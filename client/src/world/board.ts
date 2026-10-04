@@ -43,6 +43,11 @@ export class KanbanBoard {
     this.material = flat(this.texture);
   }
 
+  /** Width / height of the drawing, so the board mesh can match it. */
+  get aspect(): number {
+    return this.c.canvas.width / this.c.canvas.height;
+  }
+
   draw(project: Project, board: Board | undefined, agents: Agent[]): void {
     const { canvas, ctx } = this.c;
     const W = canvas.width;
