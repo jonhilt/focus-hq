@@ -1,4 +1,4 @@
-import type { Agent, AgentStatus, PermissionRequest, PullRequest, TermLine } from '../../shared/types';
+import type { Agent, AgentStatus, Effort, PermissionRequest, PullRequest, TermLine } from '../../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM } from '../../shared/types';
 import type { GitHubProvider } from '../github/provider';
 import type { Hub } from '../hub';
@@ -64,7 +64,7 @@ export class AgentManager {
 
   // ---------------------------------------------------------------- hiring
 
-  hire(projectId: string, repo: string, issue: { number: number; title?: string; url?: string }): Agent {
+  hire(projectId: string, repo: string, issue: { number: number; title?: string; url?: string }, effort?: Effort): Agent {
     const id = newId('agent');
     const title = issue.title ?? `Issue #${issue.number}`;
     return this.seat(projectId, repo, {
@@ -73,6 +73,7 @@ export class AgentManager {
       issue: { number: issue.number, title, url: issue.url ?? `https://github.com/${repo}/issues/${issue.number}` },
       branch: `focus/${issue.number}-${slugify(title, 30) || 'issue'}-${id.slice(-4)}`,
       baseBranch: 'main',
+      effort,
     });
   }
 
@@ -97,7 +98,7 @@ export class AgentManager {
     });
   }
 
-  private seat(projectId: string, repo: string, work: Pick<Agent, 'id' | 'task' | 'issue' | 'branch' | 'baseBranch' | 'pr'>): Agent {
+  private seat(projectId: string, repo: string, work: Pick<Agent, 'id' | 'task' | 'issue' | 'branch' | 'baseBranch' | 'pr' | 'effort'>): Agent {
     const project = this.store.project(projectId);
     if (!project.repos.includes(repo)) throw new Error(`${repo} is not connected to ${project.name}`);
     const existing = [...this.store.agents.values()].find(
@@ -121,7 +122,7 @@ export class AgentManager {
     };
     this.store.putAgent(agent);
     this.hub.send({ type: 'agent', agent });
-    this.print(agent, [{ kind: 'system', text: `✻ ${name} joined ${project.name} to work on ${repo}#${work.issue.number}` }]);
+    this.print(agent, [{ kind: 'system', text: `✻ ${name} joined ${project.name} to work on ${repo}#${work.issue.number} (${work.effort ?? 'default'} effort)` }]);
     this.schedule();
     return agent;
   }
@@ -239,6 +240,7 @@ export class AgentManager {
         systemAppend: systemAppend(agent),
         resumeSessionId,
         settings: this.store.settings,
+        effort: agent.effort,
       },
       this.hooks(agent),
     );

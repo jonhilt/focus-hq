@@ -1,4 +1,4 @@
-import type { AgentStatus, BrowserFrame, Settings, TermLine } from '../../shared/types';
+import type { AgentStatus, BrowserFrame, Effort, Settings, TermLine } from '../../shared/types';
 
 export interface RunHooks {
   lines(lines: Omit<TermLine, 't'>[]): void;
@@ -19,6 +19,8 @@ export interface RunRequest {
   systemAppend: string;
   resumeSessionId?: string;
   settings: Settings;
+  /** Missing = the model's default effort. */
+  effort?: Effort;
 }
 
 export interface RunOutcome {

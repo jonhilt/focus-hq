@@ -1,4 +1,5 @@
-import type { Agent, BrowserFrame, TermLine } from '../../../shared/types';
+import type { Agent, BrowserFrame, Effort, TermLine } from '../../../shared/types';
+import { EFFORT_LEVELS } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { statusLine } from '../world/character';
@@ -72,6 +73,7 @@ export function openAgentPanel(ui: Ui, id: string): void {
       h('span', { class: 'chip' }, `${statusIcon(a)} ${a.status}`),
       h('span', { class: 'grow muted' }, statusLine(a)),
       a.costUsd > 0 ? h('span', { class: 'chip', title: 'Estimated usage (on a subscription this is not billed)' }, `~$${a.costUsd.toFixed(2)}`) : null,
+      h('span', { class: 'chip', title: 'How hard Claude thinks on this task' }, `🧠 ${a.effort ?? 'default'} effort`),
       h('span', { class: 'chip' }, `⏱ ${timeAgo(a.startedAt)}`),
       a.task === 'issue' ? h('a', { class: 'btn small', href: a.issue.url, target: '_blank', rel: 'noreferrer' }, 'Issue ↗') : null,
       a.pr ? h('a', { class: 'btn small go', href: a.pr.url, target: '_blank', rel: 'noreferrer' }, `PR #${a.pr.number} ↗`) : null,
@@ -138,3 +140,13 @@ export function openAgentPanel(ui: Ui, id: string): void {
 export function statusIcon(a: Agent): string {
   return { queued: '⏳', 'setting-up': '📦', working: '⌨️', testing: '🧪', waiting: '✋', pushing: '🚀', done: '✅', error: '❗', stopped: '💤' }[a.status];
 }
+
+/** Picks the effort an agent is hired at. The empty value leaves it to the model's default. */
+export function effortPicker(value?: Effort): HTMLSelectElement {
+  return h('select', { class: 'effort', title: 'How hard Claude thinks on this task' },
+    h('option', { value: '', selected: !value }, '🧠 default'),
+    ...EFFORT_LEVELS.map((e) => h('option', { value: e, selected: e === value }, `🧠 ${e}`)),
+  );
+}
+
+export const pickedEffort = (picker: HTMLSelectElement): Effort | undefined => EFFORT_LEVELS.find((e) => e === picker.value);

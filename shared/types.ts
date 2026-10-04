@@ -124,6 +124,10 @@ export interface PermissionRequest {
   at: number;
 }
 
+/** How hard Claude thinks on a task (the Agent SDK's `effort` option). */
+export const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+export type Effort = (typeof EFFORT_LEVELS)[number];
+
 /** What an agent was seated for: an issue to resolve, or an open pull request whose branch conflicts with its base. */
 export type AgentTask = 'issue' | 'conflicts';
 
@@ -136,6 +140,8 @@ export interface Agent {
   task: AgentTask;
   /** For a 'conflicts' task, the pull request itself (GitHub numbers issues and PRs alike). */
   issue: { number: number; title: string; url: string };
+  /** Chosen when the agent is hired. Missing = the model's default effort. */
+  effort?: Effort;
   desk: number;
   status: AgentStatus;
   /** Short human description of what the agent is doing right now. */

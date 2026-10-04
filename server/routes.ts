@@ -1,4 +1,5 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
+import { EFFORT_LEVELS, type Effort } from '../shared/types';
 import type { Office } from './office';
 import type { Store } from './store';
 import { errorMessage } from './util';
@@ -18,6 +19,13 @@ const h = (fn: Handler) => async (req: Request, res: Response, next: NextFunctio
 
 const str = (v: unknown, fallback = '') => (typeof v === 'string' ? v : fallback);
 const param = (req: Request, name: string) => str(req.params[name]);
+/** Missing or empty = the model's default effort. */
+const effort = (v: unknown): Effort | undefined => {
+  if (v === undefined || v === '') return undefined;
+  const level = EFFORT_LEVELS.find((e) => e === v);
+  if (!level) throw new Error(`Effort must be one of ${EFFORT_LEVELS.join(', ')}`);
+  return level;
+};
 
 export function apiRouter(office: Office, store: Store): express.Router {
   const r = express.Router();
@@ -56,7 +64,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
       str(req.body.title),
       str(req.body.body),
       Array.isArray(req.body.labels) ? req.body.labels.filter((l: unknown) => typeof l === 'string' && l.trim()) : [],
-      req.body.assign === true,
+      req.body.assign === true ? { effort: effort(req.body.effort) } : undefined,
     ),
   ));
   r.post('/prs/resolve-conflicts', h((req) => office.resolveConflicts(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));
@@ -68,7 +76,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
       number: Number(req.body.number),
       title: str(req.body.title) || undefined,
       url: str(req.body.url) || undefined,
-    }),
+    }, effort(req.body.effort)),
   ));
   r.get('/agents/:id/lines', h((req) => store.allLines(param(req, 'id'))));
   r.post('/agents/:id/message', h((req) => office.agents.message(param(req, 'id'), str(req.body.text))));

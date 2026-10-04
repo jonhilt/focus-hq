@@ -92,6 +92,7 @@ export class ClaudeRunner implements AgentRunner {
       cwd: req.cwd,
       abortController: abort,
       model: req.settings.model || undefined,
+      effort: req.effort,
       systemPrompt: { type: 'preset', preset: 'claude_code', append: req.systemAppend },
       settingSources: ['user', 'project', 'local'],
       mcpServers: { browser: browserMcpServer(this.browsers, req.agentId, (frame) => hooks.browser(frame)) },

@@ -1,4 +1,4 @@
-import type { Agent, Board, Project, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
+import type { Agent, Board, Effort, Project, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
 import type { AgentManager } from './agents/manager';
 import { config } from './config';
 import type { GitHubProvider } from './github/provider';
@@ -137,7 +137,8 @@ export class Office {
 
   // ---------------------------------------------------------------- issues and pull requests
 
-  async createIssue(projectId: string, repo: string, title: string, body: string, labels: string[], assign: boolean) {
+  /** `assign` hires an agent for the new issue straight away. */
+  async createIssue(projectId: string, repo: string, title: string, body: string, labels: string[], assign?: { effort?: Effort }) {
     const project = this.store.project(projectId);
     if (!project.repos.includes(repo)) throw new Error(`${repo} is not part of ${project.name}`);
     if (!title.trim()) throw new Error('An issue needs a title');
@@ -148,7 +149,7 @@ export class Office {
       board.issues.push(issue);
       this.hub.send({ type: 'board', board });
     }
-    const agent = assign ? this.agents.hire(projectId, repo, issue) : undefined;
+    const agent = assign ? this.agents.hire(projectId, repo, issue, assign.effort) : undefined;
     this.boardChanged(projectId);
     return { issue, agent };
   }

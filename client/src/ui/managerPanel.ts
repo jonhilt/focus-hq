@@ -3,6 +3,7 @@ import { DESKS_PER_ROOM, ROOM_THEMES } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { roomTheme, THEME_INFO } from '../world/themes';
+import { effortPicker, pickedEffort } from './agentPanel';
 import type { ManagerTab, Ui } from './context';
 import { busy, h } from './dom';
 
@@ -215,6 +216,8 @@ export function issueForm(ui: Ui, projectId?: string, onDone?: () => void): HTML
   const body = h('textarea', { placeholder: 'Details, acceptance criteria, links… (Markdown)' });
   const labels = h('input', { type: 'text', placeholder: 'bug, enhancement (must already exist on GitHub)' });
   const assign = h('input', { type: 'checkbox', checked: true });
+  const effort = effortPicker();
+  assign.addEventListener('change', () => (effort.disabled = !assign.checked));
   const submit = h('button', { class: 'btn primary' }, '📌 Pin it to the board');
   submit.onclick = () => void busy(submit, async () => {
     if (!repo.value) throw new Error('This project has no repositories yet');
@@ -225,6 +228,7 @@ export function issueForm(ui: Ui, projectId?: string, onDone?: () => void): HTML
       body: body.value,
       labels: labels.value.split(',').map((l) => l.trim()).filter(Boolean),
       assign: assign.checked,
+      effort: pickedEffort(effort),
     });
     title.value = '';
     body.value = '';
@@ -241,7 +245,10 @@ export function issueForm(ui: Ui, projectId?: string, onDone?: () => void): HTML
     h('div', { class: 'field' }, h('label', null, 'Title'), title),
     h('div', { class: 'field' }, h('label', null, 'Description'), body),
     h('div', { class: 'field' }, h('label', null, 'Labels'), labels),
-    h('label', { class: 'row', style: 'margin-bottom:14px;font-weight:600' }, assign, '🤖 Assign an agent right away'),
+    h('div', { class: 'row', style: 'margin-bottom:14px' },
+      h('label', { class: 'row', style: 'font-weight:600' }, assign, '🤖 Assign an agent right away'),
+      effort,
+    ),
     h('div', { class: 'row' }, submit),
   );
 }

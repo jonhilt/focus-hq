@@ -1,4 +1,4 @@
-import type { Agent, Board, Issue, Project, RoomTheme, Settings, TermLine } from '../../../shared/types';
+import type { Agent, Board, Effort, Issue, Project, RoomTheme, Settings, TermLine } from '../../../shared/types';
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(`/api${url}`, {
@@ -24,14 +24,14 @@ export const api = {
   checkGitHub: () => call('POST', '/github/check'),
   updateSettings: (patch: Partial<Settings>) => call<Settings>('PATCH', '/settings', patch),
 
-  createIssue: (body: { projectId: string; repo: string; title: string; body: string; labels: string[]; assign: boolean }) =>
+  createIssue: (body: { projectId: string; repo: string; title: string; body: string; labels: string[]; assign: boolean; effort?: Effort }) =>
     call<{ issue: Issue; agent?: Agent }>('POST', '/issues', body),
   resolveConflicts: (projectId: string, repo: string, number: number) =>
     call<Agent>('POST', '/prs/resolve-conflicts', { projectId, repo, number }),
   mergePr: (projectId: string, repo: string, number: number) => call('POST', '/prs/merge', { projectId, repo, number }),
 
-  hire: (projectId: string, issue: Issue) =>
-    call<Agent>('POST', '/agents', { projectId, repo: issue.repo, number: issue.number, title: issue.title, url: issue.url }),
+  hire: (projectId: string, issue: Issue, effort?: Effort) =>
+    call<Agent>('POST', '/agents', { projectId, repo: issue.repo, number: issue.number, title: issue.title, url: issue.url, effort }),
   lines: (id: string) => call<TermLine[]>('GET', `/agents/${id}/lines`),
   message: (id: string, text: string) => call('POST', `/agents/${id}/message`, { text }),
   permission: (id: string, requestId: string, allow: boolean) => call('POST', `/agents/${id}/permission`, { requestId, allow }),
