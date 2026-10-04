@@ -48,6 +48,7 @@ export class Store {
         agent.activity = 'Interrupted when the office closed. Send a message to pick it back up.';
         agent.permission = undefined;
       }
+      agent.task ??= 'issue'; // saved before agents could be seated on a conflicting PR
       this.agents.set(agent.id, agent);
       this.lines.set(agent.id, this.readLog(agent.id, MEMORY_LINES));
     }

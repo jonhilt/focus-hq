@@ -26,6 +26,8 @@ export const api = {
 
   createIssue: (body: { projectId: string; repo: string; title: string; body: string; labels: string[]; assign: boolean }) =>
     call<{ issue: Issue; agent?: Agent }>('POST', '/issues', body),
+  resolveConflicts: (projectId: string, repo: string, number: number) =>
+    call<Agent>('POST', '/prs/resolve-conflicts', { projectId, repo, number }),
   mergePr: (projectId: string, repo: string, number: number) => call('POST', '/prs/merge', { projectId, repo, number }),
 
   hire: (projectId: string, issue: Issue) =>

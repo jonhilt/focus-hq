@@ -59,6 +59,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
       req.body.assign === true,
     ),
   ));
+  r.post('/prs/resolve-conflicts', h((req) => office.resolveConflicts(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));
   r.post('/prs/merge', h((req) => office.mergePullRequest(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));
 
   // agents

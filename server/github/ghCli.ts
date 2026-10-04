@@ -21,6 +21,7 @@ interface RawPr {
   title: string;
   url: string;
   headRefName: string;
+  baseRefName: string;
   author?: { login: string };
   isDraft: boolean;
   mergeable: PullRequest['mergeable'];
@@ -30,7 +31,7 @@ interface RawPr {
 }
 
 const ISSUE_FIELDS = 'number,title,body,url,labels,author,createdAt';
-const PR_FIELDS = 'number,title,url,headRefName,author,isDraft,mergeable,reviewDecision,statusCheckRollup,createdAt';
+const PR_FIELDS = 'number,title,url,headRefName,baseRefName,author,isDraft,mergeable,reviewDecision,statusCheckRollup,createdAt';
 
 function toIssue(repo: string, raw: RawIssue): Issue {
   return {
@@ -112,6 +113,7 @@ export class GhCliProvider implements GitHubProvider {
       title: p.title,
       url: p.url,
       branch: p.headRefName,
+      baseBranch: p.baseRefName,
       author: p.author?.login,
       isDraft: p.isDraft,
       mergeable: p.mergeable ?? 'UNKNOWN',

@@ -1,4 +1,4 @@
-import type { Board, Project, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
+import type { Agent, Board, Project, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
 import type { AgentManager } from './agents/manager';
 import { config } from './config';
 import type { GitHubProvider } from './github/provider';
@@ -160,6 +160,13 @@ export class Office {
       this.hub.send({ type: 'board', board });
     }
     this.boardChanged(projectId);
+  }
+
+  resolveConflicts(projectId: string, repo: string, number: number): Agent {
+    const pr = this.store.boards.get(projectId)?.prs.find((p) => p.repo === repo && p.number === number);
+    if (!pr) throw new Error(`${repo}#${number} is not an open pull request on this board`);
+    if (pr.mergeable !== 'CONFLICTING') throw new Error(`PR #${number} has no merge conflicts`);
+    return this.agents.resolveConflicts(projectId, pr);
   }
 
   // ---------------------------------------------------------------- boards

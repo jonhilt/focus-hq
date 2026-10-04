@@ -83,6 +83,16 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
           ui.hud.toast('success', `Merged #${pr.number} 🎉`);
         }, ui.error);
       };
+      const resolve = pr.mergeable === 'CONFLICTING' ? h('button', { class: 'btn small primary', title: 'Hand the merge conflicts to an agent' }, '🔧 Resolve conflicts') : null;
+      if (resolve) {
+        // the PR's agent is already at it (or queued for it); a second click would only repeat the request
+        resolve.disabled = !!pr.agent && !['done', 'error', 'stopped'].includes(pr.agent.status);
+        resolve.onclick = () =>
+          void busy(resolve, async () => {
+            const agent = await api.resolveConflicts(projectId, pr.repo, pr.number);
+            ui.hud.toast('success', `${agent.name} is resolving the conflicts on PR #${pr.number}`, { label: 'Watch', run: () => ui.goToAgent(agent.id) });
+          }, ui.error);
+      }
       const checks = { passing: '✓ checks pass', failing: '✗ checks failing', pending: '⏳ checks running', none: 'no checks' }[pr.checks];
       const agent = pr.agent;
       prs.append(
@@ -97,7 +107,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
             pr.reviewDecision ? h('span', { class: 'chip' }, pr.reviewDecision.toLowerCase().replace('_', ' ')) : null,
           ),
           h('div', { class: 'actions' },
-            merge,
+            resolve ?? merge,
             h('a', { class: 'btn small', href: `${pr.url}/files`, target: '_blank', rel: 'noreferrer' }, 'Review ↗'),
             agent ? h('button', { class: 'btn small', onclick: () => ui.openAgent(agent.id) }, `💬 ${agent.name}`) : null,
           ),

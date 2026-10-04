@@ -42,7 +42,8 @@ export interface AgentRunner {
 
 /** Git operations on an agent's checkout. Faked in demo mode. */
 export interface WorkspaceOps {
-  create(repo: string, agentId: string, branch: string, baseBranch: string): Promise<string>;
+  /** A worktree on `branch`, starting from the remote branch `startPoint`. */
+  create(repo: string, agentId: string, branch: string, startPoint: string): Promise<string>;
   remove(repo: string, agentId: string): Promise<void>;
   dir(agentId: string): string;
   hasUncommittedChanges(dir: string): Promise<boolean>;

@@ -73,7 +73,7 @@ export function openAgentPanel(ui: Ui, id: string): void {
       h('span', { class: 'grow muted' }, statusLine(a)),
       a.costUsd > 0 ? h('span', { class: 'chip', title: 'Estimated usage (on a subscription this is not billed)' }, `~$${a.costUsd.toFixed(2)}`) : null,
       h('span', { class: 'chip' }, `⏱ ${timeAgo(a.startedAt)}`),
-      h('a', { class: 'btn small', href: a.issue.url, target: '_blank', rel: 'noreferrer' }, 'Issue ↗'),
+      a.task === 'issue' ? h('a', { class: 'btn small', href: a.issue.url, target: '_blank', rel: 'noreferrer' }, 'Issue ↗') : null,
       a.pr ? h('a', { class: 'btn small go', href: a.pr.url, target: '_blank', rel: 'noreferrer' }, `PR #${a.pr.number} ↗`) : null,
     );
     if (a.permission) {

@@ -15,7 +15,7 @@ function mirrorDir(repo: string): string {
  * One clone per repository lives in data/repos; every agent gets its own git worktree of it in
  * data/workspaces/<agent id> so agents on the same repo never trip over each other.
  */
-export async function createWorktree(repo: string, agentId: string, branch: string, baseBranch: string): Promise<string> {
+export async function createWorktree(repo: string, agentId: string, branch: string, startPoint: string): Promise<string> {
   const mirror = mirrorDir(repo);
   const dir = path.join(paths.workspaces, agentId);
   await lock.with(repo, async () => {
@@ -32,7 +32,7 @@ export async function createWorktree(repo: string, agentId: string, branch: stri
     }
     fs.mkdirSync(paths.workspaces, { recursive: true });
     // --no-track: the branch must not track origin/<base>, so a stray `git push` can never land on the base branch
-    await git(mirror, ['worktree', 'add', '--no-track', '-B', branch, dir, `origin/${baseBranch}`]);
+    await git(mirror, ['worktree', 'add', '--no-track', '-B', branch, dir, `origin/${startPoint}`]);
   });
   return dir;
 }

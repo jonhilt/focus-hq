@@ -75,6 +75,7 @@ export interface PullRequest {
   title: string;
   url: string;
   branch: string;
+  baseBranch: string;
   author?: string;
   isDraft: boolean;
   mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN';
@@ -123,12 +124,17 @@ export interface PermissionRequest {
   at: number;
 }
 
+/** What an agent was seated for: an issue to resolve, or an open pull request whose branch conflicts with its base. */
+export type AgentTask = 'issue' | 'conflicts';
+
 export interface Agent {
   id: string;
   name: string;
   avatar: Avatar;
   projectId: string;
   repo: string;
+  task: AgentTask;
+  /** For a 'conflicts' task, the pull request itself (GitHub numbers issues and PRs alike). */
   issue: { number: number; title: string; url: string };
   desk: number;
   status: AgentStatus;

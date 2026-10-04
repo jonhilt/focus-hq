@@ -1,10 +1,10 @@
-import type { Agent, AgentStatus, PermissionRequest, TermLine } from '../../shared/types';
+import type { Agent, AgentStatus, PermissionRequest, PullRequest, TermLine } from '../../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM } from '../../shared/types';
 import type { GitHubProvider } from '../github/provider';
 import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { errorMessage, newId, slugify, truncate } from '../util';
-import { COMMIT_NUDGE, issuePrompt, pickName, pullRequestBody, randomAvatar, systemAppend } from './prompts';
+import { COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, randomAvatar, systemAppend } from './prompts';
 import type { AgentRunner, AgentSession, RunHooks, WorkspaceOps } from './types';
 
 interface Runtime {
@@ -65,38 +65,63 @@ export class AgentManager {
   // ---------------------------------------------------------------- hiring
 
   hire(projectId: string, repo: string, issue: { number: number; title?: string; url?: string }): Agent {
+    const id = newId('agent');
+    const title = issue.title ?? `Issue #${issue.number}`;
+    return this.seat(projectId, repo, {
+      id,
+      task: 'issue',
+      issue: { number: issue.number, title, url: issue.url ?? `https://github.com/${repo}/issues/${issue.number}` },
+      branch: `focus/${issue.number}-${slugify(title, 30) || 'issue'}-${id.slice(-4)}`,
+      baseBranch: 'main',
+    });
+  }
+
+  /**
+   * Gets a pull request's merge conflicts resolved. The agent who opened it picks it back up if they're still in
+   * the office; otherwise a new agent sits down on the PR's branch.
+   */
+  resolveConflicts(projectId: string, pr: PullRequest): Agent {
+    const owner = [...this.store.agents.values()].find((a) => a.repo === pr.repo && a.pr?.number === pr.number);
+    if (owner) {
+      this.update(owner, { baseBranch: pr.baseBranch });
+      this.message(owner.id, conflictsPrompt(owner));
+      return owner;
+    }
+    return this.seat(projectId, pr.repo, {
+      id: newId('agent'),
+      task: 'conflicts',
+      issue: { number: pr.number, title: pr.title, url: pr.url },
+      branch: pr.branch,
+      baseBranch: pr.baseBranch,
+      pr: { number: pr.number, url: pr.url },
+    });
+  }
+
+  private seat(projectId: string, repo: string, work: Pick<Agent, 'id' | 'task' | 'issue' | 'branch' | 'baseBranch' | 'pr'>): Agent {
     const project = this.store.project(projectId);
     if (!project.repos.includes(repo)) throw new Error(`${repo} is not connected to ${project.name}`);
     const existing = [...this.store.agents.values()].find(
-      (a) => a.repo === repo && a.issue.number === issue.number && !FINISHED.includes(a.status),
+      (a) => a.repo === repo && a.issue.number === work.issue.number && !FINISHED.includes(a.status),
     );
-    if (existing) throw new Error(`${existing.name} is already working on #${issue.number}`);
+    if (existing) throw new Error(`${existing.name} is already working on #${work.issue.number}`);
 
     const desk = this.freeDesk(projectId);
     const name = pickName(new Set([...this.store.agents.values()].map((a) => a.name)));
-    const id = newId('agent');
     const agent: Agent = {
-      id,
       name,
       avatar: randomAvatar(),
       projectId,
       repo,
-      issue: {
-        number: issue.number,
-        title: issue.title ?? `Issue #${issue.number}`,
-        url: issue.url ?? `https://github.com/${repo}/issues/${issue.number}`,
-      },
+      ...work,
       desk,
       status: 'queued',
       activity: 'Waiting for a free slot',
-      branch: `focus/${issue.number}-${slugify(issue.title ?? 'issue', 30) || 'issue'}-${id.slice(-4)}`,
-      baseBranch: 'main',
       costUsd: 0,
       startedAt: Date.now(),
     };
     this.store.putAgent(agent);
     this.hub.send({ type: 'agent', agent });
-    this.print(agent, [{ kind: 'system', text: `✻ ${name} joined ${project.name} to work on ${repo}#${issue.number}` }]);
+    this.print(agent, [{ kind: 'system', text: `✻ ${name} joined ${project.name} to work on ${repo}#${work.issue.number}` }]);
     this.schedule();
     return agent;
   }
@@ -141,13 +166,26 @@ export class AgentManager {
     try {
       const info = await this.github.repoInfo(agent.repo);
       if (info.isEmpty) throw new Error('This repository has no commits yet – add a README first so there is a branch to work from.');
-      const issue = await this.github.getIssue(agent.repo, agent.issue.number);
-      this.update(agent, { baseBranch: info.defaultBranch, issue: { number: issue.number, title: issue.title, url: issue.url } });
+      // an issue starts a new branch from the base; conflicts are fixed on the PR's own branch
+      let prompt: string;
+      let startPoint: string;
+      switch (agent.task) {
+        case 'issue': {
+          const issue = await this.github.getIssue(agent.repo, agent.issue.number);
+          this.update(agent, { baseBranch: info.defaultBranch, issue: { number: issue.number, title: issue.title, url: issue.url } });
+          prompt = issuePrompt(agent, issue);
+          startPoint = agent.baseBranch;
+          break;
+        }
+        case 'conflicts':
+          prompt = conflictsPrompt(agent);
+          startPoint = agent.branch;
+          break;
+      }
       this.print(agent, [{ kind: 'system', text: `✻ Setting up a worktree for ${agent.repo} on ${agent.branch}` }]);
       this.update(agent, { activity: 'Cloning the repository' });
-      await this.workspace.create(agent.repo, agent.id, agent.branch, info.defaultBranch);
+      await this.workspace.create(agent.repo, agent.id, agent.branch, startPoint);
       if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
-      let prompt = issuePrompt(agent, issue);
       if (rt.inbox.length) prompt += `\n\nNotes from your manager:\n${rt.inbox.splice(0).map((m) => `- ${m}`).join('\n')}`;
       await this.runSession(agent, prompt);
     } catch (err) {

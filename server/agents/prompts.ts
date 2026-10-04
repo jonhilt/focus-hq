@@ -3,10 +3,18 @@ import type { IssueDetail } from '../github/provider';
 import { truncate } from '../util';
 
 export function systemAppend(agent: Agent): string {
+  const assignment = {
+    issue: `Your manager assigned you GitHub issue #${agent.issue.number} in ${agent.repo}.`,
+    conflicts: `Your manager assigned you pull request #${agent.issue.number} in ${agent.repo}: it has merge conflicts with \`${agent.baseBranch}\` that you need to resolve.`,
+  }[agent.task];
+  const summary = {
+    issue: 'Your final message becomes the pull request description. Write it in Markdown with a short "Summary" and "Testing" section. No preamble.',
+    conflicts: 'Your final message goes to the manager: say briefly how you resolved each conflict and what you checked. No preamble.',
+  }[agent.task];
   return `
 # You are ${agent.name}, an agent in the Focus office
 
-Your manager assigned you GitHub issue #${agent.issue.number} in ${agent.repo}. You work autonomously; the manager watches your terminal and browser on your laptop screen and may send you messages.
+${assignment} You work autonomously; the manager watches your terminal and browser on your laptop screen and may send you messages.
 
 - Your current directory is a dedicated git worktree on branch \`${agent.branch}\`, created from \`${agent.baseBranch}\`. Stay inside it.
 - Commit your work as you go with clear messages. Never commit secrets, build output or dependency folders.
@@ -14,7 +22,7 @@ Your manager assigned you GitHub issue #${agent.issue.number} in ${agent.repo}. 
 - Run the project's tests, type checks and linters when they exist, and fix what you break.
 - If the change touches a web UI, start the dev server in the background and check your work with the mcp__browser__ tools (open, click, type, screenshot, console).
 - Nobody can answer questions while you work. Make sensible decisions and mention them in your summary.
-- Your final message becomes the pull request description. Write it in Markdown with a short "Summary" and "Testing" section. No preamble.
+- ${summary}
 `.trim();
 }
 
@@ -33,6 +41,20 @@ export function issuePrompt(agent: Agent, issue: IssueDetail): string {
     for (const c of issue.comments.slice(-15)) parts.push('', `@${c.author}:`, truncate(c.body.trim(), 4000));
   }
   return parts.filter((p, i, all) => p !== '' || all[i - 1] !== '').join('\n');
+}
+
+/** The task for whoever resolves a pull request's merge conflicts: an agent seated for it, or the one who opened the PR. */
+export function conflictsPrompt(agent: Agent): string {
+  return [
+    `Pull request #${agent.pr?.number ?? agent.issue.number} (branch \`${agent.branch}\`) has merge conflicts with \`${agent.baseBranch}\`. Please resolve them.`,
+    '',
+    `1. \`git fetch origin\`, then \`git merge origin/${agent.baseBranch}\`.`,
+    '2. Resolve every conflict so that both sides keep doing what they were meant to do. Read the base branch commits that caused each conflict before choosing.',
+    '3. Run the type checks, tests and linters, and fix what the merge broke.',
+    '4. Commit the merge.',
+    '',
+    'Merge rather than rebase: the pull request is already open, so its history must stay intact.',
+  ].join('\n');
 }
 
 export const COMMIT_NUDGE =

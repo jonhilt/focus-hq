@@ -72,7 +72,8 @@ Then in the office:
 4. **Browser testing**: agents get an in-process MCP server (`mcp__browser__open/click/type/press/screenshot/evaluate/console`) backed by headless Chromium. Every action's screenshot streams to their laptop screen.
 5. **Deliver**: if they left uncommitted changes, they're asked once to commit them. Then the office pushes the branch and opens the PR (`Closes #N`) with the agent's summary as the body.
 6. **Follow-ups**: message an agent at any time. While they're working, the message reaches them at their next step. Once they're done, the message resumes the same Claude session and the new commits update the PR.
-7. **Merged**: when the PR is merged (from the board or on GitHub), the agent leaves and their worktree is cleaned up.
+7. **Merge conflicts**: a conflicting PR gets a **🔧 Resolve conflicts** button on the board. The agent who opened it merges the base branch in and updates the PR. If nobody in the office owns the PR (a teammate's, or the agent already went home), a new agent sits down on the PR's branch to do it.
+8. **Merged**: when the PR is merged (from the board or on GitHub), the agent leaves and their worktree is cleaned up.
 
 ### Autonomy (Manager's office → Settings)
 
