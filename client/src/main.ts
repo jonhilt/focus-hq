@@ -181,7 +181,9 @@ async function main() {
     if (!p || before?.startedAt !== p.startedAt || before.status === p.status) return;
     const link = p.links[0];
     if (p.status === 'running' && link) {
-      hud.toast('success', `▶ ${p.repo}#${p.number} is running`, { label: `Open${link.name ? ` ${link.name}` : ''} ↗`, run: () => window.open(link.url, '_blank', 'noopener') });
+      const open = { label: `Open${link.name ? ` ${link.name}` : ''} ↗`, run: () => window.open(link.url, '_blank', 'noopener') };
+      if (p.warning) hud.toast('info', `▶ ${p.repo}#${p.number} is up, but: ${p.warning}`, open);
+      else hud.toast('success', `▶ ${p.repo}#${p.number} is running`, open);
     } else if (p.status === 'failed') {
       hud.toast('error', `Preview of ${p.repo}#${p.number} failed: ${p.error ?? 'see the log'}`, { label: 'Log', run: () => ui.openPreview(p.projectId) });
     }

@@ -3,8 +3,9 @@ import fs from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
-import type { Preview, PreviewConfig, PreviewLink, PreviewLog } from '../shared/types';
+import type { Preview, PreviewConfig, PreviewLink, PreviewLog, PreviewLogFile } from '../shared/types';
 import { checkoutPreview } from './agents/workspace';
 import { config, paths } from './config';
 import type { GitHubProvider } from './github/provider';
@@ -17,6 +18,12 @@ const WINDOWS = process.platform === 'win32';
 /** Named links like these go after the ones a person opens first (web before api). */
 const BACKSTAGE = /api|backend|server|db|database|postgres|swagger|docs|health|metrics/i;
 const STOP_TIMEOUT = 5 * 60_000;
+/** A running stack's own status that's worth a warning (anything else, e.g. "ready" or "ok", clears it). */
+const TROUBLED = /unhealthy|stale|fail|error|degraded|down|stopped|dead|crash/i;
+/** How much of a log file the panel gets. */
+const LOG_TAIL = 200_000;
+/** After a start command exits unhappily, how long its sites get to answer anyway. */
+const GRACE = 30_000;
 
 interface Run {
   preview: Preview;
@@ -33,9 +40,13 @@ interface Run {
   /** The start command's JSON result named the links; stop guessing them from URLs in its output. */
   namedLinks?: boolean;
   phase?: string;
-  /** The start command exited successfully and left the site(s) running on their own. */
+  /** The start command exited and left the site(s) running on their own. */
   detached?: boolean;
   watching?: boolean;
+  /** Why the preview is up but not happily (shown as its warning once a site answers). */
+  complaint?: string;
+  /** The start command exited unhappily: fail unless a site answers by then. */
+  deadline?: number;
   /** Every checkout of this preview, as given and with symlinks resolved, to find our stack in a list of stacks. */
   checkouts: string[];
   /** Our stack showed up in the progress command's list of stacks; how many polls since it went missing. */
@@ -52,6 +63,8 @@ interface Run {
   killNow?: () => void;
   /** Set once a stop is under way. */
   stopped?: Promise<void>;
+  /** The stop command and process-tree kill, run once on stop or failure. */
+  down?: Promise<void>;
 }
 
 export interface StartPreview {
@@ -93,6 +106,48 @@ export class Previews {
     return run ? { startedAt: run.preview.startedAt, first: run.printed - run.log.length, lines: run.log } : { startedAt: 0, first: 0, lines: [] };
   }
 
+  /** The files in the folder (or the file) the command reported as "logs" – *.log ones if there are any. */
+  logFiles(projectId: string): PreviewLogFile[] {
+    const where = this.logsPath(projectId);
+    if (!where) return [];
+    try {
+      const stat = fs.statSync(where);
+      if (stat.isFile()) return [{ name: path.basename(where), size: stat.size, modified: stat.mtimeMs }];
+      const files = fs.readdirSync(where, { withFileTypes: true }).filter((e) => e.isFile() && !e.name.startsWith('.'));
+      const logs = files.filter((e) => /\.(log|txt|out|err)$/i.test(e.name));
+      return (logs.length ? logs : files)
+        .map((e) => {
+          const st = fs.statSync(path.join(where, e.name));
+          return { name: e.name, size: st.size, modified: st.mtimeMs };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
+    } catch {
+      return [];
+    }
+  }
+
+  /** The end of one of logFiles(). */
+  logFile(projectId: string, name: string): { name: string; text: string; truncated: boolean } {
+    const where = this.logsPath(projectId);
+    if (!where || !this.logFiles(projectId).some((f) => f.name === name)) throw new Error(`There's no log file called ${name}`);
+    const file = fs.statSync(where).isFile() ? where : path.join(where, name);
+    const size = fs.statSync(file).size;
+    const start = Math.max(0, size - LOG_TAIL);
+    const buffer = Buffer.alloc(size - start);
+    const fd = fs.openSync(file, 'r');
+    try {
+      fs.readSync(fd, buffer, 0, buffer.length, start);
+    } finally {
+      fs.closeSync(fd);
+    }
+    return { name, text: stripAnsi(buffer.toString('utf8')), truncated: start > 0 };
+  }
+
+  private logsPath(projectId: string): string | undefined {
+    const run = this.runs.get(projectId);
+    return run?.preview.logs ? path.resolve(run.cwd ?? '', run.preview.logs) : undefined;
+  }
+
   /** Starts a preview, replacing the project's current one. Returns straight away; progress arrives as `preview` events. */
   async start(req: StartPreview): Promise<Preview> {
     while (this.runs.has(req.projectId)) await this.stop(req.projectId); // a loop: a double click could slip another run in
@@ -123,7 +178,7 @@ export class Previews {
     return run.preview;
   }
 
-  /** Kills the start command, runs the stop command, then drops the preview. */
+  /** Runs the stop command, kills what's left of the start command, then drops the preview. */
   stop(projectId: string): Promise<void> {
     const run = this.runs.get(projectId);
     if (!run) return Promise.resolve();
@@ -226,6 +281,8 @@ export class Previews {
     const office = `http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`;
     const page = (site: string) => `${office}/demo-preview/${repo}/${number}?site=${site}`;
     const stack = run.repos.length > 1;
+    const unhealthy = stack && /api/.test(repo); // shows off a stack that's up but not happy
+    const logs = stack ? demoLogs(run.preview.projectId, unhealthy) : undefined;
     const command = stack ? './scripts/stack up' : 'npm install && npm run dev';
     const script: [number, string][] = stack
       ? [
@@ -233,7 +290,7 @@ export class Previews {
           ...run.repos.filter((r) => r !== repo).map((r): [number, string] => [200, `▸ ${shortName(r)}: main @ demo`]),
           [100, `$ ${command}`],
           ...['install', 'database-migrate', 'api-build', 'readiness'].map((phase): [number, string] => [700, JSON.stringify({ status: 'starting', phase })]),
-          [400, JSON.stringify({ status: 'ready', urls: { api: page('api'), web: page('web') }, logs: '/demo/.stack/logs', phase: 'running' }, null, 2)],
+          [400, JSON.stringify({ status: unhealthy ? 'unhealthy' : 'ready', urls: { api: page('api'), web: page('web') }, logs, phase: 'running' }, null, 2)],
         ]
       : [
           [400, `▸ ${shortName(repo)}: PR #${number} @ demo`],
@@ -263,10 +320,7 @@ export class Previews {
         this.output(run, text);
       }
     }
-    if (stack) {
-      run.detached = true;
-      if (run.preview.status === 'running') void this.watch(run);
-    }
+    if (stack) this.exited(run, unhealthy ? 1 : 0, null, false);
   }
 
   private output(run: Run, raw: string): void {
@@ -306,24 +360,33 @@ export class Previews {
   }
 
   /**
-   * Reads the progress command's JSON (its exit code means nothing: a CLI may exit 1 for "still starting"). That's
-   * either our stack, or a list of stacks ({"sessions": [...]}) where ours is the one mentioning our checkouts. A list is
-   * the more reliable view: when a stack that was listed drops out while starting, whatever ran it has died.
+   * Finds our stack in the progress command's JSON (its exit code means nothing: a CLI may exit 1 for "still
+   * starting"). That's either our stack, or a list of stacks ({"sessions": [...]}) where ours is the one mentioning our
+   * checkouts. A list is the more reliable view: when a stack that was listed drops out twice in a row, whatever ran it
+   * has died ("gone").
    */
-  private progress(run: Run, stdout: string): void {
+  private ourStack(run: Run, stdout: string): Record<string, unknown> | 'gone' | undefined {
     const result = lastJson(stdout);
-    if (!result) return;
+    if (!result) return undefined;
     const single = typeof result.status === 'string' || typeof result.phase === 'string';
     const list = single ? undefined : Object.values(result).find((v): v is Record<string, unknown>[] => Array.isArray(v) && v.every(isObject));
-    if (!list) return this.apply(run, result, true);
+    if (!list) return result;
     const ours = list.find((stack) => mentions(stack, run.checkouts));
     if (ours) {
       run.listed = true;
       run.unlisted = 0;
-      this.apply(run, ours, true);
-    } else if (run.listed && ++run.unlisted >= 2) {
-      this.fail(run, 'The stack went away while starting: it is no longer in the progress command’s list');
+      return ours;
     }
+    return run.listed && ++run.unlisted >= 2 ? 'gone' : undefined;
+  }
+
+  /** Checks every link: answering, answering with a 5xx, or not at all. */
+  private async checkLinks(links: PreviewLink[]): Promise<PreviewLink[]> {
+    const codes = await Promise.all(links.map((l) => probe(l.url)));
+    return links.map(({ health: _h, code: _c, ...link }, i) => {
+      const code = codes[i];
+      return code === null ? { ...link, health: 'down' } : { ...link, health: code >= 500 ? 'error' : 'up', code };
+    });
   }
 
   /** Polls the site(s) until one answers, showing the progress command's progress meanwhile. */
@@ -335,12 +398,18 @@ export class Previews {
     while (this.live(run) && run.preview.status === 'starting') {
       const candidates = run.preview.links.length ? run.preview.links : fallback;
       for (const { url } of candidates) {
-        if (!(await answers(url)) || !this.live(run) || run.preview.status !== 'starting') continue;
-        const links = run.preview.links.length ? run.preview.links : [{ url }];
+        if ((await probe(url)) === null || !this.live(run) || run.preview.status !== 'starting') continue;
+        const links = await this.checkLinks(run.preview.links.length ? run.preview.links : [{ url }]);
+        if (!this.live(run) || run.preview.status !== 'starting') return;
         const names = links.map((l) => l.name).filter(Boolean);
-        this.update(run, { status: 'running', links, activity: links.length > 1 ? `Up – ${names.length ? names.join(', ') : `${links.length} sites`}` : `Up at ${links[0].url}` });
+        const activity = links.length > 1 ? `Up – ${names.length ? names.join(', ') : `${links.length} sites`}` : `Up at ${links[0].url}`;
+        this.update(run, { status: 'running', links, activity, warning: run.complaint });
         this.print(run, `✔ ${url} is answering`);
-        if (run.detached) void this.watch(run);
+        void this.watch(run);
+        return;
+      }
+      if (run.deadline && Date.now() > run.deadline) {
+        this.fail(run, `${run.complaint ?? 'The command gave up'}, and none of its sites answer`);
         return;
       }
       if (run.statusCommand && !polling && Date.now() - polled > 5000) {
@@ -348,7 +417,10 @@ export class Previews {
         polled = Date.now();
         void this.runCommand(run, run.statusCommand, 30_000).then(({ stdout }) => {
           polling = false;
-          if (this.live(run) && run.preview.status === 'starting') this.progress(run, stdout);
+          if (!this.live(run) || run.preview.status !== 'starting') return;
+          const stack = this.ourStack(run, stdout);
+          if (stack === 'gone') this.fail(run, 'The stack went away while starting: it is no longer in the progress command’s list');
+          else if (stack) this.apply(run, stack, true);
         });
       }
       if (!slow && !run.phase && Date.now() - started > 90_000) {
@@ -359,50 +431,94 @@ export class Previews {
     }
   }
 
-  /** The command is gone but its sites live on: notice when they stop answering. */
+  /**
+   * Keeps an eye on a running preview: each link's health, and (with a progress command) the stack's own verdict, so
+   * the warning follows it ("unhealthy", back to "ready"). When the command has exited, nothing else would notice the
+   * sites going away: three checks with no answer, or the stack dropping out of the progress command's list, fail it.
+   */
   private async watch(run: Run): Promise<void> {
     if (run.watching) return;
     run.watching = true;
+    const running = () => this.live(run) && run.preview.status === 'running';
     let misses = 0;
-    while (this.live(run) && run.preview.status === 'running') {
+    while (running()) {
       await sleep(10_000);
-      if (!this.live(run) || run.preview.status !== 'running') return;
-      const up = (await Promise.all(run.preview.links.map((l) => answers(l.url)))).some(Boolean);
-      misses = up ? 0 : misses + 1;
-      if (misses >= 3) this.fail(run, 'The site stopped answering');
+      if (!running()) return;
+      const links = await this.checkLinks(run.preview.links);
+      if (!running()) return;
+      if (JSON.stringify(links) !== JSON.stringify(run.preview.links)) this.update(run, { links });
+      misses = links.some((l) => l.health !== 'down') ? 0 : misses + 1;
+      if (run.detached && misses >= 3) return this.fail(run, 'The site stopped answering');
+      if (!run.statusCommand) continue;
+      const stack = this.ourStack(run, (await this.runCommand(run, run.statusCommand, 30_000)).stdout);
+      if (!running()) return;
+      if (stack === 'gone') return this.fail(run, 'The stack went away: it is no longer in the progress command’s list');
+      if (stack && typeof stack.status === 'string') {
+        const error = typeof stack.error === 'string' && stack.error ? `: ${stack.error}` : '';
+        run.complaint = TROUBLED.test(stack.status) ? `The stack reports itself as ${stack.status}${error}` : undefined;
+        if (run.complaint !== run.preview.warning) this.update(run, { warning: run.complaint });
+      }
     }
   }
 
   private exited(run: Run, code: number | null, signal: NodeJS.Signals | null, offered: boolean): void {
     if (!this.live(run) || run.preview.status === 'failed') return;
     const result = this.readResult(run);
-    const failed = typeof result?.status === 'string' && ['failed', 'error', 'stopped'].includes(result.status);
-    if (code === 0 && !failed && (run.preview.links.length || offered)) {
+    const status = typeof result?.status === 'string' ? result.status : undefined;
+    const reported = typeof result?.error === 'string' && result.error ? result.error : undefined;
+    const gaveUp = !!status && ['failed', 'error', 'stopped'].includes(status);
+    if (code === 0 && !gaveUp && (run.preview.links.length || offered)) {
       // e.g. a CLI that starts the sites in the background and returns
       run.detached = true;
       this.print(run, '▸ The command finished; the sites keep running on their own');
       if (run.preview.status === 'running') void this.watch(run);
       return;
     }
-    const reason = typeof result?.error === 'string' && result.error ? result.error : undefined;
-    this.fail(run, reason ?? (signal ? `The command was killed (${signal})` : code === 0 ? 'The command finished without reporting a site' : `The command exited with code ${code}`));
+    if (code !== 0 && !signal && !gaveUp && run.namedLinks) {
+      // A stack CLI that brought its sites up but didn't like what it saw (e.g. "unhealthy"): they may be worth a look.
+      run.detached = true;
+      run.complaint = `The command exited with code ${code}${status ? ` and reported the stack as ${status}` : ''}${reported ? `: ${reported}` : ''}`;
+      if (run.preview.status === 'running') {
+        this.print(run, `⚠ ${run.complaint}`);
+        this.update(run, { warning: run.complaint });
+        void this.watch(run);
+      } else {
+        this.print(run, `⚠ ${run.complaint}. Checking whether its sites answer anyway…`);
+        run.deadline = Date.now() + GRACE;
+      }
+      return;
+    }
+    const what = signal ? `was killed (${signal})` : code === 0 ? 'finished without reporting a site' : `exited with code ${code}`;
+    this.fail(run, reported ?? `The command ${what}${status ? ` (status "${status}")` : ''}`);
   }
 
+  /** Marks the preview failed and takes down what it left running; its output and logs stay on screen. */
   private fail(run: Run, message: string): void {
     if (!this.live(run) || run.preview.status === 'failed') return;
     this.print(run, `✘ ${message}`);
     this.update(run, { status: 'failed', error: message, activity: truncate(message, 160) });
-    void run.kill?.();
+    void this.shutDown(run);
+  }
+
+  /**
+   * The stop command first (the CLI knows how to take its own stack down, and its supervisor may share the start
+   * command's process group), then whatever is left of the start command's process tree. Once per run.
+   */
+  private shutDown(run: Run): Promise<void> {
+    run.down ??= (async () => {
+      if (run.stopCommand) {
+        this.print(run, `$ ${run.stopCommand}`);
+        const { code } = await this.runCommand(run, run.stopCommand, STOP_TIMEOUT, (line) => this.print(run, line));
+        if (code !== 0) console.warn(`  ⚠ Preview stop command for ${run.preview.repo}#${run.preview.number} exited with ${code}: ${run.stopCommand}`);
+      }
+      await run.kill?.();
+    })();
+    return run.down;
   }
 
   private async teardown(run: Run): Promise<void> {
-    this.update(run, { status: 'stopping', activity: 'Stopping' });
-    await run.kill?.();
-    if (run.stopCommand) {
-      this.print(run, `$ ${run.stopCommand}`);
-      const { code } = await this.runCommand(run, run.stopCommand, STOP_TIMEOUT, (line) => this.print(run, line));
-      if (code !== 0) console.warn(`  ⚠ Preview stop command for ${run.preview.repo}#${run.preview.number} exited with ${code}: ${run.stopCommand}`);
-    }
+    if (run.preview.status !== 'failed') this.update(run, { status: 'stopping', activity: 'Stopping' });
+    await this.shutDown(run);
     if (!this.owns(run)) return;
     this.runs.delete(run.preview.projectId);
     clearTimeout(run.flush);
@@ -657,18 +773,18 @@ function freePort(): Promise<number> {
   });
 }
 
-/** True when anything at all answers HTTP there (a 404 or a 500 still means the server is up). */
-function answers(url: string): Promise<boolean> {
+/** The HTTP status a URL answers with (a 404 or a 500 still means a server is there), or null when nothing answers. */
+function probe(url: string): Promise<number | null> {
   return new Promise((resolve) => {
     const done = (res: http.IncomingMessage) => {
       res.resume();
-      resolve(true);
+      resolve(res.statusCode ?? 0);
     };
     const req = url.startsWith('https:')
       ? https.get(url, { timeout: 2000, rejectUnauthorized: false }, done) // local dev certificates are self-signed
       : http.get(url, { timeout: 2000 }, done);
     req.on('timeout', () => req.destroy());
-    req.on('error', () => resolve(false));
+    req.on('error', () => resolve(null));
   });
 }
 
@@ -693,6 +809,21 @@ async function killTree(pid: number): Promise<void> {
     if (!signalTree(pid, 0)) return;
   }
   signalTree(pid, 'SIGKILL');
+}
+
+/** Log files for a demo stack, in the temp folder (demo mode writes nothing under the data dir). */
+function demoLogs(projectId: string, unhealthy: boolean): string {
+  const dir = path.join(os.tmpdir(), 'focus-demo-logs', projectId);
+  fs.mkdirSync(dir, { recursive: true });
+  const at = (s: number) => new Date(Date.now() - s * 1000).toISOString();
+  fs.writeFileSync(path.join(dir, 'api.log'), [
+    `${at(9)} info: Microsoft.Hosting.Lifetime[14] Now listening on: http://127.0.0.1:5101`,
+    `${at(8)} info: Database migrations applied (12)`,
+    unhealthy ? `${at(3)} fail: HealthChecks[0] Health check "payments" failed: connection refused (localhost:7443)` : `${at(3)} info: Health check passed`,
+    unhealthy ? `${at(3)} warn: /health reported DOWN` : `${at(2)} info: /health reported UP`,
+  ].join('\n') + '\n');
+  fs.writeFileSync(path.join(dir, 'web.log'), ['> web@0.0.0 dev', '> vite', '', '  VITE v6.3.5  ready in 388 ms', '  ➜  Local:   http://127.0.0.1:5102/'].join('\n') + '\n');
+  return dir;
 }
 
 /** Stand-in "site" for demo previews. */

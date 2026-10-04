@@ -1,4 +1,4 @@
-import type { Agent, Board, Effort, Issue, Preview, PreviewLog, Project, RoomTheme, Settings, TermLine } from '../../../shared/types';
+import type { Agent, Board, Effort, Issue, Preview, PreviewLog, PreviewLogFile, Project, RoomTheme, Settings, TermLine } from '../../../shared/types';
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(`/api${url}`, {
@@ -32,6 +32,9 @@ export const api = {
   startPreview: (projectId: string, repo: string, number: number) => call<Preview>('POST', '/previews', { projectId, repo, number }),
   stopPreview: (projectId: string) => call('DELETE', `/previews/${projectId}`),
   previewLog: (projectId: string) => call<PreviewLog>('GET', `/previews/${projectId}/log`),
+  previewLogFiles: (projectId: string) => call<PreviewLogFile[]>('GET', `/previews/${projectId}/logs`),
+  previewLogFile: (projectId: string, name: string) =>
+    call<{ name: string; text: string; truncated: boolean }>('GET', `/previews/${projectId}/logs/${encodeURIComponent(name)}`),
 
   hire: (projectId: string, issue: Issue, effort?: Effort) =>
     call<Agent>('POST', '/agents', { projectId, repo: issue.repo, number: issue.number, title: issue.title, url: issue.url, effort }),

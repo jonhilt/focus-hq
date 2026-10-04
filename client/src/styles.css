@@ -126,6 +126,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn.primary { background: var(--yellow); }
 .btn.go { background: #b2f2bb; }
 .btn.danger { background: #ffc9c9; }
+.btn.warn { background: #ffe066; }
 .btn.small { padding: 2px 10px; font-size: 14px; border-width: 2px; box-shadow: 2px 2px 0 var(--ink); border-radius: 10px; }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .grow { flex: 1; min-width: 0; }
@@ -188,6 +189,9 @@ input[type='color'] { width: 48px; height: 40px; border: 3px solid var(--ink); b
 
 .preview-links { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
 .preview-links .btn { text-decoration: none; color: inherit; }
+.preview-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.preview-tabs .tab { border-bottom: 3px solid var(--ink); border-radius: 10px; margin-bottom: 0; padding: 4px 12px; font-size: 14px; }
+.preview-tabs .tab.on { background: var(--yellow); padding-bottom: 4px; }
 .preview-links code { font-family: var(--mono); font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ------------------------------------------------------------------ board panel */

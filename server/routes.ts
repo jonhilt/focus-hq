@@ -74,6 +74,8 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.post('/previews', h((req) => office.startPreview(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));
   r.delete('/previews/:projectId', h((req) => office.previews.stop(param(req, 'projectId'))));
   r.get('/previews/:projectId/log', h((req) => office.previews.log(param(req, 'projectId'))));
+  r.get('/previews/:projectId/logs', h((req) => office.previews.logFiles(param(req, 'projectId'))));
+  r.get('/previews/:projectId/logs/:name', h((req) => office.previews.logFile(param(req, 'projectId'), param(req, 'name'))));
 
   // agents
   r.post('/agents', h((req) =>

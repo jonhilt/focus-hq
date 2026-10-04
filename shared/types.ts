@@ -183,6 +183,17 @@ export interface PreviewLink {
   /** e.g. "web" when the command printed JSON like {"urls": {"web": "http://…"}}. */
   name?: string;
   url: string;
+  /** Last check: answering, answering with a 5xx, or not answering at all. */
+  health?: 'up' | 'error' | 'down';
+  /** HTTP status of the last check. */
+  code?: number;
+}
+
+/** A log file in the folder a preview command reported as "logs". */
+export interface PreviewLogFile {
+  name: string;
+  size: number;
+  modified: number;
 }
 
 /** A pull request running on this machine so the manager can try it in their own browser. One per project at a time. */
@@ -205,6 +216,8 @@ export interface Preview {
   links: PreviewLink[];
   /** Where the command keeps its own logs, if it said so in its JSON output. */
   logs?: string;
+  /** Up, but not happily: e.g. the command exited 1 reporting the stack as "unhealthy". */
+  warning?: string;
   startedAt: number;
   error?: string;
 }

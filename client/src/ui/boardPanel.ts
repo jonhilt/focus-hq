@@ -6,6 +6,7 @@ import { statusLine } from '../world/character';
 import { effortPicker, pickedEffort, statusIcon } from './agentPanel';
 import type { BoardTab, Ui } from './context';
 import { busy, fill, h, timeAgo } from './dom';
+import { linkHealth } from './previewPanel';
 
 /** The project's Kanban board up close: assign agents, follow progress, merge PRs. */
 export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): void {
@@ -113,9 +114,14 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
           }, '▶ Preview')]
         : preview.status === 'running'
           ? [
-              ...preview.links.slice(0, 3).map((link) =>
-                h('a', { class: 'btn small primary', href: link.url, target: '_blank', rel: 'noreferrer', title: link.url }, `Open ${link.name ?? 'site'} ↗`)),
-              h('button', { class: 'btn small', title: 'Output, restart and stop', onclick: openPreview }, '▶ Running'),
+              ...preview.links.slice(0, 3).map((link) => {
+                const sick = link.health === 'down' || link.health === 'error';
+                const tip = [link.url, linkHealth(link)].filter(Boolean).join('\n');
+                return h('a', { class: `btn small ${sick ? 'warn' : 'primary'}`, href: link.url, target: '_blank', rel: 'noreferrer', title: tip }, `${sick ? '⚠ ' : ''}Open ${link.name ?? 'site'} ↗`);
+              }),
+              preview.warning
+                ? h('button', { class: 'btn small warn', title: preview.warning, onclick: openPreview }, '⚠ Running')
+                : h('button', { class: 'btn small', title: 'Output, logs, restart and stop', onclick: openPreview }, '▶ Running'),
             ]
           : preview.status === 'failed'
             ? [h('button', { class: 'btn small danger', title: preview.error ?? '', onclick: openPreview }, '⚠ Preview failed')]
