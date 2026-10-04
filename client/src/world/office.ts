@@ -5,9 +5,10 @@ import { state } from '../net/state';
 import { columns } from './board';
 import { Builder, interactive } from './builder';
 import { canvasTexture, fitText, makeCanvas, roundRect, signTexture, UI_FONT } from './canvas';
-import { type Box2, DOOR_W, HALL_HALF, LOBBY, OFFICE, OVER_DOOR, ROOM_DEPTH, ROOM_WIDTH, roomSlot, roomToWorld, rowsFor, SUN_POSITION, WALL_H } from './layout';
+import { type Box2, DOOR_W, HALL_HALF, LOBBY, LOUNGE, LOUNGE_DOOR_X, OFFICE, OVER_DOOR, ROOM_DEPTH, ROOM_WIDTH, roomSlot, roomToWorld, rowsFor, SUN_POSITION, WALL_H } from './layout';
 import { box, flat, toon } from './materials';
 import { bookshelf, ceilingLight, chair, coffeeMachine, cyl, desk, DESK_TOP, plant, rug, sofa, trophy, waterCooler, windowPane } from './props';
+import { Lounge } from './lounge';
 import { buildVacantRoom, ProjectRoom } from './room';
 import type { Scenery } from './scenery';
 import { tiled } from './textures';
@@ -28,6 +29,7 @@ export class World {
   readonly root = new THREE.Group();
   colliders: Box2[] = [];
   rooms = new Map<string, ProjectRoom>();
+  lounge: Lounge | null = null;
   /** Room landscapes by project, theme and slot; kept across rebuilds since they're slow to make. */
   private sceneries = new Map<string, Scenery>();
   private builder: Builder | null = null;
@@ -64,6 +66,7 @@ export class World {
     if (this.builder) this.root.remove(this.builder.group);
     for (const room of this.rooms.values()) room.dispose();
     this.rooms.clear();
+    this.lounge?.dispose();
     const b = new Builder();
     this.builder = b;
 
@@ -72,21 +75,28 @@ export class World {
 
     // floors and ceiling
     b.floor(LOBBY.x0, LOBBY.x1, LOBBY.z0, LOBBY.z1, toon('#ffffff', { map: tiled.carpet('#4a3f6e', 6, 4) }));
-    b.floor(OFFICE.x0, OFFICE.x1, OFFICE.z0, OFFICE.z1, toon('#ffffff', { map: tiled.carpet('#7b2d43', 6, 4) }));
+    b.floor(OFFICE.x0, OFFICE.x1, OFFICE.z0, OFFICE.z1, toon('#ffffff', { map: tiled.carpet('#7b2d43', 4, 3) }));
+    b.floor(LOUNGE.x0, LOUNGE.x1, LOUNGE.z0, LOUNGE.z1, toon('#ffffff', { map: tiled.carpet('#3b3f5c', 4, 2) }));
     b.floor(-HALL_HALF, HALL_HALF, hallEnd, 0, toon('#ffffff', { map: tiled.carpet(HULL.carpet, 3, -hallEnd / 2) }));
     for (const s of [-1, 1]) b.floor(s * (HALL_HALF - 0.45), s * (HALL_HALF - 0.3), hallEnd, 0, toon(HULL.carpetEdge), 0.004);
-    b.ceiling(-OUTER_X, OUTER_X, hallEnd, OFFICE.z1);
+    b.ceiling(-OUTER_X, OUTER_X, hallEnd, LOUNGE.z1);
 
     // walls
     const lobbyWall = '#e2d6dc';
     const officeWall = '#cfd3e6';
     const roomWall = HULL.bulkhead;
-    b.wall(OFFICE.x0, OFFICE.z1, OFFICE.x1, OFFICE.z1, officeWall);
+    b.wall(OFFICE.x0, OFFICE.z1, OFFICE.x1, OFFICE.z1, officeWall, [{ at: LOUNGE_DOOR_X, width: DOOR_W }]);
     b.wall(OFFICE.x0, OFFICE.z0, OFFICE.x0, OFFICE.z1, officeWall);
     b.wall(OFFICE.x1, OFFICE.z0, OFFICE.x1, OFFICE.z1, officeWall);
     b.wall(OFFICE.x0, OFFICE.z0, OFFICE.x1, OFFICE.z0, officeWall, [{ at: 0, width: DOOR_W }]);
     b.wall(LOBBY.x0, LOBBY.z0, LOBBY.x0, LOBBY.z1, lobbyWall);
     b.wall(LOBBY.x1, LOBBY.z0, LOBBY.x1, LOBBY.z1, lobbyWall);
+    // the lobby is wider than the office: close the strips either side of the office's south wall
+    if (LOBBY.x0 < OFFICE.x0) b.wall(LOBBY.x0, LOBBY.z1, OFFICE.x0, LOBBY.z1, lobbyWall);
+    if (LOBBY.x1 > OFFICE.x1) b.wall(OFFICE.x1, LOBBY.z1, LOBBY.x1, LOBBY.z1, lobbyWall);
+    b.wall(LOUNGE.x0, LOUNGE.z0, LOUNGE.x0, LOUNGE.z1, HULL.bulkhead);
+    b.wall(LOUNGE.x1, LOUNGE.z0, LOUNGE.x1, LOUNGE.z1, HULL.bulkhead);
+    b.wall(LOUNGE.x0, LOUNGE.z1, LOUNGE.x1, LOUNGE.z1, HULL.bulkhead);
     for (let r = 0; r < rows; r++) {
       const z0 = -r * ROOM_WIDTH;
       const z1 = -(r + 1) * ROOM_WIDTH;
@@ -132,6 +142,7 @@ export class World {
 
     this.buildLobby(b);
     this.buildManagerOffice(b);
+    this.lounge = new Lounge(b);
 
     this.root.add(b.group);
     this.colliders = b.colliders;
@@ -141,7 +152,7 @@ export class World {
 
   private buildLobby(b: Builder): void {
     // hanging sign over the hallway entrance
-    const hallSign = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 0.7), flat(lcarsSign('Holodecks', { color: LCARS.periwinkle, sub: 'project rooms down the hall', code: 'Deck 4' })));
+    const hallSign = new THREE.Mesh(new THREE.PlaneGeometry(3.7, 0.62), flat(lcarsSign('Holodecks', { color: LCARS.periwinkle, sub: 'project rooms', code: 'Deck 4' })));
     hallSign.position.set(0, 2.75, 0.15);
     b.add(hallSign);
     const officeSign = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 0.62), flat(lcarsSign("Manager's office", { color: LCARS.red, code: '04-01' })));
@@ -152,19 +163,20 @@ export class World {
 
     // big welcome logo on the west wall + directory
     const logo = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.1), flat(lcarsSign('U.S.S. Focus HQ', { w: 1024, h: 245, color: LCARS.gold, sub: 'an office full of Claude Code agents', code: 'NCC-4477' })));
-    logo.position.set(LOBBY.x0 + 0.13, 2.25, 6);
+    const lz = (LOBBY.z0 + LOBBY.z1) / 2;
+    logo.position.set(LOBBY.x0 + 0.13, 2.25, lz);
     logo.rotation.y = Math.PI / 2;
     b.add(logo);
     const directory = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.0), flat(this.directoryTex));
-    directory.position.set(LOBBY.x0 + 0.15, 1.25, 9.6);
+    directory.position.set(LOBBY.x0 + 0.15, 1.25, LOBBY.z1 - 1.6);
     directory.rotation.y = Math.PI / 2;
     b.add(directory);
-    b.add(box(0.1, 2.2, 1.7, '#495057', LOBBY.x0 + 0.08, 0.15, 9.6));
+    b.add(box(0.1, 2.2, 1.7, '#495057', LOBBY.x0 + 0.08, 0.15, LOBBY.z1 - 1.6));
     interactive(directory, { kind: 'teleport' }, () => 'Office directory – jump to a room');
 
     // reception desk
     const reception = new THREE.Group();
-    reception.position.set(-5.5, 0, 4);
+    reception.position.set(LOBBY.x0 + 2.6, 0, lz - 1.4);
     reception.add(box(1.0, 1.05, 3.0, '#ff922b', 0, 0, 0));
     reception.add(box(1.2, 0.08, 3.2, '#ffffff', 0, 1.05, 0));
     const bell = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), toon('#ffd43b'));
@@ -174,15 +186,15 @@ export class World {
     b.collideObject(reception);
 
     const couch = sofa('#4dabf7');
-    couch.position.set(LOBBY.x1 - 0.7, 0, 6);
+    couch.position.set(LOBBY.x1 - 0.7, 0, lz);
     couch.rotation.y = Math.PI;
     b.add(couch);
     b.collideObject(couch);
-    const table = box(0.8, 0.4, 1.4, '#a0693b', LOBBY.x1 - 2.1, 0, 6);
+    const table = box(0.8, 0.4, 1.4, '#a0693b', LOBBY.x1 - 2.1, 0, lz);
     b.add(table);
     b.collideObject(table);
     const coffee = coffeeMachine();
-    coffee.position.set(LOBBY.x1 - 0.5, 0, 10.6);
+    coffee.position.set(LOBBY.x1 - 0.5, 0, LOBBY.z1 - 0.6);
     coffee.rotation.y = Math.PI;
     b.add(coffee);
     b.collideObject(coffee);
@@ -190,23 +202,23 @@ export class World {
     cooler.position.set(LOBBY.x1 - 0.4, 0, 1.6);
     b.add(cooler);
     b.collideObject(cooler);
-    const lobbyRug = rug('#ffa94d', 6, 4);
-    lobbyRug.position.set(0, 0.012, 6);
+    const lobbyRug = rug('#ffa94d', 5, 3.5);
+    lobbyRug.position.set(0, 0.012, lz);
     b.add(lobbyRug);
-    for (const [x, z] of [[LOBBY.x0 + 0.6, 0.7], [LOBBY.x1 - 0.6, 3.2], [LOBBY.x0 + 0.6, 11.3], [-3.6, 0.7], [3.6, 0.7]]) {
+    for (const [x, z] of [[LOBBY.x0 + 0.6, 0.7], [LOBBY.x1 - 0.6, 3.2], [LOBBY.x0 + 0.6, LOBBY.z1 - 0.7], [-HALL_HALF - 0.9, 0.7], [HALL_HALF + 0.9, 0.7]]) {
       const p = plant(1.2);
       p.position.set(x, 0, z);
       b.add(p);
       b.collideObject(p.children[0]);
     }
-    for (const [x, z] of [[-4, 3], [4, 3], [-4, 9], [4, 9]]) {
+    for (const [x, z] of [[-3.5, lz - 2.5], [3.5, lz - 2.5], [-3.5, lz + 2.5], [3.5, lz + 2.5]]) {
       const light = ceilingLight(1.4, 1.4);
       light.position.set(x, WALL_H - 0.03, z);
       b.add(light);
     }
-    for (const z of [3, 9]) {
-      const w = windowPane(2.2, 1.4);
-      w.position.set(LOBBY.x1 - 0.13, 1.9, z === 3 ? 3.4 : 8.6);
+    for (const z of [lz - 2.3, lz + 2.3]) {
+      const w = windowPane(2.0, 1.4);
+      w.position.set(LOBBY.x1 - 0.13, 1.9, z);
       w.rotation.y = -Math.PI / 2;
       b.add(w);
     }
@@ -214,24 +226,24 @@ export class World {
 
   private buildManagerOffice(b: Builder): void {
     const cz = (OFFICE.z0 + OFFICE.z1) / 2;
-    const officeRug = rug('#f8f0fc', 7, 5);
-    officeRug.position.set(0, 0.012, cz + 2);
+    const officeRug = rug('#f8f0fc', 5.5, 4);
+    officeRug.position.set(0.6, 0.012, cz + 0.4);
     b.add(officeRug);
 
     // the manager's desk faces the door; the computer faces the manager's chair
     const bigDesk = desk(3.2, 1.3, '#8b5e3c', '#5c3d2e');
     bigDesk.rotation.y = Math.PI / 2;
-    bigDesk.position.set(0, 0, cz + 2.4);
+    bigDesk.position.set(0.6, 0, cz + 1.4);
     b.add(bigDesk);
     b.collideObject(bigDesk);
     const seat = chair('#212529');
-    seat.position.set(0, 0, cz + 3.6);
+    seat.position.set(0.6, 0, cz + 2.6);
     seat.rotation.y = -Math.PI / 2;
     seat.scale.setScalar(1.2);
     b.add(seat);
 
     const computer = new THREE.Group();
-    computer.position.set(0, DESK_TOP, cz + 2.3);
+    computer.position.set(0.6, DESK_TOP, cz + 1.3);
     const stand = cyl(0.04, 0.12, 0.35, '#343a40');
     stand.position.y = 0.17;
     computer.add(stand);
@@ -247,7 +259,7 @@ export class World {
     interactive(computer, { kind: 'manager' }, () => 'Use the management console');
 
     const inbox = new THREE.Group();
-    inbox.position.set(-1.1, DESK_TOP, cz + 2.3);
+    inbox.position.set(-0.5, DESK_TOP, cz + 1.3);
     inbox.add(box(0.45, 0.12, 0.35, '#e9ecef', 0, 0, 0));
     inbox.add(box(0.38, 0.05, 0.28, '#ffe066', 0, 0.06, 0));
     const inboxSign = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.2), flat(signTexture('＋ New issue', { bg: '#fff3bf', fg: '#e67700', border: '#e67700' })));
@@ -257,20 +269,20 @@ export class World {
     b.add(inbox);
     interactive(inbox, { kind: 'manager', tab: 'issue' }, () => 'File a new issue');
     const cup = trophy();
-    cup.position.set(1.15, DESK_TOP, cz + 2.4);
+    cup.position.set(1.75, DESK_TOP, cz + 1.4);
     b.add(cup);
 
     // mission control on the west wall
-    const wallScreen = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 2.7), flat(this.dashboardTex));
-    wallScreen.position.set(OFFICE.x0 + 0.16, 1.8, cz);
+    const wallScreen = new THREE.Mesh(new THREE.PlaneGeometry(4.0, 2.25), flat(this.dashboardTex));
+    wallScreen.position.set(OFFICE.x0 + 0.16, 1.75, cz - 0.6);
     wallScreen.rotation.y = Math.PI / 2;
     b.add(wallScreen);
-    b.add(box(0.08, 2.9, 5.0, '#212529', OFFICE.x0 + 0.1, 0.35, cz));
+    b.add(box(0.08, 2.45, 4.2, '#212529', OFFICE.x0 + 0.1, 0.52, cz - 0.6));
     interactive(wallScreen, { kind: 'manager' }, () => 'Open mission control');
 
     // blueprint table for new projects
     const blueprint = new THREE.Group();
-    blueprint.position.set(OFFICE.x1 - 2.2, 0, OFFICE.z0 + 2.4);
+    blueprint.position.set(OFFICE.x1 - 1.6, 0, OFFICE.z0 + 1.6);
     blueprint.add(box(1.6, 0.9, 1.1, '#5c7cfa', 0, 0, 0));
     const sheet = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.0), flat(blueprintTexture()));
     sheet.rotation.x = -Math.PI / 2;
@@ -284,8 +296,8 @@ export class World {
     b.collideObject(blueprint.children[0]);
     interactive(blueprint, { kind: 'manager', tab: 'new-project' }, () => 'Plan a new project');
 
-    const shelf = bookshelf(2.4);
-    shelf.position.set(OFFICE.x1 - 0.3, 0, cz + 3);
+    const shelf = bookshelf(2.0);
+    shelf.position.set(OFFICE.x1 - 0.3, 0, cz + 1.6);
     shelf.rotation.y = Math.PI;
     b.add(shelf);
     b.collideObject(shelf);
@@ -295,13 +307,12 @@ export class World {
       b.add(p);
       b.collideObject(p.children[0]);
     }
-    for (const x of [-4, 4]) {
-      const w = windowPane(2.8, 1.6);
-      w.position.set(x, 1.9, OFFICE.z1 - 0.13);
-      w.rotation.y = Math.PI;
-      b.add(w);
-    }
-    for (const [x, z] of [[-4, cz - 2], [4, cz - 2], [-4, cz + 3], [4, cz + 3]]) {
+    // the north wall backs onto the lounge now; the east wall still looks out
+    const view = windowPane(2.0, 1.4);
+    view.position.set(OFFICE.x1 - 0.13, 1.9, cz - 1.6);
+    view.rotation.y = -Math.PI / 2;
+    b.add(view);
+    for (const [x, z] of [[-3, cz - 2], [3, cz - 2], [-3, cz + 2], [3, cz + 2]]) {
       const light = ceilingLight(1.4, 1.4);
       light.position.set(x, WALL_H - 0.03, z);
       b.add(light);
@@ -311,8 +322,9 @@ export class World {
   /** Teleport destinations. */
   places(): Place[] {
     const places: Place[] = [
-      { label: '🛋️ Lobby', position: new THREE.Vector3(0, 0, 9), lookAt: new THREE.Vector3(0, 1.6, 0) },
+      { label: '🛋️ Lobby', position: new THREE.Vector3(0, 0, LOBBY.z1 - 1.2), lookAt: new THREE.Vector3(0, 1.6, 0) },
       { label: "💼 Manager's office", position: new THREE.Vector3(0, 0, OFFICE.z0 + 1.5), lookAt: new THREE.Vector3(0, 1.2, OFFICE.z0 + 5) },
+      { label: '🖖 Observation lounge', position: new THREE.Vector3(-1.2, 0, LOUNGE.z0 + 0.9), lookAt: new THREE.Vector3(0.6, 1.1, LOUNGE.z0 + 4.6) },
     ];
     for (const room of this.rooms.values()) {
       places.push({
@@ -327,6 +339,7 @@ export class World {
 
   /** Human name of where a world position is. */
   locationOf(p: THREE.Vector3): { label: string; projectId?: string } {
+    if (p.z > LOUNGE.z0) return { label: 'Observation lounge' };
     if (p.z > OFFICE.z0) return { label: "Manager's office" };
     if (p.z > 0) return { label: 'Lobby' };
     if (Math.abs(p.x) < HALL_HALF) return { label: 'Hallway' };
@@ -345,6 +358,7 @@ export class World {
     this.lastT = t;
     for (const door of this.doors) door.update(camera, dt);
     for (const room of this.rooms.values()) room.update(t, now, camera);
+    this.lounge?.update(t, camera);
     if (this.panelsDirty && now - this.lastPanels > 1000) {
       this.panelsDirty = false;
       this.lastPanels = now;
@@ -416,7 +430,7 @@ export class World {
     const area = lcarsFrame(ctx, canvas.width, canvas.height, { title: 'Directory', color: LCARS.lilac, seed: 1701 });
     ctx.textBaseline = 'middle';
     let y = area.y + 50;
-    const entries: [string, string][] = [["Manager's office", '↑ north'], ...[...this.rooms.values()].map((r): [string, string] => [r.project.name, `room ${r.slot.index + 1} · ${r.slot.side > 0 ? 'right' : 'left'}`])];
+    const entries: [string, string][] = [["Manager's office", '↑ north'], ['Observation lounge', '↑ past the office'], ...[...this.rooms.values()].map((r): [string, string] => [r.project.name, `room ${r.slot.index + 1} · ${r.slot.side > 0 ? 'right' : 'left'}`])];
     for (const [name, where] of entries.slice(0, 10)) {
       ctx.textAlign = 'left';
       ctx.fillStyle = LCARS.peach;

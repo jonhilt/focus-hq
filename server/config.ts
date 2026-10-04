@@ -33,4 +33,6 @@ export const paths = {
   mirrors: path.join(config.dataDir, 'repos'),
   workspaces: path.join(config.dataDir, 'workspaces'),
   previews: path.join(config.dataDir, 'previews'),
+  /** Read-only checkouts of each project's repos at their default branch, for the planner. */
+  planning: path.join(config.dataDir, 'planning'),
 };

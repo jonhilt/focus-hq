@@ -1,5 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { sleep } from '../util';
+import type { BriefingOfficer, OfficerHooks, OfficerReply, OfficerTurn } from './briefing';
+import { mergeBrief } from './briefing';
+import type { Drafter, DraftRequest, DraftResult } from './planner';
 import { renderText, renderToolUse } from './render';
 import type { AgentRunner, AgentSession, RunHooks, RunOutcome, RunRequest, WorkspaceOps } from './types';
 
@@ -170,3 +173,175 @@ export const demoWorkspace: WorkspaceOps = {
   commitsAhead: async () => 2,
   push: async () => sleep(800),
 };
+
+/** The demo planner: pretends to read the code, then writes a plausible issue from the idea. */
+export class DemoDrafter implements Drafter {
+  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
+
+  async draft(req: DraftRequest, activity: (text: string) => void): Promise<DraftResult> {
+    const wait = async (seconds: number) => {
+      await sleep((seconds * 1000) / this.speed);
+      if (req.signal.aborted) throw new Error('Discarded');
+    };
+    const idea = req.idea || req.revise?.title || 'the change';
+    const backend = /\b(api|endpoint|server|order|auth|login|rate|database|email)\b/i.test(idea);
+    const repo = req.revise?.repo ?? (req.repos.find((r) => (backend ? /api|server|backend/ : /web|front|app|game|dodger/).test(r)) ?? req.repos[0]);
+    const kind = /api/.test(repo) ? 'api' : /game|dodger/.test(repo) ? 'game' : 'web';
+    const files = pick(FILES[kind], 3);
+    const folder = repo.split('/')[1];
+
+    activity('Pulling the latest code');
+    await wait(1);
+    if (req.revise) {
+      activity('Rereading my draft');
+      await wait(1.5);
+      activity(`Reading ${folder}/${files[0]}`);
+      await wait(2);
+      activity('Thinking…');
+      await wait(2);
+      const note = req.revise.notes.trim().replace(/\.$/, '');
+      const body = req.revise.body.replace(/\n+## Out of scope/, `\n- [ ] ${note.charAt(0).toUpperCase()}${note.slice(1)}\n\n## Out of scope`);
+      return { repo, title: req.revise.title, body, sessionId: req.resumeSessionId, costUsd: 0.04 };
+    }
+    for (const step of [`Reading ${folder}/CLAUDE.md`, `Searching ${folder} for related code`, ...files.map((f) => `Reading ${folder}/${f}`), 'Thinking…']) {
+      activity(step);
+      await wait(1.6 + Math.random() * 1.4);
+    }
+    const clean = idea.replace(/\s+/g, ' ').trim().replace(/[.!]$/, '');
+    const title = clean.charAt(0).toUpperCase() + clean.slice(1, 70);
+    const body = [
+      '## Context',
+      '',
+      `The manager asked for: "${clean}". Today the relevant behaviour lives in \`${files[0]}\`, with supporting code in \`${files[1]}\`.`,
+      '',
+      '## What to build',
+      '',
+      `- ${title}, following the existing patterns in \`${files[0]}\`.`,
+      `- Keep the change contained to ${folder}; update \`${files[2]}\` only where it has to change.`,
+      '',
+      '## Acceptance criteria',
+      '',
+      `- [ ] ${title} works end to end${kind === 'api' ? ' (covered by a test against the endpoint)' : ' in the browser'}.`,
+      '- [ ] Empty and error states are handled (no blank screen or unhandled exception).',
+      kind === 'api' ? '- [ ] Invalid input returns a 4xx with a helpful message.' : '- [ ] It looks right at phone width (375px).',
+      '- [ ] Existing tests still pass, and new behaviour has a test.',
+      '',
+      '## Out of scope',
+      '',
+      '- Redesigning anything beyond what this change needs.',
+      '',
+      '## Assumptions',
+      '',
+      `- This belongs in ${repo}${req.repos.length > 1 ? ' rather than the other repos in the project' : ''}.`,
+    ].join('\n');
+    return { repo, title, body, sessionId: `demo-plan-${randomBytes(3).toString('hex')}`, costUsd: 0.11 };
+  }
+}
+
+/** The demo briefing officer: asks the usual questions in order, filling the brief with your answers. */
+export class DemoOfficer implements BriefingOfficer {
+  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
+
+  async turn(req: OfficerTurn, hooks: OfficerHooks): Promise<OfficerReply> {
+    const wait = async (seconds: number) => {
+      await sleep((seconds * 1000) / this.speed);
+      if (req.signal.aborted) throw new Error('Stopped');
+    };
+    const repo = req.repos.find((r) => /web|front|app|game|dodger/.test(r)) ?? req.repos[0];
+    const kind = /api/.test(repo) ? 'api' : /game|dodger/.test(repo) ? 'game' : 'web';
+    const files = FILES[kind];
+    const folder = repo.split('/')[1];
+    const idea = req.idea.replace(/\s+/g, ' ').trim().replace(/[.!?]$/, '');
+    const answers = req.messages.filter((m) => m.from === 'manager').slice(1).map((m) => m.text.replace(/\s+/g, ' ').trim());
+    const last = answers[answers.length - 1] ?? '';
+    const line = (text: string) => (text.length > 140 ? `${text.slice(0, 139)}…` : text);
+    let brief = req.brief;
+    const update = (patch: Parameters<typeof mergeBrief>[1]) => {
+      brief = mergeBrief(brief, patch);
+      hooks.brief(brief);
+    };
+    const session = req.resumeSessionId ?? `demo-brief-${randomBytes(3).toString('hex')}`;
+
+    if (req.kind === 'wrap-up') {
+      hooks.activity('Rereading the brief');
+      await wait(1.5);
+      hooks.activity(`Reading ${folder}/${files[0]}`);
+      await wait(1.5);
+      hooks.activity('Writing up the issue');
+      await wait(2);
+      const title = (brief.summary || idea).replace(/^./, (c) => c.toUpperCase()).slice(0, 70);
+      const list = (items: string[], check = false) => (items.length ? items : ['(none agreed)']).map((i) => `- ${check ? '[ ] ' : ''}${i}`).join('\n');
+      const body = [
+        '## Context',
+        '',
+        `${brief.why ? `${brief.why.replace(/\.?$/, '.')}` : `The manager wants: ${idea}.`}${brief.who ? ` It's for ${brief.who.replace(/^./, (c) => c.toLowerCase()).replace(/\.$/, '')}.` : ''}`,
+        '',
+        `The relevant code lives in \`${files[0]}\` and \`${files[1]}\`. Agreed in a briefing in the observation lounge.`,
+        '',
+        '## What to build',
+        '',
+        list(brief.scope.length ? brief.scope : [idea]),
+        '',
+        '## Acceptance criteria',
+        '',
+        list([...brief.acceptance, 'Existing tests still pass, and the new behaviour has tests'], true),
+        '',
+        '## Out of scope',
+        '',
+        list(brief.outOfScope),
+      ].join('\n');
+      return { text: '', sessionId: session, costUsd: 0.18, draft: { repo, title, body } };
+    }
+
+    if (req.kind === 'open') {
+      for (const step of ['Pulling the latest code', `Reading ${folder}/CLAUDE.md`, `Reading ${folder}/${files[0]}`, `Searching ${folder} for related code`]) {
+        hooks.activity(step);
+        await wait(1.4);
+      }
+      hooks.activity('Updating the brief');
+      update({ summary: idea, open_questions: ['Who is this for?', 'What goes wrong for them today?', 'What tells us it worked?', 'What should we leave out?'] });
+      await wait(1);
+      return {
+        text: `I've had a look: today this lives around \`${folder}/${files[0]}\`. Before I write anything down, who is this for, and what's going wrong for them today? My guess is returning users who lose track of something they meant to come back to.`,
+        sessionId: session,
+        costUsd: 0.09,
+      };
+    }
+
+    hooks.activity('Thinking it over');
+    await wait(1.5);
+    const step = answers.length;
+    hooks.activity('Updating the brief');
+    await wait(0.8);
+    if (step === 1) {
+      update({ who: line(last), open_questions: brief.openQuestions.slice(1) });
+      return {
+        text: `That narrows it. What goes wrong for them today, and why fix it now? I'd guess they lose track of things they meant to come back to, and some never do.`,
+        sessionId: session,
+        costUsd: 0.05,
+      };
+    }
+    if (step === 2) {
+      update({ why: line(last), open_questions: brief.openQuestions.slice(1) });
+      return {
+        text: `Clear. What would tell us it's working? I'd suggest something checkable, like "it's still there after a reload, and on another device once signed in".`,
+        sessionId: session,
+        costUsd: 0.05,
+      };
+    }
+    if (step === 3) {
+      update({ acceptance: [line(last), 'Works at phone width (375px)'], scope: [line(idea.replace(/^./, (c) => c.toUpperCase()))], open_questions: brief.openQuestions.slice(1) });
+      return {
+        text: `Noted, and I've added a phone-width check since \`${files[1]}\` has its own mobile layout. What should we leave out of this first version? I'd keep sharing and notifications for later.`,
+        sessionId: session,
+        costUsd: 0.05,
+      };
+    }
+    if (step === 4) {
+      update({ out_of_scope: [line(last)], open_questions: [] });
+      return { text: `That's everything I needed: nothing important is still open. Anything to add, or shall we wrap up?`, sessionId: session, costUsd: 0.04 };
+    }
+    update({ scope: [...brief.scope, line(last)] });
+    return { text: `Added to the scope. Ready to wrap up whenever you are.`, sessionId: session, costUsd: 0.03 };
+  }
+}

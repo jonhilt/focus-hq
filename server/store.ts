@@ -1,15 +1,19 @@
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import type { Agent, Board, BrowserFrame, Project, Settings, TermLine } from '../shared/types';
+import type { Agent, Board, Briefing, BrowserFrame, Project, Settings, TermLine } from '../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, ROOM_THEMES, type RoomTheme } from '../shared/types';
 import { paths } from './config';
 import { newId } from './util';
+
+/** A briefing as saved: with the officer's session, so the next turn can resume it. */
+export type StoredBriefing = Briefing & { sessionId?: string };
 
 interface PersistedState {
   settings: Settings;
   projects: Project[];
   agents: Agent[];
+  briefing?: StoredBriefing | null;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -31,6 +35,8 @@ export class Store {
   boards = new Map<string, Board>();
   private lines = new Map<string, TermLine[]>();
   browser = new Map<string, BrowserFrame>();
+  /** The briefing in the observation lounge, if one is in session. */
+  briefing: StoredBriefing | null = null;
   private saveTimer: NodeJS.Timeout | null = null;
 
   constructor(private readonly persist: boolean) {}
@@ -42,6 +48,10 @@ export class Store {
     const raw = JSON.parse(fs.readFileSync(paths.state, 'utf8')) as Partial<PersistedState>;
     this.settings = { ...DEFAULT_SETTINGS, ...raw.settings };
     this.projects = raw.projects ?? [];
+    this.briefing = raw.briefing ?? null;
+    if (this.briefing && (this.briefing.status === 'thinking' || this.briefing.status === 'wrapping-up')) {
+      Object.assign(this.briefing, { status: 'failed', activity: 'Interrupted', error: 'Interrupted when the office closed. Say something to pick it back up.' });
+    }
     for (const agent of raw.agents ?? []) {
       if (ACTIVE_STATUSES.includes(agent.status) || agent.status === 'queued') {
         agent.status = 'stopped';
@@ -59,7 +69,7 @@ export class Store {
     if (this.saveTimer) return;
     this.saveTimer = setTimeout(() => {
       this.saveTimer = null;
-      const state: PersistedState = { settings: this.settings, projects: this.projects, agents: [...this.agents.values()] };
+      const state: PersistedState = { settings: this.settings, projects: this.projects, agents: [...this.agents.values()], briefing: this.briefing };
       fs.mkdirSync(path.dirname(paths.state), { recursive: true });
       const tmp = `${paths.state}.tmp`;
       fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
@@ -126,6 +136,11 @@ export class Store {
   removeProject(id: string): void {
     this.projects = this.projects.filter((p) => p.id !== id);
     this.boards.delete(id);
+    this.save();
+  }
+
+  setBriefing(briefing: StoredBriefing | null): void {
+    this.briefing = briefing;
     this.save();
   }
 

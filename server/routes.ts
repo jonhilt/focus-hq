@@ -65,8 +65,28 @@ export function apiRouter(office: Office, store: Store): express.Router {
       str(req.body.body),
       Array.isArray(req.body.labels) ? req.body.labels.filter((l: unknown) => typeof l === 'string' && l.trim()) : [],
       req.body.assign === true ? { effort: effort(req.body.effort) } : undefined,
+      req.body.fromDraft === true,
     ),
   ));
+
+  // the planner at each room's ＋ New issue stand: rough idea in, issue draft out (over the websocket)
+  r.post('/projects/:id/draft', h((req) => {
+    const revise = req.body.revise;
+    return office.planner.start(
+      param(req, 'id'),
+      str(req.body.idea),
+      revise && typeof revise === 'object'
+        ? { repo: str(revise.repo), title: str(revise.title), body: str(revise.body), notes: str(revise.notes) }
+        : undefined,
+    );
+  }));
+  r.delete('/projects/:id/draft', h((req) => office.planner.discard(param(req, 'id'))));
+
+  // briefings in the observation lounge: one at a time, ending in an issue draft at the project's stand
+  r.post('/briefing', h((req) => office.briefings.call(str(req.body.projectId), str(req.body.idea))));
+  r.post('/briefing/say', h((req) => office.briefings.say(str(req.body.text))));
+  r.post('/briefing/wrap-up', h(() => office.briefings.wrapUp()));
+  r.delete('/briefing', h(() => office.briefings.end()));
   r.post('/prs/resolve-conflicts', h((req) => office.resolveConflicts(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));
   r.post('/prs/merge', h((req) => office.mergePullRequest(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));
 

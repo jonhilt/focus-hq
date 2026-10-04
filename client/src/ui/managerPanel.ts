@@ -6,6 +6,7 @@ import { roomTheme, THEME_INFO } from '../world/themes';
 import { effortPicker, pickedEffort } from './agentPanel';
 import type { ManagerTab, Ui } from './context';
 import { busy, h } from './dom';
+import { plannerCard } from './plannerCard';
 
 const COLORS = ['#ff8a5b', '#5bc0eb', '#9bc53d', '#c879ff', '#fde74c', '#ff5d8f', '#2ec4b6', '#f4a259'];
 
@@ -254,10 +255,14 @@ export function issueForm(ui: Ui, projectId?: string, onDone?: () => void): HTML
     repo.replaceChildren(...(p?.repos ?? []).map((r) => h('option', { value: r }, r)));
     repo.disabled = !p?.repos.length;
   };
-  project.addEventListener('change', fillRepos);
   fillRepos();
-  const title = h('input', { type: 'text', placeholder: 'What needs doing?', autofocus: true });
+  const title = h('input', { type: 'text', placeholder: 'What needs doing?' });
   const body = h('textarea', { placeholder: 'Details, acceptance criteria, links… (Markdown)' });
+  const planner = plannerCard(ui, () => project.value, { repo, title, body });
+  project.addEventListener('change', () => {
+    fillRepos();
+    planner.refresh();
+  });
   const labels = h('input', { type: 'text', placeholder: 'bug, enhancement (must already exist on GitHub)' });
   const assign = h('input', { type: 'checkbox', checked: true });
   const effort = effortPicker();
@@ -273,6 +278,7 @@ export function issueForm(ui: Ui, projectId?: string, onDone?: () => void): HTML
       labels: labels.value.split(',').map((l) => l.trim()).filter(Boolean),
       assign: assign.checked,
       effort: pickedEffort(effort),
+      fromDraft: planner.usedDraft(),
     });
     title.value = '';
     body.value = '';
@@ -282,8 +288,9 @@ export function issueForm(ui: Ui, projectId?: string, onDone?: () => void): HTML
   }, ui.error);
 
   return h('div', null,
+    h('div', { class: 'field' }, h('label', null, 'Project'), project),
+    planner.el,
     h('div', { class: 'row' },
-      h('div', { class: 'field grow' }, h('label', null, 'Project'), project),
       h('div', { class: 'field grow' }, h('label', null, 'Repository'), repo),
     ),
     h('div', { class: 'field' }, h('label', null, 'Title'), title),

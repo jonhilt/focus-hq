@@ -1,5 +1,7 @@
 import type { Agent, Board, Effort, Preview, Project, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
 import type { AgentManager } from './agents/manager';
+import type { Briefings } from './agents/briefing';
+import type { IssuePlanner } from './agents/planner';
 import { config } from './config';
 import type { GitHubProvider } from './github/provider';
 import type { Hub } from './hub';
@@ -29,6 +31,8 @@ export class Office {
     private readonly hub: Hub,
     private readonly github: GitHubProvider,
     readonly previews: Previews,
+    readonly planner: IssuePlanner,
+    readonly briefings: Briefings,
     version: string,
   ) {
     this.info = {
@@ -63,6 +67,8 @@ export class Office {
       lines: Object.fromEntries(agents.map((a) => [a.id, this.store.recentLines(a.id)])),
       browser: Object.fromEntries(this.store.browser),
       previews: this.previews.list(),
+      drafts: this.planner.list(),
+      briefing: this.briefings.current(),
     };
   }
 
@@ -96,6 +102,8 @@ export class Office {
     for (const agent of this.store.agentsIn(id)) await this.agents.dismiss(agent.id);
     this.store.removeProject(id);
     this.broadcastProjects();
+    this.planner.remove(id);
+    this.briefings.projectRemoved(id);
     await this.previews.remove(id);
   }
 
@@ -142,13 +150,14 @@ export class Office {
 
   // ---------------------------------------------------------------- issues and pull requests
 
-  /** `assign` hires an agent for the new issue straight away. */
-  async createIssue(projectId: string, repo: string, title: string, body: string, labels: string[], assign?: { effort?: Effort }) {
+  /** `assign` hires an agent for the new issue straight away; `fromDraft` clears the planner's draft once it's filed. */
+  async createIssue(projectId: string, repo: string, title: string, body: string, labels: string[], assign?: { effort?: Effort }, fromDraft = false) {
     const project = this.store.project(projectId);
     if (!project.repos.includes(repo)) throw new Error(`${repo} is not part of ${project.name}`);
     if (!title.trim()) throw new Error('An issue needs a title');
     const issue = await this.github.createIssue(repo, title.trim(), body, labels);
     this.hub.toast('success', `Filed ${repo}#${issue.number}`);
+    if (fromDraft) this.planner.discard(projectId);
     const board = this.store.boards.get(projectId);
     if (board && !board.issues.some((i) => i.repo === repo && i.number === issue.number)) {
       board.issues.push(issue);

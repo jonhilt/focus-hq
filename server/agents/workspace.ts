@@ -53,21 +53,31 @@ export async function removeWorktree(repo: string, agentId: string): Promise<voi
  * Checks a pull request's head (or a branch) out into a preview folder. Preview folders are reused from one preview to
  * the next, so installed dependencies and build output (ignored files) survive. Returns the commit checked out.
  */
-export async function checkoutPreview(repo: string, dir: string, ref: { pr: number } | { branch: string }): Promise<string> {
-  const mirror = mirrorDir(repo);
+export function checkoutPreview(repo: string, dir: string, ref: { pr: number } | { branch: string }): Promise<string> {
   // refs/pull/N/head exists for every PR, forks included
   const source = 'pr' in ref ? `refs/pull/${ref.pr}/head` : `refs/heads/${ref.branch}`;
+  return checkoutDetached(repo, dir, source, 'refs/focus/preview');
+}
+
+/** The default branch's latest commit, detached in `dir`, for agents that only read the code (the planner). */
+export function checkoutLatest(repo: string, dir: string): Promise<string> {
+  return checkoutDetached(repo, dir, 'HEAD', 'refs/focus/latest');
+}
+
+/** Fetches `source` from origin into the mirror's `localRef` and checks it out, detached, in a reusable folder. */
+function checkoutDetached(repo: string, dir: string, source: string, localRef: string): Promise<string> {
+  const mirror = mirrorDir(repo);
   return lock.with(repo, async () => {
     await ensureMirror(repo);
-    await git(mirror, ['fetch', 'origin', `+${source}:refs/focus/preview`], 10 * 60_000);
-    const sha = (await git(mirror, ['rev-parse', 'refs/focus/preview'])).trim();
+    await git(mirror, ['fetch', 'origin', `+${source}:${localRef}`], 10 * 60_000);
+    const sha = (await git(mirror, ['rev-parse', localRef])).trim();
     const reused =
       fs.existsSync(path.join(dir, '.git')) &&
       (await git(dir, ['checkout', '--detach', '--force', sha]).then(() => true, () => false));
     if (reused) {
-      await git(dir, ['clean', '-fd']); // untracked files from the last preview; ignored ones (node_modules, bin/obj) stay
+      await git(dir, ['clean', '-fd']); // untracked files from last time; ignored ones (node_modules, bin/obj) stay
     } else {
-      // first preview here, or a checkout broken by an earlier failure or a re-cloned mirror
+      // first checkout here, or one broken by an earlier failure or a re-cloned mirror
       fs.rmSync(dir, { recursive: true, force: true });
       await git(mirror, ['worktree', 'prune']);
       fs.mkdirSync(path.dirname(dir), { recursive: true });

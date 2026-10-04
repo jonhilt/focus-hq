@@ -6,6 +6,7 @@ import { state } from './net/state';
 import { Player } from './player';
 import { openAgentPanel } from './ui/agentPanel';
 import { openBoardPanel } from './ui/boardPanel';
+import { briefingPanelOpen, openBriefingPanel } from './ui/briefingPanel';
 import type { Ui } from './ui/context';
 import { h } from './ui/dom';
 import { Hud } from './ui/hud';
@@ -14,6 +15,7 @@ import { Panels } from './ui/panels';
 import { openPreviewPanel } from './ui/previewPanel';
 import { openNewIssuePanel, openPausePanel, openTeleportPanel } from './ui/travelPanel';
 import type { Interaction } from './world/builder';
+import { plannerFor } from '../../shared/crew';
 import { sound } from './sound';
 import { SUN_POSITION } from './world/layout';
 import { World } from './world/office';
@@ -84,6 +86,12 @@ async function main() {
     },
     openPreview: (projectId) => openPreviewPanel(ui, projectId),
     openNewIssue: (projectId) => openNewIssuePanel(ui, projectId),
+    openBriefing: (projectId) => openBriefingPanel(ui, projectId),
+    goToLounge: () => {
+      const lounge = world.places().find((p) => p.label.includes('lounge'));
+      if (lounge) ui.goTo(lounge);
+      openBriefingPanel(ui);
+    },
     openManager: (tab) => openManagerPanel(ui, tab),
     openTeleport: () => openTeleportPanel(ui),
   };
@@ -143,7 +151,11 @@ async function main() {
   const syncWorld = () => {
     world.sync(state.projects);
     player.colliders = world.colliders;
-    for (const room of world.rooms.values()) room.syncAgents();
+    for (const room of world.rooms.values()) {
+      room.syncAgents();
+      room.syncPlanner();
+    }
+    world.lounge?.sync();
     world.markPanels();
   };
   state.on('snapshot', () => {
@@ -172,6 +184,19 @@ async function main() {
   state.on('board', (projectId) => {
     world.room(projectId)?.markBoard();
     world.markPanels();
+  });
+  state.on('draft', (projectId) => world.room(projectId)?.syncPlanner());
+  let briefingStatus = state.briefing?.status;
+  state.on('briefing', () => {
+    world.lounge?.sync();
+    for (const room of world.rooms.values()) room.syncPlanner();
+    const b = state.briefing;
+    if (b && b.status !== briefingStatus && !briefingPanelOpen()) {
+      const name = plannerFor(b.projectId).name;
+      if (b.status === 'waiting') hud.toast('info', `🖖 ${name} has a question for you in the observation lounge`, { label: 'Answer', run: () => ui.openBriefing() });
+      if (b.status === 'failed') hud.toast('error', `${name} lost the thread of the briefing: ${b.error ?? ''}`, { label: 'Open', run: () => ui.openBriefing() });
+    }
+    briefingStatus = b?.status;
   });
   state.on('toast', (e) => {
     const agentId = e.agentId;
@@ -233,6 +258,9 @@ async function main() {
         break;
       case 'new-issue':
         ui.openNewIssue(i.projectId);
+        break;
+      case 'briefing':
+        ui.openBriefing();
         break;
       case 'manager':
         ui.openManager(i.tab);

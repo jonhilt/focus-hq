@@ -1,11 +1,12 @@
 import * as THREE from 'three';
+import { plannerFor } from '../../../shared/crew';
 import type { Board, Project } from '../../../shared/types';
 import { DESKS_PER_ROOM } from '../../../shared/types';
 import { state } from '../net/state';
 import { KanbanBoard } from './board';
 import { type Builder, interactive } from './builder';
 import { signTexture } from './canvas';
-import { Character } from './character';
+import { agentView, Character, type CrewView } from './character';
 import { OVER_DOOR, type RoomSlot, ROOM_DEPTH, ROOM_WIDTH, WALL_H } from './layout';
 import { box, flat, lighten, toon } from './materials';
 import { ceilingLight, chair, cyl, DESK_TOP, desk, laptop, paperStack, plant } from './props';
@@ -54,6 +55,8 @@ export class ProjectRoom {
   readonly group = new THREE.Group();
   readonly desks: DeskSlot[] = [];
   private board = new KanbanBoard();
+  /** The operations officer behind the ＋ New issue stand, who drafts issues. */
+  private planner!: Character;
   private prPile = new THREE.Group();
   private prCount = -1;
   private boardDirty = true;
@@ -154,12 +157,24 @@ export class ProjectRoom {
     pen.position.set(0.05, 1.16, 0.15);
     kiosk.add(pen);
     const kioskSign = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.28), flat(signTexture('＋ New issue', { bg: '#fff3bf', fg: '#e67700', border: '#e67700' })));
-    kioskSign.position.set(0, 1.55, 0);
+    kioskSign.position.set(0, 2.55, 0); // above the officer's head and speech bubble
     kioskSign.rotation.y = -Math.PI / 2;
     kiosk.add(kioskSign);
     this.group.add(kiosk);
     interactive(kiosk, { kind: 'new-issue', projectId: project.id }, () => `File a new issue for ${project.name}`);
     builder.collideObject(kiosk.children[0]);
+
+    // the room's operations officer sits behind the stand, facing whoever walks up to it
+    const station = new THREE.Group();
+    station.position.set(0.8, 0, 0);
+    station.rotation.y = Math.PI;
+    const stool = chair('#495057');
+    station.add(stool);
+    this.planner = new Character(this.plannerView());
+    station.add(this.planner.group);
+    kiosk.add(station);
+    interactive(this.planner.group, { kind: 'new-issue', projectId: project.id }, () => `Ask ${plannerFor(project.id).name} to draft an issue`);
+    builder.collideObject(stool);
 
     for (const [x, z] of [[HALF_D - 0.6, -HALF_W + 0.6], [HALF_D - 0.6, HALF_W - 0.6], [-HALF_D + 0.6, -HALF_W + 0.6], [-HALF_D + 0.6, HALF_W - 0.6]]) {
       const p = plant(1.1, ['#e07a5f', '#3d405b', '#81b29a', '#f2cc8f'][Math.abs(x + z) % 4 | 0]);
@@ -178,6 +193,7 @@ export class ProjectRoom {
     }
 
     this.syncAgents();
+    this.syncPlanner();
   }
 
   private buildDesk(index: number, builder: Builder): DeskSlot {
@@ -251,16 +267,40 @@ export class ProjectRoom {
           slot.seat.remove(slot.character.group);
           slot.character.dispose();
         }
-        slot.character = new Character(agent);
+        slot.character = new Character(agentView(agent));
         slot.seat.add(slot.character.group);
         slot.agentId = agent.id;
         interactive(slot.character.group, { kind: 'agent', id: agent.id }, () => `Talk to ${agent.name} (#${agent.issue.number})`);
         interactive(slot.laptopGroup, { kind: 'agent', id: agent.id }, () => `Look at ${agent.name}'s laptop (#${agent.issue.number})`);
       }
-      slot.character!.setAgent(agent);
+      slot.character!.set(agentView(agent));
       slot.screen.setAgent(agent);
     }
     this.boardDirty = true;
+  }
+
+  /** What the planner is up to, from the project's issue draft. */
+  private plannerView(): CrewView {
+    const crew = plannerFor(this.project.id);
+    const draft = state.drafts.get(this.project.id);
+    const base = { name: crew.name, avatar: crew.avatar, tag: 'Ops' };
+    switch (draft?.status) {
+      case 'drafting':
+        return { ...base, status: 'working', icon: '📝', line: draft.activity, thinking: draft.activity === 'Thinking…' };
+      case 'ready':
+        return { ...base, status: 'done', icon: '📋', line: 'Draft ready – come and see' };
+      case 'failed':
+        return { ...base, status: 'error', line: 'Couldn’t finish the draft' };
+      default:
+        return { ...base, status: 'queued', icon: '🖖', line: 'Got an idea? I’ll write it up' };
+    }
+  }
+
+  syncPlanner(): void {
+    // while they're in a briefing, the officer is in the observation lounge, not at the stand
+    const briefing = state.briefing;
+    this.planner.group.visible = !(briefing?.projectId === this.project.id && briefing.status !== 'done');
+    this.planner.set(this.plannerView());
   }
 
   markScreen(agentId: string): void {
@@ -288,6 +328,7 @@ export class ProjectRoom {
       this.rebuildPrPile(board);
     }
     const inRoom = camera.distanceTo(this.slot.center) < 14;
+    if (inRoom) this.planner.update(t, camera.distanceTo(this.planner.group.getWorldPosition(tmp)));
     for (const slot of this.desks) {
       if (!slot.character) {
         slot.screen.maybeDraw(now, false, undefined, undefined);
@@ -315,6 +356,7 @@ export class ProjectRoom {
       slot.screen.dispose();
       slot.character?.dispose();
     }
+    this.planner.dispose();
   }
 }
 

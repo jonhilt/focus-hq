@@ -1,0 +1,195 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { createSdkMcpServer, type McpSdkServerConfigWithInstance, type Options, query, tool } from '@anthropic-ai/claude-agent-sdk';
+import { z } from 'zod';
+import type { Brief, Settings } from '../../shared/types';
+import { paths } from '../config';
+import { errorMessage, truncate } from '../util';
+import { type BriefingOfficer, briefingPrompt, briefingSystemPrompt, mergeBrief, type OfficerHooks, type OfficerReply, type OfficerTurn } from './briefing';
+import { agentEnv } from './claudeRunner';
+import { type Drafter, type DraftRequest, type DraftResult, draftSchema, plannerPrompt, plannerSystemPrompt, repoFolders } from './planner';
+import { renderToolUse } from './render';
+import { checkoutLatest } from './workspace';
+
+// The permanent crew's Claude Code sessions: they read the project's code and change nothing. Read-only because they
+// only have Read, Glob and Grep (plus the office's own tools), `dontAsk` denies anything not pre-approved, and none of
+// your settings, hooks or MCP servers load.
+
+const READ_ONLY_TOOLS = ['Read', 'Glob', 'Grep'];
+const TURN_TIMEOUT_MS = 8 * 60_000;
+
+/** planning/<project>/<repo>: one folder per repo under the session's cwd, so Glob and Grep reach all of them. */
+const planningDir = (projectId: string) => path.join(paths.planning, projectId);
+
+async function checkouts(projectId: string, repos: string[], activity: (text: string) => void): Promise<string> {
+  const cwd = planningDir(projectId);
+  const folders = repoFolders(repos);
+  activity(`Pulling the latest ${repos.length === 1 ? 'code' : `code of ${repos.length} repos`}`);
+  await Promise.all(repos.map((repo) => checkoutLatest(repo, path.join(cwd, folders.get(repo)!))));
+  return cwd;
+}
+
+interface ReadOnlyRun {
+  cwd: string;
+  systemAppend: string;
+  prompt: string;
+  settings: Settings;
+  signal: AbortSignal;
+  activity: (text: string) => void;
+  resume?: string;
+  schema?: Record<string, unknown>;
+  /** The office's own tools for this session, all pre-approved. */
+  tools?: { server: McpSdkServerConfigWithInstance; names: string[] };
+}
+
+interface ReadOnlyResult {
+  text: string;
+  structured: unknown;
+  sessionId?: string;
+  costUsd?: number;
+}
+
+/** One turn of a read-only session, reporting what it's doing as it goes. */
+async function runReadOnly(run: ReadOnlyRun): Promise<ReadOnlyResult> {
+  const abort = new AbortController();
+  const onAbort = () => abort.abort();
+  run.signal.addEventListener('abort', onAbort);
+  const timer = setTimeout(onAbort, TURN_TIMEOUT_MS);
+  const extra = run.tools ? run.tools.names.map((n) => `mcp__${run.tools!.server.name}__${n}`) : [];
+  const options: Options = {
+    cwd: run.cwd,
+    abortController: abort,
+    model: run.settings.model || undefined,
+    systemPrompt: { type: 'preset', preset: 'claude_code', append: run.systemAppend },
+    tools: READ_ONLY_TOOLS,
+    allowedTools: [...READ_ONLY_TOOLS, ...extra],
+    permissionMode: 'dontAsk',
+    settingSources: [],
+    mcpServers: run.tools ? { [run.tools.server.name]: run.tools.server } : {},
+    strictMcpConfig: true,
+    outputFormat: run.schema ? { type: 'json_schema', schema: run.schema } : undefined,
+    maxTurns: 40,
+    resume: run.resume,
+    env: agentEnv(),
+  };
+
+  let sessionId = run.resume;
+  try {
+    for await (const msg of query({ prompt: run.prompt, options })) {
+      if (msg.type === 'system' && msg.subtype === 'init') sessionId = msg.session_id;
+      else if (msg.type === 'assistant' && msg.parent_tool_use_id === null) {
+        for (const block of msg.message.content) {
+          if (block.type === 'tool_use') {
+            if (block.name.startsWith('mcp__brief__')) run.activity('Updating the brief');
+            else run.activity(renderToolUse(block.name, (block.input ?? {}) as Record<string, unknown>, run.cwd).activity ?? '');
+          } else if (block.type === 'thinking') run.activity('Thinking…');
+          else if (block.type === 'text' && block.text.trim()) run.activity(truncate(block.text.trim().split('\n')[0], 100));
+        }
+      } else if (msg.type === 'result') {
+        if (msg.subtype !== 'success' || msg.is_error) throw new Error(msg.subtype === 'success' ? msg.result : (msg.errors?.join('\n') || msg.subtype));
+        return { text: msg.result, structured: msg.structured_output, sessionId, costUsd: msg.total_cost_usd };
+      }
+    }
+    throw new Error('The session stopped without a result');
+  } catch (err) {
+    if (run.signal.aborted) throw new Error('Stopped');
+    if (abort.signal.aborted) throw new Error(`Gave up after ${TURN_TIMEOUT_MS / 60_000} minutes`);
+    throw new Error(errorMessage(err));
+  } finally {
+    clearTimeout(timer);
+    run.signal.removeEventListener('abort', onAbort);
+  }
+}
+
+function asDraft(out: unknown, repos: string[]): DraftResult {
+  const d = (out ?? {}) as Partial<DraftResult>;
+  if (!d.title || !d.body) throw new Error('Finished without writing the issue');
+  return { repo: String(d.repo ?? repos[0]), title: String(d.title), body: String(d.body) };
+}
+
+/** The planner at a room's stand: one idea in, one issue draft out. */
+export class ClaudeDrafter implements Drafter {
+  forget(projectId: string): void {
+    // the mirrors' `git worktree prune` drops the registrations next time
+    fs.rmSync(planningDir(projectId), { recursive: true, force: true });
+  }
+
+  async draft(req: DraftRequest, activity: (text: string) => void): Promise<DraftResult> {
+    const cwd = await checkouts(req.projectId, req.repos, activity);
+    if (req.signal.aborted) throw new Error('Discarded');
+    const result = await runReadOnly({
+      cwd,
+      systemAppend: plannerSystemPrompt(req),
+      prompt: plannerPrompt(req),
+      settings: req.settings,
+      signal: req.signal,
+      activity,
+      resume: req.resumeSessionId,
+      schema: draftSchema(req.repos),
+    }).catch((err: Error) => {
+      throw req.signal.aborted ? new Error('Discarded') : err;
+    });
+    return { ...asDraft(result.structured, req.repos), sessionId: result.sessionId, costUsd: result.costUsd };
+  }
+}
+
+/** The officer in a briefing: each turn resumes the same session, with a tool to keep the brief on the wall screen. */
+export class ClaudeOfficer implements BriefingOfficer {
+  async turn(req: OfficerTurn, hooks: OfficerHooks): Promise<OfficerReply> {
+    // fresh code at the start (or after a lost session); later turns read what's already checked out
+    const cwd = req.kind === 'open' || !req.resumeSessionId ? await checkouts(req.projectId, req.repos, hooks.activity) : planningDir(req.projectId);
+    if (req.signal.aborted) throw new Error('Stopped');
+    let brief = req.brief;
+    const server = briefServer(() => brief, (next) => {
+      brief = next;
+      hooks.brief(next);
+    });
+    const wrapUp = req.kind === 'wrap-up';
+    const result = await runReadOnly({
+      cwd,
+      systemAppend: briefingSystemPrompt(req),
+      prompt: briefingPrompt(req),
+      settings: req.settings,
+      signal: req.signal,
+      activity: hooks.activity,
+      resume: req.resumeSessionId,
+      schema: wrapUp ? draftSchema(req.repos) : undefined,
+      tools: { server, names: ['update_brief'] },
+    });
+    return {
+      text: wrapUp ? '' : result.text,
+      sessionId: result.sessionId,
+      costUsd: result.costUsd,
+      draft: wrapUp ? asDraft(result.structured, req.repos) : undefined,
+    };
+  }
+}
+
+/** The update_brief tool: the officer's pen for the lounge's wall screen. */
+function briefServer(get: () => Brief, set: (brief: Brief) => void): McpSdkServerConfigWithInstance {
+  const lines = z.array(z.string()).optional();
+  return createSdkMcpServer({
+    name: 'brief',
+    version: '1.0.0',
+    alwaysLoad: true,
+    tools: [
+      tool(
+        'update_brief',
+        'Update the brief on the observation lounge wall screen, which the manager can see. Pass only the fields that change; a list replaces the whole list. One short line per entry.',
+        {
+          summary: z.string().optional().describe('What we are building, in one sentence'),
+          why: z.string().optional().describe('The problem it solves and why it matters'),
+          who: z.string().optional().describe('Who it is for'),
+          scope: lines.describe('What is in'),
+          out_of_scope: lines.describe('What is deliberately left out or for later'),
+          acceptance: lines.describe('Observable, testable acceptance criteria agreed so far'),
+          open_questions: lines.describe('What still needs deciding; drop entries once answered'),
+        },
+        async (patch) => {
+          set(mergeBrief(get(), patch));
+          return { content: [{ type: 'text', text: 'The brief on the screen is updated.' }] };
+        },
+      ),
+    ],
+  });
+}

@@ -1,4 +1,4 @@
-import type { Agent, Board, BrowserFrame, Preview, Project, ServerEvent, ServerInfo, TermLine } from '../../../shared/types';
+import type { Agent, Board, Briefing, BrowserFrame, IssueDraft, Preview, Project, ServerEvent, ServerInfo, TermLine } from '../../../shared/types';
 
 type Events = {
   snapshot: void;
@@ -13,6 +13,9 @@ type Events = {
   preview: { projectId: string; preview: Preview | null; before?: Preview };
   'preview-log': Extract<ServerEvent, { type: 'preview-log' }>;
   toast: Extract<ServerEvent, { type: 'toast' }>;
+  /** A project's issue draft changed (project id). */
+  draft: string;
+  briefing: void;
   connection: boolean;
 };
 
@@ -30,6 +33,10 @@ export class OfficeState {
   browser = new Map<string, BrowserFrame>();
   /** Running previews by project id. */
   previews = new Map<string, Preview>();
+  /** The planner's issue draft per project id, while one is being written or waits to be filed. */
+  drafts = new Map<string, IssueDraft>();
+  /** The briefing in the observation lounge, if one is in session. */
+  briefing: Briefing | null = null;
   connected = false;
 
   private listeners = new Map<keyof Events, Set<Listener<never>>>();
@@ -79,6 +86,8 @@ export class OfficeState {
         this.lines = new Map(Object.entries(s.lines));
         this.browser = new Map(Object.entries(s.browser));
         this.previews = new Map((s.previews ?? []).map((p) => [p.projectId, p]));
+        this.drafts = new Map((s.drafts ?? []).map((d) => [d.projectId, d]));
+        this.briefing = s.briefing ?? null;
         this.emit('snapshot', undefined);
         break;
       }
@@ -131,6 +140,15 @@ export class OfficeState {
         break;
       case 'toast':
         this.emit('toast', event);
+        break;
+      case 'briefing':
+        this.briefing = event.briefing;
+        this.emit('briefing', undefined);
+        break;
+      case 'draft':
+        if (event.draft) this.drafts.set(event.projectId, event.draft);
+        else this.drafts.delete(event.projectId);
+        this.emit('draft', event.projectId);
         break;
     }
   }

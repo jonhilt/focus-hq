@@ -3,9 +3,12 @@ import http from 'node:http';
 import path from 'node:path';
 import express from 'express';
 import { BrowserPool } from './agents/browserTool';
+import { Briefings } from './agents/briefing';
+import { ClaudeDrafter, ClaudeOfficer } from './agents/claudeCrew';
 import { ClaudeRunner } from './agents/claudeRunner';
-import { DemoRunner, demoWorkspace } from './agents/demoRunner';
+import { DemoDrafter, DemoOfficer, DemoRunner, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
+import { IssuePlanner } from './agents/planner';
 import type { WorkspaceOps } from './agents/types';
 import * as git from './agents/workspace';
 import { config } from './config';
@@ -36,7 +39,9 @@ async function main() {
   const browsers = new BrowserPool();
   const runner = config.demo ? new DemoRunner() : new ClaudeRunner(browsers);
   const previews = new Previews(hub, github, config.demo);
-  const office = new Office(store, hub, github, previews, await currentVersion());
+  const planner = new IssuePlanner(store, hub, config.demo ? new DemoDrafter() : new ClaudeDrafter());
+  const briefings = new Briefings(store, hub, planner, config.demo ? new DemoOfficer() : new ClaudeOfficer());
+  const office = new Office(store, hub, github, previews, planner, briefings, await currentVersion());
   office.agents = new AgentManager(store, hub, github, runner, config.demo ? demoWorkspace : liveWorkspace, (id) => office.boardChanged(id));
 
   if (config.demo && store.projects.length === 0) {

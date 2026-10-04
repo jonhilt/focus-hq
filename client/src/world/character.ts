@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Agent, AgentStatus } from '../../../shared/types';
+import type { Agent, AgentStatus, Avatar } from '../../../shared/types';
 import { canvasTexture, fitText, makeCanvas, roundRect, UI_FONT } from './canvas';
 import { darken, toon } from './materials';
 import { ball, cyl } from './props';
@@ -46,6 +46,33 @@ export function statusLine(agent: Agent): string {
   }
 }
 
+/** What a character shows: an agent at their desk, or a permanent crew member like the planner at the stand. */
+export interface CrewView {
+  name: string;
+  avatar: Avatar;
+  /** Picks the pose and the bubble's colours. */
+  status: AgentStatus;
+  /** The speech bubble's second line. */
+  line: string;
+  /** Right of the name on the bubble, e.g. "#12". */
+  tag?: string;
+  /** Replaces the status icon on the bubble. */
+  icon?: string;
+  /** Hand on chin. */
+  thinking?: boolean;
+}
+
+export function agentView(agent: Agent): CrewView {
+  return {
+    name: agent.name,
+    avatar: agent.avatar,
+    status: agent.status,
+    line: statusLine(agent),
+    tag: `#${agent.issue.number}`,
+    thinking: agent.activity === 'Thinking…',
+  };
+}
+
 /** A chibi office worker sitting on a chair, facing +X. */
 export class Character {
   readonly group = new THREE.Group();
@@ -62,8 +89,8 @@ export class Character {
   private celebrateUntil = 0;
   private lastStatus: AgentStatus | null = null;
 
-  constructor(public agent: Agent) {
-    const { shirt, skin, hair, accessory } = agent.avatar;
+  constructor(private view: CrewView) {
+    const { shirt, skin, hair, accessory } = view.avatar;
 
     this.body = new THREE.Group();
     this.group.add(this.body);
@@ -138,10 +165,10 @@ export class Character {
     this.bubble.position.set(0, 1.95, 0);
     this.bubble.renderOrder = 10;
     this.group.add(this.bubble);
-    this.setAgent(agent);
+    this.set(view);
   }
 
-  private addAccessory(kind: Agent['avatar']['accessory'], hair: string): void {
+  private addAccessory(kind: Avatar['accessory'], hair: string): void {
     if (kind === 'glasses') {
       for (const s of [-1, 1]) {
         const ring = new THREE.Mesh(new THREE.TorusGeometry(0.068, 0.013, 6, 16), toon('#222'));
@@ -182,18 +209,18 @@ export class Character {
     }
   }
 
-  setAgent(agent: Agent): void {
-    if (this.lastStatus && this.lastStatus !== 'done' && agent.status === 'done') this.celebrateUntil = performance.now() + 3500;
-    this.lastStatus = agent.status;
-    this.agent = agent;
+  set(view: CrewView): void {
+    if (this.lastStatus && this.lastStatus !== 'done' && view.status === 'done') this.celebrateUntil = performance.now() + 3500;
+    this.lastStatus = view.status;
+    this.view = view;
     this.drawBubble();
   }
 
   private drawBubble(): void {
-    const agent = this.agent;
-    const style = STATUS_STYLE[agent.status];
-    const text = statusLine(agent);
-    const key = `${agent.name}|${agent.status}|${text}|${agent.issue.number}`;
+    const view = this.view;
+    const style = STATUS_STYLE[view.status];
+    const text = view.line;
+    const key = `${view.name}|${view.status}|${text}|${view.tag}|${view.icon}`;
     if (key === this.bubbleKey) return;
     this.bubbleKey = key;
     const { canvas, ctx } = this.bubbleCanvas;
@@ -219,12 +246,12 @@ export class Character {
     ctx.fillStyle = '#1b1b1b';
     ctx.font = `700 46px ${UI_FONT}`;
     ctx.textAlign = 'left';
-    ctx.fillText(`${style.icon} ${agent.name}`, 30, 52);
+    ctx.fillText(`${view.icon ?? style.icon} ${view.name}`, 30, 52);
     ctx.fillStyle = style.fg;
     ctx.globalAlpha = 0.8;
     ctx.font = `600 34px ${UI_FONT}`;
     ctx.textAlign = 'right';
-    ctx.fillText(`#${agent.issue.number}`, w - 30, 54);
+    if (view.tag) ctx.fillText(view.tag, w - 30, 54);
     ctx.globalAlpha = 1;
     ctx.textAlign = 'left';
     ctx.font = `500 34px ${UI_FONT}`;
@@ -234,10 +261,10 @@ export class Character {
 
   /** dist = camera distance, used to fade the speech bubble when you look over their shoulder. */
   update(t: number, dist = 10): void {
-    const s = this.agent.status;
+    const s = this.view.status;
     const p = t + this.phase;
     const now = performance.now();
-    const thinking = this.agent.activity === 'Thinking…';
+    const thinking = this.view.thinking;
 
     // defaults: hands on the keyboard
     let lz = -0.42, rz = -0.42, lx = 0, rx = 0;

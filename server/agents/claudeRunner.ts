@@ -57,6 +57,16 @@ function summarizeInput(toolName: string, input: Record<string, unknown>): strin
   return `${toolName}(${truncate(typeof first === 'string' ? first : JSON.stringify(first ?? ''), 300)})`;
 }
 
+/** The environment every Claude Code session gets. */
+export function agentEnv(): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: 'focus/0.1.0' };
+  if (process.env.FOCUS_USE_API_KEY !== '1') {
+    // Agents run on your Claude subscription login, not on an API key that happens to be in the environment.
+    delete env.ANTHROPIC_API_KEY;
+  }
+  return env;
+}
+
 /** Runs agents with the Claude Agent SDK, i.e. real Claude Code instances using your local Claude login. */
 export class ClaudeRunner implements AgentRunner {
   constructor(private readonly browsers: BrowserPool) {}
@@ -81,11 +91,7 @@ export class ClaudeRunner implements AgentRunner {
           };
     };
 
-    const env: Record<string, string | undefined> = { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: 'focus/0.1.0' };
-    if (process.env.FOCUS_USE_API_KEY !== '1') {
-      // Agents run on your Claude subscription login, not on an API key that happens to be in the environment.
-      delete env.ANTHROPIC_API_KEY;
-    }
+    const env = agentEnv();
 
     const stderrTail: string[] = [];
     const options: Options = {

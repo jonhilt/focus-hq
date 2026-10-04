@@ -14,6 +14,7 @@ There is no test suite yet. Verify 3D/UI changes by running the demo and taking 
 
 - Server and client share types through `shared/types.ts`; server→client traffic is `ServerEvent`s over `/ws`, client→server is REST under `/api`.
 - Agents never push or open PRs themselves; `server/agents/manager.ts` does that after the session ends.
+- The permanent crew (each room's ops officer at the New issue stand, who also runs briefings in the observation lounge) are read-only Claude Code sessions built in `server/agents/claudeCrew.ts`: Read/Glob/Grep plus the office's own tools, `dontAsk`, no settings loaded. They draft; the manager files.
 - Anything shell-like goes through `run()` in `server/util.ts` (execFile, no shell). The one exception is the manager's own preview commands in `server/previews.ts`, which run through a shell on purpose (`&&`, `npm.cmd` on Windows, project CLIs).
 - 3D: toon materials from `world/materials.ts`. Text surfaces (screens, signs, boards) use `flat()` so they're unlit and skip the outline pass. Room contents are built in room-local coordinates; walls and colliders are in world coordinates via `Builder`.
 - The building's look (bulkhead palette, LCARS signs and screens, sliding doors, space viewports) lives in `world/starship.ts`; every doorway `Builder.wall` cuts gets sliding doors. Sounds are synthesised with Web Audio in `sound.ts`; the `AudioContext` starts on the splash screen's click.

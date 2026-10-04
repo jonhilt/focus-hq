@@ -267,8 +267,11 @@ export function viewportTexture(): THREE.Texture {
   return (viewport = canvasTexture(canvas));
 }
 
-/** How close (horizontally) someone must be for a door to open; it shuts again once they're a little further off. */
-const DOOR_SENSOR = { open: 2.8, close: 3.1 };
+/**
+ * How close (horizontally) someone must be for a door to open; it shuts again once they're a little further off.
+ * Under HALL_HALF, so walking down the middle of the corridor doesn't open every door you pass.
+ */
+const DOOR_SENSOR = { open: 1.75, close: 2.05 };
 
 /** A pair of sliding doors filling a doorway, opening as you come near. Built in world coordinates. */
 export class SlidingDoors {

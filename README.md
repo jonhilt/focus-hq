@@ -13,6 +13,8 @@ A cartoon, first-person 3D office where a swarm of **Claude Code** agents works 
 - Each room has **scenery**: its walls and ceiling vanish into a landscape, so the desks sit on a beach, in a forest clearing, in a desert canyon, on the moon, on a city rooftop at dusk or in a vast library. A faint holodeck grid shows where the walls are when you get close. Pick one per project in the Manager's office, or keep plain office walls. Empty rooms are bare holodecks.
 - Every **agent** is a separate Claude Code instance (via the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk)) with its own desk, laptop and git worktree.
 - Walk up behind an agent and you see their **laptop screen**: the live Claude Code terminal and, while they test, the **browser** they are driving.
+- Each room has an **operations officer** at its **＋ New issue** stand. Give them a rough idea and they read the project's code and write it up as an issue with context and **acceptance criteria**, ready for you to edit and file.
+- Bigger or fuzzier ideas go to a **briefing** in the **observation lounge** behind the Manager's office. The officer reads the code, grills you one question at a time and keeps a brief on the wall screen. When you wrap up, they write one issue to the room's stand.
 - Each room's **Kanban whiteboard** shows what's to do, who's working on what, and which **pull requests** are ready to merge.
 - The **manager's office** is where you create projects, connect existing repos or create blank ones, file issues and tune how much the agents may do on their own.
 - When an agent is done, the office pushes their branch and opens a **pull request** with their summary as the description. Merge it from the board and they pack up and go home.
@@ -48,7 +50,7 @@ Then in the office:
 
 1. Walk north into the **Manager's office** (or press <kbd>M</kbd>) → **New project**. Connect repositories (`owner/name` or a URL), or tick *create a new blank repository*.
 2. A new room appears down the hallway. Its whiteboard fills with the repos' open issues.
-3. At the board (<kbd>E</kbd>), click **Assign agent** on an issue, or file one at the **＋ New issue** stand and tick *Assign an agent right away*. The 🧠 picker beside either sets how much effort the agent puts in (`low` to `max`; *default* leaves it to the model).
+3. At the board (<kbd>E</kbd>), click **Assign agent** on an issue, or file one at the **＋ New issue** stand and tick *Assign an agent right away*. The officer at the stand can draft it for you from a one-liner (see [Drafting issues](#drafting-issues)). The 🧠 picker beside either sets how much effort the agent puts in (`low` to `max`; *default* leaves it to the model).
 4. Watch them work. Press <kbd>E</kbd> on an agent or laptop to open the full terminal, message them, or approve something they need.
 5. When the PR shows up under **Ready to merge**, press **▶ Preview** to try it, review it on GitHub and merge it from the board.
 
@@ -65,6 +67,29 @@ Then in the office:
 | <kbd>M</kbd> | manager's console |
 | <kbd>N</kbd> | new issue for the room you're in |
 | <kbd>Esc</kbd> | pause / close a panel |
+
+## Drafting issues
+
+Every room has an operations officer sitting at its **＋ New issue** stand (<kbd>E</kbd> on them, or <kbd>N</kbd> anywhere in the room). The officer is the same person every time; their name comes from the project.
+
+1. Type a rough idea ("let shoppers save items for later from the cart") and press **✨ Draft it**. You can close the panel and walk off. Their speech bubble shows what they're reading.
+2. The officer reads the project's repositories and writes an issue: a title, **Context** (naming the files involved), **What to build**, **Acceptance criteria** as a checklist, **Out of scope** and any **Assumptions**. They also pick which of the project's repos it belongs in.
+3. The draft fills the form's fields. Edit it however you like, or tell them what to change and press **↻ Redraft**. A redraft continues their last session, so they don't read the code all over again.
+4. **📌 Pin it to the board** files it as usual. Filing it, or **✕ Discard draft**, clears the stand.
+
+The officer never files, pushes or edits anything. They run as a Claude Code session with only `Read`, `Glob` and `Grep`, in `dontAsk` mode, with no settings, hooks or MCP servers loaded. They read up-to-date checkouts of the project's default branches in `~/.focus/planning/<project>/`. A draft lives in memory only, so it's lost if the office restarts. Drafting sessions don't count towards **Agents working at once**.
+
+### Briefings
+
+For anything bigger or fuzzier than a one-line issue, press **📣 Call a briefing** at the stand instead of **✨ Draft it**. You can also call one from the observation lounge itself, through the door in the north wall of the Manager's office. You're beamed to the lounge, and the officer leaves the stand and sits down across the table from you.
+
+1. The officer reads the code, puts a first brief on the wall screen and asks their first question.
+2. They ask one question at a time, starting with the why (who it's for, what's going wrong, what success looks like), then the what. They check the code before asking, and they suggest an answer with each question so you can just say yes.
+3. The brief on the wall screen (and in the panel) keeps up as you go: **Why**, **Who for**, **Scope**, **Out of scope**, **Acceptance criteria** and **Open questions**.
+4. **📋 Wrap up** when you're happy. The officer writes one issue, with the why from the briefing in its Context, and leaves it at the project's stand as a normal draft. A redraft there carries on from the whole briefing.
+5. **✕ End briefing** sends them back to the stand. Only one briefing runs at a time.
+
+A briefing is saved in `~/.focus/state.json` with the officer's session, and each turn resumes that session. Nothing runs while it's your turn, and you can pick a briefing back up after a restart.
 
 ## How an agent works an issue
 
@@ -144,7 +169,8 @@ The data dir is deliberately outside this repo. Otherwise agents working in a wo
 ## Architecture
 
 ```
-shared/types.ts           types shared by server and client (Project, Agent, Board, events…)
+shared/types.ts           types shared by server and client (Project, Agent, Board, IssueDraft, events…)
+shared/crew.ts            permanent crew per room (the planner), derived from the project id
 server/
   supervise.ts            runs index.ts and restarts it after an auto update
   updater.ts              auto update: fetch, fast-forward, install/build, restart
@@ -160,13 +186,17 @@ server/
     claudeRunner.ts       Claude Agent SDK query() in streaming-input mode, permission callback
     render.ts             SDK messages → Claude-Code-style terminal lines + "what am I doing" text
     browserTool.ts        in-process MCP server driving headless Chromium, streams screenshots
-    workspace.ts          git mirrors + worktrees (agents' and the per-repo preview checkout)
-    demoRunner.ts         scripted pretend agents for demo mode
+    workspace.ts          git mirrors + worktrees (agents', the per-repo preview checkout, the planner's read-only checkouts)
+    planner.ts            the officer at each room's New issue stand: issue drafts, their prompt and schema
+    briefing.ts           briefings in the observation lounge: turns, the brief, wrap-up into a stand draft
+    claudeCrew.ts         the officer's read-only Claude Code sessions (Read/Glob/Grep, update_brief, structured output)
+    demoRunner.ts         scripted pretend agents (and a pretend planner and briefing officer) for demo mode
 client/src/
   main.ts                 renderer (toon shading + outline pass), loop, interaction, UI wiring
   world/                  office layout, rooms, desks, characters, laptop screens, whiteboard
     scenery.ts            stencil "holo walls" that show a landscape built around a room
     themes.ts             the landscapes (beach, forest, desert, moon, city, library)
+    lounge.ts             the observation lounge: briefing table, officer, the brief on the wall screen
   ui/                     HUD and panels (agent terminal, board, manager console, teleport)
 ```
 

@@ -229,6 +229,84 @@ export interface PreviewLog {
   lines: string[];
 }
 
+/** The crew member at a room's ＋ New issue stand who turns a rough idea into a well-specified issue. One per project. */
+export interface Planner {
+  name: string;
+  avatar: Avatar;
+}
+
+export type DraftStatus = 'drafting' | 'ready' | 'failed';
+
+/**
+ * An issue the planner is writing, or has written, for a project. Lives in memory until it's filed or discarded, so it
+ * waits at the stand if you walk away. One per project at a time.
+ */
+export interface IssueDraft {
+  projectId: string;
+  status: DraftStatus;
+  /** The manager's rough idea, as they typed it. */
+  idea: string;
+  /** What the planner is doing right now ("Reading src/cart.ts"). */
+  activity: string;
+  /** The project repository the planner thinks the issue belongs in. */
+  repo?: string;
+  title?: string;
+  /** Markdown: context, what to build, acceptance criteria, out of scope, assumptions. */
+  body?: string;
+  error?: string;
+  startedAt: number;
+  finishedAt?: number;
+  costUsd?: number;
+}
+
+/** The brief a briefing builds up, shown on the observation lounge's wall screen. One line per entry. */
+export interface Brief {
+  /** What we're building, in a sentence. */
+  summary: string;
+  /** The problem it solves and why it matters now. */
+  why: string;
+  /** Who it's for. */
+  who: string;
+  scope: string[];
+  outOfScope: string[];
+  acceptance: string[];
+  openQuestions: string[];
+}
+
+export const EMPTY_BRIEF: Brief = { summary: '', why: '', who: '', scope: [], outOfScope: [], acceptance: [], openQuestions: [] };
+
+export interface BriefingMessage {
+  from: 'manager' | 'officer' | 'system';
+  text: string;
+  at: number;
+}
+
+/**
+ * thinking - the officer is reading code or composing a reply; waiting - your turn; wrapping-up - writing the issue;
+ * done - the issue is at the project's stand; failed - the last turn went wrong (say something to try again).
+ */
+export type BriefingStatus = 'thinking' | 'waiting' | 'wrapping-up' | 'done' | 'failed';
+
+/**
+ * A back-and-forth in the observation lounge between the manager and a project's operations officer about a bigger
+ * or fuzzier feature, ending in one well-specified issue. One at a time, saved across restarts.
+ */
+export interface Briefing {
+  id: string;
+  projectId: string;
+  /** What the manager called the briefing about. */
+  idea: string;
+  status: BriefingStatus;
+  /** What the officer is doing right now. */
+  activity: string;
+  messages: BriefingMessage[];
+  brief: Brief;
+  startedAt: number;
+  updatedAt: number;
+  costUsd: number;
+  error?: string;
+}
+
 export interface GitHubStatus {
   ok: boolean;
   login?: string;
@@ -253,6 +331,8 @@ export interface Snapshot {
   lines: Record<string, TermLine[]>;
   browser: Record<string, BrowserFrame>;
   previews: Preview[];
+  drafts: IssueDraft[];
+  briefing: Briefing | null;
 }
 
 export type ServerEvent =
@@ -266,6 +346,8 @@ export type ServerEvent =
   | { type: 'board'; board: Board }
   | { type: 'preview'; projectId: string; preview: Preview | null }
   | { type: 'preview-log'; projectId: string; log: PreviewLog }
+  | { type: 'draft'; projectId: string; draft: IssueDraft | null }
+  | { type: 'briefing'; briefing: Briefing | null }
   | { type: 'toast'; level: 'info' | 'success' | 'error'; text: string; agentId?: string };
 
 export const DESKS_PER_ROOM = 6;

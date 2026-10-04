@@ -21,7 +21,7 @@ export class Player {
     dom: HTMLElement,
   ) {
     this.controls = new PointerLockControls(camera, dom);
-    camera.position.set(0, EYE_HEIGHT, 9);
+    camera.position.set(0, EYE_HEIGHT, 8);
     window.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
       this.keys.add(e.code);
