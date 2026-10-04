@@ -6,7 +6,7 @@ import { columns } from './board';
 import { Builder, interactive } from './builder';
 import { canvasTexture, fitText, makeCanvas, roundRect, signTexture, UI_FONT } from './canvas';
 import { type Box2, DOOR_W, HALL_HALF, LOBBY, LOUNGE, LOUNGE_DOOR_X, OFFICE, OVER_DOOR, ROOM_DEPTH, ROOM_WIDTH, roomSlot, roomToWorld, rowsFor, SUN_POSITION, WALL_H, WALL_T } from './layout';
-import { box, flat, toon } from './materials';
+import { box, flat, toon, toonMaterial } from './materials';
 import { bookshelf, ceilingLight, chair, coffeeMachine, cyl, desk, DESK_TOP, plant, rug, sofa, trophy, waterCooler } from './props';
 import { Lounge } from './lounge';
 import { buildVacantRoom, ProjectRoom } from './room';
@@ -79,7 +79,10 @@ export class World {
     b.floor(OFFICE.x0, OFFICE.x1, OFFICE.z0, OFFICE.z1, toon('#ffffff', { map: tiled.carpet('#7b2d43', 4, 3) }));
     b.floor(LOUNGE.x0, LOUNGE.x1, LOUNGE.z0, LOUNGE.z1, toon('#ffffff', { map: tiled.carpet('#3b3f5c', 4, 2) }));
     b.floor(-HALL_HALF, HALL_HALF, hallEnd, 0, toon('#ffffff', { map: tiled.carpet(HULL.carpet, 3, -hallEnd / 2) }));
-    for (const s of [-1, 1]) b.floor(s * (HALL_HALF - 0.45), s * (HALL_HALF - 0.3), hallEnd, 0, toon(HULL.carpetEdge), 0.004);
+    // the hallway grows with every project, so lifting the edge strips clear of the carpet would never be enough from
+    // its far end: they win the depth test by offset instead
+    const edge = toonMaterial({ color: HULL.carpetEdge, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 });
+    for (const s of [-1, 1]) b.floor(s * (HALL_HALF - 0.45), s * (HALL_HALF - 0.3), hallEnd, 0, edge);
     b.ceiling(-OUTER_X, OUTER_X, hallEnd, LOUNGE.z1);
 
     // walls
@@ -89,23 +92,22 @@ export class World {
     b.wall(OFFICE.x0, OFFICE.z1, OFFICE.x1, OFFICE.z1, officeWall, [{ at: LOUNGE_DOOR_X, width: DOOR_W }]);
     b.wall(OFFICE.x0, OFFICE.z0, OFFICE.x0, OFFICE.z1, officeWall);
     b.wall(OFFICE.x1, OFFICE.z0, OFFICE.x1, OFFICE.z1, officeWall);
-    b.wall(OFFICE.x0, OFFICE.z0, OFFICE.x1, OFFICE.z0, officeWall, [{ at: 0, width: DOOR_W }]);
+    // Walls run unbroken between corners: two lengths meeting end to end leave a seam that flickers down their face.
+    // The office's south wall spans the lobby, which is wider than the office.
+    b.wall(LOBBY.x0, LOBBY.z1, LOBBY.x1, LOBBY.z1, officeWall, [{ at: 0, width: DOOR_W }]);
     b.wall(LOBBY.x0, LOBBY.z0, LOBBY.x0, LOBBY.z1, lobbyWall);
     b.wall(LOBBY.x1, LOBBY.z0, LOBBY.x1, LOBBY.z1, lobbyWall);
-    // the lobby is wider than the office: close the strips either side of the office's south wall
-    if (LOBBY.x0 < OFFICE.x0) b.wall(LOBBY.x0, LOBBY.z1, OFFICE.x0, LOBBY.z1, lobbyWall);
-    if (LOBBY.x1 > OFFICE.x1) b.wall(OFFICE.x1, LOBBY.z1, LOBBY.x1, LOBBY.z1, lobbyWall);
     b.wall(LOUNGE.x0, LOUNGE.z0, LOUNGE.x0, LOUNGE.z1, HULL.bulkhead);
     b.wall(LOUNGE.x1, LOUNGE.z0, LOUNGE.x1, LOUNGE.z1, HULL.bulkhead);
     b.wall(LOUNGE.x0, LOUNGE.z1, LOUNGE.x1, LOUNGE.z1, HULL.bulkhead);
+    const roomDoors = Array.from({ length: rows }, (_, r) => ({ at: -(r + 0.5) * ROOM_WIDTH, width: DOOR_W }));
+    for (const s of [-1, 1]) {
+      b.wall(s * HALL_HALF, hallEnd, s * HALL_HALF, 0, roomWall, roomDoors);
+      b.wall(s * OUTER_X, hallEnd, s * OUTER_X, 0, roomWall);
+    }
     for (let r = 0; r < rows; r++) {
       const z0 = -r * ROOM_WIDTH;
       const z1 = -(r + 1) * ROOM_WIDTH;
-      const door = [{ at: (z0 + z1) / 2, width: DOOR_W }];
-      b.wall(HALL_HALF, z1, HALL_HALF, z0, roomWall, door);
-      b.wall(-HALL_HALF, z1, -HALL_HALF, z0, roomWall, door);
-      b.wall(OUTER_X, z1, OUTER_X, z0, roomWall);
-      b.wall(-OUTER_X, z1, -OUTER_X, z0, roomWall);
       b.wall(HALL_HALF, z0, OUTER_X, z0, roomWall);
       b.wall(-OUTER_X, z0, -HALL_HALF, z0, roomWall);
       // a strip light down the middle of the corridor, and LCARS consoles between the doors
@@ -195,7 +197,8 @@ export class World {
     b.add(table);
     b.collideObject(table);
     const coffee = coffeeMachine();
-    coffee.position.set(LOBBY.x1 - 0.5, 0, LOBBY.z1 - 0.6);
+    // clear of the wall: buried in it, the counter's top would fight the dado's
+    coffee.position.set(LOBBY.x1 - 0.5, 0, LOBBY.z1 - 0.75);
     coffee.rotation.y = Math.PI;
     b.add(coffee);
     b.collideObject(coffee);
@@ -298,8 +301,7 @@ export class World {
     interactive(blueprint, { kind: 'manager', tab: 'new-project' }, () => 'Plan a new project');
 
     const shelf = bookshelf(2.0);
-    shelf.position.set(OFFICE.x1 - 0.3, 0, cz + 1.6);
-    shelf.rotation.y = Math.PI;
+    shelf.position.set(OFFICE.x1 - 0.35, 0, cz + 1.6);
     b.add(shelf);
     b.collideObject(shelf);
     for (const [x, z] of [[OFFICE.x0 + 0.7, OFFICE.z1 - 0.7], [OFFICE.x1 - 0.7, OFFICE.z1 - 0.7], [OFFICE.x0 + 0.7, OFFICE.z0 + 0.7], [OFFICE.x1 - 0.7, OFFICE.z0 + 0.7]]) {

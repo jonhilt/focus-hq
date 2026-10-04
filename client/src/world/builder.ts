@@ -91,12 +91,12 @@ export class Builder {
     }
   }
 
-  floor(x0: number, x1: number, z0: number, z1: number, material: THREE.Material, y = 0): THREE.Mesh {
+  floor(x0: number, x1: number, z0: number, z1: number, material: THREE.Material): THREE.Mesh {
     const w = Math.abs(x1 - x0);
     const d = Math.abs(z1 - z0);
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, d), material);
     mesh.rotation.x = -Math.PI / 2;
-    mesh.position.set((x0 + x1) / 2, y, (z0 + z1) / 2);
+    mesh.position.set((x0 + x1) / 2, 0, (z0 + z1) / 2);
     material.userData.outlineParameters = { visible: false };
     return this.add(mesh);
   }

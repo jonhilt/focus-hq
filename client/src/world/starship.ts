@@ -214,7 +214,7 @@ export function lcarsConsole(w: number, h: number, seed: number): THREE.Group {
   const g = new THREE.Group();
   g.add(box(w + 0.12, h + 0.12, 0.04, HULL.frame, 0, -h / 2 - 0.06, -0.02));
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(w, h), flat(canvasTexture(canvas)));
-  screen.position.z = 0.002;
+  screen.position.z = 0.01; // any closer and the frame shows through it from down the corridor
   g.add(screen);
   return g;
 }
