@@ -1,0 +1,129 @@
+import type { Agent, Board, BrowserFrame, Project, ServerEvent, ServerInfo, TermLine } from '../../../shared/types';
+
+type Events = {
+  snapshot: void;
+  info: void;
+  projects: void;
+  agent: Agent;
+  'agent-removed': Agent;
+  lines: { id: string; lines: TermLine[] };
+  browser: string;
+  board: string;
+  toast: Extract<ServerEvent, { type: 'toast' }>;
+  connection: boolean;
+};
+
+type Listener<T> = (payload: T) => void;
+
+const MAX_LINES = 600;
+
+/** Mirror of the server's office state, kept live over the WebSocket. */
+export class OfficeState {
+  info: ServerInfo | null = null;
+  projects: Project[] = [];
+  agents = new Map<string, Agent>();
+  boards = new Map<string, Board>();
+  lines = new Map<string, TermLine[]>();
+  browser = new Map<string, BrowserFrame>();
+  connected = false;
+
+  private listeners = new Map<keyof Events, Set<Listener<never>>>();
+  private ws: WebSocket | null = null;
+  private retry = 500;
+
+  on<K extends keyof Events>(event: K, fn: Listener<Events[K]>): () => void {
+    let set = this.listeners.get(event);
+    if (!set) this.listeners.set(event, (set = new Set()));
+    set.add(fn as Listener<never>);
+    return () => set!.delete(fn as Listener<never>);
+  }
+
+  private emit<K extends keyof Events>(event: K, payload: Events[K]): void {
+    for (const fn of this.listeners.get(event) ?? []) (fn as Listener<Events[K]>)(payload);
+  }
+
+  connect(): void {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.host}/ws`);
+    this.ws = ws;
+    ws.onopen = () => {
+      this.retry = 500;
+      this.connected = true;
+      this.emit('connection', true);
+    };
+    ws.onclose = () => {
+      if (this.ws !== ws) return;
+      this.connected = false;
+      this.emit('connection', false);
+      setTimeout(() => this.connect(), this.retry);
+      this.retry = Math.min(this.retry * 2, 8000);
+    };
+    ws.onmessage = (e) => this.handle(JSON.parse(e.data as string) as ServerEvent);
+  }
+
+  private handle(event: ServerEvent): void {
+    switch (event.type) {
+      case 'snapshot': {
+        const s = event.snapshot;
+        this.info = s.info;
+        this.projects = s.projects;
+        this.agents = new Map(s.agents.map((a) => [a.id, a]));
+        this.boards = new Map(s.boards.map((b) => [b.projectId, b]));
+        this.lines = new Map(Object.entries(s.lines));
+        this.browser = new Map(Object.entries(s.browser));
+        this.emit('snapshot', undefined);
+        break;
+      }
+      case 'info':
+        this.info = event.info;
+        this.emit('info', undefined);
+        break;
+      case 'projects':
+        this.projects = event.projects;
+        this.emit('projects', undefined);
+        break;
+      case 'agent':
+        this.agents.set(event.agent.id, event.agent);
+        this.emit('agent', event.agent);
+        break;
+      case 'agent-removed': {
+        const agent = this.agents.get(event.id);
+        this.agents.delete(event.id);
+        this.lines.delete(event.id);
+        this.browser.delete(event.id);
+        if (agent) this.emit('agent-removed', agent);
+        break;
+      }
+      case 'lines': {
+        const buffer = this.lines.get(event.id) ?? [];
+        buffer.push(...event.lines);
+        if (buffer.length > MAX_LINES) buffer.splice(0, buffer.length - MAX_LINES);
+        this.lines.set(event.id, buffer);
+        this.emit('lines', { id: event.id, lines: event.lines });
+        break;
+      }
+      case 'browser':
+        if (event.frame) this.browser.set(event.id, event.frame);
+        else this.browser.delete(event.id);
+        this.emit('browser', event.id);
+        break;
+      case 'board':
+        this.boards.set(event.board.projectId, event.board);
+        this.emit('board', event.board.projectId);
+        break;
+      case 'toast':
+        this.emit('toast', event);
+        break;
+    }
+  }
+
+  project(id: string): Project | undefined {
+    return this.projects.find((p) => p.id === id);
+  }
+
+  agentsIn(projectId: string): Agent[] {
+    return [...this.agents.values()].filter((a) => a.projectId === projectId);
+  }
+}
+
+export const state = new OfficeState();

@@ -1,0 +1,68 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { paths } from '../config';
+import { KeyedLock, run } from '../util';
+
+const lock = new KeyedLock();
+
+const git = (cwd: string, args: string[], timeoutMs?: number) => run('git', args, { cwd, timeoutMs });
+
+function mirrorDir(repo: string): string {
+  return path.join(paths.mirrors, repo.replace('/', '__'));
+}
+
+/**
+ * One clone per repository lives in data/repos; every agent gets its own git worktree of it in
+ * data/workspaces/<agent id> so agents on the same repo never trip over each other.
+ */
+export async function createWorktree(repo: string, agentId: string, branch: string, baseBranch: string): Promise<string> {
+  const mirror = mirrorDir(repo);
+  const dir = path.join(paths.workspaces, agentId);
+  await lock.with(repo, async () => {
+    if (!fs.existsSync(path.join(mirror, '.git'))) {
+      fs.mkdirSync(paths.mirrors, { recursive: true });
+      await run('gh', ['repo', 'clone', repo, mirror], { timeoutMs: 15 * 60_000 });
+    } else {
+      await git(mirror, ['fetch', 'origin', '--prune'], 10 * 60_000);
+    }
+    await git(mirror, ['worktree', 'prune']);
+    if (fs.existsSync(dir)) {
+      // Re-hiring the same agent id should never happen, but don't leave a half-made worktree behind.
+      await git(mirror, ['worktree', 'remove', '--force', dir]).catch(() => fs.rmSync(dir, { recursive: true, force: true }));
+    }
+    fs.mkdirSync(paths.workspaces, { recursive: true });
+    // --no-track: the branch must not track origin/<base>, so a stray `git push` can never land on the base branch
+    await git(mirror, ['worktree', 'add', '--no-track', '-B', branch, dir, `origin/${baseBranch}`]);
+  });
+  return dir;
+}
+
+export async function removeWorktree(repo: string, agentId: string): Promise<void> {
+  const dir = path.join(paths.workspaces, agentId);
+  if (!fs.existsSync(dir)) return;
+  await lock.with(repo, () => git(mirrorDir(repo), ['worktree', 'remove', '--force', dir])).catch(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+}
+
+export function workspaceDir(agentId: string): string {
+  return path.join(paths.workspaces, agentId);
+}
+
+/** Number of commits on HEAD that are not on the base branch. */
+export async function commitsAhead(dir: string, baseBranch: string): Promise<number> {
+  const out = await git(dir, ['rev-list', '--count', `origin/${baseBranch}..HEAD`]);
+  return Number(out.trim()) || 0;
+}
+
+export async function hasUncommittedChanges(dir: string): Promise<boolean> {
+  return (await git(dir, ['status', '--porcelain'])).trim().length > 0;
+}
+
+export async function pushBranch(dir: string, branch: string): Promise<void> {
+  await git(dir, ['push', '--force-with-lease', '-u', 'origin', `HEAD:refs/heads/${branch}`], 5 * 60_000);
+}
+
+export async function commitLog(dir: string, baseBranch: string): Promise<string> {
+  return (await git(dir, ['log', '--format=- %s', `origin/${baseBranch}..HEAD`])).trim();
+}
