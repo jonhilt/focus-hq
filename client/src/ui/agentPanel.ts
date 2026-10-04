@@ -1,0 +1,140 @@
+import type { Agent, BrowserFrame, TermLine } from '../../../shared/types';
+import { api } from '../net/api';
+import { state } from '../net/state';
+import { statusLine } from '../world/character';
+import { drawMockPage } from '../world/screen';
+import type { Ui } from './context';
+import { busy, fill, h, timeAgo } from './dom';
+
+const FINISHED = ['done', 'error', 'stopped'];
+
+/** Full-size view of an agent's laptop: terminal, browser, approvals and a chat box. */
+export function openAgentPanel(ui: Ui, id: string): void {
+  const agent = state.agents.get(id);
+  if (!agent) return;
+
+  const terminal = h('div', { class: 'terminal' });
+  const browserBar = h('div', { class: 'browser-bar' });
+  const browserImg = h('img', { alt: 'Agent browser' });
+  const browserCanvas = h('canvas', { width: 640, height: 420 });
+  const browser = h('div', { class: 'browser-view' }, browserBar, browserImg, browserCanvas);
+  const grid = h('div', { class: 'agent-grid single' }, terminal, browser);
+  const ask = h('div');
+  const info = h('div', { class: 'row', style: 'margin-bottom:12px' });
+  const body = h('div', { style: 'display:flex;flex-direction:column;height:100%;min-height:0' }, ask, info, grid);
+
+  const input = h('input', { type: 'text', placeholder: `Message ${agent.name}… (they'll read it at their next step)`, autofocus: true });
+  const send = h('button', { class: 'btn primary' }, 'Send');
+  const stop = h('button', { class: 'btn danger' }, '■ Stop');
+  const dismiss = h('button', { class: 'btn' }, '👋 Send home');
+  const footer = h('div', { class: 'compose' }, input, send, stop, dismiss);
+
+  const title = h('h2');
+  ui.panels.open({ title, body, footer, wide: true, accent: agent.avatar.shirt + '55' });
+
+  const sendMessage = () => {
+    const text = input.value.trim();
+    if (!text) return;
+    void busy(send, async () => {
+      await api.message(id, text);
+      input.value = '';
+    }, ui.error);
+  };
+  send.onclick = sendMessage;
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendMessage();
+  });
+  stop.onclick = () => void busy(stop, () => api.stop(id), ui.error);
+  dismiss.onclick = () => {
+    const a = state.agents.get(id);
+    if (a && !FINISHED.includes(a.status) && !confirm(`${a.name} is still working. Stop and send them home?`)) return;
+    void busy(dismiss, async () => {
+      await api.dismiss(id);
+      ui.panels.close();
+    }, ui.error);
+  };
+
+  const appendLines = (lines: TermLine[]) => {
+    const nearBottom = terminal.scrollHeight - terminal.scrollTop - terminal.clientHeight < 60;
+    for (const line of lines) terminal.append(h('div', { class: line.kind }, line.text || ' '));
+    while (terminal.childElementCount > 3000) terminal.firstElementChild?.remove();
+    if (nearBottom) terminal.scrollTop = terminal.scrollHeight;
+  };
+
+  const renderHeader = (a: Agent) => {
+    title.replaceChildren(
+      h('span', { class: 'dot', style: `background:${a.avatar.shirt};margin-right:8px;vertical-align:middle` }),
+      `${a.name} · `,
+      h('span', { class: 'muted', style: 'font-weight:500' }, `#${a.issue.number} ${a.issue.title}`),
+    );
+    fill(
+      info,
+      h('span', { class: 'chip' }, `${statusIcon(a)} ${a.status}`),
+      h('span', { class: 'grow muted' }, statusLine(a)),
+      a.costUsd > 0 ? h('span', { class: 'chip', title: 'Estimated usage (on a subscription this is not billed)' }, `~$${a.costUsd.toFixed(2)}`) : null,
+      h('span', { class: 'chip' }, `⏱ ${timeAgo(a.startedAt)}`),
+      h('a', { class: 'btn small', href: a.issue.url, target: '_blank', rel: 'noreferrer' }, 'Issue ↗'),
+      a.pr ? h('a', { class: 'btn small go', href: a.pr.url, target: '_blank', rel: 'noreferrer' }, `PR #${a.pr.number} ↗`) : null,
+    );
+    if (a.permission) {
+      const req = a.permission;
+      const approve = h('button', { class: 'btn go' }, '✔ Approve');
+      const decline = h('button', { class: 'btn danger' }, '✘ Decline');
+      approve.onclick = () => void busy(approve, () => api.permission(id, req.id, true), ui.error);
+      decline.onclick = () => void busy(decline, () => api.permission(id, req.id, false), ui.error);
+      ask.replaceChildren(
+        h('div', { class: 'ask' }, h('strong', null, `✋ ${a.name} wants to run`), h('code', { class: 'grow' }, req.summary), approve, decline),
+      );
+    } else {
+      ask.replaceChildren();
+    }
+    stop.disabled = FINISHED.includes(a.status);
+    input.placeholder = FINISHED.includes(a.status)
+      ? a.status === 'done'
+        ? `Ask ${a.name} for changes – they'll update the PR`
+        : `Tell ${a.name} what to do next to pick the work back up`
+      : `Message ${a.name}… (they'll read it at their next step)`;
+  };
+
+  const renderBrowser = (frame: BrowserFrame | undefined) => {
+    grid.classList.toggle('single', !frame);
+    browser.style.display = frame ? '' : 'none';
+    if (!frame) return;
+    browserBar.textContent = `🔒 ${frame.url}${frame.title ? ` — ${frame.title}` : ''}`;
+    if (frame.image) {
+      browserImg.style.display = '';
+      browserCanvas.style.display = 'none';
+      if (browserImg.src !== frame.image) browserImg.src = frame.image;
+    } else if (frame.mock) {
+      browserImg.style.display = 'none';
+      browserCanvas.style.display = '';
+      const ctx = browserCanvas.getContext('2d')!;
+      drawMockPage(ctx, frame.mock, 0, 0, browserCanvas.width, browserCanvas.height);
+    }
+  };
+
+  renderHeader(agent);
+  renderBrowser(state.browser.get(id));
+  appendLines(state.lines.get(id) ?? []);
+  terminal.scrollTop = terminal.scrollHeight;
+  // load the full history in the background
+  void api.lines(id).then((lines) => {
+    terminal.replaceChildren();
+    appendLines(lines);
+    terminal.scrollTop = terminal.scrollHeight;
+  }).catch(() => undefined);
+
+  ui.panels.own(state.on('lines', (e) => e.id === id && appendLines(e.lines)));
+  ui.panels.own(state.on('agent', (a) => a.id === id && renderHeader(a)));
+  ui.panels.own(state.on('browser', (agentId) => agentId === id && renderBrowser(state.browser.get(id))));
+  ui.panels.own(state.on('agent-removed', (a) => {
+    if (a.id === id) {
+      ui.panels.close();
+      ui.hud.toast('info', `${a.name} has left the office`);
+    }
+  }));
+}
+
+export function statusIcon(a: Agent): string {
+  return { queued: '⏳', 'setting-up': '📦', working: '⌨️', testing: '🧪', waiting: '✋', pushing: '🚀', done: '✅', error: '❗', stopped: '💤' }[a.status];
+}
