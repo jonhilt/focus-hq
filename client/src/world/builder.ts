@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { type Box2, DOOR_H, WALL_H, WALL_T } from './layout';
-import { box, darken } from './materials';
+import { box } from './materials';
+import { HULL, SlidingDoors } from './starship';
 
 export type Interaction =
   | { kind: 'agent'; id: string }
@@ -26,6 +27,7 @@ export interface Door {
 export class Builder {
   readonly group = new THREE.Group();
   readonly colliders: Box2[] = [];
+  readonly doors: SlidingDoors[] = [];
 
   add<T extends THREE.Object3D>(obj: T): T {
     this.group.add(obj);
@@ -45,7 +47,8 @@ export class Builder {
 
   /**
    * An axis-aligned wall from (x0,z0) to (x1,z1) – one of the coordinates must match – with door gaps
-   * centred at `doors[].at` along its length. Two-tone like a cartoon office: wainscot below, paint above.
+   * centred at `doors[].at` along its length, each closed by sliding doors. Starship bulkhead: a dark dado with an
+   * LCARS stripe along its top, `color` above.
    */
   wall(x0: number, z0: number, x1: number, z1: number, color: string, doors: Door[] = []): void {
     const alongX = z0 === z1;
@@ -63,20 +66,25 @@ export class Builder {
     };
 
     let cursor = start;
-    const trim = darken(color, 0.25);
     for (const [g0, g1] of [...gaps, [end, end] as const]) {
       if (g0 > cursor) {
         piece(cursor, g0, 0, WALL_H, color, WALL_T);
-        piece(cursor, g0, 0, 0.9, trim, WALL_T + 0.05);
+        piece(cursor, g0, 0, 0.9, HULL.dado, WALL_T + 0.05);
+        piece(cursor, g0, 0.9, 0.97, HULL.stripe, WALL_T + 0.05);
         if (alongX) this.collide(cursor, g0, fixed - WALL_T / 2, fixed + WALL_T / 2);
         else this.collide(fixed - WALL_T / 2, fixed + WALL_T / 2, cursor, g0);
       }
       if (g1 > g0) {
         piece(g0, g1, DOOR_H, WALL_H, color, WALL_T);
-        // door frame
-        piece(g0 - 0.08, g0, 0, DOOR_H + 0.08, '#ffffff', WALL_T + 0.08);
-        piece(g1, g1 + 0.08, 0, DOOR_H + 0.08, '#ffffff', WALL_T + 0.08);
-        piece(g0, g1, DOOR_H, DOOR_H + 0.08, '#ffffff', WALL_T + 0.08);
+        // door frame, standing a little proud of the wall's cut faces so they don't fight
+        const lip = 0.02;
+        piece(g0 - 0.14, g0 + lip, 0, DOOR_H + 0.14, HULL.frame, WALL_T + 0.08);
+        piece(g1 - lip, g1 + 0.14, 0, DOOR_H + 0.14, HULL.frame, WALL_T + 0.08);
+        piece(g0, g1, DOOR_H - lip, DOOR_H + 0.14, HULL.frame, WALL_T + 0.08);
+        const mid = (g0 + g1) / 2;
+        const door = new SlidingDoors(alongX ? new THREE.Vector3(mid, 0, fixed) : new THREE.Vector3(fixed, 0, mid), alongX ? 'x' : 'z', g1 - g0, DOOR_H);
+        this.doors.push(door);
+        this.add(door.group);
       }
       cursor = Math.max(cursor, g1);
     }
@@ -93,7 +101,7 @@ export class Builder {
   }
 
   ceiling(x0: number, x1: number, z0: number, z1: number): void {
-    const mat = new THREE.MeshBasicMaterial({ color: '#ece6da' });
+    const mat = new THREE.MeshBasicMaterial({ color: HULL.ceiling });
     mat.userData.outlineParameters = { visible: false };
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(Math.abs(x1 - x0), Math.abs(z1 - z0)), mat);
     mesh.rotation.x = Math.PI / 2;

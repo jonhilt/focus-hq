@@ -58,39 +58,6 @@ export function carpetTexture(color: string): THREE.Texture {
   });
 }
 
-export function skyTexture(): THREE.Texture {
-  return cached('sky', () => {
-    const { canvas, ctx } = makeCanvas(256, 256);
-    const g = ctx.createLinearGradient(0, 0, 0, 256);
-    g.addColorStop(0, '#5ec8ff');
-    g.addColorStop(1, '#c9f0ff');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 256, 256);
-    ctx.fillStyle = '#ffffff';
-    for (const [x, y, s] of [[60, 70, 1], [180, 50, 0.8], [140, 120, 0.6]]) {
-      ctx.beginPath();
-      ctx.arc(x, y, 22 * s, 0, Math.PI * 2);
-      ctx.arc(x + 24 * s, y - 10 * s, 26 * s, 0, Math.PI * 2);
-      ctx.arc(x + 50 * s, y, 20 * s, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    // rolling hills and a tree line
-    ctx.fillStyle = '#7bd389';
-    ctx.beginPath();
-    ctx.moveTo(0, 256);
-    for (let x = 0; x <= 256; x += 8) ctx.lineTo(x, 205 + Math.sin(x / 30) * 12);
-    ctx.lineTo(256, 256);
-    ctx.fill();
-    ctx.fillStyle = '#4caf6a';
-    ctx.beginPath();
-    ctx.moveTo(0, 256);
-    for (let x = 0; x <= 256; x += 8) ctx.lineTo(x, 228 + Math.cos(x / 22) * 8);
-    ctx.lineTo(256, 256);
-    ctx.fill();
-    return canvasTexture(canvas);
-  });
-}
-
 export const tiled = {
   checker: (a: string, b: string, x: number, y: number) => repeat(checkerTexture(a, b).clone(), x, y),
   wood: (x: number, y: number) => repeat(woodTexture().clone(), x, y),

@@ -14,11 +14,12 @@ import { Panels } from './ui/panels';
 import { openPreviewPanel } from './ui/previewPanel';
 import { openNewIssuePanel, openPausePanel, openTeleportPanel } from './ui/travelPanel';
 import type { Interaction } from './world/builder';
+import { sound } from './sound';
 import { SUN_POSITION } from './world/layout';
 import { World } from './world/office';
 
 async function fontsReady(): Promise<void> {
-  const loads = ['700 40px Fredoka', '500 40px Fredoka', '15px "JetBrains Mono"'].map((f) => document.fonts.load(f));
+  const loads = ['700 40px Fredoka', '500 40px Fredoka', '15px "JetBrains Mono"', '600 40px Antonio', '500 40px Antonio'].map((f) => document.fonts.load(f));
   await Promise.race([Promise.all(loads), new Promise((r) => setTimeout(r, 2500))]).catch(() => undefined);
 }
 
@@ -57,6 +58,7 @@ async function main() {
     error: (message) => hud.toast('error', message),
     places: () => world.places(),
     goTo: (place) => {
+      sound.beam();
       panels.close(false);
       player.teleport(place.position, place.lookAt);
       player.lock();
@@ -65,6 +67,7 @@ async function main() {
       const agent = state.agents.get(id);
       const view = agent && world.room(agent.projectId)?.viewpoint(id);
       if (!view) return;
+      sound.beam();
       panels.close(false);
       player.teleport(view.position, view.lookAt);
       player.lock();
@@ -85,8 +88,14 @@ async function main() {
     openTeleport: () => openTeleportPanel(ui),
   };
 
-  panels.onOpen = () => player.unlock();
-  panels.onClose = () => player.lock();
+  panels.onOpen = () => {
+    sound.chirp('open');
+    player.unlock();
+  };
+  panels.onClose = () => {
+    sound.chirp('close');
+    player.lock();
+  };
 
   // splash screen until the first click
   let started = false;
@@ -113,6 +122,7 @@ async function main() {
   document.body.append(splash);
   enter.onclick = () => {
     started = true;
+    sound.start();
     splash.remove();
     player.lock();
     if (state.projects.length === 0) {
@@ -261,6 +271,7 @@ async function main() {
     player.enabled = !panels.isOpen;
     player.update(dt);
     world.update(t, now, camera.position);
+    sound.listen(camera);
     if (now - lastPick > 90) {
       lastPick = now;
       pick();

@@ -11,6 +11,7 @@ import { box, flat, lighten, toon } from './materials';
 import { ceilingLight, chair, cyl, DESK_TOP, desk, laptop, paperStack, plant } from './props';
 import { holodeckMaterial, holodeckSkin, type Scenery } from './scenery';
 import { LaptopScreen } from './screen';
+import { LCARS, lcarsSign } from './starship';
 
 interface DeskSlot {
   index: number;
@@ -26,6 +27,11 @@ const HALF_D = ROOM_DEPTH / 2;
 const HALF_W = ROOM_WIDTH / 2;
 /** Things hung on the far wall sit this far in from its centre line, in front of a themed room's wall skin. */
 const ON_WALL = HALF_D - 0.16;
+/** Door signs hang on the hallway side, just proud of the door frame. */
+const DOOR_SIGN_X = -HALF_D - 0.16;
+
+/** A room's number on the door, the way a starship numbers its doors. */
+const doorCode = (slot: RoomSlot) => `04-${String(slot.index + 2).padStart(2, '0')}`;
 
 /** Local (room-frame) position of a desk: two rows of three, everyone facing the Kanban board. */
 export function deskPosition(index: number): THREE.Vector3 {
@@ -83,10 +89,10 @@ export class ProjectRoom {
     // sign above the door, facing the hallway
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(3.4, 0.62),
-      flat(signTexture(project.name, { bg: project.color, fg: '#ffffff', border: '#1b1b1b', sub: project.repos.map((r) => r.split('/')[1]).join(' · ') || 'No repositories yet' })),
+      flat(lcarsSign(project.name, { color: project.color, code: doorCode(slot), sub: project.repos.map((r) => r.split('/')[1]).join(' · ') || 'No repositories yet' })),
     );
     sign.rotation.y = -Math.PI / 2;
-    sign.position.set(-HALF_D - 0.14, 2.85, 0);
+    sign.position.set(DOOR_SIGN_X, 2.87, 0);
     this.group.add(sign);
     interactive(sign, { kind: 'board', projectId: project.id }, () => `Open ${project.name}'s board`);
 
@@ -325,13 +331,13 @@ export function buildVacantRoom(slot: RoomSlot, builder: Builder): THREE.Group {
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = 0.005;
   group.add(floor, holodeckSkin());
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), flat(signTexture('Vacant', { bg: '#f8f9fa', fg: '#868e96', border: '#868e96', sub: 'Create a project in the Manager’s office' })));
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), flat(lcarsSign('Holodeck vacant', { color: '#9a94a8', code: doorCode(slot), sub: 'Create a project in the Manager’s office' })));
   sign.rotation.y = -Math.PI / 2;
-  sign.position.set(-HALF_D - 0.14, 2.85, 0);
+  sign.position.set(DOOR_SIGN_X, 2.87, 0);
   group.add(sign);
   const poster = new THREE.Mesh(
     new THREE.PlaneGeometry(5, 1.4),
-    flat(signTexture('Room for rent', { w: 1024, h: 288, bg: '#fff9db', fg: '#e67700', border: '#e67700', sub: 'Start a project from the Manager’s office' })),
+    flat(lcarsSign('Holodeck available', { w: 1024, h: 288, color: LCARS.gold, sub: 'Start a project from the Manager’s office' })),
   );
   poster.rotation.y = -Math.PI / 2;
   poster.position.set(ON_WALL, 1.8, 0);

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { box, darken, flat, lighten, toon } from './materials';
-import { skyTexture } from './textures';
+import { HULL, viewportTexture } from './starship';
 
 const cyl = (rt: number, rb: number, h: number, color: string, segments = 16) =>
   new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, segments), toon(color));
@@ -136,12 +136,12 @@ export function bookshelf(width = 1.6): THREE.Group {
   return g;
 }
 
-/** A window looking out on a cartoon sky; faces +Z in its local frame. */
+/** A viewport looking out on space; faces +Z in its local frame. */
 export function windowPane(w: number, h: number): THREE.Group {
   const g = new THREE.Group();
-  const glass = new THREE.Mesh(new THREE.PlaneGeometry(w, h), flat(skyTexture()));
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(w, h), flat(viewportTexture()));
   g.add(glass);
-  const frame = '#ffffff';
+  const frame = HULL.frame;
   g.add(box(w + 0.16, 0.08, 0.06, frame, 0, h / 2, 0));
   g.add(box(w + 0.16, 0.08, 0.06, frame, 0, -h / 2 - 0.08, 0));
   g.add(box(0.08, h, 0.06, frame, -w / 2 - 0.04, -h / 2, 0));

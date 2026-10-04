@@ -11,6 +11,7 @@ import { bookshelf, ceilingLight, chair, coffeeMachine, cyl, desk, DESK_TOP, pla
 import { buildVacantRoom, ProjectRoom } from './room';
 import type { Scenery } from './scenery';
 import { tiled } from './textures';
+import { HULL, LCARS, LCARS_FONT, lcarsConsole, lcarsFrame, lcarsSign, type SlidingDoors } from './starship';
 import { createScenery, roomTheme } from './themes';
 
 export interface Place {
@@ -30,6 +31,8 @@ export class World {
   /** Room landscapes by project, theme and slot; kept across rebuilds since they're slow to make. */
   private sceneries = new Map<string, Scenery>();
   private builder: Builder | null = null;
+  private doors: SlidingDoors[] = [];
+  private lastT = 0;
   private dashboard = makeCanvas(1280, 720);
   private dashboardTex = canvasTexture(this.dashboard.canvas);
   private directory = makeCanvas(768, 1024);
@@ -68,15 +71,16 @@ export class World {
     const hallEnd = -rows * ROOM_WIDTH;
 
     // floors and ceiling
-    b.floor(LOBBY.x0, LOBBY.x1, LOBBY.z0, LOBBY.z1, toon('#ffffff', { map: tiled.wood(6, 4) }));
+    b.floor(LOBBY.x0, LOBBY.x1, LOBBY.z0, LOBBY.z1, toon('#ffffff', { map: tiled.carpet('#4a3f6e', 6, 4) }));
     b.floor(OFFICE.x0, OFFICE.x1, OFFICE.z0, OFFICE.z1, toon('#ffffff', { map: tiled.carpet('#7b2d43', 6, 4) }));
-    b.floor(-HALL_HALF, HALL_HALF, hallEnd, 0, toon('#ffffff', { map: tiled.checker('#f1f3f5', '#ced4da', 3, -hallEnd / 2) }));
+    b.floor(-HALL_HALF, HALL_HALF, hallEnd, 0, toon('#ffffff', { map: tiled.carpet(HULL.carpet, 3, -hallEnd / 2) }));
+    for (const s of [-1, 1]) b.floor(s * (HALL_HALF - 0.45), s * (HALL_HALF - 0.3), hallEnd, 0, toon(HULL.carpetEdge), 0.004);
     b.ceiling(-OUTER_X, OUTER_X, hallEnd, OFFICE.z1);
 
     // walls
-    const lobbyWall = '#ffe8cc';
-    const officeWall = '#c5f6fa';
-    const roomWall = '#fff4e6';
+    const lobbyWall = '#e2d6dc';
+    const officeWall = '#cfd3e6';
+    const roomWall = HULL.bulkhead;
     b.wall(OFFICE.x0, OFFICE.z1, OFFICE.x1, OFFICE.z1, officeWall);
     b.wall(OFFICE.x0, OFFICE.z0, OFFICE.x0, OFFICE.z1, officeWall);
     b.wall(OFFICE.x1, OFFICE.z0, OFFICE.x1, OFFICE.z1, officeWall);
@@ -93,10 +97,15 @@ export class World {
       b.wall(-OUTER_X, z1, -OUTER_X, z0, roomWall);
       b.wall(HALL_HALF, z0, OUTER_X, z0, roomWall);
       b.wall(-OUTER_X, z0, -HALL_HALF, z0, roomWall);
-      for (const z of [z0 - 3, z1 + 3]) {
-        const light = ceilingLight(1.2, 0.6);
-        light.position.set(0, WALL_H - 0.03, z);
-        b.add(light);
+      // a strip light down the middle of the corridor, and LCARS consoles between the doors
+      const light = ceilingLight(0.5, ROOM_WIDTH - 1.2);
+      light.position.set(0, WALL_H - 0.03, (z0 + z1) / 2);
+      b.add(light);
+      for (const s of [-1, 1]) {
+        const console = lcarsConsole(1.5, 0.95, r * 2 + (s > 0 ? 0 : 1));
+        console.position.set(s * (HALL_HALF - 0.13), 1.95, (z0 + z1) / 2 + s * (r % 2 ? 1 : -1) * 3.6);
+        console.rotation.y = -s * (Math.PI / 2);
+        b.add(console);
       }
     }
     b.wall(-OUTER_X, hallEnd, OUTER_X, hallEnd, roomWall);
@@ -126,22 +135,23 @@ export class World {
 
     this.root.add(b.group);
     this.colliders = b.colliders;
+    this.doors = b.doors;
     this.panelsDirty = true;
   }
 
   private buildLobby(b: Builder): void {
     // hanging sign over the hallway entrance
-    const hallSign = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 0.7), flat(signTexture('Project rooms', { bg: '#4263eb', fg: '#fff', border: '#1b1b1b', sub: 'down the hall ↓' })));
+    const hallSign = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 0.7), flat(lcarsSign('Holodecks', { color: LCARS.periwinkle, sub: 'project rooms down the hall', code: 'Deck 4' })));
     hallSign.position.set(0, 2.75, 0.15);
     b.add(hallSign);
-    const officeSign = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 0.62), flat(signTexture("Manager's office", { bg: '#7b2d43', fg: '#fff', border: '#1b1b1b' })));
+    const officeSign = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 0.62), flat(lcarsSign("Manager's office", { color: LCARS.red, code: '04-01' })));
     officeSign.position.set(0, 2.88, OFFICE.z0 - 0.14);
     officeSign.rotation.y = Math.PI;
     b.add(officeSign);
     interactive(officeSign, { kind: 'manager' }, () => 'Open the management console');
 
     // big welcome logo on the west wall + directory
-    const logo = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.1), flat(signTexture('FOCUS HQ', { w: 1024, h: 245, bg: '#ff6b6b', fg: '#fff', border: '#1b1b1b', sub: 'an office full of Claude Code agents' })));
+    const logo = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.1), flat(lcarsSign('U.S.S. Focus HQ', { w: 1024, h: 245, color: LCARS.gold, sub: 'an office full of Claude Code agents', code: 'NCC-4477' })));
     logo.position.set(LOBBY.x0 + 0.13, 2.25, 6);
     logo.rotation.y = Math.PI / 2;
     b.add(logo);
@@ -331,6 +341,9 @@ export class World {
   }
 
   update(t: number, now: number, camera: THREE.Vector3): void {
+    const dt = Math.min(0.1, t - this.lastT);
+    this.lastT = t;
+    for (const door of this.doors) door.update(camera, dt);
     for (const room of this.rooms.values()) room.update(t, now, camera);
     if (this.panelsDirty && now - this.lastPanels > 1000) {
       this.panelsDirty = false;
@@ -342,99 +355,83 @@ export class World {
 
   private drawDashboard(): void {
     const { canvas, ctx } = this.dashboard;
-    const W = canvas.width;
-    const H = canvas.height;
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#1b1f3b');
-    g.addColorStop(1, '#2d1b4e');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#ffd43b';
-    ctx.font = `700 54px ${UI_FONT}`;
+    const area = lcarsFrame(ctx, canvas.width, canvas.height, { title: 'Mission control', color: LCARS.orange, seed: 74656 });
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText('🛰️ Mission control', 40, 60);
     const agents = [...state.agents.values()];
     const working = agents.filter((a) => ACTIVE_STATUSES.includes(a.status) && a.status !== 'waiting').length;
     const waiting = agents.filter((a) => a.status === 'waiting').length;
     const prs = [...state.boards.values()].reduce((n, b) => n + b.prs.length, 0);
     const todo = state.projects.reduce((n, p) => n + columns(p, state.boards.get(p.id), state.agentsIn(p.id)).todo.length, 0);
     const tiles: [string, number, string][] = [
-      ['working', working, '#4dabf7'],
-      ['need you', waiting, '#ffd43b'],
-      ['to do', todo, '#ff922b'],
-      ['PRs ready', prs, '#69db7c'],
+      ['working', working, LCARS.sky],
+      ['need you', waiting, LCARS.gold],
+      ['to do', todo, LCARS.orange],
+      ['PRs ready', prs, LCARS.lilac],
     ];
+    const tileW = (area.w - 3 * 18) / 4;
     tiles.forEach(([label, value, color], i) => {
-      const x = 40 + i * 302;
-      ctx.fillStyle = 'rgba(255,255,255,0.08)';
-      roundRect(ctx, x, 110, 280, 150, 20);
-      ctx.fill();
+      const x = area.x + i * (tileW + 18);
       ctx.fillStyle = color;
-      ctx.font = `700 76px ${UI_FONT}`;
-      ctx.fillText(String(value), x + 24, 175);
-      ctx.fillStyle = '#ced4da';
-      ctx.font = `500 30px ${UI_FONT}`;
-      ctx.fillText(label, x + 24, 235);
+      roundRect(ctx, x, area.y, tileW, 14, 7);
+      ctx.fill();
+      ctx.font = `600 92px ${LCARS_FONT}`;
+      ctx.fillText(String(value), x + 4, area.y + 80);
+      ctx.fillStyle = LCARS.peach;
+      ctx.font = `500 30px ${LCARS_FONT}`;
+      ctx.fillText(label.toUpperCase(), x + 4, area.y + 150);
     });
-    ctx.font = `600 32px ${UI_FONT}`;
-    let y = 320;
+    let y = area.y + 230;
     if (state.projects.length === 0) {
-      ctx.fillStyle = '#ced4da';
-      ctx.fillText('No projects yet – press E here to create your first one.', 40, y);
+      ctx.fillStyle = LCARS.peach;
+      ctx.font = `500 34px ${LCARS_FONT}`;
+      ctx.fillText('NO PROJECTS YET – PRESS E HERE TO CREATE YOUR FIRST ONE.', area.x, y);
     }
-    for (const p of state.projects.slice(0, 6)) {
+    for (const p of state.projects.slice(0, 5)) {
       const cols = columns(p, state.boards.get(p.id), state.agentsIn(p.id));
       ctx.fillStyle = p.color;
-      roundRect(ctx, 40, y - 28, 18, 56, 6);
+      roundRect(ctx, area.x, y - 22, 60, 44, 22);
       ctx.fill();
-      ctx.fillStyle = '#f8f9fa';
-      ctx.font = `600 34px ${UI_FONT}`;
-      ctx.fillText(fitText(ctx, p.name, 520), 76, y);
-      ctx.fillStyle = '#adb5bd';
-      ctx.font = `500 28px ${UI_FONT}`;
-      ctx.fillText(`📋 ${cols.todo.length}   🔨 ${cols.doing.length}   👀 ${cols.prs.length}`, 640, y);
+      ctx.fillStyle = LCARS.peach;
+      ctx.font = `600 38px ${LCARS_FONT}`;
+      ctx.fillText(fitText(ctx, p.name.toUpperCase(), 520), area.x + 80, y);
+      ctx.fillStyle = LCARS.sky;
+      ctx.font = `500 30px ${UI_FONT}`;
+      ctx.fillText(`📋 ${cols.todo.length}   🔨 ${cols.doing.length}   👀 ${cols.prs.length}`, area.x + 640, y);
       y += 66;
     }
     const info = state.info;
-    ctx.fillStyle = info?.github.ok ? '#69db7c' : '#ff8787';
-    ctx.font = `500 24px ${UI_FONT}`;
-    ctx.fillText(info ? (info.github.ok ? `● GitHub: ${info.github.login}` : `● GitHub not connected`) : '● connecting…', 40, H - 30);
+    const bottom = area.y + area.h;
+    ctx.fillStyle = info?.github.ok ? LCARS.sky : LCARS.red;
+    ctx.font = `500 28px ${LCARS_FONT}`;
+    ctx.fillText((info ? (info.github.ok ? `● GitHub: ${info.github.login}` : '● GitHub not connected') : '● connecting…').toUpperCase(), area.x, bottom);
     ctx.textAlign = 'right';
-    ctx.fillStyle = '#868e96';
-    ctx.fillText(info?.mode === 'demo' ? 'DEMO MODE' : `autonomy: ${info?.settings.autonomy ?? '?'}`, W - 40, H - 30);
+    ctx.fillStyle = LCARS.lilac;
+    ctx.fillText((info?.mode === 'demo' ? 'Demo mode' : `autonomy: ${info?.settings.autonomy ?? '?'}`).toUpperCase(), area.x + area.w, bottom);
     this.dashboardTex.needsUpdate = true;
   }
 
   private drawDirectory(): void {
     const { canvas, ctx } = this.directory;
-    const W = canvas.width;
-    const H = canvas.height;
-    ctx.fillStyle = '#212529';
-    ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#ffd43b';
-    ctx.font = `700 60px ${UI_FONT}`;
-    ctx.textAlign = 'center';
+    const area = lcarsFrame(ctx, canvas.width, canvas.height, { title: 'Directory', color: LCARS.lilac, seed: 1701 });
     ctx.textBaseline = 'middle';
-    ctx.fillText('Directory', W / 2, 70);
-    ctx.textAlign = 'left';
-    let y = 170;
+    let y = area.y + 50;
     const entries: [string, string][] = [["Manager's office", '↑ north'], ...[...this.rooms.values()].map((r): [string, string] => [r.project.name, `room ${r.slot.index + 1} · ${r.slot.side > 0 ? 'right' : 'left'}`])];
-    for (const [name, where] of entries.slice(0, 11)) {
-      ctx.fillStyle = '#f8f9fa';
-      ctx.font = `600 40px ${UI_FONT}`;
-      ctx.fillText(fitText(ctx, name, 470), 40, y);
-      ctx.fillStyle = '#adb5bd';
-      ctx.font = `500 28px ${UI_FONT}`;
-      ctx.textAlign = 'right';
-      ctx.fillText(where, W - 40, y + 4);
+    for (const [name, where] of entries.slice(0, 10)) {
       ctx.textAlign = 'left';
-      y += 74;
+      ctx.fillStyle = LCARS.peach;
+      ctx.font = `600 52px ${LCARS_FONT}`;
+      ctx.fillText(fitText(ctx, name.toUpperCase(), area.w * 0.6), area.x, y);
+      ctx.fillStyle = LCARS.sky;
+      ctx.font = `500 34px ${LCARS_FONT}`;
+      ctx.textAlign = 'right';
+      ctx.fillText(where.toUpperCase(), area.x + area.w, y + 4);
+      y += 78;
     }
-    ctx.fillStyle = '#ffd43b';
-    ctx.font = `500 30px ${UI_FONT}`;
+    ctx.fillStyle = LCARS.gold;
+    ctx.font = `500 30px ${LCARS_FONT}`;
     ctx.textAlign = 'center';
-    ctx.fillText('Press E (or T anywhere) to jump to a room', W / 2, H - 50);
+    ctx.fillText('PRESS E (OR T ANYWHERE) TO JUMP TO A ROOM', area.x + area.w / 2, area.y + area.h - 10);
     this.directoryTex.needsUpdate = true;
   }
 

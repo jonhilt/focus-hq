@@ -1,4 +1,5 @@
 import { state } from '../net/state';
+import { sound } from '../sound';
 import { statusLine } from '../world/character';
 import { statusIcon } from './agentPanel';
 import type { Ui } from './context';
@@ -41,14 +42,18 @@ export function openNewIssuePanel(ui: Ui, projectId?: string): void {
   });
 }
 
+const soundLabel = (on: boolean) => (on ? '🔊 Ship sounds on' : '🔇 Ship sounds off');
+
 export function openPausePanel(ui: Ui, resume: () => void): void {
   const info = state.info;
+  const soundButton = h('button', { class: 'btn', onclick: () => (soundButton.textContent = soundLabel(sound.toggle())) }, soundLabel(sound.enabled));
   const body = h('div', { style: 'text-align:center' },
     h('p', null, 'The office keeps working while you’re away.'),
     h('div', { class: 'row', style: 'justify-content:center' },
       h('button', { class: 'btn primary', onclick: resume }, '▶ Back to work'),
       h('button', { class: 'btn', onclick: () => ui.openTeleport() }, '🗺️ Teleport'),
       h('button', { class: 'btn', onclick: () => ui.openManager() }, "💼 Manager's console"),
+      soundButton,
     ),
     info?.mode === 'demo' ? h('p', { class: 'muted' }, 'Demo mode – GitHub and agents are simulated.') : null,
   );

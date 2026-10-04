@@ -1,5 +1,6 @@
 import { ACTIVE_STATUSES } from '../../../shared/types';
 import { state } from '../net/state';
+import { sound } from '../sound';
 import { fill, h } from './dom';
 
 export type ToastAction = { label: string; run: () => void };
@@ -97,6 +98,7 @@ export class Hud {
       action ? h('button', { class: 'btn small', onclick: () => { action.run(); el.remove(); } }, action.label) : null,
     );
     this.toasts.append(el);
+    sound.badge();
     while (this.toasts.children.length > 5) this.toasts.firstElementChild?.remove();
     setTimeout(() => el.remove(), action ? 12_000 : 6_000);
   }
