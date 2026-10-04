@@ -42,12 +42,20 @@ export function openManagerPanel(ui: Ui, tab: ManagerTab = state.projects.length
     ['settings', '⚙️ Settings'],
   ];
   let current = tab;
+  let selected: string | undefined;
   const show = (t: ManagerTab) => {
     current = t;
     tabs.replaceChildren(...names.map(([key, label]) => h('button', { class: `tab${key === t ? ' on' : ''}`, onclick: () => show(key) }, label)));
     body.replaceChildren(
-      t === 'projects' ? projectsTab(ui, show) : t === 'new-project' ? newProjectTab(ui, show) : t === 'issue' ? issueForm(ui) : settingsTab(ui),
+      t === 'projects' ? projectsTab(ui, show, selected, openProject)
+        : t === 'new-project' ? newProjectTab(ui, openProject)
+        : t === 'issue' ? issueForm(ui)
+        : settingsTab(ui),
     );
+  };
+  const openProject = (id: string) => {
+    selected = id;
+    show('projects');
   };
   ui.panels.open({ title: "💼 Manager's office", body, tabs, accent: '#f3d9fa' });
   show(tab);
@@ -56,14 +64,24 @@ export function openManagerPanel(ui: Ui, tab: ManagerTab = state.projects.length
   ui.panels.own(state.on('info', () => current === 'settings' && !body.contains(document.activeElement) && show('settings')));
 }
 
-function projectsTab(ui: Ui, show: (t: ManagerTab) => void): HTMLElement {
-  if (!state.projects.length) {
+/** One project at a time, picked from a list, so the console stays navigable however many projects there are. */
+function projectsTab(ui: Ui, show: (t: ManagerTab) => void, selected: string | undefined, openProject: (id: string) => void): HTMLElement {
+  const project = state.project(selected ?? '') ?? state.projects[0];
+  if (!project) {
     return h('div', { class: 'empty' },
       h('p', null, 'No projects yet. Each project gets its own room with desks for agents.'),
       h('button', { class: 'btn primary', onclick: () => show('new-project') }, '＋ Create your first project'),
     );
   }
-  return h('div', { class: 'cards' }, ...state.projects.map((p) => projectCard(ui, p)));
+  const list = h('nav', { class: 'project-list' },
+    ...state.projects.map((p, i) =>
+      h('button', { class: `project-pick${p === project ? ' on' : ''}`, onclick: () => openProject(p.id) },
+        h('span', { class: 'dot', style: `background:${p.color}` }),
+        h('span', { class: 'grow' }, p.name, h('small', null, `Room ${i + 1} · ${p.repos.length} repo${p.repos.length === 1 ? '' : 's'}`)),
+      ),
+    ),
+  );
+  return h('div', { class: 'projects' }, list, projectCard(ui, project));
 }
 
 function projectCard(ui: Ui, p: Project): HTMLElement {
@@ -176,7 +194,7 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
   );
 }
 
-function newProjectTab(ui: Ui, show: (t: ManagerTab) => void): HTMLElement {
+function newProjectTab(ui: Ui, openProject: (id: string) => void): HTMLElement {
   const name = h('input', { type: 'text', placeholder: 'e.g. Sock Shop', autofocus: true });
   const color = h('input', { type: 'color', value: COLORS[state.projects.length % COLORS.length] });
   const repos = h('textarea', { placeholder: 'owner/frontend\nowner/backend', style: 'min-height:80px' });
@@ -205,7 +223,7 @@ function newProjectTab(ui: Ui, show: (t: ManagerTab) => void): HTMLElement {
         if (place) ui.goTo(place);
       },
     });
-    show('projects');
+    openProject(project.id);
   }, ui.error);
 
   return h('div', null,
