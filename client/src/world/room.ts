@@ -90,17 +90,21 @@ export class ProjectRoom {
     this.group.add(sign);
     interactive(sign, { kind: 'board', projectId: project.id }, () => `Open ${project.name}'s board`);
 
-    // Kanban whiteboard on the far wall
-    const boardMesh = new THREE.Mesh(new THREE.PlaneGeometry(7.4, 3.12), this.board.material);
+    // Kanban whiteboard on the far wall: as tall as fits between its bottom rail and the ceiling, as wide as its drawing
+    const boardBottom = 0.24;
+    const boardTop = WALL_H - 0.2; // the top rail sits under the ceiling
+    const boardW = (boardTop - boardBottom) * this.board.aspect;
+    const post = boardW / 2 + 0.05;
+    const boardMesh = new THREE.Mesh(new THREE.PlaneGeometry(boardW, boardTop - boardBottom), this.board.material);
     boardMesh.rotation.y = -Math.PI / 2;
-    boardMesh.position.set(ON_WALL, 1.75, 0);
+    boardMesh.position.set(ON_WALL, (boardBottom + boardTop) / 2, 0);
     this.group.add(boardMesh);
     const frameColor = '#adb5bd';
-    this.group.add(box(0.08, 0.1, 7.6, frameColor, ON_WALL - 0.01, 0.14, 0));
-    this.group.add(box(0.08, 0.1, 7.6, frameColor, ON_WALL - 0.01, 3.31, 0));
-    for (const s of [-1, 1]) this.group.add(box(0.08, 3.27, 0.1, frameColor, ON_WALL - 0.01, 0.14, s * 3.75));
+    this.group.add(box(0.08, 0.1, boardW + 0.2, frameColor, ON_WALL - 0.01, boardBottom - 0.1, 0));
+    this.group.add(box(0.08, 0.1, boardW + 0.2, frameColor, ON_WALL - 0.01, boardTop, 0));
+    for (const s of [-1, 1]) this.group.add(box(0.08, boardTop - boardBottom + 0.2, 0.1, frameColor, ON_WALL - 0.01, boardBottom - 0.1, s * post));
     // with no real wall behind it, the board stands on its own feet
-    if (this.scenery) for (const s of [-1, 1]) this.group.add(box(0.7, 0.14, 0.12, frameColor, ON_WALL - 0.3, 0, s * 3.75));
+    if (this.scenery) for (const s of [-1, 1]) this.group.add(box(0.7, 0.14, 0.12, frameColor, ON_WALL - 0.3, 0, s * post));
     this.group.add(box(0.22, 0.05, 2.0, '#868e96', ON_WALL - 0.09, 0.16, 1.5)); // marker tray
     ['#e03131', '#1971c2', '#2f9e44'].forEach((c, i) => {
       const m = cyl(0.02, 0.02, 0.16, c, 8);
