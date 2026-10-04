@@ -5,7 +5,7 @@ import { state } from '../net/state';
 import { columns } from './board';
 import { Builder, interactive } from './builder';
 import { canvasTexture, fitText, makeCanvas, roundRect, signTexture, UI_FONT } from './canvas';
-import { type Box2, DOOR_W, HALL_HALF, LOBBY, OFFICE, ROOM_DEPTH, ROOM_WIDTH, roomSlot, roomToWorld, rowsFor, SUN_POSITION, WALL_H } from './layout';
+import { type Box2, DOOR_W, HALL_HALF, LOBBY, OFFICE, OVER_DOOR, ROOM_DEPTH, ROOM_WIDTH, roomSlot, roomToWorld, rowsFor, SUN_POSITION, WALL_H } from './layout';
 import { box, flat, toon } from './materials';
 import { bookshelf, ceilingLight, chair, coffeeMachine, cyl, desk, DESK_TOP, plant, rug, sofa, trophy, waterCooler, windowPane } from './props';
 import { buildVacantRoom, ProjectRoom } from './room';
@@ -145,7 +145,7 @@ export class World {
     hallSign.position.set(0, 2.75, 0.15);
     b.add(hallSign);
     const officeSign = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 0.62), flat(lcarsSign("Manager's office", { color: LCARS.red, code: '04-01' })));
-    officeSign.position.set(0, 2.88, OFFICE.z0 - 0.14);
+    officeSign.position.set(0, 2.88, OFFICE.z0 - OVER_DOOR);
     officeSign.rotation.y = Math.PI;
     b.add(officeSign);
     interactive(officeSign, { kind: 'manager' }, () => 'Open the management console');

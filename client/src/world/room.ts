@@ -6,7 +6,7 @@ import { KanbanBoard } from './board';
 import { type Builder, interactive } from './builder';
 import { signTexture } from './canvas';
 import { Character } from './character';
-import { type RoomSlot, ROOM_DEPTH, ROOM_WIDTH, WALL_H } from './layout';
+import { OVER_DOOR, type RoomSlot, ROOM_DEPTH, ROOM_WIDTH, WALL_H } from './layout';
 import { box, flat, lighten, toon } from './materials';
 import { ceilingLight, chair, cyl, DESK_TOP, desk, laptop, paperStack, plant } from './props';
 import { holodeckMaterial, holodeckSkin, type Scenery } from './scenery';
@@ -28,7 +28,7 @@ const HALF_W = ROOM_WIDTH / 2;
 /** Things hung on the far wall sit this far in from its centre line, in front of a themed room's wall skin. */
 const ON_WALL = HALF_D - 0.16;
 /** Door signs hang on the hallway side, just proud of the door frame. */
-const DOOR_SIGN_X = -HALF_D - 0.16;
+const DOOR_SIGN_X = -HALF_D - OVER_DOOR;
 
 /** A room's number on the door, the way a starship numbers its doors. */
 const doorCode = (slot: RoomSlot) => `04-${String(slot.index + 2).padStart(2, '0')}`;

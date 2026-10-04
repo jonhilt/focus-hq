@@ -235,7 +235,8 @@ function mountain(k: Kit, x: number, z: number, r: number, h: number, color: str
   g.position.set(x, -1, z);
   g.rotation.y = k.range(0, Math.PI);
   g.add(k.cone(r, h, color, 0, 0, 0, 7));
-  if (snow) g.add(k.cone(r * 0.33, h * 0.33, snow, 0, h * 0.67 + 0.05, 0, 7));
+  // the cap is the top of the slope lifted clear of it: 150m out, a smaller lift loses the depth test to the rock
+  if (snow) g.add(k.cone(r * 0.33, h * 0.33, snow, 0, h * 0.69, 0, 7));
   return g;
 }
 

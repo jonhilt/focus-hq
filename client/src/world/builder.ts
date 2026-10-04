@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { type Box2, DOOR_H, WALL_H, WALL_T } from './layout';
+import { type Box2, DOOR_H, FRAME_FACE, WALL_H, WALL_T } from './layout';
 import { box } from './materials';
 import { HULL, SlidingDoors } from './starship';
 
@@ -78,9 +78,9 @@ export class Builder {
         piece(g0, g1, DOOR_H, WALL_H, color, WALL_T);
         // door frame, standing a little proud of the wall's cut faces so they don't fight
         const lip = 0.02;
-        piece(g0 - 0.14, g0 + lip, 0, DOOR_H + 0.14, HULL.frame, WALL_T + 0.08);
-        piece(g1 - lip, g1 + 0.14, 0, DOOR_H + 0.14, HULL.frame, WALL_T + 0.08);
-        piece(g0, g1, DOOR_H - lip, DOOR_H + 0.14, HULL.frame, WALL_T + 0.08);
+        piece(g0 - 0.14, g0 + lip, 0, DOOR_H + 0.14, HULL.frame, FRAME_FACE * 2);
+        piece(g1 - lip, g1 + 0.14, 0, DOOR_H + 0.14, HULL.frame, FRAME_FACE * 2);
+        piece(g0, g1, DOOR_H - lip, DOOR_H + 0.14, HULL.frame, FRAME_FACE * 2);
         const mid = (g0 + g1) / 2;
         const door = new SlidingDoors(alongX ? new THREE.Vector3(mid, 0, fixed) : new THREE.Vector3(fixed, 0, mid), alongX ? 'x' : 'z', g1 - g0, DOOR_H);
         this.doors.push(door);

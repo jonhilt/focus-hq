@@ -6,6 +6,10 @@ export const WALL_H = 3.2;
 export const WALL_T = 0.2;
 export const DOOR_W = 2.4;
 export const DOOR_H = 2.5;
+/** How far a door frame's face stands out from its wall's centre line. */
+export const FRAME_FACE = WALL_T / 2 + 0.04;
+/** Where a sign over a door hangs: far enough in front of the frame to win the depth test from down the hall. */
+export const OVER_DOOR = FRAME_FACE + 0.02;
 export const HALL_HALF = 3;
 export const ROOM_DEPTH = 14; // from the hallway wall to the outer wall
 export const ROOM_WIDTH = 12; // along the hallway
