@@ -182,6 +182,12 @@ input[type='color'] { width: 48px; height: 40px; border: 3px solid var(--ink); b
 .compose { display: flex; gap: 10px; padding: 12px 16px; border-top: 4px solid var(--ink); background: #f8f9fa; flex-wrap: wrap; }
 .compose input { flex: 1; min-width: 200px; }
 
+/* ------------------------------------------------------------------ preview panel */
+
+.preview-links { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.preview-links .btn { text-decoration: none; color: inherit; }
+.preview-links code { font-family: var(--mono); font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* ------------------------------------------------------------------ board panel */
 
 .kanban { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }

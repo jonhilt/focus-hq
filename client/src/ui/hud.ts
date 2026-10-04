@@ -40,6 +40,7 @@ export class Hud {
     state.on('board', refresh);
     state.on('info', refresh);
     state.on('connection', refresh);
+    state.on('preview', refresh);
   }
 
   setVisible(visible: boolean): void {
@@ -84,6 +85,7 @@ export class Hud {
       waiting ? h('div', { class: 'stat alert' }, `✋ ${waiting} need${waiting === 1 ? 's' : ''} you`) : null,
       failed ? h('div', { class: 'stat bad' }, `❗ ${failed} stuck`) : null,
       h('div', { class: 'stat' }, `👀 ${prs} PR${prs === 1 ? '' : 's'}`),
+      state.previews.size ? h('div', { class: 'stat' }, `▶ ${state.previews.size} preview${state.previews.size === 1 ? '' : 's'}`) : null,
     );
   }
 

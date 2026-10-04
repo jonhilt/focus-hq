@@ -1,8 +1,9 @@
-import type { Agent, Board, Effort, Project, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
+import type { Agent, Board, Effort, Preview, Project, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
 import type { AgentManager } from './agents/manager';
 import { config } from './config';
 import type { GitHubProvider } from './github/provider';
 import type { Hub } from './hub';
+import type { Previews } from './previews';
 import type { Store } from './store';
 import { errorMessage } from './util';
 
@@ -27,6 +28,7 @@ export class Office {
     private readonly store: Store,
     private readonly hub: Hub,
     private readonly github: GitHubProvider,
+    readonly previews: Previews,
     version: string,
   ) {
     this.info = {
@@ -60,6 +62,7 @@ export class Office {
       boards: [...this.store.boards.values()],
       lines: Object.fromEntries(agents.map((a) => [a.id, this.store.recentLines(a.id)])),
       browser: Object.fromEntries(this.store.browser),
+      previews: this.previews.list(),
     };
   }
 
@@ -93,6 +96,7 @@ export class Office {
     for (const agent of this.store.agentsIn(id)) await this.agents.dismiss(agent.id);
     this.store.removeProject(id);
     this.broadcastProjects();
+    await this.previews.remove(id);
   }
 
   private async resolveRepo(input: string): Promise<string> {
@@ -123,6 +127,7 @@ export class Office {
     this.store.save();
     this.broadcastProjects();
     this.boardChanged(projectId, 0);
+    if (this.previews.list().some((p) => p.projectId === projectId && p.repo === repo)) void this.previews.stop(projectId);
     return project;
   }
 
@@ -157,6 +162,7 @@ export class Office {
   async mergePullRequest(projectId: string, repo: string, number: number): Promise<void> {
     await this.github.mergePullRequest(repo, number, this.store.settings.mergeMethod);
     this.agents.prClosed(repo, number, true);
+    this.previews.closed(repo, number);
     const board = this.store.boards.get(projectId);
     if (board) {
       board.prs = board.prs.filter((p) => !(p.repo === repo && p.number === number));
@@ -170,6 +176,17 @@ export class Office {
     if (!pr) throw new Error(`${repo}#${number} is not an open pull request on this board`);
     if (pr.mergeable !== 'CONFLICTING') throw new Error(`PR #${number} has no merge conflicts`);
     return this.agents.resolveConflicts(projectId, pr);
+  }
+
+  // ---------------------------------------------------------------- previews
+
+  /** Runs an open PR locally (replacing the project's current preview) for the manager to click through. */
+  startPreview(projectId: string, repo: string, number: number): Promise<Preview> {
+    const project = this.store.project(projectId);
+    if (!project.repos.includes(repo)) throw new Error(`${repo} is not part of ${project.name}`);
+    const pr = this.store.boards.get(projectId)?.prs.find((p) => p.repo === repo && p.number === number);
+    if (!pr) throw new Error(`${repo}#${number} is not an open pull request`);
+    return this.previews.start({ projectId, repos: project.repos, repo, number, title: pr.title, config: project.preview ?? {} });
   }
 
   // ---------------------------------------------------------------- boards
@@ -220,6 +237,11 @@ export class Office {
     if (!this.store.projects.some((p) => p.id === projectId)) return;
     this.store.boards.set(projectId, board);
     this.hub.send({ type: 'board', board });
+
+    const preview = this.previews.list().find((p) => p.projectId === projectId);
+    if (preview && !board.error?.includes(preview.repo) && !board.prs.some((p) => p.repo === preview.repo && p.number === preview.number)) {
+      this.previews.closed(preview.repo, preview.number);
+    }
 
     await this.noticeClosedPullRequests(projectId, board);
     this.autoAssign(projectId, board);

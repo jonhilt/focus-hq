@@ -15,6 +15,9 @@ export interface Ui {
   goToAgent(id: string): void;
   openAgent(id: string): void;
   openBoard(projectId: string, tab?: BoardTab): void;
+  /** Starts a preview of the PR unless it's already the one running, then shows its panel. */
+  previewPr(projectId: string, repo: string, number: number): void;
+  openPreview(projectId: string): void;
   openNewIssue(projectId?: string): void;
   openManager(tab?: ManagerTab): void;
   openTeleport(): void;

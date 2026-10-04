@@ -13,6 +13,7 @@ import { DemoGitHub } from './github/demo';
 import { GhCliProvider } from './github/ghCli';
 import { Hub } from './hub';
 import { Office } from './office';
+import { demoPreviewPage, Previews } from './previews';
 import { apiRouter } from './routes';
 import { Store } from './store';
 import { currentVersion, RESTART_EXIT_CODE, Updater } from './updater';
@@ -34,7 +35,8 @@ async function main() {
   const github = config.demo ? new DemoGitHub() : new GhCliProvider();
   const browsers = new BrowserPool();
   const runner = config.demo ? new DemoRunner() : new ClaudeRunner(browsers);
-  const office = new Office(store, hub, github, await currentVersion());
+  const previews = new Previews(hub, github, config.demo);
+  const office = new Office(store, hub, github, previews, await currentVersion());
   office.agents = new AgentManager(store, hub, github, runner, config.demo ? demoWorkspace : liveWorkspace, (id) => office.boardChanged(id));
 
   if (config.demo && store.projects.length === 0) {
@@ -47,6 +49,14 @@ async function main() {
 
   const app = express();
   app.use('/api', apiRouter(office, store));
+  if (config.demo) {
+    app.get('/demo-preview/:owner/:name/:number', (req, res) => {
+      const repo = `${req.params.owner}/${req.params.name}`;
+      const preview = previews.list().find((p) => p.repo === repo && p.number === Number(req.params.number));
+      const site = typeof req.query.site === 'string' ? req.query.site : 'web';
+      res.type('html').send(demoPreviewPage(repo, Number(req.params.number), preview?.title ?? 'Pull request preview', site));
+    });
+  }
   const server = http.createServer(app);
   hub.attach(server, () => office.snapshot());
 
@@ -91,7 +101,7 @@ async function main() {
     console.log('\nClosing the office…');
     for (const agent of store.agents.values()) office.agents.stop(agent.id);
     store.save();
-    await browsers.shutdown();
+    await Promise.all([browsers.shutdown(), previews.shutdown()]);
     setTimeout(() => process.exit(exitCode), 300);
   };
   process.on('SIGINT', () => void shutdown());

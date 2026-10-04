@@ -77,6 +77,9 @@ export function openAgentPanel(ui: Ui, id: string): void {
       h('span', { class: 'chip' }, `⏱ ${timeAgo(a.startedAt)}`),
       a.task === 'issue' ? h('a', { class: 'btn small', href: a.issue.url, target: '_blank', rel: 'noreferrer' }, 'Issue ↗') : null,
       a.pr ? h('a', { class: 'btn small go', href: a.pr.url, target: '_blank', rel: 'noreferrer' }, `PR #${a.pr.number} ↗`) : null,
+      a.pr && a.status === 'done'
+        ? h('button', { class: 'btn small', title: 'Run the PR on your machine and open it in your browser', onclick: () => ui.previewPr(a.projectId, a.repo, a.pr!.number) }, '▶ Preview')
+        : null,
     );
     if (a.permission) {
       const req = a.permission;

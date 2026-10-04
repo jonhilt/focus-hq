@@ -70,6 +70,11 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.post('/prs/resolve-conflicts', h((req) => office.resolveConflicts(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));
   r.post('/prs/merge', h((req) => office.mergePullRequest(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));
 
+  // previews: a PR running on this machine, one per project
+  r.post('/previews', h((req) => office.startPreview(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));
+  r.delete('/previews/:projectId', h((req) => office.previews.stop(param(req, 'projectId'))));
+  r.get('/previews/:projectId/log', h((req) => office.previews.log(param(req, 'projectId'))));
+
   // agents
   r.post('/agents', h((req) =>
     office.agents.hire(str(req.body.projectId), str(req.body.repo), {

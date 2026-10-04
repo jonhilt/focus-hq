@@ -1,4 +1,4 @@
-import type { Agent, Board, BrowserFrame, Project, ServerEvent, ServerInfo, TermLine } from '../../../shared/types';
+import type { Agent, Board, BrowserFrame, Preview, Project, ServerEvent, ServerInfo, TermLine } from '../../../shared/types';
 
 type Events = {
   snapshot: void;
@@ -9,6 +9,9 @@ type Events = {
   lines: { id: string; lines: TermLine[] };
   browser: string;
   board: string;
+  /** before = the preview this one replaced or updated, so listeners can spot status changes. */
+  preview: { projectId: string; preview: Preview | null; before?: Preview };
+  'preview-log': Extract<ServerEvent, { type: 'preview-log' }>;
   toast: Extract<ServerEvent, { type: 'toast' }>;
   connection: boolean;
 };
@@ -25,6 +28,8 @@ export class OfficeState {
   boards = new Map<string, Board>();
   lines = new Map<string, TermLine[]>();
   browser = new Map<string, BrowserFrame>();
+  /** Running previews by project id. */
+  previews = new Map<string, Preview>();
   connected = false;
 
   private listeners = new Map<keyof Events, Set<Listener<never>>>();
@@ -73,6 +78,7 @@ export class OfficeState {
         this.boards = new Map(s.boards.map((b) => [b.projectId, b]));
         this.lines = new Map(Object.entries(s.lines));
         this.browser = new Map(Object.entries(s.browser));
+        this.previews = new Map((s.previews ?? []).map((p) => [p.projectId, p]));
         this.emit('snapshot', undefined);
         break;
       }
@@ -112,6 +118,16 @@ export class OfficeState {
       case 'board':
         this.boards.set(event.board.projectId, event.board);
         this.emit('board', event.board.projectId);
+        break;
+      case 'preview': {
+        const before = this.previews.get(event.projectId);
+        if (event.preview) this.previews.set(event.projectId, { ...event.preview });
+        else this.previews.delete(event.projectId);
+        this.emit('preview', { projectId: event.projectId, preview: event.preview, before });
+        break;
+      }
+      case 'preview-log':
+        this.emit('preview-log', event);
         break;
       case 'toast':
         this.emit('toast', event);

@@ -32,4 +32,5 @@ export const paths = {
   logs: path.join(config.dataDir, 'logs'),
   mirrors: path.join(config.dataDir, 'repos'),
   workspaces: path.join(config.dataDir, 'workspaces'),
+  previews: path.join(config.dataDir, 'previews'),
 };

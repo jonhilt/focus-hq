@@ -14,7 +14,7 @@ There is no test suite yet. Verify 3D/UI changes by running the demo and taking 
 
 - Server and client share types through `shared/types.ts`; server→client traffic is `ServerEvent`s over `/ws`, client→server is REST under `/api`.
 - Agents never push or open PRs themselves; `server/agents/manager.ts` does that after the session ends.
-- Anything shell-like goes through `run()` in `server/util.ts` (execFile, no shell).
+- Anything shell-like goes through `run()` in `server/util.ts` (execFile, no shell). The one exception is the manager's own preview commands in `server/previews.ts`, which run through a shell on purpose (`&&`, `npm.cmd` on Windows, project CLIs).
 - 3D: toon materials from `world/materials.ts`. Text surfaces (screens, signs, boards) use `flat()` so they're unlit and skip the outline pass. Room contents are built in room-local coordinates; walls and colliders are in world coordinates via `Builder`.
 - Room landscapes (`world/themes.ts`) are drawn through a stencil mask, so build them only with the `Kit` from `world/scenery.ts` (its materials carry the mask; with a plain `toon()` material, the object would turn up in whichever room or hallway it physically overlaps). Keep landscape objects out of the room footprint (|x| < 7, |z| < 6 in room-local coordinates).
 - Imports are extensionless (Vite + tsx both resolve them).

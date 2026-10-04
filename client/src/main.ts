@@ -1,6 +1,7 @@
 import './styles.css';
 import * as THREE from 'three';
 import { OutlineEffect } from 'three/examples/jsm/effects/OutlineEffect.js';
+import { api } from './net/api';
 import { state } from './net/state';
 import { Player } from './player';
 import { openAgentPanel } from './ui/agentPanel';
@@ -10,6 +11,7 @@ import { h } from './ui/dom';
 import { Hud } from './ui/hud';
 import { openManagerPanel } from './ui/managerPanel';
 import { Panels } from './ui/panels';
+import { openPreviewPanel } from './ui/previewPanel';
 import { openNewIssuePanel, openPausePanel, openTeleportPanel } from './ui/travelPanel';
 import type { Interaction } from './world/builder';
 import { SUN_POSITION } from './world/layout';
@@ -69,6 +71,15 @@ async function main() {
     },
     openAgent: (id) => openAgentPanel(ui, id),
     openBoard: (projectId, tab) => openBoardPanel(ui, projectId, tab),
+    previewPr: (projectId, repo, number) => {
+      const running = state.previews.get(projectId);
+      if (running?.repo === repo && running.number === number && running.status !== 'failed') return openPreviewPanel(ui, projectId);
+      api.startPreview(projectId, repo, number).then(
+        (preview) => openPreviewPanel(ui, projectId, preview),
+        (err: Error) => ui.error(err.message),
+      );
+    },
+    openPreview: (projectId) => openPreviewPanel(ui, projectId),
     openNewIssue: (projectId) => openNewIssuePanel(ui, projectId),
     openManager: (tab) => openManagerPanel(ui, tab),
     openTeleport: () => openTeleportPanel(ui),
@@ -155,6 +166,15 @@ async function main() {
   state.on('toast', (e) => {
     const agentId = e.agentId;
     hud.toast(e.level, e.text, agentId && state.agents.has(agentId) ? { label: 'Go there', run: () => ui.goToAgent(agentId) } : undefined);
+  });
+  state.on('preview', ({ preview: p, before }) => {
+    if (!p || before?.startedAt !== p.startedAt || before.status === p.status) return;
+    const link = p.links[0];
+    if (p.status === 'running' && link) {
+      hud.toast('success', `▶ ${p.repo}#${p.number} is running`, { label: `Open${link.name ? ` ${link.name}` : ''} ↗`, run: () => window.open(link.url, '_blank', 'noopener') });
+    } else if (p.status === 'failed') {
+      hud.toast('error', `Preview of ${p.repo}#${p.number} failed: ${p.error ?? 'see the log'}`, { label: 'Log', run: () => ui.openPreview(p.projectId) });
+    }
   });
   state.connect();
 

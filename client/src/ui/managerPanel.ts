@@ -1,4 +1,4 @@
-import type { Autonomy, Project, RoomTheme } from '../../../shared/types';
+import type { Autonomy, PreviewConfig, Project, RoomTheme } from '../../../shared/types';
 import { DESKS_PER_ROOM, ROOM_THEMES } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
@@ -107,6 +107,31 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
     ui.hud.toast('success', `Created ${repo}`);
   }, ui.error);
 
+  const firstRepo = p.repos[0]?.split('/')[1] ?? 'repo';
+  const fields: [keyof PreviewConfig, string, string][] = [
+    ['command', 'Start', 'auto: npm install && npm run dev in the PR’s repo'],
+    ['stopCommand', 'Stop', `optional, e.g. {dir:${firstRepo}}/scripts/stack down`],
+    ['statusCommand', 'Progress', 'optional, polled while starting: JSON with a "phase", or a list of stacks'],
+  ];
+  const previewInputs = fields.map(([key, label, placeholder]) => {
+    const input = h('input', { type: 'text', value: p.preview?.[key] ?? '', placeholder, spellcheck: false });
+    input.addEventListener('change', () => {
+      const preview = Object.fromEntries(previewInputs.map(([k, , el]) => [k, el.value.trim()]));
+      void api.updateProject(p.id, { preview }).catch((e: Error) => ui.error(e.message));
+    });
+    return [key, label, input] as const;
+  });
+  const previews = p.repos.length
+    ? h('div', null,
+        h('div', { class: 'label', style: 'margin-top:14px' }, '▶ Preview'),
+        ...previewInputs.map(([, label, input]) => h('div', { class: 'row', style: 'margin-top:6px' }, h('span', { style: 'min-width:80px' }, label), h('div', { class: 'grow' }, input))),
+        h('small', { class: 'muted', style: 'display:block;margin-top:4px' },
+          'Runs in a checkout of the PR when you press ▶ Preview on the board. {dir} is that checkout, {dir:<repo>} another repo of this project ',
+          '(the PR’s code if the PR is in it, its default branch otherwise), {port} a free port (also $FOCUS_PREVIEW_PORT). ',
+          'Links come from the JSON the command prints ({"urls": {"web": "http://…"}}) or the local URLs in its output.'),
+      )
+    : null;
+
   const maxAgents = h('input', { type: 'number', min: '1', max: String(DESKS_PER_ROOM), value: String(p.maxAgents), style: 'width:80px' });
   maxAgents.addEventListener('change', () => void api.updateProject(p.id, { maxAgents: Number(maxAgents.value) }).catch((e: Error) => ui.error(e.message)));
   const auto = h('input', { type: 'checkbox', checked: p.autoAssign });
@@ -139,6 +164,7 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
     chips,
     h('div', { class: 'row' }, h('div', { class: 'grow' }, repoInput), connect, repoDatalist(listId)),
     h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow' }, newRepo), h('label', { class: 'row', style: 'gap:4px' }, newRepoPrivate, 'private'), create),
+    previews,
     h('div', { class: 'row', style: 'margin-top:14px' },
       h('label', { class: 'row', style: 'gap:6px' }, 'Scenery', theme),
       h('label', { class: 'row', style: 'gap:6px' }, 'Agents at once', maxAgents),

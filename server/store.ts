@@ -99,7 +99,10 @@ export class Store {
     return scenic.find((t) => !used.has(t)) ?? scenic[this.projects.length % scenic.length];
   }
 
-  updateProject(id: string, patch: Partial<Pick<Project, 'name' | 'color' | 'theme' | 'maxAgents' | 'autoAssign' | 'autoLabel' | 'onlyMyPrs'>>): Project {
+  updateProject(
+    id: string,
+    patch: Partial<Pick<Project, 'name' | 'color' | 'theme' | 'maxAgents' | 'autoAssign' | 'autoLabel' | 'onlyMyPrs' | 'preview'>>,
+  ): Project {
     const project = this.project(id);
     if (patch.name !== undefined) project.name = patch.name.trim() || project.name;
     if (patch.color !== undefined) project.color = patch.color;
@@ -111,6 +114,11 @@ export class Store {
     if (patch.autoAssign !== undefined) project.autoAssign = patch.autoAssign;
     if (patch.autoLabel !== undefined) project.autoLabel = patch.autoLabel.trim();
     if (patch.onlyMyPrs !== undefined) project.onlyMyPrs = !!patch.onlyMyPrs;
+    if (patch.preview !== undefined) {
+      const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+      const p = patch.preview ?? {};
+      project.preview = { command: text(p.command), stopCommand: text(p.stopCommand), statusCommand: text(p.statusCommand) };
+    }
     this.save();
     return project;
   }

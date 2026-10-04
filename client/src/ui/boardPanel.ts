@@ -102,6 +102,25 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
       }
       const checks = { passing: '✓ checks pass', failing: '✗ checks failing', pending: '⏳ checks running', none: 'no checks' }[pr.checks];
       const agent = pr.agent;
+      const running = state.previews.get(projectId);
+      const preview = running?.repo === pr.repo && running.number === pr.number ? running : undefined;
+      const openPreview = () => ui.openPreview(projectId);
+      const previewActions = !preview
+        ? [h('button', {
+            class: 'btn small',
+            title: `Check this PR out and run it on your machine${running ? ` (replaces the preview of ${running.repo.split('/')[1]}#${running.number})` : ''}`,
+            onclick: () => ui.previewPr(projectId, pr.repo, pr.number),
+          }, '▶ Preview')]
+        : preview.status === 'running'
+          ? [
+              ...preview.links.slice(0, 3).map((link) =>
+                h('a', { class: 'btn small primary', href: link.url, target: '_blank', rel: 'noreferrer', title: link.url }, `Open ${link.name ?? 'site'} ↗`)),
+              h('button', { class: 'btn small', title: 'Output, restart and stop', onclick: openPreview }, '▶ Running'),
+            ]
+          : preview.status === 'failed'
+            ? [h('button', { class: 'btn small danger', title: preview.error ?? '', onclick: openPreview }, '⚠ Preview failed')]
+            : [h('button', { class: 'btn small', title: preview.activity, onclick: openPreview }, preview.status === 'stopping' ? '⏹ Stopping…' : '⏳ Starting…')];
+      const behind = preview?.sha && pr.headSha && preview.sha !== pr.headSha && preview.sha !== 'demo';
       prs.append(
         h('div', { class: 'note pr' },
           h('div', { class: 't' }, `PR #${pr.number} ${pr.title}`),
@@ -112,9 +131,11 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
             pr.mergeable === 'CONFLICTING' ? h('span', { class: 'chip', style: 'background:#ffc9c9' }, '⚠ conflicts') : null,
             pr.isDraft ? h('span', { class: 'chip' }, 'draft') : null,
             pr.reviewDecision ? h('span', { class: 'chip' }, pr.reviewDecision.toLowerCase().replace('_', ' ')) : null,
+            behind ? h('span', { class: 'chip', style: 'background:#ffe066', title: 'Restart the preview to see the latest commits' }, '↻ preview is behind') : null,
           ),
           h('div', { class: 'actions' },
             resolve ?? merge,
+            ...previewActions,
             h('a', { class: 'btn small', href: `${pr.url}/files`, target: '_blank', rel: 'noreferrer' }, 'Review ↗'),
             agent ? h('button', { class: 'btn small', onclick: () => ui.openAgent(agent.id) }, `💬 ${agent.name}`) : null,
           ),
@@ -146,4 +167,5 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
   ui.panels.own(state.on('agent', (a) => a.projectId === projectId && rerender()));
   ui.panels.own(state.on('agent-removed', (a) => a.projectId === projectId && rerender()));
   ui.panels.own(state.on('projects', rerender));
+  ui.panels.own(state.on('preview', (e) => e.projectId === projectId && rerender()));
 }

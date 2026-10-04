@@ -53,7 +53,25 @@ export interface Project {
   autoLabel: string;
   /** Board shows only PRs you (the gh account) or your agents opened, hiding teammates' PRs. */
   onlyMyPrs?: boolean;
+  /** How ▶ Preview runs this project's pull requests. */
+  preview?: PreviewConfig;
   createdAt: number;
+}
+
+/**
+ * Shell commands for ▶ Preview, run in the PR's checkout. Placeholders: {dir} (the PR's checkout), {dir:<repo>} (that
+ * repo's checkout: the PR's code if the PR is in it, else its default branch), {port}, {pr}, {repo}.
+ */
+export interface PreviewConfig {
+  /** Starts the site(s). Empty = install and run the package.json dev script of the PR's repo. */
+  command?: string;
+  /** Tears down what `command` left running (containers, background servers). Runs on stop and before every start. */
+  stopCommand?: string;
+  /**
+   * Polled while starting. Its JSON is this stack's state or a list of stacks ({"sessions": [...]}, ours is the one
+   * mentioning our checkouts); its "phase" shows as progress, and a listed stack dropping out fails the preview.
+   */
+  statusCommand?: string;
 }
 
 export interface Issue {
@@ -75,6 +93,8 @@ export interface PullRequest {
   title: string;
   url: string;
   branch: string;
+  /** Commit at the head of the PR branch. */
+  headSha?: string;
   baseBranch: string;
   author?: string;
   isDraft: boolean;
@@ -157,6 +177,45 @@ export interface Agent {
   error?: string;
 }
 
+export type PreviewStatus = 'starting' | 'running' | 'failed' | 'stopping';
+
+export interface PreviewLink {
+  /** e.g. "web" when the command printed JSON like {"urls": {"web": "http://…"}}. */
+  name?: string;
+  url: string;
+}
+
+/** A pull request running on this machine so the manager can try it in their own browser. One per project at a time. */
+export interface Preview {
+  projectId: string;
+  repo: string;
+  /** The pull request being previewed. */
+  number: number;
+  title: string;
+  /** Commit that is checked out. Differs from the PR's headSha once someone pushes again. */
+  sha?: string;
+  status: PreviewStatus;
+  /** What it's doing right now ("Installing dependencies", "Up at http://localhost:5173/"…). */
+  activity: string;
+  /** The command line that runs the site(s). */
+  command?: string;
+  /** Free port offered to the command as {port} and $FOCUS_PREVIEW_PORT. */
+  port?: number;
+  /** Local sites the command brought up. The first one is the main link. */
+  links: PreviewLink[];
+  /** Where the command keeps its own logs, if it said so in its JSON output. */
+  logs?: string;
+  startedAt: number;
+  error?: string;
+}
+
+/** A stretch of a preview's output. `first` numbers the first line since the preview started, so pieces can be stitched. */
+export interface PreviewLog {
+  startedAt: number;
+  first: number;
+  lines: string[];
+}
+
 export interface GitHubStatus {
   ok: boolean;
   login?: string;
@@ -180,6 +239,7 @@ export interface Snapshot {
   /** Recent terminal lines per agent id. */
   lines: Record<string, TermLine[]>;
   browser: Record<string, BrowserFrame>;
+  previews: Preview[];
 }
 
 export type ServerEvent =
@@ -191,6 +251,8 @@ export type ServerEvent =
   | { type: 'lines'; id: string; lines: TermLine[] }
   | { type: 'browser'; id: string; frame: BrowserFrame | null }
   | { type: 'board'; board: Board }
+  | { type: 'preview'; projectId: string; preview: Preview | null }
+  | { type: 'preview-log'; projectId: string; log: PreviewLog }
   | { type: 'toast'; level: 'info' | 'success' | 'error'; text: string; agentId?: string };
 
 export const DESKS_PER_ROOM = 6;

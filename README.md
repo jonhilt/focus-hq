@@ -15,6 +15,7 @@ A cartoon, first-person 3D office where a swarm of **Claude Code** agents works 
 - Each room's **Kanban whiteboard** shows what's to do, who's working on what, and which **pull requests** are ready to merge.
 - The **manager's office** is where you create projects, connect existing repos or create blank ones, file issues and tune how much the agents may do on their own.
 - When an agent is done, the office pushes their branch and opens a **pull request** with their summary as the description. Merge it from the board and they pack up and go home.
+- Press **▶ Preview** on any open pull request to run it on your machine and open it in **your own browser** before you merge.
 
 GitHub goes through the [`gh` CLI](https://cli.github.com/). Claude runs through the Agent SDK on **your own Claude login**, so agents use your Claude subscription.
 
@@ -48,7 +49,7 @@ Then in the office:
 2. A new room appears down the hallway. Its whiteboard fills with the repos' open issues.
 3. At the board (<kbd>E</kbd>), click **Assign agent** on an issue, or file one at the **＋ New issue** stand and tick *Assign an agent right away*. The 🧠 picker beside either sets how much effort the agent puts in (`low` to `max`; *default* leaves it to the model).
 4. Watch them work. Press <kbd>E</kbd> on an agent or laptop to open the full terminal, message them, or approve something they need.
-5. When the PR shows up under **Ready to merge**, review it on GitHub and merge it from the board.
+5. When the PR shows up under **Ready to merge**, press **▶ Preview** to try it, review it on GitHub and merge it from the board.
 
 > **Subscription note:** if `ANTHROPIC_API_KEY` is set, agents ignore it and use your Claude login. Set `FOCUS_USE_API_KEY=1` if you want them on the API key instead. Each agent is a full Claude Code session, so several at once use your plan's limits faster. **Settings → Agents working at once** caps that (default 4).
 
@@ -75,6 +76,40 @@ Then in the office:
 7. **Merge conflicts**: a conflicting PR gets a **🔧 Resolve conflicts** button on the board. The agent who opened it merges the base branch in and updates the PR. If nobody in the office owns the PR (a teammate's, or the agent already went home), a new agent sits down on the PR's branch to do it.
 8. **Merged**: when the PR is merged (from the board or on GitHub), the agent leaves and their worktree is cleaned up.
 
+## Previewing a pull request
+
+Every PR card under **Ready to merge** (and a finished agent's panel) has a **▶ Preview** button. Each project has one preview at a time: previewing another PR replaces it.
+
+1. The PR's head (`refs/pull/<n>/head`, so teammates' and forks' PRs work too) is checked out in `~/.focus/previews/<project>/<repo>`. Any other repo of the project that the preview commands mention (`{dir:<repo>}`) is checked out next to it at its default branch. The checkouts are reused from one preview to the next, so `node_modules`, `bin/obj` and other ignored build output stick around.
+2. The project's **preview command** runs in the PR's checkout. Set it in the Manager's office (**Projects → ▶ Preview**). Leave it empty and the office runs `npm install && npm run dev` in the PR's repo (or the `start` script, with pnpm/yarn/bun if the repo has their lockfile).
+3. The links come from the command's output: a JSON object with `urls` (`{"urls": {"web": "http://127.0.0.1:55686", "api": "…"}}`, a list, or a single `url`) becomes named links, web front ends before APIs. Otherwise every local URL it prints (`http://localhost:5173/`…) becomes a link. If it prints neither, the office waits for the free port it offered.
+4. You get a toast with **Open ↗** once a site answers. The preview panel shows the command's output, the links, **Restart** (e.g. after the agent pushed more commits; the card says when the preview is behind) and **Stop**.
+
+| Command | |
+| --- | --- |
+| **Start** | Brings the site(s) up. It can stay in the foreground like a dev server, or exit 0 once its sites are up in the background. In that case the office keeps checking that the sites still answer. A JSON `error` in its output becomes the failure message. |
+| **Stop** *(optional)* | Tears down whatever **Start** left running, like containers and background servers. It runs on **Stop**, when the PR is merged or closed, when the office shuts down, and before every start, so a stack left over from a crash is never reused. The office also kills the start command's whole process tree. |
+| **Progress** *(optional)* | Polled every 5 seconds while starting. Only its JSON output counts, not its exit code. That's either this stack's state, or a list of stacks (`{"sessions": [...]}`) where this preview's is the one that mentions its checkout paths. The `phase` shows as progress ("Starting – database-migrate"). A list is the more reliable choice: if a stack it listed drops out while still starting, whatever was running it has died, and the preview fails within about 10 seconds instead of waiting for the start command to time out. A start command can also print JSON lines with a `phase` itself. |
+
+| Placeholder | |
+| --- | --- |
+| `{dir}` | the PR's checkout (also the working directory) |
+| `{dir:<repo>}` | that repo's checkout (name or owner/name): the PR's code if the PR is in it, its default branch otherwise |
+| `{port}`, `$FOCUS_PREVIEW_PORT` | a free port |
+| `{pr}`, `{repo}` | the PR number and owner/name |
+
+`PORT` is only set for the auto-detected npm command, so a CLI that starts several sites doesn't hand them all one port.
+
+A project whose API, web app and admin app live in three repos and come up with one script might use:
+
+```
+Start     {dir:shop-api}/scripts/stack up --api {dir:shop-api} --web {dir:shop-web} --admin {dir:shop-admin}
+Stop      {dir:shop-api}/scripts/stack down --api {dir:shop-api} --web {dir:shop-web} --admin {dir:shop-admin}
+Progress  {dir:shop-api}/scripts/stack list
+```
+
+The commands run through your shell (so `&&` and `npm` on Windows work), on your machine, as you. A preview runs the PR's code, so only preview PRs you'd be happy to run locally.
+
 ### Autonomy (Manager's office → Settings)
 
 | Mode | What it means |
@@ -90,7 +125,7 @@ None of these is a sandbox. Agents run as you, on your machine, with your `gh` c
 | Env var | Default | |
 | --- | --- | --- |
 | `PORT` / `HOST` | `4477` / `127.0.0.1` | where the office listens |
-| `FOCUS_DATA_DIR` | `~/.focus` | state, agent logs, repo clones and worktrees |
+| `FOCUS_DATA_DIR` | `~/.focus` | state, agent logs, repo clones, worktrees and preview checkouts |
 | `FOCUS_MODE=demo` | | same as `--demo` |
 | `FOCUS_BOARD_REFRESH_MS` | `60000` | how often boards re-read issues and PRs |
 | `FOCUS_BROWSER_PATH` | | Chromium/Chrome binary for agent browser testing |
@@ -117,13 +152,14 @@ server/
   store.ts                ~/.focus/state.json + per-agent terminal logs (jsonl)
   routes.ts               REST API used by the panels
   hub.ts                  broadcasts ServerEvents to every browser tab
+  previews.ts             ▶ Preview: check a PR out, run the project's preview commands, find its links, tear it down
   github/                 GitHubProvider: gh CLI (live) and an in-memory fake (demo)
   agents/
     manager.ts            hire → queue → worktree → run → commit nudge → push → PR; messages, approvals
     claudeRunner.ts       Claude Agent SDK query() in streaming-input mode, permission callback
     render.ts             SDK messages → Claude-Code-style terminal lines + "what am I doing" text
     browserTool.ts        in-process MCP server driving headless Chromium, streams screenshots
-    workspace.ts          git mirrors + worktrees
+    workspace.ts          git mirrors + worktrees (agents' and the per-repo preview checkout)
     demoRunner.ts         scripted pretend agents for demo mode
 client/src/
   main.ts                 renderer (toon shading + outline pass), loop, interaction, UI wiring
