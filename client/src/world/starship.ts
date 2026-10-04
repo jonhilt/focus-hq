@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { sound } from '../sound';
 import { canvasTexture, fitText, makeCanvas } from './canvas';
-import { box, flat, lighten } from './materials';
+import { box, flat, lighten, toon } from './materials';
+import { viewportGlass } from './starfield';
 
 // The building is a starship in the style of Star Trek: Lower Decks: lilac-grey bulkheads over a dark dado,
-// blue carpet, LCARS consoles and signs, doors that swoosh open and viewports onto space.
+// blue carpet, LCARS consoles and signs, doors that swoosh open and viewports onto space (see starfield.ts).
 // The project rooms are its holodecks.
 
 export const HULL = {
@@ -218,53 +219,42 @@ export function lcarsConsole(w: number, h: number, seed: number): THREE.Group {
   return g;
 }
 
-let viewport: THREE.Texture | undefined;
-/** What a starship's windows look out on: stars, a nebula and a ringed planet. */
-export function viewportTexture(): THREE.Texture {
-  if (viewport) return viewport;
-  const { canvas, ctx } = makeCanvas(512, 320);
-  const sky = ctx.createLinearGradient(0, 0, 0, 320);
-  sky.addColorStop(0, '#05051a');
-  sky.addColorStop(1, '#16123a');
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, 512, 320);
-  const nebula = ctx.createRadialGradient(120, 90, 10, 120, 90, 180);
-  nebula.addColorStop(0, 'rgba(204,102,204,0.45)');
-  nebula.addColorStop(1, 'rgba(204,102,204,0)');
-  ctx.fillStyle = nebula;
-  ctx.fillRect(0, 0, 512, 320);
-  const rnd = seeded(1701);
-  for (let i = 0; i < 220; i++) {
-    ctx.fillStyle = rnd() < 0.15 ? '#ffd8a8' : '#ffffff';
-    ctx.globalAlpha = 0.4 + rnd() * 0.6;
-    const s = rnd() < 0.1 ? 3 : rnd() < 0.4 ? 2 : 1;
-    ctx.fillRect(rnd() * 512, rnd() * 320, s, s);
-  }
-  ctx.globalAlpha = 1;
-  // a ringed planet, cartoon-flat
-  const px = 380;
-  const py = 210;
-  ctx.strokeStyle = '#ffcc99';
-  ctx.lineWidth = 6;
-  ctx.beginPath();
-  ctx.ellipse(px, py, 110, 22, -0.25, Math.PI, Math.PI * 2);
-  ctx.stroke();
-  ctx.fillStyle = '#ff9966';
-  ctx.beginPath();
-  ctx.arc(px, py, 64, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#cc6666';
-  ctx.beginPath();
-  ctx.arc(px + 18, py + 14, 56, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#ff9966';
-  ctx.beginPath();
-  ctx.arc(px - 8, py - 6, 54, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(px, py, 110, 22, -0.25, 0, Math.PI);
-  ctx.stroke();
-  return (viewport = canvasTexture(canvas));
+function roundedRect(w: number, h: number, r: number): THREE.Path {
+  const p = new THREE.Path();
+  p.moveTo(-w / 2 + r, -h / 2);
+  p.lineTo(w / 2 - r, -h / 2);
+  p.quadraticCurveTo(w / 2, -h / 2, w / 2, -h / 2 + r);
+  p.lineTo(w / 2, h / 2 - r);
+  p.quadraticCurveTo(w / 2, h / 2, w / 2 - r, h / 2);
+  p.lineTo(-w / 2 + r, h / 2);
+  p.quadraticCurveTo(-w / 2, h / 2, -w / 2, h / 2 - r);
+  p.lineTo(-w / 2, -h / 2 + r);
+  p.quadraticCurveTo(-w / 2, -h / 2, -w / 2 + r, -h / 2);
+  return p;
+}
+
+/** A flat ring between two rounded rectangles, `depth` deep and facing +Z. */
+function ring(w: number, h: number, border: number, depth: number, color: string): THREE.Mesh {
+  const r = Math.min(w, h) * 0.18;
+  const shape = new THREE.Shape(roundedRect(w + border * 2, h + border * 2, r + border).getPoints(6));
+  shape.holes.push(roundedRect(w, h, r));
+  return new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, curveSegments: 6 }), toon(color));
+}
+
+/**
+ * A viewport onto space: a rounded port in a thick bulkhead surround, with a sill below. Its back is centred on its
+ * origin and it faces +Z, so mount it on a wall's face.
+ */
+export function viewport(w: number, h: number): THREE.Group {
+  const g = new THREE.Group();
+  const glass = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(roundedRect(w, h, Math.min(w, h) * 0.18).getPoints(6))), viewportGlass);
+  glass.position.z = 0.005;
+  g.add(glass);
+  g.add(ring(w, h, 0.05, 0.06, HULL.dado));
+  g.add(ring(w + 0.1, h + 0.1, 0.18, 0.1, HULL.frame));
+  g.add(box(w * 0.8, 0.07, 0.16, HULL.frame, 0, -h / 2 - 0.3, 0.08));
+  g.add(box(w * 0.3, 0.035, 0.012, LCARS.orange, -w * 0.2, -h / 2 - 0.22, 0.1));
+  return g;
 }
 
 /**

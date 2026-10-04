@@ -5,10 +5,10 @@ import { state } from '../net/state';
 import { type Builder, interactive } from './builder';
 import { canvasTexture, makeCanvas, wrap } from './canvas';
 import { Character, type CrewView } from './character';
-import { LOUNGE, LOUNGE_DOOR_X, OFFICE, OVER_DOOR, WALL_H } from './layout';
+import { LOUNGE, LOUNGE_DOOR_X, OFFICE, OVER_DOOR, WALL_H, WALL_T } from './layout';
 import { box, flat, toon } from './materials';
-import { ceilingLight, chair, cyl, plant, windowPane } from './props';
-import { LCARS, LCARS_FONT, lcarsConsole, lcarsFrame, lcarsSign } from './starship';
+import { ceilingLight, chair, cyl, plant } from './props';
+import { LCARS, LCARS_FONT, lcarsConsole, lcarsFrame, lcarsSign, viewport } from './starship';
 
 const TABLE = { x: 0.6, z: 21.3, length: 5.2, width: 1.5 };
 /** Seats round the table: [x, z, facing], facing being the chair's rotation (0 faces +X). */
@@ -42,8 +42,8 @@ export class Lounge {
 
     // viewports along the outer hull
     for (const x of [-3.7, 0, 3.7]) {
-      const w = windowPane(3.2, 1.8);
-      w.position.set(x, 1.85, LOUNGE.z1 - 0.13);
+      const w = viewport(3.0, 1.8); // 3 wide so the thick surrounds clear each other at 3.7 apart
+      w.position.set(x, 1.85, LOUNGE.z1 - WALL_T / 2 - 0.005);
       w.rotation.y = Math.PI;
       b.add(w);
     }

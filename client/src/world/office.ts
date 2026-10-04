@@ -5,14 +5,15 @@ import { state } from '../net/state';
 import { columns } from './board';
 import { Builder, interactive } from './builder';
 import { canvasTexture, fitText, makeCanvas, roundRect, signTexture, UI_FONT } from './canvas';
-import { type Box2, DOOR_W, HALL_HALF, LOBBY, LOUNGE, LOUNGE_DOOR_X, OFFICE, OVER_DOOR, ROOM_DEPTH, ROOM_WIDTH, roomSlot, roomToWorld, rowsFor, SUN_POSITION, WALL_H } from './layout';
+import { type Box2, DOOR_W, HALL_HALF, LOBBY, LOUNGE, LOUNGE_DOOR_X, OFFICE, OVER_DOOR, ROOM_DEPTH, ROOM_WIDTH, roomSlot, roomToWorld, rowsFor, SUN_POSITION, WALL_H, WALL_T } from './layout';
 import { box, flat, toon } from './materials';
-import { bookshelf, ceilingLight, chair, coffeeMachine, cyl, desk, DESK_TOP, plant, rug, sofa, trophy, waterCooler, windowPane } from './props';
+import { bookshelf, ceilingLight, chair, coffeeMachine, cyl, desk, DESK_TOP, plant, rug, sofa, trophy, waterCooler } from './props';
 import { Lounge } from './lounge';
 import { buildVacantRoom, ProjectRoom } from './room';
 import type { Scenery } from './scenery';
 import { tiled } from './textures';
-import { HULL, LCARS, LCARS_FONT, lcarsConsole, lcarsFrame, lcarsSign, type SlidingDoors } from './starship';
+import { HULL, LCARS, LCARS_FONT, lcarsConsole, lcarsFrame, lcarsSign, type SlidingDoors, viewport } from './starship';
+import { cruise } from './starfield';
 import { createScenery, roomTheme } from './themes';
 
 export interface Place {
@@ -119,8 +120,8 @@ export class World {
       }
     }
     b.wall(-OUTER_X, hallEnd, OUTER_X, hallEnd, roomWall);
-    const endWindow = windowPane(2.4, 1.6);
-    endWindow.position.set(0, 1.9, hallEnd + 0.13);
+    const endWindow = viewport(2.4, 1.6);
+    endWindow.position.set(0, 1.9, hallEnd + WALL_T / 2 + 0.005);
     b.add(endWindow);
 
     // rooms
@@ -217,8 +218,8 @@ export class World {
       b.add(light);
     }
     for (const z of [lz - 2.3, lz + 2.3]) {
-      const w = windowPane(2.0, 1.4);
-      w.position.set(LOBBY.x1 - 0.13, 1.9, z);
+      const w = viewport(2.0, 1.4);
+      w.position.set(LOBBY.x1 - WALL_T / 2 - 0.005, 1.9, z);
       w.rotation.y = -Math.PI / 2;
       b.add(w);
     }
@@ -308,8 +309,8 @@ export class World {
       b.collideObject(p.children[0]);
     }
     // the north wall backs onto the lounge now; the east wall still looks out
-    const view = windowPane(2.0, 1.4);
-    view.position.set(OFFICE.x1 - 0.13, 1.9, cz - 1.6);
+    const view = viewport(2.0, 1.4);
+    view.position.set(OFFICE.x1 - WALL_T / 2 - 0.005, 1.9, cz - 1.6);
     view.rotation.y = -Math.PI / 2;
     b.add(view);
     for (const [x, z] of [[-3, cz - 2], [3, cz - 2], [-3, cz + 2], [3, cz + 2]]) {
@@ -356,6 +357,7 @@ export class World {
   update(t: number, now: number, camera: THREE.Vector3): void {
     const dt = Math.min(0.1, t - this.lastT);
     this.lastT = t;
+    cruise(t);
     for (const door of this.doors) door.update(camera, dt);
     for (const room of this.rooms.values()) room.update(t, now, camera);
     this.lounge?.update(t, camera);
