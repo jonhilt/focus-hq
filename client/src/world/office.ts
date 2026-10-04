@@ -146,7 +146,7 @@ export class World {
     logo.rotation.y = Math.PI / 2;
     b.add(logo);
     const directory = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.0), flat(this.directoryTex));
-    directory.position.set(LOBBY.x0 + 0.13, 1.25, 9.6);
+    directory.position.set(LOBBY.x0 + 0.15, 1.25, 9.6);
     directory.rotation.y = Math.PI / 2;
     b.add(directory);
     b.add(box(0.1, 2.2, 1.7, '#495057', LOBBY.x0 + 0.08, 0.15, 9.6));
