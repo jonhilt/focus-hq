@@ -1,4 +1,4 @@
-import type { Board, Project, ServerInfo, Settings, Snapshot } from '../shared/types';
+import type { Board, Project, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
 import type { AgentManager } from './agents/manager';
 import { config } from './config';
 import type { GitHubProvider } from './github/provider';
@@ -67,9 +67,9 @@ export class Office {
 
   // ---------------------------------------------------------------- projects
 
-  async createProject(name: string, color: string | undefined, repos: string[]): Promise<Project> {
+  async createProject(name: string, color: string | undefined, repos: string[], theme?: RoomTheme): Promise<Project> {
     const normalized = await Promise.all(repos.filter((r) => r.trim()).map((r) => this.resolveRepo(r)));
-    const project = this.store.addProject(name, color);
+    const project = this.store.addProject(name, color, theme);
     project.repos = [...new Set(normalized)];
     this.store.save();
     this.broadcastProjects();

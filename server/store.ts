@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import type { Agent, Board, BrowserFrame, Project, Settings, TermLine } from '../shared/types';
-import { ACTIVE_STATUSES, DESKS_PER_ROOM } from '../shared/types';
+import { ACTIVE_STATUSES, DESKS_PER_ROOM, ROOM_THEMES, type RoomTheme } from '../shared/types';
 import { paths } from './config';
 import { newId } from './util';
 
@@ -74,11 +74,12 @@ export class Store {
     return project;
   }
 
-  addProject(name: string, color?: string): Project {
+  addProject(name: string, color?: string, theme?: RoomTheme): Project {
     const project: Project = {
       id: newId('proj'),
       name: name.trim() || 'Untitled project',
       color: color || PROJECT_COLORS[this.projects.length % PROJECT_COLORS.length],
+      theme: isTheme(theme) ? theme : this.nextTheme(),
       repos: [],
       maxAgents: 3,
       autoAssign: false,
@@ -90,10 +91,21 @@ export class Store {
     return project;
   }
 
-  updateProject(id: string, patch: Partial<Pick<Project, 'name' | 'color' | 'maxAgents' | 'autoAssign' | 'autoLabel' | 'onlyMyPrs'>>): Project {
+  /** The first landscape no room uses yet, so new rooms don't repeat while there are fresh ones. */
+  private nextTheme(): RoomTheme {
+    const scenic = ROOM_THEMES.filter((t) => t !== 'office');
+    const used = new Set(this.projects.map((p) => p.theme));
+    return scenic.find((t) => !used.has(t)) ?? scenic[this.projects.length % scenic.length];
+  }
+
+  updateProject(id: string, patch: Partial<Pick<Project, 'name' | 'color' | 'theme' | 'maxAgents' | 'autoAssign' | 'autoLabel' | 'onlyMyPrs'>>): Project {
     const project = this.project(id);
     if (patch.name !== undefined) project.name = patch.name.trim() || project.name;
     if (patch.color !== undefined) project.color = patch.color;
+    if (patch.theme !== undefined) {
+      if (!isTheme(patch.theme)) throw new Error(`Unknown room theme ${patch.theme}`);
+      project.theme = patch.theme;
+    }
     if (patch.maxAgents !== undefined) project.maxAgents = Math.max(1, Math.min(DESKS_PER_ROOM, Math.round(patch.maxAgents)));
     if (patch.autoAssign !== undefined) project.autoAssign = patch.autoAssign;
     if (patch.autoLabel !== undefined) project.autoLabel = patch.autoLabel.trim();
@@ -170,4 +182,8 @@ export class Store {
       return [];
     }
   }
+}
+
+function isTheme(value: unknown): value is RoomTheme {
+  return typeof value === 'string' && (ROOM_THEMES as readonly string[]).includes(value);
 }

@@ -9,6 +9,7 @@ import { Character } from './character';
 import { type RoomSlot, ROOM_DEPTH, ROOM_WIDTH, WALL_H } from './layout';
 import { box, flat, lighten, toon } from './materials';
 import { ceilingLight, chair, cyl, DESK_TOP, desk, laptop, paperStack, plant } from './props';
+import { holodeckMaterial, holodeckSkin, type Scenery } from './scenery';
 import { LaptopScreen } from './screen';
 
 interface DeskSlot {
@@ -23,6 +24,8 @@ interface DeskSlot {
 
 const HALF_D = ROOM_DEPTH / 2;
 const HALF_W = ROOM_WIDTH / 2;
+/** Things hung on the far wall sit this far in from its centre line, in front of a themed room's wall skin. */
+const ON_WALL = HALF_D - 0.16;
 
 /** Local (room-frame) position of a desk: two rows of three, everyone facing the Kanban board. */
 export function deskPosition(index: number): THREE.Vector3 {
@@ -49,10 +52,15 @@ export class ProjectRoom {
   private prCount = -1;
   private boardDirty = true;
 
+  /**
+   * `scenery` is the landscape the room sits in (null for plain office walls). The World owns it, so it can
+   * outlive this room when the building is rebuilt for an unrelated change.
+   */
   constructor(
     public project: Project,
     readonly slot: RoomSlot,
     builder: Builder,
+    private readonly scenery: Scenery | null,
   ) {
     this.group.position.copy(slot.center);
     this.group.rotation.y = slot.rotationY;
@@ -70,6 +78,8 @@ export class ProjectRoom {
     stripe.position.set(0.5, 0.01, 0);
     this.group.add(stripe);
 
+    if (scenery) this.group.add(scenery.group); // a themed room's walls and ceiling show it
+
     // sign above the door, facing the hallway
     const sign = new THREE.Mesh(
       new THREE.PlaneGeometry(3.4, 0.62),
@@ -83,17 +93,19 @@ export class ProjectRoom {
     // Kanban whiteboard on the far wall
     const boardMesh = new THREE.Mesh(new THREE.PlaneGeometry(7.4, 3.12), this.board.material);
     boardMesh.rotation.y = -Math.PI / 2;
-    boardMesh.position.set(HALF_D - 0.13, 1.75, 0);
+    boardMesh.position.set(ON_WALL, 1.75, 0);
     this.group.add(boardMesh);
     const frameColor = '#adb5bd';
-    this.group.add(box(0.08, 0.1, 7.6, frameColor, HALF_D - 0.14, 0.14, 0));
-    this.group.add(box(0.08, 0.1, 7.6, frameColor, HALF_D - 0.14, 3.31, 0));
-    for (const s of [-1, 1]) this.group.add(box(0.08, 3.27, 0.1, frameColor, HALF_D - 0.14, 0.14, s * 3.75));
-    this.group.add(box(0.22, 0.05, 2.0, '#868e96', HALF_D - 0.22, 0.16, 1.5)); // marker tray
+    this.group.add(box(0.08, 0.1, 7.6, frameColor, ON_WALL - 0.01, 0.14, 0));
+    this.group.add(box(0.08, 0.1, 7.6, frameColor, ON_WALL - 0.01, 3.31, 0));
+    for (const s of [-1, 1]) this.group.add(box(0.08, 3.27, 0.1, frameColor, ON_WALL - 0.01, 0.14, s * 3.75));
+    // with no real wall behind it, the board stands on its own feet
+    if (this.scenery) for (const s of [-1, 1]) this.group.add(box(0.7, 0.14, 0.12, frameColor, ON_WALL - 0.3, 0, s * 3.75));
+    this.group.add(box(0.22, 0.05, 2.0, '#868e96', ON_WALL - 0.09, 0.16, 1.5)); // marker tray
     ['#e03131', '#1971c2', '#2f9e44'].forEach((c, i) => {
       const m = cyl(0.02, 0.02, 0.16, c, 8);
       m.rotation.x = Math.PI / 2;
-      m.position.set(HALF_D - 0.22, 0.23, 1.2 + i * 0.12);
+      m.position.set(ON_WALL - 0.09, 0.23, 1.2 + i * 0.12);
       this.group.add(m);
     });
     interactive(boardMesh, { kind: 'board', projectId: project.id }, () => `Use the ${project.name} board`);
@@ -146,7 +158,8 @@ export class ProjectRoom {
       builder.collideObject(p.children[0]);
     }
 
-    for (const x of [-3.5, 0.5, 4.5]) {
+    // only a plain office has a ceiling to hang lights from
+    for (const x of this.scenery ? [] : [-3.5, 0.5, 4.5]) {
       for (const z of [-3, 3]) {
         const light = ceilingLight(1.4, 0.7);
         light.position.set(x, WALL_H - 0.03, z);
@@ -257,6 +270,7 @@ export class ProjectRoom {
   }
 
   update(t: number, now: number, camera: THREE.Vector3): void {
+    this.scenery?.update(t, this.group.worldToLocal(tmp.copy(camera)));
     if (this.boardDirty) {
       this.boardDirty = false;
       const board = state.boards.get(this.project.id);
@@ -302,11 +316,11 @@ export function buildVacantRoom(slot: RoomSlot, builder: Builder): THREE.Group {
   group.position.copy(slot.center);
   group.rotation.y = slot.rotationY;
   builder.add(group);
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_DEPTH - 0.2, ROOM_WIDTH - 0.2), toon('#dee2e6'));
-  floor.material.userData.outlineParameters = { visible: false };
+  // an empty holodeck: dark, with the yellow grid, waiting for a project to load a landscape
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_DEPTH - 0.2, ROOM_WIDTH - 0.2), holodeckMaterial());
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = 0.005;
-  group.add(floor);
+  group.add(floor, holodeckSkin());
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), flat(signTexture('Vacant', { bg: '#f8f9fa', fg: '#868e96', border: '#868e96', sub: 'Create a project in the Manager’s office' })));
   sign.rotation.y = -Math.PI / 2;
   sign.position.set(-HALF_D - 0.14, 2.85, 0);
@@ -316,7 +330,7 @@ export function buildVacantRoom(slot: RoomSlot, builder: Builder): THREE.Group {
     flat(signTexture('Room for rent', { w: 1024, h: 288, bg: '#fff9db', fg: '#e67700', border: '#e67700', sub: 'Start a project from the Manager’s office' })),
   );
   poster.rotation.y = -Math.PI / 2;
-  poster.position.set(HALF_D - 0.13, 1.8, 0);
+  poster.position.set(ON_WALL, 1.8, 0);
   group.add(poster);
   interactive(poster, { kind: 'manager', tab: 'new-project' }, () => 'Start a new project');
   // moving boxes

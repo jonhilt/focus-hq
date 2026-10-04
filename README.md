@@ -9,6 +9,7 @@ A cartoon, first-person 3D office where a swarm of **Claude Code** agents works 
 | ![Live terminal on an agent's laptop](docs/laptop.jpg) | ![Kanban panel with issues, agents and PRs](docs/board.jpg) |
 
 - Every **project** gets a **room**. A project can span several GitHub repositories.
+- Each room has **scenery**: its walls and ceiling vanish into a landscape, so the desks sit on a beach, in a forest clearing, in a desert canyon, on the moon, on a city rooftop at dusk or in a vast library. A faint holodeck grid shows where the walls are when you get close. Pick one per project in the Manager's office, or keep plain office walls. Empty rooms are bare holodecks.
 - Every **agent** is a separate Claude Code instance (via the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk)) with its own desk, laptop and git worktree.
 - Walk up behind an agent and you see their **laptop screen**: the live Claude Code terminal and, while they test, the **browser** they are driving.
 - Each room's **Kanban whiteboard** shows what's to do, who's working on what, and which **pull requests** are ready to merge.
@@ -118,6 +119,8 @@ server/
 client/src/
   main.ts                 renderer (toon shading + outline pass), loop, interaction, UI wiring
   world/                  office layout, rooms, desks, characters, laptop screens, whiteboard
+    scenery.ts            stencil "holo walls" that show a landscape built around a room
+    themes.ts             the landscapes (beach, forest, desert, moon, city, library)
   ui/                     HUD and panels (agent terminal, board, manager console, teleport)
 ```
 
