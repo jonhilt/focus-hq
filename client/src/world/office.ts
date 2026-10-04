@@ -42,7 +42,10 @@ export class World {
   sync(projects: Project[]): void {
     const key = JSON.stringify(projects.map((p) => [p.id, p.name, p.color, p.repos]));
     if (key === this.projectKey) {
-      for (const room of this.rooms.values()) room.project = projects.find((p) => p.id === room.project.id) ?? room.project;
+      for (const room of this.rooms.values()) {
+        room.project = projects.find((p) => p.id === room.project.id) ?? room.project;
+        room.markBoard();
+      }
       this.panelsDirty = true;
       return;
     }

@@ -90,13 +90,14 @@ export class Store {
     return project;
   }
 
-  updateProject(id: string, patch: Partial<Pick<Project, 'name' | 'color' | 'maxAgents' | 'autoAssign' | 'autoLabel'>>): Project {
+  updateProject(id: string, patch: Partial<Pick<Project, 'name' | 'color' | 'maxAgents' | 'autoAssign' | 'autoLabel' | 'onlyMyPrs'>>): Project {
     const project = this.project(id);
     if (patch.name !== undefined) project.name = patch.name.trim() || project.name;
     if (patch.color !== undefined) project.color = patch.color;
     if (patch.maxAgents !== undefined) project.maxAgents = Math.max(1, Math.min(DESKS_PER_ROOM, Math.round(patch.maxAgents)));
     if (patch.autoAssign !== undefined) project.autoAssign = patch.autoAssign;
     if (patch.autoLabel !== undefined) project.autoLabel = patch.autoLabel.trim();
+    if (patch.onlyMyPrs !== undefined) project.onlyMyPrs = !!patch.onlyMyPrs;
     this.save();
     return project;
   }

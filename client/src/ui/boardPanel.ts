@@ -13,6 +13,9 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
   const body = h('div');
   const refresh = h('button', { class: 'btn small', title: 'Re-read issues and PRs from GitHub' }, '⟳ Refresh');
   const newIssue = h('button', { class: 'btn small primary' }, '＋ New issue');
+  const mine = h('input', { type: 'checkbox', checked: !!project.onlyMyPrs });
+  const mineToggle = h('label', { class: 'btn small', title: 'Hide pull requests opened by other people' }, mine, ' Only my PRs');
+  mine.onchange = () => void api.updateProject(projectId, { onlyMyPrs: mine.checked }).catch((e: Error) => ui.error(e.message));
   refresh.onclick = () => void busy(refresh, () => api.refreshBoard(projectId), ui.error);
   newIssue.onclick = () => ui.openNewIssue(projectId);
 
@@ -21,7 +24,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
     body,
     wide: true,
     accent: project.color + '66',
-    headerExtra: [newIssue, refresh],
+    headerExtra: [mineToggle, newIssue, refresh],
   });
 
   const render = () => {
@@ -68,7 +71,8 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
     }
 
     const prs = h('div', { class: 'col' }, h('h3', null, h('span', null, '👀 Ready to merge'), h('span', null, cols.prs.length)));
-    if (!cols.prs.length) prs.append(h('div', { class: 'empty' }, 'No open pull requests.'));
+    mine.checked = !!p.onlyMyPrs;
+    if (!cols.prs.length) prs.append(h('div', { class: 'empty' }, cols.hiddenPrs ? 'None of the open pull requests are yours.' : 'No open pull requests.'));
     for (const pr of cols.prs) {
       const merge = h('button', { class: 'btn small go' }, `⤵ ${state.info?.settings.mergeMethod ?? 'squash'} & merge`);
       merge.disabled = pr.mergeable === 'CONFLICTING' || pr.isDraft;
@@ -107,6 +111,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
       body,
       board?.error ? h('div', { class: 'ask', style: 'background:#ffe3e3' }, `⚠ ${board.error}`) : null,
       h('div', { class: 'kanban' }, todo, doing, prs),
+      cols.hiddenPrs ? h('div', { class: 'empty' }, `${cols.hiddenPrs} PR${cols.hiddenPrs === 1 ? '' : 's'} by other people hidden`) : null,
     );
   };
 
