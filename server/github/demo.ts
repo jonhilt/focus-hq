@@ -55,7 +55,22 @@ export class DemoGitHub implements GitHubProvider {
         author: 'you',
         createdAt: new Date(start + i * 3600_000).toISOString(),
       }));
-      this.repos.set(name, { description: seed.description, issues, prs: [], nextNumber: issues.length + 1 });
+      const number = issues.length + 1;
+      // a teammate's PR, so the board's "only my PRs" filter has something to hide
+      const prs: FakeRepo['prs'] = [{
+        repo: name,
+        number,
+        title: 'Tidy up README badges',
+        url: `https://github.com/${name}/pull/${number}`,
+        branch: 'sam/readme-badges',
+        author: 'sam-teammate',
+        isDraft: false,
+        mergeable: 'MERGEABLE',
+        checks: 'passing',
+        createdAt: new Date(start + 86400_000).toISOString(),
+        state: 'OPEN',
+      }];
+      this.repos.set(name, { description: seed.description, issues, prs, nextNumber: number + 1 });
     }
   }
 

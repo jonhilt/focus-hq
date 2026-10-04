@@ -42,6 +42,8 @@ export interface Project {
   autoAssign: boolean;
   /** When auto-assigning, only pick issues carrying this label (empty = any issue). */
   autoLabel: string;
+  /** Board shows only PRs you (the gh account) or your agents opened, hiding teammates' PRs. */
+  onlyMyPrs?: boolean;
   createdAt: number;
 }
 
