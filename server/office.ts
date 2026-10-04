@@ -27,9 +27,11 @@ export class Office {
     private readonly store: Store,
     private readonly hub: Hub,
     private readonly github: GitHubProvider,
+    version: string,
   ) {
     this.info = {
       mode: config.demo ? 'demo' : 'live',
+      version,
       github: { ok: false, error: 'Checking…' },
       settings: store.settings,
       deskCount: 6,

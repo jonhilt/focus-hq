@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { BrowserPool } from './agents/browserTool';
 import { ClaudeRunner } from './agents/claudeRunner';
@@ -16,8 +15,7 @@ import { Hub } from './hub';
 import { Office } from './office';
 import { apiRouter } from './routes';
 import { Store } from './store';
-
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+import { currentVersion, RESTART_EXIT_CODE, Updater } from './updater';
 
 const liveWorkspace: WorkspaceOps = {
   create: git.createWorktree,
@@ -36,7 +34,7 @@ async function main() {
   const github = config.demo ? new DemoGitHub() : new GhCliProvider();
   const browsers = new BrowserPool();
   const runner = config.demo ? new DemoRunner() : new ClaudeRunner(browsers);
-  const office = new Office(store, hub, github);
+  const office = new Office(store, hub, github, await currentVersion());
   office.agents = new AgentManager(store, hub, github, runner, config.demo ? demoWorkspace : liveWorkspace, (id) => office.boardChanged(id));
 
   if (config.demo && store.projects.length === 0) {
@@ -55,13 +53,13 @@ async function main() {
   if (config.dev) {
     const { createServer } = await import('vite');
     const vite = await createServer({
-      configFile: path.join(root, 'vite.config.ts'),
+      configFile: path.join(config.root, 'vite.config.ts'),
       server: { middlewareMode: true, hmr: { server } },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    const dist = path.join(root, 'dist');
+    const dist = path.join(config.root, 'dist');
     if (!fs.existsSync(path.join(dist, 'index.html'))) {
       console.error('No client build found. Run "npm run build" first, or use "npm run dev".');
       process.exit(1);
@@ -86,15 +84,20 @@ async function main() {
     else console.log(`  GitHub: signed in as ${info.github.login}`);
   }
 
-  const shutdown = async () => {
+  let closing = false;
+  const shutdown = async (exitCode = 0) => {
+    if (closing) return;
+    closing = true;
     console.log('\nClosing the office…');
     for (const agent of store.agents.values()) office.agents.stop(agent.id);
     store.save();
     await browsers.shutdown();
-    setTimeout(() => process.exit(0), 300);
+    setTimeout(() => process.exit(exitCode), 300);
   };
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', () => void shutdown());
+  process.on('SIGTERM', () => void shutdown());
+
+  if (config.autoUpdate) await new Updater(store, hub, () => shutdown(RESTART_EXIT_CODE)).start();
 }
 
 main().catch((err) => {

@@ -96,6 +96,12 @@ None of these is a sandbox. Agents run as you, on your machine, with your `gh` c
 | `FOCUS_BROWSER_PATH` | | Chromium/Chrome binary for agent browser testing |
 | `FOCUS_USE_API_KEY=1` | | let agents use `ANTHROPIC_API_KEY` instead of your Claude login |
 | `FOCUS_DEMO_SPEED` | `1` | speed up the pretend agents in demo mode |
+| `FOCUS_AUTO_UPDATE=0` | | turn off auto update |
+| `FOCUS_UPDATE_CHECK_MS` | `300000` | how often auto update checks for new commits |
+
+### Auto update
+
+`npm run dev` and `npm start` keep the office on the latest code. Every few minutes the office fetches the branch your Focus checkout tracks (usually `origin/main`). When new commits land there, it waits until no agent is busy, fast-forwards, runs `npm install` if dependencies changed and rebuilds the client (`npm start` only). Then it restarts, and open browser tabs reload on their own. It skips the update when the checkout has local commits or uncommitted changes, and it stays off in demo mode.
 
 The data dir is deliberately outside this repo. Otherwise agents working in a worktree under it would pick up this project's `CLAUDE.md`.
 
@@ -104,6 +110,8 @@ The data dir is deliberately outside this repo. Otherwise agents working in a wo
 ```
 shared/types.ts           types shared by server and client (Project, Agent, Board, events…)
 server/
+  supervise.ts            runs index.ts and restarts it after an auto update
+  updater.ts              auto update: fetch, fast-forward, install/build, restart
   index.ts                express + WebSocket (/ws) + Vite middleware (dev) or dist/ (prod)
   office.ts               projects/rooms, Kanban boards (polling GitHub), auto-assign, settings
   store.ts                ~/.focus/state.json + per-agent terminal logs (jsonl)

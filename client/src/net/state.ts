@@ -65,6 +65,8 @@ export class OfficeState {
     switch (event.type) {
       case 'snapshot': {
         const s = event.snapshot;
+        // The server restarted on newer code (auto update): reload to pick up the matching client.
+        if (this.info && this.info.version !== s.info.version) return location.reload();
         this.info = s.info;
         this.projects = s.projects;
         this.agents = new Map(s.agents.map((a) => [a.id, a]));

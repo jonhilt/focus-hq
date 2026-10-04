@@ -5,10 +5,10 @@
   "type": "module",
   "description": "A cartoon 3D office where a swarm of Claude Code agents works your GitHub issues.",
   "scripts": {
-    "dev": "tsx server/index.ts --dev",
+    "dev": "tsx server/supervise.ts --dev",
     "demo": "tsx server/index.ts --dev --demo",
     "build": "vite build",
-    "start": "tsx server/index.ts",
+    "start": "tsx server/supervise.ts",
     "typecheck": "tsc -p ."
   },
   "engines": {

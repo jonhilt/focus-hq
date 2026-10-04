@@ -159,6 +159,8 @@ export interface GitHubStatus {
 
 export interface ServerInfo {
   mode: 'live' | 'demo';
+  /** Commit the server runs. Browsers reload when it changes, so an auto update reaches the client too. */
+  version: string;
   github: GitHubStatus;
   settings: Settings;
   deskCount: number;
