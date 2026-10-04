@@ -1,7 +1,8 @@
-import type { Autonomy, Project } from '../../../shared/types';
-import { DESKS_PER_ROOM } from '../../../shared/types';
+import type { Autonomy, Project, RoomTheme } from '../../../shared/types';
+import { DESKS_PER_ROOM, ROOM_THEMES } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
+import { roomTheme, THEME_INFO } from '../world/themes';
 import type { ManagerTab, Ui } from './context';
 import { busy, h } from './dom';
 
@@ -14,6 +15,13 @@ function knownRepos(): Promise<string[]> {
     return [];
   });
   return repoCache;
+}
+
+/** Picker for the landscape a room sits in. */
+function themeSelect(selected: RoomTheme | '', surprise = false): HTMLSelectElement {
+  const options = ROOM_THEMES.map((t) => h('option', { value: t, selected: t === selected }, `${THEME_INFO[t].emoji} ${THEME_INFO[t].label}`));
+  if (surprise) options.unshift(h('option', { value: '', selected: selected === '' }, '✨ Surprise me'));
+  return h('select', null, ...options);
 }
 
 function repoDatalist(id: string): HTMLDataListElement {
@@ -105,6 +113,8 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
   const saveAuto = () => void api.updateProject(p.id, { autoAssign: auto.checked, autoLabel: label.value }).catch((e: Error) => ui.error(e.message));
   auto.addEventListener('change', saveAuto);
   label.addEventListener('change', saveAuto);
+  const theme = themeSelect(roomTheme(p));
+  theme.addEventListener('change', () => void api.updateProject(p.id, { theme: theme.value as RoomTheme }).catch((e: Error) => ui.error(e.message)));
 
   const remove = h('button', { class: 'btn small danger' }, '🗑 Close project');
   remove.onclick = () => {
@@ -129,6 +139,7 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
     h('div', { class: 'row' }, h('div', { class: 'grow' }, repoInput), connect, repoDatalist(listId)),
     h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow' }, newRepo), h('label', { class: 'row', style: 'gap:4px' }, newRepoPrivate, 'private'), create),
     h('div', { class: 'row', style: 'margin-top:14px' },
+      h('label', { class: 'row', style: 'gap:6px' }, 'Scenery', theme),
       h('label', { class: 'row', style: 'gap:6px' }, 'Agents at once', maxAgents),
       h('label', { class: 'row', style: 'gap:6px' }, auto, 'Auto-assign open issues'),
       h('label', { class: 'row', style: 'gap:6px' }, 'with label', label),
@@ -149,12 +160,13 @@ function newProjectTab(ui: Ui, show: (t: ManagerTab) => void): HTMLElement {
     h('div', { class: 'row' }, h('div', { class: 'grow' }, blankName), h('label', { class: 'row', style: 'gap:4px' }, blankPrivate, 'private')),
   );
   blank.addEventListener('change', () => (blankOpts.style.display = blank.checked ? '' : 'none'));
+  const theme = themeSelect('', true);
 
   const create = h('button', { class: 'btn primary' }, '🏗️ Build the room');
   create.onclick = () => void busy(create, async () => {
     if (!name.value.trim()) throw new Error('Give the project a name');
     const list = repos.value.split(/[\s,]+/).map((r) => r.trim()).filter(Boolean);
-    const project = await api.createProject(name.value, color.value, list);
+    const project = await api.createProject(name.value, color.value, list, (theme.value || undefined) as RoomTheme | undefined);
     if (blank.checked) {
       const repoName = (blankName.value || name.value).trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-');
       await api.createRepo({ name: repoName, private: blankPrivate.checked, description: name.value, projectId: project.id });
@@ -175,6 +187,11 @@ function newProjectTab(ui: Ui, show: (t: ManagerTab) => void): HTMLElement {
       h('label', null, 'Existing GitHub repositories'),
       repos,
       h('small', null, 'One per line, as owner/name or a GitHub URL. Leave empty to add them later.'),
+    ),
+    h('div', { class: 'field' },
+      h('label', null, 'Room scenery'),
+      theme,
+      h('small', null, 'The room’s walls disappear and it sits in the middle of this instead. Change it any time.'),
     ),
     h('label', { class: 'row', style: 'margin-bottom:12px;font-weight:600' }, blank, '✨ Also create a new, blank repository on GitHub for it'),
     blankOpts,

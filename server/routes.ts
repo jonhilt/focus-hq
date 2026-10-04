@@ -29,7 +29,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.patch('/settings', h((req) => office.updateSettings(req.body ?? {})));
 
   // projects (rooms)
-  r.post('/projects', h((req) => office.createProject(str(req.body.name), req.body.color, Array.isArray(req.body.repos) ? req.body.repos : [])));
+  r.post('/projects', h((req) => office.createProject(str(req.body.name), req.body.color, Array.isArray(req.body.repos) ? req.body.repos : [], req.body.theme)));
   r.patch('/projects/:id', h((req) => office.updateProject(param(req, 'id'), req.body ?? {})));
   r.delete('/projects/:id', h((req) => office.deleteProject(param(req, 'id'))));
   r.post('/projects/:id/repos', h((req) => office.connectRepo(param(req, 'id'), str(req.body.repo))));

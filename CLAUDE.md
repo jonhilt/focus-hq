@@ -16,4 +16,5 @@ There is no test suite yet. Verify 3D/UI changes by running the demo and taking 
 - Agents never push or open PRs themselves; `server/agents/manager.ts` does that after the session ends.
 - Anything shell-like goes through `run()` in `server/util.ts` (execFile, no shell).
 - 3D: toon materials from `world/materials.ts`. Text surfaces (screens, signs, boards) use `flat()` so they're unlit and skip the outline pass. Room contents are built in room-local coordinates; walls and colliders are in world coordinates via `Builder`.
+- Room landscapes (`world/themes.ts`) are drawn through a stencil mask, so build them only with the `Kit` from `world/scenery.ts` (its materials carry the mask; with a plain `toon()` material, the object would turn up in whichever room or hallway it physically overlaps). Keep landscape objects out of the room footprint (|x| < 7, |z| < 6 in room-local coordinates).
 - Imports are extensionless (Vite + tsx both resolve them).

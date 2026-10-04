@@ -30,10 +30,19 @@ export interface Settings {
   mergeMethod: 'squash' | 'merge' | 'rebase';
 }
 
+/**
+ * What a room's walls show. Every theme but 'office' turns the walls and ceiling into a window on a
+ * landscape built around the room, so the desks look like they sit in the middle of it.
+ */
+export const ROOM_THEMES = ['beach', 'forest', 'desert', 'moon', 'city', 'library', 'office'] as const;
+export type RoomTheme = (typeof ROOM_THEMES)[number];
+
 export interface Project {
   id: string;
   name: string;
   color: string;
+  /** Scenery around the room. Missing on projects made before themes existed; the client then picks one from the id. */
+  theme?: RoomTheme;
   /** GitHub repositories as "owner/name". */
   repos: string[];
   /** How many agents may work on this project at the same time (the room always has DESKS_PER_ROOM desks). */

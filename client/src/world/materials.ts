@@ -25,6 +25,11 @@ export function toon(color: THREE.ColorRepresentation, opts: { map?: THREE.Textu
   return mat;
 }
 
+/** An uncached toon material, for callers that change its render state (e.g. stencil masking). */
+export function toonMaterial(params: THREE.MeshToonMaterialParameters = {}): THREE.MeshToonMaterial {
+  return new THREE.MeshToonMaterial({ gradientMap, ...params });
+}
+
 /** Unlit material for screens and printed surfaces; excluded from the outline pass. */
 export function flat(map: THREE.Texture, opts: { transparent?: boolean } = {}): THREE.MeshBasicMaterial {
   const mat = new THREE.MeshBasicMaterial({ map, transparent: opts.transparent ?? false, toneMapped: false });

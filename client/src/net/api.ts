@@ -1,4 +1,4 @@
-import type { Agent, Board, Issue, Project, Settings, TermLine } from '../../../shared/types';
+import type { Agent, Board, Issue, Project, RoomTheme, Settings, TermLine } from '../../../shared/types';
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(`/api${url}`, {
@@ -12,7 +12,7 @@ async function call<T>(method: string, url: string, body?: unknown): Promise<T> 
 }
 
 export const api = {
-  createProject: (name: string, color: string, repos: string[]) => call<Project>('POST', '/projects', { name, color, repos }),
+  createProject: (name: string, color: string, repos: string[], theme?: RoomTheme) => call<Project>('POST', '/projects', { name, color, repos, theme }),
   updateProject: (id: string, patch: Partial<Project>) => call<Project>('PATCH', `/projects/${id}`, patch),
   deleteProject: (id: string) => call('DELETE', `/projects/${id}`),
   connectRepo: (id: string, repo: string) => call<Project>('POST', `/projects/${id}/repos`, { repo }),

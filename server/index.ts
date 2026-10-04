@@ -40,10 +40,10 @@ async function main() {
   office.agents = new AgentManager(store, hub, github, runner, config.demo ? demoWorkspace : liveWorkspace, (id) => office.boardChanged(id));
 
   if (config.demo && store.projects.length === 0) {
-    const shop = store.addProject('Sock Shop', '#ff8a5b');
+    const shop = store.addProject('Sock Shop', '#ff8a5b', 'beach');
     shop.repos = ['demo/webshop-frontend', 'demo/webshop-api'];
     shop.maxAgents = 4;
-    const game = store.addProject('Space Dodger', '#5bc0eb');
+    const game = store.addProject('Space Dodger', '#5bc0eb', 'moon');
     game.repos = ['demo/space-dodger'];
   }
 

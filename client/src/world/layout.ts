@@ -12,6 +12,8 @@ export const ROOM_WIDTH = 12; // along the hallway
 export const LOBBY = { x0: -9, x1: 9, z0: 0, z1: 12 };
 export const OFFICE = { x0: -9, x1: 9, z0: 12, z1: 24 };
 export const EYE_HEIGHT = 1.6;
+/** Where the office's sun light comes from (painted suns in the room landscapes line up with it). */
+export const SUN_POSITION = new THREE.Vector3(6, 10, 4);
 
 export interface RoomSlot {
   index: number;

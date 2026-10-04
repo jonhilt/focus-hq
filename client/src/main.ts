@@ -12,6 +12,7 @@ import { openManagerPanel } from './ui/managerPanel';
 import { Panels } from './ui/panels';
 import { openNewIssuePanel, openPausePanel, openTeleportPanel } from './ui/travelPanel';
 import type { Interaction } from './world/builder';
+import { SUN_POSITION } from './world/layout';
 import { World } from './world/office';
 
 async function fontsReady(): Promise<void> {
@@ -21,7 +22,7 @@ async function fontsReady(): Promise<void> {
 
 async function main() {
   // ---------------------------------------------------------------- renderer & scene
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true }); // stencil: room landscapes
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -32,7 +33,7 @@ async function main() {
   scene.background = new THREE.Color('#9ad7ff');
   scene.add(new THREE.HemisphereLight('#ffffff', '#d9c7a8', 1.9));
   const sun = new THREE.DirectionalLight('#fff4e0', 1.3);
-  sun.position.set(6, 10, 4);
+  sun.position.copy(SUN_POSITION);
   scene.add(sun);
   scene.add(new THREE.AmbientLight('#ffffff', 0.35));
 

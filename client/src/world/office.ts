@@ -5,11 +5,13 @@ import { state } from '../net/state';
 import { columns } from './board';
 import { Builder, interactive } from './builder';
 import { canvasTexture, fitText, makeCanvas, roundRect, signTexture, UI_FONT } from './canvas';
-import { type Box2, DOOR_W, HALL_HALF, LOBBY, OFFICE, ROOM_DEPTH, ROOM_WIDTH, roomSlot, roomToWorld, rowsFor, WALL_H } from './layout';
+import { type Box2, DOOR_W, HALL_HALF, LOBBY, OFFICE, ROOM_DEPTH, ROOM_WIDTH, roomSlot, roomToWorld, rowsFor, SUN_POSITION, WALL_H } from './layout';
 import { box, flat, toon } from './materials';
 import { bookshelf, ceilingLight, chair, coffeeMachine, cyl, desk, DESK_TOP, plant, rug, sofa, trophy, waterCooler, windowPane } from './props';
 import { buildVacantRoom, ProjectRoom } from './room';
+import type { Scenery } from './scenery';
 import { tiled } from './textures';
+import { createScenery, roomTheme } from './themes';
 
 export interface Place {
   label: string;
@@ -25,6 +27,8 @@ export class World {
   readonly root = new THREE.Group();
   colliders: Box2[] = [];
   rooms = new Map<string, ProjectRoom>();
+  /** Room landscapes by project, theme and slot; kept across rebuilds since they're slow to make. */
+  private sceneries = new Map<string, Scenery>();
   private builder: Builder | null = null;
   private dashboard = makeCanvas(1280, 720);
   private dashboardTex = canvasTexture(this.dashboard.canvas);
@@ -40,7 +44,7 @@ export class World {
 
   /** Rebuilds the building when the set of projects (or their names/colours/repos) changes. */
   sync(projects: Project[]): void {
-    const key = JSON.stringify(projects.map((p) => [p.id, p.name, p.color, p.repos]));
+    const key = JSON.stringify(projects.map((p) => [p.id, p.name, p.color, p.repos, p.theme]));
     if (key === this.projectKey) {
       for (const room of this.rooms.values()) {
         room.project = projects.find((p) => p.id === room.project.id) ?? room.project;
@@ -101,7 +105,20 @@ export class World {
     b.add(endWindow);
 
     // rooms
-    projects.forEach((project, i) => this.rooms.set(project.id, new ProjectRoom(project, roomSlot(i), b)));
+    const previous = this.sceneries;
+    this.sceneries = new Map();
+    projects.forEach((project, i) => {
+      const slot = roomSlot(i);
+      const theme = roomTheme(project);
+      const key = `${project.id}|${theme}|${i}`;
+      let scenery = previous.get(key) ?? null;
+      previous.delete(key);
+      // the stencil value (slot + 1) and the sun direction both depend on the slot, hence the key
+      scenery ??= createScenery(theme, i + 1, project.id, SUN_POSITION.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -slot.rotationY));
+      if (scenery) this.sceneries.set(key, scenery);
+      this.rooms.set(project.id, new ProjectRoom(project, slot, b, scenery));
+    });
+    for (const scenery of previous.values()) scenery.dispose();
     for (let i = projects.length; i < rows * 2; i++) buildVacantRoom(roomSlot(i), b);
 
     this.buildLobby(b);
