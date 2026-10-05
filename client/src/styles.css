@@ -180,7 +180,7 @@ textarea.qa-brief { width: 100%; min-height: 160px; font-family: var(--mono); fo
 .qa-report p { margin: 8px 0; line-height: 1.4; }
 .qa-report .m { font-size: 13px; margin-top: 2px; }
 .qa-report.passed { background: #f4fff5; }
-.qa-report.failed { background: #fff5f5; }
+.qa-report.failed, .qa-report.fixing, .qa-report.needs-you { background: #fff5f5; }
 .qa-checks { width: 100%; border-collapse: collapse; font-size: 14px; margin: 6px 0; }
 .qa-checks td { border-top: 1px solid #dee2e6; padding: 5px 6px; vertical-align: top; }
 .qa-checks td:first-child { width: 26px; }
@@ -191,7 +191,8 @@ textarea.qa-brief { width: 100%; min-height: 160px; font-family: var(--mono); fo
 .qa-report .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .chip.qa { cursor: pointer; border: inherit; font: inherit; }
 .chip.qa.passed { background: #d3f9d8; }
-.chip.qa.failed { background: #ffc9c9; }
+.chip.qa.failed, .chip.qa.needs-you { background: #ffc9c9; }
+.chip.qa.fixing { background: #ffe8cc; }
 .chip.qa.testing, .chip.qa.queued { background: #d0ebff; }
 .chip.qa.stale, .chip.qa.error { background: #ffe066; }
 @media (max-width: 760px) { .qa-station { grid-template-columns: 1fr; } }

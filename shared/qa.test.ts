@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoQaFor, qaBadge, sameCommit } from './qa';
+import { autoQaFor, autoSendBackFor, qaBadge, sameCommit } from './qa';
 import type { QaReview } from './types';
 
 const review = (r: Partial<QaReview> = {}): QaReview => ({
@@ -26,6 +26,13 @@ describe('qaBadge', () => {
   it('marks a verdict on an older commit stale, whichever way it went', () => {
     expect(qaBadge(review(), { headSha: 'fff0000aaa' }).state).toBe('stale');
     expect(qaBadge(review({ status: 'failed' }), { headSha: 'fff0000aaa' })).toEqual({ state: 'stale', label: 'QA failed an older commit' });
+  });
+
+  it('says who a failed PR went back to, or that it needs you', () => {
+    const fixing = review({ status: 'failed', followUp: { kind: 'fixing', agentId: 'a1', agentName: 'Ada' } });
+    expect(qaBadge(fixing, { headSha: 'abc1234def5678' })).toEqual({ state: 'fixing', label: '🔧 QA failed: back with Ada' });
+    const stuck = review({ status: 'failed', followUp: { kind: 'needs-you', reason: 'it failed QA 3 times' } });
+    expect(qaBadge(stuck, { headSha: 'abc1234def5678' })).toEqual({ state: 'needs-you', label: '🙋 QA failed: needs you' });
   });
 
   it('trusts the verdict when either side doesn’t know the commit', () => {
@@ -60,5 +67,12 @@ describe('autoQaFor', () => {
     expect(autoQaFor({})).toBe(true);
     expect(autoQaFor({ autoQa: true })).toBe(true);
     expect(autoQaFor({ autoQa: false })).toBe(false);
+  });
+});
+
+describe('autoSendBackFor', () => {
+  it('is on unless the project switched it off', () => {
+    expect(autoSendBackFor({})).toBe(true);
+    expect(autoSendBackFor({ autoSendBack: false })).toBe(false);
   });
 });

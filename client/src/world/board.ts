@@ -192,7 +192,7 @@ export class KanbanBoard {
       const qa = qaBadge(state.reviews.get(prKey(pr.repo, pr.number)), pr);
       const flags = [pr.isDraft ? 'draft' : '', pr.mergeable === 'CONFLICTING' ? '⚠ conflicts' : '', pr.reviewDecision === 'APPROVED' ? '👍 approved' : ''].filter(Boolean);
       const meta = [qa.state === 'none' ? '' : qa.label, pr.agent ? pr.agent.name : pr.author ? `@${pr.author}` : '', checks, ...flags].filter(Boolean).join(' · ');
-      const color = pr.checks === 'failing' || pr.mergeable === 'CONFLICTING' || qa.state === 'failed' ? '#c92a2a' : '#2b8a3e';
+      const color = pr.checks === 'failing' || pr.mergeable === 'CONFLICTING' || ['failed', 'fixing', 'needs-you'].includes(qa.state) ? '#c92a2a' : '#2b8a3e';
       note(2, i, pr.number, '#d3f9d8', `PR #${pr.number} ${pr.title}`, meta, color, pr.agent && UNIFORM[pr.agent.avatar.division]);
     });
     if (cols.prs.length > maxNotes) more(2, cols.prs.length - fit(cols.prs.length));

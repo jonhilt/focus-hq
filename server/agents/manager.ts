@@ -1,5 +1,5 @@
 import { qaOfficerFor, randomAvatar } from '../../shared/crew';
-import { autoQaFor, prKey } from '../../shared/qa';
+import { autoQaFor, autoSendBackFor, prKey, sameCommit } from '../../shared/qa';
 import type { Agent, AgentStatus, Effort, PermissionRequest, PullRequest, QaReview, TermLine } from '../../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, QA_DESK } from '../../shared/types';
 import type { GitHubProvider } from '../github/provider';
@@ -7,7 +7,9 @@ import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { errorMessage, newId, slugify, truncate } from '../util';
 import { COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, systemAppend } from './prompts';
-import { parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
+import { fixPrompt, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
+import type { QaLoopEvent } from './qaLoop';
+import { qaNextStep } from './qaLoop';
 import type { AgentRunner, AgentSession, RunHooks, WorkspaceOps } from './types';
 
 interface Runtime {
@@ -91,7 +93,7 @@ export class AgentManager {
    * the office; otherwise a new agent sits down on the PR's branch.
    */
   resolveConflicts(projectId: string, pr: PullRequest): Agent {
-    const owner = [...this.store.agents.values()].find((a) => a.task !== 'review' && a.repo === pr.repo && a.pr?.number === pr.number);
+    const owner = this.prOwner(pr.repo, pr.number);
     if (owner) {
       this.update(owner, { baseBranch: pr.baseBranch });
       this.message(owner.id, conflictsPrompt(owner));
@@ -105,6 +107,11 @@ export class AgentManager {
       baseBranch: pr.baseBranch,
       pr: { number: pr.number, url: pr.url },
     });
+  }
+
+  /** The agent in the office whose PR this is: the one who opened it, or one seated on it since. */
+  private prOwner(repo: string, number: number): Agent | undefined {
+    return [...this.store.agents.values()].find((a) => a.task !== 'review' && a.repo === repo && a.pr?.number === number);
   }
 
   private seat(projectId: string, repo: string, work: Pick<Agent, 'id' | 'task' | 'issue' | 'branch' | 'baseBranch' | 'pr' | 'effort'>): Agent {
@@ -182,7 +189,7 @@ export class AgentManager {
       if (agent.task === 'review') return await this.launchReview(agent);
       const info = await this.github.repoInfo(agent.repo);
       if (info.isEmpty) throw new Error('This repository has no commits yet – add a README first so there is a branch to work from.');
-      // an issue starts a new branch from the base; conflicts are fixed on the PR's own branch
+      // an issue starts a new branch from the base; conflicts and QA's findings are fixed on the PR's own branch
       let prompt: string;
       let startPoint: string;
       switch (agent.task) {
@@ -197,6 +204,13 @@ export class AgentManager {
           prompt = conflictsPrompt(agent);
           startPoint = agent.branch;
           break;
+        case 'fix': {
+          const review = this.store.reviews.get(prKey(agent.repo, agent.issue.number));
+          if (!review?.report) throw new Error(`QA's report on PR #${agent.issue.number} is gone, so there's nothing to fix`);
+          prompt = fixPrompt({ number: agent.issue.number, branch: agent.branch }, { sha: review.sha, report: review.report });
+          startPoint = agent.branch;
+          break;
+        }
       }
       this.print(agent, [{ kind: 'system', text: `✻ Setting up a worktree for ${agent.repo} on ${agent.branch}` }]);
       this.update(agent, { activity: 'Cloning the repository' });
@@ -273,6 +287,7 @@ export class AgentManager {
     if (outcome.aborted) {
       this.update(agent, { status: 'stopped', activity: 'Stopped by the manager', permission: undefined, finishedAt: Date.now() });
       if (review) this.reviewEnded(agent, 'Stopped by the manager');
+      this.fixEnded(agent, 'stopped');
       this.schedule();
       return;
     }
@@ -298,6 +313,12 @@ export class AgentManager {
         rt.nudged = true;
         this.print(agent, [{ kind: 'system', text: '✻ Uncommitted changes left behind – asking the agent to commit them' }]);
         return await this.runSession(agent, COMMIT_NUDGE, agent.sessionId);
+      }
+      const fixing = this.fixing(agent);
+      if (fixing?.sha && sameCommit(await this.workspace.head(dir), fixing.sha)) {
+        this.update(agent, { status: 'done', activity: 'Finished without fixing anything – see the terminal', finishedAt: Date.now() });
+        this.fixEnded(agent, 'pushed-nothing');
+        return;
       }
       const ahead = await this.workspace.commitsAhead(dir, agent.baseBranch);
       if (ahead === 0) {
@@ -325,6 +346,7 @@ export class AgentManager {
       this.print(agent, [{ kind: 'success', text: `✔ Pull request ready: ${pr.url}` }]);
       this.update(agent, { status: 'done', pr, activity: `PR #${pr.number} is ready for review`, finishedAt: Date.now() });
       this.boardChanged(agent.projectId);
+      this.fixEnded(agent, 'pushed');
       // new code on the PR: the room's QA officer tests it
       const project = this.store.projects.find((p) => p.id === agent.projectId);
       if (project && autoQaFor(project)) {
@@ -351,6 +373,7 @@ export class AgentManager {
     this.update(agent, { status: 'error', error: message, activity: 'Hit a problem – send a message to retry', permission: undefined, finishedAt: Date.now() });
     this.hub.toast('error', `${agent.name}: ${truncate(message, 140)}`, agent.id);
     if (agent.task === 'review') this.reviewEnded(agent, message);
+    this.fixEnded(agent, 'failed');
     this.schedule();
   }
 
@@ -362,7 +385,17 @@ export class AgentManager {
     if (!project.repos.includes(repo)) throw new Error(`${repo} is not connected to ${project.name}`);
     const existing = this.store.reviews.get(prKey(repo, number));
     if (existing && (existing.status === 'queued' || existing.status === 'testing')) return existing;
-    const review: QaReview = { projectId, repo, number, title, status: 'queued', requestedAt: Date.now() };
+    const review: QaReview = {
+      projectId,
+      repo,
+      number,
+      title,
+      status: 'queued',
+      requestedAt: Date.now(),
+      openedByOffice: existing?.openedByOffice || [...this.store.agents.values()].some((a) => a.task === 'issue' && a.repo === repo && a.pr?.number === number),
+      failedRounds: existing?.failedRounds,
+      lastRound: existing?.report ? { sha: existing.sha, report: existing.report } : existing?.lastRound,
+    };
     this.putReview(review);
     this.nextReview(projectId);
     return review;
@@ -416,7 +449,7 @@ export class AgentManager {
     const review = this.store.reviews.get(prKey(agent.repo, pr.number));
     if (review) this.putReview({ ...review, status: 'testing', title: pr.title, sha, agentId: agent.id, error: undefined });
     rt.qaSystem = qaSystemAppend(agent, project, pr, sha);
-    let prompt = qaPrompt(agent.repo, pr, issues);
+    let prompt = qaPrompt(agent.repo, pr, issues, review?.lastRound);
     if (rt.inbox.length) prompt += `\n\nNotes from your manager:\n${rt.inbox.splice(0).map((m) => `- ${m}`).join('\n')}`;
     await this.runSession(agent, prompt);
   }
@@ -450,12 +483,83 @@ export class AgentManager {
     } catch (err) {
       this.print(agent, [{ kind: 'error', text: `✘ Couldn't post the QA report on the PR: ${errorMessage(err)}` }]);
     }
-    if (review) this.putReview({ ...review, status: pass ? 'passed' : 'failed', report, commentUrl, finishedAt: Date.now(), error: undefined });
+    const failedRounds = (review?.failedRounds ?? 0) + (pass ? 0 : 1);
+    const done: QaReview | undefined = review && { ...review, status: pass ? 'passed' : 'failed', report, commentUrl, failedRounds, finishedAt: Date.now(), error: undefined };
+    if (done) this.putReview(done);
     this.print(agent, [{ kind: pass ? 'success' : 'error', text: `${pass ? '✅ QA passed' : '❌ QA failed'} PR #${number} · ${report.checks.length} checks` }]);
     this.update(agent, { status: 'done', activity: `${pass ? '✅ Passed' : '❌ Failed'} PR #${number}`, finishedAt: Date.now() });
     this.hub.toast(pass ? 'success' : 'error', `${pass ? '✅' : '❌'} ${agent.name} ${pass ? 'passed' : 'failed'} ${agent.repo.split('/')[1]}#${number}: ${truncate(report.summary, 120)}`, agent.id);
     this.boardChanged(agent.projectId);
+    if (done) await this.qaNext(done, { kind: 'verdict', verdict: report.verdict, failedRounds });
     this.nextReview(agent.projectId);
+  }
+
+  // ---------------------------------------------------------------- sending failed PRs back
+
+  /** Acts on what qaNextStep decides for a PR after a verdict or a fix. */
+  private async qaNext(review: QaReview, event: QaLoopEvent): Promise<void> {
+    const project = this.store.projects.find((p) => p.id === review.projectId);
+    if (!project) return;
+    const step = qaNextStep({ openedByOffice: !!review.openedByOffice, autoSendBack: autoSendBackFor(project) }, event);
+    switch (step.kind) {
+      case 'nothing':
+        if (review.followUp) this.putReview({ ...review, followUp: undefined });
+        return;
+      case 'send-back':
+        return this.sendBack(review);
+      case 'needs-you':
+        return this.needsYou(review, step.reason);
+    }
+  }
+
+  /**
+   * Hands QA's findings to the developer who opened the PR, if they're still in the office; otherwise a new agent sits
+   * down on the PR's branch to fix it.
+   */
+  private async sendBack(review: QaReview): Promise<void> {
+    const { report } = review;
+    if (!report) return;
+    const where = `${review.repo.split('/')[1]}#${review.number}`;
+    try {
+      const owner = this.prOwner(review.repo, review.number);
+      if (owner) {
+        this.putReview({ ...review, followUp: { kind: 'fixing', agentId: owner.id, agentName: owner.name } });
+        this.message(owner.id, fixPrompt({ number: review.number, branch: owner.branch }, { sha: review.sha, report }));
+        this.hub.toast('info', `🔧 ${where} failed QA – back to ${owner.name}`, owner.id);
+        return;
+      }
+      const pr = await this.github.getPullRequest(review.repo, review.number);
+      const agent = this.seat(review.projectId, review.repo, {
+        id: newId('agent'),
+        task: 'fix',
+        issue: { number: pr.number, title: pr.title, url: pr.url },
+        branch: pr.branch,
+        baseBranch: pr.baseBranch,
+        pr: { number: pr.number, url: pr.url },
+      });
+      this.putReview({ ...review, followUp: { kind: 'fixing', agentId: agent.id, agentName: agent.name } });
+      this.hub.toast('info', `🔧 ${where} failed QA – ${agent.name} sits down to fix it`, agent.id);
+    } catch (err) {
+      this.needsYou(review, `it couldn't be sent back (${errorMessage(err)})`);
+    }
+  }
+
+  /** The office stops sending the PR back: it's the manager's call now. */
+  private needsYou(review: QaReview, reason: string): void {
+    this.putReview({ ...review, followUp: { kind: 'needs-you', reason } });
+    this.hub.toast('error', `🙋 ${review.repo.split('/')[1]}#${review.number} needs you: ${reason}`);
+  }
+
+  /** The failed review this agent was sent to fix, while it's still theirs. */
+  private fixing(agent: Agent): QaReview | undefined {
+    if (!agent.pr) return undefined;
+    const review = this.store.reviews.get(prKey(agent.repo, agent.pr.number));
+    return review?.followUp?.kind === 'fixing' && review.followUp.agentId === agent.id ? review : undefined;
+  }
+
+  private fixEnded(agent: Agent, outcome: Extract<QaLoopEvent, { kind: 'fix-ended' }>['outcome']): void {
+    const review = this.fixing(agent);
+    if (review) void this.qaNext(review, { kind: 'fix-ended', by: agent.name, outcome });
   }
 
   /** A review that ended without a verdict (stopped, failed, or its PR went away). */
@@ -550,7 +654,7 @@ export class AgentManager {
   /** Called when a PR an agent opened was merged or closed. The agent packs up and goes home. */
   prClosed(repo: string, number: number, merged: boolean): void {
     this.reviewGone(repo, number);
-    const agent = [...this.store.agents.values()].find((a) => a.task !== 'review' && a.repo === repo && a.pr?.number === number);
+    const agent = this.prOwner(repo, number);
     if (!agent || this.leaving.has(agent.id)) return;
     this.leaving.add(agent.id);
     this.print(agent, [{ kind: 'success', text: merged ? `🎉 PR #${number} was merged!` : `PR #${number} was closed` }]);

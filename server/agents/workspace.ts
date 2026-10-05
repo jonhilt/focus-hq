@@ -102,6 +102,10 @@ export async function commitsAhead(dir: string, baseBranch: string): Promise<num
   return Number(out.trim()) || 0;
 }
 
+export async function head(dir: string): Promise<string> {
+  return (await git(dir, ['rev-parse', 'HEAD'])).trim();
+}
+
 export async function hasUncommittedChanges(dir: string): Promise<boolean> {
   return (await git(dir, ['status', '--porcelain'])).trim().length > 0;
 }

@@ -57,6 +57,8 @@ export interface Project {
   preview?: PreviewConfig;
   /** The QA officer tests every PR the office opens or updates (missing = on). */
   autoQa?: boolean;
+  /** A PR the office opened that fails QA goes back to a developer to fix (missing = on). */
+  autoSendBack?: boolean;
   /** What QA must check on every PR of this project, on top of the usual review. Goes into the QA officer's prompt. */
   qaBrief?: string;
   createdAt: number;
@@ -165,10 +167,10 @@ export const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 export type Effort = (typeof EFFORT_LEVELS)[number];
 
 /**
- * What an agent was seated for: an issue to resolve, an open pull request whose branch conflicts with its base, or
- * (the room's QA officer) a pull request to review and test.
+ * What an agent was seated for: an issue to resolve, an open pull request whose branch conflicts with its base, an open
+ * pull request that failed QA, or (the room's QA officer) a pull request to review and test.
  */
-export type AgentTask = 'issue' | 'conflicts' | 'review';
+export type AgentTask = 'issue' | 'conflicts' | 'fix' | 'review';
 
 /** The QA officer doesn't sit at one of the room's desks but at the QA station by the pull requests table. */
 export const QA_DESK = -1;
@@ -180,7 +182,7 @@ export interface Agent {
   projectId: string;
   repo: string;
   task: AgentTask;
-  /** For a 'conflicts' task, the pull request itself (GitHub numbers issues and PRs alike). */
+  /** For a 'conflicts' or 'fix' task, the pull request itself (GitHub numbers issues and PRs alike). */
   issue: { number: number; title: string; url: string };
   /** Chosen when the agent is hired. Missing = the model's default effort. */
   effort?: Effort;
@@ -350,6 +352,9 @@ export interface QaReport {
 
 export type QaStatus = 'queued' | 'testing' | 'passed' | 'failed' | 'error';
 
+/** What the office did about a failed verdict on a PR it opened: a developer is on it, or it gave up and wants you. */
+export type QaFollowUp = { kind: 'fixing'; agentId: string; agentName: string } | { kind: 'needs-you'; reason: string };
+
 /** The latest QA review of a pull request. Kept until the PR is merged or closed. */
 export interface QaReview {
   projectId: string;
@@ -365,6 +370,13 @@ export interface QaReview {
   /** The QA officer's session for this review, while their record is around. */
   agentId?: string;
   error?: string;
+  /** An agent of the office opened the PR, so a failed verdict may go back to a developer. Teammates' PRs never do. */
+  openedByOffice?: boolean;
+  /** Rounds of QA this PR has failed so far, this one included once it's in (missing = none). */
+  failedRounds?: number;
+  /** The round before this one, so a re-test checks those findings first and focuses on what changed since. */
+  lastRound?: { sha?: string; report: QaReport };
+  followUp?: QaFollowUp;
   requestedAt: number;
   finishedAt?: number;
 }

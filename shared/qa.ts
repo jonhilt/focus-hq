@@ -2,14 +2,17 @@ import type { PullRequest, QaReview } from './types';
 
 // QA decisions shared by the server and the board. Pure, so they're unit tested (shared/qa.test.ts).
 
-export type QaBadgeState = 'none' | 'queued' | 'testing' | 'passed' | 'failed' | 'stale' | 'error';
+export type QaBadgeState = 'none' | 'queued' | 'testing' | 'passed' | 'failed' | 'fixing' | 'needs-you' | 'stale' | 'error';
 
 export interface QaBadge {
   state: QaBadgeState;
   label: string;
 }
 
-/** What a PR card shows about QA. A verdict on an older commit than the PR's head is stale. */
+/**
+ * What a PR card shows about QA. A verdict on an older commit than the PR's head is stale. A fail says who it went back
+ * to, or that the office gave up on it.
+ */
 export function qaBadge(review: QaReview | undefined, pr: Pick<PullRequest, 'headSha'>): QaBadge {
   if (!review) return { state: 'none', label: 'not tested' };
   switch (review.status) {
@@ -22,7 +25,15 @@ export function qaBadge(review: QaReview | undefined, pr: Pick<PullRequest, 'hea
     case 'passed':
     case 'failed': {
       if (review.sha && pr.headSha && !sameCommit(review.sha, pr.headSha)) return { state: 'stale', label: `QA ${review.status} an older commit` };
-      return review.status === 'passed' ? { state: 'passed', label: '✅ QA passed' } : { state: 'failed', label: '❌ QA failed' };
+      if (review.status === 'passed') return { state: 'passed', label: '✅ QA passed' };
+      switch (review.followUp?.kind) {
+        case 'fixing':
+          return { state: 'fixing', label: `🔧 QA failed: back with ${review.followUp.agentName}` };
+        case 'needs-you':
+          return { state: 'needs-you', label: '🙋 QA failed: needs you' };
+        case undefined:
+          return { state: 'failed', label: '❌ QA failed' };
+      }
     }
   }
 }
@@ -36,6 +47,11 @@ export function sameCommit(a: string, b: string): boolean {
 /** Whether QA should pick up a PR the office just opened or pushed to: on unless the project switched it off. */
 export function autoQaFor(project: { autoQa?: boolean }): boolean {
   return project.autoQa !== false;
+}
+
+/** Whether a failed PR the office opened goes back to a developer: on unless the project switched it off. */
+export function autoSendBackFor(project: { autoSendBack?: boolean }): boolean {
+  return project.autoSendBack !== false;
 }
 
 /** Key for a pull request across a project's repos. */

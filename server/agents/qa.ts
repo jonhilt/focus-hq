@@ -1,4 +1,4 @@
-import type { Agent, QaReport } from '../../shared/types';
+import type { Agent, QaReport, QaReview } from '../../shared/types';
 import type { IssueDetail, PullRequestDetail } from '../github/provider';
 import { truncate } from '../util';
 
@@ -124,7 +124,7 @@ Finish with the structured QA report: the verdict, a two to four sentence summar
 `.trim();
 }
 
-export function qaPrompt(repo: string, pr: PullRequestDetail, issues: IssueDetail[]): string {
+export function qaPrompt(repo: string, pr: PullRequestDetail, issues: IssueDetail[], lastRound?: QaReview['lastRound']): string {
   const parts = [
     `Please QA pull request #${pr.number} in ${repo}: ${pr.title}`,
     `URL: ${pr.url}`,
@@ -137,5 +137,35 @@ export function qaPrompt(repo: string, pr: PullRequestDetail, issues: IssueDetai
     parts.push('', `Linked issue #${issue.number}: ${issue.title}`, truncate(issue.body.trim() || '(no description)', 12_000));
   }
   if (!issues.length) parts.push('', 'No linked issue: work out what the PR is meant to do from its title, description and commits.');
+  if (lastRound) {
+    const { sha, report } = lastRound;
+    const since = sha ? `\`git diff ${sha.slice(0, 7)}..HEAD\`` : 'the commits pushed since';
+    parts.push(
+      '',
+      `This is a re-test. Last round you ${report.verdict === 'pass' ? 'passed' : 'failed'} it${sha ? ` at commit ${sha.slice(0, 7)}` : ''}:`,
+      ...findings(report),
+      '',
+      `Check those findings first. Then focus on what changed since (${since}), and finish with a quick smoke test of the main flow rather than a full review of the whole PR.`,
+    );
+  }
   return parts.filter((p, i, all) => p !== '' || all[i - 1] !== '').join('\n');
+}
+
+/** QA's findings on a failed round, for whoever has to fix them. */
+export function fixPrompt(pr: { number: number; branch: string }, review: Pick<QaReview, 'sha'> & { report: QaReport }): string {
+  return [
+    `QA failed pull request #${pr.number}${review.sha ? ` (commit ${review.sha.slice(0, 7)})` : ''} and sent it back to you. Please fix it.`,
+    '',
+    ...findings(review.report),
+    '',
+    `Fix what QA found on \`${pr.branch}\`, run the tests, type checks and linters, and commit. The office pushes your commits to the same pull request and QA tests it again.`,
+  ].join('\n');
+}
+
+function findings(report: QaReport): string[] {
+  const failed = report.checks.filter((c) => c.result === 'fail');
+  const lines = [truncate(report.summary || '(no summary)', 4000)];
+  if (failed.length) lines.push('', 'Failed checks:', ...failed.map((c) => `- ${c.name}${c.details ? `: ${truncate(c.details, 1000)}` : ''}`));
+  if (report.fixInstructions) lines.push('', 'What needs fixing:', truncate(report.fixInstructions, 8000));
+  return lines;
 }

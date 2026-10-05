@@ -1,5 +1,5 @@
 import { qaOfficerFor, UNIFORM } from '../../../shared/crew';
-import { autoQaFor, qaBadge } from '../../../shared/qa';
+import { autoQaFor, autoSendBackFor, qaBadge } from '../../../shared/qa';
 import type { QaReview } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
@@ -34,8 +34,11 @@ export function openQaPanel(ui: Ui, projectId: string): void {
   });
   const auto = h('input', { type: 'checkbox', checked: autoQaFor(project) });
   auto.onchange = () => void api.updateProject(projectId, { autoQa: auto.checked }).catch((e: Error) => ui.error(e.message));
+  const sendBack = h('input', { type: 'checkbox', checked: autoSendBackFor(project) });
+  sendBack.onchange = () => void api.updateProject(projectId, { autoSendBack: sendBack.checked }).catch((e: Error) => ui.error(e.message));
   const settings = h('div', { class: 'card qa-settings' },
     h('label', { class: 'qa-toggle' }, auto, h('span', null, '🔍 Test every pull request the office opens or updates')),
+    h('label', { class: 'qa-toggle' }, sendBack, h('span', null, '🔧 Send a failed pull request the office opened back to be fixed (up to 3 rounds)')),
     h('div', { class: 'field', style: 'margin:10px 0 0' },
       h('label', null, `What should ${officer.name} check on every ${project.name} PR?`),
       brief,
@@ -88,6 +91,7 @@ function reviewCard(ui: Ui, review: QaReview): HTMLElement {
       review.sha ? `commit ${review.sha.slice(0, 7)} · ` : '',
       review.finishedAt ? `tested ${timeAgo(review.finishedAt)}` : `asked ${timeAgo(review.requestedAt)}`,
     ),
+    review.followUp?.kind === 'needs-you' ? h('p', { class: 'planner-error' }, `🙋 Needs you: ${review.followUp.reason}. The office stopped sending it back.`) : null,
     report?.summary ? h('p', null, report.summary) : null,
     review.error ? h('p', { class: 'planner-error' }, review.error) : null,
     report?.checks.length

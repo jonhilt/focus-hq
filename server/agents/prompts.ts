@@ -7,10 +7,12 @@ export function systemAppend(agent: Agent): string {
   const assignment = {
     issue: `Your manager assigned you GitHub issue #${agent.issue.number} in ${agent.repo}.`,
     conflicts: `Your manager assigned you pull request #${agent.issue.number} in ${agent.repo}: it has merge conflicts with \`${agent.baseBranch}\` that you need to resolve.`,
+    fix: `Your manager assigned you pull request #${agent.issue.number} in ${agent.repo}: it failed QA and you need to fix what QA found.`,
   }[agent.task];
   const summary = {
     issue: 'Your final message becomes the pull request description. Write it in Markdown with a short "Summary" and "Testing" section. No preamble.',
     conflicts: 'Your final message goes to the manager: say briefly how you resolved each conflict and what you checked. No preamble.',
+    fix: 'Your final message goes to the manager: say briefly what you fixed and how you checked it. No preamble.',
   }[agent.task];
   return `
 # You are ${agent.name}, an agent in the Focus office

@@ -78,10 +78,15 @@ export class DemoRunner implements AgentRunner {
       const prTitle = match?.[3]?.trim() ?? 'the change';
       const prKind = /api/.test(prRepo) ? 'api' : /game|dodger/.test(prRepo) ? 'game' : 'web';
       const changed = pick(FILES[prKind], 2);
-      // every third PR has a problem the first time round; a re-check (a resumed session) finds it fixed
-      const fails = !req.resumeSessionId && pr % 3 === 0;
+      // every third PR has a problem the first time round; a re-test, or a re-check after a message, finds it fixed
+      const retest = /This is a re-test/.test(req.prompt);
+      const fails = !req.resumeSessionId && !retest && pr % 3 === 0;
       if (req.resumeSessionId) {
         await say('Re-checking after your message.');
+      } else if (retest) {
+        const since = /git diff (\w+)\.\.HEAD/.exec(req.prompt)?.[1] ?? 'last round';
+        await say(`Re-test of PR #${pr}: checking last round's findings first, then what changed since ${since}.`);
+        await tool('Bash', { command: `git diff ${since}..HEAD --stat` }, [`${changed[0]} | 6 ++++--`, '1 file changed']);
       } else {
         await say(`I'll review PR #${pr} and test it against the linked issue.`);
         await tool('Bash', { command: 'git diff origin/main...HEAD --stat' }, [`${changed[0]} | 24 ++++--`, `${changed[1]} | 9 +++`, '2 files changed']);
@@ -128,7 +133,8 @@ export class DemoRunner implements AgentRunner {
       if (req.outputSchema) return qaScript();
       hooks.session(req.resumeSessionId ?? `demo-${randomBytes(4).toString('hex')}`);
       hooks.lines([{ kind: 'system', text: '✻ Claude Code (demo) · pretend model · acceptEdits' }]);
-      if (req.resumeSessionId) {
+      // a follow-up message, or QA's findings handed to an agent seated on the PR to fix them
+      if (req.resumeSessionId || /^QA failed/.test(req.prompt)) {
         inbox.unshift(req.prompt);
         await handleInbox();
         await say('All set. The pull request has been updated with these changes.');
@@ -228,6 +234,8 @@ export const demoWorkspace: WorkspaceOps = {
   dir: (agentId) => `/demo/${agentId}`,
   hasUncommittedChanges: async () => false,
   commitsAhead: async () => 2,
+  // demo agents always commit something, so every session ends on a new commit
+  head: async () => randomBytes(5).toString('hex'),
   push: async () => sleep(800),
   // no real checkout: the manager falls back to the PR's head as GitHub reports it
   checkoutPullRequest: async () => {

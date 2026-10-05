@@ -54,6 +54,8 @@ export interface WorkspaceOps {
   dir(agentId: string): string;
   hasUncommittedChanges(dir: string): Promise<boolean>;
   commitsAhead(dir: string, baseBranch: string): Promise<number>;
+  /** The commit checked out in `dir`. */
+  head(dir: string): Promise<string>;
   push(dir: string, branch: string): Promise<void>;
   /** A detached checkout of a pull request's head in the agent's workspace (for QA). Returns the commit ('' if unknown). */
   checkoutPullRequest(repo: string, agentId: string, number: number): Promise<string>;

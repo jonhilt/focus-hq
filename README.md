@@ -122,9 +122,12 @@ Every room has a QA officer in blue, sitting at the pull requests table facing t
 - **The report:** the office posts it as a comment on the PR (QA never touches GitHub themselves), and the board shows **✅ QA passed**, **❌ QA failed** or, once newer commits land, **QA passed an older commit**. You still merge.
 - **The QA station** (<kbd>E</kbd> on the officer when they're free, or the QA chip on a PR):
   - every report in full;
-  - the auto-QA switch;
+  - the auto-QA and send-back switches;
   - the project's **QA brief**: what to check on every PR of this project ("works at phone width", "no console errors"). It goes into the officer's instructions on every review.
-- **Following up:** message the QA officer like any agent, to have them look at something else. To get a failed PR fixed, message the developer who opened it. Their new commits go back to QA by themselves.
+- **Sending a failed PR back:** when QA fails a PR the office opened, the office hands QA's summary and fix instructions to the developer who opened it. If they've gone home, a new agent sits down on the PR's branch, fixes it and pushes to the same PR. The fix goes back to QA by itself, and the re-test is told last round's findings and the commit it tested, so it checks those first, then what changed since, plus a quick smoke test.
+  - After 3 failed rounds, or a fix that pushes nothing, the office stops: the PR card and the whiteboard show **🙋 needs you**, and a toast says why.
+  - Teammates' PRs are never sent back. Turn send-back off per project at the QA station.
+- **Following up:** message the QA officer like any agent, to have them look at something else.
 
 ## Previewing a pull request
 

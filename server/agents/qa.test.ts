@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { QaReport } from '../../shared/types';
 import type { PullRequestDetail } from '../github/provider';
-import { parseQaReport, qaComment, qaPrompt, qaSystemAppend } from './qa';
+import { fixPrompt, parseQaReport, qaComment, qaPrompt, qaSystemAppend } from './qa';
 
 const report = (r: Partial<QaReport> = {}): QaReport => ({
   verdict: 'pass',
@@ -90,5 +90,42 @@ describe('QA instructions', () => {
     const issue = { repo: 'acme/shop', number: 7, title: 'Save for later', body: '- [ ] survives a reload', url: '', labels: [], createdAt: '', comments: [] };
     expect(qaPrompt('acme/shop', pr, [issue])).toContain('Linked issue #7: Save for later\n- [ ] survives a reload');
     expect(qaPrompt('acme/shop', pr, [])).toContain('No linked issue');
+  });
+});
+
+const failed = report({
+  verdict: 'fail',
+  summary: 'The cart breaks when it is empty.',
+  checks: [
+    { name: 'Saves for later', result: 'pass', details: 'ok' },
+    { name: 'Empty cart', result: 'fail', details: 'Page goes blank' },
+  ],
+  fixInstructions: 'Guard the empty cart in cart.ts',
+});
+
+describe('re-test', () => {
+  it('tells QA last round’s findings and diffs from the commit it tested', () => {
+    const text = qaPrompt('acme/shop', pr, [], { sha: 'fed9876543', report: failed });
+    expect(text).toContain('Last round you failed it at commit fed9876');
+    expect(text).toContain('- Empty cart: Page goes blank');
+    expect(text).not.toContain('- Saves for later');
+    expect(text).toContain('Guard the empty cart in cart.ts');
+    expect(text).toContain('`git diff fed9876..HEAD`');
+    expect(text).toContain('smoke test');
+  });
+
+  it('is a full review the first time round', () => {
+    expect(qaPrompt('acme/shop', pr, [])).not.toContain('re-test');
+  });
+});
+
+describe('fixPrompt', () => {
+  it('hands the developer QA’s summary, failed checks and fix instructions', () => {
+    const text = fixPrompt(pr, { sha: 'fed9876543', report: failed });
+    expect(text.split('\n')[0]).toBe('QA failed pull request #12 (commit fed9876) and sent it back to you. Please fix it.');
+    expect(text).toContain('The cart breaks when it is empty.');
+    expect(text).toContain('- Empty cart: Page goes blank');
+    expect(text).toContain('What needs fixing:\nGuard the empty cart in cart.ts');
+    expect(text).toContain('`focus/7-save-for-later-ab12`');
   });
 });

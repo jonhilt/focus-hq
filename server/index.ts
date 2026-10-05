@@ -27,6 +27,7 @@ const liveWorkspace: WorkspaceOps = {
   dir: git.workspaceDir,
   hasUncommittedChanges: git.hasUncommittedChanges,
   commitsAhead: git.commitsAhead,
+  head: git.head,
   push: git.pushBranch,
   checkoutPullRequest: git.checkoutPullRequest,
 };
