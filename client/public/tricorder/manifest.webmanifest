@@ -1,0 +1,14 @@
+{
+  "name": "Focus Tricorder",
+  "short_name": "Tricorder",
+  "description": "Check on the Focus office from your phone.",
+  "start_url": "/tricorder/",
+  "scope": "/tricorder/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    { "src": "/tricorder/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/tricorder/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

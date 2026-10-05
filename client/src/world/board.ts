@@ -1,38 +1,12 @@
+import { columns } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import * as THREE from 'three';
 import { prKey, qaBadge } from '../../../shared/qa';
-import type { Agent, Board, Issue, Project, PullRequest } from '../../../shared/types';
+import type { Agent, Board, Project } from '../../../shared/types';
 import { state } from '../net/state';
 import { canvasTexture, fitText, makeCanvas, wrap } from './canvas';
 import { flat } from './materials';
 import { LCARS, LCARS_FONT, LCARS_STATUS, lcarsFrame } from './starship';
-
-export interface Columns {
-  todo: Issue[];
-  doing: Agent[];
-  prs: (PullRequest & { agent?: Agent })[];
-  /** Open PRs hidden by the project's "only my PRs" filter. */
-  hiddenPrs: number;
-}
-
-/** Splits a project's issues, agents and PRs into the three Kanban columns. */
-export function columns(project: Project, board: Board | undefined, agents: Agent[]): Columns {
-  const prs = board?.prs ?? [];
-  const claimed = (issue: Issue) =>
-    agents.some((a) => a.repo === issue.repo && a.issue.number === issue.number) ||
-    prs.some((p) => p.repo === issue.repo && p.branch.startsWith(`focus/${issue.number}-`));
-  const login = state.info?.github.login;
-  const all = prs.map((p) => ({ ...p, agent: agents.find((a) => a.task !== 'review' && a.repo === p.repo && a.pr?.number === p.number) }));
-  // agents' PRs are opened with your gh account, so author === login covers them too; the agent check catches stale data
-  const shown = project.onlyMyPrs && login ? all.filter((p) => p.agent || p.author === login) : all;
-  return {
-    todo: (board?.issues ?? []).filter((i) => project.repos.includes(i.repo) && !claimed(i)),
-    // the QA officer works at their own station, not on the board's issues
-    doing: agents.filter((a) => a.status !== 'done' && a.task !== 'review').sort((a, b) => a.startedAt - b.startedAt),
-    prs: shown,
-    hiddenPrs: all.length - shown.length,
-  };
-}
 
 const shortRepo = (repo: string) => repo.split('/')[1] ?? repo;
 
@@ -54,7 +28,7 @@ export class KanbanBoard {
 
   draw(project: Project, board: Board | undefined, agents: Agent[]): void {
     const { ctx } = this.c;
-    const cols = columns(project, board, agents);
+    const cols = columns(project, board, agents, state.info?.github.login);
     const multiRepo = project.repos.length > 1;
     const seed = [...project.id].reduce((n, ch) => n + ch.charCodeAt(0), 0);
     const area = lcarsFrame(ctx, this.c.canvas.width, this.c.canvas.height, { title: project.name, color: project.color, seed });

@@ -1,12 +1,12 @@
+import { statusIcon, statusLine } from '../../../shared/agentStatus';
+import { columns } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import { previewIncludes, previewSet } from '../../../shared/previewSet';
 import { prKey, qaBadge, sameCommit } from '../../../shared/qa';
 import type { Effort } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
-import { columns } from '../world/board';
-import { statusLine } from '../world/character';
-import { effortPicker, pickedCloud, pickedEffort, statusIcon, wherePicker } from './agentPanel';
+import { effortPicker, pickedCloud, pickedEffort, wherePicker } from './agentPanel';
 import type { BoardTab, Ui } from './context';
 import { busy, fill, h, timeAgo } from './dom';
 import { linkHealth } from './previewPanel';
@@ -41,7 +41,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
     if (!p) return ui.panels.close();
     const board = state.boards.get(projectId);
     const agents = state.agentsIn(projectId);
-    const cols = columns(p, board, agents);
+    const cols = columns(p, board, agents, state.info?.github.login);
     const multi = p.repos.length > 1;
     const busyAgents = agents.filter((a) => a.task !== 'review' && !['done', 'error', 'stopped'].includes(a.status)).length;
     const full = busyAgents >= p.maxAgents;

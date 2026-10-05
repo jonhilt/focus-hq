@@ -1,9 +1,8 @@
+import { statusIcon, statusLine } from '../../../shared/agentStatus';
 import { UNIFORM } from '../../../shared/crew';
 import { state } from '../net/state';
 import { sound } from '../sound';
-import { statusLine } from '../world/character';
 import { LCARS } from '../world/starship';
-import { statusIcon } from './agentPanel';
 import type { Ui } from './context';
 import { h } from './dom';
 import { issueForm } from './managerPanel';

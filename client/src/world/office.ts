@@ -1,8 +1,8 @@
 import * as THREE from 'three';
+import { columns } from '../../../shared/board';
 import type { Project } from '../../../shared/types';
 import { ACTIVE_STATUSES } from '../../../shared/types';
 import { state } from '../net/state';
-import { columns } from './board';
 import { Builder, interactive } from './builder';
 import { canvasTexture, fitText, makeCanvas, roundRect } from './canvas';
 import { type Box2, DOOR_W, HALL_HALF, LOBBY, LOUNGE, LOUNGE_DOOR_X, OFFICE, OVER_DOOR, ROOM_DEPTH, ROOM_WIDTH, roomSlot, roomToWorld, rowsFor, SUN_POSITION, WALL_H, WALL_T } from './layout';
@@ -380,7 +380,7 @@ export class World {
     const working = agents.filter((a) => ACTIVE_STATUSES.includes(a.status) && a.status !== 'waiting').length;
     const waiting = agents.filter((a) => a.status === 'waiting').length;
     const prs = [...state.boards.values()].reduce((n, b) => n + b.prs.length, 0);
-    const todo = state.projects.reduce((n, p) => n + columns(p, state.boards.get(p.id), state.agentsIn(p.id)).todo.length, 0);
+    const todo = state.projects.reduce((n, p) => n + columns(p, state.boards.get(p.id), state.agentsIn(p.id), state.info?.github.login).todo.length, 0);
     const tiles: [string, number, string][] = [
       ['working', working, LCARS.sky],
       ['need you', waiting, LCARS.gold],
@@ -406,7 +406,7 @@ export class World {
       ctx.fillText('NO PROJECTS YET – PRESS E HERE TO CREATE YOUR FIRST ONE.', area.x, y);
     }
     for (const p of state.projects.slice(0, 5)) {
-      const cols = columns(p, state.boards.get(p.id), state.agentsIn(p.id));
+      const cols = columns(p, state.boards.get(p.id), state.agentsIn(p.id), state.info?.github.login);
       ctx.fillStyle = p.color;
       roundRect(ctx, area.x, y - 22, 60, 44, 22);
       ctx.fill();

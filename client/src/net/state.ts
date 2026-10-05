@@ -47,6 +47,7 @@ export class OfficeState {
   private listeners = new Map<keyof Events, Set<Listener<never>>>();
   private ws: WebSocket | null = null;
   private retry = 500;
+  private retryTimer: ReturnType<typeof setTimeout> | undefined;
 
   on<K extends keyof Events>(event: K, fn: Listener<Events[K]>): () => void {
     let set = this.listeners.get(event);
@@ -59,11 +60,16 @@ export class OfficeState {
     for (const fn of this.listeners.get(event) ?? []) (fn as Listener<Events[K]>)(payload);
   }
 
+  /** Opens a fresh socket, dropping any earlier one; the snapshot the server sends on connect resyncs everything. */
   connect(): void {
+    clearTimeout(this.retryTimer);
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const ws = new WebSocket(`${proto}://${location.host}/ws`);
+    const before = this.ws;
     this.ws = ws;
+    before?.close();
     ws.onopen = () => {
+      if (this.ws !== ws) return;
       this.retry = 500;
       this.connected = true;
       this.emit('connection', true);
@@ -72,7 +78,7 @@ export class OfficeState {
       if (this.ws !== ws) return;
       this.connected = false;
       this.emit('connection', false);
-      setTimeout(() => this.connect(), this.retry);
+      this.retryTimer = setTimeout(() => this.connect(), this.retry);
       this.retry = Math.min(this.retry * 2, 8000);
     };
     ws.onmessage = (e) => this.handle(JSON.parse(e.data as string) as ServerEvent);

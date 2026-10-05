@@ -1,9 +1,9 @@
+import { statusLine } from '../../../shared/agentStatus';
 import { qaOfficerFor, UNIFORM } from '../../../shared/crew';
 import { autoQaFor, autoSendBackFor, qaBadge } from '../../../shared/qa';
 import type { QaReview, QaScreenshot } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
-import { statusLine } from '../world/character';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { busy, fill, h, timeAgo } from './dom';

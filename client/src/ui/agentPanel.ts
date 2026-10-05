@@ -1,10 +1,10 @@
+import { statusIcon, statusLine } from '../../../shared/agentStatus';
 import { cloudSessionUrl } from '../../../shared/cloud';
 import { UNIFORM } from '../../../shared/crew';
 import type { Agent, BrowserFrame, Effort, TermLine } from '../../../shared/types';
 import { EFFORT_LEVELS } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
-import { statusLine } from '../world/character';
 import { drawMockPage } from '../world/screen';
 import type { Ui } from './context';
 import { busy, fill, h, timeAgo } from './dom';
@@ -146,10 +146,6 @@ export function openAgentPanel(ui: Ui, id: string): void {
       ui.hud.toast('info', `${a.name} has gone off duty`);
     }
   }));
-}
-
-export function statusIcon(a: Agent): string {
-  return { queued: '⏳', 'setting-up': '📦', working: '⌨️', testing: '🧪', waiting: '✋', pushing: '🚀', done: '✅', error: '❗', stopped: '💤' }[a.status];
 }
 
 /** Picks the effort an agent is hired at. The empty value leaves it to the model's default. */

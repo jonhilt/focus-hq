@@ -1,4 +1,7 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
+
+const page = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
 export default defineConfig({
   root: 'client',
@@ -6,5 +9,9 @@ export default defineConfig({
     outDir: '../dist',
     emptyOutDir: true,
     chunkSizeWarningLimit: 1200,
+    rolldownOptions: {
+      // the 3D office, and the Tricorder: the phone view, which must stay free of three.js
+      input: { main: page('client/index.html'), tricorder: page('client/tricorder/index.html') },
+    },
   },
 });

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { STATUS_ICON, statusLine } from '../../../shared/agentStatus';
 import { UNIFORM } from '../../../shared/crew';
 import type { Agent, AgentStatus, Avatar, Rank } from '../../../shared/types';
 import { canvasTexture, fitText, makeCanvas } from './canvas';
@@ -55,33 +56,6 @@ function combadge(): THREE.Group {
 function pips(rank: Rank): THREE.Object3D[] {
   const count = rank === 'ensign' ? 1 : 2;
   return Array.from({ length: count }, (_, i) => onChest(ball(0.022, PIP_GOLD, 10), 0.93, -0.45 - i * 0.26, 0.2));
-}
-
-const STATUS_ICON: Record<AgentStatus, string> = {
-  queued: '⏳',
-  'setting-up': '📦',
-  working: '⌨️',
-  testing: '🧪',
-  waiting: '✋',
-  pushing: '🚀',
-  done: '✅',
-  error: '❗',
-  stopped: '💤',
-};
-
-export function statusLine(agent: Agent): string {
-  switch (agent.status) {
-    case 'waiting':
-      return 'Needs your approval!';
-    case 'done':
-      return agent.pr ? `PR #${agent.pr.number} ready for review` : agent.activity;
-    case 'error':
-      return 'Hit a problem – come and look';
-    case 'stopped':
-      return 'Stopped';
-    default:
-      return agent.activity || agent.status;
-  }
 }
 
 /** What a character shows: an agent at their desk, or a permanent crew member like the planner at the stand. */

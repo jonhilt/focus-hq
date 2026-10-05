@@ -67,6 +67,8 @@ async function main() {
       res.type('html').send(demoPreviewPage(repo, Number(req.params.number), preview?.title ?? 'Pull request preview', site));
     });
   }
+  // the Tricorder's page lives in a folder (client/tricorder/index.html), and its relative URLs need the slash
+  app.get('/tricorder', (req, res, next) => (req.path.endsWith('/') ? next() : res.redirect(req.originalUrl.replace('/tricorder', '/tricorder/'))));
   const server = http.createServer(app);
   hub.attach(server, () => office.snapshot());
 
@@ -74,7 +76,8 @@ async function main() {
     const { createServer } = await import('vite');
     const vite = await createServer({
       configFile: path.join(config.root, 'vite.config.ts'),
-      server: { middlewareMode: true, hmr: { server } },
+      // .ts.net: the phone reaches the office through Tailscale Serve (see "On your phone" in the README)
+      server: { middlewareMode: true, hmr: { server }, allowedHosts: ['.ts.net'] },
       appType: 'spa',
     });
     app.use(vite.middlewares);

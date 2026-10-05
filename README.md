@@ -192,6 +192,22 @@ None of these is a sandbox. Agents run as you, on your machine, with your `gh` c
 
 Cloud agents run in a cloud VM rather than on your machine, but they push to GitHub as you. In ✋ mode, the one push they may make without asking is `git push origin HEAD:<their branch>`. GitHub access from a cloud session doesn't limit which branches can be pushed, so use branch protection on GitHub for anything that matters.
 
+## On your phone (Tricorder)
+
+The office also serves a phone-sized page, the **Tricorder**, at `/tricorder`. It shows what needs you (raised hands, agents in trouble, PRs QA gave up on, conflicting PRs), each project's agents in flight, its PRs and its issues. From there you can open an agent's terminal and browser, approve or decline, message or stop them, merge, send a PR to QA, hand its conflicts to an agent, and assign an agent to an issue.
+
+| | | | |
+| --- | --- | --- | --- |
+| ![The Tricorder's home screen](docs/tricorder-home.jpg) | ![An agent's terminal, with a raised hand pinned on top](docs/tricorder-agent.jpg) | ![An agent's browser tab](docs/tricorder-browser.jpg) | ![Pull requests and their actions](docs/tricorder-prs.jpg) |
+
+The office only listens on `127.0.0.1`, so reach it from your iPhone over [Tailscale](https://tailscale.com):
+
+1. Install Tailscale on the Mac and on the iPhone, and sign both in to the same tailnet.
+2. On the Mac, with the office running, run `tailscale serve --bg 4477`. This puts the office on your tailnet over HTTPS (`tailscale serve status` shows the address, `tailscale serve reset` takes it down).
+3. On the iPhone, open `https://<mac>.<tailnet>.ts.net/tricorder` in Safari, then **Share → Add to Home Screen**. It opens full screen from there, and reconnects when you come back to it.
+
+Anyone on your tailnet who can reach the Mac can control the office, and the office runs agents as you, with your GitHub credentials. The API has no login of its own: the tailnet is the only lock, so don't share the machine with people you wouldn't hand your laptop to.
+
 ## Configuration
 
 | Env var | Default | |
@@ -218,6 +234,9 @@ The data dir is deliberately outside this repo. Otherwise agents working in a wo
 shared/types.ts           types shared by server and client (Project, Agent, Board, IssueDraft, events…)
 shared/crew.ts            how the crew look (uniforms, species), and the permanent crew per room (the ops officer, the QA officer), derived from the project id
 shared/qa.ts              QA decisions shared by server and board (badges, stale verdicts)
+shared/board.ts           a project's Kanban columns (to do, in progress, PRs), for the 3D board, its panel and the Tricorder
+shared/agentStatus.ts     how an agent's status reads (icon, one-line status)
+shared/tricorder.ts       the Tricorder's decisions: what needs you, which agents are in flight
 server/
   supervise.ts            runs index.ts and restarts it after an auto update
   updater.ts              auto update: fetch, fast-forward, install/build, restart
@@ -247,6 +266,9 @@ client/src/
     themes.ts             the landscapes (beach, forest, desert, moon, city, library)
     lounge.ts             the observation lounge: briefing table, officer, the brief on the wall screen
   ui/                     HUD and panels (agent terminal, board, ready room console, teleport, QA station, briefing)
+  tricorder/              the phone view at /tricorder (no three.js): home screen, agent drill-down, buttons that survive live re-renders
+client/tricorder/index.html   the Tricorder's page (a second Vite entry), with its home-screen meta tags
+client/public/tricorder/  its web app manifest and home-screen icons
 ```
 
 The client mirrors server state over the WebSocket. Every action is a small REST call. Laptop screens and Kanban displays are canvases drawn into textures, and only redrawn when something changes. Screens near you redraw faster.
