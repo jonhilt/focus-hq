@@ -12,8 +12,9 @@ import { IssuePlanner } from './agents/planner';
 import type { WorkspaceOps } from './agents/types';
 import * as git from './agents/workspace';
 import { config } from './config';
-import { DemoGitHub } from './github/demo';
-import { GhCliProvider } from './github/ghCli';
+import { demoLayer } from './github/demo';
+import { ghCliLayer } from './github/ghCli';
+import { toProvider } from './github/service';
 import { Hub } from './hub';
 import { Office } from './office';
 import { demoPreviewPage, Previews } from './previews';
@@ -37,7 +38,7 @@ async function main() {
   store.load();
 
   const hub = new Hub();
-  const github = config.demo ? new DemoGitHub() : new GhCliProvider();
+  const github = toProvider(config.demo ? demoLayer : ghCliLayer);
   const browsers = new BrowserPool();
   const runner = config.demo ? new DemoRunner() : new ClaudeRunner(browsers);
   const previews = new Previews(hub, github, config.demo);
