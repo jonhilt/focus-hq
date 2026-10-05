@@ -1,5 +1,7 @@
 import * as THREE from 'three';
-import { box, darken, lighten, toon } from './materials';
+import { canvasTexture, makeCanvas } from './canvas';
+import { box, darken, flat, lighten, toon } from './materials';
+import { LCARS } from './starship';
 
 const cyl = (rt: number, rb: number, h: number, color: string, segments = 16) =>
   new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, segments), toon(color));
@@ -171,6 +173,55 @@ export function trophy(): THREE.Group {
   const cup = cyl(0.1, 0.05, 0.14, '#ffc107');
   cup.position.y = 0.25;
   g.add(cup);
+  return g;
+}
+
+/** The PADD's face, drawn once and shared by every PADD. */
+let paddScreen: THREE.MeshBasicMaterial | undefined;
+function paddScreenMaterial(): THREE.MeshBasicMaterial {
+  if (paddScreen) return paddScreen;
+  const { canvas, ctx } = makeCanvas(200, 280);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, 200, 280);
+  // an LCARS elbow down the left, a header bar, and rows of readout
+  ctx.fillStyle = LCARS.orange;
+  ctx.beginPath();
+  ctx.roundRect(8, 8, 120, 34, [17, 0, 0, 0]);
+  ctx.fill();
+  ctx.fillRect(8, 8, 34, 120);
+  ctx.fillStyle = LCARS.lilac;
+  ctx.fillRect(8, 134, 34, 64);
+  ctx.fillStyle = LCARS.periwinkle;
+  ctx.beginPath();
+  ctx.roundRect(8, 204, 34, 68, [0, 0, 0, 17]);
+  ctx.fill();
+  ctx.fillStyle = LCARS.gold;
+  ctx.beginPath();
+  ctx.roundRect(136, 8, 56, 34, [0, 17, 17, 0]);
+  ctx.fill();
+  const rows = [LCARS.peach, LCARS.sky, LCARS.peach, LCARS.peach, LCARS.sky, LCARS.peach, LCARS.peach, LCARS.gold];
+  rows.forEach((colour, i) => {
+    ctx.fillStyle = colour;
+    ctx.fillRect(54, 58 + i * 26, 70 + ((i * 47) % 70), 12);
+  });
+  paddScreen = flat(canvasTexture(canvas));
+  return paddScreen;
+}
+
+/** A Starfleet PADD, upright with its screen facing -X; it spans PADD_WIDTH along z and is centred on its origin. */
+export const PADD_WIDTH = 0.26;
+export function padd(): THREE.Group {
+  const g = new THREE.Group();
+  g.name = 'padd';
+  // its own geometries rather than box()'s shared ones, so whoever holds it can dispose them
+  g.add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.34, PADD_WIDTH), toon('#2b2d42')));
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(0.034, 0.03, PADD_WIDTH + 0.004), toon(LCARS.gold));
+  cap.position.y = 0.155;
+  g.add(cap);
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.26), paddScreenMaterial());
+  screen.rotation.y = -Math.PI / 2;
+  screen.position.set(-0.016, -0.01, 0);
+  g.add(screen);
   return g;
 }
 

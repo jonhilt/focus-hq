@@ -3,13 +3,17 @@ import { STATUS_ICON, statusLine } from '../../../shared/agentStatus';
 import { UNIFORM } from '../../../shared/crew';
 import type { Agent, AgentStatus, Avatar, Rank } from '../../../shared/types';
 import { canvasTexture, fitText, makeCanvas } from './canvas';
-import { type Expression, Head, PIP_GOLD } from './head';
+import { Head, PIP_GOLD } from './head';
 import { toon } from './materials';
-import { ball, capsule, cyl } from './props';
+import { keyboardPose, type Pose, type PoseInput, paddPose } from './pose';
+import { ball, capsule, cyl, padd, PADD_WIDTH } from './props';
 import { LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
 
 /** The jumpsuit: black, with the division's colour across the shoulders. */
 const SUIT = '#32363f';
+
+/** How far along an arm's +X its hand sits. */
+const REACH = 0.34;
 
 /** Arm made of a capsule pointing along +X from its shoulder pivot. */
 function arm(colour: string, skin: string): THREE.Group {
@@ -20,7 +24,7 @@ function arm(colour: string, skin: string): THREE.Group {
   upper.position.x = 0.15;
   g.add(upper);
   const hand = ball(0.075, skin);
-  hand.position.x = 0.34;
+  hand.position.x = REACH;
   g.add(hand);
   return g;
 }
@@ -85,6 +89,15 @@ export function agentView(agent: Agent): CrewView {
   };
 }
 
+/** What a seated character works with: a laptop in front of them, or a PADD in their hands. */
+export type Grip = 'keyboard' | 'padd';
+type Hands = { grip: 'keyboard' } | { grip: 'padd'; padd: THREE.Group };
+
+/** The left hand holds a PADD by its lower-left corner. */
+const PADD_GRIP = new THREE.Vector3(0, 0.1, PADD_WIDTH / 2);
+const tmpHand = new THREE.Vector3();
+const tmpGrip = new THREE.Vector3();
+
 /** A chibi Starfleet crew member sitting on a chair, facing +X. */
 export class Character {
   readonly group = new THREE.Group();
@@ -99,8 +112,12 @@ export class Character {
   private phase = Math.random() * 10;
   private celebrateUntil = 0;
   private lastStatus: AgentStatus | null = null;
+  private hands: Hands;
 
-  constructor(private view: CrewView) {
+  constructor(
+    private view: CrewView,
+    grip: Grip = 'keyboard',
+  ) {
     const { division, rank, skin } = view.avatar;
     const colour = UNIFORM[division];
 
@@ -137,6 +154,15 @@ export class Character {
     this.armR = arm(colour, skin);
     this.armR.position.set(0.02, 0.95, 0.25);
     this.body.add(this.armL, this.armR);
+    switch (grip) {
+      case 'keyboard':
+        this.hands = { grip };
+        break;
+      case 'padd':
+        this.hands = { grip, padd: padd() };
+        this.body.add(this.hands.padd);
+        break;
+    }
 
     // soft blob shadow
     const shadow = new THREE.Mesh(
@@ -212,68 +238,24 @@ export class Character {
   update(t: number, dist = 10): void {
     const s = this.view.status;
     const p = t + this.phase;
-    const now = performance.now();
-    const thinking = this.view.thinking;
-
-    // defaults: hands on the keyboard
-    let lz = -0.42, rz = -0.42, rx = 0;
-    const lx = 0;
-    let headTilt = 0, headTurn = 0, bodyY = 0;
-    let expression: Expression = 'idle';
-
-    if (s === 'working' || s === 'setting-up' || s === 'pushing') {
-      lz += Math.sin(p * 17) * 0.1;
-      rz += Math.sin(p * 17 + 2) * 0.1;
-      headTilt = Math.sin(p * 2) * 0.04;
-      expression = 'focused';
-      if (thinking) {
-        expression = 'thinking';
-        rz = 0.25;
-        rx = -0.5;
-        headTilt = 0.15;
-        headTurn = Math.sin(p) * 0.15;
+    const input: PoseInput = {
+      status: s,
+      thinking: this.view.thinking ?? false,
+      celebrating: performance.now() < this.celebrateUntil,
+      p,
+    };
+    let bodyY: number;
+    switch (this.hands.grip) {
+      case 'keyboard':
+        bodyY = this.strike(keyboardPose(input), p);
+        break;
+      case 'padd': {
+        const pose = paddPose(input);
+        bodyY = this.strike(pose, p);
+        this.holdPadd(this.hands.padd, pose.lean);
+        break;
       }
-    } else if (s === 'testing') {
-      lz += Math.sin(p * 6) * 0.06;
-      rz += Math.sin(p * 9) * 0.08;
-      headTurn = Math.sin(p * 0.8) * 0.12;
-      expression = 'focused';
-    } else if (s === 'waiting') {
-      rz = 1.35 + Math.sin(p * 9) * 0.15;
-      rx = 0.2;
-      bodyY = Math.abs(Math.sin(p * 4)) * 0.04;
-      headTurn = -0.5;
-      headTilt = 0.15;
-      expression = 'eager';
-    } else if (s === 'done') {
-      lz = -1.1;
-      rz = -1.1;
-      headTilt = 0.12;
-      expression = 'happy';
-      if (now < this.celebrateUntil) {
-        expression = 'grin';
-        lz = rz = 1.2 + Math.sin(p * 14) * 0.2;
-        bodyY = Math.abs(Math.sin(p * 9)) * 0.18;
-      }
-    } else if (s === 'error') {
-      lz = rz = -1.2;
-      headTilt = -0.35;
-      expression = 'worried';
-    } else if (s === 'stopped' || s === 'queued') {
-      lz = rz = -1.15;
-      headTilt = s === 'stopped' ? -0.25 + Math.sin(p * 1.2) * 0.04 : Math.sin(p * 0.7) * 0.05;
-      headTurn = s === 'queued' ? Math.sin(p * 0.5) * 0.4 : 0;
-      if (s === 'stopped') expression = 'asleep';
     }
-
-    this.armL.rotation.set(lx, 0.15, lz);
-    this.armR.rotation.set(rx, -0.15, rz);
-    this.head.group.rotation.set(0, headTurn, headTilt);
-    this.body.position.y = bodyY;
-    this.body.scale.y = 1 + Math.sin(p * 2.2) * 0.008;
-
-    // the face follows the pose, blinking now and then
-    this.head.express(expression, (p % 4.3) < 0.12);
 
     // bubble bob, and pulse when the hand is up
     this.bubble.position.y = 1.95 + Math.sin(p * 2) * 0.03 + bodyY;
@@ -282,6 +264,27 @@ export class Character {
     const fade = Math.min(1, Math.max(0, (dist - 2.5) / 1.5));
     this.bubble.material.opacity = fade;
     this.bubble.visible = fade > 0.02;
+  }
+
+  /** Puts the arms, head, body and face in the pose; returns how high the body has bounced. */
+  private strike({ armL, armR, headTilt, headTurn, bodyY, expression }: Pose, p: number): number {
+    this.armL.rotation.set(armL.x, armL.y, armL.z);
+    this.armR.rotation.set(armR.x, armR.y, armR.z);
+    this.head.group.rotation.set(0, headTurn, headTilt);
+    this.body.position.y = bodyY;
+    this.body.scale.y = 1 + Math.sin(p * 2.2) * 0.008;
+
+    // the face follows the pose, blinking now and then
+    this.head.express(expression, (p % 4.3) < 0.12);
+    return bodyY;
+  }
+
+  /** Puts the PADD in the left hand, leaning back from upright so its screen faces the eyes. */
+  private holdPadd(pad: THREE.Group, lean: number): void {
+    this.armL.updateMatrix();
+    tmpHand.set(REACH, 0, 0).applyMatrix4(this.armL.matrix);
+    pad.rotation.set(0, 0, -lean);
+    pad.position.copy(tmpHand).add(tmpGrip.copy(PADD_GRIP).applyEuler(pad.rotation));
   }
 
   dispose(): void {

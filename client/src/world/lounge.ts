@@ -123,7 +123,7 @@ export class Lounge {
     if (briefing) {
       const view = officerView(briefing);
       if (!this.officer) {
-        this.officer = new Character(view);
+        this.officer = new Character(view, 'padd');
         this.officerProject = projectId;
         this.seat.add(this.officer.group);
         interactive(this.officer.group, { kind: 'briefing' }, () => this.label());
