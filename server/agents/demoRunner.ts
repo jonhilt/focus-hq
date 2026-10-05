@@ -374,6 +374,9 @@ export class DemoOfficer implements BriefingOfficer {
       hooks.brief(brief);
     };
     const session = req.resumeSessionId ?? `demo-brief-${randomBytes(3).toString('hex')}`;
+    const today = { title: 'Today', mermaid: `flowchart TD\n  U["${files[1]}"] -->|"renders"| A["${files[0]}"]\n  A -->|"reads and writes"| S["${files[4]}"]` };
+    const optionA = { title: 'Option A: extend the existing module', mermaid: `flowchart TD\n  A["${files[0]}"] -->|"new calls"| S["${files[4]}"]\n  S -->|"persists"| P[("localStorage")]` };
+    const optionB = { title: 'Option B: a module of its own', mermaid: `flowchart TD\n  A["${files[0]}"] -->|"uses"| N["new module"]\n  N -->|"reads"| S["${files[4]}"]` };
 
     if (req.kind === 'wrap-up') {
       hooks.activity('Rereading the brief');
@@ -395,6 +398,9 @@ export class DemoOfficer implements BriefingOfficer {
         '',
         list(brief.scope.length ? brief.scope : [idea]),
         '',
+        ...brief.diagrams
+          .filter((d) => d.title.startsWith('Chosen'))
+          .flatMap((d) => ['## Approach', '', `${d.title.replace(/^Chosen: (.)/, (_, c: string) => c.toUpperCase())}, because it keeps the change in one place and needs no new wiring.`, '', '```mermaid', d.mermaid, '```', '']),
         '## Acceptance criteria',
         '',
         list([...brief.acceptance, 'Existing tests still pass, and the new behaviour has tests'], true),
@@ -412,7 +418,7 @@ export class DemoOfficer implements BriefingOfficer {
         await wait(1.4);
       }
       hooks.activity('Updating the brief');
-      update({ summary: idea, open_questions: ['Who is this for?', 'What goes wrong for them today?', 'What tells us it worked?', 'What should we leave out?'] });
+      update({ summary: idea, open_questions: ['Who is this for?', 'What goes wrong for them today?', 'What tells us it worked?', 'What should we leave out?'], diagrams: [today] });
       await wait(1);
       return {
         text: `I've had a look: today this lives around \`${folder}/${files[0]}\`. Before I write anything down, who is this for, and what's going wrong for them today? My guess is returning users who lose track of something they meant to come back to.`,
@@ -443,16 +449,16 @@ export class DemoOfficer implements BriefingOfficer {
       };
     }
     if (step === 3) {
-      update({ acceptance: [line(last), 'Works at phone width (375px)'], scope: [line(idea.replace(/^./, (c) => c.toUpperCase()))], open_questions: brief.openQuestions.slice(1) });
+      update({ acceptance: [line(last), 'Works at phone width (375px)'], scope: [line(idea.replace(/^./, (c) => c.toUpperCase()))], open_questions: brief.openQuestions.slice(1), diagrams: [today, optionA, optionB] });
       return {
-        text: `Noted, and I've added a phone-width check since \`${files[1]}\` has its own mobile layout. What should we leave out of this first version? I'd keep sharing and notifications for later.`,
+        text: `Noted, and I've added a phone-width check since \`${files[1]}\` has its own mobile layout. I've put two designs on the screen: A extends \`${files[4]}\` (smallest change, but that file grows), B gives it a module of its own (cleaner, more wiring). I'd go with A. And what should we leave out of this first version? I'd keep sharing and notifications for later.`,
         sessionId: session,
         costUsd: 0.05,
       };
     }
     if (step === 4) {
-      update({ out_of_scope: [line(last)], open_questions: [] });
-      return { text: `That's everything I needed: nothing important is still open. Anything to add, or shall we wrap up?`, sessionId: session, costUsd: 0.04 };
+      update({ out_of_scope: [line(last)], open_questions: [], diagrams: [today, { ...optionA, title: optionA.title.replace(/^Option A/, 'Chosen') }] });
+      return { text: `That's everything I needed: I've kept Option A on the screen as the chosen design, and nothing important is still open. Anything to add, or shall we wrap up?`, sessionId: session, costUsd: 0.04 };
     }
     update({ scope: [...brief.scope, line(last)] });
     return { text: `Added to the scope. Ready to wrap up whenever you are.`, sessionId: session, costUsd: 0.03 };

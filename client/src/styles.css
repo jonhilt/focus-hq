@@ -280,6 +280,15 @@ textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
 .brief-section ul { margin: 0; padding-left: 20px; }
 .brief-section li { margin: 2px 0; line-height: 1.35; }
 .brief-section .muted { margin: 0; }
+.brief-section.diagrams h4 { border-color: var(--lcars-green); }
+.brief-diagram { margin: 10px 0 14px; }
+.brief-diagram figcaption { margin-bottom: 6px; color: var(--lcars-peach); font-family: var(--ui); font-size: 15px; }
+.brief-diagram-svg { overflow-x: auto; border-radius: 8px; background: var(--surface); padding: 8px; }
+/* Mermaid measures its labels away from this page, so the HUD's uppercase and the form .label style would overflow their boxes */
+.brief-diagram-svg, .brief-diagram-svg .label { text-transform: none; letter-spacing: normal; font-size: inherit; font-weight: inherit; color: inherit; }
+.brief-diagram-svg svg { display: block; margin: 0 auto; }
+.brief-diagram-svg pre { margin: 6px 0 0; font-size: 12px; white-space: pre-wrap; color: var(--muted); }
+.brief-diagram-error { margin: 0; color: var(--lcars-red); font-size: 12px; white-space: pre-wrap; }
 @media (max-width: 760px) { .briefing { grid-template-columns: 1fr; height: auto; } .briefing-log { max-height: 50vh; } }
 
 /* ------------------------------------------------------------------ agent panel */

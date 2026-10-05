@@ -4,6 +4,7 @@ import { api } from '../net/api';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
+import { diagramView } from './diagrams';
 import { busy, fill, h } from './dom';
 
 let open = false;
@@ -141,5 +142,6 @@ function briefView(brief: Brief, idea: string): HTMLElement {
     section('Out of scope', brief.outOfScope, 'out'),
     section('Acceptance criteria', brief.acceptance, 'acceptance'),
     section('Open questions', brief.openQuestions, 'open'),
+    brief.diagrams.length ? h('div', { class: 'brief-section diagrams' }, h('h4', null, 'Diagrams'), ...brief.diagrams.map(diagramView)) : null,
   );
 }

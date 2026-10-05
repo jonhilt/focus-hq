@@ -191,6 +191,10 @@ function briefServer(get: () => Brief, set: (brief: Brief) => void): McpSdkServe
           out_of_scope: lines.describe('What is deliberately left out or for later'),
           acceptance: lines.describe('Observable, testable acceptance criteria agreed so far'),
           open_questions: lines.describe('What still needs deciding; drop entries once answered'),
+          diagrams: z
+            .array(z.object({ title: z.string().describe('"Today", "Option A: …" or "Chosen: …"'), mermaid: z.string().describe('Mermaid source: flowchart, classDiagram or sequenceDiagram, labels in quotes') }))
+            .optional()
+            .describe('Architecture diagrams, at most 4; replaces the whole list'),
         },
         async (patch) => {
           set(mergeBrief(get(), patch));

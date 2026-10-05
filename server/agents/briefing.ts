@@ -1,5 +1,5 @@
 import { plannerFor } from '../../shared/crew';
-import { type Brief, type Briefing, type BriefingMessage, EMPTY_BRIEF, type Planner, type Settings } from '../../shared/types';
+import { type Brief, type BriefDiagram, type Briefing, type BriefingMessage, EMPTY_BRIEF, type Planner, type Settings } from '../../shared/types';
 import type { Hub } from '../hub';
 import type { Store, StoredBriefing } from '../store';
 import { errorMessage, newId, truncate } from '../util';
@@ -229,13 +229,19 @@ ${repoList(req.repos)}
 
 How to run the briefing:
 - Ask one question per reply (two only when they're tightly linked). Keep replies short: a line on what you found or understood, then the question. No headings, no essays.
-- Why first: the problem, who has it, and what success looks like. Then the what: the behaviour, the edge cases, what's out. The how only where it constrains the work.
+- Why first: the problem, who has it, and what success looks like. Then the what: the behaviour, the edge cases, what's out. The how where it constrains the work, or where the change is complex enough to need designing (below).
 - Look before you ask. Never ask what the code can tell you: read it (Read, Glob, Grep; you can't change anything) and bring what you found ("Orders already carry a status in shop-api/src/orders.ts. Should 'saved for later' be a status, or its own list?").
 - When the question goes beyond the code (library versions, migration guidance, external APIs, docs), search and read the web (WebSearch, WebFetch) and bring back what you found with its source. Anything the code can answer, keep reading the code for.
 - Give your recommendation with each question, so the manager can just say yes.
 - Push back on anything vague, contradictory or too big for one agent in one sitting, and suggest what to leave for later.
 - Keep the brief current with mcp__brief__update_brief whenever something is agreed or a new question comes up. It's on the lounge's wall screen for both of you. One short line per entry, and drop open questions once they're answered.
 - When nothing important is still open, say you have enough and suggest wrapping up. The manager decides when.
+
+Diagrams, for complex changes only (several modules, or a real choice of design; not every briefing):
+- Think the architecture through from the code: where the responsibilities sit, which modules and classes talk to each other, and what the change would touch.
+- Put diagrams on the wall screen with update_brief's diagrams list: one titled "Today" showing how the affected modules work now, then one per design option ("Option A: …", "Option B: …"). Four at most in all. Give each option's trade-off in the conversation, not in the diagram.
+- Recommend an option and let the manager choose in the conversation. Once they have, replace the list with only the chosen design, titled "Chosen: …" (keeping "Today" is fine).
+- Mermaid only, and only flowchart, classDiagram or sequenceDiagram. Keep them small and prefer top-down flowcharts (flowchart TD): the screen is narrow. Put every node and edge label in double quotes so they parse: A["Briefings"] -->|"calls"| B["Store"].
 `.trim();
 }
 
@@ -255,14 +261,18 @@ export function briefingPrompt(req: Pick<OfficerTurn, 'kind' | 'idea' | 'brief' 
 
 ${ISSUE_FORMAT}
 
+If the manager chose a design option, add an "## Approach" section after What to build: the chosen option, why it beat the others, and its diagram in a fenced \`\`\`mermaid block (GitHub renders it). If no option was chosen, leave that section out.
+
 It's one issue, for one agent in one sitting: anything you agreed to leave for later goes under Out of scope. Context carries the why from the briefing. Finish with the structured result: repo, title and body.`;
   }
   const latest = [...req.messages].reverse().find((m) => m.from === 'manager')?.text ?? '';
   return recap ? `${recap}The manager's latest message, for you to answer:\n"""\n${latest}\n"""` : latest;
 }
 
+type BriefPatch = Partial<Record<'summary' | 'why' | 'who', string> & Record<'scope' | 'out_of_scope' | 'acceptance' | 'open_questions', string[]> & { diagrams: BriefDiagram[] }>;
+
 /** Applies an update_brief call: fields left out stay as they are; lists replace the whole list. */
-export function mergeBrief(brief: Brief, patch: Partial<Record<'summary' | 'why' | 'who', string> & Record<'scope' | 'out_of_scope' | 'acceptance' | 'open_questions', string[]>>): Brief {
+export function mergeBrief(brief: Brief, patch: BriefPatch): Brief {
   const lines = (list: string[] | undefined, fallback: string[]) => (list ? list.map((l) => l.trim()).filter(Boolean).slice(0, 12) : fallback);
   return {
     summary: patch.summary?.trim() ?? brief.summary,
@@ -272,5 +282,8 @@ export function mergeBrief(brief: Brief, patch: Partial<Record<'summary' | 'why'
     outOfScope: lines(patch.out_of_scope, brief.outOfScope),
     acceptance: lines(patch.acceptance, brief.acceptance),
     openQuestions: lines(patch.open_questions, brief.openQuestions),
+    diagrams: patch.diagrams
+      ? patch.diagrams.map((d) => ({ title: d.title.trim(), mermaid: d.mermaid.trim() })).filter((d) => d.mermaid).slice(0, 4)
+      : brief.diagrams,
   };
 }

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { qaOfficerFor, randomAvatar } from '../shared/crew';
 import { prKey } from '../shared/qa';
 import type { Agent, Board, Briefing, BrowserFrame, Project, QaReview, Settings, TermLine } from '../shared/types';
-import { ACTIVE_STATUSES, DESKS_PER_ROOM, ROOM_THEMES, type RoomTheme } from '../shared/types';
+import { ACTIVE_STATUSES, DESKS_PER_ROOM, EMPTY_BRIEF, ROOM_THEMES, type RoomTheme } from '../shared/types';
 import { paths } from './config';
 import { newId } from './util';
 
@@ -56,7 +56,8 @@ export class Store {
     const raw = JSON.parse(fs.readFileSync(paths.state, 'utf8')) as Partial<PersistedState>;
     this.settings = { ...DEFAULT_SETTINGS, ...raw.settings };
     this.projects = raw.projects ?? [];
-    this.briefing = raw.briefing ?? null;
+    // briefings saved before a field was added to the brief get its empty value
+    this.briefing = raw.briefing ? { ...raw.briefing, brief: { ...EMPTY_BRIEF, ...raw.briefing.brief } } : null;
     for (const review of raw.reviews ?? []) {
       if (review.status === 'queued' || review.status === 'testing') {
         Object.assign(review, { status: 'error', error: 'Interrupted when Focus shut down. Send it to QA again.' });

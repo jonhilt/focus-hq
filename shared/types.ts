@@ -324,9 +324,17 @@ export interface Brief {
   outOfScope: string[];
   acceptance: string[];
   openQuestions: string[];
+  /** Architecture sketches for a complex change: how it works today, the design options, then the chosen one. */
+  diagrams: BriefDiagram[];
 }
 
-export const EMPTY_BRIEF: Brief = { summary: '', why: '', who: '', scope: [], outOfScope: [], acceptance: [], openQuestions: [] };
+/** A titled Mermaid diagram on the wall screen ("Today", "Option A: …", "Chosen: …"). */
+export interface BriefDiagram {
+  title: string;
+  mermaid: string;
+}
+
+export const EMPTY_BRIEF: Brief = { summary: '', why: '', who: '', scope: [], outOfScope: [], acceptance: [], openQuestions: [], diagrams: [] };
 
 export interface BriefingMessage {
   from: 'manager' | 'officer' | 'system';
