@@ -5,7 +5,7 @@ import tseslint from 'typescript-eslint';
 export default tseslint.config(
   { ignores: ['dist/', 'node_modules/', 'data/'] },
   {
-    files: ['shared/**/*.ts', 'server/**/*.ts', 'client/src/**/*.ts', 'vite.config.ts', 'vitest.config.ts'],
+    files: ['shared/**/*.ts', 'server/**/*.ts', 'client/src/**/*.ts', 'vite.config.ts', 'vitest.config.ts', 'scripts/**/*.ts'],
     extends: [js.configs.recommended, tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       parserOptions: {

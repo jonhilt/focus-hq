@@ -11,7 +11,8 @@
     "start": "tsx server/supervise.ts",
     "typecheck": "tsc -p . && effect-language-service diagnostics --project tsconfig.json --format text",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "smoke": "tsx scripts/smoke.ts"
   },
   "engines": {
     "node": ">=20"

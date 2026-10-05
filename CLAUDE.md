@@ -9,6 +9,7 @@ Browser-based cartoon 3D office (Three.js) visualising a swarm of Claude Code ag
 - `npm run demo`: fake GitHub + scripted agents (`FOCUS_DEMO_SPEED=3` speeds them up). Use it to check UI and 3D changes.
 - `npm run build`: Vite build of the client into `dist/`.
 - `npm test`: vitest unit tests (`*.test.ts` next to the code they cover).
+- `npm run smoke`: Playwright smoke test of the splash screen against a demo office on a free port; screenshots land in `smoke-shots/`.
 
 Unit tests cover the pure decision code (QA verdicts and badges, prompts). Keep new decisions (what happens next, can this merge) in small pure functions with a test next to them, and leave the I/O to the caller. Verify 3D/UI changes by running the demo and taking screenshots with Playwright. `window.focusHQ` exposes `{ state, world, player, ui }`, so a script can teleport (`ui.goTo(ui.places()[i])`, `ui.goToAgent(id)`) and open panels without pointer lock.
 

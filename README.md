@@ -284,3 +284,4 @@ The client mirrors server state over the WebSocket. Every action is a small REST
 | `npm start` | serve `dist/` in live mode |
 | `npm run typecheck` | `tsc` over server, client and shared code |
 | `npm test` | unit tests (vitest) for the pure decision code: QA verdicts, badges, prompts |
+| `npm run smoke` | headless Playwright check of the splash screen in demo mode (screenshots in `smoke-shots/`) |
