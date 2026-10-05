@@ -8,8 +8,8 @@ import { ACTIVE_STATUSES, DESKS_PER_ROOM, EMPTY_BRIEF, ROOM_THEMES, type RoomThe
 import { paths } from './config';
 import { newId } from './util';
 
-/** A briefing as saved: with the officer's session, so the next turn can resume it. */
-export type StoredBriefing = Briefing & { sessionId?: string };
+/** A briefing as saved: with the officer's and QA's sessions, so the next turn can resume them. */
+export type StoredBriefing = Briefing & { sessionId?: string; qaSessionId?: string };
 
 interface PersistedState {
   settings: Settings;
@@ -67,6 +67,8 @@ export class Store {
     if (this.briefing && (this.briefing.status === 'thinking' || this.briefing.status === 'wrapping-up')) {
       Object.assign(this.briefing, { status: 'failed', activity: 'Interrupted', error: 'Interrupted when Focus shut down. Say something to pick it back up.' });
     }
+    // the officer's reply is saved; only QA's note was lost
+    if (this.briefing?.status === 'qa-checking') Object.assign(this.briefing, { status: 'waiting', activity: 'Waiting for you' });
     for (const agent of raw.agents ?? []) {
       if (ACTIVE_STATUSES.includes(agent.status) || agent.status === 'queued') {
         agent.status = 'stopped';

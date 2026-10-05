@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { plannerFor, qaOfficerFor } from '../../../shared/crew';
+import { plannerFor, qaAtBriefing, qaOfficerFor } from '../../../shared/crew';
 import { prKey } from '../../../shared/qa';
 import type { Board, Project } from '../../../shared/types';
 import { DESKS_PER_ROOM } from '../../../shared/types';
@@ -335,6 +335,8 @@ export class ProjectRoom {
 
   syncQa(): void {
     const agent = state.qaAgent(this.project.id);
+    // while they're in a briefing, QA is in the observation lounge, not at their station
+    this.qa.group.visible = !qaAtBriefing(this.project.id, state.briefing, agent);
     this.qa.set(this.qaView());
     this.qaScreen.setAgent(agent ?? null);
     const name = qaOfficerFor(this.project.id).name;

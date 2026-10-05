@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { plannerFor } from '../../../shared/crew';
+import { plannerFor, qaAtBriefing, qaOfficerFor } from '../../../shared/crew';
 import type { Brief, Briefing } from '../../../shared/types';
 import { state } from '../net/state';
 import { type Builder, interactive } from './builder';
@@ -20,15 +20,50 @@ const SEATS: [number, number, number][] = [
 ];
 /** The officer's seat: the middle of the north side, back to the viewports, facing whoever walks in. */
 const OFFICER_SEAT = 1;
+/** QA sits at the officer's elbow, at the east end of the north side. */
+const QA_SEAT = 2;
+
+/** A crew member's chair at the table: empty, or holding whoever the briefing needs there. */
+class Chair {
+  readonly seat = new THREE.Group();
+  private character: Character | null = null;
+  private who = '';
+
+  constructor(private readonly label: () => string) {}
+
+  /** Seats `view` (`who` says whose it is), or empties the chair. */
+  set(who: string, view: CrewView | null): void {
+    if (this.character && (!view || who !== this.who)) {
+      this.seat.remove(this.character.group);
+      this.character.dispose();
+      this.character = null;
+    }
+    if (!view) return;
+    if (this.character) return this.character.set(view);
+    // there's no keyboard on the lounge table: whoever sits here reads and taps a PADD
+    this.character = new Character(view, 'padd');
+    this.who = who;
+    this.seat.add(this.character.group);
+    interactive(this.character.group, { kind: 'briefing' }, this.label);
+  }
+
+  update(t: number, camera: THREE.Vector3): void {
+    this.character?.update(t, camera.distanceTo(this.character.group.getWorldPosition(tmp)));
+  }
+
+  dispose(): void {
+    this.character?.dispose();
+  }
+}
 
 /**
  * The observation lounge: a long table under the viewports, where the manager and a project's operations officer hold
- * briefings. The wall screen shows the brief as it takes shape. Built in world coordinates.
+ * briefings, the project's QA officer sitting in. The wall screen shows the brief as it takes shape. Built in world
+ * coordinates.
  */
 export class Lounge {
-  private officer: Character | null = null;
-  private officerProject = '';
-  private seat = new THREE.Group();
+  private officer = new Chair(() => this.label());
+  private qa = new Chair(() => this.label());
   private screen = makeCanvas(1280, 768);
   private screenTex = canvasTexture(this.screen.canvas);
   private screenKey = '';
@@ -71,7 +106,8 @@ export class Lounge {
       g.rotation.y = facing;
       g.add(chair('#7b2d43'));
       b.add(g);
-      if (i === OFFICER_SEAT) g.add(this.seat);
+      if (i === OFFICER_SEAT) g.add(this.officer.seat);
+      if (i === QA_SEAT) g.add(this.qa.seat);
     });
 
     // the brief, on the west wall where everyone at the table can read it
@@ -111,32 +147,19 @@ export class Lounge {
     return briefing ? `Join the briefing about ${state.project(briefing.projectId)?.name ?? 'a project'}` : 'Call a briefing';
   }
 
-  /** Seats (or dismisses) the officer and redraws the screen to match the current briefing. */
+  /** Seats (or dismisses) the officer and QA, and redraws the screen to match the current briefing. */
   sync(): void {
     const briefing = state.briefing;
     const projectId = briefing?.projectId ?? '';
-    if (this.officer && projectId !== this.officerProject) {
-      this.seat.remove(this.officer.group);
-      this.officer.dispose();
-      this.officer = null;
-    }
-    if (briefing) {
-      const view = officerView(briefing);
-      if (!this.officer) {
-        this.officer = new Character(view, 'padd');
-        this.officerProject = projectId;
-        this.seat.add(this.officer.group);
-        interactive(this.officer.group, { kind: 'briefing' }, () => this.label());
-      } else {
-        this.officer.set(view);
-      }
-    }
+    this.officer.set(projectId, briefing && officerView(briefing));
+    this.qa.set(projectId, briefing && qaAtBriefing(projectId, briefing, state.qaAgent(projectId)) ? qaView(briefing) : null);
     this.drawScreen(briefing);
   }
 
   update(t: number, camera: THREE.Vector3): void {
-    if (!this.officer || camera.z < OFFICE.z0) return;
-    this.officer.update(t, camera.distanceTo(this.officer.group.getWorldPosition(tmp)));
+    if (camera.z < OFFICE.z0) return;
+    this.officer.update(t, camera);
+    this.qa.update(t, camera);
   }
 
   private drawScreen(briefing: Briefing | null): void {
@@ -164,7 +187,8 @@ export class Lounge {
   }
 
   dispose(): void {
-    this.officer?.dispose();
+    this.officer.dispose();
+    this.qa.dispose();
     this.screenTex.dispose();
   }
 }
@@ -178,6 +202,8 @@ function officerView(briefing: Briefing): CrewView {
   switch (briefing.status) {
     case 'thinking':
       return { ...base, status: 'working', icon: '💭', line: briefing.activity, thinking: true };
+    case 'qa-checking':
+      return { ...base, status: 'waiting', icon: '👂', line: `Hearing from ${qaOfficerFor(briefing.projectId).name}` };
     case 'wrapping-up':
       return { ...base, status: 'working', icon: '📝', line: 'Writing up the issue' };
     case 'waiting':
@@ -187,6 +213,16 @@ function officerView(briefing: Briefing): CrewView {
     case 'failed':
       return { ...base, status: 'error', line: 'Lost my train of thought – say again?' };
   }
+}
+
+/** QA at the table: reading the criteria when they've just changed, otherwise listening, their last note to hand. */
+function qaView(briefing: Briefing): CrewView {
+  const crew = qaOfficerFor(briefing.projectId);
+  const base = { name: crew.name, avatar: crew.avatar, tag: 'QA' };
+  if (briefing.status === 'qa-checking') return { ...base, status: 'working', icon: '🔍', line: briefing.activity, thinking: true };
+  const last = briefing.messages[briefing.messages.length - 1];
+  if (last?.from === 'qa') return { ...base, status: 'waiting', icon: '🧪', line: last.text };
+  return { ...base, status: 'queued', icon: '🧪', line: 'Listening in on the acceptance criteria' };
 }
 
 /** The brief as LCARS columns: summary across the top, why/who on the left, scope and criteria on the right. */

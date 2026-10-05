@@ -174,6 +174,7 @@ async function main() {
   const agentChanged = (a: { projectId: string }) => {
     world.room(a.projectId)?.syncAgents();
     world.room(a.projectId)?.syncQa();
+    world.lounge?.sync(); // QA joins a briefing when their review is done
     world.markPanels();
   };
   state.on('agent', agentChanged);
@@ -198,7 +199,10 @@ async function main() {
   let briefingStatus = state.briefing?.status;
   state.on('briefing', () => {
     world.lounge?.sync();
-    for (const room of world.rooms.values()) room.syncPlanner();
+    for (const room of world.rooms.values()) {
+      room.syncPlanner();
+      room.syncQa();
+    }
     const b = state.briefing;
     if (b && b.status !== briefingStatus && !briefingPanelOpen()) {
       const name = plannerFor(b.projectId).name;

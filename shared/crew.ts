@@ -1,4 +1,4 @@
-import type { Avatar, Division, Hairstyle, Planner, Rank, Species } from './types';
+import { ACTIVE_STATUSES, type Agent, type Avatar, type Briefing, type Division, type Hairstyle, type Planner, type Rank, type Species } from './types';
 
 // Who's aboard. Agents get a random look when they're hired. Permanent crew members, one of each per room (the
 // operations officer at the New issue stand and the QA officer at the QA station), are derived from the project id
@@ -73,4 +73,13 @@ export function qaOfficerFor(projectId: string): Planner {
   const taken = hash(`planner:${projectId}`) % SURNAMES.length;
   const surname = SURNAMES[(taken + 1 + ((h >>> 3) % (SURNAMES.length - 1))) % SURNAMES.length];
   return { name: `${RANK_TITLE[avatar.rank]} ${surname}`, avatar };
+}
+
+/**
+ * Whether the room's QA officer is at the lounge table rather than their QA station: for the length of a briefing
+ * about their project, joining once any review they're in the middle of is done.
+ */
+export function qaAtBriefing(projectId: string, briefing: Pick<Briefing, 'projectId' | 'status'> | null, qaAgent: Pick<Agent, 'status'> | undefined): boolean {
+  if (briefing?.projectId !== projectId || briefing.status === 'done') return false;
+  return !qaAgent || !ACTIVE_STATUSES.includes(qaAgent.status);
 }

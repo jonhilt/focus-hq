@@ -1,4 +1,4 @@
-import { plannerFor } from '../../../shared/crew';
+import { plannerFor, qaOfficerFor } from '../../../shared/crew';
 import type { Brief } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
@@ -47,6 +47,8 @@ export function openBriefingPanel(ui: Ui, projectId?: string): void {
       return;
     }
     const officer = plannerFor(briefing.projectId);
+    const qa = qaOfficerFor(briefing.projectId);
+    const names = { manager: 'You', officer: officer.name, qa: `${qa.name} · QA` };
     const project = state.project(briefing.projectId);
     title.textContent = `🖖 Briefing: ${project?.name ?? 'a project'}`;
     const yourTurn = briefing.status === 'waiting' || briefing.status === 'failed';
@@ -58,12 +60,15 @@ export function openBriefingPanel(ui: Ui, projectId?: string): void {
         m.from === 'system'
           ? h('div', { class: 'briefing-note' }, m.text)
           : h('div', { class: `briefing-msg ${m.from}` },
-              h('strong', null, m.from === 'manager' ? 'You' : officer.name),
+              h('strong', null, names[m.from]),
               ...m.text.split(/\n{2,}/).map((p) => h('p', null, p)),
             ),
       ),
       briefing.status === 'thinking' || briefing.status === 'wrapping-up'
         ? h('div', { class: 'briefing-msg officer typing' }, h('strong', null, officer.name), h('p', null, `✻ ${briefing.activity}`))
+        : null,
+      briefing.status === 'qa-checking'
+        ? h('div', { class: 'briefing-msg qa typing' }, h('strong', null, names.qa), h('p', null, `✻ ${briefing.activity}`))
         : null,
       briefing.status === 'failed' ? h('div', { class: 'briefing-note error' }, `⚠ ${briefing.error ?? 'Something went wrong'}. Say something to carry on.`) : null,
     );
@@ -113,14 +118,15 @@ function callForm(ui: Ui, projectId?: string): HTMLElement {
   if (!projects.length) return h('div', { class: 'empty' }, 'Connect a repository to a project first: the officer reads its code during the briefing.');
   const project = h('select', null, ...projects.map((p) => h('option', { value: p.id, selected: p.id === projectId }, p.name)));
   const officer = h('p', { class: 'muted' });
-  const showOfficer = () => (officer.textContent = `${plannerFor(project.value).name}, ${state.project(project.value)?.name}'s operations officer, will join you.`);
+  const showOfficer = () =>
+    (officer.textContent = `${plannerFor(project.value).name}, ${state.project(project.value)?.name}'s operations officer, will join you, with ${qaOfficerFor(project.value).name} from QA sitting in.`);
   project.addEventListener('change', showOfficer);
   showOfficer();
   const idea = h('textarea', { placeholder: 'What do you want to talk through? e.g. a wishlist that follows shoppers across devices', autofocus: true });
   const go = h('button', { class: 'btn primary' }, '📣 Call the briefing');
   go.onclick = () => void busy(go, () => api.callBriefing(project.value, idea.value), ui.error);
   return h('div', { class: 'briefing-call' },
-    h('p', null, 'For anything bigger or fuzzier than a one-line issue. The officer reads the code, asks you questions one at a time and keeps a brief on the wall screen. When you wrap up, they write one issue to the project’s stand.'),
+    h('p', null, 'For anything bigger or fuzzier than a one-line issue. The officer reads the code, asks you questions one at a time and keeps a brief on the wall screen. QA chips in when the acceptance criteria change, so they can be tested. When you wrap up, they write one issue to the project’s stand.'),
     h('div', { class: 'field' }, h('label', null, 'Project'), project),
     officer,
     h('div', { class: 'field' }, h('label', null, 'Topic'), idea),

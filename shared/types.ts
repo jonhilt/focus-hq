@@ -337,20 +337,23 @@ export interface BriefDiagram {
 export const EMPTY_BRIEF: Brief = { summary: '', why: '', who: '', scope: [], outOfScope: [], acceptance: [], openQuestions: [], diagrams: [] };
 
 export interface BriefingMessage {
-  from: 'manager' | 'officer' | 'system';
+  /** qa - the room's QA officer's note on the acceptance criteria. */
+  from: 'manager' | 'officer' | 'qa' | 'system';
   text: string;
   at: number;
 }
 
 /**
- * thinking - the officer is reading code or composing a reply; waiting - your turn; wrapping-up - writing the issue;
- * done - the issue is at the project's stand; failed - the last turn went wrong (say something to try again).
+ * thinking - the officer is reading code or composing a reply; qa-checking - the QA officer is reading the acceptance
+ * criteria the officer just changed; waiting - your turn; wrapping-up - writing the issue; done - the issue is at the
+ * project's stand; failed - the last turn went wrong (say something to try again).
  */
-export type BriefingStatus = 'thinking' | 'waiting' | 'wrapping-up' | 'done' | 'failed';
+export type BriefingStatus = 'thinking' | 'qa-checking' | 'waiting' | 'wrapping-up' | 'done' | 'failed';
 
 /**
  * A back-and-forth in the observation lounge between the manager and a project's operations officer about a bigger
- * or fuzzier feature, ending in one well-specified issue. One at a time, saved across restarts.
+ * or fuzzier feature, ending in one well-specified issue. The project's QA officer sits in and speaks up when the
+ * acceptance criteria change. One at a time, saved across restarts.
  */
 export interface Briefing {
   id: string;

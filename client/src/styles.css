@@ -264,6 +264,7 @@ textarea.qa-brief { width: 100%; min-height: 160px; font-family: var(--mono); fo
 .briefing-msg { max-width: 85%; border-radius: 14px; padding: 8px 12px; background: color-mix(in srgb, var(--tone) 14%, var(--surface-2)); }
 .briefing-msg p { margin: 4px 0 0; line-height: 1.4; white-space: pre-wrap; }
 .briefing-msg.officer { --tone: var(--lcars-orange); align-self: flex-start; border-left: 6px solid var(--tone); border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.briefing-msg.qa { --tone: var(--lcars-periwinkle); align-self: flex-start; margin-left: 24px; border-left: 6px solid var(--tone); border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .briefing-msg.manager { --tone: var(--lcars-sky); align-self: flex-end; border-right: 6px solid var(--tone); border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .briefing-msg.typing p { font-family: var(--mono); font-size: 13px; color: var(--lcars-gold); }
 .briefing-note { align-self: center; color: var(--muted); font-size: 13px; }

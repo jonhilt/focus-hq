@@ -5,7 +5,22 @@ import { z } from 'zod';
 import type { Brief, Settings } from '../../shared/types';
 import { paths } from '../config';
 import { errorMessage, truncate } from '../util';
-import { type BriefingOfficer, briefingPrompt, briefingSystemPrompt, mergeBrief, type OfficerHooks, type OfficerReply, type OfficerTurn } from './briefing';
+import {
+  asQaNote,
+  type BriefingOfficer,
+  type BriefingQa,
+  briefingPrompt,
+  briefingQaPrompt,
+  briefingQaSystemPrompt,
+  briefingSystemPrompt,
+  mergeBrief,
+  type OfficerHooks,
+  type OfficerReply,
+  type OfficerTurn,
+  qaNoteSchema,
+  type QaReply,
+  type QaTurn,
+} from './briefing';
 import { agentEnv } from './claudeRunner';
 import { type Drafter, type DraftRequest, type DraftResult, draftSchema, plannerPrompt, plannerSystemPrompt, repoFolders } from './planner';
 import { renderToolUse } from './render';
@@ -169,6 +184,24 @@ export class ClaudeOfficer implements BriefingOfficer {
       costUsd: result.costUsd,
       draft: wrapUp ? asDraft(result.structured, req.repos) : undefined,
     };
+  }
+}
+
+/** The QA officer at a briefing: reads the code the officer checked out, and answers with one note or none. */
+export class ClaudeBriefingQa implements BriefingQa {
+  async check(req: QaTurn, activity: (text: string) => void): Promise<QaReply> {
+    const result = await runReadOnly({
+      cwd: planningDir(req.projectId),
+      systemAppend: briefingQaSystemPrompt(req),
+      prompt: briefingQaPrompt(req),
+      settings: req.settings,
+      signal: req.signal,
+      activity,
+      builtins: CODE_TOOLS,
+      resume: req.resumeSessionId,
+      schema: qaNoteSchema,
+    });
+    return { note: asQaNote(result.structured), sessionId: result.sessionId, costUsd: result.costUsd };
   }
 }
 

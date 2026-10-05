@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { sleep } from '../util';
-import type { BriefingOfficer, OfficerHooks, OfficerReply, OfficerTurn } from './briefing';
+import { qaOfficerFor } from '../../shared/crew';
+import type { BriefingOfficer, BriefingQa, OfficerHooks, OfficerReply, OfficerTurn, QaReply, QaTurn } from './briefing';
 import { mergeBrief } from './briefing';
 import type { Drafter, DraftRequest, DraftResult } from './planner';
 import { renderText, renderToolUse } from './render';
@@ -351,6 +352,10 @@ export class DemoDrafter implements Drafter {
   }
 }
 
+/** The phone-width check the demo officer proposes, and the testable rewrite the demo QA officer suggests for it. */
+const PHONE_CHECK = 'Works at phone width (375px)';
+const PHONE_CHECK_REWRITE = 'At 375px wide nothing scrolls sideways and every button can be tapped';
+
 /** The demo briefing officer: asks the usual questions in order, filling the brief with your answers. */
 export class DemoOfficer implements BriefingOfficer {
   private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
@@ -449,7 +454,7 @@ export class DemoOfficer implements BriefingOfficer {
       };
     }
     if (step === 3) {
-      update({ acceptance: [line(last), 'Works at phone width (375px)'], scope: [line(idea.replace(/^./, (c) => c.toUpperCase()))], open_questions: brief.openQuestions.slice(1), diagrams: [today, optionA, optionB] });
+      update({ acceptance: [line(last), PHONE_CHECK], scope: [line(idea.replace(/^./, (c) => c.toUpperCase()))], open_questions: brief.openQuestions.slice(1), diagrams: [today, optionA, optionB] });
       return {
         text: `Noted, and I've added a phone-width check since \`${files[1]}\` has its own mobile layout. I've put two designs on the screen: A extends \`${files[4]}\` (smallest change, but that file grows), B gives it a module of its own (cleaner, more wiring). I'd go with A. And what should we leave out of this first version? I'd keep sharing and notifications for later.`,
         sessionId: session,
@@ -457,10 +462,34 @@ export class DemoOfficer implements BriefingOfficer {
       };
     }
     if (step === 4) {
-      update({ out_of_scope: [line(last)], open_questions: [], diagrams: [today, { ...optionA, title: optionA.title.replace(/^Option A/, 'Chosen') }] });
-      return { text: `That's everything I needed: I've kept Option A on the screen as the chosen design, and nothing important is still open. Anything to add, or shall we wrap up?`, sessionId: session, costUsd: 0.04 };
+      // QA's note came after the officer's last reply: take their rewrite on board
+      const qaSpoke = req.messages.slice(req.messages.map((m) => m.from).lastIndexOf('officer')).some((m) => m.from === 'qa');
+      const acceptance = qaSpoke ? brief.acceptance.map((a) => (a === PHONE_CHECK ? PHONE_CHECK_REWRITE : a)) : brief.acceptance;
+      update({ out_of_scope: [line(last)], open_questions: [], acceptance, diagrams: [today, { ...optionA, title: optionA.title.replace(/^Option A/, 'Chosen') }] });
+      const taken = qaSpoke ? ` I've swapped in ${qaOfficerFor(req.projectId).name}'s rewrite of the phone-width check; say if you'd rather keep it loose.` : '';
+      return { text: `That's everything I needed: I've kept Option A on the screen as the chosen design, and nothing important is still open.${taken} Anything to add, or shall we wrap up?`, sessionId: session, costUsd: 0.04 };
     }
     update({ scope: [...brief.scope, line(last)] });
     return { text: `Added to the scope. Ready to wrap up whenever you are.`, sessionId: session, costUsd: 0.03 };
+  }
+}
+
+/** The demo QA officer at a briefing: chips in once, on the vague phone-width check, and stays quiet after that. */
+export class DemoBriefingQa implements BriefingQa {
+  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
+
+  async check(req: QaTurn, activity: (text: string) => void): Promise<QaReply> {
+    const session = req.resumeSessionId ?? `demo-brief-qa-${randomBytes(3).toString('hex')}`;
+    activity('Reading the acceptance criteria');
+    await sleep(1500 / this.speed);
+    if (req.signal.aborted) throw new Error('Stopped');
+    if (req.messages.some((m) => m.from === 'qa') || !req.brief.acceptance.includes(PHONE_CHECK)) return { sessionId: session, costUsd: 0.02 };
+    activity(req.qaBrief ? 'Checking them against the QA brief' : 'Thinking how I’d test them');
+    await sleep(1200 / this.speed);
+    return {
+      note: `“${PHONE_CHECK}” is hard to fail: I’d test “${PHONE_CHECK_REWRITE}”.`,
+      sessionId: session,
+      costUsd: 0.03,
+    };
   }
 }
