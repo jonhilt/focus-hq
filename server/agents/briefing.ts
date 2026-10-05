@@ -24,7 +24,7 @@ export interface OfficerTurn {
 }
 
 export interface OfficerHooks {
-  activity(text: string): void;
+  activity: (text: string) => void;
   /** The officer updated the brief on the wall screen. */
   brief(brief: Brief): void;
 }

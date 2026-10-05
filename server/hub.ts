@@ -12,8 +12,8 @@ export class Hub {
       if (req.url !== '/ws') return; // leave other upgrades (Vite HMR) alone
       this.wss!.handleUpgrade(req, socket, head, (ws) => this.wss!.emit('connection', ws, req));
     });
-    this.wss.on('connection', async (ws) => {
-      ws.send(JSON.stringify({ type: 'snapshot', snapshot: await snapshot() } satisfies ServerEvent));
+    this.wss.on('connection', (ws) => {
+      void snapshot().then((s) => ws.send(JSON.stringify({ type: 'snapshot', snapshot: s } satisfies ServerEvent)));
     });
   }
 

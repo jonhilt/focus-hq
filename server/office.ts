@@ -114,7 +114,7 @@ export class Office {
     try {
       return (await this.github.repoInfo(repo)).nameWithOwner;
     } catch (err) {
-      throw new Error(`Can't open ${repo} on GitHub: ${errorMessage(err)}`);
+      throw new Error(`Can't open ${repo} on GitHub: ${errorMessage(err)}`, { cause: err });
     }
   }
 

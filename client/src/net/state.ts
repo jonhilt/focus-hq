@@ -51,8 +51,8 @@ export class OfficeState {
   on<K extends keyof Events>(event: K, fn: Listener<Events[K]>): () => void {
     let set = this.listeners.get(event);
     if (!set) this.listeners.set(event, (set = new Set()));
-    set.add(fn as Listener<never>);
-    return () => set!.delete(fn as Listener<never>);
+    set.add(fn);
+    return () => set.delete(fn);
   }
 
   private emit<K extends keyof Events>(event: K, payload: Events[K]): void {

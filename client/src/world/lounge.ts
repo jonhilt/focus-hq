@@ -230,7 +230,7 @@ function drawBrief(ctx: CanvasRenderingContext2D, area: { x: number; y: number; 
   };
   let left = section(area.x, top, 'Why', LCARS.orange, brief.why ? [brief.why] : [], bottom);
   left = section(area.x, left, 'Who for', LCARS.sky, brief.who ? [brief.who] : [], bottom);
-  left = section(area.x, left, 'Open questions', LCARS.red, brief.openQuestions, bottom);
+  section(area.x, left, 'Open questions', LCARS.red, brief.openQuestions, bottom);
   const rx = area.x + colW + 40;
   let right = section(rx, top, 'Scope', LCARS.periwinkle, brief.scope, bottom);
   right = section(rx, right, 'Out of scope', LCARS.lilac, brief.outOfScope, bottom);

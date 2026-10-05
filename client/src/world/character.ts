@@ -242,7 +242,8 @@ export class Character {
     const thinking = this.view.thinking;
 
     // defaults: hands on the keyboard
-    let lz = -0.42, rz = -0.42, lx = 0, rx = 0;
+    let lz = -0.42, rz = -0.42, rx = 0;
+    const lx = 0;
     let headTilt = 0, headTurn = 0, bodyY = 0;
     let expression: Expression = 'idle';
 

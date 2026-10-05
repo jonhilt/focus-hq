@@ -14,7 +14,7 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, props?: Props<K
     const { class: cls, style, on, attrs, ...rest } = props;
     if (cls) el.className = cls;
     if (style) el.setAttribute('style', style);
-    if (on) for (const [name, fn] of Object.entries(on)) el.addEventListener(name, fn as EventListener);
+    if (on) for (const [name, fn] of Object.entries(on)) el.addEventListener(name, fn);
     if (attrs) for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
     Object.assign(el, rest);
   }

@@ -92,9 +92,9 @@ async function runReadOnly(run: ReadOnlyRun): Promise<ReadOnlyResult> {
     }
     throw new Error('The session stopped without a result');
   } catch (err) {
-    if (run.signal.aborted) throw new Error('Stopped');
-    if (abort.signal.aborted) throw new Error(`Gave up after ${TURN_TIMEOUT_MS / 60_000} minutes`);
-    throw new Error(errorMessage(err));
+    if (run.signal.aborted) throw new Error('Stopped', { cause: err });
+    if (abort.signal.aborted) throw new Error(`Gave up after ${TURN_TIMEOUT_MS / 60_000} minutes`, { cause: err });
+    throw new Error(errorMessage(err), { cause: err });
   } finally {
     clearTimeout(timer);
     run.signal.removeEventListener('abort', onAbort);

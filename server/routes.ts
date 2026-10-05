@@ -4,7 +4,7 @@ import type { Office } from './office';
 import type { Store } from './store';
 import { errorMessage } from './util';
 
-type Handler = (req: Request, res: Response) => Promise<unknown> | unknown;
+type Handler = (req: Request, res: Response) => unknown;
 
 /** Wraps a handler so thrown errors become `{ error }` JSON with a 400. */
 const h = (fn: Handler) => async (req: Request, res: Response, next: NextFunction) => {

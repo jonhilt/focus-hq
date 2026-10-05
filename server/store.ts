@@ -138,7 +138,7 @@ export class Store {
     if (patch.name !== undefined) project.name = patch.name.trim() || project.name;
     if (patch.color !== undefined) project.color = patch.color;
     if (patch.theme !== undefined) {
-      if (!isTheme(patch.theme)) throw new Error(`Unknown room theme ${patch.theme}`);
+      if (!isTheme(patch.theme)) throw new Error(`Unknown room theme ${String(patch.theme)}`);
       project.theme = patch.theme;
     }
     if (patch.maxAgents !== undefined) project.maxAgents = Math.max(1, Math.min(DESKS_PER_ROOM, Math.round(patch.maxAgents)));

@@ -5,6 +5,7 @@ Browser-based cartoon 3D office (Three.js) visualising a swarm of Claude Code ag
 ## Commands
 
 - `npm run typecheck`: run after every change; covers `server/`, `client/src/` and `shared/`.
+- `npm run lint`: run after every change; ESLint with type-aware typescript-eslint rules (floating and misused promises) over the same files.
 - `npm run demo`: fake GitHub + scripted agents (`FOCUS_DEMO_SPEED=3` speeds them up). Use it to check UI and 3D changes.
 - `npm run build`: Vite build of the client into `dist/`.
 - `npm test`: vitest unit tests (`*.test.ts` next to the code they cover).

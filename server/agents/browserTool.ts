@@ -170,7 +170,7 @@ export function browserMcpServer(pool: BrowserPool, agentId: string, hooks: Pick
           try {
             const { page } = await pool.tab(agentId);
             const result = await page.evaluate((src) => {
-              // eslint-disable-next-line no-new-func
+              // eslint-disable-next-line @typescript-eslint/no-implied-eval -- evaluating the agent's expression in the page is the tool's purpose
               const value = new Function(`return (${src});`)();
               return Promise.resolve(value).then((v) => JSON.stringify(v, null, 2));
             }, expression);

@@ -39,7 +39,7 @@ function skinGeometry(): THREE.BufferGeometry {
     plane(z1 - DOOR_W / 2, SKIN_TOP).rotateY(Math.PI / 2).translate(x0, SKIN_TOP / 2, jamb),
     plane(DOOR_W, SKIN_TOP - DOOR_H).rotateY(Math.PI / 2).translate(x0, (DOOR_H + SKIN_TOP) / 2, 0),
     plane(x1 - x0, z1 - z0).rotateX(Math.PI / 2).translate(0, SKIN_TOP, 0), // ceiling
-  ])!;
+  ]);
 }
 
 /** Makes a material draw only where the skin stamped `ref`. */

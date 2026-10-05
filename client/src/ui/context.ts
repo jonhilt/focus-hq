@@ -9,7 +9,7 @@ export type BoardTab = 'todo' | 'doing' | 'prs';
 export interface Ui {
   panels: Panels;
   hud: Hud;
-  error(message: string): void;
+  error: (message: string) => void;
   places(): Place[];
   goTo(place: Place): void;
   goToAgent(id: string): void;
