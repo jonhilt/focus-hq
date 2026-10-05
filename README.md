@@ -90,6 +90,8 @@ For anything bigger or fuzzier than a one-line issue, press **📣 Call a briefi
 4. **📋 Wrap up** when you're happy. The officer writes one issue, with the why from the briefing in its Context, and leaves it at the project's stand as a normal draft. A redraft there carries on from the whole briefing.
 5. **✕ End briefing** sends them back to the stand. Only one briefing runs at a time.
 
+In a briefing the officer can also search and read the web (`WebSearch`, `WebFetch`) for things the code can't answer, like library versions or migration guidance, and tells you where they found it. They still can't change anything.
+
 A briefing is saved in `~/.focus/state.json` with the officer's session, and each turn resumes that session. Nothing runs while it's your turn, and you can pick a briefing back up after a restart.
 
 ## How an agent works an issue
@@ -218,7 +220,7 @@ server/
     workspace.ts          git mirrors + worktrees (agents', the per-repo preview checkout, the planner's read-only checkouts)
     planner.ts            the officer at each room's New issue stand: issue drafts, their prompt and schema
     briefing.ts           briefings in the observation lounge: turns, the brief, wrap-up into a stand draft
-    claudeCrew.ts         the officer's read-only Claude Code sessions (Read/Glob/Grep, update_brief, structured output)
+    claudeCrew.ts         the officer's read-only Claude Code sessions (Read/Glob/Grep, web search/fetch in briefings, update_brief, structured output)
     qa.ts                 the QA officer: instructions, the report's schema and parsing, the PR comment
     demoRunner.ts         scripted pretend agents (and a pretend planner, briefing officer and QA officer) for demo mode
 client/src/

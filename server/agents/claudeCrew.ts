@@ -11,11 +11,14 @@ import { type Drafter, type DraftRequest, type DraftResult, draftSchema, planner
 import { renderToolUse } from './render';
 import { checkoutLatest } from './workspace';
 
-// The permanent crew's Claude Code sessions: they read the project's code and change nothing. Read-only because they
-// only have Read, Glob and Grep (plus the office's own tools), `dontAsk` denies anything not pre-approved, and none of
-// your settings, hooks or MCP servers load.
+// The permanent crew's Claude Code sessions: they read the project's code (and, in briefings, the web) and change
+// nothing. Read-only because they only have Read, Glob and Grep, plus WebSearch and WebFetch in briefings and the
+// office's own tools, `dontAsk` denies anything not pre-approved, and none of your settings, hooks or MCP servers load.
 
-const READ_ONLY_TOOLS = ['Read', 'Glob', 'Grep'];
+/** The built-in tools a crew session may be given: none of them can change anything. */
+type ReadOnlyTool = 'Read' | 'Glob' | 'Grep' | 'WebSearch' | 'WebFetch';
+const CODE_TOOLS: ReadOnlyTool[] = ['Read', 'Glob', 'Grep'];
+const WEB_TOOLS: ReadOnlyTool[] = ['WebSearch', 'WebFetch'];
 const TURN_TIMEOUT_MS = 8 * 60_000;
 
 /** planning/<project>/<repo>: one folder per repo under the session's cwd, so Glob and Grep reach all of them. */
@@ -36,6 +39,8 @@ interface ReadOnlyRun {
   settings: Settings;
   signal: AbortSignal;
   activity: (text: string) => void;
+  /** Built-in tools, all pre-approved. */
+  builtins: ReadOnlyTool[];
   resume?: string;
   schema?: Record<string, unknown>;
   /** The office's own tools for this session, all pre-approved. */
@@ -61,8 +66,8 @@ async function runReadOnly(run: ReadOnlyRun): Promise<ReadOnlyResult> {
     abortController: abort,
     model: run.settings.model || undefined,
     systemPrompt: { type: 'preset', preset: 'claude_code', append: run.systemAppend },
-    tools: READ_ONLY_TOOLS,
-    allowedTools: [...READ_ONLY_TOOLS, ...extra],
+    tools: run.builtins,
+    allowedTools: [...run.builtins, ...extra],
     permissionMode: 'dontAsk',
     settingSources: [],
     mcpServers: run.tools ? { [run.tools.server.name]: run.tools.server } : {},
@@ -124,6 +129,7 @@ export class ClaudeDrafter implements Drafter {
       settings: req.settings,
       signal: req.signal,
       activity,
+      builtins: CODE_TOOLS,
       resume: req.resumeSessionId,
       schema: draftSchema(req.repos),
     }).catch((err: Error) => {
@@ -152,6 +158,7 @@ export class ClaudeOfficer implements BriefingOfficer {
       settings: req.settings,
       signal: req.signal,
       activity: hooks.activity,
+      builtins: [...CODE_TOOLS, ...WEB_TOOLS],
       resume: req.resumeSessionId,
       schema: wrapUp ? draftSchema(req.repos) : undefined,
       tools: { server, names: ['update_brief'] },
