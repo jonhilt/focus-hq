@@ -1,3 +1,4 @@
+import { cloudSessionUrl } from '../../../shared/cloud';
 import { UNIFORM } from '../../../shared/crew';
 import type { Agent, BrowserFrame, Effort, TermLine } from '../../../shared/types';
 import { EFFORT_LEVELS } from '../../../shared/types';
@@ -75,7 +76,9 @@ export function openAgentPanel(ui: Ui, id: string): void {
       h('span', { class: 'grow muted' }, statusLine(a)),
       a.costUsd > 0 ? h('span', { class: 'chip', title: 'Estimated usage (on a subscription this is not billed)' }, `~$${a.costUsd.toFixed(2)}`) : null,
       h('span', { class: 'chip', title: 'How hard Claude thinks on this task' }, `🧠 ${a.effort ?? 'default'} effort`),
+      a.cloud ? h('span', { class: 'chip', title: 'Works in a Claude Code cloud session and pushes their own branch' }, '☁ cloud') : null,
       h('span', { class: 'chip' }, `⏱ ${timeAgo(a.startedAt)}`),
+      cloudLink(a),
       a.task === 'issue' ? h('a', { class: 'btn small', href: a.issue.url, target: '_blank', rel: 'noreferrer' }, 'Issue ↗') : null,
       a.task === 'review' ? h('a', { class: 'btn small go', href: a.issue.url, target: '_blank', rel: 'noreferrer' }, `PR #${a.issue.number} ↗`) : null,
       a.task === 'review' ? h('button', { class: 'btn small', onclick: () => ui.openQa(a.projectId) }, '🔍 QA reports') : null,
@@ -158,3 +161,19 @@ export function effortPicker(value?: Effort): HTMLSelectElement {
 }
 
 export const pickedEffort = (picker: HTMLSelectElement): Effort | undefined => EFFORT_LEVELS.find((e) => e === picker.value);
+
+/** Picks where an agent works: on this machine, or in a Claude Code cloud session. */
+export function wherePicker(cloud = false): HTMLSelectElement {
+  return h('select', { class: 'effort', title: 'Where the agent works: on this machine, or in a Claude Code cloud session (claude.ai/code)' },
+    h('option', { value: '', selected: !cloud }, '💻 local'),
+    h('option', { value: 'cloud', selected: cloud }, '☁ cloud'),
+  );
+}
+
+export const pickedCloud = (picker: HTMLSelectElement): boolean => picker.value === 'cloud';
+
+/** Opens a cloud agent's session on claude.ai, once Claude Code has reported it. */
+export function cloudLink(a: Agent): HTMLElement | null {
+  const url = cloudSessionUrl(a);
+  return url ? h('a', { class: 'btn small', href: url, target: '_blank', rel: 'noreferrer', title: 'Watch or steer the session on claude.ai' }, 'Cloud session ↗') : null;
+}

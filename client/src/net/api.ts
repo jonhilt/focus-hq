@@ -24,7 +24,7 @@ export const api = {
   checkGitHub: () => call('POST', '/github/check'),
   updateSettings: (patch: Partial<Settings>) => call<Settings>('PATCH', '/settings', patch),
 
-  createIssue: (body: { projectId: string; repo: string; title: string; body: string; labels: string[]; assign: boolean; effort?: Effort; fromDraft?: boolean }) =>
+  createIssue: (body: { projectId: string; repo: string; title: string; body: string; labels: string[]; assign: boolean; effort?: Effort; cloud?: boolean; fromDraft?: boolean }) =>
     call<{ issue: Issue; agent?: Agent }>('POST', '/issues', body),
   draftIssue: (projectId: string, idea: string, revise?: { repo: string; title: string; body: string; notes: string }) =>
     call<IssueDraft>('POST', `/projects/${projectId}/draft`, { idea, revise }),
@@ -45,8 +45,8 @@ export const api = {
   previewLogFile: (projectId: string, name: string) =>
     call<{ name: string; text: string; truncated: boolean }>('GET', `/previews/${projectId}/logs/${encodeURIComponent(name)}`),
 
-  hire: (projectId: string, issue: Issue, effort?: Effort) =>
-    call<Agent>('POST', '/agents', { projectId, repo: issue.repo, number: issue.number, title: issue.title, url: issue.url, effort }),
+  hire: (projectId: string, issue: Issue, effort?: Effort, cloud?: boolean) =>
+    call<Agent>('POST', '/agents', { projectId, repo: issue.repo, number: issue.number, title: issue.title, url: issue.url, effort, cloud }),
   lines: (id: string) => call<TermLine[]>('GET', `/agents/${id}/lines`),
   message: (id: string, text: string) => call('POST', `/agents/${id}/message`, { text }),
   permission: (id: string, requestId: string, allow: boolean) => call('POST', `/agents/${id}/permission`, { requestId, allow }),

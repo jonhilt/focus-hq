@@ -179,13 +179,15 @@ export function qaPrompt(repo: string, pr: PullRequestDetail, issues: IssueDetai
 }
 
 /** QA's findings on a failed round, for whoever has to fix them. */
-export function fixPrompt(pr: { number: number; branch: string }, review: Pick<QaReview, 'sha'> & { report: QaReport }): string {
+export function fixPrompt(pr: { number: number; branch: string }, review: Pick<QaReview, 'sha'> & { report: QaReport }, cloud = false): string {
   return [
     `QA failed pull request #${pr.number}${review.sha ? ` (commit ${review.sha.slice(0, 7)})` : ''} and sent it back to you. Please fix it.`,
     '',
     ...findings(review.report),
     '',
-    `Fix what QA found on \`${pr.branch}\`, run the tests, type checks and linters, and commit. The office pushes your commits to the same pull request and QA tests it again.`,
+    cloud
+      ? `Fix what QA found on \`${pr.branch}\`, run the tests, type checks and linters, commit, and push with \`git push origin HEAD:${pr.branch}\`. That updates the pull request and QA tests it again.`
+      : `Fix what QA found on \`${pr.branch}\`, run the tests, type checks and linters, and commit. The office pushes your commits to the same pull request and QA tests it again.`,
   ].join('\n');
 }
 

@@ -189,5 +189,12 @@ describe('fixPrompt', () => {
     expect(text).toContain('- Empty cart: Page goes blank');
     expect(text).toContain('What needs fixing:\nGuard the empty cart in cart.ts');
     expect(text).toContain('`focus/7-save-for-later-ab12`');
+    expect(text).toContain('The office pushes your commits');
+  });
+
+  it('has a cloud developer push the fix themselves', () => {
+    const text = fixPrompt(pr, { sha: 'fed9876543', report: failed }, true);
+    expect(text).toContain('git push origin HEAD:focus/7-save-for-later-ab12');
+    expect(text).not.toContain('The office pushes');
   });
 });

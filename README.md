@@ -106,6 +106,19 @@ A briefing is saved in `~/.focus/state.json` with the officer's session, and eac
 8. **QA**: every PR the office opens or updates goes to the holodeck's QA officer (see [QA](#qa)).
 9. **Merged**: when the PR is merged (from the board or on GitHub), the agent leaves and their worktree is cleaned up.
 
+### Cloud agents
+
+The **💻 local / ☁ cloud** picker next to 🧠 (on **Assign agent**, and at the New issue stand) puts an agent in a [Claude Code cloud session](https://code.claude.com/docs/en/claude-code-on-the-web) instead of on your machine. They still get a station and a laptop, and the office still opens the PR and hands it to QA.
+
+- **How it runs:** through the Agent SDK's bundled CLI with `--cloud`, which starts the cloud session and relays it in the same message stream as a local agent, so their terminal is live as usual. The laptop panel links to the session on claude.ai (**Cloud session ↗**), where you can watch or steer it too.
+- **Their branch:** the office publishes `focus/<issue>-<slug>-<id>` to GitHub first (the cloud session clones it from there), and the agent is told to commit and push to that branch, and only that one, with `git push origin HEAD:<branch>`. When the session ends, the office fetches the branch and opens the PR. If nothing new arrived, the agent is asked once to push.
+- **Screenshots:** the office's browser tool runs on your machine, so cloud agents test in the cloud machine's own browser instead (a Playwright script, say). Any screenshot they look at comes back in their tool results and shows on their laptop screen, like a local agent's browser.
+- **Follow-ups** reattach to the same cloud session (`--cloud <session id>`). If that fails (an archived session, say), a new cloud session picks the work up from the branch with your message.
+- **Stop** interrupts the cloud session's turn before letting go of it.
+- The QA officer always works locally: QA needs the office browser for its screenshots.
+
+You need a claude.ai login (not `FOCUS_USE_API_KEY`) and GitHub connected for cloud sessions: install the [Claude GitHub App](https://github.com/apps/claude) on the repo, or run `/web-setup` in Claude Code. Without the app, the CLI uploads the worktree instead of cloning. On Team and Enterprise plans, an admin has to allow cloud sessions. Cloud agents count towards **Agents working at once**: they share your plan's limits. The cloud session works in your [cloud environment](https://code.claude.com/docs/en/cloud-environments) (network access, setup script), not with your local tools. The headless `--cloud` mode the office drives isn't documented by Anthropic yet, so a Claude Code update can change how it behaves.
+
 ## QA
 
 Every holodeck has a QA officer in blue, sitting at the pull requests table facing the board, with a laptop you can look at over their shoulder.
@@ -176,6 +189,8 @@ The commands run through your shell (so `&&` and `npm` on Windows work), on your
 
 None of these is a sandbox. Agents run as you, on your machine, with your `gh` credentials. Treat full autonomy accordingly.
 
+Cloud agents run in a cloud VM rather than on your machine, but they push to GitHub as you. In ✋ mode, the one push they may make without asking is `git push origin HEAD:<their branch>`. GitHub access from a cloud session doesn't limit which branches can be pushed, so use branch protection on GitHub for anything that matters.
+
 ## Configuration
 
 | Env var | Default | |
@@ -214,8 +229,9 @@ server/
   github/                 GitHub as an Effect service: gh CLI layer (live), in-memory layer (demo), Promise adapter
   agents/
     manager.ts            hire → queue → worktree → run → commit nudge → push → PR; messages, approvals
-    claudeRunner.ts       Claude Agent SDK query() in streaming-input mode, permission callback
-    render.ts             SDK messages → Claude-Code-style terminal lines + "what am I doing" text
+    claudeRunner.ts       Claude Agent SDK query() in streaming-input mode, permission callback; cloud agents via --cloud
+    cloud.ts              what happens after a cloud agent's session (push nudge, carrying on in a new session)
+    render.ts             SDK messages → Claude-Code-style terminal lines + "what am I doing" text + screenshots in tool results
     browserTool.ts        in-process MCP server driving headless Chromium, streams screenshots
     workspace.ts          git mirrors + worktrees (agents', the per-repo preview checkout, the planner's read-only checkouts)
     planner.ts            the officer at each room's New issue stand: issue drafts, their prompt and schema

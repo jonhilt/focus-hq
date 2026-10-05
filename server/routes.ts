@@ -75,7 +75,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
       str(req.body.title),
       str(req.body.body),
       Array.isArray(req.body.labels) ? req.body.labels.filter((l: unknown) => typeof l === 'string' && l.trim()) : [],
-      req.body.assign === true ? { effort: effort(req.body.effort) } : undefined,
+      req.body.assign === true ? { effort: effort(req.body.effort), cloud: req.body.cloud === true } : undefined,
       req.body.fromDraft === true,
     ),
   ));
@@ -115,7 +115,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
       number: Number(req.body.number),
       title: str(req.body.title) || undefined,
       url: str(req.body.url) || undefined,
-    }, effort(req.body.effort)),
+    }, { effort: effort(req.body.effort), cloud: req.body.cloud === true }),
   ));
   r.get('/agents/:id/lines', h((req) => store.allLines(param(req, 'id'))));
   r.post('/agents/:id/message', h((req) => office.agents.message(param(req, 'id'), str(req.body.text))));

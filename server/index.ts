@@ -30,6 +30,8 @@ const liveWorkspace: WorkspaceOps = {
   commitsAhead: git.commitsAhead,
   head: git.head,
   push: git.pushBranch,
+  publish: git.publishBranch,
+  pull: git.pullBranch,
   checkoutPullRequest: git.checkoutPullRequest,
 };
 

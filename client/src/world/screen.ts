@@ -88,7 +88,7 @@ export class LaptopScreen {
     ctx.font = `600 20px ${LCARS_FONT}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(fitText(ctx, `${agent.name} · ${agent.repo}#${agent.issue.number} · claude`.toUpperCase(), W - 140), 80, 19);
+    ctx.fillText(fitText(ctx, `${agent.name} · ${agent.repo}#${agent.issue.number} · claude${agent.cloud ? ' ☁ cloud' : ''}`.toUpperCase(), W - 140), 80, 19);
 
     const footerH = 34;
     const browserActive = !!frame && (agent.status === 'testing' || Date.now() - frame.at < 45_000);

@@ -25,6 +25,11 @@ export interface RunRequest {
   effort?: Effort;
   /** JSON schema for a structured final answer (the QA officer's report). */
   outputSchema?: Record<string, unknown>;
+  /**
+   * Run in a Claude Code cloud session that works on `branch` and pushes it. `resumeSessionId` is then the cloud
+   * session's id, and `systemAppend` goes into the first message.
+   */
+  cloud?: { branch: string };
 }
 
 /** What a run the captain stopped reports, and how a stopped review is told apart from one that failed. */
@@ -38,6 +43,8 @@ export interface RunOutcome {
   structured?: unknown;
   error?: string;
   aborted?: boolean;
+  /** Claude Code got as far as reporting the session. A cloud session that couldn't be reattached to never does. */
+  started?: boolean;
 }
 
 export interface AgentSession {
@@ -62,6 +69,13 @@ export interface WorkspaceOps {
   /** The commit checked out in `dir`. */
   head(dir: string): Promise<string>;
   push(dir: string, branch: string): Promise<void>;
+  /**
+   * Makes sure origin has `branch`, for a cloud session to clone: pushes `dir`'s commit if it isn't there yet, and
+   * otherwise brings `dir` up to it (work a cloud session already pushed is never overwritten).
+   */
+  publish(dir: string, branch: string): Promise<void>;
+  /** Brings `dir` up to the remote `branch`, where a cloud agent pushed its work. */
+  pull(dir: string, branch: string): Promise<void>;
   /** A detached checkout of a pull request's head in the agent's workspace (for QA). Returns the commit ('' if unknown). */
   checkoutPullRequest(repo: string, agentId: string, number: number): Promise<string>;
 }

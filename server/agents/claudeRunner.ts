@@ -1,7 +1,8 @@
-import { query, type CanUseTool, type Options, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
-import { errorMessage, truncate } from '../util';
+import { query, type CanUseTool, type Options, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import { cloudSessionUrl } from '../../shared/cloud';
+import { errorMessage, sleep, truncate } from '../util';
 import { BrowserPool, browserMcpServer } from './browserTool';
-import { renderText, renderToolResult, renderToolUse } from './render';
+import { appUrl, renderText, renderToolResult, renderToolUse, screenshotFrame, type ToolCall } from './render';
 import { type AgentRunner, type AgentSession, type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN } from './types';
 
 /** Feeds user messages into a streaming-input query; lets the manager talk to a running agent. */
@@ -67,16 +68,34 @@ export function agentEnv(): Record<string, string | undefined> {
   return env;
 }
 
-/** Runs agents with the Claude Agent SDK, i.e. real Claude Code instances using your local Claude login. */
+/** What one run remembers between messages: tool calls waiting for their results, and the page last pointed at. */
+interface RunContext {
+  cwd: string;
+  cloud: boolean;
+  calls: Map<string, ToolCall>;
+  lastUrl?: string;
+  /** The cloud session's id, once the CLI has reported it. */
+  cloudId?: string;
+}
+
+/**
+ * Runs agents with the Claude Agent SDK, i.e. real Claude Code instances using your local Claude login. A cloud agent
+ * runs through the bundled CLI's headless `--cloud` mode: the CLI starts (or reattaches to) a Claude Code cloud session
+ * and relays it in the same message stream, so it renders like a local one.
+ */
 export class ClaudeRunner implements AgentRunner {
   constructor(private readonly browsers: BrowserPool) {}
 
   start(req: RunRequest, hooks: RunHooks): AgentSession {
     const input = new InputQueue();
     const abort = new AbortController();
-    input.push(req.prompt);
+    const cloud = req.cloud;
+    // A new cloud session gets its instructions in the first message: which local options reach it is up to the CLI.
+    input.push(cloud && !req.resumeSessionId ? `${req.systemAppend}\n\n---\n\n${req.prompt}` : req.prompt);
 
     const autonomy = req.settings.autonomy;
+    // a cloud agent has to push its own branch, and only that one
+    const askCommands = cloud ? [...ASK_MODE_COMMANDS, `Bash(git push origin HEAD:${cloud.branch})`] : ASK_MODE_COMMANDS;
     const canUseTool: CanUseTool = async (toolName, toolInput, { signal, title }) => {
       if (autonomy === 'ask' && (ASK_MODE_TOOLS.has(toolName) || toolName.startsWith('mcp__browser__'))) {
         return { behavior: 'allow', updatedInput: toolInput };
@@ -99,11 +118,16 @@ export class ClaudeRunner implements AgentRunner {
       abortController: abort,
       model: req.settings.model || undefined,
       effort: req.effort,
-      systemPrompt: { type: 'preset', preset: 'claude_code', append: req.systemAppend },
       settingSources: ['user', 'project', 'local'],
-      mcpServers: { browser: browserMcpServer(this.browsers, req.agentId, hooks) },
       disallowedTools: ['AskUserQuestion', 'EnterPlanMode'],
-      resume: req.resumeSessionId,
+      ...(cloud
+        ? // the cloud VM has its own browser; ours runs on this machine. `--cloud <id>` reattaches to the session.
+          { systemPrompt: { type: 'preset', preset: 'claude_code' }, extraArgs: { cloud: req.resumeSessionId ?? null } }
+        : {
+            systemPrompt: { type: 'preset', preset: 'claude_code', append: req.systemAppend },
+            mcpServers: { browser: browserMcpServer(this.browsers, req.agentId, hooks) },
+            resume: req.resumeSessionId,
+          }),
       outputFormat: req.outputSchema ? { type: 'json_schema', schema: req.outputSchema } : undefined,
       env,
       stderr: (data) => {
@@ -114,18 +138,23 @@ export class ClaudeRunner implements AgentRunner {
         ? { permissionMode: 'bypassPermissions', allowDangerouslySkipPermissions: true }
         : autonomy === 'auto'
           ? { permissionMode: 'auto', canUseTool }
-          : { permissionMode: 'acceptEdits', allowedTools: ASK_MODE_COMMANDS, canUseTool }),
+          : { permissionMode: 'acceptEdits', allowedTools: askCommands, canUseTool }),
     };
 
+    let q: Query | undefined;
+    let stopping = false;
+    const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map() };
     const done = (async (): Promise<RunOutcome> => {
       let summary = '';
       let structured: unknown;
       let ok = false;
       let error: string | undefined;
+      let started = false;
       try {
-        const q = query({ prompt: input, options });
+        q = query({ prompt: input, options });
         for await (const msg of q) {
-          const result = this.handle(msg, req.cwd, hooks);
+          if (msg.type === 'system' && msg.subtype === 'init') started = true;
+          const result = this.handle(msg, ctx, hooks);
           if (result) {
             ok = !result.isError;
             summary = result.text;
@@ -136,34 +165,55 @@ export class ClaudeRunner implements AgentRunner {
             if (!result.queued) input.close();
           }
         }
-        return { ok, summary, structured, error };
+        if (stopping) return { ok: false, summary, error: STOPPED_BY_CAPTAIN, aborted: true, started };
+        return { ok, summary, structured, error, started };
       } catch (err) {
-        if (abort.signal.aborted) return { ok: false, summary, error: STOPPED_BY_CAPTAIN, aborted: true };
+        if (stopping || abort.signal.aborted) return { ok: false, summary, error: STOPPED_BY_CAPTAIN, aborted: true, started };
         const detail = stderrTail.join('').trim().split('\n').slice(-3).join(' ');
-        return { ok: false, summary, error: `${errorMessage(err)}${detail ? ` — ${truncate(detail, 300)}` : ''}` };
+        return { ok: false, summary, error: `${errorMessage(err)}${detail ? ` — ${truncate(detail, 300)}` : ''}`, started };
       } finally {
         input.close();
         await this.browsers.close(req.agentId);
       }
     })();
 
+    const kill = () => {
+      abort.abort();
+      input.close();
+    };
     return {
       send: (text) => input.push(text),
       stop: () => {
-        abort.abort();
-        input.close();
+        stopping = true;
+        // Killing the local client alone would leave a cloud session working: interrupt its turn first.
+        if (cloud && q) void Promise.race([q.interrupt(), sleep(5000)]).catch(() => undefined).finally(kill);
+        else kill();
       },
       done,
     };
   }
 
   /** Renders one SDK message; returns the outcome when it is a turn result. */
-  private handle(msg: SDKMessage, cwd: string, hooks: RunHooks): { text: string; isError: boolean; queued: number; structured?: unknown } | null {
+  private handle(msg: SDKMessage, ctx: RunContext, hooks: RunHooks): { text: string; isError: boolean; queued: number; structured?: unknown } | null {
+    const { cwd } = ctx;
     switch (msg.type) {
-      case 'system':
+      case 'system': {
+        // Relayed from a cloud session, init (and later cloud_session_delta) carry the cloud session's own id: the one
+        // `--cloud <id>` reattaches with. The worker's session_id beside it doesn't reattach.
+        const cloudId = (msg as { cloud_session?: { id?: unknown } }).cloud_session?.id;
+        if (ctx.cloud && typeof cloudId === 'string' && cloudId !== ctx.cloudId) {
+          ctx.cloudId = cloudId;
+          hooks.session(cloudId);
+          const url = cloudSessionUrl({ cloud: true, sessionId: cloudId });
+          if (url) hooks.lines([{ kind: 'system', text: `☁ Cloud session: ${url}` }]);
+        }
         if (msg.subtype === 'init') {
-          hooks.session(msg.session_id);
-          hooks.lines([{ kind: 'system', text: `✻ Claude Code ${msg.claude_code_version} · ${msg.model} · ${msg.permissionMode}` }]);
+          if (!ctx.cloud) hooks.session(msg.session_id);
+          hooks.lines([{ kind: 'system', text: `✻ Claude Code ${msg.claude_code_version} · ${msg.model} · ${msg.permissionMode}${ctx.cloud ? ' · ☁ cloud' : ''}` }]);
+        } else if ((msg as { subtype: string }).subtype === 'cloud_session_status') {
+          // the CLI's own notes on the cloud session (starting up, where to watch it)
+          const content = (msg as { content?: unknown }).content;
+          if (typeof content === 'string' && content.trim()) hooks.lines([{ kind: 'system', text: `☁ ${truncate(content.trim(), 300)}` }]);
         } else if (msg.subtype === 'api_retry') {
           hooks.lines([{ kind: 'error', text: `  ⚠ API ${msg.error} – retrying (attempt ${msg.attempt}/${msg.max_retries})` }]);
           hooks.activity(null, `Waiting on the API (${msg.error})`);
@@ -171,6 +221,7 @@ export class ClaudeRunner implements AgentRunner {
           hooks.lines([{ kind: 'system', text: '✻ Conversation compacted' }]);
         }
         return null;
+      }
 
       case 'assistant': {
         if (msg.error) {
@@ -186,7 +237,10 @@ export class ClaudeRunner implements AgentRunner {
             hooks.lines([{ kind: 'thinking', text: '✻ Thinking…' }]);
             hooks.activity(null, 'Thinking…');
           } else if (block.type === 'tool_use') {
-            const rendered = renderToolUse(block.name, (block.input ?? {}) as Record<string, unknown>, cwd);
+            const call: ToolCall = { name: block.name, input: (block.input ?? {}) as Record<string, unknown> };
+            ctx.calls.set(block.id, call);
+            ctx.lastUrl = appUrl(call) ?? ctx.lastUrl;
+            const rendered = renderToolUse(call.name, call.input, cwd);
             hooks.lines(nested ? rendered.lines.map((l) => ({ ...l, text: `    ${l.text}` })) : rendered.lines);
             if (rendered.activity || rendered.status) hooks.activity(rendered.status ?? null, rendered.activity ?? '');
           }
@@ -196,9 +250,18 @@ export class ClaudeRunner implements AgentRunner {
 
       case 'user': {
         const content = msg.message.content;
-        if (Array.isArray(content) && msg.parent_tool_use_id === null) {
-          for (const block of content) {
-            if (block.type === 'tool_result') hooks.lines(renderToolResult(block as unknown as { type: string }));
+        if (!Array.isArray(content)) return null;
+        for (const block of content) {
+          if (block.type !== 'tool_result') continue;
+          const call = ctx.calls.get(block.tool_use_id);
+          ctx.calls.delete(block.tool_use_id);
+          if (msg.parent_tool_use_id === null) hooks.lines(renderToolResult(block as unknown as { type: string }));
+          // an image the agent (or a subagent) looked at goes on its laptop screen, like our browser tool's frames
+          const frame = screenshotFrame(block as unknown as { type: string }, call, ctx.lastUrl, Date.now());
+          if (frame) {
+            hooks.browser(frame);
+            const page = /^https?:\/\//.test(frame.url);
+            hooks.activity(page ? 'testing' : null, `${page ? 'Checking a screenshot of' : 'Looking at'} ${truncate(frame.url, 60)}`);
           }
         }
         return null;

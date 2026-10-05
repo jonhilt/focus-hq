@@ -193,6 +193,11 @@ export interface Agent {
   issue: { number: number; title: string; url: string };
   /** Chosen when the agent is hired. Missing = the model's default effort. */
   effort?: Effort;
+  /**
+   * Works in a Claude Code cloud session instead of on this machine: it pushes its own branch, and `sessionId` is the
+   * cloud session's id (session_…). Never set on the QA officer.
+   */
+  cloud?: boolean;
   desk: number;
   status: AgentStatus;
   /** Short human description of what the agent is doing right now. */

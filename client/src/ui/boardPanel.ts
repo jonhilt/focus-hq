@@ -6,7 +6,7 @@ import { api } from '../net/api';
 import { state } from '../net/state';
 import { columns } from '../world/board';
 import { statusLine } from '../world/character';
-import { effortPicker, pickedEffort, statusIcon } from './agentPanel';
+import { effortPicker, pickedCloud, pickedEffort, statusIcon, wherePicker } from './agentPanel';
 import type { BoardTab, Ui } from './context';
 import { busy, fill, h, timeAgo } from './dom';
 import { linkHealth } from './previewPanel';
@@ -34,6 +34,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
 
   // the board re-renders as agents report progress, so remember each issue's pick across renders
   const efforts = new Map<string, Effort | undefined>();
+  const clouds = new Map<string, boolean>();
 
   const render = () => {
     const p = state.project(projectId);
@@ -51,10 +52,12 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
       const key = `${issue.repo}#${issue.number}`;
       const effort = effortPicker(efforts.get(key));
       effort.onchange = () => efforts.set(key, pickedEffort(effort));
+      const where = wherePicker(clouds.get(key));
+      where.onchange = () => clouds.set(key, pickedCloud(where));
       const assign = h('button', { class: 'btn small primary', title: full ? 'Agents beyond the limit wait in a queue' : '' }, full ? '⏳ Queue agent' : '🤖 Assign agent');
       assign.onclick = () =>
         void busy(assign, async () => {
-          const agent = await api.hire(projectId, issue, pickedEffort(effort));
+          const agent = await api.hire(projectId, issue, pickedEffort(effort), pickedCloud(where));
           ui.hud.toast('success', `${agent.name} is on #${issue.number}`, { label: 'Watch', run: () => ui.goToAgent(agent.id) });
         }, ui.error);
       todo.append(
@@ -65,7 +68,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
             ...issue.labels.slice(0, 4).map((l) => h('span', { class: 'chip' }, l)),
             h('span', null, timeAgo(Date.parse(issue.createdAt))),
           ),
-          h('div', { class: 'actions' }, assign, effort, h('a', { class: 'btn small', href: issue.url, target: '_blank', rel: 'noreferrer' }, 'Open ↗')),
+          h('div', { class: 'actions' }, assign, effort, where, h('a', { class: 'btn small', href: issue.url, target: '_blank', rel: 'noreferrer' }, 'Open ↗')),
         ),
       );
     }
@@ -75,7 +78,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
     for (const a of cols.doing) {
       const note = h('div', { class: `note doing ${a.status}`, title: 'Open their laptop' },
         h('div', { class: 't' }, h('span', { class: 'dot', style: `background:${UNIFORM[a.avatar.division]};margin-right:6px;vertical-align:-2px` }), `${a.name} · #${a.issue.number} ${a.issue.title}`),
-        h('div', { class: 'm' }, h('span', { class: 'chip' }, `${statusIcon(a)} ${a.status}`), h('span', { class: 'chip' }, `🧠 ${a.effort ?? 'default'}`), multi ? h('span', { class: 'chip' }, a.repo.split('/')[1]) : null, h('span', null, statusLine(a))),
+        h('div', { class: 'm' }, h('span', { class: 'chip' }, `${statusIcon(a)} ${a.status}`), h('span', { class: 'chip' }, `🧠 ${a.effort ?? 'default'}`), a.cloud ? h('span', { class: 'chip' }, '☁ cloud') : null, multi ? h('span', { class: 'chip' }, a.repo.split('/')[1]) : null, h('span', null, statusLine(a))),
       );
       note.onclick = () => ui.openAgent(a.id);
       doing.append(note);

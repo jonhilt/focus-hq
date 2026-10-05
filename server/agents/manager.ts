@@ -6,7 +6,8 @@ import type { GitHubProvider } from '../github/provider';
 import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
-import { COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, systemAppend } from './prompts';
+import { afterCloudRun, carryOnInNewSession } from './cloud';
+import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
 import { evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
 import type { QaLoopEvent } from './qaLoop';
 import { qaNextStep } from './qaLoop';
@@ -77,7 +78,8 @@ export class AgentManager {
 
   // ---------------------------------------------------------------- hiring
 
-  hire(projectId: string, repo: string, issue: { number: number; title?: string; url?: string }, effort?: Effort): Agent {
+  /** `cloud` puts them in a Claude Code cloud session instead of on this machine. */
+  hire(projectId: string, repo: string, issue: { number: number; title?: string; url?: string }, how: { effort?: Effort; cloud?: boolean } = {}): Agent {
     const id = newId('agent');
     const title = issue.title ?? `Issue #${issue.number}`;
     return this.seat(projectId, repo, {
@@ -86,7 +88,8 @@ export class AgentManager {
       issue: { number: issue.number, title, url: issue.url ?? `https://github.com/${repo}/issues/${issue.number}` },
       branch: `focus/${issue.number}-${slugify(title, 30) || 'issue'}-${id.slice(-4)}`,
       baseBranch: 'main',
-      effort,
+      effort: how.effort,
+      cloud: how.cloud || undefined,
     });
   }
 
@@ -116,7 +119,7 @@ export class AgentManager {
     return [...this.store.agents.values()].find((a) => a.task !== 'review' && a.repo === repo && a.pr?.number === number);
   }
 
-  private seat(projectId: string, repo: string, work: Pick<Agent, 'id' | 'task' | 'issue' | 'branch' | 'baseBranch' | 'pr' | 'effort'>): Agent {
+  private seat(projectId: string, repo: string, work: Pick<Agent, 'id' | 'task' | 'issue' | 'branch' | 'baseBranch' | 'pr' | 'effort' | 'cloud'>): Agent {
     const project = this.store.project(projectId);
     if (!project.repos.includes(repo)) throw new Error(`${repo} is not connected to ${project.name}`);
     const existing = [...this.store.agents.values()].find(
@@ -140,7 +143,7 @@ export class AgentManager {
     };
     this.store.putAgent(agent);
     this.hub.send({ type: 'agent', agent });
-    this.print(agent, [{ kind: 'system', text: `✻ ${name} joined ${project.name} to work on ${repo}#${work.issue.number} (${work.effort ?? 'default'} effort)` }]);
+    this.print(agent, [{ kind: 'system', text: `✻ ${name} joined ${project.name} to work on ${repo}#${work.issue.number} (${work.effort ?? 'default'} effort${work.cloud ? ', in the cloud' : ''})` }]);
     this.schedule();
     return agent;
   }
@@ -209,7 +212,7 @@ export class AgentManager {
         case 'fix': {
           const review = this.store.reviews.get(prKey(agent.repo, agent.issue.number));
           if (!review?.report) throw new Error(`QA's report on PR #${agent.issue.number} is gone, so there's nothing to fix`);
-          prompt = fixPrompt({ number: agent.issue.number, branch: agent.branch }, { sha: review.sha, report: review.report });
+          prompt = fixPrompt({ number: agent.issue.number, branch: agent.branch }, { sha: review.sha, report: review.report }, agent.cloud);
           startPoint = agent.branch;
           break;
         }
@@ -217,6 +220,11 @@ export class AgentManager {
       this.print(agent, [{ kind: 'system', text: `✻ Setting up a worktree for ${agent.repo} on ${agent.branch}` }]);
       this.update(agent, { activity: 'Cloning the repository' });
       await this.workspace.create(agent.repo, agent.id, agent.branch, startPoint);
+      if (agent.cloud) {
+        // a cloud session clones its branch from GitHub, so a new one has to be there first
+        this.update(agent, { activity: 'Publishing the branch for the cloud session' });
+        await this.workspace.publish(this.workspace.dir(agent.id), agent.branch);
+      }
       if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
       if (rt.inbox.length) prompt += `\n\nNotes from your manager:\n${rt.inbox.splice(0).map((m) => `- ${m}`).join('\n')}`;
       await this.runSession(agent, prompt);
@@ -283,6 +291,7 @@ export class AgentManager {
         settings: this.store.settings,
         effort: agent.effort,
         outputSchema: review ? QA_SCHEMA : undefined,
+        cloud: agent.cloud ? { branch: agent.branch } : undefined,
       },
       this.hooks(agent),
     );
@@ -299,6 +308,11 @@ export class AgentManager {
       this.fixEnded(agent, 'stopped');
       this.schedule();
       return;
+    }
+    if (agent.cloud && carryOnInNewSession(outcome, !!resumeSessionId)) {
+      // everything the old session did is on the branch: a new one picks it up from there
+      this.print(agent, [{ kind: 'system', text: `✻ Couldn't get back into the cloud session (${truncate(outcome.error ?? 'no reason given', 200)}) – starting a new one on ${agent.branch}` }]);
+      return this.runSession(agent, carryOnPrompt(agent, prompt));
     }
     if (rt.inbox.length) {
       // The manager wrote while the session was wrapping up: carry on in the same conversation.
@@ -318,7 +332,17 @@ export class AgentManager {
     rt.busy = true;
     try {
       const dir = this.workspace.dir(agent.id);
-      if (!rt.nudged && (await this.workspace.hasUncommittedChanges(dir))) {
+      if (agent.cloud) {
+        // a cloud agent pushed its work to GitHub: bring it into the worktree, where the checks below look
+        const before = await this.workspace.head(dir);
+        this.update(agent, { activity: `Fetching ${agent.branch} from GitHub` });
+        await this.workspace.pull(dir, agent.branch);
+        if (afterCloudRun({ before, after: await this.workspace.head(dir), nudged: rt.nudged }) === 'nudge') {
+          rt.nudged = true;
+          this.print(agent, [{ kind: 'system', text: `✻ Nothing new on ${agent.branch} – asking the agent to push their work` }]);
+          return await this.runSession(agent, pushNudge(agent), agent.sessionId);
+        }
+      } else if (!rt.nudged && (await this.workspace.hasUncommittedChanges(dir))) {
         rt.nudged = true;
         this.print(agent, [{ kind: 'system', text: '✻ Uncommitted changes left behind – asking the agent to commit them' }]);
         return await this.runSession(agent, COMMIT_NUDGE, agent.sessionId);
@@ -335,9 +359,13 @@ export class AgentManager {
         this.hub.toast('info', `${agent.name} finished #${agent.issue.number} without code changes`, agent.id);
         return;
       }
-      this.update(agent, { status: 'pushing', activity: `Pushing ${ahead} commit${ahead === 1 ? '' : 's'}` });
-      this.print(agent, [{ kind: 'system', text: `✻ Pushing ${agent.branch}` }]);
-      await this.workspace.push(dir, agent.branch);
+      if (agent.cloud) {
+        this.print(agent, [{ kind: 'system', text: `✻ ${ahead} commit${ahead === 1 ? '' : 's'} on ${agent.branch}, pushed from the cloud session` }]);
+      } else {
+        this.update(agent, { status: 'pushing', activity: `Pushing ${ahead} commit${ahead === 1 ? '' : 's'}` });
+        this.print(agent, [{ kind: 'system', text: `✻ Pushing ${agent.branch}` }]);
+        await this.workspace.push(dir, agent.branch);
+      }
 
       let pr = agent.pr ?? (await this.github.findPullRequest(agent.repo, agent.branch));
       if (pr) {
@@ -566,7 +594,7 @@ export class AgentManager {
       const owner = this.prOwner(review.repo, review.number);
       if (owner) {
         this.putReview({ ...review, followUp: { kind: 'fixing', agentId: owner.id, agentName: owner.name } });
-        this.message(owner.id, fixPrompt({ number: review.number, branch: owner.branch }, { sha: review.sha, report }));
+        this.message(owner.id, fixPrompt({ number: review.number, branch: owner.branch }, { sha: review.sha, report }, owner.cloud));
         this.hub.toast('info', `🔧 ${where} failed QA – back to ${owner.name}`, owner.id);
         return;
       }

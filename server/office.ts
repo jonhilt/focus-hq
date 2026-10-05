@@ -153,7 +153,7 @@ export class Office {
   // ---------------------------------------------------------------- issues and pull requests
 
   /** `assign` hires an agent for the new issue straight away; `fromDraft` clears the planner's draft once it's filed. */
-  async createIssue(projectId: string, repo: string, title: string, body: string, labels: string[], assign?: { effort?: Effort }, fromDraft = false) {
+  async createIssue(projectId: string, repo: string, title: string, body: string, labels: string[], assign?: { effort?: Effort; cloud?: boolean }, fromDraft = false) {
     const project = this.store.project(projectId);
     if (!project.repos.includes(repo)) throw new Error(`${repo} is not part of ${project.name}`);
     if (!title.trim()) throw new Error('An issue needs a title');
@@ -165,7 +165,7 @@ export class Office {
       board.issues.push(issue);
       this.hub.send({ type: 'board', board });
     }
-    const agent = assign ? this.agents.hire(projectId, repo, issue, assign.effort) : undefined;
+    const agent = assign ? this.agents.hire(projectId, repo, issue, assign) : undefined;
     this.boardChanged(projectId);
     return { issue, agent };
   }

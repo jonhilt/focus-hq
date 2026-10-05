@@ -72,6 +72,11 @@ export class DemoRunner implements AgentRunner {
     const files = FILES[kind];
     const accent = ['#ff8a5b', '#5bc0eb', '#9bc53d', '#c879ff'][issueNumber % 4];
 
+    // a cloud agent pushes its own branch: that's how its work reaches the office
+    const push = async () => {
+      if (req.cloud) await tool('Bash', { command: `git push origin HEAD:${req.cloud.branch}` }, [`To github.com:${repo}.git`, `   4f2a91c..9e1d0b7  HEAD -> ${req.cloud.branch}`]);
+    };
+
     const handleInbox = async () => {
       while (inbox.length) {
         const message = inbox.shift()!;
@@ -81,6 +86,7 @@ export class DemoRunner implements AgentRunner {
         await tool('Edit', { file_path: `/work/${file}`, old_string: '// TODO: handle edge case', new_string: '// Handles the edge case the manager pointed out\nif (!input) return fallback;' }, ['Updated 1 file']);
         await tool('Bash', { command: 'npm test' }, ['Tests: 44 passed, 44 total']);
         await tool('Bash', { command: 'git commit -am "Address manager feedback"' }, ['[branch 4f2a91c] Address manager feedback', ' 1 file changed, 3 insertions(+)']);
+        await push();
       }
     };
 
@@ -154,8 +160,10 @@ export class DemoRunner implements AgentRunner {
 
     const script = async (): Promise<RunOutcome> => {
       if (req.outputSchema) return qaScript();
-      hooks.session(req.resumeSessionId ?? `demo-${randomBytes(4).toString('hex')}`);
-      hooks.lines([{ kind: 'system', text: '✻ Claude Code (demo) · pretend model · acceptEdits' }]);
+      const sessionId = req.resumeSessionId ?? `${req.cloud ? 'session_demo' : 'demo-'}${randomBytes(4).toString('hex')}`;
+      hooks.session(sessionId);
+      hooks.lines([{ kind: 'system', text: `✻ Claude Code (demo) · pretend model · acceptEdits${req.cloud ? ' · ☁ cloud' : ''}` }]);
+      if (req.cloud) hooks.lines([{ kind: 'system', text: `☁ Cloud session: https://claude.ai/code/${sessionId}` }]);
       // a follow-up message, or QA's findings handed to an agent seated on the PR to fix them
       if (req.resumeSessionId || /^QA failed/.test(req.prompt)) {
         inbox.unshift(req.prompt);
@@ -211,10 +219,19 @@ export class DemoRunner implements AgentRunner {
         await tool('Bash', { command: 'npm run dev &', run_in_background: true }, ['VITE ready on http://localhost:5173']);
         const pages = ['/', kind === 'game' ? '/play' : '/products/42', kind === 'game' ? '/scores' : '/cart'];
         for (let step = 0; step < 3; step++) {
-          const name = step === 0 ? 'open' : step === 1 ? 'click' : 'screenshot';
           const url = `http://localhost:5173${pages[step]}`;
-          await tool(`mcp__browser__${name}`, step === 1 ? { text: 'Add to cart' } : { url }, [`URL: ${url}`, '[screenshot]']);
-          hooks.browser({ url, title: title.slice(0, 40), mock: { heading: title, accent, step }, at: Date.now() });
+          if (req.cloud) {
+            // in the cloud there's no office browser: a Playwright script saves a screenshot, and reading it puts it on the laptop
+            const file = `/tmp/shots/${step + 1}.png`;
+            await tool('Bash', { command: `node shot.mjs ${url} ${file}` }, [`Saved ${file}`]);
+            await tool('Read', { file_path: file }, ['[screenshot]']);
+            hooks.browser({ url, title: `${step + 1}.png`, mock: { heading: title, accent, step }, at: Date.now() });
+            hooks.activity('testing', `Checking a screenshot of ${url}`);
+          } else {
+            const name = step === 0 ? 'open' : step === 1 ? 'click' : 'screenshot';
+            await tool(`mcp__browser__${name}`, step === 1 ? { text: 'Add to cart' } : { url }, [`URL: ${url}`, '[screenshot]']);
+            hooks.browser({ url, title: title.slice(0, 40), mock: { heading: title, accent, step }, at: Date.now() });
+          }
           await wait(1.5, 3);
         }
       }
@@ -223,6 +240,7 @@ export class DemoRunner implements AgentRunner {
         `[focus/issue-${issueNumber} a1b2c3d] ${title}`,
         ' 3 files changed, 58 insertions(+), 9 deletions(-)',
       ]);
+      await push();
       const summary = `## Summary\n\nResolves "${title}".\n\n- Updated ${pick(files, 2).join(' and ')}\n- Added tests in \`test/issue-${issueNumber}.test.ts\`\n\n## Testing\n\n- \`npm test\` passes${kind !== 'api' ? '\n- Checked the flow in the browser' : ''}`;
       await say('Done! Committed the change with tests. Summary for the pull request:');
       hooks.lines(summary.split('\n').map((text) => ({ kind: 'text', text: `  ${text}` })));
@@ -260,6 +278,8 @@ export const demoWorkspace: WorkspaceOps = {
   // demo agents always commit something, so every session ends on a new commit
   head: async () => randomBytes(5).toString('hex'),
   push: async () => sleep(800),
+  publish: async () => sleep(400),
+  pull: async () => sleep(400),
   // no real checkout: the manager falls back to the PR's head as GitHub reports it
   checkoutPullRequest: async () => {
     await sleep(600);

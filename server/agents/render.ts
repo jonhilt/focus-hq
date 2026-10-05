@@ -1,4 +1,4 @@
-import type { AgentStatus, TermLine } from '../../shared/types';
+import type { AgentStatus, BrowserFrame, TermLine } from '../../shared/types';
 import { truncate } from '../util';
 
 type Line = Omit<TermLine, 't'>;
@@ -11,7 +11,50 @@ export interface Rendered {
 
 type Block = { type: string; [key: string]: unknown };
 
+/** A tool call, remembered until its result comes back. */
+export interface ToolCall {
+  name: string;
+  input: Record<string, unknown>;
+}
+
 const str = (v: unknown) => (typeof v === 'string' ? v : v === undefined ? '' : JSON.stringify(v));
+
+const LOCAL_URL = /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::\d+)?[^\s'"`)<>\\]*/g;
+
+/**
+ * The page a tool call points a browser at, so a screenshot that comes back later can say what it shows: a browser
+ * tool's `url`, or the last local address in a command or script ("node shot.mjs http://localhost:5173/cart").
+ */
+export function appUrl(call: ToolCall): string | undefined {
+  if (call.name === 'WebFetch' || call.name === 'WebSearch') return undefined;
+  if (typeof call.input.url === 'string' && /^https?:\/\//.test(call.input.url)) return call.input.url;
+  const found = Object.values(call.input).flatMap((v) => (typeof v === 'string' ? (v.match(LOCAL_URL) ?? []) : []));
+  return found.at(-1);
+}
+
+/** An image block as a data URL: the API's shape (source.base64) or MCP's (data + mimeType). */
+function imageUrl(block: Block): string | undefined {
+  if (block.type !== 'image') return undefined;
+  const source = block.source as { type?: unknown; media_type?: unknown; data?: unknown } | undefined;
+  if (source?.type === 'base64' && typeof source.data === 'string') {
+    return `data:${typeof source.media_type === 'string' ? source.media_type : 'image/png'};base64,${source.data}`;
+  }
+  if (typeof block.data === 'string') return `data:${typeof block.mimeType === 'string' ? block.mimeType : 'image/png'};base64,${block.data}`;
+  return undefined;
+}
+
+/**
+ * A screenshot the agent looked at (a PNG it read, another browser tool's capture), as a frame for its laptop screen.
+ * Our own browser tool streams its frames as it goes, so its results are left alone.
+ */
+export function screenshotFrame(result: Block, call: ToolCall | undefined, lastUrl: string | undefined, at: number): BrowserFrame | null {
+  if (call?.name.startsWith('mcp__browser__') || !Array.isArray(result.content)) return null;
+  const image = (result.content as Block[]).map(imageUrl).filter((url) => url !== undefined).at(-1);
+  if (!image) return null;
+  const file = typeof call?.input.file_path === 'string' ? call.input.file_path : undefined;
+  const name = file?.split(/[/\\]/).pop();
+  return { url: lastUrl ?? file ?? call?.name ?? 'screenshot', title: lastUrl ? name : undefined, image, at };
+}
 
 /** Turns Claude Code tool calls into terminal lines that look like Claude Code's own UI. */
 export function renderToolUse(name: string, input: Record<string, unknown>, cwd: string): Rendered {
