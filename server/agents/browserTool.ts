@@ -3,6 +3,7 @@ import type { Browser, BrowserContext, LaunchOptions, Page } from 'playwright';
 import { z } from 'zod';
 import type { BrowserFrame } from '../../shared/types';
 import { errorMessage, truncate } from '../util';
+import type { RunHooks } from './types';
 
 type CallResult = { content: ({ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string })[]; isError?: boolean };
 
@@ -78,14 +79,19 @@ export class BrowserPool {
   }
 }
 
-/** In-process MCP server exposing a real browser. Every action streams a screenshot to the agent's laptop. */
-export function browserMcpServer(pool: BrowserPool, agentId: string, onFrame: (frame: BrowserFrame) => void) {
-  const snapshot = async (tab: Tab, note: string): Promise<CallResult> => {
+/**
+ * In-process MCP server exposing a real browser. Every action streams a screenshot to the agent's laptop; the ones the
+ * agent asks for are kept as evidence too.
+ */
+export function browserMcpServer(pool: BrowserPool, agentId: string, hooks: Pick<RunHooks, 'browser' | 'screenshot'>) {
+  const snapshot = async (tab: Tab, note: string, keep?: (frame: BrowserFrame) => void): Promise<CallResult> => {
     const { page } = tab;
     const jpeg = await page.screenshot({ type: 'jpeg', quality: 60 });
     const title = await page.title().catch(() => '');
     const base64 = jpeg.toString('base64');
-    onFrame({ url: page.url(), title, image: `data:image/jpeg;base64,${base64}`, at: Date.now() });
+    const frame: BrowserFrame = { url: page.url(), title, image: `data:image/jpeg;base64,${base64}`, at: Date.now() };
+    hooks.browser(frame);
+    keep?.(frame);
     const text = await page
       .evaluate(() => document.body?.innerText ?? '')
       .catch(() => '');
@@ -97,12 +103,12 @@ export function browserMcpServer(pool: BrowserPool, agentId: string, onFrame: (f
     };
   };
 
-  const act = async (fn: (tab: Tab) => Promise<string>): Promise<CallResult> => {
+  const act = async (fn: (tab: Tab) => Promise<string>, keep?: (frame: BrowserFrame) => void): Promise<CallResult> => {
     try {
       const tab = await pool.tab(agentId);
       const note = await fn(tab);
       await tab.page.waitForLoadState('domcontentloaded', { timeout: 5000 }).catch(() => undefined);
-      return await snapshot(tab, note);
+      return await snapshot(tab, note, keep);
     } catch (err) {
       return { content: [{ type: 'text', text: `Browser error: ${errorMessage(err)}` }], isError: true };
     }
@@ -155,7 +161,7 @@ export function browserMcpServer(pool: BrowserPool, agentId: string, onFrame: (f
           return `Pressed ${key}`;
         }),
       ),
-      tool('screenshot', 'Screenshot the current page.', {}, () => act(async () => 'Screenshot')),
+      tool('screenshot', 'Screenshot the current page.', {}, () => act(async () => 'Screenshot', hooks.screenshot)),
       tool(
         'evaluate',
         'Run a JavaScript expression in the page and return its JSON result.',

@@ -32,6 +32,12 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.use(express.json({ limit: '2mb' }));
 
   r.get('/state', h(() => office.snapshot()));
+  r.get('/qa-shots/:file', async (req, res) => {
+    const file = param(req, 'file');
+    const bytes = /^[\w-]+\.(jpg|png|svg)$/.test(file) ? await store.readShot(file) : undefined;
+    if (!bytes) return void res.sendStatus(404);
+    res.type(file.split('.').pop()!).set('Cache-Control', 'max-age=31536000, immutable').send(bytes);
+  });
   r.post('/github/check', h(() => office.checkGitHub()));
   r.get('/github/repos', h(() => office.listRepos()));
   r.patch('/settings', h((req) => office.updateSettings(req.body ?? {})));

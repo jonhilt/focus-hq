@@ -1,6 +1,6 @@
 import { qaOfficerFor, UNIFORM } from '../../../shared/crew';
 import { autoQaFor, autoSendBackFor, qaBadge } from '../../../shared/qa';
-import type { QaReview } from '../../../shared/types';
+import type { QaReview, QaScreenshot } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { statusLine } from '../world/character';
@@ -98,6 +98,7 @@ function reviewCard(ui: Ui, review: QaReview): HTMLElement {
     report?.checks.length
       ? h('table', { class: 'qa-checks' }, ...report.checks.map((c) => h('tr', null, h('td', null, ICON[c.result]), h('td', null, h('strong', null, c.name)), h('td', null, c.details))))
       : null,
+    review.screenshots?.length ? h('div', { class: 'qa-shots' }, ...review.screenshots.map((s, i) => screenshot(s, i))) : null,
     report?.fixInstructions ? h('div', { class: 'qa-fix' }, h('strong', null, '🔧 What needs fixing'), h('p', null, report.fixInstructions)) : null,
     report?.commands.length
       ? h('details', null, h('summary', null, `🧪 ${report.commands.length} command${report.commands.length === 1 ? '' : 's'} run`),
@@ -108,5 +109,13 @@ function reviewCard(ui: Ui, review: QaReview): HTMLElement {
       review.commentUrl ? h('a', { class: 'btn small', href: review.commentUrl, target: '_blank', rel: 'noreferrer' }, 'Report on GitHub ↗') : null,
       h('a', { class: 'btn small', href: `https://github.com/${review.repo}/pull/${review.number}`, target: '_blank', rel: 'noreferrer' }, 'PR ↗'),
     ),
+  );
+}
+
+function screenshot(shot: QaScreenshot, index: number): HTMLElement {
+  const src = `/api/qa-shots/${shot.file}`;
+  return h('figure', null,
+    h('a', { href: src, target: '_blank', rel: 'noreferrer' }, h('img', { src, alt: shot.caption, loading: 'lazy' })),
+    h('figcaption', null, `${index + 1}. ${shot.caption}`, shot.url ? null : h('small', { class: 'planner-error' }, ' · not on GitHub (upload failed)')),
   );
 }

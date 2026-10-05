@@ -348,6 +348,17 @@ export interface QaReport {
   commands: { command: string; result: string }[];
   /** On a fail: what the developer should fix. */
   fixInstructions?: string;
+  /** A caption for each screenshot they took on purpose (mcp__browser__screenshot), in the order they took them. */
+  captions: string[];
+}
+
+/** A screenshot from a QA review, kept as evidence with the report. */
+export interface QaScreenshot {
+  caption: string;
+  /** The image as the office keeps it, served at /api/qa-shots/<file>. */
+  file: string;
+  /** The image on the repo's QA evidence branch. Missing if the upload failed. */
+  url?: string;
 }
 
 export type QaStatus = 'queued' | 'testing' | 'passed' | 'failed' | 'error';
@@ -365,6 +376,8 @@ export interface QaReview {
   /** The commit QA checked out and tested. */
   sha?: string;
   report?: QaReport;
+  /** The screenshots that go with the report, in the order they were taken. */
+  screenshots?: QaScreenshot[];
   /** The QA report posted on the pull request. */
   commentUrl?: string;
   /** The QA officer's session for this review, while their record is around. */

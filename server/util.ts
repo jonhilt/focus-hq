@@ -33,6 +33,15 @@ export function run(cmd: string, args: string[], opts: { cwd?: string; input?: s
   });
 }
 
+const IMAGE_EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/svg+xml': 'svg' };
+
+/** The bytes and file extension of a base64 image data URL; null for anything else. */
+export function decodeImage(dataUrl: string): { ext: string; bytes: Buffer } | null {
+  const m = /^data:([\w/+.-]+);base64,(.*)$/s.exec(dataUrl);
+  const ext = m && IMAGE_EXT[m[1]];
+  return ext ? { ext, bytes: Buffer.from(m[2], 'base64') } : null;
+}
+
 export function newId(prefix: string): string {
   return `${prefix}_${randomBytes(5).toString('hex')}`;
 }

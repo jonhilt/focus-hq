@@ -1,9 +1,12 @@
 import type { GitHubStatus, Issue, PullRequest } from '../../shared/types';
 import { errorMessage, run } from '../util';
-import { closingIssues, rollupChecks, type CreatePullRequest, type GitHubProvider, type IssueDetail, type PullRequestDetail, type RepoInfo } from './provider';
+import { closingIssues, evidenceUrl, QA_EVIDENCE_BRANCH, rollupChecks, type CreatePullRequest, type GitHubProvider, type IssueDetail, type PullRequestDetail, type RepoInfo } from './provider';
 
 const gh = (args: string[], input?: string) => run('gh', args, { input, timeoutMs: 120_000 });
 const ghJson = async <T>(args: string[]): Promise<T> => JSON.parse(await gh(args)) as T;
+/** A REST call with a JSON body on stdin (screenshots are too big for the command line). */
+const ghPost = async <T>(method: 'POST' | 'PUT', endpoint: string, body: unknown): Promise<T> =>
+  JSON.parse(await gh(['api', '-X', method, endpoint, '--input', '-'], JSON.stringify(body))) as T;
 
 interface RawIssue {
   number: number;
@@ -157,6 +160,31 @@ export class GhCliProvider implements GitHubProvider {
 
   async commentOnPullRequest(repo: string, number: number, body: string): Promise<string> {
     return (await gh(['pr', 'comment', String(number), '-R', repo, '--body-file', '-'], body)).trim().split('\n').pop() ?? '';
+  }
+
+  async uploadQaEvidence(repo: string, path: string, bytes: Buffer): Promise<string> {
+    await this.evidenceBranch(repo);
+    await ghPost('PUT', `repos/${repo}/contents/${path}`, {
+      message: `QA evidence: ${path}`,
+      content: bytes.toString('base64'),
+      branch: QA_EVIDENCE_BRANCH,
+    });
+    return evidenceUrl(repo, path);
+  }
+
+  /** Creates the QA evidence branch as an orphan (a root commit of its own) unless it's there already. */
+  private async evidenceBranch(repo: string): Promise<void> {
+    const exists = () => gh(['api', `repos/${repo}/git/ref/heads/${QA_EVIDENCE_BRANCH}`]).then(() => true, () => false);
+    if (await exists()) return;
+    const readme = `# QA evidence\n\nScreenshots the Focus QA officer took while testing pull requests, linked from their reports. This branch shares no history with the code and is never merged.\n`;
+    const tree = await ghPost<{ sha: string }>('POST', `repos/${repo}/git/trees`, { tree: [{ path: 'README.md', mode: '100644', type: 'blob', content: readme }] });
+    const commit = await ghPost<{ sha: string }>('POST', `repos/${repo}/git/commits`, { message: 'Start the QA evidence branch', tree: tree.sha, parents: [] });
+    try {
+      await ghPost('POST', `repos/${repo}/git/refs`, { ref: `refs/heads/${QA_EVIDENCE_BRANCH}`, sha: commit.sha });
+    } catch (err) {
+      // another room's QA officer may have just created it
+      if (!(await exists())) throw err;
+    }
   }
 
   async createPullRequest(repo: string, pr: CreatePullRequest): Promise<{ number: number; url: string }> {

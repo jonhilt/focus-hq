@@ -101,7 +101,7 @@ export class ClaudeRunner implements AgentRunner {
       effort: req.effort,
       systemPrompt: { type: 'preset', preset: 'claude_code', append: req.systemAppend },
       settingSources: ['user', 'project', 'local'],
-      mcpServers: { browser: browserMcpServer(this.browsers, req.agentId, (frame) => hooks.browser(frame)) },
+      mcpServers: { browser: browserMcpServer(this.browsers, req.agentId, hooks) },
       disallowedTools: ['AskUserQuestion', 'EnterPlanMode'],
       resume: req.resumeSessionId,
       outputFormat: req.outputSchema ? { type: 'json_schema', schema: req.outputSchema } : undefined,

@@ -1,13 +1,13 @@
 import { qaOfficerFor, randomAvatar } from '../../shared/crew';
 import { autoQaFor, autoSendBackFor, prKey, sameCommit } from '../../shared/qa';
-import type { Agent, AgentStatus, Effort, PermissionRequest, PullRequest, QaReview, TermLine } from '../../shared/types';
+import type { Agent, AgentStatus, BrowserFrame, Effort, PermissionRequest, PullRequest, QaReport, QaReview, QaScreenshot, TermLine } from '../../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, QA_DESK } from '../../shared/types';
 import type { GitHubProvider } from '../github/provider';
 import type { Hub } from '../hub';
 import type { Store } from '../store';
-import { errorMessage, newId, slugify, truncate } from '../util';
+import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
 import { COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, systemAppend } from './prompts';
-import { fixPrompt, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
+import { evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
 import type { QaLoopEvent } from './qaLoop';
 import { qaNextStep } from './qaLoop';
 import { type AgentRunner, type AgentSession, type RunHooks, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
@@ -21,6 +21,8 @@ interface Runtime {
   busy: boolean;
   /** The QA officer's instructions for the review in hand (they depend on the PR). */
   qaSystem?: string;
+  /** The screenshots the QA officer took on purpose this review: how many, and the last MAX_SCREENSHOTS of them. */
+  shots?: { taken: number; frames: BrowserFrame[] };
 }
 
 const FINISHED: AgentStatus[] = ['done', 'stopped', 'error'];
@@ -234,6 +236,13 @@ export class AgentManager {
       browser: (frame) => {
         this.store.browser.set(agent.id, frame);
         this.hub.send({ type: 'browser', id: agent.id, frame });
+      },
+      screenshot: (frame) => {
+        if (agent.task !== 'review') return;
+        rt.shots ??= { taken: 0, frames: [] };
+        rt.shots.taken++;
+        rt.shots.frames.push(frame);
+        if (rt.shots.frames.length > MAX_SCREENSHOTS) rt.shots.frames.shift();
       },
       session: (sessionId) => this.update(agent, { sessionId }),
       cost: (usd) => this.update(agent, { costUsd: usd }),
@@ -449,6 +458,7 @@ export class AgentManager {
     const review = this.store.reviews.get(prKey(agent.repo, pr.number));
     if (review) this.putReview({ ...review, status: 'testing', title: pr.title, sha, agentId: agent.id, error: undefined });
     rt.qaSystem = qaSystemAppend(agent, project, pr, sha);
+    rt.shots = undefined;
     let prompt = qaPrompt(agent.repo, pr, issues, review?.lastRound);
     if (rt.inbox.length) prompt += `\n\nNotes from your manager:\n${rt.inbox.splice(0).map((m) => `- ${m}`).join('\n')}`;
     await this.runSession(agent, prompt);
@@ -475,16 +485,18 @@ export class AgentManager {
     }
     const pass = report.verdict === 'pass';
     const review = this.store.reviews.get(prKey(agent.repo, number));
+    const screenshots = await this.keepScreenshots(agent, report, review?.sha);
     let commentUrl: string | undefined;
     try {
       this.update(agent, { activity: 'Posting the QA report on the PR' });
-      commentUrl = (await this.github.commentOnPullRequest(agent.repo, number, qaComment(report, { officer: agent.name, sha: review?.sha }))) || undefined;
+      const body = qaComment(report, { officer: agent.name, sha: review?.sha }, screenshots);
+      commentUrl = (await this.github.commentOnPullRequest(agent.repo, number, body)) || undefined;
       this.print(agent, [{ kind: 'system', text: `✻ Posted the QA report: ${commentUrl ?? 'done'}` }]);
     } catch (err) {
       this.print(agent, [{ kind: 'error', text: `✘ Couldn't post the QA report on the PR: ${errorMessage(err)}` }]);
     }
     const failedRounds = (review?.failedRounds ?? 0) + (pass ? 0 : 1);
-    const done: QaReview | undefined = review && { ...review, status: pass ? 'passed' : 'failed', report, commentUrl, failedRounds, finishedAt: Date.now(), error: undefined };
+    const done: QaReview | undefined = review && { ...review, status: pass ? 'passed' : 'failed', report, screenshots, commentUrl, failedRounds, finishedAt: Date.now(), error: undefined };
     if (done) this.putReview(done);
     this.print(agent, [{ kind: pass ? 'success' : 'error', text: `${pass ? '✅ QA passed' : '❌ QA failed'} PR #${number} · ${report.checks.length} checks` }]);
     this.update(agent, { status: 'done', activity: `${pass ? '✅ Passed' : '❌ Failed'} PR #${number}`, finishedAt: Date.now() });
@@ -492,6 +504,36 @@ export class AgentManager {
     this.boardChanged(agent.projectId);
     if (done) await this.qaNext(done, { kind: 'verdict', verdict: report.verdict, failedRounds });
     this.nextReview(agent.projectId);
+  }
+
+  /**
+   * Keeps the QA officer's screenshots for the station and uploads them to the repo's QA evidence branch. One that
+   * fails to upload stays out of the PR comment, and the error goes to their terminal.
+   */
+  private async keepScreenshots(agent: Agent, report: QaReport, sha: string | undefined): Promise<QaScreenshot[]> {
+    const rt = this.rt(agent.id);
+    const { taken, frames } = rt.shots ?? { taken: 0, frames: [] };
+    rt.shots = undefined;
+    const images = frames.map((f) => (f.image ? decodeImage(f.image) : null));
+    const captions = keptCaptions(report.captions, taken, frames.length);
+    const at = Date.now();
+    const screenshots: QaScreenshot[] = [];
+    if (frames.length) this.update(agent, { activity: `Uploading ${frames.length} screenshot${frames.length === 1 ? '' : 's'}` });
+    for (const [i, image] of images.entries()) {
+      if (!image) continue;
+      const file = `${slugify(agent.repo)}-${agent.issue.number}-${at}-${i + 1}.${image.ext}`;
+      this.store.saveShot(file, image.bytes);
+      const shot: QaScreenshot = { caption: captions[i], file };
+      try {
+        shot.url = await this.github.uploadQaEvidence(agent.repo, evidencePath(agent.issue.number, sha, at, i, image.ext), image.bytes);
+      } catch (err) {
+        this.print(agent, [{ kind: 'error', text: `✘ Couldn't upload screenshot ${i + 1} ("${truncate(shot.caption, 60)}"): ${errorMessage(err)}` }]);
+      }
+      screenshots.push(shot);
+    }
+    const uploaded = screenshots.filter((s) => s.url).length;
+    if (uploaded) this.print(agent, [{ kind: 'system', text: `✻ Uploaded ${uploaded} screenshot${uploaded === 1 ? '' : 's'} to the QA evidence branch` }]);
+    return screenshots;
   }
 
   // ---------------------------------------------------------------- sending failed PRs back

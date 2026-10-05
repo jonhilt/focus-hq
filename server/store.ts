@@ -42,6 +42,8 @@ export class Store {
   briefing: StoredBriefing | null = null;
   /** The latest QA review per pull request (by prKey). */
   reviews = new Map<string, QaReview>();
+  /** QA screenshots by file name, when not persisting (demo). */
+  private shots = new Map<string, Buffer>();
   private saveTimer: NodeJS.Timeout | null = null;
 
   constructor(private readonly persist: boolean) {}
@@ -158,19 +160,49 @@ export class Store {
   removeProject(id: string): void {
     this.projects = this.projects.filter((p) => p.id !== id);
     this.boards.delete(id);
-    for (const [key, review] of this.reviews) if (review.projectId === id) this.reviews.delete(key);
+    for (const review of [...this.reviews.values()]) if (review.projectId === id) this.removeReview(review.repo, review.number);
     this.save();
   }
 
   putReview(review: QaReview): void {
-    this.reviews.set(prKey(review.repo, review.number), review);
+    const key = prKey(review.repo, review.number);
+    this.dropShots(this.reviews.get(key), review);
+    this.reviews.set(key, review);
     this.save();
   }
 
   removeReview(repo: string, number: number): boolean {
-    const removed = this.reviews.delete(prKey(repo, number));
+    const key = prKey(repo, number);
+    this.dropShots(this.reviews.get(key));
+    const removed = this.reviews.delete(key);
     if (removed) this.save();
     return removed;
+  }
+
+  // ---- QA screenshots ----
+
+  saveShot(file: string, bytes: Buffer): void {
+    if (!this.persist) {
+      this.shots.set(file, bytes);
+      return;
+    }
+    fs.mkdirSync(paths.qaShots, { recursive: true });
+    fs.writeFileSync(path.join(paths.qaShots, file), bytes);
+  }
+
+  async readShot(file: string): Promise<Buffer | undefined> {
+    if (!this.persist) return this.shots.get(file);
+    return fsp.readFile(path.join(paths.qaShots, file)).catch(() => undefined);
+  }
+
+  /** Deletes the screenshots of a review that its replacement no longer shows. */
+  private dropShots(old: QaReview | undefined, replacement?: QaReview): void {
+    const keep = new Set(replacement?.screenshots?.map((s) => s.file));
+    for (const { file } of old?.screenshots ?? []) {
+      if (keep.has(file)) continue;
+      this.shots.delete(file);
+      if (this.persist) fs.rm(path.join(paths.qaShots, file), { force: true }, () => undefined);
+    }
   }
 
   setBriefing(briefing: StoredBriefing | null): void {

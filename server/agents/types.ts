@@ -5,6 +5,8 @@ export interface RunHooks {
   /** status null = keep the current status. */
   activity(status: AgentStatus | null, activity: string): void;
   browser(frame: BrowserFrame): void;
+  /** A screenshot the agent took on purpose (mcp__browser__screenshot), on top of the frame every action streams. */
+  screenshot(frame: BrowserFrame): void;
   session(sessionId: string): void;
   cost(totalUsd: number): void;
   /** The agent raises its hand. Resolves true when the manager approves. */

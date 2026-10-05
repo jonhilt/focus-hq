@@ -26,6 +26,12 @@ export interface PullRequestDetail {
   linkedIssues: number[];
 }
 
+/** The orphan branch QA's screenshots go on: no shared history with the code, never merged. */
+export const QA_EVIDENCE_BRANCH = 'focus-qa-evidence';
+
+/** How a file on the QA evidence branch is linked from a comment; works for private repos too. */
+export const evidenceUrl = (repo: string, path: string) => `https://github.com/${repo}/blob/${QA_EVIDENCE_BRANCH}/${path}?raw=true`;
+
 export interface CreatePullRequest {
   head: string;
   base: string;
@@ -47,6 +53,8 @@ export interface GitHubProvider {
   getPullRequest(repo: string, number: number): Promise<PullRequestDetail>;
   /** Posts a comment on a pull request and returns its URL. */
   commentOnPullRequest(repo: string, number: number, body: string): Promise<string>;
+  /** Commits a file to the repo's QA evidence branch, creating the branch on first use, and returns its URL. */
+  uploadQaEvidence(repo: string, path: string, bytes: Buffer): Promise<string>;
   createPullRequest(repo: string, pr: CreatePullRequest): Promise<{ number: number; url: string }>;
   mergePullRequest(repo: string, number: number, method: 'squash' | 'merge' | 'rebase'): Promise<void>;
   createRepo(name: string, opts: { owner?: string; private: boolean; description: string }): Promise<string>;

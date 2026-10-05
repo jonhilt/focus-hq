@@ -1,5 +1,5 @@
 import type { GitHubStatus, Issue, PullRequest } from '../../shared/types';
-import { closingIssues, type CreatePullRequest, type GitHubProvider, type IssueDetail, type PullRequestDetail, type RepoInfo } from './provider';
+import { closingIssues, evidenceUrl, type CreatePullRequest, type GitHubProvider, type IssueDetail, type PullRequestDetail, type RepoInfo } from './provider';
 
 interface FakeRepo {
   description: string;
@@ -164,6 +164,11 @@ export class DemoGitHub implements GitHubProvider {
     if (!pr) throw new Error(`PR #${number} not found in ${name}`);
     pr.comments = [...(pr.comments ?? []), body];
     return `${pr.url}#issuecomment-${pr.comments.length}`;
+  }
+
+  async uploadQaEvidence(name: string, path: string): Promise<string> {
+    this.repo(name);
+    return evidenceUrl(name, path);
   }
 
   async createPullRequest(name: string, req: CreatePullRequest) {

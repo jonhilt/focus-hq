@@ -1,9 +1,12 @@
-import type { Agent, QaReport, QaReview } from '../../shared/types';
+import type { Agent, QaReport, QaReview, QaScreenshot } from '../../shared/types';
 import type { IssueDetail, PullRequestDetail } from '../github/provider';
 import { truncate } from '../util';
 
 // The QA officer's instructions, their report's schema, and the PR comment the office posts. Pure, so they're unit
 // tested (qa.test.ts).
+
+/** How many of the screenshots QA takes on purpose go on the pull request: the last ones. */
+export const MAX_SCREENSHOTS = 8;
 
 /** JSON schema for the QA officer's structured report (the Agent SDK's outputFormat). */
 export const QA_SCHEMA: Record<string, unknown> = {
@@ -38,6 +41,11 @@ export const QA_SCHEMA: Record<string, unknown> = {
       },
     },
     fixInstructions: { type: 'string', description: 'When the verdict is fail: precise, actionable instructions for the developer.' },
+    screenshots: {
+      type: 'array',
+      description: 'One short caption per mcp__browser__screenshot call you made, in the order you took them. Empty if you took none.',
+      items: { type: 'string' },
+    },
   },
 };
 
@@ -74,15 +82,30 @@ export function parseQaReport(structured: unknown, text = ''): QaReport | null {
     })),
     commands: list(r.commands).map((c) => ({ command: String(c.command ?? '').trim(), result: String(c.result ?? '').trim() })),
     fixInstructions: r.verdict === 'fail' ? fix : undefined,
+    captions: Array.isArray(r.screenshots) ? r.screenshots.map((c) => String(c ?? '').trim()) : [],
   };
+}
+
+/**
+ * The caption for each screenshot kept, given QA's captions for all `taken` of them and that only the last `kept`
+ * survive. A screenshot QA didn't caption is just numbered.
+ */
+export function keptCaptions(captions: string[], taken: number, kept: number): string[] {
+  const first = taken - kept;
+  return Array.from({ length: kept }, (_, i) => captions[first + i] || `Screenshot ${first + i + 1}`);
+}
+
+/** Where a screenshot goes on the QA evidence branch: one folder per review round, so re-tests never collide. */
+export function evidencePath(pr: number, sha: string | undefined, at: number, index: number, ext: string): string {
+  return `pr-${pr}/${sha ? `${sha.slice(0, 7)}-` : ''}${at}/${index + 1}.${ext}`;
 }
 
 const ICON = { pass: '✅', fail: '❌', skip: '⏭️' } as const;
 /** A table cell: no pipes or line breaks to break the row. */
 const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>') || ' ';
 
-/** The QA report as a pull request comment. */
-export function qaComment(report: QaReport, by: { officer: string; sha?: string }): string {
+/** The QA report as a pull request comment, with the screenshots that made it to GitHub. */
+export function qaComment(report: QaReport, by: { officer: string; sha?: string }, screenshots: QaScreenshot[]): string {
   const pass = report.verdict === 'pass';
   const lines = [
     `## 🔍 QA report: ${pass ? '✅ Passed' : '❌ Failed'}`,
@@ -97,6 +120,12 @@ export function qaComment(report: QaReport, by: { officer: string; sha?: string 
     lines.push('', '<details><summary>🧪 Commands run</summary>', '', '| Command | Result |', '|---|---|', ...report.commands.map((c) => `| \`${cell(c.command)}\` | ${cell(c.result)} |`), '', '</details>');
   }
   if (!pass && report.fixInstructions) lines.push('', '### 🔧 What needs fixing', '', report.fixInstructions);
+  lines.push('', '### 📸 Screenshots');
+  if (!screenshots.length) lines.push('', 'No screenshots were taken during this review.');
+  screenshots.forEach((s, i) => {
+    const caption = s.caption.replace(/\r?\n/g, ' ');
+    lines.push('', `**${i + 1}. ${caption}**`, '', s.url ? `![${caption.replace(/[[\]]/g, '')}](${s.url})` : '_The image couldn\'t be uploaded._');
+  });
   lines.push('', `<sub>Posted by the Focus office. QA reviews and tests; the manager decides what merges.</sub>`);
   return lines.join('\n');
 }
@@ -116,11 +145,12 @@ How to test:
 2. Review the code as a careful reviewer would: \`git diff origin/${pr.baseBranch}...HEAD\`. Look for bugs, unhandled errors and edge cases, security problems, leftover debug code, and new logic without tests.
 3. Install dependencies if needed, then run the project's test suite, linters, type checks and build (whichever exist).
 4. If the change touches a web UI, start its dev server in the background and exercise the change with the mcp__browser__ tools: click through it, try the edge cases, and check the console for errors. Stop the server afterwards.
+   Call mcp__browser__screenshot on each state that shows the change working or failing: the last ${MAX_SCREENSHOTS} go on the pull request with your report, each with the caption you give it.
 5. You may write throwaway scripts to probe behaviour, but don't commit them.
 
 Rules: don't change the code under test, don't commit or push, and don't comment on, review or merge anything on GitHub: the office posts your report. Nobody can answer questions while you work, so make sensible calls and say what you assumed.
 
-Finish with the structured QA report: the verdict, a two to four sentence summary, every check you made (acceptance criteria first), the commands you ran with their results and, on a fail, precise fix instructions for the developer.
+Finish with the structured QA report: the verdict, a two to four sentence summary, every check you made (acceptance criteria first), the commands you ran with their results, a caption for each screenshot you took and, on a fail, precise fix instructions for the developer.
 `.trim();
 }
 

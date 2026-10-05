@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { QaReport } from '../../shared/types';
 import type { PullRequestDetail } from '../github/provider';
-import { fixPrompt, parseQaReport, qaComment, qaPrompt, qaSystemAppend } from './qa';
+import { evidencePath, fixPrompt, keptCaptions, parseQaReport, qaComment, qaPrompt, qaSystemAppend } from './qa';
 
 const report = (r: Partial<QaReport> = {}): QaReport => ({
   verdict: 'pass',
   summary: 'Saving for later works and survives a reload.',
   checks: [{ name: 'Item moves to Saved for later', result: 'pass', details: 'Clicked "Save for later" on the cart' }],
   commands: [{ command: 'npm test', result: '42 passed' }],
+  captions: [],
   ...r,
 });
 
@@ -48,13 +49,44 @@ describe('parseQaReport', () => {
 
   it('cleans up loose fields', () => {
     const parsed = parseQaReport({ verdict: 'pass', checks: [{ name: ' A ', result: 'weird' }, null, 'x'], commands: 'nope', fixInstructions: 'ignored on a pass' });
-    expect(parsed).toEqual({ verdict: 'pass', summary: '', checks: [{ name: 'A', result: 'pass', details: '' }], commands: [], fixInstructions: undefined });
+    expect(parsed).toEqual({ verdict: 'pass', summary: '', checks: [{ name: 'A', result: 'pass', details: '' }], commands: [], fixInstructions: undefined, captions: [] });
+  });
+
+  it('reads the screenshot captions in order', () => {
+    expect(parseQaReport({ verdict: 'pass', screenshots: [' Cart with 2 items ', 'Saved list', null] })?.captions).toEqual(['Cart with 2 items', 'Saved list', '']);
+    expect(parseQaReport({ verdict: 'pass', screenshots: 'nope' })?.captions).toEqual([]);
+  });
+});
+
+describe('keptCaptions', () => {
+  it('pairs each caption with its screenshot', () => {
+    expect(keptCaptions(['a', 'b'], 2, 2)).toEqual(['a', 'b']);
+  });
+
+  it('keeps the captions of the last screenshots when the early ones were dropped', () => {
+    expect(keptCaptions(['1', '2', '3', '4'], 4, 2)).toEqual(['3', '4']);
+  });
+
+  it('numbers screenshots QA didn’t caption', () => {
+    expect(keptCaptions(['first', ''], 5, 3)).toEqual(['Screenshot 3', 'Screenshot 4', 'Screenshot 5']);
+    expect(keptCaptions(['first', ''], 3, 3)).toEqual(['first', 'Screenshot 2', 'Screenshot 3']);
+  });
+
+  it('is empty without screenshots', () => {
+    expect(keptCaptions(['orphan caption'], 0, 0)).toEqual([]);
+  });
+});
+
+describe('evidencePath', () => {
+  it('gives each review round its own folder', () => {
+    expect(evidencePath(12, 'abc1234def', 1700000000000, 0, 'jpg')).toBe('pr-12/abc1234-1700000000000/1.jpg');
+    expect(evidencePath(12, undefined, 1700000000000, 2, 'svg')).toBe('pr-12/1700000000000/3.svg');
   });
 });
 
 describe('qaComment', () => {
   it('leads with the verdict, the tester and the commit', () => {
-    const body = qaComment(report(), { officer: 'Lt. Varga', sha: 'abc1234def5678' });
+    const body = qaComment(report(), { officer: 'Lt. Varga', sha: 'abc1234def5678' }, []);
     expect(body.split('\n')[0]).toBe('## 🔍 QA report: ✅ Passed');
     expect(body).toContain('Lt. Varga');
     expect(body).toContain('`abc1234`');
@@ -63,14 +95,37 @@ describe('qaComment', () => {
   });
 
   it('adds the fix instructions on a fail', () => {
-    const body = qaComment(report({ verdict: 'fail', fixInstructions: 'Guard the empty cart in cart.ts' }), { officer: 'Lt. Varga' });
+    const body = qaComment(report({ verdict: 'fail', fixInstructions: 'Guard the empty cart in cart.ts' }), { officer: 'Lt. Varga' }, []);
     expect(body).toContain('❌ Failed');
     expect(body).toContain('### 🔧 What needs fixing\n\nGuard the empty cart in cart.ts');
   });
 
   it('keeps pipes and line breaks from breaking the table', () => {
-    const body = qaComment(report({ checks: [{ name: 'a | b', result: 'fail', details: 'line 1\nline 2' }] }), { officer: 'X' });
+    const body = qaComment(report({ checks: [{ name: 'a | b', result: 'fail', details: 'line 1\nline 2' }] }), { officer: 'X' }, []);
     expect(body).toContain('| ❌ | a \\| b | line 1<br>line 2 |');
+  });
+
+  it('embeds the screenshots in order, each under its caption', () => {
+    const body = qaComment(report(), { officer: 'X' }, [
+      { caption: 'Cart with 2 items', file: 'a.jpg', url: 'https://github.com/acme/shop/blob/focus-qa-evidence/pr-12/1/1.jpg?raw=true' },
+      { caption: 'Saved [for] later', file: 'b.jpg', url: 'https://github.com/acme/shop/blob/focus-qa-evidence/pr-12/1/2.jpg?raw=true' },
+    ]);
+    expect(body).toContain('### 📸 Screenshots');
+    const first = body.indexOf('**1. Cart with 2 items**\n\n![Cart with 2 items](https://github.com/acme/shop/blob/focus-qa-evidence/pr-12/1/1.jpg?raw=true)');
+    const second = body.indexOf('**2. Saved [for] later**\n\n![Saved for later](https://github.com/acme/shop/blob/focus-qa-evidence/pr-12/1/2.jpg?raw=true)');
+    expect(first).toBeGreaterThan(-1);
+    expect(second).toBeGreaterThan(first);
+  });
+
+  it('says so when the review has no screenshots', () => {
+    expect(qaComment(report(), { officer: 'X' }, [])).toContain('### 📸 Screenshots\n\nNo screenshots were taken during this review.');
+  });
+
+  it('keeps the caption but leaves out an image that failed to upload', () => {
+    const body = qaComment(report(), { officer: 'X' }, [{ caption: 'Empty cart', file: 'a.jpg' }]);
+    expect(body).toContain('**1. Empty cart**\n\n_The image couldn\'t be uploaded._');
+    expect(body).not.toContain('![');
+    expect(body).not.toContain('No screenshots');
   });
 });
 
