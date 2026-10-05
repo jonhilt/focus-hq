@@ -1,3 +1,4 @@
+import { UNIFORM } from '../../../shared/crew';
 import { prKey, qaBadge } from '../../../shared/qa';
 import type { Effort } from '../../../shared/types';
 import { api } from '../net/api';
@@ -72,7 +73,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
     if (!cols.doing.length) doing.append(h('div', { class: 'empty' }, 'Nobody is working on anything.'));
     for (const a of cols.doing) {
       const note = h('div', { class: `note doing ${a.status}`, title: 'Open their laptop' },
-        h('div', { class: 't' }, h('span', { class: 'dot', style: `background:${a.avatar.shirt};margin-right:6px;vertical-align:-2px` }), `${a.name} · #${a.issue.number} ${a.issue.title}`),
+        h('div', { class: 't' }, h('span', { class: 'dot', style: `background:${UNIFORM[a.avatar.division]};margin-right:6px;vertical-align:-2px` }), `${a.name} · #${a.issue.number} ${a.issue.title}`),
         h('div', { class: 'm' }, h('span', { class: 'chip' }, `${statusIcon(a)} ${a.status}`), h('span', { class: 'chip' }, `🧠 ${a.effort ?? 'default'}`), multi ? h('span', { class: 'chip' }, a.repo.split('/')[1]) : null, h('span', null, statusLine(a))),
       );
       note.onclick = () => ui.openAgent(a.id);
@@ -145,7 +146,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
         h('div', { class: 'note pr' },
           h('div', { class: 't' }, `PR #${pr.number} ${pr.title}`),
           h('div', { class: 'm' },
-            agent ? h('span', { class: 'chip' }, h('span', { class: 'dot', style: `background:${agent.avatar.shirt}` }), agent.name) : pr.author ? h('span', { class: 'chip' }, `@${pr.author}`) : null,
+            agent ? h('span', { class: 'chip' }, h('span', { class: 'dot', style: `background:${UNIFORM[agent.avatar.division]}` }), agent.name) : pr.author ? h('span', { class: 'chip' }, `@${pr.author}`) : null,
             multi ? h('span', { class: 'chip' }, pr.repo.split('/')[1]) : null,
             qaChip,
             h('span', { class: 'chip', style: pr.checks === 'failing' ? 'background:#ffc9c9' : '' }, checks),

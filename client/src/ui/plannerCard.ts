@@ -1,4 +1,4 @@
-import { plannerFor } from '../../../shared/crew';
+import { plannerFor, UNIFORM } from '../../../shared/crew';
 import type { IssueDraft } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
@@ -54,7 +54,7 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
     renderedKey = key;
 
     const header = h('div', { class: 'planner-head' },
-      h('span', { class: 'planner-badge', style: `background:${planner.avatar.shirt}` }, '🖖'),
+      h('span', { class: 'planner-badge', style: `background:${UNIFORM[planner.avatar.division]}` }, '🖖'),
       h('div', { class: 'grow' },
         h('strong', null, planner.name),
         h('small', null, `Operations · drafts issues for ${project.name}`),

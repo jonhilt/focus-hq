@@ -11,7 +11,7 @@ A cartoon, first-person 3D office where a swarm of **Claude Code** agents works 
 - The office is a **starship** in the style of *Star Trek: Lower Decks*: bulkhead corridors, LCARS signs and consoles, viewports onto space (with stars drifting past as the ship cruises), doors that swoosh open as you walk up, and the engines' thrum underneath it all (mute it from the pause menu).
 - Every **project** gets a **room**. A project can span several GitHub repositories.
 - Each room has **scenery**: its walls and ceiling vanish into a landscape, so the desks sit on a beach, in a forest clearing, in a desert canyon, on the moon, on a city rooftop at dusk or in a vast library. A faint holodeck grid shows where the walls are when you get close. Pick one per project in the Manager's office, or keep plain office walls. Empty rooms are bare holodecks.
-- Every **agent** is a separate Claude Code instance (via the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk)) with its own desk, laptop and git worktree.
+- Every **agent** is a separate Claude Code instance (via the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk)) with its own desk, laptop and git worktree. The crew wear Starfleet uniforms in their division's colour (command red, operations gold, sciences blue) and come from all over the Federation.
 - Walk up behind an agent and you see their **laptop screen**: the live Claude Code terminal and, while they test, the **browser** they are driving.
 - Each room has an **operations officer** at its **＋ New issue** stand. Give them a rough idea and they read the project's code and write it up as an issue with context and **acceptance criteria**, ready for you to edit and file.
 - Bigger or fuzzier ideas go to a **briefing** in the **observation lounge** behind the Manager's office. The officer reads the code, grills you one question at a time and keeps a brief on the wall screen. When you wrap up, they write one issue to the room's stand.
@@ -194,7 +194,7 @@ The data dir is deliberately outside this repo. Otherwise agents working in a wo
 
 ```
 shared/types.ts           types shared by server and client (Project, Agent, Board, IssueDraft, events…)
-shared/crew.ts            permanent crew per room (the ops officer, the QA officer), derived from the project id
+shared/crew.ts            how the crew look (uniforms, species), and the permanent crew per room (the ops officer, the QA officer), derived from the project id
 shared/qa.ts              QA decisions shared by server and board (badges, stale verdicts)
 server/
   supervise.ts            runs index.ts and restarts it after an auto update

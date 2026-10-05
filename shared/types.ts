@@ -134,11 +134,23 @@ export interface BrowserFrame {
   at: number;
 }
 
+/** Starfleet divisions, told apart by uniform colour: command red, operations gold, sciences blue. */
+export type Division = 'command' | 'operations' | 'sciences';
+/** Pips on the collar: an ensign wears one, a lieutenant two. */
+export type Rank = 'ensign' | 'lieutenant';
+export type Species = 'human' | 'vulcan' | 'bajoran' | 'andorian' | 'orion' | 'trill';
+export type Hairstyle = 'crop' | 'bowl' | 'bun' | 'ponytail' | 'curls' | 'bald';
+
 export interface Avatar {
-  shirt: string;
-  hair: string;
+  division: Division;
+  rank: Rank;
+  species: Species;
+  /** A tone that suits the species: Andorians are blue, Orions green. */
   skin: string;
-  accessory: 'none' | 'glasses' | 'headphones' | 'cap' | 'bow';
+  hair: string;
+  hairstyle: Hairstyle;
+  /** `implant` is a cybernetic eyepiece. */
+  accessory: 'none' | 'glasses' | 'implant';
 }
 
 export interface PermissionRequest {

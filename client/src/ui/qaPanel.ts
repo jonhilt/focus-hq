@@ -1,4 +1,4 @@
-import { qaOfficerFor } from '../../../shared/crew';
+import { qaOfficerFor, UNIFORM } from '../../../shared/crew';
 import { autoQaFor, qaBadge } from '../../../shared/qa';
 import type { QaReview } from '../../../shared/types';
 import { api } from '../net/api';
@@ -50,7 +50,7 @@ export function openQaPanel(ui: Ui, projectId: string): void {
     const queued = reviews.filter((r) => r.status === 'queued').length;
     fill(live,
       h('div', { class: 'qa-now' },
-        h('span', { class: 'planner-badge', style: `background:${officer.avatar.shirt}` }, '🔍'),
+        h('span', { class: 'planner-badge', style: `background:${UNIFORM[officer.avatar.division]}` }, '🔍'),
         h('div', { class: 'grow' },
           h('strong', null, officer.name),
           h('small', null, qa && !['done', 'error', 'stopped'].includes(qa.status) ? `${statusLine(qa)} · PR #${qa.issue.number}` : 'Standing by for pull requests'),

@@ -1,3 +1,4 @@
+import { UNIFORM } from '../../../shared/crew';
 import * as THREE from 'three';
 import { prKey, qaBadge } from '../../../shared/qa';
 import type { Agent, Board, Issue, Project, PullRequest } from '../../../shared/types';
@@ -182,7 +183,7 @@ export class KanbanBoard {
     cols.doing.slice(0, fit(cols.doing.length)).forEach((agent, i) => {
       const statusColor = agent.status === 'waiting' ? '#e67700' : agent.status === 'error' ? '#c92a2a' : '#1864ab';
       const meta = `${agent.name} · ${agent.status === 'waiting' ? '✋ needs approval' : agent.status}${multiRepo ? ` · ${shortRepo(agent.repo)}` : ''}`;
-      note(1, i, agent.issue.number, agent.status === 'error' ? '#ffe3e3' : '#d0ebff', `#${agent.issue.number} ${agent.issue.title}`, meta, statusColor, agent.avatar.shirt);
+      note(1, i, agent.issue.number, agent.status === 'error' ? '#ffe3e3' : '#d0ebff', `#${agent.issue.number} ${agent.issue.title}`, meta, statusColor, UNIFORM[agent.avatar.division]);
     });
     if (cols.doing.length > maxNotes) more(1, cols.doing.length - fit(cols.doing.length));
 
@@ -192,7 +193,7 @@ export class KanbanBoard {
       const flags = [pr.isDraft ? 'draft' : '', pr.mergeable === 'CONFLICTING' ? '⚠ conflicts' : '', pr.reviewDecision === 'APPROVED' ? '👍 approved' : ''].filter(Boolean);
       const meta = [qa.state === 'none' ? '' : qa.label, pr.agent ? pr.agent.name : pr.author ? `@${pr.author}` : '', checks, ...flags].filter(Boolean).join(' · ');
       const color = pr.checks === 'failing' || pr.mergeable === 'CONFLICTING' || qa.state === 'failed' ? '#c92a2a' : '#2b8a3e';
-      note(2, i, pr.number, '#d3f9d8', `PR #${pr.number} ${pr.title}`, meta, color, pr.agent?.avatar.shirt);
+      note(2, i, pr.number, '#d3f9d8', `PR #${pr.number} ${pr.title}`, meta, color, pr.agent && UNIFORM[pr.agent.avatar.division]);
     });
     if (cols.prs.length > maxNotes) more(2, cols.prs.length - fit(cols.prs.length));
 

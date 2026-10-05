@@ -1,15 +1,19 @@
 import * as THREE from 'three';
-import type { Agent, AgentStatus, Avatar } from '../../../shared/types';
+import { UNIFORM } from '../../../shared/crew';
+import type { Agent, AgentStatus, Avatar, Rank } from '../../../shared/types';
 import { canvasTexture, fitText, makeCanvas, roundRect, UI_FONT } from './canvas';
-import { darken, toon } from './materials';
-import { ball, cyl } from './props';
+import { type Expression, Head, PIP_GOLD } from './head';
+import { toon } from './materials';
+import { ball, capsule, cyl } from './props';
 
-const capsule = (r: number, len: number, color: string) => new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 6, 12), toon(color));
+/** The jumpsuit: black, with the division's colour across the shoulders. */
+const SUIT = '#32363f';
 
 /** Arm made of a capsule pointing along +X from its shoulder pivot. */
-function arm(shirt: string, skin: string): THREE.Group {
+function arm(colour: string, skin: string): THREE.Group {
   const g = new THREE.Group();
-  const upper = capsule(0.065, 0.22, shirt);
+  g.add(ball(0.085, colour));
+  const upper = capsule(0.065, 0.22, SUIT);
   upper.rotation.z = Math.PI / 2;
   upper.position.x = 0.15;
   g.add(upper);
@@ -17,6 +21,39 @@ function arm(shirt: string, skin: string): THREE.Group {
   hand.position.x = 0.34;
   g.add(hand);
   return g;
+}
+
+/** Faces +X, so it sits flat on a chest whose surface there points along `normal` (an angle round Y from +X towards -Z). */
+function onChest(o: THREE.Object3D, y: number, normal: number, r = 0.205): THREE.Object3D {
+  o.position.set(Math.cos(normal) * r, y, -Math.sin(normal) * r);
+  o.rotation.y = normal;
+  return o;
+}
+
+/** The Starfleet delta on a silver oval, worn on the left breast. */
+function combadge(): THREE.Group {
+  const g = new THREE.Group();
+  const oval = cyl(0.03, 0.03, 0.014, '#c9ced6', 20);
+  oval.rotation.z = Math.PI / 2;
+  oval.scale.set(1, 1, 1.6);
+  g.add(oval);
+  const delta = new THREE.Shape();
+  delta.moveTo(0, 0.05);
+  delta.lineTo(0.026, -0.036);
+  delta.lineTo(0, -0.02);
+  delta.lineTo(-0.026, -0.036);
+  delta.closePath();
+  const arrow = new THREE.Mesh(new THREE.ExtrudeGeometry(delta, { depth: 0.012, bevelEnabled: false }), toon(PIP_GOLD));
+  arrow.rotation.y = Math.PI / 2;
+  arrow.position.x = 0.002;
+  g.add(arrow);
+  return g;
+}
+
+/** Rank pips on the right of the collar. */
+function pips(rank: Rank): THREE.Object3D[] {
+  const count = rank === 'ensign' ? 1 : 2;
+  return Array.from({ length: count }, (_, i) => onChest(ball(0.022, PIP_GOLD, 10), 0.93, -0.45 - i * 0.26, 0.2));
 }
 
 const STATUS_STYLE: Record<AgentStatus, { icon: string; bg: string; fg: string }> = {
@@ -73,14 +110,13 @@ export function agentView(agent: Agent): CrewView {
   };
 }
 
-/** A chibi office worker sitting on a chair, facing +X. */
+/** A chibi Starfleet crew member sitting on a chair, facing +X. */
 export class Character {
   readonly group = new THREE.Group();
   private body: THREE.Group;
-  private head: THREE.Group;
+  private head: Head;
   private armL: THREE.Group;
   private armR: THREE.Group;
-  private eyes: THREE.Group[] = [];
   private bubble: THREE.Sprite;
   private bubbleCanvas = makeCanvas(640, 180);
   private bubbleTex: THREE.CanvasTexture;
@@ -90,62 +126,40 @@ export class Character {
   private lastStatus: AgentStatus | null = null;
 
   constructor(private view: CrewView) {
-    const { shirt, skin, hair, accessory } = view.avatar;
+    const { division, rank, skin } = view.avatar;
+    const colour = UNIFORM[division];
 
     this.body = new THREE.Group();
     this.group.add(this.body);
-    const torso = capsule(0.2, 0.18, shirt);
+    const torso = capsule(0.2, 0.18, SUIT);
     torso.position.y = 0.78;
     this.body.add(torso);
+    const yoke = new THREE.Mesh(new THREE.SphereGeometry(0.207, 20, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), toon(colour));
+    yoke.position.y = 0.87;
+    this.body.add(yoke);
+    this.body.add(onChest(combadge(), 0.88, 0.5, 0.214), ...pips(rank));
     // legs: thighs forward on the seat, shins down
     for (const s of [-1, 1]) {
-      const thigh = capsule(0.085, 0.26, darken(shirt, 0.45));
+      const thigh = capsule(0.085, 0.26, SUIT);
       thigh.rotation.z = Math.PI / 2;
       thigh.position.set(0.2, 0.55, s * 0.1);
       this.body.add(thigh);
-      const shin = capsule(0.075, 0.3, darken(shirt, 0.45));
+      const shin = capsule(0.075, 0.3, SUIT);
       shin.position.set(0.4, 0.3, s * 0.1);
       this.body.add(shin);
-      const shoe = ball(0.09, '#343a40');
-      shoe.scale.set(1.4, 0.6, 1);
-      shoe.position.set(0.46, 0.06, s * 0.1);
-      this.body.add(shoe);
+      const boot = ball(0.09, '#1f2228');
+      boot.scale.set(1.4, 0.6, 1);
+      boot.position.set(0.46, 0.06, s * 0.1);
+      this.body.add(boot);
     }
 
-    this.head = new THREE.Group();
-    this.head.position.y = 1.22;
-    this.body.add(this.head);
-    this.head.add(ball(0.25, skin, 20));
-    const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.265, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.52), toon(hair));
-    hairCap.rotation.z = 0.35;
-    hairCap.position.set(-0.02, 0.02, 0);
-    this.head.add(hairCap);
+    this.head = new Head(view.avatar);
+    this.head.group.position.y = 1.27;
+    this.body.add(this.head.group);
 
-    for (const s of [-1, 1]) {
-      const eye = new THREE.Group();
-      eye.position.set(0.2, 0.04, s * 0.09);
-      const white = ball(0.06, '#ffffff', 12);
-      white.scale.set(0.7, 1, 1);
-      eye.add(white);
-      const pupil = ball(0.034, '#1b1b1b', 10);
-      pupil.position.x = 0.035;
-      eye.add(pupil);
-      this.head.add(eye);
-      this.eyes.push(eye);
-      const blush = ball(0.04, '#ff8fab', 8);
-      blush.scale.set(0.4, 0.6, 1);
-      blush.position.set(0.205, -0.07, s * 0.16);
-      this.head.add(blush);
-    }
-    const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.012, 6, 12, Math.PI), toon('#7a2e2e'));
-    mouth.rotation.set(0, Math.PI / 2, Math.PI);
-    mouth.position.set(0.235, -0.07, 0);
-    this.head.add(mouth);
-    this.addAccessory(accessory, hair);
-
-    this.armL = arm(shirt, skin);
+    this.armL = arm(colour, skin);
     this.armL.position.set(0.02, 0.95, -0.25);
-    this.armR = arm(shirt, skin);
+    this.armR = arm(colour, skin);
     this.armR.position.set(0.02, 0.95, 0.25);
     this.body.add(this.armL, this.armR);
 
@@ -166,47 +180,6 @@ export class Character {
     this.bubble.renderOrder = 10;
     this.group.add(this.bubble);
     this.set(view);
-  }
-
-  private addAccessory(kind: Avatar['accessory'], hair: string): void {
-    if (kind === 'glasses') {
-      for (const s of [-1, 1]) {
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.068, 0.013, 6, 16), toon('#222'));
-        ring.rotation.y = Math.PI / 2;
-        ring.position.set(0.245, 0.04, s * 0.09);
-        this.head.add(ring);
-      }
-      const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.012, 0.05), toon('#222'));
-      bridge.position.set(0.25, 0.05, 0);
-      this.head.add(bridge);
-    } else if (kind === 'headphones') {
-      const band = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.025, 6, 20, Math.PI), toon('#ff006e'));
-      band.position.y = 0.0;
-      this.head.add(band);
-      band.rotation.y = Math.PI / 2;
-      for (const s of [-1, 1]) {
-        const cup = cyl(0.09, 0.09, 0.07, '#ff006e');
-        cup.rotation.x = Math.PI / 2;
-        cup.position.set(0, 0, s * 0.27);
-        this.head.add(cup);
-      }
-    } else if (kind === 'cap') {
-      const color = darken(hair === '#1e1e1e' ? '#e63946' : '#3a86ff', 0);
-      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.27, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.45), toon(color));
-      dome.position.y = 0.04;
-      this.head.add(dome);
-      const brim = cyl(0.16, 0.16, 0.025, color);
-      brim.scale.set(1.4, 1, 1);
-      brim.position.set(0.22, 0.12, 0);
-      this.head.add(brim);
-    } else if (kind === 'bow') {
-      for (const s of [-1, 1]) {
-        const loop = ball(0.07, '#ff4d6d', 10);
-        loop.scale.set(0.6, 0.8, 1.3);
-        loop.position.set(-0.02, 0.25, s * 0.08 + 0.12);
-        this.head.add(loop);
-      }
-    }
   }
 
   set(view: CrewView): void {
@@ -269,12 +242,15 @@ export class Character {
     // defaults: hands on the keyboard
     let lz = -0.42, rz = -0.42, lx = 0, rx = 0;
     let headTilt = 0, headTurn = 0, bodyY = 0;
+    let expression: Expression = 'idle';
 
     if (s === 'working' || s === 'setting-up' || s === 'pushing') {
       lz += Math.sin(p * 17) * 0.1;
       rz += Math.sin(p * 17 + 2) * 0.1;
       headTilt = Math.sin(p * 2) * 0.04;
+      expression = 'focused';
       if (thinking) {
+        expression = 'thinking';
         rz = 0.25;
         rx = -0.5;
         headTilt = 0.15;
@@ -284,38 +260,43 @@ export class Character {
       lz += Math.sin(p * 6) * 0.06;
       rz += Math.sin(p * 9) * 0.08;
       headTurn = Math.sin(p * 0.8) * 0.12;
+      expression = 'focused';
     } else if (s === 'waiting') {
       rz = 1.35 + Math.sin(p * 9) * 0.15;
       rx = 0.2;
       bodyY = Math.abs(Math.sin(p * 4)) * 0.04;
       headTurn = -0.5;
       headTilt = 0.15;
+      expression = 'eager';
     } else if (s === 'done') {
       lz = -1.1;
       rz = -1.1;
       headTilt = 0.12;
+      expression = 'happy';
       if (now < this.celebrateUntil) {
+        expression = 'grin';
         lz = rz = 1.2 + Math.sin(p * 14) * 0.2;
         bodyY = Math.abs(Math.sin(p * 9)) * 0.18;
       }
     } else if (s === 'error') {
       lz = rz = -1.2;
       headTilt = -0.35;
+      expression = 'worried';
     } else if (s === 'stopped' || s === 'queued') {
       lz = rz = -1.15;
       headTilt = s === 'stopped' ? -0.25 + Math.sin(p * 1.2) * 0.04 : Math.sin(p * 0.7) * 0.05;
       headTurn = s === 'queued' ? Math.sin(p * 0.5) * 0.4 : 0;
+      if (s === 'stopped') expression = 'asleep';
     }
 
     this.armL.rotation.set(lx, 0.15, lz);
     this.armR.rotation.set(rx, -0.15, rz);
-    this.head.rotation.set(0, headTurn, headTilt);
+    this.head.group.rotation.set(0, headTurn, headTilt);
     this.body.position.y = bodyY;
     this.body.scale.y = 1 + Math.sin(p * 2.2) * 0.008;
 
-    // blink
-    const blink = (p % 4.3) < 0.12 ? 0.1 : 1;
-    for (const eye of this.eyes) eye.scale.y = s === 'stopped' ? 0.1 : blink;
+    // the face follows the pose, blinking now and then
+    this.head.express(expression, (p % 4.3) < 0.12);
 
     // bubble bob, and pulse when the hand is up
     this.bubble.position.y = 1.95 + Math.sin(p * 2) * 0.03 + bodyY;

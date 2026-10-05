@@ -1,3 +1,4 @@
+import { UNIFORM } from '../../../shared/crew';
 import { state } from '../net/state';
 import { sound } from '../sound';
 import { statusLine } from '../world/character';
@@ -23,7 +24,7 @@ export function openTeleportPanel(ui: Ui): void {
     h('div', { class: 'places' },
       ...agents.map((a) =>
         h('button', { class: 'btn place', style: a.status === 'waiting' ? 'background:#ffe066' : '', onclick: () => ui.goToAgent(a.id) },
-          h('span', { class: 'dot', style: `background:${a.avatar.shirt};margin-right:6px;vertical-align:-2px` }),
+          h('span', { class: 'dot', style: `background:${UNIFORM[a.avatar.division]};margin-right:6px;vertical-align:-2px` }),
           `${statusIcon(a)} ${a.name}`,
           h('small', null, `${state.project(a.projectId)?.name ?? ''} · #${a.issue.number} · ${statusLine(a)}`),
         ),

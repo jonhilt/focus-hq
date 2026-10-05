@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
+import { qaOfficerFor, randomAvatar } from '../shared/crew';
 import { prKey } from '../shared/qa';
 import type { Agent, Board, Briefing, BrowserFrame, Project, QaReview, Settings, TermLine } from '../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, ROOM_THEMES, type RoomTheme } from '../shared/types';
@@ -69,6 +70,8 @@ export class Store {
         agent.permission = undefined;
       }
       agent.task ??= 'issue'; // saved before agents could be seated on a conflicting PR
+      // saved before the crew wore uniforms
+      if (!('division' in agent.avatar)) agent.avatar = agent.task === 'review' ? qaOfficerFor(agent.projectId).avatar : randomAvatar();
       this.agents.set(agent.id, agent);
       this.lines.set(agent.id, this.readLog(agent.id, MEMORY_LINES));
     }

@@ -1,4 +1,4 @@
-import { qaOfficerFor } from '../../shared/crew';
+import { qaOfficerFor, randomAvatar } from '../../shared/crew';
 import { autoQaFor, prKey } from '../../shared/qa';
 import type { Agent, AgentStatus, Effort, PermissionRequest, PullRequest, QaReview, TermLine } from '../../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, QA_DESK } from '../../shared/types';
@@ -6,7 +6,7 @@ import type { GitHubProvider } from '../github/provider';
 import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { errorMessage, newId, slugify, truncate } from '../util';
-import { COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, randomAvatar, systemAppend } from './prompts';
+import { COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, systemAppend } from './prompts';
 import { parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
 import type { AgentRunner, AgentSession, RunHooks, WorkspaceOps } from './types';
 

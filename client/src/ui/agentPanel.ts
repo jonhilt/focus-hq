@@ -1,3 +1,4 @@
+import { UNIFORM } from '../../../shared/crew';
 import type { Agent, BrowserFrame, Effort, TermLine } from '../../../shared/types';
 import { EFFORT_LEVELS } from '../../../shared/types';
 import { api } from '../net/api';
@@ -31,7 +32,7 @@ export function openAgentPanel(ui: Ui, id: string): void {
   const footer = h('div', { class: 'compose' }, input, send, stop, dismiss);
 
   const title = h('h2');
-  ui.panels.open({ title, body, footer, wide: true, accent: agent.avatar.shirt + '55' });
+  ui.panels.open({ title, body, footer, wide: true, accent: UNIFORM[agent.avatar.division] + '55' });
 
   const sendMessage = () => {
     const text = input.value.trim();
@@ -64,7 +65,7 @@ export function openAgentPanel(ui: Ui, id: string): void {
 
   const renderHeader = (a: Agent) => {
     title.replaceChildren(
-      h('span', { class: 'dot', style: `background:${a.avatar.shirt};margin-right:8px;vertical-align:middle` }),
+      h('span', { class: 'dot', style: `background:${UNIFORM[a.avatar.division]};margin-right:8px;vertical-align:middle` }),
       `${a.name} · `,
       h('span', { class: 'muted', style: 'font-weight:500' }, `#${a.issue.number} ${a.issue.title}`),
     );

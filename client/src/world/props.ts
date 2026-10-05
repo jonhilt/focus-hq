@@ -3,6 +3,7 @@ import { box, darken, lighten, toon } from './materials';
 
 const cyl = (rt: number, rb: number, h: number, color: string, segments = 16) =>
   new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, segments), toon(color));
+const capsule = (r: number, len: number, color: string) => new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 6, 12), toon(color));
 const ball = (r: number, color: string, segments = 14) => new THREE.Mesh(new THREE.SphereGeometry(r, segments, Math.round(segments * 0.75)), toon(color));
 
 export const DESK_TOP = 0.76;
@@ -173,4 +174,4 @@ export function trophy(): THREE.Group {
   return g;
 }
 
-export { ball, cyl };
+export { ball, capsule, cyl };

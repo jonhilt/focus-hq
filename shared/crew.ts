@@ -1,17 +1,46 @@
-import type { Avatar, Planner } from './types';
+import type { Avatar, Division, Hairstyle, Planner, Rank, Species } from './types';
 
-// Permanent crew members, one of each per room: the operations officer at the New issue stand and the QA officer at
-// the QA station. They're derived from the project id rather than stored, so the same officer is at the same post on
-// every reload and on every client.
+// Who's aboard. Agents get a random look when they're hired. Permanent crew members, one of each per room (the
+// operations officer at the New issue stand and the QA officer at the QA station), are derived from the project id
+// rather than stored, so the same officer is at the same post on every reload and on every client.
+
+/** Each division's uniform colour, also used wherever the UI marks whose work something is. */
+export const UNIFORM: Record<Division, string> = { command: '#d8433b', operations: '#e8b33c', sciences: '#3f8fd8' };
+const DIVISIONS = Object.keys(UNIFORM) as Division[];
+
+export const RANK_TITLE: Record<Rank, string> = { ensign: 'Ensign', lieutenant: 'Lt.' };
 
 const SURNAMES = [
   'Okafor', 'Haddad', 'Varga', 'Lindqvist', 'Moreau', 'Tanaka', 'Oyelaran', 'Kowalczyk', 'Reyes', 'Castellanos',
   'Novak', 'Adeyemi', 'Sorensen', 'Petrakis', 'Nakamura', 'Quintero', 'Abara', 'Halloran', 'Ivanova', 'Mensah',
 ];
-const HAIR = ['#2d1b0e', '#5a3825', '#e6be8a', '#b55239', '#1e1e1e', '#95a5a6', '#f6e58d'];
-const SKIN = ['#ffdbac', '#f1c27d', '#e0ac69', '#c68642', '#8d5524', '#ffe0bd'];
-/** Operations wear gold. */
-const OPS_GOLD = '#e8b33c';
+
+const HUMAN_SKIN = ['#ffdbac', '#f1c27d', '#e0ac69', '#c68642', '#8d5524', '#ffe0bd'];
+const HUMAN_HAIR = ['#2d1b0e', '#5a3825', '#e6be8a', '#b55239', '#1e1e1e', '#95a5a6', '#f6e58d'];
+const LOOKS: Record<Species, { skin: string[]; hair: string[]; hairstyles: Hairstyle[] }> = {
+  human: { skin: HUMAN_SKIN, hair: HUMAN_HAIR, hairstyles: ['crop', 'crop', 'bun', 'ponytail', 'curls', 'bald'] },
+  vulcan: { skin: ['#f1c27d', '#e0ac69', '#c68642', '#ffe0bd'], hair: ['#1e1e1e', '#2d1b0e'], hairstyles: ['bowl'] },
+  bajoran: { skin: HUMAN_SKIN, hair: HUMAN_HAIR, hairstyles: ['crop', 'bun', 'ponytail', 'curls'] },
+  andorian: { skin: ['#8cc4ec', '#76b2e0', '#9fcdf0'], hair: ['#f4f6f8', '#dfe7f2'], hairstyles: ['crop', 'bun', 'ponytail'] },
+  orion: { skin: ['#6cc070', '#58ad5e', '#7fcf7a'], hair: ['#1e1e1e', '#2d1b0e', '#b55239'], hairstyles: ['ponytail', 'curls', 'bun', 'crop'] },
+  trill: { skin: HUMAN_SKIN, hair: HUMAN_HAIR, hairstyles: ['crop', 'bun', 'ponytail', 'curls'] },
+};
+/** Mostly humans, as aboard any Starfleet ship. */
+const CREW_SPECIES: Species[] = ['human', 'human', 'human', 'human', 'vulcan', 'bajoran', 'andorian', 'orion', 'trill'];
+const ACCESSORIES: Avatar['accessory'][] = ['none', 'none', 'none', 'glasses', 'implant'];
+
+/** `roll` returns numbers in [0, 1), like Math.random. */
+function rollAvatar(roll: () => number, division: Division, rank: Rank): Avatar {
+  const pick = <T>(list: T[]) => list[Math.floor(roll() * list.length)];
+  const species = pick(CREW_SPECIES);
+  const looks = LOOKS[species];
+  return { division, rank, species, skin: pick(looks.skin), hair: pick(looks.hair), hairstyle: pick(looks.hairstyles), accessory: pick(ACCESSORIES) };
+}
+
+/** A newly hired agent: an ensign from any division, fresh on the lower decks. */
+export function randomAvatar(): Avatar {
+  return rollAvatar(Math.random, DIVISIONS[Math.floor(Math.random() * DIVISIONS.length)], 'ensign');
+}
 
 function hash(text: string): number {
   let h = 2166136261;
@@ -19,32 +48,29 @@ function hash(text: string): number {
   return h >>> 0;
 }
 
+/** mulberry32: the same seed always rolls the same officer. */
+function seeded(seed: number): () => number {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 /** The operations officer at a room's ＋ New issue stand, who drafts issues for it. */
 export function plannerFor(projectId: string): Planner {
   const h = hash(`planner:${projectId}`);
-  const avatar: Avatar = {
-    shirt: OPS_GOLD,
-    hair: HAIR[(h >>> 5) % HAIR.length],
-    skin: SKIN[(h >>> 9) % SKIN.length],
-    accessory: (h >>> 13) % 3 === 0 ? 'glasses' : 'none',
-  };
-  return { name: `${(h >>> 1) % 3 === 0 ? 'Ensign' : 'Lt.'} ${SURNAMES[h % SURNAMES.length]}`, avatar };
+  const avatar = rollAvatar(seeded(h), 'operations', (h >>> 1) % 3 === 0 ? 'ensign' : 'lieutenant');
+  return { name: `${RANK_TITLE[avatar.rank]} ${SURNAMES[h % SURNAMES.length]}`, avatar };
 }
 
-/** Sciences wear blue: the QA officer runs the diagnostics. */
-const SCIENCE_BLUE = '#4f8fd6';
-
-/** The QA officer at a room's QA station, beside the pull requests table, who reviews and tests every PR. */
+/** The QA officer at a room's QA station, beside the pull requests table, who reviews and tests every PR. Sciences: they run the diagnostics. */
 export function qaOfficerFor(projectId: string): Planner {
   const h = hash(`qa:${projectId}`);
-  const avatar: Avatar = {
-    shirt: SCIENCE_BLUE,
-    hair: HAIR[(h >>> 5) % HAIR.length],
-    skin: SKIN[(h >>> 9) % SKIN.length],
-    accessory: (h >>> 13) % 2 === 0 ? 'glasses' : 'headphones',
-  };
+  const avatar = rollAvatar(seeded(h), 'sciences', (h >>> 1) % 3 === 0 ? 'ensign' : 'lieutenant');
   // never the same surname as the room's operations officer
   const taken = hash(`planner:${projectId}`) % SURNAMES.length;
   const surname = SURNAMES[(taken + 1 + ((h >>> 3) % (SURNAMES.length - 1))) % SURNAMES.length];
-  return { name: `${(h >>> 1) % 3 === 0 ? 'Ensign' : 'Lt.'} ${surname}`, avatar };
+  return { name: `${RANK_TITLE[avatar.rank]} ${surname}`, avatar };
 }

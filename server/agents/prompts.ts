@@ -1,4 +1,4 @@
-import type { Agent, Avatar } from '../../shared/types';
+import type { Agent } from '../../shared/types';
 import type { IssueDetail } from '../github/provider';
 import { truncate } from '../util';
 
@@ -81,15 +81,4 @@ export function pickName(taken: Set<string>): string {
   const free = NAMES.filter((n) => !taken.has(n));
   if (free.length) return free[Math.floor(Math.random() * free.length)];
   return `${NAMES[Math.floor(Math.random() * NAMES.length)]} ${taken.size + 1}`;
-}
-
-const SHIRTS = ['#ff6b6b', '#4ecdc4', '#ffd93d', '#6c5ce7', '#ff9f43', '#1dd1a1', '#54a0ff', '#f368e0', '#00d2d3', '#ee5253'];
-const HAIR = ['#2d1b0e', '#5a3825', '#e6be8a', '#b55239', '#1e1e1e', '#8e44ad', '#ff7979', '#f6e58d', '#95a5a6'];
-const SKIN = ['#ffdbac', '#f1c27d', '#e0ac69', '#c68642', '#8d5524', '#ffe0bd'];
-const ACCESSORIES: Avatar['accessory'][] = ['none', 'glasses', 'headphones', 'cap', 'bow', 'glasses', 'none'];
-
-const any = <T>(list: T[]) => list[Math.floor(Math.random() * list.length)];
-
-export function randomAvatar(): Avatar {
-  return { shirt: any(SHIRTS), hair: any(HAIR), skin: any(SKIN), accessory: any(ACCESSORIES) };
 }
