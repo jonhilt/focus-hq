@@ -1,5 +1,6 @@
 import { columns } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
+import { waitsLabel } from '../../../shared/dependencies';
 import * as THREE from 'three';
 import { prKey, qaBadge } from '../../../shared/qa';
 import type { Agent, Board, Project } from '../../../shared/types';
@@ -112,7 +113,9 @@ export class KanbanBoard {
 
     cols.todo.slice(0, fit(cols.todo.length)).forEach((issue, i) => {
       const labels = issue.labels.slice(0, 2).join(', ');
-      note(0, i, LCARS.peach, `#${issue.number} ${issue.title}`, [multiRepo ? shortRepo(issue.repo) : '', labels].filter(Boolean).join(' · ') || 'Unassigned');
+      const waits = waitsLabel(issue.waitsFor);
+      const meta = [waits && `⏸ ${waits}`, multiRepo ? shortRepo(issue.repo) : '', labels].filter(Boolean).join(' · ') || 'Unassigned';
+      note(0, i, waits ? LCARS.lilac : LCARS.peach, `#${issue.number} ${issue.title}`, meta);
     });
     if (cols.todo.length > maxNotes) more(0, cols.todo.length - fit(cols.todo.length));
     if (cols.todo.length === 0) {

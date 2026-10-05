@@ -42,7 +42,7 @@ const SEED: Record<string, { description: string; issues: [string, string, strin
     issues: [
       ['Add a high score table', 'Keep the top 10 scores in localStorage and show them on game over.', ['enhancement']],
       ['Ship clips through asteroids at high speed', 'Collision check misses fast frames; use swept collision.', ['bug']],
-      ['Add sound effects with a mute button', 'Explosion + thruster sounds. Mute toggle in the corner.', ['enhancement']],
+      ['Add sound effects with a mute button', 'Explosion + thruster sounds. Mute toggle in the corner, and silence while paused.\n\nDepends on #4', ['enhancement']],
       ['Pause the game when the tab is hidden', 'Use the visibilitychange event.', ['enhancement']],
     ],
   },

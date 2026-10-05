@@ -1,5 +1,6 @@
 import type { Agent, Board, Effort, Preview, PreviewSet, Project, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
 import { chosenSet, previewPrs } from '../shared/previewSet';
+import { startOrder } from '../shared/dependencies';
 import type { AgentManager } from './agents/manager';
 import type { Briefings } from './agents/briefing';
 import type { IssuePlanner } from './agents/planner';
@@ -300,7 +301,7 @@ export class Office {
     const project = this.store.projects.find((p) => p.id === projectId);
     if (!project?.autoAssign) return;
     let slots = this.agents.freeSlots(projectId);
-    for (const issue of board.issues) {
+    for (const issue of startOrder(board.issues)) {
       if (slots <= 0) break;
       if (project.autoLabel && !issue.labels.includes(project.autoLabel)) continue;
       if (this.agents.claimed(issue.repo).has(issue.number)) continue;

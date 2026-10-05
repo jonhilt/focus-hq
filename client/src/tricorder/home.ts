@@ -1,6 +1,7 @@
 import { statusIcon, statusLine } from '../../../shared/agentStatus';
 import { columns } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
+import { assignWarning, waitsLabel } from '../../../shared/dependencies';
 import { prKey, qaBadge } from '../../../shared/qa';
 import { type Attention, inFlight, needsYou } from '../../../shared/tricorder';
 import type { Agent, Issue, Project, PullRequest } from '../../../shared/types';
@@ -164,15 +165,22 @@ function prCard(ctx: HomeContext, project: Project, pr: PullRequest & { agent?: 
   );
 }
 
-function issueCard(ctx: HomeContext, project: Project, issue: Issue, multi: boolean, doing: Agent[]): HTMLElement {
+function issueCard(ctx: HomeContext, project: Project, issue: Issue & { waitsFor: number[] }, multi: boolean, doing: Agent[]): HTMLElement {
   const key = `issue:${prKey(issue.repo, issue.number)}`;
   const full = doing.filter((a) => !FINISHED.includes(a.status)).length >= project.maxAgents;
+  const waits = waitsLabel(issue.waitsFor);
   return h('article', { class: 'card issue', attrs: { 'data-key': key } },
     h('div', { class: 'title' }, h('a', { href: issue.url, target: '_blank', rel: 'noreferrer' }, `#${issue.number}`), ` ${issue.title}`),
-    issue.labels.length || multi
-      ? h('div', { class: 'pills' }, multi ? h('span', { class: 'pill' }, issue.repo.split('/')[1]) : null, ...issue.labels.slice(0, 4).map((l) => h('span', { class: 'pill' }, l)))
+    issue.labels.length || multi || waits
+      ? h('div', { class: 'pills' },
+          waits ? h('span', { class: 'pill' }, `⏸ ${waits}`) : null,
+          multi ? h('span', { class: 'pill' }, issue.repo.split('/')[1]) : null,
+          ...issue.labels.slice(0, 4).map((l) => h('span', { class: 'pill' }, l)))
       : null,
-    h('div', { class: 'actions' }, ctx.actions.button(`${key}:hire`, full ? '⏳ Queue agent' : '🤖 Assign agent', () => api.hire(project.id, issue), { class: 'primary' })),
+    h('div', { class: 'actions' }, ctx.actions.button(`${key}:hire`, full ? '⏳ Queue agent' : '🤖 Assign agent', () => api.hire(project.id, issue), {
+      class: 'primary',
+      confirm: assignWarning(issue),
+    })),
     ctx.actions.errors(key),
   );
 }

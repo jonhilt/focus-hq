@@ -1,6 +1,7 @@
 import { statusIcon, statusLine } from '../../../shared/agentStatus';
 import { columns } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
+import { assignWarning, waitsLabel } from '../../../shared/dependencies';
 import { previewIncludes, previewSet } from '../../../shared/previewSet';
 import { prKey, qaBadge, sameCommit } from '../../../shared/qa';
 import type { Effort } from '../../../shared/types';
@@ -55,15 +56,20 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
       const where = wherePicker(clouds.get(key));
       where.onchange = () => clouds.set(key, pickedCloud(where));
       const assign = h('button', { class: 'btn small primary', title: full ? 'Agents beyond the limit wait in a queue' : '' }, full ? '⏳ Queue agent' : '🤖 Assign agent');
-      assign.onclick = () =>
+      const waits = waitsLabel(issue.waitsFor);
+      assign.onclick = () => {
+        const warning = assignWarning(issue);
+        if (warning && !confirm(warning)) return;
         void busy(assign, async () => {
           const agent = await api.hire(projectId, issue, pickedEffort(effort), pickedCloud(where));
           ui.hud.toast('success', `${agent.name} is on #${issue.number}`, { label: 'Watch', run: () => ui.goToAgent(agent.id) });
         }, ui.error);
+      };
       todo.append(
         h('div', { class: 'note' },
           h('div', { class: 't' }, `#${issue.number} ${issue.title}`),
           h('div', { class: 'm' },
+            waits ? h('span', { class: 'chip', title: 'Auto-assign leaves it until those are closed' }, `⏸ ${waits}`) : null,
             multi ? h('span', { class: 'chip' }, issue.repo.split('/')[1]) : null,
             ...issue.labels.slice(0, 4).map((l) => h('span', { class: 'chip' }, l)),
             h('span', null, timeAgo(Date.parse(issue.createdAt))),
