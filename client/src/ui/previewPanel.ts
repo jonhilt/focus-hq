@@ -1,4 +1,6 @@
-import type { Preview, PreviewLink, PreviewLog, PreviewLogFile } from '../../../shared/types';
+import { linkedPrs } from '../../../shared/previewSet';
+import { sameCommit } from '../../../shared/qa';
+import type { Preview, PreviewCheckout, PreviewLink, PreviewLog, PreviewLogFile, PreviewSet } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
@@ -15,31 +17,36 @@ export function linkHealth(link: PreviewLink): string {
   return link.code ? `HTTP ${link.code}` : '';
 }
 
-/** The project's preview: links to open it in your own browser, the command's output and log files, restart and stop. */
+/**
+ * The project's preview: a row per checked-out repo (switch its PR there), links to open it in your own browser, the
+ * command's output and log files, restart and stop.
+ */
 export function openPreviewPanel(ui: Ui, projectId: string, initial?: Preview): void {
   let current = state.previews.get(projectId) ?? initial;
   if (!current) return;
-  // what Restart runs again once the preview has stopped
-  let target = { repo: current.repo, number: current.number, title: current.title };
+  // what Restart (and a row's picker) runs again, also once the preview has stopped
+  let target = { repo: current.repo, number: current.number, title: current.title, set: current.set };
+  const startWith = (repo: string, number: number, set: PreviewSet) => api.startPreview(projectId, repo, number, set);
 
   const title = h('h2');
   const warning = h('div');
   const info = h('div', { class: 'row', style: 'margin-bottom:12px' });
+  const repos = h('div', { class: 'preview-repos' });
   const links = h('div', { class: 'preview-links' });
   const tabs = h('div', { class: 'preview-tabs' });
   const terminal = h('div', { class: 'terminal grow' });
   const fileView = h('div', { class: 'terminal grow', style: 'display:none' });
-  const body = h('div', { style: 'display:flex;flex-direction:column;height:100%;min-height:0' }, warning, info, links, tabs, terminal, fileView);
+  const body = h('div', { style: 'display:flex;flex-direction:column;height:100%;min-height:0' }, warning, info, repos, links, tabs, terminal, fileView);
   const restart = h('button', { class: 'btn' }, '↻ Restart');
   const stop = h('button', { class: 'btn danger' }, '■ Stop');
   const footer = h('div', { class: 'compose' },
-    h('span', { class: 'grow muted', style: 'align-self:center' }, 'Runs the PR’s code on this machine. Previews stop when the PR is merged or closed.'),
+    h('span', { class: 'grow muted', style: 'align-self:center' }, 'Runs the PRs’ code on this machine. Previews stop when one of their PRs is merged or closed.'),
     restart,
     stop,
   );
   ui.panels.open({ title, body, footer, wide: true, accent: LCARS.peach });
 
-  restart.onclick = () => void busy(restart, () => api.startPreview(projectId, target.repo, target.number), ui.error);
+  restart.onclick = () => void busy(restart, () => startWith(target.repo, target.number, target.set), ui.error);
   stop.onclick = () => void busy(stop, () => api.stopPreview(projectId), ui.error);
 
   // The fetched backlog and live lines can arrive in either order: live ones wait for the backlog, line numbers dedupe.
@@ -108,9 +115,43 @@ export function openPreviewPanel(ui: Ui, projectId: string, initial?: Preview): 
   }, 3000);
   ui.panels.own(() => clearInterval(timer));
 
+  /** Repo name, a picker of its open PRs (and the default branch), the checked-out commit and whether the PR moved on. */
+  const repoRow = (c: PreviewCheckout) => {
+    const board = state.boards.get(projectId);
+    const open = (board?.prs ?? []).filter((x) => x.repo === c.repo);
+    const main = board?.prs.find((x) => x.repo === target.repo && x.number === target.number);
+    const linked = new Set(main && board ? linkedPrs(main, board).map((x) => `${x.repo}#${x.number}`) : []);
+    const chosen = 'pr' in c.ref ? c.ref.pr : null;
+    const pr = open.find((x) => x.number === chosen);
+    const picker = h('select', { class: 'effort', title: 'Restart the preview with another PR here' },
+      // the clicked PR's repo always runs a PR: picking another one there previews that one instead
+      c.repo === target.repo ? null : h('option', { value: '', selected: chosen === null }, `⎇ ${'branch' in c.ref ? c.ref.branch : 'default branch'}`),
+      ...open.map((x) => h('option', { value: String(x.number), selected: x.number === chosen }, `${linked.has(`${x.repo}#${x.number}`) ? '🔗 ' : ''}#${x.number} ${x.title}`)),
+      // a PR that has since left the board stays visible as what's running
+      chosen !== null && !pr ? h('option', { value: String(chosen), selected: true, disabled: true }, `#${chosen}`) : null,
+    );
+    picker.onchange = () => {
+      const number = picker.value ? Number(picker.value) : null;
+      const switching = c.repo === target.repo && number !== null;
+      const set = { ...target.set, [c.repo]: number };
+      picker.disabled = true;
+      startWith(switching ? c.repo : target.repo, switching ? number : target.number, set).catch((e: Error) => {
+        ui.error(e.message);
+        render(); // back to what's running
+      });
+    };
+    const behind = c.sha && pr?.headSha && c.sha !== 'demo' && !sameCommit(c.sha, pr.headSha);
+    return h('div', { class: 'preview-repo' },
+      h('strong', null, c.repo.split('/')[1]),
+      picker,
+      c.sha ? h('span', { class: 'chip', title: c.sha }, c.sha === 'demo' ? 'demo' : c.sha.slice(0, 7)) : h('span', { class: 'chip muted' }, '⏳ fetching'),
+      behind ? h('span', { class: 'chip warn', title: 'Someone pushed to this PR since the preview started' }, '↻ behind – restart') : null,
+      pr ? h('a', { class: 'btn small', href: `${pr.url}/files`, target: '_blank', rel: 'noreferrer' }, 'PR ↗') : null,
+    );
+  };
+
   const render = () => {
     const p = current;
-    const pr = state.boards.get(projectId)?.prs.find((x) => x.repo === target.repo && x.number === target.number);
     title.replaceChildren(
       `▶ ${target.repo.split('/')[1]}#${target.number} · `,
       h('span', { class: 'muted', style: 'font-weight:500' }, target.title),
@@ -121,15 +162,22 @@ export function openPreviewPanel(ui: Ui, projectId: string, initial?: Preview): 
         ? h('div', { class: 'ask' }, h('strong', null, '⚠'), h('span', { class: 'grow' }, p.warning, h('br'), h('small', { class: 'muted' }, files.length ? 'The sites may still be worth a look. The log tabs below say what’s wrong.' : 'The sites may still be worth a look.')))
         : null,
     );
-    const behind = p?.sha && pr?.headSha && p.sha !== 'demo' && p.sha !== pr.headSha;
     fill(
       info,
       h('span', { class: 'chip' }, p ? `${ICONS[p.status]} ${p.status}` : '💤 stopped'),
       h('span', { class: 'grow muted' }, p ? p.activity : 'Not running'),
-      behind ? h('span', { class: 'chip warn', title: 'Someone pushed to the PR since this preview started' }, '↻ PR has new commits – restart') : null,
-      p?.sha && p.sha !== 'demo' ? h('span', { class: 'chip', title: p.sha }, p.sha.slice(0, 7)) : null,
       p ? h('span', { class: 'chip' }, `⏱ ${timeAgo(p.startedAt)}`) : null,
-      pr ? h('a', { class: 'btn small', href: `${pr.url}/files`, target: '_blank', rel: 'noreferrer' }, 'PR ↗') : null,
+    );
+    const checkouts = p?.checkouts ?? [];
+    // linked PRs in repos the preview command never mentions with {dir:<repo>}: not checked out
+    const outside = checkouts.length ? Object.entries(target.set).filter(([repo, n]) => n !== null && !checkouts.some((c) => c.repo === repo)) : [];
+    fill(
+      repos,
+      ...checkouts.map(repoRow),
+      ...outside.map(([repo, n]) => {
+        const name = repo.split('/')[1];
+        return h('div', { class: 'muted preview-repo' }, `🔗 ${name} #${n} isn’t part of the preview: the preview command doesn’t use ${name} (add {dir:${name}} to it).`);
+      }),
     );
     const found = p?.links ?? [];
     fill(
@@ -180,7 +228,7 @@ export function openPreviewPanel(ui: Ui, projectId: string, initial?: Preview): 
       select('');
     }
     current = e.preview ?? undefined;
-    if (current) target = { repo: current.repo, number: current.number, title: current.title };
+    if (current) target = { repo: current.repo, number: current.number, title: current.title, set: current.set };
     render();
   }));
   ui.panels.own(state.on('preview-log', (e) => {

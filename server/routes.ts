@@ -1,5 +1,5 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
-import { EFFORT_LEVELS, type Effort } from '../shared/types';
+import { EFFORT_LEVELS, type Effort, type PreviewSet } from '../shared/types';
 import type { Office } from './office';
 import type { Store } from './store';
 import { errorMessage } from './util';
@@ -20,6 +20,11 @@ const h = (fn: Handler) => async (req: Request, res: Response, next: NextFunctio
 const str = (v: unknown, fallback = '') => (typeof v === 'string' ? v : fallback);
 const param = (req: Request, name: string) => str(req.params[name]);
 /** Missing or empty = the model's default effort. */
+/** A preview's per-repo choices: { "owner/name": 12 } for a PR, null for the default branch. Anything else is dropped. */
+const picks = (v: unknown): PreviewSet | undefined => {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
+  return Object.fromEntries(Object.entries(v).filter((e): e is [string, number | null] => e[1] === null || Number.isInteger(e[1])));
+};
 const effort = (v: unknown): Effort | undefined => {
   if (v === undefined || v === '') return undefined;
   const level = EFFORT_LEVELS.find((e) => e === v);
@@ -98,7 +103,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.post('/prs/merge', h((req) => office.mergePullRequest(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));
 
   // previews: a PR running on this machine, one per project
-  r.post('/previews', h((req) => office.startPreview(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));
+  r.post('/previews', h((req) => office.startPreview(str(req.body.projectId), str(req.body.repo), Number(req.body.number), picks(req.body.with))));
   r.delete('/previews/:projectId', h((req) => office.previews.stop(param(req, 'projectId'))));
   r.get('/previews/:projectId/log', h((req) => office.previews.log(param(req, 'projectId'))));
   r.get('/previews/:projectId/logs', h((req) => office.previews.logFiles(param(req, 'projectId'))));

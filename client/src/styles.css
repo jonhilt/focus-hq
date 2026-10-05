@@ -314,7 +314,10 @@ textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
 /* ------------------------------------------------------------------ preview panel */
 
 .preview-links { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
-
+.preview-repos { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.preview-repo { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.preview-repo strong { min-width: 150px; }
+.preview-repo select { max-width: 360px; }
 .preview-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
 .preview-tabs .tab { padding: 2px 12px; font-size: 14px; }
 .preview-links code { font-family: var(--mono); font-size: 13px; letter-spacing: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

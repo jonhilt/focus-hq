@@ -1,4 +1,4 @@
-import type { Agent, Board, Briefing, Effort, Issue, IssueDraft, Preview, QaReview, PreviewLog, PreviewLogFile, Project, RoomTheme, Settings, TermLine } from '../../../shared/types';
+import type { Agent, Board, Briefing, Effort, Issue, IssueDraft, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, RoomTheme, Settings, TermLine } from '../../../shared/types';
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(`/api${url}`, {
@@ -37,7 +37,8 @@ export const api = {
   resolveConflicts: (projectId: string, repo: string, number: number) =>
     call<Agent>('POST', '/prs/resolve-conflicts', { projectId, repo, number }),
   mergePr: (projectId: string, repo: string, number: number) => call('POST', '/prs/merge', { projectId, repo, number }),
-  startPreview: (projectId: string, repo: string, number: number) => call<Preview>('POST', '/previews', { projectId, repo, number }),
+  /** `picks`: what other repos run (a PR number, or null for the default branch); left out, the PRs linked to this one. */
+  startPreview: (projectId: string, repo: string, number: number, picks?: PreviewSet) => call<Preview>('POST', '/previews', { projectId, repo, number, with: picks }),
   stopPreview: (projectId: string) => call('DELETE', `/previews/${projectId}`),
   previewLog: (projectId: string) => call<PreviewLog>('GET', `/previews/${projectId}/log`),
   previewLogFiles: (projectId: string) => call<PreviewLogFile[]>('GET', `/previews/${projectId}/logs`),

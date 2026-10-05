@@ -5,7 +5,8 @@ import https from 'node:https';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-import type { Preview, PreviewConfig, PreviewLink, PreviewLog, PreviewLogFile } from '../shared/types';
+import { previewIncludes } from '../shared/previewSet';
+import type { Preview, PreviewCheckout, PreviewConfig, PreviewLink, PreviewLog, PreviewLogFile, PreviewRef, PreviewSet } from '../shared/types';
 import { checkoutPreview } from './agents/workspace';
 import { config, paths } from './config';
 import type { GitHubProvider } from './github/provider';
@@ -48,7 +49,7 @@ interface Run {
   /** The start command exited unhappily: fail unless a site answers by then. */
   deadline?: number;
   /** Every checkout of this preview, as given and with symlinks resolved, to find our stack in a list of stacks. */
-  checkouts: string[];
+  paths: string[];
   /** Our stack showed up in the progress command's list of stacks; how many polls since it went missing. */
   listed?: boolean;
   unlisted: number;
@@ -74,13 +75,15 @@ export interface StartPreview {
   repo: string;
   number: number;
   title: string;
+  /** What each repo runs; `repo` at `number`. */
+  set: PreviewSet;
   config: PreviewConfig;
 }
 
 /**
  * Runs pull requests on this machine so the manager can click through them in their own browser. One preview per
- * project: the PR is checked out in data/previews/<project>/<repo>, the repos its commands mention ({dir:<repo>}) at
- * their default branch next to it, and the project's preview command runs there. Its links come from the JSON it prints
+ * project: the PR is checked out in data/previews/<project>/<repo>, the repos its commands mention ({dir:<repo>}) next to
+ * it, each at its PR from the preview's set or else its default branch, and the project's preview command runs there. Its links come from the JSON it prints
  * ({"urls": {...}}), the local URLs in its output, or the free port we offered it.
  */
 export class Previews {
@@ -157,6 +160,8 @@ export class Previews {
         repo: req.repo,
         number: req.number,
         title: req.title,
+        set: req.set,
+        checkouts: [],
         status: 'starting',
         activity: 'Getting ready',
         links: [],
@@ -168,7 +173,7 @@ export class Previews {
       printed: 0,
       pending: [],
       stdout: '',
-      checkouts: [],
+      paths: [],
       unlisted: 0,
     };
     this.runs.set(req.projectId, run);
@@ -186,10 +191,10 @@ export class Previews {
     return run.stopped;
   }
 
-  /** A PR was merged or closed: its previews have nothing left to show. */
+  /** A PR was merged or closed: the previews checking it out (with other PRs or not) have nothing left to show. */
   closed(repo: string, number: number): void {
     for (const run of this.runs.values()) {
-      if (run.preview.repo === repo && run.preview.number === number) void this.stop(run.preview.projectId);
+      if (previewIncludes(run.preview, repo, number)) void this.stop(run.preview.projectId);
     }
   }
 
@@ -211,10 +216,18 @@ export class Previews {
     const mentioned = [cfg.command, cfg.stopCommand, cfg.statusCommand].filter(Boolean).join('\n');
     const dirs = new Map<string, string>();
     for (const r of [repo, ...referencedRepos(mentioned, run.repos)]) dirs.set(r, previewDir(projectId, r, run.repos));
+    const refs = await Promise.all(
+      [...dirs.keys()].map(async (r): Promise<PreviewCheckout> => {
+        const pr = r === repo ? number : run.preview.set[r];
+        return { repo: r, ref: pr != null ? { pr } : { branch: (await this.github.repoInfo(r)).defaultBranch } };
+      }),
+    );
+    if (!this.live(run)) return;
+    this.update(run, { checkouts: refs });
     const port = await freePort();
     const expand = (template: string) => expandCommand(template, { port, number, repo, repos: run.repos, dirs });
     run.cwd = dirs.get(repo)!;
-    run.checkouts = [...dirs.values()];
+    run.paths = [...dirs.values()];
     run.env = previewEnv(port, !cfg.command);
     const stopCommand = cfg.stopCommand && expand(cfg.stopCommand);
 
@@ -226,15 +239,14 @@ export class Previews {
       if (!this.live(run)) return;
     }
 
-    for (const [r, dir] of dirs) {
-      const name = shortName(r);
-      this.update(run, { activity: r === repo ? `Fetching PR #${number}` : `Fetching ${name}` });
-      const branch = r === repo ? undefined : (await this.github.repoInfo(r)).defaultBranch;
-      const sha = await checkoutPreview(r, dir, branch ? { branch } : { pr: number });
+    for (const { repo: r, ref } of refs) {
+      const dir = dirs.get(r)!;
+      this.update(run, { activity: `Fetching ${shortName(r)} ${refName(ref)}` });
+      const sha = await checkoutPreview(r, dir, ref);
       if (!this.live(run)) return;
-      if (r === repo) this.update(run, { sha });
-      run.checkouts.push(fs.realpathSync(dir));
-      this.print(run, `▸ ${name}: ${branch ?? `PR #${number}`} @ ${sha.slice(0, 7)} in ${dir}`);
+      this.checkedOut(run, r, sha);
+      run.paths.push(fs.realpathSync(dir));
+      this.print(run, `${checkoutLine(r, ref, sha)} in ${dir}`);
     }
 
     const command = cfg.command ? expand(cfg.command) : detectCommand(run.cwd);
@@ -284,16 +296,26 @@ export class Previews {
     const unhealthy = stack && /api/.test(repo); // shows off a stack that's up but not happy
     const logs = stack ? demoLogs(run.preview.projectId, unhealthy) : undefined;
     const command = stack ? './scripts/stack up' : 'npm install && npm run dev';
-    const script: [number, string][] = stack
+    // a stack uses every repo of the project, the dev server only the PR's
+    const checkouts = (stack ? [repo, ...run.repos.filter((r) => r !== repo)] : [repo]).map((r): PreviewCheckout => {
+      const pr = r === repo ? number : run.preview.set[r];
+      return { repo: r, ref: pr != null ? { pr } : { branch: 'main' } };
+    });
+    this.update(run, { checkouts });
+    const shas = await Promise.all(checkouts.map(async ({ repo: r, ref }) => ('pr' in ref ? (await this.github.getPullRequest(r, ref.pr)).headSha : 'demo')));
+    const fetched = checkouts.map((c, i): [number, () => void] => [stack ? 300 : 400, () => {
+      this.checkedOut(run, c.repo, shas[i]);
+      this.output(run, checkoutLine(c.repo, c.ref, shas[i]));
+    }]);
+    const script: [number, string | (() => void)][] = stack
       ? [
-          [400, `▸ ${shortName(repo)}: PR #${number} @ demo`],
-          ...run.repos.filter((r) => r !== repo).map((r): [number, string] => [200, `▸ ${shortName(r)}: main @ demo`]),
+          ...fetched,
           [100, `$ ${command}`],
           ...['install', 'database-migrate', 'api-build', 'readiness'].map((phase): [number, string] => [700, JSON.stringify({ status: 'starting', phase })]),
           [400, JSON.stringify({ status: unhealthy ? 'unhealthy' : 'ready', urls: { api: page('api'), web: page('web') }, logs, phase: 'running' }, null, 2)],
         ]
       : [
-          [400, `▸ ${shortName(repo)}: PR #${number} @ demo`],
+          ...fetched,
           [200, `$ ${command}`],
           [1400, 'added 312 packages, and audited 313 packages in 3s'],
           [300, `> ${shortName(repo)}@0.0.0 dev`],
@@ -306,12 +328,14 @@ export class Previews {
     run.kill = async () => {
       stopped = true;
     };
-    this.update(run, { sha: 'demo', command, activity: 'Starting' });
+    this.update(run, { command, activity: 'Starting' });
     void this.waitUntilUp(run, []);
     for (const [delay, text] of script) {
       await sleep(delay);
       if (stopped || !this.live(run)) return;
-      if (text.startsWith('{')) {
+      if (typeof text === 'function') {
+        text();
+      } else if (text.startsWith('{')) {
         // what a JSON-printing CLI's stdout looks like to launch()
         run.stdout += `${text}\n`;
         for (const line of text.split('\n')) this.output(run, line);
@@ -321,6 +345,12 @@ export class Previews {
       }
     }
     if (stack) this.exited(run, unhealthy ? 1 : 0, null, false);
+  }
+
+  /** Records the commit a repo's checkout landed on. */
+  private checkedOut(run: Run, repo: string, sha: string): void {
+    const checkouts = run.preview.checkouts.map((c) => (c.repo === repo ? { ...c, sha } : c));
+    this.update(run, repo === run.preview.repo ? { checkouts, sha } : { checkouts });
   }
 
   private output(run: Run, raw: string): void {
@@ -371,7 +401,7 @@ export class Previews {
     const single = typeof result.status === 'string' || typeof result.phase === 'string';
     const list = single ? undefined : Object.values(result).find((v): v is Record<string, unknown>[] => Array.isArray(v) && v.every(isObject));
     if (!list) return result;
-    const ours = list.find((stack) => mentions(stack, run.checkouts));
+    const ours = list.find((stack) => mentions(stack, run.paths));
     if (ours) {
       run.listed = true;
       run.unlisted = 0;
@@ -587,6 +617,11 @@ export class Previews {
 // ---------------------------------------------------------------- commands
 
 const shortName = (repo: string) => repo.split('/')[1] ?? repo;
+
+const refName = (ref: PreviewRef) => ('pr' in ref ? `PR #${ref.pr}` : ref.branch);
+
+/** "▸ web: PR #12 @ 1a2b3c4" or "▸ api: main @ 5d6e7f8". */
+const checkoutLine = (repo: string, ref: PreviewRef, sha: string) => `▸ ${shortName(repo)}: ${refName(ref)} @ ${sha.slice(0, 7)}`;
 
 /** data/previews/<project>/<repo name>, or <owner>__<name> when two repos in the project share a name. */
 function previewDir(projectId: string, repo: string, repos: string[]): string {

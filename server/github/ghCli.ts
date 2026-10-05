@@ -32,10 +32,13 @@ interface RawPr {
   reviewDecision?: string;
   statusCheckRollup?: unknown;
   createdAt: string;
+  updatedAt?: string;
+  body?: string;
+  closingIssuesReferences?: { number: number }[];
 }
 
 const ISSUE_FIELDS = 'number,title,body,url,labels,author,createdAt';
-const PR_FIELDS = 'number,title,url,headRefName,headRefOid,baseRefName,author,isDraft,mergeable,reviewDecision,statusCheckRollup,createdAt';
+const PR_FIELDS = 'number,title,url,headRefName,headRefOid,baseRefName,author,isDraft,mergeable,reviewDecision,statusCheckRollup,createdAt,updatedAt,body,closingIssuesReferences';
 
 function toIssue(repo: string, raw: RawIssue): Issue {
   return {
@@ -48,6 +51,11 @@ function toIssue(repo: string, raw: RawIssue): Issue {
     author: raw.author?.login,
     createdAt: raw.createdAt,
   };
+}
+
+/** Issues a PR closes: the ones GitHub links to it and the ones its body names. */
+function linkedIssues(references: { number: number }[] | undefined, body: string): number[] {
+  return [...new Set([...(references ?? []).map((i) => i.number), ...closingIssues(body)])];
 }
 
 function numberFromUrl(url: string): number {
@@ -124,7 +132,9 @@ export class GhCliProvider implements GitHubProvider {
       mergeable: p.mergeable ?? 'UNKNOWN',
       reviewDecision: p.reviewDecision || undefined,
       checks: rollupChecks(p.statusCheckRollup),
+      closes: linkedIssues(p.closingIssuesReferences, p.body ?? ''),
       createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
     }));
   }
 
@@ -141,10 +151,9 @@ export class GhCliProvider implements GitHubProvider {
   }
 
   async getPullRequest(repo: string, number: number): Promise<PullRequestDetail> {
-    const raw = await ghJson<RawPr & { body: string; closingIssuesReferences?: { number: number }[] }>([
+    const raw = await ghJson<RawPr>([
       'pr', 'view', String(number), '-R', repo, '--json', 'number,title,body,url,headRefName,headRefOid,baseRefName,author,closingIssuesReferences',
     ]);
-    const linked = new Set([...(raw.closingIssuesReferences ?? []).map((i) => i.number), ...closingIssues(raw.body)]);
     return {
       number: raw.number,
       title: raw.title,
@@ -154,7 +163,7 @@ export class GhCliProvider implements GitHubProvider {
       baseBranch: raw.baseRefName,
       headSha: raw.headRefOid ?? '',
       author: raw.author?.login,
-      linkedIssues: [...linked],
+      linkedIssues: linkedIssues(raw.closingIssuesReferences, raw.body ?? ''),
     };
   }
 

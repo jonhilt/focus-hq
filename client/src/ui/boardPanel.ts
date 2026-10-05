@@ -1,5 +1,6 @@
 import { UNIFORM } from '../../../shared/crew';
-import { prKey, qaBadge } from '../../../shared/qa';
+import { previewIncludes, previewSet } from '../../../shared/previewSet';
+import { prKey, qaBadge, sameCommit } from '../../../shared/qa';
 import type { Effort } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
@@ -106,7 +107,8 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
       const checks = { passing: '✓ checks pass', failing: '✗ checks failing', pending: '⏳ checks running', none: 'no checks' }[pr.checks];
       const agent = pr.agent;
       const running = state.previews.get(projectId);
-      const preview = running?.repo === pr.repo && running.number === pr.number ? running : undefined;
+      const preview = running && previewIncludes(running, pr.repo, pr.number) ? running : undefined;
+      const along = board ? Object.entries(previewSet(pr, board, p.repos)).filter(([repo, n]) => repo !== pr.repo && n !== null) : [];
       const openPreview = () => ui.openPreview(projectId);
       const previewActions = !preview
         ? [h('button', {
@@ -128,7 +130,8 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
           : preview.status === 'failed'
             ? [h('button', { class: 'btn small danger', title: preview.error ?? '', onclick: openPreview }, '⚠ Preview failed')]
             : [h('button', { class: 'btn small', title: preview.activity, onclick: openPreview }, preview.status === 'stopping' ? '⏹ Stopping…' : '⏳ Starting…')];
-      const behind = preview?.sha && pr.headSha && preview.sha !== pr.headSha && preview.sha !== 'demo';
+      const sha = preview?.checkouts.find((c) => c.repo === pr.repo)?.sha;
+      const behind = sha && pr.headSha && sha !== 'demo' && !sameCommit(sha, pr.headSha);
       const review = state.reviews.get(prKey(pr.repo, pr.number));
       const qa = qaBadge(review, pr);
       const qaBusy = qa.state === 'queued' || qa.state === 'testing';
@@ -154,6 +157,10 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
             pr.isDraft ? h('span', { class: 'chip' }, 'draft') : null,
             pr.reviewDecision ? h('span', { class: 'chip' }, pr.reviewDecision.toLowerCase().replace('_', ' ')) : null,
             behind ? h('span', { class: 'chip warn', title: 'Restart the preview to see the latest commits' }, '↻ preview is behind') : null,
+            along.length
+              ? h('span', { class: 'chip', title: '▶ Preview checks these out too: they close issues with the same feature: label' },
+                  `+ ${along.map(([repo, n]) => `${repo.split('/')[1]} #${n}`).join(', ')}`)
+              : null,
           ),
           h('div', { class: 'actions' },
             resolve ?? merge,

@@ -66,7 +66,8 @@ export interface Project {
 
 /**
  * Shell commands for ▶ Preview, run in the PR's checkout. Placeholders: {dir} (the PR's checkout), {dir:<repo>} (that
- * repo's checkout: the PR's code if the PR is in it, else its default branch), {port}, {pr}, {repo}.
+ * repo's checkout, at the repo's chosen PR: the clicked one, a PR linked to it through a feature label, or one picked in
+ * the preview panel; else its default branch), {port}, {pr}, {repo}.
  */
 export interface PreviewConfig {
   /** Starts the site(s). Empty = install and run the package.json dev script of the PR's repo. */
@@ -107,7 +108,11 @@ export interface PullRequest {
   mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN';
   reviewDecision?: string;
   checks: ChecksState;
+  /** Issues in the same repo it closes ("Closes #N", or linked on GitHub). */
+  closes: number[];
   createdAt: string;
+  /** Last activity on GitHub. Missing when the provider can't tell. */
+  updatedAt?: string;
 }
 
 export interface Board {
@@ -220,15 +225,32 @@ export interface PreviewLogFile {
   modified: number;
 }
 
-/** A pull request running on this machine so the manager can try it in their own browser. One per project at a time. */
+/** Which pull request each repository of a project runs in a preview: its number, or null for the default branch. */
+export type PreviewSet = Record<string, number | null>;
+
+export type PreviewRef = { pr: number } | { branch: string };
+
+/** One repository a preview checked out (or is about to). */
+export interface PreviewCheckout {
+  repo: string;
+  ref: PreviewRef;
+  /** Missing until it's fetched. Differs from the PR's headSha once someone pushes again. */
+  sha?: string;
+}
+
+/** Pull requests running on this machine so the manager can try them in their own browser. One per project at a time. */
 export interface Preview {
   projectId: string;
   repo: string;
-  /** The pull request being previewed. */
+  /** The pull request being previewed: the one ▶ Preview was clicked on. */
   number: number;
   title: string;
-  /** Commit that is checked out. Differs from the PR's headSha once someone pushes again. */
+  /** Commit of `number` that is checked out. */
   sha?: string;
+  /** Every repository's choice, the clicked PR's included. Restart runs the same set again. */
+  set: PreviewSet;
+  /** The repositories the preview command uses, at their choice from `set`, filled in once the preview has worked them out. */
+  checkouts: PreviewCheckout[];
   status: PreviewStatus;
   /** What it's doing right now ("Installing dependencies", "Up at http://localhost:5173/"…). */
   activity: string;

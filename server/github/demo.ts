@@ -4,11 +4,14 @@ import { closingIssues, evidenceUrl, type CreatePullRequest, type GitHubProvider
 interface FakeRepo {
   description: string;
   issues: Issue[];
-  prs: (PullRequest & { state: 'OPEN' | 'CLOSED' | 'MERGED'; closes?: number; body?: string; comments?: string[] })[];
+  prs: (PullRequest & { state: 'OPEN' | 'CLOSED' | 'MERGED'; body?: string; comments?: string[] })[];
   nextNumber: number;
 }
 
-const SEED: Record<string, { description: string; issues: [string, string, string[]][] }> = {
+/** An open PR an agent made earlier: its title, the (1-based) seed issue it closes, and how many hours ago it was last pushed. */
+type SeedPr = [string, number, number];
+
+const SEED: Record<string, { description: string; issues: [string, string, string[]][]; prs?: SeedPr[] }> = {
   'demo/webshop-frontend': {
     description: 'Storefront for the cartoon sock shop',
     issues: [
@@ -17,7 +20,9 @@ const SEED: Record<string, { description: string; issues: [string, string, strin
       ['Product page images are blurry on retina screens', 'Serve 2x images via srcset.', ['bug']],
       ['Add "Recently viewed" carousel to the home page', 'Show the last 6 products the visitor opened.', ['enhancement']],
       ['Checkout button should be disabled while submitting', 'Double clicks create duplicate orders.', ['bug']],
+      ['Wishlist page with a heart on every product', 'Save socks for later. Needs the wishlist API.', ['enhancement', 'feature:wishlist']],
     ],
+    prs: [['Wishlist page with a heart on every product', 6, 2]],
   },
   'demo/webshop-api': {
     description: 'REST API for the sock shop',
@@ -25,7 +30,10 @@ const SEED: Record<string, { description: string; issues: [string, string, strin
       ['Rate limit the /login endpoint', 'Max 10 attempts per minute per IP.', ['security']],
       ['Add pagination to GET /products', 'Support ?page and ?pageSize, default 20.', ['enhancement']],
       ['Orders endpoint returns 500 for empty carts', 'Should be a 422 with a helpful message.', ['bug']],
+      ['Wishlist endpoints', 'GET/PUT/DELETE /wishlist for the signed-in shopper.', ['enhancement', 'feature:wishlist']],
     ],
+    // two attempts at the same issue: a preview picks the one pushed to last
+    prs: [['Wishlist endpoints (first try)', 4, 30], ['Wishlist endpoints', 4, 1]],
   },
   'demo/space-dodger': {
     description: 'A tiny browser game about dodging asteroids',
@@ -70,10 +78,33 @@ export class DemoGitHub implements GitHubProvider {
         // one of them conflicts, so there is something to hand to an agent
         mergeable: name === 'demo/webshop-api' ? 'CONFLICTING' : 'MERGEABLE',
         checks: 'passing',
+        closes: [],
         createdAt: new Date(start + 86400_000).toISOString(),
         state: 'OPEN',
       }];
-      this.repos.set(name, { description: seed.description, issues, prs, nextNumber: number + 1 });
+      // pairs of PRs closing feature:-labelled issues in both shop repos, so ▶ Preview has a set to bring along
+      for (const [title, closes, hoursAgo] of seed.prs ?? []) {
+        const n = number + prs.length;
+        prs.push({
+          repo: name,
+          number: n,
+          title,
+          url: `https://github.com/${name}/pull/${n}`,
+          branch: `focus/${closes}-${title.toLowerCase().replace(/\W+/g, '-').replace(/-$/, '')}-${n}`,
+          headSha: (n * 0x85ebca6b >>> 0).toString(16).padStart(8, '0') + 'f00',
+          baseBranch: 'main',
+          author: 'demo-manager',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          checks: 'passing',
+          closes: [closes],
+          createdAt: new Date(Date.now() - (hoursAgo + 3) * 3600_000).toISOString(),
+          updatedAt: new Date(Date.now() - hoursAgo * 3600_000).toISOString(),
+          state: 'OPEN',
+          body: `Adds ${title.toLowerCase()}.\n\nCloses #${closes}`,
+        });
+      }
+      this.repos.set(name, { description: seed.description, issues, prs, nextNumber: number + prs.length });
     }
   }
 
@@ -126,7 +157,7 @@ export class DemoGitHub implements GitHubProvider {
   async listPullRequests(name: string): Promise<PullRequest[]> {
     return this.repo(name)
       .prs.filter((p) => p.state === 'OPEN')
-      .map(({ state: _state, closes: _closes, ...pr }) => {
+      .map(({ state: _state, body: _body, comments: _comments, ...pr }) => {
         // Checks "finish" a little while after the PR is opened.
         const age = Date.now() - Date.parse(pr.createdAt);
         return { ...pr, checks: age < 20_000 ? 'pending' : pr.number % 5 === 0 ? 'failing' : 'passing' };
@@ -174,7 +205,6 @@ export class DemoGitHub implements GitHubProvider {
   async createPullRequest(name: string, req: CreatePullRequest) {
     const repo = this.repo(name);
     const number = repo.nextNumber++;
-    const closes = /Closes #(\d+)/.exec(req.body);
     const pr = {
       repo: name,
       number,
@@ -186,9 +216,10 @@ export class DemoGitHub implements GitHubProvider {
       isDraft: false,
       mergeable: 'MERGEABLE' as const,
       checks: 'pending' as const,
+      closes: closingIssues(req.body),
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       state: 'OPEN' as const,
-      closes: closes ? Number(closes[1]) : undefined,
       body: req.body,
       headSha: Math.random().toString(16).slice(2, 12).padEnd(10, '0'),
     };
@@ -201,7 +232,7 @@ export class DemoGitHub implements GitHubProvider {
     const pr = repo.prs.find((p) => p.number === number);
     if (!pr || pr.state !== 'OPEN') throw new Error(`PR #${number} is not open`);
     pr.state = 'MERGED';
-    if (pr.closes) repo.issues = repo.issues.filter((i) => i.number !== pr.closes);
+    repo.issues = repo.issues.filter((i) => !pr.closes.includes(i.number));
   }
 
   async createRepo(name: string, opts: { owner?: string; private: boolean; description: string }): Promise<string> {

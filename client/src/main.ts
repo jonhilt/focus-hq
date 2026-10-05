@@ -17,6 +17,7 @@ import { openQaPanel } from './ui/qaPanel';
 import { openNewIssuePanel, openPausePanel, openTeleportPanel } from './ui/travelPanel';
 import type { Interaction } from './world/builder';
 import { plannerFor } from '../../shared/crew';
+import { previewIncludes } from '../../shared/previewSet';
 import { sound } from './sound';
 import { SUN_POSITION } from './world/layout';
 import { World } from './world/office';
@@ -79,7 +80,7 @@ async function main() {
     openBoard: (projectId, tab) => openBoardPanel(ui, projectId, tab),
     previewPr: (projectId, repo, number) => {
       const running = state.previews.get(projectId);
-      if (running?.repo === repo && running.number === number && running.status !== 'failed') return openPreviewPanel(ui, projectId);
+      if (running && previewIncludes(running, repo, number) && running.status !== 'failed') return openPreviewPanel(ui, projectId);
       api.startPreview(projectId, repo, number).then(
         (preview) => openPreviewPanel(ui, projectId, preview),
         (err: Error) => ui.error(err.message),

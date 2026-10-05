@@ -1,4 +1,5 @@
-import type { Agent, Board, Effort, Preview, Project, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
+import type { Agent, Board, Effort, Preview, PreviewSet, Project, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
+import { chosenSet, previewPrs } from '../shared/previewSet';
 import type { AgentManager } from './agents/manager';
 import type { Briefings } from './agents/briefing';
 import type { IssuePlanner } from './agents/planner';
@@ -136,7 +137,7 @@ export class Office {
     this.store.save();
     this.broadcastProjects();
     this.boardChanged(projectId, 0);
-    if (this.previews.list().some((p) => p.projectId === projectId && p.repo === repo)) void this.previews.stop(projectId);
+    if (this.previews.list().some((p) => p.projectId === projectId && (p.repo === repo || p.checkouts.some((c) => c.repo === repo)))) void this.previews.stop(projectId);
     return project;
   }
 
@@ -197,13 +198,18 @@ export class Office {
 
   // ---------------------------------------------------------------- previews
 
-  /** Runs an open PR locally (replacing the project's current preview) for the manager to click through. */
-  startPreview(projectId: string, repo: string, number: number): Promise<Preview> {
+  /**
+   * Runs an open PR locally (replacing the project's current preview) for the manager to click through, together with
+   * the PRs linked to it through a feature label, or the PRs `picks` names (null: that repo's default branch).
+   */
+  startPreview(projectId: string, repo: string, number: number, picks?: PreviewSet): Promise<Preview> {
     const project = this.store.project(projectId);
     if (!project.repos.includes(repo)) throw new Error(`${repo} is not part of ${project.name}`);
-    const pr = this.store.boards.get(projectId)?.prs.find((p) => p.repo === repo && p.number === number);
-    if (!pr) throw new Error(`${repo}#${number} is not an open pull request`);
-    return this.previews.start({ projectId, repos: project.repos, repo, number, title: pr.title, config: project.preview ?? {} });
+    const board = this.store.boards.get(projectId);
+    const pr = board?.prs.find((p) => p.repo === repo && p.number === number);
+    if (!board || !pr) throw new Error(`${repo}#${number} is not an open pull request`);
+    const set = chosenSet(pr, board, project.repos, picks);
+    return this.previews.start({ projectId, repos: project.repos, repo, number, title: pr.title, set, config: project.preview ?? {} });
   }
 
   // ---------------------------------------------------------------- boards
@@ -256,8 +262,8 @@ export class Office {
     this.hub.send({ type: 'board', board });
 
     const preview = this.previews.list().find((p) => p.projectId === projectId);
-    if (preview && !board.error?.includes(preview.repo) && !board.prs.some((p) => p.repo === preview.repo && p.number === preview.number)) {
-      this.previews.closed(preview.repo, preview.number);
+    for (const { repo, number } of preview ? previewPrs(preview) : []) {
+      if (!board.error?.includes(repo) && !board.prs.some((p) => p.repo === repo && p.number === number)) this.previews.closed(repo, number);
     }
 
     await this.noticeClosedPullRequests(projectId, board);
