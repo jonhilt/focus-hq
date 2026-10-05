@@ -348,7 +348,7 @@ export class AgentManager {
           head: agent.branch,
           base: agent.baseBranch,
           title: agent.issue.title,
-          body: pullRequestBody(agent, summary),
+          body: pullRequestBody(agent, summary, this.store.settings.attribution),
         });
         this.hub.toast('success', `🎉 ${agent.name} opened PR #${pr.number}: ${agent.issue.title}`, agent.id);
       }
@@ -489,7 +489,7 @@ export class AgentManager {
     let commentUrl: string | undefined;
     try {
       this.update(agent, { activity: 'Posting the QA report on the PR' });
-      const body = qaComment(report, { officer: agent.name, sha: review?.sha }, screenshots);
+      const body = qaComment(report, { officer: agent.name, sha: review?.sha }, screenshots, this.store.settings.attribution);
       commentUrl = (await this.github.commentOnPullRequest(agent.repo, number, body)) || undefined;
       this.print(agent, [{ kind: 'system', text: `✻ Posted the QA report: ${commentUrl ?? 'done'}` }]);
     } catch (err) {

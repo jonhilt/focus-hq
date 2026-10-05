@@ -28,6 +28,8 @@ export interface Settings {
   model: string;
   /** Agents auto-merge nothing; this is the merge method used by the board's Merge button. */
   mergeMethod: 'squash' | 'merge' | 'rebase';
+  /** Pull requests and QA reports on GitHub name the agent who did the work and mention Focus. */
+  attribution: boolean;
 }
 
 /**

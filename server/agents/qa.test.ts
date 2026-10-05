@@ -86,7 +86,7 @@ describe('evidencePath', () => {
 
 describe('qaComment', () => {
   it('leads with the verdict, the tester and the commit', () => {
-    const body = qaComment(report(), { officer: 'Lt. Varga', sha: 'abc1234def5678' }, []);
+    const body = qaComment(report(), { officer: 'Lt. Varga', sha: 'abc1234def5678' }, [], true);
     expect(body.split('\n')[0]).toBe('## 🔍 QA report: ✅ Passed');
     expect(body).toContain('Lt. Varga');
     expect(body).toContain('`abc1234`');
@@ -94,14 +94,21 @@ describe('qaComment', () => {
     expect(body).not.toContain('What needs fixing');
   });
 
+  it('leaves out the officer and Focus when attribution is off, but keeps the commit', () => {
+    const body = qaComment(report(), { officer: 'Lt. Varga', sha: 'abc1234def5678' }, [], false);
+    expect(body.split('\n').slice(0, 2)).toEqual(['## 🔍 QA report: ✅ Passed', '**Tested at** commit `abc1234`']);
+    expect(body).not.toContain('Lt. Varga');
+    expect(body).not.toContain('Focus');
+  });
+
   it('adds the fix instructions on a fail', () => {
-    const body = qaComment(report({ verdict: 'fail', fixInstructions: 'Guard the empty cart in cart.ts' }), { officer: 'Lt. Varga' }, []);
+    const body = qaComment(report({ verdict: 'fail', fixInstructions: 'Guard the empty cart in cart.ts' }), { officer: 'Lt. Varga' }, [], true);
     expect(body).toContain('❌ Failed');
     expect(body).toContain('### 🔧 What needs fixing\n\nGuard the empty cart in cart.ts');
   });
 
   it('keeps pipes and line breaks from breaking the table', () => {
-    const body = qaComment(report({ checks: [{ name: 'a | b', result: 'fail', details: 'line 1\nline 2' }] }), { officer: 'X' }, []);
+    const body = qaComment(report({ checks: [{ name: 'a | b', result: 'fail', details: 'line 1\nline 2' }] }), { officer: 'X' }, [], true);
     expect(body).toContain('| ❌ | a \\| b | line 1<br>line 2 |');
   });
 
@@ -109,7 +116,7 @@ describe('qaComment', () => {
     const body = qaComment(report(), { officer: 'X' }, [
       { caption: 'Cart with 2 items', file: 'a.jpg', url: 'https://github.com/acme/shop/blob/focus-qa-evidence/pr-12/1/1.jpg?raw=true' },
       { caption: 'Saved [for] later', file: 'b.jpg', url: 'https://github.com/acme/shop/blob/focus-qa-evidence/pr-12/1/2.jpg?raw=true' },
-    ]);
+    ], true);
     expect(body).toContain('### 📸 Screenshots');
     const first = body.indexOf('**1. Cart with 2 items**\n\n![Cart with 2 items](https://github.com/acme/shop/blob/focus-qa-evidence/pr-12/1/1.jpg?raw=true)');
     const second = body.indexOf('**2. Saved [for] later**\n\n![Saved for later](https://github.com/acme/shop/blob/focus-qa-evidence/pr-12/1/2.jpg?raw=true)');
@@ -118,11 +125,11 @@ describe('qaComment', () => {
   });
 
   it('says so when the review has no screenshots', () => {
-    expect(qaComment(report(), { officer: 'X' }, [])).toContain('### 📸 Screenshots\n\nNo screenshots were taken during this review.');
+    expect(qaComment(report(), { officer: 'X' }, [], true)).toContain('### 📸 Screenshots\n\nNo screenshots were taken during this review.');
   });
 
   it('keeps the caption but leaves out an image that failed to upload', () => {
-    const body = qaComment(report(), { officer: 'X' }, [{ caption: 'Empty cart', file: 'a.jpg' }]);
+    const body = qaComment(report(), { officer: 'X' }, [{ caption: 'Empty cart', file: 'a.jpg' }], true);
     expect(body).toContain('**1. Empty cart**\n\n_The image couldn\'t be uploaded._');
     expect(body).not.toContain('![');
     expect(body).not.toContain('No screenshots');

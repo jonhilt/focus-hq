@@ -319,6 +319,7 @@ export class Office {
     if (patch.autonomy && ['ask', 'auto', 'full'].includes(patch.autonomy)) s.autonomy = patch.autonomy;
     if (patch.model !== undefined) s.model = patch.model.trim();
     if (patch.mergeMethod && ['squash', 'merge', 'rebase'].includes(patch.mergeMethod)) s.mergeMethod = patch.mergeMethod;
+    if (typeof patch.attribution === 'boolean') s.attribution = patch.attribution;
     this.store.save();
     this.hub.send({ type: 'info', info: { ...this.info, settings: s } });
     this.agents.schedule();

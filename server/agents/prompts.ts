@@ -64,13 +64,11 @@ export const COMMIT_NUDGE =
   'Your working tree still has uncommitted changes. Commit everything that belongs to this change now ' +
   '(leave out build output, dependencies and secrets), then reply with your pull request description again.';
 
-export function pullRequestBody(agent: Agent, summary: string): string {
-  return `${summary.trim() || `Resolves the issue below.`}
+export function pullRequestBody(agent: Pick<Agent, 'name'> & { issue: Pick<Agent['issue'], 'number'> }, summary: string, attribution: boolean): string {
+  const body = `${summary.trim() || `Resolves the issue below.`}
 
-Closes #${agent.issue.number}
-
----
-_Built by **${agent.name}** in the Focus office with Claude Code._`;
+Closes #${agent.issue.number}`;
+  return attribution ? `${body}\n\n---\n_Built by **${agent.name}** in the Focus office with Claude Code._` : body;
 }
 
 const NAMES = [

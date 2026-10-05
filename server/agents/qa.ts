@@ -105,14 +105,11 @@ const ICON = { pass: '✅', fail: '❌', skip: '⏭️' } as const;
 const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>') || ' ';
 
 /** The QA report as a pull request comment, with the screenshots that made it to GitHub. */
-export function qaComment(report: QaReport, by: { officer: string; sha?: string }, screenshots: QaScreenshot[]): string {
+export function qaComment(report: QaReport, by: { officer: string; sha?: string }, screenshots: QaScreenshot[], attribution: boolean): string {
   const pass = report.verdict === 'pass';
-  const lines = [
-    `## 🔍 QA report: ${pass ? '✅ Passed' : '❌ Failed'}`,
-    `**Tested by** ${by.officer} (Focus QA officer)${by.sha ? ` · commit \`${by.sha.slice(0, 7)}\`` : ''}`,
-    '',
-    report.summary || (pass ? 'Everything checked out.' : 'Problems found, see below.'),
-  ];
+  const commit = by.sha ? `commit \`${by.sha.slice(0, 7)}\`` : '';
+  const tested = attribution ? [`**Tested by** ${by.officer} (Focus QA officer)`, commit].filter(Boolean).join(' · ') : commit && `**Tested at** ${commit}`;
+  const lines = [`## 🔍 QA report: ${pass ? '✅ Passed' : '❌ Failed'}`, ...(tested ? [tested] : []), '', report.summary || (pass ? 'Everything checked out.' : 'Problems found, see below.')];
   if (report.checks.length) {
     lines.push('', '| | Check | Details |', '|---|---|---|', ...report.checks.map((c) => `| ${ICON[c.result]} | ${cell(c.name)} | ${cell(c.details)} |`));
   }
@@ -126,7 +123,7 @@ export function qaComment(report: QaReport, by: { officer: string; sha?: string 
     const caption = s.caption.replace(/\r?\n/g, ' ');
     lines.push('', `**${i + 1}. ${caption}**`, '', s.url ? `![${caption.replace(/[[\]]/g, '')}](${s.url})` : '_The image couldn\'t be uploaded._');
   });
-  lines.push('', `<sub>Posted by the Focus office. QA reviews and tests; the manager decides what merges.</sub>`);
+  if (attribution) lines.push('', `<sub>Posted by the Focus office. QA reviews and tests; the manager decides what merges.</sub>`);
   return lines.join('\n');
 }
 

@@ -330,6 +330,8 @@ function settingsTab(ui: Ui): HTMLElement {
   model.addEventListener('change', () => save({ model: model.value }));
   const merge = h('select', null, ...(['squash', 'merge', 'rebase'] as const).map((m) => h('option', { value: m, selected: s.mergeMethod === m }, m)));
   merge.addEventListener('change', () => save({ mergeMethod: merge.value as 'squash' }));
+  const attribution = h('input', { type: 'checkbox', checked: s.attribution });
+  attribution.addEventListener('change', () => save({ attribution: attribution.checked }));
   const recheck = h('button', { class: 'btn small' }, '⟳ Check again');
   recheck.onclick = () => void busy(recheck, () => api.checkGitHub(), ui.error);
 
@@ -338,6 +340,7 @@ function settingsTab(ui: Ui): HTMLElement {
     h('div', { class: 'field' }, h('label', null, 'Agents working at once (all projects)'), max, h('small', null, 'Each agent is a full Claude Code session on your subscription – more agents use your limits faster.')),
     h('div', { class: 'field' }, h('label', null, 'Model'), model, h('small', null, 'e.g. claude-opus-5-5 or claude-sonnet-5-5. Leave empty for your Claude Code default.')),
     h('div', { class: 'field' }, h('label', null, 'Merge method for the board’s Merge button'), merge),
+    h('div', { class: 'field' }, h('label', null, attribution, ' Sign pull requests and QA reports'), h('small', null, 'Names the agent or QA officer who did the work, and mentions Focus, in what the office posts on GitHub.')),
     h('div', { class: 'card', style: 'margin-top:8px' },
       h('div', { class: 'row' },
         h('strong', null, 'GitHub'),
