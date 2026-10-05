@@ -9,7 +9,7 @@
     "demo": "tsx server/index.ts --dev --demo",
     "build": "vite build",
     "start": "tsx server/supervise.ts",
-    "typecheck": "tsc -p .",
+    "typecheck": "tsc -p . && effect-language-service diagnostics --project tsconfig.json --format text",
     "lint": "eslint .",
     "test": "vitest run"
   },
@@ -27,6 +27,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@effect/language-service": "0.87.3",
     "@eslint/js": "^10.0.1",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.4",

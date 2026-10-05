@@ -1,41 +1,73 @@
-import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import http from 'node:http';
-import https from 'node:https';
-import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import { Clock, Data, Effect, Exit, ManagedRuntime, Schedule, Scope, type Duration } from 'effect';
 import { previewIncludes } from '../shared/previewSet';
 import type { Preview, PreviewCheckout, PreviewConfig, PreviewLink, PreviewLog, PreviewLogFile, PreviewRef, PreviewSet } from '../shared/types';
-import { checkoutPreview } from './agents/workspace';
 import { config, paths } from './config';
 import type { GitHubProvider } from './github/provider';
 import type { Hub } from './hub';
-import { errorMessage, sleep, truncate } from './util';
+import { CheckoutFailed, type CommandNotStarted, PreviewMachine, type ShellProcess } from './previewMachine';
+import { errorMessage, truncate } from './util';
 
 const LOG_LINES = 600;
 const MAX_LINKS = 8;
 const WINDOWS = process.platform === 'win32';
 /** Named links like these go after the ones a person opens first (web before api). */
 const BACKSTAGE = /api|backend|server|db|database|postgres|swagger|docs|health|metrics/i;
-const STOP_TIMEOUT = 5 * 60_000;
+const STOP_TIMEOUT: Duration.Input = '5 minutes';
+const STATUS_TIMEOUT: Duration.Input = '30 seconds';
 /** A running stack's own status that's worth a warning (anything else, e.g. "ready" or "ok", clears it). */
 const TROUBLED = /unhealthy|stale|fail|error|degraded|down|stopped|dead|crash/i;
 /** How much of a log file the panel gets. */
 const LOG_TAIL = 200_000;
 /** After a start command exits unhappily, how long its sites get to answer anyway. */
-const GRACE = 30_000;
+const GRACE: Duration.Input = '30 seconds';
+/** Between SIGTERM and SIGKILL. */
+const KILL_GRACE: Duration.Input = '5 seconds';
+
+export class CommandTimedOut extends Data.TaggedError('CommandTimedOut')<{ what: string; timeout: Duration.Input }> {
+  override get message() {
+    return `The ${this.what} timed out after ${String(this.timeout)}`;
+  }
+}
+
+export class NoPreviewCommand extends Data.TaggedError('NoPreviewCommand')<{ repo: string }> {
+  override get message() {
+    return (
+      `Don't know how to run ${this.repo}: there's no package.json with a dev or start script. ` +
+      `Set the project's preview command in the ready room (Projects).`
+    );
+  }
+}
+
+/** A {dir:<name>} placeholder that names no repository in the project, or more than one. */
+export class BadDirPlaceholder extends Data.TaggedError('BadDirPlaceholder')<{ name: string; matches: string[]; repos: string[] }> {
+  override get message() {
+    return this.matches.length
+      ? `{dir:${this.name}} could mean ${this.matches.join(' or ')} – use owner/name`
+      : `{dir:${this.name}} isn't a repository in this project (${this.repos.map(shortName).join(', ')})`;
+  }
+}
+
+type LaunchError = CommandNotStarted | CheckoutFailed | NoPreviewCommand | BadDirPlaceholder;
 
 interface Run {
   preview: Preview;
   config: PreviewConfig;
   /** Every repository in the project, for {dir:<repo>}. */
   repos: string[];
+  /**
+   * Everything the preview has running: the start command's process tree, its polling and the log flush. Closing it
+   * runs the stop command and kills the tree.
+   */
+  scope: Scope.Closeable;
+  /** Closes `scope`, once; anyone else waits for that. */
+  down: Effect.Effect<void>;
   log: string[];
   /** Lines printed so far, including ones trimmed from `log`. */
   printed: number;
   pending: string[];
-  flush?: NodeJS.Timeout;
   /** Tail of the start command's stdout, for a JSON result. */
   stdout: string;
   /** The start command's JSON result named the links; stop guessing them from URLs in its output. */
@@ -46,8 +78,6 @@ interface Run {
   watching?: boolean;
   /** Why the preview is up but not happily (shown as its warning once a site answers). */
   complaint?: string;
-  /** The start command exited unhappily: fail unless a site answers by then. */
-  deadline?: number;
   /** Every checkout of this preview, as given and with symlinks resolved, to find our stack in a list of stacks. */
   paths: string[];
   /** Our stack showed up in the progress command's list of stacks; how many polls since it went missing. */
@@ -55,17 +85,9 @@ interface Run {
   unlisted: number;
   cwd?: string;
   env?: NodeJS.ProcessEnv;
-  /** Expanded, once there's something to stop. */
-  stopCommand?: string;
   statusCommand?: string;
-  /** Stops the start command and everything it started: SIGTERM, a grace period, then SIGKILL. */
-  kill?: () => Promise<void>;
-  /** Last resort when the office itself is exiting. */
-  killNow?: () => void;
   /** Set once a stop is under way. */
   stopped?: Promise<void>;
-  /** The stop command and process-tree kill, run once on stop or failure. */
-  down?: Promise<void>;
 }
 
 export interface StartPreview {
@@ -85,6 +107,8 @@ export interface StartPreview {
  * project: the PR is checked out in data/previews/<project>/<repo>, the repos its commands mention ({dir:<repo>}) next to
  * it, each at its PR from the preview's set or else its default branch, and the project's preview command runs there. Its links come from the JSON it prints
  * ({"urls": {...}}), the local URLs in its output, or the free port we offered it.
+ *
+ * Promise-based outside, Effect inside: each preview's lifetime is a `Scope`, run on this one runtime.
  */
 export class Previews {
   private runs = new Map<string, Run>();
@@ -93,12 +117,8 @@ export class Previews {
     private readonly hub: Hub,
     private readonly github: GitHubProvider,
     private readonly demo: boolean,
-  ) {
-    // Commands run in their own process group, so they'd outlive the office unless we take them down with us.
-    process.on('exit', () => {
-      for (const run of this.runs.values()) run.killNow?.();
-    });
-  }
+    private readonly runtime: ManagedRuntime.ManagedRuntime<PreviewMachine, never> = ManagedRuntime.make(PreviewMachine.layer),
+  ) {}
 
   list(): Preview[] {
     return [...this.runs.values()].map((r) => r.preview);
@@ -154,6 +174,7 @@ export class Previews {
   /** Starts a preview, replacing the project's current one. Returns straight away; progress arrives as `preview` events. */
   async start(req: StartPreview): Promise<Preview> {
     while (this.runs.has(req.projectId)) await this.stop(req.projectId); // a loop: a double click could slip another run in
+    const scope = Scope.makeUnsafe();
     const run: Run = {
       preview: {
         projectId: req.projectId,
@@ -165,10 +186,12 @@ export class Previews {
         status: 'starting',
         activity: 'Getting ready',
         links: [],
-        startedAt: Date.now(),
+        startedAt: this.runtime.runSync(Clock.currentTimeMillis),
       },
       config: req.config,
       repos: req.repos,
+      scope,
+      down: this.runtime.runSync(Effect.cached(Scope.close(scope, Exit.void))),
       log: [],
       printed: 0,
       pending: [],
@@ -178,8 +201,17 @@ export class Previews {
     };
     this.runs.set(req.projectId, run);
     this.publish(run);
-    const launch = this.demo ? this.launchDemo(run) : this.launch(run);
-    void launch.catch((err) => this.fail(run, errorMessage(err)));
+    // forked first, so closing the scope stops it last: the stop command's output still reaches the panel
+    const flush = Effect.sync(() => this.flush(run));
+    this.background(run, flush.pipe(Effect.repeat(Schedule.spaced('150 millis')), Effect.ensuring(flush)));
+    this.background(
+      run,
+      (this.demo ? this.launchDemo(run) : this.launch(run)).pipe(
+        Effect.catch((err) => Effect.sync(() => this.fail(run, err.message))),
+        // a bug shouldn't leave the preview "starting" forever
+        Effect.catchDefect((defect) => Effect.sync(() => this.fail(run, errorMessage(defect)))),
+      ),
+    );
     return run.preview;
   }
 
@@ -187,7 +219,7 @@ export class Previews {
   stop(projectId: string): Promise<void> {
     const run = this.runs.get(projectId);
     if (!run) return Promise.resolve();
-    run.stopped ??= this.teardown(run);
+    run.stopped ??= this.runtime.runPromise(this.teardown(run));
     return run.stopped;
   }
 
@@ -210,141 +242,147 @@ export class Previews {
 
   // ---------------------------------------------------------------- running
 
-  private async launch(run: Run): Promise<void> {
-    const { projectId, repo, number } = run.preview;
-    const cfg = run.config;
-    const mentioned = [cfg.command, cfg.stopCommand, cfg.statusCommand].filter(Boolean).join('\n');
-    const dirs = new Map<string, string>();
-    for (const r of [repo, ...referencedRepos(mentioned, run.repos)]) dirs.set(r, previewDir(projectId, r, run.repos));
-    const refs = await Promise.all(
-      [...dirs.keys()].map(async (r): Promise<PreviewCheckout> => {
-        const pr = r === repo ? number : run.preview.set[r];
-        return { repo: r, ref: pr != null ? { pr } : { branch: (await this.github.repoInfo(r)).defaultBranch } };
-      }),
-    );
-    if (!this.live(run)) return;
-    this.update(run, { checkouts: refs });
-    const port = await freePort();
-    const expand = (template: string) => expandCommand(template, { port, number, repo, repos: run.repos, dirs });
-    run.cwd = dirs.get(repo)!;
-    run.paths = [...dirs.values()];
-    run.env = previewEnv(port, !cfg.command);
-    const stopCommand = cfg.stopCommand && expand(cfg.stopCommand);
-
-    // A stack an earlier preview (or a crash) left behind would otherwise be picked up as is, running old code.
-    if (stopCommand && [...dirs.values()].every((d) => fs.existsSync(d))) {
-      this.update(run, { activity: 'Stopping anything an earlier preview left running' });
-      this.print(run, '▸ Making sure nothing from an earlier preview is still running', `$ ${stopCommand}`);
-      await this.runCommand(run, stopCommand, STOP_TIMEOUT, (line) => this.print(run, line));
-      if (!this.live(run)) return;
-    }
-
-    for (const { repo: r, ref } of refs) {
-      const dir = dirs.get(r)!;
-      this.update(run, { activity: `Fetching ${shortName(r)} ${refName(ref)}` });
-      const sha = await checkoutPreview(r, dir, ref);
-      if (!this.live(run)) return;
-      this.checkedOut(run, r, sha);
-      run.paths.push(fs.realpathSync(dir));
-      this.print(run, `${checkoutLine(r, ref, sha)} in ${dir}`);
-    }
-
-    const command = cfg.command ? expand(cfg.command) : detectCommand(run.cwd);
-    if (!command) {
-      throw new Error(
-        `Don't know how to run ${repo}: there's no package.json with a dev or start script. ` +
-          `Set the project's preview command in the ready room (Projects).`,
+  private launch(run: Run): Effect.Effect<void, LaunchError, PreviewMachine> {
+    return Effect.gen({ self: this }, function* () {
+      const machine = yield* PreviewMachine;
+      const { projectId, repo, number } = run.preview;
+      const cfg = run.config;
+      const mentioned = [cfg.command, cfg.stopCommand, cfg.statusCommand].filter(Boolean).join('\n');
+      const dirs = new Map<string, string>();
+      for (const r of [repo, ...(yield* referencedRepos(mentioned, run.repos))]) dirs.set(r, previewDir(projectId, r, run.repos));
+      const refs = yield* Effect.forEach(
+        [...dirs.keys()],
+        (r): Effect.Effect<PreviewCheckout, CheckoutFailed> => {
+          const pr = r === repo ? number : run.preview.set[r];
+          if (pr != null) return Effect.succeed({ repo: r, ref: { pr } });
+          return Effect.tryPromise({
+            try: () => this.github.repoInfo(r),
+            catch: (err) => new CheckoutFailed({ repo: r, reason: errorMessage(err) }),
+          }).pipe(Effect.map((info) => ({ repo: r, ref: { branch: info.defaultBranch } })));
+        },
+        { concurrency: 'unbounded' },
       );
-    }
-    run.stopCommand = stopCommand || undefined;
-    run.statusCommand = cfg.statusCommand ? expand(cfg.statusCommand) : undefined;
-    // Only promise a site on our port when the command was told about it; a fixed-port CLI just prints its URLs.
-    const offered = !cfg.command || /\{port\}|FOCUS_PREVIEW_PORT/.test(cfg.command);
-    this.update(run, { port, command, activity: 'Starting' });
-    this.print(run, `$ ${command}`);
+      this.update(run, { checkouts: refs });
+      const port = yield* machine.freePort;
+      const expand = (template: string) => expandCommand(template, { port, number, repo, repos: run.repos, dirs });
+      run.cwd = dirs.get(repo)!;
+      run.paths = [...dirs.values()];
+      run.env = previewEnv(port, !cfg.command);
+      const stopCommand = cfg.stopCommand ? expand(cfg.stopCommand) : undefined;
 
-    const child = spawnShell(command, run.cwd, run.env);
-    const pid = child.pid;
-    if (pid) {
-      run.kill = () => killTree(pid);
-      run.killNow = () => signalTree(pid, 'SIGKILL');
-    }
-    const onLine = lineSplitter((line) => this.output(run, line));
-    child.stdout.on('data', (chunk: Buffer) => {
-      run.stdout = (run.stdout + chunk.toString('utf8')).slice(-256_000);
-      onLine(chunk);
-      this.readResult(run);
-    });
-    child.stderr.on('data', onLine);
-    child.on('error', (err) => this.fail(run, `Couldn't start the command: ${err.message}`));
-    onExit(child, (code, signal) => {
+      // A stack an earlier preview (or a crash) left behind would otherwise be picked up as is, running old code.
+      if (stopCommand && [...dirs.values()].every((d) => fs.existsSync(d))) {
+        this.update(run, { activity: 'Stopping anything an earlier preview left running' });
+        this.print(run, '▸ Making sure nothing from an earlier preview is still running', `$ ${stopCommand}`);
+        yield* this.runCommand(run, 'stop command', stopCommand, STOP_TIMEOUT, (line) => this.print(run, line)).pipe(
+          Effect.catch((err) => Effect.sync(() => this.print(run, `⚠ ${err.message}`))),
+        );
+      }
+
+      for (const { repo: r, ref } of refs) {
+        const dir = dirs.get(r)!;
+        this.update(run, { activity: `Fetching ${shortName(r)} ${refName(ref)}` });
+        const checkout = yield* machine.checkout(r, dir, ref);
+        this.checkedOut(run, r, checkout.sha);
+        run.paths.push(checkout.path);
+        this.print(run, `${checkoutLine(r, ref, checkout.sha)} in ${dir}`);
+      }
+
+      const command = cfg.command ? expand(cfg.command) : detectCommand(run.cwd);
+      if (!command) return yield* new NoPreviewCommand({ repo });
+      run.statusCommand = cfg.statusCommand ? expand(cfg.statusCommand) : undefined;
+      // Only promise a site on our port when the command was told about it; a fixed-port CLI just prints its URLs.
+      const offered = !cfg.command || /\{port\}|FOCUS_PREVIEW_PORT/.test(cfg.command);
+      this.update(run, { port, command, activity: 'Starting' });
+      this.print(run, `$ ${command}`);
+
+      const onLine = lineSplitter((line) => this.output(run, line));
+      const child = yield* this.spawn(run, command, {
+        onStdout: (chunk) => {
+          run.stdout = (run.stdout + chunk.toString('utf8')).slice(-256_000);
+          onLine(chunk);
+          this.readResult(run);
+        },
+        onStderr: onLine,
+        // The stop command first (the CLI knows how to take its own stack down, and its supervisor may share the start
+        // command's process group), then whatever is left of the start command's process tree.
+        release: (proc) => Effect.andThen(this.runStopCommand(run, stopCommand), killTree(proc)),
+      }).pipe(Scope.provide(run.scope));
+      this.background(run, this.waitUntilUp(run, offered ? [{ url: `http://localhost:${port}/` }] : []));
+      const { code, signal } = yield* child.exited;
       onLine(null);
       this.exited(run, code, signal, offered);
     });
-    void this.waitUntilUp(run, offered ? [{ url: `http://localhost:${port}/` }] : []);
   }
 
   /**
    * Demo mode: pretend to install and start the site(s), which the office serves itself. Multi-repo projects get a
    * stack CLI that prints its URLs as JSON, single-repo ones a Vite dev server.
    */
-  private async launchDemo(run: Run): Promise<void> {
-    const { repo, number } = run.preview;
-    const office = `http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`;
-    const page = (site: string) => `${office}/demo-preview/${repo}/${number}?site=${site}`;
-    const stack = run.repos.length > 1;
-    const unhealthy = stack && /api/.test(repo); // shows off a stack that's up but not happy
-    const logs = stack ? demoLogs(run.preview.projectId, unhealthy) : undefined;
-    const command = stack ? './scripts/stack up' : 'npm install && npm run dev';
-    // a stack uses every repo of the project, the dev server only the PR's
-    const checkouts = (stack ? [repo, ...run.repos.filter((r) => r !== repo)] : [repo]).map((r): PreviewCheckout => {
-      const pr = r === repo ? number : run.preview.set[r];
-      return { repo: r, ref: pr != null ? { pr } : { branch: 'main' } };
-    });
-    this.update(run, { checkouts });
-    const shas = await Promise.all(checkouts.map(async ({ repo: r, ref }) => ('pr' in ref ? (await this.github.getPullRequest(r, ref.pr)).headSha : 'demo')));
-    const fetched = checkouts.map((c, i): [number, () => void] => [stack ? 300 : 400, () => {
-      this.checkedOut(run, c.repo, shas[i]);
-      this.output(run, checkoutLine(c.repo, c.ref, shas[i]));
-    }]);
-    const script: [number, string | (() => void)][] = stack
-      ? [
-          ...fetched,
-          [100, `$ ${command}`],
-          ...['install', 'database-migrate', 'api-build', 'readiness'].map((phase): [number, string] => [700, JSON.stringify({ status: 'starting', phase })]),
-          [400, JSON.stringify({ status: unhealthy ? 'unhealthy' : 'ready', urls: { api: page('api'), web: page('web') }, logs, phase: 'running' }, null, 2)],
-        ]
-      : [
-          ...fetched,
-          [200, `$ ${command}`],
-          [1400, 'added 312 packages, and audited 313 packages in 3s'],
-          [300, `> ${shortName(repo)}@0.0.0 dev`],
-          [200, '> vite'],
-          [900, '  VITE v6.3.5  ready in 412 ms'],
-          [100, `  ➜  Local:   ${page('web')}`],
-          [50, '  ➜  press h + enter to show help'],
-        ];
-    let stopped = false;
-    run.kill = async () => {
-      stopped = true;
-    };
-    this.update(run, { command, activity: 'Starting' });
-    void this.waitUntilUp(run, []);
-    for (const [delay, text] of script) {
-      await sleep(delay);
-      if (stopped || !this.live(run)) return;
-      if (typeof text === 'function') {
-        text();
-      } else if (text.startsWith('{')) {
-        // what a JSON-printing CLI's stdout looks like to launch()
-        run.stdout += `${text}\n`;
-        for (const line of text.split('\n')) this.output(run, line);
-        this.readResult(run);
-      } else {
-        this.output(run, text);
+  private launchDemo(run: Run): Effect.Effect<void, CheckoutFailed, PreviewMachine> {
+    return Effect.gen({ self: this }, function* () {
+      const { repo, number } = run.preview;
+      const office = `http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`;
+      const page = (site: string) => `${office}/demo-preview/${repo}/${number}?site=${site}`;
+      const stack = run.repos.length > 1;
+      const unhealthy = stack && /api/.test(repo); // shows off a stack that's up but not happy
+      const logs = stack ? demoLogs(run.preview.projectId, unhealthy) : undefined;
+      const command = stack ? './scripts/stack up' : 'npm install && npm run dev';
+      // a stack uses every repo of the project, the dev server only the PR's
+      const checkouts = (stack ? [repo, ...run.repos.filter((r) => r !== repo)] : [repo]).map((r): PreviewCheckout => {
+        const pr = r === repo ? number : run.preview.set[r];
+        return { repo: r, ref: pr != null ? { pr } : { branch: 'main' } };
+      });
+      this.update(run, { checkouts });
+      const shas = yield* Effect.forEach(
+        checkouts,
+        ({ repo: r, ref }) =>
+          'pr' in ref
+            ? Effect.tryPromise({
+                try: async () => (await this.github.getPullRequest(r, ref.pr)).headSha,
+                catch: (err) => new CheckoutFailed({ repo: r, reason: errorMessage(err) }),
+              })
+            : Effect.succeed('demo'),
+        { concurrency: 'unbounded' },
+      );
+      const fetched = checkouts.map((c, i): [number, () => void] => [stack ? 300 : 400, () => {
+        this.checkedOut(run, c.repo, shas[i]);
+        this.output(run, checkoutLine(c.repo, c.ref, shas[i]));
+      }]);
+      const script: [number, string | (() => void)][] = stack
+        ? [
+            ...fetched,
+            [100, `$ ${command}`],
+            ...['install', 'database-migrate', 'api-build', 'readiness'].map((phase): [number, string] => [700, JSON.stringify({ status: 'starting', phase })]),
+            [400, JSON.stringify({ status: unhealthy ? 'unhealthy' : 'ready', urls: { api: page('api'), web: page('web') }, logs, phase: 'running' }, null, 2)],
+          ]
+        : [
+            ...fetched,
+            [200, `$ ${command}`],
+            [1400, 'added 312 packages, and audited 313 packages in 3s'],
+            [300, `> ${shortName(repo)}@0.0.0 dev`],
+            [200, '> vite'],
+            [900, '  VITE v6.3.5  ready in 412 ms'],
+            [100, `  ➜  Local:   ${page('web')}`],
+            [50, '  ➜  press h + enter to show help'],
+          ];
+      this.update(run, { command, activity: 'Starting' });
+      this.background(run, this.waitUntilUp(run, []));
+      for (const [delay, text] of script) {
+        yield* Effect.sleep(delay);
+        if (typeof text === 'function') {
+          text();
+        } else if (text.startsWith('{')) {
+          // what a JSON-printing CLI's stdout looks like to launch()
+          run.stdout += `${text}\n`;
+          for (const line of text.split('\n')) this.output(run, line);
+          this.readResult(run);
+        } else {
+          this.output(run, text);
+        }
       }
-    }
-    if (stack) this.exited(run, unhealthy ? 1 : 0, null, false);
+      if (stack) this.exited(run, unhealthy ? 1 : 0, null, false);
+    });
   }
 
   /** Records the commit a repo's checkout landed on. */
@@ -410,55 +448,55 @@ export class Previews {
     return run.listed && ++run.unlisted >= 2 ? 'gone' : undefined;
   }
 
-  /** Checks every link: answering, answering with a 5xx, or not at all. */
-  private async checkLinks(links: PreviewLink[]): Promise<PreviewLink[]> {
-    const codes = await Promise.all(links.map((l) => probe(l.url)));
-    return links.map(({ health: _h, code: _c, ...link }, i) => {
-      const code = codes[i];
-      return code === null ? { ...link, health: 'down' } : { ...link, health: code >= 500 ? 'error' : 'up', code };
-    });
+  /** The progress command's view of our stack; nothing when it fails or times out (the next poll tries again). */
+  private progress(run: Run, statusCommand: string): Effect.Effect<Record<string, unknown> | 'gone' | undefined, never, PreviewMachine> {
+    return this.runCommand(run, 'progress command', statusCommand, STATUS_TIMEOUT).pipe(
+      Effect.map(({ stdout }) => this.ourStack(run, stdout)),
+      Effect.orElseSucceed(() => undefined),
+    );
   }
 
   /** Polls the site(s) until one answers, showing the progress command's progress meanwhile. */
-  private async waitUntilUp(run: Run, fallback: PreviewLink[]): Promise<void> {
-    const started = Date.now();
-    let slow = false;
-    let polled = 0;
-    let polling = false;
-    while (this.live(run) && run.preview.status === 'starting') {
-      const candidates = run.preview.links.length ? run.preview.links : fallback;
-      for (const { url } of candidates) {
-        if ((await probe(url)) === null || !this.live(run) || run.preview.status !== 'starting') continue;
-        const links = await this.checkLinks(run.preview.links.length ? run.preview.links : [{ url }]);
-        if (!this.live(run) || run.preview.status !== 'starting') return;
-        const names = links.map((l) => l.name).filter(Boolean);
-        const activity = links.length > 1 ? `Up – ${names.length ? names.join(', ') : `${links.length} sites`}` : `Up at ${links[0].url}`;
-        this.update(run, { status: 'running', links, activity, warning: run.complaint });
-        this.print(run, `✔ ${url} is answering`);
-        void this.watch(run);
-        return;
+  private waitUntilUp(run: Run, fallback: PreviewLink[]): Effect.Effect<void, never, PreviewMachine> {
+    const starting = () => this.live(run) && run.preview.status === 'starting';
+    return Effect.gen({ self: this }, function* () {
+      const machine = yield* PreviewMachine;
+      const { statusCommand } = run;
+      if (statusCommand) {
+        const poll = this.progress(run, statusCommand).pipe(
+          Effect.map((stack) => {
+            if (!starting()) return;
+            if (stack === 'gone') this.fail(run, 'The stack went away while starting: it is no longer in the progress command’s list');
+            else if (stack) this.apply(run, stack, true);
+          }),
+        );
+        yield* Effect.forkChild(poll.pipe(Effect.repeat(Schedule.spaced('5 seconds'))));
       }
-      if (run.deadline && Date.now() > run.deadline) {
-        this.fail(run, `${run.complaint ?? 'The command gave up'}, and none of its sites answer`);
-        return;
-      }
-      if (run.statusCommand && !polling && Date.now() - polled > 5000) {
-        polling = true;
-        polled = Date.now();
-        void this.runCommand(run, run.statusCommand, 30_000).then(({ stdout }) => {
-          polling = false;
-          if (!this.live(run) || run.preview.status !== 'starting') return;
-          const stack = this.ourStack(run, stdout);
-          if (stack === 'gone') this.fail(run, 'The stack went away while starting: it is no longer in the progress command’s list');
-          else if (stack) this.apply(run, stack, true);
-        });
-      }
-      if (!slow && !run.phase && Date.now() - started > 90_000) {
-        slow = true;
-        this.update(run, { activity: candidates.length ? 'Still waiting for the site to answer – check the log' : 'Waiting for the command to report its URLs' });
-      }
-      await sleep(1000);
-    }
+      const slow = Effect.sync(() => {
+        if (!starting() || run.phase) return;
+        const waiting = run.preview.links.length || fallback.length;
+        this.update(run, { activity: waiting ? 'Still waiting for the site to answer – check the log' : 'Waiting for the command to report its URLs' });
+      });
+      yield* Effect.forkChild(Effect.delay(slow, '90 seconds'));
+
+      /** True once a site answers. */
+      const answered = Effect.gen({ self: this }, function* () {
+        const candidates = run.preview.links.length ? run.preview.links : fallback;
+        for (const { url } of candidates) {
+          if ((yield* machine.probe(url)) === null || !starting()) continue;
+          const links = yield* checkLinks(run.preview.links.length ? run.preview.links : [{ url }]);
+          if (!starting()) return true;
+          const names = links.map((l) => l.name).filter(Boolean);
+          const activity = links.length > 1 ? `Up – ${names.length ? names.join(', ') : `${links.length} sites`}` : `Up at ${links[0].url}`;
+          this.update(run, { status: 'running', links, activity, warning: run.complaint });
+          this.print(run, `✔ ${url} is answering`);
+          this.watch(run);
+          return true;
+        }
+        return false;
+      });
+      yield* answered.pipe(Effect.repeat({ schedule: Schedule.spaced('1 second'), until: (up) => up || !starting() }));
+    });
   }
 
   /**
@@ -466,29 +504,38 @@ export class Previews {
    * the warning follows it ("unhealthy", back to "ready"). When the command has exited, nothing else would notice the
    * sites going away: three checks with no answer, or the stack dropping out of the progress command's list, fail it.
    */
-  private async watch(run: Run): Promise<void> {
+  private watch(run: Run): void {
     if (run.watching) return;
     run.watching = true;
     const running = () => this.live(run) && run.preview.status === 'running';
     let misses = 0;
-    while (running()) {
-      await sleep(10_000);
-      if (!running()) return;
-      const links = await this.checkLinks(run.preview.links);
-      if (!running()) return;
+    /** False once there's nothing left to watch. */
+    const check = Effect.gen({ self: this }, function* () {
+      if (!running()) return false;
+      const links = yield* checkLinks(run.preview.links);
+      if (!running()) return false;
       if (JSON.stringify(links) !== JSON.stringify(run.preview.links)) this.update(run, { links });
       misses = links.some((l) => l.health !== 'down') ? 0 : misses + 1;
-      if (run.detached && misses >= 3) return this.fail(run, 'The site stopped answering');
-      if (!run.statusCommand) continue;
-      const stack = this.ourStack(run, (await this.runCommand(run, run.statusCommand, 30_000)).stdout);
-      if (!running()) return;
-      if (stack === 'gone') return this.fail(run, 'The stack went away: it is no longer in the progress command’s list');
+      if (run.detached && misses >= 3) {
+        this.fail(run, 'The site stopped answering');
+        return false;
+      }
+      if (!run.statusCommand) return true;
+      const stack = yield* this.progress(run, run.statusCommand);
+      if (!running()) return false;
+      if (stack === 'gone') {
+        this.fail(run, 'The stack went away: it is no longer in the progress command’s list');
+        return false;
+      }
       if (stack && typeof stack.status === 'string') {
         const error = typeof stack.error === 'string' && stack.error ? `: ${stack.error}` : '';
         run.complaint = TROUBLED.test(stack.status) ? `The stack reports itself as ${stack.status}${error}` : undefined;
         if (run.complaint !== run.preview.warning) this.update(run, { warning: run.complaint });
       }
-    }
+      return true;
+    });
+    const every = Schedule.spaced('10 seconds');
+    this.background(run, Effect.delay(check, '10 seconds').pipe(Effect.repeat({ schedule: every, while: (more) => more })));
   }
 
   private exited(run: Run, code: number | null, signal: NodeJS.Signals | null, offered: boolean): void {
@@ -501,20 +548,24 @@ export class Previews {
       // e.g. a CLI that starts the sites in the background and returns
       run.detached = true;
       this.print(run, '▸ The command finished; the sites keep running on their own');
-      if (run.preview.status === 'running') void this.watch(run);
+      if (run.preview.status === 'running') this.watch(run);
       return;
     }
     if (code !== 0 && !signal && !gaveUp && run.namedLinks) {
       // A stack CLI that brought its sites up but didn't like what it saw (e.g. "unhealthy"): they may be worth a look.
       run.detached = true;
-      run.complaint = `The command exited with code ${code}${status ? ` and reported the stack as ${status}` : ''}${reported ? `: ${reported}` : ''}`;
+      const complaint = `The command exited with code ${code}${status ? ` and reported the stack as ${status}` : ''}${reported ? `: ${reported}` : ''}`;
+      run.complaint = complaint;
       if (run.preview.status === 'running') {
-        this.print(run, `⚠ ${run.complaint}`);
-        this.update(run, { warning: run.complaint });
-        void this.watch(run);
+        this.print(run, `⚠ ${complaint}`);
+        this.update(run, { warning: complaint });
+        this.watch(run);
       } else {
-        this.print(run, `⚠ ${run.complaint}. Checking whether its sites answer anyway…`);
-        run.deadline = Date.now() + GRACE;
+        this.print(run, `⚠ ${complaint}. Checking whether its sites answer anyway…`);
+        const giveUp = Effect.sync(() => {
+          if (run.preview.status === 'starting') this.fail(run, `${complaint}, and none of its sites answer`);
+        });
+        this.background(run, Effect.delay(giveUp, GRACE));
       }
       return;
     }
@@ -527,68 +578,97 @@ export class Previews {
     if (!this.live(run) || run.preview.status === 'failed') return;
     this.print(run, `✘ ${message}`);
     this.update(run, { status: 'failed', error: message, activity: truncate(message, 160) });
-    void this.shutDown(run);
+    this.runtime.runFork(run.down);
   }
 
-  /**
-   * The stop command first (the CLI knows how to take its own stack down, and its supervisor may share the start
-   * command's process group), then whatever is left of the start command's process tree. Once per run.
-   */
-  private shutDown(run: Run): Promise<void> {
-    run.down ??= (async () => {
-      if (run.stopCommand) {
-        this.print(run, `$ ${run.stopCommand}`);
-        const { code } = await this.runCommand(run, run.stopCommand, STOP_TIMEOUT, (line) => this.print(run, line));
-        if (code !== 0) console.warn(`  ⚠ Preview stop command for ${run.preview.repo}#${run.preview.number} exited with ${code}: ${run.stopCommand}`);
-      }
-      await run.kill?.();
-    })();
-    return run.down;
-  }
-
-  private async teardown(run: Run): Promise<void> {
-    if (run.preview.status !== 'failed') this.update(run, { status: 'stopping', activity: 'Stopping' });
-    await this.shutDown(run);
-    if (!this.owns(run)) return;
-    this.runs.delete(run.preview.projectId);
-    clearTimeout(run.flush);
-    this.hub.send({ type: 'preview', projectId: run.preview.projectId, preview: null });
-  }
-
-  /** Runs a stop or status command to the end. Never rejects. */
-  private runCommand(run: Run, command: string, timeoutMs: number, onLine?: (line: string) => void): Promise<{ code: number | null; stdout: string }> {
-    return new Promise((resolve) => {
-      let stdout = '';
-      const child = spawnShell(command, run.cwd, run.env);
-      const lines = lineSplitter((line) => onLine?.(truncate(stripAnsi(line), 2000)));
-      child.stdout.on('data', (chunk: Buffer) => {
-        stdout = (stdout + chunk.toString('utf8')).slice(-256_000);
-        lines(chunk);
-      });
-      child.stderr.on('data', lines);
-      const timer = setTimeout(() => child.pid && signalTree(child.pid, 'SIGKILL'), timeoutMs);
-      child.on('error', () => {
-        clearTimeout(timer);
-        resolve({ code: null, stdout });
-      });
-      onExit(child, (code) => {
-        clearTimeout(timer);
-        lines(null);
-        resolve({ code, stdout });
-      });
+  private teardown(run: Run): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      if (run.preview.status !== 'failed') this.update(run, { status: 'stopping', activity: 'Stopping' });
+      yield* run.down;
+      if (!this.owns(run)) return;
+      this.runs.delete(run.preview.projectId);
+      this.hub.send({ type: 'preview', projectId: run.preview.projectId, preview: null });
     });
   }
 
+  /** The stop command, on the way down. A failing one only gets a warning: the process tree gets killed regardless. */
+  private runStopCommand(run: Run, stopCommand: string | undefined): Effect.Effect<void, never, PreviewMachine> {
+    if (!stopCommand) return Effect.void;
+    const label = `Preview stop command for ${run.preview.repo}#${run.preview.number}`;
+    return Effect.gen({ self: this }, function* () {
+      this.print(run, `$ ${stopCommand}`);
+      const { code } = yield* this.runCommand(run, 'stop command', stopCommand, STOP_TIMEOUT, (line) => this.print(run, line));
+      if (code !== 0) console.warn(`  ⚠ ${label} exited with ${code}: ${stopCommand}`);
+    }).pipe(
+      Effect.catch((err) =>
+        Effect.sync(() => {
+          this.print(run, `⚠ ${err.message}`);
+          console.warn(`  ⚠ ${label}: ${err.message}: ${stopCommand}`);
+        }),
+      ),
+    );
+  }
+
+  /** Runs a stop or progress command to the end, or kills it once it has taken `timeout`. */
+  private runCommand(
+    run: Run,
+    what: string,
+    command: string,
+    timeout: Duration.Input,
+    onLine?: (line: string) => void,
+  ): Effect.Effect<{ code: number | null; stdout: string }, CommandNotStarted | CommandTimedOut, PreviewMachine> {
+    return Effect.gen({ self: this }, function* () {
+      let stdout = '';
+      const lines = lineSplitter((line) => onLine?.(truncate(stripAnsi(line), 2000)));
+      const child = yield* this.spawn(run, command, {
+        onStdout: (chunk) => {
+          stdout = (stdout + chunk.toString('utf8')).slice(-256_000);
+          lines(chunk);
+        },
+        onStderr: lines,
+        // Left alone once it has exited: whatever it started in the background is meant to outlive it.
+        release: (proc, exit) => (Exit.isSuccess(exit) ? Effect.void : killTree(proc)),
+      });
+      const { code } = yield* child.exited;
+      lines(null);
+      return { code, stdout };
+    }).pipe(
+      Effect.scoped,
+      Effect.timeoutOrElse({ duration: timeout, orElse: () => Effect.fail(new CommandTimedOut({ what, timeout })) }),
+    );
+  }
+
+  /** Spawns a command in the preview's checkout, owned by the current scope: closing it runs `release`. */
+  private spawn(
+    run: Run,
+    command: string,
+    options: {
+      onStdout: (chunk: Buffer) => void;
+      onStderr: (chunk: Buffer) => void;
+      release: (proc: ShellProcess, exit: Exit.Exit<unknown, unknown>) => Effect.Effect<void, never, PreviewMachine>;
+    },
+  ): Effect.Effect<ShellProcess, never, PreviewMachine | Scope.Scope> {
+    return Effect.acquireRelease(
+      PreviewMachine.use((machine) => machine.spawn(command, { cwd: run.cwd, env: run.env, onStdout: options.onStdout, onStderr: options.onStderr })),
+      options.release,
+    );
+  }
+
   // ---------------------------------------------------------------- plumbing
+
+  /** Runs an effect for as long as the preview lasts: closing its scope interrupts it. */
+  private background(run: Run, effect: Effect.Effect<void, never, PreviewMachine>): void {
+    this.runtime.runFork(Effect.forkIn(effect, run.scope));
+  }
 
   /** Still the project's preview (maybe on its way out). */
   private owns(run: Run): boolean {
     return this.runs.get(run.preview.projectId) === run;
   }
 
-  /** Still the project's preview and not being stopped. */
+  /** Still the project's preview and not being stopped (a failed one stays failed while it's stopped). */
   private live(run: Run): boolean {
-    return this.owns(run) && !run.stopped;
+    return this.owns(run) && run.preview.status !== 'stopping' && !run.stopped;
   }
 
   private update(run: Run, patch: Partial<Preview>): void {
@@ -605,13 +685,41 @@ export class Previews {
     if (run.log.length > LOG_LINES) run.log.splice(0, run.log.length - LOG_LINES);
     run.printed += lines.length;
     run.pending.push(...lines);
-    run.flush ??= setTimeout(() => {
-      run.flush = undefined;
-      if (!this.owns(run)) return;
-      const lines = run.pending.splice(0);
-      this.hub.send({ type: 'preview-log', projectId: run.preview.projectId, log: { startedAt: run.preview.startedAt, first: run.printed - lines.length, lines } });
-    }, 150);
   }
+
+  /** Sends the lines printed since the last flush (batched, so a chatty dev server isn't a message per line). */
+  private flush(run: Run): void {
+    if (!run.pending.length || !this.owns(run)) return;
+    const lines = run.pending.splice(0);
+    this.hub.send({ type: 'preview-log', projectId: run.preview.projectId, log: { startedAt: run.preview.startedAt, first: run.printed - lines.length, lines } });
+  }
+}
+
+/**
+ * Takes down a command and everything it started: SIGTERM, then SIGKILL for whatever is still there after a grace
+ * period.
+ */
+function killTree(proc: ShellProcess): Effect.Effect<void, never, PreviewMachine> {
+  const { pid } = proc;
+  if (pid === undefined) return Effect.void;
+  return Effect.gen(function* () {
+    const machine = yield* PreviewMachine;
+    if (!(yield* machine.signal(pid, 'SIGTERM'))) return;
+    yield* machine.signal(pid, 0).pipe(
+      Effect.repeat({ schedule: Schedule.spaced('200 millis'), while: (alive) => alive }),
+      Effect.timeoutOrElse({ duration: KILL_GRACE, orElse: () => machine.signal(pid, 'SIGKILL') }),
+    );
+  });
+}
+
+/** Checks every link: answering, answering with a 5xx, or not at all. */
+function checkLinks(links: PreviewLink[]): Effect.Effect<PreviewLink[], never, PreviewMachine> {
+  return PreviewMachine.use((machine) =>
+    Effect.forEach(links, ({ health: _h, code: _c, ...link }) =>
+      machine.probe(link.url).pipe(
+        Effect.map((code): PreviewLink => (code === null ? { ...link, health: 'down' } : { ...link, health: code >= 500 ? 'error' : 'up', code })),
+      ), { concurrency: 'unbounded' }),
+  );
 }
 
 // ---------------------------------------------------------------- commands
@@ -630,26 +738,28 @@ function previewDir(projectId: string, repo: string, repos: string[]): string {
 }
 
 /** Finds the repo a {dir:<name>} placeholder means, by owner/name or just name. */
-function resolveRepo(name: string, repos: string[]): string {
+function resolveRepo(name: string, repos: string[]): string | BadDirPlaceholder {
   const wanted = name.trim().toLowerCase();
   const exact = repos.find((r) => r.toLowerCase() === wanted);
   if (exact) return exact;
   const byName = repos.filter((r) => shortName(r).toLowerCase() === wanted);
-  if (byName.length === 1) return byName[0];
-  throw new Error(
-    byName.length
-      ? `{dir:${name}} could mean ${byName.join(' or ')} – use owner/name`
-      : `{dir:${name}} isn't a repository in this project (${repos.map(shortName).join(', ')})`,
-  );
+  return byName.length === 1 ? byName[0] : new BadDirPlaceholder({ name, matches: byName, repos });
 }
 
-function referencedRepos(text: string, repos: string[]): string[] {
-  return [...new Set([...text.matchAll(/\{dir:([^}]+)\}/g)].map((m) => resolveRepo(m[1], repos)))];
+function referencedRepos(text: string, repos: string[]): Effect.Effect<string[], BadDirPlaceholder> {
+  const found = new Set<string>();
+  for (const [, name] of text.matchAll(/\{dir:([^}]+)\}/g)) {
+    const repo = resolveRepo(name, repos);
+    if (repo instanceof BadDirPlaceholder) return Effect.fail(repo);
+    found.add(repo);
+  }
+  return Effect.succeed([...found]);
 }
 
+/** Fills in {port}, {pr}, {repo} and {dir} / {dir:<repo>}; every {dir:<repo>} is in `dirs` by now (referencedRepos). */
 function expandCommand(template: string, ctx: { port: number; number: number; repo: string; repos: string[]; dirs: Map<string, string> }): string {
   return template.replace(/\{(port|pr|repo|dir)(?::([^}]+))?\}/g, (whole, key: string, arg?: string) => {
-    if (key === 'dir') return shellQuote(ctx.dirs.get(arg ? resolveRepo(arg, ctx.repos) : ctx.repo)!);
+    if (key === 'dir') return shellQuote(ctx.dirs.get(arg ? (resolveRepo(arg, ctx.repos) as string) : ctx.repo)!);
     if (arg) return whole;
     return key === 'port' ? String(ctx.port) : key === 'pr' ? String(ctx.number) : ctx.repo;
   });
@@ -668,28 +778,6 @@ function previewEnv(port: number, auto: boolean): NodeJS.ProcessEnv {
   delete env.HOST;
   if (auto) env.PORT = String(port);
   return env;
-}
-
-/**
- * A shell on purpose: preview commands are the manager's own command lines (npm.cmd on Windows, `&&`, a project CLI).
- * Detached on POSIX so the whole process group can be killed.
- */
-function spawnShell(command: string, cwd: string | undefined, env: NodeJS.ProcessEnv | undefined) {
-  return spawn(command, { cwd, env, shell: true, detached: !WINDOWS, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-}
-
-/** Calls back once the process has exited and its output drained, without waiting on pipes a background child keeps open. */
-function onExit(child: ReturnType<typeof spawnShell>, done: (code: number | null, signal: NodeJS.Signals | null) => void): void {
-  child.on('exit', (code, signal) => {
-    let settled = false;
-    const settle = () => {
-      if (settled) return;
-      settled = true;
-      done(code, signal);
-    };
-    child.once('close', settle);
-    setTimeout(settle, 500);
-  });
 }
 
 /** The repo's own way of running itself: install, then its dev (or start) script. */
@@ -794,57 +882,7 @@ function lineSplitter(onLine: (line: string) => void): (chunk: Buffer | null) =>
   };
 }
 
-// ---------------------------------------------------------------- processes and ports
-
-function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.unref();
-    server.on('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      const { port } = server.address() as net.AddressInfo;
-      server.close(() => resolve(port));
-    });
-  });
-}
-
-/** The HTTP status a URL answers with (a 404 or a 500 still means a server is there), or null when nothing answers. */
-function probe(url: string): Promise<number | null> {
-  return new Promise((resolve) => {
-    const done = (res: http.IncomingMessage) => {
-      res.resume();
-      resolve(res.statusCode ?? 0);
-    };
-    const req = url.startsWith('https:')
-      ? https.get(url, { timeout: 2000, rejectUnauthorized: false }, done) // local dev certificates are self-signed
-      : http.get(url, { timeout: 2000 }, done);
-    req.on('timeout', () => req.destroy());
-    req.on('error', () => resolve(null));
-  });
-}
-
-/** Signals the command and everything it started. False once nothing is left. */
-function signalTree(pid: number, signal: NodeJS.Signals | 0): boolean {
-  if (WINDOWS) {
-    if (signal !== 0) spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
-    return false;
-  }
-  try {
-    process.kill(-pid, signal); // negative pid: the whole process group
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function killTree(pid: number): Promise<void> {
-  if (!signalTree(pid, 'SIGTERM')) return;
-  for (let i = 0; i < 25; i++) {
-    await sleep(200);
-    if (!signalTree(pid, 0)) return;
-  }
-  signalTree(pid, 'SIGKILL');
-}
+// ---------------------------------------------------------------- demo
 
 /** Log files for a demo stack, in the temp folder (demo mode writes nothing under the data dir). */
 function demoLogs(projectId: string, unhealthy: boolean): string {

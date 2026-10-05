@@ -13,7 +13,8 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true
+    "noEmit": true,
+    "plugins": [{ "name": "@effect/language-service" }]
   },
   "include": ["shared", "server", "client/src", "vite.config.ts", "vitest.config.ts"]
 }

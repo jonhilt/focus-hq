@@ -245,7 +245,8 @@ server/
   store.ts                ~/.focus/state.json + per-agent terminal logs (jsonl)
   routes.ts               REST API used by the panels
   hub.ts                  broadcasts ServerEvents to every browser tab
-  previews.ts             ▶ Preview: check a PR out, run the project's preview commands, find its links, tear it down
+  previews.ts             ▶ Preview: check a PR out, run the project's preview commands, find its links, tear it down (Effect: one Scope per preview)
+  previewMachine.ts       what a preview does to this machine (shell commands in their own process group, signals, probes) as an Effect service
   github/                 GitHub as an Effect service: gh CLI layer (live), in-memory layer (demo), Promise adapter
   agents/
     manager.ts            hire → queue → worktree → run → commit nudge → push → PR; messages, approvals
