@@ -2,6 +2,7 @@ import { plannerFor } from '../../../shared/crew';
 import type { Brief } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
+import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { busy, fill, h } from './dom';
 
@@ -98,7 +99,7 @@ export function openBriefingPanel(ui: Ui, projectId?: string): void {
     if (yourTurn && document.activeElement !== input) input.focus();
   };
 
-  ui.panels.open({ title, body, accent: '#e5dbff', wide: true });
+  ui.panels.open({ title, body, accent: LCARS.lilac, wide: true });
   open = true;
   ui.panels.own(() => (open = false));
   ui.panels.own(state.on('briefing', render));

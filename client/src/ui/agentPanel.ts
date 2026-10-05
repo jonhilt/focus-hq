@@ -32,7 +32,7 @@ export function openAgentPanel(ui: Ui, id: string): void {
   const footer = h('div', { class: 'compose' }, input, send, stop, dismiss);
 
   const title = h('h2');
-  ui.panels.open({ title, body, footer, wide: true, accent: UNIFORM[agent.avatar.division] + '55' });
+  ui.panels.open({ title, body, footer, wide: true, accent: UNIFORM[agent.avatar.division] });
 
   const sendMessage = () => {
     const text = input.value.trim();
@@ -140,7 +140,7 @@ export function openAgentPanel(ui: Ui, id: string): void {
   ui.panels.own(state.on('agent-removed', (a) => {
     if (a.id === id) {
       ui.panels.close();
-      ui.hud.toast('info', `${a.name} has left the office`);
+      ui.hud.toast('info', `${a.name} has gone off duty`);
     }
   }));
 }

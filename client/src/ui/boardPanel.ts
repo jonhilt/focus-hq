@@ -27,7 +27,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
     title: `${project.name} – board`,
     body,
     wide: true,
-    accent: project.color + '66',
+    accent: project.color,
     headerExtra: [mineToggle, newIssue, refresh],
   });
 
@@ -45,7 +45,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
     const full = busyAgents >= p.maxAgents;
 
     const todo = h('div', { class: 'col' }, h('h3', null, h('span', null, '📋 To do'), h('span', null, cols.todo.length)));
-    if (!cols.todo.length) todo.append(h('div', { class: 'empty' }, p.repos.length ? 'No open issues. File one!' : 'Connect a repository in the Manager’s office first.'));
+    if (!cols.todo.length) todo.append(h('div', { class: 'empty' }, p.repos.length ? 'No open issues. File one!' : 'Connect a repository in your ready room first.'));
     for (const issue of cols.todo) {
       const key = `${issue.repo}#${issue.number}`;
       const effort = effortPicker(efforts.get(key));
@@ -135,7 +135,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
       const qaChip = qa.state === 'none'
         ? null
         : h('button', { class: `chip qa ${qa.state}`, title: review?.report?.summary ?? review?.error ?? 'Open the QA report', onclick: () => ui.openQa(projectId) }, qa.label);
-      const sendToQa = h('button', { class: 'btn small', title: qa.state === 'none' ? 'Have the room’s QA officer review and test it' : 'Test the latest commit again' }, qa.state === 'none' ? '🔍 Send to QA' : '↻ Re-test');
+      const sendToQa = h('button', { class: 'btn small', title: qa.state === 'none' ? 'Have the holodeck’s QA officer review and test it' : 'Test the latest commit again' }, qa.state === 'none' ? '🔍 Send to QA' : '↻ Re-test');
       sendToQa.disabled = qaBusy;
       sendToQa.onclick = () =>
         void busy(sendToQa, async () => {
@@ -149,11 +149,11 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
             agent ? h('span', { class: 'chip' }, h('span', { class: 'dot', style: `background:${UNIFORM[agent.avatar.division]}` }), agent.name) : pr.author ? h('span', { class: 'chip' }, `@${pr.author}`) : null,
             multi ? h('span', { class: 'chip' }, pr.repo.split('/')[1]) : null,
             qaChip,
-            h('span', { class: 'chip', style: pr.checks === 'failing' ? 'background:#ffc9c9' : '' }, checks),
-            pr.mergeable === 'CONFLICTING' ? h('span', { class: 'chip', style: 'background:#ffc9c9' }, '⚠ conflicts') : null,
+            h('span', { class: pr.checks === 'failing' ? 'chip bad' : 'chip' }, checks),
+            pr.mergeable === 'CONFLICTING' ? h('span', { class: 'chip bad' }, '⚠ conflicts') : null,
             pr.isDraft ? h('span', { class: 'chip' }, 'draft') : null,
             pr.reviewDecision ? h('span', { class: 'chip' }, pr.reviewDecision.toLowerCase().replace('_', ' ')) : null,
-            behind ? h('span', { class: 'chip', style: 'background:#ffe066', title: 'Restart the preview to see the latest commits' }, '↻ preview is behind') : null,
+            behind ? h('span', { class: 'chip warn', title: 'Restart the preview to see the latest commits' }, '↻ preview is behind') : null,
           ),
           h('div', { class: 'actions' },
             resolve ?? merge,
@@ -170,7 +170,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
     highlight.style.borderColor = project.color;
     fill(
       body,
-      board?.error ? h('div', { class: 'ask', style: 'background:#ffe3e3' }, `⚠ ${board.error}`) : null,
+      board?.error ? h('div', { class: 'ask error' }, `⚠ ${board.error}`) : null,
       h('div', { class: 'kanban' }, todo, doing, prs),
       cols.hiddenPrs ? h('div', { class: 'empty' }, `${cols.hiddenPrs} PR${cols.hiddenPrs === 1 ? '' : 's'} by other people hidden`) : null,
     );

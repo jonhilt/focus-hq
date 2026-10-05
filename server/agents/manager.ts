@@ -10,7 +10,7 @@ import { COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, 
 import { fixPrompt, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
 import type { QaLoopEvent } from './qaLoop';
 import { qaNextStep } from './qaLoop';
-import type { AgentRunner, AgentSession, RunHooks, WorkspaceOps } from './types';
+import { type AgentRunner, type AgentSession, type RunHooks, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
 
 interface Runtime {
   session?: AgentSession;
@@ -152,7 +152,7 @@ export class AgentManager {
     const leaving = seated
       .filter((a) => FINISHED.includes(a.status))
       .sort((a, b) => rank(a) - rank(b) || (a.finishedAt ?? 0) - (b.finishedAt ?? 0))[0];
-    if (!leaving) throw new Error('Every desk in this room is taken by a working agent');
+    if (!leaving) throw new Error('Every station on this holodeck is taken by a working agent');
     void this.dismiss(leaving.id);
     return leaving.desk;
   }
@@ -243,7 +243,7 @@ export class AgentManager {
           const resume = agent.status === 'waiting' ? 'working' : agent.status;
           rt.permission = { req, resolve, resume };
           this.update(agent, { status: 'waiting', permission: req, activity: `Needs approval: ${truncate(summary, 60)}` });
-          this.print(agent, [{ kind: 'manager', text: `✋ Waiting for the manager to approve ${truncate(summary, 200)}` }]);
+          this.print(agent, [{ kind: 'manager', text: `✋ Waiting for the captain to approve ${truncate(summary, 200)}` }]);
           this.hub.toast('info', `✋ ${agent.name} needs your approval`, agent.id);
           signal.addEventListener('abort', () => {
             if (rt.permission?.req.id === req.id) {
@@ -285,8 +285,8 @@ export class AgentManager {
     if (!this.store.agents.has(agent.id)) return;
 
     if (outcome.aborted) {
-      this.update(agent, { status: 'stopped', activity: 'Stopped by the manager', permission: undefined, finishedAt: Date.now() });
-      if (review) this.reviewEnded(agent, 'Stopped by the manager');
+      this.update(agent, { status: 'stopped', activity: STOPPED_BY_CAPTAIN, permission: undefined, finishedAt: Date.now() });
+      if (review) this.reviewEnded(agent, STOPPED_BY_CAPTAIN);
       this.fixEnded(agent, 'stopped');
       this.schedule();
       return;
@@ -566,8 +566,8 @@ export class AgentManager {
   private reviewEnded(agent: Agent, error: string): void {
     const review = this.store.reviews.get(prKey(agent.repo, agent.issue.number));
     if (review && (review.status === 'testing' || review.status === 'queued')) this.putReview({ ...review, status: 'error', error, finishedAt: Date.now() });
-    // don't start the next review under the manager's nose when they stopped this one on purpose
-    if (error !== 'Stopped by the manager') setTimeout(() => this.nextReview(agent.projectId), 0);
+    // don't start the next review under the captain's nose when they stopped this one on purpose
+    if (error !== STOPPED_BY_CAPTAIN) setTimeout(() => this.nextReview(agent.projectId), 0);
   }
 
   /** The PR is merged or closed: forget its review, and stop the QA officer if they're on it. */
@@ -593,7 +593,7 @@ export class AgentManager {
     const rt = this.rt(id);
     text = text.trim();
     if (!text) return;
-    this.print(agent, [{ kind: 'manager', text: `▶ Manager: ${text}` }]);
+    this.print(agent, [{ kind: 'manager', text: `▶ Captain: ${text}` }]);
 
     if (rt.session?.send(text)) {
       if (!rt.permission) this.update(agent, { activity: 'Reading your message' });
@@ -620,7 +620,7 @@ export class AgentManager {
     const pending = rt.permission;
     if (!pending || pending.req.id !== requestId) throw new Error('That request is no longer pending');
     rt.permission = undefined;
-    this.print(agent, [{ kind: 'manager', text: `${allow ? '✔ Approved' : '✘ Declined'} by the manager: ${pending.req.summary}` }]);
+    this.print(agent, [{ kind: 'manager', text: `${allow ? '✔ Approved' : '✘ Declined'} by the captain: ${pending.req.summary}` }]);
     this.update(agent, {
       status: pending.resume,
       permission: undefined,
@@ -635,7 +635,7 @@ export class AgentManager {
     if (rt.session) {
       rt.session.stop();
     } else if (!FINISHED.includes(agent.status)) {
-      this.update(agent, { status: 'stopped', activity: 'Stopped by the manager', finishedAt: Date.now() });
+      this.update(agent, { status: 'stopped', activity: STOPPED_BY_CAPTAIN, finishedAt: Date.now() });
       this.schedule();
     }
   }

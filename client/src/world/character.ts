@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { UNIFORM } from '../../../shared/crew';
 import type { Agent, AgentStatus, Avatar, Rank } from '../../../shared/types';
-import { canvasTexture, fitText, makeCanvas, roundRect, UI_FONT } from './canvas';
+import { canvasTexture, fitText, makeCanvas } from './canvas';
 import { type Expression, Head, PIP_GOLD } from './head';
 import { toon } from './materials';
 import { ball, capsule, cyl } from './props';
+import { LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
 
 /** The jumpsuit: black, with the division's colour across the shoulders. */
 const SUIT = '#32363f';
@@ -56,16 +57,16 @@ function pips(rank: Rank): THREE.Object3D[] {
   return Array.from({ length: count }, (_, i) => onChest(ball(0.022, PIP_GOLD, 10), 0.93, -0.45 - i * 0.26, 0.2));
 }
 
-const STATUS_STYLE: Record<AgentStatus, { icon: string; bg: string; fg: string }> = {
-  queued: { icon: '⏳', bg: '#e9ecef', fg: '#343a40' },
-  'setting-up': { icon: '📦', bg: '#e7f5ff', fg: '#1864ab' },
-  working: { icon: '⌨️', bg: '#ffffff', fg: '#212529' },
-  testing: { icon: '🧪', bg: '#f3f0ff', fg: '#5f3dc4' },
-  waiting: { icon: '✋', bg: '#ffe066', fg: '#5c3c00' },
-  pushing: { icon: '🚀', bg: '#e6fcf5', fg: '#087f5b' },
-  done: { icon: '✅', bg: '#d3f9d8', fg: '#2b8a3e' },
-  error: { icon: '❗', bg: '#ffe3e3', fg: '#c92a2a' },
-  stopped: { icon: '💤', bg: '#dee2e6', fg: '#495057' },
+const STATUS_ICON: Record<AgentStatus, string> = {
+  queued: '⏳',
+  'setting-up': '📦',
+  working: '⌨️',
+  testing: '🧪',
+  waiting: '✋',
+  pushing: '🚀',
+  done: '✅',
+  error: '❗',
+  stopped: '💤',
 };
 
 export function statusLine(agent: Agent): string {
@@ -191,7 +192,7 @@ export class Character {
 
   private drawBubble(): void {
     const view = this.view;
-    const style = STATUS_STYLE[view.status];
+    const color = LCARS_STATUS[view.status];
     const text = view.line;
     const key = `${view.name}|${view.status}|${text}|${view.tag}|${view.icon}`;
     if (key === this.bubbleKey) return;
@@ -200,35 +201,36 @@ export class Character {
     const w = canvas.width;
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
-    // speech bubble body + tail
-    ctx.fillStyle = style.bg;
-    ctx.strokeStyle = '#1b1b1b';
-    ctx.lineWidth = 7;
-    roundRect(ctx, 6, 6, w - 12, h - 40, 34);
-    ctx.fill();
-    ctx.stroke();
+    // an LCARS readout: a status-coloured cap, a black plate with a rail along the top, and a tail
+    const plateH = h - 40;
+    const capW = 44;
+    ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.moveTo(w / 2 - 22, h - 37);
-    ctx.lineTo(w / 2, h - 6);
-    ctx.lineTo(w / 2 + 22, h - 37);
+    ctx.roundRect(6, 6, capW, plateH, [plateH / 2, 0, 0, plateH / 2]);
     ctx.fill();
-    ctx.stroke();
-    ctx.fillRect(w / 2 - 19, h - 44, 38, 10);
+    ctx.fillStyle = '#000000';
+    ctx.beginPath();
+    ctx.roundRect(capW + 12, 6, w - capW - 18, plateH, [0, 24, 24, 0]);
+    ctx.moveTo(w / 2 - 22, plateH + 4);
+    ctx.lineTo(w / 2, h - 6);
+    ctx.lineTo(w / 2 + 22, plateH + 4);
+    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.fillRect(capW + 12, 6, (w - capW - 18) * 0.45, 8);
 
+    const tx = capW + 32;
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#1b1b1b';
-    ctx.font = `700 46px ${UI_FONT}`;
+    ctx.fillStyle = LCARS.peach;
+    ctx.font = `600 46px ${LCARS_FONT}`;
     ctx.textAlign = 'left';
-    ctx.fillText(`${view.icon ?? style.icon} ${view.name}`, 30, 52);
-    ctx.fillStyle = style.fg;
-    ctx.globalAlpha = 0.8;
-    ctx.font = `600 34px ${UI_FONT}`;
+    ctx.fillText(`${view.icon ?? STATUS_ICON[view.status]} ${view.name.toUpperCase()}`, tx, 56);
+    ctx.fillStyle = color;
+    ctx.font = `600 34px ${LCARS_FONT}`;
     ctx.textAlign = 'right';
-    if (view.tag) ctx.fillText(view.tag, w - 30, 54);
-    ctx.globalAlpha = 1;
+    if (view.tag) ctx.fillText(view.tag.toUpperCase(), w - 34, 58);
     ctx.textAlign = 'left';
-    ctx.font = `500 34px ${UI_FONT}`;
-    ctx.fillText(fitText(ctx, text, w - 60), 30, 104);
+    ctx.font = `500 36px ${LCARS_FONT}`;
+    ctx.fillText(fitText(ctx, text, w - tx - 34), tx, 108);
     this.bubbleTex.needsUpdate = true;
   }
 

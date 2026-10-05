@@ -4,6 +4,7 @@ import type { QaReview } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { statusLine } from '../world/character';
+import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { busy, fill, h, timeAgo } from './dom';
 
@@ -37,8 +38,8 @@ export function openQaPanel(ui: Ui, projectId: string): void {
   const sendBack = h('input', { type: 'checkbox', checked: autoSendBackFor(project) });
   sendBack.onchange = () => void api.updateProject(projectId, { autoSendBack: sendBack.checked }).catch((e: Error) => ui.error(e.message));
   const settings = h('div', { class: 'card qa-settings' },
-    h('label', { class: 'qa-toggle' }, auto, h('span', null, '🔍 Test every pull request the office opens or updates')),
-    h('label', { class: 'qa-toggle' }, sendBack, h('span', null, '🔧 Send a failed pull request the office opened back to be fixed (up to 3 rounds)')),
+    h('label', { class: 'qa-toggle' }, auto, h('span', null, '🔍 Test every pull request the crew opens or updates')),
+    h('label', { class: 'qa-toggle' }, sendBack, h('span', null, '🔧 Send a failed pull request the crew opened back to be fixed (up to 3 rounds)')),
     h('div', { class: 'field', style: 'margin:10px 0 0' },
       h('label', null, `What should ${officer.name} check on every ${project.name} PR?`),
       brief,
@@ -63,12 +64,12 @@ export function openQaPanel(ui: Ui, projectId: string): void {
       ),
       reviews.length
         ? h('div', { class: 'cards' }, ...reviews.map((r) => reviewCard(ui, r)))
-        : h('div', { class: 'empty' }, `No reports yet. ${officer.name} tests each PR the office opens, or press 🔍 Send to QA on any PR on the board.`),
+        : h('div', { class: 'empty' }, `No reports yet. ${officer.name} tests each PR the crew opens, or press 🔍 Send to QA on any PR on the board.`),
     );
   };
 
   fill(body, live, settings);
-  ui.panels.open({ title: `🔍 QA station: ${project.name}`, body, accent: '#d0ebff', wide: true });
+  ui.panels.open({ title: `🔍 QA station: ${project.name}`, body, accent: LCARS.sky, wide: true });
   ui.panels.own(state.on('review', (id) => id === projectId && render()));
   ui.panels.own(state.on('agent', (a) => a.projectId === projectId && a.task === 'review' && render()));
   ui.panels.own(state.on('board', (id) => id === projectId && render()));
@@ -91,7 +92,7 @@ function reviewCard(ui: Ui, review: QaReview): HTMLElement {
       review.sha ? `commit ${review.sha.slice(0, 7)} · ` : '',
       review.finishedAt ? `tested ${timeAgo(review.finishedAt)}` : `asked ${timeAgo(review.requestedAt)}`,
     ),
-    review.followUp?.kind === 'needs-you' ? h('p', { class: 'planner-error' }, `🙋 Needs you: ${review.followUp.reason}. The office stopped sending it back.`) : null,
+    review.followUp?.kind === 'needs-you' ? h('p', { class: 'planner-error' }, `🙋 Needs you: ${review.followUp.reason}. The crew stopped sending it back.`) : null,
     report?.summary ? h('p', null, report.summary) : null,
     review.error ? h('p', { class: 'planner-error' }, review.error) : null,
     report?.checks.length

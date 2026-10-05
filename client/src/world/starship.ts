@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { AgentStatus } from '../../../shared/types';
 import { sound } from '../sound';
 import { canvasTexture, fitText, makeCanvas } from './canvas';
 import { box, flat, lighten, toon } from './materials';
@@ -29,6 +30,20 @@ export const LCARS = {
   sky: '#99ccff',
 };
 const PALETTE = Object.values(LCARS);
+
+/** An agent's status as an LCARS colour, for speech bubbles, laptops and the board. Matches the DOM UI's styles.css. */
+export const LCARS_STATUS: Record<AgentStatus, string> = {
+  queued: '#8d86a0',
+  'setting-up': LCARS.sky,
+  working: LCARS.periwinkle,
+  testing: LCARS.lilac,
+  waiting: LCARS.gold,
+  pushing: LCARS.orange,
+  // not on the ship's walls: green keeps "done" and "passing" from reading as just another blue (--lcars-green)
+  done: '#99cc66',
+  error: LCARS.red,
+  stopped: '#8d86a0',
+};
 
 export const LCARS_FONT = '"Antonio", "Arial Narrow", "Roboto Condensed", sans-serif';
 

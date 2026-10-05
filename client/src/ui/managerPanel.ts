@@ -2,6 +2,7 @@ import type { Autonomy, PreviewConfig, Project, RoomTheme } from '../../../share
 import { DESKS_PER_ROOM, ROOM_THEMES } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
+import { LCARS } from '../world/starship';
 import { roomTheme, THEME_INFO } from '../world/themes';
 import { effortPicker, pickedEffort } from './agentPanel';
 import type { ManagerTab, Ui } from './context';
@@ -19,7 +20,7 @@ function knownRepos(): Promise<string[]> {
   return repoCache;
 }
 
-/** Picker for the landscape a room sits in. */
+/** Picker for the program a holodeck runs. */
 function themeSelect(selected: RoomTheme | '', surprise = false): HTMLSelectElement {
   const options = ROOM_THEMES.map((t) => h('option', { value: t, selected: t === selected }, `${THEME_INFO[t].emoji} ${THEME_INFO[t].label}`));
   if (surprise) options.unshift(h('option', { value: '', selected: selected === '' }, '✨ Surprise me'));
@@ -32,7 +33,7 @@ function repoDatalist(id: string): HTMLDataListElement {
   return list;
 }
 
-/** The management console: projects, repositories, new issues and office settings. */
+/** The ready room console: projects, repositories, new issues and ship-wide settings. */
 export function openManagerPanel(ui: Ui, tab: ManagerTab = state.projects.length ? 'projects' : 'new-project'): void {
   const body = h('div');
   const tabs = h('div', { class: 'tabs' });
@@ -58,7 +59,7 @@ export function openManagerPanel(ui: Ui, tab: ManagerTab = state.projects.length
     selected = id;
     show('projects');
   };
-  ui.panels.open({ title: "💼 Manager's office", body, tabs, accent: '#f3d9fa' });
+  ui.panels.open({ title: '🎖️ Ready room', body, tabs, accent: LCARS.lilac });
   show(tab);
   // keep the projects list fresh, but never wipe a form the manager is typing into
   ui.panels.own(state.on('projects', () => current === 'projects' && !body.contains(document.activeElement) && show('projects')));
@@ -70,7 +71,7 @@ function projectsTab(ui: Ui, show: (t: ManagerTab) => void, selected: string | u
   const project = state.project(selected ?? '') ?? state.projects[0];
   if (!project) {
     return h('div', { class: 'empty' },
-      h('p', null, 'No projects yet. Each project gets its own room with desks for agents.'),
+      h('p', null, 'No projects yet. Each project gets its own holodeck with stations for agents.'),
       h('button', { class: 'btn primary', onclick: () => show('new-project') }, '＋ Create your first project'),
     );
   }
@@ -78,7 +79,7 @@ function projectsTab(ui: Ui, show: (t: ManagerTab) => void, selected: string | u
     ...state.projects.map((p, i) =>
       h('button', { class: `project-pick${p === project ? ' on' : ''}`, onclick: () => openProject(p.id) },
         h('span', { class: 'dot', style: `background:${p.color}` }),
-        h('span', { class: 'grow' }, p.name, h('small', null, `Room ${i + 1} · ${p.repos.length} repo${p.repos.length === 1 ? '' : 's'}`)),
+        h('span', { class: 'grow' }, p.name, h('small', null, `Holodeck ${i + 1} · ${p.repos.length} repo${p.repos.length === 1 ? '' : 's'}`)),
       ),
     ),
   );
@@ -169,7 +170,7 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
 
   const room = state.projects.indexOf(p) + 1;
   return h('div', { class: 'card', style: `border-left: 14px solid ${p.color}` },
-    h('div', { class: 'row' }, color, h('div', { class: 'grow' }, name), h('span', { class: 'chip' }, `Room ${room}`),
+    h('div', { class: 'row' }, color, h('div', { class: 'grow' }, name), h('span', { class: 'chip' }, `Holodeck ${room}`),
       h('button', { class: 'btn small', onclick: () => ui.openBoard(p.id) }, '📋 Board'),
       h('button', {
         class: 'btn small',
@@ -185,7 +186,7 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
     h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow' }, newRepo), h('label', { class: 'row', style: 'gap:4px' }, newRepoPrivate, 'private'), create),
     previews,
     h('div', { class: 'row', style: 'margin-top:14px' },
-      h('label', { class: 'row', style: 'gap:6px' }, 'Scenery', theme),
+      h('label', { class: 'row', style: 'gap:6px' }, 'Holodeck program', theme),
       h('label', { class: 'row', style: 'gap:6px' }, 'Agents at once', maxAgents),
       h('label', { class: 'row', style: 'gap:6px' }, auto, 'Auto-assign open issues'),
       h('label', { class: 'row', style: 'gap:6px' }, 'with label', label),
@@ -208,7 +209,7 @@ function newProjectTab(ui: Ui, openProject: (id: string) => void): HTMLElement {
   blank.addEventListener('change', () => (blankOpts.style.display = blank.checked ? '' : 'none'));
   const theme = themeSelect('', true);
 
-  const create = h('button', { class: 'btn primary' }, '🏗️ Build the room');
+  const create = h('button', { class: 'btn primary' }, '✨ Load the holodeck');
   create.onclick = () => void busy(create, async () => {
     if (!name.value.trim()) throw new Error('Give the project a name');
     const list = repos.value.split(/[\s,]+/).map((r) => r.trim()).filter(Boolean);
@@ -217,7 +218,7 @@ function newProjectTab(ui: Ui, openProject: (id: string) => void): HTMLElement {
       const repoName = (blankName.value || name.value).trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-');
       await api.createRepo({ name: repoName, private: blankPrivate.checked, description: name.value, projectId: project.id });
     }
-    ui.hud.toast('success', `${project.name} has a room!`, {
+    ui.hud.toast('success', `${project.name} has a holodeck!`, {
       label: 'Go there',
       run: () => {
         const place = ui.places().find((p) => p.projectId === project.id);
@@ -235,9 +236,9 @@ function newProjectTab(ui: Ui, openProject: (id: string) => void): HTMLElement {
       h('small', null, 'One per line, as owner/name or a GitHub URL. Leave empty to add them later.'),
     ),
     h('div', { class: 'field' },
-      h('label', null, 'Room scenery'),
+      h('label', null, 'Holodeck program'),
       theme,
-      h('small', null, 'The room’s walls disappear and it sits in the middle of this instead. Change it any time.'),
+      h('small', null, 'The holodeck’s walls disappear and the crew works in the middle of this instead. Change it any time.'),
     ),
     h('label', { class: 'row', style: 'margin-bottom:12px;font-weight:600' }, blank, '✨ Also create a new, blank repository on GitHub for it'),
     blankOpts,
@@ -340,7 +341,7 @@ function settingsTab(ui: Ui): HTMLElement {
     h('div', { class: 'card', style: 'margin-top:8px' },
       h('div', { class: 'row' },
         h('strong', null, 'GitHub'),
-        info.github.ok ? h('span', { class: 'chip', style: 'background:#d3f9d8' }, `signed in as ${info.github.login}`) : h('span', { class: 'chip', style: 'background:#ffc9c9' }, 'not connected'),
+        info.github.ok ? h('span', { class: 'chip ok' }, `signed in as ${info.github.login}`) : h('span', { class: 'chip bad' }, 'not connected'),
         h('span', { class: 'grow' }),
         recheck,
       ),

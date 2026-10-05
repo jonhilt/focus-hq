@@ -109,18 +109,18 @@ async function main() {
 
   // splash screen until the first click
   let started = false;
-  const splashStatus = h('p', { class: 'muted' }, 'Connecting to the office…');
-  const enter = h('button', { class: 'big-button' }, 'Enter the office');
+  const splashStatus = h('p', { class: 'muted' }, 'Hailing the ship…');
+  const enter = h('button', { class: 'big-button' }, 'Come aboard');
   const splash = h('div', { class: 'splash' },
-    h('div', { class: 'card', style: 'background:var(--paper)' },
+    h('div', { class: 'card' },
       h('h1', null, 'FOCUS HQ'),
-      h('p', null, 'Your office full of Claude Code agents. Every project has a room, every agent a desk and a laptop you can look over their shoulder at.'),
+      h('p', null, 'A starship crewed by Claude Code agents. Every project gets a holodeck, every agent a station and a laptop you can look over their shoulder at.'),
       h('div', { class: 'keys' },
         h('span', null, h('kbd', { class: 'k' }, 'WASD'), 'walk'),
         h('span', null, h('kbd', { class: 'k' }, 'Mouse'), 'look around'),
         h('span', null, h('kbd', { class: 'k' }, 'E'), 'use / talk'),
         h('span', null, h('kbd', { class: 'k' }, 'T'), 'teleport'),
-        h('span', null, h('kbd', { class: 'k' }, 'M'), "manager's console"),
+        h('span', null, h('kbd', { class: 'k' }, 'M'), 'ready room'),
         h('span', null, h('kbd', { class: 'k' }, 'Esc'), 'pause'),
       ),
       enter,
@@ -136,7 +136,7 @@ async function main() {
     splash.remove();
     player.lock();
     if (state.projects.length === 0) {
-      hud.toast('info', "Welcome! Head north into the Manager's office to set up your first project.", { label: 'Open console', run: () => ui.openManager('new-project') });
+      hud.toast('info', 'Welcome aboard, Captain! Head north into your ready room to set up your first project.', { label: 'Open console', run: () => ui.openManager('new-project') });
     }
   };
 

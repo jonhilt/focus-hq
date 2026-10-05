@@ -1,24 +1,24 @@
 # 🏢 Focus HQ
 
-A cartoon, first-person 3D office where a swarm of **Claude Code** agents works through your GitHub issues.
+A cartoon, first-person 3D starship where a crew of **Claude Code** agents works through your GitHub issues, and you're the captain.
 
-![A project room: agents at their desks, the Kanban whiteboard on the back wall](docs/room.jpg)
+![A project holodeck: agents at their stations, the Kanban display on the back wall](docs/room.jpg)
 
 | Over an agent's shoulder | The board up close |
 | --- | --- |
 | ![Live terminal on an agent's laptop](docs/laptop.jpg) | ![Kanban panel with issues, agents and PRs](docs/board.jpg) |
 
 - The office is a **starship** in the style of *Star Trek: Lower Decks*: bulkhead corridors, LCARS signs and consoles, viewports onto space (with stars drifting past as the ship cruises), doors that swoosh open as you walk up, and the engines' thrum underneath it all (mute it from the pause menu).
-- Every **project** gets a **room**. A project can span several GitHub repositories.
-- Each room has **scenery**: its walls and ceiling vanish into a landscape, so the desks sit on a beach, in a forest clearing, in a desert canyon, on the moon, on a city rooftop at dusk or in a vast library. A faint holodeck grid shows where the walls are when you get close. Pick one per project in the Manager's office, or keep plain office walls. Empty rooms are bare holodecks.
-- Every **agent** is a separate Claude Code instance (via the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk)) with its own desk, laptop and git worktree. The crew wear Starfleet uniforms in their division's colour (command red, operations gold, sciences blue) and come from all over the Federation.
+- Every **project** gets a **holodeck**. A project can span several GitHub repositories.
+- Each holodeck runs a **program**: its walls and ceiling vanish into a landscape, so the stations sit on a beach, in a forest clearing, in a desert canyon, on the moon, on a city rooftop at dusk or in a vast library. A faint holodeck grid shows where the walls are when you get close. Pick one per project in your **ready room**, or keep the plain holodeck grid. Empty holodecks are bare.
+- Every **agent** is a separate Claude Code instance (via the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk)) with its own station, laptop and git worktree. The crew wear Starfleet uniforms in their division's colour (command red, operations gold, sciences blue) and come from all over the Federation.
 - Walk up behind an agent and you see their **laptop screen**: the live Claude Code terminal and, while they test, the **browser** they are driving.
-- Each room has an **operations officer** at its **＋ New issue** stand. Give them a rough idea and they read the project's code and write it up as an issue with context and **acceptance criteria**, ready for you to edit and file.
-- Bigger or fuzzier ideas go to a **briefing** in the **observation lounge** behind the Manager's office. The officer reads the code, grills you one question at a time and keeps a brief on the wall screen. When you wrap up, they write one issue to the room's stand.
-- Each room's **Kanban whiteboard** shows what's to do, who's working on what, and which **pull requests** are ready to merge.
-- The **manager's office** is where you create projects, connect existing repos or create blank ones, file issues and tune how much the agents may do on their own.
-- When an agent is done, the office pushes their branch and opens a **pull request** with their summary as the description. Merge it from the board and they pack up and go home.
-- Each room has a **QA officer** at the pull requests table. They review and test every PR the office opens (code review, tests, the browser) and post a **QA report** on it. The board shows the verdict next to each PR.
+- Each holodeck has an **operations officer** at its **＋ New issue** stand. Give them a rough idea and they read the project's code and write it up as an issue with context and **acceptance criteria**, ready for you to edit and file.
+- Bigger or fuzzier ideas go to a **briefing** in the **observation lounge** behind the ready room. The officer reads the code, grills you one question at a time and keeps a brief on the wall screen. When you wrap up, they write one issue to the holodeck's stand.
+- Each holodeck's **Kanban display** shows what's to do, who's working on what, and which **pull requests** are ready to merge.
+- The captain's **ready room** is where you create projects, connect existing repos or create blank ones, file issues and tune how much the agents may do on their own.
+- When an agent is done, Focus pushes their branch and opens a **pull request** with their summary as the description. Merge it from the board and they pack up and go home.
+- Each holodeck has a **QA officer** at the pull requests table. They review and test every PR the crew opens (code review, tests, the browser) and post a **QA report** on it. The board shows the verdict next to each PR.
 - Press **▶ Preview** on any open pull request to run it on your machine and open it in **your own browser** before you merge.
 
 GitHub goes through the [`gh` CLI](https://cli.github.com/). Claude runs through the Agent SDK on **your own Claude login**, so agents use your Claude subscription.
@@ -30,7 +30,7 @@ npm install
 npm run demo        # fake GitHub + pretend agents, nothing to set up
 ```
 
-Open <http://127.0.0.1:4477>, click **Enter the office**, and walk around.
+Open <http://127.0.0.1:4477>, click **Come aboard**, and walk around.
 
 ### The real thing
 
@@ -47,13 +47,13 @@ npm run dev         # live mode with hot reload for the 3D client
 npm run build && npm start
 ```
 
-Then in the office:
+Then on board:
 
-1. Walk north into the **Manager's office** (or press <kbd>M</kbd>) → **New project**. Connect repositories (`owner/name` or a URL), or tick *create a new blank repository*.
-2. A new room appears down the hallway. Its whiteboard fills with the repos' open issues.
+1. Walk north into your **ready room** (or press <kbd>M</kbd>) → **New project**. Connect repositories (`owner/name` or a URL), or tick *create a new blank repository*.
+2. A new holodeck appears down the corridor. Its Kanban display fills with the repos' open issues.
 3. At the board (<kbd>E</kbd>), click **Assign agent** on an issue, or file one at the **＋ New issue** stand and tick *Assign an agent right away*. The officer at the stand can draft it for you from a one-liner (see [Drafting issues](#drafting-issues)). The 🧠 picker beside either sets how much effort the agent puts in (`low` to `max`; *default* leaves it to the model).
 4. Watch them work. Press <kbd>E</kbd> on an agent or laptop to open the full terminal, message them, or approve something they need.
-5. When the PR shows up under **Ready to merge**, the room's QA officer tests it and posts their report on it. Press **▶ Preview** to try it yourself, review it on GitHub and merge it from the board.
+5. When the PR shows up under **Ready to merge**, the holodeck's QA officer tests it and posts their report on it. Press **▶ Preview** to try it yourself, review it on GitHub and merge it from the board.
 
 > **Subscription note:** if `ANTHROPIC_API_KEY` is set, agents ignore it and use your Claude login. Set `FOCUS_USE_API_KEY=1` if you want them on the API key instead. Each agent is a full Claude Code session, so several at once use your plan's limits faster. **Settings → Agents working at once** caps that (default 4).
 
@@ -64,14 +64,14 @@ Then in the office:
 | <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / mouse | walk / look |
 | <kbd>Shift</kbd> | run |
 | <kbd>E</kbd> or click | use whatever is under the crosshair (agent, laptop, board, PR table, kiosk, console) |
-| <kbd>T</kbd> | teleport to any room or straight to an agent's desk |
-| <kbd>M</kbd> | manager's console |
-| <kbd>N</kbd> | new issue for the room you're in |
+| <kbd>T</kbd> | teleport to any holodeck or straight to an agent's station |
+| <kbd>M</kbd> | ready room |
+| <kbd>N</kbd> | new issue for the holodeck you're in |
 | <kbd>Esc</kbd> | pause / close a panel |
 
 ## Drafting issues
 
-Every room has an operations officer sitting at its **＋ New issue** stand (<kbd>E</kbd> on them, or <kbd>N</kbd> anywhere in the room). The officer is the same person every time; their name comes from the project.
+Every holodeck has an operations officer sitting at its **＋ New issue** stand (<kbd>E</kbd> on them, or <kbd>N</kbd> anywhere on the holodeck). The officer is the same person every time; their name comes from the project.
 
 1. Type a rough idea ("let shoppers save items for later from the cart") and press **✨ Draft it**. You can close the panel and walk off. Their speech bubble shows what they're reading.
 2. The officer reads the project's repositories and writes an issue: a title, **Context** (naming the files involved), **What to build**, **Acceptance criteria** as a checklist, **Out of scope** and any **Assumptions**. They also pick which of the project's repos it belongs in.
@@ -82,7 +82,7 @@ The officer never files, pushes or edits anything. They run as a Claude Code ses
 
 ### Briefings
 
-For anything bigger or fuzzier than a one-line issue, press **📣 Call a briefing** at the stand instead of **✨ Draft it**. You can also call one from the observation lounge itself, through the door in the north wall of the Manager's office. You're beamed to the lounge, and the officer leaves the stand and sits down across the table from you.
+For anything bigger or fuzzier than a one-line issue, press **📣 Call a briefing** at the stand instead of **✨ Draft it**. You can also call one from the observation lounge itself, through the door in the north wall of the ready room. You're beamed to the lounge, and the officer leaves the stand and sits down across the table from you.
 
 1. The officer reads the code, puts a first brief on the wall screen and asks their first question.
 2. They ask one question at a time, starting with the why (who it's for, what's going wrong, what success looks like), then the what. They check the code before asking, and they suggest an answer with each question so you can just say yes.
@@ -94,24 +94,24 @@ A briefing is saved in `~/.focus/state.json` with the officer's session, and eac
 
 ## How an agent works an issue
 
-1. **Hire**: the agent gets a desk in the project's room and a name. If the office is at its concurrency limit, they wait in the queue (⏳).
+1. **Hire**: the agent gets a station on the project's holodeck and a name. If the office is at its concurrency limit, they wait in the queue (⏳).
 2. **Set up**: `~/.focus/repos/<owner>__<name>` holds one clone per repository. The agent gets a fresh `git worktree` of it on a new branch `focus/<issue>-<slug>-<id>`, so agents never step on each other.
 3. **Work**: Claude Code runs in that worktree with the issue (title, body, labels, comments) as its task. It also gets a few instructions: commit as you go, don't push, run the tests, check UI changes in the browser, and write the final message as a PR description.
 4. **Browser testing**: agents get an in-process MCP server (`mcp__browser__open/click/type/press/screenshot/evaluate/console`) backed by headless Chromium. Every action's screenshot streams to their laptop screen.
 5. **Deliver**: if they left uncommitted changes, they're asked once to commit them. Then the office pushes the branch and opens the PR (`Closes #N`) with the agent's summary as the body.
 6. **Follow-ups**: message an agent at any time. While they're working, the message reaches them at their next step. Once they're done, the message resumes the same Claude session and the new commits update the PR.
 7. **Merge conflicts**: a conflicting PR gets a **🔧 Resolve conflicts** button on the board. The agent who opened it merges the base branch in and updates the PR. If nobody in the office owns the PR (a teammate's, or the agent already went home), a new agent sits down on the PR's branch to do it.
-8. **QA**: every PR the office opens or updates goes to the room's QA officer (see [QA](#qa)).
+8. **QA**: every PR the office opens or updates goes to the holodeck's QA officer (see [QA](#qa)).
 9. **Merged**: when the PR is merged (from the board or on GitHub), the agent leaves and their worktree is cleaned up.
 
 ## QA
 
-Every room has a QA officer in blue, sitting at the pull requests table facing the board, with a laptop you can look at over their shoulder.
+Every holodeck has a QA officer in blue, sitting at the pull requests table facing the board, with a laptop you can look at over their shoulder.
 
 - **When they test:**
   - Automatically, when the office opens a PR or pushes new commits to one. Turn this off per project at the QA station.
   - Whenever you press **🔍 Send to QA** (or **↻ Re-test**) on a PR on the board, a teammate's PR included.
-- **One at a time:** reviews queue up for the room's officer. QA counts towards **Agents working at once**, but goes ahead of new issues in the queue and doesn't take one of the room's agent slots.
+- **One at a time:** reviews queue up for the holodeck's officer. QA counts towards **Agents working at once**, but goes ahead of new issues in the queue and doesn't take one of the holodeck's agent slots.
 - **What they do:**
   1. Check the PR's head out, detached, into their own folder.
   2. Read the PR and its linked issues, and work out the acceptance criteria.
@@ -125,7 +125,7 @@ Every room has a QA officer in blue, sitting at the pull requests table facing t
   - the auto-QA and send-back switches;
   - the project's **QA brief**: what to check on every PR of this project ("works at phone width", "no console errors"). It goes into the officer's instructions on every review.
 - **Sending a failed PR back:** when QA fails a PR the office opened, the office hands QA's summary and fix instructions to the developer who opened it. If they've gone home, a new agent sits down on the PR's branch, fixes it and pushes to the same PR. The fix goes back to QA by itself, and the re-test is told last round's findings and the commit it tested, so it checks those first, then what changed since, plus a quick smoke test.
-  - After 3 failed rounds, or a fix that pushes nothing, the office stops: the PR card and the whiteboard show **🙋 needs you**, and a toast says why.
+  - After 3 failed rounds, or a fix that pushes nothing, the office stops: the PR card and the Kanban display show **🙋 needs you**, and a toast says why.
   - Teammates' PRs are never sent back. Turn send-back off per project at the QA station.
 - **Following up:** message the QA officer like any agent, to have them look at something else.
 
@@ -134,7 +134,7 @@ Every room has a QA officer in blue, sitting at the pull requests table facing t
 Every PR card under **Ready to merge** (and a finished agent's panel) has a **▶ Preview** button. Each project has one preview at a time: previewing another PR replaces it.
 
 1. The PR's head (`refs/pull/<n>/head`, so teammates' and forks' PRs work too) is checked out in `~/.focus/previews/<project>/<repo>`. Any other repo of the project that the preview commands mention (`{dir:<repo>}`) is checked out next to it at its default branch. The checkouts are reused from one preview to the next, so `node_modules`, `bin/obj` and other ignored build output stick around.
-2. The project's **preview command** runs in the PR's checkout. Set it in the Manager's office (**Projects → ▶ Preview**). Leave it empty and the office runs `npm install && npm run dev` in the PR's repo (or the `start` script, with pnpm/yarn/bun if the repo has their lockfile).
+2. The project's **preview command** runs in the PR's checkout. Set it in the ready room (**Projects → ▶ Preview**). Leave it empty and the office runs `npm install && npm run dev` in the PR's repo (or the `start` script, with pnpm/yarn/bun if the repo has their lockfile).
 3. The links come from the command's output: a JSON object with `urls` (`{"urls": {"web": "http://127.0.0.1:55686", "api": "…"}}`, a list, or a single `url`) becomes named links, web front ends before APIs. Otherwise every local URL it prints (`http://localhost:5173/`…) becomes a link. If it prints neither, the office waits for the free port it offered.
 4. You get a toast with **Open ↗** once a site answers. The preview panel shows the command's output and a tab for each log file in the folder its JSON reported as `logs` (lines mentioning errors or failures are highlighted). It also shows the links with their last health check (⚠ when a site stops answering or answers with a 5xx), **Restart** (e.g. after the agent pushed more commits; the card says when the preview is behind) and **Stop**.
 
@@ -163,7 +163,7 @@ Progress  {dir:shop-api}/scripts/stack list
 
 The commands run through your shell (so `&&` and `npm` on Windows work), on your machine, as you. A preview runs the PR's code, so only preview PRs you'd be happy to run locally.
 
-### Autonomy (Manager's office → Settings)
+### Autonomy (ready room → Settings)
 
 | Mode | What it means |
 | --- | --- |
@@ -222,14 +222,14 @@ server/
     demoRunner.ts         scripted pretend agents (and a pretend planner, briefing officer and QA officer) for demo mode
 client/src/
   main.ts                 renderer (toon shading + outline pass), loop, interaction, UI wiring
-  world/                  office layout, rooms, desks, characters, laptop screens, whiteboard
+  world/                  ship layout, holodecks, stations, characters, laptop screens, Kanban display
     scenery.ts            stencil "holo walls" that show a landscape built around a room
     themes.ts             the landscapes (beach, forest, desert, moon, city, library)
     lounge.ts             the observation lounge: briefing table, officer, the brief on the wall screen
-  ui/                     HUD and panels (agent terminal, board, manager console, teleport, QA station, briefing)
+  ui/                     HUD and panels (agent terminal, board, ready room console, teleport, QA station, briefing)
 ```
 
-The client mirrors server state over the WebSocket. Every action is a small REST call. Laptop screens and whiteboards are canvases drawn into textures, and only redrawn when something changes. Screens near you redraw faster.
+The client mirrors server state over the WebSocket. Every action is a small REST call. Laptop screens and Kanban displays are canvases drawn into textures, and only redrawn when something changes. Screens near you redraw faster.
 
 ## Scripts
 

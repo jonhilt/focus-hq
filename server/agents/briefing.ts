@@ -105,7 +105,7 @@ export class Briefings {
 
   wrapUp(): Briefing {
     const briefing = this.ready();
-    briefing.messages.push({ from: 'system', text: 'The manager wrapped up the briefing.', at: Date.now() });
+    briefing.messages.push({ from: 'system', text: 'The captain wrapped up the briefing.', at: Date.now() });
     this.turn(briefing, 'wrapping-up', 'Writing up the issue');
     this.run(briefing, 'wrap-up');
     return publicView(briefing);

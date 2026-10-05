@@ -2,9 +2,10 @@ import { UNIFORM } from '../../../shared/crew';
 import * as THREE from 'three';
 import { prKey, qaBadge } from '../../../shared/qa';
 import type { Agent, Board, Issue, Project, PullRequest } from '../../../shared/types';
-import { canvasTexture, fitText, makeCanvas, roundRect, UI_FONT, wrap } from './canvas';
 import { state } from '../net/state';
+import { canvasTexture, fitText, makeCanvas, wrap } from './canvas';
 import { flat } from './materials';
+import { LCARS, LCARS_FONT, LCARS_STATUS, lcarsFrame } from './starship';
 
 export interface Columns {
   todo: Issue[];
@@ -35,7 +36,7 @@ export function columns(project: Project, board: Board | undefined, agents: Agen
 
 const shortRepo = (repo: string) => repo.split('/')[1] ?? repo;
 
-/** The big whiteboard on each room's back wall. */
+/** The big LCARS display on each room's back wall. */
 export class KanbanBoard {
   readonly material: THREE.MeshBasicMaterial;
   private readonly c = makeCanvas(1800, 760);
@@ -52,138 +53,104 @@ export class KanbanBoard {
   }
 
   draw(project: Project, board: Board | undefined, agents: Agent[]): void {
-    const { canvas, ctx } = this.c;
-    const W = canvas.width;
-    const H = canvas.height;
+    const { ctx } = this.c;
     const cols = columns(project, board, agents);
     const multiRepo = project.repos.length > 1;
-
-    ctx.fillStyle = '#fdfdfb';
-    ctx.fillRect(0, 0, W, H);
-    // faint marker smudges
-    ctx.fillStyle = 'rgba(120,140,160,0.05)';
-    for (let i = 0; i < 6; i++) {
-      ctx.beginPath();
-      ctx.ellipse(200 + i * 290, 380 + Math.sin(i) * 200, 160, 40, i, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    const seed = [...project.id].reduce((n, ch) => n + ch.charCodeAt(0), 0);
+    const area = lcarsFrame(ctx, this.c.canvas.width, this.c.canvas.height, { title: project.name, color: project.color, seed });
+    const bottom = area.y + area.h;
 
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
-    ctx.fillStyle = project.color;
-    ctx.font = `700 58px ${UI_FONT}`;
-    ctx.fillText(fitText(ctx, project.name, 900), 40, 52);
-    ctx.fillStyle = '#868e96';
-    ctx.font = `500 28px ${UI_FONT}`;
-    ctx.textAlign = 'right';
-    const repos = project.repos.length ? project.repos.join('  ·  ') : 'No repositories yet – connect one in the Manager’s office';
-    ctx.fillText(fitText(ctx, repos, 820), W - 40, 56);
+    ctx.fillStyle = LCARS.peach;
+    ctx.font = `500 28px ${LCARS_FONT}`;
+    const repos = project.repos.length ? project.repos.join('  ·  ') : 'No repositories yet – connect one in the ready room';
+    ctx.fillText(fitText(ctx, repos.toUpperCase(), area.w * 0.5), area.x, area.y + 12);
     if (board?.error) {
-      ctx.fillStyle = '#e03131';
-      ctx.font = `500 22px ${UI_FONT}`;
-      ctx.fillText(fitText(ctx, `⚠ ${board.error.split('\n')[0]}`, 820), W - 40, 92);
+      ctx.fillStyle = LCARS_STATUS.error;
+      ctx.textAlign = 'right';
+      ctx.fillText(fitText(ctx, `⚠ ${board.error.split('\n')[0]}`.toUpperCase(), area.w * 0.48), area.x + area.w, area.y + 12);
     }
 
-    const colW = (W - 80) / 3;
+    const gutter = 24;
+    const colW = (area.w - gutter * 2) / 3;
+    const colX = (i: number) => area.x + i * (colW + gutter);
+    const headY = area.y + 48;
+    const headH = 46;
     const titles: [string, string, number][] = [
-      ['📋 To do', '#f08c00', cols.todo.length],
-      ['🔨 In progress', '#1c7ed6', cols.doing.length],
-      [cols.hiddenPrs ? '👀 My PRs' : '👀 Ready to merge', '#2f9e44', cols.prs.length],
+      ['📋 To do', LCARS.orange, cols.todo.length],
+      ['🔨 In progress', LCARS.sky, cols.doing.length],
+      [cols.hiddenPrs ? '👀 My PRs' : '👀 Ready to merge', LCARS.lilac, cols.prs.length],
     ];
     titles.forEach(([title, color, count], i) => {
-      const x = 40 + i * colW;
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 6;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(x + 10, 150);
-      ctx.lineTo(x + colW - 20, 152);
-      ctx.stroke();
-      if (i > 0) {
-        ctx.strokeStyle = '#ced4da';
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(x - 6, 120);
-        ctx.lineTo(x - 4, H - 30);
-        ctx.stroke();
-      }
+      const x = colX(i);
       ctx.fillStyle = color;
-      ctx.font = `700 40px ${UI_FONT}`;
+      ctx.beginPath();
+      ctx.roundRect(x, headY, colW, headH, [headH / 2, 0, 0, headH / 2]);
+      ctx.fill();
+      ctx.fillStyle = '#000000';
+      ctx.font = `600 34px ${LCARS_FONT}`;
       ctx.textAlign = 'left';
-      ctx.fillText(title, x + 10, 120);
-      ctx.font = `700 30px ${UI_FONT}`;
+      ctx.fillText(title.toUpperCase(), x + 26, headY + headH / 2 + 2);
       ctx.textAlign = 'right';
-      ctx.fillText(String(count), x + colW - 24, 122);
+      ctx.fillText(String(count), x + colW - 16, headY + headH / 2 + 2);
     });
 
-    const noteH = 92;
+    const noteH = 88;
     const gap = 12;
-    const top = 172;
-    const maxNotes = Math.floor((H - top - 20) / (noteH + gap));
+    const top = headY + headH + 16;
+    const maxNotes = Math.floor((bottom - top + gap) / (noteH + gap));
 
-    const note = (col: number, row: number, seed: number, bg: string, title: string, meta: string, metaColor = '#495057', dot?: string) => {
-      const x = 40 + col * colW + 12;
+    const note = (col: number, row: number, tone: string, title: string, meta: string, dot?: string) => {
+      const x = colX(col);
       const y = top + row * (noteH + gap);
-      const w = colW - 44;
-      ctx.save();
-      ctx.translate(x + w / 2, y + noteH / 2);
-      ctx.rotate(((seed * 37) % 7 - 3) * 0.004);
-      ctx.translate(-w / 2, -noteH / 2);
-      ctx.fillStyle = 'rgba(0,0,0,0.12)';
-      roundRect(ctx, 4, 6, w, noteH, 8);
+      ctx.fillStyle = '#1b1630';
+      ctx.beginPath();
+      ctx.roundRect(x, y, colW, noteH, [0, 12, 12, 0]);
       ctx.fill();
-      ctx.fillStyle = bg;
-      roundRect(ctx, 0, 0, w, noteH, 8);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.55)'; // tape
-      ctx.fillRect(w / 2 - 40, -8, 80, 18);
-      let tx = 16;
+      ctx.fillStyle = tone;
+      ctx.fillRect(x, y, 10, noteH);
+      let tx = x + 26;
       if (dot) {
         ctx.fillStyle = dot;
         ctx.beginPath();
-        ctx.arc(30, 32, 16, 0, Math.PI * 2);
+        ctx.arc(x + 40, y + 30, 14, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = '#1b1b1b';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        tx = 56;
+        tx = x + 66;
       }
-      ctx.fillStyle = '#212529';
-      ctx.font = `600 26px ${UI_FONT}`;
+      ctx.fillStyle = '#f1eaff';
+      ctx.font = `500 28px ${LCARS_FONT}`;
       ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(wrap(ctx, title, w - tx - 14, 1)[0], tx, 32);
-      ctx.fillStyle = metaColor;
-      ctx.font = `500 22px ${UI_FONT}`;
-      ctx.fillText(fitText(ctx, meta, w - 30), 16, 68);
-      ctx.restore();
+      ctx.fillText(wrap(ctx, title, x + colW - tx - 14, 1)[0], tx, y + 30);
+      ctx.fillStyle = tone;
+      ctx.font = `500 23px ${LCARS_FONT}`;
+      ctx.fillText(fitText(ctx, meta.toUpperCase(), colW - 40), x + 26, y + 66);
     };
 
     const more = (col: number, n: number) => {
-      ctx.fillStyle = '#868e96';
-      ctx.font = `600 26px ${UI_FONT}`;
+      ctx.fillStyle = LCARS.lilac;
+      ctx.font = `600 26px ${LCARS_FONT}`;
       ctx.textAlign = 'center';
-      ctx.fillText(`+ ${n} more…`, 40 + col * colW + colW / 2, H - 28);
+      ctx.fillText(`+ ${n} MORE…`, colX(col) + colW / 2, bottom - 14);
     };
 
     const fit = (n: number) => (n > maxNotes ? maxNotes - 1 : n);
 
     cols.todo.slice(0, fit(cols.todo.length)).forEach((issue, i) => {
       const labels = issue.labels.slice(0, 2).join(', ');
-      note(0, i, issue.number, '#fff3bf', `#${issue.number} ${issue.title}`, [multiRepo ? shortRepo(issue.repo) : '', labels].filter(Boolean).join(' · ') || 'Unassigned');
+      note(0, i, LCARS.peach, `#${issue.number} ${issue.title}`, [multiRepo ? shortRepo(issue.repo) : '', labels].filter(Boolean).join(' · ') || 'Unassigned');
     });
     if (cols.todo.length > maxNotes) more(0, cols.todo.length - fit(cols.todo.length));
     if (cols.todo.length === 0) {
-      ctx.fillStyle = '#adb5bd';
-      ctx.font = `500 28px ${UI_FONT}`;
+      ctx.fillStyle = LCARS.lilac;
+      ctx.font = `500 30px ${LCARS_FONT}`;
       ctx.textAlign = 'center';
-      ctx.fillText('Nothing to do – add an issue!', 40 + colW / 2, top + 50);
+      ctx.fillText('NOTHING TO DO – ADD AN ISSUE!', colX(0) + colW / 2, top + 44);
     }
 
     cols.doing.slice(0, fit(cols.doing.length)).forEach((agent, i) => {
-      const statusColor = agent.status === 'waiting' ? '#e67700' : agent.status === 'error' ? '#c92a2a' : '#1864ab';
       const meta = `${agent.name} · ${agent.status === 'waiting' ? '✋ needs approval' : agent.status}${multiRepo ? ` · ${shortRepo(agent.repo)}` : ''}`;
-      note(1, i, agent.issue.number, agent.status === 'error' ? '#ffe3e3' : '#d0ebff', `#${agent.issue.number} ${agent.issue.title}`, meta, statusColor, UNIFORM[agent.avatar.division]);
+      note(1, i, LCARS_STATUS[agent.status], `#${agent.issue.number} ${agent.issue.title}`, meta, UNIFORM[agent.avatar.division]);
     });
     if (cols.doing.length > maxNotes) more(1, cols.doing.length - fit(cols.doing.length));
 
@@ -192,8 +159,8 @@ export class KanbanBoard {
       const qa = qaBadge(state.reviews.get(prKey(pr.repo, pr.number)), pr);
       const flags = [pr.isDraft ? 'draft' : '', pr.mergeable === 'CONFLICTING' ? '⚠ conflicts' : '', pr.reviewDecision === 'APPROVED' ? '👍 approved' : ''].filter(Boolean);
       const meta = [qa.state === 'none' ? '' : qa.label, pr.agent ? pr.agent.name : pr.author ? `@${pr.author}` : '', checks, ...flags].filter(Boolean).join(' · ');
-      const color = pr.checks === 'failing' || pr.mergeable === 'CONFLICTING' || ['failed', 'fixing', 'needs-you'].includes(qa.state) ? '#c92a2a' : '#2b8a3e';
-      note(2, i, pr.number, '#d3f9d8', `PR #${pr.number} ${pr.title}`, meta, color, pr.agent && UNIFORM[pr.agent.avatar.division]);
+      const tone = pr.checks === 'failing' || pr.mergeable === 'CONFLICTING' || ['failed', 'fixing', 'needs-you'].includes(qa.state) ? LCARS_STATUS.error : LCARS_STATUS.done;
+      note(2, i, tone, `PR #${pr.number} ${pr.title}`, meta, pr.agent && UNIFORM[pr.agent.avatar.division]);
     });
     if (cols.prs.length > maxNotes) more(2, cols.prs.length - fit(cols.prs.length));
 

@@ -4,7 +4,7 @@ import { ACTIVE_STATUSES } from '../../../shared/types';
 import { state } from '../net/state';
 import { columns } from './board';
 import { Builder, interactive } from './builder';
-import { canvasTexture, fitText, makeCanvas, roundRect, signTexture, UI_FONT } from './canvas';
+import { canvasTexture, fitText, makeCanvas, roundRect } from './canvas';
 import { type Box2, DOOR_W, HALL_HALF, LOBBY, LOUNGE, LOUNGE_DOOR_X, OFFICE, OVER_DOOR, ROOM_DEPTH, ROOM_WIDTH, roomSlot, roomToWorld, rowsFor, SUN_POSITION, WALL_H, WALL_T } from './layout';
 import { box, flat, toon, toonMaterial } from './materials';
 import { bookshelf, ceilingLight, chair, coffeeMachine, cyl, desk, DESK_TOP, plant, rug, sofa, trophy, waterCooler } from './props';
@@ -155,17 +155,17 @@ export class World {
 
   private buildLobby(b: Builder): void {
     // hanging sign over the hallway entrance
-    const hallSign = new THREE.Mesh(new THREE.PlaneGeometry(3.7, 0.62), flat(lcarsSign('Holodecks', { color: LCARS.periwinkle, sub: 'project rooms', code: 'Deck 4' })));
+    const hallSign = new THREE.Mesh(new THREE.PlaneGeometry(3.7, 0.62), flat(lcarsSign('Holodecks', { color: LCARS.periwinkle, sub: 'one per project', code: 'Deck 4' })));
     hallSign.position.set(0, 2.75, 0.15);
     b.add(hallSign);
-    const officeSign = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 0.62), flat(lcarsSign("Manager's office", { color: LCARS.red, code: '04-01' })));
+    const officeSign = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 0.62), flat(lcarsSign('Ready room', { color: LCARS.red, code: '04-01' })));
     officeSign.position.set(0, 2.88, OFFICE.z0 - OVER_DOOR);
     officeSign.rotation.y = Math.PI;
     b.add(officeSign);
-    interactive(officeSign, { kind: 'manager' }, () => 'Open the management console');
+    interactive(officeSign, { kind: 'manager' }, () => 'Open the ready room console');
 
     // big welcome logo on the west wall + directory
-    const logo = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.1), flat(lcarsSign('U.S.S. Focus HQ', { w: 1024, h: 245, color: LCARS.gold, sub: 'an office full of Claude Code agents', code: 'NCC-4477' })));
+    const logo = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.1), flat(lcarsSign('U.S.S. Focus HQ', { w: 1024, h: 245, color: LCARS.gold, sub: 'crewed by Claude Code agents', code: 'NCC-4477' })));
     const lz = (LOBBY.z0 + LOBBY.z1) / 2;
     logo.position.set(LOBBY.x0 + 0.13, 2.25, lz);
     logo.rotation.y = Math.PI / 2;
@@ -175,7 +175,7 @@ export class World {
     directory.rotation.y = Math.PI / 2;
     b.add(directory);
     b.add(box(0.1, 2.2, 1.7, '#495057', LOBBY.x0 + 0.08, 0.15, LOBBY.z1 - 1.6));
-    interactive(directory, { kind: 'teleport' }, () => 'Office directory – jump to a room');
+    interactive(directory, { kind: 'teleport' }, () => 'Ship’s directory – jump to a holodeck');
 
     // reception desk
     const reception = new THREE.Group();
@@ -255,18 +255,18 @@ export class World {
     const monitor = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.8), flat(this.dashboardTex));
     monitor.position.set(0, 0.75, 0.035);
     computer.add(monitor);
-    const back = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.8), flat(signTexture('Management console', { w: 1024, h: 585, bg: '#343a40', fg: '#ffd43b', sub: 'walk around and press E' })));
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.8), flat(consoleBackTexture()));
     back.position.set(0, 0.75, -0.035);
     back.rotation.y = Math.PI;
     computer.add(back);
     b.add(computer);
-    interactive(computer, { kind: 'manager' }, () => 'Use the management console');
+    interactive(computer, { kind: 'manager' }, () => 'Use the ready room console');
 
     const inbox = new THREE.Group();
     inbox.position.set(-0.5, DESK_TOP, cz + 1.3);
     inbox.add(box(0.45, 0.12, 0.35, '#e9ecef', 0, 0, 0));
-    inbox.add(box(0.38, 0.05, 0.28, '#ffe066', 0, 0.06, 0));
-    const inboxSign = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.2), flat(signTexture('＋ New issue', { bg: '#fff3bf', fg: '#e67700', border: '#e67700' })));
+    inbox.add(box(0.38, 0.05, 0.28, LCARS.peach, 0, 0.06, 0));
+    const inboxSign = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.2), flat(lcarsSign('New issue', { color: LCARS.orange, h: 292 })));
     inboxSign.position.set(0, 0.35, -0.05);
     inboxSign.rotation.y = Math.PI;
     inbox.add(inboxSign);
@@ -292,7 +292,7 @@ export class World {
     sheet.rotation.x = -Math.PI / 2;
     sheet.position.y = 0.91;
     blueprint.add(sheet);
-    const bpSign = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.32), flat(signTexture('＋ New project', { bg: '#dbe4ff', fg: '#364fc7', border: '#364fc7' })));
+    const bpSign = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.32), flat(lcarsSign('New project', { color: LCARS.periwinkle, h: 252 })));
     bpSign.position.set(0, 1.5, -0.3);
     bpSign.rotation.y = Math.PI;
     blueprint.add(bpSign);
@@ -325,8 +325,8 @@ export class World {
   /** Teleport destinations. */
   places(): Place[] {
     const places: Place[] = [
-      { label: '🛋️ Lobby', position: new THREE.Vector3(0, 0, LOBBY.z1 - 1.2), lookAt: new THREE.Vector3(0, 1.6, 0) },
-      { label: "💼 Manager's office", position: new THREE.Vector3(0, 0, OFFICE.z0 + 1.5), lookAt: new THREE.Vector3(0, 1.2, OFFICE.z0 + 5) },
+      { label: '🛋️ Concourse', position: new THREE.Vector3(0, 0, LOBBY.z1 - 1.2), lookAt: new THREE.Vector3(0, 1.6, 0) },
+      { label: '🎖️ Ready room', position: new THREE.Vector3(0, 0, OFFICE.z0 + 1.5), lookAt: new THREE.Vector3(0, 1.2, OFFICE.z0 + 5) },
       { label: '🖖 Observation lounge', position: new THREE.Vector3(-1.2, 0, LOUNGE.z0 + 0.9), lookAt: new THREE.Vector3(0.6, 1.1, LOUNGE.z0 + 4.6) },
     ];
     for (const room of this.rooms.values()) {
@@ -343,13 +343,13 @@ export class World {
   /** Human name of where a world position is. */
   locationOf(p: THREE.Vector3): { label: string; projectId?: string } {
     if (p.z > LOUNGE.z0) return { label: 'Observation lounge' };
-    if (p.z > OFFICE.z0) return { label: "Manager's office" };
-    if (p.z > 0) return { label: 'Lobby' };
-    if (Math.abs(p.x) < HALL_HALF) return { label: 'Hallway' };
+    if (p.z > OFFICE.z0) return { label: 'Ready room' };
+    if (p.z > 0) return { label: 'Concourse' };
+    if (Math.abs(p.x) < HALL_HALF) return { label: 'Corridor' };
     const row = Math.floor(-p.z / ROOM_WIDTH);
     const index = row * 2 + (p.x > 0 ? 0 : 1);
     const room = [...this.rooms.values()].find((r) => r.slot.index === index);
-    return room ? { label: room.project.name, projectId: room.project.id } : { label: 'Vacant room' };
+    return room ? { label: room.project.name, projectId: room.project.id } : { label: 'Vacant holodeck' };
   }
 
   markPanels(): void {
@@ -414,7 +414,7 @@ export class World {
       ctx.font = `600 38px ${LCARS_FONT}`;
       ctx.fillText(fitText(ctx, p.name.toUpperCase(), 520), area.x + 80, y);
       ctx.fillStyle = LCARS.sky;
-      ctx.font = `500 30px ${UI_FONT}`;
+      ctx.font = `500 30px ${LCARS_FONT}`;
       ctx.fillText(`📋 ${cols.todo.length}   🔨 ${cols.doing.length}   👀 ${cols.prs.length}`, area.x + 640, y);
       y += 66;
     }
@@ -434,7 +434,7 @@ export class World {
     const area = lcarsFrame(ctx, canvas.width, canvas.height, { title: 'Directory', color: LCARS.lilac, seed: 1701 });
     ctx.textBaseline = 'middle';
     let y = area.y + 50;
-    const entries: [string, string][] = [["Manager's office", '↑ north'], ['Observation lounge', '↑ past the office'], ...[...this.rooms.values()].map((r): [string, string] => [r.project.name, `room ${r.slot.index + 1} · ${r.slot.side > 0 ? 'right' : 'left'}`])];
+    const entries: [string, string][] = [['Ready room', '↑ north'], ['Observation lounge', '↑ past the ready room'], ...[...this.rooms.values()].map((r): [string, string] => [r.project.name, `holodeck ${r.slot.index + 1} · ${r.slot.side > 0 ? 'right' : 'left'}`])];
     for (const [name, where] of entries.slice(0, 10)) {
       ctx.textAlign = 'left';
       ctx.fillStyle = LCARS.peach;
@@ -449,7 +449,7 @@ export class World {
     ctx.fillStyle = LCARS.gold;
     ctx.font = `500 30px ${LCARS_FONT}`;
     ctx.textAlign = 'center';
-    ctx.fillText('PRESS E (OR T ANYWHERE) TO JUMP TO A ROOM', area.x + area.w / 2, area.y + area.h - 10);
+    ctx.fillText('PRESS E (OR T ANYWHERE) TO JUMP TO A HOLODECK', area.x + area.w / 2, area.y + area.h - 10);
     this.directoryTex.needsUpdate = true;
   }
 
@@ -460,6 +460,21 @@ export class World {
   get interactRoot(): THREE.Object3D {
     return this.root;
   }
+}
+
+/** The back of the ready room console's monitor, facing whoever walks up behind it. */
+function consoleBackTexture(): THREE.CanvasTexture {
+  const { canvas, ctx } = makeCanvas(1024, 585);
+  const area = lcarsFrame(ctx, canvas.width, canvas.height, { title: 'Ready room', color: LCARS.gold, seed: 1031 });
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = LCARS.peach;
+  ctx.font = `600 76px ${LCARS_FONT}`;
+  ctx.fillText('CAPTAIN’S CONSOLE', area.x, area.y + area.h * 0.4);
+  ctx.fillStyle = LCARS.sky;
+  ctx.font = `500 38px ${LCARS_FONT}`;
+  ctx.fillText('WALK AROUND AND PRESS E', area.x, area.y + area.h * 0.4 + 80);
+  return canvasTexture(canvas);
 }
 
 function blueprintTexture(): THREE.CanvasTexture {
@@ -489,7 +504,7 @@ function blueprintTexture(): THREE.CanvasTexture {
   ctx.lineTo(280, 250);
   ctx.stroke();
   ctx.fillStyle = '#ffffff';
-  ctx.font = `700 40px ${UI_FONT}`;
+  ctx.font = `600 44px ${LCARS_FONT}`;
   ctx.textAlign = 'center';
   ctx.fillText('NEW PROJECT', 400, 270);
   return canvasTexture(canvas);

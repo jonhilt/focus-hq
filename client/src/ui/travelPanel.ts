@@ -2,6 +2,7 @@ import { UNIFORM } from '../../../shared/crew';
 import { state } from '../net/state';
 import { sound } from '../sound';
 import { statusLine } from '../world/character';
+import { LCARS } from '../world/starship';
 import { statusIcon } from './agentPanel';
 import type { Ui } from './context';
 import { h } from './dom';
@@ -23,7 +24,7 @@ export function openTeleportPanel(ui: Ui): void {
     agents.length ? h('h3', null, 'People') : null,
     h('div', { class: 'places' },
       ...agents.map((a) =>
-        h('button', { class: 'btn place', style: a.status === 'waiting' ? 'background:#ffe066' : '', onclick: () => ui.goToAgent(a.id) },
+        h('button', { class: a.status === 'waiting' ? 'btn place warn' : 'btn place', onclick: () => ui.goToAgent(a.id) },
           h('span', { class: 'dot', style: `background:${UNIFORM[a.avatar.division]};margin-right:6px;vertical-align:-2px` }),
           `${statusIcon(a)} ${a.name}`,
           h('small', null, `${state.project(a.projectId)?.name ?? ''} · #${a.issue.number} · ${statusLine(a)}`),
@@ -31,7 +32,7 @@ export function openTeleportPanel(ui: Ui): void {
       ),
     ),
   );
-  ui.panels.open({ title: '🗺️ Where to?', body, accent: '#d0ebff' });
+  ui.panels.open({ title: '🗺️ Where to?', body, accent: LCARS.periwinkle });
 }
 
 export function openNewIssuePanel(ui: Ui, projectId?: string): void {
@@ -39,7 +40,7 @@ export function openNewIssuePanel(ui: Ui, projectId?: string): void {
   ui.panels.open({
     title: project ? `📝 New issue for ${project.name}` : '📝 New issue',
     body: issueForm(ui, projectId, () => ui.panels.close()),
-    accent: '#fff3bf',
+    accent: LCARS.gold,
   });
 }
 
@@ -49,14 +50,14 @@ export function openPausePanel(ui: Ui, resume: () => void): void {
   const info = state.info;
   const soundButton = h('button', { class: 'btn', onclick: () => (soundButton.textContent = soundLabel(sound.toggle())) }, soundLabel(sound.enabled));
   const body = h('div', { style: 'text-align:center' },
-    h('p', null, 'The office keeps working while you’re away.'),
+    h('p', null, 'The crew keeps working while you’re away.'),
     h('div', { class: 'row', style: 'justify-content:center' },
       h('button', { class: 'btn primary', onclick: resume }, '▶ Back to work'),
       h('button', { class: 'btn', onclick: () => ui.openTeleport() }, '🗺️ Teleport'),
-      h('button', { class: 'btn', onclick: () => ui.openManager() }, "💼 Manager's console"),
+      h('button', { class: 'btn', onclick: () => ui.openManager() }, '🎖️ Ready room'),
       soundButton,
     ),
     info?.mode === 'demo' ? h('p', { class: 'muted' }, 'Demo mode – GitHub and agents are simulated.') : null,
   );
-  ui.panels.open({ title: '☕ Paused', body, accent: '#e7f5ff' });
+  ui.panels.open({ title: '☕ Paused', body, accent: LCARS.sky });
 }

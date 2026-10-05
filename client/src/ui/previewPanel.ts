@@ -1,6 +1,7 @@
 import type { Preview, PreviewLink, PreviewLog, PreviewLogFile } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
+import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { busy, fill, h, timeAgo } from './dom';
 
@@ -36,7 +37,7 @@ export function openPreviewPanel(ui: Ui, projectId: string, initial?: Preview): 
     restart,
     stop,
   );
-  ui.panels.open({ title, body, footer, wide: true, accent: '#b2f2bb88' });
+  ui.panels.open({ title, body, footer, wide: true, accent: LCARS.peach });
 
   restart.onclick = () => void busy(restart, () => api.startPreview(projectId, target.repo, target.number), ui.error);
   stop.onclick = () => void busy(stop, () => api.stopPreview(projectId), ui.error);
@@ -125,7 +126,7 @@ export function openPreviewPanel(ui: Ui, projectId: string, initial?: Preview): 
       info,
       h('span', { class: 'chip' }, p ? `${ICONS[p.status]} ${p.status}` : '💤 stopped'),
       h('span', { class: 'grow muted' }, p ? p.activity : 'Not running'),
-      behind ? h('span', { class: 'chip', style: 'background:#ffe066', title: 'Someone pushed to the PR since this preview started' }, '↻ PR has new commits – restart') : null,
+      behind ? h('span', { class: 'chip warn', title: 'Someone pushed to the PR since this preview started' }, '↻ PR has new commits – restart') : null,
       p?.sha && p.sha !== 'demo' ? h('span', { class: 'chip', title: p.sha }, p.sha.slice(0, 7)) : null,
       p ? h('span', { class: 'chip' }, `⏱ ${timeAgo(p.startedAt)}`) : null,
       pr ? h('a', { class: 'btn small', href: `${pr.url}/files`, target: '_blank', rel: 'noreferrer' }, 'PR ↗') : null,

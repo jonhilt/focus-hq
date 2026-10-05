@@ -2,7 +2,7 @@ import { query, type CanUseTool, type Options, type SDKMessage, type SDKUserMess
 import { errorMessage, truncate } from '../util';
 import { BrowserPool, browserMcpServer } from './browserTool';
 import { renderText, renderToolResult, renderToolUse } from './render';
-import type { AgentRunner, AgentSession, RunHooks, RunOutcome, RunRequest } from './types';
+import { type AgentRunner, type AgentSession, type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN } from './types';
 
 /** Feeds user messages into a streaming-input query; lets the manager talk to a running agent. */
 class InputQueue implements AsyncIterable<SDKUserMessage> {
@@ -138,7 +138,7 @@ export class ClaudeRunner implements AgentRunner {
         }
         return { ok, summary, structured, error };
       } catch (err) {
-        if (abort.signal.aborted) return { ok: false, summary, error: 'Stopped by the manager', aborted: true };
+        if (abort.signal.aborted) return { ok: false, summary, error: STOPPED_BY_CAPTAIN, aborted: true };
         const detail = stderrTail.join('').trim().split('\n').slice(-3).join(' ');
         return { ok: false, summary, error: `${errorMessage(err)}${detail ? ` — ${truncate(detail, 300)}` : ''}` };
       } finally {

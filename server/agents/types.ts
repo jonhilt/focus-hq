@@ -25,6 +25,9 @@ export interface RunRequest {
   outputSchema?: Record<string, unknown>;
 }
 
+/** What a run the captain stopped reports, and how a stopped review is told apart from one that failed. */
+export const STOPPED_BY_CAPTAIN = 'Stopped by the captain';
+
 export interface RunOutcome {
   ok: boolean;
   /** Claude's final message: becomes the pull request description. */

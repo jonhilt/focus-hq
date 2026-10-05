@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Agent, BrowserFrame, TermLine } from '../../../shared/types';
 import { canvasTexture, fitText, makeCanvas, MONO_FONT, roundRect, UI_FONT } from './canvas';
 import { flat } from './materials';
+import { LCARS, LCARS_FONT, LCARS_STATUS, lcarsFrame } from './starship';
 
 export const TERM_COLORS: Record<TermLine['kind'], string> = {
   system: '#8b949e',
@@ -12,18 +13,6 @@ export const TERM_COLORS: Record<TermLine['kind'], string> = {
   error: '#ff7b72',
   success: '#7ee787',
   manager: '#ffd33d',
-};
-
-const STATUS_COLORS: Record<Agent['status'], string> = {
-  queued: '#868e96',
-  'setting-up': '#339af0',
-  working: '#4c6ef5',
-  testing: '#9775fa',
-  waiting: '#fab005',
-  pushing: '#20c997',
-  done: '#40c057',
-  error: '#fa5252',
-  stopped: '#868e96',
 };
 
 /** Draws a terminal (and the agent's browser while it tests) onto a canvas used as the laptop screen. */
@@ -39,7 +28,7 @@ export class LaptopScreen {
   /** `idle` is what the screen says while nobody's using it. */
   constructor(
     private agent: Agent | null,
-    private readonly idle = 'This desk is free',
+    private readonly idle = 'This station is free',
   ) {
     this.texture = canvasTexture(this.c.canvas);
     this.material = flat(this.texture);
@@ -71,37 +60,35 @@ export class LaptopScreen {
     const H = canvas.height;
     const agent = this.agent;
     if (!agent) {
-      const g = ctx.createLinearGradient(0, 0, W, H);
-      g.addColorStop(0, '#3a0ca3');
-      g.addColorStop(1, '#4cc9f0');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      ctx.textAlign = 'center';
-      ctx.font = `700 64px ${UI_FONT}`;
-      ctx.fillText('Focus OS', W / 2, H / 2 - 10);
-      ctx.font = `500 30px ${UI_FONT}`;
-      ctx.fillText(this.idle, W / 2, H / 2 + 44);
+      const area = lcarsFrame(ctx, W, H, { title: 'Focus OS', color: LCARS.periwinkle, seed: 47 });
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = LCARS.peach;
+      ctx.font = `600 64px ${LCARS_FONT}`;
+      ctx.fillText('STANDING BY', area.x, area.y + area.h / 2 - 30);
+      ctx.fillStyle = LCARS.sky;
+      ctx.font = `500 32px ${LCARS_FONT}`;
+      ctx.fillText(fitText(ctx, this.idle.toUpperCase(), area.w), area.x, area.y + area.h / 2 + 30);
       return;
     }
 
     ctx.fillStyle = '#0d1117';
     ctx.fillRect(0, 0, W, H);
 
-    // title bar
-    ctx.fillStyle = '#2b303b';
+    // title bar: an LCARS rail in the agent's status colour
+    const color = LCARS_STATUS[agent.status];
+    ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, W, 36);
-    ['#ff5f57', '#febc2e', '#28c840'].forEach((c, i) => {
-      ctx.fillStyle = c;
-      ctx.beginPath();
-      ctx.arc(20 + i * 22, 18, 7, 0, Math.PI * 2);
-      ctx.fill();
-    });
-    ctx.fillStyle = '#c9d1d9';
-    ctx.font = `600 17px ${UI_FONT}`;
-    ctx.textAlign = 'center';
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.roundRect(4, 4, 64, 28, [14, 0, 0, 14]);
+    ctx.roundRect(W - 40, 4, 36, 28, [0, 14, 14, 0]);
+    ctx.fill();
+    ctx.fillStyle = LCARS.peach;
+    ctx.font = `600 20px ${LCARS_FONT}`;
+    ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(fitText(ctx, `${agent.name.toLowerCase()} — ${agent.repo}#${agent.issue.number} — claude`, W - 160), W / 2, 19);
+    ctx.fillText(fitText(ctx, `${agent.name} · ${agent.repo}#${agent.issue.number} · claude`.toUpperCase(), W - 140), 80, 19);
 
     const footerH = 34;
     const browserActive = !!frame && (agent.status === 'testing' || Date.now() - frame.at < 45_000);
@@ -110,10 +97,10 @@ export class LaptopScreen {
     if (browserActive && frame) this.drawBrowser(frame, termW, 36, W - termW, H - 36 - footerH);
 
     // status bar
-    ctx.fillStyle = STATUS_COLORS[agent.status];
+    ctx.fillStyle = color;
     ctx.fillRect(0, H - footerH, W, footerH);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = `600 18px ${UI_FONT}`;
+    ctx.fillStyle = '#000000';
+    ctx.font = `600 20px ${LCARS_FONT}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     const right = agent.costUsd > 0 ? `$${agent.costUsd.toFixed(2)}` : '';

@@ -68,34 +68,3 @@ export function fitText(ctx: CanvasRenderingContext2D, text: string, maxWidth: n
   while (t.length && ctx.measureText(`${t}…`).width > maxWidth) t = t.slice(0, -1);
   return `${t}…`;
 }
-
-/** A sign texture with centered text. */
-export function signTexture(text: string, opts: { w?: number; h?: number; bg?: string; fg?: string; font?: string; border?: string; sub?: string } = {}): THREE.CanvasTexture {
-  const w = opts.w ?? 1024;
-  const h = opts.h ?? 200;
-  const { canvas, ctx } = makeCanvas(w, h);
-  ctx.fillStyle = opts.bg ?? '#ffffff';
-  roundRect(ctx, 0, 0, w, h, h * 0.18);
-  ctx.fill();
-  if (opts.border) {
-    ctx.lineWidth = h * 0.06;
-    ctx.strokeStyle = opts.border;
-    roundRect(ctx, ctx.lineWidth / 2, ctx.lineWidth / 2, w - ctx.lineWidth, h - ctx.lineWidth, h * 0.16);
-    ctx.stroke();
-  }
-  ctx.fillStyle = opts.fg ?? '#222';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  let size = Math.min(opts.sub ? h * 0.42 : h * 0.55, w * 0.16);
-  const font = (px: number) => opts.font ?? `700 ${px}px ${UI_FONT}`;
-  ctx.font = font(size);
-  while (size > 12 && ctx.measureText(text).width > w * 0.9) ctx.font = font((size *= 0.92));
-  ctx.fillText(fitText(ctx, text, w * 0.9), w / 2, opts.sub ? h * 0.38 : h / 2 + h * 0.03);
-  if (opts.sub) {
-    ctx.globalAlpha = 0.75;
-    ctx.font = `500 ${Math.min(h * 0.22, size * 0.55)}px ${UI_FONT}`;
-    ctx.fillText(fitText(ctx, opts.sub, w * 0.9), w / 2, h * 0.75);
-    ctx.globalAlpha = 1;
-  }
-  return canvasTexture(canvas);
-}

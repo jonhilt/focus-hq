@@ -4,7 +4,7 @@ import type { BriefingOfficer, OfficerHooks, OfficerReply, OfficerTurn } from '.
 import { mergeBrief } from './briefing';
 import type { Drafter, DraftRequest, DraftResult } from './planner';
 import { renderText, renderToolUse } from './render';
-import type { AgentRunner, AgentSession, RunHooks, RunOutcome, RunRequest, WorkspaceOps } from './types';
+import { type AgentRunner, type AgentSession, type RunHooks, type RunOutcome, type RunRequest, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
 
 const FILES: Record<string, string[]> = {
   web: ['src/App.tsx', 'src/components/Header.tsx', 'src/components/CartBadge.tsx', 'src/pages/Product.tsx', 'src/store/cart.ts', 'src/styles/theme.css'],
@@ -174,7 +174,7 @@ export class DemoRunner implements AgentRunner {
         const ok = await hooks.permission('Bash', 'Bash(rm -rf dist && npm run build)', abort.signal);
         if (stopped) throw new Error('stopped');
         hooks.activity('working', ok ? 'Rebuilding' : 'Finding another way');
-        hooks.lines([{ kind: ok ? 'output' : 'error', text: ok ? '  ⎿  built in 2.31s' : '  ⎿  Declined by the manager' }]);
+        hooks.lines([{ kind: ok ? 'output' : 'error', text: ok ? '  ⎿  built in 2.31s' : '  ⎿  Declined by the captain' }]);
         await wait(1, 2);
       }
 
@@ -207,7 +207,7 @@ export class DemoRunner implements AgentRunner {
     };
 
     const done = script()
-      .catch((err): RunOutcome => (stopped ? { ok: false, summary: '', error: 'Stopped by the manager', aborted: true } : { ok: false, summary: '', error: String(err) }))
+      .catch((err): RunOutcome => (stopped ? { ok: false, summary: '', error: STOPPED_BY_CAPTAIN, aborted: true } : { ok: false, summary: '', error: String(err) }))
       .finally(() => {
         finished = true;
       });
@@ -282,7 +282,7 @@ export class DemoDrafter implements Drafter {
     const body = [
       '## Context',
       '',
-      `The manager asked for: "${clean}". Today the relevant behaviour lives in \`${files[0]}\`, with supporting code in \`${files[1]}\`.`,
+      `The captain asked for: "${clean}". Today the relevant behaviour lives in \`${files[0]}\`, with supporting code in \`${files[1]}\`.`,
       '',
       '## What to build',
       '',
@@ -344,7 +344,7 @@ export class DemoOfficer implements BriefingOfficer {
       const body = [
         '## Context',
         '',
-        `${brief.why ? `${brief.why.replace(/\.?$/, '.')}` : `The manager wants: ${idea}.`}${brief.who ? ` It's for ${brief.who.replace(/^./, (c) => c.toLowerCase()).replace(/\.$/, '')}.` : ''}`,
+        `${brief.why ? `${brief.why.replace(/\.?$/, '.')}` : `The captain wants: ${idea}.`}${brief.who ? ` It's for ${brief.who.replace(/^./, (c) => c.toLowerCase()).replace(/\.$/, '')}.` : ''}`,
         '',
         `The relevant code lives in \`${files[0]}\` and \`${files[1]}\`. Agreed in a briefing in the observation lounge.`,
         '',

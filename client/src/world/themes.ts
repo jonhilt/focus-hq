@@ -12,7 +12,7 @@ export const THEME_INFO: Record<RoomTheme, { label: string; emoji: string; holo:
   moon: { label: 'Moon base', emoji: '🌙', holo: '#a5dcff' },
   city: { label: 'Rooftop at dusk', emoji: '🌆', holo: '#ffb3ec' },
   library: { label: 'The great library', emoji: '📚', holo: '#ffe7a8' },
-  office: { label: 'Plain office walls', emoji: '🏢', holo: '#ffffff' },
+  office: { label: 'Plain holodeck grid', emoji: '🏢', holo: '#ffffff' },
 };
 
 const SCENIC = ROOM_THEMES.filter((t) => t !== 'office');

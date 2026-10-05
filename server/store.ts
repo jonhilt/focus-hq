@@ -56,17 +56,17 @@ export class Store {
     this.briefing = raw.briefing ?? null;
     for (const review of raw.reviews ?? []) {
       if (review.status === 'queued' || review.status === 'testing') {
-        Object.assign(review, { status: 'error', error: 'Interrupted when the office closed. Send it to QA again.' });
+        Object.assign(review, { status: 'error', error: 'Interrupted when Focus shut down. Send it to QA again.' });
       }
       this.reviews.set(prKey(review.repo, review.number), review);
     }
     if (this.briefing && (this.briefing.status === 'thinking' || this.briefing.status === 'wrapping-up')) {
-      Object.assign(this.briefing, { status: 'failed', activity: 'Interrupted', error: 'Interrupted when the office closed. Say something to pick it back up.' });
+      Object.assign(this.briefing, { status: 'failed', activity: 'Interrupted', error: 'Interrupted when Focus shut down. Say something to pick it back up.' });
     }
     for (const agent of raw.agents ?? []) {
       if (ACTIVE_STATUSES.includes(agent.status) || agent.status === 'queued') {
         agent.status = 'stopped';
-        agent.activity = 'Interrupted when the office closed. Send a message to pick it back up.';
+        agent.activity = 'Interrupted when Focus shut down. Send a message to pick it back up.';
         agent.permission = undefined;
       }
       agent.task ??= 'issue'; // saved before agents could be seated on a conflicting PR

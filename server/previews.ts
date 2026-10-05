@@ -241,7 +241,7 @@ export class Previews {
     if (!command) {
       throw new Error(
         `Don't know how to run ${repo}: there's no package.json with a dev or start script. ` +
-          `Set the project's preview command in the Manager's office (Projects).`,
+          `Set the project's preview command in the ready room (Projects).`,
       );
     }
     run.stopCommand = stopCommand || undefined;

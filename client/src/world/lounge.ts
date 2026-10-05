@@ -153,7 +153,7 @@ export class Lounge {
       ctx.fillText('NO BRIEFING IN SESSION', area.x, area.y + 20);
       ctx.fillStyle = LCARS.sky;
       ctx.font = `500 34px ${LCARS_FONT}`;
-      for (const [i, line] of wrap(ctx, 'Call one from a room’s New issue stand, or press E here, when an idea needs talking through before anyone builds it.'.toUpperCase(), area.w).entries()) {
+      for (const [i, line] of wrap(ctx, 'Call one from a holodeck’s New issue stand, or press E here, when an idea needs talking through before anyone builds it.'.toUpperCase(), area.w).entries()) {
         ctx.fillText(line, area.x, area.y + 110 + i * 44);
       }
       this.screenTex.needsUpdate = true;

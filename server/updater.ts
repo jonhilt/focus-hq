@@ -68,7 +68,7 @@ export class Updater {
     if (busy.length > 0) {
       if (this.waitingToldAt !== target) {
         this.waitingToldAt = target;
-        this.hub.toast('info', `A Focus update is ready. The office restarts once ${busy.length === 1 ? 'the busy agent finishes' : `all ${busy.length} busy agents finish`}.`);
+        this.hub.toast('info', `A Focus update is ready. The ship restarts once ${busy.length === 1 ? 'the busy agent finishes' : `all ${busy.length} busy agents finish`}.`);
       }
       return;
     }

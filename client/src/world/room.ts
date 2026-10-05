@@ -6,14 +6,13 @@ import { DESKS_PER_ROOM } from '../../../shared/types';
 import { state } from '../net/state';
 import { KanbanBoard } from './board';
 import { type Builder, interactive } from './builder';
-import { signTexture } from './canvas';
 import { agentView, Character, type CrewView } from './character';
 import { OVER_DOOR, type RoomSlot, ROOM_DEPTH, ROOM_WIDTH, WALL_H } from './layout';
 import { box, flat, lighten, toon } from './materials';
 import { ceilingLight, chair, cyl, DESK_TOP, desk, laptop, paperStack, plant } from './props';
 import { holodeckMaterial, holodeckSkin, type Scenery } from './scenery';
 import { LaptopScreen } from './screen';
-import { LCARS, lcarsSign } from './starship';
+import { HULL, LCARS, lcarsSign } from './starship';
 
 interface DeskSlot {
   index: number;
@@ -107,7 +106,7 @@ export class ProjectRoom {
     this.group.add(sign);
     interactive(sign, { kind: 'board', projectId: project.id }, () => `Open ${project.name}'s board`);
 
-    // Kanban whiteboard on the far wall: as tall as fits between its bottom rail and the ceiling, as wide as its drawing
+    // the Kanban display on the far wall: as tall as fits between its bottom rail and the ceiling, as wide as its drawing
     const boardBottom = 0.24;
     const boardTop = WALL_H - 0.2; // the top rail sits under the ceiling
     const boardW = (boardTop - boardBottom) * this.board.aspect;
@@ -116,19 +115,12 @@ export class ProjectRoom {
     boardMesh.rotation.y = -Math.PI / 2;
     boardMesh.position.set(ON_WALL, (boardBottom + boardTop) / 2, 0);
     this.group.add(boardMesh);
-    const frameColor = '#adb5bd';
+    const frameColor = HULL.frame;
     this.group.add(box(0.08, 0.1, boardW + 0.2, frameColor, ON_WALL - 0.01, boardBottom - 0.1, 0));
     this.group.add(box(0.08, 0.1, boardW + 0.2, frameColor, ON_WALL - 0.01, boardTop, 0));
     for (const s of [-1, 1]) this.group.add(box(0.08, boardTop - boardBottom + 0.2, 0.1, frameColor, ON_WALL - 0.01, boardBottom - 0.1, s * post));
     // with no real wall behind it, the board stands on its own feet
     if (this.scenery) for (const s of [-1, 1]) this.group.add(box(0.7, 0.14, 0.12, frameColor, ON_WALL - 0.3, 0, s * post));
-    this.group.add(box(0.22, 0.05, 2.0, '#868e96', ON_WALL - 0.09, 0.16, 1.5)); // marker tray
-    ['#e03131', '#1971c2', '#2f9e44'].forEach((c, i) => {
-      const m = cyl(0.02, 0.02, 0.16, c, 8);
-      m.rotation.x = Math.PI / 2;
-      m.position.set(ON_WALL - 0.09, 0.23, 1.2 + i * 0.12);
-      this.group.add(m);
-    });
     interactive(boardMesh, { kind: 'board', projectId: project.id }, () => `Use the ${project.name} board`);
 
     // desks
@@ -144,7 +136,7 @@ export class ProjectRoom {
     table.add(top, leg);
     this.prPile.position.set(0.28, 0.77, 0.22);
     table.add(this.prPile);
-    const tableSign = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.28), flat(signTexture('👀 Pull requests', { bg: '#d3f9d8', fg: '#2b8a3e', border: '#2b8a3e' })));
+    const tableSign = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.28), flat(lcarsSign('Pull requests', { color: LCARS.lilac, h: 260 })));
     tableSign.position.set(0, 1.45, 0);
     tableSign.rotation.y = -Math.PI / 2;
     table.add(tableSign);
@@ -167,19 +159,19 @@ export class ProjectRoom {
     this.qa = new Character(this.qaView());
     this.qaSeat.add(this.qa.group);
 
-    // "new issue" stand with a sticky-note pad
+    // "new issue" stand with a note pad
     const kiosk = new THREE.Group();
     kiosk.position.set(HALF_D - 2.0, 0, HALF_W - 1.6);
     kiosk.add(box(0.5, 1.0, 0.5, project.color, 0, 0, 0));
     kiosk.add(box(0.6, 0.06, 0.6, '#ffffff', 0, 1.0, 0));
-    const pad = box(0.3, 0.08, 0.3, '#ffe066', 0, 1.06, 0);
+    const pad = box(0.3, 0.08, 0.3, LCARS.peach, 0, 1.06, 0);
     pad.rotation.y = 0.2;
     kiosk.add(pad);
     const pen = cyl(0.015, 0.015, 0.25, '#1971c2', 8);
     pen.rotation.set(Math.PI / 2, 0, 0.4);
     pen.position.set(0.05, 1.16, 0.15);
     kiosk.add(pen);
-    const kioskSign = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.28), flat(signTexture('＋ New issue', { bg: '#fff3bf', fg: '#e67700', border: '#e67700' })));
+    const kioskSign = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.28), flat(lcarsSign('New issue', { color: LCARS.orange, h: 287 })));
     kioskSign.position.set(0, 2.55, 0); // above the officer's head and speech bubble
     kioskSign.rotation.y = -Math.PI / 2;
     kiosk.add(kioskSign);
@@ -265,7 +257,7 @@ export class ProjectRoom {
 
   private deskLabel(slot: DeskSlot): string {
     const agent = slot.agentId ? state.agents.get(slot.agentId) : undefined;
-    return agent ? `Look at ${agent.name}'s laptop (#${agent.issue.number})` : 'Empty desk – assign an issue from the board';
+    return agent ? `Look at ${agent.name}'s laptop (#${agent.issue.number})` : 'Empty station – assign an issue from the board';
   }
 
   /** Seats, updates and removes characters to match the agents in this project. */
@@ -368,7 +360,7 @@ export class ProjectRoom {
     if (count === this.prCount) return;
     this.prCount = count;
     this.prPile.clear();
-    this.prPile.add(paperStack(count, ['#74c0fc', '#ffa8a8', '#b2f2bb', '#ffe066', '#d0bfff']));
+    this.prPile.add(paperStack(count, Object.values(LCARS)));
   }
 
   update(t: number, now: number, camera: THREE.Vector3): void {
@@ -434,13 +426,13 @@ export function buildVacantRoom(slot: RoomSlot, builder: Builder): THREE.Group {
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = 0.005;
   group.add(floor, holodeckSkin());
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), flat(lcarsSign('Holodeck vacant', { color: '#9a94a8', code: doorCode(slot), sub: 'Create a project in the Manager’s office' })));
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), flat(lcarsSign('Holodeck vacant', { color: '#9a94a8', code: doorCode(slot), sub: 'Create a project in the ready room' })));
   sign.rotation.y = -Math.PI / 2;
   sign.position.set(DOOR_SIGN_X, 2.87, 0);
   group.add(sign);
   const poster = new THREE.Mesh(
     new THREE.PlaneGeometry(5, 1.4),
-    flat(lcarsSign('Holodeck available', { w: 1024, h: 288, color: LCARS.gold, sub: 'Start a project from the Manager’s office' })),
+    flat(lcarsSign('Holodeck available', { w: 1024, h: 288, color: LCARS.gold, sub: 'Start a project from the ready room' })),
   );
   poster.rotation.y = -Math.PI / 2;
   poster.position.set(ON_WALL, 1.8, 0);
