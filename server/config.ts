@@ -37,4 +37,13 @@ export const paths = {
   qaShots: path.join(config.dataDir, 'qa-shots'),
   /** Read-only checkouts of each project's repos at their default branch, for the planner. */
   planning: path.join(config.dataDir, 'planning'),
+  /** Speech models for dictation. */
+  models: path.join(config.dataDir, 'models'),
+};
+
+/** whisper.cpp's CLI and model for dictation (see server/voice.ts). */
+export const whisper = {
+  bin: process.env.FOCUS_WHISPER_BIN || 'whisper-cli',
+  model: path.resolve(process.env.FOCUS_WHISPER_MODEL || path.join(paths.models, 'ggml-large-v3-turbo-q5_0.bin')),
+  modelUrl: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin',
 };

@@ -4,6 +4,7 @@ import { api } from '../net/api';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
+import { withMic } from './dictation';
 import { diagramView } from './diagrams';
 import { busy, fill, h } from './dom';
 
@@ -20,6 +21,7 @@ export function openBriefingPanel(ui: Ui, projectId?: string): void {
   const title = h('h2');
   // the message box outlives re-renders, so a reply arriving doesn't wipe what you're typing
   const input = h('textarea', { class: 'briefing-input', placeholder: 'Your answer… (Enter to send, Shift+Enter for a new line)' });
+  const inputBox = withMic(ui, input);
   const send = h('button', { class: 'btn primary' }, 'Send');
   const sendNow = () => {
     if (!input.value.trim() || send.disabled) return;
@@ -88,7 +90,7 @@ export function openBriefingPanel(ui: Ui, projectId?: string): void {
           end,
         )
       : h('div', null,
-          input,
+          inputBox,
           h('div', { class: 'row' }, send, wrap, h('small', { class: 'muted' }, briefing.costUsd ? `$${briefing.costUsd.toFixed(2)} so far` : ''), h('span', { class: 'grow' }), end),
         );
 
@@ -129,7 +131,7 @@ function callForm(ui: Ui, projectId?: string): HTMLElement {
     h('p', null, 'For anything bigger or fuzzier than a one-line issue. The officer reads the code, asks you questions one at a time and keeps a brief on the wall screen. QA chips in when the acceptance criteria change, so they can be tested. When you wrap up, they write one issue to the project’s stand.'),
     h('div', { class: 'field' }, h('label', null, 'Project'), project),
     officer,
-    h('div', { class: 'field' }, h('label', null, 'Topic'), idea),
+    h('div', { class: 'field' }, h('label', null, 'Topic'), withMic(ui, idea)),
     go,
   );
 }

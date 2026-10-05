@@ -3,6 +3,7 @@ import type { IssueDraft } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import type { Ui } from './context';
+import { withMic } from './dictation';
 import { busy, fill, h } from './dom';
 
 export interface IssueFields {
@@ -92,7 +93,7 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
         api.draftIssue(pid, draft.idea, { repo: fields.repo.value, title: fields.title.value, body: fields.body.value, notes: notes.value }), ui.error);
       fill(el, header,
         h('p', null, 'Draft’s in the form below. Edit it and pin it to the board, or tell me what to change:'),
-        notes,
+        withMic(ui, notes),
         h('div', { class: 'row' }, redraft, h('span', { class: 'grow' }), discard()),
       );
       return;
@@ -113,7 +114,7 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
       draft?.status === 'failed'
         ? h('p', { class: 'planner-error' }, `I couldn’t finish that draft: ${draft.error ?? 'something went wrong'}`)
         : h('p', null, 'Tell me roughly what you need. I’ll read the code and write it up as an issue with acceptance criteria. Something bigger or fuzzier? Call a briefing and we’ll talk it through in the observation lounge first.'),
-      idea,
+      withMic(ui, idea),
       h('div', { class: 'row' }, go, brief, h('small', { class: 'muted' }, 'Ctrl+Enter drafts'), h('span', { class: 'grow' }), draft ? discard() : null),
     );
   };

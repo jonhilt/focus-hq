@@ -8,6 +8,7 @@ import { api } from '../net/api';
 import { state } from '../net/state';
 import { drawMockPage } from '../world/screen';
 import type { Ui } from './context';
+import { withMic } from './dictation';
 import { busy, fill, h, timeAgo } from './dom';
 
 const FINISHED = ['done', 'error', 'stopped'];
@@ -31,7 +32,7 @@ export function openAgentPanel(ui: Ui, id: string): void {
   const send = h('button', { class: 'btn primary' }, 'Send');
   const stop = h('button', { class: 'btn danger' }, '■ Stop');
   const dismiss = h('button', { class: 'btn' }, '👋 Send home');
-  const footer = h('div', { class: 'compose' }, input, send, stop, dismiss);
+  const footer = h('div', { class: 'compose' }, withMic(ui, input), send, stop, dismiss);
 
   const title = h('h2');
   ui.panels.open({ title, body, footer, wide: true, accent: UNIFORM[agent.avatar.division] });

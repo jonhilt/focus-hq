@@ -123,6 +123,14 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.post('/agents/:id/stop', h((req) => office.agents.stop(param(req, 'id'))));
   r.delete('/agents/:id', h((req) => office.agents.dismiss(param(req, 'id'))));
 
+  // dictation: whisper.cpp on this machine turns the browser's 16 kHz WAV into text
+  r.get('/voice/status', h(() => office.voice.refresh()));
+  r.post('/voice/download-model', h(() => office.voice.startDownload()));
+  r.post('/transcribe', express.raw({ type: 'audio/wav', limit: '25mb' }), h(async (req) => {
+    if (!Buffer.isBuffer(req.body) || !req.body.length) throw new Error('Send the recording as an audio/wav body');
+    return { text: await office.voice.transcribe(req.body) };
+  }));
+
   r.use((_req, res) => res.status(404).json({ error: 'Not found' }));
   return r;
 }

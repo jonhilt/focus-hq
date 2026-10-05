@@ -1,5 +1,5 @@
 import { prKey } from '../../../shared/qa';
-import type { Agent, Board, Briefing, BrowserFrame, IssueDraft, QaReview, Preview, Project, ServerEvent, ServerInfo, TermLine } from '../../../shared/types';
+import type { Agent, Board, Briefing, BrowserFrame, IssueDraft, QaReview, Preview, Project, ServerEvent, ServerInfo, TermLine, VoiceStatus } from '../../../shared/types';
 
 type Events = {
   snapshot: void;
@@ -19,6 +19,7 @@ type Events = {
   briefing: void;
   /** A QA review changed or went away (its project id). */
   review: string;
+  voice: void;
   connection: boolean;
 };
 
@@ -42,6 +43,8 @@ export class OfficeState {
   briefing: Briefing | null = null;
   /** The latest QA review per pull request (by prKey). */
   reviews = new Map<string, QaReview>();
+  /** Whether dictation can run on the server, and the speech model's download. */
+  voice: VoiceStatus | null = null;
   connected = false;
 
   private listeners = new Map<keyof Events, Set<Listener<never>>>();
@@ -100,7 +103,9 @@ export class OfficeState {
         this.drafts = new Map((s.drafts ?? []).map((d) => [d.projectId, d]));
         this.briefing = s.briefing ?? null;
         this.reviews = new Map((s.reviews ?? []).map((r) => [prKey(r.repo, r.number), r]));
+        this.voice = s.voice;
         this.emit('snapshot', undefined);
+        this.emit('voice', undefined);
         break;
       }
       case 'info':
@@ -164,6 +169,10 @@ export class OfficeState {
         if (review) this.emit('review', review.projectId);
         break;
       }
+      case 'voice':
+        this.voice = event.voice;
+        this.emit('voice', undefined);
+        break;
       case 'briefing':
         this.briefing = event.briefing;
         this.emit('briefing', undefined);

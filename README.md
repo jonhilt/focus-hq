@@ -193,6 +193,17 @@ None of these is a sandbox. Agents run as you, on your machine, with your `gh` c
 
 Cloud agents run in a cloud VM rather than on your machine, but they push to GitHub as you. In ✋ mode, the one push they may make without asking is `git push origin HEAD:<their branch>`. GitHub access from a cloud session doesn't limit which branches can be pushed, so use branch protection on GitHub for anything that matters.
 
+## Voice input
+
+Every box where you write to the crew has a 🎤: an agent's message box, the briefing topic and answers, the New issue idea, notes, title and description, and the QA brief. Click it (or press **Ctrl+M** in the box) and speak, then click again to stop. The text lands at the cursor for you to check. Nothing is sent until you send it.
+
+[whisper.cpp](https://github.com/ggml-org/whisper.cpp) transcribes on your machine with the `large-v3-turbo` model, so your audio never leaves it. On Apple Silicon it runs on the GPU. Set it up once:
+
+1. `brew install whisper-cpp` (it provides `whisper-cli`).
+2. **Ready room → Settings → Voice input → Download model** fetches `ggml-large-v3-turbo-q5_0.bin` (574 MB) into `~/.focus/models/`. Or download it yourself from [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin) into that folder.
+
+Until both are there, the 🎤 buttons are greyed out, and their tooltip says what's missing. `FOCUS_WHISPER_BIN` and `FOCUS_WHISPER_MODEL` point at a different `whisper-cli` or model file. In demo mode, every recording transcribes to the same demo sentence.
+
 ## On your phone (Tricorder)
 
 The office also serves a phone-sized page, the **Tricorder**, at `/tricorder`. It shows what needs you (raised hands, agents in trouble, PRs QA gave up on, conflicting PRs), each project's agents in flight, its PRs and its issues. From there you can open an agent's terminal and browser, approve or decline, message or stop them, merge, send a PR to QA, hand its conflicts to an agent, and assign an agent to an issue.
@@ -222,6 +233,8 @@ Anyone on your tailnet who can reach the Mac can control the office, and the off
 | `FOCUS_DEMO_SPEED` | `1` | speed up the pretend agents in demo mode |
 | `FOCUS_AUTO_UPDATE=0` | | turn off auto update |
 | `FOCUS_UPDATE_CHECK_MS` | `300000` | how often auto update checks for new commits |
+| `FOCUS_WHISPER_BIN` | `whisper-cli` | whisper.cpp's CLI for [voice input](#voice-input) |
+| `FOCUS_WHISPER_MODEL` | `~/.focus/models/ggml-large-v3-turbo-q5_0.bin` | the speech model for voice input |
 
 ### Auto update
 

@@ -21,6 +21,7 @@ import { demoPreviewPage, Previews } from './previews';
 import { apiRouter } from './routes';
 import { Store } from './store';
 import { currentVersion, RESTART_EXIT_CODE, Updater } from './updater';
+import { Voice } from './voice';
 
 const liveWorkspace: WorkspaceOps = {
   create: git.createWorktree,
@@ -46,7 +47,7 @@ async function main() {
   const previews = new Previews(hub, github, config.demo);
   const planner = new IssuePlanner(store, hub, config.demo ? new DemoDrafter() : new ClaudeDrafter());
   const briefings = new Briefings(store, hub, planner, config.demo ? new DemoOfficer() : new ClaudeOfficer(), config.demo ? new DemoBriefingQa() : new ClaudeBriefingQa());
-  const office = new Office(store, hub, github, previews, planner, briefings, await currentVersion());
+  const office = new Office(store, hub, github, previews, planner, briefings, new Voice(hub, config.demo), await currentVersion());
   office.agents = new AgentManager(store, hub, github, runner, config.demo ? demoWorkspace : liveWorkspace, (id) => office.boardChanged(id));
 
   if (config.demo && store.projects.length === 0) {

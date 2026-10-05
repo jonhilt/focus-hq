@@ -1,12 +1,14 @@
-import type { Autonomy, PreviewConfig, Project, RoomTheme } from '../../../shared/types';
+import type { Autonomy, PreviewConfig, Project, RoomTheme, VoiceStatus } from '../../../shared/types';
 import { DESKS_PER_ROOM, ROOM_THEMES } from '../../../shared/types';
+import { voiceMissing, WHISPER_INSTALL } from '../../../shared/voice';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import { roomTheme, THEME_INFO } from '../world/themes';
 import { effortPicker, pickedCloud, pickedEffort, wherePicker } from './agentPanel';
 import type { ManagerTab, Ui } from './context';
-import { busy, h } from './dom';
+import { withMic } from './dictation';
+import { busy, fill, h } from './dom';
 import { plannerCard } from './plannerCard';
 
 const COLORS = ['#ff8a5b', '#5bc0eb', '#9bc53d', '#c879ff', '#fde74c', '#ff5d8f', '#2ec4b6', '#f4a259'];
@@ -299,8 +301,8 @@ export function issueForm(ui: Ui, projectId?: string, onDone?: () => void): HTML
     h('div', { class: 'row' },
       h('div', { class: 'field grow' }, h('label', null, 'Repository'), repo),
     ),
-    h('div', { class: 'field' }, h('label', null, 'Title'), title),
-    h('div', { class: 'field' }, h('label', null, 'Description'), body),
+    h('div', { class: 'field' }, h('label', null, 'Title'), withMic(ui, title)),
+    h('div', { class: 'field' }, h('label', null, 'Description'), withMic(ui, body)),
     h('div', { class: 'field' }, h('label', null, 'Labels'), labels),
     h('div', { class: 'row', style: 'margin-bottom:14px' },
       h('label', { class: 'row', style: 'font-weight:600' }, assign, '🤖 Assign an agent right away'),
@@ -360,5 +362,55 @@ function settingsTab(ui: Ui): HTMLElement {
           ? 'Demo mode: GitHub and the agents are simulated. Run "npm run dev" for the real thing.'
           : 'Live mode: GitHub through the gh CLI, agents through the Claude Agent SDK using your Claude login.'),
     ),
+    voiceSection(ui),
   );
+}
+
+const MB = 1024 * 1024;
+
+/** Dictation's setup: whisper-cli (installed by hand) and its model (downloaded from here). Follows the server live. */
+function voiceSection(ui: Ui): HTMLElement {
+  const el = h('div', { class: 'card voice-setup', style: 'margin-top:12px' });
+  const render = (voice: VoiceStatus | null) => {
+    if (!voice) return fill(el, h('strong', null, 'Voice input'), h('p', { class: 'muted' }, 'Connecting…'));
+    const recheck = h('button', { class: 'btn small', title: 'Look for whisper-cli and the model again' }, '⟳ Check again');
+    recheck.onclick = () => void busy(recheck, () => api.voiceStatus(), ui.error);
+    const copy = h('button', { class: 'btn small' }, '📋 Copy');
+    copy.onclick = () => void navigator.clipboard.writeText(WHISPER_INSTALL).then(() => ui.hud.toast('info', `Copied: ${WHISPER_INSTALL}`), (e: Error) => ui.error(e.message));
+    const download = voice.download;
+    const running = download?.state === 'running';
+    const get = h('button', { class: 'btn small primary', disabled: running }, download?.state === 'failed' ? '↻ Retry download' : '⬇ Download model (574 MB)');
+    get.onclick = () => void busy(get, () => api.downloadVoiceModel(), ui.error);
+
+    fill(el,
+      h('div', { class: 'row' },
+        h('strong', null, '🎤 Voice input'),
+        voiceMissing(voice) ? h('span', { class: 'chip bad' }, 'not set up') : h('span', { class: 'chip ok' }, 'ready'),
+        h('span', { class: 'grow' }),
+        recheck,
+      ),
+      h('p', { class: 'muted' }, 'Dictate into the office’s text boxes with 🎤 or Ctrl+M. whisper.cpp transcribes on this machine: your audio never leaves it.'),
+      h('div', { class: 'voice-row' },
+        h('span', null, 'whisper-cli'),
+        voice.whisper.found
+          ? h('span', { class: 'chip ok', title: voice.whisper.command }, 'found')
+          : [h('span', { class: 'chip bad' }, 'not found'), h('code', null, WHISPER_INSTALL), copy],
+      ),
+      h('div', { class: 'voice-row' },
+        h('span', null, 'Speech model'),
+        voice.model.present ? h('span', { class: 'chip ok', title: voice.model.path }, 'present') : [h('span', { class: 'chip bad' }, 'missing'), get],
+      ),
+      running
+        ? h('div', { class: 'voice-progress' },
+            h('progress', download.total ? { max: download.total, value: download.bytes } : null),
+            h('small', { class: 'muted' }, `${Math.round(download.bytes / MB)}${download.total ? ` of ${Math.round(download.total / MB)}` : ''} MB`),
+          )
+        : null,
+      download?.state === 'failed' ? h('p', { class: 'planner-error' }, download.error) : null,
+      voice.model.present ? null : h('small', { class: 'muted' }, `Or download it yourself to ${voice.model.path}.`),
+    );
+  };
+  ui.panels.own(state.on('voice', () => el.isConnected && render(state.voice)));
+  render(state.voice);
+  return el;
 }

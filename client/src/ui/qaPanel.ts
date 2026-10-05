@@ -6,6 +6,7 @@ import { api } from '../net/api';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
+import { withMic } from './dictation';
 import { busy, fill, h, timeAgo } from './dom';
 
 const ICON = { pass: '✅', fail: '❌', skip: '⏭️' } as const;
@@ -42,7 +43,7 @@ export function openQaPanel(ui: Ui, projectId: string): void {
     h('label', { class: 'qa-toggle' }, sendBack, h('span', null, '🔧 Send a failed pull request the crew opened back to be fixed (up to 3 rounds)')),
     h('div', { class: 'field', style: 'margin:10px 0 0' },
       h('label', null, `What should ${officer.name} check on every ${project.name} PR?`),
-      brief,
+      withMic(ui, brief),
       saved,
     ),
   );

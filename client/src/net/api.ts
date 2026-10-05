@@ -1,11 +1,11 @@
-import type { Agent, Board, Briefing, Effort, Issue, IssueDraft, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, RoomTheme, Settings, TermLine } from '../../../shared/types';
+import type { Agent, Board, Briefing, Effort, Issue, IssueDraft, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, RoomTheme, Settings, TermLine, VoiceStatus } from '../../../shared/types';
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
-  const res = await fetch(`/api${url}`, {
-    method,
-    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  return send<T>(method, url, body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+}
+
+async function send<T>(method: string, url: string, init: RequestInit): Promise<T> {
+  const res = await fetch(`/api${url}`, { method, ...init });
   const data = (await res.json().catch(() => ({}))) as T & { error?: string };
   if (!res.ok) throw new Error(data.error ?? `${res.status} ${res.statusText}`);
   return data;
@@ -52,4 +52,8 @@ export const api = {
   permission: (id: string, requestId: string, allow: boolean) => call('POST', `/agents/${id}/permission`, { requestId, allow }),
   stop: (id: string) => call('POST', `/agents/${id}/stop`),
   dismiss: (id: string) => call('DELETE', `/agents/${id}`),
+
+  voiceStatus: () => call<VoiceStatus>('GET', '/voice/status'),
+  downloadVoiceModel: () => call<VoiceStatus>('POST', '/voice/download-model'),
+  transcribe: (wav: ArrayBuffer) => send<{ text: string }>('POST', '/transcribe', { headers: { 'Content-Type': 'audio/wav' }, body: wav }),
 };

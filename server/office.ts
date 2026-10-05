@@ -9,6 +9,7 @@ import type { Hub } from './hub';
 import type { Previews } from './previews';
 import type { Store } from './store';
 import { errorMessage } from './util';
+import type { Voice } from './voice';
 
 const REPO_RE = /^[\w.-]+\/[\w.-]+$/;
 
@@ -34,6 +35,7 @@ export class Office {
     readonly previews: Previews,
     readonly planner: IssuePlanner,
     readonly briefings: Briefings,
+    readonly voice: Voice,
     version: string,
   ) {
     this.info = {
@@ -71,6 +73,7 @@ export class Office {
       drafts: this.planner.list(),
       briefing: this.briefings.current(),
       reviews: [...this.store.reviews.values()],
+      voice: this.voice.status(),
     };
   }
 

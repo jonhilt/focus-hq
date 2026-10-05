@@ -449,6 +449,17 @@ export interface ServerInfo {
   deskCount: number;
 }
 
+/** A speech model download in progress, or the last one that failed. */
+export type VoiceDownload = { state: 'running'; bytes: number; total?: number } | { state: 'failed'; error: string };
+
+/** Whether dictation can run: whisper.cpp's CLI and its model, both on this machine. */
+export interface VoiceStatus {
+  /** `command` is the resolved path when found, otherwise what was looked for. */
+  whisper: { found: boolean; command: string };
+  model: { present: boolean; path: string };
+  download?: VoiceDownload;
+}
+
 export interface Snapshot {
   info: ServerInfo;
   projects: Project[];
@@ -461,6 +472,7 @@ export interface Snapshot {
   drafts: IssueDraft[];
   briefing: Briefing | null;
   reviews: QaReview[];
+  voice: VoiceStatus;
 }
 
 export type ServerEvent =
@@ -478,6 +490,7 @@ export type ServerEvent =
   | { type: 'briefing'; briefing: Briefing | null }
   | { type: 'review'; review: QaReview }
   | { type: 'review-removed'; repo: string; number: number }
+  | { type: 'voice'; voice: VoiceStatus }
   | { type: 'toast'; level: 'info' | 'success' | 'error'; text: string; agentId?: string };
 
 export const DESKS_PER_ROOM = 6;
