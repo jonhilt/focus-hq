@@ -2,6 +2,7 @@ import { query, type CanUseTool, type Options, type Query, type SDKMessage, type
 import { cloudSessionUrl } from '../../shared/cloud';
 import { errorMessage, sleep, truncate } from '../util';
 import { BrowserPool, browserMcpServer } from './browserTool';
+import { CLOUD_UNAVAILABLE, cloudRefused } from './cloud';
 import { appUrl, renderText, renderToolResult, renderToolUse, screenshotFrame, type ToolCall } from './render';
 import { type AgentRunner, type AgentSession, type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN } from './types';
 
@@ -169,6 +170,7 @@ export class ClaudeRunner implements AgentRunner {
         return { ok, summary, structured, error, started };
       } catch (err) {
         if (stopping || abort.signal.aborted) return { ok: false, summary, error: STOPPED_BY_CAPTAIN, aborted: true, started };
+        if (cloud && cloudRefused(`${errorMessage(err)}\n${stderrTail.join('')}`)) return { ok: false, summary, error: CLOUD_UNAVAILABLE, started };
         const detail = stderrTail.join('').trim().split('\n').slice(-3).join(' ');
         return { ok: false, summary, error: `${errorMessage(err)}${detail ? ` — ${truncate(detail, 300)}` : ''}`, started };
       } finally {

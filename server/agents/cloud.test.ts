@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { afterCloudRun, carryOnInNewSession } from './cloud';
+import { afterCloudRun, CLOUD_UNAVAILABLE, carryOnInNewSession, cloudRefused } from './cloud';
 
 describe('afterCloudRun', () => {
   it('delivers when new commits reached the branch', () => {
@@ -29,5 +29,26 @@ describe('carryOnInNewSession', () => {
     expect(carryOnInNewSession({ ok: false, summary: '', error: busy }, true)).toBe(false);
     const asking = 'Error: cloud session session_01 is waiting on a question; answer it where it was asked (https://claude.ai/code/session_01) before sending it another message.';
     expect(carryOnInNewSession({ ok: false, summary: '', error: asking }, true)).toBe(false);
+  });
+
+  it('does not start a new session when Claude Code refuses to start cloud sessions', () => {
+    expect(carryOnInNewSession({ ok: false, summary: '', error: CLOUD_UNAVAILABLE }, true)).toBe(false);
+  });
+});
+
+describe('cloudRefused', () => {
+  it('spots Claude Code refusing to start a cloud session without a terminal', () => {
+    const stderr = `Claude Code process exited with code 1
+Error: --cloud requires an interactive terminal.
+Non-interactive invocations (piped stdout, --init-only, --sdk-url) run locally and would silently ignore --cloud. Drop --cloud, or run from a TTY.`;
+    expect(cloudRefused(stderr)).toBe(true);
+    const notAnId = `Error: --cloud "fix it" is not a cloud session ID or URL.
+Without an interactive terminal, --cloud can only send the prompt to an existing cloud session: pass its ID (session_... or cse_...) or its claude.ai/code URL. To start a new cloud session, run from a TTY.`;
+    expect(cloudRefused(notAnId)).toBe(true);
+  });
+
+  it('leaves other failures alone', () => {
+    expect(cloudRefused('Claude Code process exited with code 1')).toBe(false);
+    expect(cloudRefused('Error: cloud session session_01 is archived')).toBe(false);
   });
 });

@@ -16,5 +16,20 @@ export function afterCloudRun(r: { before: string; after: string; nudged: boolea
  */
 export function carryOnInNewSession(outcome: RunOutcome, resumed: boolean): boolean {
   const stillThere = /\bis busy\b|waiting on a question/i.test(outcome.error ?? '');
-  return resumed && !outcome.ok && !outcome.aborted && !outcome.started && !stillThere;
+  // a new session would be refused the same way
+  const refused = outcome.error === CLOUD_UNAVAILABLE;
+  return resumed && !outcome.ok && !outcome.aborted && !outcome.started && !stillThere && !refused;
+}
+
+export const CLOUD_UNAVAILABLE =
+  "Cloud sessions can't be started from Focus with the installed Claude Code: it only starts one from an interactive " +
+  'terminal, and the office runs it headlessly through the Agent SDK. Assign the issue to a 💻 local agent instead.';
+
+/**
+ * Claude Code starts a new cloud session headlessly only while Anthropic has its headless cloud client switched on for
+ * the account (a server-side rollout, with no flag or SDK option to ask for it). Otherwise it exits at once, saying
+ * --cloud needs an interactive terminal. Running it under a pseudo-terminal would only hide that.
+ */
+export function cloudRefused(output: string): boolean {
+  return /--cloud requires an interactive terminal|Without an interactive terminal, --cloud/.test(output);
 }
