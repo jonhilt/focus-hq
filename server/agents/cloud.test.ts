@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { afterCloudRun, CLOUD_UNAVAILABLE, carryOnInNewSession, cloudRefused } from './cloud';
+import { afterCloudRun, CLOUD_UNAVAILABLE, carryOnInNewSession, cloudRefused, fallBackToLocal } from './cloud';
 
 describe('afterCloudRun', () => {
   it('delivers when new commits reached the branch', () => {
@@ -33,6 +33,22 @@ describe('carryOnInNewSession', () => {
 
   it('does not start a new session when Claude Code refuses to start cloud sessions', () => {
     expect(carryOnInNewSession({ ok: false, summary: '', error: CLOUD_UNAVAILABLE }, true)).toBe(false);
+  });
+});
+
+describe('fallBackToLocal', () => {
+  const refused = { ok: false, summary: '', error: CLOUD_UNAVAILABLE };
+
+  it('carries on locally when Claude Code refuses to start a cloud session', () => {
+    expect(fallBackToLocal({ cloud: true }, refused)).toBe(true);
+  });
+
+  it('leaves stops, successes, other errors and local agents alone', () => {
+    expect(fallBackToLocal({ cloud: true }, { ...refused, aborted: true })).toBe(false);
+    expect(fallBackToLocal({ cloud: true }, { ok: true, summary: 'done' })).toBe(false);
+    expect(fallBackToLocal({ cloud: true }, { ok: false, summary: '', error: 'Error: cloud session session_01 is busy with a turn' })).toBe(false);
+    expect(fallBackToLocal({ cloud: true }, { ok: false, summary: '', error: 'boom', started: true })).toBe(false);
+    expect(fallBackToLocal({}, refused)).toBe(false);
   });
 });
 

@@ -164,7 +164,7 @@ export const pickedEffort = (picker: HTMLSelectElement): Effort | undefined => E
 
 /** Picks where an agent works: on this machine, or in a Claude Code cloud session. */
 export function wherePicker(cloud = false): HTMLSelectElement {
-  return h('select', { class: 'effort', title: 'Where the agent works: on this machine, or in a Claude Code cloud session (claude.ai/code)' },
+  return h('select', { class: 'effort', title: "Where the agent works: on this machine, or in a Claude Code cloud session (claude.ai/code). If Claude Code won't start a cloud session, the agent carries on locally" },
     h('option', { value: '', selected: !cloud }, '💻 local'),
     h('option', { value: 'cloud', selected: cloud }, '☁ cloud'),
   );

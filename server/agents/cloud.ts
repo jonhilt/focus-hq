@@ -1,3 +1,4 @@
+import type { Agent } from '../../shared/types';
 import type { RunOutcome } from './types';
 
 /**
@@ -21,9 +22,17 @@ export function carryOnInNewSession(outcome: RunOutcome, resumed: boolean): bool
   return resumed && !outcome.ok && !outcome.aborted && !outcome.started && !stillThere && !refused;
 }
 
+/**
+ * Claude Code refused to start a cloud session, which the office can't change: the agent carries on as a local agent in
+ * the worktree already set up for them, as the captain would have them do by hand.
+ */
+export function fallBackToLocal(agent: Pick<Agent, 'cloud'>, outcome: RunOutcome): boolean {
+  return !!agent.cloud && !outcome.ok && !outcome.aborted && outcome.error === CLOUD_UNAVAILABLE;
+}
+
 export const CLOUD_UNAVAILABLE =
   "Cloud sessions can't be started from Focus with the installed Claude Code: it only starts one from an interactive " +
-  'terminal, and the office runs it headlessly through the Agent SDK. Assign the issue to a 💻 local agent instead.';
+  'terminal, and the office runs it headlessly through the Agent SDK.';
 
 /**
  * Claude Code starts a new cloud session headlessly only while Anthropic has its headless cloud client switched on for

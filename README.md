@@ -111,10 +111,10 @@ A briefing is saved in `~/.focus/state.json` with the officer's session, and eac
 The **💻 local / ☁ cloud** picker next to 🧠 (on **Assign agent**, and at the New issue stand) puts an agent in a [Claude Code cloud session](https://code.claude.com/docs/en/claude-code-on-the-web) instead of on your machine. They still get a station and a laptop, and the office still opens the PR and hands it to QA.
 
 - **How it runs:** through the Agent SDK's bundled CLI with `--cloud`, which starts the cloud session and relays it in the same message stream as a local agent, so their terminal is live as usual. The laptop panel links to the session on claude.ai (**Cloud session ↗**), where you can watch or steer it too.
-- **When Claude Code won't start one:** the CLI starts a new cloud session headlessly only while Anthropic has its headless cloud client switched on for your account, a server-side rollout with no flag or SDK option to request it. Otherwise it refuses with "--cloud requires an interactive terminal", and the agent fails at once with an error saying cloud sessions can't be started from Focus with the installed Claude Code. Assign a 💻 local agent instead.
+- **When Claude Code won't start one:** the CLI starts a new cloud session headlessly only while Anthropic has its headless cloud client switched on for your account, a server-side rollout with no flag or SDK option to request it. Otherwise it refuses with "--cloud requires an interactive terminal", and the agent carries on as a 💻 local agent in the worktree the office already set up: one line in their terminal says so, the ☁ chip and **Cloud session ↗** link go, and the PR, QA and later follow-ups work as for any local agent. ☁ stays on offer, since Anthropic can switch headless cloud sessions on at any time.
 - **Their branch:** the office publishes `focus/<issue>-<slug>-<id>` to GitHub first (the cloud session clones it from there), and the agent is told to commit and push to that branch, and only that one, with `git push origin HEAD:<branch>`. When the session ends, the office fetches the branch and opens the PR. If nothing new arrived, the agent is asked once to push.
 - **Screenshots:** the office's browser tool runs on your machine, so cloud agents test in the cloud machine's own browser instead (a Playwright script, say). Any screenshot they look at comes back in their tool results and shows on their laptop screen, like a local agent's browser.
-- **Follow-ups** reattach to the same cloud session (`--cloud <session id>`). If that fails (an archived session, say), a new cloud session picks the work up from the branch with your message, unless Claude Code refused to start cloud sessions.
+- **Follow-ups** reattach to the same cloud session (`--cloud <session id>`). If that fails (an archived session, say), a new cloud session picks the work up from the branch with your message. If Claude Code refuses to start that one, the office fetches the branch into the worktree first, so nothing the cloud session pushed is lost, and the agent carries on locally with your message.
 - **Stop** interrupts the cloud session's turn before letting go of it.
 - The QA officer always works locally: QA needs the office browser for its screenshots.
 
@@ -231,7 +231,7 @@ server/
   agents/
     manager.ts            hire → queue → worktree → run → commit nudge → push → PR; messages, approvals
     claudeRunner.ts       Claude Agent SDK query() in streaming-input mode, permission callback; cloud agents via --cloud
-    cloud.ts              what happens after a cloud agent's session (push nudge, carrying on in a new session, the CLI refusing --cloud)
+    cloud.ts              what happens after a cloud agent's session (push nudge, carrying on in a new session, falling back to local when the CLI refuses --cloud)
     render.ts             SDK messages → Claude-Code-style terminal lines + "what am I doing" text + screenshots in tool results
     browserTool.ts        in-process MCP server driving headless Chromium, streams screenshots
     workspace.ts          git mirrors + worktrees (agents', the per-repo preview checkout, the planner's read-only checkouts)

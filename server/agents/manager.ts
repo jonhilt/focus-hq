@@ -6,7 +6,7 @@ import type { GitHubProvider } from '../github/provider';
 import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
-import { afterCloudRun, carryOnInNewSession } from './cloud';
+import { afterCloudRun, carryOnInNewSession, fallBackToLocal } from './cloud';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
 import { evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
 import type { QaLoopEvent } from './qaLoop';
@@ -17,6 +17,8 @@ interface Runtime {
   session?: AgentSession;
   /** Messages from the manager that arrived while no session could take them. */
   inbox: string[];
+  /** The manager's notes folded into the task when it was handed out, kept in case it has to be told again. */
+  notes: string[];
   permission?: { req: PermissionRequest; resolve: (ok: boolean) => void; resume: AgentStatus };
   nudged: boolean;
   busy: boolean;
@@ -48,7 +50,7 @@ export class AgentManager {
   private rt(id: string): Runtime {
     let rt = this.runtimes.get(id);
     if (!rt) {
-      rt = { inbox: [], nudged: false, busy: false };
+      rt = { inbox: [], notes: [], nudged: false, busy: false };
       this.runtimes.set(id, rt);
     }
     return rt;
@@ -194,29 +196,10 @@ export class AgentManager {
       if (agent.task === 'review') return await this.launchReview(agent);
       const info = await this.github.repoInfo(agent.repo);
       if (info.isEmpty) throw new Error('This repository has no commits yet – add a README first so there is a branch to work from.');
+      if (agent.task === 'issue') this.update(agent, { baseBranch: info.defaultBranch });
+      const prompt = await this.taskPrompt(agent);
       // an issue starts a new branch from the base; conflicts and QA's findings are fixed on the PR's own branch
-      let prompt: string;
-      let startPoint: string;
-      switch (agent.task) {
-        case 'issue': {
-          const issue = await this.github.getIssue(agent.repo, agent.issue.number);
-          this.update(agent, { baseBranch: info.defaultBranch, issue: { number: issue.number, title: issue.title, url: issue.url } });
-          prompt = issuePrompt(agent, issue);
-          startPoint = agent.baseBranch;
-          break;
-        }
-        case 'conflicts':
-          prompt = conflictsPrompt(agent);
-          startPoint = agent.branch;
-          break;
-        case 'fix': {
-          const review = this.store.reviews.get(prKey(agent.repo, agent.issue.number));
-          if (!review?.report) throw new Error(`QA's report on PR #${agent.issue.number} is gone, so there's nothing to fix`);
-          prompt = fixPrompt({ number: agent.issue.number, branch: agent.branch }, { sha: review.sha, report: review.report }, agent.cloud);
-          startPoint = agent.branch;
-          break;
-        }
-      }
+      const startPoint = agent.task === 'issue' ? agent.baseBranch : agent.branch;
       this.print(agent, [{ kind: 'system', text: `✻ Setting up a worktree for ${agent.repo} on ${agent.branch}` }]);
       this.update(agent, { activity: 'Cloning the repository' });
       await this.workspace.create(agent.repo, agent.id, agent.branch, startPoint);
@@ -226,10 +209,30 @@ export class AgentManager {
         await this.workspace.publish(this.workspace.dir(agent.id), agent.branch);
       }
       if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
-      if (rt.inbox.length) prompt += `\n\nNotes from your manager:\n${rt.inbox.splice(0).map((m) => `- ${m}`).join('\n')}`;
-      await this.runSession(agent, prompt);
+      rt.notes = rt.inbox.splice(0);
+      await this.runSession(agent, withNotes(prompt, rt.notes));
     } catch (err) {
       this.fail(agent, err);
+    }
+  }
+
+  /** The agent's task, told for where they work now. */
+  private async taskPrompt(agent: Agent): Promise<string> {
+    switch (agent.task) {
+      case 'review':
+        throw new Error('The QA officer gets qaPrompt (qa.ts)');
+      case 'issue': {
+        const issue = await this.github.getIssue(agent.repo, agent.issue.number);
+        this.update(agent, { issue: { number: issue.number, title: issue.title, url: issue.url } });
+        return issuePrompt(agent, issue);
+      }
+      case 'conflicts':
+        return conflictsPrompt(agent);
+      case 'fix': {
+        const review = this.store.reviews.get(prKey(agent.repo, agent.issue.number));
+        if (!review?.report) throw new Error(`QA's report on PR #${agent.issue.number} is gone, so there's nothing to fix`);
+        return fixPrompt({ number: agent.issue.number, branch: agent.branch }, { sha: review.sha, report: review.report }, agent.cloud);
+      }
     }
   }
 
@@ -308,6 +311,18 @@ export class AgentManager {
       this.fixEnded(agent, 'stopped');
       this.schedule();
       return;
+    }
+    if (fallBackToLocal(agent, outcome)) {
+      // a session id from the cloud means it already worked there: its pushes may be on GitHub but not in the worktree
+      const ranInCloud = !!agent.sessionId;
+      rt.nudged = false;
+      this.update(agent, { cloud: undefined, sessionId: undefined });
+      this.print(agent, [{ kind: 'system', text: "✻ Claude Code won't start a cloud session from Focus – carrying on here as a 💻 local agent" }]);
+      if (!ranInCloud) return this.runSession(agent, withNotes(await this.taskPrompt(agent), rt.notes));
+      this.update(agent, { activity: `Fetching ${agent.branch} from GitHub` });
+      await this.workspace.pull(this.workspace.dir(agent.id), agent.branch);
+      // only a new session gets refused, so this is already a carry-on prompt with the manager's message in it
+      return this.runSession(agent, prompt);
     }
     if (agent.cloud && carryOnInNewSession(outcome, !!resumeSessionId)) {
       // everything the old session did is on the branch: a new one picks it up from there
@@ -466,7 +481,7 @@ export class AgentManager {
       costUsd: 0,
       startedAt: Date.now(),
     };
-    this.runtimes.set(id, { inbox: [], nudged: false, busy: false });
+    this.runtimes.set(id, { inbox: [], notes: [], nudged: false, busy: false });
     this.store.putAgent(agent);
     this.hub.send({ type: 'agent', agent });
     this.print(agent, [{ kind: 'system', text: `──────── ✻ ${officer.name} picks up ${next.repo}#${next.number} for QA: ${next.title}` }]);
@@ -746,4 +761,8 @@ export class AgentManager {
     const busy = this.store.agentsIn(projectId).filter((a) => a.task !== 'review' && (a.status === 'queued' || ACTIVE_STATUSES.includes(a.status))).length;
     return Math.max(0, project.maxAgents - busy);
   }
+}
+
+function withNotes(prompt: string, notes: string[]): string {
+  return notes.length ? `${prompt}\n\nNotes from your manager:\n${notes.map((m) => `- ${m}`).join('\n')}` : prompt;
 }
