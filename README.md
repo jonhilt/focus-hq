@@ -117,6 +117,7 @@ The **💻 local / ☁ cloud** picker next to 🧠 (on **Assign agent**, and at 
 - **Follow-ups** reattach to the same cloud session (`--cloud <session id>`). If that fails (an archived session, say), a new cloud session picks the work up from the branch with your message. If Claude Code refuses to start that one, the office fetches the branch into the worktree first, so nothing the cloud session pushed is lost, and the agent carries on locally with your message.
 - **Stop** interrupts the cloud session's turn before letting go of it.
 - The QA officer always works locally: QA needs the office browser for its screenshots.
+- **Smoke test:** to check cloud sessions work on your account, assign a ☁ cloud agent to a small docs-only issue and confirm that a PR opens from its `focus/…` branch.
 
 You need a claude.ai login (not `FOCUS_USE_API_KEY`) and GitHub connected for cloud sessions: install the [Claude GitHub App](https://github.com/apps/claude) on the repo, or run `/web-setup` in Claude Code. Without the app, the CLI uploads the worktree instead of cloning. On Team and Enterprise plans, an admin has to allow cloud sessions. Cloud agents count towards **Agents working at once**: they share your plan's limits. The cloud session works in your [cloud environment](https://code.claude.com/docs/en/cloud-environments) (network access, setup script), not with your local tools. The headless `--cloud` mode the office drives isn't documented by Anthropic yet, so a Claude Code update can change how it behaves.
 
