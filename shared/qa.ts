@@ -1,0 +1,42 @@
+import type { PullRequest, QaReview } from './types';
+
+// QA decisions shared by the server and the board. Pure, so they're unit tested (shared/qa.test.ts).
+
+export type QaBadgeState = 'none' | 'queued' | 'testing' | 'passed' | 'failed' | 'stale' | 'error';
+
+export interface QaBadge {
+  state: QaBadgeState;
+  label: string;
+}
+
+/** What a PR card shows about QA. A verdict on an older commit than the PR's head is stale. */
+export function qaBadge(review: QaReview | undefined, pr: Pick<PullRequest, 'headSha'>): QaBadge {
+  if (!review) return { state: 'none', label: 'not tested' };
+  switch (review.status) {
+    case 'queued':
+      return { state: 'queued', label: '⏳ QA queued' };
+    case 'testing':
+      return { state: 'testing', label: '🔍 QA testing' };
+    case 'error':
+      return { state: 'error', label: '⚠ QA couldn’t finish' };
+    case 'passed':
+    case 'failed': {
+      if (review.sha && pr.headSha && !sameCommit(review.sha, pr.headSha)) return { state: 'stale', label: `QA ${review.status} an older commit` };
+      return review.status === 'passed' ? { state: 'passed', label: '✅ QA passed' } : { state: 'failed', label: '❌ QA failed' };
+    }
+  }
+}
+
+/** Short and long SHAs of the same commit match. */
+export function sameCommit(a: string, b: string): boolean {
+  const n = Math.min(a.length, b.length);
+  return n >= 7 && a.slice(0, n).toLowerCase() === b.slice(0, n).toLowerCase();
+}
+
+/** Whether QA should pick up a PR the office just opened or pushed to: on unless the project switched it off. */
+export function autoQaFor(project: { autoQa?: boolean }): boolean {
+  return project.autoQa !== false;
+}
+
+/** Key for a pull request across a project's repos. */
+export const prKey = (repo: string, number: number) => `${repo}#${number}`;

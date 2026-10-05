@@ -13,6 +13,7 @@ import { Hud } from './ui/hud';
 import { openManagerPanel } from './ui/managerPanel';
 import { Panels } from './ui/panels';
 import { openPreviewPanel } from './ui/previewPanel';
+import { openQaPanel } from './ui/qaPanel';
 import { openNewIssuePanel, openPausePanel, openTeleportPanel } from './ui/travelPanel';
 import type { Interaction } from './world/builder';
 import { plannerFor } from '../../shared/crew';
@@ -87,6 +88,7 @@ async function main() {
     openPreview: (projectId) => openPreviewPanel(ui, projectId),
     openNewIssue: (projectId) => openNewIssuePanel(ui, projectId),
     openBriefing: (projectId) => openBriefingPanel(ui, projectId),
+    openQa: (projectId) => openQaPanel(ui, projectId),
     goToLounge: () => {
       const lounge = world.places().find((p) => p.label.includes('lounge'));
       if (lounge) ui.goTo(lounge);
@@ -154,6 +156,7 @@ async function main() {
     for (const room of world.rooms.values()) {
       room.syncAgents();
       room.syncPlanner();
+      room.syncQa();
     }
     world.lounge?.sync();
     world.markPanels();
@@ -169,6 +172,7 @@ async function main() {
   state.on('info', () => world.markPanels());
   const agentChanged = (a: { projectId: string }) => {
     world.room(a.projectId)?.syncAgents();
+    world.room(a.projectId)?.syncQa();
     world.markPanels();
   };
   state.on('agent', agentChanged);
@@ -186,6 +190,10 @@ async function main() {
     world.markPanels();
   });
   state.on('draft', (projectId) => world.room(projectId)?.syncPlanner());
+  state.on('review', (projectId) => {
+    world.room(projectId)?.markBoard();
+    world.room(projectId)?.syncQa();
+  });
   let briefingStatus = state.briefing?.status;
   state.on('briefing', () => {
     world.lounge?.sync();
@@ -261,6 +269,9 @@ async function main() {
         break;
       case 'briefing':
         ui.openBriefing();
+        break;
+      case 'qa':
+        ui.openQa(i.projectId);
         break;
       case 'manager':
         ui.openManager(i.tab);

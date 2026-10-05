@@ -76,6 +76,8 @@ export function openAgentPanel(ui: Ui, id: string): void {
       h('span', { class: 'chip', title: 'How hard Claude thinks on this task' }, `🧠 ${a.effort ?? 'default'} effort`),
       h('span', { class: 'chip' }, `⏱ ${timeAgo(a.startedAt)}`),
       a.task === 'issue' ? h('a', { class: 'btn small', href: a.issue.url, target: '_blank', rel: 'noreferrer' }, 'Issue ↗') : null,
+      a.task === 'review' ? h('a', { class: 'btn small go', href: a.issue.url, target: '_blank', rel: 'noreferrer' }, `PR #${a.issue.number} ↗`) : null,
+      a.task === 'review' ? h('button', { class: 'btn small', onclick: () => ui.openQa(a.projectId) }, '🔍 QA reports') : null,
       a.pr ? h('a', { class: 'btn small go', href: a.pr.url, target: '_blank', rel: 'noreferrer' }, `PR #${a.pr.number} ↗`) : null,
       a.pr && a.status === 'done'
         ? h('button', { class: 'btn small', title: 'Run the PR on your machine and open it in your browser', onclick: () => ui.previewPr(a.projectId, a.repo, a.pr!.number) }, '▶ Preview')
@@ -95,7 +97,9 @@ export function openAgentPanel(ui: Ui, id: string): void {
     }
     stop.disabled = FINISHED.includes(a.status);
     input.placeholder = FINISHED.includes(a.status)
-      ? a.status === 'done'
+      ? a.task === 'review'
+        ? `Ask ${a.name} to look at something else on PR #${a.issue.number}`
+        : a.status === 'done'
         ? `Ask ${a.name} for changes – they'll update the PR`
         : `Tell ${a.name} what to do next to pick the work back up`
       : `Message ${a.name}… (they'll read it at their next step)`;

@@ -1,10 +1,13 @@
-import type { Agent, AgentStatus, Effort, PermissionRequest, PullRequest, TermLine } from '../../shared/types';
-import { ACTIVE_STATUSES, DESKS_PER_ROOM } from '../../shared/types';
+import { qaOfficerFor } from '../../shared/crew';
+import { autoQaFor, prKey } from '../../shared/qa';
+import type { Agent, AgentStatus, Effort, PermissionRequest, PullRequest, QaReview, TermLine } from '../../shared/types';
+import { ACTIVE_STATUSES, DESKS_PER_ROOM, QA_DESK } from '../../shared/types';
 import type { GitHubProvider } from '../github/provider';
 import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { errorMessage, newId, slugify, truncate } from '../util';
 import { COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, randomAvatar, systemAppend } from './prompts';
+import { parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
 import type { AgentRunner, AgentSession, RunHooks, WorkspaceOps } from './types';
 
 interface Runtime {
@@ -14,9 +17,14 @@ interface Runtime {
   permission?: { req: PermissionRequest; resolve: (ok: boolean) => void; resume: AgentStatus };
   nudged: boolean;
   busy: boolean;
+  /** The QA officer's instructions for the review in hand (they depend on the PR). */
+  qaSystem?: string;
 }
 
 const FINISHED: AgentStatus[] = ['done', 'stopped', 'error'];
+
+/** Each room has one QA officer; their agent record is reused from review to review. */
+const qaAgentId = (projectId: string) => `qa_${projectId}`;
 
 /** Hires agents, seats them at desks, runs them, and turns their work into pull requests. */
 export class AgentManager {
@@ -56,9 +64,10 @@ export class AgentManager {
     this.hub.send({ type: 'lines', id: agent.id, lines: stamped });
   }
 
+  /** Agents running, everywhere or (QA officers aside, who don't take one of a room's slots) in one project. */
   private activeCount(projectId?: string): number {
     return [...this.store.agents.values()].filter(
-      (a) => ACTIVE_STATUSES.includes(a.status) && (!projectId || a.projectId === projectId),
+      (a) => ACTIVE_STATUSES.includes(a.status) && (!projectId || (a.projectId === projectId && a.task !== 'review')),
     ).length;
   }
 
@@ -82,7 +91,7 @@ export class AgentManager {
    * the office; otherwise a new agent sits down on the PR's branch.
    */
   resolveConflicts(projectId: string, pr: PullRequest): Agent {
-    const owner = [...this.store.agents.values()].find((a) => a.repo === pr.repo && a.pr?.number === pr.number);
+    const owner = [...this.store.agents.values()].find((a) => a.task !== 'review' && a.repo === pr.repo && a.pr?.number === pr.number);
     if (owner) {
       this.update(owner, { baseBranch: pr.baseBranch });
       this.message(owner.id, conflictsPrompt(owner));
@@ -141,9 +150,14 @@ export class AgentManager {
     return leaving.desk;
   }
 
-  /** Starts queued agents while there is room under the global and per-project limits. */
+  /**
+   * Starts queued agents while there is room under the global and per-project limits. QA goes first, and doesn't count
+   * against a room's limit: finished work gets reviewed before new work starts.
+   */
   schedule(): void {
-    const queued = [...this.store.agents.values()].filter((a) => a.status === 'queued').sort((a, b) => a.startedAt - b.startedAt);
+    const queued = [...this.store.agents.values()]
+      .filter((a) => a.status === 'queued')
+      .sort((a, b) => Number(b.task === 'review') - Number(a.task === 'review') || a.startedAt - b.startedAt);
     let running = this.activeCount();
     for (const agent of queued) {
       if (running >= this.store.settings.maxConcurrent) {
@@ -152,7 +166,7 @@ export class AgentManager {
       }
       const project = this.store.projects.find((p) => p.id === agent.projectId);
       if (!project) continue;
-      if (this.activeCount(project.id) >= project.maxAgents) {
+      if (agent.task !== 'review' && this.activeCount(project.id) >= project.maxAgents) {
         this.update(agent, { activity: `Waiting – ${project.name} allows ${project.maxAgents} at once` });
         continue;
       }
@@ -163,8 +177,9 @@ export class AgentManager {
 
   private async launch(agent: Agent): Promise<void> {
     const rt = this.rt(agent.id);
-    this.update(agent, { status: 'setting-up', activity: 'Reading the issue', error: undefined });
+    this.update(agent, { status: 'setting-up', activity: agent.task === 'review' ? 'Reading the pull request' : 'Reading the issue', error: undefined });
     try {
+      if (agent.task === 'review') return await this.launchReview(agent);
       const info = await this.github.repoInfo(agent.repo);
       if (info.isEmpty) throw new Error('This repository has no commits yet – add a README first so there is a branch to work from.');
       // an issue starts a new branch from the base; conflicts are fixed on the PR's own branch
@@ -229,6 +244,9 @@ export class AgentManager {
 
   private async runSession(agent: Agent, prompt: string, resumeSessionId?: string): Promise<void> {
     const rt = this.rt(agent.id);
+    const review = agent.task === 'review';
+    // before marking them busy: the QA officer's instructions may need GitHub, and that can fail
+    const instructions = review ? await this.qaSystem(agent) : systemAppend(agent);
     rt.busy = true;
     this.update(agent, { status: 'working', activity: resumeSessionId ? 'Reading your message' : 'Getting started', error: undefined, finishedAt: undefined });
     const session = this.runner.start(
@@ -237,10 +255,11 @@ export class AgentManager {
         agentName: agent.name,
         cwd: this.workspace.dir(agent.id),
         prompt,
-        systemAppend: systemAppend(agent),
+        systemAppend: instructions,
         resumeSessionId,
         settings: this.store.settings,
         effort: agent.effort,
+        outputSchema: review ? QA_SCHEMA : undefined,
       },
       this.hooks(agent),
     );
@@ -253,6 +272,7 @@ export class AgentManager {
 
     if (outcome.aborted) {
       this.update(agent, { status: 'stopped', activity: 'Stopped by the manager', permission: undefined, finishedAt: Date.now() });
+      if (review) this.reviewEnded(agent, 'Stopped by the manager');
       this.schedule();
       return;
     }
@@ -264,6 +284,7 @@ export class AgentManager {
       this.fail(agent, outcome.error ?? 'The agent stopped with an error');
       return;
     }
+    if (review) return this.finishReview(agent, outcome.structured, outcome.summary);
     await this.deliver(agent, outcome.summary);
   }
 
@@ -304,6 +325,15 @@ export class AgentManager {
       this.print(agent, [{ kind: 'success', text: `✔ Pull request ready: ${pr.url}` }]);
       this.update(agent, { status: 'done', pr, activity: `PR #${pr.number} is ready for review`, finishedAt: Date.now() });
       this.boardChanged(agent.projectId);
+      // new code on the PR: the room's QA officer tests it
+      const project = this.store.projects.find((p) => p.id === agent.projectId);
+      if (project && autoQaFor(project)) {
+        try {
+          this.requestReview(agent.projectId, agent.repo, pr.number, agent.issue.title);
+        } catch (err) {
+          this.print(agent, [{ kind: 'error', text: `✘ Couldn't hand PR #${pr.number} to QA: ${errorMessage(err)}` }]);
+        }
+      }
     } catch (err) {
       this.fail(agent, err);
     } finally {
@@ -320,7 +350,136 @@ export class AgentManager {
     this.print(agent, [{ kind: 'error', text: `✘ ${message}` }]);
     this.update(agent, { status: 'error', error: message, activity: 'Hit a problem – send a message to retry', permission: undefined, finishedAt: Date.now() });
     this.hub.toast('error', `${agent.name}: ${truncate(message, 140)}`, agent.id);
+    if (agent.task === 'review') this.reviewEnded(agent, message);
     this.schedule();
+  }
+
+  // ---------------------------------------------------------------- QA
+
+  /** Asks the room's QA officer to review and test a pull request. Queued if they're busy with another. */
+  requestReview(projectId: string, repo: string, number: number, title: string): QaReview {
+    const project = this.store.project(projectId);
+    if (!project.repos.includes(repo)) throw new Error(`${repo} is not connected to ${project.name}`);
+    const existing = this.store.reviews.get(prKey(repo, number));
+    if (existing && (existing.status === 'queued' || existing.status === 'testing')) return existing;
+    const review: QaReview = { projectId, repo, number, title, status: 'queued', requestedAt: Date.now() };
+    this.putReview(review);
+    this.nextReview(projectId);
+    return review;
+  }
+
+  /** Seats the room's QA officer on the oldest queued review, once they're free. */
+  private nextReview(projectId: string): void {
+    const id = qaAgentId(projectId);
+    const current = this.store.agents.get(id);
+    if (current && !FINISHED.includes(current.status)) return;
+    const next = [...this.store.reviews.values()]
+      .filter((r) => r.projectId === projectId && r.status === 'queued')
+      .sort((a, b) => a.requestedAt - b.requestedAt)[0];
+    if (!next) return;
+    const officer = qaOfficerFor(projectId);
+    const url = `https://github.com/${next.repo}/pull/${next.number}`;
+    const agent: Agent = {
+      id,
+      name: officer.name,
+      avatar: officer.avatar,
+      projectId,
+      repo: next.repo,
+      task: 'review',
+      // GitHub numbers pull requests and issues alike; a QA officer's "issue" is the PR under test
+      issue: { number: next.number, title: next.title, url },
+      desk: QA_DESK,
+      status: 'queued',
+      activity: 'Waiting for a free slot',
+      branch: `qa/pr-${next.number}`,
+      baseBranch: current?.baseBranch ?? 'main',
+      costUsd: 0,
+      startedAt: Date.now(),
+    };
+    this.runtimes.set(id, { inbox: [], nudged: false, busy: false });
+    this.store.putAgent(agent);
+    this.hub.send({ type: 'agent', agent });
+    this.print(agent, [{ kind: 'system', text: `──────── ✻ ${officer.name} picks up ${next.repo}#${next.number} for QA: ${next.title}` }]);
+    this.putReview({ ...next, agentId: id });
+    this.schedule();
+  }
+
+  private async launchReview(agent: Agent): Promise<void> {
+    const rt = this.rt(agent.id);
+    const project = this.store.project(agent.projectId);
+    const pr = await this.github.getPullRequest(agent.repo, agent.issue.number);
+    const issues = (await Promise.all(pr.linkedIssues.slice(0, 3).map((n) => this.github.getIssue(agent.repo, n).catch(() => null)))).filter((i) => i !== null);
+    this.update(agent, { baseBranch: pr.baseBranch, issue: { number: pr.number, title: pr.title, url: pr.url }, activity: 'Checking out the pull request' });
+    this.print(agent, [{ kind: 'system', text: `✻ Checking out PR #${pr.number} (${pr.branch} into ${pr.baseBranch})` }]);
+    const sha = (await this.workspace.checkoutPullRequest(agent.repo, agent.id, pr.number)) || pr.headSha;
+    if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
+    const review = this.store.reviews.get(prKey(agent.repo, pr.number));
+    if (review) this.putReview({ ...review, status: 'testing', title: pr.title, sha, agentId: agent.id, error: undefined });
+    rt.qaSystem = qaSystemAppend(agent, project, pr, sha);
+    let prompt = qaPrompt(agent.repo, pr, issues);
+    if (rt.inbox.length) prompt += `\n\nNotes from your manager:\n${rt.inbox.splice(0).map((m) => `- ${m}`).join('\n')}`;
+    await this.runSession(agent, prompt);
+  }
+
+  /** The QA officer's instructions; rebuilt from GitHub if the office restarted since the review began. */
+  private async qaSystem(agent: Agent): Promise<string> {
+    const rt = this.rt(agent.id);
+    if (!rt.qaSystem) {
+      const pr = await this.github.getPullRequest(agent.repo, agent.issue.number);
+      const sha = this.store.reviews.get(prKey(agent.repo, agent.issue.number))?.sha ?? pr.headSha;
+      rt.qaSystem = qaSystemAppend(agent, this.store.project(agent.projectId), pr, sha);
+    }
+    return rt.qaSystem;
+  }
+
+  /** Records the QA officer's verdict, posts it on the pull request, and moves on to the next review. */
+  private async finishReview(agent: Agent, structured: unknown, text: string): Promise<void> {
+    const number = agent.issue.number;
+    const report = parseQaReport(structured, text);
+    if (!report) {
+      this.fail(agent, 'Finished without a QA report. Send them a message to ask for one, or send the PR to QA again.');
+      return;
+    }
+    const pass = report.verdict === 'pass';
+    const review = this.store.reviews.get(prKey(agent.repo, number));
+    let commentUrl: string | undefined;
+    try {
+      this.update(agent, { activity: 'Posting the QA report on the PR' });
+      commentUrl = (await this.github.commentOnPullRequest(agent.repo, number, qaComment(report, { officer: agent.name, sha: review?.sha }))) || undefined;
+      this.print(agent, [{ kind: 'system', text: `✻ Posted the QA report: ${commentUrl ?? 'done'}` }]);
+    } catch (err) {
+      this.print(agent, [{ kind: 'error', text: `✘ Couldn't post the QA report on the PR: ${errorMessage(err)}` }]);
+    }
+    if (review) this.putReview({ ...review, status: pass ? 'passed' : 'failed', report, commentUrl, finishedAt: Date.now(), error: undefined });
+    this.print(agent, [{ kind: pass ? 'success' : 'error', text: `${pass ? '✅ QA passed' : '❌ QA failed'} PR #${number} · ${report.checks.length} checks` }]);
+    this.update(agent, { status: 'done', activity: `${pass ? '✅ Passed' : '❌ Failed'} PR #${number}`, finishedAt: Date.now() });
+    this.hub.toast(pass ? 'success' : 'error', `${pass ? '✅' : '❌'} ${agent.name} ${pass ? 'passed' : 'failed'} ${agent.repo.split('/')[1]}#${number}: ${truncate(report.summary, 120)}`, agent.id);
+    this.boardChanged(agent.projectId);
+    this.nextReview(agent.projectId);
+  }
+
+  /** A review that ended without a verdict (stopped, failed, or its PR went away). */
+  private reviewEnded(agent: Agent, error: string): void {
+    const review = this.store.reviews.get(prKey(agent.repo, agent.issue.number));
+    if (review && (review.status === 'testing' || review.status === 'queued')) this.putReview({ ...review, status: 'error', error, finishedAt: Date.now() });
+    // don't start the next review under the manager's nose when they stopped this one on purpose
+    if (error !== 'Stopped by the manager') setTimeout(() => this.nextReview(agent.projectId), 0);
+  }
+
+  /** The PR is merged or closed: forget its review, and stop the QA officer if they're on it. */
+  reviewGone(repo: string, number: number): void {
+    const review = this.store.reviews.get(prKey(repo, number));
+    if (!review) return;
+    this.store.removeReview(repo, number);
+    this.hub.send({ type: 'review-removed', repo, number });
+    const qa = this.store.agents.get(qaAgentId(review.projectId));
+    if (qa && qa.repo === repo && qa.issue.number === number && !FINISHED.includes(qa.status)) this.stop(qa.id);
+    this.nextReview(review.projectId);
+  }
+
+  private putReview(review: QaReview): void {
+    this.store.putReview(review);
+    this.hub.send({ type: 'review', review });
   }
 
   // ---------------------------------------------------------------- manager actions
@@ -390,7 +549,8 @@ export class AgentManager {
 
   /** Called when a PR an agent opened was merged or closed. The agent packs up and goes home. */
   prClosed(repo: string, number: number, merged: boolean): void {
-    const agent = [...this.store.agents.values()].find((a) => a.repo === repo && a.pr?.number === number);
+    this.reviewGone(repo, number);
+    const agent = [...this.store.agents.values()].find((a) => a.task !== 'review' && a.repo === repo && a.pr?.number === number);
     if (!agent || this.leaving.has(agent.id)) return;
     this.leaving.add(agent.id);
     this.print(agent, [{ kind: 'success', text: merged ? `🎉 PR #${number} was merged!` : `PR #${number} was closed` }]);
@@ -409,7 +569,7 @@ export class AgentManager {
 
   freeSlots(projectId: string): number {
     const project = this.store.project(projectId);
-    const busy = this.store.agentsIn(projectId).filter((a) => a.status === 'queued' || ACTIVE_STATUSES.includes(a.status)).length;
+    const busy = this.store.agentsIn(projectId).filter((a) => a.task !== 'review' && (a.status === 'queued' || ACTIVE_STATUSES.includes(a.status))).length;
     return Math.max(0, project.maxAgents - busy);
   }
 }

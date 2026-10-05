@@ -18,6 +18,7 @@ A cartoon, first-person 3D office where a swarm of **Claude Code** agents works 
 - Each room's **Kanban whiteboard** shows what's to do, who's working on what, and which **pull requests** are ready to merge.
 - The **manager's office** is where you create projects, connect existing repos or create blank ones, file issues and tune how much the agents may do on their own.
 - When an agent is done, the office pushes their branch and opens a **pull request** with their summary as the description. Merge it from the board and they pack up and go home.
+- Each room has a **QA officer** at the pull requests table. They review and test every PR the office opens (code review, tests, the browser) and post a **QA report** on it. The board shows the verdict next to each PR.
 - Press **▶ Preview** on any open pull request to run it on your machine and open it in **your own browser** before you merge.
 
 GitHub goes through the [`gh` CLI](https://cli.github.com/). Claude runs through the Agent SDK on **your own Claude login**, so agents use your Claude subscription.
@@ -52,7 +53,7 @@ Then in the office:
 2. A new room appears down the hallway. Its whiteboard fills with the repos' open issues.
 3. At the board (<kbd>E</kbd>), click **Assign agent** on an issue, or file one at the **＋ New issue** stand and tick *Assign an agent right away*. The officer at the stand can draft it for you from a one-liner (see [Drafting issues](#drafting-issues)). The 🧠 picker beside either sets how much effort the agent puts in (`low` to `max`; *default* leaves it to the model).
 4. Watch them work. Press <kbd>E</kbd> on an agent or laptop to open the full terminal, message them, or approve something they need.
-5. When the PR shows up under **Ready to merge**, press **▶ Preview** to try it, review it on GitHub and merge it from the board.
+5. When the PR shows up under **Ready to merge**, the room's QA officer tests it and posts their report on it. Press **▶ Preview** to try it yourself, review it on GitHub and merge it from the board.
 
 > **Subscription note:** if `ANTHROPIC_API_KEY` is set, agents ignore it and use your Claude login. Set `FOCUS_USE_API_KEY=1` if you want them on the API key instead. Each agent is a full Claude Code session, so several at once use your plan's limits faster. **Settings → Agents working at once** caps that (default 4).
 
@@ -100,7 +101,30 @@ A briefing is saved in `~/.focus/state.json` with the officer's session, and eac
 5. **Deliver**: if they left uncommitted changes, they're asked once to commit them. Then the office pushes the branch and opens the PR (`Closes #N`) with the agent's summary as the body.
 6. **Follow-ups**: message an agent at any time. While they're working, the message reaches them at their next step. Once they're done, the message resumes the same Claude session and the new commits update the PR.
 7. **Merge conflicts**: a conflicting PR gets a **🔧 Resolve conflicts** button on the board. The agent who opened it merges the base branch in and updates the PR. If nobody in the office owns the PR (a teammate's, or the agent already went home), a new agent sits down on the PR's branch to do it.
-8. **Merged**: when the PR is merged (from the board or on GitHub), the agent leaves and their worktree is cleaned up.
+8. **QA**: every PR the office opens or updates goes to the room's QA officer (see [QA](#qa)).
+9. **Merged**: when the PR is merged (from the board or on GitHub), the agent leaves and their worktree is cleaned up.
+
+## QA
+
+Every room has a QA officer in blue, sitting at the pull requests table facing the board, with a laptop you can look at over their shoulder.
+
+- **When they test:**
+  - Automatically, when the office opens a PR or pushes new commits to one. Turn this off per project at the QA station.
+  - Whenever you press **🔍 Send to QA** (or **↻ Re-test**) on a PR on the board, a teammate's PR included.
+- **One at a time:** reviews queue up for the room's officer. QA counts towards **Agents working at once**, but goes ahead of new issues in the queue and doesn't take one of the room's agent slots.
+- **What they do:**
+  1. Check the PR's head out, detached, into their own folder.
+  2. Read the PR and its linked issues, and work out the acceptance criteria.
+  3. Review the diff against the base branch.
+  4. Run the tests, type checks, linters and build.
+  5. Click through UI changes with the browser tool, so you see that on their laptop.
+  6. Finish with a structured report: a verdict, a summary, every check made, the commands run and, on a fail, fix instructions.
+- **The report:** the office posts it as a comment on the PR (QA never touches GitHub themselves), and the board shows **✅ QA passed**, **❌ QA failed** or, once newer commits land, **QA passed an older commit**. You still merge.
+- **The QA station** (<kbd>E</kbd> on the officer when they're free, or the QA chip on a PR):
+  - every report in full;
+  - the auto-QA switch;
+  - the project's **QA brief**: what to check on every PR of this project ("works at phone width", "no console errors"). It goes into the officer's instructions on every review.
+- **Following up:** message the QA officer like any agent, to have them look at something else. To get a failed PR fixed, message the developer who opened it. Their new commits go back to QA by themselves.
 
 ## Previewing a pull request
 
@@ -170,7 +194,8 @@ The data dir is deliberately outside this repo. Otherwise agents working in a wo
 
 ```
 shared/types.ts           types shared by server and client (Project, Agent, Board, IssueDraft, events…)
-shared/crew.ts            permanent crew per room (the planner), derived from the project id
+shared/crew.ts            permanent crew per room (the ops officer, the QA officer), derived from the project id
+shared/qa.ts              QA decisions shared by server and board (badges, stale verdicts)
 server/
   supervise.ts            runs index.ts and restarts it after an auto update
   updater.ts              auto update: fetch, fast-forward, install/build, restart
@@ -190,14 +215,15 @@ server/
     planner.ts            the officer at each room's New issue stand: issue drafts, their prompt and schema
     briefing.ts           briefings in the observation lounge: turns, the brief, wrap-up into a stand draft
     claudeCrew.ts         the officer's read-only Claude Code sessions (Read/Glob/Grep, update_brief, structured output)
-    demoRunner.ts         scripted pretend agents (and a pretend planner and briefing officer) for demo mode
+    qa.ts                 the QA officer: instructions, the report's schema and parsing, the PR comment
+    demoRunner.ts         scripted pretend agents (and a pretend planner, briefing officer and QA officer) for demo mode
 client/src/
   main.ts                 renderer (toon shading + outline pass), loop, interaction, UI wiring
   world/                  office layout, rooms, desks, characters, laptop screens, whiteboard
     scenery.ts            stencil "holo walls" that show a landscape built around a room
     themes.ts             the landscapes (beach, forest, desert, moon, city, library)
     lounge.ts             the observation lounge: briefing table, officer, the brief on the wall screen
-  ui/                     HUD and panels (agent terminal, board, manager console, teleport)
+  ui/                     HUD and panels (agent terminal, board, manager console, teleport, QA station, briefing)
 ```
 
 The client mirrors server state over the WebSocket. Every action is a small REST call. Laptop screens and whiteboards are canvases drawn into textures, and only redrawn when something changes. Screens near you redraw faster.
@@ -211,3 +237,4 @@ The client mirrors server state over the WebSocket. Every action is a small REST
 | `npm run build` | build the client into `dist/` |
 | `npm start` | serve `dist/` in live mode |
 | `npm run typecheck` | `tsc` over server, client and shared code |
+| `npm test` | unit tests (vitest) for the pure decision code: QA verdicts, badges, prompts |

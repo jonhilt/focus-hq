@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import type { Agent, Board, Briefing, BrowserFrame, Project, Settings, TermLine } from '../shared/types';
+import { prKey } from '../shared/qa';
+import type { Agent, Board, Briefing, BrowserFrame, Project, QaReview, Settings, TermLine } from '../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, ROOM_THEMES, type RoomTheme } from '../shared/types';
 import { paths } from './config';
 import { newId } from './util';
@@ -14,6 +15,7 @@ interface PersistedState {
   projects: Project[];
   agents: Agent[];
   briefing?: StoredBriefing | null;
+  reviews?: QaReview[];
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -37,6 +39,8 @@ export class Store {
   browser = new Map<string, BrowserFrame>();
   /** The briefing in the observation lounge, if one is in session. */
   briefing: StoredBriefing | null = null;
+  /** The latest QA review per pull request (by prKey). */
+  reviews = new Map<string, QaReview>();
   private saveTimer: NodeJS.Timeout | null = null;
 
   constructor(private readonly persist: boolean) {}
@@ -49,6 +53,12 @@ export class Store {
     this.settings = { ...DEFAULT_SETTINGS, ...raw.settings };
     this.projects = raw.projects ?? [];
     this.briefing = raw.briefing ?? null;
+    for (const review of raw.reviews ?? []) {
+      if (review.status === 'queued' || review.status === 'testing') {
+        Object.assign(review, { status: 'error', error: 'Interrupted when the office closed. Send it to QA again.' });
+      }
+      this.reviews.set(prKey(review.repo, review.number), review);
+    }
     if (this.briefing && (this.briefing.status === 'thinking' || this.briefing.status === 'wrapping-up')) {
       Object.assign(this.briefing, { status: 'failed', activity: 'Interrupted', error: 'Interrupted when the office closed. Say something to pick it back up.' });
     }
@@ -69,7 +79,13 @@ export class Store {
     if (this.saveTimer) return;
     this.saveTimer = setTimeout(() => {
       this.saveTimer = null;
-      const state: PersistedState = { settings: this.settings, projects: this.projects, agents: [...this.agents.values()], briefing: this.briefing };
+      const state: PersistedState = {
+        settings: this.settings,
+        projects: this.projects,
+        agents: [...this.agents.values()],
+        briefing: this.briefing,
+        reviews: [...this.reviews.values()],
+      };
       fs.mkdirSync(path.dirname(paths.state), { recursive: true });
       const tmp = `${paths.state}.tmp`;
       fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
@@ -111,7 +127,7 @@ export class Store {
 
   updateProject(
     id: string,
-    patch: Partial<Pick<Project, 'name' | 'color' | 'theme' | 'maxAgents' | 'autoAssign' | 'autoLabel' | 'onlyMyPrs' | 'preview'>>,
+    patch: Partial<Pick<Project, 'name' | 'color' | 'theme' | 'maxAgents' | 'autoAssign' | 'autoLabel' | 'onlyMyPrs' | 'preview' | 'autoQa' | 'qaBrief'>>,
   ): Project {
     const project = this.project(id);
     if (patch.name !== undefined) project.name = patch.name.trim() || project.name;
@@ -122,6 +138,8 @@ export class Store {
     }
     if (patch.maxAgents !== undefined) project.maxAgents = Math.max(1, Math.min(DESKS_PER_ROOM, Math.round(patch.maxAgents)));
     if (patch.autoAssign !== undefined) project.autoAssign = patch.autoAssign;
+    if (patch.autoQa !== undefined) project.autoQa = patch.autoQa === true;
+    if (patch.qaBrief !== undefined) project.qaBrief = String(patch.qaBrief).slice(0, 4000);
     if (patch.autoLabel !== undefined) project.autoLabel = patch.autoLabel.trim();
     if (patch.onlyMyPrs !== undefined) project.onlyMyPrs = !!patch.onlyMyPrs;
     if (patch.preview !== undefined) {
@@ -136,7 +154,19 @@ export class Store {
   removeProject(id: string): void {
     this.projects = this.projects.filter((p) => p.id !== id);
     this.boards.delete(id);
+    for (const [key, review] of this.reviews) if (review.projectId === id) this.reviews.delete(key);
     this.save();
+  }
+
+  putReview(review: QaReview): void {
+    this.reviews.set(prKey(review.repo, review.number), review);
+    this.save();
+  }
+
+  removeReview(repo: string, number: number): boolean {
+    const removed = this.reviews.delete(prKey(repo, number));
+    if (removed) this.save();
+    return removed;
   }
 
   setBriefing(briefing: StoredBriefing | null): void {

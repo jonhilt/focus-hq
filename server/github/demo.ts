@@ -1,10 +1,10 @@
 import type { GitHubStatus, Issue, PullRequest } from '../../shared/types';
-import type { CreatePullRequest, GitHubProvider, IssueDetail, RepoInfo } from './provider';
+import { closingIssues, type CreatePullRequest, type GitHubProvider, type IssueDetail, type PullRequestDetail, type RepoInfo } from './provider';
 
 interface FakeRepo {
   description: string;
   issues: Issue[];
-  prs: (PullRequest & { state: 'OPEN' | 'CLOSED' | 'MERGED'; closes?: number })[];
+  prs: (PullRequest & { state: 'OPEN' | 'CLOSED' | 'MERGED'; closes?: number; body?: string; comments?: string[] })[];
   nextNumber: number;
 }
 
@@ -63,6 +63,7 @@ export class DemoGitHub implements GitHubProvider {
         title: 'Tidy up README badges',
         url: `https://github.com/${name}/pull/${number}`,
         branch: 'sam/readme-badges',
+        headSha: (number * 0x9e3779b1 >>> 0).toString(16).padStart(8, '0') + '5ab',
         baseBranch: 'main',
         author: 'sam-teammate',
         isDraft: false,
@@ -141,6 +142,30 @@ export class DemoGitHub implements GitHubProvider {
     return pr ? { number: pr.number, url: pr.url } : null;
   }
 
+  async getPullRequest(name: string, number: number): Promise<PullRequestDetail> {
+    const pr = this.repo(name).prs.find((p) => p.number === number);
+    if (!pr) throw new Error(`PR #${number} not found in ${name}`);
+    const body = pr.body ?? 'Tidies up the badges at the top of the README.';
+    return {
+      number,
+      title: pr.title,
+      body,
+      url: pr.url,
+      branch: pr.branch,
+      baseBranch: pr.baseBranch,
+      headSha: pr.headSha ?? 'demo',
+      author: pr.author,
+      linkedIssues: closingIssues(body),
+    };
+  }
+
+  async commentOnPullRequest(name: string, number: number, body: string): Promise<string> {
+    const pr = this.repo(name).prs.find((p) => p.number === number);
+    if (!pr) throw new Error(`PR #${number} not found in ${name}`);
+    pr.comments = [...(pr.comments ?? []), body];
+    return `${pr.url}#issuecomment-${pr.comments.length}`;
+  }
+
   async createPullRequest(name: string, req: CreatePullRequest) {
     const repo = this.repo(name);
     const number = repo.nextNumber++;
@@ -159,6 +184,8 @@ export class DemoGitHub implements GitHubProvider {
       createdAt: new Date().toISOString(),
       state: 'OPEN' as const,
       closes: closes ? Number(closes[1]) : undefined,
+      body: req.body,
+      headSha: Math.random().toString(16).slice(2, 12).padEnd(10, '0'),
     };
     repo.prs.push(pr);
     return { number, url: pr.url };

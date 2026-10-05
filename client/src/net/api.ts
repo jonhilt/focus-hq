@@ -1,4 +1,4 @@
-import type { Agent, Board, Briefing, Effort, Issue, IssueDraft, Preview, PreviewLog, PreviewLogFile, Project, RoomTheme, Settings, TermLine } from '../../../shared/types';
+import type { Agent, Board, Briefing, Effort, Issue, IssueDraft, Preview, QaReview, PreviewLog, PreviewLogFile, Project, RoomTheme, Settings, TermLine } from '../../../shared/types';
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(`/api${url}`, {
@@ -33,6 +33,7 @@ export const api = {
   briefingSay: (text: string) => call<Briefing>('POST', '/briefing/say', { text }),
   briefingWrapUp: () => call<Briefing>('POST', '/briefing/wrap-up'),
   briefingEnd: () => call('DELETE', '/briefing'),
+  sendToQa: (projectId: string, repo: string, number: number) => call<QaReview>('POST', '/prs/qa', { projectId, repo, number }),
   resolveConflicts: (projectId: string, repo: string, number: number) =>
     call<Agent>('POST', '/prs/resolve-conflicts', { projectId, repo, number }),
   mergePr: (projectId: string, repo: string, number: number) => call('POST', '/prs/merge', { projectId, repo, number }),

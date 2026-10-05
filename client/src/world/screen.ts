@@ -36,7 +36,11 @@ export class LaptopScreen {
   private image: HTMLImageElement | null = null;
   private imageSrc = '';
 
-  constructor(private agent: Agent | null) {
+  /** `idle` is what the screen says while nobody's using it. */
+  constructor(
+    private agent: Agent | null,
+    private readonly idle = 'This desk is free',
+  ) {
     this.texture = canvasTexture(this.c.canvas);
     this.material = flat(this.texture);
   }
@@ -77,7 +81,7 @@ export class LaptopScreen {
       ctx.font = `700 64px ${UI_FONT}`;
       ctx.fillText('Focus OS', W / 2, H / 2 - 10);
       ctx.font = `500 30px ${UI_FONT}`;
-      ctx.fillText('This desk is free', W / 2, H / 2 + 44);
+      ctx.fillText(this.idle, W / 2, H / 2 + 44);
       return;
     }
 

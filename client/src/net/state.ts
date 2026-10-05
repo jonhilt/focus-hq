@@ -1,4 +1,5 @@
-import type { Agent, Board, Briefing, BrowserFrame, IssueDraft, Preview, Project, ServerEvent, ServerInfo, TermLine } from '../../../shared/types';
+import { prKey } from '../../../shared/qa';
+import type { Agent, Board, Briefing, BrowserFrame, IssueDraft, QaReview, Preview, Project, ServerEvent, ServerInfo, TermLine } from '../../../shared/types';
 
 type Events = {
   snapshot: void;
@@ -16,6 +17,8 @@ type Events = {
   /** A project's issue draft changed (project id). */
   draft: string;
   briefing: void;
+  /** A QA review changed or went away (its project id). */
+  review: string;
   connection: boolean;
 };
 
@@ -37,6 +40,8 @@ export class OfficeState {
   drafts = new Map<string, IssueDraft>();
   /** The briefing in the observation lounge, if one is in session. */
   briefing: Briefing | null = null;
+  /** The latest QA review per pull request (by prKey). */
+  reviews = new Map<string, QaReview>();
   connected = false;
 
   private listeners = new Map<keyof Events, Set<Listener<never>>>();
@@ -88,6 +93,7 @@ export class OfficeState {
         this.previews = new Map((s.previews ?? []).map((p) => [p.projectId, p]));
         this.drafts = new Map((s.drafts ?? []).map((d) => [d.projectId, d]));
         this.briefing = s.briefing ?? null;
+        this.reviews = new Map((s.reviews ?? []).map((r) => [prKey(r.repo, r.number), r]));
         this.emit('snapshot', undefined);
         break;
       }
@@ -141,6 +147,17 @@ export class OfficeState {
       case 'toast':
         this.emit('toast', event);
         break;
+      case 'review':
+        this.reviews.set(prKey(event.review.repo, event.review.number), event.review);
+        this.emit('review', event.review.projectId);
+        break;
+      case 'review-removed': {
+        const key = prKey(event.repo, event.number);
+        const review = this.reviews.get(key);
+        this.reviews.delete(key);
+        if (review) this.emit('review', review.projectId);
+        break;
+      }
       case 'briefing':
         this.briefing = event.briefing;
         this.emit('briefing', undefined);
@@ -159,6 +176,15 @@ export class OfficeState {
 
   agentsIn(projectId: string): Agent[] {
     return [...this.agents.values()].filter((a) => a.projectId === projectId);
+  }
+
+  /** The room's QA officer's agent record, while they have one. */
+  qaAgent(projectId: string): Agent | undefined {
+    return this.agentsIn(projectId).find((a) => a.task === 'review');
+  }
+
+  reviewsIn(projectId: string): QaReview[] {
+    return [...this.reviews.values()].filter((r) => r.projectId === projectId).sort((a, b) => (b.finishedAt ?? b.requestedAt) - (a.finishedAt ?? a.requestedAt));
   }
 }
 

@@ -68,7 +68,64 @@ export class DemoRunner implements AgentRunner {
       }
     };
 
+    // the QA officer: review the diff, run the tests, click through the UI, report a verdict
+    const qaScript = async (): Promise<RunOutcome> => {
+      hooks.session(req.resumeSessionId ?? `demo-qa-${randomBytes(4).toString('hex')}`);
+      hooks.lines([{ kind: 'system', text: '✻ Claude Code (demo) · pretend model · QA' }]);
+      const match = /pull request #(\d+) in (\S+): (.+)/.exec(req.prompt);
+      const pr = Number(match?.[1] ?? 0);
+      const prRepo = match?.[2] ?? repo;
+      const prTitle = match?.[3]?.trim() ?? 'the change';
+      const prKind = /api/.test(prRepo) ? 'api' : /game|dodger/.test(prRepo) ? 'game' : 'web';
+      const changed = pick(FILES[prKind], 2);
+      // every third PR has a problem the first time round; a re-check (a resumed session) finds it fixed
+      const fails = !req.resumeSessionId && pr % 3 === 0;
+      if (req.resumeSessionId) {
+        await say('Re-checking after your message.');
+      } else {
+        await say(`I'll review PR #${pr} and test it against the linked issue.`);
+        await tool('Bash', { command: 'git diff origin/main...HEAD --stat' }, [`${changed[0]} | 24 ++++--`, `${changed[1]} | 9 +++`, '2 files changed']);
+        for (const file of changed) await tool('Read', { file_path: `/work/${file}` }, [`Read ${60 + Math.floor(Math.random() * 120)} lines`]);
+        await think();
+      }
+      await tool('Bash', { command: 'npm ci' }, ['added 412 packages in 9s']);
+      await tool('Bash', { command: prKind === 'api' ? 'npm test' : 'npx vitest run' }, [`Tests  ${30 + pr} passed`]);
+      await tool('Bash', { command: 'npx tsc --noEmit' }, ['(no output)']);
+      if (prKind !== 'api') {
+        await tool('Bash', { command: 'npm run dev &', run_in_background: true }, ['VITE ready on http://localhost:5173']);
+        const pages = ['/', prKind === 'game' ? '/play' : '/cart'];
+        for (let step = 0; step < 2; step++) {
+          const url = `http://localhost:5173${pages[step]}`;
+          await tool(`mcp__browser__${step === 0 ? 'open' : 'click'}`, step === 0 ? { url } : { text: prKind === 'game' ? 'Start' : 'Checkout' }, [`URL: ${url}`, '[screenshot]']);
+          hooks.browser({ url, title: prTitle.slice(0, 40), mock: { heading: `QA: ${prTitle}`, accent: '#4f8fd6', step }, at: Date.now() });
+          await wait(1.5, 3);
+        }
+        await tool('mcp__browser__console', {}, [fails ? 'TypeError: Cannot read properties of undefined (reading \'length\')' : '(no console output)']);
+      }
+      const report = {
+        verdict: fails ? 'fail' : 'pass',
+        summary: fails
+          ? `The happy path works, but the change breaks when the list is empty: the page throws in ${changed[0]} and renders nothing. Tests and type checks pass, so nothing covers that case yet.`
+          : `${prTitle} works as the issue describes. Tests, type checks and a click-through in the browser all pass, and I found nothing in the diff to worry about.`,
+        checks: [
+          { name: 'Does what the issue asks', result: 'pass', details: `Exercised "${prTitle}" end to end.` },
+          { name: 'Empty state', result: fails ? 'fail' : 'pass', details: fails ? `With nothing saved, ${changed[0]} reads .length of undefined and the page goes blank.` : 'Shows a friendly empty message.' },
+          { name: 'Code review', result: 'pass', details: `Read the diff in ${changed.join(' and ')}: no leftover debug code, errors handled.` },
+          { name: 'Tests cover the new logic', result: fails ? 'fail' : 'pass', details: fails ? 'No test for the empty case.' : 'New tests cover the main path and the empty case.' },
+        ],
+        commands: [
+          { command: 'npm ci', result: 'ok' },
+          { command: prKind === 'api' ? 'npm test' : 'npx vitest run', result: `${30 + pr} passed, 0 failed` },
+          { command: 'npx tsc --noEmit', result: 'no errors' },
+        ],
+        fixInstructions: fails ? `Guard the empty case in \`${changed[0]}\` (treat a missing list as []), show the empty message instead, and add a test for it.` : undefined,
+      };
+      await say(fails ? 'Found a problem with the empty state. Writing up the report.' : 'All good. Writing up the report.');
+      return { ok: true, summary: JSON.stringify(report), structured: report };
+    };
+
     const script = async (): Promise<RunOutcome> => {
+      if (req.outputSchema) return qaScript();
       hooks.session(req.resumeSessionId ?? `demo-${randomBytes(4).toString('hex')}`);
       hooks.lines([{ kind: 'system', text: '✻ Claude Code (demo) · pretend model · acceptEdits' }]);
       if (req.resumeSessionId) {
@@ -172,6 +229,11 @@ export const demoWorkspace: WorkspaceOps = {
   hasUncommittedChanges: async () => false,
   commitsAhead: async () => 2,
   push: async () => sleep(800),
+  // no real checkout: the manager falls back to the PR's head as GitHub reports it
+  checkoutPullRequest: async () => {
+    await sleep(600);
+    return '';
+  },
 };
 
 /** The demo planner: pretends to read the code, then writes a plausible issue from the idea. */

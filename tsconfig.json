@@ -15,5 +15,5 @@
     "isolatedModules": true,
     "noEmit": true
   },
-  "include": ["shared", "server", "client/src", "vite.config.ts"]
+  "include": ["shared", "server", "client/src", "vite.config.ts", "vitest.config.ts"]
 }

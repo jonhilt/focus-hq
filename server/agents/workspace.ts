@@ -87,6 +87,11 @@ function checkoutDetached(repo: string, dir: string, source: string, localRef: s
   });
 }
 
+/** The QA officer's checkout: a pull request's head, detached, in their workspace folder. Returns the commit. */
+export function checkoutPullRequest(repo: string, agentId: string, number: number): Promise<string> {
+  return checkoutDetached(repo, path.join(paths.workspaces, agentId), `refs/pull/${number}/head`, 'refs/focus/qa');
+}
+
 export function workspaceDir(agentId: string): string {
   return path.join(paths.workspaces, agentId);
 }

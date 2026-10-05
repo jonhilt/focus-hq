@@ -21,12 +21,16 @@ export interface RunRequest {
   settings: Settings;
   /** Missing = the model's default effort. */
   effort?: Effort;
+  /** JSON schema for a structured final answer (the QA officer's report). */
+  outputSchema?: Record<string, unknown>;
 }
 
 export interface RunOutcome {
   ok: boolean;
   /** Claude's final message: becomes the pull request description. */
   summary: string;
+  /** The structured final answer, when the run asked for one. */
+  structured?: unknown;
   error?: string;
   aborted?: boolean;
 }
@@ -51,4 +55,6 @@ export interface WorkspaceOps {
   hasUncommittedChanges(dir: string): Promise<boolean>;
   commitsAhead(dir: string, baseBranch: string): Promise<number>;
   push(dir: string, branch: string): Promise<void>;
+  /** A detached checkout of a pull request's head in the agent's workspace (for QA). Returns the commit ('' if unknown). */
+  checkoutPullRequest(repo: string, agentId: string, number: number): Promise<string>;
 }

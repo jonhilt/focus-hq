@@ -104,6 +104,7 @@ export class ClaudeRunner implements AgentRunner {
       mcpServers: { browser: browserMcpServer(this.browsers, req.agentId, (frame) => hooks.browser(frame)) },
       disallowedTools: ['AskUserQuestion', 'EnterPlanMode'],
       resume: req.resumeSessionId,
+      outputFormat: req.outputSchema ? { type: 'json_schema', schema: req.outputSchema } : undefined,
       env,
       stderr: (data) => {
         stderrTail.push(data);
@@ -118,6 +119,7 @@ export class ClaudeRunner implements AgentRunner {
 
     const done = (async (): Promise<RunOutcome> => {
       let summary = '';
+      let structured: unknown;
       let ok = false;
       let error: string | undefined;
       try {
@@ -127,13 +129,14 @@ export class ClaudeRunner implements AgentRunner {
           if (result) {
             ok = !result.isError;
             summary = result.text;
+            structured = result.structured ?? structured;
             error = result.isError ? result.text : undefined;
             // Messages sent mid-turn are folded into that turn, so don't count results per message: finish once the
             // CLI has nothing queued. Anything still in our queue is delivered before the input reports it is done.
             if (!result.queued) input.close();
           }
         }
-        return { ok, summary, error };
+        return { ok, summary, structured, error };
       } catch (err) {
         if (abort.signal.aborted) return { ok: false, summary, error: 'Stopped by the manager', aborted: true };
         const detail = stderrTail.join('').trim().split('\n').slice(-3).join(' ');
@@ -155,7 +158,7 @@ export class ClaudeRunner implements AgentRunner {
   }
 
   /** Renders one SDK message; returns the outcome when it is a turn result. */
-  private handle(msg: SDKMessage, cwd: string, hooks: RunHooks): { text: string; isError: boolean; queued: number } | null {
+  private handle(msg: SDKMessage, cwd: string, hooks: RunHooks): { text: string; isError: boolean; queued: number; structured?: unknown } | null {
     switch (msg.type) {
       case 'system':
         if (msg.subtype === 'init') {
@@ -212,7 +215,7 @@ export class ClaudeRunner implements AgentRunner {
         hooks.cost(msg.total_cost_usd);
         if (msg.subtype === 'success') {
           hooks.lines([{ kind: 'success', text: `✔ Done in ${Math.round(msg.duration_ms / 1000)}s · ${msg.num_turns} turns` }]);
-          return { text: msg.result, isError: msg.is_error, queued: msg.queued_turn_count ?? 0 };
+          return { text: msg.result, isError: msg.is_error, queued: msg.queued_turn_count ?? 0, structured: msg.structured_output };
         }
         const text = msg.errors?.join('\n') || msg.subtype;
         hooks.lines([{ kind: 'error', text: `✘ ${msg.subtype}: ${truncate(text, 300)}` }]);

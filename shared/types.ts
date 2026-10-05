@@ -55,6 +55,10 @@ export interface Project {
   onlyMyPrs?: boolean;
   /** How ▶ Preview runs this project's pull requests. */
   preview?: PreviewConfig;
+  /** The QA officer tests every PR the office opens or updates (missing = on). */
+  autoQa?: boolean;
+  /** What QA must check on every PR of this project, on top of the usual review. Goes into the QA officer's prompt. */
+  qaBrief?: string;
   createdAt: number;
 }
 
@@ -148,8 +152,14 @@ export interface PermissionRequest {
 export const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 export type Effort = (typeof EFFORT_LEVELS)[number];
 
-/** What an agent was seated for: an issue to resolve, or an open pull request whose branch conflicts with its base. */
-export type AgentTask = 'issue' | 'conflicts';
+/**
+ * What an agent was seated for: an issue to resolve, an open pull request whose branch conflicts with its base, or
+ * (the room's QA officer) a pull request to review and test.
+ */
+export type AgentTask = 'issue' | 'conflicts' | 'review';
+
+/** The QA officer doesn't sit at one of the room's desks but at the QA station by the pull requests table. */
+export const QA_DESK = -1;
 
 export interface Agent {
   id: string;
@@ -307,6 +317,46 @@ export interface Briefing {
   error?: string;
 }
 
+export interface QaCheck {
+  name: string;
+  result: 'pass' | 'fail' | 'skip';
+  /** What they did and what they saw. */
+  details: string;
+}
+
+/** The QA officer's verdict on one pull request, as they report it at the end of their session. */
+export interface QaReport {
+  verdict: 'pass' | 'fail';
+  summary: string;
+  /** Each acceptance criterion, review point or scenario checked. */
+  checks: QaCheck[];
+  /** Test suites, builds and other commands run, with what came out. */
+  commands: { command: string; result: string }[];
+  /** On a fail: what the developer should fix. */
+  fixInstructions?: string;
+}
+
+export type QaStatus = 'queued' | 'testing' | 'passed' | 'failed' | 'error';
+
+/** The latest QA review of a pull request. Kept until the PR is merged or closed. */
+export interface QaReview {
+  projectId: string;
+  repo: string;
+  number: number;
+  title: string;
+  status: QaStatus;
+  /** The commit QA checked out and tested. */
+  sha?: string;
+  report?: QaReport;
+  /** The QA report posted on the pull request. */
+  commentUrl?: string;
+  /** The QA officer's session for this review, while their record is around. */
+  agentId?: string;
+  error?: string;
+  requestedAt: number;
+  finishedAt?: number;
+}
+
 export interface GitHubStatus {
   ok: boolean;
   login?: string;
@@ -333,6 +383,7 @@ export interface Snapshot {
   previews: Preview[];
   drafts: IssueDraft[];
   briefing: Briefing | null;
+  reviews: QaReview[];
 }
 
 export type ServerEvent =
@@ -348,6 +399,8 @@ export type ServerEvent =
   | { type: 'preview-log'; projectId: string; log: PreviewLog }
   | { type: 'draft'; projectId: string; draft: IssueDraft | null }
   | { type: 'briefing'; briefing: Briefing | null }
+  | { type: 'review'; review: QaReview }
+  | { type: 'review-removed'; repo: string; number: number }
   | { type: 'toast'; level: 'info' | 'success' | 'error'; text: string; agentId?: string };
 
 export const DESKS_PER_ROOM = 6;

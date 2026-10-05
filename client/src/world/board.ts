@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { prKey, qaBadge } from '../../../shared/qa';
 import type { Agent, Board, Issue, Project, PullRequest } from '../../../shared/types';
 import { canvasTexture, fitText, makeCanvas, roundRect, UI_FONT, wrap } from './canvas';
 import { state } from '../net/state';
@@ -19,12 +20,13 @@ export function columns(project: Project, board: Board | undefined, agents: Agen
     agents.some((a) => a.repo === issue.repo && a.issue.number === issue.number) ||
     prs.some((p) => p.repo === issue.repo && p.branch.startsWith(`focus/${issue.number}-`));
   const login = state.info?.github.login;
-  const all = prs.map((p) => ({ ...p, agent: agents.find((a) => a.repo === p.repo && a.pr?.number === p.number) }));
+  const all = prs.map((p) => ({ ...p, agent: agents.find((a) => a.task !== 'review' && a.repo === p.repo && a.pr?.number === p.number) }));
   // agents' PRs are opened with your gh account, so author === login covers them too; the agent check catches stale data
   const shown = project.onlyMyPrs && login ? all.filter((p) => p.agent || p.author === login) : all;
   return {
     todo: (board?.issues ?? []).filter((i) => project.repos.includes(i.repo) && !claimed(i)),
-    doing: agents.filter((a) => a.status !== 'done').sort((a, b) => a.startedAt - b.startedAt),
+    // the QA officer works at their own station, not on the board's issues
+    doing: agents.filter((a) => a.status !== 'done' && a.task !== 'review').sort((a, b) => a.startedAt - b.startedAt),
     prs: shown,
     hiddenPrs: all.length - shown.length,
   };
@@ -186,9 +188,10 @@ export class KanbanBoard {
 
     cols.prs.slice(0, fit(cols.prs.length)).forEach((pr, i) => {
       const checks = { passing: '✓ checks pass', failing: '✗ checks failing', pending: '⏳ checks running', none: 'no checks' }[pr.checks];
+      const qa = qaBadge(state.reviews.get(prKey(pr.repo, pr.number)), pr);
       const flags = [pr.isDraft ? 'draft' : '', pr.mergeable === 'CONFLICTING' ? '⚠ conflicts' : '', pr.reviewDecision === 'APPROVED' ? '👍 approved' : ''].filter(Boolean);
-      const meta = [pr.agent ? pr.agent.name : pr.author ? `@${pr.author}` : '', checks, ...flags].filter(Boolean).join(' · ');
-      const color = pr.checks === 'failing' || pr.mergeable === 'CONFLICTING' ? '#c92a2a' : '#2b8a3e';
+      const meta = [qa.state === 'none' ? '' : qa.label, pr.agent ? pr.agent.name : pr.author ? `@${pr.author}` : '', checks, ...flags].filter(Boolean).join(' · ');
+      const color = pr.checks === 'failing' || pr.mergeable === 'CONFLICTING' || qa.state === 'failed' ? '#c92a2a' : '#2b8a3e';
       note(2, i, pr.number, '#d3f9d8', `PR #${pr.number} ${pr.title}`, meta, color, pr.agent?.avatar.shirt);
     });
     if (cols.prs.length > maxNotes) more(2, cols.prs.length - fit(cols.prs.length));

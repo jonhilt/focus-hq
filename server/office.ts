@@ -69,6 +69,7 @@ export class Office {
       previews: this.previews.list(),
       drafts: this.planner.list(),
       briefing: this.briefings.current(),
+      reviews: [...this.store.reviews.values()],
     };
   }
 
@@ -180,6 +181,13 @@ export class Office {
     this.boardChanged(projectId);
   }
 
+  /** Hands an open pull request on the board to the room's QA officer (any PR, a teammate's too). */
+  requestReview(projectId: string, repo: string, number: number) {
+    const pr = this.store.boards.get(projectId)?.prs.find((p) => p.repo === repo && p.number === number);
+    if (!pr) throw new Error(`${repo}#${number} is not an open pull request on this board`);
+    return this.agents.requestReview(projectId, repo, number, pr.title);
+  }
+
   resolveConflicts(projectId: string, repo: string, number: number): Agent {
     const pr = this.store.boards.get(projectId)?.prs.find((p) => p.repo === repo && p.number === number);
     if (!pr) throw new Error(`${repo}#${number} is not an open pull request on this board`);
@@ -257,6 +265,15 @@ export class Office {
   }
 
   private async noticeClosedPullRequests(projectId: string, board: Board): Promise<void> {
+    // QA reviews of PRs that left the board (asked of GitHub, since a PR opened a moment ago may not be listed yet)
+    for (const review of [...this.store.reviews.values()].filter((r) => r.projectId === projectId)) {
+      if (board.prs.some((p) => p.repo === review.repo && p.number === review.number) || board.error?.includes(review.repo)) continue;
+      try {
+        if ((await this.github.pullRequestState(review.repo, review.number)) !== 'OPEN') this.agents.reviewGone(review.repo, review.number);
+      } catch {
+        // try again next refresh
+      }
+    }
     for (const agent of this.store.agentsIn(projectId)) {
       if (!agent.pr || agent.status !== 'done') continue;
       if (board.prs.some((p) => p.repo === agent.repo && p.number === agent.pr!.number)) continue;

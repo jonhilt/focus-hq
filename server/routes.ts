@@ -87,6 +87,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.post('/briefing/say', h((req) => office.briefings.say(str(req.body.text))));
   r.post('/briefing/wrap-up', h(() => office.briefings.wrapUp()));
   r.delete('/briefing', h(() => office.briefings.end()));
+  r.post('/prs/qa', h((req) => office.requestReview(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));
   r.post('/prs/resolve-conflicts', h((req) => office.resolveConflicts(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));
   r.post('/prs/merge', h((req) => office.mergePullRequest(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));
 

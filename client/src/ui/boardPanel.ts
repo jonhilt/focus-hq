@@ -1,3 +1,4 @@
+import { prKey, qaBadge } from '../../../shared/qa';
 import type { Effort } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
@@ -39,7 +40,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
     const agents = state.agentsIn(projectId);
     const cols = columns(p, board, agents);
     const multi = p.repos.length > 1;
-    const busyAgents = agents.filter((a) => !['done', 'error', 'stopped'].includes(a.status)).length;
+    const busyAgents = agents.filter((a) => a.task !== 'review' && !['done', 'error', 'stopped'].includes(a.status)).length;
     const full = busyAgents >= p.maxAgents;
 
     const todo = h('div', { class: 'col' }, h('h3', null, h('span', null, '📋 To do'), h('span', null, cols.todo.length)));
@@ -127,12 +128,26 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
             ? [h('button', { class: 'btn small danger', title: preview.error ?? '', onclick: openPreview }, '⚠ Preview failed')]
             : [h('button', { class: 'btn small', title: preview.activity, onclick: openPreview }, preview.status === 'stopping' ? '⏹ Stopping…' : '⏳ Starting…')];
       const behind = preview?.sha && pr.headSha && preview.sha !== pr.headSha && preview.sha !== 'demo';
+      const review = state.reviews.get(prKey(pr.repo, pr.number));
+      const qa = qaBadge(review, pr);
+      const qaBusy = qa.state === 'queued' || qa.state === 'testing';
+      const qaChip = qa.state === 'none'
+        ? null
+        : h('button', { class: `chip qa ${qa.state}`, title: review?.report?.summary ?? review?.error ?? 'Open the QA report', onclick: () => ui.openQa(projectId) }, qa.label);
+      const sendToQa = h('button', { class: 'btn small', title: qa.state === 'none' ? 'Have the room’s QA officer review and test it' : 'Test the latest commit again' }, qa.state === 'none' ? '🔍 Send to QA' : '↻ Re-test');
+      sendToQa.disabled = qaBusy;
+      sendToQa.onclick = () =>
+        void busy(sendToQa, async () => {
+          await api.sendToQa(projectId, pr.repo, pr.number);
+          ui.hud.toast('info', `🔍 PR #${pr.number} is with QA`);
+        }, ui.error);
       prs.append(
         h('div', { class: 'note pr' },
           h('div', { class: 't' }, `PR #${pr.number} ${pr.title}`),
           h('div', { class: 'm' },
             agent ? h('span', { class: 'chip' }, h('span', { class: 'dot', style: `background:${agent.avatar.shirt}` }), agent.name) : pr.author ? h('span', { class: 'chip' }, `@${pr.author}`) : null,
             multi ? h('span', { class: 'chip' }, pr.repo.split('/')[1]) : null,
+            qaChip,
             h('span', { class: 'chip', style: pr.checks === 'failing' ? 'background:#ffc9c9' : '' }, checks),
             pr.mergeable === 'CONFLICTING' ? h('span', { class: 'chip', style: 'background:#ffc9c9' }, '⚠ conflicts') : null,
             pr.isDraft ? h('span', { class: 'chip' }, 'draft') : null,
@@ -141,6 +156,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
           ),
           h('div', { class: 'actions' },
             resolve ?? merge,
+            sendToQa,
             ...previewActions,
             h('a', { class: 'btn small', href: `${pr.url}/files`, target: '_blank', rel: 'noreferrer' }, 'Review ↗'),
             agent ? h('button', { class: 'btn small', onclick: () => ui.openAgent(agent.id) }, `💬 ${agent.name}`) : null,
@@ -174,4 +190,5 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
   ui.panels.own(state.on('agent-removed', (a) => a.projectId === projectId && rerender()));
   ui.panels.own(state.on('projects', rerender));
   ui.panels.own(state.on('preview', (e) => e.projectId === projectId && rerender()));
+  ui.panels.own(state.on('review', (id) => id === projectId && rerender()));
 }

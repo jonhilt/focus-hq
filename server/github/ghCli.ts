@@ -1,6 +1,6 @@
 import type { GitHubStatus, Issue, PullRequest } from '../../shared/types';
 import { errorMessage, run } from '../util';
-import { rollupChecks, type CreatePullRequest, type GitHubProvider, type IssueDetail, type RepoInfo } from './provider';
+import { closingIssues, rollupChecks, type CreatePullRequest, type GitHubProvider, type IssueDetail, type PullRequestDetail, type RepoInfo } from './provider';
 
 const gh = (args: string[], input?: string) => run('gh', args, { input, timeoutMs: 120_000 });
 const ghJson = async <T>(args: string[]): Promise<T> => JSON.parse(await gh(args)) as T;
@@ -135,6 +135,28 @@ export class GhCliProvider implements GitHubProvider {
       'pr', 'list', '-R', repo, '--head', branch, '--state', 'open', '--json', 'number,url',
     ]);
     return raw[0] ?? null;
+  }
+
+  async getPullRequest(repo: string, number: number): Promise<PullRequestDetail> {
+    const raw = await ghJson<RawPr & { body: string; closingIssuesReferences?: { number: number }[] }>([
+      'pr', 'view', String(number), '-R', repo, '--json', 'number,title,body,url,headRefName,headRefOid,baseRefName,author,closingIssuesReferences',
+    ]);
+    const linked = new Set([...(raw.closingIssuesReferences ?? []).map((i) => i.number), ...closingIssues(raw.body)]);
+    return {
+      number: raw.number,
+      title: raw.title,
+      body: raw.body ?? '',
+      url: raw.url,
+      branch: raw.headRefName,
+      baseBranch: raw.baseRefName,
+      headSha: raw.headRefOid ?? '',
+      author: raw.author?.login,
+      linkedIssues: [...linked],
+    };
+  }
+
+  async commentOnPullRequest(repo: string, number: number, body: string): Promise<string> {
+    return (await gh(['pr', 'comment', String(number), '-R', repo, '--body-file', '-'], body)).trim().split('\n').pop() ?? '';
   }
 
   async createPullRequest(repo: string, pr: CreatePullRequest): Promise<{ number: number; url: string }> {

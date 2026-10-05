@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { plannerFor } from '../../../shared/crew';
+import { plannerFor, qaOfficerFor } from '../../../shared/crew';
+import { prKey } from '../../../shared/qa';
 import type { Board, Project } from '../../../shared/types';
 import { DESKS_PER_ROOM } from '../../../shared/types';
 import { state } from '../net/state';
@@ -26,6 +27,8 @@ interface DeskSlot {
 
 const HALF_D = ROOM_DEPTH / 2;
 const HALF_W = ROOM_WIDTH / 2;
+/** The QA officer's seat, in front of the pull requests table (room frame). */
+const QA_SEAT = { x: HALF_D - 2.0 - 1.0, z: -HALF_W + 1.55 };
 /** Things hung on the far wall sit this far in from its centre line, in front of a themed room's wall skin. */
 const ON_WALL = HALF_D - 0.16;
 /** Door signs hang on the hallway side, just proud of the door frame. */
@@ -57,6 +60,11 @@ export class ProjectRoom {
   private board = new KanbanBoard();
   /** The operations officer behind the ＋ New issue stand, who drafts issues. */
   private planner!: Character;
+  /** The QA officer at the pull requests table, with the laptop they test on. */
+  private qa!: Character;
+  private qaScreen = new LaptopScreen(null, 'QA station · standing by');
+  private qaLaptop!: THREE.Group;
+  private qaSeat = new THREE.Group();
   private prPile = new THREE.Group();
   private prCount = -1;
   private boardDirty = true;
@@ -134,7 +142,7 @@ export class ProjectRoom {
     const leg = cyl(0.07, 0.12, 0.74, '#868e96');
     leg.position.y = 0.37;
     table.add(top, leg);
-    this.prPile.position.y = 0.77;
+    this.prPile.position.set(0.28, 0.77, 0.22);
     table.add(this.prPile);
     const tableSign = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.28), flat(signTexture('👀 Pull requests', { bg: '#d3f9d8', fg: '#2b8a3e', border: '#2b8a3e' })));
     tableSign.position.set(0, 1.45, 0);
@@ -143,6 +151,21 @@ export class ProjectRoom {
     this.group.add(table);
     interactive(table, { kind: 'board', projectId: project.id, tab: 'prs' }, () => 'Review pull requests');
     builder.collideObject(top);
+
+    // the QA station: the QA officer sits at the pull requests table facing the board, testing on a laptop you can
+    // look at over their shoulder, the way you do at the desks
+    const qaLap = laptop(this.qaScreen.material);
+    qaLap.group.position.set(HALF_D - 2.0 - 0.2, 0.77, -HALF_W + 1.5);
+    qaLap.group.rotation.y = -0.15;
+    this.qaLaptop = qaLap.group;
+    this.group.add(qaLap.group);
+    this.qaSeat.position.set(QA_SEAT.x, 0, QA_SEAT.z);
+    const qaChair = chair('#495057');
+    this.qaSeat.add(qaChair);
+    this.group.add(this.qaSeat);
+    builder.collideObject(qaChair);
+    this.qa = new Character(this.qaView());
+    this.qaSeat.add(this.qa.group);
 
     // "new issue" stand with a sticky-note pad
     const kiosk = new THREE.Group();
@@ -194,6 +217,7 @@ export class ProjectRoom {
 
     this.syncAgents();
     this.syncPlanner();
+    this.syncQa();
   }
 
   private buildDesk(index: number, builder: Builder): DeskSlot {
@@ -303,8 +327,36 @@ export class ProjectRoom {
     this.planner.set(this.plannerView());
   }
 
+  /** The QA officer's look and their laptop, from their latest review. */
+  private qaView(): CrewView {
+    const agent = state.qaAgent(this.project.id);
+    if (!agent) {
+      const crew = qaOfficerFor(this.project.id);
+      const queued = state.reviewsIn(this.project.id).some((r) => r.status === 'queued');
+      return { name: crew.name, avatar: crew.avatar, tag: 'QA', icon: '🔍', status: 'queued', line: queued ? 'PRs queued for testing' : 'Standing by for pull requests' };
+    }
+    const view = agentView(agent);
+    // a verdict is "done" either way; a fail shouldn't look like a celebration
+    if (agent.status === 'done' && state.reviews.get(prKey(agent.repo, agent.issue.number))?.status === 'failed') view.status = 'error';
+    return view;
+  }
+
+  syncQa(): void {
+    const agent = state.qaAgent(this.project.id);
+    this.qa.set(this.qaView());
+    this.qaScreen.setAgent(agent ?? null);
+    const name = qaOfficerFor(this.project.id).name;
+    const use = agent
+      ? ({ kind: 'agent', id: agent.id } as const)
+      : ({ kind: 'qa', projectId: this.project.id } as const);
+    const label = () => (agent ? `Look at ${name}'s laptop (testing PR #${agent.issue.number})` : `${name}'s QA station`);
+    interactive(this.qa.group, use, label);
+    interactive(this.qaLaptop, use, label);
+  }
+
   markScreen(agentId: string): void {
     this.desks.find((d) => d.agentId === agentId)?.screen.markDirty();
+    if (state.qaAgent(this.project.id)?.id === agentId) this.qaScreen.markDirty();
   }
 
   markBoard(): void {
@@ -329,6 +381,10 @@ export class ProjectRoom {
     }
     const inRoom = camera.distanceTo(this.slot.center) < 14;
     if (inRoom) this.planner.update(t, camera.distanceTo(this.planner.group.getWorldPosition(tmp)));
+    const qaDist = camera.distanceTo(this.qa.group.getWorldPosition(tmp));
+    if (inRoom) this.qa.update(t, qaDist);
+    const qaAgent = state.qaAgent(this.project.id);
+    this.qaScreen.maybeDraw(now, inRoom && qaDist < 6, qaAgent && state.lines.get(qaAgent.id), qaAgent && state.browser.get(qaAgent.id));
     for (const slot of this.desks) {
       if (!slot.character) {
         slot.screen.maybeDraw(now, false, undefined, undefined);
@@ -344,8 +400,11 @@ export class ProjectRoom {
   /** World position and look target for standing behind an agent. */
   viewpoint(agentId: string): { position: THREE.Vector3; lookAt: THREE.Vector3 } | null {
     const slot = this.desks.find((d) => d.agentId === agentId);
-    if (!slot) return null;
-    const v = deskViewpoint(slot.index);
+    const qa = state.qaAgent(this.project.id)?.id === agentId;
+    if (!slot && !qa) return null;
+    const v = slot
+      ? deskViewpoint(slot.index)
+      : { position: new THREE.Vector3(QA_SEAT.x - 1.3, 0, QA_SEAT.z + 0.9), lookAt: new THREE.Vector3(QA_SEAT.x + 0.9, 1.0, QA_SEAT.z - 0.05) };
     this.group.updateWorldMatrix(true, false);
     return { position: v.position.applyMatrix4(this.group.matrixWorld), lookAt: v.lookAt.applyMatrix4(this.group.matrixWorld) };
   }
@@ -357,6 +416,8 @@ export class ProjectRoom {
       slot.character?.dispose();
     }
     this.planner.dispose();
+    this.qa.dispose();
+    this.qaScreen.dispose();
   }
 }
 

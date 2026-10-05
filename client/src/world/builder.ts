@@ -11,6 +11,7 @@ export type Interaction =
   | { kind: 'manager'; tab?: 'projects' | 'new-project' | 'issue' | 'settings' }
   | { kind: 'teleport' }
   | { kind: 'briefing' }
+  | { kind: 'qa'; projectId: string }
   | { kind: 'vacant' };
 
 /** Marks an object (and everything under it) as something the player can use with E. */

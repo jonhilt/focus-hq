@@ -28,6 +28,7 @@ const liveWorkspace: WorkspaceOps = {
   hasUncommittedChanges: git.hasUncommittedChanges,
   commitsAhead: git.commitsAhead,
   push: git.pushBranch,
+  checkoutPullRequest: git.checkoutPullRequest,
 };
 
 async function main() {

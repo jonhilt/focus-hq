@@ -19,6 +19,8 @@ export interface Ui {
   previewPr(projectId: string, repo: string, number: number): void;
   openPreview(projectId: string): void;
   openNewIssue(projectId?: string): void;
+  /** The room's QA station: the QA officer, their reports and the project's QA brief. */
+  openQa(projectId: string): void;
   /** The observation lounge's briefing, or a form to call one (for `projectId`, if given). */
   openBriefing(projectId?: string): void;
   /** Beams you to the observation lounge and opens the briefing. */
