@@ -60,8 +60,11 @@ export interface AgentRunner {
 
 /** Git operations on an agent's checkout. Faked in demo mode. */
 export interface WorkspaceOps {
-  /** A worktree on `branch`, starting from the remote branch `startPoint`. */
-  create(repo: string, agentId: string, branch: string, startPoint: string): Promise<string>;
+  /**
+   * A worktree on `branch`, starting from the remote branch `startPoint`. If a workspace of an agent who isn't
+   * `inOffice` still has the branch, it's removed; if a colleague's has it, this fails.
+   */
+  create(repo: string, agentId: string, branch: string, startPoint: string, inOffice: (agentId: string) => boolean): Promise<string>;
   remove(repo: string, agentId: string): Promise<void>;
   dir(agentId: string): string;
   hasUncommittedChanges(dir: string): Promise<boolean>;

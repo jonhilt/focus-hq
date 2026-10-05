@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { paths } from '../config';
-import { KeyedLock, run } from '../util';
+import { KeyedLock, run, sleep } from '../util';
+import { claimBranch, heldMessage, parseWorktrees, retryLockRace } from './worktrees';
 
 const lock = new KeyedLock();
 
@@ -21,24 +22,42 @@ async function ensureMirror(repo: string): Promise<void> {
 
 /**
  * One clone per repository lives in data/repos; every agent gets its own git worktree of it in
- * data/workspaces/<agent id> so agents on the same repo never trip over each other.
+ * data/workspaces/<agent id> so agents on the same repo never trip over each other. A worktree left behind by an agent
+ * who isn't `inOffice` any more gives up its branch to the new one.
  */
-export async function createWorktree(repo: string, agentId: string, branch: string, startPoint: string): Promise<string> {
+export async function createWorktree(
+  repo: string,
+  agentId: string,
+  branch: string,
+  startPoint: string,
+  inOffice: (agentId: string) => boolean,
+): Promise<string> {
   const mirror = mirrorDir(repo);
   const dir = path.join(paths.workspaces, agentId);
   await lock.with(repo, async () => {
     await ensureMirror(repo);
-    await git(mirror, ['fetch', 'origin', '--prune'], 10 * 60_000);
-    await git(mirror, ['worktree', 'prune']);
+    await retryLockRace(() => git(mirror, ['fetch', 'origin', '--prune'], 10 * 60_000), () => sleep(750));
     if (fs.existsSync(dir)) {
       // Re-hiring the same agent id should never happen, but don't leave a half-made worktree behind.
-      await git(mirror, ['worktree', 'remove', '--force', dir]).catch(() => fs.rmSync(dir, { recursive: true, force: true }));
+      await removeDir(mirror, dir);
     }
+    await git(mirror, ['worktree', 'prune']);
     fs.mkdirSync(paths.workspaces, { recursive: true });
+    const worktrees = parseWorktrees(await git(mirror, ['worktree', 'list', '--porcelain']));
+    const claim = claimBranch(worktrees, branch, fs.realpathSync(paths.workspaces), inOffice);
+    if (claim.kind === 'held') throw new Error(heldMessage(branch, claim));
+    if (claim.kind === 'reclaim') {
+      await removeDir(mirror, claim.path);
+      await git(mirror, ['worktree', 'prune']);
+    }
     // --no-track: the branch must not track origin/<base>, so a stray `git push` can never land on the base branch
     await git(mirror, ['worktree', 'add', '--no-track', '-B', branch, dir, `origin/${startPoint}`]);
   });
   return dir;
+}
+
+async function removeDir(mirror: string, dir: string): Promise<void> {
+  await git(mirror, ['worktree', 'remove', '--force', dir]).catch(() => fs.rmSync(dir, { recursive: true, force: true }));
 }
 
 export async function removeWorktree(repo: string, agentId: string): Promise<void> {

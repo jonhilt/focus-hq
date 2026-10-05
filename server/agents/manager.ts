@@ -202,7 +202,7 @@ export class AgentManager {
       const startPoint = agent.task === 'issue' ? agent.baseBranch : agent.branch;
       this.print(agent, [{ kind: 'system', text: `✻ Setting up a worktree for ${agent.repo} on ${agent.branch}` }]);
       this.update(agent, { activity: 'Cloning the repository' });
-      await this.workspace.create(agent.repo, agent.id, agent.branch, startPoint);
+      await this.workspace.create(agent.repo, agent.id, agent.branch, startPoint, (id) => this.store.agents.has(id));
       if (agent.cloud) {
         // a cloud session clones its branch from GitHub, so a new one has to be there first
         this.update(agent, { activity: 'Publishing the branch for the cloud session' });
