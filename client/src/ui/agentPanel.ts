@@ -1,5 +1,6 @@
 import { statusIcon, statusLine } from '../../../shared/agentStatus';
 import { cloudSessionUrl } from '../../../shared/cloud';
+import { showsBrowser } from '../../../shared/browserView';
 import { UNIFORM } from '../../../shared/crew';
 import type { Agent, BrowserFrame, Effort, TermLine } from '../../../shared/types';
 import { EFFORT_LEVELS } from '../../../shared/types';
@@ -110,9 +111,10 @@ export function openAgentPanel(ui: Ui, id: string): void {
   };
 
   const renderBrowser = (frame: BrowserFrame | undefined) => {
-    grid.classList.toggle('single', !frame);
-    browser.style.display = frame ? '' : 'none';
-    if (!frame) return;
+    const shown = showsBrowser(frame);
+    grid.classList.toggle('single', !shown);
+    browser.style.display = shown ? '' : 'none';
+    if (!shown) return;
     browserBar.textContent = `🔒 ${frame.url}${frame.title ? ` — ${frame.title}` : ''}`;
     if (frame.image) {
       browserImg.style.display = '';

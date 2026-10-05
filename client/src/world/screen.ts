@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Agent, BrowserFrame, TermLine } from '../../../shared/types';
+import { showsBrowser } from '../../../shared/browserView';
 import { canvasTexture, fitText, makeCanvas, MONO_FONT, roundRect, UI_FONT } from './canvas';
 import { flat } from './materials';
 import { LCARS, LCARS_FONT, LCARS_STATUS, lcarsFrame } from './starship';
@@ -15,7 +16,7 @@ export const TERM_COLORS: Record<TermLine['kind'], string> = {
   manager: '#ffd33d',
 };
 
-/** Draws a terminal (and the agent's browser while it tests) onto a canvas used as the laptop screen. */
+/** Draws a terminal (and the agent's browser, when they have one) onto a canvas used as the laptop screen. */
 export class LaptopScreen {
   readonly material: THREE.MeshBasicMaterial;
   private readonly c = makeCanvas(800, 512);
@@ -91,10 +92,10 @@ export class LaptopScreen {
     ctx.fillText(fitText(ctx, `${agent.name} · ${agent.repo}#${agent.issue.number} · claude${agent.cloud ? ' ☁ cloud' : ''}`.toUpperCase(), W - 140), 80, 19);
 
     const footerH = 34;
-    const browserActive = !!frame && (agent.status === 'testing' || Date.now() - frame.at < 45_000);
-    const termW = browserActive ? Math.round(W * 0.5) : W;
+    const browser = showsBrowser(frame);
+    const termW = browser ? Math.round(W * 0.5) : W;
     this.drawTerminal(lines, 0, 36, termW, H - 36 - footerH);
-    if (browserActive && frame) this.drawBrowser(frame, termW, 36, W - termW, H - 36 - footerH);
+    if (browser) this.drawBrowser(frame, termW, 36, W - termW, H - 36 - footerH);
 
     // status bar
     ctx.fillStyle = color;
