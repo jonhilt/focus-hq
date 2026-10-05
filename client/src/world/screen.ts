@@ -16,8 +16,8 @@ export const TERM_COLORS: Record<TermLine['kind'], string> = {
   manager: '#ffd33d',
 };
 
-/** Draws a terminal (and the agent's browser, when they have one) onto a canvas used as the laptop screen. */
-export class LaptopScreen {
+/** Draws a terminal (and the agent's browser, when they have one) onto a canvas used as a station's display. */
+export class StationScreen {
   readonly material: THREE.MeshBasicMaterial;
   private readonly c = makeCanvas(800, 512);
   private readonly texture: THREE.CanvasTexture;

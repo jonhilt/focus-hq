@@ -41,24 +41,6 @@ export function chair(color: string): THREE.Group {
   return g;
 }
 
-/** Chunky cartoon laptop; the returned screen mesh faces -X (towards whoever sits at it). */
-export function laptop(screen: THREE.Material, shell = '#b8c0cc'): { group: THREE.Group; screen: THREE.Mesh; lid: THREE.Group } {
-  const g = new THREE.Group();
-  g.add(box(0.5, 0.035, 0.84, shell, 0, 0, 0));
-  g.add(box(0.3, 0.006, 0.7, '#4a4f5a', -0.06, 0.035, 0)); // keyboard
-  const lid = new THREE.Group();
-  lid.position.set(0.24, 0.035, 0);
-  lid.rotation.z = -0.22;
-  g.add(lid);
-  lid.add(box(0.03, 0.58, 0.84, shell, 0.015, 0, 0));
-  lid.add(box(0.005, 0.58, 0.84, '#22252c', -0.003, 0, 0)); // bezel
-  const plane = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 0.5), screen);
-  plane.rotation.y = -Math.PI / 2;
-  plane.position.set(-0.007, 0.29, 0);
-  lid.add(plane);
-  return { group: g, screen: plane, lid };
-}
-
 export function plant(scale = 1, pot = '#e07a5f'): THREE.Group {
   const g = new THREE.Group();
   const p = cyl(0.22, 0.16, 0.4, pot);

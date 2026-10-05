@@ -9,16 +9,16 @@ import { type Builder, interactive } from './builder';
 import { agentView, Character, type CrewView } from './character';
 import { OVER_DOOR, type RoomSlot, ROOM_DEPTH, ROOM_WIDTH, WALL_H } from './layout';
 import { box, flat, lighten, toon } from './materials';
-import { ceilingLight, chair, cyl, DESK_TOP, desk, laptop, paperStack, plant } from './props';
+import { ceilingLight, chair, cyl, paperStack, plant } from './props';
 import { holodeckMaterial, holodeckSkin, type Scenery } from './scenery';
-import { LaptopScreen } from './screen';
-import { HULL, LCARS, lcarsSign } from './starship';
+import { StationScreen } from './screen';
+import { HULL, LCARS, lcarsSign, workstation } from './starship';
 
 interface DeskSlot {
   index: number;
   group: THREE.Group;
-  laptopGroup: THREE.Group;
-  screen: LaptopScreen;
+  station: THREE.Group;
+  screen: StationScreen;
   seat: THREE.Group;
   character?: Character;
   agentId?: string;
@@ -26,8 +26,10 @@ interface DeskSlot {
 
 const HALF_D = ROOM_DEPTH / 2;
 const HALF_W = ROOM_WIDTH / 2;
-/** The QA officer's seat, in front of the pull requests table (room frame). */
-const QA_SEAT = { x: HALF_D - 2.0 - 1.0, z: -HALF_W + 1.55 };
+/** The QA officer's seat, at a station beside the pull requests table (room frame). */
+const QA_SEAT = new THREE.Vector3(HALF_D - 2.0 - 1.0, 0, -HALF_W + 2.9);
+/** Where a developer sits, relative to deskPosition(); the console in front of them is centred on it across the room. */
+const DESK_SEAT = new THREE.Vector3(-0.68, 0, -0.22);
 /** Things hung on the far wall sit this far in from its centre line, in front of a themed room's wall skin. */
 const ON_WALL = HALF_D - 0.16;
 /** Door signs hang on the hallway side, just proud of the door frame. */
@@ -43,27 +45,30 @@ export function deskPosition(index: number): THREE.Vector3 {
   return new THREE.Vector3(row === 0 ? -2.4 : 1.6, 0, (col - 1) * 3.7);
 }
 
-/** Where to stand to look over an agent's shoulder at their laptop (room frame). */
+/** Where to stand to look over an agent's shoulder at their station's display (room frame). */
 export function deskViewpoint(index: number): { position: THREE.Vector3; lookAt: THREE.Vector3 } {
-  const d = deskPosition(index);
+  return overShoulder(deskPosition(index).add(DESK_SEAT));
+}
+
+/** Behind the right shoulder of whoever sits at `seat`, looking at their workstation's display (room frame). */
+function overShoulder(seat: THREE.Vector3): { position: THREE.Vector3; lookAt: THREE.Vector3 } {
   return {
-    position: new THREE.Vector3(d.x - 1.75, 0, d.z + 0.95),
-    lookAt: new THREE.Vector3(d.x + 0.15, 1.0, d.z + 0.15),
+    position: new THREE.Vector3(seat.x - 1.1, 0, seat.z + 1.0),
+    lookAt: new THREE.Vector3(seat.x + 0.85, 1.1, seat.z + 0.22),
   };
 }
 
-/** A project's room: desks with agents and laptops, the Kanban board and a pile of PRs to review. */
+/** A project's room: workstations with agents at them, the Kanban board and a pile of PRs to review. */
 export class ProjectRoom {
   readonly group = new THREE.Group();
   readonly desks: DeskSlot[] = [];
   private board = new KanbanBoard();
   /** The operations officer behind the ＋ New issue stand, who drafts issues. */
   private planner!: Character;
-  /** The QA officer at the pull requests table, with the laptop they test on. */
+  /** The QA officer at their station beside the pull requests table. */
   private qa!: Character;
-  private qaScreen = new LaptopScreen(null, 'QA station · standing by');
-  private qaLaptop!: THREE.Group;
-  private qaSeat = new THREE.Group();
+  private qaScreen = new StationScreen(null, 'QA station · standing by');
+  private qaStation!: THREE.Group;
   private prPile = new THREE.Group();
   private prCount = -1;
   private boardDirty = true;
@@ -144,20 +149,15 @@ export class ProjectRoom {
     interactive(table, { kind: 'board', projectId: project.id, tab: 'prs' }, () => 'Review pull requests');
     builder.collideObject(top);
 
-    // the QA station: the QA officer sits at the pull requests table facing the board, testing on a laptop you can
-    // look at over their shoulder, the way you do at the desks
-    const qaLap = laptop(this.qaScreen.material);
-    qaLap.group.position.set(HALF_D - 2.0 - 0.2, 0.77, -HALF_W + 1.5);
-    qaLap.group.rotation.y = -0.15;
-    this.qaLaptop = qaLap.group;
-    this.group.add(qaLap.group);
-    this.qaSeat.position.set(QA_SEAT.x, 0, QA_SEAT.z);
-    const qaChair = chair('#495057');
-    this.qaSeat.add(qaChair);
-    this.group.add(this.qaSeat);
-    builder.collideObject(qaChair);
+    // the QA station: the QA officer sits beside the pull requests table facing the board, testing on a station you
+    // can look at over their shoulder, the way you do at the developers'
+    const qaStation = workstation(this.qaScreen.material, LCARS.lilac);
+    qaStation.group.position.copy(QA_SEAT);
+    this.qaStation = qaStation.group;
+    this.group.add(qaStation.group);
+    builder.collideObject(qaStation.group);
     this.qa = new Character(this.qaView());
-    this.qaSeat.add(this.qa.group);
+    qaStation.seat.add(this.qa.group);
 
     // "new issue" stand with a note pad
     const kiosk = new THREE.Group();
@@ -216,48 +216,20 @@ export class ProjectRoom {
     const group = new THREE.Group();
     group.position.copy(deskPosition(index));
     this.group.add(group);
-    const d = desk(1.9, 1.0);
-    group.add(d);
-    builder.collideObject(d);
+    const screen = new StationScreen(null);
+    const station = workstation(screen.material, [LCARS.orange, LCARS.periwinkle, LCARS.gold][index % 3]);
+    station.group.position.copy(DESK_SEAT);
+    group.add(station.group);
+    builder.collideObject(station.group);
 
-    const screen = new LaptopScreen(null);
-    const lap = laptop(screen.material);
-    lap.group.position.set(0.0, DESK_TOP, 0.18);
-    lap.group.rotation.y = -0.28;
-    group.add(lap.group);
-
-    const mug = cyl(0.05, 0.045, 0.11, ['#ffd166', '#ef476f', '#06d6a0', '#118ab2'][index % 4], 12);
-    mug.position.set(-0.2, DESK_TOP + 0.055, -0.62);
-    group.add(mug);
-    if (index % 2 === 0) {
-      const p = plant(0.35, '#f4f1de');
-      p.position.set(0.3, DESK_TOP, -0.75);
-      group.add(p);
-    }
-
-    const seat = new THREE.Group();
-    seat.position.set(-0.85, 0, -0.32);
-    seat.add(chair('#495057'));
-    group.add(seat);
-    builder.collide(...this.worldBox(group, -1.25, -0.45, -0.75, 0.15));
-
-    const slot: DeskSlot = { index, group, laptopGroup: lap.group, screen, seat };
-    interactive(lap.group, { kind: 'desk', projectId: this.project.id }, () => this.deskLabel(slot));
-    interactive(d, { kind: 'desk', projectId: this.project.id }, () => this.deskLabel(slot));
+    const slot: DeskSlot = { index, group, station: station.group, screen, seat: station.seat };
+    interactive(station.group, { kind: 'desk', projectId: this.project.id }, () => this.deskLabel(slot));
     return slot;
-  }
-
-  /** World-space AABB (as collide() args) of a rectangle in a desk's local frame. */
-  private worldBox(group: THREE.Group, x0: number, x1: number, z0: number, z1: number): [number, number, number, number] {
-    group.updateWorldMatrix(true, false);
-    const a = new THREE.Vector3(x0, 0, z0).applyMatrix4(group.matrixWorld);
-    const b = new THREE.Vector3(x1, 0, z1).applyMatrix4(group.matrixWorld);
-    return [a.x, b.x, a.z, b.z];
   }
 
   private deskLabel(slot: DeskSlot): string {
     const agent = slot.agentId ? state.agents.get(slot.agentId) : undefined;
-    return agent ? `Look at ${agent.name}'s laptop (#${agent.issue.number})` : 'Empty station – assign an issue from the board';
+    return agent ? `Look at ${agent.name}'s station (#${agent.issue.number})` : 'Empty station – assign an issue from the board';
   }
 
   /** Seats, updates and removes characters to match the agents in this project. */
@@ -274,7 +246,7 @@ export class ProjectRoom {
         if (slot.agentId) {
           slot.agentId = undefined;
           slot.screen.setAgent(null);
-          interactive(slot.laptopGroup, { kind: 'desk', projectId: this.project.id }, () => this.deskLabel(slot));
+          interactive(slot.station, { kind: 'desk', projectId: this.project.id }, () => this.deskLabel(slot));
         }
         continue;
       }
@@ -287,7 +259,7 @@ export class ProjectRoom {
         slot.seat.add(slot.character.group);
         slot.agentId = agent.id;
         interactive(slot.character.group, { kind: 'agent', id: agent.id }, () => `Talk to ${agent.name} (#${agent.issue.number})`);
-        interactive(slot.laptopGroup, { kind: 'agent', id: agent.id }, () => `Look at ${agent.name}'s laptop (#${agent.issue.number})`);
+        interactive(slot.station, { kind: 'agent', id: agent.id }, () => this.deskLabel(slot));
       }
       slot.character!.set(agentView(agent));
       slot.screen.setAgent(agent);
@@ -319,7 +291,7 @@ export class ProjectRoom {
     this.planner.set(this.plannerView());
   }
 
-  /** The QA officer's look and their laptop, from their latest review. */
+  /** The QA officer's look, from their latest review. */
   private qaView(): CrewView {
     const agent = state.qaAgent(this.project.id);
     if (!agent) {
@@ -343,9 +315,9 @@ export class ProjectRoom {
     const use = agent
       ? ({ kind: 'agent', id: agent.id } as const)
       : ({ kind: 'qa', projectId: this.project.id } as const);
-    const label = () => (agent ? `Look at ${name}'s laptop (testing PR #${agent.issue.number})` : `${name}'s QA station`);
+    const label = () => (agent ? `Look at ${name}'s station (testing PR #${agent.issue.number})` : `${name}'s QA station`);
     interactive(this.qa.group, use, label);
-    interactive(this.qaLaptop, use, label);
+    interactive(this.qaStation, use, label);
   }
 
   markScreen(agentId: string): void {
@@ -398,7 +370,7 @@ export class ProjectRoom {
     if (!slot && !qa) return null;
     const v = slot
       ? deskViewpoint(slot.index)
-      : { position: new THREE.Vector3(QA_SEAT.x - 1.3, 0, QA_SEAT.z + 0.9), lookAt: new THREE.Vector3(QA_SEAT.x + 0.9, 1.0, QA_SEAT.z - 0.05) };
+      : overShoulder(QA_SEAT);
     this.group.updateWorldMatrix(true, false);
     return { position: v.position.applyMatrix4(this.group.matrixWorld), lookAt: v.lookAt.applyMatrix4(this.group.matrixWorld) };
   }

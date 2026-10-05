@@ -115,7 +115,7 @@ async function main() {
   const splash = h('div', { class: 'splash' },
     h('div', { class: 'card' },
       h('h1', null, 'FOCUS HQ'),
-      h('p', null, 'A starship crewed by Claude Code agents. Every project gets a holodeck, every agent a station and a laptop you can look over their shoulder at.'),
+      h('p', null, 'A starship crewed by Claude Code agents. Every project gets a holodeck, every agent a station you can look over their shoulder at.'),
       h('div', { class: 'keys' },
         h('span', null, h('kbd', { class: 'k' }, 'WASD'), 'walk'),
         h('span', null, h('kbd', { class: 'k' }, 'Mouse'), 'look around'),

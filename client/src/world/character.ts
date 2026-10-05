@@ -89,7 +89,7 @@ export function agentView(agent: Agent): CrewView {
   };
 }
 
-/** What a seated character works with: a laptop in front of them, or a PADD in their hands. */
+/** What a seated character works with: a workstation's touch panel in front of them, or a PADD in their hands. */
 export type Grip = 'keyboard' | 'padd';
 type Hands = { grip: 'keyboard' } | { grip: 'padd'; padd: THREE.Group };
 

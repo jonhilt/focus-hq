@@ -6,13 +6,13 @@ A cartoon, first-person 3D starship where a crew of **Claude Code** agents works
 
 | Over an agent's shoulder | The board up close |
 | --- | --- |
-| ![Live terminal on an agent's laptop](docs/laptop.jpg) | ![Kanban panel with issues, agents and PRs](docs/board.jpg) |
+| ![Live terminal and browser on an agent's station](docs/station.jpg) | ![Kanban panel with issues, agents and PRs](docs/board.jpg) |
 
 - The office is a **starship** in the style of *Star Trek: Lower Decks*: bulkhead corridors, LCARS signs and consoles, viewports onto space (with stars drifting past as the ship cruises), doors that swoosh open as you walk up, and the engines' thrum underneath it all (mute it from the pause menu).
 - Every **project** gets a **holodeck**. A project can span several GitHub repositories.
 - Each holodeck runs a **program**: its walls and ceiling vanish into a landscape, so the stations sit on a beach, in a forest clearing, in a desert canyon, on the moon, on a city rooftop at dusk or in a vast library. A faint holodeck grid shows where the walls are when you get close. Pick one per project in your **ready room**, or keep the plain holodeck grid. Empty holodecks are bare.
-- Every **agent** is a separate Claude Code instance (via the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk)) with its own station, laptop and git worktree. The crew wear Starfleet uniforms in their division's colour (command red, operations gold, sciences blue) and come from all over the Federation.
-- Walk up behind an agent and you see their **laptop screen**: the live Claude Code terminal and, while they test, the **browser** they are driving.
+- Every **agent** is a separate Claude Code instance (via the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk)) with its own workstation and git worktree. The crew wear Starfleet uniforms in their division's colour (command red, operations gold, sciences blue) and come from all over the Federation.
+- Walk up behind an agent and you see their **station's display**: the live Claude Code terminal and, while they test, the **browser** they are driving.
 - Each holodeck has an **operations officer** at its **＋ New issue** stand. Give them a rough idea and they read the project's code and write it up as an issue with context and **acceptance criteria**, ready for you to edit and file.
 - Bigger or fuzzier ideas go to a **briefing** in the **observation lounge** behind the ready room. The officer reads the code, grills you one question at a time and keeps a brief on the wall screen. When you wrap up, they write one issue to the holodeck's stand.
 - Each holodeck's **Kanban display** shows what's to do, who's working on what, and which **pull requests** are ready to merge.
@@ -52,7 +52,7 @@ Then on board:
 1. Walk north into your **ready room** (or press <kbd>M</kbd>) → **New project**. Connect repositories (`owner/name` or a URL), or tick *create a new blank repository*.
 2. A new holodeck appears down the corridor. Its Kanban display fills with the repos' open issues.
 3. At the board (<kbd>E</kbd>), click **Assign agent** on an issue, or file one at the **＋ New issue** stand and tick *Assign an agent right away*. The officer at the stand can draft it for you from a one-liner (see [Drafting issues](#drafting-issues)). The 🧠 picker beside either sets how much effort the agent puts in (`low` to `max`; *default* leaves it to the model).
-4. Watch them work. Press <kbd>E</kbd> on an agent or laptop to open the full terminal, message them, or approve something they need.
+4. Watch them work. Press <kbd>E</kbd> on an agent or their station to open the full terminal, message them, or approve something they need.
 5. When the PR shows up under **Ready to merge**, the holodeck's QA officer tests it and posts their report on it. Press **▶ Preview** to try it yourself, review it on GitHub and merge it from the board.
 
 > **Subscription note:** if `ANTHROPIC_API_KEY` is set, agents ignore it and use your Claude login. Set `FOCUS_USE_API_KEY=1` if you want them on the API key instead. Each agent is a full Claude Code session, so several at once use your plan's limits faster. **Settings → Agents working at once** caps that (default 4).
@@ -63,7 +63,7 @@ Then on board:
 | --- | --- |
 | <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / mouse | walk / look |
 | <kbd>Shift</kbd> | run |
-| <kbd>E</kbd> or click | use whatever is under the crosshair (agent, laptop, board, PR table, kiosk, console) |
+| <kbd>E</kbd> or click | use whatever is under the crosshair (agent, station, board, PR table, kiosk, console) |
 | <kbd>T</kbd> | teleport to any holodeck or straight to an agent's station |
 | <kbd>M</kbd> | ready room |
 | <kbd>N</kbd> | new issue for the holodeck you're in |
@@ -99,7 +99,7 @@ A briefing is saved in `~/.focus/state.json` with the officer's session, and eac
 1. **Hire**: the agent gets a station on the project's holodeck and a name. If the office is at its concurrency limit, they wait in the queue (⏳).
 2. **Set up**: `~/.focus/repos/<owner>__<name>` holds one clone per repository. The agent gets a fresh `git worktree` of it on a new branch `focus/<issue>-<slug>-<id>`, so agents never step on each other.
 3. **Work**: Claude Code runs in that worktree with the issue (title, body, labels, comments) as its task. It also gets a few instructions: commit as you go, don't push, run the tests, check UI changes in the browser, and write the final message as a PR description.
-4. **Browser testing**: agents get an in-process MCP server (`mcp__browser__open/click/type/press/screenshot/evaluate/console`) backed by headless Chromium. Every action's screenshot streams to their laptop screen.
+4. **Browser testing**: agents get an in-process MCP server (`mcp__browser__open/click/type/press/screenshot/evaluate/console`) backed by headless Chromium. Every action's screenshot streams to their station's display.
 5. **Deliver**: if they left uncommitted changes, they're asked once to commit them. Then the office pushes the branch and opens the PR (`Closes #N`) with the agent's summary as the body.
 6. **Follow-ups**: message an agent at any time. While they're working, the message reaches them at their next step. Once they're done, the message resumes the same Claude session and the new commits update the PR.
 7. **Merge conflicts**: a conflicting PR gets a **🔧 Resolve conflicts** button on the board. The agent who opened it merges the base branch in and updates the PR. If nobody in the office owns the PR (a teammate's, or the agent already went home), a new agent sits down on the PR's branch to do it.
@@ -108,12 +108,12 @@ A briefing is saved in `~/.focus/state.json` with the officer's session, and eac
 
 ### Cloud agents
 
-The **💻 local / ☁ cloud** picker next to 🧠 (on **Assign agent**, and at the New issue stand) puts an agent in a [Claude Code cloud session](https://code.claude.com/docs/en/claude-code-on-the-web) instead of on your machine. They still get a station and a laptop, and the office still opens the PR and hands it to QA.
+The **💻 local / ☁ cloud** picker next to 🧠 (on **Assign agent**, and at the New issue stand) puts an agent in a [Claude Code cloud session](https://code.claude.com/docs/en/claude-code-on-the-web) instead of on your machine. They still get a station, and the office still opens the PR and hands it to QA.
 
 - **How it runs:** through the Agent SDK's bundled CLI with `--cloud`, which starts the cloud session and relays it in the same message stream as a local agent, so their terminal is live as usual. The laptop panel links to the session on claude.ai (**Cloud session ↗**), where you can watch or steer it too.
 - **When Claude Code won't start one:** the CLI starts a new cloud session headlessly only while Anthropic has its headless cloud client switched on for your account, a server-side rollout with no flag or SDK option to request it. Otherwise it refuses with "--cloud requires an interactive terminal", and the agent carries on as a 💻 local agent in the worktree the office already set up: one line in their terminal says so, the ☁ chip and **Cloud session ↗** link go, and the PR, QA and later follow-ups work as for any local agent. ☁ stays on offer, since Anthropic can switch headless cloud sessions on at any time.
 - **Their branch:** the office publishes `focus/<issue>-<slug>-<id>` to GitHub first (the cloud session clones it from there), and the agent is told to commit and push to that branch, and only that one, with `git push origin HEAD:<branch>`. When the session ends, the office fetches the branch and opens the PR. If nothing new arrived, the agent is asked once to push.
-- **Screenshots:** the office's browser tool runs on your machine, so cloud agents test in the cloud machine's own browser instead (a Playwright script, say). Any screenshot they look at comes back in their tool results and shows on their laptop screen, like a local agent's browser.
+- **Screenshots:** the office's browser tool runs on your machine, so cloud agents test in the cloud machine's own browser instead (a Playwright script, say). Any screenshot they look at comes back in their tool results and shows on their station's display, like a local agent's browser.
 - **Follow-ups** reattach to the same cloud session (`--cloud <session id>`). If that fails (an archived session, say), a new cloud session picks the work up from the branch with your message. If Claude Code refuses to start that one, the office fetches the branch into the worktree first, so nothing the cloud session pushed is lost, and the agent carries on locally with your message.
 - **Stop** interrupts the cloud session's turn before letting go of it.
 - The QA officer always works locally: QA needs the office browser for its screenshots.
@@ -123,7 +123,7 @@ You need a claude.ai login (not `FOCUS_USE_API_KEY`) and GitHub connected for cl
 
 ## QA
 
-Every holodeck has a QA officer in blue, sitting at the pull requests table facing the board, with a laptop you can look at over their shoulder.
+Every holodeck has a QA officer in blue, sitting at a station beside the pull requests table facing the board, with a display you can look at over their shoulder.
 
 - **When they test:**
   - Automatically, when the office opens a PR or pushes new commits to one. Turn this off per project at the QA station.
@@ -134,7 +134,7 @@ Every holodeck has a QA officer in blue, sitting at the pull requests table faci
   2. Read the PR and its linked issues, and work out the acceptance criteria.
   3. Review the diff against the base branch.
   4. Run the tests, type checks, linters and build.
-  5. Click through UI changes with the browser tool, so you see that on their laptop.
+  5. Click through UI changes with the browser tool, so you see that on their station's display.
   6. Finish with a structured report: a verdict, a summary, every check made, the commands run and, on a fail, fix instructions.
 - **The report:** the office posts it as a comment on the PR (QA never touches GitHub themselves), and the board shows **✅ QA passed**, **❌ QA failed** or, once newer commits land, **QA passed an older commit**. You still merge.
 - **Screenshots:** the last 8 screenshots QA takes on purpose (`mcp__browser__screenshot`) go with the report, each with QA's caption. The office commits them to an orphan branch in the PR's repo, `focus-qa-evidence` (created on first use, no shared history with the code, never merged), and embeds them in the comment. A screenshot that fails to upload is left out of the comment and the error shows in QA's terminal.
@@ -263,7 +263,7 @@ server/
     demoRunner.ts         scripted pretend agents (and a pretend planner, briefing officer and QA officer) for demo mode
 client/src/
   main.ts                 renderer (toon shading + outline pass), loop, interaction, UI wiring
-  world/                  ship layout, holodecks, stations, characters, laptop screens, Kanban display
+  world/                  ship layout, holodecks, stations, characters, station screens, Kanban display
     scenery.ts            stencil "holo walls" that show a landscape built around a room
     themes.ts             the landscapes (beach, forest, desert, moon, city, library)
     lounge.ts             the observation lounge: briefing table, officer, the brief on the wall screen

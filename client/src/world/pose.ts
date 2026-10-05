@@ -28,10 +28,10 @@ export interface PoseInput {
   p: number;
 }
 
-/** A character at a laptop: every pose starts from hands on the keyboard. */
+/** A character at a workstation: every pose starts from fingertips on the touch panel. */
 export function keyboardPose({ status: s, thinking, celebrating, p }: PoseInput): Pose {
-  // defaults: hands on the keyboard
-  let lz = -0.42, rz = -0.42, rx = 0;
+  // defaults: fingertips on the touch panel
+  let lz = -0.38, rz = -0.38, rx = 0;
   const lx = 0;
   let headTilt = 0, headTurn = 0, bodyY = 0;
   let expression: Expression = 'idle';
@@ -97,7 +97,7 @@ const LAP = { armL: { x: 0, y: -0.35, z: -0.5 }, armR: { x: 0, y: 0.35, z: -0.5 
 const ASIDE = { armL: { x: 0, y: -0.25, z: -0.4 }, lean: 0.85 };
 
 /**
- * A character with no laptop, holding a PADD in the left hand (and the right, when it isn't busy). Every motion is
+ * A character with no workstation, holding a PADD in the left hand (and the right, when it isn't busy). Every motion is
  * slow: reading and the odd tap, never typing.
  */
 export function paddPose({ status: s, thinking, celebrating, p }: PoseInput): PaddPose {

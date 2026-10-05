@@ -19,7 +19,7 @@ function fastestArm(pose: (input: PoseInput) => Pose, input: Omit<PoseInput, 'p'
   return fastest;
 }
 
-const onKeyboard = (pose: Pose) => Math.abs(pose.armL.z + 0.42) < 0.11 && Math.abs(pose.armR.z + 0.42) < 0.11 && pose.armL.y === 0.15;
+const onKeyboard = (pose: Pose) => Math.abs(pose.armL.z + 0.38) < 0.11 && Math.abs(pose.armR.z + 0.38) < 0.11 && pose.armL.y === 0.15;
 
 describe('paddPose', () => {
   it('never uses the keyboard pose', () => {

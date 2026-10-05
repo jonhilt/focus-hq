@@ -3,6 +3,7 @@ import type { AgentStatus } from '../../../shared/types';
 import { sound } from '../sound';
 import { canvasTexture, fitText, makeCanvas } from './canvas';
 import { box, flat, lighten, toon } from './materials';
+import { cyl } from './props';
 import { viewportGlass } from './starfield';
 
 // The building is a starship in the style of Star Trek: Lower Decks: lilac-grey bulkheads over a dark dado,
@@ -31,7 +32,7 @@ export const LCARS = {
 };
 const PALETTE = Object.values(LCARS);
 
-/** An agent's status as an LCARS colour, for speech bubbles, laptops and the board. Matches the DOM UI's styles.css. */
+/** An agent's status as an LCARS colour, for speech bubbles, station displays and the board. Matches the DOM UI's styles.css. */
 export const LCARS_STATUS: Record<AgentStatus, string> = {
   queued: '#8d86a0',
   'setting-up': LCARS.sky,
@@ -232,6 +233,130 @@ export function lcarsConsole(w: number, h: number, seed: number): THREE.Group {
   screen.position.z = 0.01; // any closer and the frame shows through it from down the corridor
   g.add(screen);
   return g;
+}
+
+/** Height of a workstation's touch panel at its front edge, where a seated crew member's hands rest. */
+const CONSOLE_TOP = 0.72;
+/** From the seat's centre to the touch panel's front edge: a seated Character's hands land just inside it. */
+const REACH = 0.28;
+const PANEL_DEPTH = 0.44;
+const PANEL_SLOPE = 0.2;
+const CONSOLE_WIDTH = 1.2;
+
+let touchPanel: THREE.MeshBasicMaterial | undefined;
+
+/** The LCARS touch surface every workstation shares: rows of coloured keys on black. */
+function touchPanelMaterial(): THREE.MeshBasicMaterial {
+  if (touchPanel) return touchPanel;
+  const w = 512;
+  const h = 192;
+  const { canvas, ctx } = makeCanvas(w, h);
+  const rnd = seeded(1701);
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, w, h);
+  const gap = 8;
+  const rows = 4;
+  const rowH = (h - gap * (rows + 1)) / rows;
+  for (let r = 0; r < rows; r++) {
+    const y = gap + r * (rowH + gap);
+    let x = gap;
+    while (x < w - gap) {
+      const last = w - gap - x < 110;
+      const kw = last ? w - gap - x : 30 + rnd() * 60;
+      ctx.fillStyle = PALETTE[Math.floor(rnd() * PALETTE.length)];
+      if (last || rnd() > 0.12) pill(ctx, x, y, kw, rowH, { left: x === gap, right: last });
+      x += kw + gap;
+    }
+  }
+  return (touchPanel = flat(canvasTexture(canvas)));
+}
+
+/** A bridge-style seat on a pedestal, facing +X; a Character sits on it at the origin. */
+function stationSeat(upholstery: string): THREE.Group {
+  const g = new THREE.Group();
+  const foot = cyl(0.24, 0.28, 0.06, HULL.dado, 24);
+  foot.position.y = 0.03;
+  const column = cyl(0.07, 0.09, 0.34, HULL.frame);
+  column.position.y = 0.23;
+  const shell = cyl(0.29, 0.27, 0.06, HULL.frame, 24);
+  shell.position.y = 0.41;
+  const cushion = cyl(0.27, 0.27, 0.06, upholstery, 24);
+  cushion.position.y = 0.47;
+  g.add(foot, column, shell, cushion);
+  const back = new THREE.Group();
+  back.position.set(-0.28, 0.42, 0);
+  back.rotation.z = 0.1;
+  back.add(box(0.07, 0.66, 0.56, HULL.frame, -0.02, 0, 0));
+  back.add(box(0.05, 0.54, 0.46, upholstery, 0.04, 0.08, 0));
+  g.add(back);
+  for (const s of [-1, 1]) {
+    g.add(box(0.05, 0.16, 0.05, HULL.frame, -0.1, 0.48, s * 0.3));
+    g.add(box(0.34, 0.05, 0.07, upholstery, -0.04, 0.62, s * 0.3));
+  }
+  return g;
+}
+
+/**
+ * A TNG-style workstation with its seat: an LCARS touch panel sloping up to an upright display, on a sculpted
+ * pedestal. Faces +X from the seat at the origin; seat a Character by adding it to `seat`. The screen mesh faces the
+ * seat, ready for a StationScreen's material.
+ */
+export function workstation(screen: THREE.Material, accent: string): { group: THREE.Group; screen: THREE.Mesh; seat: THREE.Group } {
+  const g = new THREE.Group();
+  const seat = new THREE.Group();
+  seat.add(stationSeat('#5c5470'));
+  g.add(seat);
+  // the console sits a little right of the seat, so whoever stands at its right shoulder can read the display
+  const station = new THREE.Group();
+  station.position.set(REACH, 0, 0.22);
+  g.add(station);
+
+  // the pedestal is a side profile swept across the console, cut away under the panel's overhang for the knees
+  const under = CONSOLE_TOP - 0.04;
+  const backX = PANEL_DEPTH * Math.cos(PANEL_SLOPE);
+  const backY = under + PANEL_DEPTH * Math.sin(PANEL_SLOPE);
+  const profile = new THREE.Shape();
+  profile.moveTo(0.36, 0);
+  profile.lineTo(0.66, 0);
+  profile.lineTo(0.66, backY);
+  profile.lineTo(backX, backY);
+  profile.lineTo(0.02, under);
+  profile.quadraticCurveTo(0.36, under, 0.36, under - 0.28);
+  profile.closePath();
+  const bodyW = CONSOLE_WIDTH - 0.24;
+  const body = new THREE.Mesh(new THREE.ExtrudeGeometry(profile, { depth: bodyW, bevelEnabled: false }), toon(HULL.bulkhead));
+  body.position.z = -bodyW / 2;
+  station.add(body);
+  station.add(box(0.4, 0.08, CONSOLE_WIDTH - 0.14, HULL.dado, 0.51, 0, 0));
+  station.add(box(0.02, 0.05, bodyW + 0.01, accent, 0.355, 0.3, 0));
+
+  const panel = new THREE.Group();
+  panel.position.y = under;
+  panel.rotation.z = PANEL_SLOPE;
+  panel.add(box(PANEL_DEPTH, 0.04, CONSOLE_WIDTH, '#2b2735', PANEL_DEPTH / 2, 0, 0));
+  panel.add(box(0.05, 0.05, CONSOLE_WIDTH + 0.02, accent, 0, -0.005, 0));
+  const keys = new THREE.Mesh(
+    new THREE.PlaneGeometry(CONSOLE_WIDTH - 0.08, PANEL_DEPTH - 0.1).rotateX(-Math.PI / 2).rotateY(-Math.PI / 2),
+    touchPanelMaterial(),
+  );
+  keys.position.set(PANEL_DEPTH / 2 + 0.02, 0.041, 0);
+  panel.add(keys);
+  station.add(panel);
+
+  // 800×512, like a StationScreen's canvas
+  const dw = 0.94;
+  const dh = 0.6;
+  const display = new THREE.Group();
+  display.position.set(backX + 0.02, backY, 0);
+  display.rotation.z = -0.2; // leaning back
+  display.add(box(0.07, dh + 0.1, dw + 0.1, HULL.frame, 0.035, 0, 0));
+  display.add(box(0.08, 0.06, dw + 0.1, accent, 0.035, dh + 0.1, 0));
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(dw, dh), screen);
+  plane.rotation.y = -Math.PI / 2;
+  plane.position.set(-0.002, 0.05 + dh / 2, 0);
+  display.add(plane);
+  station.add(display);
+  return { group: g, screen: plane, seat };
 }
 
 function roundedRect(w: number, h: number, r: number): THREE.Path {
