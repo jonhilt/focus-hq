@@ -6,6 +6,7 @@ import { autoMergeFor, type GateMark, mergeStep, type MergeStep } from '../share
 import { autoSendBackFor, prKey } from '../shared/qa';
 import type { AgentManager } from './agents/manager';
 import type { Briefings } from './agents/briefing';
+import type { NumberOne } from './agents/numberOne';
 import type { IssuePlanner } from './agents/planner';
 import { config } from './config';
 import type { GitHubProvider } from './github/provider';
@@ -41,6 +42,7 @@ export class Office {
     readonly previews: Previews,
     readonly planner: IssuePlanner,
     readonly briefings: Briefings,
+    readonly numberOne: NumberOne,
     readonly voice: Voice,
     version: string,
   ) {
@@ -79,6 +81,7 @@ export class Office {
       drafts: this.planner.list(),
       briefing: this.briefings.current(),
       goals: this.briefings.goals(),
+      numberOne: this.numberOne.current(),
       reviews: [...this.store.reviews.values()],
       voice: this.voice.status(),
     };

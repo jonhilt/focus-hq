@@ -6,6 +6,7 @@ import type { BriefingOfficer, BriefingQa, OfficerHooks, OfficerReply, OfficerTu
 import type { BriefingEngineer, EngineerReply, EngineerTurn } from './engineering';
 import { mergeBrief } from './briefing';
 import { asBreakdown } from './breakdown';
+import type { NumberOneOfficer, NumberOneReply, NumberOneTurn } from './numberOne';
 import type { Drafter, DraftRequest, DraftResult } from './planner';
 import { renderText, renderToolUse } from './render';
 import type { TriageDecision, Triager, TriageRequest } from './triage';
@@ -377,6 +378,82 @@ function demoCode(repos: string[]): { repo: string; files: string[]; folder: str
   const repo = repos.find((r) => /web|front|app|game|dodger/.test(r)) ?? repos[0];
   const kind = /api/.test(repo) ? 'api' : /game|dodger/.test(repo) ? 'game' : 'web';
   return { repo, files: FILES[kind], folder: repo.split('/')[1] };
+}
+
+/**
+ * The demo Number One: reads the ship's real (demo) state for "what's going on", pretends to read a project's code or an
+ * agent's worktree, and suggests work when the captain sounds like they want something built.
+ */
+export class DemoNumberOne implements NumberOneOfficer {
+  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
+
+  async turn(req: NumberOneTurn, activity: (text: string) => void): Promise<NumberOneReply> {
+    const wait = async (seconds: number) => {
+      await sleep((seconds * 1000) / this.speed);
+      if (req.signal.aborted) throw new Error('Stopped');
+    };
+    const asked = req.messages.filter((m) => m.from === 'manager').at(-1)?.text.replace(/\s+/g, ' ').trim() ?? '';
+    const q = asked.toLowerCase();
+    const said = (text: string, spoken: string, costUsd = 0.04): NumberOneReply => ({ text, spoken, sessionId: req.resumeSessionId ?? `demo-one-${randomBytes(3).toString('hex')}`, costUsd });
+    const project = req.projects.find((p) => q.includes(p.name.toLowerCase()) || p.repos.some((r) => q.includes(r.split('/')[1]))) ?? req.projects.find((p) => p.repos.length);
+    activity('Thinking…');
+    await wait(1);
+
+    if (/going on|status|stuck|happening|needs me|who'?s/.test(q)) {
+      activity('Checking the ship’s status');
+      const ship = await req.shipStatus();
+      await wait(1.2);
+      const rooms = ship.projects.map((p) => {
+        const working = p.agents.filter((a) => a.task !== 'review').map((a) => `${a.name} on ${a.issue} (${a.activity})`);
+        const prs = p.prs.map((pr) => `#${pr.number} ${pr.qa}`);
+        const needs = p.needsCaptain.length ? `Needs you: ${p.needsCaptain.join('; ')}.` : 'Nothing needs you there.';
+        return `**${p.name}**: ${working.length ? working.join(', ') : 'nobody at a desk'}. ${prs.length ? `Open PRs: ${prs.join(', ')}.` : 'No open PRs.'} ${needs}`;
+      });
+      const waiting = ship.projects.reduce((n, p) => n + p.needsCaptain.length, 0);
+      return said(rooms.join('\n\n') || 'There are no projects aboard yet.', waiting ? `${waiting} ${waiting === 1 ? 'thing needs' : 'things need'} you, Captain. The details are on screen.` : 'All quiet, Captain. Nothing needs you right now.');
+    }
+
+    const agent = (await req.shipStatus()).projects.flatMap((p) => p.agents).find((a) => q.includes(a.name.toLowerCase().replace(/^(lt\.|ensign) /, '')));
+    if (agent && /done|so far|progress|up to/.test(q)) {
+      activity(`Reading ${agent.worktree ?? 'their branch'}`);
+      await wait(1.5);
+      const { files } = demoCode([agent.repo]);
+      return said(
+        `${agent.name} is on ${agent.issue}. In their worktree (\`${agent.worktree ?? 'cloud'}\`) they've changed \`${files[0]}\` and \`${files[4]}\` so far, and added a test next to it. It's half-finished: ${agent.activity.toLowerCase()}.`,
+        `${agent.name} has made a start on two files and a test. It's not done yet.`,
+      );
+    }
+
+    if (project && /how does|where|work|code|file|read/.test(q)) {
+      const { files, folder } = demoCode(project.repos);
+      activity(`Pulling the latest code of ${project.name}`);
+      await wait(1.5);
+      for (const file of [files[0], files[4]]) {
+        activity(`Reading ${project.id}/${folder}/${file}`);
+        await wait(1.2);
+      }
+      return said(
+        `In ${project.name}, it starts in \`${folder}/${files[0]}\`, which hands off to \`${folder}/${files[4]}\` for the state. \`${folder}/${files[1]}\` only renders what it's given.`,
+        `It starts in the app's entry point and keeps its state in one module. The files are on screen.`,
+        0.07,
+      );
+    }
+
+    if (project && /should we|could we|we need|let'?s|add|build|want/.test(q)) {
+      return {
+        ...said(
+          `That sounds like work for ${project.name}. I'd start with a draft at the stand; if it turns out bigger than one issue, call a briefing instead.`,
+          `That's one for ${project.name}. Want me to send it to the stand, or call a briefing?`,
+        ),
+        suggest: { projectId: project.id, idea: asked },
+      };
+    }
+
+    return said(
+      `Happy to think it through, Captain. Ask me how something works in ${project?.name ?? 'any project'}, what's going on aboard, or what an agent has done so far.`,
+      'Happy to think it through, Captain.',
+    );
+  }
 }
 
 /** The demo briefing officer: asks the usual questions in order, filling the brief with your answers. */

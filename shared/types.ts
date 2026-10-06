@@ -507,6 +507,38 @@ export interface Briefing {
   error?: string;
 }
 
+/** Work Number One suggests a chat turn into: the captain sends it to the project's stand or calls a briefing about it. */
+export interface WorkSuggestion {
+  projectId: string;
+  idea: string;
+}
+
+export interface NumberOneMessage {
+  from: 'manager' | 'number-one';
+  text: string;
+  /** Number One's reply in a line or two, without paths or code. */
+  spoken?: string;
+  suggest?: WorkSuggestion;
+  at: number;
+}
+
+/** thinking - Number One is reading or composing a reply; waiting - your turn; failed - the last turn went wrong (say something to try again). */
+export type NumberOneStatus = 'thinking' | 'waiting' | 'failed';
+
+/**
+ * The captain's chat with Number One, the ship's first officer: questions about any project's code, the ship's live
+ * state, or anything else. Read-only: it never turns into work by itself. One conversation, saved across restarts.
+ */
+export interface NumberOneChat {
+  status: NumberOneStatus;
+  /** What Number One is doing right now. */
+  activity: string;
+  messages: NumberOneMessage[];
+  updatedAt: number;
+  costUsd: number;
+  error?: string;
+}
+
 export interface QaCheck {
   name: string;
   result: 'pass' | 'fail' | 'skip';
@@ -653,6 +685,7 @@ export interface Snapshot {
   briefing: Briefing | null;
   /** Goals parked out of the lounge while the crew builds their current step. */
   goals: Briefing[];
+  numberOne: NumberOneChat;
   reviews: QaReview[];
   voice: VoiceStatus;
 }
@@ -670,6 +703,7 @@ export type ServerEvent =
   | { type: 'preview-log'; projectId: string; log: PreviewLog }
   | { type: 'draft'; projectId: string; draft: IssueDraft | null }
   | { type: 'briefing'; briefing: Briefing | null; goals: Briefing[] }
+  | { type: 'number-one'; chat: NumberOneChat }
   | { type: 'review'; review: QaReview }
   | { type: 'review-removed'; repo: string; number: number }
   | { type: 'voice'; voice: VoiceStatus }

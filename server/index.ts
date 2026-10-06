@@ -4,10 +4,11 @@ import path from 'node:path';
 import express from 'express';
 import { BrowserPool } from './agents/browserTool';
 import { Briefings, type IssueFiler } from './agents/briefing';
-import { ClaudeBriefingQa, ClaudeDrafter, ClaudeEngineer, ClaudeOfficer, ClaudeTriager } from './agents/claudeCrew';
+import { ClaudeBriefingQa, ClaudeDrafter, ClaudeEngineer, ClaudeNumberOne, ClaudeOfficer, ClaudeTriager } from './agents/claudeCrew';
 import { ClaudeRunner } from './agents/claudeRunner';
-import { DemoBriefingQa, DemoDrafter, DemoEngineer, DemoOfficer, DemoRunner, DemoTriager, demoWorkspace } from './agents/demoRunner';
+import { DemoBriefingQa, DemoDrafter, DemoEngineer, DemoNumberOne, DemoOfficer, DemoRunner, DemoTriager, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
+import { NumberOne, type ShipStatus, summariseShip } from './agents/numberOne';
 import { IssuePlanner } from './agents/planner';
 import type { WorkspaceOps } from './agents/types';
 import * as git from './agents/workspace';
@@ -60,8 +61,11 @@ async function main() {
   const briefings = config.demo
     ? new Briefings(store, hub, planner, new DemoOfficer(), new DemoBriefingQa(), filer, new DemoEngineer())
     : new Briefings(store, hub, planner, new ClaudeOfficer(), new ClaudeBriefingQa(), filer, new ClaudeEngineer());
-  const office = new Office(store, hub, github, previews, planner, briefings, new Voice(hub, config.demo), await currentVersion());
-  office.agents = new AgentManager(store, hub, github, runner, config.demo ? demoWorkspace : liveWorkspace, config.demo ? new DemoTriager() : new ClaudeTriager(), (id) => office.boardChanged(id));
+  const workspace = config.demo ? demoWorkspace : liveWorkspace;
+  // Number One reads the ship through the office, which is up by the time anyone asks
+  const numberOne = new NumberOne(store, hub, config.demo ? new DemoNumberOne() : new ClaudeNumberOne(), async (): Promise<ShipStatus> => summariseShip(await office.snapshot(), (id) => workspace.dir(id)));
+  const office = new Office(store, hub, github, previews, planner, briefings, numberOne, new Voice(hub, config.demo), await currentVersion());
+  office.agents = new AgentManager(store, hub, github, runner, workspace, config.demo ? new DemoTriager() : new ClaudeTriager(), (id) => office.boardChanged(id));
 
   if (config.demo && store.projects.length === 0) {
     const shop = store.addProject('Sock Shop', '#ff8a5b', 'beach');

@@ -86,6 +86,15 @@ export function chiefEngineer(): Planner {
   return { name: `${RANK_TITLE.lieutenant} Brennan`, avatar };
 }
 
+/**
+ * Number One, the ship's first officer in the ready room: one for the whole ship, who talks anything through with the
+ * captain, reading any project's code and the ship's live state. Command, like the captain.
+ */
+export function numberOne(): Planner {
+  const avatar = rollAvatar(seeded(hash('number-one')), 'command', 'lieutenant');
+  return { name: 'Cmdr. Adair', avatar };
+}
+
 /** Whether the engineer is at the lounge table: from the moment a briefing asks engineering until it's wrapped up. */
 export function engineerAtBriefing(briefing: Pick<Briefing, 'status' | 'engineering'> | null): boolean {
   if (!briefing || briefing.status === 'done') return false;

@@ -121,6 +121,17 @@ When the route is foggy, press **🧭 Set a goal** in the lounge instead of call
 
 Goals are saved in `~/.focus/state.json` with the officer's session, so a goal picks up where it left off after a restart.
 
+### Number One
+
+Number One, the ship's first officer, is there to just talk: ask how something works in any project, what's going on aboard, or think an idea through, without it turning into an issue. There's one for the whole ship (the ready-room figure and panel are coming; for now it's the server side, under `/api/number-one`).
+
+- **The ship's state**: their `ship_status` tool sums up the board per project: agents and what they're on (with their worktree paths), open PRs with QA's verdict and checks, and what needs you (raised hands, conflicts, stuck PRs, PRs ready to merge, drafts at the stand).
+- **Any project's code**: `open_project` checks a project's repos out at their default branch into `~/.focus/planning/<project>/` (the same folders the stand and briefings use) the first time they need it, so opening a chat checks nothing out. If the fetch fails, they tell you which project and carry on.
+- **Agents' worktrees**: readable, to answer "what has Lt. X done so far?", never to explain how the code works.
+- **Read-only**: Read, Glob, Grep, web search and fetch, and those two tools. They never file, push, edit, start agents, draft issues or call briefings. When a chat turns into work, the reply carries a suggestion (`suggest: { projectId, idea }`) for you to send to the stand or a briefing.
+
+The chat runs alongside any briefing, one turn at a time. It's saved in `~/.focus/state.json` with Number One's session, which every message resumes, so it survives a restart. **New conversation** clears the log and starts a fresh session.
+
 ## How an agent works an issue
 
 1. **Hire**: the agent gets a station on the project's holodeck and a name. If the office is at its concurrency limit, they wait in the queue (⏳).
@@ -320,9 +331,10 @@ server/
     briefing.ts           briefings in the observation lounge: turns, the brief, wrap-up into a stand draft or a breakdown
     breakdown.ts          a briefing's epic and sub-issues: the officer's result, the manager's edits, Depends on lines
     engineering.ts        the ship's engineer at a briefing: options prompt, schema and decoding
-    claudeCrew.ts         the officer's read-only Claude Code sessions (Read/Glob/Grep, web search/fetch in briefings, update_brief, structured output)
+    numberOne.ts          Number One's ship-wide chat: turns, prompt, reply schema and the ship_status summariser
+    claudeCrew.ts         the officer's read-only Claude Code sessions (Read/Glob/Grep, web search/fetch in briefings, update_brief, Number One's ship_status and open_project, structured output)
     qa.ts                 the QA officer: instructions, the report's schema and parsing, the PR comment
-    demoRunner.ts         scripted pretend agents (and a pretend planner, briefing officer, QA officer and engineer) for demo mode
+    demoRunner.ts         scripted pretend agents (and a pretend planner, briefing officer, QA officer, engineer and Number One) for demo mode
 client/src/
   main.ts                 renderer (toon shading + outline pass), loop, interaction, UI wiring
   world/                  ship layout, holodecks, stations, characters, station screens, Kanban display

@@ -3,7 +3,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { qaOfficerFor, randomAvatar } from '../shared/crew';
 import { prKey } from '../shared/qa';
-import type { Agent, Board, Briefing, BrowserFrame, ClosedPr, Project, QaReview, Settings, TermLine } from '../shared/types';
+import type { Agent, Board, Briefing, BrowserFrame, ClosedPr, NumberOneChat, Project, QaReview, Settings, TermLine } from '../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, EMPTY_BRIEF, ROOM_THEMES, type RoomTheme } from '../shared/types';
 import { paths } from './config';
 import { newId } from './util';
@@ -43,12 +43,24 @@ export function afterRestart(saved: StoredBriefing): StoredBriefing {
   }
 }
 
+/** Number One's chat as saved: with their session, so the next message resumes it. */
+export type StoredNumberOne = NumberOneChat & { sessionId?: string };
+
+export const freshNumberOne = (): StoredNumberOne => ({ status: 'waiting', activity: '', messages: [], updatedAt: Date.now(), costUsd: 0 });
+
+/** Number One's saved chat as it picks up after a restart: a turn in flight when Focus shut down ends, and the chat stays usable. */
+export function numberOneAfterRestart(saved: StoredNumberOne): StoredNumberOne {
+  if (saved.status !== 'thinking') return saved;
+  return { ...saved, status: 'failed', activity: 'Interrupted', error: 'Interrupted when Focus shut down. Ask again.' };
+}
+
 interface PersistedState {
   settings: Settings;
   projects: Project[];
   agents: Agent[];
   briefing?: StoredBriefing | null;
   goals?: StoredBriefing[];
+  numberOne?: StoredNumberOne;
   reviews?: QaReview[];
   closedPrs?: ClosedPr[];
 }
@@ -77,6 +89,8 @@ export class Store {
   briefing: StoredBriefing | null = null;
   /** Goals parked out of the lounge while the crew builds their current step. */
   goals: StoredBriefing[] = [];
+  /** The captain's chat with Number One. */
+  numberOne: StoredNumberOne = freshNumberOne();
   /** The latest QA review per pull request (by prKey). */
   reviews = new Map<string, QaReview>();
   /** PRs the operations officer closed as the wrong approach, by prKey of the issue they were for. */
@@ -96,6 +110,7 @@ export class Store {
     this.projects = raw.projects ?? [];
     this.briefing = raw.briefing ? afterRestart(raw.briefing) : null;
     this.goals = (raw.goals ?? []).map(afterRestart);
+    if (raw.numberOne) this.numberOne = numberOneAfterRestart(raw.numberOne);
     for (const review of raw.reviews ?? []) {
       if (review.status === 'queued' || review.status === 'testing') {
         Object.assign(review, { status: 'error', error: 'Interrupted when Focus shut down. Send it to QA again.' });
@@ -131,6 +146,7 @@ export class Store {
         agents: [...this.agents.values()],
         briefing: this.briefing,
         goals: this.goals,
+        numberOne: this.numberOne,
         reviews: [...this.reviews.values()],
         closedPrs: [...this.closedPrs.values()],
       };

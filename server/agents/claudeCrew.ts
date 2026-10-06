@@ -28,6 +28,7 @@ import { asBreakdown, breakdownSchema } from './breakdown';
 import { agentEnv } from './claudeRunner';
 import { type BriefingEngineer, decodeEngineeringReport, ENGINEERING_SCHEMA, type EngineerReply, type EngineerTurn, engineerPrompt, engineerSystemPrompt } from './engineering';
 import { type Drafter, type DraftRequest, type DraftResult, draftSchema, plannerPrompt, standDraftSchema, plannerSystemPrompt, repoFolders } from './planner';
+import { asNumberOneReply, type ChatProject, type NumberOneOfficer, type NumberOneReply, type NumberOneTurn, numberOnePrompt, numberOneReplySchema, numberOneSystemPrompt } from './numberOne';
 import { renderToolUse } from './render';
 import { parseTriage, TRIAGE_SCHEMA, type TriageDecision, type Triager, type TriageRequest, triagePrompt, triageSystemPrompt } from './triage';
 import { checkoutLatest } from './workspace';
@@ -64,8 +65,10 @@ interface ReadOnlyRun {
   builtins: ReadOnlyTool[];
   resume?: string;
   schema?: Record<string, unknown>;
-  /** The office's own tools for this session, all pre-approved. */
-  tools?: { server: McpSdkServerConfigWithInstance; names: string[] };
+  /** The office's own tools for this session, all pre-approved, and what the activity line says while one runs. */
+  tools?: { server: McpSdkServerConfigWithInstance; names: string[]; activity: (name: string) => string };
+  /** Folders outside `cwd` the session may read too. */
+  readable?: string[];
 }
 
 interface ReadOnlyResult {
@@ -81,9 +84,11 @@ async function runReadOnly(run: ReadOnlyRun): Promise<ReadOnlyResult> {
   const onAbort = () => abort.abort();
   run.signal.addEventListener('abort', onAbort);
   const timer = setTimeout(onAbort, TURN_TIMEOUT_MS);
-  const extra = run.tools ? run.tools.names.map((n) => `mcp__${run.tools!.server.name}__${n}`) : [];
+  const prefix = run.tools ? `mcp__${run.tools.server.name}__` : undefined;
+  const extra = run.tools ? run.tools.names.map((n) => `${prefix}${n}`) : [];
   const options: Options = {
     cwd: run.cwd,
+    additionalDirectories: run.readable,
     abortController: abort,
     model: run.settings.model || undefined,
     systemPrompt: { type: 'preset', preset: 'claude_code', append: run.systemAppend },
@@ -106,7 +111,7 @@ async function runReadOnly(run: ReadOnlyRun): Promise<ReadOnlyResult> {
       else if (msg.type === 'assistant' && msg.parent_tool_use_id === null) {
         for (const block of msg.message.content) {
           if (block.type === 'tool_use') {
-            if (block.name.startsWith('mcp__brief__')) run.activity('Updating the brief');
+            if (prefix && block.name.startsWith(prefix)) run.activity(run.tools!.activity(block.name.slice(prefix.length)));
             else run.activity(renderToolUse(block.name, (block.input ?? {}) as Record<string, unknown>, run.cwd).activity ?? '');
           } else if (block.type === 'thinking') run.activity('Thinking…');
           else if (block.type === 'text' && block.text.trim()) run.activity(truncate(block.text.trim().split('\n')[0], 100));
@@ -185,7 +190,7 @@ export class ClaudeOfficer implements BriefingOfficer {
       builtins: [...CODE_TOOLS, ...WEB_TOOLS],
       resume: req.resumeSessionId,
       schema: wrapUp ? draftSchema(req.repos) : breakDown ? breakdownSchema(req.repos) : step ? stepSchema(req.repos) : officerReplySchema,
-      tools: { server, names: ['update_brief'] },
+      tools: { server, names: ['update_brief'], activity: () => 'Updating the brief' },
     });
     const written = (): StepProposal => {
       const { repo, title, body } = asDraft(result.structured, req.repos);
@@ -255,6 +260,68 @@ export class ClaudeEngineer implements BriefingEngineer {
     });
     return { report: decodeEngineeringReport(result.structured), sessionId: result.sessionId, costUsd: result.costUsd };
   }
+}
+
+/**
+ * Number One: one session for the whole ship, from planning/, so every project's checkout is in reach once it's opened.
+ * Agents' worktrees are readable too, to see what an agent has done so far.
+ */
+export class ClaudeNumberOne implements NumberOneOfficer {
+  async turn(req: NumberOneTurn, activity: (text: string) => void): Promise<NumberOneReply> {
+    fs.mkdirSync(paths.planning, { recursive: true });
+    const ids = req.projects.map((p) => p.id);
+    const result = await runReadOnly({
+      cwd: paths.planning,
+      readable: [paths.workspaces],
+      systemAppend: numberOneSystemPrompt({ projects: req.projects, workspaces: paths.workspaces }),
+      prompt: numberOnePrompt(req),
+      settings: req.settings,
+      signal: req.signal,
+      activity,
+      builtins: [...CODE_TOOLS, ...WEB_TOOLS],
+      resume: req.resumeSessionId,
+      schema: numberOneReplySchema(ids),
+      tools: {
+        server: numberOneServer(req, activity),
+        names: ['ship_status', 'open_project'],
+        activity: (name) => (name === 'ship_status' ? 'Checking the ship’s status' : 'Opening a project'),
+      },
+    });
+    return { ...asNumberOneReply(result.structured, result.text, ids), sessionId: result.sessionId, costUsd: result.costUsd };
+  }
+}
+
+/** Number One's own tools: the ship's state, and a project's code on demand. Neither changes anything aboard. */
+function numberOneServer(req: NumberOneTurn, activity: (text: string) => void): McpSdkServerConfigWithInstance {
+  const text = (t: string, isError = false) => ({ content: [{ type: 'text' as const, text: t }], ...(isError && { isError }) });
+  const project = (id: string): ChatProject | undefined => req.projects.find((p) => p.id === id);
+  return createSdkMcpServer({
+    name: 'number-one',
+    version: '1.0.0',
+    alwaysLoad: true,
+    tools: [
+      tool('ship_status', 'The ship right now: per project, its agents (with their worktree paths), open pull requests with QA verdicts and checks, and what needs the captain.', {}, async () =>
+        text(JSON.stringify(await req.shipStatus(), null, 1)),
+      ),
+      tool(
+        'open_project',
+        "Checks out a project's repositories at their latest default branch, into <projectId>/<repo folder>/ under your current directory, so you can read its code.",
+        { projectId: z.string().describe('The project id, as listed in your instructions') },
+        async ({ projectId }) => {
+          const found = project(projectId);
+          if (!found) return text(`There's no project with id ${projectId}. The projects are: ${req.projects.map((p) => `${p.name} (${p.id})`).join(', ') || 'none'}.`, true);
+          if (!found.repos.length) return text(`${found.name} has no repositories yet.`, true);
+          try {
+            const cwd = await checkouts(found.id, found.repos, activity);
+            const folders = repoFolders(found.repos);
+            return text(`${found.name} is checked out at its default branch:\n${found.repos.map((r) => `- ${path.relative(paths.planning, path.join(cwd, folders.get(r)!))}/ (${r})`).join('\n')}`);
+          } catch (err) {
+            return text(`The checkout of ${found.name} failed: ${errorMessage(err)}`, true);
+          }
+        },
+      ),
+    ],
+  });
 }
 
 /** The update_brief tool: the officer's pen for the lounge's wall screen. */
