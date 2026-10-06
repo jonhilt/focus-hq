@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { paths } from '../config';
-import { KeyedLock, run, sleep } from '../util';
-import { claimBranch, heldMessage, parseWorktrees, retryLockRace } from './worktrees';
+import { errorMessage, KeyedLock, run, sleep } from '../util';
+import { claimBranch, heldMessage, orphanedWorkspaces, parseWorktrees, retryLockRace } from './worktrees';
 
 const lock = new KeyedLock();
 
@@ -66,6 +66,36 @@ export async function removeWorktree(repo: string, agentId: string): Promise<voi
   await lock.with(repo, () => git(mirrorDir(repo), ['worktree', 'remove', '--force', dir])).catch(() => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
+}
+
+/**
+ * Deletes the folders in data/workspaces that no agent in the office or project owns (a removal that failed, or a
+ * dismissal the server never got round to), then prunes every mirror so it stops listing them. A folder that can't be
+ * deleted is logged and the sweep carries on.
+ */
+export async function sweepWorkspaces(agentIds: Iterable<string>, projectIds: Iterable<string>): Promise<void> {
+  const folders = subfolders(paths.workspaces);
+  for (const name of orphanedWorkspaces(folders, agentIds, projectIds)) {
+    const dir = path.join(paths.workspaces, name);
+    try {
+      await fs.promises.rm(dir, { recursive: true, force: true });
+      console.log(`Swept orphaned workspace ${dir}`);
+    } catch (err) {
+      console.error(`Couldn't sweep orphaned workspace ${dir}: ${errorMessage(err)}`);
+    }
+  }
+  for (const name of subfolders(paths.mirrors)) {
+    const repo = name.replace('__', '/');
+    await lock.with(repo, () => git(mirrorDir(repo), ['worktree', 'prune'])).catch((err: unknown) => {
+      console.error(`Couldn't prune worktrees of ${repo}: ${errorMessage(err)}`);
+    });
+  }
+}
+
+/** Real folders directly inside `dir` (symlinks aren't followed), or none if `dir` doesn't exist yet. */
+function subfolders(dir: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
 }
 
 /**

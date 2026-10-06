@@ -14,6 +14,7 @@ import type { QaLoopEvent } from './qaLoop';
 import { qaNextStep } from './qaLoop';
 import type { Triager } from './triage';
 import { type AgentRunner, type AgentSession, type RunHooks, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
+import { triageWorkspaceId } from './worktrees';
 
 interface Runtime {
   session?: AgentSession;
@@ -34,9 +35,6 @@ const FINISHED: AgentStatus[] = ['done', 'stopped', 'error'];
 
 /** Each room has one QA officer; their agent record is reused from review to review. */
 const qaAgentId = (projectId: string) => `qa_${projectId}`;
-
-/** Where the room's operations officer checks out a stuck PR to look at it. */
-const triageWorkspaceId = (projectId: string) => `triage_${projectId}`;
 
 /** Hires agents, seats them at desks, runs them, and turns their work into pull requests. */
 export class AgentManager {

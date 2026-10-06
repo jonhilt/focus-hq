@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CommandError } from '../util';
-import { claimBranch, heldMessage, isRefLockRace, parseWorktrees, retryLockRace } from './worktrees';
+import { claimBranch, heldMessage, isRefLockRace, orphanedWorkspaces, parseWorktrees, retryLockRace } from './worktrees';
 
 const porcelain = `worktree /data/repos/acme__shop
 HEAD aca864f97ead8ad492cb364ebc49dfa3cbe1de51
@@ -124,5 +124,17 @@ describe('retryLockRace', () => {
     const f = failing(network);
     await expect(retryLockRace(f.fetch, noWait)).rejects.toBe(network);
     expect(f.calls()).toBe(1);
+  });
+});
+
+describe('orphanedWorkspaces', () => {
+  it("picks the folders that belong to no agent in the office and no project's triage", () => {
+    const folders = ['agent_786fa4665d', 'agent_d86247eeb5', 'qa_p1', 'triage_p1', 'triage_p_gone'];
+    const agents = ['agent_d86247eeb5', 'qa_p1'];
+    expect(orphanedWorkspaces(folders, agents, ['p1'])).toEqual(['agent_786fa4665d', 'triage_p_gone']);
+  });
+
+  it('keeps everything when every folder has an owner', () => {
+    expect(orphanedWorkspaces(['agent_a', 'triage_p1'], ['agent_a'], ['p1'])).toEqual([]);
   });
 });

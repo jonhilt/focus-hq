@@ -41,6 +41,18 @@ export function claimBranch(
   return inOffice(agentId) ? { kind: 'held', path: holder.path, agentId } : { kind: 'reclaim', path: holder.path };
 }
 
+/**
+ * The folders under data/workspaces that nobody owns: each agent in the office (QA officers included) keeps the folder
+ * named after it, and each project keeps its PR triage checkout. Everything else is left over and can go.
+ */
+export function orphanedWorkspaces(folders: string[], agentIds: Iterable<string>, projectIds: Iterable<string>): string[] {
+  const owned = new Set([...agentIds, ...[...projectIds].map(triageWorkspaceId)]);
+  return folders.filter((name) => !owned.has(name));
+}
+
+/** Where the room's operations officer checks out a stuck PR to look at it. */
+export const triageWorkspaceId = (projectId: string) => `triage_${projectId}`;
+
 export function heldMessage(branch: string, claim: { path: string; agentId?: string }): string {
   return claim.agentId
     ? `Branch ${branch} is checked out in ${claim.path}, the workspace of ${claim.agentId}, who's still in the office.`

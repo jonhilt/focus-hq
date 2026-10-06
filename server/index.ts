@@ -21,7 +21,11 @@ import { demoPreviewPage, Previews } from './previews';
 import { apiRouter } from './routes';
 import { Store } from './store';
 import { currentVersion, RESTART_EXIT_CODE, Updater } from './updater';
+import { errorMessage } from './util';
 import { Voice } from './voice';
+
+/** How often orphaned agent workspaces are swept up, besides once at startup. */
+const SWEEP_EVERY_MS = 60 * 60_000;
 
 const liveWorkspace: WorkspaceOps = {
   create: git.createWorktree,
@@ -112,6 +116,12 @@ async function main() {
 
   await office.start();
   if (!config.demo) {
+    const sweep = () =>
+      git
+        .sweepWorkspaces(store.agents.keys(), store.projects.map((p) => p.id))
+        .catch((err: unknown) => console.error(`Workspace sweep failed: ${errorMessage(err)}`));
+    void sweep();
+    setInterval(() => void sweep(), SWEEP_EVERY_MS);
     const info = await office.checkGitHub();
     if (!info.github.ok) console.warn(`  ⚠ ${info.github.error}`);
     else console.log(`  GitHub: signed in as ${info.github.login}`);
