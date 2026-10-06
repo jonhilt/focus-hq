@@ -4,3 +4,5 @@ data/
 *.log
 .DS_Store
 smoke-shots/
+blender/build/
+__pycache__/

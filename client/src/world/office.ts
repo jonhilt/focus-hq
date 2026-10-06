@@ -5,6 +5,7 @@ import type { Project } from '../../../shared/types';
 import { ACTIVE_STATUSES } from '../../../shared/types';
 import { state } from '../net/state';
 import { Builder, interactive } from './builder';
+import type { Deck } from './deck';
 import { canvasTexture, fitText, makeCanvas, roundRect } from './canvas';
 import { type Box2, DOOR_W, HALL_HALF, LOBBY, LOUNGE, LOUNGE_DOOR_X, OFFICE, OVER_DOOR, ROOM_DEPTH, ROOM_WIDTH, roomSlot, roomToWorld, rowsFor, SUN_POSITION, WALL_H, WALL_T } from './layout';
 import { box, flat, toon, toonMaterial } from './materials';
@@ -51,8 +52,13 @@ export class World {
   /** Holodecks of hidden projects: locked, and nameless. */
   private inUse = new Set<number>();
 
-  constructor(scene: THREE.Scene) {
+  /** `decks` are the parts of the ship built in Blender; the rest is built here. */
+  constructor(
+    scene: THREE.Scene,
+    private readonly decks: Deck[] = [],
+  ) {
     scene.add(this.root);
+    for (const deck of decks) this.root.add(deck.root);
   }
 
   /** Rebuilds the building when the set of projects (or their names/colours/repos, or which are hidden) changes. */
@@ -163,8 +169,8 @@ export class World {
     this.engineering = new EngineeringStation(b);
 
     this.root.add(b.group);
-    this.colliders = b.colliders;
-    this.doors = b.doors;
+    this.colliders = [...b.colliders, ...this.decks.flatMap((d) => d.colliders)];
+    this.doors = [...b.doors, ...this.decks.flatMap((d) => d.doors)];
     this.panelsDirty = true;
   }
 
@@ -340,9 +346,15 @@ export class World {
     }
   }
 
+  /** Where you come aboard: the first deck built in Blender, or the concourse. */
+  boarding(): Place {
+    return this.decks[0]?.places[0] ?? { label: '🛋️ Concourse', position: new THREE.Vector3(0, 0, 8), lookAt: new THREE.Vector3(0, 1.6, 0) };
+  }
+
   /** Teleport destinations. */
   places(): Place[] {
     const places: Place[] = [
+      ...this.decks.flatMap((d) => d.places),
       { label: '🛋️ Concourse', position: new THREE.Vector3(0, 0, LOBBY.z1 - 1.2), lookAt: new THREE.Vector3(0, 1.6, 0) },
       { label: '🎖️ Ready room', position: new THREE.Vector3(0, 0, OFFICE.z0 + 1.5), lookAt: new THREE.Vector3(0, 1.2, OFFICE.z0 + 5) },
       { label: '🖖 Observation lounge', position: new THREE.Vector3(-1.2, 0, LOUNGE.z0 + 0.9), lookAt: new THREE.Vector3(0.6, 1.1, LOUNGE.z0 + 4.6) },
@@ -360,6 +372,10 @@ export class World {
 
   /** Human name of where a world position is. */
   locationOf(p: THREE.Vector3): { label: string; projectId?: string } {
+    for (const deck of this.decks) {
+      const label = deck.areaAt(p);
+      if (label) return { label };
+    }
     if (p.z > LOUNGE.z0) return { label: 'Observation lounge' };
     if (p.z > OFFICE.z0) return { label: 'Ready room' };
     if (p.z > 0) return { label: 'Concourse' };

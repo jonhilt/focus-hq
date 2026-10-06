@@ -201,8 +201,8 @@ export function lcarsSign(text: string, opts: { color?: string; sub?: string; co
   return canvasTexture(canvas);
 }
 
-/** A wall console of LCARS readouts, for a corridor wall. Faces +Z in its local frame. */
-export function lcarsConsole(w: number, h: number, seed: number): THREE.Group {
+/** LCARS readouts for a w×h panel: rows of numbers under a frame titled after a ship's system. */
+export function readoutTexture(w: number, h: number, seed: number): THREE.CanvasTexture {
   const res = 512;
   const { canvas, ctx } = makeCanvas(res, Math.round((res * h) / w));
   const rnd = seeded(seed * 7919);
@@ -227,9 +227,14 @@ export function lcarsConsole(w: number, h: number, seed: number): THREE.Group {
       x += ctx.measureText(n).width + 10 + rnd() * 12;
     }
   }
+  return canvasTexture(canvas);
+}
+
+/** A wall console of LCARS readouts, for a corridor wall. Faces +Z in its local frame. */
+export function lcarsConsole(w: number, h: number, seed: number): THREE.Group {
   const g = new THREE.Group();
   g.add(box(w + 0.12, h + 0.12, 0.04, HULL.frame, 0, -h / 2 - 0.06, -0.02));
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(w, h), flat(canvasTexture(canvas)));
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(w, h), flat(readoutTexture(w, h, seed)));
   screen.position.z = 0.01; // any closer and the frame shows through it from down the corridor
   g.add(screen);
   return g;
@@ -243,10 +248,16 @@ const PANEL_DEPTH = 0.44;
 const PANEL_SLOPE = 0.2;
 const CONSOLE_WIDTH = 1.2;
 
-let touchPanel: THREE.MeshBasicMaterial | undefined;
+let touchPanel: THREE.CanvasTexture | undefined;
+let touchPanelMat: THREE.MeshBasicMaterial | undefined;
 
 /** The LCARS touch surface every workstation shares: rows of coloured keys on black. */
 function touchPanelMaterial(): THREE.MeshBasicMaterial {
+  return (touchPanelMat ??= flat(touchPanelTexture()));
+}
+
+/** The touch surface's keys: a 512×192 canvas. */
+export function touchPanelTexture(): THREE.CanvasTexture {
   if (touchPanel) return touchPanel;
   const w = 512;
   const h = 192;
@@ -268,7 +279,7 @@ function touchPanelMaterial(): THREE.MeshBasicMaterial {
       x += kw + gap;
     }
   }
-  return (touchPanel = flat(canvasTexture(canvas)));
+  return (touchPanel = canvasTexture(canvas));
 }
 
 /** A bridge-style seat on a pedestal, facing +X; a Character sits on it at the origin. */
@@ -410,16 +421,16 @@ export class SlidingDoors {
   private open = 0;
   private target = 0;
 
-  /** `along` is the doorway's axis; `at` is its centre on the floor. Locked doors never open. */
+  /** `at` is the doorway's centre on the floor; the leaves slide along its local X, turned `yaw` about Y. Locked doors never open. */
   constructor(
     private readonly at: THREE.Vector3,
-    along: 'x' | 'z',
+    yaw: number,
     private readonly width: number,
     height: number,
     private readonly locked = false,
   ) {
     this.group.position.copy(at);
-    if (along === 'z') this.group.rotation.y = Math.PI / 2;
+    this.group.rotation.y = yaw;
     for (const s of [-1, 1]) {
       const leaf = new THREE.Group();
       const w = width / 2;

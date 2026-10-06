@@ -21,12 +21,24 @@ import { numberOne } from '../../shared/crew';
 import { toastShows } from '../../shared/hidden';
 import { previewIncludes } from '../../shared/previewSet';
 import { sound } from './sound';
-import { SUN_POSITION } from './world/layout';
+import { Deck } from './world/deck';
+import { COMMAND_DECK, SUN_POSITION } from './world/layout';
 import { World } from './world/office';
 
 async function fontsReady(): Promise<void> {
   const loads = ['700 40px Fredoka', '500 40px Fredoka', '15px "JetBrains Mono"', '600 40px Antonio', '500 40px Antonio'].map((f) => document.fonts.load(f));
   await Promise.race([Promise.all(loads), new Promise((r) => setTimeout(r, 2500))]).catch(() => undefined);
+}
+
+/** The ship being rebuilt in Blender, deck by deck, while it's still behind ?ship=next. */
+async function nextShip(): Promise<Deck[]> {
+  if (new URLSearchParams(location.search).get('ship') !== 'next') return [];
+  try {
+    return [await Deck.load('/ship/command-deck.glb', COMMAND_DECK)];
+  } catch (err) {
+    console.error('The command deck failed to load; carrying on without it.', err);
+    return [];
+  }
 }
 
 async function main() {
@@ -51,9 +63,10 @@ async function main() {
 
   await fontsReady();
 
-  const world = new World(scene);
+  const world = new World(scene, await nextShip());
   const player = new Player(camera, renderer.domElement);
-  camera.lookAt(0, 1.6, 0);
+  const aboard = world.boarding();
+  player.teleport(aboard.position, aboard.lookAt);
   const hud = new Hud();
   const panels = new Panels();
 

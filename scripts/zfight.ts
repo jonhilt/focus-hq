@@ -58,7 +58,8 @@ async function main(): Promise<number> {
   try {
     await waitForServer(url, server, 60_000);
     browser = await launchBrowser();
-    const { pairs, meshes, padds } = await scan(browser, url);
+    // with the decks built in Blender (see nextShip in client/src/main.ts) as well as the rest
+    const { pairs, meshes, padds } = await scan(browser, `${url}?ship=next`);
     const fighting = pairs.filter((p) => !allowed(p));
     console.log(`Scanned ${meshes} meshes (${padds} PADDs); ${pairs.length - fighting.length} allowed overlaps skipped.`);
     if (!fighting.length) {

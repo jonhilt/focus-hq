@@ -344,11 +344,14 @@ client/src/
     lounge.ts             the observation lounge: a table under the viewports and a star chart (scenery)
     engineering.ts        the engineering station on the concourse, where the engineer keeps the ship running (scenery)
     numberOne.ts          Number One in the ready room, across the captain's desk (numberOneView.ts: their bubble)
+    deck.ts               a deck built in Blender: loads its GLB, draws its surfaces, reads its markers (deckExtras.ts: what the markers and surfaces say)
   ui/                     HUD and panels (agent terminal, board, ready room console, teleport, QA station, goals)
     numberOnePanel.ts     the chat with Number One: the log, suggestions sent to the stand or started as goals, voice mode
   tricorder/              the phone view at /tricorder (no three.js): home screen, agent drill-down, buttons that survive live re-renders
 client/tricorder/index.html   the Tricorder's page (a second Vite entry), with its home-screen meta tags
 client/public/tricorder/  its web app manifest and home-screen icons
+client/public/ship/       the decks built in Blender, as GLBs (npm run ship writes them)
+blender/                  the Blender scripts that build the decks: ship.py (entry), kit.py (walls, furniture, markers), command_deck.py (the bridge)
 ```
 
 The client mirrors server state over the WebSocket. Every action is a small REST call. Laptop screens and Kanban displays are canvases drawn into textures, and only redrawn when something changes. Screens near you redraw faster.

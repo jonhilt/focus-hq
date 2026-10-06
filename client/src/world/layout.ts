@@ -20,6 +20,11 @@ export const LOUNGE = { x0: -6, x1: 6, z0: 18, z1: 25 };
 /** The lounge door, off to the west so the manager's desk doesn't sit in front of it. */
 export const LOUNGE_DOOR_X = -3.4;
 export const EYE_HEIGHT = 1.6;
+/**
+ * Where the command deck (built in Blender: world/deck.ts) sits: aft of the rest of the ship, on its long axis so the
+ * viewscreen sees space the way the corridor's end window does.
+ */
+export const COMMAND_DECK = new THREE.Vector3(0, 0, 80);
 /** Where the office's sun light comes from (painted suns in the room landscapes line up with it). */
 export const SUN_POSITION = new THREE.Vector3(6, 10, 4);
 

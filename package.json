@@ -13,7 +13,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "smoke": "tsx scripts/smoke.ts",
-    "zfight": "tsx scripts/zfight.ts"
+    "zfight": "tsx scripts/zfight.ts",
+    "ship": "tsx scripts/ship.ts"
   },
   "engines": {
     "node": ">=20"

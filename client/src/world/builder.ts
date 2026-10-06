@@ -91,7 +91,7 @@ export class Builder {
         piece(g1 - lip, g1 + 0.14, 0, DOOR_H + 0.14, HULL.frame, FRAME_FACE * 2);
         piece(g0, g1, DOOR_H - lip, DOOR_H + 0.14, HULL.frame, FRAME_FACE * 2);
         const mid = (g0 + g1) / 2;
-        const door = new SlidingDoors(alongX ? new THREE.Vector3(mid, 0, fixed) : new THREE.Vector3(fixed, 0, mid), alongX ? 'x' : 'z', g1 - g0, DOOR_H, locked);
+        const door = new SlidingDoors(alongX ? new THREE.Vector3(mid, 0, fixed) : new THREE.Vector3(fixed, 0, mid), alongX ? 0 : Math.PI / 2, g1 - g0, DOOR_H, locked);
         this.doors.push(door);
         this.add(door.group);
         if (locked) {
