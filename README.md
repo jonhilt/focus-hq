@@ -33,6 +33,10 @@ npm run demo        # fake GitHub + pretend agents, nothing to set up
 
 Open <http://127.0.0.1:4477>, click **Come aboard**, and walk around.
 
+### Take the code tour
+
+To see how it works, open the repo in VS Code and take the guided tour. It follows one agent from the GitHub issue you assign them, through their Claude Code session, to the pull request, QA's report and the merge, a step at a time in the code. VS Code offers to install the [CodeTour](https://marketplace.visualstudio.com/items?itemName=vsls-contrib.codetour) extension it needs; once it's in, the tour starts from the CodeTour panel in the Explorer (or **CodeTour: Start Tour** in the command palette). Keep `npm run demo` running beside it to watch each step happen.
+
 ### The real thing
 
 Prerequisites:
@@ -371,3 +375,7 @@ The client mirrors server state over the WebSocket. Every action is a small REST
 | `npm test` | unit tests (vitest) for the pure decision code: QA verdicts, badges, prompts |
 | `npm run smoke` | headless Playwright check of the splash screen in demo mode (screenshots in `smoke-shots/`) |
 | `npm run zfight` | headless scan of the demo office's 3D scene for z-fighting (coplanar faces from different meshes); fails listing each pair |
+
+## Licence
+
+Source-available for members of the AI Coding Lab community: see [LICENSE](LICENSE). Not open source, so please don't republish it.
