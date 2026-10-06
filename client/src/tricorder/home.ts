@@ -1,5 +1,5 @@
 import { statusIcon, statusLine } from '../../../shared/agentStatus';
-import { columns, resolvingAlready } from '../../../shared/board';
+import { columns, goalState, resolvingAlready } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import { assignWarning, waitsLabel } from '../../../shared/dependencies';
 import { prKey, qaBadge } from '../../../shared/qa';
@@ -23,8 +23,9 @@ export const agentHref = (id: string) => `#agent/${encodeURIComponent(id)}`;
 export const prCardId = (projectId: string, pr: Pick<PullRequest, 'repo' | 'number'>) => `pr:${projectId}:${prKey(pr.repo, pr.number)}`;
 export const projectKey = (projectId: string) => `project:${projectId}`;
 
-/** What the agent is on: an issue, or a pull request for conflicts, fixes and QA. */
-export const workLabel = (a: Agent) => `${a.task === 'issue' ? '#' : 'PR #'}${a.issue.number} ${a.issue.title}`;
+/** What the agent is on: a goal, an issue, or a pull request for conflicts, fixes and QA. */
+export const workLabel = (a: Agent) =>
+  a.task === 'lead' ? `🎯 ${a.lead?.title ?? a.issue.title}` : `${a.task === 'issue' ? '#' : 'PR #'}${a.issue.number} ${a.issue.title}`;
 
 const FINISHED = ['done', 'error', 'stopped'];
 
@@ -90,15 +91,18 @@ function collapsible(ctx: HomeContext, key: string, fallback: boolean, cls: stri
 }
 
 function projectSection(ctx: HomeContext, project: Project, cols: ReturnType<typeof columns>): HTMLElement {
-  const flying = inFlight(project.id, state.agentsIn(project.id));
+  // the goals have their own list: in progress for as long as they're open
+  const flying = inFlight(project.id, state.agentsIn(project.id)).filter((a) => a.task !== 'lead');
   const multi = project.repos.length > 1;
   const board = state.boards.get(project.id);
   const section = collapsible(ctx, projectKey(project.id), true, 'project',
     [
       h('span', { class: 'name' }, project.name),
-      h('span', { class: 'counts' }, `${flying.length} flying · ${cols.prs.length} PR${cols.prs.length === 1 ? '' : 's'}`),
+      h('span', { class: 'counts' }, `${cols.goals.length ? `${cols.goals.length} goal${cols.goals.length === 1 ? '' : 's'} · ` : ''}${flying.length} flying · ${cols.prs.length} PR${cols.prs.length === 1 ? '' : 's'}`),
     ],
     board?.error ? h('p', { class: 'error-text' }, `⚠ ${board.error}`) : null,
+    cols.goals.length ? h('h3', null, 'Goals') : null,
+    cols.goals.length ? h('div', { class: 'list' }, ...cols.goals.map(goalCard)) : null,
     h('h3', null, 'In flight'),
     flying.length ? h('div', { class: 'list' }, ...flying.map((a) => agentCard(a, multi))) : h('p', { class: 'empty' }, 'Nobody is working right now.'),
     h('h3', null, 'Ready to merge'),
@@ -113,6 +117,19 @@ function projectSection(ctx: HomeContext, project: Project, cols: ReturnType<typ
   );
   section.style.setProperty('--accent', project.color);
   return section;
+}
+
+function goalCard(lead: Agent): HTMLElement {
+  return h('a', { class: 'card agent', href: agentHref(lead.id), attrs: { 'data-key': `agent:${lead.id}` } },
+    h('div', { class: 'row' },
+      h('span', { class: 'dot', style: `background:${UNIFORM[lead.avatar.division]}` }),
+      h('strong', { class: 'grow' }, `${lead.name} · team station ${(lead.lead?.station ?? 0) + 1}`),
+      // between turns, a lead isn't "done": the goal's line below says what it waits for
+      lead.status === 'done' || lead.status === 'stopped' ? null : h('span', { class: `pill status ${lead.status}` }, `${statusIcon(lead)} ${lead.status}`),
+    ),
+    h('div', { class: 'title' }, workLabel(lead)),
+    h('div', { class: 'activity' }, goalState(lead)),
+  );
 }
 
 function agentCard(a: Agent, multi: boolean): HTMLElement {

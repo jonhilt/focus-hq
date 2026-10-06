@@ -453,7 +453,7 @@ export class World {
       ctx.fillText(fitText(ctx, p.name.toUpperCase(), 520), area.x + 80, y);
       ctx.fillStyle = LCARS.sky;
       ctx.font = `500 30px ${LCARS_FONT}`;
-      ctx.fillText(`📋 ${cols.todo.length}   🔨 ${cols.doing.length}   👀 ${cols.prs.length}`, area.x + 640, y);
+      ctx.fillText(`📋 ${cols.todo.length}   🎯 ${cols.goals.length}   🔨 ${cols.doing.length}   👀 ${cols.prs.length}`, area.x + 640, y);
       y += 66;
     }
     const info = state.info;

@@ -1,9 +1,12 @@
+import { STATUS_ICON } from './agentStatus';
 import { issueKey, waitingFor } from './dependencies';
 import type { Agent, Board, Issue, Project, PullRequest } from './types';
 
 export interface Columns {
   /** `waitsFor`: the open issues it depends on, empty when it can start. */
   todo: (Issue & { waitsFor: number[] })[];
+  /** The goals under way: each one's lead, by team station. In progress for as long as the goal is, at it right now or not. */
+  goals: Agent[];
   doing: Agent[];
   prs: (PullRequest & { agent?: Agent })[];
   /** Open PRs hidden by the project's "only my PRs" filter. */
@@ -26,11 +29,32 @@ export function columns(project: Project, board: Board | undefined, agents: Agen
     todo: (board?.issues ?? [])
       .filter((i) => project.repos.includes(i.repo) && !claimed(i))
       .map((i) => ({ ...i, waitsFor: waiting.get(issueKey(i.repo, i.number)) ?? [] })),
-    // the QA officer and the lead work at their own stations, not on the board's issues
+    goals: agents.filter((a) => a.task === 'lead' && a.lead).sort((a, b) => (a.lead?.station ?? 0) - (b.lead?.station ?? 0)),
+    // the QA officer and the leads work at their own stations, not on the board's issues
     doing: agents.filter((a) => a.status !== 'done' && a.task !== 'review' && a.task !== 'lead').sort((a, b) => a.startedAt - b.startedAt),
     prs: shown,
     hiddenPrs: all.length - shown.length,
   };
+}
+
+/** Where a goal is, in a few words: which slice, and whether its lead is at it, waiting on a PR, or waiting for you. */
+export function goalState(lead: Pick<Agent, 'status' | 'lead'>): string {
+  const work = lead.lead;
+  if (work?.closing) return '🏁 Ready to wrap up';
+  const slice = `Slice ${work?.slice ?? 1}`;
+  switch (lead.status) {
+    case 'waiting':
+      return `${slice} · ✋ needs approval`;
+    case 'error':
+      return `${slice} · ❗ hit a problem`;
+    case 'done':
+    case 'stopped': {
+      const open = work?.prs.filter((p) => !p.outcome).length ?? 0;
+      return `${slice} · ${open ? `👀 ${open} PR${open === 1 ? '' : 's'} open` : '💬 waiting for you'}`;
+    }
+    default:
+      return `${slice} · ${STATUS_ICON[lead.status]} ${lead.status}`;
+  }
 }
 
 /**

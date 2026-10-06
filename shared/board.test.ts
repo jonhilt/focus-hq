@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { carryMergeable, resolvingAlready } from './board';
-import type { Agent, PullRequest } from './types';
+import { carryMergeable, columns, goalState, resolvingAlready } from './board';
+import type { Agent, LeadWork, Project, PullRequest } from './types';
 
 const pr = (mergeable: PullRequest['mergeable'], over: Partial<PullRequest> = {}): PullRequest => ({
   repo: 'acme/shop',
@@ -56,5 +56,28 @@ describe('resolvingAlready', () => {
   it('is never a goal’s lead: they take the conflicts on whatever else they’re doing', () => {
     expect(resolvingAlready(agent('lead', 'working'))).toBe(false);
     expect(resolvingAlready(agent('lead', 'done'))).toBe(false);
+  });
+});
+
+describe('goals on the board', () => {
+  const work = (over: Partial<LeadWork> = {}): LeadWork => ({ station: 0, title: 'Saved items', repos: [], slice: 2, prs: [], ...over });
+  const lead = (id: string, status: Agent['status'], over: Partial<LeadWork> = {}) =>
+    ({ id, task: 'lead', status, projectId: 'p1', repo: 'acme/shop', issue: { number: 0, title: 'Saved items', url: '' }, startedAt: 0, lead: work(over) }) as Agent;
+  const project = { id: 'p1', repos: ['acme/shop'] } as Project;
+
+  it('are in progress for as long as the goal is, by team station, whether or not the lead is at it', () => {
+    const agents = [lead('b', 'done', { station: 3 }), lead('a', 'working', { station: 1 }), { ...lead('dev', 'working'), task: 'issue', lead: undefined } as Agent];
+    const cols = columns(project, undefined, agents, undefined);
+    expect(cols.goals.map((a) => a.id)).toEqual(['a', 'b']);
+    expect(cols.doing.map((a) => a.id)).toEqual(['dev']);
+  });
+
+  it('say which slice they’re on and what they’re waiting for', () => {
+    expect(goalState(lead('l', 'working'))).toBe('Slice 2 · ⌨️ working');
+    expect(goalState(lead('l', 'waiting'))).toBe('Slice 2 · ✋ needs approval');
+    expect(goalState(lead('l', 'done'))).toBe('Slice 2 · 💬 waiting for you');
+    const prs = [{ repo: 'acme/shop', number: 4, url: '' }, { repo: 'acme/api', number: 9, url: '' }, { repo: 'acme/api', number: 3, url: '', outcome: 'merged' as const }];
+    expect(goalState(lead('l', 'done', { prs }))).toBe('Slice 2 · 👀 2 PRs open');
+    expect(goalState(lead('l', 'working', { closing: { reason: 'All shipped', at: 0 } }))).toBe('🏁 Ready to wrap up');
   });
 });

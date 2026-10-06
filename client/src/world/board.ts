@@ -1,4 +1,4 @@
-import { columns } from '../../../shared/board';
+import { columns, goalState } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import { waitsLabel } from '../../../shared/dependencies';
 import * as THREE from 'three';
@@ -55,7 +55,7 @@ export class KanbanBoard {
     const headH = 46;
     const titles: [string, string, number][] = [
       ['📋 To do', LCARS.orange, cols.todo.length],
-      ['🔨 In progress', LCARS.sky, cols.doing.length],
+      ['🔨 In progress', LCARS.sky, cols.goals.length + cols.doing.length],
       [cols.hiddenPrs ? '👀 My PRs' : '👀 Ready to merge', LCARS.lilac, cols.prs.length],
     ];
     titles.forEach(([title, color, count], i) => {
@@ -126,11 +126,23 @@ export class KanbanBoard {
       ctx.fillText('NOTHING TO DO – ADD AN ISSUE!', colX(0) + colW / 2, top + 44);
     }
 
-    cols.doing.slice(0, fit(cols.doing.length)).forEach((agent, i) => {
-      const meta = `${agent.name} · ${agent.status === 'waiting' ? '✋ needs approval' : agent.status}${multiRepo ? ` · ${shortRepo(agent.repo)}` : ''}`;
-      note(1, i, LCARS_STATUS[agent.status], `#${agent.issue.number} ${agent.issue.title}`, meta, UNIFORM[agent.avatar.division]);
-    });
-    if (cols.doing.length > maxNotes) more(1, cols.doing.length - fit(cols.doing.length));
+    // the goals first: each is in progress for as long as it's open, whether or not its lead is at it right now
+    const doing = [
+      ...cols.goals.map((lead) => ({
+        tone: lead.lead?.closing ? LCARS.gold : lead.status === 'waiting' || lead.status === 'error' ? LCARS_STATUS[lead.status] : LCARS.periwinkle,
+        title: `🎯 ${lead.lead?.title ?? lead.issue.title}`,
+        meta: `${lead.name} · ${goalState(lead)}`,
+        dot: UNIFORM[lead.avatar.division],
+      })),
+      ...cols.doing.map((agent) => ({
+        tone: LCARS_STATUS[agent.status],
+        title: `#${agent.issue.number} ${agent.issue.title}`,
+        meta: `${agent.name} · ${agent.status === 'waiting' ? '✋ needs approval' : agent.status}${multiRepo ? ` · ${shortRepo(agent.repo)}` : ''}`,
+        dot: UNIFORM[agent.avatar.division],
+      })),
+    ];
+    doing.slice(0, fit(doing.length)).forEach((n, i) => note(1, i, n.tone, n.title, n.meta, n.dot));
+    if (doing.length > maxNotes) more(1, doing.length - fit(doing.length));
 
     cols.prs.slice(0, fit(cols.prs.length)).forEach((pr, i) => {
       const checks = { passing: '✓ checks pass', failing: '✗ checks failing', pending: '⏳ checks running', none: 'no checks' }[pr.checks];

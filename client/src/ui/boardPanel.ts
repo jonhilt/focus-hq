@@ -1,5 +1,5 @@
 import { statusIcon, statusLine } from '../../../shared/agentStatus';
-import { columns, resolvingAlready } from '../../../shared/board';
+import { columns, goalState, resolvingAlready } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import { assignWarning, waitsLabel } from '../../../shared/dependencies';
 import { unpassedReason } from '../../../shared/mergeGate';
@@ -85,8 +85,19 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
       );
     }
 
-    const doing = h('div', { class: 'col' }, h('h3', null, h('span', null, '🔨 In progress'), h('span', null, `${busyAgents}/${p.maxAgents}`)));
-    if (!cols.doing.length) doing.append(h('div', { class: 'empty' }, 'Nobody is working on anything.'));
+    const doing = h('div', { class: 'col' },
+      h('h3', null, h('span', null, '🔨 In progress'), h('span', { title: 'Goals under way · desk agents at work (of the room’s limit)' }, `${cols.goals.length ? `🎯 ${cols.goals.length} · ` : ''}${busyAgents}/${p.maxAgents}`)),
+    );
+    if (!cols.doing.length && !cols.goals.length) doing.append(h('div', { class: 'empty' }, 'Nobody is working on anything.'));
+    // the goals first: each is in progress for as long as it's open, whether or not its lead is at it right now
+    for (const lead of cols.goals) {
+      const note = h('div', { class: `note doing goal ${lead.status}`, title: 'Open the goal' },
+        h('div', { class: 't' }, h('span', { class: 'dot', style: `background:${UNIFORM[lead.avatar.division]};margin-right:6px;vertical-align:-2px` }), `🎯 ${lead.lead?.title ?? lead.issue.title}`),
+        h('div', { class: 'm' }, h('span', { class: 'chip' }, `team station ${(lead.lead?.station ?? 0) + 1}`), h('span', { class: 'chip' }, lead.name), h('span', null, goalState(lead))),
+      );
+      note.onclick = () => ui.openAgent(lead.id);
+      doing.append(note);
+    }
     for (const a of cols.doing) {
       const note = h('div', { class: `note doing ${a.status}`, title: 'Open their laptop' },
         h('div', { class: 't' }, h('span', { class: 'dot', style: `background:${UNIFORM[a.avatar.division]};margin-right:6px;vertical-align:-2px` }), `${a.name} · #${a.issue.number} ${a.issue.title}`),

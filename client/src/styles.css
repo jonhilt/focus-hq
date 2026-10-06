@@ -345,6 +345,7 @@ textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
 }
 .note.doing { --tone: var(--lcars-sky); cursor: pointer; }
 .note.doing:hover { background: color-mix(in srgb, var(--tone) 22%, var(--surface)); }
+.note.doing.goal { --tone: var(--lcars-periwinkle); }
 .note.doing.waiting { --tone: var(--lcars-gold); }
 .note.doing.error { --tone: var(--lcars-red); }
 .note.pr { --tone: var(--lcars-green); }
