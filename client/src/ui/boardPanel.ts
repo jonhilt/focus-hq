@@ -1,5 +1,5 @@
 import { statusIcon, statusLine } from '../../../shared/agentStatus';
-import { columns } from '../../../shared/board';
+import { columns, resolvingAlready } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import { assignWarning, waitsLabel } from '../../../shared/dependencies';
 import { unpassedReason } from '../../../shared/mergeGate';
@@ -114,10 +114,10 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
           ui.hud.toast('success', `Merged #${pr.number} 🎉`);
         }, ui.error);
       };
-      const resolve = pr.mergeable === 'CONFLICTING' ? h('button', { class: 'btn small primary', title: 'Hand the merge conflicts to an agent' }, '🔧 Resolve conflicts') : null;
+      const resolve = pr.mergeable === 'CONFLICTING' ? h('button', { class: 'btn small primary', title: pr.agent?.task === 'lead' ? `Hand the merge conflicts to ${pr.agent.name}, the goal's lead` : 'Hand the merge conflicts to an agent' }, '🔧 Resolve conflicts') : null;
       if (resolve) {
-        // the PR's agent is already at it (or queued for it); a second click would only repeat the request
-        resolve.disabled = !!pr.agent && !['done', 'error', 'stopped'].includes(pr.agent.status);
+        // the PR's developer is already at it (or queued for it); a second click would only repeat the request
+        resolve.disabled = resolvingAlready(pr.agent);
         resolve.onclick = () =>
           void busy(resolve, async () => {
             const agent = await api.resolveConflicts(projectId, pr.repo, pr.number);

@@ -1,5 +1,5 @@
 import { statusIcon, statusLine } from '../../../shared/agentStatus';
-import { columns } from '../../../shared/board';
+import { columns, resolvingAlready } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import { assignWarning, waitsLabel } from '../../../shared/dependencies';
 import { prKey, qaBadge } from '../../../shared/qa';
@@ -137,11 +137,11 @@ function prCard(ctx: HomeContext, project: Project, pr: PullRequest & { agent?: 
     disabled: conflicting || pr.isDraft,
     confirm: `Merge ${pr.repo}#${pr.number} "${pr.title}"?`,
   });
-  // the PR's agent is already at it (or queued for it); a second tap would only repeat the request
+  // the PR's developer is already at it (or queued for it); a second tap would only repeat the request
   const resolve = conflicting
     ? actions.button(`${key}:resolve`, '🔧 Resolve conflicts', () => api.resolveConflicts(project.id, pr.repo, pr.number), {
         class: 'primary',
-        disabled: !!pr.agent && !FINISHED.includes(pr.agent.status),
+        disabled: resolvingAlready(pr.agent),
       })
     : null;
   const sendToQa = actions.button(`${key}:qa`, qa.state === 'none' ? '🔍 Send to QA' : '↻ Re-test', () => api.sendToQa(project.id, pr.repo, pr.number), {

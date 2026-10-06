@@ -34,6 +34,14 @@ export function columns(project: Project, board: Board | undefined, agents: Agen
 }
 
 /**
+ * Whether a conflicting PR's agent already has its conflicts in hand: a developer who's at work on it (or queued to)
+ * would only hear the request twice. A goal's lead always takes it, with whatever else they're doing.
+ */
+export function resolvingAlready(agent: Pick<Agent, 'task' | 'status'> | undefined): boolean {
+  return !!agent && agent.task !== 'lead' && !['done', 'error', 'stopped'].includes(agent.status);
+}
+
+/**
  * GitHub computes mergeability lazily and answers UNKNOWN until it's done, so a freshly fetched PR keeps
  * the last definite answer from `previous` while its head commit and base branch haven't moved.
  */

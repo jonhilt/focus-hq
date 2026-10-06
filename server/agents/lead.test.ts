@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadWork } from '../../shared/types';
-import { afterLanding, afterVerdict, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, openPr, pickStation, qaVerdictNote, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
+import { afterLanding, afterVerdict, conflictsNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, openPr, pickStation, qaVerdictNote, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -329,5 +329,15 @@ describe('the lead’s context', () => {
     expect(keep).toContain('What done looks like: Works anywhere');
     expect(keep).toContain('- Store is fine');
     expect(COMPACT_INSTRUCTIONS).toMatch(/keep the task, what you have done and decided and why, and what is left/);
+  });
+});
+
+describe('a slice’s merge conflicts', () => {
+  it('go back to the lead, to merge the base into their own checkout and ship again', () => {
+    const note = conflictsNote('acme/web', 12, 'main', 'web');
+    expect(note).toMatch(/^acme\/web#12 has merge conflicts with `main`\. Resolve them in \.\/web, which is on its branch:/);
+    expect(note).toContain('`git -C web fetch origin`, then `git -C web merge origin/main`');
+    expect(note).toContain('ship again with mcp__office__ship: that updates the pull request');
+    expect(note).toMatch(/Merge rather than rebase/);
   });
 });

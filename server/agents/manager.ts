@@ -1,23 +1,56 @@
+import { Data, Effect, Exit, Fiber, FiberMap, type Layer, ManagedRuntime, PartitionedSemaphore, Scope } from 'effect';
 import { helperFor, leadFor, leadId, plannerFor, qaFor, qaOfficerFor, randomAvatar } from '../../shared/crew';
 import { autoQaFor, autoSendBackFor, prKey, sameCommit } from '../../shared/qa';
 import { afterTriage, triageLabel, type TriageResult, type TriageStep, whenStuck } from '../../shared/triage';
 import type { Agent, AgentStatus, BrowserFrame, Effort, FailedCheck, FixFor, PermissionRequest, PullRequest, QaReport, QaReview, QaScreenshot, QueuedGoal, TermLine } from '../../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, LEAD_DESK, QA_DESK, TEAM_STATIONS } from '../../shared/types';
-import type { GitHubProvider, PullRequestDetail } from '../github/provider';
+import type { PullRequestDetail } from '../github/provider';
+import { GitHub, type GitHubError } from '../github/service';
 import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
 import { afterCloudRun, carryOnInNewSession, fallBackToLocal } from './cloud';
-import { afterLanding, afterVerdict, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, closeCheck, fileGoal, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reviewsToStart, shipped, shipPlan, sliceBranch, sliceLanded, workspaceNote } from './lead';
+import { afterLanding, afterVerdict, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, closeCheck, conflictsNote, fileGoal, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reviewsToStart, shipped, shipPlan, sliceBranch, sliceLanded, workspaceNote } from './lead';
 import { repoFolders } from './planner';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
 import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
 import type { QaLoopEvent } from './qaLoop';
 import { qaNextStep } from './qaLoop';
-import type { Triager } from './triage';
-import { type AgentRunner, type AgentSession, type RunHooks, type RunRequest, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
+import { deskless, whoStarts } from './schedule';
+import { type GitFailed, Sessions, Triage, Workspace } from './services';
 import { applyTaskTool } from './tasks';
+import { type AgentSession, type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN } from './types';
 import { triageWorkspaceId } from './worktrees';
+
+/** What the manager's work needs: GitHub, the agents' checkouts, Claude Code sessions and the operations officer. */
+export type ManagerServices = GitHub | Workspace | Sessions | Triage;
+
+/** The repository has no commits yet, so there's no branch to work from. */
+export class EmptyRepository extends Data.TaggedError('EmptyRepository')<{ repo: string }> {
+  override get message() {
+    return 'This repository has no commits yet – add a README first so there is a branch to work from.';
+  }
+}
+
+/** None of a goal's repos has a commit to check out. */
+export class NothingToCheckOut extends Data.TaggedError('NothingToCheckOut') {
+  override get message() {
+    return 'None of the project’s repositories has any commits yet – add a README first';
+  }
+}
+
+/** A fixer was seated on a PR whose QA report has gone since. */
+export class ReportGone extends Data.TaggedError('ReportGone')<{ number: number }> {
+  override get message() {
+    return `QA's report on PR #${this.number} is gone, so there's nothing to fix`;
+  }
+}
+
+/** The office won't do what was asked, and says why (a taken station, a busy agent, a goal that isn't one). */
+export class Refused extends Data.TaggedError('Refused')<{ message: string }> {}
+
+/** What can stop an agent's work, each with a message for their terminal. */
+type WorkError = GitHubError | GitFailed | EmptyRepository | NothingToCheckOut | ReportGone | Refused;
 
 interface Runtime {
   session?: AgentSession;
@@ -41,24 +74,36 @@ const FINISHED: AgentStatus[] = ['done', 'stopped', 'error'];
 /** Each room has one QA officer; their agent record is reused from review to review. */
 const qaAgentId = (projectId: string) => `qa_${projectId}`;
 
-/** Hires agents, seats them at desks, runs them, and turns their work into pull requests. */
+/**
+ * Hires agents, seats them at desks, runs them, and turns their work into pull requests.
+ *
+ * Plain methods outside, Effect inside: each agent's work runs as its one fiber (`runs`), so they never run twice at
+ * once and sending them home interrupts it (and with it their Claude Code session); timers are `Effect.sleep`s; each
+ * room's operations officer looks at one stuck PR at a time (`triageLock`).
+ */
 export class AgentManager {
   private runtimes = new Map<string, Runtime>();
   private leaving = new Set<string>();
-  /** Each room's operations officer looks at one stuck PR at a time: the triages in hand, chained per project. */
-  private triages = new Map<string, Promise<void>>();
-  /** Stops a triage under way, by prKey, when the PR goes or the manager re-tests it. */
-  private triageAborts = new Map<string, AbortController>();
+  private readonly runtime: ManagedRuntime.ManagedRuntime<ManagerServices, never>;
+  private readonly scope = Scope.makeUnsafe();
+  /** Each agent's work in hand, by agent id: their launch, a turn and what follows it, or a compaction. */
+  private readonly runs: FiberMap.FiberMap<string, void, never>;
+  /** The operations officer's look at a stuck PR, by prKey: stopped when the PR goes or the manager re-tests it. */
+  private readonly triageRuns: FiberMap.FiberMap<string, TriageResult, never>;
+  /** One triage at a time per room. */
+  private readonly triageLock: PartitionedSemaphore.PartitionedSemaphore<string>;
 
   constructor(
     private readonly store: Store,
     private readonly hub: Hub,
-    private readonly github: GitHubProvider,
-    private readonly runner: AgentRunner,
-    private readonly workspace: WorkspaceOps,
-    private readonly triager: Triager,
+    services: Layer.Layer<ManagerServices>,
     private readonly boardChanged: (projectId: string) => void,
-  ) {}
+  ) {
+    this.runtime = ManagedRuntime.make(services);
+    this.runs = this.runtime.runSync(FiberMap.make<string, void, never>().pipe(Scope.provide(this.scope)));
+    this.triageRuns = this.runtime.runSync(FiberMap.make<string, TriageResult, never>().pipe(Scope.provide(this.scope)));
+    this.triageLock = this.runtime.runSync(PartitionedSemaphore.make<string>({ permits: 1 }));
+  }
 
   private rt(id: string): Runtime {
     let rt = this.runtimes.get(id);
@@ -84,11 +129,27 @@ export class AgentManager {
     this.hub.send({ type: 'lines', id: agent.id, lines: stamped });
   }
 
-  /** Agents running, everywhere or (QA officers and leads aside, who don't take one of a room's slots) in one project. */
-  private activeCount(projectId?: string): number {
-    return [...this.store.agents.values()].filter(
-      (a) => ACTIVE_STATUSES.includes(a.status) && (!projectId || (a.projectId === projectId && !deskless(a))),
-    ).length;
+  /** Something to do in the background, after the current step: a timer, a follow-up, a check. */
+  private background(effect: Effect.Effect<void, never, ManagerServices>): void {
+    this.runtime.runFork(effect);
+  }
+
+  /**
+   * Runs `work` as the agent's one fiber. When they're already at work, nothing new starts. When it ends, whoever is
+   * queued gets a look in (the agent themselves included, once their fiber has gone).
+   */
+  private runFor(id: string, work: Effect.Effect<void, never, ManagerServices>): Fiber.Fiber<void> {
+    const after = Effect.sync(() => this.background(Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => this.schedule())))));
+    return this.runtime.runSync(FiberMap.run(this.runs, id, work.pipe(Effect.ensuring(after)), { onlyIfMissing: true }));
+  }
+
+  /** Whatever went wrong in an agent's work: in their terminal, and in a toast. A bug fails them too, rather than leaving them stuck. */
+  private orFail(agent: Agent) {
+    return (work: Effect.Effect<void, WorkError, ManagerServices>): Effect.Effect<void, never, ManagerServices> =>
+      work.pipe(
+        Effect.catch((err) => Effect.sync(() => this.fail(agent, err))),
+        Effect.catchDefect((defect) => Effect.sync(() => this.fail(agent, errorMessage(defect)))),
+      );
   }
 
   // ---------------------------------------------------------------- hiring
@@ -116,10 +177,18 @@ export class AgentManager {
   }
 
   /**
-   * Gets a pull request's merge conflicts resolved. The agent who opened it picks it back up if they're still in
-   * the office; otherwise a new agent sits down on the PR's branch.
+   * Gets a pull request's merge conflicts resolved. A goal's slice goes back to its lead, whose checkout holds the PR's
+   * branch; any other PR to the agent who opened it if they're still in the office; otherwise a new agent sits down on
+   * the PR's branch.
    */
   resolveConflicts(projectId: string, pr: PullRequest): Agent {
+    const lead = this.leadWith(pr.repo, pr.number);
+    if (lead?.lead) {
+      const folder = lead.lead.repos.find((r) => r.repo === pr.repo)?.folder ?? pr.repo.split('/')[1];
+      this.message(lead.id, conflictsNote(pr.repo, pr.number, pr.baseBranch, folder), 'Office');
+      this.hub.toast('info', `🔧 ${pr.repo.split('/')[1]}#${pr.number} conflicts with ${pr.baseBranch} – back to ${lead.name}`, lead.id);
+      return lead;
+    }
     const owner = this.prOwner(pr.repo, pr.number);
     if (owner) {
       this.update(owner, { baseBranch: pr.baseBranch });
@@ -155,11 +224,11 @@ export class AgentManager {
 
   private seat(projectId: string, repo: string, work: Pick<Agent, 'id' | 'task' | 'issue' | 'branch' | 'baseBranch' | 'pr' | 'effort' | 'cloud'>): Agent {
     const project = this.store.project(projectId);
-    if (!project.repos.includes(repo)) throw new Error(`${repo} is not connected to ${project.name}`);
+    if (!project.repos.includes(repo)) throw new Refused({ message: `${repo} is not connected to ${project.name}` });
     const existing = [...this.store.agents.values()].find(
       (a) => a.repo === repo && a.issue.number === work.issue.number && !FINISHED.includes(a.status),
     );
-    if (existing) throw new Error(`${existing.name} is already working on #${work.issue.number}`);
+    if (existing) throw new Refused({ message: `${existing.name} is already working on #${work.issue.number}` });
 
     const desk = this.freeDesk(projectId);
     const name = pickName(new Set([...this.store.agents.values()].map((a) => a.name)));
@@ -191,91 +260,81 @@ export class AgentManager {
     const leaving = seated
       .filter((a) => FINISHED.includes(a.status))
       .sort((a, b) => rank(a) - rank(b) || (a.finishedAt ?? 0) - (b.finishedAt ?? 0))[0];
-    if (!leaving) throw new Error('Every station on this holodeck is taken by a working agent');
-    void this.dismiss(leaving.id);
+    if (!leaving) throw new Refused({ message: 'Every station on this holodeck is taken by a working agent' });
+    this.background(this.goHome(leaving.id));
     return leaving.desk;
   }
 
   /**
-   * Starts queued agents while there is room under the global and per-project limits. QA goes first, and doesn't count
-   * against a room's limit: finished work gets reviewed before new work starts.
+   * Starts queued agents while there is room under the global and per-project limits (`whoStarts`). QA goes first, and
+   * doesn't count against a room's limit: finished work gets reviewed before new work starts.
    */
   schedule(): void {
-    const queued = [...this.store.agents.values()]
-      .filter((a) => a.status === 'queued')
-      .sort((a, b) => Number(b.task === 'review') - Number(a.task === 'review') || a.startedAt - b.startedAt);
-    let running = this.activeCount();
-    for (const agent of queued) {
-      if (running >= this.store.settings.maxConcurrent) {
-        this.update(agent, { activity: `Waiting for a free slot (${running} agents busy)` });
-        continue;
-      }
-      const project = this.store.projects.find((p) => p.id === agent.projectId);
-      if (!project) continue;
-      if (!deskless(agent) && this.activeCount(project.id) >= project.maxAgents) {
-        this.update(agent, { activity: `Waiting – ${project.name} allows ${project.maxAgents} at once` });
-        continue;
-      }
-      running++;
-      void this.launch(agent);
+    const { start, wait } = whoStarts([...this.store.agents.values()], this.store.projects, this.store.settings.maxConcurrent);
+    for (const { agent, why } of wait) this.update(agent, { activity: why });
+    for (const agent of start) {
+      // still finishing their last piece of work: they start once it's over (runFor looks again then)
+      if (FiberMap.hasUnsafe(this.runs, agent.id)) continue;
+      this.runFor(agent.id, this.launch(agent));
     }
   }
 
-  private async launch(agent: Agent): Promise<void> {
+  private launch(agent: Agent): Effect.Effect<void, never, ManagerServices> {
     const rt = this.rt(agent.id);
     if (rt.resume) {
       rt.resume = false;
-      // no longer queued from here on, before anything is awaited: a schedule() meanwhile mustn't launch them again
       this.update(agent, { status: 'setting-up', activity: 'Picking up where they left off' });
-      return this.runSession(agent, rt.inbox.splice(0).join('\n\n'), agent.sessionId).catch((err) => this.fail(agent, err));
+      return this.runSession(agent, rt.inbox.splice(0).join('\n\n'), agent.sessionId).pipe(this.orFail(agent));
     }
     this.update(agent, { status: 'setting-up', activity: agent.task === 'review' ? 'Reading the pull request' : 'Reading the issue', error: undefined });
-    try {
-      if (agent.task === 'review') return await this.launchReview(agent);
-      if (agent.task === 'lead') return await this.launchLead(agent);
-      const info = await this.github.repoInfo(agent.repo);
-      if (info.isEmpty) throw new Error('This repository has no commits yet – add a README first so there is a branch to work from.');
+    return Effect.gen({ self: this }, function* () {
+      if (agent.task === 'review') return yield* this.launchReview(agent);
+      if (agent.task === 'lead') return yield* this.launchLead(agent);
+      const github = yield* GitHub;
+      const workspace = yield* Workspace;
+      const info = yield* github.repoInfo(agent.repo);
+      if (info.isEmpty) return yield* new EmptyRepository({ repo: agent.repo });
       if (agent.task === 'issue') this.update(agent, { baseBranch: info.defaultBranch });
-      const prompt = await this.taskPrompt(agent);
+      const prompt = yield* this.taskPrompt(agent);
       // an issue starts a new branch from the base; conflicts and QA's findings are fixed on the PR's own branch
       const startPoint = agent.task === 'issue' ? agent.baseBranch : agent.branch;
       this.print(agent, [{ kind: 'system', text: `✻ Setting up a worktree for ${agent.repo} on ${agent.branch}` }]);
       this.update(agent, { activity: 'Cloning the repository' });
-      await this.workspace.create(agent.repo, agent.id, agent.branch, startPoint, (id) => this.store.agents.has(id));
+      yield* workspace.create(agent.repo, agent.id, agent.branch, startPoint, (id) => this.store.agents.has(id));
       if (agent.cloud) {
         // a cloud session clones its branch from GitHub, so a new one has to be there first
         this.update(agent, { activity: 'Publishing the branch for the cloud session' });
-        await this.workspace.publish(this.workspace.dir(agent.id), agent.branch);
+        yield* workspace.publish(workspace.dir(agent.id), agent.branch);
       }
       if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
       rt.notes = rt.inbox.splice(0);
-      await this.runSession(agent, withNotes(prompt, rt.notes));
-    } catch (err) {
-      this.fail(agent, err);
-    }
+      yield* this.runSession(agent, withNotes(prompt, rt.notes));
+    }).pipe(this.orFail(agent));
   }
 
   /** The agent's task, told for where they work now. */
-  private async taskPrompt(agent: Agent): Promise<string> {
-    switch (agent.task) {
-      case 'review':
-        throw new Error('The QA officer gets qaPrompt (qa.ts)');
-      case 'lead':
-        throw new Error('The project lead takes the captain’s messages, not a task');
-      case 'issue': {
-        const issue = await this.github.getIssue(agent.repo, agent.issue.number);
-        this.update(agent, { issue: { number: issue.number, title: issue.title, url: issue.url } });
-        return issuePrompt(agent, issue);
+  private taskPrompt(agent: Agent): Effect.Effect<string, GitHubError | ReportGone | Refused, GitHub> {
+    return Effect.gen({ self: this }, function* () {
+      switch (agent.task) {
+        case 'review':
+          return yield* new Refused({ message: 'The QA officer gets qaPrompt (qa.ts)' });
+        case 'lead':
+          return yield* new Refused({ message: 'The project lead takes the captain’s messages, not a task' });
+        case 'issue': {
+          const issue = yield* (yield* GitHub).getIssue(agent.repo, agent.issue.number);
+          this.update(agent, { issue: { number: issue.number, title: issue.title, url: issue.url } });
+          return issuePrompt(agent, issue);
+        }
+        case 'conflicts':
+          return conflictsPrompt(agent);
+        case 'fix': {
+          const review = this.store.reviews.get(prKey(agent.repo, agent.issue.number));
+          if (!review?.report) return yield* new ReportGone({ number: agent.issue.number });
+          const fixes = review.followUp?.kind === 'fixing' ? review.followUp.fixes : { kind: 'qa' as const };
+          return this.fixPromptFor(agent, review, review.report, fixes);
+        }
       }
-      case 'conflicts':
-        return conflictsPrompt(agent);
-      case 'fix': {
-        const review = this.store.reviews.get(prKey(agent.repo, agent.issue.number));
-        if (!review?.report) throw new Error(`QA's report on PR #${agent.issue.number} is gone, so there's nothing to fix`);
-        const fixes = review.followUp?.kind === 'fixing' ? review.followUp.fixes : { kind: 'qa' as const };
-        return this.fixPromptFor(agent, review, review.report, fixes);
-      }
-    }
+    });
   }
 
   private hooks(agent: Agent): RunHooks {
@@ -313,7 +372,10 @@ export class AgentManager {
         if (helpers === before) return;
         this.update(agent, { helpers });
         if (event.kind === 'started') this.print(agent, [{ kind: 'system', text: `✻ ${helperFor(event.id).name} joins ${agent.name}'s team station: ${event.description}` }]);
-        if (event.kind === 'ended') setTimeout(() => this.update(agent, { helpers: (agent.helpers ?? []).filter((h) => h.id !== event.id) }), HELPER_LINGER_MS);
+        // a helper that's done lingers a moment, so you see how it got on
+        if (event.kind === 'ended') {
+          this.background(Effect.sleep(HELPER_LINGER_MS).pipe(Effect.andThen(Effect.sync(() => this.update(agent, { helpers: (agent.helpers ?? []).filter((h) => h.id !== event.id) })))));
+        }
       },
       cost: (usd) => this.update(agent, { costUsd: usd }),
       permission: (tool, summary, signal) =>
@@ -336,18 +398,20 @@ export class AgentManager {
   }
 
   /** The agent's instructions. The QA officer's may need GitHub, and that can fail. */
-  private async instructions(agent: Agent): Promise<string> {
+  private instructions(agent: Agent): Effect.Effect<string, GitHubError, GitHub> {
     if (agent.task === 'review') return this.qaSystem(agent);
-    if (agent.task === 'lead' && agent.lead) return leadSystemAppend(agent, this.store.project(agent.projectId).name, agent.lead.station);
-    return systemAppend(agent);
+    if (agent.task === 'lead' && agent.lead) return Effect.succeed(leadSystemAppend(agent, this.store.project(agent.projectId).name, agent.lead.station));
+    return Effect.succeed(systemAppend(agent));
   }
 
   /** One turn of the agent's session: the same tools and instructions on every turn, so a resumed session stays itself. */
   private runRequest(agent: Agent, prompt: string, instructions: string, resumeSessionId?: string): RunRequest {
+    // the lead's tools answer Claude Code as Promises: the SDK's tool boundary
+    const tool = <A>(effect: Effect.Effect<A, WorkError, ManagerServices>) => this.runtime.runPromise(effect);
     return {
       agentId: agent.id,
       agentName: agent.name,
-      cwd: this.workspace.dir(agent.id),
+      cwd: this.runtime.runSync(Workspace.use((w) => Effect.succeed(w.dir(agent.id)))),
       prompt,
       systemAppend: instructions,
       resumeSessionId,
@@ -356,139 +420,169 @@ export class AgentManager {
       outputSchema: agent.task === 'review' ? QA_SCHEMA : undefined,
       cloud: agent.cloud ? { branch: agent.branch } : undefined,
       tools: agent.task === 'lead'
-        ? { ship: (input) => this.shipLead(agent, input), note: (input) => this.noteGoal(agent, input), proposeClose: (input) => this.proposeClose(agent, input.reason) }
+        ? { ship: (input) => tool(this.shipLead(agent, input)), note: (input) => tool(this.noteGoal(agent, input)), proposeClose: (input) => tool(this.proposeClose(agent, input.reason)) }
         : undefined,
     };
   }
 
   /**
-   * Compacts the agent's conversation with `/compact` and the office's instructions for what to keep. Never fails the
-   * agent: a compaction that doesn't happen leaves the conversation as it was. Returns whether it happened.
+   * One turn of the agent's session, start to finish. Messages waiting for them go in as it starts (`withInbox`). The
+   * turn is held in a scope: interrupting it stops Claude.
    */
-  private async compact(agent: Agent, keep: string): Promise<boolean> {
-    if (!agent.sessionId || agent.cloud) return false;
+  private turn(agent: Agent, req: RunRequest, withInbox: boolean): Effect.Effect<RunOutcome, never, Sessions> {
     const rt = this.rt(agent.id);
-    const wasBusy = rt.busy;
-    rt.busy = true;
-    this.update(agent, { activity: 'Compacting the conversation' });
-    this.print(agent, [{ kind: 'system', text: '✻ The office compacts the conversation, keeping what the goal needs' }]);
-    try {
-      const session = this.runner.start(this.runRequest(agent, `/compact ${keep}`, await this.instructions(agent), agent.sessionId), this.hooks(agent));
-      rt.session = session;
-      const outcome = await session.done;
+    return Effect.scoped(
+      Effect.gen({ self: this }, function* () {
+        const session = yield* (yield* Sessions).start(req, this.hooks(agent));
+        rt.session = session;
+        if (withInbox) for (const message of rt.inbox.splice(0)) session.send(message);
+        return yield* Effect.promise(() => session.done);
+      }),
+    ).pipe(Effect.ensuring(Effect.sync(() => (rt.session = undefined))));
+  }
+
+  /**
+   * Compacts the agent's conversation with `/compact` and the office's instructions for what to keep. Never fails the
+   * agent: a compaction that doesn't happen leaves the conversation as it was. Succeeds with whether it happened.
+   */
+  private compact(agent: Agent, keep: string): Effect.Effect<boolean, never, ManagerServices> {
+    return Effect.gen({ self: this }, function* () {
+      if (!agent.sessionId || agent.cloud) return false;
+      const rt = this.rt(agent.id);
+      const wasBusy = rt.busy;
+      rt.busy = true;
+      this.update(agent, { activity: 'Compacting the conversation' });
+      this.print(agent, [{ kind: 'system', text: '✻ The office compacts the conversation, keeping what the goal needs' }]);
+      const outcome = yield* this.instructions(agent).pipe(
+        Effect.flatMap((instructions) => this.turn(agent, this.runRequest(agent, `/compact ${keep}`, instructions, agent.sessionId), false)),
+        Effect.catch((err) => Effect.succeed<RunOutcome>({ ok: false, summary: '', error: err.message })),
+        Effect.ensuring(Effect.sync(() => (rt.busy = wasBusy))),
+      );
       if (!outcome.ok) this.print(agent, [{ kind: 'error', text: `✘ Couldn't compact the conversation: ${outcome.error ?? 'no reason given'}. Carrying on as it is.` }]);
       return outcome.ok;
-    } catch (err) {
-      this.print(agent, [{ kind: 'error', text: `✘ Couldn't compact the conversation: ${errorMessage(err)}. Carrying on as it is.` }]);
-      return false;
-    } finally {
-      rt.session = undefined;
-      rt.busy = wasBusy;
-    }
+    });
   }
 
   /** The captain's Compact now: between the agent's turns, keeping what their work needs. */
-  async compactNow(id: string): Promise<Agent> {
+  compactNow(id: string): Promise<Agent> {
     const agent = this.store.agent(id);
-    if (agent.task === 'review') throw new Error('QA starts each review afresh, so there’s nothing to compact');
-    if (!agent.sessionId || agent.cloud) throw new Error(`${agent.name} has no conversation here to compact`);
-    if (!FINISHED.includes(agent.status) || this.rt(id).busy) throw new Error(`${agent.name} is working: compact once their turn ends`);
+    if (agent.task === 'review') throw new Refused({ message: 'QA starts each review afresh, so there’s nothing to compact' });
+    if (!agent.sessionId || agent.cloud) throw new Refused({ message: `${agent.name} has no conversation here to compact` });
+    if (!FINISHED.includes(agent.status) || FiberMap.hasUnsafe(this.runs, id)) throw new Refused({ message: `${agent.name} is working: compact once their turn ends` });
     const { status, activity } = agent;
     this.update(agent, { status: 'working' });
-    const ok = await this.compact(agent, agent.lead ? compactInstructions(agent.lead.title, agent.lead.note) : COMPACT_INSTRUCTIONS);
-    this.update(agent, { status, activity: ok ? 'Conversation compacted' : activity });
-    return agent;
+    const keep = agent.lead ? compactInstructions(agent.lead.title, agent.lead.note) : COMPACT_INSTRUCTIONS;
+    const work = this.compact(agent, keep).pipe(Effect.flatMap((ok) => Effect.sync(() => this.update(agent, { status, activity: ok ? 'Conversation compacted' : activity }))));
+    return this.runtime.runPromise(Fiber.join(this.runFor(id, work))).then(() => agent);
   }
 
-  private async runSession(agent: Agent, prompt: string, resumeSessionId?: string): Promise<void> {
-    const rt = this.rt(agent.id);
-    const review = agent.task === 'review';
-    const lead = agent.task === 'lead' ? agent.lead : undefined;
-    // the lead's last slice has landed: their repos move to fresh code before they hear anything else
-    if (lead && sliceLanded(lead.prs)) prompt = `${await this.nextSlice(agent, lead)}\n\n${prompt}`;
-    // before marking them busy: the QA officer's instructions may need GitHub, and that can fail
-    const instructions = await this.instructions(agent);
-    rt.busy = true;
-    this.update(agent, { status: 'working', activity: resumeSessionId ? 'Reading your message' : 'Getting started', error: undefined, finishedAt: undefined });
-    const session = this.runner.start(this.runRequest(agent, prompt, instructions, resumeSessionId), this.hooks(agent));
-    rt.session = session;
-    for (const message of rt.inbox.splice(0)) session.send(message);
-    const outcome = await session.done;
-    rt.session = undefined;
-    rt.busy = false;
-    if (!this.store.agents.has(agent.id)) return;
+  private runSession(agent: Agent, prompt: string, resumeSessionId?: string): Effect.Effect<void, WorkError, ManagerServices> {
+    return Effect.gen({ self: this }, function* () {
+      const rt = this.rt(agent.id);
+      const review = agent.task === 'review';
+      const lead = agent.task === 'lead' ? agent.lead : undefined;
+      // the lead's last slice has landed: their repos move to fresh code before they hear anything else
+      if (lead && sliceLanded(lead.prs)) prompt = `${yield* this.nextSlice(agent, lead)}\n\n${prompt}`;
+      // before marking them busy: the QA officer's instructions may need GitHub, and that can fail
+      const instructions = yield* this.instructions(agent);
+      rt.busy = true;
+      this.update(agent, { status: 'working', activity: resumeSessionId ? 'Reading your message' : 'Getting started', error: undefined, finishedAt: undefined });
+      const outcome = yield* this.turn(agent, this.runRequest(agent, prompt, instructions, resumeSessionId), true);
+      rt.busy = false;
+      if (!this.store.agents.has(agent.id)) return;
 
-    if (outcome.aborted) {
-      this.update(agent, { status: 'stopped', activity: STOPPED_BY_CAPTAIN, permission: undefined, finishedAt: Date.now() });
-      if (review) this.reviewEnded(agent, STOPPED_BY_CAPTAIN);
-      this.fixEnded(agent, 'stopped');
-      this.schedule();
-      return;
-    }
-    if (fallBackToLocal(agent, outcome)) {
-      // a session id from the cloud means it already worked there: its pushes may be on GitHub but not in the worktree
-      const ranInCloud = !!agent.sessionId;
-      rt.nudged = false;
-      this.update(agent, { cloud: undefined, sessionId: undefined });
-      this.print(agent, [{ kind: 'system', text: "✻ Claude Code won't start a cloud session from Focus – carrying on here as a 💻 local agent" }]);
-      if (!ranInCloud) return this.runSession(agent, withNotes(await this.taskPrompt(agent), rt.notes));
-      this.update(agent, { activity: `Fetching ${agent.branch} from GitHub` });
-      await this.workspace.pull(this.workspace.dir(agent.id), agent.branch);
-      // only a new session gets refused, so this is already a carry-on prompt with the manager's message in it
-      return this.runSession(agent, prompt);
-    }
-    if (agent.cloud && carryOnInNewSession(outcome, !!resumeSessionId)) {
-      // everything the old session did is on the branch: a new one picks it up from there
-      this.print(agent, [{ kind: 'system', text: `✻ Couldn't get back into the cloud session (${truncate(outcome.error ?? 'no reason given', 200)}) – starting a new one on ${agent.branch}` }]);
-      return this.runSession(agent, carryOnPrompt(agent, prompt));
-    }
-    if (rt.inbox.length) {
-      // The manager wrote while the session was wrapping up: carry on in the same conversation.
-      return this.runSession(agent, rt.inbox.splice(0).join('\n\n'), agent.sessionId);
-    }
-    if (!outcome.ok) {
-      this.fail(agent, outcome.error ?? 'The agent stopped with an error');
-      return;
-    }
-    if (review) return this.finishReview(agent, outcome.structured, outcome.summary);
-    if (lead) {
-      // the lead's turn is over: it's the captain's turn, and their work ships when the lead says so, not now. Their
-      // subagents ended with it; any that just finished linger a moment
-      this.update(agent, { status: 'done', activity: 'Your turn', finishedAt: Date.now(), helpers: agent.helpers?.filter((h) => h.status !== 'working') });
-      this.schedule();
-      return;
-    }
-    await this.deliver(agent, outcome.summary);
+      if (outcome.aborted) {
+        this.update(agent, { status: 'stopped', activity: STOPPED_BY_CAPTAIN, permission: undefined, finishedAt: Date.now() });
+        if (review) this.reviewEnded(agent, STOPPED_BY_CAPTAIN);
+        this.fixEnded(agent, 'stopped');
+        this.schedule();
+        return;
+      }
+      if (fallBackToLocal(agent, outcome)) {
+        // a session id from the cloud means it already worked there: its pushes may be on GitHub but not in the worktree
+        const ranInCloud = !!agent.sessionId;
+        rt.nudged = false;
+        this.update(agent, { cloud: undefined, sessionId: undefined });
+        this.print(agent, [{ kind: 'system', text: "✻ Claude Code won't start a cloud session from Focus – carrying on here as a 💻 local agent" }]);
+        if (!ranInCloud) return yield* this.runSession(agent, withNotes(yield* this.taskPrompt(agent), rt.notes));
+        this.update(agent, { activity: `Fetching ${agent.branch} from GitHub` });
+        const workspace = yield* Workspace;
+        yield* workspace.pull(workspace.dir(agent.id), agent.branch);
+        // only a new session gets refused, so this is already a carry-on prompt with the manager's message in it
+        return yield* this.runSession(agent, prompt);
+      }
+      if (agent.cloud && carryOnInNewSession(outcome, !!resumeSessionId)) {
+        // everything the old session did is on the branch: a new one picks it up from there
+        this.print(agent, [{ kind: 'system', text: `✻ Couldn't get back into the cloud session (${truncate(outcome.error ?? 'no reason given', 200)}) – starting a new one on ${agent.branch}` }]);
+        return yield* this.runSession(agent, carryOnPrompt(agent, prompt));
+      }
+      if (rt.inbox.length) {
+        // The manager wrote while the session was wrapping up: carry on in the same conversation.
+        return yield* this.runSession(agent, rt.inbox.splice(0).join('\n\n'), agent.sessionId);
+      }
+      if (!outcome.ok) {
+        this.fail(agent, outcome.error ?? 'The agent stopped with an error');
+        return;
+      }
+      if (review) return yield* this.finishReview(agent, outcome.structured, outcome.summary);
+      if (lead) {
+        // the lead's turn is over: it's the captain's turn, and their work ships when the lead says so, not now. Their
+        // subagents ended with it; any that just finished linger a moment
+        this.update(agent, { status: 'done', activity: 'Your turn', finishedAt: Date.now(), helpers: agent.helpers?.filter((h) => h.status !== 'working') });
+        this.schedule();
+        return;
+      }
+      yield* this.deliver(agent, outcome.summary);
+    });
   }
 
-  /** Pushes the branch and opens (or updates) the pull request. */
-  private async deliver(agent: Agent, summary: string): Promise<void> {
+  /** Pushes the branch and opens (or updates) the pull request. Then the agent hears anything the manager said meanwhile. */
+  private deliver(agent: Agent, summary: string): Effect.Effect<void, never, ManagerServices> {
     const rt = this.rt(agent.id);
-    rt.busy = true;
-    try {
-      const dir = this.workspace.dir(agent.id);
+    return Effect.gen({ self: this }, function* () {
+      rt.busy = true;
+      yield* this.ship(agent, summary).pipe(
+        this.orFail(agent),
+        Effect.ensuring(Effect.sync(() => {
+          rt.busy = false;
+          this.schedule();
+        })),
+      );
+      if (rt.inbox.length && this.store.agents.has(agent.id) && agent.status === 'done' && agent.sessionId) {
+        yield* this.runSession(agent, rt.inbox.splice(0).join('\n\n'), agent.sessionId).pipe(this.orFail(agent));
+      }
+    });
+  }
+
+  /** The agent's work, onto GitHub: they're asked once to commit (or, in the cloud, push) what they left behind. */
+  private ship(agent: Agent, summary: string): Effect.Effect<void, WorkError, ManagerServices> {
+    const rt = this.rt(agent.id);
+    return Effect.gen({ self: this }, function* () {
+      const github = yield* GitHub;
+      const workspace = yield* Workspace;
+      const dir = workspace.dir(agent.id);
       if (agent.cloud) {
         // a cloud agent pushed its work to GitHub: bring it into the worktree, where the checks below look
-        const before = await this.workspace.head(dir);
+        const before = yield* workspace.head(dir);
         this.update(agent, { activity: `Fetching ${agent.branch} from GitHub` });
-        await this.workspace.pull(dir, agent.branch);
-        if (afterCloudRun({ before, after: await this.workspace.head(dir), nudged: rt.nudged }) === 'nudge') {
+        yield* workspace.pull(dir, agent.branch);
+        if (afterCloudRun({ before, after: yield* workspace.head(dir), nudged: rt.nudged }) === 'nudge') {
           rt.nudged = true;
           this.print(agent, [{ kind: 'system', text: `✻ Nothing new on ${agent.branch} – asking the agent to push their work` }]);
-          return await this.runSession(agent, pushNudge(agent), agent.sessionId);
+          return yield* this.runSession(agent, pushNudge(agent), agent.sessionId);
         }
-      } else if (!rt.nudged && (await this.workspace.hasUncommittedChanges(dir))) {
+      } else if (!rt.nudged && (yield* workspace.hasUncommittedChanges(dir))) {
         rt.nudged = true;
         this.print(agent, [{ kind: 'system', text: '✻ Uncommitted changes left behind – asking the agent to commit them' }]);
-        return await this.runSession(agent, COMMIT_NUDGE, agent.sessionId);
+        return yield* this.runSession(agent, COMMIT_NUDGE, agent.sessionId);
       }
       const fixing = this.fixing(agent);
-      if (fixing?.sha && sameCommit(await this.workspace.head(dir), fixing.sha)) {
+      if (fixing?.sha && sameCommit(yield* workspace.head(dir), fixing.sha)) {
         this.update(agent, { status: 'done', activity: 'Finished without fixing anything – see the terminal', finishedAt: Date.now() });
         this.fixEnded(agent, 'pushed-nothing');
         return;
       }
-      const ahead = await this.workspace.commitsAhead(dir, agent.baseBranch);
+      const ahead = yield* workspace.commitsAhead(dir, agent.baseBranch);
       if (ahead === 0) {
         this.update(agent, { status: 'done', activity: 'Finished without committing changes – see the terminal', finishedAt: Date.now() });
         this.hub.toast('info', `${agent.name} finished #${agent.issue.number} without code changes`, agent.id);
@@ -499,15 +593,15 @@ export class AgentManager {
       } else {
         this.update(agent, { status: 'pushing', activity: `Pushing ${ahead} commit${ahead === 1 ? '' : 's'}` });
         this.print(agent, [{ kind: 'system', text: `✻ Pushing ${agent.branch}` }]);
-        await this.workspace.push(dir, agent.branch);
+        yield* workspace.push(dir, agent.branch);
       }
 
-      let pr = agent.pr ?? (await this.github.findPullRequest(agent.repo, agent.branch));
+      let pr = agent.pr ?? (yield* github.findPullRequest(agent.repo, agent.branch));
       if (pr) {
         this.hub.toast('success', `${agent.name} updated PR #${pr.number}`, agent.id);
       } else {
         this.update(agent, { activity: 'Opening the pull request' });
-        pr = await this.github.createPullRequest(agent.repo, {
+        pr = yield* github.createPullRequest(agent.repo, {
           head: agent.branch,
           base: agent.baseBranch,
           title: agent.issue.title,
@@ -528,19 +622,11 @@ export class AgentManager {
           this.print(agent, [{ kind: 'error', text: `✘ Couldn't hand PR #${pr.number} to QA: ${errorMessage(err)}` }]);
         }
       }
-    } catch (err) {
-      this.fail(agent, err);
-    } finally {
-      rt.busy = false;
-      this.schedule();
-      if (rt.inbox.length && this.store.agents.has(agent.id) && agent.status === 'done' && agent.sessionId) {
-        void this.runSession(agent, rt.inbox.splice(0).join('\n\n'), agent.sessionId);
-      }
-    }
+    });
   }
 
-  private fail(agent: Agent, err: unknown): void {
-    const message = typeof err === 'string' ? err : errorMessage(err);
+  private fail(agent: Agent, err: { message: string } | string): void {
+    const message = typeof err === 'string' ? err : err.message;
     this.print(agent, [{ kind: 'error', text: `✘ ${message}` }]);
     this.update(agent, { status: 'error', error: message, activity: 'Hit a problem – send a message to retry', permission: undefined, finishedAt: Date.now() });
     this.hub.toast('error', `${agent.name}: ${truncate(message, 140)}`, agent.id);
@@ -558,8 +644,8 @@ export class AgentManager {
    */
   startGoal(projectId: string, text: string, how: { station?: number; effort?: Effort; from?: string } = {}): { agent: Agent } | { queued: QueuedGoal } {
     const project = this.store.project(projectId);
-    if (!project.repos.length) throw new Error(`Connect a repository to ${project.name} first`);
-    if (!text.trim()) throw new Error('Tell them what you’re after');
+    if (!project.repos.length) throw new Refused({ message: `Connect a repository to ${project.name} first` });
+    if (!text.trim()) throw new Refused({ message: 'Tell them what you’re after' });
     const leads = this.store.agentsIn(projectId).filter((a) => a.task === 'lead');
     // goals already waiting go first: a new one joins the line behind them, even if a station has just come free
     if (how.station === undefined && project.goalQueue?.length) return { queued: this.queueGoal(projectId, text, how) };
@@ -568,7 +654,7 @@ export class AgentManager {
       const wanted = how.station;
       if (wanted === undefined) return { queued: this.queueGoal(projectId, text, how) };
       const holder = leads.find((a) => a.lead?.station === wanted);
-      throw new Error(holder ? `Team station ${wanted + 1} already has a goal: ${holder.lead?.title ?? holder.name}` : `${project.name} has team stations 1 to ${TEAM_STATIONS}`);
+      throw new Refused({ message: holder ? `Team station ${wanted + 1} already has a goal: ${holder.lead?.title ?? holder.name}` : `${project.name} has team stations 1 to ${TEAM_STATIONS}` });
     }
     const suffix = newId('g').slice(-6);
     const id = leadId(projectId, suffix);
@@ -628,12 +714,12 @@ export class AgentManager {
   startQueued(projectId: string, queueId: string, edits: { text?: string; effort?: Effort } = {}): Agent {
     const project = this.store.project(projectId);
     const queued = (project.goalQueue ?? []).find((g) => g.id === queueId);
-    if (!queued) throw new Error('That goal is no longer in line');
+    if (!queued) throw new Refused({ message: 'That goal is no longer in line' });
     const leads = this.store.agentsIn(projectId).filter((a) => a.task === 'lead');
     const station = pickStation(leads.map((a) => a.lead?.station ?? 0));
-    if (station === undefined) throw new Error(`Every team station in ${project.name} still has a goal`);
+    if (station === undefined) throw new Refused({ message: `Every team station in ${project.name} still has a goal` });
     const started = this.startGoal(projectId, edits.text?.trim() || queued.text, { station, effort: edits.effort ?? queued.effort, from: queued.from });
-    if (!('agent' in started)) throw new Error('No team station was free after all');
+    if (!('agent' in started)) throw new Refused({ message: 'No team station was free after all' });
     this.changeQueue(projectId, (project.goalQueue ?? []).filter((g) => g.id !== queueId));
     return started.agent;
   }
@@ -647,53 +733,59 @@ export class AgentManager {
   }
 
   /** The lead's note tool: the goal's note and title, as they want them. */
-  private async noteGoal(agent: Agent, input: NoteInput): Promise<string> {
-    const work = agent.lead;
-    if (!work) throw new Error('There’s no goal to keep a note on');
-    const next = applyNote(work, input);
-    if ('error' in next) throw new Error(next.error);
-    this.update(agent, { lead: { ...work, title: next.title, note: next.note }, issue: { ...agent.issue, title: next.title } });
-    return 'Noted. The captain sees the note on the goal, and you hear it again at each new slice.';
+  private noteGoal(agent: Agent, input: NoteInput): Effect.Effect<string, Refused> {
+    return Effect.gen({ self: this }, function* () {
+      const work = agent.lead;
+      if (!work) return yield* new Refused({ message: 'There’s no goal to keep a note on' });
+      const next = applyNote(work, input);
+      if ('error' in next) return yield* new Refused({ message: next.error });
+      this.update(agent, { lead: { ...work, title: next.title, note: next.note }, issue: { ...agent.issue, title: next.title } });
+      return 'Noted. The captain sees the note on the goal, and you hear it again at each new slice.';
+    });
   }
 
   /** The lead's propose_close tool: the captain hears the goal looks done, and closes it or carries on. */
-  private async proposeClose(agent: Agent, reason: string): Promise<string> {
-    const work = agent.lead;
-    if (!work) throw new Error('There’s no goal to close');
-    this.update(agent, { lead: { ...work, closing: { reason: reason.trim() || 'The goal looks done', at: Date.now() } } });
-    this.print(agent, [{ kind: 'success', text: `🏁 ${agent.name} thinks “${work.title}” is ready to wrap up: ${reason.trim()}` }]);
-    this.hub.toast('success', `🏁 ${agent.name} thinks “${work.title}” is ready to wrap up`, agent.id);
-    return 'The captain sees that you think the goal is ready to wrap up. Tell them why in a sentence or two, then stop: they close the goal, or carry on with you.';
+  private proposeClose(agent: Agent, reason: string): Effect.Effect<string, Refused> {
+    return Effect.gen({ self: this }, function* () {
+      const work = agent.lead;
+      if (!work) return yield* new Refused({ message: 'There’s no goal to close' });
+      this.update(agent, { lead: { ...work, closing: { reason: reason.trim() || 'The goal looks done', at: Date.now() } } });
+      this.print(agent, [{ kind: 'success', text: `🏁 ${agent.name} thinks “${work.title}” is ready to wrap up: ${reason.trim()}` }]);
+      this.hub.toast('success', `🏁 ${agent.name} thinks “${work.title}” is ready to wrap up`, agent.id);
+      return 'The captain sees that you think the goal is ready to wrap up. Tell them why in a sentence or two, then stop: they close the goal, or carry on with you.';
+    });
   }
 
   /**
    * Closes a goal: files it in the room's log and sends its lead home, which frees the station. First says what would be
    * lost or left behind (uncommitted changes, open pull requests), unless `force`.
    */
-  async closeGoal(id: string, force = false): Promise<{ closed: true } | { warn: string[] }> {
-    const agent = this.store.agent(id);
-    const work = agent.lead;
-    if (agent.task !== 'lead' || !work) throw new Error(`${agent.name} isn’t leading a goal`);
-    const dirty: string[] = [];
-    for (const r of work.repos) if (await this.workspace.hasUncommittedChanges(this.workspace.dir(leadWorktreeId(id, r.folder))).catch(() => false)) dirty.push(r.folder);
-    const check = closeCheck(work, dirty);
-    if (check.kind === 'warn' && !force) return { warn: check.reasons };
-    const project = this.store.project(agent.projectId);
-    project.goals = fileGoal(project.goals ?? [], goalRecord(agent, Date.now()));
-    this.projectsChanged();
-    await this.dismiss(id);
-    // the goal's reviewer goes home with its lead; a review they were on, or still waiting, goes to the room's QA officer
-    const reviewer = goalReviewerId(id);
-    for (const r of this.store.reviews.values()) {
-      if (r.agentId === reviewer && (r.status === 'testing' || r.status === 'queued')) this.putReview({ ...r, status: 'queued', agentId: undefined });
-    }
-    await this.dismiss(reviewer);
-    this.nextReview(agent.projectId);
-    const next = nextGoal(project.goalQueue);
-    this.hub.toast('success', next
-      ? `🏁 “${work.title}” is closed. Team station ${work.station + 1} is free: next up is “${goalTitle(next.text)}” (L to start it)`
-      : `🏁 “${work.title}” is closed, and team station ${work.station + 1} is free`, undefined, project.id);
-    return { closed: true };
+  closeGoal(id: string, force = false): Promise<{ closed: true } | { warn: string[] }> {
+    return this.runtime.runPromise(Effect.gen({ self: this }, function* () {
+      const agent = this.store.agent(id);
+      const work = agent.lead;
+      if (agent.task !== 'lead' || !work) return yield* new Refused({ message: `${agent.name} isn’t leading a goal` });
+      const workspace = yield* Workspace;
+      const dirty = yield* Effect.filter(work.repos, (r) => workspace.hasUncommittedChanges(workspace.dir(leadWorktreeId(id, r.folder))).pipe(Effect.orElseSucceed(() => false)));
+      const check = closeCheck(work, dirty.map((r) => r.folder));
+      if (check.kind === 'warn' && !force) return { warn: check.reasons };
+      const project = this.store.project(agent.projectId);
+      project.goals = fileGoal(project.goals ?? [], goalRecord(agent, Date.now()));
+      this.projectsChanged();
+      yield* this.goHome(id);
+      // the goal's reviewer goes home with its lead; a review they were on, or still waiting, goes to the room's QA officer
+      const reviewer = goalReviewerId(id);
+      for (const r of this.store.reviews.values()) {
+        if (r.agentId === reviewer && (r.status === 'testing' || r.status === 'queued')) this.putReview({ ...r, status: 'queued', agentId: undefined });
+      }
+      yield* this.goHome(reviewer);
+      this.nextReview(agent.projectId);
+      const next = nextGoal(project.goalQueue);
+      this.hub.toast('success', next
+        ? `🏁 “${work.title}” is closed. Team station ${work.station + 1} is free: next up is “${goalTitle(next.text)}” (L to start it)`
+        : `🏁 “${work.title}” is closed, and team station ${work.station + 1} is free`, undefined, project.id);
+      return { closed: true as const };
+    }));
   }
 
   /** How hard the agent thinks from now on: from its next request if it's working, else from its next turn. */
@@ -707,105 +799,120 @@ export class AgentManager {
   }
 
   /** Checks out every repo of the project side by side, on the goal's first branch, then hands the lead the captain's words. */
-  private async launchLead(agent: Agent): Promise<void> {
-    const rt = this.rt(agent.id);
-    const project = this.store.project(agent.projectId);
-    await this.checkOutSlice(agent, project.repos);
-    if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
-    const words = rt.inbox.splice(0).join('\n\n') || 'Hello! What are we working on?';
-    await this.runSession(agent, `${workspaceNote(agent.lead!, agent.branch)}\n\n${words}`);
+  private launchLead(agent: Agent): Effect.Effect<void, WorkError, ManagerServices> {
+    return Effect.gen({ self: this }, function* () {
+      const rt = this.rt(agent.id);
+      const project = this.store.project(agent.projectId);
+      yield* this.checkOutSlice(agent, project.repos);
+      if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
+      const words = rt.inbox.splice(0).join('\n\n') || 'Hello! What are we working on?';
+      yield* this.runSession(agent, `${workspaceNote(agent.lead!, agent.branch)}\n\n${words}`);
+    });
   }
 
   /** Worktrees of `repos` on the lead's current branch, each from its repo's default branch, recorded on the lead. */
-  private async checkOutSlice(agent: Agent, repos: string[]): Promise<void> {
-    const folders = repoFolders(repos);
-    const checkouts: NonNullable<Agent['lead']>['repos'] = [];
-    for (const repo of repos) {
-      const info = await this.github.repoInfo(repo);
-      if (info.isEmpty) {
-        this.print(agent, [{ kind: 'system', text: `✻ Skipping ${repo}: it has no commits yet` }]);
-        continue;
+  private checkOutSlice(agent: Agent, repos: string[]): Effect.Effect<void, GitHubError | GitFailed | NothingToCheckOut, GitHub | Workspace> {
+    return Effect.gen({ self: this }, function* () {
+      const github = yield* GitHub;
+      const workspace = yield* Workspace;
+      const folders = repoFolders(repos);
+      const checkouts: NonNullable<Agent['lead']>['repos'] = [];
+      for (const repo of repos) {
+        const info = yield* github.repoInfo(repo);
+        if (info.isEmpty) {
+          this.print(agent, [{ kind: 'system', text: `✻ Skipping ${repo}: it has no commits yet` }]);
+          continue;
+        }
+        const folder = folders.get(repo)!;
+        this.update(agent, { activity: `Checking out ${repo}` });
+        this.print(agent, [{ kind: 'system', text: `✻ Checking out ${repo} at ./${folder} on ${agent.branch}` }]);
+        yield* workspace.create(repo, leadWorktreeId(agent.id, folder), agent.branch, info.defaultBranch, (id) => this.store.agents.has(id));
+        checkouts.push({ repo, folder, baseBranch: info.defaultBranch });
       }
-      const folder = folders.get(repo)!;
-      this.update(agent, { activity: `Checking out ${repo}` });
-      this.print(agent, [{ kind: 'system', text: `✻ Checking out ${repo} at ./${folder} on ${agent.branch}` }]);
-      await this.workspace.create(repo, leadWorktreeId(agent.id, folder), agent.branch, info.defaultBranch, (id) => this.store.agents.has(id));
-      checkouts.push({ repo, folder, baseBranch: info.defaultBranch });
-    }
-    if (!checkouts.length) throw new Error('None of the project’s repositories has any commits yet – add a README first');
-    this.update(agent, { lead: { ...agent.lead!, repos: checkouts }, baseBranch: checkouts[0].baseBranch });
+      if (!checkouts.length) return yield* new NothingToCheckOut();
+      this.update(agent, { lead: { ...agent.lead!, repos: checkouts }, baseBranch: checkouts[0].baseBranch });
+    });
   }
 
   /**
    * The slice has landed: a new branch on fresh code in every repo, unless a repo has uncommitted changes, which are
-   * never thrown away. Returns what the lead hears about it.
+   * never thrown away. Succeeds with what the lead hears about it.
    */
-  private async nextSlice(agent: Agent, lead: NonNullable<Agent['lead']>): Promise<string> {
-    const project = this.store.project(agent.projectId);
-    const dirty: string[] = [];
-    for (const r of lead.repos) if (await this.workspace.hasUncommittedChanges(this.workspace.dir(leadWorktreeId(agent.id, r.folder)))) dirty.push(r.folder);
-    const step = afterLanding(dirty, !!agent.sessionId);
-    if (step === 'held-back') return heldBack(lead, dirty);
-    // a good moment to lighten the conversation: the slice's details are in the code and the note now
-    if (step === 'compact-then-next') await this.compact(agent, compactInstructions(lead.title, lead.note));
-    const slice = lead.slice + 1;
-    for (const r of lead.repos) await this.workspace.remove(r.repo, leadWorktreeId(agent.id, r.folder)).catch(() => undefined);
-    const note = lead.note && { ...lead.note, slice: [] };
-    this.update(agent, { branch: sliceBranch(lead.title, slice, newId('s').slice(-4)), lead: { ...lead, note, repos: [], slice, prs: [] } });
-    await this.checkOutSlice(agent, project.repos);
-    return newSliceNote(agent.lead!, agent.branch);
+  private nextSlice(agent: Agent, lead: NonNullable<Agent['lead']>): Effect.Effect<string, GitHubError | GitFailed | NothingToCheckOut, ManagerServices> {
+    return Effect.gen({ self: this }, function* () {
+      const workspace = yield* Workspace;
+      const project = this.store.project(agent.projectId);
+      const dirty = yield* Effect.filter(lead.repos, (r) => workspace.hasUncommittedChanges(workspace.dir(leadWorktreeId(agent.id, r.folder))));
+      const step = afterLanding(dirty.map((r) => r.folder), !!agent.sessionId);
+      if (step === 'held-back') return heldBack(lead, dirty.map((r) => r.folder));
+      // a good moment to lighten the conversation: the slice's details are in the code and the note now
+      if (step === 'compact-then-next') yield* this.compact(agent, compactInstructions(lead.title, lead.note));
+      const slice = lead.slice + 1;
+      yield* Effect.forEach(lead.repos, (r) => workspace.remove(r.repo, leadWorktreeId(agent.id, r.folder)), { discard: true });
+      const note = lead.note && { ...lead.note, slice: [] };
+      this.update(agent, { branch: sliceBranch(lead.title, slice, newId('s').slice(-4)), lead: { ...lead, note, repos: [], slice, prs: [] } });
+      yield* this.checkOutSlice(agent, project.repos);
+      return newSliceNote(agent.lead!, agent.branch);
+    });
   }
 
   /**
    * The lead's ship tool: pushes every repo with new commits and opens (or updates) its pull request, which QA then
    * reviews. Nothing ships while any repo has uncommitted changes.
    */
-  private async shipLead(agent: Agent, input: { title: string; summary: string }): Promise<string> {
-    const work = agent.lead;
-    if (!work?.repos.length) throw new Error('There’s nothing checked out to ship');
-    const states = await Promise.all(
-      work.repos.map(async (r) => {
-        const dir = this.workspace.dir(leadWorktreeId(agent.id, r.folder));
-        const head = await this.workspace.head(dir);
-        const changed = !openPr(work, r.repo)?.sha || !sameCommit(head, openPr(work, r.repo)!.sha!);
-        return { ...r, dir, head, changed, dirty: await this.workspace.hasUncommittedChanges(dir), ahead: await this.workspace.commitsAhead(dir, r.baseBranch) };
-      }),
-    );
-    const plan = shipPlan(states);
-    if (plan.kind !== 'ship') return notShipped(plan);
-    const project = this.store.project(agent.projectId);
-    const title = input.title.trim() || `Slice ${work.slice}`;
-    const lines: string[] = [];
-    for (const s of states.filter((x) => plan.repos.includes(x.repo))) {
-      this.update(agent, { status: 'pushing', activity: `Shipping ${s.repo}` });
-      this.print(agent, [{ kind: 'system', text: `✻ Pushing ${agent.branch} in ${s.repo}` }]);
-      await this.workspace.push(s.dir, agent.branch);
-      let pr = openPr(work, s.repo) ?? (await this.github.findPullRequest(s.repo, agent.branch).then((found) => found && { repo: s.repo, ...found }));
-      if (pr) {
-        lines.push(`Updated ${s.repo}#${pr.number}: ${pr.url}`);
-      } else {
-        const alongside = plan.repos.filter((r) => r !== s.repo);
-        const body = leadPrBody(input.summary, agent, alongside, this.store.settings.attribution);
-        const opened = await this.github.createPullRequest(s.repo, { head: agent.branch, base: s.baseBranch, title, body });
-        pr = { repo: s.repo, ...opened };
-        lines.push(`Opened ${s.repo}#${pr.number}: ${pr.url}`);
-        this.hub.toast('success', `🎉 ${agent.name} opened ${s.repo.split('/')[1]}#${pr.number}: ${title}`, agent.id);
-      }
-      const known = pr;
-      const others = agent.lead!.prs.filter((p) => !(p.repo === known.repo && p.number === known.number));
-      this.update(agent, { lead: { ...agent.lead!, prs: [...others, { repo: known.repo, number: known.number, url: known.url, sha: s.head }] } });
-      this.print(agent, [{ kind: 'success', text: `✔ ${lines.at(-1)}` }]);
-      if (autoQaFor(project)) {
-        try {
-          this.requestReview(agent.projectId, s.repo, known.number, title);
-        } catch (err) {
-          this.print(agent, [{ kind: 'error', text: `✘ Couldn't hand ${s.repo}#${known.number} to QA: ${errorMessage(err)}` }]);
+  private shipLead(agent: Agent, input: { title: string; summary: string }): Effect.Effect<string, GitHubError | GitFailed | Refused, GitHub | Workspace> {
+    return Effect.gen({ self: this }, function* () {
+      const work = agent.lead;
+      if (!work?.repos.length) return yield* new Refused({ message: 'There’s nothing checked out to ship' });
+      const github = yield* GitHub;
+      const workspace = yield* Workspace;
+      const states = yield* Effect.forEach(
+        work.repos,
+        (r) =>
+          Effect.gen(function* () {
+            const dir = workspace.dir(leadWorktreeId(agent.id, r.folder));
+            const head = yield* workspace.head(dir);
+            const changed = !openPr(work, r.repo)?.sha || !sameCommit(head, openPr(work, r.repo)!.sha!);
+            return { ...r, dir, head, changed, dirty: yield* workspace.hasUncommittedChanges(dir), ahead: yield* workspace.commitsAhead(dir, r.baseBranch) };
+          }),
+        { concurrency: 'unbounded' },
+      );
+      const plan = shipPlan(states);
+      if (plan.kind !== 'ship') return notShipped(plan);
+      const project = this.store.project(agent.projectId);
+      const title = input.title.trim() || `Slice ${work.slice}`;
+      const lines: string[] = [];
+      for (const s of states.filter((x) => plan.repos.includes(x.repo))) {
+        this.update(agent, { status: 'pushing', activity: `Shipping ${s.repo}` });
+        this.print(agent, [{ kind: 'system', text: `✻ Pushing ${agent.branch} in ${s.repo}` }]);
+        yield* workspace.push(s.dir, agent.branch);
+        const found = openPr(work, s.repo) ?? (yield* github.findPullRequest(s.repo, agent.branch));
+        let pr: { number: number; url: string };
+        if (found) {
+          pr = found;
+          lines.push(`Updated ${s.repo}#${pr.number}: ${pr.url}`);
+        } else {
+          const alongside = plan.repos.filter((r) => r !== s.repo);
+          const body = leadPrBody(input.summary, agent, alongside, this.store.settings.attribution);
+          pr = yield* github.createPullRequest(s.repo, { head: agent.branch, base: s.baseBranch, title, body });
+          lines.push(`Opened ${s.repo}#${pr.number}: ${pr.url}`);
+          this.hub.toast('success', `🎉 ${agent.name} opened ${s.repo.split('/')[1]}#${pr.number}: ${title}`, agent.id);
+        }
+        const others = agent.lead!.prs.filter((p) => !(p.repo === s.repo && p.number === pr.number));
+        this.update(agent, { lead: { ...agent.lead!, prs: [...others, { repo: s.repo, number: pr.number, url: pr.url, sha: s.head }] } });
+        this.print(agent, [{ kind: 'success', text: `✔ ${lines.at(-1)}` }]);
+        if (autoQaFor(project)) {
+          try {
+            this.requestReview(agent.projectId, s.repo, pr.number, title);
+          } catch (err) {
+            this.print(agent, [{ kind: 'error', text: `✘ Couldn't hand ${s.repo}#${pr.number} to QA: ${errorMessage(err)}` }]);
+          }
         }
       }
-    }
-    this.update(agent, { status: 'working', activity: 'Shipped the slice' });
-    this.boardChanged(agent.projectId);
-    return shipped(lines);
+      this.update(agent, { status: 'working', activity: 'Shipped the slice' });
+      this.boardChanged(agent.projectId);
+      return shipped(lines);
+    });
   }
 
   /** The lead whose open pull request this is, if any. */
@@ -848,11 +955,11 @@ export class AgentManager {
   /** `retryNote` tells QA why the operations officer sent it back to them. */
   requestReview(projectId: string, repo: string, number: number, title: string, retryNote?: string): QaReview {
     const project = this.store.project(projectId);
-    if (!project.repos.includes(repo)) throw new Error(`${repo} is not connected to ${project.name}`);
+    if (!project.repos.includes(repo)) throw new Refused({ message: `${repo} is not connected to ${project.name}` });
     const existing = this.store.reviews.get(prKey(repo, number));
     if (existing && (existing.status === 'queued' || existing.status === 'testing')) return existing;
     // a re-test from the board overrides the operations officer
-    this.triageAborts.get(prKey(repo, number))?.abort();
+    this.stopTriage(prKey(repo, number));
     const review: QaReview = {
       projectId,
       repo,
@@ -926,120 +1033,136 @@ export class AgentManager {
     this.putReview({ ...review, agentId: id });
   }
 
-  private async launchReview(agent: Agent): Promise<void> {
-    const rt = this.rt(agent.id);
-    const project = this.store.project(agent.projectId);
-    const pr = await this.github.getPullRequest(agent.repo, agent.issue.number);
-    const issues = (await Promise.all(pr.linkedIssues.slice(0, 3).map((n) => this.github.getIssue(agent.repo, n).catch(() => null)))).filter((i) => i !== null);
-    this.update(agent, { baseBranch: pr.baseBranch, issue: { number: pr.number, title: pr.title, url: pr.url }, activity: 'Checking out the pull request' });
-    this.print(agent, [{ kind: 'system', text: `✻ Checking out PR #${pr.number} (${pr.branch} into ${pr.baseBranch})` }]);
-    const sha = (await this.workspace.checkoutPullRequest(agent.repo, agent.id, pr.number)) || pr.headSha;
-    if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
-    const review = this.store.reviews.get(prKey(agent.repo, pr.number));
-    if (review) this.putReview({ ...review, status: 'testing', title: pr.title, sha, agentId: agent.id, error: undefined });
-    rt.qaSystem = qaSystemAppend(agent, project, pr, sha);
-    rt.shots = undefined;
-    let prompt = qaPrompt(agent.repo, pr, issues, review ?? {});
-    if (rt.inbox.length) prompt += `\n\nNotes from your manager:\n${rt.inbox.splice(0).map((m) => `- ${m}`).join('\n')}`;
-    await this.runSession(agent, prompt);
+  private launchReview(agent: Agent): Effect.Effect<void, WorkError, ManagerServices> {
+    return Effect.gen({ self: this }, function* () {
+      const rt = this.rt(agent.id);
+      const github = yield* GitHub;
+      const workspace = yield* Workspace;
+      const project = this.store.project(agent.projectId);
+      const pr = yield* github.getPullRequest(agent.repo, agent.issue.number);
+      const linked = yield* Effect.forEach(pr.linkedIssues.slice(0, 3), (n) => github.getIssue(agent.repo, n).pipe(Effect.orElseSucceed(() => null)), { concurrency: 'unbounded' });
+      const issues = linked.filter((i) => i !== null);
+      this.update(agent, { baseBranch: pr.baseBranch, issue: { number: pr.number, title: pr.title, url: pr.url }, activity: 'Checking out the pull request' });
+      this.print(agent, [{ kind: 'system', text: `✻ Checking out PR #${pr.number} (${pr.branch} into ${pr.baseBranch})` }]);
+      const sha = (yield* workspace.checkoutPullRequest(agent.repo, agent.id, pr.number)) || pr.headSha;
+      if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
+      const review = this.store.reviews.get(prKey(agent.repo, pr.number));
+      if (review) this.putReview({ ...review, status: 'testing', title: pr.title, sha, agentId: agent.id, error: undefined });
+      rt.qaSystem = qaSystemAppend(agent, project, pr, sha);
+      rt.shots = undefined;
+      let prompt = qaPrompt(agent.repo, pr, issues, review ?? {});
+      if (rt.inbox.length) prompt += `\n\nNotes from your manager:\n${rt.inbox.splice(0).map((m) => `- ${m}`).join('\n')}`;
+      yield* this.runSession(agent, prompt);
+    });
   }
 
   /** The QA officer's instructions; rebuilt from GitHub if the office restarted since the review began. */
-  private async qaSystem(agent: Agent): Promise<string> {
-    const rt = this.rt(agent.id);
-    if (!rt.qaSystem) {
-      const pr = await this.github.getPullRequest(agent.repo, agent.issue.number);
-      const sha = this.store.reviews.get(prKey(agent.repo, agent.issue.number))?.sha ?? pr.headSha;
-      rt.qaSystem = qaSystemAppend(agent, this.store.project(agent.projectId), pr, sha);
-    }
-    return rt.qaSystem;
+  private qaSystem(agent: Agent): Effect.Effect<string, GitHubError, GitHub> {
+    return Effect.gen({ self: this }, function* () {
+      const rt = this.rt(agent.id);
+      if (!rt.qaSystem) {
+        const pr = yield* (yield* GitHub).getPullRequest(agent.repo, agent.issue.number);
+        const sha = this.store.reviews.get(prKey(agent.repo, agent.issue.number))?.sha ?? pr.headSha;
+        rt.qaSystem = qaSystemAppend(agent, this.store.project(agent.projectId), pr, sha);
+      }
+      return rt.qaSystem;
+    });
   }
 
   /** Records the QA officer's verdict, posts it on the pull request, and moves on to the next review. */
-  private async finishReview(agent: Agent, structured: unknown, text: string): Promise<void> {
-    const number = agent.issue.number;
-    const report = parseQaReport(structured, text);
-    if (!report) {
-      this.fail(agent, 'Finished without a QA report. Send them a message to ask for one, or send the PR to QA again.');
-      return;
-    }
-    const pass = report.verdict === 'pass';
-    const review = this.store.reviews.get(prKey(agent.repo, number));
-    const screenshots = await this.keepScreenshots(agent, report, review?.sha);
-    let commentUrl: string | undefined;
-    try {
+  private finishReview(agent: Agent, structured: unknown, text: string): Effect.Effect<void, never, ManagerServices> {
+    return Effect.gen({ self: this }, function* () {
+      const number = agent.issue.number;
+      const report = parseQaReport(structured, text);
+      if (!report) {
+        this.fail(agent, 'Finished without a QA report. Send them a message to ask for one, or send the PR to QA again.');
+        return;
+      }
+      const pass = report.verdict === 'pass';
+      const review = this.store.reviews.get(prKey(agent.repo, number));
+      const screenshots = yield* this.keepScreenshots(agent, report, review?.sha);
       this.update(agent, { activity: 'Posting the QA report on the PR' });
       const body = qaComment(report, { officer: agent.name, sha: review?.sha }, screenshots, this.store.settings.attribution);
-      commentUrl = (await this.github.commentOnPullRequest(agent.repo, number, body)) || undefined;
-      this.print(agent, [{ kind: 'system', text: `✻ Posted the QA report: ${commentUrl ?? 'done'}` }]);
-    } catch (err) {
-      this.print(agent, [{ kind: 'error', text: `✘ Couldn't post the QA report on the PR: ${errorMessage(err)}` }]);
-    }
-    const failedRounds = (review?.failedRounds ?? 0) + (pass ? 0 : 1);
-    const done: QaReview | undefined = review && { ...review, status: pass ? 'passed' : 'failed', report, screenshots, commentUrl, failedRounds, finishedAt: Date.now(), error: undefined };
-    if (done) this.putReview(done);
-    this.print(agent, [{ kind: pass ? 'success' : 'error', text: `${pass ? '✅ QA passed' : '❌ QA failed'} PR #${number} · ${report.checks.length} checks` }]);
-    this.update(agent, { status: 'done', activity: `${pass ? '✅ Passed' : '❌ Failed'} PR #${number}`, finishedAt: Date.now() });
-    this.hub.toast(pass ? 'success' : 'error', `${pass ? '✅' : '❌'} ${agent.name} ${pass ? 'passed' : 'failed'} ${agent.repo.split('/')[1]}#${number}: ${truncate(report.summary, 120)}`, agent.id);
-    this.boardChanged(agent.projectId);
-    if (done) await this.qaNext(done, { kind: 'verdict', verdict: report.verdict, failedRounds });
-    this.leadHearsVerdict(agent.repo, number, `QA officer ${agent.name}`, report, failedRounds);
-    this.nextReview(agent.projectId);
+      const commentUrl = yield* (yield* GitHub).commentOnPullRequest(agent.repo, number, body).pipe(
+        Effect.tap((url) => Effect.sync(() => this.print(agent, [{ kind: 'system', text: `✻ Posted the QA report: ${url || 'done'}` }]))),
+        Effect.map((url) => url || undefined),
+        Effect.catch((err) => Effect.sync(() => {
+          this.print(agent, [{ kind: 'error', text: `✘ Couldn't post the QA report on the PR: ${err.message}` }]);
+          return undefined;
+        })),
+      );
+      const failedRounds = (review?.failedRounds ?? 0) + (pass ? 0 : 1);
+      const done: QaReview | undefined = review && { ...review, status: pass ? 'passed' : 'failed', report, screenshots, commentUrl, failedRounds, finishedAt: Date.now(), error: undefined };
+      if (done) this.putReview(done);
+      this.print(agent, [{ kind: pass ? 'success' : 'error', text: `${pass ? '✅ QA passed' : '❌ QA failed'} PR #${number} · ${report.checks.length} checks` }]);
+      this.update(agent, { status: 'done', activity: `${pass ? '✅ Passed' : '❌ Failed'} PR #${number}`, finishedAt: Date.now() });
+      this.hub.toast(pass ? 'success' : 'error', `${pass ? '✅' : '❌'} ${agent.name} ${pass ? 'passed' : 'failed'} ${agent.repo.split('/')[1]}#${number}: ${truncate(report.summary, 120)}`, agent.id);
+      this.boardChanged(agent.projectId);
+      if (done) yield* this.qaNext(done, { kind: 'verdict', verdict: report.verdict, failedRounds });
+      this.leadHearsVerdict(agent.repo, number, `QA officer ${agent.name}`, report, failedRounds);
+      this.nextReview(agent.projectId);
+    });
   }
 
   /**
    * Keeps the QA officer's screenshots for the station and uploads them to the repo's QA evidence branch. One that
    * fails to upload stays out of the PR comment, and the error goes to their terminal.
    */
-  private async keepScreenshots(agent: Agent, report: QaReport, sha: string | undefined): Promise<QaScreenshot[]> {
-    const rt = this.rt(agent.id);
-    const { taken, frames } = rt.shots ?? { taken: 0, frames: [] };
-    rt.shots = undefined;
-    const images = frames.map((f) => (f.image ? decodeImage(f.image) : null));
-    const captions = keptCaptions(report.captions, taken, frames.length);
-    const at = Date.now();
-    const screenshots: QaScreenshot[] = [];
-    if (frames.length) this.update(agent, { activity: `Uploading ${frames.length} screenshot${frames.length === 1 ? '' : 's'}` });
-    for (const [i, image] of images.entries()) {
-      if (!image) continue;
-      const file = `${slugify(agent.repo)}-${agent.issue.number}-${at}-${i + 1}.${image.ext}`;
-      this.store.saveShot(file, image.bytes);
-      const shot: QaScreenshot = { caption: captions[i], file };
-      try {
-        shot.url = await this.github.uploadQaEvidence(agent.repo, evidencePath(agent.issue.number, sha, at, i, image.ext), image.bytes);
-      } catch (err) {
-        this.print(agent, [{ kind: 'error', text: `✘ Couldn't upload screenshot ${i + 1} ("${truncate(shot.caption, 60)}"): ${errorMessage(err)}` }]);
+  private keepScreenshots(agent: Agent, report: QaReport, sha: string | undefined): Effect.Effect<QaScreenshot[], never, GitHub> {
+    return Effect.gen({ self: this }, function* () {
+      const github = yield* GitHub;
+      const rt = this.rt(agent.id);
+      const { taken, frames } = rt.shots ?? { taken: 0, frames: [] };
+      rt.shots = undefined;
+      const images = frames.map((f) => (f.image ? decodeImage(f.image) : null));
+      const captions = keptCaptions(report.captions, taken, frames.length);
+      const at = Date.now();
+      const screenshots: QaScreenshot[] = [];
+      if (frames.length) this.update(agent, { activity: `Uploading ${frames.length} screenshot${frames.length === 1 ? '' : 's'}` });
+      for (const [i, image] of images.entries()) {
+        if (!image) continue;
+        const file = `${slugify(agent.repo)}-${agent.issue.number}-${at}-${i + 1}.${image.ext}`;
+        this.store.saveShot(file, image.bytes);
+        const shot: QaScreenshot = { caption: captions[i], file };
+        shot.url = yield* github.uploadQaEvidence(agent.repo, evidencePath(agent.issue.number, sha, at, i, image.ext), image.bytes).pipe(
+          Effect.catch((err) => Effect.sync(() => {
+            this.print(agent, [{ kind: 'error', text: `✘ Couldn't upload screenshot ${i + 1} ("${truncate(shot.caption, 60)}"): ${err.message}` }]);
+            return undefined;
+          })),
+        );
+        screenshots.push(shot);
       }
-      screenshots.push(shot);
-    }
-    const uploaded = screenshots.filter((s) => s.url).length;
-    if (uploaded) this.print(agent, [{ kind: 'system', text: `✻ Uploaded ${uploaded} screenshot${uploaded === 1 ? '' : 's'} to the QA evidence branch` }]);
-    return screenshots;
+      const uploaded = screenshots.filter((s) => s.url).length;
+      if (uploaded) this.print(agent, [{ kind: 'system', text: `✻ Uploaded ${uploaded} screenshot${uploaded === 1 ? '' : 's'} to the QA evidence branch` }]);
+      return screenshots;
+    });
   }
 
   // ---------------------------------------------------------------- sending failed PRs back
 
   /** Acts on what qaNextStep decides for a PR after a verdict or a fix. */
-  private async qaNext(review: QaReview, event: QaLoopEvent): Promise<void> {
-    const project = this.store.projects.find((p) => p.id === review.projectId);
-    if (!project) return;
-    const step = qaNextStep({ openedByOffice: !!review.openedByOffice, autoSendBack: autoSendBackFor(project) }, event);
-    switch (step.kind) {
-      case 'nothing':
-        if (review.followUp) this.putReview({ ...review, followUp: undefined });
-        return;
-      case 'send-back':
-        return this.sendBack(review, { kind: 'qa' });
-      case 'needs-you':
-        return this.stuck(review, step.reason);
-    }
+  private qaNext(review: QaReview, event: QaLoopEvent): Effect.Effect<void, never, ManagerServices> {
+    return Effect.gen({ self: this }, function* () {
+      const project = this.store.projects.find((p) => p.id === review.projectId);
+      if (!project) return;
+      const step = qaNextStep({ openedByOffice: !!review.openedByOffice, autoSendBack: autoSendBackFor(project) }, event);
+      switch (step.kind) {
+        case 'nothing':
+          if (review.followUp) this.putReview({ ...review, followUp: undefined });
+          return;
+        case 'send-back':
+          return yield* this.sendBack(review, { kind: 'qa' });
+        case 'needs-you':
+          return this.stuck(review, step.reason);
+      }
+    });
   }
 
   /** A passed PR whose checks on GitHub keep failing goes back to be fixed, like one QA failed. */
   sendBackChecks(repo: string, number: number, checks: FailedCheck[]): Promise<void> {
     const review = this.store.reviews.get(prKey(repo, number));
-    if (!review) throw new Error(`QA hasn't reviewed ${repo}#${number}`);
-    return this.sendBack(review, { kind: 'checks', checks });
+    if (!review) throw new Refused({ message: `QA hasn't reviewed ${repo}#${number}` });
+    return this.runtime.runPromise(this.sendBack(review, { kind: 'checks', checks }));
   }
 
   /**
@@ -1047,13 +1170,13 @@ export class AgentManager {
    * otherwise a new agent sits down on the PR's branch to fix it.
    */
   /** `note` is the operations officer's advice, when they're the one sending it back. */
-  private async sendBack(review: QaReview, fixes: FixFor, note?: string): Promise<void> {
-    const { report } = review;
-    if (!report) return;
-    const where = `${review.repo.split('/')[1]}#${review.number}`;
-    const why = fixes.kind === 'qa' ? 'failed QA' : 'keeps failing its checks';
-    const advice = note && `${plannerFor(review.projectId).name}, the operations officer, looked at why this PR is stuck: ${note}`;
-    try {
+  private sendBack(review: QaReview, fixes: FixFor, note?: string): Effect.Effect<void, never, GitHub> {
+    return Effect.gen({ self: this }, function* () {
+      const { report } = review;
+      if (!report) return;
+      const where = `${review.repo.split('/')[1]}#${review.number}`;
+      const why = fixes.kind === 'qa' ? 'failed QA' : 'keeps failing its checks';
+      const advice = note && `${plannerFor(review.projectId).name}, the operations officer, looked at why this PR is stuck: ${note}`;
       const owner = this.prOwner(review.repo, review.number);
       if (owner) {
         this.putReview({ ...review, followUp: { kind: 'fixing', agentId: owner.id, agentName: owner.name, fixes } });
@@ -1062,7 +1185,7 @@ export class AgentManager {
         this.hub.toast('info', `🔧 ${where} ${why} – back to ${owner.name}`, owner.id);
         return;
       }
-      const pr = await this.github.getPullRequest(review.repo, review.number);
+      const pr = yield* (yield* GitHub).getPullRequest(review.repo, review.number);
       const agent = this.seat(review.projectId, review.repo, {
         id: newId('agent'),
         task: 'fix',
@@ -1074,9 +1197,11 @@ export class AgentManager {
       if (advice) this.rt(agent.id).inbox.push(advice);
       this.putReview({ ...review, followUp: { kind: 'fixing', agentId: agent.id, agentName: agent.name, fixes } });
       this.hub.toast('info', `🔧 ${where} ${why} – ${agent.name} sits down to fix it`, agent.id);
-    } catch (err) {
-      this.needsYou(review, `it couldn't be sent back (${errorMessage(err)})`);
-    }
+    }).pipe(
+      // a full room throws from seat(): it's the manager's call then, like any other failure to send it back
+      Effect.catchDefect((defect) => Effect.sync(() => this.needsYou(review, `it couldn't be sent back (${errorMessage(defect)})`))),
+      Effect.catch((err) => Effect.sync(() => this.needsYou(review, `it couldn't be sent back (${err.message})`))),
+    );
   }
 
   private fixPromptFor(agent: Agent, review: QaReview, report: QaReport, fixes: FixFor): string {
@@ -1089,7 +1214,6 @@ export class AgentManager {
     }
   }
 
-
   // ---------------------------------------------------------------- triaging stuck PRs
 
   /** The PR is stuck: the room's operations officer looks at it first, unless they've had their tries. */
@@ -1099,103 +1223,111 @@ export class AgentManager {
     if (step.kind === 'needs-you') return this.needsYou(review, step.reason);
     const triaging: QaReview = { ...review, triages: (review.triages ?? 0) + 1, followUp: { kind: 'triaging', officer, activity: 'Coming over to look' } };
     this.putReview(triaging);
-    const before = this.triages.get(review.projectId) ?? Promise.resolve();
-    const next = before.then(() => this.triage(triaging, reason)).catch((err: unknown) => this.needsYou(triaging, `${officer} hit a problem looking at it (${errorMessage(err)})`));
-    this.triages.set(review.projectId, next);
+    // one at a time per room, in the order they got stuck
+    this.background(this.triageLock.withPermit(review.projectId)(this.triage(triaging, reason)));
+  }
+
+  /** Stops the operations officer looking at the PR, if they are: the manager stepped in, or the PR went. */
+  private stopTriage(key: string): void {
+    if (FiberMap.hasUnsafe(this.triageRuns, key)) this.runtime.runFork(FiberMap.remove(this.triageRuns, key));
   }
 
   /** The operations officer reads QA's reports, the checks, the diff and the issue, then does one thing about it. */
-  private async triage(review: QaReview, reason: string): Promise<void> {
-    const officer = plannerFor(review.projectId);
-    const key = prKey(review.repo, review.number);
-    // the manager may have stepped in meanwhile (a re-test, a merge), and then it's not the officer's any more
-    const current = () => {
-      const now = this.store.reviews.get(key);
-      return now?.followUp?.kind === 'triaging' ? now : undefined;
-    };
-    const activity = (text: string) => {
-      const now = current();
-      if (now && text) this.putReview({ ...now, followUp: { kind: 'triaging', officer: officer.name, activity: truncate(text, 120) } });
-    };
-    let result: TriageResult;
-    let pr: PullRequestDetail | undefined;
-    const abort = new AbortController();
-    this.triageAborts.set(key, abort);
-    try {
-      const project = this.store.project(review.projectId);
-      activity('Reading the pull request');
-      pr = await this.github.getPullRequest(review.repo, review.number);
-      const checks = this.failingChecks(review);
-      const [diff, issues] = await Promise.all([
-        this.github.pullRequestDiff(review.repo, review.number).catch((err) => `(couldn't get the diff: ${errorMessage(err)})`),
-        Promise.all(pr.linkedIssues.slice(0, 3).map((n) => this.github.getIssue(review.repo, n).catch(() => null))),
-      ]);
-      activity('Checking out the pull request');
-      const id = triageWorkspaceId(review.projectId);
-      await this.workspace.checkoutPullRequest(review.repo, id, review.number);
-      if (!current()) return;
-      const decision = await this.triager.triage(
-        {
-          projectId: project.id,
-          projectName: project.name,
-          officer,
-          repo: review.repo,
-          pr,
-          cwd: this.workspace.dir(id),
-          reason,
-          review,
-          checks,
-          diff,
-          issues: issues.filter((i) => i !== null),
-          settings: this.store.settings,
-          signal: abort.signal,
-        },
-        activity,
+  private triage(review: QaReview, reason: string): Effect.Effect<void, never, ManagerServices> {
+    return Effect.gen({ self: this }, function* () {
+      const officer = plannerFor(review.projectId);
+      const key = prKey(review.repo, review.number);
+      // the manager may have stepped in meanwhile (a re-test, a merge), and then it's not the officer's any more
+      const current = () => {
+        const now = this.store.reviews.get(key);
+        return now?.followUp?.kind === 'triaging' ? now : undefined;
+      };
+      const activity = (text: string) => {
+        const now = current();
+        if (now && text) this.putReview({ ...now, followUp: { kind: 'triaging', officer: officer.name, activity: truncate(text, 120) } });
+      };
+      const github = yield* GitHub;
+      const workspace = yield* Workspace;
+      const triager = yield* Triage;
+      let pr: PullRequestDetail | undefined;
+      // the look itself, which a re-test or the PR going stops (stopTriage)
+      const look: Effect.Effect<TriageResult, never> = Effect.gen({ self: this }, function* () {
+        const project = this.store.project(review.projectId);
+        activity('Reading the pull request');
+        pr = yield* github.getPullRequest(review.repo, review.number);
+        const checks = this.failingChecks(review);
+        const [diff, linked] = yield* Effect.all([
+          github.pullRequestDiff(review.repo, review.number).pipe(Effect.catch((err) => Effect.succeed(`(couldn't get the diff: ${err.message})`))),
+          Effect.forEach(pr.linkedIssues.slice(0, 3), (n) => github.getIssue(review.repo, n).pipe(Effect.orElseSucceed(() => null)), { concurrency: 'unbounded' }),
+        ], { concurrency: 'unbounded' });
+        activity('Checking out the pull request');
+        const id = triageWorkspaceId(review.projectId);
+        yield* workspace.checkoutPullRequest(review.repo, id, review.number);
+        if (!current()) return { error: 'The manager stepped in' };
+        const decision = yield* triager.triage(
+          {
+            projectId: project.id,
+            projectName: project.name,
+            officer,
+            repo: review.repo,
+            pr,
+            cwd: workspace.dir(id),
+            reason,
+            review,
+            checks,
+            diff,
+            issues: linked.filter((i) => i !== null),
+            settings: this.store.settings,
+          },
+          activity,
+        );
+        return { decision };
+      }).pipe(
+        Effect.catch((err) => Effect.succeed<TriageResult>({ error: err.message })),
+        Effect.catchDefect((defect) => Effect.succeed<TriageResult>({ error: errorMessage(defect) })),
       );
-      result = { decision };
-    } catch (err) {
-      result = { error: errorMessage(err) };
-    } finally {
-      this.triageAborts.delete(key);
-    }
-    const now = current();
-    if (!now) return;
-    const decided = 'decision' in result ? { ...now, triage: { officer: officer.name, ...result.decision, at: Date.now() } } : now;
-    await this.afterTriage(decided, afterTriage(officer.name, result, { closes: pr?.linkedIssues ?? [] }));
+      const exit = yield* Fiber.await(yield* FiberMap.run(this.triageRuns, key, look));
+      const now = current();
+      if (!now || !Exit.isSuccess(exit)) return;
+      const result = exit.value;
+      const decided = 'decision' in result ? { ...now, triage: { officer: officer.name, ...result.decision, at: Date.now() } } : now;
+      yield* this.afterTriage(decided, afterTriage(officer.name, result, { closes: pr?.linkedIssues ?? [] }));
+    });
   }
 
   /** Does what the operations officer decided. `review.triage` is their decision, if they came to one. */
-  private async afterTriage(review: QaReview, step: TriageStep): Promise<void> {
-    if (step.kind === 'needs-you') return this.needsYou(review, step.reason);
+  private afterTriage(review: QaReview, step: TriageStep): Effect.Effect<void, never, ManagerServices> {
+    if (step.kind === 'needs-you') return Effect.sync(() => this.needsYou(review, step.reason));
     const officer = plannerFor(review.projectId).name;
     const where = `${review.repo.split('/')[1]}#${review.number}`;
     const backToQa = (why: string) => {
       this.putReview({ ...review, followUp: undefined });
       this.requestReview(review.projectId, review.repo, review.number, review.title, `${officer}, the room's operations officer, ${why} because it was stuck: ${step.note}`);
     };
-    try {
+    return Effect.gen({ self: this }, function* () {
       switch (step.kind) {
         case 'retry-qa':
           backToQa('sent it back to you');
           break;
         case 'send-back':
-          await this.sendBack(review, { kind: 'qa' }, step.note);
+          yield* this.sendBack(review, { kind: 'qa' }, step.note);
           break;
         case 'rerun-checks': {
           const runIds = [...new Set(this.failingChecks(review).flatMap((c) => (c.runId ? [c.runId] : [])))];
-          await this.github.rerunFailedRuns(review.repo, runIds);
+          yield* (yield* GitHub).rerunFailedRuns(review.repo, runIds);
           const runs = runIds.length;
           backToQa(`re-ran ${runs} failed GitHub Actions run${runs === 1 ? '' : 's'} and sent it back to you`);
           break;
         }
         case 'close':
-          await this.closeStuck(review, step.note);
+          yield* this.closeStuck(review, step.note);
           break;
       }
       this.hub.toast('info', `${triageLabel({ officer, action: step.kind })} (${where}): ${truncate(step.note, 120)}`, undefined, review.projectId);
-    } catch (err) {
-      this.needsYou(review, `${officer} chose ${step.kind} but it failed (${errorMessage(err)})`);
-    }
+    }).pipe(
+      Effect.catch((err) => Effect.sync(() => this.needsYou(review, `${officer} chose ${step.kind} but it failed (${err.message})`))),
+      Effect.catchDefect((defect) => Effect.sync(() => this.needsYou(review, `${officer} chose ${step.kind} but it failed (${errorMessage(defect)})`))),
+    );
   }
 
   /** The PR's failing checks, as of the board's last look at GitHub: fresh enough for which checks are red. */
@@ -1204,15 +1336,19 @@ export class AgentManager {
   }
 
   /** Closes a PR whose approach can't work. Its issues stay open, marked on the board, for a fresh attempt. */
-  private async closeStuck(review: QaReview, note: string): Promise<void> {
-    const officer = plannerFor(review.projectId).name;
-    const pr = await this.github.getPullRequest(review.repo, review.number);
-    const comment = `🧭 ${officer}, the Focus office's operations officer, closed this pull request: ${note}\n\n${pr.linkedIssues.map((n) => `#${n}`).join(', ')} stays open, so it gets built again.`;
-    await this.github.closePullRequest(review.repo, review.number, comment);
-    for (const issue of pr.linkedIssues) this.store.putClosedPr({ repo: review.repo, issue, pr: review.number, officer, note, at: Date.now() });
-    this.prClosed(review.repo, review.number, false);
-    this.boardChanged(review.projectId);
+  private closeStuck(review: QaReview, note: string): Effect.Effect<void, GitHubError, GitHub> {
+    return Effect.gen({ self: this }, function* () {
+      const github = yield* GitHub;
+      const officer = plannerFor(review.projectId).name;
+      const pr = yield* github.getPullRequest(review.repo, review.number);
+      const comment = `🧭 ${officer}, the Focus office's operations officer, closed this pull request: ${note}\n\n${pr.linkedIssues.map((n) => `#${n}`).join(', ')} stays open, so it gets built again.`;
+      yield* github.closePullRequest(review.repo, review.number, comment);
+      for (const issue of pr.linkedIssues) this.store.putClosedPr({ repo: review.repo, issue, pr: review.number, officer, note, at: Date.now() });
+      this.prClosed(review.repo, review.number, false);
+      this.boardChanged(review.projectId);
+    });
   }
+
   /** The office stops sending the PR back: it's the manager's call now. */
   private needsYou(review: QaReview, reason: string): void {
     this.putReview({ ...review, followUp: { kind: 'needs-you', reason } });
@@ -1228,22 +1364,23 @@ export class AgentManager {
 
   private fixEnded(agent: Agent, outcome: Extract<QaLoopEvent, { kind: 'fix-ended' }>['outcome']): void {
     const review = this.fixing(agent);
-    if (review) void this.qaNext(review, { kind: 'fix-ended', by: agent.name, outcome });
+    if (review) this.background(this.qaNext(review, { kind: 'fix-ended', by: agent.name, outcome }));
   }
 
   /** A review that ended without a verdict (stopped, failed, or its PR went away). */
   private reviewEnded(agent: Agent, error: string): void {
     const review = this.store.reviews.get(prKey(agent.repo, agent.issue.number));
     if (review && (review.status === 'testing' || review.status === 'queued')) this.putReview({ ...review, status: 'error', error, finishedAt: Date.now() });
-    // don't start the next review under the captain's nose when they stopped this one on purpose
-    if (error !== STOPPED_BY_CAPTAIN) setTimeout(() => this.nextReview(agent.projectId), 0);
+    // don't start the next review under the captain's nose when they stopped this one on purpose; otherwise once this
+    // one's wound down
+    if (error !== STOPPED_BY_CAPTAIN) this.background(Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => this.nextReview(agent.projectId)))));
   }
 
   /** The PR is merged or closed: forget its review, and stop the QA officer if they're on it. */
   reviewGone(repo: string, number: number): void {
     const review = this.store.reviews.get(prKey(repo, number));
     if (!review) return;
-    this.triageAborts.get(prKey(repo, number))?.abort();
+    this.stopTriage(prKey(repo, number));
     this.store.removeReview(repo, number);
     this.hub.send({ type: 'review-removed', repo, number });
     const qa = review.agentId ? this.store.agents.get(review.agentId) : undefined;
@@ -1290,7 +1427,7 @@ export class AgentManager {
     const agent = this.store.agent(id);
     const rt = this.rt(id);
     const pending = rt.permission;
-    if (!pending || pending.req.id !== requestId) throw new Error('That request is no longer pending');
+    if (!pending || pending.req.id !== requestId) throw new Refused({ message: 'That request is no longer pending' });
     rt.permission = undefined;
     this.print(agent, [{ kind: 'manager', text: `${allow ? '✔ Approved' : '✘ Declined'} by the captain: ${pending.req.summary}` }]);
     this.update(agent, {
@@ -1312,16 +1449,26 @@ export class AgentManager {
     }
   }
 
-  async dismiss(id: string): Promise<void> {
-    const agent = this.store.agents.get(id);
-    if (!agent) return;
-    this.runtimes.get(id)?.session?.stop();
-    this.runtimes.delete(id);
-    this.store.removeAgent(id);
-    this.hub.send({ type: 'agent-removed', id });
-    this.schedule();
-    const checkouts = agent.lead ? agent.lead.repos.map((r) => ({ repo: r.repo, id: leadWorktreeId(id, r.folder) })) : [{ repo: agent.repo, id }];
-    for (const c of checkouts) await this.workspace.remove(c.repo, c.id).catch(() => undefined);
+  dismiss(id: string): Promise<void> {
+    return this.runtime.runPromise(this.goHome(id));
+  }
+
+  /** Sends the agent home: their work stops (and with it their Claude Code session) and their checkouts go. */
+  private goHome(id: string): Effect.Effect<void, never, Workspace> {
+    return Effect.gen({ self: this }, function* () {
+      const agent = this.store.agents.get(id);
+      if (!agent) return;
+      // out of the office first, so their work, as it's interrupted, finds them gone
+      this.runtimes.get(id)?.session?.stop();
+      this.runtimes.delete(id);
+      this.store.removeAgent(id);
+      this.hub.send({ type: 'agent-removed', id });
+      yield* FiberMap.remove(this.runs, id);
+      this.schedule();
+      const workspace = yield* Workspace;
+      const checkouts = agent.lead ? agent.lead.repos.map((r) => ({ repo: r.repo, id: leadWorktreeId(id, r.folder) })) : [{ repo: agent.repo, id }];
+      yield* Effect.forEach(checkouts, (c) => workspace.remove(c.repo, c.id), { discard: true });
+    });
   }
 
   /** Called when a PR an agent opened was merged or closed. The agent packs up and goes home. */
@@ -1334,10 +1481,10 @@ export class AgentManager {
     this.print(agent, [{ kind: 'success', text: merged ? `🎉 PR #${number} was merged!` : `PR #${number} was closed` }]);
     this.update(agent, { activity: merged ? '🎉 Merged! Packing up' : 'PR closed – packing up' });
     if (merged) this.hub.toast('success', `🎉 Merged ${repo}#${number} – ${agent.name} heads home`, agent.id);
-    setTimeout(() => {
-      this.leaving.delete(agent.id);
-      void this.dismiss(agent.id);
-    }, 6000);
+    this.background(Effect.sleep('6 seconds').pipe(
+      Effect.andThen(Effect.sync(() => this.leaving.delete(agent.id))),
+      Effect.andThen(this.goHome(agent.id)),
+    ));
   }
 
   /** Issues already claimed by an agent who is still in the office. */
@@ -1351,9 +1498,6 @@ export class AgentManager {
     return Math.max(0, project.maxAgents - busy);
   }
 }
-
-/** QA officers and leads don't sit at one of a room's desks, and don't count against its limit (only the global one). */
-const deskless = (a: Pick<Agent, 'task'>) => a.task === 'review' || a.task === 'lead';
 
 function withNotes(prompt: string, notes: string[]): string {
   return notes.length ? `${prompt}\n\nNotes from your manager:\n${notes.map((m) => `- ${m}`).join('\n')}` : prompt;

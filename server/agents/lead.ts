@@ -297,6 +297,21 @@ export function qaVerdictNote(repo: string, number: number, report: Pick<QaRepor
   return `QA ${verdict} ${repo}#${number}: ${report.summary}${fix}\n\n${next}`;
 }
 
+/**
+ * One of the slice's pull requests conflicts with its base: the lead resolves it in their own checkout of that repo
+ * (which still holds the PR's branch) and ships again, which updates the PR.
+ */
+export function conflictsNote(repo: string, number: number, baseBranch: string, folder: string): string {
+  return [
+    `${repo}#${number} has merge conflicts with \`${baseBranch}\`. Resolve them in ./${folder}, which is on its branch:`,
+    `1. \`git -C ${folder} fetch origin\`, then \`git -C ${folder} merge origin/${baseBranch}\`.`,
+    '2. Resolve every conflict so that both sides keep doing what they were meant to do. Read the base branch commits that caused each conflict before choosing.',
+    '3. Run the repo\'s type checks, tests and linters, and fix what the merge broke.',
+    '4. Commit the merge, then ship again with mcp__office__ship: that updates the pull request.',
+    'Merge rather than rebase: the pull request is already open, so its history must stay intact. If you have other work in progress in that repo, commit it or set it aside first.',
+  ].join('\n');
+}
+
 /** The slice's pull requests have all merged or closed, for the lead. */
 export function landedNote(work: LeadWork): string {
   const prs = work.prs.map((p) => `${p.repo}#${p.number} ${p.outcome === 'merged' ? 'merged' : 'was closed unmerged'}`).join(', ');

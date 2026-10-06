@@ -31,7 +31,7 @@ Unit tests cover the pure decision code (QA verdicts and badges, prompts). Keep 
 
 ## Effect
 
-`server/github/` and `server/previews.ts` run on [Effect](https://effect.website/); the rest of the server is still Promise-based and reaches them through adapters at the edge (`toProvider` in `server/github/service.ts`, the `Previews` class's one `ManagedRuntime`). `docs/effect-assessment.md` has the background and the migration path.
+`server/github/`, `server/previews.ts` and the agent manager (`server/agents/manager.ts`, with its services in `services.ts`) run on [Effect](https://effect.website/); the rest of the server is still Promise-based and reaches them through adapters at the edge (`toProvider` in `server/github/service.ts`, the one `ManagedRuntime` each in `Previews` and `AgentManager`, whose public methods stay Promise-based or synchronous). An agent's work runs as a fiber in the manager's `FiberMap`, one per agent, so interrupting it (sending them home) stops their Claude Code session. `docs/effect-assessment.md` has the background and the migration path.
 
 - We're on **Effect v4** (`effect` is pinned exactly). Read `node_modules/effect/CLAUDE.md` and `node_modules/effect/ai-docs/` before writing Effect code, and don't write APIs from memory: `Context.Tag`, `Effect.Service`, `Effect.async`, `catchAll` and `either` are v3 names that don't exist here (`Context.Service`, `Effect.callback`, `Effect.catch`, `Effect.result`).
 - Services are `Context.Service` classes; their implementations (live, demo) are Layers, usually a static `layer`. Tests provide fake Layers (and `TestClock` from `effect/testing` for time) rather than `vi.mock` or real sleeps.

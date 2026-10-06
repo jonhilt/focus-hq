@@ -1,12 +1,14 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
+import { Effect, Layer, ManagedRuntime } from 'effect';
 import express from 'express';
 import { BrowserPool } from './agents/browserTool';
 import { ClaudeDrafter, ClaudeNumberOne, ClaudeTriager } from './agents/claudeCrew';
 import { ClaudeRunner } from './agents/claudeRunner';
 import { DemoDrafter, DemoNumberOne, DemoRunner, DemoTriager, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
+import { Sessions, Triage, Workspace } from './agents/services';
 import { NumberOne, type ShipStatus, summariseShip } from './agents/numberOne';
 import { IssuePlanner } from './agents/planner';
 import type { WorkspaceOps } from './agents/types';
@@ -14,7 +16,7 @@ import * as git from './agents/workspace';
 import { config } from './config';
 import { demoLayer } from './github/demo';
 import { ghCliLayer } from './github/ghCli';
-import { toProvider } from './github/service';
+import { GitHub, toProvider } from './github/service';
 import { Hub } from './hub';
 import { Office } from './office';
 import { demoPreviewPage, Previews } from './previews';
@@ -45,7 +47,9 @@ async function main() {
   store.load();
 
   const hub = new Hub();
-  const github = toProvider(config.demo ? demoLayer : ghCliLayer);
+  // one GitHub for the whole office (the demo's lives in memory), as an Effect service and through the Promise adapter
+  const gitHub = Layer.succeed(GitHub, await ManagedRuntime.make(config.demo ? demoLayer : ghCliLayer).runPromise(GitHub.use(Effect.succeed)));
+  const github = toProvider(gitHub);
   const browsers = new BrowserPool();
   const runner = config.demo ? new DemoRunner() : new ClaudeRunner(browsers);
   const previews = new Previews(hub, github, config.demo);
@@ -54,7 +58,8 @@ async function main() {
   // Number One reads the ship through the office, which is up by the time anyone asks
   const numberOne = new NumberOne(store, hub, config.demo ? new DemoNumberOne() : new ClaudeNumberOne(), async (): Promise<ShipStatus> => summariseShip(await office.snapshot(), (id) => workspace.dir(id)));
   const office = new Office(store, hub, github, previews, planner, numberOne, new Voice(hub, config.demo), await currentVersion());
-  office.agents = new AgentManager(store, hub, github, runner, workspace, config.demo ? new DemoTriager() : new ClaudeTriager(), (id) => office.boardChanged(id));
+  const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()));
+  office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
 
   if (config.demo && store.projects.length === 0) {
     const shop = store.addProject('Sock Shop', '#ff8a5b', 'beach');

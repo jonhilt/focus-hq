@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { carryMergeable } from './board';
-import type { PullRequest } from './types';
+import { carryMergeable, resolvingAlready } from './board';
+import type { Agent, PullRequest } from './types';
 
 const pr = (mergeable: PullRequest['mergeable'], over: Partial<PullRequest> = {}): PullRequest => ({
   repo: 'acme/shop',
@@ -40,5 +40,21 @@ describe('carryMergeable', () => {
     expect(carryMergeable([pr('CONFLICTING', { number: 8 })], [pr('UNKNOWN')])[0].mergeable).toBe('UNKNOWN');
     expect(carryMergeable([pr('CONFLICTING', { repo: 'acme/api' })], [pr('UNKNOWN')])[0].mergeable).toBe('UNKNOWN');
     expect(carryMergeable([pr('UNKNOWN')], [pr('UNKNOWN')])[0].mergeable).toBe('UNKNOWN');
+  });
+});
+
+describe('resolvingAlready', () => {
+  const agent = (task: Agent['task'], status: Agent['status']) => ({ task, status });
+
+  it('is a developer still at work on the PR, who would only hear the request twice', () => {
+    expect(resolvingAlready(agent('issue', 'working'))).toBe(true);
+    expect(resolvingAlready(agent('issue', 'queued'))).toBe(true);
+    expect(resolvingAlready(agent('issue', 'done'))).toBe(false);
+    expect(resolvingAlready(undefined)).toBe(false);
+  });
+
+  it('is never a goal’s lead: they take the conflicts on whatever else they’re doing', () => {
+    expect(resolvingAlready(agent('lead', 'working'))).toBe(false);
+    expect(resolvingAlready(agent('lead', 'done'))).toBe(false);
   });
 });
