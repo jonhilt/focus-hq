@@ -1,10 +1,9 @@
 import * as THREE from 'three';
 import type { Builder } from './builder';
-import { canvasTexture, makeCanvas } from './canvas';
 import { LOUNGE, LOUNGE_DOOR_X, OFFICE, OVER_DOOR, WALL_H, WALL_T } from './layout';
 import { box, flat, toon } from './materials';
 import { ceilingLight, chair, cyl, plant } from './props';
-import { LCARS, LCARS_FONT, lcarsConsole, lcarsFrame, lcarsSign, viewport } from './starship';
+import { LCARS, lcarsConsole, lcarsSign, starChartTexture, viewport } from './starship';
 
 const TABLE = { x: 0.6, z: 21.3, length: 5.2, width: 1.5 };
 /** Seats round the table: [x, z, facing], facing being the chair's rotation (0 faces +X). */
@@ -17,8 +16,7 @@ const SEATS: [number, number, number][] = [
 
 /** The observation lounge: a long table under the viewports and a star chart on the wall. Scenery, built in world coordinates. */
 export class Lounge {
-  private screen = makeCanvas(1280, 768);
-  private screenTex = canvasTexture(this.screen.canvas);
+  private screenTex = starChartTexture();
 
   constructor(b: Builder) {
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.56), flat(lcarsSign('Observation lounge', { color: LCARS.lilac, code: '04-00' })));
@@ -85,48 +83,9 @@ export class Lounge {
     carpetStripe.rotation.x = -Math.PI / 2;
     carpetStripe.position.set(TABLE.x, 0.008, TABLE.z);
     b.add(carpetStripe);
-
-    drawStarChart(this.screen);
-    this.screenTex.needsUpdate = true;
   }
 
   dispose(): void {
     this.screenTex.dispose();
   }
-}
-
-/** Long-range sensors: a scatter of stars (the same every time) and the course the ship has laid in across them. */
-function drawStarChart({ canvas, ctx }: { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D }): void {
-  const area = lcarsFrame(ctx, canvas.width, canvas.height, { title: 'Long-range sensors', color: LCARS.lilac, seed: 1864 });
-  let seed = 1864;
-  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  for (let i = 0; i < 140; i++) {
-    ctx.fillStyle = rand() > 0.85 ? LCARS.gold : '#e8e2f0';
-    ctx.globalAlpha = 0.4 + rand() * 0.6;
-    ctx.beginPath();
-    ctx.arc(area.x + rand() * area.w, area.y + 40 + rand() * (area.h - 40), 1 + rand() * 2.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-  const course: [number, number][] = [[0.06, 0.82], [0.3, 0.6], [0.52, 0.66], [0.74, 0.38], [0.92, 0.22]];
-  const at = ([u, v]: [number, number]): [number, number] => [area.x + u * area.w, area.y + 40 + v * (area.h - 40)];
-  ctx.strokeStyle = LCARS.orange;
-  ctx.lineWidth = 4;
-  ctx.setLineDash([16, 12]);
-  ctx.beginPath();
-  for (const [i, point] of course.entries()) ctx[i ? 'lineTo' : 'moveTo'](...at(point));
-  ctx.stroke();
-  ctx.setLineDash([]);
-  for (const point of course) {
-    const [x, y] = at(point);
-    ctx.fillStyle = LCARS.orange;
-    ctx.beginPath();
-    ctx.arc(x, y, 9, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  ctx.fillStyle = LCARS.peach;
-  ctx.font = `600 40px ${LCARS_FONT}`;
-  ctx.fillText('COURSE LAID IN', area.x, area.y);
 }

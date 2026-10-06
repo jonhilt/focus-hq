@@ -6,13 +6,14 @@ import { ACTIVE_STATUSES } from '../../../shared/types';
 import { state } from '../net/state';
 import { Builder, interactive } from './builder';
 import type { Deck } from './deck';
+import type { ScreenName } from './deckExtras';
 import { canvasTexture, fitText, makeCanvas, roundRect } from './canvas';
-import { type Box2, DOOR_W, HALL_HALF, LOBBY, LOUNGE, LOUNGE_DOOR_X, OFFICE, OVER_DOOR, ROOM_DEPTH, ROOM_WIDTH, roomSlot, roomToWorld, rowsFor, SUN_POSITION, WALL_H, WALL_T } from './layout';
+import { type Box2, contains, DOOR_W, HALL_HALF, LOBBY, LOUNGE, LOUNGE_DOOR_X, OFFICE, OVER_DOOR, ROOM_DEPTH, ROOM_WIDTH, roomSlot, roomToWorld, rowsFor, SUN_POSITION, WALL_H, WALL_T } from './layout';
 import { box, flat, toon, toonMaterial } from './materials';
 import { bookshelf, ceilingLight, chair, coffeeMachine, cyl, desk, DESK_TOP, plant, rug, sofa, trophy, waterCooler } from './props';
 import { EngineeringStation } from './engineering';
 import { Lounge } from './lounge';
-import { FirstOfficer } from './numberOne';
+import { FirstOfficer, type Seat } from './numberOne';
 import { buildHiddenRoom, buildVacantRoom, ProjectRoom } from './room';
 import type { Scenery } from './scenery';
 import { tiled } from './textures';
@@ -28,15 +29,32 @@ export interface Place {
 }
 
 const OUTER_X = HALL_HALF + ROOM_DEPTH;
+const OFFICE_WALL = '#cfd3e6';
+
+/**
+ * Where the ready room, and the lounge beyond it, are: aboard the deck built in Blender that seats Number One (who's
+ * always in the ready room), or built here, north of the lobby.
+ */
+type ReadyRoom = { kind: 'aboard'; numberOne: Seat } | { kind: 'here' };
+
+/** A room north of the lobby: the floor it covers, where to teleport to in it, and the way the directory points to it. */
+interface NorthRoom {
+  name: string;
+  area: Box2;
+  way: string;
+  place: Place;
+}
 
 /** Builds and owns the whole office: lobby, manager's office, hallway and one room per project. */
 export class World {
   readonly root = new THREE.Group();
   colliders: Box2[] = [];
   rooms = new Map<string, ProjectRoom>();
-  lounge: Lounge | null = null;
   engineering: EngineeringStation | null = null;
   numberOne: FirstOfficer | null = null;
+  private readonly readyRoom: ReadyRoom;
+  private lounge: Lounge | null = null;
+  private northRooms: NorthRoom[] = [];
   /** Room landscapes by project, theme and slot; kept across rebuilds since they're slow to make. */
   private sceneries = new Map<string, Scenery>();
   private builder: Builder | null = null;
@@ -59,6 +77,10 @@ export class World {
   ) {
     scene.add(this.root);
     for (const deck of decks) this.root.add(deck.root);
+    const screens: Record<ScreenName, THREE.Material> = { 'mission-control': flat(this.dashboardTex) };
+    for (const { screen, mesh } of decks.flatMap((d) => d.screens)) mesh.material = screens[screen];
+    const numberOne = decks.find((d) => d.numberOne)?.numberOne;
+    this.readyRoom = numberOne ? { kind: 'aboard', numberOne } : { kind: 'here' };
   }
 
   /** Rebuilds the building when the set of projects (or their names/colours/repos, or which are hidden) changes. */
@@ -95,30 +117,19 @@ export class World {
 
     // floors and ceiling
     b.floor(LOBBY.x0, LOBBY.x1, LOBBY.z0, LOBBY.z1, toon('#ffffff', { map: tiled.carpet('#4a3f6e', 6, 4) }));
-    b.floor(OFFICE.x0, OFFICE.x1, OFFICE.z0, OFFICE.z1, toon('#ffffff', { map: tiled.carpet('#7b2d43', 4, 3) }));
-    b.floor(LOUNGE.x0, LOUNGE.x1, LOUNGE.z0, LOUNGE.z1, toon('#ffffff', { map: tiled.carpet('#3b3f5c', 4, 2) }));
     b.floor(-HALL_HALF, HALL_HALF, hallEnd, 0, toon('#ffffff', { map: tiled.carpet(HULL.carpet, 3, -hallEnd / 2) }));
     // the hallway grows with every project, so lifting the edge strips clear of the carpet would never be enough from
     // its far end: they win the depth test by offset instead
     const edge = toonMaterial({ color: HULL.carpetEdge, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 });
     for (const s of [-1, 1]) b.floor(s * (HALL_HALF - 0.45), s * (HALL_HALF - 0.3), hallEnd, 0, edge);
-    b.ceiling(-OUTER_X, OUTER_X, hallEnd, LOUNGE.z1);
+    b.ceiling(-OUTER_X, OUTER_X, hallEnd, LOBBY.z1);
 
     // walls
     const lobbyWall = '#e2d6dc';
-    const officeWall = '#cfd3e6';
     const roomWall = HULL.bulkhead;
-    b.wall(OFFICE.x0, OFFICE.z1, OFFICE.x1, OFFICE.z1, officeWall, [{ at: LOUNGE_DOOR_X, width: DOOR_W }]);
-    b.wall(OFFICE.x0, OFFICE.z0, OFFICE.x0, OFFICE.z1, officeWall);
-    b.wall(OFFICE.x1, OFFICE.z0, OFFICE.x1, OFFICE.z1, officeWall);
     // Walls run unbroken between corners: two lengths meeting end to end leave a seam that flickers down their face.
-    // The office's south wall spans the lobby, which is wider than the office.
-    b.wall(LOBBY.x0, LOBBY.z1, LOBBY.x1, LOBBY.z1, officeWall, [{ at: 0, width: DOOR_W }]);
     b.wall(LOBBY.x0, LOBBY.z0, LOBBY.x0, LOBBY.z1, lobbyWall);
     b.wall(LOBBY.x1, LOBBY.z0, LOBBY.x1, LOBBY.z1, lobbyWall);
-    b.wall(LOUNGE.x0, LOUNGE.z0, LOUNGE.x0, LOUNGE.z1, HULL.bulkhead);
-    b.wall(LOUNGE.x1, LOUNGE.z0, LOUNGE.x1, LOUNGE.z1, HULL.bulkhead);
-    b.wall(LOUNGE.x0, LOUNGE.z1, LOUNGE.x1, LOUNGE.z1, HULL.bulkhead);
     for (const s of [-1, 1]) {
       // rooms on the right (+x) take the even slots
       const roomDoors = Array.from({ length: rows }, (_, r) => ({ at: -(r + 0.5) * ROOM_WIDTH, width: DOOR_W, locked: this.inUse.has(r * 2 + (s > 0 ? 0 : 1)) }));
@@ -166,8 +177,16 @@ export class World {
     for (const scenery of previous.values()) scenery.dispose();
 
     this.buildLobby(b);
-    this.buildManagerOffice(b);
-    this.lounge = new Lounge(b);
+    switch (this.readyRoom.kind) {
+      case 'here':
+        this.buildReadyRoom(b);
+        break;
+      case 'aboard':
+        // nothing's north of the lobby, so there's no door in its north wall
+        b.wall(LOBBY.x0, LOBBY.z1, LOBBY.x1, LOBBY.z1, OFFICE_WALL);
+        this.seatNumberOne(b, this.readyRoom.numberOne);
+        break;
+    }
     this.engineering = new EngineeringStation(b);
 
     this.root.add(b.group);
@@ -181,12 +200,6 @@ export class World {
     const hallSign = new THREE.Mesh(new THREE.PlaneGeometry(3.7, 0.62), flat(lcarsSign('Holodecks', { color: LCARS.periwinkle, sub: 'one per project', code: 'Deck 4' })));
     hallSign.position.set(0, 2.75, 0.15);
     b.add(hallSign);
-    const officeSign = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 0.62), flat(lcarsSign('Ready room', { color: LCARS.red, code: '04-01' })));
-    officeSign.position.set(0, 2.88, OFFICE.z0 - OVER_DOOR);
-    officeSign.rotation.y = Math.PI;
-    b.add(officeSign);
-    interactive(officeSign, { kind: 'manager' }, () => 'Open the ready room console');
-
     // big welcome logo on the west wall + directory
     const logo = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.1), flat(lcarsSign('U.S.S. Focus HQ', { w: 1024, h: 245, color: LCARS.gold, sub: 'crewed by Claude Code agents', code: 'NCC-4477' })));
     const lz = (LOBBY.z0 + LOBBY.z1) / 2;
@@ -251,6 +264,42 @@ export class World {
     }
   }
 
+  /** The ready room, through the lobby's north door, and the observation lounge beyond it. */
+  private buildReadyRoom(b: Builder): void {
+    // the office's south wall spans the lobby, which is wider than the office
+    b.wall(LOBBY.x0, LOBBY.z1, LOBBY.x1, LOBBY.z1, OFFICE_WALL, [{ at: 0, width: DOOR_W }]);
+    b.ceiling(-OUTER_X, OUTER_X, LOBBY.z1, LOUNGE.z1);
+    b.floor(OFFICE.x0, OFFICE.x1, OFFICE.z0, OFFICE.z1, toon('#ffffff', { map: tiled.carpet('#7b2d43', 4, 3) }));
+    b.floor(LOUNGE.x0, LOUNGE.x1, LOUNGE.z0, LOUNGE.z1, toon('#ffffff', { map: tiled.carpet('#3b3f5c', 4, 2) }));
+    b.wall(OFFICE.x0, OFFICE.z1, OFFICE.x1, OFFICE.z1, OFFICE_WALL, [{ at: LOUNGE_DOOR_X, width: DOOR_W }]);
+    b.wall(OFFICE.x0, OFFICE.z0, OFFICE.x0, OFFICE.z1, OFFICE_WALL);
+    b.wall(OFFICE.x1, OFFICE.z0, OFFICE.x1, OFFICE.z1, OFFICE_WALL);
+    b.wall(LOUNGE.x0, LOUNGE.z0, LOUNGE.x0, LOUNGE.z1, HULL.bulkhead);
+    b.wall(LOUNGE.x1, LOUNGE.z0, LOUNGE.x1, LOUNGE.z1, HULL.bulkhead);
+    b.wall(LOUNGE.x0, LOUNGE.z1, LOUNGE.x1, LOUNGE.z1, HULL.bulkhead);
+    const officeSign = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 0.62), flat(lcarsSign('Ready room', { color: LCARS.red, code: '04-01' })));
+    officeSign.position.set(0, 2.88, OFFICE.z0 - OVER_DOOR);
+    officeSign.rotation.y = Math.PI;
+    b.add(officeSign);
+    interactive(officeSign, { kind: 'manager' }, () => 'Open the ready room console');
+    this.buildManagerOffice(b);
+    this.lounge = new Lounge(b);
+    this.northRooms = [
+      {
+        name: 'Ready room',
+        area: { minX: OFFICE.x0, maxX: OFFICE.x1, minZ: OFFICE.z0, maxZ: OFFICE.z1 },
+        way: '↑ north',
+        place: { label: '🎖️ Ready room', position: new THREE.Vector3(0, 0, OFFICE.z0 + 1.5), lookAt: new THREE.Vector3(0, 1.2, OFFICE.z0 + 5) },
+      },
+      {
+        name: 'Observation lounge',
+        area: { minX: LOUNGE.x0, maxX: LOUNGE.x1, minZ: LOUNGE.z0, maxZ: LOUNGE.z1 },
+        way: '↑ past the ready room',
+        place: { label: '🖖 Observation lounge', position: new THREE.Vector3(-1.2, 0, LOUNGE.z0 + 0.9), lookAt: new THREE.Vector3(0.6, 1.1, LOUNGE.z0 + 4.6) },
+      },
+    ];
+  }
+
   private buildManagerOffice(b: Builder): void {
     const cz = (OFFICE.z0 + OFFICE.z1) / 2;
     const officeRug = rug('#f8f0fc', 5.5, 4);
@@ -270,7 +319,7 @@ export class World {
     b.add(seat);
     // Number One sits across the desk's east end from the captain, clear of the way in, the console and the inbox
     // (lifted a hair so their shadow clears the rug)
-    this.numberOne = new FirstOfficer(b, new THREE.Vector3(1.8, 0.005, cz + 0.1), seat.position);
+    this.seatNumberOne(b, { at: new THREE.Vector3(1.8, 0.005, cz + 0.1), facing: seat.position });
 
     const computer = new THREE.Group();
     computer.position.set(0.6, DESK_TOP, cz + 1.3);
@@ -348,6 +397,12 @@ export class World {
     }
   }
 
+  private seatNumberOne(b: Builder, seat: Seat): void {
+    this.numberOne = new FirstOfficer(seat);
+    b.add(this.numberOne.group);
+    b.colliders.push(this.numberOne.footprint);
+  }
+
   /** Where you come aboard: the first deck built in Blender, or the concourse. */
   boarding(): Place {
     return this.decks[0]?.places[0] ?? { label: '🛋️ Concourse', position: new THREE.Vector3(0, 0, 8), lookAt: new THREE.Vector3(0, 1.6, 0) };
@@ -358,8 +413,7 @@ export class World {
     const places: Place[] = [
       ...this.decks.flatMap((d) => d.places),
       { label: '🛋️ Concourse', position: new THREE.Vector3(0, 0, LOBBY.z1 - 1.2), lookAt: new THREE.Vector3(0, 1.6, 0) },
-      { label: '🎖️ Ready room', position: new THREE.Vector3(0, 0, OFFICE.z0 + 1.5), lookAt: new THREE.Vector3(0, 1.2, OFFICE.z0 + 5) },
-      { label: '🖖 Observation lounge', position: new THREE.Vector3(-1.2, 0, LOUNGE.z0 + 0.9), lookAt: new THREE.Vector3(0.6, 1.1, LOUNGE.z0 + 4.6) },
+      ...this.northRooms.map((r) => r.place),
     ];
     for (const room of this.rooms.values()) {
       places.push({
@@ -378,8 +432,8 @@ export class World {
       const label = deck.areaAt(p);
       if (label) return { label };
     }
-    if (p.z > LOUNGE.z0) return { label: 'Observation lounge' };
-    if (p.z > OFFICE.z0) return { label: 'Ready room' };
+    const north = this.northRooms.find((r) => contains(r.area, p));
+    if (north) return { label: north.name };
     if (p.z > 0) return { label: 'Concourse' };
     if (Math.abs(p.x) < HALL_HALF) return { label: 'Corridor' };
     const row = Math.floor(-p.z / ROOM_WIDTH);
@@ -474,7 +528,7 @@ export class World {
     const area = lcarsFrame(ctx, canvas.width, canvas.height, { title: 'Directory', color: LCARS.lilac, seed: 1701 });
     ctx.textBaseline = 'middle';
     let y = area.y + 50;
-    const entries: [string, string][] = [['Ready room', '↑ north'], ['Observation lounge', '↑ past the ready room'], ...[...this.rooms.values()].map((r): [string, string] => [r.project.name, `holodeck ${r.slot.index + 1} · ${r.slot.side > 0 ? 'right' : 'left'}`])];
+    const entries: [string, string][] = [...this.northRooms.map((r): [string, string] => [r.name, r.way]), ...[...this.rooms.values()].map((r): [string, string] => [r.project.name, `holodeck ${r.slot.index + 1} · ${r.slot.side > 0 ? 'right' : 'left'}`])];
     for (const [name, where] of entries.slice(0, 10)) {
       ctx.textAlign = 'left';
       ctx.fillStyle = LCARS.peach;

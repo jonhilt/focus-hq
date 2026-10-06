@@ -1,31 +1,57 @@
-"""The command deck: the bridge, with a turbolift behind it.
+"""The command deck: the bridge, with a turbolift behind it, the ready room off its starboard side and the observation
+lounge off its port side.
 
 The bridge is a sixteen-sided room with its three forward sides flattened into one wall for the viewscreen. The
 captain's chair sits in the middle of a ring of lighter carpet, flanked by two more; conn and ops face the viewscreen
 ahead of it, and a low rail curves round behind it, open where the walkway comes in from the turbolift aft.
+
+The ready room and the lounge are rectangles whose walls stand back to back with the bridge's, so one doorway passes
+through both and its doors are the bridge's.
 """
 
 import math
 
 from mathutils import Matrix, Vector
 
-from kit import (DOOR_H, HULL, LCARS, annulus, bezel, box, collide_footprint, collide_object, collide_path, cylinder, door,
-                 marker, material, pane, panel, polygon, prism, readout, ring_points, rounded_rect, sign, sweep, toon,
-                 unlit, walls)
+from kit import (DOOR_H, FRAME_PROUD, HULL, LCARS, annulus, bezel, box, collide_footprint, collide_object, collide_path,
+                 cylinder, door, interact, marker, material, pane, panel, polygon, prism, readout, ring_points,
+                 rounded_rect, sign, slab, sweep, toon, unlit, walls)
 
 APOTHEM = 7.5
 HEIGHT = 4.0
 WALL = 0.2
+DOORWAY = 2.0
 #: the sides kept, numbered anticlockwise from starboard in sixteenths of a turn; 3 and 5 make way for the viewscreen
 SIDES = [0, 1, 2, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-#: a wall's cross-section, up the back, over the top and down the front: a header band, then the LCARS stripe over
-#: the dado, as on the corridors (see Builder.wall)
-PROFILE = [(-WALL, 0), (-WALL, HEIGHT), (0, HEIGHT), (0, 3.6), (0.08, 3.6), (0.08, 3.42), (0, 3.42), (0, 0.97),
-           (0.07, 0.97), (0.07, 0.9), (0.05, 0.9), (0.05, 0)]
 CARPET = '#3d4a82'
 CUSHION = '#5c5470'
 COMMAND_RED = '#a8434c'
 CONSOLE_TOP = '#2b2735'
+UPHOLSTERY = '#7b2d43'
+#: the ready room and the lounge: their ceilings, how far they reach fore and aft of the beam, and where their walls
+#: stand, back to back with the bridge's
+ROOM_HEIGHT = 3.4
+ROOM_HALF = 3.5
+ROOM_NEAR = APOTHEM + 2 * WALL
+
+
+def profile(height):
+    """A wall's cross-section, up the back, over the top and down the front: a header band, then the LCARS stripe over
+    the dado, as on the corridors (see Builder.wall)."""
+    return [(-WALL, 0), (-WALL, height), (0, height), (0, height - 0.4), (0.08, height - 0.4), (0.08, height - 0.58),
+            (0, height - 0.58), (0, 0.97), (0.07, 0.97), (0.07, 0.9), (0.05, 0.9), (0.05, 0)]
+
+
+def wall_materials():
+    """A material for each edge of a wall's profile."""
+    bulkhead, frame = toon(HULL['bulkhead']), toon(HULL['frame'])
+    return [bulkhead, bulkhead, bulkhead, frame, frame, frame, bulkhead, toon(HULL['stripe']), toon(HULL['stripe']),
+            toon(HULL['dado']), toon(HULL['dado'])]
+
+
+def facing(at, to):
+    """The yaw that turns an object's +Y from `at` towards `to`."""
+    return math.atan2(-(to[0] - at[0]), to[1] - at[1])
 
 
 def angle(side):
@@ -64,17 +90,22 @@ def build():
     forward_stations()
     rail()
     turbolift()
+    ready_room()
+    lounge()
     marker('place bridge', 'place', (0, -5.8, 0), label='🌌 Bridge')
     marker('area bridge', 'area', (0, 0, 1), scale=(APOTHEM + 0.3, APOTHEM + 0.1, 1), label='Bridge')
 
 
 def shell():
-    bulkhead, frame = toon(HULL['bulkhead']), toon(HULL['frame'])
-    mats = [bulkhead, bulkhead, bulkhead, frame, frame, frame, bulkhead, toon(HULL['stripe']), toon(HULL['stripe']),
-            toon(HULL['dado']), toon(HULL['dado'])]
-    aft = walls('bridge wall', OUTLINE, [(SIDES.index(12), 0.0, 2.0)], PROFILE, mats, lintel_from=DOOR_H + 0.1)[0]
-    door('door turbolift', aft, 2.0)
+    frame = toon(HULL['frame'])
+    starboard, port, aft = walls('bridge wall', OUTLINE, [(SIDES.index(side), 0.0, DOORWAY) for side in (0, 8, 12)],
+                                 profile(HEIGHT), wall_materials(), lintel_from=DOOR_H + 0.1)
+    door('door turbolift', aft, DOORWAY)
     sign('sign turbolift', 'Turbolift', 1.4, LCARS['gold'], (0, 0.13, 2.82), aft, code='01-12')
+    for name, f, text, color, code in (('ready room', starboard, 'Ready room', LCARS['red'], '01-00'),
+                                       ('lounge', port, 'Observation lounge', LCARS['lilac'], '01-08')):
+        door(f'door {name}', f, DOORWAY, wall=2 * WALL, back=FRAME_PROUD)
+        sign(f'sign {name}', text, 1.6, color, (0, 0.13, 2.82), f, code=code)
 
     polygon('bridge floor', OUTLINE, 0, material(HULL['carpet'], surface='carpet', outline=False), uv_scale=0.5)
     polygon('bridge ceiling', OUTLINE, HEIGHT, unlit(HULL['ceiling']), down=True)
@@ -117,11 +148,11 @@ def keys_on_slope(name, width, front, back, frame):
 
 
 def wall_dressing():
-    for side, w, h, z, seed in [(0, 1.2, 1.6, 1.15, 11), (1, 1.8, 1.0, 1.5, 12), (7, 1.8, 1.0, 1.5, 13), (9, 1.8, 1.0, 1.5, 14),
-                                (11, 1.0, 1.6, 1.15, 15), (13, 1.0, 1.6, 1.15, 16), (15, 1.8, 1.0, 1.5, 17)]:
+    for side, w, h, z, seed in [(1, 1.8, 1.0, 1.5, 12), (7, 1.8, 1.0, 1.5, 13), (11, 1.0, 1.6, 1.15, 15), (13, 1.0, 1.6, 1.15, 16),
+                                (15, 1.8, 1.0, 1.5, 17)]:
         readout(f'readout {side}', w, h, seed, (0, 0, z), side_frame(side))
-    sign('dedication plaque', 'U.S.S. Focus', 2.2, LCARS['gold'], (0, 0.025, 1.7), side_frame(8), sub='Crewed by Claude Code agents', code='NCC-4477')
-    box('dedication plaque back', (2.3, 0.02, 0.53), toon(HULL['dado']), (0, 0.01, 1.65), frame=side_frame(8))
+    sign('dedication plaque', 'U.S.S. Focus', 2.2, LCARS['gold'], (0, 0.025, 1.7), side_frame(9), sub='Crewed by Claude Code agents', code='NCC-4477')
+    box('dedication plaque back', (2.3, 0.02, 0.53), toon(HULL['dado']), (0, 0.01, 1.65), frame=side_frame(9))
     wall_console('ops console', 2, 2.8, 21)
     wall_console('engineering console', 6, 2.8, 22)
     wall_console('tactical console', 10, 2.2, 23)
@@ -201,3 +232,140 @@ def turbolift():
     back = Matrix.Translation((0, cy - r * math.cos(math.pi / 14), 0))
     readout('turbolift panel', 0.5, 0.7, 41, (0, 0, 1.3), back)
     marker('area turbolift', 'area', (0, cy, 1), scale=(r + 0.1, r + 0.1, 1), label='Turbolift')
+
+
+def side_room(name, near, far, carpet):
+    """
+    A room off the bridge's starboard or port side, from its wall at x = `near`, back to back with the bridge's, out to
+    `far`: walls with a gap for the bridge's doorway, carpet reaching through it to the bridge's own, and a ceiling.
+    """
+    lo, hi = sorted((near, far))
+    outline = [(lo, -ROOM_HALF), (hi, -ROOM_HALF), (hi, ROOM_HALF), (lo, ROOM_HALF)]
+    walls(f'{name} wall', outline, [(3 if near == lo else 1, 0.0, DOORWAY)], profile(ROOM_HEIGHT), wall_materials(),
+          lintel_from=DOOR_H + 0.1)
+    a, b = sorted((math.copysign(APOTHEM, near), far))
+    polygon(f'{name} floor', [(a, -ROOM_HALF), (b, -ROOM_HALF), (b, ROOM_HALF), (a, ROOM_HALF)], 0,
+            material(carpet, surface='carpet', outline=False), uv_scale=0.5)
+    polygon(f'{name} ceiling', outline, ROOM_HEIGHT, unlit(HULL['ceiling']), down=True)
+
+
+def ceiling_light(name, w, h, at):
+    polygon(name, [(at[0] + x, at[1] + y) for x, y in rounded_rect(w, h, min(w, h) * 0.3)], ROOM_HEIGHT - 0.02,
+            unlit('#ffffff'), down=True)
+
+
+def wall_frame(x, y, yaw):
+    """A Matrix on a side room's wall at (x, y), turned `yaw` so its +Y faces into the room."""
+    return Matrix.Translation((x, y, 0)) @ Matrix.Rotation(yaw, 4, 'Z')
+
+
+def screen(name, w, h, kind, at, frame):
+    """A w×h screen in a rounded bezel on a wall, centred `at` (across, height) on `frame`, showing `kind`: a surface
+    the browser draws."""
+    bezel(f'{name} frame', w, h, 0.1, 0.1, 0.08, toon(HULL['frame']), (at[0], 0, at[1]), frame)
+    return panel(name, w, h, material('#000000', outline=False, **kind), (at[0], 0.012, at[1] - h / 2), frame)
+
+
+def window(name, w, h, at, frame):
+    """A viewport onto space in a rounded bezel, centred `at` (across, height) on `frame`."""
+    bezel(f'{name} frame', w, h, 0.3, 0.15, 0.1, toon(HULL['frame']), (at[0], 0, at[1]), frame)
+    pane(name, rounded_rect(w, h, 0.3), material('#000000', surface='space', outline=False), (at[0], 0.012, at[1]), frame)
+
+
+def ready_room():
+    """
+    The captain's: a desk at the far end facing the door, under a window onto space, with the captain's console on it
+    and Number One's chair at its corner; mission control on the forward wall and a couch along the aft one.
+    """
+    near, far = ROOM_NEAR, ROOM_NEAR + 8
+    mid = (near + far) / 2
+    side_room('ready room', near, far, '#6e3043')
+    window('ready room window', 3.0, 1.2, (0, 1.8), wall_frame(far, 0, math.pi / 2))
+
+    desk_x, chair_at = far - 2.0, (far - 0.9, 0)
+    top = slab('ready room desk', [(desk_x + x, y) for x, y in rounded_rect(1.1, 2.8, 0.15)], 0.7, 0.76, toon(CONSOLE_TOP), round=0.01)
+    box('ready room desk base', (0.6, 2.3, 0.7), toon(HULL['dado']), (desk_x - 0.15, 0, 0), round=0.02)
+    collide_object(top)
+    command_chair('ready room', chair_at, math.pi / 2, COMMAND_RED, 0.85)
+    captains_console(Matrix.Translation((desk_x - 0.25, 0, 0.76)) @ Matrix.Rotation(-math.pi / 2, 4, 'Z'))
+    seat = (desk_x - 1.4, 1.9)
+    marker('number one', 'number-one', (seat[0], seat[1], 0.005), yaw=facing(seat, chair_at))
+
+    mission = screen('mission control', 2.6, 2.6 * 9 / 16, {'surface': 'screen', 'screen': 'mission-control'}, (0, 1.9),
+                     wall_frame(mid - 0.8, ROOM_HALF, math.pi))
+    interact('manager', 'Open mission control', mission)
+    couch('ready room couch', (mid - 1.2, -ROOM_HALF + 0.5), 0, 2.4)
+    for y, seed in ((2.4, 51), (-2.4, 52)):
+        readout(f'ready room readout {seed}', 0.8, 1.1, seed, (0, 0, 1.3), wall_frame(near, y, -math.pi / 2))
+    for x in (mid - 2, mid + 2):
+        ceiling_light(f'ready room light {x:.0f}', 2.0, 1.0, (x, 0))
+    place = (near + 1.2, -0.8)
+    marker('place ready room', 'place', (*place, 0), yaw=facing(place, (desk_x, 0.6)), label='🎖️ Ready room')
+    marker('area ready room', 'area', (mid, 0, 1), scale=((far - near) / 2 + 0.1, ROOM_HALF + 0.1, 1), label='Ready room')
+
+
+def captains_console(f):
+    """A monitor on the desk, built facing +Y (the captain) with its back to whoever comes in, showing mission control."""
+    frame = toon(HULL['frame'])
+    cylinder('captain console foot', 0.16, 0.02, frame, frame=f)
+    cylinder('captain console stand', 0.04, 0.2, frame, (0, 0, 0.02), frame=f)
+    body = box('captain console', (1.0, 0.06, 0.62), frame, (0, 0, 0.18), frame=f, round=0.015)
+    front = panel('captain console screen', 0.92, 0.92 * 9 / 16, material('#000000', surface='screen', outline=False, screen='mission-control'),
+                  (0, 0.035, 0.23), f)
+    back = sign('captain console back', 'Captain’s console', 0.92, LCARS['gold'], (0, -0.035, 0.4), f, yaw=math.pi,
+                sub='Walk round and press E')
+    interact('manager', 'Use the ready room console', body, front, back)
+
+
+def couch(name, at, yaw, length):
+    """A couch facing +Y with its back to a wall."""
+    f = wall_frame(at[0], at[1], yaw)
+    soft, frame = toon('#6b5b8a'), toon(HULL['frame'])
+    base = box(f'{name} base', (length, 0.8, 0.3), toon(HULL['dado']), frame=f, round=0.03)
+    box(f'{name} cushion', (length - 0.36, 0.62, 0.14), soft, (0, 0.06, 0.3), frame=f, round=0.05)
+    box(f'{name} back', (length, 0.2, 0.6), frame, (0, -0.3, 0.3), frame=f, round=0.04)
+    box(f'{name} back cushion', (length - 0.36, 0.1, 0.42), soft, (0, -0.16, 0.44), frame=f, round=0.04)
+    for s in (-1, 1):
+        box(f'{name} arm {s}', (0.18, 0.6, 0.3), frame, (s * (length / 2 - 0.09), 0.1, 0.3), frame=f, round=0.04)
+    collide_object(base)
+
+
+def lounge():
+    """The observation lounge: a long table running from the door to a star chart on the far wall, beside a row of
+    viewports along the aft wall."""
+    near, far = -ROOM_NEAR, -(ROOM_NEAR + 10)
+    mid = (near + far) / 2
+    side_room('lounge', near, far, '#3b3f5c')
+    polygon('lounge rug', [(mid + x, y) for x, y in rounded_rect(7.6, 4.1, 0.6)], 0.008, material('#4a4e74', outline=False))
+
+    length, width = 5.2, 1.5
+    top = slab('lounge table', [(mid + x, y) for x, y in rounded_rect(length, width, width / 2 - 0.02, segments=8)], 0.72, 0.79, toon('#2b2d42'))
+    for s in (-1, 1):
+        box(f'lounge table pedestal {s}', (0.5, 0.5, 0.72), toon('#495057'), (mid + s * 1.23, 0, 0))
+    polygon('lounge table strip', [(mid + x, y) for x, y in rounded_rect(2.96, 0.12, 0.05)], 0.795, unlit(LCARS['lilac']))
+    collide_object(top)
+    for i, dx in enumerate((-1.9, 0, 1.9)):
+        lounge_chair(f'lounge chair fore {i}', (mid + dx, width / 2 + 0.45), math.pi)
+        lounge_chair(f'lounge chair aft {i}', (mid + dx, -width / 2 - 0.45), 0)
+    lounge_chair('lounge chair port', (mid - length / 2 - 0.5, 0), -math.pi / 2)
+    lounge_chair('lounge chair starboard', (mid + length / 2 + 0.5, 0), math.pi / 2)
+
+    screen('star chart', 2.6, 1.56, {'surface': 'star-chart'}, (0, 1.92), wall_frame(far, 0, -math.pi / 2))
+    for i, dx in enumerate((-2.9, 0, 2.9)):
+        window(f'lounge window {i}', 2.4, 1.4, (0, 1.85), wall_frame(mid + dx, -ROOM_HALF, 0))
+    for i, dx in enumerate((-2.4, 2.4)):
+        readout(f'lounge readout {i}', 1.8, 1.0, 61 + i, (0, 0, 1.5), wall_frame(mid + dx, ROOM_HALF, math.pi))
+    ceiling_light('lounge light', 5.0, 1.0, (mid, 0))
+    place = (near - 1.0, -1.3)
+    marker('place lounge', 'place', (*place, 0), yaw=facing(place, (mid - 1.0, 0.3)), label='🖖 Observation lounge')
+    marker('area lounge', 'area', (mid, 0, 1), scale=((near - far) / 2 + 0.1, ROOM_HALF + 0.1, 1), label='Observation lounge')
+
+
+def lounge_chair(name, at, yaw):
+    """A high-backed chair on a pedestal facing +Y."""
+    f = wall_frame(at[0], at[1], yaw)
+    soft = toon(UPHOLSTERY)
+    cylinder(f'{name} base', 0.24, 0.04, toon(HULL['dado']), frame=f)
+    cylinder(f'{name} column', 0.05, 0.36, toon(HULL['frame']), (0, 0, 0.04), frame=f)
+    box(f'{name} seat', (0.5, 0.5, 0.1), soft, (0, 0, 0.4), frame=f, round=0.03)
+    box(f'{name} back', (0.46, 0.08, 0.72), soft, (0, -0.24, 0.48), frame=f, round=0.03)

@@ -19,8 +19,8 @@ async function scan(browser: Browser, url: string): Promise<{ pairs: FightingPai
   // the world is built once the first snapshot arrives
   const built = await page
     .waitForFunction(() => {
-      const hq = (window as { focusHQ?: { world: { rooms: Map<string, unknown>; lounge: unknown } } }).focusHQ;
-      return !!hq && hq.world.rooms.size > 0 && !!hq.world.lounge;
+      const hq = (window as { focusHQ?: { world: { rooms: Map<string, unknown>; numberOne: unknown } } }).focusHQ;
+      return !!hq && hq.world.rooms.size > 0 && !!hq.world.numberOne;
     }, null, { timeout: 30_000 })
     .then(() => true, () => false);
   if (!built) throw new CheckFailed('the office is built within 30s');
@@ -58,10 +58,15 @@ async function main(): Promise<number> {
   try {
     await waitForServer(url, server, 60_000);
     browser = await launchBrowser();
-    // with the decks built in Blender (see nextShip in client/src/main.ts) as well as the rest
-    const { pairs, meshes, padds } = await scan(browser, `${url}?ship=next`);
-    const fighting = pairs.filter((p) => !allowed(p));
-    console.log(`Scanned ${meshes} meshes (${padds} PADDs); ${pairs.length - fighting.length} allowed overlaps skipped.`);
+    // the ship as it is, and with the decks built in Blender (see nextShip in client/src/main.ts), which stand in for
+    // some of it
+    const fighting: FightingPair[] = [];
+    for (const ship of ['', '?ship=next']) {
+      const { pairs, meshes, padds } = await scan(browser, `${url}${ship}`);
+      const unallowed = pairs.filter((p) => !allowed(p));
+      fighting.push(...unallowed);
+      console.log(`${ship || 'Default ship'}: scanned ${meshes} meshes (${padds} PADDs); ${pairs.length - unallowed.length} allowed overlaps skipped.`);
+    }
     if (!fighting.length) {
       console.log('No z-fighting found.');
       return 0;

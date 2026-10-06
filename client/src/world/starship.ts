@@ -230,6 +230,44 @@ export function readoutTexture(w: number, h: number, seed: number): THREE.Canvas
   return canvasTexture(canvas);
 }
 
+/** Long-range sensors: a scatter of stars (the same every time) and the course the ship has laid in across them. */
+export function starChartTexture(): THREE.CanvasTexture {
+  const { canvas, ctx } = makeCanvas(1280, 768);
+  const area = lcarsFrame(ctx, canvas.width, canvas.height, { title: 'Long-range sensors', color: LCARS.lilac, seed: 1864 });
+  let seed = 1864;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 140; i++) {
+    ctx.fillStyle = rand() > 0.85 ? LCARS.gold : '#e8e2f0';
+    ctx.globalAlpha = 0.4 + rand() * 0.6;
+    ctx.beginPath();
+    ctx.arc(area.x + rand() * area.w, area.y + 40 + rand() * (area.h - 40), 1 + rand() * 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  const course: [number, number][] = [[0.06, 0.82], [0.3, 0.6], [0.52, 0.66], [0.74, 0.38], [0.92, 0.22]];
+  const at = ([u, v]: [number, number]): [number, number] => [area.x + u * area.w, area.y + 40 + v * (area.h - 40)];
+  ctx.strokeStyle = LCARS.orange;
+  ctx.lineWidth = 4;
+  ctx.setLineDash([16, 12]);
+  ctx.beginPath();
+  for (const [i, point] of course.entries()) ctx[i ? 'lineTo' : 'moveTo'](...at(point));
+  ctx.stroke();
+  ctx.setLineDash([]);
+  for (const point of course) {
+    const [x, y] = at(point);
+    ctx.fillStyle = LCARS.orange;
+    ctx.beginPath();
+    ctx.arc(x, y, 9, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = LCARS.peach;
+  ctx.font = `600 40px ${LCARS_FONT}`;
+  ctx.fillText('COURSE LAID IN', area.x, area.y);
+  return canvasTexture(canvas);
+}
+
 /** A wall console of LCARS readouts, for a corridor wall. Faces +Z in its local frame. */
 export function lcarsConsole(w: number, h: number, seed: number): THREE.Group {
   const g = new THREE.Group();

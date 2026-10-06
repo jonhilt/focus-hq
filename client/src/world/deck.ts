@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { type Marker, readMarker, readSurface } from './deckExtras';
-import type { Box2 } from './layout';
+import { interactive } from './builder';
+import { type Marker, readInteraction, readMarker, readSurface, type ScreenName, type Surface } from './deckExtras';
+import { type Box2, contains } from './layout';
 import { flat, noOutline, toon, toonMaterial } from './materials';
+import type { Seat } from './numberOne';
 import type { Place } from './office';
-import { lcarsSign, readoutTexture, SlidingDoors, touchPanelTexture } from './starship';
+import { lcarsSign, readoutTexture, SlidingDoors, starChartTexture, touchPanelTexture } from './starship';
 import { viewportGlass } from './starfield';
 import { tiled } from './textures';
 
@@ -20,11 +22,17 @@ function gltfTexture(tex: THREE.Texture): THREE.Texture {
   return tex;
 }
 
+/** A screen shows the World's canvas textures, which are flipped the three.js way: turn its glTF UVs to match. */
+function flipUVs(mesh: THREE.Mesh): THREE.Mesh {
+  const uv = mesh.geometry.getAttribute('uv');
+  for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));
+  uv.needsUpdate = true;
+  return mesh;
+}
+
 let keys: THREE.Material | undefined;
 
-function surfaceMaterial(gltf: THREE.MeshStandardMaterial): THREE.Material {
-  const surface = readSurface(gltf.userData);
-  const color = `#${gltf.color.getHexString()}`;
+function surfaceMaterial(surface: Surface, color: string): THREE.Material {
   switch (surface.kind) {
     case 'toon':
       return surface.outline ? toon(color) : noOutline(toonMaterial({ color }));
@@ -40,6 +48,11 @@ function surfaceMaterial(gltf: THREE.MeshStandardMaterial): THREE.Material {
       return flat(gltfTexture(readoutTexture(surface.w, surface.h, surface.seed)));
     case 'sign':
       return flat(gltfTexture(lcarsSign(surface.text, { color: surface.color, sub: surface.sub, code: surface.code })));
+    case 'star-chart':
+      return flat(gltfTexture(starChartTexture()));
+    case 'screen':
+      // blank until the World puts what it draws there
+      return noOutline(new THREE.MeshBasicMaterial({ color: '#000000' }));
   }
 }
 
@@ -54,7 +67,10 @@ export class Deck {
   readonly colliders: Box2[] = [];
   readonly doors: SlidingDoors[] = [];
   readonly places: Place[] = [];
+  /** The screens the World draws on. */
+  readonly screens: { screen: ScreenName; mesh: THREE.Mesh }[] = [];
   private readonly areas: { label: string; box: Box2 }[] = [];
+  private seat: Seat | undefined;
 
   /** Loads a deck's GLB and puts its origin at `origin` in the world. */
   static async load(url: string, origin: THREE.Vector3): Promise<Deck> {
@@ -73,14 +89,25 @@ export class Deck {
       if (marker) {
         this.read(o, marker);
         markers.push(o);
-      } else if (o instanceof THREE.Mesh && o.material instanceof THREE.MeshStandardMaterial) {
+        return;
+      }
+      const use = readInteraction(o.userData);
+      if (use) interactive(o, use.interaction, () => use.label);
+      if (o instanceof THREE.Mesh && o.material instanceof THREE.MeshStandardMaterial) {
         const gltf = o.material;
+        const surface = readSurface(gltf.userData);
+        if (surface.kind === 'screen') this.screens.push({ screen: surface.screen, mesh: flipUVs(o) });
         let mat = materials.get(gltf);
-        if (!mat) materials.set(gltf, (mat = surfaceMaterial(gltf)));
+        if (!mat) materials.set(gltf, (mat = surfaceMaterial(surface, `#${gltf.color.getHexString()}`)));
         o.material = mat;
       }
     });
     for (const o of markers) o.removeFromParent();
+  }
+
+  /** Where Number One sits on this deck, if they're aboard it. */
+  get numberOne(): Seat | undefined {
+    return this.seat;
   }
 
   private read(o: THREE.Object3D, marker: Marker): void {
@@ -105,11 +132,16 @@ export class Deck {
       case 'area':
         this.areas.push({ label: marker.label, box: footprint(o) });
         break;
+      case 'number-one': {
+        const ahead = new THREE.Vector3(0, 0, -1).applyQuaternion(turn);
+        this.seat = { at, facing: at.clone().add(ahead) };
+        break;
+      }
     }
   }
 
   /** The name of the part of the deck a world position is in, if it's on this deck. */
   areaAt(p: THREE.Vector3): string | undefined {
-    return this.areas.find(({ box: b }) => p.x >= b.minX && p.x <= b.maxX && p.z >= b.minZ && p.z <= b.maxZ)?.label;
+    return this.areas.find(({ box }) => contains(box, p))?.label;
   }
 }

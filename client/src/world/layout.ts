@@ -70,3 +70,7 @@ export interface Box2 {
   minZ: number;
   maxZ: number;
 }
+
+export function contains(b: Box2, p: THREE.Vector3): boolean {
+  return p.x >= b.minX && p.x <= b.maxX && p.z >= b.minZ && p.z <= b.maxZ;
+}

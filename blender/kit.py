@@ -7,13 +7,17 @@ are metres.
 What the browser reads (client/src/world/deck.ts), all through custom properties, which export as glTF extras:
 - An object's `marker` makes it a marker rather than scenery: 'collider' (an empty cube: an axis-aligned box the
   player can't walk into), 'door' (sliding doors at a doorway's centre, sliding along the empty's X: `width`,
-  `height`), 'place' (a teleport destination, looking along the empty's +Y: `label`) or 'area' (an empty cube: the
-  floor `label` names in the HUD).
+  `height`), 'place' (a teleport destination, looking along the empty's +Y: `label`), 'area' (an empty cube: the
+  floor `label` names in the HUD) or 'number-one' (where Number One's chair stands, turned along the empty's +Y: it
+  says the ready room is on this deck).
+- An object's `interact` has pressing E on it do something: 'manager' (open the ready room console), with the hint
+  `label`.
 - A material's `surface` has the browser draw it: 'space' (a viewport onto the stars), 'keys' (an LCARS touch panel),
   'readout' (LCARS readouts: `seed`, `w`, `h`), 'sign' (an LCARS sign: `text`, `color`, optional `sub` and `code`),
-  'carpet' (speckled carpet in the material's colour, tiled every 2 m) or 'unlit' (the material's colour, unshaded:
-  lights and ceilings). Everything else is a toon material in its base colour. `outline: 0` leaves a surface out of
-  the outline pass.
+  'screen' (a screen the browser keeps drawing: `screen`, which is 'mission-control'), 'star-chart' (long-range
+  sensors), 'carpet' (speckled carpet in the material's colour, tiled every 2 m) or 'unlit' (the material's colour,
+  unshaded: lights and ceilings). Everything else is a toon material in its base colour. `outline: 0` leaves a
+  surface out of the outline pass.
 """
 
 import math
@@ -155,6 +159,22 @@ def cylinder(name, r, h, mat, at=(0, 0, 0), r_top=None, segments=24, frame=None)
     bmesh.ops.create_cone(bm, cap_ends=True, segments=segments, radius1=r, radius2=r if r_top is None else r_top, depth=h)
     bmesh.ops.translate(bm, vec=(0, 0, h / 2), verts=bm.verts)
     return link(mesh_object(name, bm, [mat], smooth=math.radians(40)), at, 0.0, frame)
+
+
+def slab(name, points, z0, z1, mat, round=0.0):
+    """A flat-topped solid from z0 up to z1 over 2D points listed counter-clockwise from above."""
+    bm = bmesh.new()
+    bottom = [bm.verts.new((x, y, z0)) for x, y in points]
+    top = [bm.verts.new((x, y, z1)) for x, y in points]
+    bm.faces.new(top)
+    bm.faces.new(list(reversed(bottom)))
+    for i in range(len(points)):
+        j = (i + 1) % len(points)
+        bm.faces.new((bottom[i], bottom[j], top[j], top[i]))
+    obj = mesh_object(name, bm, [mat])
+    if round:
+        bevel(obj, round)
+    return link(obj)
 
 
 def polygon(name, points, z, mat, down=False, uv_scale=None):
@@ -350,25 +370,25 @@ def walls(name, outline, doors, profile, mats, lintel_from):
     The walls around a room whose inner faces run through `outline` (corners, counter-clockwise from above), as
     one swept profile with gaps for `doors`: (edge index, offset of the door's centre from the edge's middle, width),
     edge i running from outline[i] to outline[i + 1]. Above each gap, the profile from `lintel_from` up spans it.
-    Colliders follow the walls between the gaps, as deep as the profile. Returns each door's frame: a Matrix at the
-    gap's centre on the inner face, X along the wall, Y into the room.
+    Colliders follow the walls between the gaps, as deep as the profile. Returns each door's frame, in the order of
+    `doors`: a Matrix at the gap's centre on the inner face, X along the wall, Y into the room.
     """
     near, far = max(d for d, _ in profile), -min(d for d, _ in profile)
     n = len(outline)
     stations = []
-    frames = []
+    frames = [None] * len(doors)
     for i in range(n):
         a, b = Vector(outline[i]), Vector(outline[(i + 1) % n])
         stations.append(('corner', a))
         along = (b - a).normalized()
         mid = (a + b) / 2
-        for _, offset, width in sorted((d for d in doors if d[0] == i), key=lambda d: d[1]):
+        for k, (_, offset, width) in sorted(((k, d) for k, d in enumerate(doors) if d[0] == i), key=lambda kd: kd[1][1]):
             centre = mid + along * offset
             stations.append(('gap', centre - along * width / 2))
             stations.append(('end', centre + along * width / 2))
             yaw = math.atan2(along.y, along.x)
-            frames.append(Matrix.Translation((centre.x, centre.y, 0)) @ Matrix.Rotation(yaw, 4, 'Z'))
-    if not frames:
+            frames[k] = Matrix.Translation((centre.x, centre.y, 0)) @ Matrix.Rotation(yaw, 4, 'Z')
+    if not doors:
         sweep(name, outline, profile, mats, closed=True)
         collide_path(outline, near, far, closed=True)
         return frames
@@ -376,11 +396,12 @@ def walls(name, outline, doors, profile, mats, lintel_from):
     first = next(i for i, s in enumerate(stations) if s[0] == 'end')
     stations = stations[first:] + stations[:first]
     above, above_mats = _clip(profile, mats, lintel_from)
-    run = []
+    run, runs = [], 0
     for kind, p in stations + [stations[0]]:
         run.append(p)
         if kind == 'gap':
-            sweep(f'{name} {len(frames)}', run, profile, mats)
+            sweep(f'{name} {runs}', run, profile, mats)
+            runs += 1
             collide_path(run, near, far)
             run = [p]
         elif kind == 'end' and len(run) == 2:
@@ -389,31 +410,42 @@ def walls(name, outline, doors, profile, mats, lintel_from):
     return frames
 
 
-def door(name, frame, width, height=DOOR_H, wall=0.2):
-    """A rounded door frame standing proud of both faces of a `wall` thick wall, and the marker for its sliding doors."""
+def door(name, frame, width, height=DOOR_H, wall=0.2, back=0.04):
+    """
+    A rounded door frame standing proud of both faces of a `wall` thick wall, and the marker for its sliding doors. It
+    stands FRAME_PROUD into the room and `back` out of the far face: FRAME_PROUD too when that's another room's wall,
+    with trims of its own to clear.
+    """
     a = width / 2 + 0.16
     top = height + 0.16
     # the frame's outline seen from the room: an upside-down U, its opening exactly the doors' height so its
     # underside seals their tops
     outline = [(-a, 0), (-width / 2, 0), (-width / 2, height), (width / 2, height), (width / 2, 0), (a, 0), (a, top), (-a, top)]
     bm = bmesh.new()
-    back = [bm.verts.new((x, -wall - 0.04, z)) for x, z in outline]
+    rear = [bm.verts.new((x, -wall - back, z)) for x, z in outline]
     front = [bm.verts.new((x, FRAME_PROUD, z)) for x, z in outline]
     for i in range(len(outline)):
         j = (i + 1) % len(outline)
-        bm.faces.new((back[i], back[j], front[j], front[i]))
+        bm.faces.new((rear[i], rear[j], front[j], front[i]))
     bm.faces.new(list(reversed(front)))
-    bm.faces.new(back)
+    bm.faces.new(rear)
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     obj = bevel(mesh_object(f'{name} frame', bm, [toon(HULL['frame'])]), 0.03)
     link(obj, frame=frame)
     marker(name, 'door', (0, -wall / 2, 0), frame=frame, width=width, height=height)
     for s in (-1, 1):
-        collide_points([frame @ Vector((s * x, y, 0)) for x in (width / 2, a) for y in (-wall - 0.04, FRAME_PROUD)])
+        collide_points([frame @ Vector((s * x, y, 0)) for x in (width / 2, a) for y in (-wall - back, FRAME_PROUD)])
     return obj
 
 
 # ---------------------------------------------------------------------------------------------------- markers
+
+def interact(kind, label, *objs):
+    """Has pressing E on any of `objs` do `kind` (see the module's docstring), with `label` as the hint."""
+    for obj in objs:
+        obj['interact'] = kind
+        obj['label'] = label
+
 
 def marker(name, kind, at=(0, 0, 0), yaw=0.0, frame=None, scale=(1, 1, 1), **props):
     """An empty the browser reads rather than draws (see the module's docstring)."""
