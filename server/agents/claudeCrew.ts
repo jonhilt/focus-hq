@@ -24,7 +24,7 @@ import {
 import { asBreakdown, breakdownSchema } from './breakdown';
 import { agentEnv } from './claudeRunner';
 import { type BriefingEngineer, decodeEngineeringReport, ENGINEERING_SCHEMA, type EngineerReply, type EngineerTurn, engineerPrompt, engineerSystemPrompt } from './engineering';
-import { type Drafter, type DraftRequest, type DraftResult, draftSchema, plannerPrompt, plannerSystemPrompt, repoFolders } from './planner';
+import { type Drafter, type DraftRequest, type DraftResult, draftSchema, plannerPrompt, standDraftSchema, plannerSystemPrompt, repoFolders } from './planner';
 import { renderToolUse } from './render';
 import { parseTriage, TRIAGE_SCHEMA, type TriageDecision, type Triager, type TriageRequest, triagePrompt, triageSystemPrompt } from './triage';
 import { checkoutLatest } from './workspace';
@@ -127,7 +127,7 @@ async function runReadOnly(run: ReadOnlyRun): Promise<ReadOnlyResult> {
 function asDraft(out: unknown, repos: string[]): DraftResult {
   const d = (out ?? {}) as Partial<DraftResult>;
   if (!d.title || !d.body) throw new Error('Finished without writing the issue');
-  return { repo: String(d.repo ?? repos[0]), title: String(d.title), body: String(d.body) };
+  return { repo: String(d.repo ?? repos[0]), title: String(d.title), body: String(d.body), tooBig: d.tooBig ? String(d.tooBig) : undefined };
 }
 
 /** The planner at a room's stand: one idea in, one issue draft out. */
@@ -149,7 +149,7 @@ export class ClaudeDrafter implements Drafter {
       activity,
       builtins: CODE_TOOLS,
       resume: req.resumeSessionId,
-      schema: draftSchema(req.repos),
+      schema: standDraftSchema(req.repos),
     }).catch((err: Error) => {
       throw req.signal.aborted ? new Error('Discarded') : err;
     });

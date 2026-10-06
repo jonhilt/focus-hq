@@ -331,6 +331,8 @@ export interface IssueDraft {
   title?: string;
   /** Markdown: context, what to build, acceptance criteria, out of scope, assumptions. */
   body?: string;
+  /** Why the planner thinks the idea is too big or too vague for one issue, when they do: the card offers a briefing. */
+  tooBig?: string;
   error?: string;
   startedAt: number;
   finishedAt?: number;

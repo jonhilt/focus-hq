@@ -294,6 +294,16 @@ export const demoWorkspace: WorkspaceOps = {
   },
 };
 
+/** The demo planner's judgement of an idea too big for one issue: a rebuild, or a list of three or more features. */
+export function demoTooBig(idea: string): string | undefined {
+  const rebuild = /\b(rebuild|rewrite|overhaul|redesign|replatform|migrate)\b/i.exec(idea);
+  const features = idea.split(/,|\band\b|\bplus\b/i).filter((part) => part.trim()).length;
+  if (rebuild && features >= 3) return `A ${rebuild[0].toLowerCase()} with ${features} separate features is several issues' worth of work.`;
+  if (rebuild) return `A ${rebuild[0].toLowerCase()} is more than one agent can finish in one sitting.`;
+  if (features >= 3) return `That's ${features} separate features, more than one agent can build in one sitting.`;
+  return undefined;
+}
+
 /** The demo planner: pretends to read the code, then writes a plausible issue from the idea. */
 export class DemoDrafter implements Drafter {
   private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
@@ -321,7 +331,7 @@ export class DemoDrafter implements Drafter {
       await wait(2);
       const note = req.revise.notes.trim().replace(/\.$/, '');
       const body = req.revise.body.replace(/\n+## Out of scope/, `\n- [ ] ${note.charAt(0).toUpperCase()}${note.slice(1)}\n\n## Out of scope`);
-      return { repo, title: req.revise.title, body, sessionId: req.resumeSessionId, costUsd: 0.04 };
+      return { repo, title: req.revise.title, body, tooBig: demoTooBig(req.idea), sessionId: req.resumeSessionId, costUsd: 0.04 };
     }
     for (const step of [`Reading ${folder}/CLAUDE.md`, `Searching ${folder} for related code`, ...files.map((f) => `Reading ${folder}/${f}`), 'Thinking…']) {
       activity(step);
@@ -354,7 +364,7 @@ export class DemoDrafter implements Drafter {
       '',
       `- This belongs in ${repo}${req.repos.length > 1 ? ' rather than the other repos in the project' : ''}.`,
     ].join('\n');
-    return { repo, title, body, sessionId: `demo-plan-${randomBytes(3).toString('hex')}`, costUsd: 0.11 };
+    return { repo, title, body, tooBig: demoTooBig(idea), sessionId: `demo-plan-${randomBytes(3).toString('hex')}`, costUsd: 0.11 };
   }
 }
 

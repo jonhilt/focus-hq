@@ -222,6 +222,7 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .planner-idea { font-style: italic; color: var(--muted); }
 .planner-activity { font-family: var(--mono); font-size: 13px; color: var(--lcars-gold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 auto; }
 .planner-error { color: var(--lcars-red); }
+.planner-suggest { border-left: 3px solid var(--lcars-gold); padding: 2px 0 2px 10px; margin: 10px 0; }
 
 /* the QA station */
 .qa-station { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; align-items: start; }

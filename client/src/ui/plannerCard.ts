@@ -62,6 +62,14 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
       ),
       draft?.costUsd ? h('small', { class: 'muted' }, `$${draft.costUsd.toFixed(2)}`) : null,
     );
+    const briefingButton = (idea: () => string, title: string) => {
+      const button = h('button', { class: 'btn small', title }, '📣 Call a briefing');
+      button.onclick = () => void busy(button, async () => {
+        await api.callBriefing(pid, idea());
+        ui.goToLounge();
+      }, ui.error);
+      return button;
+    };
     const discard = () =>
       h('button', { class: 'btn small', onclick: () => void api.discardDraft(pid).catch((e: Error) => ui.error(e.message)) }, draft?.status === 'drafting' ? '✕ Stop' : '✕ Discard draft');
 
@@ -91,7 +99,14 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
       const redraft = h('button', { class: 'btn small primary' }, '↻ Redraft');
       redraft.onclick = () => void busy(redraft, () =>
         api.draftIssue(pid, draft.idea, { repo: fields.repo.value, title: fields.title.value, body: fields.body.value, notes: notes.value }), ui.error);
+      const suggestion = draft.tooBig
+        ? h('div', { class: 'planner-suggest' },
+          h('p', null, `This one might be better as a briefing. ${draft.tooBig}`),
+          h('div', { class: 'row' }, briefingButton(() => draft.idea, 'Talk it through in the observation lounge; the draft stays here in case you’d rather use it')),
+        )
+        : null;
       fill(el, header,
+        suggestion,
         h('p', null, 'Draft’s in the form below. Edit it and pin it to the board, or tell me what to change:'),
         withMic(ui, notes),
         h('div', { class: 'row' }, redraft, h('span', { class: 'grow' }), discard()),
@@ -102,11 +117,7 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
     const idea = h('textarea', { class: 'planner-input', placeholder: 'e.g. let shoppers save items for later from the cart', value: draft?.idea ?? '' });
     const go = h('button', { class: 'btn small primary' }, draft?.status === 'failed' ? '✨ Try again' : '✨ Draft it');
     go.onclick = () => void busy(go, () => api.draftIssue(pid, idea.value), ui.error);
-    const brief = h('button', { class: 'btn small', title: 'Talk it through in the observation lounge first' }, '📣 Call a briefing');
-    brief.onclick = () => void busy(brief, async () => {
-      await api.callBriefing(pid, idea.value);
-      ui.goToLounge();
-    }, ui.error);
+    const brief = briefingButton(() => idea.value, 'Talk it through in the observation lounge first');
     idea.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) go.click();
     });

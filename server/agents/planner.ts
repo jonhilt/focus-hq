@@ -22,6 +22,8 @@ export interface DraftResult {
   repo: string;
   title: string;
   body: string;
+  /** Set when the planner thinks the idea is too big or too vague for one issue: why, in a line. */
+  tooBig?: string;
   sessionId?: string;
   costUsd?: number;
 }
@@ -95,6 +97,7 @@ export class IssuePlanner {
           repo: repos.includes(result.repo) ? result.repo : repos[0],
           title: result.title.trim(),
           body: result.body.trim(),
+          tooBig: result.tooBig?.trim() || undefined,
           costUsd: result.costUsd,
           finishedAt: Date.now(),
         } satisfies Partial<IssueDraft>);
@@ -200,11 +203,12 @@ How to work:
 - Spend a few minutes, not an audit: you're scoping the work, not doing it. Describe the outcome and point at where it lives; don't write the implementation into the issue.
 - Don't add requirements the manager didn't ask for. Where the idea is ambiguous, pick the sensible reading and note it under Assumptions so the manager can correct it.
 - Size it for one agent in one sitting. If the idea is much bigger, write up the first useful slice and list the rest under Out of scope.
+- If the idea is much bigger than one agent can build in one sitting, or too vague to write testable acceptance criteria for, also fill in tooBig with a one-line reason. The manager is then offered a briefing to talk it through. Leave tooBig out for an ordinary, well-defined change.
 - Pick the repository the work belongs in. If it spans several, pick the one with most of the work and mention the others under Context.
 
 ${ISSUE_FORMAT}
 
-Finish with the structured result: repo, title and body.
+Finish with the structured result: repo, title and body (and tooBig, only when it applies).
 `.trim();
 }
 
@@ -236,6 +240,18 @@ export function draftSchema(repos: string[]): Record<string, unknown> {
       repo: { type: 'string', enum: repos, description: 'The repository the issue should be filed in.' },
       title: { type: 'string', description: 'Imperative and specific, under 70 characters.' },
       body: { type: 'string', description: 'The issue body in Markdown: Context, What to build, Acceptance criteria, Out of scope, Assumptions.' },
+    },
+  };
+}
+
+/** The stand's draft schema: a briefing's wrap-up is already the talk-it-through, so only the stand can suggest one. */
+export function standDraftSchema(repos: string[]): Record<string, unknown> {
+  const schema = draftSchema(repos);
+  return {
+    ...schema,
+    properties: {
+      ...(schema.properties as Record<string, unknown>),
+      tooBig: { type: 'string', description: 'Only if the idea is too big or too vague for one issue: why, in one line, so the manager can call a briefing instead.' },
     },
   };
 }
