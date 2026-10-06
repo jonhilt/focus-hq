@@ -200,12 +200,53 @@ export type Effort = (typeof EFFORT_LEVELS)[number];
 
 /**
  * What an agent was seated for: an issue to resolve, an open pull request whose branch conflicts with its base, an open
- * pull request that failed QA, or (the room's QA officer) a pull request to review and test.
+ * pull request that failed QA, (the room's QA officer) a pull request to review and test, or (the project's lead) the
+ * captain's own Claude Code session across all the project's repos.
  */
-export type AgentTask = 'issue' | 'conflicts' | 'fix' | 'review';
+export type AgentTask = 'issue' | 'conflicts' | 'fix' | 'review' | 'lead';
 
 /** The QA officer doesn't sit at one of the room's desks but at the QA station by the pull requests table. */
 export const QA_DESK = -1;
+
+/** Nor does the project's lead, who has the group desk. */
+export const LEAD_DESK = -2;
+
+/** A pull request the project's lead shipped, and what became of it. */
+export interface LeadPr {
+  repo: string;
+  number: number;
+  url: string;
+  /** The commit last shipped to it, so shipping again leaves it alone until there's something new. */
+  sha?: string;
+  /** Missing while it's open. */
+  outcome?: 'merged' | 'closed';
+}
+
+/** A subagent the project's lead handed a piece of work to (Claude Code's Agent tool), seated at the group desk while it works. */
+export interface Helper {
+  /** The Agent tool call that started it. */
+  id: string;
+  /** What the lead asked of it, in a few words. */
+  description: string;
+  /** The subagent type (general-purpose, Explore, …), when Claude Code says. */
+  type?: string;
+  status: 'working' | 'done' | 'failed';
+  /** What it's doing right now, or how it finished. */
+  activity: string;
+  startedAt: number;
+}
+
+/**
+ * The project's lead at work: every repo of the project checked out side by side on the slice's branch, and the pull
+ * requests the slice shipped. Once they've all merged or closed, the next slice starts on fresh code.
+ */
+export interface LeadWork {
+  /** Each repo, checked out at ./<folder> in the lead's workspace, and the branch it ships into. */
+  repos: { repo: string; folder: string; baseBranch: string }[];
+  /** Which slice this is: 1, 2, … */
+  slice: number;
+  prs: LeadPr[];
+}
 
 export interface Agent {
   id: string;
@@ -214,6 +255,10 @@ export interface Agent {
   projectId: string;
   repo: string;
   task: AgentTask;
+  /** The project's lead's repos and pull requests ('lead' task only). */
+  lead?: LeadWork;
+  /** The subagents the lead has working for it right now, and any that just finished ('lead' task only). */
+  helpers?: Helper[];
   /** For a 'conflicts' or 'fix' task, the pull request itself (GitHub numbers issues and PRs alike). */
   issue: { number: number; title: string; url: string };
   /** Chosen when the agent is hired. Missing = the model's default effort. */
@@ -331,7 +376,7 @@ export interface IssueDraft {
   title?: string;
   /** Markdown: context, what to build, acceptance criteria, out of scope, assumptions. */
   body?: string;
-  /** Why the planner thinks the idea is too big or too vague for one issue, when they do: the card offers a briefing. */
+  /** Why the planner thinks the idea is too big or too vague for one issue, when they do: the card offers the project's lead. */
   tooBig?: string;
   error?: string;
   startedAt: number;
@@ -339,175 +384,7 @@ export interface IssueDraft {
   costUsd?: number;
 }
 
-/** The brief a briefing builds up, shown on the observation lounge's wall screen. One line per entry. */
-export interface Brief {
-  /** What we're building, in a sentence. */
-  summary: string;
-  /** The problem it solves and why it matters now. */
-  why: string;
-  /** Who it's for. */
-  who: string;
-  scope: string[];
-  outOfScope: string[];
-  acceptance: string[];
-  openQuestions: string[];
-  /** Architecture sketches for a complex change: how it works today, the design options, then the chosen one. */
-  diagrams: BriefDiagram[];
-  /** The engineer's option the manager picked; it goes into the issue's Context. Missing until they pick one. */
-  approach?: EngineeringOption;
-}
-
-/** A titled Mermaid diagram on the wall screen ("Today", "Option A: …", "Chosen: …"). */
-export interface BriefDiagram {
-  title: string;
-  mermaid: string;
-}
-
-/** How much work an option is: one agent in one sitting, or an epic of several issues. */
-export const OPTION_SIZES = ['one agent', 'several issues'] as const;
-export type OptionSize = (typeof OPTION_SIZES)[number];
-
-/** One way to build a briefing's change, as the ship's engineer lays it out after reading the code. */
-export interface EngineeringOption {
-  title: string;
-  /** The approach in a few lines. */
-  approach: string;
-  /** Files and modules it touches. */
-  touches: string[];
-  tradeoffs: string[];
-  risks: string[];
-  size: OptionSize;
-}
-
-/** The engineer's answer when a briefing asks engineering: two or three options, and which one they'd pick. */
-export interface EngineeringReport {
-  options: EngineeringOption[];
-  /** Index into `options`. */
-  recommended: number;
-  /** Why they recommend it. */
-  why: string;
-}
-
-export const EMPTY_BRIEF: Brief = { summary: '', why: '', who: '', scope: [], outOfScope: [], acceptance: [], openQuestions: [], diagrams: [] };
-
-export interface BriefingMessage {
-  /** qa - the room's QA officer's note on the acceptance criteria; engineer - the ship's engineer, back with options. */
-  from: 'manager' | 'officer' | 'qa' | 'engineer' | 'system';
-  text: string;
-  /** An officer's reply in a line or two for voice mode, without paths or code. Missing: the text is said as it is. */
-  spoken?: string;
-  at: number;
-}
-
-/**
- * thinking - the officer is reading code or composing a reply; qa-checking - the QA officer is reading the acceptance
- * criteria the officer just changed; engineering - the ship's engineer is reading the code for options; waiting - your turn; wrapping-up - writing the issue, the breakdown or a goal's next step; reviewing -
- * the breakdown is waiting for you to edit and file it; filing - filing the breakdown (or a goal's step) on GitHub; done - the issue is at
- * the project's stand, or the breakdown is filed; parked - a goal out of the lounge while the crew builds its step;
- * failed - the last turn went wrong (say something to try again).
- */
-export type BriefingStatus = 'thinking' | 'qa-checking' | 'engineering' | 'waiting' | 'wrapping-up' | 'reviewing' | 'filing' | 'done' | 'parked' | 'failed';
-
-/** How a briefing wraps up: one issue at the stand, an epic with sub-issues the manager reviews and files, or a goal's next step. */
-export type WrapUpShape = 'one' | 'breakdown' | 'step';
-
-/** An issue in a breakdown, as the officer wrote it and the manager edited it. */
-export interface BreakdownIssue {
-  title: string;
-  /** Markdown, without any `Depends on` line: those are added with the real numbers when it's filed. */
-  body: string;
-  /** Its number once filed, so filing again after a failure carries on rather than filing it twice. */
-  number?: number;
-}
-
-export interface SubIssueDraft extends BreakdownIssue {
-  /** Stays put when other sub-issues are dropped ("s1", "s2", …). */
-  key: string;
-  /** Keys of earlier sub-issues that have to merge before this one can start. */
-  dependsOn: string[];
-}
-
-/** A briefing broken down into an epic and its sub-issues, all for one repository. */
-export interface Breakdown {
-  repo: string;
-  epic: BreakdownIssue;
-  subIssues: SubIssueDraft[];
-}
-
-/** The manager's edits to a breakdown before filing: sub-issues left out are dropped. */
-export interface BreakdownEdits {
-  epic: { title: string; body: string };
-  subIssues: { key: string; title: string; body: string }[];
-}
-
-/** A GitHub issue a goal filed: its epic, or one of its steps. */
-export interface GoalIssue {
-  repo: string;
-  number: number;
-  title: string;
-  url: string;
-}
-
-/** One step toward a goal: an issue an agent builds, and what became of its pull request. */
-export interface GoalStep extends GoalIssue {
-  /** The pull request that builds it, once the office has seen one on the board. */
-  pr?: { number: number; url: string };
-  /** What became of that PR; missing while it's open, or before there is one. */
-  outcome?: 'merged' | 'closed';
-  /** QA's latest verdict on the PR, kept here because the review goes when the PR does. */
-  qa?: { verdict: 'pass' | 'fail'; summary: string };
-  filedAt: number;
-}
-
-/** The step the officer proposes next, for the manager to edit and file. */
-export interface StepProposal {
-  repo: string;
-  title: string;
-  body: string;
-}
-
-/**
- * A briefing about a goal rather than a feature: no plan up front, just where we're going. The crew work toward it one
- * small step at a time, each an issue the officer writes from what the last one taught us. Between steps the goal is
- * parked out of the lounge; the manager reconvenes it to hear how the step went and decide the next one.
- */
-export interface Goal {
-  /** The issue holding the goal itself, filed with the first step; each step is a sub-issue of it where GitHub allows. */
-  epic?: GoalIssue;
-  /** Steps filed so far, oldest first. */
-  steps: GoalStep[];
-  proposal?: StepProposal;
-}
-
-/**
- * A back-and-forth in the observation lounge between the manager and a project's operations officer about a bigger
- * or fuzzier feature, ending in one well-specified issue or an epic with sub-issues, or, for a goal, going on one step at a time. The project's QA officer sits in and
- * speaks up when the acceptance criteria change; for a big change, the ship's engineer can be asked for options on how
- * to build it. One at a time, saved across restarts.
- */
-export interface Briefing {
-  id: string;
-  projectId: string;
-  /** What the manager called the briefing about. */
-  idea: string;
-  status: BriefingStatus;
-  /** What the officer is doing right now. */
-  activity: string;
-  messages: BriefingMessage[];
-  brief: Brief;
-  /** The engineer's latest options, once the manager has asked engineering. */
-  engineering?: EngineeringReport;
-  /** The epic and sub-issues, from the officer breaking the briefing down until it's filed (or wrapped up as one issue). */
-  breakdown?: Breakdown;
-  /** Set when the briefing is about a goal, worked toward one step at a time. */
-  goal?: Goal;
-  startedAt: number;
-  updatedAt: number;
-  costUsd: number;
-  error?: string;
-}
-
-/** Work Number One suggests a chat turn into: the captain sends it to the project's stand or calls a briefing about it. */
+/** Work Number One suggests a chat turn into: the captain sends it to the project's stand or to its lead. */
 export interface WorkSuggestion {
   projectId: string;
   idea: string;
@@ -647,7 +524,7 @@ export interface ServerInfo {
 export type VoiceDownload = { state: 'running'; bytes: number; total?: number } | { state: 'failed'; error: string };
 
 /**
- * Kokoro, the crew's voices in briefings: idle until voice mode (or Settings) asks for it, then loading (downloading
+ * Kokoro, the crew's voices: idle until voice mode (or Settings) asks for it, then loading (downloading
  * the model first, once) and ready, or failed.
  */
 export type SpeechEngine =
@@ -682,9 +559,6 @@ export interface Snapshot {
   browser: Record<string, BrowserFrame>;
   previews: Preview[];
   drafts: IssueDraft[];
-  briefing: Briefing | null;
-  /** Goals parked out of the lounge while the crew builds their current step. */
-  goals: Briefing[];
   numberOne: NumberOneChat;
   reviews: QaReview[];
   voice: VoiceStatus;
@@ -702,7 +576,6 @@ export type ServerEvent =
   | { type: 'preview'; projectId: string; preview: Preview | null }
   | { type: 'preview-log'; projectId: string; log: PreviewLog }
   | { type: 'draft'; projectId: string; draft: IssueDraft | null }
-  | { type: 'briefing'; briefing: Briefing | null; goals: Briefing[] }
   | { type: 'number-one'; chat: NumberOneChat }
   | { type: 'review'; review: QaReview }
   | { type: 'review-removed'; repo: string; number: number }

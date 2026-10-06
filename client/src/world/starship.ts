@@ -272,7 +272,7 @@ function touchPanelMaterial(): THREE.MeshBasicMaterial {
 }
 
 /** A bridge-style seat on a pedestal, facing +X; a Character sits on it at the origin. */
-function stationSeat(upholstery: string): THREE.Group {
+export function stationSeat(upholstery: string): THREE.Group {
   const g = new THREE.Group();
   const foot = cyl(0.24, 0.28, 0.06, HULL.dado, 24);
   foot.position.y = 0.03;

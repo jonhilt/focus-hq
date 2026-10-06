@@ -8,7 +8,7 @@ export type KokoroVoice = (typeof KOKORO_VOICES)[number];
 
 export const isKokoroVoice = (v: unknown): v is KokoroVoice => KOKORO_VOICES.some((k) => k === v);
 
-/** Who speaks aloud: the crew at a briefing, and Number One in the ready room. */
+/** Who speaks aloud: the crew, and Number One in the ready room. */
 export type CrewSpeaker = 'officer' | 'qa' | 'engineer' | 'number-one';
 
 /** A crew member's voice: Kokoro's, and how the browser's built-in voice stands in for it while Kokoro isn't ready. */

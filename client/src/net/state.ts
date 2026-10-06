@@ -1,5 +1,5 @@
 import { prKey } from '../../../shared/qa';
-import type { Agent, Board, Briefing, BrowserFrame, IssueDraft, NumberOneChat, QaReview, Preview, Project, ServerEvent, ServerInfo, TermLine, VoiceStatus } from '../../../shared/types';
+import type { Agent, Board, BrowserFrame, IssueDraft, NumberOneChat, QaReview, Preview, Project, ServerEvent, ServerInfo, TermLine, VoiceStatus } from '../../../shared/types';
 
 type Events = {
   snapshot: void;
@@ -16,7 +16,6 @@ type Events = {
   toast: Extract<ServerEvent, { type: 'toast' }>;
   /** A project's issue draft changed (project id). */
   draft: string;
-  briefing: void;
   'number-one': void;
   /** A QA review changed or went away (its project id). */
   review: string;
@@ -40,10 +39,6 @@ export class OfficeState {
   previews = new Map<string, Preview>();
   /** The planner's issue draft per project id, while one is being written or waits to be filed. */
   drafts = new Map<string, IssueDraft>();
-  /** The briefing in the observation lounge, if one is in session. */
-  briefing: Briefing | null = null;
-  /** Goals parked out of the lounge while the crew builds their current step. */
-  goals: Briefing[] = [];
   /** The captain's chat with Number One in the ready room. */
   numberOne: NumberOneChat | null = null;
   /** The latest QA review per pull request (by prKey). */
@@ -106,8 +101,6 @@ export class OfficeState {
         this.browser = new Map(Object.entries(s.browser));
         this.previews = new Map((s.previews ?? []).map((p) => [p.projectId, p]));
         this.drafts = new Map((s.drafts ?? []).map((d) => [d.projectId, d]));
-        this.briefing = s.briefing ?? null;
-        this.goals = s.goals ?? [];
         this.reviews = new Map((s.reviews ?? []).map((r) => [prKey(r.repo, r.number), r]));
         this.numberOne = s.numberOne;
         this.voice = s.voice;
@@ -181,10 +174,6 @@ export class OfficeState {
         this.voice = event.voice;
         this.emit('voice', undefined);
         break;
-      case 'briefing':
-        this.briefing = event.briefing;
-        this.goals = event.goals ?? [];
-        this.emit('briefing', undefined);
         break;
       case 'number-one':
         this.numberOne = event.chat;

@@ -1,13 +1,15 @@
-import { plannerFor, qaOfficerFor, randomAvatar } from '../../shared/crew';
+import { helperFor, leadFor, leadId, plannerFor, qaOfficerFor, randomAvatar } from '../../shared/crew';
 import { autoQaFor, autoSendBackFor, prKey, sameCommit } from '../../shared/qa';
 import { afterTriage, triageLabel, type TriageResult, type TriageStep, whenStuck } from '../../shared/triage';
 import type { Agent, AgentStatus, BrowserFrame, Effort, FailedCheck, FixFor, PermissionRequest, PullRequest, QaReport, QaReview, QaScreenshot, TermLine } from '../../shared/types';
-import { ACTIVE_STATUSES, DESKS_PER_ROOM, QA_DESK } from '../../shared/types';
+import { ACTIVE_STATUSES, DESKS_PER_ROOM, LEAD_DESK, QA_DESK } from '../../shared/types';
 import type { GitHubProvider, PullRequestDetail } from '../github/provider';
 import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
 import { afterCloudRun, carryOnInNewSession, fallBackToLocal } from './cloud';
+import { afterVerdict, applyHelperEvent, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, newSliceNote, notShipped, openPr, qaVerdictNote, shipped, shipPlan, sliceBranch, sliceLanded } from './lead';
+import { repoFolders } from './planner';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
 import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
 import type { QaLoopEvent } from './qaLoop';
@@ -79,10 +81,10 @@ export class AgentManager {
     this.hub.send({ type: 'lines', id: agent.id, lines: stamped });
   }
 
-  /** Agents running, everywhere or (QA officers aside, who don't take one of a room's slots) in one project. */
+  /** Agents running, everywhere or (QA officers and leads aside, who don't take one of a room's slots) in one project. */
   private activeCount(projectId?: string): number {
     return [...this.store.agents.values()].filter(
-      (a) => ACTIVE_STATUSES.includes(a.status) && (!projectId || (a.projectId === projectId && a.task !== 'review')),
+      (a) => ACTIVE_STATUSES.includes(a.status) && (!projectId || (a.projectId === projectId && !deskless(a))),
     ).length;
   }
 
@@ -207,7 +209,7 @@ export class AgentManager {
       }
       const project = this.store.projects.find((p) => p.id === agent.projectId);
       if (!project) continue;
-      if (agent.task !== 'review' && this.activeCount(project.id) >= project.maxAgents) {
+      if (!deskless(agent) && this.activeCount(project.id) >= project.maxAgents) {
         this.update(agent, { activity: `Waiting – ${project.name} allows ${project.maxAgents} at once` });
         continue;
       }
@@ -221,6 +223,7 @@ export class AgentManager {
     this.update(agent, { status: 'setting-up', activity: agent.task === 'review' ? 'Reading the pull request' : 'Reading the issue', error: undefined });
     try {
       if (agent.task === 'review') return await this.launchReview(agent);
+      if (agent.task === 'lead') return await this.launchLead(agent);
       const info = await this.github.repoInfo(agent.repo);
       if (info.isEmpty) throw new Error('This repository has no commits yet – add a README first so there is a branch to work from.');
       if (agent.task === 'issue') this.update(agent, { baseBranch: info.defaultBranch });
@@ -248,6 +251,8 @@ export class AgentManager {
     switch (agent.task) {
       case 'review':
         throw new Error('The QA officer gets qaPrompt (qa.ts)');
+      case 'lead':
+        throw new Error('The project lead takes the captain’s messages, not a task');
       case 'issue': {
         const issue = await this.github.getIssue(agent.repo, agent.issue.number);
         this.update(agent, { issue: { number: issue.number, title: issue.title, url: issue.url } });
@@ -284,6 +289,16 @@ export class AgentManager {
         if (rt.shots.frames.length > MAX_SCREENSHOTS) rt.shots.frames.shift();
       },
       session: (sessionId) => this.update(agent, { sessionId }),
+      helper: (event) => {
+        // only the lead's helpers have somewhere to sit: the group desk
+        if (agent.task !== 'lead') return;
+        const before = agent.helpers ?? [];
+        const helpers = applyHelperEvent(before, event, Date.now());
+        if (helpers === before) return;
+        this.update(agent, { helpers });
+        if (event.kind === 'started') this.print(agent, [{ kind: 'system', text: `✻ ${helperFor(event.id).name} joins the group desk: ${event.description}` }]);
+        if (event.kind === 'ended') setTimeout(() => this.update(agent, { helpers: (agent.helpers ?? []).filter((h) => h.id !== event.id) }), HELPER_LINGER_MS);
+      },
       cost: (usd) => this.update(agent, { costUsd: usd }),
       permission: (tool, summary, signal) =>
         new Promise<boolean>((resolve) => {
@@ -307,8 +322,11 @@ export class AgentManager {
   private async runSession(agent: Agent, prompt: string, resumeSessionId?: string): Promise<void> {
     const rt = this.rt(agent.id);
     const review = agent.task === 'review';
+    const lead = agent.task === 'lead' ? agent.lead : undefined;
+    // the lead's last slice has landed: their repos move to fresh code before they hear anything else
+    if (lead && sliceLanded(lead.prs)) prompt = `${await this.nextSlice(agent, lead)}\n\n${prompt}`;
     // before marking them busy: the QA officer's instructions may need GitHub, and that can fail
-    const instructions = review ? await this.qaSystem(agent) : systemAppend(agent);
+    const instructions = review ? await this.qaSystem(agent) : lead ? leadSystemAppend(agent, this.store.project(agent.projectId).name, lead) : systemAppend(agent);
     rt.busy = true;
     this.update(agent, { status: 'working', activity: resumeSessionId ? 'Reading your message' : 'Getting started', error: undefined, finishedAt: undefined });
     const session = this.runner.start(
@@ -323,6 +341,7 @@ export class AgentManager {
         effort: agent.effort,
         outputSchema: review ? QA_SCHEMA : undefined,
         cloud: agent.cloud ? { branch: agent.branch } : undefined,
+        tools: lead ? { ship: (input) => this.shipLead(agent, input) } : undefined,
       },
       this.hooks(agent),
     );
@@ -366,6 +385,13 @@ export class AgentManager {
       return;
     }
     if (review) return this.finishReview(agent, outcome.structured, outcome.summary);
+    if (lead) {
+      // the lead's turn is over: it's the captain's turn, and their work ships when the lead says so, not now. Their
+      // subagents ended with it; any that just finished linger a moment
+      this.update(agent, { status: 'done', activity: 'Your turn', finishedAt: Date.now(), helpers: agent.helpers?.filter((h) => h.status !== 'working') });
+      this.schedule();
+      return;
+    }
     await this.deliver(agent, outcome.summary);
   }
 
@@ -455,6 +481,182 @@ export class AgentManager {
     if (agent.task === 'review') this.reviewEnded(agent, message);
     this.fixEnded(agent, 'failed');
     this.schedule();
+  }
+
+  // ---------------------------------------------------------------- the project's lead
+
+  /**
+   * Talks to the project's lead: the captain's own Claude Code session for the project, at the room's group desk. The
+   * first message seats them; every later one goes to the same session.
+   */
+  startLead(projectId: string, text: string): Agent {
+    const project = this.store.project(projectId);
+    if (!project.repos.length) throw new Error(`Connect a repository to ${project.name} first`);
+    if (!text.trim()) throw new Error('Tell them what you’re after');
+    const id = leadId(projectId);
+    const existing = this.store.agents.get(id);
+    if (existing) {
+      this.message(id, text);
+      return existing;
+    }
+    const crew = leadFor(projectId);
+    const agent: Agent = {
+      id,
+      name: crew.name,
+      avatar: crew.avatar,
+      projectId,
+      repo: project.repos[0],
+      task: 'lead',
+      issue: { number: 0, title: `${project.name}’s lead`, url: '' },
+      desk: LEAD_DESK,
+      status: 'queued',
+      activity: 'Coming over to the group desk',
+      branch: sliceBranch(project.name, 1, id.slice(-4)),
+      baseBranch: 'main',
+      lead: { repos: [], slice: 1, prs: [] },
+      costUsd: 0,
+      startedAt: Date.now(),
+    };
+    this.runtimes.set(id, { inbox: [text.trim()], notes: [], nudged: false, busy: false });
+    this.store.putAgent(agent);
+    this.hub.send({ type: 'agent', agent });
+    this.print(agent, [
+      { kind: 'system', text: `✻ ${crew.name} sits down at ${project.name}'s group desk to lead the work across ${project.repos.join(', ')}` },
+      { kind: 'manager', text: `▶ Captain: ${text.trim()}` },
+    ]);
+    this.schedule();
+    return agent;
+  }
+
+  /** Checks out every repo of the project side by side, on the slice's branch, then hands the lead the captain's words. */
+  private async launchLead(agent: Agent): Promise<void> {
+    const rt = this.rt(agent.id);
+    const project = this.store.project(agent.projectId);
+    await this.checkOutSlice(agent, project.repos);
+    if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
+    await this.runSession(agent, rt.inbox.splice(0).join('\n\n') || 'Hello! What are we working on?');
+  }
+
+  /** Worktrees of `repos` on the lead's current branch, each from its repo's default branch, recorded on the lead. */
+  private async checkOutSlice(agent: Agent, repos: string[]): Promise<void> {
+    const folders = repoFolders(repos);
+    const checkouts: NonNullable<Agent['lead']>['repos'] = [];
+    for (const repo of repos) {
+      const info = await this.github.repoInfo(repo);
+      if (info.isEmpty) {
+        this.print(agent, [{ kind: 'system', text: `✻ Skipping ${repo}: it has no commits yet` }]);
+        continue;
+      }
+      const folder = folders.get(repo)!;
+      this.update(agent, { activity: `Checking out ${repo}` });
+      this.print(agent, [{ kind: 'system', text: `✻ Checking out ${repo} at ./${folder} on ${agent.branch}` }]);
+      await this.workspace.create(repo, leadWorktreeId(agent.id, folder), agent.branch, info.defaultBranch, (id) => this.store.agents.has(id.split('/')[0]));
+      checkouts.push({ repo, folder, baseBranch: info.defaultBranch });
+    }
+    if (!checkouts.length) throw new Error('None of the project’s repositories has any commits yet – add a README first');
+    this.update(agent, { lead: { ...agent.lead!, repos: checkouts }, baseBranch: checkouts[0].baseBranch });
+  }
+
+  /**
+   * The slice has landed: a new branch on fresh code in every repo, unless a repo has uncommitted changes, which are
+   * never thrown away. Returns what the lead hears about it.
+   */
+  private async nextSlice(agent: Agent, lead: NonNullable<Agent['lead']>): Promise<string> {
+    const project = this.store.project(agent.projectId);
+    const dirty: string[] = [];
+    for (const r of lead.repos) if (await this.workspace.hasUncommittedChanges(this.workspace.dir(leadWorktreeId(agent.id, r.folder)))) dirty.push(r.folder);
+    if (dirty.length) return heldBack(lead, dirty);
+    const slice = lead.slice + 1;
+    for (const r of lead.repos) await this.workspace.remove(r.repo, leadWorktreeId(agent.id, r.folder)).catch(() => undefined);
+    this.update(agent, { branch: sliceBranch(project.name, slice, newId('s').slice(-4)), lead: { repos: [], slice, prs: [] } });
+    await this.checkOutSlice(agent, project.repos);
+    return newSliceNote(agent.lead!, agent.branch);
+  }
+
+  /**
+   * The lead's ship tool: pushes every repo with new commits and opens (or updates) its pull request, which QA then
+   * reviews. Nothing ships while any repo has uncommitted changes.
+   */
+  private async shipLead(agent: Agent, input: { title: string; summary: string }): Promise<string> {
+    const work = agent.lead;
+    if (!work?.repos.length) throw new Error('There’s nothing checked out to ship');
+    const states = await Promise.all(
+      work.repos.map(async (r) => {
+        const dir = this.workspace.dir(leadWorktreeId(agent.id, r.folder));
+        const head = await this.workspace.head(dir);
+        const changed = !openPr(work, r.repo)?.sha || !sameCommit(head, openPr(work, r.repo)!.sha!);
+        return { ...r, dir, head, changed, dirty: await this.workspace.hasUncommittedChanges(dir), ahead: await this.workspace.commitsAhead(dir, r.baseBranch) };
+      }),
+    );
+    const plan = shipPlan(states);
+    if (plan.kind !== 'ship') return notShipped(plan);
+    const project = this.store.project(agent.projectId);
+    const title = input.title.trim() || `Slice ${work.slice}`;
+    const lines: string[] = [];
+    for (const s of states.filter((x) => plan.repos.includes(x.repo))) {
+      this.update(agent, { status: 'pushing', activity: `Shipping ${s.repo}` });
+      this.print(agent, [{ kind: 'system', text: `✻ Pushing ${agent.branch} in ${s.repo}` }]);
+      await this.workspace.push(s.dir, agent.branch);
+      let pr = openPr(work, s.repo) ?? (await this.github.findPullRequest(s.repo, agent.branch).then((found) => found && { repo: s.repo, ...found }));
+      if (pr) {
+        lines.push(`Updated ${s.repo}#${pr.number}: ${pr.url}`);
+      } else {
+        const alongside = plan.repos.filter((r) => r !== s.repo);
+        const body = leadPrBody(input.summary, agent, alongside, this.store.settings.attribution);
+        const opened = await this.github.createPullRequest(s.repo, { head: agent.branch, base: s.baseBranch, title, body });
+        pr = { repo: s.repo, ...opened };
+        lines.push(`Opened ${s.repo}#${pr.number}: ${pr.url}`);
+        this.hub.toast('success', `🎉 ${agent.name} opened ${s.repo.split('/')[1]}#${pr.number}: ${title}`, agent.id);
+      }
+      const known = pr;
+      const others = agent.lead!.prs.filter((p) => !(p.repo === known.repo && p.number === known.number));
+      this.update(agent, { lead: { ...agent.lead!, prs: [...others, { repo: known.repo, number: known.number, url: known.url, sha: s.head }] } });
+      this.print(agent, [{ kind: 'success', text: `✔ ${lines.at(-1)}` }]);
+      if (autoQaFor(project)) {
+        try {
+          this.requestReview(agent.projectId, s.repo, known.number, title);
+        } catch (err) {
+          this.print(agent, [{ kind: 'error', text: `✘ Couldn't hand ${s.repo}#${known.number} to QA: ${errorMessage(err)}` }]);
+        }
+      }
+    }
+    this.update(agent, { status: 'working', activity: 'Shipped the slice' });
+    this.boardChanged(agent.projectId);
+    return shipped(lines);
+  }
+
+  /** The lead whose open pull request this is, if any. */
+  private leadWith(repo: string, number: number): Agent | undefined {
+    return [...this.store.agents.values()].find((a) => a.task === 'lead' && a.lead?.prs.some((p) => p.repo === repo && p.number === number && !p.outcome));
+  }
+
+  /** QA's verdict on one of the lead's pull requests: a fail wakes the lead to fix it, a couple of times at most. */
+  private leadHearsVerdict(repo: string, number: number, from: string, report: QaReport, failedRounds: number): void {
+    const lead = this.leadWith(repo, number);
+    if (!lead) return;
+    const text = qaVerdictNote(repo, number, report);
+    const step = afterVerdict(report.verdict, failedRounds);
+    if (step === 'wake') return this.message(lead.id, text, from);
+    // no turn spent on it: the lead hears it with the captain's next message
+    this.print(lead, [{ kind: 'manager', text: `▶ ${from}: ${text}` }]);
+    this.rt(lead.id).inbox.push(`[${from}] ${text}`);
+    if (step === 'needs-you') this.hub.toast('error', `🙋 QA failed ${repo.split('/')[1]}#${number} ${failedRounds} times: ${lead.name} needs you to look`, lead.id);
+  }
+
+  /** The lead's pull request was merged or closed. Once the slice's have all landed, the lead hears about it. */
+  private leadPrClosed(repo: string, number: number, merged: boolean): boolean {
+    const lead = this.leadWith(repo, number);
+    if (!lead?.lead) return false;
+    const prs = lead.lead.prs.map((p) => (p.repo === repo && p.number === number ? { ...p, outcome: merged ? ('merged' as const) : ('closed' as const) } : p));
+    this.update(lead, { lead: { ...lead.lead, prs } });
+    this.print(lead, [{ kind: merged ? 'success' : 'system', text: `${merged ? '🎉' : '✻'} ${repo}#${number} was ${merged ? 'merged' : 'closed'}` }]);
+    if (sliceLanded(prs)) this.message(lead.id, landedNote(lead.lead), 'Office');
+    return true;
+  }
+
+  /** The leads' pull requests still open, for the office to notice when they're merged or closed on GitHub. */
+  leadPrs(projectId: string): { repo: string; number: number }[] {
+    return this.store.agentsIn(projectId).flatMap((a) => (a.task === 'lead' ? (a.lead?.prs ?? []).filter((p) => !p.outcome) : []));
   }
 
   // ---------------------------------------------------------------- QA
@@ -580,6 +782,7 @@ export class AgentManager {
     this.hub.toast(pass ? 'success' : 'error', `${pass ? '✅' : '❌'} ${agent.name} ${pass ? 'passed' : 'failed'} ${agent.repo.split('/')[1]}#${number}: ${truncate(report.summary, 120)}`, agent.id);
     this.boardChanged(agent.projectId);
     if (done) await this.qaNext(done, { kind: 'verdict', verdict: report.verdict, failedRounds });
+    this.leadHearsVerdict(agent.repo, number, `QA officer ${agent.name}`, report, failedRounds);
     this.nextReview(agent.projectId);
   }
 
@@ -854,12 +1057,14 @@ export class AgentManager {
 
   // ---------------------------------------------------------------- manager actions
 
-  message(id: string, text: string): void {
+  /** Sends the agent a message: the captain's, or (with `from`) news from someone else aboard. */
+  message(id: string, text: string, from?: string): void {
     const agent = this.store.agent(id);
     const rt = this.rt(id);
     text = text.trim();
     if (!text) return;
-    this.print(agent, [{ kind: 'manager', text: `▶ Captain: ${text}` }]);
+    this.print(agent, [{ kind: 'manager', text: `▶ ${from ?? 'Captain'}: ${text}` }]);
+    if (from) text = `[${from}] ${text}`;
 
     if (rt.session?.send(text)) {
       if (!rt.permission) this.update(agent, { activity: 'Reading your message' });
@@ -914,12 +1119,14 @@ export class AgentManager {
     this.store.removeAgent(id);
     this.hub.send({ type: 'agent-removed', id });
     this.schedule();
-    await this.workspace.remove(agent.repo, id).catch(() => undefined);
+    const checkouts = agent.lead ? agent.lead.repos.map((r) => ({ repo: r.repo, id: leadWorktreeId(id, r.folder) })) : [{ repo: agent.repo, id }];
+    for (const c of checkouts) await this.workspace.remove(c.repo, c.id).catch(() => undefined);
   }
 
   /** Called when a PR an agent opened was merged or closed. The agent packs up and goes home. */
   prClosed(repo: string, number: number, merged: boolean): void {
     this.reviewGone(repo, number);
+    if (this.leadPrClosed(repo, number, merged)) return;
     const agent = this.prOwner(repo, number);
     if (!agent || this.leaving.has(agent.id)) return;
     this.leaving.add(agent.id);
@@ -939,10 +1146,13 @@ export class AgentManager {
 
   freeSlots(projectId: string): number {
     const project = this.store.project(projectId);
-    const busy = this.store.agentsIn(projectId).filter((a) => a.task !== 'review' && (a.status === 'queued' || ACTIVE_STATUSES.includes(a.status))).length;
+    const busy = this.store.agentsIn(projectId).filter((a) => !deskless(a) && (a.status === 'queued' || ACTIVE_STATUSES.includes(a.status))).length;
     return Math.max(0, project.maxAgents - busy);
   }
 }
+
+/** QA officers and leads don't sit at one of a room's desks, and don't count against its limit. */
+const deskless = (a: Pick<Agent, 'task'>) => a.task === 'review' || a.task === 'lead';
 
 function withNotes(prompt: string, notes: string[]): string {
   return notes.length ? `${prompt}\n\nNotes from your manager:\n${notes.map((m) => `- ${m}`).join('\n')}` : prompt;

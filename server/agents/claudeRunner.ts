@@ -3,6 +3,7 @@ import { cloudSessionUrl } from '../../shared/cloud';
 import { errorMessage, sleep, truncate } from '../util';
 import { BrowserPool, browserMcpServer } from './browserTool';
 import { CLOUD_UNAVAILABLE, cloudRefused } from './cloud';
+import { officeMcpServer } from './officeTool';
 import { appUrl, renderText, renderToolResult, renderToolUse, screenshotFrame, type ToolCall } from './render';
 import { type AgentRunner, type AgentSession, type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN } from './types';
 
@@ -77,6 +78,8 @@ interface RunContext {
   lastUrl?: string;
   /** The cloud session's id, once the CLI has reported it. */
   cloudId?: string;
+  /** Subagents by Claude Code's task id: the Agent tool call that started each, which their messages point back to. */
+  helpers: Map<string, string>;
 }
 
 /**
@@ -126,10 +129,12 @@ export class ClaudeRunner implements AgentRunner {
           { systemPrompt: { type: 'preset', preset: 'claude_code' }, extraArgs: { cloud: req.resumeSessionId ?? null } }
         : {
             systemPrompt: { type: 'preset', preset: 'claude_code', append: req.systemAppend },
-            mcpServers: { browser: browserMcpServer(this.browsers, req.agentId, hooks) },
+            mcpServers: { browser: browserMcpServer(this.browsers, req.agentId, hooks), ...(req.tools && { office: officeMcpServer(req.tools) }) },
             resume: req.resumeSessionId,
           }),
       outputFormat: req.outputSchema ? { type: 'json_schema', schema: req.outputSchema } : undefined,
+      // the lead's helpers sit at the group desk: a line every ~30s on what each is doing, for their speech bubbles
+      agentProgressSummaries: !!req.tools,
       env,
       stderr: (data) => {
         stderrTail.push(data);
@@ -144,7 +149,7 @@ export class ClaudeRunner implements AgentRunner {
 
     let q: Query | undefined;
     let stopping = false;
-    const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map() };
+    const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map(), helpers: new Map() };
     const done = (async (): Promise<RunOutcome> => {
       let summary = '';
       let structured: unknown;
@@ -221,6 +226,19 @@ export class ClaudeRunner implements AgentRunner {
           hooks.activity(null, `Waiting on the API (${msg.error})`);
         } else if (msg.subtype === 'compact_boundary') {
           hooks.lines([{ kind: 'system', text: '✻ Conversation compacted' }]);
+        } else if (msg.subtype === 'task_started' && msg.task_type === 'local_agent') {
+          // a subagent: known by the Agent tool call that started it, which its own messages point back to
+          const id = msg.tool_use_id ?? msg.task_id;
+          ctx.helpers.set(msg.task_id, id);
+          hooks.helper?.({ kind: 'started', id, description: msg.description, type: msg.subagent_type });
+        } else if (msg.subtype === 'task_progress') {
+          const id = ctx.helpers.get(msg.task_id);
+          const activity = msg.summary ?? (msg.last_tool_name ? `Using ${msg.last_tool_name}` : '');
+          if (id && activity) hooks.helper?.({ kind: 'activity', id, activity: truncate(activity, 100) });
+        } else if (msg.subtype === 'task_notification') {
+          const id = ctx.helpers.get(msg.task_id);
+          if (id) hooks.helper?.({ kind: 'ended', id, ok: msg.status === 'completed', summary: truncate(msg.summary, 100) });
+          ctx.helpers.delete(msg.task_id);
         }
         return null;
       }
@@ -245,6 +263,8 @@ export class ClaudeRunner implements AgentRunner {
             const rendered = renderToolUse(call.name, call.input, cwd);
             hooks.lines(nested ? rendered.lines.map((l) => ({ ...l, text: `    ${l.text}` })) : rendered.lines);
             if (rendered.activity || rendered.status) hooks.activity(rendered.status ?? null, rendered.activity ?? '');
+            // a subagent's tool call is what that helper is busy with
+            if (nested && rendered.activity) hooks.helper?.({ kind: 'activity', id: msg.parent_tool_use_id!, activity: rendered.activity });
           }
         }
         return null;

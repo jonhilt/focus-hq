@@ -1,11 +1,5 @@
 import { randomBytes } from 'node:crypto';
 import { sleep } from '../util';
-import { qaOfficerFor } from '../../shared/crew';
-import { optionText } from '../../shared/engineering';
-import type { BriefingOfficer, BriefingQa, OfficerHooks, OfficerReply, OfficerTurn, QaReply, QaTurn } from './briefing';
-import type { BriefingEngineer, EngineerReply, EngineerTurn } from './engineering';
-import { mergeBrief } from './briefing';
-import { asBreakdown } from './breakdown';
 import type { NumberOneOfficer, NumberOneReply, NumberOneTurn } from './numberOne';
 import type { Drafter, DraftRequest, DraftResult } from './planner';
 import { renderText, renderToolUse } from './render';
@@ -166,8 +160,102 @@ export class DemoRunner implements AgentRunner {
       return { ok: true, summary: JSON.stringify(report), structured: report };
     };
 
+    // the project's lead: talks a goal through, builds a slice across every repo, ships it, and hears back
+    const leadScript = async (tools: NonNullable<RunRequest['tools']>): Promise<RunOutcome> => {
+      const sessionId = req.resumeSessionId ?? `demo-lead-${randomBytes(4).toString('hex')}`;
+      hooks.session(sessionId);
+      if (!req.resumeSessionId) hooks.lines([{ kind: 'system', text: '✻ Claude Code (demo) · pretend model · acceptEdits' }]);
+      const repos = [...req.systemAppend.matchAll(/^- \.\/(\S+): (\S+), on branch/gm)].map((m) => ({ folder: m[1], repo: m[2] }));
+      const kindOf = (repo: string) => (/api/.test(repo) ? 'api' : /game|dodger/.test(repo) ? 'game' : 'web');
+      const message = req.prompt.replace(/\s+/g, ' ').trim();
+      // a resumed session doesn't hear the goal again: anything short is a go-ahead, not the goal
+      const goal = req.resumeSessionId && message.length < 40 ? 'saved items' : message.replace(/[.!?]$/, '').slice(0, 60);
+      const ship = async (title: string, summary: string): Promise<boolean> => {
+        hooks.lines([{ kind: 'tool', text: `⏺ mcp__office__ship(${title})` }]);
+        hooks.activity('pushing', 'Shipping the slice');
+        if (req.settings.autonomy === 'ask' && !(await hooks.permission('mcp__office__ship', `Ship the slice: ${title}`, abort.signal))) {
+          if (stopped) throw new Error('stopped');
+          hooks.lines([{ kind: 'error', text: '  ⎿  Declined by the captain' }]);
+          await say('Holding off on shipping. Tell me what you’d like changed first.');
+          return false;
+        }
+        const result = await tools.ship({ title, summary });
+        hooks.lines(result.split('\n').filter((l) => l.trim()).slice(0, 4).map((text, i) => ({ kind: 'output', text: `  ${i === 0 ? '⎿' : ' '}  ${text}` })));
+        return true;
+      };
+      const commit = async (folder: string, text: string) =>
+        tool('Bash', { command: `git -C ${folder} add -A && git -C ${folder} commit -m "${text}"` }, [`[${folder} 4f2a91c] ${text}`, ' 2 files changed, 41 insertions(+)']);
+
+      if (/^\[QA officer/.test(req.prompt)) {
+        await think();
+        if (/^\[QA officer [^\]]+\] QA failed/.test(req.prompt)) {
+          const target = repos.find((r) => req.prompt.includes(r.repo)) ?? repos[0];
+          await say(`QA found a gap in ${target.folder}. Fixing it before anything else.`);
+          await tool('Edit', { file_path: `/work/${target.folder}/${FILES[kindOf(target.repo)][0]}`, old_string: 'items.length', new_string: '(items ?? []).length' }, ['Updated 1 file']);
+          await tool('Bash', { command: `npm --prefix ${target.folder} test` }, ['Tests: 46 passed, 46 total']);
+          await commit(target.folder, 'Handle an empty list');
+          if (await ship('Fix what QA found', 'Handles the empty case QA found, with a test.')) await say('Shipped the fix; QA will look again. The rest of the slice is unchanged.');
+        } else {
+          await say(`QA passed it. It's ready for you to merge whenever you're happy with it.`);
+        }
+        return { ok: true, summary: 'Heard back from QA.' };
+      }
+      if (/has landed/.test(req.prompt)) {
+        await think();
+        await say(`That slice is in, and it taught us the data side holds up fine. The open question now is whether people find saved items from the header. Next I'd add it there and tidy the store code it exposed. Shall I go?`);
+        return { ok: true, summary: 'The slice landed.' };
+      }
+      if (!req.resumeSessionId) {
+        for (const r of repos) {
+          await tool('Read', { file_path: `/work/${r.folder}/CLAUDE.md` }, [`Read ${30 + r.folder.length * 3} lines`]);
+          await tool('Glob', { pattern: `${r.folder}/src/**/*` }, [`Found ${14 + r.folder.length} files`]);
+        }
+        await think();
+        await say(`I've had a look around ${repos.map((r) => `./${r.folder}`).join(' and ')}. For "${goal}", I'd start with a thin slice end to end${repos.length > 1 ? ` through ${repos.map((r) => r.folder).join(' and ')}` : ''}: the simplest version that works, so we find out early whether the data model holds. Shall I go ahead?`);
+        return { ok: true, summary: 'Proposed the first slice.' };
+      }
+      await say('On it: a thin slice first.');
+      await tool('TodoWrite', { todos: repos.map((r) => ({ content: `${r.folder}: ${goal}`, status: 'pending' })) });
+      // two helpers map the repos side by side while the lead plans: they sit down at the group desk while they work
+      if (repos.length > 1) {
+        const helpers = repos.map((r) => ({ ...r, id: `demo-helper-${r.folder}-${randomBytes(2).toString('hex')}`, files: FILES[kindOf(r.repo)] }));
+        for (const h of helpers) {
+          hooks.lines([{ kind: 'tool', text: `⏺ Agent(Map ./${h.folder} for ${goal})` }]);
+          hooks.helper?.({ kind: 'started', id: h.id, description: `Map ./${h.folder} for ${goal}`, type: 'Explore' });
+        }
+        hooks.activity('working', `Waiting on ${helpers.length} helpers`);
+        for (let step = 0; step < 3; step++) {
+          await wait(2, 3.5);
+          for (const h of helpers) {
+            const file = `${h.folder}/${h.files[step % h.files.length]}`;
+            hooks.lines([{ kind: 'tool', text: `    ⏺ Read(${file})` }]);
+            hooks.helper?.({ kind: 'activity', id: h.id, activity: `Reading ${file}` });
+          }
+        }
+        for (const h of helpers) {
+          await wait(1, 2);
+          hooks.helper?.({ kind: 'ended', id: h.id, ok: true, summary: `${h.folder}: ${goal} fits in ${h.files[1]}` });
+          hooks.lines([{ kind: 'output', text: `  ⎿  ${h.folder}: ${goal} fits in ${h.files[1]}` }]);
+        }
+      }
+      for (const r of repos) {
+        const files = FILES[kindOf(r.repo)];
+        await tool('Read', { file_path: `/work/${r.folder}/${files[0]}` }, [`Read ${60 + files[0].length} lines`]);
+        await tool('Edit', { file_path: `/work/${r.folder}/${files[1]}`, old_string: '// TODO', new_string: `// ${goal}` }, ['Updated 1 file']);
+        await tool('Bash', { command: `npm --prefix ${r.folder} test` }, ['Tests: 44 passed, 44 total']);
+        await commit(r.folder, `Thin slice: ${goal}`);
+      }
+      await handleInbox();
+      const title = `Thin slice: ${goal}`.slice(0, 70);
+      if (await ship(title, `## Summary\n\nA first, thin version of ${goal}, end to end.\n\n## Testing\n\n- Tests pass in every repo`)) {
+        await say(`Shipped: ${repos.length > 1 ? `a pull request in each of ${repos.map((r) => r.folder).join(' and ')}` : 'a pull request'}. It works end to end in the simplest way; the store code is a bit tangled now, so I'd tidy it in the next slice. Have a look and merge when you're happy.`);
+      }
+      return { ok: true, summary: 'Shipped the slice.' };
+    };
+
     const script = async (): Promise<RunOutcome> => {
       if (req.outputSchema) return qaScript();
+      if (req.tools) return leadScript(req.tools);
       const sessionId = req.resumeSessionId ?? `${req.cloud ? 'session_demo' : 'demo-'}${randomBytes(4).toString('hex')}`;
       hooks.session(sessionId);
       hooks.lines([{ kind: 'system', text: `✻ Claude Code (demo) · pretend model · acceptEdits${req.cloud ? ' · ☁ cloud' : ''}` }]);
@@ -369,11 +457,7 @@ export class DemoDrafter implements Drafter {
   }
 }
 
-/** The phone-width check the demo officer proposes, and the testable rewrite the demo QA officer suggests for it. */
-const PHONE_CHECK = 'Works at phone width (375px)';
-const PHONE_CHECK_REWRITE = 'At 375px wide nothing scrolls sideways and every button can be tapped';
-
-/** The repo a demo briefing is about, and the made-up files it talks about. */
+/** The repo a demo conversation is about, and the made-up files it talks about. */
 function demoCode(repos: string[]): { repo: string; files: string[]; folder: string } {
   const repo = repos.find((r) => /web|front|app|game|dodger/.test(r)) ?? repos[0];
   const kind = /api/.test(repo) ? 'api' : /game|dodger/.test(repo) ? 'game' : 'web';
@@ -442,8 +526,8 @@ export class DemoNumberOne implements NumberOneOfficer {
     if (project && /should we|could we|we need|let'?s|add|build|want/.test(q)) {
       return {
         ...said(
-          `That sounds like work for ${project.name}. I'd start with a draft at the stand; if it turns out bigger than one issue, call a briefing instead.`,
-          `That's one for ${project.name}. Want me to send it to the stand, or call a briefing?`,
+          `That sounds like work for ${project.name}. I'd start with a draft at the stand; if it turns out bigger than one issue, talk it through with the project's lead instead.`,
+          `That's one for ${project.name}. Want me to send it to the stand, or to the lead?`,
         ),
         suggest: { projectId: project.id, idea: asked },
       };
@@ -453,277 +537,6 @@ export class DemoNumberOne implements NumberOneOfficer {
       `Happy to think it through, Captain. Ask me how something works in ${project?.name ?? 'any project'}, what's going on aboard, or what an agent has done so far.`,
       'Happy to think it through, Captain.',
     );
-  }
-}
-
-/** The demo briefing officer: asks the usual questions in order, filling the brief with your answers. */
-export class DemoOfficer implements BriefingOfficer {
-  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
-
-  async turn(req: OfficerTurn, hooks: OfficerHooks): Promise<OfficerReply> {
-    const wait = async (seconds: number) => {
-      await sleep((seconds * 1000) / this.speed);
-      if (req.signal.aborted) throw new Error('Stopped');
-    };
-    const { repo, files, folder } = demoCode(req.repos);
-    const idea = req.idea.replace(/\s+/g, ' ').trim().replace(/[.!?]$/, '');
-    const answers = req.messages.filter((m) => m.from === 'manager').slice(1).map((m) => m.text.replace(/\s+/g, ' ').trim());
-    const last = answers[answers.length - 1] ?? '';
-    const line = (text: string) => (text.length > 140 ? `${text.slice(0, 139)}…` : text);
-    let brief = req.brief;
-    const update = (patch: Parameters<typeof mergeBrief>[1]) => {
-      brief = mergeBrief(brief, patch);
-      hooks.brief(brief);
-    };
-    const session = req.resumeSessionId ?? `demo-brief-${randomBytes(3).toString('hex')}`;
-    const today = { title: 'Today', mermaid: `flowchart TD\n  U["${files[1]}"] -->|"renders"| A["${files[0]}"]\n  A -->|"reads and writes"| S["${files[4]}"]` };
-    const optionA = { title: 'Option A: extend the existing module', mermaid: `flowchart TD\n  A["${files[0]}"] -->|"new calls"| S["${files[4]}"]\n  S -->|"persists"| P[("localStorage")]` };
-    const optionB = { title: 'Option B: a module of its own', mermaid: `flowchart TD\n  A["${files[0]}"] -->|"uses"| N["new module"]\n  N -->|"reads"| S["${files[4]}"]` };
-
-    if (req.goal) {
-      const said = (text: string, costUsd = 0.05) => ({ text, sessionId: session, costUsd });
-      const steps = req.goal.steps;
-      if (req.kind === 'open') {
-        for (const step of ['Pulling the latest code', `Reading ${folder}/CLAUDE.md`, `Reading ${folder}/${files[0]}`]) {
-          hooks.activity(step);
-          await wait(1.4);
-        }
-        hooks.activity('Updating the brief');
-        update({ summary: idea, open_questions: [`Can \`${files[4]}\` carry it as it is?`] });
-        await wait(1);
-        return said(`I've had a look around \`${folder}/${files[0]}\`. Before we go anywhere: who's this for, and what would you see once it's done? My guess is returning users, finding what they meant to come back to.`, 0.08);
-      }
-      if (req.kind === 'step') {
-        hooks.activity('Rereading the unknowns');
-        await wait(1.5);
-        hooks.activity(`Reading ${folder}/${files[4]}`);
-        await wait(1.5);
-        hooks.activity(`Writing up step ${steps.length + 1}`);
-        await wait(1.5);
-        const unknown = brief.openQuestions[0] ?? `whether \`${files[4]}\` can carry it`;
-        const first = !steps.length;
-        const title = `${first ? 'Thinnest slice' : 'Next slice'}: ${idea}`.slice(0, 70);
-        const body = [
-          '## Testing',
-          '',
-          first ? `${unknown} The thinnest slice that touches it will tell us.` : `Whether what step ${steps.length} built holds up once people use it from \`${files[1]}\`.`,
-          '',
-          '## Why now',
-          '',
-          first ? "It's the riskiest unknown: if it doesn't hold, the route changes." : `Step ${steps.length} landed, so the next unknown is how it feels in use.`,
-          '',
-          '## What to build',
-          '',
-          first ? `- Store and load ${idea} in \`${files[4]}\`, with the simplest possible UI in \`${files[0]}\`.` : `- Show ${idea} in \`${files[1]}\`, reusing what step ${steps.length} added.`,
-          '',
-          '## Done when',
-          '',
-          `- [ ] ${brief.acceptance[0] ?? `${idea} works end to end`}`,
-          '- [ ] Existing tests still pass, and the new behaviour has a test',
-          '',
-          '## Not in this step',
-          '',
-          '- Polish, settings and anything the next step might change',
-        ].join('\n');
-        return { text: '', sessionId: session, costUsd: 0.12, step: { repo, title, body } };
-      }
-      if (req.kind === 'reconvene') {
-        hooks.activity('Pulling the latest code');
-        await wait(1.4);
-        const landed = steps.at(-1)?.outcome === 'merged';
-        if (!landed) return said(`It hasn't landed yet: ${steps.length ? `step ${steps.length} is still with the crew` : 'nothing filed so far'}. What's on your mind, do you want to rethink it?`);
-        hooks.activity(`Reading what landed in ${folder}/${files[4]}`);
-        await wait(1.5);
-        hooks.activity('Updating the brief');
-        update({ open_questions: [`Will people find it from \`${files[1]}\`?`, ...brief.openQuestions.slice(1)] });
-        await wait(0.8);
-        return said(`It landed, and it answered our first question: \`${files[4]}\` carries it without a new table. That moves the risk to whether people find it, so I'd make the next step about \`${files[1]}\`. Or, if that's enough for you, I think we're close to done. Take the next step?`);
-      }
-      hooks.activity('Thinking it over');
-      await wait(1.5);
-      const step = answers.length;
-      hooks.activity('Updating the brief');
-      await wait(0.8);
-      if (step === 1) {
-        update({ who: line(last), acceptance: [line(last)] });
-        return said("That's where we're going, and I've put it on the screen as what we'd see once it's done. Why now: what goes wrong for people today?");
-      }
-      if (step === 2) {
-        update({ why: line(last) });
-        return said(`Got it. The riskiest unknown I can see is whether \`${files[4]}\` can carry it as it is, so I'd make the first step the thinnest slice end to end that finds out. Shall we take it?`);
-      }
-      return said(`Noted. Take the ${steps.length ? 'next' : 'first'} step whenever you're ready.`, 0.03);
-    }
-
-    if (req.kind === 'wrap-up') {
-      hooks.activity('Rereading the brief');
-      await wait(1.5);
-      hooks.activity(`Reading ${folder}/${files[0]}`);
-      await wait(1.5);
-      hooks.activity('Writing up the issue');
-      await wait(2);
-      const title = (brief.summary || idea).replace(/^./, (c) => c.toUpperCase()).slice(0, 70);
-      const list = (items: string[], check = false) => (items.length ? items : ['(none agreed)']).map((i) => `- ${check ? '[ ] ' : ''}${i}`).join('\n');
-      const body = [
-        '## Context',
-        '',
-        `${brief.why ? `${brief.why.replace(/\.?$/, '.')}` : `The captain wants: ${idea}.`}${brief.who ? ` It's for ${brief.who.replace(/^./, (c) => c.toLowerCase()).replace(/\.$/, '')}.` : ''}`,
-        '',
-        `The relevant code lives in \`${files[0]}\` and \`${files[1]}\`. Agreed in a briefing in the observation lounge.`,
-        '',
-        ...(brief.approach
-          ? ['### Approach', '', `Picked from engineering's options: ${optionText(brief.approach)}`, '']
-          : brief.diagrams
-              .filter((d) => d.title.startsWith('Chosen'))
-              .flatMap((d) => ['### Approach', '', `${d.title.replace(/^Chosen: (.)/, (_, c: string) => c.toUpperCase())}, because it keeps the change in one place and needs no new wiring.`, '', '```mermaid', d.mermaid, '```', ''])),
-        '## What to build',
-        '',
-        list(brief.scope.length ? brief.scope : [idea]),
-        '',
-        '## Acceptance criteria',
-        '',
-        list([...brief.acceptance, 'Existing tests still pass, and the new behaviour has tests'], true),
-        '',
-        '## Out of scope',
-        '',
-        list(brief.outOfScope),
-      ].join('\n');
-      return { text: '', sessionId: session, costUsd: 0.18, draft: { repo, title, body } };
-    }
-
-    if (req.kind === 'break-down') {
-      hooks.activity('Rereading the brief');
-      await wait(1.5);
-      hooks.activity(`Searching ${folder} for where each piece would go`);
-      await wait(1.5);
-      hooks.activity('Breaking it down');
-      await wait(2);
-      const title = (brief.summary || idea).replace(/^./, (c) => c.toUpperCase()).slice(0, 70);
-      const list = (items: string[], check = false) => (items.length ? items : ['(none agreed)']).map((i) => `- ${check ? '[ ] ' : ''}${i}`).join('\n');
-      const epic = [
-        '## Why',
-        '',
-        `${brief.why ? brief.why.replace(/\.?$/, '.') : `The captain wants: ${idea}.`}${brief.who ? ` It's for ${brief.who.replace(/^./, (c) => c.toLowerCase()).replace(/\.$/, '')}.` : ''}`,
-        '',
-        '## Scope',
-        '',
-        list(brief.scope.length ? brief.scope : [idea]),
-        '',
-        '## Acceptance criteria',
-        '',
-        list(brief.acceptance, true),
-        '',
-        '## Out of scope',
-        '',
-        list(brief.outOfScope),
-        ...(brief.approach ? ['', '## Approach', '', `Picked from engineering's options: ${optionText(brief.approach)}`] : []),
-      ].join('\n');
-      // the first piece is the foundation the second builds on; the rest can go side by side
-      const pieces = [`Store and load ${idea}`, `Show ${idea} in the UI`, `Tests and edge cases for ${idea}`];
-      const parts = (brief.scope.length >= 2 ? brief.scope : pieces).slice(0, 5);
-      const sub = (part: string, i: number) => ({
-        title: part.replace(/^./, (c) => c.toUpperCase()).slice(0, 70),
-        body: [
-          '## Context',
-          '',
-          `Part of the briefing on ${idea}. The relevant code lives in \`${files[i % files.length]}\`.`,
-          '',
-          '## What to build',
-          '',
-          `- ${part}`,
-          '',
-          '## Acceptance criteria',
-          '',
-          list([`${part} works end to end`, 'Existing tests still pass, and the new behaviour has tests'], true),
-          '',
-          '## Out of scope',
-          '',
-          '- The other parts of the epic',
-        ].join('\n'),
-        depends_on: i === 1 ? [1] : [],
-      });
-      const breakdown = asBreakdown({ repo, epic: { title, body: epic }, sub_issues: parts.map(sub) }, req.repos);
-      return { text: '', sessionId: session, costUsd: 0.24, breakdown };
-    }
-
-    if (req.kind === 'open') {
-      for (const step of ['Pulling the latest code', `Reading ${folder}/CLAUDE.md`, `Reading ${folder}/${files[0]}`, `Searching ${folder} for related code`]) {
-        hooks.activity(step);
-        await wait(1.4);
-      }
-      hooks.activity('Updating the brief');
-      update({ summary: idea, open_questions: ['Who is this for?', 'What goes wrong for them today?', 'What tells us it worked?', 'What should we leave out?'], diagrams: [today] });
-      await wait(1);
-      return {
-        text: `I've had a look: today this lives around \`${folder}/${files[0]}\`. Before I write anything down, who is this for, and what's going wrong for them today? My guess is returning users who lose track of something they meant to come back to.`,
-        spoken: `I've had a look at the code. Who is this for, and what's going wrong for them today?`,
-        sessionId: session,
-        costUsd: 0.09,
-      };
-    }
-
-    hooks.activity('Thinking it over');
-    await wait(1.5);
-    const step = answers.length;
-    hooks.activity('Updating the brief');
-    await wait(0.8);
-    if (step === 1) {
-      update({ who: line(last), open_questions: brief.openQuestions.slice(1) });
-      return {
-        text: `That narrows it. What goes wrong for them today, and why fix it now? I'd guess they lose track of things they meant to come back to, and some never do.`,
-        spoken: `That narrows it. What goes wrong for them today, and why fix it now?`,
-        sessionId: session,
-        costUsd: 0.05,
-      };
-    }
-    if (step === 2) {
-      update({ why: line(last), open_questions: brief.openQuestions.slice(1) });
-      return {
-        text: `Clear. What would tell us it's working? I'd suggest something checkable, like "it's still there after a reload, and on another device once signed in".`,
-        spoken: `Clear. What would tell us it's working?`,
-        sessionId: session,
-        costUsd: 0.05,
-      };
-    }
-    if (step === 3) {
-      update({ acceptance: [line(last), PHONE_CHECK], scope: [line(idea.replace(/^./, (c) => c.toUpperCase()))], open_questions: brief.openQuestions.slice(1), diagrams: [today, optionA, optionB] });
-      return {
-        text: `Noted, and I've added a phone-width check since \`${files[1]}\` has its own mobile layout. I've put two designs on the screen: A extends \`${files[4]}\` (smallest change, but that file grows), B gives it a module of its own (cleaner, more wiring). I'd go with A, but if you'd like a proper look at the how, ask engineering. And what should we leave out of this first version? I'd keep sharing and notifications for later.`,
-        spoken: `Noted. I've put two designs on the screen and I'd go with A. What should we leave out of this first version?`,
-        sessionId: session,
-        costUsd: 0.05,
-      };
-    }
-    if (step === 4) {
-      // QA's note came after the officer's last reply: take their rewrite on board
-      const qaSpoke = req.messages.slice(req.messages.map((m) => m.from).lastIndexOf('officer')).some((m) => m.from === 'qa');
-      const acceptance = qaSpoke ? brief.acceptance.map((a) => (a === PHONE_CHECK ? PHONE_CHECK_REWRITE : a)) : brief.acceptance;
-      update({ out_of_scope: [line(last)], open_questions: [], acceptance, diagrams: [today, { ...optionA, title: optionA.title.replace(/^Option A/, 'Chosen') }] });
-      const taken = qaSpoke ? ` I've swapped in ${qaOfficerFor(req.projectId).name}'s rewrite of the phone-width check; say if you'd rather keep it loose.` : '';
-      return { text: `That's everything I needed: I've kept Option A on the screen as the chosen design, and nothing important is still open.${taken} Anything to add, or shall we wrap up?`, spoken: `That's everything I needed. Anything to add, or shall we wrap up?`, sessionId: session, costUsd: 0.04 };
-    }
-    update({ scope: [...brief.scope, line(last)] });
-    return { text: `Added to the scope. Ready to wrap up whenever you are.`, spoken: `Added. Ready when you are.`, sessionId: session, costUsd: 0.03 };
-  }
-}
-
-/** The demo QA officer at a briefing: chips in once, on the vague phone-width check, and stays quiet after that. */
-export class DemoBriefingQa implements BriefingQa {
-  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
-
-  async check(req: QaTurn, activity: (text: string) => void): Promise<QaReply> {
-    const session = req.resumeSessionId ?? `demo-brief-qa-${randomBytes(3).toString('hex')}`;
-    activity('Reading the acceptance criteria');
-    await sleep(1500 / this.speed);
-    if (req.signal.aborted) throw new Error('Stopped');
-    if (req.messages.some((m) => m.from === 'qa') || !req.brief.acceptance.includes(PHONE_CHECK)) return { sessionId: session, costUsd: 0.02 };
-    activity(req.qaBrief ? 'Checking them against the QA brief' : 'Thinking how I’d test them');
-    await sleep(1200 / this.speed);
-    return {
-      note: `“${PHONE_CHECK}” is hard to fail: I’d test “${PHONE_CHECK_REWRITE}”.`,
-      sessionId: session,
-      costUsd: 0.03,
-    };
   }
 }
 
@@ -752,56 +565,5 @@ export class DemoTriager implements Triager {
       };
     }
     return { action: 'send-back', note: `Don't patch the symptom in ${file}: default the list to [] where it's loaded, and add the test QA asked for.` };
-  }
-}
-
-/** The demo engineer: reads a few files, then lays out three options for the briefing's change, recommending the middle one. */
-export class DemoEngineer implements BriefingEngineer {
-  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
-
-  async propose(req: EngineerTurn, activity: (text: string) => void): Promise<EngineerReply> {
-    const { files, folder } = demoCode(req.repos);
-    for (const step of ['On the way to the lounge', 'Rereading the brief', `Reading ${folder}/CLAUDE.md`, `Reading ${folder}/${files[0]}`, `Reading ${folder}/${files[4]}`, `Searching ${folder} for callers of ${files[4].split('/').pop()}`, 'Weighing the options']) {
-      activity(step);
-      await sleep(1300 / this.speed);
-      if (req.signal.aborted) throw new Error('Stopped');
-    }
-    const what = (req.brief.summary || req.idea).replace(/[.!?]$/, '').toLowerCase();
-    // sent back with a note: the note becomes a trade-off on the recommended option, so the rework shows on the screen
-    const heard = req.request ? [`Reworked for your note: ${req.request}`] : [];
-    return {
-      report: {
-        options: [
-          {
-            title: 'Extend the existing module',
-            approach: `Add ${what} to \`${files[4]}\` and render it from \`${files[0]}\`. No new modules.`,
-            touches: [files[4], files[0]],
-            tradeoffs: ['Smallest diff, ships fastest', `\`${files[4]}\` keeps growing`],
-            risks: ['Mixes two concerns in one file'],
-            size: 'one agent',
-          },
-          {
-            title: 'A module of its own',
-            approach: `A new module owns ${what}; \`${files[0]}\` calls it and \`${files[4]}\` stays as it is.`,
-            touches: [files[0], files[1], 'a new module beside ' + files[4]],
-            tradeoffs: [...heard, 'Clear home for the feature, easy to test', 'A little more wiring up front'],
-            risks: ['Two places to keep in step until the old path is gone'],
-            size: 'one agent',
-          },
-          {
-            title: 'Rework the data layer first',
-            approach: `Move persistence out of \`${files[4]}\` into a store every screen shares, then build ${what} on it.`,
-            touches: [files[4], files[0], files[1], files[3]],
-            tradeoffs: ['Pays down debt the next features need', 'Biggest change by far'],
-            risks: ['Touches screens that work today', 'Needs a migration for saved data'],
-            size: 'several issues',
-          },
-        ],
-        recommended: 1,
-        why: 'it gives the feature a home without the cost of reworking the data layer now.',
-      },
-      sessionId: req.resumeSessionId ?? `demo-engineer-${randomBytes(3).toString('hex')}`,
-      costUsd: 0.12,
-    };
   }
 }

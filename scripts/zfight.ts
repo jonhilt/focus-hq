@@ -24,26 +24,13 @@ async function scan(browser: Browser, url: string): Promise<{ pairs: FightingPai
     }, null, { timeout: 30_000 })
     .then(() => true, () => false);
   if (!built) throw new CheckFailed('the office is built within 30s');
-  // the lounge crew, PADDs in hand, only take their seats for a briefing
-  const called = await page.evaluate(async () => {
-    const { state } = (window as unknown as { focusHQ: { state: { projects: { id: string }[] } } }).focusHQ;
-    const res = await fetch('/api/briefing', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ projectId: state.projects[0]?.id, idea: 'Check the ship for z-fighting' }),
-    });
-    return res.ok ? '' : await res.text();
+  // Number One reads a PADD in the ready room, and only moves while someone's near: join them and give a few frames to
+  // raise it
+  await page.evaluate(() => {
+    const { ui } = (window as unknown as { focusHQ: { ui: { places(): { label: string }[]; goTo(place: { label: string }): void } } }).focusHQ;
+    const room = ui.places().find((p) => p.label.includes('Ready room'));
+    if (room) ui.goTo(room);
   });
-  if (called) throw new CheckFailed(`a briefing starts in the lounge (${called})`);
-  const seated = await page
-    .waitForFunction(() => {
-      const world = (window as unknown as { focusHQ: { world: { root: import('three').Object3D } } }).focusHQ.world;
-      return !!world.root.getObjectByName('padd');
-    }, null, { timeout: 15_000 })
-    .then(() => true, () => false);
-  if (!seated) throw new CheckFailed('the briefing officer sits down with a PADD within 15s');
-  // they only move while someone's near, so join them and give a few frames to raise their PADDs
-  await page.evaluate(() => (window as unknown as { focusHQ: { ui: { goToLounge(): void } } }).focusHQ.ui.goToLounge());
   await page.waitForTimeout(1000);
   // a module path in a variable, so tsc doesn't try to resolve Vite's URL
   const modulePath = '/src/world/zfight.ts';

@@ -1,12 +1,6 @@
 import * as THREE from 'three';
-import { chiefEngineer, engineerAtBriefing, plannerFor, qaAtBriefing, qaOfficerFor } from '../../../shared/crew';
-import { optionLabel } from '../../../shared/engineering';
-import { STEP_STATE_LABELS, stepState } from '../../../shared/goals';
-import type { Brief, Briefing, EngineeringReport, GoalStep } from '../../../shared/types';
-import { state } from '../net/state';
-import { type Builder, interactive } from './builder';
-import { canvasTexture, makeCanvas, wrap } from './canvas';
-import { Character, type CrewView } from './character';
+import type { Builder } from './builder';
+import { canvasTexture, makeCanvas } from './canvas';
 import { LOUNGE, LOUNGE_DOOR_X, OFFICE, OVER_DOOR, WALL_H, WALL_T } from './layout';
 import { box, flat, toon } from './materials';
 import { ceilingLight, chair, cyl, plant } from './props';
@@ -20,65 +14,17 @@ const SEATS: [number, number, number][] = [
   [TABLE.x - TABLE.length / 2 - 0.5, TABLE.z, 0],
   [TABLE.x + TABLE.length / 2 + 0.5, TABLE.z, Math.PI],
 ];
-/** The officer's seat: the middle of the north side, back to the viewports, facing whoever walks in. */
-const OFFICER_SEAT = 1;
-/** QA sits at the officer's elbow, at the east end of the north side. */
-const QA_SEAT = 2;
-/** The engineer, when called, takes the officer's other elbow, at the west end, nearest the wall screen. */
-const ENGINEER_SEAT = 0;
 
-/** A crew member's chair at the table: empty, or holding whoever the briefing needs there. */
-class Chair {
-  readonly seat = new THREE.Group();
-  private character: Character | null = null;
-  private who = '';
-
-  constructor(private readonly label: () => string) {}
-
-  /** Seats `view` (`who` says whose it is), or empties the chair. */
-  set(who: string, view: CrewView | null): void {
-    if (this.character && (!view || who !== this.who)) {
-      this.seat.remove(this.character.group);
-      this.character.dispose();
-      this.character = null;
-    }
-    if (!view) return;
-    if (this.character) return this.character.set(view);
-    // there's no keyboard on the lounge table: whoever sits here reads and taps a PADD
-    this.character = new Character(view, 'padd');
-    this.who = who;
-    this.seat.add(this.character.group);
-    interactive(this.character.group, { kind: 'briefing' }, this.label);
-  }
-
-  update(t: number, camera: THREE.Vector3): void {
-    this.character?.update(t, camera.distanceTo(this.character.group.getWorldPosition(tmp)));
-  }
-
-  dispose(): void {
-    this.character?.dispose();
-  }
-}
-
-/**
- * The observation lounge: a long table under the viewports, where the manager and a project's operations officer hold
- * briefings, the project's QA officer sitting in and the ship's engineer joining when asked. The wall screen shows the
- * brief as it takes shape, or the engineer's options while they wait for a pick. Built in world coordinates.
- */
+/** The observation lounge: a long table under the viewports and a star chart on the wall. Scenery, built in world coordinates. */
 export class Lounge {
-  private officer = new Chair(() => this.label());
-  private qa = new Chair(() => this.label());
-  private engineer = new Chair(() => this.label());
   private screen = makeCanvas(1280, 768);
   private screenTex = canvasTexture(this.screen.canvas);
-  private screenKey = '';
 
   constructor(b: Builder) {
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.56), flat(lcarsSign('Observation lounge', { color: LCARS.lilac, code: '04-00' })));
     sign.position.set(LOUNGE_DOOR_X, 2.88, OFFICE.z1 - OVER_DOOR);
     sign.rotation.y = Math.PI;
     b.add(sign);
-    interactive(sign, { kind: 'briefing' }, () => 'Briefings in the observation lounge');
 
     // viewports along the outer hull
     for (const x of [-3.7, 0, 3.7]) {
@@ -103,26 +49,21 @@ export class Lounge {
     table.add(box(straight * 0.8, 0.01, 0.12, LCARS.lilac, 0, 0.79, 0)); // a lit strip down the middle
     b.add(table);
     b.collide(TABLE.x - TABLE.length / 2, TABLE.x + TABLE.length / 2, TABLE.z - TABLE.width / 2, TABLE.z + TABLE.width / 2);
-    interactive(table, { kind: 'briefing' }, () => this.label());
 
-    SEATS.forEach(([x, z, facing], i) => {
+    for (const [x, z, facing] of SEATS) {
       const g = new THREE.Group();
       g.position.set(x, 0, z);
       g.rotation.y = facing;
       g.add(chair('#7b2d43'));
       b.add(g);
-      if (i === OFFICER_SEAT) g.add(this.officer.seat);
-      if (i === QA_SEAT) g.add(this.qa.seat);
-      if (i === ENGINEER_SEAT) g.add(this.engineer.seat);
-    });
+    }
 
-    // the brief, on the west wall where everyone at the table can read it
+    // a star chart on the west wall, where everyone at the table can see it
     const screen = new THREE.Mesh(new THREE.PlaneGeometry(4.0, 2.4), flat(this.screenTex));
     screen.position.set(LOUNGE.x0 + 0.16, 1.75, TABLE.z);
     screen.rotation.y = Math.PI / 2;
     b.add(screen);
     b.add(box(0.08, 2.6, 4.2, '#212529', LOUNGE.x0 + 0.1, 0.45, TABLE.z));
-    interactive(screen, { kind: 'briefing' }, () => this.label());
 
     const panel = lcarsConsole(1.6, 1.0, 7);
     panel.position.set(LOUNGE.x1 - 0.13, 1.9, TABLE.z);
@@ -145,238 +86,47 @@ export class Lounge {
     carpetStripe.position.set(TABLE.x, 0.008, TABLE.z);
     b.add(carpetStripe);
 
-    this.sync();
-  }
-
-  private label(): string {
-    const briefing = state.briefing;
-    return briefing ? `Join the briefing about ${state.project(briefing.projectId)?.name ?? 'a project'}` : 'Call a briefing';
-  }
-
-  /** Seats (or dismisses) the officer, QA and the engineer, and redraws the screen to match the current briefing. */
-  sync(): void {
-    const briefing = state.briefing;
-    const projectId = briefing?.projectId ?? '';
-    this.officer.set(projectId, briefing && officerView(briefing));
-    this.qa.set(projectId, briefing && qaAtBriefing(projectId, briefing, state.qaAgent(projectId)) ? qaView(briefing) : null);
-    this.engineer.set('engineer', briefing && engineerAtBriefing(briefing) ? engineerView(briefing) : null);
-    this.drawScreen(briefing);
-  }
-
-  update(t: number, camera: THREE.Vector3): void {
-    if (camera.z < OFFICE.z0) return;
-    this.officer.update(t, camera);
-    this.qa.update(t, camera);
-    this.engineer.update(t, camera);
-  }
-
-  private drawScreen(briefing: Briefing | null): void {
-    const key = JSON.stringify([briefing?.projectId, briefing?.status, briefing?.brief, briefing?.engineering, briefing?.goal?.steps]);
-    if (key === this.screenKey) return;
-    this.screenKey = key;
-    const { canvas, ctx } = this.screen;
-    const area = lcarsFrame(ctx, canvas.width, canvas.height, { title: briefing ? (briefing.goal ? 'Goal' : 'Briefing') : 'Observation lounge', color: LCARS.lilac, seed: 1864 });
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    if (!briefing) {
-      ctx.fillStyle = LCARS.peach;
-      ctx.font = `600 56px ${LCARS_FONT}`;
-      ctx.fillText('NO BRIEFING IN SESSION', area.x, area.y + 20);
-      ctx.fillStyle = LCARS.sky;
-      ctx.font = `500 34px ${LCARS_FONT}`;
-      for (const [i, line] of wrap(ctx, 'Call one from a holodeck’s New issue stand, or press E here, when an idea needs talking through before anyone builds it.'.toUpperCase(), area.w).entries()) {
-        ctx.fillText(line, area.x, area.y + 110 + i * 44);
-      }
-      this.screenTex.needsUpdate = true;
-      return;
-    }
-    const project = state.project(briefing.projectId)?.name ?? '';
-    // until the manager picks one, the engineer's options take the screen; the pick then shows in the brief
-    if (briefing.engineering && !briefing.brief.approach) drawOptions(ctx, area, briefing.engineering, project);
-    else drawBrief(ctx, area, briefing.brief, project, briefing.idea, briefing.goal?.steps);
+    drawStarChart(this.screen);
     this.screenTex.needsUpdate = true;
   }
 
   dispose(): void {
-    this.officer.dispose();
-    this.qa.dispose();
-    this.engineer.dispose();
     this.screenTex.dispose();
   }
 }
 
-const tmp = new THREE.Vector3();
-
-function officerView(briefing: Briefing): CrewView {
-  const crew = plannerFor(briefing.projectId);
-  const base = { name: crew.name, avatar: crew.avatar, tag: 'Ops' };
-  const project = state.project(briefing.projectId)?.name ?? 'the project';
-  switch (briefing.status) {
-    case 'thinking':
-      return { ...base, status: 'working', icon: '💭', line: briefing.activity, thinking: true };
-    case 'qa-checking':
-      return { ...base, status: 'waiting', icon: '👂', line: `Hearing from ${qaOfficerFor(briefing.projectId).name}` };
-    case 'engineering':
-      return { ...base, status: 'waiting', icon: '👂', line: `Waiting on ${chiefEngineer().name}’s options` };
-    case 'wrapping-up':
-      return { ...base, status: 'working', icon: '📝', line: briefing.activity };
-    case 'waiting':
-      return briefing.goal?.proposal
-        ? { ...base, status: 'waiting', icon: '🧭', line: 'The next step’s ready for you to file' }
-        : { ...base, status: 'waiting', icon: '🖖', line: 'Your turn' };
-    case 'reviewing':
-      return { ...base, status: 'waiting', icon: '🧩', line: 'The breakdown’s ready for you to check' };
-    case 'filing':
-      return { ...base, status: 'working', icon: '📌', line: briefing.activity };
-    case 'done':
-      return briefing.breakdown
-        ? { ...base, status: 'done', icon: '🧩', line: `The epic and its sub-issues are on ${project}’s board` }
-        : { ...base, status: 'done', icon: '📋', line: `The issue’s at ${project}’s stand` };
-    case 'parked':
-      return { ...base, status: 'done', icon: '🧭', line: briefing.activity };
-    case 'failed':
-      return { ...base, status: 'error', line: 'Lost my train of thought – say again?' };
+/** Long-range sensors: a scatter of stars (the same every time) and the course the ship has laid in across them. */
+function drawStarChart({ canvas, ctx }: { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D }): void {
+  const area = lcarsFrame(ctx, canvas.width, canvas.height, { title: 'Long-range sensors', color: LCARS.lilac, seed: 1864 });
+  let seed = 1864;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 140; i++) {
+    ctx.fillStyle = rand() > 0.85 ? LCARS.gold : '#e8e2f0';
+    ctx.globalAlpha = 0.4 + rand() * 0.6;
+    ctx.beginPath();
+    ctx.arc(area.x + rand() * area.w, area.y + 40 + rand() * (area.h - 40), 1 + rand() * 2.5, 0, Math.PI * 2);
+    ctx.fill();
   }
-}
-
-/** QA at the table: reading the criteria when they've just changed, otherwise listening, their last note to hand. */
-function qaView(briefing: Briefing): CrewView {
-  const crew = qaOfficerFor(briefing.projectId);
-  const base = { name: crew.name, avatar: crew.avatar, tag: 'QA' };
-  if (briefing.status === 'qa-checking') return { ...base, status: 'working', icon: '🔍', line: briefing.activity, thinking: true };
-  const last = briefing.messages[briefing.messages.length - 1];
-  if (last?.from === 'qa') return { ...base, status: 'waiting', icon: '🧪', line: last.text };
-  return { ...base, status: 'queued', icon: '🧪', line: 'Listening in on the acceptance criteria' };
-}
-
-/** The engineer at the table: reading the code for options, then waiting on the manager's pick. */
-function engineerView(briefing: Briefing): CrewView {
-  const crew = chiefEngineer();
-  const base = { name: crew.name, avatar: crew.avatar, tag: 'Eng', icon: '🔧' };
-  if (briefing.status === 'engineering') return { ...base, status: 'working', line: briefing.activity, thinking: true };
-  const approach = briefing.brief.approach;
-  if (approach) return { ...base, status: 'done', line: `Approach: ${approach.title}` };
-  const last = briefing.messages[briefing.messages.length - 1];
-  return { ...base, status: 'waiting', line: last?.from === 'engineer' ? last.text : 'Options on the screen – pick one' };
-}
-
-/** The engineer's options side by side, the recommended one starred, with why along the bottom. */
-function drawOptions(ctx: CanvasRenderingContext2D, area: { x: number; y: number; w: number; h: number }, report: EngineeringReport, project: string): void {
-  let y = area.y;
-  ctx.fillStyle = LCARS.gold;
-  ctx.font = `500 26px ${LCARS_FONT}`;
-  ctx.fillText(`${project} · engineering`.toUpperCase(), area.x, y);
-  y += 34;
+  ctx.globalAlpha = 1;
+  const course: [number, number][] = [[0.06, 0.82], [0.3, 0.6], [0.52, 0.66], [0.74, 0.38], [0.92, 0.22]];
+  const at = ([u, v]: [number, number]): [number, number] => [area.x + u * area.w, area.y + 40 + v * (area.h - 40)];
+  ctx.strokeStyle = LCARS.orange;
+  ctx.lineWidth = 4;
+  ctx.setLineDash([16, 12]);
+  ctx.beginPath();
+  for (const [i, point] of course.entries()) ctx[i ? 'lineTo' : 'moveTo'](...at(point));
+  ctx.stroke();
+  ctx.setLineDash([]);
+  for (const point of course) {
+    const [x, y] = at(point);
+    ctx.fillStyle = LCARS.orange;
+    ctx.beginPath();
+    ctx.arc(x, y, 9, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
   ctx.fillStyle = LCARS.peach;
   ctx.font = `600 40px ${LCARS_FONT}`;
-  ctx.fillText('OPTIONS – PICK ONE', area.x, y);
-  y += 56;
-  const gap = 24;
-  const colW = (area.w - gap * (report.options.length - 1)) / report.options.length;
-  const bottom = area.y + area.h - 70;
-  const colours = [LCARS.orange, LCARS.periwinkle, LCARS.sky];
-  report.options.forEach((option, i) => {
-    const x = area.x + i * (colW + gap);
-    const recommended = i === report.recommended;
-    let yy = y;
-    ctx.fillStyle = recommended ? LCARS.gold : colours[i % colours.length];
-    ctx.fillRect(x, yy, colW, 10);
-    yy += 18;
-    ctx.font = `600 26px ${LCARS_FONT}`;
-    ctx.fillText(`${optionLabel(i)}${recommended ? ' ★' : ''}`.toUpperCase(), x, yy);
-    ctx.fillStyle = LCARS.sky;
-    ctx.font = `500 22px ${LCARS_FONT}`;
-    ctx.textAlign = 'right';
-    ctx.fillText(option.size.toUpperCase(), x + colW, yy + 3);
-    ctx.textAlign = 'left';
-    yy += 32;
-    ctx.fillStyle = LCARS.peach;
-    ctx.font = `600 28px ${LCARS_FONT}`;
-    for (const line of wrap(ctx, option.title, colW, 2)) {
-      ctx.fillText(line, x, yy);
-      yy += 32;
-    }
-    yy += 4;
-    const block = (lines: string[], colour: string, max: number) => {
-      ctx.fillStyle = colour;
-      ctx.font = `400 21px ${LCARS_FONT}`;
-      let shown = 0;
-      for (const entry of lines) {
-        for (const line of wrap(ctx, entry, colW - 4, max - shown)) {
-          if (yy > bottom - 24) return;
-          ctx.fillText(line, x, yy);
-          yy += 25;
-          shown++;
-        }
-        if (shown >= max) break;
-      }
-      yy += 8;
-    };
-    block([option.approach], '#e8e2f0', 4);
-    block(option.touches.map((t) => `▸ ${t}`), LCARS.sky, 2);
-    block(option.tradeoffs.map((t) => `± ${t}`), LCARS.lilac, 3);
-    block(option.risks.map((r) => `⚠ ${r}`), LCARS.red, 2);
-  });
-  ctx.fillStyle = LCARS.gold;
-  ctx.font = `500 24px ${LCARS_FONT}`;
-  for (const [i, line] of wrap(ctx, `★ ${optionLabel(report.recommended)}: ${report.why}`.toUpperCase(), area.w, 2).entries()) {
-    ctx.fillText(line, area.x, bottom + 8 + i * 28);
-  }
-}
-
-/** The brief as LCARS columns: summary across the top, why/who on the left, scope and criteria on the right. */
-/** The brief; for a goal (`steps` set), where you're going, what's unknown and the steps so far, with no scope. */
-function drawBrief(ctx: CanvasRenderingContext2D, area: { x: number; y: number; w: number; h: number }, brief: Brief, project: string, idea: string, steps?: GoalStep[]): void {
-  const colW = (area.w - 40) / 2;
-  let y = area.y;
-  ctx.fillStyle = LCARS.gold;
-  ctx.font = `500 26px ${LCARS_FONT}`;
-  ctx.fillText(project.toUpperCase(), area.x, y);
-  y += 34;
-  ctx.fillStyle = LCARS.peach;
-  ctx.font = `600 40px ${LCARS_FONT}`;
-  for (const line of wrap(ctx, (brief.summary || idea).toUpperCase(), area.w, 2)) {
-    ctx.fillText(line, area.x, y);
-    y += 46;
-  }
-  y += 10;
-  const top = y;
-  const bottom = area.y + area.h;
-  const section = (x: number, y0: number, title: string, color: string, entries: string[], maxY: number): number => {
-    if (y0 > maxY - 40) return y0;
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y0 + 4, 10, 24);
-    ctx.font = `600 26px ${LCARS_FONT}`;
-    ctx.fillText(title.toUpperCase(), x + 18, y0);
-    let yy = y0 + 34;
-    ctx.font = `400 24px ${LCARS_FONT}`;
-    ctx.fillStyle = '#e8e2f0';
-    const items = entries.length ? entries : ['—'];
-    for (const entry of items) {
-      for (const line of wrap(ctx, entry, colW - 30, 2)) {
-        if (yy > maxY - 28) {
-          ctx.fillText('…', x + 18, yy);
-          return yy + 30;
-        }
-        ctx.fillText(line, x + 18, yy);
-        yy += 28;
-      }
-    }
-    return yy + 12;
-  };
-  let left = section(area.x, top, 'Why', LCARS.orange, brief.why ? [brief.why] : [], bottom);
-  left = section(area.x, left, 'Who for', LCARS.sky, brief.who ? [brief.who] : [], bottom);
-  if (steps) {
-    section(area.x, left, 'Unknowns', LCARS.red, brief.openQuestions, bottom);
-    const rx = area.x + colW + 40;
-    const right = section(rx, top, 'Done when', LCARS.gold, brief.acceptance, bottom);
-    section(rx, right, 'Steps', LCARS.periwinkle, steps.map((s, i) => `${i + 1}. #${s.number} ${s.title}: ${STEP_STATE_LABELS[stepState(s)]}`), bottom);
-    return;
-  }
-  if (brief.approach) left = section(area.x, left, 'Approach', LCARS.gold, [`${brief.approach.title} (${brief.approach.size})`], bottom);
-  section(area.x, left, 'Open questions', LCARS.red, brief.openQuestions, bottom);
-  const rx = area.x + colW + 40;
-  let right = section(rx, top, 'Scope', LCARS.periwinkle, brief.scope, bottom);
-  right = section(rx, right, 'Out of scope', LCARS.lilac, brief.outOfScope, bottom);
-  section(rx, right, 'Acceptance criteria', LCARS.gold, brief.acceptance, bottom);
+  ctx.fillText('COURSE LAID IN', area.x, area.y);
 }

@@ -16,7 +16,9 @@ export function columns(project: Project, board: Board | undefined, agents: Agen
   const claimed = (issue: Issue) =>
     agents.some((a) => a.repo === issue.repo && a.issue.number === issue.number) ||
     prs.some((p) => p.repo === issue.repo && p.branch.startsWith(`focus/${issue.number}-`));
-  const all = prs.map((p) => ({ ...p, agent: agents.find((a) => a.task !== 'review' && a.repo === p.repo && a.pr?.number === p.number) }));
+  const by = (p: PullRequest) => (a: Agent) =>
+    a.task === 'lead' ? !!a.lead?.prs.some((x) => x.repo === p.repo && x.number === p.number) : a.task !== 'review' && a.repo === p.repo && a.pr?.number === p.number;
+  const all = prs.map((p) => ({ ...p, agent: agents.find(by(p)) }));
   // agents' PRs are opened with your gh account, so author === login covers them too; the agent check catches stale data
   const shown = project.onlyMyPrs && login ? all.filter((p) => p.agent || p.author === login) : all;
   const waiting = waitingFor(board?.issues ?? []);
@@ -24,8 +26,8 @@ export function columns(project: Project, board: Board | undefined, agents: Agen
     todo: (board?.issues ?? [])
       .filter((i) => project.repos.includes(i.repo) && !claimed(i))
       .map((i) => ({ ...i, waitsFor: waiting.get(issueKey(i.repo, i.number)) ?? [] })),
-    // the QA officer works at their own station, not on the board's issues
-    doing: agents.filter((a) => a.status !== 'done' && a.task !== 'review').sort((a, b) => a.startedAt - b.startedAt),
+    // the QA officer and the lead work at their own stations, not on the board's issues
+    doing: agents.filter((a) => a.status !== 'done' && a.task !== 'review' && a.task !== 'lead').sort((a, b) => a.startedAt - b.startedAt),
     prs: shown,
     hiddenPrs: all.length - shown.length,
   };

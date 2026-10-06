@@ -1,4 +1,4 @@
-import { plannerFor, UNIFORM } from '../../../shared/crew';
+import { leadFor, leadId, plannerFor, UNIFORM } from '../../../shared/crew';
 import type { IssueDraft } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
@@ -47,8 +47,7 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
     if (!project) return fill(el);
     const planner = plannerFor(pid);
     const draft = state.drafts.get(pid);
-    const briefing = state.briefing?.projectId === pid && state.briefing.status !== 'done' ? state.briefing : null;
-    const key = `${pid}|${draft?.status ?? 'none'}|${draft?.startedAt ?? 0}|${briefing ? 'briefing' : ''}`;
+    const key = `${pid}|${draft?.status ?? 'none'}|${draft?.startedAt ?? 0}`;
     activity.textContent = draft?.status === 'drafting' ? `✻ ${draft.activity}` : '';
     if (draft) apply(draft);
     if (key === renderedKey) return; // only the activity line changed: don't wipe what you're typing
@@ -62,11 +61,14 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
       ),
       draft?.costUsd ? h('small', { class: 'muted' }, `$${draft.costUsd.toFixed(2)}`) : null,
     );
-    const briefingButton = (idea: () => string, title: string) => {
-      const button = h('button', { class: 'btn small', title }, '🧭 Set a goal');
+    const lead = leadFor(pid);
+    // the idea goes to the lead as your first word, if there is one; otherwise their panel asks for it
+    const leadButton = (idea: () => string, title: string) => {
+      const button = h('button', { class: 'btn small', title }, '🧭 Talk to the lead');
       button.onclick = () => void busy(button, async () => {
-        await api.callBriefing(pid, idea());
-        ui.goToLounge();
+        if (!idea().trim()) return ui.openLead(pid);
+        await api.talkToLead(pid, idea());
+        ui.openAgent(leadId(pid));
       }, ui.error);
       return button;
     };
@@ -75,14 +77,6 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
 
     if (!project.repos.length) {
       fill(el, header, h('p', { class: 'muted' }, 'Connect a repository to this project and I can start drafting.'));
-      return;
-    }
-
-    if (briefing) {
-      fill(el, header,
-        h('p', null, `I’m in the observation lounge, in a ${briefing.goal ? 'briefing about the goal' : 'briefing about'} “${briefing.idea}”. Come and join me, or ${briefing.goal ? 'park it' : 'end it'} there.`),
-        h('div', { class: 'row' }, h('button', { class: 'btn small primary', onclick: () => ui.goToLounge() }, '🖖 Join the briefing')),
-      );
       return;
     }
 
@@ -101,8 +95,8 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
         api.draftIssue(pid, draft.idea, { repo: fields.repo.value, title: fields.title.value, body: fields.body.value, notes: notes.value }), ui.error);
       const suggestion = draft.tooBig
         ? h('div', { class: 'planner-suggest' },
-          h('p', null, `This one might be better as a goal, worked toward one step at a time. ${draft.tooBig}`),
-          h('div', { class: 'row' }, briefingButton(() => draft.idea, 'Agree where you’re going in the observation lounge, then take it one step at a time; the draft stays here in case you’d rather use it')),
+          h('p', null, `This one might be better with ${lead.name}, built a slice at a time. ${draft.tooBig}`),
+          h('div', { class: 'row' }, leadButton(() => draft.idea, `Talk it through with ${lead.name} at the group desk; the draft stays here in case you’d rather use it`)),
         )
         : null;
       fill(el, header,
@@ -117,21 +111,20 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
     const idea = h('textarea', { class: 'planner-input', placeholder: 'e.g. let shoppers save items for later from the cart', value: draft?.idea ?? '' });
     const go = h('button', { class: 'btn small primary' }, draft?.status === 'failed' ? '✨ Try again' : '✨ Draft it');
     go.onclick = () => void busy(go, () => api.draftIssue(pid, idea.value), ui.error);
-    const brief = briefingButton(() => idea.value, 'Agree where you’re going in the observation lounge, then take it one step at a time');
+    const toLead = leadButton(() => idea.value, `Talk it through with ${lead.name} at the group desk, who builds it a slice at a time`);
     idea.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) go.click();
     });
     fill(el, header,
       draft?.status === 'failed'
         ? h('p', { class: 'planner-error' }, `I couldn’t finish that draft: ${draft.error ?? 'something went wrong'}`)
-        : h('p', null, 'Tell me roughly what you need. I’ll read the code and write it up as an issue with acceptance criteria. Something bigger or fuzzier? Set a goal: we’ll agree where you’re going in the observation lounge, then get there one small step at a time.'),
+        : h('p', null, `Tell me roughly what you need. I’ll read the code and write it up as an issue with acceptance criteria. Something bigger or fuzzier? Talk it through with ${lead.name}, the project’s lead, who builds it a slice at a time.`),
       withMic(ui, idea),
-      h('div', { class: 'row' }, go, brief, h('small', { class: 'muted' }, 'Ctrl+Enter drafts'), h('span', { class: 'grow' }), draft ? discard() : null),
+      h('div', { class: 'row' }, go, toLead, h('small', { class: 'muted' }, 'Ctrl+Enter drafts'), h('span', { class: 'grow' }), draft ? discard() : null),
     );
   };
 
   ui.panels.own(state.on('draft', (pid) => pid === projectId() && render()));
-  ui.panels.own(state.on('briefing', render));
   render();
   return { el, refresh: render, usedDraft: () => applied > 0 && state.drafts.has(projectId()) };
 }

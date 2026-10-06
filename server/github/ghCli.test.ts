@@ -115,14 +115,6 @@ describe('gh CLI layer', () => {
     expect(error._tag).toBe('GhBadOutput');
   });
 
-  it('links a sub-issue to its epic by the sub-issue’s id', async () => {
-    const { calls, inputs, layer } = fakeGh((args) => Effect.succeed(args.includes('-X') ? '{}' : '{"id":987654}'));
-    await succeed(layer, (gh) => gh.addSubIssue('acme/shop', 40, 42));
-    expect(calls[0]).toEqual(['api', 'repos/acme/shop/issues/42', '--jq', '{id}']);
-    expect(calls[1]).toEqual(['api', '-X', 'POST', 'repos/acme/shop/issues/40/sub_issues', '--input', '-']);
-    expect(JSON.parse(inputs[1]!)).toEqual({ sub_issue_id: 987654 });
-  });
-
   it('reports a missing gh as a status, not a failure', async () => {
     const { layer } = fakeGh(() => Effect.fail(new GhNotInstalled()));
     expect(await succeed(layer, (gh) => gh.status)).toEqual({

@@ -4,7 +4,7 @@ import { state } from '../net/state';
 import { cancelDictation, keptOpenMic, type Microphone, micPerRecording } from './dictation';
 import { h } from './dom';
 
-/** Voice mode's two switches, remembered per browser. Both start off. */
+/** Voice mode's two switches, remembered per browser (under the keys from when briefings had it too). Both start off. */
 export const voicePrefs = {
   get voiceMode(): boolean {
     return localStorage.getItem('focus.briefing.voice') === '1';
@@ -91,7 +91,7 @@ async function play(line: Queued): Promise<void> {
 }
 
 /**
- * Voice mode while the briefing panel is open: the crew speaking, and the mic you answer on. The mic opens for each
+ * Voice mode while Number One's panel is open: them speaking, and the mic you answer on. The mic opens for each
  * recording, or once for the whole session with "keep the mic open". Ending it stops everything and lets go of the mic.
  */
 export class VoiceSession {

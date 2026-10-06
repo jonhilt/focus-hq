@@ -84,7 +84,7 @@ export function agentView(agent: Agent): CrewView {
     avatar: agent.avatar,
     status: agent.status,
     line: statusLine(agent),
-    tag: `#${agent.issue.number}`,
+    tag: agent.task === 'lead' ? 'Lead' : `#${agent.issue.number}`,
     thinking: agent.activity === 'Thinking…',
   };
 }

@@ -4,20 +4,20 @@ import { OutlineEffect } from 'three/examples/jsm/effects/OutlineEffect.js';
 import { api } from './net/api';
 import { state } from './net/state';
 import { Player } from './player';
-import { openAgentPanel } from './ui/agentPanel';
+import { agentPanelOpen, openAgentPanel } from './ui/agentPanel';
 import { openBoardPanel } from './ui/boardPanel';
-import { briefingPanelOpen, openBriefingPanel } from './ui/briefingPanel';
 import type { Ui } from './ui/context';
 import { h } from './ui/dom';
 import { Hud } from './ui/hud';
 import { openManagerPanel } from './ui/managerPanel';
+import { openLeadPanel } from './ui/leadPanel';
 import { numberOnePanelOpen, openNumberOnePanel } from './ui/numberOnePanel';
 import { Panels } from './ui/panels';
 import { openPreviewPanel } from './ui/previewPanel';
 import { openQaPanel } from './ui/qaPanel';
 import { openNewIssuePanel, openPausePanel, openTeleportPanel } from './ui/travelPanel';
 import type { Interaction } from './world/builder';
-import { chiefEngineer, numberOne, plannerFor } from '../../shared/crew';
+import { numberOne } from '../../shared/crew';
 import { previewIncludes } from '../../shared/previewSet';
 import { sound } from './sound';
 import { SUN_POSITION } from './world/layout';
@@ -71,7 +71,8 @@ async function main() {
     goToAgent: (id) => {
       const agent = state.agents.get(id);
       const view = agent && world.room(agent.projectId)?.viewpoint(id);
-      if (!view) return;
+      // someone without a seat in the room to stand behind: their panel instead
+      if (!view) return agent ? ui.openAgent(id) : undefined;
       sound.beam();
       panels.close(false);
       player.teleport(view.position, view.lookAt);
@@ -89,14 +90,9 @@ async function main() {
     },
     openPreview: (projectId) => openPreviewPanel(ui, projectId),
     openNewIssue: (projectId) => openNewIssuePanel(ui, projectId),
-    openBriefing: (projectId) => openBriefingPanel(ui, projectId),
     openQa: (projectId) => openQaPanel(ui, projectId),
     openNumberOne: () => openNumberOnePanel(ui),
-    goToLounge: () => {
-      const lounge = world.places().find((p) => p.label.includes('lounge'));
-      if (lounge) ui.goTo(lounge);
-      openBriefingPanel(ui);
-    },
+    openLead: (projectId) => openLeadPanel(ui, projectId),
     openManager: (tab) => openManagerPanel(ui, tab),
     openTeleport: () => openTeleportPanel(ui),
   };
@@ -168,7 +164,6 @@ async function main() {
       room.syncPlanner();
       room.syncQa();
     }
-    world.lounge?.sync();
     world.numberOne?.sync();
     world.markPanels();
   };
@@ -184,10 +179,19 @@ async function main() {
   const agentChanged = (a: { projectId: string }) => {
     world.room(a.projectId)?.syncAgents();
     world.room(a.projectId)?.syncQa();
-    world.lounge?.sync(); // QA joins a briefing when their review is done
     world.markPanels();
   };
   state.on('agent', agentChanged);
+  // the project's lead finishing a turn: it's your turn, unless you're already looking at them
+  const leadTurns = new Map<string, string>();
+  state.on('agent', (a) => {
+    if (a.task !== 'lead') return;
+    const before = leadTurns.get(a.id);
+    leadTurns.set(a.id, a.status);
+    if (a.status === 'done' && before && before !== 'done' && !agentPanelOpen(a.id)) {
+      hud.toast('info', `🖖 ${a.name} is waiting for you`, { label: 'Talk', run: () => ui.openAgent(a.id) });
+    }
+  });
   // crew working their consoles: a few blips from a station as its terminal scrolls, now and then rather than per line
   const chatter = new Map<string, number>();
   state.on('agent-removed', (a) => {
@@ -219,26 +223,6 @@ async function main() {
     world.room(projectId)?.markBoard();
     world.room(projectId)?.syncQa();
     world.room(projectId)?.syncPlanner();
-  });
-  let briefingStatus = state.briefing?.status;
-  state.on('briefing', () => {
-    world.lounge?.sync();
-    world.engineering?.sync();
-    for (const room of world.rooms.values()) {
-      room.syncPlanner();
-      room.syncQa();
-    }
-    const b = state.briefing;
-    if (b && b.status !== briefingStatus && !briefingPanelOpen()) {
-      const name = plannerFor(b.projectId).name;
-      if (b.status === 'waiting' && b.messages.at(-1)?.from === 'engineer') {
-        hud.toast('info', `🔧 ${chiefEngineer().name} has options for you in the observation lounge`, { label: 'Look', run: () => ui.openBriefing() });
-      } else if (b.status === 'waiting' && b.goal?.proposal) {
-        hud.toast('info', `🧭 ${name} has a step for you to file in the observation lounge`, { label: 'Look', run: () => ui.openBriefing() });
-      } else if (b.status === 'waiting') hud.toast('info', `🖖 ${name} has a question for you in the observation lounge`, { label: 'Answer', run: () => ui.openBriefing() });
-      if (b.status === 'failed') hud.toast('error', `${name} lost the thread of the briefing: ${b.error ?? ''}`, { label: 'Open', run: () => ui.openBriefing() });
-    }
-    briefingStatus = b?.status;
   });
   let numberOneStatus = state.numberOne?.status;
   state.on('number-one', () => {
@@ -313,14 +297,14 @@ async function main() {
       case 'new-issue':
         ui.openNewIssue(i.projectId);
         break;
-      case 'briefing':
-        ui.openBriefing();
-        break;
       case 'number-one':
         ui.openNumberOne();
         break;
       case 'qa':
         ui.openQa(i.projectId);
+        break;
+      case 'lead':
+        ui.openLead(i.projectId);
         break;
       case 'manager':
         ui.openManager(i.tab);
@@ -343,6 +327,10 @@ async function main() {
       KeyM: () => ui.openManager(),
       KeyN: () => ui.openNewIssue(world.locationOf(camera.position).projectId),
       Digit1: () => ui.openNumberOne(),
+      KeyL: () => {
+        const projectId = world.locationOf(camera.position).projectId;
+        if (projectId) ui.openLead(projectId);
+      },
     };
     const run = hotkeys[e.code];
     if (!run) return;

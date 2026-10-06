@@ -48,7 +48,7 @@ export const whisper = {
   modelUrl: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin',
 };
 
-/** Kokoro, the crew's voices in briefings (see server/speech.ts), run in-process through kokoro-js. */
+/** Kokoro, the crew's voices (see server/speech.ts), run in-process through kokoro-js. */
 export const kokoro = {
   model: 'onnx-community/Kokoro-82M-v1.0-ONNX',
   dtype: 'q8',

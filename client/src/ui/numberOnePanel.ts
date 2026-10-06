@@ -1,11 +1,11 @@
-import { crewVoice, numberOne, plannerFor } from '../../../shared/crew';
+import { crewVoice, leadFor, leadId, numberOne, plannerFor } from '../../../shared/crew';
 import type { NumberOneChat, WorkSuggestion } from '../../../shared/types';
 import { linesToSpeak } from '../../../shared/voice';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
-import { voicePrefs, VoiceSession, voiceToggle } from './briefingVoice';
+import { voicePrefs, VoiceSession, voiceToggle } from './voiceMode';
 import { type MicMode, withMic } from './dictation';
 import { busy, fill, h } from './dom';
 
@@ -16,14 +16,14 @@ export const numberOnePanelOpen = () => open;
 /**
  * The ready room's chat with Number One: ask about any project's code or what's going on aboard, or think an idea
  * through. Nothing said here turns into work by itself: a reply that suggests some offers to send it to the project's
- * stand or set a goal for it.
+ * stand or its lead.
  */
 export function openNumberOnePanel(ui: Ui): void {
   const one = numberOne();
   const body = h('div', { class: 'briefing-chat number-one' });
   // the message box outlives re-renders, so a reply arriving doesn't wipe what you're typing
   const input = h('textarea', { class: 'briefing-input' });
-  // voice mode is the briefing's, setting and all: Number One speaks their replies, and 🎤 / Ctrl+M sends what you say
+  // in voice mode Number One speaks their replies, and 🎤 / Ctrl+M sends what you say
   let voice = voicePrefs.voiceMode ? new VoiceSession(voicePrefs.keepMicOpen) : null;
   ui.panels.own(() => voice?.end());
   const micMode = (): MicMode =>
@@ -118,7 +118,7 @@ export function openNumberOnePanel(ui: Ui): void {
   render();
 }
 
-/** What a reply suggests doing: a draft at the project's stand, or a goal to work toward from the lounge. */
+/** What a reply suggests doing: a draft at the project's stand, or a talk with its lead. */
 function suggestion(ui: Ui, { projectId, idea }: WorkSuggestion): HTMLElement {
   const name = state.project(projectId)?.name ?? 'the project';
   const officer = plannerFor(projectId).name;
@@ -131,11 +131,11 @@ function suggestion(ui: Ui, { projectId, idea }: WorkSuggestion): HTMLElement {
       ui.openNewIssue(projectId);
     }, ui.error);
   };
-  const goal = h('button', { class: 'btn small primary', title: `${officer} meets you in the observation lounge to agree where you’re going, then takes it one small step at a time` }, '🧭 Set a goal');
-  goal.onclick = () =>
-    void busy(goal, async () => {
-      await api.callBriefing(projectId, idea);
-      ui.openBriefing();
+  const lead = h('button', { class: 'btn small primary', title: `${leadFor(projectId).name} talks it through with you at ${name}’s group desk, then builds it a slice at a time` }, '🧭 Talk to the lead');
+  lead.onclick = () =>
+    void busy(lead, async () => {
+      await api.talkToLead(projectId, idea);
+      ui.openAgent(leadId(projectId));
     }, ui.error);
-  return h('div', { class: 'row suggest' }, h('small', { class: 'muted' }, `For ${name}:`), draft, goal);
+  return h('div', { class: 'row suggest' }, h('small', { class: 'muted' }, `For ${name}:`), draft, lead);
 }

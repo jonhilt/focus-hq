@@ -40,8 +40,7 @@ const publicView = ({ sessionId: _, ...chat }: StoredNumberOne): NumberOneChat =
 /**
  * Number One in the ready room: the captain's chat with the ship's first officer, who reads any project's code and the
  * ship's live state and changes nothing. When a chat turns into work they suggest it; the captain decides where it goes.
- * One conversation, one turn at a time, each resuming the same session, so it survives a restart. Independent of
- * briefings: each has its own turn running.
+ * One conversation, one turn at a time, each resuming the same session, so it survives a restart.
  */
 export class NumberOne {
   private running: AbortController | null = null;
@@ -166,9 +165,6 @@ export interface ProjectStatus {
 /** What `ship_status` tells Number One: per project, who's working on what, the open PRs and what needs the captain. */
 export interface ShipStatus {
   projects: ProjectStatus[];
-  /** What's going on in the observation lounge, if anything. */
-  briefing?: string;
-  parkedGoals: number;
 }
 
 const MAX_PRS = 15;
@@ -211,7 +207,7 @@ export function summariseShip(snapshot: Snapshot, worktree: (agentId: string) =>
         name: a.name,
         task: a.task,
         repo: a.repo,
-        issue: truncate(`#${a.issue.number} ${a.issue.title}`, TITLE),
+        issue: a.task === 'lead' ? `Slice ${a.lead?.slice ?? 1}, with the captain` : truncate(`#${a.issue.number} ${a.issue.title}`, TITLE),
         status: a.status,
         activity: truncate(statusLine(a), ACTIVITY),
         ...(a.pr && { pr: a.pr.number }),
@@ -234,13 +230,7 @@ export function summariseShip(snapshot: Snapshot, worktree: (agentId: string) =>
       ...(board?.error && { boardError: truncate(board.error, ACTIVITY) }),
     };
   });
-  const briefing = snapshot.briefing;
-  const lounge = briefing && snapshot.projects.find((p) => p.id === briefing.projectId);
-  return {
-    projects,
-    ...(briefing && { briefing: `${briefing.goal ? 'A goal' : 'A briefing'} about ${lounge?.name ?? 'a project'} (${briefing.status}): “${truncate(briefing.brief.summary || briefing.idea, TITLE)}”` }),
-    parkedGoals: snapshot.goals.length,
-  };
+  return { projects };
 }
 
 // ---------------------------------------------------------------- prompts and reply
@@ -261,7 +251,7 @@ export function numberOneSystemPrompt(req: { projects: ChatProject[]; workspaces
   return `
 # You are ${numberOne().name}, Number One: first officer of the Focus, in the ready room with the captain
 
-The Focus is an office of Claude Code agents. Each project is a room: agents at its desks build GitHub issues into pull requests, a QA officer tests every pull request, and the room's operations officer drafts issues at the ＋ New issue stand and runs briefings in the observation lounge. The captain (the person you're talking to) runs the ship.
+The Focus is an office of Claude Code agents. Each project is a room: agents at its desks build GitHub issues into pull requests, a QA officer tests every pull request, the room's operations officer drafts issues at the ＋ New issue stand, and the project's lead (the captain's own Claude Code session across its repos, at the group desk) builds bigger goals a slice at a time. The captain (the person you're talking to) runs the ship.
 
 You are the one the captain just talks to: questions about any project's code, what's going on aboard, or thinking something through. Answer plainly and briefly, like a trusted first officer. No headings or essays.
 
@@ -275,7 +265,7 @@ Your tools (you can't change anything, and must not try):
 - An agent's worktree (the \`worktree\` path in ship_status, under ${req.workspaces}) holds their half-finished work: read it only to see what that agent has done so far, never to explain how the code works.
 - WebSearch and WebFetch: for anything beyond the code, with the source.
 
-You never file, push, edit, start agents, draft issues or call briefings yourself. When a conversation turns into work, suggest it: put \`suggest\` in your result with the project's id and the idea in a sentence or two, and say so in your reply. The captain decides whether to draft it at the stand or call a briefing. Leave \`suggest\` out of every other reply.
+You never file, push, edit, start agents, draft issues or talk to the lead yourself. When a conversation turns into work, suggest it: put \`suggest\` in your result with the project's id and the idea in a sentence or two, and say so in your reply. The captain decides whether to draft it at the stand or take it to the project's lead. Leave \`suggest\` out of every other reply.
 
 Finish every reply with the structured result: \`reply\`, what you'd write (file names and all), and \`spoken\`, the same reply said aloud in one or two short conversational sentences, with no file paths, code or symbols.
 `.trim();
@@ -306,10 +296,10 @@ export function numberOneReplySchema(projectIds: string[]): Record<string, unkno
           type: 'object',
           additionalProperties: false,
           required: ['projectId', 'idea'],
-          description: 'Only when the conversation has turned into work worth doing: the project and the idea, for the captain to draft at the stand or call a briefing about',
+          description: 'Only when the conversation has turned into work worth doing: the project and the idea, for the captain to draft at the stand or take to the project’s lead',
           properties: {
             projectId: { type: 'string', enum: projectIds },
-            idea: { type: 'string', description: 'The work in a sentence or two, as the captain would put it to the operations officer' },
+            idea: { type: 'string', description: 'The work in a sentence or two, as the captain would put it to the operations officer or the lead' },
           },
         },
       }),

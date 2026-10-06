@@ -22,7 +22,6 @@ export class GitHub extends Context.Service<GitHub, {
   listIssues(repo: string): Op<Issue[]>;
   getIssue(repo: string, number: number): Op<IssueDetail>;
   createIssue(repo: string, title: string, body: string, labels?: string[]): Op<Issue>;
-  addSubIssue(repo: string, parent: number, child: number): Op<void>;
   listPullRequests(repo: string): Op<PullRequest[]>;
   pullRequestState(repo: string, number: number): Op<'OPEN' | 'CLOSED' | 'MERGED'>;
   findPullRequest(repo: string, branch: string): Op<{ number: number; url: string } | null>;
@@ -51,7 +50,6 @@ export function toProvider(layer: Layer.Layer<GitHub>): GitHubProvider {
     listIssues: (repo) => call((gh) => gh.listIssues(repo)),
     getIssue: (repo, number) => call((gh) => gh.getIssue(repo, number)),
     createIssue: (repo, title, body, labels) => call((gh) => gh.createIssue(repo, title, body, labels)),
-    addSubIssue: (repo, parent, child) => call((gh) => gh.addSubIssue(repo, parent, child)),
     listPullRequests: (repo) => call((gh) => gh.listPullRequests(repo)),
     pullRequestState: (repo, number) => call((gh) => gh.pullRequestState(repo, number)),
     findPullRequest: (repo, branch) => call((gh) => gh.findPullRequest(repo, branch)),

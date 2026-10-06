@@ -150,13 +150,6 @@ const make = Effect.gen(function* () {
       return created(args, body).pipe(Effect.map(({ number, url }) => ({ repo, number, title, body, url, labels, createdAt: new Date().toISOString() })));
     },
 
-    // the REST API links sub-issues by the issue's id, not its number
-    addSubIssue: (repo, parent, child) =>
-      ghJson(Schema.Struct({ id: Schema.Number }), ['api', `repos/${repo}/issues/${child}`, '--jq', '{id}']).pipe(
-        Effect.flatMap(({ id }) => ghPost(Schema.Unknown, 'POST', `repos/${repo}/issues/${parent}/sub_issues`, { sub_issue_id: id })),
-        Effect.asVoid,
-      ),
-
     listPullRequests: (repo) =>
       ghJson(Schema.Array(RawPr), ['pr', 'list', '-R', repo, '--state', 'open', '--limit', '100', '--json', PR_FIELDS]).pipe(
         Effect.map((raw) =>

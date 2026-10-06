@@ -3,45 +3,10 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { qaOfficerFor, randomAvatar } from '../shared/crew';
 import { prKey } from '../shared/qa';
-import type { Agent, Board, Briefing, BrowserFrame, ClosedPr, NumberOneChat, Project, QaReview, Settings, TermLine } from '../shared/types';
-import { ACTIVE_STATUSES, DESKS_PER_ROOM, EMPTY_BRIEF, ROOM_THEMES, type RoomTheme } from '../shared/types';
+import type { Agent, Board, BrowserFrame, ClosedPr, NumberOneChat, Project, QaReview, Settings, TermLine } from '../shared/types';
+import { ACTIVE_STATUSES, DESKS_PER_ROOM, ROOM_THEMES, type RoomTheme } from '../shared/types';
 import { paths } from './config';
 import { newId } from './util';
-
-/** A briefing as saved: with the officer's, QA's and the engineer's sessions, so the next turn can resume them. */
-export type StoredBriefing = Briefing & { sessionId?: string; qaSessionId?: string; engineerSessionId?: string };
-
-/** A saved briefing as it picks up after a restart: whatever was running when Focus shut down was interrupted. */
-export function afterRestart(saved: StoredBriefing): StoredBriefing {
-  // briefings saved before a field was added to the brief get its empty value
-  const briefing = { ...saved, brief: { ...EMPTY_BRIEF, ...saved.brief } };
-  switch (briefing.status) {
-    case 'thinking':
-    case 'wrapping-up':
-      return { ...briefing, status: 'failed', activity: 'Interrupted', error: 'Interrupted when Focus shut down. Say something to pick it back up.' };
-    case 'qa-checking':
-      // the officer's reply is saved; only QA's note was lost
-      return { ...briefing, status: 'waiting', activity: 'Waiting for you' };
-    case 'engineering':
-      return {
-        ...briefing,
-        status: 'waiting',
-        activity: 'Waiting for you',
-        messages: [...briefing.messages, { from: 'system', text: 'Engineering was interrupted when Focus shut down. Ask again.', at: Date.now() }],
-      };
-    case 'filing':
-      // a goal's epic kept its number, so filing the step again doesn't file the goal twice
-      if (briefing.goal) return { ...briefing, status: 'failed', activity: 'Interrupted', error: 'Interrupted when Focus shut down while filing the step. File it again to carry on.' };
-      // whatever was filed kept its number, so filing again carries on
-      return { ...briefing, status: 'reviewing', activity: 'Waiting for you to file the breakdown', error: 'Interrupted when Focus shut down. File all again to carry on.' };
-    case 'waiting':
-    case 'failed':
-    case 'reviewing':
-    case 'done':
-    case 'parked':
-      return briefing;
-  }
-}
 
 /** Number One's chat as saved: with their session, so the next message resumes it. */
 export type StoredNumberOne = NumberOneChat & { sessionId?: string };
@@ -58,8 +23,6 @@ interface PersistedState {
   settings: Settings;
   projects: Project[];
   agents: Agent[];
-  briefing?: StoredBriefing | null;
-  goals?: StoredBriefing[];
   numberOne?: StoredNumberOne;
   reviews?: QaReview[];
   closedPrs?: ClosedPr[];
@@ -85,10 +48,6 @@ export class Store {
   boards = new Map<string, Board>();
   private lines = new Map<string, TermLine[]>();
   browser = new Map<string, BrowserFrame>();
-  /** The briefing in the observation lounge, if one is in session. */
-  briefing: StoredBriefing | null = null;
-  /** Goals parked out of the lounge while the crew builds their current step. */
-  goals: StoredBriefing[] = [];
   /** The captain's chat with Number One. */
   numberOne: StoredNumberOne = freshNumberOne();
   /** The latest QA review per pull request (by prKey). */
@@ -108,8 +67,6 @@ export class Store {
     const raw = JSON.parse(fs.readFileSync(paths.state, 'utf8')) as Partial<PersistedState>;
     this.settings = { ...DEFAULT_SETTINGS, ...raw.settings };
     this.projects = raw.projects ?? [];
-    this.briefing = raw.briefing ? afterRestart(raw.briefing) : null;
-    this.goals = (raw.goals ?? []).map(afterRestart);
     if (raw.numberOne) this.numberOne = numberOneAfterRestart(raw.numberOne);
     for (const review of raw.reviews ?? []) {
       if (review.status === 'queued' || review.status === 'testing') {
@@ -128,6 +85,7 @@ export class Store {
         agent.permission = undefined;
       }
       agent.task ??= 'issue'; // saved before agents could be seated on a conflicting PR
+      agent.helpers = undefined; // a lead's subagents don't outlive the office
       // saved before the crew wore uniforms
       if (!('division' in agent.avatar)) agent.avatar = agent.task === 'review' ? qaOfficerFor(agent.projectId).avatar : randomAvatar();
       this.agents.set(agent.id, agent);
@@ -144,8 +102,6 @@ export class Store {
         settings: this.settings,
         projects: this.projects,
         agents: [...this.agents.values()],
-        briefing: this.briefing,
-        goals: this.goals,
         numberOne: this.numberOne,
         reviews: [...this.reviews.values()],
         closedPrs: [...this.closedPrs.values()],
@@ -272,11 +228,6 @@ export class Store {
       this.shots.delete(file);
       if (this.persist) fs.rm(path.join(paths.qaShots, file), { force: true }, () => undefined);
     }
-  }
-
-  setBriefing(briefing: StoredBriefing | null): void {
-    this.briefing = briefing;
-    this.save();
   }
 
   // ---- agents ----

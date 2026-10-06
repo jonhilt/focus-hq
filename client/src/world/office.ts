@@ -372,7 +372,6 @@ export class World {
     cruise(t);
     for (const door of this.doors) door.update(camera, dt);
     for (const room of this.rooms.values()) room.update(t, now, camera);
-    this.lounge?.update(t, camera);
     this.engineering?.update(t, camera);
     this.numberOne?.update(t, camera);
     if (this.panelsDirty && now - this.lastPanels > 1000) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { BriefingMessage, NumberOneMessage, VoiceStatus } from './types';
+import type { NumberOneMessage, VoiceStatus } from './types';
 import { forSpeech, linesToSpeak, spokenLine, voiceMissing } from './voice';
 
 const status = (whisper: boolean, model: boolean): VoiceStatus => ({
@@ -69,13 +69,13 @@ describe('spokenLine', () => {
 });
 
 describe('linesToSpeak', () => {
-  const messages: BriefingMessage[] = [
-    { from: 'manager', text: 'A wishlist', at: 0 },
-    { from: 'officer', text: 'I read `cart.ts`. Who is it for?', spoken: 'Who is it for?', at: 1 },
-    { from: 'qa', text: 'Say what **fast** means.', at: 2 },
-    { from: 'system', text: 'The captain asked Lt. Brennan for options.', at: 3 },
-    { from: 'engineer', text: '2 options on the screen. I’d go with A, one module: it’s smaller. And safer.', at: 4 },
-    { from: 'officer', text: 'It’s written up and waiting at Shop’s stand.', at: 5 },
+  const messages: Parameters<typeof linesToSpeak>[0] = [
+    { from: 'manager', text: 'A wishlist' },
+    { from: 'officer', text: 'I read `cart.ts`. Who is it for?', spoken: 'Who is it for?' },
+    { from: 'qa', text: 'Say what **fast** means.' },
+    { from: 'system', text: 'The captain asked Lt. Brennan for options.' },
+    { from: 'engineer', text: '2 options on the screen. I’d go with A, one module: it’s smaller. And safer.' },
+    { from: 'officer', text: 'It’s written up and waiting at Shop’s stand.' },
   ];
 
   it('speaks the crew in log order: the officer’s spoken line, the rest as they are', () => {

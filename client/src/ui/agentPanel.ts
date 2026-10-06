@@ -1,7 +1,7 @@
 import { statusIcon, statusLine } from '../../../shared/agentStatus';
 import { cloudSessionUrl } from '../../../shared/cloud';
 import { showsBrowser } from '../../../shared/browserView';
-import { UNIFORM } from '../../../shared/crew';
+import { helperFor, UNIFORM } from '../../../shared/crew';
 import type { Agent, BrowserFrame, Effort, TermLine } from '../../../shared/types';
 import { EFFORT_LEVELS } from '../../../shared/types';
 import { api } from '../net/api';
@@ -14,6 +14,10 @@ import { busy, fill, h, timeAgo } from './dom';
 const FINISHED = ['done', 'error', 'stopped'];
 
 /** Full-size view of an agent's laptop: terminal, browser, approvals and a chat box. */
+let shown: string | null = null;
+/** Whether this agent's panel is showing (so the office doesn't toast what you can already see). */
+export const agentPanelOpen = (id: string) => shown === id;
+
 export function openAgentPanel(ui: Ui, id: string): void {
   const agent = state.agents.get(id);
   if (!agent) return;
@@ -36,6 +40,8 @@ export function openAgentPanel(ui: Ui, id: string): void {
 
   const title = h('h2');
   ui.panels.open({ title, body, footer, wide: true, accent: UNIFORM[agent.avatar.division] });
+  shown = id;
+  ui.panels.own(() => (shown = null));
 
   const sendMessage = () => {
     const text = input.value.trim();
@@ -70,7 +76,7 @@ export function openAgentPanel(ui: Ui, id: string): void {
     title.replaceChildren(
       h('span', { class: 'dot', style: `background:${UNIFORM[a.avatar.division]};margin-right:8px;vertical-align:middle` }),
       `${a.name} · `,
-      h('span', { class: 'muted', style: 'font-weight:500' }, `#${a.issue.number} ${a.issue.title}`),
+      h('span', { class: 'muted', style: 'font-weight:500' }, a.task === 'lead' ? `${state.project(a.projectId)?.name ?? ''} lead · slice ${a.lead?.slice ?? 1}` : `#${a.issue.number} ${a.issue.title}`),
     );
     fill(
       info,
@@ -85,6 +91,12 @@ export function openAgentPanel(ui: Ui, id: string): void {
       a.task === 'review' ? h('a', { class: 'btn small go', href: a.issue.url, target: '_blank', rel: 'noreferrer' }, `PR #${a.issue.number} ↗`) : null,
       a.task === 'review' ? h('button', { class: 'btn small', onclick: () => ui.openQa(a.projectId) }, '🔍 QA reports') : null,
       a.pr ? h('a', { class: 'btn small go', href: a.pr.url, target: '_blank', rel: 'noreferrer' }, `PR #${a.pr.number} ↗`) : null,
+      ...(a.lead?.prs ?? []).map((p) =>
+        h('a', { class: `btn small${p.outcome ? '' : ' go'}`, href: p.url, target: '_blank', rel: 'noreferrer', title: p.outcome ?? 'open' },
+          `${p.outcome === 'merged' ? '✔ ' : p.outcome === 'closed' ? '✕ ' : ''}${p.repo.split('/')[1]} #${p.number} ↗`)),
+      ...(a.helpers ?? []).map((x) =>
+        h('span', { class: 'chip', title: `${x.description}\n${x.activity}` }, `${x.status === 'working' ? '🧑‍🚀' : x.status === 'done' ? '✔' : '✘'} ${helperFor(x.id).name}: ${x.description}`)),
+      a.task === 'lead' ? h('button', { class: 'btn small', onclick: () => ui.openBoard(a.projectId, 'prs') }, '📋 Board') : null,
       a.pr && a.status === 'done'
         ? h('button', { class: 'btn small', title: 'Run the PR on your machine and open it in your browser', onclick: () => ui.previewPr(a.projectId, a.repo, a.pr!.number) }, '▶ Preview')
         : null,
@@ -103,7 +115,9 @@ export function openAgentPanel(ui: Ui, id: string): void {
     }
     stop.disabled = FINISHED.includes(a.status);
     input.placeholder = FINISHED.includes(a.status)
-      ? a.task === 'review'
+      ? a.task === 'lead'
+        ? `Talk to ${a.name}`
+        : a.task === 'review'
         ? `Ask ${a.name} to look at something else on PR #${a.issue.number}`
         : a.status === 'done'
         ? `Ask ${a.name} for changes – they'll update the PR`

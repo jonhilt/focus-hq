@@ -1,9 +1,9 @@
 import type { CrewSpeaker, CrewVoice, KokoroVoice } from './voice';
-import { ACTIVE_STATUSES, type Agent, type Avatar, type Briefing, type Division, type Hairstyle, type Planner, type Rank, type Species } from './types';
+import { type Avatar, type Division, type Hairstyle, type Planner, type Rank, type Species } from './types';
 
 // Who's aboard. Agents get a random look when they're hired. Permanent crew members, one of each per room (the
-// operations officer at the New issue stand and the QA officer at the QA station), are derived from the project id
-// rather than stored, so the same officer is at the same post on every reload and on every client. The ship's engineer
+// operations officer at the New issue stand, the QA officer at the QA station and the lead at the group desk), are
+// derived from the project id rather than stored, so the same officer is at the same post on every reload and on every client. The ship's engineer
 // is the one crew member who serves every room.
 
 /** Each division's uniform colour, also used wherever the UI marks whose work something is. */
@@ -77,10 +77,29 @@ export function qaOfficerFor(projectId: string): Planner {
   return { name: `${RANK_TITLE[avatar.rank]} ${surname}`, avatar };
 }
 
+/** Each project has one lead; like the QA officer, their record is the same from slice to slice. */
+export const leadId = (projectId: string) => `lead_${projectId}`;
+
 /**
- * The ship's engineer at the engineering station on the concourse: one for the whole ship, called to a briefing to read
- * the code and lay out options for a big change. Operations, like everyone who keeps the ship running.
+ * The project's lead at the room's group desk: the captain's own Claude Code session for the project, building across
+ * its repos a slice at a time. Command: they lead the work. Never the same surname as the room's other officers.
  */
+export function leadFor(projectId: string): Planner {
+  const h = hash(`lead:${projectId}`);
+  const avatar = rollAvatar(seeded(h), 'command', 'lieutenant');
+  const taken = new Set([hash(`planner:${projectId}`) % SURNAMES.length, SURNAMES.indexOf(qaOfficerFor(projectId).name.split(' ').at(-1)!)]);
+  const free = SURNAMES.filter((_, i) => !taken.has(i));
+  return { name: `${RANK_TITLE.lieutenant} ${free[(h >>> 3) % free.length]}`, avatar };
+}
+
+/** A helper the lead brings to the group desk: an ensign from sciences or operations, the same for the same task. */
+export function helperFor(id: string): Planner {
+  const h = hash(`helper:${id}`);
+  const avatar = rollAvatar(seeded(h), h % 2 ? 'sciences' : 'operations', 'ensign');
+  return { name: `${RANK_TITLE.ensign} ${SURNAMES[(h >>> 4) % SURNAMES.length]}`, avatar };
+}
+
+/** The ship's engineer at the engineering station on the concourse: one for the whole ship. Operations, like everyone who keeps the ship running. */
 export function chiefEngineer(): Planner {
   const avatar = rollAvatar(seeded(hash('engineer')), 'operations', 'lieutenant');
   return { name: `${RANK_TITLE.lieutenant} Brennan`, avatar };
@@ -95,25 +114,7 @@ export function numberOne(): Planner {
   return { name: 'Cmdr. Adair', avatar };
 }
 
-/** Whether the engineer is at the lounge table: from the moment a briefing asks engineering until it's wrapped up. */
-export function engineerAtBriefing(briefing: Pick<Briefing, 'status' | 'engineering'> | null): boolean {
-  if (!briefing || briefing.status === 'done') return false;
-  return briefing.status === 'engineering' || !!briefing.engineering;
-}
-
-/**
- * Whether the room's QA officer is at the lounge table rather than their QA station: for the length of a briefing
- * about their project, joining once any review they're in the middle of is done.
- */
-export function qaAtBriefing(projectId: string, briefing: Pick<Briefing, 'projectId' | 'status'> | null, qaAgent: Pick<Agent, 'status'> | undefined): boolean {
-  if (briefing?.projectId !== projectId || briefing.status === 'done') return false;
-  return !qaAgent || !ACTIVE_STATUSES.includes(qaAgent.status);
-}
-
-/**
- * Each post's voices, none shared between the posts at a briefing, so the officer, QA and the engineer never sound
- * alike. Number One never sits in on one, so borrows a voice, at a pitch of their own.
- */
+/** Each post's voices, none shared between the posts, so the officer, QA and the engineer never sound alike; Number One borrows one, at a pitch of their own. */
 const VOICES: Record<CrewSpeaker, { kokoro: KokoroVoice[]; pitch: number }> = {
   officer: { kokoro: ['af_heart', 'am_michael', 'bf_emma', 'bm_george'], pitch: 1 },
   qa: { kokoro: ['af_bella', 'am_puck', 'bf_isabella', 'bm_fable'], pitch: 1.3 },
@@ -124,7 +125,7 @@ const VOICES: Record<CrewSpeaker, { kokoro: KokoroVoice[]; pitch: number }> = {
 /** The ship has one engineer and one Number One: the same voice whichever project they're talking about. */
 const SHIPWIDE: CrewSpeaker[] = ['engineer', 'number-one'];
 
-/** The voice a crew member speaks in at a briefing about the project: always the same one for the same person. */
+/** The voice a crew member speaks in about the project: always the same one for the same person. */
 export function crewVoice(speaker: CrewSpeaker, projectId: string): CrewVoice {
   const post = VOICES[speaker];
   const kokoro = post.kokoro[hash(`voice:${speaker}:${SHIPWIDE.includes(speaker) ? '' : projectId}`) % post.kokoro.length];

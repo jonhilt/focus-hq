@@ -15,7 +15,7 @@ export const ROOM_DEPTH = 14; // from the hallway wall to the outer wall
 export const ROOM_WIDTH = 12; // along the hallway
 export const LOBBY = { x0: -7, x1: 7, z0: 0, z1: 10 };
 export const OFFICE = { x0: -6, x1: 6, z0: 10, z1: 18 };
-/** Where briefings happen: a long table under the viewports, through a door in the manager's office's north wall. */
+/** The observation lounge: a long table under the viewports, through a door in the manager's office's north wall. */
 export const LOUNGE = { x0: -6, x1: 6, z0: 18, z1: 25 };
 /** The lounge door, off to the west so the manager's desk doesn't sit in front of it. */
 export const LOUNGE_DOOR_X = -3.4;

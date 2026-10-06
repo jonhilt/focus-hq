@@ -257,16 +257,11 @@ textarea.qa-brief { width: 100%; min-height: 160px; font-family: var(--mono); fo
 .chip.qa.stale, .chip.qa.error { --tone: var(--lcars-gold); }
 @media (max-width: 760px) { .qa-station { grid-template-columns: 1fr; } }
 
-/* briefings in the observation lounge */
-.briefing { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; height: 100%; min-height: 0; }
-.briefing-call { grid-column: 1 / -1; max-width: 720px; }
+/* Number One's chat in the ready room (the classes are from when briefings shared it) */
 .briefing-chat { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 .briefing-log { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 4px 4px 0; }
 .briefing-msg { max-width: 85%; border-radius: 14px; padding: 8px 12px; background: color-mix(in srgb, var(--tone) 14%, var(--surface-2)); }
 .briefing-msg p { margin: 4px 0 0; line-height: 1.4; white-space: pre-wrap; }
-.briefing-msg.officer { --tone: var(--lcars-orange); align-self: flex-start; border-left: 6px solid var(--tone); border-top-left-radius: 0; border-bottom-left-radius: 0; }
-.briefing-msg.qa { --tone: var(--lcars-periwinkle); align-self: flex-start; margin-left: 24px; border-left: 6px solid var(--tone); border-top-left-radius: 0; border-bottom-left-radius: 0; }
-.briefing-msg.engineer { --tone: var(--lcars-gold); align-self: flex-start; margin-left: 24px; border-left: 6px solid var(--tone); border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .briefing-msg.number-one { --tone: var(--lcars-lilac); align-self: flex-start; border-left: 6px solid var(--tone); border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .briefing-msg .suggest { margin-top: 8px; gap: 8px; }
 .briefing-chat.number-one { height: 100%; max-width: 860px; margin: 0 auto; }
@@ -277,54 +272,7 @@ textarea.qa-brief { width: 100%; min-height: 160px; font-family: var(--mono); fo
 textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
 .voice-controls { margin-bottom: 6px; gap: 12px; }
 .voice-controls label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
-.breakdown { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; }
-.breakdown h4 { margin: 4px 0 0; }
-.breakdown-card { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--radius); background: var(--surface-2); border-left: 6px solid var(--lcars-orange); margin-bottom: 8px; }
-.breakdown-card.epic { border-left-color: var(--lcars-lilac); }
-.breakdown-card.dropped { opacity: 0.45; }
-.breakdown-card .row { align-items: center; }
-.breakdown-card input { flex: 1; min-width: 0; }
-.breakdown-card textarea { min-height: 110px; width: 100%; font-family: var(--mono); font-size: 13px; }
-.breakdown-card .tag { white-space: nowrap; }
-.breakdown-filed { flex-wrap: wrap; align-items: center; }
-.breakdown-card.step { border-left-color: var(--lcars-gold); }
-.breakdown-card.step textarea { min-height: 140px; }
-.breakdown-card.goal { border-left-color: var(--lcars-gold); }
-.parked-goals h3 { margin: 0 0 8px; }
-.parked-goals:not(:empty) { margin-bottom: 14px; }
-.brief-section.steps h4 { border-color: var(--lcars-gold); }
-.brief-section ol { margin: 0; padding-left: 22px; }
-.briefing-brief { overflow: auto; background: var(--bg); color: var(--text); border-radius: var(--radius); border: 2px solid var(--line); padding: 14px 16px; font-family: var(--mono); font-size: 14px; letter-spacing: 0; }
-.briefing-brief h3 { margin: 0 0 10px; color: var(--lcars-peach); font-family: var(--ui); font-size: 22px; }
-.brief-section h4 { margin: 12px 0 4px; font-family: var(--ui); font-size: 14px; color: var(--text); border-left: 8px solid var(--lcars-lilac); padding-left: 8px; }
-.brief-section.why h4 { border-color: var(--lcars-orange); }
-.brief-section.who h4 { border-color: var(--lcars-sky); }
-.brief-section.scope h4 { border-color: var(--lcars-periwinkle); }
-.brief-section.acceptance h4 { border-color: var(--lcars-gold); }
-.brief-section.open h4 { border-color: var(--lcars-red); }
-.brief-section ul { margin: 0; padding-left: 20px; }
-.brief-section li { margin: 2px 0; line-height: 1.35; }
-.brief-section .muted { margin: 0; }
-.brief-section.approach h4, .brief-section.options h4 { border-color: var(--lcars-gold); }
-.brief-option { margin: 8px 0 12px; padding: 8px 10px; border-radius: 8px; border-left: 6px solid var(--line); background: var(--surface); }
-.brief-option.recommended { border-left-color: var(--lcars-gold); }
-.brief-option.picked { border-left-color: var(--lcars-green); background: color-mix(in srgb, var(--lcars-green) 12%, var(--surface)); }
-.brief-option p { margin: 4px 0; line-height: 1.35; }
-.brief-option em { display: block; margin-top: 4px; color: var(--muted); font-style: normal; font-size: 12px; text-transform: uppercase; }
-.brief-option .size { color: var(--lcars-sky); }
-.brief-option .star { color: var(--lcars-gold); }
-.brief-option .btn { margin-top: 6px; }
-.brief-section.options .why { color: var(--lcars-gold); margin: 0 0 8px; }
-.brief-section.diagrams h4 { border-color: var(--lcars-green); }
-.brief-diagram { margin: 10px 0 14px; }
-.brief-diagram figcaption { margin-bottom: 6px; color: var(--lcars-peach); font-family: var(--ui); font-size: 15px; }
-.brief-diagram-svg { overflow-x: auto; border-radius: 8px; background: var(--surface); padding: 8px; }
-/* Mermaid measures its labels away from this page, so the HUD's uppercase and the form .label style would overflow their boxes */
-.brief-diagram-svg, .brief-diagram-svg .label { text-transform: none; letter-spacing: normal; font-size: inherit; font-weight: inherit; color: inherit; }
-.brief-diagram-svg svg { display: block; margin: 0 auto; }
-.brief-diagram-svg pre { margin: 6px 0 0; font-size: 12px; white-space: pre-wrap; color: var(--muted); }
-.brief-diagram-error { margin: 0; color: var(--lcars-red); font-size: 12px; white-space: pre-wrap; }
-@media (max-width: 760px) { .briefing { grid-template-columns: 1fr; height: auto; } .briefing-log { max-height: 50vh; } }
+@media (max-width: 760px) { .briefing-log { max-height: 50vh; } }
 
 /* ------------------------------------------------------------------ agent panel */
 

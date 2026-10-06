@@ -1,5 +1,5 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
-import { type BreakdownEdits, EFFORT_LEVELS, type Effort, type PreviewSet } from '../shared/types';
+import { EFFORT_LEVELS, type Effort, type PreviewSet } from '../shared/types';
 import { isKokoroVoice } from '../shared/voice';
 import type { Office } from './office';
 import type { Store } from './store';
@@ -31,14 +31,6 @@ const effort = (v: unknown): Effort | undefined => {
   const level = EFFORT_LEVELS.find((e) => e === v);
   if (!level) throw new Error(`Effort must be one of ${EFFORT_LEVELS.join(', ')}`);
   return level;
-};
-
-/** A breakdown as the manager edited it; any other shape is a bad request. */
-const breakdownEdits = (v: unknown): BreakdownEdits => {
-  const issue = (i: unknown) => ({ title: str((i as Record<string, unknown> | null)?.title), body: str((i as Record<string, unknown> | null)?.body) });
-  const raw = (v ?? {}) as Record<string, unknown>;
-  if (!Array.isArray(raw.subIssues)) throw new Error('Send the breakdown’s sub-issues');
-  return { epic: issue(raw.epic), subIssues: (raw.subIssues as unknown[]).map((s) => ({ key: str((s as Record<string, unknown> | null)?.key), ...issue(s) })) };
 };
 
 export function apiRouter(office: Office, store: Store): express.Router {
@@ -102,20 +94,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
   }));
   r.delete('/projects/:id/draft', h((req) => office.planner.discard(param(req, 'id'))));
 
-  // briefings in the observation lounge, one at a time: by default about a goal, which goes one step at a time, parked
-  // out of the lounge between steps; planned up front (goal: false), ending in an issue draft at the stand or a filed breakdown
-  r.post('/briefing', h((req) => office.briefings.call(str(req.body.projectId), str(req.body.idea), req.body.goal !== false)));
-  r.post('/briefing/say', h((req) => office.briefings.say(str(req.body.text))));
-  r.post('/briefing/wrap-up', h((req) => office.briefings.wrapUp(req.body.shape === 'breakdown' || req.body.shape === 'step' ? req.body.shape : 'one')));
-  r.post('/briefing/step', h((req) => office.briefings.fileStep({ title: str(req.body.title), body: str(req.body.body) })));
-  r.post('/briefing/park', h(() => office.briefings.park()));
-  r.post('/goals/:id/reconvene', h((req) => office.briefings.reconvene(param(req, 'id'))));
-  r.delete('/goals/:id', h((req) => office.briefings.dropGoal(param(req, 'id'))));
-  r.post('/briefing/file', h((req) => office.briefings.file(breakdownEdits(req.body))));
-  r.post('/briefing/engineering', h((req) => office.briefings.askEngineering(str(req.body.text))));
-  r.post('/briefing/approach', h((req) => office.briefings.pickApproach(Number(req.body.option))));
-  r.delete('/briefing', h(() => office.briefings.end()));
-  // Number One in the ready room: one ship-wide chat, read-only, alongside any briefing
+  // Number One in the ready room: one ship-wide chat, read-only
   r.post('/number-one/say', h((req) => office.numberOne.say(str(req.body.text))));
   r.post('/number-one/new', h(() => office.numberOne.newConversation()));
   r.post('/prs/qa', h((req) => office.requestReview(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));
@@ -137,6 +116,8 @@ export function apiRouter(office: Office, store: Store): express.Router {
       url: str(req.body.url) || undefined,
     }, { effort: effort(req.body.effort), cloud: req.body.cloud === true }),
   ));
+  // the project's lead: the captain's own Claude Code session across its repos, at the room's group desk
+  r.post('/projects/:id/lead', h((req) => office.agents.startLead(param(req, 'id'), str(req.body.text))));
   r.get('/agents/:id/lines', h((req) => store.allLines(param(req, 'id'))));
   r.post('/agents/:id/message', h((req) => office.agents.message(param(req, 'id'), str(req.body.text))));
   r.post('/agents/:id/permission', h((req) => office.agents.resolvePermission(param(req, 'id'), str(req.body.requestId), req.body.allow === true)));
@@ -150,7 +131,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
     if (!Buffer.isBuffer(req.body) || !req.body.length) throw new Error('Send the recording as an audio/wav body');
     return { text: await office.voice.transcribe(req.body) };
   }));
-  // the crew's voices in briefings: Kokoro on this machine turns a line into a WAV
+  // the crew's voices: Kokoro on this machine turns a line into a WAV
   r.post('/voice/speech/load', h(() => office.voice.loadSpeech()));
   r.post('/voice/speak', h(async (req, res) => {
     const text = str(req.body.text).trim();

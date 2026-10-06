@@ -2,39 +2,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createSdkMcpServer, type McpSdkServerConfigWithInstance, type Options, query, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
-import type { Brief, Settings, StepProposal } from '../../shared/types';
+import type { Settings } from '../../shared/types';
 import { paths } from '../config';
 import { errorMessage, truncate } from '../util';
-import {
-  asOfficerReply,
-  asQaNote,
-  type BriefingOfficer,
-  type BriefingQa,
-  briefingPrompt,
-  briefingQaPrompt,
-  briefingQaSystemPrompt,
-  briefingSystemPrompt,
-  mergeBrief,
-  type OfficerHooks,
-  type OfficerReply,
-  type OfficerTurn,
-  officerReplySchema,
-  qaNoteSchema,
-  type QaReply,
-  type QaTurn,
-  stepSchema,
-} from './briefing';
-import { asBreakdown, breakdownSchema } from './breakdown';
 import { agentEnv } from './claudeRunner';
-import { type BriefingEngineer, decodeEngineeringReport, ENGINEERING_SCHEMA, type EngineerReply, type EngineerTurn, engineerPrompt, engineerSystemPrompt } from './engineering';
-import { type Drafter, type DraftRequest, type DraftResult, draftSchema, plannerPrompt, standDraftSchema, plannerSystemPrompt, repoFolders } from './planner';
+import { type Drafter, type DraftRequest, type DraftResult, draftSchema, plannerPrompt, plannerSystemPrompt, repoFolders } from './planner';
 import { asNumberOneReply, type ChatProject, type NumberOneOfficer, type NumberOneReply, type NumberOneTurn, numberOnePrompt, numberOneReplySchema, numberOneSystemPrompt } from './numberOne';
 import { renderToolUse } from './render';
 import { parseTriage, TRIAGE_SCHEMA, type TriageDecision, type Triager, type TriageRequest, triagePrompt, triageSystemPrompt } from './triage';
 import { checkoutLatest } from './workspace';
 
-// The permanent crew's Claude Code sessions (the ship's engineer included): they read the project's code (and, in briefings, the web) and change
-// nothing. Read-only because they only have Read, Glob and Grep, plus WebSearch and WebFetch in briefings and the
+// The permanent crew's Claude Code sessions: they read the project's code (and, for Number One, the web) and change
+// nothing. Read-only because they only have Read, Glob and Grep, plus WebSearch and WebFetch for Number One and the
 // office's own tools, `dontAsk` denies anything not pre-approved, and none of your settings, hooks or MCP servers load.
 
 /** The built-in tools a crew session may be given: none of them can change anything. */
@@ -157,71 +136,11 @@ export class ClaudeDrafter implements Drafter {
       activity,
       builtins: CODE_TOOLS,
       resume: req.resumeSessionId,
-      schema: standDraftSchema(req.repos),
+      schema: draftSchema(req.repos),
     }).catch((err: Error) => {
       throw req.signal.aborted ? new Error('Discarded') : err;
     });
     return { ...asDraft(result.structured, req.repos), sessionId: result.sessionId, costUsd: result.costUsd };
-  }
-}
-
-/** The officer in a briefing: each turn resumes the same session, with a tool to keep the brief on the wall screen. */
-export class ClaudeOfficer implements BriefingOfficer {
-  async turn(req: OfficerTurn, hooks: OfficerHooks): Promise<OfficerReply> {
-    // fresh code at the start, on reconvening a goal (its step has landed since) and after a lost session; other turns read what's already checked out
-    const fresh = req.kind === 'open' || req.kind === 'reconvene' || !req.resumeSessionId;
-    const cwd = fresh ? await checkouts(req.projectId, req.repos, hooks.activity) : planningDir(req.projectId);
-    if (req.signal.aborted) throw new Error('Stopped');
-    let brief = req.brief;
-    const server = briefServer(() => brief, (next) => {
-      brief = next;
-      hooks.brief(next);
-    });
-    const wrapUp = req.kind === 'wrap-up';
-    const breakDown = req.kind === 'break-down';
-    const step = req.kind === 'step';
-    const result = await runReadOnly({
-      cwd,
-      systemAppend: briefingSystemPrompt(req),
-      prompt: briefingPrompt(req),
-      settings: req.settings,
-      signal: req.signal,
-      activity: hooks.activity,
-      builtins: [...CODE_TOOLS, ...WEB_TOOLS],
-      resume: req.resumeSessionId,
-      schema: wrapUp ? draftSchema(req.repos) : breakDown ? breakdownSchema(req.repos) : step ? stepSchema(req.repos) : officerReplySchema,
-      tools: { server, names: ['update_brief'], activity: () => 'Updating the brief' },
-    });
-    const written = (): StepProposal => {
-      const { repo, title, body } = asDraft(result.structured, req.repos);
-      return { repo, title, body };
-    };
-    return {
-      ...(wrapUp || breakDown || step ? { text: '' } : asOfficerReply(result.structured, result.text)),
-      sessionId: result.sessionId,
-      costUsd: result.costUsd,
-      draft: wrapUp ? asDraft(result.structured, req.repos) : undefined,
-      breakdown: breakDown ? asBreakdown(result.structured, req.repos) : undefined,
-      step: step ? written() : undefined,
-    };
-  }
-}
-
-/** The QA officer at a briefing: reads the code the officer checked out, and answers with one note or none. */
-export class ClaudeBriefingQa implements BriefingQa {
-  async check(req: QaTurn, activity: (text: string) => void): Promise<QaReply> {
-    const result = await runReadOnly({
-      cwd: planningDir(req.projectId),
-      systemAppend: briefingQaSystemPrompt(req),
-      prompt: briefingQaPrompt(req),
-      settings: req.settings,
-      signal: req.signal,
-      activity,
-      builtins: CODE_TOOLS,
-      resume: req.resumeSessionId,
-      schema: qaNoteSchema,
-    });
-    return { note: asQaNote(result.structured), sessionId: result.sessionId, costUsd: result.costUsd };
   }
 }
 
@@ -241,24 +160,6 @@ export class ClaudeTriager implements Triager {
     const decision = parseTriage(result.structured);
     if (!decision) throw new Error('Finished without choosing what to do');
     return { ...decision, costUsd: result.costUsd };
-  }
-}
-
-/** The ship's engineer at a briefing: reads the code the officer checked out, and answers with options. */
-export class ClaudeEngineer implements BriefingEngineer {
-  async propose(req: EngineerTurn, activity: (text: string) => void): Promise<EngineerReply> {
-    const result = await runReadOnly({
-      cwd: planningDir(req.projectId),
-      systemAppend: engineerSystemPrompt(req),
-      prompt: engineerPrompt(req),
-      settings: req.settings,
-      signal: req.signal,
-      activity,
-      builtins: CODE_TOOLS,
-      resume: req.resumeSessionId,
-      schema: ENGINEERING_SCHEMA,
-    });
-    return { report: decodeEngineeringReport(result.structured), sessionId: result.sessionId, costUsd: result.costUsd };
   }
 }
 
@@ -318,39 +219,6 @@ function numberOneServer(req: NumberOneTurn, activity: (text: string) => void): 
           } catch (err) {
             return text(`The checkout of ${found.name} failed: ${errorMessage(err)}`, true);
           }
-        },
-      ),
-    ],
-  });
-}
-
-/** The update_brief tool: the officer's pen for the lounge's wall screen. */
-function briefServer(get: () => Brief, set: (brief: Brief) => void): McpSdkServerConfigWithInstance {
-  const lines = z.array(z.string()).optional();
-  return createSdkMcpServer({
-    name: 'brief',
-    version: '1.0.0',
-    alwaysLoad: true,
-    tools: [
-      tool(
-        'update_brief',
-        'Update the brief on the observation lounge wall screen, which the manager can see. Pass only the fields that change; a list replaces the whole list. One short line per entry.',
-        {
-          summary: z.string().optional().describe('What we are building, in one sentence'),
-          why: z.string().optional().describe('The problem it solves and why it matters'),
-          who: z.string().optional().describe('Who it is for'),
-          scope: lines.describe('What is in'),
-          out_of_scope: lines.describe('What is deliberately left out or for later'),
-          acceptance: lines.describe('Observable, testable acceptance criteria agreed so far'),
-          open_questions: lines.describe('What still needs deciding; drop entries once answered'),
-          diagrams: z
-            .array(z.object({ title: z.string().describe('"Today", "Option A: …" or "Chosen: …"'), mermaid: z.string().describe('Mermaid source: flowchart, classDiagram or sequenceDiagram, labels in quotes') }))
-            .optional()
-            .describe('Architecture diagrams, at most 4; replaces the whole list'),
-        },
-        async (patch) => {
-          set(mergeBrief(get(), patch));
-          return { content: [{ type: 'text', text: 'The brief on the screen is updated.' }] };
         },
       ),
     ],

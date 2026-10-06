@@ -3,10 +3,9 @@ import http from 'node:http';
 import path from 'node:path';
 import express from 'express';
 import { BrowserPool } from './agents/browserTool';
-import { Briefings, type IssueFiler } from './agents/briefing';
-import { ClaudeBriefingQa, ClaudeDrafter, ClaudeEngineer, ClaudeNumberOne, ClaudeOfficer, ClaudeTriager } from './agents/claudeCrew';
+import { ClaudeDrafter, ClaudeNumberOne, ClaudeTriager } from './agents/claudeCrew';
 import { ClaudeRunner } from './agents/claudeRunner';
-import { DemoBriefingQa, DemoDrafter, DemoEngineer, DemoNumberOne, DemoOfficer, DemoRunner, DemoTriager, demoWorkspace } from './agents/demoRunner';
+import { DemoDrafter, DemoNumberOne, DemoRunner, DemoTriager, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
 import { NumberOne, type ShipStatus, summariseShip } from './agents/numberOne';
 import { IssuePlanner } from './agents/planner';
@@ -51,20 +50,10 @@ async function main() {
   const runner = config.demo ? new DemoRunner() : new ClaudeRunner(browsers);
   const previews = new Previews(hub, github, config.demo);
   const planner = new IssuePlanner(store, hub, config.demo ? new DemoDrafter() : new ClaudeDrafter());
-  // a briefing only files once the office is up
-  const filer: IssueFiler = {
-    file: (projectId, repo, title, body) => office.fileIssue(projectId, repo, title, body),
-    addSubIssue: (repo, parent, child) => github.addSubIssue(repo, parent, child),
-    pullRequestBody: (repo, number) => github.getPullRequest(repo, number).then((pr) => pr.body),
-    pullRequestState: (repo, number) => github.pullRequestState(repo, number),
-  };
-  const briefings = config.demo
-    ? new Briefings(store, hub, planner, new DemoOfficer(), new DemoBriefingQa(), filer, new DemoEngineer())
-    : new Briefings(store, hub, planner, new ClaudeOfficer(), new ClaudeBriefingQa(), filer, new ClaudeEngineer());
   const workspace = config.demo ? demoWorkspace : liveWorkspace;
   // Number One reads the ship through the office, which is up by the time anyone asks
   const numberOne = new NumberOne(store, hub, config.demo ? new DemoNumberOne() : new ClaudeNumberOne(), async (): Promise<ShipStatus> => summariseShip(await office.snapshot(), (id) => workspace.dir(id)));
-  const office = new Office(store, hub, github, previews, planner, briefings, numberOne, new Voice(hub, config.demo), await currentVersion());
+  const office = new Office(store, hub, github, previews, planner, numberOne, new Voice(hub, config.demo), await currentVersion());
   office.agents = new AgentManager(store, hub, github, runner, workspace, config.demo ? new DemoTriager() : new ClaudeTriager(), (id) => office.boardChanged(id));
 
   if (config.demo && store.projects.length === 0) {

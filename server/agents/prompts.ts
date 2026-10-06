@@ -4,6 +4,7 @@ import { truncate } from '../util';
 
 export function systemAppend(agent: Agent): string {
   if (agent.task === 'review') throw new Error('The QA officer gets qaSystemAppend (qa.ts)');
+  if (agent.task === 'lead') throw new Error('The project lead gets leadSystemAppend (lead.ts)');
   const assignment = {
     issue: `Your manager assigned you GitHub issue #${agent.issue.number} in ${agent.repo}.`,
     conflicts: `Your manager assigned you pull request #${agent.issue.number} in ${agent.repo}: it has merge conflicts with \`${agent.baseBranch}\` that you need to resolve.`,

@@ -1,4 +1,4 @@
-import type { Agent, Board, BreakdownEdits, Briefing, Effort, Issue, IssueDraft, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, RoomTheme, Settings, TermLine, VoiceStatus, WrapUpShape } from '../../../shared/types';
+import type { Agent, Board, Effort, Issue, IssueDraft, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, RoomTheme, Settings, TermLine, VoiceStatus } from '../../../shared/types';
 import type { KokoroVoice } from '../../../shared/voice';
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -30,17 +30,8 @@ export const api = {
   draftIssue: (projectId: string, idea: string, revise?: { repo: string; title: string; body: string; notes: string }) =>
     call<IssueDraft>('POST', `/projects/${projectId}/draft`, { idea, revise }),
   discardDraft: (projectId: string) => call('DELETE', `/projects/${projectId}/draft`),
-  callBriefing: (projectId: string, idea: string, goal = true) => call<Briefing>('POST', '/briefing', { projectId, idea, goal }),
-  briefingSay: (text: string) => call<Briefing>('POST', '/briefing/say', { text }),
-  briefingWrapUp: (shape: WrapUpShape) => call<Briefing>('POST', '/briefing/wrap-up', { shape }),
-  briefingFile: (edits: BreakdownEdits) => call<Briefing>('POST', '/briefing/file', edits),
-  briefingAskEngineering: (text: string) => call<Briefing>('POST', '/briefing/engineering', { text }),
-  briefingPickApproach: (option: number) => call<Briefing>('POST', '/briefing/approach', { option }),
-  briefingEnd: () => call('DELETE', '/briefing'),
-  briefingFileStep: (step: { title: string; body: string }) => call<Briefing>('POST', '/briefing/step', step),
-  briefingPark: () => call('POST', '/briefing/park'),
-  reconveneGoal: (id: string) => call<Briefing>('POST', `/goals/${id}/reconvene`),
-  dropGoal: (id: string) => call('DELETE', `/goals/${id}`),
+  /** Talks to the project's lead, seating them first if they aren't there yet. */
+  talkToLead: (projectId: string, text: string) => call<Agent>('POST', `/projects/${projectId}/lead`, { text }),
   numberOneSay: (text: string) => call<NumberOneChat>('POST', '/number-one/say', { text }),
   numberOneNew: () => call<NumberOneChat>('POST', '/number-one/new'),
   sendToQa: (projectId: string, repo: string, number: number) => call<QaReview>('POST', '/prs/qa', { projectId, repo, number }),

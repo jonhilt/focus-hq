@@ -115,32 +115,6 @@ export class IssuePlanner {
     return draft;
   }
 
-  /**
-   * Puts a finished draft at the project's stand, written somewhere else (at the end of a briefing). `sessionId` is the
-   * session that wrote it, so a redraft at the stand carries on from the whole discussion.
-   */
-  deliver(projectId: string, idea: string, result: DraftResult): IssueDraft {
-    this.running.get(projectId)?.abort();
-    this.running.delete(projectId);
-    if (result.sessionId) this.sessions.set(projectId, result.sessionId);
-    const repos = this.store.project(projectId).repos;
-    const now = Date.now();
-    const draft: IssueDraft = {
-      projectId,
-      status: 'ready',
-      idea,
-      activity: 'Draft ready',
-      repo: repos.includes(result.repo) ? result.repo : repos[0],
-      title: result.title.trim(),
-      body: result.body.trim(),
-      costUsd: result.costUsd,
-      startedAt: now,
-      finishedAt: now,
-    };
-    this.set(draft);
-    return draft;
-  }
-
   /** Stops a draft in progress, or throws away a finished one. */
   discard(projectId: string): void {
     this.running.get(projectId)?.abort();
@@ -180,7 +154,7 @@ export function repoList(repos: string[]): string {
 ${repos.map((r) => `- \`${folders.get(r)}/\`: ${r}`).join('\n')}`;
 }
 
-/** The issue a planner writes, from the stand or at the end of a briefing. */
+/** The issue a planner writes at the stand. */
 export const ISSUE_FORMAT = `The issue:
 - title: imperative and specific, under 70 characters ("Show stock levels on the product page").
 - body, in Markdown, with these sections:
@@ -203,7 +177,7 @@ How to work:
 - Spend a few minutes, not an audit: you're scoping the work, not doing it. Describe the outcome and point at where it lives; don't write the implementation into the issue.
 - Don't add requirements the manager didn't ask for. Where the idea is ambiguous, pick the sensible reading and note it under Assumptions so the manager can correct it.
 - Size it for one agent in one sitting. If the idea is much bigger, write up the first useful slice and list the rest under Out of scope.
-- If the idea is much bigger than one agent can build in one sitting, or too vague to write testable acceptance criteria for, also fill in tooBig with a one-line reason. The manager is then offered to take it to the observation lounge as a goal, worked toward one small step at a time. Leave tooBig out for an ordinary, well-defined change.
+- If the idea is much bigger than one agent can build in one sitting, or too vague to write testable acceptance criteria for, also fill in tooBig with a one-line reason. The manager is then offered to talk it through with the project's lead, who builds toward it one small slice at a time. Leave tooBig out for an ordinary, well-defined change.
 - Pick the repository the work belongs in. If it spans several, pick the one with most of the work and mention the others under Context.
 
 ${ISSUE_FORMAT}
@@ -240,18 +214,7 @@ export function draftSchema(repos: string[]): Record<string, unknown> {
       repo: { type: 'string', enum: repos, description: 'The repository the issue should be filed in.' },
       title: { type: 'string', description: 'Imperative and specific, under 70 characters.' },
       body: { type: 'string', description: 'The issue body in Markdown: Context, What to build, Acceptance criteria, Out of scope, Assumptions.' },
-    },
-  };
-}
-
-/** The stand's draft schema: a briefing's wrap-up is already the talk-it-through, so only the stand can suggest one. */
-export function standDraftSchema(repos: string[]): Record<string, unknown> {
-  const schema = draftSchema(repos);
-  return {
-    ...schema,
-    properties: {
-      ...(schema.properties as Record<string, unknown>),
-      tooBig: { type: 'string', description: 'Only if the idea is too big or too vague for one issue: why, in one line, so the manager can set it as a goal instead.' },
+      tooBig: { type: 'string', description: 'Only if the idea is too big or too vague for one issue: why, in one line, so the manager can take it to the project’s lead instead.' },
     },
   };
 }

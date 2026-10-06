@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Agent, Board, Briefing, IssueDraft, NumberOneChat, Project, PullRequest, QaReview, Snapshot } from '../../shared/types';
+import type { Agent, Board, IssueDraft, NumberOneChat, Project, PullRequest, QaReview, Snapshot } from '../../shared/types';
 import { Hub } from '../hub';
 import { numberOneAfterRestart, Store } from '../store';
 import { asNumberOneReply, NumberOne, type NumberOneOfficer, numberOnePrompt, numberOneReplySchema, numberOneSystemPrompt, type ShipStatus, summariseShip } from './numberOne';
@@ -19,8 +19,6 @@ function snapshot(patch: Partial<Snapshot> = {}): Snapshot {
     browser: {},
     previews: [],
     drafts: [],
-    briefing: null,
-    goals: [],
     reviews: [],
     ...patch,
   } as unknown as Snapshot;
@@ -92,9 +90,9 @@ describe('summariseShip', () => {
     expect(status.projects[0].prs[0].title.length).toBe(80);
   });
 
-  it('says what’s in the observation lounge', () => {
-    const briefing = { projectId: 'p1', status: 'waiting', idea: 'a wishlist', brief: { summary: '' } } as Briefing;
-    expect(summariseShip(snapshot({ briefing }), worktree).briefing).toBe('A briefing about Shop (waiting): “a wishlist”');
+  it('says which slice the project’s lead is on, not an issue', () => {
+    const lead = agent({ id: 'lead_p1', task: 'lead', issue: { number: 0, title: 'Shop’s lead', url: '' }, lead: { repos: [], slice: 2, prs: [] } });
+    expect(summariseShip(snapshot({ agents: [lead] }), worktree).projects[0].agents[0].issue).toBe('Slice 2, with the captain');
   });
 });
 
@@ -112,7 +110,7 @@ describe('numberOneSystemPrompt', () => {
   });
 
   it('says Number One never acts, only suggests, and relays a failed checkout', () => {
-    expect(prompt).toMatch(/never file, push, edit, start agents, draft issues or call briefings/);
+    expect(prompt).toMatch(/never file, push, edit, start agents, draft issues or talk to the lead/);
     expect(prompt).toMatch(/the checkout failed and for which project/);
   });
 });
@@ -168,7 +166,7 @@ describe('Number One’s reply', () => {
 });
 
 describe('NumberOne', () => {
-  const ship: ShipStatus = { projects: [], parkedGoals: 0 };
+  const ship: ShipStatus = { projects: [] };
 
   function setup(officer: NumberOneOfficer['turn']) {
     const store = new Store(false);

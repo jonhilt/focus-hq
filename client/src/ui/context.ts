@@ -21,12 +21,10 @@ export interface Ui {
   openNewIssue(projectId?: string): void;
   /** The room's QA station: the QA officer, their reports and the project's QA brief. */
   openQa(projectId: string): void;
-  /** The observation lounge's briefing, or a form to call one (for `projectId`, if given). */
-  openBriefing(projectId?: string): void;
+  /** The project's lead: their session, or a box to seat them. */
+  openLead(projectId: string): void;
   /** The ready room's chat with Number One. */
   openNumberOne(): void;
-  /** Beams you to the observation lounge and opens the briefing. */
-  goToLounge(): void;
   openManager(tab?: ManagerTab): void;
   openTeleport(): void;
 }

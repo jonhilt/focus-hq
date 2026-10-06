@@ -1,5 +1,11 @@
 import type { AgentStatus, BrowserFrame, Effort, Settings, TermLine } from '../../shared/types';
 
+/** What Claude Code says about a subagent the session started: started, busy with something, finished. */
+export type HelperEvent =
+  | { kind: 'started'; id: string; description: string; type?: string }
+  | { kind: 'activity'; id: string; activity: string }
+  | { kind: 'ended'; id: string; ok: boolean; summary?: string };
+
 export interface RunHooks {
   lines(lines: Omit<TermLine, 't'>[]): void;
   /** status null = keep the current status. */
@@ -9,6 +15,8 @@ export interface RunHooks {
   screenshot(frame: BrowserFrame): void;
   session(sessionId: string): void;
   cost(totalUsd: number): void;
+  /** A subagent of the session started, got busy or finished. */
+  helper?(event: HelperEvent): void;
   /** The agent raises its hand. Resolves true when the manager approves. */
   permission(tool: string, summary: string, signal: AbortSignal): Promise<boolean>;
 }
@@ -25,11 +33,19 @@ export interface RunRequest {
   effort?: Effort;
   /** JSON schema for a structured final answer (the QA officer's report). */
   outputSchema?: Record<string, unknown>;
+  /** The office's own tools for this session (the project's lead's), exposed to Claude Code as mcp__office__*. */
+  tools?: OfficeTools;
   /**
    * Run in a Claude Code cloud session that works on `branch` and pushes it. `resumeSessionId` is then the cloud
    * session's id, and `systemAppend` goes into the first message.
    */
   cloud?: { branch: string };
+}
+
+/** Tools the office lends a session. Each returns what happened, in words, for Claude to read. */
+export interface OfficeTools {
+  /** Ships the slice: pushes every repo with new commits, and opens or updates its pull request. */
+  ship(input: { title: string; summary: string }): Promise<string>;
 }
 
 /** What a run the captain stopped reports, and how a stopped review is told apart from one that failed. */

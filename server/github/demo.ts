@@ -166,14 +166,6 @@ export const demoLayer = Layer.sync(GitHub, () => {
         }),
       ),
 
-    addSubIssue: (name, parent, child) =>
-      repo(name).pipe(
-        Effect.flatMap((r) => {
-          const missing = [parent, child].find((n) => !r.issues.some((i) => i.number === n));
-          return missing === undefined ? Effect.void : Effect.fail(new GitHubNotFound({ message: `Issue #${missing} not found in ${name}` }));
-        }),
-      ),
-
     listPullRequests: (name) =>
       repo(name).pipe(
         Effect.map((r) =>

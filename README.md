@@ -11,11 +11,10 @@ A cartoon, first-person 3D starship where a crew of **Claude Code** agents works
 - The office is a **starship** in the style of *Star Trek: Lower Decks*: bulkhead corridors, LCARS signs and consoles, viewports onto space (with stars drifting past as the ship cruises), doors that swoosh open as you walk up, and the engines' thrum underneath it all (mute it from the pause menu).
 - Every **project** gets a **holodeck**. A project can span several GitHub repositories.
 - Each holodeck runs a **program**: its walls and ceiling vanish into a landscape, so the stations sit on a beach, in a forest clearing, in a desert canyon, on the moon, on a city rooftop at dusk or in a vast library. A faint holodeck grid shows where the walls are when you get close. Pick one per project in your **ready room**, or keep the plain holodeck grid. Empty holodecks are bare.
-- Every **agent** is a separate Claude Code instance (via the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk)) with its own workstation and git worktree. The crew wear Starfleet uniforms in their division's colour (command red, operations gold, sciences blue) and come from all over the Federation.
+- Every **agent** is a separate Claude Code instance (via the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk)) with its own workstation and git worktree. The crew wear Starfleet uniforms in their division's colour (command red, operations gold, sciences blue) and come from all over the Federation. They **beam in** to their station when they're assigned and beam out when they go home: a shimmering column of sparkles, the transporter's hum if you're in the room.
 - Walk up behind an agent and you see their **station's display**: the live Claude Code terminal and, while they test, the **browser** they are driving.
+- Each holodeck has a **lead**: your own Claude Code session for the project, with every one of its repos checked out side by side. Talk a goal through with them, and they build it a slice at a time, the way you'd work in Claude Code. Each slice ships as a pull request in every repo it touches; QA reviews them, you merge them, and the lead carries on from what the slice taught you.
 - Each holodeck has an **operations officer** at its **＋ New issue** stand. Give them a rough idea and they read the project's code and write it up as an issue with context and **acceptance criteria**, ready for you to edit and file.
-- Bigger or fuzzier ideas become a **goal**, worked toward from the **observation lounge** behind the ready room. There's no plan up front: the officer agrees with you where you're going and what's unknown, then proposes one small step at a time, the one that tests the riskiest unknown. After each step lands you reconvene to hear what it taught you and pick the next.
-- If you'd rather plan it up front, a **briefing** still does that: the officer grills you one question at a time, keeps a brief on the wall screen, and writes one issue to the holodeck's stand or breaks a bigger feature down into an epic and sub-issues for you to check and file.
 - Each holodeck's **Kanban display** shows what's to do, who's working on what, and which **pull requests** are ready to merge.
 - The captain's **ready room** is where you create projects, connect existing repos or create blank ones, file issues and tune how much the agents may do on their own.
 - When an agent is done, Focus pushes their branch and opens a **pull request** with their summary as the description. Merge it from the board and they pack up and go home.
@@ -68,8 +67,22 @@ Then on board:
 | <kbd>T</kbd> | teleport to any holodeck or straight to an agent's station |
 | <kbd>M</kbd> | ready room |
 | <kbd>N</kbd> | new issue for the holodeck you're in |
+| <kbd>L</kbd> | talk to the lead of the holodeck you're in |
 | <kbd>1</kbd> | talk to Number One |
 | <kbd>Esc</kbd> | pause / close a panel |
+
+## The lead
+
+Each project has a lead, a lieutenant in command red: your own Claude Code session for the project. They sit at the holodeck's **group desk**, the round table on your left as you come in, facing a shared display. Press <kbd>E</kbd> on them or the desk, <kbd>L</kbd> anywhere on the holodeck, or **🧭 Lead** on its board, and tell them what you're after. You talk to them like any Claude Code session, in their panel. Their terminal and browser show on the group desk's display, which you can read over their shoulder (teleport to them, or walk up behind their seat).
+
+- **Their workspace:** every repo of the project, checked out side by side at `./<repo>` on the slice's branch (`focus/lead-<project>-<slice>-<id>`), so a change that runs through the API, the web app and the admin app is just one piece of work. They read each repo's CLAUDE.md, run its tests and check UI changes in the browser, like the rest of the crew.
+- **How they work:** talk a goal through briefly, then build it a slice at a time. A slice is a reasonably sized change that ships on its own: often a thin slice end to end through every repo it needs, or a refactor once the code has learned something.
+- **Their helpers:** when they hand independent pieces of work to subagents (Claude Code's Agent tool), each one sits down at the group desk as an ensign with a PADD while it works: its bubble shows what it's doing (from Claude Code's progress summaries, about every 30 seconds, and its tool calls). It says how it got on when it reports back, then leaves. Three seats; any more wait for one. They're listed in the lead's panel too, and their tool calls show, indented, in the lead's terminal.
+- **Shipping a slice:** they never push. When a slice is ready they ask the office to ship it (`mcp__office__ship`, which in **ask** mode raises their hand for you to approve first). The office pushes every repo with new commits since it last shipped and opens a pull request in each (or updates the one it opened), and the holodeck's QA officer reviews them. Nothing ships while any repo has uncommitted changes.
+- **Hearing back:** a QA fail goes straight to them, and they fix it and ship again, twice at most before it's yours to look at. A pass is passed on with your next message. You merge their pull requests from the board (they don't merge by themselves). Once every pull request of the slice has merged or closed, they hear about it and their repos move to fresh code on a new branch for the next slice. A repo with uncommitted changes holds that back, so nothing is lost.
+- **One per project:** their record is the same from slice to slice, like the QA officer's. **Send home** from their panel clears their workspace; the next message seats them again with fresh code.
+
+Leads don't take one of the holodeck's desks or count towards its agent limit. They do count towards **Agents working at once** while they work.
 
 ## Drafting issues
 
@@ -80,63 +93,31 @@ Every holodeck has an operations officer sitting at its **＋ New issue** stand 
 3. The draft fills the form's fields. Edit it however you like, or tell them what to change and press **↻ Redraft**. A redraft continues their last session, so they don't read the code all over again.
 4. **📌 Pin it to the board** files it as usual. Filing it, or **✕ Discard draft**, clears the stand.
 
+If the idea is too big or too fuzzy for one issue, the officer says so above the draft. **🧭 Talk to the lead** (there, or next to **✨ Draft it**) takes the idea to the [lead](#the-lead) instead, who builds it a slice at a time.
+
 The officer never files, pushes or edits anything. They run as a Claude Code session with only `Read`, `Glob` and `Grep`, in `dontAsk` mode, with no settings, hooks or MCP servers loaded. They read up-to-date checkouts of the project's default branches in `~/.focus/planning/<project>/`. A draft lives in memory only, so it's lost if the office restarts. Drafting sessions don't count towards **Agents working at once**.
-
-### Goals
-
-For anything bigger or fuzzier than a one-line issue, press **🧭 Set a goal** at the stand instead of **✨ Draft it**. You can also set one from the observation lounge itself, through the door in the north wall of the ready room. You're beamed to the lounge, and the officer leaves the stand and sits down across the table from you.
-
-A goal gets no spec and no plan up front. You agree where you're going, then find the way one small step at a time.
-
-1. The officer asks a handful of questions to pin down the destination: what you want and why, who it's for, and what you'd see once it's done. They also name the **unknowns**, the assumptions that could sink the goal or change the route. The wall screen shows **Why**, **Who for**, **Done when**, **Unknowns** and the **Steps** so far, with no scope and no design. QA sits in as usual, and the engineer isn't called.
-2. **🧭 Take the first step**: the officer writes one step, the smallest change that tests the riskiest unknown or gets a thin slice working end to end. It's an issue with **Testing**, **Why now**, **What to build**, **Done when** and **Not in this step**. Edit it, or say what to change and **↻ Rewrite the step**.
-3. **📌 File this step** files the goal as an epic (on the first step only), then the step, headed `Step N toward #epic`. Within the epic's repo it's linked as a sub-issue; a step in another repo links back in its body. The goal is then **parked**: it leaves the lounge, so you can work on other goals or briefings while the crew builds the step. Assign an agent to it as you would any issue, or let auto-assign pick it up.
-4. While a goal is parked, the office keeps track of its step: the PR that closes it (or sits on its `focus/<issue>-…` branch), QA's verdict on that PR, and whether it was merged or closed. A toast says when the step has landed.
-5. **📣 Reconvene** the goal from the lounge (parked goals are listed above the form to set a goal). The officer pulls the latest code and reads the step's PR description and QA's verdict. They tell you what the step taught you, update the unknowns, and suggest the next step, or say they think the goal is met. Talk it over, then take the next step.
-6. **⏸ Park** sends a goal out of the lounge without taking a step. **✕ End goal** (or **✕ Drop** on a parked one) forgets it. Its issues stay on GitHub.
-
-Goals are saved in `~/.focus/state.json` with the officer's session, so a goal picks up where it left off after a restart.
-
-### Briefings
-
-To plan something up front instead, press **📋 Plan it up front instead** on the lounge's form. You get a briefing: scope and acceptance criteria agreed before anyone builds anything, ending in one issue or an epic with sub-issues.
-
-1. The officer reads the code, puts a first brief on the wall screen and asks their first question.
-2. They ask one question at a time, starting with the why (who it's for, what's going wrong, what success looks like), then the what. They check the code before asking, and they suggest an answer with each question so you can just say yes.
-3. The brief on the wall screen (and in the panel) keeps up as you go: **Why**, **Who for**, **Scope**, **Out of scope**, **Acceptance criteria** and **Open questions**.
-4. For a big change, **🔧 Ask engineering** before you wrap up. Lt. Brennan, the ship's engineer, leaves the engineering station on the concourse for the lounge table, reads the code and comes back with two or three options: the approach, the files it touches, trade-offs, risks and a rough size (one agent, or several issues), plus the one they recommend. The options show in the panel and on the wall screen. **Pick this one** puts an option in the brief as its **Approach**, which ends up in the issue's Context (or the epic's, for a breakdown). Anything in the message box goes along as a note, so **🔧 Back to engineering** with "keep it to one file" asks for a rework. The engineer is read-only like the rest of the crew: options only, no code.
-5. **📋 Wrap up** when you're happy, as **📝 One issue** or **🧩 Break it down**.
-   - **One issue**: the officer writes one issue, with the why from the briefing in its Context, and leaves it at the project's stand as a normal draft. A redraft there carries on from the whole briefing.
-   - **Break it down**, for a feature too big for one agent in one sitting: the officer writes an epic (the brief: why, scope, acceptance criteria) and 2 to 5 sub-issues in the usual issue format, all for one repository. They split only where the parts are independent and touch different files, or where a risky foundation should land first. A sub-issue that can't start before another merges says so, at most two steps deep.
-   - Nothing is filed until you've checked the breakdown: edit any title or body, **✕ Drop** sub-issues, or go back to **📝 One issue instead**. **📌 File all** files the epic, then each sub-issue with a `Depends on #N` line carrying the real numbers (auto-assign starts the blocking issue first), linked to the epic as GitHub sub-issues. If filing stops halfway, **File all** again carries on without filing anything twice.
-6. **✕ End briefing** sends them back to the stand. Only one briefing runs at a time.
-
-In a briefing the officer can also search and read the web (`WebSearch`, `WebFetch`) for things the code can't answer, like library versions or migration guidance, and tells you where they found it. They still can't change anything.
-
-#### Voice mode
-
-Press **🔈 Voice off** above the message box to talk a goal or a briefing through instead of reading it. It's off by default, and each browser remembers the setting.
-
-- **The crew speak.** Each new line is read aloud: the officer's reply as a sentence or two without file paths or code (the officer writes it in the same turn as the reply), and QA's notes, the engineer's recommendation and the officer's fixed lines as they are. The full text still goes in the log, straight away. Lines are spoken one at a time, in log order, and anything already in the log when you open the panel isn't spoken.
-- **Their voices.** [Kokoro](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX) (82M, through `kokoro-js`) runs in the office's server on this machine. The officer, QA and the engineer each have a voice of their own. The model (about 90 MB) downloads into `~/.focus/models/kokoro` the first time voice mode is switched on, or from **⚙️ Settings → Voice input → Crew voices**. Until it's ready, or if it fails to load, the browser's built-in voice stands in.
-- **You answer by talking.** Press 🎤 (or <kbd>Ctrl</kbd>+<kbd>M</kbd> in the message box) and talk, then press again, or hold it and let go. Your answer is sent as soon as whisper.cpp has transcribed it (see [Voice input](#voice-input)). Starting to record stops whoever is speaking and drops their queued lines. If nothing was heard, nothing is sent. You can still type and press **Send**.
-- **Keep the mic open between turns** opens the microphone once for the whole session rather than for each answer. Use it with speakers, where opening the mic each time makes the audio glitch. Leave it off with Bluetooth earphones, which drop to call quality while the mic is open. Turning voice mode off or closing the panel lets go of the mic.
-
-A briefing is saved in `~/.focus/state.json` with the officer's session, and each turn resumes that session. Nothing runs while it's your turn, and you can pick a briefing back up after a restart, along with a breakdown waiting to be filed (your unsaved edits to it aside).
 
 ### Number One
 
 Number One, the ship's first officer, is there to just talk: ask how something works in any project, what's going on aboard, or think an idea through, without it turning into an issue. There's one for the whole ship, sitting across the captain's desk in the ready room: press <kbd>E</kbd> on them, or <kbd>1</kbd> anywhere aboard. Their bubble shows what they're reading while they think, and 🖖 *Your turn* once they've answered.
 
 - **The ship's state**: their `ship_status` tool sums up the board per project: agents and what they're on (with their worktree paths), open PRs with QA's verdict and checks, and what needs you (raised hands, conflicts, stuck PRs, PRs ready to merge, drafts at the stand).
-- **Any project's code**: `open_project` checks a project's repos out at their default branch into `~/.focus/planning/<project>/` (the same folders the stand and briefings use) the first time they need it, so opening a chat checks nothing out. If the fetch fails, they tell you which project and carry on.
+- **Any project's code**: `open_project` checks a project's repos out at their default branch into `~/.focus/planning/<project>/` (the same folders the stand uses) the first time they need it, so opening a chat checks nothing out. If the fetch fails, they tell you which project and carry on.
 - **Agents' worktrees**: readable, to answer "what has Lt. X done so far?", never to explain how the code works.
-- **Read-only**: Read, Glob, Grep, web search and fetch, and those two tools. They never file, push, edit, start agents, draft issues or call briefings. When a chat turns into work, the reply carries a suggestion (`suggest: { projectId, idea }`) for you to send to the stand or a briefing.
+- **Read-only**: Read, Glob, Grep, web search and fetch, and those two tools. They never file, push, edit, start agents, draft issues or talk to the lead. When a chat turns into work, the reply carries a suggestion (`suggest: { projectId, idea }`) for you to send to the stand or the lead.
 
-- **From chat to work**: under a reply that suggests some, **✨ Draft at the stand** has the project's officer write it up at its New issue stand (asking first if a draft is already waiting there), and **🧭 Set a goal** calls a goal about it in the observation lounge.
-- **Voice mode**: the same 🔈/🔊 switch as briefings, and the same setting. Number One says each new reply in a voice of their own, and 🎤 sends what you say.
+- **From chat to work**: under a reply that suggests some, **✨ Draft at the stand** has the project's officer write it up at its New issue stand (asking first if a draft is already waiting there), and **🧭 Talk to the lead** passes it to the project's lead as your first word, seating them at the group desk if they aren't there yet.
 
-The chat runs alongside any goal or briefing, one turn at a time. It's saved in `~/.focus/state.json` with Number One's session, which every message resumes, so it survives a restart. **New conversation** clears the log and starts a fresh session.
+The chat runs one turn at a time. It's saved in `~/.focus/state.json` with Number One's session, which every message resumes, so it survives a restart. **New conversation** clears the log and starts a fresh session.
+
+#### Voice mode
+
+Press **🔈 Voice off** above the message box to talk with Number One instead of reading. It's off by default, and each browser remembers the setting.
+
+- **Number One speaks.** Each new reply is read aloud as a sentence or two without file paths or code (they write it in the same turn as the reply). The full text still goes in the log, straight away. Anything already in the log when you open the panel isn't spoken.
+- **Their voice.** [Kokoro](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX) (82M, through `kokoro-js`) runs in the office's server on this machine. The model (about 90 MB) downloads into `~/.focus/models/kokoro` the first time voice mode is switched on, or from **⚙️ Settings → Voice input → Crew voices**. Until it's ready, or if it fails to load, the browser's built-in voice stands in.
+- **You answer by talking.** Press 🎤 (or <kbd>Ctrl</kbd>+<kbd>M</kbd> in the message box) and talk, then press again, or hold it and let go. Your message is sent as soon as whisper.cpp has transcribed it (see [Voice input](#voice-input)). Starting to record stops Number One speaking and drops their queued lines. If nothing was heard, nothing is sent. You can still type and press **Send**.
+- **Keep the mic open between turns** opens the microphone once for the whole session rather than for each answer. Use it with speakers, where opening the mic each time makes the audio glitch. Leave it off with Bluetooth earphones, which drop to call quality while the mic is open. Turning voice mode off or closing the panel lets go of the mic.
 
 ## How an agent works an issue
 
@@ -259,7 +240,7 @@ Cloud agents run in a cloud VM rather than on your machine, but they push to Git
 
 ## Voice input
 
-Every box where you write to the crew has a 🎤: an agent's message box, the briefing topic and answers, the New issue idea, notes, title and description, and the QA brief. Click it (or press **Ctrl+M** in the box) and speak, then click again to stop, or hold it while you speak and let go. The text lands at the cursor for you to check. Nothing is sent until you send it (except in a briefing's [voice mode](#voice-mode)).
+Every box where you write to the crew has a 🎤: an agent's message box, what you tell the lead, the New issue idea, notes, title and description, and the QA brief. Click it (or press **Ctrl+M** in the box) and speak, then click again to stop, or hold it while you speak and let go. The text lands at the cursor for you to check. Nothing is sent until you send it (except in Number One's [voice mode](#voice-mode)).
 
 [whisper.cpp](https://github.com/ggml-org/whisper.cpp) transcribes on your machine with the `large-v3-turbo` model, so your audio never leaves it. On Apple Silicon it runs on the GPU. Set it up once:
 
@@ -334,23 +315,24 @@ server/
     browserTool.ts        in-process MCP server driving headless Chromium, streams screenshots
     workspace.ts          git mirrors + worktrees (agents', the per-repo preview checkout, the planner's read-only checkouts)
     planner.ts            the officer at each room's New issue stand: issue drafts, their prompt and schema
-    briefing.ts           briefings in the observation lounge: turns, the brief, wrap-up into a stand draft or a breakdown
-    breakdown.ts          a briefing's epic and sub-issues: the officer's result, the manager's edits, Depends on lines
-    engineering.ts        the ship's engineer at a briefing: options prompt, schema and decoding
+    lead.ts               each project's lead: their instructions, what shipping a slice does, what they hear back, their helpers
+    officeTool.ts         the office's own MCP tools for an agent (the lead's ship)
     numberOne.ts          Number One's ship-wide chat: turns, prompt, reply schema and the ship_status summariser
-    claudeCrew.ts         the officer's read-only Claude Code sessions (Read/Glob/Grep, web search/fetch in briefings, update_brief, Number One's ship_status and open_project, structured output)
+    claudeCrew.ts         the crew's read-only Claude Code sessions (Read/Glob/Grep, web search/fetch for Number One, Number One's ship_status and open_project, structured output)
     qa.ts                 the QA officer: instructions, the report's schema and parsing, the PR comment
-    demoRunner.ts         scripted pretend agents (and a pretend planner, briefing officer, QA officer, engineer and Number One) for demo mode
+    demoRunner.ts         scripted pretend agents (and a pretend lead, planner, QA officer and Number One) for demo mode
 client/src/
   main.ts                 renderer (toon shading + outline pass), loop, interaction, UI wiring
   world/                  ship layout, holodecks, stations, characters, station screens, Kanban display
     scenery.ts            stencil "holo walls" that show a landscape built around a room
     themes.ts             the landscapes (beach, forest, desert, moon, city, library)
-    lounge.ts             the observation lounge: briefing table, officer, the brief on the wall screen
-    engineering.ts        the engineering station on the concourse, where the engineer waits to be asked
+    groupDesk.ts          each holodeck's group desk: the lead's seat, the shared display, seats for their helpers (helperSeats.ts: who sits where)
+    transporter.ts        the transporter beam the crew arrive and leave in
+    lounge.ts             the observation lounge: a table under the viewports and a star chart (scenery)
+    engineering.ts        the engineering station on the concourse, where the engineer keeps the ship running (scenery)
     numberOne.ts          Number One in the ready room, across the captain's desk (numberOneView.ts: their bubble)
-  ui/                     HUD and panels (agent terminal, board, ready room console, teleport, QA station, briefing)
-    numberOnePanel.ts     the chat with Number One: the log, suggestions sent to the stand or set as a goal, voice mode
+  ui/                     HUD and panels (agent terminal, board, ready room console, teleport, QA station, the lead)
+    numberOnePanel.ts     the chat with Number One: the log, suggestions sent to the stand or the lead, voice mode
   tricorder/              the phone view at /tricorder (no three.js): home screen, agent drill-down, buttons that survive live re-renders
 client/tricorder/index.html   the Tricorder's page (a second Vite entry), with its home-screen meta tags
 client/public/tricorder/  its web app manifest and home-screen icons

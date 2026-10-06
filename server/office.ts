@@ -5,7 +5,6 @@ import { startOrder } from '../shared/dependencies';
 import { autoMergeFor, type GateMark, mergeStep, type MergeStep } from '../shared/mergeGate';
 import { autoSendBackFor, prKey } from '../shared/qa';
 import type { AgentManager } from './agents/manager';
-import type { Briefings } from './agents/briefing';
 import type { NumberOne } from './agents/numberOne';
 import type { IssuePlanner } from './agents/planner';
 import { config } from './config';
@@ -41,7 +40,6 @@ export class Office {
     private readonly github: GitHubProvider,
     readonly previews: Previews,
     readonly planner: IssuePlanner,
-    readonly briefings: Briefings,
     readonly numberOne: NumberOne,
     readonly voice: Voice,
     version: string,
@@ -79,8 +77,6 @@ export class Office {
       browser: Object.fromEntries(this.store.browser),
       previews: this.previews.list(),
       drafts: this.planner.list(),
-      briefing: this.briefings.current(),
-      goals: this.briefings.goals(),
       numberOne: this.numberOne.current(),
       reviews: [...this.store.reviews.values()],
       voice: this.voice.status(),
@@ -118,7 +114,6 @@ export class Office {
     this.store.removeProject(id);
     this.broadcastProjects();
     this.planner.remove(id);
-    this.briefings.projectRemoved(id);
     await this.previews.remove(id);
   }
 
@@ -294,7 +289,6 @@ export class Office {
     }
 
     await this.noticeClosedPullRequests(projectId, board);
-    await this.briefings.track(projectId, board);
     await this.autoMerge(projectId, board);
     this.autoAssign(projectId, board);
   }
@@ -368,6 +362,16 @@ export class Office {
       if (board.prs.some((p) => p.repo === review.repo && p.number === review.number) || board.error?.includes(review.repo)) continue;
       try {
         if ((await this.github.pullRequestState(review.repo, review.number)) !== 'OPEN') this.agents.reviewGone(review.repo, review.number);
+      } catch {
+        // try again next refresh
+      }
+    }
+    // the leads' pull requests, merged or closed on GitHub
+    for (const pr of this.agents.leadPrs(projectId)) {
+      if (board.prs.some((p) => p.repo === pr.repo && p.number === pr.number) || board.error?.includes(pr.repo)) continue;
+      try {
+        const state = await this.github.pullRequestState(pr.repo, pr.number);
+        if (state !== 'OPEN') this.agents.prClosed(pr.repo, pr.number, state === 'MERGED');
       } catch {
         // try again next refresh
       }
