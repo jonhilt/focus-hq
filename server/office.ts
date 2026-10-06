@@ -1,4 +1,5 @@
 import type { Agent, Board, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
+import { carryMergeable } from '../shared/board';
 import { chosenSet, previewPrs } from '../shared/previewSet';
 import { startOrder } from '../shared/dependencies';
 import { autoMergeFor, type GateMark, mergeStep, type MergeStep } from '../shared/mergeGate';
@@ -272,6 +273,7 @@ export class Office {
     if (errors.length) board.error = errors.join('\n');
     board.issues.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     board.prs.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    board.prs = carryMergeable(this.store.boards.get(projectId)?.prs ?? [], board.prs);
     if (!this.store.projects.some((p) => p.id === projectId)) return;
     this.store.boards.set(projectId, board);
     this.hub.send({ type: 'board', board });

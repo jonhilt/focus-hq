@@ -30,3 +30,16 @@ export function columns(project: Project, board: Board | undefined, agents: Agen
     hiddenPrs: all.length - shown.length,
   };
 }
+
+/**
+ * GitHub computes mergeability lazily and answers UNKNOWN until it's done, so a freshly fetched PR keeps
+ * the last definite answer from `previous` while its head commit and base branch haven't moved.
+ */
+export function carryMergeable(previous: PullRequest[], fresh: PullRequest[]): PullRequest[] {
+  return fresh.map((pr) => {
+    if (pr.mergeable !== 'UNKNOWN') return pr;
+    const before = previous.find((p) => p.repo === pr.repo && p.number === pr.number);
+    if (!before || before.mergeable === 'UNKNOWN' || before.headSha !== pr.headSha || before.baseBranch !== pr.baseBranch) return pr;
+    return { ...pr, mergeable: before.mergeable };
+  });
+}
