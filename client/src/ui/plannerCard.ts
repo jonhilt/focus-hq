@@ -63,7 +63,7 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
       draft?.costUsd ? h('small', { class: 'muted' }, `$${draft.costUsd.toFixed(2)}`) : null,
     );
     const briefingButton = (idea: () => string, title: string) => {
-      const button = h('button', { class: 'btn small', title }, '📣 Call a briefing');
+      const button = h('button', { class: 'btn small', title }, '🧭 Set a goal');
       button.onclick = () => void busy(button, async () => {
         await api.callBriefing(pid, idea());
         ui.goToLounge();
@@ -80,7 +80,7 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
 
     if (briefing) {
       fill(el, header,
-        h('p', null, `I’m in a briefing in the observation lounge about “${briefing.idea}”. Come and join me, or end it there.`),
+        h('p', null, `I’m in the observation lounge, in a ${briefing.goal ? 'briefing about the goal' : 'briefing about'} “${briefing.idea}”. Come and join me, or ${briefing.goal ? 'park it' : 'end it'} there.`),
         h('div', { class: 'row' }, h('button', { class: 'btn small primary', onclick: () => ui.goToLounge() }, '🖖 Join the briefing')),
       );
       return;
@@ -101,8 +101,8 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
         api.draftIssue(pid, draft.idea, { repo: fields.repo.value, title: fields.title.value, body: fields.body.value, notes: notes.value }), ui.error);
       const suggestion = draft.tooBig
         ? h('div', { class: 'planner-suggest' },
-          h('p', null, `This one might be better as a briefing. ${draft.tooBig}`),
-          h('div', { class: 'row' }, briefingButton(() => draft.idea, 'Talk it through in the observation lounge; the draft stays here in case you’d rather use it')),
+          h('p', null, `This one might be better as a goal, worked toward one step at a time. ${draft.tooBig}`),
+          h('div', { class: 'row' }, briefingButton(() => draft.idea, 'Agree where you’re going in the observation lounge, then take it one step at a time; the draft stays here in case you’d rather use it')),
         )
         : null;
       fill(el, header,
@@ -117,14 +117,14 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
     const idea = h('textarea', { class: 'planner-input', placeholder: 'e.g. let shoppers save items for later from the cart', value: draft?.idea ?? '' });
     const go = h('button', { class: 'btn small primary' }, draft?.status === 'failed' ? '✨ Try again' : '✨ Draft it');
     go.onclick = () => void busy(go, () => api.draftIssue(pid, idea.value), ui.error);
-    const brief = briefingButton(() => idea.value, 'Talk it through in the observation lounge first');
+    const brief = briefingButton(() => idea.value, 'Agree where you’re going in the observation lounge, then take it one step at a time');
     idea.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) go.click();
     });
     fill(el, header,
       draft?.status === 'failed'
         ? h('p', { class: 'planner-error' }, `I couldn’t finish that draft: ${draft.error ?? 'something went wrong'}`)
-        : h('p', null, 'Tell me roughly what you need. I’ll read the code and write it up as an issue with acceptance criteria. Something bigger or fuzzier? Call a briefing and we’ll talk it through in the observation lounge first.'),
+        : h('p', null, 'Tell me roughly what you need. I’ll read the code and write it up as an issue with acceptance criteria. Something bigger or fuzzier? Set a goal: we’ll agree where you’re going in the observation lounge, then get there one small step at a time.'),
       withMic(ui, idea),
       h('div', { class: 'row' }, go, brief, h('small', { class: 'muted' }, 'Ctrl+Enter drafts'), h('span', { class: 'grow' }), draft ? discard() : null),
     );

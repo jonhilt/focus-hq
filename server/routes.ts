@@ -102,9 +102,9 @@ export function apiRouter(office: Office, store: Store): express.Router {
   }));
   r.delete('/projects/:id/draft', h((req) => office.planner.discard(param(req, 'id'))));
 
-  // briefings in the observation lounge: one at a time, ending in an issue draft at the project's stand or a filed breakdown;
-  // a goal instead goes one step at a time, parked out of the lounge between steps
-  r.post('/briefing', h((req) => office.briefings.call(str(req.body.projectId), str(req.body.idea), req.body.goal === true)));
+  // briefings in the observation lounge, one at a time: by default about a goal, which goes one step at a time, parked
+  // out of the lounge between steps; planned up front (goal: false), ending in an issue draft at the stand or a filed breakdown
+  r.post('/briefing', h((req) => office.briefings.call(str(req.body.projectId), str(req.body.idea), req.body.goal !== false)));
   r.post('/briefing/say', h((req) => office.briefings.say(str(req.body.text))));
   r.post('/briefing/wrap-up', h((req) => office.briefings.wrapUp(req.body.shape === 'breakdown' || req.body.shape === 'step' ? req.body.shape : 'one')));
   r.post('/briefing/step', h((req) => office.briefings.fileStep({ title: str(req.body.title), body: str(req.body.body) })));

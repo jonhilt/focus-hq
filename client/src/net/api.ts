@@ -30,7 +30,7 @@ export const api = {
   draftIssue: (projectId: string, idea: string, revise?: { repo: string; title: string; body: string; notes: string }) =>
     call<IssueDraft>('POST', `/projects/${projectId}/draft`, { idea, revise }),
   discardDraft: (projectId: string) => call('DELETE', `/projects/${projectId}/draft`),
-  callBriefing: (projectId: string, idea: string, goal = false) => call<Briefing>('POST', '/briefing', { projectId, idea, goal }),
+  callBriefing: (projectId: string, idea: string, goal = true) => call<Briefing>('POST', '/briefing', { projectId, idea, goal }),
   briefingSay: (text: string) => call<Briefing>('POST', '/briefing/say', { text }),
   briefingWrapUp: (shape: WrapUpShape) => call<Briefing>('POST', '/briefing/wrap-up', { shape }),
   briefingFile: (edits: BreakdownEdits) => call<Briefing>('POST', '/briefing/file', edits),

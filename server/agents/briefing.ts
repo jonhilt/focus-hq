@@ -161,8 +161,11 @@ export class Briefings {
     return this.store.goals.map(publicView);
   }
 
-  /** Calls a briefing about `idea`; with `goal`, about a goal to work toward one step at a time. */
-  call(projectId: string, idea: string, goal = false): Briefing {
+  /**
+   * Calls a briefing about `idea`: by default about a goal, worked toward one step at a time; with `goal` false, the
+   * plan-it-up-front kind that ends in one issue or a breakdown.
+   */
+  call(projectId: string, idea: string, goal = true): Briefing {
     const project = this.store.project(projectId);
     const officer = plannerFor(projectId);
     if (!project.repos.length) throw new Error(`${project.name} has no repositories yet`);
@@ -700,6 +703,10 @@ export class Briefings {
 
 // ---------------------------------------------------------------- prompts
 
+/** How the officer finishes a reply in the briefing log, with a line for voice mode to say aloud. */
+const REPLY_FORMAT =
+  "Finish every reply with the structured result: `reply`, what you'd write (it goes in the briefing log, file names and all), and `spoken`, the same reply said aloud to the manager in one or two short conversational sentences: the point and the question, with no file paths, code or symbols.";
+
 export function briefingSystemPrompt(req: Pick<OfficerTurn, 'planner' | 'projectId' | 'projectName' | 'repos' | 'goal'>): string {
   if (req.goal) return goalSystemPrompt(req);
   return `
@@ -720,7 +727,7 @@ How to run the briefing:
 - ${qaName(req)}, the project's QA officer, sits in: every pull request built from this issue comes to them to test. When you add or change acceptance criteria, they may add one short note (a criterion that can't be checked, a missing edge case, something the project's QA brief requires). You'll get it with the manager's next message: weigh it, recommend, and put what the manager agrees to into the acceptance criteria. The manager decides.
 - ${chiefEngineer().name}, the ship's engineer, can be called in by the manager to read the code and lay out two or three options for how to build it. When the how is a real choice across several modules, suggest asking engineering. Once the manager picks an option it's the brief's Approach: build on it, don't reopen it.
 - When nothing important is still open, say you have enough and suggest wrapping up. The manager decides when.
-- Finish every reply with the structured result: \`reply\`, what you'd write (it goes in the briefing log, file names and all), and \`spoken\`, the same reply said aloud to the manager in one or two short conversational sentences: the point and the question, with no file paths, code or symbols.
+- ${REPLY_FORMAT}
 
 Diagrams, for complex changes only (several modules, or a real choice of design; not every briefing):
 - Think the architecture through from the code: where the responsibilities sit, which modules and classes talk to each other, and what the change would touch.
@@ -748,6 +755,7 @@ How to run it:
 - Keep the brief on the wall screen current with mcp__brief__update_brief: summary (the goal, in a line), why, who, acceptance (what you'd see once it's done) and open_questions (the unknowns, riskiest first). Leave scope, out_of_scope and diagrams empty.
 - ${qaName(req)}, the project's QA officer, sits in: they test every step, and they'll check the goal is met at the end. When you change the done-when outcomes, they may add a note on making them checkable. Weigh it, and put what the manager agrees to into them.
 - Once you know the destination and the riskiest unknown, suggest taking the first step. The manager decides when.
+- ${REPLY_FORMAT}
 
 Choosing a step, now and every time you reconvene:
 - The smallest change an agent can build in one sitting and a reviewer can merge on its own, that either tests the riskiest unknown or gets a thin slice of the goal working end to end.

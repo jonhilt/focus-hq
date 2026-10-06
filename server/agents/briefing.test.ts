@@ -182,7 +182,7 @@ describe('Briefings with QA sitting in', () => {
 
   it('adds QA’s note under the officer’s reply when the criteria change, checked against the QA brief', async () => {
     const { briefings, check, settled } = setup([{ acceptance: ['Works well on mobile'] }]);
-    briefings.call('p1', 'a wishlist');
+    briefings.call('p1', 'a wishlist', false);
     await settled();
     expect(from(briefings.current())).toEqual(['manager', 'officer', 'qa']);
     expect(briefings.current()!.messages[2].text).toBe('Say what “well” means.');
@@ -191,7 +191,7 @@ describe('Briefings with QA sitting in', () => {
 
   it('leaves QA out, at no cost, when the criteria didn’t change', async () => {
     const { briefings, check, settled } = setup([{ summary: 'A wishlist' }]);
-    briefings.call('p1', 'a wishlist');
+    briefings.call('p1', 'a wishlist', false);
     await settled();
     expect(check).not.toHaveBeenCalled();
     expect(from(briefings.current())).toEqual(['manager', 'officer']);
@@ -200,7 +200,7 @@ describe('Briefings with QA sitting in', () => {
 
   it('keeps the officer’s spoken line with the reply, made speakable', async () => {
     const { briefings, settled } = setup([{}]);
-    briefings.call('p1', 'a wishlist');
+    briefings.call('p1', 'a wishlist', false);
     await settled();
     expect(briefings.current()!.messages[1]).toMatchObject({ from: 'officer', text: 'Reply 1', spoken: 'Said 1.' });
   });
@@ -208,7 +208,7 @@ describe('Briefings with QA sitting in', () => {
   it('adds nothing when QA finds the criteria fine', async () => {
     const { briefings, check, settled } = setup([{ acceptance: ['Saves in under a second'] }], '');
     check.mockResolvedValue({ sessionId: 'qa-1' });
-    briefings.call('p1', 'a wishlist');
+    briefings.call('p1', 'a wishlist', false);
     await settled();
     expect(check).toHaveBeenCalledOnce();
     expect(from(briefings.current())).toEqual(['manager', 'officer']);
@@ -217,7 +217,7 @@ describe('Briefings with QA sitting in', () => {
   it('waits for QA to finish a review before they join', async () => {
     const { store, briefings, check, settled } = setup([{ acceptance: ['Works well on mobile'] }]);
     store.agents.set('qa_p1', { id: 'qa_p1', projectId: 'p1', task: 'review', status: 'testing' } as never);
-    briefings.call('p1', 'a wishlist');
+    briefings.call('p1', 'a wishlist', false);
     await settled();
     expect(check).not.toHaveBeenCalled();
   });
@@ -225,7 +225,7 @@ describe('Briefings with QA sitting in', () => {
   it('keeps the officer’s reply when QA stumbles', async () => {
     const { briefings, check, settled } = setup([{ acceptance: ['Works well on mobile'] }]);
     check.mockRejectedValue(new Error('rate limited'));
-    briefings.call('p1', 'a wishlist');
+    briefings.call('p1', 'a wishlist', false);
     await settled();
     const messages = briefings.current()!.messages;
     expect(messages.map((m) => m.from)).toEqual(['manager', 'officer', 'system']);
@@ -308,7 +308,7 @@ describe('Briefings breaking down into an epic and sub-issues', () => {
 
   async function reviewing() {
     const s = setup();
-    s.briefings.call('p1', 'wishlists');
+    s.briefings.call('p1', 'wishlists', false);
     await s.status('waiting');
     s.briefings.wrapUp('breakdown');
     await s.status('reviewing');
@@ -485,7 +485,7 @@ describe('Briefings asking engineering', () => {
 
   async function withOptions() {
     const s = setup();
-    s.briefings.call('p1', 'a wishlist');
+    s.briefings.call('p1', 'a wishlist', false);
     await s.settled();
     s.briefings.askEngineering('');
     await s.settled();
@@ -494,7 +494,7 @@ describe('Briefings asking engineering', () => {
 
   it('brings the engineer to the table, then puts their options and recommendation in the briefing', async () => {
     const { briefings, propose, settled } = setup();
-    briefings.call('p1', 'a wishlist');
+    briefings.call('p1', 'a wishlist', false);
     await settled();
     expect(briefings.askEngineering('').status).toBe('engineering');
     await settled();
@@ -514,7 +514,7 @@ describe('Briefings asking engineering', () => {
 
   it('won’t pick before there are options, or one that isn’t there', async () => {
     const { briefings, settled } = setup();
-    briefings.call('p1', 'a wishlist');
+    briefings.call('p1', 'a wishlist', false);
     await settled();
     expect(() => briefings.pickApproach(0)).toThrow(/Ask engineering/);
     briefings.askEngineering('');
@@ -534,7 +534,7 @@ describe('Briefings asking engineering', () => {
   it('keeps the briefing going when engineering stumbles', async () => {
     const { briefings, propose, settled } = setup();
     propose.mockRejectedValue(new Error('rate limited'));
-    briefings.call('p1', 'a wishlist');
+    briefings.call('p1', 'a wishlist', false);
     await settled();
     briefings.askEngineering('');
     await settled();
@@ -545,7 +545,7 @@ describe('Briefings asking engineering', () => {
 
   it('won’t take a message while the engineer is working', async () => {
     const { briefings, settled } = setup();
-    briefings.call('p1', 'a wishlist');
+    briefings.call('p1', 'a wishlist', false);
     await settled();
     briefings.askEngineering('');
     expect(() => briefings.say('hello')).toThrow(/still working on the options/);
@@ -620,13 +620,20 @@ describe('Briefings about a goal, one step at a time', () => {
     expect(filer.file).not.toHaveBeenCalled();
   });
 
+  it('makes a goal of a briefing by default', async () => {
+    const { briefings, status } = setup();
+    briefings.call('p1', 'save for later');
+    expect(briefings.current()!.goal).toEqual({ steps: [] });
+    await status('waiting');
+  });
+
   it('only takes steps: no wrapping a goal up, and no steps outside one', async () => {
     const { briefings, status } = setup();
     briefings.call('p1', 'save for later', true);
     await status('waiting');
     expect(() => briefings.wrapUp('one')).toThrow(/one step at a time: take a step/);
     briefings.end();
-    briefings.call('p1', 'a wishlist');
+    briefings.call('p1', 'a wishlist', false);
     await status('waiting');
     expect(() => briefings.wrapUp('step')).toThrow(/Only a goal/);
     expect(() => briefings.fileStep(proposal)).toThrow(/no step to file/);
@@ -648,7 +655,7 @@ describe('Briefings about a goal, one step at a time', () => {
 
   it('frees the lounge for another briefing while the goal is parked', async () => {
     const { briefings, status } = await firstStepFiled();
-    briefings.call('p1', 'a wishlist');
+    briefings.call('p1', 'a wishlist', false);
     await status('waiting');
     expect(() => briefings.reconvene(briefings.goals()[0].id)).toThrow(/still in the lounge with a briefing/);
   });
@@ -739,7 +746,7 @@ describe('Briefings about a goal, one step at a time', () => {
 
   it('only parks a goal', async () => {
     const { briefings, status } = setup();
-    briefings.call('p1', 'a wishlist');
+    briefings.call('p1', 'a wishlist', false);
     await status('waiting');
     expect(() => briefings.park()).toThrow(/Only a goal can be parked/);
   });
@@ -770,6 +777,10 @@ describe('goal prompts', () => {
     expect(prompt).toMatch(/Never plan past the next step/);
     expect(prompt).toContain(qaOfficerFor('p1').name);
     expect(prompt).not.toContain('Diagrams');
+  });
+
+  it('asks for a spoken line with each reply, for voice mode', () => {
+    expect(briefingSystemPrompt({ ...req, goal: { steps: [] } })).toMatch(/`spoken`, the same reply said aloud/);
   });
 
   it('asks for one step in the step format, knowing the steps so far', () => {

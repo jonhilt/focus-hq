@@ -14,8 +14,8 @@ A cartoon, first-person 3D starship where a crew of **Claude Code** agents works
 - Every **agent** is a separate Claude Code instance (via the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk)) with its own workstation and git worktree. The crew wear Starfleet uniforms in their division's colour (command red, operations gold, sciences blue) and come from all over the Federation.
 - Walk up behind an agent and you see their **station's display**: the live Claude Code terminal and, while they test, the **browser** they are driving.
 - Each holodeck has an **operations officer** at its **＋ New issue** stand. Give them a rough idea and they read the project's code and write it up as an issue with context and **acceptance criteria**, ready for you to edit and file.
-- Bigger or fuzzier ideas go to a **briefing** in the **observation lounge** behind the ready room. The officer reads the code, grills you one question at a time and keeps a brief on the wall screen. When you wrap up, they write one issue to the holodeck's stand, or break a bigger feature down into an epic and sub-issues for you to check and file.
-- When the route is foggy, **set a goal** there instead: no plan up front, just where you're going. The officer proposes one small step at a time, the one that tests the riskiest unknown, and you reconvene after each step lands to hear what it taught you and pick the next.
+- Bigger or fuzzier ideas become a **goal**, worked toward from the **observation lounge** behind the ready room. There's no plan up front: the officer agrees with you where you're going and what's unknown, then proposes one small step at a time, the one that tests the riskiest unknown. After each step lands you reconvene to hear what it taught you and pick the next.
+- If you'd rather plan it up front, a **briefing** still does that: the officer grills you one question at a time, keeps a brief on the wall screen, and writes one issue to the holodeck's stand or breaks a bigger feature down into an epic and sub-issues for you to check and file.
 - Each holodeck's **Kanban display** shows what's to do, who's working on what, and which **pull requests** are ready to merge.
 - The captain's **ready room** is where you create projects, connect existing repos or create blank ones, file issues and tune how much the agents may do on their own.
 - When an agent is done, Focus pushes their branch and opens a **pull request** with their summary as the description. Merge it from the board and they pack up and go home.
@@ -81,9 +81,24 @@ Every holodeck has an operations officer sitting at its **＋ New issue** stand 
 
 The officer never files, pushes or edits anything. They run as a Claude Code session with only `Read`, `Glob` and `Grep`, in `dontAsk` mode, with no settings, hooks or MCP servers loaded. They read up-to-date checkouts of the project's default branches in `~/.focus/planning/<project>/`. A draft lives in memory only, so it's lost if the office restarts. Drafting sessions don't count towards **Agents working at once**.
 
+### Goals
+
+For anything bigger or fuzzier than a one-line issue, press **🧭 Set a goal** at the stand instead of **✨ Draft it**. You can also set one from the observation lounge itself, through the door in the north wall of the ready room. You're beamed to the lounge, and the officer leaves the stand and sits down across the table from you.
+
+A goal gets no spec and no plan up front. You agree where you're going, then find the way one small step at a time.
+
+1. The officer asks a handful of questions to pin down the destination: what you want and why, who it's for, and what you'd see once it's done. They also name the **unknowns**, the assumptions that could sink the goal or change the route. The wall screen shows **Why**, **Who for**, **Done when**, **Unknowns** and the **Steps** so far, with no scope and no design. QA sits in as usual, and the engineer isn't called.
+2. **🧭 Take the first step**: the officer writes one step, the smallest change that tests the riskiest unknown or gets a thin slice working end to end. It's an issue with **Testing**, **Why now**, **What to build**, **Done when** and **Not in this step**. Edit it, or say what to change and **↻ Rewrite the step**.
+3. **📌 File this step** files the goal as an epic (on the first step only), then the step, headed `Step N toward #epic`. Within the epic's repo it's linked as a sub-issue; a step in another repo links back in its body. The goal is then **parked**: it leaves the lounge, so you can work on other goals or briefings while the crew builds the step. Assign an agent to it as you would any issue, or let auto-assign pick it up.
+4. While a goal is parked, the office keeps track of its step: the PR that closes it (or sits on its `focus/<issue>-…` branch), QA's verdict on that PR, and whether it was merged or closed. A toast says when the step has landed.
+5. **📣 Reconvene** the goal from the lounge (parked goals are listed above the form to set a goal). The officer pulls the latest code and reads the step's PR description and QA's verdict. They tell you what the step taught you, update the unknowns, and suggest the next step, or say they think the goal is met. Talk it over, then take the next step.
+6. **⏸ Park** sends a goal out of the lounge without taking a step. **✕ End goal** (or **✕ Drop** on a parked one) forgets it. Its issues stay on GitHub.
+
+Goals are saved in `~/.focus/state.json` with the officer's session, so a goal picks up where it left off after a restart.
+
 ### Briefings
 
-For anything bigger or fuzzier than a one-line issue, press **📣 Call a briefing** at the stand instead of **✨ Draft it**. You can also call one from the observation lounge itself, through the door in the north wall of the ready room. You're beamed to the lounge, and the officer leaves the stand and sits down across the table from you.
+To plan something up front instead, press **📋 Plan it up front instead** on the lounge's form. You get a briefing: scope and acceptance criteria agreed before anyone builds anything, ending in one issue or an epic with sub-issues.
 
 1. The officer reads the code, puts a first brief on the wall screen and asks their first question.
 2. They ask one question at a time, starting with the why (who it's for, what's going wrong, what success looks like), then the what. They check the code before asking, and they suggest an answer with each question so you can just say yes.
@@ -99,7 +114,7 @@ In a briefing the officer can also search and read the web (`WebSearch`, `WebFet
 
 #### Voice mode
 
-Press **🔈 Voice off** above the message box to talk a briefing through instead of reading it. It's off by default, and each browser remembers the setting.
+Press **🔈 Voice off** above the message box to talk a goal or a briefing through instead of reading it. It's off by default, and each browser remembers the setting.
 
 - **The crew speak.** Each new line is read aloud: the officer's reply as a sentence or two without file paths or code (the officer writes it in the same turn as the reply), and QA's notes, the engineer's recommendation and the officer's fixed lines as they are. The full text still goes in the log, straight away. Lines are spoken one at a time, in log order, and anything already in the log when you open the panel isn't spoken.
 - **Their voices.** [Kokoro](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX) (82M, through `kokoro-js`) runs in the office's server on this machine. The officer, QA and the engineer each have a voice of their own. The model (about 90 MB) downloads into `~/.focus/models/kokoro` the first time voice mode is switched on, or from **⚙️ Settings → Voice input → Crew voices**. Until it's ready, or if it fails to load, the browser's built-in voice stands in.
@@ -107,19 +122,6 @@ Press **🔈 Voice off** above the message box to talk a briefing through instea
 - **Keep the mic open between turns** opens the microphone once for the whole session rather than for each answer. Use it with speakers, where opening the mic each time makes the audio glitch. Leave it off with Bluetooth earphones, which drop to call quality while the mic is open. Turning voice mode off or closing the panel lets go of the mic.
 
 A briefing is saved in `~/.focus/state.json` with the officer's session, and each turn resumes that session. Nothing runs while it's your turn, and you can pick a briefing back up after a restart, along with a breakdown waiting to be filed (your unsaved edits to it aside).
-
-### Goals
-
-When the route is foggy, press **🧭 Set a goal** in the lounge instead of calling a briefing. A goal gets no spec and no plan up front. You agree where you're going, then find the way one small step at a time.
-
-1. The officer asks a handful of questions to pin down the destination: what you want and why, who it's for, and what you'd see once it's done. They also name the **unknowns**, the assumptions that could sink the goal or change the route. The wall screen shows **Why**, **Who for**, **Done when**, **Unknowns** and the **Steps** so far, with no scope and no design. QA sits in as usual, and the engineer isn't called.
-2. **🧭 Take the first step**: the officer writes one step, the smallest change that tests the riskiest unknown or gets a thin slice working end to end. It's an issue with **Testing**, **Why now**, **What to build**, **Done when** and **Not in this step**. Edit it, or say what to change and **↻ Rewrite the step**.
-3. **📌 File this step** files the goal as an epic (on the first step only), then the step, headed `Step N toward #epic`. Within the epic's repo it's linked as a sub-issue; a step in another repo links back in its body. The goal is then **parked**: it leaves the lounge, so you can hold other briefings while the crew builds the step. Assign an agent to it as you would any issue, or let auto-assign pick it up.
-4. While a goal is parked, the office keeps track of its step: the PR that closes it (or sits on its `focus/<issue>-…` branch), QA's verdict on that PR, and whether it was merged or closed. A toast says when the step has landed.
-5. **📣 Reconvene** the goal from the lounge (parked goals are listed above the form to call a briefing). The officer pulls the latest code and reads the step's PR description and QA's verdict. They tell you what the step taught you, update the unknowns, and suggest the next step, or say they think the goal is met. Talk it over, then take the next step.
-6. **⏸ Park** sends a goal out of the lounge without taking a step. **✕ End goal** (or **✕ Drop** on a parked one) forgets it. Its issues stay on GitHub.
-
-Goals are saved in `~/.focus/state.json` with the officer's session, so a goal picks up where it left off after a restart.
 
 ### Number One
 
@@ -130,7 +132,7 @@ Number One, the ship's first officer, is there to just talk: ask how something w
 - **Agents' worktrees**: readable, to answer "what has Lt. X done so far?", never to explain how the code works.
 - **Read-only**: Read, Glob, Grep, web search and fetch, and those two tools. They never file, push, edit, start agents, draft issues or call briefings. When a chat turns into work, the reply carries a suggestion (`suggest: { projectId, idea }`) for you to send to the stand or a briefing.
 
-The chat runs alongside any briefing, one turn at a time. It's saved in `~/.focus/state.json` with Number One's session, which every message resumes, so it survives a restart. **New conversation** clears the log and starts a fresh session.
+The chat runs alongside any goal or briefing, one turn at a time. It's saved in `~/.focus/state.json` with Number One's session, which every message resumes, so it survives a restart. **New conversation** clears the log and starts a fresh session.
 
 ## How an agent works an issue
 

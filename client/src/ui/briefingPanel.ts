@@ -361,20 +361,19 @@ function callForm(ui: Ui, projectId?: string): { el: HTMLElement; goals: HTMLEle
     (officer.textContent = `${plannerFor(project.value).name}, ${state.project(project.value)?.name}'s operations officer, will join you, with ${qaOfficerFor(project.value).name} from QA sitting in.`);
   project.addEventListener('change', showOfficer);
   showOfficer();
-  const idea = h('textarea', { placeholder: 'What do you want to talk through? e.g. a wishlist that follows shoppers across devices', autofocus: true });
-  const go = h('button', { class: 'btn primary' }, '📣 Call the briefing');
-  go.onclick = () => void busy(go, () => api.callBriefing(project.value, idea.value), ui.error);
+  const idea = h('textarea', { placeholder: 'Where do you want to get to? e.g. shoppers find what they saved, on any device', autofocus: true });
   const goal = h('button', { class: 'btn primary', title: 'No plan up front: agree where you’re going, then take one small step at a time' }, '🧭 Set a goal');
-  goal.onclick = () => void busy(goal, () => api.callBriefing(project.value, idea.value, true), ui.error);
+  goal.onclick = () => void busy(goal, () => api.callBriefing(project.value, idea.value), ui.error);
+  const planned = h('button', { class: 'btn small', title: 'Agree scope and acceptance criteria up front (engineering can lay out options), then wrap up as one issue or an epic with sub-issues' }, '📋 Plan it up front instead');
+  planned.onclick = () => void busy(planned, () => api.callBriefing(project.value, idea.value, false), ui.error);
   return {
     el: h('div', { class: 'briefing-call' },
       goals,
-      h('p', null, 'For anything bigger or fuzzier than a one-line issue. The officer reads the code, asks you questions one at a time and keeps a brief on the wall screen. QA chips in when the acceptance criteria change, so they can be tested. For a big change, ask engineering for options on how to build it and pick one. When you wrap up, they write one issue to the project’s stand, or break it down into an epic and sub-issues for you to check and file.'),
-      h('p', null, 'Or set a goal, when the route is foggy: agree where you’re going and what’s unknown, with no plan. The officer proposes one small step at a time, the one that tests the riskiest unknown. Once you file it, the goal is parked while the crew builds it; reconvene to hear what it taught you and pick the next.'),
+      h('p', null, 'For anything bigger or fuzzier than a one-line issue. Agree where you’re going and what’s unknown, with no plan: the officer reads the code and asks a few questions, then proposes one small step at a time, the one that tests the riskiest unknown. Once you file it, the goal is parked while the crew builds it; reconvene to hear what it taught you and pick the next. QA sits in, and tests every step.'),
       h('div', { class: 'field' }, h('label', null, 'Project'), project),
       officer,
-      h('div', { class: 'field' }, h('label', null, 'Topic'), withMic(ui, idea)),
-      h('div', { class: 'row' }, go, goal),
+      h('div', { class: 'field' }, h('label', null, 'Goal'), withMic(ui, idea)),
+      h('div', { class: 'row' }, goal, h('span', { class: 'grow' }), planned),
     ),
     goals,
   };

@@ -203,7 +203,7 @@ How to work:
 - Spend a few minutes, not an audit: you're scoping the work, not doing it. Describe the outcome and point at where it lives; don't write the implementation into the issue.
 - Don't add requirements the manager didn't ask for. Where the idea is ambiguous, pick the sensible reading and note it under Assumptions so the manager can correct it.
 - Size it for one agent in one sitting. If the idea is much bigger, write up the first useful slice and list the rest under Out of scope.
-- If the idea is much bigger than one agent can build in one sitting, or too vague to write testable acceptance criteria for, also fill in tooBig with a one-line reason. The manager is then offered a briefing to talk it through. Leave tooBig out for an ordinary, well-defined change.
+- If the idea is much bigger than one agent can build in one sitting, or too vague to write testable acceptance criteria for, also fill in tooBig with a one-line reason. The manager is then offered to take it to the observation lounge as a goal, worked toward one small step at a time. Leave tooBig out for an ordinary, well-defined change.
 - Pick the repository the work belongs in. If it spans several, pick the one with most of the work and mention the others under Context.
 
 ${ISSUE_FORMAT}
@@ -251,7 +251,7 @@ export function standDraftSchema(repos: string[]): Record<string, unknown> {
     ...schema,
     properties: {
       ...(schema.properties as Record<string, unknown>),
-      tooBig: { type: 'string', description: 'Only if the idea is too big or too vague for one issue: why, in one line, so the manager can call a briefing instead.' },
+      tooBig: { type: 'string', description: 'Only if the idea is too big or too vague for one issue: why, in one line, so the manager can set it as a goal instead.' },
     },
   };
 }
