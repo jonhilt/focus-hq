@@ -59,6 +59,9 @@ export class Builder {
     const fixed = alongX ? z0 : x0;
     const gaps = doors.map((d) => [d.at - d.width / 2, d.at + d.width / 2] as const).sort((a, b) => a[0] - b[0]);
 
+    // the dado and its stripe run a little past the wall's ends (into the corner or door frame), so their end faces
+    // don't share a plane with the wall's
+    const overrun = 0.005;
     const piece = (from: number, to: number, y0: number, y1: number, mat: string, thick: number) => {
       const len = to - from;
       if (len <= 0.001) return;
@@ -71,8 +74,8 @@ export class Builder {
     for (const [g0, g1] of [...gaps, [end, end] as const]) {
       if (g0 > cursor) {
         piece(cursor, g0, 0, WALL_H, color, WALL_T);
-        piece(cursor, g0, 0, 0.9, HULL.dado, WALL_T + 0.05);
-        piece(cursor, g0, 0.9, 0.97, HULL.stripe, WALL_T + 0.05);
+        piece(cursor - overrun, g0 + overrun, 0, 0.9, HULL.dado, WALL_T + 0.05);
+        piece(cursor - overrun, g0 + overrun, 0.9, 0.97, HULL.stripe, WALL_T + 0.05);
         if (alongX) this.collide(cursor, g0, fixed - WALL_T / 2, fixed + WALL_T / 2);
         else this.collide(fixed - WALL_T / 2, fixed + WALL_T / 2, cursor, g0);
       }

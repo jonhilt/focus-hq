@@ -12,7 +12,8 @@
     "typecheck": "tsc -p . && effect-language-service diagnostics --project tsconfig.json --format text",
     "lint": "eslint .",
     "test": "vitest run",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "zfight": "tsx scripts/zfight.ts"
   },
   "engines": {
     "node": ">=20"

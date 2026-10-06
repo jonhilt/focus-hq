@@ -48,6 +48,8 @@ function masked<T extends THREE.Material>(mat: T, ref: number): T {
   mat.stencilRef = ref;
   mat.stencilFunc = THREE.EqualStencilFunc;
   mat.stencilFail = mat.stencilZFail = mat.stencilZPass = THREE.KeepStencilOp;
+  // drawn only through its room's skin, so it can't fight with the office around it (see zfight.ts)
+  mat.userData.landscape = true;
   noOutline(mat);
   return mat;
 }

@@ -102,7 +102,7 @@ export function bookshelf(width = 1.6): THREE.Group {
   const wood = '#a0693b';
   g.add(box(0.4, 2.0, 0.05, wood, 0, 0, -width / 2));
   g.add(box(0.4, 2.0, 0.05, wood, 0, 0, width / 2));
-  g.add(box(0.05, 2.0, width, darken(wood, 0.15), 0.18, 0, 0));
+  g.add(box(0.05, 2.0, width - 0.05, darken(wood, 0.15), 0.18, 0, 0)); // between the sides, not flush with their tops
   const colors = ['#e63946', '#457b9d', '#f4a261', '#2a9d8f', '#8338ec', '#ffbe0b'];
   for (let s = 0; s < 4; s++) {
     const y = s * 0.5;
@@ -197,12 +197,13 @@ export function padd(): THREE.Group {
   g.name = 'padd';
   // its own geometries rather than box()'s shared ones, so whoever holds it can dispose them
   g.add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.34, PADD_WIDTH), toon('#2b2d42')));
-  const cap = new THREE.Mesh(new THREE.BoxGeometry(0.034, 0.03, PADD_WIDTH + 0.004), toon(LCARS.gold));
-  cap.position.y = 0.155;
+  // the cap stands clear of the body on every side, so their faces don't fight
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.03, PADD_WIDTH + 0.006), toon(LCARS.gold));
+  cap.position.y = 0.16;
   g.add(cap);
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.26), paddScreenMaterial());
   screen.rotation.y = -Math.PI / 2;
-  screen.position.set(-0.016, -0.01, 0);
+  screen.position.set(-0.0175, -0.01, 0);
   g.add(screen);
   return g;
 }

@@ -339,7 +339,7 @@ export function workstation(screen: THREE.Material, accent: string): { group: TH
     new THREE.PlaneGeometry(CONSOLE_WIDTH - 0.08, PANEL_DEPTH - 0.1).rotateX(-Math.PI / 2).rotateY(-Math.PI / 2),
     touchPanelMaterial(),
   );
-  keys.position.set(PANEL_DEPTH / 2 + 0.02, 0.041, 0);
+  keys.position.set(PANEL_DEPTH / 2 + 0.02, 0.044, 0);
   panel.add(keys);
   station.add(panel);
 
@@ -353,7 +353,7 @@ export function workstation(screen: THREE.Material, accent: string): { group: TH
   display.add(box(0.08, 0.06, dw + 0.1, accent, 0.035, dh + 0.1, 0));
   const plane = new THREE.Mesh(new THREE.PlaneGeometry(dw, dh), screen);
   plane.rotation.y = -Math.PI / 2;
-  plane.position.set(-0.002, 0.05 + dh / 2, 0);
+  plane.position.set(-0.005, 0.05 + dh / 2, 0);
   display.add(plane);
   station.add(display);
   return { group: g, screen: plane, seat };
@@ -424,7 +424,8 @@ export class SlidingDoors {
       const w = width / 2;
       leaf.add(box(w, height, 0.08, HULL.door, (s * w) / 2, 0, 0));
       leaf.add(box(w, 0.14, 0.1, HULL.dado, (s * w) / 2, height * 0.42, 0));
-      leaf.add(box(0.05, height, 0.1, HULL.frame, s * 0.025, 0, 0)); // the seam where the leaves meet
+      // the seam where the leaves meet, a little deeper than the band across them so their faces don't fight
+      leaf.add(box(0.05, height, 0.11, HULL.frame, s * 0.025, 0, 0));
       this.leaves.push(leaf);
       this.group.add(leaf);
     }
