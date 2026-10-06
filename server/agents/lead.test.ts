@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { leadFor, leadId, plannerFor, qaOfficerFor } from '../../shared/crew';
+import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadWork } from '../../shared/types';
-import { afterVerdict, applyHelperEvent, applyNote, checkNote, closeCheck, emptyNote, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, openPr, pickStation, qaVerdictNote, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
+import { afterVerdict, applyHelperEvent, applyNote, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, openPr, pickStation, qaVerdictNote, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -274,5 +274,41 @@ describe('the goal queue', () => {
     expect(moveQueued(line, 'a', -1).map((g) => g.id)).toEqual(['a', 'b', 'c']);
     expect(moveQueued(line, 'b', 1).map((g) => g.id)).toEqual(['a', 'c', 'b']);
     expect(moveQueued(line, 'zz', 1)).toBe(line);
+  });
+});
+
+describe('a goal’s own QA reviewer', () => {
+  it('is in sciences, the same for the same goal, never sharing a surname with anyone else in the room', () => {
+    for (const id of ['p1', 'shop']) {
+      const others = [leadFor(id, 'g1').name, leadFor(id, 'g2').name];
+      const reviewer = qaFor(id, 'g1', others);
+      expect(reviewer.avatar.division).toBe('sciences');
+      expect(qaFor(id, 'g1', others)).toEqual(reviewer);
+      expect([plannerFor(id), qaOfficerFor(id), ...others.map((name) => ({ name }))].map((o) => surname(o.name))).not.toContain(surname(reviewer.name));
+    }
+    expect(goalReviewerId('lead_p1_ab')).toBe('qa_lead_p1_ab');
+  });
+
+  it('reviews the pull requests its goal’s lead shipped, and nobody else’s', () => {
+    const lead = { id: 'lead_p1_ab', task: 'lead', lead: work } as Agent;
+    const developer = { id: 'agent_x', task: 'issue', pr: { number: 3 } } as Agent;
+    expect(goalOf({ repo: 'acme/api', number: 7 }, [developer, lead])).toBe(lead);
+    expect(goalOf({ repo: 'acme/api', number: 3 }, [developer, lead])).toBeUndefined();
+  });
+});
+
+describe('reviewsToStart', () => {
+  const review = (id: string, reviewer: string, at: number) => ({ id, reviewer, requestedAt: at });
+  const of = (r: { reviewer: string }) => r.reviewer;
+
+  it('starts the oldest review for each free reviewer, side by side', () => {
+    const queued = [review('a2', 'qa_goal_a', 3), review('room', 'qa_p1', 2), review('a1', 'qa_goal_a', 1), review('b1', 'qa_goal_b', 4)];
+    expect(reviewsToStart(queued, of, () => false).map((s) => `${s.review.id}→${s.reviewer}`)).toEqual(['a1→qa_goal_a', 'room→qa_p1', 'b1→qa_goal_b']);
+  });
+
+  it('leaves a busy reviewer’s reviews waiting', () => {
+    const queued = [review('a1', 'qa_goal_a', 1), review('b1', 'qa_goal_b', 2)];
+    expect(reviewsToStart(queued, of, (r) => r === 'qa_goal_a').map((s) => s.review.id)).toEqual(['b1']);
+    expect(reviewsToStart([], of, () => false)).toEqual([]);
   });
 });

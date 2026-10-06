@@ -202,7 +202,12 @@ export class OfficeState {
 
   /** The room's QA officer's agent record, while they have one. */
   qaAgent(projectId: string): Agent | undefined {
-    return this.agentsIn(projectId).find((a) => a.task === 'review');
+    return this.agentsIn(projectId).find((a) => a.task === 'review' && !a.reviewFor);
+  }
+
+  /** The goals' own QA reviewers in the room, while they have a record. */
+  reviewersIn(projectId: string): Agent[] {
+    return this.agentsIn(projectId).filter((a) => a.task === 'review' && a.reviewFor);
   }
 
   reviewsIn(projectId: string): QaReview[] {

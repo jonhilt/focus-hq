@@ -67,6 +67,8 @@ export interface Project {
   autoMerge?: boolean;
   /** What QA must check on every PR of this project, on top of the usual review. Goes into the QA officer's prompt. */
   qaBrief?: string;
+  /** How hard the room's QA (its officer, and each goal's reviewer) thinks. Missing = the model's default. */
+  qaEffort?: Effort;
   /** Goals waiting for a free team station, first up first. They never start by themselves. */
   goalQueue?: QueuedGoal[];
   /** Goals that have been closed, newest first (a few dozen at most). */
@@ -323,6 +325,8 @@ export interface Agent {
   lead?: LeadWork;
   /** The subagents the lead has working for it right now, and any that just finished ('lead' task only). */
   helpers?: Helper[];
+  /** A goal's own QA reviewer: the goal (its lead's id) whose pull requests they review. Missing on the room's QA officer. */
+  reviewFor?: string;
   /** The task list the agent keeps for itself with Claude Code's task tools, as it stands. Missing until it keeps one. */
   tasks?: ClaudeTask[];
   /** For a 'conflicts' or 'fix' task, the pull request itself (GitHub numbers issues and PRs alike). */

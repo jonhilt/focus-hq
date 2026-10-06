@@ -1,4 +1,4 @@
-import type { Agent, Effort, GoalNote, GoalRecord, Helper, LeadPr, LeadWork, QaReport, QueuedGoal, Settings } from '../../shared/types';
+import type { Agent, Effort, GoalNote, GoalRecord, Helper, LeadPr, LeadWork, QaReport, QaReview, QueuedGoal, Settings } from '../../shared/types';
 import { TEAM_STATIONS } from '../../shared/types';
 import type { HelperEvent } from './types';
 import { slugify } from '../util';
@@ -226,6 +226,29 @@ export function workspaceNote(work: LeadWork, branch: string): string {
 /** What the lead hears back after shipping: each pull request opened or updated. */
 export function shipped(lines: string[]): string {
   return `${lines.join('\n')}\n\nThe room's QA officer reviews each pull request, and you'll hear their verdict. Tell the captain what's in the slice and what you'd do next.`;
+}
+
+/** A goal's own QA reviewer, reused from review to review like the room's QA officer. */
+export const goalReviewerId = (leadId: string) => `qa_${leadId}`;
+
+/** The goal whose lead shipped this pull request, if one did: its own reviewer reviews it. */
+export const goalOf = (review: Pick<QaReview, 'repo' | 'number'>, leads: Agent[]): Agent | undefined =>
+  leads.find((a) => a.task === 'lead' && a.lead?.prs.some((p) => p.repo === review.repo && p.number === review.number));
+
+/**
+ * The reviews that can start now, oldest first: each reviewer (`reviewerOf`) takes at most one, and only when they
+ * aren't already busy with another. Goals' reviewers and the room's QA officer work side by side.
+ */
+export function reviewsToStart<R extends { requestedAt: number }>(queued: R[], reviewerOf: (review: R) => string, busy: (reviewer: string) => boolean): { review: R; reviewer: string }[] {
+  const taken = new Set<string>();
+  const start: { review: R; reviewer: string }[] = [];
+  for (const review of [...queued].sort((a, b) => a.requestedAt - b.requestedAt)) {
+    const reviewer = reviewerOf(review);
+    if (taken.has(reviewer) || busy(reviewer)) continue;
+    taken.add(reviewer);
+    start.push({ review, reviewer });
+  }
+  return start;
 }
 
 /** How many times QA can fail one of the lead's pull requests before the lead stops being sent back to fix it. */

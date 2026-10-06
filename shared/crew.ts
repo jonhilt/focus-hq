@@ -89,9 +89,25 @@ export const leadId = (projectId: string, suffix: string) => `lead_${projectId}_
 export function leadFor(projectId: string, goalId: string, others: string[] = []): Planner {
   const h = hash(`lead:${projectId}:${goalId}`);
   const avatar = rollAvatar(seeded(h), 'command', 'lieutenant');
+  return { name: `${RANK_TITLE.lieutenant} ${freeSurname(projectId, h, others)}`, avatar };
+}
+
+/**
+ * A goal's own QA reviewer, who comes to its lead's table to review the goal's pull requests while the room's QA
+ * officer looks after everyone else's. Sciences, like the QA officer; never sharing a surname with the room's officers
+ * or `others` (the names of everyone else at its team stations).
+ */
+export function qaFor(projectId: string, goalId: string, others: string[] = []): Planner {
+  const h = hash(`qa:${projectId}:${goalId}`);
+  const avatar = rollAvatar(seeded(h), 'sciences', (h >>> 1) % 3 === 0 ? 'ensign' : 'lieutenant');
+  return { name: `${RANK_TITLE[avatar.rank]} ${freeSurname(projectId, h, others)}`, avatar };
+}
+
+/** A surname nobody in the room has: not its officers', nor any of `others`. */
+function freeSurname(projectId: string, h: number, others: string[]): string {
   const taken = new Set([plannerFor(projectId).name, qaOfficerFor(projectId).name, ...others].map((n) => n.split(' ').at(-1)));
   const free = SURNAMES.filter((s) => !taken.has(s));
-  return { name: `${RANK_TITLE.lieutenant} ${(free.length ? free : SURNAMES)[(h >>> 3) % (free.length || SURNAMES.length)]}`, avatar };
+  return (free.length ? free : SURNAMES)[(h >>> 3) % (free.length || SURNAMES.length)];
 }
 
 /** A helper the lead brings to the group desk: an ensign from sciences or operations, the same for the same task. */

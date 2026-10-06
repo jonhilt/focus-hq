@@ -1,4 +1,4 @@
-import { helperFor, leadFor, leadId, plannerFor, qaOfficerFor, randomAvatar } from '../../shared/crew';
+import { helperFor, leadFor, leadId, plannerFor, qaFor, qaOfficerFor, randomAvatar } from '../../shared/crew';
 import { autoQaFor, autoSendBackFor, prKey, sameCommit } from '../../shared/qa';
 import { afterTriage, triageLabel, type TriageResult, type TriageStep, whenStuck } from '../../shared/triage';
 import type { Agent, AgentStatus, BrowserFrame, Effort, FailedCheck, FixFor, PermissionRequest, PullRequest, QaReport, QaReview, QaScreenshot, QueuedGoal, TermLine } from '../../shared/types';
@@ -8,7 +8,7 @@ import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
 import { afterCloudRun, carryOnInNewSession, fallBackToLocal } from './cloud';
-import { afterVerdict, applyHelperEvent, applyNote, closeCheck, fileGoal, goalEffort, goalRecord, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, shipped, shipPlan, sliceBranch, sliceLanded, workspaceNote } from './lead';
+import { afterVerdict, applyHelperEvent, applyNote, closeCheck, fileGoal, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reviewsToStart, shipped, shipPlan, sliceBranch, sliceLanded, workspaceNote } from './lead';
 import { repoFolders } from './planner';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
 import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
@@ -631,6 +631,13 @@ export class AgentManager {
     project.goals = fileGoal(project.goals ?? [], goalRecord(agent, Date.now()));
     this.projectsChanged();
     await this.dismiss(id);
+    // the goal's reviewer goes home with its lead; a review they were on, or still waiting, goes to the room's QA officer
+    const reviewer = goalReviewerId(id);
+    for (const r of this.store.reviews.values()) {
+      if (r.agentId === reviewer && (r.status === 'testing' || r.status === 'queued')) this.putReview({ ...r, status: 'queued', agentId: undefined });
+    }
+    await this.dismiss(reviewer);
+    this.nextReview(agent.projectId);
     const next = nextGoal(project.goalQueue);
     this.hub.toast('success', next
       ? `🏁 “${work.title}” is closed. Team station ${work.station + 1} is free: next up is “${goalTitle(next.text)}” (L to start it)`
@@ -811,30 +818,48 @@ export class AgentManager {
     return review;
   }
 
-  /** Seats the room's QA officer on the oldest queued review, once they're free. */
+  /**
+   * Seats reviewers on queued reviews, oldest first, as they come free: a goal's pull requests go to the goal's own
+   * reviewer, at its lead's table, and everyone else's to the room's QA officer, so the room's goals are reviewed side by
+   * side.
+   */
   private nextReview(projectId: string): void {
-    const id = qaAgentId(projectId);
+    const leads = this.store.agentsIn(projectId).filter((a) => a.task === 'lead');
+    const queued = [...this.store.reviews.values()].filter((r) => r.projectId === projectId && r.status === 'queued');
+    const reviewerOf = (r: QaReview) => {
+      const goal = goalOf(r, leads);
+      return goal ? goalReviewerId(goal.id) : qaAgentId(projectId);
+    };
+    const busy = (id: string) => {
+      const reviewer = this.store.agents.get(id);
+      return !!reviewer && !FINISHED.includes(reviewer.status);
+    };
+    for (const { review, reviewer } of reviewsToStart(queued, reviewerOf, busy)) this.seatReviewer(projectId, reviewer, review, goalOf(review, leads));
+    this.schedule();
+  }
+
+  /** Puts the room's QA officer, or `goal`'s own reviewer, on `review`: the same person every time. */
+  private seatReviewer(projectId: string, id: string, review: QaReview, goal: Agent | undefined): void {
+    const project = this.store.project(projectId);
     const current = this.store.agents.get(id);
-    if (current && !FINISHED.includes(current.status)) return;
-    const next = [...this.store.reviews.values()]
-      .filter((r) => r.projectId === projectId && r.status === 'queued')
-      .sort((a, b) => a.requestedAt - b.requestedAt)[0];
-    if (!next) return;
-    const officer = qaOfficerFor(projectId);
-    const url = `https://github.com/${next.repo}/pull/${next.number}`;
+    const others = this.store.agentsIn(projectId).filter((a) => a.id !== id && (a.task === 'lead' || a.reviewFor)).map((a) => a.name);
+    const crew = current ?? (goal ? qaFor(projectId, goal.id, others) : qaOfficerFor(projectId));
+    const url = `https://github.com/${review.repo}/pull/${review.number}`;
     const agent: Agent = {
       id,
-      name: officer.name,
-      avatar: officer.avatar,
+      name: crew.name,
+      avatar: crew.avatar,
       projectId,
-      repo: next.repo,
+      repo: review.repo,
       task: 'review',
+      reviewFor: goal?.id,
       // GitHub numbers pull requests and issues alike; a QA officer's "issue" is the PR under test
-      issue: { number: next.number, title: next.title, url },
+      issue: { number: review.number, title: review.title, url },
+      effort: project.qaEffort,
       desk: QA_DESK,
       status: 'queued',
       activity: 'Waiting for a free slot',
-      branch: `qa/pr-${next.number}`,
+      branch: `qa/pr-${review.number}`,
       baseBranch: current?.baseBranch ?? 'main',
       costUsd: 0,
       startedAt: Date.now(),
@@ -842,9 +867,9 @@ export class AgentManager {
     this.runtimes.set(id, { inbox: [], notes: [], nudged: false, busy: false });
     this.store.putAgent(agent);
     this.hub.send({ type: 'agent', agent });
-    this.print(agent, [{ kind: 'system', text: `──────── ✻ ${officer.name} picks up ${next.repo}#${next.number} for QA: ${next.title}` }]);
-    this.putReview({ ...next, agentId: id });
-    this.schedule();
+    const where = goal ? ` at ${goal.name}'s table, for “${goal.lead?.title ?? 'their goal'}”` : '';
+    this.print(agent, [{ kind: 'system', text: `──────── ✻ ${crew.name} picks up ${review.repo}#${review.number} for QA${where}: ${review.title}` }]);
+    this.putReview({ ...review, agentId: id });
   }
 
   private async launchReview(agent: Agent): Promise<void> {
@@ -1167,7 +1192,7 @@ export class AgentManager {
     this.triageAborts.get(prKey(repo, number))?.abort();
     this.store.removeReview(repo, number);
     this.hub.send({ type: 'review-removed', repo, number });
-    const qa = this.store.agents.get(qaAgentId(review.projectId));
+    const qa = review.agentId ? this.store.agents.get(review.agentId) : undefined;
     if (qa && qa.repo === repo && qa.issue.number === number && !FINISHED.includes(qa.status)) this.stop(qa.id);
     this.nextReview(review.projectId);
   }

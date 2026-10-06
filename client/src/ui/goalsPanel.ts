@@ -19,6 +19,12 @@ const doing = (lead: Agent) => {
   return t ? t.activeForm || t.subject : '';
 };
 
+/** The goal's own QA reviewer, while they're on one of its pull requests. */
+function reviewing(lead: Agent): HTMLElement | null {
+  const reviewer = state.reviewersIn(lead.projectId).find((r) => r.reviewFor === lead.id && !['done', 'error', 'stopped'].includes(r.status));
+  return reviewer ? h('small', { class: 'muted', style: 'display:block' }, `🔍 ${reviewer.name} is reviewing ${reviewer.repo.split('/')[1]} #${reviewer.issue.number}: ${reviewer.activity}`) : null;
+}
+
 /** One goal under way: its lead, what they're doing, their note and its pull requests. */
 function goalCard(ui: Ui, lead: Agent): HTMLElement {
   const work = lead.lead;
@@ -36,6 +42,7 @@ function goalCard(ui: Ui, lead: Agent): HTMLElement {
     ),
     work?.closing ? h('p', { class: 'goal-closing' }, `🏁 Ready to wrap up: ${work.closing.reason}`) : null,
     noteView(work?.note, true),
+    reviewing(lead),
     lead.tasks?.length ? h('small', { class: 'muted' }, `📋 Claude's tasks: ${lead.tasks.filter((t) => t.status === 'completed').length}/${lead.tasks.length} done${doing(lead) ? ` · ▶ ${doing(lead)}` : ''}`) : null,
     h('div', { class: 'row', style: 'margin-top:8px' },
       h('span', { class: 'chip' }, `${statusIcon(lead)} ${lead.status}`),
@@ -137,7 +144,7 @@ export function openGoalsPanel(ui: Ui, projectId: string): void {
   };
   ui.panels.open({ title: `🧭 ${project.name} – goals`, body, accent: project.color });
   render();
-  ui.panels.own(state.on('agent', (a) => a.projectId === projectId && a.task === 'lead' && render()));
+  ui.panels.own(state.on('agent', (a) => a.projectId === projectId && (a.task === 'lead' || !!a.reviewFor) && render()));
   ui.panels.own(state.on('agent-removed', (a) => a.projectId === projectId && render()));
   ui.panels.own(state.on('projects', render));
 }

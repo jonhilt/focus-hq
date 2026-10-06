@@ -4,7 +4,7 @@ import path from 'node:path';
 import { qaOfficerFor, randomAvatar } from '../shared/crew';
 import { prKey } from '../shared/qa';
 import type { Agent, Board, BrowserFrame, ClosedPr, NumberOneChat, Project, QaReview, Settings, TermLine } from '../shared/types';
-import { ACTIVE_STATUSES, DESKS_PER_ROOM, ROOM_THEMES, type RoomTheme } from '../shared/types';
+import { ACTIVE_STATUSES, DESKS_PER_ROOM, EFFORT_LEVELS, ROOM_THEMES, type RoomTheme } from '../shared/types';
 import { paths } from './config';
 import { upgradeLead } from './agents/lead';
 import { newId } from './util';
@@ -150,7 +150,7 @@ export class Store {
 
   updateProject(
     id: string,
-    patch: Partial<Pick<Project, 'name' | 'color' | 'theme' | 'maxAgents' | 'autoAssign' | 'autoLabel' | 'onlyMyPrs' | 'preview' | 'autoQa' | 'autoSendBack' | 'autoMerge' | 'qaBrief'>>,
+    patch: Partial<Pick<Project, 'name' | 'color' | 'theme' | 'maxAgents' | 'autoAssign' | 'autoLabel' | 'onlyMyPrs' | 'preview' | 'autoQa' | 'autoSendBack' | 'autoMerge' | 'qaBrief' | 'qaEffort'>>,
   ): Project {
     const project = this.project(id);
     if (patch.name !== undefined) project.name = patch.name.trim() || project.name;
@@ -165,6 +165,8 @@ export class Store {
     if (patch.autoSendBack !== undefined) project.autoSendBack = patch.autoSendBack === true;
     if (patch.autoMerge !== undefined) project.autoMerge = patch.autoMerge === true;
     if (patch.qaBrief !== undefined) project.qaBrief = String(patch.qaBrief).slice(0, 4000);
+    // an empty choice goes back to the model's default
+    if (patch.qaEffort !== undefined) project.qaEffort = EFFORT_LEVELS.find((e) => e === patch.qaEffort);
     if (patch.autoLabel !== undefined) project.autoLabel = patch.autoLabel.trim();
     if (patch.onlyMyPrs !== undefined) project.onlyMyPrs = !!patch.onlyMyPrs;
     if (patch.preview !== undefined) {
