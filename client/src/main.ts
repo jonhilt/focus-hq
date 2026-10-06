@@ -229,6 +229,8 @@ async function main() {
       const name = plannerFor(b.projectId).name;
       if (b.status === 'waiting' && b.messages.at(-1)?.from === 'engineer') {
         hud.toast('info', `🔧 ${chiefEngineer().name} has options for you in the observation lounge`, { label: 'Look', run: () => ui.openBriefing() });
+      } else if (b.status === 'waiting' && b.goal?.proposal) {
+        hud.toast('info', `🧭 ${name} has a step for you to file in the observation lounge`, { label: 'Look', run: () => ui.openBriefing() });
       } else if (b.status === 'waiting') hud.toast('info', `🖖 ${name} has a question for you in the observation lounge`, { label: 'Answer', run: () => ui.openBriefing() });
       if (b.status === 'failed') hud.toast('error', `${name} lost the thread of the briefing: ${b.error ?? ''}`, { label: 'Open', run: () => ui.openBriefing() });
     }

@@ -54,6 +54,8 @@ async function main() {
   const filer: IssueFiler = {
     file: (projectId, repo, title, body) => office.fileIssue(projectId, repo, title, body),
     addSubIssue: (repo, parent, child) => github.addSubIssue(repo, parent, child),
+    pullRequestBody: (repo, number) => github.getPullRequest(repo, number).then((pr) => pr.body),
+    pullRequestState: (repo, number) => github.pullRequestState(repo, number),
   };
   const briefings = config.demo
     ? new Briefings(store, hub, planner, new DemoOfficer(), new DemoBriefingQa(), filer, new DemoEngineer())

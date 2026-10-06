@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { qaOfficerFor } from '../../shared/crew';
-import { type Breakdown, type Brief, type Briefing, EMPTY_BRIEF, type EngineeringReport, type Issue, type Project } from '../../shared/types';
+import { type Board, type Breakdown, type Brief, type Briefing, EMPTY_BRIEF, type EngineeringReport, type Issue, type Project, type PullRequest, type QaReview } from '../../shared/types';
 import { Hub } from '../hub';
 import { afterRestart, Store, type StoredBriefing } from '../store';
 import {
@@ -16,6 +16,8 @@ import {
   Briefings,
   briefingSystemPrompt,
   mergeBrief,
+  type OfficerTurn,
+  STEP_FORMAT,
 } from './briefing';
 import type { BriefingEngineer } from './engineering';
 import type { IssuePlanner } from './planner';
@@ -295,6 +297,8 @@ describe('Briefings breaking down into an epic and sub-issues', () => {
         return { repo, number: next++, title, body } as Issue;
       }),
       addSubIssue: vi.fn<IssueFiler['addSubIssue']>(async () => {}),
+      pullRequestBody: vi.fn<IssueFiler['pullRequestBody']>(async () => ''),
+      pullRequestState: vi.fn<IssueFiler['pullRequestState']>(async () => 'OPEN'),
     };
     const planner = { deliver: vi.fn(() => ({ title: 'Wishlists' })) };
     const briefings = new Briefings(store, new Hub(), planner as unknown as IssuePlanner, officer, { check: async () => ({}) }, filer, {} as BriefingEngineer);
@@ -551,5 +555,238 @@ describe('Briefings asking engineering', () => {
     const merged = mergeBrief({ ...EMPTY_BRIEF, approach: report.options[0] }, { summary: 'A wishlist' });
     expect(merged.approach).toEqual(report.options[0]);
     expect(mergeBrief(EMPTY_BRIEF, { summary: 'x' })).not.toHaveProperty('approach');
+  });
+});
+
+describe('Briefings about a goal, one step at a time', () => {
+  const project: Project = { id: 'p1', name: 'Shop', repos: ['acme/shop', 'acme/api'] } as Project;
+  const proposal = { repo: 'acme/shop', title: 'Save an item, thinly', body: '## Testing\n\nWhether the cart can hold it' };
+
+  function setup() {
+    const store = new Store(false);
+    store.projects = [project];
+    const turns: OfficerTurn[] = [];
+    const officer: BriefingOfficer = {
+      turn: async (r, hooks) => {
+        turns.push(r);
+        if (r.kind === 'open') hooks.brief({ ...r.brief, summary: 'Shoppers save items for later', acceptance: ['A saved item is there next visit'], openQuestions: ['Can the cart hold it?'] });
+        return { text: `Reply to ${r.kind}`, sessionId: 'officer-1', step: r.kind === 'step' ? structuredClone(proposal) : undefined };
+      },
+    };
+    let next = 40;
+    const filed: { repo: string; title: string; body: string }[] = [];
+    const filer = {
+      file: vi.fn<IssueFiler['file']>(async (_p, repo, title, body) => {
+        filed.push({ repo, title, body });
+        const number = next++;
+        return { repo, number, title, body, url: `https://github.com/${repo}/issues/${number}` } as Issue;
+      }),
+      addSubIssue: vi.fn<IssueFiler['addSubIssue']>(async () => {}),
+      pullRequestBody: vi.fn<IssueFiler['pullRequestBody']>(async () => 'Stored saved items on the cart. Totals skip them.'),
+      pullRequestState: vi.fn<IssueFiler['pullRequestState']>(async () => 'MERGED'),
+    };
+    const hub = new Hub();
+    const toasts: string[] = [];
+    hub.toast = (_level, text) => void toasts.push(text);
+    const briefings = new Briefings(store, hub, {} as IssuePlanner, officer, { check: async () => ({}) }, filer, {} as BriefingEngineer);
+    const status = (s: Briefing['status']) => vi.waitFor(() => expect(briefings.current()?.status).toBe(s));
+    const parked = () => vi.waitFor(() => expect(briefings.goals()[0]?.status).toBe('parked'));
+    return { store, briefings, turns, filer, filed, toasts, status, parked };
+  }
+
+  async function proposed() {
+    const s = setup();
+    s.briefings.call('p1', 'save for later', true);
+    await s.status('waiting');
+    s.briefings.wrapUp('step');
+    await vi.waitFor(() => expect(s.briefings.current()?.goal?.proposal).toBeDefined());
+    return s;
+  }
+
+  async function firstStepFiled() {
+    const s = await proposed();
+    s.briefings.fileStep(proposal);
+    await s.parked();
+    return s;
+  }
+
+  const board = (prs: Partial<PullRequest>[]): Board => ({ projectId: 'p1', issues: [], prs: prs.map((p) => ({ repo: 'acme/shop', branch: 'x', closes: [], url: `pr${p.number}`, ...p }) as PullRequest), updatedAt: 0 });
+
+  it('proposes one step for the manager to edit and file, filing nothing yet', async () => {
+    const { briefings, turns, filer } = await proposed();
+    expect(turns.map((t) => t.kind)).toEqual(['open', 'step']);
+    expect(turns[0].goal?.steps).toEqual([]);
+    expect(briefings.current()).toMatchObject({ status: 'waiting', goal: { proposal } });
+    expect(filer.file).not.toHaveBeenCalled();
+  });
+
+  it('only takes steps: no wrapping a goal up, and no steps outside one', async () => {
+    const { briefings, status } = setup();
+    briefings.call('p1', 'save for later', true);
+    await status('waiting');
+    expect(() => briefings.wrapUp('one')).toThrow(/one step at a time: take a step/);
+    briefings.end();
+    briefings.call('p1', 'a wishlist');
+    await status('waiting');
+    expect(() => briefings.wrapUp('step')).toThrow(/Only a goal/);
+    expect(() => briefings.fileStep(proposal)).toThrow(/no step to file/);
+  });
+
+  it('files the goal, then the step as its sub-issue with the manager’s edits, and parks the goal', async () => {
+    const { briefings, filed, filer, toasts } = await proposed();
+    briefings.fileStep({ title: 'Save one item', body: 'edited' });
+    await vi.waitFor(() => expect(briefings.goals()).toHaveLength(1));
+    expect(filed.map((f) => f.title)).toEqual(['Shoppers save items for later', 'Save one item']);
+    expect(filed[0].body).toContain('## Unknowns\n\n- Can the cart hold it?');
+    expect(filed[1].body).toBe('Step 1 toward #40: Shoppers save items for later\n\nedited');
+    expect(filer.addSubIssue).toHaveBeenCalledWith('acme/shop', 40, 41);
+    expect(briefings.current()).toBeNull();
+    expect(briefings.goals()[0]).toMatchObject({ status: 'parked', goal: { epic: { number: 40 }, steps: [{ number: 41, title: 'Save one item' }] } });
+    expect(briefings.goals()[0].goal!.proposal).toBeUndefined();
+    expect(toasts.at(-1)).toContain('acme/shop#41');
+  });
+
+  it('frees the lounge for another briefing while the goal is parked', async () => {
+    const { briefings, status } = await firstStepFiled();
+    briefings.call('p1', 'a wishlist');
+    await status('waiting');
+    expect(() => briefings.reconvene(briefings.goals()[0].id)).toThrow(/still in the lounge with a briefing/);
+  });
+
+  it('keeps track of the step’s PR, QA’s verdict on it, and its merge', async () => {
+    const { briefings, store, filer, toasts } = await firstStepFiled();
+    await briefings.track('p1', board([{ number: 42, closes: [41] }]));
+    expect(briefings.goals()[0].goal!.steps[0].pr).toEqual({ number: 42, url: 'pr42' });
+    store.reviews.set('acme/shop#42', { report: { verdict: 'pass', summary: 'Saved items survive a reload' } } as QaReview);
+    await briefings.track('p1', board([{ number: 42 }]));
+    expect(briefings.goals()[0].goal!.steps[0].qa).toEqual({ verdict: 'pass', summary: 'Saved items survive a reload' });
+    expect(filer.pullRequestState).not.toHaveBeenCalled();
+    await briefings.track('p1', board([]));
+    expect(filer.pullRequestState).toHaveBeenCalledWith('acme/shop', 42);
+    expect(briefings.goals()[0].goal!.steps[0].outcome).toBe('merged');
+    expect(toasts.at(-1)).toMatch(/Step 1 toward “Shoppers save items for later” merged: reconvene/);
+  });
+
+  it('leaves a step alone while its repo didn’t load', async () => {
+    const { briefings } = await firstStepFiled();
+    await briefings.track('p1', { ...board([{ number: 42, closes: [41] }]), error: 'acme/shop: rate limited' });
+    expect(briefings.goals()[0].goal!.steps[0].pr).toBeUndefined();
+  });
+
+  it('reconvenes with how the step went, its PR’s description included, then takes the next step without filing the goal again', async () => {
+    const { briefings, turns, filed, filer, status } = await firstStepFiled();
+    await briefings.track('p1', board([{ number: 42, closes: [41] }]));
+    await briefings.track('p1', board([]));
+    briefings.reconvene(briefings.goals()[0].id);
+    expect(briefings.goals()).toEqual([]);
+    await status('waiting');
+    const reconvened = turns.at(-1)!;
+    expect(reconvened.kind).toBe('reconvene');
+    expect(reconvened.report).toContain('Step 1: acme/shop#41 “Save an item, thinly”, PR #42 merged');
+    expect(reconvened.report).toContain('Stored saved items on the cart. Totals skip them.');
+    expect(filer.pullRequestBody).toHaveBeenCalledWith('acme/shop', 42);
+    expect(briefings.current()!.messages.at(-1)).toMatchObject({ from: 'officer', text: 'Reply to reconvene' });
+
+    briefings.wrapUp('step');
+    await vi.waitFor(() => expect(briefings.current()?.goal?.proposal).toBeDefined());
+    briefings.fileStep({ ...proposal, title: 'Show saved items' });
+    await vi.waitFor(() => expect(briefings.goals()[0]?.goal?.steps).toHaveLength(2));
+    expect(filed.map((f) => f.title)).toEqual(['Shoppers save items for later', 'Save an item, thinly', 'Show saved items']);
+    expect(filed[2].body).toMatch(/^Step 2 toward #40/);
+  });
+
+  it('files a step in another repo without linking it as a sub-issue, which GitHub can’t across repos', async () => {
+    const { briefings, store, filer, filed, status } = await firstStepFiled();
+    briefings.reconvene(briefings.goals()[0].id);
+    await status('waiting');
+    briefings.wrapUp('step');
+    await vi.waitFor(() => expect(briefings.current()?.goal?.proposal).toBeDefined());
+    store.briefing!.goal!.proposal!.repo = 'acme/api';
+    briefings.fileStep({ title: 'Store saved items', body: 'api' });
+    await vi.waitFor(() => expect(briefings.goals()[0]?.goal?.steps).toHaveLength(2));
+    expect(filed.at(-1)).toMatchObject({ repo: 'acme/api', body: 'Step 2 toward acme/shop#40: Shoppers save items for later\n\napi' });
+    expect(filer.addSubIssue).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the filed goal when the step fails to file, so filing again files only the step', async () => {
+    const { briefings, filer, filed, status } = await proposed();
+    filer.file.mockImplementationOnce(async (_p, repo, title, body) => {
+      filed.push({ repo, title, body });
+      return { repo, number: 40, title, body, url: 'e' } as Issue;
+    });
+    filer.file.mockImplementationOnce(async () => {
+      throw new Error('rate limited');
+    });
+    briefings.fileStep(proposal);
+    await status('failed');
+    expect(briefings.current()!.error).toMatch(/rate limited.*File it again/);
+    expect(briefings.current()!.goal!.epic!.number).toBe(40);
+    briefings.fileStep(proposal);
+    await vi.waitFor(() => expect(briefings.goals()).toHaveLength(1));
+    expect(filed.map((f) => f.title)).toEqual(['Shoppers save items for later', 'Save an item, thinly']);
+  });
+
+  it('parks a goal without a step, and reconvenes it with nothing to report', async () => {
+    const { briefings, turns, status } = setup();
+    briefings.call('p1', 'save for later', true);
+    await status('waiting');
+    briefings.park();
+    expect(briefings.goals()[0]).toMatchObject({ status: 'parked', activity: 'Parked before the first step' });
+    briefings.reconvene(briefings.goals()[0].id);
+    await status('waiting');
+    expect(turns.at(-1)).toMatchObject({ kind: 'reconvene', report: 'No step has been filed yet.' });
+  });
+
+  it('only parks a goal', async () => {
+    const { briefings, status } = setup();
+    briefings.call('p1', 'a wishlist');
+    await status('waiting');
+    expect(() => briefings.park()).toThrow(/Only a goal can be parked/);
+  });
+
+  it('forgets a dropped goal, and the goals of a deleted project', async () => {
+    const { briefings } = await firstStepFiled();
+    briefings.projectRemoved('p1');
+    expect(briefings.goals()).toEqual([]);
+    const again = await firstStepFiled();
+    again.briefings.dropGoal(again.briefings.goals()[0].id);
+    expect(again.briefings.goals()).toEqual([]);
+  });
+
+  it('picks up after a restart mid-filing as the manager’s turn, to file the step again', () => {
+    const saved = { id: 'b', status: 'filing', goal: { steps: [], epic: { repo: 'acme/shop', number: 40, title: 'g', url: '' } }, brief: EMPTY_BRIEF, messages: [] } as unknown as StoredBriefing;
+    expect(afterRestart(saved)).toMatchObject({ status: 'failed', error: expect.stringContaining('File it again') as unknown, goal: { epic: { number: 40 } } });
+  });
+});
+
+describe('goal prompts', () => {
+  const goal = { steps: [{ repo: 'acme/shop', number: 41, title: 'Save one item', url: '', filedAt: 0, pr: { number: 42, url: '' }, outcome: 'merged' as const }] };
+
+  it('agrees the destination and the unknowns, with no plan up front', () => {
+    const prompt = briefingSystemPrompt({ ...req, goal: { steps: [] } });
+    expect(prompt).toMatch(/not a spec/);
+    expect(prompt).toMatch(/Name the unknowns/);
+    expect(prompt).toMatch(/Don't design the solution, list tasks or map the route/);
+    expect(prompt).toMatch(/Never plan past the next step/);
+    expect(prompt).toContain(qaOfficerFor('p1').name);
+    expect(prompt).not.toContain('Diagrams');
+  });
+
+  it('asks for one step in the step format, knowing the steps so far', () => {
+    const prompt = briefingPrompt({ kind: 'step', idea: 'save for later', brief: EMPTY_BRIEF, messages: [], resumeSessionId: 's1', goal });
+    expect(prompt).toContain(STEP_FORMAT);
+    expect(prompt).toContain('Step 1: acme/shop#41 “Save one item”, PR #42 merged');
+    expect(prompt).toMatch(/the next step .*one step, not a plan/);
+  });
+
+  it('opens a goal on where we’re going', () => {
+    expect(briefingPrompt({ kind: 'open', idea: 'save for later', brief: EMPTY_BRIEF, messages: [], goal: { steps: [] } })).toMatch(/The manager has a goal/);
+  });
+
+  it('reconvenes on the report, asking what the step taught us', () => {
+    const prompt = briefingPrompt({ kind: 'reconvene', idea: 'x', brief: EMPTY_BRIEF, messages: [], resumeSessionId: 's1', goal, report: 'Steps so far: …' });
+    expect(prompt).toContain('Steps so far: …');
+    expect(prompt).toMatch(/what it taught you/);
+    expect(prompt).toMatch(/goal is met/);
   });
 });

@@ -30,12 +30,15 @@ export function afterRestart(saved: StoredBriefing): StoredBriefing {
         messages: [...briefing.messages, { from: 'system', text: 'Engineering was interrupted when Focus shut down. Ask again.', at: Date.now() }],
       };
     case 'filing':
+      // a goal's epic kept its number, so filing the step again doesn't file the goal twice
+      if (briefing.goal) return { ...briefing, status: 'failed', activity: 'Interrupted', error: 'Interrupted when Focus shut down while filing the step. File it again to carry on.' };
       // whatever was filed kept its number, so filing again carries on
       return { ...briefing, status: 'reviewing', activity: 'Waiting for you to file the breakdown', error: 'Interrupted when Focus shut down. File all again to carry on.' };
     case 'waiting':
     case 'failed':
     case 'reviewing':
     case 'done':
+    case 'parked':
       return briefing;
   }
 }
@@ -45,6 +48,7 @@ interface PersistedState {
   projects: Project[];
   agents: Agent[];
   briefing?: StoredBriefing | null;
+  goals?: StoredBriefing[];
   reviews?: QaReview[];
   closedPrs?: ClosedPr[];
 }
@@ -71,6 +75,8 @@ export class Store {
   browser = new Map<string, BrowserFrame>();
   /** The briefing in the observation lounge, if one is in session. */
   briefing: StoredBriefing | null = null;
+  /** Goals parked out of the lounge while the crew builds their current step. */
+  goals: StoredBriefing[] = [];
   /** The latest QA review per pull request (by prKey). */
   reviews = new Map<string, QaReview>();
   /** PRs the operations officer closed as the wrong approach, by prKey of the issue they were for. */
@@ -89,6 +95,7 @@ export class Store {
     this.settings = { ...DEFAULT_SETTINGS, ...raw.settings };
     this.projects = raw.projects ?? [];
     this.briefing = raw.briefing ? afterRestart(raw.briefing) : null;
+    this.goals = (raw.goals ?? []).map(afterRestart);
     for (const review of raw.reviews ?? []) {
       if (review.status === 'queued' || review.status === 'testing') {
         Object.assign(review, { status: 'error', error: 'Interrupted when Focus shut down. Send it to QA again.' });
@@ -123,6 +130,7 @@ export class Store {
         projects: this.projects,
         agents: [...this.agents.values()],
         briefing: this.briefing,
+        goals: this.goals,
         reviews: [...this.reviews.values()],
         closedPrs: [...this.closedPrs.values()],
       };

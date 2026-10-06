@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { chiefEngineer, engineerAtBriefing, plannerFor, qaAtBriefing, qaOfficerFor } from '../../../shared/crew';
 import { optionLabel } from '../../../shared/engineering';
-import type { Brief, Briefing, EngineeringReport } from '../../../shared/types';
+import { STEP_STATE_LABELS, stepState } from '../../../shared/goals';
+import type { Brief, Briefing, EngineeringReport, GoalStep } from '../../../shared/types';
 import { state } from '../net/state';
 import { type Builder, interactive } from './builder';
 import { canvasTexture, makeCanvas, wrap } from './canvas';
@@ -170,11 +171,11 @@ export class Lounge {
   }
 
   private drawScreen(briefing: Briefing | null): void {
-    const key = JSON.stringify([briefing?.projectId, briefing?.status, briefing?.brief, briefing?.engineering]);
+    const key = JSON.stringify([briefing?.projectId, briefing?.status, briefing?.brief, briefing?.engineering, briefing?.goal?.steps]);
     if (key === this.screenKey) return;
     this.screenKey = key;
     const { canvas, ctx } = this.screen;
-    const area = lcarsFrame(ctx, canvas.width, canvas.height, { title: briefing ? 'Briefing' : 'Observation lounge', color: LCARS.lilac, seed: 1864 });
+    const area = lcarsFrame(ctx, canvas.width, canvas.height, { title: briefing ? (briefing.goal ? 'Goal' : 'Briefing') : 'Observation lounge', color: LCARS.lilac, seed: 1864 });
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     if (!briefing) {
@@ -192,7 +193,7 @@ export class Lounge {
     const project = state.project(briefing.projectId)?.name ?? '';
     // until the manager picks one, the engineer's options take the screen; the pick then shows in the brief
     if (briefing.engineering && !briefing.brief.approach) drawOptions(ctx, area, briefing.engineering, project);
-    else drawBrief(ctx, area, briefing.brief, project, briefing.idea);
+    else drawBrief(ctx, area, briefing.brief, project, briefing.idea, briefing.goal?.steps);
     this.screenTex.needsUpdate = true;
   }
 
@@ -220,7 +221,9 @@ function officerView(briefing: Briefing): CrewView {
     case 'wrapping-up':
       return { ...base, status: 'working', icon: '📝', line: briefing.activity };
     case 'waiting':
-      return { ...base, status: 'waiting', icon: '🖖', line: 'Your turn' };
+      return briefing.goal?.proposal
+        ? { ...base, status: 'waiting', icon: '🧭', line: 'The next step’s ready for you to file' }
+        : { ...base, status: 'waiting', icon: '🖖', line: 'Your turn' };
     case 'reviewing':
       return { ...base, status: 'waiting', icon: '🧩', line: 'The breakdown’s ready for you to check' };
     case 'filing':
@@ -229,6 +232,8 @@ function officerView(briefing: Briefing): CrewView {
       return briefing.breakdown
         ? { ...base, status: 'done', icon: '🧩', line: `The epic and its sub-issues are on ${project}’s board` }
         : { ...base, status: 'done', icon: '📋', line: `The issue’s at ${project}’s stand` };
+    case 'parked':
+      return { ...base, status: 'done', icon: '🧭', line: briefing.activity };
     case 'failed':
       return { ...base, status: 'error', line: 'Lost my train of thought – say again?' };
   }
@@ -320,7 +325,8 @@ function drawOptions(ctx: CanvasRenderingContext2D, area: { x: number; y: number
 }
 
 /** The brief as LCARS columns: summary across the top, why/who on the left, scope and criteria on the right. */
-function drawBrief(ctx: CanvasRenderingContext2D, area: { x: number; y: number; w: number; h: number }, brief: Brief, project: string, idea: string): void {
+/** The brief; for a goal (`steps` set), where you're going, what's unknown and the steps so far, with no scope. */
+function drawBrief(ctx: CanvasRenderingContext2D, area: { x: number; y: number; w: number; h: number }, brief: Brief, project: string, idea: string, steps?: GoalStep[]): void {
   const colW = (area.w - 40) / 2;
   let y = area.y;
   ctx.fillStyle = LCARS.gold;
@@ -360,6 +366,13 @@ function drawBrief(ctx: CanvasRenderingContext2D, area: { x: number; y: number; 
   };
   let left = section(area.x, top, 'Why', LCARS.orange, brief.why ? [brief.why] : [], bottom);
   left = section(area.x, left, 'Who for', LCARS.sky, brief.who ? [brief.who] : [], bottom);
+  if (steps) {
+    section(area.x, left, 'Unknowns', LCARS.red, brief.openQuestions, bottom);
+    const rx = area.x + colW + 40;
+    const right = section(rx, top, 'Done when', LCARS.gold, brief.acceptance, bottom);
+    section(rx, right, 'Steps', LCARS.periwinkle, steps.map((s, i) => `${i + 1}. #${s.number} ${s.title}: ${STEP_STATE_LABELS[stepState(s)]}`), bottom);
+    return;
+  }
   if (brief.approach) left = section(area.x, left, 'Approach', LCARS.gold, [`${brief.approach.title} (${brief.approach.size})`], bottom);
   section(area.x, left, 'Open questions', LCARS.red, brief.openQuestions, bottom);
   const rx = area.x + colW + 40;

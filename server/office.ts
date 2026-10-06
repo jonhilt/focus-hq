@@ -78,6 +78,7 @@ export class Office {
       previews: this.previews.list(),
       drafts: this.planner.list(),
       briefing: this.briefings.current(),
+      goals: this.briefings.goals(),
       reviews: [...this.store.reviews.values()],
       voice: this.voice.status(),
     };
@@ -290,6 +291,7 @@ export class Office {
     }
 
     await this.noticeClosedPullRequests(projectId, board);
+    await this.briefings.track(projectId, board);
     await this.autoMerge(projectId, board);
     this.autoAssign(projectId, board);
   }

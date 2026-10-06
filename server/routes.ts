@@ -102,10 +102,15 @@ export function apiRouter(office: Office, store: Store): express.Router {
   }));
   r.delete('/projects/:id/draft', h((req) => office.planner.discard(param(req, 'id'))));
 
-  // briefings in the observation lounge: one at a time, ending in an issue draft at the project's stand or a filed breakdown
-  r.post('/briefing', h((req) => office.briefings.call(str(req.body.projectId), str(req.body.idea))));
+  // briefings in the observation lounge: one at a time, ending in an issue draft at the project's stand or a filed breakdown;
+  // a goal instead goes one step at a time, parked out of the lounge between steps
+  r.post('/briefing', h((req) => office.briefings.call(str(req.body.projectId), str(req.body.idea), req.body.goal === true)));
   r.post('/briefing/say', h((req) => office.briefings.say(str(req.body.text))));
-  r.post('/briefing/wrap-up', h((req) => office.briefings.wrapUp(req.body.shape === 'breakdown' ? 'breakdown' : 'one')));
+  r.post('/briefing/wrap-up', h((req) => office.briefings.wrapUp(req.body.shape === 'breakdown' || req.body.shape === 'step' ? req.body.shape : 'one')));
+  r.post('/briefing/step', h((req) => office.briefings.fileStep({ title: str(req.body.title), body: str(req.body.body) })));
+  r.post('/briefing/park', h(() => office.briefings.park()));
+  r.post('/goals/:id/reconvene', h((req) => office.briefings.reconvene(param(req, 'id'))));
+  r.delete('/goals/:id', h((req) => office.briefings.dropGoal(param(req, 'id'))));
   r.post('/briefing/file', h((req) => office.briefings.file(breakdownEdits(req.body))));
   r.post('/briefing/engineering', h((req) => office.briefings.askEngineering(str(req.body.text))));
   r.post('/briefing/approach', h((req) => office.briefings.pickApproach(Number(req.body.option))));

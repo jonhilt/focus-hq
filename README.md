@@ -15,6 +15,7 @@ A cartoon, first-person 3D starship where a crew of **Claude Code** agents works
 - Walk up behind an agent and you see their **station's display**: the live Claude Code terminal and, while they test, the **browser** they are driving.
 - Each holodeck has an **operations officer** at its **＋ New issue** stand. Give them a rough idea and they read the project's code and write it up as an issue with context and **acceptance criteria**, ready for you to edit and file.
 - Bigger or fuzzier ideas go to a **briefing** in the **observation lounge** behind the ready room. The officer reads the code, grills you one question at a time and keeps a brief on the wall screen. When you wrap up, they write one issue to the holodeck's stand, or break a bigger feature down into an epic and sub-issues for you to check and file.
+- When the route is foggy, **set a goal** there instead: no plan up front, just where you're going. The officer proposes one small step at a time, the one that tests the riskiest unknown, and you reconvene after each step lands to hear what it taught you and pick the next.
 - Each holodeck's **Kanban display** shows what's to do, who's working on what, and which **pull requests** are ready to merge.
 - The captain's **ready room** is where you create projects, connect existing repos or create blank ones, file issues and tune how much the agents may do on their own.
 - When an agent is done, Focus pushes their branch and opens a **pull request** with their summary as the description. Merge it from the board and they pack up and go home.
@@ -106,6 +107,19 @@ Press **🔈 Voice off** above the message box to talk a briefing through instea
 - **Keep the mic open between turns** opens the microphone once for the whole session rather than for each answer. Use it with speakers, where opening the mic each time makes the audio glitch. Leave it off with Bluetooth earphones, which drop to call quality while the mic is open. Turning voice mode off or closing the panel lets go of the mic.
 
 A briefing is saved in `~/.focus/state.json` with the officer's session, and each turn resumes that session. Nothing runs while it's your turn, and you can pick a briefing back up after a restart, along with a breakdown waiting to be filed (your unsaved edits to it aside).
+
+### Goals
+
+When the route is foggy, press **🧭 Set a goal** in the lounge instead of calling a briefing. A goal gets no spec and no plan up front. You agree where you're going, then find the way one small step at a time.
+
+1. The officer asks a handful of questions to pin down the destination: what you want and why, who it's for, and what you'd see once it's done. They also name the **unknowns**, the assumptions that could sink the goal or change the route. The wall screen shows **Why**, **Who for**, **Done when**, **Unknowns** and the **Steps** so far, with no scope and no design. QA sits in as usual, and the engineer isn't called.
+2. **🧭 Take the first step**: the officer writes one step, the smallest change that tests the riskiest unknown or gets a thin slice working end to end. It's an issue with **Testing**, **Why now**, **What to build**, **Done when** and **Not in this step**. Edit it, or say what to change and **↻ Rewrite the step**.
+3. **📌 File this step** files the goal as an epic (on the first step only), then the step, headed `Step N toward #epic`. Within the epic's repo it's linked as a sub-issue; a step in another repo links back in its body. The goal is then **parked**: it leaves the lounge, so you can hold other briefings while the crew builds the step. Assign an agent to it as you would any issue, or let auto-assign pick it up.
+4. While a goal is parked, the office keeps track of its step: the PR that closes it (or sits on its `focus/<issue>-…` branch), QA's verdict on that PR, and whether it was merged or closed. A toast says when the step has landed.
+5. **📣 Reconvene** the goal from the lounge (parked goals are listed above the form to call a briefing). The officer pulls the latest code and reads the step's PR description and QA's verdict. They tell you what the step taught you, update the unknowns, and suggest the next step, or say they think the goal is met. Talk it over, then take the next step.
+6. **⏸ Park** sends a goal out of the lounge without taking a step. **✕ End goal** (or **✕ Drop** on a parked one) forgets it. Its issues stay on GitHub.
+
+Goals are saved in `~/.focus/state.json` with the officer's session, so a goal picks up where it left off after a restart.
 
 ## How an agent works an issue
 

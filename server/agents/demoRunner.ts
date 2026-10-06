@@ -403,6 +403,81 @@ export class DemoOfficer implements BriefingOfficer {
     const optionA = { title: 'Option A: extend the existing module', mermaid: `flowchart TD\n  A["${files[0]}"] -->|"new calls"| S["${files[4]}"]\n  S -->|"persists"| P[("localStorage")]` };
     const optionB = { title: 'Option B: a module of its own', mermaid: `flowchart TD\n  A["${files[0]}"] -->|"uses"| N["new module"]\n  N -->|"reads"| S["${files[4]}"]` };
 
+    if (req.goal) {
+      const said = (text: string, costUsd = 0.05) => ({ text, sessionId: session, costUsd });
+      const steps = req.goal.steps;
+      if (req.kind === 'open') {
+        for (const step of ['Pulling the latest code', `Reading ${folder}/CLAUDE.md`, `Reading ${folder}/${files[0]}`]) {
+          hooks.activity(step);
+          await wait(1.4);
+        }
+        hooks.activity('Updating the brief');
+        update({ summary: idea, open_questions: [`Can \`${files[4]}\` carry it as it is?`] });
+        await wait(1);
+        return said(`I've had a look around \`${folder}/${files[0]}\`. Before we go anywhere: who's this for, and what would you see once it's done? My guess is returning users, finding what they meant to come back to.`, 0.08);
+      }
+      if (req.kind === 'step') {
+        hooks.activity('Rereading the unknowns');
+        await wait(1.5);
+        hooks.activity(`Reading ${folder}/${files[4]}`);
+        await wait(1.5);
+        hooks.activity(`Writing up step ${steps.length + 1}`);
+        await wait(1.5);
+        const unknown = brief.openQuestions[0] ?? `whether \`${files[4]}\` can carry it`;
+        const first = !steps.length;
+        const title = `${first ? 'Thinnest slice' : 'Next slice'}: ${idea}`.slice(0, 70);
+        const body = [
+          '## Testing',
+          '',
+          first ? `${unknown} The thinnest slice that touches it will tell us.` : `Whether what step ${steps.length} built holds up once people use it from \`${files[1]}\`.`,
+          '',
+          '## Why now',
+          '',
+          first ? "It's the riskiest unknown: if it doesn't hold, the route changes." : `Step ${steps.length} landed, so the next unknown is how it feels in use.`,
+          '',
+          '## What to build',
+          '',
+          first ? `- Store and load ${idea} in \`${files[4]}\`, with the simplest possible UI in \`${files[0]}\`.` : `- Show ${idea} in \`${files[1]}\`, reusing what step ${steps.length} added.`,
+          '',
+          '## Done when',
+          '',
+          `- [ ] ${brief.acceptance[0] ?? `${idea} works end to end`}`,
+          '- [ ] Existing tests still pass, and the new behaviour has a test',
+          '',
+          '## Not in this step',
+          '',
+          '- Polish, settings and anything the next step might change',
+        ].join('\n');
+        return { text: '', sessionId: session, costUsd: 0.12, step: { repo, title, body } };
+      }
+      if (req.kind === 'reconvene') {
+        hooks.activity('Pulling the latest code');
+        await wait(1.4);
+        const landed = steps.at(-1)?.outcome === 'merged';
+        if (!landed) return said(`It hasn't landed yet: ${steps.length ? `step ${steps.length} is still with the crew` : 'nothing filed so far'}. What's on your mind, do you want to rethink it?`);
+        hooks.activity(`Reading what landed in ${folder}/${files[4]}`);
+        await wait(1.5);
+        hooks.activity('Updating the brief');
+        update({ open_questions: [`Will people find it from \`${files[1]}\`?`, ...brief.openQuestions.slice(1)] });
+        await wait(0.8);
+        return said(`It landed, and it answered our first question: \`${files[4]}\` carries it without a new table. That moves the risk to whether people find it, so I'd make the next step about \`${files[1]}\`. Or, if that's enough for you, I think we're close to done. Take the next step?`);
+      }
+      hooks.activity('Thinking it over');
+      await wait(1.5);
+      const step = answers.length;
+      hooks.activity('Updating the brief');
+      await wait(0.8);
+      if (step === 1) {
+        update({ who: line(last), acceptance: [line(last)] });
+        return said("That's where we're going, and I've put it on the screen as what we'd see once it's done. Why now: what goes wrong for people today?");
+      }
+      if (step === 2) {
+        update({ why: line(last) });
+        return said(`Got it. The riskiest unknown I can see is whether \`${files[4]}\` can carry it as it is, so I'd make the first step the thinnest slice end to end that finds out. Shall we take it?`);
+      }
+      return said(`Noted. Take the ${steps.length ? 'next' : 'first'} step whenever you're ready.`, 0.03);
+    }
+
     if (req.kind === 'wrap-up') {
       hooks.activity('Rereading the brief');
       await wait(1.5);

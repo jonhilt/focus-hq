@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createSdkMcpServer, type McpSdkServerConfigWithInstance, type Options, query, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
-import type { Brief, Settings } from '../../shared/types';
+import type { Brief, Settings, StepProposal } from '../../shared/types';
 import { paths } from '../config';
 import { errorMessage, truncate } from '../util';
 import {
@@ -22,6 +22,7 @@ import {
   qaNoteSchema,
   type QaReply,
   type QaTurn,
+  stepSchema,
 } from './briefing';
 import { asBreakdown, breakdownSchema } from './breakdown';
 import { agentEnv } from './claudeRunner';
@@ -162,8 +163,9 @@ export class ClaudeDrafter implements Drafter {
 /** The officer in a briefing: each turn resumes the same session, with a tool to keep the brief on the wall screen. */
 export class ClaudeOfficer implements BriefingOfficer {
   async turn(req: OfficerTurn, hooks: OfficerHooks): Promise<OfficerReply> {
-    // fresh code at the start (or after a lost session); later turns read what's already checked out
-    const cwd = req.kind === 'open' || !req.resumeSessionId ? await checkouts(req.projectId, req.repos, hooks.activity) : planningDir(req.projectId);
+    // fresh code at the start, on reconvening a goal (its step has landed since) and after a lost session; other turns read what's already checked out
+    const fresh = req.kind === 'open' || req.kind === 'reconvene' || !req.resumeSessionId;
+    const cwd = fresh ? await checkouts(req.projectId, req.repos, hooks.activity) : planningDir(req.projectId);
     if (req.signal.aborted) throw new Error('Stopped');
     let brief = req.brief;
     const server = briefServer(() => brief, (next) => {
@@ -172,6 +174,7 @@ export class ClaudeOfficer implements BriefingOfficer {
     });
     const wrapUp = req.kind === 'wrap-up';
     const breakDown = req.kind === 'break-down';
+    const step = req.kind === 'step';
     const result = await runReadOnly({
       cwd,
       systemAppend: briefingSystemPrompt(req),
@@ -181,15 +184,20 @@ export class ClaudeOfficer implements BriefingOfficer {
       activity: hooks.activity,
       builtins: [...CODE_TOOLS, ...WEB_TOOLS],
       resume: req.resumeSessionId,
-      schema: wrapUp ? draftSchema(req.repos) : breakDown ? breakdownSchema(req.repos) : officerReplySchema,
+      schema: wrapUp ? draftSchema(req.repos) : breakDown ? breakdownSchema(req.repos) : step ? stepSchema(req.repos) : officerReplySchema,
       tools: { server, names: ['update_brief'] },
     });
+    const written = (): StepProposal => {
+      const { repo, title, body } = asDraft(result.structured, req.repos);
+      return { repo, title, body };
+    };
     return {
-      ...(wrapUp || breakDown ? { text: '' } : asOfficerReply(result.structured, result.text)),
+      ...(wrapUp || breakDown || step ? { text: '' } : asOfficerReply(result.structured, result.text)),
       sessionId: result.sessionId,
       costUsd: result.costUsd,
       draft: wrapUp ? asDraft(result.structured, req.repos) : undefined,
       breakdown: breakDown ? asBreakdown(result.structured, req.repos) : undefined,
+      step: step ? written() : undefined,
     };
   }
 }

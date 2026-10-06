@@ -41,6 +41,8 @@ export class OfficeState {
   drafts = new Map<string, IssueDraft>();
   /** The briefing in the observation lounge, if one is in session. */
   briefing: Briefing | null = null;
+  /** Goals parked out of the lounge while the crew builds their current step. */
+  goals: Briefing[] = [];
   /** The latest QA review per pull request (by prKey). */
   reviews = new Map<string, QaReview>();
   /** Whether dictation can run on the server, and the speech model's download. */
@@ -102,6 +104,7 @@ export class OfficeState {
         this.previews = new Map((s.previews ?? []).map((p) => [p.projectId, p]));
         this.drafts = new Map((s.drafts ?? []).map((d) => [d.projectId, d]));
         this.briefing = s.briefing ?? null;
+        this.goals = s.goals ?? [];
         this.reviews = new Map((s.reviews ?? []).map((r) => [prKey(r.repo, r.number), r]));
         this.voice = s.voice;
         this.emit('snapshot', undefined);
@@ -175,6 +178,7 @@ export class OfficeState {
         break;
       case 'briefing':
         this.briefing = event.briefing;
+        this.goals = event.goals ?? [];
         this.emit('briefing', undefined);
         break;
       case 'draft':

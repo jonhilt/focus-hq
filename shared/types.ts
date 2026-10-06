@@ -401,14 +401,15 @@ export interface BriefingMessage {
 
 /**
  * thinking - the officer is reading code or composing a reply; qa-checking - the QA officer is reading the acceptance
- * criteria the officer just changed; engineering - the ship's engineer is reading the code for options; waiting - your turn; wrapping-up - writing the issue or the breakdown; reviewing -
- * the breakdown is waiting for you to edit and file it; filing - filing the breakdown on GitHub; done - the issue is at
- * the project's stand, or the breakdown is filed; failed - the last turn went wrong (say something to try again).
+ * criteria the officer just changed; engineering - the ship's engineer is reading the code for options; waiting - your turn; wrapping-up - writing the issue, the breakdown or a goal's next step; reviewing -
+ * the breakdown is waiting for you to edit and file it; filing - filing the breakdown (or a goal's step) on GitHub; done - the issue is at
+ * the project's stand, or the breakdown is filed; parked - a goal out of the lounge while the crew builds its step;
+ * failed - the last turn went wrong (say something to try again).
  */
-export type BriefingStatus = 'thinking' | 'qa-checking' | 'engineering' | 'waiting' | 'wrapping-up' | 'reviewing' | 'filing' | 'done' | 'failed';
+export type BriefingStatus = 'thinking' | 'qa-checking' | 'engineering' | 'waiting' | 'wrapping-up' | 'reviewing' | 'filing' | 'done' | 'parked' | 'failed';
 
-/** How a briefing wraps up: one issue at the stand, or an epic with sub-issues the manager reviews and files. */
-export type WrapUpShape = 'one' | 'breakdown';
+/** How a briefing wraps up: one issue at the stand, an epic with sub-issues the manager reviews and files, or a goal's next step. */
+export type WrapUpShape = 'one' | 'breakdown' | 'step';
 
 /** An issue in a breakdown, as the officer wrote it and the manager edited it. */
 export interface BreakdownIssue {
@@ -439,9 +440,48 @@ export interface BreakdownEdits {
   subIssues: { key: string; title: string; body: string }[];
 }
 
+/** A GitHub issue a goal filed: its epic, or one of its steps. */
+export interface GoalIssue {
+  repo: string;
+  number: number;
+  title: string;
+  url: string;
+}
+
+/** One step toward a goal: an issue an agent builds, and what became of its pull request. */
+export interface GoalStep extends GoalIssue {
+  /** The pull request that builds it, once the office has seen one on the board. */
+  pr?: { number: number; url: string };
+  /** What became of that PR; missing while it's open, or before there is one. */
+  outcome?: 'merged' | 'closed';
+  /** QA's latest verdict on the PR, kept here because the review goes when the PR does. */
+  qa?: { verdict: 'pass' | 'fail'; summary: string };
+  filedAt: number;
+}
+
+/** The step the officer proposes next, for the manager to edit and file. */
+export interface StepProposal {
+  repo: string;
+  title: string;
+  body: string;
+}
+
+/**
+ * A briefing about a goal rather than a feature: no plan up front, just where we're going. The crew work toward it one
+ * small step at a time, each an issue the officer writes from what the last one taught us. Between steps the goal is
+ * parked out of the lounge; the manager reconvenes it to hear how the step went and decide the next one.
+ */
+export interface Goal {
+  /** The issue holding the goal itself, filed with the first step; each step is a sub-issue of it where GitHub allows. */
+  epic?: GoalIssue;
+  /** Steps filed so far, oldest first. */
+  steps: GoalStep[];
+  proposal?: StepProposal;
+}
+
 /**
  * A back-and-forth in the observation lounge between the manager and a project's operations officer about a bigger
- * or fuzzier feature, ending in one well-specified issue or an epic with sub-issues. The project's QA officer sits in and
+ * or fuzzier feature, ending in one well-specified issue or an epic with sub-issues, or, for a goal, going on one step at a time. The project's QA officer sits in and
  * speaks up when the acceptance criteria change; for a big change, the ship's engineer can be asked for options on how
  * to build it. One at a time, saved across restarts.
  */
@@ -459,6 +499,8 @@ export interface Briefing {
   engineering?: EngineeringReport;
   /** The epic and sub-issues, from the officer breaking the briefing down until it's filed (or wrapped up as one issue). */
   breakdown?: Breakdown;
+  /** Set when the briefing is about a goal, worked toward one step at a time. */
+  goal?: Goal;
   startedAt: number;
   updatedAt: number;
   costUsd: number;
@@ -609,6 +651,8 @@ export interface Snapshot {
   previews: Preview[];
   drafts: IssueDraft[];
   briefing: Briefing | null;
+  /** Goals parked out of the lounge while the crew builds their current step. */
+  goals: Briefing[];
   reviews: QaReview[];
   voice: VoiceStatus;
 }
@@ -625,7 +669,7 @@ export type ServerEvent =
   | { type: 'preview'; projectId: string; preview: Preview | null }
   | { type: 'preview-log'; projectId: string; log: PreviewLog }
   | { type: 'draft'; projectId: string; draft: IssueDraft | null }
-  | { type: 'briefing'; briefing: Briefing | null }
+  | { type: 'briefing'; briefing: Briefing | null; goals: Briefing[] }
   | { type: 'review'; review: QaReview }
   | { type: 'review-removed'; repo: string; number: number }
   | { type: 'voice'; voice: VoiceStatus }

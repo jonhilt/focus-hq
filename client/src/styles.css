@@ -284,6 +284,13 @@ textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
 .breakdown-card textarea { min-height: 110px; width: 100%; font-family: var(--mono); font-size: 13px; }
 .breakdown-card .tag { white-space: nowrap; }
 .breakdown-filed { flex-wrap: wrap; align-items: center; }
+.breakdown-card.step { border-left-color: var(--lcars-gold); }
+.breakdown-card.step textarea { min-height: 140px; }
+.breakdown-card.goal { border-left-color: var(--lcars-gold); }
+.parked-goals h3 { margin: 0 0 8px; }
+.parked-goals:not(:empty) { margin-bottom: 14px; }
+.brief-section.steps h4 { border-color: var(--lcars-gold); }
+.brief-section ol { margin: 0; padding-left: 22px; }
 .briefing-brief { overflow: auto; background: var(--bg); color: var(--text); border-radius: var(--radius); border: 2px solid var(--line); padding: 14px 16px; font-family: var(--mono); font-size: 14px; letter-spacing: 0; }
 .briefing-brief h3 { margin: 0 0 10px; color: var(--lcars-peach); font-family: var(--ui); font-size: 22px; }
 .brief-section h4 { margin: 12px 0 4px; font-family: var(--ui); font-size: 14px; color: var(--text); border-left: 8px solid var(--lcars-lilac); padding-left: 8px; }

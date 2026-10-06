@@ -1,5 +1,7 @@
 import { chiefEngineer, plannerFor, qaAtBriefing, qaOfficerFor } from '../../shared/crew';
 import { optionLabel, optionText, recommendation, reportText } from '../../shared/engineering';
+import { goalEpicBody, issueRef, stepBody, stepLine, stepPrGone, trackStep } from '../../shared/goals';
+import { prKey } from '../../shared/qa';
 import {
   type Brief,
   type BriefDiagram,
@@ -8,11 +10,16 @@ import {
   type Briefing,
   type BriefingMessage,
   type BriefingStatus,
+  type Board,
   EMPTY_BRIEF,
   type EngineeringReport,
+  type Goal,
+  type GoalIssue,
+  type GoalStep,
   type Issue,
   type Planner,
   type Settings,
+  type StepProposal,
   type WrapUpShape,
 } from '../../shared/types';
 import { spokenLine } from '../../shared/voice';
@@ -21,9 +28,10 @@ import type { Store, StoredBriefing } from '../store';
 import { errorMessage, newId, truncate } from '../util';
 import { applyEdits, filedBody, SUB_ISSUES } from './breakdown';
 import type { BriefingEngineer } from './engineering';
-import { type DraftResult, type IssuePlanner, ISSUE_FORMAT, repoList } from './planner';
+import { type DraftResult, draftSchema, type IssuePlanner, ISSUE_FORMAT, repoList } from './planner';
 
-export type TurnKind = 'open' | 'reply' | 'wrap-up' | 'break-down';
+/** step - write a goal's next step; reconvene - hear how a goal's latest step went. */
+export type TurnKind = 'open' | 'reply' | 'wrap-up' | 'break-down' | 'step' | 'reconvene';
 
 export interface OfficerTurn {
   kind: TurnKind;
@@ -39,6 +47,10 @@ export interface OfficerTurn {
   messages: BriefingMessage[];
   /** The officer's session so far; missing on the first turn, or if it was lost. */
   resumeSessionId?: string;
+  /** Set when the briefing is about a goal, worked toward one step at a time. */
+  goal?: Goal;
+  /** On reconvening: how the latest step went, its PR's description included. */
+  report?: string;
   settings: Settings;
   signal: AbortSignal;
 }
@@ -60,6 +72,8 @@ export interface OfficerReply {
   draft?: DraftResult;
   /** A break-down's epic and sub-issues. */
   breakdown?: Breakdown;
+  /** A goal's next step. */
+  step?: StepProposal;
 }
 
 /** Takes one turn of a briefing. The live one resumes a read-only Claude Code session; the demo one is scripted. */
@@ -101,11 +115,15 @@ export interface BriefingQa {
 export const acceptanceChanged = (before: string[], after: string[]): boolean =>
   before.length !== after.length || before.some((line, i) => line !== after[i]);
 
-/** Where a filed breakdown goes: onto GitHub and the project's board. */
+/** Where briefings meet GitHub: filing a breakdown or a goal's steps (onto the project's board too), and reading back how a step went. */
 export interface IssueFiler {
   file(projectId: string, repo: string, title: string, body: string): Promise<Issue>;
   addSubIssue(repo: string, parent: number, child: number): Promise<void>;
+  pullRequestBody(repo: string, number: number): Promise<string>;
+  pullRequestState(repo: string, number: number): Promise<'OPEN' | 'CLOSED' | 'MERGED'>;
 }
+
+const goalIssue = ({ repo, number, title, url }: Issue): GoalIssue => ({ repo, number, title, url });
 
 const publicView = ({ sessionId: _, qaSessionId: __, engineerSessionId: ___, ...briefing }: StoredBriefing): Briefing => briefing;
 
@@ -116,6 +134,10 @@ const publicView = ({ sessionId: _, qaSessionId: __, engineerSessionId: ___, ...
  * project's QA officer sits in and adds a note when the acceptance criteria change, and the manager can send for the
  * ship's engineer to lay out options for how to build it, picking one as the Approach. One at a time. Each turn resumes
  * the speaker's session, so nothing runs while it's your turn and a briefing survives a restart.
+ *
+ * A briefing about a goal doesn't wrap up: once the manager files a step, it's parked out of the lounge (freeing it for
+ * other briefings) while the crew builds the step, and the office keeps track of the step's PR. The manager reconvenes
+ * it to hear how the step went and take the next one.
  */
 export class Briefings {
   private running: AbortController | null = null;
@@ -134,16 +156,18 @@ export class Briefings {
     return this.store.briefing ? publicView(this.store.briefing) : null;
   }
 
-  call(projectId: string, idea: string): Briefing {
+  /** Goals parked out of the lounge. */
+  goals(): Briefing[] {
+    return this.store.goals.map(publicView);
+  }
+
+  /** Calls a briefing about `idea`; with `goal`, about a goal to work toward one step at a time. */
+  call(projectId: string, idea: string, goal = false): Briefing {
     const project = this.store.project(projectId);
     const officer = plannerFor(projectId);
     if (!project.repos.length) throw new Error(`${project.name} has no repositories yet`);
-    if (!idea.trim()) throw new Error(`Tell ${officer.name} what the briefing is about`);
-    const existing = this.store.briefing;
-    if (existing && existing.status !== 'done') {
-      const name = this.store.projects.find((p) => p.id === existing.projectId)?.name ?? 'another project';
-      throw new Error(`${plannerFor(existing.projectId).name} is still in the lounge with a briefing about ${name}. Wrap it up or end it first.`);
-    }
+    if (!idea.trim()) throw new Error(`Tell ${officer.name} what the ${goal ? 'goal' : 'briefing'} is about`);
+    this.expectLoungeFree();
     const now = Date.now();
     const briefing: StoredBriefing = {
       id: newId('brief'),
@@ -153,6 +177,7 @@ export class Briefings {
       activity: 'Reading up on the project',
       messages: [{ from: 'manager', text: idea.trim(), at: now }],
       brief: { ...EMPTY_BRIEF },
+      ...(goal && { goal: { steps: [] } }),
       startedAt: now,
       updatedAt: now,
       costUsd: 0,
@@ -172,9 +197,21 @@ export class Briefings {
     return publicView(briefing);
   }
 
-  /** The officer writes it up as one issue at the stand, or breaks it down for the manager to review (again, from a breakdown). */
+  /**
+   * The officer writes it up as one issue at the stand, or breaks it down for the manager to review (again, from a
+   * breakdown). A goal never wraps up: the officer writes its next step instead, for the manager to edit and file.
+   */
   wrapUp(shape: WrapUpShape): Briefing {
     const briefing = this.expect('waiting', 'failed', 'reviewing');
+    if (!!briefing.goal !== (shape === 'step')) throw new Error(briefing.goal ? 'A goal goes one step at a time: take a step' : 'Only a goal goes one step at a time');
+    if (briefing.goal) {
+      const next = briefing.goal.steps.length ? 'the next step' : 'the first step';
+      briefing.goal.proposal = undefined;
+      briefing.messages.push({ from: 'system', text: `The captain asked for ${next}.`, at: Date.now() });
+      this.turn(briefing, 'wrapping-up', `Writing up ${next}`);
+      this.run(briefing, (signal, current) => this.converse(briefing, 'step', signal, current));
+      return publicView(briefing);
+    }
     if (briefing.breakdown && [briefing.breakdown.epic, ...briefing.breakdown.subIssues].some((i) => i.number !== undefined)) {
       throw new Error('Some of the breakdown is filed already: file the rest');
     }
@@ -194,6 +231,85 @@ export class Briefings {
     this.turn(briefing, 'filing', 'Filing the epic');
     void this.fileAll(briefing, briefing.breakdown);
     return publicView(briefing);
+  }
+
+  /**
+   * Files the goal's proposed step, with the manager's edits: the goal's epic first if this is its first step, then the
+   * step, linked to it. Then the goal is parked while the crew builds it.
+   */
+  fileStep(edit: { title: string; body: string }): Briefing {
+    const briefing = this.expect('waiting', 'failed');
+    const proposal = briefing.goal?.proposal;
+    if (!briefing.goal || !proposal) throw new Error('There’s no step to file: take a step first');
+    const step = { ...proposal, title: edit.title.trim(), body: edit.body.trim() };
+    if (!step.title || !step.body) throw new Error('The step needs a title and a description');
+    briefing.goal.proposal = step;
+    this.turn(briefing, 'filing', briefing.goal.epic ? 'Filing the step' : 'Filing the goal');
+    void this.fileGoalStep(briefing, briefing.goal, step);
+    return publicView(briefing);
+  }
+
+  /** Parks the goal in session out of the lounge without taking a step, so the lounge is free for other briefings. */
+  park(): void {
+    const briefing = this.expect('waiting', 'failed');
+    if (!briefing.goal) throw new Error('Only a goal can be parked: wrap the briefing up or end it');
+    briefing.messages.push({ from: 'system', text: 'The captain parked the goal.', at: Date.now() });
+    this.parkGoal(briefing);
+  }
+
+  /** Brings a parked goal back to the lounge: the officer catches up on its latest step and says what it taught you. */
+  reconvene(id: string): Briefing {
+    const goal = this.store.goals.find((g) => g.id === id);
+    if (!goal?.goal) throw new Error('That goal isn’t parked any more');
+    this.expectLoungeFree();
+    const latest = goal.goal.steps.at(-1);
+    this.store.goals = this.store.goals.filter((g) => g !== goal);
+    goal.messages.push({ from: 'system', text: latest ? `The captain reconvened. ${stepLine(latest, goal.goal.steps.length - 1)}.` : 'The captain reconvened.', at: Date.now() });
+    this.store.setBriefing(goal);
+    this.turn(goal, 'thinking', latest ? 'Catching up on the step' : 'Picking up where we left off');
+    this.run(goal, async (signal, current) => {
+      const report = latest ? await this.stepReport(latest, goal.goal!.steps) : 'No step has been filed yet.';
+      if (current()) await this.converse(goal, 'reconvene', signal, current, report);
+    });
+    return publicView(goal);
+  }
+
+  /** Forgets a parked goal. Its issues stay on GitHub. */
+  dropGoal(id: string): void {
+    this.store.goals = this.store.goals.filter((g) => g.id !== id);
+    this.store.save();
+    this.broadcast();
+  }
+
+  /**
+   * Keeps track of the steps of the project's goals as its board refreshes: each step's PR once it's opened, QA's verdict
+   * on it, and whether it was merged or closed once it leaves the board.
+   */
+  async track(projectId: string, board: Board): Promise<void> {
+    const goals = [...this.store.goals, ...(this.store.briefing ? [this.store.briefing] : [])].filter((b) => b.projectId === projectId && b.goal);
+    let changed = false;
+    for (const briefing of goals) {
+      const steps = briefing.goal!.steps;
+      for (const [i, step] of steps.entries()) {
+        if (step.outcome || board.error?.includes(step.repo)) continue;
+        let next = trackStep(step, board.prs, (pr) => this.store.reviews.get(prKey(step.repo, pr)));
+        if (stepPrGone(next, board.prs)) {
+          const state = await this.filer.pullRequestState(next.repo, next.pr!.number).catch(() => 'OPEN' as const);
+          if (state !== 'OPEN') next = { ...next, outcome: state === 'MERGED' ? 'merged' : 'closed' };
+        }
+        if (next === step) continue;
+        steps[i] = next;
+        changed = true;
+        if (next.outcome && i === steps.length - 1 && briefing.status === 'parked') {
+          const goal = truncate(briefing.brief.summary || briefing.idea, 60);
+          const officer = plannerFor(projectId).name;
+          this.hub.toast(next.outcome === 'merged' ? 'success' : 'info', `🧭 Step ${i + 1} toward “${goal}” ${next.outcome === 'merged' ? 'merged' : 'was closed unmerged'}: reconvene with ${officer} in the observation lounge`);
+        }
+      }
+    }
+    if (!changed) return;
+    this.store.save();
+    this.broadcast();
   }
 
   /** Sends for the ship's engineer, who reads the code and comes back with options; `request` sends their last ones back for changes. */
@@ -232,6 +348,19 @@ export class Briefings {
   /** The project is gone: so is any briefing about it. */
   projectRemoved(projectId: string): void {
     if (this.store.briefing?.projectId === projectId) this.end();
+    if (!this.store.goals.some((g) => g.projectId === projectId)) return;
+    this.store.goals = this.store.goals.filter((g) => g.projectId !== projectId);
+    this.store.save();
+    this.broadcast();
+  }
+
+  /** Throws unless the lounge is free for another briefing: nobody's in it, or the briefing in it is over. */
+  private expectLoungeFree(): void {
+    const existing = this.store.briefing;
+    if (!existing || existing.status === 'done') return;
+    const name = this.store.projects.find((p) => p.id === existing.projectId)?.name ?? 'another project';
+    const what = existing.goal ? 'a goal' : 'a briefing';
+    throw new Error(`${plannerFor(existing.projectId).name} is still in the lounge with ${what} about ${name}. ${existing.goal ? 'Park it' : 'Wrap it up'} or end it first.`);
   }
 
   /** The briefing, if it's in one of `statuses`; otherwise why the manager has to wait (or can't). */
@@ -250,9 +379,11 @@ export class Briefings {
       case 'reviewing':
         throw new Error('The breakdown is waiting for you: file it, or wrap up as one issue instead');
       case 'filing':
-        throw new Error('Still filing the breakdown');
+        throw new Error(briefing.goal ? 'Still filing the step' : 'Still filing the breakdown');
       case 'done':
         throw new Error(`This briefing is over: ${briefing.breakdown ? 'its issues are filed' : 'its issue is at the stand'}. End it to start another.`);
+      case 'parked':
+        throw new Error('That goal is parked: reconvene it first');
       case 'waiting':
       case 'failed':
         throw new Error('It’s your turn: say something first');
@@ -284,7 +415,7 @@ export class Briefings {
   }
 
   /** The officer's turn, then QA's note if the officer changed the acceptance criteria. */
-  private async converse(briefing: StoredBriefing, kind: TurnKind, signal: AbortSignal, current: () => boolean): Promise<void> {
+  private async converse(briefing: StoredBriefing, kind: TurnKind, signal: AbortSignal, current: () => boolean, report?: string): Promise<void> {
     const project = this.store.project(briefing.projectId);
     const officer = plannerFor(briefing.projectId);
     const before = briefing.brief.acceptance;
@@ -300,6 +431,8 @@ export class Briefings {
         engineering: briefing.engineering,
         messages: [...briefing.messages],
         resumeSessionId: briefing.sessionId,
+        goal: briefing.goal,
+        report,
         settings: this.store.settings,
         signal,
       },
@@ -332,6 +465,20 @@ export class Briefings {
       });
       Object.assign(briefing, { status: 'done', activity: 'Issue drafted', updatedAt: now });
       this.hub.toast('success', `📋 ${officer.name} wrote up the briefing: “${truncate(draft.title ?? '', 60)}” is at ${project.name}’s stand`);
+      this.store.save();
+      this.broadcast();
+      return;
+    }
+    if (kind === 'step') {
+      if (!reply.step) throw new Error('The officer finished without writing the step');
+      const goal = briefing.goal!;
+      goal.proposal = reply.step;
+      briefing.messages.push({
+        from: 'officer',
+        text: `Here’s the ${goal.steps.length ? 'next' : 'first'} step I’d take: “${reply.step.title}”, in ${reply.step.repo}. Edit it and file it, or tell me what to change.`,
+        at: now,
+      });
+      Object.assign(briefing, { status: 'waiting', activity: 'Waiting for you to file the step', updatedAt: now });
       this.store.save();
       this.broadcast();
       return;
@@ -483,14 +630,78 @@ export class Briefings {
     this.broadcast();
   }
 
+  /**
+   * Files the goal's epic (once: its number is saved before the step is filed) and the step, then parks the goal. On a
+   * failure the step waits to be filed again.
+   */
+  private async fileGoalStep(briefing: StoredBriefing, goal: Goal, proposal: StepProposal): Promise<void> {
+    const project = this.store.project(briefing.projectId);
+    let epic: GoalIssue;
+    let step: GoalStep;
+    let linked = '';
+    try {
+      epic = (goal.epic ??= goalIssue(await this.filer.file(project.id, proposal.repo, truncate(briefing.brief.summary || briefing.idea, 70), goalEpicBody(briefing.brief, briefing.idea))));
+      this.store.save();
+      Object.assign(briefing, { activity: `Filing “${truncate(proposal.title, 60)}”`, updatedAt: Date.now() });
+      this.broadcast();
+      const position = goal.steps.length + 1;
+      step = { ...goalIssue(await this.filer.file(project.id, proposal.repo, proposal.title, stepBody(proposal.body, epic, proposal.repo, position))), filedAt: Date.now() };
+      goal.steps.push(step);
+      goal.proposal = undefined;
+      this.store.save();
+      // GitHub only links sub-issues within a repo; elsewhere the step's body links back to the goal
+      if (epic.repo === step.repo) {
+        await this.filer.addSubIssue(step.repo, epic.number, step.number).catch((err) => (linked = `Couldn’t link #${step.number} to the goal as a sub-issue: ${errorMessage(err)}`));
+      }
+    } catch (err) {
+      if (this.store.briefing !== briefing) return;
+      Object.assign(briefing, { status: 'failed', activity: 'Waiting for you to file the step', error: `Couldn’t file the step: ${errorMessage(err)}. File it again to carry on.`, updatedAt: Date.now() });
+      this.store.save();
+      this.broadcast();
+      return;
+    }
+    // ended while filing: what's filed stays on GitHub, but the goal is gone
+    if (this.store.briefing !== briefing) return;
+    const now = Date.now();
+    const n = goal.steps.length;
+    if (linked) briefing.messages.push({ from: 'system', text: linked, at: now });
+    briefing.messages.push({
+      from: 'officer',
+      text: `Filed ${issueRef(step)}, step ${n} toward ${issueRef(epic)}. It’s on ${project.name}’s board. I’ll park the goal while the crew builds it: reconvene me once its PR has landed, or sooner if you want to rethink.`,
+      at: now,
+    });
+    this.hub.toast('success', `🧭 Filed step ${n} toward “${truncate(epic.title, 60)}”: ${issueRef(step)}`);
+    this.parkGoal(briefing);
+  }
+
+  /** Moves the goal out of the lounge, into the parked goals. */
+  private parkGoal(briefing: StoredBriefing): void {
+    const n = briefing.goal?.steps.length ?? 0;
+    const activity = n ? `Step ${n} underway` : 'Parked before the first step';
+    Object.assign(briefing, { status: 'parked', activity, error: undefined, updatedAt: Date.now() });
+    this.store.goals = [...this.store.goals.filter((g) => g.id !== briefing.id), briefing];
+    this.store.setBriefing(null);
+    this.broadcast();
+  }
+
+  /** How the latest step went, for the officer: every step's line, and the latest PR's description if there's one. */
+  private async stepReport(latest: GoalStep, steps: GoalStep[]): Promise<string> {
+    const body = latest.pr ? await this.filer.pullRequestBody(latest.repo, latest.pr.number).catch(() => '') : '';
+    return [
+      `Steps so far:\n${steps.map(stepLine).join('\n')}`,
+      body.trim() ? `The latest step's pull request, as its developer described it:\n"""\n${truncate(body.trim(), 6000)}\n"""` : '',
+    ].filter(Boolean).join('\n\n');
+  }
+
   private broadcast(): void {
-    this.hub.send({ type: 'briefing', briefing: this.current() });
+    this.hub.send({ type: 'briefing', briefing: this.current(), goals: this.goals() });
   }
 }
 
 // ---------------------------------------------------------------- prompts
 
-export function briefingSystemPrompt(req: Pick<OfficerTurn, 'planner' | 'projectId' | 'projectName' | 'repos'>): string {
+export function briefingSystemPrompt(req: Pick<OfficerTurn, 'planner' | 'projectId' | 'projectName' | 'repos' | 'goal'>): string {
+  if (req.goal) return goalSystemPrompt(req);
   return `
 # You are ${req.planner.name}, operations officer for ${req.projectName} aboard the Focus, in a briefing in the observation lounge
 
@@ -519,6 +730,54 @@ Diagrams, for complex changes only (several modules, or a real choice of design;
 `.trim();
 }
 
+/** For a goal: agree where we're going, not the route, and find the way one small step at a time. */
+function goalSystemPrompt(req: Pick<OfficerTurn, 'planner' | 'projectId' | 'projectName' | 'repos'>): string {
+  return `
+# You are ${req.planner.name}, operations officer for ${req.projectName} aboard the Focus, in a briefing about a goal in the observation lounge
+
+The manager has a goal, not a spec. Nobody knows the whole route yet, and that's fine: you'll get there one small step at a time. Each step is a GitHub issue that a Claude Code agent builds on their own, with nobody to ask, and the QA officer tests. After a step lands, the manager reconvenes you to hear what it taught you, and you pick the next step together. Your job is to agree where you're going and find the way as you go, not to plan the route up front.
+
+${repoList(req.repos)}
+
+How to run it:
+- Agree the destination: what the manager wants and why, who it's for, and what you'd see once it's done (observable outcomes, not features). That takes a handful of questions, not a requirements session. Stop once you have it.
+- Name the unknowns: the assumptions that could sink the goal or change the route (does the data exist, will the API allow it, do people want it, will it be fast enough). The steps are there to find these out.
+- Don't design the solution, list tasks or map the route. No scope lists, no architecture, no breakdown. Where the how matters, a step finds it out.
+- Ask one question per reply. Keep replies short: a line on what you found, then the question with your recommendation, so the manager can just say yes.
+- Look before you ask. Never ask what the code can tell you: read it (Read, Glob, Grep; you can't change anything). For what the code can't tell you, search and read the web (WebSearch, WebFetch) and say where you found it.
+- Keep the brief on the wall screen current with mcp__brief__update_brief: summary (the goal, in a line), why, who, acceptance (what you'd see once it's done) and open_questions (the unknowns, riskiest first). Leave scope, out_of_scope and diagrams empty.
+- ${qaName(req)}, the project's QA officer, sits in: they test every step, and they'll check the goal is met at the end. When you change the done-when outcomes, they may add a note on making them checkable. Weigh it, and put what the manager agrees to into them.
+- Once you know the destination and the riskiest unknown, suggest taking the first step. The manager decides when.
+
+Choosing a step, now and every time you reconvene:
+- The smallest change an agent can build in one sitting and a reviewer can merge on its own, that either tests the riskiest unknown or gets a thin slice of the goal working end to end.
+- Never plan past the next step: you'll know more once it lands.
+- On reconvening, read what landed (your checkout is up to date) and how it went. Say what the step taught you, update the unknowns on the wall screen (and the done-when outcomes, if the goal itself has moved), then suggest the next step in a sentence or two, or say you think the goal is met and why.
+`.trim();
+}
+
+/** How the officer writes a goal's step. The office puts a line linking it to the goal on top. */
+export const STEP_FORMAT = `The step, as a GitHub issue:
+- title: imperative and specific, under 70 characters.
+- body, in Markdown, with these sections:
+  - \`## Testing\`: the unknown this step tests, or the slice of the goal it gets working, in a sentence or two.
+  - \`## Why now\`: why this comes next, from what you know so far (and what earlier steps taught you).
+  - \`## What to build\`: the change, concretely, naming the files involved. Small: one agent, one sitting, one pull request.
+  - \`## Done when\`: a checklist (\`- [ ]\`) of observable, testable outcomes for this step only.
+  - \`## Not in this step\`: what an agent might be tempted to do that belongs to a later step (skip it if nothing needs saying).`;
+
+/** JSON schema for a goal's step: an issue like any other, in the step's format. */
+export function stepSchema(repos: string[]): Record<string, unknown> {
+  const schema = draftSchema(repos);
+  return {
+    ...schema,
+    properties: {
+      ...(schema.properties as Record<string, unknown>),
+      body: { type: 'string', description: 'The step in Markdown: Testing, Why now, What to build, Done when, Not in this step.' },
+    },
+  };
+}
+
 const qaName = (req: Pick<OfficerTurn, 'projectId'>) => qaOfficerFor(req.projectId).name;
 
 const SPEAKERS: Record<BriefingMessage['from'], string> = { manager: 'Manager', officer: 'Operations officer', qa: 'QA officer', engineer: 'Engineer', system: 'Note' };
@@ -539,13 +798,32 @@ function engineeringNote(req: Pick<OfficerTurn, 'brief' | 'engineering'>): strin
   return '';
 }
 
-export function briefingPrompt(req: Pick<OfficerTurn, 'kind' | 'idea' | 'brief' | 'engineering' | 'messages' | 'resumeSessionId'>): string {
+export function briefingPrompt(req: Pick<OfficerTurn, 'kind' | 'idea' | 'brief' | 'engineering' | 'messages' | 'resumeSessionId' | 'goal' | 'report'>): string {
   const { approach: _, ...brief } = req.brief;
   const engineering = engineeringNote(req);
   // a lost session (or one that never started) gets the conversation back from the transcript
   const recap = req.resumeSessionId
     ? ''
     : `Here's the briefing so far:\n"""\n${transcript(req.messages, 'officer')}\n"""\n\nThe brief on the screen:\n${JSON.stringify(brief, null, 2)}\n\n${engineering ? `${engineering}\n\n` : ''}`;
+  if (req.kind === 'open' && req.goal) {
+    return `The manager has a goal:\n"""\n${req.idea}\n"""\n\nGet your bearings in the code, put a first draft of the brief on the screen with update_brief (the goal, and any unknowns you can already see), then ask your first question.`;
+  }
+  if (req.kind === 'step') {
+    const steps = req.goal?.steps ?? [];
+    const sofar = steps.length ? `Steps so far:\n${steps.map(stepLine).join('\n')}\n\n` : '';
+    return `${recap}${sofar}The manager wants to take the ${steps.length ? 'next' : 'first'} step toward the goal. Write it now, from the brief and what you've discussed${steps.length ? ' since the last step' : ''}: one step, not a plan.
+
+${STEP_FORMAT}
+
+Pick the repository the step's work belongs in. Finish with the structured result: repo, title and body.`;
+  }
+  if (req.kind === 'reconvene') {
+    return `${recap}The manager has reconvened the briefing to hear how the latest step went.
+
+${req.report ?? ''}
+
+Your checkout is up to date with what has landed: read it where it helps. If the step hasn't landed yet, say where it stands and ask what's on the manager's mind. Otherwise say what it taught you, update the unknowns on the wall screen (and the done-when outcomes, if the goal has moved), then suggest the next step in a sentence or two, or say you think the goal is met and why. Keep it short.`;
+  }
   if (req.kind === 'open') {
     return `The manager has called a briefing about:\n"""\n${req.idea}\n"""\n\nGet your bearings in the code, put a first draft of the brief on the screen with update_brief (including your open questions), then ask your first question.`;
   }

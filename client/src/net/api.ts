@@ -30,13 +30,17 @@ export const api = {
   draftIssue: (projectId: string, idea: string, revise?: { repo: string; title: string; body: string; notes: string }) =>
     call<IssueDraft>('POST', `/projects/${projectId}/draft`, { idea, revise }),
   discardDraft: (projectId: string) => call('DELETE', `/projects/${projectId}/draft`),
-  callBriefing: (projectId: string, idea: string) => call<Briefing>('POST', '/briefing', { projectId, idea }),
+  callBriefing: (projectId: string, idea: string, goal = false) => call<Briefing>('POST', '/briefing', { projectId, idea, goal }),
   briefingSay: (text: string) => call<Briefing>('POST', '/briefing/say', { text }),
   briefingWrapUp: (shape: WrapUpShape) => call<Briefing>('POST', '/briefing/wrap-up', { shape }),
   briefingFile: (edits: BreakdownEdits) => call<Briefing>('POST', '/briefing/file', edits),
   briefingAskEngineering: (text: string) => call<Briefing>('POST', '/briefing/engineering', { text }),
   briefingPickApproach: (option: number) => call<Briefing>('POST', '/briefing/approach', { option }),
   briefingEnd: () => call('DELETE', '/briefing'),
+  briefingFileStep: (step: { title: string; body: string }) => call<Briefing>('POST', '/briefing/step', step),
+  briefingPark: () => call('POST', '/briefing/park'),
+  reconveneGoal: (id: string) => call<Briefing>('POST', `/goals/${id}/reconvene`),
+  dropGoal: (id: string) => call('DELETE', `/goals/${id}`),
   sendToQa: (projectId: string, repo: string, number: number) => call<QaReview>('POST', '/prs/qa', { projectId, repo, number }),
   resolveConflicts: (projectId: string, repo: string, number: number) =>
     call<Agent>('POST', '/prs/resolve-conflicts', { projectId, repo, number }),

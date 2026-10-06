@@ -1,6 +1,7 @@
 import { chiefEngineer, crewVoice, plannerFor, qaOfficerFor } from '../../../shared/crew';
 import { optionLabel } from '../../../shared/engineering';
-import type { Brief, Breakdown, BreakdownEdits, Briefing, EngineeringOption, WrapUpShape } from '../../../shared/types';
+import { issueRef, STEP_STATE_LABELS, stepState } from '../../../shared/goals';
+import type { Brief, Breakdown, BreakdownEdits, Briefing, EngineeringOption, GoalStep, StepProposal, WrapUpShape } from '../../../shared/types';
 import { linesToSpeak } from '../../../shared/voice';
 import { api } from '../net/api';
 import { state } from '../net/state';
@@ -17,8 +18,9 @@ export const briefingPanelOpen = () => open;
 
 /**
  * The observation lounge's briefing: the conversation with the project's operations officer on the left, the brief
- * they keep on the wall screen on the right, under the engineer's options once engineering has been asked. With no
- * briefing in session, a form to call one.
+ * they keep on the wall screen on the right, under the engineer's options once engineering has been asked. For a goal,
+ * the step they propose sits above the message box, and the brief shows where you're going and the steps so far. With
+ * no briefing in session, a form to call one, under the goals parked until you reconvene them.
  */
 export function openBriefingPanel(ui: Ui, projectId?: string): void {
   const body = h('div', { class: 'briefing' });
@@ -59,22 +61,31 @@ export function openBriefingPanel(ui: Ui, projectId?: string): void {
   let choosing = false;
   // the breakdown editor outlives re-renders too, rebuilt only when what's filed (or the briefing) changes
   let editor: { key: string; view: BreakdownEditor } | null = null;
+  // so is the call form (a parked goal's step moving on mustn't wipe what you're typing), rebuilt when the projects change
+  let calling: { key: string; el: HTMLElement; goals: HTMLElement } | null = null;
+  // and a goal's proposed step, rebuilt only when the officer proposes another
+  let stepCard: { key: string; view: StepEditor } | null = null;
 
   const render = () => {
     const briefing = state.briefing;
     if (!briefing) {
       shownMessages = -1;
       title.textContent = '🖖 Observation lounge';
-      fill(body, callForm(ui, projectId));
+      const key = JSON.stringify(state.projects.map((p) => [p.id, p.name, p.repos.length]));
+      if (calling?.key !== key) calling = { key, ...callForm(ui, projectId) };
+      fill(calling.goals, ...parkedGoals(ui));
+      if (body.firstChild !== calling.el) fill(body, calling.el);
       return;
     }
+    calling = null;
+    const goal = briefing.goal;
     speak(briefing);
     const officer = plannerFor(briefing.projectId);
     const qa = qaOfficerFor(briefing.projectId);
     const engineer = chiefEngineer();
     const names = { manager: 'You', officer: officer.name, qa: `${qa.name} · QA`, engineer: `${engineer.name} · Engineering` };
     const project = state.project(briefing.projectId);
-    title.textContent = `🖖 Briefing: ${project?.name ?? 'a project'}`;
+    title.textContent = `${goal ? '🧭 Goal' : '🖖 Briefing'}: ${project?.name ?? 'a project'}`;
     const yourTurn = briefing.status === 'waiting' || briefing.status === 'failed';
     input.disabled = !yourTurn;
     send.disabled = !yourTurn;
@@ -91,7 +102,7 @@ export function openBriefingPanel(ui: Ui, projectId?: string): void {
               ...m.text.split(/\n{2,}/).map((p) => h('p', null, p)),
             ),
       ),
-      briefing.status === 'thinking' || briefing.status === 'wrapping-up'
+      briefing.status === 'thinking' || briefing.status === 'wrapping-up' || (goal && briefing.status === 'filing')
         ? h('div', { class: 'briefing-msg officer typing' }, h('strong', null, officer.name), h('p', null, `✻ ${briefing.activity}`))
         : null,
       briefing.status === 'qa-checking'
@@ -100,7 +111,9 @@ export function openBriefingPanel(ui: Ui, projectId?: string): void {
       briefing.status === 'engineering'
         ? h('div', { class: 'briefing-msg engineer typing' }, h('strong', null, names.engineer), h('p', null, `✻ ${briefing.activity}`))
         : null,
-      briefing.status === 'failed' ? h('div', { class: 'briefing-note error' }, `⚠ ${briefing.error ?? 'Something went wrong'}. Say something to carry on.`) : null,
+      briefing.status === 'failed'
+        ? h('div', { class: 'briefing-note error' }, goal?.proposal && briefing.error ? `⚠ ${briefing.error}` : `⚠ ${briefing.error ?? 'Something went wrong'}. Say something to carry on.`)
+        : null,
     );
 
     if (!yourTurn) choosing = false;
@@ -173,6 +186,42 @@ export function openBriefingPanel(ui: Ui, projectId?: string): void {
         ),
         h('aside', { class: 'briefing-brief' }, briefView(briefing.brief, briefing.idea)),
       );
+      return;
+    }
+
+    if (goal) {
+      const next = goal.steps.length ? 'next' : 'first';
+      // with a step already proposed, what you've said since goes into a rewrite
+      const take = goal.proposal
+        ? h('button', { class: 'btn', title: `${officer.name} writes the step again, with what you've said since` }, '↻ Rewrite the step')
+        : h('button', { class: 'btn', title: `${officer.name} writes up the ${next} step: the smallest one that tests the riskiest unknown, for you to edit and file` }, `🧭 Take the ${next} step`);
+      take.disabled = !yourTurn || briefing.messages.length < 2;
+      take.onclick = () => void busy(take, () => api.briefingWrapUp('step'), ui.error);
+      const park = h('button', { class: 'btn', title: 'Out of the lounge until you reconvene it, so the lounge is free for other briefings' }, '⏸ Park');
+      park.disabled = !yourTurn;
+      park.onclick = () => void busy(park, () => api.briefingPark(), ui.error);
+      const endGoal = h('button', { class: 'btn small' }, '✕ End goal');
+      endGoal.onclick = () => {
+        if (confirm(`End the goal? ${officer.name} forgets it. Its issues stay on GitHub.`)) void api.briefingEnd().catch((e: Error) => ui.error(e.message));
+      };
+      const proposal = goal.proposal;
+      if (!proposal) stepCard = null;
+      else {
+        const key = JSON.stringify([briefing.id, proposal]);
+        if (stepCard?.key !== key) stepCard = { key, view: stepEditor(ui, proposal) };
+        stepCard.view.enable(yourTurn);
+      }
+      fill(body,
+        h('div', { class: 'briefing-chat' }, log, stepCard?.view.el, h('div', null, voiceControls(), inputBox, h('div', { class: 'row' }, send, take, park, cost, h('span', { class: 'grow' }), endGoal))),
+        h('aside', { class: 'briefing-brief' }, goalView(briefing)),
+      );
+      if (briefing.messages.length !== shownMessages) {
+        shownMessages = briefing.messages.length;
+        requestAnimationFrame(() => (log.scrollTop = log.scrollHeight));
+      } else {
+        log.scrollTop = log.scrollHeight;
+      }
+      if (yourTurn && !proposal && document.activeElement !== input) input.focus();
       return;
     }
 
@@ -302,9 +351,10 @@ function breakdownEditor(b: Breakdown, filing: boolean): BreakdownEditor {
   };
 }
 
-function callForm(ui: Ui, projectId?: string): HTMLElement {
+function callForm(ui: Ui, projectId?: string): { el: HTMLElement; goals: HTMLElement } {
+  const goals = h('div', { class: 'parked-goals' });
   const projects = state.projects.filter((p) => p.repos.length);
-  if (!projects.length) return h('div', { class: 'empty' }, 'Connect a repository to a project first: the officer reads its code during the briefing.');
+  if (!projects.length) return { el: h('div', { class: 'empty' }, 'Connect a repository to a project first: the officer reads its code during the briefing.'), goals };
   const project = h('select', null, ...projects.map((p) => h('option', { value: p.id, selected: p.id === projectId }, p.name)));
   const officer = h('p', { class: 'muted' });
   const showOfficer = () =>
@@ -314,12 +364,89 @@ function callForm(ui: Ui, projectId?: string): HTMLElement {
   const idea = h('textarea', { placeholder: 'What do you want to talk through? e.g. a wishlist that follows shoppers across devices', autofocus: true });
   const go = h('button', { class: 'btn primary' }, '📣 Call the briefing');
   go.onclick = () => void busy(go, () => api.callBriefing(project.value, idea.value), ui.error);
-  return h('div', { class: 'briefing-call' },
-    h('p', null, 'For anything bigger or fuzzier than a one-line issue. The officer reads the code, asks you questions one at a time and keeps a brief on the wall screen. QA chips in when the acceptance criteria change, so they can be tested. For a big change, ask engineering for options on how to build it and pick one. When you wrap up, they write one issue to the project’s stand, or break it down into an epic and sub-issues for you to check and file.'),
-    h('div', { class: 'field' }, h('label', null, 'Project'), project),
-    officer,
-    h('div', { class: 'field' }, h('label', null, 'Topic'), withMic(ui, idea)),
-    go,
+  const goal = h('button', { class: 'btn primary', title: 'No plan up front: agree where you’re going, then take one small step at a time' }, '🧭 Set a goal');
+  goal.onclick = () => void busy(goal, () => api.callBriefing(project.value, idea.value, true), ui.error);
+  return {
+    el: h('div', { class: 'briefing-call' },
+      goals,
+      h('p', null, 'For anything bigger or fuzzier than a one-line issue. The officer reads the code, asks you questions one at a time and keeps a brief on the wall screen. QA chips in when the acceptance criteria change, so they can be tested. For a big change, ask engineering for options on how to build it and pick one. When you wrap up, they write one issue to the project’s stand, or break it down into an epic and sub-issues for you to check and file.'),
+      h('p', null, 'Or set a goal, when the route is foggy: agree where you’re going and what’s unknown, with no plan. The officer proposes one small step at a time, the one that tests the riskiest unknown. Once you file it, the goal is parked while the crew builds it; reconvene to hear what it taught you and pick the next.'),
+      h('div', { class: 'field' }, h('label', null, 'Project'), project),
+      officer,
+      h('div', { class: 'field' }, h('label', null, 'Topic'), withMic(ui, idea)),
+      h('div', { class: 'row' }, go, goal),
+    ),
+    goals,
+  };
+}
+
+/** How a step stands, in a few words: its PR, and QA's verdict on it. */
+const stepStatus = (s: GoalStep) => [STEP_STATE_LABELS[stepState(s)], s.qa && `QA ${s.qa.verdict === 'pass' ? 'passed' : 'failed'}`].filter(Boolean).join(' · ');
+const issueLink = (s: { url: string; repo: string; number: number }, from?: string) => h('a', { href: s.url, target: '_blank', rel: 'noopener' }, issueRef(s, from));
+
+/** The goals parked out of the lounge, each with its latest step and a button to reconvene it. */
+function parkedGoals(ui: Ui): HTMLElement[] {
+  if (!state.goals.length) return [];
+  return [
+    h('h3', null, '🧭 Goals underway'),
+    ...state.goals.map((g) => {
+      const officer = plannerFor(g.projectId).name;
+      const steps = g.goal?.steps ?? [];
+      const latest = steps.at(-1);
+      const landed = latest && (latest.outcome === 'merged' || latest.outcome === 'closed');
+      const reconvene = h('button', { class: `btn small${landed ? ' primary' : ''}`, title: `${officer} catches up on the latest step and says what it taught you` }, '📣 Reconvene');
+      reconvene.onclick = () => void busy(reconvene, () => api.reconveneGoal(g.id), ui.error);
+      const drop = h('button', { class: 'btn small' }, '✕ Drop');
+      drop.onclick = () => {
+        if (confirm(`Drop the goal? ${officer} forgets it. Its issues stay on GitHub.`)) void api.dropGoal(g.id).catch((e: Error) => ui.error(e.message));
+      };
+      return h('div', { class: 'breakdown-card goal' },
+        h('div', { class: 'row' }, h('strong', null, g.brief.summary || g.idea), h('small', { class: 'muted' }, state.project(g.projectId)?.name ?? ''), h('span', { class: 'grow' }), reconvene, drop),
+        latest
+          ? h('small', null, `Step ${steps.length}: `, issueLink(latest), ` ${latest.title} · ${stepStatus(latest)}`)
+          : h('small', { class: 'muted' }, 'Parked before the first step'),
+      );
+    }),
+  ];
+}
+
+interface StepEditor {
+  el: HTMLElement;
+  /** Whether it can be filed now: only while it's your turn. */
+  enable(yes: boolean): void;
+}
+
+/** The step the officer proposed, editable, with a button to file it. */
+function stepEditor(ui: Ui, step: StepProposal): StepEditor {
+  const title = h('input', { value: step.title });
+  const area = h('textarea', { value: step.body });
+  const file = h('button', { class: 'btn primary', title: 'Files it on GitHub, linked to the goal, then parks the goal while the crew builds it' }, '📌 File this step');
+  file.onclick = () => void busy(file, () => api.briefingFileStep({ title: title.value, body: area.value }), ui.error);
+  return {
+    el: h('div', { class: 'breakdown-card step' }, h('div', { class: 'row' }, h('strong', null, 'Step'), title, h('small', { class: 'muted' }, step.repo), file), area),
+    enable: (yes) => {
+      for (const el of [title, area, file]) el.disabled = !yes;
+    },
+  };
+}
+
+/** A goal's side of the wall screen: where you're going, what's unknown, and the steps so far. */
+function goalView(b: Briefing): HTMLElement {
+  const { brief, goal } = b;
+  const steps = goal?.steps ?? [];
+  return h('div', null,
+    h('h3', null, brief.summary || b.idea),
+    goal?.epic ? h('p', null, '🧭 ', issueLink(goal.epic)) : null,
+    section('Why', brief.why ? [brief.why] : [], 'why'),
+    section('Who for', brief.who ? [brief.who] : [], 'who'),
+    section('Done when', brief.acceptance, 'acceptance'),
+    section('Unknowns', brief.openQuestions, 'open'),
+    h('div', { class: 'brief-section steps' },
+      h('h4', null, 'Steps'),
+      steps.length
+        ? h('ol', null, ...steps.map((s) => h('li', null, issueLink(s, goal?.epic?.repo), ` ${s.title} `, h('small', { class: 'muted' }, stepStatus(s)))))
+        : h('p', { class: 'muted' }, 'None yet. The first tests the riskiest unknown.'),
+    ),
   );
 }
 
@@ -351,12 +478,13 @@ function optionsView(ui: Ui, briefing: Briefing, yourTurn: boolean): HTMLElement
   );
 }
 
+const section = (label: string, entries: string[], cls = '') =>
+  h('div', { class: `brief-section ${cls}` },
+    h('h4', null, label),
+    entries.length ? h('ul', null, ...entries.map((e) => h('li', null, e))) : h('p', { class: 'muted' }, '—'),
+  );
+
 function briefView(brief: Brief, idea: string): HTMLElement {
-  const section = (label: string, entries: string[], cls = '') =>
-    h('div', { class: `brief-section ${cls}` },
-      h('h4', null, label),
-      entries.length ? h('ul', null, ...entries.map((e) => h('li', null, e))) : h('p', { class: 'muted' }, '—'),
-    );
   return h('div', null,
     h('h3', null, brief.summary || idea),
     section('Why', brief.why ? [brief.why] : [], 'why'),
