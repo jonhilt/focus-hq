@@ -10,7 +10,7 @@ import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
 import { afterCloudRun, carryOnInNewSession, fallBackToLocal } from './cloud';
-import { afterLanding, afterVerdict, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, closeCheck, conflictsNote, fileGoal, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reviewsToStart, shipped, shipPlan, sliceBranch, sliceLanded, workspaceNote } from './lead';
+import { afterLanding, afterVerdict, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, closeCheck, conflictsNote, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reviewsToStart, shipped, shipPlan, sliceBranch, sliceLanded } from './lead';
 import { repoFolders } from './planner';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
 import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
@@ -471,7 +471,7 @@ export class AgentManager {
     if (!FINISHED.includes(agent.status) || FiberMap.hasUnsafe(this.runs, id)) throw new Refused({ message: `${agent.name} is working: compact once their turn ends` });
     const { status, activity } = agent;
     this.update(agent, { status: 'working' });
-    const keep = agent.lead ? compactInstructions(agent.lead.title, agent.lead.note) : COMPACT_INSTRUCTIONS;
+    const keep = agent.lead ? compactInstructions(agent.lead) : COMPACT_INSTRUCTIONS;
     const work = this.compact(agent, keep).pipe(Effect.flatMap((ok) => Effect.sync(() => this.update(agent, { status, activity: ok ? 'Conversation compacted' : activity }))));
     return this.runtime.runPromise(Fiber.join(this.runFor(id, work))).then(() => agent);
   }
@@ -675,7 +675,7 @@ export class AgentManager {
       activity: `Coming over to team station ${station + 1}`,
       branch: sliceBranch(title, 1, newId('s').slice(-4)),
       baseBranch: 'main',
-      lead: { station, title, repos: [], slice: 1, prs: [] },
+      lead: { station, title, brief: goalBrief(text), repos: [], slice: 1, prs: [] },
       costUsd: 0,
       startedAt: Date.now(),
     };
@@ -805,8 +805,8 @@ export class AgentManager {
       const project = this.store.project(agent.projectId);
       yield* this.checkOutSlice(agent, project.repos);
       if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
-      const words = rt.inbox.splice(0).join('\n\n') || 'Hello! What are we working on?';
-      yield* this.runSession(agent, `${workspaceNote(agent.lead!, agent.branch)}\n\n${words}`);
+      // a new goal, or one whose conversation couldn't be resumed: the lead hears where it stands
+      yield* this.runSession(agent, freshSessionPrompt(agent.lead!, agent.branch, rt.inbox.splice(0), sliceLanded(agent.lead!.prs)));
     });
   }
 
@@ -846,13 +846,13 @@ export class AgentManager {
       const step = afterLanding(dirty.map((r) => r.folder), !!agent.sessionId);
       if (step === 'held-back') return heldBack(lead, dirty.map((r) => r.folder));
       // a good moment to lighten the conversation: the slice's details are in the code and the note now
-      if (step === 'compact-then-next') yield* this.compact(agent, compactInstructions(lead.title, lead.note));
+      const summarised = step === 'compact-then-next' && (yield* this.compact(agent, compactInstructions(lead)));
       const slice = lead.slice + 1;
       yield* Effect.forEach(lead.repos, (r) => workspace.remove(r.repo, leadWorktreeId(agent.id, r.folder)), { discard: true });
       const note = lead.note && { ...lead.note, slice: [] };
       this.update(agent, { branch: sliceBranch(lead.title, slice, newId('s').slice(-4)), lead: { ...lead, note, repos: [], slice, prs: [] } });
       yield* this.checkOutSlice(agent, project.repos);
-      return newSliceNote(agent.lead!, agent.branch);
+      return newSliceNote(agent.lead!, agent.branch, summarised);
     });
   }
 

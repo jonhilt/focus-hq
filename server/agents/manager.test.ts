@@ -101,6 +101,49 @@ describe('AgentManager', () => {
     expect(claude.turns[0].sent.at(-1)).toMatch(new RegExp(`^\\[Office\\] ${pr.repo}#${pr.number} has merge conflicts with \`main\`\\. Resolve them in \\./${pr.repo.split('/')[1]}`));
   });
 
+  it('carries the goal into the next slice, as the captain put it, once the last one has landed', async () => {
+    const { agents, claude, store, project } = office();
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items\nShoppers keep a list across devices') as { agent: { id: string } };
+    const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
+    await until(() => leads().length === 1);
+    await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    leads()[0].end({ ok: true, summary: 'Shipped the first slice' });
+    await until(() => store.agent(lead.id).status === 'done');
+
+    for (const pr of store.agent(lead.id).lead!.prs) agents.prClosed(pr.repo, pr.number, true);
+    // the office summarises the conversation first, keeping the goal
+    await until(() => leads().length === 2);
+    expect(leads()[1].req.prompt).toMatch(/^\/compact Summarise this conversation for the lead of the goal "Saved items"/);
+    expect(leads()[1].req.prompt).toContain('> Shoppers keep a list across devices');
+    leads()[1].end({ ok: true, summary: 'Compacted' });
+
+    await until(() => leads().length === 3);
+    const next = leads()[2].req;
+    expect(next.resumeSessionId).toBe('session-1');
+    expect(next.prompt).toMatch(/^Slice 2 starts on fresh code/);
+    expect(next.prompt).toContain('The office summarised your conversation to make room for this slice');
+    expect(next.prompt).toContain('The goal: Saved items\n\nAs the captain first put it:\n> Saved items\n> Shoppers keep a list across devices');
+    expect(next.prompt).toMatch(/\[Office\] Slice 1 has landed/);
+  });
+
+  it('tells a lead whose conversation can’t be picked back up where the goal stands', async () => {
+    const { agents, claude, store, project } = office();
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items\nShoppers keep a list across devices') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    expect(claude.turns[0].req.prompt).not.toContain('new conversation');
+    claude.turns[0].end({ ok: true, summary: 'Proposed a slice' });
+    await until(() => store.agent(lead.id).status === 'done');
+
+    store.agent(lead.id).sessionId = undefined;
+    agents.message(lead.id, 'Go ahead');
+    await until(() => claude.turns.length === 2);
+    const fresh = claude.turns[1].req;
+    expect(fresh.resumeSessionId).toBeUndefined();
+    expect(fresh.prompt).toContain("You're carrying on with this goal in a new conversation");
+    expect(fresh.prompt).toContain('> Shoppers keep a list across devices');
+    expect(fresh.prompt).toMatch(/Go ahead$/);
+  });
+
   it('says why when a goal can’t have the station it asked for, and queues one when every station is taken', () => {
     const { agents, project } = office();
     agents.startGoal(project.id, 'One', { station: 1 });

@@ -308,6 +308,11 @@ export interface LeadWork {
   station: number;
   /** The goal in a few words. */
   title: string;
+  /**
+   * The goal as the captain first put it (`goalBrief`). The lead hears it again with the note at each new slice, so it
+   * survives a summarised conversation, or one that's gone. Missing on goals started before it was kept.
+   */
+  brief?: string;
   /** The lead's note on the goal, once they've written one. */
   note?: GoalNote;
   /** The lead thinks the goal is done, or that nothing worthwhile is left: the captain closes it, or carries on. */

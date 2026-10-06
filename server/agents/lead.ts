@@ -37,6 +37,15 @@ export function goalTitle(text: string): string {
   return `${cut.slice(0, cut.lastIndexOf(' ') > 30 ? cut.lastIndexOf(' ') : 60).replace(/[\s.,;:]+$/, '')}…`;
 }
 
+/** How much of the captain's first words on a goal it keeps, to hear again at each new slice. */
+export const BRIEF_LIMIT = 2000;
+
+/** The goal as the captain first put it, kept with the goal (cut short past `BRIEF_LIMIT`). */
+export function goalBrief(text: string): string {
+  const brief = text.trim();
+  return brief.length <= BRIEF_LIMIT ? brief : `${brief.slice(0, BRIEF_LIMIT).trimEnd()}…`;
+}
+
 /** The effort a new goal's lead works at: what the captain picked, else the office's default for leads. */
 export const goalEffort = (picked: Effort | undefined, settings: Pick<Settings, 'leadEffort'>): Effort => picked ?? settings.leadEffort;
 
@@ -137,12 +146,12 @@ export const afterLanding = (dirtyFolders: string[], hasSession: boolean): 'held
  * What a lead's conversation keeps when the office compacts it between slices: the goal and how it's going, not the
  * details the code and the note already hold.
  */
-export function compactInstructions(title: string, note: GoalNote | undefined): string {
+export function compactInstructions(work: Pick<LeadWork, 'title' | 'note' | 'brief'>): string {
   return [
-    `Summarise this conversation for the lead of the goal "${title}" to carry on from, at the start of a new slice.`,
-    'Keep: the goal and what done looks like; the decisions made and why; what each slice taught us; what the captain prefers, and anything they asked to keep in mind; the pull requests and what became of them; what to do next.',
+    `Summarise this conversation for the lead of the goal "${work.title}" to carry on from, at the start of a new slice.`,
+    'Keep: the goal, what the captain asked for and what done looks like; the decisions made and why; what each slice taught us; what the captain prefers, and anything they asked to keep in mind; the pull requests and what became of them; what to do next.',
     'Drop: file contents, diffs, command and tool output, and the step-by-step of finished work: the code and the goal note hold it now.',
-    `The goal note as it stands:\n${noteForPrompt(title, note)}`,
+    `The goal note as it stands:\n${noteForPrompt(work)}`,
   ].join('\n\n');
 }
 
@@ -198,10 +207,14 @@ export function applyNote(work: Pick<LeadWork, 'title' | 'note'>, input: NoteInp
   return error ? { error } : { title, note };
 }
 
-/** The goal as the lead last wrote it down: for a new slice, and anywhere their conversation may have been summarised. */
-export function noteForPrompt(title: string, note: GoalNote | undefined): string {
-  const n = note ?? emptyNote();
-  const parts = [`The goal: ${title}`];
+/**
+ * The goal as the captain put it and the lead last wrote it down: for a new slice, and anywhere their conversation may
+ * have been summarised or lost.
+ */
+export function noteForPrompt(work: Pick<LeadWork, 'title' | 'note' | 'brief'>): string {
+  const n = work.note ?? emptyNote();
+  const parts = [`The goal: ${work.title}`];
+  if (work.brief && work.brief !== work.title) parts.push(`As the captain first put it:\n${work.brief.split('\n').map((l) => `> ${l}`.trimEnd()).join('\n')}`);
   if (n.done) parts.push(`What done looks like: ${n.done}`);
   if (n.learned.length) parts.push(`What the slices so far taught us:\n${n.learned.map((l) => `- ${l}`).join('\n')}`);
   if (n.slice.length) parts.push(`This slice:\n${n.slice.map((i) => `- [${i.done ? 'x' : ' '}] ${i.text}`).join('\n')}`);
@@ -318,9 +331,32 @@ export function landedNote(work: LeadWork): string {
   return `Slice ${work.slice} has landed: ${prs}. Tell the captain what it taught you and what you'd do next.`;
 }
 
-/** What the lead hears when a new slice starts: their repos on fresh code, and the goal as they wrote it down. */
-export function newSliceNote(work: LeadWork, branch: string): string {
-  return `Slice ${work.slice} starts on fresh code. Your repos are now:\n${workspaceList(work, branch)}\n\nThe office cleared the last slice's checklist from your note. Where the goal stands:\n\n${noteForPrompt(work.title, work.note)}`;
+/**
+ * What the lead hears when a new slice starts: their repos on fresh code, and the goal as the captain put it and the
+ * lead wrote it down. `summarised`: the office compacted their conversation first, so the note is what to go on.
+ */
+export function newSliceNote(work: LeadWork, branch: string, summarised = false): string {
+  return [
+    `Slice ${work.slice} starts on fresh code. Your repos are now:\n${workspaceList(work, branch)}`,
+    summarised ? 'The office summarised your conversation to make room for this slice: the goal below, the code and the summary are what to go on.' : '',
+    `The office cleared the last slice's checklist from your note. Where the goal stands:\n\n${noteForPrompt(work)}`,
+  ].filter(Boolean).join('\n\n');
+}
+
+/**
+ * A lead's first message in a new Claude Code session. A new goal's lead hears where their repos are and the captain's
+ * words. A goal under way whose conversation couldn't be resumed hears where the goal stands first; when its slice has
+ * landed, the new slice's note (`newSliceNote`, which goes before this) says where the repos are and where the goal stands.
+ */
+export function freshSessionPrompt(work: LeadWork, branch: string, inbox: string[], landed: boolean): string {
+  const words = inbox.join('\n\n');
+  // the goal's first words, in full: the brief is them, cut short past BRIEF_LIMIT
+  if (work.brief !== undefined && inbox.length && goalBrief(inbox[0]) === work.brief) return `${workspaceNote(work, branch)}\n\n${words}`;
+  return [
+    landed ? '' : workspaceNote(work, branch),
+    `You're carrying on with this goal in a new conversation: the one before couldn't be picked back up.${landed ? '' : ` Where the goal stands:\n\n${noteForPrompt(work)}`}`,
+    words || "Look over the repos, then tell the captain where you think the goal stands and what you'd do next.",
+  ].filter(Boolean).join('\n\n');
 }
 
 /** The slice landed but some repos still have uncommitted changes: the next slice waits for them. */
