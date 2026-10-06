@@ -15,6 +15,7 @@ import {
   type Settings,
   type WrapUpShape,
 } from '../../shared/types';
+import { spokenLine } from '../../shared/voice';
 import type { Hub } from '../hub';
 import type { Store, StoredBriefing } from '../store';
 import { errorMessage, newId, truncate } from '../util';
@@ -51,6 +52,8 @@ export interface OfficerHooks {
 export interface OfficerReply {
   /** What the officer says (not used on a wrap-up). */
   text: string;
+  /** The same reply as a line to say aloud, from the same turn. */
+  spoken?: string;
   sessionId?: string;
   costUsd?: number;
   /** A wrap-up's issue. */
@@ -346,7 +349,8 @@ export class Briefings {
       this.broadcast();
       return;
     }
-    briefing.messages.push({ from: 'officer', text: reply.text.trim() || '…', at: now });
+    const text = reply.text.trim() || '…';
+    briefing.messages.push({ from: 'officer', text, spoken: spokenLine(reply.spoken, text), at: now });
     if (acceptanceChanged(before, briefing.brief.acceptance) && qaAtBriefing(project.id, briefing, this.store.agentsIn(project.id).find((a) => a.task === 'review'))) {
       await this.qaNote(briefing, before, signal, current);
       if (!current()) return;
@@ -505,6 +509,7 @@ How to run the briefing:
 - ${qaName(req)}, the project's QA officer, sits in: every pull request built from this issue comes to them to test. When you add or change acceptance criteria, they may add one short note (a criterion that can't be checked, a missing edge case, something the project's QA brief requires). You'll get it with the manager's next message: weigh it, recommend, and put what the manager agrees to into the acceptance criteria. The manager decides.
 - ${chiefEngineer().name}, the ship's engineer, can be called in by the manager to read the code and lay out two or three options for how to build it. When the how is a real choice across several modules, suggest asking engineering. Once the manager picks an option it's the brief's Approach: build on it, don't reopen it.
 - When nothing important is still open, say you have enough and suggest wrapping up. The manager decides when.
+- Finish every reply with the structured result: \`reply\`, what you'd write (it goes in the briefing log, file names and all), and \`spoken\`, the same reply said aloud to the manager in one or two short conversational sentences: the point and the question, with no file paths, code or symbols.
 
 Diagrams, for complex changes only (several modules, or a real choice of design; not every briefing):
 - Think the architecture through from the code: where the responsibilities sit, which modules and classes talk to each other, and what the change would touch.
@@ -619,6 +624,25 @@ Now:
 ${list(req.brief.acceptance)}
 
 Finish with the structured result: your one note, or an empty note if the criteria are fine.`;
+}
+
+export const officerReplySchema = {
+  type: 'object',
+  properties: {
+    reply: { type: 'string', description: 'Your reply for the briefing log: what you found or understood, then your question and recommendation' },
+    spoken: { type: 'string', description: 'The same reply said aloud: one or two short conversational sentences, no file paths, code or symbols' },
+  },
+  required: ['reply', 'spoken'],
+  additionalProperties: false,
+} as const;
+
+/** The officer's structured reply; the session's final text stands in if the structure is missing. */
+export function asOfficerReply(out: unknown, fallback: string): Pick<OfficerReply, 'text' | 'spoken'> {
+  const field = (key: 'reply' | 'spoken') => {
+    const value = typeof out === 'object' && out ? (out as Record<string, unknown>)[key] : undefined;
+    return typeof value === 'string' ? value.trim() : '';
+  };
+  return { text: field('reply') || fallback, spoken: field('spoken') || undefined };
 }
 
 export const qaNoteSchema = {

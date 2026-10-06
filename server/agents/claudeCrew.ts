@@ -6,6 +6,7 @@ import type { Brief, Settings } from '../../shared/types';
 import { paths } from '../config';
 import { errorMessage, truncate } from '../util';
 import {
+  asOfficerReply,
   asQaNote,
   type BriefingOfficer,
   type BriefingQa,
@@ -17,6 +18,7 @@ import {
   type OfficerHooks,
   type OfficerReply,
   type OfficerTurn,
+  officerReplySchema,
   qaNoteSchema,
   type QaReply,
   type QaTurn,
@@ -179,11 +181,11 @@ export class ClaudeOfficer implements BriefingOfficer {
       activity: hooks.activity,
       builtins: [...CODE_TOOLS, ...WEB_TOOLS],
       resume: req.resumeSessionId,
-      schema: wrapUp ? draftSchema(req.repos) : breakDown ? breakdownSchema(req.repos) : undefined,
+      schema: wrapUp ? draftSchema(req.repos) : breakDown ? breakdownSchema(req.repos) : officerReplySchema,
       tools: { server, names: ['update_brief'] },
     });
     return {
-      text: wrapUp || breakDown ? '' : result.text,
+      ...(wrapUp || breakDown ? { text: '' } : asOfficerReply(result.structured, result.text)),
       sessionId: result.sessionId,
       costUsd: result.costUsd,
       draft: wrapUp ? asDraft(result.structured, req.repos) : undefined,

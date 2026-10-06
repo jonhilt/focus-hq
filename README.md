@@ -96,6 +96,15 @@ For anything bigger or fuzzier than a one-line issue, press **📣 Call a briefi
 
 In a briefing the officer can also search and read the web (`WebSearch`, `WebFetch`) for things the code can't answer, like library versions or migration guidance, and tells you where they found it. They still can't change anything.
 
+#### Voice mode
+
+Press **🔈 Voice off** above the message box to talk a briefing through instead of reading it. It's off by default, and each browser remembers the setting.
+
+- **The crew speak.** Each new line is read aloud: the officer's reply as a sentence or two without file paths or code (the officer writes it in the same turn as the reply), and QA's notes, the engineer's recommendation and the officer's fixed lines as they are. The full text still goes in the log, straight away. Lines are spoken one at a time, in log order, and anything already in the log when you open the panel isn't spoken.
+- **Their voices.** [Kokoro](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX) (82M, through `kokoro-js`) runs in the office's server on this machine. The officer, QA and the engineer each have a voice of their own. The model (about 90 MB) downloads into `~/.focus/models/kokoro` the first time voice mode is switched on, or from **⚙️ Settings → Voice input → Crew voices**. Until it's ready, or if it fails to load, the browser's built-in voice stands in.
+- **You answer by talking.** Press 🎤 (or <kbd>Ctrl</kbd>+<kbd>M</kbd> in the message box) and talk, then press again, or hold it and let go. Your answer is sent as soon as whisper.cpp has transcribed it (see [Voice input](#voice-input)). Starting to record stops whoever is speaking and drops their queued lines. If nothing was heard, nothing is sent. You can still type and press **Send**.
+- **Keep the mic open between turns** opens the microphone once for the whole session rather than for each answer. Use it with speakers, where opening the mic each time makes the audio glitch. Leave it off with Bluetooth earphones, which drop to call quality while the mic is open. Turning voice mode off or closing the panel lets go of the mic.
+
 A briefing is saved in `~/.focus/state.json` with the officer's session, and each turn resumes that session. Nothing runs while it's your turn, and you can pick a briefing back up after a restart, along with a breakdown waiting to be filed (your unsaved edits to it aside).
 
 ## How an agent works an issue
@@ -219,7 +228,7 @@ Cloud agents run in a cloud VM rather than on your machine, but they push to Git
 
 ## Voice input
 
-Every box where you write to the crew has a 🎤: an agent's message box, the briefing topic and answers, the New issue idea, notes, title and description, and the QA brief. Click it (or press **Ctrl+M** in the box) and speak, then click again to stop. The text lands at the cursor for you to check. Nothing is sent until you send it.
+Every box where you write to the crew has a 🎤: an agent's message box, the briefing topic and answers, the New issue idea, notes, title and description, and the QA brief. Click it (or press **Ctrl+M** in the box) and speak, then click again to stop, or hold it while you speak and let go. The text lands at the cursor for you to check. Nothing is sent until you send it (except in a briefing's [voice mode](#voice-mode)).
 
 [whisper.cpp](https://github.com/ggml-org/whisper.cpp) transcribes on your machine with the `large-v3-turbo` model, so your audio never leaves it. On Apple Silicon it runs on the GPU. Set it up once:
 

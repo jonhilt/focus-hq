@@ -1,11 +1,13 @@
-import { chiefEngineer, plannerFor, qaOfficerFor } from '../../../shared/crew';
+import { chiefEngineer, crewVoice, plannerFor, qaOfficerFor } from '../../../shared/crew';
 import { optionLabel } from '../../../shared/engineering';
 import type { Brief, Breakdown, BreakdownEdits, Briefing, EngineeringOption, WrapUpShape } from '../../../shared/types';
+import { linesToSpeak } from '../../../shared/voice';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
-import { withMic } from './dictation';
+import { voicePrefs, VoiceSession } from './briefingVoice';
+import { type MicMode, withMic } from './dictation';
 import { diagramView } from './diagrams';
 import { busy, fill, h } from './dom';
 
@@ -22,8 +24,20 @@ export function openBriefingPanel(ui: Ui, projectId?: string): void {
   const body = h('div', { class: 'briefing' });
   const title = h('h2');
   // the message box outlives re-renders, so a reply arriving doesn't wipe what you're typing
-  const input = h('textarea', { class: 'briefing-input', placeholder: 'Your answer… (Enter to send, Shift+Enter for a new line)' });
-  const inputBox = withMic(ui, input);
+  const input = h('textarea', { class: 'briefing-input' });
+  // 🔊 voice mode: the crew speak their new lines, and 🎤 / Ctrl+M is push-to-talk, sending what you say
+  let voice = voicePrefs.voiceMode ? new VoiceSession(voicePrefs.keepMicOpen) : null;
+  ui.panels.own(() => voice?.end());
+  const micMode = (): MicMode =>
+    voice ? { kind: 'talk', mic: voice.mic, started: () => voice?.speaker.hush(), send: (text) => api.briefingSay(text).then(() => undefined) } : { kind: 'dictate' };
+  const inputBox = withMic(ui, input, micMode);
+  // what was in the log when the panel opened has been said: only lines after it are spoken
+  let heard = { id: state.briefing?.id, count: state.briefing?.messages.length ?? 0 };
+  const speak = (briefing: Briefing) => {
+    const lines = linesToSpeak(briefing.messages, heard.id === briefing.id ? heard.count : 0);
+    heard = { id: briefing.id, count: briefing.messages.length };
+    for (const line of lines) voice?.speaker.say(line.text, crewVoice(line.speaker, briefing.projectId));
+  };
   const send = h('button', { class: 'btn primary' }, 'Send');
   const sendNow = () => {
     if (!input.value.trim() || send.disabled) return;
@@ -54,6 +68,7 @@ export function openBriefingPanel(ui: Ui, projectId?: string): void {
       fill(body, callForm(ui, projectId));
       return;
     }
+    speak(briefing);
     const officer = plannerFor(briefing.projectId);
     const qa = qaOfficerFor(briefing.projectId);
     const engineer = chiefEngineer();
@@ -63,6 +78,9 @@ export function openBriefingPanel(ui: Ui, projectId?: string): void {
     const yourTurn = briefing.status === 'waiting' || briefing.status === 'failed';
     input.disabled = !yourTurn;
     send.disabled = !yourTurn;
+    input.placeholder = voice
+      ? 'Press 🎤 or Ctrl+M and talk, then press again (or hold it and let go): your answer goes as soon as it’s transcribed. Or type it.'
+      : 'Your answer… (Enter to send, Shift+Enter for a new line)';
 
     const log = h('div', { class: 'briefing-log' },
       ...briefing.messages.map((m) =>
@@ -165,6 +183,7 @@ export function openBriefingPanel(ui: Ui, projectId?: string): void {
           end,
         )
       : h('div', null,
+          voiceControls(),
           inputBox,
           choosing
             ? h('div', { class: 'row' }, h('strong', null, 'Wrap up as'), one, breakDown, cancel)
@@ -182,6 +201,27 @@ export function openBriefingPanel(ui: Ui, projectId?: string): void {
       log.scrollTop = log.scrollHeight;
     }
     if (yourTurn && document.activeElement !== input) input.focus();
+  };
+
+  const voiceControls = () => {
+    const toggle = h('button', { class: `btn small${voice ? ' primary' : ''}`, title: voice ? 'Voice mode is on: the crew speak, and 🎤 sends what you say. Click to turn it off.' : 'Voice mode: the crew say their lines aloud, and you answer by talking' }, voice ? '🔊 Voice on' : '🔈 Voice off');
+    toggle.onclick = () => {
+      voice?.end();
+      voice = voice ? null : new VoiceSession(voicePrefs.keepMicOpen);
+      voicePrefs.voiceMode = voice !== null;
+      render();
+    };
+    const keep = h('input', { type: 'checkbox', checked: voicePrefs.keepMicOpen });
+    keep.onchange = () => {
+      voicePrefs.keepMicOpen = keep.checked;
+      voice?.keepMicOpen(keep.checked);
+    };
+    return h('div', { class: 'row voice-controls' },
+      toggle,
+      voice
+        ? h('label', { title: 'For speakers: saves the glitch each time the mic opens and closes. Leave it off with Bluetooth earphones.' }, keep, ' Keep the mic open between turns')
+        : null,
+    );
   };
 
   ui.panels.open({ title, body, accent: LCARS.lilac, wide: true });

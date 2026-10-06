@@ -20,6 +20,55 @@ const BADGE: Record<Phase, string> = { idle: '', listening: '● Listening… �
 /** Only one mic records at a time: starting another cancels this one. */
 let cancelActive: (() => void) | undefined;
 
+/** Stops whatever is recording, without transcribing it. */
+export const cancelDictation = () => cancelActive?.();
+
+/** Where recordings get their audio from. */
+export interface Microphone {
+  open(): Promise<MediaStream>;
+  /** A recording is done with the stream. */
+  done(stream: MediaStream): void;
+  /** Lets go of the mic for good, so the browser's mic indicator goes off. */
+  release(): void;
+}
+
+const stopTracks = (stream: MediaStream) => stream.getTracks().forEach((t) => t.stop());
+
+function openStream(): Promise<MediaStream> {
+  if (!navigator.mediaDevices?.getUserMedia) return Promise.reject(new Error('This page can’t use the microphone. Open the office on localhost or over https.'));
+  return navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+}
+
+/** Opens the mic for each recording and closes it after. */
+export const micPerRecording: Microphone = { open: openStream, done: stopTracks, release: () => undefined };
+
+/** Opens the mic for the first recording and keeps it open until it's released: no glitch on speakers each time it opens. */
+export function keptOpenMic(): Microphone {
+  let stream: Promise<MediaStream> | undefined;
+  return {
+    open: () =>
+      (stream ??= openStream().catch((err: unknown) => {
+        stream = undefined;
+        throw err;
+      })),
+    done: () => undefined,
+    release: () => {
+      void stream?.then(stopTracks, () => undefined);
+      stream = undefined;
+    },
+  };
+}
+
+/** What a recording is for: dictating into the box (the words go in at the cursor), or talking (they're sent at once). */
+export type MicMode =
+  | { kind: 'dictate' }
+  | { kind: 'talk'; mic: Microphone; started(): void; send(text: string): Promise<void> };
+
+const DICTATE: MicMode = { kind: 'dictate' };
+const micOf = (mode: MicMode) => (mode.kind === 'talk' ? mode.mic : micPerRecording);
+/** Holding 🎤 or Ctrl+M longer than this records until you let go; a quick press records until you press again. */
+const HOLD_MS = 400;
+
 function paint(mic: HTMLButtonElement): void {
   const phase = mic.dataset.phase as Phase;
   const missing = voiceMissing(state.voice);
@@ -31,16 +80,20 @@ function paint(mic: HTMLButtonElement): void {
 state.on('voice', () => document.querySelectorAll<HTMLButtonElement>('button.mic').forEach(paint));
 
 /**
- * Wraps a text box with a 🎤 button: click it (or press Ctrl+M in the box) to record, again to stop. The server
- * transcribes the recording locally and the text lands at the cursor. Nothing is sent: the manager reviews it and
- * sends it as usual. Put the returned element where the field would have gone.
+ * Wraps a text box with a 🎤 button: click it (or press Ctrl+M in the box) to record, again to stop, or hold it and let
+ * go. The server transcribes the recording locally. Dictating, the text lands at the cursor and nothing is sent: the
+ * manager reviews it and sends it as usual. Talking, it's sent as soon as it's transcribed. `mode` is asked at the
+ * start of each recording. Put the returned element where the field would have gone.
  */
-export function withMic(ui: Ui, field: Field): HTMLElement {
+export function withMic(ui: Ui, field: Field, mode: () => MicMode = () => DICTATE): HTMLElement {
   const mic = h('button', { type: 'button', class: 'mic' }, '🎤');
   const badge = h('span', { class: 'dictate-badge' });
   const wrap = h('div', { class: 'dictate' }, field, mic, badge);
   let phase: Phase = 'idle';
   let session: Promise<Recording> | undefined;
+  let recording: MicMode = DICTATE;
+  /** When the press that started this recording began, while it's still held down. */
+  let heldSince: number | undefined;
 
   const show = (next: Phase) => {
     phase = next;
@@ -67,7 +120,9 @@ export function withMic(ui: Ui, field: Field): HTMLElement {
     cancelActive = cancel;
     // the panel can close (Esc) mid-recording: don't leave the microphone on
     ui.panels.own(cancel);
-    const pending = record();
+    recording = mode();
+    if (recording.kind === 'talk') recording.started();
+    const pending = record(micOf(recording));
     session = pending;
     show('listening');
     pending.catch((err: unknown) => {
@@ -77,51 +132,83 @@ export function withMic(ui: Ui, field: Field): HTMLElement {
     });
   };
 
+  const insert = (text: string) => {
+    const { value, cursor } = insertTranscript(field.value, field.selectionStart ?? field.value.length, field.selectionEnd ?? field.value.length, text);
+    field.value = value;
+    field.focus();
+    field.setSelectionRange(cursor, cursor);
+    // let the panel's own listeners see the change (the QA brief saves on change)
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    field.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+
   const stop = async () => {
     const pending = session;
     if (!pending) return;
     session = undefined;
     if (cancelActive === cancel) cancelActive = undefined;
     show('transcribing');
+    const finished = recording;
     try {
       const { text } = await api.transcribe(await (await pending).stop());
       show('idle');
       if (!field.isConnected) return;
-      if (!text.trim()) return ui.hud.toast('info', 'Dictation: didn’t catch any words.');
-      const { value, cursor } = insertTranscript(field.value, field.selectionStart ?? field.value.length, field.selectionEnd ?? field.value.length, text);
-      field.value = value;
-      field.focus();
-      field.setSelectionRange(cursor, cursor);
-      // let the panel's own listeners see the change (the QA brief saves on change)
-      field.dispatchEvent(new Event('input', { bubbles: true }));
-      field.dispatchEvent(new Event('change', { bubbles: true }));
+      if (!text.trim()) return ui.hud.toast('info', `Dictation: didn’t catch any words${finished.kind === 'talk' ? ', so nothing was sent' : ''}.`);
+      if (finished.kind === 'talk') {
+        try {
+          return await finished.send(text);
+        } catch (err) {
+          // keep the words: they go in the box to send again
+          insert(text);
+          throw err;
+        }
+      }
+      insert(text);
     } catch (err) {
       fail(err instanceof Error ? err.message : String(err));
     }
   };
 
-  const toggle = () => {
-    if (phase === 'idle') start();
-    else if (phase === 'listening') void stop();
+  const press = () => {
+    if (mic.disabled) return;
+    if (phase === 'idle') {
+      start();
+      heldSince = performance.now();
+    } else if (phase === 'listening') void stop();
   };
-  mic.addEventListener('click', toggle);
+  const letGo = () => {
+    if (heldSince !== undefined && performance.now() - heldSince > HOLD_MS && phase === 'listening') void stop();
+    heldSince = undefined;
+  };
+  mic.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    // keep the focus in the box, so Ctrl+M carries on working
+    e.preventDefault();
+    press();
+  });
+  mic.addEventListener('pointerup', letGo);
+  mic.addEventListener('pointerleave', letGo);
+  // Enter or Space on the focused button
+  mic.addEventListener('click', (e) => e.detail === 0 && press());
   field.addEventListener('keydown', (e) => {
     if (!(e instanceof KeyboardEvent) || !e.ctrlKey || e.metaKey || e.altKey || e.code !== 'KeyM') return;
     e.preventDefault();
     e.stopPropagation();
-    toggle();
+    if (!e.repeat) press();
+  });
+  field.addEventListener('keyup', (e) => {
+    if (e instanceof KeyboardEvent && e.code === 'KeyM') letGo();
   });
   show('idle');
   return wrap;
 }
 
-async function record(): Promise<Recording> {
-  if (!navigator.mediaDevices?.getUserMedia) throw new Error('This page can’t use the microphone. Open the office on localhost or over https.');
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+async function record(mic: Microphone): Promise<Recording> {
+  const stream = await mic.open();
   const recorder = new MediaRecorder(stream);
   const chunks: Blob[] = [];
   recorder.ondataavailable = (e) => chunks.push(e.data);
-  const release = () => stream.getTracks().forEach((t) => t.stop());
+  const release = () => mic.done(stream);
   recorder.start();
   return {
     stop: () =>

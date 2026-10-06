@@ -504,6 +504,7 @@ export class DemoOfficer implements BriefingOfficer {
       await wait(1);
       return {
         text: `I've had a look: today this lives around \`${folder}/${files[0]}\`. Before I write anything down, who is this for, and what's going wrong for them today? My guess is returning users who lose track of something they meant to come back to.`,
+        spoken: `I've had a look at the code. Who is this for, and what's going wrong for them today?`,
         sessionId: session,
         costUsd: 0.09,
       };
@@ -518,6 +519,7 @@ export class DemoOfficer implements BriefingOfficer {
       update({ who: line(last), open_questions: brief.openQuestions.slice(1) });
       return {
         text: `That narrows it. What goes wrong for them today, and why fix it now? I'd guess they lose track of things they meant to come back to, and some never do.`,
+        spoken: `That narrows it. What goes wrong for them today, and why fix it now?`,
         sessionId: session,
         costUsd: 0.05,
       };
@@ -526,6 +528,7 @@ export class DemoOfficer implements BriefingOfficer {
       update({ why: line(last), open_questions: brief.openQuestions.slice(1) });
       return {
         text: `Clear. What would tell us it's working? I'd suggest something checkable, like "it's still there after a reload, and on another device once signed in".`,
+        spoken: `Clear. What would tell us it's working?`,
         sessionId: session,
         costUsd: 0.05,
       };
@@ -534,6 +537,7 @@ export class DemoOfficer implements BriefingOfficer {
       update({ acceptance: [line(last), PHONE_CHECK], scope: [line(idea.replace(/^./, (c) => c.toUpperCase()))], open_questions: brief.openQuestions.slice(1), diagrams: [today, optionA, optionB] });
       return {
         text: `Noted, and I've added a phone-width check since \`${files[1]}\` has its own mobile layout. I've put two designs on the screen: A extends \`${files[4]}\` (smallest change, but that file grows), B gives it a module of its own (cleaner, more wiring). I'd go with A, but if you'd like a proper look at the how, ask engineering. And what should we leave out of this first version? I'd keep sharing and notifications for later.`,
+        spoken: `Noted. I've put two designs on the screen and I'd go with A. What should we leave out of this first version?`,
         sessionId: session,
         costUsd: 0.05,
       };
@@ -544,10 +548,10 @@ export class DemoOfficer implements BriefingOfficer {
       const acceptance = qaSpoke ? brief.acceptance.map((a) => (a === PHONE_CHECK ? PHONE_CHECK_REWRITE : a)) : brief.acceptance;
       update({ out_of_scope: [line(last)], open_questions: [], acceptance, diagrams: [today, { ...optionA, title: optionA.title.replace(/^Option A/, 'Chosen') }] });
       const taken = qaSpoke ? ` I've swapped in ${qaOfficerFor(req.projectId).name}'s rewrite of the phone-width check; say if you'd rather keep it loose.` : '';
-      return { text: `That's everything I needed: I've kept Option A on the screen as the chosen design, and nothing important is still open.${taken} Anything to add, or shall we wrap up?`, sessionId: session, costUsd: 0.04 };
+      return { text: `That's everything I needed: I've kept Option A on the screen as the chosen design, and nothing important is still open.${taken} Anything to add, or shall we wrap up?`, spoken: `That's everything I needed. Anything to add, or shall we wrap up?`, sessionId: session, costUsd: 0.04 };
     }
     update({ scope: [...brief.scope, line(last)] });
-    return { text: `Added to the scope. Ready to wrap up whenever you are.`, sessionId: session, costUsd: 0.03 };
+    return { text: `Added to the scope. Ready to wrap up whenever you are.`, spoken: `Added. Ready when you are.`, sessionId: session, costUsd: 0.03 };
   }
 }
 

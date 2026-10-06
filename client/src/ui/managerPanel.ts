@@ -1,5 +1,5 @@
 import { autoMergeFor } from '../../../shared/mergeGate';
-import type { Autonomy, PreviewConfig, Project, RoomTheme, VoiceStatus } from '../../../shared/types';
+import type { Autonomy, PreviewConfig, Project, RoomTheme, SpeechStatus, VoiceStatus } from '../../../shared/types';
 import { DESKS_PER_ROOM, ROOM_THEMES } from '../../../shared/types';
 import { voiceMissing, WHISPER_INSTALL } from '../../../shared/voice';
 import { api } from '../net/api';
@@ -372,6 +372,30 @@ function settingsTab(ui: Ui): HTMLElement {
 
 const MB = 1024 * 1024;
 
+/** Kokoro, the crew's voices in briefings: downloaded here or the first time voice mode is switched on. */
+function speechSetup(speech: SpeechStatus, ui: Ui): HTMLElement {
+  const engine = speech.engine;
+  const get = h('button', { class: 'btn small primary' }, engine.state === 'failed' ? '↻ Try again' : speech.downloaded ? 'Load' : '⬇ Download (90 MB)');
+  get.onclick = () => void busy(get, () => api.loadSpeech(), ui.error);
+  const chip =
+    engine.state === 'ready' ? h('span', { class: 'chip ok', title: speech.path }, 'ready')
+    : engine.state === 'loading' ? h('span', { class: 'chip' }, speech.downloaded ? 'loading…' : 'downloading…')
+    : engine.state === 'failed' ? [h('span', { class: 'chip bad' }, 'failed'), get]
+    : speech.downloaded ? [h('span', { class: 'chip ok', title: speech.path }, 'downloaded'), get]
+    : [h('span', { class: 'chip bad' }, 'missing'), get];
+  return h('div', null,
+    h('div', { class: 'voice-row' }, h('span', null, 'Crew voices'), chip),
+    h('small', { class: 'muted' }, 'Kokoro speaks the crew’s lines in a briefing’s 🔊 voice mode, on this machine. Until it’s ready, the browser’s built-in voice stands in.'),
+    engine.state === 'loading' && engine.bytes
+      ? h('div', { class: 'voice-progress' },
+          h('progress', engine.total ? { max: engine.total, value: engine.bytes } : null),
+          h('small', { class: 'muted' }, `${Math.round(engine.bytes / MB)}${engine.total ? ` of ${Math.round(engine.total / MB)}` : ''} MB`),
+        )
+      : null,
+    engine.state === 'failed' ? h('p', { class: 'planner-error' }, engine.error) : null,
+  );
+}
+
 /** Dictation's setup: whisper-cli (installed by hand) and its model (downloaded from here). Follows the server live. */
 function voiceSection(ui: Ui): HTMLElement {
   const el = h('div', { class: 'card voice-setup', style: 'margin-top:12px' });
@@ -412,6 +436,7 @@ function voiceSection(ui: Ui): HTMLElement {
         : null,
       download?.state === 'failed' ? h('p', { class: 'planner-error' }, download.error) : null,
       voice.model.present ? null : h('small', { class: 'muted' }, `Or download it yourself to ${voice.model.path}.`),
+      speechSetup(voice.speech, ui),
     );
   };
   ui.panels.own(state.on('voice', () => el.isConnected && render(state.voice)));

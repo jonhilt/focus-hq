@@ -1,5 +1,6 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { type BreakdownEdits, EFFORT_LEVELS, type Effort, type PreviewSet } from '../shared/types';
+import { isKokoroVoice } from '../shared/voice';
 import type { Office } from './office';
 import type { Store } from './store';
 import { errorMessage } from './util';
@@ -140,6 +141,14 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.post('/transcribe', express.raw({ type: 'audio/wav', limit: '25mb' }), h(async (req) => {
     if (!Buffer.isBuffer(req.body) || !req.body.length) throw new Error('Send the recording as an audio/wav body');
     return { text: await office.voice.transcribe(req.body) };
+  }));
+  // the crew's voices in briefings: Kokoro on this machine turns a line into a WAV
+  r.post('/voice/speech/load', h(() => office.voice.loadSpeech()));
+  r.post('/voice/speak', h(async (req, res) => {
+    const text = str(req.body.text).trim();
+    if (!text) throw new Error('Send the line to say');
+    if (!isKokoroVoice(req.body.voice)) throw new Error('Unknown voice');
+    res.type('audio/wav').send(await office.voice.speak(text.slice(0, 1000), req.body.voice));
   }));
 
   r.use((_req, res) => res.status(404).json({ error: 'Not found' }));

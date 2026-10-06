@@ -1,4 +1,5 @@
 import type { Agent, Board, BreakdownEdits, Briefing, Effort, Issue, IssueDraft, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, RoomTheme, Settings, TermLine, VoiceStatus, WrapUpShape } from '../../../shared/types';
+import type { KokoroVoice } from '../../../shared/voice';
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   return send<T>(method, url, body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -59,4 +60,11 @@ export const api = {
   voiceStatus: () => call<VoiceStatus>('GET', '/voice/status'),
   downloadVoiceModel: () => call<VoiceStatus>('POST', '/voice/download-model'),
   transcribe: (wav: ArrayBuffer) => send<{ text: string }>('POST', '/transcribe', { headers: { 'Content-Type': 'audio/wav' }, body: wav }),
+  loadSpeech: () => call<VoiceStatus>('POST', '/voice/speech/load'),
+  /** The line as Kokoro says it, as a WAV. */
+  speak: async (text: string, voice: KokoroVoice, signal: AbortSignal): Promise<Blob> => {
+    const res = await fetch('/api/voice/speak', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, voice }), signal });
+    if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `${res.status} ${res.statusText}`);
+    return res.blob();
+  },
 };

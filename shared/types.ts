@@ -394,6 +394,8 @@ export interface BriefingMessage {
   /** qa - the room's QA officer's note on the acceptance criteria; engineer - the ship's engineer, back with options. */
   from: 'manager' | 'officer' | 'qa' | 'engineer' | 'system';
   text: string;
+  /** An officer's reply in a line or two for voice mode, without paths or code. Missing: the text is said as it is. */
+  spoken?: string;
   at: number;
 }
 
@@ -570,12 +572,30 @@ export interface ServerInfo {
 /** A speech model download in progress, or the last one that failed. */
 export type VoiceDownload = { state: 'running'; bytes: number; total?: number } | { state: 'failed'; error: string };
 
-/** Whether dictation can run: whisper.cpp's CLI and its model, both on this machine. */
+/**
+ * Kokoro, the crew's voices in briefings: idle until voice mode (or Settings) asks for it, then loading (downloading
+ * the model first, once) and ready, or failed.
+ */
+export type SpeechEngine =
+  | { state: 'idle' }
+  | { state: 'loading'; bytes: number; total?: number }
+  | { state: 'ready' }
+  | { state: 'failed'; error: string };
+
+export interface SpeechStatus {
+  /** Whether the model is on this machine, in `path`. */
+  downloaded: boolean;
+  path: string;
+  engine: SpeechEngine;
+}
+
+/** Whether dictation can run (whisper.cpp's CLI and its model, both on this machine), and the crew's voices. */
 export interface VoiceStatus {
   /** `command` is the resolved path when found, otherwise what was looked for. */
   whisper: { found: boolean; command: string };
   model: { present: boolean; path: string };
   download?: VoiceDownload;
+  speech: SpeechStatus;
 }
 
 export interface Snapshot {

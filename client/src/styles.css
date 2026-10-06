@@ -272,6 +272,8 @@ textarea.qa-brief { width: 100%; min-height: 160px; font-family: var(--mono); fo
 .briefing-note { align-self: center; color: var(--muted); font-size: 13px; }
 .briefing-note.error { color: var(--lcars-red); }
 textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
+.voice-controls { margin-bottom: 6px; gap: 12px; }
+.voice-controls label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
 .breakdown { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; }
 .breakdown h4 { margin: 4px 0 0; }
 .breakdown-card { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--radius); background: var(--surface-2); border-left: 6px solid var(--lcars-orange); margin-bottom: 8px; }

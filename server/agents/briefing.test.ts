@@ -5,6 +5,7 @@ import { Hub } from '../hub';
 import { afterRestart, Store, type StoredBriefing } from '../store';
 import {
   acceptanceChanged,
+  asOfficerReply,
   asQaNote,
   type BriefingOfficer,
   type BriefingQa,
@@ -133,6 +134,17 @@ describe('briefing QA prompts', () => {
   });
 });
 
+describe('asOfficerReply', () => {
+  it('reads the written reply and the line to say aloud', () => {
+    expect(asOfficerReply({ reply: ' Read `a.ts`. Who is it for? ', spoken: ' Who is it for? ' }, 'raw')).toEqual({ text: 'Read `a.ts`. Who is it for?', spoken: 'Who is it for?' });
+  });
+
+  it('falls back to the session’s text when the structure is missing', () => {
+    expect(asOfficerReply(undefined, 'Who is it for?')).toEqual({ text: 'Who is it for?', spoken: undefined });
+    expect(asOfficerReply({ reply: '', spoken: 1 }, 'Who is it for?')).toEqual({ text: 'Who is it for?', spoken: undefined });
+  });
+});
+
 describe('acceptanceChanged', () => {
   it('is true when a criterion is added, removed or reworded', () => {
     expect(acceptanceChanged([], ['a'])).toBe(true);
@@ -156,7 +168,7 @@ describe('Briefings with QA sitting in', () => {
     const officer: BriefingOfficer = {
       turn: async (r, hooks) => {
         hooks.brief({ ...r.brief, ...patches[turn++] });
-        return { text: `Reply ${turn}`, sessionId: 'officer-1', costUsd: 0.1 };
+        return { text: `Reply ${turn}`, spoken: `\`a.ts\` Said ${turn}.`, sessionId: 'officer-1', costUsd: 0.1 };
       },
     };
     const check = vi.fn<BriefingQa['check']>(async () => ({ note, sessionId: 'qa-1', costUsd: 0.01 }));
@@ -182,6 +194,13 @@ describe('Briefings with QA sitting in', () => {
     expect(check).not.toHaveBeenCalled();
     expect(from(briefings.current())).toEqual(['manager', 'officer']);
     expect(briefings.current()!.costUsd).toBeCloseTo(0.1);
+  });
+
+  it('keeps the officer’s spoken line with the reply, made speakable', async () => {
+    const { briefings, settled } = setup([{}]);
+    briefings.call('p1', 'a wishlist');
+    await settled();
+    expect(briefings.current()!.messages[1]).toMatchObject({ from: 'officer', text: 'Reply 1', spoken: 'Said 1.' });
   });
 
   it('adds nothing when QA finds the criteria fine', async () => {

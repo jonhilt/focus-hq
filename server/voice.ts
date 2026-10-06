@@ -6,9 +6,10 @@ import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import type { VoiceDownload, VoiceStatus } from '../shared/types';
-import { voiceMissing } from '../shared/voice';
+import { type KokoroVoice, voiceMissing } from '../shared/voice';
 import { whisper } from './config';
 import type { Hub } from './hub';
+import { Speech } from './speech';
 import { errorMessage, newId, run } from './util';
 
 export const DEMO_TRANSCRIPT = 'This is a demo transcription.';
@@ -45,9 +46,11 @@ function findExecutable(bin: string): string | undefined {
 /**
  * Local dictation with whisper.cpp: finds `whisper-cli` and its model, transcribes WAV recordings with them, and
  * downloads the model. Audio never leaves the machine. In demo mode it's always ready and transcribes to a fixed line.
+ * The crew's voices (Kokoro, in `speech`) are local too, and real in demo mode as well.
  */
 export class Voice {
   private download?: VoiceDownload;
+  private readonly speech = new Speech(() => this.refresh());
 
   constructor(
     private readonly hub: Hub,
@@ -55,13 +58,25 @@ export class Voice {
   ) {}
 
   status(): VoiceStatus {
-    if (this.demo) return { whisper: { found: true, command: whisper.bin }, model: { present: true, path: whisper.model } };
+    const speech = this.speech.status();
+    if (this.demo) return { whisper: { found: true, command: whisper.bin }, model: { present: true, path: whisper.model }, speech };
     const found = findExecutable(whisper.bin);
     return {
       whisper: { found: found !== undefined, command: found ?? whisper.bin },
       model: { present: existsSync(whisper.model), path: whisper.model },
       download: this.download,
+      speech,
     };
+  }
+
+  /** Gets Kokoro ready to speak: downloads it the first time, then loads it. Progress goes out as `voice` events. */
+  loadSpeech(): VoiceStatus {
+    this.speech.load();
+    return this.status();
+  }
+
+  speak(text: string, voice: KokoroVoice): Promise<Buffer> {
+    return this.speech.speak(text, voice);
   }
 
   /** Looks for whisper-cli and the model again (after a brew install, say) and tells every browser. */

@@ -1,3 +1,4 @@
+import type { CrewSpeaker, CrewVoice, KokoroVoice } from './voice';
 import { ACTIVE_STATUSES, type Agent, type Avatar, type Briefing, type Division, type Hairstyle, type Planner, type Rank, type Species } from './types';
 
 // Who's aboard. Agents get a random look when they're hired. Permanent crew members, one of each per room (the
@@ -98,4 +99,18 @@ export function engineerAtBriefing(briefing: Pick<Briefing, 'status' | 'engineer
 export function qaAtBriefing(projectId: string, briefing: Pick<Briefing, 'projectId' | 'status'> | null, qaAgent: Pick<Agent, 'status'> | undefined): boolean {
   if (briefing?.projectId !== projectId || briefing.status === 'done') return false;
   return !qaAgent || !ACTIVE_STATUSES.includes(qaAgent.status);
+}
+
+/** Each post's voices, none shared between posts, so the officer, QA and the engineer never sound alike. */
+const VOICES: Record<CrewSpeaker, { kokoro: KokoroVoice[]; pitch: number }> = {
+  officer: { kokoro: ['af_heart', 'am_michael', 'bf_emma', 'bm_george'], pitch: 1 },
+  qa: { kokoro: ['af_bella', 'am_puck', 'bf_isabella', 'bm_fable'], pitch: 1.3 },
+  engineer: { kokoro: ['am_fenrir'], pitch: 0.75 },
+};
+
+/** The voice a crew member speaks in at a briefing about the project: always the same one for the same person. */
+export function crewVoice(speaker: CrewSpeaker, projectId: string): CrewVoice {
+  const post = VOICES[speaker];
+  const kokoro = post.kokoro[hash(`voice:${speaker}:${speaker === 'engineer' ? '' : projectId}`) % post.kokoro.length];
+  return { kokoro, lang: kokoro.startsWith('b') ? 'en-GB' : 'en-US', pitch: post.pitch };
 }

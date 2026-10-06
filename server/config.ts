@@ -37,7 +37,7 @@ export const paths = {
   qaShots: path.join(config.dataDir, 'qa-shots'),
   /** Read-only checkouts of each project's repos at their default branch, for the planner. */
   planning: path.join(config.dataDir, 'planning'),
-  /** Speech models for dictation. */
+  /** Speech models: whisper for dictation, Kokoro for the crew's voices. */
   models: path.join(config.dataDir, 'models'),
 };
 
@@ -47,3 +47,13 @@ export const whisper = {
   model: path.resolve(process.env.FOCUS_WHISPER_MODEL || path.join(paths.models, 'ggml-large-v3-turbo-q5_0.bin')),
   modelUrl: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin',
 };
+
+/** Kokoro, the crew's voices in briefings (see server/speech.ts), run in-process through kokoro-js. */
+export const kokoro = {
+  model: 'onnx-community/Kokoro-82M-v1.0-ONNX',
+  dtype: 'q8',
+  /** transformers.js's cache: the model downloads into it once. */
+  dir: path.join(paths.models, 'kokoro'),
+  /** Written once the model has downloaded and loaded: transformers.js streams straight into the cache, so a download cut short looks like a model. */
+  marker: path.join(paths.models, 'kokoro', 'complete'),
+} as const;
