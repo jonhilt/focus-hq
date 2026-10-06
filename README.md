@@ -131,11 +131,14 @@ Press **🔈 Voice off** above the message box to talk with Number One instead o
 2. **Set up**: `~/.focus/repos/<owner>__<name>` holds one clone per repository. The agent gets a fresh `git worktree` of it on a new branch `focus/<issue>-<slug>-<id>`, so agents never step on each other.
 3. **Work**: Claude Code runs in that worktree with the issue (title, body, labels, comments) as its task. It also gets a few instructions: commit as you go, don't push, run the tests, check UI changes in the browser, and write the final message as a PR description.
 4. **Browser testing**: agents get an in-process MCP server (`mcp__browser__open/click/type/press/screenshot/evaluate/console`) backed by headless Chromium. Every action's screenshot streams to their station's display.
-5. **Deliver**: if they left uncommitted changes, they're asked once to commit them. Then the office pushes the branch and opens the PR (`Closes #N`) with the agent's summary as the body.
-6. **Follow-ups**: message an agent at any time. While they're working, the message reaches them at their next step. Once they're done, the message resumes the same Claude session and the new commits update the PR.
-7. **Merge conflicts**: a conflicting PR gets a **🔧 Resolve conflicts** button on the board. The agent who opened it merges the base branch in and updates the PR. If nobody in the office owns the PR (a teammate's, or the agent already went home), a new agent sits down on the PR's branch to do it.
-8. **QA**: every PR the office opens or updates goes to the holodeck's QA officer (see [QA](#qa)).
-9. **Merged**: when the PR is merged (from the board or on GitHub), the agent leaves and their worktree is cleaned up.
+5. **Their own task list**: when an agent keeps a task list with Claude Code's task tools (TodoWrite, or TaskCreate and TaskUpdate), the office follows it from the session's messages (`tasks.ts`), without asking for one or changing how they keep it. It shows in their panel (done, ▶ what they're doing now, what's left), on the Tricorder, and on their station's display (see below).
+6. **Deliver**: if they left uncommitted changes, they're asked once to commit them. Then the office pushes the branch and opens the PR (`Closes #N`) with the agent's summary as the body.
+7. **Follow-ups**: message an agent at any time. While they're working, the message reaches them at their next step. Once they're done, the message resumes the same Claude session and the new commits update the PR.
+8. **Merge conflicts**: a conflicting PR gets a **🔧 Resolve conflicts** button on the board. The agent who opened it merges the base branch in and updates the PR. If nobody in the office owns the PR (a teammate's, or the agent already went home), a new agent sits down on the PR's branch to do it.
+9. **QA**: every PR the office opens or updates goes to the holodeck's QA officer (see [QA](#qa)).
+10. **Merged**: when the PR is merged (from the board or on GitHub), the agent leaves and their worktree is cleaned up.
+
+**Station displays** show an agent's work in panes side by side: their terminal; their browser, while they have a page up; and their progress, while there's any: the task list Claude keeps for itself, and for a goal's lead the goal note's what-done-looks-like and this slice's checklist. A desk's laptop fits two panes, so the browser wins while it's showing and the task list's count moves to the status bar; a lead's bigger display fits all three. The 🌐 📋 🎯 switches in an agent's panel turn the browser, Claude's task list and the goal note on or off on every display, just for you (your browser remembers them).
 
 ### Cloud agents
 
@@ -318,6 +321,7 @@ server/
     claudeRunner.ts       Claude Agent SDK query() in streaming-input mode, permission callback; cloud agents via --cloud
     cloud.ts              what happens after a cloud agent's session (push nudge, carrying on in a new session, falling back to local when the CLI refuses --cloud)
     render.ts             SDK messages → Claude-Code-style terminal lines + "what am I doing" text + screenshots in tool results
+    tasks.ts              the task list an agent keeps with Claude Code's task tools, followed from its session (TodoWrite, TaskCreate, TaskUpdate, TaskList)
     browserTool.ts        in-process MCP server driving headless Chromium, streams screenshots
     workspace.ts          git mirrors + worktrees (agents', the per-repo preview checkout, the planner's read-only checkouts)
     planner.ts            the officer at each room's New issue stand: issue drafts, their prompt and schema
@@ -329,7 +333,7 @@ server/
     demoRunner.ts         scripted pretend agents (and a pretend lead, planner, QA officer and Number One) for demo mode
 client/src/
   main.ts                 renderer (toon shading + outline pass), loop, interaction, UI wiring
-  world/                  ship layout, holodecks, stations, characters, station screens, Kanban display
+  world/                  ship layout, holodecks, stations, characters, station screens (screenPanes.ts: which panes side by side, and each viewer's switches), Kanban display
     scenery.ts            stencil "holo walls" that show a landscape built around a room
     themes.ts             the landscapes (beach, forest, desert, moon, city, library)
     groupDesk.ts          each holodeck's group desk: the first goal's lead's seat, the shared display, seats for their helpers (helperSeats.ts: who sits where)

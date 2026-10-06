@@ -13,6 +13,12 @@ const prLink = (p: { repo: string; number: number; url: string; outcome?: string
   h('a', { class: `btn small${p.outcome ? '' : ' go'}`, href: p.url, target: '_blank', rel: 'noreferrer', title: p.outcome ?? 'open' },
     `${p.outcome === 'merged' ? '✔ ' : p.outcome === 'closed' ? '✕ ' : ''}${p.repo.split('/')[1]} #${p.number} ↗`);
 
+/** What the lead says it's doing, from the task list Claude keeps for itself. */
+const doing = (lead: Agent) => {
+  const t = lead.tasks?.find((x) => x.status === 'in_progress');
+  return t ? t.activeForm || t.subject : '';
+};
+
 /** One goal under way: its lead, what they're doing, their note and its pull requests. */
 function goalCard(ui: Ui, lead: Agent): HTMLElement {
   const work = lead.lead;
@@ -30,6 +36,7 @@ function goalCard(ui: Ui, lead: Agent): HTMLElement {
     ),
     work?.closing ? h('p', { class: 'goal-closing' }, `🏁 Ready to wrap up: ${work.closing.reason}`) : null,
     noteView(work?.note, true),
+    lead.tasks?.length ? h('small', { class: 'muted' }, `📋 Claude's tasks: ${lead.tasks.filter((t) => t.status === 'completed').length}/${lead.tasks.length} done${doing(lead) ? ` · ▶ ${doing(lead)}` : ''}`) : null,
     h('div', { class: 'row', style: 'margin-top:8px' },
       h('span', { class: 'chip' }, `${statusIcon(lead)} ${lead.status}`),
       h('small', { class: 'grow muted' }, statusLine(lead)),

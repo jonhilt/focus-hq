@@ -10,7 +10,7 @@ import { drawMockPage } from '../world/screen';
 import type { Ui } from './context';
 import { withMic } from './dictation';
 import { busy, fill, h, timeAgo } from './dom';
-import { closeGoal, EFFORT_HINT, noteView } from './goals';
+import { closeGoal, EFFORT_HINT, noteView, screenToggles, tasksView } from './goals';
 
 const FINISHED = ['done', 'error', 'stopped'];
 
@@ -31,8 +31,10 @@ export function openAgentPanel(ui: Ui, id: string): void {
   const grid = h('div', { class: 'agent-grid single' }, terminal, browser);
   const ask = h('div');
   const info = h('div', { class: 'row', style: 'margin-bottom:12px' });
-  // a goal's lead: the goal as they keep it, and whether they think it's done
+  // what they're keeping track of: the goal as a lead keeps it (and whether they think it's done), and the task list
+  // Claude keeps for itself
   const goal = h('div', { class: 'goal-panel' });
+  const toggles = screenToggles(() => undefined);
   const body = h('div', { style: 'display:flex;flex-direction:column;height:100%;min-height:0' }, ask, info, goal, grid);
 
   const input = h('input', { type: 'text', placeholder: `Message ${agent.name}… (they'll read it at their next step)`, autofocus: true });
@@ -91,6 +93,7 @@ export function openAgentPanel(ui: Ui, id: string): void {
       a.task === 'lead' ? leadEffortChip(a) : h('span', { class: 'chip', title: 'How hard Claude thinks on this task' }, `🧠 ${a.effort ?? 'default'} effort`),
       a.cloud ? h('span', { class: 'chip', title: 'Works in a Claude Code cloud session and pushes their own branch' }, '☁ cloud') : null,
       h('span', { class: 'chip' }, `⏱ ${timeAgo(a.startedAt)}`),
+      toggles,
       cloudLink(a),
       a.task === 'issue' ? h('a', { class: 'btn small', href: a.issue.url, target: '_blank', rel: 'noreferrer' }, 'Issue ↗') : null,
       a.task === 'review' ? h('a', { class: 'btn small go', href: a.issue.url, target: '_blank', rel: 'noreferrer' }, `PR #${a.issue.number} ↗`) : null,
@@ -106,9 +109,11 @@ export function openAgentPanel(ui: Ui, id: string): void {
         ? h('button', { class: 'btn small', title: 'Run the PR on your machine and open it in your browser', onclick: () => ui.previewPr(a.projectId, a.repo, a.pr!.number) }, '▶ Preview')
         : null,
     );
+    const note = noteView(a.lead?.note);
+    const tasks = tasksView(a.tasks);
     fill(goal,
       a.lead?.closing ? h('p', { class: 'goal-closing' }, `🏁 ${a.name} thinks this goal is ready to wrap up: ${a.lead.closing.reason}. Close it, or tell them what's next.`) : null,
-      noteView(a.lead?.note),
+      note || tasks ? h('div', { class: 'progress-columns' }, note, tasks) : null,
     );
     if (a.permission) {
       const req = a.permission;

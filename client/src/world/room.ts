@@ -14,7 +14,7 @@ import { OVER_DOOR, type RoomSlot, ROOM_DEPTH, ROOM_WIDTH, WALL_H } from './layo
 import { box, flat, lighten, toon } from './materials';
 import { ceilingLight, chair, cyl, paperStack, plant } from './props';
 import { holodeckMaterial, holodeckSkin, type Scenery } from './scenery';
-import { StationScreen } from './screen';
+import { BIG_SCREEN, StationScreen } from './screen';
 import { Beam } from './transporter';
 import { HULL, LCARS, lcarsSign, workstation } from './starship';
 
@@ -78,7 +78,7 @@ export class ProjectRoom {
    * the desk's display. The other goals' leads have no seat until the room gets its team stations.
    */
   private leadSlot!: { seat: THREE.Group; id?: string; character?: Character };
-  private leadScreen = new StationScreen(null, 'Group desk · start a goal here');
+  private leadScreen = new StationScreen(null, 'Group desk · start a goal here', BIG_SCREEN);
   private leadDesk!: { table: THREE.Group; display: THREE.Group };
   /** The lead's helpers (their subagents) in the seats around the group desk, while they work. */
   private helperSlots: { seat: THREE.Group; id?: string; character?: Character }[] = [];

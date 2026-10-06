@@ -80,6 +80,7 @@ export function agentView(id: string, actions: Actions, back: () => void): View 
           FINISHED.includes(a.status) ? null : actions.button(`${scope}:stop`, '■ Stop', () => api.stop(id), { class: 'danger small' }),
         ),
         h('div', { class: 'activity' }, statusLine(a)),
+        tasksLine(a),
         a.status === 'error' && a.error ? h('div', { class: 'error-text' }, a.error) : null,
       ),
       a.permission ? askFor(a, a.permission) : null,
@@ -150,4 +151,12 @@ export function agentView(id: string, actions: Actions, back: () => void): View 
   void backfill();
   update();
   return { el, update, dispose: () => offs.forEach((off) => off()) };
+}
+
+/** How far along the task list Claude keeps for itself is, and what it's doing now, in a line. */
+function tasksLine(a: Agent): HTMLElement | null {
+  const tasks = a.tasks ?? [];
+  if (!tasks.length) return null;
+  const doing = tasks.find((t) => t.status === 'in_progress');
+  return h('div', { class: 'activity' }, `📋 ${tasks.filter((t) => t.status === 'completed').length}/${tasks.length} done${doing ? ` · ▶ ${doing.activeForm || doing.subject}` : ''}`);
 }

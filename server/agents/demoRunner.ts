@@ -49,6 +49,8 @@ export class DemoRunner implements AgentRunner {
     const tool = async (name: string, input: Record<string, unknown>, output: string[] = []) => {
       const r = renderToolUse(name, input, '/work');
       hooks.lines(r.lines);
+      // the agent's own task list, as Claude Code's task tools would report it
+      if (name === 'TodoWrite') hooks.taskTool?.(name, input, undefined, '');
       if (r.activity || r.status) hooks.activity(r.status ?? null, r.activity ?? '');
       await wait(1.2, 3.2);
       if (output.length) {
@@ -239,7 +241,14 @@ export class DemoRunner implements AgentRunner {
       }
       await say('On it: a thin slice first.');
       await note({ slice: checklist(0) });
-      await tool('TodoWrite', { todos: repos.map((r) => ({ content: `${r.folder}: ${goal}`, status: 'pending' })) });
+      const leadTodos = (done: number) => ({
+        todos: [...repos.map((r) => [`Build ${goal} in ./${r.folder}`, `Building it in ./${r.folder}`]), ['Ship the slice', 'Shipping the slice']].map(([content, activeForm], i) => ({
+          content,
+          activeForm,
+          status: i < done ? 'completed' : i === done ? 'in_progress' : 'pending',
+        })),
+      });
+      await tool('TodoWrite', leadTodos(0));
       // two helpers map the repos side by side while the lead plans: they sit down at the team station while they work
       if (repos.length > 1) {
         const helpers = repos.map((r) => ({ ...r, id: `demo-helper-${r.folder}-${randomBytes(2).toString('hex')}`, files: FILES[kindOf(r.repo)] }));
@@ -269,10 +278,12 @@ export class DemoRunner implements AgentRunner {
         await tool('Bash', { command: `npm --prefix ${r.folder} test` }, ['Tests: 44 passed, 44 total']);
         await commit(r.folder, `Thin slice: ${goal}`);
         await note({ slice: checklist(repos.indexOf(r) + 1) });
+        await tool('TodoWrite', leadTodos(repos.indexOf(r) + 1));
       }
       await handleInbox();
       const title = `Thin slice: ${goal}`.slice(0, 70);
       if (await ship(title, `## Summary\n\nA first, thin version of ${goal}, end to end.\n\n## Testing\n\n- Tests pass in every repo`)) {
+        await tool('TodoWrite', leadTodos(repos.length + 1));
         await say(`Shipped: ${repos.length > 1 ? `a pull request in each of ${repos.map((r) => r.folder).join(' and ')}` : 'a pull request'}. It works end to end in the simplest way; the store code is a bit tangled now, so I'd tidy it in the next slice. Have a look and merge when you're happy.`);
       }
       return { ok: true, summary: 'Shipped the slice.' };
@@ -299,14 +310,16 @@ export class DemoRunner implements AgentRunner {
         await tool('Read', { file_path: `/work/${file}` }, [`Read ${40 + Math.floor(Math.random() * 160)} lines`]);
       }
       await think();
-      await tool('TodoWrite', {
+      // the developer's own task list, moving along as they work
+      const todos = (step: number) => ({
         todos: [
-          { content: 'Understand the current behaviour', status: 'completed' },
-          { content: `Implement: ${title}`, status: 'in_progress' },
-          { content: 'Add tests', status: 'pending' },
-          { content: kind === 'api' ? 'Run the test suite' : 'Check it in the browser', status: 'pending' },
-        ],
+          ['Understand the current behaviour', 'Reading the code'],
+          [`Implement: ${title}`, 'Implementing it'],
+          ['Add tests', 'Adding tests'],
+          [kind === 'api' ? 'Run the test suite' : 'Check it in the browser', kind === 'api' ? 'Running the tests' : 'Checking it in the browser'],
+        ].map(([content, activeForm], i) => ({ content, activeForm, status: i < step ? 'completed' : i === step ? 'in_progress' : 'pending' })),
       });
+      await tool('TodoWrite', todos(1));
       await handleInbox();
 
       for (const file of pick(files, 2)) {
@@ -316,6 +329,7 @@ export class DemoRunner implements AgentRunner {
           new_string: `export function render(state) {\n  // ${title}\n  return view(withFix(state));`,
         }, ['Updated 1 file']);
       }
+      await tool('TodoWrite', todos(2));
       await tool('Write', {
         file_path: `/work/test/issue-${issueNumber}.test.ts`,
         content: `import { describe, it, expect } from 'vitest';\n\ndescribe('${title.replace(/'/g, '')}', () => {\n  it('works', () => {\n    expect(run()).toBe(true);\n  });\n});`,
@@ -336,6 +350,7 @@ export class DemoRunner implements AgentRunner {
         `Tests  ${41 + issueNumber} passed`,
       ]);
 
+      await tool('TodoWrite', todos(3));
       if (kind !== 'api') {
         await tool('Bash', { command: 'npm run dev &', run_in_background: true }, ['VITE ready on http://localhost:5173']);
         const pages = ['/', kind === 'game' ? '/play' : '/products/42', kind === 'game' ? '/scores' : '/cart'];
@@ -356,6 +371,7 @@ export class DemoRunner implements AgentRunner {
           await wait(1.5, 3);
         }
       }
+      await tool('TodoWrite', todos(4));
       await handleInbox();
       await tool('Bash', { command: `git add -A && git commit -m "${title.replace(/"/g, '')} (#${issueNumber})"` }, [
         `[focus/issue-${issueNumber} a1b2c3d] ${title}`,

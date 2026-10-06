@@ -1,4 +1,5 @@
-import { type Agent, EFFORT_LEVELS, type Effort, type GoalNote } from '../../../shared/types';
+import { type Agent, type ClaudeTask, EFFORT_LEVELS, type Effort, type GoalNote } from '../../../shared/types';
+import { type PanePrefs, screenPrefs } from '../world/screenPanes';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import type { Ui } from './context';
@@ -41,6 +42,44 @@ export function noteView(note: GoalNote | undefined, compact = false): HTMLEleme
       : null,
     !compact && note.learned.length ? h('div', null, h('strong', null, 'Learned:'), list(note.learned)) : null,
     !compact && note.next.length ? h('div', null, h('strong', null, 'Next:'), list(note.next)) : null,
+  );
+}
+
+/** The task list an agent keeps for itself with Claude Code's task tools: done, what it's doing now, what's left. */
+export function tasksView(tasks: ClaudeTask[] | undefined): HTMLElement | null {
+  if (!tasks?.length) return null;
+  const done = tasks.filter((t) => t.status === 'completed').length;
+  return h('div', { class: 'goal-note' },
+    h('strong', null, `Claude's tasks (${done}/${tasks.length}):`),
+    h('ul', { class: 'goal-list checklist' },
+      ...tasks.map((t) =>
+        t.status === 'completed'
+          ? h('li', { class: 'ticked' }, `✓ ${t.subject}`)
+          : t.status === 'in_progress'
+            ? h('li', { class: 'doing' }, `▶ ${t.activeForm || t.subject}`)
+            : h('li', null, `○ ${t.subject}`)),
+    ),
+  );
+}
+
+/** Switches for what this viewer's station screens show beside the terminal. */
+export function screenToggles(onChange: () => void): HTMLElement {
+  const toggle = (pane: keyof PanePrefs, icon: string, what: string) => {
+    const button = h('button', { class: 'btn small screen-toggle', title: `Station screens show ${what} beside the terminal (just for you)` }, icon);
+    const paint = () => button.classList.toggle('on', screenPrefs.current[pane]);
+    button.onclick = () => {
+      screenPrefs.set(pane, !screenPrefs.current[pane]);
+      paint();
+      onChange();
+    };
+    paint();
+    return button;
+  };
+  return h('span', { class: 'row screen-toggles', style: 'gap:4px' },
+    h('small', { class: 'muted' }, '🖥'),
+    toggle('browser', '🌐', 'the browser'),
+    toggle('tasks', '📋', "Claude's own task list"),
+    toggle('note', '🎯', "a lead's goal note"),
   );
 }
 

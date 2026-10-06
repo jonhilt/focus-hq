@@ -5,6 +5,7 @@ import { BrowserPool, browserMcpServer } from './browserTool';
 import { CLOUD_UNAVAILABLE, cloudRefused } from './cloud';
 import { officeMcpServer } from './officeTool';
 import { appUrl, renderText, renderToolResult, renderToolUse, screenshotFrame, type ToolCall } from './render';
+import { TASK_TOOLS } from './tasks';
 import { type AgentRunner, type AgentSession, type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN } from './types';
 
 /** Feeds user messages into a streaming-input query; lets the manager talk to a running agent. */
@@ -279,11 +280,18 @@ export class ClaudeRunner implements AgentRunner {
       case 'user': {
         const content = msg.message.content;
         if (!Array.isArray(content)) return null;
+        const results = content.filter((b) => b.type === 'tool_result');
         for (const block of content) {
           if (block.type !== 'tool_result') continue;
           const call = ctx.calls.get(block.tool_use_id);
           ctx.calls.delete(block.tool_use_id);
           if (msg.parent_tool_use_id === null) hooks.lines(renderToolResult(block as unknown as { type: string }));
+          // the agent's own task list (a subagent's is its own business); the structured output is the message's only
+          // when it carries this one result
+          if (call && TASK_TOOLS.has(call.name) && msg.parent_tool_use_id === null) {
+            const said = typeof block.content === 'string' ? block.content : (block.content ?? []).map((c) => (c.type === 'text' ? c.text : '')).join('\n');
+            hooks.taskTool?.(call.name, call.input, results.length === 1 ? msg.tool_use_result : undefined, said);
+          }
           // an image the agent (or a subagent) looked at goes on its laptop screen, like our browser tool's frames
           const frame = screenshotFrame(block as unknown as { type: string }, call, ctx.lastUrl, Date.now());
           if (frame) {

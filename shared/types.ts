@@ -269,6 +269,15 @@ export interface LeadPr {
   outcome?: 'merged' | 'closed';
 }
 
+/** One item of the task list an agent keeps for itself with Claude Code's task tools (TodoWrite, TaskCreate, TaskUpdate). */
+export interface ClaudeTask {
+  id: string;
+  subject: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  /** What it says while it's doing it ("Running tests"). */
+  activeForm?: string;
+}
+
 /** A subagent a goal's lead handed a piece of work to (Claude Code's Agent tool), seated at the group desk while it works. */
 export interface Helper {
   /** The Agent tool call that started it. */
@@ -314,6 +323,8 @@ export interface Agent {
   lead?: LeadWork;
   /** The subagents the lead has working for it right now, and any that just finished ('lead' task only). */
   helpers?: Helper[];
+  /** The task list the agent keeps for itself with Claude Code's task tools, as it stands. Missing until it keeps one. */
+  tasks?: ClaudeTask[];
   /** For a 'conflicts' or 'fix' task, the pull request itself (GitHub numbers issues and PRs alike). */
   issue: { number: number; title: string; url: string };
   /** Chosen when the agent is hired. Missing = the model's default effort. */

@@ -16,6 +16,7 @@ import type { QaLoopEvent } from './qaLoop';
 import { qaNextStep } from './qaLoop';
 import type { Triager } from './triage';
 import { type AgentRunner, type AgentSession, type RunHooks, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
+import { applyTaskTool } from './tasks';
 import { triageWorkspaceId } from './worktrees';
 
 interface Runtime {
@@ -294,7 +295,13 @@ export class AgentManager {
         rt.shots.frames.push(frame);
         if (rt.shots.frames.length > MAX_SCREENSHOTS) rt.shots.frames.shift();
       },
-      session: (sessionId) => this.update(agent, { sessionId }),
+      // a new session keeps a task list of its own, if any
+      session: (sessionId) => this.update(agent, { sessionId, ...(agent.sessionId && agent.sessionId !== sessionId ? { tasks: undefined } : {}) }),
+      taskTool: (name, input, result, said) => {
+        const before = agent.tasks ?? [];
+        const tasks = applyTaskTool(before, name, input, result, said);
+        if (tasks !== before) this.update(agent, { tasks });
+      },
       helper: (event) => {
         // only a lead's helpers have somewhere to sit: the lead's team station
         if (agent.task !== 'lead') return;
