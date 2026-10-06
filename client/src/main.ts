@@ -15,7 +15,7 @@ import { numberOnePanelOpen, openNumberOnePanel } from './ui/numberOnePanel';
 import { Panels } from './ui/panels';
 import { openPreviewPanel } from './ui/previewPanel';
 import { openQaPanel } from './ui/qaPanel';
-import { openNewIssuePanel, openPausePanel, openTeleportPanel } from './ui/travelPanel';
+import { openNewIssuePanel, openPausePanel, openTeleportPanel, openTurboliftPanel } from './ui/travelPanel';
 import type { Interaction } from './world/builder';
 import { numberOne } from '../../shared/crew';
 import { toastShows } from '../../shared/hidden';
@@ -24,6 +24,7 @@ import { sound } from './sound';
 import { Deck } from './world/deck';
 import { COMMAND_DECK, SUN_POSITION } from './world/layout';
 import { World } from './world/office';
+import { stopAt } from './world/turbolift';
 
 async function fontsReady(): Promise<void> {
   const loads = ['700 40px Fredoka', '500 40px Fredoka', '15px "JetBrains Mono"', '600 40px Antonio', '500 40px Antonio'].map((f) => document.fonts.load(f));
@@ -109,6 +110,16 @@ async function main() {
     openGoals: (projectId, station) => openGoalsPanel(ui, projectId, station),
     openManager: (tab) => openManagerPanel(ui, tab),
     openTeleport: () => openTeleportPanel(ui),
+    openTurbolift: () => {
+      const stops = world.stops();
+      openTurboliftPanel(ui, stops, stopAt(stops, camera.position));
+    },
+    ride: (stop) => {
+      sound.lift();
+      panels.close(false);
+      hud.blackout(() => player.teleport(stop.position, stop.lookAt));
+      player.lock();
+    },
   };
 
   // every button on a console blips, bar the close button, which has the panel's own closing chirp
@@ -326,6 +337,9 @@ async function main() {
         break;
       case 'teleport':
         ui.openTeleport();
+        break;
+      case 'turbolift':
+        ui.openTurbolift();
         break;
       case 'vacant':
         ui.openManager('new-project');

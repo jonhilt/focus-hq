@@ -86,6 +86,8 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
   text-shadow: 0 1px 2px #000; display: flex; gap: 14px; flex-wrap: wrap;
 }
 
+.curtain { position: fixed; inset: 0; z-index: 6; background: #000; opacity: 0; pointer-events: none; transition: opacity 0.35s ease; }
+.curtain.down { opacity: 1; }
 .toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 30; max-width: min(420px, calc(100vw - 32px)); }
 .toast {
   --tone: var(--lcars-periwinkle);

@@ -30,6 +30,8 @@ export interface Place {
 
 const OUTER_X = HALL_HALF + ROOM_DEPTH;
 const OFFICE_WALL = '#cfd3e6';
+/** While the ready room's aboard a deck, the turbolift stops at the lobby's north door, where the ready room's was. */
+const LOBBY_LIFT: Place = { label: 'Deck 4 · Holodecks', position: new THREE.Vector3(0, 0, LOBBY.z1 - 1.2), lookAt: new THREE.Vector3(0, 1.6, 0) };
 
 /**
  * Where the ready room, and the lounge beyond it, are: aboard the deck built in Blender that seats Number One (who's
@@ -182,8 +184,7 @@ export class World {
         this.buildReadyRoom(b);
         break;
       case 'aboard':
-        // nothing's north of the lobby, so there's no door in its north wall
-        b.wall(LOBBY.x0, LOBBY.z1, LOBBY.x1, LOBBY.z1, OFFICE_WALL);
+        this.buildLobbyLift(b);
         this.seatNumberOne(b, this.readyRoom.numberOne);
         break;
     }
@@ -406,6 +407,31 @@ export class World {
   /** Where you come aboard: the first deck built in Blender, or the concourse. */
   boarding(): Place {
     return this.decks[0]?.places[0] ?? { label: '🛋️ Concourse', position: new THREE.Vector3(0, 0, 8), lookAt: new THREE.Vector3(0, 1.6, 0) };
+  }
+
+  /** Nothing's north of the lobby any more: its north door is the turbolift's, shut until a car comes. */
+  private buildLobbyLift(b: Builder): void {
+    b.wall(LOBBY.x0, LOBBY.z1, LOBBY.x1, LOBBY.z1, OFFICE_WALL, [{ at: 0, width: DOOR_W, locked: true }]);
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 0.62), flat(lcarsSign('Turbolift', { color: LCARS.gold, code: '04-01' })));
+    sign.position.set(0, 2.88, LOBBY.z1 - OVER_DOOR);
+    sign.rotation.y = Math.PI;
+    b.add(sign);
+    const panel = lcarsConsole(0.9, 0.95, 41);
+    panel.position.set(DOOR_W / 2 + 0.9, 1.95, LOBBY.z1 - 0.13);
+    panel.rotation.y = Math.PI;
+    b.add(panel);
+    for (const o of [sign, panel]) interactive(o, { kind: 'turbolift' }, () => 'Use the turbolift');
+  }
+
+  /** Where the turbolift stops: in each deck's car, and at the lobby's north door while the ready room's aboard a deck. */
+  stops(): Place[] {
+    const cars = this.decks.flatMap((d) => d.stops);
+    switch (this.readyRoom.kind) {
+      case 'here':
+        return cars;
+      case 'aboard':
+        return [...cars, LOBBY_LIFT];
+    }
   }
 
   /** Teleport destinations. */

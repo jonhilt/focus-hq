@@ -56,6 +56,12 @@ function surfaceMaterial(surface: Surface, color: string): THREE.Material {
   }
 }
 
+/** Somewhere to stand at `at`, looking along the forward of a marker turned `turn`. */
+function placeAt(label: string, at: THREE.Vector3, turn: THREE.Quaternion): Place {
+  const ahead = new THREE.Vector3(0, 0, -1).applyQuaternion(turn);
+  return { label, position: at.clone().setY(0), lookAt: at.clone().addScaledVector(ahead, 4).setY(1.5) };
+}
+
 /** The floor an empty cube's box covers. */
 function footprint(o: THREE.Object3D): Box2 {
   const b = new THREE.Box3(new THREE.Vector3(-1, -1, -1), new THREE.Vector3(1, 1, 1)).applyMatrix4(o.matrixWorld);
@@ -67,6 +73,8 @@ export class Deck {
   readonly colliders: Box2[] = [];
   readonly doors: SlidingDoors[] = [];
   readonly places: Place[] = [];
+  /** Where the turbolift stops on this deck. */
+  readonly stops: Place[] = [];
   /** The screens the World draws on. */
   readonly screens: { screen: ScreenName; mesh: THREE.Mesh }[] = [];
   private readonly areas: { label: string; box: Box2 }[] = [];
@@ -124,11 +132,12 @@ export class Deck {
         this.root.add(doors.group);
         break;
       }
-      case 'place': {
-        const ahead = new THREE.Vector3(0, 0, -1).applyQuaternion(turn);
-        this.places.push({ label: marker.label, position: at.clone().setY(0), lookAt: at.clone().addScaledVector(ahead, 4).setY(1.5) });
+      case 'place':
+        this.places.push(placeAt(marker.label, at, turn));
         break;
-      }
+      case 'turbolift':
+        this.stops.push(placeAt(marker.label, at, turn));
+        break;
       case 'area':
         this.areas.push({ label: marker.label, box: footprint(o) });
         break;

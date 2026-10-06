@@ -28,4 +28,8 @@ export interface Ui {
   openNumberOne(): void;
   openManager(tab?: ManagerTab): void;
   openTeleport(): void;
+  /** The turbolift's controls, for whichever stop you're at. */
+  openTurbolift(): void;
+  /** Takes the turbolift to `stop`. */
+  ride(stop: Place): void;
 }

@@ -269,6 +269,26 @@ class ShipSound {
     lfo.stop(t + 1.45);
   }
 
+  /** A turbolift ride: the car's motor winding up, air rushing past as it runs, then winding down as it arrives. */
+  lift(): void {
+    const out = this.out(0.5);
+    if (!out) return;
+    const { ctx, gain } = out;
+    const t = ctx.currentTime;
+    const motor = ctx.createOscillator();
+    motor.type = 'sawtooth';
+    motor.frequency.setValueAtTime(70, t);
+    motor.frequency.exponentialRampToValueAtTime(165, t + 0.7);
+    motor.frequency.exponentialRampToValueAtTime(85, t + 1.5);
+    const tone = ctx.createBiquadFilter();
+    tone.type = 'lowpass';
+    tone.frequency.value = 520;
+    motor.connect(tone).connect(envelope(ctx, t, 0.25, 1.7, 0.6)).connect(gain);
+    motor.start(t);
+    motor.stop(t + 1.8);
+    this.hiss(gain, t + 0.1, { type: 'bandpass', from: 280, to: 1700, q: 1.2, attack: 0.5, end: 1.5, peak: 0.5 });
+  }
+
   /** The engines: brown noise rumble over a quiet, steady hum. Runs for as long as the page does. */
   private thrum(): void {
     const ctx = this.ctx!;

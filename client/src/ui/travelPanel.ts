@@ -2,6 +2,7 @@ import { statusIcon, statusLine } from '../../../shared/agentStatus';
 import { UNIFORM } from '../../../shared/crew';
 import { state } from '../net/state';
 import { sound } from '../sound';
+import type { Place } from '../world/office';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { h } from './dom';
@@ -32,6 +33,18 @@ export function openTeleportPanel(ui: Ui): void {
     ),
   );
   ui.panels.open({ title: '🗺️ Where to?', body, accent: LCARS.periwinkle });
+}
+
+/** The turbolift's controls: a button for each deck it stops at, bar the one you're on. */
+export function openTurboliftPanel(ui: Ui, stops: Place[], here: Place | undefined): void {
+  const body = h('div', { class: 'places' },
+    ...stops.map((stop) =>
+      stop === here
+        ? h('button', { class: 'btn place', disabled: true }, stop.label, h('small', null, 'You’re here'))
+        : h('button', { class: 'btn place', onclick: () => ui.ride(stop) }, stop.label),
+    ),
+  );
+  ui.panels.open({ title: '🛗 Turbolift', body, accent: LCARS.gold });
 }
 
 export function openNewIssuePanel(ui: Ui, projectId?: string): void {

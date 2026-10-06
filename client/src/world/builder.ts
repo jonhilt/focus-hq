@@ -10,6 +10,7 @@ export type Interaction =
   | { kind: 'new-issue'; projectId: string }
   | { kind: 'manager'; tab?: 'projects' | 'new-project' | 'issue' | 'settings' }
   | { kind: 'teleport' }
+  | { kind: 'turbolift' }
   | { kind: 'number-one' }
   | { kind: 'qa'; projectId: string }
   /** A free team station: start a goal there. */

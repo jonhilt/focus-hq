@@ -8,10 +8,11 @@ What the browser reads (client/src/world/deck.ts), all through custom properties
 - An object's `marker` makes it a marker rather than scenery: 'collider' (an empty cube: an axis-aligned box the
   player can't walk into), 'door' (sliding doors at a doorway's centre, sliding along the empty's X: `width`,
   `height`), 'place' (a teleport destination, looking along the empty's +Y: `label`), 'area' (an empty cube: the
-  floor `label` names in the HUD) or 'number-one' (where Number One's chair stands, turned along the empty's +Y: it
-  says the ready room is on this deck).
-- An object's `interact` has pressing E on it do something: 'manager' (open the ready room console), with the hint
-  `label`.
+  floor `label` names in the HUD), 'number-one' (where Number One's chair stands, turned along the empty's +Y: it
+  says the ready room is on this deck) or 'turbolift' (where the turbolift stops: you stand there in its car, facing
+  along the empty's +Y, and `label` names the deck).
+- An object's `interact` has pressing E on it do something: 'manager' (open the ready room console) or 'turbolift' (its
+  controls), with the hint `label`.
 - A material's `surface` has the browser draw it: 'space' (a viewport onto the stars), 'keys' (an LCARS touch panel),
   'readout' (LCARS readouts: `seed`, `w`, `h`), 'sign' (an LCARS sign: `text`, `color`, optional `sub` and `code`),
   'screen' (a screen the browser keeps drawing: `screen`, which is 'mission-control'), 'star-chart' (long-range

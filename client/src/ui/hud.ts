@@ -13,6 +13,7 @@ export class Hud {
   private location = h('div', { class: 'location' });
   private stats = h('div', { class: 'stats' });
   private toasts = h('div', { class: 'toasts' });
+  private curtain = h('div', { class: 'curtain' });
   private lastLocation = '';
 
   constructor() {
@@ -35,7 +36,7 @@ export class Hud {
         h('span', null, h('kbd', null, 'Esc'), 'pause'),
       ),
     );
-    document.body.append(this.root, this.toasts);
+    document.body.append(this.root, this.toasts, this.curtain);
     const refresh = () => this.renderStats();
     state.on('snapshot', refresh);
     state.on('agent', refresh);
@@ -44,6 +45,15 @@ export class Hud {
     state.on('info', refresh);
     state.on('connection', refresh);
     state.on('preview', refresh);
+  }
+
+  /** Blacks out the view, does `between` in the dark and brings the view back: the length of a turbolift ride. */
+  blackout(between: () => void): void {
+    this.curtain.classList.add('down');
+    setTimeout(() => {
+      between();
+      this.curtain.classList.remove('down');
+    }, 900);
   }
 
   setVisible(visible: boolean): void {

@@ -13,12 +13,14 @@ describe('readMarker', () => {
     expect(readMarker({ marker: 'place', label: '🌌 Bridge' })).toEqual({ kind: 'place', label: '🌌 Bridge' });
     expect(readMarker({ marker: 'area', label: 'Turbolift' })).toEqual({ kind: 'area', label: 'Turbolift' });
     expect(readMarker({ marker: 'number-one' })).toEqual({ kind: 'number-one' });
+    expect(readMarker({ marker: 'turbolift', label: 'Deck 1 · Bridge' })).toEqual({ kind: 'turbolift', label: 'Deck 1 · Bridge' });
   });
 
   it('fails on a marker it doesn’t know or one missing what it needs', () => {
     expect(() => readMarker({ marker: 'window' })).toThrow(/unknown marker/);
     expect(() => readMarker({ marker: 'door', width: 2 })).toThrow(/height should be a number/);
     expect(() => readMarker({ marker: 'place' })).toThrow(/label should be a string/);
+    expect(() => readMarker({ marker: 'turbolift' })).toThrow(/label should be a string/);
   });
 });
 
@@ -60,6 +62,7 @@ describe('readInteraction', () => {
       interaction: { kind: 'manager' },
       label: 'Use the ready room console',
     });
+    expect(readInteraction({ interact: 'turbolift', label: 'Use the turbolift' })).toEqual({ interaction: { kind: 'turbolift' }, label: 'Use the turbolift' });
   });
 
   it('fails on an interaction it doesn’t know or one without a hint', () => {

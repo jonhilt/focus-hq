@@ -230,7 +230,8 @@ def turbolift():
     annulus('turbolift light', 0, 0.6, h - 0.015, unlit('#ffffff'), at=(0, cy), down=True)
     sweep('turbolift rail', arc, [(0.06, 0.95), (0.06, 1.0), (0.1, 1.0), (0.1, 0.95)], [frame, frame, frame], caps=True)
     back = Matrix.Translation((0, cy - r * math.cos(math.pi / 14), 0))
-    readout('turbolift panel', 0.5, 0.7, 41, (0, 0, 1.3), back)
+    interact('turbolift', 'Use the turbolift', readout('turbolift panel', 0.5, 0.7, 41, (0, 0, 1.3), back))
+    marker('turbolift stop', 'turbolift', (0, cy, 0), label='Deck 1 · Bridge')
     marker('area turbolift', 'area', (0, cy, 1), scale=(r + 0.1, r + 0.1, 1), label='Turbolift')
 
 
