@@ -1,3 +1,4 @@
+import { autoMergeFor } from '../../../shared/mergeGate';
 import type { Autonomy, PreviewConfig, Project, RoomTheme, VoiceStatus } from '../../../shared/types';
 import { DESKS_PER_ROOM, ROOM_THEMES } from '../../../shared/types';
 import { voiceMissing, WHISPER_INSTALL } from '../../../shared/voice';
@@ -161,6 +162,8 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
   const saveAuto = () => void api.updateProject(p.id, { autoAssign: auto.checked, autoLabel: label.value }).catch((e: Error) => ui.error(e.message));
   auto.addEventListener('change', saveAuto);
   label.addEventListener('change', saveAuto);
+  const autoMerge = h('input', { type: 'checkbox', checked: autoMergeFor(p) });
+  autoMerge.addEventListener('change', () => void api.updateProject(p.id, { autoMerge: autoMerge.checked }).catch((e: Error) => ui.error(e.message)));
   const theme = themeSelect(roomTheme(p));
   theme.addEventListener('change', () => void api.updateProject(p.id, { theme: theme.value as RoomTheme }).catch((e: Error) => ui.error(e.message)));
 
@@ -192,6 +195,7 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
       h('label', { class: 'row', style: 'gap:6px' }, 'Agents at once', maxAgents),
       h('label', { class: 'row', style: 'gap:6px' }, auto, 'Auto-assign open issues'),
       h('label', { class: 'row', style: 'gap:6px' }, 'with label', label),
+      h('label', { class: 'row', style: 'gap:6px', title: 'Merges a PR the crew opened once QA passed its latest commit and its checks are green' }, autoMerge, 'Auto-merge QA-passed PRs'),
       h('span', { class: 'grow' }),
       remove,
     ),

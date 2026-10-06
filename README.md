@@ -139,15 +139,21 @@ Every holodeck has a QA officer in blue, sitting at a station beside the pull re
   4. Run the tests, type checks, linters and build.
   5. Click through UI changes with the browser tool, so you see that on their station's display.
   6. Finish with a structured report: a verdict, a summary, every check made, the commands run and, on a fail, fix instructions.
-- **The report:** the office posts it as a comment on the PR (QA never touches GitHub themselves), and the board shows **✅ QA passed**, **❌ QA failed** or, once newer commits land, **QA passed an older commit**. You still merge.
+- **The report:** the office posts it as a comment on the PR (QA never touches GitHub themselves), and the board shows **✅ QA passed**, **❌ QA failed** or, once newer commits land, **QA passed an older commit**. Merging a PR whose latest commit QA hasn't passed asks you to confirm, and says why.
 - **Screenshots:** the last 8 screenshots QA takes on purpose (`mcp__browser__screenshot`) go with the report, each with QA's caption. The office commits them to an orphan branch in the PR's repo, `focus-qa-evidence` (created on first use, no shared history with the code, never merged), and embeds them in the comment. A screenshot that fails to upload is left out of the comment and the error shows in QA's terminal.
 - **The QA station** (<kbd>E</kbd> on the officer when they're free, or the QA chip on a PR):
   - every report in full, with its screenshots;
-  - the auto-QA and send-back switches;
+  - the auto-QA, send-back and auto-merge switches;
   - the project's **QA brief**: what to check on every PR of this project ("works at phone width", "no console errors"). It goes into the officer's instructions on every review.
 - **Sending a failed PR back:** when QA fails a PR the office opened, the office hands QA's summary and fix instructions to the developer who opened it. If they've gone home, a new agent sits down on the PR's branch, fixes it and pushes to the same PR. The fix goes back to QA by itself, and the re-test is told last round's findings and the commit it tested, so it checks those first, then what changed since, plus a quick smoke test.
   - After 3 failed rounds, or a fix that pushes nothing, the office stops: the PR card and the Kanban display show **🙋 needs you**, and a toast says why.
   - Teammates' PRs are never sent back. Turn send-back off per project at the QA station.
+- **Auto-merge** (off by default; switch it on per project at the QA station or on the project's card in the ready room): on each board refresh the office takes every PR it opened one step closer to merged, following `mergeStep` in `shared/mergeGate.ts`.
+  - QA passed the PR's current head commit, its checks pass (or it has none) and it merges cleanly: it merges with **Settings → merge method**, for that exact commit only (`--match-head-commit`), and its developer packs up.
+  - Commits arrived after QA's verdict: back to QA first.
+  - Checks fail: the failed GitHub Actions runs are re-run once (`gh run rerun --failed`). If they fail again, the PR goes back to its developer with the failing checks' names and links, like a QA fail.
+  - Conflicts: **🔧 Resolve conflicts**, then QA again.
+  - A refused merge (required reviews, say) shows GitHub's reason and isn't retried for that commit. Teammates' PRs never merge by themselves.
 - **Following up:** message the QA officer like any agent, to have them look at something else.
 
 ## Previewing a pull request

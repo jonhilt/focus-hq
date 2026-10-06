@@ -1,4 +1,4 @@
-import type { Agent, QaReport, QaReview, QaScreenshot } from '../../shared/types';
+import type { Agent, FailedCheck, QaReport, QaReview, QaScreenshot } from '../../shared/types';
 import type { IssueDetail, PullRequestDetail } from '../github/provider';
 import { truncate } from '../util';
 
@@ -185,10 +185,28 @@ export function fixPrompt(pr: { number: number; branch: string }, review: Pick<Q
     '',
     ...findings(review.report),
     '',
-    cloud
-      ? `Fix what QA found on \`${pr.branch}\`, run the tests, type checks and linters, commit, and push with \`git push origin HEAD:${pr.branch}\`. That updates the pull request and QA tests it again.`
-      : `Fix what QA found on \`${pr.branch}\`, run the tests, type checks and linters, and commit. The office pushes your commits to the same pull request and QA tests it again.`,
+    fixAndPush('what QA found', pr.branch, cloud),
   ].join('\n');
+}
+
+/** For a PR QA passed whose checks on GitHub still fail after a re-run. */
+export function checksFixPrompt(pr: { number: number; branch: string }, sha: string | undefined, checks: FailedCheck[], cloud = false): string {
+  return [
+    `QA passed pull request #${pr.number}, but its checks on GitHub fail${sha ? ` on commit ${sha.slice(0, 7)}` : ''}, and failed again when re-run. It was sent back to you. Please fix it.`,
+    '',
+    'Failing checks:',
+    ...checks.map((c) => `- ${c.name}${c.url ? `: ${c.url}` : ''}`),
+    '',
+    'For GitHub Actions, `gh run view <run id> --log-failed` shows what went wrong.',
+    '',
+    fixAndPush('the failing checks', pr.branch, cloud),
+  ].join('\n');
+}
+
+function fixAndPush(what: string, branch: string, cloud: boolean): string {
+  return cloud
+    ? `Fix ${what} on \`${branch}\`, run the tests, type checks and linters, commit, and push with \`git push origin HEAD:${branch}\`. That updates the pull request and QA tests it again.`
+    : `Fix ${what} on \`${branch}\`, run the tests, type checks and linters, and commit. The office pushes your commits to the same pull request and QA tests it again.`;
 }
 
 function findings(report: QaReport): string[] {

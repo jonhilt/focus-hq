@@ -33,6 +33,7 @@ const pr = (p: Partial<PullRequest> = {}): PullRequest => ({
   isDraft: false,
   mergeable: 'MERGEABLE',
   checks: 'passing',
+  failedChecks: [],
   closes: [7],
   createdAt: '2026-01-01T00:00:00Z',
   ...p,
@@ -68,7 +69,7 @@ describe('needsYou', () => {
     const fixing = pr({ number: 13 });
     const reviews = new Map([
       [prKey('acme/shop', 12), failedNeedsYou],
-      [prKey('acme/shop', 13), { ...failedNeedsYou, number: 13, followUp: { kind: 'fixing' as const, agentId: 'a1', agentName: 'Ada' } }],
+      [prKey('acme/shop', 13), { ...failedNeedsYou, number: 13, followUp: { kind: 'fixing' as const, agentId: 'a1', agentName: 'Ada', fixes: { kind: 'qa' as const } } }],
     ]);
     expect(needsYou([], [{ projectId: 'p', pr: stuck }, { projectId: 'p', pr: fixing }], reviews)).toEqual([{ kind: 'qa', projectId: 'p', pr: stuck }]);
   });

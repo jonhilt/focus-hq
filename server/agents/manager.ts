@@ -1,6 +1,6 @@
 import { qaOfficerFor, randomAvatar } from '../../shared/crew';
 import { autoQaFor, autoSendBackFor, prKey, sameCommit } from '../../shared/qa';
-import type { Agent, AgentStatus, BrowserFrame, Effort, PermissionRequest, PullRequest, QaReport, QaReview, QaScreenshot, TermLine } from '../../shared/types';
+import type { Agent, AgentStatus, BrowserFrame, Effort, FailedCheck, FixFor, PermissionRequest, PullRequest, QaReport, QaReview, QaScreenshot, TermLine } from '../../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, QA_DESK } from '../../shared/types';
 import type { GitHubProvider } from '../github/provider';
 import type { Hub } from '../hub';
@@ -8,7 +8,7 @@ import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
 import { afterCloudRun, carryOnInNewSession, fallBackToLocal } from './cloud';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
-import { evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
+import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
 import type { QaLoopEvent } from './qaLoop';
 import { qaNextStep } from './qaLoop';
 import { type AgentRunner, type AgentSession, type RunHooks, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
@@ -121,6 +121,18 @@ export class AgentManager {
     return [...this.store.agents.values()].find((a) => a.task !== 'review' && a.repo === repo && a.pr?.number === number);
   }
 
+  /** An agent of the office opened the PR (QA's review remembers it after they've gone home). */
+  openedByOffice(repo: string, number: number): boolean {
+    return !!this.store.reviews.get(prKey(repo, number))?.openedByOffice
+      || [...this.store.agents.values()].some((a) => a.task === 'issue' && a.repo === repo && a.pr?.number === number);
+  }
+
+  /** Someone in the office is working on the PR right now, or queued to. */
+  busyOn(repo: string, number: number): boolean {
+    const owner = this.prOwner(repo, number);
+    return !!owner && !FINISHED.includes(owner.status);
+  }
+
   private seat(projectId: string, repo: string, work: Pick<Agent, 'id' | 'task' | 'issue' | 'branch' | 'baseBranch' | 'pr' | 'effort' | 'cloud'>): Agent {
     const project = this.store.project(projectId);
     if (!project.repos.includes(repo)) throw new Error(`${repo} is not connected to ${project.name}`);
@@ -231,7 +243,8 @@ export class AgentManager {
       case 'fix': {
         const review = this.store.reviews.get(prKey(agent.repo, agent.issue.number));
         if (!review?.report) throw new Error(`QA's report on PR #${agent.issue.number} is gone, so there's nothing to fix`);
-        return fixPrompt({ number: agent.issue.number, branch: agent.branch }, { sha: review.sha, report: review.report }, agent.cloud);
+        const fixes = review.followUp?.kind === 'fixing' ? review.followUp.fixes : { kind: 'qa' as const };
+        return this.fixPromptFor(agent, review, review.report, fixes);
       }
     }
   }
@@ -444,7 +457,7 @@ export class AgentManager {
       title,
       status: 'queued',
       requestedAt: Date.now(),
-      openedByOffice: existing?.openedByOffice || [...this.store.agents.values()].some((a) => a.task === 'issue' && a.repo === repo && a.pr?.number === number),
+      openedByOffice: this.openedByOffice(repo, number),
       failedRounds: existing?.failedRounds,
       lastRound: existing?.report ? { sha: existing.sha, report: existing.report } : existing?.lastRound,
     };
@@ -591,26 +604,34 @@ export class AgentManager {
         if (review.followUp) this.putReview({ ...review, followUp: undefined });
         return;
       case 'send-back':
-        return this.sendBack(review);
+        return this.sendBack(review, { kind: 'qa' });
       case 'needs-you':
         return this.needsYou(review, step.reason);
     }
   }
 
+  /** A passed PR whose checks on GitHub keep failing goes back to be fixed, like one QA failed. */
+  sendBackChecks(repo: string, number: number, checks: FailedCheck[]): Promise<void> {
+    const review = this.store.reviews.get(prKey(repo, number));
+    if (!review) throw new Error(`QA hasn't reviewed ${repo}#${number}`);
+    return this.sendBack(review, { kind: 'checks', checks });
+  }
+
   /**
-   * Hands QA's findings to the developer who opened the PR, if they're still in the office; otherwise a new agent sits
-   * down on the PR's branch to fix it.
+   * Hands QA's findings, or the failing checks, to the developer who opened the PR, if they're still in the office;
+   * otherwise a new agent sits down on the PR's branch to fix it.
    */
-  private async sendBack(review: QaReview): Promise<void> {
+  private async sendBack(review: QaReview, fixes: FixFor): Promise<void> {
     const { report } = review;
     if (!report) return;
     const where = `${review.repo.split('/')[1]}#${review.number}`;
+    const why = fixes.kind === 'qa' ? 'failed QA' : 'keeps failing its checks';
     try {
       const owner = this.prOwner(review.repo, review.number);
       if (owner) {
-        this.putReview({ ...review, followUp: { kind: 'fixing', agentId: owner.id, agentName: owner.name } });
-        this.message(owner.id, fixPrompt({ number: review.number, branch: owner.branch }, { sha: review.sha, report }, owner.cloud));
-        this.hub.toast('info', `🔧 ${where} failed QA – back to ${owner.name}`, owner.id);
+        this.putReview({ ...review, followUp: { kind: 'fixing', agentId: owner.id, agentName: owner.name, fixes } });
+        this.message(owner.id, this.fixPromptFor(owner, review, report, fixes));
+        this.hub.toast('info', `🔧 ${where} ${why} – back to ${owner.name}`, owner.id);
         return;
       }
       const pr = await this.github.getPullRequest(review.repo, review.number);
@@ -622,10 +643,20 @@ export class AgentManager {
         baseBranch: pr.baseBranch,
         pr: { number: pr.number, url: pr.url },
       });
-      this.putReview({ ...review, followUp: { kind: 'fixing', agentId: agent.id, agentName: agent.name } });
-      this.hub.toast('info', `🔧 ${where} failed QA – ${agent.name} sits down to fix it`, agent.id);
+      this.putReview({ ...review, followUp: { kind: 'fixing', agentId: agent.id, agentName: agent.name, fixes } });
+      this.hub.toast('info', `🔧 ${where} ${why} – ${agent.name} sits down to fix it`, agent.id);
     } catch (err) {
       this.needsYou(review, `it couldn't be sent back (${errorMessage(err)})`);
+    }
+  }
+
+  private fixPromptFor(agent: Agent, review: QaReview, report: QaReport, fixes: FixFor): string {
+    const pr = { number: review.number, branch: agent.branch };
+    switch (fixes.kind) {
+      case 'qa':
+        return fixPrompt(pr, { sha: review.sha, report }, agent.cloud);
+      case 'checks':
+        return checksFixPrompt(pr, review.sha, fixes.checks, agent.cloud);
     }
   }
 

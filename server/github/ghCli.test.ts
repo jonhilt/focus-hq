@@ -60,11 +60,38 @@ describe('gh CLI layer', () => {
         mergeable: 'MERGEABLE',
         reviewDecision: undefined,
         checks: 'pending',
+        failedChecks: [],
         closes: [7, 8, 9],
         createdAt: '2026-10-01T10:00:00Z',
         updatedAt: '2026-10-01T11:00:00Z',
       }]);
     expect(calls[0].slice(0, 5)).toEqual(['pr', 'list', '-R', 'acme/shop', '--state']);
+  });
+
+  it('names failed checks, with the Actions run to re-run where there is one', async () => {
+    const rollup = [
+      { __typename: 'CheckRun', workflowName: 'CI', name: 'test', status: 'COMPLETED', conclusion: 'FAILURE', detailsUrl: 'https://github.com/acme/shop/actions/runs/77/job/5' },
+      { __typename: 'CheckRun', workflowName: 'CI', name: 'lint', status: 'COMPLETED', conclusion: 'SUCCESS', detailsUrl: 'https://github.com/acme/shop/actions/runs/77/job/6' },
+      { __typename: 'StatusContext', context: 'ci/circleci', state: 'ERROR', targetUrl: 'https://circleci.com/gh/acme/shop/1' },
+    ];
+    const { layer } = fakeGh(() => Effect.succeed(JSON.stringify([{ ...(JSON.parse(prJson) as object[])[0], statusCheckRollup: rollup }])));
+    const [pr] = await succeed(layer, (gh) => gh.listPullRequests('acme/shop'));
+    expect(pr.checks).toBe('failing');
+    expect(pr.failedChecks).toEqual([
+      { name: 'CI / test', url: 'https://github.com/acme/shop/actions/runs/77/job/5', runId: 77 },
+      { name: 'ci/circleci', url: 'https://circleci.com/gh/acme/shop/1', runId: undefined },
+    ]);
+  });
+
+  it('merges only the head commit it was given, and re-runs failed runs', async () => {
+    const { calls, layer } = fakeGh(() => Effect.succeed(''));
+    await succeed(layer, (gh) => gh.mergePullRequest('acme/shop', 12, 'squash', 'abc123'));
+    await succeed(layer, (gh) => gh.rerunFailedRuns('acme/shop', [77, 78]));
+    expect(calls).toEqual([
+      ['pr', 'merge', '12', '-R', 'acme/shop', '--squash', '--delete-branch', '--match-head-commit', 'abc123'],
+      ['run', 'rerun', '77', '--failed', '-R', 'acme/shop'],
+      ['run', 'rerun', '78', '--failed', '-R', 'acme/shop'],
+    ]);
   });
 
   it('fails with GhCommandFailed, keeping stderr and the exit code', async () => {

@@ -29,7 +29,7 @@ describe('qaBadge', () => {
   });
 
   it('says who a failed PR went back to, or that it needs you', () => {
-    const fixing = review({ status: 'failed', followUp: { kind: 'fixing', agentId: 'a1', agentName: 'Ada' } });
+    const fixing = review({ status: 'failed', followUp: { kind: 'fixing', agentId: 'a1', agentName: 'Ada', fixes: { kind: 'qa' } } });
     expect(qaBadge(fixing, { headSha: 'abc1234def5678' })).toEqual({ state: 'fixing', label: '🔧 QA failed: back with Ada' });
     const stuck = review({ status: 'failed', followUp: { kind: 'needs-you', reason: 'it failed QA 3 times' } });
     expect(qaBadge(stuck, { headSha: 'abc1234def5678' })).toEqual({ state: 'needs-you', label: '🙋 QA failed: needs you' });

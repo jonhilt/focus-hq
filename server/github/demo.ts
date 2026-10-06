@@ -1,4 +1,5 @@
 import { Effect, Layer } from 'effect';
+import { sameCommit } from '../../shared/qa';
 import type { Issue, PullRequest } from '../../shared/types';
 import { closingIssues, evidenceUrl } from './provider';
 import { GitHub, GitHubNotFound, GitHubRejected } from './service';
@@ -6,7 +7,7 @@ import { GitHub, GitHubNotFound, GitHubRejected } from './service';
 interface FakeRepo {
   description: string;
   issues: Issue[];
-  prs: (PullRequest & { state: 'OPEN' | 'CLOSED' | 'MERGED'; body?: string; comments?: string[] })[];
+  prs: (PullRequest & { state: 'OPEN' | 'CLOSED' | 'MERGED'; body?: string; comments?: string[]; rerunAt?: number })[];
   nextNumber: number;
 }
 
@@ -48,6 +49,11 @@ const SEED: Record<string, { description: string; issues: [string, string, strin
   },
 };
 
+/** Checks "finish" a little while after the PR is opened, or after a re-run. */
+const CHECKS_TAKE_MS = 20_000;
+/** The demo's pretend GitHub Actions run for a PR: one per PR, so a re-run finds its PR from the run id. */
+const RUN_IDS = 4000;
+
 /** In-memory GitHub used by `npm run demo`: the seed repos above, changed by whatever the office does to them. */
 export const demoLayer = Layer.sync(GitHub, () => {
   const repos = new Map<string, FakeRepo>();
@@ -78,6 +84,7 @@ export const demoLayer = Layer.sync(GitHub, () => {
       // one of them conflicts, so there is something to hand to an agent
       mergeable: name === 'demo/webshop-api' ? 'CONFLICTING' : 'MERGEABLE',
       checks: 'passing',
+      failedChecks: [],
       closes: [],
       createdAt: new Date(start + 86400_000).toISOString(),
       state: 'OPEN',
@@ -97,6 +104,7 @@ export const demoLayer = Layer.sync(GitHub, () => {
         isDraft: false,
         mergeable: 'MERGEABLE',
         checks: 'passing',
+        failedChecks: [],
         closes: [closes],
         createdAt: new Date(Date.now() - (hoursAgo + 3) * 3600_000).toISOString(),
         updatedAt: new Date(Date.now() - hoursAgo * 3600_000).toISOString(),
@@ -171,10 +179,13 @@ export const demoLayer = Layer.sync(GitHub, () => {
         Effect.map((r) =>
           r.prs
             .filter((p) => p.state === 'OPEN')
-            .map(({ state: _state, body: _body, comments: _comments, ...p }): PullRequest => {
-              // Checks "finish" a little while after the PR is opened.
-              const age = Date.now() - Date.parse(p.createdAt);
-              return { ...p, checks: age < 20_000 ? 'pending' : p.number % 5 === 0 ? 'failing' : 'passing' };
+            .map(({ state: _state, body: _body, comments: _comments, rerunAt, ...p }): PullRequest => {
+              const running = Date.now() - Math.max(Date.parse(p.createdAt), rerunAt ?? 0) < CHECKS_TAKE_MS;
+              // every fifth PR has a flaky test: it fails until it's re-run
+              if (running) return { ...p, checks: 'pending', failedChecks: [] };
+              if (p.number % 5 !== 0 || rerunAt) return { ...p, checks: 'passing', failedChecks: [] };
+              const runId = RUN_IDS + p.number;
+              return { ...p, checks: 'failing', failedChecks: [{ name: 'CI / test', url: `https://github.com/${name}/actions/runs/${runId}`, runId }] };
             }),
         ),
       ),
@@ -233,6 +244,7 @@ export const demoLayer = Layer.sync(GitHub, () => {
             isDraft: false,
             mergeable: 'MERGEABLE',
             checks: 'pending',
+            failedChecks: [],
             closes: closingIssues(req.body),
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
@@ -244,14 +256,22 @@ export const demoLayer = Layer.sync(GitHub, () => {
         }),
       ),
 
-    mergePullRequest: (name, number) =>
+    mergePullRequest: (name, number, _method, headSha) =>
       Effect.gen(function* () {
         const r = yield* repo(name);
         const p = r.prs.find((p) => p.number === number);
         if (!p || p.state !== 'OPEN') return yield* new GitHubRejected({ message: `PR #${number} is not open` });
+        if (headSha && p.headSha && !sameCommit(headSha, p.headSha)) return yield* new GitHubRejected({ message: `Head branch was modified. Review and try the merge again.` });
         p.state = 'MERGED';
         r.issues = r.issues.filter((i) => !p.closes.includes(i.number));
       }),
+
+    rerunFailedRuns: (name, runIds) =>
+      repo(name).pipe(
+        Effect.map((r) => {
+          for (const p of r.prs) if (runIds.includes(RUN_IDS + p.number)) p.rerunAt = Date.now();
+        }),
+      ),
 
     createRepo: (name, opts) =>
       Effect.suspend(() => {

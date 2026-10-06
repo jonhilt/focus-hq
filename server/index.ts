@@ -61,6 +61,8 @@ async function main() {
     shop.maxAgents = 4;
     const game = store.addProject('Space Dodger', '#5bc0eb', 'moon');
     game.repos = ['demo/space-dodger'];
+    // so the demo shows a PR going QA pass → checks green → merged by itself
+    game.autoMerge = true;
   }
 
   const app = express();

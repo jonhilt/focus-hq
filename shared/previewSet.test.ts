@@ -24,6 +24,7 @@ const pr = (repo: string, number: number, closes: number[], updatedAt?: string):
   isDraft: false,
   mergeable: 'MERGEABLE',
   checks: 'passing',
+  failedChecks: [],
   closes,
   createdAt: '2026-10-01T00:00:00Z',
   updatedAt,

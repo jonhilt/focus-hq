@@ -1,4 +1,4 @@
-import type { ChecksState, GitHubStatus, Issue, PullRequest } from '../../shared/types';
+import type { ChecksState, FailedCheck, GitHubStatus, Issue, PullRequest } from '../../shared/types';
 
 export interface RepoInfo {
   nameWithOwner: string;
@@ -58,7 +58,10 @@ export interface GitHubProvider {
   /** Commits a file to the repo's QA evidence branch, creating the branch on first use, and returns its URL. */
   uploadQaEvidence(repo: string, path: string, bytes: Buffer): Promise<string>;
   createPullRequest(repo: string, pr: CreatePullRequest): Promise<{ number: number; url: string }>;
-  mergePullRequest(repo: string, number: number, method: 'squash' | 'merge' | 'rebase'): Promise<void>;
+  /** `headSha` makes GitHub refuse the merge if the branch has moved past that commit. */
+  mergePullRequest(repo: string, number: number, method: 'squash' | 'merge' | 'rebase', headSha?: string): Promise<void>;
+  /** Re-runs the failed jobs of these GitHub Actions runs. */
+  rerunFailedRuns(repo: string, runIds: number[]): Promise<void>;
   createRepo(name: string, opts: { owner?: string; private: boolean; description: string }): Promise<string>;
 }
 
@@ -71,17 +74,34 @@ export function closingIssues(body: string): number[] {
   return [...out];
 }
 
+type RollupItem = Record<string, string | undefined>;
+
+const rollupItems = (rollup: unknown): RollupItem[] => (Array.isArray(rollup) ? (rollup as RollupItem[]) : []);
+
+const failed = (item: RollupItem) =>
+  ['FAILURE', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE', 'ERROR'].includes((item.conclusion || item.state || '').toUpperCase());
+
 export function rollupChecks(rollup: unknown): ChecksState {
-  if (!Array.isArray(rollup) || rollup.length === 0) return 'none';
+  const items = rollupItems(rollup);
+  if (items.length === 0) return 'none';
   let pending = false;
-  for (const item of rollup as Record<string, string | undefined>[]) {
-    const conclusion = (item.conclusion ?? '').toUpperCase();
+  for (const item of items) {
     const state = (item.state ?? '').toUpperCase();
     const status = (item.status ?? '').toUpperCase();
-    if (['FAILURE', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE', 'ERROR'].includes(conclusion || state)) {
-      return 'failing';
-    }
+    if (failed(item)) return 'failing';
     if ((status && status !== 'COMPLETED') || state === 'PENDING' || state === 'EXPECTED') pending = true;
   }
   return pending ? 'pending' : 'passing';
+}
+
+/** The failed checks in a status check rollup: GitHub Actions jobs (check runs) and other CI's commit statuses. */
+export function failedChecks(rollup: unknown): FailedCheck[] {
+  return rollupItems(rollup)
+    .filter(failed)
+    .map((item) => {
+      const url = item.detailsUrl || item.targetUrl || undefined;
+      const run = url ? /\/actions\/runs\/(\d+)/.exec(url) : null;
+      const name = [item.workflowName, item.name || item.context].filter(Boolean).join(' / ') || 'a check';
+      return { name, url, runId: run ? Number(run[1]) : undefined };
+    });
 }

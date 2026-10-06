@@ -1,0 +1,107 @@
+import { qaBadge, sameCommit } from './qa';
+import type { FailedCheck, PullRequest, QaReview } from './types';
+
+// When a pull request may merge, and what the office does next with one that can't yet. Pure, so it's unit tested
+// (shared/mergeGate.test.ts); office.ts follows the steps on each board refresh while a project has auto-merge on.
+
+/** What the merge gate already did about a PR's head commit, so a board refresh doesn't do it again. */
+export type GateMark = { sha: string } & ({ kind: 'rerun' } | { kind: 'sent-back' } | { kind: 'resolving' } | { kind: 'refused'; reason: string });
+
+export type MergeStep =
+  /** QA passed `sha`, the PR's head; merge exactly that commit. */
+  | { kind: 'merge'; sha: string }
+  /** Something is under way (checks, QA, a developer): look again next refresh. */
+  | { kind: 'wait'; reason: string }
+  /** QA hasn't passed the head commit yet. */
+  | { kind: 'qa'; reason: string }
+  | { kind: 'rerun-checks'; sha: string; runIds: number[] }
+  /** Checks still fail after a re-run: back to the developer with the failing checks. */
+  | { kind: 'send-back'; sha: string; checks: FailedCheck[] }
+  | { kind: 'resolve-conflicts'; sha: string }
+  /** The office won't take it further by itself; the manager can still merge it from the board. */
+  | { kind: 'blocked'; reason: string };
+
+/** What the office knows about a PR beyond GitHub and QA. */
+export interface GateOffice {
+  /** An agent of the office opened it. Teammates' PRs never merge by themselves. */
+  openedByOffice: boolean;
+  /** An agent of the office is working on it right now (fixing it, resolving its conflicts). */
+  developerBusy: boolean;
+  /** The project sends failed PRs back to a developer. */
+  autoSendBack: boolean;
+  mark?: GateMark;
+}
+
+type GatePr = Pick<PullRequest, 'headSha' | 'isDraft' | 'mergeable' | 'checks' | 'failedChecks'>;
+
+export function mergeStep(pr: GatePr, review: QaReview | undefined, office: GateOffice): MergeStep {
+  if (!office.openedByOffice) return { kind: 'blocked', reason: 'a teammate opened it' };
+  if (pr.isDraft) return { kind: 'blocked', reason: 'it’s a draft' };
+  const head = pr.headSha;
+  if (!head) return { kind: 'blocked', reason: 'GitHub didn’t say which commit it’s at' };
+  if (office.developerBusy) return { kind: 'wait', reason: 'a developer is working on it' };
+  const mark = office.mark && sameCommit(office.mark.sha, head) ? office.mark : undefined;
+  if (pr.mergeable === 'CONFLICTING') {
+    return mark?.kind === 'resolving' ? { kind: 'blocked', reason: 'it still conflicts after resolving' } : { kind: 'resolve-conflicts', sha: head };
+  }
+
+  if (!review) return { kind: 'qa', reason: 'QA hasn’t tested it' };
+  switch (review.status) {
+    case 'queued':
+    case 'testing':
+      return { kind: 'wait', reason: 'QA is testing it' };
+    case 'error':
+      return { kind: 'blocked', reason: 'QA couldn’t finish testing it' };
+    case 'failed':
+    case 'passed':
+      break;
+  }
+  if (!review.sha) return { kind: 'blocked', reason: 'QA didn’t record which commit it tested' };
+  if (!sameCommit(review.sha, head)) return { kind: 'qa', reason: `commits arrived after QA ${review.status} it` };
+  if (review.followUp?.kind === 'needs-you') return { kind: 'blocked', reason: review.followUp.reason };
+  if (review.status === 'failed') return { kind: 'blocked', reason: 'QA failed it' };
+
+  if (mark?.kind === 'refused') return { kind: 'blocked', reason: `GitHub refused the merge: ${mark.reason}` };
+  switch (pr.checks) {
+    case 'pending':
+      return { kind: 'wait', reason: 'checks are running' };
+    case 'failing': {
+      const runIds = [...new Set(pr.failedChecks.flatMap((c) => (c.runId ? [c.runId] : [])))];
+      if (!mark && runIds.length) return { kind: 'rerun-checks', sha: head, runIds };
+      if (mark?.kind === 'sent-back') return { kind: 'blocked', reason: 'checks still fail after it went back to a developer' };
+      if (!office.autoSendBack) return { kind: 'blocked', reason: 'checks fail' };
+      return { kind: 'send-back', sha: head, checks: pr.failedChecks };
+    }
+    case 'passing':
+    case 'none':
+      break;
+  }
+  if (pr.mergeable === 'UNKNOWN') return { kind: 'wait', reason: 'GitHub is still working out whether it merges cleanly' };
+  return { kind: 'merge', sha: head };
+}
+
+/** Why merging a PR from the board needs the manager to confirm: QA hasn't passed its current head commit. */
+export function unpassedReason(review: QaReview | undefined, pr: Pick<PullRequest, 'headSha'>): string | undefined {
+  switch (qaBadge(review, pr).state) {
+    case 'passed':
+      return undefined;
+    case 'none':
+      return 'QA hasn’t tested it';
+    case 'queued':
+    case 'testing':
+      return 'QA hasn’t finished testing it';
+    case 'error':
+      return 'QA couldn’t finish testing it';
+    case 'failed':
+    case 'fixing':
+    case 'needs-you':
+      return 'QA failed it';
+    case 'stale':
+      return `QA ${review?.status} an older commit, not the latest one`;
+  }
+}
+
+/** Whether PRs the office opened merge by themselves: off unless the project switched it on. */
+export function autoMergeFor(project: { autoMerge?: boolean }): boolean {
+  return project.autoMerge === true;
+}

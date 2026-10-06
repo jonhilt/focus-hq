@@ -30,7 +30,8 @@ export class GitHub extends Context.Service<GitHub, {
   commentOnPullRequest(repo: string, number: number, body: string): Op<string>;
   uploadQaEvidence(repo: string, path: string, bytes: Buffer): Op<string>;
   createPullRequest(repo: string, pr: CreatePullRequest): Op<{ number: number; url: string }>;
-  mergePullRequest(repo: string, number: number, method: 'squash' | 'merge' | 'rebase'): Op<void>;
+  mergePullRequest(repo: string, number: number, method: 'squash' | 'merge' | 'rebase', headSha?: string): Op<void>;
+  rerunFailedRuns(repo: string, runIds: number[]): Op<void>;
   createRepo(name: string, opts: { owner?: string; private: boolean; description: string }): Op<string>;
 }>()('focus/github/GitHub') {}
 
@@ -56,7 +57,8 @@ export function toProvider(layer: Layer.Layer<GitHub>): GitHubProvider {
     commentOnPullRequest: (repo, number, body) => call((gh) => gh.commentOnPullRequest(repo, number, body)),
     uploadQaEvidence: (repo, path, bytes) => call((gh) => gh.uploadQaEvidence(repo, path, bytes)),
     createPullRequest: (repo, pr) => call((gh) => gh.createPullRequest(repo, pr)),
-    mergePullRequest: (repo, number, method) => call((gh) => gh.mergePullRequest(repo, number, method)),
+    mergePullRequest: (repo, number, method, headSha) => call((gh) => gh.mergePullRequest(repo, number, method, headSha)),
+    rerunFailedRuns: (repo, runIds) => call((gh) => gh.rerunFailedRuns(repo, runIds)),
     createRepo: (name, opts) => call((gh) => gh.createRepo(name, opts)),
   };
 }

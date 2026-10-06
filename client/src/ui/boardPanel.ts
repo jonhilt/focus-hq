@@ -2,6 +2,7 @@ import { statusIcon, statusLine } from '../../../shared/agentStatus';
 import { columns } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import { assignWarning, waitsLabel } from '../../../shared/dependencies';
+import { unpassedReason } from '../../../shared/mergeGate';
 import { previewIncludes, previewSet } from '../../../shared/previewSet';
 import { prKey, qaBadge, sameCommit } from '../../../shared/qa';
 import type { Effort } from '../../../shared/types';
@@ -94,10 +95,15 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
     mine.checked = !!p.onlyMyPrs;
     if (!cols.prs.length) prs.append(h('div', { class: 'empty' }, cols.hiddenPrs ? 'None of the open pull requests are yours.' : 'No open pull requests.'));
     for (const pr of cols.prs) {
+      const review = state.reviews.get(prKey(pr.repo, pr.number));
       const merge = h('button', { class: 'btn small go' }, `⤵ ${state.info?.settings.mergeMethod ?? 'squash'} & merge`);
       merge.disabled = pr.mergeable === 'CONFLICTING' || pr.isDraft;
       merge.onclick = () => {
-        if (!confirm(`Merge ${pr.repo}#${pr.number} "${pr.title}"?`)) return;
+        const unpassed = unpassedReason(review, pr);
+        const ask = unpassed
+          ? `⚠ ${unpassed}.\n\nMerge ${pr.repo}#${pr.number} "${pr.title}" anyway?`
+          : `Merge ${pr.repo}#${pr.number} "${pr.title}"?`;
+        if (!confirm(ask)) return;
         void busy(merge, async () => {
           await api.mergePr(projectId, pr.repo, pr.number);
           ui.hud.toast('success', `Merged #${pr.number} 🎉`);
@@ -141,7 +147,6 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
             : [h('button', { class: 'btn small', title: preview.activity, onclick: openPreview }, preview.status === 'stopping' ? '⏹ Stopping…' : '⏳ Starting…')];
       const sha = preview?.checkouts.find((c) => c.repo === pr.repo)?.sha;
       const behind = sha && pr.headSha && sha !== 'demo' && !sameCommit(sha, pr.headSha);
-      const review = state.reviews.get(prKey(pr.repo, pr.number));
       const qa = qaBadge(review, pr);
       const qaBusy = qa.state === 'queued' || qa.state === 'testing';
       const qaChip = qa.state === 'none'

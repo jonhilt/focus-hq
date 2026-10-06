@@ -1,6 +1,8 @@
-import type { Agent, Board, Effort, Issue, Preview, PreviewSet, Project, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
+import type { Agent, Board, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
 import { chosenSet, previewPrs } from '../shared/previewSet';
 import { startOrder } from '../shared/dependencies';
+import { autoMergeFor, type GateMark, mergeStep, type MergeStep } from '../shared/mergeGate';
+import { autoSendBackFor, prKey } from '../shared/qa';
 import type { AgentManager } from './agents/manager';
 import type { Briefings } from './agents/briefing';
 import type { IssuePlanner } from './agents/planner';
@@ -28,6 +30,8 @@ export class Office {
   private info: ServerInfo;
   private refreshTimers = new Map<string, NodeJS.Timeout>();
   private refreshing = new Map<string, Promise<void>>();
+  /** What auto-merge already did about each PR's head commit (by prKey). Forgotten on restart, so it may try once more. */
+  private gateMarks = new Map<string, GateMark>();
 
   constructor(
     private readonly store: Store,
@@ -97,7 +101,7 @@ export class Office {
   updateProject(id: string, patch: Parameters<Store['updateProject']>[1]): Project {
     const project = this.store.updateProject(id, patch);
     this.broadcastProjects();
-    if (patch.autoAssign || patch.maxAgents !== undefined) {
+    if (patch.autoAssign || patch.autoMerge || patch.maxAgents !== undefined) {
       this.agents.schedule();
       this.boardChanged(id, 0);
     }
@@ -180,8 +184,9 @@ export class Office {
     return issue;
   }
 
-  async mergePullRequest(projectId: string, repo: string, number: number): Promise<void> {
-    await this.github.mergePullRequest(repo, number, this.store.settings.mergeMethod);
+  /** `headSha` merges only that commit: GitHub refuses if the branch has moved on since. */
+  async mergePullRequest(projectId: string, repo: string, number: number, headSha?: string): Promise<void> {
+    await this.github.mergePullRequest(repo, number, this.store.settings.mergeMethod, headSha);
     this.agents.prClosed(repo, number, true);
     this.previews.closed(repo, number);
     const board = this.store.boards.get(projectId);
@@ -277,7 +282,71 @@ export class Office {
     }
 
     await this.noticeClosedPullRequests(projectId, board);
+    await this.autoMerge(projectId, board);
     this.autoAssign(projectId, board);
+  }
+
+  /** With auto-merge on, takes each open PR one step further along mergeStep: QA, checks, conflicts, merged. */
+  private async autoMerge(projectId: string, board: Board): Promise<void> {
+    const project = this.store.projects.find((p) => p.id === projectId);
+    if (!project || !autoMergeFor(project)) return;
+    const open = new Set(board.prs.map((p) => prKey(p.repo, p.number)));
+    for (const key of this.gateMarks.keys()) {
+      const repo = key.slice(0, key.lastIndexOf('#'));
+      if (project.repos.includes(repo) && !board.error?.includes(repo) && !open.has(key)) this.gateMarks.delete(key);
+    }
+    for (const pr of [...board.prs]) {
+      const key = prKey(pr.repo, pr.number);
+      const step = mergeStep(pr, this.store.reviews.get(key), {
+        openedByOffice: this.agents.openedByOffice(pr.repo, pr.number),
+        developerBusy: this.agents.busyOn(pr.repo, pr.number),
+        autoSendBack: autoSendBackFor(project),
+        mark: this.gateMarks.get(key),
+      });
+      try {
+        await this.followMergeStep(projectId, pr, step);
+      } catch (err) {
+        this.hub.toast('error', `Auto-merge of ${pr.repo.split('/')[1]}#${pr.number}: ${errorMessage(err)}`);
+      }
+    }
+  }
+
+  private async followMergeStep(projectId: string, pr: PullRequest, step: MergeStep): Promise<void> {
+    const key = prKey(pr.repo, pr.number);
+    const where = `${pr.repo.split('/')[1]}#${pr.number}`;
+    switch (step.kind) {
+      case 'wait':
+      case 'blocked':
+        return;
+      case 'merge':
+        try {
+          await this.mergePullRequest(projectId, pr.repo, pr.number, step.sha);
+          this.gateMarks.delete(key);
+          this.hub.toast('success', `🤖 Auto-merged ${where}: QA passed it and its checks are green`);
+        } catch (err) {
+          this.gateMarks.set(key, { sha: step.sha, kind: 'refused', reason: errorMessage(err) });
+          this.hub.toast('error', `🤖 GitHub refused to merge ${where}: ${errorMessage(err)}`);
+        }
+        return;
+      case 'qa':
+        this.agents.requestReview(projectId, pr.repo, pr.number, pr.title);
+        this.hub.toast('info', `🔍 ${where} goes to QA before it can merge: ${step.reason}`);
+        return;
+      case 'rerun-checks':
+        this.gateMarks.set(key, { sha: step.sha, kind: 'rerun' });
+        await this.github.rerunFailedRuns(pr.repo, step.runIds);
+        this.hub.toast('info', `↻ Re-running the failed checks on ${where}`);
+        return;
+      case 'send-back':
+        this.gateMarks.set(key, { sha: step.sha, kind: 'sent-back' });
+        await this.agents.sendBackChecks(pr.repo, pr.number, step.checks);
+        return;
+      case 'resolve-conflicts':
+        this.gateMarks.set(key, { sha: step.sha, kind: 'resolving' });
+        this.agents.resolveConflicts(projectId, pr);
+        this.hub.toast('info', `🔧 ${where} conflicts with ${pr.baseBranch} – resolving them before QA`);
+        return;
+    }
   }
 
   private async noticeClosedPullRequests(projectId: string, board: Board): Promise<void> {

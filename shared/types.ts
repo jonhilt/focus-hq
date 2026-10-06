@@ -26,7 +26,7 @@ export interface Settings {
   autonomy: Autonomy;
   /** Claude model for agents. Empty = Claude Code's default for your account. */
   model: string;
-  /** Agents auto-merge nothing; this is the merge method used by the board's Merge button. */
+  /** How the board's Merge button, and auto-merge, merge a pull request. */
   mergeMethod: 'squash' | 'merge' | 'rebase';
   /** Pull requests and QA reports on GitHub name the agent who did the work and mention Focus. */
   attribution: boolean;
@@ -61,6 +61,8 @@ export interface Project {
   autoQa?: boolean;
   /** A PR the office opened that fails QA goes back to a developer to fix (missing = on). */
   autoSendBack?: boolean;
+  /** PRs the office opened merge by themselves once QA passed their head commit and checks are green (missing = off). */
+  autoMerge?: boolean;
   /** What QA must check on every PR of this project, on top of the usual review. Goes into the QA officer's prompt. */
   qaBrief?: string;
   createdAt: number;
@@ -96,6 +98,14 @@ export interface Issue {
 
 export type ChecksState = 'passing' | 'failing' | 'pending' | 'none';
 
+/** A check on a pull request that failed. */
+export interface FailedCheck {
+  name: string;
+  url?: string;
+  /** The GitHub Actions run it's part of, which `gh run rerun --failed` can re-run. Missing for other CI. */
+  runId?: number;
+}
+
 export interface PullRequest {
   repo: string;
   number: number;
@@ -110,6 +120,8 @@ export interface PullRequest {
   mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN';
   reviewDecision?: string;
   checks: ChecksState;
+  /** The checks that failed, while `checks` is 'failing'. */
+  failedChecks: FailedCheck[];
   /** Issues in the same repo it closes ("Closes #N", or linked on GitHub). */
   closes: number[];
   createdAt: string;
@@ -438,8 +450,11 @@ export interface QaScreenshot {
 
 export type QaStatus = 'queued' | 'testing' | 'passed' | 'failed' | 'error';
 
-/** What the office did about a failed verdict on a PR it opened: a developer is on it, or it gave up and wants you. */
-export type QaFollowUp = { kind: 'fixing'; agentId: string; agentName: string } | { kind: 'needs-you'; reason: string };
+/** What a developer was sent back to fix: QA's findings, or the PR's checks failing on GitHub after QA passed it. */
+export type FixFor = { kind: 'qa' } | { kind: 'checks'; checks: FailedCheck[] };
+
+/** What the office did about a failed PR it opened: a developer is on it, or it gave up and wants you. */
+export type QaFollowUp = { kind: 'fixing'; agentId: string; agentName: string; fixes: FixFor } | { kind: 'needs-you'; reason: string };
 
 /** The latest QA review of a pull request. Kept until the PR is merged or closed. */
 export interface QaReview {

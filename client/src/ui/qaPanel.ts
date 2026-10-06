@@ -1,5 +1,6 @@
 import { statusLine } from '../../../shared/agentStatus';
 import { qaOfficerFor, UNIFORM } from '../../../shared/crew';
+import { autoMergeFor } from '../../../shared/mergeGate';
 import { autoQaFor, autoSendBackFor, qaBadge } from '../../../shared/qa';
 import type { QaReview, QaScreenshot } from '../../../shared/types';
 import { api } from '../net/api';
@@ -38,9 +39,12 @@ export function openQaPanel(ui: Ui, projectId: string): void {
   auto.onchange = () => void api.updateProject(projectId, { autoQa: auto.checked }).catch((e: Error) => ui.error(e.message));
   const sendBack = h('input', { type: 'checkbox', checked: autoSendBackFor(project) });
   sendBack.onchange = () => void api.updateProject(projectId, { autoSendBack: sendBack.checked }).catch((e: Error) => ui.error(e.message));
+  const merge = h('input', { type: 'checkbox', checked: autoMergeFor(project) });
+  merge.onchange = () => void api.updateProject(projectId, { autoMerge: merge.checked }).catch((e: Error) => ui.error(e.message));
   const settings = h('div', { class: 'card qa-settings' },
     h('label', { class: 'qa-toggle' }, auto, h('span', null, '🔍 Test every pull request the crew opens or updates')),
     h('label', { class: 'qa-toggle' }, sendBack, h('span', null, '🔧 Send a failed pull request the crew opened back to be fixed (up to 3 rounds)')),
+    h('label', { class: 'qa-toggle' }, merge, h('span', null, '🤖 Auto-merge a pull request the crew opened once QA passed its latest commit and its checks are green')),
     h('div', { class: 'field', style: 'margin:10px 0 0' },
       h('label', null, `What should ${officer.name} check on every ${project.name} PR?`),
       withMic(ui, brief),

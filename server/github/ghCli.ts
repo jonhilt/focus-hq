@@ -1,6 +1,6 @@
 import { Effect, Layer, Schema } from 'effect';
 import type { Issue } from '../../shared/types';
-import { closingIssues, evidenceUrl, QA_EVIDENCE_BRANCH, rollupChecks } from './provider';
+import { closingIssues, evidenceUrl, failedChecks, QA_EVIDENCE_BRANCH, rollupChecks } from './provider';
 import { decodeJson, GhBadOutput, GhRunner } from './runner';
 import { GitHub } from './service';
 
@@ -173,6 +173,7 @@ const make = Effect.gen(function* () {
             mergeable: p.mergeable ?? 'UNKNOWN',
             reviewDecision: p.reviewDecision || undefined,
             checks: rollupChecks(p.statusCheckRollup),
+            failedChecks: failedChecks(p.statusCheckRollup),
             closes: linkedIssues(p.closingIssuesReferences, p.body ?? ''),
             createdAt: p.createdAt,
             updatedAt: p.updatedAt,
@@ -220,7 +221,10 @@ const make = Effect.gen(function* () {
     createPullRequest: (repo, pr) =>
       created(['pr', 'create', '-R', repo, '--head', pr.head, '--base', pr.base, '--title', pr.title, '--body-file', '-'], pr.body),
 
-    mergePullRequest: (repo, number, method) => gh(['pr', 'merge', String(number), '-R', repo, `--${method}`, '--delete-branch']).pipe(Effect.asVoid),
+    mergePullRequest: (repo, number, method, headSha) =>
+      gh(['pr', 'merge', String(number), '-R', repo, `--${method}`, '--delete-branch', ...(headSha ? ['--match-head-commit', headSha] : [])]).pipe(Effect.asVoid),
+
+    rerunFailedRuns: (repo, runIds) => Effect.forEach(runIds, (id) => gh(['run', 'rerun', String(id), '--failed', '-R', repo]), { discard: true }),
 
     createRepo: (name, opts) => {
       const full = opts.owner ? `${opts.owner}/${name}` : name;
