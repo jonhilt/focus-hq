@@ -33,6 +33,8 @@ function placeholderShot(url: string, heading: string, caption: string, accent: 
 /** Pretend agents for `npm run demo`: realistic-looking terminal output, browser testing and the odd raised hand. */
 export class DemoRunner implements AgentRunner {
   private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
+  /** Each lead's repos and goal, by session: a resumed turn doesn't hear them again. */
+  private leads = new Map<string, { repos: { folder: string; repo: string }[]; goal: string }>();
 
   start(req: RunRequest, hooks: RunHooks): AgentSession {
     const inbox: string[] = [];
@@ -160,16 +162,21 @@ export class DemoRunner implements AgentRunner {
       return { ok: true, summary: JSON.stringify(report), structured: report };
     };
 
-    // the project's lead: talks a goal through, builds a slice across every repo, ships it, and hears back
+    // a goal's lead: talks the goal through, builds a slice across every repo, ships it, and hears back
     const leadScript = async (tools: NonNullable<RunRequest['tools']>): Promise<RunOutcome> => {
       const sessionId = req.resumeSessionId ?? `demo-lead-${randomBytes(4).toString('hex')}`;
       hooks.session(sessionId);
       if (!req.resumeSessionId) hooks.lines([{ kind: 'system', text: '✻ Claude Code (demo) · pretend model · acceptEdits' }]);
-      const repos = [...req.systemAppend.matchAll(/^- \.\/(\S+): (\S+), on branch/gm)].map((m) => ({ folder: m[1], repo: m[2] }));
+      // where the repos are comes in the goal's first message and with each new slice; a resumed turn remembers it
+      const listed = [...req.prompt.matchAll(/^- \.\/(\S+): (\S+), on branch/gm)].map((m) => ({ folder: m[1], repo: m[2] }));
+      const known = this.leads.get(sessionId);
+      const repos = listed.length ? listed : (known?.repos ?? []);
       const kindOf = (repo: string) => (/api/.test(repo) ? 'api' : /game|dodger/.test(repo) ? 'game' : 'web');
-      const message = req.prompt.replace(/\s+/g, ' ').trim();
-      // a resumed session doesn't hear the goal again: anything short is a go-ahead, not the goal
-      const goal = req.resumeSessionId && message.length < 40 ? 'saved items' : message.replace(/[.!?]$/, '').slice(0, 60);
+      // the captain's words, without the office's note about the workspace in front of them
+      const message = req.prompt.replace(/^(Your workspace|Slice \d+ starts)[^\n]*\n(- [^\n]*(\n|$))*/, '').replace(/\s+/g, ' ').trim();
+      // a resumed session doesn't hear the goal again, and a goal's lead keeps the one goal
+      const goal = known?.goal ?? (message.replace(/[.!?]$/, '').slice(0, 60) || 'saved items');
+      this.leads.set(sessionId, { repos, goal });
       const ship = async (title: string, summary: string): Promise<boolean> => {
         hooks.lines([{ kind: 'tool', text: `⏺ mcp__office__ship(${title})` }]);
         hooks.activity('pushing', 'Shipping the slice');
@@ -216,7 +223,7 @@ export class DemoRunner implements AgentRunner {
       }
       await say('On it: a thin slice first.');
       await tool('TodoWrite', { todos: repos.map((r) => ({ content: `${r.folder}: ${goal}`, status: 'pending' })) });
-      // two helpers map the repos side by side while the lead plans: they sit down at the group desk while they work
+      // two helpers map the repos side by side while the lead plans: they sit down at the team station while they work
       if (repos.length > 1) {
         const helpers = repos.map((r) => ({ ...r, id: `demo-helper-${r.folder}-${randomBytes(2).toString('hex')}`, files: FILES[kindOf(r.repo)] }));
         for (const h of helpers) {
@@ -526,7 +533,7 @@ export class DemoNumberOne implements NumberOneOfficer {
     if (project && /should we|could we|we need|let'?s|add|build|want/.test(q)) {
       return {
         ...said(
-          `That sounds like work for ${project.name}. I'd start with a draft at the stand; if it turns out bigger than one issue, talk it through with the project's lead instead.`,
+          `That sounds like work for ${project.name}. I'd start with a draft at the stand; if it turns out bigger than one issue, start it as a goal with a lead of its own instead.`,
           `That's one for ${project.name}. Want me to send it to the stand, or to the lead?`,
         ),
         suggest: { projectId: project.id, idea: asked },

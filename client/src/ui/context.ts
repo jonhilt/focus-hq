@@ -21,8 +21,8 @@ export interface Ui {
   openNewIssue(projectId?: string): void;
   /** The room's QA station: the QA officer, their reports and the project's QA brief. */
   openQa(projectId: string): void;
-  /** The project's lead: their session, or a box to seat them. */
-  openLead(projectId: string): void;
+  /** The room's goals: each one's lead, and a box to start another. */
+  openGoals(projectId: string): void;
   /** The ready room's chat with Number One. */
   openNumberOne(): void;
   openManager(tab?: ManagerTab): void;

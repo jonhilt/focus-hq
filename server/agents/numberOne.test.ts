@@ -90,9 +90,9 @@ describe('summariseShip', () => {
     expect(status.projects[0].prs[0].title.length).toBe(80);
   });
 
-  it('says which slice the project’s lead is on, not an issue', () => {
-    const lead = agent({ id: 'lead_p1', task: 'lead', issue: { number: 0, title: 'Shop’s lead', url: '' }, lead: { repos: [], slice: 2, prs: [] } });
-    expect(summariseShip(snapshot({ agents: [lead] }), worktree).projects[0].agents[0].issue).toBe('Slice 2, with the captain');
+  it('says which goal a lead is on, and which slice, not an issue', () => {
+    const lead = agent({ id: 'lead_p1_ab12', task: 'lead', issue: { number: 0, title: 'Saved items', url: '' }, lead: { station: 1, title: 'Saved items', repos: [], slice: 2, prs: [] } });
+    expect(summariseShip(snapshot({ agents: [lead] }), worktree).projects[0].agents[0].issue).toBe('Goal “Saved items”, slice 2, with the captain');
   });
 });
 

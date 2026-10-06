@@ -76,7 +76,7 @@ export function openAgentPanel(ui: Ui, id: string): void {
     title.replaceChildren(
       h('span', { class: 'dot', style: `background:${UNIFORM[a.avatar.division]};margin-right:8px;vertical-align:middle` }),
       `${a.name} · `,
-      h('span', { class: 'muted', style: 'font-weight:500' }, a.task === 'lead' ? `${state.project(a.projectId)?.name ?? ''} lead · slice ${a.lead?.slice ?? 1}` : `#${a.issue.number} ${a.issue.title}`),
+      h('span', { class: 'muted', style: 'font-weight:500' }, a.task === 'lead' ? `${a.lead?.title ?? 'Goal'} · team station ${(a.lead?.station ?? 0) + 1} · slice ${a.lead?.slice ?? 1}` : `#${a.issue.number} ${a.issue.title}`),
     );
     fill(
       info,

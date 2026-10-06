@@ -1,4 +1,4 @@
-import { crewVoice, leadFor, leadId, numberOne, plannerFor } from '../../../shared/crew';
+import { crewVoice, numberOne, plannerFor } from '../../../shared/crew';
 import type { NumberOneChat, WorkSuggestion } from '../../../shared/types';
 import { linesToSpeak } from '../../../shared/voice';
 import { api } from '../net/api';
@@ -16,7 +16,7 @@ export const numberOnePanelOpen = () => open;
 /**
  * The ready room's chat with Number One: ask about any project's code or what's going on aboard, or think an idea
  * through. Nothing said here turns into work by itself: a reply that suggests some offers to send it to the project's
- * stand or its lead.
+ * stand, or to start it as a goal.
  */
 export function openNumberOnePanel(ui: Ui): void {
   const one = numberOne();
@@ -118,7 +118,7 @@ export function openNumberOnePanel(ui: Ui): void {
   render();
 }
 
-/** What a reply suggests doing: a draft at the project's stand, or a talk with its lead. */
+/** What a reply suggests doing: a draft at the project's stand, or a goal with a lead of its own. */
 function suggestion(ui: Ui, { projectId, idea }: WorkSuggestion): HTMLElement {
   const name = state.project(projectId)?.name ?? 'the project';
   const officer = plannerFor(projectId).name;
@@ -131,11 +131,11 @@ function suggestion(ui: Ui, { projectId, idea }: WorkSuggestion): HTMLElement {
       ui.openNewIssue(projectId);
     }, ui.error);
   };
-  const lead = h('button', { class: 'btn small primary', title: `${leadFor(projectId).name} talks it through with you at ${name}’s group desk, then builds it a slice at a time` }, '🧭 Talk to the lead');
+  const lead = h('button', { class: 'btn small primary', title: `Start it as a goal at a free team station in ${name}: a lead of its own talks it through with you, then builds it a slice at a time` }, '🧭 Start a goal');
   lead.onclick = () =>
     void busy(lead, async () => {
-      await api.talkToLead(projectId, idea);
-      ui.openAgent(leadId(projectId));
+      const agent = await api.startGoal(projectId, idea);
+      ui.openAgent(agent.id);
     }, ui.error);
   return h('div', { class: 'row suggest' }, h('small', { class: 'muted' }, `For ${name}:`), draft, lead);
 }

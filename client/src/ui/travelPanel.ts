@@ -26,7 +26,7 @@ export function openTeleportPanel(ui: Ui): void {
         h('button', { class: a.status === 'waiting' ? 'btn place warn' : 'btn place', onclick: () => ui.goToAgent(a.id) },
           h('span', { class: 'dot', style: `background:${UNIFORM[a.avatar.division]};margin-right:6px;vertical-align:-2px` }),
           `${statusIcon(a)} ${a.name}`,
-          h('small', null, `${state.project(a.projectId)?.name ?? ''} · ${a.task === 'lead' ? 'lead' : `#${a.issue.number}`} · ${statusLine(a)}`),
+          h('small', null, `${state.project(a.projectId)?.name ?? ''} · ${a.task === 'lead' ? `lead of “${a.lead?.title ?? 'a goal'}”` : `#${a.issue.number}`} · ${statusLine(a)}`),
         ),
       ),
     ),

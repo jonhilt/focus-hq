@@ -64,6 +64,9 @@ async function main() {
     game.repos = ['demo/space-dodger'];
     // so the demo shows a PR going QA pass → checks green → merged by itself
     game.autoMerge = true;
+    // two goals under way side by side, each with its own lead at its own team station
+    office.agents.startGoal(shop.id, 'Shoppers can save items for later and find them again on any device');
+    office.agents.startGoal(shop.id, 'Show how many of each sock are left in stock on the product page', { station: 2 });
   }
 
   const app = express();

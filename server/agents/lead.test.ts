@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaOfficerFor } from '../../shared/crew';
-import type { LeadWork } from '../../shared/types';
-import { afterVerdict, applyHelperEvent, heldBack, landedNote, leadPrBody, leadSystemAppend, newSliceNote, notShipped, openPr, qaVerdictNote, shipPlan, sliceBranch, sliceLanded } from './lead';
+import type { Agent, LeadWork } from '../../shared/types';
+import { afterVerdict, applyHelperEvent, goalEffort, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, newSliceNote, notShipped, openPr, pickStation, qaVerdictNote, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
 
 const work: LeadWork = {
+  station: 1,
+  title: 'Saved items',
   repos: [
     { repo: 'acme/web', folder: 'web', baseBranch: 'main' },
     { repo: 'acme/api', folder: 'api', baseBranch: 'develop' },
@@ -15,22 +17,66 @@ const work: LeadWork = {
   ],
 };
 
-describe('the lead', () => {
-  it('is one per project, a lieutenant in command red, never sharing a surname with the room’s other officers', () => {
+const surname = (name: string) => name.split(' ').at(-1);
+
+describe('a goal’s lead', () => {
+  it('is a lieutenant in command red, one per goal, never sharing a surname with the room’s officers or its other leads', () => {
     for (const id of ['p1', 'p2', 'shop', 'thomas']) {
-      const lead = leadFor(id);
-      expect(lead.avatar.division).toBe('command');
-      const surname = lead.name.split(' ').at(-1);
-      expect([plannerFor(id), qaOfficerFor(id)].map((o) => o.name.split(' ').at(-1))).not.toContain(surname);
+      const first = leadFor(id, 'g1');
+      expect(first.avatar.division).toBe('command');
+      expect(first.name).toMatch(/^Lt\. /);
+      expect([plannerFor(id), qaOfficerFor(id)].map((o) => surname(o.name))).not.toContain(surname(first.name));
+      expect(leadFor(id, 'g1')).toEqual(first);
+      const others = [first.name, leadFor(id, 'g2').name, leadFor(id, 'g3').name];
+      expect(others.map(surname)).not.toContain(surname(leadFor(id, 'g4', others).name));
     }
-    expect(leadId('p1')).toBe('lead_p1');
+    expect(leadId('p1', 'ab12')).toBe('lead_p1_ab12');
+  });
+
+  it('takes the station asked for if it’s free, else the first free one', () => {
+    expect(pickStation([])).toBe(0);
+    expect(pickStation([0, 2])).toBe(1);
+    expect(pickStation([0, 1, 2, 3])).toBeUndefined();
+    expect(pickStation([0], 3)).toBe(3);
+    expect(pickStation([3], 3)).toBeUndefined();
+    expect(pickStation([], 4)).toBeUndefined();
+    expect(pickStation([], -1)).toBeUndefined();
+    expect(pickStation([], 1.5)).toBeUndefined();
+  });
+
+  it('calls the goal by the captain’s first line, cut at a word', () => {
+    expect(goalTitle('Shoppers can save items for later.\nAnd find them on any device')).toBe('Shoppers can save items for later');
+    expect(goalTitle('\n\n  Stock   levels  ')).toBe('Stock levels');
+    expect(goalTitle('   ')).toBe('A new goal');
+    const long = goalTitle('Let shoppers save items for later from the cart and the product page, then find them again on any device');
+    expect(long).toBe('Let shoppers save items for later from the cart and the…');
+    expect(long.length).toBeLessThanOrEqual(61);
+  });
+
+  it('works at the effort the captain picked, else the office’s default for leads', () => {
+    expect(goalEffort(undefined, { leadEffort: 'high' })).toBe('high');
+    expect(goalEffort('xhigh', { leadEffort: 'high' })).toBe('xhigh');
+  });
+
+  it('turns the project’s one lead, saved before goals, into the goal at the first station', () => {
+    const old = { id: 'lead_p1', task: 'lead', issue: { number: 0, title: 'Shop’s lead', url: '' }, lead: { repos: [], slice: 3, prs: [] } } as unknown as Agent;
+    const upgraded = upgradeLead(old, 'Shop');
+    expect(upgraded.lead).toEqual({ station: 0, title: 'Shop’s first goal', repos: [], slice: 3, prs: [] });
+    expect(upgraded.issue.title).toBe('Shop’s first goal');
+    const current = { ...old, lead: work } as Agent;
+    expect(upgradeLead(current, 'Shop')).toBe(current);
+    const developer = { id: 'agent_x', task: 'issue' } as Agent;
+    expect(upgradeLead(developer, 'Shop')).toBe(developer);
   });
 });
 
 describe('slices', () => {
-  it('gets a fresh branch each slice', () => {
-    expect(sliceBranch('Thomas Project', 3, 'ab12')).toBe('focus/lead-thomas-project-3-ab12');
-    expect(sliceBranch('!!!', 1, 'x')).toBe('focus/lead-project-1-x');
+  it('gets a fresh branch each slice, named after the goal', () => {
+    expect(sliceBranch('Shoppers can save items for later', 3, 'ab12')).toBe('focus/shoppers-can-save-items-3-ab12');
+    expect(sliceBranch('Show how many of each sock are left', 1, 'cd')).toBe('focus/show-how-many-of-each-1-cd');
+    expect(sliceBranch('Internationalisation', 2, 'x')).toBe('focus/internationalisation-2-x');
+    expect(sliceBranch('Supercalifragilisticexpialidocious', 1, 'x')).toBe('focus/supercalifragilisticexpi-1-x');
+    expect(sliceBranch('!!!', 1, 'x')).toBe('focus/goal-1-x');
   });
 
   it('lands once it shipped and every pull request has merged or closed', () => {
@@ -72,21 +118,31 @@ describe('shipPlan', () => {
 describe('what the lead writes and hears', () => {
   it('describes each pull request with the repos shipping alongside it, signed when attribution is on', () => {
     expect(leadPrBody('Adds saving', { name: 'Lt. Okafor' }, ['acme/api'], true)).toBe(
-      'Adds saving\n\nShipped alongside the same slice in acme/api.\n\n---\n_Built by **Lt. Okafor**, the project’s lead in the Focus office, with Claude Code._',
+      'Adds saving\n\nShipped alongside the same slice in acme/api.\n\n---\n_Built by **Lt. Okafor**, a lead in the Focus office, with Claude Code._',
     );
-    expect(leadPrBody(' ', { name: 'x' }, [], false)).toBe('A slice of work from the project’s lead.');
+    expect(leadPrBody(' ', { name: 'x' }, [], false)).toBe('A slice of work from one of the project’s leads.');
   });
 
   it('works in slices across every repo, ships through the office, and never pushes', () => {
-    const prompt = leadSystemAppend({ name: 'Lt. Okafor', branch: 'focus/lead-shop-2-ab' }, 'Shop', work);
-    expect(prompt).toContain('- ./web: acme/web, on branch `focus/lead-shop-2-ab` from `main`');
-    expect(prompt).toContain('- ./api: acme/api, on branch `focus/lead-shop-2-ab` from `develop`');
+    const prompt = leadSystemAppend({ name: 'Lt. Okafor' }, 'Shop', 1);
+    expect(prompt).toMatch(/^# You are Lt\. Okafor, a lead on Shop/);
+    expect(prompt).toContain('team station 2');
+    expect(prompt).toMatch(/Other leads may be working on other goals in the same repos/);
     expect(prompt).toMatch(/Don't write a spec or plan the whole route/);
     expect(prompt).toMatch(/thin slice end to end, through every repo it needs/);
     expect(prompt).toMatch(/A slice can also be a refactor/);
     expect(prompt).toContain('mcp__office__ship');
     expect(prompt).toMatch(/Never push and never open pull requests yourself/);
     expect(prompt).toMatch(/subagents with the Agent tool/);
+  });
+
+  it('keeps what changes from slice to slice out of its instructions, which a resumed session never re-reads', () => {
+    const prompt = leadSystemAppend({ name: 'Lt. Okafor' }, 'Shop', 1);
+    expect(prompt).not.toMatch(/focus\//);
+    expect(prompt).not.toMatch(/^- \.\//m);
+    expect(workspaceNote(work, 'focus/saved-items-2-ab')).toBe(
+      'Your workspace, with every repo of the project checked out side by side:\n- ./web: acme/web, on branch `focus/saved-items-2-ab` from `main`\n- ./api: acme/api, on branch `focus/saved-items-2-ab` from `develop`',
+    );
   });
 
   it('passes on QA’s verdict, with what to fix on a fail', () => {

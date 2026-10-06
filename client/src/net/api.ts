@@ -30,8 +30,9 @@ export const api = {
   draftIssue: (projectId: string, idea: string, revise?: { repo: string; title: string; body: string; notes: string }) =>
     call<IssueDraft>('POST', `/projects/${projectId}/draft`, { idea, revise }),
   discardDraft: (projectId: string) => call('DELETE', `/projects/${projectId}/draft`),
-  /** Talks to the project's lead, seating them first if they aren't there yet. */
-  talkToLead: (projectId: string, text: string) => call<Agent>('POST', `/projects/${projectId}/lead`, { text }),
+  /** Starts a goal at a team station (the first free one unless `station` says): a lead of its own hears `text` first. */
+  startGoal: (projectId: string, text: string, how: { station?: number; effort?: Effort } = {}) =>
+    call<Agent>('POST', `/projects/${projectId}/goals`, { text, ...how }),
   numberOneSay: (text: string) => call<NumberOneChat>('POST', '/number-one/say', { text }),
   numberOneNew: () => call<NumberOneChat>('POST', '/number-one/new'),
   sendToQa: (projectId: string, repo: string, number: number) => call<QaReview>('POST', '/prs/qa', { projectId, repo, number }),

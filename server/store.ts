@@ -6,6 +6,7 @@ import { prKey } from '../shared/qa';
 import type { Agent, Board, BrowserFrame, ClosedPr, NumberOneChat, Project, QaReview, Settings, TermLine } from '../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, ROOM_THEMES, type RoomTheme } from '../shared/types';
 import { paths } from './config';
+import { upgradeLead } from './agents/lead';
 import { newId } from './util';
 
 /** Number One's chat as saved: with their session, so the next message resumes it. */
@@ -34,6 +35,7 @@ const DEFAULT_SETTINGS: Settings = {
   model: '',
   mergeMethod: 'squash',
   attribution: true,
+  leadEffort: 'high',
 };
 
 const PROJECT_COLORS = ['#ff8a5b', '#5bc0eb', '#9bc53d', '#c879ff', '#fde74c', '#ff5d8f', '#2ec4b6', '#f4a259'];
@@ -86,6 +88,7 @@ export class Store {
       }
       agent.task ??= 'issue'; // saved before agents could be seated on a conflicting PR
       agent.helpers = undefined; // a lead's subagents don't outlive the office
+      if (agent.task === 'lead') Object.assign(agent, upgradeLead(agent, this.projects.find((p) => p.id === agent.projectId)?.name ?? 'The project'));
       // saved before the crew wore uniforms
       if (!('division' in agent.avatar)) agent.avatar = agent.task === 'review' ? qaOfficerFor(agent.projectId).avatar : randomAvatar();
       this.agents.set(agent.id, agent);

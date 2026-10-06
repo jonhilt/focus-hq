@@ -195,6 +195,11 @@ export class OfficeState {
     return [...this.agents.values()].filter((a) => a.projectId === projectId);
   }
 
+  /** The room's goals: each one's lead, by team station. */
+  leadsIn(projectId: string): Agent[] {
+    return this.agentsIn(projectId).filter((a) => a.task === 'lead').sort((a, b) => (a.lead?.station ?? 0) - (b.lead?.station ?? 0));
+  }
+
   /** The room's QA officer's agent record, while they have one. */
   qaAgent(projectId: string): Agent | undefined {
     return this.agentsIn(projectId).find((a) => a.task === 'review');

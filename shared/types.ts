@@ -30,6 +30,8 @@ export interface Settings {
   mergeMethod: 'squash' | 'merge' | 'rebase';
   /** Pull requests and QA reports on GitHub name the agent who did the work and mention Focus. */
   attribution: boolean;
+  /** The effort a new goal's lead starts at, unless the captain picks another when starting it. */
+  leadEffort: Effort;
 }
 
 /**
@@ -200,18 +202,21 @@ export type Effort = (typeof EFFORT_LEVELS)[number];
 
 /**
  * What an agent was seated for: an issue to resolve, an open pull request whose branch conflicts with its base, an open
- * pull request that failed QA, (the room's QA officer) a pull request to review and test, or (the project's lead) the
- * captain's own Claude Code session across all the project's repos.
+ * pull request that failed QA, (the room's QA officer) a pull request to review and test, or (a goal's lead) the
+ * captain's own Claude Code session for one goal, across all the project's repos.
  */
 export type AgentTask = 'issue' | 'conflicts' | 'fix' | 'review' | 'lead';
 
 /** The QA officer doesn't sit at one of the room's desks but at the QA station by the pull requests table. */
 export const QA_DESK = -1;
 
-/** Nor does the project's lead, who has the group desk. */
+/** Nor does a goal's lead, who sits at one of the room's team stations (`LeadWork.station`). */
 export const LEAD_DESK = -2;
 
-/** A pull request the project's lead shipped, and what became of it. */
+/** How many goals a room can work on at once: each has its own team station, and a lead at it. */
+export const TEAM_STATIONS = 4;
+
+/** A pull request a goal's lead shipped, and what became of it. */
 export interface LeadPr {
   repo: string;
   number: number;
@@ -222,7 +227,7 @@ export interface LeadPr {
   outcome?: 'merged' | 'closed';
 }
 
-/** A subagent the project's lead handed a piece of work to (Claude Code's Agent tool), seated at the group desk while it works. */
+/** A subagent a goal's lead handed a piece of work to (Claude Code's Agent tool), seated at the group desk while it works. */
 export interface Helper {
   /** The Agent tool call that started it. */
   id: string;
@@ -237,10 +242,14 @@ export interface Helper {
 }
 
 /**
- * The project's lead at work: every repo of the project checked out side by side on the slice's branch, and the pull
+ * A goal's lead at work: every repo of the project checked out side by side on the slice's branch, and the pull
  * requests the slice shipped. Once they've all merged or closed, the next slice starts on fresh code.
  */
 export interface LeadWork {
+  /** The team station the goal has: 0 … TEAM_STATIONS-1. */
+  station: number;
+  /** The goal in a few words. */
+  title: string;
   /** Each repo, checked out at ./<folder> in the lead's workspace, and the branch it ships into. */
   repos: { repo: string; folder: string; baseBranch: string }[];
   /** Which slice this is: 1, 2, … */
@@ -255,7 +264,7 @@ export interface Agent {
   projectId: string;
   repo: string;
   task: AgentTask;
-  /** The project's lead's repos and pull requests ('lead' task only). */
+  /** A goal's lead's station, repos and pull requests ('lead' task only). */
   lead?: LeadWork;
   /** The subagents the lead has working for it right now, and any that just finished ('lead' task only). */
   helpers?: Helper[];
@@ -376,7 +385,7 @@ export interface IssueDraft {
   title?: string;
   /** Markdown: context, what to build, acceptance criteria, out of scope, assumptions. */
   body?: string;
-  /** Why the planner thinks the idea is too big or too vague for one issue, when they do: the card offers the project's lead. */
+  /** Why the planner thinks the idea is too big or too vague for one issue, when they do: the card offers to start it as a goal. */
   tooBig?: string;
   error?: string;
   startedAt: number;

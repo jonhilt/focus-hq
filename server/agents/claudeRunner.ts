@@ -128,7 +128,9 @@ export class ClaudeRunner implements AgentRunner {
         ? // the cloud VM has its own browser; ours runs on this machine. `--cloud <id>` reattaches to the session.
           { systemPrompt: { type: 'preset', preset: 'claude_code' }, extraArgs: { cloud: req.resumeSessionId ?? null } }
         : {
-            systemPrompt: { type: 'preset', preset: 'claude_code', append: req.systemAppend },
+            // recorded on the first request and reused on every resume (the SDK's default, spelled out): instructions
+            // that change mid-session would be ignored, so whatever changes goes in messages instead
+            systemPrompt: { type: 'preset', preset: 'claude_code', append: req.systemAppend, snapshot: true },
             mcpServers: { browser: browserMcpServer(this.browsers, req.agentId, hooks), ...(req.tools && { office: officeMcpServer(req.tools) }) },
             resume: req.resumeSessionId,
           }),

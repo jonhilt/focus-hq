@@ -21,7 +21,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
   const body = h('div');
   const refresh = h('button', { class: 'btn small', title: 'Re-read issues and PRs from GitHub' }, '⟳ Refresh');
   const newIssue = h('button', { class: 'btn small primary' }, '＋ New issue');
-  const lead = h('button', { class: 'btn small', title: 'Your own Claude Code session for the project, across its repos (L)', onclick: () => ui.openLead(projectId) }, '🧭 Lead');
+  const lead = h('button', { class: 'btn small', title: 'Goals: each built a slice at a time by a lead of its own, your own Claude Code session for it (L)', onclick: () => ui.openGoals(projectId) }, '🧭 Goals');
   const mine = h('input', { type: 'checkbox', checked: !!project.onlyMyPrs });
   const mineToggle = h('label', { class: 'btn small', title: 'Hide pull requests opened by other people' }, mine, ' Only my PRs');
   mine.onchange = () => void api.updateProject(projectId, { onlyMyPrs: mine.checked }).catch((e: Error) => ui.error(e.message));

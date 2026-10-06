@@ -10,7 +10,7 @@ import type { Ui } from './ui/context';
 import { h } from './ui/dom';
 import { Hud } from './ui/hud';
 import { openManagerPanel } from './ui/managerPanel';
-import { openLeadPanel } from './ui/leadPanel';
+import { openGoalsPanel } from './ui/goalsPanel';
 import { numberOnePanelOpen, openNumberOnePanel } from './ui/numberOnePanel';
 import { Panels } from './ui/panels';
 import { openPreviewPanel } from './ui/previewPanel';
@@ -92,7 +92,7 @@ async function main() {
     openNewIssue: (projectId) => openNewIssuePanel(ui, projectId),
     openQa: (projectId) => openQaPanel(ui, projectId),
     openNumberOne: () => openNumberOnePanel(ui),
-    openLead: (projectId) => openLeadPanel(ui, projectId),
+    openGoals: (projectId) => openGoalsPanel(ui, projectId),
     openManager: (tab) => openManagerPanel(ui, tab),
     openTeleport: () => openTeleportPanel(ui),
   };
@@ -182,7 +182,7 @@ async function main() {
     world.markPanels();
   };
   state.on('agent', agentChanged);
-  // the project's lead finishing a turn: it's your turn, unless you're already looking at them
+  // a goal's lead finishing a turn: it's your turn, unless you're already looking at them
   const leadTurns = new Map<string, string>();
   state.on('agent', (a) => {
     if (a.task !== 'lead') return;
@@ -304,7 +304,7 @@ async function main() {
         ui.openQa(i.projectId);
         break;
       case 'lead':
-        ui.openLead(i.projectId);
+        ui.openGoals(i.projectId);
         break;
       case 'manager':
         ui.openManager(i.tab);
@@ -329,7 +329,7 @@ async function main() {
       Digit1: () => ui.openNumberOne(),
       KeyL: () => {
         const projectId = world.locationOf(camera.position).projectId;
-        if (projectId) ui.openLead(projectId);
+        if (projectId) ui.openGoals(projectId);
       },
     };
     const run = hotkeys[e.code];

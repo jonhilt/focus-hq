@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { errorMessage } from '../util';
 import type { OfficeTools } from './types';
 
-/** The office's tools for a session, as an in-process MCP server: mcp__office__ship for the project's lead. */
+/** The office's tools for a session, as an in-process MCP server: mcp__office__ship for a goal's lead. */
 export function officeMcpServer(tools: OfficeTools): McpSdkServerConfigWithInstance {
   return createSdkMcpServer({
     name: 'office',

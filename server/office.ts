@@ -1,4 +1,5 @@
 import type { Agent, Board, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
+import { EFFORT_LEVELS } from '../shared/types';
 import { carryMergeable } from '../shared/board';
 import { chosenSet, previewPrs } from '../shared/previewSet';
 import { startOrder } from '../shared/dependencies';
@@ -416,6 +417,8 @@ export class Office {
     if (patch.model !== undefined) s.model = patch.model.trim();
     if (patch.mergeMethod && ['squash', 'merge', 'rebase'].includes(patch.mergeMethod)) s.mergeMethod = patch.mergeMethod;
     if (typeof patch.attribution === 'boolean') s.attribution = patch.attribution;
+    const leadEffort = EFFORT_LEVELS.find((e) => e === patch.leadEffort);
+    if (leadEffort) s.leadEffort = leadEffort;
     this.store.save();
     this.hub.send({ type: 'info', info: { ...this.info, settings: s } });
     this.agents.schedule();

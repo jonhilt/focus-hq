@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { helperFor, leadFor, leadId, plannerFor, qaOfficerFor } from '../../../shared/crew';
+import { helperFor, plannerFor, qaOfficerFor } from '../../../shared/crew';
 import { prKey } from '../../../shared/qa';
-import type { Board, Helper, Project } from '../../../shared/types';
+import type { Agent, Board, Helper, Project } from '../../../shared/types';
 import { DESKS_PER_ROOM } from '../../../shared/types';
 import { state } from '../net/state';
 import { sound } from '../sound';
@@ -73,9 +73,12 @@ export class ProjectRoom {
   private qa!: Character;
   private qaScreen = new StationScreen(null, 'QA station · standing by');
   private qaStation!: THREE.Group;
-  /** The project's lead at the group desk, always there like the operations officer; their session on its display. */
-  private lead!: Character;
-  private leadScreen = new StationScreen(null, 'Group desk · tell the lead what you’re after');
+  /**
+   * The group desk's lead, while the room has a goal: the lead of its first (by team station), with their session on
+   * the desk's display. The other goals' leads have no seat until the room gets its team stations.
+   */
+  private leadSlot!: { seat: THREE.Group; id?: string; character?: Character };
+  private leadScreen = new StationScreen(null, 'Group desk · start a goal here');
   private leadDesk!: { table: THREE.Group; display: THREE.Group };
   /** The lead's helpers (their subagents) in the seats around the group desk, while they work. */
   private helperSlots: { seat: THREE.Group; id?: string; character?: Character }[] = [];
@@ -175,14 +178,13 @@ export class ProjectRoom {
     this.qa = new Character(this.qaView());
     qaStation.seat.add(this.qa.group);
 
-    // the group desk by the door, where the project's lead works with the captain
+    // the group desk by the door, where the lead of the room's first goal works with the captain
     const desk = buildGroupDesk(this.leadScreen.material, project.color);
     this.group.add(desk.group);
     for (const c of desk.colliders) builder.collideObject(c);
     this.leadDesk = desk;
     this.helperSlots = desk.helperSeats.map((seat) => ({ seat }));
-    this.lead = new Character(this.leadView());
-    desk.leadSeat.add(this.lead.group);
+    this.leadSlot = { seat: desk.leadSeat };
 
     // "new issue" stand with a note pad
     const kiosk = new THREE.Group();
@@ -257,27 +259,39 @@ export class ProjectRoom {
     if (this.youreHere) sound.beam();
   }
 
-  /** The lead's look: their session once they're working, else waiting for the captain to bring them something. */
-  private leadView(): CrewView {
-    const agent = state.agents.get(leadId(this.project.id));
-    if (agent) return agentView(agent);
-    const crew = leadFor(this.project.id);
-    return { name: crew.name, avatar: crew.avatar, tag: 'Lead', icon: '🧭', status: 'queued', line: 'Got a goal? Let’s build it' };
+  /** The lead at the group desk: the room's first goal's, by team station. */
+  private deskLead(): Agent | undefined {
+    return state.leadsIn(this.project.id)[0];
   }
 
   syncLead(): void {
-    const agent = state.agents.get(leadId(this.project.id));
-    this.lead.set(this.leadView());
+    const agent = this.deskLead();
+    const slot = this.leadSlot;
+    if (slot.id !== agent?.id && slot.character) {
+      this.leave(slot.seat, slot.character);
+      slot.character = undefined;
+    }
+    slot.id = agent?.id;
     this.leadScreen.setAgent(agent ?? null);
-    const name = leadFor(this.project.id).name;
     const use = { kind: 'lead', projectId: this.project.id } as const;
-    const label = () => (state.agents.has(leadId(this.project.id)) ? `Talk to ${name}, ${this.project.name}'s lead` : `Talk to ${name}, the lead: tell them what you're after`);
-    for (const o of [this.lead.group, this.leadDesk.table, this.leadDesk.display]) interactive(o, use, label);
-    this.syncHelpers(agent?.helpers ?? [], name);
+    const label = () => {
+      const goals = state.leadsIn(this.project.id).length;
+      return goals ? `${this.project.name}'s goals: ${goals} under way` : `Start a goal for ${this.project.name}`;
+    };
+    for (const o of [this.leadDesk.table, this.leadDesk.display]) interactive(o, use, label);
+    if (agent) {
+      if (!slot.character) {
+        slot.character = new Character(agentView(agent));
+        this.arrive(slot.seat, slot.character);
+        interactive(slot.character.group, { kind: 'agent', id: agent.id }, () => `Talk to ${agent.name}, lead of “${agent.lead?.title ?? 'a goal'}”`);
+      }
+      slot.character.set(agentView(agent));
+    }
+    this.syncHelpers(agent?.helpers ?? [], agent);
   }
 
   /** Seats the lead's helpers around the group desk, PADDs in hand, and sends the ones who've gone on their way. */
-  private syncHelpers(helpers: Helper[], leadName: string): void {
+  private syncHelpers(helpers: Helper[], lead: Agent | undefined): void {
     const seats = seatHelpers(this.helperSlots.map((s) => s.id), helpers.map((h) => h.id));
     for (const [i, slot] of this.helperSlots.entries()) {
       const helper = helpers.find((h) => h.id === seats[i]);
@@ -286,7 +300,7 @@ export class ProjectRoom {
         slot.character = undefined;
       }
       slot.id = seats[i];
-      if (!helper) continue;
+      if (!helper || !lead) continue;
       const crew = helperFor(helper.id);
       const view: CrewView = {
         name: crew.name,
@@ -298,7 +312,7 @@ export class ProjectRoom {
       if (!slot.character) {
         slot.character = new Character(view, 'padd');
         this.arrive(slot.seat, slot.character);
-        interactive(slot.character.group, { kind: 'lead', projectId: this.project.id }, () => `${crew.name}, helping ${leadName}: ${helper.description}`);
+        interactive(slot.character.group, { kind: 'agent', id: lead.id }, () => `${crew.name}, helping ${lead.name}: ${helper.description}`);
       }
       slot.character.set(view);
     }
@@ -412,7 +426,7 @@ export class ProjectRoom {
   markScreen(agentId: string): void {
     this.desks.find((d) => d.agentId === agentId)?.screen.markDirty();
     if (state.qaAgent(this.project.id)?.id === agentId) this.qaScreen.markDirty();
-    if (leadId(this.project.id) === agentId) this.leadScreen.markDirty();
+    if (this.leadSlot.id === agentId) this.leadScreen.markDirty();
   }
 
   markBoard(): void {
@@ -443,11 +457,11 @@ export class ProjectRoom {
     if (inRoom) this.qa.update(t, qaDist);
     const qaAgent = state.qaAgent(this.project.id);
     this.qaScreen.maybeDraw(now, inRoom && qaDist < 6, qaAgent && state.lines.get(qaAgent.id), qaAgent && state.browser.get(qaAgent.id));
-    const leadDist = camera.distanceTo(this.lead.group.getWorldPosition(tmp));
-    if (inRoom) this.lead.update(t, leadDist);
+    const leadDist = camera.distanceTo(this.leadSlot.seat.getWorldPosition(tmp));
+    if (inRoom) this.leadSlot.character?.update(t, leadDist);
     for (const slot of this.helperSlots) if (inRoom && slot.character) slot.character.update(t, camera.distanceTo(slot.character.group.getWorldPosition(tmp)));
-    const lead = leadId(this.project.id);
-    this.leadScreen.maybeDraw(now, inRoom && leadDist < 7, state.lines.get(lead), state.browser.get(lead));
+    const lead = this.leadSlot.id;
+    this.leadScreen.maybeDraw(now, inRoom && leadDist < 7, lead ? state.lines.get(lead) : undefined, lead ? state.browser.get(lead) : undefined);
     for (const slot of this.desks) {
       if (!slot.character) {
         slot.screen.maybeDraw(now, false, undefined, undefined);
@@ -464,7 +478,7 @@ export class ProjectRoom {
   viewpoint(agentId: string): { position: THREE.Vector3; lookAt: THREE.Vector3 } | null {
     const slot = this.desks.find((d) => d.agentId === agentId);
     const qa = state.qaAgent(this.project.id)?.id === agentId;
-    const lead = leadId(this.project.id) === agentId;
+    const lead = this.leadSlot.id === agentId;
     if (!slot && !qa && !lead) return null;
     const v = slot
       ? deskViewpoint(slot.index)
@@ -484,7 +498,7 @@ export class ProjectRoom {
     this.planner.dispose();
     this.qa.dispose();
     this.qaScreen.dispose();
-    this.lead.dispose();
+    this.leadSlot.character?.dispose();
     this.leadScreen.dispose();
     for (const slot of this.helperSlots) slot.character?.dispose();
     for (const beam of this.beams) beam.finish();

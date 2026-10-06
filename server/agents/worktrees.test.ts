@@ -71,6 +71,17 @@ describe('claimBranch', () => {
     expect(claimBranch(odd, 'b1', '/data/workspaces', nobody).kind).toBe('held');
     expect(claimBranch(odd, 'b2', '/data/workspaces', nobody).kind).toBe('held');
   });
+
+  it("reclaims a repo's folder in the workspace of a lead who has gone, and leaves a working lead's alone", () => {
+    const leads = [{ path: '/data/workspaces/lead_p1_ab12/web', branch: 'focus/saved-items-1-cd34' }];
+    expect(claimBranch(leads, 'focus/saved-items-1-cd34', '/data/workspaces', nobody)).toEqual({ kind: 'reclaim', path: '/data/workspaces/lead_p1_ab12/web' });
+    expect(claimBranch(leads, 'focus/saved-items-1-cd34', '/data/workspaces', (id) => id === 'lead_p1_ab12')).toEqual({
+      kind: 'held',
+      path: '/data/workspaces/lead_p1_ab12/web',
+      agentId: 'lead_p1_ab12',
+    });
+    expect(claimBranch([{ path: '/data/workspaces/lead_p1_ab12/web/deeper', branch: 'x' }], 'x', '/data/workspaces', nobody).kind).toBe('held');
+  });
 });
 
 describe('heldMessage', () => {

@@ -2,13 +2,13 @@ import { helperFor, leadFor, leadId, plannerFor, qaOfficerFor, randomAvatar } fr
 import { autoQaFor, autoSendBackFor, prKey, sameCommit } from '../../shared/qa';
 import { afterTriage, triageLabel, type TriageResult, type TriageStep, whenStuck } from '../../shared/triage';
 import type { Agent, AgentStatus, BrowserFrame, Effort, FailedCheck, FixFor, PermissionRequest, PullRequest, QaReport, QaReview, QaScreenshot, TermLine } from '../../shared/types';
-import { ACTIVE_STATUSES, DESKS_PER_ROOM, LEAD_DESK, QA_DESK } from '../../shared/types';
+import { ACTIVE_STATUSES, DESKS_PER_ROOM, LEAD_DESK, QA_DESK, TEAM_STATIONS } from '../../shared/types';
 import type { GitHubProvider, PullRequestDetail } from '../github/provider';
 import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
 import { afterCloudRun, carryOnInNewSession, fallBackToLocal } from './cloud';
-import { afterVerdict, applyHelperEvent, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, newSliceNote, notShipped, openPr, qaVerdictNote, shipped, shipPlan, sliceBranch, sliceLanded } from './lead';
+import { afterVerdict, applyHelperEvent, goalEffort, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, newSliceNote, notShipped, openPr, pickStation, qaVerdictNote, shipped, shipPlan, sliceBranch, sliceLanded, workspaceNote } from './lead';
 import { repoFolders } from './planner';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
 import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
@@ -27,6 +27,8 @@ interface Runtime {
   permission?: { req: PermissionRequest; resolve: (ok: boolean) => void; resume: AgentStatus };
   nudged: boolean;
   busy: boolean;
+  /** Queued to pick its conversation back up (the inbox is what it hears), rather than to start its task. */
+  resume?: boolean;
   /** The QA officer's instructions for the review in hand (they depend on the PR). */
   qaSystem?: string;
   /** The screenshots the QA officer took on purpose this review: how many, and the last MAX_SCREENSHOTS of them. */
@@ -220,6 +222,10 @@ export class AgentManager {
 
   private async launch(agent: Agent): Promise<void> {
     const rt = this.rt(agent.id);
+    if (rt.resume) {
+      rt.resume = false;
+      return this.runSession(agent, rt.inbox.splice(0).join('\n\n'), agent.sessionId).catch((err) => this.fail(agent, err));
+    }
     this.update(agent, { status: 'setting-up', activity: agent.task === 'review' ? 'Reading the pull request' : 'Reading the issue', error: undefined });
     try {
       if (agent.task === 'review') return await this.launchReview(agent);
@@ -290,13 +296,13 @@ export class AgentManager {
       },
       session: (sessionId) => this.update(agent, { sessionId }),
       helper: (event) => {
-        // only the lead's helpers have somewhere to sit: the group desk
+        // only a lead's helpers have somewhere to sit: the lead's team station
         if (agent.task !== 'lead') return;
         const before = agent.helpers ?? [];
         const helpers = applyHelperEvent(before, event, Date.now());
         if (helpers === before) return;
         this.update(agent, { helpers });
-        if (event.kind === 'started') this.print(agent, [{ kind: 'system', text: `✻ ${helperFor(event.id).name} joins the group desk: ${event.description}` }]);
+        if (event.kind === 'started') this.print(agent, [{ kind: 'system', text: `✻ ${helperFor(event.id).name} joins ${agent.name}'s team station: ${event.description}` }]);
         if (event.kind === 'ended') setTimeout(() => this.update(agent, { helpers: (agent.helpers ?? []).filter((h) => h.id !== event.id) }), HELPER_LINGER_MS);
       },
       cost: (usd) => this.update(agent, { costUsd: usd }),
@@ -326,7 +332,7 @@ export class AgentManager {
     // the lead's last slice has landed: their repos move to fresh code before they hear anything else
     if (lead && sliceLanded(lead.prs)) prompt = `${await this.nextSlice(agent, lead)}\n\n${prompt}`;
     // before marking them busy: the QA officer's instructions may need GitHub, and that can fail
-    const instructions = review ? await this.qaSystem(agent) : lead ? leadSystemAppend(agent, this.store.project(agent.projectId).name, lead) : systemAppend(agent);
+    const instructions = review ? await this.qaSystem(agent) : lead ? leadSystemAppend(agent, this.store.project(agent.projectId).name, lead.station) : systemAppend(agent);
     rt.busy = true;
     this.update(agent, { status: 'working', activity: resumeSessionId ? 'Reading your message' : 'Getting started', error: undefined, finishedAt: undefined });
     const session = this.runner.start(
@@ -483,23 +489,30 @@ export class AgentManager {
     this.schedule();
   }
 
-  // ---------------------------------------------------------------- the project's lead
+  // ---------------------------------------------------------------- goals and their leads
 
   /**
-   * Talks to the project's lead: the captain's own Claude Code session for the project, at the room's group desk. The
-   * first message seats them; every later one goes to the same session.
+   * Starts a goal at one of the room's team stations: a lead of its own (the captain's own Claude Code session for the
+   * goal), with every repo of the project checked out on the goal's first branch, who hears `text` first. `station`
+   * picks the station; otherwise the goal takes the first free one. Later messages go to the lead like any agent's.
    */
-  startLead(projectId: string, text: string): Agent {
+  startGoal(projectId: string, text: string, how: { station?: number; effort?: Effort } = {}): Agent {
     const project = this.store.project(projectId);
     if (!project.repos.length) throw new Error(`Connect a repository to ${project.name} first`);
     if (!text.trim()) throw new Error('Tell them what you’re after');
-    const id = leadId(projectId);
-    const existing = this.store.agents.get(id);
-    if (existing) {
-      this.message(id, text);
-      return existing;
+    const leads = this.store.agentsIn(projectId).filter((a) => a.task === 'lead');
+    const station = pickStation(leads.map((a) => a.lead?.station ?? 0), how.station);
+    if (station === undefined) {
+      const wanted = how.station;
+      if (wanted === undefined) throw new Error(`Every team station in ${project.name} has a goal – finish one first`);
+      const holder = leads.find((a) => a.lead?.station === wanted);
+      throw new Error(holder ? `Team station ${wanted + 1} already has a goal: ${holder.lead?.title ?? holder.name}` : `${project.name} has team stations 1 to ${TEAM_STATIONS}`);
     }
-    const crew = leadFor(projectId);
+    const suffix = newId('g').slice(-6);
+    const id = leadId(projectId, suffix);
+    const crew = leadFor(projectId, suffix, leads.map((a) => a.name));
+    const title = goalTitle(text);
+    const effort = goalEffort(how.effort, this.store.settings);
     const agent: Agent = {
       id,
       name: crew.name,
@@ -507,13 +520,14 @@ export class AgentManager {
       projectId,
       repo: project.repos[0],
       task: 'lead',
-      issue: { number: 0, title: `${project.name}’s lead`, url: '' },
+      issue: { number: 0, title, url: '' },
+      effort,
       desk: LEAD_DESK,
       status: 'queued',
-      activity: 'Coming over to the group desk',
-      branch: sliceBranch(project.name, 1, id.slice(-4)),
+      activity: `Coming over to team station ${station + 1}`,
+      branch: sliceBranch(title, 1, newId('s').slice(-4)),
       baseBranch: 'main',
-      lead: { repos: [], slice: 1, prs: [] },
+      lead: { station, title, repos: [], slice: 1, prs: [] },
       costUsd: 0,
       startedAt: Date.now(),
     };
@@ -521,20 +535,21 @@ export class AgentManager {
     this.store.putAgent(agent);
     this.hub.send({ type: 'agent', agent });
     this.print(agent, [
-      { kind: 'system', text: `✻ ${crew.name} sits down at ${project.name}'s group desk to lead the work across ${project.repos.join(', ')}` },
+      { kind: 'system', text: `✻ ${crew.name} takes team station ${station + 1} to lead “${title}” across ${project.repos.join(', ')} (${effort} effort)` },
       { kind: 'manager', text: `▶ Captain: ${text.trim()}` },
     ]);
     this.schedule();
     return agent;
   }
 
-  /** Checks out every repo of the project side by side, on the slice's branch, then hands the lead the captain's words. */
+  /** Checks out every repo of the project side by side, on the goal's first branch, then hands the lead the captain's words. */
   private async launchLead(agent: Agent): Promise<void> {
     const rt = this.rt(agent.id);
     const project = this.store.project(agent.projectId);
     await this.checkOutSlice(agent, project.repos);
     if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
-    await this.runSession(agent, rt.inbox.splice(0).join('\n\n') || 'Hello! What are we working on?');
+    const words = rt.inbox.splice(0).join('\n\n') || 'Hello! What are we working on?';
+    await this.runSession(agent, `${workspaceNote(agent.lead!, agent.branch)}\n\n${words}`);
   }
 
   /** Worktrees of `repos` on the lead's current branch, each from its repo's default branch, recorded on the lead. */
@@ -550,7 +565,7 @@ export class AgentManager {
       const folder = folders.get(repo)!;
       this.update(agent, { activity: `Checking out ${repo}` });
       this.print(agent, [{ kind: 'system', text: `✻ Checking out ${repo} at ./${folder} on ${agent.branch}` }]);
-      await this.workspace.create(repo, leadWorktreeId(agent.id, folder), agent.branch, info.defaultBranch, (id) => this.store.agents.has(id.split('/')[0]));
+      await this.workspace.create(repo, leadWorktreeId(agent.id, folder), agent.branch, info.defaultBranch, (id) => this.store.agents.has(id));
       checkouts.push({ repo, folder, baseBranch: info.defaultBranch });
     }
     if (!checkouts.length) throw new Error('None of the project’s repositories has any commits yet – add a README first');
@@ -568,7 +583,7 @@ export class AgentManager {
     if (dirty.length) return heldBack(lead, dirty);
     const slice = lead.slice + 1;
     for (const r of lead.repos) await this.workspace.remove(r.repo, leadWorktreeId(agent.id, r.folder)).catch(() => undefined);
-    this.update(agent, { branch: sliceBranch(project.name, slice, newId('s').slice(-4)), lead: { repos: [], slice, prs: [] } });
+    this.update(agent, { branch: sliceBranch(lead.title, slice, newId('s').slice(-4)), lead: { ...lead, repos: [], slice, prs: [] } });
     await this.checkOutSlice(agent, project.repos);
     return newSliceNote(agent.lead!, agent.branch);
   }
@@ -1074,15 +1089,13 @@ export class AgentManager {
       rt.inbox.push(text);
       return;
     }
-    // Finished, stopped or failed: pick the conversation back up.
+    // Finished, stopped or failed: pick the conversation back up (or start over, with no session to go back to) once
+    // there's a free slot, like any agent starting work.
     rt.nudged = false;
-    if (agent.sessionId) {
-      void this.runSession(agent, text, agent.sessionId).catch((err) => this.fail(agent, err));
-    } else {
-      rt.inbox.push(text);
-      this.update(agent, { status: 'queued', activity: 'Waiting for a free slot', error: undefined });
-      this.schedule();
-    }
+    rt.inbox.push(text);
+    rt.resume = !!agent.sessionId;
+    this.update(agent, { status: 'queued', activity: 'Waiting for a free slot', error: undefined });
+    this.schedule();
   }
 
   resolvePermission(id: string, requestId: string, allow: boolean): void {
@@ -1151,7 +1164,7 @@ export class AgentManager {
   }
 }
 
-/** QA officers and leads don't sit at one of a room's desks, and don't count against its limit. */
+/** QA officers and leads don't sit at one of a room's desks, and don't count against its limit (only the global one). */
 const deskless = (a: Pick<Agent, 'task'>) => a.task === 'review' || a.task === 'lead';
 
 function withNotes(prompt: string, notes: string[]): string {

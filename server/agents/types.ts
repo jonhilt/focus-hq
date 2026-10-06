@@ -33,7 +33,7 @@ export interface RunRequest {
   effort?: Effort;
   /** JSON schema for a structured final answer (the QA officer's report). */
   outputSchema?: Record<string, unknown>;
-  /** The office's own tools for this session (the project's lead's), exposed to Claude Code as mcp__office__*. */
+  /** The office's own tools for this session (a goal's lead's), exposed to Claude Code as mcp__office__*. */
   tools?: OfficeTools;
   /**
    * Run in a Claude Code cloud session that works on `branch` and pushes it. `resumeSessionId` is then the cloud

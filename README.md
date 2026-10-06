@@ -13,7 +13,7 @@ A cartoon, first-person 3D starship where a crew of **Claude Code** agents works
 - Each holodeck runs a **program**: its walls and ceiling vanish into a landscape, so the stations sit on a beach, in a forest clearing, in a desert canyon, on the moon, on a city rooftop at dusk or in a vast library. A faint holodeck grid shows where the walls are when you get close. Pick one per project in your **ready room**, or keep the plain holodeck grid. Empty holodecks are bare.
 - Every **agent** is a separate Claude Code instance (via the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk)) with its own workstation and git worktree. The crew wear Starfleet uniforms in their division's colour (command red, operations gold, sciences blue) and come from all over the Federation. They **beam in** to their station when they're assigned and beam out when they go home: a shimmering column of sparkles, the transporter's hum if you're in the room.
 - Walk up behind an agent and you see their **station's display**: the live Claude Code terminal and, while they test, the **browser** they are driving.
-- Each holodeck has a **lead**: your own Claude Code session for the project, with every one of its repos checked out side by side. Talk a goal through with them, and they build it a slice at a time, the way you'd work in Claude Code. Each slice ships as a pull request in every repo it touches; QA reviews them, you merge them, and the lead carries on from what the slice taught you.
+- Each holodeck works on up to four **goals** at once, each with a **lead** of its own: your own Claude Code session for that goal, with every one of the project's repos checked out side by side. Talk the goal through with them, and they build it a slice at a time, the way you'd work in Claude Code. Each slice ships as a pull request in every repo it touches; QA reviews them, you merge them, and the lead carries on from what the slice taught you.
 - Each holodeck has an **operations officer** at its **＋ New issue** stand. Give them a rough idea and they read the project's code and write it up as an issue with context and **acceptance criteria**, ready for you to edit and file.
 - Each holodeck's **Kanban display** shows what's to do, who's working on what, and which **pull requests** are ready to merge.
 - The captain's **ready room** is where you create projects, connect existing repos or create blank ones, file issues and tune how much the agents may do on their own.
@@ -67,22 +67,24 @@ Then on board:
 | <kbd>T</kbd> | teleport to any holodeck or straight to an agent's station |
 | <kbd>M</kbd> | ready room |
 | <kbd>N</kbd> | new issue for the holodeck you're in |
-| <kbd>L</kbd> | talk to the lead of the holodeck you're in |
+| <kbd>L</kbd> | the goals of the holodeck you're in: talk to their leads, or start another |
 | <kbd>1</kbd> | talk to Number One |
 | <kbd>Esc</kbd> | pause / close a panel |
 
-## The lead
+## Goals and their leads
 
-Each project has a lead, a lieutenant in command red: your own Claude Code session for the project. They sit at the holodeck's **group desk**, the round table on your left as you come in, facing a shared display. Press <kbd>E</kbd> on them or the desk, <kbd>L</kbd> anywhere on the holodeck, or **🧭 Lead** on its board, and tell them what you're after. You talk to them like any Claude Code session, in their panel. Their terminal and browser show on the group desk's display, which you can read over their shoulder (teleport to them, or walk up behind their seat).
+A holodeck works on up to four goals at once, one per **team station**. Each goal has a lead of its own, a lieutenant in command red: your own Claude Code session for that goal. Open the holodeck's goals with <kbd>L</kbd> anywhere on it, <kbd>E</kbd> on the **group desk** (the round table on your left as you come in), or **🧭 Goals** on its board. Each goal shows its lead, its slice and its pull requests: **🖖 Talk** opens the lead's panel, where you talk to them like any Claude Code session. To start another, tell the box at the bottom what you're after and pick how hard the lead thinks (**Effort a new goal's lead starts at** in Settings sets the default, high to begin with). A lead of its own takes the first free station.
 
-- **Their workspace:** every repo of the project, checked out side by side at `./<repo>` on the slice's branch (`focus/lead-<project>-<slice>-<id>`), so a change that runs through the API, the web app and the admin app is just one piece of work. They read each repo's CLAUDE.md, run its tests and check UI changes in the browser, like the rest of the crew.
+Until each team station has a table of its own, the lead of the holodeck's first goal sits at the group desk, with their terminal and browser on its display, which you can read over their shoulder (teleport to them, or walk up behind their seat). The other goals' leads work just the same; you find them in the goals list.
+
+- **Their workspace:** every repo of the project, checked out side by side at `./<repo>` on the slice's branch (`focus/<goal>-<slice>-<id>`), so a change that runs through the API, the web app and the admin app is just one piece of work. They read each repo's CLAUDE.md, run its tests and check UI changes in the browser, like the rest of the crew.
 - **How they work:** talk a goal through briefly, then build it a slice at a time. A slice is a reasonably sized change that ships on its own: often a thin slice end to end through every repo it needs, or a refactor once the code has learned something.
-- **Their helpers:** when they hand independent pieces of work to subagents (Claude Code's Agent tool), each one sits down at the group desk as an ensign with a PADD while it works: its bubble shows what it's doing (from Claude Code's progress summaries, about every 30 seconds, and its tool calls). It says how it got on when it reports back, then leaves. Three seats; any more wait for one. They're listed in the lead's panel too, and their tool calls show, indented, in the lead's terminal.
+- **Their helpers:** when they hand independent pieces of work to subagents (Claude Code's Agent tool), each one sits down at the lead's table as an ensign with a PADD while it works: its bubble shows what it's doing (from Claude Code's progress summaries, about every 30 seconds, and its tool calls). It says how it got on when it reports back, then leaves. Three seats; any more wait for one. They're listed in the lead's panel too, and their tool calls show, indented, in the lead's terminal.
 - **Shipping a slice:** they never push. When a slice is ready they ask the office to ship it (`mcp__office__ship`, which in **ask** mode raises their hand for you to approve first). The office pushes every repo with new commits since it last shipped and opens a pull request in each (or updates the one it opened), and the holodeck's QA officer reviews them. Nothing ships while any repo has uncommitted changes.
 - **Hearing back:** a QA fail goes straight to them, and they fix it and ship again, twice at most before it's yours to look at. A pass is passed on with your next message. You merge their pull requests from the board (they don't merge by themselves). Once every pull request of the slice has merged or closed, they hear about it and their repos move to fresh code on a new branch for the next slice. A repo with uncommitted changes holds that back, so nothing is lost.
-- **One per project:** their record is the same from slice to slice, like the QA officer's. **Send home** from their panel clears their workspace; the next message seats them again with fresh code.
+- **One per goal:** their record lasts as long as the goal, from slice to slice. Their instructions say who they are and how they work, and stay the same for the whole goal (Claude Code keeps a session's first system prompt when it resumes); where their repos are, and on which branch, comes in messages. Other leads may be working in the same repos at the same time, each on their own branches. **Send home** from their panel ends the goal, clears its workspace and frees its station.
 
-Leads don't take one of the holodeck's desks or count towards its agent limit. They do count towards **Agents working at once** while they work.
+Leads don't take one of the holodeck's desks or count towards its agent limit. They do count towards **Agents working at once** while they work: a message to a lead (or any agent) that has finished its turn waits for a free slot like anyone starting work.
 
 ## Drafting issues
 
@@ -93,7 +95,7 @@ Every holodeck has an operations officer sitting at its **＋ New issue** stand 
 3. The draft fills the form's fields. Edit it however you like, or tell them what to change and press **↻ Redraft**. A redraft continues their last session, so they don't read the code all over again.
 4. **📌 Pin it to the board** files it as usual. Filing it, or **✕ Discard draft**, clears the stand.
 
-If the idea is too big or too fuzzy for one issue, the officer says so above the draft. **🧭 Talk to the lead** (there, or next to **✨ Draft it**) takes the idea to the [lead](#the-lead) instead, who builds it a slice at a time.
+If the idea is too big or too fuzzy for one issue, the officer says so above the draft. **🧭 Start a goal** (there, or next to **✨ Draft it**) starts it as a [goal](#goals-and-their-leads) instead, at a free team station, where a lead of its own builds it a slice at a time.
 
 The officer never files, pushes or edits anything. They run as a Claude Code session with only `Read`, `Glob` and `Grep`, in `dontAsk` mode, with no settings, hooks or MCP servers loaded. They read up-to-date checkouts of the project's default branches in `~/.focus/planning/<project>/`. A draft lives in memory only, so it's lost if the office restarts. Drafting sessions don't count towards **Agents working at once**.
 
@@ -104,9 +106,9 @@ Number One, the ship's first officer, is there to just talk: ask how something w
 - **The ship's state**: their `ship_status` tool sums up the board per project: agents and what they're on (with their worktree paths), open PRs with QA's verdict and checks, and what needs you (raised hands, conflicts, stuck PRs, PRs ready to merge, drafts at the stand).
 - **Any project's code**: `open_project` checks a project's repos out at their default branch into `~/.focus/planning/<project>/` (the same folders the stand uses) the first time they need it, so opening a chat checks nothing out. If the fetch fails, they tell you which project and carry on.
 - **Agents' worktrees**: readable, to answer "what has Lt. X done so far?", never to explain how the code works.
-- **Read-only**: Read, Glob, Grep, web search and fetch, and those two tools. They never file, push, edit, start agents, draft issues or talk to the lead. When a chat turns into work, the reply carries a suggestion (`suggest: { projectId, idea }`) for you to send to the stand or the lead.
+- **Read-only**: Read, Glob, Grep, web search and fetch, and those two tools. They never file, push, edit, start agents, draft issues or talk to the lead. When a chat turns into work, the reply carries a suggestion (`suggest: { projectId, idea }`) for you to send to the stand or start as a goal.
 
-- **From chat to work**: under a reply that suggests some, **✨ Draft at the stand** has the project's officer write it up at its New issue stand (asking first if a draft is already waiting there), and **🧭 Talk to the lead** passes it to the project's lead as your first word, seating them at the group desk if they aren't there yet.
+- **From chat to work**: under a reply that suggests some, **✨ Draft at the stand** has the project's officer write it up at its New issue stand (asking first if a draft is already waiting there), and **🧭 Start a goal** starts it as a goal at a free team station, with the idea as your first words to its lead.
 
 The chat runs one turn at a time. It's saved in `~/.focus/state.json` with Number One's session, which every message resumes, so it survives a restart. **New conversation** clears the log and starts a fresh session.
 
@@ -240,7 +242,7 @@ Cloud agents run in a cloud VM rather than on your machine, but they push to Git
 
 ## Voice input
 
-Every box where you write to the crew has a 🎤: an agent's message box, what you tell the lead, the New issue idea, notes, title and description, and the QA brief. Click it (or press **Ctrl+M** in the box) and speak, then click again to stop, or hold it while you speak and let go. The text lands at the cursor for you to check. Nothing is sent until you send it (except in Number One's [voice mode](#voice-mode)).
+Every box where you write to the crew has a 🎤: an agent's message box, a new goal, the New issue idea, notes, title and description, and the QA brief. Click it (or press **Ctrl+M** in the box) and speak, then click again to stop, or hold it while you speak and let go. The text lands at the cursor for you to check. Nothing is sent until you send it (except in Number One's [voice mode](#voice-mode)).
 
 [whisper.cpp](https://github.com/ggml-org/whisper.cpp) transcribes on your machine with the `large-v3-turbo` model, so your audio never leaves it. On Apple Silicon it runs on the GPU. Set it up once:
 
@@ -315,7 +317,7 @@ server/
     browserTool.ts        in-process MCP server driving headless Chromium, streams screenshots
     workspace.ts          git mirrors + worktrees (agents', the per-repo preview checkout, the planner's read-only checkouts)
     planner.ts            the officer at each room's New issue stand: issue drafts, their prompt and schema
-    lead.ts               each project's lead: their instructions, what shipping a slice does, what they hear back, their helpers
+    lead.ts               each goal's lead: their station, name and branches, their instructions, what shipping a slice does, what they hear back, their helpers
     officeTool.ts         the office's own MCP tools for an agent (the lead's ship)
     numberOne.ts          Number One's ship-wide chat: turns, prompt, reply schema and the ship_status summariser
     claudeCrew.ts         the crew's read-only Claude Code sessions (Read/Glob/Grep, web search/fetch for Number One, Number One's ship_status and open_project, structured output)
@@ -326,13 +328,13 @@ client/src/
   world/                  ship layout, holodecks, stations, characters, station screens, Kanban display
     scenery.ts            stencil "holo walls" that show a landscape built around a room
     themes.ts             the landscapes (beach, forest, desert, moon, city, library)
-    groupDesk.ts          each holodeck's group desk: the lead's seat, the shared display, seats for their helpers (helperSeats.ts: who sits where)
+    groupDesk.ts          each holodeck's group desk: the first goal's lead's seat, the shared display, seats for their helpers (helperSeats.ts: who sits where)
     transporter.ts        the transporter beam the crew arrive and leave in
     lounge.ts             the observation lounge: a table under the viewports and a star chart (scenery)
     engineering.ts        the engineering station on the concourse, where the engineer keeps the ship running (scenery)
     numberOne.ts          Number One in the ready room, across the captain's desk (numberOneView.ts: their bubble)
-  ui/                     HUD and panels (agent terminal, board, ready room console, teleport, QA station, the lead)
-    numberOnePanel.ts     the chat with Number One: the log, suggestions sent to the stand or the lead, voice mode
+  ui/                     HUD and panels (agent terminal, board, ready room console, teleport, QA station, goals)
+    numberOnePanel.ts     the chat with Number One: the log, suggestions sent to the stand or started as goals, voice mode
   tricorder/              the phone view at /tricorder (no three.js): home screen, agent drill-down, buttons that survive live re-renders
 client/tricorder/index.html   the Tricorder's page (a second Vite entry), with its home-screen meta tags
 client/public/tricorder/  its web app manifest and home-screen icons

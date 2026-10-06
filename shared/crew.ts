@@ -2,9 +2,10 @@ import type { CrewSpeaker, CrewVoice, KokoroVoice } from './voice';
 import { type Avatar, type Division, type Hairstyle, type Planner, type Rank, type Species } from './types';
 
 // Who's aboard. Agents get a random look when they're hired. Permanent crew members, one of each per room (the
-// operations officer at the New issue stand, the QA officer at the QA station and the lead at the group desk), are
-// derived from the project id rather than stored, so the same officer is at the same post on every reload and on every client. The ship's engineer
-// is the one crew member who serves every room.
+// operations officer at the New issue stand and the QA officer at the QA station), are derived from the project id
+// rather than stored, so the same officer is at the same post on every reload and on every client. A goal's lead is
+// derived from the goal when it starts, then kept on its agent record. The ship's engineer is the one crew member who
+// serves every room.
 
 /** Each division's uniform colour, also used wherever the UI marks whose work something is. */
 export const UNIFORM: Record<Division, string> = { command: '#d8433b', operations: '#e8b33c', sciences: '#3f8fd8' };
@@ -77,19 +78,20 @@ export function qaOfficerFor(projectId: string): Planner {
   return { name: `${RANK_TITLE[avatar.rank]} ${surname}`, avatar };
 }
 
-/** Each project has one lead; like the QA officer, their record is the same from slice to slice. */
-export const leadId = (projectId: string) => `lead_${projectId}`;
+/** Each goal has its own lead, whose agent record lasts as long as the goal. */
+export const leadId = (projectId: string, suffix: string) => `lead_${projectId}_${suffix}`;
 
 /**
- * The project's lead at the room's group desk: the captain's own Claude Code session for the project, building across
- * its repos a slice at a time. Command: they lead the work. Never the same surname as the room's other officers.
+ * A goal's lead at one of the room's team stations: the captain's own Claude Code session for the goal, building across
+ * the project's repos a slice at a time. Command: they lead the work. Never the same surname as the room's other
+ * officers, nor as `others` (the names of the room's other leads).
  */
-export function leadFor(projectId: string): Planner {
-  const h = hash(`lead:${projectId}`);
+export function leadFor(projectId: string, goalId: string, others: string[] = []): Planner {
+  const h = hash(`lead:${projectId}:${goalId}`);
   const avatar = rollAvatar(seeded(h), 'command', 'lieutenant');
-  const taken = new Set([hash(`planner:${projectId}`) % SURNAMES.length, SURNAMES.indexOf(qaOfficerFor(projectId).name.split(' ').at(-1)!)]);
-  const free = SURNAMES.filter((_, i) => !taken.has(i));
-  return { name: `${RANK_TITLE.lieutenant} ${free[(h >>> 3) % free.length]}`, avatar };
+  const taken = new Set([plannerFor(projectId).name, qaOfficerFor(projectId).name, ...others].map((n) => n.split(' ').at(-1)));
+  const free = SURNAMES.filter((s) => !taken.has(s));
+  return { name: `${RANK_TITLE.lieutenant} ${(free.length ? free : SURNAMES)[(h >>> 3) % (free.length || SURNAMES.length)]}`, avatar };
 }
 
 /** A helper the lead brings to the group desk: an ensign from sciences or operations, the same for the same task. */

@@ -116,8 +116,13 @@ export function apiRouter(office: Office, store: Store): express.Router {
       url: str(req.body.url) || undefined,
     }, { effort: effort(req.body.effort), cloud: req.body.cloud === true }),
   ));
-  // the project's lead: the captain's own Claude Code session across its repos, at the room's group desk
-  r.post('/projects/:id/lead', h((req) => office.agents.startLead(param(req, 'id'), str(req.body.text))));
+  // a goal: its own lead (the captain's own Claude Code session for it, across the project's repos) at a team station
+  r.post('/projects/:id/goals', h((req) =>
+    office.agents.startGoal(param(req, 'id'), str(req.body.text), {
+      station: typeof req.body.station === 'number' ? req.body.station : undefined,
+      effort: effort(req.body.effort),
+    }),
+  ));
   r.get('/agents/:id/lines', h((req) => store.allLines(param(req, 'id'))));
   r.post('/agents/:id/message', h((req) => office.agents.message(param(req, 'id'), str(req.body.text))));
   r.post('/agents/:id/permission', h((req) => office.agents.resolvePermission(param(req, 'id'), str(req.body.requestId), req.body.allow === true)));

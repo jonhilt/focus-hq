@@ -30,7 +30,7 @@ export class Hud {
         h('span', null, h('kbd', null, 'T'), 'teleport'),
         h('span', null, h('kbd', null, 'M'), 'ready room'),
         h('span', null, h('kbd', null, 'N'), 'new issue'),
-        h('span', null, h('kbd', null, 'L'), 'lead'),
+        h('span', null, h('kbd', null, 'L'), 'goals'),
         h('span', null, h('kbd', null, '1'), 'Number One'),
         h('span', null, h('kbd', null, 'Esc'), 'pause'),
       ),

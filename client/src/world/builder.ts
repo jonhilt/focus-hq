@@ -12,6 +12,7 @@ export type Interaction =
   | { kind: 'teleport' }
   | { kind: 'number-one' }
   | { kind: 'qa'; projectId: string }
+  /** The room's goals: their leads, and a box to start another. */
   | { kind: 'lead'; projectId: string }
   | { kind: 'vacant' };
 

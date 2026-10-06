@@ -27,6 +27,17 @@ export type BranchClaim =
   /** Checked out somewhere we mustn't touch: a colleague's workspace, or a folder that isn't a workspace at all. */
   | { kind: 'held'; path: string; agentId?: string };
 
+/**
+ * Whose workspace a path (relative to data/workspaces) is: an agent's own folder, or one repo's folder inside a lead's
+ * workspace (`lead_…/<repo>`). Anything else, including other folders nested in a workspace, belongs to no one we know.
+ */
+function workspaceOwner(rel: string): string | undefined {
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return undefined;
+  const parts = rel.split(path.sep);
+  if (parts.length === 1) return rel;
+  return parts.length === 2 && parts[0].startsWith('lead_') ? parts[0] : undefined;
+}
+
 export function claimBranch(
   worktrees: Worktree[],
   branch: string,
@@ -35,8 +46,7 @@ export function claimBranch(
 ): BranchClaim {
   const holder = worktrees.find((w) => w.branch === branch);
   if (!holder) return { kind: 'free' };
-  const rel = path.relative(workspacesDir, holder.path);
-  const agentId = rel && !rel.startsWith('..') && !path.isAbsolute(rel) && !rel.includes(path.sep) ? rel : undefined;
+  const agentId = workspaceOwner(path.relative(workspacesDir, holder.path));
   if (!agentId) return { kind: 'held', path: holder.path };
   return inOffice(agentId) ? { kind: 'held', path: holder.path, agentId } : { kind: 'reclaim', path: holder.path };
 }

@@ -1,6 +1,6 @@
 import { autoMergeFor } from '../../../shared/mergeGate';
 import type { Autonomy, PreviewConfig, Project, RoomTheme, SpeechStatus, VoiceStatus } from '../../../shared/types';
-import { DESKS_PER_ROOM, ROOM_THEMES } from '../../../shared/types';
+import { DESKS_PER_ROOM, EFFORT_LEVELS, ROOM_THEMES } from '../../../shared/types';
 import { voiceMissing, WHISPER_INSTALL } from '../../../shared/voice';
 import { api } from '../net/api';
 import { state } from '../net/state';
@@ -344,6 +344,11 @@ function settingsTab(ui: Ui): HTMLElement {
   merge.addEventListener('change', () => save({ mergeMethod: merge.value as 'squash' }));
   const attribution = h('input', { type: 'checkbox', checked: s.attribution });
   attribution.addEventListener('change', () => save({ attribution: attribution.checked }));
+  const leadEffort = h('select', null, ...EFFORT_LEVELS.map((e) => h('option', { value: e, selected: s.leadEffort === e }, `🧠 ${e}`)));
+  leadEffort.addEventListener('change', () => {
+    const level = EFFORT_LEVELS.find((e) => e === leadEffort.value);
+    if (level) save({ leadEffort: level });
+  });
   const recheck = h('button', { class: 'btn small' }, '⟳ Check again');
   recheck.onclick = () => void busy(recheck, () => api.checkGitHub(), ui.error);
 
@@ -351,6 +356,7 @@ function settingsTab(ui: Ui): HTMLElement {
     h('div', { class: 'field' }, h('label', null, 'How much can agents do on their own?'), autonomy, h('small', null, 'Applies to agents started from now on.')),
     h('div', { class: 'field' }, h('label', null, 'Agents working at once (all projects)'), max, h('small', null, 'Each agent is a full Claude Code session on your subscription – more agents use your limits faster.')),
     h('div', { class: 'field' }, h('label', null, 'Model'), model, h('small', null, 'e.g. claude-opus-5-5 or claude-sonnet-5-5. Leave empty for your Claude Code default.')),
+    h('div', { class: 'field' }, h('label', null, 'Effort a new goal’s lead starts at'), leadEffort, h('small', null, 'You can pick another when you start a goal. High suits most slices; xhigh and max take longer and cost more.')),
     h('div', { class: 'field' }, h('label', null, 'Merge method for the board’s Merge button'), merge),
     h('div', { class: 'field' }, h('label', null, attribution, ' Sign pull requests and QA reports'), h('small', null, 'Names the agent or QA officer who did the work, and mentions Focus, in what the office posts on GitHub.')),
     h('div', { class: 'card', style: 'margin-top:8px' },
