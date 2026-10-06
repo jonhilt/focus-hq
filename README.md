@@ -1,4 +1,4 @@
-# 🏢 Focus HQ
+# 🏢 Welcome to the USS Focus
 
 A cartoon, first-person 3D starship where a crew of **Claude Code** agents works through your GitHub issues, and you're the captain.
 
