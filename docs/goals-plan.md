@@ -1,6 +1,8 @@
 # Goals: a lead per goal, four team stations per room
 
-Today each room has one lead (`lead_<projectId>`) at one group desk, working one slice at a time in one long Claude Code session, next to six individual desks. This plan replaces that with **goals**:
+*All six stages are done; this page stays as the record of what was planned and decided.*
+
+Before this plan, each room had one lead (`lead_<projectId>`) at one group desk, working one slice at a time in one long Claude Code session, next to six individual desks. This plan replaces that with **goals**:
 
 - a room has **4 team stations** and **2 individual desks** (quick issue work);
 - you start a goal by walking up to a free team station and telling it what you're after: that station gets **its own lead**, with its own Claude Code session, worktrees, slices and pull requests;
@@ -168,7 +170,7 @@ Each stage passes `typecheck`, `lint` and `test`, and gets a demo run before it'
 3. ✅ **Floating QA.** *(Done. Until stage 5 seats them, a goal's reviewer is listed at the QA station and on its goal in the goals list. QA effort is set at the QA station.)* `reviewerFor`, a per-goal reviewer `qa_<leadId>`, `nextReview` per reviewer, dismissal on close, and names. Tests for `reviewerFor` and for two goals' reviews running at once in the demo. (Their seats come with the room in stage 5; until then they show up in the QA panel and the agents list.)
 4. ✅ **Context.** *(Done. `/compact` with instructions is supported headless: the bundled CLI marks it `supportsNonInteractive` with optional custom summarisation instructions, so no fallback was needed. The meter and Compact now work for any agent with a local conversation, not just leads.)* The `/compact` check, compaction at slice landing (`afterLanding`, `compactInstructions`), `getContextUsage` → `contextPct` and the meter, Compact now, and the subagent line in the prompt.
 5. ✅ **The room.** *(Done, with two changes from the plan. The display has no separate side panel: since stage 2b the big screen's progress pane carries the goal note, Claude's task list and the context meter, and the back of the display names the station, its lead and goal. And agents saved at desks the room no longer has aren't sent home: they take a free desk on load (`fitDesks`), else stay off the floor, records and checkouts kept, until they next start and take one (`pickDesk`). `pickDesk` also stops a full room evicting a goal's lead, which `freeDesk` could before.)* `teamStation.ts`, the new layout, 2 individual desks plus the moving-over of their agents, station interactions and panel, reviewer seats, zfight and screenshots.
-6. **Docs.** README (feature tour and architecture map), and CLAUDE.md's lead, QA and desk conventions (`LEAD_DESK`, `lead_<projectId>`, `qa_<projectId>`, the group desk).
+6. ✅ **Docs.** *(Done. Along the way, beyond the plan: goals show as in progress on the room's Kanban board and the Tricorder, a goal keeps the captain's first words on it (`brief`) to hear again at each new slice, a slice's merge conflicts go back to its lead, and the agent manager moved to Effect.)* README (feature tour and architecture map), and CLAUDE.md's lead, QA and desk conventions (`LEAD_DESK`, `lead_<projectId>_<suffix>`, `qa_<leadId>`, the team stations and two desks).
 
 ## Decided
 
