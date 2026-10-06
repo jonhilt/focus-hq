@@ -20,7 +20,7 @@ import { Office } from './office';
 import { demoPreviewPage, Previews } from './previews';
 import { apiRouter } from './routes';
 import { Store } from './store';
-import { currentVersion, RESTART_EXIT_CODE, Updater } from './updater';
+import { currentVersion, RESTART_MESSAGE, Updater } from './updater';
 import { errorMessage } from './util';
 import { Voice } from './voice';
 
@@ -123,19 +123,23 @@ async function main() {
   }
 
   let closing = false;
-  const shutdown = async (exitCode = 0) => {
+  const shutdown = async () => {
     if (closing) return;
     closing = true;
     console.log('\nClosing the office…');
     for (const agent of store.agents.values()) office.agents.stop(agent.id);
     store.save();
     await Promise.all([browsers.shutdown(), previews.shutdown()]);
-    setTimeout(() => process.exit(exitCode), 300);
+    setTimeout(() => process.exit(0), 300);
   };
   process.on('SIGINT', () => void shutdown());
   process.on('SIGTERM', () => void shutdown());
 
-  if (config.autoUpdate) await new Updater(store, hub, () => shutdown(RESTART_EXIT_CODE)).start();
+  const restart = () => {
+    process.send?.(RESTART_MESSAGE);
+    return shutdown();
+  };
+  if (config.autoUpdate) await new Updater(store, hub, restart).start();
 }
 
 main().catch((err) => {

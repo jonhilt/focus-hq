@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { RESTART_EXIT_CODE } from './updater';
+import { RESTART_MESSAGE } from './updater';
 
 // Runs the office as a child process and starts it again when it exits to pick up an auto update. The office can't
 // restart itself in place: a fresh process is the only way to load new server code and dependencies.
@@ -11,9 +11,14 @@ let child: ReturnType<typeof spawn>;
 
 function start(): void {
   // execArgv carries tsx's loader hooks, so the child runs TypeScript the same way this process does.
-  child = spawn(process.execPath, [...process.execArgv, entry, ...process.argv.slice(2)], { stdio: 'inherit' });
+  // the ipc channel carries the office's restart request
+  child = spawn(process.execPath, [...process.execArgv, entry, ...process.argv.slice(2)], { stdio: ['inherit', 'inherit', 'inherit', 'ipc'] });
+  let restartRequested = false;
+  child.on('message', (message) => {
+    if (message === RESTART_MESSAGE) restartRequested = true;
+  });
   child.on('exit', (code, signal) => {
-    if (code === RESTART_EXIT_CODE) {
+    if (restartRequested) {
       console.log('  ↻ Restarting the office…\n');
       return start();
     }

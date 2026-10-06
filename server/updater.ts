@@ -4,8 +4,12 @@ import type { Hub } from './hub';
 import type { Store } from './store';
 import { errorMessage, run } from './util';
 
-/** Exit code that tells server/supervise.ts to start the office again (EX_TEMPFAIL). */
-export const RESTART_EXIT_CODE = 75;
+/**
+ * What the office sends server/supervise.ts, before it starts closing, to be started again. A message rather than an
+ * exit code because how the process ends isn't ours to decide: onnxruntime (the crew's voices) can abort on exit on
+ * macOS ("mutex lock failed"), and the restart must survive that.
+ */
+export const RESTART_MESSAGE = 'restart';
 
 const git = (args: string[]) => run('git', args, { cwd: config.root }).then((out) => out.trim());
 
