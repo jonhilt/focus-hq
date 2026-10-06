@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { BriefingMessage, VoiceStatus } from './types';
+import type { BriefingMessage, NumberOneMessage, VoiceStatus } from './types';
 import { forSpeech, linesToSpeak, spokenLine, voiceMissing } from './voice';
 
 const status = (whisper: boolean, model: boolean): VoiceStatus => ({
@@ -90,5 +90,13 @@ describe('linesToSpeak', () => {
   it('says nothing that was in the log before `from`', () => {
     expect(linesToSpeak(messages, 5)).toEqual([{ speaker: 'officer', text: 'It’s written up and waiting at Shop’s stand.' }]);
     expect(linesToSpeak(messages, 6)).toEqual([]);
+  });
+
+  it('speaks Number One’s replies as their spoken line, never the captain’s', () => {
+    const chat: NumberOneMessage[] = [
+      { from: 'manager', text: 'How does the cart work?', at: 0 },
+      { from: 'number-one', text: 'It starts in `src/cart.ts`.', spoken: 'It starts in the cart module.', at: 1 },
+    ];
+    expect(linesToSpeak(chat, 0)).toEqual([{ speaker: 'number-one', text: 'It starts in the cart module.' }]);
   });
 });

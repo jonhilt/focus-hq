@@ -11,6 +11,7 @@ export type Interaction =
   | { kind: 'manager'; tab?: 'projects' | 'new-project' | 'issue' | 'settings' }
   | { kind: 'teleport' }
   | { kind: 'briefing' }
+  | { kind: 'number-one' }
   | { kind: 'qa'; projectId: string }
   | { kind: 'vacant' };
 

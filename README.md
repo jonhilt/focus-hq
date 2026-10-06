@@ -68,6 +68,7 @@ Then on board:
 | <kbd>T</kbd> | teleport to any holodeck or straight to an agent's station |
 | <kbd>M</kbd> | ready room |
 | <kbd>N</kbd> | new issue for the holodeck you're in |
+| <kbd>1</kbd> | talk to Number One |
 | <kbd>Esc</kbd> | pause / close a panel |
 
 ## Drafting issues
@@ -125,12 +126,15 @@ A briefing is saved in `~/.focus/state.json` with the officer's session, and eac
 
 ### Number One
 
-Number One, the ship's first officer, is there to just talk: ask how something works in any project, what's going on aboard, or think an idea through, without it turning into an issue. There's one for the whole ship (the ready-room figure and panel are coming; for now it's the server side, under `/api/number-one`).
+Number One, the ship's first officer, is there to just talk: ask how something works in any project, what's going on aboard, or think an idea through, without it turning into an issue. There's one for the whole ship, sitting across the captain's desk in the ready room: press <kbd>E</kbd> on them, or <kbd>1</kbd> anywhere aboard. Their bubble shows what they're reading while they think, and 🖖 *Your turn* once they've answered.
 
 - **The ship's state**: their `ship_status` tool sums up the board per project: agents and what they're on (with their worktree paths), open PRs with QA's verdict and checks, and what needs you (raised hands, conflicts, stuck PRs, PRs ready to merge, drafts at the stand).
 - **Any project's code**: `open_project` checks a project's repos out at their default branch into `~/.focus/planning/<project>/` (the same folders the stand and briefings use) the first time they need it, so opening a chat checks nothing out. If the fetch fails, they tell you which project and carry on.
 - **Agents' worktrees**: readable, to answer "what has Lt. X done so far?", never to explain how the code works.
 - **Read-only**: Read, Glob, Grep, web search and fetch, and those two tools. They never file, push, edit, start agents, draft issues or call briefings. When a chat turns into work, the reply carries a suggestion (`suggest: { projectId, idea }`) for you to send to the stand or a briefing.
+
+- **From chat to work**: under a reply that suggests some, **✨ Draft at the stand** has the project's officer write it up at its New issue stand (asking first if a draft is already waiting there), and **🧭 Set a goal** calls a goal about it in the observation lounge.
+- **Voice mode**: the same 🔈/🔊 switch as briefings, and the same setting. Number One says each new reply in a voice of their own, and 🎤 sends what you say.
 
 The chat runs alongside any goal or briefing, one turn at a time. It's saved in `~/.focus/state.json` with Number One's session, which every message resumes, so it survives a restart. **New conversation** clears the log and starts a fresh session.
 
@@ -344,7 +348,9 @@ client/src/
     themes.ts             the landscapes (beach, forest, desert, moon, city, library)
     lounge.ts             the observation lounge: briefing table, officer, the brief on the wall screen
     engineering.ts        the engineering station on the concourse, where the engineer waits to be asked
+    numberOne.ts          Number One in the ready room, across the captain's desk (numberOneView.ts: their bubble)
   ui/                     HUD and panels (agent terminal, board, ready room console, teleport, QA station, briefing)
+    numberOnePanel.ts     the chat with Number One: the log, suggestions sent to the stand or set as a goal, voice mode
   tricorder/              the phone view at /tricorder (no three.js): home screen, agent drill-down, buttons that survive live re-renders
 client/tricorder/index.html   the Tricorder's page (a second Vite entry), with its home-screen meta tags
 client/public/tricorder/  its web app manifest and home-screen icons

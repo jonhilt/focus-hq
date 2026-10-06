@@ -65,6 +65,13 @@ describe('crewVoice', () => {
   it('is the same voice for the same crew member every time', () => {
     expect(crewVoice('officer', 'p1')).toEqual(crewVoice('officer', 'p1'));
     expect(crewVoice('engineer', 'p1')).toEqual(crewVoice('engineer', 'p2'));
+    expect(crewVoice('number-one', 'p1')).toEqual(crewVoice('number-one', 'p2'));
+  });
+
+  it('gives Number One a pitch of their own, so they never sound like a briefing’s crew', () => {
+    for (const p of projects) {
+      expect([crewVoice('officer', p), crewVoice('qa', p), crewVoice('engineer', p)].map((v) => v.pitch)).not.toContain(crewVoice('number-one', p).pitch);
+    }
   });
 
   it('matches the browser voice’s accent to Kokoro’s', () => {

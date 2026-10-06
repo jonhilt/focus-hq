@@ -10,6 +10,7 @@ import { box, flat, toon, toonMaterial } from './materials';
 import { bookshelf, ceilingLight, chair, coffeeMachine, cyl, desk, DESK_TOP, plant, rug, sofa, trophy, waterCooler } from './props';
 import { EngineeringStation } from './engineering';
 import { Lounge } from './lounge';
+import { FirstOfficer } from './numberOne';
 import { buildVacantRoom, ProjectRoom } from './room';
 import type { Scenery } from './scenery';
 import { tiled } from './textures';
@@ -33,6 +34,7 @@ export class World {
   rooms = new Map<string, ProjectRoom>();
   lounge: Lounge | null = null;
   engineering: EngineeringStation | null = null;
+  numberOne: FirstOfficer | null = null;
   /** Room landscapes by project, theme and slot; kept across rebuilds since they're slow to make. */
   private sceneries = new Map<string, Scenery>();
   private builder: Builder | null = null;
@@ -71,6 +73,7 @@ export class World {
     this.rooms.clear();
     this.lounge?.dispose();
     this.engineering?.dispose();
+    this.numberOne?.dispose();
     const b = new Builder();
     this.builder = b;
 
@@ -249,6 +252,9 @@ export class World {
     seat.rotation.y = -Math.PI / 2;
     seat.scale.setScalar(1.2);
     b.add(seat);
+    // Number One sits across the desk's east end from the captain, clear of the way in, the console and the inbox
+    // (lifted a hair so their shadow clears the rug)
+    this.numberOne = new FirstOfficer(b, new THREE.Vector3(1.8, 0.005, cz + 0.1), seat.position);
 
     const computer = new THREE.Group();
     computer.position.set(0.6, DESK_TOP, cz + 1.3);
@@ -368,6 +374,7 @@ export class World {
     for (const room of this.rooms.values()) room.update(t, now, camera);
     this.lounge?.update(t, camera);
     this.engineering?.update(t, camera);
+    this.numberOne?.update(t, camera);
     if (this.panelsDirty && now - this.lastPanels > 1000) {
       this.panelsDirty = false;
       this.lastPanels = now;

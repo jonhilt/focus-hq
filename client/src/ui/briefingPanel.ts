@@ -7,7 +7,7 @@ import { api } from '../net/api';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
-import { voicePrefs, VoiceSession } from './briefingVoice';
+import { voicePrefs, VoiceSession, voiceToggle } from './briefingVoice';
 import { type MicMode, withMic } from './dictation';
 import { diagramView } from './diagrams';
 import { busy, fill, h } from './dom';
@@ -252,26 +252,11 @@ export function openBriefingPanel(ui: Ui, projectId?: string): void {
     if (yourTurn && document.activeElement !== input) input.focus();
   };
 
-  const voiceControls = () => {
-    const toggle = h('button', { class: `btn small${voice ? ' primary' : ''}`, title: voice ? 'Voice mode is on: the crew speak, and 🎤 sends what you say. Click to turn it off.' : 'Voice mode: the crew say their lines aloud, and you answer by talking' }, voice ? '🔊 Voice on' : '🔈 Voice off');
-    toggle.onclick = () => {
-      voice?.end();
-      voice = voice ? null : new VoiceSession(voicePrefs.keepMicOpen);
-      voicePrefs.voiceMode = voice !== null;
+  const voiceControls = () =>
+    voiceToggle(voice, (next) => {
+      voice = next;
       render();
-    };
-    const keep = h('input', { type: 'checkbox', checked: voicePrefs.keepMicOpen });
-    keep.onchange = () => {
-      voicePrefs.keepMicOpen = keep.checked;
-      voice?.keepMicOpen(keep.checked);
-    };
-    return h('div', { class: 'row voice-controls' },
-      toggle,
-      voice
-        ? h('label', { title: 'For speakers: saves the glitch each time the mic opens and closes. Leave it off with Bluetooth earphones.' }, keep, ' Keep the mic open between turns')
-        : null,
-    );
-  };
+    });
 
   ui.panels.open({ title, body, accent: LCARS.lilac, wide: true });
   open = true;

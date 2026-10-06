@@ -1,4 +1,4 @@
-import type { BriefingMessage, VoiceStatus } from './types';
+import type { VoiceStatus } from './types';
 
 export const WHISPER_INSTALL = 'brew install whisper-cpp';
 
@@ -8,8 +8,8 @@ export type KokoroVoice = (typeof KOKORO_VOICES)[number];
 
 export const isKokoroVoice = (v: unknown): v is KokoroVoice => KOKORO_VOICES.some((k) => k === v);
 
-/** Who speaks in a briefing. */
-export type CrewSpeaker = 'officer' | 'qa' | 'engineer';
+/** Who speaks aloud: the crew at a briefing, and Number One in the ready room. */
+export type CrewSpeaker = 'officer' | 'qa' | 'engineer' | 'number-one';
 
 /** A crew member's voice: Kokoro's, and how the browser's built-in voice stands in for it while Kokoro isn't ready. */
 export interface CrewVoice {
@@ -65,7 +65,7 @@ export interface CrewLine {
  * What the crew say aloud among the messages from index `from` on, in log order: an officer's reply as its spoken
  * line; QA's notes, the engineer's recommendation and the office's fixed officer lines as they are.
  */
-export function linesToSpeak(messages: BriefingMessage[], from: number): CrewLine[] {
+export function linesToSpeak(messages: { from: CrewSpeaker | 'manager' | 'system'; text: string; spoken?: string }[], from: number): CrewLine[] {
   return messages.slice(from).flatMap((m) => {
     if (m.from === 'manager' || m.from === 'system') return [];
     const text = forSpeech(m.spoken ?? m.text);

@@ -23,6 +23,8 @@ export interface Ui {
   openQa(projectId: string): void;
   /** The observation lounge's briefing, or a form to call one (for `projectId`, if given). */
   openBriefing(projectId?: string): void;
+  /** The ready room's chat with Number One. */
+  openNumberOne(): void;
   /** Beams you to the observation lounge and opens the briefing. */
   goToLounge(): void;
   openManager(tab?: ManagerTab): void;

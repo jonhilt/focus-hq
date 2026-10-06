@@ -11,12 +11,13 @@ import type { Ui } from './ui/context';
 import { h } from './ui/dom';
 import { Hud } from './ui/hud';
 import { openManagerPanel } from './ui/managerPanel';
+import { numberOnePanelOpen, openNumberOnePanel } from './ui/numberOnePanel';
 import { Panels } from './ui/panels';
 import { openPreviewPanel } from './ui/previewPanel';
 import { openQaPanel } from './ui/qaPanel';
 import { openNewIssuePanel, openPausePanel, openTeleportPanel } from './ui/travelPanel';
 import type { Interaction } from './world/builder';
-import { chiefEngineer, plannerFor } from '../../shared/crew';
+import { chiefEngineer, numberOne, plannerFor } from '../../shared/crew';
 import { previewIncludes } from '../../shared/previewSet';
 import { sound } from './sound';
 import { SUN_POSITION } from './world/layout';
@@ -90,6 +91,7 @@ async function main() {
     openNewIssue: (projectId) => openNewIssuePanel(ui, projectId),
     openBriefing: (projectId) => openBriefingPanel(ui, projectId),
     openQa: (projectId) => openQaPanel(ui, projectId),
+    openNumberOne: () => openNumberOnePanel(ui),
     goToLounge: () => {
       const lounge = world.places().find((p) => p.label.includes('lounge'));
       if (lounge) ui.goTo(lounge);
@@ -128,6 +130,7 @@ async function main() {
         h('span', null, h('kbd', { class: 'k' }, 'E'), 'use / talk'),
         h('span', null, h('kbd', { class: 'k' }, 'T'), 'teleport'),
         h('span', null, h('kbd', { class: 'k' }, 'M'), 'ready room'),
+        h('span', null, h('kbd', { class: 'k' }, '1'), 'Number One'),
         h('span', null, h('kbd', { class: 'k' }, 'Esc'), 'pause'),
       ),
       enter,
@@ -166,6 +169,7 @@ async function main() {
       room.syncQa();
     }
     world.lounge?.sync();
+    world.numberOne?.sync();
     world.markPanels();
   };
   state.on('snapshot', () => {
@@ -236,6 +240,18 @@ async function main() {
     }
     briefingStatus = b?.status;
   });
+  let numberOneStatus = state.numberOne?.status;
+  state.on('number-one', () => {
+    world.numberOne?.sync();
+    const chat = state.numberOne;
+    // a reply can take a while: say so when it lands while you're elsewhere
+    if (chat && chat.status !== numberOneStatus && numberOneStatus === 'thinking' && !numberOnePanelOpen()) {
+      const name = numberOne().name;
+      if (chat.status === 'waiting') hud.toast('info', `🖖 ${name} has an answer for you`, { label: 'Read it', run: () => ui.openNumberOne() });
+      if (chat.status === 'failed') hud.toast('error', `${name} lost the thread: ${chat.error ?? ''}`, { label: 'Open', run: () => ui.openNumberOne() });
+    }
+    numberOneStatus = chat?.status;
+  });
   state.on('toast', (e) => {
     const agentId = e.agentId;
     hud.toast(e.level, e.text, agentId && state.agents.has(agentId) ? { label: 'Go there', run: () => ui.goToAgent(agentId) } : undefined);
@@ -300,6 +316,9 @@ async function main() {
       case 'briefing':
         ui.openBriefing();
         break;
+      case 'number-one':
+        ui.openNumberOne();
+        break;
       case 'qa':
         ui.openQa(i.projectId);
         break;
@@ -318,10 +337,18 @@ async function main() {
   window.addEventListener('keydown', (e) => {
     if (!started || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
     if (panels.isOpen) return;
-    if (e.code === 'KeyE') interact();
-    else if (e.code === 'KeyT') ui.openTeleport();
-    else if (e.code === 'KeyM') ui.openManager();
-    else if (e.code === 'KeyN') ui.openNewIssue(world.locationOf(camera.position).projectId);
+    const hotkeys: Record<string, (() => void) | undefined> = {
+      KeyE: interact,
+      KeyT: () => ui.openTeleport(),
+      KeyM: () => ui.openManager(),
+      KeyN: () => ui.openNewIssue(world.locationOf(camera.position).projectId),
+      Digit1: () => ui.openNumberOne(),
+    };
+    const run = hotkeys[e.code];
+    if (!run) return;
+    // or the key lands in the message box the panel it opens has just focused
+    e.preventDefault();
+    run();
   });
 
   window.addEventListener('resize', () => {

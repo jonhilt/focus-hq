@@ -110,16 +110,23 @@ export function qaAtBriefing(projectId: string, briefing: Pick<Briefing, 'projec
   return !qaAgent || !ACTIVE_STATUSES.includes(qaAgent.status);
 }
 
-/** Each post's voices, none shared between posts, so the officer, QA and the engineer never sound alike. */
+/**
+ * Each post's voices, none shared between the posts at a briefing, so the officer, QA and the engineer never sound
+ * alike. Number One never sits in on one, so borrows a voice, at a pitch of their own.
+ */
 const VOICES: Record<CrewSpeaker, { kokoro: KokoroVoice[]; pitch: number }> = {
   officer: { kokoro: ['af_heart', 'am_michael', 'bf_emma', 'bm_george'], pitch: 1 },
   qa: { kokoro: ['af_bella', 'am_puck', 'bf_isabella', 'bm_fable'], pitch: 1.3 },
   engineer: { kokoro: ['am_fenrir'], pitch: 0.75 },
+  'number-one': { kokoro: ['bm_george'], pitch: 0.9 },
 };
+
+/** The ship has one engineer and one Number One: the same voice whichever project they're talking about. */
+const SHIPWIDE: CrewSpeaker[] = ['engineer', 'number-one'];
 
 /** The voice a crew member speaks in at a briefing about the project: always the same one for the same person. */
 export function crewVoice(speaker: CrewSpeaker, projectId: string): CrewVoice {
   const post = VOICES[speaker];
-  const kokoro = post.kokoro[hash(`voice:${speaker}:${speaker === 'engineer' ? '' : projectId}`) % post.kokoro.length];
+  const kokoro = post.kokoro[hash(`voice:${speaker}:${SHIPWIDE.includes(speaker) ? '' : projectId}`) % post.kokoro.length];
   return { kokoro, lang: kokoro.startsWith('b') ? 'en-GB' : 'en-US', pitch: post.pitch };
 }

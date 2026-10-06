@@ -1,5 +1,5 @@
 import { prKey } from '../../../shared/qa';
-import type { Agent, Board, Briefing, BrowserFrame, IssueDraft, QaReview, Preview, Project, ServerEvent, ServerInfo, TermLine, VoiceStatus } from '../../../shared/types';
+import type { Agent, Board, Briefing, BrowserFrame, IssueDraft, NumberOneChat, QaReview, Preview, Project, ServerEvent, ServerInfo, TermLine, VoiceStatus } from '../../../shared/types';
 
 type Events = {
   snapshot: void;
@@ -17,6 +17,7 @@ type Events = {
   /** A project's issue draft changed (project id). */
   draft: string;
   briefing: void;
+  'number-one': void;
   /** A QA review changed or went away (its project id). */
   review: string;
   voice: void;
@@ -43,6 +44,8 @@ export class OfficeState {
   briefing: Briefing | null = null;
   /** Goals parked out of the lounge while the crew builds their current step. */
   goals: Briefing[] = [];
+  /** The captain's chat with Number One in the ready room. */
+  numberOne: NumberOneChat | null = null;
   /** The latest QA review per pull request (by prKey). */
   reviews = new Map<string, QaReview>();
   /** Whether dictation can run on the server, and the speech model's download. */
@@ -106,9 +109,11 @@ export class OfficeState {
         this.briefing = s.briefing ?? null;
         this.goals = s.goals ?? [];
         this.reviews = new Map((s.reviews ?? []).map((r) => [prKey(r.repo, r.number), r]));
+        this.numberOne = s.numberOne;
         this.voice = s.voice;
         this.emit('snapshot', undefined);
         this.emit('voice', undefined);
+        this.emit('number-one', undefined);
         break;
       }
       case 'info':
@@ -180,6 +185,10 @@ export class OfficeState {
         this.briefing = event.briefing;
         this.goals = event.goals ?? [];
         this.emit('briefing', undefined);
+        break;
+      case 'number-one':
+        this.numberOne = event.chat;
+        this.emit('number-one', undefined);
         break;
       case 'draft':
         if (event.draft) this.drafts.set(event.projectId, event.draft);

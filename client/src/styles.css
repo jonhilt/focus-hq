@@ -267,6 +267,9 @@ textarea.qa-brief { width: 100%; min-height: 160px; font-family: var(--mono); fo
 .briefing-msg.officer { --tone: var(--lcars-orange); align-self: flex-start; border-left: 6px solid var(--tone); border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .briefing-msg.qa { --tone: var(--lcars-periwinkle); align-self: flex-start; margin-left: 24px; border-left: 6px solid var(--tone); border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .briefing-msg.engineer { --tone: var(--lcars-gold); align-self: flex-start; margin-left: 24px; border-left: 6px solid var(--tone); border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.briefing-msg.number-one { --tone: var(--lcars-lilac); align-self: flex-start; border-left: 6px solid var(--tone); border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.briefing-msg .suggest { margin-top: 8px; gap: 8px; }
+.briefing-chat.number-one { height: 100%; max-width: 860px; margin: 0 auto; }
 .briefing-msg.manager { --tone: var(--lcars-sky); align-self: flex-end; border-right: 6px solid var(--tone); border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .briefing-msg.typing p { font-family: var(--mono); font-size: 13px; color: var(--lcars-gold); }
 .briefing-note { align-self: center; color: var(--muted); font-size: 13px; }
