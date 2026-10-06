@@ -1,7 +1,8 @@
-// The ship's sounds, all synthesised with Web Audio: the engines' thrum underneath everything, doors that swoosh,
-// LCARS chirps when a console opens and blips as you press its buttons, crew tapping at their stations while they work,
-// a combadge chirp for news (a brighter trill when it's good, a denied tone when it isn't) and a transporter shimmer
-// when you teleport.
+// The ship's sounds. The console chirps when a panel opens and closes, the blips as you press its buttons, the combadge
+// for news (a brighter trill when it's good, a denied tone when it isn't) and the transporter shimmer when you teleport
+// are recorded clips from client/public/sfx/ (CC0, credited in CREDITS.md there), each with a synthesised stand-in that
+// plays until the clips have loaded or if they never do. The engines' thrum underneath everything, the doors that swoosh
+// and the crew tapping at their stations are synthesised with Web Audio, positioned where they happen.
 
 import * as THREE from 'three';
 
@@ -11,6 +12,21 @@ const forward = new THREE.Vector3();
 const LCARS_BLIPS = [1175, 1319, 1480, 1568, 1760, 1976, 2349];
 /** Stations further than this (metres) are out of earshot: the inverse rolloff alone would let every room leak in. */
 const STATION_EARSHOT = 9;
+
+/**
+ * The recorded clips, decoded once sound starts. Several takes for one sound are picked among at random. Each file is
+ * levelled to about -18 dB RMS, so the volumes they play at below are what puts them level with the synthesised sounds.
+ */
+const CLIPS = {
+  open: ['panel-open'],
+  close: ['panel-close'],
+  press: ['press-1', 'press-2', 'press-3', 'press-4'],
+  info: ['alert-info'],
+  success: ['alert-success'],
+  error: ['alert-error'],
+  beam: ['beam'],
+} as const;
+type Clip = keyof typeof CLIPS;
 
 const pick = <T>(xs: readonly T[]): T => xs[Math.floor(Math.random() * xs.length)];
 
@@ -31,6 +47,7 @@ class ShipSound {
   private master: GainNode | null = null;
   private brown: AudioBuffer | null = null;
   private white: AudioBuffer | null = null;
+  private readonly clips: Partial<Record<Clip, AudioBuffer[]>> = {};
   private readonly ear = new THREE.Vector3();
   enabled = localStorage.getItem(STORAGE_KEY) !== 'off';
 
@@ -44,6 +61,32 @@ class ShipSound {
     this.brown = this.noise(4, true);
     this.white = this.noise(2, false);
     this.thrum();
+    void this.load(this.ctx);
+  }
+
+  /** Fetches and decodes every clip. A take that fails to load is left out; a clip with none keeps its synthesised sound. */
+  private async load(ctx: AudioContext): Promise<void> {
+    await Promise.all(Object.entries(CLIPS).map(async ([clip, files]) => {
+      const takes = await Promise.allSettled(files.map(async (file) => {
+        const res = await fetch(`/sfx/${file}.mp3`);
+        if (!res.ok) throw new Error(`${file}: HTTP ${res.status}`);
+        return ctx.decodeAudioData(await res.arrayBuffer());
+      }));
+      const buffers = takes.flatMap((t) => (t.status === 'fulfilled' ? [t.value] : []));
+      if (buffers.length) this.clips[clip as Clip] = buffers;
+    }));
+  }
+
+  /** Plays a take of `clip` at `volume` (and `rate`), or `synth` while there's no clip to play. */
+  private play(clip: Clip, volume: number, synth: () => void, rate = 1): void {
+    const buffers = this.clips[clip];
+    if (!buffers) return synth();
+    const out = this.out(volume);
+    if (!out) return;
+    const src = this.source(out.ctx, pick(buffers));
+    src.playbackRate.value = rate;
+    src.connect(out.gain);
+    src.start();
   }
 
   toggle(): boolean {
@@ -155,16 +198,20 @@ class ShipSound {
 
   /** LCARS console chirps: a rising pair when a panel opens, a falling one when it closes. */
   chirp(kind: 'open' | 'close'): void {
-    this.tones(kind === 'open' ? [1320, 1760] : [1480, 990], 0.055, 0.05);
+    this.play(kind, 0.25, () => this.tones(kind === 'open' ? [1320, 1760] : [1480, 990], 0.055, 0.05));
   }
 
-  /** An LCARS button press. */
+  /** An LCARS button press, nudged up or down a little so a run of presses doesn't drone on one note. */
   press(): void {
-    this.tones([pick(LCARS_BLIPS)], 0.06, 0.03);
+    this.play('press', 0.16, () => this.tones([pick(LCARS_BLIPS)], 0.06, 0.03), 0.9 + Math.random() * 0.25);
   }
 
   /** The combadge for news, an acknowledging trill when something worked, a low denied tone when it didn't. */
   alert(level: 'info' | 'success' | 'error'): void {
+    this.play(level, 0.18, () => this.synthAlert(level));
+  }
+
+  private synthAlert(level: 'info' | 'success' | 'error'): void {
     switch (level) {
       case 'info':
         return this.tones([2093, 2637, 3136], 0.045, 0.04, 'triangle');
@@ -192,6 +239,10 @@ class ShipSound {
 
   /** Transporter shimmer for teleports. */
   beam(): void {
+    this.play('beam', 0.3, () => this.synthBeam());
+  }
+
+  private synthBeam(): void {
     const out = this.out(0.05);
     if (!out) return;
     const { ctx, gain } = out;
