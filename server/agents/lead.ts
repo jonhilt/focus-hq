@@ -1,4 +1,4 @@
-import type { Agent, Effort, Helper, LeadPr, LeadWork, QaReport, Settings } from '../../shared/types';
+import type { Agent, Effort, GoalNote, GoalRecord, Helper, LeadPr, LeadWork, QaReport, QueuedGoal, Settings } from '../../shared/types';
 import { TEAM_STATIONS } from '../../shared/types';
 import type { HelperEvent } from './types';
 import { slugify } from '../util';
@@ -112,6 +112,7 @@ Your workspace holds every repo of the project side by side, each in its own fol
 
 How to work:
 - When a goal is new, talk it through briefly: what they want, why, and what done looks like. Don't write a spec or plan the whole route. Agree the first slice and get going.
+- Keep the goal's note with mcp__office__note. It survives when your conversation gets summarised, and the captain sees it, so keep it current and short: it's a note, not a spec. In it: what done looks like (once you've agreed it), this slice's checklist when the slice has more than a couple of parts (tick items off as you go), a line or two on what each slice taught you once it lands, and up to three ideas for what's next. You can also give the goal a better title. When a slice lands the office clears its checklist: carry what's unfinished into the next one, or say in learned that you dropped it.
 - A slice is a reasonably sized change that ships on its own and gets something real working: often a thin slice end to end, through every repo it needs. A slice can also be a refactor, once the code has learned something. Keep each pull request reviewable.
 - Before changing a repo, read its CLAUDE.md or README. Run its tests, type checks and linters, and check UI changes in the browser with the mcp__browser__ tools.
 - Commit in each repo as you go. Never push and never open pull requests yourself.
@@ -120,7 +121,101 @@ How to work:
 - You'll hear QA's verdict on each pull request, and when the slice's pull requests have all merged or closed. After that your repos move to fresh code on a new branch for the next slice.
 - For independent pieces of work that can run side by side, you can hand them to subagents with the Agent tool. You own what they bring back.
 - When a decision is the captain's (scope, a trade-off they'd care about), ask and stop. Otherwise make sensible calls and say what you decided.
+- When what done looks like is met, or a slice has landed and nothing worthwhile is left, call mcp__office__propose_close with why, tell the captain, and stop. They close the goal, or carry on with you.
 `.trim();
+}
+
+/** How long a goal's note may get: enough to carry the goal, never enough to become a spec. */
+export const NOTE_LIMITS = { title: 60, done: 400, slice: 7, item: 160, learned: 10, line: 200, next: 3 } as const;
+
+export const emptyNote = (): GoalNote => ({ done: '', slice: [], learned: [], next: [] });
+
+/**
+ * What the lead can send through the note tool: each field replaces what was there, except `learned`, which adds a
+ * line (`allLearned` replaces them all, to merge old lessons when the list is full).
+ */
+export interface NoteInput {
+  title?: string;
+  done?: string;
+  slice?: { text: string; done?: boolean }[];
+  learned?: string;
+  allLearned?: string[];
+  next?: string[];
+}
+
+/** Why the note is too long, for the lead to trim: undefined when it fits. */
+export function checkNote(title: string, note: GoalNote): string | undefined {
+  const L = NOTE_LIMITS;
+  const over: string[] = [];
+  if (title.length > L.title) over.push(`the title is ${title.length} characters (at most ${L.title})`);
+  if (note.done.length > L.done) over.push(`done is ${note.done.length} characters (at most ${L.done})`);
+  if (note.slice.length > L.slice) over.push(`the slice has ${note.slice.length} items (at most ${L.slice}: split the slice, or merge items)`);
+  if (note.slice.some((i) => i.text.length > L.item)) over.push(`a slice item is longer than ${L.item} characters`);
+  if (note.learned.length > L.learned) over.push(`learned has ${note.learned.length} lines (at most ${L.learned}: send allLearned with the older lessons merged)`);
+  if (note.learned.some((l) => l.length > L.line)) over.push(`a learned line is longer than ${L.line} characters`);
+  if (note.next.length > L.next) over.push(`next has ${note.next.length} ideas (at most ${L.next})`);
+  if (note.next.some((n) => n.length > L.item)) over.push(`an idea in next is longer than ${L.item} characters`);
+  return over.length ? `The note is too long: ${over.join('; ')}. It's a note, not a spec: trim it and try again.` : undefined;
+}
+
+/** The goal's title and note after the lead's update, or why it was refused (nothing changes then). */
+export function applyNote(work: Pick<LeadWork, 'title' | 'note'>, input: NoteInput): { title: string; note: GoalNote } | { error: string } {
+  const before = work.note ?? emptyNote();
+  const clean = (text: string) => text.replace(/\s+/g, ' ').trim();
+  const title = input.title !== undefined && clean(input.title) ? clean(input.title) : work.title;
+  const note: GoalNote = {
+    done: input.done !== undefined ? input.done.trim() : before.done,
+    slice: input.slice ? input.slice.map((i) => ({ text: clean(i.text), done: !!i.done })).filter((i) => i.text) : before.slice,
+    learned: [...(input.allLearned ? input.allLearned.map(clean).filter(Boolean) : before.learned), ...(input.learned && clean(input.learned) ? [clean(input.learned)] : [])],
+    next: input.next ? input.next.map(clean).filter(Boolean) : before.next,
+  };
+  const error = checkNote(title, note);
+  return error ? { error } : { title, note };
+}
+
+/** The goal as the lead last wrote it down: for a new slice, and anywhere their conversation may have been summarised. */
+export function noteForPrompt(title: string, note: GoalNote | undefined): string {
+  const n = note ?? emptyNote();
+  const parts = [`The goal: ${title}`];
+  if (n.done) parts.push(`What done looks like: ${n.done}`);
+  if (n.learned.length) parts.push(`What the slices so far taught us:\n${n.learned.map((l) => `- ${l}`).join('\n')}`);
+  if (n.slice.length) parts.push(`This slice:\n${n.slice.map((i) => `- [${i.done ? 'x' : ' '}] ${i.text}`).join('\n')}`);
+  if (n.next.length) parts.push(`Ideas for next:\n${n.next.map((x) => `- ${x}`).join('\n')}`);
+  return parts.join('\n\n');
+}
+
+/** What closing the goal would lose or leave behind, for the captain to confirm first. */
+export function closeCheck(work: Pick<LeadWork, 'prs'>, dirtyFolders: string[]): { kind: 'ok' } | { kind: 'warn'; reasons: string[] } {
+  const reasons: string[] = [];
+  if (dirtyFolders.length) reasons.push(`Uncommitted changes in ${dirtyFolders.map((f) => `./${f}`).join(' and ')} are thrown away.`);
+  const open = work.prs.filter((p) => !p.outcome);
+  if (open.length) reasons.push(`${open.map((p) => `${p.repo}#${p.number}`).join(' and ')} ${open.length === 1 ? 'stays' : 'stay'} open on GitHub, with no lead to fix ${open.length === 1 ? 'it' : 'them'}.`);
+  return reasons.length ? { kind: 'warn', reasons } : { kind: 'ok' };
+}
+
+/** How many closed goals a room keeps in its log. */
+export const GOAL_LOG = 30;
+
+/** The goal for the room's log, as it closes: its slices are the ones that shipped. */
+export function goalRecord(agent: Agent, now: number): GoalRecord {
+  const work = agent.lead!;
+  return { id: agent.id, title: work.title, note: work.note, slices: work.prs.length ? work.slice : work.slice - 1, prs: work.prs, leadName: agent.name, sessionId: agent.sessionId, openedAt: agent.startedAt, closedAt: now };
+}
+
+/** The room's log with a goal just closed: newest first, the oldest dropping off. */
+export const fileGoal = (log: GoalRecord[], record: GoalRecord): GoalRecord[] => [record, ...log.filter((g) => g.id !== record.id)].slice(0, GOAL_LOG);
+
+/** The queued goal a freed station offers: the first in line. */
+export const nextGoal = (queue: QueuedGoal[] | undefined): QueuedGoal | undefined => queue?.[0];
+
+/** The queue with one goal moved `by` places (negative: sooner), staying within the queue. */
+export function moveQueued(queue: QueuedGoal[], id: string, by: number): QueuedGoal[] {
+  const from = queue.findIndex((g) => g.id === id);
+  if (from < 0) return queue;
+  const to = Math.max(0, Math.min(queue.length - 1, from + by));
+  const next = queue.filter((g) => g.id !== id);
+  next.splice(to, 0, queue[from]);
+  return next;
 }
 
 /** Where the lead's repos are, for the first message of a goal. */
@@ -160,9 +255,9 @@ export function landedNote(work: LeadWork): string {
   return `Slice ${work.slice} has landed: ${prs}. Tell the captain what it taught you and what you'd do next.`;
 }
 
-/** What the lead hears when a new slice starts: their repos on fresh code. */
+/** What the lead hears when a new slice starts: their repos on fresh code, and the goal as they wrote it down. */
 export function newSliceNote(work: LeadWork, branch: string): string {
-  return `Slice ${work.slice} starts on fresh code. Your repos are now:\n${workspaceList(work, branch)}`;
+  return `Slice ${work.slice} starts on fresh code. Your repos are now:\n${workspaceList(work, branch)}\n\nThe office cleared the last slice's checklist from your note. Where the goal stands:\n\n${noteForPrompt(work.title, work.note)}`;
 }
 
 /** The slice landed but some repos still have uncommitted changes: the next slice waits for them. */

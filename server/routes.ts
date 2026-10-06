@@ -121,12 +121,25 @@ export function apiRouter(office: Office, store: Store): express.Router {
     office.agents.startGoal(param(req, 'id'), str(req.body.text), {
       station: typeof req.body.station === 'number' ? req.body.station : undefined,
       effort: effort(req.body.effort),
+      from: str(req.body.from) || undefined,
     }),
   ));
+  // goals waiting for a free team station: started by the captain, never by themselves
+  r.post('/projects/:id/goals/queue/:qid/start', h((req) =>
+    office.agents.startQueued(param(req, 'id'), param(req, 'qid'), { text: str(req.body.text) || undefined, effort: effort(req.body.effort) }),
+  ));
+  r.post('/projects/:id/goals/queue/:qid/move', h((req) => office.agents.moveQueued(param(req, 'id'), param(req, 'qid'), Math.sign(Number(req.body.by)) || 0)));
+  r.delete('/projects/:id/goals/queue/:qid', h((req) => office.agents.dropQueued(param(req, 'id'), param(req, 'qid'))));
   r.get('/agents/:id/lines', h((req) => store.allLines(param(req, 'id'))));
   r.post('/agents/:id/message', h((req) => office.agents.message(param(req, 'id'), str(req.body.text))));
   r.post('/agents/:id/permission', h((req) => office.agents.resolvePermission(param(req, 'id'), str(req.body.requestId), req.body.allow === true)));
   r.post('/agents/:id/stop', h((req) => office.agents.stop(param(req, 'id'))));
+  r.post('/agents/:id/close', h((req) => office.agents.closeGoal(param(req, 'id'), req.body.force === true)));
+  r.post('/agents/:id/effort', h((req) => {
+    const level = effort(req.body.effort);
+    if (!level) throw new Error('Pick an effort level');
+    return office.agents.setEffort(param(req, 'id'), level);
+  }));
   r.delete('/agents/:id', h((req) => office.agents.dismiss(param(req, 'id'))));
 
   // dictation: whisper.cpp on this machine turns the browser's 16 kHz WAV into text

@@ -1,14 +1,14 @@
 import { helperFor, leadFor, leadId, plannerFor, qaOfficerFor, randomAvatar } from '../../shared/crew';
 import { autoQaFor, autoSendBackFor, prKey, sameCommit } from '../../shared/qa';
 import { afterTriage, triageLabel, type TriageResult, type TriageStep, whenStuck } from '../../shared/triage';
-import type { Agent, AgentStatus, BrowserFrame, Effort, FailedCheck, FixFor, PermissionRequest, PullRequest, QaReport, QaReview, QaScreenshot, TermLine } from '../../shared/types';
+import type { Agent, AgentStatus, BrowserFrame, Effort, FailedCheck, FixFor, PermissionRequest, PullRequest, QaReport, QaReview, QaScreenshot, QueuedGoal, TermLine } from '../../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, LEAD_DESK, QA_DESK, TEAM_STATIONS } from '../../shared/types';
 import type { GitHubProvider, PullRequestDetail } from '../github/provider';
 import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
 import { afterCloudRun, carryOnInNewSession, fallBackToLocal } from './cloud';
-import { afterVerdict, applyHelperEvent, goalEffort, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, newSliceNote, notShipped, openPr, pickStation, qaVerdictNote, shipped, shipPlan, sliceBranch, sliceLanded, workspaceNote } from './lead';
+import { afterVerdict, applyHelperEvent, applyNote, closeCheck, fileGoal, goalEffort, goalRecord, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, shipped, shipPlan, sliceBranch, sliceLanded, workspaceNote } from './lead';
 import { repoFolders } from './planner';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
 import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
@@ -347,7 +347,9 @@ export class AgentManager {
         effort: agent.effort,
         outputSchema: review ? QA_SCHEMA : undefined,
         cloud: agent.cloud ? { branch: agent.branch } : undefined,
-        tools: lead ? { ship: (input) => this.shipLead(agent, input) } : undefined,
+        tools: lead
+          ? { ship: (input) => this.shipLead(agent, input), note: (input) => this.noteGoal(agent, input), proposeClose: (input) => this.proposeClose(agent, input.reason) }
+          : undefined,
       },
       this.hooks(agent),
     );
@@ -496,15 +498,17 @@ export class AgentManager {
    * goal), with every repo of the project checked out on the goal's first branch, who hears `text` first. `station`
    * picks the station; otherwise the goal takes the first free one. Later messages go to the lead like any agent's.
    */
-  startGoal(projectId: string, text: string, how: { station?: number; effort?: Effort } = {}): Agent {
+  startGoal(projectId: string, text: string, how: { station?: number; effort?: Effort; from?: string } = {}): { agent: Agent } | { queued: QueuedGoal } {
     const project = this.store.project(projectId);
     if (!project.repos.length) throw new Error(`Connect a repository to ${project.name} first`);
     if (!text.trim()) throw new Error('Tell them what you’re after');
     const leads = this.store.agentsIn(projectId).filter((a) => a.task === 'lead');
+    // goals already waiting go first: a new one joins the line behind them, even if a station has just come free
+    if (how.station === undefined && project.goalQueue?.length) return { queued: this.queueGoal(projectId, text, how) };
     const station = pickStation(leads.map((a) => a.lead?.station ?? 0), how.station);
     if (station === undefined) {
       const wanted = how.station;
-      if (wanted === undefined) throw new Error(`Every team station in ${project.name} has a goal – finish one first`);
+      if (wanted === undefined) return { queued: this.queueGoal(projectId, text, how) };
       const holder = leads.find((a) => a.lead?.station === wanted);
       throw new Error(holder ? `Team station ${wanted + 1} already has a goal: ${holder.lead?.title ?? holder.name}` : `${project.name} has team stations 1 to ${TEAM_STATIONS}`);
     }
@@ -536,9 +540,104 @@ export class AgentManager {
     this.hub.send({ type: 'agent', agent });
     this.print(agent, [
       { kind: 'system', text: `✻ ${crew.name} takes team station ${station + 1} to lead “${title}” across ${project.repos.join(', ')} (${effort} effort)` },
-      { kind: 'manager', text: `▶ Captain: ${text.trim()}` },
+      { kind: 'manager', text: `▶ ${how.from ? `Captain, from ${how.from}` : 'Captain'}: ${text.trim()}` },
     ]);
     this.schedule();
+    return { agent };
+  }
+
+  /** Puts a goal in line for the next free team station. It waits there for the captain to start it. */
+  private queueGoal(projectId: string, text: string, how: { effort?: Effort; from?: string }): QueuedGoal {
+    const project = this.store.project(projectId);
+    const queued: QueuedGoal = { id: newId('q'), text: text.trim(), effort: how.effort, from: how.from, at: Date.now() };
+    const ahead = project.goalQueue?.length ?? 0;
+    this.changeQueue(projectId, [...(project.goalQueue ?? []), queued]);
+    this.hub.toast('info', `🧭 “${goalTitle(text)}” waits in line for a team station in ${project.name}${ahead ? `, behind ${ahead} other goal${ahead === 1 ? '' : 's'}` : ''}`);
+    return queued;
+  }
+
+  private changeQueue(projectId: string, queue: QueuedGoal[]): void {
+    this.store.project(projectId).goalQueue = queue;
+    this.projectsChanged();
+  }
+
+  private projectsChanged(): void {
+    this.store.save();
+    this.hub.send({ type: 'projects', projects: this.store.projects });
+  }
+
+  /** Starts a queued goal at a free team station, with the captain's last edits to it. */
+  startQueued(projectId: string, queueId: string, edits: { text?: string; effort?: Effort } = {}): Agent {
+    const project = this.store.project(projectId);
+    const queued = (project.goalQueue ?? []).find((g) => g.id === queueId);
+    if (!queued) throw new Error('That goal is no longer in line');
+    const leads = this.store.agentsIn(projectId).filter((a) => a.task === 'lead');
+    const station = pickStation(leads.map((a) => a.lead?.station ?? 0));
+    if (station === undefined) throw new Error(`Every team station in ${project.name} still has a goal`);
+    const started = this.startGoal(projectId, edits.text?.trim() || queued.text, { station, effort: edits.effort ?? queued.effort, from: queued.from });
+    if (!('agent' in started)) throw new Error('No team station was free after all');
+    this.changeQueue(projectId, (project.goalQueue ?? []).filter((g) => g.id !== queueId));
+    return started.agent;
+  }
+
+  dropQueued(projectId: string, queueId: string): void {
+    this.changeQueue(projectId, (this.store.project(projectId).goalQueue ?? []).filter((g) => g.id !== queueId));
+  }
+
+  moveQueued(projectId: string, queueId: string, by: number): void {
+    this.changeQueue(projectId, moveQueued(this.store.project(projectId).goalQueue ?? [], queueId, by));
+  }
+
+  /** The lead's note tool: the goal's note and title, as they want them. */
+  private async noteGoal(agent: Agent, input: NoteInput): Promise<string> {
+    const work = agent.lead;
+    if (!work) throw new Error('There’s no goal to keep a note on');
+    const next = applyNote(work, input);
+    if ('error' in next) throw new Error(next.error);
+    this.update(agent, { lead: { ...work, title: next.title, note: next.note }, issue: { ...agent.issue, title: next.title } });
+    return 'Noted. The captain sees the note on the goal, and you hear it again at each new slice.';
+  }
+
+  /** The lead's propose_close tool: the captain hears the goal looks done, and closes it or carries on. */
+  private async proposeClose(agent: Agent, reason: string): Promise<string> {
+    const work = agent.lead;
+    if (!work) throw new Error('There’s no goal to close');
+    this.update(agent, { lead: { ...work, closing: { reason: reason.trim() || 'The goal looks done', at: Date.now() } } });
+    this.print(agent, [{ kind: 'success', text: `🏁 ${agent.name} thinks “${work.title}” is ready to wrap up: ${reason.trim()}` }]);
+    this.hub.toast('success', `🏁 ${agent.name} thinks “${work.title}” is ready to wrap up`, agent.id);
+    return 'The captain sees that you think the goal is ready to wrap up. Tell them why in a sentence or two, then stop: they close the goal, or carry on with you.';
+  }
+
+  /**
+   * Closes a goal: files it in the room's log and sends its lead home, which frees the station. First says what would be
+   * lost or left behind (uncommitted changes, open pull requests), unless `force`.
+   */
+  async closeGoal(id: string, force = false): Promise<{ closed: true } | { warn: string[] }> {
+    const agent = this.store.agent(id);
+    const work = agent.lead;
+    if (agent.task !== 'lead' || !work) throw new Error(`${agent.name} isn’t leading a goal`);
+    const dirty: string[] = [];
+    for (const r of work.repos) if (await this.workspace.hasUncommittedChanges(this.workspace.dir(leadWorktreeId(id, r.folder))).catch(() => false)) dirty.push(r.folder);
+    const check = closeCheck(work, dirty);
+    if (check.kind === 'warn' && !force) return { warn: check.reasons };
+    const project = this.store.project(agent.projectId);
+    project.goals = fileGoal(project.goals ?? [], goalRecord(agent, Date.now()));
+    this.projectsChanged();
+    await this.dismiss(id);
+    const next = nextGoal(project.goalQueue);
+    this.hub.toast('success', next
+      ? `🏁 “${work.title}” is closed. Team station ${work.station + 1} is free: next up is “${goalTitle(next.text)}” (L to start it)`
+      : `🏁 “${work.title}” is closed, and team station ${work.station + 1} is free`);
+    return { closed: true };
+  }
+
+  /** How hard the agent thinks from now on: from its next request if it's working, else from its next turn. */
+  setEffort(id: string, effort: Effort): Agent {
+    const agent = this.store.agent(id);
+    if (agent.effort === effort) return agent;
+    this.update(agent, { effort });
+    this.rt(id).session?.setEffort?.(effort);
+    this.print(agent, [{ kind: 'system', text: `✻ The captain set ${agent.name}'s effort to ${effort}` }]);
     return agent;
   }
 
@@ -583,7 +682,8 @@ export class AgentManager {
     if (dirty.length) return heldBack(lead, dirty);
     const slice = lead.slice + 1;
     for (const r of lead.repos) await this.workspace.remove(r.repo, leadWorktreeId(agent.id, r.folder)).catch(() => undefined);
-    this.update(agent, { branch: sliceBranch(lead.title, slice, newId('s').slice(-4)), lead: { ...lead, repos: [], slice, prs: [] } });
+    const note = lead.note && { ...lead.note, slice: [] };
+    this.update(agent, { branch: sliceBranch(lead.title, slice, newId('s').slice(-4)), lead: { ...lead, note, repos: [], slice, prs: [] } });
     await this.checkOutSlice(agent, project.repos);
     return newSliceNote(agent.lead!, agent.branch);
   }
@@ -1079,6 +1179,8 @@ export class AgentManager {
     text = text.trim();
     if (!text) return;
     this.print(agent, [{ kind: 'manager', text: `▶ ${from ?? 'Captain'}: ${text}` }]);
+    // the captain carries on with a goal the lead thought was done
+    if (!from && agent.lead?.closing) this.update(agent, { lead: { ...agent.lead, closing: undefined } });
     if (from) text = `[${from}] ${text}`;
 
     if (rt.session?.send(text)) {

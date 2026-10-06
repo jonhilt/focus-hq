@@ -1,4 +1,4 @@
-import type { Agent, Board, Effort, Issue, IssueDraft, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, RoomTheme, Settings, TermLine, VoiceStatus } from '../../../shared/types';
+import type { Agent, Board, Effort, Issue, IssueDraft, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, RoomTheme, Settings, TermLine, VoiceStatus } from '../../../shared/types';
 import type { KokoroVoice } from '../../../shared/voice';
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -30,9 +30,18 @@ export const api = {
   draftIssue: (projectId: string, idea: string, revise?: { repo: string; title: string; body: string; notes: string }) =>
     call<IssueDraft>('POST', `/projects/${projectId}/draft`, { idea, revise }),
   discardDraft: (projectId: string) => call('DELETE', `/projects/${projectId}/draft`),
-  /** Starts a goal at a team station (the first free one unless `station` says): a lead of its own hears `text` first. */
-  startGoal: (projectId: string, text: string, how: { station?: number; effort?: Effort } = {}) =>
-    call<Agent>('POST', `/projects/${projectId}/goals`, { text, ...how }),
+  /**
+   * Starts a goal at a team station (the first free one unless `station` says): a lead of its own hears `text` first.
+   * With every station taken, the goal waits in line instead.
+   */
+  startGoal: (projectId: string, text: string, how: { station?: number; effort?: Effort; from?: string } = {}) =>
+    call<{ agent: Agent } | { queued: QueuedGoal }>('POST', `/projects/${projectId}/goals`, { text, ...how }),
+  startQueued: (projectId: string, queueId: string, edits: { text?: string; effort?: Effort } = {}) =>
+    call<Agent>('POST', `/projects/${projectId}/goals/queue/${queueId}/start`, edits),
+  moveQueued: (projectId: string, queueId: string, by: -1 | 1) => call('POST', `/projects/${projectId}/goals/queue/${queueId}/move`, { by }),
+  dropQueued: (projectId: string, queueId: string) => call('DELETE', `/projects/${projectId}/goals/queue/${queueId}`),
+  /** Closes a goal, unless something would be lost or left behind: then it says what, and `force` closes it anyway. */
+  closeGoal: (id: string, force = false) => call<{ closed: true } | { warn: string[] }>('POST', `/agents/${id}/close`, { force }),
   numberOneSay: (text: string) => call<NumberOneChat>('POST', '/number-one/say', { text }),
   numberOneNew: () => call<NumberOneChat>('POST', '/number-one/new'),
   sendToQa: (projectId: string, repo: string, number: number) => call<QaReview>('POST', '/prs/qa', { projectId, repo, number }),
@@ -54,6 +63,7 @@ export const api = {
   permission: (id: string, requestId: string, allow: boolean) => call('POST', `/agents/${id}/permission`, { requestId, allow }),
   stop: (id: string) => call('POST', `/agents/${id}/stop`),
   dismiss: (id: string) => call('DELETE', `/agents/${id}`),
+  setEffort: (id: string, effort: Effort) => call<Agent>('POST', `/agents/${id}/effort`, { effort }),
 
   voiceStatus: () => call<VoiceStatus>('GET', '/voice/status'),
   downloadVoiceModel: () => call<VoiceStatus>('POST', '/voice/download-model'),

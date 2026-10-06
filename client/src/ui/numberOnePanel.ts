@@ -8,6 +8,7 @@ import type { Ui } from './context';
 import { voicePrefs, VoiceSession, voiceToggle } from './voiceMode';
 import { type MicMode, withMic } from './dictation';
 import { busy, fill, h } from './dom';
+import { handOffControl } from './goals';
 
 let open = false;
 /** Whether the Number One panel is showing (so the office doesn't toast a reply you can already see). */
@@ -131,11 +132,6 @@ function suggestion(ui: Ui, { projectId, idea }: WorkSuggestion): HTMLElement {
       ui.openNewIssue(projectId);
     }, ui.error);
   };
-  const lead = h('button', { class: 'btn small primary', title: `Start it as a goal at a free team station in ${name}: a lead of its own talks it through with you, then builds it a slice at a time` }, '🧭 Start a goal');
-  lead.onclick = () =>
-    void busy(lead, async () => {
-      const agent = await api.startGoal(projectId, idea);
-      ui.openAgent(agent.id);
-    }, ui.error);
+  const lead = handOffControl(ui, projectId, () => idea, 'Number One', `Start it as a goal in ${name}, where a lead of its own talks it through with you and builds it a slice at a time, or hand it to a goal under way`, true);
   return h('div', { class: 'row suggest' }, h('small', { class: 'muted' }, `For ${name}:`), draft, lead);
 }

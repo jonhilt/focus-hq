@@ -211,6 +211,19 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
   background: var(--surface-2); border-left: 6px solid var(--lcars-lilac); border-radius: 0 var(--radius) var(--radius) 0; padding: 14px;
 }
 .cards { display: flex; flex-direction: column; gap: 14px; }
+.cards h3 { margin: 4px 0 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+
+/* a goal's note, as its lead keeps it */
+.goal-note { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.goal-list { margin: 2px 0 0; padding-left: 18px; }
+.goal-list.checklist { list-style: none; padding-left: 4px; }
+.goal-list li.ticked { color: var(--muted); text-decoration: line-through; }
+.goal-closing { margin: 8px 0 0; color: var(--lcars-gold); font-weight: 600; }
+.goal-queued, .goal-record { padding: 10px 14px; }
+.goal-panel:empty { display: none; }
+.goal-panel { margin-bottom: 12px; max-height: 30vh; overflow: auto; flex: none; }
+.goal-panel .goal-note { margin-top: 0; }
+.goal-record { border-left-color: var(--muted); }
 
 /* the planner at the top of the New issue form */
 .planner { --tone: var(--lcars-peach); border-left-color: var(--tone); margin-bottom: 14px; background: color-mix(in srgb, var(--tone) 10%, var(--surface-2)); }

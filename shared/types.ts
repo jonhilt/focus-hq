@@ -67,7 +67,49 @@ export interface Project {
   autoMerge?: boolean;
   /** What QA must check on every PR of this project, on top of the usual review. Goes into the QA officer's prompt. */
   qaBrief?: string;
+  /** Goals waiting for a free team station, first up first. They never start by themselves. */
+  goalQueue?: QueuedGoal[];
+  /** Goals that have been closed, newest first (a few dozen at most). */
+  goals?: GoalRecord[];
   createdAt: number;
+}
+
+/** A goal waiting for a free team station: what the captain said, and the effort its lead will start at. */
+export interface QueuedGoal {
+  id: string;
+  text: string;
+  effort?: Effort;
+  /** Who handed it over, when it wasn't the captain directly: the New issue stand, Number One. */
+  from?: string;
+  at: number;
+}
+
+/**
+ * What a goal's lead keeps track of, through the office's note tool: not a spec, but the part of the goal that has to
+ * survive a summarised conversation. Kept short by the office (see `checkNote`).
+ */
+export interface GoalNote {
+  /** What done looks like, agreed with the captain at the start. */
+  done: string;
+  /** This slice's checklist. The office clears it when the slice lands. */
+  slice: { text: string; done: boolean }[];
+  /** A line or two per slice: what it taught us, what we decided and why. */
+  learned: string[];
+  /** A few candidate next slices, rewritten rather than added to. */
+  next: string[];
+}
+
+/** A closed goal, in its room's log: enough to look back on, and to pick it back up one day. */
+export interface GoalRecord {
+  id: string;
+  title: string;
+  note?: GoalNote;
+  slices: number;
+  prs: LeadPr[];
+  leadName: string;
+  sessionId?: string;
+  openedAt: number;
+  closedAt: number;
 }
 
 /**
@@ -250,6 +292,10 @@ export interface LeadWork {
   station: number;
   /** The goal in a few words. */
   title: string;
+  /** The lead's note on the goal, once they've written one. */
+  note?: GoalNote;
+  /** The lead thinks the goal is done, or that nothing worthwhile is left: the captain closes it, or carries on. */
+  closing?: { reason: string; at: number };
   /** Each repo, checked out at ./<folder> in the lead's workspace, and the branch it ships into. */
   repos: { repo: string; folder: string; baseBranch: string }[];
   /** Which slice this is: 1, 2, … */

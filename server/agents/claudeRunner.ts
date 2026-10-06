@@ -192,6 +192,10 @@ export class ClaudeRunner implements AgentRunner {
     };
     return {
       send: (text) => input.push(text),
+      // a cloud session's settings live in the cloud: its new effort applies from its next turn
+      setEffort: (effort) => {
+        if (!cloud) void q?.applyFlagSettings({ effortLevel: effort }).catch(() => undefined);
+      },
       stop: () => {
         stopping = true;
         // Killing the local client alone would leave a cloud session working: interrupt its turn first.

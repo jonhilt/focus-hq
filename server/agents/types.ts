@@ -1,4 +1,5 @@
 import type { AgentStatus, BrowserFrame, Effort, Settings, TermLine } from '../../shared/types';
+import type { NoteInput } from './lead';
 
 /** What Claude Code says about a subagent the session started: started, busy with something, finished. */
 export type HelperEvent =
@@ -46,6 +47,10 @@ export interface RunRequest {
 export interface OfficeTools {
   /** Ships the slice: pushes every repo with new commits, and opens or updates its pull request. */
   ship(input: { title: string; summary: string }): Promise<string>;
+  /** Updates the goal's note (and title). Throws, in words, when the note would get too long. */
+  note(input: NoteInput): Promise<string>;
+  /** The lead thinks the goal is done: the captain closes it, or carries on. */
+  proposeClose(input: { reason: string }): Promise<string>;
 }
 
 /** What a run the captain stopped reports, and how a stopped review is told apart from one that failed. */
@@ -66,6 +71,8 @@ export interface RunOutcome {
 export interface AgentSession {
   /** Queue a follow-up message. Returns false if the session already wound down. */
   send(text: string): boolean;
+  /** Changes how hard Claude thinks, from the session's next request on. */
+  setEffort?(effort: Effort): void;
   stop(): void;
   done: Promise<RunOutcome>;
 }

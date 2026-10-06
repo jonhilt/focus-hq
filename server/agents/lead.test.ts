@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadWork } from '../../shared/types';
-import { afterVerdict, applyHelperEvent, goalEffort, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, newSliceNote, notShipped, openPr, pickStation, qaVerdictNote, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
+import { afterVerdict, applyHelperEvent, applyNote, checkNote, closeCheck, emptyNote, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, openPr, pickStation, qaVerdictNote, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -134,6 +134,8 @@ describe('what the lead writes and hears', () => {
     expect(prompt).toContain('mcp__office__ship');
     expect(prompt).toMatch(/Never push and never open pull requests yourself/);
     expect(prompt).toMatch(/subagents with the Agent tool/);
+    expect(prompt).toMatch(/mcp__office__note.*it's a note, not a spec/s);
+    expect(prompt).toMatch(/call mcp__office__propose_close with why, tell the captain, and stop/);
   });
 
   it('keeps what changes from slice to slice out of its instructions, which a resumed session never re-reads', () => {
@@ -187,5 +189,90 @@ describe('applyHelperEvent', () => {
     expect(done[0]).toMatchObject({ status: 'done', activity: 'The store holds a list' });
     expect(applyHelperEvent(done, { kind: 'activity', id: 't1', activity: 'late' }, 8)).toBe(done);
     expect(applyHelperEvent(started, { kind: 'ended', id: 't1', ok: false }, 7)[0]).toMatchObject({ status: 'failed', activity: 'Hit a problem' });
+  });
+});
+
+describe('the goal’s note', () => {
+  const start = { title: 'Saved items', note: undefined };
+
+  it('takes only what the lead sends: each field replaces, learned adds a line', () => {
+    const first = applyNote(start, { done: 'Saved items survive a reload', next: ['Thin slice'] });
+    expect(first).toEqual({ title: 'Saved items', note: { done: 'Saved items survive a reload', slice: [], learned: [], next: ['Thin slice'] } });
+    if ('error' in first) throw new Error(first.error);
+    const second = applyNote(first, { title: '  Saved   items, anywhere ', slice: [{ text: 'api: store', done: true }, { text: ' ' }, { text: 'web: button' }], learned: 'The store is fine' });
+    expect(second).toEqual({
+      title: 'Saved items, anywhere',
+      note: { done: 'Saved items survive a reload', slice: [{ text: 'api: store', done: true }, { text: 'web: button', done: false }], learned: ['The store is fine'], next: ['Thin slice'] },
+    });
+    if ('error' in second) throw new Error(second.error);
+    expect(applyNote(second, { learned: 'Header next' })).toMatchObject({ note: { learned: ['The store is fine', 'Header next'] } });
+    expect(applyNote(second, { allLearned: ['Merged lesson'], learned: 'Newest' })).toMatchObject({ note: { learned: ['Merged lesson', 'Newest'] } });
+  });
+
+  it('refuses a note that grows into a spec, saying what to trim', () => {
+    const items = (n: number) => Array.from({ length: n }, (_, i) => ({ text: `item ${i}` }));
+    expect(applyNote(start, { slice: items(7) })).not.toHaveProperty('error');
+    const tooMany = applyNote(start, { slice: items(8), next: ['a', 'b', 'c', 'd'] });
+    expect(tooMany).toHaveProperty('error');
+    expect((tooMany as { error: string }).error).toMatch(/the slice has 8 items \(at most 7.*next has 4 ideas \(at most 3\)/);
+    expect(checkNote('x'.repeat(61), emptyNote())).toMatch(/the title is 61 characters/);
+    expect(checkNote('ok', { ...emptyNote(), done: 'x'.repeat(401) })).toMatch(/done is 401 characters/);
+    expect(checkNote('ok', { ...emptyNote(), learned: Array(11).fill('lesson') })).toMatch(/send allLearned with the older lessons merged/);
+    expect(checkNote('ok', emptyNote())).toBeUndefined();
+  });
+
+  it('reads back as the goal where it stands, leaving out what’s empty', () => {
+    expect(noteForPrompt('Saved items', undefined)).toBe('The goal: Saved items');
+    expect(noteForPrompt('Saved items', { done: 'Works on any device', slice: [{ text: 'api', done: true }, { text: 'web', done: false }], learned: ['Store is fine'], next: ['Header'] })).toBe(
+      'The goal: Saved items\n\nWhat done looks like: Works on any device\n\nWhat the slices so far taught us:\n- Store is fine\n\nThis slice:\n- [x] api\n- [ ] web\n\nIdeas for next:\n- Header',
+    );
+  });
+
+  it('comes back at each new slice, with its checklist cleared by the office', () => {
+    const text = newSliceNote({ ...work, slice: 3, prs: [], note: { done: 'Works anywhere', slice: [], learned: ['Store is fine'], next: [] } }, 'focus/saved-items-3-cd');
+    expect(text).toMatch(/^Slice 3 starts on fresh code/);
+    expect(text).toContain("cleared the last slice's checklist");
+    expect(text).toContain('What done looks like: Works anywhere');
+  });
+});
+
+describe('closing a goal', () => {
+  it('warns about work it would throw away and pull requests it would leave behind', () => {
+    expect(closeCheck({ prs: [{ ...work.prs[0] }] }, [])).toEqual({ kind: 'ok' });
+    expect(closeCheck(work, ['web'])).toEqual({
+      kind: 'warn',
+      reasons: ['Uncommitted changes in ./web are thrown away.', 'acme/api#7 stays open on GitHub, with no lead to fix it.'],
+    });
+  });
+
+  it('files the goal in the room’s log, newest first, keeping a few dozen', () => {
+    const lead = { id: 'lead_p1_ab', name: 'Lt. Okafor', sessionId: 's1', startedAt: 10, lead: work } as Agent;
+    const record = goalRecord(lead, 99);
+    expect(record).toEqual({ id: 'lead_p1_ab', title: 'Saved items', note: undefined, slices: 2, prs: work.prs, leadName: 'Lt. Okafor', sessionId: 's1', openedAt: 10, closedAt: 99 });
+    // closed before the new slice shipped anything: that one doesn't count
+    expect(goalRecord({ ...lead, lead: { ...work, slice: 3, prs: [] } }, 99).slices).toBe(2);
+    const full = Array.from({ length: GOAL_LOG }, (_, i) => ({ ...record, id: `g${i}` }));
+    const log = fileGoal(full, record);
+    expect(log).toHaveLength(GOAL_LOG);
+    expect(log[0]).toBe(record);
+    expect(log.at(-1)?.id).toBe(`g${GOAL_LOG - 2}`);
+  });
+});
+
+describe('the goal queue', () => {
+  const q = (id: string) => ({ id, text: id, at: 0 });
+  const line = [q('a'), q('b'), q('c')];
+
+  it('offers the first goal in line', () => {
+    expect(nextGoal(line)?.id).toBe('a');
+    expect(nextGoal([])).toBeUndefined();
+    expect(nextGoal(undefined)).toBeUndefined();
+  });
+
+  it('moves a goal sooner or later, staying in the line', () => {
+    expect(moveQueued(line, 'c', -1).map((g) => g.id)).toEqual(['a', 'c', 'b']);
+    expect(moveQueued(line, 'a', -1).map((g) => g.id)).toEqual(['a', 'b', 'c']);
+    expect(moveQueued(line, 'b', 1).map((g) => g.id)).toEqual(['a', 'c', 'b']);
+    expect(moveQueued(line, 'zz', 1)).toBe(line);
   });
 });

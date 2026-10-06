@@ -10,6 +10,7 @@ import { drawMockPage } from '../world/screen';
 import type { Ui } from './context';
 import { withMic } from './dictation';
 import { busy, fill, h, timeAgo } from './dom';
+import { closeGoal, EFFORT_HINT, noteView } from './goals';
 
 const FINISHED = ['done', 'error', 'stopped'];
 
@@ -30,12 +31,15 @@ export function openAgentPanel(ui: Ui, id: string): void {
   const grid = h('div', { class: 'agent-grid single' }, terminal, browser);
   const ask = h('div');
   const info = h('div', { class: 'row', style: 'margin-bottom:12px' });
-  const body = h('div', { style: 'display:flex;flex-direction:column;height:100%;min-height:0' }, ask, info, grid);
+  // a goal's lead: the goal as they keep it, and whether they think it's done
+  const goal = h('div', { class: 'goal-panel' });
+  const body = h('div', { style: 'display:flex;flex-direction:column;height:100%;min-height:0' }, ask, info, goal, grid);
 
   const input = h('input', { type: 'text', placeholder: `Message ${agent.name}… (they'll read it at their next step)`, autofocus: true });
   const send = h('button', { class: 'btn primary' }, 'Send');
   const stop = h('button', { class: 'btn danger' }, '■ Stop');
-  const dismiss = h('button', { class: 'btn' }, '👋 Send home');
+  const lead = agent.task === 'lead';
+  const dismiss = h('button', { class: 'btn', title: lead ? 'File the goal in the room’s log and send its lead home, which frees the station' : undefined }, lead ? '🏁 Close goal' : '👋 Send home');
   const footer = h('div', { class: 'compose' }, withMic(ui, input), send, stop, dismiss);
 
   const title = h('h2');
@@ -58,6 +62,7 @@ export function openAgentPanel(ui: Ui, id: string): void {
   stop.onclick = () => void busy(stop, () => api.stop(id), ui.error);
   dismiss.onclick = () => {
     const a = state.agents.get(id);
+    if (a?.task === 'lead') return void busy(dismiss, () => closeGoal(a), ui.error);
     if (a && !FINISHED.includes(a.status) && !confirm(`${a.name} is still working. Stop and send them home?`)) return;
     void busy(dismiss, async () => {
       await api.dismiss(id);
@@ -83,7 +88,7 @@ export function openAgentPanel(ui: Ui, id: string): void {
       h('span', { class: 'chip' }, `${statusIcon(a)} ${a.status}`),
       h('span', { class: 'grow muted' }, statusLine(a)),
       a.costUsd > 0 ? h('span', { class: 'chip', title: 'Estimated usage (on a subscription this is not billed)' }, `~$${a.costUsd.toFixed(2)}`) : null,
-      h('span', { class: 'chip', title: 'How hard Claude thinks on this task' }, `🧠 ${a.effort ?? 'default'} effort`),
+      a.task === 'lead' ? leadEffortChip(a) : h('span', { class: 'chip', title: 'How hard Claude thinks on this task' }, `🧠 ${a.effort ?? 'default'} effort`),
       a.cloud ? h('span', { class: 'chip', title: 'Works in a Claude Code cloud session and pushes their own branch' }, '☁ cloud') : null,
       h('span', { class: 'chip' }, `⏱ ${timeAgo(a.startedAt)}`),
       cloudLink(a),
@@ -100,6 +105,10 @@ export function openAgentPanel(ui: Ui, id: string): void {
       a.pr && a.status === 'done'
         ? h('button', { class: 'btn small', title: 'Run the PR on your machine and open it in your browser', onclick: () => ui.previewPr(a.projectId, a.repo, a.pr!.number) }, '▶ Preview')
         : null,
+    );
+    fill(goal,
+      a.lead?.closing ? h('p', { class: 'goal-closing' }, `🏁 ${a.name} thinks this goal is ready to wrap up: ${a.lead.closing.reason}. Close it, or tell them what's next.`) : null,
+      noteView(a.lead?.note),
     );
     if (a.permission) {
       const req = a.permission;
@@ -141,6 +150,18 @@ export function openAgentPanel(ui: Ui, id: string): void {
       const ctx = browserCanvas.getContext('2d')!;
       drawMockPage(ctx, frame.mock, 0, 0, browserCanvas.width, browserCanvas.height);
     }
+  };
+
+  /** A lead's effort, changeable any time: from their next request if they're working, else their next turn. */
+  const leadEffortChip = (a: Agent) => {
+    const select = h('select', { class: 'effort', title: `How hard ${a.name} thinks. A change applies from their next request, and costs a little (the prompt cache starts over).` },
+      ...EFFORT_LEVELS.map((e) => h('option', { value: e, selected: e === a.effort, title: EFFORT_HINT[e] }, `🧠 ${e} effort`)),
+    );
+    select.onchange = () => {
+      const level = EFFORT_LEVELS.find((e) => e === select.value);
+      if (level) void api.setEffort(id, level).catch((e: Error) => ui.error(e.message));
+    };
+    return select;
   };
 
   renderHeader(agent);

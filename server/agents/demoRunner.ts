@@ -190,6 +190,12 @@ export class DemoRunner implements AgentRunner {
         hooks.lines(result.split('\n').filter((l) => l.trim()).slice(0, 4).map((text, i) => ({ kind: 'output', text: `  ${i === 0 ? '⎿' : ' '}  ${text}` })));
         return true;
       };
+      const note = async (input: Parameters<typeof tools.note>[0]) => {
+        hooks.lines([{ kind: 'tool', text: `⏺ mcp__office__note(${Object.keys(input).join(', ')})` }]);
+        const result = await tools.note(input).catch((err: Error) => err.message);
+        hooks.lines([{ kind: 'output', text: `  ⎿  ${result}` }]);
+      };
+      const checklist = (ticked: number) => repos.map((r, i) => ({ text: `${r.folder}: the simplest version of ${goal}`, done: i < ticked }));
       const commit = async (folder: string, text: string) =>
         tool('Bash', { command: `git -C ${folder} add -A && git -C ${folder} commit -m "${text}"` }, [`[${folder} 4f2a91c] ${text}`, ' 2 files changed, 41 insertions(+)']);
 
@@ -207,9 +213,18 @@ export class DemoRunner implements AgentRunner {
         }
         return { ok: true, summary: 'Heard back from QA.' };
       }
-      if (/has landed/.test(req.prompt)) {
+      const landed = /Slice (\d+) has landed/.exec(req.prompt);
+      if (landed) {
         await think();
-        await say(`That slice is in, and it taught us the data side holds up fine. The open question now is whether people find saved items from the header. Next I'd add it there and tidy the store code it exposed. Shall I go?`);
+        await note({ learned: `Slice ${landed[1]}: the data side holds up; the store code needs tidying`, next: ['Show it in the header', 'Tidy the store code it exposed'] });
+        // by the second slice the goal's done: the captain closes it, or carries on
+        if (Number(landed[1]) >= 2) {
+          hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__propose_close(What done looks like is met)' }]);
+          await tools.proposeClose({ reason: `${goal} works end to end, on every device, which is what we said done looks like` });
+          await say(`That's what we said done looks like: ${goal} works end to end. I think we can wrap this goal up. Close it if you agree, or tell me what's next.`);
+          return { ok: true, summary: 'Proposed closing the goal.' };
+        }
+        await say(`That slice is in, and it taught us the data side holds up fine. The open question now is whether people find it from the header. Next I'd add it there and tidy the store code it exposed. Shall I go?`);
         return { ok: true, summary: 'The slice landed.' };
       }
       if (!req.resumeSessionId) {
@@ -218,10 +233,12 @@ export class DemoRunner implements AgentRunner {
           await tool('Glob', { pattern: `${r.folder}/src/**/*` }, [`Found ${14 + r.folder.length} files`]);
         }
         await think();
+        await note({ done: `${goal}: it works end to end, and survives a reload on another device.`, next: ['A thin slice end to end'] });
         await say(`I've had a look around ${repos.map((r) => `./${r.folder}`).join(' and ')}. For "${goal}", I'd start with a thin slice end to end${repos.length > 1 ? ` through ${repos.map((r) => r.folder).join(' and ')}` : ''}: the simplest version that works, so we find out early whether the data model holds. Shall I go ahead?`);
         return { ok: true, summary: 'Proposed the first slice.' };
       }
       await say('On it: a thin slice first.');
+      await note({ slice: checklist(0) });
       await tool('TodoWrite', { todos: repos.map((r) => ({ content: `${r.folder}: ${goal}`, status: 'pending' })) });
       // two helpers map the repos side by side while the lead plans: they sit down at the team station while they work
       if (repos.length > 1) {
@@ -251,6 +268,7 @@ export class DemoRunner implements AgentRunner {
         await tool('Edit', { file_path: `/work/${r.folder}/${files[1]}`, old_string: '// TODO', new_string: `// ${goal}` }, ['Updated 1 file']);
         await tool('Bash', { command: `npm --prefix ${r.folder} test` }, ['Tests: 44 passed, 44 total']);
         await commit(r.folder, `Thin slice: ${goal}`);
+        await note({ slice: checklist(repos.indexOf(r) + 1) });
       }
       await handleInbox();
       const title = `Thin slice: ${goal}`.slice(0, 70);

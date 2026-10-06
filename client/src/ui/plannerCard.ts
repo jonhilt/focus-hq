@@ -4,6 +4,7 @@ import { api } from '../net/api';
 import { state } from '../net/state';
 import type { Ui } from './context';
 import { withMic } from './dictation';
+import { handOffControl } from './goals';
 import { busy, fill, h } from './dom';
 
 export interface IssueFields {
@@ -61,16 +62,8 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
       ),
       draft?.costUsd ? h('small', { class: 'muted' }, `$${draft.costUsd.toFixed(2)}`) : null,
     );
-    // the idea starts a goal, as your first words to its lead, if there is one; otherwise the goals panel asks for it
-    const leadButton = (idea: () => string, title: string) => {
-      const button = h('button', { class: 'btn small', title }, '🧭 Start a goal');
-      button.onclick = () => void busy(button, async () => {
-        if (!idea().trim()) return ui.openGoals(pid);
-        const lead = await api.startGoal(pid, idea());
-        ui.openAgent(lead.id);
-      }, ui.error);
-      return button;
-    };
+    // the idea goes to a goal (a new one, or one under way), if there is one; otherwise the goals panel asks for it
+    const leadButton = (idea: () => string, title: string) => handOffControl(ui, pid, idea, 'the New issue stand', title);
     const discard = () =>
       h('button', { class: 'btn small', onclick: () => void api.discardDraft(pid).catch((e: Error) => ui.error(e.message)) }, draft?.status === 'drafting' ? '✕ Stop' : '✕ Discard draft');
 
