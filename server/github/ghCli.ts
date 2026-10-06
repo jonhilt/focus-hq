@@ -226,6 +226,11 @@ const make = Effect.gen(function* () {
 
     rerunFailedRuns: (repo, runIds) => Effect.forEach(runIds, (id) => gh(['run', 'rerun', String(id), '--failed', '-R', repo]), { discard: true }),
 
+    closePullRequest: (repo, number, comment) => gh(['pr', 'close', String(number), '-R', repo, '--comment', comment]).pipe(Effect.asVoid),
+
+    pullRequestDiff: (repo, number) => gh(['pr', 'diff', String(number), '-R', repo]),
+
+
     createRepo: (name, opts) => {
       const full = opts.owner ? `${opts.owner}/${name}` : name;
       const args = ['repo', 'create', full, opts.private ? '--private' : '--public', '--add-readme'];

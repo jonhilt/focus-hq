@@ -167,13 +167,17 @@ const failed = report({
 
 describe('re-test', () => {
   it('tells QA last round’s findings and diffs from the commit it tested', () => {
-    const text = qaPrompt('acme/shop', pr, [], { sha: 'fed9876543', report: failed });
+    const text = qaPrompt('acme/shop', pr, [], { lastRound: { sha: 'fed9876543', report: failed } });
     expect(text).toContain('Last round you failed it at commit fed9876');
     expect(text).toContain('- Empty cart: Page goes blank');
     expect(text).not.toContain('- Saves for later');
     expect(text).toContain('Guard the empty cart in cart.ts');
     expect(text).toContain('`git diff fed9876..HEAD`');
     expect(text).toContain('smoke test');
+  });
+
+  it('passes on why the operations officer sent it back to QA', () => {
+    expect(qaPrompt('acme/shop', pr, [], { retryNote: 'Lt. Haddad sent it back: QA ran the old build.' })).toContain('Lt. Haddad sent it back: QA ran the old build.');
   });
 
   it('is a full review the first time round', () => {

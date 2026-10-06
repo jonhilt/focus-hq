@@ -3,6 +3,7 @@ import { UNIFORM } from '../../../shared/crew';
 import { waitsLabel } from '../../../shared/dependencies';
 import * as THREE from 'three';
 import { prKey, qaBadge } from '../../../shared/qa';
+import { triageLabel } from '../../../shared/triage';
 import type { Agent, Board, Project } from '../../../shared/types';
 import { state } from '../net/state';
 import { canvasTexture, fitText, makeCanvas, wrap } from './canvas';
@@ -114,7 +115,7 @@ export class KanbanBoard {
     cols.todo.slice(0, fit(cols.todo.length)).forEach((issue, i) => {
       const labels = issue.labels.slice(0, 2).join(', ');
       const waits = waitsLabel(issue.waitsFor);
-      const meta = [waits && `⏸ ${waits}`, multiRepo ? shortRepo(issue.repo) : '', labels].filter(Boolean).join(' · ') || 'Unassigned';
+      const meta = [issue.closedPr && `🧭 PR #${issue.closedPr.pr} closed, try again`, waits && `⏸ ${waits}`, multiRepo ? shortRepo(issue.repo) : '', labels].filter(Boolean).join(' · ') || 'Unassigned';
       note(0, i, waits ? LCARS.lilac : LCARS.peach, `#${issue.number} ${issue.title}`, meta);
     });
     if (cols.todo.length > maxNotes) more(0, cols.todo.length - fit(cols.todo.length));
@@ -133,9 +134,11 @@ export class KanbanBoard {
 
     cols.prs.slice(0, fit(cols.prs.length)).forEach((pr, i) => {
       const checks = { passing: '✓ checks pass', failing: '✗ checks failing', pending: '⏳ checks running', none: 'no checks' }[pr.checks];
-      const qa = qaBadge(state.reviews.get(prKey(pr.repo, pr.number)), pr);
+      const review = state.reviews.get(prKey(pr.repo, pr.number));
+      const qa = qaBadge(review, pr);
       const flags = [pr.isDraft ? 'draft' : '', pr.mergeable === 'CONFLICTING' ? '⚠ conflicts' : '', pr.reviewDecision === 'APPROVED' ? '👍 approved' : ''].filter(Boolean);
-      const meta = [qa.state === 'none' ? '' : qa.label, pr.agent ? pr.agent.name : pr.author ? `@${pr.author}` : '', checks, ...flags].filter(Boolean).join(' · ');
+      const triage = review?.triage && qa.state !== 'triaging' ? triageLabel(review.triage) : '';
+      const meta = [qa.state === 'none' ? '' : qa.label, triage, pr.agent ? pr.agent.name : pr.author ? `@${pr.author}` : '', checks, ...flags].filter(Boolean).join(' · ');
       const tone = pr.checks === 'failing' || pr.mergeable === 'CONFLICTING' || ['failed', 'fixing', 'needs-you'].includes(qa.state) ? LCARS_STATUS.error : LCARS_STATUS.done;
       note(2, i, tone, `PR #${pr.number} ${pr.title}`, meta, pr.agent && UNIFORM[pr.agent.avatar.division]);
     });

@@ -62,6 +62,10 @@ export interface GitHubProvider {
   mergePullRequest(repo: string, number: number, method: 'squash' | 'merge' | 'rebase', headSha?: string): Promise<void>;
   /** Re-runs the failed jobs of these GitHub Actions runs. */
   rerunFailedRuns(repo: string, runIds: number[]): Promise<void>;
+  /** Closes a pull request unmerged, with a comment saying why. The issues it would have closed stay open. */
+  closePullRequest(repo: string, number: number, comment: string): Promise<void>;
+  /** The pull request's diff against its base. */
+  pullRequestDiff(repo: string, number: number): Promise<string>;
   createRepo(name: string, opts: { owner?: string; private: boolean; description: string }): Promise<string>;
 }
 

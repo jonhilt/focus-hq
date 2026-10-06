@@ -26,6 +26,7 @@ import { agentEnv } from './claudeRunner';
 import { type BriefingEngineer, decodeEngineeringReport, ENGINEERING_SCHEMA, type EngineerReply, type EngineerTurn, engineerPrompt, engineerSystemPrompt } from './engineering';
 import { type Drafter, type DraftRequest, type DraftResult, draftSchema, plannerPrompt, plannerSystemPrompt, repoFolders } from './planner';
 import { renderToolUse } from './render';
+import { parseTriage, TRIAGE_SCHEMA, type TriageDecision, type Triager, type TriageRequest, triagePrompt, triageSystemPrompt } from './triage';
 import { checkoutLatest } from './workspace';
 
 // The permanent crew's Claude Code sessions (the ship's engineer included): they read the project's code (and, in briefings, the web) and change
@@ -206,6 +207,25 @@ export class ClaudeBriefingQa implements BriefingQa {
       schema: qaNoteSchema,
     });
     return { note: asQaNote(result.structured), sessionId: result.sessionId, costUsd: result.costUsd };
+  }
+}
+
+/** The operations officer looking at a stuck PR: reads its checkout and decides one thing to do. */
+export class ClaudeTriager implements Triager {
+  async triage(req: TriageRequest, activity: (text: string) => void): Promise<TriageDecision & { costUsd?: number }> {
+    const result = await runReadOnly({
+      cwd: req.cwd,
+      systemAppend: triageSystemPrompt(req),
+      prompt: triagePrompt(req),
+      settings: req.settings,
+      signal: req.signal,
+      activity,
+      builtins: CODE_TOOLS,
+      schema: TRIAGE_SCHEMA,
+    });
+    const decision = parseTriage(result.structured);
+    if (!decision) throw new Error('Finished without choosing what to do');
+    return { ...decision, costUsd: result.costUsd };
   }
 }
 

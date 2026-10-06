@@ -147,7 +147,7 @@ Every holodeck has a QA officer in blue, sitting at a station beside the pull re
   - the auto-QA, send-back and auto-merge switches;
   - the project's **QA brief**: what to check on every PR of this project ("works at phone width", "no console errors"). It goes into the officer's instructions on every review.
 - **Sending a failed PR back:** when QA fails a PR the office opened, the office hands QA's summary and fix instructions to the developer who opened it. If they've gone home, a new agent sits down on the PR's branch, fixes it and pushes to the same PR. The fix goes back to QA by itself, and the re-test is told last round's findings and the commit it tested, so it checks those first, then what changed since, plus a quick smoke test.
-  - After 3 failed rounds, or a fix that pushes nothing, the office stops: the PR card and the Kanban display show **🙋 needs you**, and a toast says why.
+  - After 3 failed rounds, or a fix that pushes nothing, the PR is stuck. See [Stuck PRs](#stuck-prs).
   - Teammates' PRs are never sent back. Turn send-back off per project at the QA station.
 - **Auto-merge** (off by default; switch it on per project at the QA station or on the project's card in the ready room): on each board refresh the office takes every PR it opened one step closer to merged, following `mergeStep` in `shared/mergeGate.ts`.
   - QA passed the PR's current head commit, its checks pass (or it has none) and it merges cleanly: it merges with **Settings → merge method**, for that exact commit only (`--match-head-commit`), and its developer packs up.
@@ -156,6 +156,20 @@ Every holodeck has a QA officer in blue, sitting at a station beside the pull re
   - Conflicts: **🔧 Resolve conflicts**, then QA again.
   - A refused merge (required reviews, say) shows GitHub's reason and isn't retried for that commit. Teammates' PRs never merge by themselves.
 - **Following up:** message the QA officer like any agent, to have them look at something else.
+
+### Stuck PRs
+
+Before a stuck PR reaches you, the holodeck's operations officer (the one at the **＋ New issue** stand) looks at it. The PR card says **🧭 Lt. … is looking**, and so does their speech bubble.
+
+- **What they read:** QA's last two reports, GitHub's checks, the diff, the linked issue and a checkout of the PR. It's the same kind of read-only session as their drafting (`Read`, `Glob`, `Grep`, `dontAsk`).
+- **What they do, exactly one of:**
+  - **retry QA**, when QA's own session went wrong or the fix has landed since. QA gets their note.
+  - **send back** to a developer, with a note on what to do differently.
+  - **re-run checks**, when a red GitHub check looks flaky or like an outage. The failed Actions jobs re-run, then QA tests again.
+  - **close the PR**, when the approach can't work. Its issue stays open and the board marks it (**🧭 PR #… closed**). The next agent assigned to it hears why.
+  - **escalate** to you, with a one-line diagnosis.
+- Afterwards the card says what they did. Only an escalation, or a session that ends without a decision, shows **🙋 needs you** with a toast.
+- **Limit:** each PR gets 2 triages. If it gets stuck a third time, it comes straight to you.
 
 ## Previewing a pull request
 

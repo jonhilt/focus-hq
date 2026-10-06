@@ -94,6 +94,7 @@ export function unpassedReason(review: QaReview | undefined, pr: Pick<PullReques
       return 'QA couldn’t finish testing it';
     case 'failed':
     case 'fixing':
+    case 'triaging':
     case 'needs-you':
       return 'QA failed it';
     case 'stale':

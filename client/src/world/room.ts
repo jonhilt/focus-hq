@@ -267,11 +267,16 @@ export class ProjectRoom {
     this.boardDirty = true;
   }
 
-  /** What the planner is up to, from the project's issue draft. */
+  /** What the planner is up to: looking into a stuck PR, else the project's issue draft. */
   private plannerView(): CrewView {
     const crew = plannerFor(this.project.id);
     const draft = state.drafts.get(this.project.id);
     const base = { name: crew.name, avatar: crew.avatar, tag: 'Ops' };
+    const stuck = state.reviewsIn(this.project.id).find((r) => r.followUp?.kind === 'triaging');
+    if (stuck?.followUp?.kind === 'triaging') {
+      const { activity } = stuck.followUp;
+      return { ...base, status: 'working', icon: '🧭', line: `Why is PR #${stuck.number} stuck? ${activity}`, thinking: activity === 'Thinking…' };
+    }
     switch (draft?.status) {
       case 'drafting':
         return { ...base, status: 'working', icon: '📝', line: draft.activity, thinking: draft.activity === 'Thinking…' };

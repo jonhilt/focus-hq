@@ -2,7 +2,7 @@ import type { PullRequest, QaReview } from './types';
 
 // QA decisions shared by the server and the board. Pure, so they're unit tested (shared/qa.test.ts).
 
-export type QaBadgeState = 'none' | 'queued' | 'testing' | 'passed' | 'failed' | 'fixing' | 'needs-you' | 'stale' | 'error';
+export type QaBadgeState = 'none' | 'queued' | 'testing' | 'passed' | 'failed' | 'fixing' | 'triaging' | 'needs-you' | 'stale' | 'error';
 
 export interface QaBadge {
   state: QaBadgeState;
@@ -11,7 +11,7 @@ export interface QaBadge {
 
 /**
  * What a PR card shows about QA. A verdict on an older commit than the PR's head is stale. A fail says who it went back
- * to, or that the office gave up on it.
+ * to, that the room's operations officer is looking into why it's stuck, or that the office gave up on it.
  */
 export function qaBadge(review: QaReview | undefined, pr: Pick<PullRequest, 'headSha'>): QaBadge {
   if (!review) return { state: 'none', label: 'not tested' };
@@ -29,6 +29,8 @@ export function qaBadge(review: QaReview | undefined, pr: Pick<PullRequest, 'hea
       switch (review.followUp?.kind) {
         case 'fixing':
           return { state: 'fixing', label: `🔧 QA failed: back with ${review.followUp.agentName}` };
+        case 'triaging':
+          return { state: 'triaging', label: `🧭 ${review.followUp.officer} is looking` };
         case 'needs-you':
           return { state: 'needs-you', label: '🙋 QA failed: needs you' };
         case undefined:

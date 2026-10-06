@@ -160,4 +160,12 @@ describe('Promise adapter', () => {
     expect((await github.listIssues('demo/space-dodger')).map((i) => i.number)).toEqual([2, 3, 4]);
     await expect(github.mergePullRequest('demo/space-dodger', pr.number, 'squash')).rejects.toMatchObject({ _tag: 'GitHubRejected' });
   });
+
+  it('closes a demo PR without closing its issue', async () => {
+    const github = toProvider(demoLayer);
+    const pr = await github.createPullRequest('demo/space-dodger', { head: 'focus/2-swept', base: 'main', title: 'Swept collisions', body: 'Closes #2' });
+    await github.closePullRequest('demo/space-dodger', pr.number, 'Wrong approach');
+    expect(await github.pullRequestState('demo/space-dodger', pr.number)).toBe('CLOSED');
+    expect((await github.listIssues('demo/space-dodger')).map((i) => i.number)).toContain(2);
+  });
 });

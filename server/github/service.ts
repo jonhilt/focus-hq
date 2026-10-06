@@ -32,6 +32,8 @@ export class GitHub extends Context.Service<GitHub, {
   createPullRequest(repo: string, pr: CreatePullRequest): Op<{ number: number; url: string }>;
   mergePullRequest(repo: string, number: number, method: 'squash' | 'merge' | 'rebase', headSha?: string): Op<void>;
   rerunFailedRuns(repo: string, runIds: number[]): Op<void>;
+  closePullRequest(repo: string, number: number, comment: string): Op<void>;
+  pullRequestDiff(repo: string, number: number): Op<string>;
   createRepo(name: string, opts: { owner?: string; private: boolean; description: string }): Op<string>;
 }>()('focus/github/GitHub') {}
 
@@ -59,6 +61,8 @@ export function toProvider(layer: Layer.Layer<GitHub>): GitHubProvider {
     createPullRequest: (repo, pr) => call((gh) => gh.createPullRequest(repo, pr)),
     mergePullRequest: (repo, number, method, headSha) => call((gh) => gh.mergePullRequest(repo, number, method, headSha)),
     rerunFailedRuns: (repo, runIds) => call((gh) => gh.rerunFailedRuns(repo, runIds)),
+    closePullRequest: (repo, number, comment) => call((gh) => gh.closePullRequest(repo, number, comment)),
+    pullRequestDiff: (repo, number) => call((gh) => gh.pullRequestDiff(repo, number)),
     createRepo: (name, opts) => call((gh) => gh.createRepo(name, opts)),
   };
 }

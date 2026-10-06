@@ -3,7 +3,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { qaOfficerFor, randomAvatar } from '../shared/crew';
 import { prKey } from '../shared/qa';
-import type { Agent, Board, Briefing, BrowserFrame, Project, QaReview, Settings, TermLine } from '../shared/types';
+import type { Agent, Board, Briefing, BrowserFrame, ClosedPr, Project, QaReview, Settings, TermLine } from '../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, EMPTY_BRIEF, ROOM_THEMES, type RoomTheme } from '../shared/types';
 import { paths } from './config';
 import { newId } from './util';
@@ -46,6 +46,7 @@ interface PersistedState {
   agents: Agent[];
   briefing?: StoredBriefing | null;
   reviews?: QaReview[];
+  closedPrs?: ClosedPr[];
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -72,6 +73,8 @@ export class Store {
   briefing: StoredBriefing | null = null;
   /** The latest QA review per pull request (by prKey). */
   reviews = new Map<string, QaReview>();
+  /** PRs the operations officer closed as the wrong approach, by prKey of the issue they were for. */
+  closedPrs = new Map<string, ClosedPr>();
   /** QA screenshots by file name, when not persisting (demo). */
   private shots = new Map<string, Buffer>();
   private saveTimer: NodeJS.Timeout | null = null;
@@ -90,8 +93,12 @@ export class Store {
       if (review.status === 'queued' || review.status === 'testing') {
         Object.assign(review, { status: 'error', error: 'Interrupted when Focus shut down. Send it to QA again.' });
       }
+      if (review.followUp?.kind === 'triaging') {
+        review.followUp = { kind: 'needs-you', reason: `${review.followUp.officer} was looking at it when Focus shut down` };
+      }
       this.reviews.set(prKey(review.repo, review.number), review);
     }
+    for (const closed of raw.closedPrs ?? []) this.closedPrs.set(prKey(closed.repo, closed.issue), closed);
     for (const agent of raw.agents ?? []) {
       if (ACTIVE_STATUSES.includes(agent.status) || agent.status === 'queued') {
         agent.status = 'stopped';
@@ -117,6 +124,7 @@ export class Store {
         agents: [...this.agents.values()],
         briefing: this.briefing,
         reviews: [...this.reviews.values()],
+        closedPrs: [...this.closedPrs.values()],
       };
       fs.mkdirSync(path.dirname(paths.state), { recursive: true });
       const tmp = `${paths.state}.tmp`;
@@ -197,6 +205,15 @@ export class Store {
     this.dropShots(this.reviews.get(key), review);
     this.reviews.set(key, review);
     this.save();
+  }
+
+  putClosedPr(closed: ClosedPr): void {
+    this.closedPrs.set(prKey(closed.repo, closed.issue), closed);
+    this.save();
+  }
+
+  removeClosedPr(repo: string, issue: number): void {
+    if (this.closedPrs.delete(prKey(repo, issue))) this.save();
   }
 
   removeReview(repo: string, number: number): boolean {

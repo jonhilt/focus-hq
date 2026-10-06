@@ -1,8 +1,9 @@
-import { qaOfficerFor, randomAvatar } from '../../shared/crew';
+import { plannerFor, qaOfficerFor, randomAvatar } from '../../shared/crew';
 import { autoQaFor, autoSendBackFor, prKey, sameCommit } from '../../shared/qa';
+import { afterTriage, triageLabel, type TriageResult, type TriageStep, whenStuck } from '../../shared/triage';
 import type { Agent, AgentStatus, BrowserFrame, Effort, FailedCheck, FixFor, PermissionRequest, PullRequest, QaReport, QaReview, QaScreenshot, TermLine } from '../../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, QA_DESK } from '../../shared/types';
-import type { GitHubProvider } from '../github/provider';
+import type { GitHubProvider, PullRequestDetail } from '../github/provider';
 import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
@@ -11,6 +12,7 @@ import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pu
 import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
 import type { QaLoopEvent } from './qaLoop';
 import { qaNextStep } from './qaLoop';
+import type { Triager } from './triage';
 import { type AgentRunner, type AgentSession, type RunHooks, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
 
 interface Runtime {
@@ -33,10 +35,17 @@ const FINISHED: AgentStatus[] = ['done', 'stopped', 'error'];
 /** Each room has one QA officer; their agent record is reused from review to review. */
 const qaAgentId = (projectId: string) => `qa_${projectId}`;
 
+/** Where the room's operations officer checks out a stuck PR to look at it. */
+const triageWorkspaceId = (projectId: string) => `triage_${projectId}`;
+
 /** Hires agents, seats them at desks, runs them, and turns their work into pull requests. */
 export class AgentManager {
   private runtimes = new Map<string, Runtime>();
   private leaving = new Set<string>();
+  /** Each room's operations officer looks at one stuck PR at a time: the triages in hand, chained per project. */
+  private triages = new Map<string, Promise<void>>();
+  /** Stops a triage under way, by prKey, when the PR goes or the manager re-tests it. */
+  private triageAborts = new Map<string, AbortController>();
 
   constructor(
     private readonly store: Store,
@@ -44,6 +53,7 @@ export class AgentManager {
     private readonly github: GitHubProvider,
     private readonly runner: AgentRunner,
     private readonly workspace: WorkspaceOps,
+    private readonly triager: Triager,
     private readonly boardChanged: (projectId: string) => void,
   ) {}
 
@@ -84,6 +94,13 @@ export class AgentManager {
   hire(projectId: string, repo: string, issue: { number: number; title?: string; url?: string }, how: { effort?: Effort; cloud?: boolean } = {}): Agent {
     const id = newId('agent');
     const title = issue.title ?? `Issue #${issue.number}`;
+    const closed = this.store.closedPrs.get(prKey(repo, issue.number));
+    if (closed) {
+      // the last attempt was closed as the wrong approach: the new developer hears why
+      this.rt(id).inbox.push(`${closed.officer} closed an earlier attempt at this issue (PR #${closed.pr}) because the approach was wrong: ${closed.note}`);
+      this.store.removeClosedPr(repo, issue.number);
+      this.boardChanged(projectId);
+    }
     return this.seat(projectId, repo, {
       id,
       task: 'issue',
@@ -445,11 +462,14 @@ export class AgentManager {
   // ---------------------------------------------------------------- QA
 
   /** Asks the room's QA officer to review and test a pull request. Queued if they're busy with another. */
-  requestReview(projectId: string, repo: string, number: number, title: string): QaReview {
+  /** `retryNote` tells QA why the operations officer sent it back to them. */
+  requestReview(projectId: string, repo: string, number: number, title: string, retryNote?: string): QaReview {
     const project = this.store.project(projectId);
     if (!project.repos.includes(repo)) throw new Error(`${repo} is not connected to ${project.name}`);
     const existing = this.store.reviews.get(prKey(repo, number));
     if (existing && (existing.status === 'queued' || existing.status === 'testing')) return existing;
+    // a re-test from the board overrides the operations officer
+    this.triageAborts.get(prKey(repo, number))?.abort();
     const review: QaReview = {
       projectId,
       repo,
@@ -460,6 +480,9 @@ export class AgentManager {
       openedByOffice: this.openedByOffice(repo, number),
       failedRounds: existing?.failedRounds,
       lastRound: existing?.report ? { sha: existing.sha, report: existing.report } : existing?.lastRound,
+      triages: existing?.triages,
+      triage: existing?.triage,
+      retryNote,
     };
     this.putReview(review);
     this.nextReview(projectId);
@@ -515,7 +538,7 @@ export class AgentManager {
     if (review) this.putReview({ ...review, status: 'testing', title: pr.title, sha, agentId: agent.id, error: undefined });
     rt.qaSystem = qaSystemAppend(agent, project, pr, sha);
     rt.shots = undefined;
-    let prompt = qaPrompt(agent.repo, pr, issues, review?.lastRound);
+    let prompt = qaPrompt(agent.repo, pr, issues, review ?? {});
     if (rt.inbox.length) prompt += `\n\nNotes from your manager:\n${rt.inbox.splice(0).map((m) => `- ${m}`).join('\n')}`;
     await this.runSession(agent, prompt);
   }
@@ -606,7 +629,7 @@ export class AgentManager {
       case 'send-back':
         return this.sendBack(review, { kind: 'qa' });
       case 'needs-you':
-        return this.needsYou(review, step.reason);
+        return this.stuck(review, step.reason);
     }
   }
 
@@ -621,16 +644,19 @@ export class AgentManager {
    * Hands QA's findings, or the failing checks, to the developer who opened the PR, if they're still in the office;
    * otherwise a new agent sits down on the PR's branch to fix it.
    */
-  private async sendBack(review: QaReview, fixes: FixFor): Promise<void> {
+  /** `note` is the operations officer's advice, when they're the one sending it back. */
+  private async sendBack(review: QaReview, fixes: FixFor, note?: string): Promise<void> {
     const { report } = review;
     if (!report) return;
     const where = `${review.repo.split('/')[1]}#${review.number}`;
     const why = fixes.kind === 'qa' ? 'failed QA' : 'keeps failing its checks';
+    const advice = note && `${plannerFor(review.projectId).name}, the operations officer, looked at why this PR is stuck: ${note}`;
     try {
       const owner = this.prOwner(review.repo, review.number);
       if (owner) {
         this.putReview({ ...review, followUp: { kind: 'fixing', agentId: owner.id, agentName: owner.name, fixes } });
-        this.message(owner.id, this.fixPromptFor(owner, review, report, fixes));
+        const prompt = this.fixPromptFor(owner, review, report, fixes);
+        this.message(owner.id, advice ? `${prompt}\n\n${advice}` : prompt);
         this.hub.toast('info', `🔧 ${where} ${why} – back to ${owner.name}`, owner.id);
         return;
       }
@@ -643,6 +669,7 @@ export class AgentManager {
         baseBranch: pr.baseBranch,
         pr: { number: pr.number, url: pr.url },
       });
+      if (advice) this.rt(agent.id).inbox.push(advice);
       this.putReview({ ...review, followUp: { kind: 'fixing', agentId: agent.id, agentName: agent.name, fixes } });
       this.hub.toast('info', `🔧 ${where} ${why} – ${agent.name} sits down to fix it`, agent.id);
     } catch (err) {
@@ -660,6 +687,130 @@ export class AgentManager {
     }
   }
 
+
+  // ---------------------------------------------------------------- triaging stuck PRs
+
+  /** The PR is stuck: the room's operations officer looks at it first, unless they've had their tries. */
+  private stuck(review: QaReview, reason: string): void {
+    const officer = plannerFor(review.projectId).name;
+    const step = whenStuck(review, officer, reason);
+    if (step.kind === 'needs-you') return this.needsYou(review, step.reason);
+    const triaging: QaReview = { ...review, triages: (review.triages ?? 0) + 1, followUp: { kind: 'triaging', officer, activity: 'Coming over to look' } };
+    this.putReview(triaging);
+    const before = this.triages.get(review.projectId) ?? Promise.resolve();
+    const next = before.then(() => this.triage(triaging, reason)).catch((err: unknown) => this.needsYou(triaging, `${officer} hit a problem looking at it (${errorMessage(err)})`));
+    this.triages.set(review.projectId, next);
+  }
+
+  /** The operations officer reads QA's reports, the checks, the diff and the issue, then does one thing about it. */
+  private async triage(review: QaReview, reason: string): Promise<void> {
+    const officer = plannerFor(review.projectId);
+    const key = prKey(review.repo, review.number);
+    // the manager may have stepped in meanwhile (a re-test, a merge), and then it's not the officer's any more
+    const current = () => {
+      const now = this.store.reviews.get(key);
+      return now?.followUp?.kind === 'triaging' ? now : undefined;
+    };
+    const activity = (text: string) => {
+      const now = current();
+      if (now && text) this.putReview({ ...now, followUp: { kind: 'triaging', officer: officer.name, activity: truncate(text, 120) } });
+    };
+    let result: TriageResult;
+    let pr: PullRequestDetail | undefined;
+    const abort = new AbortController();
+    this.triageAborts.set(key, abort);
+    try {
+      const project = this.store.project(review.projectId);
+      activity('Reading the pull request');
+      pr = await this.github.getPullRequest(review.repo, review.number);
+      const checks = this.failingChecks(review);
+      const [diff, issues] = await Promise.all([
+        this.github.pullRequestDiff(review.repo, review.number).catch((err) => `(couldn't get the diff: ${errorMessage(err)})`),
+        Promise.all(pr.linkedIssues.slice(0, 3).map((n) => this.github.getIssue(review.repo, n).catch(() => null))),
+      ]);
+      activity('Checking out the pull request');
+      const id = triageWorkspaceId(review.projectId);
+      await this.workspace.checkoutPullRequest(review.repo, id, review.number);
+      if (!current()) return;
+      const decision = await this.triager.triage(
+        {
+          projectId: project.id,
+          projectName: project.name,
+          officer,
+          repo: review.repo,
+          pr,
+          cwd: this.workspace.dir(id),
+          reason,
+          review,
+          checks,
+          diff,
+          issues: issues.filter((i) => i !== null),
+          settings: this.store.settings,
+          signal: abort.signal,
+        },
+        activity,
+      );
+      result = { decision };
+    } catch (err) {
+      result = { error: errorMessage(err) };
+    } finally {
+      this.triageAborts.delete(key);
+    }
+    const now = current();
+    if (!now) return;
+    const decided = 'decision' in result ? { ...now, triage: { officer: officer.name, ...result.decision, at: Date.now() } } : now;
+    await this.afterTriage(decided, afterTriage(officer.name, result, { closes: pr?.linkedIssues ?? [] }));
+  }
+
+  /** Does what the operations officer decided. `review.triage` is their decision, if they came to one. */
+  private async afterTriage(review: QaReview, step: TriageStep): Promise<void> {
+    if (step.kind === 'needs-you') return this.needsYou(review, step.reason);
+    const officer = plannerFor(review.projectId).name;
+    const where = `${review.repo.split('/')[1]}#${review.number}`;
+    const backToQa = (why: string) => {
+      this.putReview({ ...review, followUp: undefined });
+      this.requestReview(review.projectId, review.repo, review.number, review.title, `${officer}, the room's operations officer, ${why} because it was stuck: ${step.note}`);
+    };
+    try {
+      switch (step.kind) {
+        case 'retry-qa':
+          backToQa('sent it back to you');
+          break;
+        case 'send-back':
+          await this.sendBack(review, { kind: 'qa' }, step.note);
+          break;
+        case 'rerun-checks': {
+          const runIds = [...new Set(this.failingChecks(review).flatMap((c) => (c.runId ? [c.runId] : [])))];
+          await this.github.rerunFailedRuns(review.repo, runIds);
+          const runs = runIds.length;
+          backToQa(`re-ran ${runs} failed GitHub Actions run${runs === 1 ? '' : 's'} and sent it back to you`);
+          break;
+        }
+        case 'close':
+          await this.closeStuck(review, step.note);
+          break;
+      }
+      this.hub.toast('info', `${triageLabel({ officer, action: step.kind })} (${where}): ${truncate(step.note, 120)}`);
+    } catch (err) {
+      this.needsYou(review, `${officer} chose ${step.kind} but it failed (${errorMessage(err)})`);
+    }
+  }
+
+  /** The PR's failing checks, as of the board's last look at GitHub: fresh enough for which checks are red. */
+  private failingChecks(review: QaReview): FailedCheck[] {
+    return this.store.boards.get(review.projectId)?.prs.find((p) => p.repo === review.repo && p.number === review.number)?.failedChecks ?? [];
+  }
+
+  /** Closes a PR whose approach can't work. Its issues stay open, marked on the board, for a fresh attempt. */
+  private async closeStuck(review: QaReview, note: string): Promise<void> {
+    const officer = plannerFor(review.projectId).name;
+    const pr = await this.github.getPullRequest(review.repo, review.number);
+    const comment = `🧭 ${officer}, the Focus office's operations officer, closed this pull request: ${note}\n\n${pr.linkedIssues.map((n) => `#${n}`).join(', ')} stays open, so it gets built again.`;
+    await this.github.closePullRequest(review.repo, review.number, comment);
+    for (const issue of pr.linkedIssues) this.store.putClosedPr({ repo: review.repo, issue, pr: review.number, officer, note, at: Date.now() });
+    this.prClosed(review.repo, review.number, false);
+    this.boardChanged(review.projectId);
+  }
   /** The office stops sending the PR back: it's the manager's call now. */
   private needsYou(review: QaReview, reason: string): void {
     this.putReview({ ...review, followUp: { kind: 'needs-you', reason } });
@@ -690,6 +841,7 @@ export class AgentManager {
   reviewGone(repo: string, number: number): void {
     const review = this.store.reviews.get(prKey(repo, number));
     if (!review) return;
+    this.triageAborts.get(prKey(repo, number))?.abort();
     this.store.removeReview(repo, number);
     this.hub.send({ type: 'review-removed', repo, number });
     const qa = this.store.agents.get(qaAgentId(review.projectId));

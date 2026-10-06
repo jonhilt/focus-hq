@@ -5,6 +5,7 @@ import { assignWarning, waitsLabel } from '../../../shared/dependencies';
 import { unpassedReason } from '../../../shared/mergeGate';
 import { previewIncludes, previewSet } from '../../../shared/previewSet';
 import { prKey, qaBadge, sameCommit } from '../../../shared/qa';
+import { triageLabel } from '../../../shared/triage';
 import type { Effort } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
@@ -70,6 +71,9 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
         h('div', { class: 'note' },
           h('div', { class: 't' }, `#${issue.number} ${issue.title}`),
           h('div', { class: 'm' },
+            issue.closedPr
+              ? h('span', { class: 'chip warn', title: `${issue.closedPr.officer} closed it: ${issue.closedPr.note}` }, `🧭 PR #${issue.closedPr.pr} closed: wrong approach, open for another go`)
+              : null,
             waits ? h('span', { class: 'chip', title: 'Auto-assign leaves it until those are closed' }, `⏸ ${waits}`) : null,
             multi ? h('span', { class: 'chip' }, issue.repo.split('/')[1]) : null,
             ...issue.labels.slice(0, 4).map((l) => h('span', { class: 'chip' }, l)),
@@ -152,6 +156,9 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
       const qaChip = qa.state === 'none'
         ? null
         : h('button', { class: `chip qa ${qa.state}`, title: review?.report?.summary ?? review?.error ?? 'Open the QA report', onclick: () => ui.openQa(projectId) }, qa.label);
+      const triage = review?.triage && qa.state !== 'triaging'
+        ? h('span', { class: 'chip', title: review.triage.note }, triageLabel(review.triage))
+        : null;
       const sendToQa = h('button', { class: 'btn small', title: qa.state === 'none' ? 'Have the holodeck’s QA officer review and test it' : 'Test the latest commit again' }, qa.state === 'none' ? '🔍 Send to QA' : '↻ Re-test');
       sendToQa.disabled = qaBusy;
       sendToQa.onclick = () =>
@@ -166,6 +173,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
             agent ? h('span', { class: 'chip' }, h('span', { class: 'dot', style: `background:${UNIFORM[agent.avatar.division]}` }), agent.name) : pr.author ? h('span', { class: 'chip' }, `@${pr.author}`) : null,
             multi ? h('span', { class: 'chip' }, pr.repo.split('/')[1]) : null,
             qaChip,
+            triage,
             h('span', { class: pr.checks === 'failing' ? 'chip bad' : 'chip' }, checks),
             pr.mergeable === 'CONFLICTING' ? h('span', { class: 'chip bad' }, '⚠ conflicts') : null,
             pr.isDraft ? h('span', { class: 'chip' }, 'draft') : null,

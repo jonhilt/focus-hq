@@ -214,6 +214,7 @@ async function main() {
   state.on('review', (projectId) => {
     world.room(projectId)?.markBoard();
     world.room(projectId)?.syncQa();
+    world.room(projectId)?.syncPlanner();
   });
   let briefingStatus = state.briefing?.status;
   state.on('briefing', () => {

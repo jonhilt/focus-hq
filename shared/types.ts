@@ -94,6 +94,19 @@ export interface Issue {
   labels: string[];
   author?: string;
   createdAt: string;
+  /** The office closed a PR for it because the approach was wrong, so it's open for another go. */
+  closedPr?: ClosedPr;
+}
+
+/** A PR the room's operations officer closed, remembered on the issue it was meant to close. */
+export interface ClosedPr {
+  repo: string;
+  issue: number;
+  pr: number;
+  officer: string;
+  /** What was wrong with the approach, for whoever builds it next. */
+  note: string;
+  at: number;
 }
 
 export type ChecksState = 'passing' | 'failing' | 'pending' | 'none';
@@ -483,8 +496,25 @@ export type QaStatus = 'queued' | 'testing' | 'passed' | 'failed' | 'error';
 /** What a developer was sent back to fix: QA's findings, or the PR's checks failing on GitHub after QA passed it. */
 export type FixFor = { kind: 'qa' } | { kind: 'checks'; checks: FailedCheck[] };
 
-/** What the office did about a failed PR it opened: a developer is on it, or it gave up and wants you. */
-export type QaFollowUp = { kind: 'fixing'; agentId: string; agentName: string; fixes: FixFor } | { kind: 'needs-you'; reason: string };
+/**
+ * What the office did about a failed PR it opened: a developer is on it, the room's operations officer is working out
+ * why it's stuck, or it gave up and wants you.
+ */
+export type QaFollowUp =
+  | { kind: 'fixing'; agentId: string; agentName: string; fixes: FixFor }
+  | { kind: 'triaging'; officer: string; activity: string }
+  | { kind: 'needs-you'; reason: string };
+
+/** What the operations officer can do about a stuck PR. */
+export type TriageAction = 'retry-qa' | 'send-back' | 'rerun-checks' | 'close' | 'escalate';
+
+/** What the operations officer did about a stuck PR, and why (on an escalation, their diagnosis). */
+export interface Triage {
+  officer: string;
+  action: TriageAction;
+  note: string;
+  at: number;
+}
 
 /** The latest QA review of a pull request. Kept until the PR is merged or closed. */
 export interface QaReview {
@@ -510,6 +540,12 @@ export interface QaReview {
   /** The round before this one, so a re-test checks those findings first and focuses on what changed since. */
   lastRound?: { sha?: string; report: QaReport };
   followUp?: QaFollowUp;
+  /** Times the operations officer has looked at this PR because it was stuck (missing = never). */
+  triages?: number;
+  /** What they did the last time. */
+  triage?: Triage;
+  /** Why it's back with QA, when the operations officer sent it back: for the QA officer, this round only. */
+  retryNote?: string;
   requestedAt: number;
   finishedAt?: number;
 }

@@ -28,6 +28,11 @@ describe('qaBadge', () => {
     expect(qaBadge(review({ status: 'failed' }), { headSha: 'fff0000aaa' })).toEqual({ state: 'stale', label: 'QA failed an older commit' });
   });
 
+  it('says while the operations officer looks into a stuck PR', () => {
+    const triaging = review({ status: 'failed', followUp: { kind: 'triaging', officer: 'Lt. Varga', activity: 'Reading the diff' } });
+    expect(qaBadge(triaging, { headSha: 'abc1234def5678' })).toEqual({ state: 'triaging', label: '🧭 Lt. Varga is looking' });
+  });
+
   it('says who a failed PR went back to, or that it needs you', () => {
     const fixing = review({ status: 'failed', followUp: { kind: 'fixing', agentId: 'a1', agentName: 'Ada', fixes: { kind: 'qa' } } });
     expect(qaBadge(fixing, { headSha: 'abc1234def5678' })).toEqual({ state: 'fixing', label: '🔧 QA failed: back with Ada' });

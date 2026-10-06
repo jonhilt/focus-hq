@@ -266,6 +266,19 @@ export const demoLayer = Layer.sync(GitHub, () => {
         r.issues = r.issues.filter((i) => !p.closes.includes(i.number));
       }),
 
+    closePullRequest: (name, number, comment) =>
+      Effect.gen(function* () {
+        const p = yield* pr(name, number);
+        if (p.state !== 'OPEN') return yield* new GitHubRejected({ message: `PR #${number} is not open` });
+        p.state = 'CLOSED';
+        p.comments = [...(p.comments ?? []), comment];
+      }),
+
+    pullRequestDiff: (name, number) =>
+      pr(name, number).pipe(
+        Effect.map((p) => `diff --git a/src/${p.branch}.ts b/src/${p.branch}.ts\n--- a/src/${p.branch}.ts\n+++ b/src/${p.branch}.ts\n@@ -1,3 +1,6 @@\n export function render(state) {\n-  return view(state);\n+  // ${p.title}\n+  return view(withFix(state));\n }\n`),
+      ),
+
     rerunFailedRuns: (name, runIds) =>
       repo(name).pipe(
         Effect.map((r) => {

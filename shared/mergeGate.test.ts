@@ -157,6 +157,7 @@ describe('unpassedReason', () => {
   it('names why anything else needs confirming', () => {
     expect(unpassedReason(undefined, { headSha: HEAD })).toBe('QA hasn’t tested it');
     expect(unpassedReason(review({ status: 'failed' }), { headSha: HEAD })).toBe('QA failed it');
+    expect(unpassedReason(review({ status: 'failed', followUp: { kind: 'triaging', officer: 'Lt. Varga', activity: 'Reading the diff' } }), { headSha: HEAD })).toBe('QA failed it');
     expect(unpassedReason(review(), { headSha: 'fff0000aaa' })).toBe('QA passed an older commit, not the latest one');
     expect(unpassedReason(review({ status: 'testing' }), { headSha: HEAD })).toBe('QA hasn’t finished testing it');
   });

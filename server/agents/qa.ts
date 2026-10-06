@@ -151,7 +151,8 @@ Finish with the structured QA report: the verdict, a two to four sentence summar
 `.trim();
 }
 
-export function qaPrompt(repo: string, pr: PullRequestDetail, issues: IssueDetail[], lastRound?: QaReview['lastRound']): string {
+export function qaPrompt(repo: string, pr: PullRequestDetail, issues: IssueDetail[], round: Pick<QaReview, 'lastRound' | 'retryNote'> = {}): string {
+  const { lastRound, retryNote } = round;
   const parts = [
     `Please QA pull request #${pr.number} in ${repo}: ${pr.title}`,
     `URL: ${pr.url}`,
@@ -170,11 +171,12 @@ export function qaPrompt(repo: string, pr: PullRequestDetail, issues: IssueDetai
     parts.push(
       '',
       `This is a re-test. Last round you ${report.verdict === 'pass' ? 'passed' : 'failed'} it${sha ? ` at commit ${sha.slice(0, 7)}` : ''}:`,
-      ...findings(report),
+      ...qaFindings(report),
       '',
       `Check those findings first. Then focus on what changed since (${since}), and finish with a quick smoke test of the main flow rather than a full review of the whole PR.`,
     );
   }
+  if (retryNote) parts.push('', retryNote);
   return parts.filter((p, i, all) => p !== '' || all[i - 1] !== '').join('\n');
 }
 
@@ -183,7 +185,7 @@ export function fixPrompt(pr: { number: number; branch: string }, review: Pick<Q
   return [
     `QA failed pull request #${pr.number}${review.sha ? ` (commit ${review.sha.slice(0, 7)})` : ''} and sent it back to you. Please fix it.`,
     '',
-    ...findings(review.report),
+    ...qaFindings(review.report),
     '',
     fixAndPush('what QA found', pr.branch, cloud),
   ].join('\n');
@@ -209,7 +211,8 @@ function fixAndPush(what: string, branch: string, cloud: boolean): string {
     : `Fix ${what} on \`${branch}\`, run the tests, type checks and linters, and commit. The office pushes your commits to the same pull request and QA tests it again.`;
 }
 
-function findings(report: QaReport): string[] {
+/** QA's findings on a round: the summary, failed checks and fix instructions. */
+export function qaFindings(report: QaReport): string[] {
   const failed = report.checks.filter((c) => c.result === 'fail');
   const lines = [truncate(report.summary || '(no summary)', 4000)];
   if (failed.length) lines.push('', 'Failed checks:', ...failed.map((c) => `- ${c.name}${c.details ? `: ${truncate(c.details, 1000)}` : ''}`));

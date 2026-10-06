@@ -8,6 +8,7 @@ import { mergeBrief } from './briefing';
 import { asBreakdown } from './breakdown';
 import type { Drafter, DraftRequest, DraftResult } from './planner';
 import { renderText, renderToolUse } from './render';
+import type { TriageDecision, Triager, TriageRequest } from './triage';
 import { type AgentRunner, type AgentSession, type RunHooks, type RunOutcome, type RunRequest, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
 
 const FILES: Record<string, string[]> = {
@@ -104,9 +105,11 @@ export class DemoRunner implements AgentRunner {
       const prTitle = match?.[3]?.trim() ?? 'the change';
       const prKind = /api/.test(prRepo) ? 'api' : /game|dodger/.test(prRepo) ? 'game' : 'web';
       const changed = pick(FILES[prKind], 2);
-      // every third PR has a problem the first time round; a re-test, or a re-check after a message, finds it fixed
+      // every third PR has a problem the first time round; a re-test, or a re-check after a message, finds it fixed. Every
+      // sixth (PR 9, 15, …) is stubborn: QA keeps failing it until the operations officer looks into why it's stuck
       const retest = /This is a re-test/.test(req.prompt);
-      const fails = !req.resumeSessionId && !retest && pr % 3 === 0;
+      const stubborn = pr % 6 === 3 && !/operations officer/.test(req.prompt);
+      const fails = !req.resumeSessionId && (stubborn || (!retest && pr % 3 === 0));
       if (req.resumeSessionId) {
         await say('Re-checking after your message.');
       } else if (retest) {
@@ -555,6 +558,34 @@ export class DemoBriefingQa implements BriefingQa {
       sessionId: session,
       costUsd: 0.03,
     };
+  }
+}
+
+/**
+ * The demo operations officer at a stuck PR: re-runs a red check, retries QA when its fixes have landed (the demo's
+ * stubborn PRs), sends a fix that pushed nothing back with a different plan, and escalates the second time round.
+ */
+export class DemoTriager implements Triager {
+  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
+
+  async triage(req: TriageRequest, activity: (text: string) => void): Promise<TriageDecision> {
+    const folder = req.repo.split('/')[1];
+    const file = /`([^`]+)`/.exec(req.review.report?.fixInstructions ?? '')?.[1] ?? 'src/App.tsx';
+    for (const step of ["Reading QA's reports", `Reading ${folder}/${file}`, 'Reading the diff', "Checking GitHub's checks", 'Thinking…']) {
+      activity(step);
+      await sleep((1500 + Math.random() * 1000) / this.speed);
+      if (req.signal.aborted) throw new Error('Stopped');
+    }
+    const red = req.checks[0];
+    if (req.review.triage) return { action: 'escalate', note: `I already tried ${req.review.triage.action} and it's still stuck: this needs your call on what ${req.pr.title} should do.` };
+    if (red) return { action: 'rerun-checks', note: `${red.name} timed out fetching dependencies, which looks like a runner outage rather than this change.` };
+    if (req.review.report && (req.review.failedRounds ?? 0) > 1) {
+      return {
+        action: 'retry-qa',
+        note: `The empty-state guard in \`${file}\` landed in the last fix, but QA keeps testing a stale dev server. Restart it from a clean install before checking the empty state.`,
+      };
+    }
+    return { action: 'send-back', note: `Don't patch the symptom in ${file}: default the list to [] where it's loaded, and add the test QA asked for.` };
   }
 }
 

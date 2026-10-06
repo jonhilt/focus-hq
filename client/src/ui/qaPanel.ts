@@ -2,6 +2,7 @@ import { statusLine } from '../../../shared/agentStatus';
 import { qaOfficerFor, UNIFORM } from '../../../shared/crew';
 import { autoMergeFor } from '../../../shared/mergeGate';
 import { autoQaFor, autoSendBackFor, qaBadge } from '../../../shared/qa';
+import { triageLabel } from '../../../shared/triage';
 import type { QaReview, QaScreenshot } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
@@ -97,6 +98,8 @@ function reviewCard(ui: Ui, review: QaReview): HTMLElement {
       review.sha ? `commit ${review.sha.slice(0, 7)} · ` : '',
       review.finishedAt ? `tested ${timeAgo(review.finishedAt)}` : `asked ${timeAgo(review.requestedAt)}`,
     ),
+    review.followUp?.kind === 'triaging' ? h('p', null, `🧭 ${review.followUp.officer} is looking into why it's stuck: ${review.followUp.activity}`) : null,
+    review.triage && review.followUp?.kind !== 'triaging' ? h('p', null, `${triageLabel(review.triage)}: ${review.triage.note}`) : null,
     review.followUp?.kind === 'needs-you' ? h('p', { class: 'planner-error' }, `🙋 Needs you: ${review.followUp.reason}. The crew stopped sending it back.`) : null,
     report?.summary ? h('p', null, report.summary) : null,
     review.error ? h('p', { class: 'planner-error' }, review.error) : null,

@@ -272,6 +272,12 @@ export class Office {
     );
     if (errors.length) board.error = errors.join('\n');
     board.issues.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    for (const issue of board.issues) issue.closedPr = this.store.closedPrs.get(prKey(issue.repo, issue.number));
+    for (const closed of [...this.store.closedPrs.values()]) {
+      // the issue was closed since (or built another way): nothing left to mark
+      const listed = !project.repos.includes(closed.repo) || board.error?.includes(closed.repo) || board.issues.some((i) => i.repo === closed.repo && i.number === closed.issue);
+      if (!listed) this.store.removeClosedPr(closed.repo, closed.issue);
+    }
     board.prs.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     board.prs = carryMergeable(this.store.boards.get(projectId)?.prs ?? [], board.prs);
     if (!this.store.projects.some((p) => p.id === projectId)) return;

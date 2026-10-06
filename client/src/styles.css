@@ -251,7 +251,7 @@ textarea.qa-brief { width: 100%; min-height: 160px; font-family: var(--mono); fo
 .chip.qa:hover { background: color-mix(in srgb, var(--tone) 70%, #fff); }
 .chip.qa.passed { --tone: var(--lcars-green); }
 .chip.qa.failed, .chip.qa.needs-you { --tone: var(--lcars-red); }
-.chip.qa.fixing { --tone: var(--lcars-orange); }
+.chip.qa.fixing, .chip.qa.triaging { --tone: var(--lcars-orange); }
 .chip.qa.testing, .chip.qa.queued { --tone: var(--lcars-periwinkle); }
 .chip.qa.stale, .chip.qa.error { --tone: var(--lcars-gold); }
 @media (max-width: 760px) { .qa-station { grid-template-columns: 1fr; } }
