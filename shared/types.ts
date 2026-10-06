@@ -30,6 +30,8 @@ export interface Settings {
   mergeMethod: 'squash' | 'merge' | 'rebase';
   /** Pull requests and QA reports on GitHub name the agent who did the work and mention Focus. */
   attribution: boolean;
+  /** Agents read your own ~/.claude/CLAUDE.md (and ~/.claude/rules) as well as Focus's instructions and the repo's CLAUDE.md. */
+  userClaudeMd: boolean;
   /** The effort a new goal's lead starts at, unless the captain picks another when starting it. */
   leadEffort: Effort;
 }

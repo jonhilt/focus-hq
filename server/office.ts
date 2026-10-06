@@ -417,6 +417,7 @@ export class Office {
     if (patch.model !== undefined) s.model = patch.model.trim();
     if (patch.mergeMethod && ['squash', 'merge', 'rebase'].includes(patch.mergeMethod)) s.mergeMethod = patch.mergeMethod;
     if (typeof patch.attribution === 'boolean') s.attribution = patch.attribution;
+    if (typeof patch.userClaudeMd === 'boolean') s.userClaudeMd = patch.userClaudeMd;
     const leadEffort = EFFORT_LEVELS.find((e) => e === patch.leadEffort);
     if (leadEffort) s.leadEffort = leadEffort;
     this.store.save();

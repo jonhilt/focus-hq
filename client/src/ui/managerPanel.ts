@@ -366,6 +366,8 @@ function settingsTab(ui: Ui): HTMLElement {
   merge.addEventListener('change', () => save({ mergeMethod: merge.value as 'squash' }));
   const attribution = h('input', { type: 'checkbox', checked: s.attribution });
   attribution.addEventListener('change', () => save({ attribution: attribution.checked }));
+  const userClaudeMd = h('input', { type: 'checkbox', checked: s.userClaudeMd });
+  userClaudeMd.addEventListener('change', () => save({ userClaudeMd: userClaudeMd.checked }));
   const leadEffort = h('select', null, ...EFFORT_LEVELS.map((e) => h('option', { value: e, selected: s.leadEffort === e }, `🧠 ${e}`)));
   leadEffort.addEventListener('change', () => {
     const level = EFFORT_LEVELS.find((e) => e === leadEffort.value);
@@ -381,6 +383,7 @@ function settingsTab(ui: Ui): HTMLElement {
     h('div', { class: 'field' }, h('label', null, 'Effort a new goal’s lead starts at'), leadEffort, h('small', null, 'You can pick another when you start a goal. High suits most slices; xhigh and max take longer and cost more.')),
     h('div', { class: 'field' }, h('label', null, 'Merge method for the board’s Merge button'), merge),
     h('div', { class: 'field' }, h('label', null, attribution, ' Sign pull requests and QA reports'), h('small', null, 'Names the agent or QA officer who did the work, and mentions Focus, in what the office posts on GitHub.')),
+    h('div', { class: 'field' }, h('label', null, userClaudeMd, ' Agents read your own CLAUDE.md'), h('small', null, 'Your ~/.claude/CLAUDE.md and ~/.claude/rules, written for your own Claude Code. Turn off so agents follow only Focus and the repo’s CLAUDE.md; your ~/.claude/settings.json still loads. Applies to agents started from now on.')),
     h('div', { class: 'card', style: 'margin-top:8px' },
       h('div', { class: 'row' },
         h('strong', null, 'GitHub'),

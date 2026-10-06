@@ -36,6 +36,7 @@ const DEFAULT_SETTINGS: Settings = {
   model: '',
   mergeMethod: 'squash',
   attribution: true,
+  userClaudeMd: true,
   leadEffort: 'high',
 };
 

@@ -1,3 +1,5 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { query, type CanUseTool, type Options, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { cloudSessionUrl } from '../../shared/cloud';
 import { errorMessage, sleep, truncate } from '../util';
@@ -71,6 +73,16 @@ export function agentEnv(): Record<string, string | undefined> {
   return env;
 }
 
+/**
+ * The settings files and CLAUDE.md files a session loads. Without your own CLAUDE.md, only it and your rules are
+ * excluded, so your ~/.claude/settings.json (permissions, env, plugins) still applies; anything they import goes too.
+ */
+export function claudeConfig(userClaudeMd: boolean, configDir: string): Pick<Options, 'settingSources' | 'settings'> {
+  const settingSources: Options['settingSources'] = ['user', 'project', 'local'];
+  if (userClaudeMd) return { settingSources };
+  return { settingSources, settings: { claudeMdExcludes: [join(configDir, 'CLAUDE.md'), join(configDir, 'rules', '**')] } };
+}
+
 /** What one run remembers between messages: tool calls waiting for their results, and the page last pointed at. */
 interface RunContext {
   cwd: string;
@@ -133,7 +145,7 @@ export class ClaudeRunner implements AgentRunner {
       abortController: abort,
       model: req.settings.model || undefined,
       effort: req.effort,
-      settingSources: ['user', 'project', 'local'],
+      ...claudeConfig(req.settings.userClaudeMd, process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude')),
       disallowedTools: ['AskUserQuestion', 'EnterPlanMode'],
       ...(cloud
         ? // the cloud VM has its own browser; ours runs on this machine. `--cloud <id>` reattaches to the session.
