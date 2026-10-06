@@ -99,6 +99,12 @@ async function main() {
     openTeleport: () => openTeleportPanel(ui),
   };
 
+  // every button on a console blips, bar the close button, which has the panel's own closing chirp
+  document.addEventListener('click', (e) => {
+    const button = (e.target as Element).closest('button');
+    if (button && !button.classList.contains('close')) sound.press();
+  }, true);
+
   panels.onOpen = () => {
     sound.chirp('open');
     player.unlock();
@@ -178,10 +184,23 @@ async function main() {
     world.markPanels();
   };
   state.on('agent', agentChanged);
-  state.on('agent-removed', agentChanged);
+  // crew working their consoles: a few blips from a station as its terminal scrolls, now and then rather than per line
+  const chatter = new Map<string, number>();
+  state.on('agent-removed', (a) => {
+    chatter.delete(a.id);
+    agentChanged(a);
+  });
   state.on('lines', ({ id }) => {
     const a = state.agents.get(id);
-    if (a) world.room(a.projectId)?.markScreen(id);
+    if (!a) return;
+    const room = world.room(a.projectId);
+    room?.markScreen(id);
+    const now = performance.now();
+    if ((chatter.get(id) ?? 0) > now) return;
+    const at = room?.viewpoint(id)?.lookAt;
+    if (!at) return;
+    chatter.set(id, now + 1500 + Math.random() * 3500);
+    sound.console(at);
   });
   state.on('browser', (id) => {
     const a = state.agents.get(id);

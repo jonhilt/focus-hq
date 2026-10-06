@@ -98,7 +98,7 @@ export class Hud {
       action ? h('button', { class: 'btn small', onclick: () => { action.run(); el.remove(); } }, action.label) : null,
     );
     this.toasts.append(el);
-    sound.badge();
+    sound.alert(level);
     while (this.toasts.children.length > 5) this.toasts.firstElementChild?.remove();
     setTimeout(() => el.remove(), action ? 12_000 : 6_000);
   }

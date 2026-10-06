@@ -1,10 +1,18 @@
 // The ship's sounds, all synthesised with Web Audio: the engines' thrum underneath everything, doors that swoosh,
-// LCARS chirps when a console opens, a combadge chirp for news and a transporter shimmer when you teleport.
+// LCARS chirps when a console opens and blips as you press its buttons, crew tapping at their stations while they work,
+// a combadge chirp for news (a brighter trill when it's good, a denied tone when it isn't) and a transporter shimmer
+// when you teleport.
 
 import * as THREE from 'three';
 
 const STORAGE_KEY = 'focus.sound';
 const forward = new THREE.Vector3();
+/** Pitches LCARS panels blip at; picking among them keeps a run of presses from droning on one note. */
+const LCARS_BLIPS = [1175, 1319, 1480, 1568, 1760, 1976, 2349];
+/** Stations further than this (metres) are out of earshot: the inverse rolloff alone would let every room leak in. */
+const STATION_EARSHOT = 9;
+
+const pick = <T>(xs: readonly T[]): T => xs[Math.floor(Math.random() * xs.length)];
 
 /**
  * A gain that rises to `peak` over `attack` seconds from `t`, then dies away by `t + end` (to about -35 dB).
@@ -23,6 +31,7 @@ class ShipSound {
   private master: GainNode | null = null;
   private brown: AudioBuffer | null = null;
   private white: AudioBuffer | null = null;
+  private readonly ear = new THREE.Vector3();
   enabled = localStorage.getItem(STORAGE_KEY) !== 'off';
 
   /** Browsers only allow audio after a user gesture, so call this from one (the splash screen's button). */
@@ -50,6 +59,7 @@ class ShipSound {
     camera.getWorldDirection(forward);
     const l = this.ctx.listener;
     const p = camera.position;
+    this.ear.copy(p);
     if (l.positionX) {
       const t = this.ctx.currentTime;
       l.positionX.setTargetAtTime(p.x, t, 0.02);
@@ -74,19 +84,7 @@ class ShipSound {
     if (!out) return;
     const { ctx, gain } = out;
     const t = ctx.currentTime;
-    const panner = ctx.createPanner();
-    panner.panningModel = 'HRTF';
-    panner.distanceModel = 'inverse';
-    panner.refDistance = 1.5;
-    panner.rolloffFactor = 1.2;
-    if (panner.positionX) {
-      panner.positionX.value = at.x;
-      panner.positionY.value = 1.6;
-      panner.positionZ.value = at.z;
-    } else {
-      panner.setPosition(at.x, 1.6, at.z);
-    }
-    panner.connect(gain);
+    const panner = this.panner(ctx, at.x, 1.6, at.z, gain);
 
     const travel = opening ? 0.3 : 0.4;
     if (opening) this.hiss(panner, t, { type: 'highpass', from: 3500, to: 3500, q: 0.7, attack: 0.002, end: 0.03, peak: 0.35 }); // unlatch
@@ -124,6 +122,24 @@ class ShipSound {
     }
   }
 
+  /** A panner at (x, y, z) feeding `dest`, so a sound comes from somewhere on the ship. */
+  private panner(ctx: AudioContext, x: number, y: number, z: number, dest: AudioNode): PannerNode {
+    const panner = ctx.createPanner();
+    panner.panningModel = 'HRTF';
+    panner.distanceModel = 'inverse';
+    panner.refDistance = 1.5;
+    panner.rolloffFactor = 1.2;
+    if (panner.positionX) {
+      panner.positionX.value = x;
+      panner.positionY.value = y;
+      panner.positionZ.value = z;
+    } else {
+      panner.setPosition(x, y, z);
+    }
+    panner.connect(dest);
+    return panner;
+  }
+
   /** A burst of filtered white noise starting at `t`, its filter swept from `from` to `to` Hz. */
   private hiss(dest: AudioNode, t: number, o: { type: BiquadFilterType; from: number; to: number; q: number; attack: number; end: number; peak: number }): void {
     const ctx = this.ctx!;
@@ -142,9 +158,36 @@ class ShipSound {
     this.tones(kind === 'open' ? [1320, 1760] : [1480, 990], 0.055, 0.05);
   }
 
-  /** The combadge: something needs your attention. */
-  badge(): void {
-    this.tones([2093, 2637, 3136], 0.045, 0.04, 'triangle');
+  /** An LCARS button press. */
+  press(): void {
+    this.tones([pick(LCARS_BLIPS)], 0.06, 0.03);
+  }
+
+  /** The combadge for news, an acknowledging trill when something worked, a low denied tone when it didn't. */
+  alert(level: 'info' | 'success' | 'error'): void {
+    switch (level) {
+      case 'info':
+        return this.tones([2093, 2637, 3136], 0.045, 0.04, 'triangle');
+      case 'success':
+        return this.tones([1568, 2093, 2637, 2093, 2637], 0.04, 0.035, 'triangle');
+      case 'error':
+        return this.tones([587, 440], 0.14, 0.045, 'triangle');
+    }
+  }
+
+  /** Someone tapping at the station whose display is at `at`: a few quiet blips, if you're close enough to hear. */
+  console(at: THREE.Vector3): void {
+    if (at.distanceTo(this.ear) > STATION_EARSHOT) return;
+    const out = this.out(0.5);
+    if (!out) return;
+    const { ctx, gain } = out;
+    const panner = this.panner(ctx, at.x, at.y, at.z, gain);
+    let t = ctx.currentTime;
+    for (let i = 2 + Math.floor(Math.random() * 3); i > 0; i--) {
+      const step = 0.05 + Math.random() * 0.07;
+      this.blip(panner, t, pick(LCARS_BLIPS), step * 0.8, 0.06, 'sine');
+      t += step;
+    }
   }
 
   /** Transporter shimmer for teleports. */
@@ -175,7 +218,7 @@ class ShipSound {
     lfo.stop(t + 1.45);
   }
 
-  /** The engines: brown noise rumble plus a low hum that swells slowly. Runs for as long as the page does. */
+  /** The engines: brown noise rumble over a quiet, steady hum. Runs for as long as the page does. */
   private thrum(): void {
     const ctx = this.ctx!;
     const bus = ctx.createGain();
@@ -192,37 +235,34 @@ class ShipSound {
     rumble.connect(low).connect(rumbleGain).connect(bus);
     rumble.start();
 
+    // Exact harmonics and a steady level: a detuned overtone or a swell makes the hum beat, which grates over time.
     const hum = ctx.createGain();
-    hum.gain.value = 0.25;
+    hum.gain.value = 0.14;
     hum.connect(bus);
-    for (const [f, type] of [[49, 'sine'], [98.4, 'triangle'], [147, 'sine']] as const) {
+    for (const f of [49, 98, 147]) {
       const osc = ctx.createOscillator();
-      osc.type = type;
       osc.frequency.value = f;
       osc.connect(hum);
       osc.start();
     }
-    const swell = ctx.createOscillator();
-    const swellDepth = ctx.createGain();
-    swell.frequency.value = 0.12;
-    swellDepth.gain.value = 0.1;
-    swell.connect(swellDepth).connect(hum.gain);
-    swell.start();
   }
 
   private tones(freqs: number[], step: number, volume: number, type: OscillatorType = 'sine'): void {
     const out = this.out(volume);
     if (!out) return;
     const { ctx, gain } = out;
-    freqs.forEach((f, i) => {
-      const t = ctx.currentTime + i * step;
-      const osc = ctx.createOscillator();
-      osc.type = type;
-      osc.frequency.value = f;
-      osc.connect(envelope(ctx, t, 0.005, step * 0.95, 1)).connect(gain);
-      osc.start(t);
-      osc.stop(t + step);
-    });
+    freqs.forEach((f, i) => this.blip(gain, ctx.currentTime + i * step, f, step, 1, type));
+  }
+
+  /** One short tone of `length` seconds at `t`. */
+  private blip(dest: AudioNode, t: number, freq: number, length: number, peak: number, type: OscillatorType): void {
+    const ctx = this.ctx!;
+    const osc = ctx.createOscillator();
+    osc.type = type;
+    osc.frequency.value = freq;
+    osc.connect(envelope(ctx, t, 0.005, length * 0.95, peak)).connect(dest);
+    osc.start(t);
+    osc.stop(t + length);
   }
 
   /** A one-shot's output at `volume`, or null when sound hasn't started or is off (no point building the graph). */
