@@ -47,6 +47,8 @@ export interface GitHubProvider {
   listIssues(repo: string): Promise<Issue[]>;
   getIssue(repo: string, number: number): Promise<IssueDetail>;
   createIssue(repo: string, title: string, body: string, labels?: string[]): Promise<Issue>;
+  /** Makes `child` a sub-issue of `parent` (an epic), both in `repo`. */
+  addSubIssue(repo: string, parent: number, child: number): Promise<void>;
   listPullRequests(repo: string): Promise<PullRequest[]>;
   pullRequestState(repo: string, number: number): Promise<'OPEN' | 'CLOSED' | 'MERGED'>;
   findPullRequest(repo: string, branch: string): Promise<{ number: number; url: string } | null>;

@@ -11,6 +11,28 @@ import { newId } from './util';
 /** A briefing as saved: with the officer's and QA's sessions, so the next turn can resume them. */
 export type StoredBriefing = Briefing & { sessionId?: string; qaSessionId?: string };
 
+/** A saved briefing as it picks up after a restart: whatever was running when Focus shut down was interrupted. */
+export function afterRestart(saved: StoredBriefing): StoredBriefing {
+  // briefings saved before a field was added to the brief get its empty value
+  const briefing = { ...saved, brief: { ...EMPTY_BRIEF, ...saved.brief } };
+  switch (briefing.status) {
+    case 'thinking':
+    case 'wrapping-up':
+      return { ...briefing, status: 'failed', activity: 'Interrupted', error: 'Interrupted when Focus shut down. Say something to pick it back up.' };
+    case 'qa-checking':
+      // the officer's reply is saved; only QA's note was lost
+      return { ...briefing, status: 'waiting', activity: 'Waiting for you' };
+    case 'filing':
+      // whatever was filed kept its number, so filing again carries on
+      return { ...briefing, status: 'reviewing', activity: 'Waiting for you to file the breakdown', error: 'Interrupted when Focus shut down. File all again to carry on.' };
+    case 'waiting':
+    case 'failed':
+    case 'reviewing':
+    case 'done':
+      return briefing;
+  }
+}
+
 interface PersistedState {
   settings: Settings;
   projects: Project[];
@@ -56,19 +78,13 @@ export class Store {
     const raw = JSON.parse(fs.readFileSync(paths.state, 'utf8')) as Partial<PersistedState>;
     this.settings = { ...DEFAULT_SETTINGS, ...raw.settings };
     this.projects = raw.projects ?? [];
-    // briefings saved before a field was added to the brief get its empty value
-    this.briefing = raw.briefing ? { ...raw.briefing, brief: { ...EMPTY_BRIEF, ...raw.briefing.brief } } : null;
+    this.briefing = raw.briefing ? afterRestart(raw.briefing) : null;
     for (const review of raw.reviews ?? []) {
       if (review.status === 'queued' || review.status === 'testing') {
         Object.assign(review, { status: 'error', error: 'Interrupted when Focus shut down. Send it to QA again.' });
       }
       this.reviews.set(prKey(review.repo, review.number), review);
     }
-    if (this.briefing && (this.briefing.status === 'thinking' || this.briefing.status === 'wrapping-up')) {
-      Object.assign(this.briefing, { status: 'failed', activity: 'Interrupted', error: 'Interrupted when Focus shut down. Say something to pick it back up.' });
-    }
-    // the officer's reply is saved; only QA's note was lost
-    if (this.briefing?.status === 'qa-checking') Object.assign(this.briefing, { status: 'waiting', activity: 'Waiting for you' });
     for (const agent of raw.agents ?? []) {
       if (ACTIVE_STATUSES.includes(agent.status) || agent.status === 'queued') {
         agent.status = 'stopped';

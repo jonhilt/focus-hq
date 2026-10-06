@@ -3,6 +3,7 @@ import { sleep } from '../util';
 import { qaOfficerFor } from '../../shared/crew';
 import type { BriefingOfficer, BriefingQa, OfficerHooks, OfficerReply, OfficerTurn, QaReply, QaTurn } from './briefing';
 import { mergeBrief } from './briefing';
+import { asBreakdown } from './breakdown';
 import type { Drafter, DraftRequest, DraftResult } from './planner';
 import { renderText, renderToolUse } from './render';
 import { type AgentRunner, type AgentSession, type RunHooks, type RunOutcome, type RunRequest, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
@@ -415,6 +416,60 @@ export class DemoOfficer implements BriefingOfficer {
         list(brief.outOfScope),
       ].join('\n');
       return { text: '', sessionId: session, costUsd: 0.18, draft: { repo, title, body } };
+    }
+
+    if (req.kind === 'break-down') {
+      hooks.activity('Rereading the brief');
+      await wait(1.5);
+      hooks.activity(`Searching ${folder} for where each piece would go`);
+      await wait(1.5);
+      hooks.activity('Breaking it down');
+      await wait(2);
+      const title = (brief.summary || idea).replace(/^./, (c) => c.toUpperCase()).slice(0, 70);
+      const list = (items: string[], check = false) => (items.length ? items : ['(none agreed)']).map((i) => `- ${check ? '[ ] ' : ''}${i}`).join('\n');
+      const epic = [
+        '## Why',
+        '',
+        `${brief.why ? brief.why.replace(/\.?$/, '.') : `The captain wants: ${idea}.`}${brief.who ? ` It's for ${brief.who.replace(/^./, (c) => c.toLowerCase()).replace(/\.$/, '')}.` : ''}`,
+        '',
+        '## Scope',
+        '',
+        list(brief.scope.length ? brief.scope : [idea]),
+        '',
+        '## Acceptance criteria',
+        '',
+        list(brief.acceptance, true),
+        '',
+        '## Out of scope',
+        '',
+        list(brief.outOfScope),
+      ].join('\n');
+      // the first piece is the foundation the second builds on; the rest can go side by side
+      const pieces = [`Store and load ${idea}`, `Show ${idea} in the UI`, `Tests and edge cases for ${idea}`];
+      const parts = (brief.scope.length >= 2 ? brief.scope : pieces).slice(0, 5);
+      const sub = (part: string, i: number) => ({
+        title: part.replace(/^./, (c) => c.toUpperCase()).slice(0, 70),
+        body: [
+          '## Context',
+          '',
+          `Part of the briefing on ${idea}. The relevant code lives in \`${files[i % files.length]}\`.`,
+          '',
+          '## What to build',
+          '',
+          `- ${part}`,
+          '',
+          '## Acceptance criteria',
+          '',
+          list([`${part} works end to end`, 'Existing tests still pass, and the new behaviour has tests'], true),
+          '',
+          '## Out of scope',
+          '',
+          '- The other parts of the epic',
+        ].join('\n'),
+        depends_on: i === 1 ? [1] : [],
+      });
+      const breakdown = asBreakdown({ repo, epic: { title, body: epic }, sub_issues: parts.map(sub) }, req.repos);
+      return { text: '', sessionId: session, costUsd: 0.24, breakdown };
     }
 
     if (req.kind === 'open') {

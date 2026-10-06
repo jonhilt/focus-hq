@@ -205,11 +205,17 @@ function officerView(briefing: Briefing): CrewView {
     case 'qa-checking':
       return { ...base, status: 'waiting', icon: '👂', line: `Hearing from ${qaOfficerFor(briefing.projectId).name}` };
     case 'wrapping-up':
-      return { ...base, status: 'working', icon: '📝', line: 'Writing up the issue' };
+      return { ...base, status: 'working', icon: '📝', line: briefing.activity };
     case 'waiting':
       return { ...base, status: 'waiting', icon: '🖖', line: 'Your turn' };
+    case 'reviewing':
+      return { ...base, status: 'waiting', icon: '🧩', line: 'The breakdown’s ready for you to check' };
+    case 'filing':
+      return { ...base, status: 'working', icon: '📌', line: briefing.activity };
     case 'done':
-      return { ...base, status: 'done', icon: '📋', line: `The issue’s at ${project}’s stand` };
+      return briefing.breakdown
+        ? { ...base, status: 'done', icon: '🧩', line: `The epic and its sub-issues are on ${project}’s board` }
+        : { ...base, status: 'done', icon: '📋', line: `The issue’s at ${project}’s stand` };
     case 'failed':
       return { ...base, status: 'error', line: 'Lost my train of thought – say again?' };
   }

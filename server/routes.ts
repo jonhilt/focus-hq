@@ -1,5 +1,5 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
-import { EFFORT_LEVELS, type Effort, type PreviewSet } from '../shared/types';
+import { type BreakdownEdits, EFFORT_LEVELS, type Effort, type PreviewSet } from '../shared/types';
 import type { Office } from './office';
 import type { Store } from './store';
 import { errorMessage } from './util';
@@ -30,6 +30,14 @@ const effort = (v: unknown): Effort | undefined => {
   const level = EFFORT_LEVELS.find((e) => e === v);
   if (!level) throw new Error(`Effort must be one of ${EFFORT_LEVELS.join(', ')}`);
   return level;
+};
+
+/** A breakdown as the manager edited it; any other shape is a bad request. */
+const breakdownEdits = (v: unknown): BreakdownEdits => {
+  const issue = (i: unknown) => ({ title: str((i as Record<string, unknown> | null)?.title), body: str((i as Record<string, unknown> | null)?.body) });
+  const raw = (v ?? {}) as Record<string, unknown>;
+  if (!Array.isArray(raw.subIssues)) throw new Error('Send the breakdown’s sub-issues');
+  return { epic: issue(raw.epic), subIssues: (raw.subIssues as unknown[]).map((s) => ({ key: str((s as Record<string, unknown> | null)?.key), ...issue(s) })) };
 };
 
 export function apiRouter(office: Office, store: Store): express.Router {
@@ -93,10 +101,11 @@ export function apiRouter(office: Office, store: Store): express.Router {
   }));
   r.delete('/projects/:id/draft', h((req) => office.planner.discard(param(req, 'id'))));
 
-  // briefings in the observation lounge: one at a time, ending in an issue draft at the project's stand
+  // briefings in the observation lounge: one at a time, ending in an issue draft at the project's stand or a filed breakdown
   r.post('/briefing', h((req) => office.briefings.call(str(req.body.projectId), str(req.body.idea))));
   r.post('/briefing/say', h((req) => office.briefings.say(str(req.body.text))));
-  r.post('/briefing/wrap-up', h(() => office.briefings.wrapUp()));
+  r.post('/briefing/wrap-up', h((req) => office.briefings.wrapUp(req.body.shape === 'breakdown' ? 'breakdown' : 'one')));
+  r.post('/briefing/file', h((req) => office.briefings.file(breakdownEdits(req.body))));
   r.delete('/briefing', h(() => office.briefings.end()));
   r.post('/prs/qa', h((req) => office.requestReview(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));
   r.post('/prs/resolve-conflicts', h((req) => office.resolveConflicts(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));

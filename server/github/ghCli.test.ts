@@ -8,15 +8,17 @@ import { GitHub, toProvider } from './service';
 /** The gh layer over a fake runner that answers each command from `reply`, and remembers what it was asked. */
 function fakeGh(reply: (args: readonly string[]) => Effect.Effect<string, GhCommandError>) {
   const calls: (readonly string[])[] = [];
+  const inputs: (string | undefined)[] = [];
   const runner = Layer.succeed(GhRunner, GhRunner.of({
     // suspended, so a call counts when it runs rather than when an Effect is built from it
-    run: (args) =>
+    run: (args, input) =>
       Effect.suspend(() => {
         calls.push(args);
+        inputs.push(input);
         return reply(args);
       }),
   }));
-  return { calls, layer: ghCliService.pipe(Layer.provide(runner)) };
+  return { calls, inputs, layer: ghCliService.pipe(Layer.provide(runner)) };
 }
 
 const succeed = <A, E>(layer: Layer.Layer<GitHub>, op: (gh: GitHub['Service']) => Effect.Effect<A, E>) =>
@@ -84,6 +86,14 @@ describe('gh CLI layer', () => {
     const { layer } = fakeGh(() => Effect.succeed('Warning: something odd\n'));
     const error = await fail(layer, (gh) => gh.createPullRequest('acme/shop', { head: 'b', base: 'main', title: 't', body: 'b' }));
     expect(error._tag).toBe('GhBadOutput');
+  });
+
+  it('links a sub-issue to its epic by the sub-issue’s id', async () => {
+    const { calls, inputs, layer } = fakeGh((args) => Effect.succeed(args.includes('-X') ? '{}' : '{"id":987654}'));
+    await succeed(layer, (gh) => gh.addSubIssue('acme/shop', 40, 42));
+    expect(calls[0]).toEqual(['api', 'repos/acme/shop/issues/42', '--jq', '{id}']);
+    expect(calls[1]).toEqual(['api', '-X', 'POST', 'repos/acme/shop/issues/40/sub_issues', '--input', '-']);
+    expect(JSON.parse(inputs[1]!)).toEqual({ sub_issue_id: 987654 });
   });
 
   it('reports a missing gh as a status, not a failure', async () => {

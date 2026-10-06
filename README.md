@@ -14,7 +14,7 @@ A cartoon, first-person 3D starship where a crew of **Claude Code** agents works
 - Every **agent** is a separate Claude Code instance (via the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk)) with its own workstation and git worktree. The crew wear Starfleet uniforms in their division's colour (command red, operations gold, sciences blue) and come from all over the Federation.
 - Walk up behind an agent and you see their **station's display**: the live Claude Code terminal and, while they test, the **browser** they are driving.
 - Each holodeck has an **operations officer** at its **＋ New issue** stand. Give them a rough idea and they read the project's code and write it up as an issue with context and **acceptance criteria**, ready for you to edit and file.
-- Bigger or fuzzier ideas go to a **briefing** in the **observation lounge** behind the ready room. The officer reads the code, grills you one question at a time and keeps a brief on the wall screen. When you wrap up, they write one issue to the holodeck's stand.
+- Bigger or fuzzier ideas go to a **briefing** in the **observation lounge** behind the ready room. The officer reads the code, grills you one question at a time and keeps a brief on the wall screen. When you wrap up, they write one issue to the holodeck's stand, or break a bigger feature down into an epic and sub-issues for you to check and file.
 - Each holodeck's **Kanban display** shows what's to do, who's working on what, and which **pull requests** are ready to merge.
 - The captain's **ready room** is where you create projects, connect existing repos or create blank ones, file issues and tune how much the agents may do on their own.
 - When an agent is done, Focus pushes their branch and opens a **pull request** with their summary as the description. Merge it from the board and they pack up and go home.
@@ -87,12 +87,15 @@ For anything bigger or fuzzier than a one-line issue, press **📣 Call a briefi
 1. The officer reads the code, puts a first brief on the wall screen and asks their first question.
 2. They ask one question at a time, starting with the why (who it's for, what's going wrong, what success looks like), then the what. They check the code before asking, and they suggest an answer with each question so you can just say yes.
 3. The brief on the wall screen (and in the panel) keeps up as you go: **Why**, **Who for**, **Scope**, **Out of scope**, **Acceptance criteria** and **Open questions**.
-4. **📋 Wrap up** when you're happy. The officer writes one issue, with the why from the briefing in its Context, and leaves it at the project's stand as a normal draft. A redraft there carries on from the whole briefing.
+4. **📋 Wrap up** when you're happy, as **📝 One issue** or **🧩 Break it down**.
+   - **One issue**: the officer writes one issue, with the why from the briefing in its Context, and leaves it at the project's stand as a normal draft. A redraft there carries on from the whole briefing.
+   - **Break it down**, for a feature too big for one agent in one sitting: the officer writes an epic (the brief: why, scope, acceptance criteria) and 2 to 5 sub-issues in the usual issue format, all for one repository. They split only where the parts are independent and touch different files, or where a risky foundation should land first. A sub-issue that can't start before another merges says so, at most two steps deep.
+   - Nothing is filed until you've checked the breakdown: edit any title or body, **✕ Drop** sub-issues, or go back to **📝 One issue instead**. **📌 File all** files the epic, then each sub-issue with a `Depends on #N` line carrying the real numbers (auto-assign starts the blocking issue first), linked to the epic as GitHub sub-issues. If filing stops halfway, **File all** again carries on without filing anything twice.
 5. **✕ End briefing** sends them back to the stand. Only one briefing runs at a time.
 
 In a briefing the officer can also search and read the web (`WebSearch`, `WebFetch`) for things the code can't answer, like library versions or migration guidance, and tells you where they found it. They still can't change anything.
 
-A briefing is saved in `~/.focus/state.json` with the officer's session, and each turn resumes that session. Nothing runs while it's your turn, and you can pick a briefing back up after a restart.
+A briefing is saved in `~/.focus/state.json` with the officer's session, and each turn resumes that session. Nothing runs while it's your turn, and you can pick a briefing back up after a restart, along with a breakdown waiting to be filed (your unsaved edits to it aside).
 
 ## How an agent works an issue
 
@@ -270,7 +273,8 @@ server/
     browserTool.ts        in-process MCP server driving headless Chromium, streams screenshots
     workspace.ts          git mirrors + worktrees (agents', the per-repo preview checkout, the planner's read-only checkouts)
     planner.ts            the officer at each room's New issue stand: issue drafts, their prompt and schema
-    briefing.ts           briefings in the observation lounge: turns, the brief, wrap-up into a stand draft
+    briefing.ts           briefings in the observation lounge: turns, the brief, wrap-up into a stand draft or a breakdown
+    breakdown.ts          a briefing's epic and sub-issues: the officer's result, the manager's edits, Depends on lines
     claudeCrew.ts         the officer's read-only Claude Code sessions (Read/Glob/Grep, web search/fetch in briefings, update_brief, structured output)
     qa.ts                 the QA officer: instructions, the report's schema and parsing, the PR comment
     demoRunner.ts         scripted pretend agents (and a pretend planner, briefing officer and QA officer) for demo mode

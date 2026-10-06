@@ -1,11 +1,25 @@
 import { plannerFor, qaAtBriefing, qaOfficerFor } from '../../shared/crew';
-import { type Brief, type BriefDiagram, type Briefing, type BriefingMessage, EMPTY_BRIEF, type Planner, type Settings } from '../../shared/types';
+import {
+  type Brief,
+  type BriefDiagram,
+  type Breakdown,
+  type BreakdownEdits,
+  type Briefing,
+  type BriefingMessage,
+  type BriefingStatus,
+  EMPTY_BRIEF,
+  type Issue,
+  type Planner,
+  type Settings,
+  type WrapUpShape,
+} from '../../shared/types';
 import type { Hub } from '../hub';
 import type { Store, StoredBriefing } from '../store';
 import { errorMessage, newId, truncate } from '../util';
+import { applyEdits, filedBody, SUB_ISSUES } from './breakdown';
 import { type DraftResult, type IssuePlanner, ISSUE_FORMAT, repoList } from './planner';
 
-export type TurnKind = 'open' | 'reply' | 'wrap-up';
+export type TurnKind = 'open' | 'reply' | 'wrap-up' | 'break-down';
 
 export interface OfficerTurn {
   kind: TurnKind;
@@ -36,6 +50,8 @@ export interface OfficerReply {
   costUsd?: number;
   /** A wrap-up's issue. */
   draft?: DraftResult;
+  /** A break-down's epic and sub-issues. */
+  breakdown?: Breakdown;
 }
 
 /** Takes one turn of a briefing. The live one resumes a read-only Claude Code session; the demo one is scripted. */
@@ -77,12 +93,18 @@ export interface BriefingQa {
 export const acceptanceChanged = (before: string[], after: string[]): boolean =>
   before.length !== after.length || before.some((line, i) => line !== after[i]);
 
+/** Where a filed breakdown goes: onto GitHub and the project's board. */
+export interface IssueFiler {
+  file(projectId: string, repo: string, title: string, body: string): Promise<Issue>;
+  addSubIssue(repo: string, parent: number, child: number): Promise<void>;
+}
+
 const publicView = ({ sessionId: _, qaSessionId: __, ...briefing }: StoredBriefing): Briefing => briefing;
 
 /**
  * Briefings in the observation lounge: the manager and a project's operations officer talk a bigger or fuzzier idea
  * through, the officer keeping a brief on the wall screen, until the manager wraps up and the officer writes one issue
- * to the project's stand. The project's QA officer sits in and adds a note when the acceptance criteria change. One at
+ * to the project's stand, or breaks it down into an epic and sub-issues that the manager reviews and files. The project's QA officer sits in and adds a note when the acceptance criteria change. One at
  * a time. Each turn resumes the officer's (and QA's) session, so nothing runs while it's your turn and a briefing
  * survives a restart.
  */
@@ -95,6 +117,7 @@ export class Briefings {
     private readonly planner: IssuePlanner,
     private readonly officer: BriefingOfficer,
     private readonly qa: BriefingQa,
+    private readonly filer: IssueFiler,
   ) {}
 
   current(): Briefing | null {
@@ -131,7 +154,7 @@ export class Briefings {
   }
 
   say(text: string): Briefing {
-    const briefing = this.ready();
+    const briefing = this.expect('waiting', 'failed');
     if (!text.trim()) throw new Error('Say something first');
     briefing.messages.push({ from: 'manager', text: text.trim(), at: Date.now() });
     this.turn(briefing, 'thinking', 'Thinking it over');
@@ -139,11 +162,27 @@ export class Briefings {
     return publicView(briefing);
   }
 
-  wrapUp(): Briefing {
-    const briefing = this.ready();
-    briefing.messages.push({ from: 'system', text: 'The captain wrapped up the briefing.', at: Date.now() });
-    this.turn(briefing, 'wrapping-up', 'Writing up the issue');
-    this.run(briefing, 'wrap-up');
+  /** The officer writes it up as one issue at the stand, or breaks it down for the manager to review (again, from a breakdown). */
+  wrapUp(shape: WrapUpShape): Briefing {
+    const briefing = this.expect('waiting', 'failed', 'reviewing');
+    if (briefing.breakdown && [briefing.breakdown.epic, ...briefing.breakdown.subIssues].some((i) => i.number !== undefined)) {
+      throw new Error('Some of the breakdown is filed already: file the rest');
+    }
+    const one = shape === 'one';
+    briefing.breakdown = undefined;
+    briefing.messages.push({ from: 'system', text: one ? 'The captain wrapped up the briefing as one issue.' : 'The captain asked for an epic broken down into sub-issues.', at: Date.now() });
+    this.turn(briefing, 'wrapping-up', one ? 'Writing up the issue' : 'Breaking it down');
+    this.run(briefing, one ? 'wrap-up' : 'break-down');
+    return publicView(briefing);
+  }
+
+  /** Files the breakdown, with the manager's edits: the epic first, then each sub-issue, linked to it. */
+  file(edits: BreakdownEdits): Briefing {
+    const briefing = this.expect('reviewing');
+    if (!briefing.breakdown) throw new Error('There’s no breakdown to file');
+    briefing.breakdown = applyEdits(briefing.breakdown, edits);
+    this.turn(briefing, 'filing', 'Filing the epic');
+    void this.fileAll(briefing, briefing.breakdown);
     return publicView(briefing);
   }
 
@@ -161,15 +200,27 @@ export class Briefings {
     if (this.store.briefing?.projectId === projectId) this.end();
   }
 
-  /** The briefing, if it's the manager's turn. */
-  private ready(): StoredBriefing {
+  /** The briefing, if it's in one of `statuses`; otherwise why the manager has to wait (or can't). */
+  private expect(...statuses: BriefingStatus[]): StoredBriefing {
     const briefing = this.store.briefing;
     if (!briefing) throw new Error('There’s no briefing in session');
-    const name = plannerFor(briefing.projectId).name;
-    if (briefing.status === 'thinking' || briefing.status === 'wrapping-up') throw new Error(`${name} is still thinking`);
-    if (briefing.status === 'qa-checking') throw new Error(`${qaOfficerFor(briefing.projectId).name} is still reading the acceptance criteria`);
-    if (briefing.status === 'done') throw new Error('This briefing is over: its issue is at the stand. End it to start another.');
-    return briefing;
+    if (statuses.includes(briefing.status)) return briefing;
+    switch (briefing.status) {
+      case 'thinking':
+      case 'wrapping-up':
+        throw new Error(`${plannerFor(briefing.projectId).name} is still thinking`);
+      case 'qa-checking':
+        throw new Error(`${qaOfficerFor(briefing.projectId).name} is still reading the acceptance criteria`);
+      case 'reviewing':
+        throw new Error('The breakdown is waiting for you: file it, or wrap up as one issue instead');
+      case 'filing':
+        throw new Error('Still filing the breakdown');
+      case 'done':
+        throw new Error(`This briefing is over: ${briefing.breakdown ? 'its issues are filed' : 'its issue is at the stand'}. End it to start another.`);
+      case 'waiting':
+      case 'failed':
+        throw new Error('It’s your turn: say something first');
+    }
   }
 
   private turn(briefing: StoredBriefing, status: Briefing['status'], activity: string): void {
@@ -247,6 +298,19 @@ export class Briefings {
       this.broadcast();
       return;
     }
+    if (kind === 'break-down') {
+      if (!reply.breakdown) throw new Error('The officer finished without breaking it down');
+      briefing.breakdown = reply.breakdown;
+      briefing.messages.push({
+        from: 'officer',
+        text: `I’ve broken it down into an epic and ${reply.breakdown.subIssues.length} sub-issues for ${reply.breakdown.repo}. Edit what you like, drop what we don’t need, then file them all. Nothing goes to GitHub until you do.`,
+        at: now,
+      });
+      Object.assign(briefing, { status: 'reviewing', activity: 'Waiting for you to file the breakdown', updatedAt: now });
+      this.store.save();
+      this.broadcast();
+      return;
+    }
     briefing.messages.push({ from: 'officer', text: reply.text.trim() || '…', at: now });
     if (acceptanceChanged(before, briefing.brief.acceptance) && qaAtBriefing(project.id, briefing, this.store.agentsIn(project.id).find((a) => a.task === 'review'))) {
       await this.qaNote(briefing, before, signal, current);
@@ -294,6 +358,49 @@ export class Briefings {
     }
   }
 
+  /**
+   * Files what isn't filed yet, saving each number as it goes. On a failure the briefing goes back to reviewing, so
+   * filing again carries on where this stopped. A sub-issue that won't link to the epic is filed all the same, with a
+   * note in the log.
+   */
+  private async fileAll(briefing: StoredBriefing, breakdown: Breakdown): Promise<void> {
+    const project = this.store.project(briefing.projectId);
+    const { repo, epic } = breakdown;
+    const progress = (activity: string) => {
+      Object.assign(briefing, { activity, updatedAt: Date.now() });
+      this.store.save();
+      this.broadcast();
+    };
+    const unlinked: string[] = [];
+    try {
+      const epicNumber = (epic.number ??= (await this.filer.file(project.id, repo, epic.title, epic.body)).number);
+      const numbers = new Map<string, number>();
+      for (const sub of breakdown.subIssues) {
+        if (sub.number === undefined) {
+          progress(`Filing “${truncate(sub.title, 60)}”`);
+          const issue = await this.filer.file(project.id, repo, sub.title, filedBody(sub, numbers));
+          sub.number = issue.number;
+          progress(`Linking #${issue.number} to the epic`);
+          await this.filer.addSubIssue(repo, epicNumber, issue.number).catch((err) => unlinked.push(`#${issue.number} (${errorMessage(err)})`));
+        }
+        numbers.set(sub.key, sub.number);
+      }
+    } catch (err) {
+      Object.assign(briefing, { status: 'reviewing', activity: 'Waiting for you to file the breakdown', error: `Couldn’t file everything: ${errorMessage(err)}. File all again to carry on.`, updatedAt: Date.now() });
+      this.store.save();
+      this.broadcast();
+      return;
+    }
+    const now = Date.now();
+    const subs = breakdown.subIssues.map((s) => `#${s.number}`).join(', ');
+    if (unlinked.length) briefing.messages.push({ from: 'system', text: `Couldn’t link ${unlinked.join(', ')} to the epic as a sub-issue.`, at: now });
+    briefing.messages.push({ from: 'officer', text: `Filed in ${repo}: the epic, #${epic.number} “${epic.title}”, with sub-issues ${subs}. They’re on ${project.name}’s board.`, at: now });
+    Object.assign(briefing, { status: 'done', activity: 'Breakdown filed', updatedAt: now });
+    this.hub.toast('success', `🧩 Filed ${repo}#${epic.number} with ${breakdown.subIssues.length} sub-issues`);
+    this.store.save();
+    this.broadcast();
+  }
+
   private broadcast(): void {
     this.hub.send({ type: 'briefing', briefing: this.current() });
   }
@@ -305,7 +412,7 @@ export function briefingSystemPrompt(req: Pick<OfficerTurn, 'planner' | 'project
   return `
 # You are ${req.planner.name}, operations officer for ${req.projectName} aboard the Focus, in a briefing in the observation lounge
 
-The manager has called a briefing about something bigger or fuzzier than a one-line issue. Your job: question them until you both agree on what to build and why. When they wrap up, you write it up as one GitHub issue that a Claude Code agent will build on its own, with nobody to ask, and that a reviewer will check the pull request against.
+The manager has called a briefing about something bigger or fuzzier than a one-line issue. Your job: question them until you both agree on what to build and why. When they wrap up, you write it up as one GitHub issue, or, if they ask, as an epic broken down into sub-issues. Claude Code agents build each issue on their own, with nobody to ask, and a reviewer checks each pull request against it.
 
 ${repoList(req.repos)}
 
@@ -315,7 +422,7 @@ How to run the briefing:
 - Look before you ask. Never ask what the code can tell you: read it (Read, Glob, Grep; you can't change anything) and bring what you found ("Orders already carry a status in shop-api/src/orders.ts. Should 'saved for later' be a status, or its own list?").
 - When the question goes beyond the code (library versions, migration guidance, external APIs, docs), search and read the web (WebSearch, WebFetch) and bring back what you found with its source. Anything the code can answer, keep reading the code for.
 - Give your recommendation with each question, so the manager can just say yes.
-- Push back on anything vague, contradictory or too big for one agent in one sitting, and suggest what to leave for later.
+- Push back on anything vague or contradictory. If it's too big for one agent in one sitting, say so: suggest what to leave for later, or breaking it down into sub-issues when it wraps up.
 - Keep the brief current with mcp__brief__update_brief whenever something is agreed or a new question comes up. It's on the lounge's wall screen for both of you. One short line per entry, and drop open questions once they're answered.
 - ${qaName(req)}, the project's QA officer, sits in: every pull request built from this issue comes to them to test. When you add or change acceptance criteria, they may add one short note (a criterion that can't be checked, a missing edge case, something the project's QA brief requires). You'll get it with the manager's next message: weigh it, recommend, and put what the manager agrees to into the acceptance criteria. The manager decides.
 - When nothing important is still open, say you have enough and suggest wrapping up. The manager decides when.
@@ -355,6 +462,21 @@ ${ISSUE_FORMAT}
 If the manager chose a design option, add an "## Approach" section after What to build: the chosen option, why it beat the others, and its diagram in a fenced \`\`\`mermaid block (GitHub renders it). If no option was chosen, leave that section out.
 
 Acceptance criteria include the QA officer's suggestions the manager agreed to, and only those. It's one issue, for one agent in one sitting: anything you agreed to leave for later goes under Out of scope. Context carries the why from the briefing. Finish with the structured result: repo, title and body.`;
+  }
+  if (req.kind === 'break-down') {
+    return `${recap}The manager is wrapping up the briefing and wants it broken down: an epic, and ${SUB_ISSUES.min} to ${SUB_ISSUES.max} sub-issues that agents build one each, each in one sitting. Write them now, from the brief and everything you discussed.
+
+The epic is the brief. Title it after the feature. Its body has \`## Why\` (the problem, who has it, what success looks like), \`## Scope\`, \`## Acceptance criteria\` for the feature as a whole (a \`- [ ]\` checklist) and \`## Out of scope\`. If the manager chose a design option, add an \`## Approach\` section: the chosen option, why it beat the others, and its diagram in a fenced \`\`\`mermaid block.
+
+How to split it, the same as at the stand: one sub-issue per whole piece of the feature, one that an agent builds and a reviewer checks on its own. Split only where the parts are independent and touch different files, or where a risky foundation should land first. Fewer, whole sub-issues beat many thin ones.
+
+Each sub-issue is written like any other issue.
+
+${ISSUE_FORMAT}
+
+Dependencies: a sub-issue's depends_on lists the positions (1-based) of earlier sub-issues that have to merge before it can start. Fill it only where the work truly can't start before the other merges, and leave it empty otherwise, so agents can work side by side. Never more than two steps deep (3 waits for 2, which waits for 1). Don't write "Depends on" lines into the bodies: the office adds them with the real issue numbers when it files them.
+
+Acceptance criteria include the QA officer's suggestions the manager agreed to, and only those. The epic and its sub-issues all go in one repository: the one with most of the work. Finish with the structured result: repo, epic and sub_issues.`;
   }
   const latest = [...req.messages].reverse().find((m) => m.from === 'manager')?.text ?? '';
   if (recap) return `${recap}The manager's latest message, for you to answer:\n"""\n${latest}\n"""`;

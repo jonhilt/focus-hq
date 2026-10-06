@@ -1,13 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { qaOfficerFor } from '../../shared/crew';
-import { type Brief, type Briefing, EMPTY_BRIEF, type Project } from '../../shared/types';
+import { type Breakdown, type Brief, type Briefing, EMPTY_BRIEF, type Issue, type Project } from '../../shared/types';
 import { Hub } from '../hub';
-import { Store } from '../store';
+import { afterRestart, Store, type StoredBriefing } from '../store';
 import {
   acceptanceChanged,
   asQaNote,
   type BriefingOfficer,
   type BriefingQa,
+  type IssueFiler,
   briefingPrompt,
   briefingQaPrompt,
   briefingQaSystemPrompt,
@@ -158,7 +159,7 @@ describe('Briefings with QA sitting in', () => {
       },
     };
     const check = vi.fn<BriefingQa['check']>(async () => ({ note, sessionId: 'qa-1', costUsd: 0.01 }));
-    const briefings = new Briefings(store, new Hub(), {} as IssuePlanner, officer, { check });
+    const briefings = new Briefings(store, new Hub(), {} as IssuePlanner, officer, { check }, {} as IssueFiler);
     const settled = () => vi.waitFor(() => expect(briefings.current()?.status).toBe('waiting'));
     return { store, briefings, check, settled };
   }
@@ -235,5 +236,154 @@ describe('mergeBrief', () => {
 
   it('clears the list when passed an empty one', () => {
     expect(mergeBrief(withDiagrams, { diagrams: [] }).diagrams).toEqual([]);
+  });
+});
+
+describe('Briefings breaking down into an epic and sub-issues', () => {
+  const project: Project = { id: 'p1', name: 'Shop', repos: ['acme/shop'] } as Project;
+  const breakdown: Breakdown = {
+    repo: 'acme/shop',
+    epic: { title: 'Wishlists', body: '## Why' },
+    subIssues: [
+      { key: 's1', title: 'Wishlist API', body: 'api', dependsOn: [] },
+      { key: 's2', title: 'Wishlist page', body: 'page', dependsOn: ['s1'] },
+      { key: 's3', title: 'Share a wishlist', body: 'share', dependsOn: ['s2'] },
+    ],
+  };
+  const all = { epic: breakdown.epic, subIssues: breakdown.subIssues.map(({ key, title, body }) => ({ key, title, body })) };
+
+  function setup() {
+    const store = new Store(false);
+    store.projects = [project];
+    const turns: string[] = [];
+    const officer: BriefingOfficer = {
+      turn: async (r) => {
+        turns.push(r.kind);
+        return {
+          text: 'Who is it for?',
+          sessionId: 'officer-1',
+          breakdown: r.kind === 'break-down' ? structuredClone(breakdown) : undefined,
+          draft: r.kind === 'wrap-up' ? { repo: 'acme/shop', title: 'Wishlists', body: 'one' } : undefined,
+        };
+      },
+    };
+    let next = 40;
+    const filed: { title: string; body: string }[] = [];
+    const filer = {
+      file: vi.fn<IssueFiler['file']>(async (_p, repo, title, body) => {
+        filed.push({ title, body });
+        return { repo, number: next++, title, body } as Issue;
+      }),
+      addSubIssue: vi.fn<IssueFiler['addSubIssue']>(async () => {}),
+    };
+    const planner = { deliver: vi.fn(() => ({ title: 'Wishlists' })) };
+    const briefings = new Briefings(store, new Hub(), planner as unknown as IssuePlanner, officer, { check: async () => ({}) }, filer);
+    const status = (s: Briefing['status']) => vi.waitFor(() => expect(briefings.current()?.status).toBe(s));
+    return { store, briefings, turns, filer, filed, planner, status };
+  }
+
+  async function reviewing() {
+    const s = setup();
+    s.briefings.call('p1', 'wishlists');
+    await s.status('waiting');
+    s.briefings.wrapUp('breakdown');
+    await s.status('reviewing');
+    return s;
+  }
+
+  it('waits for the manager with the breakdown, filing nothing', async () => {
+    const { briefings, turns, filer } = await reviewing();
+    expect(turns).toEqual(['open', 'break-down']);
+    expect(briefings.current()!.breakdown).toEqual(breakdown);
+    expect(filer.file).not.toHaveBeenCalled();
+    expect(() => briefings.say('more')).toThrow(/breakdown is waiting for you/);
+  });
+
+  it('files the epic first, then the sub-issues linked to it, with the real numbers in Depends on', async () => {
+    const { briefings, filer, filed, status } = await reviewing();
+    briefings.file(all);
+    await status('done');
+    expect(filed.map((f) => f.title)).toEqual(['Wishlists', 'Wishlist API', 'Wishlist page', 'Share a wishlist']);
+    expect(filed.map((f) => f.body)).toEqual(['## Why', 'api', 'Depends on #41\n\npage', 'Depends on #42\n\nshare']);
+    expect(filer.addSubIssue.mock.calls).toEqual([['acme/shop', 40, 41], ['acme/shop', 40, 42], ['acme/shop', 40, 43]]);
+    expect(briefings.current()!.messages.at(-1)!.text).toContain('#40');
+  });
+
+  it('files the manager’s edits, without the sub-issues they dropped', async () => {
+    const { briefings, filed, status } = await reviewing();
+    briefings.file({ epic: { title: 'Saved for later', body: 'Why' }, subIssues: [all.subIssues[1], { ...all.subIssues[2], title: 'Share it' }] });
+    await status('done');
+    expect(filed).toEqual([
+      { title: 'Saved for later', body: 'Why' },
+      { title: 'Wishlist page', body: 'page' },
+      { title: 'Share it', body: 'Depends on #41\n\nshare' },
+    ]);
+  });
+
+  it('can switch back to one issue before filing', async () => {
+    const { briefings, turns, filer, planner, status } = await reviewing();
+    briefings.wrapUp('one');
+    expect(briefings.current()!.breakdown).toBeUndefined();
+    await status('done');
+    expect(turns.at(-1)).toBe('wrap-up');
+    expect(planner.deliver).toHaveBeenCalledOnce();
+    expect(filer.file).not.toHaveBeenCalled();
+  });
+
+  it('carries on where it stopped after a failure, without filing anything twice', async () => {
+    const { briefings, filer, filed, status } = await reviewing();
+    filer.file.mockImplementationOnce(async (_p, repo, title, body) => {
+      filed.push({ title, body });
+      return { repo, number: 40, title, body } as Issue;
+    });
+    filer.file.mockImplementationOnce(async () => {
+      throw new Error('rate limited');
+    });
+    briefings.file(all);
+    await status('reviewing');
+    expect(briefings.current()!.error).toContain('rate limited');
+    expect(briefings.current()!.breakdown!.epic.number).toBe(40);
+    expect(() => briefings.wrapUp('one')).toThrow(/filed already/);
+    briefings.file(all);
+    await status('done');
+    expect(filed.map((f) => f.title)).toEqual(['Wishlists', 'Wishlist API', 'Wishlist page', 'Share a wishlist']);
+  });
+
+  it('notes a sub-issue that wouldn’t link, and files the rest', async () => {
+    const { briefings, filer, status } = await reviewing();
+    filer.addSubIssue.mockRejectedValueOnce(new Error('sub-issues are off'));
+    briefings.file(all);
+    await status('done');
+    expect(filer.file).toHaveBeenCalledTimes(4);
+    expect(briefings.current()!.messages.some((m) => m.from === 'system' && m.text.includes('sub-issues are off'))).toBe(true);
+  });
+
+  it('survives a restart, picking filing back up from what was filed', async () => {
+    const { store } = await reviewing();
+    const saved = JSON.parse(JSON.stringify(store.briefing)) as StoredBriefing;
+    expect(afterRestart(saved)).toMatchObject({ status: 'reviewing', breakdown });
+    saved.breakdown!.epic.number = 40;
+    expect(afterRestart({ ...saved, status: 'filing' })).toMatchObject({ status: 'reviewing', error: expect.stringContaining('File all again') as unknown, breakdown: { epic: { number: 40 } } });
+  });
+});
+
+describe('the break-down prompt', () => {
+  const prompt = briefingPrompt({ kind: 'break-down', idea: 'wishlists', brief: EMPTY_BRIEF, messages: [], resumeSessionId: 's1' });
+
+  it('asks for an epic and two to five sub-issues in the issue format', () => {
+    expect(prompt).toMatch(/an epic, and 2 to 5 sub-issues/);
+    expect(prompt).toContain('## Acceptance criteria');
+    expect(prompt).toContain('## Out of scope');
+  });
+
+  it('gives the stand’s sizing rules', () => {
+    expect(prompt).toMatch(/one sub-issue per whole piece of the feature/);
+    expect(prompt).toMatch(/independent and touch different files, or where a risky foundation should land first/);
+  });
+
+  it('keeps dependencies to what must merge first, two steps deep at most, and leaves the numbers to the office', () => {
+    expect(prompt).toMatch(/only where the work truly can't start before the other merges/);
+    expect(prompt).toMatch(/Never more than two steps deep/);
+    expect(prompt).toMatch(/Don't write "Depends on" lines/);
   });
 });

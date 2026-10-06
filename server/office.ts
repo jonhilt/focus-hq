@@ -1,4 +1,4 @@
-import type { Agent, Board, Effort, Preview, PreviewSet, Project, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
+import type { Agent, Board, Effort, Issue, Preview, PreviewSet, Project, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
 import { chosenSet, previewPrs } from '../shared/previewSet';
 import { startOrder } from '../shared/dependencies';
 import type { AgentManager } from './agents/manager';
@@ -161,17 +161,23 @@ export class Office {
     const project = this.store.project(projectId);
     if (!project.repos.includes(repo)) throw new Error(`${repo} is not part of ${project.name}`);
     if (!title.trim()) throw new Error('An issue needs a title');
-    const issue = await this.github.createIssue(repo, title.trim(), body, labels);
+    const issue = await this.fileIssue(projectId, repo, title.trim(), body, labels);
     this.hub.toast('success', `Filed ${repo}#${issue.number}`);
     if (fromDraft) this.planner.discard(projectId);
+    const agent = assign ? this.agents.hire(projectId, repo, issue, assign) : undefined;
+    return { issue, agent };
+  }
+
+  /** Files an issue on GitHub and puts it on the project's board straight away (then refreshes it), without a toast. */
+  async fileIssue(projectId: string, repo: string, title: string, body: string, labels: string[] = []): Promise<Issue> {
+    const issue = await this.github.createIssue(repo, title, body, labels);
     const board = this.store.boards.get(projectId);
     if (board && !board.issues.some((i) => i.repo === repo && i.number === issue.number)) {
       board.issues.push(issue);
       this.hub.send({ type: 'board', board });
     }
-    const agent = assign ? this.agents.hire(projectId, repo, issue, assign) : undefined;
     this.boardChanged(projectId);
-    return { issue, agent };
+    return issue;
   }
 
   async mergePullRequest(projectId: string, repo: string, number: number): Promise<void> {

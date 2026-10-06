@@ -21,6 +21,7 @@ import {
   type QaReply,
   type QaTurn,
 } from './briefing';
+import { asBreakdown, breakdownSchema } from './breakdown';
 import { agentEnv } from './claudeRunner';
 import { type Drafter, type DraftRequest, type DraftResult, draftSchema, plannerPrompt, plannerSystemPrompt, repoFolders } from './planner';
 import { renderToolUse } from './render';
@@ -166,6 +167,7 @@ export class ClaudeOfficer implements BriefingOfficer {
       hooks.brief(next);
     });
     const wrapUp = req.kind === 'wrap-up';
+    const breakDown = req.kind === 'break-down';
     const result = await runReadOnly({
       cwd,
       systemAppend: briefingSystemPrompt(req),
@@ -175,14 +177,15 @@ export class ClaudeOfficer implements BriefingOfficer {
       activity: hooks.activity,
       builtins: [...CODE_TOOLS, ...WEB_TOOLS],
       resume: req.resumeSessionId,
-      schema: wrapUp ? draftSchema(req.repos) : undefined,
+      schema: wrapUp ? draftSchema(req.repos) : breakDown ? breakdownSchema(req.repos) : undefined,
       tools: { server, names: ['update_brief'] },
     });
     return {
-      text: wrapUp ? '' : result.text,
+      text: wrapUp || breakDown ? '' : result.text,
       sessionId: result.sessionId,
       costUsd: result.costUsd,
       draft: wrapUp ? asDraft(result.structured, req.repos) : undefined,
+      breakdown: breakDown ? asBreakdown(result.structured, req.repos) : undefined,
     };
   }
 }

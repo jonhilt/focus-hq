@@ -345,14 +345,47 @@ export interface BriefingMessage {
 
 /**
  * thinking - the officer is reading code or composing a reply; qa-checking - the QA officer is reading the acceptance
- * criteria the officer just changed; waiting - your turn; wrapping-up - writing the issue; done - the issue is at the
- * project's stand; failed - the last turn went wrong (say something to try again).
+ * criteria the officer just changed; waiting - your turn; wrapping-up - writing the issue or the breakdown; reviewing -
+ * the breakdown is waiting for you to edit and file it; filing - filing the breakdown on GitHub; done - the issue is at
+ * the project's stand, or the breakdown is filed; failed - the last turn went wrong (say something to try again).
  */
-export type BriefingStatus = 'thinking' | 'qa-checking' | 'waiting' | 'wrapping-up' | 'done' | 'failed';
+export type BriefingStatus = 'thinking' | 'qa-checking' | 'waiting' | 'wrapping-up' | 'reviewing' | 'filing' | 'done' | 'failed';
+
+/** How a briefing wraps up: one issue at the stand, or an epic with sub-issues the manager reviews and files. */
+export type WrapUpShape = 'one' | 'breakdown';
+
+/** An issue in a breakdown, as the officer wrote it and the manager edited it. */
+export interface BreakdownIssue {
+  title: string;
+  /** Markdown, without any `Depends on` line: those are added with the real numbers when it's filed. */
+  body: string;
+  /** Its number once filed, so filing again after a failure carries on rather than filing it twice. */
+  number?: number;
+}
+
+export interface SubIssueDraft extends BreakdownIssue {
+  /** Stays put when other sub-issues are dropped ("s1", "s2", …). */
+  key: string;
+  /** Keys of earlier sub-issues that have to merge before this one can start. */
+  dependsOn: string[];
+}
+
+/** A briefing broken down into an epic and its sub-issues, all for one repository. */
+export interface Breakdown {
+  repo: string;
+  epic: BreakdownIssue;
+  subIssues: SubIssueDraft[];
+}
+
+/** The manager's edits to a breakdown before filing: sub-issues left out are dropped. */
+export interface BreakdownEdits {
+  epic: { title: string; body: string };
+  subIssues: { key: string; title: string; body: string }[];
+}
 
 /**
  * A back-and-forth in the observation lounge between the manager and a project's operations officer about a bigger
- * or fuzzier feature, ending in one well-specified issue. The project's QA officer sits in and speaks up when the
+ * or fuzzier feature, ending in one well-specified issue or an epic with sub-issues. The project's QA officer sits in and speaks up when the
  * acceptance criteria change. One at a time, saved across restarts.
  */
 export interface Briefing {
@@ -365,6 +398,8 @@ export interface Briefing {
   activity: string;
   messages: BriefingMessage[];
   brief: Brief;
+  /** The epic and sub-issues, from the officer breaking the briefing down until it's filed (or wrapped up as one issue). */
+  breakdown?: Breakdown;
   startedAt: number;
   updatedAt: number;
   costUsd: number;

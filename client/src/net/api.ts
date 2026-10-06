@@ -1,4 +1,4 @@
-import type { Agent, Board, Briefing, Effort, Issue, IssueDraft, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, RoomTheme, Settings, TermLine, VoiceStatus } from '../../../shared/types';
+import type { Agent, Board, BreakdownEdits, Briefing, Effort, Issue, IssueDraft, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, RoomTheme, Settings, TermLine, VoiceStatus, WrapUpShape } from '../../../shared/types';
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   return send<T>(method, url, body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -31,7 +31,8 @@ export const api = {
   discardDraft: (projectId: string) => call('DELETE', `/projects/${projectId}/draft`),
   callBriefing: (projectId: string, idea: string) => call<Briefing>('POST', '/briefing', { projectId, idea }),
   briefingSay: (text: string) => call<Briefing>('POST', '/briefing/say', { text }),
-  briefingWrapUp: () => call<Briefing>('POST', '/briefing/wrap-up'),
+  briefingWrapUp: (shape: WrapUpShape) => call<Briefing>('POST', '/briefing/wrap-up', { shape }),
+  briefingFile: (edits: BreakdownEdits) => call<Briefing>('POST', '/briefing/file', edits),
   briefingEnd: () => call('DELETE', '/briefing'),
   sendToQa: (projectId: string, repo: string, number: number) => call<QaReview>('POST', '/prs/qa', { projectId, repo, number }),
   resolveConflicts: (projectId: string, repo: string, number: number) =>
