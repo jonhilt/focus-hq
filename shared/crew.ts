@@ -2,7 +2,8 @@ import { ACTIVE_STATUSES, type Agent, type Avatar, type Briefing, type Division,
 
 // Who's aboard. Agents get a random look when they're hired. Permanent crew members, one of each per room (the
 // operations officer at the New issue stand and the QA officer at the QA station), are derived from the project id
-// rather than stored, so the same officer is at the same post on every reload and on every client.
+// rather than stored, so the same officer is at the same post on every reload and on every client. The ship's engineer
+// is the one crew member who serves every room.
 
 /** Each division's uniform colour, also used wherever the UI marks whose work something is. */
 export const UNIFORM: Record<Division, string> = { command: '#d8433b', operations: '#e8b33c', sciences: '#3f8fd8' };
@@ -73,6 +74,21 @@ export function qaOfficerFor(projectId: string): Planner {
   const taken = hash(`planner:${projectId}`) % SURNAMES.length;
   const surname = SURNAMES[(taken + 1 + ((h >>> 3) % (SURNAMES.length - 1))) % SURNAMES.length];
   return { name: `${RANK_TITLE[avatar.rank]} ${surname}`, avatar };
+}
+
+/**
+ * The ship's engineer at the engineering station on the concourse: one for the whole ship, called to a briefing to read
+ * the code and lay out options for a big change. Operations, like everyone who keeps the ship running.
+ */
+export function chiefEngineer(): Planner {
+  const avatar = rollAvatar(seeded(hash('engineer')), 'operations', 'lieutenant');
+  return { name: `${RANK_TITLE.lieutenant} Brennan`, avatar };
+}
+
+/** Whether the engineer is at the lounge table: from the moment a briefing asks engineering until it's wrapped up. */
+export function engineerAtBriefing(briefing: Pick<Briefing, 'status' | 'engineering'> | null): boolean {
+  if (!briefing || briefing.status === 'done') return false;
+  return briefing.status === 'engineering' || !!briefing.engineering;
 }
 
 /**

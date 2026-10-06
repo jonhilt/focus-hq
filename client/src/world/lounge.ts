@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { plannerFor, qaAtBriefing, qaOfficerFor } from '../../../shared/crew';
-import type { Brief, Briefing } from '../../../shared/types';
+import { chiefEngineer, engineerAtBriefing, plannerFor, qaAtBriefing, qaOfficerFor } from '../../../shared/crew';
+import { optionLabel } from '../../../shared/engineering';
+import type { Brief, Briefing, EngineeringReport } from '../../../shared/types';
 import { state } from '../net/state';
 import { type Builder, interactive } from './builder';
 import { canvasTexture, makeCanvas, wrap } from './canvas';
@@ -22,6 +23,8 @@ const SEATS: [number, number, number][] = [
 const OFFICER_SEAT = 1;
 /** QA sits at the officer's elbow, at the east end of the north side. */
 const QA_SEAT = 2;
+/** The engineer, when called, takes the officer's other elbow, at the west end, nearest the wall screen. */
+const ENGINEER_SEAT = 0;
 
 /** A crew member's chair at the table: empty, or holding whoever the briefing needs there. */
 class Chair {
@@ -58,12 +61,13 @@ class Chair {
 
 /**
  * The observation lounge: a long table under the viewports, where the manager and a project's operations officer hold
- * briefings, the project's QA officer sitting in. The wall screen shows the brief as it takes shape. Built in world
- * coordinates.
+ * briefings, the project's QA officer sitting in and the ship's engineer joining when asked. The wall screen shows the
+ * brief as it takes shape, or the engineer's options while they wait for a pick. Built in world coordinates.
  */
 export class Lounge {
   private officer = new Chair(() => this.label());
   private qa = new Chair(() => this.label());
+  private engineer = new Chair(() => this.label());
   private screen = makeCanvas(1280, 768);
   private screenTex = canvasTexture(this.screen.canvas);
   private screenKey = '';
@@ -108,6 +112,7 @@ export class Lounge {
       b.add(g);
       if (i === OFFICER_SEAT) g.add(this.officer.seat);
       if (i === QA_SEAT) g.add(this.qa.seat);
+      if (i === ENGINEER_SEAT) g.add(this.engineer.seat);
     });
 
     // the brief, on the west wall where everyone at the table can read it
@@ -147,12 +152,13 @@ export class Lounge {
     return briefing ? `Join the briefing about ${state.project(briefing.projectId)?.name ?? 'a project'}` : 'Call a briefing';
   }
 
-  /** Seats (or dismisses) the officer and QA, and redraws the screen to match the current briefing. */
+  /** Seats (or dismisses) the officer, QA and the engineer, and redraws the screen to match the current briefing. */
   sync(): void {
     const briefing = state.briefing;
     const projectId = briefing?.projectId ?? '';
     this.officer.set(projectId, briefing && officerView(briefing));
     this.qa.set(projectId, briefing && qaAtBriefing(projectId, briefing, state.qaAgent(projectId)) ? qaView(briefing) : null);
+    this.engineer.set('engineer', briefing && engineerAtBriefing(briefing) ? engineerView(briefing) : null);
     this.drawScreen(briefing);
   }
 
@@ -160,10 +166,11 @@ export class Lounge {
     if (camera.z < OFFICE.z0) return;
     this.officer.update(t, camera);
     this.qa.update(t, camera);
+    this.engineer.update(t, camera);
   }
 
   private drawScreen(briefing: Briefing | null): void {
-    const key = JSON.stringify([briefing?.projectId, briefing?.status, briefing?.brief]);
+    const key = JSON.stringify([briefing?.projectId, briefing?.status, briefing?.brief, briefing?.engineering]);
     if (key === this.screenKey) return;
     this.screenKey = key;
     const { canvas, ctx } = this.screen;
@@ -182,13 +189,17 @@ export class Lounge {
       this.screenTex.needsUpdate = true;
       return;
     }
-    drawBrief(ctx, area, briefing.brief, state.project(briefing.projectId)?.name ?? '', briefing.idea);
+    const project = state.project(briefing.projectId)?.name ?? '';
+    // until the manager picks one, the engineer's options take the screen; the pick then shows in the brief
+    if (briefing.engineering && !briefing.brief.approach) drawOptions(ctx, area, briefing.engineering, project);
+    else drawBrief(ctx, area, briefing.brief, project, briefing.idea);
     this.screenTex.needsUpdate = true;
   }
 
   dispose(): void {
     this.officer.dispose();
     this.qa.dispose();
+    this.engineer.dispose();
     this.screenTex.dispose();
   }
 }
@@ -204,6 +215,8 @@ function officerView(briefing: Briefing): CrewView {
       return { ...base, status: 'working', icon: '💭', line: briefing.activity, thinking: true };
     case 'qa-checking':
       return { ...base, status: 'waiting', icon: '👂', line: `Hearing from ${qaOfficerFor(briefing.projectId).name}` };
+    case 'engineering':
+      return { ...base, status: 'waiting', icon: '👂', line: `Waiting on ${chiefEngineer().name}’s options` };
     case 'wrapping-up':
       return { ...base, status: 'working', icon: '📝', line: briefing.activity };
     case 'waiting':
@@ -229,6 +242,81 @@ function qaView(briefing: Briefing): CrewView {
   const last = briefing.messages[briefing.messages.length - 1];
   if (last?.from === 'qa') return { ...base, status: 'waiting', icon: '🧪', line: last.text };
   return { ...base, status: 'queued', icon: '🧪', line: 'Listening in on the acceptance criteria' };
+}
+
+/** The engineer at the table: reading the code for options, then waiting on the manager's pick. */
+function engineerView(briefing: Briefing): CrewView {
+  const crew = chiefEngineer();
+  const base = { name: crew.name, avatar: crew.avatar, tag: 'Eng', icon: '🔧' };
+  if (briefing.status === 'engineering') return { ...base, status: 'working', line: briefing.activity, thinking: true };
+  const approach = briefing.brief.approach;
+  if (approach) return { ...base, status: 'done', line: `Approach: ${approach.title}` };
+  const last = briefing.messages[briefing.messages.length - 1];
+  return { ...base, status: 'waiting', line: last?.from === 'engineer' ? last.text : 'Options on the screen – pick one' };
+}
+
+/** The engineer's options side by side, the recommended one starred, with why along the bottom. */
+function drawOptions(ctx: CanvasRenderingContext2D, area: { x: number; y: number; w: number; h: number }, report: EngineeringReport, project: string): void {
+  let y = area.y;
+  ctx.fillStyle = LCARS.gold;
+  ctx.font = `500 26px ${LCARS_FONT}`;
+  ctx.fillText(`${project} · engineering`.toUpperCase(), area.x, y);
+  y += 34;
+  ctx.fillStyle = LCARS.peach;
+  ctx.font = `600 40px ${LCARS_FONT}`;
+  ctx.fillText('OPTIONS – PICK ONE', area.x, y);
+  y += 56;
+  const gap = 24;
+  const colW = (area.w - gap * (report.options.length - 1)) / report.options.length;
+  const bottom = area.y + area.h - 70;
+  const colours = [LCARS.orange, LCARS.periwinkle, LCARS.sky];
+  report.options.forEach((option, i) => {
+    const x = area.x + i * (colW + gap);
+    const recommended = i === report.recommended;
+    let yy = y;
+    ctx.fillStyle = recommended ? LCARS.gold : colours[i % colours.length];
+    ctx.fillRect(x, yy, colW, 10);
+    yy += 18;
+    ctx.font = `600 26px ${LCARS_FONT}`;
+    ctx.fillText(`${optionLabel(i)}${recommended ? ' ★' : ''}`.toUpperCase(), x, yy);
+    ctx.fillStyle = LCARS.sky;
+    ctx.font = `500 22px ${LCARS_FONT}`;
+    ctx.textAlign = 'right';
+    ctx.fillText(option.size.toUpperCase(), x + colW, yy + 3);
+    ctx.textAlign = 'left';
+    yy += 32;
+    ctx.fillStyle = LCARS.peach;
+    ctx.font = `600 28px ${LCARS_FONT}`;
+    for (const line of wrap(ctx, option.title, colW, 2)) {
+      ctx.fillText(line, x, yy);
+      yy += 32;
+    }
+    yy += 4;
+    const block = (lines: string[], colour: string, max: number) => {
+      ctx.fillStyle = colour;
+      ctx.font = `400 21px ${LCARS_FONT}`;
+      let shown = 0;
+      for (const entry of lines) {
+        for (const line of wrap(ctx, entry, colW - 4, max - shown)) {
+          if (yy > bottom - 24) return;
+          ctx.fillText(line, x, yy);
+          yy += 25;
+          shown++;
+        }
+        if (shown >= max) break;
+      }
+      yy += 8;
+    };
+    block([option.approach], '#e8e2f0', 4);
+    block(option.touches.map((t) => `▸ ${t}`), LCARS.sky, 2);
+    block(option.tradeoffs.map((t) => `± ${t}`), LCARS.lilac, 3);
+    block(option.risks.map((r) => `⚠ ${r}`), LCARS.red, 2);
+  });
+  ctx.fillStyle = LCARS.gold;
+  ctx.font = `500 24px ${LCARS_FONT}`;
+  for (const [i, line] of wrap(ctx, `★ ${optionLabel(report.recommended)}: ${report.why}`.toUpperCase(), area.w, 2).entries()) {
+    ctx.fillText(line, area.x, bottom + 8 + i * 28);
+  }
 }
 
 /** The brief as LCARS columns: summary across the top, why/who on the left, scope and criteria on the right. */
@@ -272,6 +360,7 @@ function drawBrief(ctx: CanvasRenderingContext2D, area: { x: number; y: number; 
   };
   let left = section(area.x, top, 'Why', LCARS.orange, brief.why ? [brief.why] : [], bottom);
   left = section(area.x, left, 'Who for', LCARS.sky, brief.who ? [brief.who] : [], bottom);
+  if (brief.approach) left = section(area.x, left, 'Approach', LCARS.gold, [`${brief.approach.title} (${brief.approach.size})`], bottom);
   section(area.x, left, 'Open questions', LCARS.red, brief.openQuestions, bottom);
   const rx = area.x + colW + 40;
   let right = section(rx, top, 'Scope', LCARS.periwinkle, brief.scope, bottom);

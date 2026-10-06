@@ -338,6 +338,8 @@ export interface Brief {
   openQuestions: string[];
   /** Architecture sketches for a complex change: how it works today, the design options, then the chosen one. */
   diagrams: BriefDiagram[];
+  /** The engineer's option the manager picked; it goes into the issue's Context. Missing until they pick one. */
+  approach?: EngineeringOption;
 }
 
 /** A titled Mermaid diagram on the wall screen ("Today", "Option A: …", "Chosen: …"). */
@@ -346,22 +348,47 @@ export interface BriefDiagram {
   mermaid: string;
 }
 
+/** How much work an option is: one agent in one sitting, or an epic of several issues. */
+export const OPTION_SIZES = ['one agent', 'several issues'] as const;
+export type OptionSize = (typeof OPTION_SIZES)[number];
+
+/** One way to build a briefing's change, as the ship's engineer lays it out after reading the code. */
+export interface EngineeringOption {
+  title: string;
+  /** The approach in a few lines. */
+  approach: string;
+  /** Files and modules it touches. */
+  touches: string[];
+  tradeoffs: string[];
+  risks: string[];
+  size: OptionSize;
+}
+
+/** The engineer's answer when a briefing asks engineering: two or three options, and which one they'd pick. */
+export interface EngineeringReport {
+  options: EngineeringOption[];
+  /** Index into `options`. */
+  recommended: number;
+  /** Why they recommend it. */
+  why: string;
+}
+
 export const EMPTY_BRIEF: Brief = { summary: '', why: '', who: '', scope: [], outOfScope: [], acceptance: [], openQuestions: [], diagrams: [] };
 
 export interface BriefingMessage {
-  /** qa - the room's QA officer's note on the acceptance criteria. */
-  from: 'manager' | 'officer' | 'qa' | 'system';
+  /** qa - the room's QA officer's note on the acceptance criteria; engineer - the ship's engineer, back with options. */
+  from: 'manager' | 'officer' | 'qa' | 'engineer' | 'system';
   text: string;
   at: number;
 }
 
 /**
  * thinking - the officer is reading code or composing a reply; qa-checking - the QA officer is reading the acceptance
- * criteria the officer just changed; waiting - your turn; wrapping-up - writing the issue or the breakdown; reviewing -
+ * criteria the officer just changed; engineering - the ship's engineer is reading the code for options; waiting - your turn; wrapping-up - writing the issue or the breakdown; reviewing -
  * the breakdown is waiting for you to edit and file it; filing - filing the breakdown on GitHub; done - the issue is at
  * the project's stand, or the breakdown is filed; failed - the last turn went wrong (say something to try again).
  */
-export type BriefingStatus = 'thinking' | 'qa-checking' | 'waiting' | 'wrapping-up' | 'reviewing' | 'filing' | 'done' | 'failed';
+export type BriefingStatus = 'thinking' | 'qa-checking' | 'engineering' | 'waiting' | 'wrapping-up' | 'reviewing' | 'filing' | 'done' | 'failed';
 
 /** How a briefing wraps up: one issue at the stand, or an epic with sub-issues the manager reviews and files. */
 export type WrapUpShape = 'one' | 'breakdown';
@@ -397,8 +424,9 @@ export interface BreakdownEdits {
 
 /**
  * A back-and-forth in the observation lounge between the manager and a project's operations officer about a bigger
- * or fuzzier feature, ending in one well-specified issue or an epic with sub-issues. The project's QA officer sits in and speaks up when the
- * acceptance criteria change. One at a time, saved across restarts.
+ * or fuzzier feature, ending in one well-specified issue or an epic with sub-issues. The project's QA officer sits in and
+ * speaks up when the acceptance criteria change; for a big change, the ship's engineer can be asked for options on how
+ * to build it. One at a time, saved across restarts.
  */
 export interface Briefing {
   id: string;
@@ -410,6 +438,8 @@ export interface Briefing {
   activity: string;
   messages: BriefingMessage[];
   brief: Brief;
+  /** The engineer's latest options, once the manager has asked engineering. */
+  engineering?: EngineeringReport;
   /** The epic and sub-issues, from the officer breaking the briefing down until it's filed (or wrapped up as one issue). */
   breakdown?: Breakdown;
   startedAt: number;

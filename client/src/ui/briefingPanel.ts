@@ -1,5 +1,6 @@
-import { plannerFor, qaOfficerFor } from '../../../shared/crew';
-import type { Brief, Breakdown, BreakdownEdits, WrapUpShape } from '../../../shared/types';
+import { chiefEngineer, plannerFor, qaOfficerFor } from '../../../shared/crew';
+import { optionLabel } from '../../../shared/engineering';
+import type { Brief, Breakdown, BreakdownEdits, Briefing, EngineeringOption, WrapUpShape } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
@@ -14,7 +15,8 @@ export const briefingPanelOpen = () => open;
 
 /**
  * The observation lounge's briefing: the conversation with the project's operations officer on the left, the brief
- * they keep on the wall screen on the right. With no briefing in session, a form to call one.
+ * they keep on the wall screen on the right, under the engineer's options once engineering has been asked. With no
+ * briefing in session, a form to call one.
  */
 export function openBriefingPanel(ui: Ui, projectId?: string): void {
   const body = h('div', { class: 'briefing' });
@@ -54,7 +56,8 @@ export function openBriefingPanel(ui: Ui, projectId?: string): void {
     }
     const officer = plannerFor(briefing.projectId);
     const qa = qaOfficerFor(briefing.projectId);
-    const names = { manager: 'You', officer: officer.name, qa: `${qa.name} · QA` };
+    const engineer = chiefEngineer();
+    const names = { manager: 'You', officer: officer.name, qa: `${qa.name} · QA`, engineer: `${engineer.name} · Engineering` };
     const project = state.project(briefing.projectId);
     title.textContent = `🖖 Briefing: ${project?.name ?? 'a project'}`;
     const yourTurn = briefing.status === 'waiting' || briefing.status === 'failed';
@@ -76,6 +79,9 @@ export function openBriefingPanel(ui: Ui, projectId?: string): void {
       briefing.status === 'qa-checking'
         ? h('div', { class: 'briefing-msg qa typing' }, h('strong', null, names.qa), h('p', null, `✻ ${briefing.activity}`))
         : null,
+      briefing.status === 'engineering'
+        ? h('div', { class: 'briefing-msg engineer typing' }, h('strong', null, names.engineer), h('p', null, `✻ ${briefing.activity}`))
+        : null,
       briefing.status === 'failed' ? h('div', { class: 'briefing-note error' }, `⚠ ${briefing.error ?? 'Something went wrong'}. Say something to carry on.`) : null,
     );
 
@@ -90,6 +96,17 @@ export function openBriefingPanel(ui: Ui, projectId?: string): void {
     wrap.onclick = () => {
       choosing = true;
       render();
+    };
+    // what's in the message box goes with it: a steer for the first ask, the changes wanted on a second
+    const ask = h('button', { class: 'btn', title: `${engineer.name} reads the code and comes back with 2 or 3 options for how to build it. Anything in the message box goes along as a note.` },
+      briefing.engineering ? '🔧 Back to engineering' : '🔧 Ask engineering');
+    ask.disabled = !yourTurn || briefing.messages.length < 2;
+    ask.onclick = () => {
+      const text = input.value;
+      void busy(ask, async () => {
+        await api.briefingAskEngineering(text);
+        input.value = '';
+      }, ui.error);
     };
     const one = h('button', { class: 'btn primary', title: `${officer.name} writes one issue and leaves it at the stand` }, '📝 One issue');
     one.onclick = () => wrapUp('one', one);
@@ -151,12 +168,12 @@ export function openBriefingPanel(ui: Ui, projectId?: string): void {
           inputBox,
           choosing
             ? h('div', { class: 'row' }, h('strong', null, 'Wrap up as'), one, breakDown, cancel)
-            : h('div', { class: 'row' }, send, wrap, cost, h('span', { class: 'grow' }), end),
+            : h('div', { class: 'row' }, send, ask, wrap, cost, h('span', { class: 'grow' }), end),
         );
 
     fill(body,
       h('div', { class: 'briefing-chat' }, log, controls),
-      h('aside', { class: 'briefing-brief' }, briefView(briefing.brief, briefing.idea)),
+      h('aside', { class: 'briefing-brief' }, optionsView(ui, briefing, yourTurn), briefView(briefing.brief, briefing.idea)),
     );
     if (briefing.messages.length !== shownMessages) {
       shownMessages = briefing.messages.length;
@@ -258,11 +275,39 @@ function callForm(ui: Ui, projectId?: string): HTMLElement {
   const go = h('button', { class: 'btn primary' }, '📣 Call the briefing');
   go.onclick = () => void busy(go, () => api.callBriefing(project.value, idea.value), ui.error);
   return h('div', { class: 'briefing-call' },
-    h('p', null, 'For anything bigger or fuzzier than a one-line issue. The officer reads the code, asks you questions one at a time and keeps a brief on the wall screen. QA chips in when the acceptance criteria change, so they can be tested. When you wrap up, they write one issue to the project’s stand, or break it down into an epic and sub-issues for you to check and file.'),
+    h('p', null, 'For anything bigger or fuzzier than a one-line issue. The officer reads the code, asks you questions one at a time and keeps a brief on the wall screen. QA chips in when the acceptance criteria change, so they can be tested. For a big change, ask engineering for options on how to build it and pick one. When you wrap up, they write one issue to the project’s stand, or break it down into an epic and sub-issues for you to check and file.'),
     h('div', { class: 'field' }, h('label', null, 'Project'), project),
     officer,
     h('div', { class: 'field' }, h('label', null, 'Topic'), withMic(ui, idea)),
     go,
+  );
+}
+
+const bullets = (label: string, items: string[]) => (items.length ? h('div', null, h('em', null, label), h('ul', null, ...items.map((i) => h('li', null, i)))) : null);
+const sameOption = (a: EngineeringOption | undefined, b: EngineeringOption) => JSON.stringify(a) === JSON.stringify(b);
+
+/** The engineer's options, recommended one starred, each with a button to pick it as the approach. */
+function optionsView(ui: Ui, briefing: Briefing, yourTurn: boolean): HTMLElement | null {
+  const report = briefing.engineering;
+  if (!report) return null;
+  return h('div', { class: 'brief-section options' },
+    h('h4', null, `🔧 ${chiefEngineer().name}’s options`),
+    ...report.options.map((o, i) => {
+      const picked = sameOption(briefing.brief.approach, o);
+      const pick = h('button', { class: `btn small${picked ? '' : ' primary'}` }, picked ? '✓ Picked' : 'Pick this one');
+      pick.disabled = !yourTurn || picked;
+      pick.onclick = () => void busy(pick, () => api.briefingPickApproach(i), ui.error);
+      return h('div', { class: `brief-option${i === report.recommended ? ' recommended' : ''}${picked ? ' picked' : ''}` },
+        h('div', { class: 'row' }, h('strong', null, `${optionLabel(i)}: ${o.title}`), h('span', { class: 'grow' }), h('small', { class: 'size' }, o.size)),
+        i === report.recommended ? h('small', { class: 'star' }, '★ Recommended') : null,
+        h('p', null, o.approach),
+        bullets('Touches', o.touches),
+        bullets('Trade-offs', o.tradeoffs),
+        bullets('Risks', o.risks),
+        pick,
+      );
+    }),
+    h('p', { class: 'why' }, `★ ${optionLabel(report.recommended)}, because ${report.why.replace(/^./, (c) => c.toLowerCase())}`),
   );
 }
 
@@ -276,6 +321,7 @@ function briefView(brief: Brief, idea: string): HTMLElement {
     h('h3', null, brief.summary || idea),
     section('Why', brief.why ? [brief.why] : [], 'why'),
     section('Who for', brief.who ? [brief.who] : [], 'who'),
+    brief.approach ? section('Approach', [`${brief.approach.title} (${brief.approach.size})`, brief.approach.approach], 'approach') : null,
     section('Scope', brief.scope, 'scope'),
     section('Out of scope', brief.outOfScope, 'out'),
     section('Acceptance criteria', brief.acceptance, 'acceptance'),

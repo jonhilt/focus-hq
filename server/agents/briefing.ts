@@ -1,4 +1,5 @@
-import { plannerFor, qaAtBriefing, qaOfficerFor } from '../../shared/crew';
+import { chiefEngineer, plannerFor, qaAtBriefing, qaOfficerFor } from '../../shared/crew';
+import { optionLabel, optionText, recommendation, reportText } from '../../shared/engineering';
 import {
   type Brief,
   type BriefDiagram,
@@ -8,6 +9,7 @@ import {
   type BriefingMessage,
   type BriefingStatus,
   EMPTY_BRIEF,
+  type EngineeringReport,
   type Issue,
   type Planner,
   type Settings,
@@ -17,6 +19,7 @@ import type { Hub } from '../hub';
 import type { Store, StoredBriefing } from '../store';
 import { errorMessage, newId, truncate } from '../util';
 import { applyEdits, filedBody, SUB_ISSUES } from './breakdown';
+import type { BriefingEngineer } from './engineering';
 import { type DraftResult, type IssuePlanner, ISSUE_FORMAT, repoList } from './planner';
 
 export type TurnKind = 'open' | 'reply' | 'wrap-up' | 'break-down';
@@ -29,6 +32,8 @@ export interface OfficerTurn {
   repos: string[];
   idea: string;
   brief: Brief;
+  /** The engineer's latest options, if the manager has asked engineering. */
+  engineering?: EngineeringReport;
   /** Everything said so far, the manager's latest message included. */
   messages: BriefingMessage[];
   /** The officer's session so far; missing on the first turn, or if it was lost. */
@@ -99,14 +104,15 @@ export interface IssueFiler {
   addSubIssue(repo: string, parent: number, child: number): Promise<void>;
 }
 
-const publicView = ({ sessionId: _, qaSessionId: __, ...briefing }: StoredBriefing): Briefing => briefing;
+const publicView = ({ sessionId: _, qaSessionId: __, engineerSessionId: ___, ...briefing }: StoredBriefing): Briefing => briefing;
 
 /**
  * Briefings in the observation lounge: the manager and a project's operations officer talk a bigger or fuzzier idea
  * through, the officer keeping a brief on the wall screen, until the manager wraps up and the officer writes one issue
- * to the project's stand, or breaks it down into an epic and sub-issues that the manager reviews and files. The project's QA officer sits in and adds a note when the acceptance criteria change. One at
- * a time. Each turn resumes the officer's (and QA's) session, so nothing runs while it's your turn and a briefing
- * survives a restart.
+ * to the project's stand, or breaks it down into an epic and sub-issues that the manager reviews and files. The
+ * project's QA officer sits in and adds a note when the acceptance criteria change, and the manager can send for the
+ * ship's engineer to lay out options for how to build it, picking one as the Approach. One at a time. Each turn resumes
+ * the speaker's session, so nothing runs while it's your turn and a briefing survives a restart.
  */
 export class Briefings {
   private running: AbortController | null = null;
@@ -118,6 +124,7 @@ export class Briefings {
     private readonly officer: BriefingOfficer,
     private readonly qa: BriefingQa,
     private readonly filer: IssueFiler,
+    private readonly engineer: BriefingEngineer,
   ) {}
 
   current(): Briefing | null {
@@ -149,7 +156,7 @@ export class Briefings {
     };
     this.store.setBriefing(briefing);
     this.broadcast();
-    this.run(briefing, 'open');
+    this.run(briefing, (signal, current) => this.converse(briefing, 'open', signal, current));
     return publicView(briefing);
   }
 
@@ -158,7 +165,7 @@ export class Briefings {
     if (!text.trim()) throw new Error('Say something first');
     briefing.messages.push({ from: 'manager', text: text.trim(), at: Date.now() });
     this.turn(briefing, 'thinking', 'Thinking it over');
-    this.run(briefing, 'reply');
+    this.run(briefing, (signal, current) => this.converse(briefing, 'reply', signal, current));
     return publicView(briefing);
   }
 
@@ -172,7 +179,7 @@ export class Briefings {
     briefing.breakdown = undefined;
     briefing.messages.push({ from: 'system', text: one ? 'The captain wrapped up the briefing as one issue.' : 'The captain asked for an epic broken down into sub-issues.', at: Date.now() });
     this.turn(briefing, 'wrapping-up', one ? 'Writing up the issue' : 'Breaking it down');
-    this.run(briefing, one ? 'wrap-up' : 'break-down');
+    this.run(briefing, (signal, current) => this.converse(briefing, one ? 'wrap-up' : 'break-down', signal, current));
     return publicView(briefing);
   }
 
@@ -183,6 +190,30 @@ export class Briefings {
     briefing.breakdown = applyEdits(briefing.breakdown, edits);
     this.turn(briefing, 'filing', 'Filing the epic');
     void this.fileAll(briefing, briefing.breakdown);
+    return publicView(briefing);
+  }
+
+  /** Sends for the ship's engineer, who reads the code and comes back with options; `request` sends their last ones back for changes. */
+  askEngineering(request: string): Briefing {
+    const briefing = this.expect('waiting', 'failed');
+    const ask = request.trim();
+    const what = briefing.engineering ? 'another look at the options' : 'options on how to build it';
+    briefing.messages.push({ from: 'system', text: `The captain asked ${chiefEngineer().name} for ${what}${ask ? `: “${ask}”` : '.'}`, at: Date.now() });
+    this.turn(briefing, 'engineering', 'On the way to the lounge');
+    this.run(briefing, (signal, current) => this.engineering(briefing, ask, signal, current));
+    return publicView(briefing);
+  }
+
+  /** The manager picks one of the engineer's options: it goes into the brief as the Approach, and from there into the issue. */
+  pickApproach(index: number): Briefing {
+    const briefing = this.expect('waiting', 'failed');
+    const option = briefing.engineering?.options[index];
+    if (!option) throw new Error(briefing.engineering ? 'There’s no such option' : 'Ask engineering for options first');
+    briefing.brief = { ...briefing.brief, approach: option };
+    briefing.messages.push({ from: 'system', text: `The captain picked ${optionLabel(index)}, ${option.title}, as the approach.`, at: Date.now() });
+    briefing.updatedAt = Date.now();
+    this.store.save();
+    this.broadcast();
     return publicView(briefing);
   }
 
@@ -211,6 +242,8 @@ export class Briefings {
         throw new Error(`${plannerFor(briefing.projectId).name} is still thinking`);
       case 'qa-checking':
         throw new Error(`${qaOfficerFor(briefing.projectId).name} is still reading the acceptance criteria`);
+      case 'engineering':
+        throw new Error(`${chiefEngineer().name} is still working on the options`);
       case 'reviewing':
         throw new Error('The breakdown is waiting for you: file it, or wrap up as one issue instead');
       case 'filing':
@@ -229,12 +262,13 @@ export class Briefings {
     this.broadcast();
   }
 
-  private run(briefing: StoredBriefing, kind: TurnKind): void {
+  /** Runs a turn of the briefing in the background; `current` turns false once it's been superseded or ended. */
+  private run(briefing: StoredBriefing, work: (signal: AbortSignal, current: () => boolean) => Promise<void>): void {
     const abort = new AbortController();
     this.running?.abort();
     this.running = abort;
     const current = () => this.store.briefing === briefing && this.running === abort;
-    void this.converse(briefing, kind, abort.signal, current)
+    void work(abort.signal, current)
       .catch((err) => {
         if (!current()) return;
         Object.assign(briefing, { status: 'failed', activity: 'Lost the thread', error: errorMessage(err), updatedAt: Date.now() });
@@ -260,6 +294,7 @@ export class Briefings {
         repos: [...project.repos],
         idea: briefing.idea,
         brief: briefing.brief,
+        engineering: briefing.engineering,
         messages: [...briefing.messages],
         resumeSessionId: briefing.sessionId,
         settings: this.store.settings,
@@ -358,6 +393,49 @@ export class Briefings {
     }
   }
 
+  /** The engineer's options, which clear any earlier pick. An engineering hiccup is a note in the log; the briefing carries on. */
+  private async engineering(briefing: StoredBriefing, request: string, signal: AbortSignal, current: () => boolean): Promise<void> {
+    const project = this.store.project(briefing.projectId);
+    const engineer = chiefEngineer();
+    try {
+      const reply = await this.engineer.propose(
+        {
+          projectId: project.id,
+          projectName: project.name,
+          engineer,
+          planner: plannerFor(project.id),
+          repos: [...project.repos],
+          idea: briefing.idea,
+          brief: briefing.brief,
+          messages: [...briefing.messages],
+          request,
+          previous: briefing.engineering,
+          resumeSessionId: briefing.engineerSessionId,
+          settings: this.store.settings,
+          signal,
+        },
+        (text) => {
+          if (!current() || !text) return;
+          briefing.activity = truncate(text, 120);
+          this.broadcast();
+        },
+      );
+      if (!current()) return;
+      briefing.engineerSessionId = reply.sessionId ?? briefing.engineerSessionId;
+      briefing.costUsd += reply.costUsd ?? 0;
+      briefing.engineering = reply.report;
+      const { approach: _, ...brief } = briefing.brief;
+      briefing.brief = brief;
+      briefing.messages.push({ from: 'engineer', text: recommendation(reply.report), at: Date.now() });
+    } catch (err) {
+      if (!current()) return;
+      briefing.messages.push({ from: 'system', text: `${engineer.name} couldn’t finish the options: ${errorMessage(err)}`, at: Date.now() });
+    }
+    Object.assign(briefing, { status: 'waiting', activity: 'Waiting for you', updatedAt: Date.now() });
+    this.store.save();
+    this.broadcast();
+  }
+
   /**
    * Files what isn't filed yet, saving each number as it goes. On a failure the briefing goes back to reviewing, so
    * filing again carries on where this stopped. A sub-issue that won't link to the epic is filed all the same, with a
@@ -425,6 +503,7 @@ How to run the briefing:
 - Push back on anything vague or contradictory. If it's too big for one agent in one sitting, say so: suggest what to leave for later, or breaking it down into sub-issues when it wraps up.
 - Keep the brief current with mcp__brief__update_brief whenever something is agreed or a new question comes up. It's on the lounge's wall screen for both of you. One short line per entry, and drop open questions once they're answered.
 - ${qaName(req)}, the project's QA officer, sits in: every pull request built from this issue comes to them to test. When you add or change acceptance criteria, they may add one short note (a criterion that can't be checked, a missing edge case, something the project's QA brief requires). You'll get it with the manager's next message: weigh it, recommend, and put what the manager agrees to into the acceptance criteria. The manager decides.
+- ${chiefEngineer().name}, the ship's engineer, can be called in by the manager to read the code and lay out two or three options for how to build it. When the how is a real choice across several modules, suggest asking engineering. Once the manager picks an option it's the brief's Approach: build on it, don't reopen it.
 - When nothing important is still open, say you have enough and suggest wrapping up. The manager decides when.
 
 Diagrams, for complex changes only (several modules, or a real choice of design; not every briefing):
@@ -437,36 +516,49 @@ Diagrams, for complex changes only (several modules, or a real choice of design;
 
 const qaName = (req: Pick<OfficerTurn, 'projectId'>) => qaOfficerFor(req.projectId).name;
 
-const SPEAKERS: Record<BriefingMessage['from'], string> = { manager: 'Manager', officer: 'Operations officer', qa: 'QA officer', system: 'Note' };
+const SPEAKERS: Record<BriefingMessage['from'], string> = { manager: 'Manager', officer: 'Operations officer', qa: 'QA officer', engineer: 'Engineer', system: 'Note' };
+
+type Speaker = 'officer' | 'qa' | 'engineer';
 
 /** The conversation as one speaker reads it: their own lines are "You". */
-const transcript = (messages: BriefingMessage[], you: 'officer' | 'qa') =>
+export const transcript = (messages: BriefingMessage[], you: Speaker) =>
   messages.map((m) => `${m.from === you ? 'You' : SPEAKERS[m.from]}: ${m.text}`).join('\n\n');
 
 /** What's been said since the speaker's last line (everything, if they haven't spoken yet). */
-const since = (messages: BriefingMessage[], from: 'officer' | 'qa') => messages.slice(messages.map((m) => m.from).lastIndexOf(from) + 1);
+export const since = (messages: BriefingMessage[], from: Speaker) => messages.slice(messages.map((m) => m.from).lastIndexOf(from) + 1);
 
-export function briefingPrompt(req: Pick<OfficerTurn, 'kind' | 'idea' | 'brief' | 'messages' | 'resumeSessionId'>): string {
+/** Where engineering stands, for the officer: the approach the manager picked, else the options waiting for a pick. */
+function engineeringNote(req: Pick<OfficerTurn, 'brief' | 'engineering'>): string {
+  if (req.brief.approach) return `The approach the manager picked from engineering's options (settled: build on it, don't reopen it):\n"""\n${optionText(req.brief.approach)}\n"""`;
+  if (req.engineering) return `Engineering's options, waiting for the manager to pick one:\n"""\n${reportText(req.engineering)}\n"""`;
+  return '';
+}
+
+export function briefingPrompt(req: Pick<OfficerTurn, 'kind' | 'idea' | 'brief' | 'engineering' | 'messages' | 'resumeSessionId'>): string {
+  const { approach: _, ...brief } = req.brief;
+  const engineering = engineeringNote(req);
   // a lost session (or one that never started) gets the conversation back from the transcript
   const recap = req.resumeSessionId
     ? ''
-    : `Here's the briefing so far:\n"""\n${transcript(req.messages, 'officer')}\n"""\n\nThe brief on the screen:\n${JSON.stringify(req.brief, null, 2)}\n\n`;
+    : `Here's the briefing so far:\n"""\n${transcript(req.messages, 'officer')}\n"""\n\nThe brief on the screen:\n${JSON.stringify(brief, null, 2)}\n\n${engineering ? `${engineering}\n\n` : ''}`;
   if (req.kind === 'open') {
     return `The manager has called a briefing about:\n"""\n${req.idea}\n"""\n\nGet your bearings in the code, put a first draft of the brief on the screen with update_brief (including your open questions), then ask your first question.`;
   }
+  // the officer's session doesn't hear the pick (it's made while it's the manager's turn), so it comes with the wrap-up
+  const picked = !recap && req.brief.approach ? `${engineering}\n\n` : '';
   if (req.kind === 'wrap-up') {
-    return `${recap}The manager is wrapping up the briefing. Write the issue now, from the brief and everything you discussed.
+    return `${recap}${picked}The manager is wrapping up the briefing. Write the issue now, from the brief and everything you discussed.
 
 ${ISSUE_FORMAT}
 
-If the manager chose a design option, add an "## Approach" section after What to build: the chosen option, why it beat the others, and its diagram in a fenced \`\`\`mermaid block (GitHub renders it). If no option was chosen, leave that section out.
+If the manager picked an approach (from engineering's options, or a design option chosen in the conversation), end Context with an "### Approach" subsection: the approach, the files and modules it touches, why it beat the others, its trade-offs and risks, and its diagram, if there is one, in a fenced \`\`\`mermaid block (GitHub renders it). If its size is several issues, say this issue is the first slice and put the rest under Out of scope. If no option was chosen, leave that section out.
 
 Acceptance criteria include the QA officer's suggestions the manager agreed to, and only those. It's one issue, for one agent in one sitting: anything you agreed to leave for later goes under Out of scope. Context carries the why from the briefing. Finish with the structured result: repo, title and body.`;
   }
   if (req.kind === 'break-down') {
-    return `${recap}The manager is wrapping up the briefing and wants it broken down: an epic, and ${SUB_ISSUES.min} to ${SUB_ISSUES.max} sub-issues that agents build one each, each in one sitting. Write them now, from the brief and everything you discussed.
+    return `${recap}${picked}The manager is wrapping up the briefing and wants it broken down: an epic, and ${SUB_ISSUES.min} to ${SUB_ISSUES.max} sub-issues that agents build one each, each in one sitting. Write them now, from the brief and everything you discussed.
 
-The epic is the brief. Title it after the feature. Its body has \`## Why\` (the problem, who has it, what success looks like), \`## Scope\`, \`## Acceptance criteria\` for the feature as a whole (a \`- [ ]\` checklist) and \`## Out of scope\`. If the manager chose a design option, add an \`## Approach\` section: the chosen option, why it beat the others, and its diagram in a fenced \`\`\`mermaid block.
+The epic is the brief. Title it after the feature. Its body has \`## Why\` (the problem, who has it, what success looks like), \`## Scope\`, \`## Acceptance criteria\` for the feature as a whole (a \`- [ ]\` checklist) and \`## Out of scope\`. If the manager picked an approach (from engineering's options, or a design option chosen in the conversation), add an \`## Approach\` section: the approach, the files and modules it touches, why it beat the others, its trade-offs and risks, and its diagram, if there is one, in a fenced \`\`\`mermaid block. Each sub-issue's Context says which part of that approach it builds.
 
 How to split it, the same as at the stand: one sub-issue per whole piece of the feature, one that an agent builds and a reviewer checks on its own. Split only where the parts are independent and touch different files, or where a risky foundation should land first. Fewer, whole sub-issues beat many thin ones.
 
@@ -480,9 +572,15 @@ Acceptance criteria include the QA officer's suggestions the manager agreed to, 
   }
   const latest = [...req.messages].reverse().find((m) => m.from === 'manager')?.text ?? '';
   if (recap) return `${recap}The manager's latest message, for you to answer:\n"""\n${latest}\n"""`;
-  const notes = since(req.messages, 'officer').filter((m) => m.from === 'qa');
-  if (!notes.length) return latest;
-  return `The QA officer, on your last change to the acceptance criteria:\n"""\n${notes.map((m) => m.text).join('\n\n')}\n"""\n\nThe manager, for you to answer:\n"""\n${latest}\n"""`;
+  const heard = since(req.messages, 'officer');
+  const notes = heard.filter((m) => m.from === 'qa');
+  const room = heard.filter((m) => m.from === 'engineer' || m.from === 'system');
+  const parts = [
+    notes.length ? `The QA officer, on your last change to the acceptance criteria:\n"""\n${notes.map((m) => m.text).join('\n\n')}\n"""` : '',
+    room.length ? `Since your last reply:\n"""\n${transcript(room, 'officer')}\n"""${engineering ? `\n\n${engineering}` : ''}` : '',
+  ].filter(Boolean);
+  if (!parts.length) return latest;
+  return `${parts.join('\n\n')}\n\nThe manager, for you to answer:\n"""\n${latest}\n"""`;
 }
 
 export function briefingQaSystemPrompt(req: Pick<QaTurn, 'qa' | 'planner' | 'projectName' | 'repos' | 'qaBrief'>): string {
@@ -552,5 +650,7 @@ export function mergeBrief(brief: Brief, patch: BriefPatch): Brief {
     diagrams: patch.diagrams
       ? patch.diagrams.map((d) => ({ title: d.title.trim(), mermaid: d.mermaid.trim() })).filter((d) => d.mermaid).slice(0, 4)
       : brief.diagrams,
+    // only the manager's pick sets the approach
+    ...(brief.approach && { approach: brief.approach }),
   };
 }

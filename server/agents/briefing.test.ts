@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { qaOfficerFor } from '../../shared/crew';
-import { type Breakdown, type Brief, type Briefing, EMPTY_BRIEF, type Issue, type Project } from '../../shared/types';
+import { type Breakdown, type Brief, type Briefing, EMPTY_BRIEF, type EngineeringReport, type Issue, type Project } from '../../shared/types';
 import { Hub } from '../hub';
 import { afterRestart, Store, type StoredBriefing } from '../store';
 import {
@@ -16,6 +16,7 @@ import {
   briefingSystemPrompt,
   mergeBrief,
 } from './briefing';
+import type { BriefingEngineer } from './engineering';
 import type { IssuePlanner } from './planner';
 
 const req = { planner: { name: 'Ensign Ro' }, projectId: 'p1', projectName: 'Shop', repos: ['acme/shop'] } as Parameters<typeof briefingSystemPrompt>[0];
@@ -58,9 +59,9 @@ describe('briefingPrompt', () => {
   const turn = (kind: Parameters<typeof briefingPrompt>[0]['kind']) =>
     briefingPrompt({ kind, idea: 'a wishlist', brief: EMPTY_BRIEF, messages: [{ from: 'manager', text: 'a wishlist', at: 0 }], resumeSessionId: 's1' });
 
-  it('asks the wrap-up for an Approach section with a mermaid block only when an option was chosen', () => {
+  it('asks the wrap-up for an Approach in Context, with a mermaid block, only when an option was chosen', () => {
     const prompt = turn('wrap-up');
-    expect(prompt).toContain('## Approach');
+    expect(prompt).toMatch(/end Context with an "### Approach" subsection/);
     expect(prompt).toContain('```mermaid');
     expect(prompt).toMatch(/If no option was chosen, leave that section out/);
   });
@@ -159,7 +160,7 @@ describe('Briefings with QA sitting in', () => {
       },
     };
     const check = vi.fn<BriefingQa['check']>(async () => ({ note, sessionId: 'qa-1', costUsd: 0.01 }));
-    const briefings = new Briefings(store, new Hub(), {} as IssuePlanner, officer, { check }, {} as IssueFiler);
+    const briefings = new Briefings(store, new Hub(), {} as IssuePlanner, officer, { check }, {} as IssueFiler, {} as BriefingEngineer);
     const settled = () => vi.waitFor(() => expect(briefings.current()?.status).toBe('waiting'));
     return { store, briefings, check, settled };
   }
@@ -277,7 +278,7 @@ describe('Briefings breaking down into an epic and sub-issues', () => {
       addSubIssue: vi.fn<IssueFiler['addSubIssue']>(async () => {}),
     };
     const planner = { deliver: vi.fn(() => ({ title: 'Wishlists' })) };
-    const briefings = new Briefings(store, new Hub(), planner as unknown as IssuePlanner, officer, { check: async () => ({}) }, filer);
+    const briefings = new Briefings(store, new Hub(), planner as unknown as IssuePlanner, officer, { check: async () => ({}) }, filer, {} as BriefingEngineer);
     const status = (s: Briefing['status']) => vi.waitFor(() => expect(briefings.current()?.status).toBe(s));
     return { store, briefings, turns, filer, filed, planner, status };
   }
@@ -385,5 +386,151 @@ describe('the break-down prompt', () => {
     expect(prompt).toMatch(/only where the work truly can't start before the other merges/);
     expect(prompt).toMatch(/Never more than two steps deep/);
     expect(prompt).toMatch(/Don't write "Depends on" lines/);
+  });
+});
+
+const option = (title: string) => ({ title, approach: `Do it via ${title}`, touches: ['src/store.ts'], tradeoffs: ['Quick'], risks: ['Grows the file'], size: 'one agent' as const });
+const report: EngineeringReport = { options: [option('the store'), option('a new module')], recommended: 1, why: 'it keeps the store small.' };
+
+describe('briefingPrompt with engineering', () => {
+  const base = { idea: 'a wishlist', engineering: report, resumeSessionId: 's1' };
+  const messages = [
+    { from: 'officer' as const, text: 'Shall we ask engineering?', at: 1 },
+    { from: 'system' as const, text: 'The captain asked Lt. Brennan for options.', at: 2 },
+    { from: 'engineer' as const, text: '2 options on the screen.', at: 3 },
+    { from: 'manager' as const, text: 'Let’s talk scope.', at: 4 },
+  ];
+
+  it('passes the engineer’s options on with the manager’s next message', () => {
+    const prompt = briefingPrompt({ ...base, kind: 'reply', brief: EMPTY_BRIEF, messages });
+    expect(prompt).toContain('Engineer: 2 options on the screen.');
+    expect(prompt).toContain('Option B: **a new module** (one agent)');
+    expect(prompt).toContain('Recommended: Option B. it keeps the store small.');
+    expect(prompt).toContain('Let’s talk scope.');
+  });
+
+  it('tells the officer the picked approach is settled', () => {
+    const prompt = briefingPrompt({ ...base, kind: 'reply', brief: { ...EMPTY_BRIEF, approach: report.options[0] }, messages });
+    expect(prompt).toMatch(/approach the manager picked .*don't reopen it/);
+    expect(prompt).toContain('**the store**');
+    expect(prompt).not.toContain('Option B');
+  });
+
+  it('hands the picked approach to a resumed wrap-up, which never heard the pick', () => {
+    const prompt = briefingPrompt({ ...base, kind: 'wrap-up', brief: { ...EMPTY_BRIEF, approach: report.options[0] }, messages });
+    expect(prompt).toContain('Do it via the store');
+    expect(prompt).toContain('Touches:\n- src/store.ts');
+  });
+
+  it('leaves engineering out of a wrap-up when nothing was picked', () => {
+    expect(briefingPrompt({ ...base, kind: 'wrap-up', brief: EMPTY_BRIEF, messages })).not.toContain('a new module');
+  });
+
+  it('keeps the approach out of the brief JSON in a recap, and gives it once', () => {
+    const prompt = briefingPrompt({ ...base, resumeSessionId: undefined, kind: 'wrap-up', brief: { ...EMPTY_BRIEF, approach: report.options[0] }, messages });
+    expect(prompt.match(/Do it via the store/g)).toHaveLength(1);
+  });
+});
+
+describe('the picked approach in a breakdown', () => {
+  it('hands the pick to a resumed break-down for the epic’s Approach', () => {
+    const prompt = briefingPrompt({ kind: 'break-down', idea: 'a wishlist', brief: { ...EMPTY_BRIEF, approach: report.options[1] }, messages: [], resumeSessionId: 's1' });
+    expect(prompt).toContain('Do it via a new module');
+    expect(prompt).toMatch(/If the manager picked an approach .*add an `## Approach` section/);
+  });
+
+  it('turns engineering interrupted by a restart back into the manager’s turn, with a note', () => {
+    const saved = { id: 'b', projectId: 'p1', idea: '', status: 'engineering', activity: '', messages: [], brief: EMPTY_BRIEF, startedAt: 0, updatedAt: 0, costUsd: 0 } as StoredBriefing;
+    const after = afterRestart(saved);
+    expect(after.status).toBe('waiting');
+    expect(after.messages.at(-1)).toMatchObject({ from: 'system', text: expect.stringContaining('Ask again') });
+  });
+});
+
+describe('Briefings asking engineering', () => {
+  const project: Project = { id: 'p1', name: 'Shop', repos: ['acme/shop'] } as Project;
+
+  function setup() {
+    const store = new Store(false);
+    store.projects = [project];
+    const officer: BriefingOfficer = { turn: async () => ({ text: 'Reply', sessionId: 'officer-1' }) };
+    const propose = vi.fn<BriefingEngineer['propose']>(async () => ({ report, sessionId: 'eng-1', costUsd: 0.2 }));
+    const briefings = new Briefings(store, new Hub(), {} as IssuePlanner, officer, { check: vi.fn() }, {} as IssueFiler, { propose });
+    const settled = () => vi.waitFor(() => expect(briefings.current()?.status).toBe('waiting'));
+    return { store, briefings, propose, settled };
+  }
+
+  async function withOptions() {
+    const s = setup();
+    s.briefings.call('p1', 'a wishlist');
+    await s.settled();
+    s.briefings.askEngineering('');
+    await s.settled();
+    return s;
+  }
+
+  it('brings the engineer to the table, then puts their options and recommendation in the briefing', async () => {
+    const { briefings, propose, settled } = setup();
+    briefings.call('p1', 'a wishlist');
+    await settled();
+    expect(briefings.askEngineering('').status).toBe('engineering');
+    await settled();
+    const b = briefings.current()!;
+    expect(b.engineering).toEqual(report);
+    expect(b.messages.at(-1)).toMatchObject({ from: 'engineer', text: expect.stringContaining('Option B, a new module') });
+    expect(b.costUsd).toBeCloseTo(0.2);
+    expect(propose.mock.calls[0][0]).toMatchObject({ request: '', previous: undefined, projectName: 'Shop' });
+  });
+
+  it('puts the picked option into the brief as the approach', async () => {
+    const { briefings } = await withOptions();
+    const b = briefings.pickApproach(0);
+    expect(b.brief.approach).toEqual(report.options[0]);
+    expect(b.messages.at(-1)).toMatchObject({ from: 'system', text: expect.stringContaining('Option A, the store') });
+  });
+
+  it('won’t pick before there are options, or one that isn’t there', async () => {
+    const { briefings, settled } = setup();
+    briefings.call('p1', 'a wishlist');
+    await settled();
+    expect(() => briefings.pickApproach(0)).toThrow(/Ask engineering/);
+    briefings.askEngineering('');
+    await settled();
+    expect(() => briefings.pickApproach(5)).toThrow(/no such option/);
+  });
+
+  it('sends the options back with the manager’s note, resuming the engineer, and clears the old pick', async () => {
+    const { briefings, propose, settled } = await withOptions();
+    briefings.pickApproach(0);
+    briefings.askEngineering('Keep it to one file');
+    await settled();
+    expect(propose.mock.calls[1][0]).toMatchObject({ request: 'Keep it to one file', previous: report, resumeSessionId: 'eng-1' });
+    expect(briefings.current()!.brief.approach).toBeUndefined();
+  });
+
+  it('keeps the briefing going when engineering stumbles', async () => {
+    const { briefings, propose, settled } = setup();
+    propose.mockRejectedValue(new Error('rate limited'));
+    briefings.call('p1', 'a wishlist');
+    await settled();
+    briefings.askEngineering('');
+    await settled();
+    const b = briefings.current()!;
+    expect(b.engineering).toBeUndefined();
+    expect(b.messages.at(-1)).toMatchObject({ from: 'system', text: expect.stringContaining('rate limited') });
+  });
+
+  it('won’t take a message while the engineer is working', async () => {
+    const { briefings, settled } = setup();
+    briefings.call('p1', 'a wishlist');
+    await settled();
+    briefings.askEngineering('');
+    expect(() => briefings.say('hello')).toThrow(/still working on the options/);
+  });
+
+  it('keeps the approach when the officer updates the brief', () => {
+    const merged = mergeBrief({ ...EMPTY_BRIEF, approach: report.options[0] }, { summary: 'A wishlist' });
+    expect(merged.approach).toEqual(report.options[0]);
+    expect(mergeBrief(EMPTY_BRIEF, { summary: 'x' })).not.toHaveProperty('approach');
   });
 });

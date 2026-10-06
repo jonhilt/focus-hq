@@ -8,8 +8,8 @@ import { ACTIVE_STATUSES, DESKS_PER_ROOM, EMPTY_BRIEF, ROOM_THEMES, type RoomThe
 import { paths } from './config';
 import { newId } from './util';
 
-/** A briefing as saved: with the officer's and QA's sessions, so the next turn can resume them. */
-export type StoredBriefing = Briefing & { sessionId?: string; qaSessionId?: string };
+/** A briefing as saved: with the officer's, QA's and the engineer's sessions, so the next turn can resume them. */
+export type StoredBriefing = Briefing & { sessionId?: string; qaSessionId?: string; engineerSessionId?: string };
 
 /** A saved briefing as it picks up after a restart: whatever was running when Focus shut down was interrupted. */
 export function afterRestart(saved: StoredBriefing): StoredBriefing {
@@ -22,6 +22,13 @@ export function afterRestart(saved: StoredBriefing): StoredBriefing {
     case 'qa-checking':
       // the officer's reply is saved; only QA's note was lost
       return { ...briefing, status: 'waiting', activity: 'Waiting for you' };
+    case 'engineering':
+      return {
+        ...briefing,
+        status: 'waiting',
+        activity: 'Waiting for you',
+        messages: [...briefing.messages, { from: 'system', text: 'Engineering was interrupted when Focus shut down. Ask again.', at: Date.now() }],
+      };
     case 'filing':
       // whatever was filed kept its number, so filing again carries on
       return { ...briefing, status: 'reviewing', activity: 'Waiting for you to file the breakdown', error: 'Interrupted when Focus shut down. File all again to carry on.' };

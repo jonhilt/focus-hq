@@ -8,6 +8,7 @@ import { canvasTexture, fitText, makeCanvas, roundRect } from './canvas';
 import { type Box2, DOOR_W, HALL_HALF, LOBBY, LOUNGE, LOUNGE_DOOR_X, OFFICE, OVER_DOOR, ROOM_DEPTH, ROOM_WIDTH, roomSlot, roomToWorld, rowsFor, SUN_POSITION, WALL_H, WALL_T } from './layout';
 import { box, flat, toon, toonMaterial } from './materials';
 import { bookshelf, ceilingLight, chair, coffeeMachine, cyl, desk, DESK_TOP, plant, rug, sofa, trophy, waterCooler } from './props';
+import { EngineeringStation } from './engineering';
 import { Lounge } from './lounge';
 import { buildVacantRoom, ProjectRoom } from './room';
 import type { Scenery } from './scenery';
@@ -31,6 +32,7 @@ export class World {
   colliders: Box2[] = [];
   rooms = new Map<string, ProjectRoom>();
   lounge: Lounge | null = null;
+  engineering: EngineeringStation | null = null;
   /** Room landscapes by project, theme and slot; kept across rebuilds since they're slow to make. */
   private sceneries = new Map<string, Scenery>();
   private builder: Builder | null = null;
@@ -68,6 +70,7 @@ export class World {
     for (const room of this.rooms.values()) room.dispose();
     this.rooms.clear();
     this.lounge?.dispose();
+    this.engineering?.dispose();
     const b = new Builder();
     this.builder = b;
 
@@ -146,6 +149,7 @@ export class World {
     this.buildLobby(b);
     this.buildManagerOffice(b);
     this.lounge = new Lounge(b);
+    this.engineering = new EngineeringStation(b);
 
     this.root.add(b.group);
     this.colliders = b.colliders;
@@ -363,6 +367,7 @@ export class World {
     for (const door of this.doors) door.update(camera, dt);
     for (const room of this.rooms.values()) room.update(t, now, camera);
     this.lounge?.update(t, camera);
+    this.engineering?.update(t, camera);
     if (this.panelsDirty && now - this.lastPanels > 1000) {
       this.panelsDirty = false;
       this.lastPanels = now;

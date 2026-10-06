@@ -16,7 +16,7 @@ import { openPreviewPanel } from './ui/previewPanel';
 import { openQaPanel } from './ui/qaPanel';
 import { openNewIssuePanel, openPausePanel, openTeleportPanel } from './ui/travelPanel';
 import type { Interaction } from './world/builder';
-import { plannerFor } from '../../shared/crew';
+import { chiefEngineer, plannerFor } from '../../shared/crew';
 import { previewIncludes } from '../../shared/previewSet';
 import { sound } from './sound';
 import { SUN_POSITION } from './world/layout';
@@ -199,6 +199,7 @@ async function main() {
   let briefingStatus = state.briefing?.status;
   state.on('briefing', () => {
     world.lounge?.sync();
+    world.engineering?.sync();
     for (const room of world.rooms.values()) {
       room.syncPlanner();
       room.syncQa();
@@ -206,7 +207,9 @@ async function main() {
     const b = state.briefing;
     if (b && b.status !== briefingStatus && !briefingPanelOpen()) {
       const name = plannerFor(b.projectId).name;
-      if (b.status === 'waiting') hud.toast('info', `🖖 ${name} has a question for you in the observation lounge`, { label: 'Answer', run: () => ui.openBriefing() });
+      if (b.status === 'waiting' && b.messages.at(-1)?.from === 'engineer') {
+        hud.toast('info', `🔧 ${chiefEngineer().name} has options for you in the observation lounge`, { label: 'Look', run: () => ui.openBriefing() });
+      } else if (b.status === 'waiting') hud.toast('info', `🖖 ${name} has a question for you in the observation lounge`, { label: 'Answer', run: () => ui.openBriefing() });
       if (b.status === 'failed') hud.toast('error', `${name} lost the thread of the briefing: ${b.error ?? ''}`, { label: 'Open', run: () => ui.openBriefing() });
     }
     briefingStatus = b?.status;

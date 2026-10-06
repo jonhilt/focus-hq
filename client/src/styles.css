@@ -265,6 +265,7 @@ textarea.qa-brief { width: 100%; min-height: 160px; font-family: var(--mono); fo
 .briefing-msg p { margin: 4px 0 0; line-height: 1.4; white-space: pre-wrap; }
 .briefing-msg.officer { --tone: var(--lcars-orange); align-self: flex-start; border-left: 6px solid var(--tone); border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .briefing-msg.qa { --tone: var(--lcars-periwinkle); align-self: flex-start; margin-left: 24px; border-left: 6px solid var(--tone); border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.briefing-msg.engineer { --tone: var(--lcars-gold); align-self: flex-start; margin-left: 24px; border-left: 6px solid var(--tone); border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .briefing-msg.manager { --tone: var(--lcars-sky); align-self: flex-end; border-right: 6px solid var(--tone); border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .briefing-msg.typing p { font-family: var(--mono); font-size: 13px; color: var(--lcars-gold); }
 .briefing-note { align-self: center; color: var(--muted); font-size: 13px; }
@@ -291,6 +292,16 @@ textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
 .brief-section ul { margin: 0; padding-left: 20px; }
 .brief-section li { margin: 2px 0; line-height: 1.35; }
 .brief-section .muted { margin: 0; }
+.brief-section.approach h4, .brief-section.options h4 { border-color: var(--lcars-gold); }
+.brief-option { margin: 8px 0 12px; padding: 8px 10px; border-radius: 8px; border-left: 6px solid var(--line); background: var(--surface); }
+.brief-option.recommended { border-left-color: var(--lcars-gold); }
+.brief-option.picked { border-left-color: var(--lcars-green); background: color-mix(in srgb, var(--lcars-green) 12%, var(--surface)); }
+.brief-option p { margin: 4px 0; line-height: 1.35; }
+.brief-option em { display: block; margin-top: 4px; color: var(--muted); font-style: normal; font-size: 12px; text-transform: uppercase; }
+.brief-option .size { color: var(--lcars-sky); }
+.brief-option .star { color: var(--lcars-gold); }
+.brief-option .btn { margin-top: 6px; }
+.brief-section.options .why { color: var(--lcars-gold); margin: 0 0 8px; }
 .brief-section.diagrams h4 { border-color: var(--lcars-green); }
 .brief-diagram { margin: 10px 0 14px; }
 .brief-diagram figcaption { margin-bottom: 6px; color: var(--lcars-peach); font-family: var(--ui); font-size: 15px; }

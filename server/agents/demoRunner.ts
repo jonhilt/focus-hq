@@ -1,7 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import { sleep } from '../util';
 import { qaOfficerFor } from '../../shared/crew';
+import { optionText } from '../../shared/engineering';
 import type { BriefingOfficer, BriefingQa, OfficerHooks, OfficerReply, OfficerTurn, QaReply, QaTurn } from './briefing';
+import type { BriefingEngineer, EngineerReply, EngineerTurn } from './engineering';
 import { mergeBrief } from './briefing';
 import { asBreakdown } from './breakdown';
 import type { Drafter, DraftRequest, DraftResult } from './planner';
@@ -357,6 +359,13 @@ export class DemoDrafter implements Drafter {
 const PHONE_CHECK = 'Works at phone width (375px)';
 const PHONE_CHECK_REWRITE = 'At 375px wide nothing scrolls sideways and every button can be tapped';
 
+/** The repo a demo briefing is about, and the made-up files it talks about. */
+function demoCode(repos: string[]): { repo: string; files: string[]; folder: string } {
+  const repo = repos.find((r) => /web|front|app|game|dodger/.test(r)) ?? repos[0];
+  const kind = /api/.test(repo) ? 'api' : /game|dodger/.test(repo) ? 'game' : 'web';
+  return { repo, files: FILES[kind], folder: repo.split('/')[1] };
+}
+
 /** The demo briefing officer: asks the usual questions in order, filling the brief with your answers. */
 export class DemoOfficer implements BriefingOfficer {
   private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
@@ -366,10 +375,7 @@ export class DemoOfficer implements BriefingOfficer {
       await sleep((seconds * 1000) / this.speed);
       if (req.signal.aborted) throw new Error('Stopped');
     };
-    const repo = req.repos.find((r) => /web|front|app|game|dodger/.test(r)) ?? req.repos[0];
-    const kind = /api/.test(repo) ? 'api' : /game|dodger/.test(repo) ? 'game' : 'web';
-    const files = FILES[kind];
-    const folder = repo.split('/')[1];
+    const { repo, files, folder } = demoCode(req.repos);
     const idea = req.idea.replace(/\s+/g, ' ').trim().replace(/[.!?]$/, '');
     const answers = req.messages.filter((m) => m.from === 'manager').slice(1).map((m) => m.text.replace(/\s+/g, ' ').trim());
     const last = answers[answers.length - 1] ?? '';
@@ -400,13 +406,15 @@ export class DemoOfficer implements BriefingOfficer {
         '',
         `The relevant code lives in \`${files[0]}\` and \`${files[1]}\`. Agreed in a briefing in the observation lounge.`,
         '',
+        ...(brief.approach
+          ? ['### Approach', '', `Picked from engineering's options: ${optionText(brief.approach)}`, '']
+          : brief.diagrams
+              .filter((d) => d.title.startsWith('Chosen'))
+              .flatMap((d) => ['### Approach', '', `${d.title.replace(/^Chosen: (.)/, (_, c: string) => c.toUpperCase())}, because it keeps the change in one place and needs no new wiring.`, '', '```mermaid', d.mermaid, '```', ''])),
         '## What to build',
         '',
         list(brief.scope.length ? brief.scope : [idea]),
         '',
-        ...brief.diagrams
-          .filter((d) => d.title.startsWith('Chosen'))
-          .flatMap((d) => ['## Approach', '', `${d.title.replace(/^Chosen: (.)/, (_, c: string) => c.toUpperCase())}, because it keeps the change in one place and needs no new wiring.`, '', '```mermaid', d.mermaid, '```', '']),
         '## Acceptance criteria',
         '',
         list([...brief.acceptance, 'Existing tests still pass, and the new behaviour has tests'], true),
@@ -443,6 +451,7 @@ export class DemoOfficer implements BriefingOfficer {
         '## Out of scope',
         '',
         list(brief.outOfScope),
+        ...(brief.approach ? ['', '## Approach', '', `Picked from engineering's options: ${optionText(brief.approach)}`] : []),
       ].join('\n');
       // the first piece is the foundation the second builds on; the rest can go side by side
       const pieces = [`Store and load ${idea}`, `Show ${idea} in the UI`, `Tests and edge cases for ${idea}`];
@@ -511,7 +520,7 @@ export class DemoOfficer implements BriefingOfficer {
     if (step === 3) {
       update({ acceptance: [line(last), PHONE_CHECK], scope: [line(idea.replace(/^./, (c) => c.toUpperCase()))], open_questions: brief.openQuestions.slice(1), diagrams: [today, optionA, optionB] });
       return {
-        text: `Noted, and I've added a phone-width check since \`${files[1]}\` has its own mobile layout. I've put two designs on the screen: A extends \`${files[4]}\` (smallest change, but that file grows), B gives it a module of its own (cleaner, more wiring). I'd go with A. And what should we leave out of this first version? I'd keep sharing and notifications for later.`,
+        text: `Noted, and I've added a phone-width check since \`${files[1]}\` has its own mobile layout. I've put two designs on the screen: A extends \`${files[4]}\` (smallest change, but that file grows), B gives it a module of its own (cleaner, more wiring). I'd go with A, but if you'd like a proper look at the how, ask engineering. And what should we leave out of this first version? I'd keep sharing and notifications for later.`,
         sessionId: session,
         costUsd: 0.05,
       };
@@ -545,6 +554,57 @@ export class DemoBriefingQa implements BriefingQa {
       note: `“${PHONE_CHECK}” is hard to fail: I’d test “${PHONE_CHECK_REWRITE}”.`,
       sessionId: session,
       costUsd: 0.03,
+    };
+  }
+}
+
+/** The demo engineer: reads a few files, then lays out three options for the briefing's change, recommending the middle one. */
+export class DemoEngineer implements BriefingEngineer {
+  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
+
+  async propose(req: EngineerTurn, activity: (text: string) => void): Promise<EngineerReply> {
+    const { files, folder } = demoCode(req.repos);
+    for (const step of ['On the way to the lounge', 'Rereading the brief', `Reading ${folder}/CLAUDE.md`, `Reading ${folder}/${files[0]}`, `Reading ${folder}/${files[4]}`, `Searching ${folder} for callers of ${files[4].split('/').pop()}`, 'Weighing the options']) {
+      activity(step);
+      await sleep(1300 / this.speed);
+      if (req.signal.aborted) throw new Error('Stopped');
+    }
+    const what = (req.brief.summary || req.idea).replace(/[.!?]$/, '').toLowerCase();
+    // sent back with a note: the note becomes a trade-off on the recommended option, so the rework shows on the screen
+    const heard = req.request ? [`Reworked for your note: ${req.request}`] : [];
+    return {
+      report: {
+        options: [
+          {
+            title: 'Extend the existing module',
+            approach: `Add ${what} to \`${files[4]}\` and render it from \`${files[0]}\`. No new modules.`,
+            touches: [files[4], files[0]],
+            tradeoffs: ['Smallest diff, ships fastest', `\`${files[4]}\` keeps growing`],
+            risks: ['Mixes two concerns in one file'],
+            size: 'one agent',
+          },
+          {
+            title: 'A module of its own',
+            approach: `A new module owns ${what}; \`${files[0]}\` calls it and \`${files[4]}\` stays as it is.`,
+            touches: [files[0], files[1], 'a new module beside ' + files[4]],
+            tradeoffs: [...heard, 'Clear home for the feature, easy to test', 'A little more wiring up front'],
+            risks: ['Two places to keep in step until the old path is gone'],
+            size: 'one agent',
+          },
+          {
+            title: 'Rework the data layer first',
+            approach: `Move persistence out of \`${files[4]}\` into a store every screen shares, then build ${what} on it.`,
+            touches: [files[4], files[0], files[1], files[3]],
+            tradeoffs: ['Pays down debt the next features need', 'Biggest change by far'],
+            risks: ['Touches screens that work today', 'Needs a migration for saved data'],
+            size: 'several issues',
+          },
+        ],
+        recommended: 1,
+        why: 'it gives the feature a home without the cost of reworking the data layer now.',
+      },
+      sessionId: req.resumeSessionId ?? `demo-engineer-${randomBytes(3).toString('hex')}`,
+      costUsd: 0.12,
     };
   }
 }

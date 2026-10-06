@@ -4,9 +4,9 @@ import path from 'node:path';
 import express from 'express';
 import { BrowserPool } from './agents/browserTool';
 import { Briefings, type IssueFiler } from './agents/briefing';
-import { ClaudeBriefingQa, ClaudeDrafter, ClaudeOfficer } from './agents/claudeCrew';
+import { ClaudeBriefingQa, ClaudeDrafter, ClaudeEngineer, ClaudeOfficer } from './agents/claudeCrew';
 import { ClaudeRunner } from './agents/claudeRunner';
-import { DemoBriefingQa, DemoDrafter, DemoOfficer, DemoRunner, demoWorkspace } from './agents/demoRunner';
+import { DemoBriefingQa, DemoDrafter, DemoEngineer, DemoOfficer, DemoRunner, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
 import { IssuePlanner } from './agents/planner';
 import type { WorkspaceOps } from './agents/types';
@@ -51,7 +51,9 @@ async function main() {
     file: (projectId, repo, title, body) => office.fileIssue(projectId, repo, title, body),
     addSubIssue: (repo, parent, child) => github.addSubIssue(repo, parent, child),
   };
-  const briefings = new Briefings(store, hub, planner, config.demo ? new DemoOfficer() : new ClaudeOfficer(), config.demo ? new DemoBriefingQa() : new ClaudeBriefingQa(), filer);
+  const briefings = config.demo
+    ? new Briefings(store, hub, planner, new DemoOfficer(), new DemoBriefingQa(), filer, new DemoEngineer())
+    : new Briefings(store, hub, planner, new ClaudeOfficer(), new ClaudeBriefingQa(), filer, new ClaudeEngineer());
   const office = new Office(store, hub, github, previews, planner, briefings, new Voice(hub, config.demo), await currentVersion());
   office.agents = new AgentManager(store, hub, github, runner, config.demo ? demoWorkspace : liveWorkspace, (id) => office.boardChanged(id));
 

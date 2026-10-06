@@ -23,11 +23,12 @@ import {
 } from './briefing';
 import { asBreakdown, breakdownSchema } from './breakdown';
 import { agentEnv } from './claudeRunner';
+import { type BriefingEngineer, decodeEngineeringReport, ENGINEERING_SCHEMA, type EngineerReply, type EngineerTurn, engineerPrompt, engineerSystemPrompt } from './engineering';
 import { type Drafter, type DraftRequest, type DraftResult, draftSchema, plannerPrompt, plannerSystemPrompt, repoFolders } from './planner';
 import { renderToolUse } from './render';
 import { checkoutLatest } from './workspace';
 
-// The permanent crew's Claude Code sessions: they read the project's code (and, in briefings, the web) and change
+// The permanent crew's Claude Code sessions (the ship's engineer included): they read the project's code (and, in briefings, the web) and change
 // nothing. Read-only because they only have Read, Glob and Grep, plus WebSearch and WebFetch in briefings and the
 // office's own tools, `dontAsk` denies anything not pre-approved, and none of your settings, hooks or MCP servers load.
 
@@ -205,6 +206,24 @@ export class ClaudeBriefingQa implements BriefingQa {
       schema: qaNoteSchema,
     });
     return { note: asQaNote(result.structured), sessionId: result.sessionId, costUsd: result.costUsd };
+  }
+}
+
+/** The ship's engineer at a briefing: reads the code the officer checked out, and answers with options. */
+export class ClaudeEngineer implements BriefingEngineer {
+  async propose(req: EngineerTurn, activity: (text: string) => void): Promise<EngineerReply> {
+    const result = await runReadOnly({
+      cwd: planningDir(req.projectId),
+      systemAppend: engineerSystemPrompt(req),
+      prompt: engineerPrompt(req),
+      settings: req.settings,
+      signal: req.signal,
+      activity,
+      builtins: CODE_TOOLS,
+      resume: req.resumeSessionId,
+      schema: ENGINEERING_SCHEMA,
+    });
+    return { report: decodeEngineeringReport(result.structured), sessionId: result.sessionId, costUsd: result.costUsd };
   }
 }
 

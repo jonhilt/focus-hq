@@ -87,11 +87,12 @@ For anything bigger or fuzzier than a one-line issue, press **📣 Call a briefi
 1. The officer reads the code, puts a first brief on the wall screen and asks their first question.
 2. They ask one question at a time, starting with the why (who it's for, what's going wrong, what success looks like), then the what. They check the code before asking, and they suggest an answer with each question so you can just say yes.
 3. The brief on the wall screen (and in the panel) keeps up as you go: **Why**, **Who for**, **Scope**, **Out of scope**, **Acceptance criteria** and **Open questions**.
-4. **📋 Wrap up** when you're happy, as **📝 One issue** or **🧩 Break it down**.
+4. For a big change, **🔧 Ask engineering** before you wrap up. Lt. Brennan, the ship's engineer, leaves the engineering station on the concourse for the lounge table, reads the code and comes back with two or three options: the approach, the files it touches, trade-offs, risks and a rough size (one agent, or several issues), plus the one they recommend. The options show in the panel and on the wall screen. **Pick this one** puts an option in the brief as its **Approach**, which ends up in the issue's Context (or the epic's, for a breakdown). Anything in the message box goes along as a note, so **🔧 Back to engineering** with "keep it to one file" asks for a rework. The engineer is read-only like the rest of the crew: options only, no code.
+5. **📋 Wrap up** when you're happy, as **📝 One issue** or **🧩 Break it down**.
    - **One issue**: the officer writes one issue, with the why from the briefing in its Context, and leaves it at the project's stand as a normal draft. A redraft there carries on from the whole briefing.
    - **Break it down**, for a feature too big for one agent in one sitting: the officer writes an epic (the brief: why, scope, acceptance criteria) and 2 to 5 sub-issues in the usual issue format, all for one repository. They split only where the parts are independent and touch different files, or where a risky foundation should land first. A sub-issue that can't start before another merges says so, at most two steps deep.
    - Nothing is filed until you've checked the breakdown: edit any title or body, **✕ Drop** sub-issues, or go back to **📝 One issue instead**. **📌 File all** files the epic, then each sub-issue with a `Depends on #N` line carrying the real numbers (auto-assign starts the blocking issue first), linked to the epic as GitHub sub-issues. If filing stops halfway, **File all** again carries on without filing anything twice.
-5. **✕ End briefing** sends them back to the stand. Only one briefing runs at a time.
+6. **✕ End briefing** sends them back to the stand. Only one briefing runs at a time.
 
 In a briefing the officer can also search and read the web (`WebSearch`, `WebFetch`) for things the code can't answer, like library versions or migration guidance, and tells you where they found it. They still can't change anything.
 
@@ -281,15 +282,17 @@ server/
     planner.ts            the officer at each room's New issue stand: issue drafts, their prompt and schema
     briefing.ts           briefings in the observation lounge: turns, the brief, wrap-up into a stand draft or a breakdown
     breakdown.ts          a briefing's epic and sub-issues: the officer's result, the manager's edits, Depends on lines
+    engineering.ts        the ship's engineer at a briefing: options prompt, schema and decoding
     claudeCrew.ts         the officer's read-only Claude Code sessions (Read/Glob/Grep, web search/fetch in briefings, update_brief, structured output)
     qa.ts                 the QA officer: instructions, the report's schema and parsing, the PR comment
-    demoRunner.ts         scripted pretend agents (and a pretend planner, briefing officer and QA officer) for demo mode
+    demoRunner.ts         scripted pretend agents (and a pretend planner, briefing officer, QA officer and engineer) for demo mode
 client/src/
   main.ts                 renderer (toon shading + outline pass), loop, interaction, UI wiring
   world/                  ship layout, holodecks, stations, characters, station screens, Kanban display
     scenery.ts            stencil "holo walls" that show a landscape built around a room
     themes.ts             the landscapes (beach, forest, desert, moon, city, library)
     lounge.ts             the observation lounge: briefing table, officer, the brief on the wall screen
+    engineering.ts        the engineering station on the concourse, where the engineer waits to be asked
   ui/                     HUD and panels (agent terminal, board, ready room console, teleport, QA station, briefing)
   tricorder/              the phone view at /tricorder (no three.js): home screen, agent drill-down, buttons that survive live re-renders
 client/tricorder/index.html   the Tricorder's page (a second Vite entry), with its home-screen meta tags
