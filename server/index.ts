@@ -64,7 +64,7 @@ async function main() {
   if (config.demo && store.projects.length === 0) {
     const shop = store.addProject('Sock Shop', '#ff8a5b', 'beach');
     shop.repos = ['demo/webshop-frontend', 'demo/webshop-api'];
-    shop.maxAgents = 4;
+    shop.maxAgents = 2;
     const game = store.addProject('Space Dodger', '#5bc0eb', 'moon');
     game.repos = ['demo/space-dodger'];
     // so the demo shows a PR going QA pass → checks green → merged by itself

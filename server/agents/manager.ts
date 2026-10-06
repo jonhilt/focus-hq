@@ -3,7 +3,7 @@ import { helperFor, leadFor, leadId, plannerFor, qaFor, qaOfficerFor, randomAvat
 import { autoQaFor, autoSendBackFor, prKey, sameCommit } from '../../shared/qa';
 import { afterTriage, triageLabel, type TriageResult, type TriageStep, whenStuck } from '../../shared/triage';
 import type { Agent, AgentStatus, BrowserFrame, Effort, FailedCheck, FixFor, PermissionRequest, PullRequest, QaReport, QaReview, QaScreenshot, QueuedGoal, TermLine } from '../../shared/types';
-import { ACTIVE_STATUSES, DESKS_PER_ROOM, LEAD_DESK, QA_DESK, TEAM_STATIONS } from '../../shared/types';
+import { ACTIVE_STATUSES, LEAD_DESK, QA_DESK, TEAM_STATIONS } from '../../shared/types';
 import type { PullRequestDetail } from '../github/provider';
 import { GitHub, type GitHubError } from '../github/service';
 import type { Hub } from '../hub';
@@ -16,6 +16,7 @@ import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pu
 import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
 import type { QaLoopEvent } from './qaLoop';
 import { qaNextStep } from './qaLoop';
+import { offTheFloor, pickDesk } from './desks';
 import { deskless, whoStarts } from './schedule';
 import { type GitFailed, Sessions, Triage, Workspace } from './services';
 import { applyTaskTool } from './tasks';
@@ -251,18 +252,12 @@ export class AgentManager {
     return agent;
   }
 
+  /** A desk in the room, sending home whoever finished first when they're all taken (`pickDesk`). */
   private freeDesk(projectId: string): number {
-    const seated = this.store.agentsIn(projectId);
-    const taken = new Set(seated.map((a) => a.desk));
-    for (let d = 0; d < DESKS_PER_ROOM; d++) if (!taken.has(d)) return d;
-    // The room is full: send home whoever finished first (failed/stopped agents before ones with open PRs).
-    const rank = (a: Agent) => (a.status === 'done' ? 1 : 0);
-    const leaving = seated
-      .filter((a) => FINISHED.includes(a.status))
-      .sort((a, b) => rank(a) - rank(b) || (a.finishedAt ?? 0) - (b.finishedAt ?? 0))[0];
-    if (!leaving) throw new Refused({ message: 'Every station on this holodeck is taken by a working agent' });
-    this.background(this.goHome(leaving.id));
-    return leaving.desk;
+    const pick = pickDesk(this.store.agentsIn(projectId));
+    if (!pick) throw new Refused({ message: 'Every desk on this holodeck is taken by a working agent' });
+    if (pick.evict) this.background(this.goHome(pick.evict.id));
+    return pick.desk;
   }
 
   /**
@@ -275,6 +270,16 @@ export class AgentManager {
     for (const agent of start) {
       // still finishing their last piece of work: they start once it's over (runFor looks again then)
       if (FiberMap.hasUnsafe(this.runs, agent.id)) continue;
+      // saved at a desk the room no longer has: they take one now, or wait for one
+      if (offTheFloor(agent)) {
+        const pick = pickDesk(this.store.agentsIn(agent.projectId));
+        if (!pick) {
+          this.update(agent, { activity: 'Waiting for a free desk' });
+          continue;
+        }
+        if (pick.evict) this.background(this.goHome(pick.evict.id));
+        this.update(agent, { desk: pick.desk });
+      }
       this.runFor(agent.id, this.launch(agent));
     }
   }
@@ -711,12 +716,14 @@ export class AgentManager {
   }
 
   /** Starts a queued goal at a free team station, with the captain's last edits to it. */
-  startQueued(projectId: string, queueId: string, edits: { text?: string; effort?: Effort } = {}): Agent {
+  startQueued(projectId: string, queueId: string, edits: { text?: string; effort?: Effort; station?: number } = {}): Agent {
     const project = this.store.project(projectId);
     const queued = (project.goalQueue ?? []).find((g) => g.id === queueId);
     if (!queued) throw new Refused({ message: 'That goal is no longer in line' });
     const leads = this.store.agentsIn(projectId).filter((a) => a.task === 'lead');
-    const station = pickStation(leads.map((a) => a.lead?.station ?? 0));
+    // the station the captain started it from, if it's still free; else the first free one
+    const taken = leads.map((a) => a.lead?.station ?? 0);
+    const station = (edits.station === undefined ? undefined : pickStation(taken, edits.station)) ?? pickStation(taken);
     if (station === undefined) throw new Refused({ message: `Every team station in ${project.name} still has a goal` });
     const started = this.startGoal(projectId, edits.text?.trim() || queued.text, { station, effort: edits.effort ?? queued.effort, from: queued.from });
     if (!('agent' in started)) throw new Refused({ message: 'No team station was free after all' });

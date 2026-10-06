@@ -1,5 +1,6 @@
 import { Layer } from 'effect';
 import { describe, expect, it } from 'vitest';
+import { randomAvatar } from '../../shared/crew';
 import { demoLayer } from '../github/demo';
 import { Hub } from '../hub';
 import { Store } from '../store';
@@ -142,6 +143,19 @@ describe('AgentManager', () => {
     expect(fresh.prompt).toContain("You're carrying on with this goal in a new conversation");
     expect(fresh.prompt).toContain('> Shoppers keep a list across devices');
     expect(fresh.prompt).toMatch(/Go ahead$/);
+  });
+
+  it('seats an agent saved at a desk the room no longer has the next time they start', async () => {
+    const { agents, claude, store, project } = office();
+    store.putAgent({
+      id: 'old', name: 'Lt. Old', avatar: randomAvatar(), projectId: project.id, repo: 'demo/webshop-frontend', task: 'issue',
+      issue: { number: 1, title: 'Dark mode', url: '' }, desk: 4, status: 'stopped', activity: 'Interrupted', sessionId: 'old-session',
+      branch: 'focus/1-dark-mode', baseBranch: 'main', costUsd: 0, startedAt: 0,
+    });
+    agents.message('old', 'Carry on');
+    await until(() => claude.turns.length === 1);
+    expect(claude.turns[0].req.resumeSessionId).toBe('old-session');
+    expect(store.agent('old').desk).toBe(0);
   });
 
   it('says why when a goal can’t have the station it asked for, and queues one when every station is taken', () => {

@@ -1,7 +1,7 @@
-// Who sits at the group desk. Pure: no Three.js, so it's testable outside the browser.
+// Who sits round a team station. Pure: no Three.js, so it's testable outside the browser.
 
 /**
- * Who sits where at the group desk: each helper keeps the seat it took, a newcomer takes the first free one (in the
+ * Who sits where at a team station: each helper keeps the seat it took, a newcomer takes the first free one (in the
  * order they started), and anyone gone leaves theirs empty. Helpers beyond the seats wait their turn for one.
  */
 export function seatHelpers(seated: (string | undefined)[], helpers: string[]): (string | undefined)[] {

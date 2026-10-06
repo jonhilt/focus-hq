@@ -36,7 +36,7 @@ export const api = {
    */
   startGoal: (projectId: string, text: string, how: { station?: number; effort?: Effort; from?: string } = {}) =>
     call<{ agent: Agent } | { queued: QueuedGoal }>('POST', `/projects/${projectId}/goals`, { text, ...how }),
-  startQueued: (projectId: string, queueId: string, edits: { text?: string; effort?: Effort } = {}) =>
+  startQueued: (projectId: string, queueId: string, edits: { text?: string; effort?: Effort; station?: number } = {}) =>
     call<Agent>('POST', `/projects/${projectId}/goals/queue/${queueId}/start`, edits),
   moveQueued: (projectId: string, queueId: string, by: -1 | 1) => call('POST', `/projects/${projectId}/goals/queue/${queueId}/move`, { by }),
   dropQueued: (projectId: string, queueId: string) => call('DELETE', `/projects/${projectId}/goals/queue/${queueId}`),

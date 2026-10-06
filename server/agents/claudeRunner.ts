@@ -146,7 +146,7 @@ export class ClaudeRunner implements AgentRunner {
             resume: req.resumeSessionId,
           }),
       outputFormat: req.outputSchema ? { type: 'json_schema', schema: req.outputSchema } : undefined,
-      // the lead's helpers sit at the group desk: a line every ~30s on what each is doing, for their speech bubbles
+      // the lead's helpers sit round their team station: a line every ~30s on what each is doing, for their speech bubbles
       agentProgressSummaries: !!req.tools,
       env,
       stderr: (data) => {

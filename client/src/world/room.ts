@@ -2,21 +2,21 @@ import * as THREE from 'three';
 import { helperFor, plannerFor, qaOfficerFor } from '../../../shared/crew';
 import { prKey } from '../../../shared/qa';
 import type { Agent, Board, Helper, Project } from '../../../shared/types';
-import { DESKS_PER_ROOM } from '../../../shared/types';
+import { DESKS_PER_ROOM, TEAM_STATIONS } from '../../../shared/types';
 import { state } from '../net/state';
 import { sound } from '../sound';
 import { KanbanBoard } from './board';
-import { type Builder, interactive } from './builder';
-import { buildGroupDesk, leadViewpoint } from './groupDesk';
+import { type Builder, type Interaction, interactive } from './builder';
 import { seatHelpers } from './helperSeats';
 import { agentView, Character, type CrewView } from './character';
 import { OVER_DOOR, type RoomSlot, ROOM_DEPTH, ROOM_WIDTH, WALL_H } from './layout';
 import { box, flat, lighten, toon } from './materials';
 import { ceilingLight, chair, cyl, paperStack, plant } from './props';
 import { holodeckMaterial, holodeckSkin, type Scenery } from './scenery';
-import { BIG_SCREEN, StationScreen } from './screen';
+import { StationScreen } from './screen';
 import { Beam } from './transporter';
 import { HULL, LCARS, lcarsSign, workstation } from './starship';
+import { type StationSeat, TeamStation } from './teamStation';
 
 interface DeskSlot {
   index: number;
@@ -42,11 +42,9 @@ const DOOR_SIGN_X = -HALF_D - OVER_DOOR;
 /** A room's number on the door, the way a starship numbers its doors. */
 const doorCode = (slot: RoomSlot) => `04-${String(slot.index + 2).padStart(2, '0')}`;
 
-/** Local (room-frame) position of a desk: two rows of three, everyone facing the Kanban board. */
+/** Local (room-frame) position of a desk: the room's two, either side of the aisle by the door, facing the Kanban board. */
 export function deskPosition(index: number): THREE.Vector3 {
-  const row = Math.floor(index / 3);
-  const col = index % 3;
-  return new THREE.Vector3(row === 0 ? -2.4 : 1.6, 0, (col - 1) * 3.7);
+  return new THREE.Vector3(-4.6, 0, (index === 0 ? -1 : 1) * 3.8);
 }
 
 /** Where to stand to look over an agent's shoulder at their station's display (room frame). */
@@ -73,15 +71,8 @@ export class ProjectRoom {
   private qa!: Character;
   private qaScreen = new StationScreen(null, 'QA station · standing by');
   private qaStation!: THREE.Group;
-  /**
-   * The group desk's lead, while the room has a goal: the lead of its first (by team station), with their session on
-   * the desk's display. The other goals' leads have no seat until the room gets its team stations.
-   */
-  private leadSlot!: { seat: THREE.Group; id?: string; character?: Character };
-  private leadScreen = new StationScreen(null, 'Group desk · start a goal here', BIG_SCREEN);
-  private leadDesk!: { table: THREE.Group; display: THREE.Group };
-  /** The lead's helpers (their subagents) in the seats around the group desk, while they work. */
-  private helperSlots: { seat: THREE.Group; id?: string; character?: Character }[] = [];
+  /** The team stations: one goal each, its lead, their helpers and the goal's QA reviewer round its table. */
+  private stations: TeamStation[] = [];
   private prPile = new THREE.Group();
   private prCount = -1;
   private boardDirty = true;
@@ -178,13 +169,13 @@ export class ProjectRoom {
     this.qa = new Character(this.qaView());
     qaStation.seat.add(this.qa.group);
 
-    // the group desk by the door, where the lead of the room's first goal works with the captain
-    const desk = buildGroupDesk(this.leadScreen.material, project.color);
-    this.group.add(desk.group);
-    for (const c of desk.colliders) builder.collideObject(c);
-    this.leadDesk = desk;
-    this.helperSlots = desk.helperSeats.map((seat) => ({ seat }));
-    this.leadSlot = { seat: desk.leadSeat };
+    // the team stations either side of the aisle, where each goal's lead works with the captain
+    for (let i = 0; i < TEAM_STATIONS; i++) {
+      const station = new TeamStation(i, [LCARS.gold, LCARS.periwinkle, LCARS.orange, LCARS.lilac][i]);
+      this.group.add(station.group);
+      for (const c of station.colliders) builder.collideObject(c);
+      this.stations.push(station);
+    }
 
     // "new issue" stand with a note pad
     const kiosk = new THREE.Group();
@@ -259,48 +250,57 @@ export class ProjectRoom {
     if (this.youreHere) sound.beam();
   }
 
-  /** The lead at the group desk: the room's first goal's, by team station. */
-  private deskLead(): Agent | undefined {
-    return state.leadsIn(this.project.id)[0];
-  }
-
-  syncLead(): void {
-    const agent = this.deskLead();
-    const slot = this.leadSlot;
-    if (slot.id !== agent?.id && slot.character) {
+  /**
+   * Seats `id` (with `view`) in `slot`, beaming out whoever sat there before; nobody when `id` is undefined. Using them
+   * does `use`.
+   */
+  private sit(slot: StationSeat, id: string | undefined, view: CrewView | undefined, use: Interaction, label: () => string, prop?: 'padd'): void {
+    if (slot.id !== id && slot.character) {
       this.leave(slot.seat, slot.character);
       slot.character = undefined;
     }
-    slot.id = agent?.id;
-    this.leadScreen.setAgent(agent ?? null);
-    const use = { kind: 'lead', projectId: this.project.id } as const;
-    const label = () => {
-      const goals = state.leadsIn(this.project.id).length;
-      return goals ? `${this.project.name}'s goals: ${goals} under way` : `Start a goal for ${this.project.name}`;
-    };
-    for (const o of [this.leadDesk.table, this.leadDesk.display]) interactive(o, use, label);
-    if (agent) {
-      if (!slot.character) {
-        slot.character = new Character(agentView(agent));
-        this.arrive(slot.seat, slot.character);
-        interactive(slot.character.group, { kind: 'agent', id: agent.id }, () => `Talk to ${agent.name}, lead of “${agent.lead?.title ?? 'a goal'}”`);
-      }
-      slot.character.set(agentView(agent));
+    slot.id = id;
+    if (!id || !view) return;
+    if (!slot.character) {
+      slot.character = new Character(view, prop);
+      this.arrive(slot.seat, slot.character);
     }
-    this.syncHelpers(agent?.helpers ?? [], agent);
+    slot.character.set(view);
+    interactive(slot.character.group, use, label);
   }
 
-  /** Seats the lead's helpers around the group desk, PADDs in hand, and sends the ones who've gone on their way. */
-  private syncHelpers(helpers: Helper[], lead: Agent | undefined): void {
-    const seats = seatHelpers(this.helperSlots.map((s) => s.id), helpers.map((h) => h.id));
-    for (const [i, slot] of this.helperSlots.entries()) {
+  /** Each team station's goal: its lead, their helpers, and the goal's QA reviewer; a free one says what's next. */
+  syncStations(): void {
+    const leads = state.leadsIn(this.project.id);
+    const reviewers = state.reviewersIn(this.project.id);
+    const next = this.project.goalQueue?.[0]?.text.split('\n')[0];
+    for (const station of this.stations) {
+      const lead = leads.find((a) => (a.lead?.station ?? 0) === station.index);
+      const n = station.index + 1;
+      station.screen.setAgent(lead ?? null);
+      station.screen.setIdle(station.freeText(next));
+      station.setSign(lead ? `${lead.name} · ${lead.lead?.title ?? lead.issue.title}` : next ? `Free · next up: ${next}` : 'Free · start a goal here');
+      const use: Interaction = lead ? { kind: 'agent', id: lead.id } : { kind: 'station', projectId: this.project.id, station: station.index };
+      const label = () => (lead ? `Talk to ${lead.name}, lead of “${lead.lead?.title ?? 'a goal'}”` : next ? `Team station ${n} is free: start “${next}”` : `Start a goal at team station ${n}`);
+      for (const o of [station.table, station.display]) interactive(o, use, label);
+      this.sit(station.lead, lead?.id, lead && agentView(lead), use, label);
+      this.syncHelpers(station, lead);
+      const reviewer = lead && reviewers.find((r) => r.reviewFor === lead.id);
+      this.sit(station.reviewer, reviewer?.id, reviewer && agentView(reviewer), reviewer ? { kind: 'agent', id: reviewer.id } : use,
+        () => (reviewer ? `${reviewer.name}, reviewing “${lead?.lead?.title ?? 'the goal'}”: ${reviewer.activity}` : label()), 'padd');
+    }
+  }
+
+  /** Seats the lead's helpers round their station, PADDs in hand, and sends the ones who've gone on their way. */
+  private syncHelpers(station: TeamStation, lead: Agent | undefined): void {
+    const helpers: Helper[] = lead?.helpers ?? [];
+    const seats = seatHelpers(station.helpers.map((s) => s.id), helpers.map((h) => h.id));
+    for (const [i, slot] of station.helpers.entries()) {
       const helper = helpers.find((h) => h.id === seats[i]);
-      if (slot.id !== seats[i] && slot.character) {
-        this.leave(slot.seat, slot.character);
-        slot.character = undefined;
+      if (!helper || !lead) {
+        this.sit(slot, undefined, undefined, { kind: 'station', projectId: this.project.id, station: station.index }, () => '');
+        continue;
       }
-      slot.id = seats[i];
-      if (!helper || !lead) continue;
       const crew = helperFor(helper.id);
       const view: CrewView = {
         name: crew.name,
@@ -309,12 +309,7 @@ export class ProjectRoom {
         status: helper.status === 'working' ? 'working' : helper.status === 'done' ? 'done' : 'error',
         line: helper.status === 'working' ? helper.activity : `${helper.status === 'done' ? '✔' : '✘'} ${helper.activity}`,
       };
-      if (!slot.character) {
-        slot.character = new Character(view, 'padd');
-        this.arrive(slot.seat, slot.character);
-        interactive(slot.character.group, { kind: 'agent', id: lead.id }, () => `${crew.name}, helping ${lead.name}: ${helper.description}`);
-      }
-      slot.character.set(view);
+      this.sit(slot, helper.id, view, { kind: 'agent', id: lead.id }, () => `${crew.name}, helping ${lead.name}: ${helper.description}`, 'padd');
     }
   }
 
@@ -366,7 +361,7 @@ export class ProjectRoom {
       slot.character!.set(agentView(agent));
       slot.screen.setAgent(agent);
     }
-    this.syncLead();
+    this.syncStations();
     this.boardDirty = true;
   }
 
@@ -426,7 +421,7 @@ export class ProjectRoom {
   markScreen(agentId: string): void {
     this.desks.find((d) => d.agentId === agentId)?.screen.markDirty();
     if (state.qaAgent(this.project.id)?.id === agentId) this.qaScreen.markDirty();
-    if (this.leadSlot.id === agentId) this.leadScreen.markDirty();
+    for (const station of this.stations) if (station.lead.id === agentId) station.screen.markDirty();
   }
 
   markBoard(): void {
@@ -457,11 +452,12 @@ export class ProjectRoom {
     if (inRoom) this.qa.update(t, qaDist);
     const qaAgent = state.qaAgent(this.project.id);
     this.qaScreen.maybeDraw(now, inRoom && qaDist < 6, qaAgent && state.lines.get(qaAgent.id), qaAgent && state.browser.get(qaAgent.id));
-    const leadDist = camera.distanceTo(this.leadSlot.seat.getWorldPosition(tmp));
-    if (inRoom) this.leadSlot.character?.update(t, leadDist);
-    for (const slot of this.helperSlots) if (inRoom && slot.character) slot.character.update(t, camera.distanceTo(slot.character.group.getWorldPosition(tmp)));
-    const lead = this.leadSlot.id;
-    this.leadScreen.maybeDraw(now, inRoom && leadDist < 7, lead ? state.lines.get(lead) : undefined, lead ? state.browser.get(lead) : undefined);
+    for (const station of this.stations) {
+      if (inRoom) for (const slot of [station.lead, ...station.helpers, station.reviewer]) slot.character?.update(t, camera.distanceTo(slot.seat.getWorldPosition(tmp)));
+      const lead = station.lead.id;
+      const near = inRoom && camera.distanceTo(station.group.getWorldPosition(tmp)) < 7;
+      station.screen.maybeDraw(now, near, lead ? state.lines.get(lead) : undefined, lead ? state.browser.get(lead) : undefined);
+    }
     for (const slot of this.desks) {
       if (!slot.character) {
         slot.screen.maybeDraw(now, false, undefined, undefined);
@@ -478,12 +474,12 @@ export class ProjectRoom {
   viewpoint(agentId: string): { position: THREE.Vector3; lookAt: THREE.Vector3 } | null {
     const slot = this.desks.find((d) => d.agentId === agentId);
     const qa = state.qaAgent(this.project.id)?.id === agentId;
-    const lead = this.leadSlot.id === agentId;
-    if (!slot && !qa && !lead) return null;
+    const station = this.stations.find((st) => st.lead.id === agentId);
+    if (!slot && !qa && !station) return null;
     const v = slot
       ? deskViewpoint(slot.index)
-      : lead
-        ? leadViewpoint()
+      : station
+        ? station.viewpoint()
         : overShoulder(QA_SEAT);
     this.group.updateWorldMatrix(true, false);
     return { position: v.position.applyMatrix4(this.group.matrixWorld), lookAt: v.lookAt.applyMatrix4(this.group.matrixWorld) };
@@ -498,9 +494,7 @@ export class ProjectRoom {
     this.planner.dispose();
     this.qa.dispose();
     this.qaScreen.dispose();
-    this.leadSlot.character?.dispose();
-    this.leadScreen.dispose();
-    for (const slot of this.helperSlots) slot.character?.dispose();
+    for (const station of this.stations) station.dispose();
     for (const beam of this.beams) beam.finish();
   }
 }

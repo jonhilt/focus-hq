@@ -364,7 +364,7 @@ export function heldBack(work: LeadWork, folders: string[]): string {
   return `Slice ${work.slice} has landed, but ${folders.map((f) => `./${f}`).join(' and ')} still ${folders.length === 1 ? 'has' : 'have'} uncommitted changes, so your repos stay where they are. Ship them as part of the next slice, or discard them; the next slice starts on fresh code once every repo is clean.`;
 }
 
-/** How long a finished helper stays at the group desk, so you see it done before it goes. */
+/** How long a finished helper stays at the team station, so you see it done before it goes. */
 export const HELPER_LINGER_MS = 8000;
 
 /**

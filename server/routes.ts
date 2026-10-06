@@ -126,7 +126,11 @@ export function apiRouter(office: Office, store: Store): express.Router {
   ));
   // goals waiting for a free team station: started by the captain, never by themselves
   r.post('/projects/:id/goals/queue/:qid/start', h((req) =>
-    office.agents.startQueued(param(req, 'id'), param(req, 'qid'), { text: str(req.body.text) || undefined, effort: effort(req.body.effort) }),
+    office.agents.startQueued(param(req, 'id'), param(req, 'qid'), {
+      text: str(req.body.text) || undefined,
+      effort: effort(req.body.effort),
+      station: typeof req.body.station === 'number' ? req.body.station : undefined,
+    }),
   ));
   r.post('/projects/:id/goals/queue/:qid/move', h((req) => office.agents.moveQueued(param(req, 'id'), param(req, 'qid'), Math.sign(Number(req.body.by)) || 0)));
   r.delete('/projects/:id/goals/queue/:qid', h((req) => office.agents.dropQueued(param(req, 'id'), param(req, 'qid'))));

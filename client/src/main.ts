@@ -106,7 +106,7 @@ async function main() {
     openNewIssue: (projectId) => openNewIssuePanel(ui, projectId),
     openQa: (projectId) => openQaPanel(ui, projectId),
     openNumberOne: () => openNumberOnePanel(ui),
-    openGoals: (projectId) => openGoalsPanel(ui, projectId),
+    openGoals: (projectId, station) => openGoalsPanel(ui, projectId, station),
     openManager: (tab) => openManagerPanel(ui, tab),
     openTeleport: () => openTeleportPanel(ui),
   };
@@ -318,8 +318,8 @@ async function main() {
       case 'qa':
         ui.openQa(i.projectId);
         break;
-      case 'lead':
-        ui.openGoals(i.projectId);
+      case 'station':
+        ui.openGoals(i.projectId, i.station);
         break;
       case 'manager':
         ui.openManager(i.tab);

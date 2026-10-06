@@ -53,7 +53,7 @@ function goalCard(ui: Ui, lead: Agent): HTMLElement {
 }
 
 /** A goal waiting for a station: the first one starts with a press once a station is free, edits and all. */
-function queuedCard(ui: Ui, projectId: string, goal: QueuedGoal, place: number, total: number, free: boolean): HTMLElement {
+function queuedCard(ui: Ui, projectId: string, goal: QueuedGoal, place: number, total: number, free: boolean, station?: number): HTMLElement {
   const up = h('button', { class: 'btn small', title: 'Sooner', disabled: place === 0 }, '▲');
   const down = h('button', { class: 'btn small', title: 'Later', disabled: place === total - 1 }, '▼');
   const drop = h('button', { class: 'btn small', title: 'Take it out of the line' }, '✕');
@@ -72,7 +72,7 @@ function queuedCard(ui: Ui, projectId: string, goal: QueuedGoal, place: number, 
   const start = h('button', { class: 'btn primary' }, '🖖 Start it');
   start.onclick = () =>
     void busy(start, async () => {
-      const lead = await api.startQueued(projectId, goal.id, { text: text.value, effort: effort.picked() });
+      const lead = await api.startQueued(projectId, goal.id, { text: text.value, effort: effort.picked(), station });
       ui.openAgent(lead.id);
     }, ui.error);
   return h('div', { class: 'card planner goal-queued' }, head, h('p', null, 'A team station is free. Start it as it is, or change it first:'), withMic(ui, text), h('div', { class: 'row' }, start, effort.el));
@@ -95,7 +95,7 @@ function recordRow(goal: GoalRecord): HTMLElement {
  * across the project's repos). Talk to a goal's lead, close it, or start another; with every station taken, new goals
  * wait in line until one is free and the captain starts them.
  */
-export function openGoalsPanel(ui: Ui, projectId: string): void {
+export function openGoalsPanel(ui: Ui, projectId: string, station?: number): void {
   const project = state.project(projectId);
   if (!project) return;
   const list = h('div', { class: 'cards', style: 'margin-bottom:14px' });
@@ -107,7 +107,7 @@ export function openGoalsPanel(ui: Ui, projectId: string): void {
   const start = h('button', { class: 'btn primary' }, '🖖 Start the goal');
   start.onclick = () =>
     void busy(start, async () => {
-      const started = await api.startGoal(projectId, text.value, { effort: effort.picked() });
+      const started = await api.startGoal(projectId, text.value, { effort: effort.picked(), station: here() });
       text.value = '';
       if ('agent' in started) ui.openAgent(started.agent.id);
     }, ui.error);
@@ -126,6 +126,9 @@ export function openGoalsPanel(ui: Ui, projectId: string): void {
   );
   const body = h('div', null, list, queue, form, log);
 
+  // the station the captain walked up to, while it's still free and no goal is waiting ahead of a new one
+  const here = () => (station !== undefined && !state.leadsIn(projectId).some((a) => a.lead?.station === station) && !state.project(projectId)?.goalQueue?.length ? station : undefined);
+
   const render = () => {
     const p = state.project(projectId);
     if (!p) return ui.panels.close();
@@ -133,8 +136,8 @@ export function openGoalsPanel(ui: Ui, projectId: string): void {
     const open = TEAM_STATIONS - leads.length;
     fill(list, ...(leads.length ? leads.map((lead) => goalCard(ui, lead)) : [h('div', { class: 'empty' }, 'No goals under way yet.')]));
     const waiting = p.goalQueue ?? [];
-    fill(queue, ...(waiting.length ? [h('h3', null, `Waiting for a team station (${waiting.length})`), ...waiting.map((g, i) => queuedCard(ui, projectId, g, i, waiting.length, open > 0))] : []));
-    free.textContent = `${open} of ${TEAM_STATIONS} team stations free · Ctrl+Enter starts`;
+    fill(queue, ...(waiting.length ? [h('h3', null, `Waiting for a team station (${waiting.length})`), ...waiting.map((g, i) => queuedCard(ui, projectId, g, i, waiting.length, open > 0, station))] : []));
+    free.textContent = `${here() !== undefined ? `At team station ${here()! + 1} · ` : ''}${open} of ${TEAM_STATIONS} team stations free · Ctrl+Enter starts`;
     intro.textContent = open > 0 && !waiting.length
       ? `A lead of its own takes a free team station, with ${p.repos.length === 1 ? p.repos[0] : `all ${p.repos.length} of ${p.name}'s repos`} checked out side by side: your own Claude Code session for the goal. Talk it through, then let them build it a slice at a time. Each slice ships as a pull request per repo it touches, QA reviews it, and you merge it.`
       : 'Every team station has a goal, or goals are waiting for one: this one joins the line, and you start it once a station is free.';

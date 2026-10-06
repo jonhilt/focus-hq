@@ -6,6 +6,7 @@ import { prKey } from '../shared/qa';
 import type { Agent, Board, BrowserFrame, ClosedPr, NumberOneChat, Project, QaReview, Settings, TermLine } from '../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, EFFORT_LEVELS, ROOM_THEMES, type RoomTheme } from '../shared/types';
 import { paths } from './config';
+import { fitDesks } from './agents/desks';
 import { upgradeLead } from './agents/lead';
 import { newId } from './util';
 
@@ -94,6 +95,9 @@ export class Store {
       this.agents.set(agent.id, agent);
       this.lines.set(agent.id, this.readLog(agent.id, MEMORY_LINES));
     }
+    // rooms had six desks before team stations: anyone at a desk that's gone takes a free one, or waits off the floor
+    for (const [id, desk] of fitDesks([...this.agents.values()])) this.agents.get(id)!.desk = desk;
+    for (const project of this.projects) project.maxAgents = Math.min(project.maxAgents, DESKS_PER_ROOM);
   }
 
   save(): void {
@@ -131,7 +135,7 @@ export class Store {
       color: color || PROJECT_COLORS[this.projects.length % PROJECT_COLORS.length],
       theme: isTheme(theme) ? theme : this.nextTheme(),
       repos: [],
-      maxAgents: 3,
+      maxAgents: DESKS_PER_ROOM,
       autoAssign: false,
       autoLabel: '',
       createdAt: Date.now(),

@@ -68,6 +68,8 @@ export class World {
       for (const room of this.rooms.values()) {
         room.project = projects.find((p) => p.id === room.project.id) ?? room.project;
         room.markBoard();
+        // a goal joining or leaving the line changes what a free team station says
+        room.syncStations();
       }
       this.panelsDirty = true;
       return;

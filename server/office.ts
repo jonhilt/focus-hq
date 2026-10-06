@@ -1,5 +1,5 @@
 import type { Agent, Board, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
-import { EFFORT_LEVELS } from '../shared/types';
+import { DESKS_PER_ROOM, EFFORT_LEVELS } from '../shared/types';
 import { carryMergeable } from '../shared/board';
 import { chosenSet, previewPrs } from '../shared/previewSet';
 import { startOrder } from '../shared/dependencies';
@@ -50,7 +50,7 @@ export class Office {
       version,
       github: { ok: false, error: 'Checking…' },
       settings: store.settings,
-      deskCount: 6,
+      deskCount: DESKS_PER_ROOM,
     };
   }
 

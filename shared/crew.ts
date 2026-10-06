@@ -110,7 +110,7 @@ function freeSurname(projectId: string, h: number, others: string[]): string {
   return (free.length ? free : SURNAMES)[(h >>> 3) % (free.length || SURNAMES.length)];
 }
 
-/** A helper the lead brings to the group desk: an ensign from sciences or operations, the same for the same task. */
+/** A helper the lead brings to their team station: an ensign from sciences or operations, the same for the same task. */
 export function helperFor(id: string): Planner {
   const h = hash(`helper:${id}`);
   const avatar = rollAvatar(seeded(h), h % 2 ? 'sciences' : 'operations', 'ensign');

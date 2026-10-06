@@ -47,7 +47,7 @@ export class StationScreen {
   /** `idle` is what the screen says while nobody's using it. */
   constructor(
     private agent: Agent | null,
-    private readonly idle = 'This station is free',
+    private idle = 'This station is free',
     private readonly size: ScreenSize = LAPTOP,
   ) {
     this.c = makeCanvas(size.w, size.h);
@@ -57,6 +57,13 @@ export class StationScreen {
 
   setAgent(agent: Agent | null): void {
     this.agent = agent;
+    this.dirty = true;
+  }
+
+  /** What the screen says while nobody's using it. */
+  setIdle(text: string): void {
+    if (text === this.idle) return;
+    this.idle = text;
     this.dirty = true;
   }
 

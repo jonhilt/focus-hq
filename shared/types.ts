@@ -285,7 +285,7 @@ export interface ClaudeTask {
   activeForm?: string;
 }
 
-/** A subagent a goal's lead handed a piece of work to (Claude Code's Agent tool), seated at the group desk while it works. */
+/** A subagent a goal's lead handed a piece of work to (Claude Code's Agent tool), seated at the goal's team station while it works. */
 export interface Helper {
   /** The Agent tool call that started it. */
   id: string;
@@ -350,6 +350,10 @@ export interface Agent {
    * cloud session's id (session_…). Never set on the QA officer.
    */
   cloud?: boolean;
+  /**
+   * Which of the room's DESKS_PER_ROOM desks they sit at; QA_DESK and LEAD_DESK for QA and leads. An agent saved when
+   * rooms had more desks can be off the floor (a desk number past them) until they next start (`offTheFloor`).
+   */
   desk: number;
   status: AgentStatus;
   /** Short human description of what the agent is doing right now. */
@@ -665,4 +669,5 @@ export type ServerEvent =
   /** projectId, or the agent's, lets the browser drop toasts about a hidden project. */
   | { type: 'toast'; level: 'info' | 'success' | 'error'; text: string; agentId?: string; projectId?: string };
 
-export const DESKS_PER_ROOM = 6;
+/** A room's individual desks, for quick issue work; goals have team stations of their own (TEAM_STATIONS). */
+export const DESKS_PER_ROOM = 2;

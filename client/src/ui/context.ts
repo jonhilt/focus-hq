@@ -22,7 +22,8 @@ export interface Ui {
   /** The room's QA station: the QA officer, their reports and the project's QA brief. */
   openQa(projectId: string): void;
   /** The room's goals: each one's lead, and a box to start another. */
-  openGoals(projectId: string): void;
+  /** `station`: the free team station the captain walked up to, where a goal they start goes. */
+  openGoals(projectId: string, station?: number): void;
   /** The ready room's chat with Number One. */
   openNumberOne(): void;
   openManager(tab?: ManagerTab): void;
