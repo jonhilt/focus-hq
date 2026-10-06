@@ -154,7 +154,7 @@ export class Office {
     const clean = name.trim().replace(/\s+/g, '-');
     if (!/^[\w.-]+$/.test(clean)) throw new Error('Repository names may only contain letters, numbers, ".", "-" and "_"');
     const repo = await this.github.createRepo(clean, opts);
-    this.hub.toast('success', `Created ${repo} on GitHub`);
+    this.hub.toast('success', `Created ${repo} on GitHub`, undefined, projectId);
     if (projectId) await this.connectRepo(projectId, repo);
     return repo;
   }
@@ -167,7 +167,7 @@ export class Office {
     if (!project.repos.includes(repo)) throw new Error(`${repo} is not part of ${project.name}`);
     if (!title.trim()) throw new Error('An issue needs a title');
     const issue = await this.fileIssue(projectId, repo, title.trim(), body, labels);
-    this.hub.toast('success', `Filed ${repo}#${issue.number}`);
+    this.hub.toast('success', `Filed ${repo}#${issue.number}`, undefined, projectId);
     if (fromDraft) this.planner.discard(projectId);
     const agent = assign ? this.agents.hire(projectId, repo, issue, assign) : undefined;
     return { issue, agent };
@@ -314,7 +314,7 @@ export class Office {
       try {
         await this.followMergeStep(projectId, pr, step);
       } catch (err) {
-        this.hub.toast('error', `Auto-merge of ${pr.repo.split('/')[1]}#${pr.number}: ${errorMessage(err)}`);
+        this.hub.toast('error', `Auto-merge of ${pr.repo.split('/')[1]}#${pr.number}: ${errorMessage(err)}`, undefined, projectId);
       }
     }
   }
@@ -330,20 +330,20 @@ export class Office {
         try {
           await this.mergePullRequest(projectId, pr.repo, pr.number, step.sha);
           this.gateMarks.delete(key);
-          this.hub.toast('success', `🤖 Auto-merged ${where}: QA passed it and its checks are green`);
+          this.hub.toast('success', `🤖 Auto-merged ${where}: QA passed it and its checks are green`, undefined, projectId);
         } catch (err) {
           this.gateMarks.set(key, { sha: step.sha, kind: 'refused', reason: errorMessage(err) });
-          this.hub.toast('error', `🤖 GitHub refused to merge ${where}: ${errorMessage(err)}`);
+          this.hub.toast('error', `🤖 GitHub refused to merge ${where}: ${errorMessage(err)}`, undefined, projectId);
         }
         return;
       case 'qa':
         this.agents.requestReview(projectId, pr.repo, pr.number, pr.title);
-        this.hub.toast('info', `🔍 ${where} goes to QA before it can merge: ${step.reason}`);
+        this.hub.toast('info', `🔍 ${where} goes to QA before it can merge: ${step.reason}`, undefined, projectId);
         return;
       case 'rerun-checks':
         this.gateMarks.set(key, { sha: step.sha, kind: 'rerun' });
         await this.github.rerunFailedRuns(pr.repo, step.runIds);
-        this.hub.toast('info', `↻ Re-running the failed checks on ${where}`);
+        this.hub.toast('info', `↻ Re-running the failed checks on ${where}`, undefined, projectId);
         return;
       case 'send-back':
         this.gateMarks.set(key, { sha: step.sha, kind: 'sent-back' });
@@ -352,7 +352,7 @@ export class Office {
       case 'resolve-conflicts':
         this.gateMarks.set(key, { sha: step.sha, kind: 'resolving' });
         this.agents.resolveConflicts(projectId, pr);
-        this.hub.toast('info', `🔧 ${where} conflicts with ${pr.baseBranch} – resolving them before QA`);
+        this.hub.toast('info', `🔧 ${where} conflicts with ${pr.baseBranch} – resolving them before QA`, undefined, projectId);
         return;
     }
   }

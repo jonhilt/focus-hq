@@ -67,6 +67,11 @@ export interface Project {
   autoMerge?: boolean;
   /** What QA must check on every PR of this project, on top of the usual review. Goes into the QA officer's prompt. */
   qaBrief?: string;
+  /**
+   * Kept out of sight, say while demoing the office: the holodeck keeps its place behind locked doors with an "in use"
+   * sign, and the project's name, board and crew show nowhere aboard. Its crew keep working. Missing = shown.
+   */
+  hidden?: boolean;
   /** How hard the room's QA (its officer, and each goal's reviewer) thinks. Missing = the model's default. */
   qaEffort?: Effort;
   /** Goals waiting for a free team station, first up first. They never start by themselves. */
@@ -650,6 +655,7 @@ export type ServerEvent =
   | { type: 'review'; review: QaReview }
   | { type: 'review-removed'; repo: string; number: number }
   | { type: 'voice'; voice: VoiceStatus }
-  | { type: 'toast'; level: 'info' | 'success' | 'error'; text: string; agentId?: string };
+  /** projectId, or the agent's, lets the browser drop toasts about a hidden project. */
+  | { type: 'toast'; level: 'info' | 'success' | 'error'; text: string; agentId?: string; projectId?: string };
 
 export const DESKS_PER_ROOM = 6;

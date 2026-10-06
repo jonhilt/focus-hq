@@ -1,3 +1,4 @@
+import { isHidden, shownProjects } from '../../../shared/hidden';
 import { prKey } from '../../../shared/qa';
 import type { Agent, Board, BrowserFrame, IssueDraft, NumberOneChat, QaReview, Preview, Project, ServerEvent, ServerInfo, TermLine, VoiceStatus } from '../../../shared/types';
 
@@ -189,6 +190,21 @@ export class OfficeState {
 
   project(id: string): Project | undefined {
     return this.projects.find((p) => p.id === id);
+  }
+
+  /** The projects that show aboard: every one but the hidden ones, which nothing outside the ready room names. */
+  get shown(): Project[] {
+    return shownProjects(this.projects);
+  }
+
+  /** Whether the project is hidden (see Project.hidden). */
+  isHidden(projectId: string): boolean {
+    return isHidden(this.project(projectId));
+  }
+
+  /** Every agent but those of hidden projects. */
+  shownAgents(): Agent[] {
+    return [...this.agents.values()].filter((a) => !this.isHidden(a.projectId));
   }
 
   agentsIn(projectId: string): Agent[] {

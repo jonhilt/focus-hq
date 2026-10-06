@@ -25,7 +25,8 @@ export class Hub {
     }
   }
 
-  toast(level: 'info' | 'success' | 'error', text: string, agentId?: string): void {
-    this.send({ type: 'toast', level, text, agentId });
+  /** `projectId` names the project a toast without an agent is about, so it stays quiet while that project is hidden. */
+  toast(level: 'info' | 'success' | 'error', text: string, agentId?: string, projectId?: string): void {
+    this.send({ type: 'toast', level, text, agentId, projectId });
   }
 }

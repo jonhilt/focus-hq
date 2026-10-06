@@ -508,16 +508,40 @@ export class ProjectRoom {
 const tmp = new THREE.Vector3();
 
 /** An empty room waiting for a project. */
-export function buildVacantRoom(slot: RoomSlot, builder: Builder): THREE.Group {
+/** An empty holodeck: dark, with the yellow grid. */
+function bareHolodeck(slot: RoomSlot, builder: Builder): THREE.Group {
   const group = new THREE.Group();
   group.position.copy(slot.center);
   group.rotation.y = slot.rotationY;
   builder.add(group);
-  // an empty holodeck: dark, with the yellow grid, waiting for a project to load a landscape
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_DEPTH - 0.2, ROOM_WIDTH - 0.2), holodeckMaterial());
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = 0.005;
   group.add(floor, holodeckSkin());
+  return group;
+}
+
+/**
+ * A hidden project's holodeck: its doors stay locked (the World builds them so) under an "in use" sign that doesn't
+ * say whose, and nothing of the project is built inside.
+ */
+export function buildHiddenRoom(slot: RoomSlot, builder: Builder): THREE.Group {
+  const group = bareHolodeck(slot, builder);
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), flat(lcarsSign('Holodeck in use', { color: LCARS.red, code: doorCode(slot), sub: 'Program running · do not disturb' })));
+  sign.rotation.y = -Math.PI / 2;
+  sign.position.set(DOOR_SIGN_X, 2.87, 0);
+  group.add(sign);
+  // a plate on the closed doors, clear of the seam and band that stand out from their leaves
+  const plate = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.36), flat(lcarsSign('In use', { color: LCARS.red, h: 284 })));
+  plate.rotation.y = -Math.PI / 2;
+  plate.position.set(-HALF_D - 0.075, 1.5, 0);
+  group.add(plate);
+  return group;
+}
+
+export function buildVacantRoom(slot: RoomSlot, builder: Builder): THREE.Group {
+  // waiting for a project to load a landscape
+  const group = bareHolodeck(slot, builder);
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), flat(lcarsSign('Holodeck vacant', { color: '#9a94a8', code: doorCode(slot), sub: 'Create a project in the ready room' })));
   sign.rotation.y = -Math.PI / 2;
   sign.position.set(DOOR_SIGN_X, 2.87, 0);

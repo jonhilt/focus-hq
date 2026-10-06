@@ -27,6 +27,13 @@ function snapshot(patch: Partial<Snapshot> = {}): Snapshot {
 const worktree = (id: string) => `/ws/${id}`;
 
 describe('summariseShip', () => {
+  it('leaves hidden projects out', () => {
+    const secret = { id: 'p2', name: 'Secret', repos: ['acme/secret'], hidden: true } as Project;
+    const status = summariseShip(snapshot({ projects: [project, secret], agents: [agent({}), agent({ id: 'a2', projectId: 'p2' })] }), worktree);
+    expect(status.projects.map((p) => p.name)).toEqual(['Shop']);
+    expect(JSON.stringify(status)).not.toContain('secret');
+  });
+
   it('lists each agent with their issue, status and worktree, without terminal lines or browser frames', () => {
     const status = summariseShip(
       snapshot({
@@ -190,6 +197,14 @@ describe('NumberOne', () => {
     expect(turn.mock.calls[1][0].resumeSessionId).toBe('s1');
     expect(turn.mock.calls[1][0].projects).toEqual([{ id: 'p1', name: 'Shop', repos: ['acme/shop', 'acme/shop-api'] }]);
     expect(numberOne.current().costUsd).toBeCloseTo(0.2);
+  });
+
+  it('keeps hidden projects out of the chat', async () => {
+    const { store, numberOne, turn, settled } = setup(async () => ({ text: 'Aye.', sessionId: 's1' }));
+    store.projects = [project, { id: 'p2', name: 'Secret', repos: ['acme/secret'], hidden: true } as Project];
+    numberOne.say('What projects are aboard?');
+    await settled();
+    expect(turn.mock.calls[0][0].projects.map((p) => p.id)).toEqual(['p1']);
   });
 
   it('refuses a message while still thinking', () => {

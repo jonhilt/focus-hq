@@ -1,5 +1,6 @@
 import { statusLine } from '../../shared/agentStatus';
 import { numberOne } from '../../shared/crew';
+import { shownProjects } from '../../shared/hidden';
 import { prKey, qaBadge } from '../../shared/qa';
 import type { Agent, NumberOneChat, NumberOneMessage, Project, PullRequest, Settings, Snapshot, WorkSuggestion } from '../../shared/types';
 import { spokenLine } from '../../shared/voice';
@@ -86,7 +87,8 @@ export class NumberOne {
     const abort = new AbortController();
     this.running = abort;
     const current = () => this.store.numberOne === chat && this.running === abort;
-    const projects = this.store.projects.map(({ id, name, repos }) => ({ id, name, repos: [...repos] }));
+    // hidden projects stay out of the chat, so a demo can't turn them up
+    const projects = shownProjects(this.store.projects).map(({ id, name, repos }) => ({ id, name, repos: [...repos] }));
     void this.officer
       .turn(
         { projects, messages: [...chat.messages], resumeSessionId: chat.sessionId, shipStatus: this.shipStatus, settings: this.store.settings, signal: abort.signal },
@@ -173,11 +175,11 @@ const ACTIVITY = 120;
 
 /**
  * The ship's live state, trimmed hard for Number One: no terminal lines, browser frames, previews or voice, and short
- * lines throughout. `worktree` says where an agent's checkout lives on this machine.
+ * lines throughout, and nothing about hidden projects. `worktree` says where an agent's checkout lives on this machine.
  */
 export function summariseShip(snapshot: Snapshot, worktree: (agentId: string) => string): ShipStatus {
   const reviews = new Map(snapshot.reviews.map((r) => [prKey(r.repo, r.number), r]));
-  const projects = snapshot.projects.map((project): ProjectStatus => {
+  const projects = shownProjects(snapshot.projects).map((project): ProjectStatus => {
     const agents = snapshot.agents.filter((a) => a.projectId === project.id);
     const board = snapshot.boards.find((b) => b.projectId === project.id);
     const prs = board?.prs ?? [];

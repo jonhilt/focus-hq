@@ -28,12 +28,12 @@ export const workLabel = (a: Agent) => `${a.task === 'issue' ? '#' : 'PR #'}${a.
 
 const FINISHED = ['done', 'error', 'stopped'];
 
-/** The home screen: what needs you, then each project's agents in flight, PRs and issues. */
+/** The home screen: what needs you, then each shown project's agents in flight, PRs and issues. */
 export function home(ctx: HomeContext): HTMLElement {
   const login = state.info?.github.login;
-  const boards = state.projects.map((project) => ({ project, cols: columns(project, state.boards.get(project.id), state.agentsIn(project.id), login) }));
+  const boards = state.shown.map((project) => ({ project, cols: columns(project, state.boards.get(project.id), state.agentsIn(project.id), login) }));
   const attention = needsYou(
-    [...state.agents.values()],
+    state.shownAgents(),
     boards.flatMap(({ project, cols }) => cols.prs.map((pr) => ({ projectId: project.id, pr }))),
     state.reviews,
   );

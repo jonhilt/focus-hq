@@ -25,6 +25,8 @@ export function interactive(obj: THREE.Object3D, interaction: Interaction, label
 export interface Door {
   at: number;
   width: number;
+  /** Stays shut and blocks the way, like a hidden project's holodeck. */
+  locked?: boolean;
 }
 
 /** Accumulates static geometry plus the 2D boxes the player collides with. */
@@ -59,7 +61,7 @@ export class Builder {
     const start = alongX ? Math.min(x0, x1) : Math.min(z0, z1);
     const end = alongX ? Math.max(x0, x1) : Math.max(z0, z1);
     const fixed = alongX ? z0 : x0;
-    const gaps = doors.map((d) => [d.at - d.width / 2, d.at + d.width / 2] as const).sort((a, b) => a[0] - b[0]);
+    const gaps = doors.map((d) => [d.at - d.width / 2, d.at + d.width / 2, d.locked === true] as const).sort((a, b) => a[0] - b[0]);
 
     // the dado and its stripe run a little past the wall's ends (into the corner or door frame), so their end faces
     // don't share a plane with the wall's
@@ -73,7 +75,7 @@ export class Builder {
     };
 
     let cursor = start;
-    for (const [g0, g1] of [...gaps, [end, end] as const]) {
+    for (const [g0, g1, locked] of [...gaps, [end, end, false] as const]) {
       if (g0 > cursor) {
         piece(cursor, g0, 0, WALL_H, color, WALL_T);
         piece(cursor - overrun, g0 + overrun, 0, 0.9, HULL.dado, WALL_T + 0.05);
@@ -89,9 +91,13 @@ export class Builder {
         piece(g1 - lip, g1 + 0.14, 0, DOOR_H + 0.14, HULL.frame, FRAME_FACE * 2);
         piece(g0, g1, DOOR_H - lip, DOOR_H + 0.14, HULL.frame, FRAME_FACE * 2);
         const mid = (g0 + g1) / 2;
-        const door = new SlidingDoors(alongX ? new THREE.Vector3(mid, 0, fixed) : new THREE.Vector3(fixed, 0, mid), alongX ? 'x' : 'z', g1 - g0, DOOR_H);
+        const door = new SlidingDoors(alongX ? new THREE.Vector3(mid, 0, fixed) : new THREE.Vector3(fixed, 0, mid), alongX ? 'x' : 'z', g1 - g0, DOOR_H, locked);
         this.doors.push(door);
         this.add(door.group);
+        if (locked) {
+          if (alongX) this.collide(g0, g1, fixed - WALL_T / 2, fixed + WALL_T / 2);
+          else this.collide(fixed - WALL_T / 2, fixed + WALL_T / 2, g0, g1);
+        }
       }
       cursor = Math.max(cursor, g1);
     }

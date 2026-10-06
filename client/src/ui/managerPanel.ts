@@ -1,3 +1,4 @@
+import { isHidden } from '../../../shared/hidden';
 import { autoMergeFor } from '../../../shared/mergeGate';
 import type { Autonomy, PreviewConfig, Project, RoomTheme, SpeechStatus, VoiceStatus } from '../../../shared/types';
 import { DESKS_PER_ROOM, EFFORT_LEVELS, ROOM_THEMES } from '../../../shared/types';
@@ -71,7 +72,8 @@ export function openManagerPanel(ui: Ui, tab: ManagerTab = state.projects.length
 
 /** One project at a time, picked from a list, so the console stays navigable however many projects there are. */
 function projectsTab(ui: Ui, show: (t: ManagerTab) => void, selected: string | undefined, openProject: (id: string) => void): HTMLElement {
-  const project = state.project(selected ?? '') ?? state.projects[0];
+  // a hidden project only opens when picked, so a demo can open the console without landing on one
+  const project = state.project(selected ?? '') ?? state.shown[0] ?? state.projects[0];
   if (!project) {
     return h('div', { class: 'empty' },
       h('p', null, 'No projects yet. Each project gets its own holodeck with stations for agents.'),
@@ -81,12 +83,29 @@ function projectsTab(ui: Ui, show: (t: ManagerTab) => void, selected: string | u
   const list = h('nav', { class: 'project-list' },
     ...state.projects.map((p, i) =>
       h('button', { class: `project-pick${p === project ? ' on' : ''}`, onclick: () => openProject(p.id) },
-        h('span', { class: 'dot', style: `background:${p.color}` }),
-        h('span', { class: 'grow' }, p.name, h('small', null, `Holodeck ${i + 1} · ${p.repos.length} repo${p.repos.length === 1 ? '' : 's'}`)),
+        isHidden(p)
+          ? [h('span', null, '🔒'), h('span', { class: 'grow' }, 'Hidden project', h('small', null, `Holodeck ${i + 1} · in use`))]
+          : [
+              h('span', { class: 'dot', style: `background:${p.color}` }),
+              h('span', { class: 'grow' }, p.name, h('small', null, `Holodeck ${i + 1} · ${p.repos.length} repo${p.repos.length === 1 ? '' : 's'}`)),
+            ],
       ),
     ),
   );
-  return h('div', { class: 'projects' }, list, projectCard(ui, project));
+  return h('div', { class: 'projects' }, list, isHidden(project) ? hiddenCard(ui, project) : projectCard(ui, project));
+}
+
+/** A hidden project's card: nothing about it but where its holodeck is, and the way to show it again. */
+function hiddenCard(ui: Ui, p: Project): HTMLElement {
+  const show = h('button', { class: 'btn primary' }, '👁 Show it');
+  show.onclick = () => void busy(show, () => api.updateProject(p.id, { hidden: false }), ui.error);
+  return h('div', { class: 'card' },
+    h('div', { class: 'row' }, h('strong', { class: 'grow' }, '🔒 Hidden project'), h('span', { class: 'chip' }, `Holodeck ${state.projects.indexOf(p) + 1}`)),
+    h('p', { class: 'muted' },
+      'Its holodeck stays locked behind an “in use” sign, and its name, board and crew show nowhere aboard. ',
+      'Its crew keep working on it, and nothing else moves into its holodeck.'),
+    h('div', { class: 'row' }, show),
+  );
 }
 
 function projectCard(ui: Ui, p: Project): HTMLElement {
@@ -167,6 +186,8 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
   const theme = themeSelect(roomTheme(p));
   theme.addEventListener('change', () => void api.updateProject(p.id, { theme: theme.value as RoomTheme }).catch((e: Error) => ui.error(e.message)));
 
+  const hide = h('button', { class: 'btn small', title: 'Keep it out of sight, say while you demo the office: its holodeck stays in place behind locked doors, and its crew keep working' }, '🙈 Hide');
+  hide.onclick = () => void busy(hide, () => api.updateProject(p.id, { hidden: true }), ui.error);
   const remove = h('button', { class: 'btn small danger' }, '🗑 Close project');
   remove.onclick = () => {
     if (!confirm(`Close ${p.name}? Its agents are sent home. Nothing on GitHub is deleted.`)) return;
@@ -197,6 +218,7 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
       h('label', { class: 'row', style: 'gap:6px' }, 'with label', label),
       h('label', { class: 'row', style: 'gap:6px', title: 'Merges a PR the crew opened once QA passed its latest commit and its checks are green' }, autoMerge, 'Auto-merge QA-passed PRs'),
       h('span', { class: 'grow' }),
+      hide,
       remove,
     ),
   );
@@ -254,8 +276,8 @@ function newProjectTab(ui: Ui, openProject: (id: string) => void): HTMLElement {
 
 /** Form for filing a new issue; optionally hires an agent for it straight away. */
 export function issueForm(ui: Ui, projectId?: string, onDone?: () => void): HTMLElement {
-  if (!state.projects.length) return h('div', { class: 'empty' }, 'Create a project first.');
-  const project = h('select', null, ...state.projects.map((p) => h('option', { value: p.id, selected: p.id === projectId }, p.name)));
+  if (!state.shown.length) return h('div', { class: 'empty' }, 'Create a project first.');
+  const project = h('select', null, ...state.shown.map((p) => h('option', { value: p.id, selected: p.id === projectId }, p.name)));
   const repo = h('select');
   const fillRepos = () => {
     const p = state.project(project.value);

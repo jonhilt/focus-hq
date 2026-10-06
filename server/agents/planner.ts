@@ -102,7 +102,7 @@ export class IssuePlanner {
           finishedAt: Date.now(),
         } satisfies Partial<IssueDraft>);
         this.broadcast(draft);
-        this.hub.toast('success', `📝 ${planner.name} has a draft ready at ${project.name}'s stand: ${truncate(draft.title ?? '', 60)}`);
+        this.hub.toast('success', `📝 ${planner.name} has a draft ready at ${project.name}'s stand: ${truncate(draft.title ?? '', 60)}`, undefined, project.id);
       })
       .catch((err) => {
         if (!current()) return; // discarded meanwhile

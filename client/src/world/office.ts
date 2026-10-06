@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { columns } from '../../../shared/board';
+import { holodecks } from '../../../shared/hidden';
 import type { Project } from '../../../shared/types';
 import { ACTIVE_STATUSES } from '../../../shared/types';
 import { state } from '../net/state';
@@ -11,7 +12,7 @@ import { bookshelf, ceilingLight, chair, coffeeMachine, cyl, desk, DESK_TOP, pla
 import { EngineeringStation } from './engineering';
 import { Lounge } from './lounge';
 import { FirstOfficer } from './numberOne';
-import { buildVacantRoom, ProjectRoom } from './room';
+import { buildHiddenRoom, buildVacantRoom, ProjectRoom } from './room';
 import type { Scenery } from './scenery';
 import { tiled } from './textures';
 import { HULL, LCARS, LCARS_FONT, lcarsConsole, lcarsFrame, lcarsSign, type SlidingDoors, viewport } from './starship';
@@ -47,14 +48,16 @@ export class World {
   private panelsDirty = true;
   private lastPanels = 0;
   private projectKey = '';
+  /** Holodecks of hidden projects: locked, and nameless. */
+  private inUse = new Set<number>();
 
   constructor(scene: THREE.Scene) {
     scene.add(this.root);
   }
 
-  /** Rebuilds the building when the set of projects (or their names/colours/repos) changes. */
+  /** Rebuilds the building when the set of projects (or their names/colours/repos, or which are hidden) changes. */
   sync(projects: Project[]): void {
-    const key = JSON.stringify(projects.map((p) => [p.id, p.name, p.color, p.repos, p.theme]));
+    const key = JSON.stringify(projects.map((p) => [p.id, p.name, p.color, p.repos, p.theme, p.hidden === true]));
     if (key === this.projectKey) {
       for (const room of this.rooms.values()) {
         room.project = projects.find((p) => p.id === room.project.id) ?? room.project;
@@ -79,6 +82,8 @@ export class World {
 
     const rows = rowsFor(projects.length);
     const hallEnd = -rows * ROOM_WIDTH;
+    const decks = holodecks(projects, rows * 2);
+    this.inUse = new Set(decks.flatMap((deck, i) => (deck.kind === 'in-use' ? [i] : [])));
 
     // floors and ceiling
     b.floor(LOBBY.x0, LOBBY.x1, LOBBY.z0, LOBBY.z1, toon('#ffffff', { map: tiled.carpet('#4a3f6e', 6, 4) }));
@@ -106,8 +111,9 @@ export class World {
     b.wall(LOUNGE.x0, LOUNGE.z0, LOUNGE.x0, LOUNGE.z1, HULL.bulkhead);
     b.wall(LOUNGE.x1, LOUNGE.z0, LOUNGE.x1, LOUNGE.z1, HULL.bulkhead);
     b.wall(LOUNGE.x0, LOUNGE.z1, LOUNGE.x1, LOUNGE.z1, HULL.bulkhead);
-    const roomDoors = Array.from({ length: rows }, (_, r) => ({ at: -(r + 0.5) * ROOM_WIDTH, width: DOOR_W }));
     for (const s of [-1, 1]) {
+      // rooms on the right (+x) take the even slots
+      const roomDoors = Array.from({ length: rows }, (_, r) => ({ at: -(r + 0.5) * ROOM_WIDTH, width: DOOR_W, locked: this.inUse.has(r * 2 + (s > 0 ? 0 : 1)) }));
       b.wall(s * HALL_HALF, hallEnd, s * HALL_HALF, 0, roomWall, roomDoors);
       b.wall(s * OUTER_X, hallEnd, s * OUTER_X, 0, roomWall);
     }
@@ -135,8 +141,11 @@ export class World {
     // rooms
     const previous = this.sceneries;
     this.sceneries = new Map();
-    projects.forEach((project, i) => {
+    decks.forEach((deck, i) => {
       const slot = roomSlot(i);
+      if (deck.kind === 'vacant') return void buildVacantRoom(slot, b);
+      if (deck.kind === 'in-use') return void buildHiddenRoom(slot, b);
+      const { project } = deck;
       const theme = roomTheme(project);
       const key = `${project.id}|${theme}|${i}`;
       let scenery = previous.get(key) ?? null;
@@ -147,7 +156,6 @@ export class World {
       this.rooms.set(project.id, new ProjectRoom(project, slot, b, scenery));
     });
     for (const scenery of previous.values()) scenery.dispose();
-    for (let i = projects.length; i < rows * 2; i++) buildVacantRoom(roomSlot(i), b);
 
     this.buildLobby(b);
     this.buildManagerOffice(b);
@@ -359,7 +367,8 @@ export class World {
     const row = Math.floor(-p.z / ROOM_WIDTH);
     const index = row * 2 + (p.x > 0 ? 0 : 1);
     const room = [...this.rooms.values()].find((r) => r.slot.index === index);
-    return room ? { label: room.project.name, projectId: room.project.id } : { label: 'Vacant holodeck' };
+    if (room) return { label: room.project.name, projectId: room.project.id };
+    return { label: this.inUse.has(index) ? 'Holodeck in use' : 'Vacant holodeck' };
   }
 
   markPanels(): void {
@@ -387,11 +396,13 @@ export class World {
     const area = lcarsFrame(ctx, canvas.width, canvas.height, { title: 'Mission control', color: LCARS.orange, seed: 74656 });
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    const agents = [...state.agents.values()];
+    // hidden projects don't count: the totals would give them away
+    const projects = state.shown;
+    const agents = state.shownAgents();
     const working = agents.filter((a) => ACTIVE_STATUSES.includes(a.status) && a.status !== 'waiting').length;
     const waiting = agents.filter((a) => a.status === 'waiting').length;
-    const prs = [...state.boards.values()].reduce((n, b) => n + b.prs.length, 0);
-    const todo = state.projects.reduce((n, p) => n + columns(p, state.boards.get(p.id), state.agentsIn(p.id), state.info?.github.login).todo.length, 0);
+    const prs = projects.reduce((n, p) => n + (state.boards.get(p.id)?.prs.length ?? 0), 0);
+    const todo = projects.reduce((n, p) => n + columns(p, state.boards.get(p.id), state.agentsIn(p.id), state.info?.github.login).todo.length, 0);
     const tiles: [string, number, string][] = [
       ['working', working, LCARS.sky],
       ['need you', waiting, LCARS.gold],
@@ -411,12 +422,12 @@ export class World {
       ctx.fillText(label.toUpperCase(), x + 4, area.y + 150);
     });
     let y = area.y + 230;
-    if (state.projects.length === 0) {
+    if (projects.length === 0) {
       ctx.fillStyle = LCARS.peach;
       ctx.font = `500 34px ${LCARS_FONT}`;
       ctx.fillText('NO PROJECTS YET – PRESS E HERE TO CREATE YOUR FIRST ONE.', area.x, y);
     }
-    for (const p of state.projects.slice(0, 5)) {
+    for (const p of projects.slice(0, 5)) {
       const cols = columns(p, state.boards.get(p.id), state.agentsIn(p.id), state.info?.github.login);
       ctx.fillStyle = p.color;
       roundRect(ctx, area.x, y - 22, 60, 44, 22);

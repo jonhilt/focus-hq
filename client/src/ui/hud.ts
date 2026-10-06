@@ -73,12 +73,13 @@ export class Hud {
   }
 
   private renderStats(): void {
-    const agents = [...state.agents.values()];
+    const agents = state.shownAgents();
     const working = agents.filter((a) => ACTIVE_STATUSES.includes(a.status) && a.status !== 'waiting').length;
     const waiting = agents.filter((a) => a.status === 'waiting').length;
     const queued = agents.filter((a) => a.status === 'queued').length;
     const failed = agents.filter((a) => a.status === 'error').length;
-    const prs = [...state.boards.values()].reduce((n, b) => n + b.prs.length, 0);
+    const prs = state.shown.reduce((n, p) => n + (state.boards.get(p.id)?.prs.length ?? 0), 0);
+    const previews = [...state.previews.keys()].filter((id) => !state.isHidden(id)).length;
     fill(
       this.stats,
       !state.connected ? h('div', { class: 'stat bad' }, '🔌 reconnecting…') : null,
@@ -88,7 +89,7 @@ export class Hud {
       waiting ? h('div', { class: 'stat alert' }, `✋ ${waiting} need${waiting === 1 ? 's' : ''} you`) : null,
       failed ? h('div', { class: 'stat bad' }, `❗ ${failed} stuck`) : null,
       h('div', { class: 'stat' }, `👀 ${prs} PR${prs === 1 ? '' : 's'}`),
-      state.previews.size ? h('div', { class: 'stat' }, `▶ ${state.previews.size} preview${state.previews.size === 1 ? '' : 's'}`) : null,
+      previews ? h('div', { class: 'stat' }, `▶ ${previews} preview${previews === 1 ? '' : 's'}`) : null,
     );
   }
 

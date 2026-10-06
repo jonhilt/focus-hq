@@ -410,12 +410,13 @@ export class SlidingDoors {
   private open = 0;
   private target = 0;
 
-  /** `along` is the doorway's axis; `at` is its centre on the floor. */
+  /** `along` is the doorway's axis; `at` is its centre on the floor. Locked doors never open. */
   constructor(
     private readonly at: THREE.Vector3,
     along: 'x' | 'z',
     private readonly width: number,
     height: number,
+    private readonly locked = false,
   ) {
     this.group.position.copy(at);
     if (along === 'z') this.group.rotation.y = Math.PI / 2;
@@ -432,6 +433,7 @@ export class SlidingDoors {
   }
 
   update(eye: THREE.Vector3, dt: number): void {
+    if (this.locked) return;
     // the gap between the two distances stops a door stuttering open and shut when you stand at the edge
     const distance = Math.hypot(eye.x - this.at.x, eye.z - this.at.z);
     const target = distance < DOOR_SENSOR.open ? 1 : distance > DOOR_SENSOR.close ? 0 : this.target;

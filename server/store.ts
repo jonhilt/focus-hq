@@ -150,7 +150,7 @@ export class Store {
 
   updateProject(
     id: string,
-    patch: Partial<Pick<Project, 'name' | 'color' | 'theme' | 'maxAgents' | 'autoAssign' | 'autoLabel' | 'onlyMyPrs' | 'preview' | 'autoQa' | 'autoSendBack' | 'autoMerge' | 'qaBrief' | 'qaEffort'>>,
+    patch: Partial<Pick<Project, 'name' | 'color' | 'theme' | 'maxAgents' | 'autoAssign' | 'autoLabel' | 'onlyMyPrs' | 'preview' | 'autoQa' | 'autoSendBack' | 'autoMerge' | 'qaBrief' | 'qaEffort' | 'hidden'>>,
   ): Project {
     const project = this.project(id);
     if (patch.name !== undefined) project.name = patch.name.trim() || project.name;
@@ -169,6 +169,7 @@ export class Store {
     if (patch.qaEffort !== undefined) project.qaEffort = EFFORT_LEVELS.find((e) => e === patch.qaEffort);
     if (patch.autoLabel !== undefined) project.autoLabel = patch.autoLabel.trim();
     if (patch.onlyMyPrs !== undefined) project.onlyMyPrs = !!patch.onlyMyPrs;
+    if (patch.hidden !== undefined) project.hidden = patch.hidden === true;
     if (patch.preview !== undefined) {
       const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
       const p = patch.preview ?? {};

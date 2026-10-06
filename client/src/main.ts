@@ -18,6 +18,7 @@ import { openQaPanel } from './ui/qaPanel';
 import { openNewIssuePanel, openPausePanel, openTeleportPanel } from './ui/travelPanel';
 import type { Interaction } from './world/builder';
 import { numberOne } from '../../shared/crew';
+import { toastShows } from '../../shared/hidden';
 import { previewIncludes } from '../../shared/previewSet';
 import { sound } from './sound';
 import { SUN_POSITION } from './world/layout';
@@ -185,7 +186,7 @@ async function main() {
   // a goal's lead finishing a turn: it's your turn, unless you're already looking at them
   const leadTurns = new Map<string, string>();
   state.on('agent', (a) => {
-    if (a.task !== 'lead') return;
+    if (a.task !== 'lead' || state.isHidden(a.projectId)) return;
     const before = leadTurns.get(a.id);
     leadTurns.set(a.id, a.status);
     if (a.status === 'done' && before && before !== 'done' && !agentPanelOpen(a.id)) {
@@ -237,11 +238,12 @@ async function main() {
     numberOneStatus = chat?.status;
   });
   state.on('toast', (e) => {
+    if (!toastShows(e, state.projects, (id) => state.agents.get(id)?.projectId)) return;
     const agentId = e.agentId;
     hud.toast(e.level, e.text, agentId && state.agents.has(agentId) ? { label: 'Go there', run: () => ui.goToAgent(agentId) } : undefined);
   });
   state.on('preview', ({ preview: p, before }) => {
-    if (!p || before?.startedAt !== p.startedAt || before.status === p.status) return;
+    if (!p || before?.startedAt !== p.startedAt || before.status === p.status || state.isHidden(p.projectId)) return;
     const link = p.links[0];
     if (p.status === 'running' && link) {
       const open = { label: `Open${link.name ? ` ${link.name}` : ''} ↗`, run: () => window.open(link.url, '_blank', 'noopener') };

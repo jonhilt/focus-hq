@@ -10,7 +10,7 @@ import { issueForm } from './managerPanel';
 /** Jump to any room or straight to an agent's desk. */
 export function openTeleportPanel(ui: Ui): void {
   const places = ui.places();
-  const agents = [...state.agents.values()].sort((a, b) => Number(b.status === 'waiting') - Number(a.status === 'waiting') || a.startedAt - b.startedAt);
+  const agents = state.shownAgents().sort((a, b) => Number(b.status === 'waiting') - Number(a.status === 'waiting') || a.startedAt - b.startedAt);
   const body = h('div', null,
     h('div', { class: 'places' },
       ...places.map((place) =>

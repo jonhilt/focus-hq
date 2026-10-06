@@ -559,7 +559,7 @@ export class AgentManager {
     const queued: QueuedGoal = { id: newId('q'), text: text.trim(), effort: how.effort, from: how.from, at: Date.now() };
     const ahead = project.goalQueue?.length ?? 0;
     this.changeQueue(projectId, [...(project.goalQueue ?? []), queued]);
-    this.hub.toast('info', `🧭 “${goalTitle(text)}” waits in line for a team station in ${project.name}${ahead ? `, behind ${ahead} other goal${ahead === 1 ? '' : 's'}` : ''}`);
+    this.hub.toast('info', `🧭 “${goalTitle(text)}” waits in line for a team station in ${project.name}${ahead ? `, behind ${ahead} other goal${ahead === 1 ? '' : 's'}` : ''}`, undefined, projectId);
     return queued;
   }
 
@@ -641,7 +641,7 @@ export class AgentManager {
     const next = nextGoal(project.goalQueue);
     this.hub.toast('success', next
       ? `🏁 “${work.title}” is closed. Team station ${work.station + 1} is free: next up is “${goalTitle(next.text)}” (L to start it)`
-      : `🏁 “${work.title}” is closed, and team station ${work.station + 1} is free`);
+      : `🏁 “${work.title}” is closed, and team station ${work.station + 1} is free`, undefined, project.id);
     return { closed: true };
   }
 
@@ -1138,7 +1138,7 @@ export class AgentManager {
           await this.closeStuck(review, step.note);
           break;
       }
-      this.hub.toast('info', `${triageLabel({ officer, action: step.kind })} (${where}): ${truncate(step.note, 120)}`);
+      this.hub.toast('info', `${triageLabel({ officer, action: step.kind })} (${where}): ${truncate(step.note, 120)}`, undefined, review.projectId);
     } catch (err) {
       this.needsYou(review, `${officer} chose ${step.kind} but it failed (${errorMessage(err)})`);
     }
@@ -1162,7 +1162,7 @@ export class AgentManager {
   /** The office stops sending the PR back: it's the manager's call now. */
   private needsYou(review: QaReview, reason: string): void {
     this.putReview({ ...review, followUp: { kind: 'needs-you', reason } });
-    this.hub.toast('error', `🙋 ${review.repo.split('/')[1]}#${review.number} needs you: ${reason}`);
+    this.hub.toast('error', `🙋 ${review.repo.split('/')[1]}#${review.number} needs you: ${reason}`, undefined, review.projectId);
   }
 
   /** The failed review this agent was sent to fix, while it's still theirs. */
