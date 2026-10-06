@@ -139,7 +139,7 @@ export class StationScreen {
     ctx.textBaseline = 'middle';
     // no room for the task list beside the terminal: how far along it is goes in the status bar instead
     const listed = !panes.some((p) => p.pane === 'progress') && tasks.length ? `📋 ${tasks.filter((t) => t.status === 'completed').length}/${tasks.length}` : '';
-    const right = [listed, agent.costUsd > 0 ? `$${agent.costUsd.toFixed(2)}` : ''].filter(Boolean).join('  ·  ');
+    const right = [listed, agent.context ? `◔ ${agent.context.percent}%` : '', agent.costUsd > 0 ? `$${agent.costUsd.toFixed(2)}` : ''].filter(Boolean).join('  ·  ');
     ctx.fillText(fitText(ctx, `● ${agent.status.toUpperCase()}  ${agent.activity}`, W - 40 - ctx.measureText(right).width), 12, H - footerH / 2);
     ctx.textAlign = 'right';
     ctx.fillText(right, W - 12, H - footerH / 2);

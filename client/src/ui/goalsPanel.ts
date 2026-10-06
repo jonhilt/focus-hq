@@ -35,7 +35,7 @@ function goalCard(ui: Ui, lead: Agent): HTMLElement {
       h('span', { class: 'planner-badge', style: `background:${UNIFORM[lead.avatar.division]}` }, String((work?.station ?? 0) + 1)),
       h('div', { class: 'grow' },
         h('strong', null, work?.title ?? lead.issue.title),
-        h('small', null, `${lead.name} · team station ${(work?.station ?? 0) + 1} · slice ${work?.slice ?? 1} · 🧠 ${lead.effort ?? 'default'}`),
+        h('small', null, `${lead.name} · team station ${(work?.station ?? 0) + 1} · slice ${work?.slice ?? 1} · 🧠 ${lead.effort ?? 'default'}${lead.context ? ` · ◔ ${lead.context.percent}% context` : ''}`),
       ),
       close,
       h('button', { class: 'btn small primary', onclick: () => ui.openAgent(lead.id) }, '🖖 Talk'),

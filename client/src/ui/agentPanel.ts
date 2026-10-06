@@ -1,4 +1,4 @@
-import { statusIcon, statusLine } from '../../../shared/agentStatus';
+import { contextLevel, statusIcon, statusLine } from '../../../shared/agentStatus';
 import { cloudSessionUrl } from '../../../shared/cloud';
 import { showsBrowser } from '../../../shared/browserView';
 import { helperFor, UNIFORM } from '../../../shared/crew';
@@ -93,6 +93,7 @@ export function openAgentPanel(ui: Ui, id: string): void {
       a.task === 'lead' ? leadEffortChip(a) : h('span', { class: 'chip', title: 'How hard Claude thinks on this task' }, `🧠 ${a.effort ?? 'default'} effort`),
       a.cloud ? h('span', { class: 'chip', title: 'Works in a Claude Code cloud session and pushes their own branch' }, '☁ cloud') : null,
       h('span', { class: 'chip' }, `⏱ ${timeAgo(a.startedAt)}`),
+      contextChip(a),
       toggles,
       cloudLink(a),
       a.task === 'issue' ? h('a', { class: 'btn small', href: a.issue.url, target: '_blank', rel: 'noreferrer' }, 'Issue ↗') : null,
@@ -155,6 +156,18 @@ export function openAgentPanel(ui: Ui, id: string): void {
       const ctx = browserCanvas.getContext('2d')!;
       drawMockPage(ctx, frame.mock, 0, 0, browserCanvas.width, browserCanvas.height);
     }
+  };
+
+  /** How full their context is, and (between turns) a button to compact it. */
+  const contextChip = (a: Agent) => {
+    if (!a.context) return null;
+    const level = contextLevel(a.context.percent);
+    const chip = h('span', { class: `chip ctx-${level}`, title: `${a.context.tokens.toLocaleString()} of ${a.context.max.toLocaleString()} tokens in ${a.name}'s context. Claude Code compacts it by itself when it fills up${a.task === 'lead' ? '; the office also compacts it each time a slice lands' : ''}.` }, `◔ ${a.context.percent}% context`);
+    const canCompact = a.task !== 'review' && !a.cloud && !!a.sessionId && FINISHED.includes(a.status);
+    if (!canCompact) return chip;
+    const compact = h('button', { class: 'btn small', title: 'Summarise the conversation now, keeping what the work needs, so the next turn starts lighter' }, '🗜 Compact');
+    compact.onclick = () => void busy(compact, () => api.compact(id), ui.error);
+    return h('span', { class: 'row', style: 'gap:4px' }, chip, compact);
   };
 
   /** A lead's effort, changeable any time: from their next request if they're working, else their next turn. */

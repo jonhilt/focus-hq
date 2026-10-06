@@ -225,6 +225,8 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .goal-panel .goal-note { margin-top: 0; }
 .progress-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
 .goal-list li.doing { color: var(--lcars-gold); }
+.chip.ctx-filling { background: var(--lcars-gold); }
+.chip.ctx-full { background: var(--lcars-red); color: #fff; }
 .screen-toggle { opacity: 0.45; }
 .screen-toggle.on { opacity: 1; }
 .goal-record { border-left-color: var(--muted); }

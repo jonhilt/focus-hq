@@ -64,6 +64,8 @@ export const api = {
   stop: (id: string) => call('POST', `/agents/${id}/stop`),
   dismiss: (id: string) => call('DELETE', `/agents/${id}`),
   setEffort: (id: string, effort: Effort) => call<Agent>('POST', `/agents/${id}/effort`, { effort }),
+  /** Compacts the agent's conversation between turns, keeping what their work needs. */
+  compact: (id: string) => call<Agent>('POST', `/agents/${id}/compact`),
 
   voiceStatus: () => call<VoiceStatus>('GET', '/voice/status'),
   downloadVoiceModel: () => call<VoiceStatus>('POST', '/voice/download-model'),

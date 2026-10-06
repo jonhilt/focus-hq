@@ -8,14 +8,14 @@ import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
 import { afterCloudRun, carryOnInNewSession, fallBackToLocal } from './cloud';
-import { afterVerdict, applyHelperEvent, applyNote, closeCheck, fileGoal, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reviewsToStart, shipped, shipPlan, sliceBranch, sliceLanded, workspaceNote } from './lead';
+import { afterLanding, afterVerdict, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, closeCheck, fileGoal, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reviewsToStart, shipped, shipPlan, sliceBranch, sliceLanded, workspaceNote } from './lead';
 import { repoFolders } from './planner';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
 import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
 import type { QaLoopEvent } from './qaLoop';
 import { qaNextStep } from './qaLoop';
 import type { Triager } from './triage';
-import { type AgentRunner, type AgentSession, type RunHooks, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
+import { type AgentRunner, type AgentSession, type RunHooks, type RunRequest, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
 import { applyTaskTool } from './tasks';
 import { triageWorkspaceId } from './worktrees';
 
@@ -225,6 +225,8 @@ export class AgentManager {
     const rt = this.rt(agent.id);
     if (rt.resume) {
       rt.resume = false;
+      // no longer queued from here on, before anything is awaited: a schedule() meanwhile mustn't launch them again
+      this.update(agent, { status: 'setting-up', activity: 'Picking up where they left off' });
       return this.runSession(agent, rt.inbox.splice(0).join('\n\n'), agent.sessionId).catch((err) => this.fail(agent, err));
     }
     this.update(agent, { status: 'setting-up', activity: agent.task === 'review' ? 'Reading the pull request' : 'Reading the issue', error: undefined });
@@ -296,7 +298,8 @@ export class AgentManager {
         if (rt.shots.frames.length > MAX_SCREENSHOTS) rt.shots.frames.shift();
       },
       // a new session keeps a task list of its own, if any
-      session: (sessionId) => this.update(agent, { sessionId, ...(agent.sessionId && agent.sessionId !== sessionId ? { tasks: undefined } : {}) }),
+      session: (sessionId) => this.update(agent, { sessionId, ...(agent.sessionId && agent.sessionId !== sessionId ? { tasks: undefined, context: undefined } : {}) }),
+      context: (context) => this.update(agent, { context }),
       taskTool: (name, input, result, said) => {
         const before = agent.tasks ?? [];
         const tasks = applyTaskTool(before, name, input, result, said);
@@ -332,6 +335,71 @@ export class AgentManager {
     };
   }
 
+  /** The agent's instructions. The QA officer's may need GitHub, and that can fail. */
+  private async instructions(agent: Agent): Promise<string> {
+    if (agent.task === 'review') return this.qaSystem(agent);
+    if (agent.task === 'lead' && agent.lead) return leadSystemAppend(agent, this.store.project(agent.projectId).name, agent.lead.station);
+    return systemAppend(agent);
+  }
+
+  /** One turn of the agent's session: the same tools and instructions on every turn, so a resumed session stays itself. */
+  private runRequest(agent: Agent, prompt: string, instructions: string, resumeSessionId?: string): RunRequest {
+    return {
+      agentId: agent.id,
+      agentName: agent.name,
+      cwd: this.workspace.dir(agent.id),
+      prompt,
+      systemAppend: instructions,
+      resumeSessionId,
+      settings: this.store.settings,
+      effort: agent.effort,
+      outputSchema: agent.task === 'review' ? QA_SCHEMA : undefined,
+      cloud: agent.cloud ? { branch: agent.branch } : undefined,
+      tools: agent.task === 'lead'
+        ? { ship: (input) => this.shipLead(agent, input), note: (input) => this.noteGoal(agent, input), proposeClose: (input) => this.proposeClose(agent, input.reason) }
+        : undefined,
+    };
+  }
+
+  /**
+   * Compacts the agent's conversation with `/compact` and the office's instructions for what to keep. Never fails the
+   * agent: a compaction that doesn't happen leaves the conversation as it was. Returns whether it happened.
+   */
+  private async compact(agent: Agent, keep: string): Promise<boolean> {
+    if (!agent.sessionId || agent.cloud) return false;
+    const rt = this.rt(agent.id);
+    const wasBusy = rt.busy;
+    rt.busy = true;
+    this.update(agent, { activity: 'Compacting the conversation' });
+    this.print(agent, [{ kind: 'system', text: '✻ The office compacts the conversation, keeping what the goal needs' }]);
+    try {
+      const session = this.runner.start(this.runRequest(agent, `/compact ${keep}`, await this.instructions(agent), agent.sessionId), this.hooks(agent));
+      rt.session = session;
+      const outcome = await session.done;
+      if (!outcome.ok) this.print(agent, [{ kind: 'error', text: `✘ Couldn't compact the conversation: ${outcome.error ?? 'no reason given'}. Carrying on as it is.` }]);
+      return outcome.ok;
+    } catch (err) {
+      this.print(agent, [{ kind: 'error', text: `✘ Couldn't compact the conversation: ${errorMessage(err)}. Carrying on as it is.` }]);
+      return false;
+    } finally {
+      rt.session = undefined;
+      rt.busy = wasBusy;
+    }
+  }
+
+  /** The captain's Compact now: between the agent's turns, keeping what their work needs. */
+  async compactNow(id: string): Promise<Agent> {
+    const agent = this.store.agent(id);
+    if (agent.task === 'review') throw new Error('QA starts each review afresh, so there’s nothing to compact');
+    if (!agent.sessionId || agent.cloud) throw new Error(`${agent.name} has no conversation here to compact`);
+    if (!FINISHED.includes(agent.status) || this.rt(id).busy) throw new Error(`${agent.name} is working: compact once their turn ends`);
+    const { status, activity } = agent;
+    this.update(agent, { status: 'working' });
+    const ok = await this.compact(agent, agent.lead ? compactInstructions(agent.lead.title, agent.lead.note) : COMPACT_INSTRUCTIONS);
+    this.update(agent, { status, activity: ok ? 'Conversation compacted' : activity });
+    return agent;
+  }
+
   private async runSession(agent: Agent, prompt: string, resumeSessionId?: string): Promise<void> {
     const rt = this.rt(agent.id);
     const review = agent.task === 'review';
@@ -339,27 +407,10 @@ export class AgentManager {
     // the lead's last slice has landed: their repos move to fresh code before they hear anything else
     if (lead && sliceLanded(lead.prs)) prompt = `${await this.nextSlice(agent, lead)}\n\n${prompt}`;
     // before marking them busy: the QA officer's instructions may need GitHub, and that can fail
-    const instructions = review ? await this.qaSystem(agent) : lead ? leadSystemAppend(agent, this.store.project(agent.projectId).name, lead.station) : systemAppend(agent);
+    const instructions = await this.instructions(agent);
     rt.busy = true;
     this.update(agent, { status: 'working', activity: resumeSessionId ? 'Reading your message' : 'Getting started', error: undefined, finishedAt: undefined });
-    const session = this.runner.start(
-      {
-        agentId: agent.id,
-        agentName: agent.name,
-        cwd: this.workspace.dir(agent.id),
-        prompt,
-        systemAppend: instructions,
-        resumeSessionId,
-        settings: this.store.settings,
-        effort: agent.effort,
-        outputSchema: review ? QA_SCHEMA : undefined,
-        cloud: agent.cloud ? { branch: agent.branch } : undefined,
-        tools: lead
-          ? { ship: (input) => this.shipLead(agent, input), note: (input) => this.noteGoal(agent, input), proposeClose: (input) => this.proposeClose(agent, input.reason) }
-          : undefined,
-      },
-      this.hooks(agent),
-    );
+    const session = this.runner.start(this.runRequest(agent, prompt, instructions, resumeSessionId), this.hooks(agent));
     rt.session = session;
     for (const message of rt.inbox.splice(0)) session.send(message);
     const outcome = await session.done;
@@ -693,7 +744,10 @@ export class AgentManager {
     const project = this.store.project(agent.projectId);
     const dirty: string[] = [];
     for (const r of lead.repos) if (await this.workspace.hasUncommittedChanges(this.workspace.dir(leadWorktreeId(agent.id, r.folder)))) dirty.push(r.folder);
-    if (dirty.length) return heldBack(lead, dirty);
+    const step = afterLanding(dirty, !!agent.sessionId);
+    if (step === 'held-back') return heldBack(lead, dirty);
+    // a good moment to lighten the conversation: the slice's details are in the code and the note now
+    if (step === 'compact-then-next') await this.compact(agent, compactInstructions(lead.title, lead.note));
     const slice = lead.slice + 1;
     for (const r of lead.repos) await this.workspace.remove(r.repo, leadWorktreeId(agent.id, r.folder)).catch(() => undefined);
     const note = lead.note && { ...lead.note, slice: [] };

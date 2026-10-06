@@ -134,6 +134,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.post('/agents/:id/message', h((req) => office.agents.message(param(req, 'id'), str(req.body.text))));
   r.post('/agents/:id/permission', h((req) => office.agents.resolvePermission(param(req, 'id'), str(req.body.requestId), req.body.allow === true)));
   r.post('/agents/:id/stop', h((req) => office.agents.stop(param(req, 'id'))));
+  r.post('/agents/:id/compact', h((req) => office.agents.compactNow(param(req, 'id'))));
   r.post('/agents/:id/close', h((req) => office.agents.closeGoal(param(req, 'id'), req.body.force === true)));
   r.post('/agents/:id/effort', h((req) => {
     const level = effort(req.body.effort);

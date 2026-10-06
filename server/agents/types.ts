@@ -18,6 +18,8 @@ export interface RunHooks {
   cost(totalUsd: number): void;
   /** A subagent of the session started, got busy or finished. */
   helper?(event: HelperEvent): void;
+  /** How full the session's context window is, at the end of a turn. */
+  context?(usage: { percent: number; tokens: number; max: number }): void;
   /**
    * The session called one of Claude Code's task tools (TodoWrite, TaskCreate, …): what it sent, and what came back as
    * the tool's structured output and as text. The agent's task list follows it (`applyTaskTool`).

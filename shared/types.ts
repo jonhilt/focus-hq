@@ -330,6 +330,8 @@ export interface Agent {
   lead?: LeadWork;
   /** The subagents the lead has working for it right now, and any that just finished ('lead' task only). */
   helpers?: Helper[];
+  /** How full the agent's context window was at the end of its last turn, as Claude Code reports it. */
+  context?: { percent: number; tokens: number; max: number };
   /** A goal's own QA reviewer: the goal (its lead's id) whose pull requests they review. Missing on the room's QA officer. */
   reviewFor?: string;
   /** The task list the agent keeps for itself with Claude Code's task tools, as it stands. Missing until it keeps one. */

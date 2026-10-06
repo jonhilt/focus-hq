@@ -83,6 +83,16 @@ interface RunContext {
   helpers: Map<string, string>;
 }
 
+/** How full the session's context window is, from Claude Code's own count (its last response's usage, no extra calls). */
+async function reportContext(q: Query, hooks: RunHooks): Promise<void> {
+  try {
+    const usage = await Promise.race([q.getContextUsage({ detail: 'summary' }), sleep(3000).then(() => null)]);
+    if (usage) hooks.context?.({ percent: Math.round(usage.percentage), tokens: usage.totalTokens, max: usage.rawMaxTokens });
+  } catch {
+    // an older CLI, or a session already winding down: the meter keeps its last reading
+  }
+}
+
 /**
  * Runs agents with the Claude Agent SDK, i.e. real Claude Code instances using your local Claude login. A cloud agent
  * runs through the bundled CLI's headless `--cloud` mode: the CLI starts (or reattaches to) a Claude Code cloud session
@@ -169,6 +179,8 @@ export class ClaudeRunner implements AgentRunner {
             summary = result.text;
             structured = result.structured ?? structured;
             error = result.isError ? result.text : undefined;
+            // how full the context is now, asked while the session's still there to answer
+            if (!cloud) await reportContext(q, hooks);
             // Messages sent mid-turn are folded into that turn, so don't count results per message: finish once the
             // CLI has nothing queued. Anything still in our queue is delivered before the input reports it is done.
             if (!result.queued) input.close();

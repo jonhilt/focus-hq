@@ -33,10 +33,15 @@ function placeholderShot(url: string, heading: string, caption: string, accent: 
 /** Pretend agents for `npm run demo`: realistic-looking terminal output, browser testing and the odd raised hand. */
 export class DemoRunner implements AgentRunner {
   private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
+  /** How full each pretend session's context is. */
+  private context = new Map<string, number>();
   /** Each lead's repos and goal, by session: a resumed turn doesn't hear them again. */
   private leads = new Map<string, { repos: { folder: string; repo: string }[]; goal: string }>();
 
-  start(req: RunRequest, hooks: RunHooks): AgentSession {
+  start(req: RunRequest, given: RunHooks): AgentSession {
+    // which pretend session this is, once the script says: its context fills a little more each turn
+    let session = req.resumeSessionId ?? '';
+    const hooks: RunHooks = { ...given, session: (id) => ((session = id), given.session(id)) };
     const inbox: string[] = [];
     let stopped = false;
     let finished = false;
@@ -289,7 +294,18 @@ export class DemoRunner implements AgentRunner {
       return { ok: true, summary: 'Shipped the slice.' };
     };
 
+    // the office compacting a conversation: what Claude Code's /compact does, in brief
+    const compactScript = async (): Promise<RunOutcome> => {
+      hooks.session(req.resumeSessionId ?? `demo-${randomBytes(4).toString('hex')}`);
+      hooks.activity('working', 'Compacting the conversation');
+      await wait(2, 4);
+      hooks.lines([{ kind: 'system', text: '✻ Conversation compacted' }]);
+      this.context.set(req.resumeSessionId ?? '', 9);
+      return { ok: true, summary: '' };
+    };
+
     const script = async (): Promise<RunOutcome> => {
+      if (req.prompt.startsWith('/compact')) return compactScript();
       if (req.outputSchema) return qaScript();
       if (req.tools) return leadScript(req.tools);
       const sessionId = req.resumeSessionId ?? `${req.cloud ? 'session_demo' : 'demo-'}${randomBytes(4).toString('hex')}`;
@@ -384,7 +400,14 @@ export class DemoRunner implements AgentRunner {
       return { ok: true, summary };
     };
 
+    // each turn fills the pretend context a little more, as a real session's would
     const done = script()
+      .then((outcome) => {
+        const percent = Math.min(97, (this.context.get(session) ?? 4) + (req.prompt.startsWith('/compact') ? 0 : 8 + Math.round(Math.random() * 10)));
+        this.context.set(session, percent);
+        hooks.context?.({ percent, tokens: percent * 2000, max: 200_000 });
+        return outcome;
+      })
       .catch((err): RunOutcome => (stopped ? { ok: false, summary: '', error: STOPPED_BY_CAPTAIN, aborted: true } : { ok: false, summary: '', error: String(err) }))
       .finally(() => {
         finished = true;

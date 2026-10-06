@@ -119,11 +119,36 @@ How to work:
 - When a slice is ready, call mcp__office__ship with a title and a summary. The office pushes every repo with new commits and opens (or updates) a pull request in each, and QA reviews them. Then tell the captain what's in the slice, what it taught you, and what you'd do next, and stop there: they review it and decide.
 - Shipping again before the pull requests merge updates them: that's how you fix what QA or the captain finds.
 - You'll hear QA's verdict on each pull request, and when the slice's pull requests have all merged or closed. After that your repos move to fresh code on a new branch for the next slice.
-- For independent pieces of work that can run side by side, you can hand them to subagents with the Agent tool. You own what they bring back.
+- For independent pieces of work that can run side by side, you can hand them to subagents with the Agent tool. You own what they bring back. Hand broad exploration (reading through a repo, long test runs, combing through logs) to subagents too, and keep their conclusions rather than the details: your context has to last the whole goal.
 - When a decision is the captain's (scope, a trade-off they'd care about), ask and stop. Otherwise make sensible calls and say what you decided.
 - When what done looks like is met, or a slice has landed and nothing worthwhile is left, call mcp__office__propose_close with why, tell the captain, and stop. They close the goal, or carry on with you.
 `.trim();
 }
+
+/**
+ * What happens when a slice has landed and the lead takes their next turn: nothing moves while a repo has uncommitted
+ * changes; otherwise the conversation is compacted first (when there's one to compact), then the repos move to fresh
+ * code for the next slice.
+ */
+export const afterLanding = (dirtyFolders: string[], hasSession: boolean): 'held-back' | 'compact-then-next' | 'next' =>
+  dirtyFolders.length ? 'held-back' : hasSession ? 'compact-then-next' : 'next';
+
+/**
+ * What a lead's conversation keeps when the office compacts it between slices: the goal and how it's going, not the
+ * details the code and the note already hold.
+ */
+export function compactInstructions(title: string, note: GoalNote | undefined): string {
+  return [
+    `Summarise this conversation for the lead of the goal "${title}" to carry on from, at the start of a new slice.`,
+    'Keep: the goal and what done looks like; the decisions made and why; what each slice taught us; what the captain prefers, and anything they asked to keep in mind; the pull requests and what became of them; what to do next.',
+    'Drop: file contents, diffs, command and tool output, and the step-by-step of finished work: the code and the goal note hold it now.',
+    `The goal note as it stands:\n${noteForPrompt(title, note)}`,
+  ].join('\n\n');
+}
+
+/** What any other agent's conversation keeps when the captain compacts it. */
+export const COMPACT_INSTRUCTIONS =
+  'Summarise this conversation so you can carry on with your task: keep the task, what you have done and decided and why, and what is left. Drop file contents, diffs, and command and tool output.';
 
 /** How long a goal's note may get: enough to carry the goal, never enough to become a spec. */
 export const NOTE_LIMITS = { title: 60, done: 400, slice: 7, item: 160, learned: 10, line: 200, next: 3 } as const;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadWork } from '../../shared/types';
-import { afterVerdict, applyHelperEvent, applyNote, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, openPr, pickStation, qaVerdictNote, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
+import { afterLanding, afterVerdict, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, openPr, pickStation, qaVerdictNote, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -136,6 +136,7 @@ describe('what the lead writes and hears', () => {
     expect(prompt).toMatch(/subagents with the Agent tool/);
     expect(prompt).toMatch(/mcp__office__note.*it's a note, not a spec/s);
     expect(prompt).toMatch(/call mcp__office__propose_close with why, tell the captain, and stop/);
+    expect(prompt).toMatch(/Hand broad exploration .* to subagents too, and keep their conclusions/);
   });
 
   it('keeps what changes from slice to slice out of its instructions, which a resumed session never re-reads', () => {
@@ -310,5 +311,23 @@ describe('reviewsToStart', () => {
     const queued = [review('a1', 'qa_goal_a', 1), review('b1', 'qa_goal_b', 2)];
     expect(reviewsToStart(queued, of, (r) => r === 'qa_goal_a').map((s) => s.review.id)).toEqual(['b1']);
     expect(reviewsToStart([], of, () => false)).toEqual([]);
+  });
+});
+
+describe('the lead’s context', () => {
+  it('compacts between slices, unless the slice is held back or there’s no conversation yet', () => {
+    expect(afterLanding([], true)).toBe('compact-then-next');
+    expect(afterLanding([], false)).toBe('next');
+    expect(afterLanding(['web'], true)).toBe('held-back');
+  });
+
+  it('keeps the goal, the decisions and the lessons, drops the details, and carries the note', () => {
+    const keep = compactInstructions('Saved items', { done: 'Works anywhere', slice: [], learned: ['Store is fine'], next: ['Header'] });
+    expect(keep).toMatch(/^Summarise this conversation for the lead of the goal "Saved items"/);
+    expect(keep).toMatch(/Keep: the goal and what done looks like; the decisions made and why/);
+    expect(keep).toMatch(/Drop: file contents, diffs, command and tool output/);
+    expect(keep).toContain('What done looks like: Works anywhere');
+    expect(keep).toContain('- Store is fine');
+    expect(COMPACT_INSTRUCTIONS).toMatch(/keep the task, what you have done and decided and why, and what is left/);
   });
 });

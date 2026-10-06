@@ -30,3 +30,8 @@ export function statusLine(agent: Agent): string {
       return agent.activity || agent.status;
   }
 }
+
+/** How full an agent's context is: fine, filling up (worth compacting at a good moment), or nearly full. */
+export function contextLevel(percent: number): 'ok' | 'filling' | 'full' {
+  return percent >= 80 ? 'full' : percent >= 60 ? 'filling' : 'ok';
+}
