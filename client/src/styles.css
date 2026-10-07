@@ -281,6 +281,7 @@ button.screen-pane:focus-visible { outline: 2px solid var(--text); outline-offse
 .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
 .field label, .label { font-weight: 600; font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--lcars-peach); }
 .field small { color: var(--muted); }
+.field > .btn { align-self: flex-start; }
 input[type='text'], input[type='number'], textarea, select {
   width: 100%; padding: 8px 12px; border-radius: 10px; border: 2px solid var(--line); background: var(--bg); color: var(--text); outline: none;
 }
@@ -335,8 +336,10 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .planner { --tone: var(--lcars-peach); border-left-color: var(--tone); margin-bottom: 14px; background: color-mix(in srgb, var(--tone) 10%, var(--surface-2)); }
 .planner p { margin: 8px 0; }
 .planner-head { display: flex; align-items: center; gap: 10px; }
+.planner-head strong { text-transform: uppercase; letter-spacing: 0.06em; }
 .planner-head small { display: block; color: var(--muted); }
-.planner-badge { width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--ink); display: grid; place-items: center; font-size: 17px; flex: none; }
+/* the officer's colour on an LCARS end cap */
+.planner-badge { width: 24px; height: 34px; border-radius: 999px 0 0 999px; flex: none; }
 .planner textarea.planner-input { min-height: 64px; margin-bottom: 8px; width: 100%; }
 .planner-idea { font-style: italic; color: var(--muted); }
 .planner-activity { font-family: var(--mono); font-size: 13px; color: var(--lcars-gold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 auto; }
@@ -380,6 +383,7 @@ textarea.qa-brief { width: 100%; min-height: 160px; font-family: var(--mono); fo
 .briefing-chat { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 .briefing-log { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 4px 4px 0; }
 .briefing-msg { max-width: 85%; border-radius: 14px; padding: 8px 12px; background: color-mix(in srgb, var(--tone) 14%, var(--surface-2)); }
+.briefing-msg strong { font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tone); }
 .briefing-msg p { margin: 4px 0 0; line-height: 1.4; white-space: pre-wrap; }
 .briefing-msg.number-one { --tone: var(--lcars-lilac); align-self: flex-start; border-left: 6px solid var(--tone); border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .briefing-msg .suggest { margin-top: 8px; gap: 8px; }
@@ -390,7 +394,6 @@ textarea.qa-brief { width: 100%; min-height: 160px; font-family: var(--mono); fo
 .briefing-note.error { color: var(--lcars-red); }
 textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
 .voice-controls { margin-bottom: 6px; gap: 12px; }
-.voice-controls label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
 @media (max-width: 760px) { .briefing-log { max-height: 50vh; } }
 
 /* ------------------------------------------------------------------ agent panel */
@@ -476,7 +479,7 @@ textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
 .projects { display: grid; grid-template-columns: 200px 1fr; gap: 14px; align-items: start; }
 .project-list { display: flex; flex-direction: column; gap: 6px; position: sticky; top: 0; }
 .project-pick {
-  display: flex; gap: 8px; align-items: center; text-align: left; cursor: pointer; padding: 8px 10px; font-weight: 600;
+  display: flex; gap: 8px; align-items: center; text-align: left; cursor: pointer; padding: 8px 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
   border: none; border-left: 6px solid var(--line); border-radius: 0 999px 999px 0; background: var(--surface-2);
 }
 .project-pick:hover { background: color-mix(in srgb, var(--lcars-lilac) 20%, var(--surface-2)); }
@@ -486,17 +489,26 @@ textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
 .project-pick.on small { color: #000b; }
 
 .repo-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
-.repo-chips .chip button { border: none; background: none; color: inherit; cursor: pointer; padding: 0; font-weight: 600; }
+/* a repository's pill ends in a segment that disconnects it */
+.repo-chips .chip { padding-right: 0; overflow: hidden; }
+.repo-chips .chip button {
+  align-self: stretch; margin-left: 4px; padding: 0 10px; border: none; border-left: 3px solid var(--bg); cursor: pointer;
+  background: color-mix(in srgb, var(--tone) 65%, #000); color: var(--ink); font: inherit; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.repo-chips .chip button:hover { background: var(--lcars-red); }
 .autonomy { display: grid; gap: 10px; }
 .autonomy label {
-  display: flex; gap: 10px; align-items: flex-start; border: 2px solid var(--line); border-left-width: 8px; border-radius: 0 14px 14px 0;
+  position: relative; display: flex; gap: 10px; align-items: flex-start; border: 2px solid var(--line); border-left-width: 8px; border-radius: 0 14px 14px 0;
   padding: 10px 12px; cursor: pointer; background: var(--surface-2); color: var(--text); text-transform: none; letter-spacing: 0.02em;
 }
 .autonomy label:hover { border-color: var(--lcars-lilac); }
-.autonomy label.on { border-color: var(--lcars-gold); background: color-mix(in srgb, var(--lcars-gold) 14%, var(--surface-2)); }
+/* the picked one is lit, so the radio itself stays out of sight (but focusable) */
+.autonomy label:has(input:checked) { border-color: var(--lcars-gold); background: color-mix(in srgb, var(--lcars-gold) 14%, var(--surface-2)); }
+.autonomy label:has(input:focus-visible) { outline: 2px solid var(--text); outline-offset: 2px; }
+.autonomy strong { text-transform: uppercase; letter-spacing: 0.06em; color: var(--lcars-peach); }
 .field .autonomy label { font-weight: 400; font-size: 15px; }
 .field input[type='number'], .field select { max-width: 220px; }
-.autonomy input { margin-top: 5px; }
+.autonomy input { position: absolute; opacity: 0; pointer-events: none; }
 .places { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
 .btn.place { text-align: left; padding: 10px 26px 10px 18px; border-radius: 0 999px 999px 0; text-transform: none; overflow: hidden; }
 .place small { display: block; font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
@@ -533,7 +545,7 @@ select.effort { width: auto; padding: 2px 6px; border-radius: 10px; font-size: 1
 @keyframes listening { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--lcars-red) 35%, transparent); } }
 
 .voice-setup .voice-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
-.voice-setup .voice-row > span:first-child { min-width: 110px; font-weight: 600; color: var(--lcars-peach); }
+.voice-setup .voice-row > span:first-child { min-width: 110px; font-weight: 600; color: var(--lcars-peach); text-transform: uppercase; letter-spacing: 0.06em; }
 .voice-setup code { font-family: var(--mono); font-size: 13px; padding: 2px 8px; border-radius: 6px; background: var(--surface-2); }
 .voice-progress { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .voice-progress progress { flex: 1; accent-color: var(--lcars-gold); }

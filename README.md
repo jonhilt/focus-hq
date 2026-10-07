@@ -14,10 +14,10 @@ A cartoon, first-person 3D starship where a crew of **Claude Code** agents works
 - Every **agent** is a separate Claude Code instance (via the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk)) with its own workstation and git worktree. The crew wear Starfleet uniforms in their division's colour (command red, operations gold, sciences blue) and come from all over the Federation. They **beam in** to their station when they're assigned and beam out when they go home: a shimmering column of sparkles, the transporter's hum if you're in the room.
 - Walk up behind an agent and you see their **station's display**: the live Claude Code terminal and, while they test, the **browser** they are driving.
 - Each holodeck works on up to four **goals** at once, each with a **lead** of its own at a **team station**: your own Claude Code session for that goal, with every one of the project's repos checked out side by side. Each station is a door on the holodeck's side wall, and through it the goal's briefing room, far bigger than the holodeck could hold: the lead, their helpers and the goal's QA reviewer round a long table, with the captain's chair at its head facing the lead's session on the far wall. You walk straight in: the open door shows the room beyond, and you step through without a cut. Two individual desks by the door take quick issue work. Talk the goal through with them, and they build it a slice at a time, the way you'd work in Claude Code. Each slice ships as a pull request in every repo it touches; QA reviews them, you merge them, and the lead carries on from what the slice taught you.
-- Each holodeck has an **operations officer** at its **＋ New issue** stand. Give them a rough idea and they read the project's code and write it up as an issue with context and **acceptance criteria**, ready for you to edit and file.
+- Each holodeck has an **operations officer** at its **New issue** stand. Give them a rough idea and they read the project's code and write it up as an issue with context and **acceptance criteria**, ready for you to edit and file.
 - Each holodeck's **Kanban display** shows what's to do, the goals under way and who's working on what, and which **pull requests** are ready to merge.
 - The captain's **ready room** is where you create projects, connect existing repos or create blank ones, file issues and tune how much the agents may do on their own.
-- **🙈 Hide** a project there to keep it out of sight while you demo the office. Its holodeck keeps its place behind locked doors under a *Holodeck in use* sign, and no other room moves or takes its place. Its name, board, crew, toasts and totals show nowhere aboard (the Tricorder and Number One included), while its crew keep working. In the ready room's list it shows only as *Hidden project* with its holodeck number; **👁 Show it** brings it back.
+- **Hide** a project there to keep it out of sight while you demo the office. Its holodeck keeps its place behind locked doors under a *Holodeck in use* sign, and no other room moves or takes its place. Its name, board, crew, toasts and totals show nowhere aboard (the Tricorder and Number One included), while its crew keep working. In the ready room's list it shows only as *Hidden project* with its holodeck number; **👁 Show it** brings it back.
 - When an agent is done, Focus pushes their branch and opens a **pull request** with their summary as the description. Merge it from the board and they pack up and go home.
 - Each holodeck has a **QA officer** at the pull requests table. They review and test every PR the crew opens (code review, tests, the browser) and post a **QA report** on it. The board shows the verdict next to each PR.
 - Press **Preview** on any open pull request to run it on your machine and open it in **your own browser** before you merge.
@@ -54,9 +54,9 @@ npm run build && npm start
 
 Then on board:
 
-1. Walk north into your **ready room** (or press <kbd>M</kbd>) → **New project**. Connect repositories (`owner/name` or a URL), or tick *create a new blank repository*.
+1. Walk north into your **ready room** (or press <kbd>M</kbd>) → **New project**. Connect repositories (`owner/name` or a URL), or switch on *A new, blank repository on GitHub too*.
 2. A new holodeck appears down the corridor. Its Kanban display fills with the repos' open issues.
-3. At the board (<kbd>E</kbd>), click **Assign agent** on an issue, or file one at the **＋ New issue** stand and tick *Assign an agent right away*. The officer at the stand can draft it for you from a one-liner (see [Drafting issues](#drafting-issues)). The 🧠 picker beside either sets how much effort the agent puts in (`low` to `max`; *default* leaves it to the model).
+3. At the board (<kbd>E</kbd>), click **Assign agent** on an issue, or file one at the **New issue** stand and leave *Assign an agent right away* on. The officer at the stand can draft it for you from a one-liner (see [Drafting issues](#drafting-issues)). The 🧠 picker beside either sets how much effort the agent puts in (`low` to `max`; *default* leaves it to the model).
 4. Watch them work. Press <kbd>E</kbd> on an agent or their station to open the full terminal, message them, or approve something they need.
 5. When the PR shows up under **Ready to merge**, the holodeck's QA officer tests it and posts their report on it. Press **Preview** to try it yourself, review it on GitHub and merge it from the board.
 
@@ -99,14 +99,14 @@ Leads don't take one of the holodeck's two individual desks or count towards its
 
 ## Drafting issues
 
-Every holodeck has an operations officer sitting at its **＋ New issue** stand (<kbd>E</kbd> on them, or <kbd>N</kbd> anywhere on the holodeck). The officer is the same person every time; their name comes from the project.
+Every holodeck has an operations officer sitting at its **New issue** stand (<kbd>E</kbd> on them, or <kbd>N</kbd> anywhere on the holodeck). The officer is the same person every time; their name comes from the project.
 
-1. Type a rough idea ("let shoppers save items for later from the cart") and press **✨ Draft it**. You can close the panel and walk off. Their speech bubble shows what they're reading.
+1. Type a rough idea ("let shoppers save items for later from the cart") and press **Draft it**. You can close the panel and walk off. Their speech bubble shows what they're reading.
 2. The officer reads the project's repositories and writes an issue: a title, **Context** (naming the files involved), **What to build**, **Acceptance criteria** as a checklist, **Out of scope** and any **Assumptions**. They also pick which of the project's repos it belongs in.
-3. The draft fills the form's fields. Edit it however you like, or tell them what to change and press **↻ Redraft**. A redraft continues their last session, so they don't read the code all over again.
-4. **📌 Pin it to the board** files it as usual. Filing it, or **✕ Discard draft**, clears the stand.
+3. The draft fills the form's fields. Edit it however you like, or tell them what to change and press **Redraft**. A redraft continues their last session, so they don't read the code all over again.
+4. **Pin it to the board** files it as usual. Filing it, or **Discard draft**, clears the stand.
 
-If the idea is too big or too fuzzy for one issue, the officer says so above the draft. **To a goal** (there, or next to **✨ Draft it**) hands it to a [goal](#goals-and-their-leads) instead: a new one, where a lead of its own builds it a slice at a time, or one already under way, picked beside the button.
+If the idea is too big or too fuzzy for one issue, the officer says so above the draft. **To a goal** (there, or next to **Draft it**) hands it to a [goal](#goals-and-their-leads) instead: a new one, where a lead of its own builds it a slice at a time, or one already under way, picked beside the button.
 
 The officer never files, pushes or edits anything. They run as a Claude Code session with only `Read`, `Glob` and `Grep`, in `dontAsk` mode, with no settings, hooks or MCP servers loaded. They read up-to-date checkouts of the project's default branches in `~/.focus/planning/<project>/`. A draft lives in memory only, so it's lost if the office restarts. Drafting sessions don't count towards **Agents working at once**.
 
@@ -119,18 +119,18 @@ Number One, the ship's first officer, is there to just talk: ask how something w
 - **Agents' worktrees**: readable, to answer "what has Lt. X done so far?", never to explain how the code works.
 - **Read-only**: Read, Glob, Grep, web search and fetch, and those two tools. They never file, push, edit, start agents, draft issues or talk to the lead. When a chat turns into work, the reply carries a suggestion (`suggest: { projectId, idea }`) for you to send to the stand or start as a goal.
 
-- **From chat to work**: under a reply that suggests some, **✨ Draft at the stand** has the project's officer write it up at its New issue stand (asking first if a draft is already waiting there), and **To a goal** starts it as a new goal (or hands it to one under way, picked beside the button), with the idea as your words to its lead.
+- **From chat to work**: under a reply that suggests some, **Draft at the stand** has the project's officer write it up at its New issue stand (asking first if a draft is already waiting there), and **To a goal** starts it as a new goal (or hands it to one under way, picked beside the button), with the idea as your words to its lead.
 
 The chat runs one turn at a time. It's saved in `~/.focus/state.json` with Number One's session, which every message resumes, so it survives a restart. **New conversation** clears the log and starts a fresh session.
 
 #### Voice mode
 
-Press **🔈 Voice off** above the message box to talk with Number One instead of reading. It's off by default, and each browser remembers the setting.
+Switch **Voice** on above the message box to talk with Number One instead of reading. It's off by default, and each browser remembers the setting.
 
 - **Number One speaks.** Each new reply is read aloud as a sentence or two without file paths or code (they write it in the same turn as the reply). The full text still goes in the log, straight away. Anything already in the log when you open the panel isn't spoken.
-- **Their voice.** [Kokoro](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX) (82M, through `kokoro-js`) runs in the office's server on this machine. The model (about 90 MB) downloads into `~/.focus/models/kokoro` the first time voice mode is switched on, or from **⚙️ Settings → Voice input → Crew voices**. Until it's ready, or if it fails to load, the browser's built-in voice stands in.
+- **Their voice.** [Kokoro](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX) (82M, through `kokoro-js`) runs in the office's server on this machine. The model (about 90 MB) downloads into `~/.focus/models/kokoro` the first time voice mode is switched on, or from **Settings → Voice input → Crew voices**. Until it's ready, or if it fails to load, the browser's built-in voice stands in.
 - **You answer by talking.** Press **Mic** (or <kbd>Ctrl</kbd>+<kbd>M</kbd> in the message box) and talk, then press again, or hold it and let go. Your message is sent as soon as whisper.cpp has transcribed it (see [Voice input](#voice-input)). Starting to record stops Number One speaking and drops their queued lines. If nothing was heard, nothing is sent. You can still type and press **Send**.
-- **Keep the mic open between turns** opens the microphone once for the whole session rather than for each answer. Use it with speakers, where opening the mic each time makes the audio glitch. Leave it off with Bluetooth earphones, which drop to call quality while the mic is open. Turning voice mode off or closing the panel lets go of the mic.
+- **Keep the mic open** opens the microphone once for the whole session rather than for each answer. Use it with speakers, where opening the mic each time makes the audio glitch. Leave it off with Bluetooth earphones, which drop to call quality while the mic is open. Turning voice mode off or closing the panel lets go of the mic.
 
 ## How an agent works an issue
 
@@ -160,7 +160,7 @@ The **local / cloud** picker next to the effort picker (on **Assign agent**, and
 - **Follow-ups** reattach to the same cloud session (`--cloud <session id>`). If that fails (an archived session, say), a new cloud session picks the work up from the branch with your message. If Claude Code refuses to start that one, the office fetches the branch into the worktree first, so nothing the cloud session pushed is lost, and the agent carries on locally with your message.
 - **Stop** interrupts the cloud session's turn before letting go of it.
 - The QA officer always works locally: QA needs the office browser for its screenshots.
-- **Smoke test:** to check cloud sessions work on your account, assign a ☁ cloud agent to a small docs-only issue and confirm that a PR opens from its `focus/…` branch.
+- **Smoke test:** to check cloud sessions work on your account, assign a cloud agent to a small docs-only issue and confirm that a PR opens from its `focus/…` branch.
 
 You need a claude.ai login (not `FOCUS_USE_API_KEY`) and GitHub connected for cloud sessions: install the [Claude GitHub App](https://github.com/apps/claude) on the repo, or run `/web-setup` in Claude Code. Without the app, the CLI uploads the worktree instead of cloning. On Team and Enterprise plans, an admin has to allow cloud sessions. Cloud agents count towards **Agents working at once**: they share your plan's limits. The cloud session works in your [cloud environment](https://code.claude.com/docs/en/cloud-environments) (network access, setup script), not with your local tools. The headless `--cloud` mode the office drives isn't documented by Anthropic yet, so a Claude Code update can change how it behaves.
 
@@ -199,7 +199,7 @@ Every holodeck has a QA officer in blue, sitting at a station beside the pull re
 
 ### Stuck PRs
 
-Before a stuck PR reaches you, the holodeck's operations officer (the one at the **＋ New issue** stand) looks at it. The PR card says **Lt. … is looking**, and so does their speech bubble.
+Before a stuck PR reaches you, the holodeck's operations officer (the one at the **New issue** stand) looks at it. The PR card says **Lt. … is looking**, and so does their speech bubble.
 
 - **What they read:** QA's last two reports, GitHub's checks, the diff, the linked issue and a checkout of the PR. It's the same kind of read-only session as their drafting (`Read`, `Glob`, `Grep`, `dontAsk`).
 - **What they do, exactly one of:**
@@ -216,7 +216,7 @@ Before a stuck PR reaches you, the holodeck's operations officer (the one at the
 Every PR card under **Ready to merge** (and a finished agent's panel) has a **Preview** button. Each project has one preview at a time: previewing another PR replaces it.
 
 1. The PR's head (`refs/pull/<n>/head`, so teammates' and forks' PRs work too) is checked out in `~/.focus/previews/<project>/<repo>`. Any other repo of the project that the preview commands mention (`{dir:<repo>}`) is checked out next to it at its default branch. The checkouts are reused from one preview to the next, so `node_modules`, `bin/obj` and other ignored build output stick around.
-2. The project's **preview command** runs in the PR's checkout. Set it in the ready room (**Projects → ▶ Preview**). Leave it empty and the office runs `npm install && npm run dev` in the PR's repo (or the `start` script, with pnpm/yarn/bun if the repo has their lockfile).
+2. The project's **preview command** runs in the PR's checkout. Set it in the ready room (**Projects → Preview**). Leave it empty and the office runs `npm install && npm run dev` in the PR's repo (or the `start` script, with pnpm/yarn/bun if the repo has their lockfile).
 3. The links come from the command's output: a JSON object with `urls` (`{"urls": {"web": "http://127.0.0.1:55686", "api": "…"}}`, a list, or a single `url`) becomes named links, web front ends before APIs. Otherwise every local URL it prints (`http://localhost:5173/`…) becomes a link. If it prints neither, the office waits for the free port it offered.
 4. You get a toast with **Open ↗** once a site answers. The preview panel shows the command's output and a tab for each log file in the folder its JSON reported as `logs` (lines mentioning errors or failures are highlighted). It also shows the links with their last health check (⚠ when a site stops answering or answers with a 5xx), **Restart** (e.g. after the agent pushed more commits; the card says when the preview is behind) and **Stop**.
 
@@ -249,24 +249,24 @@ The commands run through your shell (so `&&` and `npm` on Windows work), on your
 
 | Mode | What it means |
 | --- | --- |
-| ✋ **Raise your hand** (default) | Claude Code's `acceptEdits` mode. File edits and common dev commands (`git` except push, `npm`/`pnpm`/`yarn`, test runners, compilers…) run freely. Anything else and the agent **raises their hand**: you get a toast, and the agent's panel has Approve/Decline buttons. |
-| 🤖 **Auto mode** | Claude Code's auto-mode classifier decides. Agents only raise their hand when it can't. |
-| 🚀 **Full autonomy** | `bypassPermissions`. Fastest, but agents can run anything on your machine. |
+| **Raise your hand** (default) | Claude Code's `acceptEdits` mode. File edits and common dev commands (`git` except push, `npm`/`pnpm`/`yarn`, test runners, compilers…) run freely. Anything else and the agent **raises their hand**: you get a toast, and the agent's panel has Approve/Decline buttons. |
+| **Auto mode** | Claude Code's auto-mode classifier decides. Agents only raise their hand when it can't. |
+| **Full autonomy** | `bypassPermissions`. Fastest, but agents can run anything on your machine. |
 
 None of these is a sandbox. Agents run as you, on your machine, with your `gh` credentials. Treat full autonomy accordingly.
 
-Cloud agents run in a cloud VM rather than on your machine, but they push to GitHub as you. In ✋ mode, the one push they may make without asking is `git push origin HEAD:<their branch>`. GitHub access from a cloud session doesn't limit which branches can be pushed, so use branch protection on GitHub for anything that matters.
+Cloud agents run in a cloud VM rather than on your machine, but they push to GitHub as you. In Raise your hand mode, the one push they may make without asking is `git push origin HEAD:<their branch>`. GitHub access from a cloud session doesn't limit which branches can be pushed, so use branch protection on GitHub for anything that matters.
 
 ## Voice input
 
-Every box where you write to the crew has a 🎤: an agent's message box, a new goal, the New issue idea, notes, title and description, and the QA brief. Click it (or press **Ctrl+M** in the box) and speak, then click again to stop, or hold it while you speak and let go. The text lands at the cursor for you to check. Nothing is sent until you send it (except in Number One's [voice mode](#voice-mode)).
+Every box where you write to the crew has a **Mic** button: an agent's message box, a new goal, the New issue idea, notes, title and description, and the QA brief. Click it (or press **Ctrl+M** in the box) and speak, then click again to stop, or hold it while you speak and let go. The text lands at the cursor for you to check. Nothing is sent until you send it (except in Number One's [voice mode](#voice-mode)).
 
 [whisper.cpp](https://github.com/ggml-org/whisper.cpp) transcribes on your machine with the `large-v3-turbo` model, so your audio never leaves it. On Apple Silicon it runs on the GPU. Set it up once:
 
 1. `brew install whisper-cpp` (it provides `whisper-cli`).
 2. **Ready room → Settings → Voice input → Download model** fetches `ggml-large-v3-turbo-q5_0.bin` (574 MB) into `~/.focus/models/`. Or download it yourself from [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin) into that folder.
 
-Until both are there, the 🎤 buttons are greyed out, and their tooltip says what's missing. `FOCUS_WHISPER_BIN` and `FOCUS_WHISPER_MODEL` point at a different `whisper-cli` or model file. In demo mode, every recording transcribes to the same demo sentence.
+Until both are there, the Mic buttons are greyed out, and their tooltip says what's missing. `FOCUS_WHISPER_BIN` and `FOCUS_WHISPER_MODEL` point at a different `whisper-cli` or model file. In demo mode, every recording transcribes to the same demo sentence.
 
 ## On your phone (Tricorder)
 
@@ -323,7 +323,7 @@ server/
   store.ts                ~/.focus/state.json + per-agent terminal logs (jsonl)
   routes.ts               REST API used by the panels
   hub.ts                  broadcasts ServerEvents to every browser tab
-  previews.ts             ▶ Preview: check a PR out, run the project's preview commands, find its links, tear it down (Effect: one Scope per preview)
+  previews.ts             Preview: check a PR out, run the project's preview commands, find its links, tear it down (Effect: one Scope per preview)
   previewMachine.ts       what a preview does to this machine (shell commands in their own process group, signals, probes) as an Effect service
   github/                 GitHub as an Effect service: gh CLI layer (live), in-memory layer (demo), Promise adapter
   agents/

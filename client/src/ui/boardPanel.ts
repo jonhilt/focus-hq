@@ -13,6 +13,7 @@ import { LCARS_STATUS } from '../world/starship';
 import { effortPicker, pickedCloud, pickedEffort, wherePicker } from './agentPanel';
 import type { BoardTab, Ui } from './context';
 import { busy, fill, h, timeAgo } from './dom';
+import { Switch } from './panels';
 import { linkHealth } from './previewPanel';
 
 /** The project's Kanban board up close: assign agents, follow progress, merge PRs. */
@@ -23,19 +24,10 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
   const refresh = h('button', { class: 'btn small', title: 'Re-read issues and PRs from GitHub' }, 'Refresh');
   const newIssue = h('button', { class: 'btn small primary' }, 'New issue');
   const lead = h('button', { class: 'btn small', title: 'Goals: each built a slice at a time by a lead of its own, your own Claude Code session for it (L)', onclick: () => ui.openGoals(projectId) }, 'Goals');
-  // a lit switch, like the sidebar's: it says whether it's on
-  const mineState = h('span');
-  const mineToggle = h('button', { class: 'btn small switch', title: 'Hide pull requests opened by other people' }, 'Only my PRs', mineState);
-  const paintMine = (on: boolean) => {
-    mineToggle.classList.toggle('on', on);
-    mineToggle.setAttribute('aria-pressed', String(on));
-    mineState.textContent = on ? 'On' : 'Off';
-  };
-  mineToggle.onclick = () => {
-    const on = !state.project(projectId)?.onlyMyPrs;
-    paintMine(on);
-    void api.updateProject(projectId, { onlyMyPrs: on }).catch((e: Error) => ui.error(e.message));
-  };
+  const mine = new Switch('Only my PRs', !!project.onlyMyPrs, {
+    title: 'Hide pull requests opened by other people',
+    changed: (on) => void api.updateProject(projectId, { onlyMyPrs: on }).catch((e: Error) => ui.error(e.message)),
+  });
   refresh.onclick = () => void busy(refresh, () => api.refreshBoard(projectId), ui.error);
   newIssue.onclick = () => ui.openNewIssue(projectId);
 
@@ -44,7 +36,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
     body,
     wide: true,
     accent: project.color,
-    headerExtra: [mineToggle, lead, newIssue, refresh],
+    headerExtra: [mine.el, lead, newIssue, refresh],
   });
 
   // the board re-renders as agents report progress, so remember each issue's pick across renders
@@ -119,7 +111,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
     }
 
     const prs = h('div', { class: 'col' }, h('h3', null, h('span', null, 'Ready to merge'), h('span', null, cols.prs.length)));
-    paintMine(!!p.onlyMyPrs);
+    mine.on = !!p.onlyMyPrs;
     if (!cols.prs.length) prs.append(h('div', { class: 'empty' }, cols.hiddenPrs ? 'None of the open pull requests are yours.' : 'No open pull requests.'));
     for (const pr of cols.prs) {
       const review = state.reviews.get(prKey(pr.repo, pr.number));

@@ -78,11 +78,11 @@ export function openNumberOnePanel(ui: Ui): void {
           m.from === 'number-one' && m.suggest ? suggestion(ui, m.suggest) : null,
         ),
       ),
-      thinking ? h('div', { class: 'briefing-msg number-one typing' }, h('strong', null, one.name), h('p', null, `✻ ${chat.activity}`)) : null,
-      chat?.status === 'failed' ? h('div', { class: 'briefing-note error' }, `⚠ ${chat.error ?? 'Something went wrong'}. Say something to carry on.`) : null,
+      thinking ? h('div', { class: 'briefing-msg number-one typing' }, h('strong', null, one.name), h('p', null, chat.activity)) : null,
+      chat?.status === 'failed' ? h('div', { class: 'briefing-note error' }, `${chat.error ?? 'Something went wrong'}. Say something to carry on.`) : null,
     );
 
-    const fresh = h('button', { class: 'btn small', title: `${one.name} forgets this conversation and starts afresh, even mid-thought` }, '🧹 New conversation');
+    const fresh = h('button', { class: 'btn small', title: `${one.name} forgets this conversation and starts afresh, even mid-thought` }, 'New conversation');
     fresh.disabled = !messages.length && !thinking;
     fresh.onclick = () =>
       void busy(fresh, async () => {
@@ -111,7 +111,7 @@ export function openNumberOnePanel(ui: Ui): void {
     if (document.activeElement !== input) input.focus();
   };
 
-  ui.panels.open({ title: h('h2', null, `🖖 ${one.name} · First officer`), body, accent: LCARS.lilac, wide: true });
+  ui.panels.open({ title: `${one.name} · First officer`, body, accent: LCARS.lilac, wide: true });
   open = true;
   ui.panels.own(() => (open = false));
   ui.panels.own(state.on('number-one', render));
@@ -123,7 +123,7 @@ export function openNumberOnePanel(ui: Ui): void {
 function suggestion(ui: Ui, { projectId, idea }: WorkSuggestion): HTMLElement {
   const name = state.project(projectId)?.name ?? 'the project';
   const officer = plannerFor(projectId).name;
-  const draft = h('button', { class: 'btn small', title: `${officer} writes it up as one issue at ${name}’s New issue stand` }, '✨ Draft at the stand');
+  const draft = h('button', { class: 'btn small', title: `${officer} writes it up as one issue at ${name}’s New issue stand` }, 'Draft at the stand');
   draft.onclick = () => {
     const waiting = state.drafts.get(projectId);
     if (waiting?.status === 'ready' && !confirm(`${officer} has a draft waiting at ${name}’s stand${waiting.title ? ` (“${waiting.title}”)` : ''}. Replace it?`)) return;

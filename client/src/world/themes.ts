@@ -6,14 +6,14 @@ import { ROOM_DEPTH, ROOM_WIDTH } from './layout';
 import { hashString, Kit, Scenery } from './scenery';
 import { checkerTexture } from './textures';
 
-export const THEME_INFO: Record<RoomTheme, { label: string; emoji: string; holo: string }> = {
-  beach: { label: 'Tropical beach', emoji: '🏝️', holo: '#e8fdff' },
-  forest: { label: 'Forest clearing', emoji: '🌲', holo: '#f0ffe0' },
-  desert: { label: 'Desert canyon', emoji: '🌵', holo: '#fff4dc' },
-  moon: { label: 'Moon base', emoji: '🌙', holo: '#a5dcff' },
-  city: { label: 'Rooftop at dusk', emoji: '🌆', holo: '#ffb3ec' },
-  library: { label: 'The great library', emoji: '📚', holo: '#ffe7a8' },
-  office: { label: 'Plain holodeck grid', emoji: '🏢', holo: '#ffffff' },
+export const THEME_INFO: Record<RoomTheme, { label: string; holo: string }> = {
+  beach: { label: 'Tropical beach', holo: '#e8fdff' },
+  forest: { label: 'Forest clearing', holo: '#f0ffe0' },
+  desert: { label: 'Desert canyon', holo: '#fff4dc' },
+  moon: { label: 'Moon base', holo: '#a5dcff' },
+  city: { label: 'Rooftop at dusk', holo: '#ffb3ec' },
+  library: { label: 'The great library', holo: '#ffe7a8' },
+  office: { label: 'Plain holodeck grid', holo: '#ffffff' },
 };
 
 const HALF_D = ROOM_DEPTH / 2;

@@ -24,7 +24,7 @@ export function voiceMissing(status: VoiceStatus | null): string | undefined {
   if (!status) return 'Voice input: connecting…';
   const missing = [!status.whisper.found && 'whisper-cli', !status.model.present && 'the speech model'].filter(Boolean);
   if (!missing.length) return undefined;
-  return `Voice input needs ${missing.join(' and ')}. Set it up in the ready room: ⚙️ Settings → Voice input.`;
+  return `Voice input needs ${missing.join(' and ')}. Set it up in the ready room: Settings, Voice input.`;
 }
 
 const CODE_EXTENSIONS = 'ts|tsx|js|jsx|mjs|cjs|json|md|css|scss|html|py|rb|go|rs|java|kt|cs|swift|sql|yml|yaml|toml|sh|vue|svelte';

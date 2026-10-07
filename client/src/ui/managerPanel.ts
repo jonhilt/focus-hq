@@ -11,7 +11,7 @@ import { effortPicker, pickedCloud, pickedEffort, wherePicker } from './agentPan
 import type { ManagerTab, Ui } from './context';
 import { withMic } from './dictation';
 import { busy, fill, h } from './dom';
-import { SideNav } from './panels';
+import { SideNav, Switch } from './panels';
 import { plannerCard } from './plannerCard';
 
 const COLORS = ['#ff8a5b', '#5bc0eb', '#9bc53d', '#c879ff', '#fde74c', '#ff5d8f', '#2ec4b6', '#f4a259'];
@@ -27,8 +27,8 @@ function knownRepos(): Promise<string[]> {
 
 /** Picker for the program a holodeck runs. */
 function themeSelect(selected: RoomTheme | '', surprise = false): HTMLSelectElement {
-  const options = ROOM_THEMES.map((t) => h('option', { value: t, selected: t === selected }, `${THEME_INFO[t].emoji} ${THEME_INFO[t].label}`));
-  if (surprise) options.unshift(h('option', { value: '', selected: selected === '' }, '✨ Surprise me'));
+  const options = ROOM_THEMES.map((t) => h('option', { value: t, selected: t === selected }, THEME_INFO[t].label));
+  if (surprise) options.unshift(h('option', { value: '', selected: selected === '' }, 'Surprise me'));
   return h('select', null, ...options);
 }
 
@@ -63,7 +63,7 @@ export function openManagerPanel(ui: Ui, tab: ManagerTab = state.projects.length
     selected = id;
     show('projects');
   };
-  ui.panels.open({ title: 'Ready room', body, nav, accent: LCARS.lilac });
+  ui.panels.open({ title: 'Ready room', body, nav, accent: LCARS.lilac, wide: true });
   show(tab);
   // keep the projects list fresh, but never wipe a form the manager is typing into
   ui.panels.own(state.on('projects', () => current === 'projects' && !body.contains(document.activeElement) && show('projects')));
@@ -77,14 +77,14 @@ function projectsTab(ui: Ui, show: (t: ManagerTab) => void, selected: string | u
   if (!project) {
     return h('div', { class: 'empty' },
       h('p', null, 'No projects yet. Each project gets its own holodeck with stations for agents.'),
-      h('button', { class: 'btn primary', onclick: () => show('new-project') }, '＋ Create your first project'),
+      h('button', { class: 'btn primary', onclick: () => show('new-project') }, 'Create your first project'),
     );
   }
   const list = h('nav', { class: 'project-list' },
     ...state.projects.map((p, i) =>
       h('button', { class: `project-pick${p === project ? ' on' : ''}`, onclick: () => openProject(p.id) },
         isHidden(p)
-          ? [h('span', null, '🔒'), h('span', { class: 'grow' }, 'Hidden project', h('small', null, `Holodeck ${i + 1} · in use`))]
+          ? [h('span', { class: 'dot', style: 'background:var(--line)' }), h('span', { class: 'grow' }, 'Hidden project', h('small', null, `Holodeck ${i + 1} · in use`))]
           : [
               h('span', { class: 'dot', style: `background:${p.color}` }),
               h('span', { class: 'grow' }, p.name, h('small', null, `Holodeck ${i + 1} · ${p.repos.length} repo${p.repos.length === 1 ? '' : 's'}`)),
@@ -97,10 +97,10 @@ function projectsTab(ui: Ui, show: (t: ManagerTab) => void, selected: string | u
 
 /** A hidden project's card: nothing about it but where its holodeck is, and the way to show it again. */
 function hiddenCard(ui: Ui, p: Project): HTMLElement {
-  const show = h('button', { class: 'btn primary' }, '👁 Show it');
+  const show = h('button', { class: 'btn primary' }, 'Show it');
   show.onclick = () => void busy(show, () => api.updateProject(p.id, { hidden: false }), ui.error);
   return h('div', { class: 'card' },
-    h('div', { class: 'row' }, h('strong', { class: 'grow' }, '🔒 Hidden project'), h('span', { class: 'chip' }, `Holodeck ${state.projects.indexOf(p) + 1}`)),
+    h('div', { class: 'row' }, h('strong', { class: 'grow' }, 'Hidden project'), h('span', { class: 'chip' }, `Holodeck ${state.projects.indexOf(p) + 1}`)),
     h('p', { class: 'muted' },
       'Its holodeck stays locked behind an “in use” sign, and its name, board and crew show nowhere aboard. ',
       'Its crew keep working on it, and nothing else moves into its holodeck.'),
@@ -120,13 +120,13 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
       h('span', { class: 'chip' },
         h('a', { href: `https://github.com/${repo}`, target: '_blank', rel: 'noreferrer' }, repo),
         h('button', {
-          title: `Disconnect ${repo}`,
+          title: `Disconnect ${repo} from ${p.name}`,
           onclick: () => {
             if (confirm(`Disconnect ${repo} from ${p.name}? (The GitHub repository is not touched.)`)) {
               void api.disconnectRepo(p.id, repo).catch((e: Error) => ui.error(e.message));
             }
           },
-        }, '✕'),
+        }, 'Disconnect'),
       ),
     ),
     p.repos.length ? null : h('span', { class: 'muted' }, 'No repositories connected yet.'),
@@ -141,10 +141,10 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
   }, ui.error);
 
   const newRepo = h('input', { type: 'text', placeholder: 'new-repo-name' });
-  const newRepoPrivate = h('input', { type: 'checkbox', checked: true });
-  const create = h('button', { class: 'btn small' }, '✨ Create blank repo');
+  const newRepoPrivate = new Switch('Private', true);
+  const create = h('button', { class: 'btn small' }, 'Create blank repo');
   create.onclick = () => void busy(create, async () => {
-    const { repo } = await api.createRepo({ name: newRepo.value, private: newRepoPrivate.checked, description: `Part of ${p.name}`, projectId: p.id });
+    const { repo } = await api.createRepo({ name: newRepo.value, private: newRepoPrivate.on, description: `Part of ${p.name}`, projectId: p.id });
     newRepo.value = '';
     ui.hud.toast('success', `Created ${repo}`);
   }, ui.error);
@@ -165,10 +165,10 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
   });
   const previews = p.repos.length
     ? h('div', null,
-        h('div', { class: 'label', style: 'margin-top:14px' }, '▶ Preview'),
-        ...previewInputs.map(([, label, input]) => h('div', { class: 'row', style: 'margin-top:6px' }, h('span', { style: 'min-width:80px' }, label), h('div', { class: 'grow' }, input))),
+        h('div', { class: 'label', style: 'margin-top:14px' }, 'Preview'),
+        ...previewInputs.map(([, label, input]) => h('div', { class: 'row', style: 'margin-top:6px' }, h('span', { class: 'label', style: 'min-width:80px' }, label), h('div', { class: 'grow' }, input))),
         h('small', { class: 'muted', style: 'display:block;margin-top:4px' },
-          'Runs in a checkout of the PR when you press ▶ Preview on the board. {dir} is that checkout, {dir:<repo>} another repo of this project ',
+          'Runs in a checkout of the PR when you press Preview on the board. {dir} is that checkout, {dir:<repo>} another repo of this project ',
           '(the PR’s code if the PR is in it, its default branch otherwise), {port} a free port (also $FOCUS_PREVIEW_PORT). ',
           'Links come from the JSON the command prints ({"urls": {"web": "http://…"}}) or the local URLs in its output.'),
       )
@@ -176,47 +176,47 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
 
   const maxAgents = h('input', { type: 'number', min: '1', max: String(DESKS_PER_ROOM), value: String(p.maxAgents), style: 'width:80px' });
   maxAgents.addEventListener('change', () => void api.updateProject(p.id, { maxAgents: Number(maxAgents.value) }).catch((e: Error) => ui.error(e.message)));
-  const auto = h('input', { type: 'checkbox', checked: p.autoAssign });
   const label = h('input', { type: 'text', value: p.autoLabel, placeholder: 'any label', style: 'width:140px' });
-  const saveAuto = () => void api.updateProject(p.id, { autoAssign: auto.checked, autoLabel: label.value }).catch((e: Error) => ui.error(e.message));
-  auto.addEventListener('change', saveAuto);
+  const saveAuto = () => void api.updateProject(p.id, { autoAssign: auto.on, autoLabel: label.value }).catch((e: Error) => ui.error(e.message));
+  const auto = new Switch('Auto-assign open issues', p.autoAssign, { changed: saveAuto });
   label.addEventListener('change', saveAuto);
-  const autoMerge = h('input', { type: 'checkbox', checked: autoMergeFor(p) });
-  autoMerge.addEventListener('change', () => void api.updateProject(p.id, { autoMerge: autoMerge.checked }).catch((e: Error) => ui.error(e.message)));
+  const autoMerge = new Switch('Auto-merge QA-passed PRs', autoMergeFor(p), {
+    title: 'Merges a PR the crew opened once QA passed its latest commit and its checks are green',
+    changed: (on) => void api.updateProject(p.id, { autoMerge: on }).catch((e: Error) => ui.error(e.message)),
+  });
   const theme = themeSelect(roomTheme(p));
   theme.addEventListener('change', () => void api.updateProject(p.id, { theme: theme.value as RoomTheme }).catch((e: Error) => ui.error(e.message)));
 
-  const hide = h('button', { class: 'btn small', title: 'Keep it out of sight, say while you demo the office: its holodeck stays in place behind locked doors, and its crew keep working' }, '🙈 Hide');
+  const hide = h('button', { class: 'btn small', title: 'Keep it out of sight, say while you demo the office: its holodeck stays in place behind locked doors, and its crew keep working' }, 'Hide');
   hide.onclick = () => void busy(hide, () => api.updateProject(p.id, { hidden: true }), ui.error);
-  const remove = h('button', { class: 'btn small danger' }, '🗑 Close project');
+  const remove = h('button', { class: 'btn small danger' }, 'Close project');
   remove.onclick = () => {
     if (!confirm(`Close ${p.name}? Its agents are sent home. Nothing on GitHub is deleted.`)) return;
     void busy(remove, () => api.deleteProject(p.id), ui.error);
   };
 
-  const room = state.projects.indexOf(p) + 1;
   return h('div', { class: 'card', style: `border-left: 14px solid ${p.color}` },
-    h('div', { class: 'row' }, color, h('div', { class: 'grow' }, name), h('span', { class: 'chip' }, `Holodeck ${room}`),
-      h('button', { class: 'btn small', onclick: () => ui.openBoard(p.id) }, '📋 Board'),
+    h('div', { class: 'row' }, color, h('div', { class: 'grow' }, name),
+      h('button', { class: 'btn small', onclick: () => ui.openBoard(p.id) }, 'Board'),
       h('button', {
         class: 'btn small',
         onclick: () => {
           const place = ui.places().find((pl) => pl.projectId === p.id);
           if (place) ui.goTo(place);
         },
-      }, '🚶 Go there'),
+      }, 'Go there'),
     ),
     h('div', { class: 'label', style: 'margin-top:12px' }, 'Repositories'),
     chips,
     h('div', { class: 'row' }, h('div', { class: 'grow' }, repoInput), connect, repoDatalist(listId)),
-    h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow' }, newRepo), h('label', { class: 'row', style: 'gap:4px' }, newRepoPrivate, 'private'), create),
+    h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow' }, newRepo), newRepoPrivate.el, create),
     previews,
     h('div', { class: 'row', style: 'margin-top:14px' },
-      h('label', { class: 'row', style: 'gap:6px' }, 'Holodeck program', theme),
-      h('label', { class: 'row', style: 'gap:6px' }, 'Agents at once', maxAgents),
-      h('label', { class: 'row', style: 'gap:6px' }, auto, 'Auto-assign open issues'),
-      h('label', { class: 'row', style: 'gap:6px' }, 'with label', label),
-      h('label', { class: 'row', style: 'gap:6px', title: 'Merges a PR the crew opened once QA passed its latest commit and its checks are green' }, autoMerge, 'Auto-merge QA-passed PRs'),
+      h('label', { class: 'row label', style: 'gap:6px' }, 'Holodeck program', theme),
+      h('label', { class: 'row label', style: 'gap:6px' }, 'Agents at once', maxAgents),
+      auto.el,
+      h('label', { class: 'row label', style: 'gap:6px' }, 'with label', label),
+      autoMerge.el,
       h('span', { class: 'grow' }),
       hide,
       remove,
@@ -228,23 +228,20 @@ function newProjectTab(ui: Ui, openProject: (id: string) => void): HTMLElement {
   const name = h('input', { type: 'text', placeholder: 'e.g. Sock Shop', autofocus: true });
   const color = h('input', { type: 'color', value: COLORS[state.projects.length % COLORS.length] });
   const repos = h('textarea', { placeholder: 'owner/frontend\nowner/backend', style: 'min-height:80px' });
-  const blank = h('input', { type: 'checkbox' });
   const blankName = h('input', { type: 'text', placeholder: 'repository name (defaults to the project name)' });
-  const blankPrivate = h('input', { type: 'checkbox', checked: true });
-  const blankOpts = h('div', { style: 'display:none;margin:-4px 0 12px 28px' },
-    h('div', { class: 'row' }, h('div', { class: 'grow' }, blankName), h('label', { class: 'row', style: 'gap:4px' }, blankPrivate, 'private')),
-  );
-  blank.addEventListener('change', () => (blankOpts.style.display = blank.checked ? '' : 'none'));
+  const blankPrivate = new Switch('Private', true);
+  const blankOpts = h('div', { class: 'row', hidden: true }, h('div', { class: 'grow' }, blankName), blankPrivate.el);
+  const blank = new Switch('A new, blank repository on GitHub too', false, { changed: (on) => (blankOpts.hidden = !on) });
   const theme = themeSelect('', true);
 
-  const create = h('button', { class: 'btn primary' }, '✨ Load the holodeck');
+  const create = h('button', { class: 'btn primary' }, 'Load the holodeck');
   create.onclick = () => void busy(create, async () => {
     if (!name.value.trim()) throw new Error('Give the project a name');
     const list = repos.value.split(/[\s,]+/).map((r) => r.trim()).filter(Boolean);
     const project = await api.createProject(name.value, color.value, list, (theme.value || undefined) as RoomTheme | undefined);
-    if (blank.checked) {
+    if (blank.on) {
       const repoName = (blankName.value || name.value).trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-');
-      await api.createRepo({ name: repoName, private: blankPrivate.checked, description: name.value, projectId: project.id });
+      await api.createRepo({ name: repoName, private: blankPrivate.on, description: name.value, projectId: project.id });
     }
     ui.hud.toast('success', `${project.name} has a holodeck!`, {
       label: 'Go there',
@@ -268,8 +265,7 @@ function newProjectTab(ui: Ui, openProject: (id: string) => void): HTMLElement {
       theme,
       h('small', null, 'The holodeck’s walls disappear and the crew works in the middle of this instead. Change it any time.'),
     ),
-    h('label', { class: 'row', style: 'margin-bottom:12px;font-weight:600' }, blank, '✨ Also create a new, blank repository on GitHub for it'),
-    blankOpts,
+    h('div', { class: 'field' }, blank.el, blankOpts),
     h('div', { class: 'row' }, create),
   );
 }
@@ -293,14 +289,15 @@ export function issueForm(ui: Ui, projectId?: string, onDone?: () => void): HTML
     planner.refresh();
   });
   const labels = h('input', { type: 'text', placeholder: 'bug, enhancement (must already exist on GitHub)' });
-  const assign = h('input', { type: 'checkbox', checked: true });
   const effort = effortPicker();
   const where = wherePicker();
-  assign.addEventListener('change', () => {
-    effort.disabled = !assign.checked;
-    where.disabled = !assign.checked;
+  const assign = new Switch('Assign an agent right away', true, {
+    changed: (on) => {
+      effort.disabled = !on;
+      where.disabled = !on;
+    },
   });
-  const submit = h('button', { class: 'btn primary' }, '📌 Pin it to the board');
+  const submit = h('button', { class: 'btn primary' }, 'Pin it to the board');
   submit.onclick = () => void busy(submit, async () => {
     if (!repo.value) throw new Error('This project has no repositories yet');
     const result = await api.createIssue({
@@ -309,7 +306,7 @@ export function issueForm(ui: Ui, projectId?: string, onDone?: () => void): HTML
       title: title.value,
       body: body.value,
       labels: labels.value.split(',').map((l) => l.trim()).filter(Boolean),
-      assign: assign.checked,
+      assign: assign.on,
       effort: pickedEffort(effort),
       cloud: pickedCloud(where),
       fromDraft: planner.usedDraft(),
@@ -331,7 +328,7 @@ export function issueForm(ui: Ui, projectId?: string, onDone?: () => void): HTML
     h('div', { class: 'field' }, h('label', null, 'Description'), withMic(ui, body)),
     h('div', { class: 'field' }, h('label', null, 'Labels'), labels),
     h('div', { class: 'row', style: 'margin-bottom:14px' },
-      h('label', { class: 'row', style: 'font-weight:600' }, assign, '🤖 Assign an agent right away'),
+      assign.el,
       effort,
       where,
     ),
@@ -346,15 +343,15 @@ function settingsTab(ui: Ui): HTMLElement {
   const save = (patch: Parameters<typeof api.updateSettings>[0]) => void api.updateSettings(patch).catch((e: Error) => ui.error(e.message));
 
   const options: [Autonomy, string, string][] = [
-    ['ask', '✋ Raise your hand', 'Agents edit files and run common dev commands (git, npm, tests…) freely. Anything else waits for your approval – walk over or use the toast.'],
-    ['auto', '🤖 Auto mode', "Claude Code's auto-mode classifier approves safe actions; agents only raise their hand when it can't decide."],
-    ['full', '🚀 Full autonomy', 'Bypass all permission checks. Fastest, but agents can run any command on this machine.'],
+    ['ask', 'Raise your hand', 'Agents edit files and run common dev commands (git, npm, tests…) freely. Anything else waits for your approval – walk over or use the toast.'],
+    ['auto', 'Auto mode', "Claude Code's auto-mode classifier approves safe actions; agents only raise their hand when it can't decide."],
+    ['full', 'Full autonomy', 'Bypass all permission checks. Fastest, but agents can run any command on this machine.'],
   ];
   const autonomy = h('div', { class: 'autonomy' },
     ...options.map(([value, title, text]) => {
       const radio = h('input', { type: 'radio', name: 'autonomy', value, checked: s.autonomy === value });
       radio.addEventListener('change', () => save({ autonomy: value }));
-      return h('label', { class: s.autonomy === value ? 'on' : '' }, radio, h('div', null, h('strong', null, title), h('div', { class: 'muted' }, text)));
+      return h('label', null, radio, h('div', null, h('strong', null, title), h('div', { class: 'muted' }, text)));
     }),
   );
 
@@ -364,16 +361,14 @@ function settingsTab(ui: Ui): HTMLElement {
   model.addEventListener('change', () => save({ model: model.value }));
   const merge = h('select', null, ...(['squash', 'merge', 'rebase'] as const).map((m) => h('option', { value: m, selected: s.mergeMethod === m }, m)));
   merge.addEventListener('change', () => save({ mergeMethod: merge.value as 'squash' }));
-  const attribution = h('input', { type: 'checkbox', checked: s.attribution });
-  attribution.addEventListener('change', () => save({ attribution: attribution.checked }));
-  const userClaudeMd = h('input', { type: 'checkbox', checked: s.userClaudeMd });
-  userClaudeMd.addEventListener('change', () => save({ userClaudeMd: userClaudeMd.checked }));
-  const leadEffort = h('select', null, ...EFFORT_LEVELS.map((e) => h('option', { value: e, selected: s.leadEffort === e }, `🧠 ${e}`)));
+  const attribution = new Switch('Sign pull requests and QA reports', s.attribution, { changed: (on) => save({ attribution: on }) });
+  const userClaudeMd = new Switch('Agents read your own CLAUDE.md', s.userClaudeMd, { changed: (on) => save({ userClaudeMd: on }) });
+  const leadEffort = h('select', null, ...EFFORT_LEVELS.map((e) => h('option', { value: e, selected: s.leadEffort === e }, e)));
   leadEffort.addEventListener('change', () => {
     const level = EFFORT_LEVELS.find((e) => e === leadEffort.value);
     if (level) save({ leadEffort: level });
   });
-  const recheck = h('button', { class: 'btn small' }, '⟳ Check again');
+  const recheck = h('button', { class: 'btn small' }, 'Check again');
   recheck.onclick = () => void busy(recheck, () => api.checkGitHub(), ui.error);
 
   return h('div', null,
@@ -382,11 +377,11 @@ function settingsTab(ui: Ui): HTMLElement {
     h('div', { class: 'field' }, h('label', null, 'Model'), model, h('small', null, 'e.g. claude-opus-5-5 or claude-sonnet-5-5. Leave empty for your Claude Code default.')),
     h('div', { class: 'field' }, h('label', null, 'Effort a new goal’s lead starts at'), leadEffort, h('small', null, 'You can pick another when you start a goal. High suits most slices; xhigh and max take longer and cost more.')),
     h('div', { class: 'field' }, h('label', null, 'Merge method for the board’s Merge button'), merge),
-    h('div', { class: 'field' }, h('label', null, attribution, ' Sign pull requests and QA reports'), h('small', null, 'Names the agent or QA officer who did the work, and mentions Focus, in what the office posts on GitHub.')),
-    h('div', { class: 'field' }, h('label', null, userClaudeMd, ' Agents read your own CLAUDE.md'), h('small', null, 'Your ~/.claude/CLAUDE.md and ~/.claude/rules, written for your own Claude Code. Turn off so agents follow only Focus and the repo’s CLAUDE.md; your ~/.claude/settings.json still loads. Applies to agents started from now on.')),
+    h('div', { class: 'field' }, attribution.el, h('small', null, 'Names the agent or QA officer who did the work, and mentions Focus, in what the office posts on GitHub.')),
+    h('div', { class: 'field' }, userClaudeMd.el, h('small', null, 'Your ~/.claude/CLAUDE.md and ~/.claude/rules, written for your own Claude Code. Turn off so agents follow only Focus and the repo’s CLAUDE.md; your ~/.claude/settings.json still loads. Applies to agents started from now on.')),
     h('div', { class: 'card', style: 'margin-top:8px' },
       h('div', { class: 'row' },
-        h('strong', null, 'GitHub'),
+        h('strong', { class: 'label' }, 'GitHub'),
         info.github.ok ? h('span', { class: 'chip ok' }, `signed in as ${info.github.login}`) : h('span', { class: 'chip bad' }, 'not connected'),
         h('span', { class: 'grow' }),
         recheck,
@@ -406,7 +401,7 @@ const MB = 1024 * 1024;
 /** Kokoro, the crew's voices: downloaded here or the first time voice mode is switched on. */
 function speechSetup(speech: SpeechStatus, ui: Ui): HTMLElement {
   const engine = speech.engine;
-  const get = h('button', { class: 'btn small primary' }, engine.state === 'failed' ? '↻ Try again' : speech.downloaded ? 'Load' : '⬇ Download (90 MB)');
+  const get = h('button', { class: 'btn small primary' }, engine.state === 'failed' ? 'Try again' : speech.downloaded ? 'Load' : 'Download (90 MB)');
   get.onclick = () => void busy(get, () => api.loadSpeech(), ui.error);
   const chip =
     engine.state === 'ready' ? h('span', { class: 'chip ok', title: speech.path }, 'ready')
@@ -416,7 +411,7 @@ function speechSetup(speech: SpeechStatus, ui: Ui): HTMLElement {
     : [h('span', { class: 'chip bad' }, 'missing'), get];
   return h('div', null,
     h('div', { class: 'voice-row' }, h('span', null, 'Crew voices'), chip),
-    h('small', { class: 'muted' }, 'Kokoro speaks Number One’s replies in 🔊 voice mode, on this machine. Until it’s ready, the browser’s built-in voice stands in.'),
+    h('small', { class: 'muted' }, 'Kokoro speaks Number One’s replies in voice mode, on this machine. Until it’s ready, the browser’s built-in voice stands in.'),
     engine.state === 'loading' && engine.bytes
       ? h('div', { class: 'voice-progress' },
           h('progress', engine.total ? { max: engine.total, value: engine.bytes } : null),
@@ -431,19 +426,19 @@ function speechSetup(speech: SpeechStatus, ui: Ui): HTMLElement {
 function voiceSection(ui: Ui): HTMLElement {
   const el = h('div', { class: 'card voice-setup', style: 'margin-top:12px' });
   const render = (voice: VoiceStatus | null) => {
-    if (!voice) return fill(el, h('strong', null, 'Voice input'), h('p', { class: 'muted' }, 'Connecting…'));
-    const recheck = h('button', { class: 'btn small', title: 'Look for whisper-cli and the model again' }, '⟳ Check again');
+    if (!voice) return fill(el, h('strong', { class: 'label' }, 'Voice input'), h('p', { class: 'muted' }, 'Connecting…'));
+    const recheck = h('button', { class: 'btn small', title: 'Look for whisper-cli and the model again' }, 'Check again');
     recheck.onclick = () => void busy(recheck, () => api.voiceStatus(), ui.error);
-    const copy = h('button', { class: 'btn small' }, '📋 Copy');
+    const copy = h('button', { class: 'btn small' }, 'Copy');
     copy.onclick = () => void navigator.clipboard.writeText(WHISPER_INSTALL).then(() => ui.hud.toast('info', `Copied: ${WHISPER_INSTALL}`), (e: Error) => ui.error(e.message));
     const download = voice.download;
     const running = download?.state === 'running';
-    const get = h('button', { class: 'btn small primary', disabled: running }, download?.state === 'failed' ? '↻ Retry download' : '⬇ Download model (574 MB)');
+    const get = h('button', { class: 'btn small primary', disabled: running }, download?.state === 'failed' ? 'Retry download' : 'Download model (574 MB)');
     get.onclick = () => void busy(get, () => api.downloadVoiceModel(), ui.error);
 
     fill(el,
       h('div', { class: 'row' },
-        h('strong', null, '🎤 Voice input'),
+        h('strong', { class: 'label' }, 'Voice input'),
         voiceMissing(voice) ? h('span', { class: 'chip bad' }, 'not set up') : h('span', { class: 'chip ok' }, 'ready'),
         h('span', { class: 'grow' }),
         recheck,

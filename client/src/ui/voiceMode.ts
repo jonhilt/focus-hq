@@ -3,6 +3,7 @@ import { api } from '../net/api';
 import { state } from '../net/state';
 import { cancelDictation, keptOpenMic, type Microphone, micPerRecording } from './dictation';
 import { h } from './dom';
+import { Switch } from './panels';
 
 /** Voice mode's two switches, remembered per browser (under the keys from when briefings had it too). Both start off. */
 export const voicePrefs = {
@@ -122,25 +123,24 @@ export class VoiceSession {
 }
 
 /**
- * Voice mode's 🔊/🔈 toggle, with "keep the mic open" while it's on. Flipping it ends `voice`, remembers the choice and
+ * Voice mode's switch, with "keep the mic open" while it's on. Flipping it ends `voice`, remembers the choice and
  * hands `switched` the session to carry on with (null when it's now off).
  */
 export function voiceToggle(voice: VoiceSession | null, switched: (voice: VoiceSession | null) => void): HTMLElement {
-  const toggle = h('button', { class: `btn small${voice ? ' primary' : ''}`, title: voice ? 'Voice mode is on: the crew speak, and Mic sends what you say. Click to turn it off.' : 'Voice mode: the crew say their lines aloud, and you answer by talking' }, voice ? '🔊 Voice on' : '🔈 Voice off');
-  toggle.onclick = () => {
-    voice?.end();
-    voicePrefs.voiceMode = !voice;
-    switched(voice ? null : new VoiceSession(voicePrefs.keepMicOpen));
-  };
-  const keep = h('input', { type: 'checkbox', checked: voicePrefs.keepMicOpen });
-  keep.onchange = () => {
-    voicePrefs.keepMicOpen = keep.checked;
-    voice?.keepMicOpen(keep.checked);
-  };
-  return h('div', { class: 'row voice-controls' },
-    toggle,
-    voice
-      ? h('label', { title: 'For speakers: saves the glitch each time the mic opens and closes. Leave it off with Bluetooth earphones.' }, keep, ' Keep the mic open between turns')
-      : null,
-  );
+  const toggle = new Switch('Voice', !!voice, {
+    title: voice ? 'Voice mode is on: the crew speak, and Mic sends what you say. Click to turn it off.' : 'Voice mode: the crew say their lines aloud, and you answer by talking',
+    changed: (on) => {
+      voice?.end();
+      voicePrefs.voiceMode = on;
+      switched(on ? new VoiceSession(voicePrefs.keepMicOpen) : null);
+    },
+  });
+  const keep = new Switch('Keep the mic open', voicePrefs.keepMicOpen, {
+    title: 'Keeps it open between turns. For speakers: saves the glitch each time the mic opens and closes. Leave it off with Bluetooth earphones.',
+    changed: (on) => {
+      voicePrefs.keepMicOpen = on;
+      voice?.keepMicOpen(on);
+    },
+  });
+  return h('div', { class: 'row voice-controls' }, toggle.el, voice ? keep.el : null);
 }

@@ -50,7 +50,7 @@ export function openTurboliftPanel(ui: Ui, stops: Place[], here: Place | undefin
 export function openNewIssuePanel(ui: Ui, projectId?: string): void {
   const project = projectId ? state.project(projectId) : undefined;
   ui.panels.open({
-    title: project ? `📝 New issue for ${project.name}` : '📝 New issue',
+    title: project ? `${project.name} · new issue` : 'New issue',
     body: issueForm(ui, projectId, () => ui.panels.close()),
     accent: LCARS.gold,
   });

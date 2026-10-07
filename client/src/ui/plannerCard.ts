@@ -49,13 +49,13 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
     const planner = plannerFor(pid);
     const draft = state.drafts.get(pid);
     const key = `${pid}|${draft?.status ?? 'none'}|${draft?.startedAt ?? 0}`;
-    activity.textContent = draft?.status === 'drafting' ? `✻ ${draft.activity}` : '';
+    activity.textContent = draft?.status === 'drafting' ? draft.activity : '';
     if (draft) apply(draft);
     if (key === renderedKey) return; // only the activity line changed: don't wipe what you're typing
     renderedKey = key;
 
     const header = h('div', { class: 'planner-head' },
-      h('span', { class: 'planner-badge', style: `background:${UNIFORM[planner.avatar.division]}` }, '🖖'),
+      h('span', { class: 'planner-badge', style: `background:${UNIFORM[planner.avatar.division]}` }),
       h('div', { class: 'grow' },
         h('strong', null, planner.name),
         h('small', null, `Operations · drafts issues for ${project.name}`),
@@ -65,7 +65,7 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
     // the idea goes to a goal (a new one, or one under way), if there is one; otherwise the goals panel asks for it
     const leadButton = (idea: () => string, title: string) => handOffControl(ui, pid, idea, 'the New issue stand', title);
     const discard = () =>
-      h('button', { class: 'btn small', onclick: () => void api.discardDraft(pid).catch((e: Error) => ui.error(e.message)) }, draft?.status === 'drafting' ? '✕ Stop' : '✕ Discard draft');
+      h('button', { class: 'btn small', onclick: () => void api.discardDraft(pid).catch((e: Error) => ui.error(e.message)) }, draft?.status === 'drafting' ? 'Stop' : 'Discard draft');
 
     if (!project.repos.length) {
       fill(el, header, h('p', { class: 'muted' }, 'Connect a repository to this project and I can start drafting.'));
@@ -82,7 +82,7 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
 
     if (draft?.status === 'ready') {
       const notes = h('textarea', { class: 'planner-input', placeholder: 'e.g. also cover the empty cart, and leave the checkout page alone' });
-      const redraft = h('button', { class: 'btn small primary' }, '↻ Redraft');
+      const redraft = h('button', { class: 'btn small primary' }, 'Redraft');
       redraft.onclick = () => void busy(redraft, () =>
         api.draftIssue(pid, draft.idea, { repo: fields.repo.value, title: fields.title.value, body: fields.body.value, notes: notes.value }), ui.error);
       const suggestion = draft.tooBig
@@ -101,7 +101,7 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
     }
 
     const idea = h('textarea', { class: 'planner-input', placeholder: 'e.g. let shoppers save items for later from the cart', value: draft?.idea ?? '' });
-    const go = h('button', { class: 'btn small primary' }, draft?.status === 'failed' ? '✨ Try again' : '✨ Draft it');
+    const go = h('button', { class: 'btn small primary' }, draft?.status === 'failed' ? 'Try again' : 'Draft it');
     go.onclick = () => void busy(go, () => api.draftIssue(pid, idea.value), ui.error);
     const toLead = leadButton(() => idea.value, 'Start it as a goal at a free team station, where a lead of its own builds it a slice at a time');
     idea.addEventListener('keydown', (e) => {

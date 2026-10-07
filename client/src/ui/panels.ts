@@ -114,12 +114,14 @@ export interface NavItem<K extends string> {
 export class SideNav<K extends string> implements PanelNav {
   readonly el = h('div', { class: 'side-nav', attrs: { role: 'tablist', 'aria-orientation': 'vertical' } });
   private items: readonly NavItem<K>[] = [];
+  private picked: K | undefined;
   private buttons = new Map<K, HTMLButtonElement>();
 
   constructor(private readonly onPick: (key: K) => void) {}
 
   show(items: readonly NavItem<K>[], picked: K | undefined): void {
     this.items = items;
+    this.picked = picked;
     const keep = new Set(items.map((i) => i.key));
     for (const [key, button] of this.buttons) {
       if (keep.has(key)) continue;
@@ -144,11 +146,17 @@ export class SideNav<K extends string> implements PanelNav {
 
   pick(n: number): void {
     const item = this.items[n - 1];
-    if (item && !item.standby) this.onPick(item.key);
+    if (item && !item.standby) this.choose(item.key);
+  }
+
+  private choose(key: K): void {
+    // another view starts at its top, not wherever the last one was scrolled to
+    if (key !== this.picked) this.el.closest('.panel')?.querySelector('.panel-body')?.scrollTo(0, 0);
+    this.onPick(key);
   }
 
   private button(key: K): HTMLButtonElement {
-    const button = h('button', { attrs: { role: 'tab' }, onclick: () => this.onPick(key) });
+    const button = h('button', { attrs: { role: 'tab' }, onclick: () => this.choose(key) });
     this.buttons.set(key, button);
     return button;
   }
@@ -160,6 +168,33 @@ export function readout(label: string, value: Node | string, opts: { tone?: stri
     h('small', null, label),
     h('b', { style: opts.tone ? `color:${opts.tone}` : undefined }, value),
   );
+}
+
+/** An LCARS switch in place of a checkbox: a pill that's lit while it's on, and says which. */
+export class Switch {
+  readonly el: HTMLButtonElement;
+  private readonly reading = h('span');
+  private state = false;
+
+  constructor(label: string, on: boolean, opts: { title?: string; changed?: (on: boolean) => void } = {}) {
+    this.el = h('button', { class: 'btn small switch', type: 'button', title: opts.title }, label, this.reading);
+    this.el.onclick = () => {
+      this.on = !this.on;
+      opts.changed?.(this.on);
+    };
+    this.on = on;
+  }
+
+  get on(): boolean {
+    return this.state;
+  }
+
+  set on(on: boolean) {
+    this.state = on;
+    this.el.classList.toggle('on', on);
+    this.el.setAttribute('aria-pressed', String(on));
+    this.reading.textContent = on ? 'On' : 'Off';
+  }
 }
 
 /** The view to show: the one picked, while it has something to show; otherwise the first that does. */
