@@ -63,6 +63,8 @@ CONSOLE_TOP = '#2b2735'
 DOOR_H = 2.5
 """How far the outline of a door frame stands into the room: clear of every wall trim, so they end inside it."""
 FRAME_PROUD = 0.12
+"""How wide a door frame's jambs are, either side of its opening."""
+FRAME_JAMB = 0.16
 
 
 # ---------------------------------------------------------------------------------------------------- materials
@@ -397,11 +399,11 @@ def walls(name, outline, doors, profile, mats, lintel_from, closed=True):
     """
     The walls around a room whose inner faces run through `outline` (corners, counter-clockwise from above), as
     one swept profile with gaps for `doors`: (edge index, offset of the door's centre from the edge's middle, width),
-    edge i running from outline[i] to outline[i + 1]. Above each gap, the profile from `lintel_from` up spans it.
-    Colliders follow the walls between the gaps, as deep as the profile. Returns each door's frame, in the order of
-    `doors`: a Matrix at the gap's centre on the inner face, X along the wall, Y into the room. Not `closed`, the
-    outline is a run of wall from its first point to its last, and the profile's d is measured from wherever it runs
-    (a wall's centre line, when both its faces show).
+    edge i running from outline[i] to outline[i + 1], each to have a door_frame round it. Above each gap, the profile
+    from `lintel_from` up spans it. Colliders follow the walls between the gaps, as deep as the profile. Returns each
+    door's frame, in the order of `doors`: a Matrix at the gap's centre on the inner face, X along the wall, Y into the
+    room. Not `closed`, the outline is a run of wall from its first point to its last, and the profile's d is measured
+    from wherever it runs (a wall's centre line, when both its faces show).
     """
     near, far = max(d for d, _ in profile), -min(d for d, _ in profile)
     n = len(outline)
@@ -414,8 +416,11 @@ def walls(name, outline, doors, profile, mats, lintel_from, closed=True):
         mid = (a + b) / 2
         for k, (_, offset, width) in sorted(((k, d) for k, d in enumerate(doors) if d[0] == i), key=lambda kd: kd[1][1]):
             centre = mid + along * offset
-            stations.append(('gap', centre - along * width / 2))
-            stations.append(('end', centre + along * width / 2))
+            # the walls run halfway into the door frame's jambs, past their bevelled edges, so the ends of the walls'
+            # trims stay buried in them rather than poking out into the doorway
+            gap = width / 2 + FRAME_JAMB / 2
+            stations.append(('gap', centre - along * gap))
+            stations.append(('end', centre + along * gap))
             yaw = math.atan2(along.y, along.x)
             frames[k] = Matrix.Translation((centre.x, centre.y, 0)) @ Matrix.Rotation(yaw, 4, 'Z')
     if not doors:
@@ -461,8 +466,8 @@ def door_frame(name, frame, width, height=DOOR_H, wall=0.2, back=0.04, proud=FRA
     A rounded frame round a doorway through a `wall` thick wall, at `frame` (the doorway's centre on the wall's inner
     face, Y into the room), standing `proud` into the room and `back` out of the far face, with colliders for its jambs.
     """
-    a = width / 2 + 0.16
-    top = height + 0.16
+    a = width / 2 + FRAME_JAMB
+    top = height + FRAME_JAMB
     # the frame's outline seen from the room: an upside-down U, its opening exactly the doors' height so its
     # underside seals their tops
     outline = [(-a, 0), (-width / 2, 0), (-width / 2, height), (width / 2, height), (width / 2, 0), (a, 0), (a, top), (-a, top)]

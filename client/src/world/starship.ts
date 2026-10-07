@@ -3,7 +3,7 @@ import type { AgentStatus } from '../../../shared/types';
 import { sound } from '../sound';
 import { canvasTexture, fitText, makeCanvas } from './canvas';
 import { box, flat, lighten, toon } from './materials';
-import { cyl } from './props';
+import { cyl, seatBack } from './props';
 import { viewportGlass } from './starfield';
 
 // The building is a starship in the style of Star Trek: Lower Decks: lilac-grey bulkheads over a dark dado,
@@ -332,15 +332,22 @@ export function stationSeat(upholstery: string): THREE.Group {
   const cushion = cyl(0.27, 0.27, 0.06, upholstery, 24);
   cushion.position.y = 0.47;
   g.add(foot, column, shell, cushion);
+  // the back curves round the seat's edge, so it meets the seat all the way across rather than only in the middle,
+  // leaning back from where it rises out of the shell
   const back = new THREE.Group();
   back.position.set(-0.28, 0.42, 0);
   back.rotation.z = 0.1;
-  back.add(box(0.07, 0.66, 0.56, HULL.frame, -0.02, 0, 0));
-  back.add(box(0.05, 0.54, 0.46, upholstery, 0.04, 0.08, 0));
+  const curved = (r0: number, r1: number, spread: number, h: number, color: string, y: number) => {
+    const mesh = new THREE.Mesh(seatBack(r0, r1, spread, h), toon(color));
+    mesh.position.set(0.28, y, 0);
+    return mesh;
+  };
+  back.add(curved(0.25, 0.32, 1.13, 0.66, HULL.frame, 0), curved(0.21, 0.26, 0.96, 0.54, upholstery, 0.08));
   g.add(back);
+  // the arms on posts standing in the shell, their back ends buried in the back
   for (const s of [-1, 1]) {
-    g.add(box(0.05, 0.16, 0.05, HULL.frame, -0.1, 0.48, s * 0.3));
-    g.add(box(0.34, 0.05, 0.07, upholstery, -0.04, 0.62, s * 0.3));
+    g.add(box(0.05, 0.18, 0.05, HULL.frame, -0.05, 0.44, s * 0.255));
+    g.add(box(0.3, 0.05, 0.07, upholstery, -0.01, 0.62, s * 0.27));
   }
   return g;
 }

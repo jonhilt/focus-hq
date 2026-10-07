@@ -26,8 +26,13 @@ export function chair(color: string): THREE.Group {
   const seat = cyl(0.26, 0.26, 0.08, color);
   seat.position.y = 0.46;
   g.add(seat);
-  const back = box(0.08, 0.5, 0.46, color, -0.24, 0.5, 0);
+  // curved round the seat's edge, so it meets the seat all the way across, and leaning back from where it rises
+  const back = new THREE.Group();
+  back.position.set(-0.24, 0.46, 0);
   back.rotation.z = 0.12;
+  const shell = new THREE.Mesh(seatBack(0.2, 0.28, 0.96, 0.54), toon(color));
+  shell.position.x = 0.24;
+  back.add(shell);
   g.add(back);
   const pole = cyl(0.03, 0.03, 0.36, '#555');
   pole.position.y = 0.24;
@@ -39,6 +44,17 @@ export function chair(color: string): THREE.Group {
     g.add(leg);
   }
   return g;
+}
+
+/** A curved chair back: an arc between radii r0 and r1 round the seat's centre, `spread` radians either side of -X, h tall. */
+export function seatBack(r0: number, r1: number, spread: number, h: number): THREE.ExtrudeGeometry {
+  const shape = new THREE.Shape();
+  shape.absarc(0, 0, r1, Math.PI - spread, Math.PI + spread, false);
+  shape.absarc(0, 0, r0, Math.PI + spread, Math.PI - spread, true);
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false, curveSegments: 12 });
+  // extruded along +Z; stand it up so it rises along +Y
+  geo.rotateX(-Math.PI / 2);
+  return geo;
 }
 
 export function plant(scale = 1, pot = '#e07a5f'): THREE.Group {
