@@ -2,7 +2,7 @@ import { statusLine } from '../../shared/agentStatus';
 import { numberOne } from '../../shared/crew';
 import { shownProjects } from '../../shared/hidden';
 import { prKey, qaBadge } from '../../shared/qa';
-import type { Agent, NumberOneChat, NumberOneMessage, Project, PullRequest, Settings, Snapshot, WorkSuggestion } from '../../shared/types';
+import type { Agent, GoalRecord, NumberOneChat, NumberOneMessage, Project, PullRequest, Settings, Snapshot, WorkSuggestion } from '../../shared/types';
 import { spokenLine } from '../../shared/voice';
 import type { Hub } from '../hub';
 import { freshNumberOne, type Store, type StoredNumberOne } from '../store';
@@ -162,14 +162,41 @@ export interface ProjectStatus {
   /** What's waiting on the captain in this room. */
   needsCaptain: string[];
   boardError?: string;
+  /** Goals the captain has closed, newest first, with each PR's state on GitHub now. */
+  closedGoals: ClosedGoalLine[];
+  /** Closed goals left out to keep it short. */
+  moreGoals?: number;
 }
 
-/** What `ship_status` tells Number One: per project, who's working on what, the open PRs and what needs the captain. */
+export type GoalPrState = 'open' | 'merged' | 'closed';
+
+export interface GoalPrLine {
+  repo: string;
+  number: number;
+  state: GoalPrState;
+  /** GitHub couldn't be asked, so `state` is what was recorded when the goal closed, not confirmed live. */
+  stale?: true;
+}
+
+export interface ClosedGoalLine {
+  title: string;
+  lead: string;
+  slices: number;
+  /** ISO time. */
+  closedAt: string;
+  /** What done looked like, agreed with the captain at the start. */
+  done?: string;
+  prs: GoalPrLine[];
+}
+
+/** What `ship_status` tells Number One: per project, who's working on what, the open PRs, what needs the captain and the closed goals. */
 export interface ShipStatus {
   projects: ProjectStatus[];
 }
 
 const MAX_PRS = 15;
+const MAX_GOALS = 10;
+const DONE = 200;
 const TITLE = 80;
 const ACTIVITY = 120;
 
@@ -177,12 +204,47 @@ const ACTIVITY = 120;
  * The ship's live state, trimmed hard for Number One: no terminal lines, browser frames, previews or voice, and short
  * lines throughout, and nothing about hidden projects. `worktree` says where an agent's checkout lives on this machine.
  */
-export function summariseShip(snapshot: Snapshot, worktree: (agentId: string) => string): ShipStatus {
+/** The PRs of the closed goals `summariseShip` shows, whose state it wants looked up on GitHub. */
+export function closedGoalPrs(snapshot: Pick<Snapshot, 'projects'>): { repo: string; number: number }[] {
+  return shownProjects(snapshot.projects).flatMap((p) => (p.goals ?? []).slice(0, MAX_GOALS).flatMap((g) => g.prs.map(({ repo, number }) => ({ repo, number }))));
+}
+
+/**
+ * Asks GitHub for each PR's state at once, keyed by `prKey`. A PR whose lookup fails is left out of the map, which
+ * `summariseShip` reports as its recorded outcome, marked stale.
+ */
+export async function lookUpPrStates(prs: { repo: string; number: number }[], state: (repo: string, number: number) => Promise<'OPEN' | 'CLOSED' | 'MERGED'>): Promise<Map<string, GoalPrState>> {
+  const unique = [...new Map(prs.map((pr) => [prKey(pr.repo, pr.number), pr])).entries()];
+  const found = await Promise.allSettled(unique.map(([, pr]) => state(pr.repo, pr.number)));
+  const states = new Map<string, GoalPrState>();
+  found.forEach((result, i) => {
+    if (result.status === 'fulfilled') states.set(unique[i][0], result.value.toLowerCase() as GoalPrState);
+  });
+  return states;
+}
+
+function closedGoal(goal: GoalRecord, prStates: ReadonlyMap<string, GoalPrState>): ClosedGoalLine {
+  return {
+    title: truncate(goal.title, TITLE),
+    lead: goal.leadName,
+    slices: goal.slices,
+    closedAt: new Date(goal.closedAt).toISOString(),
+    ...(goal.note?.done && { done: truncate(goal.note.done, DONE) }),
+    prs: goal.prs.map((pr): GoalPrLine => {
+      const live = prStates.get(prKey(pr.repo, pr.number));
+      return live ? { repo: pr.repo, number: pr.number, state: live } : { repo: pr.repo, number: pr.number, state: pr.outcome ?? 'open', stale: true };
+    }),
+  };
+}
+
+/** `prStates` is each closed goal's PR's state on GitHub now (see `lookUpPrStates`); one missing falls back to what was recorded. */
+export function summariseShip(snapshot: Snapshot, worktree: (agentId: string) => string, prStates: ReadonlyMap<string, GoalPrState> = new Map()): ShipStatus {
   const reviews = new Map(snapshot.reviews.map((r) => [prKey(r.repo, r.number), r]));
   const projects = shownProjects(snapshot.projects).map((project): ProjectStatus => {
     const agents = snapshot.agents.filter((a) => a.projectId === project.id);
     const board = snapshot.boards.find((b) => b.projectId === project.id);
     const prs = board?.prs ?? [];
+    const goals = project.goals ?? [];
     const needs: string[] = [];
     for (const agent of agents) {
       if (agent.status === 'waiting') needs.push(`${agent.name} has a hand up${agent.permission ? `: ${truncate(agent.permission.summary, ACTIVITY)}` : ''}`);
@@ -230,6 +292,8 @@ export function summariseShip(snapshot: Snapshot, worktree: (agentId: string) =>
       ...(prs.length > MAX_PRS && { morePrs: prs.length - MAX_PRS }),
       needsCaptain: needs,
       ...(board?.error && { boardError: truncate(board.error, ACTIVITY) }),
+      closedGoals: goals.slice(0, MAX_GOALS).map((g) => closedGoal(g, prStates)),
+      ...(goals.length > MAX_GOALS && { moreGoals: goals.length - MAX_GOALS }),
     };
   });
   return { projects };
@@ -261,7 +325,7 @@ The projects aboard, and where their code goes once you open them:
 ${projectList(req.projects)}
 
 Your tools (you can't change anything, and must not try):
-- mcp__number-one__ship_status: the ship right now, per project: agents and what they're on, open pull requests with QA's verdict and checks, and what needs the captain. Call it whenever the captain asks what's going on, what's stuck or who's doing what; don't answer that from memory, it changes all the time.
+- mcp__number-one__ship_status: the ship right now, per project: agents and what they're on, open pull requests with QA's verdict and checks, what needs the captain, and the goals the captain has closed with each of their pull requests' state on GitHub right now (open, merged or closed; \`stale\` means GitHub couldn't be asked and it's only what was recorded when the goal closed, so say so). Call it whenever the captain asks what's going on, what's stuck or who's doing what, or whether a closed goal landed; don't answer that from memory, it changes all the time.
 - mcp__number-one__open_project: checks a project's repositories out at their default branch into the folders above. Call it once per project per conversation, before reading that project's code. If it fails, tell the captain the checkout failed and for which project, then carry on with whatever else you can answer.
 - Read, Glob and Grep: the code. Answer "how does X work" from the default-branch checkouts only, naming the files.
 - An agent's worktree (the \`worktree\` path in ship_status, under ${req.workspaces}) holds their half-finished work: read it only to see what that agent has done so far, never to explain how the code works.

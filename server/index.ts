@@ -9,7 +9,7 @@ import { ClaudeRunner } from './agents/claudeRunner';
 import { DemoDrafter, DemoNumberOne, DemoRunner, DemoTriager, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
 import { Sessions, Triage, Workspace } from './agents/services';
-import { NumberOne, type ShipStatus, summariseShip } from './agents/numberOne';
+import { closedGoalPrs, lookUpPrStates, NumberOne, type ShipStatus, summariseShip } from './agents/numberOne';
 import { IssuePlanner } from './agents/planner';
 import type { WorkspaceOps } from './agents/types';
 import * as git from './agents/workspace';
@@ -58,7 +58,12 @@ async function main() {
   const planner = new IssuePlanner(store, hub, config.demo ? new DemoDrafter() : new ClaudeDrafter());
   const workspace = config.demo ? demoWorkspace : liveWorkspace;
   // Number One reads the ship through the office, which is up by the time anyone asks
-  const numberOne = new NumberOne(store, hub, config.demo ? new DemoNumberOne() : new ClaudeNumberOne(), async (): Promise<ShipStatus> => summariseShip(await office.snapshot(), (id) => workspace.dir(id)));
+  const numberOne = new NumberOne(store, hub, config.demo ? new DemoNumberOne() : new ClaudeNumberOne(), async (): Promise<ShipStatus> => {
+    const snapshot = await office.snapshot();
+    // closed goals' PRs, looked up live on every call: one that fails falls back to what was recorded
+    const prStates = await lookUpPrStates(closedGoalPrs(snapshot), (repo, number) => github.pullRequestState(repo, number));
+    return summariseShip(snapshot, (id) => workspace.dir(id), prStates);
+  });
   const office = new Office(store, hub, github, previews, planner, numberOne, new Voice(hub, config.demo), await currentVersion());
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));

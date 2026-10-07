@@ -574,6 +574,19 @@ export class DemoNumberOne implements NumberOneOfficer {
       return said(rooms.join('\n\n') || 'There are no projects aboard yet.', waiting ? `${waiting} ${waiting === 1 ? 'thing needs' : 'things need'} you, Captain. The details are on screen.` : 'All quiet, Captain. Nothing needs you right now.');
     }
 
+    if (/land|closed goal|finished goal/.test(q)) {
+      activity('Checking the ship’s status');
+      const ship = await req.shipStatus();
+      await wait(1.2);
+      const goals = ship.projects.flatMap((p) => p.closedGoals.map((g) => ({ project: p.name, ...g })));
+      const lines = goals.map((g) => {
+        const prs = g.prs.map((pr) => `${pr.repo}#${pr.number} ${pr.state}${pr.stale ? ' (as recorded; GitHub didn’t answer)' : ''}`);
+        const landed = g.prs.length > 0 && g.prs.every((pr) => pr.state === 'merged' && !pr.stale);
+        return `**${g.title}** (${g.project}, ${g.lead}, ${g.slices} ${g.slices === 1 ? 'slice' : 'slices'}): ${prs.length ? prs.join(', ') : 'no PRs'}. ${landed ? 'It landed.' : 'Not all of it has landed.'}`;
+      });
+      return said(lines.join('\n\n') || 'No goals have been closed yet, Captain.', goals.length ? `${goals.length} closed ${goals.length === 1 ? 'goal' : 'goals'}, Captain. The details are on screen.` : 'No goals have been closed yet, Captain.');
+    }
+
     const agent = (await req.shipStatus()).projects.flatMap((p) => p.agents).find((a) => q.includes(a.name.toLowerCase().replace(/^(lt\.|ensign) /, '')));
     if (agent && /done|so far|progress|up to/.test(q)) {
       activity(`Reading ${agent.worktree ?? 'their branch'}`);

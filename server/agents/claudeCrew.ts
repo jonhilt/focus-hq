@@ -201,7 +201,7 @@ function numberOneServer(req: NumberOneTurn, activity: (text: string) => void): 
     version: '1.0.0',
     alwaysLoad: true,
     tools: [
-      tool('ship_status', 'The ship right now: per project, its agents (with their worktree paths), open pull requests with QA verdicts and checks, and what needs the captain.', {}, async () =>
+      tool('ship_status', "The ship right now: per project, its agents (with their worktree paths), open pull requests with QA verdicts and checks, what needs the captain, and its closed goals (newest first) with each PR's state on GitHub right now (stale: true when it couldn't be looked up, so it's only the recorded outcome).", {}, async () =>
         text(JSON.stringify(await req.shipStatus(), null, 1)),
       ),
       tool(

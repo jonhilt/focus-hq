@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Agent, Board, IssueDraft, NumberOneChat, Project, PullRequest, QaReview, Snapshot } from '../../shared/types';
+import type { Agent, Board, GoalRecord, IssueDraft, NumberOneChat, Project, PullRequest, QaReview, Snapshot } from '../../shared/types';
 import { Hub } from '../hub';
 import { numberOneAfterRestart, Store } from '../store';
-import { asNumberOneReply, NumberOne, type NumberOneOfficer, numberOnePrompt, numberOneReplySchema, numberOneSystemPrompt, type ShipStatus, summariseShip } from './numberOne';
+import { asNumberOneReply, closedGoalPrs, lookUpPrStates, NumberOne, type NumberOneOfficer, numberOnePrompt, numberOneReplySchema, numberOneSystemPrompt, type ShipStatus, summariseShip } from './numberOne';
 
 const project = { id: 'p1', name: 'Shop', repos: ['acme/shop', 'acme/shop-api'] } as Project;
 const agent = (patch: Partial<Agent>): Agent =>
@@ -100,6 +100,96 @@ describe('summariseShip', () => {
   it('says which goal a lead is on, and which slice, not an issue', () => {
     const lead = agent({ id: 'lead_p1_ab12', task: 'lead', issue: { number: 0, title: 'Saved items', url: '' }, lead: { station: 1, title: 'Saved items', repos: [], slice: 2, prs: [] } });
     expect(summariseShip(snapshot({ agents: [lead] }), worktree).projects[0].agents[0].issue).toBe('Goal “Saved items”, slice 2, with the captain');
+  });
+
+  const goal = (patch: Partial<GoalRecord>): GoalRecord => ({
+    id: 'g1',
+    title: 'Saved items',
+    note: { done: 'Shoppers find saved items on any device', slice: [], learned: [], next: [] },
+    slices: 3,
+    prs: [
+      { repo: 'acme/shop', number: 50, url: '' },
+      { repo: 'acme/shop-api', number: 7, url: '', outcome: 'merged' },
+      { repo: 'acme/shop', number: 51, url: '', outcome: 'closed' },
+    ],
+    leadName: 'Cmdr Vale',
+    openedAt: 0,
+    closedAt: Date.UTC(2026, 9, 1),
+    ...patch,
+  });
+  const withGoals = (goals: GoalRecord[]) => snapshot({ projects: [{ ...project, goals }] });
+
+  it('lists closed goals with each PR’s live state, not the one recorded when the goal closed', () => {
+    const live = new Map([
+      ['acme/shop#50', 'merged'],
+      ['acme/shop-api#7', 'closed'],
+      ['acme/shop#51', 'open'],
+    ] as const);
+    const status = summariseShip(withGoals([goal({})]), worktree, new Map(live));
+    expect(status.projects[0].closedGoals).toEqual([
+      {
+        title: 'Saved items',
+        lead: 'Cmdr Vale',
+        slices: 3,
+        closedAt: '2026-10-01T00:00:00.000Z',
+        done: 'Shoppers find saved items on any device',
+        prs: [
+          { repo: 'acme/shop', number: 50, state: 'merged' },
+          { repo: 'acme/shop-api', number: 7, state: 'closed' },
+          { repo: 'acme/shop', number: 51, state: 'open' },
+        ],
+      },
+    ]);
+  });
+
+  it('falls back to the recorded outcome, marked stale, for a PR it couldn’t look up', () => {
+    const status = summariseShip(withGoals([goal({ note: undefined })]), worktree, new Map([['acme/shop#51', 'merged']]));
+    const [shown] = status.projects[0].closedGoals;
+    expect(shown.done).toBeUndefined();
+    expect(shown.prs).toEqual([
+      { repo: 'acme/shop', number: 50, state: 'open', stale: true },
+      { repo: 'acme/shop-api', number: 7, state: 'merged', stale: true },
+      { repo: 'acme/shop', number: 51, state: 'merged' },
+    ]);
+  });
+
+  it('caps the closed goals, newest first, and counts the rest', () => {
+    const goals = Array.from({ length: 13 }, (_, i) => goal({ id: `g${i}`, title: `${i} ${'x'.repeat(200)}`, prs: [{ repo: 'acme/shop', number: i + 1, url: '' }] }));
+    const snap = withGoals(goals);
+    const status = summariseShip(snap, worktree);
+    expect(status.projects[0].closedGoals).toHaveLength(10);
+    expect(status.projects[0].closedGoals[0].title).toMatch(/^0 /);
+    expect(status.projects[0].closedGoals[0].title.length).toBe(80);
+    expect(status.projects[0].moreGoals).toBe(3);
+    // only the shown goals' PRs get looked up
+    expect(closedGoalPrs(snap).map((p) => p.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  });
+
+  it('gives a project without closed goals an empty list, and keeps hidden projects’ goals out', () => {
+    const secret = { id: 'p2', name: 'Secret', repos: ['acme/secret'], hidden: true, goals: [goal({ prs: [{ repo: 'acme/secret', number: 9, url: '' }] })] } as Project;
+    const snap = snapshot({ projects: [project, secret] });
+    const status = summariseShip(snap, worktree);
+    expect(status.projects.map((p) => [p.name, p.closedGoals, p.moreGoals])).toEqual([['Shop', [], undefined]]);
+    expect(closedGoalPrs(snap)).toEqual([]);
+  });
+});
+
+describe('lookUpPrStates', () => {
+  it('looks each PR up once, and leaves out the ones that fail', async () => {
+    const asked: string[] = [];
+    const states = await lookUpPrStates(
+      [
+        { repo: 'acme/shop', number: 1 },
+        { repo: 'acme/shop', number: 2 },
+        { repo: 'acme/shop', number: 1 },
+      ],
+      (repo, number) => {
+        asked.push(`${repo}#${number}`);
+        return number === 2 ? Promise.reject(new Error('gh down')) : Promise.resolve('MERGED');
+      },
+    );
+    expect(asked).toEqual(['acme/shop#1', 'acme/shop#2']);
+    expect([...states]).toEqual([['acme/shop#1', 'merged']]);
   });
 });
 
