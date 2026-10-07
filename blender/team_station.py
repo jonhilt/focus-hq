@@ -48,10 +48,10 @@ SIDE_X = 1.35
 SEATS = [('station-lead', 1, 4.7), ('station-reviewer', -1, 4.7), ('station-helper-1', 1, 5.7),
          ('station-helper-2', -1, 5.7), ('station-helper-3', 1, 6.7), ('station-helper-4', -1, 6.7)]
 CAPTAIN = 3.0
-#: the screen: StationScreen's BIG_SCREEN proportions (1600×1024), its bezel between the wall's stripe and its header
+#: the screen: StationScreen's BIG_SCREEN proportions (1600×1024), its bezel resting on the wall's stripe, under its header
 SCREEN_W = 3.4
 SCREEN_H = SCREEN_W * 1024 / 1600
-SCREEN_BOTTOM = 1.1
+SCREEN_BOTTOM = 1.09
 SIGN_W = 1.3
 #: the goal board on the starboard wall, beside the table: GoalBoard's proportions (1440×804), its bezel between the
 #: wall's stripe and its header, clear of the heads of the crew in front of it seen from the head of the table

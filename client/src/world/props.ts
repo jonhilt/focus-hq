@@ -22,11 +22,13 @@ export function chair(color: string): THREE.Group {
   shell.position.x = 0.24;
   back.add(shell);
   g.add(back);
-  const pole = cyl(0.03, 0.03, 0.36, '#555');
-  pole.position.y = 0.24;
+  // the pole stands on the floor, its legs spreading out from its foot and reaching a little below it, so they touch
+  // the floor even when the chair's lifted clear of a carpet
+  const pole = cyl(0.03, 0.03, 0.44, '#555');
+  pole.position.y = 0.22;
   g.add(pole);
   for (let i = 0; i < 5; i++) {
-    const leg = box(0.32, 0.03, 0.05, '#555', 0, 0.04, 0);
+    const leg = box(0.32, 0.035, 0.05, '#555', 0, -0.005, 0);
     leg.geometry = leg.geometry.clone().translate(0.16, 0, 0);
     leg.rotation.y = (i / 5) * Math.PI * 2;
     g.add(leg);
@@ -78,7 +80,8 @@ export function ceilingLight(w = 1.2, d = 0.6): THREE.Mesh {
 export function paperStack(count: number, colors: string[]): THREE.Group {
   const g = new THREE.Group();
   for (let i = 0; i < count; i++) {
-    const folder = box(0.32, 0.035, 0.24, colors[i % colors.length], 0, i * 0.04, 0);
+    // each folder lying on the one below
+    const folder = box(0.32, 0.035, 0.24, colors[i % colors.length], 0, i * 0.035, 0);
     folder.rotation.y = (((i * 37) % 11) - 5) * 0.03;
     g.add(folder);
   }

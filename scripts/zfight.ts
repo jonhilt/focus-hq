@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { Browser } from 'playwright';
 import type { FightingPair } from '../client/src/world/zfight';
-import { CheckFailed, freePort, launchBrowser, startDemo, stopDemo, waitForServer } from './demoOffice';
+import { CheckFailed, freePort, launchBrowser, openScene, startDemo, stopDemo, waitForServer } from './demoOffice';
 
 /** Overlaps that are fine as they are. Each pattern matches one mesh's identity, in either order. */
 const ALLOWED: { a: RegExp; b: RegExp; reason: string }[] = [];
@@ -14,34 +14,13 @@ const allowed = (p: FightingPair) =>
   ALLOWED.some(({ a, b }) => (a.test(p.a) && b.test(p.b)) || (a.test(p.b) && b.test(p.a)));
 
 async function scan(browser: Browser, url: string): Promise<{ pairs: FightingPair[]; meshes: number; padds: number }> {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
-  await page.goto(url);
-  // the world is built once the first snapshot arrives
-  const built = await page
-    .waitForFunction(() => {
-      const hq = (window as { focusHQ?: { world: { rooms: Map<string, unknown>; numberOne: unknown } } }).focusHQ;
-      return !!hq && hq.world.rooms.size > 0 && !!hq.world.numberOne;
-    }, null, { timeout: 30_000 })
-    .then(() => true, () => false);
-  if (!built) throw new CheckFailed('the office is built within 30s');
-  // Number One reads a PADD in the ready room, and only moves while someone's near: join them and give a few frames to
-  // raise it
-  await page.evaluate(() => {
-    const { ui } = (window as unknown as { focusHQ: { ui: { places(): { label: string }[]; goTo(place: { label: string }): void } } }).focusHQ;
-    const room = ui.places().find((p) => p.label.includes('Ready room'));
-    if (room) ui.goTo(room);
-  });
-  await page.waitForTimeout(1000);
+  const page = await openScene(browser, url);
   // a module path in a variable, so tsc doesn't try to resolve Vite's URL
   const modulePath = '/src/world/zfight.ts';
   return page.evaluate(async (modulePath) => {
     const { findZFighting } = (await import(modulePath)) as typeof import('../client/src/world/zfight');
     const world = (window as unknown as { focusHQ: { world: { root: import('three').Object3D } } }).focusHQ.world;
     const scene = world.root.parent ?? world.root;
-    // team stations' briefing rooms are only drawn while you're in one or looking in through its door (teamStation.ts)
-    scene.traverse((o) => {
-      if (o.name === 'briefing_room' && o.parent) o.parent.visible = true;
-    });
     let meshes = 0;
     let padds = 0;
     scene.traverse((o) => {

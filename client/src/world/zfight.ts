@@ -1,6 +1,7 @@
 // Finds z-fighting in a scene graph: faces from different meshes that lie in (almost) the same plane, face the same
 // way and overlap, so the depth test flips between them as the camera turns. `npm run zfight` (scripts/zfight.ts)
-// imports this into the running office; it isn't part of the client bundle.
+// imports this into the running office; it isn't part of the client bundle. The gap scan (gaps.ts) shares its
+// triangle handling.
 import * as THREE from 'three';
 import { WALL_H } from './layout';
 
@@ -56,7 +57,7 @@ function lookAlike(a: THREE.Material, b: THREE.Material): boolean {
   return a === b && !(a as { map?: THREE.Texture | null }).map;
 }
 
-interface Tri {
+export interface Tri {
   mesh: number;
   mat: THREE.Material;
   /** Normal flipped so its largest component is positive, with `d` flipped to match. */
@@ -69,7 +70,7 @@ interface Tri {
   box: THREE.Box3;
 }
 
-function visible(obj: THREE.Object3D): boolean {
+export function visible(obj: THREE.Object3D): boolean {
   for (let o: THREE.Object3D | null = obj; o; o = o.parent) if (!o.visible) return false;
   return true;
 }
@@ -87,7 +88,7 @@ function canonical(n: THREE.Vector3): boolean {
   return big > 0;
 }
 
-function trianglesOf(mesh: THREE.Mesh, index: number, out: Tri[]): void {
+export function trianglesOf(mesh: THREE.Mesh, index: number, out: Tri[]): void {
   const pos = mesh.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
   if (!pos) return;
   const idx = mesh.geometry.index;
@@ -123,19 +124,19 @@ function trianglesOf(mesh: THREE.Mesh, index: number, out: Tri[]): void {
   }
 }
 
-const key = (nx: number, ny: number, nz: number, d: number) => `${nx},${ny},${nz},${d}`;
-const cells = (value: number, tolerance: number, step: number) => {
+export const key = (nx: number, ny: number, nz: number, d: number) => `${nx},${ny},${nz},${d}`;
+export const cells = (value: number, tolerance: number, step: number) => {
   const lo = Math.floor((value - tolerance) / step);
   const hi = Math.floor((value + tolerance) / step);
   return lo === hi ? [lo] : [lo, hi];
 };
 
 /** A point's coordinates in the plane spanned by `u` and `w`. */
-function project(p: THREE.Vector3, u: THREE.Vector3, w: THREE.Vector3): [number, number] {
+export function project(p: THREE.Vector3, u: THREE.Vector3, w: THREE.Vector3): [number, number] {
   return [p.dot(u), p.dot(w)];
 }
 
-function signedArea(poly: [number, number][]): number {
+export function signedArea(poly: [number, number][]): number {
   let a = 0;
   for (let i = 0; i < poly.length; i++) {
     const [x0, y0] = poly[i];
@@ -146,7 +147,7 @@ function signedArea(poly: [number, number][]): number {
 }
 
 /** Sutherland–Hodgman: the part of `subject` inside the convex, counter-clockwise `clip`. */
-function clip(subject: [number, number][], clipPoly: [number, number][]): [number, number][] {
+export function clip(subject: [number, number][], clipPoly: [number, number][]): [number, number][] {
   let out = subject;
   for (let i = 0; i < clipPoly.length && out.length; i++) {
     const [ax, ay] = clipPoly[i];
@@ -168,13 +169,13 @@ function clip(subject: [number, number][], clipPoly: [number, number][]): [numbe
   return out;
 }
 
-function basis(n: THREE.Vector3): [THREE.Vector3, THREE.Vector3] {
+export function basis(n: THREE.Vector3): [THREE.Vector3, THREE.Vector3] {
   const helper = Math.abs(n.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
   const u = new THREE.Vector3().crossVectors(n, helper).normalize();
   return [u, new THREE.Vector3().crossVectors(n, u)];
 }
 
-function ccw(t: Tri, u: THREE.Vector3, w: THREE.Vector3): [number, number][] {
+export function ccw(t: Tri, u: THREE.Vector3, w: THREE.Vector3): [number, number][] {
   const poly = t.v.map((p) => project(p, u, w));
   return signedArea(poly) < 0 ? poly.reverse() : poly;
 }

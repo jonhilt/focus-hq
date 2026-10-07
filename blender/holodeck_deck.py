@@ -137,4 +137,5 @@ def tail():
     """The end of the hallway: a bulkhead across the deck, with a window looking out from the hallway."""
     module('tail')
     bulkhead('tail wall', (-OUTER, 0), (OUTER, 0))
-    window('tail window', 2.4, 1.6, (0, 1.95), Matrix.Translation((0, -WALL_T / 2, 0)) @ Matrix.Rotation(math.pi, 4, 'Z'))
+    # its frame resting on the stripe
+    window('tail window', 2.4, 1.6, (0, 1.92), Matrix.Translation((0, -WALL_T / 2, 0)) @ Matrix.Rotation(math.pi, 4, 'Z'))

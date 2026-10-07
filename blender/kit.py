@@ -581,7 +581,8 @@ def bridge_seat(name, frame):
     cylinder(f'{name} seat base', 0.24, 0.05, dado, frame=frame)
     cylinder(f'{name} seat column', 0.07, 0.36, trim, (0, 0, 0.05), frame=frame)
     cushion = cylinder(f'{name} seat', 0.28, 0.08, toon(CUSHION), (0, 0, 0.41), frame=frame)
-    box(f'{name} seat back', (0.5, 0.07, 0.45), trim, (0, -0.25, 0.5), frame=frame, round=0.03)
+    # rising from just under the cushion, so it doesn't float over the cushion's rim
+    box(f'{name} seat back', (0.5, 0.07, 0.55), trim, (0, -0.25, 0.4), frame=frame, round=0.03)
     collide_object(cushion)
 
 

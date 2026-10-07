@@ -23,6 +23,9 @@ const ORDER = { stamp: 10, clear: 11, landscape: 12, glass: -20, restore: -10 };
 const OUTLINE = new THREE.Color().setRGB(0.1, 0.1, 0.12); // OutlineEffect's default colour (linear)
 const noRaycast = () => {};
 
+/** The skin's geometry's name: the gap scan (gaps.ts) knows it hides whatever is behind it. */
+export const SKIN = 'holodeck skin';
+
 /** The skin: every inner wall face of the room (minus the doorway) plus the ceiling, all facing inwards. */
 function skinGeometry(): THREE.BufferGeometry {
   const x0 = -HALF_D + SKIN_INSET;
@@ -31,7 +34,7 @@ function skinGeometry(): THREE.BufferGeometry {
   const z1 = HALF_W - SKIN_INSET;
   const jamb = (z1 + DOOR_W / 2) / 2;
   const plane = (w: number, h: number) => new THREE.PlaneGeometry(w, h);
-  return mergeGeometries([
+  const geo = mergeGeometries([
     plane(z1 - z0, SKIN_TOP).rotateY(-Math.PI / 2).translate(x1, SKIN_TOP / 2, 0), // far wall
     plane(x1 - x0, SKIN_TOP).translate(0, SKIN_TOP / 2, z0),
     plane(x1 - x0, SKIN_TOP).rotateY(Math.PI).translate(0, SKIN_TOP / 2, z1),
@@ -40,6 +43,8 @@ function skinGeometry(): THREE.BufferGeometry {
     plane(DOOR_W, SKIN_TOP - DOOR_H).rotateY(Math.PI / 2).translate(x0, (DOOR_H + SKIN_TOP) / 2, 0),
     plane(x1 - x0, z1 - z0).rotateX(Math.PI / 2).translate(0, SKIN_TOP, 0), // ceiling
   ]);
+  geo.name = SKIN;
+  return geo;
 }
 
 /** Makes a material draw only where the skin stamped `ref`. */

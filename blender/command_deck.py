@@ -122,7 +122,8 @@ def viewscreen():
 def wall_console(name, side, length, seed):
     """A standing console against a wall, its keys sloping up towards it, with readouts above."""
     f = side_frame(side)
-    profile = [(0.6, 0), (0.6, 0.8), (0.14, 0.98), (0.02, 0.98), (0.02, 0)]
+    # its back against the wall, behind the dado and the stripe
+    profile = [(0.6, 0), (0.6, 0.8), (0.14, 0.98), (0, 0.98), (0, 0)]
     bulkhead = toon(HULL['bulkhead'])
     prism(name, profile, length, [bulkhead, toon(CONSOLE_TOP), bulkhead, bulkhead, toon(HULL['dado'])], frame=f)
     collide_footprint(f, -length / 2, length / 2, 0.02, 0.62)

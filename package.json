@@ -15,6 +15,7 @@
     "test": "vitest run",
     "smoke": "tsx scripts/smoke.ts",
     "zfight": "tsx scripts/zfight.ts",
+    "gaps": "tsx scripts/gaps.ts",
     "ship": "tsx scripts/ship.ts"
   },
   "engines": {
