@@ -1,6 +1,7 @@
 import { Data, Effect, Exit, Fiber, FiberMap, type Layer, ManagedRuntime, PartitionedSemaphore, Scope } from 'effect';
 import { helperFor, leadFor, leadId, plannerFor, qaFor, qaOfficerFor, randomAvatar } from '../../shared/crew';
-import { autoQaFor, autoSendBackFor, prKey, sameCommit } from '../../shared/qa';
+import { type Closer, type LedgerEntry, reportCard, type ReportCard } from '../../shared/ledger';
+import { autoQaFor, autoSendBackFor, prKey, qaBadge, sameCommit } from '../../shared/qa';
 import { afterTriage, triageLabel, type TriageResult, type TriageStep, whenStuck } from '../../shared/triage';
 import type { Agent, AgentStatus, BrowserFrame, ConflictsOutcome, Effort, FailedCheck, FixFor, PermissionRequest, PullRequest, QaReport, QaReview, QaScreenshot, QueuedGoal, TermLine } from '../../shared/types';
 import { ACTIVE_STATUSES, LEAD_DESK, QA_DESK, TEAM_STATIONS } from '../../shared/types';
@@ -89,6 +90,8 @@ export class AgentManager {
   /** The pull requests (prKey) the office is merging its base branch into right now. */
   private merging = new Set<string>();
   private leaving = new Set<string>();
+  /** The pull requests (prKey) whose merge or close is in the ledger: the office notices some more than once. */
+  private landed = new Set<string>();
   private readonly runtime: ManagedRuntime.ManagedRuntime<ManagerServices, never>;
   private readonly scope = Scope.makeUnsafe();
   /** Each agent's work in hand, by agent id: their launch, a turn and what follows it, or a compaction. */
@@ -207,6 +210,7 @@ export class AgentManager {
     const owner = lead ? undefined : this.prOwner(pr.repo, pr.number);
     const merge = await this.mergeBase(pr);
     if (merge.kind === 'up-to-date') return merge;
+    this.record(projectId, { kind: 'conflicts', repo: pr.repo, pr: pr.number, goal: lead?.lead?.title, resolved: merge.kind === 'merged' ? 'office' : 'agent' });
     if (merge.kind === 'merged') {
       if (lead) this.mergedForLead(lead, pr, merge.sha, 'the office');
       else if (owner) await this.runtime.runPromise(this.catchUp(owner, merge));
@@ -855,7 +859,9 @@ export class AgentManager {
       const check = closeCheck(work, dirty.map((r) => r.folder));
       if (check.kind === 'warn' && !force) return { warn: check.reasons };
       const project = this.store.project(agent.projectId);
-      project.goals = fileGoal(project.goals ?? [], goalRecord(agent, Date.now()));
+      const record = goalRecord(agent, Date.now());
+      project.goals = fileGoal(project.goals ?? [], record);
+      this.record(project.id, { kind: 'goal-closed', goal: record });
       this.projectsChanged();
       yield* this.goHome(id);
       // the goal's reviewer goes home with its lead; a review they were on, or still waiting, goes to the room's QA officer
@@ -1202,6 +1208,9 @@ export class AgentManager {
         })),
       );
       const failedRounds = (review?.failedRounds ?? 0) + (pass ? 0 : 1);
+      const checks = { pass: 0, fail: 0, skip: 0 };
+      for (const c of report.checks) checks[c.result]++;
+      this.record(agent.projectId, { kind: 'qa-verdict', repo: agent.repo, pr: number, goal: this.leadWith(agent.repo, number)?.lead?.title, verdict: report.verdict, sha: review?.sha, reviewer: agent.name, checks, failedRounds });
       const done: QaReview | undefined = review && { ...review, status: pass ? 'passed' : 'failed', report, screenshots, commentUrl, failedRounds, finishedAt: Date.now(), error: undefined };
       if (done) this.putReview(done);
       this.print(agent, [{ kind: pass ? 'success' : 'error', text: `${pass ? '✅ QA passed' : '❌ QA failed'} PR #${number} · ${report.checks.length} checks` }]);
@@ -1286,6 +1295,7 @@ export class AgentManager {
       if (!report) return;
       const where = `${review.repo.split('/')[1]}#${review.number}`;
       const why = fixes.kind === 'qa' ? 'failed QA' : 'keeps failing its checks';
+      if (fixes.kind === 'checks') this.record(review.projectId, { kind: 'checks-sent-back', repo: review.repo, pr: review.number, goal: this.leadWith(review.repo, review.number)?.lead?.title, checks: fixes.checks.map((c) => c.name) });
       const advice = note && `${plannerFor(review.projectId).name}, the operations officer, looked at why this PR is stuck: ${note}`;
       const owner = this.prOwner(review.repo, review.number);
       if (owner) {
@@ -1401,6 +1411,7 @@ export class AgentManager {
       if (!now || !Exit.isSuccess(exit)) return;
       const result = exit.value;
       const decided = 'decision' in result ? { ...now, triage: { officer: officer.name, ...result.decision, at: Date.now() } } : now;
+      if ('decision' in result) this.record(review.projectId, { kind: 'triage', repo: review.repo, pr: review.number, goal: this.leadWith(review.repo, review.number)?.lead?.title, officer: officer.name, ...result.decision });
       yield* this.afterTriage(decided, afterTriage(officer.name, result, { closes: pr?.linkedIssues ?? [] }));
     });
   }
@@ -1454,7 +1465,7 @@ export class AgentManager {
       const comment = `🧭 ${officer}, the Focus office's operations officer, closed this pull request: ${note}\n\n${pr.linkedIssues.map((n) => `#${n}`).join(', ')} stays open, so it gets built again.`;
       yield* github.closePullRequest(review.repo, review.number, comment);
       for (const issue of pr.linkedIssues) this.store.putClosedPr({ repo: review.repo, issue, pr: review.number, officer, note, at: Date.now() });
-      this.prClosed(review.repo, review.number, false);
+      this.prClosed(review.repo, review.number, false, 'officer');
       this.boardChanged(review.projectId);
     });
   }
@@ -1582,8 +1593,9 @@ export class AgentManager {
     });
   }
 
-  /** Called when a PR an agent opened was merged or closed. The agent packs up and goes home. */
-  prClosed(repo: string, number: number, merged: boolean): void {
+  /** Called when a PR an agent opened was merged or closed. The agent packs up and goes home. `headSha` is the commit that merged, when the office knows it. */
+  prClosed(repo: string, number: number, merged: boolean, by: Closer = 'github', headSha?: string): void {
+    this.recordLanding(repo, number, merged, by, headSha);
     this.reviewGone(repo, number);
     if (this.leadPrClosed(repo, number, merged)) return;
     const agent = this.prOwner(repo, number);
@@ -1596,6 +1608,32 @@ export class AgentManager {
       Effect.andThen(Effect.sync(() => this.leaving.delete(agent.id))),
       Effect.andThen(this.goHome(agent.id)),
     ));
+  }
+
+  /** Writes a PR the office knows (QA reviewed it, or an agent or lead opened it) merging or closing in the ledger, once. */
+  recordLanding(repo: string, number: number, merged: boolean, by: Closer = 'github', headSha?: string): void {
+    const key = prKey(repo, number);
+    if (this.landed.has(key)) return;
+    const review = this.store.reviews.get(key);
+    const lead = this.leadWith(repo, number);
+    const projectId = review?.projectId ?? lead?.projectId ?? this.prOwner(repo, number)?.projectId;
+    if (!projectId) return;
+    this.landed.add(key);
+    // merged on GitHub, the office doesn't know the final head: a goal's PR is at the commit its lead last shipped
+    const head = headSha ?? lead?.lead?.prs.find((p) => p.repo === repo && p.number === number)?.sha;
+    const qa = qaBadge(review, { headSha: head ?? '' }).state;
+    this.record(projectId, { kind: merged ? 'merged' : 'closed', repo, pr: number, goal: lead?.lead?.title, by, qa, failedRounds: review?.failedRounds ?? 0, triages: review?.triages ?? 0 });
+  }
+
+  /** Writes an entry in the ledger, and shows the chief engineer the new report card. */
+  record(projectId: string, entry: LedgerEntry): void {
+    this.store.record({ ...entry, at: Date.now(), projectId });
+    this.hub.send({ type: 'report', report: this.report() });
+  }
+
+  /** The ledger's last 30 days, summed up. */
+  report(): ReportCard {
+    return reportCard(this.store.ledger, Date.now());
   }
 
   /** Issues already claimed by an agent who is still in the office. */

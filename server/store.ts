@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { qaOfficerFor, randomAvatar } from '../shared/crew';
+import { type LedgerEvent, parseLedger } from '../shared/ledger';
 import { prKey } from '../shared/qa';
 import type { Agent, Board, BrowserFrame, ClosedPr, NumberOneChat, Project, QaReview, Settings, TermLine } from '../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, EFFORT_LEVELS, ROOM_THEMES, type RoomTheme } from '../shared/types';
@@ -58,6 +59,8 @@ export class Store {
   reviews = new Map<string, QaReview>();
   /** PRs the operations officer closed as the wrong approach, by prKey of the issue they were for. */
   closedPrs = new Map<string, ClosedPr>();
+  /** The ship's log of how work went, oldest first: data/ledger.jsonl, appended to as it grows. */
+  ledger: LedgerEvent[] = [];
   /** QA screenshots by file name, when not persisting (demo). */
   private shots = new Map<string, Buffer>();
   private saveTimer: NodeJS.Timeout | null = null;
@@ -67,6 +70,7 @@ export class Store {
   load(): void {
     if (!this.persist) return;
     fs.mkdirSync(paths.logs, { recursive: true });
+    if (fs.existsSync(paths.ledger)) this.ledger = parseLedger(fs.readFileSync(paths.ledger, 'utf8'));
     if (!fs.existsSync(paths.state)) return;
     const raw = JSON.parse(fs.readFileSync(paths.state, 'utf8')) as Partial<PersistedState>;
     this.settings = { ...DEFAULT_SETTINGS, ...raw.settings };
@@ -213,6 +217,13 @@ export class Store {
     const removed = this.reviews.delete(key);
     if (removed) this.save();
     return removed;
+  }
+
+  // ---- the ledger ----
+
+  record(event: LedgerEvent): void {
+    this.ledger.push(event);
+    if (this.persist) fs.appendFile(paths.ledger, JSON.stringify(event) + '\n', () => undefined);
   }
 
   // ---- QA screenshots ----

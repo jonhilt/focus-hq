@@ -1,5 +1,7 @@
 // Types shared between the server and the browser client.
 
+import type { ReportCard } from './ledger';
+
 export type AgentStatus =
   | 'queued' // hired, waiting for a free slot
   | 'setting-up' // cloning the repo / creating a worktree
@@ -656,6 +658,8 @@ export interface Snapshot {
   numberOne: NumberOneChat;
   reviews: QaReview[];
   voice: VoiceStatus;
+  /** The ledger's last 30 days, summed up for the chief engineer's screen. */
+  report: ReportCard;
 }
 
 export type ServerEvent =
@@ -673,6 +677,7 @@ export type ServerEvent =
   | { type: 'number-one'; chat: NumberOneChat }
   | { type: 'review'; review: QaReview }
   | { type: 'review-removed'; repo: string; number: number }
+  | { type: 'report'; report: ReportCard }
   | { type: 'voice'; voice: VoiceStatus }
   /** projectId, or the agent's, lets the browser drop toasts about a hidden project. */
   | { type: 'toast'; level: 'info' | 'success' | 'error'; text: string; agentId?: string; projectId?: string };

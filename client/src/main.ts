@@ -258,6 +258,7 @@ async function main() {
     world.room(projectId)?.syncQa();
     world.room(projectId)?.syncPlanner();
   });
+  state.on('report', () => world.engineering?.showReport(state.report));
   let numberOneStatus = state.numberOne?.status;
   state.on('number-one', () => {
     world.numberOne?.sync();

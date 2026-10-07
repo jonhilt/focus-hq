@@ -3,6 +3,7 @@ import { DESKS_PER_ROOM, EFFORT_LEVELS } from '../shared/types';
 import { carryMergeable } from '../shared/board';
 import { chosenSet, previewPrs } from '../shared/previewSet';
 import { startOrder } from '../shared/dependencies';
+import type { Closer } from '../shared/ledger';
 import { autoMergeFor, type GateMark, mergeStep, type MergeStep } from '../shared/mergeGate';
 import { autoSendBackFor, prKey } from '../shared/qa';
 import type { AgentManager } from './agents/manager';
@@ -81,6 +82,7 @@ export class Office {
       numberOne: this.numberOne.current(),
       reviews: [...this.store.reviews.values()],
       voice: this.voice.status(),
+      report: this.agents.report(),
     };
   }
 
@@ -185,12 +187,12 @@ export class Office {
     return issue;
   }
 
-  /** `headSha` merges only that commit: GitHub refuses if the branch has moved on since. */
-  async mergePullRequest(projectId: string, repo: string, number: number, headSha?: string): Promise<void> {
+  /** `headSha` merges only that commit: GitHub refuses if the branch has moved on since. The office auto-merges; otherwise it's the captain. */
+  async mergePullRequest(projectId: string, repo: string, number: number, headSha?: string, by: Closer = 'captain'): Promise<void> {
     await this.github.mergePullRequest(repo, number, this.store.settings.mergeMethod, headSha);
-    this.agents.prClosed(repo, number, true);
-    this.previews.closed(repo, number);
     const board = this.store.boards.get(projectId);
+    this.agents.prClosed(repo, number, true, by, headSha ?? board?.prs.find((p) => p.repo === repo && p.number === number)?.headSha);
+    this.previews.closed(repo, number);
     if (board) {
       board.prs = board.prs.filter((p) => !(p.repo === repo && p.number === number));
       this.hub.send({ type: 'board', board });
@@ -328,7 +330,7 @@ export class Office {
         return;
       case 'merge':
         try {
-          await this.mergePullRequest(projectId, pr.repo, pr.number, step.sha);
+          await this.mergePullRequest(projectId, pr.repo, pr.number, step.sha, 'office');
           this.gateMarks.delete(key);
           this.hub.toast('success', `🤖 Auto-merged ${where}: QA passed it and its checks are green`, undefined, projectId);
         } catch (err) {
@@ -368,7 +370,10 @@ export class Office {
     for (const review of [...this.store.reviews.values()].filter((r) => r.projectId === projectId)) {
       if (board.prs.some((p) => p.repo === review.repo && p.number === review.number) || board.error?.includes(review.repo)) continue;
       try {
-        if ((await this.github.pullRequestState(review.repo, review.number)) !== 'OPEN') this.agents.reviewGone(review.repo, review.number);
+        const state = await this.github.pullRequestState(review.repo, review.number);
+        if (state === 'OPEN') continue;
+        this.agents.recordLanding(review.repo, review.number, state === 'MERGED');
+        this.agents.reviewGone(review.repo, review.number);
       } catch {
         // try again next refresh
       }

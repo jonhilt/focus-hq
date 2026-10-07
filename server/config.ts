@@ -29,6 +29,8 @@ export const config = {
 
 export const paths = {
   state: path.join(config.dataDir, 'state.json'),
+  /** The ship's log of how work went (shared/ledger.ts): appended to, never rewritten. */
+  ledger: path.join(config.dataDir, 'ledger.jsonl'),
   logs: path.join(config.dataDir, 'logs'),
   mirrors: path.join(config.dataDir, 'repos'),
   workspaces: path.join(config.dataDir, 'workspaces'),

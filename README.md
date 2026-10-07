@@ -299,6 +299,17 @@ Anyone on your tailnet who can reach the Mac can control the office, and the off
 | `FOCUS_WHISPER_BIN` | `whisper-cli` | whisper.cpp's CLI for [voice input](#voice-input) |
 | `FOCUS_WHISPER_MODEL` | `~/.focus/models/ggml-large-v3-turbo-q5_0.bin` | the speech model for voice input |
 
+### What to back up
+
+The office's memory of how work went is in two places. Back both up:
+
+- **`~/.focus/`** (or `FOCUS_DATA_DIR`): `state.json` (projects, goals and their notes, open reviews), `ledger.jsonl` (below), `logs/` (each agent's terminal) and `qa-shots/`. Leave out `repos/`, `workspaces/`, `planning/`, `previews/`, `merges/` and `models/`: the office rebuilds or re-downloads them.
+- **`~/.claude/projects/-Users-<you>--focus-*/`**: the agents' Claude Code transcripts, which the chief engineer reads. Claude Code deletes transcripts older than 30 days unless `cleanupPeriodDays` in `~/.claude/settings.json` says otherwise.
+
+### The ledger
+
+`~/.focus/ledger.jsonl` is the ship's log of how work went, one JSON line per event, appended and never rewritten: each QA verdict (with its commit, round and checks), each PR merged or closed (by whom, and QA's badge on it at that moment, so a merge without a QA pass shows), merge conflicts (cleanly merged by the office, or an agent had to resolve them), checks sent back, triage decisions, and each goal as it closes (uncapped, unlike the 30 goals `state.json` keeps). It outlives the reviews and agents it's about, which `state.json` drops when a PR merges or an agent goes home. The engineering station's screen shows the last 30 days of it summed up (`reportCard` in `shared/ledger.ts`).
+
 ### Auto update
 
 `npm run dev` and `npm start` keep the office on the latest code. Every few minutes the office fetches the branch your Focus checkout tracks (usually `origin/main`). When new commits land there, it waits until no agent is busy, fast-forwards, runs `npm install` if dependencies changed and rebuilds the client (`npm start` only). Then it restarts, and open browser tabs reload on their own. It skips the update when the checkout has local commits or uncommitted changes, and it stays off in demo mode.
@@ -314,12 +325,13 @@ shared/qa.ts              QA decisions shared by server and board (badges, stale
 shared/board.ts           a project's Kanban columns (to do, in progress, PRs), for the 3D board, its panel and the Tricorder
 shared/agentStatus.ts     how an agent's status reads (icon, one-line status)
 shared/tricorder.ts       the Tricorder's decisions: what needs you, which agents are in flight
+shared/ledger.ts          the ledger of how work went (QA verdicts, merges, conflicts, triage, goals) and its report card
 server/
   supervise.ts            runs index.ts and restarts it after an auto update
   updater.ts              auto update: fetch, fast-forward, install/build, restart
   index.ts                express + WebSocket (/ws) + Vite middleware (dev) or dist/ (prod)
   office.ts               projects/rooms, Kanban boards (polling GitHub), auto-assign, settings
-  store.ts                ~/.focus/state.json + per-agent terminal logs (jsonl)
+  store.ts                ~/.focus/state.json + per-agent terminal logs (jsonl) + the ledger (ledger.jsonl)
   routes.ts               REST API used by the panels
   hub.ts                  broadcasts ServerEvents to every browser tab
   previews.ts             Preview: check a PR out, run the project's preview commands, find its links, tear it down (Effect: one Scope per preview)

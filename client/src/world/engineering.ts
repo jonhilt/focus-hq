@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { chiefEngineer } from '../../../shared/crew';
+import { type ReportCard, reportLines } from '../../../shared/ledger';
 import { canvasTexture, makeCanvas } from './canvas';
 import { Character } from './character';
 import { type Box2, type Seat, seatYaw } from './layout';
@@ -7,7 +8,8 @@ import { flat } from './materials';
 import { LCARS, LCARS_FONT, lcarsFrame, workstation } from './starship';
 
 /**
- * The engineering station: where the ship's engineer keeps the ship running, facing their board on the wall. In world
+ * The engineering station: where the ship's engineer keeps the ship running, facing their board on the wall, which
+ * shows the ledger's report card (how the office's work has gone lately). In world
  * coordinates: whoever places it adds `group` to the scene and `footprint` to the colliders.
  */
 export class EngineeringStation {
@@ -29,24 +31,29 @@ export class EngineeringStation {
     const crew = chiefEngineer();
     this.engineer = new Character({ name: crew.name, avatar: crew.avatar, tag: 'Eng', icon: '🔧', status: 'queued', line: 'Keeping the ship running' });
     station.seat.add(this.engineer.group);
-    this.drawScreen();
+    this.drawScreen(null);
+  }
+
+  showReport(report: ReportCard | null): void {
+    this.drawScreen(report);
   }
 
   update(t: number, camera: THREE.Vector3): void {
     if (this.engineer.group.visible) this.engineer.update(t, camera.distanceTo(this.engineer.group.getWorldPosition(tmp)));
   }
 
-  private drawScreen(): void {
+  private drawScreen(report: ReportCard | null): void {
     const { canvas, ctx } = this.screen;
     const area = lcarsFrame(ctx, canvas.width, canvas.height, { title: 'Engineering', color: LCARS.gold, seed: 4707 });
+    const { headline, lines } = report ? reportLines(report) : { headline: 'All systems nominal', lines: [] };
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillStyle = LCARS.peach;
     ctx.font = `600 40px ${LCARS_FONT}`;
-    ctx.fillText('ALL SYSTEMS NOMINAL', area.x, area.y + 10);
+    ctx.fillText(headline.toUpperCase(), area.x, area.y + 10, area.w);
     ctx.fillStyle = LCARS.sky;
     ctx.font = `500 26px ${LCARS_FONT}`;
-    for (const [i, line] of ['Warp core stable', 'Structural integrity 100%', 'Holodeck power nominal'].entries()) ctx.fillText(line.toUpperCase(), area.x, area.y + 190 + i * 34);
+    for (const [i, line] of lines.entries()) ctx.fillText(line.toUpperCase(), area.x, area.y + 70 + i * 36, area.w);
     this.screenTex.needsUpdate = true;
   }
 
