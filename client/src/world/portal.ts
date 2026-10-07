@@ -38,6 +38,12 @@ const surface = new THREE.ShaderMaterial({
   side: THREE.DoubleSide,
 });
 noOutline(surface);
+// stamped where the far end shows, so the ambient occlusion leaves it alone (occlusion.ts): it would shade the alcove's
+// corners over the picture, not the far room's. Holodeck landscapes count their stencil values up from 1.
+surface.stencilWrite = true;
+surface.stencilRef = 255;
+surface.stencilFunc = THREE.AlwaysStencilFunc;
+surface.stencilZPass = THREE.ReplaceStencilOp;
 
 /**
  * The inside of the alcove behind a doorway, in its frame: just inside the frame's jambs and under the doors' tops,

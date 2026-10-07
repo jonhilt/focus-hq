@@ -14,7 +14,8 @@ function throughWallsMaterial(): THREE.ShaderMaterial {
     colorWrite: false,
     depthFunc: THREE.AlwaysDepth,
   });
-  // every room's landscape has a stencil value of its own (themes.ts), and nothing else uses one
+  // every room's landscape has a stencil value of its own (themes.ts), and a doorway's alcove another (portal.ts):
+  // neither shows what's really there
   mat.stencilWrite = true;
   mat.stencilRef = 0;
   mat.stencilFunc = THREE.NotEqualStencilFunc;
@@ -95,7 +96,8 @@ export class SceneRenderer {
     this.renderer.setRenderTarget(target);
     this.effect.render(scene, camera);
     // a holodeck's walls are still in the depth where its landscape shows through them (scenery.ts writes them back),
-    // which would shade the sky round the wall's corners: there, the depth goes to the far plane, as the sky's is
+    // which would shade the sky round the wall's corners, as would a doorway's alcove the far room drawn over it:
+    // there, the depth goes to the far plane, as the sky's is
     const autoClear = this.renderer.autoClear;
     this.renderer.autoClear = false;
     this.throughWalls.render(this.renderer);
