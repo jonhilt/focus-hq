@@ -17,12 +17,14 @@ import math
 
 from mathutils import Matrix, Vector
 
-from kit import (COMMAND_RED, DOOR_H, FRAME_PROUD, HULL, bezel, box, collide_object, collide_points,
-                 command_chair, door_frame, facing, lounge_chair, marker, material, module, panel, polygon, readout,
-                 rounded_rect, slab, toon, unlit, walls, window)
+from kit import (COMMAND_RED, FRAME_PROUD, HULL, bezel, box, collide_object, collide_points, command_chair, door_frame,
+                 facing, lounge_chair, marker, material, module, panel, polygon, rounded_rect, slab, toon, unlit, walls,
+                 window)
 from command_deck import profile, wall_materials
 
 DOOR_W = 2.0
+#: lower than the ship's other doors, to leave room for the station's sign over it in the holodeck
+DOOR_H = 2.3
 WALL = 0.2
 #: behind a doorway, where you are for a moment once you've stepped through: the browser's portal fills it
 ALCOVE = 0.75
@@ -30,7 +32,10 @@ ALCOVE = 0.75
 #: the door's housing: as wide, deep and tall as it stands in the holodeck, in front of its side wall
 HOUSING_HALF = DOOR_W / 2 + 0.55
 HOUSING_BACK = -(ALCOVE + 0.15)
-HOUSING_TOP = 3.0
+#: just over the door frame: the station's sign floats over it, as a pod's does (world/teamStation.ts: GoalSign)
+HOUSING_TOP = 2.62
+#: the station's sign beside the briefing room's screen: GoalSign's proportions (1800×256)
+SIGN_ASPECT = 1800 / 256
 
 #: the briefing room's inner faces, from the doorway's wall to the screen's
 ROOM_HALF = 3.5
@@ -47,9 +52,12 @@ CAPTAIN = 3.0
 SCREEN_W = 3.4
 SCREEN_H = SCREEN_W * 1024 / 1600
 SCREEN_BOTTOM = 1.1
-#: the sign beside it: lcarsSign's 1024×287
-SIGN_W = 1.2
-SIGN_H = SIGN_W * 287 / 1024
+SIGN_W = 1.3
+#: the goal board on the starboard wall, beside the table: GoalBoard's proportions (1440×804), its bezel between the
+#: wall's stripe and its header, clear of the heads of the crew in front of it seen from the head of the table
+BOARD_W = 3.4
+BOARD_H = BOARD_W * 804 / 1440
+BOARD_BOTTOM = 1.35
 
 
 def build():
@@ -63,7 +71,7 @@ def doorway(name, f):
     frame standing FRAME_PROUD out of both faces of a WALL thick wall, the marker the browser hangs the doors and the
     portal on, and colliders round the alcove behind, so you can step far enough in to go through but no further.
     """
-    door_frame(name, f @ Matrix.Translation((0, WALL / 2, 0)), DOOR_W, wall=WALL, back=FRAME_PROUD)
+    door_frame(name, f @ Matrix.Translation((0, WALL / 2, 0)), DOOR_W, DOOR_H, wall=WALL, back=FRAME_PROUD)
     marker(f'{name} portal', 'portal', frame=f, width=DOOR_W, height=DOOR_H, depth=ALCOVE)
     out = DOOR_W / 2 + 0.3
     for s in (-1, 1):
@@ -73,8 +81,9 @@ def doorway(name, f):
 
 def station_door():
     """
-    The door in the holodeck: a housing round the alcove, in the bulkhead's colours with its LCARS stripe, an accent of
-    the station's colour either side of the frame and along its top, and the station's sign over the doorway.
+    The door in the holodeck: a housing round the alcove, in the bulkhead's colours with its LCARS stripe and the
+    station's colour along its top, and lamps either side of the frame that show whether its goal room is in session.
+    The station's sign floats over it, drawn by the browser.
     """
     module('station_door')
     doorway('station door', Matrix())
@@ -100,23 +109,20 @@ def station_door():
          0, 0.9, toon(HULL['dado']))
     slab('station door stripe', housing(HOUSING_HALF + 0.035, HOUSING_BACK - 0.035, front + 0.035, inner + 0.01,
                                         ALCOVE + 0.01), 0.9, 0.97, toon(HULL['stripe']))
-    accent = material(HULL['dado'], surface='accent')
-    box('station door cap', (HOUSING_HALF * 2 + 0.06, front - HOUSING_BACK + 0.06, 0.06), accent,
-        (0, (front + HOUSING_BACK) / 2, HOUSING_TOP))
+    box('station door cap', (HOUSING_HALF * 2 + 0.06, front - HOUSING_BACK + 0.06, 0.05),
+        material(HULL['dado'], surface='accent'), (0, (front + HOUSING_BACK) / 2, HOUSING_TOP))
     edge = DOOR_W / 2 + 0.16
+    lamp = material(HULL['dado'], surface='lamp')
     for s in (-1, 1):
-        box(f'station door accent {s}', (0.12, 0.03, DOOR_H + 0.16 - 0.97), accent,
+        box(f'station door lamp {s}', (0.14, 0.03, DOOR_H + 0.16 - 0.97), lamp,
             (s * (edge + HOUSING_HALF) / 2, front + 0.015, 0.97))
-    panel('station door sign', SIGN_W * 0.85, SIGN_H * 0.85,
-          material('#000000', surface='screen', outline=False, screen='team-station-sign'),
-          (0, front + 0.012, DOOR_H + 0.16 + 0.04))
 
 
 def briefing_room():
     """
     The goal's briefing room: the doorway in the middle of its aft wall, the captain's chair at the near end of a long
     table, the crew either side of it, and the lead's session on the far wall, with the station's sign beside it.
-    Viewports onto space down the port side, readouts down the starboard.
+    Viewports onto space down the port side, and the goal board, with the lead's note on the goal, to starboard.
     """
     module('briefing_room')
     outline = [(-ROOM_HALF, WALL / 2), (ROOM_HALF, WALL / 2), (ROOM_HALF, ROOM_FAR), (-ROOM_HALF, ROOM_FAR)]
@@ -152,15 +158,19 @@ def briefing_room():
           (0, 0.012, SCREEN_BOTTOM), far)
     # to port of the screen, as you face it: the far wall's +X is the room's -X
     sign_x = (SCREEN_W / 2 + 0.12 + ROOM_HALF) / 2
-    box('sign frame', (SIGN_W + 0.08, 0.04, SIGN_H + 0.08), toon(HULL['dado']), (sign_x, 0.02, 1.6 - 0.04), frame=far, round=0.015)
-    panel('sign', SIGN_W, SIGN_H, material('#000000', surface='screen', outline=False, screen='team-station-sign'),
+    sign_h = SIGN_W / SIGN_ASPECT
+    box('sign frame', (SIGN_W + 0.08, 0.04, sign_h + 0.08), toon(HULL['dado']), (sign_x, 0.02, 1.6 - 0.04), frame=far, round=0.015)
+    panel('sign', SIGN_W, sign_h, material('#000000', surface='screen', outline=False, screen='team-station-sign'),
           (sign_x, 0.044, 1.6), far)
 
     port = Matrix.Rotation(-math.pi / 2, 4, 'Z')
     starboard = Matrix.Rotation(math.pi / 2, 4, 'Z')
     for i, y in enumerate((3.9, 7.5)):
         window(f'briefing room window {i}', 2.2, 1.3, (0, 1.85), Matrix.Translation((-ROOM_HALF, y, 0)) @ port)
-        readout(f'briefing room readout {i}', 1.6, 0.9, 81 + i, (0, 0, 1.45), Matrix.Translation((ROOM_HALF, y, 0)) @ starboard)
+    board = Matrix.Translation((ROOM_HALF, TABLE[1], 0)) @ starboard
+    bezel('goal board frame', BOARD_W, BOARD_H, 0.1, 0.1, 0.08, toon(HULL['frame']), (0, 0, BOARD_BOTTOM + BOARD_H / 2), board)
+    panel('goal board', BOARD_W, BOARD_H, material('#000000', surface='screen', outline=False, screen='team-station-note'),
+          (0, 0.012, BOARD_BOTTOM), board)
 
     view = (0, CAPTAIN - 0.95)
     marker('place briefing room', 'place', (*view, 0), yaw=facing(view, (0, ROOM_FAR)), label='Briefing room')

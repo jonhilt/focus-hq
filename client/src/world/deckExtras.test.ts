@@ -41,6 +41,7 @@ describe('readSurface', () => {
   it('reads the surfaces the browser draws itself', () => {
     expect(readSurface({ surface: 'space', outline: 0 })).toEqual({ kind: 'space' });
     expect(readSurface({ surface: 'accent' })).toEqual({ kind: 'accent' });
+    expect(readSurface({ surface: 'lamp' })).toEqual({ kind: 'lamp' });
     expect(readSurface({ surface: 'readout', seed: 21, w: 2.4, h: 0.9 })).toEqual({ kind: 'readout', seed: 21, w: 2.4, h: 0.9 });
     expect(readSurface({ surface: 'sign', text: 'Turbolift', color: '#ff9900', code: '01-12' })).toEqual({
       kind: 'sign',
@@ -52,6 +53,7 @@ describe('readSurface', () => {
     expect(readSurface({ surface: 'screen', screen: 'mission-control', outline: 0 })).toEqual({ kind: 'screen', screen: 'mission-control' });
     expect(readSurface({ surface: 'screen', screen: 'team-station', outline: 0 })).toEqual({ kind: 'screen', screen: 'team-station' });
     expect(readSurface({ surface: 'screen', screen: 'team-station-sign', outline: 0 })).toEqual({ kind: 'screen', screen: 'team-station-sign' });
+    expect(readSurface({ surface: 'screen', screen: 'team-station-note', outline: 0 })).toEqual({ kind: 'screen', screen: 'team-station-note' });
     expect(readSurface({ surface: 'star-chart', outline: 0 })).toEqual({ kind: 'star-chart' });
   });
 

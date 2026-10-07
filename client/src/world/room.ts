@@ -265,7 +265,8 @@ export class ProjectRoom {
     slot.id = id;
     if (!id || !view) return;
     if (!slot.character) {
-      slot.character = new Character(view);
+      // round the briefing table, with a PADD each
+      slot.character = new Character(view, 'padd');
       this.arrive(slot.seat, slot.character);
     }
     slot.character.set(view);
@@ -282,7 +283,7 @@ export class ProjectRoom {
       const n = station.index + 1;
       station.screen.setAgent(lead ?? null);
       station.screen.setIdle(station.freeText(next));
-      station.setSign(lead ? `${lead.name} · ${lead.lead?.title ?? lead.issue.title}` : next ? `Free · next up: ${next}` : 'Free · start a goal here');
+      station.show(lead, next);
       const use: Interaction = lead ? { kind: 'agent', id: lead.id } : { kind: 'station', projectId: this.project.id, station: station.index };
       const label = () => (lead ? `Talk to ${lead.name}, lead of “${lead.lead?.title ?? 'a goal'}”` : next ? `Team station ${n} is free: start “${next}”` : `Start a goal at team station ${n}`);
       for (const thing of station.furniture) interactive(thing, use, label);
@@ -470,6 +471,7 @@ export class ProjectRoom {
     const qaAgent = state.qaAgent(this.project.id);
     this.qaScreen.maybeDraw(now, inRoom && qaDist < 6, qaAgent && state.lines.get(qaAgent.id), qaAgent && state.browser.get(qaAgent.id));
     for (const station of this.stations) {
+      station.update(t);
       // only drawn while you're in it, or might see into it through its open door
       station.room.visible = station === briefing || station.portal.ajar;
       // in the briefing room, or seeing into it through the door

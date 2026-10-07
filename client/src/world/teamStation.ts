@@ -1,21 +1,26 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import type { Agent } from '../../../shared/types';
 import type { Builder } from './builder';
 import type { Character } from './character';
 import { dress, footprint } from './deck';
 import { type Crew, HELPER_SEATS, type Marker } from './deckExtras';
+import { type GoalRoomTone, goalRoomState } from './goalRoom';
+import { GoalBoard, GoalSign, TONE } from './goalScreens';
 import { type Box2, contains, EYE_HEIGHT, ROOM_WIDTH } from './layout';
-import { flat, toon } from './materials';
+import { toon } from './materials';
 import { type Doorway, Portal } from './portal';
 import { BIG_SCREEN, StationScreen } from './screen';
-import { lcarsSign } from './starship';
+import { HULL } from './starship';
 
 // A team station: where a goal's lead works with the captain. In the holodeck it's a door, with the station's sign
-// over it; through it is the goal's briefing room, which stands far off in the world (layout.ts: briefingRoomAt) and
-// is far bigger than the holodeck could hold. The two doorways are a Portal, so you see the briefing room through the
-// open door and walk straight in. The lead, their helpers (Claude Code's subagents) and the goal's QA reviewer sit
-// round its table, the captain's chair at its head, facing the lead's session on the far wall. Both halves are built
-// in Blender (blender/team_station.py); who sits where and what the screens show are drawn here.
+// floating over it and lamps either side that show whether its goal room is in session; through it is the goal's
+// briefing room, which stands far off in the world (layout.ts: briefingRoomAt) and is far bigger than the holodeck
+// could hold. The two doorways are a Portal, so you see the briefing room through the open door and walk straight in.
+// The lead, their helpers (Claude Code's subagents) and the goal's QA reviewer sit round its table with their PADDs,
+// the captain's chair at its head, facing the lead's session on the far wall, with the lead's note on the goal on the
+// board beside them. Both halves are built in Blender (blender/team_station.py); who sits where and what the screens
+// show are drawn here.
 
 /** The two modules every team station is a copy of: its door, and the briefing room through it. */
 export interface TeamStationKit {
@@ -45,6 +50,11 @@ const DOOR_SPOTS: { x: number; side: 1 | -1 }[] = [
 ];
 /** How far a door's housing stands from its side wall's centre line: clear of its skin (scenery.ts: SKIN_INSET). */
 const WALL_GAP = 0.16;
+/**
+ * The sign floating over the door (the door's frame, -Z out into the room): just above its housing's cap and in front
+ * of it, as wide as GoalSign's proportions allow under the holodeck's ceiling.
+ */
+const DOOR_SIGN = { width: 3.0, bottom: 2.72, out: 0.28 };
 
 /** Who sits in a seat: the agent (or helper) id, and their Character while they're there. */
 export interface StationSeat {
@@ -87,8 +97,11 @@ export class TeamStation {
   private readonly head: THREE.Vector3;
   private readonly screenCentre: THREE.Vector3;
   private readonly area: Box2;
-  private readonly sign = flat(lcarsSign('', { h: 287 }));
-  private signText = '';
+  private readonly sign = new GoalSign();
+  private readonly board = new GoalBoard();
+  /** The lamps either side of the door, lit by how the goal room stands (`update`). */
+  private readonly lamp = new THREE.MeshBasicMaterial({ color: HULL.dado });
+  private tone: GoalRoomTone = 'free';
 
   constructor(
     readonly index: number,
@@ -107,7 +120,11 @@ export class TeamStation {
     // facing into the room: its forward (-Z) away from its wall
     this.door.rotation.y = spot.side < 0 ? Math.PI : 0;
     this.door.add(door);
-    const doorScreens = this.dress(door, (this.doorKit = blank()));
+    this.dress(door, (this.doorKit = blank()));
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(DOOR_SIGN.width, (DOOR_SIGN.width * GoalSign.H) / GoalSign.W), this.sign.material);
+    sign.position.set(0, DOOR_SIGN.bottom + (DOOR_SIGN.width * GoalSign.H) / GoalSign.W / 2, -DOOR_SIGN.out);
+    sign.rotation.y = Math.PI;
+    door.add(sign);
 
     const room = (this.furnished = kit.room.clone());
     room.position.copy(origin);
@@ -121,9 +138,9 @@ export class TeamStation {
     };
     const display = screen(roomScreens, 'team-station', 'briefing room');
     display.material = this.screen.material;
-    screen(roomScreens, 'team-station-sign', 'briefing room').material = this.sign;
-    screen(doorScreens, 'team-station-sign', 'door').material = this.sign;
-    this.setSign(this.freeText());
+    screen(roomScreens, 'team-station-sign', 'briefing room').material = this.sign.material;
+    screen(roomScreens, 'team-station-note', 'briefing room').material = this.board.material;
+    this.show(undefined);
 
     const { place, area } = this.roomKit;
     if (!place || !area) throw new Error('The team station’s briefing room has no place or area marker');
@@ -145,10 +162,10 @@ export class TeamStation {
     this.reviewer = seat('station-reviewer');
   }
 
-  /** Reads a module's markers into `read`, paints its accents and returns its screens. */
+  /** Reads a module's markers into `read`, paints its accents and lamps and returns its screens. */
   private dress(module: THREE.Object3D, read: Read): { screen: string; mesh: THREE.Mesh }[] {
     module.updateMatrixWorld(true);
-    const { screens, accents } = dress(module, (o, marker) => {
+    const { screens, accents, lamps } = dress(module, (o, marker) => {
       switch (marker.kind) {
         case 'collider':
           read.blocks.push(o.matrix.clone());
@@ -174,6 +191,7 @@ export class TeamStation {
       }
     });
     for (const mesh of accents) mesh.material = toon(this.accent);
+    for (const mesh of lamps) mesh.material = this.lamp;
     return screens;
   }
 
@@ -237,14 +255,24 @@ export class TeamStation {
     return next ? `Next up: ${next}` : `Team station ${this.index + 1} · start a goal here`;
   }
 
-  /** The sign over the door and beside the screen: the station's number, and its goal (`sub`). */
-  setSign(sub: string): void {
-    if (sub === this.signText) return;
-    this.signText = sub;
-    const old = this.sign.map;
-    this.sign.map = lcarsSign(`Team station ${this.index + 1}`, { color: this.accent, code: `TS-${this.index + 1}`, sub, h: 287 });
-    this.sign.needsUpdate = true;
-    old?.dispose();
+  /**
+   * Shows the station's goal on its sign (over the door and beside the screen), its lamps and its goal board: its
+   * lead, or what's `next` in line for it while it's free.
+   */
+  show(lead: Agent | undefined, next?: string): void {
+    const view = { index: this.index, accent: this.accent, lead, next };
+    this.sign.show(view);
+    this.board.show(view);
+    this.tone = goalRoomState(lead).tone;
+  }
+
+  /**
+   * Lights the lamps either side of the door: off while the station's free, breathing in its tone while the lead's at
+   * work, pulsing while they need you, steady while it's your turn.
+   */
+  update(t: number): void {
+    const glow = { free: 0, 'in-session': 0.8 + 0.2 * Math.sin(t * 2), 'needs-you': 0.6 + 0.4 * Math.sin(t * 7), 'your-turn': 1, queued: 0.55, stopped: 1 }[this.tone];
+    this.lamp.color.set(HULL.dado).lerp(LIT.set(TONE[this.tone]), glow);
   }
 
   /** At the head of the briefing room's table, looking down it at the screen (world). */
@@ -254,11 +282,14 @@ export class TeamStation {
 
   dispose(): void {
     this.screen.dispose();
-    this.sign.map?.dispose();
     this.sign.dispose();
+    this.board.dispose();
+    this.lamp.dispose();
     for (const s of [this.lead, ...this.helpers, this.reviewer]) s.character?.dispose();
   }
 }
+
+const LIT = new THREE.Color();
 
 function blank(): Read {
   return { blocks: [], seats: new Map() };
