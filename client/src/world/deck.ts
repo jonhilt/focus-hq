@@ -60,6 +60,9 @@ function surfaceMaterial(surface: Surface, color: string): THREE.Material {
     case 'screen':
       // blank until the World puts what it draws there
       return noOutline(new THREE.MeshBasicMaterial({ color: '#000000' }));
+    case 'accent':
+      // its own colour until whatever it's part of paints it
+      return toon(color);
   }
 }
 
@@ -78,10 +81,14 @@ export function footprint(matrixWorld: THREE.Matrix4): Box2 {
 /**
  * Makes a scene from a GLB ready to draw: each material becomes what its surface says, and each object something
  * to use if it says so. Hands each marker to `read` (with its world matrix still up to date), then takes it out of
- * the scene. Returns the screens the browser keeps drawing on.
+ * the scene. Returns the screens the browser keeps drawing on, and the meshes to paint in an accent.
  */
-export function dress(scene: THREE.Object3D, read: (o: THREE.Object3D, marker: Marker) => void): { screen: ScreenName; mesh: THREE.Mesh }[] {
+export function dress(
+  scene: THREE.Object3D,
+  read: (o: THREE.Object3D, marker: Marker) => void,
+): { screens: { screen: ScreenName; mesh: THREE.Mesh }[]; accents: THREE.Mesh[] } {
   const screens: { screen: ScreenName; mesh: THREE.Mesh }[] = [];
+  const accents: THREE.Mesh[] = [];
   const markers: THREE.Object3D[] = [];
   scene.traverse((o) => {
     const marker = readMarker(o.userData);
@@ -96,13 +103,14 @@ export function dress(scene: THREE.Object3D, read: (o: THREE.Object3D, marker: M
       const gltf = o.material;
       const surface = readSurface(gltf.userData);
       if (surface.kind === 'screen') screens.push({ screen: surface.screen, mesh: flipUVs(o) });
+      if (surface.kind === 'accent') accents.push(o);
       let mat = surfaces.get(gltf);
       if (!mat) surfaces.set(gltf, (mat = surfaceMaterial(surface, `#${gltf.color.getHexString()}`)));
       o.material = mat;
     }
   });
   for (const o of markers) o.removeFromParent();
-  return screens;
+  return { screens, accents };
 }
 
 export class Deck {
@@ -132,10 +140,12 @@ export class Deck {
     scene.position.copy(origin);
     this.root.add(scene);
     this.root.updateMatrixWorld(true);
-    for (const { screen, mesh } of dress(scene, (o, marker) => this.read(o, marker))) {
+    const { screens, accents } = dress(scene, (o, marker) => this.read(o, marker));
+    for (const { screen, mesh } of screens) {
       if (screen !== 'mission-control') throw new Error(`Deck extras: a deck has a ${screen} screen, which only a team station draws`);
       this.screens.push({ screen, mesh });
     }
+    if (accents.length) throw new Error(`Deck extras: a deck has an accent (${accents[0].name}), which only a team station paints`);
   }
 
   /** Where `crew` sits on this deck: asking a deck that hasn't a seat for them is a bug, so it fails loudly. */

@@ -71,7 +71,7 @@ export class ProjectRoom {
   private qa!: Character;
   private qaScreen = new StationScreen(null, 'QA station · standing by');
   private qaStation!: THREE.Group;
-  /** The team stations: one goal each, its lead, their helpers and the goal's QA reviewer round its table. */
+  /** The team stations: one goal each, its lead in the command chair, and their helpers and reviewer at consoles. */
   private stations: TeamStation[] = [];
   private prPile = new THREE.Group();
   private prCount = -1;
@@ -455,7 +455,10 @@ export class ProjectRoom {
     const qaAgent = state.qaAgent(this.project.id);
     this.qaScreen.maybeDraw(now, inRoom && qaDist < 6, qaAgent && state.lines.get(qaAgent.id), qaAgent && state.browser.get(qaAgent.id));
     for (const station of this.stations) {
-      if (inRoom) for (const slot of [station.lead, ...station.helpers, station.reviewer]) slot.character?.update(t, camera.distanceTo(slot.seat.getWorldPosition(tmp)));
+      // everyone at a station fades their bubble by how near you are to the lead's chair, so from behind it, watching
+      // the viewscreen, none of them cross it
+      const atLead = camera.distanceTo(station.lead.seat.getWorldPosition(tmp));
+      if (inRoom) for (const slot of [station.lead, ...station.helpers, station.reviewer]) slot.character?.update(t, atLead);
       const lead = station.lead.id;
       const near = inRoom && camera.distanceTo(station.group.getWorldPosition(tmp)) < 7;
       station.screen.maybeDraw(now, near, lead ? state.lines.get(lead) : undefined, lead ? state.browser.get(lead) : undefined);

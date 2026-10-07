@@ -33,7 +33,7 @@ const isCrew = (v: unknown): v is Crew => (CREW as readonly unknown[]).includes(
 
 /**
  * A screen the browser keeps drawing on: mission control is the World's dashboard; a team station shows its lead's
- * session, and its name and goal on the sign over it.
+ * session, and its name and goal on the sign under it.
  */
 const SCREENS = ['mission-control', 'team-station', 'team-station-sign'] as const;
 export type ScreenName = (typeof SCREENS)[number];
@@ -54,6 +54,8 @@ export type Surface =
   | { kind: 'readout'; seed: number; w: number; h: number }
   | { kind: 'sign'; text: string; color: string; sub?: string; code?: string }
   | { kind: 'screen'; screen: ScreenName }
+  /** The colour of whatever it's part of: a team station's accent. */
+  | { kind: 'accent' }
   /** Long-range sensors, as on the lounge wall. */
   | { kind: 'star-chart' };
 
@@ -107,6 +109,7 @@ export function readSurface(e: Extras): Surface {
     case 'space':
     case 'keys':
     case 'star-chart':
+    case 'accent':
       return { kind: e.surface };
     case 'readout':
       return { kind: 'readout', seed: num(e, 'seed'), w: num(e, 'w'), h: num(e, 'h') };

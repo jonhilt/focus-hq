@@ -4,7 +4,7 @@ import type { Character } from './character';
 import { dress, footprint } from './deck';
 import { type Crew, HELPER_SEATS } from './deckExtras';
 import type { Box2 } from './layout';
-import { flat } from './materials';
+import { flat, toon } from './materials';
 import { BIG_SCREEN, StationScreen } from './screen';
 import { lcarsSign } from './starship';
 
@@ -73,7 +73,7 @@ export class TeamStation {
     this.furniture = kit.clone();
     this.furniture.updateMatrixWorld(true);
     const seats = new Map<Crew, THREE.Group>();
-    const screens = dress(this.furniture, (o, marker) => {
+    const { screens, accents } = dress(this.furniture, (o, marker) => {
       switch (marker.kind) {
         case 'collider':
           this.blocks.push(o.matrix.clone());
@@ -98,6 +98,7 @@ export class TeamStation {
     display.material = this.screen.material;
     this.screenCentre = new THREE.Box3().setFromObject(display).getCenter(new THREE.Vector3());
     screenMesh('team-station-sign').material = this.sign;
+    for (const mesh of accents) mesh.material = toon(accent);
     this.setSign(this.freeText());
     this.group.add(this.furniture);
 
@@ -123,7 +124,7 @@ export class TeamStation {
     return next ? `Next up: ${next}` : `Team station ${this.index + 1} · start a goal here`;
   }
 
-  /** The sign over the viewscreen: the station's number, and its goal (`sub`). */
+  /** The sign under the viewscreen: the station's number, and its goal (`sub`). */
   setSign(sub: string): void {
     if (sub === this.signText) return;
     this.signText = sub;
@@ -136,8 +137,9 @@ export class TeamStation {
   /** Behind the lead's chair, looking at the viewscreen over their head (room frame). */
   viewpoint(): { position: THREE.Vector3; lookAt: THREE.Vector3 } {
     const local = {
-      // a little right, so the lead's head is off the screen's bottom, and the helpers either side are out of the way
-      position: this.lead.seat.position.clone().add(new THREE.Vector3(0.3, 0, 1.7)).setY(0),
+      // a little right, so the lead's head is off the screen's bottom and the sign under its starboard corner, and the
+      // helpers either side are out of the way
+      position: this.lead.seat.position.clone().add(new THREE.Vector3(0.45, 0, 1.7)).setY(0),
       lookAt: this.screenCentre.clone(),
     };
     this.group.updateMatrix();

@@ -24,8 +24,9 @@ SCREEN_W = 2.5
 SCREEN_H = SCREEN_W * 1024 / 1600
 SCREEN_BOTTOM = 1.45
 BEZEL = 0.12
-#: the sign under it: lcarsSign's 1024×287
-SIGN_W = 1.25
+#: the sign under it: lcarsSign's 1024×287, under the screen's starboard corner, where it shows from behind the lead
+#: between their head and the nearest helper's
+SIGN_W = 1.1
 SIGN_H = SIGN_W * 287 / 1024
 #: each wing runs forward and out from beside the lead, its seats this far apart, from the lead outwards in the order
 #: helpers take them
@@ -61,7 +62,7 @@ def station(crew, at, seed):
     seat = Matrix.Translation((at.x, at.y, 0)) @ Matrix.Rotation(facing(at, (0, SCREEN_Y)), 4, 'Z')
     # built with whoever sits at it on its +Y side, then turned to face them
     console = seat @ Matrix.Translation((0, REACH, 0)) @ Matrix.Rotation(math.pi, 4, 'Z')
-    bridge_console(crew, 0.6, seed, console, display=(0.5, 0.3))
+    bridge_console(crew, 0.6, seed, console, display=(0.5, 0.3), accent=material(HULL['dado'], surface='accent'))
     bridge_seat(crew, seat)
     marker(f'seat {crew}', 'seat', frame=seat, crew=crew)
 
@@ -76,5 +77,7 @@ def viewscreen():
     # just in front of the bezel's back, so its rounded opening hides the screen's corners
     panel('viewscreen', SCREEN_W, SCREEN_H, material('#000000', surface='screen', outline=False, screen='team-station'), (0, 0.012, SCREEN_BOTTOM), f)
     under = SCREEN_BOTTOM - BEZEL - 0.1 - SIGN_H
-    box('sign frame', (SIGN_W + 0.08, 0.05, SIGN_H + 0.08), toon(HULL['dado']), (0, 0.025, under - 0.04), frame=f, round=0.015)
-    panel('sign', SIGN_W, SIGN_H, material('#000000', surface='screen', outline=False, screen='team-station-sign'), (0, 0.054, under), f)
+    # its frame's edge in line with the bezel's (the frame turns the screen round, so starboard is -X)
+    x = -(SCREEN_W / 2 + BEZEL - SIGN_W / 2 - 0.04)
+    box('sign frame', (SIGN_W + 0.08, 0.05, SIGN_H + 0.08), toon(HULL['dado']), (x, 0.025, under - 0.04), frame=f, round=0.015)
+    panel('sign', SIGN_W, SIGN_H, material('#000000', surface='screen', outline=False, screen='team-station-sign'), (x, 0.054, under), f)

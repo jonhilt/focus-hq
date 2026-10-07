@@ -17,8 +17,8 @@ What the browser reads (client/src/world/deck.ts), all through custom properties
 - A material's `surface` has the browser draw it: 'space' (a viewport onto the stars), 'keys' (an LCARS touch panel),
   'readout' (LCARS readouts: `seed`, `w`, `h`), 'sign' (an LCARS sign: `text`, `color`, optional `sub` and `code`),
   'screen' (a screen the browser keeps drawing: `screen`, which is 'mission-control', or a team station's
-  'team-station' and the 'team-station-sign' over it), 'star-chart' (long-range
-  sensors), 'carpet' (speckled carpet in the material's colour, tiled every 2 m) or 'unlit' (the material's colour,
+  'team-station' and the 'team-station-sign' under it), 'star-chart' (long-range
+  sensors), 'accent' (a team station's own colour), 'carpet' (speckled carpet in the material's colour, tiled every 2 m) or 'unlit' (the material's colour,
   unshaded: lights and ceilings). Everything else is a toon material in its base colour. `outline: 0` leaves a
   surface out of the outline pass.
 """
@@ -549,15 +549,17 @@ def command_chair(name, at, yaw, cushion, scale):
     collide_object(shell, pad=0.12 * scale)
 
 
-def bridge_console(name, length, seed, frame, display=(0.8, 0.42)):
+def bridge_console(name, length, seed, frame, display=(0.8, 0.42), accent=None):
     """A low console `length` long, as conn and ops are, with whoever sits at it on its +Y side: LCARS keys on its slope
-    and a readout `display` (width, height) standing at its back."""
+    and a readout `display` (width, height) standing at its back. `accent` paints the lip under the keys and the
+    readout's frame."""
     profile = [(0.25, 0), (0.25, 0.55), (0.42, 0.74), (-0.12, 0.92), (-0.2, 0.86), (-0.2, 0)]
     dado, bulkhead, trim = toon(HULL['dado']), toon(HULL['bulkhead']), toon(HULL['frame'])
-    body = prism(f'{name} console', profile, length, [bulkhead, dado, toon(CONSOLE_TOP), bulkhead, bulkhead, dado], frame=frame, round=0.02)
+    lip = accent or dado
+    body = prism(f'{name} console', profile, length, [bulkhead, lip, toon(CONSOLE_TOP), bulkhead, bulkhead, dado], frame=frame, round=0.02)
     collide_object(body)
     keys_on_slope(f'{name} keys', length - 0.12, (0.42, 0.74), (-0.12, 0.92), frame)
-    box(f'{name} display', (display[0], 0.06, display[1]), trim, (0, -0.16, 0.88), frame=frame, round=0.015)
+    box(f'{name} display', (display[0], 0.06, display[1]), accent or trim, (0, -0.16, 0.88), frame=frame, round=0.015)
     w, h = (round(d - 0.08, 3) for d in display)
     panel(f'{name} display screen', w, h, material('#000000', surface='readout', outline=False, seed=seed, w=w, h=h), (0, -0.125, 0.92), frame)
     return body

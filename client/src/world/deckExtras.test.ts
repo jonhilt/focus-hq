@@ -38,6 +38,7 @@ describe('readSurface', () => {
 
   it('reads the surfaces the browser draws itself', () => {
     expect(readSurface({ surface: 'space', outline: 0 })).toEqual({ kind: 'space' });
+    expect(readSurface({ surface: 'accent' })).toEqual({ kind: 'accent' });
     expect(readSurface({ surface: 'readout', seed: 21, w: 2.4, h: 0.9 })).toEqual({ kind: 'readout', seed: 21, w: 2.4, h: 0.9 });
     expect(readSurface({ surface: 'sign', text: 'Turbolift', color: '#ff9900', code: '01-12' })).toEqual({
       kind: 'sign',
