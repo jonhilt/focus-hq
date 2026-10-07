@@ -16,7 +16,8 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, props?: Props<K
     if (style) el.setAttribute('style', style);
     if (on) for (const [name, fn] of Object.entries(on)) el.addEventListener(name, fn);
     if (attrs) for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
-    Object.assign(el, rest);
+    // an undefined prop is left unset rather than set to the string "undefined"
+    Object.assign(el, Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)));
   }
   for (const child of children.flat()) {
     if (child === null || child === undefined || child === false) continue;

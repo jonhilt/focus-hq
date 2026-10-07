@@ -15,7 +15,7 @@ interface Recording {
 }
 
 const READY_TITLE = 'Dictate (Ctrl+M). Transcribed on this machine; nothing is sent until you send it.';
-const BADGE: Record<Phase, string> = { idle: '', listening: '● Listening… 🎤 or Ctrl+M to stop', transcribing: 'Transcribing…' };
+const BADGE: Record<Phase, string> = { idle: '', listening: 'Listening · Mic or Ctrl+M to stop', transcribing: 'Transcribing…' };
 
 /** Only one mic records at a time: starting another cancels this one. */
 let cancelActive: (() => void) | undefined;
@@ -66,7 +66,7 @@ export type MicMode =
 
 const DICTATE: MicMode = { kind: 'dictate' };
 const micOf = (mode: MicMode) => (mode.kind === 'talk' ? mode.mic : micPerRecording);
-/** Holding 🎤 or Ctrl+M longer than this records until you let go; a quick press records until you press again. */
+/** Holding Mic or Ctrl+M longer than this records until you let go; a quick press records until you press again. */
 const HOLD_MS = 400;
 
 function paint(mic: HTMLButtonElement): void {
@@ -80,13 +80,13 @@ function paint(mic: HTMLButtonElement): void {
 state.on('voice', () => document.querySelectorAll<HTMLButtonElement>('button.mic').forEach(paint));
 
 /**
- * Wraps a text box with a 🎤 button: click it (or press Ctrl+M in the box) to record, again to stop, or hold it and let
+ * Wraps a text box with a Mic button: click it (or press Ctrl+M in the box) to record, again to stop, or hold it and let
  * go. The server transcribes the recording locally. Dictating, the text lands at the cursor and nothing is sent: the
  * manager reviews it and sends it as usual. Talking, it's sent as soon as it's transcribed. `mode` is asked at the
  * start of each recording. Put the returned element where the field would have gone.
  */
 export function withMic(ui: Ui, field: Field, mode: () => MicMode = () => DICTATE): HTMLElement {
-  const mic = h('button', { type: 'button', class: 'mic' }, '🎤');
+  const mic = h('button', { type: 'button', class: 'mic' }, 'Mic');
   const badge = h('span', { class: 'dictate-badge' });
   const wrap = h('div', { class: 'dictate' }, field, mic, badge);
   let phase: Phase = 'idle';

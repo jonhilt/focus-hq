@@ -19,8 +19,8 @@ describe('qaBadge', () => {
   });
 
   it('shows a verdict on the PR’s head commit', () => {
-    expect(qaBadge(review(), { headSha: 'abc1234def5678' })).toEqual({ state: 'passed', label: '✅ QA passed' });
-    expect(qaBadge(review({ status: 'failed' }), { headSha: 'abc1234def5678' })).toEqual({ state: 'failed', label: '❌ QA failed' });
+    expect(qaBadge(review(), { headSha: 'abc1234def5678' })).toEqual({ state: 'passed', label: 'QA passed' });
+    expect(qaBadge(review({ status: 'failed' }), { headSha: 'abc1234def5678' })).toEqual({ state: 'failed', label: 'QA failed' });
   });
 
   it('marks a verdict on an older commit stale, whichever way it went', () => {
@@ -30,14 +30,14 @@ describe('qaBadge', () => {
 
   it('says while the operations officer looks into a stuck PR', () => {
     const triaging = review({ status: 'failed', followUp: { kind: 'triaging', officer: 'Lt. Varga', activity: 'Reading the diff' } });
-    expect(qaBadge(triaging, { headSha: 'abc1234def5678' })).toEqual({ state: 'triaging', label: '🧭 Lt. Varga is looking' });
+    expect(qaBadge(triaging, { headSha: 'abc1234def5678' })).toEqual({ state: 'triaging', label: 'Lt. Varga is looking' });
   });
 
   it('says who a failed PR went back to, or that it needs you', () => {
     const fixing = review({ status: 'failed', followUp: { kind: 'fixing', agentId: 'a1', agentName: 'Ada', fixes: { kind: 'qa' } } });
-    expect(qaBadge(fixing, { headSha: 'abc1234def5678' })).toEqual({ state: 'fixing', label: '🔧 QA failed: back with Ada' });
+    expect(qaBadge(fixing, { headSha: 'abc1234def5678' })).toEqual({ state: 'fixing', label: 'QA failed: back with Ada' });
     const stuck = review({ status: 'failed', followUp: { kind: 'needs-you', reason: 'it failed QA 3 times' } });
-    expect(qaBadge(stuck, { headSha: 'abc1234def5678' })).toEqual({ state: 'needs-you', label: '🙋 QA failed: needs you' });
+    expect(qaBadge(stuck, { headSha: 'abc1234def5678' })).toEqual({ state: 'needs-you', label: 'QA failed: needs you' });
   });
 
   it('trusts the verdict when either side doesn’t know the commit', () => {

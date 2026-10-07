@@ -73,11 +73,11 @@ describe('goals on the board', () => {
   });
 
   it('say which slice they’re on and what they’re waiting for', () => {
-    expect(goalState(lead('l', 'working'))).toBe('Slice 2 · ⌨️ working');
-    expect(goalState(lead('l', 'waiting'))).toBe('Slice 2 · ✋ needs approval');
-    expect(goalState(lead('l', 'done'))).toBe('Slice 2 · 💬 waiting for you');
+    expect(goalState(lead('l', 'working'))).toBe('Slice 2 · working');
+    expect(goalState(lead('l', 'waiting'))).toBe('Slice 2 · needs approval');
+    expect(goalState(lead('l', 'done'))).toBe('Slice 2 · waiting for you');
     const prs = [{ repo: 'acme/shop', number: 4, url: '' }, { repo: 'acme/api', number: 9, url: '' }, { repo: 'acme/api', number: 3, url: '', outcome: 'merged' as const }];
-    expect(goalState(lead('l', 'done', { prs }))).toBe('Slice 2 · 👀 2 PRs open');
-    expect(goalState(lead('l', 'working', { closing: { reason: 'All shipped', at: 0 } }))).toBe('🏁 Ready to wrap up');
+    expect(goalState(lead('l', 'done', { prs }))).toBe('Slice 2 · 2 PRs open');
+    expect(goalState(lead('l', 'working', { closing: { reason: 'All shipped', at: 0 } }))).toBe('Ready to wrap up');
   });
 });

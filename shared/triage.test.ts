@@ -44,7 +44,7 @@ describe('afterTriage', () => {
 
 describe('triageLabel', () => {
   it('says what the officer did', () => {
-    expect(triageLabel({ officer, action: 'retry-qa' })).toBe('🧭 Lt. Varga sent it back to QA');
-    expect(triageLabel({ officer, action: 'escalate' })).toBe('🧭 Lt. Varga handed it to you');
+    expect(triageLabel({ officer, action: 'retry-qa' })).toBe('Lt. Varga sent it back to QA');
+    expect(triageLabel({ officer, action: 'escalate' })).toBe('Lt. Varga handed it to you');
   });
 });

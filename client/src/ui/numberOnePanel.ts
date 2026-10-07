@@ -24,7 +24,7 @@ export function openNumberOnePanel(ui: Ui): void {
   const body = h('div', { class: 'briefing-chat number-one' });
   // the message box outlives re-renders, so a reply arriving doesn't wipe what you're typing
   const input = h('textarea', { class: 'briefing-input' });
-  // in voice mode Number One speaks their replies, and 🎤 / Ctrl+M sends what you say
+  // in voice mode Number One speaks their replies, and Mic / Ctrl+M sends what you say
   let voice = voicePrefs.voiceMode ? new VoiceSession(voicePrefs.keepMicOpen) : null;
   ui.panels.own(() => voice?.end());
   const micMode = (): MicMode =>
@@ -64,7 +64,7 @@ export function openNumberOnePanel(ui: Ui): void {
     const thinking = chat?.status === 'thinking';
     send.disabled = thinking;
     input.placeholder = voice
-      ? 'Press 🎤 or Ctrl+M and talk, then press again (or hold it and let go): it goes as soon as it’s transcribed. Or type it.'
+      ? 'Press Mic or Ctrl+M and talk, then press again (or hold it and let go): it goes as soon as it’s transcribed. Or type it.'
       : `Ask ${one.name} anything… (Enter to send, Shift+Enter for a new line)`;
 
     const log = h('div', { class: 'briefing-log' },

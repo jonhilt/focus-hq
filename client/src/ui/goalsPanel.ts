@@ -1,17 +1,17 @@
-import { statusIcon, statusLine } from '../../../shared/agentStatus';
+import { contextLevel, statusLine } from '../../../shared/agentStatus';
 import { UNIFORM } from '../../../shared/crew';
 import { type Agent, type GoalRecord, type QueuedGoal, TEAM_STATIONS } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
+import { LCARS_STATUS } from '../world/starship';
 import type { Ui } from './context';
 import { withMic } from './dictation';
 import { busy, fill, h, timeAgo } from './dom';
-import { closeGoal, leadEffortPicker, noteView } from './goals';
+import { CONTEXT_TONE, closeGoal, leadEffortPicker, noteView, prLink, reviewing } from './goals';
+import { type NavItem, readout, shownView, SideNav } from './panels';
 
-/** A pull request a goal's lead shipped, as a link that says what became of it. */
-const prLink = (p: { repo: string; number: number; url: string; outcome?: string }) =>
-  h('a', { class: `btn small${p.outcome ? '' : ' go'}`, href: p.url, target: '_blank', rel: 'noreferrer', title: p.outcome ?? 'open' },
-    `${p.outcome === 'merged' ? '✔ ' : p.outcome === 'closed' ? '✕ ' : ''}${p.repo.split('/')[1]} #${p.number} ↗`);
+/** The goals panel's views: the goals under way (and any waiting for a station), a new one, and the closed ones. */
+type GoalsView = 'goals' | 'new' | 'log';
 
 /** What the lead says it's doing, from the task list Claude keeps for itself. */
 const doing = (lead: Agent) => {
@@ -19,57 +19,56 @@ const doing = (lead: Agent) => {
   return t ? t.activeForm || t.subject : '';
 };
 
-/** The goal's own QA reviewer, while they're on one of its pull requests. */
-function reviewing(lead: Agent): HTMLElement | null {
-  const reviewer = state.reviewersIn(lead.projectId).find((r) => r.reviewFor === lead.id && !['done', 'error', 'stopped'].includes(r.status));
-  return reviewer ? h('small', { class: 'muted', style: 'display:block' }, `🔍 ${reviewer.name} is reviewing ${reviewer.repo.split('/')[1]} #${reviewer.issue.number}: ${reviewer.activity}`) : null;
-}
-
-/** One goal under way: its lead, what they're doing, their note and its pull requests. */
+/** One goal under way: its station, its lead and how they're getting on, their note and its pull requests. */
 function goalCard(ui: Ui, lead: Agent): HTMLElement {
   const work = lead.lead;
-  const close = h('button', { class: `btn small${work?.closing ? ' go' : ''}`, title: 'File the goal in the room’s log and send its lead home, which frees the station' }, '🏁 Close goal');
+  const station = (work?.station ?? 0) + 1;
+  const tasks = lead.tasks ?? [];
+  const close = h('button', { class: `btn small${work?.closing ? ' go' : ''}`, title: 'File the goal in the room’s log and send its lead home, which frees the station' }, 'Close goal');
   close.onclick = () => void busy(close, () => closeGoal(lead), ui.error);
-  return h('div', { class: 'card', style: `border-left-color:${UNIFORM[lead.avatar.division]}` },
-    h('div', { class: 'planner-head' },
-      h('span', { class: 'planner-badge', style: `background:${UNIFORM[lead.avatar.division]}` }, String((work?.station ?? 0) + 1)),
-      h('div', { class: 'grow' },
-        h('strong', null, work?.title ?? lead.issue.title),
-        h('small', null, `${lead.name} · team station ${(work?.station ?? 0) + 1} · slice ${work?.slice ?? 1} · 🧠 ${lead.effort ?? 'default'}${lead.context ? ` · ◔ ${lead.context.percent}% context` : ''}`),
+  return h('div', { class: 'goal-card', style: `--tone:${UNIFORM[lead.avatar.division]}` },
+    h('div', { class: 'goal-station', title: `Team station ${station}` }, String(station).padStart(2, '0')),
+    h('div', { class: 'goal-main' },
+      h('div', { class: 'row' },
+        h('strong', { class: 'grow goal-title' }, work?.title ?? lead.issue.title),
+        close,
+        h('button', { class: 'btn small primary', onclick: () => ui.openAgent(lead.id) }, 'Talk'),
       ),
-      close,
-      h('button', { class: 'btn small primary', onclick: () => ui.openAgent(lead.id) }, '🖖 Talk'),
-    ),
-    work?.closing ? h('p', { class: 'goal-closing' }, `🏁 Ready to wrap up: ${work.closing.reason}`) : null,
-    noteView(work?.note, true),
-    reviewing(lead),
-    lead.tasks?.length ? h('small', { class: 'muted' }, `📋 Claude's tasks: ${lead.tasks.filter((t) => t.status === 'completed').length}/${lead.tasks.length} done${doing(lead) ? ` · ▶ ${doing(lead)}` : ''}`) : null,
-    h('div', { class: 'row', style: 'margin-top:8px' },
-      h('span', { class: 'chip' }, `${statusIcon(lead)} ${lead.status}`),
-      h('small', { class: 'grow muted' }, statusLine(lead)),
-      ...(work?.prs ?? []).map(prLink),
+      h('div', { class: 'readouts' },
+        readout('Lead', lead.name),
+        readout('Status', lead.status, { tone: LCARS_STATUS[lead.status] }),
+        readout('Activity', statusLine(lead), { grow: true }),
+        readout('Slice', String(work?.slice ?? 1)),
+        readout('Effort', lead.effort ?? 'default'),
+        lead.context ? readout('Context', `${lead.context.percent}%`, { tone: CONTEXT_TONE[contextLevel(lead.context.percent)] }) : null,
+        tasks.length ? readout('Tasks', `${tasks.filter((t) => t.status === 'completed').length}/${tasks.length}`, { title: doing(lead) ? `Now: ${doing(lead)}` : undefined }) : null,
+      ),
+      work?.closing ? h('p', { class: 'goal-closing' }, `Ready to wrap up: ${work.closing.reason}`) : null,
+      noteView(work?.note, true),
+      reviewing(lead),
+      work?.prs.length ? h('div', { class: 'row', style: 'margin-top:8px' }, ...work.prs.map(prLink)) : null,
     ),
   );
 }
 
 /** A goal waiting for a station: the first one starts with a press once a station is free, edits and all. */
 function queuedCard(ui: Ui, projectId: string, goal: QueuedGoal, place: number, total: number, free: boolean, station?: number): HTMLElement {
-  const up = h('button', { class: 'btn small', title: 'Sooner', disabled: place === 0 }, '▲');
-  const down = h('button', { class: 'btn small', title: 'Later', disabled: place === total - 1 }, '▼');
-  const drop = h('button', { class: 'btn small', title: 'Take it out of the line' }, '✕');
+  const up = h('button', { class: 'btn small', title: 'Start it before the one ahead', disabled: place === 0 }, 'Sooner');
+  const down = h('button', { class: 'btn small', title: 'Start it after the one behind', disabled: place === total - 1 }, 'Later');
+  const drop = h('button', { class: 'btn small danger', title: 'Take it out of the line' }, 'Remove');
   up.onclick = () => void busy(up, () => api.moveQueued(projectId, goal.id, -1), ui.error);
   down.onclick = () => void busy(down, () => api.moveQueued(projectId, goal.id, 1), ui.error);
   drop.onclick = () => void busy(drop, () => api.dropQueued(projectId, goal.id), ui.error);
   const head = h('div', { class: 'row' },
     h('strong', { class: 'grow' }, `${place === 0 ? 'Next up: ' : `${place + 1}. `}${goal.text.split('\n')[0]}`),
-    h('small', { class: 'muted' }, `${goal.from ? `from ${goal.from} · ` : ''}🧠 ${goal.effort ?? state.info?.settings.leadEffort ?? 'high'} · ${timeAgo(goal.at)}`),
+    h('small', { class: 'muted' }, `${goal.from ? `from ${goal.from} · ` : ''}${goal.effort ?? state.info?.settings.leadEffort ?? 'high'} effort · ${timeAgo(goal.at)}`),
     up, down, drop,
   );
   if (place !== 0 || !free) return h('div', { class: 'card goal-queued' }, head);
   // a station is free: the first goal in line starts with a press, as it stands or as the captain edits it
   const text = h('textarea', { class: 'planner-input', value: goal.text });
   const effort = leadEffortPicker(goal.effort ?? state.info?.settings.leadEffort);
-  const start = h('button', { class: 'btn primary' }, '🖖 Start it');
+  const start = h('button', { class: 'btn primary' }, 'Start it');
   start.onclick = () =>
     void busy(start, async () => {
       const lead = await api.startQueued(projectId, goal.id, { text: text.value, effort: effort.picked(), station });
@@ -93,38 +92,45 @@ function recordRow(goal: GoalRecord): HTMLElement {
 /**
  * The room's goals: one per team station, each with a lead of its own (the captain's own Claude Code session for it,
  * across the project's repos). Talk to a goal's lead, close it, or start another; with every station taken, new goals
- * wait in line until one is free and the captain starts them.
+ * wait in line until one is free and the captain starts them. The sidebar picks between the goals under way, a new
+ * one and the closed ones.
  */
 export function openGoalsPanel(ui: Ui, projectId: string, station?: number): void {
   const project = state.project(projectId);
   if (!project) return;
-  const list = h('div', { class: 'cards', style: 'margin-bottom:14px' });
-  const queue = h('div', { class: 'cards', style: 'margin-bottom:14px' });
+  const list = h('div', { class: 'cards' });
+  const queue = h('div', { class: 'cards', style: 'margin-top:14px' });
   const log = h('div', { class: 'cards' });
-  const free = h('small', { class: 'muted' });
-  const text = h('textarea', { class: 'planner-input', placeholder: 'What are we working on? e.g. shoppers can save items for later and find them again on any device', autofocus: true });
+  const free = h('div', { class: 'readouts' });
+  const text = h('textarea', { class: 'planner-input', placeholder: 'What are we working on? e.g. shoppers can save items for later and find them again on any device' });
   const effort = leadEffortPicker(state.info?.settings.leadEffort);
-  const start = h('button', { class: 'btn primary' }, '🖖 Start the goal');
+  const start = h('button', { class: 'btn primary' }, 'Start the goal');
+  const intro = h('p', { style: 'margin-top:0' });
+  const views: Record<GoalsView, HTMLElement> = {
+    goals: h('div', null, list, queue),
+    new: h('div', null, free, intro, withMic(ui, text), h('div', { class: 'row', style: 'margin-top:8px' }, start, effort.el, h('small', { class: 'muted' }, 'Ctrl+Enter starts'))),
+    log,
+  };
+
+  // the free station the captain walked up to opens on a new goal; otherwise the goals under way, if there are any
+  let picked: GoalsView | undefined = station !== undefined ? 'new' : undefined;
+  const nav = new SideNav<GoalsView>((view) => {
+    picked = view;
+    render();
+    if (view === 'new') text.focus();
+  });
+
   start.onclick = () =>
     void busy(start, async () => {
       const started = await api.startGoal(projectId, text.value, { effort: effort.picked(), station: here() });
       text.value = '';
-      if ('agent' in started) ui.openAgent(started.agent.id);
+      if ('agent' in started) return ui.openAgent(started.agent.id);
+      picked = 'goals'; // it's waiting in line: show it there
+      render();
     }, ui.error);
   text.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) start.click();
   });
-  const intro = h('p');
-  const form = h('div', { class: 'card planner', style: 'margin-bottom:14px' },
-    h('div', { class: 'planner-head' },
-      h('span', { class: 'planner-badge', style: `background:${UNIFORM.command}` }, '🧭'),
-      h('div', { class: 'grow' }, h('strong', null, 'Start a goal'), free),
-    ),
-    intro,
-    withMic(ui, text),
-    h('div', { class: 'row' }, start, effort.el),
-  );
-  const body = h('div', null, list, queue, form, log);
 
   // the station the captain walked up to, while it's still free and no goal is waiting ahead of a new one
   const here = () => (station !== undefined && !state.leadsIn(projectId).some((a) => a.lead?.station === station) && !state.project(projectId)?.goalQueue?.length ? station : undefined);
@@ -133,20 +139,35 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
     const p = state.project(projectId);
     if (!p) return ui.panels.close();
     const leads = state.leadsIn(projectId);
-    const open = TEAM_STATIONS - leads.length;
-    fill(list, ...(leads.length ? leads.map((lead) => goalCard(ui, lead)) : [h('div', { class: 'empty' }, 'No goals under way yet.')]));
     const waiting = p.goalQueue ?? [];
+    const done = p.goals ?? [];
+    const open = TEAM_STATIONS - leads.length;
+    const startsNow = open > 0 && !waiting.length;
+    const items: NavItem<GoalsView>[] = [
+      { key: 'goals', label: 'Under way', readout: `${leads.length}/${TEAM_STATIONS}${waiting.length ? ` +${waiting.length}` : ''}`, standby: !leads.length && !waiting.length },
+      { key: 'new', label: 'New goal', readout: startsNow ? `${open} free` : 'Queue' },
+      { key: 'log', label: 'Closed', readout: done.length ? String(done.length) : '', standby: !done.length },
+    ];
+    const view = shownView(items, picked) ?? 'new';
+    nav.show(items, view);
+    for (const [key, el] of Object.entries(views)) el.hidden = key !== view;
+
+    fill(list, ...leads.map((lead) => goalCard(ui, lead)));
     fill(queue, ...(waiting.length ? [h('h3', null, `Waiting for a team station (${waiting.length})`), ...waiting.map((g, i) => queuedCard(ui, projectId, g, i, waiting.length, open > 0, station))] : []));
-    free.textContent = `${here() !== undefined ? `At team station ${here()! + 1} · ` : ''}${open} of ${TEAM_STATIONS} team stations free · Ctrl+Enter starts`;
-    intro.textContent = open > 0 && !waiting.length
+    fill(free,
+      readout('Team stations free', `${open} of ${TEAM_STATIONS}`),
+      here() !== undefined ? readout('Starts at', `Team station ${here()! + 1}`) : null,
+      waiting.length ? readout('Waiting', String(waiting.length), { tone: LCARS_STATUS.waiting }) : null,
+    );
+    intro.textContent = startsNow
       ? `A lead of its own takes a free team station, with ${p.repos.length === 1 ? p.repos[0] : `all ${p.repos.length} of ${p.name}'s repos`} checked out side by side: your own Claude Code session for the goal. Talk it through, then let them build it a slice at a time. Each slice ships as a pull request per repo it touches, QA reviews it, and you merge it.`
       : 'Every team station has a goal, or goals are waiting for one: this one joins the line, and you start it once a station is free.';
-    start.textContent = open > 0 && !waiting.length ? '🖖 Start the goal' : '🧭 Add it to the line';
-    const done = p.goals ?? [];
-    fill(log, ...(done.length ? [h('h3', null, `Closed goals (${done.length})`), ...done.map(recordRow)] : []));
+    start.textContent = startsNow ? 'Start the goal' : 'Add it to the line';
+    fill(log, ...done.map(recordRow));
   };
-  ui.panels.open({ title: `🧭 ${project.name} – goals`, body, accent: project.color });
+  ui.panels.open({ title: `${project.name} · goals`, body: h('div', null, ...Object.values(views)), nav, accent: project.color });
   render();
+  if (!views.new.hidden) text.focus();
   ui.panels.own(state.on('agent', (a) => a.projectId === projectId && (a.task === 'lead' || !!a.reviewFor) && render()));
   ui.panels.own(state.on('agent-removed', (a) => a.projectId === projectId && render()));
   ui.panels.own(state.on('projects', render));

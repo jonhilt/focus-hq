@@ -59,7 +59,7 @@ describe('summariseShip', () => {
     const failing = pr({ number: 41, checks: 'failing', failedChecks: [{ name: 'build' }] });
     const status = summariseShip(snapshot({ boards: [{ projectId: 'p1', issues: [], prs: [pr({}), failing], updatedAt: 0 }], reviews: [review] }), worktree);
     expect(status.projects[0].prs).toEqual([
-      { repo: 'acme/shop', number: 40, title: 'Wishlist', author: undefined, draft: false, qa: '✅ QA passed', checks: 'passing', conflicts: false },
+      { repo: 'acme/shop', number: 40, title: 'Wishlist', author: undefined, draft: false, qa: 'QA passed', checks: 'passing', conflicts: false },
       { repo: 'acme/shop', number: 41, title: 'Wishlist', author: undefined, draft: false, qa: 'not tested', checks: 'failing', failedChecks: ['build'], conflicts: false },
     ]);
   });

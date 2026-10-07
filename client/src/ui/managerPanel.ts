@@ -11,6 +11,7 @@ import { effortPicker, pickedCloud, pickedEffort, wherePicker } from './agentPan
 import type { ManagerTab, Ui } from './context';
 import { withMic } from './dictation';
 import { busy, fill, h } from './dom';
+import { SideNav } from './panels';
 import { plannerCard } from './plannerCard';
 
 const COLORS = ['#ff8a5b', '#5bc0eb', '#9bc53d', '#c879ff', '#fde74c', '#ff5d8f', '#2ec4b6', '#f4a259'];
@@ -40,18 +41,17 @@ function repoDatalist(id: string): HTMLDataListElement {
 /** The ready room console: projects, repositories, new issues and ship-wide settings. */
 export function openManagerPanel(ui: Ui, tab: ManagerTab = state.projects.length ? 'projects' : 'new-project'): void {
   const body = h('div');
-  const tabs = h('div', { class: 'tabs' });
-  const names: [ManagerTab, string][] = [
-    ['projects', '🏢 Projects'],
-    ['new-project', '＋ New project'],
-    ['issue', '📝 New issue'],
-    ['settings', '⚙️ Settings'],
-  ];
+  const nav = new SideNav<ManagerTab>((t) => show(t));
   let current = tab;
   let selected: string | undefined;
   const show = (t: ManagerTab) => {
     current = t;
-    tabs.replaceChildren(...names.map(([key, label]) => h('button', { class: `tab${key === t ? ' on' : ''}`, onclick: () => show(key) }, label)));
+    nav.show([
+      { key: 'projects', label: 'Projects', readout: String(state.projects.length) },
+      { key: 'new-project', label: 'New project' },
+      { key: 'issue', label: 'New issue' },
+      { key: 'settings', label: 'Settings' },
+    ], t);
     body.replaceChildren(
       t === 'projects' ? projectsTab(ui, show, selected, openProject)
         : t === 'new-project' ? newProjectTab(ui, openProject)
@@ -63,7 +63,7 @@ export function openManagerPanel(ui: Ui, tab: ManagerTab = state.projects.length
     selected = id;
     show('projects');
   };
-  ui.panels.open({ title: '🎖️ Ready room', body, tabs, accent: LCARS.lilac });
+  ui.panels.open({ title: 'Ready room', body, nav, accent: LCARS.lilac });
   show(tab);
   // keep the projects list fresh, but never wipe a form the manager is typing into
   ui.panels.own(state.on('projects', () => current === 'projects' && !body.contains(document.activeElement) && show('projects')));
@@ -448,7 +448,7 @@ function voiceSection(ui: Ui): HTMLElement {
         h('span', { class: 'grow' }),
         recheck,
       ),
-      h('p', { class: 'muted' }, 'Dictate into the office’s text boxes with 🎤 or Ctrl+M. whisper.cpp transcribes on this machine: your audio never leaves it.'),
+      h('p', { class: 'muted' }, 'Dictate into the office’s text boxes with Mic or Ctrl+M. whisper.cpp transcribes on this machine: your audio never leaves it.'),
       h('div', { class: 'voice-row' },
         h('span', null, 'whisper-cli'),
         voice.whisper.found

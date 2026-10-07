@@ -51,5 +51,5 @@ const DID: Record<TriageAction, string> = {
 
 /** What a PR card says the officer did. */
 export function triageLabel(triage: Pick<Triage, 'officer' | 'action'>): string {
-  return `🧭 ${triage.officer} ${DID[triage.action]}`;
+  return `${triage.officer} ${DID[triage.action]}`;
 }

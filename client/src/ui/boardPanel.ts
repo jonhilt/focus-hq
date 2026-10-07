@@ -1,4 +1,4 @@
-import { statusIcon, statusLine } from '../../../shared/agentStatus';
+import { statusLine } from '../../../shared/agentStatus';
 import { columns, goalState, resolvingAlready } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import { assignWarning, waitsLabel } from '../../../shared/dependencies';
@@ -9,6 +9,7 @@ import { triageLabel } from '../../../shared/triage';
 import type { Effort } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
+import { LCARS_STATUS } from '../world/starship';
 import { effortPicker, pickedCloud, pickedEffort, wherePicker } from './agentPanel';
 import type { BoardTab, Ui } from './context';
 import { busy, fill, h, timeAgo } from './dom';
@@ -19,17 +20,27 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
   const project = state.project(projectId);
   if (!project) return;
   const body = h('div');
-  const refresh = h('button', { class: 'btn small', title: 'Re-read issues and PRs from GitHub' }, '⟳ Refresh');
-  const newIssue = h('button', { class: 'btn small primary' }, '＋ New issue');
-  const lead = h('button', { class: 'btn small', title: 'Goals: each built a slice at a time by a lead of its own, your own Claude Code session for it (L)', onclick: () => ui.openGoals(projectId) }, '🧭 Goals');
-  const mine = h('input', { type: 'checkbox', checked: !!project.onlyMyPrs });
-  const mineToggle = h('label', { class: 'btn small', title: 'Hide pull requests opened by other people' }, mine, ' Only my PRs');
-  mine.onchange = () => void api.updateProject(projectId, { onlyMyPrs: mine.checked }).catch((e: Error) => ui.error(e.message));
+  const refresh = h('button', { class: 'btn small', title: 'Re-read issues and PRs from GitHub' }, 'Refresh');
+  const newIssue = h('button', { class: 'btn small primary' }, 'New issue');
+  const lead = h('button', { class: 'btn small', title: 'Goals: each built a slice at a time by a lead of its own, your own Claude Code session for it (L)', onclick: () => ui.openGoals(projectId) }, 'Goals');
+  // a lit switch, like the sidebar's: it says whether it's on
+  const mineState = h('span');
+  const mineToggle = h('button', { class: 'btn small switch', title: 'Hide pull requests opened by other people' }, 'Only my PRs', mineState);
+  const paintMine = (on: boolean) => {
+    mineToggle.classList.toggle('on', on);
+    mineToggle.setAttribute('aria-pressed', String(on));
+    mineState.textContent = on ? 'On' : 'Off';
+  };
+  mineToggle.onclick = () => {
+    const on = !state.project(projectId)?.onlyMyPrs;
+    paintMine(on);
+    void api.updateProject(projectId, { onlyMyPrs: on }).catch((e: Error) => ui.error(e.message));
+  };
   refresh.onclick = () => void busy(refresh, () => api.refreshBoard(projectId), ui.error);
   newIssue.onclick = () => ui.openNewIssue(projectId);
 
   ui.panels.open({
-    title: `${project.name} – board`,
+    title: `${project.name} · board`,
     body,
     wide: true,
     accent: project.color,
@@ -50,7 +61,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
     const busyAgents = agents.filter((a) => a.task !== 'review' && a.task !== 'lead' && !['done', 'error', 'stopped'].includes(a.status)).length;
     const full = busyAgents >= p.maxAgents;
 
-    const todo = h('div', { class: 'col' }, h('h3', null, h('span', null, '📋 To do'), h('span', null, cols.todo.length)));
+    const todo = h('div', { class: 'col' }, h('h3', null, h('span', null, 'To do'), h('span', null, cols.todo.length)));
     if (!cols.todo.length) todo.append(h('div', { class: 'empty' }, p.repos.length ? 'No open issues. File one!' : 'Connect a repository in your ready room first.'));
     for (const issue of cols.todo) {
       const key = `${issue.repo}#${issue.number}`;
@@ -58,7 +69,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
       effort.onchange = () => efforts.set(key, pickedEffort(effort));
       const where = wherePicker(clouds.get(key));
       where.onchange = () => clouds.set(key, pickedCloud(where));
-      const assign = h('button', { class: 'btn small primary', title: full ? 'Agents beyond the limit wait in a queue' : '' }, full ? '⏳ Queue agent' : '🤖 Assign agent');
+      const assign = h('button', { class: 'btn small primary', title: full ? 'Agents beyond the limit wait in a queue' : '' }, full ? 'Queue agent' : 'Assign agent');
       const waits = waitsLabel(issue.waitsFor);
       assign.onclick = () => {
         const warning = assignWarning(issue);
@@ -73,9 +84,9 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
           h('div', { class: 't' }, `#${issue.number} ${issue.title}`),
           h('div', { class: 'm' },
             issue.closedPr
-              ? h('span', { class: 'chip warn', title: `${issue.closedPr.officer} closed it: ${issue.closedPr.note}` }, `🧭 PR #${issue.closedPr.pr} closed: wrong approach, open for another go`)
+              ? h('span', { class: 'chip warn', title: `${issue.closedPr.officer} closed it: ${issue.closedPr.note}` }, `PR #${issue.closedPr.pr} closed: wrong approach, open for another go`)
               : null,
-            waits ? h('span', { class: 'chip', title: 'Auto-assign leaves it until those are closed' }, `⏸ ${waits}`) : null,
+            waits ? h('span', { class: 'chip', title: 'Auto-assign leaves it until those are closed' }, waits) : null,
             multi ? h('span', { class: 'chip' }, issue.repo.split('/')[1]) : null,
             ...issue.labels.slice(0, 4).map((l) => h('span', { class: 'chip' }, l)),
             h('span', null, timeAgo(Date.parse(issue.createdAt))),
@@ -86,13 +97,13 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
     }
 
     const doing = h('div', { class: 'col' },
-      h('h3', null, h('span', null, '🔨 In progress'), h('span', { title: 'Goals under way · desk agents at work (of the room’s limit)' }, `${cols.goals.length ? `🎯 ${cols.goals.length} · ` : ''}${busyAgents}/${p.maxAgents}`)),
+      h('h3', null, h('span', null, 'In progress'), h('span', { title: 'Goals under way · desk agents at work (of the room’s limit)' }, `${cols.goals.length ? `${cols.goals.length} goal${cols.goals.length === 1 ? '' : 's'} · ` : ''}${busyAgents}/${p.maxAgents}`)),
     );
     if (!cols.doing.length && !cols.goals.length) doing.append(h('div', { class: 'empty' }, 'Nobody is working on anything.'));
     // the goals first: each is in progress for as long as it's open, whether or not its lead is at it right now
     for (const lead of cols.goals) {
       const note = h('div', { class: `note doing goal ${lead.status}`, title: 'Open the goal' },
-        h('div', { class: 't' }, h('span', { class: 'dot', style: `background:${UNIFORM[lead.avatar.division]};margin-right:6px;vertical-align:-2px` }), `🎯 ${lead.lead?.title ?? lead.issue.title}`),
+        h('div', { class: 't' }, h('span', { class: 'dot', style: `background:${UNIFORM[lead.avatar.division]};margin-right:6px;vertical-align:-2px` }), lead.lead?.title ?? lead.issue.title),
         h('div', { class: 'm' }, h('span', { class: 'chip' }, `team station ${(lead.lead?.station ?? 0) + 1}`), h('span', { class: 'chip' }, lead.name), h('span', null, goalState(lead))),
       );
       note.onclick = () => ui.openAgent(lead.id);
@@ -101,31 +112,31 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
     for (const a of cols.doing) {
       const note = h('div', { class: `note doing ${a.status}`, title: 'Open their laptop' },
         h('div', { class: 't' }, h('span', { class: 'dot', style: `background:${UNIFORM[a.avatar.division]};margin-right:6px;vertical-align:-2px` }), `${a.name} · #${a.issue.number} ${a.issue.title}`),
-        h('div', { class: 'm' }, h('span', { class: 'chip' }, `${statusIcon(a)} ${a.status}`), h('span', { class: 'chip' }, `🧠 ${a.effort ?? 'default'}`), a.cloud ? h('span', { class: 'chip' }, '☁ cloud') : null, multi ? h('span', { class: 'chip' }, a.repo.split('/')[1]) : null, h('span', null, statusLine(a))),
+        h('div', { class: 'm' }, h('span', { class: 'chip', style: `--tone:${LCARS_STATUS[a.status]}` }, a.status), h('span', { class: 'chip' }, `${a.effort ?? 'default'} effort`), a.cloud ? h('span', { class: 'chip' }, 'cloud') : null, multi ? h('span', { class: 'chip' }, a.repo.split('/')[1]) : null, h('span', null, statusLine(a))),
       );
       note.onclick = () => ui.openAgent(a.id);
       doing.append(note);
     }
 
-    const prs = h('div', { class: 'col' }, h('h3', null, h('span', null, '👀 Ready to merge'), h('span', null, cols.prs.length)));
-    mine.checked = !!p.onlyMyPrs;
+    const prs = h('div', { class: 'col' }, h('h3', null, h('span', null, 'Ready to merge'), h('span', null, cols.prs.length)));
+    paintMine(!!p.onlyMyPrs);
     if (!cols.prs.length) prs.append(h('div', { class: 'empty' }, cols.hiddenPrs ? 'None of the open pull requests are yours.' : 'No open pull requests.'));
     for (const pr of cols.prs) {
       const review = state.reviews.get(prKey(pr.repo, pr.number));
-      const merge = h('button', { class: 'btn small go' }, `⤵ ${state.info?.settings.mergeMethod ?? 'squash'} & merge`);
+      const merge = h('button', { class: 'btn small go' }, `${state.info?.settings.mergeMethod ?? 'squash'} & merge`);
       merge.disabled = pr.mergeable === 'CONFLICTING' || pr.isDraft;
       merge.onclick = () => {
         const unpassed = unpassedReason(review, pr);
         const ask = unpassed
-          ? `⚠ ${unpassed}.\n\nMerge ${pr.repo}#${pr.number} "${pr.title}" anyway?`
+          ? `${unpassed}.\n\nMerge ${pr.repo}#${pr.number} "${pr.title}" anyway?`
           : `Merge ${pr.repo}#${pr.number} "${pr.title}"?`;
         if (!confirm(ask)) return;
         void busy(merge, async () => {
           await api.mergePr(projectId, pr.repo, pr.number);
-          ui.hud.toast('success', `Merged #${pr.number} 🎉`);
+          ui.hud.toast('success', `Merged #${pr.number}`);
         }, ui.error);
       };
-      const resolve = pr.mergeable === 'CONFLICTING' ? h('button', { class: 'btn small primary', title: pr.agent?.task === 'lead' ? `Hand the merge conflicts to ${pr.agent.name}, the goal's lead` : 'Hand the merge conflicts to an agent' }, '🔧 Resolve conflicts') : null;
+      const resolve = pr.mergeable === 'CONFLICTING' ? h('button', { class: 'btn small primary', title: pr.agent?.task === 'lead' ? `Hand the merge conflicts to ${pr.agent.name}, the goal's lead` : 'Hand the merge conflicts to an agent' }, 'Resolve conflicts') : null;
       if (resolve) {
         // the PR's developer is already at it (or queued for it); a second click would only repeat the request
         resolve.disabled = resolvingAlready(pr.agent);
@@ -135,7 +146,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
             ui.hud.toast('success', `${agent.name} is resolving the conflicts on PR #${pr.number}`, { label: 'Watch', run: () => ui.goToAgent(agent.id) });
           }, ui.error);
       }
-      const checks = { passing: '✓ checks pass', failing: '✗ checks failing', pending: '⏳ checks running', none: 'no checks' }[pr.checks];
+      const checks = { passing: 'checks pass', failing: 'checks failing', pending: 'checks running', none: 'no checks' }[pr.checks];
       const agent = pr.agent;
       const running = state.previews.get(projectId);
       const preview = running && previewIncludes(running, pr.repo, pr.number) ? running : undefined;
@@ -146,21 +157,21 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
             class: 'btn small',
             title: `Check this PR out and run it on your machine${running ? ` (replaces the preview of ${running.repo.split('/')[1]}#${running.number})` : ''}`,
             onclick: () => ui.previewPr(projectId, pr.repo, pr.number),
-          }, '▶ Preview')]
+          }, 'Preview')]
         : preview.status === 'running'
           ? [
               ...preview.links.slice(0, 3).map((link) => {
                 const sick = link.health === 'down' || link.health === 'error';
                 const tip = [link.url, linkHealth(link)].filter(Boolean).join('\n');
-                return h('a', { class: `btn small ${sick ? 'warn' : 'primary'}`, href: link.url, target: '_blank', rel: 'noreferrer', title: tip }, `${sick ? '⚠ ' : ''}Open ${link.name ?? 'site'} ↗`);
+                return h('a', { class: `btn small ${sick ? 'warn' : 'primary'}`, href: link.url, target: '_blank', rel: 'noreferrer', title: tip }, `Open ${link.name ?? 'site'} ↗`);
               }),
               preview.warning
-                ? h('button', { class: 'btn small warn', title: preview.warning, onclick: openPreview }, '⚠ Running')
-                : h('button', { class: 'btn small', title: 'Output, logs, restart and stop', onclick: openPreview }, '▶ Running'),
+                ? h('button', { class: 'btn small warn', title: preview.warning, onclick: openPreview }, 'Running')
+                : h('button', { class: 'btn small', title: 'Output, logs, restart and stop', onclick: openPreview }, 'Running'),
             ]
           : preview.status === 'failed'
-            ? [h('button', { class: 'btn small danger', title: preview.error ?? '', onclick: openPreview }, '⚠ Preview failed')]
-            : [h('button', { class: 'btn small', title: preview.activity, onclick: openPreview }, preview.status === 'stopping' ? '⏹ Stopping…' : '⏳ Starting…')];
+            ? [h('button', { class: 'btn small danger', title: preview.error ?? '', onclick: openPreview }, 'Preview failed')]
+            : [h('button', { class: 'btn small', title: preview.activity, onclick: openPreview }, preview.status === 'stopping' ? 'Stopping…' : 'Starting…')];
       const sha = preview?.checkouts.find((c) => c.repo === pr.repo)?.sha;
       const behind = sha && pr.headSha && sha !== 'demo' && !sameCommit(sha, pr.headSha);
       const qa = qaBadge(review, pr);
@@ -171,12 +182,12 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
       const triage = review?.triage && qa.state !== 'triaging'
         ? h('span', { class: 'chip', title: review.triage.note }, triageLabel(review.triage))
         : null;
-      const sendToQa = h('button', { class: 'btn small', title: qa.state === 'none' ? 'Have the holodeck’s QA officer review and test it' : 'Test the latest commit again' }, qa.state === 'none' ? '🔍 Send to QA' : '↻ Re-test');
+      const sendToQa = h('button', { class: 'btn small', title: qa.state === 'none' ? 'Have the holodeck’s QA officer review and test it' : 'Test the latest commit again' }, qa.state === 'none' ? 'Send to QA' : 'Re-test');
       sendToQa.disabled = qaBusy;
       sendToQa.onclick = () =>
         void busy(sendToQa, async () => {
           await api.sendToQa(projectId, pr.repo, pr.number);
-          ui.hud.toast('info', `🔍 PR #${pr.number} is with QA`);
+          ui.hud.toast('info', `PR #${pr.number} is with QA`);
         }, ui.error);
       prs.append(
         h('div', { class: 'note pr' },
@@ -186,13 +197,13 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
             multi ? h('span', { class: 'chip' }, pr.repo.split('/')[1]) : null,
             qaChip,
             triage,
-            h('span', { class: pr.checks === 'failing' ? 'chip bad' : 'chip' }, checks),
-            pr.mergeable === 'CONFLICTING' ? h('span', { class: 'chip bad' }, '⚠ conflicts') : null,
+            h('span', { class: pr.checks === 'failing' ? 'chip bad' : pr.checks === 'passing' ? 'chip ok' : 'chip' }, checks),
+            pr.mergeable === 'CONFLICTING' ? h('span', { class: 'chip bad' }, 'conflicts') : null,
             pr.isDraft ? h('span', { class: 'chip' }, 'draft') : null,
             pr.reviewDecision ? h('span', { class: 'chip' }, pr.reviewDecision.toLowerCase().replace('_', ' ')) : null,
-            behind ? h('span', { class: 'chip warn', title: 'Restart the preview to see the latest commits' }, '↻ preview is behind') : null,
+            behind ? h('span', { class: 'chip warn', title: 'Restart the preview to see the latest commits' }, 'preview is behind') : null,
             along.length
-              ? h('span', { class: 'chip', title: '▶ Preview checks these out too: they close issues with the same feature: label' },
+              ? h('span', { class: 'chip', title: 'Preview checks these out too: they close issues with the same feature: label' },
                   `+ ${along.map(([repo, n]) => `${repo.split('/')[1]} #${n}`).join(', ')}`)
               : null,
           ),
@@ -201,17 +212,17 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
             sendToQa,
             ...previewActions,
             h('a', { class: 'btn small', href: `${pr.url}/files`, target: '_blank', rel: 'noreferrer' }, 'Review ↗'),
-            agent ? h('button', { class: 'btn small', onclick: () => ui.openAgent(agent.id) }, `💬 ${agent.name}`) : null,
+            agent ? h('button', { class: 'btn small', onclick: () => ui.openAgent(agent.id) }, `Talk to ${agent.name}`) : null,
           ),
         ),
       );
     }
 
-    const highlight = { todo, doing, prs }[focus ?? 'todo'];
-    highlight.style.borderColor = project.color;
+    // the column you came for is lit
+    ({ todo, doing, prs }[focus ?? 'todo']).classList.add('on');
     fill(
       body,
-      board?.error ? h('div', { class: 'ask error' }, `⚠ ${board.error}`) : null,
+      board?.error ? h('div', { class: 'ask error' }, board.error) : null,
       h('div', { class: 'kanban' }, todo, doing, prs),
       cols.hiddenPrs ? h('div', { class: 'empty' }, `${cols.hiddenPrs} PR${cols.hiddenPrs === 1 ? '' : 's'} by other people hidden`) : null,
     );

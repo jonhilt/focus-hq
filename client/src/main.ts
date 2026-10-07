@@ -162,8 +162,6 @@ async function main() {
       splashStatus,
     ),
   );
-  splash.querySelector('.card')!.classList.add('panel');
-  (splash.querySelector('.card') as HTMLElement).style.padding = '28px';
   document.body.append(splash);
   enter.onclick = () => {
     started = true;

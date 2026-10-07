@@ -1,4 +1,3 @@
-import { STATUS_ICON } from './agentStatus';
 import { issueKey, waitingFor } from './dependencies';
 import type { Agent, Board, Issue, Project, PullRequest } from './types';
 
@@ -40,20 +39,20 @@ export function columns(project: Project, board: Board | undefined, agents: Agen
 /** Where a goal is, in a few words: which slice, and whether its lead is at it, waiting on a PR, or waiting for you. */
 export function goalState(lead: Pick<Agent, 'status' | 'lead'>): string {
   const work = lead.lead;
-  if (work?.closing) return '🏁 Ready to wrap up';
+  if (work?.closing) return 'Ready to wrap up';
   const slice = `Slice ${work?.slice ?? 1}`;
   switch (lead.status) {
     case 'waiting':
-      return `${slice} · ✋ needs approval`;
+      return `${slice} · needs approval`;
     case 'error':
-      return `${slice} · ❗ hit a problem`;
+      return `${slice} · hit a problem`;
     case 'done':
     case 'stopped': {
       const open = work?.prs.filter((p) => !p.outcome).length ?? 0;
-      return `${slice} · ${open ? `👀 ${open} PR${open === 1 ? '' : 's'} open` : '💬 waiting for you'}`;
+      return `${slice} · ${open ? `${open} PR${open === 1 ? '' : 's'} open` : 'waiting for you'}`;
     }
     default:
-      return `${slice} · ${STATUS_ICON[lead.status]} ${lead.status}`;
+      return `${slice} · ${lead.status}`;
   }
 }
 

@@ -17,24 +17,24 @@ export function qaBadge(review: QaReview | undefined, pr: Pick<PullRequest, 'hea
   if (!review) return { state: 'none', label: 'not tested' };
   switch (review.status) {
     case 'queued':
-      return { state: 'queued', label: '⏳ QA queued' };
+      return { state: 'queued', label: 'QA queued' };
     case 'testing':
-      return { state: 'testing', label: '🔍 QA testing' };
+      return { state: 'testing', label: 'QA testing' };
     case 'error':
-      return { state: 'error', label: '⚠ QA couldn’t finish' };
+      return { state: 'error', label: 'QA couldn’t finish' };
     case 'passed':
     case 'failed': {
       if (review.sha && pr.headSha && !sameCommit(review.sha, pr.headSha)) return { state: 'stale', label: `QA ${review.status} an older commit` };
-      if (review.status === 'passed') return { state: 'passed', label: '✅ QA passed' };
+      if (review.status === 'passed') return { state: 'passed', label: 'QA passed' };
       switch (review.followUp?.kind) {
         case 'fixing':
-          return { state: 'fixing', label: `🔧 QA failed: back with ${review.followUp.agentName}` };
+          return { state: 'fixing', label: `QA failed: back with ${review.followUp.agentName}` };
         case 'triaging':
-          return { state: 'triaging', label: `🧭 ${review.followUp.officer} is looking` };
+          return { state: 'triaging', label: `${review.followUp.officer} is looking` };
         case 'needs-you':
-          return { state: 'needs-you', label: '🙋 QA failed: needs you' };
+          return { state: 'needs-you', label: 'QA failed: needs you' };
         case undefined:
-          return { state: 'failed', label: '❌ QA failed' };
+          return { state: 'failed', label: 'QA failed' };
       }
     }
   }

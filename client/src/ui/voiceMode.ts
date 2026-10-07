@@ -126,7 +126,7 @@ export class VoiceSession {
  * hands `switched` the session to carry on with (null when it's now off).
  */
 export function voiceToggle(voice: VoiceSession | null, switched: (voice: VoiceSession | null) => void): HTMLElement {
-  const toggle = h('button', { class: `btn small${voice ? ' primary' : ''}`, title: voice ? 'Voice mode is on: the crew speak, and 🎤 sends what you say. Click to turn it off.' : 'Voice mode: the crew say their lines aloud, and you answer by talking' }, voice ? '🔊 Voice on' : '🔈 Voice off');
+  const toggle = h('button', { class: `btn small${voice ? ' primary' : ''}`, title: voice ? 'Voice mode is on: the crew speak, and Mic sends what you say. Click to turn it off.' : 'Voice mode: the crew say their lines aloud, and you answer by talking' }, voice ? '🔊 Voice on' : '🔈 Voice off');
   toggle.onclick = () => {
     voice?.end();
     voicePrefs.voiceMode = !voice;

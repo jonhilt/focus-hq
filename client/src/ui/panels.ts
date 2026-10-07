@@ -1,27 +1,50 @@
 import { h } from './dom';
 
+/** A panel's views, down its sidebar: Alt+1… picks them by number. */
+export interface PanelNav {
+  el: HTMLElement;
+  /** Picks the view numbered `n` (from 1), unless it's on standby. */
+  pick(n: number): void;
+}
+
 export interface PanelOptions {
   title: string | Node;
   body: HTMLElement;
   accent?: string;
   wide?: boolean;
-  tabs?: HTMLElement;
+  /** The panel's views: the sidebar widens to hold their buttons. */
+  nav?: PanelNav;
+  /** Switches at the foot of the sidebar, under the views. */
+  side?: HTMLElement;
   footer?: HTMLElement;
+  /** Buttons on the header bar, before the title. */
   headerExtra?: Node[];
 }
 
-/** Hosts one modal panel at a time. Opening a panel releases the mouse; closing it grabs it again. */
+/**
+ * Hosts one modal panel at a time, in an LCARS frame: an elbow joins the sidebar to the header bar (title at its right
+ * end, then CLOSE), and a second one joins it to the bar along the bottom. Opening a panel releases the mouse; closing
+ * it grabs it again.
+ */
 export class Panels {
   private overlay: HTMLDivElement | null = null;
+  private nav: PanelNav | undefined;
   private cleanups: (() => void)[] = [];
   onOpen: () => void = () => undefined;
   onClose: () => void = () => undefined;
 
   constructor() {
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.overlay) {
+      if (!this.overlay) return;
+      if (e.key === 'Escape') {
         e.preventDefault();
         this.close();
+      }
+      // e.code, since Alt+digit types a symbol on a Mac
+      const digit = /^Digit([1-9])$/.exec(e.code);
+      if (digit && e.altKey && this.nav) {
+        e.preventDefault();
+        this.nav.pick(Number(digit[1]));
       }
     });
   }
@@ -32,13 +55,22 @@ export class Panels {
 
   open(opts: PanelOptions): void {
     this.close(false);
+    const title = typeof opts.title === 'string' ? h('h2', null, opts.title) : opts.title;
     const panel = h(
       'div',
-      { class: `panel${opts.wide ? ' wide' : ''}`, style: opts.accent ? `--accent:${opts.accent}` : undefined },
-      h('div', { class: 'panel-head' }, typeof opts.title === 'string' ? h('h2', null, opts.title) : opts.title, ...(opts.headerExtra ?? []), h('button', { class: 'btn close', title: 'Close (Esc)', onclick: () => this.close() }, '✕')),
-      opts.tabs ?? null,
+      { class: `panel${opts.wide ? ' wide' : ''}${opts.nav ? ' has-nav' : ''}`, style: opts.accent ? `--accent:${opts.accent}` : undefined },
+      h('div', { class: 'panel-elbow' }),
+      h('div', { class: 'panel-head' },
+        ...(opts.headerExtra ?? []),
+        h('span', { class: 'panel-bar' }),
+        title,
+        h('button', { class: 'panel-close', title: 'Close (Esc)', onclick: () => this.close() }, 'Close'),
+      ),
+      opts.nav ? h('div', { class: 'panel-nav' }, opts.nav.el) : null,
+      h('div', { class: 'panel-side' }, opts.side ?? null),
       h('div', { class: 'panel-body' }, opts.body),
-      opts.footer ?? null,
+      opts.footer ? h('div', { class: 'panel-foot' }, opts.footer) : null,
+      h('div', { class: 'panel-base' }),
     );
     const overlay = h('div', { class: 'overlay' }, panel);
     overlay.addEventListener('mousedown', (e) => {
@@ -46,6 +78,7 @@ export class Panels {
     });
     document.body.append(overlay);
     this.overlay = overlay;
+    this.nav = opts.nav;
     this.onOpen();
     const focusable = panel.querySelector<HTMLElement>('[autofocus]');
     focusable?.focus();
@@ -61,6 +94,78 @@ export class Panels {
     for (const fn of this.cleanups.splice(0)) fn();
     this.overlay.remove();
     this.overlay = null;
+    this.nav = undefined;
     if (notify) this.onClose();
   }
+}
+
+/** One of a panel's views, as its sidebar button shows it. */
+export interface NavItem<K extends string> {
+  key: K;
+  label: string;
+  /** A short live readout on the button: a count, a fraction, LIVE. */
+  readout?: string;
+  /** Nothing to show there right now: dimmed, and can't be picked. */
+  standby?: boolean;
+}
+
+/**
+ * An LCARS sidebar's buttons, one per view: numbered (the number is its Alt shortcut), the picked one lit. `show` updates
+ * the buttons in place, so a re-render doesn't take focus off the one you're on.
+ */
+export class SideNav<K extends string> implements PanelNav {
+  readonly el = h('div', { class: 'side-nav', attrs: { role: 'tablist', 'aria-orientation': 'vertical' } });
+  private items: readonly NavItem<K>[] = [];
+  private buttons = new Map<K, HTMLButtonElement>();
+
+  constructor(private readonly onPick: (key: K) => void) {}
+
+  show(items: readonly NavItem<K>[], picked: K | undefined): void {
+    this.items = items;
+    const keep = new Set(items.map((i) => i.key));
+    for (const [key, button] of this.buttons) {
+      if (keep.has(key)) continue;
+      button.remove();
+      this.buttons.delete(key);
+    }
+    items.forEach((item, i) => {
+      const button = this.buttons.get(item.key) ?? this.button(item.key);
+      const on = item.key === picked;
+      button.className = `nav-btn${on ? ' on' : ''}${item.standby ? ' standby' : ''}`;
+      button.disabled = !!item.standby;
+      button.setAttribute('aria-selected', String(on));
+      button.title = `${item.label} (Alt+${i + 1})`;
+      button.replaceChildren(
+        h('span', { class: 'nav-num' }, String(i + 1).padStart(2, '0')),
+        h('span', { class: 'nav-readout' }, item.readout ?? ''),
+        h('span', { class: 'nav-label' }, item.label),
+      );
+      this.el.append(button); // in item order
+    });
+  }
+
+  pick(n: number): void {
+    const item = this.items[n - 1];
+    if (item && !item.standby) this.onPick(item.key);
+  }
+
+  private button(key: K): HTMLButtonElement {
+    const button = h('button', { attrs: { role: 'tab' }, onclick: () => this.onPick(key) });
+    this.buttons.set(key, button);
+    return button;
+  }
+}
+
+/** An LCARS readout: a small label over its value, in the cool colour LCARS keeps for data unless `tone` says otherwise. */
+export function readout(label: string, value: Node | string, opts: { tone?: string; title?: string; grow?: boolean } = {}): HTMLElement {
+  return h('div', { class: `readout${opts.grow ? ' grow' : ''}`, title: opts.title },
+    h('small', null, label),
+    h('b', { style: opts.tone ? `color:${opts.tone}` : undefined }, value),
+  );
+}
+
+/** The view to show: the one picked, while it has something to show; otherwise the first that does. */
+export function shownView<K extends string>(items: readonly NavItem<K>[], picked: K | undefined): K | undefined {
+  const live = items.filter((i) => !i.standby);
+  return (live.find((i) => i.key === picked) ?? live[0])?.key;
 }
