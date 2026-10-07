@@ -173,7 +173,7 @@ async function main() {
     splash.remove();
     player.lock();
     if (state.projects.length === 0) {
-      const way = { current: 'Head north into your ready room', next: 'Your ready room is off the bridge to starboard: head in there' }[theShip.kind];
+      const way = { current: 'Head north into your ready room', next: 'Your ready room is off the bridge to port: head in there' }[theShip.kind];
       hud.toast('info', `Welcome aboard, Captain! ${way} to set up your first project.`, { label: 'Open console', run: () => ui.openManager('new-project') });
     }
   };

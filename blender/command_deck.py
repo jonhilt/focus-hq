@@ -1,5 +1,5 @@
-"""The command deck: the bridge, with a turbolift behind it, the ready room off its starboard side and the observation
-lounge off its port side.
+"""The command deck: the bridge, with a turbolift behind it, the ready room off its port side and the observation
+lounge off its starboard side.
 
 The bridge is a sixteen-sided room with its three forward sides flattened into one wall for the viewscreen. The
 captain's chair sits in the middle of a ring of lighter carpet, flanked by two more; conn and ops face the viewscreen
@@ -95,8 +95,8 @@ def shell():
                                  profile(HEIGHT), wall_materials(), lintel_from=DOOR_H + 0.1)
     door('door turbolift', aft, DOORWAY)
     sign('sign turbolift', 'Turbolift', 1.4, LCARS['gold'], (0, 0.13, 2.82), aft, code='01-12')
-    for name, f, text, color, code in (('ready room', starboard, 'Ready room', LCARS['red'], '01-00'),
-                                       ('lounge', port, 'Observation lounge', LCARS['lilac'], '01-08')):
+    for name, f, text, color, code in (('ready room', port, 'Ready room', LCARS['red'], '01-08'),
+                                       ('lounge', starboard, 'Observation lounge', LCARS['lilac'], '01-00')):
         door(f'door {name}', f, DOORWAY, wall=2 * WALL, back=FRAME_PROUD)
         sign(f'sign {name}', text, 1.6, color, (0, 0.13, 2.82), f, code=code)
 
@@ -203,34 +203,35 @@ def screen(name, w, h, kind, at, frame):
 
 def ready_room():
     """
-    The captain's: a desk at the far end facing the door, under a window onto space, with the captain's console on it
-    and Number One's chair at its corner; mission control on the forward wall and a couch along the aft one.
+    The captain's, off the port side: a desk at the far end facing the door, under a window onto space, with the
+    captain's console on it and Number One's chair at its corner; mission control on the forward wall and a couch along
+    the aft one.
     """
-    near, far = ROOM_NEAR, ROOM_NEAR + 8
+    near, far = -ROOM_NEAR, -(ROOM_NEAR + 8)
     mid = (near + far) / 2
     side_room('ready room', near, far, '#6e3043')
-    window('ready room window', 3.0, 1.2, (0, 1.8), wall_frame(far, 0, math.pi / 2))
+    window('ready room window', 3.0, 1.2, (0, 1.8), wall_frame(far, 0, -math.pi / 2))
 
-    desk_x, chair_at = far - 2.0, (far - 0.9, 0)
+    desk_x, chair_at = far + 2.0, (far + 0.9, 0)
     top = slab('ready room desk', [(desk_x + x, y) for x, y in rounded_rect(1.1, 2.8, 0.15)], 0.7, 0.76, toon(CONSOLE_TOP), round=0.01)
-    box('ready room desk base', (0.6, 2.3, 0.7), toon(HULL['dado']), (desk_x - 0.15, 0, 0), round=0.02)
+    box('ready room desk base', (0.6, 2.3, 0.7), toon(HULL['dado']), (desk_x + 0.15, 0, 0), round=0.02)
     collide_object(top)
-    command_chair('ready room', chair_at, math.pi / 2, COMMAND_RED, 0.85)
-    captains_console(Matrix.Translation((desk_x - 0.25, 0, 0.76)) @ Matrix.Rotation(-math.pi / 2, 4, 'Z'))
-    seat = (desk_x - 1.4, 1.9)
+    command_chair('ready room', chair_at, -math.pi / 2, COMMAND_RED, 0.85)
+    captains_console(Matrix.Translation((desk_x + 0.25, 0, 0.76)) @ Matrix.Rotation(math.pi / 2, 4, 'Z'))
+    seat = (desk_x + 1.4, 1.9)
     marker('number one', 'seat', (seat[0], seat[1], 0.005), yaw=facing(seat, chair_at), crew='number-one')
 
     mission = screen('mission control', 2.6, 2.6 * 9 / 16, {'surface': 'screen', 'screen': 'mission-control'}, (0, 1.9),
-                     wall_frame(mid - 0.8, ROOM_HALF, math.pi))
+                     wall_frame(mid + 0.8, ROOM_HALF, math.pi))
     interact('manager', 'Open mission control', mission)
-    couch('ready room couch', (mid - 1.2, -ROOM_HALF + 0.5), 0, 2.4)
+    couch('ready room couch', (mid + 1.2, -ROOM_HALF + 0.5), 0, 2.4)
     for y, seed in ((2.4, 51), (-2.4, 52)):
-        readout(f'ready room readout {seed}', 0.8, 1.1, seed, (0, 0, 1.3), wall_frame(near, y, -math.pi / 2))
+        readout(f'ready room readout {seed}', 0.8, 1.1, seed, (0, 0, 1.3), wall_frame(near, y, math.pi / 2))
     for x in (mid - 2, mid + 2):
         ceiling_light(f'ready room light {x:.0f}', 2.0, 1.0, (x, 0))
-    place = (near + 1.2, -0.8)
+    place = (near - 1.2, -0.8)
     marker('place ready room', 'place', (*place, 0), yaw=facing(place, (desk_x, 0.6)), label='🎖️ Ready room')
-    marker('area ready room', 'area', (mid, 0, 1), scale=((far - near) / 2 + 0.1, ROOM_HALF + 0.1, 1), label='Ready room')
+    marker('area ready room', 'area', (mid, 0, 1), scale=((near - far) / 2 + 0.1, ROOM_HALF + 0.1, 1), label='Ready room')
 
 
 def captains_console(f):
@@ -260,9 +261,9 @@ def couch(name, at, yaw, length):
 
 
 def lounge():
-    """The observation lounge: a long table running from the door to a star chart on the far wall, beside a row of
-    viewports along the aft wall."""
-    near, far = -ROOM_NEAR, -(ROOM_NEAR + 10)
+    """The observation lounge, off the starboard side: a long table running from the door to a star chart on the far
+    wall, beside a row of viewports along the aft wall."""
+    near, far = ROOM_NEAR, ROOM_NEAR + 10
     mid = (near + far) / 2
     side_room('lounge', near, far, '#3b3f5c')
     polygon('lounge rug', [(mid + x, y) for x, y in rounded_rect(7.6, 4.1, 0.6)], 0.008, material('#4a4e74', outline=False))
@@ -279,13 +280,13 @@ def lounge():
     lounge_chair('lounge chair port', (mid - length / 2 - 0.5, 0), -math.pi / 2)
     lounge_chair('lounge chair starboard', (mid + length / 2 + 0.5, 0), math.pi / 2)
 
-    screen('star chart', 2.6, 1.56, {'surface': 'star-chart'}, (0, 1.92), wall_frame(far, 0, -math.pi / 2))
+    screen('star chart', 2.6, 1.56, {'surface': 'star-chart'}, (0, 1.92), wall_frame(far, 0, math.pi / 2))
     for i, dx in enumerate((-2.9, 0, 2.9)):
         window(f'lounge window {i}', 2.4, 1.4, (0, 1.85), wall_frame(mid + dx, -ROOM_HALF, 0))
     for i, dx in enumerate((-2.4, 2.4)):
         readout(f'lounge readout {i}', 1.8, 1.0, 61 + i, (0, 0, 1.5), wall_frame(mid + dx, ROOM_HALF, math.pi))
     ceiling_light('lounge light', 5.0, 1.0, (mid, 0))
-    place = (near - 1.0, -1.3)
-    marker('place lounge', 'place', (*place, 0), yaw=facing(place, (mid - 1.0, 0.3)), label='🖖 Observation lounge')
-    marker('area lounge', 'area', (mid, 0, 1), scale=((near - far) / 2 + 0.1, ROOM_HALF + 0.1, 1), label='Observation lounge')
+    place = (near + 1.0, -1.3)
+    marker('place lounge', 'place', (*place, 0), yaw=facing(place, (mid + 1.0, 0.3)), label='🖖 Observation lounge')
+    marker('area lounge', 'area', (mid, 0, 1), scale=((far - near) / 2 + 0.1, ROOM_HALF + 0.1, 1), label='Observation lounge')
 
