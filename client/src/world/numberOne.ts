@@ -3,18 +3,12 @@ import { numberOne } from '../../../shared/crew';
 import { state } from '../net/state';
 import { interactive } from './builder';
 import { Character } from './character';
-import type { Box2 } from './layout';
+import { type Box2, type Seat, seatYaw } from './layout';
 import { numberOneView } from './numberOneView';
 import { chair } from './props';
 
 /** Number One only reads their PADD while someone's near enough to see. */
 const NEAR = 12;
-
-/** Where Number One's chair stands, and a point they turn to face: the captain's chair, or on the way to it. */
-export interface Seat {
-  at: THREE.Vector3;
-  facing: THREE.Vector3;
-}
 
 /**
  * Number One in the ready room: in a visitor's chair, turned to the captain's chair. In world coordinates: whoever
@@ -25,16 +19,17 @@ export class FirstOfficer {
   readonly footprint: Box2;
   private character: Character;
 
-  constructor({ at: seat, facing }: Seat) {
+  /** `seat` faces the captain's chair, or a point on the way to it. */
+  constructor(seat: Seat) {
     const g = this.group;
-    g.position.copy(seat);
-    // chairs and characters face +X: turn them to the captain
-    g.rotation.y = Math.atan2(-(facing.z - seat.z), facing.x - seat.x);
+    g.position.copy(seat.at);
+    g.rotation.y = seatYaw(seat);
     g.add(chair('#7b2d43'));
     // there's no keyboard on the visitor's side of the desk: they read and tap a PADD
     this.character = new Character(numberOneView(state.numberOne), 'padd');
     g.add(this.character.group);
-    this.footprint = { minX: seat.x - 0.4, maxX: seat.x + 0.4, minZ: seat.z - 0.4, maxZ: seat.z + 0.4 };
+    const { x, z } = seat.at;
+    this.footprint = { minX: x - 0.4, maxX: x + 0.4, minZ: z - 0.4, maxZ: z + 0.4 };
     interactive(g, { kind: 'number-one' }, () => `Talk to ${numberOne().name}, your first officer`);
   }
 

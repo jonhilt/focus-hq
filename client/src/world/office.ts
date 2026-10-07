@@ -6,14 +6,15 @@ import { ACTIVE_STATUSES } from '../../../shared/types';
 import { state } from '../net/state';
 import { Builder, interactive } from './builder';
 import type { Deck } from './deck';
+import type { HolodeckDeck } from './holodeckDeck';
 import type { ScreenName } from './deckExtras';
 import { canvasTexture, fitText, makeCanvas, roundRect } from './canvas';
-import { type Box2, contains, DOOR_W, HALL_HALF, LOBBY, LOUNGE, LOUNGE_DOOR_X, OFFICE, OVER_DOOR, ROOM_DEPTH, ROOM_WIDTH, roomSlot, roomToWorld, rowsFor, SUN_POSITION, WALL_H, WALL_T } from './layout';
+import { type Box2, contains, DOOR_W, HALL_HALF, LOBBY, LOUNGE, LOUNGE_DOOR_X, OFFICE, OVER_DOOR, ROOM_DEPTH, ROOM_WIDTH, roomSlot, roomToWorld, rowsFor, type Seat, slotAt, SUN_POSITION, WALL_H, WALL_T } from './layout';
 import { box, flat, toon, toonMaterial } from './materials';
 import { bookshelf, ceilingLight, chair, coffeeMachine, cyl, desk, DESK_TOP, plant, rug, sofa, trophy, waterCooler } from './props';
 import { EngineeringStation } from './engineering';
 import { Lounge } from './lounge';
-import { FirstOfficer, type Seat } from './numberOne';
+import { FirstOfficer } from './numberOne';
 import { buildHiddenRoom, buildVacantRoom, ProjectRoom } from './room';
 import type { Scenery } from './scenery';
 import { tiled } from './textures';
@@ -30,14 +31,14 @@ export interface Place {
 
 const OUTER_X = HALL_HALF + ROOM_DEPTH;
 const OFFICE_WALL = '#cfd3e6';
-/** While the ready room's aboard a deck, the turbolift stops at the lobby's north door, where the ready room's was. */
-const LOBBY_LIFT: Place = { label: 'Deck 4 · Holodecks', position: new THREE.Vector3(0, 0, LOBBY.z1 - 1.2), lookAt: new THREE.Vector3(0, 1.6, 0) };
+const CONCOURSE: Place = { label: '🛋️ Concourse', position: new THREE.Vector3(0, 0, LOBBY.z1 - 1.2), lookAt: new THREE.Vector3(0, 1.6, 0) };
 
 /**
- * Where the ready room, and the lounge beyond it, are: aboard the deck built in Blender that seats Number One (who's
- * always in the ready room), or built here, north of the lobby.
+ * The ship the World builds: as it is, all built here, or as it'll be (`?ship=next`), its decks built in Blender: the
+ * command deck (the bridge, and the ready room and lounge, with Number One), and the holodeck deck, whose hallway and
+ * holodecks stand where the old ones do, and whose turbolift and engineering stand in for the concourse.
  */
-type ReadyRoom = { kind: 'aboard'; numberOne: Seat } | { kind: 'here' };
+export type Ship = { kind: 'current' } | { kind: 'next'; command: Deck; holodecks: HolodeckDeck };
 
 /** A room north of the lobby: the floor it covers, where to teleport to in it, and the way the directory points to it. */
 interface NorthRoom {
@@ -54,9 +55,10 @@ export class World {
   rooms = new Map<string, ProjectRoom>();
   engineering: EngineeringStation | null = null;
   numberOne: FirstOfficer | null = null;
-  private readonly readyRoom: ReadyRoom;
   private lounge: Lounge | null = null;
   private northRooms: NorthRoom[] = [];
+  /** The holodeck deck, as put together for the rows the ship has now (on the next ship). */
+  private holodeckDeck: Deck[] = [];
   /** Room landscapes by project, theme and slot; kept across rebuilds since they're slow to make. */
   private sceneries = new Map<string, Scenery>();
   private builder: Builder | null = null;
@@ -66,23 +68,36 @@ export class World {
   private dashboardTex = canvasTexture(this.dashboard.canvas);
   private directory = makeCanvas(768, 1024);
   private directoryTex = canvasTexture(this.directory.canvas);
+  /** What the decks built in Blender show on their screens. */
+  private readonly screens: Record<ScreenName, THREE.Material> = { 'mission-control': flat(this.dashboardTex) };
   private panelsDirty = true;
   private lastPanels = 0;
   private projectKey = '';
   /** Holodecks of hidden projects: locked, and nameless. */
   private inUse = new Set<number>();
 
-  /** `decks` are the parts of the ship built in Blender; the rest is built here. */
   constructor(
     scene: THREE.Scene,
-    private readonly decks: Deck[] = [],
+    private readonly ship: Ship,
   ) {
     scene.add(this.root);
-    for (const deck of decks) this.root.add(deck.root);
-    const screens: Record<ScreenName, THREE.Material> = { 'mission-control': flat(this.dashboardTex) };
-    for (const { screen, mesh } of decks.flatMap((d) => d.screens)) mesh.material = screens[screen];
-    const numberOne = decks.find((d) => d.numberOne)?.numberOne;
-    this.readyRoom = numberOne ? { kind: 'aboard', numberOne } : { kind: 'here' };
+    for (const deck of this.decks()) this.mount(deck, this.root);
+  }
+
+  /** Puts a deck built in Blender into `parent`, its screens showing what the World draws for them. */
+  private mount(deck: Deck, parent: THREE.Object3D): void {
+    parent.add(deck.root);
+    for (const { screen, mesh } of deck.screens) mesh.material = this.screens[screen];
+  }
+
+  /** The decks built in Blender aboard the ship. */
+  private decks(): Deck[] {
+    switch (this.ship.kind) {
+      case 'current':
+        return [];
+      case 'next':
+        return [this.ship.command, ...this.holodeckDeck];
+    }
   }
 
   /** Rebuilds the building when the set of projects (or their names/colours/repos, or which are hidden) changes. */
@@ -113,28 +128,63 @@ export class World {
     this.builder = b;
 
     const rows = rowsFor(projects.length);
-    const hallEnd = -rows * ROOM_WIDTH;
     const decks = holodecks(projects, rows * 2);
     this.inUse = new Set(decks.flatMap((deck, i) => (deck.kind === 'in-use' ? [i] : [])));
 
+    // rooms
+    const previous = this.sceneries;
+    this.sceneries = new Map();
+    decks.forEach((deck, i) => {
+      const slot = roomSlot(i);
+      if (deck.kind === 'vacant') return void buildVacantRoom(slot, b);
+      if (deck.kind === 'in-use') return void buildHiddenRoom(slot, b);
+      const { project } = deck;
+      const theme = roomTheme(project);
+      const key = `${project.id}|${theme}|${i}`;
+      let scenery = previous.get(key) ?? null;
+      previous.delete(key);
+      // the stencil value (slot + 1) and the sun direction both depend on the slot, hence the key
+      scenery ??= createScenery(theme, i + 1, project.id, SUN_POSITION.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -slot.rotationY));
+      if (scenery) this.sceneries.set(key, scenery);
+      this.rooms.set(project.id, new ProjectRoom(project, slot, b, scenery));
+    });
+    for (const scenery of previous.values()) scenery.dispose();
+
+    switch (this.ship.kind) {
+      case 'current':
+        this.buildHallway(b, rows);
+        this.buildLobby(b);
+        this.buildReadyRoom(b);
+        this.buildEngineering(b);
+        break;
+      case 'next':
+        this.buildHolodeckDeck(b, rows, this.ship.holodecks);
+        this.seatNumberOne(b, this.ship.command.seat('number-one'));
+        break;
+    }
+
+    this.root.add(b.group);
+    this.colliders = [...b.colliders, ...this.decks().flatMap((d) => d.colliders)];
+    this.doors = [...b.doors, ...this.decks().flatMap((d) => d.doors)];
+    this.panelsDirty = true;
+  }
+
+  /** The holodecks' hallway, from the concourse south, its walls and the holodecks' doors, which lock for hidden projects. */
+  private buildHallway(b: Builder, rows: number): void {
+    const hallEnd = -rows * ROOM_WIDTH;
     // floors and ceiling
-    b.floor(LOBBY.x0, LOBBY.x1, LOBBY.z0, LOBBY.z1, toon('#ffffff', { map: tiled.carpet('#4a3f6e', 6, 4) }));
     b.floor(-HALL_HALF, HALL_HALF, hallEnd, 0, toon('#ffffff', { map: tiled.carpet(HULL.carpet, 3, -hallEnd / 2) }));
     // the hallway grows with every project, so lifting the edge strips clear of the carpet would never be enough from
     // its far end: they win the depth test by offset instead
     const edge = toonMaterial({ color: HULL.carpetEdge, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 });
     for (const s of [-1, 1]) b.floor(s * (HALL_HALF - 0.45), s * (HALL_HALF - 0.3), hallEnd, 0, edge);
-    b.ceiling(-OUTER_X, OUTER_X, hallEnd, LOBBY.z1);
+    b.ceiling(-OUTER_X, OUTER_X, hallEnd, 0);
 
     // walls
-    const lobbyWall = '#e2d6dc';
     const roomWall = HULL.bulkhead;
     // Walls run unbroken between corners: two lengths meeting end to end leave a seam that flickers down their face.
-    b.wall(LOBBY.x0, LOBBY.z0, LOBBY.x0, LOBBY.z1, lobbyWall);
-    b.wall(LOBBY.x1, LOBBY.z0, LOBBY.x1, LOBBY.z1, lobbyWall);
-    for (const s of [-1, 1]) {
-      // rooms on the right (+x) take the even slots
-      const roomDoors = Array.from({ length: rows }, (_, r) => ({ at: -(r + 0.5) * ROOM_WIDTH, width: DOOR_W, locked: this.inUse.has(r * 2 + (s > 0 ? 0 : 1)) }));
+    for (const s of [-1, 1] as const) {
+      const roomDoors = Array.from({ length: rows }, (_, r) => ({ at: -(r + 0.5) * ROOM_WIDTH, width: DOOR_W, locked: this.inUse.has(slotAt(r, s)) }));
       b.wall(s * HALL_HALF, hallEnd, s * HALL_HALF, 0, roomWall, roomDoors);
       b.wall(s * OUTER_X, hallEnd, s * OUTER_X, 0, roomWall);
     }
@@ -158,45 +208,38 @@ export class World {
     const endWindow = viewport(2.4, 1.6);
     endWindow.position.set(0, 1.9, hallEnd + WALL_T / 2 + 0.005);
     b.add(endWindow);
+  }
 
-    // rooms
-    const previous = this.sceneries;
-    this.sceneries = new Map();
-    decks.forEach((deck, i) => {
-      const slot = roomSlot(i);
-      if (deck.kind === 'vacant') return void buildVacantRoom(slot, b);
-      if (deck.kind === 'in-use') return void buildHiddenRoom(slot, b);
-      const { project } = deck;
-      const theme = roomTheme(project);
-      const key = `${project.id}|${theme}|${i}`;
-      let scenery = previous.get(key) ?? null;
-      previous.delete(key);
-      // the stencil value (slot + 1) and the sun direction both depend on the slot, hence the key
-      scenery ??= createScenery(theme, i + 1, project.id, SUN_POSITION.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -slot.rotationY));
-      if (scenery) this.sceneries.set(key, scenery);
-      this.rooms.set(project.id, new ProjectRoom(project, slot, b, scenery));
-    });
-    for (const scenery of previous.values()) scenery.dispose();
-
-    this.buildLobby(b);
-    switch (this.readyRoom.kind) {
-      case 'here':
-        this.buildReadyRoom(b);
-        break;
-      case 'aboard':
-        this.buildLobbyLift(b);
-        this.seatNumberOne(b, this.readyRoom.numberOne);
-        break;
+  /** The holodeck deck built in Blender, put together for `rows` rows, and the holodecks' doors, which lock for hidden projects. */
+  private buildHolodeckDeck(b: Builder, rows: number, holodecks: HolodeckDeck): void {
+    const deck = holodecks.assemble(rows);
+    this.holodeckDeck = [deck.head, ...deck.rows, deck.tail];
+    for (const part of this.holodeckDeck) this.mount(part, b.group);
+    for (let i = 0; i < rows * 2; i++) {
+      const { side, center } = roomSlot(i);
+      b.slidingDoors(new THREE.Vector3(side * HALL_HALF, 0, center.z), Math.PI / 2, DOOR_W, this.inUse.has(i));
     }
-    this.engineering = new EngineeringStation(b);
+    this.seatEngineer(b, deck.head.seat('engineer'));
+  }
 
-    this.root.add(b.group);
-    this.colliders = [...b.colliders, ...this.decks.flatMap((d) => d.colliders)];
-    this.doors = [...b.doors, ...this.decks.flatMap((d) => d.doors)];
-    this.panelsDirty = true;
+  /** Against the concourse's south wall, east of the corridor: the first post you pass on the way up from the holodecks. */
+  private buildEngineering(b: Builder): void {
+    const x = 4.8;
+    this.seatEngineer(b, { at: new THREE.Vector3(x, 0, LOBBY.z0 + 1.35), facing: new THREE.Vector3(x, 0, LOBBY.z0) });
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.42), flat(lcarsSign('Engineering', { color: LCARS.gold, code: '04-07', h: 216 })));
+    sign.position.set(x, 2.82, LOBBY.z0 + 0.12);
+    b.add(sign);
+    const board = lcarsConsole(1.8, 0.8, 43);
+    board.position.set(x, 2.0, LOBBY.z0 + 0.13);
+    b.add(board);
   }
 
   private buildLobby(b: Builder): void {
+    b.floor(LOBBY.x0, LOBBY.x1, LOBBY.z0, LOBBY.z1, toon('#ffffff', { map: tiled.carpet('#4a3f6e', 6, 4) }));
+    b.ceiling(-OUTER_X, OUTER_X, LOBBY.z0, LOBBY.z1);
+    const lobbyWall = '#e2d6dc';
+    b.wall(LOBBY.x0, LOBBY.z0, LOBBY.x0, LOBBY.z1, lobbyWall);
+    b.wall(LOBBY.x1, LOBBY.z0, LOBBY.x1, LOBBY.z1, lobbyWall);
     // hanging sign over the hallway entrance
     const hallSign = new THREE.Mesh(new THREE.PlaneGeometry(3.7, 0.62), flat(lcarsSign('Holodecks', { color: LCARS.periwinkle, sub: 'one per project', code: 'Deck 4' })));
     hallSign.position.set(0, 2.75, 0.15);
@@ -398,49 +441,37 @@ export class World {
     }
   }
 
+  private seatEngineer(b: Builder, seat: Seat): void {
+    this.engineering = new EngineeringStation(seat);
+    b.add(this.engineering.group);
+    b.colliders.push(this.engineering.footprint);
+  }
+
   private seatNumberOne(b: Builder, seat: Seat): void {
     this.numberOne = new FirstOfficer(seat);
     b.add(this.numberOne.group);
     b.colliders.push(this.numberOne.footprint);
   }
 
-  /** Where you come aboard: the first deck built in Blender, or the concourse. */
+  /** Where you come aboard: the bridge, which sorts first of the command deck's places, or the concourse. */
   boarding(): Place {
-    return this.decks[0]?.places[0] ?? { label: '🛋️ Concourse', position: new THREE.Vector3(0, 0, 8), lookAt: new THREE.Vector3(0, 1.6, 0) };
-  }
-
-  /** Nothing's north of the lobby any more: its north door is the turbolift's, shut until a car comes. */
-  private buildLobbyLift(b: Builder): void {
-    b.wall(LOBBY.x0, LOBBY.z1, LOBBY.x1, LOBBY.z1, OFFICE_WALL, [{ at: 0, width: DOOR_W, locked: true }]);
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 0.62), flat(lcarsSign('Turbolift', { color: LCARS.gold, code: '04-01' })));
-    sign.position.set(0, 2.88, LOBBY.z1 - OVER_DOOR);
-    sign.rotation.y = Math.PI;
-    b.add(sign);
-    const panel = lcarsConsole(0.9, 0.95, 41);
-    panel.position.set(DOOR_W / 2 + 0.9, 1.95, LOBBY.z1 - 0.13);
-    panel.rotation.y = Math.PI;
-    b.add(panel);
-    for (const o of [sign, panel]) interactive(o, { kind: 'turbolift' }, () => 'Use the turbolift');
-  }
-
-  /** Where the turbolift stops: in each deck's car, and at the lobby's north door while the ready room's aboard a deck. */
-  stops(): Place[] {
-    const cars = this.decks.flatMap((d) => d.stops);
-    switch (this.readyRoom.kind) {
-      case 'here':
-        return cars;
-      case 'aboard':
-        return [...cars, LOBBY_LIFT];
+    switch (this.ship.kind) {
+      case 'current':
+        return { label: '🛋️ Concourse', position: new THREE.Vector3(0, 0, 8), lookAt: new THREE.Vector3(0, 1.6, 0) };
+      case 'next':
+        return this.ship.command.places[0];
     }
+  }
+
+  /** Where the turbolift stops: in each deck's car. */
+  stops(): Place[] {
+    return this.decks().flatMap((d) => d.stops);
   }
 
   /** Teleport destinations. */
   places(): Place[] {
-    const places: Place[] = [
-      ...this.decks.flatMap((d) => d.places),
-      { label: '🛋️ Concourse', position: new THREE.Vector3(0, 0, LOBBY.z1 - 1.2), lookAt: new THREE.Vector3(0, 1.6, 0) },
-      ...this.northRooms.map((r) => r.place),
-    ];
+    const places: Place[] = this.decks().flatMap((d) => d.places);
+    if (this.ship.kind === 'current') places.push(CONCOURSE, ...this.northRooms.map((r) => r.place));
     for (const room of this.rooms.values()) {
       places.push({
         label: `🚪 ${room.project.name}`,
@@ -454,16 +485,17 @@ export class World {
 
   /** Human name of where a world position is. */
   locationOf(p: THREE.Vector3): { label: string; projectId?: string } {
-    for (const deck of this.decks) {
+    for (const deck of this.decks()) {
       const label = deck.areaAt(p);
       if (label) return { label };
     }
-    const north = this.northRooms.find((r) => contains(r.area, p));
-    if (north) return { label: north.name };
-    if (p.z > 0) return { label: 'Concourse' };
+    if (this.ship.kind === 'current') {
+      const north = this.northRooms.find((r) => contains(r.area, p));
+      if (north) return { label: north.name };
+      if (p.z > 0) return { label: 'Concourse' };
+    }
     if (Math.abs(p.x) < HALL_HALF) return { label: 'Corridor' };
-    const row = Math.floor(-p.z / ROOM_WIDTH);
-    const index = row * 2 + (p.x > 0 ? 0 : 1);
+    const index = slotAt(Math.floor(-p.z / ROOM_WIDTH), p.x > 0 ? 1 : -1);
     const room = [...this.rooms.values()].find((r) => r.slot.index === index);
     if (room) return { label: room.project.name, projectId: room.project.id };
     return { label: this.inUse.has(index) ? 'Holodeck in use' : 'Vacant holodeck' };
@@ -485,7 +517,8 @@ export class World {
       this.panelsDirty = false;
       this.lastPanels = now;
       this.drawDashboard();
-      this.drawDirectory();
+      // the directory hangs in the concourse
+      if (this.ship.kind === 'current') this.drawDirectory();
     }
   }
 

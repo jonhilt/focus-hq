@@ -1,10 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { interactive } from './builder';
-import { type Marker, readInteraction, readMarker, readSurface, type ScreenName, type Surface } from './deckExtras';
-import { type Box2, contains } from './layout';
+import { type Crew, type Marker, readInteraction, readMarker, readSurface, type ScreenName, type Surface } from './deckExtras';
+import { type Box2, contains, type Seat } from './layout';
 import { flat, noOutline, toon, toonMaterial } from './materials';
-import type { Seat } from './numberOne';
 import type { Place } from './office';
 import { lcarsSign, readoutTexture, SlidingDoors, starChartTexture, touchPanelTexture } from './starship';
 import { viewportGlass } from './starfield';
@@ -22,13 +21,21 @@ function gltfTexture(tex: THREE.Texture): THREE.Texture {
   return tex;
 }
 
+/** Geometry whose UVs are already flipped: a module's copies share it. */
+const flipped = new WeakSet<THREE.BufferGeometry>();
+
 /** A screen shows the World's canvas textures, which are flipped the three.js way: turn its glTF UVs to match. */
 function flipUVs(mesh: THREE.Mesh): THREE.Mesh {
+  if (flipped.has(mesh.geometry)) return mesh;
+  flipped.add(mesh.geometry);
   const uv = mesh.geometry.getAttribute('uv');
   for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));
   uv.needsUpdate = true;
   return mesh;
 }
+
+/** What each glTF material is drawn with, made once however many copies of a module use it. */
+const surfaces = new WeakMap<THREE.Material, THREE.Material>();
 
 let keys: THREE.Material | undefined;
 
@@ -78,7 +85,7 @@ export class Deck {
   /** The screens the World draws on. */
   readonly screens: { screen: ScreenName; mesh: THREE.Mesh }[] = [];
   private readonly areas: { label: string; box: Box2 }[] = [];
-  private seat: Seat | undefined;
+  private readonly seats = new Map<Crew, Seat>();
 
   /** Loads a deck's GLB and puts its origin at `origin` in the world. */
   static async load(url: string, origin: THREE.Vector3): Promise<Deck> {
@@ -86,12 +93,16 @@ export class Deck {
     return new Deck(gltf.scene, origin);
   }
 
+  /** A deck of one module of a GLB (blender/kit.py: module), a copy of which it puts at `origin` in the world. */
+  static from(module: THREE.Object3D, origin: THREE.Vector3): Deck {
+    return new Deck(module.clone(), origin);
+  }
+
   private constructor(scene: THREE.Object3D, origin: THREE.Vector3) {
     scene.position.copy(origin);
     this.root.add(scene);
     this.root.updateMatrixWorld(true);
     const markers: THREE.Object3D[] = [];
-    const materials = new Map<THREE.Material, THREE.Material>();
     scene.traverse((o) => {
       const marker = readMarker(o.userData);
       if (marker) {
@@ -105,17 +116,19 @@ export class Deck {
         const gltf = o.material;
         const surface = readSurface(gltf.userData);
         if (surface.kind === 'screen') this.screens.push({ screen: surface.screen, mesh: flipUVs(o) });
-        let mat = materials.get(gltf);
-        if (!mat) materials.set(gltf, (mat = surfaceMaterial(surface, `#${gltf.color.getHexString()}`)));
+        let mat = surfaces.get(gltf);
+        if (!mat) surfaces.set(gltf, (mat = surfaceMaterial(surface, `#${gltf.color.getHexString()}`)));
         o.material = mat;
       }
     });
     for (const o of markers) o.removeFromParent();
   }
 
-  /** Where Number One sits on this deck, if they're aboard it. */
-  get numberOne(): Seat | undefined {
-    return this.seat;
+  /** Where `crew` sits on this deck: asking a deck that hasn't a seat for them is a bug, so it fails loudly. */
+  seat(crew: Crew): Seat {
+    const seat = this.seats.get(crew);
+    if (!seat) throw new Error(`Deck extras: no seat marker for crew ${crew}`);
+    return seat;
   }
 
   private read(o: THREE.Object3D, marker: Marker): void {
@@ -141,9 +154,9 @@ export class Deck {
       case 'area':
         this.areas.push({ label: marker.label, box: footprint(o) });
         break;
-      case 'number-one': {
+      case 'seat': {
         const ahead = new THREE.Vector3(0, 0, -1).applyQuaternion(turn);
-        this.seat = { at, facing: at.clone().add(ahead) };
+        this.seats.set(marker.crew, { at, facing: at.clone().add(ahead) });
         break;
       }
     }

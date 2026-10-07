@@ -14,8 +14,8 @@ import math
 from mathutils import Matrix, Vector
 
 from kit import (DOOR_H, FRAME_PROUD, HULL, LCARS, annulus, bezel, box, collide_footprint, collide_object, collide_path,
-                 cylinder, door, interact, marker, material, pane, panel, polygon, prism, readout, ring_points,
-                 rounded_rect, sign, slab, sweep, toon, unlit, walls)
+                 cylinder, door, facing, interact, marker, material, pane, panel, polygon, prism, readout, ring_points,
+                 rounded_rect, sign, slab, sweep, toon, turbolift_car, unlit, walls, window)
 
 APOTHEM = 7.5
 HEIGHT = 4.0
@@ -49,11 +49,6 @@ def wall_materials():
             toon(HULL['dado']), toon(HULL['dado'])]
 
 
-def facing(at, to):
-    """The yaw that turns an object's +Y from `at` towards `to`."""
-    return math.atan2(-(to[0] - at[0]), to[1] - at[1])
-
-
 def angle(side):
     return side * math.pi / 8
 
@@ -83,13 +78,13 @@ def side_length(side):
 
 
 def build():
-    shell()
+    aft = shell()
     viewscreen()
     wall_dressing()
     command_well()
     forward_stations()
     rail()
-    turbolift()
+    turbolift_car(aft, 'Deck 1 · Bridge', wall=WALL)
     ready_room()
     lounge()
     marker('place bridge', 'place', (0, -5.8, 0), label='🌌 Bridge')
@@ -97,6 +92,7 @@ def build():
 
 
 def shell():
+    """The bridge's walls, floor and ceiling, its doors and their signs; returns the turbolift's doorway, aft."""
     frame = toon(HULL['frame'])
     starboard, port, aft = walls('bridge wall', OUTLINE, [(SIDES.index(side), 0.0, DOORWAY) for side in (0, 8, 12)],
                                  profile(HEIGHT), wall_materials(), lintel_from=DOOR_H + 0.1)
@@ -117,6 +113,7 @@ def shell():
         a, b = SIDES[i - 1], SIDES[i]
         inward = -(Vector((math.cos(angle(a)), math.sin(angle(a)))) + Vector((math.cos(angle(b)), math.sin(angle(b))))).normalized()
         box(f'pilaster {i}', (0.26, 0.24, HEIGHT), frame, (p[0], p[1], 0), math.atan2(inward.y, inward.x) - math.pi / 2, round=0.03)
+    return aft
 
 
 def viewscreen():
@@ -215,26 +212,6 @@ def rail():
         collide_path(path, 0.12, 0.12)
 
 
-def turbolift():
-    """A round car behind the aft door: a light band near the top, a grab rail round the back, the deck panel."""
-    cy, r, h = -APOTHEM - WALL - 1.2, 1.2, 3.0
-    arc = ring_points(0, cy, r, 7, math.pi, 2 * math.pi)
-    path = [(-r, -APOTHEM - WALL)] + arc + [(r, -APOTHEM - WALL)]
-    wall, frame = toon('#a39bb8'), toon(HULL['frame'])
-    profile = [(-0.1, 0), (-0.1, h), (0, h), (0, 2.62), (0.03, 2.62), (0.03, 2.48), (0, 2.48), (0, 0)]
-    sweep('turbolift wall', path, profile, [wall, wall, wall, frame, unlit('#fff4e0'), frame, wall])
-    collide_path(path, 0.12, 0.12)
-    floor = [(-r, -APOTHEM)] + arc + [(r, -APOTHEM)]
-    polygon('turbolift floor', floor, 0, material('#3a3450', outline=False))
-    polygon('turbolift ceiling', floor, h, unlit(HULL['ceiling']), down=True)
-    annulus('turbolift light', 0, 0.6, h - 0.015, unlit('#ffffff'), at=(0, cy), down=True)
-    sweep('turbolift rail', arc, [(0.06, 0.95), (0.06, 1.0), (0.1, 1.0), (0.1, 0.95)], [frame, frame, frame], caps=True)
-    back = Matrix.Translation((0, cy - r * math.cos(math.pi / 14), 0))
-    interact('turbolift', 'Use the turbolift', readout('turbolift panel', 0.5, 0.7, 41, (0, 0, 1.3), back))
-    marker('turbolift stop', 'turbolift', (0, cy, 0), label='Deck 1 · Bridge')
-    marker('area turbolift', 'area', (0, cy, 1), scale=(r + 0.1, r + 0.1, 1), label='Turbolift')
-
-
 def side_room(name, near, far, carpet):
     """
     A room off the bridge's starboard or port side, from its wall at x = `near`, back to back with the bridge's, out to
@@ -267,12 +244,6 @@ def screen(name, w, h, kind, at, frame):
     return panel(name, w, h, material('#000000', outline=False, **kind), (at[0], 0.012, at[1] - h / 2), frame)
 
 
-def window(name, w, h, at, frame):
-    """A viewport onto space in a rounded bezel, centred `at` (across, height) on `frame`."""
-    bezel(f'{name} frame', w, h, 0.3, 0.15, 0.1, toon(HULL['frame']), (at[0], 0, at[1]), frame)
-    pane(name, rounded_rect(w, h, 0.3), material('#000000', surface='space', outline=False), (at[0], 0.012, at[1]), frame)
-
-
 def ready_room():
     """
     The captain's: a desk at the far end facing the door, under a window onto space, with the captain's console on it
@@ -290,7 +261,7 @@ def ready_room():
     command_chair('ready room', chair_at, math.pi / 2, COMMAND_RED, 0.85)
     captains_console(Matrix.Translation((desk_x - 0.25, 0, 0.76)) @ Matrix.Rotation(-math.pi / 2, 4, 'Z'))
     seat = (desk_x - 1.4, 1.9)
-    marker('number one', 'number-one', (seat[0], seat[1], 0.005), yaw=facing(seat, chair_at))
+    marker('number one', 'seat', (seat[0], seat[1], 0.005), yaw=facing(seat, chair_at), crew='number-one')
 
     mission = screen('mission control', 2.6, 2.6 * 9 / 16, {'surface': 'screen', 'screen': 'mission-control'}, (0, 1.9),
                      wall_frame(mid - 0.8, ROOM_HALF, math.pi))

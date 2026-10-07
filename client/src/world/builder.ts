@@ -92,16 +92,26 @@ export class Builder {
         piece(g1 - lip, g1 + 0.14, 0, DOOR_H + 0.14, HULL.frame, FRAME_FACE * 2);
         piece(g0, g1, DOOR_H - lip, DOOR_H + 0.14, HULL.frame, FRAME_FACE * 2);
         const mid = (g0 + g1) / 2;
-        const door = new SlidingDoors(alongX ? new THREE.Vector3(mid, 0, fixed) : new THREE.Vector3(fixed, 0, mid), alongX ? 0 : Math.PI / 2, g1 - g0, DOOR_H, locked);
-        this.doors.push(door);
-        this.add(door.group);
-        if (locked) {
-          if (alongX) this.collide(g0, g1, fixed - WALL_T / 2, fixed + WALL_T / 2);
-          else this.collide(fixed - WALL_T / 2, fixed + WALL_T / 2, g0, g1);
-        }
+        this.slidingDoors(alongX ? new THREE.Vector3(mid, 0, fixed) : new THREE.Vector3(fixed, 0, mid), alongX ? 0 : Math.PI / 2, g1 - g0, locked);
       }
       cursor = Math.max(cursor, g1);
     }
+  }
+
+  /**
+   * Sliding doors `width` wide in a doorway through a wall WALL_T thick, centred on `at` on the floor and turned `yaw`
+   * (0 for a wall along X). Locked ones stay shut and block the way.
+   */
+  slidingDoors(at: THREE.Vector3, yaw: number, width: number, locked: boolean): void {
+    const door = new SlidingDoors(at, yaw, width, DOOR_H, locked);
+    this.doors.push(door);
+    this.add(door.group);
+    if (!locked) return;
+    const c = Math.abs(Math.cos(yaw));
+    const s = Math.abs(Math.sin(yaw));
+    const dx = (c * width + s * WALL_T) / 2;
+    const dz = (s * width + c * WALL_T) / 2;
+    this.collide(at.x - dx, at.x + dx, at.z - dz, at.z + dz);
   }
 
   floor(x0: number, x1: number, z0: number, z1: number, material: THREE.Material): THREE.Mesh {

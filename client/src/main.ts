@@ -22,8 +22,9 @@ import { toastShows } from '../../shared/hidden';
 import { previewIncludes } from '../../shared/previewSet';
 import { sound } from './sound';
 import { Deck } from './world/deck';
+import { HolodeckDeck } from './world/holodeckDeck';
 import { COMMAND_DECK, SUN_POSITION } from './world/layout';
-import { World } from './world/office';
+import { type Ship, World } from './world/office';
 import { stopAt } from './world/turbolift';
 
 async function fontsReady(): Promise<void> {
@@ -31,14 +32,15 @@ async function fontsReady(): Promise<void> {
   await Promise.race([Promise.all(loads), new Promise((r) => setTimeout(r, 2500))]).catch(() => undefined);
 }
 
-/** The ship being rebuilt in Blender, deck by deck, while it's still behind ?ship=next. */
-async function nextShip(): Promise<Deck[]> {
-  if (new URLSearchParams(location.search).get('ship') !== 'next') return [];
+/** The ship as it is, or, behind ?ship=next, as it's being rebuilt in Blender, deck by deck. */
+async function ship(): Promise<Ship> {
+  if (new URLSearchParams(location.search).get('ship') !== 'next') return { kind: 'current' };
   try {
-    return [await Deck.load('/ship/command-deck.glb', COMMAND_DECK)];
+    const [command, holodecks] = await Promise.all([Deck.load('/ship/command-deck.glb', COMMAND_DECK), HolodeckDeck.load('/ship/holodeck-deck.glb')]);
+    return { kind: 'next', command, holodecks };
   } catch (err) {
-    console.error('The command deck failed to load; carrying on without it.', err);
-    return [];
+    console.error('The decks built in Blender failed to load; carrying on with the ship as it is.', err);
+    return { kind: 'current' };
   }
 }
 
@@ -64,7 +66,8 @@ async function main() {
 
   await fontsReady();
 
-  const world = new World(scene, await nextShip());
+  const theShip = await ship();
+  const world = new World(scene, theShip);
   const player = new Player(camera, renderer.domElement);
   const aboard = world.boarding();
   player.teleport(aboard.position, aboard.lookAt);
@@ -167,7 +170,8 @@ async function main() {
     splash.remove();
     player.lock();
     if (state.projects.length === 0) {
-      hud.toast('info', 'Welcome aboard, Captain! Head north into your ready room to set up your first project.', { label: 'Open console', run: () => ui.openManager('new-project') });
+      const way = { current: 'Head north into your ready room', next: 'Your ready room is off the bridge to starboard: head in there' }[theShip.kind];
+      hud.toast('info', `Welcome aboard, Captain! ${way} to set up your first project.`, { label: 'Open console', run: () => ui.openManager('new-project') });
     }
   };
 

@@ -8,9 +8,9 @@ What the browser reads (client/src/world/deck.ts), all through custom properties
 - An object's `marker` makes it a marker rather than scenery: 'collider' (an empty cube: an axis-aligned box the
   player can't walk into), 'door' (sliding doors at a doorway's centre, sliding along the empty's X: `width`,
   `height`), 'place' (a teleport destination, looking along the empty's +Y: `label`), 'area' (an empty cube: the
-  floor `label` names in the HUD), 'number-one' (where Number One's chair stands, turned along the empty's +Y: it
-  says the ready room is on this deck) or 'turbolift' (where the turbolift stops: you stand there in its car, facing
-  along the empty's +Y, and `label` names the deck).
+  floor `label` names in the HUD), 'seat' (where a crew member's chair stands, turned along the empty's +Y: `crew`,
+  'number-one' in the ready room or 'engineer' at the engineering station) or 'turbolift' (where the turbolift stops:
+  you stand there in its car, facing along the empty's +Y, and `label` names the deck).
 - An object's `interact` has pressing E on it do something: 'manager' (open the ready room console) or 'turbolift' (its
   controls), with the hint `label`.
 - A material's `surface` has the browser draw it: 'space' (a viewport onto the stars), 'keys' (an LCARS touch panel),
@@ -101,15 +101,27 @@ def unlit(color):
 # ---------------------------------------------------------------------------------------------------- objects
 
 _collection = None
+_module = None
 
 
 def begin(name):
     """Starts a deck: an empty scene with a collection of its own."""
-    global _collection
+    global _collection, _module
     bpy.ops.wm.read_factory_settings(use_empty=True)
     _materials.clear()
     _collection = bpy.data.collections.new(name)
     bpy.context.scene.collection.children.link(_collection)
+    _module = None
+
+
+def module(name):
+    """
+    Starts a module: an empty at the origin that everything built until the next one hangs from, for the browser to put
+    in place as a whole. A deck built of modules can be as long as it needs to be, like the holodecks' row after row.
+    """
+    global _module
+    _module = None  # or the new module's empty would hang from the last one
+    _module = link(bpy.data.objects.new(name, None))
 
 
 def link(obj, at=(0, 0, 0), yaw=0.0, frame=None):
@@ -117,6 +129,9 @@ def link(obj, at=(0, 0, 0), yaw=0.0, frame=None):
     local = Matrix.Translation(Vector(at)) @ Matrix.Rotation(yaw, 4, 'Z')
     obj.matrix_world = (frame @ local) if frame is not None else local
     _collection.objects.link(obj)
+    # modules stand at the origin unturned, so hanging from one leaves where an object is alone
+    if _module is not None:
+        obj.parent = _module
     return obj
 
 
@@ -366,19 +381,21 @@ def _clip(profile, mats, z_min):
     return pts + [(pts[0][0], z_min)], kept + [mats[0]]
 
 
-def walls(name, outline, doors, profile, mats, lintel_from):
+def walls(name, outline, doors, profile, mats, lintel_from, closed=True):
     """
     The walls around a room whose inner faces run through `outline` (corners, counter-clockwise from above), as
     one swept profile with gaps for `doors`: (edge index, offset of the door's centre from the edge's middle, width),
     edge i running from outline[i] to outline[i + 1]. Above each gap, the profile from `lintel_from` up spans it.
     Colliders follow the walls between the gaps, as deep as the profile. Returns each door's frame, in the order of
-    `doors`: a Matrix at the gap's centre on the inner face, X along the wall, Y into the room.
+    `doors`: a Matrix at the gap's centre on the inner face, X along the wall, Y into the room. Not `closed`, the
+    outline is a run of wall from its first point to its last, and the profile's d is measured from wherever it runs
+    (a wall's centre line, when both its faces show).
     """
     near, far = max(d for d, _ in profile), -min(d for d, _ in profile)
     n = len(outline)
     stations = []
     frames = [None] * len(doors)
-    for i in range(n):
+    for i in range(n if closed else n - 1):
         a, b = Vector(outline[i]), Vector(outline[(i + 1) % n])
         stations.append(('corner', a))
         along = (b - a).normalized()
@@ -390,15 +407,18 @@ def walls(name, outline, doors, profile, mats, lintel_from):
             yaw = math.atan2(along.y, along.x)
             frames[k] = Matrix.Translation((centre.x, centre.y, 0)) @ Matrix.Rotation(yaw, 4, 'Z')
     if not doors:
-        sweep(name, outline, profile, mats, closed=True)
-        collide_path(outline, near, far, closed=True)
+        sweep(name, outline, profile, mats, closed=closed)
+        collide_path(outline, near, far, closed=closed)
         return frames
-    # start just past a door, so every run goes from one door's far jamb round to the next door's near one
-    first = next(i for i, s in enumerate(stations) if s[0] == 'end')
-    stations = stations[first:] + stations[:first]
+    if closed:
+        # start just past a door, so every run goes from one door's far jamb round to the next door's near one
+        first = next(i for i, s in enumerate(stations) if s[0] == 'end')
+        stations = stations[first:] + stations[:first] + [stations[first]]
+    else:
+        stations.append(('corner', Vector(outline[-1])))
     above, above_mats = _clip(profile, mats, lintel_from)
     run, runs = [], 0
-    for kind, p in stations + [stations[0]]:
+    for kind, p in stations:
         run.append(p)
         if kind == 'gap':
             sweep(f'{name} {runs}', run, profile, mats)
@@ -408,14 +428,26 @@ def walls(name, outline, doors, profile, mats, lintel_from):
         elif kind == 'end' and len(run) == 2:
             sweep(f'{name} lintel', run, above, above_mats)
             run = [p]
+    if len(run) > 1:
+        sweep(f'{name} {runs}', run, profile, mats)
+        collide_path(run, near, far)
     return frames
 
 
 def door(name, frame, width, height=DOOR_H, wall=0.2, back=0.04):
     """
-    A rounded door frame standing proud of both faces of a `wall` thick wall, and the marker for its sliding doors. It
-    stands FRAME_PROUD into the room and `back` out of the far face: FRAME_PROUD too when that's another room's wall,
-    with trims of its own to clear.
+    A door frame (door_frame, standing FRAME_PROUD into the room) and the marker for its sliding doors. `back` is how far
+    it stands out of the far face: FRAME_PROUD too when that's another room's wall, with trims of its own to clear.
+    """
+    obj = door_frame(name, frame, width, height, wall, back)
+    marker(name, 'door', (0, -wall / 2, 0), frame=frame, width=width, height=height)
+    return obj
+
+
+def door_frame(name, frame, width, height=DOOR_H, wall=0.2, back=0.04, proud=FRAME_PROUD):
+    """
+    A rounded frame round a doorway through a `wall` thick wall, at `frame` (the doorway's centre on the wall's inner
+    face, Y into the room), standing `proud` into the room and `back` out of the far face, with colliders for its jambs.
     """
     a = width / 2 + 0.16
     top = height + 0.16
@@ -424,7 +456,7 @@ def door(name, frame, width, height=DOOR_H, wall=0.2, back=0.04):
     outline = [(-a, 0), (-width / 2, 0), (-width / 2, height), (width / 2, height), (width / 2, 0), (a, 0), (a, top), (-a, top)]
     bm = bmesh.new()
     rear = [bm.verts.new((x, -wall - back, z)) for x, z in outline]
-    front = [bm.verts.new((x, FRAME_PROUD, z)) for x, z in outline]
+    front = [bm.verts.new((x, proud, z)) for x, z in outline]
     for i in range(len(outline)):
         j = (i + 1) % len(outline)
         bm.faces.new((rear[i], rear[j], front[j], front[i]))
@@ -433,10 +465,51 @@ def door(name, frame, width, height=DOOR_H, wall=0.2, back=0.04):
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     obj = bevel(mesh_object(f'{name} frame', bm, [toon(HULL['frame'])]), 0.03)
     link(obj, frame=frame)
-    marker(name, 'door', (0, -wall / 2, 0), frame=frame, width=width, height=height)
     for s in (-1, 1):
-        collide_points([frame @ Vector((s * x, y, 0)) for x in (width / 2, a) for y in (-wall - back, FRAME_PROUD)])
+        collide_points([frame @ Vector((s * x, y, 0)) for x in (width / 2, a) for y in (-wall - back, proud)])
     return obj
+
+
+# ---------------------------------------------------------------------------------------------------- fittings
+
+def facing(at, to):
+    """The yaw that turns an object's +Y from `at` towards `to`."""
+    return math.atan2(-(to[0] - at[0]), to[1] - at[1])
+
+
+def window(name, w, h, at, frame):
+    """A viewport onto space in a rounded bezel, centred `at` (across, height) on `frame`."""
+    bezel(f'{name} frame', w, h, 0.3, 0.15, 0.1, toon(HULL['frame']), (at[0], 0, at[1]), frame)
+    pane(name, rounded_rect(w, h, 0.3), material('#000000', surface='space', outline=False), (at[0], 0.012, at[1]), frame)
+
+
+def turbolift_car(frame, deck, wall=0.2):
+    """
+    A round turbolift car behind a doorway through a `wall` thick wall, at `frame` (the doorway's centre on the wall's
+    inner face, Y into the room): a light band near the top, a grab rail round the back, the panel that calls it, and
+    where it stops, for `deck`.
+    """
+    r, h = 1.2, 3.0
+    cy = -wall - r
+
+    def on_deck(points):
+        return [tuple((frame @ Vector((x, y, 0))).xy) for x, y in points]
+
+    arc = ring_points(0, cy, r, 7, math.pi, 2 * math.pi)
+    path = on_deck([(-r, -wall)] + arc + [(r, -wall)])
+    shell, trim = toon('#a39bb8'), toon(HULL['frame'])
+    profile = [(-0.1, 0), (-0.1, h), (0, h), (0, 2.62), (0.03, 2.62), (0.03, 2.48), (0, 2.48), (0, 0)]
+    sweep('turbolift wall', path, profile, [shell, shell, shell, trim, unlit('#fff4e0'), trim, shell])
+    collide_path(path, 0.12, 0.12)
+    floor = on_deck([(-r, 0)] + arc + [(r, 0)])
+    polygon('turbolift floor', floor, 0, material('#3a3450', outline=False))
+    polygon('turbolift ceiling', floor, h, unlit(HULL['ceiling']), down=True)
+    annulus('turbolift light', 0, 0.6, h - 0.015, unlit('#ffffff'), at=on_deck([(0, cy)])[0], down=True)
+    sweep('turbolift rail', on_deck(arc), [(0.06, 0.95), (0.06, 1.0), (0.1, 1.0), (0.1, 0.95)], [trim, trim, trim], caps=True)
+    back = frame @ Matrix.Translation((0, cy - r * math.cos(math.pi / 14), 0))
+    interact('turbolift', 'Use the turbolift', readout('turbolift panel', 0.5, 0.7, 41, (0, 0, 1.3), back))
+    marker('turbolift stop', 'turbolift', (0, cy, 0), frame=frame, label=deck)
+    marker('area turbolift', 'area', (0, cy, 1), frame=frame, scale=(r + 0.1, r + 0.1, 1), label='Turbolift')
 
 
 # ---------------------------------------------------------------------------------------------------- markers

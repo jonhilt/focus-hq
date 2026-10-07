@@ -15,10 +15,15 @@ export type Marker =
   | { kind: 'place'; label: string }
   /** An empty cube: the floor it covers, named in the HUD. */
   | { kind: 'area'; label: string }
-  /** Where Number One's chair stands, turned along the empty's forward: the ready room is on this deck. */
-  | { kind: 'number-one' }
+  /** Where a crew member's chair stands, turned along the empty's forward. */
+  | { kind: 'seat'; crew: Crew }
   /** Where a turbolift stops: you stand here in its car, facing along the empty's forward (its doors). */
   | { kind: 'turbolift'; label: string };
+
+/** Crew a deck seats: Number One in the ready room, and the chief engineer at the engineering station. */
+const CREW = ['number-one', 'engineer'] as const;
+export type Crew = (typeof CREW)[number];
+const isCrew = (v: unknown): v is Crew => (CREW as readonly unknown[]).includes(v);
 
 /** A screen the browser keeps drawing on: mission control is the World's dashboard. */
 export type ScreenName = 'mission-control';
@@ -70,8 +75,8 @@ export function readMarker(e: Extras): Marker | null {
       return { kind: 'place', label: str(e, 'label') };
     case 'area':
       return { kind: 'area', label: str(e, 'label') };
-    case 'number-one':
-      return { kind: 'number-one' };
+    case 'seat':
+      return { kind: 'seat', crew: isCrew(e.crew) ? e.crew : fail('unknown crew', e) };
     case 'turbolift':
       return { kind: 'turbolift', label: str(e, 'label') };
     default:

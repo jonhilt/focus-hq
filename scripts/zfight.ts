@@ -58,7 +58,7 @@ async function main(): Promise<number> {
   try {
     await waitForServer(url, server, 60_000);
     browser = await launchBrowser();
-    // the ship as it is, and with the decks built in Blender (see nextShip in client/src/main.ts), which stand in for
+    // the ship as it is, and with the decks built in Blender (see ship in client/src/main.ts), which stand in for
     // some of it
     const fighting: FightingPair[] = [];
     for (const ship of ['', '?ship=next']) {

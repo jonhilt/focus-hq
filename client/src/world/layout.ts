@@ -54,6 +54,11 @@ export function roomSlot(index: number): RoomSlot {
   };
 }
 
+/** The slot of the holodeck in row `row` on `side` of the hallway: roomSlot's index, from where the holodeck stands. */
+export function slotAt(row: number, side: 1 | -1): number {
+  return row * 2 + (side > 0 ? 0 : 1);
+}
+
 /** Rows needed for n projects, always leaving at least one vacant room to grow into. */
 export function rowsFor(projectCount: number): number {
   return Math.max(1, Math.ceil((projectCount + 1) / 2));
@@ -69,6 +74,17 @@ export interface Box2 {
   maxX: number;
   minZ: number;
   maxZ: number;
+}
+
+/** Where a crew member's chair stands, and a point they turn to face. */
+export interface Seat {
+  at: THREE.Vector3;
+  facing: THREE.Vector3;
+}
+
+/** The turn about Y that faces a seat's chair, and whoever sits in it (built facing +X), towards what they face. */
+export function seatYaw({ at, facing }: Seat): number {
+  return Math.atan2(-(facing.z - at.z), facing.x - at.x);
 }
 
 export function contains(b: Box2, p: THREE.Vector3): boolean {

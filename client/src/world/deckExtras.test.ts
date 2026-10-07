@@ -12,7 +12,8 @@ describe('readMarker', () => {
     expect(readMarker({ marker: 'door', width: 2, height: 2.5 })).toEqual({ kind: 'door', width: 2, height: 2.5 });
     expect(readMarker({ marker: 'place', label: '🌌 Bridge' })).toEqual({ kind: 'place', label: '🌌 Bridge' });
     expect(readMarker({ marker: 'area', label: 'Turbolift' })).toEqual({ kind: 'area', label: 'Turbolift' });
-    expect(readMarker({ marker: 'number-one' })).toEqual({ kind: 'number-one' });
+    expect(readMarker({ marker: 'seat', crew: 'number-one' })).toEqual({ kind: 'seat', crew: 'number-one' });
+    expect(readMarker({ marker: 'seat', crew: 'engineer' })).toEqual({ kind: 'seat', crew: 'engineer' });
     expect(readMarker({ marker: 'turbolift', label: 'Deck 1 · Bridge' })).toEqual({ kind: 'turbolift', label: 'Deck 1 · Bridge' });
   });
 
@@ -21,6 +22,7 @@ describe('readMarker', () => {
     expect(() => readMarker({ marker: 'door', width: 2 })).toThrow(/height should be a number/);
     expect(() => readMarker({ marker: 'place' })).toThrow(/label should be a string/);
     expect(() => readMarker({ marker: 'turbolift' })).toThrow(/label should be a string/);
+    expect(() => readMarker({ marker: 'seat', crew: 'cook' })).toThrow(/unknown crew/);
   });
 });
 
