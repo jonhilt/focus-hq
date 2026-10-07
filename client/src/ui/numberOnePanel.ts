@@ -26,7 +26,6 @@ export function openNumberOnePanel(ui: Ui): void {
   const input = h('textarea', { class: 'briefing-input' });
   // in voice mode Number One speaks their replies, and Mic / Ctrl+M sends what you say
   let voice = voicePrefs.voiceMode ? new VoiceSession(voicePrefs.keepMicOpen) : null;
-  ui.panels.own(() => voice?.end());
   const micMode = (): MicMode =>
     voice ? { kind: 'talk', mic: voice.mic, started: () => voice?.speaker.hush(), send: (text) => api.numberOneSay(text).then(() => undefined) } : { kind: 'dictate' };
   const inputBox = withMic(ui, input, micMode);
@@ -114,6 +113,7 @@ export function openNumberOnePanel(ui: Ui): void {
   ui.panels.open({ title: `${one.name} · First officer`, body, accent: LCARS.lilac, wide: true });
   open = true;
   ui.panels.own(() => (open = false));
+  ui.panels.own(() => voice?.end());
   ui.panels.own(state.on('number-one', render));
   ui.panels.own(state.on('projects', render));
   render();

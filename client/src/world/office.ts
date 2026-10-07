@@ -185,7 +185,7 @@ export class World {
     const places: Place[] = this.decks().flatMap((d) => d.places);
     for (const room of this.rooms.values()) {
       places.push({
-        label: `🚪 ${room.project.name}`,
+        label: room.project.name,
         projectId: room.project.id,
         position: roomToWorld(room.slot, new THREE.Vector3(-HALF_D + 1.4, 0, 0)),
         lookAt: roomToWorld(room.slot, new THREE.Vector3(HALF_D, 1.5, 0)),

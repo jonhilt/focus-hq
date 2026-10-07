@@ -20,7 +20,7 @@ export function openHelperPanel(ui: Ui, leadId: string, id: string): void {
   const terminal = h('div', { class: 'terminal' });
   const info = h('div', { class: 'row', style: 'margin-bottom:12px' });
   const body = h('div', { style: 'display:flex;flex-direction:column;height:100%;min-height:0' }, info, h('div', { class: 'agent-grid single' }, terminal));
-  const talk = h('button', { class: 'btn primary', onclick: () => ui.openAgent(leadId) }, `🖖 Talk to ${lead.name}`);
+  const talk = h('button', { class: 'btn primary', onclick: () => ui.openAgent(leadId) }, `Talk to ${lead.name}`);
   const footer = h('div', { class: 'compose' }, h('span', { class: 'grow muted' }, `${crew.name} works for ${lead.name}: talk to them about it.`), talk);
   const title = h('h2', null,
     h('span', { class: 'dot', style: `background:${UNIFORM[crew.avatar.division]};margin-right:8px;vertical-align:middle` }),
@@ -32,10 +32,10 @@ export function openHelperPanel(ui: Ui, leadId: string, id: string): void {
   const renderInfo = (x: Helper) =>
     fill(
       info,
-      h('span', { class: 'chip' }, `${x.status === 'working' ? '🧑‍🚀' : x.status === 'done' ? '✔' : '✘'} ${x.status}`),
+      h('span', { class: `chip ${x.status === 'done' ? 'ok' : x.status === 'failed' ? 'bad' : ''}` }, x.status),
       h('span', { class: 'grow muted' }, x.activity),
       x.type ? h('span', { class: 'chip' }, x.type) : null,
-      h('span', { class: 'chip' }, `⏱ ${timeAgo(x.startedAt)}`),
+      h('span', { class: 'chip' }, `started ${timeAgo(x.startedAt)}`),
     );
 
   const appendLines = (lines: TermLine[]) => {
@@ -59,7 +59,7 @@ export function openHelperPanel(ui: Ui, leadId: string, id: string): void {
     const x = helperOf(a, id);
     // once they've gone, what they did stays up until you close it
     if (x) renderInfo(x);
-    else fill(info, h('span', { class: 'chip' }, '👋 gone'), h('span', { class: 'grow muted' }, `${crew.name} has gone on their way`));
+    else fill(info, h('span', { class: 'chip off' }, 'gone'), h('span', { class: 'grow muted' }, `${crew.name} has gone on their way`));
   }));
   ui.panels.own(state.on('agent-removed', (a) => a.id === leadId && ui.panels.close()));
 }

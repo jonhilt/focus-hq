@@ -6,8 +6,10 @@ import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { busy, fill, h, timeAgo } from './dom';
+import { SideNav } from './panels';
 
-const ICONS: Record<Preview['status'], string> = { starting: '⏳', running: '✅', failed: '❗', stopping: '⏹' };
+/** A preview's status chip, lit by how it stands. */
+const TONE: Record<Preview['status'], string> = { starting: 'warn', running: 'ok', failed: 'bad', stopping: 'off' };
 const TROUBLE = /\b(error|errors|fail|failed|failure|exception|fatal|unhealthy|down|refused|denied|panic)\b/i;
 
 /** What a link's last health check found, for a tooltip. */
@@ -19,7 +21,7 @@ export function linkHealth(link: PreviewLink): string {
 
 /**
  * The project's preview: a row per checked-out repo (switch its PR there), links to open it in your own browser, the
- * command's output and log files, restart and stop.
+ * command's output and log files (picked from the sidebar), restart and stop.
  */
 export function openPreviewPanel(ui: Ui, projectId: string, initial?: Preview): void {
   let current = state.previews.get(projectId) ?? initial;
@@ -33,18 +35,19 @@ export function openPreviewPanel(ui: Ui, projectId: string, initial?: Preview): 
   const info = h('div', { class: 'row', style: 'margin-bottom:12px' });
   const repos = h('div', { class: 'preview-repos' });
   const links = h('div', { class: 'preview-links' });
-  const tabs = h('div', { class: 'preview-tabs' });
   const terminal = h('div', { class: 'terminal grow' });
   const fileView = h('div', { class: 'terminal grow', style: 'display:none' });
-  const body = h('div', { style: 'display:flex;flex-direction:column;height:100%;min-height:0' }, warning, info, repos, links, tabs, terminal, fileView);
-  const restart = h('button', { class: 'btn' }, '↻ Restart');
-  const stop = h('button', { class: 'btn danger' }, '■ Stop');
+  const body = h('div', { style: 'display:flex;flex-direction:column;height:100%;min-height:0' }, warning, info, repos, links, terminal, fileView);
+  const restart = h('button', { class: 'btn' }, 'Restart');
+  const stop = h('button', { class: 'btn danger' }, 'Stop');
   const footer = h('div', { class: 'compose' },
     h('span', { class: 'grow muted', style: 'align-self:center' }, 'Runs the PRs’ code on this machine. Previews stop when one of their PRs is merged or closed.'),
     restart,
     stop,
   );
-  ui.panels.open({ title, body, footer, wide: true, accent: LCARS.peach });
+  // the command's output, then each log file it reported ('' is the output)
+  const nav = new SideNav<string>((name) => select(name));
+  ui.panels.open({ title, body, footer, nav, wide: true, accent: LCARS.peach });
 
   restart.onclick = () => void busy(restart, () => startWith(target.repo, target.number, target.set), ui.error);
   stop.onclick = () => void busy(stop, () => api.stopPreview(projectId), ui.error);
@@ -62,7 +65,7 @@ export function openPreviewPanel(ui: Ui, projectId: string, initial?: Preview): 
     if (nearBottom) terminal.scrollTop = terminal.scrollHeight;
   };
 
-  // ---- log files the command reported ("logs"), one tab each next to the command's own output
+  // ---- log files the command reported ("logs"), one view each after the command's own output
   let files: PreviewLogFile[] = [];
   let tab = ''; // '' = the command's output
   let shown = '';
@@ -80,15 +83,10 @@ export function openPreviewPanel(ui: Ui, projectId: string, initial?: Preview): 
     if (atBottom) fileView.scrollTop = fileView.scrollHeight;
   };
   const renderTabs = () => {
-    fill(
-      tabs,
-      ...(files.length
-        ? [
-            h('button', { class: `tab${tab === '' ? ' on' : ''}`, onclick: () => select('') }, '▶ Output'),
-            ...files.map((f) => h('button', { class: `tab${tab === f.name ? ' on' : ''}`, title: `${f.size.toLocaleString()} bytes, updated ${timeAgo(f.modified)}`, onclick: () => select(f.name) }, `📄 ${f.name}`)),
-          ]
-        : []),
-    );
+    nav.show([
+      { key: '', label: 'Output', readout: current?.status === 'running' ? 'Live' : '' },
+      ...files.map((f) => ({ key: f.name, label: f.name, readout: `${Math.ceil(f.size / 1024)} KB` })),
+    ], tab);
     terminal.style.display = tab === '' ? '' : 'none';
     fileView.style.display = tab === '' ? 'none' : '';
   };
@@ -104,9 +102,8 @@ export function openPreviewPanel(ui: Ui, projectId: string, initial?: Preview): 
     void api.previewLogFiles(projectId).then((list) => {
       const changed = list.map((f) => f.name).join('\n') !== files.map((f) => f.name).join('\n');
       files = list;
-      if (!changed) return; // don't rebuild the tabs under the cursor every few seconds
+      if (!changed) return; // don't rebuild the sidebar under the cursor every few seconds
       if (tab && !files.some((f) => f.name === tab)) tab = '';
-      renderTabs();
       render();
     }, () => undefined);
   const timer = setInterval(() => {
@@ -125,8 +122,8 @@ export function openPreviewPanel(ui: Ui, projectId: string, initial?: Preview): 
     const pr = open.find((x) => x.number === chosen);
     const picker = h('select', { class: 'effort', title: 'Restart the preview with another PR here' },
       // the clicked PR's repo always runs a PR: picking another one there previews that one instead
-      c.repo === target.repo ? null : h('option', { value: '', selected: chosen === null }, `⎇ ${'branch' in c.ref ? c.ref.branch : 'default branch'}`),
-      ...open.map((x) => h('option', { value: String(x.number), selected: x.number === chosen }, `${linked.has(`${x.repo}#${x.number}`) ? '🔗 ' : ''}#${x.number} ${x.title}`)),
+      c.repo === target.repo ? null : h('option', { value: '', selected: chosen === null }, 'branch' in c.ref ? c.ref.branch : 'default branch'),
+      ...open.map((x) => h('option', { value: String(x.number), selected: x.number === chosen }, `${linked.has(`${x.repo}#${x.number}`) ? 'linked · ' : ''}#${x.number} ${x.title}`)),
       // a PR that has since left the board stays visible as what's running
       chosen !== null && !pr ? h('option', { value: String(chosen), selected: true, disabled: true }, `#${chosen}`) : null,
     );
@@ -144,8 +141,8 @@ export function openPreviewPanel(ui: Ui, projectId: string, initial?: Preview): 
     return h('div', { class: 'preview-repo' },
       h('strong', null, c.repo.split('/')[1]),
       picker,
-      c.sha ? h('span', { class: 'chip', title: c.sha }, c.sha === 'demo' ? 'demo' : c.sha.slice(0, 7)) : h('span', { class: 'chip muted' }, '⏳ fetching'),
-      behind ? h('span', { class: 'chip warn', title: 'Someone pushed to this PR since the preview started' }, '↻ behind – restart') : null,
+      c.sha ? h('span', { class: 'chip', title: c.sha }, c.sha === 'demo' ? 'demo' : c.sha.slice(0, 7)) : h('span', { class: 'chip off' }, 'fetching'),
+      behind ? h('span', { class: 'chip warn', title: 'Someone pushed to this PR since the preview started' }, 'behind: restart') : null,
       pr ? h('a', { class: 'btn small', href: `${pr.url}/files`, target: '_blank', rel: 'noreferrer' }, 'PR ↗') : null,
     );
   };
@@ -153,20 +150,20 @@ export function openPreviewPanel(ui: Ui, projectId: string, initial?: Preview): 
   const render = () => {
     const p = current;
     title.replaceChildren(
-      `▶ ${target.repo.split('/')[1]}#${target.number} · `,
+      `${target.repo.split('/')[1]} #${target.number} · `,
       h('span', { class: 'muted', style: 'font-weight:500' }, target.title),
     );
     fill(
       warning,
       p?.warning && p.status === 'running'
-        ? h('div', { class: 'ask' }, h('strong', null, '⚠'), h('span', { class: 'grow' }, p.warning, h('br'), h('small', { class: 'muted' }, files.length ? 'The sites may still be worth a look. The log tabs below say what’s wrong.' : 'The sites may still be worth a look.')))
+        ? h('div', { class: 'ask' }, h('strong', null, 'Warning'), h('span', { class: 'grow' }, p.warning, h('br'), h('small', { class: 'muted' }, files.length ? 'The sites may still be worth a look. The logs on the sidebar say what’s wrong.' : 'The sites may still be worth a look.')))
         : null,
     );
     fill(
       info,
-      h('span', { class: 'chip' }, p ? `${ICONS[p.status]} ${p.status}` : '💤 stopped'),
+      p ? h('span', { class: `chip ${TONE[p.status]}` }, p.status) : h('span', { class: 'chip off' }, 'stopped'),
       h('span', { class: 'grow muted' }, p ? p.activity : 'Not running'),
-      p ? h('span', { class: 'chip' }, `⏱ ${timeAgo(p.startedAt)}`) : null,
+      p ? h('span', { class: 'chip' }, `started ${timeAgo(p.startedAt)}`) : null,
     );
     const checkouts = p?.checkouts ?? [];
     // linked PRs in repos the preview command never mentions with {dir:<repo>}: not checked out
@@ -176,7 +173,7 @@ export function openPreviewPanel(ui: Ui, projectId: string, initial?: Preview): 
       ...checkouts.map(repoRow),
       ...outside.map(([repo, n]) => {
         const name = repo.split('/')[1];
-        return h('div', { class: 'muted preview-repo' }, `🔗 ${name} #${n} isn’t part of the preview: the preview command doesn’t use ${name} (add {dir:${name}} to it).`);
+        return h('div', { class: 'muted preview-repo' }, `${name} #${n} isn’t part of the preview: the preview command doesn’t use ${name} (add {dir:${name}} to it).`);
       }),
     );
     const found = p?.links ?? [];
@@ -191,26 +188,27 @@ export function openPreviewPanel(ui: Ui, projectId: string, initial?: Preview): 
               target: '_blank',
               rel: 'noreferrer',
               title: [link.url, linkHealth(link)].filter(Boolean).join('\n'),
-            }, `${sick ? '⚠ ' : ''}Open ${link.name ?? link.url} ↗`);
+            }, `Open ${link.name ?? link.url} ↗`);
           })
         : found.map((link) => h('span', { class: 'chip', title: 'Not answering yet' }, link.name ? `${link.name}: ${link.url}` : link.url))),
       p?.status === 'starting' && !found.length ? h('span', { class: 'muted' }, 'Links appear here as soon as the site answers.') : null,
       p?.command ? h('code', { class: 'grow', title: p.command }, `$ ${p.command}`) : null,
-      p?.logs ? h('code', { title: 'Where the command keeps its own logs' }, `📁 ${p.logs}`) : null,
+      p?.logs ? h('code', { title: 'Where the command keeps its own logs' }, `logs: ${p.logs}`) : null,
     );
-    restart.textContent = p ? '↻ Restart' : '▶ Start again';
+    restart.textContent = p ? 'Restart' : 'Start again';
     restart.disabled = p?.status === 'stopping';
-    stop.textContent = p?.status === 'failed' ? '✕ Dismiss' : '■ Stop';
+    stop.textContent = p?.status === 'failed' ? 'Dismiss' : 'Stop';
     stop.title = p?.status === 'failed' ? 'It has already been torn down; this clears it' : '';
     stop.disabled = !p || p.status === 'stopping';
     if ((p?.logs ?? '') !== logsAt) {
       logsAt = p?.logs ?? '';
       refreshFiles();
     }
+    // the sidebar too: Output's LIVE follows the status (show updates its buttons in place)
+    renderTabs();
   };
 
   render();
-  renderTabs();
   void api.previewLog(projectId).then(append, () => undefined).finally(() => {
     loaded = true;
     for (const log of early.splice(0)) append(log);

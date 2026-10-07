@@ -1,4 +1,4 @@
-import { statusIcon, statusLine } from '../../../shared/agentStatus';
+import { statusLine } from '../../../shared/agentStatus';
 import { UNIFORM } from '../../../shared/crew';
 import { state } from '../net/state';
 import { sound } from '../sound';
@@ -7,6 +7,7 @@ import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { h } from './dom';
 import { issueForm } from './managerPanel';
+import { Switch } from './panels';
 
 /** Jump to any room or straight to an agent's desk. */
 export function openTeleportPanel(ui: Ui): void {
@@ -26,13 +27,13 @@ export function openTeleportPanel(ui: Ui): void {
       ...agents.map((a) =>
         h('button', { class: a.status === 'waiting' ? 'btn place warn' : 'btn place', onclick: () => ui.goToAgent(a.id) },
           h('span', { class: 'dot', style: `background:${UNIFORM[a.avatar.division]};margin-right:6px;vertical-align:-2px` }),
-          `${statusIcon(a)} ${a.name}`,
+          a.name,
           h('small', null, `${state.project(a.projectId)?.name ?? ''} · ${a.task === 'lead' ? `lead of “${a.lead?.title ?? 'a goal'}”` : `#${a.issue.number}`} · ${statusLine(a)}`),
         ),
       ),
     ),
   );
-  ui.panels.open({ title: '🗺️ Where to?', body, accent: LCARS.periwinkle });
+  ui.panels.open({ title: 'Teleport', body, accent: LCARS.periwinkle });
 }
 
 /** The turbolift's controls: a button for each deck it stops at, bar the one you're on. */
@@ -44,32 +45,29 @@ export function openTurboliftPanel(ui: Ui, stops: Place[], here: Place | undefin
         : h('button', { class: 'btn place', onclick: () => ui.ride(stop) }, stop.label),
     ),
   );
-  ui.panels.open({ title: '🛗 Turbolift', body, accent: LCARS.gold });
+  ui.panels.open({ title: 'Turbolift', body, accent: LCARS.gold });
 }
 
 export function openNewIssuePanel(ui: Ui, projectId?: string): void {
   const project = projectId ? state.project(projectId) : undefined;
-  ui.panels.open({
-    title: project ? `${project.name} · new issue` : 'New issue',
-    body: issueForm(ui, projectId, () => ui.panels.close()),
-    accent: LCARS.gold,
-  });
+  const body = h('div');
+  ui.panels.open({ title: project ? `${project.name} · new issue` : 'New issue', body, accent: LCARS.gold });
+  // built once the panel is open: the planner card subscribes to its drafts as it's built
+  body.append(issueForm(ui, projectId, () => ui.panels.close()));
 }
-
-const soundLabel = (on: boolean) => (on ? '🔊 Ship sounds on' : '🔇 Ship sounds off');
 
 export function openPausePanel(ui: Ui, resume: () => void): void {
   const info = state.info;
-  const soundButton = h('button', { class: 'btn', onclick: () => (soundButton.textContent = soundLabel(sound.toggle())) }, soundLabel(sound.enabled));
-  const body = h('div', { style: 'text-align:center' },
-    h('p', null, 'The crew keeps working while you’re away.'),
-    h('div', { class: 'row', style: 'justify-content:center' },
-      h('button', { class: 'btn primary', onclick: resume }, '▶ Back to work'),
-      h('button', { class: 'btn', onclick: () => ui.openTeleport() }, '🗺️ Teleport'),
-      h('button', { class: 'btn', onclick: () => ui.openManager() }, '🎖️ Ready room'),
-      soundButton,
+  const sounds = new Switch('Ship sounds', sound.enabled, { changed: () => sound.toggle() });
+  const body = h('div', null,
+    h('p', { style: 'margin-top:0' }, 'The crew keeps working while you’re away.'),
+    h('div', { class: 'row' },
+      h('button', { class: 'btn primary', onclick: resume }, 'Back to work'),
+      h('button', { class: 'btn', onclick: () => ui.openTeleport() }, 'Teleport'),
+      h('button', { class: 'btn', onclick: () => ui.openManager() }, 'Ready room'),
+      sounds.el,
     ),
     info?.mode === 'demo' ? h('p', { class: 'muted' }, 'Demo mode – GitHub and agents are simulated.') : null,
   );
-  ui.panels.open({ title: '☕ Paused', body, accent: LCARS.sky });
+  ui.panels.open({ title: 'Paused', body, accent: LCARS.sky });
 }

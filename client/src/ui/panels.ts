@@ -82,7 +82,10 @@ export class Panels {
     focusable?.focus();
   }
 
-  /** Registers something to undo when the current panel closes (e.g. a state subscription). */
+  /**
+   * Registers something to undo when the current panel closes (e.g. a state subscription). Call it once `open` has run:
+   * until then, the current panel is the one being replaced, and opening the new one undoes it straight away.
+   */
   own(cleanup: () => void): void {
     this.cleanups.push(cleanup);
   }

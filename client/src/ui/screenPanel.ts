@@ -40,5 +40,5 @@ export function openScreenPanel(ui: Ui): void {
     h('small', { class: 'muted', style: 'display:block' },
       'Just for you, kept in this browser. Every station screen follows it, the laptops at desks too. A pane only shows while it has something in it, and a laptop fits two at most.'),
   );
-  ui.panels.open({ title: '🖥️ What this screen shows', body, accent: LCARS.periwinkle });
+  ui.panels.open({ title: 'What this screen shows', body, accent: LCARS.periwinkle });
 }
