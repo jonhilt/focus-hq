@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Agent } from '../../../shared/types';
-import type { Builder } from './builder';
-import type { Character } from './character';
+import type { Builder, Interaction } from './builder';
+import type { Character, CrewView } from './character';
 import { dress, footprint } from './deck';
 import { type Crew, HELPER_SEATS, type Marker } from './deckExtras';
-import { type GoalRoomTone, goalRoomState } from './goalRoom';
+import { type GoalRoomTone, goalRoomState, roster } from './goalRoom';
 import { GoalBoard, GoalSign, TONE } from './goalScreens';
 import { type Box2, contains, EYE_HEIGHT, ROOM_WIDTH } from './layout';
 import { toon } from './materials';
@@ -51,16 +51,18 @@ const DOOR_SPOTS: { x: number; side: 1 | -1 }[] = [
 /** How far a door's housing stands from its side wall's centre line: clear of its skin (scenery.ts: SKIN_INSET). */
 const WALL_GAP = 0.16;
 /**
- * The sign floating over the door (the door's frame, -Z out into the room): just above its housing's cap and in front
- * of it, as wide as GoalSign's proportions allow under the holodeck's ceiling.
+ * The sign floating over the door (the door's frame, -Z out into the room): over the pod's ring and out in front of its
+ * bezel, as a holo-pod's hologram floats, as tall as fits under the holodeck's ceiling.
  */
-const DOOR_SIGN = { width: 3.0, bottom: 2.72, out: 0.28 };
+const DOOR_SIGN = { width: 2.6, bottom: 2.79, out: 0.85 };
 
 /** Who sits in a seat: the agent (or helper) id, and their Character while they're there. */
 export interface StationSeat {
   seat: THREE.Group;
   id?: string;
   character?: Character;
+  /** How they show, for the goal board's roster. */
+  view?: CrewView;
 }
 
 /** A seat marker faces along its forward (-Z); a Character faces +X. */
@@ -87,6 +89,10 @@ export class TeamStation {
   readonly reviewer: StationSeat;
   /** What "use this station" hangs on: the door, and the briefing room's table. */
   readonly furniture: THREE.Object3D[];
+  /** The goal board on the briefing room's wall: using it opens the lead's goal, or a crew member's row, theirs. */
+  readonly goalBoard: THREE.Mesh;
+  /** Who's on the goal board's roster, in its order (`show`). */
+  private crew: { who: StationSeat; role: 'Lead' | 'Reviewer' | 'Helper' }[] = [];
   /** The briefing room's big screen, which `screen` draws on. */
   readonly display: THREE.Mesh;
   /** The door and the briefing room's doorway, joined once the room has put the door in place (`connect`). */
@@ -141,8 +147,8 @@ export class TeamStation {
     const display = (this.display = screen(roomScreens, 'team-station', 'briefing room'));
     display.material = this.screen.material;
     screen(roomScreens, 'team-station-sign', 'briefing room').material = this.sign.material;
-    screen(roomScreens, 'team-station-note', 'briefing room').material = this.board.material;
-    this.show(undefined);
+    this.goalBoard = screen(roomScreens, 'team-station-note', 'briefing room');
+    this.goalBoard.material = this.board.material;
 
     const { place, area } = this.roomKit;
     if (!place || !area) throw new Error('The team station’s briefing room has no place or area marker');
@@ -162,6 +168,19 @@ export class TeamStation {
     this.lead = seat('station-lead');
     this.helpers = HELPER_SEATS.map(seat);
     this.reviewer = seat('station-reviewer');
+    this.show(undefined);
+    this.goalBoard.userData.interactionAt = (uv: THREE.Vector2) => this.rowAt(uv);
+  }
+
+  /** Using a crew member's row on the goal board: their panel, as using them at the table does. */
+  private rowAt(uv: THREE.Vector2): { interaction: Interaction; label: () => string } | null {
+    const i = this.board.rowAt(uv);
+    const row = i === undefined ? undefined : this.crew[i];
+    const id = row?.who.id;
+    const name = row?.who.view?.name;
+    if (!row || !id || !name) return null;
+    if (row.role === 'Helper' && this.lead.id) return { interaction: { kind: 'helper', leadId: this.lead.id, id }, label: () => `Look at ${name}’s transcript` };
+    return { interaction: { kind: 'agent', id }, label: () => `Look at ${name}’s screen` };
   }
 
   /** Reads a module's markers into `read`, paints its accents and lamps and returns its screens. */
@@ -262,7 +281,10 @@ export class TeamStation {
    * lead, or what's `next` in line for it while it's free.
    */
   show(lead: Agent | undefined, next?: string): void {
-    const view = { index: this.index, accent: this.accent, lead, next };
+    const seated = (s: StationSeat) => (s.view ? s : undefined);
+    this.crew = roster(seated(this.lead), seated(this.reviewer), this.helpers.map(seated));
+    const crew = this.crew.map(({ who, role }) => ({ who: who.view!, role: role === 'Helper' ? (who.view!.tag ?? role) : role }));
+    const view = { index: this.index, accent: this.accent, lead, crew, next };
     this.sign.show(view);
     this.board.show(view);
     this.tone = goalRoomState(lead).tone;

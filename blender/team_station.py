@@ -1,5 +1,5 @@
-"""A team station: where a goal's lead works with the captain. In the holodeck it's only a door, standing against a
-side wall with the station's sign over it; through it is the goal's briefing room, far bigger than the holodeck
+"""A team station: where a goal's lead works with the captain. In the holodeck it's a holo-pod with a door, standing
+against a side wall with the station's sign over it; through it is the goal's briefing room, far bigger than the holodeck
 could hold. The lead, their helpers and the goal's reviewer sit round a long table there, the captain's chair at its
 head, facing the lead's session on a big screen on the far wall.
 
@@ -15,11 +15,13 @@ somewhere out of the way. Only the furniture is here: who sits where, and what t
 
 import math
 
+import bmesh
+import bpy
 from mathutils import Matrix, Vector
 
 from kit import (COMMAND_RED, FRAME_PROUD, HULL, bezel, box, collide_object, collide_points, command_chair, door_frame,
-                 facing, lounge_chair, marker, material, module, panel, polygon, rounded_rect, slab, toon, unlit, walls,
-                 window)
+                 facing, link, lounge_chair, marker, material, mesh_object, module, panel, polygon, rounded_rect, slab,
+                 toon, unlit, walls, window)
 from command_deck import profile, wall_materials
 
 DOOR_W = 2.0
@@ -29,11 +31,17 @@ WALL = 0.2
 #: behind a doorway, where you are for a moment once you've stepped through: the browser's portal fills it
 ALCOVE = 0.75
 
-#: the door's housing: as wide, deep and tall as it stands in the holodeck, in front of its side wall
-HOUSING_HALF = DOOR_W / 2 + 0.55
-HOUSING_BACK = -(ALCOVE + 0.15)
-#: just over the door frame: the station's sign floats over it, as a pod's does (world/teamStation.ts: GoalSign)
-HOUSING_TOP = 2.62
+#: the holo-pod round the door: as wide, deep and tall as it stands in the holodeck, in front of its side wall, and
+#: under the station's sign, which floats over and in front of it (world/teamStation.ts: GoalSign)
+POD_HALF = DOOR_W / 2 + 0.65
+POD_BACK = -(ALCOVE + 0.25)
+POD_FRONT = 0.45
+POD_TOP = 2.72
+POD_CREAM = '#e4dccb'
+#: the bezel round its doorway
+BEZEL_HALF = DOOR_W / 2 + 0.34
+BEZEL_TOP = 2.62
+BEZEL_DEPTH = 0.22
 #: the station's sign beside the briefing room's screen: GoalSign's proportions (1800×256)
 SIGN_ASPECT = 1800 / 256
 
@@ -81,41 +89,101 @@ def doorway(name, f):
 
 def station_door():
     """
-    The door in the holodeck: a housing round the alcove, in the bulkhead's colours with its LCARS stripe and the
-    station's colour along its top, and lamps either side of the frame that show whether its goal room is in session.
-    The station's sign floats over it, drawn by the browser.
+    The door in the holodeck: a holo-pod, as the Lower Decks crew train in. A cream shell, wide at its foot and rounding
+    over at its top under a ribbed ring in the station's colour, with the doorway through a thick grey bezel at its
+    front. Lamps down either side of the bezel show whether its goal room is in session, a row of lights sits over the
+    door, and a red step lies in front of it. The station's sign floats over it all, drawn by the browser.
     """
     module('station_door')
     doorway('station door', Matrix())
-    front = WALL / 2
-    # the alcove's sides stand just behind the frame's jambs, and its ceiling just above the doors' tops
+    # the doorway through the pod: just behind the frame's jambs and over the doors' tops, from the alcove's back out
+    # through the bezel; the frame stays buried in the shell, all but its inner lip
     inner = DOOR_W / 2 + 0.01
+    def cutter(widen):
+        return box('station door cut', ((inner + widen) * 2, ALCOVE + POD_FRONT + 0.4, DOOR_H + 0.02 + widen),
+                   toon('#ff00ff'), (0, (POD_FRONT + 0.3 - ALCOVE) / 2, -0.01))
 
-    def housing(out, back, front_y, notch, deep=ALCOVE):
-        """The housing's footprint, `out` either side and from `back` to `front_y`, round the alcove `notch` either side
-        and `deep`."""
-        return [(-out, back), (out, back), (out, front_y), (notch, front_y), (notch, -deep), (-notch, -deep),
-                (-notch, front_y), (-out, front_y)]
-
-    bulkhead = toon(HULL['bulkhead'])
-    slab('station door housing', housing(HOUSING_HALF, HOUSING_BACK, front, inner), 0, DOOR_H + 0.01, bulkhead)
+    # the shell: a rounded footprint, drawn in at its back and sides as it rises, its front upright as far as the
+    # bezel's top, then rounding over
+    shell = loft('station pod shell', [
+        (0.0, POD_HALF, POD_FRONT, POD_BACK, 0.45),
+        (DOOR_H, POD_HALF - 0.12, POD_FRONT - 0.02, POD_BACK + 0.06, 0.45),
+        (POD_TOP - 0.18, POD_HALF - 0.3, POD_FRONT - 0.12, POD_BACK + 0.14, 0.42),
+        (POD_TOP - 0.06, POD_HALF - 0.6, POD_FRONT - 0.32, POD_BACK + 0.26, 0.3),
+        (POD_TOP, POD_HALF - 0.85, POD_FRONT - 0.5, POD_BACK + 0.36, 0.2),
+    ], toon(POD_CREAM))
+    cut(shell, cutter(0))
     for s in (-1, 1):
-        collide_points([(s * inner, HOUSING_BACK), (s * HOUSING_HALF, front)])
-    collide_points([(-HOUSING_HALF, HOUSING_BACK), (HOUSING_HALF, -ALCOVE)])
-    box('station door lintel', (HOUSING_HALF * 2, front - HOUSING_BACK, HOUSING_TOP - DOOR_H - 0.01), bulkhead,
-        (0, (front + HOUSING_BACK) / 2, DOOR_H + 0.01))
-    # the dado and the stripe over it, as along the walls, a little proud of the housing (and behind the alcove's sides)
-    slab('station door dado', housing(HOUSING_HALF + 0.02, HOUSING_BACK - 0.02, front + 0.02, inner + 0.01, ALCOVE + 0.01),
-         0, 0.9, toon(HULL['dado']))
-    slab('station door stripe', housing(HOUSING_HALF + 0.035, HOUSING_BACK - 0.035, front + 0.035, inner + 0.01,
-                                        ALCOVE + 0.01), 0.9, 0.97, toon(HULL['stripe']))
-    box('station door cap', (HOUSING_HALF * 2 + 0.06, front - HOUSING_BACK + 0.06, 0.05),
-        material(HULL['dado'], surface='accent'), (0, (front + HOUSING_BACK) / 2, HOUSING_TOP))
-    edge = DOOR_W / 2 + 0.16
+        collide_points([(s * inner, POD_BACK), (s * POD_HALF, POD_FRONT + BEZEL_DEPTH)])
+    collide_points([(-POD_HALF, POD_BACK), (POD_HALF, -ALCOVE)])
+
+    # the bezel round the doorway, its top corners cut off, standing out of the shell's front
+    outline = [(-BEZEL_HALF, 0), (BEZEL_HALF, 0), (BEZEL_HALF, BEZEL_TOP - 0.42), (BEZEL_HALF - 0.42, BEZEL_TOP),
+               (-BEZEL_HALF + 0.42, BEZEL_TOP), (-BEZEL_HALF, BEZEL_TOP - 0.42)]
+    bezel_ = extrude('station pod bezel', outline, POD_FRONT - 0.3, POD_FRONT + BEZEL_DEPTH, toon(HULL['frame']))
+    # a hair wider than the shell's, so their faces round the doorway don't share a plane
+    cut(bezel_, cutter(0.01))
+
+    face = POD_FRONT + BEZEL_DEPTH
     lamp = material(HULL['dado'], surface='lamp')
+    lamp_x = (inner + BEZEL_HALF) / 2
     for s in (-1, 1):
-        box(f'station door lamp {s}', (0.14, 0.03, DOOR_H + 0.16 - 0.97), lamp,
-            (s * (edge + HOUSING_HALF) / 2, front + 0.015, 0.97))
+        box(f'station door lamp {s}', (0.12, 0.03, BEZEL_TOP - 0.72 - 0.3), lamp, (s * lamp_x, face, 0.3))
+    for i in range(4):
+        box(f'station pod light {i}', (0.08, 0.025, 0.08), unlit('#e8fbff'), ((i - 1.5) * 0.24, face, DOOR_H + 0.08))
+    box('station pod step', (DOOR_W + 0.2, 0.3, 0.05), toon(COMMAND_RED), (0, face + 0.15, 0))
+
+    # the ribbed ring round the top, in the station's colour
+    top = POD_TOP
+    hw, front, back = POD_HALF - 0.85, POD_FRONT - 0.5, POD_BACK + 0.36
+    accent = material(HULL['dado'], surface='accent')
+    loft('station pod ring', [(top - 0.02, hw + 0.06, front + 0.06, back - 0.06, 0.26),
+                              (top + 0.1, hw + 0.06, front + 0.06, back - 0.06, 0.26)], accent)
+    cy, hd = (front + back) / 2, (front - back) / 2 + 0.06
+    for i, (x, y) in enumerate(rounded_rect(2 * (hw + 0.06), 2 * hd, 0.26, segments=2)):
+        box(f'station pod rib {i}', (0.05, 0.05, 0.15), toon(HULL['dado']), (x * 1.02, cy + y * 1.02, top - 0.035))
+
+
+def loft(name, sections, mat):
+    """A solid through rounded rectangles one over another: (z, half width, front y, back y, corner radius) each."""
+    bm = bmesh.new()
+    rings = []
+    for z, hw, front, back, r in sections:
+        cy, hd = (front + back) / 2, (front - back) / 2
+        rings.append([bm.verts.new((x, cy + y, z)) for x, y in rounded_rect(2 * hw, 2 * hd, r)])
+    for a, b in zip(rings, rings[1:]):
+        for i in range(len(a)):
+            j = (i + 1) % len(a)
+            bm.faces.new((a[i], a[j], b[j], b[i]))
+    bm.faces.new(list(reversed(rings[0])))
+    bm.faces.new(rings[-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return link(mesh_object(name, bm, [mat], smooth=math.radians(50)))
+
+
+def extrude(name, outline, y0, y1, mat):
+    """A solid through an outline of (x, z) points, counter-clockwise seen from the front, from y0 back to y1 forward."""
+    bm = bmesh.new()
+    back = [bm.verts.new((x, y0, z)) for x, z in outline]
+    front = [bm.verts.new((x, y1, z)) for x, z in outline]
+    for i in range(len(outline)):
+        j = (i + 1) % len(outline)
+        bm.faces.new((back[i], back[j], front[j], front[i]))
+    bm.faces.new(back)
+    bm.faces.new(list(reversed(front)))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return link(mesh_object(name, bm, [mat]))
+
+
+def cut(obj, cutter):
+    """Takes `cutter`'s solid out of `obj`, for good, and throws the cutter away."""
+    mod = obj.modifiers.new('cut', 'BOOLEAN')
+    mod.operation = 'DIFFERENCE'
+    mod.solver = 'EXACT'
+    mod.object = cutter
+    with bpy.context.temp_override(object=obj, active_object=obj):
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+    bpy.data.objects.remove(cutter)
 
 
 def briefing_room():

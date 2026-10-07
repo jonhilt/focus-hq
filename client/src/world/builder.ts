@@ -3,7 +3,8 @@ import { type Box2, DOOR_H, WALL_T } from './layout';
 import { SlidingDoors } from './starship';
 
 export type Interaction =
-  | { kind: 'agent'; id: string }
+  /** An agent's panel, on one of its views if given: a lead's goal, from the goal board. */
+  | { kind: 'agent'; id: string; view?: 'browser' | 'goal' | 'tasks' | 'crew' }
   /** One of a lead's helpers at their team station: its own transcript. */
   | { kind: 'helper'; leadId: string; id: string }
   | { kind: 'desk'; projectId: string }

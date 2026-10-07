@@ -18,7 +18,8 @@ import { TermView } from './terminal';
 const FINISHED = ['done', 'error', 'stopped'];
 
 /** What the right of an agent's panel can show beside their terminal, picked from its sidebar. */
-type View = 'browser' | 'goal' | 'tasks' | 'crew';
+export type AgentView = 'browser' | 'goal' | 'tasks' | 'crew';
+type View = AgentView;
 
 const HELPER_TONE: Record<Helper['status'], string> = { working: LCARS.sky, done: LCARS_STATUS.done, failed: LCARS.red };
 
@@ -43,7 +44,8 @@ let shown: string | null = null;
 /** Whether this agent's panel is showing (so the office doesn't toast what you can already see). */
 export const agentPanelOpen = (id: string) => shown === id;
 
-export function openAgentPanel(ui: Ui, id: string): void {
+/** Opens an agent's panel, on `view` if given. */
+export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
   const agent = state.agents.get(id);
   if (!agent) return;
 
@@ -60,8 +62,8 @@ export function openAgentPanel(ui: Ui, id: string): void {
   const closing = h('div');
   const body = h('div', { class: 'agent-body' }, ask, readouts, closing, grid);
 
-  // the view you picked stays put; until you pick one, it's the first with something in it
-  let picked: View | undefined;
+  // the view you picked (or opened it on) stays put; until you pick one, it's the first with something in it
+  let picked: View | undefined = view;
   const nav = new SideNav<View>((view) => {
     picked = view;
     renderViews();

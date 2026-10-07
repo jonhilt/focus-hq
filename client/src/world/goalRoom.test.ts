@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentStatus, GoalNote } from '../../../shared/types';
-import { goalRoomState, noteColumns, sliceProgress } from './goalRoom';
+import { goalRoomState, noteSections, roster, rowAt, sliceProgress } from './goalRoom';
 
 describe('goalRoomState', () => {
   const lead = (status: AgentStatus) => ({ status });
@@ -40,7 +40,7 @@ describe('sliceProgress', () => {
   });
 });
 
-describe('noteColumns', () => {
+describe('noteSections', () => {
   const note: GoalNote = {
     done: 'Each station is a door to its briefing room.',
     slice: [
@@ -48,39 +48,53 @@ describe('noteColumns', () => {
       { text: 'Bigger sign', done: false },
     ],
     learned: ['one', 'two', 'three'],
-    next: ['A pod', 'More'],
+    next: ['A pod'],
   };
 
-  it('puts the slice’s checklist first, ticked items dimmed, then what’s next', () => {
-    const [left] = noteColumns(note, 2);
-    expect(left).toEqual([
-      {
-        heading: 'Slice 2',
-        lines: 2,
-        items: [
-          { mark: '☑', text: 'Goal board', dim: true },
-          { mark: '☐', text: 'Bigger sign', dim: false },
-        ],
-      },
-      {
-        heading: 'Next',
-        lines: 1,
-        items: [
-          { mark: '→', text: 'A pod' },
-          { mark: '→', text: 'More' },
-        ],
-      },
+  it('puts the slice’s checklist first, ticked items dimmed, then done, next and the latest two lessons', () => {
+    const sections = noteSections(note, 2);
+    expect(sections.map((s) => s.heading)).toEqual(['Slice 2', 'Done looks like', 'Next', 'Learned']);
+    expect(sections[0].items).toEqual([
+      { mark: '☑', text: 'Goal board', dim: true },
+      { mark: '☐', text: 'Bigger sign', dim: false },
     ]);
-  });
-
-  it('puts what done looks like and the latest two lessons beside it', () => {
-    const [, right] = noteColumns(note, 2);
-    expect(right.map((s) => s.heading)).toEqual(['Done looks like', 'Learned']);
-    expect(right[0].items).toEqual([{ mark: '◎', text: note.done }]);
-    expect(right[1].items.map((i) => i.text)).toEqual(['two', 'three']);
+    expect(sections[3].items.map((i) => i.text)).toEqual(['two', 'three']);
   });
 
   it('leaves out sections with nothing in them', () => {
-    expect(noteColumns({ done: '', slice: [], learned: [], next: [] }, 1)).toEqual([[], []]);
+    expect(noteSections({ done: '', slice: [], learned: [], next: [] }, 1)).toEqual([]);
+  });
+});
+
+describe('rowAt', () => {
+  const rows = [
+    { top: 100, bottom: 200 },
+    { top: 200, bottom: 300 },
+  ];
+
+  it('finds the row a point is on, the boundary going to the row below', () => {
+    expect(rowAt(rows, 150)).toBe(0);
+    expect(rowAt(rows, 200)).toBe(1);
+  });
+
+  it('finds none above, below or with no rows', () => {
+    expect(rowAt(rows, 50)).toBeUndefined();
+    expect(rowAt(rows, 300)).toBeUndefined();
+    expect(rowAt([], 150)).toBeUndefined();
+  });
+});
+
+describe('roster', () => {
+  it('lists the lead, then the reviewer, then whichever helpers are seated', () => {
+    expect(roster('lead', 'qa', [undefined, 'h2', 'h3'])).toEqual([
+      { who: 'lead', role: 'Lead' },
+      { who: 'qa', role: 'Reviewer' },
+      { who: 'h2', role: 'Helper' },
+      { who: 'h3', role: 'Helper' },
+    ]);
+  });
+
+  it('is empty at a free station', () => {
+    expect(roster(undefined, undefined, [undefined])).toEqual([]);
   });
 });

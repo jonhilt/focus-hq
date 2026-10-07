@@ -263,6 +263,7 @@ export class ProjectRoom {
       slot.character = undefined;
     }
     slot.id = id;
+    slot.view = id ? view : undefined;
     if (!id || !view) return;
     if (!slot.character) {
       // round the briefing table, with a PADD each
@@ -283,10 +284,11 @@ export class ProjectRoom {
       const n = station.index + 1;
       station.screen.setAgent(lead ?? null);
       station.screen.setIdle(station.freeText(next));
-      station.show(lead, next);
       const use: Interaction = lead ? { kind: 'agent', id: lead.id } : { kind: 'station', projectId: this.project.id, station: station.index };
       const label = () => (lead ? `Talk to ${lead.name}, lead of “${lead.lead?.title ?? 'a goal'}”` : next ? `Team station ${n} is free: start “${next}”` : `Start a goal at team station ${n}`);
       for (const thing of station.furniture) interactive(thing, use, label);
+      if (lead) interactive(station.goalBoard, { kind: 'agent', id: lead.id, view: 'goal' }, () => `Look at ${lead.name}’s goal and to-dos`);
+      else interactive(station.goalBoard, use, label);
       // the screen's panes are the captain's to choose while it shows a session; a free station's screen starts a goal
       if (lead) interactive(station.display, { kind: 'screen' }, () => 'Change what this screen shows', 10);
       else interactive(station.display, use, label);
@@ -295,6 +297,8 @@ export class ProjectRoom {
       const reviewer = lead && reviewers.find((r) => r.reviewFor === lead.id);
       this.sit(station.reviewer, reviewer?.id, reviewer && agentView(reviewer), reviewer ? { kind: 'agent', id: reviewer.id } : use,
         () => (reviewer ? `${reviewer.name}, reviewing “${lead?.lead?.title ?? 'the goal'}”: ${reviewer.activity}` : label()));
+      // once everyone's seated: the sign, the lamps and the goal board, with its roster of who's round the table
+      station.show(lead, next);
     }
   }
 

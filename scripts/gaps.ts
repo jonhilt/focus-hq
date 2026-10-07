@@ -45,16 +45,9 @@ async function main(): Promise<number> {
   try {
     await waitForServer(url, server, 60_000);
     browser = await launchBrowser();
-    // the ship as it is, and with the decks built in Blender (see ship in client/src/main.ts), or just one of them
-    const only = process.argv[2];
-    const ships = only === 'next' ? ['?ship=next'] : only === 'default' ? [''] : ['', '?ship=next'];
-    const found: Gap[] = [];
-    for (const ship of ships) {
-      const { gaps, meshes } = await scan(browser, `${url}${ship}`);
-      const unallowed = gaps.filter((g) => !allowed(g));
-      found.push(...unallowed.map((g) => ({ ...g, a: `${ship || 'default'}: ${g.a}` })));
-      console.log(`${ship || 'Default ship'}: scanned ${meshes} meshes; ${gaps.length - unallowed.length} allowed gaps skipped.`);
-    }
+    const { gaps, meshes } = await scan(browser, url);
+    const found = gaps.filter((g) => !allowed(g));
+    console.log(`Scanned ${meshes} meshes; ${gaps.length - found.length} allowed gaps skipped.`);
     if (!found.length) {
       console.log('No gaps found.');
       return 0;

@@ -50,17 +50,29 @@ export interface NoteSection {
 const LESSONS = 2;
 
 /**
- * The goal board's two columns: this slice's checklist (what's under way, first and in full) and what might come
- * next; then what done looks like and the latest lessons. A section with nothing in it is left out.
+ * The goal board's note pane, most pressing first, as far down as it fits: this slice's checklist, what done looks
+ * like, what might come next, then the latest lessons. A section with nothing in it is left out.
  */
-export function noteColumns(note: GoalNote, slice: number): [NoteSection[], NoteSection[]] {
-  const left: NoteSection[] = [];
-  const right: NoteSection[] = [];
-  if (note.slice.length) {
-    left.push({ heading: `Slice ${slice}`, lines: 2, items: note.slice.map((i) => ({ mark: i.done ? '☑' : '☐', text: i.text, dim: i.done })) });
-  }
-  if (note.next.length) left.push({ heading: 'Next', lines: 1, items: note.next.map((text) => ({ mark: '→', text })) });
-  if (note.done) right.push({ heading: 'Done looks like', lines: 4, items: [{ mark: '◎', text: note.done }] });
-  if (note.learned.length) right.push({ heading: 'Learned', lines: 2, items: note.learned.slice(-LESSONS).map((text) => ({ mark: '•', text })) });
-  return [left, right];
+export function noteSections(note: GoalNote, slice: number): NoteSection[] {
+  const out: NoteSection[] = [];
+  if (note.slice.length) out.push({ heading: `Slice ${slice}`, lines: 2, items: note.slice.map((i) => ({ mark: i.done ? '☑' : '☐', text: i.text, dim: i.done })) });
+  if (note.done) out.push({ heading: 'Done looks like', lines: 3, items: [{ mark: '◎', text: note.done }] });
+  if (note.next.length) out.push({ heading: 'Next', lines: 1, items: note.next.map((text) => ({ mark: '→', text })) });
+  if (note.learned.length) out.push({ heading: 'Learned', lines: 2, items: note.learned.slice(-LESSONS).map((text) => ({ mark: '•', text })) });
+  return out;
+}
+
+/** Which of the board's rows (each its top and bottom, top down, in canvas pixels) a point `y` down it is on, if any. */
+export function rowAt(rows: { top: number; bottom: number }[], y: number): number | undefined {
+  const i = rows.findIndex((r) => y >= r.top && y < r.bottom);
+  return i < 0 ? undefined : i;
+}
+
+/** Who sits round a briefing room's table, as the goal board lists them: the lead, the reviewer, then the helpers. */
+export function roster<T>(lead: T | undefined, reviewer: T | undefined, helpers: (T | undefined)[]): { who: T; role: 'Lead' | 'Reviewer' | 'Helper' }[] {
+  const out: { who: T; role: 'Lead' | 'Reviewer' | 'Helper' }[] = [];
+  if (lead) out.push({ who: lead, role: 'Lead' });
+  if (reviewer) out.push({ who: reviewer, role: 'Reviewer' });
+  for (const h of helpers) if (h) out.push({ who: h, role: 'Helper' });
+  return out;
 }

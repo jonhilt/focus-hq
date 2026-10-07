@@ -1,3 +1,4 @@
+import type { AgentView } from './agentPanel';
 import type { Place } from '../world/office';
 import type { Hud } from './hud';
 import type { Panels } from './panels';
@@ -13,7 +14,8 @@ export interface Ui {
   places(): Place[];
   goTo(place: Place): void;
   goToAgent(id: string): void;
-  openAgent(id: string): void;
+  /** An agent's panel, on one of its views if given (a lead's goal, say). */
+  openAgent(id: string, view?: AgentView): void;
   /** One of a lead's helpers: its own transcript. */
   openHelper(leadId: string, id: string): void;
   openBoard(projectId: string, tab?: BoardTab): void;

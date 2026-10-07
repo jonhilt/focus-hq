@@ -1,14 +1,18 @@
 import * as THREE from 'three';
-import type { Agent } from '../../../shared/types';
+import { UNIFORM } from '../../../shared/crew';
+import type { Agent, Avatar } from '../../../shared/types';
 import { canvasTexture, fitText, makeCanvas, UI_FONT, wrap } from './canvas';
-import { type GoalRoomTone, goalRoomState, type NoteSection, noteColumns, sliceProgress } from './goalRoom';
+import type { CrewView } from './character';
+import { type GoalRoomTone, goalRoomState, type NoteSection, noteSections, rowAt, sliceProgress } from './goalRoom';
 import { flat } from './materials';
-import { LCARS, LCARS_FONT } from './starship';
+import { portrait } from './portraits';
+import { LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
 
 // What a team station shows of its goal besides the lead's session, drawn like the holograms over the holodeck pods
 // in Lower Decks: glowing cyan on dark glass. The sign floats over the station's door (and hangs beside the briefing
 // room's screen): the station, its goal and lead, whether its room is in session, and how far through its slice it is.
-// The goal board on the briefing room's wall has the lead's note on the goal.
+// The goal board on the briefing room's wall lists who's round the table and what each is doing, the way the crew
+// leaderboard in Lower Decks does, beside the lead's note on the goal.
 
 /** Each goal room tone's colour: cyan in session, as the pods' holograms are; red once stopped, as theirs go. */
 export const TONE: Record<GoalRoomTone, string> = {
@@ -24,12 +28,51 @@ const GLASS = 'rgba(5, 30, 42, 0.9)';
 const PANE = 'rgba(30, 120, 150, 0.22)';
 const TEXT = '#dcfbff';
 
-/** What a station shows: its number and colour, its lead (none while it's free) and what's next in line for it. */
+/**
+ * What a station shows: its number and colour, its lead (none while it's free), who's round its table, and what's
+ * next in line for it.
+ */
 export interface StationView {
   index: number;
   accent: string;
   lead?: Agent;
+  crew?: { who: CrewView; role: string }[];
   next?: string;
+}
+
+/**
+ * A crew member's face, drawn flat, for where their portrait can't be (no WebGL): shoulders in their division's
+ * colour, their skin, hair and eyes.
+ */
+function face(ctx: CanvasRenderingContext2D, avatar: Avatar, cx: number, cy: number, r: number): void {
+  ctx.save();
+  ctx.fillStyle = UNIFORM[avatar.division];
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + r * 1.25, r * 1.05, r * 0.6, 0, Math.PI, 0);
+  ctx.fill();
+  ctx.fillStyle = avatar.skin;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.62, 0, Math.PI * 2);
+  ctx.fill();
+  if (avatar.hairstyle !== 'bald') {
+    ctx.fillStyle = avatar.hair;
+    ctx.beginPath();
+    ctx.arc(cx, cy - r * 0.05, r * 0.66, Math.PI * 1.05, Math.PI * 1.95);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.fillStyle = '#111';
+  for (const s of [-1, 1]) {
+    ctx.beginPath();
+    ctx.arc(cx + s * r * 0.22, cy + r * 0.08, r * 0.07, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.strokeStyle = '#111';
+  ctx.lineWidth = r * 0.05;
+  ctx.beginPath();
+  ctx.arc(cx, cy + r * 0.2, r * 0.18, Math.PI * 0.2, Math.PI * 0.8);
+  ctx.stroke();
+  ctx.restore();
 }
 
 /** A glowing outline round a rounded rectangle. */
@@ -70,7 +113,8 @@ abstract class Display {
 
   show(view: StationView): void {
     const { lead } = view;
-    const key = JSON.stringify([view.index, view.next, lead && [lead.name, lead.status, lead.lead?.title, lead.lead?.slice, lead.lead?.note, lead.lead?.brief]]);
+    const crew = view.crew?.map(({ who, role }) => [who.name, who.status, who.line, role]);
+    const key = JSON.stringify([view.index, view.next, crew, lead && [lead.name, lead.status, lead.lead?.title, lead.lead?.slice, lead.lead?.note, lead.lead?.brief]]);
     if (key === this.key) return;
     this.key = key;
     this.c.ctx.clearRect(0, 0, this.c.canvas.width, this.c.canvas.height);
@@ -158,22 +202,32 @@ export class GoalSign extends Display {
 }
 
 /**
- * The goal board on the briefing room's wall: the goal and how the room stands across the top, and the lead's note
- * under it in two panes (noteColumns), this slice's checklist and what's next beside what done looks like and what
- * we've learned. Before the lead has written a note, the goal as the captain put it; while the station's free, what's
- * next for it.
+ * The goal board on the briefing room's wall: the goal and how the room stands across the top; under it, like the
+ * crew leaderboard in Lower Decks, who's round the table, each with their face, name, part and what they're doing,
+ * beside the lead's note on the goal (noteSections), or before there's a note, the goal as the captain put it. While
+ * the station's free, what's next for it.
  */
 export class GoalBoard extends Display {
   static readonly W = 1440;
   static readonly H = 804;
+  /** Where each crew member's row is, in the roster's order, as last drawn. */
+  private rows: { left: number; right: number; top: number; bottom: number }[] = [];
 
   constructor() {
     super(GoalBoard.W, GoalBoard.H, false);
   }
 
-  protected draw({ index, accent, lead, next }: StationView): void {
+  /** Which crew member's row (in the roster's order) a point on the board is on, from its texture coordinates. */
+  rowAt(uv: THREE.Vector2): number | undefined {
+    const [x, y] = [uv.x * GoalBoard.W, (1 - uv.y) * GoalBoard.H];
+    const i = rowAt(this.rows, y);
+    return i !== undefined && x >= this.rows[i].left && x < this.rows[i].right ? i : undefined;
+  }
+
+  protected draw({ index, accent, lead, crew, next }: StationView): void {
     const { ctx } = this.c;
     const [W, H] = [GoalBoard.W, GoalBoard.H];
+    this.rows = [];
     const { tone, label } = goalRoomState(lead);
     const color = TONE[tone];
     ctx.fillStyle = '#061a24';
@@ -207,15 +261,62 @@ export class GoalBoard extends Display {
     const h = H - y - 40;
     const note = lead?.lead?.note;
     if (!lead) return this.message('Free', next ? `Next up: ${next}` : 'Press E at the door, or on the table, to start a goal here.', y, h, color);
-    if (!note || (!note.done && !note.slice.length && !note.learned.length && !note.next.length)) {
-      const brief = lead.lead?.brief;
-      return this.message(`${lead.name} hasn’t written the goal’s note yet`, brief ? `As the captain put it: ${brief}` : '', y, h, color);
-    }
-    const [left, right] = noteColumns(note, lead.lead?.slice ?? 1);
     const gap = 30;
-    const colW = (W - 80 - gap) / 2;
-    this.pane(left, 40, y, colW, h);
-    this.pane(right, 40 + colW + gap, y, colW, h);
+    const crewW = Math.round((W - 80 - gap) * 0.52);
+    this.crew(crew ?? [], 40, y, crewW, h);
+    const sections = note ? noteSections(note, lead.lead?.slice ?? 1) : [];
+    const brief = lead.lead?.brief;
+    if (!sections.length && brief) sections.push({ heading: 'As the captain put it', lines: 9, items: [{ mark: '“', text: brief }] });
+    if (!sections.length) sections.push({ heading: 'No note yet', lines: 2, items: [{ mark: '◎', text: `${lead.name} hasn’t written the goal’s note yet.` }] });
+    this.pane(sections, 40 + crewW + gap, y, W - 80 - gap - crewW, h);
+  }
+
+  /** The crew round the table, a row each, as many as fit: face, name and part, and what they're doing. */
+  private crew(crew: { who: CrewView; role: string }[], x: number, y: number, w: number, h: number): void {
+    const { ctx } = this.c;
+    ctx.fillStyle = PANE;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 18);
+    ctx.fill();
+    const pad = 18;
+    const rowH = Math.min(122, (h - pad * 2) / Math.max(4, crew.length));
+    const tile = rowH - 14;
+    crew.forEach(({ who, role }, i) => {
+      const ry = y + pad + i * rowH;
+      if (ry + rowH > y + h) return;
+      this.rows.push({ left: x, right: x + w, top: ry - 7, bottom: ry + rowH - 7 });
+      // the face in its own glowing cell, as on the leaderboard
+      ctx.fillStyle = 'rgba(8, 50, 66, 0.9)';
+      ctx.beginPath();
+      ctx.roundRect(x + pad, ry, tile, tile, 10);
+      ctx.fill();
+      glowRect(ctx, x + pad, ry, tile, tile, 10, TONE['in-session'], 2);
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(x + pad, ry, tile, tile, 10);
+      ctx.clip();
+      const pic = portrait(who.avatar);
+      if (pic) ctx.drawImage(pic, x + pad, ry, tile, tile);
+      else face(ctx, who.avatar, x + pad + tile / 2, ry + tile * 0.44, tile * 0.42);
+      ctx.restore();
+      const tx = x + pad + tile + 22;
+      const tw = x + w - pad - tx;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.font = `600 ${Math.round(tile * 0.4)}px ${LCARS_FONT}`;
+      const name = who.name.toUpperCase();
+      glowText(ctx, fitText(ctx, name, tw - 150), tx, ry + tile * 0.3, TONE['in-session'], 10);
+      const nameW = Math.min(ctx.measureText(name).width, tw - 150);
+      ctx.font = `600 ${Math.round(tile * 0.24)}px ${LCARS_FONT}`;
+      ctx.fillStyle = LCARS_STATUS[who.status];
+      ctx.beginPath();
+      ctx.arc(tx + nameW + 22, ry + tile * 0.3, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillText(role.toUpperCase(), tx + nameW + 38, ry + tile * 0.31);
+      ctx.font = `${Math.round(tile * 0.27)}px ${UI_FONT}`;
+      ctx.fillStyle = TEXT;
+      ctx.fillText(fitText(ctx, who.line, tw), tx, ry + tile * 0.76);
+    });
   }
 
   /** One pane of the board, its sections one under another, as many lines as fit. */

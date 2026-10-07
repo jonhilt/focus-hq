@@ -95,7 +95,7 @@ async function main() {
       player.teleport(view.position, view.lookAt);
       player.lock();
     },
-    openAgent: (id) => openAgentPanel(ui, id),
+    openAgent: (id, view) => openAgentPanel(ui, id, view),
     openHelper: (leadId, id) => openHelperPanel(ui, leadId, id),
     openBoard: (projectId, tab) => openBoardPanel(ui, projectId, tab),
     previewPr: (projectId, repo, number) => {
@@ -301,6 +301,13 @@ async function main() {
     const hits = raycaster.intersectObject(world.root, true);
     target = null;
     for (const hit of hits) {
+      // a board with rows of its own to use, like a briefing room's goal board's roster
+      const at = hit.object.userData.interactionAt as ((uv: THREE.Vector2) => typeof target) | undefined;
+      const row = at && hit.uv && hit.distance <= REACH ? at(hit.uv) : null;
+      if (row) {
+        target = row;
+        break;
+      }
       let o: THREE.Object3D | null = hit.object;
       while (o && !o.userData.interaction) o = o.parent;
       if (o) {
@@ -319,7 +326,7 @@ async function main() {
     const i = target.interaction;
     switch (i.kind) {
       case 'agent':
-        ui.openAgent(i.id);
+        ui.openAgent(i.id, i.view);
         break;
       case 'helper':
         ui.openHelper(i.leadId, i.id);
