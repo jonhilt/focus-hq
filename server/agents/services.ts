@@ -1,7 +1,7 @@
 import { Context, Data, Effect, Layer, type Scope } from 'effect';
 import { errorMessage } from '../util';
 import type { TriageDecision, Triager, TriageRequest } from './triage';
-import type { AgentRunner, AgentSession, BaseMerge, RunHooks, RunRequest, WorkspaceOps } from './types';
+import type { AgentRunner, AgentSession, BaseMerge, BranchState, RunHooks, RunRequest, WorkspaceOps } from './types';
 
 // What the agent manager needs from the outside world, as Effect services: git on the agents' checkouts, Claude Code
 // sessions, and the operations officer's triage. Each wraps the Promise-based implementation it always had (the live
@@ -39,6 +39,8 @@ export class Workspace extends Context.Service<Workspace, {
   checkoutPullRequest(repo: string, agentId: string, number: number): Effect.Effect<string, GitFailed>;
   mergeBase(repo: string, branch: string, baseBranch: string): Effect.Effect<BaseMerge, GitFailed>;
   missingRemoteCommits(dir: string, branch: string): Effect.Effect<boolean, GitFailed>;
+  snapshot(dir: string, message: string): Effect.Effect<boolean, GitFailed>;
+  branchState(dir: string, branch: string, baseBranch: string): Effect.Effect<BranchState, GitFailed>;
 }>()('focus/agents/Workspace') {
   /** The workspace on its Promise-based operations: the live git ones, or the demo's pretend ones. */
   static fromOps(ops: WorkspaceOps): Layer.Layer<Workspace> {
@@ -59,6 +61,8 @@ export class Workspace extends Context.Service<Workspace, {
       checkoutPullRequest: (repo, agentId, number) => git(`check out PR #${number}`, () => ops.checkoutPullRequest(repo, agentId, number)),
       mergeBase: (repo, branch, baseBranch) => git(`merge ${baseBranch} into ${branch}`, () => ops.mergeBase(repo, branch, baseBranch)),
       missingRemoteCommits: (dir, branch) => git(`compare with origin's ${branch}`, () => ops.missingRemoteCommits(dir, branch)),
+      snapshot: (dir, message) => git('commit a WIP snapshot', () => ops.snapshot(dir, message)),
+      branchState: (dir, branch, baseBranch) => git(`compare with origin's ${branch}`, () => ops.branchState(dir, branch, baseBranch)),
     }));
   }
 }

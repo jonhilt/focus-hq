@@ -44,6 +44,8 @@ const liveWorkspace: WorkspaceOps = {
   checkoutPullRequest: git.checkoutPullRequest,
   mergeBase: git.mergeBase,
   missingRemoteCommits: git.missingRemoteCommits,
+  snapshot: git.snapshot,
+  branchState: git.branchState,
 };
 
 async function main() {

@@ -256,18 +256,46 @@ describe('the goal’s note', () => {
 });
 
 describe('closing a goal', () => {
-  it('warns about work it would throw away and pull requests it would leave behind', () => {
-    expect(closeCheck({ prs: [{ ...work.prs[0] }] }, [])).toEqual({ kind: 'ok' });
-    expect(closeCheck(work, ['web'])).toEqual({
+  const pushed = { onOrigin: true, unpushed: 0 };
+  const clean = [{ folder: 'web', dirty: false, branch: pushed }, { folder: 'api', dirty: false, branch: pushed }];
+
+  it('closes without asking when everything reached GitHub and its pull requests are settled', () => {
+    expect(closeCheck({ slice: 2, prs: [{ ...work.prs[0] }] }, 'focus/b', clean)).toEqual({ kind: 'ok' });
+    // a later slice that hasn't shipped yet: earlier ones did
+    expect(closeCheck({ slice: 2, prs: [] }, 'focus/b', clean)).toEqual({ kind: 'ok' });
+  });
+
+  it('warns about work only the office’s clone has, pull requests it leaves behind, and a goal that shipped nothing', () => {
+    expect(closeCheck(work, 'focus/b', [{ folder: 'web', dirty: true, branch: pushed }, clean[1]])).toEqual({
       kind: 'warn',
-      reasons: ['Uncommitted changes in ./web are thrown away.', 'acme/api#7 stays open on GitHub, with no lead to fix it.'],
+      reasons: ['Uncommitted changes in ./web are committed as a WIP snapshot on `focus/b`, kept only in the office’s clone.', 'acme/api#7 stays open on GitHub, with no lead to fix it.'],
+    });
+    expect(closeCheck({ slice: 1, prs: [] }, 'focus/b', [{ folder: 'web', dirty: false, branch: { onOrigin: false, unpushed: 3 } }, { folder: 'api', dirty: false, branch: { onOrigin: true, unpushed: 1 } }])).toEqual({
+      kind: 'warn',
+      reasons: [
+        './web’s branch `focus/b` never reached GitHub: its 3 commits stay only in the office’s clone.',
+        './api has 1 commit that never reached GitHub, kept only in the office’s clone.',
+        'The goal never shipped anything: no pull request was opened for it.',
+      ],
+    });
+    // a branch GitHub never got, with nothing on it, loses nothing
+    expect(closeCheck({ slice: 2, prs: [] }, 'focus/b', [{ folder: 'web', dirty: false, branch: { onOrigin: false, unpushed: 0 } }])).toEqual({ kind: 'ok' });
+  });
+
+  it('says so when git couldn’t tell how a checkout stands', () => {
+    expect(closeCheck({ slice: 2, prs: [] }, 'focus/b', [{ folder: 'web', dirty: true }])).toEqual({
+      kind: 'warn',
+      reasons: ['Uncommitted changes in ./web are committed as a WIP snapshot on `focus/b`, kept only in the office’s clone.', 'Couldn’t tell whether ./web’s commits reached GitHub.'],
     });
   });
 
   it('files the goal in the room’s log, newest first, keeping a few dozen', () => {
-    const lead = { id: 'lead_p1_ab', name: 'Lt. Okafor', sessionId: 's1', startedAt: 10, lead: work } as Agent;
+    const lead = { id: 'lead_p1_ab', name: 'Lt. Okafor', sessionId: 's1', branch: 'focus/saved-items-2-ab12', startedAt: 10, lead: work } as Agent;
     const record = goalRecord(lead, 99);
-    expect(record).toEqual({ id: 'lead_p1_ab', title: 'Saved items', note: undefined, slices: 2, prs: work.prs, leadName: 'Lt. Okafor', sessionId: 's1', openedAt: 10, closedAt: 99 });
+    expect(record).toEqual({
+      id: 'lead_p1_ab', title: 'Saved items', note: undefined, slices: 2, prs: work.prs, leadName: 'Lt. Okafor', sessionId: 's1',
+      branch: 'focus/saved-items-2-ab12', repos: work.repos, openedAt: 10, closedAt: 99,
+    });
     // closed before the new slice shipped anything: that one doesn't count
     expect(goalRecord({ ...lead, lead: { ...work, slice: 3, prs: [] } }, 99).slices).toBe(2);
     const full = Array.from({ length: GOAL_LOG }, (_, i) => ({ ...record, id: `g${i}` }));

@@ -1,6 +1,6 @@
 import type { Agent, Effort, GoalArtifact, GoalNote, GoalRecord, Helper, LeadPr, LeadWork, QaReport, QaReview, QueuedGoal, Settings } from '../../shared/types';
 import { TEAM_STATIONS } from '../../shared/types';
-import type { HelperEvent } from './types';
+import type { BranchState, HelperEvent } from './types';
 import { slugify } from '../util';
 
 /** The lead's checkout of one repo: a folder inside their workspace. */
@@ -251,14 +251,39 @@ export function noteForPrompt(work: Pick<LeadWork, 'title' | 'note' | 'brief'>):
   return parts.join('\n\n');
 }
 
-/** What closing the goal would lose or leave behind, for the captain to confirm first. */
-export function closeCheck(work: Pick<LeadWork, 'prs'>, dirtyFolders: string[]): { kind: 'ok' } | { kind: 'warn'; reasons: string[] } {
+/**
+ * A repo of a goal's workspace as the goal closes: whether it has uncommitted changes (or git couldn't tell), and how its
+ * branch stands with GitHub (missing when git couldn't tell).
+ */
+export interface RepoAtClose {
+  folder: string;
+  dirty: boolean;
+  branch?: BranchState;
+}
+
+/**
+ * What closing the goal would leave behind, for the captain to confirm first. Nothing is thrown away (uncommitted
+ * changes are committed as a WIP snapshot on the branch), but commits GitHub hasn't got stay only in the office's clone.
+ */
+export function closeCheck(work: Pick<LeadWork, 'prs' | 'slice'>, branch: string, repos: RepoAtClose[]): { kind: 'ok' } | { kind: 'warn'; reasons: string[] } {
   const reasons: string[] = [];
-  if (dirtyFolders.length) reasons.push(`Uncommitted changes in ${dirtyFolders.map((f) => `./${f}`).join(' and ')} are thrown away.`);
+  const list = (folders: string[]) => folders.map((f) => `./${f}`).join(' and ');
+  const commits = (n: number) => `${n} commit${n === 1 ? '' : 's'}`;
+  const dirty = repos.filter((r) => r.dirty).map((r) => r.folder);
+  if (dirty.length) reasons.push(`Uncommitted changes in ${list(dirty)} are committed as a WIP snapshot on \`${branch}\`, kept only in the office’s clone.`);
+  for (const r of repos) {
+    if (!r.branch) reasons.push(`Couldn’t tell whether ./${r.folder}’s commits reached GitHub.`);
+    else if (!r.branch.onOrigin && r.branch.unpushed) reasons.push(`./${r.folder}’s branch \`${branch}\` never reached GitHub: its ${commits(r.branch.unpushed)} stay only in the office’s clone.`);
+    else if (r.branch.unpushed) reasons.push(`./${r.folder} has ${commits(r.branch.unpushed)} that never reached GitHub, kept only in the office’s clone.`);
+  }
+  if (work.slice <= 1 && !work.prs.length) reasons.push('The goal never shipped anything: no pull request was opened for it.');
   const open = work.prs.filter((p) => !p.outcome);
   if (open.length) reasons.push(`${open.map((p) => `${p.repo}#${p.number}`).join(' and ')} ${open.length === 1 ? 'stays' : 'stay'} open on GitHub, with no lead to fix ${open.length === 1 ? 'it' : 'them'}.`);
   return reasons.length ? { kind: 'warn', reasons } : { kind: 'ok' };
 }
+
+/** The commit message of the snapshot that keeps a closing goal's uncommitted work on its branch. */
+export const snapshotMessage = (title: string) => `WIP: uncommitted work when the goal “${title}” closed`;
 
 /** How many closed goals a room keeps in its log. */
 export const GOAL_LOG = 30;
@@ -266,7 +291,10 @@ export const GOAL_LOG = 30;
 /** The goal for the room's log, as it closes: its slices are the ones that shipped. */
 export function goalRecord(agent: Agent, now: number): GoalRecord {
   const work = agent.lead!;
-  return { id: agent.id, title: work.title, note: work.note, slices: work.prs.length ? work.slice : work.slice - 1, prs: work.prs, leadName: agent.name, sessionId: agent.sessionId, openedAt: agent.startedAt, closedAt: now };
+  return {
+    id: agent.id, title: work.title, note: work.note, slices: work.prs.length ? work.slice : work.slice - 1, prs: work.prs, leadName: agent.name, sessionId: agent.sessionId,
+    branch: agent.branch, repos: work.repos, openedAt: agent.startedAt, closedAt: now,
+  };
 }
 
 /** The room's log with a goal just closed: newest first, the oldest dropping off. */

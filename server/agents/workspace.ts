@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { paths } from '../config';
 import { errorMessage, KeyedLock, run, sleep } from '../util';
-import type { BaseMerge } from './types';
+import type { BaseMerge, BranchState } from './types';
 import { claimBranch, heldMessage, orphanedWorkspaces, parseWorktrees, retryLockRace } from './worktrees';
 
 const lock = new KeyedLock();
@@ -181,6 +181,29 @@ export async function head(dir: string): Promise<string> {
 
 export async function hasUncommittedChanges(dir: string): Promise<boolean> {
   return (await git(dir, ['status', '--porcelain'])).trim().length > 0;
+}
+
+/**
+ * Commits everything uncommitted in `dir`, untracked files too, as `message`, skipping commit hooks: work about to be
+ * thrown away is kept on the branch instead. False when there was nothing to commit, or no checkout to commit in.
+ */
+export async function snapshot(dir: string, message: string): Promise<boolean> {
+  if (!fs.existsSync(dir)) return false;
+  await git(dir, ['add', '-A']);
+  if (await git(dir, ['diff', '--cached', '--quiet']).then(() => true, () => false)) return false;
+  await git(dir, ['commit', '--no-verify', '-q', '-m', message]);
+  return true;
+}
+
+/**
+ * Whether origin has `branch`, and how many commits on HEAD it hasn't got: those not on origin's `branch` or, while
+ * origin hasn't got it, not on `baseBranch`.
+ */
+export async function branchState(dir: string, branch: string, baseBranch: string): Promise<BranchState> {
+  const onOrigin = (await git(dir, ['ls-remote', '--heads', 'origin', `refs/heads/${branch}`], 60_000)).trim().length > 0;
+  if (onOrigin) await git(dir, ['fetch', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`], 5 * 60_000);
+  const out = await git(dir, ['rev-list', '--count', `origin/${onOrigin ? branch : baseBranch}..HEAD`]);
+  return { onOrigin, unpushed: Number(out.trim()) || 0 };
 }
 
 export async function pushBranch(dir: string, branch: string): Promise<void> {

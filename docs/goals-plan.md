@@ -75,7 +75,7 @@ Project.goals?: GoalRecord[]   // persisted with the project, newest first, capp
 - *The lead proposes.* A new office tool, `mcp__office__propose_close({ reason })`, is for when the goal's "done" is met, or when a slice lands and nothing worthwhile is left. It sets `lead.closing`, the station's sign shows "Ready to wrap up", a toast fires, and the lead stops. You confirm with **Close goal**, or carry on talking, which clears `closing`.
 - *You close it,* any time, with **Close goal** in the lead's panel.
 
-Closing checks first, through a pure `closeCheck(lead, dirtyFolders)` → `ok | { warn: … }`: uncommitted changes ("these are thrown away") or open PRs ("they stay open on GitHub, unowned"). The panel shows the warning and asks again. Then it files the `GoalRecord` and dismisses the lead.
+Closing checks first, through a pure `closeCheck(lead, branch, repos)` → `ok | { warn: … }`: uncommitted changes (or a checkout git couldn't look at), commits GitHub hasn't got (unpushed, or a branch it never got), a goal that shipped nothing, or open PRs ("they stay open on GitHub, unowned"). The panel shows the warning and asks again. Then it commits each checkout's uncommitted work as a WIP snapshot on the goal's branch (refusing to close if it can't), files the `GoalRecord` (with the branch and repos) and dismisses the lead.
 
 **Several at once:** each goal has its own worktrees and branch, so they don't touch each other's checkouts. They can still conflict at merge, like any two PRs. Their reviews run side by side too: see *QA for goals* below. Leads count against the global `maxConcurrent` (fix 2 routes resumes through `schedule()`, so a lead past the limit shows "Waiting for a free slot"). They don't count against the room's individual desks.
 

@@ -87,6 +87,54 @@ describe('AgentManager', () => {
     expect(store.agents.has(lead.id)).toBe(false);
   });
 
+  it('commits a closing goal’s uncommitted work as a WIP snapshot on its branch before its checkouts go', async () => {
+    const steps: string[] = [];
+    let saves = true;
+    let shipMidClose: Promise<unknown> | undefined;
+    const { agents, claude, store, project } = office({
+      ...demoWorkspace,
+      // the API's checkout can't say whether it has changes: that counts as having them
+      hasUncommittedChanges: async (dir) => {
+        if (dir.endsWith('/webshop-api')) throw new Error('index.lock exists');
+        return true;
+      },
+      branchState: async () => ({ onOrigin: false, unpushed: 2 }),
+      snapshot: async (dir, message) => {
+        if (!saves) throw new Error('disk full');
+        // the lead, still mid-turn, tries to ship while the goal closes: the snapshot must never reach a pull request
+        shipMidClose ??= claude.turns[0].req.tools!.ship({ title: 'Saved items', summary: 'Last bits.' }).then(() => 'shipped', (err: Error) => err.message);
+        steps.push(`snapshot ${dir.split('/').at(-1)}: ${message}`);
+        return true;
+      },
+      remove: async (_repo, agentId) => void steps.push(`remove ${agentId.split('/').at(-1)}`),
+    });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    const branch = store.agent(lead.id).branch;
+
+    const first = await agents.closeGoal(lead.id);
+    expect(first).toEqual({ warn: expect.arrayContaining([
+      `Uncommitted changes in ./webshop-frontend and ./webshop-api are committed as a WIP snapshot on \`${branch}\`, kept only in the office’s clone.`,
+      `./webshop-api’s branch \`${branch}\` never reached GitHub: its 2 commits stay only in the office’s clone.`,
+      'The goal never shipped anything: no pull request was opened for it.',
+    ]) });
+    expect(steps).toEqual([]);
+
+    // work that can't be saved keeps the goal open
+    saves = false;
+    await expect(agents.closeGoal(lead.id, true)).rejects.toThrow(/Couldn’t commit \.\/webshop-frontend’s uncommitted work as a WIP snapshot \(disk full\)/);
+    expect(store.agents.has(lead.id)).toBe(true);
+    expect(project.goals ?? []).toEqual([]);
+
+    saves = true;
+    expect(await agents.closeGoal(lead.id, true)).toEqual({ closed: true });
+    const wip = 'WIP: uncommitted work when the goal “Saved items” closed';
+    expect(steps.indexOf('remove webshop-frontend')).toBeGreaterThan(steps.indexOf(`snapshot webshop-frontend: ${wip}`));
+    expect(steps.indexOf('remove webshop-api')).toBeGreaterThan(steps.indexOf(`snapshot webshop-api: ${wip}`));
+    expect(await shipMidClose).toBe('The captain is closing the goal: nothing ships now');
+    expect(project.goals![0]).toMatchObject({ id: lead.id, branch, sessionId: 'session-1', repos: [{ folder: 'webshop-frontend' }, { folder: 'webshop-api' }] });
+  });
+
   it('puts what the lead shows on their goal, with a picture when it can take one, until the goal closes', async () => {
     const { agents, claude, store, project } = office();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };

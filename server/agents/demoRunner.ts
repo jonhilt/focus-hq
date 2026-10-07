@@ -471,6 +471,9 @@ export const demoWorkspace: WorkspaceOps = {
     return { kind: 'conflicts' };
   },
   missingRemoteCommits: async () => false,
+  snapshot: async () => false,
+  // everything the demo's leads commit, they ship
+  branchState: async () => ({ onOrigin: true, unpushed: 0 }),
 };
 
 /** The demo planner's judgement of an idea too big for one issue: a rebuild, or a list of three or more features. */

@@ -119,6 +119,12 @@ export interface GoalRecord {
   prs: LeadPr[];
   leadName: string;
   sessionId?: string;
+  /**
+   * The branch the goal was on as it closed, in every repo, with any uncommitted work committed to it as a WIP snapshot,
+   * and the repos it was checked out from. Missing on goals closed before they were kept.
+   */
+  branch?: string;
+  repos?: LeadWork['repos'];
   openedAt: number;
   closedAt: number;
 }

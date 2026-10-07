@@ -11,7 +11,7 @@ import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
 import { afterCloudRun, carryOnInNewSession, fallBackToLocal } from './cloud';
-import { afterLanding, afterVerdict, type ArtifactInput, showArtifact, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, behindNote, closeCheck, conflictsResolvedNote, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded } from './lead';
+import { afterLanding, afterVerdict, type ArtifactInput, showArtifact, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, behindNote, closeCheck, conflictsResolvedNote, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded, snapshotMessage } from './lead';
 import { repoFolders } from './planner';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
 import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
@@ -90,6 +90,8 @@ export class AgentManager {
   /** The pull requests (prKey) the office is merging its base branch into right now. */
   private merging = new Set<string>();
   private leaving = new Set<string>();
+  /** The leads whose goal is closing right now: nothing of theirs ships, so a WIP snapshot never reaches a pull request. */
+  private closingGoals = new Set<string>();
   /** The pull requests (prKey) whose merge or close is in the ledger: the office notices some more than once. */
   private landed = new Set<string>();
   private readonly runtime: ManagedRuntime.ManagedRuntime<ManagerServices, never>;
@@ -873,8 +875,9 @@ export class AgentManager {
   }
 
   /**
-   * Closes a goal: files it in the room's log and sends its lead home, which frees the station. First says what would be
-   * lost or left behind (uncommitted changes, open pull requests), unless `force`.
+   * Closes a goal: commits any uncommitted work as a WIP snapshot on its branch, files it in the room's log and sends its
+   * lead home, which frees the station. First says what would be left behind (work GitHub hasn't got, open pull
+   * requests, a goal that shipped nothing), unless `force`. A checkout whose work can't be saved keeps the goal open.
    */
   closeGoal(id: string, force = false): Promise<{ closed: true } | { warn: string[] }> {
     return this.runtime.runPromise(Effect.gen({ self: this }, function* () {
@@ -882,15 +885,29 @@ export class AgentManager {
       const work = agent.lead;
       if (agent.task !== 'lead' || !work) return yield* new Refused({ message: `${agent.name} isn’t leading a goal` });
       const workspace = yield* Workspace;
-      const dirty = yield* Effect.filter(work.repos, (r) => workspace.hasUncommittedChanges(workspace.dir(leadWorktreeId(id, r.folder))).pipe(Effect.orElseSucceed(() => false)));
-      const check = closeCheck(work, dirty.map((r) => r.folder));
+      const dir = (folder: string) => workspace.dir(leadWorktreeId(id, folder));
+      // a check that fails counts against closing: changes git couldn't look for are treated as there
+      const repos = yield* Effect.forEach(work.repos, (r) =>
+        Effect.all({
+          folder: Effect.succeed(r.folder),
+          dirty: workspace.hasUncommittedChanges(dir(r.folder)).pipe(Effect.orElseSucceed(() => true)),
+          branch: workspace.branchState(dir(r.folder), agent.branch, r.baseBranch).pipe(Effect.orElseSucceed(() => undefined)),
+        }), { concurrency: 'unbounded' });
+      const check = closeCheck(work, agent.branch, repos);
       if (check.kind === 'warn' && !force) return { warn: check.reasons };
+      this.closingGoals.add(id);
+      yield* Effect.forEach(work.repos, (r) =>
+        workspace.snapshot(dir(r.folder), snapshotMessage(work.title)).pipe(
+          Effect.mapError((err) => new Refused({ message: `Couldn’t commit ./${r.folder}’s uncommitted work as a WIP snapshot (${err.message}), so “${work.title}” stays open` })),
+          Effect.tap((saved) => Effect.sync(() => saved && this.print(agent, [{ kind: 'system', text: `✻ Committed ./${r.folder}’s uncommitted work as a WIP snapshot on ${agent.branch}` }]))),
+        ), { discard: true }).pipe(Effect.onError(() => Effect.sync(() => this.closingGoals.delete(id))));
       const project = this.store.project(agent.projectId);
       const record = goalRecord(agent, Date.now());
       project.goals = fileGoal(project.goals ?? [], record);
       this.record(project.id, { kind: 'goal-closed', goal: record });
       this.projectsChanged();
       yield* this.goHome(id);
+      this.closingGoals.delete(id);
       this.store.dropArtifacts(id);
       // the goal's reviewer goes home with its lead; a review they were on, or still waiting, goes to the room's QA officer
       const reviewer = goalReviewerId(id);
@@ -995,6 +1012,7 @@ export class AgentManager {
     return Effect.gen({ self: this }, function* () {
       const work = agent.lead;
       if (!work?.repos.length) return yield* new Refused({ message: 'There’s nothing checked out to ship' });
+      if (this.closingGoals.has(agent.id)) return yield* new Refused({ message: 'The captain is closing the goal: nothing ships now' });
       const github = yield* GitHub;
       const workspace = yield* Workspace;
       const states = yield* Effect.forEach(
@@ -1617,7 +1635,10 @@ export class AgentManager {
       this.schedule();
       const workspace = yield* Workspace;
       const checkouts = agent.lead ? agent.lead.repos.map((r) => ({ repo: r.repo, id: leadWorktreeId(id, r.folder) })) : [{ repo: agent.repo, id }];
-      yield* Effect.forEach(checkouts, (c) => workspace.remove(c.repo, c.id), { discard: true });
+      // whatever a lead wrote since the goal closed (its session only stopped just now) goes on the branch too
+      const title = agent.lead?.title;
+      yield* Effect.forEach(checkouts, (c) =>
+        (title ? Effect.ignore(workspace.snapshot(workspace.dir(c.id), snapshotMessage(title))) : Effect.void).pipe(Effect.andThen(workspace.remove(c.repo, c.id))), { discard: true });
     });
   }
 

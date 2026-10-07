@@ -95,6 +95,12 @@ export interface AgentRunner {
   start(req: RunRequest, hooks: RunHooks): AgentSession;
 }
 
+/** How a branch in a checkout stands with origin: whether origin has it, and how many commits it hasn't got. */
+export interface BranchState {
+  onOrigin: boolean;
+  unpushed: number;
+}
+
 /** Git operations on an agent's checkout. Faked in demo mode. */
 /** What came of merging a pull request's base branch into it on the office's side: pushed, nothing to do, or a job for an agent. */
 export type BaseMerge = { kind: 'merged'; sha: string; from: string } | { kind: 'up-to-date' } | { kind: 'conflicts' };
@@ -127,6 +133,10 @@ export interface WorkspaceOps {
   mergeBase(repo: string, branch: string, baseBranch: string): Promise<BaseMerge>;
   /** Whether origin's `branch` has commits `dir`'s HEAD doesn't. */
   missingRemoteCommits(dir: string, branch: string): Promise<boolean>;
+  /** Commits everything uncommitted in `dir` as `message`, skipping hooks; false when there was nothing to commit. */
+  snapshot(dir: string, message: string): Promise<boolean>;
+  /** Whether origin has `branch`, and how many of `dir`'s commits it hasn't got (counting from `baseBranch` while it hasn't). */
+  branchState(dir: string, branch: string, baseBranch: string): Promise<BranchState>;
   /** A detached checkout of a pull request's head in the agent's workspace (for QA). Returns the commit ('' if unknown). */
   checkoutPullRequest(repo: string, agentId: string, number: number): Promise<string>;
 }

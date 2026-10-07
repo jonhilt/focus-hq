@@ -79,7 +79,7 @@ export function reviewing(lead: Agent): HTMLElement | null {
   return reviewer ? h('small', { class: 'muted', style: 'display:block' }, `${reviewer.name} is reviewing ${reviewer.repo.split('/')[1]} #${reviewer.issue.number}: ${reviewer.activity}`) : null;
 }
 
-/** Closes the goal, asking first if that would throw work away or leave pull requests behind. */
+/** Closes the goal, asking first if that would leave work only on this machine, leave pull requests behind, or ship nothing. */
 export async function closeGoal(lead: Agent): Promise<boolean> {
   const title = lead.lead?.title ?? 'this goal';
   const first = await api.closeGoal(lead.id);
