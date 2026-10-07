@@ -143,7 +143,8 @@ export class SideNav<K extends string> implements PanelNav {
         h('span', { class: 'nav-readout' }, item.readout ?? ''),
         h('span', { class: 'nav-label' }, item.label),
       );
-      this.el.append(button); // in item order
+      // in item order, moving only what's out of place: moving a focused button blurs it
+      if (this.el.children[i] !== button) this.el.insertBefore(button, this.el.children[i] ?? null);
     });
   }
 
