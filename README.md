@@ -381,7 +381,7 @@ The client mirrors server state over the WebSocket. Every action is a small REST
 | `npm run typecheck` | `tsc` over server, client and shared code |
 | `npm test` | unit tests (vitest) for the pure decision code: QA verdicts, badges, prompts |
 | `npm run smoke` | headless Playwright check of the splash screen in demo mode (screenshots in `smoke-shots/`) |
-| `npm run zfight` | headless scan of the demo office's 3D scene for z-fighting (coplanar faces from different meshes); fails listing each pair |
+| `npm run zfight` | optional, on-demand headless scan of the demo office's 3D scene for z-fighting (coplanar faces from different meshes); fails listing each pair |
 
 ## Licence
 
