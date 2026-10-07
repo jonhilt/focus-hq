@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import type { OutlineEffect } from 'three/examples/jsm/effects/OutlineEffect.js';
 import { N8AOPass } from 'n8ao';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { Outlines, sceneTarget, stencilToSky } from './outline';
@@ -10,6 +9,12 @@ import { Outlines, sceneTarget, stencilToSky } from './outline';
  * the depth, would otherwise draw what's behind a bubble straight across it.
  */
 export const OVERLAY_LAYER = 1;
+
+/**
+ * How far past its clip rectangle a frame is still drawn, in pixels at full size, so the outlines and ambient occlusion
+ * at its edges read what's really there, not what was left from an earlier frame.
+ */
+const CLIP_MARGIN = 32;
 
 /** Ambient occlusion, in metres and N8AO's units: contact shading a hand's width round where surfaces meet. */
 const AO = { radius: 0.6, falloff: 0.6, intensity: 2.5 };
@@ -66,11 +71,11 @@ export class Frame {
    * projection: a doorway's, whose near plane lies along the far doorway (portal.ts), which N8AO can't read depth from.
    */
   private reprojected?: THREE.WebGLRenderTarget;
+  /** Where on the screen it's drawn (0 to 1, as onScreen in doorway.ts gives), or everywhere (null). */
+  private rect: THREE.Vector4 | null = null;
 
   constructor(
     private readonly renderer: THREE.WebGLRenderer,
-    /** Draws the scene with its outlines as hulls (`?outline=hull`, to compare), or null for outline.ts's lines. */
-    private readonly hulls: OutlineEffect | null,
     scene: THREE.Scene,
     /** The camera the scene's drawn from, or one in the same place with a plain projection (the occlusion's). */
     private readonly camera: THREE.PerspectiveCamera,
@@ -82,7 +87,7 @@ export class Frame {
     const { x: w, y: h } = size;
     this.drawn = sceneTarget(w, h);
     this.overlay = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, stencilBuffer: true, depthTexture: this.drawn.depthTexture });
-    this.outlines = new Outlines(!hulls);
+    this.outlines = new Outlines();
     if (!occlusion) return;
     const ao = new N8AOPass(scene, camera, w, h);
     // the scene is drawn here rather than by the pass
@@ -112,11 +117,16 @@ export class Frame {
     this.reprojected?.setSize(w, h);
   }
 
+  /** Draws only within `rect` from now on, where only that much will be seen (a doorway's opening), or everywhere. */
+  clip(rect: THREE.Vector4 | null): void {
+    this.rect = rect;
+  }
+
   render(scene: THREE.Scene, camera: THREE.Camera, output: THREE.WebGLRenderTarget): void {
     const { renderer, drawn } = this;
+    this.scissor(output);
     renderer.setRenderTarget(drawn);
-    if (this.hulls) this.hulls.render(scene, camera);
-    else renderer.render(scene, camera);
+    renderer.render(scene, camera);
     this.drawOverlay(scene, camera);
     renderer.setRenderTarget(drawn);
     stencilToSky(renderer);
@@ -126,6 +136,24 @@ export class Frame {
     }
     const color = this.occluded ? { texture: this.occluded.texture, display: this.display } : undefined;
     this.outlines.render(renderer, { target: drawn, camera, color, overlay: this.overlay.texture }, output, this.display);
+  }
+
+  /** Sets every target the frame draws into, the occlusion's own included, to draw only within its rectangle. */
+  private scissor(output: THREE.WebGLRenderTarget): void {
+    const targets = [this.drawn, this.overlay, this.occluded, output];
+    // N8AO's are at full or half size, and swap places as it blurs
+    if (this.ao) for (const v of Object.values(this.ao)) if (v instanceof THREE.WebGLRenderTarget) targets.push(v);
+    const { rect, drawn } = this;
+    for (const t of targets) {
+      if (!t) continue;
+      t.scissorTest = !!rect;
+      if (!rect) continue;
+      const scale = t.width / drawn.width;
+      const margin = CLIP_MARGIN * scale;
+      const x = Math.max(0, Math.floor(rect.x * t.width - margin));
+      const y = Math.max(0, Math.floor(rect.y * t.height - margin));
+      t.scissor.set(x, y, Math.min(t.width, Math.ceil((rect.x + rect.z) * t.width + margin)) - x, Math.min(t.height, Math.ceil((rect.y + rect.w) * t.height + margin)) - y);
+    }
   }
 
   /** The scene's colours, with its depth as the occlusion's camera would have drawn it. */
@@ -139,6 +167,9 @@ export class Frame {
     u.tDepth.value = drawn.depthTexture;
     u.fromInverse.value = from.projectionMatrixInverse;
     u.to.value = this.camera.projectionMatrix;
+    // only as much as the scene was drawn
+    this.reprojected.scissor.copy(drawn.scissor);
+    this.reprojected.scissorTest = drawn.scissorTest;
     renderer.setRenderTarget(this.reprojected);
     reproject.render(renderer);
     // sized with the frame, not by the pass

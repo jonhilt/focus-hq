@@ -170,7 +170,6 @@ export class Character {
       new THREE.CircleGeometry(0.45, 24),
       new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.15, depthWrite: false }),
     );
-    shadow.material.userData.outlineParameters = { visible: false };
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.012;
     this.group.add(shadow);

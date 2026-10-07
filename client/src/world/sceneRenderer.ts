@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import type { OutlineEffect } from 'three/examples/jsm/effects/OutlineEffect.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { Frame } from './frame';
 
@@ -19,13 +18,12 @@ export class SceneRenderer {
 
   constructor(
     private readonly renderer: THREE.WebGLRenderer,
-    hulls: OutlineEffect | null,
     scene: THREE.Scene,
     camera: THREE.PerspectiveCamera,
     occlusion: boolean,
   ) {
     renderer.getDrawingBufferSize(this.size);
-    this.frame = new Frame(renderer, hulls, scene, camera, occlusion, true, this.size);
+    this.frame = new Frame(renderer, scene, camera, occlusion, true, this.size);
     this.framed = new THREE.WebGLRenderTarget(this.size.x, this.size.y, { depthBuffer: false });
     this.smaa.setSize(this.size.x, this.size.y);
     this.smaa.renderToScreen = true;

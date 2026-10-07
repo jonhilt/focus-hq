@@ -48,7 +48,7 @@ const isScreen = (v: unknown): v is ScreenName => (SCREENS as readonly unknown[]
 
 /** How a deck's surface is drawn. */
 export type Surface =
-  | { kind: 'toon'; outline: boolean }
+  | { kind: 'toon' }
   /** Its colour, unshaded: lights, ceilings. */
   | { kind: 'unlit' }
   /** Speckled carpet in its colour, tiled every UV unit. */
@@ -112,7 +112,7 @@ export function readMarker(e: Extras): Marker | null {
 export function readSurface(e: Extras): Surface {
   switch (e.surface) {
     case undefined:
-      return { kind: 'toon', outline: e.outline !== 0 };
+      return { kind: 'toon' };
     case 'unlit':
     case 'carpet':
     case 'space':

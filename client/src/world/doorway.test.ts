@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { clipNear, inDoorway, throughDoor } from './doorway';
+import { clipNear, inDoorway, onScreen, throughDoor } from './doorway';
 
 /** A doorway at `at`, turned `yaw` about Y: facing out into its room along its forward (-Z, turned). */
 const doorway = (at: [number, number, number], yaw: number) =>
@@ -76,5 +76,41 @@ describe('clipNear', () => {
   it('clips what’s between the camera and the plane', () => {
     expect(project(clipped, new THREE.Vector3(0, 0, -1)).z).toBeLessThan(-1);
     expect(project(clipped, new THREE.Vector3(0.2, 0.1, -1.8)).z).toBeLessThan(-1);
+  });
+});
+
+describe('onScreen', () => {
+  // a 2 m wide, 2.5 m high doorway facing south (-Z) into its room, and a camera looking at it from in front
+  const door = doorway([0, 0, 0], 0);
+  const lookingFrom = (eye: [number, number, number], at: [number, number, number]) => {
+    const camera = new THREE.PerspectiveCamera(70, 1.6, 0.05, 250);
+    camera.position.set(...eye);
+    camera.lookAt(...at);
+    camera.updateMatrixWorld();
+    return new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+  };
+
+  it('is the opening, centred on the screen, seen straight on from in front', () => {
+    const r = onScreen(door, 2, 2.5, lookingFrom([0, 1.25, -6], [0, 1.25, 0]))!;
+    expect(r.x + r.z / 2).toBeCloseTo(0.5, 6);
+    expect(r.y + r.w / 2).toBeCloseTo(0.5, 6);
+    expect(r.z).toBeGreaterThan(0.1);
+    expect(r.z).toBeLessThan(0.5);
+  });
+
+  it('is clipped to the screen when the opening runs off its edge', () => {
+    // turned to the right (looking down +Z, that's towards -X), the opening runs off the left of the screen
+    const r = onScreen(door, 2, 2.5, lookingFrom([0, 1.25, -6], [-6, 1.25, 0]))!;
+    expect(r.x).toBe(0);
+    expect(r.x + r.z).toBeLessThan(0.5);
+  });
+
+  it('is the whole screen as you step through it', () => {
+    expect(onScreen(door, 2, 2.5, lookingFrom([0.5, 1.6, -0.05], [0.5, 1.6, 5]))?.toArray()).toEqual([0, 0, 1, 1]);
+  });
+
+  it('is null with a corner behind the camera', () => {
+    // just in front of the doorway, looking along its wall: its far side is ahead, its near side behind
+    expect(onScreen(door, 2, 2.5, lookingFrom([0, 1.6, -0.3], [-5, 1.6, -0.3]))).toBeNull();
   });
 });

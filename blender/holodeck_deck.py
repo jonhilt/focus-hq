@@ -81,7 +81,7 @@ def head():
     for x, seed in ((-3.6, 44), (3.6, 45)):
         readout(f'head readout {seed}', 1.4, 1.0, seed, (0, 0, 1.4), Matrix.Translation((x, -HEAD, 0)))
 
-    polygon('head floor', rect(-HEAD_HALF, -HEAD, HEAD_HALF, 0), 0, material('#4a3f6e', surface='carpet', outline=False), uv_scale=0.5)
+    polygon('head floor', rect(-HEAD_HALF, -HEAD, HEAD_HALF, 0), 0, material('#4a3f6e', surface='carpet'), uv_scale=0.5)
     polygon('head ceiling', rect(-HEAD_HALF, -HEAD, HEAD_HALF, 0), WALL_H, unlit(HULL['ceiling']), down=True)
     for x in (-3.5, 3.5):
         polygon(f'head light {x:.0f}', [(x + px, -HEAD / 2 + py) for px, py in rounded_rect(1.4, 1.4, 0.4)], WALL_H - 0.02,
@@ -112,9 +112,9 @@ def row(name, even):
     between them and the row before, and LCARS consoles between the doors, on alternate sides of them row by row.
     """
     module(name)
-    polygon(f'{name} hallway', rect(-HALL, 0, HALL, ROW), 0, material(HULL['carpet'], surface='carpet', outline=False), uv_scale=0.5)
+    polygon(f'{name} hallway', rect(-HALL, 0, HALL, ROW), 0, material(HULL['carpet'], surface='carpet'), uv_scale=0.5)
     # lifted well clear of the carpet: from the far end of a long hallway, a few millimetres flicker
-    edge = material(HULL['carpetEdge'], outline=False)
+    edge = material(HULL['carpetEdge'])
     polygon(f'{name} edge starboard', rect(HALL - 0.45, 0, HALL - 0.3, ROW), 0.01, edge)
     polygon(f'{name} edge port', rect(-HALL + 0.3, 0, -HALL + 0.45, ROW), 0.01, edge)
     polygon(f'{name} ceiling', rect(-OUTER, 0, OUTER, ROW), WALL_H, unlit(HULL['ceiling']), down=True)

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 
 // The cartoon outlines, drawn after the scene from its depth rather than as an inflated, inside-out copy of each mesh
-// (three's OutlineEffect, which `?outline=hull` brings back to compare). A pixel is on a line when it's the near side of
+// (three's OutlineEffect, as they used to be). A pixel is on a line when it's the near side of
 // a step in depth (a silhouette) or of a sharp fold between faces (a box's corner, where a wall meets the floor). So
 // lines are the same width everywhere, don't break up at corners or fight the depth of whatever's beside them, and
 // don't appear between two meshes that meet flush, however they were split up in Blender.
@@ -28,7 +28,6 @@ const material = new THREE.ShaderMaterial({
     lineDisplay: { value: LINE.clone().convertLinearToSRGB() },
     inputDisplay: { value: false },
     outputDisplay: { value: false },
-    lines: { value: true },
     tOverlay: { value: null },
     overlay: { value: false },
   },
@@ -49,7 +48,6 @@ const material = new THREE.ShaderMaterial({
     uniform vec3 lineDisplay;
     uniform bool inputDisplay;
     uniform bool outputDisplay;
-    uniform bool lines;
     uniform sampler2D tOverlay;
     uniform bool overlay;
     varying vec2 vUv;
@@ -117,7 +115,7 @@ const material = new THREE.ShaderMaterial({
       vec4 color = texture2D(tColor, vUv);
       if (!inputDisplay && outputDisplay) color = sRGBTransferOETF(color);
       float d = depthAt(vUv);
-      if (lines && d < 1.0) {
+      if (d < 1.0) {
         vec3 c = viewAt(vUv, d);
         float z = -c.z;
         // how far out of its surface a neighbour has to be to count: past the smallest real step, a couple of pixels'
@@ -153,9 +151,6 @@ export interface Drawn {
 export class Outlines {
   private readonly quad = new FullScreenQuad(material);
 
-  /** `lines` false copies the colours across untouched, as when the scene was drawn with its own outlines. */
-  constructor(private readonly lines = true) {}
-
   /** Draws `drawn` into `output` with its outlines, in display colours (`display`) or linear. */
   render(renderer: THREE.WebGLRenderer, drawn: Drawn, output: THREE.WebGLRenderTarget, display: boolean): void {
     const u = material.uniforms;
@@ -172,7 +167,6 @@ export class Outlines {
     // the depth buffer's resolution at a metre away, from its near plane (24 bits), which grows with distance squared
     const near = (camera as THREE.PerspectiveCamera).near ?? 0.05;
     u.depthPrecision.value = 4 / (near * 2 ** 24);
-    u.lines.value = this.lines;
     u.tOverlay.value = drawn.overlay ?? null;
     u.overlay.value = !!drawn.overlay;
     renderer.setRenderTarget(output);

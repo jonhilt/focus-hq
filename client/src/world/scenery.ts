@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { DOOR_H, DOOR_W, ROOM_DEPTH, ROOM_WIDTH, WALL_H } from './layout';
-import { noOutline, toonMaterial } from './materials';
+import { toonMaterial } from './materials';
 
 // A themed room is a holodeck. Its walls and ceiling are lined with an invisible "skin", and a landscape is
 // built around the room (in room-local coordinates, overlapping the rest of the building). Each frame:
@@ -20,7 +20,7 @@ const SKIN_TOP = WALL_H - 0.02;
 /** Render order: office (0) → stamp (10) → clear (11) → landscape (12) | landscape glass (-20) → restore (-10) → office glass (0). */
 const ORDER = { stamp: 10, clear: 11, landscape: 12, glass: -20, restore: -10 };
 
-const OUTLINE = new THREE.Color().setRGB(0.1, 0.1, 0.12); // OutlineEffect's default colour (linear)
+const OUTLINE = new THREE.Color().setRGB(0.1, 0.1, 0.12); // the outlines' colour (linear), as outline.ts's
 const noRaycast = () => {};
 
 /** The skin's geometry's name: the gap scan (gaps.ts) knows it hides whatever is behind it. */
@@ -55,7 +55,6 @@ function masked<T extends THREE.Material>(mat: T, ref: number): T {
   mat.stencilFail = mat.stencilZFail = mat.stencilZPass = THREE.KeepStencilOp;
   // drawn only through its room's skin, so it can't fight with the office around it (see zfight.ts)
   mat.userData.landscape = true;
-  noOutline(mat);
   return mat;
 }
 
@@ -86,7 +85,6 @@ function portalMaterials(ref: number, tint: THREE.ColorRepresentation) {
   stamp.stencilRef = ref;
   stamp.stencilFunc = THREE.AlwaysStencilFunc;
   stamp.stencilZPass = THREE.ReplaceStencilOp;
-  noOutline(stamp);
 
   const clear = masked(
     new THREE.ShaderMaterial({
@@ -133,23 +131,21 @@ function portalMaterials(ref: number, tint: THREE.ColorRepresentation) {
 
 /** Walls of an empty room: the holodeck before anything is loaded. Opaque, no stencil needed. */
 export function holodeckMaterial(): THREE.ShaderMaterial {
-  return noOutline(
-    new THREE.ShaderMaterial({
-      uniforms: { base: { value: new THREE.Color('#1d2030') }, line: { value: new THREE.Color('#ffc94d') } },
-      vertexShader: plainVertex,
-      fragmentShader: /* glsl */ `
-        uniform vec3 base;
-        uniform vec3 line;
-        varying vec3 vPos;
-        varying vec3 vNormal;
-        ${gridGlsl}
-        void main() {
-          float g = grid(surfaceUv(vPos, vNormal), 1.0);
-          gl_FragColor = vec4(mix(base, line, g * 0.85), 1.0);
-          #include <colorspace_fragment>
-        }`,
-    }),
-  ) as THREE.ShaderMaterial;
+  return new THREE.ShaderMaterial({
+    uniforms: { base: { value: new THREE.Color('#1d2030') }, line: { value: new THREE.Color('#ffc94d') } },
+    vertexShader: plainVertex,
+    fragmentShader: /* glsl */ `
+      uniform vec3 base;
+      uniform vec3 line;
+      varying vec3 vPos;
+      varying vec3 vNormal;
+      ${gridGlsl}
+      void main() {
+        float g = grid(surfaceUv(vPos, vNormal), 1.0);
+        gl_FragColor = vec4(mix(base, line, g * 0.85), 1.0);
+        #include <colorspace_fragment>
+      }`,
+  });
 }
 
 /** Holodeck walls for a vacant room (or anywhere): the skin, drawn opaque with the yellow grid. */
@@ -428,7 +424,7 @@ export class Kit {
     this.keep(new THREE.Points(geo, mat));
   }
 
-  /** The hull material that outlines landscape meshes (OutlineEffect can't, as it ignores the stencil). */
+  /** The hull material that outlines landscape meshes (outline.ts can't: it takes landscape pixels for sky). */
   hullMaterial(): THREE.ShaderMaterial {
     let mat = this.mats.get('hull') as THREE.ShaderMaterial | undefined;
     if (!mat) {
@@ -436,7 +432,7 @@ export class Kit {
         masked(
           new THREE.ShaderMaterial({
             uniforms: { color: { value: OUTLINE }, thickness: { value: 0.004 } },
-            // the same push-out-along-the-normal trick OutlineEffect uses
+            // pushed out along the normal and drawn inside out, as three's OutlineEffect does
             vertexShader: /* glsl */ `
               uniform float thickness;
               void main() {

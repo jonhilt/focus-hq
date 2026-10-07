@@ -1,7 +1,5 @@
 import * as THREE from 'three';
-import type { OutlineEffect } from 'three/examples/jsm/effects/OutlineEffect.js';
-import { clipNear, inDoorway, throughDoor } from './doorway';
-import { noOutline } from './materials';
+import { clipNear, inDoorway, onScreen, throughDoor } from './doorway';
 import { Frame } from './frame';
 import { SlidingDoors } from './starship';
 
@@ -38,7 +36,6 @@ const surface = new THREE.ShaderMaterial({
     }`,
   side: THREE.DoubleSide,
 });
-noOutline(surface);
 // stamped where the far end shows, so the ambient occlusion and outlines leave it alone (outline.ts): they'd draw the
 // alcove's corners over the picture, not the far room's. Holodeck landscapes count their stencil values up from 1.
 surface.stencilWrite = true;
@@ -156,13 +153,11 @@ export class PortalView {
 
   constructor(
     private readonly renderer: THREE.WebGLRenderer,
-    /** Draws the scene with its outlines as hulls (`?outline=hull`), or null for outline.ts's lines. */
-    hulls: OutlineEffect | null,
     scene: THREE.Scene,
     occlusion: boolean,
   ) {
     renderer.getDrawingBufferSize(this.size);
-    this.frame = new Frame(renderer, hulls, scene, this.plain, occlusion, false, this.size);
+    this.frame = new Frame(renderer, scene, this.plain, occlusion, false, this.size);
     // half floats for the linear colours it holds until the alcove draws them to the screen
     this.target = new THREE.WebGLRenderTarget(this.size.x, this.size.y, { type: THREE.HalfFloatType, depthBuffer: false });
     surface.uniforms.map.value = this.target.texture;
@@ -219,6 +214,9 @@ export class PortalView {
     if (this.target.width !== this.size.x || this.target.height !== this.size.y) this.target.setSize(this.size.x, this.size.y);
     this.frame.setSize(this.size.x, this.size.y);
     surface.uniforms.size.value.copy(this.size);
+    // only what's seen through the doorway, nowhere else on the screen
+    const { matrix, width, height } = shown.doorway;
+    this.frame.clip(onScreen(matrix, width, height, this.m));
     this.frame.render(scene, v, this.target);
     this.renderer.setRenderTarget(null);
     shown.view.visible = true;

@@ -30,16 +30,9 @@ export function toonMaterial(params: THREE.MeshToonMaterialParameters = {}): THR
   return new THREE.MeshToonMaterial({ gradientMap, ...params });
 }
 
-/** Unlit material for screens and printed surfaces; excluded from the outline pass. */
+/** Unlit material for screens and printed surfaces. */
 export function flat(map: THREE.Texture, opts: { transparent?: boolean } = {}): THREE.MeshBasicMaterial {
-  const mat = new THREE.MeshBasicMaterial({ map, transparent: opts.transparent ?? false, toneMapped: false });
-  noOutline(mat);
-  return mat;
-}
-
-export function noOutline(mat: THREE.Material): THREE.Material {
-  mat.userData.outlineParameters = { visible: false };
-  return mat;
+  return new THREE.MeshBasicMaterial({ map, transparent: opts.transparent ?? false, toneMapped: false });
 }
 
 const boxCache = new Map<string, THREE.BoxGeometry>();

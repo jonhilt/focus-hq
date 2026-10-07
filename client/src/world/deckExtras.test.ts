@@ -33,13 +33,12 @@ describe('readMarker', () => {
 });
 
 describe('readSurface', () => {
-  it('draws a plain material in toon, with an outline unless it says not to', () => {
-    expect(readSurface({})).toEqual({ kind: 'toon', outline: true });
-    expect(readSurface({ outline: 0 })).toEqual({ kind: 'toon', outline: false });
+  it('draws a plain material in toon', () => {
+    expect(readSurface({})).toEqual({ kind: 'toon' });
   });
 
   it('reads the surfaces the browser draws itself', () => {
-    expect(readSurface({ surface: 'space', outline: 0 })).toEqual({ kind: 'space' });
+    expect(readSurface({ surface: 'space' })).toEqual({ kind: 'space' });
     expect(readSurface({ surface: 'accent' })).toEqual({ kind: 'accent' });
     expect(readSurface({ surface: 'lamp' })).toEqual({ kind: 'lamp' });
     expect(readSurface({ surface: 'readout', seed: 21, w: 2.4, h: 0.9 })).toEqual({ kind: 'readout', seed: 21, w: 2.4, h: 0.9 });
@@ -50,11 +49,11 @@ describe('readSurface', () => {
       sub: undefined,
       code: '01-12',
     });
-    expect(readSurface({ surface: 'screen', screen: 'mission-control', outline: 0 })).toEqual({ kind: 'screen', screen: 'mission-control' });
-    expect(readSurface({ surface: 'screen', screen: 'team-station', outline: 0 })).toEqual({ kind: 'screen', screen: 'team-station' });
-    expect(readSurface({ surface: 'screen', screen: 'team-station-sign', outline: 0 })).toEqual({ kind: 'screen', screen: 'team-station-sign' });
-    expect(readSurface({ surface: 'screen', screen: 'team-station-note', outline: 0 })).toEqual({ kind: 'screen', screen: 'team-station-note' });
-    expect(readSurface({ surface: 'star-chart', outline: 0 })).toEqual({ kind: 'star-chart' });
+    expect(readSurface({ surface: 'screen', screen: 'mission-control' })).toEqual({ kind: 'screen', screen: 'mission-control' });
+    expect(readSurface({ surface: 'screen', screen: 'team-station' })).toEqual({ kind: 'screen', screen: 'team-station' });
+    expect(readSurface({ surface: 'screen', screen: 'team-station-sign' })).toEqual({ kind: 'screen', screen: 'team-station-sign' });
+    expect(readSurface({ surface: 'screen', screen: 'team-station-note' })).toEqual({ kind: 'screen', screen: 'team-station-note' });
+    expect(readSurface({ surface: 'star-chart' })).toEqual({ kind: 'star-chart' });
   });
 
   it('fails on a surface it doesn’t know or one missing what it needs', () => {

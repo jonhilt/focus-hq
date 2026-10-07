@@ -100,7 +100,7 @@ def shell():
         door(f'door {name}', f, DOORWAY, wall=2 * WALL, back=FRAME_PROUD)
         sign(f'sign {name}', text, 1.6, color, (0, 0.13, 2.82), f, code=code)
 
-    polygon('bridge floor', OUTLINE, 0, material(HULL['carpet'], surface='carpet', outline=False), uv_scale=0.5)
+    polygon('bridge floor', OUTLINE, 0, material(HULL['carpet'], surface='carpet'), uv_scale=0.5)
     polygon('bridge ceiling', OUTLINE, HEIGHT, unlit(HULL['ceiling']), down=True)
     annulus('ceiling light', 2.3, 2.6, HEIGHT - 0.02, unlit('#ffffff'), down=True)
     annulus('ceiling dome', 0, 2.3, HEIGHT - 0.02, unlit('#e9e4f0'), down=True)
@@ -116,7 +116,7 @@ def shell():
 def viewscreen():
     f = side_frame(4)
     bezel('viewscreen frame', 5.4, 2.0, 0.3, 0.15, 0.1, toon(HULL['frame']), (0, 0, 2.25), f)
-    pane('viewscreen', [(x, z) for x, z in rounded_rect(5.4, 2.0, 0.3)], material('#000000', surface='space', outline=False), (0, 0.012, 2.25), f)
+    pane('viewscreen', [(x, z) for x, z in rounded_rect(5.4, 2.0, 0.3)], material('#000000', surface='space'), (0, 0.012, 2.25), f)
 
 
 def wall_console(name, side, length, seed):
@@ -144,9 +144,9 @@ def wall_dressing():
 
 
 def command_well():
-    annulus('command ring', 2.9, 3.1, 0.008, material(HULL['carpetEdge'], outline=False), segments=64)
-    annulus('command carpet', 0, 2.9, 0.008, material(CARPET, outline=False), segments=64)
-    polygon('walkway', [(-0.8, -APOTHEM), (0.8, -APOTHEM), (0.8, -2.95), (-0.8, -2.95)], 0.003, material(HULL['carpetEdge'], outline=False))
+    annulus('command ring', 2.9, 3.1, 0.008, material(HULL['carpetEdge']), segments=64)
+    annulus('command carpet', 0, 2.9, 0.008, material(CARPET), segments=64)
+    polygon('walkway', [(-0.8, -APOTHEM), (0.8, -APOTHEM), (0.8, -2.95), (-0.8, -2.95)], 0.003, material(HULL['carpetEdge']))
     command_chair('captain', (0, -0.4), 0, COMMAND_RED, 1.0)
     command_chair('first officer', (1.4, -0.75), 0.15, CUSHION, 0.85)
     command_chair('counsellor', (-1.4, -0.75), -0.15, CUSHION, 0.85)
@@ -181,7 +181,7 @@ def side_room(name, near, far, carpet):
           lintel_from=DOOR_H + 0.1)
     a, b = sorted((math.copysign(APOTHEM, near), far))
     polygon(f'{name} floor', [(a, -ROOM_HALF), (b, -ROOM_HALF), (b, ROOM_HALF), (a, ROOM_HALF)], 0,
-            material(carpet, surface='carpet', outline=False), uv_scale=0.5)
+            material(carpet, surface='carpet'), uv_scale=0.5)
     polygon(f'{name} ceiling', outline, ROOM_HEIGHT, unlit(HULL['ceiling']), down=True)
 
 
@@ -199,7 +199,7 @@ def screen(name, w, h, kind, at, frame):
     """A w×h screen in a rounded bezel on a wall, centred `at` (across, height) on `frame`, showing `kind`: a surface
     the browser draws."""
     bezel(f'{name} frame', w, h, 0.1, 0.1, 0.08, toon(HULL['frame']), (at[0], 0, at[1]), frame)
-    return panel(name, w, h, material('#000000', outline=False, **kind), (at[0], 0.012, at[1] - h / 2), frame)
+    return panel(name, w, h, material('#000000', **kind), (at[0], 0.012, at[1] - h / 2), frame)
 
 
 def ready_room():
@@ -241,7 +241,7 @@ def captains_console(f):
     cylinder('captain console foot', 0.16, 0.02, frame, frame=f)
     cylinder('captain console stand', 0.04, 0.2, frame, (0, 0, 0.02), frame=f)
     body = box('captain console', (1.0, 0.06, 0.62), frame, (0, 0, 0.18), frame=f, round=0.015)
-    front = panel('captain console screen', 0.92, 0.92 * 9 / 16, material('#000000', surface='screen', outline=False, screen='mission-control'),
+    front = panel('captain console screen', 0.92, 0.92 * 9 / 16, material('#000000', surface='screen', screen='mission-control'),
                   (0, 0.035, 0.23), f)
     back = sign('captain console back', 'Captain’s console', 0.92, LCARS['gold'], (0, -0.035, 0.4), f, yaw=math.pi,
                 sub='Walk round and press E')
@@ -267,7 +267,7 @@ def lounge():
     near, far = ROOM_NEAR, ROOM_NEAR + 10
     mid = (near + far) / 2
     side_room('lounge', near, far, '#3b3f5c')
-    polygon('lounge rug', [(mid + x, y) for x, y in rounded_rect(7.6, 4.1, 0.6)], 0.008, material('#4a4e74', outline=False))
+    polygon('lounge rug', [(mid + x, y) for x, y in rounded_rect(7.6, 4.1, 0.6)], 0.008, material('#4a4e74'))
 
     length, width = 5.2, 1.5
     top = slab('lounge table', [(mid + x, y) for x, y in rounded_rect(length, width, width / 2 - 0.02, segments=8)], 0.72, 0.79, toon('#2b2d42'))

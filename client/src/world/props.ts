@@ -70,10 +70,7 @@ export function plant(scale = 1, pot = '#e07a5f'): THREE.Group {
 }
 
 export function ceilingLight(w = 1.2, d = 0.6): THREE.Mesh {
-  const mat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
-  mat.userData.outlineParameters = { visible: false };
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.04, d), mat);
-  return mesh;
+  return new THREE.Mesh(new THREE.BoxGeometry(w, 0.04, d), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
 }
 
 /** A stack of paper folders, one per open pull request. */

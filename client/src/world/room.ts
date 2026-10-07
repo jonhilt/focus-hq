@@ -102,12 +102,10 @@ export class ProjectRoom {
 
     const carpet = lighten(project.color, 0.6);
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_DEPTH - 0.2, ROOM_WIDTH - 0.2), toon(carpet));
-    floor.material.userData.outlineParameters = { visible: false };
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = 0.005;
     this.group.add(floor);
     const stripe = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_DEPTH - 2, 1.2), toon(lighten(project.color, 0.35)));
-    stripe.material.userData.outlineParameters = { visible: false };
     stripe.rotation.x = -Math.PI / 2;
     stripe.position.set(0.5, 0.01, 0);
     this.group.add(stripe);

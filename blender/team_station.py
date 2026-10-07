@@ -197,12 +197,12 @@ def briefing_room():
     door = walls('briefing room wall', outline, [(0, 0.0, DOOR_W)], profile(HEIGHT), wall_materials(),
                  lintel_from=DOOR_H + 0.1)[0]
     doorway('briefing room door', door @ Matrix.Translation((0, -WALL / 2, 0)))
-    polygon('briefing room floor', outline, 0, material('#363b5e', surface='carpet', outline=False), uv_scale=0.5)
+    polygon('briefing room floor', outline, 0, material('#363b5e', surface='carpet'), uv_scale=0.5)
     polygon('briefing room ceiling', outline, HEIGHT, unlit(HULL['ceiling']), down=True)
     polygon('briefing room light', [(TABLE[0] + x, TABLE[1] + y) for x, y in rounded_rect(0.9, 3.6, 0.3)], HEIGHT - 0.02,
             unlit('#ffffff'), down=True)
     polygon('briefing room rug', [(TABLE[0] + x, TABLE[1] + y) for x, y in rounded_rect(4.0, 6.0, 0.6)], 0.008,
-            material('#4a4e74', outline=False))
+            material('#4a4e74'))
 
     w, length = TABLE_SIZE
     top = slab('briefing table', [(TABLE[0] + x, TABLE[1] + y) for x, y in rounded_rect(w, length, w / 2 - 0.02, segments=8)],
@@ -211,7 +211,7 @@ def briefing_room():
     for s in (-1, 1):
         box(f'briefing table pedestal {s}', (0.5, 0.5, 0.72), toon('#495057'), (TABLE[0], TABLE[1] + s * 1.3, 0))
     polygon('briefing table strip', [(TABLE[0] + x, TABLE[1] + y) for x, y in rounded_rect(0.12, length - 1.2, 0.05)],
-            0.795, material(HULL['dado'], surface='accent', outline=False))
+            0.795, material(HULL['dado'], surface='accent'))
 
     command_chair('captain', (0, CAPTAIN), 0, COMMAND_RED, 0.85)
     for crew, side, y in SEATS:
@@ -222,13 +222,13 @@ def briefing_room():
 
     far = Matrix.Translation((0, ROOM_FAR, 0)) @ Matrix.Rotation(math.pi, 4, 'Z')
     bezel('screen frame', SCREEN_W, SCREEN_H, 0.1, 0.12, 0.08, toon(HULL['frame']), (0, 0, SCREEN_BOTTOM + SCREEN_H / 2), far)
-    panel('screen', SCREEN_W, SCREEN_H, material('#000000', surface='screen', outline=False, screen='team-station'),
+    panel('screen', SCREEN_W, SCREEN_H, material('#000000', surface='screen', screen='team-station'),
           (0, 0.012, SCREEN_BOTTOM), far)
     # to port of the screen, as you face it: the far wall's +X is the room's -X
     sign_x = (SCREEN_W / 2 + 0.12 + ROOM_HALF) / 2
     sign_h = SIGN_W / SIGN_ASPECT
     box('sign frame', (SIGN_W + 0.08, 0.04, sign_h + 0.08), toon(HULL['dado']), (sign_x, 0.02, 1.6 - 0.04), frame=far, round=0.015)
-    panel('sign', SIGN_W, sign_h, material('#000000', surface='screen', outline=False, screen='team-station-sign'),
+    panel('sign', SIGN_W, sign_h, material('#000000', surface='screen', screen='team-station-sign'),
           (sign_x, 0.044, 1.6), far)
 
     port = Matrix.Rotation(-math.pi / 2, 4, 'Z')
@@ -237,7 +237,7 @@ def briefing_room():
         window(f'briefing room window {i}', 2.2, 1.3, (0, 1.85), Matrix.Translation((-ROOM_HALF, y, 0)) @ port)
     board = Matrix.Translation((ROOM_HALF, TABLE[1], 0)) @ starboard
     bezel('goal board frame', BOARD_W, BOARD_H, 0.1, 0.1, 0.08, toon(HULL['frame']), (0, 0, BOARD_BOTTOM + BOARD_H / 2), board)
-    panel('goal board', BOARD_W, BOARD_H, material('#000000', surface='screen', outline=False, screen='team-station-note'),
+    panel('goal board', BOARD_W, BOARD_H, material('#000000', surface='screen', screen='team-station-note'),
           (0, 0.012, BOARD_BOTTOM), board)
 
     view = (0, CAPTAIN - 0.95)

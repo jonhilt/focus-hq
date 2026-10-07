@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { interactive } from './builder';
 import { type Crew, type DeckScreen, type Marker, readInteraction, readMarker, readSurface, type ScreenName, type Surface } from './deckExtras';
 import { type Box2, contains, type Seat } from './layout';
-import { flat, noOutline, toon, toonMaterial } from './materials';
+import { flat, toon } from './materials';
 import type { Place } from './office';
 import { lcarsSign, readoutTexture, SlidingDoors, starChartTexture, touchPanelTexture } from './starship';
 import { viewportGlass } from './starfield';
@@ -42,11 +42,11 @@ let keys: THREE.Material | undefined;
 function surfaceMaterial(surface: Surface, color: string): THREE.Material {
   switch (surface.kind) {
     case 'toon':
-      return surface.outline ? toon(color) : noOutline(toonMaterial({ color }));
+      return toon(color);
     case 'unlit':
-      return noOutline(new THREE.MeshBasicMaterial({ color }));
+      return new THREE.MeshBasicMaterial({ color });
     case 'carpet':
-      return noOutline(toon('#ffffff', { map: tiled.carpet(color, 1, 1) }));
+      return toon('#ffffff', { map: tiled.carpet(color, 1, 1) });
     case 'space':
       return viewportGlass;
     case 'keys':
@@ -59,7 +59,7 @@ function surfaceMaterial(surface: Surface, color: string): THREE.Material {
       return flat(gltfTexture(starChartTexture()));
     case 'screen':
       // blank until the World puts what it draws there
-      return noOutline(new THREE.MeshBasicMaterial({ color: '#000000' }));
+      return new THREE.MeshBasicMaterial({ color: '#000000' });
     case 'accent':
     case 'lamp':
       // its own colour until whatever it's part of paints it

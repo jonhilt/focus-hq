@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { noOutline } from './materials';
 
 // Space outside the viewports, worked out per pixel from the eye's ray through the glass, so every window looks
 // out on the same sky from where it actually is and the view shifts as you walk past. The ship cruises towards -Z:
@@ -127,7 +126,6 @@ void main() {
 `;
 
 const material = new THREE.ShaderMaterial({ uniforms: { uTime: { value: 0 } }, vertexShader, fragmentShader });
-noOutline(material);
 
 /** The glass of every viewport: one shared material, so space moves on in step outside all of them. */
 export const viewportGlass: THREE.Material = material;

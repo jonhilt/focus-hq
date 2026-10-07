@@ -23,7 +23,7 @@ What the browser reads (client/src/world/deck.ts), all through custom properties
   'team-station-note', the lead's note on the goal), 'star-chart' (long-range sensors), 'accent' (a team station's own
   colour), 'lamp' (a team station door's lamps, lit while its goal room is in session), 'carpet' (speckled carpet in
   the material's colour, tiled every 2 m) or 'unlit' (the material's colour, unshaded: lights and ceilings).
-  Everything else is a toon material in its base colour. `outline: 0` leaves a surface out of the outline pass.
+  Everything else is a toon material in its base colour.
 """
 
 import math
@@ -80,9 +80,9 @@ def _linear(hex_color):
 _materials = {}
 
 
-def material(base, surface=None, outline=True, **props):
+def material(base, surface=None, **props):
     """A material in an sRGB hex colour, shared by every caller asking for the same one."""
-    key = (base, surface, outline, tuple(sorted(props.items())))
+    key = (base, surface, tuple(sorted(props.items())))
     if key in _materials:
         return _materials[key]
     name = f'{surface or "toon"} {base}' + ''.join(f' {k}={v}' for k, v in sorted(props.items()))
@@ -96,8 +96,6 @@ def material(base, surface=None, outline=True, **props):
     bsdf.inputs['Roughness'].default_value = 1.0
     if surface:
         mat['surface'] = surface
-    if not outline:
-        mat['outline'] = 0
     for k, v in props.items():
         mat[k] = v
     _materials[key] = mat
@@ -109,7 +107,7 @@ def toon(color):
 
 
 def unlit(color):
-    return material(color, surface='unlit', outline=False)
+    return material(color, surface='unlit')
 
 
 # ---------------------------------------------------------------------------------------------------- objects
@@ -304,7 +302,7 @@ def readout(name, w, h, seed, at, frame=None, yaw=0.0):
     """An LCARS readout in a frame, hung on a wall facing local +Y."""
     x, y, z = at
     box(f'{name} frame', (w + 0.1, 0.03, h + 0.1), toon(HULL['frame']), (x, y + 0.015, z - 0.05), yaw, frame)
-    return panel(name, w, h, material('#000000', surface='readout', outline=False, seed=seed, w=w, h=h), (x, y + 0.035, z), frame, yaw)
+    return panel(name, w, h, material('#000000', surface='readout', seed=seed, w=w, h=h), (x, y + 0.035, z), frame, yaw)
 
 
 def sign(name, text, w, color, at, frame=None, yaw=0.0, sub=None, code=None):
@@ -314,7 +312,7 @@ def sign(name, text, w, color, at, frame=None, yaw=0.0, sub=None, code=None):
         props['sub'] = sub
     if code:
         props['code'] = code
-    return panel(name, w, w * 200 / 1024, material('#000000', surface='sign', outline=False, **props), at, frame, yaw)
+    return panel(name, w, w * 200 / 1024, material('#000000', surface='sign', **props), at, frame, yaw)
 
 
 def prism(name, profile, length, mats, at=(0, 0, 0), yaw=0.0, frame=None, round=0.0):
@@ -497,7 +495,7 @@ def facing(at, to):
 def window(name, w, h, at, frame):
     """A viewport onto space in a rounded bezel, centred `at` (across, height) on `frame`."""
     bezel(f'{name} frame', w, h, 0.3, 0.15, 0.1, toon(HULL['frame']), (at[0], 0, at[1]), frame)
-    pane(name, rounded_rect(w, h, 0.3), material('#000000', surface='space', outline=False), (at[0], 0.012, at[1]), frame)
+    pane(name, rounded_rect(w, h, 0.3), material('#000000', surface='space'), (at[0], 0.012, at[1]), frame)
 
 
 def turbolift_car(frame, deck, wall=0.2):
@@ -519,7 +517,7 @@ def turbolift_car(frame, deck, wall=0.2):
     sweep('turbolift wall', path, profile, [shell, shell, shell, trim, unlit('#fff4e0'), trim, shell])
     collide_path(path, 0.12, 0.12)
     floor = on_deck([(-r, 0)] + arc + [(r, 0)])
-    polygon('turbolift floor', floor, 0, material('#3a3450', outline=False))
+    polygon('turbolift floor', floor, 0, material('#3a3450'))
     polygon('turbolift ceiling', floor, h, unlit(HULL['ceiling']), down=True)
     annulus('turbolift light', 0, 0.6, h - 0.015, unlit('#ffffff'), at=on_deck([(0, cy)])[0], down=True)
     sweep('turbolift rail', on_deck(arc), [(0.06, 0.95), (0.06, 1.0), (0.1, 1.0), (0.1, 0.95)], [trim, trim, trim], caps=True)
@@ -539,7 +537,7 @@ def keys_on_slope(name, width, front, back, frame):
     tilt = math.atan2(-up.y, up.z)
     normal = Vector((0, math.cos(tilt), math.sin(tilt)))
     start = Vector((0, front[0], front[1])) + up * 0.04 + normal * 0.005
-    return panel(name, width, length - 0.08, material('#000000', surface='keys', outline=False), tuple(start), frame, tilt=tilt)
+    return panel(name, width, length - 0.08, material('#000000', surface='keys'), tuple(start), frame, tilt=tilt)
 
 
 def command_chair(name, at, yaw, cushion, scale):
@@ -555,7 +553,7 @@ def command_chair(name, at, yaw, cushion, scale):
     for s in (-1, 1):
         box(f'{name} chair arm {s}', (0.14, 0.62, 0.1), frame, (s * 0.44, 0.02, 0.7), frame=f, round=0.03)
         box(f'{name} chair arm post {s}', (0.1, 0.12, 0.2), frame, (s * 0.44, 0.22, 0.5), frame=f)
-        panel(f'{name} chair keys {s}', 0.09, 0.4, material('#000000', surface='keys', outline=False), (s * 0.44, 0.3, 0.804), f, tilt=math.pi / 2)
+        panel(f'{name} chair keys {s}', 0.09, 0.4, material('#000000', surface='keys'), (s * 0.44, 0.3, 0.804), f, tilt=math.pi / 2)
     collide_object(shell, pad=0.12 * scale)
 
 
@@ -571,7 +569,7 @@ def bridge_console(name, length, seed, frame, display=(0.8, 0.42), accent=None):
     keys_on_slope(f'{name} keys', length - 0.12, (0.42, 0.74), (-0.12, 0.92), frame)
     box(f'{name} display', (display[0], 0.06, display[1]), accent or trim, (0, -0.16, 0.88), frame=frame, round=0.015)
     w, h = (round(d - 0.08, 3) for d in display)
-    panel(f'{name} display screen', w, h, material('#000000', surface='readout', outline=False, seed=seed, w=w, h=h), (0, -0.125, 0.92), frame)
+    panel(f'{name} display screen', w, h, material('#000000', surface='readout', seed=seed, w=w, h=h), (0, -0.125, 0.92), frame)
     return body
 
 

@@ -1,6 +1,5 @@
 import './styles.css';
 import * as THREE from 'three';
-import { OutlineEffect } from 'three/examples/jsm/effects/OutlineEffect.js';
 import { api } from './net/api';
 import { state } from './net/state';
 import { Player } from './player';
@@ -61,12 +60,11 @@ async function main() {
   scene.add(new THREE.AmbientLight('#ffffff', 0.35));
 
   const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 250);
-  // to compare: ?ao=0 draws without ambient occlusion, ?outline=hull with the old inside-out hulls for outlines
+  // to compare: ?ao=0 draws without ambient occlusion
   const params = new URLSearchParams(location.search);
-  const hulls = params.get('outline') === 'hull' ? new OutlineEffect(renderer, { defaultThickness: 0.004, defaultColor: [0.1, 0.1, 0.12], defaultAlpha: 1 }) : null;
   const occlusion = params.get('ao') !== '0';
-  const portalView = new PortalView(renderer, hulls, scene, occlusion);
-  const view = new SceneRenderer(renderer, hulls, scene, camera, occlusion);
+  const portalView = new PortalView(renderer, scene, occlusion);
+  const view = new SceneRenderer(renderer, scene, camera, occlusion);
 
   await fontsReady();
 

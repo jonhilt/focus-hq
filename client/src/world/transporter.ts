@@ -89,7 +89,6 @@ export class Beam {
       new THREE.MeshBasicMaterial({ map: glow(), color: GLOW, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, opacity: 0 }),
     );
     this.column.position.y = COLUMN.height / 2;
-    for (const m of [this.sparkles.material, this.column.material] as THREE.Material[]) m.userData.outlineParameters = { visible: false };
     this.fx.add(this.column, this.sparkles);
     this.fx.position.copy(figure.position);
     this.fx.rotation.copy(figure.rotation);
@@ -101,7 +100,8 @@ export class Beam {
       const original = o.material as THREE.Material;
       const clone = original.clone() as Faded['clone'];
       clone.transparent = true;
-      clone.userData = { ...clone.userData, outlineParameters: { visible: false } };
+      // writing no depth as it fades: its outlines, drawn from the depth, would stay as solid as ever round it
+      clone.depthWrite = false;
       if (clone.emissive) clone.emissive = clone.emissive.clone();
       o.material = clone;
       this.faded.push({ mesh: o, original, clone, opacity: original.opacity });
