@@ -865,16 +865,13 @@ export class AgentManager {
       const workspace = yield* Workspace;
       const project = this.store.project(agent.projectId);
       const dirty = yield* Effect.filter(lead.repos, (r) => workspace.hasUncommittedChanges(workspace.dir(leadWorktreeId(agent.id, r.folder))));
-      const step = afterLanding(dirty.map((r) => r.folder), !!agent.sessionId);
-      if (step === 'held-back') return heldBack(lead, dirty.map((r) => r.folder));
-      // a good moment to lighten the conversation: the slice's details are in the code and the note now
-      const summarised = step === 'compact-then-next' && (yield* this.compact(agent, compactInstructions(lead)));
+      if (afterLanding(dirty.map((r) => r.folder)) === 'held-back') return heldBack(lead, dirty.map((r) => r.folder));
       const slice = lead.slice + 1;
       yield* Effect.forEach(lead.repos, (r) => workspace.remove(r.repo, leadWorktreeId(agent.id, r.folder)), { discard: true });
       const note = lead.note && { ...lead.note, slice: [] };
       this.update(agent, { branch: sliceBranch(lead.title, slice, newId('s').slice(-4)), lead: { ...lead, note, repos: [], slice, prs: [] } });
       yield* this.checkOutSlice(agent, project.repos);
-      return newSliceNote(agent.lead!, agent.branch, summarised);
+      return newSliceNote(agent.lead!, agent.branch);
     });
   }
 

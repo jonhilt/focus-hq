@@ -136,19 +136,18 @@ How to work:
 
 /**
  * What happens when a slice has landed and the lead takes their next turn: nothing moves while a repo has uncommitted
- * changes; otherwise the conversation is compacted first (when there's one to compact), then the repos move to fresh
- * code for the next slice.
+ * changes; otherwise the repos move to fresh code for the next slice. The conversation is left as it is: the lead may be
+ * in the middle of something, so compacting is the captain's call.
  */
-export const afterLanding = (dirtyFolders: string[], hasSession: boolean): 'held-back' | 'compact-then-next' | 'next' =>
-  dirtyFolders.length ? 'held-back' : hasSession ? 'compact-then-next' : 'next';
+export const afterLanding = (dirtyFolders: string[]): 'held-back' | 'next' => (dirtyFolders.length ? 'held-back' : 'next');
 
 /**
- * What a lead's conversation keeps when the office compacts it between slices: the goal and how it's going, not the
- * details the code and the note already hold.
+ * What a lead's conversation keeps when the captain compacts it: the goal and how it's going, not the details the code
+ * and the note already hold.
  */
 export function compactInstructions(work: Pick<LeadWork, 'title' | 'note' | 'brief'>): string {
   return [
-    `Summarise this conversation for the lead of the goal "${work.title}" to carry on from, at the start of a new slice.`,
+    `Summarise this conversation for the lead of the goal "${work.title}" to carry on from.`,
     'Keep: the goal, what the captain asked for and what done looks like; the decisions made and why; what each slice taught us; what the captain prefers, and anything they asked to keep in mind; the pull requests and what became of them; what to do next.',
     'Drop: file contents, diffs, command and tool output, and the step-by-step of finished work: the code and the goal note hold it now.',
     `The goal note as it stands:\n${noteForPrompt(work)}`,
@@ -333,14 +332,13 @@ export function landedNote(work: LeadWork): string {
 
 /**
  * What the lead hears when a new slice starts: their repos on fresh code, and the goal as the captain put it and the
- * lead wrote it down. `summarised`: the office compacted their conversation first, so the note is what to go on.
+ * lead wrote it down.
  */
-export function newSliceNote(work: LeadWork, branch: string, summarised = false): string {
+export function newSliceNote(work: LeadWork, branch: string): string {
   return [
     `Slice ${work.slice} starts on fresh code. Your repos are now:\n${workspaceList(work, branch)}`,
-    summarised ? 'The office summarised your conversation to make room for this slice: the goal below, the code and the summary are what to go on.' : '',
     `The office cleared the last slice's checklist from your note. Where the goal stands:\n\n${noteForPrompt(work)}`,
-  ].filter(Boolean).join('\n\n');
+  ].join('\n\n');
 }
 
 /**

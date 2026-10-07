@@ -245,7 +245,6 @@ describe('the goal’s note', () => {
     expect(text).toMatch(/^Slice 3 starts on fresh code/);
     expect(text).toContain("cleared the last slice's checklist");
     expect(text).not.toContain('summarised');
-    expect(newSliceNote({ ...work, slice: 3, prs: [] }, 'focus/saved-items-3-cd', true)).toContain('The office summarised your conversation to make room for this slice');
     expect(text).toContain('What done looks like: Works anywhere');
   });
 });
@@ -328,10 +327,9 @@ describe('reviewsToStart', () => {
 });
 
 describe('the lead’s context', () => {
-  it('compacts between slices, unless the slice is held back or there’s no conversation yet', () => {
-    expect(afterLanding([], true)).toBe('compact-then-next');
-    expect(afterLanding([], false)).toBe('next');
-    expect(afterLanding(['web'], true)).toBe('held-back');
+  it('moves to the next slice without compacting, unless a repo holds it back', () => {
+    expect(afterLanding([])).toBe('next');
+    expect(afterLanding(['web'])).toBe('held-back');
   });
 
   it('keeps the goal, the decisions and the lessons, drops the details, and carries the note', () => {

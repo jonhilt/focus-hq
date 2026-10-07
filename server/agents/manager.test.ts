@@ -112,17 +112,12 @@ describe('AgentManager', () => {
     await until(() => store.agent(lead.id).status === 'done');
 
     for (const pr of store.agent(lead.id).lead!.prs) agents.prClosed(pr.repo, pr.number, true);
-    // the office summarises the conversation first, keeping the goal
+    // the conversation carries on as it is: compacting is the captain's call
     await until(() => leads().length === 2);
-    expect(leads()[1].req.prompt).toMatch(/^\/compact Summarise this conversation for the lead of the goal "Saved items"/);
-    expect(leads()[1].req.prompt).toContain('> Shoppers keep a list across devices');
-    leads()[1].end({ ok: true, summary: 'Compacted' });
-
-    await until(() => leads().length === 3);
-    const next = leads()[2].req;
+    const next = leads()[1].req;
     expect(next.resumeSessionId).toBe('session-1');
     expect(next.prompt).toMatch(/^Slice 2 starts on fresh code/);
-    expect(next.prompt).toContain('The office summarised your conversation to make room for this slice');
+    expect(next.prompt).not.toContain('summarised');
     expect(next.prompt).toContain('The goal: Saved items\n\nAs the captain first put it:\n> Saved items\n> Shoppers keep a list across devices');
     expect(next.prompt).toMatch(/\[Office\] Slice 1 has landed/);
   });

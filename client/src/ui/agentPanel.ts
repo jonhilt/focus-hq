@@ -217,7 +217,7 @@ export function openAgentPanel(ui: Ui, id: string): void {
     if (compact) compact.onclick = () => void busy(compact, () => api.compact(id), ui.error);
     return readout('Context', h('span', null, `${a.context.percent}%`, compact), {
       tone: CONTEXT_TONE[contextLevel(a.context.percent)],
-      title: `${a.context.tokens.toLocaleString()} of ${a.context.max.toLocaleString()} tokens in ${a.name}'s context. Claude Code compacts it by itself when it fills up${a.task === 'lead' ? '; the office also compacts it each time a slice lands' : ''}.`,
+      title: `${a.context.tokens.toLocaleString()} of ${a.context.max.toLocaleString()} tokens in ${a.name}'s context. Claude Code compacts it by itself when it fills up.`,
     });
   };
 
