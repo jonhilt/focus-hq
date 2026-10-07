@@ -287,6 +287,9 @@ export class ProjectRoom {
       const use: Interaction = lead ? { kind: 'agent', id: lead.id } : { kind: 'station', projectId: this.project.id, station: station.index };
       const label = () => (lead ? `Talk to ${lead.name}, lead of “${lead.lead?.title ?? 'a goal'}”` : next ? `Team station ${n} is free: start “${next}”` : `Start a goal at team station ${n}`);
       for (const thing of station.furniture) interactive(thing, use, label);
+      // the screen's panes are the captain's to choose while it shows a session; a free station's screen starts a goal
+      if (lead) interactive(station.display, { kind: 'screen' }, () => 'Change what this screen shows', 10);
+      else interactive(station.display, use, label);
       this.sit(station.lead, lead?.id, lead && agentView(lead), use, label);
       this.syncHelpers(station, lead);
       const reviewer = lead && reviewers.find((r) => r.reviewFor === lead.id);

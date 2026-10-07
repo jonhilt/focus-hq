@@ -14,8 +14,6 @@ export interface PanelOptions {
   wide?: boolean;
   /** The panel's views: the sidebar widens to hold their buttons. */
   nav?: PanelNav;
-  /** Switches at the foot of the sidebar, under the views. */
-  side?: HTMLElement;
   footer?: HTMLElement;
   /** Buttons on the header bar, before the title. */
   headerExtra?: Node[];
@@ -67,7 +65,7 @@ export class Panels {
         h('button', { class: 'panel-close', title: 'Close (Esc)', onclick: () => this.close() }, 'Close'),
       ),
       opts.nav ? h('div', { class: 'panel-nav' }, opts.nav.el) : null,
-      h('div', { class: 'panel-side' }, opts.side ?? null),
+      h('div', { class: 'panel-side' }),
       h('div', { class: 'panel-body' }, opts.body),
       opts.footer ? h('div', { class: 'panel-foot' }, opts.footer) : null,
       h('div', { class: 'panel-base' }),

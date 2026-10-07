@@ -16,8 +16,9 @@ import { numberOnePanelOpen, openNumberOnePanel } from './ui/numberOnePanel';
 import { Panels } from './ui/panels';
 import { openPreviewPanel } from './ui/previewPanel';
 import { openQaPanel } from './ui/qaPanel';
+import { openScreenPanel } from './ui/screenPanel';
 import { openNewIssuePanel, openPausePanel, openTeleportPanel, openTurboliftPanel } from './ui/travelPanel';
-import type { Interaction } from './world/builder';
+import { type Interaction, REACH } from './world/builder';
 import { numberOne } from '../../shared/crew';
 import { toastShows } from '../../shared/hidden';
 import { previewIncludes } from '../../shared/previewSet';
@@ -118,6 +119,7 @@ async function main() {
     openGoals: (projectId, station) => openGoalsPanel(ui, projectId, station),
     openManager: (tab) => openManagerPanel(ui, tab),
     openTeleport: () => openTeleportPanel(ui),
+    openScreen: () => openScreenPanel(ui),
     openTurbolift: () => {
       const stops = world.stops();
       openTurboliftPanel(ui, stops, stopAt(stops, camera.position));
@@ -288,7 +290,8 @@ async function main() {
 
   // ---------------------------------------------------------------- interaction
   const raycaster = new THREE.Raycaster();
-  raycaster.far = 4.5;
+  // as far as anything reaches: most things only from REACH (`interactive`), a big screen from across the room
+  raycaster.far = 10;
   const center = new THREE.Vector2(0, 0);
   let target: { interaction: Interaction; label: () => string } | null = null;
 
@@ -305,6 +308,7 @@ async function main() {
       let o: THREE.Object3D | null = hit.object;
       while (o && !o.userData.interaction) o = o.parent;
       if (o) {
+        if (hit.distance > ((o.userData.reach as number | undefined) ?? REACH)) break;
         target = { interaction: o.userData.interaction as Interaction, label: o.userData.label as () => string };
         break;
       }
@@ -350,6 +354,9 @@ async function main() {
         break;
       case 'turbolift':
         ui.openTurbolift();
+        break;
+      case 'screen':
+        ui.openScreen();
         break;
       case 'vacant':
         ui.openManager('new-project');

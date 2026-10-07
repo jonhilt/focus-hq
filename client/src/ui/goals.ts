@@ -1,6 +1,5 @@
 import { type Agent, type ClaudeTask, EFFORT_LEVELS, type Effort, type GoalNote } from '../../../shared/types';
 import type { contextLevel } from '../../../shared/agentStatus';
-import { type PanePrefs, screenPrefs } from '../world/screenPanes';
 import { LCARS } from '../world/starship';
 import { api } from '../net/api';
 import { state } from '../net/state';
@@ -78,32 +77,6 @@ export const prLink = (p: { repo: string; number: number; url: string; outcome?:
 export function reviewing(lead: Agent): HTMLElement | null {
   const reviewer = state.reviewersIn(lead.projectId).find((r) => r.reviewFor === lead.id && !['done', 'error', 'stopped'].includes(r.status));
   return reviewer ? h('small', { class: 'muted', style: 'display:block' }, `${reviewer.name} is reviewing ${reviewer.repo.split('/')[1]} #${reviewer.issue.number}: ${reviewer.activity}`) : null;
-}
-
-/** Switches for what this viewer's station displays show beside the terminal, for the foot of a panel's sidebar. */
-export function screenSwitches(): HTMLElement {
-  const toggle = (pane: keyof PanePrefs, label: string, what: string) => {
-    const reading = h('span');
-    const button = h('button', { class: 'side-switch', title: `Station displays show ${what} beside the terminal (just for you)` }, label, reading);
-    const paint = () => {
-      const on = screenPrefs.current[pane];
-      button.classList.toggle('on', on);
-      button.setAttribute('aria-pressed', String(on));
-      reading.textContent = on ? 'On' : 'Off';
-    };
-    button.onclick = () => {
-      screenPrefs.set(pane, !screenPrefs.current[pane]);
-      paint();
-    };
-    paint();
-    return button;
-  };
-  return h('div', { class: 'side-switches' },
-    h('small', null, 'Station displays'),
-    toggle('browser', 'Browser', 'the browser'),
-    toggle('tasks', 'Tasks', "Claude's own task list"),
-    toggle('note', 'Goal', "a lead's goal note"),
-  );
 }
 
 /** Closes the goal, asking first if that would throw work away or leave pull requests behind. */

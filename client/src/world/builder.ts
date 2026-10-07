@@ -17,12 +17,18 @@ export type Interaction =
   | { kind: 'qa'; projectId: string }
   /** A free team station: start a goal there. */
   | { kind: 'station'; projectId: string; station: number }
+  /** A team station's big screen, in use: choose what it shows. */
+  | { kind: 'screen' }
   | { kind: 'vacant' };
 
-/** Marks an object (and everything under it) as something the player can use with E. */
-export function interactive(obj: THREE.Object3D, interaction: Interaction, label: () => string): void {
+/** How far away (m) the player can use something with E, unless it says otherwise. */
+export const REACH = 4.5;
+
+/** Marks an object (and everything under it) as something the player can use with E, from up to `reach` away. */
+export function interactive(obj: THREE.Object3D, interaction: Interaction, label: () => string, reach = REACH): void {
   obj.userData.interaction = interaction;
   obj.userData.label = label;
+  obj.userData.reach = reach;
 }
 
 export interface Door {

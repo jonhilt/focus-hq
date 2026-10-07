@@ -11,7 +11,7 @@ import { LCARS, LCARS_STATUS } from '../world/starship';
 import type { Ui } from './context';
 import { withMic } from './dictation';
 import { busy, fill, h, timeAgo } from './dom';
-import { closeGoal, CONTEXT_TONE, EFFORT_HINT, noteView, prLink, reviewing, screenSwitches, tasksView } from './goals';
+import { closeGoal, CONTEXT_TONE, EFFORT_HINT, noteView, prLink, reviewing, tasksView } from './goals';
 import { type NavItem, readout, shownView, SideNav } from './panels';
 
 const FINISHED = ['done', 'error', 'stopped'];
@@ -73,7 +73,7 @@ export function openAgentPanel(ui: Ui, id: string): void {
   const footer = h('div', { class: 'compose' }, withMic(ui, input), send, stop, dismiss);
 
   const title = h('h2');
-  ui.panels.open({ title, body, footer, nav, side: screenSwitches(), wide: true, accent: UNIFORM[agent.avatar.division] });
+  ui.panels.open({ title, body, footer, nav, wide: true, accent: UNIFORM[agent.avatar.division] });
   shown = id;
   ui.panels.own(() => (shown = null));
 

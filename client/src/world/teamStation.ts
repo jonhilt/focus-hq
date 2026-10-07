@@ -85,8 +85,10 @@ export class TeamStation {
   /** In the order helpers take them (`seatHelpers`). */
   readonly helpers: StationSeat[];
   readonly reviewer: StationSeat;
-  /** What "use this station" hangs on: the door, and the briefing room's table and screen. */
+  /** What "use this station" hangs on: the door, and the briefing room's table. */
   readonly furniture: THREE.Object3D[];
+  /** The briefing room's big screen, which `screen` draws on. */
+  readonly display: THREE.Mesh;
   /** The door and the briefing room's doorway, joined once the room has put the door in place (`connect`). */
   portal!: Portal;
   private readonly doorKit: Read;
@@ -136,7 +138,7 @@ export class TeamStation {
       if (!found) throw new Error(`The team station's ${where} has no ${name} screen`);
       return found.mesh;
     };
-    const display = screen(roomScreens, 'team-station', 'briefing room');
+    const display = (this.display = screen(roomScreens, 'team-station', 'briefing room'));
     display.material = this.screen.material;
     screen(roomScreens, 'team-station-sign', 'briefing room').material = this.sign.material;
     screen(roomScreens, 'team-station-note', 'briefing room').material = this.board.material;
@@ -149,7 +151,7 @@ export class TeamStation {
     this.screenCentre = new THREE.Box3().setFromObject(display).getCenter(new THREE.Vector3());
     const table = room.getObjectByName('briefing_table');
     if (!table) throw new Error('The team station’s briefing room has no table');
-    this.furniture = [door, table, display];
+    this.furniture = [door, table];
 
     const seat = (crew: Crew): StationSeat => {
       const found = this.roomKit.seats.get(crew);
