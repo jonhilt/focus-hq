@@ -16,8 +16,11 @@ declare module 'n8ao' {
       autoRenderBeauty: boolean;
       gammaCorrection: boolean;
       screenSpaceRadius: boolean;
+      transparencyAware: boolean;
     };
-    beautyRenderTarget: THREE.WebGLRenderTarget;
+    autoDetectTransparency: boolean;
+    /** What it reads the scene's colours and depth from (it resizes it with itself). */
+    beautyRenderTarget: { texture: THREE.Texture; depthTexture: THREE.DepthTexture | null; setSize(width: number, height: number): void };
     renderToScreen: boolean;
     setSize(width: number, height: number): void;
     render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget | null, readBuffer: THREE.WebGLRenderTarget | null): void;

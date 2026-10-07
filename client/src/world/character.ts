@@ -8,6 +8,7 @@ import { toon } from './materials';
 import { keyboardPose, type Pose, type PoseInput, paddPose } from './pose';
 import { ball, capsule, cyl, padd, PADD_WIDTH } from './props';
 import { LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
+import { OVERLAY_LAYER } from './frame';
 
 /** The jumpsuit: black, with the division's colour across the shoulders. */
 const SUIT = '#32363f';
@@ -179,6 +180,7 @@ export class Character {
     this.bubble.scale.set(1.75, 0.49, 1);
     this.bubble.position.set(0, 1.95, 0);
     this.bubble.renderOrder = 10;
+    this.bubble.layers.set(OVERLAY_LAYER);
     this.group.add(this.bubble);
     this.set(view);
   }
@@ -261,7 +263,8 @@ export class Character {
     this.bubble.position.y = 1.95 + Math.sin(p * 2) * 0.03 + bodyY;
     const pulse = s === 'waiting' ? 1 + Math.sin(p * 8) * 0.06 : 1;
     this.bubble.scale.set(1.75 * pulse, 0.49 * pulse, 1);
-    const fade = Math.min(1, Math.max(0, (dist - 2.5) / 1.5));
+    // gone by the time you're looking over their shoulder (2.2 m from their feet), but not as you walk into the room
+    const fade = Math.min(1, Math.max(0, (dist - 2.3) / 0.7));
     this.bubble.material.opacity = fade;
     this.bubble.visible = fade > 0.02;
   }

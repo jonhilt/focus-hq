@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { OutlineEffect } from 'three/examples/jsm/effects/OutlineEffect.js';
 import { clipNear, inDoorway, throughDoor } from './doorway';
 import { noOutline } from './materials';
-import { Outlines, sceneTarget, stencilToSky } from './outline';
+import { Frame } from './frame';
 import { SlidingDoors } from './starship';
 
 // A pair of doorways that lead into each other, wherever in the world they stand: a team station's door in a holodeck
@@ -142,12 +142,13 @@ const CLIP_FROM = 0.3;
  * the whole scene again, from the camera carried through the doorway, with nothing behind the other doorway drawn.
  */
 export class PortalView {
-  /** The far end as drawn, to outline. */
-  private readonly drawn: THREE.WebGLRenderTarget;
-  /** The far end outlined, in linear colours, for the alcove to show. */
+  /** Draws the far end as the screen shows the near one, so nothing changes as you step through. */
+  private readonly frame: Frame;
+  /** The far end, in linear colours, for the alcove to show. */
   private readonly target: THREE.WebGLRenderTarget;
-  private readonly outlines: Outlines;
   private readonly camera = new THREE.PerspectiveCamera();
+  /** Where the camera is, with a plain projection, for the ambient occlusion (frame.ts). */
+  private readonly plain = new THREE.PerspectiveCamera();
   private readonly frustum = new THREE.Frustum();
   private readonly size = new THREE.Vector2();
   private readonly m = new THREE.Matrix4();
@@ -156,16 +157,19 @@ export class PortalView {
   constructor(
     private readonly renderer: THREE.WebGLRenderer,
     /** Draws the scene with its outlines as hulls (`?outline=hull`), or null for outline.ts's lines. */
-    private readonly hulls: OutlineEffect | null,
+    hulls: OutlineEffect | null,
+    scene: THREE.Scene,
+    occlusion: boolean,
   ) {
     renderer.getDrawingBufferSize(this.size);
-    this.drawn = sceneTarget(this.size.x, this.size.y);
+    this.frame = new Frame(renderer, hulls, scene, this.plain, occlusion, false, this.size);
     // half floats for the linear colours it holds until the alcove draws them to the screen
     this.target = new THREE.WebGLRenderTarget(this.size.x, this.size.y, { type: THREE.HalfFloatType, depthBuffer: false });
-    this.outlines = new Outlines(!hulls);
     surface.uniforms.map.value = this.target.texture;
-    this.camera.matrixAutoUpdate = false;
-    this.camera.matrixWorldAutoUpdate = false;
+    for (const c of [this.camera, this.plain]) {
+      c.matrixAutoUpdate = false;
+      c.matrixWorldAutoUpdate = false;
+    }
   }
 
   render(scene: THREE.Scene, camera: THREE.PerspectiveCamera, portals: Portal[]): void {
@@ -196,6 +200,14 @@ export class PortalView {
     v.near = camera.near;
     v.far = camera.far * FAR;
     v.updateProjectionMatrix();
+    const plain = this.plain;
+    plain.matrixWorld.copy(v.matrixWorld);
+    plain.matrixWorldInverse.copy(v.matrixWorldInverse);
+    plain.fov = v.fov;
+    plain.aspect = v.aspect;
+    plain.near = v.near;
+    plain.far = v.far;
+    plain.updateProjectionMatrix();
     // the other doorway, facing out into its room: everything between it and the carried camera is in the way
     const far = shown.other.doorway.matrix;
     this.plane.setFromNormalAndCoplanarPoint(tmp.setFromMatrixColumn(far, 2).negate().normalize(), new THREE.Vector3().setFromMatrixPosition(far));
@@ -204,16 +216,10 @@ export class PortalView {
     v.projectionMatrixInverse.copy(v.projectionMatrix).invert();
 
     this.renderer.getDrawingBufferSize(this.size);
-    if (this.target.width !== this.size.x || this.target.height !== this.size.y) {
-      this.drawn.setSize(this.size.x, this.size.y);
-      this.target.setSize(this.size.x, this.size.y);
-    }
+    if (this.target.width !== this.size.x || this.target.height !== this.size.y) this.target.setSize(this.size.x, this.size.y);
+    this.frame.setSize(this.size.x, this.size.y);
     surface.uniforms.size.value.copy(this.size);
-    this.renderer.setRenderTarget(this.drawn);
-    if (this.hulls) this.hulls.render(scene, v);
-    else this.renderer.render(scene, v);
-    stencilToSky(this.renderer);
-    this.outlines.render(this.renderer, { target: this.drawn, camera: v }, this.target, false);
+    this.frame.render(scene, v, this.target);
     this.renderer.setRenderTarget(null);
     shown.view.visible = true;
   }

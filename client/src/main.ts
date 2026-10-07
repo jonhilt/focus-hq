@@ -64,8 +64,9 @@ async function main() {
   // to compare: ?ao=0 draws without ambient occlusion, ?outline=hull with the old inside-out hulls for outlines
   const params = new URLSearchParams(location.search);
   const hulls = params.get('outline') === 'hull' ? new OutlineEffect(renderer, { defaultThickness: 0.004, defaultColor: [0.1, 0.1, 0.12], defaultAlpha: 1 }) : null;
-  const portalView = new PortalView(renderer, hulls);
-  const view = new SceneRenderer(renderer, hulls, scene, camera, params.get('ao') !== '0');
+  const occlusion = params.get('ao') !== '0';
+  const portalView = new PortalView(renderer, hulls, scene, occlusion);
+  const view = new SceneRenderer(renderer, hulls, scene, camera, occlusion);
 
   await fontsReady();
 

@@ -29,6 +29,8 @@ const material = new THREE.ShaderMaterial({
     inputDisplay: { value: false },
     outputDisplay: { value: false },
     lines: { value: true },
+    tOverlay: { value: null },
+    overlay: { value: false },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -48,6 +50,8 @@ const material = new THREE.ShaderMaterial({
     uniform bool inputDisplay;
     uniform bool outputDisplay;
     uniform bool lines;
+    uniform sampler2D tOverlay;
+    uniform bool overlay;
     varying vec2 vUv;
     const float CREASE = ${Math.cos(THREE.MathUtils.degToRad(CREASE_DEGREES)).toFixed(4)};
 
@@ -121,6 +125,15 @@ const material = new THREE.ShaderMaterial({
         float step = max(${MIN_STEP.toFixed(3)}, 2.0 * footprint * z) + depthPrecision * z * z;
         color.rgb = mix(color.rgb, outputDisplay ? lineDisplay : lineLinear, edge(c, step));
       }
+      // what's drawn over the scene (linear, premultiplied), blended as it would have been on the screen
+      if (overlay) {
+        vec4 over = texture2D(tOverlay, vUv);
+        if (over.a > 0.0) {
+          vec4 rgb = vec4(over.rgb / over.a, 1.0);
+          if (outputDisplay) rgb = sRGBTransferOETF(rgb);
+          color.rgb = mix(color.rgb, rgb.rgb, over.a);
+        }
+      }
       gl_FragColor = color;
     }`,
   depthTest: false,
@@ -133,6 +146,8 @@ export interface Drawn {
   camera: THREE.Camera;
   /** Its colours, if not the target's own: in display colours (true) or linear (false). */
   color?: { texture: THREE.Texture; display: boolean };
+  /** Drawn over it all, outlines included: linear colours, premultiplied by their alpha. */
+  overlay?: THREE.Texture;
 }
 
 export class Outlines {
@@ -158,6 +173,8 @@ export class Outlines {
     const near = (camera as THREE.PerspectiveCamera).near ?? 0.05;
     u.depthPrecision.value = 4 / (near * 2 ** 24);
     u.lines.value = this.lines;
+    u.tOverlay.value = drawn.overlay ?? null;
+    u.overlay.value = !!drawn.overlay;
     renderer.setRenderTarget(output);
     this.quad.render(renderer);
   }
