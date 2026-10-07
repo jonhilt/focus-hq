@@ -30,6 +30,7 @@ export interface Place {
 }
 
 const OUTER_X = HALL_HALF + ROOM_DEPTH;
+const HALF_D = ROOM_DEPTH / 2;
 const OFFICE_WALL = '#cfd3e6';
 const CONCOURSE: Place = { label: '🛋️ Concourse', position: new THREE.Vector3(0, 0, LOBBY.z1 - 1.2), lookAt: new THREE.Vector3(0, 1.6, 0) };
 
@@ -478,8 +479,8 @@ export class World {
       places.push({
         label: `🚪 ${room.project.name}`,
         projectId: room.project.id,
-        position: roomToWorld(room.slot, new THREE.Vector3(-5.6, 0, 0)),
-        lookAt: roomToWorld(room.slot, new THREE.Vector3(7, 1.5, 0)),
+        position: roomToWorld(room.slot, new THREE.Vector3(-HALF_D + 1.4, 0, 0)),
+        lookAt: roomToWorld(room.slot, new THREE.Vector3(HALF_D, 1.5, 0)),
       });
     }
     return places;

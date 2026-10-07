@@ -16,13 +16,14 @@ import { lcarsSign } from './starship';
 
 /**
  * The room's four team stations, in the room frame: two along each side wall, their screens on it, just in front of
- * the skin a holodeck's landscape shows through (scenery.ts).
+ * the skin a holodeck's landscape shows through (scenery.ts). Along the wall they're spaced evenly, about 0.95 m apart
+ * and from the desks by the door and the QA station by the board, so you can walk between them.
  */
 export const STATION_SPOTS: { at: THREE.Vector3; rotationY: number }[] = [
-  { at: new THREE.Vector3(-2.1, 0, -2.62), rotationY: 0 },
-  { at: new THREE.Vector3(1.8, 0, -2.62), rotationY: 0 },
-  { at: new THREE.Vector3(-2.1, 0, 2.62), rotationY: Math.PI },
-  { at: new THREE.Vector3(1.8, 0, 2.62), rotationY: Math.PI },
+  { at: new THREE.Vector3(-2.52, 0, -2.62), rotationY: 0 },
+  { at: new THREE.Vector3(2.08, 0, -2.62), rotationY: 0 },
+  { at: new THREE.Vector3(-2.52, 0, 2.62), rotationY: Math.PI },
+  { at: new THREE.Vector3(2.08, 0, 2.62), rotationY: Math.PI },
 ];
 
 /** Loads the team station's furniture: the module every station is a copy of. */

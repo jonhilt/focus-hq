@@ -44,7 +44,7 @@ const doorCode = (slot: RoomSlot) => `04-${String(slot.index + 2).padStart(2, '0
 
 /** Local (room-frame) position of a desk: the room's two, either side of the aisle by the door, facing the Kanban board. */
 export function deskPosition(index: number): THREE.Vector3 {
-  return new THREE.Vector3(-4.6, 0, (index === 0 ? -1 : 1) * 3.8);
+  return new THREE.Vector3(-HALF_D + 2.4, 0, (index === 0 ? -1 : 1) * 3.8);
 }
 
 /** Where to stand to look over an agent's shoulder at their station's display (room frame). */
@@ -219,7 +219,7 @@ export class ProjectRoom {
     }
 
     // only a plain office has a ceiling to hang lights from
-    for (const x of this.scenery ? [] : [-3.5, 0.5, 4.5]) {
+    for (const x of this.scenery ? [] : [-4.5, 0.5, 5.5]) {
       for (const z of [-3, 3]) {
         const light = ceilingLight(1.4, 0.7);
         light.position.set(x, WALL_H - 0.03, z);
@@ -440,7 +440,8 @@ export class ProjectRoom {
 
   update(t: number, now: number, camera: THREE.Vector3): void {
     this.scenery?.update(t, this.group.worldToLocal(tmp.copy(camera)));
-    this.youreHere = camera.distanceTo(this.slot.center) < 9;
+    // within earshot of a beam: in the room, or on its doorstep in the hallway
+    this.youreHere = camera.distanceTo(this.slot.center) < HALF_D + 2;
     if (this.beams.length) this.beams = this.beams.filter((b) => !b.update(now));
     if (this.boardDirty) {
       this.boardDirty = false;
@@ -448,7 +449,7 @@ export class ProjectRoom {
       this.board.draw(this.project, board, state.agentsIn(this.project.id));
       this.rebuildPrPile(board);
     }
-    const inRoom = camera.distanceTo(this.slot.center) < 14;
+    const inRoom = camera.distanceTo(this.slot.center) < ROOM_DEPTH;
     if (inRoom) this.planner.update(t, camera.distanceTo(this.planner.group.getWorldPosition(tmp)));
     const qaDist = camera.distanceTo(this.qa.group.getWorldPosition(tmp));
     if (inRoom) this.qa.update(t, qaDist);

@@ -11,7 +11,7 @@ export const FRAME_FACE = WALL_T / 2 + 0.04;
 /** Where a sign over a door hangs: far enough in front of the frame to win the depth test from down the hall. */
 export const OVER_DOOR = FRAME_FACE + 0.02;
 export const HALL_HALF = 2;
-export const ROOM_DEPTH = 14; // from the hallway wall to the outer wall
+export const ROOM_DEPTH = 16; // from the hallway wall to the outer wall
 export const ROOM_WIDTH = 12; // along the hallway
 export const LOBBY = { x0: -7, x1: 7, z0: 0, z1: 10 };
 export const OFFICE = { x0: -6, x1: 6, z0: 10, z1: 18 };

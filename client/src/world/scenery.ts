@@ -176,7 +176,7 @@ type Animate = (obj: THREE.Object3D, t: number) => void;
 
 /**
  * Toolkit handed to a theme to build its landscape. Coordinates are room-local: the room's floor centre is the
- * origin, +X runs from the door to the far wall, and the room occupies |x| < 7, |z| < 6 (keep scenery out of it).
+ * origin, +X runs from the door to the far wall, and the room occupies |x| < ROOM_DEPTH / 2, |z| < ROOM_WIDTH / 2 (keep scenery out of it).
  * Static things are merged into a few meshes per material when the landscape is finished.
  */
 export class Kit {

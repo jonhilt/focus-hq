@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Project, RoomTheme } from '../../../shared/types';
 import { ROOM_THEMES } from '../../../shared/types';
 import { canvasTexture, makeCanvas, UI_FONT } from './canvas';
+import { ROOM_DEPTH, ROOM_WIDTH } from './layout';
 import { hashString, Kit, Scenery } from './scenery';
 import { checkerTexture } from './textures';
 
@@ -14,6 +15,9 @@ export const THEME_INFO: Record<RoomTheme, { label: string; emoji: string; holo:
   library: { label: 'The great library', emoji: '📚', holo: '#ffe7a8' },
   office: { label: 'Plain holodeck grid', emoji: '🏢', holo: '#ffffff' },
 };
+
+const HALF_D = ROOM_DEPTH / 2;
+const HALF_W = ROOM_WIDTH / 2;
 
 const SCENIC = ROOM_THEMES.filter((t) => t !== 'office');
 
@@ -221,7 +225,7 @@ function spacer(minGap: number): (p: THREE.Vector3) => boolean {
 }
 
 /** Is a ground point clear of the room (with a margin)? */
-const clearOfRoom = (p: THREE.Vector3, margin = 1.2) => Math.abs(p.x) > 7 + margin || Math.abs(p.z) > 6 + margin;
+const clearOfRoom = (p: THREE.Vector3, margin = 1.2) => Math.abs(p.x) > HALF_D + margin || Math.abs(p.z) > HALF_W + margin;
 
 function rock(k: Kit, r: number, color: string, x: number, z: number): THREE.Mesh {
   const m = k.mesh(new THREE.DodecahedronGeometry(r, 0), color, [x, r * 0.35, z]);
@@ -353,16 +357,16 @@ function beach(k: Kit): void {
     k.add(k.ball(k.range(0.4, 0.8), k.pick(['#56b15a', '#4aa34f']), p.x, 0.1, p.z, 10)).scale.y = 0.6;
   }
 
-  // a spot on the sand: umbrella, towel, ball and a sandcastle
+  // a spot on the sand just beyond the far wall: umbrella, towel, ball and a sandcastle
   const brolly = umbrella(k, '#ff5d5d', '#ffffff');
-  brolly.position.set(10, 0, -7.5);
+  brolly.position.set(HALF_D + 3, 0, -7.5);
   k.add(brolly);
-  k.add(k.box(0.9, 0.03, 1.9, '#4dabf7', 9.6, 0, -6));
-  k.add(k.box(0.9, 0.035, 0.3, '#ffd43b', 9.6, 0, -6.4));
+  k.add(k.box(0.9, 0.03, 1.9, '#4dabf7', HALF_D + 2.6, 0, -6));
+  k.add(k.box(0.9, 0.035, 0.3, '#ffd43b', HALF_D + 2.6, 0, -6.4));
   const ballColors = ['#ff6b6b', '#ffffff', '#4dabf7', '#ffffff', '#ffd43b', '#ffffff'];
-  ballColors.forEach((c, i) => k.add(k.mesh(new THREE.SphereGeometry(0.3, 4, 8, (i * Math.PI) / 3, Math.PI / 3), c, [11.2, 0.3, -4.6])));
+  ballColors.forEach((c, i) => k.add(k.mesh(new THREE.SphereGeometry(0.3, 4, 8, (i * Math.PI) / 3, Math.PI / 3), c, [HALF_D + 4.2, 0.3, -4.6])));
   const castle = new THREE.Group();
-  castle.position.set(9.2, 0, 3.2);
+  castle.position.set(HALF_D + 2.2, 0, 3.2);
   castle.add(k.box(1.4, 0.45, 1.4, '#e7c182'));
   castle.add(k.box(0.7, 0.85, 0.7, '#e7c182'));
   for (const [x, z] of [[-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6], [0.6, 0.6]]) {
@@ -428,7 +432,7 @@ function forest(k: Kit): void {
 
   // a dirt path wandering away from the far wall, and a pond
   const pathZ = (x: number) => Math.sin(x * 0.08) * 3;
-  for (let x = 7.5; x < 60; x += 1.6) {
+  for (let x = HALF_D + 0.5; x < 60; x += 1.6) {
     const m = k.mesh(new THREE.CircleGeometry(1.3, 14).rotateX(-Math.PI / 2), k.basic('#d8b47a'), [x, 0.01, pathZ(x)]);
     m.scale.set(1.2, 1, 1);
     k.add(m);

@@ -25,7 +25,7 @@ WALL_T = 0.2
 DOOR_W = 2.4
 HALL = 2.0
 ROW = 12.0
-OUTER = HALL + 14.0
+OUTER = HALL + 16.0
 #: the head: as wide as the old concourse, and deep enough for engineering beside the way in
 HEAD_HALF = 7.0
 HEAD = 7.0
