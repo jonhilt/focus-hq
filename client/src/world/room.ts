@@ -311,7 +311,7 @@ export class ProjectRoom {
         status: helper.status === 'working' ? 'working' : helper.status === 'done' ? 'done' : 'error',
         line: helper.status === 'working' ? helper.activity : `${helper.status === 'done' ? '✔' : '✘'} ${helper.activity}`,
       };
-      this.sit(slot, helper.id, view, { kind: 'agent', id: lead.id }, () => `${crew.name}, helping ${lead.name}: ${helper.description}`);
+      this.sit(slot, helper.id, view, { kind: 'helper', leadId: lead.id, id: helper.id }, () => `${crew.name}, helping ${lead.name}: ${helper.description}`);
     }
   }
 

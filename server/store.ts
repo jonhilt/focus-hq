@@ -267,14 +267,19 @@ export class Store {
 
   // ---- terminal output ----
 
-  appendLines(id: string, lines: TermLine[]): void {
+  /** `persist` false keeps them in memory only, like a lead's helpers' transcripts, which go when the helper does. */
+  appendLines(id: string, lines: TermLine[], persist = true): void {
     const buffer = this.lines.get(id) ?? [];
     buffer.push(...lines);
     if (buffer.length > MEMORY_LINES) buffer.splice(0, buffer.length - MEMORY_LINES);
     this.lines.set(id, buffer);
-    if (this.persist) {
+    if (this.persist && persist) {
       fs.appendFile(path.join(paths.logs, `${id}.jsonl`), lines.map((l) => JSON.stringify(l)).join('\n') + '\n', () => undefined);
     }
+  }
+
+  dropLines(id: string): void {
+    this.lines.delete(id);
   }
 
   recentLines(id: string, count = 80): TermLine[] {

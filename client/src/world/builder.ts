@@ -5,6 +5,8 @@ import { HULL, SlidingDoors } from './starship';
 
 export type Interaction =
   | { kind: 'agent'; id: string }
+  /** One of a lead's helpers at their team station: its own transcript. */
+  | { kind: 'helper'; leadId: string; id: string }
   | { kind: 'desk'; projectId: string }
   | { kind: 'board'; projectId: string; tab?: 'todo' | 'doing' | 'prs' }
   | { kind: 'new-issue'; projectId: string }

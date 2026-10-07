@@ -5,6 +5,7 @@ import { api } from './net/api';
 import { state } from './net/state';
 import { Player } from './player';
 import { agentPanelOpen, openAgentPanel } from './ui/agentPanel';
+import { openHelperPanel } from './ui/helperPanel';
 import { openBoardPanel } from './ui/boardPanel';
 import type { Ui } from './ui/context';
 import { h } from './ui/dom';
@@ -98,6 +99,7 @@ async function main() {
       player.lock();
     },
     openAgent: (id) => openAgentPanel(ui, id),
+    openHelper: (leadId, id) => openHelperPanel(ui, leadId, id),
     openBoard: (projectId, tab) => openBoardPanel(ui, projectId, tab),
     previewPr: (projectId, repo, number) => {
       const running = state.previews.get(projectId);
@@ -316,6 +318,9 @@ async function main() {
     switch (i.kind) {
       case 'agent':
         ui.openAgent(i.id);
+        break;
+      case 'helper':
+        ui.openHelper(i.leadId, i.id);
         break;
       case 'desk':
         ui.openBoard(i.projectId, 'todo');

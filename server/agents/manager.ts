@@ -116,10 +116,23 @@ export class AgentManager {
   }
 
   private update(agent: Agent, patch: Partial<Agent>): void {
+    // a helper that's gone on its way takes its transcript with it
+    if ('helpers' in patch) for (const h of agent.helpers ?? []) if (!patch.helpers?.some((x) => x.id === h.id)) this.store.dropLines(h.id);
     Object.assign(agent, patch);
     if (!this.store.agents.has(agent.id)) return; // dismissed meanwhile
     this.store.putAgent(agent);
     this.hub.send({ type: 'agent', agent });
+  }
+
+  /** A lead's helper's lines: its own transcript, which goes when it does. */
+  private printHelper(agent: Agent, id: string, lines: Omit<TermLine, 't'>[]): void {
+    // one we don't know of (Claude Code never said it started) keeps to the lead's own lines
+    if (!agent.helpers?.some((h) => h.id === id)) return this.print(agent, lines.map((l) => ({ ...l, text: `    ${l.text}` })));
+    if (!lines.length || !this.store.agents.has(agent.id)) return;
+    const t = Date.now();
+    const stamped = lines.map((l) => ({ t, ...l }));
+    this.store.appendLines(id, stamped, false);
+    this.hub.send({ type: 'lines', id, lines: stamped });
   }
 
   private print(agent: Agent, lines: Omit<TermLine, 't'>[]): void {
@@ -346,6 +359,8 @@ export class AgentManager {
     const rt = this.rt(agent.id);
     return {
       lines: (lines) => this.print(agent, lines),
+      // a lead's helpers sit at its team station, each with a transcript of its own; anyone else's stay in their lines
+      helperLines: agent.task === 'lead' ? (id, lines) => this.printHelper(agent, id, lines) : undefined,
       activity: (status, activity) => {
         if (rt.permission) return; // hand stays up until the manager answers
         this.update(agent, { status: status ?? agent.status, activity: activity || agent.activity });
@@ -1468,6 +1483,7 @@ export class AgentManager {
       // out of the office first, so their work, as it's interrupted, finds them gone
       this.runtimes.get(id)?.session?.stop();
       this.runtimes.delete(id);
+      for (const h of agent.helpers ?? []) this.store.dropLines(h.id);
       this.store.removeAgent(id);
       this.hub.send({ type: 'agent-removed', id });
       yield* FiberMap.remove(this.runs, id);

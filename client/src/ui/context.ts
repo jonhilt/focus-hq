@@ -14,6 +14,8 @@ export interface Ui {
   goTo(place: Place): void;
   goToAgent(id: string): void;
   openAgent(id: string): void;
+  /** One of a lead's helpers: its own transcript. */
+  openHelper(leadId: string, id: string): void;
   openBoard(projectId: string, tab?: BoardTab): void;
   /** Starts a preview of the PR unless it's already the one running, then shows its panel. */
   previewPr(projectId: string, repo: string, number: number): void;

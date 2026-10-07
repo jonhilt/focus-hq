@@ -119,6 +119,8 @@ export class OfficeState {
         this.emit('projects', undefined);
         break;
       case 'agent':
+        // a lead's helper that's gone takes its transcript with it
+        for (const h of this.agents.get(event.agent.id)?.helpers ?? []) if (!event.agent.helpers?.some((x) => x.id === h.id)) this.lines.delete(h.id);
         this.agents.set(event.agent.id, event.agent);
         this.emit('agent', event.agent);
         break;
@@ -126,6 +128,7 @@ export class OfficeState {
         const agent = this.agents.get(event.id);
         this.agents.delete(event.id);
         this.lines.delete(event.id);
+        for (const h of agent?.helpers ?? []) this.lines.delete(h.id);
         this.browser.delete(event.id);
         if (agent) this.emit('agent-removed', agent);
         break;

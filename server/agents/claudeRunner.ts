@@ -2,6 +2,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { query, type CanUseTool, type Options, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { cloudSessionUrl } from '../../shared/cloud';
+import type { TermKind, TermLine } from '../../shared/types';
 import { errorMessage, sleep, truncate } from '../util';
 import { BrowserPool, browserMcpServer } from './browserTool';
 import { CLOUD_UNAVAILABLE, cloudRefused } from './cloud';
@@ -234,6 +235,9 @@ export class ClaudeRunner implements AgentRunner {
   /** Renders one SDK message; returns the outcome when it is a turn result. */
   private handle(msg: SDKMessage, ctx: RunContext, hooks: RunHooks): { text: string; isError: boolean; queued: number; structured?: unknown } | null {
     const { cwd } = ctx;
+    // a subagent's lines: a transcript of its own, or else indented in the session's (in `kind`, when it says)
+    const helperLines = (id: string, lines: Omit<TermLine, 't'>[], kind?: TermKind) =>
+      hooks.helperLines ? hooks.helperLines(id, lines) : hooks.lines(lines.map((l) => ({ ...l, kind: kind ?? l.kind, text: `    ${l.text}` })));
     switch (msg.type) {
       case 'system': {
         // Relayed from a cloud session, init (and later cloud_session_delta) carry the cloud session's own id: the one
@@ -262,13 +266,19 @@ export class ClaudeRunner implements AgentRunner {
           const id = msg.tool_use_id ?? msg.task_id;
           ctx.helpers.set(msg.task_id, id);
           hooks.helper?.({ kind: 'started', id, description: msg.description, type: msg.subagent_type });
+          // their transcript starts with what they were asked
+          const prompt = msg.tool_use_id ? ctx.calls.get(msg.tool_use_id)?.input.prompt : undefined;
+          hooks.helperLines?.(id, [{ kind: 'system', text: `✻ ${msg.description}` }, ...(typeof prompt === 'string' && prompt.trim() ? [{ kind: 'manager' as const, text: `▶ ${prompt.trim()}` }] : [])]);
         } else if (msg.subtype === 'task_progress') {
           const id = ctx.helpers.get(msg.task_id);
           const activity = msg.summary ?? (msg.last_tool_name ? `Using ${msg.last_tool_name}` : '');
           if (id && activity) hooks.helper?.({ kind: 'activity', id, activity: truncate(activity, 100) });
         } else if (msg.subtype === 'task_notification') {
           const id = ctx.helpers.get(msg.task_id);
-          if (id) hooks.helper?.({ kind: 'ended', id, ok: msg.status === 'completed', summary: truncate(msg.summary, 100) });
+          if (id) {
+            hooks.helper?.({ kind: 'ended', id, ok: msg.status === 'completed', summary: truncate(msg.summary, 100) });
+            hooks.helperLines?.(id, [msg.status === 'completed' ? { kind: 'success', text: '✔ Done' } : { kind: 'error', text: `✘ ${msg.status}` }]);
+          }
           ctx.helpers.delete(msg.task_id);
         }
         return null;
@@ -282,17 +292,22 @@ export class ClaudeRunner implements AgentRunner {
         for (const block of msg.message.content) {
           if (block.type === 'text' && block.text.trim()) {
             const lines = renderText(block.text.trim());
-            hooks.lines(nested ? lines.map((l) => ({ ...l, kind: 'output', text: `    ${l.text}` })) : lines);
-            if (!nested) hooks.activity(null, truncate(block.text.trim().split('\n')[0], 80));
+            if (nested) helperLines(msg.parent_tool_use_id!, lines, 'output');
+            else {
+              hooks.lines(lines);
+              hooks.activity(null, truncate(block.text.trim().split('\n')[0], 80));
+            }
           } else if (block.type === 'thinking') {
-            hooks.lines([{ kind: 'thinking', text: '✻ Thinking…' }]);
+            if (nested) helperLines(msg.parent_tool_use_id!, [{ kind: 'thinking', text: '✻ Thinking…' }]);
+            else hooks.lines([{ kind: 'thinking', text: '✻ Thinking…' }]);
             hooks.activity(null, 'Thinking…');
           } else if (block.type === 'tool_use') {
             const call: ToolCall = { name: block.name, input: (block.input ?? {}) as Record<string, unknown> };
             ctx.calls.set(block.id, call);
             ctx.lastUrl = appUrl(call) ?? ctx.lastUrl;
             const rendered = renderToolUse(call.name, call.input, cwd);
-            hooks.lines(nested ? rendered.lines.map((l) => ({ ...l, text: `    ${l.text}` })) : rendered.lines);
+            if (nested) helperLines(msg.parent_tool_use_id!, rendered.lines);
+            else hooks.lines(rendered.lines);
             if (rendered.activity || rendered.status) hooks.activity(rendered.status ?? null, rendered.activity ?? '');
             // a subagent's tool call is what that helper is busy with
             if (nested && rendered.activity) hooks.helper?.({ kind: 'activity', id: msg.parent_tool_use_id!, activity: rendered.activity });
@@ -309,7 +324,9 @@ export class ClaudeRunner implements AgentRunner {
           if (block.type !== 'tool_result') continue;
           const call = ctx.calls.get(block.tool_use_id);
           ctx.calls.delete(block.tool_use_id);
+          // a subagent's results only go in a transcript of its own: indented in the session's, they'd drown it
           if (msg.parent_tool_use_id === null) hooks.lines(renderToolResult(block as unknown as { type: string }));
+          else hooks.helperLines?.(msg.parent_tool_use_id, renderToolResult(block as unknown as { type: string }));
           // the agent's own task list (a subagent's is its own business); the structured output is the message's only
           // when it carries this one result
           if (call && TASK_TOOLS.has(call.name) && msg.parent_tool_use_id === null) {

@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import type { TermLine } from '../../shared/types';
 import { sleep } from '../util';
 import type { NumberOneOfficer, NumberOneReply, NumberOneTurn } from './numberOne';
 import type { Drafter, DraftRequest, DraftResult } from './planner';
@@ -257,22 +258,31 @@ export class DemoRunner implements AgentRunner {
       // two helpers map the repos side by side while the lead plans: they sit down at the team station while they work
       if (repos.length > 1) {
         const helpers = repos.map((r) => ({ ...r, id: `demo-helper-${r.folder}-${randomBytes(2).toString('hex')}`, files: FILES[kindOf(r.repo)] }));
+        // each helper's lines are its own transcript, as the real runner keeps them
+        const helperLines = (id: string, lines: Omit<TermLine, 't'>[]) =>
+          hooks.helperLines ? hooks.helperLines(id, lines) : hooks.lines(lines.map((l) => ({ ...l, text: `    ${l.text}` })));
         for (const h of helpers) {
           hooks.lines([{ kind: 'tool', text: `⏺ Agent(Map ./${h.folder} for ${goal})` }]);
           hooks.helper?.({ kind: 'started', id: h.id, description: `Map ./${h.folder} for ${goal}`, type: 'Explore' });
+          helperLines(h.id, [
+            { kind: 'system', text: `✻ Map ./${h.folder} for ${goal}` },
+            { kind: 'manager', text: `▶ Read through ./${h.folder} and tell me where ${goal} would fit: the files to change, and anything in the way.` },
+          ]);
         }
         hooks.activity('working', `Waiting on ${helpers.length} helpers`);
         for (let step = 0; step < 3; step++) {
           await wait(2, 3.5);
           for (const h of helpers) {
             const file = `${h.folder}/${h.files[step % h.files.length]}`;
-            hooks.lines([{ kind: 'tool', text: `    ⏺ Read(${file})` }]);
+            helperLines(h.id, [{ kind: 'tool', text: `⏺ Read(${file})` }, { kind: 'output', text: `  ⎿  Read ${40 + step * 17} lines` }]);
             hooks.helper?.({ kind: 'activity', id: h.id, activity: `Reading ${file}` });
           }
         }
         for (const h of helpers) {
           await wait(1, 2);
+          helperLines(h.id, [{ kind: 'text', text: `${h.folder}: ${goal} fits in ${h.files[1]}` }]);
           hooks.helper?.({ kind: 'ended', id: h.id, ok: true, summary: `${h.folder}: ${goal} fits in ${h.files[1]}` });
+          helperLines(h.id, [{ kind: 'success', text: '✔ Done' }]);
           hooks.lines([{ kind: 'output', text: `  ⎿  ${h.folder}: ${goal} fits in ${h.files[1]}` }]);
         }
       }

@@ -18,6 +18,11 @@ export interface RunHooks {
   cost(totalUsd: number): void;
   /** A subagent of the session started, got busy or finished. */
   helper?(event: HelperEvent): void;
+  /**
+   * A subagent's own lines (`id` as in its HelperEvents): its transcript, kept apart from the session's. Without it they
+   * go, indented, in the session's own lines.
+   */
+  helperLines?(id: string, lines: Omit<TermLine, 't'>[]): void;
   /** How full the session's context window is, at the end of a turn. */
   context?(usage: { percent: number; tokens: number; max: number }): void;
   /**
