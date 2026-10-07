@@ -4,6 +4,7 @@ import { api } from '../net/api';
 import { state } from '../net/state';
 import type { Ui } from './context';
 import { fill, h, timeAgo } from './dom';
+import { TermView } from './terminal';
 
 const helperOf = (lead: Agent | undefined, id: string): Helper | undefined => lead?.helpers?.find((x) => x.id === id);
 
@@ -17,7 +18,8 @@ export function openHelperPanel(ui: Ui, leadId: string, id: string): void {
   if (!lead || !helper) return ui.openAgent(leadId);
   const crew = helperFor(id);
 
-  const terminal = h('div', { class: 'terminal' });
+  const term = new TermView();
+  const terminal = term.el;
   const info = h('div', { class: 'row', style: 'margin-bottom:12px' });
   const body = h('div', { style: 'display:flex;flex-direction:column;height:100%;min-height:0' }, info, h('div', { class: 'agent-grid single' }, terminal));
   const talk = h('button', { class: 'btn primary', onclick: () => ui.openAgent(leadId) }, `Talk to ${lead.name}`);
@@ -40,7 +42,7 @@ export function openHelperPanel(ui: Ui, leadId: string, id: string): void {
 
   const appendLines = (lines: TermLine[]) => {
     const nearBottom = terminal.scrollHeight - terminal.scrollTop - terminal.clientHeight < 60;
-    for (const line of lines) terminal.append(h('div', { class: line.kind }, line.text || ' '));
+    term.append(lines);
     if (nearBottom) terminal.scrollTop = terminal.scrollHeight;
   };
 
@@ -48,7 +50,7 @@ export function openHelperPanel(ui: Ui, leadId: string, id: string): void {
   appendLines(state.lines.get(id) ?? []);
   terminal.scrollTop = terminal.scrollHeight;
   void api.lines(id).then((lines) => {
-    terminal.replaceChildren();
+    term.clear();
     appendLines(lines);
     terminal.scrollTop = terminal.scrollHeight;
   }).catch(() => undefined);

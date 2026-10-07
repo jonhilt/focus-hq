@@ -13,6 +13,7 @@ import { withMic } from './dictation';
 import { busy, fill, h, timeAgo } from './dom';
 import { closeGoal, CONTEXT_TONE, EFFORT_HINT, noteView, prLink, reviewing, tasksView } from './goals';
 import { type NavItem, readout, shownView, SideNav } from './panels';
+import { TermView } from './terminal';
 
 const FINISHED = ['done', 'error', 'stopped'];
 
@@ -46,7 +47,8 @@ export function openAgentPanel(ui: Ui, id: string): void {
   const agent = state.agents.get(id);
   if (!agent) return;
 
-  const terminal = h('div', { class: 'terminal' });
+  const term = new TermView();
+  const terminal = term.el;
   const browserBar = h('div', { class: 'browser-bar' });
   const browserImg = h('img', { alt: 'Agent browser' });
   const browserCanvas = h('canvas', { width: 640, height: 420 });
@@ -102,8 +104,7 @@ export function openAgentPanel(ui: Ui, id: string): void {
 
   const appendLines = (lines: TermLine[]) => {
     const nearBottom = terminal.scrollHeight - terminal.scrollTop - terminal.clientHeight < 60;
-    for (const line of lines) terminal.append(h('div', { class: line.kind }, line.text || ' '));
-    while (terminal.childElementCount > 3000) terminal.firstElementChild?.remove();
+    term.append(lines);
     if (nearBottom) terminal.scrollTop = terminal.scrollHeight;
   };
 
@@ -243,7 +244,7 @@ export function openAgentPanel(ui: Ui, id: string): void {
   terminal.scrollTop = terminal.scrollHeight;
   // load the full history in the background
   void api.lines(id).then((lines) => {
-    terminal.replaceChildren();
+    term.clear();
     appendLines(lines);
     terminal.scrollTop = terminal.scrollHeight;
   }).catch(() => undefined);

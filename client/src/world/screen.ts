@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Agent, BrowserFrame, ClaudeTask, GoalNote, TermLine } from '../../../shared/types';
 import { showsBrowser } from '../../../shared/browserView';
+import { plainTermLine } from '../../../shared/termText';
 import { canvasTexture, fitText, makeCanvas, MONO_FONT, roundRect, UI_FONT } from './canvas';
 import { flat } from './materials';
 import { screenPanes, screenPrefs } from './screenPanes';
@@ -222,7 +223,7 @@ export class StationScreen {
     // wrap from the end until the screen is full
     const rows: { kind: TermLine['kind']; text: string }[] = [];
     for (let i = lines.length - 1; i >= 0 && rows.length < maxRows; i--) {
-      const text = lines[i].text;
+      const text = plainTermLine(lines[i]);
       const chunks: string[] = [];
       for (let j = 0; j < Math.max(1, text.length); j += cols) chunks.push(text.slice(j, j + cols));
       for (let k = chunks.length - 1; k >= 0 && rows.length < maxRows; k--) rows.unshift({ kind: lines[i].kind, text: chunks[k] });

@@ -4,6 +4,7 @@ import type { Agent, PermissionRequest, TermLine } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { h } from '../ui/dom';
+import { TermView } from '../ui/terminal';
 import { type Actions, morph } from './actions';
 import { workLabel } from './home';
 
@@ -27,7 +28,8 @@ export function agentView(id: string, actions: Actions, back: () => void): View 
 
   const head = h('div');
   const tabs = h('nav', { class: 'tabs' });
-  const terminal = h('div', { class: 'terminal' });
+  const term = new TermView();
+  const terminal = term.el;
   const browser = h('div', { class: 'browser' });
   const errors = h('div');
   const input = h('input', { type: 'text', enterKeyHint: 'send', autocomplete: 'off' });
@@ -54,8 +56,7 @@ export function agentView(id: string, actions: Actions, back: () => void): View 
   };
 
   const append = (lines: TermLine[]) => {
-    terminal.append(...lines.map((line) => h('div', { class: line.kind }, line.text || ' ')));
-    while (terminal.childElementCount > 3000) terminal.firstElementChild?.remove();
+    term.append(lines);
     if (follow) terminal.scrollTop = terminal.scrollHeight;
   };
   terminal.onscroll = () => {
@@ -63,7 +64,7 @@ export function agentView(id: string, actions: Actions, back: () => void): View 
   };
   const backfill = () =>
     api.lines(id).then((lines) => {
-      terminal.replaceChildren();
+      term.clear();
       append(lines);
     }).catch(() => undefined);
 

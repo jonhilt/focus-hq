@@ -1,4 +1,5 @@
 import type { AgentStatus, BrowserFrame, TermLine } from '../../shared/types';
+import { REPLY } from '../../shared/termText';
 import { truncate } from '../util';
 
 type Line = Omit<TermLine, 't'>;
@@ -156,5 +157,5 @@ export function renderToolResult(block: Block): Line[] {
 
 export function renderText(text: string, kind: TermLine['kind'] = 'text'): Line[] {
   const lines = text.replace(/\r/g, '').split('\n');
-  return lines.map((l, i) => ({ kind, text: `${i === 0 ? '⏺ ' : '  '}${l}` }));
+  return lines.map((l, i) => ({ kind, text: `${i === 0 ? REPLY : '  '}${l}` }));
 }
