@@ -8,7 +8,7 @@ import { demoWorkspace } from './demoRunner';
 import { AgentManager } from './manager';
 import { Sessions, Triage, Workspace } from './services';
 import type { PullRequest } from '../../shared/types';
-import type { AgentRunner, AgentSession, RunHooks, RunOutcome, RunRequest } from './types';
+import type { AgentRunner, AgentSession, RunHooks, RunOutcome, RunRequest, WorkspaceOps } from './types';
 
 /** A Claude Code stand-in: each turn runs until the test ends it, and remembers being stopped and what it was sent. */
 class FakeClaude implements AgentRunner {
@@ -31,14 +31,14 @@ class FakeClaude implements AgentRunner {
   }
 }
 
-function office() {
+function office(workspace: WorkspaceOps = demoWorkspace) {
   const store = new Store(false);
   const project = store.addProject('Shop');
   project.repos = ['demo/webshop-frontend', 'demo/webshop-api'];
   const claude = new FakeClaude();
   const services = Layer.mergeAll(
     demoLayer,
-    Workspace.fromOps(demoWorkspace),
+    Workspace.fromOps(workspace),
     Sessions.fromRunner(claude),
     Triage.fromTriager({ triage: () => Promise.reject(new Error('no officer here')) }),
   );
@@ -120,6 +120,33 @@ describe('AgentManager', () => {
     expect(next.prompt).not.toContain('summarised');
     expect(next.prompt).toContain('The goal: Saved items\n\nAs the captain first put it:\n> Saved items\n> Shoppers keep a list across devices');
     expect(next.prompt).toMatch(/\[Office\] Slice 1 has landed/);
+  });
+
+  it('brings commits the lead hadn’t shipped along to the next slice', async () => {
+    const picked: { dir: string; commits: string[] }[] = [];
+    const { agents, claude, store, project } = office({
+      ...demoWorkspace,
+      // the lead carried on after shipping: a commit in each repo, and the API's won't apply to fresh code
+      unshippedCommits: async (dir) => [dir.endsWith('/webshop-api') ? 'api-next' : 'web-next'],
+      cherryPick: async (dir, commits) => {
+        picked.push({ dir, commits });
+        if (dir.endsWith('/webshop-api')) throw new Error('conflict');
+      },
+    });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
+    await until(() => leads().length === 1);
+    await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    leads()[0].end({ ok: true, summary: 'Shipped the first slice' });
+    await until(() => store.agent(lead.id).status === 'done');
+    const firstBranch = store.agent(lead.id).branch;
+
+    for (const pr of store.agent(lead.id).lead!.prs) agents.prClosed(pr.repo, pr.number, true);
+    await until(() => leads().length === 2);
+    expect(picked.map((p) => p.commits)).toEqual([['web-next'], ['api-next']]);
+    const next = leads()[1].req.prompt;
+    expect(next).toContain("- ./webshop-frontend: the commit you hadn't shipped came along onto the new branch.");
+    expect(next).toContain(`- ./webshop-api: the commit you hadn't shipped didn't apply cleanly to fresh code, so it's only on \`${firstBranch}\`. Bring it over with \`git cherry-pick api-next\``);
   });
 
   it('tells a lead whose conversation can’t be picked back up where the goal stands', async () => {

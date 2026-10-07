@@ -62,6 +62,9 @@ export function upgradeLead(agent: Agent, projectName: string): Agent {
 /** Whether the slice has landed: it shipped, and every pull request it opened has merged or closed. */
 export const sliceLanded = (prs: LeadPr[]): boolean => prs.length > 0 && prs.every((p) => p.outcome);
 
+/** The commit last shipped to a repo's pull request this slice, if any. */
+export const shippedSha = (work: LeadWork, repo: string): string | undefined => work.prs.findLast((p) => p.repo === repo && p.sha)?.sha;
+
 /** The lead's open pull request in a repo, if the slice has one. */
 export const openPr = (work: LeadWork, repo: string): LeadPr | undefined => work.prs.find((p) => p.repo === repo && !p.outcome);
 
@@ -127,7 +130,7 @@ How to work:
 - Commit in each repo as you go. Never push and never open pull requests yourself.
 - When a slice is ready, call mcp__office__ship with a title and a summary. The office pushes every repo with new commits and opens (or updates) a pull request in each, and QA reviews them. Then tell the captain what's in the slice, what it taught you, and what you'd do next, and stop there: they review it and decide.
 - Shipping again before the pull requests merge updates them: that's how you fix what QA or the captain finds.
-- You'll hear QA's verdict on each pull request, and when the slice's pull requests have all merged or closed. After that your repos move to fresh code on a new branch for the next slice.
+- You'll hear QA's verdict on each pull request, and when the slice's pull requests have all merged or closed. After that your repos move to fresh code on a new branch for the next slice, and the office brings along any commits you hadn't shipped.
 - For independent pieces of work that can run side by side, you can hand them to subagents with the Agent tool. You own what they bring back. Hand broad exploration (reading through a repo, long test runs, combing through logs) to subagents too, and keep their conclusions rather than the details: your context has to last the whole goal.
 - When a decision is the captain's (scope, a trade-off they'd care about), ask and stop. Otherwise make sensible calls and say what you decided.
 - When what done looks like is met, or a slice has landed and nothing worthwhile is left, call mcp__office__propose_close with why, tell the captain, and stop. They close the goal, or carry on with you.
@@ -136,8 +139,8 @@ How to work:
 
 /**
  * What happens when a slice has landed and the lead takes their next turn: nothing moves while a repo has uncommitted
- * changes; otherwise the repos move to fresh code for the next slice. The conversation is left as it is: the lead may be
- * in the middle of something, so compacting is the captain's call.
+ * changes; otherwise the repos move to fresh code for the next slice, taking along commits that never shipped. The
+ * conversation is left as it is: the lead may be in the middle of something, so compacting is the captain's call.
  */
 export const afterLanding = (dirtyFolders: string[]): 'held-back' | 'next' => (dirtyFolders.length ? 'held-back' : 'next');
 
@@ -360,6 +363,25 @@ export function freshSessionPrompt(work: LeadWork, branch: string, inbox: string
 /** The slice landed but some repos still have uncommitted changes: the next slice waits for them. */
 export function heldBack(work: LeadWork, folders: string[]): string {
   return `Slice ${work.slice} has landed, but ${folders.map((f) => `./${f}`).join(' and ')} still ${folders.length === 1 ? 'has' : 'have'} uncommitted changes, so your repos stay where they are. Ship them as part of the next slice, or discard them; the next slice starts on fresh code once every repo is clean.`;
+}
+
+/** Commits in one repo that hadn't shipped when the slice landed, and whether they made it onto the new slice's branch. */
+export interface Carried {
+  folder: string;
+  commits: string[];
+  applied: boolean;
+}
+
+/** What the lead hears about the commits they hadn't shipped when the slice landed (nothing when there were none). */
+export function carriedNote(carried: Carried[], oldBranch: string): string {
+  const lines = carried.map(({ folder, commits, applied }) => {
+    const one = commits.length === 1;
+    const these = one ? 'the commit' : `the ${commits.length} commits`;
+    return applied
+      ? `- ./${folder}: ${these} you hadn't shipped came along onto the new branch.`
+      : `- ./${folder}: ${these} you hadn't shipped didn't apply cleanly to fresh code, so ${one ? "it's" : "they're"} only on \`${oldBranch}\`. Bring ${one ? 'it' : 'them'} over with \`git cherry-pick ${commits.map((c) => c.slice(0, 10)).join(' ')}\` and resolve the conflicts.`;
+  });
+  return lines.length ? `Work you'd committed but not shipped:\n${lines.join('\n')}` : '';
 }
 
 /** How long a finished helper stays at the team station, so you see it done before it goes. */

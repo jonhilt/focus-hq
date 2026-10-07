@@ -151,6 +151,26 @@ export async function commitsAhead(dir: string, baseBranch: string): Promise<num
   return Number(out.trim()) || 0;
 }
 
+/**
+ * The commits on HEAD that haven't shipped, oldest first: those not on the base branch, nor part of `shipped` (the commit
+ * last pushed for a pull request), when git still has it.
+ */
+export async function unshippedCommits(dir: string, baseBranch: string, shipped?: string): Promise<string[]> {
+  const known = shipped ? await git(dir, ['cat-file', '-e', `${shipped}^{commit}`]).then(() => true, () => false) : false;
+  const out = await git(dir, ['rev-list', '--reverse', 'HEAD', `^origin/${baseBranch}`, ...(known ? [`^${shipped}`] : [])]);
+  return out.split('\n').map((l) => l.trim()).filter(Boolean);
+}
+
+/** Applies `commits` on top of HEAD, in order. If they don't apply cleanly, HEAD is left as it was and this fails. */
+export async function cherryPick(dir: string, commits: string[]): Promise<void> {
+  try {
+    await git(dir, ['cherry-pick', '--keep-redundant-commits', ...commits]);
+  } catch (err) {
+    await git(dir, ['cherry-pick', '--abort']).catch(() => undefined);
+    throw err;
+  }
+}
+
 export async function head(dir: string): Promise<string> {
   return (await git(dir, ['rev-parse', 'HEAD'])).trim();
 }

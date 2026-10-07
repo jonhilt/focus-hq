@@ -36,6 +36,8 @@ const liveWorkspace: WorkspaceOps = {
   hasUncommittedChanges: git.hasUncommittedChanges,
   commitsAhead: git.commitsAhead,
   head: git.head,
+  unshippedCommits: git.unshippedCommits,
+  cherryPick: git.cherryPick,
   push: git.pushBranch,
   publish: git.publishBranch,
   pull: git.pullBranch,

@@ -447,6 +447,9 @@ export const demoWorkspace: WorkspaceOps = {
   commitsAhead: async () => 2,
   // demo agents always commit something, so every session ends on a new commit
   head: async () => randomBytes(5).toString('hex'),
+  // ...and ship everything they commit
+  unshippedCommits: async () => [],
+  cherryPick: async () => undefined,
   push: async () => sleep(800),
   publish: async () => sleep(400),
   pull: async () => sleep(400),

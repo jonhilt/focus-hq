@@ -106,6 +106,10 @@ export interface WorkspaceOps {
   commitsAhead(dir: string, baseBranch: string): Promise<number>;
   /** The commit checked out in `dir`. */
   head(dir: string): Promise<string>;
+  /** The commits on HEAD not on the base branch nor in `shipped`, oldest first. */
+  unshippedCommits(dir: string, baseBranch: string, shipped?: string): Promise<string[]>;
+  /** Applies `commits` on top of HEAD; fails, leaving HEAD as it was, if they don't apply cleanly. */
+  cherryPick(dir: string, commits: string[]): Promise<void>;
   push(dir: string, branch: string): Promise<void>;
   /**
    * Makes sure origin has `branch`, for a cloud session to clone: pushes `dir`'s commit if it isn't there yet, and

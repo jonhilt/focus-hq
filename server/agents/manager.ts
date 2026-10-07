@@ -10,7 +10,7 @@ import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
 import { afterCloudRun, carryOnInNewSession, fallBackToLocal } from './cloud';
-import { afterLanding, afterVerdict, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, closeCheck, conflictsNote, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reviewsToStart, shipped, shipPlan, sliceBranch, sliceLanded } from './lead';
+import { afterLanding, afterVerdict, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, closeCheck, conflictsNote, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded } from './lead';
 import { repoFolders } from './planner';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
 import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
@@ -858,20 +858,35 @@ export class AgentManager {
 
   /**
    * The slice has landed: a new branch on fresh code in every repo, unless a repo has uncommitted changes, which are
-   * never thrown away. Succeeds with what the lead hears about it.
+   * never thrown away. Commits that never shipped come along onto the new branch, or stay on the old one, with the
+   * lead told how to bring them over, when they don't apply cleanly. Succeeds with what the lead hears about it.
    */
   private nextSlice(agent: Agent, lead: NonNullable<Agent['lead']>): Effect.Effect<string, GitHubError | GitFailed | NothingToCheckOut, ManagerServices> {
     return Effect.gen({ self: this }, function* () {
       const workspace = yield* Workspace;
       const project = this.store.project(agent.projectId);
-      const dirty = yield* Effect.filter(lead.repos, (r) => workspace.hasUncommittedChanges(workspace.dir(leadWorktreeId(agent.id, r.folder))));
+      const dir = (folder: string) => workspace.dir(leadWorktreeId(agent.id, folder));
+      const dirty = yield* Effect.filter(lead.repos, (r) => workspace.hasUncommittedChanges(dir(r.folder)));
       if (afterLanding(dirty.map((r) => r.folder)) === 'held-back') return heldBack(lead, dirty.map((r) => r.folder));
+      const unshipped = yield* Effect.forEach(lead.repos, (r) =>
+        workspace.unshippedCommits(dir(r.folder), r.baseBranch, shippedSha(lead, r.repo)).pipe(Effect.map((commits) => ({ ...r, commits }))),
+      );
+      const oldBranch = agent.branch;
       const slice = lead.slice + 1;
       yield* Effect.forEach(lead.repos, (r) => workspace.remove(r.repo, leadWorktreeId(agent.id, r.folder)), { discard: true });
       const note = lead.note && { ...lead.note, slice: [] };
       this.update(agent, { branch: sliceBranch(lead.title, slice, newId('s').slice(-4)), lead: { ...lead, note, repos: [], slice, prs: [] } });
       yield* this.checkOutSlice(agent, project.repos);
-      return newSliceNote(agent.lead!, agent.branch);
+      const carried = yield* Effect.forEach(unshipped.filter((r) => r.commits.length), ({ repo, folder, commits }) =>
+        Effect.gen({ self: this }, function* () {
+          const now = agent.lead!.repos.find((r) => r.repo === repo);
+          if (!now) return { folder, commits, applied: false };
+          this.print(agent, [{ kind: 'system', text: `✻ Bringing ${commits.length} unshipped commit${commits.length === 1 ? '' : 's'} over to ./${now.folder}` }]);
+          const applied = yield* workspace.cherryPick(dir(now.folder), commits).pipe(Effect.as(true), Effect.orElseSucceed(() => false));
+          return { folder: now.folder, commits, applied };
+        }),
+      );
+      return [newSliceNote(agent.lead!, agent.branch), carriedNote(carried, oldBranch)].filter(Boolean).join('\n\n');
     });
   }
 

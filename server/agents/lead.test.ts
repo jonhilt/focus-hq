@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadWork } from '../../shared/types';
-import { afterLanding, BRIEF_LIMIT, freshSessionPrompt, goalBrief, afterVerdict, conflictsNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, openPr, pickStation, qaVerdictNote, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
+import { afterLanding, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -88,6 +88,12 @@ describe('slices', () => {
   it('finds the slice’s open pull request in a repo', () => {
     expect(openPr(work, 'acme/api')?.number).toBe(7);
     expect(openPr(work, 'acme/web')).toBeUndefined();
+  });
+
+  it('remembers the commit each repo last shipped', () => {
+    const prs = [{ repo: 'acme/web', number: 12, url: 'u12', sha: 'aaa', outcome: 'closed' as const }, { repo: 'acme/web', number: 13, url: 'u13', sha: 'bbb' }];
+    expect(shippedSha({ ...work, prs }, 'acme/web')).toBe('bbb');
+    expect(shippedSha(work, 'acme/api')).toBeUndefined();
   });
 });
 
@@ -330,6 +336,19 @@ describe('the lead’s context', () => {
   it('moves to the next slice without compacting, unless a repo holds it back', () => {
     expect(afterLanding([])).toBe('next');
     expect(afterLanding(['web'])).toBe('held-back');
+  });
+
+  it('tells them which unshipped commits came along to the new slice, and how to bring over the ones that didn’t', () => {
+    expect(carriedNote([], 'focus/saved-items-1-ab')).toBe('');
+    const text = carriedNote(
+      [
+        { folder: 'web', commits: ['1111111111aaaa'], applied: true },
+        { folder: 'api', commits: ['2222222222bbbb', '3333333333cccc'], applied: false },
+      ],
+      'focus/saved-items-1-ab',
+    );
+    expect(text).toMatch(/^Work you'd committed but not shipped:\n- \.\/web: the commit you hadn't shipped came along onto the new branch\./);
+    expect(text).toContain("- ./api: the 2 commits you hadn't shipped didn't apply cleanly to fresh code, so they're only on `focus/saved-items-1-ab`. Bring them over with `git cherry-pick 2222222222 3333333333`");
   });
 
   it('keeps the goal, the decisions and the lessons, drops the details, and carries the note', () => {
