@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 
-// The office is T-shaped: the observation lounge (furthest north), the manager's office, the lobby, then a long
-// hallway (south) with one project room per side every ROOM_WIDTH metres.
+// The holodeck deck: a hallway running south from z = 0, with a holodeck (one project's room) either side of it every
+// ROOM_WIDTH metres; the decks built in Blender keep to these sizes (blender/holodeck_deck.py). The command deck stands
+// off to the north (COMMAND_DECK), and the team stations' briefing rooms out to either side (briefingRoomAt).
 export const WALL_H = 3.2;
 export const WALL_T = 0.2;
 export const DOOR_W = 2.4;
@@ -13,12 +14,6 @@ export const OVER_DOOR = FRAME_FACE + 0.02;
 export const HALL_HALF = 2;
 export const ROOM_DEPTH = 16; // from the hallway wall to the outer wall
 export const ROOM_WIDTH = 12; // along the hallway
-export const LOBBY = { x0: -7, x1: 7, z0: 0, z1: 10 };
-export const OFFICE = { x0: -6, x1: 6, z0: 10, z1: 18 };
-/** The observation lounge: a long table under the viewports, through a door in the manager's office's north wall. */
-export const LOUNGE = { x0: -6, x1: 6, z0: 18, z1: 25 };
-/** The lounge door, off to the west so the manager's desk doesn't sit in front of it. */
-export const LOUNGE_DOOR_X = -3.4;
 export const EYE_HEIGHT = 1.6;
 /**
  * Where the command deck (built in Blender: world/deck.ts) sits: aft of the rest of the ship, on its long axis so the

@@ -27,22 +27,6 @@ export function checkerTexture(a: string, b: string): THREE.Texture {
   });
 }
 
-export function woodTexture(): THREE.Texture {
-  return cached('wood', () => {
-    const { canvas, ctx } = makeCanvas(256, 256);
-    const colors = ['#d9a066', '#cf9458', '#e0aa70', '#d39c60'];
-    for (let i = 0; i < 8; i++) {
-      ctx.fillStyle = colors[i % colors.length];
-      ctx.fillRect(0, i * 32, 256, 32);
-      ctx.fillStyle = 'rgba(80,40,10,0.35)';
-      ctx.fillRect(0, i * 32, 256, 2);
-      const seam = ((i * 97) % 200) + 20;
-      ctx.fillRect(seam, i * 32, 2, 32);
-    }
-    return canvasTexture(canvas);
-  });
-}
-
 export function carpetTexture(color: string): THREE.Texture {
   return cached(`carpet${color}`, () => {
     const { canvas, ctx } = makeCanvas(128, 128);
@@ -59,7 +43,5 @@ export function carpetTexture(color: string): THREE.Texture {
 }
 
 export const tiled = {
-  checker: (a: string, b: string, x: number, y: number) => repeat(checkerTexture(a, b).clone(), x, y),
-  wood: (x: number, y: number) => repeat(woodTexture().clone(), x, y),
   carpet: (color: string, x: number, y: number) => repeat(carpetTexture(color).clone(), x, y),
 };

@@ -12,8 +12,8 @@ export interface HolodeckParts {
 
 /**
  * The holodeck deck, built in Blender as modules (blender/holodeck_deck.py), put together for however many rows of
- * holodecks the ship has: its head where the old hallway met the concourse and its hallway running south from there,
- * so the holodecks stand where roomSlot has always put them.
+ * holodecks the ship has: its head north of z = 0 and its hallway running south from there, so the holodecks stand
+ * where roomSlot puts them.
  */
 export class HolodeckDeck {
   private constructor(

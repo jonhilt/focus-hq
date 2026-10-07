@@ -62,15 +62,9 @@ async function main(): Promise<number> {
   try {
     await waitForServer(url, server, 60_000);
     browser = await launchBrowser();
-    // the ship as it is, and with the decks built in Blender (see ship in client/src/main.ts), which stand in for
-    // some of it
-    const fighting: FightingPair[] = [];
-    for (const ship of ['', '?ship=next']) {
-      const { pairs, meshes, padds } = await scan(browser, `${url}${ship}`);
-      const unallowed = pairs.filter((p) => !allowed(p));
-      fighting.push(...unallowed);
-      console.log(`${ship || 'Default ship'}: scanned ${meshes} meshes (${padds} PADDs); ${pairs.length - unallowed.length} allowed overlaps skipped.`);
-    }
+    const { pairs, meshes, padds } = await scan(browser, url);
+    const fighting = pairs.filter((p) => !allowed(p));
+    console.log(`Scanned ${meshes} meshes (${padds} PADDs); ${pairs.length - fighting.length} allowed overlaps skipped.`);
     if (!fighting.length) {
       console.log('No z-fighting found.');
       return 0;

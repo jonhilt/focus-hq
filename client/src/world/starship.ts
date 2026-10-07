@@ -4,7 +4,6 @@ import { sound } from '../sound';
 import { canvasTexture, fitText, makeCanvas } from './canvas';
 import { box, flat, lighten, toon } from './materials';
 import { cyl, seatBack } from './props';
-import { viewportGlass } from './starfield';
 
 // The building is a starship in the style of Star Trek: Lower Decks: lilac-grey bulkheads over a dark dado,
 // blue carpet, LCARS consoles and signs, doors that swoosh open and viewports onto space (see starfield.ts).
@@ -268,16 +267,6 @@ export function starChartTexture(): THREE.CanvasTexture {
   return canvasTexture(canvas);
 }
 
-/** A wall console of LCARS readouts, for a corridor wall. Faces +Z in its local frame. */
-export function lcarsConsole(w: number, h: number, seed: number): THREE.Group {
-  const g = new THREE.Group();
-  g.add(box(w + 0.12, h + 0.12, 0.04, HULL.frame, 0, -h / 2 - 0.06, -0.02));
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(w, h), flat(readoutTexture(w, h, seed)));
-  screen.position.z = 0.01; // any closer and the frame shows through it from down the corridor
-  g.add(screen);
-  return g;
-}
-
 /** Height of a workstation's touch panel at its front edge, where a seated crew member's hands rest. */
 const CONSOLE_TOP = 0.72;
 /** From the seat's centre to the touch panel's front edge: a seated Character's hands land just inside it. */
@@ -413,44 +402,6 @@ export function workstation(screen: THREE.Material, accent: string): { group: TH
   display.add(plane);
   station.add(display);
   return { group: g, screen: plane, seat };
-}
-
-function roundedRect(w: number, h: number, r: number): THREE.Path {
-  const p = new THREE.Path();
-  p.moveTo(-w / 2 + r, -h / 2);
-  p.lineTo(w / 2 - r, -h / 2);
-  p.quadraticCurveTo(w / 2, -h / 2, w / 2, -h / 2 + r);
-  p.lineTo(w / 2, h / 2 - r);
-  p.quadraticCurveTo(w / 2, h / 2, w / 2 - r, h / 2);
-  p.lineTo(-w / 2 + r, h / 2);
-  p.quadraticCurveTo(-w / 2, h / 2, -w / 2, h / 2 - r);
-  p.lineTo(-w / 2, -h / 2 + r);
-  p.quadraticCurveTo(-w / 2, -h / 2, -w / 2 + r, -h / 2);
-  return p;
-}
-
-/** A flat ring between two rounded rectangles, `depth` deep and facing +Z. */
-function ring(w: number, h: number, border: number, depth: number, color: string): THREE.Mesh {
-  const r = Math.min(w, h) * 0.18;
-  const shape = new THREE.Shape(roundedRect(w + border * 2, h + border * 2, r + border).getPoints(6));
-  shape.holes.push(roundedRect(w, h, r));
-  return new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, curveSegments: 6 }), toon(color));
-}
-
-/**
- * A viewport onto space: a rounded port in a thick bulkhead surround, with a sill below. Its back is centred on its
- * origin and it faces +Z, so mount it on a wall's face.
- */
-export function viewport(w: number, h: number): THREE.Group {
-  const g = new THREE.Group();
-  const glass = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape(roundedRect(w, h, Math.min(w, h) * 0.18).getPoints(6))), viewportGlass);
-  glass.position.z = 0.005;
-  g.add(glass);
-  g.add(ring(w, h, 0.05, 0.06, HULL.dado));
-  g.add(ring(w + 0.1, h + 0.1, 0.18, 0.1, HULL.frame));
-  g.add(box(w * 0.8, 0.07, 0.16, HULL.frame, 0, -h / 2 - 0.3, 0.08));
-  g.add(box(w * 0.3, 0.035, 0.012, LCARS.orange, -w * 0.2, -h / 2 - 0.22, 0.1));
-  return g;
 }
 
 /**

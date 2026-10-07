@@ -36,16 +36,10 @@ async function fontsReady(): Promise<void> {
   await Promise.race([Promise.all(loads), new Promise((r) => setTimeout(r, 2500))]).catch(() => undefined);
 }
 
-/** The ship as it is, or, behind ?ship=next, as it's being rebuilt in Blender, deck by deck. */
+/** The ship's decks, built in Blender (blender/, `npm run ship`). */
 async function ship(): Promise<Ship> {
-  if (new URLSearchParams(location.search).get('ship') !== 'next') return { kind: 'current' };
-  try {
-    const [command, holodecks] = await Promise.all([Deck.load('/ship/command-deck.glb', COMMAND_DECK), HolodeckDeck.load('/ship/holodeck-deck.glb')]);
-    return { kind: 'next', command, holodecks };
-  } catch (err) {
-    console.error('The decks built in Blender failed to load; carrying on with the ship as it is.', err);
-    return { kind: 'current' };
-  }
+  const [command, holodecks] = await Promise.all([Deck.load('/ship/command-deck.glb', COMMAND_DECK), HolodeckDeck.load('/ship/holodeck-deck.glb')]);
+  return { command, holodecks };
 }
 
 async function main() {
@@ -175,8 +169,10 @@ async function main() {
     splash.remove();
     player.lock();
     if (state.projects.length === 0) {
-      const way = { current: 'Head north into your ready room', next: 'Your ready room is off the bridge to port: head in there' }[theShip.kind];
-      hud.toast('info', `Welcome aboard, Captain! ${way} to set up your first project.`, { label: 'Open console', run: () => ui.openManager('new-project') });
+      hud.toast('info', 'Welcome aboard, Captain! Your ready room is off the bridge to port: head in there to set up your first project.', {
+        label: 'Open console',
+        run: () => ui.openManager('new-project'),
+      });
     }
   };
 
@@ -348,9 +344,6 @@ async function main() {
         break;
       case 'manager':
         ui.openManager(i.tab);
-        break;
-      case 'teleport':
-        ui.openTeleport();
         break;
       case 'turbolift':
         ui.openTurbolift();

@@ -8,8 +8,8 @@ the holodecks' doors (which lock for hidden projects), floors, contents and land
 walls of the sizes in client/src/world/layout.ts. Keep to them, and keep everything on a holodeck's side of its walls
 within 0.125 of their centre lines, behind the skin its landscape shows through (world/scenery.ts).
 
-The head sits where the old hallway met the concourse, so the holodecks stand where they always have: Blender's +Y,
-aft down the hallway, is the browser's -Z.
+The head sits just north of the browser's z = 0, with the hallway running south from it, so the holodecks stand where
+layout.ts puts them: Blender's +Y, aft down the hallway, is the browser's -Z.
 """
 
 import math
@@ -26,7 +26,7 @@ DOOR_W = 2.4
 HALL = 2.0
 ROW = 12.0
 OUTER = HALL + 16.0
-#: the head: as wide as the old concourse, and deep enough for engineering beside the way in
+#: the head: wide and deep enough for engineering beside the way in
 HEAD_HALF = 7.0
 HEAD = 7.0
 LIFT_DOOR = 2.0

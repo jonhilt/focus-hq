@@ -54,7 +54,7 @@ npm run build && npm start
 
 Then on board:
 
-1. Walk north into your **ready room** (or press <kbd>M</kbd>) → **New project**. Connect repositories (`owner/name` or a URL), or switch on *A new, blank repository on GitHub too*.
+1. Walk into your **ready room**, off the bridge to port (or press <kbd>M</kbd>) → **New project**. Connect repositories (`owner/name` or a URL), or switch on *A new, blank repository on GitHub too*.
 2. A new holodeck appears down the corridor. Its Kanban display fills with the repos' open issues.
 3. At the board (<kbd>E</kbd>), click **Assign agent** on an issue, or file one at the **New issue** stand and leave *Assign an agent right away* on. The officer at the stand can draft it for you from a one-liner (see [Drafting issues](#drafting-issues)). The 🧠 picker beside either sets how much effort the agent puts in (`low` to `max`; *default* leaves it to the model).
 4. Watch them work. Press <kbd>E</kbd> on an agent or their station to open the full terminal, message them, or approve something they need.
@@ -353,7 +353,6 @@ client/src/
     goalScreens.ts        a team station's holographic sign and goal board (goalRoom.ts: how its room stands, and how the note fills the board)
     portal.ts             doorways that lead into each other wherever they stand: the far side drawn through the open doors, and walking through (doorway.ts: the geometry)
     transporter.ts        the transporter beam the crew arrive and leave in
-    lounge.ts             the observation lounge: a table under the viewports and a star chart (scenery)
     engineering.ts        the engineering station, where the engineer keeps the ship running (scenery)
     numberOne.ts          Number One in the ready room, across the captain's desk (numberOneView.ts: their bubble)
     deck.ts               a deck built in Blender: loads its GLB, draws its surfaces, reads its markers and what pressing E does (deckExtras.ts: what the markers, surfaces and interactions say)
