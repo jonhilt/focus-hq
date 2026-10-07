@@ -144,7 +144,7 @@ function agentCard(a: Agent, multi: boolean): HTMLElement {
   );
 }
 
-function prCard(ctx: HomeContext, project: Project, pr: PullRequest & { agent?: Agent }, multi: boolean): HTMLElement {
+function prCard(ctx: HomeContext, project: Project, pr: PullRequest & { agent?: Agent; resolver?: Agent }, multi: boolean): HTMLElement {
   const key = prCardId(project.id, pr);
   const qa = qaBadge(state.reviews.get(prKey(pr.repo, pr.number)), pr);
   const conflicting = pr.mergeable === 'CONFLICTING';
@@ -155,7 +155,9 @@ function prCard(ctx: HomeContext, project: Project, pr: PullRequest & { agent?: 
     confirm: `Merge ${pr.repo}#${pr.number} "${pr.title}"?`,
   });
   // the PR's developer is already at it (or queued for it); a second tap would only repeat the request
-  const resolve = conflicting
+  const resolve = pr.resolver
+    ? h('a', { class: 'btn primary', href: agentHref(pr.resolver.id) }, '👀 Watch')
+    : conflicting
     ? actions.button(`${key}:resolve`, '🔧 Resolve conflicts', () => api.resolveConflicts(project.id, pr.repo, pr.number), {
         class: 'primary',
         disabled: resolvingAlready(pr.agent),
@@ -174,7 +176,9 @@ function prCard(ctx: HomeContext, project: Project, pr: PullRequest & { agent?: 
       multi ? h('span', { class: 'pill' }, pr.repo.split('/')[1]) : null,
       qa.state === 'none' ? null : h('span', { class: `pill qa ${qa.state}` }, qa.label),
       h('span', { class: `pill checks ${pr.checks}` }, checks),
-      conflicting ? h('span', { class: 'pill bad' }, '⚠ conflicts') : null,
+      pr.resolver
+        ? h('span', { class: 'pill warn', title: pr.resolver.activity }, `🔧 Resolving – ${pr.resolver.name}`)
+        : conflicting ? h('span', { class: 'pill bad' }, '⚠ conflicts') : null,
       pr.isDraft ? h('span', { class: 'pill' }, 'draft') : null,
     ),
     h('div', { class: 'actions' }, resolve ?? merge, sendToQa),

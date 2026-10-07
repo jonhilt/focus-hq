@@ -128,8 +128,11 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
           ui.hud.toast('success', `Merged #${pr.number}`);
         }, ui.error);
       };
-      const resolve = pr.mergeable === 'CONFLICTING' ? h('button', { class: 'btn small primary', title: `Merge ${pr.baseBranch} in, or hand the conflicts to an agent when git can't` }, 'Resolve conflicts') : null;
-      if (resolve) {
+      const resolver = pr.resolver;
+      const resolve = resolver
+        ? h('button', { class: 'btn small primary', title: `Go to ${resolver.name}'s desk`, onclick: () => ui.goToAgent(resolver.id) }, 'Watch')
+        : pr.mergeable === 'CONFLICTING' ? h('button', { class: 'btn small primary', title: `Merge ${pr.baseBranch} in, or hand the conflicts to an agent when git can't` }, 'Resolve conflicts') : null;
+      if (resolve && !resolver) {
         // the PR's developer is already at it (or queued for it); a second click would only repeat the request
         resolve.disabled = resolvingAlready(pr.agent);
         resolve.onclick = () =>
@@ -192,7 +195,9 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
             qaChip,
             triage,
             h('span', { class: pr.checks === 'failing' ? 'chip bad' : pr.checks === 'passing' ? 'chip ok' : 'chip' }, checks),
-            pr.mergeable === 'CONFLICTING' ? h('span', { class: 'chip bad' }, 'conflicts') : null,
+            resolver
+              ? h('span', { class: 'chip warn', title: resolver.activity }, `Resolving – ${resolver.name}`)
+              : pr.mergeable === 'CONFLICTING' ? h('span', { class: 'chip bad' }, 'conflicts') : null,
             pr.isDraft ? h('span', { class: 'chip' }, 'draft') : null,
             pr.reviewDecision ? h('span', { class: 'chip' }, pr.reviewDecision.toLowerCase().replace('_', ' ')) : null,
             behind ? h('span', { class: 'chip warn', title: 'Restart the preview to see the latest commits' }, 'preview is behind') : null,

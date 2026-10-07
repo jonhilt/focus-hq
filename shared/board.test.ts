@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { carryMergeable, columns, goalState, resolvingAlready } from './board';
-import type { Agent, LeadWork, Project, PullRequest } from './types';
+import type { Agent, Board, LeadWork, Project, PullRequest } from './types';
 
 const pr = (mergeable: PullRequest['mergeable'], over: Partial<PullRequest> = {}): PullRequest => ({
   repo: 'acme/shop',
@@ -56,6 +56,25 @@ describe('resolvingAlready', () => {
   it('is never a goal’s lead: they take the conflicts on whatever else they’re doing', () => {
     expect(resolvingAlready(agent('lead', 'working'))).toBe(false);
     expect(resolvingAlready(agent('lead', 'done'))).toBe(false);
+  });
+});
+
+describe('a pull request being resolved', () => {
+  const project = { id: 'p1', repos: ['acme/web'] } as Project;
+  const pr = { repo: 'acme/web', number: 12, branch: 'focus/goal-1', mergeable: 'CONFLICTING' } as PullRequest;
+  const lead = { id: 'lead_p1_a', task: 'lead', status: 'done', repo: 'acme/web', issue: { number: 0 }, lead: { prs: [{ repo: 'acme/web', number: 12 }] } } as unknown as Agent;
+  const resolver = (status: Agent['status']) => ({ id: 'agent_r', task: 'conflicts', status, repo: 'acme/web', issue: { number: 12 }, pr: { number: 12 } }) as unknown as Agent;
+
+  it('names who is resolving its conflicts, and keeps the lead as whose it is', () => {
+    const [card] = columns(project, { prs: [pr], issues: [] } as unknown as Board, [lead, resolver('working')], undefined).prs;
+    expect(card.agent?.id).toBe('lead_p1_a');
+    expect(card.resolver?.id).toBe('agent_r');
+  });
+
+  it('has no resolver once they’ve finished', () => {
+    const [card] = columns(project, { prs: [pr], issues: [] } as unknown as Board, [resolver('done'), lead], undefined).prs;
+    expect(card.agent?.id).toBe('lead_p1_a');
+    expect(card.resolver).toBeUndefined();
   });
 });
 

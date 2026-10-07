@@ -7,7 +7,8 @@ export interface Columns {
   /** The goals under way: each one's lead, by team station. In progress for as long as the goal is, at it right now or not. */
   goals: Agent[];
   doing: Agent[];
-  prs: (PullRequest & { agent?: Agent })[];
+  /** `agent`: whose PR it is (a slice's lead before anyone seated on it); `resolver`: who's resolving its conflicts right now. */
+  prs: (PullRequest & { agent?: Agent; resolver?: Agent })[];
   /** Open PRs hidden by the project's "only my PRs" filter. */
   hiddenPrs: number;
 }
@@ -18,9 +19,9 @@ export function columns(project: Project, board: Board | undefined, agents: Agen
   const claimed = (issue: Issue) =>
     agents.some((a) => a.repo === issue.repo && a.issue.number === issue.number) ||
     prs.some((p) => p.repo === issue.repo && p.branch.startsWith(`focus/${issue.number}-`));
-  const by = (p: PullRequest) => (a: Agent) =>
-    a.task === 'lead' ? !!a.lead?.prs.some((x) => x.repo === p.repo && x.number === p.number) : a.task !== 'review' && a.repo === p.repo && a.pr?.number === p.number;
-  const all = prs.map((p) => ({ ...p, agent: agents.find(by(p)) }));
+  const leadOf = (p: PullRequest) => agents.find((a) => a.task === 'lead' && !!a.lead?.prs.some((x) => x.repo === p.repo && x.number === p.number));
+  const on = (p: PullRequest) => (a: Agent) => a.task !== 'review' && a.task !== 'lead' && a.repo === p.repo && a.pr?.number === p.number;
+  const all = prs.map((p) => ({ ...p, agent: leadOf(p) ?? agents.find(on(p)), resolver: agents.find((a) => a.task === 'conflicts' && on(p)(a) && !FINISHED.includes(a.status)) }));
   // agents' PRs are opened with your gh account, so author === login covers them too; the agent check catches stale data
   const shown = project.onlyMyPrs && login ? all.filter((p) => p.agent || p.author === login) : all;
   const waiting = waitingFor(board?.issues ?? []);
@@ -61,8 +62,10 @@ export function goalState(lead: Pick<Agent, 'status' | 'lead'>): string {
  * would only hear the request twice. A goal's lead always takes it, with whatever else they're doing.
  */
 export function resolvingAlready(agent: Pick<Agent, 'task' | 'status'> | undefined): boolean {
-  return !!agent && agent.task !== 'lead' && !['done', 'error', 'stopped'].includes(agent.status);
+  return !!agent && agent.task !== 'lead' && !FINISHED.includes(agent.status);
 }
+
+const FINISHED: Agent['status'][] = ['done', 'error', 'stopped'];
 
 /**
  * GitHub computes mergeability lazily and answers UNKNOWN until it's done, so a freshly fetched PR keeps

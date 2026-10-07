@@ -85,6 +85,11 @@ describe('needsYou', () => {
       { kind: 'conflicts', projectId: 'p', pr: conflicting },
     ]);
   });
+
+  it('leaves out a conflicting PR someone is resolving', () => {
+    const resolving = { ...pr({ mergeable: 'CONFLICTING' }), resolver: agent({ task: 'conflicts' }) };
+    expect(needsYou([], [{ projectId: 'p', pr: resolving }], new Map())).toEqual([]);
+  });
 });
 
 describe('inFlight', () => {

@@ -13,16 +13,17 @@ export type Attention =
   | { kind: 'conflicts'; projectId: string; pr: PullRequest };
 
 /**
- * The Needs you strip: agents with a raised hand or in error, PRs QA gave up on and PRs that conflict with their base.
- * `prs` are the PRs the boards show, so a project's "only my PRs" filter applies here too.
+ * The Needs you strip: agents with a raised hand or in error, PRs QA gave up on and PRs that conflict with their base
+ * (unless someone's resolving it already). `prs` are the PRs the boards show, so a project's "only my PRs" filter
+ * applies here too.
  */
-export function needsYou(agents: Agent[], prs: { projectId: string; pr: PullRequest }[], reviews: ReadonlyMap<string, QaReview>): Attention[] {
+export function needsYou(agents: Agent[], prs: { projectId: string; pr: PullRequest & { resolver?: Agent } }[], reviews: ReadonlyMap<string, QaReview>): Attention[] {
   const fromAgents = agents.flatMap((agent): Attention[] =>
     agent.permission ? [{ kind: 'hand', agent }] : agent.status === 'error' ? [{ kind: 'error', agent }] : [],
   );
   const fromPrs = prs.flatMap(({ projectId, pr }): Attention[] => [
     ...(qaBadge(reviews.get(prKey(pr.repo, pr.number)), pr).state === 'needs-you' ? [{ kind: 'qa' as const, projectId, pr }] : []),
-    ...(pr.mergeable === 'CONFLICTING' ? [{ kind: 'conflicts' as const, projectId, pr }] : []),
+    ...(pr.mergeable === 'CONFLICTING' && !pr.resolver ? [{ kind: 'conflicts' as const, projectId, pr }] : []),
   ]);
   return [...fromAgents, ...fromPrs];
 }
