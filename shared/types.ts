@@ -332,6 +332,22 @@ export interface LeadWork {
   /** Which slice this is: 1, 2, … */
   slice: number;
   prs: LeadPr[];
+  /** What the lead has put on the station's screen, in the order they first showed it. Cleared when the goal closes. */
+  artifacts?: GoalArtifact[];
+}
+
+/**
+ * A visual the lead put on their station's screen with the office's show tool (a diagram, a mockup, a comparison): a
+ * self-contained HTML page, and a picture of it for the screen. Served from /api/artifacts/<lead id>/<id>.html and .jpg.
+ */
+export interface GoalArtifact {
+  /** The lead's own name for it: showing the same id again replaces it. */
+  id: string;
+  title: string;
+  /** When it was last shown: the screen shows the latest, and the picture's URL changes with it. */
+  at: number;
+  /** There's a picture of it for the screen. Missing when the office couldn't render one (no browser to hand). */
+  image?: boolean;
 }
 
 export interface Agent {

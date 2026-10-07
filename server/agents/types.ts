@@ -1,5 +1,5 @@
 import type { AgentStatus, BrowserFrame, Effort, Settings, TermLine } from '../../shared/types';
-import type { NoteInput } from './lead';
+import type { ArtifactInput, NoteInput } from './lead';
 
 /** What Claude Code says about a subagent the session started: started, busy with something, finished. */
 export type HelperEvent =
@@ -61,6 +61,8 @@ export interface OfficeTools {
   ship(input: { title: string; summary: string }): Promise<string>;
   /** Updates the goal's note (and title). Throws, in words, when the note would get too long. */
   note(input: NoteInput): Promise<string>;
+  /** Puts a visual on the lead's station's screen, or replaces the one with that id. Throws, in words, when it's refused. */
+  show(input: ArtifactInput): Promise<string>;
   /** The lead thinks the goal is done: the captain closes it, or carries on. */
   proposeClose(input: { reason: string }): Promise<string>;
 }

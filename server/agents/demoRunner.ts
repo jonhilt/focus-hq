@@ -203,6 +203,11 @@ export class DemoRunner implements AgentRunner {
         const result = await tools.note(input).catch((err: Error) => err.message);
         hooks.lines([{ kind: 'output', text: `  ⎿  ${result}` }]);
       };
+      const show = async (input: Parameters<typeof tools.show>[0]) => {
+        hooks.lines([{ kind: 'tool', text: `⏺ mcp__office__show(${input.title})` }]);
+        const result = await tools.show(input).catch((err: Error) => err.message);
+        hooks.lines([{ kind: 'output', text: `  ⎿  ${result}` }]);
+      };
       const checklist = (ticked: number) => repos.map((r, i) => ({ text: `${r.folder}: the simplest version of ${goal}`, done: i < ticked }));
       const commit = async (folder: string, text: string) =>
         tool('Bash', { command: `git -C ${folder} add -A && git -C ${folder} commit -m "${text}"` }, [`[${folder} 4f2a91c] ${text}`, ' 2 files changed, 41 insertions(+)']);
@@ -242,11 +247,13 @@ export class DemoRunner implements AgentRunner {
         }
         await think();
         await note({ done: `${goal}: it works end to end, and survives a reload on another device.`, next: ['A thin slice end to end'] });
+        await show({ id: 'data-flow', title: 'The data flow', html: demoFlowPage(goal, repos.map((r) => r.folder)) });
         await say(`I've had a look around ${repos.map((r) => `./${r.folder}`).join(' and ')}. For "${goal}", I'd start with a thin slice end to end${repos.length > 1 ? ` through ${repos.map((r) => r.folder).join(' and ')}` : ''}: the simplest version that works, so we find out early whether the data model holds. Shall I go ahead?`);
         return { ok: true, summary: 'Proposed the first slice.' };
       }
       await say('On it: a thin slice first.');
       await note({ slice: checklist(0) });
+      await show({ id: 'mockup', title: 'A first mockup', html: demoMockupPage(goal) });
       const leadTodos = (done: number) => ({
         todos: [...repos.map((r) => [`Build ${goal} in ./${r.folder}`, `Building it in ./${r.folder}`]), ['Ship the slice', 'Shipping the slice']].map(([content, activeForm], i) => ({
           content,
@@ -662,4 +669,29 @@ export class DemoTriager implements Triager {
     }
     return { action: 'send-back', note: `Don't patch the symptom in ${file}: default the list to [] where it's loaded, and add the test QA asked for.` };
   }
+}
+
+const escapeHtml = (text: string) => text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
+/** Demo mode: the diagram a lead puts on the screen while proposing the first slice, a box per repo. */
+function demoFlowPage(goal: string, folders: string[]): string {
+  const boxes = ['shopper', ...folders, 'database'];
+  const step = 1180 / boxes.length;
+  const boxW = step - 70;
+  const svg = boxes.map((b, i) => {
+    const x = 50 + i * step;
+    const arrow = i < boxes.length - 1 ? `<path d="M${x + boxW + 10} 260 H${x + step - 14}" stroke="#ffcc66" stroke-width="6" marker-end="url(#a)"/>` : '';
+    const fill = i === 0 || i === boxes.length - 1 ? '#3a4a6b' : '#cc6699';
+    return `<rect x="${x}" y="190" width="${boxW}" height="140" rx="24" fill="${fill}"/><text x="${x + boxW / 2}" y="270" fill="#fff" font-size="24" text-anchor="middle">${escapeHtml(b)}</text>${arrow}`;
+  }).join('');
+  return `<!doctype html><html><body style="margin:0;background:#0b1020;font-family:system-ui;color:#eee"><div style="padding:50px 60px 0"><h1 style="font-size:48px;margin:0">The data flow</h1><p style="font-size:26px;color:#99ccff;margin:10px 0 0">${escapeHtml(goal)}</p></div>
+<svg viewBox="0 0 1280 500" style="width:100%"><defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0L10 5L0 10z" fill="#ffcc66"/></marker></defs>${svg}</svg></body></html>`;
+}
+
+/** Demo mode: the mockup a lead puts on the screen as the slice starts. */
+function demoMockupPage(goal: string): string {
+  const card = (name: string, price: string, saved: boolean) =>
+    `<div style="background:#fff;border-radius:16px;padding:24px;width:300px;box-shadow:0 4px 16px #0002"><div style="height:160px;background:#ffd8c2;border-radius:10px"></div><h3 style="font-size:26px">${name}</h3><p style="font-size:22px;color:#555">${price}</p><button style="font-size:22px;padding:10px 18px;border-radius:999px;border:2px solid #ff8a5b;background:${saved ? '#ff8a5b' : '#fff'};color:${saved ? '#fff' : '#ff8a5b'}">${saved ? '♥ Saved' : '♡ Save for later'}</button></div>`;
+  return `<!doctype html><html><body style="margin:0;background:#fff4ec;font-family:system-ui;color:#222;padding:40px 60px"><h1 style="font-size:40px;margin:0 0 30px">${escapeHtml(goal)}</h1>
+<div style="display:flex;gap:30px">${card('Stripy socks', '£6', true)}${card('Wool hikers', '£12', false)}${card('Ankle trio', '£9', false)}</div></body></html>`;
 }

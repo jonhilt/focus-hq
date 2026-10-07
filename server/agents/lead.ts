@@ -1,4 +1,4 @@
-import type { Agent, Effort, GoalNote, GoalRecord, Helper, LeadPr, LeadWork, QaReport, QaReview, QueuedGoal, Settings } from '../../shared/types';
+import type { Agent, Effort, GoalArtifact, GoalNote, GoalRecord, Helper, LeadPr, LeadWork, QaReport, QaReview, QueuedGoal, Settings } from '../../shared/types';
 import { TEAM_STATIONS } from '../../shared/types';
 import type { HelperEvent } from './types';
 import { slugify } from '../util';
@@ -128,6 +128,7 @@ How to work:
 - A slice is a reasonably sized change that ships on its own and gets something real working: often a thin slice end to end, through every repo it needs. A slice can also be a refactor, once the code has learned something. Keep each pull request reviewable.
 - Before changing a repo, read its CLAUDE.md or README. Run its tests, type checks and linters, and check UI changes in the browser with the mcp__browser__ tools.
 - Commit in each repo as you go. Never push and never open pull requests yourself.
+- To show the captain something visual (a diagram, a mockup, options side by side), put it on your station's screen with mcp__office__show. They switch between what you've shown and open each one up close.
 - When a slice is ready, call mcp__office__ship with a title and a summary. The office pushes every repo with new commits and opens (or updates) a pull request in each, and QA reviews them. Then tell the captain what's in the slice, what it taught you, and what you'd do next, and stop there: they review it and decide.
 - Shipping again before the pull requests merge updates them: that's how you fix what QA or the captain finds.
 - You'll hear QA's verdict on each pull request, and when the slice's pull requests have all merged or closed. After that your repos move to fresh code on a new branch for the next slice, and the office brings along any commits you hadn't shipped.
@@ -207,6 +208,32 @@ export function applyNote(work: Pick<LeadWork, 'title' | 'note'>, input: NoteInp
   };
   const error = checkNote(title, note);
   return error ? { error } : { title, note };
+}
+
+export const ARTIFACT_LIMITS = { id: 40, title: 80, count: 12, bytes: 2_000_000 } as const;
+
+export interface ArtifactInput {
+  id: string;
+  title: string;
+  html: string;
+}
+
+/**
+ * The goal's artifacts once the lead shows one: a new id joins the end, a known one is replaced where it stands. Or why
+ * it was refused (nothing changes then).
+ */
+export function showArtifact(artifacts: readonly GoalArtifact[], input: ArtifactInput, at: number): GoalArtifact[] | { error: string } {
+  const L = ARTIFACT_LIMITS;
+  const title = input.title.replace(/\s+/g, ' ').trim();
+  if (!new RegExp(`^[a-z0-9][a-z0-9-]{0,${L.id - 1}}$`).test(input.id)) return { error: `The id must be lowercase letters, digits and dashes, at most ${L.id} characters (like "data-flow")` };
+  if (!title) return { error: 'Give it a title' };
+  if (title.length > L.title) return { error: `The title is ${title.length} characters (at most ${L.title})` };
+  if (!input.html.trim()) return { error: 'The page is empty' };
+  if (Buffer.byteLength(input.html) > L.bytes) return { error: `The page is over ${L.bytes / 1_000_000} MB: keep it self-contained but small` };
+  const shown = { id: input.id, title, at };
+  if (artifacts.some((a) => a.id === input.id)) return artifacts.map((a) => (a.id === input.id ? shown : a));
+  if (artifacts.length >= L.count) return { error: `The screen already has ${L.count} artifacts: show a new version under an existing id instead` };
+  return [...artifacts, shown];
 }
 
 /**

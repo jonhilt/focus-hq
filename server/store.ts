@@ -63,6 +63,8 @@ export class Store {
   ledger: LedgerEvent[] = [];
   /** QA screenshots by file name, when not persisting (demo). */
   private shots = new Map<string, Buffer>();
+  /** Artifacts' pages and pictures when nothing's saved to disk, by `<lead id>/<file>`. */
+  private artifacts = new Map<string, Buffer>();
   private saveTimer: NodeJS.Timeout | null = null;
 
   constructor(private readonly persist: boolean) {}
@@ -250,6 +252,34 @@ export class Store {
       this.shots.delete(file);
       if (this.persist) fs.rm(path.join(paths.qaShots, file), { force: true }, () => undefined);
     }
+  }
+
+  // ---- goals' artifacts ----
+
+  saveArtifact(leadId: string, file: string, bytes: Buffer): void {
+    if (!this.persist) {
+      this.artifacts.set(`${leadId}/${file}`, bytes);
+      return;
+    }
+    fs.mkdirSync(path.join(paths.artifacts, leadId), { recursive: true });
+    fs.writeFileSync(path.join(paths.artifacts, leadId, file), bytes);
+  }
+
+  /** Callers check `leadId` and `file` are plain names: they become a path. */
+  async readArtifact(leadId: string, file: string): Promise<Buffer | undefined> {
+    if (!this.persist) return this.artifacts.get(`${leadId}/${file}`);
+    return fsp.readFile(path.join(paths.artifacts, leadId, file)).catch(() => undefined);
+  }
+
+  deleteArtifact(leadId: string, file: string): void {
+    this.artifacts.delete(`${leadId}/${file}`);
+    if (this.persist) fs.rm(path.join(paths.artifacts, leadId, file), { force: true }, () => undefined);
+  }
+
+  /** Everything a goal's lead showed: the goal's closed. */
+  dropArtifacts(leadId: string): void {
+    for (const key of this.artifacts.keys()) if (key.startsWith(`${leadId}/`)) this.artifacts.delete(key);
+    if (this.persist) fs.rm(path.join(paths.artifacts, leadId), { recursive: true, force: true }, () => undefined);
   }
 
   // ---- agents ----

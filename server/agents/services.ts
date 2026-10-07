@@ -88,6 +88,26 @@ export class Sessions extends Context.Service<Sessions, {
   }
 }
 
+/** The office couldn't take a picture of an HTML page. */
+export class RenderFailed extends Data.TaggedError('RenderFailed')<{ reason: string }> {
+  override get message() {
+    return this.reason;
+  }
+}
+
+/** Pictures of the HTML pages a goal's lead puts on their station's screen, for the screen to show. */
+export class Renderer extends Context.Service<Renderer, {
+  /** A JPEG of the page as a browser shows it. */
+  render(html: string): Effect.Effect<Buffer, RenderFailed>;
+}>()('focus/agents/Renderer') {
+  /** Renders in the agents' shared headless Chromium (`BrowserPool.render`). */
+  static fromBrowser(browser: { render(html: string): Promise<Buffer> }): Layer.Layer<Renderer> {
+    return Layer.succeed(Renderer, Renderer.of({
+      render: (html) => Effect.tryPromise({ try: () => browser.render(html), catch: (err) => new RenderFailed({ reason: errorMessage(err) }) }),
+    }));
+  }
+}
+
 /** The room's operations officer looking at a stuck pull request. */
 export class Triage extends Context.Service<Triage, {
   /** Interrupting it stops the officer's session. */

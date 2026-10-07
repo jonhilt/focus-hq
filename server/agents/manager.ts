@@ -11,7 +11,7 @@ import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
 import { afterCloudRun, carryOnInNewSession, fallBackToLocal } from './cloud';
-import { afterLanding, afterVerdict, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, behindNote, closeCheck, conflictsResolvedNote, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded } from './lead';
+import { afterLanding, afterVerdict, type ArtifactInput, showArtifact, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, behindNote, closeCheck, conflictsResolvedNote, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded } from './lead';
 import { repoFolders } from './planner';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
 import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
@@ -19,13 +19,13 @@ import type { QaLoopEvent } from './qaLoop';
 import { qaNextStep } from './qaLoop';
 import { offTheFloor, pickDesk } from './desks';
 import { deskless, whoStarts } from './schedule';
-import { type GitFailed, Sessions, Triage, Workspace } from './services';
+import { type GitFailed, Renderer, Sessions, Triage, Workspace } from './services';
 import { applyTaskTool } from './tasks';
 import { type AgentSession, type BaseMerge, type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN } from './types';
 import { triageWorkspaceId } from './worktrees';
 
 /** What the manager's work needs: GitHub, the agents' checkouts, Claude Code sessions and the operations officer. */
-export type ManagerServices = GitHub | Workspace | Sessions | Triage;
+export type ManagerServices = GitHub | Workspace | Sessions | Triage | Renderer;
 
 /** The repository has no commits yet, so there's no branch to work from. */
 export class EmptyRepository extends Data.TaggedError('EmptyRepository')<{ repo: string }> {
@@ -498,7 +498,7 @@ export class AgentManager {
       outputSchema: agent.task === 'review' ? QA_SCHEMA : undefined,
       cloud: agent.cloud ? { branch: agent.branch } : undefined,
       tools: agent.task === 'lead'
-        ? { ship: (input) => tool(this.shipLead(agent, input)), note: (input) => tool(this.noteGoal(agent, input)), proposeClose: (input) => tool(this.proposeClose(agent, input.reason)) }
+        ? { ship: (input) => tool(this.shipLead(agent, input)), note: (input) => tool(this.noteGoal(agent, input)), show: (input) => tool(this.showArtifact(agent, input)), proposeClose: (input) => tool(this.proposeClose(agent, input.reason)) }
         : undefined,
     };
   }
@@ -833,6 +833,33 @@ export class AgentManager {
     });
   }
 
+  /**
+   * The lead's show tool: the page goes on the goal, with a picture of it for the station's screen. A page the office
+   * can't take a picture of still goes up: the captain can open it, though the screen only shows its title.
+   */
+  private showArtifact(agent: Agent, input: ArtifactInput): Effect.Effect<string, Refused, Renderer> {
+    return Effect.gen({ self: this }, function* () {
+      if (!agent.lead) return yield* new Refused({ message: 'There’s no goal to show it on' });
+      const checked = showArtifact(agent.lead.artifacts ?? [], input, Date.now());
+      if ('error' in checked) return yield* new Refused({ message: checked.error });
+      this.store.saveArtifact(agent.id, `${input.id}.html`, Buffer.from(input.html));
+      const picture = yield* (yield* Renderer).render(input.html).pipe(
+        Effect.map((bytes) => ({ bytes })),
+        Effect.catch((err) => Effect.succeed({ failed: err.message })),
+      );
+      if ('bytes' in picture) this.store.saveArtifact(agent.id, `${input.id}.jpg`, picture.bytes);
+      else this.store.deleteArtifact(agent.id, `${input.id}.jpg`);
+      // taking the picture takes a moment: the goal may have closed, or the lead shown something else, meanwhile
+      const work = agent.lead;
+      if (!work) return 'The goal closed before it went up.';
+      const next = showArtifact(work.artifacts ?? [], input, Date.now());
+      if ('error' in next) return yield* new Refused({ message: next.error });
+      this.update(agent, { lead: { ...work, artifacts: next.map((a) => (a.id === input.id && 'bytes' in picture ? { ...a, image: true } : a)) } });
+      const where = `“${next.find((a) => a.id === input.id)!.title}” is on your station's screen; the captain can open it up close.`;
+      return 'bytes' in picture ? where : `${where} The office couldn't take a picture of it for the screen (${picture.failed}), so the screen shows only its title.`;
+    });
+  }
+
   /** The lead's propose_close tool: the captain hears the goal looks done, and closes it or carries on. */
   private proposeClose(agent: Agent, reason: string): Effect.Effect<string, Refused> {
     return Effect.gen({ self: this }, function* () {
@@ -864,6 +891,7 @@ export class AgentManager {
       this.record(project.id, { kind: 'goal-closed', goal: record });
       this.projectsChanged();
       yield* this.goHome(id);
+      this.store.dropArtifacts(id);
       // the goal's reviewer goes home with its lead; a review they were on, or still waiting, goes to the room's QA officer
       const reviewer = goalReviewerId(id);
       for (const r of this.store.reviews.values()) {

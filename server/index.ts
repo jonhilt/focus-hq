@@ -8,7 +8,7 @@ import { ClaudeDrafter, ClaudeNumberOne, ClaudeTriager } from './agents/claudeCr
 import { ClaudeRunner } from './agents/claudeRunner';
 import { DemoDrafter, DemoNumberOne, DemoRunner, DemoTriager, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
-import { Sessions, Triage, Workspace } from './agents/services';
+import { Renderer, Sessions, Triage, Workspace } from './agents/services';
 import { closedGoalPrs, lookUpPrStates, NumberOne, type ShipStatus, summariseShip } from './agents/numberOne';
 import { IssuePlanner } from './agents/planner';
 import type { WorkspaceOps } from './agents/types';
@@ -67,7 +67,7 @@ async function main() {
     return summariseShip(snapshot, (id) => workspace.dir(id), prStates);
   });
   const office = new Office(store, hub, github, previews, planner, numberOne, new Voice(hub, config.demo), await currentVersion());
-  const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()));
+  const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
 
   if (config.demo && store.projects.length === 0) {

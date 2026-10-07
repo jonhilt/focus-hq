@@ -12,13 +12,13 @@ async function answer(run: () => Promise<string>, failed: string): Promise<{ con
   }
 }
 
-/** The office's tools for a goal's lead, as an in-process MCP server: mcp__office__ship, note and propose_close. */
+/** The office's tools for a goal's lead, as an in-process MCP server: mcp__office__ship, note, show and propose_close. */
 export function officeMcpServer(tools: OfficeTools): McpSdkServerConfigWithInstance {
   return createSdkMcpServer({
     name: 'office',
     version: '1.0.0',
     alwaysLoad: true,
-    instructions: 'The Focus office: it pushes your work and opens pull requests for you, keeps your goal\'s note, and tells the captain when you think the goal is done. Never push or open pull requests yourself.',
+    instructions: 'The Focus office: it pushes your work and opens pull requests for you, keeps your goal\'s note, puts what you show on your station\'s screen, and tells the captain when you think the goal is done. Never push or open pull requests yourself.',
     tools: [
       tool(
         'ship',
@@ -41,6 +41,16 @@ export function officeMcpServer(tools: OfficeTools): McpSdkServerConfigWithInsta
           next: z.array(z.string()).optional().describe('Up to 3 candidate next slices, replacing the last ones.'),
         },
         (input) => answer(() => tools.note(input), "Couldn't update the note"),
+      ),
+      tool(
+        'show',
+        "Put a visual on your station's big screen for the captain: a diagram, a mockup, options side by side. They see a picture of it on the screen, switch between what you've shown, and open each one up close, live. Showing an id again replaces it.",
+        {
+          id: z.string().describe('A short name for it, lowercase with dashes (like "data-flow"): show the same id again to update it.'),
+          title: z.string().describe('What it is, in a few words (at most 80 characters).'),
+          html: z.string().describe('A self-contained HTML page: inline CSS and SVG, or a script from a CDN (mermaid, say). The screen shows it at 1280 × 800, so make it read well at that size.'),
+        },
+        (input) => answer(() => tools.show(input), "Couldn't show it"),
       ),
       tool(
         'propose_close',

@@ -1,6 +1,7 @@
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import type { Browser, BrowserContext, LaunchOptions, Page } from 'playwright';
 import { z } from 'zod';
+import { ARTIFACT_SIZE } from '../../shared/artifacts';
 import type { BrowserFrame } from '../../shared/types';
 import { errorMessage, truncate } from '../util';
 import type { RunHooks } from './types';
@@ -39,18 +40,22 @@ export class BrowserPool {
     );
   }
 
+  /** The shared Chromium, launched the first time anyone needs it (and again after a launch that failed). */
+  private async shared(): Promise<Browser> {
+    this.browser ??= this.launch();
+    try {
+      return await this.browser;
+    } catch (err) {
+      this.browser = null;
+      throw err;
+    }
+  }
+
   tab(agentId: string): Promise<Tab> {
     let tab = this.tabs.get(agentId);
     if (!tab) {
       tab = (async () => {
-        this.browser ??= this.launch();
-        let browser: Browser;
-        try {
-          browser = await this.browser;
-        } catch (err) {
-          this.browser = null;
-          throw err;
-        }
+        const browser = await this.shared();
         const context = await browser.newContext({ viewport: { width: 1100, height: 700 } });
         const page = await context.newPage();
         const t: Tab = { context, page, console: [] };
@@ -65,6 +70,24 @@ export class BrowserPool {
       this.tabs.set(agentId, tab);
     }
     return tab;
+  }
+
+  /**
+   * A picture of a self-contained HTML page, as a JPEG `width` × `height`: in a context of its own, so the page sees no
+   * agent's cookies. Waits for what it loads from the network (a diagram library from a CDN, say), within reason.
+   */
+  async render(html: string, width = ARTIFACT_SIZE.w, height = ARTIFACT_SIZE.h): Promise<Buffer> {
+    const browser = await this.shared();
+    const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
+    try {
+      const page = await context.newPage();
+      await page.setContent(html, { waitUntil: 'networkidle', timeout: 15_000 }).catch(() => undefined);
+      // scripts that draw after loading (mermaid, charts) get a moment to finish
+      await page.waitForTimeout(400);
+      return await page.screenshot({ type: 'jpeg', quality: 85 });
+    } finally {
+      await context.close().catch(() => undefined);
+    }
   }
 
   async close(agentId: string): Promise<void> {

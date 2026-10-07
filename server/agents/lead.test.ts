@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadWork } from '../../shared/types';
-import { afterLanding, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
+import { afterLanding, ARTIFACT_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -397,5 +397,29 @@ describe('a lead’s first message in a new conversation', () => {
     expect(freshSessionPrompt(goal, 'focus/saved-1-ab', [], true)).toBe(
       "You're carrying on with this goal in a new conversation: the one before couldn't be picked back up.\n\nLook over the repos, then tell the captain where you think the goal stands and what you'd do next.",
     );
+  });
+});
+
+describe('showArtifact', () => {
+  const page = '<h1>Data flow</h1>';
+
+  it('adds a new id at the end and replaces a known one where it stands', () => {
+    const one = showArtifact([], { id: 'data-flow', title: ' Data  flow ', html: page }, 1);
+    expect(one).toEqual([{ id: 'data-flow', title: 'Data flow', at: 1 }]);
+    const two = showArtifact(one as never, { id: 'mockup', title: 'Mockup', html: page }, 2);
+    const again = showArtifact(two as never, { id: 'data-flow', title: 'Data flow v2', html: page }, 3);
+    expect(again).toEqual([{ id: 'data-flow', title: 'Data flow v2', at: 3 }, { id: 'mockup', title: 'Mockup', at: 2 }]);
+  });
+
+  it('refuses ids that would not make a safe file name, empty pages and untitled ones', () => {
+    for (const id of ['', 'Data', '../x', '-x', 'a'.repeat(ARTIFACT_LIMITS.id + 1)]) expect(showArtifact([], { id, title: 'T', html: page }, 1)).toHaveProperty('error');
+    expect(showArtifact([], { id: 'x', title: ' ', html: page }, 1)).toHaveProperty('error');
+    expect(showArtifact([], { id: 'x', title: 'T', html: '  ' }, 1)).toHaveProperty('error');
+  });
+
+  it('keeps the screen to a handful, though a known id can always be replaced', () => {
+    const full = Array.from({ length: ARTIFACT_LIMITS.count }, (_, i) => ({ id: `a${i}`, title: 'T', at: i }));
+    expect(showArtifact(full, { id: 'one-more', title: 'T', html: page }, 99)).toHaveProperty('error');
+    expect(showArtifact(full, { id: 'a3', title: 'T', html: page }, 99)).toHaveLength(ARTIFACT_LIMITS.count);
   });
 });

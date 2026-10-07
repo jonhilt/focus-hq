@@ -6,7 +6,7 @@ import { Hub } from '../hub';
 import { Store } from '../store';
 import { demoWorkspace } from './demoRunner';
 import { AgentManager } from './manager';
-import { Sessions, Triage, Workspace } from './services';
+import { Renderer, Sessions, Triage, Workspace } from './services';
 import type { PullRequest } from '../../shared/types';
 import type { AgentRunner, AgentSession, RunHooks, RunOutcome, RunRequest, WorkspaceOps } from './types';
 
@@ -41,6 +41,7 @@ function office(workspace: WorkspaceOps = demoWorkspace) {
     Workspace.fromOps(workspace),
     Sessions.fromRunner(claude),
     Triage.fromTriager({ triage: () => Promise.reject(new Error('no officer here')) }),
+    Renderer.fromBrowser({ render: (html) => (html.includes('unrenderable') ? Promise.reject(new Error('no browser')) : Promise.resolve(Buffer.from('jpeg'))) }),
   );
   return { store, project, claude, agents: new AgentManager(store, new Hub(), services, () => undefined) };
 }
@@ -84,6 +85,26 @@ describe('AgentManager', () => {
     await agents.dismiss(lead.id);
     expect(claude.turns[0].stopped).toBe(true);
     expect(store.agents.has(lead.id)).toBe(false);
+  });
+
+  it('puts what the lead shows on their goal, with a picture when it can take one, until the goal closes', async () => {
+    const { agents, claude, store, project } = office();
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    const show = (input: { id: string; title: string; html: string }) => claude.turns[0].req.tools!.show(input);
+    expect(await show({ id: 'data-flow', title: 'Data flow', html: '<h1>Flow</h1>' })).toMatch(/“Data flow” is on your station's screen/);
+    expect(await show({ id: 'mockup', title: 'Mockup', html: '<p>unrenderable</p>' })).toMatch(/couldn't take a picture of it for the screen \(no browser\)/);
+    await expect(show({ id: '../etc', title: 'Nope', html: '<p>x</p>' })).rejects.toThrow(/lowercase letters/);
+    expect(store.agent(lead.id).lead!.artifacts).toEqual([
+      { id: 'data-flow', title: 'Data flow', at: expect.any(Number), image: true },
+      { id: 'mockup', title: 'Mockup', at: expect.any(Number) },
+    ]);
+    expect((await store.readArtifact(lead.id, 'data-flow.html'))?.toString()).toBe('<h1>Flow</h1>');
+    expect(await store.readArtifact(lead.id, 'data-flow.jpg')).toBeDefined();
+    expect(await store.readArtifact(lead.id, 'mockup.jpg')).toBeUndefined();
+
+    await agents.closeGoal(lead.id, true);
+    expect(await store.readArtifact(lead.id, 'data-flow.html')).toBeUndefined();
   });
 
   it('merges the base into a slice’s conflicting PR itself, and tells the lead to pull once their turn is over', async () => {

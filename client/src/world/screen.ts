@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import type { Agent, BrowserFrame, ClaudeTask, GoalNote, TermLine } from '../../../shared/types';
+import type { Agent, BrowserFrame, ClaudeTask, GoalArtifact, GoalNote, TermLine } from '../../../shared/types';
+import { artifactUrl, latestArtifact } from '../../../shared/artifacts';
 import { showsBrowser } from '../../../shared/browserView';
 import { plainTermLine } from '../../../shared/termText';
 import { canvasTexture, fitText, makeCanvas, MONO_FONT, roundRect, UI_FONT } from './canvas';
@@ -44,6 +45,8 @@ export class StationScreen {
   private lastDraw = 0;
   private image: HTMLImageElement | null = null;
   private imageSrc = '';
+  private artifactImage: HTMLImageElement | null = null;
+  private artifactSrc = '';
 
   /** `idle` is what the screen says while nobody's using it. */
   constructor(
@@ -131,10 +134,12 @@ export class StationScreen {
     const tasks = prefs.tasks ? (agent.tasks ?? []) : [];
     const note = prefs.note && agent.task === 'lead' ? agent.lead?.note : undefined;
     const hasNote = !!note && (!!note.done || note.slice.length > 0);
-    const panes = screenPanes(Math.round(W), { browser: prefs.browser && showsBrowser(frame), progress: tasks.length > 0 || hasNote });
+    const artifact = prefs.artifacts && agent.task === 'lead' ? latestArtifact(agent.lead?.artifacts) : undefined;
+    const panes = screenPanes(Math.round(W), { browser: prefs.browser && showsBrowser(frame), artifact: !!artifact, progress: tasks.length > 0 || hasNote });
     for (const { pane, x, w } of panes) {
       if (pane === 'terminal') this.drawTerminal(lines, x, 36, w, H - 36 - footerH);
       else if (pane === 'browser' && frame) this.drawBrowser(frame, x, 36, w, H - 36 - footerH);
+      else if (pane === 'artifact' && artifact) this.drawArtifact(agent, artifact, x, 36, w, H - 36 - footerH);
       else if (pane === 'progress') this.drawProgress(agent, tasks, hasNote ? note : undefined, x, 36, w, H - 36 - footerH);
     }
 
@@ -275,6 +280,57 @@ export class StationScreen {
       }
     } else if (frame.mock) {
       drawMockPage(ctx, frame.mock, x, vy, w, vh);
+    }
+  }
+
+  /**
+   * The artifact the lead showed last: its picture, under an LCARS bar with its title and how many there are (the
+   * captain opens them up close, and switches between them, with E on the screen).
+   */
+  private drawArtifact(agent: Agent, artifact: GoalArtifact, x: number, y: number, w: number, h: number): void {
+    const ctx = this.c.ctx;
+    const count = agent.lead?.artifacts?.length ?? 1;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = LCARS.orange;
+    ctx.beginPath();
+    ctx.roundRect(x + 6, y + 6, 22, 26, [13, 0, 0, 13]);
+    ctx.roundRect(x + w - 28, y + 6, 22, 26, [0, 13, 13, 0]);
+    ctx.fill();
+    ctx.font = `600 18px ${LCARS_FONT}`;
+    ctx.textBaseline = 'middle';
+    const tally = count > 1 ? `${count} SHOWN · E TO SWITCH` : 'E FOR A CLOSER LOOK';
+    ctx.textAlign = 'right';
+    ctx.fillStyle = LCARS.sky;
+    ctx.fillText(tally, x + w - 36, y + 19);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = LCARS.peach;
+    ctx.fillText(fitText(ctx, artifact.title.toUpperCase(), w - 80 - ctx.measureText(tally).width), x + 36, y + 19);
+    const vy = y + 38;
+    const vh = h - 38;
+    if (!artifact.image) {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = LCARS.sky;
+      ctx.font = `500 22px ${LCARS_FONT}`;
+      ctx.fillText('NO PICTURE OF THIS ONE: PRESS E TO OPEN IT', x + w / 2, vy + vh / 2);
+      return;
+    }
+    const src = artifactUrl(agent.id, artifact, 'jpg');
+    if (this.artifactSrc !== src) {
+      this.artifactSrc = src;
+      const img = new Image();
+      img.onload = () => {
+        if (this.artifactSrc !== src) return;
+        this.artifactImage = img;
+        this.dirty = true;
+      };
+      img.src = src;
+    }
+    if (this.artifactImage) {
+      const scale = Math.min(w / this.artifactImage.width, vh / this.artifactImage.height);
+      const iw = this.artifactImage.width * scale;
+      const ih = this.artifactImage.height * scale;
+      ctx.drawImage(this.artifactImage, x + (w - iw) / 2, vy + (vh - ih) / 2, iw, ih);
     }
   }
 

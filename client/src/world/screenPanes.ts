@@ -1,11 +1,12 @@
 // What a station's screen shows side by side, and which of it each viewer wants. Pure (no Three.js, no DOM) apart
 // from the preferences' localStorage, so the layout is testable outside the browser.
 
-export type Pane = 'terminal' | 'browser' | 'progress';
+export type Pane = 'terminal' | 'browser' | 'artifact' | 'progress';
 
-/** What a viewer has switched on: the agent's browser, Claude's own task list, and a lead's goal note. */
+/** What a viewer has switched on: the agent's browser, a lead's artifacts, Claude's own task list, and a lead's goal note. */
 export interface PanePrefs {
   browser: boolean;
+  artifacts: boolean;
   tasks: boolean;
   note: boolean;
 }
@@ -14,16 +15,19 @@ export interface PanePrefs {
 export const WIDE_SCREEN = 1000;
 
 /**
- * The panes a screen `width` pixels wide shows, left to right: the terminal always, the browser while there's a page
- * to show, and the progress pane (the agent's task list, a lead's goal note) while there's any. A small screen fits
- * two: the browser wins while it's showing.
+ * The panes a screen `width` pixels wide shows, left to right: the terminal always, then what the agent has to show
+ * (a lead's artifact, which they put up for the captain on purpose, wins over the page their browser has up), and the
+ * progress pane (the agent's task list, a lead's goal note) while there's any. A small screen fits two: what there is
+ * to show wins. An artifact gets the most room.
  */
-export function screenPanes(width: number, has: { browser: boolean; progress: boolean }): { pane: Pane; x: number; w: number }[] {
-  const progress = has.progress && (!has.browser || width >= WIDE_SCREEN);
-  const shares: [Pane, number][] = has.browser && progress
-    ? [['terminal', 0.4], ['browser', 0.35], ['progress', 0.25]]
-    : has.browser
-      ? [['terminal', 0.5], ['browser', 0.5]]
+export function screenPanes(width: number, has: { browser: boolean; artifact?: boolean; progress: boolean }): { pane: Pane; x: number; w: number }[] {
+  const shown: Pane | undefined = has.artifact ? 'artifact' : has.browser ? 'browser' : undefined;
+  const progress = has.progress && (!shown || width >= WIDE_SCREEN);
+  const big = shown === 'artifact';
+  const shares: [Pane, number][] = shown && progress
+    ? [['terminal', big ? 0.3 : 0.4], [shown, big ? 0.45 : 0.35], ['progress', 0.25]]
+    : shown
+      ? [['terminal', big ? 0.4 : 0.5], [shown, big ? 0.6 : 0.5]]
       : progress
         ? [['terminal', 0.66], ['progress', 0.34]]
         : [['terminal', 1]];
@@ -37,7 +41,7 @@ export function screenPanes(width: number, has: { browser: boolean; progress: bo
 }
 
 const KEY = 'focus.screenPanes';
-const DEFAULTS: PanePrefs = { browser: true, tasks: true, note: true };
+const DEFAULTS: PanePrefs = { browser: true, artifacts: true, tasks: true, note: true };
 
 function load(): PanePrefs {
   try {

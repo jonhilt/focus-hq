@@ -32,8 +32,8 @@ export interface Ui {
   openNumberOne(): void;
   openManager(tab?: ManagerTab): void;
   openTeleport(): void;
-  /** Switches for what station screens show beside the terminal. */
-  openScreen(): void;
+  /** A team station's screen up close: what lead `leadId` has shown, and switches for what station screens show. */
+  openScreen(leadId?: string): void;
   /** The turbolift's controls, for whichever stop you're at. */
   openTurbolift(): void;
   /** Takes the turbolift to `stop`. */

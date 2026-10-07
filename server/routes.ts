@@ -44,6 +44,18 @@ export function apiRouter(office: Office, store: Store): express.Router {
     if (!bytes) return void res.sendStatus(404);
     res.type(file.split('.').pop()!).set('Cache-Control', 'max-age=31536000, immutable').send(bytes);
   });
+  // what a goal's lead put on their station's screen: the page itself runs sandboxed in an origin of its own, so its
+  // scripts can't reach the office; the picture's URL changes with each new version (?v=), so it can be kept
+  r.get('/artifacts/:lead/:file', async (req, res) => {
+    const lead = param(req, 'lead');
+    const file = param(req, 'file');
+    const ok = /^lead_\w+$/.test(lead) && /^[a-z0-9][a-z0-9-]*\.(html|jpg)$/.test(file);
+    const bytes = ok ? await store.readArtifact(lead, file) : undefined;
+    if (!bytes) return void res.sendStatus(404);
+    if (file.endsWith('.html')) res.type('html').set({ 'Content-Security-Policy': 'sandbox allow-scripts allow-popups', 'Cache-Control': 'no-cache' });
+    else res.type('jpg').set('Cache-Control', 'max-age=31536000, immutable');
+    res.send(bytes);
+  });
   r.post('/github/check', h(() => office.checkGitHub()));
   r.get('/github/repos', h(() => office.listRepos()));
   r.patch('/settings', h((req) => office.updateSettings(req.body ?? {})));

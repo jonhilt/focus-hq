@@ -116,7 +116,7 @@ async function main() {
     openGoals: (projectId, station) => openGoalsPanel(ui, projectId, station),
     openManager: (tab) => openManagerPanel(ui, tab),
     openTeleport: () => openTeleportPanel(ui),
-    openScreen: () => openScreenPanel(ui),
+    openScreen: (leadId) => openScreenPanel(ui, leadId),
     openTurbolift: () => {
       const stops = world.stops();
       openTurboliftPanel(ui, stops, stopAt(stops, camera.position));
@@ -360,7 +360,7 @@ async function main() {
         ui.openTurbolift();
         break;
       case 'screen':
-        ui.openScreen();
+        ui.openScreen(i.id);
         break;
       case 'vacant':
         ui.openManager('new-project');

@@ -16,8 +16,8 @@ export type Interaction =
   | { kind: 'qa'; projectId: string }
   /** A free team station: start a goal there. */
   | { kind: 'station'; projectId: string; station: number }
-  /** A team station's big screen, in use: choose what it shows. */
-  | { kind: 'screen' }
+  /** A team station's big screen, in use by lead `id`: look at what they've shown, and choose what it shows. */
+  | { kind: 'screen'; id: string }
   | { kind: 'vacant' };
 
 /** How far away (m) the player can use something with E, unless it says otherwise. */

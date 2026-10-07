@@ -266,6 +266,11 @@ button.screen-pane { cursor: pointer; }
 button.screen-pane:hover { border-color: var(--tone); }
 button.screen-pane:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 .screen-pane.fixed { --tone: var(--lcars-green); }
+/* a lead's artifact up close: its title, then the page itself, live */
+.artifact-head { margin-bottom: 8px; }
+.artifact-head h3 { margin: 0; }
+.artifact-stage { position: relative; height: calc(100vh - 210px); overflow: hidden; }
+.artifact-stage iframe { position: absolute; top: 0; left: 0; border: 0; border-radius: 10px; background: #fff; transform-origin: 0 0; }
 .chip {
   --tone: var(--lcars-peach);
   display: inline-flex; align-items: center; gap: 6px; padding: 1px 12px; border-radius: 999px; font-weight: 600;

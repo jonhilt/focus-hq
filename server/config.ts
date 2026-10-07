@@ -39,6 +39,8 @@ export const paths = {
   previews: path.join(config.dataDir, 'previews'),
   /** The screenshots that go with QA reports, for the QA station. */
   qaShots: path.join(config.dataDir, 'qa-shots'),
+  /** What each goal's lead has put on their station's screen, a folder per lead, until the goal closes. */
+  artifacts: path.join(config.dataDir, 'artifacts'),
   /** Read-only checkouts of each project's repos at their default branch, for the planner. */
   planning: path.join(config.dataDir, 'planning'),
   /** Speech models: whisper for dictation, Kokoro for the crew's voices. */
