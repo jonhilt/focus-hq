@@ -128,14 +128,16 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
           ui.hud.toast('success', `Merged #${pr.number}`);
         }, ui.error);
       };
-      const resolve = pr.mergeable === 'CONFLICTING' ? h('button', { class: 'btn small primary', title: pr.agent?.task === 'lead' ? `Hand the merge conflicts to ${pr.agent.name}, the goal's lead` : 'Hand the merge conflicts to an agent' }, 'Resolve conflicts') : null;
+      const resolve = pr.mergeable === 'CONFLICTING' ? h('button', { class: 'btn small primary', title: `Merge ${pr.baseBranch} in, or hand the conflicts to an agent when git can't` }, 'Resolve conflicts') : null;
       if (resolve) {
         // the PR's developer is already at it (or queued for it); a second click would only repeat the request
         resolve.disabled = resolvingAlready(pr.agent);
         resolve.onclick = () =>
           void busy(resolve, async () => {
-            const agent = await api.resolveConflicts(projectId, pr.repo, pr.number);
-            ui.hud.toast('success', `${agent.name} is resolving the conflicts on PR #${pr.number}`, { label: 'Watch', run: () => ui.goToAgent(agent.id) });
+            const outcome = await api.resolveConflicts(projectId, pr.repo, pr.number);
+            if (outcome.kind === 'merged') ui.hud.toast('success', `Merged ${pr.baseBranch} into PR #${pr.number}: git resolved it without help`);
+            else if (outcome.kind === 'up-to-date') ui.hud.toast('info', `PR #${pr.number} already has everything from ${pr.baseBranch}: GitHub hasn't caught up yet`);
+            else ui.hud.toast('success', `${outcome.agent.name} is resolving the conflicts on PR #${pr.number}`, { label: 'Watch', run: () => ui.goToAgent(outcome.agent.id) });
           }, ui.error);
       }
       const checks = { passing: 'checks pass', failing: 'checks failing', pending: 'checks running', none: 'no checks' }[pr.checks];

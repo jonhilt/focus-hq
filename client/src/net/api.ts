@@ -1,4 +1,4 @@
-import type { Agent, Board, Effort, Issue, IssueDraft, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, RoomTheme, Settings, TermLine, VoiceStatus } from '../../../shared/types';
+import type { Agent, Board, ConflictsOutcome, Effort, Issue, IssueDraft, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, RoomTheme, Settings, TermLine, VoiceStatus } from '../../../shared/types';
 import type { KokoroVoice } from '../../../shared/voice';
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -46,7 +46,7 @@ export const api = {
   numberOneNew: () => call<NumberOneChat>('POST', '/number-one/new'),
   sendToQa: (projectId: string, repo: string, number: number) => call<QaReview>('POST', '/prs/qa', { projectId, repo, number }),
   resolveConflicts: (projectId: string, repo: string, number: number) =>
-    call<Agent>('POST', '/prs/resolve-conflicts', { projectId, repo, number }),
+    call<ConflictsOutcome>('POST', '/prs/resolve-conflicts', { projectId, repo, number }),
   mergePr: (projectId: string, repo: string, number: number) => call('POST', '/prs/merge', { projectId, repo, number }),
   /** `picks`: what other repos run (a PR number, or null for the default branch); left out, the PRs linked to this one. */
   startPreview: (projectId: string, repo: string, number: number, picks?: PreviewSet) => call<Preview>('POST', '/previews', { projectId, repo, number, with: picks }),

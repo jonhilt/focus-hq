@@ -1,7 +1,9 @@
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { paths } from '../config';
 import { errorMessage, KeyedLock, run, sleep } from '../util';
+import type { BaseMerge } from './types';
 import { claimBranch, heldMessage, orphanedWorkspaces, parseWorktrees, retryLockRace } from './worktrees';
 
 const lock = new KeyedLock();
@@ -23,7 +25,8 @@ async function ensureMirror(repo: string): Promise<void> {
 /**
  * One clone per repository lives in data/repos; every agent gets its own git worktree of it in
  * data/workspaces/<agent id> so agents on the same repo never trip over each other. A worktree left behind by an agent
- * who isn't `inOffice` any more gives up its branch to the new one.
+ * who isn't `inOffice` any more gives up its branch to the new one. `local` names the branch in the worktree, when it
+ * can't be `branch` itself (checked out in someone else's).
  */
 export async function createWorktree(
   repo: string,
@@ -31,6 +34,7 @@ export async function createWorktree(
   branch: string,
   startPoint: string,
   inOffice: (agentId: string) => boolean,
+  local = branch,
 ): Promise<string> {
   const mirror = mirrorDir(repo);
   const dir = path.join(paths.workspaces, agentId);
@@ -44,14 +48,14 @@ export async function createWorktree(
     await git(mirror, ['worktree', 'prune']);
     fs.mkdirSync(paths.workspaces, { recursive: true });
     const worktrees = parseWorktrees(await git(mirror, ['worktree', 'list', '--porcelain']));
-    const claim = claimBranch(worktrees, branch, fs.realpathSync(paths.workspaces), inOffice);
-    if (claim.kind === 'held') throw new Error(heldMessage(branch, claim));
+    const claim = claimBranch(worktrees, local, fs.realpathSync(paths.workspaces), inOffice);
+    if (claim.kind === 'held') throw new Error(heldMessage(local, claim));
     if (claim.kind === 'reclaim') {
       await removeDir(mirror, claim.path);
       await git(mirror, ['worktree', 'prune']);
     }
     // --no-track: the branch must not track origin/<base>, so a stray `git push` can never land on the base branch
-    await git(mirror, ['worktree', 'add', '--no-track', '-B', branch, dir, `origin/${startPoint}`]);
+    await git(mirror, ['worktree', 'add', '--no-track', '-B', local, dir, `origin/${startPoint}`]);
   });
   return dir;
 }
@@ -194,6 +198,45 @@ export async function publishBranch(dir: string, branch: string): Promise<void> 
 export async function pullBranch(dir: string, branch: string): Promise<void> {
   await git(dir, ['fetch', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`], 5 * 60_000);
   await git(dir, ['reset', '--hard', `origin/${branch}`]);
+}
+
+/**
+ * Merges origin's `baseBranch` into origin's `branch` in a scratch worktree, and pushes the merge when git needed no
+ * help. On conflicts nothing is pushed. The push isn't forced, so it fails if someone pushed to the branch meanwhile.
+ */
+export async function mergeBase(repo: string, branch: string, baseBranch: string): Promise<BaseMerge> {
+  const mirror = mirrorDir(repo);
+  const dir = path.join(paths.merges, `${repo.replace('/', '__')}-${randomBytes(4).toString('hex')}`);
+  await lock.with(repo, async () => {
+    await ensureMirror(repo);
+    await retryLockRace(() => git(mirror, ['fetch', 'origin', '--prune'], 10 * 60_000), () => sleep(750));
+    fs.mkdirSync(paths.merges, { recursive: true });
+    await git(mirror, ['worktree', 'add', '--detach', dir, `origin/${branch}`]);
+  });
+  try {
+    const before = await head(dir);
+    try {
+      await git(dir, ['merge', '--no-edit', '-m', `Merge ${baseBranch} into ${branch}`, `origin/${baseBranch}`]);
+    } catch (err) {
+      const conflicted = await git(dir, ['diff', '--name-only', '--diff-filter=U']).catch(() => '');
+      if (!conflicted.trim()) throw err;
+      return { kind: 'conflicts' };
+    }
+    const after = await head(dir);
+    if (after === before) return { kind: 'up-to-date' };
+    await git(dir, ['push', 'origin', `HEAD:refs/heads/${branch}`], 5 * 60_000);
+    return { kind: 'merged', sha: after, from: before };
+  } finally {
+    await lock.with(repo, () => removeDir(mirror, dir));
+  }
+}
+
+/** Whether origin's `branch` has commits that HEAD doesn't (someone else pushed to it). False while origin hasn't got it. */
+export async function missingRemoteCommits(dir: string, branch: string): Promise<boolean> {
+  const remote = (await git(dir, ['ls-remote', '--heads', 'origin', `refs/heads/${branch}`], 60_000)).trim().split(/\s/)[0];
+  if (!remote) return false;
+  await git(dir, ['fetch', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`], 5 * 60_000);
+  return !(await git(dir, ['merge-base', '--is-ancestor', remote, 'HEAD']).then(() => true, () => false));
 }
 
 export async function commitLog(dir: string, baseBranch: string): Promise<string> {

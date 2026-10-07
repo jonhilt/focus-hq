@@ -2,7 +2,7 @@ import { Data, Effect, Exit, Fiber, FiberMap, type Layer, ManagedRuntime, Partit
 import { helperFor, leadFor, leadId, plannerFor, qaFor, qaOfficerFor, randomAvatar } from '../../shared/crew';
 import { autoQaFor, autoSendBackFor, prKey, sameCommit } from '../../shared/qa';
 import { afterTriage, triageLabel, type TriageResult, type TriageStep, whenStuck } from '../../shared/triage';
-import type { Agent, AgentStatus, BrowserFrame, Effort, FailedCheck, FixFor, PermissionRequest, PullRequest, QaReport, QaReview, QaScreenshot, QueuedGoal, TermLine } from '../../shared/types';
+import type { Agent, AgentStatus, BrowserFrame, ConflictsOutcome, Effort, FailedCheck, FixFor, PermissionRequest, PullRequest, QaReport, QaReview, QaScreenshot, QueuedGoal, TermLine } from '../../shared/types';
 import { ACTIVE_STATUSES, LEAD_DESK, QA_DESK, TEAM_STATIONS } from '../../shared/types';
 import type { PullRequestDetail } from '../github/provider';
 import { GitHub, type GitHubError } from '../github/service';
@@ -10,7 +10,7 @@ import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
 import { afterCloudRun, carryOnInNewSession, fallBackToLocal } from './cloud';
-import { afterLanding, afterVerdict, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, closeCheck, conflictsNote, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded } from './lead';
+import { afterLanding, afterVerdict, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, behindNote, closeCheck, conflictsResolvedNote, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded } from './lead';
 import { repoFolders } from './planner';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
 import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
@@ -20,7 +20,7 @@ import { offTheFloor, pickDesk } from './desks';
 import { deskless, whoStarts } from './schedule';
 import { type GitFailed, Sessions, Triage, Workspace } from './services';
 import { applyTaskTool } from './tasks';
-import { type AgentSession, type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN } from './types';
+import { type AgentSession, type BaseMerge, type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN } from './types';
 import { triageWorkspaceId } from './worktrees';
 
 /** What the manager's work needs: GitHub, the agents' checkouts, Claude Code sessions and the operations officer. */
@@ -57,6 +57,8 @@ interface Runtime {
   session?: AgentSession;
   /** Messages from the manager that arrived while no session could take them. */
   inbox: string[];
+  /** A lead's notes that wait for the end of the turn they're in, then join the inbox (`noteForLead`). */
+  afterTurn?: string[];
   /** The manager's notes folded into the task when it was handed out, kept in case it has to be told again. */
   notes: string[];
   permission?: { req: PermissionRequest; resolve: (ok: boolean) => void; resume: AgentStatus };
@@ -84,6 +86,8 @@ const qaAgentId = (projectId: string) => `qa_${projectId}`;
  */
 export class AgentManager {
   private runtimes = new Map<string, Runtime>();
+  /** The pull requests (prKey) the office is merging its base branch into right now. */
+  private merging = new Set<string>();
   private leaving = new Set<string>();
   private readonly runtime: ManagedRuntime.ManagedRuntime<ManagerServices, never>;
   private readonly scope = Scope.makeUnsafe();
@@ -191,25 +195,29 @@ export class AgentManager {
   }
 
   /**
-   * Gets a pull request's merge conflicts resolved. A goal's slice goes back to its lead, whose checkout holds the PR's
-   * branch; any other PR to the agent who opened it if they're still in the office; otherwise a new agent sits down on
-   * the PR's branch.
+   * Gets a pull request's merge conflicts resolved without interrupting anyone. The office first merges the base branch
+   * in itself, and pushes it when git needs no help. Otherwise the developer who opened the PR takes it, if they're still
+   * in the office; for anyone else's, a goal's slice included, a new agent sits down on the PR's branch in a worktree of
+   * their own. A goal's lead hears about it once their turn is over.
    */
-  resolveConflicts(projectId: string, pr: PullRequest): Agent {
+  async resolveConflicts(projectId: string, pr: PullRequest): Promise<ConflictsOutcome> {
+    const resolving = [...this.store.agents.values()].find((a) => a.task === 'conflicts' && a.repo === pr.repo && a.pr?.number === pr.number && !FINISHED.includes(a.status));
+    if (resolving) throw new Refused({ message: `${resolving.name} is already resolving the conflicts on #${pr.number}` });
     const lead = this.leadWith(pr.repo, pr.number);
-    if (lead?.lead) {
-      const folder = lead.lead.repos.find((r) => r.repo === pr.repo)?.folder ?? pr.repo.split('/')[1];
-      this.message(lead.id, conflictsNote(pr.repo, pr.number, pr.baseBranch, folder), 'Office');
-      this.hub.toast('info', `🔧 ${pr.repo.split('/')[1]}#${pr.number} conflicts with ${pr.baseBranch} – back to ${lead.name}`, lead.id);
-      return lead;
+    const owner = lead ? undefined : this.prOwner(pr.repo, pr.number);
+    const merge = await this.mergeBase(pr);
+    if (merge.kind === 'up-to-date') return merge;
+    if (merge.kind === 'merged') {
+      if (lead) this.mergedForLead(lead, pr, merge.sha, 'the office');
+      else if (owner) await this.runtime.runPromise(this.catchUp(owner, merge));
+      return { kind: 'merged' };
     }
-    const owner = this.prOwner(pr.repo, pr.number);
     if (owner) {
       this.update(owner, { baseBranch: pr.baseBranch });
       this.message(owner.id, conflictsPrompt(owner));
-      return owner;
+      return { kind: 'agent', agent: owner };
     }
-    return this.seat(projectId, pr.repo, {
+    const agent = this.seat(projectId, pr.repo, {
       id: newId('agent'),
       task: 'conflicts',
       issue: { number: pr.number, title: pr.title, url: pr.url },
@@ -217,6 +225,48 @@ export class AgentManager {
       baseBranch: pr.baseBranch,
       pr: { number: pr.number, url: pr.url },
     });
+    return { kind: 'agent', agent };
+  }
+
+  /** The office's own merge of the PR's base branch into it. One that fails for any reason other than conflicts goes to an agent too. */
+  private async mergeBase(pr: PullRequest): Promise<BaseMerge> {
+    const key = prKey(pr.repo, pr.number);
+    if (this.merging.has(key)) throw new Refused({ message: `The office is already merging ${pr.baseBranch} into #${pr.number}` });
+    this.merging.add(key);
+    const merge = Workspace.use((w) => w.mergeBase(pr.repo, pr.branch, pr.baseBranch)).pipe(
+      Effect.catch((err) => Effect.sync((): BaseMerge => {
+        console.warn(`Couldn't merge ${pr.baseBranch} into ${pr.repo}#${pr.number} on the office's side: ${err.message}`);
+        return { kind: 'conflicts' };
+      })),
+    );
+    return this.runtime.runPromise(merge).finally(() => this.merging.delete(key));
+  }
+
+  /**
+   * The office merged the base into a finished developer's PR: their worktree, which still has the PR's old head and
+   * nothing else, moves up to the merge, so their next push doesn't undo it.
+   */
+  private catchUp(owner: Agent, merge: { from: string }): Effect.Effect<void, never, Workspace> {
+    return Effect.gen({ self: this }, function* () {
+      if (owner.cloud || !FINISHED.includes(owner.status)) return;
+      const workspace = yield* Workspace;
+      const dir = workspace.dir(owner.id);
+      if ((yield* workspace.hasUncommittedChanges(dir)) || (yield* workspace.head(dir)) !== merge.from) return;
+      yield* workspace.pull(dir, owner.branch);
+    }).pipe(Effect.ignore);
+  }
+
+  /**
+   * The office pushed a merge to one of a lead's pull requests: the slice records the PR's new head, and the lead hears
+   * to pull it before touching that repo again, once their turn is over.
+   */
+  private mergedForLead(lead: Agent, pr: Pick<PullRequest, 'repo' | 'number' | 'baseBranch' | 'branch'>, sha: string, who: string): void {
+    const work = lead.lead;
+    if (!work) return;
+    const folder = work.repos.find((r) => r.repo === pr.repo)?.folder ?? pr.repo.split('/')[1];
+    const prs = work.prs.map((p) => (p.repo === pr.repo && p.number === pr.number ? { ...p, sha } : p));
+    this.update(lead, { lead: { ...work, prs } });
+    this.noteForLead(lead, 'Office', conflictsResolvedNote(pr, folder, who));
   }
 
   /** The agent in the office whose PR this is: the one who opened it, or one seated on it since. */
@@ -239,8 +289,9 @@ export class AgentManager {
   private seat(projectId: string, repo: string, work: Pick<Agent, 'id' | 'task' | 'issue' | 'branch' | 'baseBranch' | 'pr' | 'effort' | 'cloud'>): Agent {
     const project = this.store.project(projectId);
     if (!project.repos.includes(repo)) throw new Refused({ message: `${repo} is not connected to ${project.name}` });
+    // QA reviewing the PR, or a goal's lead, isn't working on it the way a developer would
     const existing = [...this.store.agents.values()].find(
-      (a) => a.repo === repo && a.issue.number === work.issue.number && !FINISHED.includes(a.status),
+      (a) => a.task !== 'review' && a.task !== 'lead' && a.repo === repo && a.issue.number === work.issue.number && !FINISHED.includes(a.status),
     );
     if (existing) throw new Refused({ message: `${existing.name} is already working on #${work.issue.number}` });
 
@@ -318,7 +369,10 @@ export class AgentManager {
       const startPoint = agent.task === 'issue' ? agent.baseBranch : agent.branch;
       this.print(agent, [{ kind: 'system', text: `✻ Setting up a worktree for ${agent.repo} on ${agent.branch}` }]);
       this.update(agent, { activity: 'Cloning the repository' });
-      yield* workspace.create(agent.repo, agent.id, agent.branch, startPoint, (id) => this.store.agents.has(id));
+      // the PR's branch may be checked out in its goal's lead's workspace: someone resolving its conflicts works on a
+      // local branch of their own, which the office pushes to the PR's
+      const local = agent.task === 'conflicts' ? `${agent.branch}-conflicts-${agent.id.slice(-4)}` : undefined;
+      yield* workspace.create(agent.repo, agent.id, agent.branch, startPoint, (id) => this.store.agents.has(id), local);
       if (agent.cloud) {
         // a cloud session clones its branch from GitHub, so a new one has to be there first
         this.update(agent, { activity: 'Publishing the branch for the cloud session' });
@@ -509,6 +563,9 @@ export class AgentManager {
       this.update(agent, { status: 'working', activity: resumeSessionId ? 'Reading your message' : 'Getting started', error: undefined, finishedAt: undefined });
       const outcome = yield* this.turn(agent, this.runRequest(agent, prompt, instructions, resumeSessionId), true);
       rt.busy = false;
+      // what the manager wrote during the turn carries them on into another; notes that waited for its end don't
+      const carryOn = rt.inbox.length > 0;
+      rt.inbox.push(...(rt.afterTurn?.splice(0) ?? []));
       if (!this.store.agents.has(agent.id)) return;
 
       if (outcome.aborted) {
@@ -536,7 +593,7 @@ export class AgentManager {
         this.print(agent, [{ kind: 'system', text: `✻ Couldn't get back into the cloud session (${truncate(outcome.error ?? 'no reason given', 200)}) – starting a new one on ${agent.branch}` }]);
         return yield* this.runSession(agent, carryOnPrompt(agent, prompt));
       }
-      if (rt.inbox.length) {
+      if (carryOn) {
         // The manager wrote while the session was wrapping up: carry on in the same conversation.
         return yield* this.runSession(agent, rt.inbox.splice(0).join('\n\n'), agent.sessionId);
       }
@@ -611,6 +668,10 @@ export class AgentManager {
       if (agent.cloud) {
         this.print(agent, [{ kind: 'system', text: `✻ ${ahead} commit${ahead === 1 ? '' : 's'} on ${agent.branch}, pushed from the cloud session` }]);
       } else {
+        // the push is forced, and every worktree of the repo shares its remote-tracking refs, so the lease alone wouldn't stop it
+        if (yield* workspace.missingRemoteCommits(dir, agent.branch)) {
+          return yield* new Refused({ message: `Someone else pushed to ${agent.branch} meanwhile: merge it in with \`git pull --no-rebase origin ${agent.branch}\` before this can ship` });
+        }
         this.update(agent, { status: 'pushing', activity: `Pushing ${ahead} commit${ahead === 1 ? '' : 's'}` });
         this.print(agent, [{ kind: 'system', text: `✻ Pushing ${agent.branch}` }]);
         yield* workspace.push(dir, agent.branch);
@@ -631,6 +692,8 @@ export class AgentManager {
       }
       this.print(agent, [{ kind: 'success', text: `✔ Pull request ready: ${pr.url}` }]);
       this.update(agent, { status: 'done', pr, activity: `PR #${pr.number} is ready for review`, finishedAt: Date.now() });
+      const lead = agent.task === 'conflicts' ? this.leadWith(agent.repo, pr.number) : undefined;
+      if (lead) this.mergedForLead(lead, { repo: agent.repo, number: pr.number, baseBranch: agent.baseBranch, branch: agent.branch }, yield* workspace.head(dir), agent.name);
       this.boardChanged(agent.projectId);
       this.fixEnded(agent, 'pushed');
       // new code on the PR: the room's QA officer tests it
@@ -911,6 +974,10 @@ export class AgentManager {
           }),
         { concurrency: 'unbounded' },
       );
+      // the office may have pushed a merge to the slice's branch (resolving conflicts): never ship over it
+      for (const s of states.filter((x) => x.changed && openPr(work, x.repo))) {
+        if (yield* workspace.missingRemoteCommits(s.dir, agent.branch)) return yield* new Refused({ message: behindNote(s.folder, agent.branch) });
+      }
       const plan = shipPlan(states);
       if (plan.kind !== 'ship') return notShipped(plan);
       const project = this.store.project(agent.projectId);
@@ -962,9 +1029,18 @@ export class AgentManager {
     const step = afterVerdict(report.verdict, failedRounds);
     if (step === 'wake') return this.message(lead.id, text, from);
     // no turn spent on it: the lead hears it with the captain's next message
-    this.print(lead, [{ kind: 'manager', text: `▶ ${from}: ${text}` }]);
-    this.rt(lead.id).inbox.push(`[${from}] ${text}`);
+    this.noteForLead(lead, from, text);
     if (step === 'needs-you') this.hub.toast('error', `🙋 QA failed ${repo.split('/')[1]}#${number} ${failedRounds} times: ${lead.name} needs you to look`, lead.id);
+  }
+
+  /**
+   * News for a lead that needn't cost them a turn: it waits for the end of the one they're in (an inbox that fills during
+   * a turn carries them on into another), then goes with whatever they hear next.
+   */
+  private noteForLead(lead: Agent, from: string, text: string): void {
+    this.print(lead, [{ kind: 'manager', text: `▶ ${from}: ${text}` }]);
+    const rt = this.rt(lead.id);
+    (rt.busy ? (rt.afterTurn ??= []) : rt.inbox).push(`[${from}] ${text}`);
   }
 
   /** The lead's pull request was merged or closed. Once the slice's have all landed, the lead hears about it. */

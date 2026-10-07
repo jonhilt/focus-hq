@@ -258,6 +258,12 @@ export type Effort = (typeof EFFORT_LEVELS)[number];
  */
 export type AgentTask = 'issue' | 'conflicts' | 'fix' | 'review' | 'lead';
 
+/**
+ * What the office did about a pull request's merge conflicts: merged its base branch in by itself, found it already had
+ * everything (GitHub hadn't caught up), or handed it to an agent.
+ */
+export type ConflictsOutcome = { kind: 'merged' } | { kind: 'up-to-date' } | { kind: 'agent'; agent: Agent };
+
 /** The QA officer doesn't sit at one of the room's desks but at the QA station by the pull requests table. */
 export const QA_DESK = -1;
 

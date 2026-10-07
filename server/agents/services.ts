@@ -1,7 +1,7 @@
 import { Context, Data, Effect, Layer, type Scope } from 'effect';
 import { errorMessage } from '../util';
 import type { TriageDecision, Triager, TriageRequest } from './triage';
-import type { AgentRunner, AgentSession, RunHooks, RunRequest, WorkspaceOps } from './types';
+import type { AgentRunner, AgentSession, BaseMerge, RunHooks, RunRequest, WorkspaceOps } from './types';
 
 // What the agent manager needs from the outside world, as Effect services: git on the agents' checkouts, Claude Code
 // sessions, and the operations officer's triage. Each wraps the Promise-based implementation it always had (the live
@@ -24,7 +24,7 @@ export class TriageFailed extends Data.TaggedError('TriageFailed')<{ reason: str
 /** The agents' checkouts: worktrees of the office's clones, one per agent (a lead's holds one per repo). */
 export class Workspace extends Context.Service<Workspace, {
   /** A worktree on `branch` from the remote `startPoint`, reclaiming it from an agent who isn't `inOffice`. */
-  create(repo: string, agentId: string, branch: string, startPoint: string, inOffice: (agentId: string) => boolean): Effect.Effect<string, GitFailed>;
+  create(repo: string, agentId: string, branch: string, startPoint: string, inOffice: (agentId: string) => boolean, local?: string): Effect.Effect<string, GitFailed>;
   /** Never fails: a checkout that won't go is left for the sweep. */
   remove(repo: string, agentId: string): Effect.Effect<void>;
   dir(agentId: string): string;
@@ -37,13 +37,15 @@ export class Workspace extends Context.Service<Workspace, {
   publish(dir: string, branch: string): Effect.Effect<void, GitFailed>;
   pull(dir: string, branch: string): Effect.Effect<void, GitFailed>;
   checkoutPullRequest(repo: string, agentId: string, number: number): Effect.Effect<string, GitFailed>;
+  mergeBase(repo: string, branch: string, baseBranch: string): Effect.Effect<BaseMerge, GitFailed>;
+  missingRemoteCommits(dir: string, branch: string): Effect.Effect<boolean, GitFailed>;
 }>()('focus/agents/Workspace') {
   /** The workspace on its Promise-based operations: the live git ones, or the demo's pretend ones. */
   static fromOps(ops: WorkspaceOps): Layer.Layer<Workspace> {
     const git = <A>(what: string, run: () => Promise<A>): Effect.Effect<A, GitFailed> =>
       Effect.tryPromise({ try: run, catch: (err) => new GitFailed({ what, reason: errorMessage(err) }) });
     return Layer.succeed(Workspace, Workspace.of({
-      create: (repo, agentId, branch, startPoint, inOffice) => git(`check out ${branch}`, () => ops.create(repo, agentId, branch, startPoint, inOffice)),
+      create: (repo, agentId, branch, startPoint, inOffice, local) => git(`check out ${branch}`, () => ops.create(repo, agentId, branch, startPoint, inOffice, local)),
       remove: (repo, agentId) => Effect.ignore(git('remove a checkout', () => ops.remove(repo, agentId))),
       dir: (agentId) => ops.dir(agentId),
       hasUncommittedChanges: (dir) => git('look for uncommitted changes', () => ops.hasUncommittedChanges(dir)),
@@ -55,6 +57,8 @@ export class Workspace extends Context.Service<Workspace, {
       publish: (dir, branch) => git(`publish ${branch}`, () => ops.publish(dir, branch)),
       pull: (dir, branch) => git(`fetch ${branch}`, () => ops.pull(dir, branch)),
       checkoutPullRequest: (repo, agentId, number) => git(`check out PR #${number}`, () => ops.checkoutPullRequest(repo, agentId, number)),
+      mergeBase: (repo, branch, baseBranch) => git(`merge ${baseBranch} into ${branch}`, () => ops.mergeBase(repo, branch, baseBranch)),
+      missingRemoteCommits: (dir, branch) => git(`compare with origin's ${branch}`, () => ops.missingRemoteCommits(dir, branch)),
     }));
   }
 }

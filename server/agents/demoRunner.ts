@@ -458,6 +458,12 @@ export const demoWorkspace: WorkspaceOps = {
     await sleep(600);
     return '';
   },
+  // the demo's conflicting PR always needs an agent, so there's someone to watch resolving it
+  mergeBase: async () => {
+    await sleep(600);
+    return { kind: 'conflicts' };
+  },
+  missingRemoteCommits: async () => false,
 };
 
 /** The demo planner's judgement of an idea too big for one issue: a rebuild, or a list of three or more features. */

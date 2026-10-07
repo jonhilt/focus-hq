@@ -94,12 +94,15 @@ export interface AgentRunner {
 }
 
 /** Git operations on an agent's checkout. Faked in demo mode. */
+/** What came of merging a pull request's base branch into it on the office's side: pushed, nothing to do, or a job for an agent. */
+export type BaseMerge = { kind: 'merged'; sha: string; from: string } | { kind: 'up-to-date' } | { kind: 'conflicts' };
+
 export interface WorkspaceOps {
   /**
    * A worktree on `branch`, starting from the remote branch `startPoint`. If a workspace of an agent who isn't
    * `inOffice` still has the branch, it's removed; if a colleague's has it, this fails.
    */
-  create(repo: string, agentId: string, branch: string, startPoint: string, inOffice: (agentId: string) => boolean): Promise<string>;
+  create(repo: string, agentId: string, branch: string, startPoint: string, inOffice: (agentId: string) => boolean, local?: string): Promise<string>;
   remove(repo: string, agentId: string): Promise<void>;
   dir(agentId: string): string;
   hasUncommittedChanges(dir: string): Promise<boolean>;
@@ -118,6 +121,10 @@ export interface WorkspaceOps {
   publish(dir: string, branch: string): Promise<void>;
   /** Brings `dir` up to the remote `branch`, where a cloud agent pushed its work. */
   pull(dir: string, branch: string): Promise<void>;
+  /** Merges origin's `baseBranch` into origin's `branch` on the office's side, and pushes it if git needed no help. */
+  mergeBase(repo: string, branch: string, baseBranch: string): Promise<BaseMerge>;
+  /** Whether origin's `branch` has commits `dir`'s HEAD doesn't. */
+  missingRemoteCommits(dir: string, branch: string): Promise<boolean>;
   /** A detached checkout of a pull request's head in the agent's workspace (for QA). Returns the commit ('' if unknown). */
   checkoutPullRequest(repo: string, agentId: string, number: number): Promise<string>;
 }

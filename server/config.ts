@@ -32,6 +32,8 @@ export const paths = {
   logs: path.join(config.dataDir, 'logs'),
   mirrors: path.join(config.dataDir, 'repos'),
   workspaces: path.join(config.dataDir, 'workspaces'),
+  /** Scratch worktrees where the office merges a pull request's base branch into it (outside workspaces, so the sweep leaves them be). */
+  merges: path.join(config.dataDir, 'merges'),
   previews: path.join(config.dataDir, 'previews'),
   /** The screenshots that go with QA reports, for the QA station. */
   qaShots: path.join(config.dataDir, 'qa-shots'),

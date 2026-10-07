@@ -1,4 +1,4 @@
-import type { Agent, Board, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
+import type { Board, ConflictsOutcome, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
 import { DESKS_PER_ROOM, EFFORT_LEVELS } from '../shared/types';
 import { carryMergeable } from '../shared/board';
 import { chosenSet, previewPrs } from '../shared/previewSet';
@@ -205,7 +205,7 @@ export class Office {
     return this.agents.requestReview(projectId, repo, number, pr.title);
   }
 
-  resolveConflicts(projectId: string, repo: string, number: number): Agent {
+  resolveConflicts(projectId: string, repo: string, number: number): Promise<ConflictsOutcome> {
     const pr = this.store.boards.get(projectId)?.prs.find((p) => p.repo === repo && p.number === number);
     if (!pr) throw new Error(`${repo}#${number} is not an open pull request on this board`);
     if (pr.mergeable !== 'CONFLICTING') throw new Error(`PR #${number} has no merge conflicts`);
@@ -349,11 +349,17 @@ export class Office {
         this.gateMarks.set(key, { sha: step.sha, kind: 'sent-back' });
         await this.agents.sendBackChecks(pr.repo, pr.number, step.checks);
         return;
-      case 'resolve-conflicts':
+      case 'resolve-conflicts': {
         this.gateMarks.set(key, { sha: step.sha, kind: 'resolving' });
-        this.agents.resolveConflicts(projectId, pr);
-        this.hub.toast('info', `🔧 ${where} conflicts with ${pr.baseBranch} – resolving them before QA`, undefined, projectId);
+        const outcome = await this.agents.resolveConflicts(projectId, pr);
+        const said = {
+          agent: `– resolving them before QA`,
+          merged: `– the office merged ${pr.baseBranch} in cleanly`,
+          'up-to-date': `on GitHub, but it already has everything from ${pr.baseBranch}`,
+        }[outcome.kind];
+        this.hub.toast('info', `🔧 ${where} conflicts with ${pr.baseBranch} ${said}`, outcome.kind === 'agent' ? outcome.agent.id : undefined, projectId);
         return;
+      }
     }
   }
 

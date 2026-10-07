@@ -42,6 +42,8 @@ const liveWorkspace: WorkspaceOps = {
   publish: git.publishBranch,
   pull: git.pullBranch,
   checkoutPullRequest: git.checkoutPullRequest,
+  mergeBase: git.mergeBase,
+  missingRemoteCommits: git.missingRemoteCommits,
 };
 
 async function main() {

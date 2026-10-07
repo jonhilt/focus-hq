@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadWork } from '../../shared/types';
-import { afterLanding, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
+import { afterLanding, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -364,12 +364,17 @@ describe('the lead’s context', () => {
 });
 
 describe('a slice’s merge conflicts', () => {
-  it('go back to the lead, to merge the base into their own checkout and ship again', () => {
-    const note = conflictsNote('acme/web', 12, 'main', 'web');
-    expect(note).toMatch(/^acme\/web#12 has merge conflicts with `main`\. Resolve them in \.\/web, which is on its branch:/);
-    expect(note).toContain('`git -C web fetch origin`, then `git -C web merge origin/main`');
-    expect(note).toContain('ship again with mcp__office__ship: that updates the pull request');
-    expect(note).toMatch(/Merge rather than rebase/);
+  const pr = { repo: 'acme/web', number: 12, baseBranch: 'main', branch: 'focus/goal-1' };
+
+  it('are resolved without the lead, who hears to pull before touching the repo again', () => {
+    const note = conflictsResolvedNote(pr, 'web', 'Ensign Kim');
+    expect(note).toMatch(/^acme\/web#12 had merge conflicts with `main`: Ensign Kim merged `main` into `focus\/goal-1` and pushed it, so \.\/web is behind GitHub\./);
+    expect(note).toContain('`git -C web pull --no-rebase origin focus/goal-1`');
+    expect(note).toContain("the office won't ship that repo");
+  });
+
+  it('keep the lead from shipping a checkout that’s behind', () => {
+    expect(behindNote('web', 'focus/goal-1')).toMatch(/^Nothing shipped: GitHub's `focus\/goal-1` has commits \.\/web doesn't.*`git -C web pull --no-rebase origin focus\/goal-1`/);
   });
 });
 

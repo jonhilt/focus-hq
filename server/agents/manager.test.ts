@@ -86,20 +86,75 @@ describe('AgentManager', () => {
     expect(store.agents.has(lead.id)).toBe(false);
   });
 
-  it('hands a slice’s merge conflicts to its lead, even while they’re busy', async () => {
-    const { agents, claude, store, project } = office();
+  it('merges the base into a slice’s conflicting PR itself, and tells the lead to pull once their turn is over', async () => {
+    const { agents, claude, store, project } = office({ ...demoWorkspace, mergeBase: async () => ({ kind: 'merged', sha: 'merge-sha', from: 'old-sha' }) });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
+    await until(() => leads().length === 1);
+    await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    const [pr] = store.agent(lead.id).lead!.prs;
+
+    const outcome = await agents.resolveConflicts(project.id, { repo: pr.repo, number: pr.number, branch: store.agent(lead.id).branch, baseBranch: 'main' } as PullRequest);
+    expect(outcome).toEqual({ kind: 'merged' });
+    expect(store.agent(lead.id).lead!.prs.find((p) => p.number === pr.number)?.sha).toBe('merge-sha');
+    // nothing reaches them mid-turn, and the note doesn't start another one when it ends
+    expect(leads()[0].sent).toEqual([]);
+    leads()[0].end({ ok: true, summary: 'Shipped the first slice' });
+    await until(() => store.agent(lead.id).status === 'done');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(leads()).toHaveLength(1);
+
+    agents.message(lead.id, 'How did it go?');
+    await until(() => leads().length === 2);
+    const heard = [leads()[1].req.prompt, ...leads()[1].sent].join('\n\n');
+    expect(heard).toMatch(new RegExp(`^\\[Office\\] ${pr.repo}#${pr.number} had merge conflicts with \`main\`: the office merged`));
+    expect(heard).toContain('How did it go?');
+  });
+
+  it('seats an agent of its own on a slice’s PR when git can’t merge it, rather than interrupting the lead', async () => {
+    const created: { agentId: string; branch: string; local?: string }[] = [];
+    const { agents, claude, store, project } = office({
+      ...demoWorkspace,
+      create: async (_repo, agentId, branch, _start, _inOffice, local) => (created.push({ agentId, branch, local }), `/demo/${agentId}`),
+    });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
+    await until(() => leads().length === 1);
+    await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    const [pr] = store.agent(lead.id).lead!.prs;
+    const branch = store.agent(lead.id).branch;
+
+    const outcome = await agents.resolveConflicts(project.id, { repo: pr.repo, number: pr.number, title: 'Saved items', url: pr.url, branch, baseBranch: 'main' } as PullRequest);
+    if (outcome.kind !== 'agent') throw new Error(`expected an agent, got ${outcome.kind}`);
+    expect(outcome.agent.task).toBe('conflicts');
+    await expect(agents.resolveConflicts(project.id, { repo: pr.repo, number: pr.number, branch, baseBranch: 'main' } as PullRequest)).rejects.toThrow(/already resolving/);
+    const resolver = () => claude.turns.find((t) => t.req.agentId === outcome.agent.id);
+    await until(() => !!resolver());
+    // in a worktree of their own, on a local branch of their own: the lead's checkout has the PR's
+    expect(created.find((c) => c.agentId === outcome.agent.id)).toEqual({ agentId: outcome.agent.id, branch, local: `${branch}-conflicts-${outcome.agent.id.slice(-4)}` });
+    expect(leads()[0].sent).toEqual([]);
+
+    resolver()!.end({ ok: true, summary: 'Kept both sides of the header' });
+    await until(() => store.agent(outcome.agent.id).status === 'done');
+    expect(leads()).toHaveLength(1);
+    leads()[0].end({ ok: true, summary: 'Shipped the first slice' });
+    await until(() => store.agent(lead.id).status === 'done');
+    agents.message(lead.id, 'Next?');
+    await until(() => leads().length === 2);
+    expect([leads()[1].req.prompt, ...leads()[1].sent].join('\n\n')).toContain(`${outcome.agent.name} merged \`main\` into \`${branch}\` and pushed it`);
+  });
+
+  it('won’t ship a lead’s repo over commits the office pushed to its branch', async () => {
+    let behind = false;
+    const { agents, claude, store, project } = office({ ...demoWorkspace, head: async () => 'lead-head', missingRemoteCommits: async () => behind });
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     await until(() => claude.turns.length === 1);
-    await claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
-    const [pr] = store.agent(lead.id).lead!.prs;
-    expect(store.agent(lead.id).status).toBe('working');
-
-    const to = agents.resolveConflicts(project.id, { repo: pr.repo, number: pr.number, baseBranch: 'main' } as PullRequest);
-    expect(to.id).toBe(lead.id);
-    // the reviewer the slice brought along aside, nobody new sits down
-    expect(claude.turns.filter((t) => t.req.agentId !== lead.id).map((t) => store.agent(t.req.agentId).task)).toEqual(['review']);
-    expect(claude.turns.filter((t) => t.req.agentId === lead.id)).toHaveLength(1);
-    expect(claude.turns[0].sent.at(-1)).toMatch(new RegExp(`^\\[Office\\] ${pr.repo}#${pr.number} has merge conflicts with \`main\`\\. Resolve them in \\./${pr.repo.split('/')[1]}`));
+    const ship = () => claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    await ship();
+    const work = store.agent(lead.id).lead!;
+    store.agent(lead.id).lead = { ...work, prs: work.prs.map((p) => ({ ...p, sha: 'merge-sha' })) };
+    behind = true;
+    await expect(ship()).rejects.toThrow(/^Nothing shipped: GitHub's `[^`]+` has commits \.\/webshop-/);
   });
 
   it('carries the goal into the next slice, as the captain put it, once the last one has landed', async () => {

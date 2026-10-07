@@ -313,18 +313,19 @@ export function qaVerdictNote(repo: string, number: number, report: Pick<QaRepor
 }
 
 /**
- * One of the slice's pull requests conflicts with its base: the lead resolves it in their own checkout of that repo
- * (which still holds the PR's branch) and ships again, which updates the PR.
+ * The office resolved one of the slice's merge conflicts without the lead: `who` merged the base into the PR's branch and
+ * pushed it. The lead's checkout doesn't have that commit until they pull, and the office won't ship over it.
  */
-export function conflictsNote(repo: string, number: number, baseBranch: string, folder: string): string {
+export function conflictsResolvedNote(pr: { repo: string; number: number; baseBranch: string; branch: string }, folder: string, who: string): string {
   return [
-    `${repo}#${number} has merge conflicts with \`${baseBranch}\`. Resolve them in ./${folder}, which is on its branch:`,
-    `1. \`git -C ${folder} fetch origin\`, then \`git -C ${folder} merge origin/${baseBranch}\`.`,
-    '2. Resolve every conflict so that both sides keep doing what they were meant to do. Read the base branch commits that caused each conflict before choosing.',
-    '3. Run the repo\'s type checks, tests and linters, and fix what the merge broke.',
-    '4. Commit the merge, then ship again with mcp__office__ship: that updates the pull request.',
-    'Merge rather than rebase: the pull request is already open, so its history must stay intact. If you have other work in progress in that repo, commit it or set it aside first.',
-  ].join('\n');
+    `${pr.repo}#${pr.number} had merge conflicts with \`${pr.baseBranch}\`: ${who} merged \`${pr.baseBranch}\` into \`${pr.branch}\` and pushed it, so ./${folder} is behind GitHub.`,
+    `Before you touch ./${folder} again, pull it with \`git -C ${folder} pull --no-rebase origin ${pr.branch}\` (commit or set aside anything in progress first). Until you do, the office won't ship that repo.`,
+  ].join(' ');
+}
+
+/** The lead's checkout of a repo is missing commits someone else pushed to the slice's branch, so shipping it would lose them. */
+export function behindNote(folder: string, branch: string): string {
+  return `Nothing shipped: GitHub's \`${branch}\` has commits ./${folder} doesn't (the office pushed a merge to it). Pull them with \`git -C ${folder} pull --no-rebase origin ${branch}\`, check the result, then ship again.`;
 }
 
 /** The slice's pull requests have all merged or closed, for the lead. */

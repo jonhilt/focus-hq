@@ -1,0 +1,89 @@
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+// The office's own merges work in data/repos and data/merges, so this file gets a data folder of its own (set before the
+// workspace module reads the config).
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-merge-'));
+process.env.FOCUS_DATA_DIR = path.join(tmp, 'data');
+afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
+
+let ws: typeof import('./workspace');
+beforeAll(async () => {
+  ws = await import('./workspace');
+});
+
+const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+
+function commit(dir: string, file: string, text: string): string {
+  fs.writeFileSync(path.join(dir, file), text);
+  git(dir, 'add', file);
+  git(dir, 'commit', '-qm', `${file}: ${text}`);
+  return git(dir, 'rev-parse', 'HEAD');
+}
+
+/** An origin with a PR branch, a developer's clone of it, and the office's mirror (as if it had already cloned). */
+function pullRequest(repo: string) {
+  const origin = path.join(tmp, `${repo.replace('/', '__')}.git`);
+  git(tmp, 'init', '-q', '--bare', '-b', 'main', origin);
+  const dev = path.join(tmp, `${repo.replace('/', '__')}-dev`);
+  git(tmp, 'clone', '-q', origin, dev);
+  git(dev, 'config', 'user.email', 'dev@focus.test');
+  git(dev, 'config', 'user.name', 'Dev');
+  git(dev, 'checkout', '-qb', 'main');
+  commit(dev, 'readme.md', 'hello');
+  commit(dev, 'header.ts', 'header');
+  git(dev, 'push', '-q', 'origin', 'main');
+  git(dev, 'checkout', '-qb', 'focus/pr');
+  const pr = commit(dev, 'header.ts', 'header with saved items');
+  git(dev, 'push', '-q', '-u', 'origin', 'focus/pr');
+  const mirror = path.join(process.env.FOCUS_DATA_DIR!, 'repos', repo.replace('/', '__'));
+  git(tmp, 'clone', '-q', origin, mirror);
+  git(mirror, 'config', 'user.email', 'office@focus.test');
+  git(mirror, 'config', 'user.name', 'Office');
+  /** Someone lands `text` in `file` on main. */
+  const land = (file: string, text: string) => {
+    git(dev, 'checkout', '-q', 'main');
+    commit(dev, file, text);
+    git(dev, 'push', '-q', 'origin', 'main');
+    git(dev, 'checkout', '-q', 'focus/pr');
+  };
+  const remoteHead = () => git(origin, 'rev-parse', 'focus/pr');
+  return { dev, pr, land, remoteHead };
+}
+
+describe('the office’s own merge of a PR’s base branch', () => {
+  it('pushes the merge when git needs no help, and the developer’s checkout is then behind', async () => {
+    const { dev, pr, land, remoteHead } = pullRequest('acme/clean');
+    land('footer.ts', 'footer');
+    const merge = await ws.mergeBase('acme/clean', 'focus/pr', 'main');
+    expect(merge).toEqual({ kind: 'merged', sha: remoteHead(), from: pr });
+    expect(git(path.join(tmp, 'acme__clean.git'), 'log', '-1', '--format=%s', 'focus/pr')).toBe('Merge main into focus/pr');
+    expect(await ws.missingRemoteCommits(dev, 'focus/pr')).toBe(true);
+    git(dev, 'pull', '-q', '--no-rebase', 'origin', 'focus/pr');
+    expect(await ws.missingRemoteCommits(dev, 'focus/pr')).toBe(false);
+    // the scratch worktree is gone
+    expect(fs.readdirSync(path.join(process.env.FOCUS_DATA_DIR!, 'merges'))).toEqual([]);
+  });
+
+  it('leaves the branch alone when the merge conflicts', async () => {
+    const { pr, land, remoteHead } = pullRequest('acme/conflict');
+    land('header.ts', 'header with a cart');
+    expect(await ws.mergeBase('acme/conflict', 'focus/pr', 'main')).toEqual({ kind: 'conflicts' });
+    expect(remoteHead()).toBe(pr);
+  });
+
+  it('says so when the branch already has everything from its base', async () => {
+    const { pr, remoteHead } = pullRequest('acme/current');
+    expect(await ws.mergeBase('acme/current', 'focus/pr', 'main')).toEqual({ kind: 'up-to-date' });
+    expect(remoteHead()).toBe(pr);
+  });
+
+  it('finds nothing missing from a branch origin hasn’t got', async () => {
+    const { dev } = pullRequest('acme/new');
+    git(dev, 'checkout', '-qb', 'focus/unpublished');
+    expect(await ws.missingRemoteCommits(dev, 'focus/unpublished')).toBe(false);
+  });
+});
