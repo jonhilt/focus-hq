@@ -18,14 +18,19 @@ export type Marker =
   /** Where a crew member's chair stands, turned along the empty's forward. */
   | { kind: 'seat'; crew: Crew }
   /** Where a turbolift stops: you stand here in its car, facing along the empty's forward (its doors). */
-  | { kind: 'turbolift'; label: string };
+  | { kind: 'turbolift'; label: string }
+  /**
+   * A doorway to somewhere else (world/portal.ts), at its centre in the middle of its wall, the way in along the empty's
+   * forward, with an alcove `depth` deep behind it.
+   */
+  | { kind: 'portal'; width: number; height: number; depth: number };
 
-/** The helpers' seats at a team station, in the order helpers take them. */
+/** The helpers' seats in a team station's briefing room, in the order helpers take them. */
 export const HELPER_SEATS = ['station-helper-1', 'station-helper-2', 'station-helper-3', 'station-helper-4'] as const;
 
 /**
- * Crew a model seats: Number One in the ready room, the chief engineer at the engineering station, and at a team
- * station its lead, their helpers and the goal's reviewer.
+ * Crew a model seats: Number One in the ready room, the chief engineer at the engineering station, and in a team
+ * station's briefing room its lead, their helpers and the goal's reviewer.
  */
 const CREW = ['number-one', 'engineer', 'station-lead', ...HELPER_SEATS, 'station-reviewer'] as const;
 export type Crew = (typeof CREW)[number];
@@ -94,6 +99,8 @@ export function readMarker(e: Extras): Marker | null {
       return { kind: 'seat', crew: isCrew(e.crew) ? e.crew : fail('unknown crew', e) };
     case 'turbolift':
       return { kind: 'turbolift', label: str(e, 'label') };
+    case 'portal':
+      return { kind: 'portal', width: num(e, 'width'), height: num(e, 'height'), depth: num(e, 'depth') };
     default:
       return fail('unknown marker', e);
   }

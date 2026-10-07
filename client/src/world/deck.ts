@@ -183,6 +183,8 @@ export class Deck {
         this.seats.set(marker.crew, { at, facing: at.clone().add(ahead) });
         break;
       }
+      case 'portal':
+        throw new Error('Deck extras: a deck has a portal, which only a team station has');
     }
   }
 

@@ -119,7 +119,10 @@ void main() {
   col += drifting(vWorld, rd, 160.0, 18.0) + drifting(vWorld, rd, 80.0, 11.0) + drifting(vWorld, rd, 42.0, 7.0) + drifting(vWorld, rd, 24.0, 5.0);
   // a faint diagonal sheen so it reads as glass
   col += vec3(0.6, 0.7, 1.0) * 0.035 * smoothstep(0.75, 1.0, sin((vWorld.x + vWorld.z) * 1.4 + vWorld.y * 2.0) * 0.5 + 0.5);
-  gl_FragColor = vec4(col, 1.0); // already display colours, like the flat() screens
+  // display colours, like the flat() screens: back to linear for three to turn into display colours again, so they
+  // come out the same drawn into a target first, as through a doorway (portal.ts)
+  gl_FragColor = sRGBTransferEOTF(vec4(col, 1.0));
+  #include <colorspace_fragment>
 }
 `;
 

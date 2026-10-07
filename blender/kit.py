@@ -9,15 +9,17 @@ What the browser reads (client/src/world/deck.ts), all through custom properties
   player can't walk into), 'door' (sliding doors at a doorway's centre, sliding along the empty's X: `width`,
   `height`), 'place' (a teleport destination, looking along the empty's +Y: `label`), 'area' (an empty cube: the
   floor `label` names in the HUD), 'seat' (where a crew member's chair stands, turned along the empty's +Y: `crew`,
-  'number-one' in the ready room, 'engineer' at the engineering station, or at a team station 'station-lead',
-  'station-helper-1' to 'station-helper-4' or 'station-reviewer') or 'turbolift' (where the turbolift stops:
-  you stand there in its car, facing along the empty's +Y, and `label` names the deck).
+  'number-one' in the ready room, 'engineer' at the engineering station, or in a team station's briefing room
+  'station-lead', 'station-helper-1' to 'station-helper-4' or 'station-reviewer'), 'turbolift' (where the turbolift
+  stops: you stand there in its car, facing along the empty's +Y, and `label` names the deck) or 'portal' (a doorway
+  to somewhere else, at its centre in the middle of its wall, the way in along the empty's +Y: `width`, `height`, and
+  the `depth` of the alcove behind it, where the browser draws the other end).
 - An object's `interact` has pressing E on it do something: 'manager' (open the ready room console) or 'turbolift' (its
   controls), with the hint `label`.
 - A material's `surface` has the browser draw it: 'space' (a viewport onto the stars), 'keys' (an LCARS touch panel),
   'readout' (LCARS readouts: `seed`, `w`, `h`), 'sign' (an LCARS sign: `text`, `color`, optional `sub` and `code`),
   'screen' (a screen the browser keeps drawing: `screen`, which is 'mission-control', or a team station's
-  'team-station' and the 'team-station-sign' under it), 'star-chart' (long-range
+  'team-station', its lead's session, and 'team-station-sign', its name and goal), 'star-chart' (long-range
   sensors), 'accent' (a team station's own colour), 'carpet' (speckled carpet in the material's colour, tiled every 2 m) or 'unlit' (the material's colour,
   unshaded: lights and ceilings). Everything else is a toon material in its base colour. `outline: 0` leaves a
   surface out of the outline pass.
@@ -53,6 +55,8 @@ LCARS = {
 #: the bridge's seats, its command chairs and the tops of its consoles
 CUSHION = '#5c5470'
 COMMAND_RED = '#a8434c'
+#: the lounge's chairs
+UPHOLSTERY = '#7b2d43'
 CONSOLE_TOP = '#2b2735'
 
 DOOR_H = 2.5
@@ -574,6 +578,16 @@ def bridge_seat(name, frame):
     box(f'{name} seat back', (0.5, 0.07, 0.45), trim, (0, -0.25, 0.5), frame=frame, round=0.03)
     collide_object(cushion)
 
+
+def lounge_chair(name, at, yaw):
+    """A high-backed chair on a pedestal facing +Y, turned `yaw`, as round the lounge's table. Returns its seat."""
+    f = Matrix.Translation((at[0], at[1], 0)) @ Matrix.Rotation(yaw, 4, 'Z')
+    soft = toon(UPHOLSTERY)
+    cylinder(f'{name} base', 0.24, 0.04, toon(HULL['dado']), frame=f)
+    cylinder(f'{name} column', 0.05, 0.36, toon(HULL['frame']), (0, 0, 0.04), frame=f)
+    seat = box(f'{name} seat', (0.5, 0.5, 0.1), soft, (0, 0, 0.4), frame=f, round=0.03)
+    box(f'{name} back', (0.46, 0.08, 0.72), soft, (0, -0.24, 0.48), frame=f, round=0.03)
+    return seat
 
 # ---------------------------------------------------------------------------------------------------- markers
 

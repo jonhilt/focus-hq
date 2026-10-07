@@ -18,6 +18,7 @@ describe('readMarker', () => {
     expect(readMarker({ marker: 'seat', crew: 'station-helper-4' })).toEqual({ kind: 'seat', crew: 'station-helper-4' });
     expect(readMarker({ marker: 'seat', crew: 'station-reviewer' })).toEqual({ kind: 'seat', crew: 'station-reviewer' });
     expect(readMarker({ marker: 'turbolift', label: 'Deck 1 · Bridge' })).toEqual({ kind: 'turbolift', label: 'Deck 1 · Bridge' });
+    expect(readMarker({ marker: 'portal', width: 2, height: 2.5, depth: 0.75 })).toEqual({ kind: 'portal', width: 2, height: 2.5, depth: 0.75 });
   });
 
   it('fails on a marker it doesn’t know or one missing what it needs', () => {
@@ -25,6 +26,7 @@ describe('readMarker', () => {
     expect(() => readMarker({ marker: 'door', width: 2 })).toThrow(/height should be a number/);
     expect(() => readMarker({ marker: 'place' })).toThrow(/label should be a string/);
     expect(() => readMarker({ marker: 'turbolift' })).toThrow(/label should be a string/);
+    expect(() => readMarker({ marker: 'portal', width: 2, height: 2.5 })).toThrow(/depth should be a number/);
     expect(() => readMarker({ marker: 'seat', crew: 'cook' })).toThrow(/unknown crew/);
     expect(() => readMarker({ marker: 'seat', crew: 'station-helper-5' })).toThrow(/unknown crew/);
   });

@@ -15,8 +15,8 @@ from mathutils import Matrix, Vector
 
 from kit import (COMMAND_RED, CONSOLE_TOP, CUSHION, DOOR_H, FRAME_PROUD, HULL, LCARS, annulus, bezel, box,
                  bridge_console, bridge_seat, collide_footprint, collide_object, collide_path, command_chair, cylinder,
-                 door, facing, interact, keys_on_slope, marker, material, pane, panel, polygon, prism, readout,
-                 ring_points, rounded_rect, sign, slab, sweep, toon, turbolift_car, unlit, walls, window)
+                 door, facing, interact, keys_on_slope, lounge_chair, marker, material, pane, panel, polygon, prism,
+                 readout, ring_points, rounded_rect, sign, slab, sweep, toon, turbolift_car, unlit, walls, window)
 
 APOTHEM = 7.5
 HEIGHT = 4.0
@@ -25,7 +25,6 @@ DOORWAY = 2.0
 #: the sides kept, numbered anticlockwise from starboard in sixteenths of a turn; 3 and 5 make way for the viewscreen
 SIDES = [0, 1, 2, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 CARPET = '#3d4a82'
-UPHOLSTERY = '#7b2d43'
 #: the ready room and the lounge: their ceilings, how far they reach fore and aft of the beam, and where their walls
 #: stand, back to back with the bridge's
 ROOM_HEIGHT = 3.4
@@ -290,12 +289,3 @@ def lounge():
     marker('place lounge', 'place', (*place, 0), yaw=facing(place, (mid - 1.0, 0.3)), label='🖖 Observation lounge')
     marker('area lounge', 'area', (mid, 0, 1), scale=((near - far) / 2 + 0.1, ROOM_HALF + 0.1, 1), label='Observation lounge')
 
-
-def lounge_chair(name, at, yaw):
-    """A high-backed chair on a pedestal facing +Y."""
-    f = wall_frame(at[0], at[1], yaw)
-    soft = toon(UPHOLSTERY)
-    cylinder(f'{name} base', 0.24, 0.04, toon(HULL['dado']), frame=f)
-    cylinder(f'{name} column', 0.05, 0.36, toon(HULL['frame']), (0, 0, 0.04), frame=f)
-    box(f'{name} seat', (0.5, 0.5, 0.1), soft, (0, 0, 0.4), frame=f, round=0.03)
-    box(f'{name} back', (0.46, 0.08, 0.72), soft, (0, -0.24, 0.48), frame=f, round=0.03)

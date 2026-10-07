@@ -483,10 +483,19 @@ export class SlidingDoors {
 
   update(eye: THREE.Vector3, dt: number): void {
     if (this.locked) return;
+    this.sense(Math.hypot(eye.x - this.at.x, eye.z - this.at.z), dt);
+  }
+
+  /** Whether they're open at all, so you can see through. */
+  get ajar(): boolean {
+    return this.open > 0;
+  }
+
+  /** Opens as someone `distance` away (horizontally) comes near, and shuts as they go. `quiet` doors make no sound. */
+  sense(distance: number, dt: number, quiet = false): void {
     // the gap between the two distances stops a door stuttering open and shut when you stand at the edge
-    const distance = Math.hypot(eye.x - this.at.x, eye.z - this.at.z);
     const target = distance < DOOR_SENSOR.open ? 1 : distance > DOOR_SENSOR.close ? 0 : this.target;
-    if (target !== this.target) sound.door(target === 1, this.at);
+    if (target !== this.target && !quiet) sound.door(target === 1, this.at);
     this.target = target;
     if (target === this.open) return;
     this.open = target > this.open ? Math.min(1, this.open + dt * 3.5) : Math.max(0, this.open - dt * 2.5);

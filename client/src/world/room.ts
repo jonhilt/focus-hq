@@ -9,14 +9,15 @@ import { KanbanBoard } from './board';
 import { type Builder, type Interaction, interactive } from './builder';
 import { seatHelpers } from './helperSeats';
 import { agentView, Character, type CrewView } from './character';
-import { OVER_DOOR, type RoomSlot, ROOM_DEPTH, ROOM_WIDTH, WALL_H } from './layout';
+import { briefingRoomAt, OVER_DOOR, type RoomSlot, ROOM_DEPTH, ROOM_WIDTH, WALL_H } from './layout';
 import { box, flat, lighten, toon } from './materials';
 import { ceilingLight, chair, cyl, paperStack, plant } from './props';
 import { holodeckMaterial, holodeckSkin, type Scenery } from './scenery';
 import { StationScreen } from './screen';
 import { Beam } from './transporter';
 import { HULL, LCARS, lcarsSign, workstation } from './starship';
-import { type StationSeat, TeamStation } from './teamStation';
+import type { Portal } from './portal';
+import { type StationSeat, TeamStation, type TeamStationKit } from './teamStation';
 
 interface DeskSlot {
   index: number;
@@ -71,7 +72,7 @@ export class ProjectRoom {
   private qa!: Character;
   private qaScreen = new StationScreen(null, 'QA station · standing by');
   private qaStation!: THREE.Group;
-  /** The team stations: one goal each, its lead in the command chair, and their helpers and reviewer at consoles. */
+  /** The team stations: one goal each, a door in the room to a briefing room where its lead, helpers and reviewer sit. */
   private stations: TeamStation[] = [];
   private prPile = new THREE.Group();
   private prCount = -1;
@@ -85,15 +86,15 @@ export class ProjectRoom {
 
   /**
    * `scenery` is the landscape the room sits in (null for plain office walls). The World owns it, so it can
-   * outlive this room when the building is rebuilt for an unrelated change. `teamStation` is the furniture each of
-   * its team stations is a copy of (loadTeamStation).
+   * outlive this room when the building is rebuilt for an unrelated change. `teamStation` is the door and briefing
+   * room each of its team stations is a copy of (loadTeamStation).
    */
   constructor(
     public project: Project,
     readonly slot: RoomSlot,
     builder: Builder,
     private readonly scenery: Scenery | null,
-    teamStation: THREE.Object3D,
+    teamStation: TeamStationKit,
   ) {
     this.group.position.copy(slot.center);
     this.group.rotation.y = slot.rotationY;
@@ -171,11 +172,11 @@ export class ProjectRoom {
     this.qa = new Character(this.qaView());
     qaStation.seat.add(this.qa.group);
 
-    // the team stations either side of the aisle, where each goal's lead works with the captain
+    // the team stations' doors along the side walls, each to the briefing room where a goal's lead works with the captain
     for (let i = 0; i < TEAM_STATIONS; i++) {
-      const station = new TeamStation(i, [LCARS.gold, LCARS.periwinkle, LCARS.orange, LCARS.lilac][i], teamStation);
-      this.group.add(station.group);
-      builder.colliders.push(...station.colliders());
+      const station = new TeamStation(i, [LCARS.gold, LCARS.periwinkle, LCARS.orange, LCARS.lilac][i], teamStation, briefingRoomAt(slot, i));
+      this.group.add(station.door);
+      station.connect(builder);
       this.stations.push(station);
     }
 
@@ -284,7 +285,7 @@ export class ProjectRoom {
       station.setSign(lead ? `${lead.name} · ${lead.lead?.title ?? lead.issue.title}` : next ? `Free · next up: ${next}` : 'Free · start a goal here');
       const use: Interaction = lead ? { kind: 'agent', id: lead.id } : { kind: 'station', projectId: this.project.id, station: station.index };
       const label = () => (lead ? `Talk to ${lead.name}, lead of “${lead.lead?.title ?? 'a goal'}”` : next ? `Team station ${n} is free: start “${next}”` : `Start a goal at team station ${n}`);
-      interactive(station.furniture, use, label);
+      for (const thing of station.furniture) interactive(thing, use, label);
       this.sit(station.lead, lead?.id, lead && agentView(lead), use, label);
       this.syncHelpers(station, lead);
       const reviewer = lead && reviewers.find((r) => r.reviewFor === lead.id);
@@ -438,10 +439,23 @@ export class ProjectRoom {
     this.prPile.add(paperStack(count, Object.values(LCARS)));
   }
 
+  /** The doorways between the holodeck and its team stations' briefing rooms. */
+  portals(): Portal[] {
+    return this.stations.map((s) => s.portal);
+  }
+
+  /** The team station whose briefing room a world position is in, if it's in one of this room's. */
+  briefingRoomOf(p: THREE.Vector3): number | undefined {
+    return this.stations.find((s) => s.inside(p))?.index;
+  }
+
   update(t: number, now: number, camera: THREE.Vector3): void {
-    this.scenery?.update(t, this.group.worldToLocal(tmp.copy(camera)));
-    // within earshot of a beam: in the room, or on its doorstep in the hallway
-    this.youreHere = camera.distanceTo(this.slot.center) < HALF_D + 2;
+    // from a briefing room, the holodeck is what you see through its door
+    const briefing = this.stations.find((s) => s.inside(camera));
+    const eye = briefing ? briefing.threshold() : camera;
+    this.scenery?.update(t, this.group.worldToLocal(tmp.copy(eye)));
+    // within earshot of a beam: in the room, or on its doorstep in the hallway, or in one of its briefing rooms
+    this.youreHere = eye.distanceTo(this.slot.center) < HALF_D + 2;
     if (this.beams.length) this.beams = this.beams.filter((b) => !b.update(now));
     if (this.boardDirty) {
       this.boardDirty = false;
@@ -449,19 +463,23 @@ export class ProjectRoom {
       this.board.draw(this.project, board, state.agentsIn(this.project.id));
       this.rebuildPrPile(board);
     }
-    const inRoom = camera.distanceTo(this.slot.center) < ROOM_DEPTH;
-    if (inRoom) this.planner.update(t, camera.distanceTo(this.planner.group.getWorldPosition(tmp)));
-    const qaDist = camera.distanceTo(this.qa.group.getWorldPosition(tmp));
+    const inRoom = eye.distanceTo(this.slot.center) < ROOM_DEPTH;
+    if (inRoom) this.planner.update(t, eye.distanceTo(this.planner.group.getWorldPosition(tmp)));
+    const qaDist = eye.distanceTo(this.qa.group.getWorldPosition(tmp));
     if (inRoom) this.qa.update(t, qaDist);
     const qaAgent = state.qaAgent(this.project.id);
     this.qaScreen.maybeDraw(now, inRoom && qaDist < 6, qaAgent && state.lines.get(qaAgent.id), qaAgent && state.browser.get(qaAgent.id));
     for (const station of this.stations) {
-      // everyone at a station fades their bubble by how near you are to the lead's chair, so from behind it, watching
-      // the viewscreen, none of them cross it
-      const atLead = camera.distanceTo(station.lead.seat.getWorldPosition(tmp));
-      if (inRoom) for (const slot of [station.lead, ...station.helpers, station.reviewer]) slot.character?.update(t, atLead);
+      // only drawn while you're in it, or might see into it through its open door
+      station.room.visible = station === briefing || station.portal.ajar;
+      // in the briefing room, or seeing into it through the door
+      const seen = station.eye(camera, inRoom && !briefing);
+      // everyone round the table fades their bubble by how near you are to its head, so from there, watching the
+      // screen, none of them cross it
+      const atHead = seen ? station.fromHead(seen) : 0;
+      if (seen) for (const slot of [station.lead, ...station.helpers, station.reviewer]) slot.character?.update(t, atHead);
       const lead = station.lead.id;
-      const near = inRoom && camera.distanceTo(station.group.getWorldPosition(tmp)) < 7;
+      const near = !!seen && station.fromScreen(seen) < 13;
       station.screen.maybeDraw(now, near, lead ? state.lines.get(lead) : undefined, lead ? state.browser.get(lead) : undefined);
     }
     for (const slot of this.desks) {
@@ -469,7 +487,7 @@ export class ProjectRoom {
         slot.screen.maybeDraw(now, false, undefined, undefined);
         continue;
       }
-      const dist = camera.distanceTo(slot.character.group.getWorldPosition(tmp));
+      const dist = eye.distanceTo(slot.character.group.getWorldPosition(tmp));
       if (inRoom) slot.character.update(t, dist);
       const near = inRoom && dist < 6;
       slot.screen.maybeDraw(now, near, state.lines.get(slot.agentId!), state.browser.get(slot.agentId!));
@@ -482,11 +500,9 @@ export class ProjectRoom {
     const qa = state.qaAgent(this.project.id)?.id === agentId;
     const station = this.stations.find((st) => st.lead.id === agentId);
     if (!slot && !qa && !station) return null;
-    const v = slot
-      ? deskViewpoint(slot.index)
-      : station
-        ? station.viewpoint()
-        : overShoulder(QA_SEAT);
+    // the briefing room is in the world already
+    if (station) return station.viewpoint();
+    const v = slot ? deskViewpoint(slot.index) : overShoulder(QA_SEAT);
     this.group.updateWorldMatrix(true, false);
     return { position: v.position.applyMatrix4(this.group.matrixWorld), lookAt: v.lookAt.applyMatrix4(this.group.matrixWorld) };
   }

@@ -55,6 +55,18 @@ export class Player {
     this.velocity.set(0, 0, 0);
   }
 
+  /**
+   * Carries the player through a doorway to the other end (world/portal.ts): `through` moves where they stand, the way
+   * they face and the way they're going all alike, so they walk on as if nothing happened.
+   */
+  transport(through: THREE.Matrix4): void {
+    const turn = new THREE.Quaternion().setFromRotationMatrix(through);
+    const y = this.camera.position.y;
+    this.camera.position.applyMatrix4(through).setY(y);
+    this.camera.quaternion.premultiply(turn);
+    this.velocity.applyQuaternion(turn);
+  }
+
   update(dt: number): void {
     const active = this.enabled && this.controls.isLocked;
     const forward = new THREE.Vector3();

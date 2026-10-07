@@ -15,11 +15,13 @@ import { bookshelf, ceilingLight, chair, coffeeMachine, cyl, desk, DESK_TOP, pla
 import { EngineeringStation } from './engineering';
 import { Lounge } from './lounge';
 import { FirstOfficer } from './numberOne';
+import type { Portal } from './portal';
 import { buildHiddenRoom, buildVacantRoom, ProjectRoom } from './room';
 import type { Scenery } from './scenery';
 import { tiled } from './textures';
 import { HULL, LCARS, LCARS_FONT, lcarsConsole, lcarsFrame, lcarsSign, type SlidingDoors, viewport } from './starship';
 import { cruise } from './starfield';
+import type { TeamStationKit } from './teamStation';
 import { createScenery, roomTheme } from './themes';
 
 export interface Place {
@@ -64,6 +66,8 @@ export class World {
   private sceneries = new Map<string, Scenery>();
   private builder: Builder | null = null;
   private doors: SlidingDoors[] = [];
+  /** The doorways between each holodeck and its team stations' briefing rooms. */
+  portals: Portal[] = [];
   private lastT = 0;
   private dashboard = makeCanvas(1280, 720);
   private dashboardTex = canvasTexture(this.dashboard.canvas);
@@ -80,8 +84,8 @@ export class World {
   constructor(
     scene: THREE.Scene,
     private readonly ship: Ship,
-    /** The furniture every team station is a copy of (loadTeamStation). */
-    private readonly teamStation: THREE.Object3D,
+    /** The door and briefing room every team station is a copy of (loadTeamStation). */
+    private readonly teamStation: TeamStationKit,
   ) {
     scene.add(this.root);
     for (const deck of this.decks()) this.mount(deck, this.root);
@@ -169,6 +173,7 @@ export class World {
     this.root.add(b.group);
     this.colliders = [...b.colliders, ...this.decks().flatMap((d) => d.colliders)];
     this.doors = [...b.doors, ...this.decks().flatMap((d) => d.doors)];
+    this.portals = [...this.rooms.values()].flatMap((r) => r.portals());
     this.panelsDirty = true;
   }
 
@@ -486,8 +491,21 @@ export class World {
     return places;
   }
 
+  /** Where stepping through a doorway takes you, if `eye` has just stepped into one (Player.transport). */
+  through(eye: THREE.Vector3): THREE.Matrix4 | null {
+    for (const portal of this.portals) {
+      const through = portal.crossing(eye);
+      if (through) return through;
+    }
+    return null;
+  }
+
   /** Human name of where a world position is. */
   locationOf(p: THREE.Vector3): { label: string; projectId?: string } {
+    for (const room of this.rooms.values()) {
+      const station = room.briefingRoomOf(p);
+      if (station !== undefined) return { label: `${room.project.name} · briefing room ${station + 1}`, projectId: room.project.id };
+    }
     for (const deck of this.decks()) {
       const label = deck.areaAt(p);
       if (label) return { label };
@@ -513,6 +531,7 @@ export class World {
     this.lastT = t;
     cruise(t);
     for (const door of this.doors) door.update(camera, dt);
+    for (const portal of this.portals) portal.update(camera, dt);
     for (const room of this.rooms.values()) room.update(t, now, camera);
     this.engineering?.update(t, camera);
     this.numberOne?.update(t, camera);

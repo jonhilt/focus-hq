@@ -64,6 +64,19 @@ export function rowsFor(projectCount: number): number {
   return Math.max(1, Math.ceil((projectCount + 1) / 2));
 }
 
+/**
+ * Where a team station's briefing room stands (blender/team_station.py): out beyond its holodeck's side of the ship,
+ * a row of them per holodeck, nowhere you could walk or see to except through its door. Each runs `depth` south from
+ * its doorway (to the far wall's back) and `width` across, centred on its holodeck's row, with an alcove `alcove` deep
+ * behind its door, so neither the rows' rooms nor the stations' meet.
+ */
+export const BRIEFING = { x: 40, step: 10, depth: 10.3, width: 7.4, alcove: 0.9 };
+
+/** Where station `station`'s briefing room doorway stands, for the holodeck in `slot`; the room runs south of it. */
+export function briefingRoomAt(slot: RoomSlot, station: number): THREE.Vector3 {
+  return new THREE.Vector3(slot.side * (BRIEFING.x + station * BRIEFING.step), 0, slot.center.z + BRIEFING.depth / 2);
+}
+
 /** Converts a point in a room's local frame to world space. */
 export function roomToWorld(slot: RoomSlot, local: THREE.Vector3): THREE.Vector3 {
   return local.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), slot.rotationY).add(slot.center);

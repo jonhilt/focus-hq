@@ -38,6 +38,10 @@ async function scan(browser: Browser, url: string): Promise<{ pairs: FightingPai
     const { findZFighting } = (await import(modulePath)) as typeof import('../client/src/world/zfight');
     const world = (window as unknown as { focusHQ: { world: { root: import('three').Object3D } } }).focusHQ.world;
     const scene = world.root.parent ?? world.root;
+    // team stations' briefing rooms are only drawn while you're in one or looking in through its door (teamStation.ts)
+    scene.traverse((o) => {
+      if (o.name === 'briefing_room' && o.parent) o.parent.visible = true;
+    });
     let meshes = 0;
     let padds = 0;
     scene.traverse((o) => {
