@@ -1,4 +1,4 @@
-// n8ao ships JavaScript without types: just the part of its three.js pass that occlusion.ts uses.
+// n8ao ships JavaScript without types: just the part of its three.js pass that sceneRenderer.ts uses.
 declare module 'n8ao' {
   import type * as THREE from 'three';
 

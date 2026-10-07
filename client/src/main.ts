@@ -27,7 +27,7 @@ import { Deck } from './world/deck';
 import { HolodeckDeck } from './world/holodeckDeck';
 import { COMMAND_DECK, SUN_POSITION } from './world/layout';
 import { type Ship, World } from './world/office';
-import { SceneRenderer } from './world/occlusion';
+import { SceneRenderer } from './world/sceneRenderer';
 import { PortalView } from './world/portal';
 import { loadTeamStation } from './world/teamStation';
 import { stopAt } from './world/turbolift';
@@ -61,10 +61,11 @@ async function main() {
   scene.add(new THREE.AmbientLight('#ffffff', 0.35));
 
   const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 250);
-  const effect = new OutlineEffect(renderer, { defaultThickness: 0.004, defaultColor: [0.1, 0.1, 0.12], defaultAlpha: 1 });
-  const portalView = new PortalView(renderer, effect);
-  // ?ao=0 draws without ambient occlusion, to compare
-  const view = new SceneRenderer(renderer, effect, scene, camera, new URLSearchParams(location.search).get('ao') !== '0');
+  // to compare: ?ao=0 draws without ambient occlusion, ?outline=hull with the old inside-out hulls for outlines
+  const params = new URLSearchParams(location.search);
+  const hulls = params.get('outline') === 'hull' ? new OutlineEffect(renderer, { defaultThickness: 0.004, defaultColor: [0.1, 0.1, 0.12], defaultAlpha: 1 }) : null;
+  const portalView = new PortalView(renderer, hulls);
+  const view = new SceneRenderer(renderer, hulls, scene, camera, params.get('ao') !== '0');
 
   await fontsReady();
 

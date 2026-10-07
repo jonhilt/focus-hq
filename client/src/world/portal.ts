@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { OutlineEffect } from 'three/examples/jsm/effects/OutlineEffect.js';
 import { clipNear, inDoorway, throughDoor } from './doorway';
 import { noOutline } from './materials';
+import { Outlines, sceneTarget, stencilToSky } from './outline';
 import { SlidingDoors } from './starship';
 
 // A pair of doorways that lead into each other, wherever in the world they stand: a team station's door in a holodeck
@@ -38,8 +39,8 @@ const surface = new THREE.ShaderMaterial({
   side: THREE.DoubleSide,
 });
 noOutline(surface);
-// stamped where the far end shows, so the ambient occlusion leaves it alone (occlusion.ts): it would shade the alcove's
-// corners over the picture, not the far room's. Holodeck landscapes count their stencil values up from 1.
+// stamped where the far end shows, so the ambient occlusion and outlines leave it alone (outline.ts): they'd draw the
+// alcove's corners over the picture, not the far room's. Holodeck landscapes count their stencil values up from 1.
 surface.stencilWrite = true;
 surface.stencilRef = 255;
 surface.stencilFunc = THREE.AlwaysStencilFunc;
@@ -141,7 +142,11 @@ const CLIP_FROM = 0.3;
  * the whole scene again, from the camera carried through the doorway, with nothing behind the other doorway drawn.
  */
 export class PortalView {
+  /** The far end as drawn, to outline. */
+  private readonly drawn: THREE.WebGLRenderTarget;
+  /** The far end outlined, in linear colours, for the alcove to show. */
   private readonly target: THREE.WebGLRenderTarget;
+  private readonly outlines: Outlines;
   private readonly camera = new THREE.PerspectiveCamera();
   private readonly frustum = new THREE.Frustum();
   private readonly size = new THREE.Vector2();
@@ -150,12 +155,14 @@ export class PortalView {
 
   constructor(
     private readonly renderer: THREE.WebGLRenderer,
-    private readonly effect: OutlineEffect,
+    /** Draws the scene with its outlines as hulls (`?outline=hull`), or null for outline.ts's lines. */
+    private readonly hulls: OutlineEffect | null,
   ) {
     renderer.getDrawingBufferSize(this.size);
-    // as the screen is: multisampled, with a stencil for holodeck landscapes, and half floats for the linear colours
-    // it holds until the alcove draws them to the screen
-    this.target = new THREE.WebGLRenderTarget(this.size.x, this.size.y, { type: THREE.HalfFloatType, samples: 4, stencilBuffer: true });
+    this.drawn = sceneTarget(this.size.x, this.size.y);
+    // half floats for the linear colours it holds until the alcove draws them to the screen
+    this.target = new THREE.WebGLRenderTarget(this.size.x, this.size.y, { type: THREE.HalfFloatType, depthBuffer: false });
+    this.outlines = new Outlines(!hulls);
     surface.uniforms.map.value = this.target.texture;
     this.camera.matrixAutoUpdate = false;
     this.camera.matrixWorldAutoUpdate = false;
@@ -197,10 +204,16 @@ export class PortalView {
     v.projectionMatrixInverse.copy(v.projectionMatrix).invert();
 
     this.renderer.getDrawingBufferSize(this.size);
-    if (this.target.width !== this.size.x || this.target.height !== this.size.y) this.target.setSize(this.size.x, this.size.y);
+    if (this.target.width !== this.size.x || this.target.height !== this.size.y) {
+      this.drawn.setSize(this.size.x, this.size.y);
+      this.target.setSize(this.size.x, this.size.y);
+    }
     surface.uniforms.size.value.copy(this.size);
-    this.renderer.setRenderTarget(this.target);
-    this.effect.render(scene, v);
+    this.renderer.setRenderTarget(this.drawn);
+    if (this.hulls) this.hulls.render(scene, v);
+    else this.renderer.render(scene, v);
+    stencilToSky(this.renderer);
+    this.outlines.render(this.renderer, { target: this.drawn, camera: v }, this.target, false);
     this.renderer.setRenderTarget(null);
     shown.view.visible = true;
   }
