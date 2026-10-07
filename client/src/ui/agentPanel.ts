@@ -168,8 +168,11 @@ export function openAgentPanel(ui: Ui, id: string): void {
     browser.style.display = view === 'browser' ? '' : 'none';
     info.style.display = view && view !== 'browser' ? '' : 'none';
     if (!view || view === 'browser') return;
+    const next = view === 'goal' ? goalView(a) : view === 'tasks' ? tasksView(a.tasks) : crewView(a);
+    // what hasn't changed stays put, so a click on it isn't lost to a redraw
+    if (info.childElementCount === 1 && info.firstElementChild?.isEqualNode(next)) return;
     const top = info.scrollTop;
-    fill(info, view === 'goal' ? goalView(a) : view === 'tasks' ? tasksView(a.tasks) : crewView(a));
+    fill(info, next);
     info.scrollTop = top;
   };
 
@@ -198,11 +201,11 @@ export function openAgentPanel(ui: Ui, id: string): void {
     );
   };
 
-  /** The helpers a lead has handed work to: what each was asked, and what it's doing or how it got on. */
+  /** The helpers a lead has handed work to: what each was asked, and what it's doing or how it got on. Click one for its transcript. */
   const crewView = (a: Agent) =>
     h('div', { class: 'crew' },
       ...(a.helpers ?? []).map((x) =>
-        h('div', { class: 'crew-member', style: `--tone:${HELPER_TONE[x.status]}` },
+        h('div', { class: 'crew-member', style: `--tone:${HELPER_TONE[x.status]}`, title: 'Open their transcript', onclick: () => ui.openHelper(a.id, x.id) },
           h('h4', { style: 'margin:0' }, `${helperFor(x.id).name} · ${x.status}`),
           h('p', null, x.description),
           x.activity ? h('p', { class: 'muted' }, x.activity) : null,
