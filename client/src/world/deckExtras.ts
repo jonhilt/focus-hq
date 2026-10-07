@@ -20,13 +20,26 @@ export type Marker =
   /** Where a turbolift stops: you stand here in its car, facing along the empty's forward (its doors). */
   | { kind: 'turbolift'; label: string };
 
-/** Crew a deck seats: Number One in the ready room, and the chief engineer at the engineering station. */
-const CREW = ['number-one', 'engineer'] as const;
+/** The helpers' seats at a team station, in the order helpers take them. */
+export const HELPER_SEATS = ['station-helper-1', 'station-helper-2', 'station-helper-3', 'station-helper-4'] as const;
+
+/**
+ * Crew a model seats: Number One in the ready room, the chief engineer at the engineering station, and at a team
+ * station its lead, their helpers and the goal's reviewer.
+ */
+const CREW = ['number-one', 'engineer', 'station-lead', ...HELPER_SEATS, 'station-reviewer'] as const;
 export type Crew = (typeof CREW)[number];
 const isCrew = (v: unknown): v is Crew => (CREW as readonly unknown[]).includes(v);
 
-/** A screen the browser keeps drawing on: mission control is the World's dashboard. */
-export type ScreenName = 'mission-control';
+/**
+ * A screen the browser keeps drawing on: mission control is the World's dashboard; a team station shows its lead's
+ * session, and its name and goal on the sign over it.
+ */
+const SCREENS = ['mission-control', 'team-station', 'team-station-sign'] as const;
+export type ScreenName = (typeof SCREENS)[number];
+/** The screens a deck has, which the World draws. */
+export type DeckScreen = Extract<ScreenName, 'mission-control'>;
+const isScreen = (v: unknown): v is ScreenName => (SCREENS as readonly unknown[]).includes(v);
 
 /** How a deck's surface is drawn. */
 export type Surface =
@@ -100,7 +113,7 @@ export function readSurface(e: Extras): Surface {
     case 'sign':
       return { kind: 'sign', text: str(e, 'text'), color: str(e, 'color'), sub: optStr(e, 'sub'), code: optStr(e, 'code') };
     case 'screen':
-      return { kind: 'screen', screen: e.screen === 'mission-control' ? e.screen : fail('unknown screen', e) };
+      return { kind: 'screen', screen: isScreen(e.screen) ? e.screen : fail('unknown screen', e) };
     default:
       return fail('unknown surface', e);
   }

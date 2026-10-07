@@ -9,13 +9,15 @@ What the browser reads (client/src/world/deck.ts), all through custom properties
   player can't walk into), 'door' (sliding doors at a doorway's centre, sliding along the empty's X: `width`,
   `height`), 'place' (a teleport destination, looking along the empty's +Y: `label`), 'area' (an empty cube: the
   floor `label` names in the HUD), 'seat' (where a crew member's chair stands, turned along the empty's +Y: `crew`,
-  'number-one' in the ready room or 'engineer' at the engineering station) or 'turbolift' (where the turbolift stops:
+  'number-one' in the ready room, 'engineer' at the engineering station, or at a team station 'station-lead',
+  'station-helper-1' to 'station-helper-4' or 'station-reviewer') or 'turbolift' (where the turbolift stops:
   you stand there in its car, facing along the empty's +Y, and `label` names the deck).
 - An object's `interact` has pressing E on it do something: 'manager' (open the ready room console) or 'turbolift' (its
   controls), with the hint `label`.
 - A material's `surface` has the browser draw it: 'space' (a viewport onto the stars), 'keys' (an LCARS touch panel),
   'readout' (LCARS readouts: `seed`, `w`, `h`), 'sign' (an LCARS sign: `text`, `color`, optional `sub` and `code`),
-  'screen' (a screen the browser keeps drawing: `screen`, which is 'mission-control'), 'star-chart' (long-range
+  'screen' (a screen the browser keeps drawing: `screen`, which is 'mission-control', or a team station's
+  'team-station' and the 'team-station-sign' over it), 'star-chart' (long-range
   sensors), 'carpet' (speckled carpet in the material's colour, tiled every 2 m) or 'unlit' (the material's colour,
   unshaded: lights and ceilings). Everything else is a toon material in its base colour. `outline: 0` leaves a
   surface out of the outline pass.
@@ -47,6 +49,11 @@ LCARS = {
     'gold': '#ff9900',
     'sky': '#99ccff',
 }
+
+#: the bridge's seats, its command chairs and the tops of its consoles
+CUSHION = '#5c5470'
+COMMAND_RED = '#a8434c'
+CONSOLE_TOP = '#2b2735'
 
 DOOR_H = 2.5
 """How far the outline of a door frame stands into the room: clear of every wall trim, so they end inside it."""
@@ -510,6 +517,60 @@ def turbolift_car(frame, deck, wall=0.2):
     interact('turbolift', 'Use the turbolift', readout('turbolift panel', 0.5, 0.7, 41, (0, 0, 1.3), back))
     marker('turbolift stop', 'turbolift', (0, cy, 0), frame=frame, label=deck)
     marker('area turbolift', 'area', (0, cy, 1), frame=frame, scale=(r + 0.1, r + 0.1, 1), label='Turbolift')
+
+
+# ---------------------------------------------------------------------------------------------------- furniture
+
+def keys_on_slope(name, width, front, back, frame):
+    """An LCARS touch panel on a console's slope, from its front edge (y, z) up to its back edge."""
+    up = Vector((0, back[0] - front[0], back[1] - front[1]))
+    length = up.length
+    up.normalize()
+    tilt = math.atan2(-up.y, up.z)
+    normal = Vector((0, math.cos(tilt), math.sin(tilt)))
+    start = Vector((0, front[0], front[1])) + up * 0.04 + normal * 0.005
+    return panel(name, width, length - 0.08, material('#000000', surface='keys', outline=False), tuple(start), frame, tilt=tilt)
+
+
+def command_chair(name, at, yaw, cushion, scale):
+    """A big chair on a pedestal facing +Y, with LCARS keys set into its arms."""
+    f = Matrix.Translation((at[0], at[1], 0)) @ Matrix.Rotation(yaw, 4, 'Z') @ Matrix.Diagonal((scale, scale, scale, 1))
+    frame, soft = toon(HULL['frame']), toon(cushion)
+    cylinder(f'{name} chair base', 0.4, 0.06, toon(HULL['dado']), frame=f)
+    cylinder(f'{name} chair column', 0.12, 0.32, frame, (0, 0, 0.06), frame=f)
+    shell = box(f'{name} chair seat', (0.84, 0.8, 0.12), frame, (0, 0, 0.38), frame=f, round=0.04)
+    box(f'{name} chair cushion', (0.7, 0.66, 0.1), soft, (0, 0.03, 0.5), frame=f, round=0.04)
+    box(f'{name} chair back', (0.84, 0.16, 1.0), frame, (0, -0.36, 0.42), frame=f, round=0.05)
+    box(f'{name} chair back cushion', (0.68, 0.06, 0.78), soft, (0, -0.26, 0.6), frame=f, round=0.03)
+    for s in (-1, 1):
+        box(f'{name} chair arm {s}', (0.14, 0.62, 0.1), frame, (s * 0.44, 0.02, 0.7), frame=f, round=0.03)
+        box(f'{name} chair arm post {s}', (0.1, 0.12, 0.2), frame, (s * 0.44, 0.22, 0.5), frame=f)
+        panel(f'{name} chair keys {s}', 0.09, 0.4, material('#000000', surface='keys', outline=False), (s * 0.44, 0.3, 0.804), f, tilt=math.pi / 2)
+    collide_object(shell, pad=0.12 * scale)
+
+
+def bridge_console(name, length, seed, frame, display=(0.8, 0.42)):
+    """A low console `length` long, as conn and ops are, with whoever sits at it on its +Y side: LCARS keys on its slope
+    and a readout `display` (width, height) standing at its back."""
+    profile = [(0.25, 0), (0.25, 0.55), (0.42, 0.74), (-0.12, 0.92), (-0.2, 0.86), (-0.2, 0)]
+    dado, bulkhead, trim = toon(HULL['dado']), toon(HULL['bulkhead']), toon(HULL['frame'])
+    body = prism(f'{name} console', profile, length, [bulkhead, dado, toon(CONSOLE_TOP), bulkhead, bulkhead, dado], frame=frame, round=0.02)
+    collide_object(body)
+    keys_on_slope(f'{name} keys', length - 0.12, (0.42, 0.74), (-0.12, 0.92), frame)
+    box(f'{name} display', (display[0], 0.06, display[1]), trim, (0, -0.16, 0.88), frame=frame, round=0.015)
+    w, h = (round(d - 0.08, 3) for d in display)
+    panel(f'{name} display screen', w, h, material('#000000', surface='readout', outline=False, seed=seed, w=w, h=h), (0, -0.125, 0.92), frame)
+    return body
+
+
+def bridge_seat(name, frame):
+    """A seat on a pedestal, its back towards -Y, as at conn and ops."""
+    dado, trim = toon(HULL['dado']), toon(HULL['frame'])
+    cylinder(f'{name} seat base', 0.24, 0.05, dado, frame=frame)
+    cylinder(f'{name} seat column', 0.07, 0.36, trim, (0, 0, 0.05), frame=frame)
+    cushion = cylinder(f'{name} seat', 0.28, 0.08, toon(CUSHION), (0, 0, 0.41), frame=frame)
+    box(f'{name} seat back', (0.5, 0.07, 0.45), trim, (0, -0.25, 0.5), frame=frame, round=0.03)
+    collide_object(cushion)
 
 
 # ---------------------------------------------------------------------------------------------------- markers

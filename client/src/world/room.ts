@@ -31,7 +31,7 @@ interface DeskSlot {
 const HALF_D = ROOM_DEPTH / 2;
 const HALF_W = ROOM_WIDTH / 2;
 /** The QA officer's seat, at a station beside the pull requests table (room frame). */
-const QA_SEAT = new THREE.Vector3(HALF_D - 2.0 - 1.0, 0, -HALF_W + 2.9);
+const QA_SEAT = new THREE.Vector3(HALF_D - 2.7, 0, -HALF_W + 2.9);
 /** Where a developer sits, relative to deskPosition(); the console in front of them is centred on it across the room. */
 const DESK_SEAT = new THREE.Vector3(-0.68, 0, -0.22);
 /** Things hung on the far wall sit this far in from its centre line, in front of a themed room's wall skin. */
@@ -85,13 +85,15 @@ export class ProjectRoom {
 
   /**
    * `scenery` is the landscape the room sits in (null for plain office walls). The World owns it, so it can
-   * outlive this room when the building is rebuilt for an unrelated change.
+   * outlive this room when the building is rebuilt for an unrelated change. `teamStation` is the furniture each of
+   * its team stations is a copy of (loadTeamStation).
    */
   constructor(
     public project: Project,
     readonly slot: RoomSlot,
     builder: Builder,
     private readonly scenery: Scenery | null,
+    teamStation: THREE.Object3D,
   ) {
     this.group.position.copy(slot.center);
     this.group.rotation.y = slot.rotationY;
@@ -171,9 +173,9 @@ export class ProjectRoom {
 
     // the team stations either side of the aisle, where each goal's lead works with the captain
     for (let i = 0; i < TEAM_STATIONS; i++) {
-      const station = new TeamStation(i, [LCARS.gold, LCARS.periwinkle, LCARS.orange, LCARS.lilac][i]);
+      const station = new TeamStation(i, [LCARS.gold, LCARS.periwinkle, LCARS.orange, LCARS.lilac][i], teamStation);
       this.group.add(station.group);
-      for (const c of station.colliders) builder.collideObject(c);
+      builder.colliders.push(...station.colliders());
       this.stations.push(station);
     }
 
@@ -254,7 +256,7 @@ export class ProjectRoom {
    * Seats `id` (with `view`) in `slot`, beaming out whoever sat there before; nobody when `id` is undefined. Using them
    * does `use`.
    */
-  private sit(slot: StationSeat, id: string | undefined, view: CrewView | undefined, use: Interaction, label: () => string, prop?: 'padd'): void {
+  private sit(slot: StationSeat, id: string | undefined, view: CrewView | undefined, use: Interaction, label: () => string): void {
     if (slot.id !== id && slot.character) {
       this.leave(slot.seat, slot.character);
       slot.character = undefined;
@@ -262,7 +264,7 @@ export class ProjectRoom {
     slot.id = id;
     if (!id || !view) return;
     if (!slot.character) {
-      slot.character = new Character(view, prop);
+      slot.character = new Character(view);
       this.arrive(slot.seat, slot.character);
     }
     slot.character.set(view);
@@ -282,16 +284,16 @@ export class ProjectRoom {
       station.setSign(lead ? `${lead.name} · ${lead.lead?.title ?? lead.issue.title}` : next ? `Free · next up: ${next}` : 'Free · start a goal here');
       const use: Interaction = lead ? { kind: 'agent', id: lead.id } : { kind: 'station', projectId: this.project.id, station: station.index };
       const label = () => (lead ? `Talk to ${lead.name}, lead of “${lead.lead?.title ?? 'a goal'}”` : next ? `Team station ${n} is free: start “${next}”` : `Start a goal at team station ${n}`);
-      for (const o of [station.table, station.display]) interactive(o, use, label);
+      interactive(station.furniture, use, label);
       this.sit(station.lead, lead?.id, lead && agentView(lead), use, label);
       this.syncHelpers(station, lead);
       const reviewer = lead && reviewers.find((r) => r.reviewFor === lead.id);
       this.sit(station.reviewer, reviewer?.id, reviewer && agentView(reviewer), reviewer ? { kind: 'agent', id: reviewer.id } : use,
-        () => (reviewer ? `${reviewer.name}, reviewing “${lead?.lead?.title ?? 'the goal'}”: ${reviewer.activity}` : label()), 'padd');
+        () => (reviewer ? `${reviewer.name}, reviewing “${lead?.lead?.title ?? 'the goal'}”: ${reviewer.activity}` : label()));
     }
   }
 
-  /** Seats the lead's helpers round their station, PADDs in hand, and sends the ones who've gone on their way. */
+  /** Seats the lead's helpers at their station's consoles, and sends the ones who've gone on their way. */
   private syncHelpers(station: TeamStation, lead: Agent | undefined): void {
     const helpers: Helper[] = lead?.helpers ?? [];
     const seats = seatHelpers(station.helpers.map((s) => s.id), helpers.map((h) => h.id));
@@ -309,7 +311,7 @@ export class ProjectRoom {
         status: helper.status === 'working' ? 'working' : helper.status === 'done' ? 'done' : 'error',
         line: helper.status === 'working' ? helper.activity : `${helper.status === 'done' ? '✔' : '✘'} ${helper.activity}`,
       };
-      this.sit(slot, helper.id, view, { kind: 'agent', id: lead.id }, () => `${crew.name}, helping ${lead.name}: ${helper.description}`, 'padd');
+      this.sit(slot, helper.id, view, { kind: 'agent', id: lead.id }, () => `${crew.name}, helping ${lead.name}: ${helper.description}`);
     }
   }
 

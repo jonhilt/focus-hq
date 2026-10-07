@@ -13,9 +13,10 @@ import math
 
 from mathutils import Matrix, Vector
 
-from kit import (DOOR_H, FRAME_PROUD, HULL, LCARS, annulus, bezel, box, collide_footprint, collide_object, collide_path,
-                 cylinder, door, facing, interact, marker, material, pane, panel, polygon, prism, readout, ring_points,
-                 rounded_rect, sign, slab, sweep, toon, turbolift_car, unlit, walls, window)
+from kit import (COMMAND_RED, CONSOLE_TOP, CUSHION, DOOR_H, FRAME_PROUD, HULL, LCARS, annulus, bezel, box,
+                 bridge_console, bridge_seat, collide_footprint, collide_object, collide_path, command_chair, cylinder,
+                 door, facing, interact, keys_on_slope, marker, material, pane, panel, polygon, prism, readout,
+                 ring_points, rounded_rect, sign, slab, sweep, toon, turbolift_car, unlit, walls, window)
 
 APOTHEM = 7.5
 HEIGHT = 4.0
@@ -24,9 +25,6 @@ DOORWAY = 2.0
 #: the sides kept, numbered anticlockwise from starboard in sixteenths of a turn; 3 and 5 make way for the viewscreen
 SIDES = [0, 1, 2, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 CARPET = '#3d4a82'
-CUSHION = '#5c5470'
-COMMAND_RED = '#a8434c'
-CONSOLE_TOP = '#2b2735'
 UPHOLSTERY = '#7b2d43'
 #: the ready room and the lounge: their ceilings, how far they reach fore and aft of the beam, and where their walls
 #: stand, back to back with the bridge's
@@ -133,17 +131,6 @@ def wall_console(name, side, length, seed):
     readout(f'{name} readout', length - 0.4, 0.9, seed, (0, 0, 1.5), f)
 
 
-def keys_on_slope(name, width, front, back, frame):
-    """An LCARS touch panel on a console's slope, from its front edge (y, z) up to its back edge."""
-    up = Vector((0, back[0] - front[0], back[1] - front[1]))
-    length = up.length
-    up.normalize()
-    tilt = math.atan2(-up.y, up.z)
-    normal = Vector((0, math.cos(tilt), math.sin(tilt)))
-    start = Vector((0, front[0], front[1])) + up * 0.04 + normal * 0.005
-    return panel(name, width, length - 0.08, material('#000000', surface='keys', outline=False), tuple(start), frame, tilt=tilt)
-
-
 def wall_dressing():
     for side, w, h, z, seed in [(1, 1.8, 1.0, 1.5, 12), (7, 1.8, 1.0, 1.5, 13), (11, 1.0, 1.6, 1.15, 15), (13, 1.0, 1.6, 1.15, 16),
                                 (15, 1.8, 1.0, 1.5, 17)]:
@@ -165,41 +152,12 @@ def command_well():
     command_chair('counsellor', (-1.4, -0.75), -0.15, CUSHION, 0.85)
 
 
-def command_chair(name, at, yaw, cushion, scale):
-    """A big chair on a pedestal facing +Y, with LCARS keys set into its arms."""
-    f = Matrix.Translation((at[0], at[1], 0)) @ Matrix.Rotation(yaw, 4, 'Z') @ Matrix.Diagonal((scale, scale, scale, 1))
-    frame, soft = toon(HULL['frame']), toon(cushion)
-    cylinder(f'{name} chair base', 0.4, 0.06, toon(HULL['dado']), frame=f)
-    cylinder(f'{name} chair column', 0.12, 0.32, frame, (0, 0, 0.06), frame=f)
-    shell = box(f'{name} chair seat', (0.84, 0.8, 0.12), frame, (0, 0, 0.38), frame=f, round=0.04)
-    box(f'{name} chair cushion', (0.7, 0.66, 0.1), soft, (0, 0.03, 0.5), frame=f, round=0.04)
-    box(f'{name} chair back', (0.84, 0.16, 1.0), frame, (0, -0.36, 0.42), frame=f, round=0.05)
-    box(f'{name} chair back cushion', (0.68, 0.06, 0.78), soft, (0, -0.26, 0.6), frame=f, round=0.03)
-    for s in (-1, 1):
-        box(f'{name} chair arm {s}', (0.14, 0.62, 0.1), frame, (s * 0.44, 0.02, 0.7), frame=f, round=0.03)
-        box(f'{name} chair arm post {s}', (0.1, 0.12, 0.2), frame, (s * 0.44, 0.22, 0.5), frame=f)
-        panel(f'{name} chair keys {s}', 0.09, 0.4, material('#000000', surface='keys', outline=False), (s * 0.44, 0.3, 0.804), f, tilt=math.pi / 2)
-    collide_object(shell, pad=0.12 * scale)
-
-
 def forward_stations():
     """Conn and ops: low consoles facing the viewscreen, each with a seat behind it."""
-    profile = [(0.25, 0), (0.25, 0.55), (0.42, 0.74), (-0.12, 0.92), (-0.2, 0.86), (-0.2, 0)]
-    dado, bulkhead, frame = toon(HULL['dado']), toon(HULL['bulkhead']), toon(HULL['frame'])
     for name, x, seed in (('conn', -1.5, 31), ('ops', 1.5, 32)):
         # built with whoever sits at it on its +Y side, then turned to face the viewscreen
-        f = Matrix.Translation((x, 3.3, 0)) @ Matrix.Rotation(math.pi, 4, 'Z')
-        body = prism(f'{name} console', profile, 1.2, [bulkhead, dado, toon(CONSOLE_TOP), bulkhead, bulkhead, dado], frame=f, round=0.02)
-        collide_object(body)
-        keys_on_slope(f'{name} keys', 1.08, (0.42, 0.74), (-0.12, 0.92), f)
-        box(f'{name} display', (0.8, 0.06, 0.42), frame, (0, -0.16, 0.88), frame=f, round=0.015)
-        panel(f'{name} display screen', 0.72, 0.34, material('#000000', surface='readout', outline=False, seed=seed, w=0.72, h=0.34), (0, -0.125, 0.92), f)
-        seat = Matrix.Translation((x, 2.55, 0))
-        cylinder(f'{name} seat base', 0.24, 0.05, dado, frame=seat)
-        cylinder(f'{name} seat column', 0.07, 0.36, frame, (0, 0, 0.05), frame=seat)
-        cushion = cylinder(f'{name} seat', 0.28, 0.08, toon(CUSHION), (0, 0, 0.41), frame=seat)
-        box(f'{name} seat back', (0.5, 0.07, 0.45), frame, (0, -0.25, 0.5), frame=seat, round=0.03)
-        collide_object(cushion)
+        bridge_console(name, 1.2, seed, Matrix.Translation((x, 3.3, 0)) @ Matrix.Rotation(math.pi, 4, 'Z'))
+        bridge_seat(name, Matrix.Translation((x, 2.55, 0)))
 
 
 def rail():

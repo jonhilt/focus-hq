@@ -14,8 +14,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import command_deck  # noqa: E402
 import holodeck_deck  # noqa: E402
 import kit  # noqa: E402
+import team_station  # noqa: E402
 
-DECKS = {'command-deck': command_deck.build, 'holodeck-deck': holodeck_deck.build}
+DECKS = {'command-deck': command_deck.build, 'holodeck-deck': holodeck_deck.build, 'team-station': team_station.build}
 
 
 def main():

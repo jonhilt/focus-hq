@@ -25,6 +25,7 @@ import { Deck } from './world/deck';
 import { HolodeckDeck } from './world/holodeckDeck';
 import { COMMAND_DECK, SUN_POSITION } from './world/layout';
 import { type Ship, World } from './world/office';
+import { loadTeamStation } from './world/teamStation';
 import { stopAt } from './world/turbolift';
 
 async function fontsReady(): Promise<void> {
@@ -66,8 +67,8 @@ async function main() {
 
   await fontsReady();
 
-  const theShip = await ship();
-  const world = new World(scene, theShip);
+  const [theShip, teamStation] = await Promise.all([ship(), loadTeamStation('/ship/team-station.glb')]);
+  const world = new World(scene, theShip, teamStation);
   const player = new Player(camera, renderer.domElement);
   const aboard = world.boarding();
   player.teleport(aboard.position, aboard.lookAt);

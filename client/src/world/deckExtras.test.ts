@@ -14,6 +14,9 @@ describe('readMarker', () => {
     expect(readMarker({ marker: 'area', label: 'Turbolift' })).toEqual({ kind: 'area', label: 'Turbolift' });
     expect(readMarker({ marker: 'seat', crew: 'number-one' })).toEqual({ kind: 'seat', crew: 'number-one' });
     expect(readMarker({ marker: 'seat', crew: 'engineer' })).toEqual({ kind: 'seat', crew: 'engineer' });
+    expect(readMarker({ marker: 'seat', crew: 'station-lead' })).toEqual({ kind: 'seat', crew: 'station-lead' });
+    expect(readMarker({ marker: 'seat', crew: 'station-helper-4' })).toEqual({ kind: 'seat', crew: 'station-helper-4' });
+    expect(readMarker({ marker: 'seat', crew: 'station-reviewer' })).toEqual({ kind: 'seat', crew: 'station-reviewer' });
     expect(readMarker({ marker: 'turbolift', label: 'Deck 1 · Bridge' })).toEqual({ kind: 'turbolift', label: 'Deck 1 · Bridge' });
   });
 
@@ -23,6 +26,7 @@ describe('readMarker', () => {
     expect(() => readMarker({ marker: 'place' })).toThrow(/label should be a string/);
     expect(() => readMarker({ marker: 'turbolift' })).toThrow(/label should be a string/);
     expect(() => readMarker({ marker: 'seat', crew: 'cook' })).toThrow(/unknown crew/);
+    expect(() => readMarker({ marker: 'seat', crew: 'station-helper-5' })).toThrow(/unknown crew/);
   });
 });
 
@@ -43,6 +47,8 @@ describe('readSurface', () => {
       code: '01-12',
     });
     expect(readSurface({ surface: 'screen', screen: 'mission-control', outline: 0 })).toEqual({ kind: 'screen', screen: 'mission-control' });
+    expect(readSurface({ surface: 'screen', screen: 'team-station', outline: 0 })).toEqual({ kind: 'screen', screen: 'team-station' });
+    expect(readSurface({ surface: 'screen', screen: 'team-station-sign', outline: 0 })).toEqual({ kind: 'screen', screen: 'team-station-sign' });
     expect(readSurface({ surface: 'star-chart', outline: 0 })).toEqual({ kind: 'star-chart' });
   });
 

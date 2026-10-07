@@ -7,7 +7,7 @@ import { state } from '../net/state';
 import { Builder, interactive } from './builder';
 import type { Deck } from './deck';
 import type { HolodeckDeck } from './holodeckDeck';
-import type { ScreenName } from './deckExtras';
+import type { DeckScreen } from './deckExtras';
 import { canvasTexture, fitText, makeCanvas, roundRect } from './canvas';
 import { type Box2, contains, DOOR_W, HALL_HALF, LOBBY, LOUNGE, LOUNGE_DOOR_X, OFFICE, OVER_DOOR, ROOM_DEPTH, ROOM_WIDTH, roomSlot, roomToWorld, rowsFor, type Seat, slotAt, SUN_POSITION, WALL_H, WALL_T } from './layout';
 import { box, flat, toon, toonMaterial } from './materials';
@@ -69,7 +69,7 @@ export class World {
   private directory = makeCanvas(768, 1024);
   private directoryTex = canvasTexture(this.directory.canvas);
   /** What the decks built in Blender show on their screens. */
-  private readonly screens: Record<ScreenName, THREE.Material> = { 'mission-control': flat(this.dashboardTex) };
+  private readonly screens: Record<DeckScreen, THREE.Material> = { 'mission-control': flat(this.dashboardTex) };
   private panelsDirty = true;
   private lastPanels = 0;
   private projectKey = '';
@@ -79,6 +79,8 @@ export class World {
   constructor(
     scene: THREE.Scene,
     private readonly ship: Ship,
+    /** The furniture every team station is a copy of (loadTeamStation). */
+    private readonly teamStation: THREE.Object3D,
   ) {
     scene.add(this.root);
     for (const deck of this.decks()) this.mount(deck, this.root);
@@ -146,7 +148,7 @@ export class World {
       // the stencil value (slot + 1) and the sun direction both depend on the slot, hence the key
       scenery ??= createScenery(theme, i + 1, project.id, SUN_POSITION.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -slot.rotationY));
       if (scenery) this.sceneries.set(key, scenery);
-      this.rooms.set(project.id, new ProjectRoom(project, slot, b, scenery));
+      this.rooms.set(project.id, new ProjectRoom(project, slot, b, scenery, this.teamStation));
     });
     for (const scenery of previous.values()) scenery.dispose();
 

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { interactive } from './builder';
-import { type Crew, type Marker, readInteraction, readMarker, readSurface, type ScreenName, type Surface } from './deckExtras';
+import { type Crew, type DeckScreen, type Marker, readInteraction, readMarker, readSurface, type ScreenName, type Surface } from './deckExtras';
 import { type Box2, contains, type Seat } from './layout';
 import { flat, noOutline, toon, toonMaterial } from './materials';
 import type { Place } from './office';
@@ -69,10 +69,40 @@ function placeAt(label: string, at: THREE.Vector3, turn: THREE.Quaternion): Plac
   return { label, position: at.clone().setY(0), lookAt: at.clone().addScaledVector(ahead, 4).setY(1.5) };
 }
 
-/** The floor an empty cube's box covers. */
-function footprint(o: THREE.Object3D): Box2 {
-  const b = new THREE.Box3(new THREE.Vector3(-1, -1, -1), new THREE.Vector3(1, 1, 1)).applyMatrix4(o.matrixWorld);
+/** The floor an empty cube's box covers, given its world matrix. */
+export function footprint(matrixWorld: THREE.Matrix4): Box2 {
+  const b = new THREE.Box3(new THREE.Vector3(-1, -1, -1), new THREE.Vector3(1, 1, 1)).applyMatrix4(matrixWorld);
   return { minX: b.min.x, maxX: b.max.x, minZ: b.min.z, maxZ: b.max.z };
+}
+
+/**
+ * Makes a scene from a GLB ready to draw: each material becomes what its surface says, and each object something
+ * to use if it says so. Hands each marker to `read` (with its world matrix still up to date), then takes it out of
+ * the scene. Returns the screens the browser keeps drawing on.
+ */
+export function dress(scene: THREE.Object3D, read: (o: THREE.Object3D, marker: Marker) => void): { screen: ScreenName; mesh: THREE.Mesh }[] {
+  const screens: { screen: ScreenName; mesh: THREE.Mesh }[] = [];
+  const markers: THREE.Object3D[] = [];
+  scene.traverse((o) => {
+    const marker = readMarker(o.userData);
+    if (marker) {
+      read(o, marker);
+      markers.push(o);
+      return;
+    }
+    const use = readInteraction(o.userData);
+    if (use) interactive(o, use.interaction, () => use.label);
+    if (o instanceof THREE.Mesh && o.material instanceof THREE.MeshStandardMaterial) {
+      const gltf = o.material;
+      const surface = readSurface(gltf.userData);
+      if (surface.kind === 'screen') screens.push({ screen: surface.screen, mesh: flipUVs(o) });
+      let mat = surfaces.get(gltf);
+      if (!mat) surfaces.set(gltf, (mat = surfaceMaterial(surface, `#${gltf.color.getHexString()}`)));
+      o.material = mat;
+    }
+  });
+  for (const o of markers) o.removeFromParent();
+  return screens;
 }
 
 export class Deck {
@@ -83,7 +113,7 @@ export class Deck {
   /** Where the turbolift stops on this deck. */
   readonly stops: Place[] = [];
   /** The screens the World draws on. */
-  readonly screens: { screen: ScreenName; mesh: THREE.Mesh }[] = [];
+  readonly screens: { screen: DeckScreen; mesh: THREE.Mesh }[] = [];
   private readonly areas: { label: string; box: Box2 }[] = [];
   private readonly seats = new Map<Crew, Seat>();
 
@@ -102,26 +132,10 @@ export class Deck {
     scene.position.copy(origin);
     this.root.add(scene);
     this.root.updateMatrixWorld(true);
-    const markers: THREE.Object3D[] = [];
-    scene.traverse((o) => {
-      const marker = readMarker(o.userData);
-      if (marker) {
-        this.read(o, marker);
-        markers.push(o);
-        return;
-      }
-      const use = readInteraction(o.userData);
-      if (use) interactive(o, use.interaction, () => use.label);
-      if (o instanceof THREE.Mesh && o.material instanceof THREE.MeshStandardMaterial) {
-        const gltf = o.material;
-        const surface = readSurface(gltf.userData);
-        if (surface.kind === 'screen') this.screens.push({ screen: surface.screen, mesh: flipUVs(o) });
-        let mat = surfaces.get(gltf);
-        if (!mat) surfaces.set(gltf, (mat = surfaceMaterial(surface, `#${gltf.color.getHexString()}`)));
-        o.material = mat;
-      }
-    });
-    for (const o of markers) o.removeFromParent();
+    for (const { screen, mesh } of dress(scene, (o, marker) => this.read(o, marker))) {
+      if (screen !== 'mission-control') throw new Error(`Deck extras: a deck has a ${screen} screen, which only a team station draws`);
+      this.screens.push({ screen, mesh });
+    }
   }
 
   /** Where `crew` sits on this deck: asking a deck that hasn't a seat for them is a bug, so it fails loudly. */
@@ -136,7 +150,7 @@ export class Deck {
     const turn = o.getWorldQuaternion(new THREE.Quaternion());
     switch (marker.kind) {
       case 'collider':
-        this.colliders.push(footprint(o));
+        this.colliders.push(footprint(o.matrixWorld));
         break;
       case 'door': {
         const along = new THREE.Vector3(1, 0, 0).applyQuaternion(turn);
@@ -152,7 +166,7 @@ export class Deck {
         this.stops.push(placeAt(marker.label, at, turn));
         break;
       case 'area':
-        this.areas.push({ label: marker.label, box: footprint(o) });
+        this.areas.push({ label: marker.label, box: footprint(o.matrixWorld) });
         break;
       case 'seat': {
         const ahead = new THREE.Vector3(0, 0, -1).applyQuaternion(turn);
