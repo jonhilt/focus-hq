@@ -11,7 +11,7 @@ import { PaneSwitches } from './paneSwitchPanel';
 import { PANE_SWITCHES, switchAt, switchLabel } from './paneSwitches';
 import { screenPrefs } from './screenPanes';
 import { type Box2, contains, EYE_HEIGHT, ROOM_WIDTH } from './layout';
-import { toon } from './materials';
+import { occludedToon, toon } from './materials';
 import { mergeStatic } from './merge';
 import { type Doorway, Portal } from './portal';
 import { BIG_SCREEN, StationScreen } from './screen';
@@ -232,7 +232,14 @@ export class TeamStation {
           throw new Error(`The team station has a ${marker.kind} marker, which a station can't use`);
       }
     });
-    for (const mesh of accents) mesh.material = toon(this.accent);
+    // in the station's colour, still shaded by the occlusion baked into the module
+    const painted = new Map<THREE.Texture | null, THREE.Material>();
+    for (const mesh of accents) {
+      const ao = (mesh.material as THREE.MeshToonMaterial).aoMap ?? null;
+      let mat = painted.get(ao);
+      if (!mat) painted.set(ao, (mat = ao ? occludedToon(this.accent, ao) : toon(this.accent)));
+      mesh.material = mat;
+    }
     for (const mesh of lamps) mesh.material = this.lamp;
     mergeStatic(module, [...screens.map((s) => s.mesh), ...accents, ...lamps, ...keep]);
     return screens;

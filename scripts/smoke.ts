@@ -19,7 +19,8 @@ async function runChecks(page: Page, url: string, errors: string[]): Promise<voi
 
   await page.goto(url);
   const splash = page.locator('.splash');
-  check('splash is visible', await splash.isVisible().catch(() => false));
+  // it's added once the fonts and the ship's GLBs have loaded (main.ts), not with the page
+  check('splash is visible', await splash.waitFor({ state: 'visible', timeout: 15_000 }).then(() => true, () => false));
   check('splash shows the FOCUS HQ heading', (await splash.locator('h1').textContent().catch(() => null))?.trim() === 'FOCUS HQ');
   const enter = splash.locator('button.big-button', { hasText: 'Come aboard' });
   check('splash shows the Come aboard button', await enter.isVisible().catch(() => false));

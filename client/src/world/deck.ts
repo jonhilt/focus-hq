@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { interactive } from './builder';
 import { type Crew, type DeckScreen, type Marker, readInteraction, readMarker, readSurface, type ScreenName, type Surface } from './deckExtras';
 import { type Box2, contains, type Seat } from './layout';
-import { flat, toon } from './materials';
+import { flat, occludedToon, toon } from './materials';
 import { mergeStatic } from './merge';
 import type { Place } from './office';
 import { lcarsSign, readoutTexture, SlidingDoors, starChartTexture, touchPanelTexture } from './starship';
@@ -40,14 +40,15 @@ const surfaces = new WeakMap<THREE.Material, THREE.Material>();
 
 let keys: THREE.Material | undefined;
 
-function surfaceMaterial(surface: Surface, color: string): THREE.Material {
+/** `ao`: the occlusion baked into the deck (blender/bake.py), on the meshes' second UVs, if it's shaded by one. */
+function surfaceMaterial(surface: Surface, color: string, ao: THREE.Texture | null): THREE.Material {
   switch (surface.kind) {
     case 'toon':
-      return toon(color);
+      return ao ? occludedToon(color, ao) : toon(color);
     case 'unlit':
       return new THREE.MeshBasicMaterial({ color });
     case 'carpet':
-      return toon('#ffffff', { map: tiled.carpet(color, 1, 1) });
+      return ao ? occludedToon('#ffffff', ao, tiled.carpet(color, 1, 1)) : toon('#ffffff', { map: tiled.carpet(color, 1, 1) });
     case 'space':
       return viewportGlass;
     case 'keys':
@@ -62,8 +63,9 @@ function surfaceMaterial(surface: Surface, color: string): THREE.Material {
       // blank until the World puts what it draws there
       return new THREE.MeshBasicMaterial({ color: '#000000' });
     case 'accent':
+      // its own colour until whatever it's part of paints it (keeping its occlusion)
+      return ao ? occludedToon(color, ao) : toon(color);
     case 'lamp':
-      // its own colour until whatever it's part of paints it
       return toon(color);
   }
 }
@@ -109,7 +111,7 @@ export function dress(
       if (surface.kind === 'accent') accents.push(o);
       if (surface.kind === 'lamp') lamps.push(o);
       let mat = surfaces.get(gltf);
-      if (!mat) surfaces.set(gltf, (mat = surfaceMaterial(surface, `#${gltf.color.getHexString()}`)));
+      if (!mat) surfaces.set(gltf, (mat = surfaceMaterial(surface, `#${gltf.color.getHexString()}`, gltf.aoMap)));
       o.material = mat;
     }
   });

@@ -680,4 +680,7 @@ def export(glb_path, blend_path=None):
         export_yup=True,
         export_cameras=False,
         export_lights=False,
+        # the baked occlusion (bake.py): smooth shading, which JPEG keeps well at a fraction of a PNG's size
+        export_image_format='JPEG',
+        export_jpeg_quality=90,
     )

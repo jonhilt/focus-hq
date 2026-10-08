@@ -64,7 +64,7 @@ client/src/
 client/tricorder/index.html   the Tricorder's page (a second Vite entry), with its home-screen meta tags
 client/public/tricorder/  its web app manifest and home-screen icons
 client/public/ship/       the decks built in Blender, as GLBs (npm run ship writes them)
-blender/                  the Blender scripts that build the decks: ship.py (entry), kit.py (walls, furniture, markers), command_deck.py (the bridge, ready room and observation lounge), holodeck_deck.py (the holodecks' hallway, the turbolift and engineering), team_station.py (a team station's door and briefing room)
+blender/                  the Blender scripts that build the decks: ship.py (entry), kit.py (walls, furniture, markers), bake.py (each deck's ambient occlusion, baked into a lightmap), command_deck.py (the bridge, ready room and observation lounge), holodeck_deck.py (the holodecks' hallway, the turbolift and engineering), team_station.py (a team station's door and briefing room)
 ```
 
 The client mirrors server state over the WebSocket. Every action is a small REST call. Laptop screens and Kanban displays are canvases drawn into textures, and only redrawn when something changes. Screens near you redraw faster.

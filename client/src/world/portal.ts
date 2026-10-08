@@ -167,6 +167,11 @@ export class PortalView {
     }
   }
 
+  /** Whether the ambient occlusion is drawn (Frame.occlusion). */
+  set occlusion(on: boolean) {
+    this.frame.occlusion = on;
+  }
+
   /** `reveal` shows what's drawn from a point in the far room (World.reveal), before it's drawn. */
   render(scene: THREE.Scene, camera: THREE.PerspectiveCamera, portals: Portal[], reveal: (at: THREE.Vector3) => void = () => undefined): void {
     camera.updateMatrixWorld();

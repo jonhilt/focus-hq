@@ -25,6 +25,22 @@ export function toon(color: THREE.ColorRepresentation, opts: { map?: THREE.Textu
   return mat;
 }
 
+/**
+ * A toon material shaded by ambient occlusion baked in Blender (blender/bake.py), from `aoMap` on the mesh's second
+ * UVs: over all its light, as a shadow is, not only the ambient light a standard material's occlusion dims.
+ */
+export function occludedToon(color: THREE.ColorRepresentation, aoMap: THREE.Texture, map: THREE.Texture | null = null): THREE.MeshToonMaterial {
+  const mat = new THREE.MeshToonMaterial({ color, gradientMap, map, aoMap });
+  mat.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <aomap_fragment>',
+      '#include <aomap_fragment>\n#ifdef USE_AOMAP\n\treflectedLight.directDiffuse *= ambientOcclusion;\n#endif',
+    );
+  };
+  mat.customProgramCacheKey = () => 'occluded';
+  return mat;
+}
+
 /** An uncached toon material, for callers that change its render state (e.g. stencil masking). */
 export function toonMaterial(params: THREE.MeshToonMaterialParameters = {}): THREE.MeshToonMaterial {
   return new THREE.MeshToonMaterial({ gradientMap, ...params });

@@ -11,6 +11,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import bake  # noqa: E402
 import command_deck  # noqa: E402
 import holodeck_deck  # noqa: E402
 import kit  # noqa: E402
@@ -27,6 +28,7 @@ def main():
     for name, build in DECKS.items():
         kit.begin(name)
         build()
+        bake.ambient_occlusion()
         glb = os.path.join(glb_dir, f'{name}.glb')
         kit.export(glb, blend_dir and os.path.join(blend_dir, f'{name}.blend'))
         print(f'deck {name}: {glb} ({os.path.getsize(glb) // 1024} KB)')

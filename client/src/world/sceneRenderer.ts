@@ -36,6 +36,11 @@ export class SceneRenderer {
     this.smaa.renderToScreen = true;
   }
 
+  /** Whether the ambient occlusion is drawn (Frame.occlusion). */
+  set occlusion(on: boolean) {
+    this.frame.occlusion = on;
+  }
+
   render(scene: THREE.Scene, camera: THREE.Camera): void {
     const { renderer, framed } = this;
     renderer.getDrawingBufferSize(this.size);

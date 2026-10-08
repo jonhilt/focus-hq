@@ -14,10 +14,10 @@ export class FrameStats {
   private readonly gpu: string;
   private readonly size = new THREE.Vector2();
 
-  constructor(
-    private readonly renderer: THREE.WebGLRenderer,
-    private readonly occlusion: boolean,
-  ) {
+  /** Whether the screen-space ambient occlusion is drawn just now (resolution.ts leaves it out while frames run slow). */
+  occlusion = false;
+
+  constructor(private readonly renderer: THREE.WebGLRenderer) {
     const gl = renderer.getContext();
     const info = gl.getExtension('WEBGL_debug_renderer_info');
     this.gpu = String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));

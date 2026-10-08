@@ -73,6 +73,11 @@ export class Frame {
   private reprojected?: THREE.WebGLRenderTarget;
   /** Where on the screen it's drawn (0 to 1, as onScreen in doorway.ts gives), or everywhere (null). */
   private rect: THREE.Vector4 | null = null;
+  /**
+   * Whether the ambient occlusion is drawn, if it's drawn at all: it's the costliest pass, so it's the first left out
+   * while frames run slow (resolution.ts), when the decks still have the occlusion baked into them (blender/bake.py).
+   */
+  occlusion = true;
 
   constructor(
     private readonly renderer: THREE.WebGLRenderer,
@@ -130,11 +135,12 @@ export class Frame {
     this.drawOverlay(scene, camera);
     renderer.setRenderTarget(drawn);
     stencilToSky(renderer);
-    if (this.ao && this.occluded) {
+    const occluded = this.occlusion ? this.occluded : undefined;
+    if (this.ao && occluded) {
       this.ao.beautyRenderTarget = camera === this.camera ? drawn : this.reproject(camera);
-      this.ao.render(renderer, this.occluded, null);
+      this.ao.render(renderer, occluded, null);
     }
-    const color = this.occluded ? { texture: this.occluded.texture, display: this.display } : undefined;
+    const color = occluded ? { texture: occluded.texture, display: this.display } : undefined;
     this.outlines.render(renderer, { target: drawn, camera, color, overlay: this.overlay.texture }, output, this.display);
   }
 

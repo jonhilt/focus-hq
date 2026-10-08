@@ -32,7 +32,7 @@ import { COMMAND_DECK, SUN_POSITION } from './world/layout';
 import { setMerging } from './world/merge';
 import { type Ship, World } from './world/office';
 import { SceneRenderer } from './world/sceneRenderer';
-import { adapt, initialResolution, WINDOW } from './resolution';
+import { adapt, FEWEST, initialResolution, levels, WINDOW } from './resolution';
 import { FrameStats } from './ui/frameStats';
 import { PortalView } from './world/portal';
 import { loadTeamStation } from './world/teamStation';
@@ -53,10 +53,13 @@ async function main() {
   // ---------------------------------------------------------------- renderer & scene
   // no multisampling: the scene's drawn into textures and only a full-screen pass reaches the screen (frame.ts)
   const renderer = new THREE.WebGLRenderer({ antialias: false });
-  // as fine as the screen (up to 2), and coarser while frames run slow (resolution.ts)
-  const finest = Math.min(window.devicePixelRatio, 2);
-  let resolution = initialResolution(finest);
-  renderer.setPixelRatio(resolution.ratio);
+  // to compare: ?ao=0 draws without ambient occlusion
+  const params = new URLSearchParams(location.search);
+  const occlusion = params.get('ao') !== '0';
+  // as fine as the screen (up to 2) with the ambient occlusion, and plainer while frames run slow (resolution.ts)
+  const ladder = levels(Math.min(window.devicePixelRatio, 2), occlusion);
+  let resolution = initialResolution(ladder);
+  renderer.setPixelRatio(ladder[resolution.level].ratio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.domElement.className = 'world';
@@ -71,9 +74,6 @@ async function main() {
   scene.add(new THREE.AmbientLight('#ffffff', 0.35));
 
   const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 250);
-  // to compare: ?ao=0 draws without ambient occlusion
-  const params = new URLSearchParams(location.search);
-  const occlusion = params.get('ao') !== '0';
   // ?merge=0 leaves the decks' meshes as Blender made them, for the gap and z-fighting scans to name
   setMerging(params.get('merge') !== '0');
   const portalView = new PortalView(renderer, scene, occlusion);
@@ -430,9 +430,16 @@ async function main() {
 
   // ---------------------------------------------------------------- loop
   const timer = new THREE.Timer();
-  // ?adapt=0 keeps the pixel ratio where it starts; ?stats=1 shows how frames are going
+  // ?adapt=0 keeps the picture as it starts; ?stats=1 shows how frames are going
   const adapting = params.get('adapt') !== '0';
-  const stats = params.get('stats') === '1' ? new FrameStats(renderer, occlusion) : null;
+  const stats = params.get('stats') === '1' ? new FrameStats(renderer) : null;
+  const apply = () => {
+    const level = ladder[resolution.level];
+    if (renderer.getPixelRatio() !== level.ratio) renderer.setPixelRatio(level.ratio);
+    view.occlusion = portalView.occlusion = level.occlusion;
+    if (stats) stats.occlusion = level.occlusion;
+  };
+  apply();
   const intervals: number[] = [];
   /** How long each frame's own work took (ms): its JavaScript and draw calls, not waiting on the GPU. */
   const busy: number[] = [];
@@ -450,15 +457,16 @@ async function main() {
     const now = performance.now();
     const interval = now - lastFrame;
     lastFrame = now;
-    // a frame that long is the tab hidden or a hitch, not how fast frames go
-    if (interval < 250) intervals.push(interval);
-    if (now - lastAdapt > WINDOW) {
+    // a frame that long is the tab hidden, not how fast frames go: a very slow machine's are slower than a hitch
+    if (interval < 1000) intervals.push(interval);
+    if (now - lastAdapt > WINDOW && intervals.length >= FEWEST) {
       lastAdapt = now;
       const typical = [...intervals].sort((a, b) => a - b)[intervals.length >> 1];
       if (typical !== undefined) refresh = Math.max(4, Math.min(refresh, typical));
-      const next = adapting && document.visibilityState === 'visible' ? adapt(resolution, intervals, busy, refresh, finest, now) : resolution;
-      if (next.ratio !== resolution.ratio) renderer.setPixelRatio(next.ratio);
-      resolution = next;
+      if (adapting && document.visibilityState === 'visible') {
+        resolution = adapt(resolution, intervals, busy, refresh, ladder, now);
+        apply();
+      }
       intervals.length = 0;
       busy.length = 0;
     }
