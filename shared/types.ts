@@ -28,6 +28,10 @@ export interface Settings {
   autonomy: Autonomy;
   /** Claude model for agents. Empty = Claude Code's default for your account. */
   model: string;
+  /** Claude model for agents seated to resolve a pull request's merge conflicts. Empty = the `model` setting. */
+  conflictsModel: string;
+  /** How hard those conflict-resolving agents think. Missing = the model's default. */
+  conflictsEffort?: Effort;
   /** How the board's Merge button, and auto-merge, merge a pull request. */
   mergeMethod: 'squash' | 'merge' | 'rebase';
   /** Pull requests and QA reports on GitHub name the agent who did the work and mention Focus. */
@@ -421,6 +425,8 @@ export interface Agent {
   issue: { number: number; title: string; url: string };
   /** Chosen when the agent is hired. Missing = the model's default effort. */
   effort?: Effort;
+  /** Claude model chosen for this agent when it was seated (a conflicts agent's). Missing = the office's `model` setting. */
+  model?: string;
   /**
    * Works in a Claude Code cloud session instead of on this machine: it pushes its own branch, and `sessionId` is the
    * cloud session's id (session_…). Never set on the QA officer.

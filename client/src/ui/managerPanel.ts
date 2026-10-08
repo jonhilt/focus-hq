@@ -1,6 +1,6 @@
 import { isHidden } from '../../../shared/hidden';
 import { autoMergeFor } from '../../../shared/mergeGate';
-import type { Autonomy, PreviewConfig, Project, RoomTheme, SpeechStatus, VoiceStatus } from '../../../shared/types';
+import type { Autonomy, Effort, PreviewConfig, Project, RoomTheme, SpeechStatus, VoiceStatus } from '../../../shared/types';
 import { DESKS_PER_ROOM, EFFORT_LEVELS, ROOM_THEMES } from '../../../shared/types';
 import { voiceMissing, WHISPER_INSTALL } from '../../../shared/voice';
 import { api } from '../net/api';
@@ -359,6 +359,11 @@ function settingsTab(ui: Ui): HTMLElement {
   max.addEventListener('change', () => save({ maxConcurrent: Number(max.value) }));
   const model = h('input', { type: 'text', value: s.model, placeholder: "Claude Code's default" });
   model.addEventListener('change', () => save({ model: model.value }));
+  const conflictsModel = h('input', { type: 'text', value: s.conflictsModel, placeholder: 'Use the office model', style: 'flex:1' });
+  conflictsModel.addEventListener('change', () => save({ conflictsModel: conflictsModel.value }));
+  const conflictsEffort = effortPicker(s.conflictsEffort);
+  // an empty choice clears it on the server (undefined wouldn't survive JSON)
+  conflictsEffort.addEventListener('change', () => save({ conflictsEffort: (pickedEffort(conflictsEffort) ?? '') as Effort }));
   const merge = h('select', null, ...(['squash', 'merge', 'rebase'] as const).map((m) => h('option', { value: m, selected: s.mergeMethod === m }, m)));
   merge.addEventListener('change', () => save({ mergeMethod: merge.value as 'squash' }));
   const attribution = new Switch('Sign pull requests and QA reports', s.attribution, { changed: (on) => save({ attribution: on }) });
@@ -375,6 +380,7 @@ function settingsTab(ui: Ui): HTMLElement {
     h('div', { class: 'field' }, h('label', null, 'How much can agents do on their own?'), autonomy, h('small', null, 'Applies to agents started from now on.')),
     h('div', { class: 'field' }, h('label', null, 'Agents working at once (all projects)'), max, h('small', null, 'Each agent is a full Claude Code session on your subscription – more agents use your limits faster.')),
     h('div', { class: 'field' }, h('label', null, 'Model'), model, h('small', null, 'e.g. claude-opus-5-5 or claude-sonnet-5-5. Leave empty for your Claude Code default.')),
+    h('div', { class: 'field' }, h('label', null, 'Model and effort for resolving merge conflicts'), h('div', { class: 'row' }, conflictsModel, conflictsEffort), h('small', null, 'For a new agent seated on a pull request to resolve its conflicts, which is usually mechanical work: e.g. claude-sonnet-5-5. Leave empty for the model above. The developer who opened the PR, if still aboard, resolves them in their own session instead.')),
     h('div', { class: 'field' }, h('label', null, 'Effort a new goal’s lead starts at'), leadEffort, h('small', null, 'You can pick another when you start a goal. High suits most slices; xhigh and max take longer and cost more.')),
     h('div', { class: 'field' }, h('label', null, 'Merge method for the board’s Merge button'), merge),
     h('div', { class: 'field' }, attribution.el, h('small', null, 'Names the agent or QA officer who did the work, and mentions Focus, in what the office posts on GitHub.')),

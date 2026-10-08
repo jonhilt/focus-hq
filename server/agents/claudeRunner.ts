@@ -144,7 +144,7 @@ export class ClaudeRunner implements AgentRunner {
     const options: Options = {
       cwd: req.cwd,
       abortController: abort,
-      model: req.settings.model || undefined,
+      model: req.model || req.settings.model || undefined,
       effort: req.effort,
       ...claudeConfig(req.settings.userClaudeMd, process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude')),
       disallowedTools: ['AskUserQuestion', 'EnterPlanMode'],

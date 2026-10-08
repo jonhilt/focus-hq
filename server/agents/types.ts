@@ -45,6 +45,8 @@ export interface RunRequest {
   settings: Settings;
   /** Missing = the model's default effort. */
   effort?: Effort;
+  /** The model chosen for this agent. Missing = `settings.model`. */
+  model?: string;
   /** JSON schema for a structured final answer (the QA officer's report). */
   outputSchema?: Record<string, unknown>;
   /** The office's own tools for this session (a goal's lead's), exposed to Claude Code as mcp__office__*. */

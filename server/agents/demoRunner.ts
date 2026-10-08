@@ -334,7 +334,7 @@ export class DemoRunner implements AgentRunner {
       if (req.tools) return leadScript(req.tools);
       const sessionId = req.resumeSessionId ?? `${req.cloud ? 'session_demo' : 'demo-'}${randomBytes(4).toString('hex')}`;
       hooks.session(sessionId);
-      hooks.lines([{ kind: 'system', text: `✻ Claude Code (demo) · pretend model · acceptEdits${req.cloud ? ' · ☁ cloud' : ''}` }]);
+      hooks.lines([{ kind: 'system', text: `✻ Claude Code (demo) · ${req.model || req.settings.model || 'pretend model'} · acceptEdits${req.cloud ? ' · ☁ cloud' : ''}` }]);
       if (req.cloud) hooks.lines([{ kind: 'system', text: `☁ Cloud session: https://claude.ai/code/${sessionId}` }]);
       // a follow-up message, or QA's findings handed to an agent seated on the PR to fix them
       if (req.resumeSessionId || /^QA failed/.test(req.prompt)) {

@@ -470,6 +470,9 @@ export class Office {
     if (patch.maxConcurrent !== undefined) s.maxConcurrent = Math.max(1, Math.min(32, Math.round(patch.maxConcurrent)));
     if (patch.autonomy && ['ask', 'auto', 'full'].includes(patch.autonomy)) s.autonomy = patch.autonomy;
     if (patch.model !== undefined) s.model = patch.model.trim();
+    if (typeof patch.conflictsModel === 'string') s.conflictsModel = patch.conflictsModel.trim();
+    // an empty (or unknown) choice goes back to the model's default
+    if (patch.conflictsEffort !== undefined) s.conflictsEffort = EFFORT_LEVELS.find((e) => e === patch.conflictsEffort);
     if (patch.mergeMethod && ['squash', 'merge', 'rebase'].includes(patch.mergeMethod)) s.mergeMethod = patch.mergeMethod;
     if (typeof patch.attribution === 'boolean') s.attribution = patch.attribution;
     if (typeof patch.userClaudeMd === 'boolean') s.userClaudeMd = patch.userClaudeMd;

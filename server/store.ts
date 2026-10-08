@@ -35,6 +35,7 @@ const DEFAULT_SETTINGS: Settings = {
   maxConcurrent: 4,
   autonomy: 'ask',
   model: '',
+  conflictsModel: '',
   mergeMethod: 'squash',
   attribution: true,
   userClaudeMd: true,

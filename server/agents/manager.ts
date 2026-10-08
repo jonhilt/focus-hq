@@ -13,6 +13,7 @@ import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
 import { afterCloudRun, carryOnInNewSession, fallBackToLocal } from './cloud';
+import { conflictsAgentModel } from './conflicts';
 import { afterLanding, afterVerdict, answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, behindNote, closeCheck, conflictsResolvedNote, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, everyPr, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sessionGone, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded, snapshotMessage, type FreshBranch, freshBranchNote, needsFreshBranch, repoBranch } from './lead';
 import { repoFolders } from './planner';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
@@ -235,6 +236,7 @@ export class AgentManager {
       branch: pr.branch,
       baseBranch: pr.baseBranch,
       pr: { number: pr.number, url: pr.url },
+      ...conflictsAgentModel(this.store.settings),
     });
     return { kind: 'agent', agent };
   }
@@ -297,7 +299,7 @@ export class AgentManager {
     return !!owner && !FINISHED.includes(owner.status);
   }
 
-  private seat(projectId: string, repo: string, work: Pick<Agent, 'id' | 'task' | 'issue' | 'branch' | 'baseBranch' | 'pr' | 'effort' | 'cloud'>): Agent {
+  private seat(projectId: string, repo: string, work: Pick<Agent, 'id' | 'task' | 'issue' | 'branch' | 'baseBranch' | 'pr' | 'effort' | 'model' | 'cloud'>): Agent {
     const project = this.store.project(projectId);
     if (!project.repos.includes(repo)) throw new Refused({ message: `${repo} is not connected to ${project.name}` });
     // QA reviewing the PR, or a goal's lead, isn't working on it the way a developer would
@@ -322,7 +324,7 @@ export class AgentManager {
     };
     this.store.putAgent(agent);
     this.hub.send({ type: 'agent', agent });
-    this.print(agent, [{ kind: 'system', text: `✻ ${name} joined ${project.name} to work on ${repo}#${work.issue.number} (${work.effort ?? 'default'} effort${work.cloud ? ', in the cloud' : ''})` }]);
+    this.print(agent, [{ kind: 'system', text: `✻ ${name} joined ${project.name} to work on ${repo}#${work.issue.number} (${work.model ? `${work.model}, ` : ''}${work.effort ?? 'default'} effort${work.cloud ? ', in the cloud' : ''})` }]);
     this.schedule();
     return agent;
   }
@@ -508,6 +510,7 @@ export class AgentManager {
       resumeSessionId,
       settings: this.store.settings,
       effort: agent.effort,
+      model: agent.model,
       outputSchema: agent.task === 'review' ? QA_SCHEMA : undefined,
       cloud: agent.cloud ? { branch: agent.branch } : undefined,
       tools: agent.task === 'lead'
