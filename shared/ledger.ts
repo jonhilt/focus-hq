@@ -23,13 +23,15 @@ interface PrRef {
 export type LedgerEntry =
   | (PrRef & { kind: 'qa-verdict'; verdict: 'pass' | 'fail'; sha?: string; reviewer: string; checks: { pass: number; fail: number; skip: number }; failedRounds: number })
   /** `qa` is the PR's QA badge as it merged: anything but `passed` merged without QA passing its head commit. */
-  | (PrRef & { kind: 'merged'; by: Closer; qa: QaBadgeState; failedRounds: number; triages: number })
+  | (PrRef & { kind: 'merged'; by: Closer; qa: QaBadgeState; failedRounds: number; triages: number; /** Issues it closed, when the office knew. */ closes?: number[] })
   | (PrRef & { kind: 'closed'; by: Closer; qa: QaBadgeState; failedRounds: number; triages: number })
   /** The PR conflicted with its base: the office merged the base in cleanly, or an agent had to resolve them. */
   | (PrRef & { kind: 'conflicts'; resolved: 'office' | 'agent' | 'up-to-date' })
   | (PrRef & { kind: 'checks-sent-back'; checks: string[] })
   | (PrRef & { kind: 'triage'; officer: string; action: TriageAction; note: string })
   | { kind: 'goal-closed'; goal: GoalRecord }
+  /** The captain accepted (and filed) or rejected a retro's draft, resting on these friction signatures. */
+  | { kind: 'retro-decision'; title: string; signatures: string[]; accepted: boolean; issue?: { repo: string; number: number } }
   /** A span of an agent's session, digested when it ends (or a lead's slice lands): see `SessionFacts`. */
   | SessionDigest;
 
@@ -215,6 +217,8 @@ export interface ReportCard {
   wastedPerMerge: number;
   /** Agent spend the office knows of, all told. */
   costUsd: number;
+  /** Each retro fix the captain accepted, and whether its frictions stopped coming up once it landed (whenever it was accepted). */
+  fixes: FixEffect[];
   /** Damage found in the ledger when the office opened it: it needs a look. */
   warnings?: string[];
   /** Not damage, but worth knowing: another office holds the ledger, so this one's lines aren't kept. */
@@ -245,6 +249,7 @@ export function reportCard(events: LedgerEvent[], now: number, days = 30): Repor
     triages: of('triage').length,
     goalsClosed: of('goal-closed').length,
     ...spend(of('session-digest'), merged.length),
+    fixes: fixEffects(events, now),
   };
 }
 
@@ -279,6 +284,108 @@ function reportBody(card: ReportCard): { headline: string; lines: string[] } {
       `Checks sent back: ${card.checksSentBack} · Triaged: ${card.triages}`,
       `Closed unmerged: ${card.closed} · Goals closed: ${card.goalsClosed}`,
       ...(card.sessions ? [`Per merge: $${card.costPerMerge.toFixed(2)} · ${card.wastedPerMerge.toFixed(1)} wasted tool calls`] : []),
+      ...(card.fixes.length ? [fixesLine(card.fixes)] : []),
     ],
   };
+}
+
+/** A friction's group: its kind and signature, as `<kind>: <signature>`. */
+export const frictionKey = (f: Pick<Friction, 'kind' | 'signature'>) => `${f.kind}: ${f.signature}`;
+
+export interface FrictionGroup {
+  key: string;
+  kind: FrictionKind;
+  signature: string;
+  /** Digested spans it came up in: the same session's spans count once. */
+  sessions: number;
+  /** Up to six moments, from different sessions, newest first. */
+  moments: { agent: string; at: number; quote: string }[];
+}
+
+/**
+ * The frictions in the window's session digests, grouped by kind and signature, most widespread first. A group counts
+ * sessions, not mentions; groups the captain has already decided on (`retro-decision`) are left out.
+ */
+export function frictionGroups(events: LedgerEvent[], now: number, days: number): FrictionGroup[] {
+  const since = now - days * DAY;
+  const decided = new Set(events.flatMap((e) => (e.kind === 'retro-decision' ? e.signatures : [])));
+  const groups = new Map<string, FrictionGroup & { seen: Set<string> }>();
+  for (const e of events) {
+    if (e.kind !== 'session-digest' || e.at <= since) continue;
+    for (const f of e.frictions ?? []) {
+      const key = frictionKey(f);
+      if (decided.has(key)) continue;
+      const g = groups.get(key) ?? { key, kind: f.kind, signature: f.signature, sessions: 0, moments: [], seen: new Set<string>() };
+      if (!g.seen.has(e.sessionId)) {
+        g.seen.add(e.sessionId);
+        g.sessions++;
+        g.moments.push({ agent: e.agent, at: e.at, quote: f.quote });
+      }
+      groups.set(key, g);
+    }
+  }
+  return [...groups.values()]
+    .map(({ seen: _s, ...g }) => ({ ...g, moments: g.moments.sort((a, b) => b.at - a.at).slice(0, 6) }))
+    .sort((a, b) => b.sessions - a.sessions || a.key.localeCompare(b.key));
+}
+
+/**
+ * How an accepted fix is doing: its issue's PR hasn't merged yet; it has, but too few sessions have been digested
+ * since to tell; its frictions haven't come up since; they come up in a smaller share of sessions than before; or as
+ * often as ever.
+ */
+export type FixStatus = 'waiting' | 'too-early' | 'stopped' | 'fewer' | 'recurring';
+
+export interface FixEffect {
+  title: string;
+  signatures: string[];
+  decidedAt: number;
+  issue?: { repo: string; number: number };
+  /** The merge that closed its issue. */
+  landed?: { repo: string; pr: number; at: number };
+  /** Sessions with any of its frictions, out of the sessions digested: in the window before the decision, and since it landed. */
+  before: { hits: number; sessions: number };
+  after: { hits: number; sessions: number };
+  status: FixStatus;
+}
+
+/** Sessions digested since a fix landed before the report card will say whether it worked. */
+export const FIX_SESSIONS = 5;
+
+/**
+ * Each accepted retro fix with an issue, matched to the merge that closed it (a `merged` line whose `closes` has the
+ * issue), and its frictions counted by session: in the `days` before the captain accepted it, and since it landed.
+ * A session counts once however often a friction came up in it.
+ */
+export function fixEffects(events: LedgerEvent[], now: number, days = 14): FixEffect[] {
+  const digests = events.filter((e): e is Extract<LedgerEvent, { kind: 'session-digest' }> => e.kind === 'session-digest');
+  const count = (signatures: string[], from: number, to: number) => {
+    const sessions = new Set<string>();
+    const hits = new Set<string>();
+    for (const d of digests) {
+      if (d.at <= from || d.at > to) continue;
+      sessions.add(d.sessionId);
+      if (d.frictions?.some((f) => signatures.includes(frictionKey(f)))) hits.add(d.sessionId);
+    }
+    return { hits: hits.size, sessions: sessions.size };
+  };
+  return events.flatMap((e): FixEffect[] => {
+    if (e.kind !== 'retro-decision' || !e.accepted) return [];
+    const issue = e.issue;
+    const merge = issue && events.find((m) => m.kind === 'merged' && m.at >= e.at && m.repo === issue.repo && m.closes?.includes(issue.number));
+    const landed = merge && merge.kind === 'merged' ? { repo: merge.repo, pr: merge.pr, at: merge.at } : undefined;
+    const before = count(e.signatures, e.at - days * DAY, e.at);
+    const after = landed ? count(e.signatures, landed.at, now) : { hits: 0, sessions: 0 };
+    const rate = (c: { hits: number; sessions: number }) => (c.sessions ? c.hits / c.sessions : 0);
+    const status: FixStatus = !landed ? 'waiting' : after.sessions < FIX_SESSIONS ? 'too-early' : after.hits === 0 ? 'stopped' : rate(after) < rate(before) ? 'fewer' : 'recurring';
+    return [{ title: e.title, signatures: e.signatures, decidedAt: e.at, issue, landed, before, after, status }];
+  });
+}
+
+/** The report card's line on retro fixes: how many were accepted, landed, and stopped their frictions. */
+export function fixesLine(fixes: FixEffect[]): string {
+  const landed = fixes.filter((f) => f.status !== 'waiting').length;
+  const stopped = fixes.filter((f) => f.status === 'stopped').length;
+  const recurring = fixes.filter((f) => f.status === 'recurring').length;
+  return `Retro fixes: ${fixes.length} accepted · ${landed} landed · ${stopped} stopped it${recurring ? ` · ${recurring} still recurring` : ''}`;
 }

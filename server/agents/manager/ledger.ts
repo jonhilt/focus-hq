@@ -17,6 +17,8 @@ export class Ledger extends Part {
   /** The agents' transcripts on this machine, for digesting the ones from before digests began. */
   transcripts?: (since: number) => Promise<Transcript[]>;
   private backfilling = false;
+  /** Transcripts a backfill found nothing in: left out of the count from then on. */
+  private emptyTranscripts = new Set<string>();
   /** Each session's digest in hand, so two of the same session never overlap. */
   private digesting = new Map<string, Promise<void>>();
 
@@ -32,7 +34,12 @@ export class Ledger extends Part {
     // merged on GitHub, the office doesn't know the final head: a goal's PR is at the commit its lead last shipped
     const head = headSha ?? lead?.lead?.prs.find((p) => p.repo === repo && p.number === number)?.sha;
     const qa = qaBadge(review, { headSha: head ?? '' }).state;
-    this.record(projectId, { kind: merged ? 'merged' : 'closed', repo, pr: number, goal: lead?.lead?.title, by, qa, failedRounds: review?.failedRounds ?? 0, triages: review?.triages ?? 0 });
+    // the issues it closed: as the board last saw them, and the one its developer was given
+    const owner = this.core.manager.prOwner(repo, number);
+    const onBoard = [...this.store.boards.values()].flatMap((b) => b.prs).find((p) => p.repo === repo && p.number === number)?.closes ?? [];
+    const closes = [...new Set([...onBoard, ...(owner?.task === 'issue' ? [owner.issue.number] : [])])];
+    const common = { repo, pr: number, goal: lead?.lead?.title, by, qa, failedRounds: review?.failedRounds ?? 0, triages: review?.triages ?? 0 };
+    this.record(projectId, merged ? { kind: 'merged', ...common, ...(closes.length && { closes }) } : { kind: 'closed', ...common });
   }
 
   /**
@@ -63,10 +70,14 @@ export class Ledger extends Part {
     });
   }
 
-  /** The agents' transcripts on this machine that have no digest yet: what a backfill would read. */
+  /**
+   * The agents' transcripts on this machine that have no digest yet: what a backfill would read. A session still in
+   * the office is left to be digested as it ends, and one a backfill found nothing in isn't counted again.
+   */
   async undigested(): Promise<Transcript[]> {
     const digested = new Set(this.store.ledger.flatMap((e) => (e.kind === 'session-digest' ? [e.sessionId] : [])));
-    return (await this.transcripts?.(0) ?? []).filter((t) => !digested.has(t.sessionId));
+    const live = new Set([...this.store.agents.values()].flatMap((a) => (a.sessionId ? [a.sessionId] : [])));
+    return (await this.transcripts?.(0) ?? []).filter((t) => !digested.has(t.sessionId) && !live.has(t.sessionId) && !this.emptyTranscripts.has(t.sessionId));
   }
 
   /**
@@ -86,7 +97,10 @@ export class Ledger extends Part {
     const one = async (t: Transcript) => {
       const text = await t.read();
       const span = transcriptSpan(text);
-      if (!span) return void empty++;
+      if (!span) {
+        this.emptyTranscripts.add(t.sessionId);
+        return void empty++;
+      }
       if (this.store.ledger.some((e) => e.kind === 'session-digest' && e.sessionId === t.sessionId)) return;
       const who = backfillWho(t, text);
       const facts = digestEntry(span, { id: t.name, name: t.name.split('__')[0], task: who.task, sessionId: t.sessionId, costUsd: who.costUsd ?? 0 }, who.prs, this.store.ledger);

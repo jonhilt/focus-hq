@@ -4,24 +4,23 @@
 export const FIX_KINDS = ['check', 'qa-rule', 'pointer', 'delete'] as const;
 export type FixKind = (typeof FIX_KINDS)[number];
 
-/** One moment a proposal rests on: which session (its file under sessions/), when, and what was said or done. */
-export interface RetroEvidence {
-  session: string;
-  at?: string;
-  quote: string;
-}
-
-/** One improvement the chief engineer proposes to how the office works, with the moments it rests on. */
-export interface RetroProposal {
+/**
+ * An issue the chief engineer drafts from frictions that came up in three or more sessions, for the captain to accept
+ * (it's filed) or reject. Either way the decision goes in the ledger with the frictions' signatures, so a later retro
+ * leaves them be and the report card can tell whether an accepted fix stopped them recurring.
+ */
+export interface RetroDraft {
+  id: string;
   title: string;
-  /** What keeps happening, and why it matters. */
-  problem: string;
-  evidence: RetroEvidence[];
-  /** What to change. */
-  fix: string;
+  /** The issue's body as it would be filed: the engineer's words, then the quoted evidence code adds. */
+  body: string;
   kind: FixKind;
-  /** How the next retro can tell whether it worked: a number to watch, with today's value. */
+  /** The number the next retro should watch, with its value today. */
   measure: string;
+  /** The friction groups it rests on (`<kind>: <signature>`), and how many sessions they came up in. */
+  signatures: string[];
+  sessions: number;
+  decision?: { accepted: boolean; at: number; issue?: { repo: string; number: number; url: string } };
 }
 
 export type RetroStatus = 'idle' | 'gathering' | 'thinking' | 'done' | 'failed';
@@ -33,16 +32,15 @@ export interface Retro {
   activity: string;
   /** How many days back it looks. */
   days: number;
-  /** Sessions it read. */
+  /** Session digests it looked over. */
   sessions: number;
   startedAt?: number;
   finishedAt?: number;
   /** A few lines on how things have gone. */
   summary?: string;
   /** Most worth doing first. */
-  proposals: RetroProposal[];
-  wentWell: string[];
-  /** One-offs to keep an eye on: not patterns yet. */
+  drafts: RetroDraft[];
+  /** Frictions seen in two sessions: not a pattern yet, worth keeping an eye on. */
   watch: string[];
   costUsd: number;
   error?: string;

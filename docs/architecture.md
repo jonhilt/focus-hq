@@ -44,8 +44,8 @@ server/
     explainer.ts          the LCARS player a lead's explainer plays in: their beats and stage wrapped in one page, pure
     numberOne.ts          Number One's ship-wide chat: turns, prompt, reply schema and the ship_status summariser
     claudeCrew.ts         the crew's read-only Claude Code sessions (Read/Glob/Grep, web search/fetch for Number One, Number One's ship_status and open_project, structured output)
-    retro.ts              the chief engineer's retro, pure: transcript digests, the index and its frequent tool errors, prompt, schema, and the check that every proposal cites real moments
-    engineer.ts           the chief engineer: finds the agents' transcripts, gathers the evidence into data/retros, runs one retro at a time
+    retro.ts              the chief engineer's retro, pure: what the engineer reads (the frictions that keep coming back, the ledger, goals), prompt, schema, and the check that every draft rests on real groups, with the evidence added by code; also who a transcript's message is from
+    engineer.ts           the chief engineer: groups the digests' frictions, gathers the evidence into data/retros, runs one retro at a time and notes the captain's decisions; also finds the agents' transcripts on disk
     sessionDigest.ts      a session's span digested from its transcript and the ledger, by code: calls, waste, cost, nudges
     frictions.ts          what Haiku reads of a session's span, the fixed friction kinds it picks from, and the check that every quote is really in it
     qa.ts                 the QA officer: instructions, the report's schema and parsing, the PR comment

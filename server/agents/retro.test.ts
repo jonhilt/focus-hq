@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { retroAfterRestart, freshRetro } from '../store';
-import { digestSession, errorShape, frequentErrors, messageFrom, parseRetro, renderDigest, renderIndex, type SessionDigest } from './retro';
-
-const line = (type: string, content: unknown, extra: Record<string, unknown> = {}) => JSON.stringify({ type, timestamp: '2026-10-07T12:00:00.000Z', message: { role: type, content }, ...extra });
-const meta = { name: 'lead-proj-x__abcd1234', kind: 'lead' as const, sessionId: 'abcd1234-ffff' };
+import type { FrictionGroup } from '../../shared/ledger';
+import { freshRetro, retroAfterRestart } from '../store';
+import { messageFrom, parseDrafts, renderFrictions } from './retro';
 
 describe('messageFrom', () => {
   it('knows the office’s and QA’s messages by how they open', () => {
@@ -20,76 +18,44 @@ describe('messageFrom', () => {
   });
 });
 
-describe('digestSession', () => {
-  it('keeps who said what, what the agent said before the captain spoke, QA verdicts and tool errors', () => {
-    const jsonl = [
-      line('user', 'Your workspace, with every repo of the project checked out side by side'),
-      line('assistant', [{ type: 'text', text: 'Shall I ship it?' }, { type: 'tool_use', name: 'Bash', input: {} }]),
-      line('user', [{ type: 'tool_result', is_error: true, content: 'no matches found: --include=*.ts\nmore' }]),
-      line('user', 'ship it'),
-      line('user', '<system-reminder>ignore me</system-reminder>'),
-      line('user', 'hidden', { isMeta: true }),
-      line('assistant', [{ type: 'tool_use', name: 'StructuredOutput', input: { verdict: 'fail', summary: 'README table broken' } }]),
-      'not json',
-      JSON.stringify({ type: 'ai-title', aiTitle: 'Ship the thing' }),
-    ].join('\n');
-    const d = digestSession(jsonl, meta);
-    expect(d).toMatchObject({ title: 'Ship the thing', turns: 2, toolCalls: 2, errors: ['no matches found: --include=*.ts'], verdicts: [{ verdict: 'fail', summary: 'README table broken' }] });
-    expect(d.messages.map((m) => m.from)).toEqual(['office', 'captain']);
-    expect(d.messages[1]).toMatchObject({ text: 'ship it', before: 'Shall I ship it?' });
-    expect(renderDigest(d)).toContain('CAPTAIN: ship it\n  (the agent had just said: "Shall I ship it?")');
-  });
+const DAY = 24 * 60 * 60 * 1000;
+const group = (key: string, sessions: number): FrictionGroup => {
+  const [kind, signature] = key.split(': ') as [FrictionGroup['kind'], string];
+  return { key, kind, signature, sessions, moments: [{ agent: 'Ens. A', at: 3 * DAY, quote: `${signature}, again` }] };
+};
+const groups = [group('demo-env: demo port in use', 5), group('shell: zsh glob no matches', 3), group('guard-block: dcg blocks rm -rf', 3)];
 
-  it('clips long messages, keeping the captain’s longest', () => {
-    const d = digestSession([line('user', `[Office] ${'x'.repeat(2000)}`), line('user', 'y'.repeat(2500))].join('\n'), meta);
-    expect(d.messages[0].text).toMatch(/…\[\+\d+\]$/);
-    expect(d.messages[0].text.length).toBeLessThan(800);
-    expect(d.messages[1].text.length).toBeGreaterThan(2000);
+describe('renderFrictions', () => {
+  it('lists each group under the id drafts cite, with its moments quoted', () => {
+    const page = renderFrictions(groups, 14);
+    expect(page).toContain('## G1: demo-env: demo port in use (5 sessions)\n- 1970-01-04 Ens. A: “demo port in use, again”');
+    expect(page).toContain('## G3: guard-block: dcg blocks rm -rf (3 sessions)');
   });
 });
 
-describe('frequentErrors', () => {
-  const digest = (name: string, errors: string[]): SessionDigest => ({ ...meta, name, errors, messages: [], verdicts: [], turns: 0, toolCalls: 0 });
+describe('parseDrafts', () => {
+  let n = 0;
+  const id = () => `d${++n}`;
+  const draft = (groupIds: string[], title = 'Give each workspace its own demo port') => ({ groups: groupIds, title, body: 'It keeps happening.\n\n## What to build\nA port each.\n\n## Done when\nNo clash.', kind: 'check', measure: 'Sessions with it: 5' });
 
-  it('blurs numbers, paths and quoted bits so the same failure counts once', () => {
-    expect(errorShape('Error: listen EADDRINUSE :::4591 at /tmp/a/b.ts')).toBe(errorShape('Error: listen EADDRINUSE :::5310 at /var/x.ts'));
-  });
-
-  it('lists only errors seen in more than one session, most widespread first', () => {
-    const errors = frequentErrors([
-      digest('a', ['ERR_CONNECTION_REFUSED at http://localhost:4591/', 'only here']),
-      digest('b', ['ERR_CONNECTION_REFUSED at http://localhost:5310/', 'zsh: no matches found: --include=*.ts']),
-      digest('c', ['ERR_CONNECTION_REFUSED at http://localhost:4600/', 'zsh: no matches found: --include=*.cs']),
+  it('keeps drafts resting on real groups, with the quoted evidence added by code', () => {
+    const out = parseDrafts({ summary: 'Ports.', drafts: [draft(['G1']), draft(['g2', 'G3'], 'Stop shell commands tripping')] }, groups, id);
+    expect(out?.drafts.map((d) => [d.title, d.signatures, d.sessions])).toEqual([
+      ['Give each workspace its own demo port', ['demo-env: demo port in use'], 5],
+      ['Stop shell commands tripping', ['shell: zsh glob no matches', 'guard-block: dcg blocks rm -rf'], 3],
     ]);
-    expect(errors.map((e) => e.sessions)).toEqual([['a', 'b', 'c'], ['b', 'c']]);
+    expect(out?.drafts[0].body).toBe('It keeps happening.\n\n## What to build\nA port each.\n\n## Done when\nNo clash.\n\n## Evidence\n**demo-env: demo port in use**, in 5 sessions:\n- 1970-01-04 Ens. A: “demo port in use, again”\n');
   });
 
-  it('shows them in the index', () => {
-    const index = renderIndex([digest('a', ['zsh: no matches found: *.ts']), digest('b', ['zsh: no matches found: *.cs'])], 14);
-    expect(index).toContain('2 sessions, 2×');
-    expect(index).toContain('| a | lead |');
-  });
-});
-
-describe('parseRetro', () => {
-  const sessions = new Set(['lead-a__1', 'qa-b__2']);
-  const proposal = (evidence: unknown[], kind = 'check') => ({ title: 'Do it', problem: 'p', evidence, fix: 'f', kind, measure: 'm' });
-
-  it('keeps a proposal resting on two moments in known sessions', () => {
-    const out = parseRetro({ summary: 's', proposals: [proposal([{ session: 'sessions/lead-a__1.md', at: '12:00', quote: 'go' }, { session: 'qa-b__2', quote: 'pass' }])], wentWell: ['x'], watch: [] }, sessions);
-    expect(out?.proposals[0].evidence.map((e) => e.session)).toEqual(['lead-a__1', 'qa-b__2']);
-    expect(out?.wentWell).toEqual(['x']);
-  });
-
-  it('drops a proposal citing fewer than two real moments', () => {
-    const out = parseRetro({ summary: 's', proposals: [proposal([{ session: 'lead-a__1', quote: 'go' }, { session: 'made-up__9', quote: 'x' }]), proposal([{ session: 'ledger', quote: '15 unpassed merges' }, { session: 'qa-b__2', quote: '' }])] }, sessions);
-    expect(out?.proposals).toEqual([]);
+  it('drops a draft citing no real group, or a group another draft already took', () => {
+    const out = parseDrafts({ summary: 's', drafts: [draft(['G1']), draft(['G1'], 'Again'), draft(['G9'], 'Made up'), { ...draft(['G2']), body: '' }] }, groups, id);
+    expect(out?.drafts.map((d) => d.title)).toEqual(['Give each workspace its own demo port']);
   });
 
   it('falls back to a pointer for an unknown kind, and gives up on nothing at all', () => {
-    expect(parseRetro({ summary: 's', proposals: [proposal([{ session: 'ledger', quote: 'a' }, { session: 'qa-b__2', quote: 'b' }], 'essay')] }, sessions)?.proposals[0].kind).toBe('pointer');
-    expect(parseRetro(undefined, sessions)).toBeUndefined();
-    expect(parseRetro({ proposals: [] }, sessions)).toBeUndefined();
+    expect(parseDrafts({ summary: 's', drafts: [{ ...draft(['G1']), kind: 'essay' }] }, groups, id)?.drafts[0].kind).toBe('pointer');
+    expect(parseDrafts(undefined, groups, id)).toBeUndefined();
+    expect(parseDrafts({ drafts: [] }, groups, id)).toBeUndefined();
   });
 });
 
@@ -97,5 +63,10 @@ describe('retroAfterRestart', () => {
   it('ends a retro that was under way when Focus shut down', () => {
     expect(retroAfterRestart({ ...freshRetro(), status: 'thinking' })).toMatchObject({ status: 'failed', activity: 'Interrupted' });
     expect(retroAfterRestart({ ...freshRetro(), status: 'done' }).status).toBe('done');
+  });
+
+  it('gives a retro saved before drafts none', () => {
+    const { drafts: _d, ...old } = freshRetro();
+    expect(retroAfterRestart({ ...old, status: 'done' } as never).drafts).toEqual([]);
   });
 });

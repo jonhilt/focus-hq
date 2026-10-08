@@ -24,7 +24,7 @@ describe('extractionInput', () => {
         '[12:00] OFFICE: Please resolve GitHub issue #12 in o/r',
         '[12:01] AGENT: Shall I ship it?',
         '[12:02] FAILED Bash: ls *.md → zsh: no matches found: *.md',
-        '[12:03] CAPTAIN: go\n  (the agent had just said: "Shall I ship it?")',
+        '[12:03] CAPTAIN: go\n  (the agent had just said: “Shall I ship it?”)',
         '[12:04] AGENT: Lesson: always quote globs in zsh.',
         '',
         'LEDGER qa-verdict: {"repo":"o/r","pr":12,"verdict":"fail","reviewer":"B","checks":{"pass":0,"fail":1,"skip":0},"failedRounds":1}',
@@ -33,7 +33,7 @@ describe('extractionInput', () => {
   });
 
   it('starts after the given line', () => {
-    expect(extractionInput(transcript(), 'u3', [])).toBe('[12:03] CAPTAIN: go\n  (the agent had just said: "Shall I ship it?")\n[12:04] AGENT: Lesson: always quote globs in zsh.');
+    expect(extractionInput(transcript(), 'u3', [])).toBe('[12:03] CAPTAIN: go\n  (the agent had just said: “Shall I ship it?”)\n[12:04] AGENT: Lesson: always quote globs in zsh.');
   });
 
   it('drops the agent’s own words first when the span runs long', () => {
@@ -41,7 +41,7 @@ describe('extractionInput', () => {
     const long = [...Array.from({ length: 200 }, (_, i) => line('assistant', [{ type: 'text', text: `${i} ${'x'.repeat(390)}` }])), line('user', 'please fix the header')].join('\n');
     const input = extractionInput(long, undefined, []);
     expect(input.length).toBeLessThanOrEqual(40_000);
-    expect(input.endsWith('CAPTAIN: please fix the header\n  (the agent had just said: "199 ' + 'x'.repeat(296) + ' …[+94]")')).toBe(true);
+    expect(input.endsWith('CAPTAIN: please fix the header\n  (the agent had just said: “199 ' + 'x'.repeat(296) + ' …[+94]”)')).toBe(true);
     expect(input).not.toContain('AGENT: 0 ');
   });
 });
@@ -86,6 +86,13 @@ describe('parseExtraction', () => {
     );
     expect(out).toEqual({ frictions: [], rework: [] });
     expect(parseExtraction(undefined, input)).toEqual({ frictions: [], rework: [] });
+  });
+
+  it('keeps a quote with double quotes in it, from what the agent had just said', () => {
+    n = 0;
+    const said = [line('assistant', [{ type: 'text', text: 'Run "npm test" now?' }]), line('user', 'yes, and quote globs')].join('\n');
+    const text = extractionInput(said, undefined, []);
+    expect(parseExtraction({ frictions: [{ kind: 'captain-nudge', signature: 'go ahead', quote: 'Run "npm test" now?' }], rework: [] }, text).frictions).toHaveLength(1);
   });
 
   it('turns a signature into a few lowercase words', () => {

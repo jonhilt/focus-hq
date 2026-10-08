@@ -2,11 +2,12 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { chiefEngineer } from '../../shared/crew';
-import type { Retro, Settings } from '../../shared/types';
+import { frictionGroups } from '../../shared/ledger';
+import type { Retro, RetroDraft, Settings } from '../../shared/types';
 import type { Hub } from '../hub';
 import { freshRetro, type Store } from '../store';
-import { errorMessage, truncate } from '../util';
-import { digestSession, parseRetro, renderDigest, renderGoals, renderIndex, renderLedger, type SessionKind } from './retro';
+import { errorMessage, newId, truncate } from '../util';
+import { parseDrafts, PATTERN_SESSIONS, renderFrictions, renderGoals, renderLedger, type SessionKind } from './retro';
 
 /** One session's transcript, as the office found it. */
 export interface Transcript {
@@ -22,7 +23,8 @@ export interface RetroRequest {
   /** The folder the office gathered the evidence in: the engineer's current directory. */
   cwd: string;
   days: number;
-  sessions: number;
+  /** Friction groups seen in enough sessions to draft from. */
+  groups: number;
   settings: Settings;
   signal: AbortSignal;
 }
@@ -35,10 +37,12 @@ export interface RetroOfficer {
 const DAY = 24 * 60 * 60 * 1000;
 
 /**
- * The chief engineer at the engineering station: on the captain's word, looks back over the office's recent sessions
- * and proposes changes to how it works. The office gathers the evidence (a digest of each session's transcript, the
- * ledger, closed goals) into a folder of its own; the engineer reads only that, and changes nothing. One retro at a
- * time; the latest is kept in state.json, and each one's folder (with retro.json) under data/retros.
+ * The chief engineer at the engineering station: on the captain's word, looks back over the ledger's session digests
+ * and drafts issues for the frictions that keep coming back. Code groups the digests' frictions by kind and signature
+ * and keeps those in three or more sessions; the office writes them, the ledger and closed goals into a folder of its
+ * own; the engineer reads only that, drafts, and changes nothing. The captain accepts (it's filed) or rejects each
+ * draft. One retro at a time; the latest is kept in state.json, and each one's folder (with retro.json) under
+ * data/retros.
  */
 export class ChiefEngineer {
   private running: AbortController | null = null;
@@ -47,8 +51,6 @@ export class ChiefEngineer {
     private readonly store: Store,
     private readonly hub: Hub,
     private readonly officer: RetroOfficer,
-    /** The transcripts of sessions that started or carried on since `since`. */
-    private readonly transcripts: (since: number) => Promise<Transcript[]>,
     private readonly retrosDir: string,
   ) {}
 
@@ -59,7 +61,7 @@ export class ChiefEngineer {
   start(days: number): Retro {
     if (this.running) throw new Error(`${chiefEngineer().name} is already on a retro`);
     const window = Math.max(1, Math.min(60, Math.round(days) || 14));
-    this.store.retro = { ...freshRetro(), status: 'gathering', activity: 'Gathering the transcripts', days: window, startedAt: Date.now() };
+    this.store.retro = { ...freshRetro(), status: 'gathering', activity: 'Grouping the digests’ frictions', days: window, startedAt: Date.now() };
     this.changed();
     const abort = new AbortController();
     this.running = abort;
@@ -87,37 +89,44 @@ export class ChiefEngineer {
     };
     try {
       const now = Date.now();
-      const found = await this.transcripts(now - days * DAY);
-      const digests = [];
-      for (const [i, t] of found.entries()) {
-        if (!current()) return;
-        if (i % 20 === 0) update({ activity: `Digesting transcripts (${i} of ${found.length})` });
-        const digest = digestSession(await t.read(), { name: t.name, kind: t.kind, sessionId: t.sessionId });
-        if (digest.messages.length) digests.push(digest);
-      }
-      const dir = path.join(this.retrosDir, new Date(now).toISOString().replace(/[:.]/g, '-'));
-      await fsp.mkdir(path.join(dir, 'sessions'), { recursive: true });
-      await Promise.all(digests.map((d) => fsp.writeFile(path.join(dir, 'sessions', `${d.name}.md`), renderDigest(d))));
-      const goals = this.store.projects.flatMap((p) => (p.goals ?? []).map((g) => ({ ...g, project: p.name })));
-      await fsp.writeFile(path.join(dir, 'INDEX.md'), renderIndex(digests, days));
-      await fsp.writeFile(path.join(dir, 'ledger.md'), renderLedger(this.store.ledger, now, days));
-      await fsp.writeFile(path.join(dir, 'goals.md'), renderGoals(goals, now, days));
-      if (!digests.length) {
-        update({ status: 'failed', activity: 'Nothing to look back on', error: `No agent sessions in the last ${days} days`, finishedAt: Date.now() });
+      const all = frictionGroups(this.store.ledger, now, days);
+      const groups = all.filter((g) => g.sessions >= PATTERN_SESSIONS);
+      const sessions = this.store.ledger.filter((e) => e.kind === 'session-digest' && e.at > now - days * DAY).length;
+      const watch = all.filter((g) => g.sessions === PATTERN_SESSIONS - 1).map((g) => `${g.key} (${g.sessions} sessions)`);
+      if (!groups.length) {
+        update({ status: 'done', activity: 'Nothing keeps coming back', sessions, watch, summary: sessions ? `No friction came up in ${PATTERN_SESSIONS} or more of the ${sessions} sessions digested in the last ${days} days.` : `No sessions were digested in the last ${days} days.`, finishedAt: Date.now() });
         return;
       }
-      update({ status: 'thinking', activity: `Reading ${digests.length} sessions`, sessions: digests.length });
-      const result = await this.officer.retro({ cwd: dir, days, sessions: digests.length, settings: this.store.settings, signal: abort.signal }, (text) => {
+      const dir = path.join(this.retrosDir, new Date(now).toISOString().replace(/[:.]/g, '-'));
+      await fsp.mkdir(dir, { recursive: true });
+      const goals = this.store.projects.flatMap((p) => (p.goals ?? []).map((g) => ({ ...g, project: p.name })));
+      await fsp.writeFile(path.join(dir, 'frictions.md'), renderFrictions(groups, days));
+      await fsp.writeFile(path.join(dir, 'ledger.md'), renderLedger(this.store.ledger, now, days));
+      await fsp.writeFile(path.join(dir, 'goals.md'), renderGoals(goals, now, days));
+      if (!current()) return;
+      update({ status: 'thinking', activity: `Drafting from ${groups.length} frictions`, sessions, watch });
+      const result = await this.officer.retro({ cwd: dir, days, groups: groups.length, settings: this.store.settings, signal: abort.signal }, (text) => {
         if (text) update({ activity: truncate(text, 120) });
       });
       if (!current()) return;
-      const findings = parseRetro(result.structured, new Set(digests.map((d) => d.name)));
-      if (!findings) throw new Error('Finished without findings');
-      update({ status: 'done', activity: `${findings.proposals.length} proposals for you`, ...findings, costUsd: result.costUsd ?? 0, finishedAt: Date.now() });
+      const found = parseDrafts(result.structured, groups, () => newId('draft'));
+      if (!found) throw new Error('Finished without drafts');
+      update({ status: 'done', activity: found.drafts.length === 1 ? 'A draft for you' : `${found.drafts.length} drafts for you`, ...found, costUsd: result.costUsd ?? 0, finishedAt: Date.now() });
       fs.writeFileSync(path.join(dir, 'retro.json'), JSON.stringify(this.store.retro, null, 2));
     } catch (err) {
       update({ status: 'failed', activity: 'Couldn’t finish the retro', error: errorMessage(err), finishedAt: Date.now() });
     }
+  }
+
+  /** Notes the captain's decision on a draft (the office files an accepted one and writes the ledger). */
+  decided(id: string, decision: NonNullable<RetroDraft['decision']>): RetroDraft {
+    const draft = this.store.retro.drafts.find((d) => d.id === id);
+    if (!draft) throw new Error('That draft isn’t in the latest retro');
+    if (draft.decision) throw new Error(`That draft was already ${draft.decision.accepted ? 'accepted' : 'rejected'}`);
+    const done = { ...draft, decision };
+    this.store.retro = { ...this.store.retro, drafts: this.store.retro.drafts.map((d) => (d.id === id ? done : d)) };
+    this.changed();
+    return done;
   }
 
   private changed(): void {

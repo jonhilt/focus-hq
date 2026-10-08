@@ -13,7 +13,7 @@ import { contactShadow } from './contactShadow';
 /**
  * The engineering station: where the ship's engineer keeps the ship running, facing their board on the wall, which
  * shows the ledger's report card (how the office's work has gone lately) and how their retro stands. E opens the
- * station's panel, where the captain starts a retro and reads its proposals. In world
+ * station's panel, where the captain starts a retro and decides on its drafts. In world
  * coordinates: whoever places it adds `group` to the scene and `footprint` to the colliders.
  */
 export class EngineeringStation {
@@ -92,7 +92,10 @@ function engineerView(retro: Retro | null) {
 /** The screen's last line: how the retro stands. */
 function retroLine(retro: Retro | null): string | undefined {
   if (!retro || retro.status === 'idle') return 'Retro: press E to start one';
-  if (retro.status === 'done') return `Retro: ${retro.proposals.length} proposals waiting`;
+  if (retro.status === 'done') {
+    const waiting = retro.drafts.filter((d) => !d.decision).length;
+    return waiting ? `Retro: ${waiting} draft${waiting === 1 ? '' : 's'} waiting` : retro.drafts.length ? 'Retro: all drafts decided' : 'Retro: nothing keeps coming back';
+  }
   if (retro.status === 'failed') return 'Retro: didn’t finish';
   return `Retro: ${retro.activity}`;
 }

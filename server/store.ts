@@ -16,10 +16,12 @@ import { newId } from './util';
 /** Number One's chat as saved: with their session, so the next message resumes it. */
 export type StoredNumberOne = NumberOneChat & { sessionId?: string };
 
-export const freshRetro = (): Retro => ({ status: 'idle', activity: '', days: 14, sessions: 0, proposals: [], wentWell: [], watch: [], costUsd: 0 });
+export const freshRetro = (): Retro => ({ status: 'idle', activity: '', days: 14, sessions: 0, drafts: [], watch: [], costUsd: 0 });
 
 /** The latest retro as it picks up after a restart: one under way when Focus shut down ends, so another can start. */
 export function retroAfterRestart(saved: Retro): Retro {
+  // a retro saved before drafts replaced proposals has none
+  saved = { ...saved, drafts: saved.drafts ?? [], watch: saved.watch ?? [] };
   if (saved.status !== 'gathering' && saved.status !== 'thinking') return saved;
   return { ...saved, status: 'failed', activity: 'Interrupted', error: 'Interrupted when Focus shut down. Start it again.' };
 }

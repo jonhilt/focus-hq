@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkLedger, type LedgerEvent, ledgerLine, reportCard, reportLines, type SessionFacts } from './ledger';
+import { checkLedger, fixEffects, frictionGroups, type LedgerEvent, ledgerLine, reportCard, reportLines, type SessionFacts } from './ledger';
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = 100 * DAY;
@@ -85,5 +85,53 @@ describe('reportLines', () => {
     const { headline, lines } = reportLines(reportCard([merged(1, 'passed'), merged(2, 'passed', 1)], NOW));
     expect(headline).toBe('2 merged · last 30 days');
     expect(lines[0]).toBe('QA passed first time: 50%');
+  });
+});
+
+describe('frictionGroups', () => {
+  const friction = (session: string, signature: string, at = NOW - DAY, kind: 'demo-env' | 'shell' = 'demo-env'): LedgerEvent => ({ ...(digest({}) as Extract<LedgerEvent, { kind: 'session-digest' }>), sessionId: session, agent: `Ens. ${session}`, at, frictions: [{ kind, signature, quote: `${signature} in ${session}` }] });
+
+  it('groups by kind and signature, counting each session once, most widespread first', () => {
+    const groups = frictionGroups([friction('a', 'port in use'), friction('a', 'port in use'), friction('b', 'port in use'), friction('c', 'port in use'), friction('a', 'glob', NOW - DAY, 'shell')], NOW, 14);
+    expect(groups.map((g) => [g.key, g.sessions, g.moments.length])).toEqual([['demo-env: port in use', 3, 3], ['shell: glob', 1, 1]]);
+  });
+
+  it('leaves out what came before the window, and what the captain already decided on', () => {
+    const decided: LedgerEvent = { projectId: 'p', seq: ++seq, at: NOW - DAY, kind: 'retro-decision', title: 'Ports', signatures: ['demo-env: port in use'], accepted: false };
+    expect(frictionGroups([friction('a', 'old', NOW - 20 * DAY), friction('b', 'port in use'), decided], NOW, 14)).toEqual([]);
+  });
+});
+
+describe('fixEffects', () => {
+  const T = NOW - 10 * DAY;
+  const PORT = 'demo-env: demo port in use';
+  const session = (id: string, at: number, port: boolean): LedgerEvent => ({ ...(digest({}) as Extract<LedgerEvent, { kind: 'session-digest' }>), sessionId: id, at, frictions: port ? [{ kind: 'demo-env', signature: 'demo port in use', quote: 'EADDRINUSE' }] : [] });
+  const accepted: LedgerEvent = { projectId: 'p', seq: ++seq, at: T, kind: 'retro-decision', title: 'Give each workspace its own demo port', signatures: [PORT], accepted: true, issue: { repo: 'o/r', number: 9 } };
+  const landing = (at: number): LedgerEvent => ({ ...merged(31, 'passed', 0, at), closes: [9] } as LedgerEvent);
+  const beforeIt = [session('b1', T - DAY, true), session('b2', T - DAY, true), session('b3', T - DAY, false), session('b4', T - DAY, false)];
+  const after = (n: number, hits: number, from: number) => Array.from({ length: n }, (_, i) => session(`a${i}`, from + (i + 1) * 1000, i < hits));
+
+  it('waits for the merge that closes its issue', () => {
+    expect(fixEffects([...beforeIt, accepted, merged(30, 'passed', 0, T + DAY)], NOW)).toMatchObject([{ status: 'waiting', before: { hits: 2, sessions: 4 }, after: { hits: 0, sessions: 0 } }]);
+  });
+
+  it('says it’s too early until enough sessions have been digested since it landed', () => {
+    const land = T + DAY;
+    expect(fixEffects([...beforeIt, accepted, landing(land), ...after(4, 0, land)], NOW)[0]).toMatchObject({ status: 'too-early', landed: { repo: 'o/r', pr: 31, at: land } });
+  });
+
+  it('tells stopped from fewer from still recurring, by share of sessions', () => {
+    const land = T + DAY;
+    expect(fixEffects([...beforeIt, accepted, landing(land), ...after(5, 0, land)], NOW)[0]).toMatchObject({ status: 'stopped', after: { hits: 0, sessions: 5 } });
+    expect(fixEffects([...beforeIt, accepted, landing(land), ...after(5, 1, land)], NOW)[0].status).toBe('fewer');
+    expect(fixEffects([...beforeIt, accepted, landing(land), ...after(6, 3, land)], NOW)[0].status).toBe('recurring');
+  });
+
+  it('leaves out rejected drafts, and sums them up on the report card', () => {
+    const rejected: LedgerEvent = { ...accepted, seq: ++seq, accepted: false, title: 'No' };
+    const land = T + DAY;
+    const card = reportCard([...beforeIt, accepted, rejected, landing(land), ...after(5, 0, land)], NOW);
+    expect(card.fixes).toHaveLength(1);
+    expect(reportLines(card).lines.at(-1)).toBe('Retro fixes: 1 accepted · 1 landed · 1 stopped it');
   });
 });

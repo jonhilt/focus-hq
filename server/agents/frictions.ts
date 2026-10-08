@@ -68,7 +68,7 @@ export function extractionInput(jsonl: string, afterUuid: string | undefined, pr
         const from = messageFrom(b.text);
         if (!from) continue;
         if (from === 'captain') {
-          lines.push({ text: `[${at}] CAPTAIN: ${clip(b.text, 1500)}${lastSaid ? `\n  (the agent had just said: ${JSON.stringify(clip(lastSaid, 300))})` : ''}`, spare: false });
+          lines.push({ text: `[${at}] CAPTAIN: ${clip(b.text, 1500)}${lastSaid ? `\n  (the agent had just said: “${clip(lastSaid, 300)}”)` : ''}`, spare: false });
         } else lines.push({ text: `[${at}] ${from.toUpperCase()}: ${clip(b.text, from === 'compacted' ? 120 : 600)}`, spare: false });
       }
     }

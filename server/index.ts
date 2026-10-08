@@ -7,7 +7,7 @@ import { BrowserPool } from './agents/browserTool';
 import { ClaudeDrafter, ClaudeEngineer, ClaudeExtractor, ClaudeNumberOne, ClaudeTriager } from './agents/claudeCrew';
 import { ChiefEngineer, transcriptFolders, transcriptReader } from './agents/engineer';
 import { ClaudeRunner } from './agents/claudeRunner';
-import { DemoDrafter, DemoEngineer, DemoNumberOne, DemoRunner, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
+import { DemoDrafter, DemoEngineer, DemoExtractor, DemoNumberOne, DemoRunner, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
 import { Renderer, Sessions, Triage, Workspace } from './agents/services';
 import { closedGoalPrs, lookUpPrStates, NumberOne, type ShipStatus, summariseShip } from './agents/numberOne';
@@ -74,13 +74,16 @@ async function main() {
     return summariseShip(snapshot, (id) => workspace.dir(id), prStates);
   });
   // the chief engineer reads the agents' transcripts (the demo's are scripted), digested into a folder of its own
-  const engineer = new ChiefEngineer(store, hub, config.demo ? new DemoEngineer() : new ClaudeEngineer(), config.demo ? demoTranscripts : transcriptFolders(paths.transcripts, paths.workspaces), paths.retros);
+  const engineer = new ChiefEngineer(store, hub, config.demo ? new DemoEngineer() : new ClaudeEngineer(), paths.retros);
   const office = new Office(store, hub, github, previews, planner, numberOne, engineer, new Voice(hub, config.demo), await currentVersion());
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
   // each agent session is digested into the ledger as it ends: the demo's agents have no transcripts
   // the demo's older sessions are its scripted ones, digested without Haiku
-  if (config.demo) office.agents.transcripts = demoTranscripts;
+  if (config.demo) {
+    office.agents.transcripts = demoTranscripts;
+    office.agents.extractor = new DemoExtractor();
+  }
   else {
     office.agents.readTranscript = transcriptReader(paths.transcripts, paths.workspaces);
     office.agents.extractor = new ClaudeExtractor();

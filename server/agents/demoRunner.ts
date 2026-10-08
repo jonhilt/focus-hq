@@ -5,6 +5,7 @@ import type { TermLine } from '../../shared/types';
 import { demoSinceVerdict } from '../demoGit';
 import { sleep } from '../util';
 import type { RetroOfficer, RetroRequest, Transcript } from './engineer';
+import type { Extractor } from './sessionDigest';
 import type { NumberOneOfficer, NumberOneReply, NumberOneTurn } from './numberOne';
 import type { Drafter, DraftRequest, DraftResult } from './planner';
 import type { ExplainerInput } from './explainer';
@@ -823,49 +824,44 @@ export async function demoTranscripts(): Promise<Transcript[]> {
     said('user', 100, 'Please QA pull request #8 in demo/webshop-frontend: Wishlist page'),
     toolCall(95),
     toolError(94, 'Error: listen EADDRINUSE: address already in use :::4591'),
+    said('assistant', 93, [{ type: 'text', text: 'Another office already had the demo’s port, so I started this one on a free port and carried on: the wishlist page loads, and hearts toggle and survive a reload.' }]),
     toolCall(90, 'StructuredOutput', { verdict: 'pass', summary: 'The wishlist page works; the demo office was on a taken port at first.' }),
   ]);
   return sessions.map(({ lines, ...t }) => ({ ...t, read: () => Promise.resolve(lines.join('\n')) }));
 }
 
-/** The demo's chief engineer: takes a moment over the digests, then proposes what the scripted sessions show. */
+/** The demo's chief engineer: takes a moment over the frictions, then drafts an issue for each group it was given. */
 export class DemoEngineer implements RetroOfficer {
   private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
 
   async retro(req: RetroRequest, activity: (text: string) => void): Promise<{ structured: unknown; text: string; costUsd?: number }> {
-    const sessions = fs.readdirSync(path.join(req.cwd, 'sessions')).map((f) => f.replace(/\.md$/, ''));
-    for (const step of ['Reading INDEX.md', ...sessions.map((s) => `Reading sessions/${s}.md`), 'Weighing it up']) {
+    const groups = [...fs.readFileSync(path.join(req.cwd, 'frictions.md'), 'utf8').matchAll(/^## (G\d+): (\S+): (.+) \((\d+) sessions\)$/gm)];
+    for (const step of ['Reading frictions.md', 'Reading ledger.md', 'Drafting']) {
       activity(step);
       await sleep(1200 / this.speed);
       if (req.signal.aborted) throw new Error('Stopped');
     }
-    const leads = sessions.filter((s) => s.startsWith('lead-'));
     return {
-      text: 'Two proposals.',
-      costUsd: 0.12,
+      text: `${groups.length} drafts.`,
+      costUsd: 0.05,
       structured: {
-        summary: `A quiet stretch: ${sessions.length} sessions, nothing failed QA. Two things cost time: every agent's demo office fights over the same port, and leads stop to ask for a go-ahead the captain already gave.`,
-        proposals: [
-          {
-            title: 'Give each workspace its own demo port',
-            problem: 'Every agent starts the demo on the same port, so the second one fails and goes looking for what’s holding it.',
-            evidence: sessions.map((s) => ({ session: s, quote: 'EADDRINUSE: address already in use :::4591' })),
-            fix: 'The office passes each workspace a free PORT, and npm run demo uses it.',
-            kind: 'check',
-            measure: `Sessions with EADDRINUSE: ${sessions.length} of ${sessions.length} this time.`,
-          },
-          {
-            title: 'Carry on through a plan the captain approved',
-            problem: 'Leads stop after each slice to ask for a go-ahead, and the captain replies with one word.',
-            evidence: leads.map((s, i) => ({ session: s, quote: i ? '“continue”' : '“go”, then “ship it”' })),
-            fix: 'The lead prompt says to report and carry on to the next planned slice, stopping only for new decisions.',
-            kind: 'pointer',
-            measure: `One-word go-aheads from the captain: 3 in ${leads.length} lead sessions.`,
-          },
-        ],
-        wentWell: ['QA passed the wishlist page first time.'],
-        watch: [],
+        summary: `A quiet stretch, but the same trouble came up again and again: ${groups.map((g) => g[3]).join(', ')}.`,
+        drafts: groups.map(([, id, kind, signature, sessions]) => ({
+          groups: [id],
+          title: kind === 'demo-env' ? 'Give each workspace its own demo port' : `Stop “${signature}” recurring`,
+          body: `Agents keep hitting “${signature}” (${kind}): it came up in ${sessions} sessions, each time costing a few tool calls and a restart.\n\n## What to build\n- The office passes each workspace a free PORT, and \`npm run demo\` uses it.\n\n## Done when\n- Two demos in two workspaces start side by side without a clash.`,
+          kind: 'check',
+          measure: `Sessions with “${signature}”: ${sessions} this time.`,
+        })),
       },
     };
+  }
+}
+
+/** The demo's Haiku: finds the port clash its scripted sessions all run into, quoting it. */
+export class DemoExtractor implements Extractor {
+  extract(input: string): Promise<{ structured: unknown; costUsd?: number }> {
+    const clash = /EADDRINUSE: address already in use :::\d+/.exec(input)?.[0];
+    return Promise.resolve({ structured: { frictions: clash ? [{ kind: 'demo-env', signature: 'demo port in use', quote: clash }] : [], rework: [] }, costUsd: 0.01 });
   }
 }

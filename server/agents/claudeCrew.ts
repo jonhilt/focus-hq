@@ -13,7 +13,7 @@ import { renderToolUse } from './render';
 import { parseTriage, TRIAGE_SCHEMA, type TriageDecision, type Triager, type TriageRequest, triagePrompt, triageSystemPrompt } from './triage';
 import { checkoutLatest } from './workspace';
 import type { RetroOfficer, RetroRequest } from './engineer';
-import { RETRO_SCHEMA, engineerPrompt, engineerSystemPrompt } from './retro';
+import { DRAFTS_SCHEMA, engineerPrompt, engineerSystemPrompt } from './retro';
 import { EXTRACTION_SCHEMA, extractorSystemPrompt } from './frictions';
 import type { Extractor } from './sessionDigest';
 import { chiefEngineer } from '../../shared/crew';
@@ -239,22 +239,22 @@ function numberOneServer(req: NumberOneTurn, activity: (text: string) => void): 
 }
 
 /**
- * The chief engineer on a retro: reads the evidence the office gathered into its own folder (session digests, the
- * ledger, closed goals) and nothing else. Reading a fortnight of sessions takes a while, so it gets longer than a turn.
+ * The chief engineer on a retro: reads the evidence the office gathered into its own folder (the frictions that keep
+ * coming back, the ledger, closed goals) and nothing else, and drafts issues from them.
  */
 export class ClaudeEngineer implements RetroOfficer {
   async retro(req: RetroRequest, activity: (text: string) => void): Promise<{ structured: unknown; text: string; costUsd?: number }> {
     const result = await runReadOnly({
       cwd: req.cwd,
       systemAppend: engineerSystemPrompt(chiefEngineer().name),
-      prompt: engineerPrompt(req.days, req.sessions),
+      prompt: engineerPrompt(req.days, req.groups),
       settings: req.settings,
       signal: req.signal,
       activity,
       builtins: CODE_TOOLS,
-      schema: RETRO_SCHEMA,
-      maxTurns: 300,
-      timeoutMs: 40 * 60_000,
+      schema: DRAFTS_SCHEMA,
+      maxTurns: 60,
+      timeoutMs: 15 * 60_000,
     });
     return { structured: result.structured, text: result.text, costUsd: result.costUsd };
   }

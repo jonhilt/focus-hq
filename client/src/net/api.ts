@@ -1,4 +1,4 @@
-import type { Agent, Board, ConflictsOutcome, Effort, Issue, IssueDraft, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, Retro, RoomTheme, Settings, TermLine, VoiceStatus } from '../../../shared/types';
+import type { Agent, Board, ConflictsOutcome, Effort, Issue, IssueDraft, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, Retro, RetroDraft, RoomTheme, Settings, TermLine, VoiceStatus } from '../../../shared/types';
 import type { KokoroVoice } from '../../../shared/voice';
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -50,6 +50,7 @@ export const api = {
   retroStop: () => call<Retro>('POST', '/retro/stop'),
   undigested: () => call<{ sessions: number }>('GET', '/digests/backfill'),
   backfillDigests: () => call<{ sessions: number }>('POST', '/digests/backfill'),
+  decideDraft: (id: string, accept: boolean, projectId?: string, repo?: string) => call<RetroDraft>('POST', `/retro/drafts/${encodeURIComponent(id)}`, { accept, projectId, repo }),
   sendToQa: (projectId: string, repo: string, number: number) => call<QaReview>('POST', '/prs/qa', { projectId, repo, number }),
   resolveConflicts: (projectId: string, repo: string, number: number) =>
     call<ConflictsOutcome>('POST', '/prs/resolve-conflicts', { projectId, repo, number }),
