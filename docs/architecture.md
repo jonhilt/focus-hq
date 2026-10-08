@@ -41,6 +41,7 @@ server/
     retro.ts              the chief engineer's retro, pure: transcript digests, the index and its frequent tool errors, prompt, schema, and the check that every proposal cites real moments
     engineer.ts           the chief engineer: finds the agents' transcripts, gathers the evidence into data/retros, runs one retro at a time
     sessionDigest.ts      a session's span digested from its transcript and the ledger, by code: calls, waste, cost, nudges
+    frictions.ts          what Haiku reads of a session's span, the fixed friction kinds it picks from, and the check that every quote is really in it
     qa.ts                 the QA officer: instructions, the report's schema and parsing, the PR comment
     demoRunner.ts         scripted pretend agents (and a pretend lead, planner, QA officer and Number One) for demo mode
 client/src/

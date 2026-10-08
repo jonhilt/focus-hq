@@ -1,7 +1,8 @@
 import { Data, Effect, Exit, Fiber, FiberMap, type Layer, ManagedRuntime, Option, PartitionedSemaphore, Schedule, Scope } from 'effect';
 import { helperFor, leadFor, leadId, plannerFor, qaFor, qaOfficerFor, randomAvatar } from '../../shared/crew';
 import { type Closer, type LedgerEntry, reportCard, type ReportCard } from '../../shared/ledger';
-import { digestEntry, lastDigest, transcriptSpan } from './sessionDigest';
+import type { Transcript } from './engineer';
+import { backfillWho, digestEntry, type Extractor, lastDigest, transcriptSpan, withFrictions } from './sessionDigest';
 import { goneReply } from '../../shared/mergeGate';
 import { autoQaFor, autoSendBackFor, prKey, qaBadge, sameCommit } from '../../shared/qa';
 import { afterTriage, triageLabel, type TriageResult, type TriageStep, whenStuck } from '../../shared/triage';
@@ -108,6 +109,11 @@ export class AgentManager {
   private landed = new Set<string>();
   /** Reads an agent session's Claude Code transcript by its id (missing in the demo, which has none). */
   readTranscript?: (sessionId: string) => Promise<string | undefined>;
+  /** Reads each digested span for its frictions (Haiku); without one, digests carry the facts alone. */
+  extractor?: Extractor;
+  /** The agents' transcripts on this machine, for digesting the ones from before digests began. */
+  transcripts?: (since: number) => Promise<Transcript[]>;
+  private backfilling = false;
   /** Each session's digest in hand, so two of the same session never overlap. */
   private digesting = new Map<string, Promise<void>>();
   private readonly runtime: ManagedRuntime.ManagedRuntime<ManagerServices, never>;
@@ -2181,7 +2187,8 @@ export class AgentManager {
       const text = await read(sessionId);
       const span = text && transcriptSpan(text, lastDigest(this.store.ledger, sessionId)?.toUuid);
       if (!span || this.store.ledger.some((e) => e.kind === 'session-digest' && e.key === `${sessionId}:${span.toUuid}`)) return;
-      this.record(agent.projectId, digestEntry(span, who, prs, this.store.ledger, goal));
+      const entry = digestEntry(span, who, prs, this.store.ledger, goal);
+      this.record(agent.projectId, this.extractor ? await withFrictions(entry, text, this.store.ledger, this.extractor, this.store.settings) : entry);
     };
     const next = (this.digesting.get(sessionId) ?? Promise.resolve())
       .then(digest)
@@ -2192,6 +2199,57 @@ export class AgentManager {
     });
   }
 
+  /** The agents' transcripts on this machine that have no digest yet: what a backfill would read. */
+  async undigested(): Promise<Transcript[]> {
+    const digested = new Set(this.store.ledger.flatMap((e) => (e.kind === 'session-digest' ? [e.sessionId] : [])));
+    return (await this.transcripts?.(0) ?? []).filter((t) => !digested.has(t.sessionId));
+  }
+
+  /**
+   * Digests the transcripts on this machine from before digests began, a couple at a time, each dated by when its
+   * session ended and marked backfilled. One backfill at a time; the captain hears when it starts and ends.
+   */
+  async backfill(): Promise<{ sessions: number }> {
+    if (this.backfilling) throw new Refused({ message: 'Already digesting older sessions' });
+    const pending = await this.undigested();
+    if (!pending.length) return { sessions: 0 };
+    this.backfilling = true;
+    this.hub.toast('info', `🔧 Digesting ${pending.length} older sessions`);
+    let done = 0;
+    let empty = 0;
+    let failed = 0;
+    let costUsd = 0;
+    const one = async (t: Transcript) => {
+      const text = await t.read();
+      const span = transcriptSpan(text);
+      if (!span) return void empty++;
+      if (this.store.ledger.some((e) => e.kind === 'session-digest' && e.sessionId === t.sessionId)) return;
+      const who = backfillWho(t, text);
+      const facts = digestEntry(span, { id: t.name, name: t.name.split('__')[0], task: who.task, sessionId: t.sessionId, costUsd: who.costUsd ?? 0 }, who.prs, this.store.ledger);
+      const entry = { ...facts, facts: { ...facts.facts, costUsd: who.costUsd }, backfilled: true };
+      const digest = this.extractor ? await withFrictions(entry, text, this.store.ledger, this.extractor, this.store.settings) : entry;
+      costUsd += digest.extractCostUsd ?? 0;
+      done++;
+      this.record(who.projectId, digest, span.to ? Date.parse(span.to) : Date.now());
+    };
+    const queue = [...pending];
+    const worker = async () => {
+      for (let t = queue.shift(); t; t = queue.shift()) {
+        const name = t.name;
+        await one(t).catch((err: unknown) => {
+          failed++;
+          console.warn(`Couldn't digest ${name}: ${errorMessage(err)}`);
+        });
+      }
+    };
+    void Promise.all([worker(), worker()]).finally(() => {
+      this.backfilling = false;
+      const besides = [empty && `${empty} had nothing in them`, failed && `${failed} couldn’t be read`].filter(Boolean).join(', ');
+      this.hub.toast(failed ? 'error' : 'success', `🔧 Digested ${done} of ${pending.length} older sessions ($${costUsd.toFixed(2)})${besides ? `: ${besides}` : ''}`);
+    });
+    return { sessions: pending.length };
+  }
+
   /** The pull requests an agent's session was for: a lead's slice's, the one QA reviewed, or the one a developer opened. */
   private prsOf(agent: Agent): { repo: string; pr: number }[] {
     if (agent.lead) return agent.lead.prs.map((p) => ({ repo: p.repo, pr: p.number }));
@@ -2200,8 +2258,8 @@ export class AgentManager {
   }
 
   /** Writes an entry in the ledger, and shows the chief engineer the new report card. */
-  record(projectId: string, entry: LedgerEntry): void {
-    this.store.record({ ...entry, at: Date.now(), projectId });
+  record(projectId: string, entry: LedgerEntry, at = Date.now()): void {
+    this.store.record({ ...entry, at, projectId });
     this.hub.send({ type: 'report', report: this.report() });
   }
 

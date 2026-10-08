@@ -4,7 +4,7 @@ import path from 'node:path';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import express from 'express';
 import { BrowserPool } from './agents/browserTool';
-import { ClaudeDrafter, ClaudeEngineer, ClaudeNumberOne, ClaudeTriager } from './agents/claudeCrew';
+import { ClaudeDrafter, ClaudeEngineer, ClaudeExtractor, ClaudeNumberOne, ClaudeTriager } from './agents/claudeCrew';
 import { ChiefEngineer, transcriptFolders, transcriptReader } from './agents/engineer';
 import { ClaudeRunner } from './agents/claudeRunner';
 import { DemoDrafter, DemoEngineer, DemoNumberOne, DemoRunner, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
@@ -79,7 +79,13 @@ async function main() {
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
   // each agent session is digested into the ledger as it ends: the demo's agents have no transcripts
-  if (!config.demo) office.agents.readTranscript = transcriptReader(paths.transcripts, paths.workspaces);
+  // the demo's older sessions are its scripted ones, digested without Haiku
+  if (config.demo) office.agents.transcripts = demoTranscripts;
+  else {
+    office.agents.readTranscript = transcriptReader(paths.transcripts, paths.workspaces);
+    office.agents.extractor = new ClaudeExtractor();
+    office.agents.transcripts = transcriptFolders(paths.transcripts, paths.workspaces);
+  }
 
   if (config.demo && store.projects.length === 0) {
     const shop = store.addProject('Sock Shop', '#ff8a5b', 'beach');

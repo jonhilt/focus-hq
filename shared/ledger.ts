@@ -60,6 +60,33 @@ export interface SessionFacts {
   conflicts: number;
 }
 
+/**
+ * The kinds of friction a session can hit: fixed, so the same trouble groups the same way across sessions. Only the
+ * captain (or a slice) adds one; a growing pile of `other` says it's time to.
+ */
+export const FRICTION_KINDS = {
+  'demo-env': 'the demo office or dev server not starting, dying, or fighting over a port',
+  'guard-block': 'a guard, hook or permission check refusing a command',
+  shell: 'a shell command going wrong by itself: globs, quoting, a missing command, the wrong directory',
+  'tool-refused': 'an office or Claude Code tool refusing its input (too long, wrong shape)',
+  conflicts: 'merge conflicts, or a branch behind its base',
+  'qa-rerun': 'QA re-testing, or re-running, without new work to test',
+  'captain-correction': 'the captain correcting the agent, or asking for something it missed',
+  'captain-nudge': 'the captain having to say carry on: the agent stopped when it needn’t have',
+  'missing-dependency': 'a missing install, package, model file or build step',
+  'flaky-check': 'a test, check or tool that failed and then passed with nothing changed',
+  other: 'anything else that cost time',
+} as const;
+export type FrictionKind = keyof typeof FRICTION_KINDS;
+
+/** A moment of friction, quoted word for word from the session. */
+export interface Friction {
+  kind: FrictionKind;
+  /** A few words naming it, the same each time it comes up (`zsh glob no matches`): how the retro groups them. */
+  signature: string;
+  quote: string;
+}
+
 export interface SessionDigest {
   kind: 'session-digest';
   /** `<session id>:<last transcript line's uuid>`: the same span is never digested twice. */
@@ -79,6 +106,16 @@ export interface SessionDigest {
   /** What the session had cost by the end of the span (its running total): where the next span's cost starts. */
   sessionCostUsd?: number;
   facts: SessionFacts;
+  /** What Haiku found in the span, each moment quoted from it (code checks the quotes): friction and work redone. */
+  frictions?: Friction[];
+  rework?: { what: string; quote: string }[];
+  /** A lesson someone in the session put into words, quoted; never one written for them. */
+  lesson?: string;
+  /** What the extraction cost, and why there's none when it failed (the facts are kept either way). */
+  extractCostUsd?: number;
+  extractError?: string;
+  /** Digested after the fact from a transcript on disk, not as the session ended. */
+  backfilled?: boolean;
 }
 
 export type LedgerEvent = LedgerEntry & { at: number; projectId: string; seq: number };

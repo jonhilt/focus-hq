@@ -1,5 +1,7 @@
 import type { LedgerEvent, SessionDigest, SessionFacts } from '../../shared/ledger';
-import type { Agent } from '../../shared/types';
+import type { Agent, Settings } from '../../shared/types';
+import { errorMessage } from '../util';
+import { extractionInput, parseExtraction } from './frictions';
 import { messageFrom } from './retro';
 
 // A digest of a span of an agent's session, from code alone: its Claude Code transcript (from the line after the last
@@ -28,6 +30,34 @@ function callKey(b: Block): string {
 }
 
 export type SpanFacts = Omit<SessionFacts, 'costUsd' | 'qaFails' | 'conflicts'>;
+
+/** Reads a span for its frictions (frictions.ts): Haiku when live; the demo has none. */
+export interface Extractor {
+  extract(input: string, settings: Settings, signal: AbortSignal): Promise<{ structured: unknown; costUsd?: number }>;
+}
+
+/** A span with so little in it that there's nothing to find. */
+const NOTHING_TO_READ = 200;
+
+/**
+ * Adds what Haiku finds in the span to its digest: checked quote by quote (`parseExtraction`). When it fails, the
+ * digest keeps its facts and says why there's no more.
+ */
+export async function withFrictions(entry: SessionDigest, jsonl: string, ledger: LedgerEvent[], extractor: Extractor, settings: Settings, timeoutMs = 3 * 60_000): Promise<SessionDigest> {
+  const on = (e: LedgerEvent) => 'repo' in e && 'pr' in e && entry.prs.some((p) => p.repo === e.repo && p.pr === e.pr);
+  const input = extractionInput(jsonl, entry.afterUuid, ledger.filter(on));
+  if (input.length < NOTHING_TO_READ) return { ...entry, frictions: [], rework: [] };
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), timeoutMs);
+  try {
+    const { structured, costUsd } = await extractor.extract(input, settings, abort.signal);
+    return { ...entry, ...parseExtraction(structured, input), extractCostUsd: costUsd };
+  } catch (err) {
+    return { ...entry, extractError: abort.signal.aborted ? `gave up after ${timeoutMs / 60_000} minutes` : errorMessage(err) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export interface Span {
   afterUuid?: string;
@@ -141,4 +171,18 @@ export function digestEntry(
     sessionCostUsd: agent.costUsd,
     facts: { ...span.facts, costUsd: Math.max(0, agent.costUsd - before), qaFails, conflicts },
   };
+}
+
+/**
+ * What a transcript on disk says about the session when its agent is long gone, for a backfilled digest: the kind of
+ * agent (from its folder), its project (a lead's or QA's folder names it), the PR a QA session reviewed, and what the
+ * session cost by its end (Claude Code's own running total, when it wrote one).
+ */
+export function backfillWho(t: { name: string; kind: 'lead' | 'agent' | 'qa' }, jsonl: string): { task: Agent['task']; projectId: string; prs: { repo: string; pr: number }[]; costUsd?: number } {
+  const task = t.kind === 'lead' ? 'lead' : t.kind === 'qa' ? 'review' : 'issue';
+  const project = /proj-([a-z0-9]+)/.exec(t.name)?.[1];
+  const review = /Please QA pull request #(\d+) in ([\w.-]+\/[\w.-]+)/.exec(jsonl);
+  let costUsd: number | undefined;
+  for (const m of jsonl.matchAll(/"type":"cost-state"[^\n]*?"totalCostUSD":([\d.]+)/g)) costUsd = Number(m[1]);
+  return { task, projectId: project ? `proj_${project}` : '', prs: t.kind === 'qa' && review ? [{ repo: review[2], pr: Number(review[1]) }] : [], costUsd };
 }

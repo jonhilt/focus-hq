@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { createSdkMcpServer, type McpSdkServerConfigWithInstance, type Options, query, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
@@ -13,6 +14,8 @@ import { parseTriage, TRIAGE_SCHEMA, type TriageDecision, type Triager, type Tri
 import { checkoutLatest } from './workspace';
 import type { RetroOfficer, RetroRequest } from './engineer';
 import { RETRO_SCHEMA, engineerPrompt, engineerSystemPrompt } from './retro';
+import { EXTRACTION_SCHEMA, extractorSystemPrompt } from './frictions';
+import type { Extractor } from './sessionDigest';
 import { chiefEngineer } from '../../shared/crew';
 
 // The permanent crew's Claude Code sessions: they read the project's code (and, for Number One, the web) and change
@@ -53,6 +56,9 @@ interface ReadOnlyRun {
   readable?: string[];
   /** For sessions that read a lot (a retro): more turns, and longer, than a quick look. */
   maxTurns?: number;
+  /** A model of its own (Haiku, for a cheap extraction), and a system prompt of its own in place of Claude Code's. */
+  model?: string;
+  system?: string;
   timeoutMs?: number;
 }
 
@@ -76,8 +82,8 @@ async function runReadOnly(run: ReadOnlyRun): Promise<ReadOnlyResult> {
     cwd: run.cwd,
     additionalDirectories: run.readable,
     abortController: abort,
-    model: run.settings.model || undefined,
-    systemPrompt: { type: 'preset', preset: 'claude_code', append: run.systemAppend },
+    model: run.model ?? (run.settings.model || undefined),
+    systemPrompt: run.system ?? { type: 'preset', preset: 'claude_code', append: run.systemAppend },
     tools: run.builtins,
     allowedTools: [...run.builtins, ...extra],
     permissionMode: 'dontAsk',
@@ -251,5 +257,32 @@ export class ClaudeEngineer implements RetroOfficer {
       timeoutMs: 40 * 60_000,
     });
     return { structured: result.structured, text: result.text, costUsd: result.costUsd };
+  }
+}
+
+/** The model that reads each session's span for frictions: cheap, and only ever asked to find and quote. */
+export const EXTRACTION_MODEL = 'claude-haiku-4-5';
+
+/**
+ * Haiku reading a session's span for its frictions, rework and any lesson said out loud: no tools, a short system
+ * prompt of its own (not Claude Code's), and a structured answer that code checks quote by quote.
+ */
+export class ClaudeExtractor implements Extractor {
+  async extract(input: string, settings: Settings, signal: AbortSignal): Promise<{ structured: unknown; costUsd?: number }> {
+    const result = await runReadOnly({
+      cwd: os.tmpdir(),
+      system: extractorSystemPrompt(),
+      systemAppend: '',
+      prompt: input,
+      settings,
+      signal,
+      activity: () => undefined,
+      builtins: [],
+      schema: EXTRACTION_SCHEMA,
+      model: EXTRACTION_MODEL,
+      maxTurns: 4,
+      timeoutMs: 3 * 60_000,
+    });
+    return { structured: result.structured, costUsd: result.costUsd };
   }
 }

@@ -20,6 +20,19 @@ export function openEngineeringPanel(ui: Ui): void {
   // the window outlives re-renders, so a retro finishing doesn't reset what you typed
   const days = h('input', { type: 'number', min: '1', max: '60', value: String(state.retro?.days ?? 14), style: 'width:80px' });
 
+  // the agents' sessions from before digests began: counted once when the panel opens
+  const older = h('div', { class: 'row', style: 'margin:10px 0' });
+  const showOlder = (count: number) => {
+    if (!count) return fill(older);
+    const go = h('button', { class: 'btn small' }, 'Digest them');
+    go.onclick = () => {
+      if (!confirm(`Digest ${count} older sessions? Haiku reads each one for its frictions: roughly $${(count * 0.04).toFixed(2)} all told, and it runs in the background.`)) return;
+      void busy(go, () => api.backfillDigests().then(() => fill(older, h('span', { class: 'muted' }, `Digesting ${count} older sessions: the report card fills in as they’re done`))), ui.error);
+    };
+    fill(older, h('span', { class: 'muted grow' }, `${count} older agent sessions haven’t been digested`), go);
+  };
+  void api.undigested().then((r) => showOlder(r.sessions)).catch(() => undefined);
+
   const render = () => {
     const retro = state.retro;
     const card = state.report ? reportLines(state.report) : undefined;
@@ -32,6 +45,7 @@ export function openEngineeringPanel(ui: Ui): void {
 
     fill(body,
       card ? h('div', { class: 'card' }, h('strong', null, card.headline), h('ul', null, ...card.lines.map((l) => h('li', null, l)))) : null,
+      older,
       h('div', { class: 'row', style: 'margin:14px 0' },
         h('span', { class: 'muted' }, 'Look back over the last'), days, h('span', { class: 'muted' }, 'days'),
         running ? stop : start,

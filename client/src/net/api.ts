@@ -48,6 +48,8 @@ export const api = {
   numberOneNew: () => call<NumberOneChat>('POST', '/number-one/new'),
   retroStart: (days: number) => call<Retro>('POST', '/retro/start', { days }),
   retroStop: () => call<Retro>('POST', '/retro/stop'),
+  undigested: () => call<{ sessions: number }>('GET', '/digests/backfill'),
+  backfillDigests: () => call<{ sessions: number }>('POST', '/digests/backfill'),
   sendToQa: (projectId: string, repo: string, number: number) => call<QaReview>('POST', '/prs/qa', { projectId, repo, number }),
   resolveConflicts: (projectId: string, repo: string, number: number) =>
     call<ConflictsOutcome>('POST', '/prs/resolve-conflicts', { projectId, repo, number }),

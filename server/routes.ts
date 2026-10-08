@@ -116,6 +116,8 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.post('/number-one/new', h(() => office.numberOne.newConversation()));
   r.post('/retro/start', h((req) => office.engineer.start(Number(req.body.days ?? 14))));
   r.post('/retro/stop', h(() => office.engineer.stop()));
+  r.get('/digests/backfill', h(async () => ({ sessions: (await office.agents.undigested()).length })));
+  r.post('/digests/backfill', h(() => office.agents.backfill()));
   r.post('/prs/qa', h((req) => office.requestReview(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));
   r.post('/prs/resolve-conflicts', h((req) => office.resolveConflicts(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));
   r.post('/prs/merge', h((req) => office.mergePullRequest(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));

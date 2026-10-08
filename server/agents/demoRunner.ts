@@ -792,8 +792,9 @@ function demoMockupPage(goal: string): string {
 // ---------------------------------------------------------------- the chief engineer's retro
 
 /** A transcript line the way Claude Code writes one. */
+let demoLine = 0;
 const said = (type: 'user' | 'assistant', minutesAgo: number, content: unknown) =>
-  JSON.stringify({ type, timestamp: new Date(Date.now() - minutesAgo * 60_000).toISOString(), message: { role: type, content } });
+  JSON.stringify({ type, uuid: `demo-${++demoLine}`, timestamp: new Date(Date.now() - minutesAgo * 60_000).toISOString(), message: { role: type, content } });
 const toolError = (minutesAgo: number, text: string) => said('user', minutesAgo, [{ type: 'tool_result', is_error: true, content: text }]);
 const toolCall = (minutesAgo: number, name = 'Bash', input: unknown = {}) => said('assistant', minutesAgo, [{ type: 'tool_use', name, input }]);
 
