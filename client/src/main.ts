@@ -278,6 +278,8 @@ async function main() {
     world.room(projectId)?.markBoard();
     world.room(projectId)?.syncQa();
     world.room(projectId)?.syncPlanner();
+    // the teams wall shows how QA has each goal's pull requests
+    world.room(projectId)?.syncStations();
   });
   state.on('report', () => world.engineering?.showReport(state.report, state.retro));
   state.on('retro', () => world.engineering?.showReport(state.report, state.retro));

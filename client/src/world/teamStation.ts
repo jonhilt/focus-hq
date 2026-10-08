@@ -6,7 +6,7 @@ import type { Character, CrewView } from './character';
 import { dress, footprint } from './deck';
 import { type Crew, HELPER_SEATS, type Marker } from './deckExtras';
 import { type GoalRoomTone, goalRoomState, roster } from './goalRoom';
-import { GoalBoard, GoalSign, TONE } from './goalScreens';
+import { GoalBoard, GoalSign, type StationView, TeamScreen, TONE } from './goalScreens';
 import { PaneSwitches } from './paneSwitchPanel';
 import { PANE_SWITCHES, switchAt, switchLabel } from './paneSwitches';
 import { screenPrefs } from './screenPanes';
@@ -24,7 +24,8 @@ import { HULL } from './starship';
 // The lead, their helpers (Claude Code's subagents) and the goal's QA reviewer sit round its table with their PADDs,
 // the captain's chair at its head, facing the lead's session on the far wall, with the lead's note on the goal on the
 // board beside them. Both halves are built in Blender (blender/team_station.py); who sits where and what the screens
-// show are drawn here.
+// show are drawn here. Each station also has a screen on the holodeck's teams wall (room.ts hangs them side by side),
+// so you can see what every team's up to without going in.
 
 /** The two modules every team station is a copy of: its door, and the briefing room through it. */
 export interface TeamStationKit {
@@ -59,6 +60,12 @@ const WALL_GAP = 0.16;
  * bezel, as a holo-pod's hologram floats, as tall as fits under the holodeck's ceiling.
  */
 const DOOR_SIGN = { width: 2.6, bottom: 2.79, out: 0.85 };
+
+/**
+ * The station's screen on the holodeck's teams wall: as wide as four fit side by side across the room, a face either
+ * side of a bezel `depth` thick and `rim` proud of them all round.
+ */
+export const TEAM_SCREEN = { width: 2.2, height: (2.2 * TeamScreen.H) / TeamScreen.W, depth: 0.06, rim: 0.05 };
 
 /** Who sits in a seat: the agent (or helper) id, and their Character while they're there. */
 export interface StationSeat {
@@ -111,6 +118,12 @@ export class TeamStation {
   private readonly area: Box2;
   private readonly sign = new GoalSign();
   private readonly board = new GoalBoard();
+  private readonly teamScreen = new TeamScreen();
+  /**
+   * Its screen on the holodeck's teams wall (room frame, hung by the room): the same on both faces, front (+Z) and
+   * back, either side of a bezel lit like the door's lamps.
+   */
+  readonly wall = new THREE.Group();
   /** The strip of switches under the screen, for which panes it shows: the viewer's, so the same at every station. */
   private readonly panes = new PaneSwitches();
   /** The lamps either side of the door, lit by how the goal room stands (`update`). */
@@ -167,7 +180,16 @@ export class TeamStation {
     this.head = place.clone().applyMatrix4(room.matrixWorld);
     this.area = footprint(new THREE.Matrix4().multiplyMatrices(room.matrixWorld, area));
     this.screenCentre = new THREE.Box3().setFromObject(display).getCenter(new THREE.Vector3());
-    this.furniture = [door, table];
+    const faces = [0, Math.PI].map((turn) => {
+      const face = new THREE.Mesh(new THREE.PlaneGeometry(TEAM_SCREEN.width, TEAM_SCREEN.height), this.teamScreen.material);
+      face.rotation.y = turn;
+      // a hair proud of the bezel, so neither shares its plane
+      face.position.z = Math.cos(turn) * (TEAM_SCREEN.depth / 2 + 0.004);
+      return face;
+    });
+    const { width, height, depth, rim } = TEAM_SCREEN;
+    this.wall.add(new THREE.Mesh(new THREE.BoxGeometry(width + rim * 2, height + rim * 2, depth), this.lamp), ...faces);
+    this.furniture = [door, table, ...faces];
 
     const seat = (crew: Crew): StationSeat => {
       const found = this.roomKit.seats.get(crew);
@@ -306,16 +328,18 @@ export class TeamStation {
   }
 
   /**
-   * Shows the station's goal on its sign (over the door and under the screen), its lamps and its goal board: its
-   * lead, or what's `next` in line for it while it's free.
+   * Shows the station's goal on its sign (over the door and under the screen), its lamps, its goal board and its
+   * screen on the teams wall (with how the slice's pull requests `prs` stand): its lead, or what's `next` in line for it
+   * while it's free.
    */
-  show(lead: Agent | undefined, next?: string): void {
+  show(lead: Agent | undefined, next?: string, prs?: StationView['prs']): void {
     const seated = (s: StationSeat) => (s.view ? s : undefined);
     this.crew = roster(seated(this.lead), seated(this.reviewer), this.helpers.map(seated));
     const crew = this.crew.map(({ who, role }) => ({ who: who.view!, role: role === 'Helper' ? (who.view!.tag ?? role) : role }));
-    const view = { index: this.index, accent: this.accent, lead, crew, next };
+    const view = { index: this.index, accent: this.accent, lead, crew, next, prs };
     this.sign.show(view);
     this.board.show(view);
+    this.teamScreen.show(view);
     this.tone = goalRoomState(lead).tone;
   }
 
@@ -338,6 +362,7 @@ export class TeamStation {
     this.screen.dispose();
     this.sign.dispose();
     this.board.dispose();
+    this.teamScreen.dispose();
     this.panes.dispose();
     this.lamp.dispose();
     for (const s of [this.lead, ...this.helpers, this.reviewer]) s.character?.dispose();

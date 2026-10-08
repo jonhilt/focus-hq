@@ -12,6 +12,7 @@ import { seatHelpers } from './helperSeats';
 import { agentView, Character, type CrewView } from './character';
 import { briefingRoomAt, OVER_DOOR, type RoomSlot, ROOM_DEPTH, ROOM_WIDTH, WALL_H } from './layout';
 import { ContactShadows } from './contactShadow';
+import { prGlance } from './goalRoom';
 import { box, flat, lighten, toon } from './materials';
 import { ceilingLight, chair, cyl, paperStack, plant } from './props';
 import { holodeckMaterial, holodeckSkin, type Scenery } from './scenery';
@@ -20,7 +21,7 @@ import { paneUse } from './screenPanes';
 import { Beam } from './transporter';
 import { HULL, LCARS, lcarsSign, workstation } from './starship';
 import type { Portal } from './portal';
-import { type StationSeat, TeamStation, type TeamStationKit } from './teamStation';
+import { type StationSeat, TEAM_SCREEN, TeamStation, type TeamStationKit } from './teamStation';
 
 interface DeskSlot {
   index: number;
@@ -38,6 +39,26 @@ const HALF_W = ROOM_WIDTH / 2;
 const QA_SEAT = new THREE.Vector3(HALF_D - 2.7, 0, -HALF_W + 2.9);
 /** Where a developer sits, relative to deskPosition(); the console in front of them is centred on it across the room. */
 const DESK_SEAT = new THREE.Vector3(-0.68, 0, -0.22);
+/**
+ * The teams wall: every team station's screen side by side, so you can watch them all at once from the door without
+ * going in. It hangs over the middle of the room between the stations' doors, as high as the ceiling lets you walk
+ * under it, arced a little round a point `radius` towards the door so each faces the doorway; the screens read the
+ * same from the far end. Left to right as you come in, TS-1 to TS-4: the left wall's stations' screens on the left.
+ */
+const TEAMS_WALL = { x: 0.3, top: WALL_H - 0.06, gap: 0.14, radius: 14 };
+
+/** Where team station `index` of `count` hangs its screen on the teams wall (room frame), and its turn to face the door. */
+function teamsWallSpot(index: number, count: number): { at: THREE.Vector3; yaw: number } {
+  const { x, top, gap, radius } = TEAMS_WALL;
+  const z = (index - (count - 1) / 2) * (TEAM_SCREEN.width + TEAM_SCREEN.rim * 2 + gap);
+  const turn = Math.asin(z / radius);
+  return {
+    at: new THREE.Vector3(x - radius * (1 - Math.cos(turn)), top - TEAM_SCREEN.rim - TEAM_SCREEN.height / 2, z),
+    // its front (+Z) towards the arc's centre, out towards the door
+    yaw: -Math.PI / 2 - turn,
+  };
+}
+
 /** Things hung on the far wall sit this far in from its centre line, in front of a themed room's wall skin. */
 const ON_WALL = HALF_D - 0.16;
 /** Door signs hang on the hallway side, just proud of the door frame. */
@@ -189,6 +210,10 @@ export class ProjectRoom {
       const station = new TeamStation(i, [LCARS.gold, LCARS.periwinkle, LCARS.orange, LCARS.lilac][i], teamStation, briefingRoomAt(slot, i));
       this.group.add(station.door);
       shadows.add(station.door);
+      const { at, yaw } = teamsWallSpot(i, TEAM_STATIONS);
+      station.wall.position.copy(at);
+      station.wall.rotation.y = yaw;
+      this.group.add(station.wall);
       station.connect(builder);
       this.stations.push(station);
     }
@@ -322,8 +347,10 @@ export class ProjectRoom {
       const reviewer = lead && reviewers.find((r) => r.reviewFor === lead.id);
       this.sit(station.reviewer, reviewer?.id, reviewer && agentView(reviewer), reviewer ? { kind: 'agent', id: reviewer.id } : use,
         () => (reviewer ? `${reviewer.name}, reviewing “${lead?.lead?.title ?? 'the goal'}”: ${reviewer.activity}` : label()));
-      // once everyone's seated: the sign, the lamps and the goal board, with its roster of who's round the table
-      station.show(lead, next);
+      // once everyone's seated: the sign, the lamps and the goal board, with its roster of who's round the table, and
+      // the station's screen on the teams wall, with how the slice's pull requests stand
+      const prs = lead?.lead?.prs.map((pr) => ({ label: `${pr.repo.split('/')[1]} #${pr.number}`, state: prGlance(pr, state.reviews.get(prKey(pr.repo, pr.number))?.status) }));
+      station.show(lead, next, prs);
     }
   }
 

@@ -3,7 +3,7 @@ import { UNIFORM } from '../../../shared/crew';
 import type { Agent, Avatar } from '../../../shared/types';
 import { canvasTexture, fitFont, fitText, makeCanvas, UI_FONT, wrap } from './canvas';
 import type { CrewView } from './character';
-import { type GoalRoomTone, goalRoomState, type NoteSection, noteSections, rowAt, sliceProgress } from './goalRoom';
+import { checklistGlance, type GoalRoomTone, goalRoomState, leadNow, type NoteSection, noteSections, type PrGlance, rowAt, sliceProgress } from './goalRoom';
 import { flat } from './materials';
 import { portrait } from './portraits';
 import { LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
@@ -13,7 +13,8 @@ import { LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
 // briefing room's viewscreen): the station, its goal and lead, whether its room is in session, and how far through its
 // slice it is.
 // The goal board on the briefing room's wall lists who's round the table and what each is doing, the way the crew
-// leaderboard in Lower Decks does, beside the lead's note on the goal.
+// leaderboard in Lower Decks does, beside the lead's note on the goal. The team screen hangs on the holodeck's teams
+// wall beside the other stations', for what the team's up to at a glance.
 
 /** Each goal room tone's colour: cyan in session, as the pods' holograms are; red once stopped, as theirs go. */
 export const TONE: Record<GoalRoomTone, string> = {
@@ -39,6 +40,8 @@ export interface StationView {
   lead?: Agent;
   crew?: { who: CrewView; role: string }[];
   next?: string;
+  /** The slice's pull requests and how each stands (the teams wall's). */
+  prs?: { label: string; state: PrGlance }[];
 }
 
 /**
@@ -113,14 +116,19 @@ abstract class Display {
   }
 
   show(view: StationView): void {
-    const { lead } = view;
-    const crew = view.crew?.map(({ who, role }) => [who.name, who.status, who.line, role]);
-    const key = JSON.stringify([view.index, view.next, crew, lead && [lead.name, lead.status, lead.lead?.title, lead.lead?.slice, lead.lead?.note, lead.lead?.brief]]);
+    const key = JSON.stringify(this.keyOf(view));
     if (key === this.key) return;
     this.key = key;
     this.c.ctx.clearRect(0, 0, this.c.canvas.width, this.c.canvas.height);
     this.draw(view);
     this.texture.needsUpdate = true;
+  }
+
+  /** What the display draws from: it's drawn again only when this changes. */
+  protected keyOf(view: StationView): unknown {
+    const { lead } = view;
+    const crew = view.crew?.map(({ who, role }) => [who.name, who.status, who.line, role]);
+    return [view.index, view.next, crew, lead && [lead.name, lead.status, lead.lead?.title, lead.lead?.slice, lead.lead?.note, lead.lead?.brief]];
   }
 
   protected abstract draw(view: StationView): void;
@@ -371,5 +379,228 @@ export class GoalBoard extends Display {
     ctx.fillStyle = TEXT;
     const lines = wrap(ctx, text, W - 240, 6);
     lines.forEach((line, i) => ctx.fillText(line, W / 2, y + h * 0.3 + 90 + i * 46));
+  }
+}
+
+/** How each of a goal's pull requests stands on the teams wall: its colour and word. */
+const PR_LOOK: Record<PrGlance, { color: string; word: string }> = {
+  open: { color: '#a7b4ff', word: 'open' },
+  testing: { color: TONE['in-session'], word: 'QA testing' },
+  passed: { color: TONE['your-turn'], word: 'QA passed' },
+  failed: { color: TONE.stopped, word: 'QA failed' },
+  merged: { color: LCARS.lilac, word: 'merged' },
+  closed: { color: TONE.free, word: 'closed' },
+};
+
+/**
+ * A team station's screen on the holodeck's teams wall, the four side by side so you can watch every team at once
+ * without going in: how its room stands across the top in big type (seen from across the holodeck), the goal, what the
+ * lead's up to right now, how far through the slice they are and what's left on its checklist, and along the bottom
+ * who else is round the table and the slice's pull requests. A free station says so, or what's next in line for it.
+ */
+export class TeamScreen extends Display {
+  static readonly W = 1600;
+  static readonly H = 840;
+
+  constructor() {
+    super(TeamScreen.W, TeamScreen.H, false);
+  }
+
+  protected override keyOf(view: StationView): unknown {
+    const { lead } = view;
+    return [super.keyOf(view), view.prs, lead && [leadNow(lead), lead.avatar]];
+  }
+
+  protected draw({ index, accent, lead, crew, next, prs }: StationView): void {
+    const { ctx } = this.c;
+    const [W, H] = [TeamScreen.W, TeamScreen.H];
+    const { tone, label } = goalRoomState(lead);
+    const color = TONE[tone];
+    ctx.fillStyle = '#061a24';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = GLASS;
+    ctx.fillRect(0, 0, W, H);
+    glowRect(ctx, 12, 12, W - 24, H - 24, 30, color, 6);
+
+    // across the top: the station's code in its colour, its lead, and how its room stands, big enough to read from the door
+    const top = 36;
+    const barH = 108;
+    const codeW = 270;
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.roundRect(40, top, codeW, barH, [60, 12, 12, 60]);
+    ctx.fill();
+    ctx.fillStyle = '#000000';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `600 88px ${LCARS_FONT}`;
+    ctx.fillText(`TS-${index + 1}`, 40 + codeW / 2 + 8, top + barH / 2 + 4);
+    ctx.font = `600 68px ${LCARS_FONT}`;
+    const toneText = label.toUpperCase();
+    const toneW = ctx.measureText(toneText).width + 80;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.roundRect(W - 40 - toneW, top, toneW, barH, [12, 60, 60, 12]);
+    ctx.fill();
+    ctx.fillStyle = '#000000';
+    ctx.fillText(toneText, W - 40 - toneW / 2, top + barH / 2 + 4);
+    const nameX = 40 + codeW + 34;
+    const nameW = W - 40 - toneW - 34 - nameX;
+    ctx.textAlign = 'left';
+    ctx.font = `600 60px ${LCARS_FONT}`;
+    glowText(ctx, fitText(ctx, (lead ? lead.name : 'Team station').toUpperCase(), nameW), nameX, top + barH / 2 - 14, accent, 8);
+    ctx.font = `500 32px ${LCARS_FONT}`;
+    glowText(ctx, fitText(ctx, lead ? 'GOAL LEAD' : 'NO GOAL', nameW), nameX, top + barH / 2 + 34, TEXT, 4);
+
+    if (!lead) {
+      const y = top + barH + 30;
+      ctx.fillStyle = PANE;
+      ctx.beginPath();
+      ctx.roundRect(40, y, W - 80, H - y - 40, 22);
+      ctx.fill();
+      ctx.textAlign = 'center';
+      ctx.font = `600 110px ${LCARS_FONT}`;
+      glowText(ctx, next ? 'NEXT UP' : 'FREE', W / 2, y + 150, color, 16);
+      ctx.font = `46px ${UI_FONT}`;
+      ctx.fillStyle = TEXT;
+      const lines = wrap(ctx, next ?? 'Press E here, or at its door, to start a goal at this station.', W - 260, 4);
+      lines.forEach((line, i) => ctx.fillText(line, W / 2, y + 280 + i * 60));
+      return;
+    }
+
+    // the goal, in big type
+    ctx.textAlign = 'left';
+    ctx.font = `600 88px ${LCARS_FONT}`;
+    const title = wrap(ctx, (lead.lead?.title ?? lead.issue.title).toUpperCase(), W - 100, 2);
+    title.forEach((line, i) => glowText(ctx, line, 50, top + barH + 62 + i * 92, TEXT, 10));
+
+    // what the lead's up to right now, beside their face
+    const nowY = top + barH + 62 + 92 + 58;
+    const nowH = 150;
+    ctx.fillStyle = PANE;
+    ctx.beginPath();
+    ctx.roundRect(40, nowY, W - 80, nowH, 22);
+    ctx.fill();
+    const tile = nowH - 36;
+    ctx.fillStyle = 'rgba(8, 50, 66, 0.9)';
+    ctx.beginPath();
+    ctx.roundRect(58, nowY + 18, tile, tile, 14);
+    ctx.fill();
+    glowRect(ctx, 58, nowY + 18, tile, tile, 14, color, 3);
+    this.face(lead.avatar, 58, nowY + 18, tile);
+    const tx = 58 + tile + 30;
+    const tw = W - 70 - tx;
+    ctx.font = `600 34px ${LCARS_FONT}`;
+    glowText(ctx, 'NOW', tx, nowY + 34, color, 8);
+    ctx.font = `42px ${UI_FONT}`;
+    ctx.fillStyle = TEXT;
+    wrap(ctx, leadNow(lead), tw, 2).forEach((line, i) => ctx.fillText(line, tx, nowY + 82 + i * 48));
+
+    // how far through the slice, and what's left on its checklist
+    const barY = nowY + nowH + 44;
+    const items = lead.lead?.note?.slice ?? [];
+    const progress = sliceProgress(lead.lead?.note);
+    ctx.font = `600 52px ${LCARS_FONT}`;
+    glowText(ctx, `SLICE ${lead.lead?.slice ?? 1}`, 50, barY, TEXT, 6);
+    const bx = 260;
+    const bw = W - 240 - bx;
+    ctx.fillStyle = PANE;
+    ctx.beginPath();
+    ctx.roundRect(bx, barY - 18, bw, 36, 18);
+    ctx.fill();
+    if (progress !== null && progress > 0) {
+      ctx.save();
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 16;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.roundRect(bx, barY - 18, Math.max(36, (bw * progress) / 100), 36, 18);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.textAlign = 'right';
+    ctx.font = `600 72px ${LCARS_FONT}`;
+    glowText(ctx, progress === null ? '—' : `${progress}%`, W - 50, barY + 4, color, 14);
+    ctx.textAlign = 'left';
+
+    const listY = barY + 54;
+    const lineH = 44;
+    const glance = checklistGlance(items, 3);
+    const lines: { mark: string; text: string; dim?: boolean }[] = [];
+    if (glance.done) lines.push({ mark: '☑', text: `${glance.done} done`, dim: true });
+    for (const item of glance.items) lines.push({ mark: item.done ? '☑' : '☐', text: item.text, dim: item.done });
+    if (glance.more) lines.push({ mark: '+', text: `${glance.more} more`, dim: true });
+    if (!items.length) lines.push({ mark: '◎', text: lead.lead?.note ? 'No checklist for this slice yet' : 'Talking the goal through', dim: true });
+    ctx.font = `38px ${UI_FONT}`;
+    lines.forEach((line, i) => {
+      ctx.fillStyle = line.dim ? '#7d9aa3' : TEXT;
+      ctx.fillText(line.mark, 54, listY + i * lineH);
+      ctx.fillText(fitText(ctx, line.text, W - 160), 106, listY + i * lineH);
+    });
+
+    // along the bottom: who else is round the table, and the slice's pull requests
+    const footY = H - 30 - 76;
+    ctx.fillStyle = PANE;
+    ctx.beginPath();
+    ctx.roundRect(40, footY, W - 80, 76, 20);
+    ctx.fill();
+    const others = (crew ?? []).filter((c) => c.role !== 'Lead');
+    let x = 56;
+    for (const { who } of others.slice(0, 5)) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(x, footY + 8, 60, 60, 10);
+      ctx.fillStyle = 'rgba(8, 50, 66, 0.9)';
+      ctx.fill();
+      ctx.restore();
+      this.face(who.avatar, x, footY + 8, 60);
+      ctx.fillStyle = LCARS_STATUS[who.status];
+      ctx.beginPath();
+      ctx.arc(x + 54, footY + 62, 9, 0, Math.PI * 2);
+      ctx.fill();
+      x += 72;
+    }
+    ctx.font = `500 32px ${LCARS_FONT}`;
+    const helpers = others.filter((c) => c.role !== 'Reviewer').length;
+    const reviewer = others.some((c) => c.role === 'Reviewer');
+    const who = [reviewer ? 'REVIEWER' : '', helpers ? `${helpers} HELPER${helpers === 1 ? '' : 'S'}` : ''].filter(Boolean).join(' + ') || 'LEAD ON THEIR OWN';
+    glowText(ctx, who, x + (others.length ? 8 : 0), footY + 38, TEXT, 4);
+    const whoEnd = x + ctx.measureText(who).width + 40;
+
+    ctx.textAlign = 'center';
+    ctx.font = `500 32px ${LCARS_FONT}`;
+    let right = W - 56;
+    const chips = prs ?? [];
+    if (!chips.length) {
+      ctx.textAlign = 'right';
+      glowText(ctx, 'NO PULL REQUESTS YET', right, footY + 38, '#7d9aa3', 0);
+      return;
+    }
+    for (const pr of [...chips].reverse()) {
+      const look = PR_LOOK[pr.state];
+      const text = `${pr.label} ${look.word}`.toUpperCase();
+      const w = ctx.measureText(text).width + 40;
+      if (right - w < whoEnd) break;
+      ctx.fillStyle = look.color;
+      ctx.beginPath();
+      ctx.roundRect(right - w, footY + 14, w, 48, 24);
+      ctx.fill();
+      ctx.fillStyle = '#000000';
+      ctx.fillText(text, right - w / 2, footY + 39);
+      right -= w + 14;
+    }
+  }
+
+  /** A crew member's portrait in a square tile, or their face drawn flat where there's no portrait. */
+  private face(avatar: Avatar, x: number, y: number, size: number): void {
+    const { ctx } = this.c;
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(x, y, size, size, 10);
+    ctx.clip();
+    const pic = portrait(avatar);
+    if (pic) ctx.drawImage(pic, x, y, size, size);
+    else face(ctx, avatar, x + size / 2, y + size * 0.44, size * 0.42);
+    ctx.restore();
   }
 }

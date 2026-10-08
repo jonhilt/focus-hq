@@ -1,8 +1,9 @@
 import { openQuestion } from '../../../shared/artifacts';
-import type { Agent, GoalNote } from '../../../shared/types';
+import type { Agent, GoalNote, LeadPr, QaStatus } from '../../../shared/types';
 
 // What a team station shows of its goal beyond the lead's own screen: whether its briefing room is in session, on the
-// lamps and sign at its door, and the lead's note on the goal, on the board in its briefing room.
+// lamps and sign at its door, the lead's note on the goal, on the board in its briefing room, and what the team's up to
+// at a glance, on its screen on the holodeck's teams wall.
 
 /**
  * How a goal room stands, seen from its door: no goal there, the lead at work, waiting on you to approve something,
@@ -80,4 +81,58 @@ export function roster<T>(lead: T | undefined, reviewer: T | undefined, helpers:
   if (reviewer) out.push({ who: reviewer, role: 'Reviewer' });
   for (const h of helpers) if (h) out.push({ who: h, role: 'Helper' });
   return out;
+}
+
+/**
+ * What a goal's lead is up to right now, in a line, for the teams wall: what they need from you while they need
+ * something, otherwise what they're doing (or last did).
+ */
+export function leadNow(lead: Pick<Agent, 'status' | 'activity' | 'permission' | 'lead' | 'error'>): string {
+  const question = openQuestion(lead);
+  switch (lead.status) {
+    case 'waiting':
+      return lead.permission ? `Asking you: ${lead.permission.summary}` : 'Needs you';
+    case 'error':
+      return lead.error ? `Hit a problem: ${lead.error}` : 'Hit a problem';
+    case 'stopped':
+      return 'Stopped';
+    case 'queued':
+      return 'Waiting for a free slot to carry on';
+  }
+  if (question) return `Asked you: ${question.question}`;
+  if (lead.status === 'done' && lead.lead?.closing) return `Ready to wrap up: ${lead.lead.closing.reason}`;
+  return lead.activity || (lead.status === 'done' ? 'Waiting for your reply' : 'At work');
+}
+
+/**
+ * As much of a slice's checklist as fits in `room` lines: all of it if it fits; otherwise the ticked-off items at its
+ * top folded into one line (`done` of them), then what's still to do, the last line saying how many more there are.
+ */
+export function checklistGlance(items: GoalNote['slice'], room: number): { done: number; items: GoalNote['slice']; more: number } {
+  if (items.length <= room) return { done: 0, items, more: 0 };
+  let done = 0;
+  while (done < items.length && items[done].done) done++;
+  const rest = items.slice(done);
+  const left = room - (done ? 1 : 0);
+  if (rest.length <= left) return { done, items: rest, more: 0 };
+  const shown = rest.slice(0, Math.max(0, left - 1));
+  return { done, items: shown, more: rest.length - shown.length };
+}
+
+/** How a goal's pull request stands, on the teams wall: merged or closed, otherwise how QA has it. */
+export type PrGlance = 'open' | 'testing' | 'passed' | 'failed' | 'merged' | 'closed';
+
+export function prGlance(pr: Pick<LeadPr, 'outcome'>, qa: QaStatus | undefined): PrGlance {
+  if (pr.outcome) return pr.outcome;
+  switch (qa) {
+    case 'queued':
+    case 'testing':
+      return 'testing';
+    case 'passed':
+    case 'failed':
+      return qa;
+    case 'error':
+    case undefined:
+      return 'open';
+  }
 }
