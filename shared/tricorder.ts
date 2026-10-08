@@ -16,21 +16,22 @@ export type Attention =
   | { kind: 'qa'; projectId: string; pr: PullRequest }
   | { kind: 'conflicts'; projectId: string; pr: PullRequest };
 
-/** One turn of a lead's: it ends when they wait for the captain, so a turn the captain has looked at stays looked at. */
-export const turnKey = (agent: Pick<Agent, 'id' | 'finishedAt'>): string => `${agent.id}:${agent.finishedAt ?? 0}`;
+/** A lead waiting for the captain, whose turn the captain has read: still their turn, but no longer hailing. */
+export const turnRead = (agent: Pick<Agent, 'status' | 'finishedAt' | 'lead'>): boolean =>
+  agent.status === 'done' && agent.finishedAt !== undefined && agent.lead?.readTurn === agent.finishedAt;
 
 /** What an agent waits on the manager for, if anything. */
-function agentAttention(agent: Agent, seen: ReadonlySet<string>): Attention | null {
+function agentAttention(agent: Agent): Attention | null {
   if (agent.permission) return { kind: 'hand', agent };
   if (agent.status === 'error') return { kind: 'error', agent };
   if (agent.task !== 'lead') return null;
   if (agent.lead?.closing) return { kind: 'wrap-up', agent };
-  return agent.status === 'done' && !seen.has(turnKey(agent)) ? { kind: 'turn', agent } : null;
+  return agent.status === 'done' && !turnRead(agent) ? { kind: 'turn', agent } : null;
 }
 
 /**
  * The Needs you strip: agents with a raised hand or in error, goals' leads proposing to wrap up or waiting for a reply
- * (unless the manager has looked at that turn: `seen` holds `turnKey`s), PRs QA gave up on and PRs that conflict with
+ * (unless the manager has read that turn: `turnRead`), PRs QA gave up on and PRs that conflict with
  * their base (unless someone's resolving it already). `prs` are the PRs the boards show, so a project's "only my PRs"
  * filter applies here too.
  */
@@ -38,9 +39,8 @@ export function needsYou(
   agents: Agent[],
   prs: { projectId: string; pr: PullRequest & { resolver?: Agent } }[],
   reviews: ReadonlyMap<string, QaReview>,
-  seen: ReadonlySet<string> = new Set(),
 ): Attention[] {
-  const fromAgents = agents.flatMap((agent) => agentAttention(agent, seen) ?? []);
+  const fromAgents = agents.flatMap((agent) => agentAttention(agent) ?? []);
   const fromPrs = prs.flatMap(({ projectId, pr }): Attention[] => [
     ...(qaBadge(reviews.get(prKey(pr.repo, pr.number)), pr).state === 'needs-you' ? [{ kind: 'qa' as const, projectId, pr }] : []),
     ...(pr.mergeable === 'CONFLICTING' && !pr.resolver ? [{ kind: 'conflicts' as const, projectId, pr }] : []),

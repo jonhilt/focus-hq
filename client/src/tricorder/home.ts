@@ -7,7 +7,6 @@ import { prKey, qaBadge } from '../../../shared/qa';
 import { type Attention, inFlight, needsYou } from '../../../shared/tricorder';
 import type { Agent, Issue, Project, PullRequest, QaReview } from '../../../shared/types';
 import { api } from '../net/api';
-import { seenTurns } from '../net/attention';
 import { state } from '../net/state';
 import { h } from '../ui/dom';
 import type { Actions } from './actions';
@@ -39,7 +38,6 @@ export function home(ctx: HomeContext): HTMLElement {
     state.shownAgents(),
     boards.flatMap(({ project, cols }) => cols.prs.map((pr) => ({ projectId: project.id, pr }))),
     state.reviews,
-    seenTurns(),
   );
   return h('main', { class: 'home' },
     needsYouStrip(ctx, attention),

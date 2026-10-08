@@ -340,6 +340,11 @@ export interface LeadWork {
   note?: GoalNote;
   /** The lead thinks the goal is done, or that nothing worthwhile is left: the captain closes it, or carries on. */
   closing?: { reason: string; at: number };
+  /**
+   * The turn of the lead's the captain last read (its `finishedAt`), on whichever screen: it stops hailing them in Comms
+   * and the Tricorder until their next turn ends.
+   */
+  readTurn?: number;
   /** Each repo, checked out at ./<folder> in the lead's workspace, and the branch it ships into. */
   repos: { repo: string; folder: string; baseBranch: string }[];
   /**

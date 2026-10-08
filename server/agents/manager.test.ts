@@ -84,6 +84,28 @@ describe('AgentManager', () => {
     expect([second.req.prompt, ...second.sent].join('\n\n')).toBe('Go ahead\n\nSmall slices, please');
   });
 
+  it('remembers which of a lead’s turns the captain read, until the next one ends', async () => {
+    const { agents, claude, store, project } = office();
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    agents.readTurn(lead.id); // still at it: nothing to read yet
+    expect(store.agent(lead.id).lead?.readTurn).toBeUndefined();
+
+    claude.turns[0].end({ ok: true, summary: 'Proposed a slice' });
+    await until(() => store.agent(lead.id).status === 'done');
+    agents.readTurn(lead.id);
+    const first = store.agent(lead.id).finishedAt;
+    expect(store.agent(lead.id).lead?.readTurn).toBe(first);
+
+    agents.message(lead.id, 'Go ahead');
+    await until(() => claude.turns.length === 2);
+    await new Promise((r) => setTimeout(r, 5));
+    claude.turns[1].end({ ok: true, summary: 'Shipped' });
+    await until(() => store.agent(lead.id).status === 'done' && store.agent(lead.id).finishedAt !== first);
+    // the new turn is unread
+    expect(store.agent(lead.id).lead?.readTurn).toBe(first);
+  });
+
   it('stops a QA session whose PR merged, and won’t resume it for a message', async () => {
     const { agents, claude, store, project } = office();
     const [pr] = await Effect.runPromise(Effect.gen(function* () {

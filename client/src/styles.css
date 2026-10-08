@@ -566,6 +566,8 @@ select.effort { width: auto; padding: 2px 6px; border-radius: 10px; font-size: 1
 .comms h3 { margin: 18px 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--lcars-lilac); }
 .comms h3:first-child { margin-top: 0; }
 .hail { --tone: var(--lcars-orange); background: var(--surface-2); border-left: 10px solid var(--tone); border-radius: 0 var(--radius) var(--radius) 0; padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+/* a lead's turn you've read: still waiting for your reply, but quieter */
+.hail.read { --tone: var(--lcars-lilac) !important; background: color-mix(in srgb, var(--surface-2) 60%, #000); }
 .hail-from { color: var(--lcars-peach); }
 .hail-from strong { color: var(--text); }
 .hail-project { --tone: var(--lcars-lilac); margin-left: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; background: var(--tone); color: var(--ink); border-radius: 999px; padding: 0 8px; vertical-align: 2px; }

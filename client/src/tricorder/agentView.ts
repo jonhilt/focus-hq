@@ -2,7 +2,7 @@ import { statusIcon, statusLine } from '../../../shared/agentStatus';
 import { UNIFORM } from '../../../shared/crew';
 import type { Agent, PermissionRequest, TermLine } from '../../../shared/types';
 import { api } from '../net/api';
-import { markSeen } from '../net/attention';
+import { markRead } from '../net/attention';
 import { state } from '../net/state';
 import { h } from '../ui/dom';
 import { TermView } from '../ui/terminal';
@@ -117,8 +117,8 @@ export function agentView(id: string, actions: Actions, back: () => void): View 
   const update = () => {
     const a = state.agents.get(id);
     if (!a) return;
-    // a lead's turn read here stops hailing on the home screen
-    markSeen(a);
+    // a lead's turn read here stops hailing, here and in the 3D office
+    markRead(a);
     const next = renderHead(a);
     if (!head.firstElementChild) head.append(next);
     else morph(head.firstElementChild, next);
@@ -154,7 +154,15 @@ export function agentView(id: string, actions: Actions, back: () => void): View 
   append(state.lines.get(id) ?? []);
   void backfill();
   update();
-  return { el, update, dispose: () => offs.forEach((off) => off()) };
+  // back to the phone with this agent open: reading their turn now
+  const visible = () => {
+    if (document.visibilityState === 'visible') update();
+  };
+  document.addEventListener('visibilitychange', visible);
+  return { el, update, dispose: () => {
+    offs.forEach((off) => off());
+    document.removeEventListener('visibilitychange', visible);
+  } };
 }
 
 /** How far along the task list Claude keeps for itself is, and what it's doing now, in a line. */

@@ -1,5 +1,5 @@
 import { ACTIVE_STATUSES } from '../../../shared/types';
-import { attention, onSeen } from '../net/attention';
+import { attention } from '../net/attention';
 import { state } from '../net/state';
 import { sound } from '../sound';
 import { fill, h } from './dom';
@@ -48,7 +48,6 @@ export class Hud {
     state.on('connection', refresh);
     state.on('preview', refresh);
     state.on('review', refresh);
-    onSeen(refresh);
   }
 
   /** Blacks out the view, does `between` in the dark and brings the view back: the length of a turbolift ride. */

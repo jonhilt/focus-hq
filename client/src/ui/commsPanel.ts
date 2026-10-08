@@ -3,10 +3,10 @@ import { goalState } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import { prKey } from '../../../shared/qa';
 import { lastReply } from '../../../shared/termText';
-import { type Attention, turnKey } from '../../../shared/tricorder';
+import { type Attention, turnRead } from '../../../shared/tricorder';
 import { type Agent, TEAM_STATIONS } from '../../../shared/types';
 import { api } from '../net/api';
-import { attention, markSeen, onSeen } from '../net/attention';
+import { attention, markRead } from '../net/attention';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
@@ -24,7 +24,7 @@ function hailKey(a: Attention): string {
     case 'wrap-up':
       return `wrap-up:${a.agent.id}:${a.agent.lead?.closing?.at}`;
     case 'turn':
-      return `turn:${turnKey(a.agent)}`;
+      return `turn:${a.agent.id}:${a.agent.finishedAt}`;
     case 'qa':
     case 'conflicts':
       return `${a.kind}:${a.projectId}:${a.pr.repo}#${a.pr.number}`;
@@ -69,6 +69,21 @@ function reply(ui: Ui, agent: Agent, placeholder: string): HTMLElement {
 const beam = (ui: Ui, agent: Agent) => h('button', { class: 'btn small go', title: 'Teleport to them', onclick: () => ui.goToAgent(agent.id) }, 'Beam there');
 const open = (ui: Ui, agent: Agent) => h('button', { class: 'btn small', title: 'Their panel: terminal, goal and crew', onclick: () => ui.openAgent(agent.id) }, 'Open');
 
+/**
+ * A lead waiting for the captain: what they last said, and a reply box. Unread, it hails (with Later, to stop it
+ * hailing without replying); read, it waits quietly in Your turn until the lead's at work again.
+ */
+function turnCard(ui: Ui, lead: Agent, read: boolean): HTMLElement {
+  const later = read ? null : h('button', { class: 'btn small', title: 'Stop hailing about this turn: they’ll hail again when they next wait for you' }, 'Later');
+  if (later) later.onclick = () => markRead(lead, true);
+  return h('div', { class: `hail${read ? ' read' : ''}`, style: `--tone:${LCARS.orange}` },
+    from(lead),
+    quote(lead) ?? h('p', { class: 'hail-what' }, '🖖 Waiting for you'),
+    reply(ui, lead, 'Reply…'),
+    h('div', { class: 'row' }, open(ui, lead), beam(ui, lead), later),
+  );
+}
+
 function hailCard(ui: Ui, a: Attention): HTMLElement {
   const card = (tone: string, ...children: (Node | null)[]) => h('div', { class: 'hail', style: `--tone:${tone}` }, ...children);
   switch (a.kind) {
@@ -89,11 +104,8 @@ function hailCard(ui: Ui, a: Attention): HTMLElement {
       close.onclick = () => void busy(close, () => closeGoal(a.agent), ui.error);
       return card('#99cc66', from(a.agent), h('p', { class: 'hail-what' }, `🏁 Ready to wrap up: ${a.agent.lead?.closing?.reason ?? ''}`), reply(ui, a.agent, 'Or carry on…'), h('div', { class: 'row' }, close, open(ui, a.agent), beam(ui, a.agent)));
     }
-    case 'turn': {
-      const later = h('button', { class: 'btn small', title: 'Stop hailing about this turn: they’ll hail again when they next wait for you' }, 'Later');
-      later.onclick = () => markSeen(a.agent);
-      return card(LCARS.orange, from(a.agent), quote(a.agent) ?? h('p', { class: 'hail-what' }, '🖖 Waiting for you'), reply(ui, a.agent, 'Reply…'), h('div', { class: 'row' }, open(ui, a.agent), beam(ui, a.agent), later));
-    }
+    case 'turn':
+      return turnCard(ui, a.agent, false);
     case 'qa':
     case 'conflicts': {
       const review = a.kind === 'qa' ? state.reviews.get(prKey(a.pr.repo, a.pr.number))?.followUp : undefined;
@@ -126,37 +138,61 @@ function underWayRow(ui: Ui, lead: Agent): HTMLElement {
 }
 
 /**
+ * Cards kept by key while they stand, so a half-typed reply survives the next render: the list is only touched when
+ * its cards change, since moving a card would take the focus off its reply box.
+ */
+class KeptCards<T> {
+  private cards = new Map<string, HTMLElement>();
+
+  constructor(
+    readonly el: HTMLElement,
+    private readonly key: (item: T) => string,
+    private readonly build: (item: T) => HTMLElement,
+    private readonly empty: HTMLElement | null = null,
+  ) {}
+
+  show(items: readonly T[]): void {
+    const next = new Map(items.map((item) => [this.key(item), this.cards.get(this.key(item)) ?? this.build(item)]));
+    if ([...next.keys()].join('|') !== [...this.cards.keys()].join('|') || !this.el.childElementCount) {
+      fill(this.el, ...(next.size ? next.values() : [this.empty]));
+    }
+    this.cards = next;
+  }
+}
+
+/**
  * Comms: the whole ship's traffic in one place, opened from anywhere with C. Hails first (whatever waits on the
  * captain, from `attention()`, each with what it takes to answer it there and then: a reply, an approval, closing the
- * goal), then the goals getting on without them, then each project's goals panel. Nothing to mark as read: a hail
- * clears when what it's about does (the lead's at work again, the hand's lowered), or once you've read a lead's turn.
+ * goal), then the leads whose turn the captain has read but not answered, then the goals getting on without them, then
+ * each project's goals panel. Nothing to mark as read: a hail clears when what it's about does (the lead's at work
+ * again, the hand's lowered), and a lead's turn, once read, moves to Your turn rather than out of sight.
  */
 export function openCommsPanel(ui: Ui): void {
-  const hails = h('div', { class: 'cards' });
+  const hails = new KeptCards<Attention>(h('div', { class: 'cards' }), hailKey, (a) => hailCard(ui, a), h('p', { class: 'muted' }, '✓ All quiet. Nobody is waiting on you.'));
+  const read = new KeptCards<Agent>(h('div', { class: 'cards' }), (l) => `${l.id}:${l.finishedAt}`, (l) => turnCard(ui, l, true));
   const underWay = h('div', { class: 'under-way-list' });
   const gateways = h('div', { class: 'row' });
   const hailsHead = h('h3');
+  const readHead = h('h3', { title: 'Leads whose turn you’ve read: still waiting for your reply, but not hailing' }, 'Your turn · read');
   const body = h('div', { class: 'comms' },
-    hailsHead, hails,
+    hailsHead, hails.el,
+    readHead, read.el,
     h('h3', null, 'Under way'), underWay,
     h('h3', null, 'Goals'), gateways,
   );
-  // each hail's card, kept while it stands so a half-typed reply survives the next render
-  let cards = new Map<string, HTMLElement>();
 
   const render = () => {
     const now = attention();
-    const next = new Map(now.map((a) => [hailKey(a), cards.get(hailKey(a)) ?? hailCard(ui, a)]));
-    // only touch the list when the hails change: moving a card would take the focus off its reply box
-    if ([...next.keys()].join('|') !== [...cards.keys()].join('|')) {
-      fill(hails, ...(next.size ? next.values() : [h('p', { class: 'muted' }, '✓ All quiet. Nobody is waiting on you.')]));
-    }
-    cards = next;
+    hails.show(now);
     hailsHead.textContent = now.length ? `Hailing you (${now.length})` : 'Hailing you';
 
     const hailing = new Set(now.flatMap((a) => ('agent' in a ? [a.agent.id] : [])));
-    const leads = state.shown.flatMap((p) => state.leadsIn(p.id)).filter((l) => !hailing.has(l.id));
-    fill(underWay, ...(leads.length ? leads.map((l) => underWayRow(ui, l)) : [h('p', { class: 'muted' }, hailing.size ? 'Every goal under way is waiting on you.' : 'No goals under way.')]));
+    const all = state.shown.flatMap((p) => state.leadsIn(p.id)).filter((l) => !hailing.has(l.id));
+    const yourTurn = all.filter((l) => turnRead(l));
+    read.show(yourTurn);
+    readHead.hidden = read.el.hidden = !yourTurn.length;
+    const leads = all.filter((l) => !turnRead(l));
+    fill(underWay, ...(leads.length ? leads.map((l) => underWayRow(ui, l)) : [h('p', { class: 'muted' }, hailing.size || yourTurn.length ? 'Every goal under way is waiting on you.' : 'No goals under way.')]));
 
     fill(gateways, ...state.shown.map((p) => {
       const waiting = p.goalQueue?.length ?? 0;
@@ -168,5 +204,4 @@ export function openCommsPanel(ui: Ui): void {
   ui.panels.open({ title: 'Comms', body, wide: true, accent: LCARS.orange });
   render();
   for (const event of ['agent', 'agent-removed', 'board', 'review', 'projects'] as const) ui.panels.own(state.on(event, render));
-  ui.panels.own(onSeen(render));
 }

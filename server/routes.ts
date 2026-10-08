@@ -153,6 +153,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.delete('/projects/:id/goals/queue/:qid', h((req) => office.agents.dropQueued(param(req, 'id'), param(req, 'qid'))));
   r.get('/agents/:id/lines', h((req) => store.allLines(param(req, 'id'))));
   r.post('/agents/:id/message', h((req) => office.agents.message(param(req, 'id'), str(req.body.text))));
+  r.post('/agents/:id/read', h((req) => office.agents.readTurn(param(req, 'id'))));
   r.post('/agents/:id/permission', h((req) => office.agents.resolvePermission(param(req, 'id'), str(req.body.requestId), req.body.allow === true)));
   r.post('/agents/:id/stop', h((req) => office.agents.stop(param(req, 'id'))));
   r.post('/agents/:id/compact', h((req) => office.agents.compactNow(param(req, 'id'))));
