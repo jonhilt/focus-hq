@@ -306,10 +306,19 @@ describe('AgentManager', () => {
     expect(await store.readArtifact(lead.id, 'q1.a.html')).toBeUndefined();
     expect((await store.readArtifact(lead.id, 'q2.a.html'))?.toString()).toBe('<p>A</p>');
 
-    agents.answer(lead.id, 'q2', 'b', 'Keep the header');
+    // two at once: the later one replaces the earlier, and keeps pages of its own
+    await Promise.all([ask('Which colour?'), ask('Which colour, really?')]);
+    const [latest] = store.agent(lead.id).lead!.questions!;
+    expect(latest).toMatchObject({ id: 'q4', question: 'Which colour, really?' });
+    expect((await store.readArtifact(lead.id, 'q4.a.html'))?.toString()).toBe('<p>A</p>');
+    expect(await store.readArtifact(lead.id, 'q3.a.html')).toBeUndefined();
+    expect(await store.readArtifact(lead.id, 'q2.a.html')).toBeUndefined();
+    await ask('Which layout, really?');
+
+    agents.answer(lead.id, 'q5', 'b', 'Keep the header');
     expect(store.agent(lead.id).lead!.questions![0].answer).toMatchObject({ option: 'b', note: 'Keep the header' });
     expect(claude.turns[0].sent).toEqual(['I picked B, “List”, for your question “Which layout, really?”.\n\nKeep the header']);
-    expect(() => agents.answer(lead.id, 'q2', 'a')).toThrow(/already picked B/);
+    expect(() => agents.answer(lead.id, 'q5', 'a')).toThrow(/already picked B/);
   });
 
   it('merges the base into a slice’s conflicting PR itself, and tells the lead to pull once their turn is over', async () => {

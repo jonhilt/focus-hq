@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { UNIFORM } from '../../../shared/crew';
 import type { Agent, Avatar } from '../../../shared/types';
-import { canvasTexture, fitText, makeCanvas, UI_FONT, wrap } from './canvas';
+import { canvasTexture, fitFont, fitText, makeCanvas, UI_FONT, wrap } from './canvas';
 import type { CrewView } from './character';
 import { type GoalRoomTone, goalRoomState, type NoteSection, noteSections, rowAt, sliceProgress } from './goalRoom';
 import { flat } from './materials';
@@ -184,7 +184,8 @@ export class GoalSign extends Display {
       ctx.font = `600 42px ${LCARS_FONT}`;
       glowText(ctx, `SLICE ${lead.lead?.slice ?? 1}`, rx + rightW / 2, H / 2 + 60, TEXT, 6);
     } else {
-      ctx.font = `600 64px ${LCARS_FONT}`;
+      // smaller type for a longer label (YOUR ANSWER), rather than cutting it off
+      fitFont(ctx, label.toUpperCase(), rightW - 30, 64, 44, '600', LCARS_FONT);
       glowText(ctx, fitText(ctx, label.toUpperCase(), rightW - 30), rx + rightW / 2, H / 2, color, 18);
     }
 

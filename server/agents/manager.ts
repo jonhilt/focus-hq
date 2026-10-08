@@ -1,4 +1,4 @@
-import { Data, Effect, Exit, Fiber, FiberMap, type Layer, ManagedRuntime, PartitionedSemaphore, Scope } from 'effect';
+import { Data, Effect, Exit, Fiber, FiberMap, type Layer, ManagedRuntime, Option, PartitionedSemaphore, Scope } from 'effect';
 import { helperFor, leadFor, leadId, plannerFor, qaFor, qaOfficerFor, randomAvatar } from '../../shared/crew';
 import { type Closer, type LedgerEntry, reportCard, type ReportCard } from '../../shared/ledger';
 import { goneReply } from '../../shared/mergeGate';
@@ -933,28 +933,26 @@ export class AgentManager {
       if (!agent.lead) return yield* new Refused({ message: 'There’s no goal to ask about' });
       const checked = askQuestion(agent.lead.questions ?? [], input, Date.now());
       if ('error' in checked) return yield* new Refused({ message: checked.error });
-      const { asked } = checked;
+      // the pictures first, in memory: the question's id, and which files are whose, are settled once they're taken
       const renderer = yield* Renderer;
-      const pictured = new Set<string>();
-      for (const [i, option] of asked.options.entries()) {
-        const html = input.options[i].html;
-        this.store.saveArtifact(agent.id, `${asked.id}.${option.id}.html`, Buffer.from(html));
-        const picture = yield* renderer.render(html).pipe(Effect.option);
-        if (picture._tag === 'Some') {
-          this.store.saveArtifact(agent.id, `${asked.id}.${option.id}.jpg`, picture.value);
-          pictured.add(option.id);
-        }
-      }
-      // taking the pictures takes a moment: the goal may have closed, or the lead asked again, meanwhile
+      const pictures: (Buffer | undefined)[] = [];
+      for (const option of input.options) pictures.push(Option.getOrUndefined(yield* renderer.render(option.html).pipe(Effect.option)));
+      // taking them takes a moment: the goal may have closed, or the lead asked again, meanwhile
       const work = agent.lead;
       if (!work) return 'The goal closed before the question went up.';
-      const next = askQuestion(work.questions ?? [], input, asked.at);
+      const next = askQuestion(work.questions ?? [], input, Date.now());
       if ('error' in next) return yield* new Refused({ message: next.error });
+      const { asked } = next;
       for (const q of next.dropped) for (const o of q.options) for (const ext of ['html', 'jpg']) this.store.deleteArtifact(agent.id, `${q.id}.${o.id}.${ext}`);
-      const questions = next.questions.map((q) => (q.id === asked.id ? { ...q, options: q.options.map((o) => (pictured.has(o.id) ? { ...o, image: true } : o)) } : q));
+      for (const [i, option] of asked.options.entries()) {
+        this.store.saveArtifact(agent.id, `${asked.id}.${option.id}.html`, Buffer.from(input.options[i].html));
+        const picture = pictures[i];
+        if (picture) this.store.saveArtifact(agent.id, `${asked.id}.${option.id}.jpg`, picture);
+      }
+      const questions = next.questions.map((q) => (q.id === asked.id ? { ...q, options: q.options.map((o, i) => (pictures[i] ? { ...o, image: true } : o)) } : q));
       this.update(agent, { lead: { ...work, questions } });
       this.print(agent, [{ kind: 'manager', text: `❓ Asked the captain: ${asked.question} (${asked.options.map((o) => `${o.id.toUpperCase()}: ${o.label}`).join(' · ')})` }]);
-      const missing = asked.options.length - pictured.size;
+      const missing = pictures.filter((p) => !p).length;
       return `Your question is on your station's screen with its ${asked.options.length} options${missing ? ` (the office couldn't take a picture of ${missing} of them, so the screen shows just their labels)` : ''}. The captain's pick comes back to you as a message from them: end your turn here and wait for it.`;
     });
   }

@@ -62,6 +62,17 @@ export function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: numb
   return lines;
 }
 
+/**
+ * Sets the largest font from `size` down to `min` pixels (in `weight` and `family`) that fits `text` in `maxWidth`, so a
+ * short label stays whole rather than being cut off; at `min`, `fitText` cuts what's still too long.
+ */
+export function fitFont(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, size: number, min: number, weight: string, family: string): void {
+  for (let px = size; px >= min; px -= 2) {
+    ctx.font = `${weight} ${px}px ${family}`;
+    if (ctx.measureText(text).width <= maxWidth) return;
+  }
+}
+
 export function fitText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
   if (ctx.measureText(text).width <= maxWidth) return text;
   let t = text;
