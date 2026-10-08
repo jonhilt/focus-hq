@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { checkLedger, type LedgerEntry, type LedgerEvent, ledgerLine } from '../shared/ledger';
+import { takeLock } from './fileLock';
 
 /** What opening the ledger found and did: shown on the report card, so damage never goes unnoticed. */
 export interface LedgerHealth {
@@ -28,7 +29,7 @@ export class LedgerLog {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
     const check = checkLedger(text);
-    const holder = lock(`${file}.lock`);
+    const holder = takeLock(`${file}.lock`);
     if (holder) {
       health.notes.push(`another Focus office (pid ${holder}) is writing it, so this one isn’t`);
       return { log: new LedgerLog(null, check.nextSeq), events: check.events, health };
@@ -84,30 +85,4 @@ function writeWhole(file: string, content: string): void {
   fs.fsyncSync(fd);
   fs.closeSync(fd);
   fs.renameSync(tmp, file);
-}
-
-/** Takes the lock, or says which live process holds it. A lock left by a process that's gone is taken over. */
-function lock(path: string): number | undefined {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      fs.writeFileSync(path, String(process.pid), { flag: 'wx' });
-      process.once('exit', () => fs.rmSync(path, { force: true }));
-      return undefined;
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
-      const pid = Number(fs.readFileSync(path, 'utf8'));
-      if (pid && pid !== process.pid && alive(pid)) return pid;
-      fs.rmSync(path, { force: true });
-    }
-  }
-  return undefined;
-}
-
-function alive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    return (err as NodeJS.ErrnoException).code === 'EPERM';
-  }
 }

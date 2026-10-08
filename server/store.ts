@@ -4,10 +4,11 @@ import path from 'node:path';
 import { qaOfficerFor, randomAvatar } from '../shared/crew';
 import type { LedgerEntry, LedgerEvent } from '../shared/ledger';
 import { type LedgerHealth, LedgerLog } from './ledgerLog';
-import { prKey } from '../shared/qa';
+import { olderVerdict, prKey } from '../shared/qa';
 import type { Agent, Board, BrowserFrame, ClosedPr, NumberOneChat, Project, QaReview, Retro, Settings, TermLine } from '../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, EFFORT_LEVELS, ROOM_THEMES, type RoomTheme } from '../shared/types';
-import { paths } from './config';
+import { config, paths } from './config';
+import { takeLock } from './fileLock';
 import { fitDesks } from './agents/desks';
 import { upgradeLead } from './agents/lead';
 import { newId } from './util';
@@ -86,9 +87,17 @@ export class Store {
 
   constructor(private readonly persist: boolean) {}
 
+  /**
+   * Reads the saved state. Throws if another office holds data/state.json: two offices on one data folder each save
+   * their own copy over the other's, so a review one finished comes back as the other's older one.
+   */
   load(): void {
     if (!this.persist) return;
     fs.mkdirSync(paths.logs, { recursive: true });
+    const holder = takeLock(`${paths.state}.lock`);
+    if (holder) throw new Error(stateLocked(holder, config.dataDir));
+    // what changed in the last moments before exiting is saved too, before the lock goes
+    process.prependListener('exit', () => this.flush());
     const opened = LedgerLog.open(paths.ledger);
     this.ledgerLog = opened.log;
     this.ledger = opened.events;
@@ -134,25 +143,31 @@ export class Store {
     for (const project of this.projects) project.maxAgents = Math.min(project.maxAgents, DESKS_PER_ROOM);
   }
 
+  /** Saves soon: changes that come close together are written once. */
   save(): void {
     if (!this.persist) return;
     if (this.saveTimer) return;
-    this.saveTimer = setTimeout(() => {
-      this.saveTimer = null;
-      const state: PersistedState = {
-        settings: this.settings,
-        projects: this.projects,
-        agents: [...this.agents.values()],
-        numberOne: this.numberOne,
-        retro: this.retro,
-        reviews: [...this.reviews.values()],
-        closedPrs: [...this.closedPrs.values()],
-      };
-      fs.mkdirSync(path.dirname(paths.state), { recursive: true });
-      const tmp = `${paths.state}.tmp`;
-      fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
-      fs.renameSync(tmp, paths.state);
-    }, 250);
+    this.saveTimer = setTimeout(() => this.flush(), 250);
+  }
+
+  /** Writes a save that's waiting, now. */
+  flush(): void {
+    if (!this.saveTimer) return;
+    clearTimeout(this.saveTimer);
+    this.saveTimer = null;
+    const state: PersistedState = {
+      settings: this.settings,
+      projects: this.projects,
+      agents: [...this.agents.values()],
+      numberOne: this.numberOne,
+      retro: this.retro,
+      reviews: [...this.reviews.values()],
+      closedPrs: [...this.closedPrs.values()],
+    };
+    fs.mkdirSync(path.dirname(paths.state), { recursive: true });
+    const tmp = `${paths.state}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
+    fs.renameSync(tmp, paths.state);
   }
 
   // ---- projects ----
@@ -225,11 +240,18 @@ export class Store {
     this.save();
   }
 
-  putReview(review: QaReview): void {
+  /** Keeps `review`, unless it's an older copy that would put back a verdict QA has since replaced: false then. */
+  putReview(review: QaReview): boolean {
     const key = prKey(review.repo, review.number);
-    this.dropShots(this.reviews.get(key), review);
+    const current = this.reviews.get(key);
+    if (olderVerdict(current, review)) {
+      console.warn(`Not putting back QA's older verdict on ${key} (${review.status} at ${review.sha?.slice(0, 7)}): it has since ${current!.status} ${current!.sha?.slice(0, 7)}`);
+      return false;
+    }
+    this.dropShots(current, review);
     this.reviews.set(key, review);
     this.save();
+    return true;
   }
 
   putClosedPr(closed: ClosedPr): void {
@@ -379,6 +401,11 @@ export class Store {
       return [];
     }
   }
+}
+
+/** Why the office won't open a data folder another office is using, and what to do instead. */
+export function stateLocked(pid: number, dataDir: string): string {
+  return `Another Focus office (pid ${pid}) is using ${dataDir}. Stop it first, or give this one a data folder of its own (FOCUS_DATA_DIR=<empty folder>), or run npm run demo, which saves nothing.`;
 }
 
 function isTheme(value: unknown): value is RoomTheme {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoQaFor, autoSendBackFor, qaBadge, sameCommit } from './qa';
+import { autoQaFor, autoSendBackFor, olderVerdict, qaBadge, sameCommit } from './qa';
 import type { QaReview } from './types';
 
 const review = (r: Partial<QaReview> = {}): QaReview => ({
@@ -79,5 +79,25 @@ describe('autoSendBackFor', () => {
   it('is on unless the project switched it off', () => {
     expect(autoSendBackFor({})).toBe(true);
     expect(autoSendBackFor({ autoSendBack: false })).toBe(false);
+  });
+});
+
+describe('olderVerdict', () => {
+  const failed = review({ status: 'failed', sha: '4f10df07348f', finishedAt: 100 });
+  const passed = review({ status: 'passed', sha: '2f97dabfbf22', finishedAt: 200 });
+
+  it('refuses a copy of the failed round written back over the pass that came after it', () => {
+    expect(olderVerdict(passed, { ...failed, followUp: { kind: 'needs-you', reason: 'stuck' } })).toBe(true);
+  });
+
+  it('lets a newer verdict, or the same one with a change, replace it', () => {
+    expect(olderVerdict(failed, passed)).toBe(false);
+    expect(olderVerdict(passed, { ...passed, mergeRequested: { at: 300 } })).toBe(false);
+  });
+
+  it('lets anything replace a review without a verdict, and a new round replace a verdict', () => {
+    expect(olderVerdict(undefined, failed)).toBe(false);
+    expect(olderVerdict(review({ status: 'queued' }), failed)).toBe(false);
+    expect(olderVerdict(passed, review({ status: 'queued', finishedAt: undefined }))).toBe(false);
   });
 });

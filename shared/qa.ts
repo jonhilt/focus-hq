@@ -46,6 +46,15 @@ export function sameCommit(a: string, b: string): boolean {
   return n >= 7 && a.slice(0, n).toLowerCase() === b.slice(0, n).toLowerCase();
 }
 
+/**
+ * Whether writing `incoming` would put back a verdict older than the one the review holds: a copy of the review taken
+ * before QA's latest verdict, written back after it (by a step that awaited GitHub or a session meanwhile).
+ */
+export function olderVerdict(current: QaReview | undefined, incoming: QaReview): boolean {
+  const verdict = (r: QaReview) => r.status === 'passed' || r.status === 'failed';
+  return !!current && verdict(current) && verdict(incoming) && (incoming.finishedAt ?? 0) < (current.finishedAt ?? 0);
+}
+
 /** Whether QA should pick up a PR the office just opened or pushed to: on unless the project switched it off. */
 export function autoQaFor(project: { autoQa?: boolean }): boolean {
   return project.autoQa !== false;

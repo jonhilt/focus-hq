@@ -1416,6 +1416,8 @@ export class AgentManager {
       }
       const body = carriedComment(pr.baseBranch, step.head, last.sha!, run.results.map((r) => r.command));
       const commentUrl = yield* github.commentOnPullRequest(review.repo, review.number, body).pipe(Effect.map((url) => url || undefined), Effect.orElseSucceed(() => undefined));
+      // the PR may have merged or closed while the comment went up
+      if (!current()) return;
       this.putReview({ ...last, status: 'passed', sha: step.head, carriedFrom: last.sha, commentUrl: commentUrl ?? last.commentUrl, mergeRequested: mergeRequested(), requestedAt: review.requestedAt, finishedAt: Date.now() });
       this.hub.toast('success', `✅ ${where} stays passed: merge of ${pr.baseBranch} only, checks green at ${step.head.slice(0, 7)}`, undefined, review.projectId);
       this.boardChanged(review.projectId);
@@ -1857,8 +1859,7 @@ export class AgentManager {
   }
 
   private putReview(review: QaReview): void {
-    this.store.putReview(review);
-    this.hub.send({ type: 'review', review });
+    if (this.store.putReview(review)) this.hub.send({ type: 'review', review });
   }
 
   // ---------------------------------------------------------------- moving to the cloud
