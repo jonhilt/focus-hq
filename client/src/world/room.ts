@@ -450,6 +450,11 @@ export class ProjectRoom {
     return this.stations.map((s) => s.portal);
   }
 
+  /** Its team stations' briefing rooms. */
+  briefingRooms(): THREE.Object3D[] {
+    return this.stations.map((s) => s.room);
+  }
+
   /** The team station whose briefing room a world position is in, if it's in one of this room's. */
   briefingRoomOf(p: THREE.Vector3): number | undefined {
     return this.stations.find((s) => s.inside(p))?.index;

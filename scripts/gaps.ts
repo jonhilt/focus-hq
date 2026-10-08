@@ -39,14 +39,15 @@ async function main(): Promise<number> {
   const dataDir = mkdtempSync(path.join(os.tmpdir(), 'focus-gaps-'));
   const port = await freePort();
   const url = `http://127.0.0.1:${port}/`;
-  // the decks' meshes as built, not merged (merge.ts), so what's found is named as in Blender
+  // the decks' meshes as built, not merged (merge.ts), so what's found is named as in Blender, and all of the ship
+  // drawn, not just where the camera is (regions.ts)
   console.log(`Gap scan: demo office on ${url}`);
   const server = startDemo(port, dataDir);
   let browser: Browser | undefined;
   try {
     await waitForServer(url, server, 60_000);
     browser = await launchBrowser();
-    const { gaps, meshes } = await scan(browser, `${url}?merge=0`);
+    const { gaps, meshes } = await scan(browser, `${url}?merge=0&cull=0`);
     const found = gaps.filter((g) => !allowed(g));
     console.log(`Scanned ${meshes} meshes; ${gaps.length - found.length} allowed gaps skipped.`);
     if (!found.length) {

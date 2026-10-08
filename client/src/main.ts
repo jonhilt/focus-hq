@@ -73,6 +73,8 @@ async function main() {
 
   const [theShip, teamStation] = await Promise.all([ship(), loadTeamStation('/ship/team-station.glb')]);
   const world = new World(scene, theShip, teamStation);
+  // ?cull=0 draws the whole ship from anywhere, for the gap and z-fighting scans
+  world.culling = params.get('cull') !== '0';
   const player = new Player(camera, renderer.domElement);
   const aboard = world.boarding();
   player.teleport(aboard.position, aboard.lookAt);
@@ -422,7 +424,9 @@ async function main() {
       const where = world.locationOf(camera.position);
       hud.setLocation(where.label, where.projectId ? state.project(where.projectId)?.color : undefined);
     }
-    portalView.render(scene, camera, world.portals);
+    // each drawn with only its own part of the ship: the doorway's far side, then where you are
+    portalView.render(scene, camera, world.portals, (at) => world.reveal(at));
+    world.reveal(camera.position);
     view.render(scene, camera);
     requestAnimationFrame(loop);
   };

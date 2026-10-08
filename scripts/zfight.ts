@@ -35,14 +35,15 @@ async function main(): Promise<number> {
   const dataDir = mkdtempSync(path.join(os.tmpdir(), 'focus-zfight-'));
   const port = await freePort();
   const url = `http://127.0.0.1:${port}/`;
-  // the decks' meshes as built, not merged (merge.ts), so what's found is named as in Blender
+  // the decks' meshes as built, not merged (merge.ts), so what's found is named as in Blender, and all of the ship
+  // drawn, not just where the camera is (regions.ts)
   console.log(`Z-fighting scan: demo office on ${url}`);
   const server = startDemo(port, dataDir);
   let browser: Browser | undefined;
   try {
     await waitForServer(url, server, 60_000);
     browser = await launchBrowser();
-    const { pairs, meshes, padds } = await scan(browser, `${url}?merge=0`);
+    const { pairs, meshes, padds } = await scan(browser, `${url}?merge=0&cull=0`);
     const fighting = pairs.filter((p) => !allowed(p));
     console.log(`Scanned ${meshes} meshes (${padds} PADDs); ${pairs.length - fighting.length} allowed overlaps skipped.`);
     if (!fighting.length) {

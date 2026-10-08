@@ -167,7 +167,8 @@ export class PortalView {
     }
   }
 
-  render(scene: THREE.Scene, camera: THREE.PerspectiveCamera, portals: Portal[]): void {
+  /** `reveal` shows what's drawn from a point in the far room (World.reveal), before it's drawn. */
+  render(scene: THREE.Scene, camera: THREE.PerspectiveCamera, portals: Portal[], reveal: (at: THREE.Vector3) => void = () => undefined): void {
     camera.updateMatrixWorld();
     this.frustum.setFromProjectionMatrix(this.m.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
     let shown: PortalEnd | undefined;
@@ -217,6 +218,8 @@ export class PortalView {
     // only what's seen through the doorway, nowhere else on the screen
     const { matrix, width, height } = shown.doorway;
     this.frame.clip(onScreen(matrix, width, height, this.m));
+    // a step into the room beyond the other doorway: facing out into it, along its forward (-Z)
+    reveal(tmp.setFromMatrixColumn(far, 2).normalize().multiplyScalar(-1).add(new THREE.Vector3().setFromMatrixPosition(far)));
     this.frame.render(scene, v, this.target);
     this.renderer.setRenderTarget(null);
     shown.view.visible = true;

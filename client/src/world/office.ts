@@ -14,6 +14,7 @@ import { flat } from './materials';
 import { EngineeringStation } from './engineering';
 import { FirstOfficer } from './numberOne';
 import type { Portal } from './portal';
+import { type Region, regionAt, shown } from './regions';
 import { buildHiddenRoom, buildVacantRoom, ProjectRoom } from './room';
 import type { Scenery } from './scenery';
 import { LCARS, LCARS_FONT, lcarsFrame, type SlidingDoors } from './starship';
@@ -55,6 +56,12 @@ export class World {
   private doors: SlidingDoors[] = [];
   /** The doorways between each holodeck and its team stations' briefing rooms. */
   portals: Portal[] = [];
+  /** Every team station's briefing room, apart from the holodeck deck they're reached from (regions.ts). */
+  private readonly briefingRooms = new THREE.Group();
+  /** Where the command deck is, to tell when the camera's on it. */
+  private readonly commandDeck = new THREE.Box3();
+  /** Whether to draw only the camera's region (`?cull=0` draws all of them, for the gap and z-fighting scans). */
+  culling = true;
   private lastT = 0;
   private dashboard = makeCanvas(1280, 720);
   private dashboardTex = canvasTexture(this.dashboard.canvas);
@@ -74,6 +81,26 @@ export class World {
   ) {
     scene.add(this.root);
     for (const deck of this.decks()) this.mount(deck, this.root);
+    this.root.add(this.briefingRooms);
+    // a little beyond its walls, so you're on it in its doorways too
+    this.commandDeck.setFromObject(ship.command.root).expandByScalar(1);
+  }
+
+  /**
+   * Draws, from now on, only the part of the ship (regions.ts) that `at` is in: the camera's, before the frame's drawn,
+   * and the far side's before a doorway draws it (PortalView). Null draws all of it.
+   */
+  reveal(at: THREE.Vector3 | null): void {
+    const region: Region | null = at && this.culling ? regionAt(at, this.commandDeck, (p) => this.inBriefingRoom(p)) : null;
+    const show = shown(region);
+    this.ship.command.root.visible = show.command;
+    if (this.builder) this.builder.group.visible = show.holodecks;
+    this.briefingRooms.visible = show.briefing;
+  }
+
+  private inBriefingRoom(p: THREE.Vector3): boolean {
+    for (const room of this.rooms.values()) if (room.briefingRoomOf(p) !== undefined) return true;
+    return false;
   }
 
   /** Puts a deck built in Blender into `parent`, its screens showing what the World draws for them. */
@@ -109,7 +136,9 @@ export class World {
     for (const room of this.rooms.values()) room.dispose();
     this.rooms.clear();
     this.engineering?.dispose();
+    this.numberOne?.group.removeFromParent();
     this.numberOne?.dispose();
+    this.briefingRooms.clear();
     const b = new Builder();
     this.builder = b;
 
@@ -135,6 +164,8 @@ export class World {
       this.rooms.set(project.id, new ProjectRoom(project, slot, b, scenery, this.teamStation));
     });
     for (const scenery of previous.values()) scenery.dispose();
+    // the briefing rooms stand apart from the holodeck deck, and are drawn apart from it
+    for (const room of this.rooms.values()) for (const briefing of room.briefingRooms()) this.briefingRooms.add(briefing);
 
     this.buildHolodeckDeck(b, rows, this.ship.holodecks);
     this.seatNumberOne(b, this.ship.command.seat('number-one'));
@@ -166,7 +197,8 @@ export class World {
 
   private seatNumberOne(b: Builder, seat: Seat): void {
     this.numberOne = new FirstOfficer(seat);
-    b.add(this.numberOne.group);
+    // in the ready room: drawn with the command deck
+    this.ship.command.root.add(this.numberOne.group);
     b.colliders.push(this.numberOne.footprint);
   }
 
