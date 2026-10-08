@@ -3,7 +3,7 @@ import type { Agent, BrowserFrame, ClaudeTask, GoalArtifact, GoalNote, GoalQuest
 import { ARTIFACT_SIZE, artifactUrl, latestArtifact, openQuestion, optionUrl } from '../../../shared/artifacts';
 import { showsBrowser } from '../../../shared/browserView';
 import { plainTermLine } from '../../../shared/termText';
-import { canvasTexture, fitText, makeCanvas, MONO_FONT, roundRect, UI_FONT } from './canvas';
+import { canvasTexture, fitText, makeCanvas, MONO_FONT, roundRect, UI_FONT, wrap } from './canvas';
 import { flat } from './materials';
 import { screenPanes, screenPrefs } from './screenPanes';
 import { LCARS, LCARS_FONT, LCARS_STATUS, lcarsFrame } from './starship';
@@ -301,13 +301,23 @@ export class StationScreen {
   /** The lead's open question: its options side by side (two rows of two for three or four), each lettered. */
   private drawQuestion(agent: Agent, question: GoalQuestion, x: number, y: number, w: number, h: number): void {
     const ctx = this.c.ctx;
-    this.drawShownBar(`QUESTION: ${question.question}`, 'E TO ANSWER', LCARS.gold, x, y, w, h);
-    const cols = question.options.length === 3 ? 3 : 2;
+    this.drawShownBar(`${question.options.length} OPTIONS FOR YOU`, 'E TO ANSWER', LCARS.gold, x, y, w, h);
+    // the question itself, large enough to read from the table: the first thing you see
+    ctx.font = `600 30px ${LCARS_FONT}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = LCARS.gold;
+    const lines = wrap(ctx, question.question.toUpperCase(), w - 32, 3);
+    lines.forEach((line, i) => ctx.fillText(line, x + 16, y + 50 + i * 34));
+    const qh = 24 + lines.length * 34;
+    // two to a row at most, so each stays big enough to make out
+    const cols = Math.min(2, question.options.length);
     const rows = Math.ceil(question.options.length / cols);
     const cw = (w - 8 * (cols + 1)) / cols;
+    const free = h - 38 - qh;
     // each cell as tall as its label and a picture its width, and the lot centred, so labels sit on their pictures
-    const ch = Math.min((h - 38 - 8 * (rows + 1)) / rows, 34 + (cw * ARTIFACT_SIZE.h) / ARTIFACT_SIZE.w);
-    const top = y + 38 + (h - 38 - rows * (ch + 8) - 8) / 2;
+    const ch = Math.min((free - 8 * (rows + 1)) / rows, 34 + (cw * ARTIFACT_SIZE.h) / ARTIFACT_SIZE.w);
+    const top = y + 38 + qh + (free - rows * (ch + 8) - 8) / 2;
     const used: string[] = [];
     question.options.forEach((option, i) => {
       const cx = x + 8 + (i % cols) * (cw + 8);

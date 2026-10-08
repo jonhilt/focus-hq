@@ -272,11 +272,14 @@ export function showArtifact(artifacts: readonly GoalArtifact[], input: Artifact
   return [...artifacts, shown];
 }
 
-export const QUESTION_LIMITS = { question: 300, label: 60, minOptions: 2, maxOptions: 4, kept: 12, note: 1000 } as const;
+export const QUESTION_LIMITS = { question: 300, context: 600, label: 60, detail: 500, minOptions: 2, maxOptions: 4, kept: 12, note: 1000 } as const;
 
 export interface QuestionInput {
   question: string;
-  options: { label: string; html: string }[];
+  /** Why it's being asked, and what matters in choosing. */
+  context?: string;
+  /** `detail`: what the option means and what it trades off, beside its page. */
+  options: { label: string; html: string; detail?: string }[];
 }
 
 /**
@@ -289,17 +292,26 @@ export function askQuestion(questions: readonly GoalQuestion[], input: QuestionI
   const clean = (text: string) => text.replace(/\s+/g, ' ').trim();
   const question = clean(input.question);
   if (!question) return { error: 'Ask a question' };
-  if (question.length > L.question) return { error: `The question is ${question.length} characters (at most ${L.question}): put the detail in the options` };
+  if (question.length > L.question) return { error: `The question is ${question.length} characters (at most ${L.question}): put the background in context` };
+  const context = input.context?.trim();
+  if (context && context.length > L.context) return { error: `The context is ${context.length} characters (at most ${L.context})` };
   if (input.options.length < L.minOptions || input.options.length > L.maxOptions) return { error: `Give ${L.minOptions} to ${L.maxOptions} options (you gave ${input.options.length})` };
   for (const [i, o] of input.options.entries()) {
     const label = clean(o.label);
     if (!label) return { error: `Option ${i + 1} needs a label` };
     if (label.length > L.label) return { error: `Option ${i + 1}'s label is ${label.length} characters (at most ${L.label})` };
+    if (o.detail && o.detail.trim().length > L.detail) return { error: `Option ${i + 1}'s detail is ${o.detail.trim().length} characters (at most ${L.detail})` };
     if (!o.html.trim()) return { error: `Option ${i + 1}'s page is empty` };
     if (Buffer.byteLength(o.html) > ARTIFACT_LIMITS.bytes) return { error: `Option ${i + 1}'s page is over ${ARTIFACT_LIMITS.bytes / 1_000_000} MB` };
   }
   const n = Math.max(0, ...questions.map((q) => Number(q.id.slice(1)) || 0)) + 1;
-  const asked: GoalQuestion = { id: `q${n}`, question, options: input.options.map((o, i) => ({ id: 'abcd'[i], label: clean(o.label) })), at };
+  const asked: GoalQuestion = {
+    id: `q${n}`,
+    question,
+    ...(context ? { context } : {}),
+    options: input.options.map((o, i) => ({ id: 'abcd'[i], label: clean(o.label), ...(o.detail?.trim() ? { detail: o.detail.trim() } : {}) })),
+    at,
+  };
   const kept = questions.filter((q) => q.answer);
   const over = Math.max(0, kept.length + 1 - L.kept);
   return { questions: [...kept.slice(over), asked], asked, dropped: [...questions.filter((q) => !q.answer), ...kept.slice(0, over)] };

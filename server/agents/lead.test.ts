@@ -580,6 +580,14 @@ describe('questions', () => {
     expect(dropped.map((q) => q.id)).toEqual(['q1']);
   });
 
+  it('keeps why the lead asked, and each option’s detail, when they give them', () => {
+    const asked = askQuestion([], { question: 'Which?', context: '  It decides the header.  ', options: [{ ...options[0], detail: ' Roomier. ' }, options[1]] }, 1);
+    expect(asked).toMatchObject({ asked: { context: 'It decides the header.', options: [{ id: 'a', detail: 'Roomier.' }, { id: 'b' }] } });
+    expect('error' in asked ? undefined : asked.asked.options[1]).not.toHaveProperty('detail');
+    expect(askQuestion([], { question: 'Which?', context: 'x'.repeat(QUESTION_LIMITS.context + 1), options }, 1)).toHaveProperty('error');
+    expect(askQuestion([], { question: 'Which?', options: [{ ...options[0], detail: 'x'.repeat(QUESTION_LIMITS.detail + 1) }, options[1]] }, 1)).toHaveProperty('error');
+  });
+
   it('refuses questions without enough options, or options without a label or a page', () => {
     expect(askQuestion([], { question: 'Which?', options: options.slice(0, 1) }, 1)).toHaveProperty('error');
     expect(askQuestion([], { question: 'Which?', options: [...options, ...options, options[0]] }, 1)).toHaveProperty('error');

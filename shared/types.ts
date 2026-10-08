@@ -382,8 +382,10 @@ export interface GoalQuestion {
   /** q1, q2, …: unique within the goal. */
   id: string;
   question: string;
-  /** a, b, c, d in the order the lead gave them. */
-  options: { id: string; label: string; image?: boolean }[];
+  /** Why the lead's asking, and what matters in choosing. */
+  context?: string;
+  /** a, b, c, d in the order the lead gave them, each with what it means and trades off (`detail`). */
+  options: { id: string; label: string; detail?: string; image?: boolean }[];
   at: number;
   answer?: { option: string; note?: string; at: number };
 }

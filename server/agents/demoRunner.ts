@@ -255,7 +255,11 @@ export class DemoRunner implements AgentRunner {
         hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__ask(Which layout should it start with?)' }]);
         const asked = await tools.ask({
           question: 'Which layout should it start with?',
-          options: [{ label: 'Cards with pictures', html: demoMockupPage(goal) }, { label: 'A plain list', html: demoListPage(goal) }],
+          context: 'The first slice only needs one. It decides how much the API sends per item, so it is cheaper to pick now than to change later.',
+          options: [
+            { label: 'Cards with pictures', html: demoMockupPage(goal), detail: 'Friendlier and easier to scan by eye, but it needs a picture of every item, and fits fewer on a screen.' },
+            { label: 'A plain list', html: demoListPage(goal), detail: 'Quick to build and dense: the API sends names and prices only. Plainer to look at.' },
+          ],
         }).catch((err: Error) => err.message);
         hooks.lines([{ kind: 'output', text: `  ⎿  ${asked}` }]);
         await say(`I've had a look around ${repos.map((r) => `./${r.folder}`).join(' and ')}. For "${goal}", I'd start with a thin slice end to end${repos.length > 1 ? ` through ${repos.map((r) => r.folder).join(' and ')}` : ''}: the simplest version that works, so we find out early whether the data model holds. Shall I go ahead?`);

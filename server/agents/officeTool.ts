@@ -64,11 +64,13 @@ export function officeMcpServer(tools: OfficeTools): McpSdkServerConfigWithInsta
       ),
       tool(
         'ask',
-        "Ask the captain a question best answered by looking: which layout, which diagram reads best, which of a few approaches. Each option is a page of its own, shown side by side on your station's screen; they open them up close and pick one. Their pick comes back to you as a message from them, so end your turn after asking. Asking again replaces a question they haven't answered.",
+        "Ask the captain a question best answered by looking: which layout, which diagram reads best, which of a few approaches. Each option is a page of its own, shown on your station's screen; up close, the captain steps through them one at a time, large, and picks one. Say why you're asking in context, and give each option a detail (what it means, what it trades off): they read it beside the page. Their pick comes back to you as a message from them, so end your turn after asking. Asking again replaces a question they haven't answered.",
         {
           question: z.string().describe('The question, in a sentence (at most 300 characters).'),
+          context: z.string().optional().describe('Why you\'re asking and what matters in choosing, in a few sentences (at most 600 characters): the captain reads it above the options.'),
           options: z.array(z.object({
             label: z.string().describe('A few words naming this option (at most 60 characters).'),
+            detail: z.string().optional().describe('What this option means and what it trades off, in a sentence or three (at most 500 characters): shown beside its page.'),
             html: z.string().describe('A self-contained HTML page showing it, laid out for 1280 × 800 like the show tool\'s.'),
           })).describe('2 to 4 options: the captain sees them lettered A, B, C, D in this order.'),
         },
