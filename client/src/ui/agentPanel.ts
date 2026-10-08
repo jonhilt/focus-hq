@@ -85,6 +85,43 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
     if (a) void busy(close, () => closeGoal(a), ui.error);
   };
 
+  // made once, so it keeps its busy state while their work goes onto GitHub
+  const moveToCloud = h('button', { class: 'btn small', title: 'Carry on in a Claude Code cloud session: their work so far goes onto their branch on GitHub, and you start the session' }, '☁ Move to cloud');
+  moveToCloud.onclick = async () => {
+    const a = state.agents.get(id);
+    if (!a) return;
+    const working = !FINISHED.includes(a.status);
+    if (!await confirmDialog({
+      title: 'Move to cloud',
+      message: `${working ? `${a.name} stops what they're doing, and their` : `${a.name}'s`} work so far is committed and pushed to ${a.branch}. Then you start a cloud session for them to carry on in: Focus can open a terminal that starts it.`,
+      confirmLabel: 'Move to cloud',
+    })) return;
+    void busy(moveToCloud, () => api.moveToCloud(id), ui.error);
+  };
+  let handoverKey = '';
+  /** Starting the cloud session a waiting agent carries on in: a terminal that starts it, or a link to one. */
+  const handoverAsk = (a: Agent) => {
+    const watching = !!a.handover?.terminalAt;
+    const start = h('button', { class: 'btn go', title: 'Opens a terminal on this machine running claude --cloud in their worktree. Claude Code starts a new cloud session only from a terminal; Focus picks it up from there' }, watching ? '▶ Open another terminal' : '▶ Start in a terminal');
+    start.onclick = () => void busy(start, () => api.cloudTerminal(id), ui.error);
+    const link = h('input', { type: 'text', placeholder: '…or paste a claude.ai/code session link', style: 'flex:1;min-width:220px' });
+    const attach = h('button', { class: 'btn' }, 'Use it');
+    const attachLink = () => {
+      if (link.value.trim()) void busy(attach, () => api.attachCloud(id, link.value.trim()), ui.error);
+    };
+    attach.onclick = attachLink;
+    link.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') attachLink();
+    });
+    const stay = h('button', { class: 'btn', title: 'Keep them on this machine instead' }, 'Keep local');
+    stay.onclick = () => void busy(stay, () => api.stayLocal(id), ui.error);
+    return h('div', { class: 'ask' },
+      h('strong', null, '☁ Cloud session'),
+      h('span', { class: 'muted' }, watching ? 'Waiting for the terminal to start it…' : `${a.name} is waiting for one`),
+      start, link, attach, stay,
+    );
+  };
+
   const title = h('h2');
   ui.panels.open({ title, body, footer, nav, wide: true, accent: UNIFORM[agent.avatar.division] });
   shown = id;
@@ -128,6 +165,8 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
   };
 
   const renderHeader = (a: Agent) => {
+    // a bar coming or going above the terminal (a hand up, a cloud session to start) leaves it scrolled to the end
+    const atEnd = terminal.scrollHeight - terminal.scrollTop - terminal.clientHeight < 60;
     title.replaceChildren(a.name, h('span', { class: 'muted' }, ` · ${a.task === 'lead' ? a.lead?.title ?? 'Goal' : `#${a.issue.number} ${a.issue.title}`}`));
     fill(
       readouts,
@@ -151,10 +190,19 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
         a.pr && a.status === 'done'
           ? h('button', { class: 'btn small', title: 'Run the PR on your machine and open it in your browser', onclick: () => ui.previewPr(a.projectId, a.repo, a.pr!.number) }, 'Preview')
           : null,
+        movable(a) ? moveToCloud : null,
       ),
     );
     fill(closing, a.lead?.closing ? h('p', { class: 'goal-closing' }, `${a.name} thinks this goal is ready to wrap up: ${a.lead.closing.reason}. Close it, or tell them what's next.`) : null);
-    if (a.permission) {
+    if (a.handover) {
+      // drawn again only when the hand-over changes, so a link half pasted isn't lost
+      const key = `${a.handover.since}:${a.handover.terminalAt ?? ''}`;
+      if (key !== handoverKey) {
+        handoverKey = key;
+        ask.replaceChildren(handoverAsk(a));
+      }
+    } else if (a.permission) {
+      handoverKey = '';
       const req = a.permission;
       const approve = h('button', { class: 'btn go' }, 'Approve');
       const decline = h('button', { class: 'btn danger' }, 'Decline');
@@ -164,6 +212,7 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
         h('div', { class: 'ask' }, h('strong', null, `${a.name} wants to run`), h('code', { class: 'grow' }, req.summary), approve, decline),
       );
     } else {
+      handoverKey = '';
       ask.replaceChildren();
     }
     stop.disabled = FINISHED.includes(a.status);
@@ -176,6 +225,7 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
         ? `Ask ${a.name} for changes – they'll update the PR`
         : `Tell ${a.name} what to do next to pick the work back up`
       : `Message ${a.name}… (they'll read it at their next step)`;
+    if (atEnd) terminal.scrollTop = terminal.scrollHeight;
   };
 
   /** The sidebar, and whichever view it has picked beside the terminal (none: the terminal takes the width). */
@@ -299,9 +349,12 @@ export function effortPicker(value?: Effort): HTMLSelectElement {
 
 export const pickedEffort = (picker: HTMLSelectElement): Effort | undefined => EFFORT_LEVELS.find((e) => e === picker.value);
 
+/** A local agent the captain can move to the cloud (the office says why not, if it won't). */
+const movable = (a: Agent) => (a.task === 'issue' || a.task === 'fix') && !a.cloud && !a.handover;
+
 /** Picks where an agent works: on this machine, or in a Claude Code cloud session. */
 export function wherePicker(cloud = false): HTMLSelectElement {
-  return h('select', { class: 'effort', title: "Where the agent works: on this machine, or in a Claude Code cloud session (claude.ai/code). If Claude Code won't start a cloud session, the agent carries on locally" },
+  return h('select', { class: 'effort', title: "Where the agent works: on this machine, or in a Claude Code cloud session (claude.ai/code). If Claude Code won't start the cloud session by itself, the agent waits for you to start it (Focus can open a terminal that does)" },
     h('option', { value: '', selected: !cloud }, 'local'),
     h('option', { value: 'cloud', selected: cloud }, 'cloud'),
   );

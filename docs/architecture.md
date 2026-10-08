@@ -25,7 +25,8 @@ server/
     schedule.ts           who starts next under the office's and each room's limits
     desks.ts              who sits at a room's two individual desks, and who goes home to make room (never a lead or QA)
     claudeRunner.ts       Claude Agent SDK query() in streaming-input mode, permission callback; cloud agents via --cloud
-    cloud.ts              what happens after a cloud agent's session (push nudge, carrying on in a new session, falling back to local when the CLI refuses --cloud)
+    cloud.ts              what happens after a cloud agent's session (push nudge, carrying on in a new session, falling back to local when the CLI refuses --cloud), and moving an agent to the cloud
+    terminal.ts           the terminal the office opens to start a cloud session (claude --cloud, recorded with script) and finding the session's id in it
     render.ts             SDK messages → Claude-Code-style terminal lines + "what am I doing" text + screenshots in tool results
     tasks.ts              the task list an agent keeps with Claude Code's task tools, followed from its session (TodoWrite, TaskCreate, TaskUpdate, TaskList)
     browserTool.ts        in-process MCP server driving headless Chromium, streams screenshots

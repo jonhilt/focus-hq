@@ -3,7 +3,7 @@ import { GhServerError, serverStatus } from '../github/runner';
 import { errorMessage } from '../util';
 import type { TriageDecision, Triager, TriageRequest } from './triage';
 import type { SinceVerdict } from './retest';
-import type { AgentRunner, AgentSession, BaseMerge, BranchState, ChecksRun, RunHooks, RunRequest, WorkspaceOps } from './types';
+import type { AgentRunner, AgentSession, BaseMerge, BranchState, ChecksRun, CloudTerminalRequest, RunHooks, RunRequest, WorkspaceOps } from './types';
 
 // What the agent manager needs from the outside world, as Effect services: git on the agents' checkouts, Claude Code
 // sessions, and the operations officer's triage. Each wraps the Promise-based implementation it always had (the live
@@ -18,6 +18,13 @@ export class GitFailed extends Data.TaggedError('GitFailed')<{ what: string; rea
 
 /** The operations officer couldn't finish looking at a stuck pull request. */
 export class TriageFailed extends Data.TaggedError('TriageFailed')<{ reason: string }> {
+  override get message() {
+    return this.reason;
+  }
+}
+
+/** The office couldn't open a terminal to start a cloud session in. */
+export class TerminalFailed extends Data.TaggedError('TerminalFailed')<{ reason: string }> {
   override get message() {
     return this.reason;
   }
@@ -122,10 +129,20 @@ export class Sessions extends Context.Service<Sessions, {
    * running, so interrupting whoever started it (sending the agent home, say) really stops Claude.
    */
   start(req: RunRequest, hooks: RunHooks): Effect.Effect<AgentSession, never, Scope.Scope>;
+  /**
+   * Opens a terminal on the captain's screen that starts a cloud session (`AgentRunner.cloudTerminal`). `read` is what
+   * it has shown so far; undefined when the office can't see it.
+   */
+  cloudTerminal(req: CloudTerminalRequest): Effect.Effect<{ read: Effect.Effect<string | undefined> }, TerminalFailed>;
 }>()('focus/agents/Sessions') {
   /** Sessions on a runner: Claude Code through the Agent SDK, or the demo's scripted agents. */
   static fromRunner(runner: AgentRunner): Layer.Layer<Sessions> {
     return Layer.succeed(Sessions, Sessions.of({
+      cloudTerminal: (req) =>
+        Effect.tryPromise({
+          try: () => (runner.cloudTerminal ? runner.cloudTerminal(req) : Promise.reject(new Error('This office has no terminal to open'))),
+          catch: (err) => new TerminalFailed({ reason: errorMessage(err) }),
+        }).pipe(Effect.map((terminal) => ({ read: Effect.promise(() => terminal.read().catch(() => '')) }))),
       start: (req, hooks) =>
         Effect.acquireRelease(
           Effect.sync(() => {

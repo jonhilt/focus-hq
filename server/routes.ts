@@ -161,6 +161,10 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.post('/agents/:id/permission', h((req) => office.agents.resolvePermission(param(req, 'id'), str(req.body.requestId), req.body.allow === true)));
   r.post('/agents/:id/stop', h((req) => office.agents.stop(param(req, 'id'))));
   r.post('/agents/:id/compact', h((req) => office.agents.compactNow(param(req, 'id'))));
+  r.post('/agents/:id/cloud', h((req) => office.agents.moveToCloud(param(req, 'id'))));
+  r.post('/agents/:id/cloud/terminal', h((req) => office.agents.openCloudTerminal(param(req, 'id'))));
+  r.post('/agents/:id/cloud/attach', h((req) => office.agents.attachCloud(param(req, 'id'), str(req.body.link))));
+  r.post('/agents/:id/cloud/stay', h((req) => office.agents.stayLocal(param(req, 'id'))));
   r.post('/agents/:id/close', h((req) => office.agents.closeGoal(param(req, 'id'), req.body.force === true)));
   r.post('/agents/:id/effort', h((req) => {
     const level = effort(req.body.effort);

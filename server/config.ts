@@ -49,6 +49,8 @@ export const paths = {
   retros: path.join(config.dataDir, 'retros'),
   /** Where Claude Code keeps session transcripts, the agents' among them (one folder per working directory). */
   transcripts: path.join(process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude'), 'projects'),
+  /** The terminals the office opens to start agents' cloud sessions: each one's script and what it showed, a folder per agent. */
+  cloudTerminals: path.join(config.dataDir, 'cloud-terminals'),
   /** Speech models: whisper for dictation, Kokoro for the crew's voices. */
   models: path.join(config.dataDir, 'models'),
 };

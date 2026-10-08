@@ -74,6 +74,14 @@ export const api = {
   setEffort: (id: string, effort: Effort) => call<Agent>('POST', `/agents/${id}/effort`, { effort }),
   /** Compacts the agent's conversation between turns, keeping what their work needs. */
   compact: (id: string) => call<Agent>('POST', `/agents/${id}/compact`),
+  /** Moves a local agent's work to a Claude Code cloud session, which the captain then starts. */
+  moveToCloud: (id: string) => call<Agent>('POST', `/agents/${id}/cloud`),
+  /** Opens a terminal on this machine that starts the waiting agent's cloud session. */
+  cloudTerminal: (id: string) => call<Agent>('POST', `/agents/${id}/cloud/terminal`),
+  /** Hands the waiting agent the cloud session at `link` (claude.ai/code/session_…). */
+  attachCloud: (id: string, link: string) => call<Agent>('POST', `/agents/${id}/cloud/attach`, { link }),
+  /** Keeps the waiting agent on this machine. */
+  stayLocal: (id: string) => call<Agent>('POST', `/agents/${id}/cloud/stay`),
 
   voiceStatus: () => call<VoiceStatus>('GET', '/voice/status'),
   downloadVoiceModel: () => call<VoiceStatus>('POST', '/voice/download-model'),

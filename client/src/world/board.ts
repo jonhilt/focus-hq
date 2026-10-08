@@ -137,7 +137,7 @@ export class KanbanBoard {
       ...cols.doing.map((agent) => ({
         tone: LCARS_STATUS[agent.status],
         title: `#${agent.issue.number} ${agent.issue.title}`,
-        meta: `${agent.name} · ${agent.status === 'waiting' ? '✋ needs approval' : agent.status}${multiRepo ? ` · ${shortRepo(agent.repo)}` : ''}`,
+        meta: `${agent.name} · ${agent.status === 'waiting' ? agent.handover ? '☁ needs a cloud session' : '✋ needs approval' : agent.status}${multiRepo ? ` · ${shortRepo(agent.repo)}` : ''}`,
         dot: UNIFORM[agent.avatar.division],
       })),
     ];

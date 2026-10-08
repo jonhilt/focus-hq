@@ -102,7 +102,12 @@ export class Store {
     }
     for (const closed of raw.closedPrs ?? []) this.closedPrs.set(prKey(closed.repo, closed.issue), closed);
     for (const agent of raw.agents ?? []) {
-      if (ACTIVE_STATUSES.includes(agent.status) || agent.status === 'queued') {
+      if (agent.handover) {
+        // still waiting for the captain to start their cloud session; a terminal opened before isn't watched any more
+        agent.status = 'waiting';
+        agent.activity = 'Waiting for a cloud session';
+        agent.handover.terminalAt = undefined;
+      } else if (ACTIVE_STATUSES.includes(agent.status) || agent.status === 'queued') {
         agent.status = 'stopped';
         agent.activity = 'Interrupted when Focus shut down. Send a message to pick it back up.';
         agent.permission = undefined;

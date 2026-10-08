@@ -3,13 +3,15 @@ import { join } from 'node:path';
 import { query, type CanUseTool, type Options, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { cloudSessionUrl } from '../../shared/cloud';
 import type { TermKind, TermLine } from '../../shared/types';
+import { paths } from '../config';
 import { errorMessage, sleep, truncate } from '../util';
 import { BrowserPool, browserMcpServer } from './browserTool';
 import { CLOUD_UNAVAILABLE, cloudRefused } from './cloud';
 import { officeMcpServer } from './officeTool';
 import { appUrl, renderText, renderToolResult, renderToolUse, screenshotFrame, type ToolCall } from './render';
 import { TASK_TOOLS } from './tasks';
-import { type AgentRunner, type AgentSession, type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN } from './types';
+import { bundledClaude, openTerminal, readTerminal } from './terminal';
+import { type AgentRunner, type AgentSession, type CloudTerminal, type CloudTerminalRequest, type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN } from './types';
 
 /** Feeds user messages into a streaming-input query; lets the manager talk to a running agent. */
 class InputQueue implements AsyncIterable<SDKUserMessage> {
@@ -113,6 +115,17 @@ async function reportContext(q: Query, hooks: RunHooks): Promise<void> {
  */
 export class ClaudeRunner implements AgentRunner {
   constructor(private readonly browsers: BrowserPool) {}
+
+  /**
+   * A terminal running `claude --cloud`: Claude Code starts a new cloud session only from a terminal. On macOS and
+   * Linux `script` records what it shows, where the session's id turns up; on Windows the captain pastes the link.
+   */
+  async cloudTerminal(req: CloudTerminalRequest): Promise<CloudTerminal> {
+    const dir = join(paths.cloudTerminals, req.agentId);
+    const log = process.platform === 'win32' ? undefined : join(dir, 'terminal.log');
+    await openTerminal(dir, { cwd: req.cwd, claude: bundledClaude(), description: req.description, agentName: req.agentName, log });
+    return { read: () => (log ? readTerminal(log) : Promise.resolve(undefined)) };
+  }
 
   start(req: RunRequest, hooks: RunHooks): AgentSession {
     const input = new InputQueue();

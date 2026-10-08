@@ -98,6 +98,22 @@ export interface AgentSession {
 
 export interface AgentRunner {
   start(req: RunRequest, hooks: RunHooks): AgentSession;
+  /** Opens a terminal on the captain's screen, in `cwd`, that starts a cloud session. Missing where there's no terminal to open. */
+  cloudTerminal?(req: CloudTerminalRequest): Promise<CloudTerminal>;
+}
+
+export interface CloudTerminalRequest {
+  agentId: string;
+  agentName: string;
+  cwd: string;
+  /** The new session's first message: what it's for, while the office gets ready to send the work. */
+  description: string;
+}
+
+/** A terminal the office opened to start a cloud session. */
+export interface CloudTerminal {
+  /** What it has shown so far ('' until anything), where the session's id turns up; undefined when the office can't see it. */
+  read(): Promise<string | undefined>;
 }
 
 /** How a branch in a checkout stands with origin: whether origin has it, and how many commits it hasn't got. */

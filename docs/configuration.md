@@ -8,6 +8,7 @@
 | `FOCUS_BOARD_REFRESH_MS` | `60000` | how often boards re-read issues and PRs |
 | `FOCUS_BROWSER_PATH` | | Chromium/Chrome binary for agent browser testing |
 | `FOCUS_USE_API_KEY=1` | | let agents use `ANTHROPIC_API_KEY` instead of your Claude login |
+| `FOCUS_TERMINAL` | | the command that opens a terminal running a script, e.g. `kitty -e`, for starting [cloud sessions](cloud-agents.md); tried before the platform's own |
 | `FOCUS_DEMO_SPEED` | `1` | speed up the pretend agents in demo mode |
 | `FOCUS_AUTO_UPDATE=0` | | turn off auto update |
 | `FOCUS_UPDATE_CHECK_MS` | `300000` | how often auto update checks for new commits |

@@ -9,7 +9,7 @@ import type { NumberOneOfficer, NumberOneReply, NumberOneTurn } from './numberOn
 import type { Drafter, DraftRequest, DraftResult } from './planner';
 import { renderText, renderToolUse } from './render';
 import type { TriageDecision, Triager, TriageRequest } from './triage';
-import { type AgentRunner, type AgentSession, type RunHooks, type RunOutcome, type RunRequest, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
+import { type AgentRunner, type AgentSession, type CloudTerminal, type CloudTerminalRequest, type RunHooks, type RunOutcome, type RunRequest, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
 
 const FILES: Record<string, string[]> = {
   web: ['src/App.tsx', 'src/components/Header.tsx', 'src/components/CartBadge.tsx', 'src/pages/Product.tsx', 'src/store/cart.ts', 'src/styles/theme.css'],
@@ -42,6 +42,15 @@ export class DemoRunner implements AgentRunner {
   private context = new Map<string, number>();
   /** Each lead's repos and goal, by session: a resumed turn doesn't hear them again. */
   private leads = new Map<string, { repos: { folder: string; repo: string }[]; goal: string }>();
+
+  /** A pretend terminal: the cloud session's link shows up in it after a few seconds. */
+  cloudTerminal(_req: CloudTerminalRequest): Promise<CloudTerminal> {
+    const opened = Date.now();
+    const id = `session_demo${randomBytes(4).toString('hex')}`;
+    return Promise.resolve({
+      read: () => Promise.resolve(Date.now() - opened < 4000 / this.speed ? 'Starting a cloud session…' : `Starting a cloud session…\n\x1b[2m☁ https://claude.ai/code/${id}\x1b[0m`),
+    });
+  }
 
   start(req: RunRequest, given: RunHooks): AgentSession {
     // which pretend session this is, once the script says: its context fills a little more each turn

@@ -7,7 +7,7 @@ export type AgentStatus =
   | 'setting-up' // cloning the repo / creating a worktree
   | 'working' // Claude is coding
   | 'testing' // Claude is driving the browser
-  | 'waiting' // hand raised: needs the manager to approve a tool call
+  | 'waiting' // hand raised: needs the manager to approve a tool call, or to start their cloud session (`handover`)
   | 'pushing' // pushing the branch and opening the pull request
   | 'done' // pull request is open
   | 'error'
@@ -404,6 +404,21 @@ export interface GoalArtifact {
   image?: boolean;
 }
 
+/**
+ * An agent waiting for a Claude Code cloud session to take over: the captain moved them to the cloud, or Claude Code
+ * wouldn't start the session of a cloud hire without a terminal. The captain starts one (in a terminal the office opens,
+ * or on claude.ai) and the office attaches to it, which Claude Code does without a terminal.
+ */
+export interface CloudHandover {
+  since: number;
+  /** They haven't started: the cloud session gets their task, rather than work in progress to carry on. */
+  fresh: boolean;
+  /** Their conversation on this machine, to go back to if the captain keeps them here. */
+  localSessionId?: string;
+  /** When the office opened a terminal starting the session; it watches the terminal for the session's id. */
+  terminalAt?: number;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -434,6 +449,8 @@ export interface Agent {
    * cloud session's id (session_…). Never set on the QA officer.
    */
   cloud?: boolean;
+  /** Waiting for a cloud session to take over their work, which the captain starts (`CloudHandover`). */
+  handover?: CloudHandover;
   /**
    * Which of the room's DESKS_PER_ROOM desks they sit at; QA_DESK and LEAD_DESK for QA and leads. An agent saved when
    * rooms had more desks can be off the floor (a desk number past them) until they next start (`offTheFloor`).
