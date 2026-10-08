@@ -1,10 +1,7 @@
-import fsp from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import type { Browser, BrowserContext, LaunchOptions, Page } from 'playwright';
 import { z } from 'zod';
-import { ARTIFACT_SIZE, VIDEO_SIZE } from '../../shared/artifacts';
+import { ARTIFACT_SIZE } from '../../shared/artifacts';
 import type { BrowserFrame } from '../../shared/types';
 import { errorMessage, truncate } from '../util';
 import type { RunHooks } from './types';
@@ -96,40 +93,6 @@ export class BrowserPool {
       return { image: await page.screenshot({ type: 'jpeg', quality: 85 }), errors };
     } finally {
       await context.close().catch(() => undefined);
-    }
-  }
-
-  /**
-   * A video of an explainer playing once from the top (the player's `kitPlay`), as WebM at `VIDEO_SIZE`, for a room's
-   * screen to loop. Recorded in real time, so it takes as long as the explainer. Playwright's video starts with the
-   * page, before it has loaded: `start` says where in it playback begins.
-   */
-  async record(html: string, seconds: number): Promise<{ video: Buffer; start: number }> {
-    const browser = await this.shared();
-    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'focus-explainer-'));
-    const context = await browser.newContext({
-      viewport: { width: ARTIFACT_SIZE.w, height: ARTIFACT_SIZE.h },
-      deviceScaleFactor: 1,
-      recordVideo: { dir, size: VIDEO_SIZE },
-    });
-    try {
-      const page = await context.newPage();
-      const opened = Date.now();
-      await page.setContent(html, { waitUntil: 'networkidle', timeout: 15_000 }).catch(() => undefined);
-      await page.waitForTimeout(300);
-      const start = (Date.now() - opened) / 1000;
-      await page.evaluate('window.kitPlay()');
-      await page.waitForFunction('window.kitDone === true', undefined, { timeout: (seconds + 10) * 1000, polling: 250 });
-      // a moment on the last frame, so the loop doesn't cut it off
-      await page.waitForTimeout(500);
-      const video = page.video();
-      await context.close();
-      const file = await video?.path();
-      if (!file) throw new Error('Playwright recorded no video');
-      return { video: await fsp.readFile(file), start };
-    } finally {
-      await context.close().catch(() => undefined);
-      await fsp.rm(dir, { recursive: true, force: true }).catch(() => undefined);
     }
   }
 

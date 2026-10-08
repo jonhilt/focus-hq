@@ -17,7 +17,7 @@ import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
 import { afterCloudRun, attachAgain, cantMoveToCloud, carryOnInNewSession, fallBackToLocal, terminalDescription } from './cloud';
 import { conflictsAgentModel } from './conflicts';
-import { afterLanding, afterVerdict, answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, behindNote, closeCheck, conflictsResolvedNote, fileGoal, leftLog, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, everyPr, HELPER_LINGER_MS, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pageErrorsNote, withVideo, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sessionGone, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded, snapshotMessage, type FreshBranch, freshBranchNote, needsFreshBranch, repoBranch } from './lead';
+import { afterLanding, afterVerdict, answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, behindNote, closeCheck, conflictsResolvedNote, fileGoal, leftLog, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, everyPr, HELPER_LINGER_MS, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pageErrorsNote, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sessionGone, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded, snapshotMessage, type FreshBranch, freshBranchNote, needsFreshBranch, repoBranch } from './lead';
 import { explainerPage, type ExplainerInput } from './explainer';
 import { repoFolders } from './planner';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
@@ -942,8 +942,6 @@ export class AgentManager {
       const checked = showArtifact(agent.lead.artifacts ?? [], input, Date.now());
       if ('error' in checked) return yield* new Refused({ message: checked.error });
       this.store.saveArtifact(agent.id, `${input.id}.html`, Buffer.from(input.html));
-      // an explainer's video belongs to what was shown before under this id
-      this.store.deleteArtifact(agent.id, `${input.id}.webm`);
       const picture = yield* (yield* Renderer).render(input.html).pipe(
         Effect.map(({ image, errors }) => ({ bytes: image, errors })),
         Effect.catch((err) => Effect.succeed({ failed: err.message })),
@@ -968,26 +966,7 @@ export class AgentManager {
       if ('error' in built) return yield* new Refused({ message: built.error });
       const shown = yield* this.showArtifact(agent, built);
       const seconds = input.beats.reduce((sum, b) => sum + b.seconds, 0);
-      const at = agent.lead?.artifacts?.find((a) => a.id === built.id)?.at;
-      if (at !== undefined) this.background(this.recordExplainer(agent, built, seconds, at));
-      return `${shown} It's an explainer of ${input.beats.length} beats, ${Math.round(seconds)} seconds in all: the screen plays it once the office has recorded it, in about that long.`;
-    });
-  }
-
-  /**
-   * Records an explainer playing once, for the room's screen to loop, and puts it on the artifact it was shown as. A
-   * recording that fails leaves the screen with its picture; one that finishes after the lead showed something else under
-   * that id, or the goal closed, is dropped.
-   */
-  private recordExplainer(agent: Agent, page: ArtifactInput, seconds: number, at: number): Effect.Effect<void, never, Renderer> {
-    return Effect.gen({ self: this }, function* () {
-      const recording = yield* (yield* Renderer).record(page.html, seconds).pipe(Effect.option);
-      if (Option.isNone(recording)) return;
-      const work = agent.lead;
-      const next = work && withVideo(work.artifacts ?? [], page.id, at, { start: recording.value.start, duration: seconds });
-      if (!work || !next) return;
-      this.store.saveArtifact(agent.id, `${page.id}.webm`, recording.value.video);
-      this.update(agent, { lead: { ...work, artifacts: next } });
+      return `${shown} It's an explainer of ${input.beats.length} beats, ${Math.round(seconds)} seconds in all.`;
     });
   }
 

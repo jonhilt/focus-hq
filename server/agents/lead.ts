@@ -285,14 +285,7 @@ export function pageErrorsNote(errors: readonly string[]): string {
   return ` But the page reported ${distinct.length === 1 ? 'an error' : 'errors'} as it loaded${more}: ${shown.map((e) => `“${e}”`).join('; ')}. Fix it and show it again under the same id.`;
 }
 
-/**
- * The goal's artifacts with an explainer's video on the one it was recorded from: the same id, shown at the same time.
- * Undefined when that one's gone or been shown again since, so the video is stale and goes unused.
- */
-export function withVideo(artifacts: readonly GoalArtifact[], id: string, at: number, video: { start: number; duration: number }): GoalArtifact[] | undefined {
-  if (!artifacts.some((a) => a.id === id && a.at === at)) return undefined;
-  return artifacts.map((a) => (a.id === id ? { ...a, video } : a));
-}
+
 
 export const QUESTION_LIMITS = { question: 300, context: 600, label: 60, detail: 500, minOptions: 2, maxOptions: 4, kept: 12, note: 1000 } as const;
 

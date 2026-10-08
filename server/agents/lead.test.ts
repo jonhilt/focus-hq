@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadWork } from '../../shared/types';
-import { leftLog, afterLanding, answerQuestion, pageErrorsNote, withVideo, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
+import { leftLog, afterLanding, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -555,20 +555,6 @@ describe('a lead’s first message in a new conversation', () => {
     expect(freshSessionPrompt(goal, 'focus/saved-1-ab', [], true)).toBe(
       "You're carrying on with this goal in a new conversation: the one before couldn't be picked back up.\n\nLook over the repos, then tell the captain where you think the goal stands and what you'd do next.",
     );
-  });
-});
-
-describe('withVideo', () => {
-  const shown = [{ id: 'flow', title: 'Flow', at: 1 }, { id: 'ledger', title: 'Ledger', at: 2, image: true }];
-  const video = { start: 0.7, duration: 12 };
-
-  it('puts the video on the artifact it was recorded from', () => {
-    expect(withVideo(shown, 'ledger', 2, video)).toEqual([shown[0], { ...shown[1], video }]);
-  });
-
-  it('has nothing to put it on once that one has gone or been shown again', () => {
-    expect(withVideo(shown, 'ledger', 1, video)).toBeUndefined();
-    expect(withVideo(shown, 'gone', 2, video)).toBeUndefined();
   });
 });
 
