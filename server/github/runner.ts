@@ -24,6 +24,13 @@ export class GhCommandFailed extends Data.TaggedError('GhCommandFailed')<{ args:
   }
 }
 
+/** GitHub answered with a 5xx: its own trouble, usually gone a few seconds later, so worth another try. */
+export class GhServerError extends Data.TaggedError('GhServerError')<{ args: readonly string[]; stderr: string }> {
+  override get message() {
+    return `${describe(this.args)} failed: GitHub had a problem of its own (${serverStatus(this.stderr) ?? '5xx'}): ${lastLines(this.stderr)}`;
+  }
+}
+
 export class GhTimedOut extends Data.TaggedError('GhTimedOut')<{ args: readonly string[]; timeoutMs: number }> {
   override get message() {
     return `${describe(this.args)} timed out after ${this.timeoutMs / 1000}s`;
@@ -37,12 +44,24 @@ export class GhBadOutput extends Data.TaggedError('GhBadOutput')<{ args: readonl
   }
 }
 
-export type GhCommandError = GhNotInstalled | GhNotAuthenticated | GhCommandFailed | GhTimedOut;
+export type GhCommandError = GhNotInstalled | GhNotAuthenticated | GhCommandFailed | GhServerError | GhTimedOut;
+
+/**
+ * The 5xx status GitHub answered with, as gh (`HTTP 502: Bad Gateway`) or git over HTTPS (`The requested URL returned
+ * error: 500`, `remote: Internal Server Error`) reports it, or undefined when the output shows no server error.
+ */
+export function serverStatus(output: string): string | undefined {
+  const status = /\bHTTP:? (5\d\d)\b|returned error: (5\d\d)\b|\b(5\d\d) (?:Internal Server Error|Bad Gateway|Service Unavailable|Gateway Time-?out)\b/i.exec(output);
+  if (status) return `HTTP ${status[1] ?? status[2] ?? status[3]}`;
+  if (/remote: Internal Server Error/i.test(output)) return 'HTTP 500';
+  return undefined;
+}
 
 export function classify(args: readonly string[], err: ExecFileException, stderr: string): GhCommandError {
   if (err.code === 'ENOENT') return new GhNotInstalled();
   // gh exits with 4 when a command needs a login; older versions only say so on stderr
   if (err.code === 4 || /gh auth login/.test(stderr)) return new GhNotAuthenticated({ stderr });
+  if (serverStatus(stderr)) return new GhServerError({ args, stderr });
   // Node's own message (e.g. output too big) when gh printed nothing
   return new GhCommandFailed({ args, stderr: stderr || err.message, exitCode: typeof err.code === 'number' ? err.code : null });
 }

@@ -1,15 +1,16 @@
-import { Effect, Layer } from 'effect';
+import { Effect, Layer, Schedule } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { randomAvatar } from '../../shared/crew';
 import * as demoGitHub from '../github/demo';
 import { prKey } from '../../shared/qa';
 import { demoLayer } from '../github/demo';
+import { GhServerError } from '../github/runner';
 import { GitHub } from '../github/service';
 import { Hub } from '../hub';
 import { Store } from '../store';
 import { demoWorkspace } from './demoRunner';
 import { AgentManager } from './manager';
-import { Renderer, Sessions, Triage, Workspace } from './services';
+import { Renderer, Sessions, ShipRetry, Triage, Workspace } from './services';
 import type { PullRequest, QaReport } from '../../shared/types';
 import type { AgentRunner, AgentSession, RunHooks, RunOutcome, RunRequest, WorkspaceOps } from './types';
 
@@ -34,13 +35,15 @@ class FakeClaude implements AgentRunner {
   }
 }
 
-function office(workspace: WorkspaceOps = demoWorkspace) {
+function office(workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<GitHub> = demoLayer) {
   const store = new Store(false);
   const project = store.addProject('Shop');
   project.repos = ['demo/webshop-frontend', 'demo/webshop-api'];
   const claude = new FakeClaude();
   const services = Layer.mergeAll(
-    demoLayer,
+    github,
+    // retries after a GitHub 5xx come straight away
+    Layer.succeed(ShipRetry, Schedule.spaced(0)),
     Workspace.fromOps(workspace),
     Sessions.fromRunner(claude),
     Triage.fromTriager({ triage: () => Promise.reject(new Error('no officer here')) }),
@@ -337,6 +340,60 @@ describe('AgentManager', () => {
     store.agent(lead.id).lead = { ...work, prs: work.prs.map((p) => ({ ...p, sha: 'merge-sha' })) };
     behind = true;
     await expect(ship()).rejects.toThrow(/^Nothing shipped: GitHub's `[^`]+` has commits \.\/webshop-/);
+  });
+
+  it('ships through GitHub 5xx answers, trying the push and the PR again', async () => {
+    let pushFailures = 2;
+    let prFailures = 2;
+    // the demo GitHub, except that opening a PR answers 502 twice first
+    const flaky = Layer.effect(GitHub, Effect.gen(function* () {
+      const gh = yield* GitHub;
+      return GitHub.of({
+        ...gh,
+        createPullRequest: (repo, pr) =>
+          Effect.suspend(() =>
+            prFailures-- > 0 ? Effect.fail(new GhServerError({ args: ['pr', 'create'], stderr: 'HTTP 502: Bad Gateway (https://api.github.com/graphql)' })) : gh.createPullRequest(repo, pr),
+          ),
+      });
+    })).pipe(Layer.provide(demoLayer));
+    const { agents, claude, store, project } = office({
+      ...demoWorkspace,
+      push: async (dir, branch) => {
+        if (pushFailures-- > 0) throw new Error("git push --force-with-lease failed: remote: Internal Server Error\nfatal: unable to access 'https://github.com/demo/webshop-frontend.git/': The requested URL returned error: 502");
+        return demoWorkspace.push(dir, branch);
+      },
+    }, flaky);
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+
+    const reply = await claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    expect(JSON.stringify(reply)).toMatch(/Opened demo\/webshop-/);
+    expect(store.agent(lead.id).lead!.prs.length).toBeGreaterThan(0);
+    const said = store.recentLines(lead.id).map((l) => l.text);
+    expect(said).toContain('✻ GitHub answered the push in demo/webshop-frontend with HTTP 502: trying again (1 of 3)');
+    expect(said).toContain('✻ GitHub answered opening the pull request with HTTP 502: trying again (2 of 3)');
+  });
+
+  it('gives up shipping after GitHub answers 5xx four times, and never retries other failures', async () => {
+    let pushes = 0;
+    let failure = 'The requested URL returned error: 503';
+    const { agents, claude, project } = office({
+      ...demoWorkspace,
+      push: async () => {
+        pushes++;
+        throw new Error(failure);
+      },
+    });
+    agents.startGoal(project.id, 'Saved items');
+    await until(() => claude.turns.length === 1);
+    const ship = () => claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    await expect(ship()).rejects.toThrow('The requested URL returned error: 503');
+    expect(pushes).toBe(4);
+
+    pushes = 0;
+    failure = '! [rejected] (stale info)';
+    await expect(ship()).rejects.toThrow('stale info');
+    expect(pushes).toBe(1);
   });
 
   it('carries the goal into the next slice, as the captain put it, once the last one has landed', async () => {

@@ -1,4 +1,5 @@
-import { Context, Data, Effect, Layer, type Scope } from 'effect';
+import { Context, Data, Effect, Layer, Schedule, type Scope } from 'effect';
+import { GhServerError, serverStatus } from '../github/runner';
 import { errorMessage } from '../util';
 import type { TriageDecision, Triager, TriageRequest } from './triage';
 import type { SinceVerdict } from './retest';
@@ -8,8 +9,8 @@ import type { AgentRunner, AgentSession, BaseMerge, BranchState, ChecksRun, RunH
 // sessions, and the operations officer's triage. Each wraps the Promise-based implementation it always had (the live
 // one or the demo's), and classifies its failures once, here.
 
-/** A git operation on an agent's checkout failed. Says what git said. */
-export class GitFailed extends Data.TaggedError('GitFailed')<{ what: string; reason: string }> {
+/** A git operation on an agent's checkout failed. Says what git said, and the 5xx GitHub answered with if that's why. */
+export class GitFailed extends Data.TaggedError('GitFailed')<{ what: string; reason: string; serverError?: string }> {
   override get message() {
     return this.reason;
   }
@@ -50,7 +51,7 @@ export class Workspace extends Context.Service<Workspace, {
   /** The workspace on its Promise-based operations: the live git ones, or the demo's pretend ones. */
   static fromOps(ops: WorkspaceOps): Layer.Layer<Workspace> {
     const git = <A>(what: string, run: () => Promise<A>): Effect.Effect<A, GitFailed> =>
-      Effect.tryPromise({ try: run, catch: (err) => new GitFailed({ what, reason: errorMessage(err) }) });
+      Effect.tryPromise({ try: run, catch: (err) => new GitFailed({ what, reason: errorMessage(err), serverError: serverStatus(errorMessage(err)) }) });
     return Layer.succeed(Workspace, Workspace.of({
       create: (repo, agentId, branch, startPoint, inOffice, local) => git(`check out ${branch}`, () => ops.create(repo, agentId, branch, startPoint, inOffice, local)),
       remove: (repo, agentId) => Effect.ignore(git('remove a checkout', () => ops.remove(repo, agentId))),
@@ -74,6 +75,43 @@ export class Workspace extends Context.Service<Workspace, {
     }));
   }
 }
+
+/** How many more tries shipping gets when GitHub answers with a 5xx, on `ShipRetry`'s schedule. */
+export const SHIP_RETRIES = 3;
+
+/** The wait before each retry after a GitHub 5xx: 4, 8 then 16 seconds, about 30 in all. Tests set it to none. */
+export const ShipRetry = Context.Reference<Schedule.Schedule<unknown>>('focus/agents/ShipRetry', {
+  defaultValue: () => Schedule.exponential('4 seconds'),
+});
+
+/** The 5xx GitHub answered with, when that's why `err` failed: a push's `GitFailed` or a gh `GhServerError`. */
+export function serverError(err: unknown): string | undefined {
+  if (err instanceof GitFailed) return err.serverError;
+  if (err instanceof GhServerError) return serverStatus(err.stderr) ?? 'HTTP 5xx';
+  return undefined;
+}
+
+/**
+ * Runs `effect` again, up to `SHIP_RETRIES` more times, while it fails because GitHub answered with a 5xx, telling
+ * `retrying` each time. Any other failure, or the last 5xx, fails straight through.
+ */
+export const retryServerErrors = <A, E, R>(effect: Effect.Effect<A, E, R>, retrying: (status: string, attempt: number) => void): Effect.Effect<A, E, R> =>
+  Effect.gen(function* () {
+    const schedule = yield* ShipRetry;
+    let retries = 0;
+    return yield* effect.pipe(
+      Effect.retry({
+        schedule,
+        while: (err) =>
+          Effect.sync(() => {
+            const status = serverError(err);
+            if (!status || retries >= SHIP_RETRIES) return false;
+            retrying(status, ++retries);
+            return true;
+          }),
+      }),
+    );
+  });
 
 /** Claude Code sessions, one turn at a time. */
 export class Sessions extends Context.Service<Sessions, {

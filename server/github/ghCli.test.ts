@@ -2,7 +2,7 @@ import { Effect, Layer } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { demoLayer } from './demo';
 import { ghCliService } from './ghCli';
-import { classify, GhCommandFailed, GhNotInstalled, GhRunner, type GhCommandError } from './runner';
+import { classify, GhCommandFailed, serverStatus, GhNotInstalled, GhRunner, type GhCommandError } from './runner';
 import { GitHub, toProvider } from './service';
 
 /** The gh layer over a fake runner that answers each command from `reply`, and remembers what it was asked. */
@@ -131,6 +131,16 @@ describe('classify', () => {
     expect(classify(['api', 'user'], err('ENOENT'), '')._tag).toBe('GhNotInstalled');
     expect(classify(['api', 'user'], err(4), 'To get started with GitHub CLI, please run:  gh auth login')._tag).toBe('GhNotAuthenticated');
     expect(classify(['pr', 'merge', '3'], err(1), 'Pull request is not mergeable')).toMatchObject({ _tag: 'GhCommandFailed', exitCode: 1 });
+  });
+
+  it('tells GitHub’s own 5xx trouble apart, as gh and git report it', () => {
+    expect(classify(['pr', 'create'], err(1), 'HTTP 502: Bad Gateway (https://api.github.com/graphql)')).toMatchObject({ _tag: 'GhServerError' });
+    expect(classify(['pr', 'create'], err(1), 'HTTP 422: Validation Failed')._tag).toBe('GhCommandFailed');
+    expect(serverStatus("fatal: unable to access 'https://github.com/o/r.git/': The requested URL returned error: 503")).toBe('HTTP 503');
+    expect(serverStatus('remote: Internal Server Error\nfatal: the remote end hung up unexpectedly')).toBe('HTTP 500');
+    expect(serverStatus('error: RPC failed; HTTP 504 curl 22')).toBe('HTTP 504');
+    expect(serverStatus(' ! [rejected]        HEAD -> focus/1 (stale info)')).toBeUndefined();
+    expect(serverStatus('error: 5023 objects')).toBeUndefined();
   });
 });
 

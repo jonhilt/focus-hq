@@ -21,7 +21,7 @@ import { qaNextStep } from './qaLoop';
 import { carriedComment, retestStep } from './retest';
 import { offTheFloor, pickDesk } from './desks';
 import { deskless, whoStarts } from './schedule';
-import { type GitFailed, Renderer, Sessions, Triage, Workspace } from './services';
+import { type GitFailed, Renderer, retryServerErrors, SHIP_RETRIES, Sessions, Triage, Workspace } from './services';
 import { applyTaskTool } from './tasks';
 import { type AgentSession, type BaseMerge, type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN } from './types';
 import { triageWorkspaceId } from './worktrees';
@@ -695,20 +695,20 @@ export class AgentManager {
         }
         this.update(agent, { status: 'pushing', activity: `Pushing ${ahead} commit${ahead === 1 ? '' : 's'}` });
         this.print(agent, [{ kind: 'system', text: `✻ Pushing ${agent.branch}` }]);
-        yield* workspace.push(dir, agent.branch);
+        yield* this.retrying(agent, 'the push', workspace.push(dir, agent.branch));
       }
 
-      let pr = agent.pr ?? (yield* github.findPullRequest(agent.repo, agent.branch));
+      let pr = agent.pr ?? (yield* this.retrying(agent, 'looking for the pull request', github.findPullRequest(agent.repo, agent.branch)));
       if (pr) {
         this.hub.toast('success', `${agent.name} updated PR #${pr.number}`, agent.id);
       } else {
         this.update(agent, { activity: 'Opening the pull request' });
-        pr = yield* github.createPullRequest(agent.repo, {
+        pr = yield* this.retrying(agent, 'opening the pull request', github.createPullRequest(agent.repo, {
           head: agent.branch,
           base: agent.baseBranch,
           title: agent.issue.title,
           body: pullRequestBody(agent, summary, this.store.settings.attribution),
-        });
+        }));
         this.hub.toast('success', `🎉 ${agent.name} opened PR #${pr.number}: ${agent.issue.title}`, agent.id);
       }
       this.print(agent, [{ kind: 'success', text: `✔ Pull request ready: ${pr.url}` }]);
@@ -1124,8 +1124,8 @@ export class AgentManager {
       for (const s of states.filter((x) => plan.repos.includes(x.repo))) {
         this.update(agent, { status: 'pushing', activity: `Shipping ${s.repo}` });
         this.print(agent, [{ kind: 'system', text: `✻ Pushing ${agent.branch} in ${s.repo}` }]);
-        yield* workspace.push(s.dir, agent.branch);
-        const found = openPr(work, s.repo) ?? (yield* github.findPullRequest(s.repo, agent.branch));
+        yield* this.retrying(agent, `the push in ${s.repo}`, workspace.push(s.dir, agent.branch));
+        const found = openPr(work, s.repo) ?? (yield* this.retrying(agent, 'looking for the pull request', github.findPullRequest(s.repo, agent.branch)));
         let pr: { number: number; url: string };
         if (found) {
           pr = found;
@@ -1133,7 +1133,7 @@ export class AgentManager {
         } else {
           const alongside = plan.repos.filter((r) => r !== s.repo);
           const body = leadPrBody(input.summary, agent, alongside, this.store.settings.attribution);
-          pr = yield* github.createPullRequest(s.repo, { head: agent.branch, base: s.baseBranch, title, body });
+          pr = yield* this.retrying(agent, 'opening the pull request', github.createPullRequest(s.repo, { head: agent.branch, base: s.baseBranch, title, body }));
           lines.push(`Opened ${s.repo}#${pr.number}: ${pr.url}`);
           this.hub.toast('success', `🎉 ${agent.name} opened ${s.repo.split('/')[1]}#${pr.number}: ${title}`, agent.id);
         }
@@ -1152,6 +1152,13 @@ export class AgentManager {
       this.boardChanged(agent.projectId);
       return shipped(lines);
     });
+  }
+
+  /** `effect`, tried again while GitHub answers with a 5xx (pushing or opening a PR), saying so in the agent's terminal. */
+  private retrying<A, E, R>(agent: Agent, what: string, effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> {
+    return retryServerErrors(effect, (status, attempt) =>
+      this.print(agent, [{ kind: 'system', text: `✻ GitHub answered ${what} with ${status}: trying again (${attempt} of ${SHIP_RETRIES})` }]),
+    );
   }
 
   /** The lead whose open pull request this is, if any. */

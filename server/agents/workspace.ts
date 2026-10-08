@@ -305,7 +305,13 @@ export async function branchState(dir: string, branch: string, baseBranch: strin
   return { onOrigin, unpushed: Number(out.trim()) || 0 };
 }
 
+/**
+ * Force-pushes HEAD to origin's `branch`, after a fetch with `--prune`: a remote-tracking ref left behind by a branch
+ * GitHub has since deleted (a squash-merged PR's) would otherwise poison the lease, and git refuses with "stale info".
+ * (What the lease would have caught, someone else's commits on the branch, the manager checks for before pushing.)
+ */
 export async function pushBranch(dir: string, branch: string): Promise<void> {
+  await retryLockRace(() => git(dir, ['fetch', 'origin', '--prune'], 10 * 60_000), () => sleep(750));
   await git(dir, ['push', '--force-with-lease', '-u', 'origin', `HEAD:refs/heads/${branch}`], 5 * 60_000);
 }
 
