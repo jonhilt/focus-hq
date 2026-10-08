@@ -25,6 +25,7 @@ import { sound } from './sound';
 import { Deck } from './world/deck';
 import { HolodeckDeck } from './world/holodeckDeck';
 import { COMMAND_DECK, SUN_POSITION } from './world/layout';
+import { setMerging } from './world/merge';
 import { type Ship, World } from './world/office';
 import { SceneRenderer } from './world/sceneRenderer';
 import { PortalView } from './world/portal';
@@ -63,6 +64,8 @@ async function main() {
   // to compare: ?ao=0 draws without ambient occlusion
   const params = new URLSearchParams(location.search);
   const occlusion = params.get('ao') !== '0';
+  // ?merge=0 leaves the decks' meshes as Blender made them, for the gap and z-fighting scans to name
+  setMerging(params.get('merge') !== '0');
   const portalView = new PortalView(renderer, scene, occlusion);
   const view = new SceneRenderer(renderer, scene, camera, occlusion);
 

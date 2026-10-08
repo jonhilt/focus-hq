@@ -4,6 +4,7 @@ import { interactive } from './builder';
 import { type Crew, type DeckScreen, type Marker, readInteraction, readMarker, readSurface, type ScreenName, type Surface } from './deckExtras';
 import { type Box2, contains, type Seat } from './layout';
 import { flat, toon } from './materials';
+import { mergeStatic } from './merge';
 import type { Place } from './office';
 import { lcarsSign, readoutTexture, SlidingDoors, starChartTexture, touchPanelTexture } from './starship';
 import { viewportGlass } from './starfield';
@@ -150,6 +151,8 @@ export class Deck {
     }
     if (accents.length) throw new Error(`Deck extras: a deck has an accent (${accents[0].name}), which only a team station paints`);
     if (lamps.length) throw new Error(`Deck extras: a deck has a lamp (${lamps[0].name}), which only a team station lights`);
+    // hundreds of meshes in a few dozen materials: a draw call each, until they're merged (the World draws on screens)
+    mergeStatic(scene, screens.map((s) => s.mesh));
   }
 
   /** Where `crew` sits on this deck: asking a deck that hasn't a seat for them is a bug, so it fails loudly. */

@@ -9,6 +9,7 @@ import { type GoalRoomTone, goalRoomState, roster } from './goalRoom';
 import { GoalBoard, GoalSign, TONE } from './goalScreens';
 import { type Box2, contains, EYE_HEIGHT, ROOM_WIDTH } from './layout';
 import { toon } from './materials';
+import { mergeStatic } from './merge';
 import { type Doorway, Portal } from './portal';
 import { BIG_SCREEN, StationScreen } from './screen';
 import { HULL } from './starship';
@@ -137,7 +138,10 @@ export class TeamStation {
     const room = (this.furnished = kit.room.clone());
     room.position.copy(origin);
     this.room.add(room);
-    const roomScreens = this.dress(room, (this.roomKit = blank()));
+    const table = room.getObjectByName('briefing_table');
+    if (!table) throw new Error('The team station’s briefing room has no table');
+    // the table's used, as the door is, once the room says what for (room.ts): it stays itself
+    const roomScreens = this.dress(room, (this.roomKit = blank()), [table]);
 
     const screen = (screens: { screen: string; mesh: THREE.Mesh }[], name: string, where: string) => {
       const found = screens.find((s) => s.screen === name);
@@ -155,8 +159,6 @@ export class TeamStation {
     this.head = place.clone().applyMatrix4(room.matrixWorld);
     this.area = footprint(new THREE.Matrix4().multiplyMatrices(room.matrixWorld, area));
     this.screenCentre = new THREE.Box3().setFromObject(display).getCenter(new THREE.Vector3());
-    const table = room.getObjectByName('briefing_table');
-    if (!table) throw new Error('The team station’s briefing room has no table');
     this.furniture = [door, table];
 
     const seat = (crew: Crew): StationSeat => {
@@ -183,8 +185,11 @@ export class TeamStation {
     return { interaction: { kind: 'agent', id }, label: () => `Look at ${name}’s screen` };
   }
 
-  /** Reads a module's markers into `read`, paints its accents and lamps and returns its screens. */
-  private dress(module: THREE.Object3D, read: Read): { screen: string; mesh: THREE.Mesh }[] {
+  /**
+   * Reads a module's markers into `read`, paints its accents and lamps, merges the rest of it but `keep` (merge.ts)
+   * and returns its screens.
+   */
+  private dress(module: THREE.Object3D, read: Read, keep: THREE.Object3D[] = []): { screen: string; mesh: THREE.Mesh }[] {
     module.updateMatrixWorld(true);
     const { screens, accents, lamps } = dress(module, (o, marker) => {
       switch (marker.kind) {
@@ -213,6 +218,7 @@ export class TeamStation {
     });
     for (const mesh of accents) mesh.material = toon(this.accent);
     for (const mesh of lamps) mesh.material = this.lamp;
+    mergeStatic(module, [...screens.map((s) => s.mesh), ...accents, ...lamps, ...keep]);
     return screens;
   }
 
