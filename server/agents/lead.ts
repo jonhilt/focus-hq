@@ -288,11 +288,14 @@ export const snapshotMessage = (title: string) => `WIP: uncommitted work when th
 /** How many closed goals a room keeps in its log. */
 export const GOAL_LOG = 30;
 
-/** The goal for the room's log, as it closes: its slices are the ones that shipped. */
+/** Every pull request of the goal so far: the landed slices', then this slice's, each marked with the slice it shipped in. */
+export const everyPr = (work: Pick<LeadWork, 'slice' | 'prs' | 'landed'>): LeadPr[] => [...(work.landed ?? []), ...work.prs.map((p) => ({ ...p, slice: p.slice ?? work.slice }))];
+
+/** The goal for the room's log, as it closes: its slices are the ones that shipped, and it keeps every one's pull requests. */
 export function goalRecord(agent: Agent, now: number): GoalRecord {
   const work = agent.lead!;
   return {
-    id: agent.id, title: work.title, note: work.note, slices: work.prs.length ? work.slice : work.slice - 1, prs: work.prs, leadName: agent.name, sessionId: agent.sessionId,
+    id: agent.id, title: work.title, note: work.note, slices: work.prs.length ? work.slice : work.slice - 1, prs: everyPr(work), slice: work.slice, leadName: agent.name, sessionId: agent.sessionId,
     brief: work.brief, branch: agent.branch, repos: work.repos, openedAt: agent.startedAt, closedAt: now,
   };
 }
@@ -305,9 +308,13 @@ export const reopenable = (goal: GoalRecord): boolean => !!goal.branch && !!goal
  * and its repos (so closing it again before they're checked out still files a goal that can be reopened).
  */
 export function reopenedWork(goal: GoalRecord, station: number): LeadWork {
+  // goals closed before they kept their slice kept only that slice's pull requests
+  const slice = goal.slice ?? (goal.prs.length ? goal.slices : goal.slices + 1);
+  const current = goal.slice === undefined ? goal.prs : goal.prs.filter((p) => p.slice === slice);
+  const landed = goal.slice === undefined ? [] : goal.prs.filter((p) => p.slice !== slice);
   return {
-    station, title: goal.title, brief: goal.brief, note: goal.note, repos: goal.repos ?? [], slice: goal.prs.length ? goal.slices : goal.slices + 1, prs: goal.prs,
-    reopening: { closedAt: goal.closedAt },
+    station, title: goal.title, brief: goal.brief, note: goal.note, repos: goal.repos ?? [], slice, prs: current,
+    ...(landed.length && { landed }), reopening: { closedAt: goal.closedAt },
   };
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadWork } from '../../shared/types';
-import { afterLanding, ARTIFACT_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
+import { afterLanding, ARTIFACT_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -293,7 +293,7 @@ describe('closing a goal', () => {
     const lead = { id: 'lead_p1_ab', name: 'Lt. Okafor', sessionId: 's1', branch: 'focus/saved-items-2-ab12', startedAt: 10, lead: work } as Agent;
     const record = goalRecord(lead, 99);
     expect(record).toEqual({
-      id: 'lead_p1_ab', title: 'Saved items', note: undefined, slices: 2, prs: work.prs, leadName: 'Lt. Okafor', sessionId: 's1',
+      id: 'lead_p1_ab', title: 'Saved items', note: undefined, slices: 2, prs: work.prs.map((p) => ({ ...p, slice: 2 })), slice: 2, leadName: 'Lt. Okafor', sessionId: 's1',
       brief: undefined, branch: 'focus/saved-items-2-ab12', repos: work.repos, openedAt: 10, closedAt: 99,
     });
     // closed before the new slice shipped anything: that one doesn't count
@@ -303,6 +303,21 @@ describe('closing a goal', () => {
     expect(log).toHaveLength(GOAL_LOG);
     expect(log[0]).toBe(record);
     expect(log.at(-1)?.id).toBe(`g${GOAL_LOG - 2}`);
+  });
+
+  it('keeps the pull requests of every slice it shipped, not just the last', () => {
+    const first = { repo: 'acme/web', number: 3, url: 'u3', outcome: 'merged' as const };
+    const second = { repo: 'acme/api', number: 5, url: 'u5', outcome: 'merged' as const };
+    // slice 1 lands, and the next slice starts with no pull requests of its own
+    const slice1: LeadWork = { ...work, slice: 1, prs: [first] };
+    const slice2: LeadWork = { ...slice1, slice: 2, prs: [second], landed: everyPr(slice1) };
+    const lead = { id: 'lead_p1_ab', name: 'Lt. Okafor', startedAt: 10, lead: slice2 } as Agent;
+    const record = goalRecord(lead, 99);
+    expect(record.prs).toEqual([{ ...first, slice: 1 }, { ...second, slice: 2 }]);
+    expect(record.slices).toBe(2);
+    // slice 2 lands too, and the goal closes on slice 3 before it ships anything
+    const slice3: LeadWork = { ...slice2, slice: 3, prs: [], landed: everyPr(slice2) };
+    expect(goalRecord({ ...lead, lead: slice3 }, 99)).toMatchObject({ slices: 2, slice: 3, prs: [{ ...first, slice: 1 }, { ...second, slice: 2 }] });
   });
 });
 
@@ -315,11 +330,16 @@ describe('reopening a closed goal', () => {
     expect(reopenable(record)).toBe(true);
     expect(reopenable({ ...record, branch: undefined, repos: undefined })).toBe(false);
     expect(reopenedWork(record, 3)).toEqual({
-      station: 3, title: 'Saved items', brief: 'Saved items\nAcross devices', note: undefined, repos: work.repos, slice: 2, prs: work.prs, reopening: { closedAt },
+      station: 3, title: 'Saved items', brief: 'Saved items\nAcross devices', note: undefined, repos: work.repos, slice: 2, prs: work.prs.map((p) => ({ ...p, slice: 2 })), reopening: { closedAt },
     });
-    // closed before the new slice shipped anything: it's that slice again
-    const unshipped = goalRecord({ ...lead, lead: { ...work, slice: 3, prs: [] } }, closedAt);
-    expect(reopenedWork(unshipped, 0)).toMatchObject({ slice: 3, prs: [] });
+    // closed before the new slice shipped anything: it's that slice again, with the earlier slices' pull requests kept
+    const unshipped = goalRecord({ ...lead, lead: { ...work, slice: 3, prs: [], landed: everyPr(work) } }, closedAt);
+    expect(reopenedWork(unshipped, 0)).toMatchObject({ slice: 3, prs: [], landed: everyPr(work) });
+    expect(goalRecord({ ...lead, lead: reopenedWork(unshipped, 0) }, closedAt).prs).toEqual(unshipped.prs);
+    // closed before goals kept their slice: what it kept is the last slice's
+    const old = { ...record, slice: undefined, prs: work.prs };
+    expect(reopenedWork(old, 0)).toMatchObject({ slice: 2, prs: work.prs });
+    expect(reopenedWork(old, 0).landed).toBeUndefined();
   });
 
   it('tells the lead where their repos are, and where uncommitted work went', () => {

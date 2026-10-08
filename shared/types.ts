@@ -116,7 +116,10 @@ export interface GoalRecord {
   title: string;
   note?: GoalNote;
   slices: number;
+  /** Every pull request the goal opened, slice by slice, with how each ended. Goals closed before they were kept have only their last slice's. */
   prs: LeadPr[];
+  /** The slice it was on as it closed, which a reopened goal picks up. Missing on goals closed before it was kept. */
+  slice?: number;
   leadName: string;
   sessionId?: string;
   /**
@@ -292,6 +295,8 @@ export interface LeadPr {
   sha?: string;
   /** Missing while it's open. */
   outcome?: 'merged' | 'closed';
+  /** The slice it shipped in. Set once the slice is over (it lands, or the goal closes); missing on goals closed before. */
+  slice?: number;
 }
 
 /** One item of the task list an agent keeps for itself with Claude Code's task tools (TodoWrite, TaskCreate, TaskUpdate). */
@@ -344,7 +349,10 @@ export interface LeadWork {
   reopening?: { closedAt: number };
   /** Which slice this is: 1, 2, … */
   slice: number;
+  /** This slice's pull requests. */
   prs: LeadPr[];
+  /** The pull requests of the slices that landed before this one, each with its `slice`, so the closed goal keeps them all. */
+  landed?: LeadPr[];
   /** What the lead has put on the station's screen, in the order they first showed it. Cleared when the goal closes. */
   artifacts?: GoalArtifact[];
 }

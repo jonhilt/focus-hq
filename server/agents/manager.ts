@@ -12,7 +12,7 @@ import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
 import { afterCloudRun, carryOnInNewSession, fallBackToLocal } from './cloud';
-import { afterLanding, afterVerdict, type ArtifactInput, showArtifact, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, behindNote, closeCheck, conflictsResolvedNote, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sessionGone, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded, snapshotMessage } from './lead';
+import { afterLanding, afterVerdict, type ArtifactInput, showArtifact, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, behindNote, closeCheck, conflictsResolvedNote, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, everyPr, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sessionGone, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded, snapshotMessage } from './lead';
 import { repoFolders } from './planner';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
 import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
@@ -1075,7 +1075,7 @@ export class AgentManager {
       const slice = lead.slice + 1;
       yield* Effect.forEach(lead.repos, (r) => workspace.remove(r.repo, leadWorktreeId(agent.id, r.folder)), { discard: true });
       const note = lead.note && { ...lead.note, slice: [] };
-      this.update(agent, { branch: sliceBranch(lead.title, slice, newId('s').slice(-4)), lead: { ...lead, note, repos: [], slice, prs: [] } });
+      this.update(agent, { branch: sliceBranch(lead.title, slice, newId('s').slice(-4)), lead: { ...lead, note, repos: [], slice, prs: [], landed: everyPr(lead) } });
       yield* this.checkOutSlice(agent, project.repos);
       const carried = yield* Effect.forEach(unshipped.filter((r) => r.commits.length), ({ repo, folder, commits }) =>
         Effect.gen({ self: this }, function* () {
