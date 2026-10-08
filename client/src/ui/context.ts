@@ -32,6 +32,8 @@ export interface Ui {
   openComms(): void;
   /** The ready room's chat with Number One. */
   openNumberOne(): void;
+  /** The engineering station: the ledger's report card and the chief engineer's retro. */
+  openEngineering(): void;
   openManager(tab?: ManagerTab): void;
   openTeleport(): void;
   /** A team station's screen up close: what lead `leadId` has shown, and switches for what station screens show. */

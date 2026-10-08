@@ -1,4 +1,4 @@
-import type { Agent, Board, ConflictsOutcome, Effort, Issue, IssueDraft, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, RoomTheme, Settings, TermLine, VoiceStatus } from '../../../shared/types';
+import type { Agent, Board, ConflictsOutcome, Effort, Issue, IssueDraft, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, Retro, RoomTheme, Settings, TermLine, VoiceStatus } from '../../../shared/types';
 import type { KokoroVoice } from '../../../shared/voice';
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -46,6 +46,8 @@ export const api = {
   closeGoal: (id: string, force = false) => call<{ closed: true } | { warn: string[] }>('POST', `/agents/${id}/close`, { force }),
   numberOneSay: (text: string) => call<NumberOneChat>('POST', '/number-one/say', { text }),
   numberOneNew: () => call<NumberOneChat>('POST', '/number-one/new'),
+  retroStart: (days: number) => call<Retro>('POST', '/retro/start', { days }),
+  retroStop: () => call<Retro>('POST', '/retro/stop'),
   sendToQa: (projectId: string, repo: string, number: number) => call<QaReview>('POST', '/prs/qa', { projectId, repo, number }),
   resolveConflicts: (projectId: string, repo: string, number: number) =>
     call<ConflictsOutcome>('POST', '/prs/resolve-conflicts', { projectId, repo, number }),

@@ -35,6 +35,8 @@ server/
     officeTool.ts         the office's own MCP tools for an agent (the lead's ship)
     numberOne.ts          Number One's ship-wide chat: turns, prompt, reply schema and the ship_status summariser
     claudeCrew.ts         the crew's read-only Claude Code sessions (Read/Glob/Grep, web search/fetch for Number One, Number One's ship_status and open_project, structured output)
+    retro.ts              the chief engineer's retro, pure: transcript digests, the index and its frequent tool errors, prompt, schema, and the check that every proposal cites real moments
+    engineer.ts           the chief engineer: finds the agents' transcripts, gathers the evidence into data/retros, runs one retro at a time
     qa.ts                 the QA officer: instructions, the report's schema and parsing, the PR comment
     demoRunner.ts         scripted pretend agents (and a pretend lead, planner, QA officer and Number One) for demo mode
 client/src/
@@ -46,12 +48,12 @@ client/src/
     goalScreens.ts        a team station's holographic sign and goal board (goalRoom.ts: how its room stands, and how the note fills the board; portraits.ts: the crew's portraits)
     portal.ts             doorways that lead into each other wherever they stand: the far side drawn through the open doors, and walking through (doorway.ts: the geometry)
     transporter.ts        the transporter beam the crew arrive and leave in
-    engineering.ts        the engineering station, where the engineer keeps the ship running (scenery)
+    engineering.ts        the engineering station: the engineer, the report card and how their retro stands on the console; E opens their panel
     numberOne.ts          Number One in the ready room, across the captain's desk (numberOneView.ts: their bubble)
     deck.ts               a deck built in Blender: loads its GLB, draws its surfaces, reads its markers and what pressing E does (deckExtras.ts: what the markers, surfaces and interactions say)
     holodeckDeck.ts       the holodeck deck, put together from its Blender modules for however many holodecks there are
     turbolift.ts          which turbolift stop you're at (the turbolift's controls are in ui/travelPanel.ts)
-  ui/                     HUD and panels (agent terminal, a helper's transcript, board, ready room console, teleport, QA station, goals, Comms)
+  ui/                     HUD and panels (agent terminal, a helper's transcript, board, ready room console, teleport, QA station, goals, Comms, the engineering station)
     numberOnePanel.ts     the chat with Number One: the log, suggestions sent to the stand or started as goals, voice mode
   tricorder/              the phone view at /tricorder (no three.js): home screen, agent drill-down, buttons that survive live re-renders
 client/tricorder/index.html   the Tricorder's page (a second Vite entry), with its home-screen meta tags

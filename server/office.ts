@@ -7,6 +7,7 @@ import type { Closer } from '../shared/ledger';
 import { autoMergeFor, type GateMark, mergeStep, type MergeStep, requestedMerge } from '../shared/mergeGate';
 import { autoSendBackFor, prKey } from '../shared/qa';
 import type { AgentManager } from './agents/manager';
+import type { ChiefEngineer } from './agents/engineer';
 import type { NumberOne } from './agents/numberOne';
 import type { IssuePlanner } from './agents/planner';
 import { config } from './config';
@@ -43,6 +44,7 @@ export class Office {
     readonly previews: Previews,
     readonly planner: IssuePlanner,
     readonly numberOne: NumberOne,
+    readonly engineer: ChiefEngineer,
     readonly voice: Voice,
     version: string,
   ) {
@@ -83,6 +85,7 @@ export class Office {
       reviews: [...this.store.reviews.values()],
       voice: this.voice.status(),
       report: this.agents.report(),
+      retro: this.engineer.current(),
     };
   }
 

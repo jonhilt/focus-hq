@@ -11,6 +11,9 @@ import { asNumberOneReply, type ChatProject, type NumberOneOfficer, type NumberO
 import { renderToolUse } from './render';
 import { parseTriage, TRIAGE_SCHEMA, type TriageDecision, type Triager, type TriageRequest, triagePrompt, triageSystemPrompt } from './triage';
 import { checkoutLatest } from './workspace';
+import type { RetroOfficer, RetroRequest } from './engineer';
+import { RETRO_SCHEMA, engineerPrompt, engineerSystemPrompt } from './retro';
+import { chiefEngineer } from '../../shared/crew';
 
 // The permanent crew's Claude Code sessions: they read the project's code (and, for Number One, the web) and change
 // nothing. Read-only because they only have Read, Glob and Grep, plus WebSearch and WebFetch for Number One and the
@@ -48,6 +51,9 @@ interface ReadOnlyRun {
   tools?: { server: McpSdkServerConfigWithInstance; names: string[]; activity: (name: string) => string };
   /** Folders outside `cwd` the session may read too. */
   readable?: string[];
+  /** For sessions that read a lot (a retro): more turns, and longer, than a quick look. */
+  maxTurns?: number;
+  timeoutMs?: number;
 }
 
 interface ReadOnlyResult {
@@ -62,7 +68,8 @@ async function runReadOnly(run: ReadOnlyRun): Promise<ReadOnlyResult> {
   const abort = new AbortController();
   const onAbort = () => abort.abort();
   run.signal.addEventListener('abort', onAbort);
-  const timer = setTimeout(onAbort, TURN_TIMEOUT_MS);
+  const timeoutMs = run.timeoutMs ?? TURN_TIMEOUT_MS;
+  const timer = setTimeout(onAbort, timeoutMs);
   const prefix = run.tools ? `mcp__${run.tools.server.name}__` : undefined;
   const extra = run.tools ? run.tools.names.map((n) => `${prefix}${n}`) : [];
   const options: Options = {
@@ -78,7 +85,7 @@ async function runReadOnly(run: ReadOnlyRun): Promise<ReadOnlyResult> {
     mcpServers: run.tools ? { [run.tools.server.name]: run.tools.server } : {},
     strictMcpConfig: true,
     outputFormat: run.schema ? { type: 'json_schema', schema: run.schema } : undefined,
-    maxTurns: 40,
+    maxTurns: run.maxTurns ?? 40,
     resume: run.resume,
     env: agentEnv(),
   };
@@ -103,7 +110,7 @@ async function runReadOnly(run: ReadOnlyRun): Promise<ReadOnlyResult> {
     throw new Error('The session stopped without a result');
   } catch (err) {
     if (run.signal.aborted) throw new Error('Stopped', { cause: err });
-    if (abort.signal.aborted) throw new Error(`Gave up after ${TURN_TIMEOUT_MS / 60_000} minutes`, { cause: err });
+    if (abort.signal.aborted) throw new Error(`Gave up after ${timeoutMs / 60_000} minutes`, { cause: err });
     throw new Error(errorMessage(err), { cause: err });
   } finally {
     clearTimeout(timer);
@@ -223,4 +230,26 @@ function numberOneServer(req: NumberOneTurn, activity: (text: string) => void): 
       ),
     ],
   });
+}
+
+/**
+ * The chief engineer on a retro: reads the evidence the office gathered into its own folder (session digests, the
+ * ledger, closed goals) and nothing else. Reading a fortnight of sessions takes a while, so it gets longer than a turn.
+ */
+export class ClaudeEngineer implements RetroOfficer {
+  async retro(req: RetroRequest, activity: (text: string) => void): Promise<{ structured: unknown; text: string; costUsd?: number }> {
+    const result = await runReadOnly({
+      cwd: req.cwd,
+      systemAppend: engineerSystemPrompt(chiefEngineer().name),
+      prompt: engineerPrompt(req.days, req.sessions),
+      settings: req.settings,
+      signal: req.signal,
+      activity,
+      builtins: CODE_TOOLS,
+      schema: RETRO_SCHEMA,
+      maxTurns: 300,
+      timeoutMs: 40 * 60_000,
+    });
+    return { structured: result.structured, text: result.text, costUsd: result.costUsd };
+  }
 }

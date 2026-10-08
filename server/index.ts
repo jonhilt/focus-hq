@@ -4,16 +4,17 @@ import path from 'node:path';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import express from 'express';
 import { BrowserPool } from './agents/browserTool';
-import { ClaudeDrafter, ClaudeNumberOne, ClaudeTriager } from './agents/claudeCrew';
+import { ClaudeDrafter, ClaudeEngineer, ClaudeNumberOne, ClaudeTriager } from './agents/claudeCrew';
+import { ChiefEngineer, transcriptFolders } from './agents/engineer';
 import { ClaudeRunner } from './agents/claudeRunner';
-import { DemoDrafter, DemoNumberOne, DemoRunner, DemoTriager, demoWorkspace } from './agents/demoRunner';
+import { DemoDrafter, DemoEngineer, DemoNumberOne, DemoRunner, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
 import { Renderer, Sessions, Triage, Workspace } from './agents/services';
 import { closedGoalPrs, lookUpPrStates, NumberOne, type ShipStatus, summariseShip } from './agents/numberOne';
 import { IssuePlanner } from './agents/planner';
 import type { WorkspaceOps } from './agents/types';
 import * as git from './agents/workspace';
-import { config } from './config';
+import { config, paths } from './config';
 import { demoLayer, demoPush } from './github/demo';
 import { ghCliLayer } from './github/ghCli';
 import { GitHub, toProvider } from './github/service';
@@ -72,7 +73,9 @@ async function main() {
     const prStates = await lookUpPrStates(closedGoalPrs(snapshot), (repo, number) => github.pullRequestState(repo, number));
     return summariseShip(snapshot, (id) => workspace.dir(id), prStates);
   });
-  const office = new Office(store, hub, github, previews, planner, numberOne, new Voice(hub, config.demo), await currentVersion());
+  // the chief engineer reads the agents' transcripts (the demo's are scripted), digested into a folder of its own
+  const engineer = new ChiefEngineer(store, hub, config.demo ? new DemoEngineer() : new ClaudeEngineer(), config.demo ? demoTranscripts : transcriptFolders(paths.transcripts, paths.workspaces), paths.retros);
+  const office = new Office(store, hub, github, previews, planner, numberOne, engineer, new Voice(hub, config.demo), await currentVersion());
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
 

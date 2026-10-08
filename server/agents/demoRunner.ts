@@ -1,7 +1,10 @@
 import { randomBytes } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { TermLine } from '../../shared/types';
 import { demoSinceVerdict } from '../demoGit';
 import { sleep } from '../util';
+import type { RetroOfficer, RetroRequest, Transcript } from './engineer';
 import type { NumberOneOfficer, NumberOneReply, NumberOneTurn } from './numberOne';
 import type { Drafter, DraftRequest, DraftResult } from './planner';
 import { renderText, renderToolUse } from './render';
@@ -723,4 +726,83 @@ function demoMockupPage(goal: string): string {
     `<div style="background:#fff;border-radius:16px;padding:24px;width:300px;box-shadow:0 4px 16px #0002"><div style="height:160px;background:#ffd8c2;border-radius:10px"></div><h3 style="font-size:26px">${name}</h3><p style="font-size:22px;color:#555">${price}</p><button style="font-size:22px;padding:10px 18px;border-radius:999px;border:2px solid #ff8a5b;background:${saved ? '#ff8a5b' : '#fff'};color:${saved ? '#fff' : '#ff8a5b'}">${saved ? '♥ Saved' : '♡ Save for later'}</button></div>`;
   return `<!doctype html><html><body style="margin:0;background:#fff4ec;font-family:system-ui;color:#222;padding:40px 60px"><h1 style="font-size:40px;margin:0 0 30px">${escapeHtml(goal)}</h1>
 <div style="display:flex;gap:30px">${card('Stripy socks', '£6', true)}${card('Wool hikers', '£12', false)}${card('Ankle trio', '£9', false)}</div></body></html>`;
+}
+
+// ---------------------------------------------------------------- the chief engineer's retro
+
+/** A transcript line the way Claude Code writes one. */
+const said = (type: 'user' | 'assistant', minutesAgo: number, content: unknown) =>
+  JSON.stringify({ type, timestamp: new Date(Date.now() - minutesAgo * 60_000).toISOString(), message: { role: type, content } });
+const toolError = (minutesAgo: number, text: string) => said('user', minutesAgo, [{ type: 'tool_result', is_error: true, content: text }]);
+const toolCall = (minutesAgo: number, name = 'Bash', input: unknown = {}) => said('assistant', minutesAgo, [{ type: 'tool_use', name, input }]);
+
+/** A few scripted sessions for the demo's retro to read: the office's real transcripts stay out of the demo. */
+export async function demoTranscripts(): Promise<Transcript[]> {
+  const sessions: (Omit<Transcript, 'read'> & { lines: string[] })[] = [];
+  const add = (name: string, kind: Transcript['kind'], lines: string[]) => sessions.push({ name, kind, sessionId: `${name.slice(-8)}-demo`, lines });
+  add('lead-demo-wishlist__0a1b2c3d', 'lead', [
+    said('user', 300, 'Your workspace, with every repo of the project checked out side by side: …'),
+    said('assistant', 290, 'Slice 1 is shipped. Shall I start slice 2?'),
+    said('user', 280, 'go'),
+    toolCall(275),
+    toolError(274, 'Error: listen EADDRINUSE: address already in use :::4591'),
+    said('assistant', 200, 'Slice 2 is ready for review. Want me to ship it?'),
+    said('user', 190, 'ship it'),
+  ]);
+  add('lead-demo-stock__4e5f6a7b', 'lead', [
+    said('user', 240, 'Your workspace, with every repo of the project checked out side by side: …'),
+    toolCall(230),
+    toolError(229, 'Error: listen EADDRINUSE: address already in use :::4591'),
+    said('assistant', 150, 'The stock badge is in. Next: low-stock warnings, if you want them.'),
+    said('user', 140, 'continue'),
+  ]);
+  add('qa-demo-shop__8c9d0e1f', 'qa', [
+    said('user', 100, 'Please QA pull request #8 in demo/webshop-frontend: Wishlist page'),
+    toolCall(95),
+    toolError(94, 'Error: listen EADDRINUSE: address already in use :::4591'),
+    toolCall(90, 'StructuredOutput', { verdict: 'pass', summary: 'The wishlist page works; the demo office was on a taken port at first.' }),
+  ]);
+  return sessions.map(({ lines, ...t }) => ({ ...t, read: () => Promise.resolve(lines.join('\n')) }));
+}
+
+/** The demo's chief engineer: takes a moment over the digests, then proposes what the scripted sessions show. */
+export class DemoEngineer implements RetroOfficer {
+  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
+
+  async retro(req: RetroRequest, activity: (text: string) => void): Promise<{ structured: unknown; text: string; costUsd?: number }> {
+    const sessions = fs.readdirSync(path.join(req.cwd, 'sessions')).map((f) => f.replace(/\.md$/, ''));
+    for (const step of ['Reading INDEX.md', ...sessions.map((s) => `Reading sessions/${s}.md`), 'Weighing it up']) {
+      activity(step);
+      await sleep(1200 / this.speed);
+      if (req.signal.aborted) throw new Error('Stopped');
+    }
+    const leads = sessions.filter((s) => s.startsWith('lead-'));
+    return {
+      text: 'Two proposals.',
+      costUsd: 0.12,
+      structured: {
+        summary: `A quiet stretch: ${sessions.length} sessions, nothing failed QA. Two things cost time: every agent's demo office fights over the same port, and leads stop to ask for a go-ahead the captain already gave.`,
+        proposals: [
+          {
+            title: 'Give each workspace its own demo port',
+            problem: 'Every agent starts the demo on the same port, so the second one fails and goes looking for what’s holding it.',
+            evidence: sessions.map((s) => ({ session: s, quote: 'EADDRINUSE: address already in use :::4591' })),
+            fix: 'The office passes each workspace a free PORT, and npm run demo uses it.',
+            kind: 'check',
+            measure: `Sessions with EADDRINUSE: ${sessions.length} of ${sessions.length} this time.`,
+          },
+          {
+            title: 'Carry on through a plan the captain approved',
+            problem: 'Leads stop after each slice to ask for a go-ahead, and the captain replies with one word.',
+            evidence: leads.map((s, i) => ({ session: s, quote: i ? '“continue”' : '“go”, then “ship it”' })),
+            fix: 'The lead prompt says to report and carry on to the next planned slice, stopping only for new decisions.',
+            kind: 'pointer',
+            measure: `One-word go-aheads from the captain: 3 in ${leads.length} lead sessions.`,
+          },
+        ],
+        wentWell: ['QA passed the wishlist page first time.'],
+        watch: [],
+      },
+    };
+  }
 }

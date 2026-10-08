@@ -13,6 +13,7 @@ import { Hud } from './ui/hud';
 import { openManagerPanel } from './ui/managerPanel';
 import { openGoalsPanel } from './ui/goalsPanel';
 import { linkAction, openCommsPanel } from './ui/commsPanel';
+import { openEngineeringPanel } from './ui/engineeringPanel';
 import { numberOnePanelOpen, openNumberOnePanel } from './ui/numberOnePanel';
 import { Panels } from './ui/panels';
 import { openPreviewPanel } from './ui/previewPanel';
@@ -126,6 +127,7 @@ async function main() {
     openNewIssue: (projectId) => openNewIssuePanel(ui, projectId),
     openQa: (projectId) => openQaPanel(ui, projectId),
     openNumberOne: () => openNumberOnePanel(ui),
+    openEngineering: () => openEngineeringPanel(ui),
     openComms: () => openCommsPanel(ui),
     openGoals: (projectId, station) => openGoalsPanel(ui, projectId, station),
     openManager: (tab) => openManagerPanel(ui, tab),
@@ -276,7 +278,8 @@ async function main() {
     world.room(projectId)?.syncQa();
     world.room(projectId)?.syncPlanner();
   });
-  state.on('report', () => world.engineering?.showReport(state.report));
+  state.on('report', () => world.engineering?.showReport(state.report, state.retro));
+  state.on('retro', () => world.engineering?.showReport(state.report, state.retro));
   let numberOneStatus = state.numberOne?.status;
   state.on('number-one', () => {
     world.numberOne?.sync();
@@ -365,6 +368,9 @@ async function main() {
         break;
       case 'number-one':
         ui.openNumberOne();
+        break;
+      case 'engineering':
+        ui.openEngineering();
         break;
       case 'qa':
         ui.openQa(i.projectId);

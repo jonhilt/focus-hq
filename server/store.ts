@@ -4,7 +4,7 @@ import path from 'node:path';
 import { qaOfficerFor, randomAvatar } from '../shared/crew';
 import { type LedgerEvent, parseLedger } from '../shared/ledger';
 import { prKey } from '../shared/qa';
-import type { Agent, Board, BrowserFrame, ClosedPr, NumberOneChat, Project, QaReview, Settings, TermLine } from '../shared/types';
+import type { Agent, Board, BrowserFrame, ClosedPr, NumberOneChat, Project, QaReview, Retro, Settings, TermLine } from '../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, EFFORT_LEVELS, ROOM_THEMES, type RoomTheme } from '../shared/types';
 import { paths } from './config';
 import { fitDesks } from './agents/desks';
@@ -13,6 +13,14 @@ import { newId } from './util';
 
 /** Number One's chat as saved: with their session, so the next message resumes it. */
 export type StoredNumberOne = NumberOneChat & { sessionId?: string };
+
+export const freshRetro = (): Retro => ({ status: 'idle', activity: '', days: 14, sessions: 0, proposals: [], wentWell: [], watch: [], costUsd: 0 });
+
+/** The latest retro as it picks up after a restart: one under way when Focus shut down ends, so another can start. */
+export function retroAfterRestart(saved: Retro): Retro {
+  if (saved.status !== 'gathering' && saved.status !== 'thinking') return saved;
+  return { ...saved, status: 'failed', activity: 'Interrupted', error: 'Interrupted when Focus shut down. Start it again.' };
+}
 
 export const freshNumberOne = (): StoredNumberOne => ({ status: 'waiting', activity: '', messages: [], updatedAt: Date.now(), costUsd: 0 });
 
@@ -27,6 +35,7 @@ interface PersistedState {
   projects: Project[];
   agents: Agent[];
   numberOne?: StoredNumberOne;
+  retro?: Retro;
   reviews?: QaReview[];
   closedPrs?: ClosedPr[];
 }
@@ -56,6 +65,8 @@ export class Store {
   browser = new Map<string, BrowserFrame>();
   /** The captain's chat with Number One. */
   numberOne: StoredNumberOne = freshNumberOne();
+  /** The chief engineer's latest retro. */
+  retro: Retro = freshRetro();
   /** The latest QA review per pull request (by prKey). */
   reviews = new Map<string, QaReview>();
   /** PRs the operations officer closed as the wrong approach, by prKey of the issue they were for. */
@@ -79,6 +90,7 @@ export class Store {
     this.settings = { ...DEFAULT_SETTINGS, ...raw.settings };
     this.projects = raw.projects ?? [];
     if (raw.numberOne) this.numberOne = numberOneAfterRestart(raw.numberOne);
+    if (raw.retro) this.retro = retroAfterRestart(raw.retro);
     for (const review of raw.reviews ?? []) {
       if (review.status === 'queued' || review.status === 'testing') {
         Object.assign(review, { status: 'error', error: 'Interrupted when Focus shut down. Send it to QA again.' });
@@ -118,6 +130,7 @@ export class Store {
         projects: this.projects,
         agents: [...this.agents.values()],
         numberOne: this.numberOne,
+        retro: this.retro,
         reviews: [...this.reviews.values()],
         closedPrs: [...this.closedPrs.values()],
       };
