@@ -1,0 +1,63 @@
+# Architecture
+
+```
+shared/types.ts           types shared by server and client (Project, Agent, Board, IssueDraft, events…)
+shared/crew.ts            how the crew look (uniforms, species), and the permanent crew per room (the ops officer, the QA officer), derived from the project id
+shared/qa.ts              QA decisions shared by server and board (badges, stale verdicts)
+shared/board.ts           a project's Kanban columns (to do, in progress, PRs), for the 3D board, its panel and the Tricorder
+shared/agentStatus.ts     how an agent's status reads (icon, one-line status)
+shared/tricorder.ts       the Tricorder's decisions: what needs you, which agents are in flight
+shared/ledger.ts          the ledger of how work went (QA verdicts, merges, conflicts, triage, goals) and its report card
+server/
+  supervise.ts            runs index.ts and restarts it after an auto update
+  updater.ts              auto update: fetch, fast-forward, install/build, restart
+  index.ts                express + WebSocket (/ws) + Vite middleware (dev) or dist/ (prod)
+  office.ts               projects/rooms, Kanban boards (polling GitHub), auto-assign, settings
+  store.ts                ~/.focus/state.json + per-agent terminal logs (jsonl) + the ledger (ledger.jsonl)
+  routes.ts               REST API used by the panels
+  hub.ts                  broadcasts ServerEvents to every browser tab
+  previews.ts             Preview: check a PR out, run the project's preview commands, find its links, tear it down (Effect: one Scope per preview)
+  previewMachine.ts       what a preview does to this machine (shell commands in their own process group, signals, probes) as an Effect service
+  github/                 GitHub as an Effect service: gh CLI layer (live), in-memory layer (demo), Promise adapter
+  agents/
+    manager.ts            hire → queue → worktree → run → commit nudge → push → PR; messages, approvals (Effect inside: a fiber per agent's work in a FiberMap)
+    services.ts           what the manager needs from outside as Effect services: git on the checkouts, Claude Code sessions (a scoped turn), triage
+    schedule.ts           who starts next under the office's and each room's limits
+    desks.ts              who sits at a room's two individual desks, and who goes home to make room (never a lead or QA)
+    claudeRunner.ts       Claude Agent SDK query() in streaming-input mode, permission callback; cloud agents via --cloud
+    cloud.ts              what happens after a cloud agent's session (push nudge, carrying on in a new session, falling back to local when the CLI refuses --cloud)
+    render.ts             SDK messages → Claude-Code-style terminal lines + "what am I doing" text + screenshots in tool results
+    tasks.ts              the task list an agent keeps with Claude Code's task tools, followed from its session (TodoWrite, TaskCreate, TaskUpdate, TaskList)
+    browserTool.ts        in-process MCP server driving headless Chromium, streams screenshots
+    workspace.ts          git mirrors + worktrees (agents', the per-repo preview checkout, the planner's read-only checkouts)
+    planner.ts            the officer at each room's New issue stand: issue drafts, their prompt and schema
+    lead.ts               each goal's lead: their station, name and branches, their instructions, what shipping a slice does, what they hear back, their helpers
+    officeTool.ts         the office's own MCP tools for an agent (the lead's ship)
+    numberOne.ts          Number One's ship-wide chat: turns, prompt, reply schema and the ship_status summariser
+    claudeCrew.ts         the crew's read-only Claude Code sessions (Read/Glob/Grep, web search/fetch for Number One, Number One's ship_status and open_project, structured output)
+    qa.ts                 the QA officer: instructions, the report's schema and parsing, the PR comment
+    demoRunner.ts         scripted pretend agents (and a pretend lead, planner, QA officer and Number One) for demo mode
+client/src/
+  main.ts                 renderer (toon shading + outline pass), loop, interaction, UI wiring
+  world/                  ship layout, holodecks, stations, characters, station screens (screenPanes.ts: which panes side by side, and each viewer's switches), Kanban display
+    scenery.ts            stencil "holo walls" that show a landscape built around a room
+    themes.ts             the landscapes (beach, forest, desert, moon, city, library)
+    teamStation.ts        a goal's team station: its door in the holodeck and its briefing room out in the world, the lead's screen, seats for their helpers and the goal's reviewer (helperSeats.ts: who sits where)
+    goalScreens.ts        a team station's holographic sign and goal board (goalRoom.ts: how its room stands, and how the note fills the board; portraits.ts: the crew's portraits)
+    portal.ts             doorways that lead into each other wherever they stand: the far side drawn through the open doors, and walking through (doorway.ts: the geometry)
+    transporter.ts        the transporter beam the crew arrive and leave in
+    engineering.ts        the engineering station, where the engineer keeps the ship running (scenery)
+    numberOne.ts          Number One in the ready room, across the captain's desk (numberOneView.ts: their bubble)
+    deck.ts               a deck built in Blender: loads its GLB, draws its surfaces, reads its markers and what pressing E does (deckExtras.ts: what the markers, surfaces and interactions say)
+    holodeckDeck.ts       the holodeck deck, put together from its Blender modules for however many holodecks there are
+    turbolift.ts          which turbolift stop you're at (the turbolift's controls are in ui/travelPanel.ts)
+  ui/                     HUD and panels (agent terminal, a helper's transcript, board, ready room console, teleport, QA station, goals)
+    numberOnePanel.ts     the chat with Number One: the log, suggestions sent to the stand or started as goals, voice mode
+  tricorder/              the phone view at /tricorder (no three.js): home screen, agent drill-down, buttons that survive live re-renders
+client/tricorder/index.html   the Tricorder's page (a second Vite entry), with its home-screen meta tags
+client/public/tricorder/  its web app manifest and home-screen icons
+client/public/ship/       the decks built in Blender, as GLBs (npm run ship writes them)
+blender/                  the Blender scripts that build the decks: ship.py (entry), kit.py (walls, furniture, markers), command_deck.py (the bridge, ready room and observation lounge), holodeck_deck.py (the holodecks' hallway, the turbolift and engineering), team_station.py (a team station's door and briefing room)
+```
+
+The client mirrors server state over the WebSocket. Every action is a small REST call. Laptop screens and Kanban displays are canvases drawn into textures, and only redrawn when something changes. Screens near you redraw faster.

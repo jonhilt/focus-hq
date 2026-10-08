@@ -1,6 +1,8 @@
 # Focus HQ
 
-Browser-based cartoon 3D office (Three.js) visualising a swarm of Claude Code agents (Claude Agent SDK) that work GitHub issues (gh CLI) and open PRs. See README.md for the feature tour and architecture map.
+Browser-based cartoon 3D office (Three.js) visualising a swarm of Claude Code agents (Claude Agent SDK) that work GitHub issues (gh CLI) and open PRs. README.md is a short front page; each feature has its own page under `docs/` (`docs/goals.md`, `docs/qa.md`, `docs/configuration.md`…), and `docs/architecture.md` maps the code.
+
+When you change a feature, update its page under `docs/`, not the README (add a page, and a link to it in the README's Docs list, only for a new topic).
 
 ## Commands
 

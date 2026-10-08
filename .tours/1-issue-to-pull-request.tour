@@ -102,7 +102,7 @@
       "file": "CLAUDE.md",
       "line": 1,
       "title": "How this repo is built",
-      "description": "### The repo's own CLAUDE.md\n\nFocus is mostly built by Claude Code agents, often by Focus itself. This file is what every one of them reads first: the commands to run after each change, the conventions, and the rules for Effect code.\n\nIt's worth reading as an example of a CLAUDE.md that keeps a large, fast-moving codebase coherent.\n\nWhere to go next:\n\n- **README.md → Architecture** for the full map\n- `server/agents/claudeCrew.ts` for the read-only crew (the operations officer drafting issues, Number One)\n- `client/src/world/` for the starship itself\n- `docs/goals-plan.md` for how goals were designed"
+      "description": "### The repo's own CLAUDE.md\n\nFocus is mostly built by Claude Code agents, often by Focus itself. This file is what every one of them reads first: the commands to run after each change, the conventions, and the rules for Effect code.\n\nIt's worth reading as an example of a CLAUDE.md that keeps a large, fast-moving codebase coherent.\n\nWhere to go next:\n\n- **docs/architecture.md** for the full map\n- `server/agents/claudeCrew.ts` for the read-only crew (the operations officer drafting issues, Number One)\n- `client/src/world/` for the starship itself\n- `docs/goals-plan.md` for how goals were designed"
     }
   ]
 }
