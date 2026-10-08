@@ -1,6 +1,7 @@
 import { Effect, Layer } from 'effect';
 import { sameCommit } from '../../shared/qa';
 import type { Issue, PullRequest } from '../../shared/types';
+import { demoCommit } from '../demoGit';
 import { closingIssues, evidenceUrl } from './provider';
 import { GitHub, GitHubNotFound, GitHubRejected } from './service';
 
@@ -55,8 +56,18 @@ const CHECKS_TAKE_MS = 20_000;
 const RUN_IDS = 4000;
 
 /** In-memory GitHub used by `npm run demo`: the seed repos above, changed by whatever the office does to them. */
+/** Pushes to an open demo PR: a merge of its base branch, or a change of its own. Set while a demo GitHub is around. */
+export let demoPush: ((repo: string, number: number, kind: 'merge-base' | 'change') => string) | undefined;
+
 export const demoLayer = Layer.sync(GitHub, () => {
   const repos = new Map<string, FakeRepo>();
+  demoPush = (name, number, kind) => {
+    const p = repos.get(name)?.prs.find((p) => p.number === number && p.state === 'OPEN');
+    if (!p) throw new Error(`${name}#${number} is not an open pull request`);
+    p.headSha = demoCommit(p.headSha ?? 'demo', kind);
+    p.updatedAt = new Date().toISOString();
+    return p.headSha;
+  };
   const start = Date.now() - 5 * 86400_000;
   for (const [name, seed] of Object.entries(SEED)) {
     const issues = seed.issues.map(([title, body, labels], i) => ({

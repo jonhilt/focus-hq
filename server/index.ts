@@ -14,7 +14,7 @@ import { IssuePlanner } from './agents/planner';
 import type { WorkspaceOps } from './agents/types';
 import * as git from './agents/workspace';
 import { config } from './config';
-import { demoLayer } from './github/demo';
+import { demoLayer, demoPush } from './github/demo';
 import { ghCliLayer } from './github/ghCli';
 import { GitHub, toProvider } from './github/service';
 import { Hub } from './hub';
@@ -47,6 +47,8 @@ const liveWorkspace: WorkspaceOps = {
   reopen: git.reopenWorktree,
   snapshot: git.snapshot,
   branchState: git.branchState,
+  sinceVerdict: git.sinceVerdict,
+  runChecks: git.runChecks,
 };
 
 async function main() {
@@ -94,6 +96,17 @@ async function main() {
       const preview = previews.list().find((p) => p.repo === repo && p.number === Number(req.params.number));
       const site = typeof req.query.site === 'string' ? req.query.site : 'web';
       res.type('html').send(demoPreviewPage(repo, Number(req.params.number), preview?.title ?? 'Pull request preview', site));
+    });
+    // pretend someone pushed to a PR (?kind=merge-base merges main in, ?kind=change changes its code), which goes to QA
+    app.post('/demo-push/:owner/:name/:number', (req, res) => {
+      const repo = `${req.params.owner}/${req.params.name}`;
+      const number = Number(req.params.number);
+      const project = store.projects.find((p) => p.repos.includes(repo));
+      const pr = project && store.boards.get(project.id)?.prs.find((p) => p.repo === repo && p.number === number);
+      if (!project || !pr || !demoPush) return void res.status(404).json({ error: `${repo}#${number} is not an open pull request on a board` });
+      const head = demoPush(repo, number, req.query.kind === 'change' ? 'change' : 'merge-base');
+      void office.refreshBoard(project.id).then(() => office.agents.requestReview(project.id, repo, number, pr.title)).catch((err: unknown) => console.warn(`Demo push to ${repo}#${number}: ${String(err)}`));
+      res.json({ head });
     });
   }
   // the Tricorder's page lives in a folder (client/tricorder/index.html), and its relative URLs need the slash

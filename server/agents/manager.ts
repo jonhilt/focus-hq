@@ -18,6 +18,7 @@ import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pu
 import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
 import type { QaLoopEvent } from './qaLoop';
 import { qaNextStep } from './qaLoop';
+import { carriedComment, retestStep } from './retest';
 import { offTheFloor, pickDesk } from './desks';
 import { deskless, whoStarts } from './schedule';
 import { type GitFailed, Renderer, Sessions, Triage, Workspace } from './services';
@@ -90,6 +91,8 @@ export class AgentManager {
   private runtimes = new Map<string, Runtime>();
   /** The pull requests (prKey) the office is merging its base branch into right now. */
   private merging = new Set<string>();
+  /** PRs back for QA whose new commits the office is looking at first, to see whether QA needs to test them again. */
+  private prechecking = new Set<string>();
   private leaving = new Set<string>();
   /** The leads whose goal is closing right now: nothing of theirs ships, so a WIP snapshot never reaches a pull request. */
   private closingGoals = new Set<string>();
@@ -1197,8 +1200,11 @@ export class AgentManager {
   // ---------------------------------------------------------------- QA
 
   /** Asks the room's QA officer to review and test a pull request. Queued if they're busy with another. */
-  /** `retryNote` tells QA why the operations officer sent it back to them. */
-  requestReview(projectId: string, repo: string, number: number, title: string, retryNote?: string): QaReview {
+  /**
+   * `retryNote` tells QA why the operations officer sent it back to them. Unless the captain `asked` for it, or the
+   * operations officer did, a PR QA already gave a verdict on is looked at first (`precheck`).
+   */
+  requestReview(projectId: string, repo: string, number: number, title: string, retryNote?: string, asked = false): QaReview {
     const project = this.store.project(projectId);
     if (!project.repos.includes(repo)) throw new Refused({ message: `${repo} is not connected to ${project.name}` });
     const existing = this.store.reviews.get(prKey(repo, number));
@@ -1221,7 +1227,12 @@ export class AgentManager {
       mergeRequested: existing?.mergeRequested,
     };
     this.putReview(review);
-    this.nextReview(projectId);
+    if (existing?.sha && (existing.status === 'passed' || existing.status === 'failed') && !retryNote && !asked) {
+      this.prechecking.add(prKey(repo, number));
+      this.background(this.precheck(review, existing));
+    } else {
+      this.nextReview(projectId);
+    }
     return review;
   }
 
@@ -1236,13 +1247,61 @@ export class AgentManager {
   }
 
   /**
+   * Before QA re-tests a PR they gave a verdict on: a head they already tested goes back to that verdict, and one that
+   * only merged the base branch in, cleanly, on top of a pass gets the project's checks run by the office, which carries
+   * the pass over when they're green. Anything else, or anything that goes wrong on the way, goes to QA as usual.
+   */
+  private precheck(review: QaReview, last: QaReview): Effect.Effect<void, never, ManagerServices> {
+    const key = prKey(review.repo, review.number);
+    const where = `${review.repo.split('/')[1]}#${review.number}`;
+    const current = () => this.store.reviews.get(key)?.requestedAt === review.requestedAt && this.store.reviews.get(key)?.status === 'queued';
+    // the captain may ask for (or take back) a merge when QA passes while the office looks: keep what they asked last
+    const mergeRequested = () => this.store.reviews.get(key)?.mergeRequested;
+    return Effect.gen({ self: this }, function* () {
+      const github = yield* GitHub;
+      const workspace = yield* Workspace;
+      const pr = yield* github.getPullRequest(review.repo, review.number);
+      const since = last.status === 'passed' && last.sha && pr.headSha && !sameCommit(last.sha, pr.headSha)
+        ? yield* workspace.sinceVerdict(review.repo, review.number, pr.baseBranch, last.sha).pipe(Effect.orElseSucceed(() => null))
+        : null;
+      const step = retestStep(last, pr.headSha, since);
+      if (!current()) return;
+      if (step.kind === 'skip') {
+        console.log(`Not sending ${review.repo}#${review.number} to QA: ${step.reason}`);
+        this.putReview({ ...last, mergeRequested: mergeRequested() });
+        this.boardChanged(review.projectId);
+        return;
+      }
+      if (step.kind === 'retest') return;
+      this.hub.toast('info', `🧪 ${where} only merged ${pr.baseBranch} in since QA passed it: running its checks instead of a full re-test`, undefined, review.projectId);
+      const run = yield* workspace.runChecks(review.repo, review.number, step.head).pipe(Effect.orElseSucceed(() => null));
+      const failed = run?.results.find((r) => !r.ok);
+      if (!run || failed || !current()) {
+        if (failed) console.log(`${review.repo}#${review.number}: ${failed.command} failed after merging ${pr.baseBranch}, so QA re-tests it: ${failed.output ?? ''}`);
+        return;
+      }
+      const body = carriedComment(pr.baseBranch, step.head, last.sha!, run.results.map((r) => r.command));
+      const commentUrl = yield* github.commentOnPullRequest(review.repo, review.number, body).pipe(Effect.map((url) => url || undefined), Effect.orElseSucceed(() => undefined));
+      this.putReview({ ...last, status: 'passed', sha: step.head, carriedFrom: last.sha, commentUrl: commentUrl ?? last.commentUrl, mergeRequested: mergeRequested(), requestedAt: review.requestedAt, finishedAt: Date.now() });
+      this.hub.toast('success', `✅ ${where} stays passed: merge of ${pr.baseBranch} only, checks green at ${step.head.slice(0, 7)}`, undefined, review.projectId);
+      this.boardChanged(review.projectId);
+    }).pipe(
+      Effect.catchCause((cause) => Effect.sync(() => console.warn(`Couldn't look at ${review.repo}#${review.number} before QA: ${String(cause)}`))),
+      Effect.ensuring(Effect.sync(() => {
+        this.prechecking.delete(key);
+        this.nextReview(review.projectId);
+      })),
+    );
+  }
+
+  /**
    * Seats reviewers on queued reviews, oldest first, as they come free: a goal's pull requests go to the goal's own
    * reviewer, at its lead's table, and everyone else's to the room's QA officer, so the room's goals are reviewed side by
    * side.
    */
   private nextReview(projectId: string): void {
     const leads = this.store.agentsIn(projectId).filter((a) => a.task === 'lead');
-    const queued = [...this.store.reviews.values()].filter((r) => r.projectId === projectId && r.status === 'queued');
+    const queued = [...this.store.reviews.values()].filter((r) => r.projectId === projectId && r.status === 'queued' && !this.prechecking.has(prKey(r.repo, r.number)));
     const reviewerOf = (r: QaReview) => {
       const goal = goalOf(r, leads);
       return goal ? goalReviewerId(goal.id) : qaAgentId(projectId);

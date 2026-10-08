@@ -607,6 +607,8 @@ export interface QaReview {
   status: QaStatus;
   /** The commit QA checked out and tested. */
   sha?: string;
+  /** QA passed this commit, the one before a merge of the base branch that the office checked itself and carried the pass over from. */
+  carriedFrom?: string;
   report?: QaReport;
   /** The screenshots that go with the report, in the order they were taken. */
   screenshots?: QaScreenshot[];

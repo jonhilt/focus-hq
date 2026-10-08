@@ -1,6 +1,7 @@
 import { Effect, Layer } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { randomAvatar } from '../../shared/crew';
+import * as demoGitHub from '../github/demo';
 import { prKey } from '../../shared/qa';
 import { demoLayer } from '../github/demo';
 import { GitHub } from '../github/service';
@@ -9,7 +10,7 @@ import { Store } from '../store';
 import { demoWorkspace } from './demoRunner';
 import { AgentManager } from './manager';
 import { Renderer, Sessions, Triage, Workspace } from './services';
-import type { PullRequest } from '../../shared/types';
+import type { PullRequest, QaReport } from '../../shared/types';
 import type { AgentRunner, AgentSession, RunHooks, RunOutcome, RunRequest, WorkspaceOps } from './types';
 
 /** A Claude Code stand-in: each turn runs until the test ends it, and remembers being stopped and what it was sent. */
@@ -423,5 +424,40 @@ describe('AgentManager', () => {
     expect(() => agents.startGoal(project.id, ' ')).toThrow('Tell them what you’re after');
     for (const goal of ['Two', 'Three', 'Four']) agents.startGoal(project.id, goal);
     expect(agents.startGoal(project.id, 'Five')).toMatchObject({ queued: { text: 'Five' } });
+  });
+
+  it('carries QA’s pass over a clean merge of main without seating QA, never re-tests a commit with a verdict, and re-tests a real change', async () => {
+    const { agents, claude, store, project } = office();
+    const repo = 'demo/webshop-frontend';
+    const push = demoGitHub.demoPush!;
+    const number = [...Array(20).keys()].find((n) => {
+      try {
+        push(repo, n, 'merge-base');
+        return true;
+      } catch {
+        return false;
+      }
+    })!;
+    const report: QaReport = { verdict: 'pass', summary: 'Works', checks: [], commands: [], captions: [] };
+    const passedAt = (sha: string) => store.putReview({ projectId: project.id, repo, number, title: 'PR', status: 'passed', sha, report, requestedAt: 1, finishedAt: 2 });
+    passedAt(push(repo, number, 'change'));
+
+    // the same commit again: back to its verdict
+    agents.requestReview(project.id, repo, number, 'PR');
+    await until(() => store.reviews.get(`${repo}#${number}`)?.status === 'passed');
+
+    // a merge of main: checks only, and the pass moves onto the new head, keeping a merge the captain asked for meanwhile
+    const merged = push(repo, number, 'merge-base');
+    agents.requestReview(project.id, repo, number, 'PR');
+    agents.requestMerge(repo, number, true);
+    await until(() => store.reviews.get(`${repo}#${number}`)?.sha === merged);
+    expect(store.reviews.get(`${repo}#${number}`)).toMatchObject({ status: 'passed', carriedFrom: expect.any(String) as unknown, mergeRequested: { at: expect.any(Number) as unknown } });
+    agents.requestMerge(repo, number, false);
+
+    // a change of its own: QA tests it
+    push(repo, number, 'change');
+    agents.requestReview(project.id, repo, number, 'PR');
+    await until(() => claude.turns.length === 1);
+    expect(claude.turns[0].req.prompt).toContain(`#${number}`);
   });
 });

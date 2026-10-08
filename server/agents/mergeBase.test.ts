@@ -87,3 +87,32 @@ describe('the office’s own merge of a PR’s base branch', () => {
     expect(await ws.missingRemoteCommits(dev, 'focus/unpublished')).toBe(false);
   });
 });
+
+describe('what came onto a PR since QA’s verdict', () => {
+  /** Publishes the PR branch as GitHub does, at refs/pull/1/head. */
+  const publish = (dev: string) => git(dev, 'push', '-q', 'origin', 'HEAD:refs/heads/focus/pr', 'HEAD:refs/pull/1/head');
+
+  it('finds a clean merge of main, with the PR’s own changes unchanged', async () => {
+    const { dev, pr, land } = pullRequest('acme/since-merge');
+    land('footer.ts', 'footer');
+    git(dev, 'merge', '-q', '--no-edit', 'origin/main');
+    publish(dev);
+    const since = await ws.sinceVerdict('acme/since-merge', 1, 'main', pr);
+    expect(since).toMatchObject({ head: git(dev, 'rev-parse', 'HEAD'), descends: true, sameChanges: true, commits: [{ mergesBase: true, clean: true }] });
+  }, 20_000);
+
+  it('finds a change of the PR’s own, and a merge that slipped something else in', async () => {
+    const { dev, pr, land } = pullRequest('acme/since-change');
+    land('footer.ts', 'footer');
+    git(dev, 'merge', '-q', '--no-commit', 'origin/main');
+    fs.writeFileSync(path.join(dev, 'header.ts'), 'header, edited in the merge');
+    git(dev, 'commit', '-qam', 'Merge main');
+    publish(dev);
+    const since = await ws.sinceVerdict('acme/since-change', 1, 'main', pr);
+    expect(since?.commits).toEqual([expect.objectContaining({ mergesBase: true, clean: false })]);
+    commit(dev, 'header.ts', 'header, changed again');
+    publish(dev);
+    const later = await ws.sinceVerdict('acme/since-change', 1, 'main', pr);
+    expect(later?.commits.map((c) => c.mergesBase)).toEqual([true, false]);
+  }, 20_000);
+});

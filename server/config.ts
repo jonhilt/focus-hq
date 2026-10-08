@@ -37,6 +37,8 @@ export const paths = {
   /** Scratch worktrees where the office merges a pull request's base branch into it (outside workspaces, so the sweep leaves them be). */
   merges: path.join(config.dataDir, 'merges'),
   previews: path.join(config.dataDir, 'previews'),
+  /** One reusable checkout per repo where the office runs a PR's checks itself, after a merge of its base branch (outside workspaces, so the sweep leaves them be). */
+  checks: path.join(config.dataDir, 'checks'),
   /** The screenshots that go with QA reports, for the QA station. */
   qaShots: path.join(config.dataDir, 'qa-shots'),
   /** What each goal's lead has put on their station's screen, a folder per lead, until the goal closes. */

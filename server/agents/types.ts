@@ -1,5 +1,6 @@
 import type { AgentStatus, BrowserFrame, Effort, Settings, TermLine } from '../../shared/types';
 import type { ArtifactInput, NoteInput } from './lead';
+import type { SinceVerdict } from './retest';
 
 /** What Claude Code says about a subagent the session started: started, busy with something, finished. */
 export type HelperEvent =
@@ -141,4 +142,14 @@ export interface WorkspaceOps {
   branchState(dir: string, branch: string, baseBranch: string): Promise<BranchState>;
   /** A detached checkout of a pull request's head in the agent's workspace (for QA). Returns the commit ('' if unknown). */
   checkoutPullRequest(repo: string, agentId: string, number: number): Promise<string>;
+  /** What came onto a pull request since QA's verdict on `sha`; null when git can't tell (`sha` is gone, say). */
+  sinceVerdict(repo: string, number: number, baseBranch: string, sha: string): Promise<SinceVerdict | null>;
+  /** Runs the project's checks on the pull request at `head`: null when it has none the office knows how to run. */
+  runChecks(repo: string, number: number, head: string): Promise<ChecksRun | null>;
+}
+
+/** The office's own run of a PR's checks: each command, and the end of its output when it failed. */
+export interface ChecksRun {
+  sha: string;
+  results: { command: string; ok: boolean; output?: string }[];
 }

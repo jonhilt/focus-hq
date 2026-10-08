@@ -213,7 +213,7 @@ export class Office {
   requestReview(projectId: string, repo: string, number: number) {
     const pr = this.store.boards.get(projectId)?.prs.find((p) => p.repo === repo && p.number === number);
     if (!pr) throw new Error(`${repo}#${number} is not an open pull request on this board`);
-    return this.agents.requestReview(projectId, repo, number, pr.title);
+    return this.agents.requestReview(projectId, repo, number, pr.title, undefined, true);
   }
 
   resolveConflicts(projectId: string, repo: string, number: number): Promise<ConflictsOutcome> {

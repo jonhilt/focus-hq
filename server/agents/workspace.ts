@@ -3,10 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { paths } from '../config';
 import { errorMessage, KeyedLock, run, sleep } from '../util';
-import type { BaseMerge, BranchState } from './types';
+import { sameCommit } from '../../shared/qa';
+import { checkCommands, rangeDiffUnchanged, type SinceVerdict } from './retest';
+import type { BaseMerge, BranchState, ChecksRun } from './types';
 import { claimBranch, heldMessage, orphanedWorkspaces, parseWorktrees, retryLockRace } from './worktrees';
 
 const lock = new KeyedLock();
+/** One run of the checks at a time in each repo's checks folder. */
+const checksLock = new KeyedLock();
 
 const git = (cwd: string, args: string[], timeoutMs?: number) => run('git', args, { cwd, timeoutMs });
 
@@ -177,6 +181,67 @@ function checkoutDetached(repo: string, dir: string, source: string, localRef: s
 /** The QA officer's checkout: a pull request's head, detached, in their workspace folder. Returns the commit. */
 export function checkoutPullRequest(repo: string, agentId: string, number: number): Promise<string> {
   return checkoutDetached(repo, path.join(paths.workspaces, agentId), `refs/pull/${number}/head`, 'refs/focus/qa');
+}
+
+const isAncestor = (dir: string, a: string, b: string) => git(dir, ['merge-base', '--is-ancestor', a, b]).then(() => true, () => false);
+
+/**
+ * What came onto pull request `number` since QA's verdict on `sha`: each new commit not from the base branch, whether it's a merge of the base
+ * branch whose tree is exactly what git merges by itself (no conflicts resolved, nothing else slipped in), and whether
+ * `git range-diff` finds the PR's own commits unchanged. Null when the mirror doesn't have `sha`.
+ */
+export function sinceVerdict(repo: string, number: number, baseBranch: string, sha: string): Promise<SinceVerdict | null> {
+  const mirror = mirrorDir(repo);
+  const base = `refs/remotes/origin/${baseBranch}`;
+  return lock.with(repo, async () => {
+    await ensureMirror(repo);
+    await retryLockRace(() => git(mirror, ['fetch', 'origin', `+refs/pull/${number}/head:refs/focus/since`, `+refs/heads/${baseBranch}:${base}`], 10 * 60_000), () => sleep(750));
+    if (!(await git(mirror, ['cat-file', '-e', `${sha}^{commit}`]).then(() => true, () => false))) return null;
+    const head = (await git(mirror, ['rev-parse', 'refs/focus/since'])).trim();
+    if (!(await isAncestor(mirror, sha, head))) return { head, descends: false, commits: [], sameChanges: false };
+    const commits: SinceVerdict['commits'] = [];
+    for (const line of (await git(mirror, ['rev-list', '--reverse', '--parents', head, `^${sha}`, `^${base}`])).split('\n').filter((l) => l.trim())) {
+      const [commit, ...parents] = line.trim().split(/\s+/);
+      const mergesBase = parents.length === 2 && (await isAncestor(mirror, parents[1], base));
+      let clean = false;
+      if (mergesBase) {
+        const merged = await git(mirror, ['merge-tree', '--write-tree', parents[0], parents[1]]).then((o) => o.split('\n')[0].trim(), () => '');
+        clean = !!merged && merged === (await git(mirror, ['rev-parse', `${commit}^{tree}`])).trim();
+      }
+      commits.push({ sha: commit, mergesBase, clean });
+    }
+    const own = async (tip: string) => `${(await git(mirror, ['merge-base', base, tip])).trim()}..${tip}`;
+    const diff = await git(mirror, ['range-diff', '--no-color', await own(sha), await own(head)]).catch(() => '');
+    return { head, descends: true, commits, sameChanges: rangeDiffUnchanged(diff) };
+  });
+}
+
+/**
+ * Checks pull request `number` out in its repo's checks folder (reused, so installed dependencies survive) and runs the
+ * project's checks there, stopping at the first that fails. Null when the project has none the office knows.
+ */
+export function runChecks(repo: string, number: number, head: string): Promise<ChecksRun | null> {
+  const dir = path.join(paths.checks, repo.replace('/', '__'));
+  return checksLock.with(repo, async () => {
+    const sha = await checkoutDetached(repo, dir, `refs/pull/${number}/head`, 'refs/focus/checks');
+    if (!sameCommit(sha, head)) return { sha, results: [{ command: 'git checkout', ok: false, output: `the PR moved on to ${sha.slice(0, 7)}` }] };
+    const pkg = path.join(dir, 'package.json');
+    const scripts = fs.existsSync(pkg) ? (JSON.parse(fs.readFileSync(pkg, 'utf8')) as { scripts?: Record<string, unknown> }).scripts : undefined;
+    const commands = checkCommands(scripts);
+    if (!commands.length) return null;
+    const install = ['npm', fs.existsSync(path.join(dir, 'package-lock.json')) ? 'ci' : 'install', '--no-audit', '--no-fund'];
+    const results: ChecksRun['results'] = [];
+    for (const [cmd, ...args] of [install, ...commands]) {
+      const command = [cmd, ...args].join(' ');
+      const ok = await run(cmd, args, { cwd: dir, timeoutMs: 20 * 60_000 }).then(() => true, (err: unknown) => {
+        results.push({ command, ok: false, output: errorMessage(err) });
+        return false;
+      });
+      if (!ok) break;
+      results.push({ command, ok: true });
+    }
+    return { sha, results };
+  });
 }
 
 export function workspaceDir(agentId: string): string {

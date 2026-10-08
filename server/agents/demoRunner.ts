@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { TermLine } from '../../shared/types';
+import { demoSinceVerdict } from '../demoGit';
 import { sleep } from '../util';
 import type { NumberOneOfficer, NumberOneReply, NumberOneTurn } from './numberOne';
 import type { Drafter, DraftRequest, DraftResult } from './planner';
@@ -475,6 +476,15 @@ export const demoWorkspace: WorkspaceOps = {
   snapshot: async () => false,
   // everything the demo's leads commit, they ship
   branchState: async () => ({ onOrigin: true, unpushed: 0 }),
+  sinceVerdict: async (_repo, _number, _baseBranch, sha: string) => {
+    await sleep(400);
+    return demoSinceVerdict(sha);
+  },
+  // the demo's projects pass their checks after a pretend run
+  runChecks: async (_repo, _number, head) => {
+    await sleep(1500);
+    return { sha: head, results: ['npm ci', 'npm run typecheck', 'npm run lint', 'npm test'].map((command) => ({ command, ok: true })) };
+  },
 };
 
 /** The demo planner's judgement of an idea too big for one issue: a rebuild, or a list of three or more features. */

@@ -1,7 +1,8 @@
 import { Context, Data, Effect, Layer, type Scope } from 'effect';
 import { errorMessage } from '../util';
 import type { TriageDecision, Triager, TriageRequest } from './triage';
-import type { AgentRunner, AgentSession, BaseMerge, BranchState, RunHooks, RunRequest, WorkspaceOps } from './types';
+import type { SinceVerdict } from './retest';
+import type { AgentRunner, AgentSession, BaseMerge, BranchState, ChecksRun, RunHooks, RunRequest, WorkspaceOps } from './types';
 
 // What the agent manager needs from the outside world, as Effect services: git on the agents' checkouts, Claude Code
 // sessions, and the operations officer's triage. Each wraps the Promise-based implementation it always had (the live
@@ -43,6 +44,8 @@ export class Workspace extends Context.Service<Workspace, {
   reopen(repo: string, agentId: string, branch: string, inOffice: (agentId: string) => boolean): Effect.Effect<string, GitFailed>;
   snapshot(dir: string, message: string): Effect.Effect<boolean, GitFailed>;
   branchState(dir: string, branch: string, baseBranch: string): Effect.Effect<BranchState, GitFailed>;
+  sinceVerdict(repo: string, number: number, baseBranch: string, sha: string): Effect.Effect<SinceVerdict | null, GitFailed>;
+  runChecks(repo: string, number: number, head: string): Effect.Effect<ChecksRun | null, GitFailed>;
 }>()('focus/agents/Workspace') {
   /** The workspace on its Promise-based operations: the live git ones, or the demo's pretend ones. */
   static fromOps(ops: WorkspaceOps): Layer.Layer<Workspace> {
@@ -66,6 +69,8 @@ export class Workspace extends Context.Service<Workspace, {
       reopen: (repo, agentId, branch, inOffice) => git(`check out ${branch} again`, () => ops.reopen(repo, agentId, branch, inOffice)),
       snapshot: (dir, message) => git('commit a WIP snapshot', () => ops.snapshot(dir, message)),
       branchState: (dir, branch, baseBranch) => git(`compare with origin's ${branch}`, () => ops.branchState(dir, branch, baseBranch)),
+      sinceVerdict: (repo, number, baseBranch, sha) => git(`compare PR #${number} with ${sha.slice(0, 7)}`, () => ops.sinceVerdict(repo, number, baseBranch, sha)),
+      runChecks: (repo, number, head) => git(`run the checks on PR #${number}`, () => ops.runChecks(repo, number, head)),
     }));
   }
 }
