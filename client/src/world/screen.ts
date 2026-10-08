@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Agent, BrowserFrame, ClaudeTask, GoalArtifact, GoalNote, GoalQuestion, TermLine } from '../../../shared/types';
-import { ARTIFACT_SIZE, artifactUrl, latestArtifact, openQuestion, optionUrl } from '../../../shared/artifacts';
+import { ARTIFACT_SIZE, artifactUrl, latestArtifact, openQuestion, optionUrl, VIDEO_SIZE } from '../../../shared/artifacts';
 import { showsBrowser } from '../../../shared/browserView';
 import { plainTermLine } from '../../../shared/termText';
 import { canvasTexture, fitText, makeCanvas, MONO_FONT, roundRect, UI_FONT, wrap } from './canvas';
@@ -47,6 +47,10 @@ export class StationScreen {
   private imageSrc = '';
   /** The pictures of what the lead's shown, by URL: null while one loads. */
   private readonly pictures = new Map<string, HTMLImageElement | null>();
+  /** The explainer video the screen loops, when the artifact it shows has one. */
+  private video: { src: string; el: HTMLVideoElement; start: number; end: number } | null = null;
+  /** Whether the last draw showed the video: one the screen no longer shows stops. */
+  private videoDrawn = false;
 
   /** `idle` is what the screen says while nobody's using it. */
   constructor(
@@ -84,7 +88,9 @@ export class StationScreen {
     if (!this.dirty || now - this.lastDraw < (near ? 120 : 1500)) return;
     this.dirty = false;
     this.lastDraw = now;
+    this.videoDrawn = false;
     this.draw(lines ?? [], frame);
+    if (!this.videoDrawn) this.stopVideo();
     this.texture.needsUpdate = true;
     // keep the cursor blinking while the agent is busy
     if (this.agent && !['done', 'error', 'stopped'].includes(this.agent.status)) this.dirty = true;
@@ -295,7 +301,51 @@ export class StationScreen {
     this.drawShownBar(artifact.title, count > 1 ? `${count} SHOWN · E TO SWITCH` : 'E FOR A CLOSER LOOK', LCARS.orange, x, y, w, h);
     const picture = artifact.image ? this.picture(artifactUrl(agent.id, artifact, 'jpg')) : undefined;
     this.keepPictures(picture ? [picture] : []);
-    this.drawPicture(picture, artifact.image ? '' : 'NO PICTURE OF THIS ONE: PRESS E TO OPEN IT', x, y + 38, w, h - 38);
+    // an explainer plays on a loop once its video's in; its picture stands in until then
+    const video = artifact.video ? this.loop(artifactUrl(agent.id, artifact, 'webm'), artifact.video) : undefined;
+    if (video) this.drawFitted(video, VIDEO_SIZE.width, VIDEO_SIZE.height, x, y + 38, w, h - 38);
+    else this.drawPicture(picture, artifact.image ? '' : 'NO PICTURE OF THIS ONE: PRESS E TO OPEN IT', x, y + 38, w, h - 38);
+  }
+
+  /**
+   * The video at `src`, playing muted on a loop from `start` for `duration` seconds, once it has a frame to show. The
+   * screen keeps redrawing while it plays (often when the player's near, rarely when not).
+   */
+  private loop(src: string, { start, duration }: { start: number; duration: number }): HTMLVideoElement | undefined {
+    if (this.video?.src !== src) {
+      this.stopVideo();
+      const el = document.createElement('video');
+      el.muted = true;
+      el.playsInline = true;
+      el.preload = 'auto';
+      el.src = src;
+      el.addEventListener('loadedmetadata', () => (el.currentTime = start));
+      el.addEventListener('ended', () => {
+        el.currentTime = start;
+        void el.play().catch(() => undefined);
+      });
+      void el.play().catch(() => undefined);
+      this.video = { src, el, start, end: start + duration + 0.5 };
+    }
+    const { el, end } = this.video;
+    if (el.currentTime > end) el.currentTime = this.video.start;
+    this.videoDrawn = true;
+    this.dirty = true;
+    return el.readyState >= 2 ? el : undefined;
+  }
+
+  private stopVideo(): void {
+    if (!this.video) return;
+    this.video.el.pause();
+    this.video.el.removeAttribute('src');
+    this.video.el.load();
+    this.video = null;
+  }
+
+  /** Something `iw` × `ih` fitted and centred in the box. */
+  private drawFitted(source: CanvasImageSource, iw: number, ih: number, x: number, y: number, w: number, h: number): void {
+    const scale = Math.min(w / iw, h / ih);
+    this.c.ctx.drawImage(source, x + (w - iw * scale) / 2, y + (h - ih * scale) / 2, iw * scale, ih * scale);
   }
 
   /** The lead's open question: its options side by side (two rows of two for three or four), each lettered. */
@@ -394,6 +444,7 @@ export class StationScreen {
   }
 
   dispose(): void {
+    this.stopVideo();
     this.texture.dispose();
     this.material.dispose();
   }

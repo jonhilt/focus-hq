@@ -213,7 +213,8 @@ const KIT_PLAYER = String.raw`
   var draw = typeof render === 'function' ? render : null;
   if (!draw) window.kitFault('The stage script must define render(t).');
   var end = function (i) { return i + 1 < BEATS.length ? BEATS[i + 1].at : DUR; };
-  var t = DUR, raf = 0, stopAt = DUR, playing = false;
+  // hold: the beat a step just finished, whose caption stays up while its last frame does (t is then the next one's start)
+  var t = DUR, raf = 0, stopAt = DUR, playing = false, hold = -1;
   var beatEls = BEATS.map(function (b, i) {
     var d = document.createElement('div'); d.className = 'beat'; d.style.background = 'var(--' + b.colour + ')';
     d.innerHTML = '<span><b>0' + (i + 1) + '</b></span>'; d.firstChild.appendChild(document.createTextNode(b.label));
@@ -223,13 +224,14 @@ const KIT_PLAYER = String.raw`
   var segEls = BEATS.map(function (b, i) {
     var d = document.createElement('div'); d.className = 'seg'; d.style.flex = String(end(i) - b.at);
     d.innerHTML = '<i></i><span></span>'; d.lastChild.textContent = b.label;
-    d.onclick = function (e) { var r = d.getBoundingClientRect(); stop(); document.body.classList.remove('rest'); t = b.at + Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * (end(i) - b.at); frame(); stop(); };
+    d.onclick = function (e) { var r = d.getBoundingClientRect(); stop(); hold = -1; document.body.classList.remove('rest'); t = b.at + Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * (end(i) - b.at); frame(); stop(); };
     el('kit-segs').appendChild(d); return d;
   });
   var describe = function (err, at) { return (at === undefined ? '' : 'at t = ' + at.toFixed(2) + 's: ') + (err && err.stack ? err.stack.split('\n').slice(0, 3).join('\n') : String(err)); };
   function frame() {
     if (draw) try { draw(t); } catch (err) { draw = null; window.kitFault(describe(err)); stop(); }
     var bi = 0; BEATS.forEach(function (b, i) { if (t >= b.at) bi = i; });
+    if (hold >= 0 && Math.abs(t - end(hold)) < .001) bi = hold;
     el('kit-bt').textContent = BEATS[bi].title; el('kit-bx').textContent = BEATS[bi].text;
     beatEls.forEach(function (d, i) { d.classList.toggle('on', i === bi); });
     segEls.forEach(function (d, i) {
@@ -241,13 +243,25 @@ const KIT_PLAYER = String.raw`
   }
   function run(from, to) {
     document.body.classList.remove('rest');
-    cancelAnimationFrame(raf); t = from; stopAt = to; playing = true; el('kit-pp').textContent = '❚❚ Pause';
+    var playingBeat = beatIndexAt(from);
+    cancelAnimationFrame(raf); t = from; stopAt = to; playing = true; hold = -1; el('kit-pp').textContent = '❚❚ Pause';
     var last = performance.now();
-    var step = function (now) { t = Math.min(stopAt, t + (now - last) / 1000); last = now; frame(); if (t < stopAt && playing) raf = requestAnimationFrame(step); else stop(); };
+    var step = function (now) {
+      t = Math.min(stopAt, t + (now - last) / 1000); last = now;
+      if (t >= stopAt && stopAt < DUR) hold = playingBeat;
+      frame();
+      if (t < stopAt && playing) raf = requestAnimationFrame(step); else stop();
+    };
     raf = requestAnimationFrame(step);
   }
-  function stop() { playing = false; cancelAnimationFrame(raf); el('kit-pp').textContent = t >= DUR ? '↻ Replay' : '▶ Play'; }
-  var beatIndex = function () { var bi = 0; BEATS.forEach(function (b, i) { if (t >= b.at - .01) bi = i; }); return bi; };
+  function stop() {
+    playing = false; cancelAnimationFrame(raf); el('kit-pp').textContent = t >= DUR ? '↻ Replay' : '▶ Play';
+    if (t >= DUR) window.kitDone = true;
+  }
+  function beatIndexAt(at) { var bi = 0; BEATS.forEach(function (b, i) { if (at >= b.at - .01) bi = i; }); return bi; }
+  var beatIndex = function () { return beatIndexAt(t); };
+  // the office records the screen's video by playing it once from the top
+  window.kitPlay = function () { window.kitDone = false; run(0, DUR); };
   el('kit-run').onclick = function () { run(0, DUR); };
   el('kit-pp').onclick = function () { if (playing) stop(); else run(t >= DUR ? 0 : t, DUR); };
   el('kit-next').onclick = function () {

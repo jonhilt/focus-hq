@@ -171,13 +171,23 @@ export interface Picture {
 }
 
 /** Pictures of the HTML pages a goal's lead puts on their station's screen, for the screen to show. */
+/** A video of an explainer playing once, and where in it playback starts. */
+export interface Recording {
+  video: Buffer;
+  start: number;
+}
+
 export class Renderer extends Context.Service<Renderer, {
   render(html: string): Effect.Effect<Picture, RenderFailed>;
+  /** Plays an explainer's page once, `seconds` long, and records it. */
+  record(html: string, seconds: number): Effect.Effect<Recording, RenderFailed>;
 }>()('focus/agents/Renderer') {
-  /** Renders in the agents' shared headless Chromium (`BrowserPool.render`). */
-  static fromBrowser(browser: { render(html: string): Promise<Picture> }): Layer.Layer<Renderer> {
+  /** Renders and records in the agents' shared headless Chromium (`BrowserPool.render` and `record`). */
+  static fromBrowser(browser: { render(html: string): Promise<Picture>; record(html: string, seconds: number): Promise<Recording> }): Layer.Layer<Renderer> {
+    const failed = (err: unknown) => new RenderFailed({ reason: errorMessage(err) });
     return Layer.succeed(Renderer, Renderer.of({
-      render: (html) => Effect.tryPromise({ try: () => browser.render(html), catch: (err) => new RenderFailed({ reason: errorMessage(err) }) }),
+      render: (html) => Effect.tryPromise({ try: () => browser.render(html), catch: failed }),
+      record: (html, seconds) => Effect.tryPromise({ try: () => browser.record(html, seconds), catch: failed }),
     }));
   }
 }

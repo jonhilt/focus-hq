@@ -80,3 +80,20 @@ export const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 export function truncate(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
+
+/**
+ * The bytes a request's Range header asks for out of `size`, inclusive, as a browser seeking in a video sends it
+ * (`bytes=0-`, `bytes=100-199`, `bytes=-500` for the last 500). Undefined for no header, or one this doesn't handle
+ * (several ranges, other units): send the whole thing then. 'unsatisfiable' when it starts past the end.
+ */
+export function byteRange(header: string | undefined, size: number): { start: number; end: number } | 'unsatisfiable' | undefined {
+  const m = header ? /^bytes=(\d*)-(\d*)$/.exec(header.trim()) : null;
+  if (!m || (!m[1] && !m[2])) return undefined;
+  if (!m[1]) {
+    const last = Math.min(Number(m[2]), size);
+    return last > 0 ? { start: size - last, end: size - 1 } : 'unsatisfiable';
+  }
+  const start = Number(m[1]);
+  if (start >= size) return 'unsatisfiable';
+  return { start, end: m[2] ? Math.min(Number(m[2]), size - 1) : size - 1 };
+}

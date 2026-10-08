@@ -57,7 +57,10 @@ function office(workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<Git
     Workspace.fromOps(workspace),
     Sessions.fromRunner(claude),
     Triage.fromTriager({ triage: () => Promise.reject(new Error('no officer here')) }),
-    Renderer.fromBrowser({ render: (html) => (html.includes('unrenderable') ? Promise.reject(new Error('no browser')) : Promise.resolve({ image: Buffer.from('jpeg'), errors: html.includes('throws') ? ['ReferenceError: nope is not defined'] : [] })) }),
+    Renderer.fromBrowser({
+      render: (html) => (html.includes('unrenderable') ? Promise.reject(new Error('no browser')) : Promise.resolve({ image: Buffer.from('jpeg'), errors: html.includes('throws') ? ['ReferenceError: nope is not defined'] : [] })),
+      record: (html) => (html.includes('unrecordable') ? Promise.reject(new Error('no ffmpeg')) : Promise.resolve({ video: Buffer.from('webm'), start: 0.8 })),
+    }),
   );
   return { store, project, claude, agents: new AgentManager(store, new Hub(), services, () => undefined) };
 }
@@ -333,13 +336,32 @@ describe('AgentManager', () => {
       beats: [{ title: 'Append', text: 'One line per event.', seconds }, { title: 'Crash', text: 'Half a line at the end.', seconds: 4 }],
       stage: { html: '<div id="file"></div>', script },
     });
-    expect(await explain('function render(t) {}')).toMatch(/“The ledger” is on your station's screen.*an explainer of 2 beats, 7 seconds in all\.$/);
-    expect(store.agent(lead.id).lead!.artifacts).toEqual([{ id: 'ledger', title: 'The ledger', at: expect.any(Number), image: true }]);
+    expect(await explain('function render(t) {}')).toMatch(/“The ledger” is on your station's screen.*an explainer of 2 beats, 7 seconds in all: the screen plays it once the office has recorded it/);
+    await until(() => !!store.agent(lead.id).lead!.artifacts?.[0].video);
+    expect(store.agent(lead.id).lead!.artifacts).toEqual([{ id: 'ledger', title: 'The ledger', at: expect.any(Number), image: true, video: { start: 0.8, duration: 7 } }]);
+    expect((await store.readArtifact(lead.id, 'ledger.webm'))?.toString()).toBe('webm');
     const page = (await store.readArtifact(lead.id, 'ledger.html'))!.toString();
     expect(page).toContain('<div id="file"></div>');
     expect(page).toContain('Run briefing');
     expect(await explain('function render(t) { throws(); }')).toMatch(/But the page reported an error as it loaded: “ReferenceError: nope is not defined”\. Fix it/);
     await expect(explain('function render(t) {}', 99)).rejects.toThrow(/Beat 1 plays for 99 seconds/);
+  });
+
+  it('keeps the picture alone when an explainer can’t be recorded, and drops a video once something else takes its id', async () => {
+    const { agents, claude, store, project } = office();
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    const tools = claude.turns[0].req.tools!;
+    const beats = [{ title: 'One', text: 'One.', seconds: 2 }, { title: 'Two', text: 'Two.', seconds: 2 }];
+    await tools.explain({ id: 'flow', title: 'Flow', beats, stage: { html: 'unrecordable', script: 'function render(t) {}' } });
+    await tools.explain({ id: 'ledger', title: 'Ledger', beats, stage: { html: '', script: 'function render(t) {}' } });
+    await until(() => !!store.agent(lead.id).lead!.artifacts?.find((a) => a.id === 'ledger')?.video);
+    expect(store.agent(lead.id).lead!.artifacts?.find((a) => a.id === 'flow')?.video).toBeUndefined();
+    expect(await store.readArtifact(lead.id, 'flow.webm')).toBeUndefined();
+
+    await tools.show({ id: 'ledger', title: 'Ledger, drawn', html: '<p>still</p>' });
+    expect(store.agent(lead.id).lead!.artifacts?.find((a) => a.id === 'ledger')?.video).toBeUndefined();
+    expect(await store.readArtifact(lead.id, 'ledger.webm')).toBeUndefined();
   });
 
   it('puts the lead’s question to the captain with an option apiece, and tells the lead which they picked', async () => {

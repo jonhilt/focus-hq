@@ -262,9 +262,6 @@ export class DemoRunner implements AgentRunner {
         await think();
         await note({ done: `${goal}: it works end to end, and survives a reload on another device.`, next: ['A thin slice end to end'] });
         await show({ id: 'data-flow', title: 'The data flow', html: demoFlowPage(goal, repos.map((r) => r.folder)) });
-        hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__explain(How a save travels)' }]);
-        const explained = await tools.explain(demoExplainer(repos.map((r) => r.folder))).catch((err: Error) => err.message);
-        hooks.lines([{ kind: 'output', text: `  ⎿  ${explained}` }]);
         hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__ask(Which layout should it start with?)' }]);
         const asked = await tools.ask({
           question: 'Which layout should it start with?',
@@ -281,6 +278,10 @@ export class DemoRunner implements AgentRunner {
       await say('On it: a thin slice first.');
       await note({ slice: checklist(0) });
       await show({ id: 'mockup', title: 'A first mockup', html: demoMockupPage(goal) });
+      // the explainer goes up last, so the screen plays it while the slice is built
+      hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__explain(How a save travels)' }]);
+      const explained = await tools.explain(demoExplainer(repos.map((r) => r.folder))).catch((err: Error) => err.message);
+      hooks.lines([{ kind: 'output', text: `  ⎿  ${explained}` }]);
       const leadTodos = (done: number) => ({
         todos: [...repos.map((r) => [`Build ${goal} in ./${r.folder}`, `Building it in ./${r.folder}`]), ['Ship the slice', 'Shipping the slice']].map(([content, activeForm], i) => ({
           content,

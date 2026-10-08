@@ -405,6 +405,11 @@ export interface GoalArtifact {
   at: number;
   /** There's a picture of it for the screen. Missing when the office couldn't render one (no browser to hand). */
   image?: boolean;
+  /**
+   * An explainer's video for the screen to loop, once the office has recorded it: playback runs from `start` seconds
+   * into it for `duration` seconds. Missing for other artifacts, and until it's recorded.
+   */
+  video?: { start: number; duration: number };
 }
 
 /**

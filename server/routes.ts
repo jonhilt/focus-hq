@@ -3,7 +3,7 @@ import { EFFORT_LEVELS, type Effort, type PreviewSet } from '../shared/types';
 import { isKokoroVoice } from '../shared/voice';
 import type { Office } from './office';
 import type { Store } from './store';
-import { errorMessage } from './util';
+import { byteRange, errorMessage } from './util';
 
 type Handler = (req: Request, res: Response) => unknown;
 
@@ -49,12 +49,16 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.get('/artifacts/:lead/:file', async (req, res) => {
     const lead = param(req, 'lead');
     const file = param(req, 'file');
-    // an artifact (data-flow.html), or an option of a question (q1.a.html)
-    const ok = /^lead_\w+$/.test(lead) && /^[a-z0-9][a-z0-9-]*(\.[a-d])?\.(html|jpg)$/.test(file);
+    // an artifact (data-flow.html), an option of a question (q1.a.html), or an explainer's video (ledger.webm)
+    const ok = /^lead_\w+$/.test(lead) && /^[a-z0-9][a-z0-9-]*(\.[a-d])?\.(html|jpg|webm)$/.test(file);
     const bytes = ok ? await store.readArtifact(lead, file) : undefined;
     if (!bytes) return void res.sendStatus(404);
-    if (file.endsWith('.html')) res.type('html').set({ 'Content-Security-Policy': 'sandbox allow-scripts allow-popups', 'Cache-Control': 'no-cache' });
-    else res.type('jpg').set('Cache-Control', 'max-age=31536000, immutable');
+    if (file.endsWith('.html')) return void res.type('html').set({ 'Content-Security-Policy': 'sandbox allow-scripts allow-popups', 'Cache-Control': 'no-cache' }).send(bytes);
+    res.type(file.endsWith('.webm') ? 'webm' : 'jpg').set({ 'Cache-Control': 'max-age=31536000, immutable', 'Accept-Ranges': 'bytes' });
+    // a video is asked for in ranges, so the screen can seek back to the start of its loop
+    const range = byteRange(req.headers.range, bytes.length);
+    if (range === 'unsatisfiable') return void res.status(416).set('Content-Range', `bytes */${bytes.length}`).end();
+    if (range) return void res.status(206).set('Content-Range', `bytes ${range.start}-${range.end}/${bytes.length}`).send(bytes.subarray(range.start, range.end + 1));
     res.send(bytes);
   });
   r.post('/github/check', h(() => office.checkGitHub()));
