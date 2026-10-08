@@ -9,8 +9,9 @@ import { portrait } from './portraits';
 import { LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
 
 // What a team station shows of its goal besides the lead's session, drawn like the holograms over the holodeck pods
-// in Lower Decks: glowing cyan on dark glass. The sign floats over the station's door (and hangs beside the briefing
-// room's screen): the station, its goal and lead, whether its room is in session, and how far through its slice it is.
+// in Lower Decks: glowing cyan on dark glass. The sign floats over the station's door (and is lit on the dado under the
+// briefing room's viewscreen): the station, its goal and lead, whether its room is in session, and how far through its
+// slice it is.
 // The goal board on the briefing room's wall lists who's round the table and what each is doing, the way the crew
 // leaderboard in Lower Decks does, beside the lead's note on the goal.
 

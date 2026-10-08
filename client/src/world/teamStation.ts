@@ -97,7 +97,7 @@ export class TeamStation {
   readonly goalBoard: THREE.Mesh;
   /** Who's on the goal board's roster, in its order (`show`). */
   private crew: { who: StationSeat; role: 'Lead' | 'Reviewer' | 'Helper' }[] = [];
-  /** The briefing room's big screen, which `screen` draws on. */
+  /** The briefing room's viewscreen, which `screen` draws on. */
   readonly display: THREE.Mesh;
   /** The door and the briefing room's doorway, joined once the room has put the door in place (`connect`). */
   portal!: Portal;
@@ -111,7 +111,7 @@ export class TeamStation {
   private readonly area: Box2;
   private readonly sign = new GoalSign();
   private readonly board = new GoalBoard();
-  /** The switches beside the screen, for which panes it shows: the viewer's, so the same at every station. */
+  /** The strip of switches under the screen, for which panes it shows: the viewer's, so the same at every station. */
   private readonly panes = new PaneSwitches();
   /** The lamps either side of the door, lit by how the goal room stands (`update`). */
   private readonly lamp = new THREE.MeshBasicMaterial({ color: HULL.dado });
@@ -193,11 +193,11 @@ export class TeamStation {
     return { interaction: { kind: 'agent', id }, label: () => `Look at ${name}’s screen` };
   }
 
-  /** Using a switch on the panel beside the screen: show or hide its pane. The terminal's stays on. */
+  /** Using a switch on the strip under the screen: show or hide its pane. */
   private switchAt(uv: THREE.Vector2): { interaction: Interaction; label: () => string } | null {
     const i = switchAt(uv);
     const s = i === undefined ? undefined : PANE_SWITCHES[i];
-    if (!s || s.pane === 'terminal') return null;
+    if (!s) return null;
     return { interaction: { kind: 'pane', pane: s.pane }, label: () => switchLabel(s, screenPrefs.current) };
   }
 
@@ -306,7 +306,7 @@ export class TeamStation {
   }
 
   /**
-   * Shows the station's goal on its sign (over the door and beside the screen), its lamps and its goal board: its
+   * Shows the station's goal on its sign (over the door and under the screen), its lamps and its goal board: its
    * lead, or what's `next` in line for it while it's free.
    */
   show(lead: Agent | undefined, next?: string): void {

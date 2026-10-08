@@ -5,7 +5,7 @@ import { showsBrowser } from '../../../shared/browserView';
 import { plainTermLine } from '../../../shared/termText';
 import { canvasTexture, fitText, makeCanvas, MONO_FONT, roundRect, UI_FONT, wrap } from './canvas';
 import { flat } from './materials';
-import { screenPanes, screenPrefs } from './screenPanes';
+import { type Pane, type PaneAt, paneAt, screenPanes, screenPrefs } from './screenPanes';
 import { LCARS, LCARS_FONT, LCARS_STATUS, lcarsFrame } from './starship';
 
 export const TERM_COLORS: Record<TermLine['kind'], string> = {
@@ -28,8 +28,11 @@ export interface ScreenSize {
 
 /** A desk's laptop: room for two panes side by side. */
 export const LAPTOP: ScreenSize = { w: 800, h: 512, scale: 1 };
-/** A team's big display: sharper, and wide enough for the terminal, the browser and the progress pane at once. */
-export const BIG_SCREEN: ScreenSize = { w: 1600, h: 1024, scale: 1.25 };
+/**
+ * A briefing room's viewscreen (6 × 2.5 m): sharper, and wide enough for the terminal, what the lead's shown, their
+ * browser and the progress pane side by side.
+ */
+export const BIG_SCREEN: ScreenSize = { w: 2400, h: 1000, scale: 1.25 };
 
 /**
  * Draws an agent's work onto a canvas used as a station's display, in panes side by side (`screenPanes`): their
@@ -47,6 +50,8 @@ export class StationScreen {
   private imageSrc = '';
   /** The pictures of what the lead's shown, by URL: null while one loads. */
   private readonly pictures = new Map<string, HTMLImageElement | null>();
+  /** Where each pane was last drawn, in the layout's units from the canvas's top left: none while nobody's here. */
+  private panes: PaneAt[] = [];
 
   /** `idle` is what the screen says while nobody's using it. */
   constructor(
@@ -75,6 +80,12 @@ export class StationScreen {
     this.dirty = true;
   }
 
+  /** Which pane a point on the screen is on, from its texture coordinates, as it was last drawn. */
+  paneAt(uv: { x: number; y: number }): Pane | undefined {
+    const { w, h, scale } = this.size;
+    return paneAt(this.panes, (uv.x * w) / scale, ((1 - uv.y) * h) / scale);
+  }
+
   /** Redraws when something changed, more often when the player is close. */
   maybeDraw(now: number, near: boolean, lines: TermLine[] | undefined, frame: BrowserFrame | undefined): void {
     if (this.prefsVersion !== screenPrefs.version) {
@@ -97,6 +108,7 @@ export class StationScreen {
     const W = canvas.width / this.size.scale;
     const H = canvas.height / this.size.scale;
     const agent = this.agent;
+    this.panes = [];
     if (!agent) {
       const area = lcarsFrame(ctx, W, H, { title: 'Focus OS', color: LCARS.periwinkle, seed: 47 });
       ctx.textAlign = 'left';
@@ -137,13 +149,15 @@ export class StationScreen {
     // the lead's open question, while there is one, then what they showed last
     const question = prefs.artifacts && agent.task === 'lead' ? openQuestion(agent) : undefined;
     const artifact = prefs.artifacts && agent.task === 'lead' ? latestArtifact(agent.lead?.artifacts) : undefined;
-    const panes = screenPanes(Math.round(W), { browser: prefs.browser && showsBrowser(frame), artifact: !!(question ?? artifact), progress: tasks.length > 0 || hasNote });
-    for (const { pane, x, w } of panes) {
-      if (pane === 'terminal') this.drawTerminal(lines, x, 36, w, H - 36 - footerH);
-      else if (pane === 'browser' && frame) this.drawBrowser(frame, x, 36, w, H - 36 - footerH);
-      else if (pane === 'artifact' && question) this.drawQuestion(agent, question, x, 36, w, H - 36 - footerH);
-      else if (pane === 'artifact' && artifact) this.drawArtifact(agent, artifact, x, 36, w, H - 36 - footerH);
-      else if (pane === 'progress') this.drawProgress(agent, tasks, hasNote ? note : undefined, x, 36, w, H - 36 - footerH);
+    const has = { browser: prefs.browser && showsBrowser(frame), artifact: !!(question ?? artifact), progress: tasks.length > 0 || hasNote };
+    // under the title bar, over the status bar
+    const panes = (this.panes = screenPanes(Math.round(W), Math.round(H - 36 - footerH), has).map((p) => ({ ...p, y: p.y + 36 })));
+    for (const { pane, x, y, w, h } of panes) {
+      if (pane === 'terminal') this.drawTerminal(lines, x, y, w, h);
+      else if (pane === 'browser' && frame) this.drawBrowser(frame, x, y, w, h);
+      else if (pane === 'artifact' && question) this.drawQuestion(agent, question, x, y, w, h);
+      else if (pane === 'artifact' && artifact) this.drawArtifact(agent, artifact, x, y, w, h);
+      else if (pane === 'progress') this.drawProgress(agent, tasks, hasNote ? note : undefined, x, y, w, h);
     }
 
     // status bar

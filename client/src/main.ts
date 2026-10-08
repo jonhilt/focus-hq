@@ -328,9 +328,10 @@ async function main() {
     const hits = raycaster.intersectObject(world.root, true);
     target = null;
     for (const hit of hits) {
-      // a board with rows of its own to use, like a briefing room's goal board's roster
+      // a board with rows of its own to use, like a briefing room's goal board's roster, or its big screen's panes
       const at = hit.object.userData.interactionAt as ((uv: THREE.Vector2) => typeof target) | undefined;
-      const row = at && hit.uv && hit.distance <= REACH ? at(hit.uv) : null;
+      const reach = (hit.object.userData.reach as number | undefined) ?? REACH;
+      const row = at && hit.uv && hit.distance <= reach ? at(hit.uv) : null;
       if (row) {
         target = row;
         break;

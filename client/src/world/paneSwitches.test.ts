@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { PANE_SWITCHES, switchAt, switchLabel, switchOn } from './paneSwitches';
+import { COL, GAP, H, LEFT, PANE_SWITCHES, switchAt, switchLabel, W } from './paneSwitches';
 
 const prefs = { browser: false, artifacts: true, tasks: true, note: true };
+/** The texture coordinates of a point on the strip, in its canvas pixels (uv's y runs up the strip). */
+const at = (x: number, y = H / 2) => ({ x: x / W, y: 1 - y / H });
 
 describe('switchAt', () => {
-  it('finds each switch down the panel, top to bottom', () => {
-    // uv's y runs up the panel: the first switch is just under the header
-    expect(switchAt({ x: 0.5, y: 1 - 250 / 960 })).toBe(0);
-    expect(switchAt({ x: 0.5, y: 1 - 550 / 960 })).toBe(2);
-    expect(switchAt({ x: 0.5, y: 1 - 850 / 960 })).toBe(4);
+  it('finds each switch along the strip, left to right', () => {
+    PANE_SWITCHES.forEach((_, i) => expect(switchAt(at(LEFT + i * COL + COL / 2))).toBe(i));
   });
 
-  it('is no switch on the header, in the gaps or off the sides', () => {
-    expect(switchAt({ x: 0.5, y: 1 - 80 / 960 })).toBeUndefined();
-    expect(switchAt({ x: 0.5, y: 1 - 330 / 960 })).toBeUndefined();
-    expect(switchAt({ x: 0.01, y: 1 - 250 / 960 })).toBeUndefined();
+  it('is no switch on the label, in the gaps or off the edges', () => {
+    expect(switchAt(at(LEFT / 2))).toBeUndefined();
+    expect(switchAt(at(LEFT + COL - GAP / 2))).toBeUndefined();
+    expect(switchAt(at(W - 5))).toBeUndefined();
+    expect(switchAt(at(LEFT + COL / 2, 5))).toBeUndefined();
   });
 });
 
@@ -24,10 +24,5 @@ describe('switchLabel', () => {
     const tasks = PANE_SWITCHES.find((s) => s.pane === 'tasks')!;
     expect(switchLabel(browser, prefs)).toBe('Show the browser pane');
     expect(switchLabel(tasks, prefs)).toBe('Hide the tasks pane');
-  });
-
-  it('keeps the terminal on', () => {
-    expect(switchOn(PANE_SWITCHES[0], { ...prefs, tasks: false })).toBe(true);
-    expect(switchLabel(PANE_SWITCHES[0], prefs)).toBe('The terminal always shows');
   });
 });

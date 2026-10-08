@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { canvasTexture, makeCanvas } from './canvas';
 import { flat } from './materials';
-import { H, HEADER, PAD, PANE_SWITCHES, ROW, switchOn, TOP, W } from './paneSwitches';
+import { COL, GAP, H, LEFT, PAD, PANE_SWITCHES, W } from './paneSwitches';
 import { type PanePrefs, screenPrefs } from './screenPanes';
 import { LCARS, LCARS_FONT } from './starship';
 
-/** The panel's canvas, redrawn whenever the viewer's choice changes (`update`). */
+/** The strip's canvas, redrawn whenever the viewer's choice changes (`update`). */
 export class PaneSwitches {
   readonly material: THREE.MeshBasicMaterial;
   private readonly c = makeCanvas(W, H);
@@ -29,27 +29,27 @@ export class PaneSwitches {
     const { ctx } = this.c;
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, W, H);
-    // the LCARS elbow along the top: a bar with a rounded end, and the panel's name
+    const h = H - PAD * 2;
+    // the strip's LCARS label at its left: a block with a rounded end, and its name
     ctx.fillStyle = LCARS.periwinkle;
     ctx.beginPath();
-    ctx.roundRect(PAD, PAD, W - PAD * 2, HEADER - PAD - 10, [50, 12, 12, 0]);
+    ctx.roundRect(PAD, PAD, LEFT - PAD - GAP, h, [h / 2, 8, 8, h / 2]);
     ctx.fill();
     ctx.fillStyle = '#000000';
     ctx.font = `600 64px ${LCARS_FONT}`;
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'right';
-    ctx.fillText('SCREEN PANES', W - PAD - 30, (PAD + HEADER - 10) / 2 + 2);
+    ctx.fillText('PANES', LEFT - GAP - 26, H / 2 + 2);
 
     PANE_SWITCHES.forEach((s, i) => {
-      const y = TOP + i * ROW;
-      const h = ROW - 20;
-      const on = switchOn(s, prefs);
-      const tone = s.pane === 'terminal' ? '#99cc66' : LCARS.sky;
-      // a pill: lit in its tone while on, a dim outline while off
+      const x = LEFT + i * COL;
+      const w = COL - GAP;
+      const on = prefs[s.pane];
+      // a pill: lit while on, a dim outline while off
       ctx.beginPath();
-      ctx.roundRect(PAD, y, W - PAD * 2, h, h / 2);
+      ctx.roundRect(x, PAD, w, h, h / 2);
       if (on) {
-        ctx.fillStyle = tone;
+        ctx.fillStyle = '#99cc66';
         ctx.fill();
       } else {
         ctx.strokeStyle = '#5a5470';
@@ -57,12 +57,9 @@ export class PaneSwitches {
         ctx.stroke();
       }
       ctx.fillStyle = on ? '#000000' : '#8d86a0';
-      ctx.font = `600 62px ${LCARS_FONT}`;
-      ctx.textAlign = 'left';
-      ctx.fillText(s.label.toUpperCase(), PAD + 50, y + h / 2 + 2);
-      ctx.font = `500 46px ${LCARS_FONT}`;
-      ctx.textAlign = 'right';
-      ctx.fillText((s.pane === 'terminal' ? 'Always on' : on ? 'On' : 'Off').toUpperCase(), W - PAD - 50, y + h / 2 + 2);
+      ctx.font = `600 66px ${LCARS_FONT}`;
+      ctx.textAlign = 'center';
+      ctx.fillText(s.label.toUpperCase(), x + w / 2, H / 2 + 2);
     });
   }
 

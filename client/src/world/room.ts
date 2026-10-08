@@ -7,7 +7,7 @@ import { DESKS_PER_ROOM, TEAM_STATIONS } from '../../../shared/types';
 import { state } from '../net/state';
 import { sound } from '../sound';
 import { KanbanBoard } from './board';
-import { type Builder, type Interaction, interactive } from './builder';
+import { type Builder, type Interaction, interactive, REACH } from './builder';
 import { seatHelpers } from './helperSeats';
 import { agentView, Character, type CrewView } from './character';
 import { briefingRoomAt, OVER_DOOR, type RoomSlot, ROOM_DEPTH, ROOM_WIDTH, WALL_H } from './layout';
@@ -16,6 +16,7 @@ import { box, flat, lighten, toon } from './materials';
 import { ceilingLight, chair, cyl, paperStack, plant } from './props';
 import { holodeckMaterial, holodeckSkin, type Scenery } from './scenery';
 import { StationScreen } from './screen';
+import { paneUse } from './screenPanes';
 import { Beam } from './transporter';
 import { HULL, LCARS, lcarsSign, workstation } from './starship';
 import type { Portal } from './portal';
@@ -307,10 +308,15 @@ export class ProjectRoom {
       for (const thing of station.furniture) interactive(thing, use, label);
       if (lead) interactive(station.goalBoard, { kind: 'agent', id: lead.id, view: 'goal' }, () => `Look at ${lead.name}’s goal and to-dos`);
       else interactive(station.goalBoard, use, label);
-      // up close, what the lead's shown or asked; otherwise the screen is the station's, as the table is
+      // each of the lead's panes up close (what they've shown or asked, their browser…), from the head of the table;
+      // anywhere else on it, and while it's free, the screen is the station's, as the table is
+      station.display.userData.interactionAt = lead ? (uv: THREE.Vector2) => {
+        const pane = station.screen.paneAt(uv);
+        return pane ? paneUse(pane, lead) : null;
+      } : undefined;
       if (lead && (lead.lead?.artifacts?.length || lead.lead?.questions?.length)) {
         interactive(station.display, { kind: 'screen', id: lead.id }, () => (openQuestion(lead) ? `Answer ${lead.name}’s question` : `Look at what ${lead.name} has shown up close`), 10);
-      } else interactive(station.display, use, label);
+      } else interactive(station.display, use, label, lead ? 10 : REACH);
       this.sit(station.lead, lead?.id, lead && agentView(lead), use, label);
       this.syncHelpers(station, lead);
       const reviewer = lead && reviewers.find((r) => r.reviewFor === lead.id);

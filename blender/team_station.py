@@ -42,7 +42,7 @@ POD_CREAM = '#e4dccb'
 BEZEL_HALF = DOOR_W / 2 + 0.34
 BEZEL_TOP = 2.62
 BEZEL_DEPTH = 0.22
-#: the station's sign beside the briefing room's screen: GoalSign's proportions (1800×256)
+#: the station's sign on the dado under the briefing room's screen: GoalSign's proportions (1800×256)
 SIGN_ASPECT = 1800 / 256
 
 #: the briefing room's inner faces, from the doorway's wall to the screen's
@@ -56,15 +56,22 @@ SIDE_X = 1.35
 SEATS = [('station-lead', 1, 4.7), ('station-reviewer', -1, 4.7), ('station-helper-1', 1, 5.7),
          ('station-helper-2', -1, 5.7), ('station-helper-3', 1, 6.7), ('station-helper-4', -1, 6.7)]
 CAPTAIN = 3.0
-#: the screen: StationScreen's BIG_SCREEN proportions (1600×1024), its bezel resting on the wall's stripe, under its header
-SCREEN_W = 3.4
-SCREEN_H = SCREEN_W * 1024 / 1600
-SCREEN_BOTTOM = 1.09
-SIGN_W = 1.3
-#: the pane switches to starboard of the screen, mirroring the sign: PaneSwitches' proportions (800×960)
-PANES_W = 1.0
-PANES_H = PANES_W * 960 / 800
-PANES_BOTTOM = 1.1
+#: the viewscreen, nearly wall to wall: StationScreen's BIG_SCREEN proportions (2400×1000), its bezel clear of the
+#: wall's stripe. It stands proud of the wall's header band, which runs on behind it: its bezel is deeper than the
+#: band stands out, and the screen sits in it in front of the band.
+SCREEN_W = 6.0
+SCREEN_H = SCREEN_W * 1000 / 2400
+SCREEN_BOTTOM = 1.17
+SCREEN_DEPTH = 0.18
+SCREEN_OUT = 0.1
+#: how far the wall's dado stands out (command_deck.profile)
+DADO_OUT = 0.05
+#: on the dado under the screen, clear of the stripe's lip: the station's sign to port, and the strip of pane switches
+#: (PaneSwitches' proportions, 1600×200) to starboard, mirroring it
+DADO_PANEL_W = 2.4
+DADO_PANEL_X = 1.7
+DADO_PANEL_BOTTOM = 0.42
+PANES_H = DADO_PANEL_W * 200 / 1600
 #: the goal board on the starboard wall, beside the table: GoalBoard's proportions (1440×804), its bezel between the
 #: wall's stripe and its header, clear of the heads of the crew in front of it seen from the head of the table
 BOARD_W = 3.4
@@ -193,8 +200,8 @@ def cut(obj, cutter):
 def briefing_room():
     """
     The goal's briefing room: the doorway in the middle of its aft wall, the captain's chair at the near end of a long
-    table, the crew either side of it, and the lead's session on the far wall, with the station's sign to port of it
-    and the switches for its panes to starboard.
+    table, the crew either side of it, and the lead's session on a viewscreen across the far wall, with the station's
+    sign on the dado under it to port and the switches for its panes to starboard.
     Viewports onto space down the port side, and the goal board, with the lead's note on the goal, to starboard.
     """
     module('briefing_room')
@@ -226,20 +233,20 @@ def briefing_room():
         marker(f'seat {crew}', 'seat', (*at, 0), yaw=yaw, crew=crew)
 
     far = Matrix.Translation((0, ROOM_FAR, 0)) @ Matrix.Rotation(math.pi, 4, 'Z')
-    bezel('screen frame', SCREEN_W, SCREEN_H, 0.1, 0.12, 0.08, toon(HULL['frame']), (0, 0, SCREEN_BOTTOM + SCREEN_H / 2), far)
+    bezel('screen frame', SCREEN_W, SCREEN_H, 0.1, 0.12, SCREEN_DEPTH, toon(HULL['frame']),
+          (0, 0, SCREEN_BOTTOM + SCREEN_H / 2), far)
     panel('screen', SCREEN_W, SCREEN_H, material('#000000', surface='screen', screen='team-station'),
-          (0, 0.012, SCREEN_BOTTOM), far)
-    # to port of the screen, as you face it: the far wall's +X is the room's -X
-    sign_x = (SCREEN_W / 2 + 0.12 + ROOM_HALF) / 2
-    sign_h = SIGN_W / SIGN_ASPECT
-    box('sign frame', (SIGN_W + 0.08, 0.04, sign_h + 0.08), toon(HULL['dado']), (sign_x, 0.02, 1.6 - 0.04), frame=far, round=0.015)
-    panel('sign', SIGN_W, sign_h, material('#000000', surface='screen', screen='team-station-sign'),
-          (sign_x, 0.044, 1.6), far)
-    # and to starboard, mirroring it, the switches for which panes the screen shows
-    box('panes frame', (PANES_W + 0.08, 0.04, PANES_H + 0.08), toon(HULL['dado']), (-sign_x, 0.02, PANES_BOTTOM - 0.04),
-        frame=far, round=0.015)
-    panel('panes', PANES_W, PANES_H, material('#000000', surface='screen', screen='team-station-panes'),
-          (-sign_x, 0.044, PANES_BOTTOM), far)
+          (0, SCREEN_OUT, SCREEN_BOTTOM), far)
+    # on the dado under it: the sign to port, as you face it (the far wall's +X is the room's -X), and the switches for
+    # which panes the screen shows to starboard; each in a frame a little buried in the dado
+    def dado_panel(name, x, h, screen):
+        out = DADO_OUT - 0.005
+        box(f'{name} frame', (DADO_PANEL_W + 0.08, 0.04, h + 0.08), toon(HULL['frame']),
+            (x, out + 0.02, DADO_PANEL_BOTTOM - 0.04), frame=far, round=0.015)
+        panel(name, DADO_PANEL_W, h, material('#000000', surface='screen', screen=screen), (x, out + 0.044, DADO_PANEL_BOTTOM), far)
+
+    dado_panel('sign', DADO_PANEL_X, DADO_PANEL_W / SIGN_ASPECT, 'team-station-sign')
+    dado_panel('panes', -DADO_PANEL_X, PANES_H, 'team-station-panes')
 
     port = Matrix.Rotation(-math.pi / 2, 4, 'Z')
     starboard = Matrix.Rotation(math.pi / 2, 4, 'Z')
