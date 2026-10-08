@@ -98,7 +98,7 @@ export class Triages extends Part {
       if (!now || !Exit.isSuccess(exit)) return;
       const result = exit.value;
       const decided = 'decision' in result ? { ...now, triage: { officer: officer.name, ...result.decision, at: Date.now() } } : now;
-      if ('decision' in result) this.core.ledger.record(review.projectId, { kind: 'triage', repo: review.repo, pr: review.number, goal: this.core.manager.leadWith(review.repo, review.number)?.lead?.title, officer: officer.name, ...result.decision });
+      if ('decision' in result) this.core.ledger.record(review.projectId, { kind: 'triage', repo: review.repo, pr: review.number, goal: this.core.leads.leadWith(review.repo, review.number)?.lead?.title, officer: officer.name, ...result.decision });
       yield* this.afterTriage(decided, afterTriage(officer.name, result, { closes: pr?.linkedIssues ?? [] }));
     });
   }
@@ -152,7 +152,7 @@ export class Triages extends Part {
       const comment = `🧭 ${officer}, the Focus office's operations officer, closed this pull request: ${note}\n\n${pr.linkedIssues.map((n) => `#${n}`).join(', ')} stays open, so it gets built again.`;
       yield* github.closePullRequest(review.repo, review.number, comment);
       for (const issue of pr.linkedIssues) this.store.putClosedPr({ repo: review.repo, issue, pr: review.number, officer, note, at: Date.now() });
-      this.core.manager.prClosed(review.repo, review.number, false, 'officer');
+      this.core.seating.prClosed(review.repo, review.number, false, 'officer');
       this.boardChanged(review.projectId);
     });
   }

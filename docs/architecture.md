@@ -21,9 +21,17 @@ server/
   previewMachine.ts       what a preview does to this machine (shell commands in their own process group, signals, probes) as an Effect service
   github/                 GitHub as an Effect service: gh CLI layer (live), in-memory layer (demo), Promise adapter
   agents/
-    manager.ts            hire → queue → worktree → run → commit nudge → push → PR; messages, approvals (Effect inside: a fiber per agent's work in a FiberMap)
-    manager/              the manager's parts, each a concern of its own, which AgentManager's public methods hand over to
+    manager.ts            AgentManager: the office's one way in to its agents; each public method hands over to its part in manager/
+    manager/              the manager's parts, each a concern of its own (Effect inside: a fiber per agent's work in a FiberMap)
       core.ts             what they share: store, hub, the runtime and each agent's fiber, rt/update/print; the Part base class; errors
+      seating.ts          hire → seat at a desk → start when a slot frees (schedule); sending agents home; a PR landing
+      sessions.ts         an agent's Claude Code session: launch, each turn and its hooks, compacting, what follows a turn, failing
+      delivery.ts         a developer's work onto GitHub: commit nudge → push → PR, then QA
+      conflicts.ts        a PR's merge conflicts: the office's own merge of its base, or an agent seated on it
+      leads.ts            goals: start, queue, reopen, close; what a lead hears about their PRs
+      slices.ts           a goal's slices: every repo checked out side by side, fresh code when a slice lands, the ship tool
+      goalTools.ts        the lead's note, show, explain, ask and propose_close tools, and the captain's answer
+      comms.ts            the captain's word with an agent: messages, approvals, stop, effort, reading a lead's turn
       reviews.ts          QA: the review queue, seating a reviewer, their verdict, sending a failed PR back to be fixed
       triages.ts          stuck PRs: the operations officer's look, one at a time per room, and what they decided
       cloudMoves.ts       moving an agent to a cloud session, attaching to it, or keeping them local

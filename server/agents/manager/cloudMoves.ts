@@ -60,7 +60,7 @@ export class CloudMoves extends Part {
     });
     this.print(agent, [{ kind: 'system', text: '☁ Waiting for a cloud session: ▶ Start opens a terminal that starts one, or start one on claude.ai/code and paste its link' }]);
     this.hub.toast('info', `☁ ${agent.name} is waiting for a cloud session`, agent.id);
-    this.core.manager.schedule();
+    this.core.seating.schedule();
   }
 
   /**
@@ -123,12 +123,12 @@ export class CloudMoves extends Part {
       this.update(agent, { handover: undefined, cloud: true, sessionId, status: 'setting-up', activity: 'Sending the work to the cloud session' });
       this.print(agent, [{ kind: 'system', text: `☁ Attaching to their cloud session: ${cloudSessionUrl(agent) ?? sessionId}` }]);
       const work = handover.fresh
-        ? withNotes(yield* this.core.manager.taskPrompt(agent), rt.notes)
+        ? withNotes(yield* this.core.sessions.taskPrompt(agent), rt.notes)
         : carryOnPrompt(agent, MOVED_ON);
       rt.nudged = false;
       rt.attaching = { tries: 0, handover };
       // a session the captain started hasn't had the office's instructions
-      yield* this.core.manager.runSession(agent, `${yield* this.core.manager.instructions(agent)}\n\n---\n\n${work}`, sessionId);
+      yield* this.core.sessions.runSession(agent, `${yield* this.core.sessions.instructions(agent)}\n\n---\n\n${work}`, sessionId);
     }).pipe(this.orFail(agent));
   }
 
@@ -145,13 +145,13 @@ export class CloudMoves extends Part {
     this.print(agent, [{ kind: 'system', text: `✻ ${agent.name} stays on this machine as a 💻 local agent` }]);
     if (!start || !handover.fresh) {
       this.update(agent, { status: 'stopped', activity: start ? 'Staying on this machine: send a message to carry on' : STOPPED_BY_CAPTAIN, finishedAt: Date.now() });
-      this.core.manager.schedule();
+      this.core.seating.schedule();
       return agent;
     }
     const rt = this.rt(id);
     this.update(agent, { status: 'setting-up', activity: 'Reading the issue' });
     this.runFor(id, Effect.gen({ self: this }, function* () {
-      yield* this.core.manager.runSession(agent, withNotes(yield* this.core.manager.taskPrompt(agent), rt.notes));
+      yield* this.core.sessions.runSession(agent, withNotes(yield* this.core.sessions.taskPrompt(agent), rt.notes));
     }).pipe(this.orFail(agent)));
     return agent;
   }

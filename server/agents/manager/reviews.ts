@@ -42,7 +42,7 @@ export class Reviews extends Part {
       title,
       status: 'queued',
       requestedAt: Date.now(),
-      openedByOffice: this.core.manager.openedByOffice(repo, number),
+      openedByOffice: this.core.seating.openedByOffice(repo, number),
       failedRounds: existing?.failedRounds,
       lastRound: existing?.report ? { sha: existing.sha, report: existing.report } : existing?.lastRound,
       triages: existing?.triages,
@@ -137,7 +137,7 @@ export class Reviews extends Part {
       return !!reviewer && !FINISHED.includes(reviewer.status);
     };
     for (const { review, reviewer } of reviewsToStart(queued, reviewerOf, busy)) this.seatReviewer(projectId, reviewer, review, goalOf(review, leads));
-    this.core.manager.schedule();
+    this.core.seating.schedule();
   }
 
   /** Puts the room's QA officer, or `goal`'s own reviewer, on `review`: the same person every time. */
@@ -193,7 +193,7 @@ export class Reviews extends Part {
       rt.shots = undefined;
       let prompt = qaPrompt(agent.repo, pr, issues, review ?? {});
       if (rt.inbox.length) prompt += `\n\nNotes from your manager:\n${rt.inbox.splice(0).map((m) => `- ${m}`).join('\n')}`;
-      yield* this.core.manager.runSession(agent, prompt);
+      yield* this.core.sessions.runSession(agent, prompt);
     });
   }
 
@@ -216,7 +216,7 @@ export class Reviews extends Part {
       const number = agent.issue.number;
       const report = parseQaReport(structured, text);
       if (!report) {
-        this.core.manager.fail(agent, 'Finished without a QA report. Send them a message to ask for one, or send the PR to QA again.');
+        this.core.sessions.fail(agent, 'Finished without a QA report. Send them a message to ask for one, or send the PR to QA again.');
         return;
       }
       // the PR merged or closed while they were at it: a verdict now would land on a PR that's gone
@@ -237,7 +237,7 @@ export class Reviews extends Part {
       const failedRounds = (review?.failedRounds ?? 0) + (pass ? 0 : 1);
       const checks = { pass: 0, fail: 0, skip: 0 };
       for (const c of report.checks) checks[c.result]++;
-      this.core.ledger.record(agent.projectId, { kind: 'qa-verdict', repo: agent.repo, pr: number, goal: this.core.manager.leadWith(agent.repo, number)?.lead?.title, verdict: report.verdict, sha: review?.sha, reviewer: agent.name, checks, failedRounds });
+      this.core.ledger.record(agent.projectId, { kind: 'qa-verdict', repo: agent.repo, pr: number, goal: this.core.leads.leadWith(agent.repo, number)?.lead?.title, verdict: report.verdict, sha: review?.sha, reviewer: agent.name, checks, failedRounds });
       const done: QaReview | undefined = review && { ...review, status: pass ? 'passed' : 'failed', report, screenshots, commentUrl, failedRounds, finishedAt: Date.now(), error: undefined };
       if (done) this.putReview(done);
       this.print(agent, [{ kind: pass ? 'success' : 'error', text: `${pass ? '✅ QA passed' : '❌ QA failed'} PR #${number} · ${report.checks.length} checks` }]);
@@ -246,7 +246,7 @@ export class Reviews extends Part {
       this.boardChanged(agent.projectId);
       if (done) yield* this.qaNext(done, { kind: 'verdict', verdict: report.verdict, failedRounds });
       this.core.ledger.digestSession(agent, [{ repo: agent.repo, pr: number }]);
-      this.core.manager.leadHearsVerdict(agent.repo, number, `QA officer ${agent.name}`, report, failedRounds);
+      this.core.leads.leadHearsVerdict(agent.repo, number, `QA officer ${agent.name}`, report, failedRounds);
       this.nextReview(agent.projectId);
     });
   }
@@ -323,18 +323,18 @@ export class Reviews extends Part {
       if (!report) return;
       const where = `${review.repo.split('/')[1]}#${review.number}`;
       const why = fixes.kind === 'qa' ? 'failed QA' : 'keeps failing its checks';
-      if (fixes.kind === 'checks') this.core.ledger.record(review.projectId, { kind: 'checks-sent-back', repo: review.repo, pr: review.number, goal: this.core.manager.leadWith(review.repo, review.number)?.lead?.title, checks: fixes.checks.map((c) => c.name) });
+      if (fixes.kind === 'checks') this.core.ledger.record(review.projectId, { kind: 'checks-sent-back', repo: review.repo, pr: review.number, goal: this.core.leads.leadWith(review.repo, review.number)?.lead?.title, checks: fixes.checks.map((c) => c.name) });
       const advice = note && `${plannerFor(review.projectId).name}, the operations officer, looked at why this PR is stuck: ${note}`;
-      const owner = this.core.manager.prOwner(review.repo, review.number);
+      const owner = this.core.seating.prOwner(review.repo, review.number);
       if (owner) {
         this.putReview({ ...review, followUp: { kind: 'fixing', agentId: owner.id, agentName: owner.name, fixes } });
         const prompt = this.fixPromptFor(owner, review, report, fixes);
-        this.core.manager.message(owner.id, advice ? `${prompt}\n\n${advice}` : prompt);
+        this.core.comms.message(owner.id, advice ? `${prompt}\n\n${advice}` : prompt);
         this.hub.toast('info', `🔧 ${where} ${why} – back to ${owner.name}`, owner.id);
         return;
       }
       const pr = yield* (yield* GitHub).getPullRequest(review.repo, review.number);
-      const agent = this.core.manager.seat(review.projectId, review.repo, {
+      const agent = this.core.seating.seat(review.projectId, review.repo, {
         id: newId('agent'),
         task: 'fix',
         issue: { number: pr.number, title: pr.title, url: pr.url },
@@ -395,7 +395,7 @@ export class Reviews extends Part {
       this.rt(qa.id).inbox.length = 0;
       if (!FINISHED.includes(qa.status)) {
         this.print(qa, [{ kind: 'system', text: `✻ ${goneReply(number, gone)}: stopping` }]);
-        this.core.manager.stop(qa.id);
+        this.core.comms.stop(qa.id);
       }
     }
     const review = this.store.reviews.get(prKey(repo, number));

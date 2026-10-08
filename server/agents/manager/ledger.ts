@@ -27,15 +27,15 @@ export class Ledger extends Part {
     const key = prKey(repo, number);
     if (this.landed.has(key)) return;
     const review = this.store.reviews.get(key);
-    const lead = this.core.manager.leadWith(repo, number);
-    const projectId = review?.projectId ?? lead?.projectId ?? this.core.manager.prOwner(repo, number)?.projectId;
+    const lead = this.core.leads.leadWith(repo, number);
+    const projectId = review?.projectId ?? lead?.projectId ?? this.core.seating.prOwner(repo, number)?.projectId;
     if (!projectId) return;
     this.landed.add(key);
     // merged on GitHub, the office doesn't know the final head: a goal's PR is at the commit its lead last shipped
     const head = headSha ?? lead?.lead?.prs.find((p) => p.repo === repo && p.number === number)?.sha;
     const qa = qaBadge(review, { headSha: head ?? '' }).state;
     // the issues it closed: as the board last saw them, and the one its developer was given
-    const owner = this.core.manager.prOwner(repo, number);
+    const owner = this.core.seating.prOwner(repo, number);
     const onBoard = [...this.store.boards.values()].flatMap((b) => b.prs).find((p) => p.repo === repo && p.number === number)?.closes ?? [];
     const closes = [...new Set([...onBoard, ...(owner?.task === 'issue' ? [owner.issue.number] : [])])];
     const common = { repo, pr: number, goal: lead?.lead?.title, by, qa, failedRounds: review?.failedRounds ?? 0, triages: review?.triages ?? 0 };
@@ -53,7 +53,7 @@ export class Ledger extends Part {
     if (!read || !sessionId || agent.cloud) return;
     // as they are now: the agent may be gone by the time the transcript's read
     const who = { id: agent.id, name: agent.name, task: agent.task, sessionId, costUsd: agent.costUsd };
-    const goal = agent.lead?.title ?? prs.map((p) => this.core.manager.leadWith(p.repo, p.pr)?.lead?.title).find(Boolean);
+    const goal = agent.lead?.title ?? prs.map((p) => this.core.leads.leadWith(p.repo, p.pr)?.lead?.title).find(Boolean);
     const digest = async () => {
       const text = await read(sessionId);
       const span = text && transcriptSpan(text, lastDigest(this.store.ledger, sessionId)?.toUuid);

@@ -4,12 +4,19 @@ import type { GitHub, GitHubError } from '../../github/service';
 import type { Hub } from '../../hub';
 import type { Store } from '../../store';
 import { errorMessage } from '../../util';
-import type { AgentManager } from '../manager';
 import { type GitFailed, type Renderer, retryServerErrors, SHIP_RETRIES, type Sessions, type Triage, type Workspace } from '../services';
 import type { AgentSession } from '../types';
 import type { CloudMoves } from './cloudMoves';
+import type { Comms } from './comms';
+import type { Conflicts } from './conflicts';
+import type { Delivery } from './delivery';
+import type { GoalTools } from './goalTools';
+import type { Leads } from './leads';
 import type { Ledger } from './ledger';
 import type { Reviews } from './reviews';
+import type { Seating } from './seating';
+import type { AgentSessions } from './sessions';
+import type { Slices } from './slices';
 import type { Triages } from './triages';
 
 /** What the manager's work needs: GitHub, the agents' checkouts, Claude Code sessions and the operations officer. */
@@ -79,8 +86,14 @@ export class Core {
   readonly scope = Scope.makeUnsafe();
   /** Each agent's work in hand, by agent id: their launch, a turn and what follows it, or a compaction. */
   readonly runs: FiberMap.FiberMap<string, void, never>;
-  /** What hasn't moved into a part of its own yet: hiring, sessions, goals and the captain's actions. */
-  manager!: AgentManager;
+  seating!: Seating;
+  sessions!: AgentSessions;
+  delivery!: Delivery;
+  conflicts!: Conflicts;
+  leads!: Leads;
+  slices!: Slices;
+  goalTools!: GoalTools;
+  comms!: Comms;
   reviews!: Reviews;
   triages!: Triages;
   cloud!: CloudMoves;
@@ -143,7 +156,7 @@ export class Core {
    * queued gets a look in (the agent themselves included, once their fiber has gone).
    */
   runFor(id: string, work: Effect.Effect<void, never, ManagerServices>): Fiber.Fiber<void> {
-    const after = Effect.sync(() => this.background(Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => this.manager.schedule())))));
+    const after = Effect.sync(() => this.background(Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => this.seating.schedule())))));
     return this.runtime.runSync(FiberMap.run(this.runs, id, work.pipe(Effect.ensuring(after)), { onlyIfMissing: true }));
   }
 
@@ -151,8 +164,8 @@ export class Core {
   orFail(agent: Agent) {
     return (work: Effect.Effect<void, WorkError, ManagerServices>): Effect.Effect<void, never, ManagerServices> =>
       work.pipe(
-        Effect.catch((err) => Effect.sync(() => this.manager.fail(agent, err))),
-        Effect.catchDefect((defect) => Effect.sync(() => this.manager.fail(agent, errorMessage(defect)))),
+        Effect.catch((err) => Effect.sync(() => this.sessions.fail(agent, err))),
+        Effect.catchDefect((defect) => Effect.sync(() => this.sessions.fail(agent, errorMessage(defect)))),
       );
   }
 
@@ -201,6 +214,10 @@ export abstract class Part {
 
   protected print(agent: Agent, lines: Omit<TermLine, 't'>[]): void {
     this.core.print(agent, lines);
+  }
+
+  protected printHelper(agent: Agent, id: string, lines: Omit<TermLine, 't'>[]): void {
+    this.core.printHelper(agent, id, lines);
   }
 
   protected background(effect: Effect.Effect<void, never, ManagerServices>): void {
