@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { plainMarkdown, plainTermLine, replyPart } from './termText';
+import { lastReply, plainMarkdown, plainTermLine, replyPart } from './termText';
 
 describe('replyPart', () => {
   it('starts a reply at the marker and carries it on through indented text lines', () => {
@@ -40,5 +40,22 @@ describe('plainTermLine', () => {
     expect(plainTermLine({ t: 0, kind: 'text', text: '⏺ **Done**' })).toBe('⏺ Done');
     expect(plainTermLine({ t: 0, kind: 'text', text: '  - `a`' })).toBe('  • a');
     expect(plainTermLine({ t: 0, kind: 'output', text: '  ⎿  **raw**' })).toBe('  ⎿  **raw**');
+  });
+});
+
+describe('lastReply', () => {
+  it('is the last reply, without its markdown, up to the next tool call', () => {
+    expect(lastReply([
+      { t: 0, kind: 'text', text: '⏺ First thoughts' },
+      { t: 1, kind: 'tool', text: '⏺ Bash(npm test)' },
+      { t: 2, kind: 'text', text: '⏺ Slice **shipped**.' },
+      { t: 3, kind: 'text', text: '  - QA passed' },
+      { t: 4, kind: 'text', text: '  ' },
+      { t: 5, kind: 'system', text: '✻ Turn ended' },
+    ])).toBe('Slice shipped.\n• QA passed');
+  });
+
+  it('is empty before Claude has said anything', () => {
+    expect(lastReply([{ t: 0, kind: 'manager', text: '▶ Captain: hello' }])).toBe('');
   });
 });

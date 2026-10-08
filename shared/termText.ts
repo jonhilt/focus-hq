@@ -39,3 +39,16 @@ export function plainTermLine(line: TermLine): string {
   const part = replyPart(line);
   return part ? `${part.start ? REPLY : '  '}${plainMarkdown(part.text)}` : line.text;
 }
+
+/** The last of Claude's replies in a terminal, as plain text: what a lead last said, for the Comms panel to quote. */
+export function lastReply(lines: readonly TermLine[]): string {
+  const start = lines.findLastIndex((l) => replyPart(l)?.start);
+  if (start < 0) return '';
+  const said: string[] = [];
+  for (const line of lines.slice(start)) {
+    const part = replyPart(line);
+    if (!part) break;
+    said.push(plainMarkdown(part.text));
+  }
+  return said.join('\n').trim();
+}

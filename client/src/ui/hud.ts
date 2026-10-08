@@ -1,4 +1,5 @@
 import { ACTIVE_STATUSES } from '../../../shared/types';
+import { attention, onSeen } from '../net/attention';
 import { state } from '../net/state';
 import { sound } from '../sound';
 import { fill, h } from './dom';
@@ -28,6 +29,7 @@ export class Hud {
         h('span', null, h('kbd', null, 'WASD'), 'move'),
         h('span', null, h('kbd', null, 'Shift'), 'run'),
         h('span', null, h('kbd', null, 'E'), 'interact'),
+        h('span', null, h('kbd', null, 'C'), 'comms'),
         h('span', null, h('kbd', null, 'T'), 'teleport'),
         h('span', null, h('kbd', null, 'M'), 'ready room'),
         h('span', null, h('kbd', null, 'N'), 'new issue'),
@@ -45,6 +47,8 @@ export class Hud {
     state.on('info', refresh);
     state.on('connection', refresh);
     state.on('preview', refresh);
+    state.on('review', refresh);
+    onSeen(refresh);
   }
 
   /** Blacks out the view, does `between` in the dark and brings the view back: the length of a turbolift ride. */
@@ -85,9 +89,8 @@ export class Hud {
   private renderStats(): void {
     const agents = state.shownAgents();
     const working = agents.filter((a) => ACTIVE_STATUSES.includes(a.status) && a.status !== 'waiting').length;
-    const waiting = agents.filter((a) => a.status === 'waiting').length;
     const queued = agents.filter((a) => a.status === 'queued').length;
-    const failed = agents.filter((a) => a.status === 'error').length;
+    const hails = attention().length;
     const prs = state.shown.reduce((n, p) => n + (state.boards.get(p.id)?.prs.length ?? 0), 0);
     const previews = [...state.previews.keys()].filter((id) => !state.isHidden(id)).length;
     fill(
@@ -96,10 +99,11 @@ export class Hud {
       state.info && !state.info.github.ok ? h('div', { class: 'stat bad' }, '⚠ GitHub not connected') : null,
       h('div', { class: 'stat' }, `⌨️ ${working} working`),
       queued ? h('div', { class: 'stat' }, `⏳ ${queued} queued`) : null,
-      waiting ? h('div', { class: 'stat alert' }, `✋ ${waiting} need${waiting === 1 ? 's' : ''} you`) : null,
-      failed ? h('div', { class: 'stat bad' }, `❗ ${failed} stuck`) : null,
       h('div', { class: 'stat' }, `👀 ${prs} PR${prs === 1 ? '' : 's'}`),
       previews ? h('div', { class: 'stat' }, `▶ ${previews} preview${previews === 1 ? '' : 's'}`) : null,
+      // whatever waits on the captain, anywhere on the ship: C opens Comms to answer it
+      h('div', { class: `comms-badge${hails ? ' hailing' : ''}`, title: hails ? `${hails} waiting on you: press C` : 'Nobody is waiting on you' },
+        h('span', null, 'Comms'), h('b', null, hails), h('kbd', null, 'C')),
     );
   }
 

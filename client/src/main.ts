@@ -11,6 +11,7 @@ import { h } from './ui/dom';
 import { Hud } from './ui/hud';
 import { openManagerPanel } from './ui/managerPanel';
 import { openGoalsPanel } from './ui/goalsPanel';
+import { openCommsPanel } from './ui/commsPanel';
 import { numberOnePanelOpen, openNumberOnePanel } from './ui/numberOnePanel';
 import { Panels } from './ui/panels';
 import { openPreviewPanel } from './ui/previewPanel';
@@ -118,6 +119,7 @@ async function main() {
     openNewIssue: (projectId) => openNewIssuePanel(ui, projectId),
     openQa: (projectId) => openQaPanel(ui, projectId),
     openNumberOne: () => openNumberOnePanel(ui),
+    openComms: () => openCommsPanel(ui),
     openGoals: (projectId, station) => openGoalsPanel(ui, projectId, station),
     openManager: (tab) => openManagerPanel(ui, tab),
     openTeleport: () => openTeleportPanel(ui),
@@ -382,9 +384,12 @@ async function main() {
       KeyM: () => ui.openManager(),
       KeyN: () => ui.openNewIssue(world.locationOf(camera.position).projectId),
       Digit1: () => ui.openNumberOne(),
+      KeyC: () => ui.openComms(),
+      // the goals of the holodeck you're in; anywhere else, every goal's in Comms
       KeyL: () => {
         const projectId = world.locationOf(camera.position).projectId;
         if (projectId) ui.openGoals(projectId);
+        else ui.openComms();
       },
     };
     const run = hotkeys[e.code];

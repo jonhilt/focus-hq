@@ -68,6 +68,7 @@ Then on board:
 
 - [Controls](docs/controls.md): keys and what they do
 - [Goals and their leads](docs/goals.md): team stations, briefing rooms, shipping a goal a slice at a time
+- [Comms](docs/comms.md): who's waiting on you across the ship, and answering them from anywhere
 - [Drafting issues](docs/drafting-issues.md): the operations officer at the New issue stand
 - [Number One](docs/number-one.md): the ship-wide chat in the ready room, and its voice mode
 - [How an agent works an issue](docs/agents.md): from hire to merge, their panel and station displays

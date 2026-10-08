@@ -2,6 +2,7 @@ import { statusIcon, statusLine } from '../../../shared/agentStatus';
 import { UNIFORM } from '../../../shared/crew';
 import type { Agent, PermissionRequest, TermLine } from '../../../shared/types';
 import { api } from '../net/api';
+import { markSeen } from '../net/attention';
 import { state } from '../net/state';
 import { h } from '../ui/dom';
 import { TermView } from '../ui/terminal';
@@ -116,6 +117,8 @@ export function agentView(id: string, actions: Actions, back: () => void): View 
   const update = () => {
     const a = state.agents.get(id);
     if (!a) return;
+    // a lead's turn read here stops hailing on the home screen
+    markSeen(a);
     const next = renderHead(a);
     if (!head.firstElementChild) head.append(next);
     else morph(head.firstElementChild, next);

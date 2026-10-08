@@ -6,7 +6,7 @@ shared/crew.ts            how the crew look (uniforms, species), and the permane
 shared/qa.ts              QA decisions shared by server and board (badges, stale verdicts)
 shared/board.ts           a project's Kanban columns (to do, in progress, PRs), for the 3D board, its panel and the Tricorder
 shared/agentStatus.ts     how an agent's status reads (icon, one-line status)
-shared/tricorder.ts       the Tricorder's decisions: what needs you, which agents are in flight
+shared/tricorder.ts       what needs you (the Tricorder and Comms), which agents are in flight
 shared/ledger.ts          the ledger of how work went (QA verdicts, merges, conflicts, triage, goals) and its report card
 server/
   supervise.ts            runs index.ts and restarts it after an auto update
@@ -51,7 +51,7 @@ client/src/
     deck.ts               a deck built in Blender: loads its GLB, draws its surfaces, reads its markers and what pressing E does (deckExtras.ts: what the markers, surfaces and interactions say)
     holodeckDeck.ts       the holodeck deck, put together from its Blender modules for however many holodecks there are
     turbolift.ts          which turbolift stop you're at (the turbolift's controls are in ui/travelPanel.ts)
-  ui/                     HUD and panels (agent terminal, a helper's transcript, board, ready room console, teleport, QA station, goals)
+  ui/                     HUD and panels (agent terminal, a helper's transcript, board, ready room console, teleport, QA station, goals, Comms)
     numberOnePanel.ts     the chat with Number One: the log, suggestions sent to the stand or started as goals, voice mode
   tricorder/              the phone view at /tricorder (no three.js): home screen, agent drill-down, buttons that survive live re-renders
 client/tricorder/index.html   the Tricorder's page (a second Vite entry), with its home-screen meta tags

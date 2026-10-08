@@ -1,6 +1,6 @@
 # On your phone (Tricorder)
 
-The office also serves a phone-sized page, the **Tricorder**, at `/tricorder`. It shows what needs you (raised hands, agents in trouble, PRs QA gave up on, conflicting PRs), each project's agents in flight, its PRs and its issues. From there you can open an agent's terminal and browser, approve or decline, message or stop them, merge, send a PR to QA, hand its conflicts to an agent, and assign an agent to an issue.
+The office also serves a phone-sized page, the **Tricorder**, at `/tricorder`. It shows what needs you (raised hands, agents in trouble, goals' leads waiting for your reply or ready to wrap up, PRs QA gave up on, conflicting PRs: the same rule as [Comms](comms.md)), each project's agents in flight, its PRs and its issues. From there you can open an agent's terminal and browser, approve or decline, message or stop them, merge, send a PR to QA, hand its conflicts to an agent, and assign an agent to an issue.
 
 | | | | |
 | --- | --- | --- | --- |

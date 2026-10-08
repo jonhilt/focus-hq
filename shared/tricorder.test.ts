@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { prKey } from './qa';
-import { inFlight, needsYou } from './tricorder';
+import { inFlight, needsYou, turnKey } from './tricorder';
 import type { Agent, PullRequest, QaReview } from './types';
 import { QA_DESK } from './types';
 
@@ -62,6 +62,20 @@ describe('needsYou', () => {
       { kind: 'hand', agent: hand },
       { kind: 'error', agent: broken },
     ]);
+  });
+
+  it('lists a lead waiting for a reply until their turn is seen, and a lead ready to wrap up whether seen or not', () => {
+    const turn = agent({ task: 'lead', status: 'done', finishedAt: 5, lead: { title: 'Wishlist', station: 0, repos: [], slice: 1, prs: [] } });
+    const closing = agent({ id: 'a2', task: 'lead', status: 'done', finishedAt: 6, lead: { title: 'Search', station: 1, repos: [], slice: 2, prs: [], closing: { reason: 'all merged', at: 6 } } });
+    const working = agent({ id: 'a3', task: 'lead', lead: turn.lead });
+    expect(needsYou([turn, closing, working], [], new Map())).toEqual([
+      { kind: 'turn', agent: turn },
+      { kind: 'wrap-up', agent: closing },
+    ]);
+    const seen = new Set([turnKey(turn), turnKey(closing)]);
+    expect(needsYou([turn, closing], [], new Map(), seen)).toEqual([{ kind: 'wrap-up', agent: closing }]);
+    // the next turn is news again
+    expect(needsYou([{ ...turn, finishedAt: 9 }], [], new Map(), seen)).toEqual([{ kind: 'turn', agent: { ...turn, finishedAt: 9 } }]);
   });
 
   it('lists a PR QA gave up on, but not one QA sent back to a developer', () => {

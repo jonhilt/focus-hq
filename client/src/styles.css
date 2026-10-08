@@ -83,6 +83,17 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
 .stat.alert { background: var(--lcars-gold); color: var(--ink); border-color: var(--lcars-peach); animation: blink 1s steps(1) infinite; }
 .stat.bad { background: var(--lcars-red); color: var(--ink); border-color: var(--lcars-orange); }
 @keyframes blink { 50% { background: var(--lcars-peach); border-color: var(--lcars-gold); } }
+/* Comms on the HUD: an LCARS pill that lights up and counts whatever waits on the captain */
+.comms-badge {
+  display: flex; align-items: stretch; border-radius: 999px; overflow: hidden; font-weight: 600; letter-spacing: 0.08em;
+  background: #000d; color: var(--lcars-peach); border-left: 14px solid var(--lcars-orange);
+}
+.comms-badge > * { display: flex; align-items: center; padding: 4px 10px; }
+.comms-badge b { min-width: 1.6em; justify-content: center; color: var(--muted); }
+.comms-badge kbd { background: var(--lcars-lilac); color: var(--ink); font-family: var(--ui); margin: 0; border-radius: 0; }
+.comms-badge.hailing > span { background: var(--lcars-orange); color: var(--ink); }
+.comms-badge.hailing b { background: var(--lcars-red); color: var(--ink); animation: hail 1.2s steps(1) infinite; }
+@keyframes hail { 50% { background: var(--lcars-gold); } }
 .controls {
   position: absolute; left: 16px; bottom: 16px; font-size: 13px; color: var(--lcars-peach); letter-spacing: 0.06em;
   text-shadow: 0 1px 2px #000; display: flex; gap: 14px; flex-wrap: wrap;
@@ -549,3 +560,21 @@ select.effort { width: auto; padding: 2px 6px; border-radius: 10px; font-size: 1
 .voice-setup code { font-family: var(--mono); font-size: 13px; padding: 2px 8px; border-radius: 6px; background: var(--surface-2); }
 .voice-progress { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .voice-progress progress { flex: 1; accent-color: var(--lcars-gold); }
+
+/* ------------------------------------------------------------------ Comms */
+
+.comms h3 { margin: 18px 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--lcars-lilac); }
+.comms h3:first-child { margin-top: 0; }
+.hail { --tone: var(--lcars-orange); background: var(--surface-2); border-left: 10px solid var(--tone); border-radius: 0 var(--radius) var(--radius) 0; padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+.hail-from { color: var(--lcars-peach); }
+.hail-from strong { color: var(--text); }
+.hail-project { --tone: var(--lcars-lilac); margin-left: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; background: var(--tone); color: var(--ink); border-radius: 999px; padding: 0 8px; vertical-align: 2px; }
+.hail-what { margin: 0; font-weight: 600; }
+.hail-said {
+  margin: 0; padding-left: 10px; border-left: 2px solid var(--line); white-space: pre-wrap; line-height: 1.35; max-height: 9.5em; overflow: auto;
+}
+.hail-reply input { width: 100%; }
+.under-way-list { display: flex; flex-direction: column; gap: 6px; }
+.under-way { --tone: var(--lcars-lilac); display: flex; gap: 12px; align-items: center; background: var(--surface-2); border-radius: 0 var(--radius) var(--radius) 0; padding-right: 12px; }
+.under-way-station { background: var(--tone); color: var(--ink); align-self: stretch; display: flex; align-items: center; justify-content: flex-end; border-radius: 18px 0 0 18px; padding: 0 8px 0 18px; font-size: 18px; font-weight: 600; }
+.under-way small { display: block; }

@@ -7,6 +7,7 @@ import { prKey, qaBadge } from '../../../shared/qa';
 import { type Attention, inFlight, needsYou } from '../../../shared/tricorder';
 import type { Agent, Issue, Project, PullRequest, QaReview } from '../../../shared/types';
 import { api } from '../net/api';
+import { seenTurns } from '../net/attention';
 import { state } from '../net/state';
 import { h } from '../ui/dom';
 import type { Actions } from './actions';
@@ -38,6 +39,7 @@ export function home(ctx: HomeContext): HTMLElement {
     state.shownAgents(),
     boards.flatMap(({ project, cols }) => cols.prs.map((pr) => ({ projectId: project.id, pr }))),
     state.reviews,
+    seenTurns(),
   );
   return h('main', { class: 'home' },
     needsYouStrip(ctx, attention),
@@ -53,6 +55,10 @@ function needsYouStrip(ctx: HomeContext, attention: Attention[]): HTMLElement {
         return agentEntry(a.agent, '✋', `${a.agent.name} wants to run`, a.agent.permission?.summary ?? '');
       case 'error':
         return agentEntry(a.agent, '❗', `${a.agent.name} hit a problem`, a.agent.error ?? workLabel(a.agent));
+      case 'wrap-up':
+        return agentEntry(a.agent, '🏁', `${a.agent.name} is ready to wrap up`, a.agent.lead?.closing?.reason ?? '');
+      case 'turn':
+        return agentEntry(a.agent, '🖖', `${a.agent.name} is waiting for you`, a.agent.activity);
       case 'qa': {
         const reason = state.reviews.get(prKey(a.pr.repo, a.pr.number))?.followUp;
         return prEntry(ctx, a.projectId, a.pr, '🙋', 'QA needs you', reason?.kind === 'needs-you' ? reason.reason : a.pr.title);

@@ -63,6 +63,7 @@ export function openPausePanel(ui: Ui, resume: () => void): void {
     h('p', { style: 'margin-top:0' }, 'The crew keeps working while you’re away.'),
     h('div', { class: 'row' },
       h('button', { class: 'btn primary', onclick: resume }, 'Back to work'),
+      h('button', { class: 'btn', onclick: () => ui.openComms() }, 'Comms'),
       h('button', { class: 'btn', onclick: () => ui.openTeleport() }, 'Teleport'),
       h('button', { class: 'btn', onclick: () => ui.openManager() }, 'Ready room'),
       sounds.el,

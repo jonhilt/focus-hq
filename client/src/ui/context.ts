@@ -28,6 +28,8 @@ export interface Ui {
   /** The room's goals: each one's lead, and a box to start another. */
   /** `station`: the free team station the captain walked up to, where a goal they start goes. */
   openGoals(projectId: string, station?: number): void;
+  /** Comms: whatever waits on the captain across the ship, and every goal under way. */
+  openComms(): void;
   /** The ready room's chat with Number One. */
   openNumberOne(): void;
   openManager(tab?: ManagerTab): void;

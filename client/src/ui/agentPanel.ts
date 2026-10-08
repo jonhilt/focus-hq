@@ -5,6 +5,7 @@ import { helperFor, UNIFORM } from '../../../shared/crew';
 import type { Agent, BrowserFrame, Effort, Helper, TermLine } from '../../../shared/types';
 import { EFFORT_LEVELS } from '../../../shared/types';
 import { api } from '../net/api';
+import { markSeen } from '../net/attention';
 import { state } from '../net/state';
 import { drawMockPage } from '../world/screen';
 import { LCARS, LCARS_STATUS } from '../world/starship';
@@ -80,6 +81,8 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
   ui.panels.open({ title, body, footer, nav, wide: true, accent: UNIFORM[agent.avatar.division] });
   shown = id;
   ui.panels.own(() => (shown = null));
+  // reading a lead's turn here answers their hail in Comms, whether or not you reply
+  markSeen(agent);
 
   const sendMessage = () => {
     const text = input.value.trim();
@@ -254,6 +257,7 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
   ui.panels.own(state.on('lines', (e) => e.id === id && appendLines(e.lines)));
   ui.panels.own(state.on('agent', (a) => {
     if (a.id !== id) return;
+    markSeen(a);
     renderHeader(a);
     renderViews();
   }));
