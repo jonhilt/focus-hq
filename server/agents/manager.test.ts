@@ -1,7 +1,9 @@
-import { Layer } from 'effect';
+import { Effect, Layer } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { randomAvatar } from '../../shared/crew';
+import { prKey } from '../../shared/qa';
 import { demoLayer } from '../github/demo';
+import { GitHub } from '../github/service';
 import { Hub } from '../hub';
 import { Store } from '../store';
 import { demoWorkspace } from './demoRunner';
@@ -76,6 +78,26 @@ describe('AgentManager', () => {
     const second = claude.turns[1];
     expect(second.req.resumeSessionId).toBe('session-1');
     expect([second.req.prompt, ...second.sent].join('\n\n')).toBe('Go ahead\n\nSmall slices, please');
+  });
+
+  it('stops a QA session whose PR merged, and won’t resume it for a message', async () => {
+    const { agents, claude, store, project } = office();
+    const [pr] = await Effect.runPromise(Effect.gen(function* () {
+      return yield* (yield* GitHub).listPullRequests('demo/webshop-frontend');
+    }).pipe(Effect.provide(demoLayer)));
+    agents.requestReview(project.id, pr.repo, pr.number, pr.title);
+    await until(() => claude.turns.length === 1);
+    const qa = store.reviews.get(prKey(pr.repo, pr.number))!.agentId!;
+
+    agents.prClosed(pr.repo, pr.number, true, 'captain', pr.headSha);
+    expect(claude.turns[0].stopped).toBe(true);
+    await until(() => store.agent(qa).status === 'stopped' || store.agent(qa).status === 'error');
+    expect(store.agent(qa).prGone).toBe('merged');
+
+    agents.message(qa, 'continue');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(claude.turns).toHaveLength(1);
+    expect(store.recentLines(qa).at(-1)?.text).toBe(`✻ PR #${pr.number} was merged; nothing to review`);
   });
 
   it('stops their Claude Code session when they’re sent home', async () => {

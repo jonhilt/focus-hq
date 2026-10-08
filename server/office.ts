@@ -4,7 +4,7 @@ import { carryMergeable } from '../shared/board';
 import { chosenSet, previewPrs } from '../shared/previewSet';
 import { startOrder } from '../shared/dependencies';
 import type { Closer } from '../shared/ledger';
-import { autoMergeFor, type GateMark, mergeStep, type MergeStep } from '../shared/mergeGate';
+import { autoMergeFor, type GateMark, mergeStep, type MergeStep, requestedMerge } from '../shared/mergeGate';
 import { autoSendBackFor, prKey } from '../shared/qa';
 import type { AgentManager } from './agents/manager';
 import type { NumberOne } from './agents/numberOne';
@@ -200,6 +200,15 @@ export class Office {
     this.boardChanged(projectId);
   }
 
+  /** The captain's "Merge when QA passes" (or, with `on` false, taking it back): the board refresh after QA's verdict merges it. */
+  mergeWhenPassed(projectId: string, repo: string, number: number, on = true) {
+    const pr = this.store.boards.get(projectId)?.prs.find((p) => p.repo === repo && p.number === number);
+    if (!pr) throw new Error(`${repo}#${number} is not an open pull request on this board`);
+    const review = this.agents.requestMerge(repo, number, on);
+    this.boardChanged(projectId, 0);
+    return review;
+  }
+
   /** Hands an open pull request on the board to the room's QA officer (any PR, a teammate's too). */
   requestReview(projectId: string, repo: string, number: number) {
     const pr = this.store.boards.get(projectId)?.prs.find((p) => p.repo === repo && p.number === number);
@@ -292,8 +301,43 @@ export class Office {
     }
 
     await this.noticeClosedPullRequests(projectId, board);
+    await this.requestedMerges(projectId, board);
     await this.autoMerge(projectId, board);
     this.autoAssign(projectId, board);
+  }
+
+  /** Merges the PRs the captain asked to merge once QA passed them, at exactly the commit QA passed. */
+  private async requestedMerges(projectId: string, board: Board): Promise<void> {
+    for (const pr of [...board.prs]) {
+      const review = this.store.reviews.get(prKey(pr.repo, pr.number));
+      if (!review?.mergeRequested) continue;
+      const where = `${pr.repo.split('/')[1]}#${pr.number}`;
+      const step = requestedMerge(pr, review);
+      switch (step.kind) {
+        case 'wait':
+          continue;
+        case 'qa':
+          try {
+            this.agents.requestReview(projectId, pr.repo, pr.number, pr.title);
+            this.hub.toast('info', `🔍 ${where} goes back to QA before it merges: ${step.reason}`, undefined, projectId);
+          } catch (err) {
+            this.hub.toast('error', `${where} couldn’t go back to QA before it merges: ${errorMessage(err)}`, undefined, projectId);
+          }
+          continue;
+        case 'drop':
+          this.agents.requestMerge(pr.repo, pr.number, false);
+          this.hub.toast('error', `${where} didn’t merge: ${step.reason}`, review.agentId, projectId);
+          continue;
+        case 'merge':
+          try {
+            await this.mergePullRequest(projectId, pr.repo, pr.number, step.sha, 'captain');
+            this.hub.toast('success', `Merged ${where}: QA passed it, as you asked`, undefined, projectId);
+          } catch (err) {
+            this.agents.requestMerge(pr.repo, pr.number, false);
+            this.hub.toast('error', `GitHub refused to merge ${where}: ${errorMessage(err)}`, undefined, projectId);
+          }
+      }
+    }
   }
 
   /** With auto-merge on, takes each open PR one step further along mergeStep: QA, checks, conflicts, merged. */
@@ -373,7 +417,7 @@ export class Office {
         const state = await this.github.pullRequestState(review.repo, review.number);
         if (state === 'OPEN') continue;
         this.agents.recordLanding(review.repo, review.number, state === 'MERGED');
-        this.agents.reviewGone(review.repo, review.number);
+        this.agents.reviewGone(review.repo, review.number, state === 'MERGED');
       } catch {
         // try again next refresh
       }

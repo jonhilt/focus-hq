@@ -2,7 +2,7 @@ import { statusLine } from '../../../shared/agentStatus';
 import { columns, goalState, resolvingAlready } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import { assignWarning, waitsLabel } from '../../../shared/dependencies';
-import { unpassedReason } from '../../../shared/mergeGate';
+import { mergeAction } from '../../../shared/mergeGate';
 import { previewIncludes, previewSet } from '../../../shared/previewSet';
 import { prKey, qaBadge, sameCommit } from '../../../shared/qa';
 import { triageLabel } from '../../../shared/triage';
@@ -115,12 +115,24 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
     if (!cols.prs.length) prs.append(h('div', { class: 'empty' }, cols.hiddenPrs ? 'None of the open pull requests are yours.' : 'No open pull requests.'));
     for (const pr of cols.prs) {
       const review = state.reviews.get(prKey(pr.repo, pr.number));
-      const merge = h('button', { class: 'btn small go' }, `${state.info?.settings.mergeMethod ?? 'squash'} & merge`);
+      const action = mergeAction(review, pr);
+      const merge = action.kind === 'merge'
+        ? h('button', { class: 'btn small go' }, `${state.info?.settings.mergeMethod ?? 'squash'} & merge`)
+        : action.kind === 'when-passed'
+          ? h('button', { class: 'btn small go', title: 'The office merges the commit QA passes, or tells you if QA fails it' }, 'Merge when QA passes')
+          : h('button', { class: 'btn small primary', title: 'Merges once QA passes it. Click to cancel' }, 'Merging when QA passes ✕');
       merge.disabled = pr.mergeable === 'CONFLICTING' || pr.isDraft;
       merge.onclick = () => {
-        const unpassed = unpassedReason(review, pr);
-        const ask = unpassed
-          ? `${unpassed}.\n\nMerge ${pr.repo}#${pr.number} "${pr.title}" anyway?`
+        if (action.kind !== 'merge') {
+          const on = action.kind === 'when-passed';
+          void busy(merge, async () => {
+            await api.mergeWhenPassed(projectId, pr.repo, pr.number, on);
+            ui.hud.toast('info', on ? `PR #${pr.number} merges once QA passes it` : `PR #${pr.number} won’t merge by itself after QA`);
+          }, ui.error);
+          return;
+        }
+        const ask = action.confirm
+          ? `${action.confirm}.\n\nMerge ${pr.repo}#${pr.number} "${pr.title}" anyway?`
           : `Merge ${pr.repo}#${pr.number} "${pr.title}"?`;
         if (!confirm(ask)) return;
         void busy(merge, async () => {

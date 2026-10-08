@@ -1,6 +1,7 @@
 import { Data, Effect, Exit, Fiber, FiberMap, type Layer, ManagedRuntime, PartitionedSemaphore, Scope } from 'effect';
 import { helperFor, leadFor, leadId, plannerFor, qaFor, qaOfficerFor, randomAvatar } from '../../shared/crew';
 import { type Closer, type LedgerEntry, reportCard, type ReportCard } from '../../shared/ledger';
+import { goneReply } from '../../shared/mergeGate';
 import { autoQaFor, autoSendBackFor, prKey, qaBadge, sameCommit } from '../../shared/qa';
 import { afterTriage, triageLabel, type TriageResult, type TriageStep, whenStuck } from '../../shared/triage';
 import type { Agent, AgentStatus, BrowserFrame, ConflictsOutcome, Effort, FailedCheck, FixFor, PermissionRequest, PullRequest, QaReport, QaReview, QaScreenshot, QueuedGoal, TermLine } from '../../shared/types';
@@ -1217,10 +1218,21 @@ export class AgentManager {
       triages: existing?.triages,
       triage: existing?.triage,
       retryNote,
+      mergeRequested: existing?.mergeRequested,
     };
     this.putReview(review);
     this.nextReview(projectId);
     return review;
+  }
+
+  /** Remembers (or, with `on` false, forgets) that the captain wants the PR merged once QA passes it; office.ts merges it. */
+  requestMerge(repo: string, number: number, on: boolean): QaReview {
+    const review = this.store.reviews.get(prKey(repo, number));
+    if (!review) throw new Refused({ message: `QA isn't reviewing ${repo}#${number}` });
+    if (on && review.status !== 'queued' && review.status !== 'testing') throw new Refused({ message: `QA isn't testing ${repo}#${number} right now` });
+    const next = { ...review, mergeRequested: on ? { at: Date.now() } : undefined };
+    this.putReview(next);
+    return next;
   }
 
   /**
@@ -1322,6 +1334,8 @@ export class AgentManager {
         this.fail(agent, 'Finished without a QA report. Send them a message to ask for one, or send the PR to QA again.');
         return;
       }
+      // the PR merged or closed while they were at it: a verdict now would land on a PR that's gone
+      if (agent.prGone) return;
       const pass = report.verdict === 'pass';
       const review = this.store.reviews.get(prKey(agent.repo, number));
       const screenshots = yield* this.keepScreenshots(agent, report, review?.sha);
@@ -1625,15 +1639,26 @@ export class AgentManager {
     if (error !== STOPPED_BY_CAPTAIN) this.background(Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => this.nextReview(agent.projectId)))));
   }
 
-  /** The PR is merged or closed: forget its review, and stop the QA officer if they're on it. */
-  reviewGone(repo: string, number: number): void {
+  /**
+   * The PR is merged or closed: forget its review, and stop any QA officer on it for good, so a message can't resume
+   * their session and post a verdict on a PR that's gone.
+   */
+  reviewGone(repo: string, number: number, merged: boolean): void {
+    for (const qa of [...this.store.agents.values()]) {
+      if (qa.task !== 'review' || qa.repo !== repo || qa.issue.number !== number || qa.prGone) continue;
+      const gone = merged ? 'merged' : 'closed';
+      this.update(qa, { prGone: gone });
+      this.rt(qa.id).inbox.length = 0;
+      if (!FINISHED.includes(qa.status)) {
+        this.print(qa, [{ kind: 'system', text: `✻ ${goneReply(number, gone)}: stopping` }]);
+        this.stop(qa.id);
+      }
+    }
     const review = this.store.reviews.get(prKey(repo, number));
     if (!review) return;
     this.stopTriage(prKey(repo, number));
     this.store.removeReview(repo, number);
     this.hub.send({ type: 'review-removed', repo, number });
-    const qa = review.agentId ? this.store.agents.get(review.agentId) : undefined;
-    if (qa && qa.repo === repo && qa.issue.number === number && !FINISHED.includes(qa.status)) this.stop(qa.id);
     this.nextReview(review.projectId);
   }
 
@@ -1654,6 +1679,14 @@ export class AgentManager {
     // the captain carries on with a goal the lead thought was done
     if (!from && agent.lead?.closing) this.update(agent, { lead: { ...agent.lead, closing: undefined } });
     if (from) text = `[${from}] ${text}`;
+
+    // a QA officer whose PR merged or closed has nothing left to review: their session stays over
+    if (agent.task === 'review' && agent.prGone) {
+      const reply = goneReply(agent.issue.number, agent.prGone);
+      this.print(agent, [{ kind: 'system', text: `✻ ${reply}` }]);
+      this.hub.toast('info', `${agent.name}: ${reply}`, agent.id);
+      return;
+    }
 
     if (rt.session?.send(text)) {
       if (!rt.permission) this.update(agent, { activity: 'Reading your message' });
@@ -1727,7 +1760,7 @@ export class AgentManager {
   /** Called when a PR an agent opened was merged or closed. The agent packs up and goes home. `headSha` is the commit that merged, when the office knows it. */
   prClosed(repo: string, number: number, merged: boolean, by: Closer = 'github', headSha?: string): void {
     this.recordLanding(repo, number, merged, by, headSha);
-    this.reviewGone(repo, number);
+    this.reviewGone(repo, number, merged);
     if (this.leadPrClosed(repo, number, merged)) return;
     const agent = this.prOwner(repo, number);
     if (!agent || this.leaving.has(agent.id)) return;

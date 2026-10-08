@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoMergeFor, type GateOffice, mergeStep, unpassedReason } from './mergeGate';
+import { autoMergeFor, type GateOffice, goneReply, mergeAction, mergeStep, requestedMerge, unpassedReason } from './mergeGate';
 import type { PullRequest, QaReview } from './types';
 
 const HEAD = 'abc1234def5678';
@@ -167,5 +167,58 @@ describe('autoMergeFor', () => {
   it('is off unless the project switched it on', () => {
     expect(autoMergeFor({})).toBe(false);
     expect(autoMergeFor({ autoMerge: true })).toBe(true);
+  });
+});
+
+describe('mergeAction', () => {
+  it('merges a PR QA passed straight away', () => {
+    expect(mergeAction(review(), pr())).toEqual({ kind: 'merge' });
+  });
+
+  it('offers to merge when QA passes while QA is queued or testing', () => {
+    expect(mergeAction(review({ status: 'queued', sha: undefined }), pr())).toEqual({ kind: 'when-passed' });
+    expect(mergeAction(review({ status: 'testing' }), pr())).toEqual({ kind: 'when-passed' });
+  });
+
+  it('says so once the captain asked for that', () => {
+    expect(mergeAction(review({ status: 'testing', mergeRequested: { at: 1 } }), pr())).toEqual({ kind: 'requested' });
+  });
+
+  it('still merges a failed or untested PR, behind a confirm', () => {
+    expect(mergeAction(review({ status: 'failed' }), pr())).toEqual({ kind: 'merge', confirm: 'QA failed it' });
+    expect(mergeAction(undefined, pr())).toEqual({ kind: 'merge', confirm: 'QA hasn’t tested it' });
+    expect(mergeAction(review({ sha: 'fff0000' }), pr())).toEqual({ kind: 'merge', confirm: 'QA passed an older commit, not the latest one' });
+  });
+});
+
+describe('requestedMerge', () => {
+  it('waits while QA is queued or testing', () => {
+    expect(requestedMerge(pr(), review({ status: 'queued', sha: undefined }))).toEqual({ kind: 'wait' });
+    expect(requestedMerge(pr(), review({ status: 'testing' }))).toEqual({ kind: 'wait' });
+  });
+
+  it('merges exactly the commit QA passed', () => {
+    expect(requestedMerge(pr({ headSha: HEAD }), review({ sha: HEAD.slice(0, 7) }))).toEqual({ kind: 'merge', sha: HEAD });
+  });
+
+  it('drops the request when QA fails or can’t finish', () => {
+    expect(requestedMerge(pr(), review({ status: 'failed' }))).toEqual({ kind: 'drop', reason: 'QA failed it' });
+    expect(requestedMerge(pr(), review({ status: 'error' }))).toEqual({ kind: 'drop', reason: 'QA couldn’t finish testing it' });
+  });
+
+  it('goes back to QA when commits arrived after the pass', () => {
+    expect(requestedMerge(pr({ headSha: 'fff0000111' }), review())).toEqual({ kind: 'qa', reason: 'commits arrived after QA passed it' });
+  });
+
+  it('waits for GitHub and the checks, and drops a PR that conflicts', () => {
+    expect(requestedMerge(pr({ checks: 'pending' }), review())).toEqual({ kind: 'wait' });
+    expect(requestedMerge(pr({ mergeable: 'UNKNOWN' }), review())).toEqual({ kind: 'wait' });
+    expect(requestedMerge(pr({ mergeable: 'CONFLICTING' }), review())).toEqual({ kind: 'drop', reason: 'it conflicts with its base branch' });
+  });
+});
+
+describe('goneReply', () => {
+  it('tells whoever messages QA there is nothing left to review', () => {
+    expect(goneReply(139, 'merged')).toBe('PR #139 was merged; nothing to review');
   });
 });

@@ -112,6 +112,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.post('/prs/qa', h((req) => office.requestReview(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));
   r.post('/prs/resolve-conflicts', h((req) => office.resolveConflicts(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));
   r.post('/prs/merge', h((req) => office.mergePullRequest(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));
+  r.post('/prs/merge-when-passed', h((req) => office.mergeWhenPassed(str(req.body.projectId), str(req.body.repo), Number(req.body.number), req.body.on !== false)));
 
   // previews: a PR running on this machine, one per project
   r.post('/previews', h((req) => office.startPreview(str(req.body.projectId), str(req.body.repo), Number(req.body.number), picks(req.body.with))));

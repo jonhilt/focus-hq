@@ -50,6 +50,7 @@ export const api = {
   resolveConflicts: (projectId: string, repo: string, number: number) =>
     call<ConflictsOutcome>('POST', '/prs/resolve-conflicts', { projectId, repo, number }),
   mergePr: (projectId: string, repo: string, number: number) => call('POST', '/prs/merge', { projectId, repo, number }),
+  mergeWhenPassed: (projectId: string, repo: string, number: number, on: boolean) => call<QaReview>('POST', '/prs/merge-when-passed', { projectId, repo, number, on }),
   /** `picks`: what other repos run (a PR number, or null for the default branch); left out, the PRs linked to this one. */
   startPreview: (projectId: string, repo: string, number: number, picks?: PreviewSet) => call<Preview>('POST', '/previews', { projectId, repo, number, with: picks }),
   stopPreview: (projectId: string) => call('DELETE', `/previews/${projectId}`),

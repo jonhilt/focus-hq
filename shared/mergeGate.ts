@@ -106,3 +106,49 @@ export function unpassedReason(review: QaReview | undefined, pr: Pick<PullReques
 export function autoMergeFor(project: { autoMerge?: boolean }): boolean {
   return project.autoMerge === true;
 }
+
+/** What the board's merge button does: merge now (asking first when QA hasn't passed it), or merge once QA passes. */
+export type MergeAction = { kind: 'merge'; confirm?: string } | { kind: 'when-passed' } | { kind: 'requested' };
+
+export function mergeAction(review: QaReview | undefined, pr: Pick<PullRequest, 'headSha'>): MergeAction {
+  const state = qaBadge(review, pr).state;
+  if (state === 'queued' || state === 'testing') return review?.mergeRequested ? { kind: 'requested' } : { kind: 'when-passed' };
+  const unpassed = unpassedReason(review, pr);
+  return unpassed ? { kind: 'merge', confirm: unpassed } : { kind: 'merge' };
+}
+
+export type RequestedStep =
+  /** QA passed `sha`, the PR's head: merge exactly that commit. */
+  | { kind: 'merge'; sha: string }
+  | { kind: 'wait' }
+  /** Commits arrived after QA passed it: QA again, and merge once that passes. */
+  | { kind: 'qa'; reason: string }
+  /** The office won't merge it after all: forget the request and tell the captain why. */
+  | { kind: 'drop'; reason: string };
+
+/** What the office does next with a merge the captain asked for while QA was testing a PR. */
+export function requestedMerge(pr: Pick<PullRequest, 'headSha' | 'isDraft' | 'mergeable' | 'checks'>, review: QaReview): RequestedStep {
+  switch (review.status) {
+    case 'queued':
+    case 'testing':
+      return { kind: 'wait' };
+    case 'error':
+      return { kind: 'drop', reason: 'QA couldn’t finish testing it' };
+    case 'failed':
+      return { kind: 'drop', reason: 'QA failed it' };
+    case 'passed':
+      break;
+  }
+  const head = pr.headSha;
+  if (!head || !review.sha) return { kind: 'drop', reason: 'the office can’t tell which commit QA passed' };
+  if (!sameCommit(review.sha, head)) return { kind: 'qa', reason: 'commits arrived after QA passed it' };
+  if (pr.isDraft) return { kind: 'drop', reason: 'it’s a draft' };
+  if (pr.mergeable === 'CONFLICTING') return { kind: 'drop', reason: 'it conflicts with its base branch' };
+  if (pr.mergeable === 'UNKNOWN' || pr.checks === 'pending') return { kind: 'wait' };
+  return { kind: 'merge', sha: head };
+}
+
+/** What a QA officer says to a message once their PR merged or closed, instead of resuming their session. */
+export function goneReply(number: number, gone: 'merged' | 'closed'): string {
+  return `PR #${number} was ${gone}; nothing to review`;
+}

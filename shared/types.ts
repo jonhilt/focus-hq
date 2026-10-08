@@ -378,6 +378,8 @@ export interface Agent {
   context?: { percent: number; tokens: number; max: number };
   /** A goal's own QA reviewer: the goal (its lead's id) whose pull requests they review. Missing on the room's QA officer. */
   reviewFor?: string;
+  /** A QA officer's pull request merged or closed while it was theirs: their session is over and a message can't resume it. */
+  prGone?: 'merged' | 'closed';
   /** The task list the agent keeps for itself with Claude Code's task tools, as it stands. Missing until it keeps one. */
   tasks?: ClaudeTask[];
   /** For a 'conflicts' or 'fix' task, the pull request itself (GitHub numbers issues and PRs alike). */
@@ -626,6 +628,8 @@ export interface QaReview {
   triage?: Triage;
   /** Why it's back with QA, when the operations officer sent it back: for the QA officer, this round only. */
   retryNote?: string;
+  /** The captain asked for the PR to merge once QA passes it (mergeGate's requestedMerge says when). */
+  mergeRequested?: { at: number };
   requestedAt: number;
   finishedAt?: number;
 }

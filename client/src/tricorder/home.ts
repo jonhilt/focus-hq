@@ -2,9 +2,10 @@ import { statusIcon, statusLine } from '../../../shared/agentStatus';
 import { columns, goalState, resolvingAlready } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import { assignWarning, waitsLabel } from '../../../shared/dependencies';
+import { mergeAction } from '../../../shared/mergeGate';
 import { prKey, qaBadge } from '../../../shared/qa';
 import { type Attention, inFlight, needsYou } from '../../../shared/tricorder';
-import type { Agent, Issue, Project, PullRequest } from '../../../shared/types';
+import type { Agent, Issue, Project, PullRequest, QaReview } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { h } from '../ui/dom';
@@ -144,16 +145,34 @@ function agentCard(a: Agent, multi: boolean): HTMLElement {
   );
 }
 
+/**
+ * The PR card's merge button. morph() keeps an element whose attributes haven't changed, and its click handler with
+ * it, so each thing the button can do (and each confirm it asks) has an action key of its own.
+ */
+export function mergeButton(actions: Actions, key: string, projectId: string, pr: PullRequest, review: QaReview | undefined): HTMLButtonElement {
+  const action = mergeAction(review, pr);
+  const blocked = pr.mergeable === 'CONFLICTING' || pr.isDraft;
+  switch (action.kind) {
+    case 'merge':
+      return actions.button(`${key}:${action.confirm ? 'merge-anyway' : 'merge'}`, `⤵ ${state.info?.settings.mergeMethod ?? 'squash'} & merge`, () => api.mergePr(projectId, pr.repo, pr.number), {
+        class: 'go',
+        disabled: blocked,
+        confirm: action.confirm ? `${action.confirm}.\n\nMerge ${pr.repo}#${pr.number} "${pr.title}" anyway?` : `Merge ${pr.repo}#${pr.number} "${pr.title}"?`,
+      });
+    case 'when-passed':
+      return actions.button(`${key}:merge-when-passed`, '⤵ Merge when QA passes', () => api.mergeWhenPassed(projectId, pr.repo, pr.number, true), { class: 'go', disabled: blocked });
+    case 'requested':
+      return actions.button(`${key}:merge-cancel`, '✕ Merging when QA passes', () => api.mergeWhenPassed(projectId, pr.repo, pr.number, false), { class: 'primary' });
+  }
+}
+
 function prCard(ctx: HomeContext, project: Project, pr: PullRequest & { agent?: Agent; resolver?: Agent }, multi: boolean): HTMLElement {
   const key = prCardId(project.id, pr);
-  const qa = qaBadge(state.reviews.get(prKey(pr.repo, pr.number)), pr);
+  const review = state.reviews.get(prKey(pr.repo, pr.number));
+  const qa = qaBadge(review, pr);
   const conflicting = pr.mergeable === 'CONFLICTING';
   const { actions } = ctx;
-  const merge = actions.button(`${key}:merge`, `⤵ ${state.info?.settings.mergeMethod ?? 'squash'} & merge`, () => api.mergePr(project.id, pr.repo, pr.number), {
-    class: 'go',
-    disabled: conflicting || pr.isDraft,
-    confirm: `Merge ${pr.repo}#${pr.number} "${pr.title}"?`,
-  });
+  const merge = mergeButton(actions, key, project.id, pr, review);
   // the PR's developer is already at it (or queued for it); a second tap would only repeat the request
   const resolve = pr.resolver
     ? h('a', { class: 'btn primary', href: agentHref(pr.resolver.id) }, '👀 Watch')
