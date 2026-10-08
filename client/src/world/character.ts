@@ -9,6 +9,7 @@ import { keyboardPose, type Pose, type PoseInput, paddPose } from './pose';
 import { ball, capsule, cyl, padd, PADD_WIDTH } from './props';
 import { LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
 import { OVERLAY_LAYER } from './frame';
+import { mergeStatic } from './merge';
 
 /** The jumpsuit: black, with the division's colour across the shoulders. */
 const SUIT = '#32363f';
@@ -27,6 +28,8 @@ function arm(colour: string, skin: string): THREE.Group {
   const hand = ball(0.075, skin);
   hand.position.x = REACH;
   g.add(hand);
+  // it moves as one: one draw call (merge.ts)
+  mergeStatic(g);
   return g;
 }
 
@@ -165,6 +168,9 @@ export class Character {
         this.body.add(this.hands.padd);
         break;
     }
+
+    // the torso, legs and badges are a draw call each until merged: the head and arms move, and the PADD with them
+    mergeStatic(this.body, [this.head.group, this.armL, this.armR, ...(this.hands.grip === 'padd' ? [this.hands.padd] : [])]);
 
     // soft blob shadow
     const shadow = new THREE.Mesh(

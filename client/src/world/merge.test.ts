@@ -73,4 +73,29 @@ describe('mergeStatic', () => {
     const normal = new THREE.Triangle(a, b, c).getNormal(new THREE.Vector3());
     expect(normal.x).toBeCloseTo(-1, 6);
   });
+
+  it('merges toon meshes that differ only in colour into one, each colour in its vertices', () => {
+    const root = new THREE.Group();
+    const red = new THREE.MeshToonMaterial({ color: 'red' });
+    const blue = new THREE.MeshToonMaterial({ color: 'blue' });
+    root.add(box(red), box(blue, 1, 0), box(red, 0, 1));
+    expect(mergeStatic(root)).toEqual({ from: 3, to: 1 });
+    const [mesh] = meshes(root);
+    const material = mesh.material as THREE.MeshToonMaterial;
+    expect(material.vertexColors).toBe(true);
+    expect(material.color.getHex()).toBe(0xffffff);
+    const colors = mesh.geometry.getAttribute('color');
+    const seen = new Set<number>();
+    for (let i = 0; i < colors.count; i++) seen.add(new THREE.Color(colors.getX(i), colors.getY(i), colors.getZ(i)).getHex());
+    expect(seen).toEqual(new Set([red.color.getHex(), blue.color.getHex()]));
+  });
+
+  it('leaves toon materials that differ in more than colour apart', () => {
+    const root = new THREE.Group();
+    const plain = new THREE.MeshToonMaterial({ color: 'red' });
+    const glowing = new THREE.MeshToonMaterial({ color: 'red', emissive: 'yellow' });
+    root.add(box(plain), box(plain, 1, 0), box(glowing, 0, 1), box(glowing, 1, 1));
+    expect(mergeStatic(root)).toEqual({ from: 4, to: 2 });
+    expect(new Set(meshes(root).map((m) => m.material))).toContain(glowing);
+  });
 });

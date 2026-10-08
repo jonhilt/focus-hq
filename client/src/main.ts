@@ -53,13 +53,11 @@ async function main() {
   // ---------------------------------------------------------------- renderer & scene
   // no multisampling: the scene's drawn into textures and only a full-screen pass reaches the screen (frame.ts)
   const renderer = new THREE.WebGLRenderer({ antialias: false });
-  // the decks' occlusion is baked and furniture has contact shadows: ?ao=1 adds N8AO's screen-space occlusion to compare
   const params = new URLSearchParams(location.search);
-  const occlusion = params.get('ao') === '1';
-  // as fine as the screen (up to 2) with the ambient occlusion, and plainer while frames run slow (resolution.ts)
-  const ladder = levels(Math.min(window.devicePixelRatio, 2), occlusion);
+  // as fine as the screen (up to 2), and coarser while frames run slow (resolution.ts)
+  const ladder = levels(Math.min(window.devicePixelRatio, 2));
   let resolution = initialResolution(ladder);
-  renderer.setPixelRatio(ladder[resolution.level].ratio);
+  renderer.setPixelRatio(ladder[resolution.level]);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.domElement.className = 'world';
@@ -76,8 +74,8 @@ async function main() {
   const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 250);
   // ?merge=0 leaves the decks' meshes as Blender made them, for the gap and z-fighting scans to name
   setMerging(params.get('merge') !== '0');
-  const portalView = new PortalView(renderer, scene, occlusion);
-  const view = new SceneRenderer(renderer, scene, camera, occlusion);
+  const portalView = new PortalView(renderer);
+  const view = new SceneRenderer(renderer);
 
   await fontsReady();
 
@@ -437,12 +435,9 @@ async function main() {
   const adapting = params.get('adapt') !== '0';
   const stats = params.get('stats') === '1' ? new FrameStats(renderer) : null;
   const apply = () => {
-    const level = ladder[resolution.level];
-    if (renderer.getPixelRatio() !== level.ratio) renderer.setPixelRatio(level.ratio);
-    view.occlusion = portalView.occlusion = level.occlusion;
-    if (stats) stats.occlusion = level.occlusion;
+    const ratio = ladder[resolution.level];
+    if (renderer.getPixelRatio() !== ratio) renderer.setPixelRatio(ratio);
   };
-  apply();
   const intervals: number[] = [];
   /** How long each frame's own work took (ms): its JavaScript and draw calls, not waiting on the GPU. */
   const busy: number[] = [];

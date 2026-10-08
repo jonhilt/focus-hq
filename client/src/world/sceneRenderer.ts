@@ -5,7 +5,7 @@ import { CopyShader } from 'three/examples/jsm/shaders/CopyShader.js';
 import { Frame } from './frame';
 
 /**
- * Draws each frame to the screen: the scene as frame.ts draws it (`?ao=0` leaves out the ambient occlusion), then
+ * Draws each frame to the screen: the scene as frame.ts draws it, then
  * SMAA to smooth the edges, below a pixel ratio of SMOOTH_BELOW: above it, pixels are too small for the steps along
  * an edge to show, and SMAA's three full-screen passes are better spent elsewhere.
  *
@@ -23,22 +23,12 @@ export class SceneRenderer {
   private readonly copy = new FullScreenQuad(new THREE.ShaderMaterial(CopyShader));
   private readonly size = new THREE.Vector2();
 
-  constructor(
-    private readonly renderer: THREE.WebGLRenderer,
-    scene: THREE.Scene,
-    camera: THREE.PerspectiveCamera,
-    occlusion: boolean,
-  ) {
+  constructor(private readonly renderer: THREE.WebGLRenderer) {
     renderer.getDrawingBufferSize(this.size);
-    this.frame = new Frame(renderer, scene, camera, occlusion, true, this.size);
+    this.frame = new Frame(renderer, true, this.size);
     this.framed = new THREE.WebGLRenderTarget(this.size.x, this.size.y, { depthBuffer: false });
     this.smaa.setSize(this.size.x, this.size.y);
     this.smaa.renderToScreen = true;
-  }
-
-  /** Whether the ambient occlusion is drawn (Frame.occlusion). */
-  set occlusion(on: boolean) {
-    this.frame.occlusion = on;
   }
 
   render(scene: THREE.Scene, camera: THREE.Camera): void {

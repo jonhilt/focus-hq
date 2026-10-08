@@ -26,7 +26,6 @@ const material = new THREE.ShaderMaterial({
     depthPrecision: { value: 0 },
     lineLinear: { value: LINE.clone() },
     lineDisplay: { value: LINE.clone().convertLinearToSRGB() },
-    inputDisplay: { value: false },
     outputDisplay: { value: false },
     tOverlay: { value: null },
     overlay: { value: false },
@@ -46,7 +45,6 @@ const material = new THREE.ShaderMaterial({
     uniform float depthPrecision;
     uniform vec3 lineLinear;
     uniform vec3 lineDisplay;
-    uniform bool inputDisplay;
     uniform bool outputDisplay;
     uniform sampler2D tOverlay;
     uniform bool overlay;
@@ -113,7 +111,7 @@ const material = new THREE.ShaderMaterial({
 
     void main() {
       vec4 color = texture2D(tColor, vUv);
-      if (!inputDisplay && outputDisplay) color = sRGBTransferOETF(color);
+      if (outputDisplay) color = sRGBTransferOETF(color);
       float d = depthAt(vUv);
       if (d < 1.0) {
         vec3 c = viewAt(vUv, d);
@@ -142,8 +140,6 @@ const material = new THREE.ShaderMaterial({
 export interface Drawn {
   target: THREE.WebGLRenderTarget;
   camera: THREE.Camera;
-  /** Its colours, if not the target's own: in display colours (true) or linear (false). */
-  color?: { texture: THREE.Texture; display: boolean };
   /** Drawn over it all, outlines included: linear colours, premultiplied by their alpha. */
   overlay?: THREE.Texture;
 }
@@ -156,8 +152,7 @@ export class Outlines {
     const u = material.uniforms;
     const width = Math.max(1, Math.round(LINE_WIDTH * renderer.getPixelRatio()));
     const { target, camera } = drawn;
-    u.tColor.value = drawn.color?.texture ?? target.texture;
-    u.inputDisplay.value = drawn.color?.display ?? false;
+    u.tColor.value = target.texture;
     u.outputDisplay.value = display;
     u.tDepth.value = target.depthTexture;
     u.projectionInverse.value = camera.projectionMatrixInverse;
@@ -202,8 +197,8 @@ const sky = new FullScreenQuad(skyMaterial());
 /**
  * Pushes the depth of the scene just drawn (into the current target) to the far plane wherever a stencil value says
  * it shows something other than what's there: a holodeck's walls are still in the depth where its landscape shows
- * through them (scenery.ts writes them back), and a doorway's alcove where the far room is drawn over it. Outlines and
- * ambient occlusion would draw those walls' and alcoves' corners over the picture; as sky, they leave it alone.
+ * through them (scenery.ts writes them back), and a doorway's alcove where the far room is drawn over it. Outlines would
+ * draw those walls' and alcoves' corners over the picture; as sky, they leave them alone.
  */
 export function stencilToSky(renderer: THREE.WebGLRenderer): void {
   const autoClear = renderer.autoClear;

@@ -1,0 +1,96 @@
+# Builds the ship's decks (npm run ship) when a push to a branch changes the Blender scripts that build them but not the
+# GLBs, and commits the GLBs back to the branch: so changing the ship needs no Blender of your own. Push the script
+# change, and the GLBs follow in a commit from CI a few minutes later (pull it before pushing again). If you built them
+# yourself and committed them with the scripts, CI leaves them be. It bakes on the runner's CPU, so its GLBs' baked
+# occlusion differs from a GPU's by a little noise.
+name: Ship
+
+on:
+  push:
+    branches-ignore: [main]
+    paths: ['blender/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ship-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BLENDER_VERSION: 5.2.2
+
+jobs:
+  build:
+    # the community mirror carries this file too: it only runs here
+    if: github.repository == 'jonhilt/focus'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Only if the GLBs weren't built with the scripts
+        id: changed
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          # a new branch's first push has no before: compare with where it left main
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            BEFORE=$(git merge-base origin/main HEAD)
+          fi
+          if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] && git diff --name-only "$BEFORE" HEAD | grep -q '^client/public/ship/'; then
+            echo "The push has GLBs built with its scripts: leaving them be."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Cache Blender
+        if: steps.changed.outputs.build == 'true'
+        id: blender
+        uses: actions/cache@v4
+        with:
+          path: ~/blender
+          key: blender-${{ env.BLENDER_VERSION }}-linux-x64
+
+      - name: Download Blender
+        if: steps.changed.outputs.build == 'true' && steps.blender.outputs.cache-hit != 'true'
+        run: |
+          series=${BLENDER_VERSION%.*}
+          mkdir -p ~/blender
+          curl -fsSL "https://download.blender.org/release/Blender${series}/blender-${BLENDER_VERSION}-linux-x64.tar.xz" \
+            | tar -xJ -C ~/blender --strip-components=1
+
+      - name: Libraries Blender needs, even in the background
+        if: steps.changed.outputs.build == 'true'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 libsm6 libxkbcommon0 libegl1
+
+      - uses: actions/setup-node@v4
+        if: steps.changed.outputs.build == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        if: steps.changed.outputs.build == 'true'
+        run: npm ci
+
+      - name: Build the decks
+        if: steps.changed.outputs.build == 'true'
+        run: BLENDER="$HOME/blender/blender" npm run ship
+
+      - name: Commit the GLBs to the branch
+        if: steps.changed.outputs.build == 'true'
+        run: |
+          if git diff --quiet -- client/public/ship; then
+            echo "The GLBs are as they were."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add client/public/ship
+          git commit -m "Build the ship's decks from blender/ (CI, ${GITHUB_SHA::7})"
+          # (a push with the workflow's own token starts no workflow, so this doesn't run again)
+          git push origin "HEAD:${GITHUB_REF_NAME}"

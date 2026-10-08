@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Avatar, Hairstyle, Species } from '../../../shared/types';
 import { darken, toon, toonMaterial } from './materials';
+import { mergeStatic } from './merge';
 import { ball, capsule, cyl } from './props';
 
 export const PIP_GOLD = '#f2c94c';
@@ -220,6 +221,7 @@ export class Head {
     this.group.add(...hairdo(hairstyle, hair), ...features(species, skin), ...accessory(avatar.accessory));
 
     const browColour = hairstyle === 'bald' ? darken(skin, 0.45) : darken(hair, 0.3);
+    const eyes: THREE.Object3D[] = [];
     for (const s of [-1, 1]) {
       const eye = new THREE.Group();
       eye.position.set(0.214, EYE_Y, s * EYE_Z);
@@ -234,6 +236,7 @@ export class Head {
       const lid = new THREE.Mesh(new THREE.SphereGeometry(EYE_R + 0.005, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), toon(skin));
       eye.add(lid);
       this.group.add(eye);
+      eyes.push(eye);
       this.gazes.push(gaze);
       this.lids.push(lid);
 
@@ -261,6 +264,8 @@ export class Head {
       this.group.add(mouth);
     }
     this.express('idle', false);
+    // skull, hair and features are a draw call each until merged; what moves or changes stays as it is
+    mergeStatic(this.group, [...eyes, ...this.brows, ...Object.values(this.mouths)]);
   }
 
   express(expression: Expression, blinking: boolean): void {

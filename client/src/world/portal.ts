@@ -36,7 +36,7 @@ const surface = new THREE.ShaderMaterial({
     }`,
   side: THREE.DoubleSide,
 });
-// stamped where the far end shows, so the ambient occlusion and outlines leave it alone (outline.ts): they'd draw the
+// stamped where the far end shows, so the outlines leave it alone (outline.ts): they'd draw the
 // alcove's corners over the picture, not the far room's. Holodeck landscapes count their stencil values up from 1.
 surface.stencilWrite = true;
 surface.stencilRef = 255;
@@ -144,32 +144,19 @@ export class PortalView {
   /** The far end, in linear colours, for the alcove to show. */
   private readonly target: THREE.WebGLRenderTarget;
   private readonly camera = new THREE.PerspectiveCamera();
-  /** Where the camera is, with a plain projection, for the ambient occlusion (frame.ts). */
-  private readonly plain = new THREE.PerspectiveCamera();
   private readonly frustum = new THREE.Frustum();
   private readonly size = new THREE.Vector2();
   private readonly m = new THREE.Matrix4();
   private readonly plane = new THREE.Plane();
 
-  constructor(
-    private readonly renderer: THREE.WebGLRenderer,
-    scene: THREE.Scene,
-    occlusion: boolean,
-  ) {
+  constructor(private readonly renderer: THREE.WebGLRenderer) {
     renderer.getDrawingBufferSize(this.size);
-    this.frame = new Frame(renderer, scene, this.plain, occlusion, false, this.size);
+    this.frame = new Frame(renderer, false, this.size);
     // half floats for the linear colours it holds until the alcove draws them to the screen
     this.target = new THREE.WebGLRenderTarget(this.size.x, this.size.y, { type: THREE.HalfFloatType, depthBuffer: false });
     surface.uniforms.map.value = this.target.texture;
-    for (const c of [this.camera, this.plain]) {
-      c.matrixAutoUpdate = false;
-      c.matrixWorldAutoUpdate = false;
-    }
-  }
-
-  /** Whether the ambient occlusion is drawn (Frame.occlusion). */
-  set occlusion(on: boolean) {
-    this.frame.occlusion = on;
+    this.camera.matrixAutoUpdate = false;
+    this.camera.matrixWorldAutoUpdate = false;
   }
 
   /** `reveal` shows what's drawn from a point in the far room (World.reveal), before it's drawn. */
@@ -201,14 +188,6 @@ export class PortalView {
     v.near = camera.near;
     v.far = camera.far * FAR;
     v.updateProjectionMatrix();
-    const plain = this.plain;
-    plain.matrixWorld.copy(v.matrixWorld);
-    plain.matrixWorldInverse.copy(v.matrixWorldInverse);
-    plain.fov = v.fov;
-    plain.aspect = v.aspect;
-    plain.near = v.near;
-    plain.far = v.far;
-    plain.updateProjectionMatrix();
     // the other doorway, facing out into its room: everything between it and the carried camera is in the way
     const far = shown.other.doorway.matrix;
     this.plane.setFromNormalAndCoplanarPoint(tmp.setFromMatrixColumn(far, 2).negate().normalize(), new THREE.Vector3().setFromMatrixPosition(far));

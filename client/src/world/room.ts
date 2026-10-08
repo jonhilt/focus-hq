@@ -13,6 +13,7 @@ import { agentView, Character, type CrewView } from './character';
 import { briefingRoomAt, OVER_DOOR, type RoomSlot, ROOM_DEPTH, ROOM_WIDTH, WALL_H } from './layout';
 import { ContactShadows } from './contactShadow';
 import { prGlance } from './goalRoom';
+import { mergeStatic } from './merge';
 import { box, flat, lighten, toon } from './materials';
 import { ceilingLight, chair, cyl, paperStack, plant } from './props';
 import { holodeckMaterial, holodeckSkin, type Scenery } from './scenery';
@@ -244,11 +245,11 @@ export class ProjectRoom {
     station.rotation.y = Math.PI;
     const stool = chair('#495057');
     station.add(stool);
+    kiosk.add(station);
     // the stand and the stool behind it, before the officer sits on it
     shadows.add(kiosk);
     this.planner = new Character(this.plannerView());
     station.add(this.planner.group);
-    kiosk.add(station);
     interactive(this.planner.group, { kind: 'new-issue', projectId: project.id }, () => `Ask ${plannerFor(project.id).name} to draft an issue`);
     builder.collideObject(stool);
 
@@ -271,6 +272,19 @@ export class ProjectRoom {
 
     const shaded = shadows.build();
     if (shaded) this.group.add(shaded);
+
+    // the furniture is hundreds of meshes in a few dozen materials, a draw call each until they're merged (merge.ts):
+    // the room's, then what's used (merged within itself, so it's still what's picked), keeping what moves or changes
+    const keep = [
+      ...(scenery ? [scenery.group] : []),
+      ...this.stations.flatMap((s) => [s.door, s.wall]),
+      ...this.desks.map((d) => d.seat),
+      qaStation.seat,
+      this.prPile,
+      this.qa.group,
+      station,
+    ];
+    for (const root of [this.group, ...this.desks.map((d) => d.station), qaStation.group, table, kiosk]) mergeStatic(root, keep);
 
     this.syncAgents();
     this.syncPlanner();

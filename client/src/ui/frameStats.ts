@@ -3,7 +3,7 @@ import { h } from './dom';
 
 /**
  * How the 3D view is running, shown with `?stats=1`: frame rate and time, the pixel ratio it's drawn at
- * (resolution.ts), draw calls, the GPU and whether ambient occlusion is on. So anyone can say how it runs on their
+ * (resolution.ts), draw calls and the GPU. So anyone can say how it runs on their
  * machine: the GPU's name is what makes a report from someone else's machine useful.
  */
 export class FrameStats {
@@ -13,9 +13,6 @@ export class FrameStats {
   private last = 0;
   private readonly gpu: string;
   private readonly size = new THREE.Vector2();
-
-  /** Whether the screen-space ambient occlusion is drawn just now (resolution.ts leaves it out while frames run slow). */
-  occlusion = false;
 
   constructor(private readonly renderer: THREE.WebGLRenderer) {
     const gl = renderer.getContext();
@@ -45,7 +42,7 @@ export class FrameStats {
     this.el.textContent = [
       `${Math.round(1000 / median)} fps · ${median.toFixed(1)} ms`,
       `pixel ratio ${ratio} (${size.x}×${size.y})`,
-      `${this.draws} draws · AO ${this.occlusion ? 'on' : 'off'}`,
+      `${this.draws} draws`,
       this.gpu,
     ].join('\n');
   }

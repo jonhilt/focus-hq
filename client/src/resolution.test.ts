@@ -1,39 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { adapt, initialResolution, type Level, levels, type ResolutionState } from './resolution';
+import { adapt, initialResolution, levels, type ResolutionState } from './resolution';
 
 const frames = (ms: number, n = 60) => Array.from({ length: n }, () => ms);
 const SIXTY = 1000 / 60;
 /** The CPU busy for a few ms of each frame: slow frames are waiting on the GPU. */
 const idle = frames(4);
-/** A retina screen's ladder without the occlusion, so each step is a pixel ratio. */
-const RETINA = levels(2, false);
-/** The level of `ladder` at `ratio`, without the occlusion. */
-const at = (ratio: number, ladder: Level[] = RETINA): ResolutionState => ({ level: ladder.findIndex((l) => l.ratio === ratio && !l.occlusion), blocked: {} });
-const ratio = (state: ResolutionState, ladder: Level[] = RETINA) => ladder[state.level].ratio;
+/** A retina screen's pixel ratios. */
+const RETINA = levels(2);
+/** The level at `ratio`. */
+const at = (ratio: number): ResolutionState => ({ level: RETINA.indexOf(ratio), blocked: {} });
+const ratio = (state: ResolutionState) => RETINA[state.level];
 
 describe('levels', () => {
-  it('climbs through each pixel ratio up to the finest the screen has, then adds the occlusion at the top', () => {
-    expect(levels(1, true)).toEqual([
-      { ratio: 0.75, occlusion: false },
-      { ratio: 1, occlusion: false },
-      { ratio: 1, occlusion: true },
-    ]);
-    expect(levels(1.5, false).map((l) => l.ratio)).toEqual([0.75, 1, 1.25, 1.5]);
+  it('climbs through each pixel ratio up to the finest the screen has', () => {
+    expect(levels(1)).toEqual([0.75, 1]);
+    expect(levels(1.5)).toEqual([0.75, 1, 1.25, 1.5]);
+    expect(levels(0.5)).toEqual([0.75]);
   });
 });
 
 describe('adapt', () => {
-  it('starts at the top of the ladder', () => {
-    const ladder = levels(2, true);
-    expect(ladder[initialResolution(ladder).level]).toEqual({ ratio: 2, occlusion: true });
-  });
-
-  it('drops the occlusion first when frames run slow, then pixels', () => {
-    const ladder = levels(2, true);
-    let state = adapt(initialResolution(ladder), frames(30), idle, SIXTY, ladder, 0);
-    expect(ladder[state.level]).toEqual({ ratio: 2, occlusion: false });
-    state = adapt(state, frames(30), idle, SIXTY, ladder, 1500);
-    expect(ladder[state.level]).toEqual({ ratio: 1.75, occlusion: false });
+  it('starts at the finest ratio the screen has', () => {
+    expect(ratio(initialResolution(RETINA))).toBe(2);
   });
 
   it('steps down a ratio when frames run slow', () => {

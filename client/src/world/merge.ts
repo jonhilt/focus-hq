@@ -15,12 +15,67 @@ export function setMerging(on: boolean): void {
   merging = on;
 }
 
-/** What makes meshes mergeable into one: the same material, attributes and patch of floor. */
+const BLACK = new THREE.Color(0, 0, 0);
+
+/**
+ * What a toon material is but for its colour, if its colour is all that sets it apart from others like it: meshes in
+ * such materials merge into one, each one's colour moved into its vertices, and share a twin material that takes its
+ * colour from them. A desk's or a crew member's parts are a dozen colours of the same toon material. Null otherwise.
+ */
+function tintOf(mat: THREE.Material): string | null {
+  if (!(mat instanceof THREE.MeshToonMaterial)) return null;
+  if (mat.map || mat.alphaMap || mat.emissiveMap || mat.lightMap || mat.normalMap || mat.bumpMap || mat.displacementMap || mat.vertexColors) return null;
+  if (!mat.emissive.equals(BLACK) || mat.transparent || mat.opacity !== 1 || mat.alphaTest || mat.stencilWrite || mat.polygonOffset) return null;
+  if (mat.wireframe || !mat.depthWrite || !mat.depthTest || !mat.visible) return null;
+  return ['tint', mat.side, mat.gradientMap?.uuid, mat.aoMap?.uuid, mat.aoMapIntensity, mat.aoMap?.channel, mat.customProgramCacheKey()].join('|');
+}
+
+/** The twin material for each tint (tintOf): the same, white, coloured by its vertices. */
+const twins = new Map<string, THREE.MeshToonMaterial>();
+
+function twinOf(mat: THREE.MeshToonMaterial, tint: string): THREE.MeshToonMaterial {
+  let twin = twins.get(tint);
+  if (twin) return twin;
+  twin = mat.clone();
+  twin.color.set(0xffffff);
+  twin.vertexColors = true;
+  // (a clone doesn't keep these: an occluded toon's shader changes, materials.ts)
+  twin.onBeforeCompile = (shader, renderer) => mat.onBeforeCompile(shader, renderer);
+  twin.customProgramCacheKey = () => mat.customProgramCacheKey();
+  twins.set(tint, twin);
+  return twin;
+}
+
+/** The attributes a tinted mesh is drawn with: where, which way it faces, and the UVs its occlusion map reads. */
+function tintAttributes(mat: THREE.MeshToonMaterial): string[] {
+  const channel = mat.aoMap ? mat.aoMap.channel : -1;
+  return ['position', 'normal', ...(channel < 0 ? [] : [channel === 0 ? 'uv' : `uv${channel}`])];
+}
+
+/** What makes meshes mergeable into one: the same material (or tint), attributes and patch of floor. */
 function mergeKey(mesh: THREE.Mesh, centre: THREE.Vector3): string {
   const g = mesh.geometry;
-  const attributes = Object.keys(g.attributes).sort().join(',');
+  const mat = mesh.material as THREE.Material;
   const cell = `${Math.floor(centre.x / MERGE_CELL)},${Math.floor(centre.z / MERGE_CELL)}`;
-  return `${(mesh.material as THREE.Material).uuid}|${attributes}|${g.index ? 'indexed' : 'flat'}|${mesh.renderOrder}|${cell}`;
+  const tint = tintOf(mat);
+  if (tint) {
+    const wanted = tintAttributes(mat as THREE.MeshToonMaterial);
+    if (wanted.every((n) => g.attributes[n])) return `${tint}|${wanted.join(',')}|${mesh.renderOrder}|${cell}`;
+  }
+  const attributes = Object.keys(g.attributes).sort().join(',');
+  return `${mat.uuid}|${attributes}|${g.index ? 'indexed' : 'flat'}|${mesh.renderOrder}|${cell}`;
+}
+
+/** A placed geometry with only `attributes`, an index (all of them have one, to merge) and `color` in its vertices. */
+function tinted(g: THREE.BufferGeometry, attributes: string[], color: THREE.Color): THREE.BufferGeometry {
+  for (const name of Object.keys(g.attributes)) if (!attributes.includes(name)) g.deleteAttribute(name);
+  const n = g.attributes.position.count;
+  if (!g.index) g.setIndex(Array.from({ length: n }, (_, i) => i));
+  const colors = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) color.toArray(colors, i * 3);
+  g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  g.clearGroups();
+  return g;
 }
 
 /** Puts a geometry into `matrix`'s frame, turning its triangles round if the matrix mirrors them inside out. */
@@ -90,14 +145,21 @@ export function mergeStatic(root: THREE.Object3D, keep: Iterable<THREE.Object3D>
   const m = new THREE.Matrix4();
   for (const meshes of groups.values()) {
     if (meshes.length < 2) continue;
-    const geometries = meshes.map((mesh) => placed(mesh.geometry, m.multiplyMatrices(toRoot, mesh.matrixWorld)));
+    const first = meshes[0];
+    const tint = tintOf(first.material as THREE.Material);
+    const toon = first.material as THREE.MeshToonMaterial;
+    const attributes = tint && tintAttributes(toon);
+    const tintable = !!attributes && attributes.every((n) => first.geometry.attributes[n]);
+    const geometries = meshes.map((mesh) => {
+      const g = placed(mesh.geometry, m.multiplyMatrices(toRoot, mesh.matrixWorld));
+      return tintable ? tinted(g, attributes, (mesh.material as THREE.MeshToonMaterial).color) : g;
+    });
     const merged = mergeGeometries(geometries);
     for (const g of geometries) g.dispose();
     if (!merged) continue;
     merged.computeBoundingBox();
     merged.computeBoundingSphere();
-    const first = meshes[0];
-    const mesh = new THREE.Mesh(merged, first.material);
+    const mesh = new THREE.Mesh(merged, tintable ? twinOf(toon, tint) : first.material);
     mesh.name = `merged ${meshes.length}: ${first.name}`;
     mesh.renderOrder = first.renderOrder;
     root.add(mesh);
