@@ -60,6 +60,40 @@ export async function createWorktree(
   return dir;
 }
 
+/**
+ * A worktree on `branch` as it was left (a closed goal's, with its WIP snapshot): the office's own branch if it still has
+ * it, brought up to GitHub's when that's only ahead of it (the office pushed a merge), else GitHub's. Nothing is reset.
+ * Fails when neither has the branch, or a colleague's workspace has it checked out.
+ */
+export async function reopenWorktree(repo: string, agentId: string, branch: string, inOffice: (agentId: string) => boolean): Promise<string> {
+  const mirror = mirrorDir(repo);
+  const dir = path.join(paths.workspaces, agentId);
+  await lock.with(repo, async () => {
+    await ensureMirror(repo);
+    await retryLockRace(() => git(mirror, ['fetch', 'origin', '--prune'], 10 * 60_000), () => sleep(750));
+    if (fs.existsSync(dir)) await removeDir(mirror, dir);
+    await git(mirror, ['worktree', 'prune']);
+    fs.mkdirSync(path.dirname(dir), { recursive: true });
+    const has = (ref: string) => git(mirror, ['rev-parse', '--verify', '--quiet', ref]).then(() => true, () => false);
+    const local = await has(`refs/heads/${branch}`);
+    const remote = await has(`refs/remotes/origin/${branch}`);
+    if (!local && !remote) throw new Error(`${branch} is gone: neither the office’s clone of ${repo} nor GitHub has it`);
+    const worktrees = parseWorktrees(await git(mirror, ['worktree', 'list', '--porcelain']));
+    const claim = claimBranch(worktrees, branch, fs.realpathSync(paths.workspaces), inOffice);
+    if (claim.kind === 'held') throw new Error(heldMessage(branch, claim));
+    if (claim.kind === 'reclaim') {
+      await removeDir(mirror, claim.path);
+      await git(mirror, ['worktree', 'prune']);
+    }
+    if (!local) await git(mirror, ['branch', '--no-track', branch, `origin/${branch}`]);
+    else if (remote && (await git(mirror, ['merge-base', '--is-ancestor', branch, `origin/${branch}`]).then(() => true, () => false))) {
+      await git(mirror, ['branch', '-f', branch, `origin/${branch}`]);
+    }
+    await git(mirror, ['worktree', 'add', dir, branch]);
+  });
+  return dir;
+}
+
 async function removeDir(mirror: string, dir: string): Promise<void> {
   await git(mirror, ['worktree', 'remove', '--force', dir]).catch(() => fs.rmSync(dir, { recursive: true, force: true }));
 }

@@ -1,6 +1,6 @@
 import type { Agent, Effort, GoalArtifact, GoalNote, GoalRecord, Helper, LeadPr, LeadWork, QaReport, QaReview, QueuedGoal, Settings } from '../../shared/types';
 import { TEAM_STATIONS } from '../../shared/types';
-import type { BranchState, HelperEvent } from './types';
+import type { BranchState, HelperEvent, RunOutcome } from './types';
 import { slugify } from '../util';
 
 /** The lead's checkout of one repo: a folder inside their workspace. */
@@ -293,9 +293,48 @@ export function goalRecord(agent: Agent, now: number): GoalRecord {
   const work = agent.lead!;
   return {
     id: agent.id, title: work.title, note: work.note, slices: work.prs.length ? work.slice : work.slice - 1, prs: work.prs, leadName: agent.name, sessionId: agent.sessionId,
-    branch: agent.branch, repos: work.repos, openedAt: agent.startedAt, closedAt: now,
+    brief: work.brief, branch: agent.branch, repos: work.repos, openedAt: agent.startedAt, closedAt: now,
   };
 }
+
+/** Whether a closed goal can be reopened: it kept its branch and repos (goals closed before they were kept didn't). */
+export const reopenable = (goal: GoalRecord): boolean => !!goal.branch && !!goal.repos?.length;
+
+/**
+ * A closed goal's work as it stood when it closed, at `station`: the slice it was on, with that slice's pull requests,
+ * and its repos (so closing it again before they're checked out still files a goal that can be reopened).
+ */
+export function reopenedWork(goal: GoalRecord, station: number): LeadWork {
+  return {
+    station, title: goal.title, brief: goal.brief, note: goal.note, repos: goal.repos ?? [], slice: goal.prs.length ? goal.slices : goal.slices + 1, prs: goal.prs,
+    reopening: { closedAt: goal.closedAt },
+  };
+}
+
+/**
+ * What the lead hears when the captain reopens their goal: where their repos are, and where any uncommitted work went.
+ * When its last slice had landed, the next one starts on fresh code first, and the lead hears about that above this.
+ */
+export function reopenedNote(work: LeadWork, branch: string, closedAt: number): string {
+  const closed = new Date(closedAt).toISOString().slice(0, 10);
+  const wip = `“${snapshotMessage(work.title)}”`;
+  const open = work.prs.filter((p) => !p.outcome);
+  return [
+    `[Office] The captain reopened this goal, closed on ${closed}.`,
+    sliceLanded(work.prs)
+      ? `Its last slice had landed, so the next one starts on fresh code, as above. If you had uncommitted work when it closed, it was the commit ${wip}, and it came along with any others you hadn't shipped.`
+      : `Your repos are checked out again on \`${branch}\`, as you left them: ${work.repos.map((r) => `./${r.folder}`).join(', ')}. If you had uncommitted work when it closed, it's the commit ${wip} at the tip: build on it, or \`git reset HEAD~1\` to have it uncommitted again.`,
+    open.length ? `Still open on GitHub: ${open.map((p) => `${p.repo}#${p.number}`).join(', ')}.` : '',
+    "Tell the captain where the goal stands and what you'd do next.",
+  ].filter(Boolean).join(' ');
+}
+
+/**
+ * A lead's conversation that couldn't be resumed because Claude Code no longer has it (the session was cleared, or the
+ * goal was reopened on another machine): they carry on in a new one, hearing where the goal stands.
+ */
+export const sessionGone = (outcome: RunOutcome, resumed: boolean): boolean =>
+  resumed && !outcome.ok && !outcome.aborted && !outcome.started && /no conversation found/i.test(outcome.error ?? '');
 
 /** The room's log with a goal just closed: newest first, the oldest dropping off. */
 export const fileGoal = (log: GoalRecord[], record: GoalRecord): GoalRecord[] => [record, ...log.filter((g) => g.id !== record.id)].slice(0, GOAL_LOG);

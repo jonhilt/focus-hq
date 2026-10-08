@@ -135,6 +135,96 @@ describe('AgentManager', () => {
     expect(project.goals![0]).toMatchObject({ id: lead.id, branch, sessionId: 'session-1', repos: [{ folder: 'webshop-frontend' }, { folder: 'webshop-api' }] });
   });
 
+  it('reopens a closed goal on its branch, with the same lead picking their conversation back up', async () => {
+    const reopened: { id: string; branch: string }[] = [];
+    const { agents, claude, store, project } = office({ ...demoWorkspace, reopen: async (_repo, id, branch) => (reopened.push({ id, branch }), `/demo/${id}`) });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string; name: string } };
+    const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
+    await until(() => leads().length === 1);
+    await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    leads()[0].end({ ok: true, summary: 'Shipped the first slice' });
+    await until(() => store.agent(lead.id).status === 'done');
+    const { branch, lead: work } = store.agent(lead.id);
+    expect(await agents.closeGoal(lead.id, true)).toEqual({ closed: true });
+    expect(store.agents.has(lead.id)).toBe(false);
+
+    // another goal took station 1 meanwhile
+    agents.startGoal(project.id, 'Wishlists');
+    const again = agents.reopenGoal(project.id, lead.id);
+    expect(again).toMatchObject({ id: lead.id, name: lead.name, branch, lead: { station: 1, slice: 1, title: 'Saved items' } });
+    expect(project.goals).toEqual([]);
+    expect(() => agents.reopenGoal(project.id, lead.id)).toThrow(/isn’t in the room’s log/);
+    await until(() => leads().length === 2);
+    expect(reopened).toEqual(work!.repos.map((r) => ({ id: `${lead.id}/${r.folder}`, branch })));
+    expect(leads()[1].req.resumeSessionId).toBe('session-1');
+    expect(leads()[1].req.prompt).toMatch(new RegExp(`^\\[Office\\] The captain reopened this goal, .* checked out again on \`${branch}\`, as you left them: \\./webshop-frontend, \\./webshop-api\\. .* Still open on GitHub: `));
+    expect(store.agent(lead.id).lead).toMatchObject({ repos: work!.repos, prs: work!.prs });
+
+    // Claude Code no longer has the conversation: a new one hears where the goal stands
+    leads()[1].end({ ok: false, summary: '', error: 'No conversation found with session ID: session-1' });
+    await until(() => leads().length === 3);
+    expect(leads()[2].req.resumeSessionId).toBeUndefined();
+    expect(leads()[2].req.prompt).toContain("You're carrying on with this goal in a new conversation");
+    expect(leads()[2].req.prompt).toContain('[Office] The captain reopened this goal');
+  });
+
+  it('checks a reopened goal’s repos out again before picking up its conversation, however often that fails first', async () => {
+    let failures = 1;
+    const reopened: string[] = [];
+    const { agents, claude, store, project } = office({
+      ...demoWorkspace,
+      reopen: async (_repo, id) => {
+        if (failures-- > 0) throw new Error('fetch failed: could not resolve host');
+        reopened.push(id);
+        return `/demo/${id}`;
+      },
+    });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
+    await until(() => leads().length === 1);
+    leads()[0].end({ ok: true, summary: 'Proposed a slice' });
+    await until(() => store.agent(lead.id).status === 'done');
+    const { repos } = store.agent(lead.id).lead!;
+    await agents.closeGoal(lead.id, true);
+
+    agents.reopenGoal(project.id, lead.id);
+    await until(() => store.agent(lead.id).status === 'error');
+    expect(leads()).toHaveLength(1);
+    // the captain tries again: the repos are checked out first, then the conversation picks back up
+    agents.message(lead.id, 'Try again?');
+    await until(() => leads().length === 2);
+    expect(reopened).toEqual(repos.map((r) => `${lead.id}/${r.folder}`));
+    expect(leads()[1].req.resumeSessionId).toBe('session-1');
+    expect(leads()[1].req.prompt).toMatch(/^\[Office\] The captain reopened this goal, [^]*\n\nTry again\?$/);
+    expect(store.agent(lead.id).lead).toMatchObject({ repos, reopening: undefined });
+  });
+
+  it('files a reopened goal that never got its repos back so it can be reopened again', async () => {
+    const { agents, claude, store, project } = office({ ...demoWorkspace, reopen: () => Promise.reject(new Error('fetch failed')) });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    const { branch, lead: work } = store.agent(lead.id);
+    await agents.closeGoal(lead.id, true);
+    agents.reopenGoal(project.id, lead.id);
+    await until(() => store.agent(lead.id).status === 'error');
+
+    // nothing was checked out, so there's nothing to check: only that it never shipped
+    expect(await agents.closeGoal(lead.id)).toEqual({ warn: ['The goal never shipped anything: no pull request was opened for it.'] });
+    expect(await agents.closeGoal(lead.id, true)).toEqual({ closed: true });
+    expect(project.goals).toEqual([expect.objectContaining({ id: lead.id, branch, repos: work!.repos, sessionId: 'session-1' })]);
+    expect(agents.reopenGoal(project.id, lead.id)).toMatchObject({ id: lead.id, branch });
+  });
+
+  it('reopens a goal only to a free team station', async () => {
+    const { agents, claude, project } = office();
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    await agents.closeGoal(lead.id, true);
+    for (const text of ['One', 'Two', 'Three', 'Four']) agents.startGoal(project.id, text);
+    expect(() => agents.reopenGoal(project.id, lead.id)).toThrow(/Every team station in Shop has a goal: close one first/);
+    expect(project.goals?.map((g) => g.id)).toEqual([lead.id]);
+  });
+
   it('puts what the lead shows on their goal, with a picture when it can take one, until the goal closes', async () => {
     const { agents, claude, store, project } = office();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };

@@ -11,7 +11,7 @@ import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
 import { afterCloudRun, carryOnInNewSession, fallBackToLocal } from './cloud';
-import { afterLanding, afterVerdict, type ArtifactInput, showArtifact, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, behindNote, closeCheck, conflictsResolvedNote, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded, snapshotMessage } from './lead';
+import { afterLanding, afterVerdict, type ArtifactInput, showArtifact, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, behindNote, closeCheck, conflictsResolvedNote, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sessionGone, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded, snapshotMessage } from './lead';
 import { repoFolders } from './planner';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
 import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
@@ -356,6 +356,12 @@ export class AgentManager {
 
   private launch(agent: Agent): Effect.Effect<void, never, ManagerServices> {
     const rt = this.rt(agent.id);
+    // a reopened goal's repos are checked out before anything else, however many tries that takes
+    if (agent.task === 'lead' && agent.lead?.reopening) {
+      rt.resume = false;
+      this.update(agent, { status: 'setting-up', activity: 'Checking the goal’s branch out again', error: undefined });
+      return this.launchReopened(agent, agent.lead.reopening.closedAt).pipe(this.orFail(agent));
+    }
     if (rt.resume) {
       rt.resume = false;
       this.update(agent, { status: 'setting-up', activity: 'Picking up where they left off' });
@@ -594,6 +600,11 @@ export class AgentManager {
         // only a new session gets refused, so this is already a carry-on prompt with the manager's message in it
         return yield* this.runSession(agent, prompt);
       }
+      if (lead && sessionGone(outcome, !!resumeSessionId)) {
+        this.print(agent, [{ kind: 'system', text: '✻ Claude Code no longer has their conversation – carrying on in a new one' }]);
+        this.update(agent, { sessionId: undefined });
+        return yield* this.runSession(agent, freshSessionPrompt(agent.lead!, agent.branch, [prompt], false));
+      }
       if (agent.cloud && carryOnInNewSession(outcome, !!resumeSessionId)) {
         // everything the old session did is on the branch: a new one picks it up from there
         this.print(agent, [{ kind: 'system', text: `✻ Couldn't get back into the cloud session (${truncate(outcome.error ?? 'no reason given', 200)}) – starting a new one on ${agent.branch}` }]);
@@ -779,6 +790,49 @@ export class AgentManager {
     return { agent };
   }
 
+  /**
+   * Reopens a closed goal from the room's log at a free team station (`station`, or the first free one): the same lead,
+   * so Claude Code finds their conversation again, with every repo checked out on the goal's branch as it was left.
+   */
+  reopenGoal(projectId: string, goalId: string, station?: number): Agent {
+    const project = this.store.project(projectId);
+    const goal = (project.goals ?? []).find((g) => g.id === goalId);
+    if (!goal) throw new Refused({ message: 'That goal isn’t in the room’s log' });
+    if (!reopenable(goal)) throw new Refused({ message: `“${goal.title}” closed before the office kept its branch, so it can’t be reopened` });
+    if (this.store.agents.has(goal.id)) throw new Refused({ message: `“${goal.title}” is already under way` });
+    const leads = this.store.agentsIn(projectId).filter((a) => a.task === 'lead');
+    const free = pickStation(leads.map((a) => a.lead?.station ?? 0), station) ?? pickStation(leads.map((a) => a.lead?.station ?? 0));
+    if (free === undefined) throw new Refused({ message: `Every team station in ${project.name} has a goal: close one first` });
+    const crew = leadFor(projectId, goal.id.split('_').at(-1)!, leads.map((a) => a.name));
+    const agent: Agent = {
+      id: goal.id,
+      name: leads.some((a) => a.name === goal.leadName) ? crew.name : goal.leadName,
+      avatar: crew.avatar,
+      projectId,
+      repo: goal.repos![0].repo,
+      task: 'lead',
+      issue: { number: 0, title: goal.title, url: '' },
+      effort: goalEffort(undefined, this.store.settings),
+      desk: LEAD_DESK,
+      status: 'queued',
+      activity: `Coming back to team station ${free + 1}`,
+      branch: goal.branch!,
+      baseBranch: goal.repos![0].baseBranch,
+      lead: reopenedWork(goal, free),
+      sessionId: goal.sessionId,
+      costUsd: 0,
+      startedAt: Date.now(),
+    };
+    this.runtimes.set(agent.id, { inbox: [], notes: [], nudged: false, busy: false });
+    project.goals = (project.goals ?? []).filter((g) => g.id !== goal.id);
+    this.projectsChanged();
+    this.store.putAgent(agent);
+    this.hub.send({ type: 'agent', agent });
+    this.print(agent, [{ kind: 'system', text: `✻ The captain reopened “${goal.title}”: ${agent.name} comes back to team station ${free + 1}, on ${goal.branch}` }]);
+    this.schedule();
+    return agent;
+  }
+
   /** Puts a goal in line for the next free team station. It waits there for the captain to start it. */
   private queueGoal(projectId: string, text: string, how: { effort?: Effort; from?: string }): QueuedGoal {
     const project = this.store.project(projectId);
@@ -886,8 +940,9 @@ export class AgentManager {
       if (agent.task !== 'lead' || !work) return yield* new Refused({ message: `${agent.name} isn’t leading a goal` });
       const workspace = yield* Workspace;
       const dir = (folder: string) => workspace.dir(leadWorktreeId(id, folder));
-      // a check that fails counts against closing: changes git couldn't look for are treated as there
-      const repos = yield* Effect.forEach(work.repos, (r) =>
+      // a check that fails counts against closing: changes git couldn't look for are treated as there. A reopened goal
+      // whose repos were never checked out again has nothing to check: its branch is as it was
+      const repos = yield* Effect.forEach(work.reopening ? [] : work.repos, (r) =>
         Effect.all({
           folder: Effect.succeed(r.folder),
           dirty: workspace.hasUncommittedChanges(dir(r.folder)).pipe(Effect.orElseSucceed(() => true)),
@@ -943,6 +998,33 @@ export class AgentManager {
       if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
       // a new goal, or one whose conversation couldn't be resumed: the lead hears where it stands
       yield* this.runSession(agent, freshSessionPrompt(agent.lead!, agent.branch, rt.inbox.splice(0), sliceLanded(agent.lead!.prs)));
+    });
+  }
+
+  /**
+   * A reopened goal's lead: its pull requests as GitHub has them now, every repo checked out on the goal's branch as it
+   * was left, then the conversation picked back up (or a new one, when there's none to go back to).
+   */
+  private launchReopened(agent: Agent, closedAt: number): Effect.Effect<void, WorkError, ManagerServices> {
+    return Effect.gen({ self: this }, function* () {
+      const rt = this.rt(agent.id);
+      const github = yield* GitHub;
+      const workspace = yield* Workspace;
+      // a pull request may have merged or closed while the goal was closed, with no lead to hear about it
+      const prs = yield* Effect.forEach(agent.lead!.prs, (p) =>
+        p.outcome ? Effect.succeed(p) : github.pullRequestState(p.repo, p.number).pipe(
+          Effect.map((state) => (state === 'OPEN' ? p : { ...p, outcome: state === 'MERGED' ? 'merged' as const : 'closed' as const })),
+          Effect.orElseSucceed(() => p),
+        ));
+      for (const r of agent.lead!.repos) {
+        this.update(agent, { activity: `Checking out ${r.repo}` });
+        this.print(agent, [{ kind: 'system', text: `✻ Checking out ${r.repo} at ./${r.folder} on ${agent.branch}, as it was left` }]);
+        yield* workspace.reopen(r.repo, leadWorktreeId(agent.id, r.folder), agent.branch, (id) => this.store.agents.has(id));
+      }
+      this.update(agent, { lead: { ...agent.lead!, prs, reopening: undefined } });
+      if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
+      const note = [reopenedNote(agent.lead!, agent.branch, closedAt), ...rt.inbox.splice(0)].join('\n\n');
+      yield* this.runSession(agent, agent.sessionId ? note : freshSessionPrompt(agent.lead!, agent.branch, [note], sliceLanded(prs)), agent.sessionId);
     });
   }
 

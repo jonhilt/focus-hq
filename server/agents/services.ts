@@ -39,6 +39,8 @@ export class Workspace extends Context.Service<Workspace, {
   checkoutPullRequest(repo: string, agentId: string, number: number): Effect.Effect<string, GitFailed>;
   mergeBase(repo: string, branch: string, baseBranch: string): Effect.Effect<BaseMerge, GitFailed>;
   missingRemoteCommits(dir: string, branch: string): Effect.Effect<boolean, GitFailed>;
+  /** A worktree on `branch` as it was left (a closed goal's), from the office's clone or else GitHub, never reset. */
+  reopen(repo: string, agentId: string, branch: string, inOffice: (agentId: string) => boolean): Effect.Effect<string, GitFailed>;
   snapshot(dir: string, message: string): Effect.Effect<boolean, GitFailed>;
   branchState(dir: string, branch: string, baseBranch: string): Effect.Effect<BranchState, GitFailed>;
 }>()('focus/agents/Workspace') {
@@ -61,6 +63,7 @@ export class Workspace extends Context.Service<Workspace, {
       checkoutPullRequest: (repo, agentId, number) => git(`check out PR #${number}`, () => ops.checkoutPullRequest(repo, agentId, number)),
       mergeBase: (repo, branch, baseBranch) => git(`merge ${baseBranch} into ${branch}`, () => ops.mergeBase(repo, branch, baseBranch)),
       missingRemoteCommits: (dir, branch) => git(`compare with origin's ${branch}`, () => ops.missingRemoteCommits(dir, branch)),
+      reopen: (repo, agentId, branch, inOffice) => git(`check out ${branch} again`, () => ops.reopen(repo, agentId, branch, inOffice)),
       snapshot: (dir, message) => git('commit a WIP snapshot', () => ops.snapshot(dir, message)),
       branchState: (dir, branch, baseBranch) => git(`compare with origin's ${branch}`, () => ops.branchState(dir, branch, baseBranch)),
     }));

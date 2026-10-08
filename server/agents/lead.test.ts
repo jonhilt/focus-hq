@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadWork } from '../../shared/types';
-import { afterLanding, ARTIFACT_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
+import { afterLanding, ARTIFACT_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -294,7 +294,7 @@ describe('closing a goal', () => {
     const record = goalRecord(lead, 99);
     expect(record).toEqual({
       id: 'lead_p1_ab', title: 'Saved items', note: undefined, slices: 2, prs: work.prs, leadName: 'Lt. Okafor', sessionId: 's1',
-      branch: 'focus/saved-items-2-ab12', repos: work.repos, openedAt: 10, closedAt: 99,
+      brief: undefined, branch: 'focus/saved-items-2-ab12', repos: work.repos, openedAt: 10, closedAt: 99,
     });
     // closed before the new slice shipped anything: that one doesn't count
     expect(goalRecord({ ...lead, lead: { ...work, slice: 3, prs: [] } }, 99).slices).toBe(2);
@@ -303,6 +303,45 @@ describe('closing a goal', () => {
     expect(log).toHaveLength(GOAL_LOG);
     expect(log[0]).toBe(record);
     expect(log.at(-1)?.id).toBe(`g${GOAL_LOG - 2}`);
+  });
+});
+
+describe('reopening a closed goal', () => {
+  const lead = { id: 'lead_p1_ab', name: 'Lt. Okafor', sessionId: 's1', branch: 'focus/saved-items-2-ab12', startedAt: 10, lead: { ...work, brief: 'Saved items\nAcross devices' } } as Agent;
+  const closedAt = Date.UTC(2026, 9, 7, 12);
+
+  it('picks up the slice it was on, with its pull requests, at its new station', () => {
+    const record = goalRecord(lead, closedAt);
+    expect(reopenable(record)).toBe(true);
+    expect(reopenable({ ...record, branch: undefined, repos: undefined })).toBe(false);
+    expect(reopenedWork(record, 3)).toEqual({
+      station: 3, title: 'Saved items', brief: 'Saved items\nAcross devices', note: undefined, repos: work.repos, slice: 2, prs: work.prs, reopening: { closedAt },
+    });
+    // closed before the new slice shipped anything: it's that slice again
+    const unshipped = goalRecord({ ...lead, lead: { ...work, slice: 3, prs: [] } }, closedAt);
+    expect(reopenedWork(unshipped, 0)).toMatchObject({ slice: 3, prs: [] });
+  });
+
+  it('tells the lead where their repos are, and where uncommitted work went', () => {
+    const record = goalRecord(lead, closedAt);
+    const again = reopenedWork(record, 0);
+    expect(reopenedNote(again, 'focus/saved-items-2-ab12', record.closedAt)).toBe(
+      '[Office] The captain reopened this goal, closed on 2026-10-07. Your repos are checked out again on `focus/saved-items-2-ab12`, as you left them: ./web, ./api. ' +
+      'If you had uncommitted work when it closed, it\'s the commit “WIP: uncommitted work when the goal “Saved items” closed” at the tip: build on it, or `git reset HEAD~1` to have it uncommitted again. ' +
+      'Still open on GitHub: acme/api#7. Tell the captain where the goal stands and what you\'d do next.',
+    );
+    // the slice landed while it was closed: the next one starts on fresh code
+    const landed = { ...again, prs: work.prs.map((p) => ({ ...p, outcome: 'merged' as const })) };
+    expect(reopenedNote(landed, 'focus/saved-items-2-ab12', record.closedAt)).toMatch(/Its last slice had landed, so the next one starts on fresh code, as above\. .* came along with any others you hadn't shipped\. Tell the captain/);
+  });
+
+  it('starts a new conversation only when Claude Code no longer has the old one', () => {
+    const gone = { ok: false, summary: '', error: 'No conversation found with session ID: s1' };
+    expect(sessionGone(gone, true)).toBe(true);
+    expect(sessionGone(gone, false)).toBe(false);
+    expect(sessionGone({ ...gone, started: true }, true)).toBe(false);
+    expect(sessionGone({ ...gone, error: 'Network error' }, true)).toBe(false);
+    expect(sessionGone({ ...gone, aborted: true }, true)).toBe(false);
   });
 });
 

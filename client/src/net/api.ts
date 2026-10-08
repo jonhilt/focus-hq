@@ -40,6 +40,8 @@ export const api = {
     call<Agent>('POST', `/projects/${projectId}/goals/queue/${queueId}/start`, edits),
   moveQueued: (projectId: string, queueId: string, by: -1 | 1) => call('POST', `/projects/${projectId}/goals/queue/${queueId}/move`, { by }),
   dropQueued: (projectId: string, queueId: string) => call('DELETE', `/projects/${projectId}/goals/queue/${queueId}`),
+  /** Reopens a closed goal from the room's log at a free team station, on its branch and with its lead's session. */
+  reopenGoal: (projectId: string, goalId: string) => call<Agent>('POST', `/projects/${projectId}/goals/${goalId}/reopen`, {}),
   /** Closes a goal, unless something would be lost or left behind: then it says what, and `force` closes it anyway. */
   closeGoal: (id: string, force = false) => call<{ closed: true } | { warn: string[] }>('POST', `/agents/${id}/close`, { force }),
   numberOneSay: (text: string) => call<NumberOneChat>('POST', '/number-one/say', { text }),

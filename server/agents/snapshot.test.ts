@@ -65,3 +65,67 @@ describe('a closing goal’s checkout', () => {
     expect(await ws.branchState(dir, 'focus/goal', 'main')).toEqual({ onOrigin: true, unpushed: 1 });
   });
 });
+
+/** An origin, the office's clone of it, and a lead's worktree of the clone on the goal's branch, as the office sets them up. */
+async function office(repo: string) {
+  const origin = path.join(tmp, `${repo.replace('/', '__')}.git`);
+  git(tmp, 'init', '-q', '--bare', '-b', 'main', origin);
+  const seed = path.join(tmp, `${repo.replace('/', '__')}-seed`);
+  git(tmp, 'clone', '-q', origin, seed);
+  git(seed, 'checkout', '-qb', 'main');
+  git(seed, 'config', 'user.email', 'dev@focus.test');
+  git(seed, 'config', 'user.name', 'Dev');
+  commit(seed, 'readme.md', 'hello');
+  git(seed, 'push', '-q', 'origin', 'main');
+  const mirror = path.join(process.env.FOCUS_DATA_DIR!, 'repos', repo.replace('/', '__'));
+  git(tmp, 'clone', '-q', origin, mirror);
+  git(mirror, 'config', 'user.email', 'office@focus.test');
+  git(mirror, 'config', 'user.name', 'Office');
+  const id = `lead_p1_${repo.split('/')[1]}/web`;
+  const dir = await ws.createWorktree(repo, id, 'focus/goal', 'main', () => false);
+  return { origin, seed, mirror, id, dir };
+}
+
+describe('a reopened goal’s checkout', () => {
+  it('is its branch as it was left, WIP snapshot and all', async () => {
+    const { id, dir } = await office('acme/reopen');
+    commit(dir, 'saved.ts', 'one');
+    fs.writeFileSync(path.join(dir, 'saved.ts'), 'two, uncommitted');
+    expect(await ws.snapshot(dir, 'WIP: closing')).toBe(true);
+    const tip = git(dir, 'rev-parse', 'HEAD');
+    await ws.removeWorktree('acme/reopen', id);
+    expect(fs.existsSync(dir)).toBe(false);
+
+    expect(await ws.reopenWorktree('acme/reopen', id, 'focus/goal', () => false)).toBe(dir);
+    expect(git(dir, 'rev-parse', 'HEAD')).toBe(tip);
+    expect(git(dir, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('focus/goal');
+    expect(fs.readFileSync(path.join(dir, 'saved.ts'), 'utf8')).toBe('two, uncommitted');
+  });
+
+  it('takes what GitHub has when the office’s branch is behind it, or gone', async () => {
+    const { origin, seed, id, dir } = await office('acme/behind');
+    commit(dir, 'saved.ts', 'one');
+    git(dir, 'push', '-q', 'origin', 'HEAD:refs/heads/focus/goal');
+    await ws.removeWorktree('acme/behind', id);
+    // the office merged main into the pull request's branch on GitHub while the goal was closed
+    git(seed, 'fetch', '-q', 'origin');
+    git(seed, 'checkout', '-qb', 'focus/goal', 'origin/focus/goal');
+    commit(seed, 'merge.ts', 'merged');
+    git(seed, 'push', '-q', 'origin', 'focus/goal');
+    await ws.reopenWorktree('acme/behind', id, 'focus/goal', () => false);
+    expect(git(dir, 'rev-parse', 'HEAD')).toBe(git(origin, 'rev-parse', 'focus/goal'));
+
+    // the office's clone lost its branch: GitHub's is checked out
+    await ws.removeWorktree('acme/behind', id);
+    git(path.join(process.env.FOCUS_DATA_DIR!, 'repos', 'acme__behind'), 'branch', '-D', 'focus/goal');
+    await ws.reopenWorktree('acme/behind', id, 'focus/goal', () => false);
+    expect(git(dir, 'rev-parse', 'HEAD')).toBe(git(origin, 'rev-parse', 'focus/goal'));
+  });
+
+  it('fails when neither the office nor GitHub has the branch', async () => {
+    const { id } = await office('acme/gone');
+    await ws.removeWorktree('acme/gone', id);
+    git(path.join(process.env.FOCUS_DATA_DIR!, 'repos', 'acme__gone'), 'branch', '-D', 'focus/goal');
+    await expect(ws.reopenWorktree('acme/gone', id, 'focus/goal', () => false)).rejects.toThrow(/focus\/goal is gone/);
+  });
+});

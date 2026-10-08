@@ -133,6 +133,8 @@ export interface WorkspaceOps {
   mergeBase(repo: string, branch: string, baseBranch: string): Promise<BaseMerge>;
   /** Whether origin's `branch` has commits `dir`'s HEAD doesn't. */
   missingRemoteCommits(dir: string, branch: string): Promise<boolean>;
+  /** A worktree on `branch` as it was left, nothing reset: the office's own branch (brought up to GitHub's), else GitHub's. */
+  reopen(repo: string, agentId: string, branch: string, inOffice: (agentId: string) => boolean): Promise<string>;
   /** Commits everything uncommitted in `dir` as `message`, skipping hooks; false when there was nothing to commit. */
   snapshot(dir: string, message: string): Promise<boolean>;
   /** Whether origin has `branch`, and how many of `dir`'s commits it hasn't got (counting from `baseBranch` while it hasn't). */

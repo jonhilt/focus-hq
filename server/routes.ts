@@ -145,6 +145,10 @@ export function apiRouter(office: Office, store: Store): express.Router {
     }),
   ));
   r.post('/projects/:id/goals/queue/:qid/move', h((req) => office.agents.moveQueued(param(req, 'id'), param(req, 'qid'), Math.sign(Number(req.body.by)) || 0)));
+  // a closed goal from the room's log, back at a free team station on its branch and session
+  r.post('/projects/:id/goals/:gid/reopen', h((req) =>
+    office.agents.reopenGoal(param(req, 'id'), param(req, 'gid'), typeof req.body.station === 'number' ? req.body.station : undefined),
+  ));
   r.delete('/projects/:id/goals/queue/:qid', h((req) => office.agents.dropQueued(param(req, 'id'), param(req, 'qid'))));
   r.get('/agents/:id/lines', h((req) => store.allLines(param(req, 'id'))));
   r.post('/agents/:id/message', h((req) => office.agents.message(param(req, 'id'), str(req.body.text))));

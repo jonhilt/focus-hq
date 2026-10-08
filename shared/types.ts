@@ -125,6 +125,8 @@ export interface GoalRecord {
    */
   branch?: string;
   repos?: LeadWork['repos'];
+  /** The goal as the captain first put it, for a reopened goal's lead. */
+  brief?: string;
   openedAt: number;
   closedAt: number;
 }
@@ -335,6 +337,11 @@ export interface LeadWork {
   closing?: { reason: string; at: number };
   /** Each repo, checked out at ./<folder> in the lead's workspace, and the branch it ships into. */
   repos: { repo: string; folder: string; baseBranch: string }[];
+  /**
+   * Reopened from the room's log (the goal closed at `closedAt`), until every repo is checked out again on its branch: the
+   * lead's next start does that before picking their conversation back up, however often it fails first.
+   */
+  reopening?: { closedAt: number };
   /** Which slice this is: 1, 2, … */
   slice: number;
   prs: LeadPr[];

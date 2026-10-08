@@ -44,6 +44,7 @@ const liveWorkspace: WorkspaceOps = {
   checkoutPullRequest: git.checkoutPullRequest,
   mergeBase: git.mergeBase,
   missingRemoteCommits: git.missingRemoteCommits,
+  reopen: git.reopenWorktree,
   snapshot: git.snapshot,
   branchState: git.branchState,
 };

@@ -471,6 +471,7 @@ export const demoWorkspace: WorkspaceOps = {
     return { kind: 'conflicts' };
   },
   missingRemoteCommits: async () => false,
+  reopen: async (_repo, agentId) => `/demo/${agentId}`,
   snapshot: async () => false,
   // everything the demo's leads commit, they ship
   branchState: async () => ({ onOrigin: true, unpushed: 0 }),

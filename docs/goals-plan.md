@@ -59,7 +59,7 @@ interface GoalRecord { id: string; title: string; note: GoalNote; slices: number
 Project.goals?: GoalRecord[]   // persisted with the project, newest first, capped (say 30)
 ```
 
-**Reopening is left out for now.** The log keeps the `sessionId` and note, so either way of reopening (fresh code, or restoring the last branch) can be added later without changing anything here. We decide once we've closed a few goals and know whether we miss them.
+**Reopening restores the last branch.** **Reopen** on a closed goal (`reopenGoal`) brings back the same lead (same id, so Claude Code finds its session by its working folder) at a free team station, and checks out every repo on the goal's branch as it was left (`reopenWorktree`: the office's clone's branch, WIP snapshot and all, brought up to GitHub's when that's only ahead, else GitHub's; never reset). Its pull requests are refreshed from GitHub, the goal leaves the log (its lead keeps the repos and `reopening` until every checkout succeeds, so a failed checkout is retried on their next start and closing them again files a goal that can still be reopened), and the lead resumes its conversation hearing `reopenedNote`. If the last slice landed meanwhile, the next one starts on fresh code as usual. When Claude Code no longer has the conversation (`sessionGone`), the lead starts a new one with the goal's note. With every station taken, reopening is refused rather than queued.
 
 ## Starting, switching and ending a goal
 

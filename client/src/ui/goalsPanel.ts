@@ -77,13 +77,30 @@ function queuedCard(ui: Ui, projectId: string, goal: QueuedGoal, place: number, 
   return h('div', { class: 'card planner goal-queued' }, head, h('p', null, 'A team station is free. Start it as it is, or change it first:'), withMic(ui, text), h('div', { class: 'row' }, start, effort.el));
 }
 
-/** A closed goal in the room's log. */
-function recordRow(goal: GoalRecord): HTMLElement {
+/** A closed goal in the room's log: reopened, with a free station, on its branch and with its lead's conversation. */
+function recordRow(ui: Ui, projectId: string, goal: GoalRecord, free: boolean): HTMLElement {
+  const kept = !!goal.branch && !!goal.repos?.length;
+  const reopen = kept
+    ? h('button', {
+      class: 'btn small',
+      disabled: !free,
+      title: free ? `Bring ${goal.leadName} back to a free team station, on ${goal.branch} as it was left, to carry on the conversation` : 'Every team station has a goal: close one first',
+    }, 'Reopen')
+    : null;
+  if (reopen) {
+    reopen.onclick = () =>
+      void busy(reopen, async () => {
+        const lead = await api.reopenGoal(projectId, goal.id);
+        ui.openAgent(lead.id);
+      }, ui.error);
+  }
   return h('div', { class: 'card goal-record' },
     h('div', { class: 'row' },
       h('strong', { class: 'grow' }, goal.title),
       h('small', { class: 'muted' }, `${goal.leadName} · ${goal.slices} slice${goal.slices === 1 ? '' : 's'} · closed ${timeAgo(goal.closedAt)}`),
+      reopen,
     ),
+    goal.branch ? h('small', { class: 'muted', style: 'display:block' }, `On ${goal.branch}`) : null,
     goal.note?.learned.length ? h('ul', { class: 'goal-list' }, ...goal.note.learned.map((l) => h('li', null, l))) : null,
     goal.prs.length ? h('div', { class: 'row' }, ...goal.prs.map(prLink)) : null,
   );
@@ -163,7 +180,7 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
       ? `A lead of its own takes a free team station, with ${p.repos.length === 1 ? p.repos[0] : `all ${p.repos.length} of ${p.name}'s repos`} checked out side by side: your own Claude Code session for the goal. Talk it through, then let them build it a slice at a time. Each slice ships as a pull request per repo it touches, QA reviews it, and you merge it.`
       : 'Every team station has a goal, or goals are waiting for one: this one joins the line, and you start it once a station is free.';
     start.textContent = startsNow ? 'Start the goal' : 'Add it to the line';
-    fill(log, ...done.map(recordRow));
+    fill(log, ...done.map((g) => recordRow(ui, projectId, g, open > 0)));
   };
   ui.panels.open({ title: `${project.name} · goals`, body: h('div', null, ...Object.values(views)), nav, accent: project.color });
   render();
