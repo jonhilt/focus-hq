@@ -226,6 +226,14 @@ describe('afterVerdict', () => {
 describe('applyHelperEvent', () => {
   const started = applyHelperEvent([], { kind: 'started', id: 't1', description: 'Map the cart store', type: 'Explore' }, 5);
 
+  it('stamps a new helper with the lead’s effort, and its model once it reports one', () => {
+    const seated = applyHelperEvent([], { kind: 'started', id: 't1', description: 'Map' }, 5, 'high');
+    expect(seated[0].effort).toBe('high');
+    const modelled = applyHelperEvent(seated, { kind: 'model', id: 't1', model: 'claude-sonnet-5-5' }, 6);
+    expect(modelled[0]).toMatchObject({ model: 'claude-sonnet-5-5', effort: 'high' });
+    expect(applyHelperEvent(modelled, { kind: 'model', id: 't1', model: 'claude-sonnet-5-5' }, 7)).toBe(modelled);
+  });
+
   it('seats a new helper, once', () => {
     expect(started).toEqual([{ id: 't1', description: 'Map the cart store', type: 'Explore', status: 'working', activity: 'Getting started', startedAt: 5 }]);
     expect(applyHelperEvent(started, { kind: 'started', id: 't1', description: 'again' }, 6)).toBe(started);

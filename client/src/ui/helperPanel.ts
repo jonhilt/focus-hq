@@ -37,6 +37,8 @@ export function openHelperPanel(ui: Ui, leadId: string, id: string): void {
       h('span', { class: `chip ${x.status === 'done' ? 'ok' : x.status === 'failed' ? 'bad' : ''}` }, x.status),
       h('span', { class: 'grow muted' }, x.activity),
       x.type ? h('span', { class: 'chip' }, x.type) : null,
+      x.model ? h('span', { class: 'chip', title: 'The model this helper runs on' }, x.model) : null,
+      h('span', { class: 'chip', title: "Claude Code doesn't report a subagent's effort: it thinks at its lead's" }, `${x.effort ?? 'default'} effort (inherited)`),
       h('span', { class: 'chip' }, `started ${timeAgo(x.startedAt)}`),
     );
 

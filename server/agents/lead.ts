@@ -630,15 +630,17 @@ export const HELPER_LINGER_MS = 8000;
  * The lead's helpers after a subagent event: a new one sits down, a busy one's activity changes, a finished one says
  * how it went (and goes once it has lingered). The same list when the event is about no helper we know of.
  */
-export function applyHelperEvent(helpers: Helper[], event: HelperEvent, now: number): Helper[] {
+export function applyHelperEvent(helpers: Helper[], event: HelperEvent, now: number, leadEffort?: Effort): Helper[] {
   if (event.kind === 'started') {
     if (helpers.some((h) => h.id === event.id)) return helpers;
-    return [...helpers, { id: event.id, description: event.description || 'Helping out', type: event.type, status: 'working', activity: 'Getting started', startedAt: now }];
+    return [...helpers, { id: event.id, description: event.description || 'Helping out', type: event.type, effort: leadEffort, status: 'working', activity: 'Getting started', startedAt: now }];
   }
   const helper = helpers.find((h) => h.id === event.id);
   if (!helper) return helpers;
   const next: Helper =
-    event.kind === 'activity'
+    event.kind === 'model'
+      ? helper.model === event.model ? helper : { ...helper, model: event.model }
+      : event.kind === 'activity'
       ? helper.status === 'working' && event.activity ? { ...helper, activity: event.activity } : helper
       : { ...helper, status: event.ok ? 'done' : 'failed', activity: event.ok ? (event.summary?.split('\n')[0] || 'Done') : 'Hit a problem' };
   return next === helper ? helpers : helpers.map((h) => (h.id === event.id ? next : h));

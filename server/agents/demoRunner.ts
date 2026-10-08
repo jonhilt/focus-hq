@@ -299,6 +299,7 @@ export class DemoRunner implements AgentRunner {
         for (const h of helpers) {
           hooks.lines([{ kind: 'tool', text: `⏺ Agent(Map ./${h.folder} for ${goal})` }]);
           hooks.helper?.({ kind: 'started', id: h.id, description: `Map ./${h.folder} for ${goal}`, type: 'Explore' });
+          hooks.helper?.({ kind: 'model', id: h.id, model: 'claude-haiku-4-5-20251001' });
           helperLines(h.id, [
             { kind: 'system', text: `✻ Map ./${h.folder} for ${goal}` },
             { kind: 'manager', text: `▶ Read through ./${h.folder} and tell me where ${goal} would fit: the files to change, and anything in the way.` },

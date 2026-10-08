@@ -96,6 +96,8 @@ interface RunContext {
   cloudId?: string;
   /** Subagents by Claude Code's task id: the Agent tool call that started each, which their messages point back to. */
   helpers: Map<string, string>;
+  /** Subagents (by Agent tool call) whose model we've reported. */
+  modelled: Set<string>;
 }
 
 /** How full the session's context window is, from Claude Code's own count (its last response's usage, no extra calls). */
@@ -188,7 +190,7 @@ export class ClaudeRunner implements AgentRunner {
 
     let q: Query | undefined;
     let stopping = false;
-    const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map(), helpers: new Map() };
+    const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map(), helpers: new Map(), modelled: new Set() };
     const done = (async (): Promise<RunOutcome> => {
       let summary = '';
       let structured: unknown;
@@ -302,6 +304,12 @@ export class ClaudeRunner implements AgentRunner {
           hooks.lines([{ kind: 'error', text: `⚠ ${msg.error}` }]);
         }
         const nested = msg.parent_tool_use_id !== null;
+        // a subagent's model is only in its own messages
+        if (nested && msg.message.model && !ctx.modelled.has(msg.parent_tool_use_id!)) {
+          ctx.modelled.add(msg.parent_tool_use_id!);
+          hooks.helper?.({ kind: 'model', id: msg.parent_tool_use_id!, model: msg.message.model });
+          hooks.helperLines?.(msg.parent_tool_use_id!, [{ kind: 'system', text: `✻ ${msg.message.model}` }]);
+        }
         for (const block of msg.message.content) {
           if (block.type === 'text' && block.text.trim()) {
             const lines = renderText(block.text.trim());

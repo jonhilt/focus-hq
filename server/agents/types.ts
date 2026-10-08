@@ -7,6 +7,8 @@ import type { SinceVerdict } from './retest';
 export type HelperEvent =
   | { kind: 'started'; id: string; description: string; type?: string }
   | { kind: 'activity'; id: string; activity: string }
+  /** The model it runs on, from its first message (Claude Code reports nothing else about it). */
+  | { kind: 'model'; id: string; model: string }
   | { kind: 'ended'; id: string; ok: boolean; summary?: string };
 
 export interface RunHooks {

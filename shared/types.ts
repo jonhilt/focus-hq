@@ -325,6 +325,13 @@ export interface Helper {
   description: string;
   /** The subagent type (general-purpose, Explore, …), when Claude Code says. */
   type?: string;
+  /** The model it runs on, from its first message: missing until it's sent one. */
+  model?: string;
+  /**
+   * The effort it thinks at. Claude Code doesn't report a subagent's, and they inherit their session's, so this is the
+   * lead's when the helper started.
+   */
+  effort?: Effort;
   status: 'working' | 'done' | 'failed';
   /** What it's doing right now, or how it finished. */
   activity: string;

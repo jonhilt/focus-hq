@@ -477,7 +477,7 @@ export class AgentManager {
         // only a lead's helpers have somewhere to sit: the lead's team station
         if (agent.task !== 'lead') return;
         const before = agent.helpers ?? [];
-        const helpers = applyHelperEvent(before, event, Date.now());
+        const helpers = applyHelperEvent(before, event, Date.now(), agent.effort);
         if (helpers === before) return;
         this.update(agent, { helpers });
         if (event.kind === 'started') this.print(agent, [{ kind: 'system', text: `✻ ${helperFor(event.id).name} joins ${agent.name}'s team station: ${event.description}` }]);
