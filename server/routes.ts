@@ -49,7 +49,8 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.get('/artifacts/:lead/:file', async (req, res) => {
     const lead = param(req, 'lead');
     const file = param(req, 'file');
-    const ok = /^lead_\w+$/.test(lead) && /^[a-z0-9][a-z0-9-]*\.(html|jpg)$/.test(file);
+    // an artifact (data-flow.html), or an option of a question (q1.a.html)
+    const ok = /^lead_\w+$/.test(lead) && /^[a-z0-9][a-z0-9-]*(\.[a-d])?\.(html|jpg)$/.test(file);
     const bytes = ok ? await store.readArtifact(lead, file) : undefined;
     if (!bytes) return void res.sendStatus(404);
     if (file.endsWith('.html')) res.type('html').set({ 'Content-Security-Policy': 'sandbox allow-scripts allow-popups', 'Cache-Control': 'no-cache' });
@@ -153,6 +154,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.delete('/projects/:id/goals/queue/:qid', h((req) => office.agents.dropQueued(param(req, 'id'), param(req, 'qid'))));
   r.get('/agents/:id/lines', h((req) => store.allLines(param(req, 'id'))));
   r.post('/agents/:id/message', h((req) => office.agents.message(param(req, 'id'), str(req.body.text))));
+  r.post('/agents/:id/answer', h((req) => office.agents.answer(param(req, 'id'), str(req.body.question), str(req.body.option), typeof req.body.note === 'string' ? req.body.note : undefined)));
   r.post('/agents/:id/read', h((req) => office.agents.readTurn(param(req, 'id'))));
   r.post('/agents/:id/permission', h((req) => office.agents.resolvePermission(param(req, 'id'), str(req.body.requestId), req.body.allow === true)));
   r.post('/agents/:id/stop', h((req) => office.agents.stop(param(req, 'id'))));

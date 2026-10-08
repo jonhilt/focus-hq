@@ -18,6 +18,18 @@ describe('goalRoomState', () => {
     expect(goalRoomState(lead('done'))).toEqual({ tone: 'your-turn', label: 'Your turn' });
   });
 
+  it('needs your answer while the lead has a question open, unless something more pressing is up', () => {
+    const asking = (status: AgentStatus, answered = false) => ({
+      status,
+      lead: { questions: [{ id: 'q1', question: 'Which?', options: [], at: 1, ...(answered ? { answer: { option: 'a', at: 2 } } : {}) }] } as never,
+    });
+    expect(goalRoomState(asking('done'))).toEqual({ tone: 'needs-you', label: 'Your answer' });
+    expect(goalRoomState(asking('working'))).toEqual({ tone: 'needs-you', label: 'Your answer' });
+    expect(goalRoomState(asking('done', true))).toEqual({ tone: 'your-turn', label: 'Your turn' });
+    expect(goalRoomState(asking('waiting'))).toEqual({ tone: 'needs-you', label: 'Needs you' });
+    expect(goalRoomState(asking('error')).tone).toBe('stopped');
+  });
+
   it('is queued while the lead waits for a slot, and stopped once they’ve stopped or failed', () => {
     expect(goalRoomState(lead('queued'))).toEqual({ tone: 'queued', label: 'Queued' });
     expect(goalRoomState(lead('stopped'))).toEqual({ tone: 'stopped', label: 'Stopped' });

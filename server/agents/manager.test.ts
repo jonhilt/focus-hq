@@ -293,6 +293,25 @@ describe('AgentManager', () => {
     expect(await store.readArtifact(lead.id, 'data-flow.html')).toBeUndefined();
   });
 
+  it('puts the lead’s question to the captain with an option apiece, and tells the lead which they picked', async () => {
+    const { agents, claude, store, project } = office();
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    const ask = (question: string) => claude.turns[0].req.tools!.ask({ question, options: [{ label: 'Cards', html: '<p>A</p>' }, { label: 'List', html: '<p>unrenderable</p>' }] });
+    expect(await ask('Which layout?')).toMatch(/2 options \(the office couldn't take a picture of 1 of them/);
+    expect(await ask('Which layout, really?')).toMatch(/end your turn here/);
+    const [question] = store.agent(lead.id).lead!.questions!;
+    expect(question).toMatchObject({ id: 'q2', question: 'Which layout, really?', options: [{ id: 'a', label: 'Cards', image: true }, { id: 'b', label: 'List' }] });
+    // the question it replaced goes, pages and all
+    expect(await store.readArtifact(lead.id, 'q1.a.html')).toBeUndefined();
+    expect((await store.readArtifact(lead.id, 'q2.a.html'))?.toString()).toBe('<p>A</p>');
+
+    agents.answer(lead.id, 'q2', 'b', 'Keep the header');
+    expect(store.agent(lead.id).lead!.questions![0].answer).toMatchObject({ option: 'b', note: 'Keep the header' });
+    expect(claude.turns[0].sent).toEqual(['I picked B, “List”, for your question “Which layout, really?”.\n\nKeep the header']);
+    expect(() => agents.answer(lead.id, 'q2', 'a')).toThrow(/already picked B/);
+  });
+
   it('merges the base into a slice’s conflicting PR itself, and tells the lead to pull once their turn is over', async () => {
     const { agents, claude, store, project } = office({ ...demoWorkspace, mergeBase: async () => ({ kind: 'merged', sha: 'merge-sha', from: 'old-sha' }) });
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };

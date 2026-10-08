@@ -63,6 +63,7 @@ export const api = {
     call<Agent>('POST', '/agents', { projectId, repo: issue.repo, number: issue.number, title: issue.title, url: issue.url, effort, cloud }),
   lines: (id: string) => call<TermLine[]>('GET', `/agents/${id}/lines`),
   message: (id: string, text: string) => call('POST', `/agents/${id}/message`, { text }),
+  answer: (id: string, question: string, option: string, note?: string) => call('POST', `/agents/${id}/answer`, { question, option, note }),
   /** The captain has read the lead's latest turn, here: every screen stops hailing about it. */
   readTurn: (id: string) => call('POST', `/agents/${id}/read`),
   permission: (id: string, requestId: string, allow: boolean) => call('POST', `/agents/${id}/permission`, { requestId, allow }),

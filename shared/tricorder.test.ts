@@ -64,6 +64,13 @@ describe('needsYou', () => {
     ]);
   });
 
+  it('lists a lead with a question open for you, until you answer it', () => {
+    const question = { id: 'q1', question: 'Which layout?', options: [], at: 1 };
+    const asking = agent({ status: 'done', lead: { questions: [question] } as never });
+    const answered = agent({ id: 'a2', status: 'done', lead: { questions: [{ ...question, answer: { option: 'a', at: 2 } }] } as never });
+    expect(needsYou([asking, answered], [], new Map())).toEqual([{ kind: 'question', agent: asking }]);
+  });
+
   it('lists a lead waiting for a reply until their turn is read, and a lead ready to wrap up whether read or not', () => {
     const turn = agent({ task: 'lead', status: 'done', finishedAt: 5, lead: { title: 'Wishlist', station: 0, repos: [], slice: 1, prs: [] } });
     const closing = agent({ id: 'a2', task: 'lead', status: 'done', finishedAt: 6, lead: { title: 'Search', station: 1, repos: [], slice: 2, prs: [], closing: { reason: 'all merged', at: 6 } } });

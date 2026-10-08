@@ -1,5 +1,5 @@
 import type { AgentStatus, BrowserFrame, Effort, Settings, TermLine } from '../../shared/types';
-import type { ArtifactInput, NoteInput } from './lead';
+import type { ArtifactInput, NoteInput, QuestionInput } from './lead';
 import type { SinceVerdict } from './retest';
 
 /** What Claude Code says about a subagent the session started: started, busy with something, finished. */
@@ -64,6 +64,8 @@ export interface OfficeTools {
   note(input: NoteInput): Promise<string>;
   /** Puts a visual on the lead's station's screen, or replaces the one with that id. Throws, in words, when it's refused. */
   show(input: ArtifactInput): Promise<string>;
+  /** Puts a question to the captain with visual options, on the lead's station's screen. Their pick comes back as a message. */
+  ask(input: QuestionInput): Promise<string>;
   /** The lead thinks the goal is done: the captain closes it, or carries on. */
   proposeClose(input: { reason: string }): Promise<string>;
 }

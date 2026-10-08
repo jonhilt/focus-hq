@@ -6,13 +6,14 @@ import { autoQaFor, autoSendBackFor, prKey, qaBadge, sameCommit } from '../../sh
 import { afterTriage, triageLabel, type TriageResult, type TriageStep, whenStuck } from '../../shared/triage';
 import type { Agent, AgentStatus, BrowserFrame, ConflictsOutcome, Effort, FailedCheck, FixFor, PermissionRequest, PullRequest, QaReport, QaReview, QaScreenshot, QueuedGoal, TermLine } from '../../shared/types';
 import { ACTIVE_STATUSES, LEAD_DESK, QA_DESK, TEAM_STATIONS } from '../../shared/types';
+import { answerMessage } from '../../shared/artifacts';
 import type { PullRequestDetail } from '../github/provider';
 import { GitHub, type GitHubError } from '../github/service';
 import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
 import { afterCloudRun, carryOnInNewSession, fallBackToLocal } from './cloud';
-import { afterLanding, afterVerdict, type ArtifactInput, showArtifact, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, behindNote, closeCheck, conflictsResolvedNote, type FreshBranch, freshBranchNote, needsFreshBranch, repoBranch, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, everyPr, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sessionGone, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded, snapshotMessage } from './lead';
+import { afterLanding, afterVerdict, answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, behindNote, closeCheck, conflictsResolvedNote, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, everyPr, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sessionGone, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded, snapshotMessage, type FreshBranch, freshBranchNote, needsFreshBranch, repoBranch } from './lead';
 import { repoFolders } from './planner';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
 import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
@@ -510,7 +511,7 @@ export class AgentManager {
       outputSchema: agent.task === 'review' ? QA_SCHEMA : undefined,
       cloud: agent.cloud ? { branch: agent.branch } : undefined,
       tools: agent.task === 'lead'
-        ? { ship: (input) => tool(this.shipLead(agent, input)), note: (input) => tool(this.noteGoal(agent, input)), show: (input) => tool(this.showArtifact(agent, input)), proposeClose: (input) => tool(this.proposeClose(agent, input.reason)) }
+        ? { ship: (input) => tool(this.shipLead(agent, input)), note: (input) => tool(this.noteGoal(agent, input)), show: (input) => tool(this.showArtifact(agent, input)), ask: (input) => tool(this.askCaptain(agent, input)), proposeClose: (input) => tool(this.proposeClose(agent, input.reason)) }
         : undefined,
     };
   }
@@ -918,6 +919,53 @@ export class AgentManager {
       const where = `“${next.find((a) => a.id === input.id)!.title}” is on your station's screen; the captain can open it up close.`;
       return 'bytes' in picture ? where : `${where} The office couldn't take a picture of it for the screen (${picture.failed}), so the screen shows only its title.`;
     });
+  }
+
+  /**
+   * The lead's ask tool: the question goes on the station's screen, each option a page with a picture of its own, in
+   * place of one still open. The captain's pick comes back to the lead as a message from them (`answer`).
+   */
+  private askCaptain(agent: Agent, input: QuestionInput): Effect.Effect<string, Refused, Renderer> {
+    return Effect.gen({ self: this }, function* () {
+      if (!agent.lead) return yield* new Refused({ message: 'There’s no goal to ask about' });
+      const checked = askQuestion(agent.lead.questions ?? [], input, Date.now());
+      if ('error' in checked) return yield* new Refused({ message: checked.error });
+      const { asked } = checked;
+      const renderer = yield* Renderer;
+      const pictured = new Set<string>();
+      for (const [i, option] of asked.options.entries()) {
+        const html = input.options[i].html;
+        this.store.saveArtifact(agent.id, `${asked.id}.${option.id}.html`, Buffer.from(html));
+        const picture = yield* renderer.render(html).pipe(Effect.option);
+        if (picture._tag === 'Some') {
+          this.store.saveArtifact(agent.id, `${asked.id}.${option.id}.jpg`, picture.value);
+          pictured.add(option.id);
+        }
+      }
+      // taking the pictures takes a moment: the goal may have closed, or the lead asked again, meanwhile
+      const work = agent.lead;
+      if (!work) return 'The goal closed before the question went up.';
+      const next = askQuestion(work.questions ?? [], input, asked.at);
+      if ('error' in next) return yield* new Refused({ message: next.error });
+      for (const q of next.dropped) for (const o of q.options) for (const ext of ['html', 'jpg']) this.store.deleteArtifact(agent.id, `${q.id}.${o.id}.${ext}`);
+      const questions = next.questions.map((q) => (q.id === asked.id ? { ...q, options: q.options.map((o) => (pictured.has(o.id) ? { ...o, image: true } : o)) } : q));
+      this.update(agent, { lead: { ...work, questions } });
+      this.print(agent, [{ kind: 'manager', text: `❓ Asked the captain: ${asked.question} (${asked.options.map((o) => `${o.id.toUpperCase()}: ${o.label}`).join(' · ')})` }]);
+      const missing = asked.options.length - pictured.size;
+      return `Your question is on your station's screen with its ${asked.options.length} options${missing ? ` (the office couldn't take a picture of ${missing} of them, so the screen shows just their labels)` : ''}. The captain's pick comes back to you as a message from them: end your turn here and wait for it.`;
+    });
+  }
+
+  /** The captain picks an option of the lead's open question: it's marked answered, and the lead hears which. */
+  answer(id: string, questionId: string, option: string, note?: string): Agent {
+    const agent = this.store.agent(id);
+    const work = agent.lead;
+    if (!work) throw new Error(`${agent.name} isn’t leading a goal`);
+    const questions = answerQuestion(work.questions ?? [], questionId, option, note, Date.now());
+    if ('error' in questions) throw new Error(questions.error);
+    this.update(agent, { lead: { ...work, questions } });
+    this.message(id, answerMessage(questions.find((q) => q.id === questionId)!, option, note));
+    return agent;
   }
 
   /** The lead's propose_close tool: the captain hears the goal looks done, and closes it or carries on. */

@@ -1,4 +1,5 @@
 import { statusLine } from '../../../shared/agentStatus';
+import { openQuestion } from '../../../shared/artifacts';
 import { goalState } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import { prKey } from '../../../shared/qa';
@@ -21,6 +22,8 @@ function hailKey(a: Attention): string {
   switch (a.kind) {
     case 'hand':
       return `hand:${a.agent.id}:${a.agent.permission?.id}`;
+    case 'question':
+      return `question:${a.agent.id}:${openQuestion(a.agent)?.id}`;
     case 'error':
       return `error:${a.agent.id}:${a.agent.finishedAt}`;
     case 'wrap-up':
@@ -125,6 +128,11 @@ function hailCard(ui: Ui, a: Attention): HTMLElement {
         deny.onclick = () => void busy(deny, () => api.permission(a.agent.id, req.id, false), ui.error);
       }
       return card(LCARS.gold, from(a.agent), h('p', { class: 'hail-what' }, `✋ Wants to run ${req?.summary ?? 'something'}`), h('div', { class: 'row' }, allow, deny, open(ui, a.agent), beam(ui, a.agent)));
+    }
+    case 'question': {
+      // the options are pictures: they're picked on the station's screen, up close
+      const pick = h('button', { class: 'btn small go', title: 'See the options up close and pick one', onclick: () => ui.openScreen(a.agent.id) }, 'See the options');
+      return card(LCARS.gold, from(a.agent), h('p', { class: 'hail-what' }, `❓ ${openQuestion(a.agent)?.question ?? 'Asks you'}`), h('div', { class: 'row' }, pick, open(ui, a.agent), beam(ui, a.agent)));
     }
     case 'error':
       return card(LCARS.red, from(a.agent), h('p', { class: 'hail-what' }, `❗ ${a.agent.error ?? 'Hit a problem'}`), reply(ui, a.agent, 'Tell them how to carry on…'), h('div', { class: 'row' }, open(ui, a.agent), beam(ui, a.agent)));

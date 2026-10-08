@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { openQuestion } from '../../../shared/artifacts';
 import { helperFor, plannerFor, qaOfficerFor } from '../../../shared/crew';
 import { prKey } from '../../../shared/qa';
 import type { Agent, Board, Helper, Project } from '../../../shared/types';
@@ -288,7 +289,7 @@ export class ProjectRoom {
       if (lead) interactive(station.goalBoard, { kind: 'agent', id: lead.id, view: 'goal' }, () => `Look at ${lead.name}’s goal and to-dos`);
       else interactive(station.goalBoard, use, label);
       // up close, what the lead's shown, and the panes, which are the captain's to choose; a free station's screen starts a goal
-      if (lead) interactive(station.display, { kind: 'screen', id: lead.id }, () => (lead.lead?.artifacts?.length ? `Look at what ${lead.name} has shown up close` : 'Change what this screen shows'), 10);
+      if (lead) interactive(station.display, { kind: 'screen', id: lead.id }, () => (openQuestion(lead) ? `Answer ${lead.name}’s question` : lead.lead?.artifacts?.length ? `Look at what ${lead.name} has shown up close` : 'Change what this screen shows'), 10);
       else interactive(station.display, use, label);
       this.sit(station.lead, lead?.id, lead && agentView(lead), use, label);
       this.syncHelpers(station, lead);

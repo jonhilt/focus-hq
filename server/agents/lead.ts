@@ -1,4 +1,4 @@
-import type { Agent, Effort, GoalArtifact, GoalNote, GoalRecord, Helper, LeadPr, LeadWork, QaReport, QaReview, QueuedGoal, Settings } from '../../shared/types';
+import type { Agent, Effort, GoalArtifact, GoalNote, GoalQuestion, GoalRecord, Helper, LeadPr, LeadWork, QaReport, QaReview, QueuedGoal, Settings } from '../../shared/types';
 import { TEAM_STATIONS } from '../../shared/types';
 import type { BranchState, HelperEvent, RunOutcome } from './types';
 import { slugify } from '../util';
@@ -163,7 +163,8 @@ How to work:
 - A slice is a reasonably sized change that ships on its own and gets something real working: often a thin slice end to end, through every repo it needs. A slice can also be a refactor, once the code has learned something. Keep each pull request reviewable.
 - Before changing a repo, read its CLAUDE.md or README. Run its tests, type checks and linters, and check UI changes in the browser with the mcp__browser__ tools.
 - Commit in each repo as you go. Never push and never open pull requests yourself.
-- To show the captain something visual (a diagram, a mockup, options side by side), put it on your station's screen with mcp__office__show. They switch between what you've shown and open each one up close.
+- Show the captain what you mean before you build it: put a visual on your station's screen with mcp__office__show (a diagram of how a change fits before a big one, a mockup before UI work, a before-and-after). They switch between what you've shown and open each one up close. Show the same id again to keep one up to date.
+- To ask the captain something best answered by looking (which layout, which diagram reads best), ask it with mcp__office__ask, each option a page of its own. Their pick comes back to you as a message from them: end your turn and wait for it.
 - When a slice is ready, call mcp__office__ship with a title and a summary. The office pushes every repo with new commits and opens (or updates) a pull request in each, and QA reviews them. Then tell the captain what's in the slice, what it taught you, and what you'd do next, and stop there: they review it and decide.
 - Shipping again before the pull requests merge updates them: that's how you fix what QA or the captain finds.
 - You'll hear QA's verdict on each pull request, and when the slice's pull requests have all merged or closed. After that your repos move to fresh code on a new branch for the next slice, and the office brings along any commits you hadn't shipped.
@@ -269,6 +270,50 @@ export function showArtifact(artifacts: readonly GoalArtifact[], input: Artifact
   if (artifacts.some((a) => a.id === input.id)) return artifacts.map((a) => (a.id === input.id ? shown : a));
   if (artifacts.length >= L.count) return { error: `The screen already has ${L.count} artifacts: show a new version under an existing id instead` };
   return [...artifacts, shown];
+}
+
+export const QUESTION_LIMITS = { question: 300, label: 60, minOptions: 2, maxOptions: 4, kept: 12, note: 1000 } as const;
+
+export interface QuestionInput {
+  question: string;
+  options: { label: string; html: string }[];
+}
+
+/**
+ * The goal's questions once the lead asks one: it goes on the end as q1, q2, …, with options a, b, c, d. A question
+ * still open is dropped (the new one replaces it), and so are the oldest once there are more than a few: `dropped` says
+ * which, for their pages to go too. Or why it was refused (nothing changes then).
+ */
+export function askQuestion(questions: readonly GoalQuestion[], input: QuestionInput, at: number): { questions: GoalQuestion[]; asked: GoalQuestion; dropped: GoalQuestion[] } | { error: string } {
+  const L = QUESTION_LIMITS;
+  const clean = (text: string) => text.replace(/\s+/g, ' ').trim();
+  const question = clean(input.question);
+  if (!question) return { error: 'Ask a question' };
+  if (question.length > L.question) return { error: `The question is ${question.length} characters (at most ${L.question}): put the detail in the options` };
+  if (input.options.length < L.minOptions || input.options.length > L.maxOptions) return { error: `Give ${L.minOptions} to ${L.maxOptions} options (you gave ${input.options.length})` };
+  for (const [i, o] of input.options.entries()) {
+    const label = clean(o.label);
+    if (!label) return { error: `Option ${i + 1} needs a label` };
+    if (label.length > L.label) return { error: `Option ${i + 1}'s label is ${label.length} characters (at most ${L.label})` };
+    if (!o.html.trim()) return { error: `Option ${i + 1}'s page is empty` };
+    if (Buffer.byteLength(o.html) > ARTIFACT_LIMITS.bytes) return { error: `Option ${i + 1}'s page is over ${ARTIFACT_LIMITS.bytes / 1_000_000} MB` };
+  }
+  const n = Math.max(0, ...questions.map((q) => Number(q.id.slice(1)) || 0)) + 1;
+  const asked: GoalQuestion = { id: `q${n}`, question, options: input.options.map((o, i) => ({ id: 'abcd'[i], label: clean(o.label) })), at };
+  const kept = questions.filter((q) => q.answer);
+  const over = Math.max(0, kept.length + 1 - L.kept);
+  return { questions: [...kept.slice(over), asked], asked, dropped: [...questions.filter((q) => !q.answer), ...kept.slice(0, over)] };
+}
+
+/** The goal's questions once the captain picks an option of an open one, or why it can't be picked. */
+export function answerQuestion(questions: readonly GoalQuestion[], questionId: string, option: string, note: string | undefined, at: number): GoalQuestion[] | { error: string } {
+  const question = questions.find((q) => q.id === questionId);
+  if (!question) return { error: 'That question isn’t there any more: the lead may have asked another' };
+  if (question.answer) return { error: `You already picked ${question.answer.option.toUpperCase()}` };
+  if (!question.options.some((o) => o.id === option)) return { error: `There’s no option ${option}` };
+  const said = note?.trim();
+  if (said && said.length > QUESTION_LIMITS.note) return { error: `Keep the note under ${QUESTION_LIMITS.note} characters` };
+  return questions.map((q) => (q.id === questionId ? { ...q, answer: { option, ...(said ? { note: said } : {}), at } } : q));
 }
 
 /**

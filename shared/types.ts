@@ -366,6 +366,22 @@ export interface LeadWork {
   landed?: LeadPr[];
   /** What the lead has put on the station's screen, in the order they first showed it. Cleared when the goal closes. */
   artifacts?: GoalArtifact[];
+  /** The questions the lead has asked with visual options, oldest first: at most the last one is still open. */
+  questions?: GoalQuestion[];
+}
+
+/**
+ * A question the lead put to the captain with the office's ask tool, each option a page of its own (served like an
+ * artifact, as `<question id>.<option id>`). The captain answers by picking one; it stays, answered, for the goal.
+ */
+export interface GoalQuestion {
+  /** q1, q2, …: unique within the goal. */
+  id: string;
+  question: string;
+  /** a, b, c, d in the order the lead gave them. */
+  options: { id: string; label: string; image?: boolean }[];
+  at: number;
+  answer?: { option: string; note?: string; at: number };
 }
 
 /**

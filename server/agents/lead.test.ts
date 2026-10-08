@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadWork } from '../../shared/types';
-import { afterLanding, ARTIFACT_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, everyPr, fileGoal, freshBranchNote, needsFreshBranch, repoBranch, workspaceList, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
+import { afterLanding, answerQuestion, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -544,5 +544,56 @@ describe('showArtifact', () => {
     const full = Array.from({ length: ARTIFACT_LIMITS.count }, (_, i) => ({ id: `a${i}`, title: 'T', at: i }));
     expect(showArtifact(full, { id: 'one-more', title: 'T', html: page }, 99)).toHaveProperty('error');
     expect(showArtifact(full, { id: 'a3', title: 'T', html: page }, 99)).toHaveLength(ARTIFACT_LIMITS.count);
+  });
+});
+
+describe('questions', () => {
+  const options = [{ label: 'Cards', html: '<p>A</p>' }, { label: ' Plain   list ', html: '<p>B</p>' }];
+  const ask = (questions: Parameters<typeof askQuestion>[0], question = 'Which layout?') => {
+    const asked = askQuestion(questions, { question, options }, 5);
+    if ('error' in asked) throw new Error(asked.error);
+    return asked;
+  };
+
+  it('numbers each question and letters its options', () => {
+    const { questions, asked, dropped } = ask([]);
+    expect(asked).toEqual({ id: 'q1', question: 'Which layout?', options: [{ id: 'a', label: 'Cards' }, { id: 'b', label: 'Plain list' }], at: 5 });
+    expect(questions).toEqual([asked]);
+    expect(dropped).toEqual([]);
+  });
+
+  it('replaces a question still open, and keeps the answered ones', () => {
+    const first = ask([]).questions;
+    const answered = answerQuestion(first, 'q1', 'b', '  but keep the header  ', 6);
+    expect(answered).toEqual([{ ...first[0], answer: { option: 'b', note: 'but keep the header', at: 6 } }]);
+    const second = ask(answered as never, 'Which colour?');
+    const third = ask(second.questions, 'Which colour, really?');
+    expect(third.questions.map((q) => q.id)).toEqual(['q1', 'q3']);
+    expect(third.dropped.map((q) => q.id)).toEqual(['q2']);
+  });
+
+  it('keeps only the last few answered questions', () => {
+    const many = Array.from({ length: QUESTION_LIMITS.kept }, (_, i) => ({ id: `q${i + 1}`, question: 'Q', options: [], at: i, answer: { option: 'a', at: i } }));
+    const { questions, dropped } = ask(many);
+    expect(questions).toHaveLength(QUESTION_LIMITS.kept);
+    expect(questions.at(-1)!.id).toBe(`q${QUESTION_LIMITS.kept + 1}`);
+    expect(dropped.map((q) => q.id)).toEqual(['q1']);
+  });
+
+  it('refuses questions without enough options, or options without a label or a page', () => {
+    expect(askQuestion([], { question: 'Which?', options: options.slice(0, 1) }, 1)).toHaveProperty('error');
+    expect(askQuestion([], { question: 'Which?', options: [...options, ...options, options[0]] }, 1)).toHaveProperty('error');
+    expect(askQuestion([], { question: ' ', options }, 1)).toHaveProperty('error');
+    expect(askQuestion([], { question: 'Which?', options: [options[0], { label: ' ', html: '<p>B</p>' }] }, 1)).toHaveProperty('error');
+    expect(askQuestion([], { question: 'Which?', options: [options[0], { label: 'B', html: ' ' }] }, 1)).toHaveProperty('error');
+  });
+
+  it('takes one answer per question, of an option it has', () => {
+    const { questions } = ask([]);
+    expect(answerQuestion(questions, 'q9', 'a', undefined, 2)).toHaveProperty('error');
+    expect(answerQuestion(questions, 'q1', 'c', undefined, 2)).toHaveProperty('error');
+    const answered = answerQuestion(questions, 'q1', 'a', ' ', 2) as never;
+    expect(answered).toEqual([{ ...questions[0], answer: { option: 'a', at: 2 } }]);
+    expect(answerQuestion(answered, 'q1', 'b', undefined, 3)).toHaveProperty('error');
   });
 });

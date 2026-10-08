@@ -29,7 +29,7 @@ async function answer(run: () => Promise<string>, failed: string): Promise<{ con
   }
 }
 
-/** The office's tools for a goal's lead, as an in-process MCP server: mcp__office__ship, note, show and propose_close. */
+/** The office's tools for a goal's lead, as an in-process MCP server: mcp__office__ship, note, show, ask and propose_close. */
 export function officeMcpServer(tools: OfficeTools): McpSdkServerConfigWithInstance {
   return createSdkMcpServer({
     name: 'office',
@@ -61,6 +61,18 @@ export function officeMcpServer(tools: OfficeTools): McpSdkServerConfigWithInsta
           html: z.string().describe('A self-contained HTML page: inline CSS and SVG, or a script from a CDN (mermaid, say). The screen shows it at 1280 × 800, so make it read well at that size.'),
         },
         (input) => answer(() => tools.show(input), "Couldn't show it"),
+      ),
+      tool(
+        'ask',
+        "Ask the captain a question best answered by looking: which layout, which diagram reads best, which of a few approaches. Each option is a page of its own, shown side by side on your station's screen; they open them up close and pick one. Their pick comes back to you as a message from them, so end your turn after asking. Asking again replaces a question they haven't answered.",
+        {
+          question: z.string().describe('The question, in a sentence (at most 300 characters).'),
+          options: z.array(z.object({
+            label: z.string().describe('A few words naming this option (at most 60 characters).'),
+            html: z.string().describe('A self-contained HTML page showing it, laid out for 1280 × 800 like the show tool\'s.'),
+          })).describe('2 to 4 options: the captain sees them lettered A, B, C, D in this order.'),
+        },
+        (input) => answer(() => tools.ask(input), "Couldn't ask"),
       ),
       tool(
         'propose_close',

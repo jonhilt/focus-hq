@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import type { Agent, BrowserFrame, ClaudeTask, GoalArtifact, GoalNote, TermLine } from '../../../shared/types';
-import { artifactUrl, latestArtifact } from '../../../shared/artifacts';
+import type { Agent, BrowserFrame, ClaudeTask, GoalArtifact, GoalNote, GoalQuestion, TermLine } from '../../../shared/types';
+import { ARTIFACT_SIZE, artifactUrl, latestArtifact, openQuestion, optionUrl } from '../../../shared/artifacts';
 import { showsBrowser } from '../../../shared/browserView';
 import { plainTermLine } from '../../../shared/termText';
 import { canvasTexture, fitText, makeCanvas, MONO_FONT, roundRect, UI_FONT } from './canvas';
@@ -45,8 +45,8 @@ export class StationScreen {
   private lastDraw = 0;
   private image: HTMLImageElement | null = null;
   private imageSrc = '';
-  private artifactImage: HTMLImageElement | null = null;
-  private artifactSrc = '';
+  /** The pictures of what the lead's shown, by URL: null while one loads. */
+  private readonly pictures = new Map<string, HTMLImageElement | null>();
 
   /** `idle` is what the screen says while nobody's using it. */
   constructor(
@@ -134,11 +134,14 @@ export class StationScreen {
     const tasks = prefs.tasks ? (agent.tasks ?? []) : [];
     const note = prefs.note && agent.task === 'lead' ? agent.lead?.note : undefined;
     const hasNote = !!note && (!!note.done || note.slice.length > 0);
+    // the lead's open question, while there is one, then what they showed last
+    const question = prefs.artifacts && agent.task === 'lead' ? openQuestion(agent) : undefined;
     const artifact = prefs.artifacts && agent.task === 'lead' ? latestArtifact(agent.lead?.artifacts) : undefined;
-    const panes = screenPanes(Math.round(W), { browser: prefs.browser && showsBrowser(frame), artifact: !!artifact, progress: tasks.length > 0 || hasNote });
+    const panes = screenPanes(Math.round(W), { browser: prefs.browser && showsBrowser(frame), artifact: !!(question ?? artifact), progress: tasks.length > 0 || hasNote });
     for (const { pane, x, w } of panes) {
       if (pane === 'terminal') this.drawTerminal(lines, x, 36, w, H - 36 - footerH);
       else if (pane === 'browser' && frame) this.drawBrowser(frame, x, 36, w, H - 36 - footerH);
+      else if (pane === 'artifact' && question) this.drawQuestion(agent, question, x, 36, w, H - 36 - footerH);
       else if (pane === 'artifact' && artifact) this.drawArtifact(agent, artifact, x, 36, w, H - 36 - footerH);
       else if (pane === 'progress') this.drawProgress(agent, tasks, hasNote ? note : undefined, x, 36, w, H - 36 - footerH);
     }
@@ -288,50 +291,96 @@ export class StationScreen {
    * captain opens them up close, and switches between them, with E on the screen).
    */
   private drawArtifact(agent: Agent, artifact: GoalArtifact, x: number, y: number, w: number, h: number): void {
-    const ctx = this.c.ctx;
     const count = agent.lead?.artifacts?.length ?? 1;
+    this.drawShownBar(artifact.title, count > 1 ? `${count} SHOWN · E TO SWITCH` : 'E FOR A CLOSER LOOK', LCARS.orange, x, y, w, h);
+    const picture = artifact.image ? this.picture(artifactUrl(agent.id, artifact, 'jpg')) : undefined;
+    this.keepPictures(picture ? [picture] : []);
+    this.drawPicture(picture, artifact.image ? '' : 'NO PICTURE OF THIS ONE: PRESS E TO OPEN IT', x, y + 38, w, h - 38);
+  }
+
+  /** The lead's open question: its options side by side (two rows of two for three or four), each lettered. */
+  private drawQuestion(agent: Agent, question: GoalQuestion, x: number, y: number, w: number, h: number): void {
+    const ctx = this.c.ctx;
+    this.drawShownBar(`QUESTION: ${question.question}`, 'E TO ANSWER', LCARS.gold, x, y, w, h);
+    const cols = question.options.length === 3 ? 3 : 2;
+    const rows = Math.ceil(question.options.length / cols);
+    const cw = (w - 8 * (cols + 1)) / cols;
+    // each cell as tall as its label and a picture its width, and the lot centred, so labels sit on their pictures
+    const ch = Math.min((h - 38 - 8 * (rows + 1)) / rows, 34 + (cw * ARTIFACT_SIZE.h) / ARTIFACT_SIZE.w);
+    const top = y + 38 + (h - 38 - rows * (ch + 8) - 8) / 2;
+    const used: string[] = [];
+    question.options.forEach((option, i) => {
+      const cx = x + 8 + (i % cols) * (cw + 8);
+      const cy = top + 8 + Math.floor(i / cols) * (ch + 8);
+      const picture = option.image ? this.picture(optionUrl(agent.id, question, option.id, 'jpg')) : undefined;
+      if (picture) used.push(picture);
+      ctx.fillStyle = LCARS.gold;
+      ctx.beginPath();
+      ctx.roundRect(cx, cy, cw, 30, 15);
+      ctx.fill();
+      ctx.fillStyle = '#000000';
+      ctx.font = `600 18px ${LCARS_FONT}`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(fitText(ctx, `${option.id.toUpperCase()} · ${option.label.toUpperCase()}`, cw - 24), cx + 12, cy + 15);
+      this.drawPicture(picture, option.image ? '' : option.label.toUpperCase(), cx, cy + 34, cw, ch - 34);
+    });
+    this.keepPictures(used);
+  }
+
+  /** The bar over what the lead's shown: its title on the left, and on the right what pressing E does. */
+  private drawShownBar(title: string, right: string, color: string, x: number, y: number, w: number, h: number): void {
+    const ctx = this.c.ctx;
     ctx.fillStyle = '#000000';
     ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = LCARS.orange;
+    ctx.fillStyle = color;
     ctx.beginPath();
     ctx.roundRect(x + 6, y + 6, 22, 26, [13, 0, 0, 13]);
     ctx.roundRect(x + w - 28, y + 6, 22, 26, [0, 13, 13, 0]);
     ctx.fill();
     ctx.font = `600 18px ${LCARS_FONT}`;
     ctx.textBaseline = 'middle';
-    const tally = count > 1 ? `${count} SHOWN · E TO SWITCH` : 'E FOR A CLOSER LOOK';
     ctx.textAlign = 'right';
     ctx.fillStyle = LCARS.sky;
-    ctx.fillText(tally, x + w - 36, y + 19);
+    ctx.fillText(right, x + w - 36, y + 19);
     ctx.textAlign = 'left';
     ctx.fillStyle = LCARS.peach;
-    ctx.fillText(fitText(ctx, artifact.title.toUpperCase(), w - 80 - ctx.measureText(tally).width), x + 36, y + 19);
-    const vy = y + 38;
-    const vh = h - 38;
-    if (!artifact.image) {
+    ctx.fillText(fitText(ctx, title.toUpperCase(), w - 80 - ctx.measureText(right).width), x + 36, y + 19);
+  }
+
+  /** A picture fitted and centred in the box, or `missing` in words while there's none. */
+  private drawPicture(src: string | undefined, missing: string, x: number, y: number, w: number, h: number): void {
+    const ctx = this.c.ctx;
+    const image = src ? this.pictures.get(src) : undefined;
+    if (image) {
+      const scale = Math.min(w / image.width, h / image.height);
+      ctx.drawImage(image, x + (w - image.width * scale) / 2, y + (h - image.height * scale) / 2, image.width * scale, image.height * scale);
+    } else if (missing) {
       ctx.textAlign = 'center';
       ctx.fillStyle = LCARS.sky;
       ctx.font = `500 22px ${LCARS_FONT}`;
-      ctx.fillText('NO PICTURE OF THIS ONE: PRESS E TO OPEN IT', x + w / 2, vy + vh / 2);
-      return;
+      ctx.fillText(fitText(ctx, missing, w - 20), x + w / 2, y + h / 2);
     }
-    const src = artifactUrl(agent.id, artifact, 'jpg');
-    if (this.artifactSrc !== src) {
-      this.artifactSrc = src;
+  }
+
+  /** Starts loading the picture at `src` the first time it's asked for; the screen redraws once it's in. */
+  private picture(src: string): string {
+    if (!this.pictures.has(src)) {
+      this.pictures.set(src, null);
       const img = new Image();
       img.onload = () => {
-        if (this.artifactSrc !== src) return;
-        this.artifactImage = img;
+        if (!this.pictures.has(src)) return;
+        this.pictures.set(src, img);
         this.dirty = true;
       };
       img.src = src;
     }
-    if (this.artifactImage) {
-      const scale = Math.min(w / this.artifactImage.width, vh / this.artifactImage.height);
-      const iw = this.artifactImage.width * scale;
-      const ih = this.artifactImage.height * scale;
-      ctx.drawImage(this.artifactImage, x + (w - iw) / 2, vy + (vh - ih) / 2, iw, ih);
-    }
+    return src;
+  }
+
+  /** Lets go of the pictures the screen no longer shows. */
+  private keepPictures(srcs: string[]): void {
+    for (const src of this.pictures.keys()) if (!srcs.includes(src)) this.pictures.delete(src);
   }
 
   dispose(): void {

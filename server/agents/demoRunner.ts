@@ -249,6 +249,12 @@ export class DemoRunner implements AgentRunner {
         await think();
         await note({ done: `${goal}: it works end to end, and survives a reload on another device.`, next: ['A thin slice end to end'] });
         await show({ id: 'data-flow', title: 'The data flow', html: demoFlowPage(goal, repos.map((r) => r.folder)) });
+        hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__ask(Which layout should it start with?)' }]);
+        const asked = await tools.ask({
+          question: 'Which layout should it start with?',
+          options: [{ label: 'Cards with pictures', html: demoMockupPage(goal) }, { label: 'A plain list', html: demoListPage(goal) }],
+        }).catch((err: Error) => err.message);
+        hooks.lines([{ kind: 'output', text: `  ⎿  ${asked}` }]);
         await say(`I've had a look around ${repos.map((r) => `./${r.folder}`).join(' and ')}. For "${goal}", I'd start with a thin slice end to end${repos.length > 1 ? ` through ${repos.map((r) => r.folder).join(' and ')}` : ''}: the simplest version that works, so we find out early whether the data model holds. Shall I go ahead?`);
         return { ok: true, summary: 'Proposed the first slice.' };
       }
@@ -701,6 +707,14 @@ function demoFlowPage(goal: string, folders: string[]): string {
   }).join('');
   return `<!doctype html><html><body style="margin:0;background:#0b1020;font-family:system-ui;color:#eee"><div style="padding:50px 60px 0"><h1 style="font-size:48px;margin:0">The data flow</h1><p style="font-size:26px;color:#99ccff;margin:10px 0 0">${escapeHtml(goal)}</p></div>
 <svg viewBox="0 0 1280 500" style="width:100%"><defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0L10 5L0 10z" fill="#ffcc66"/></marker></defs>${svg}</svg></body></html>`;
+}
+
+/** Demo mode: the other option a lead asks the captain about, a plain list. */
+function demoListPage(goal: string): string {
+  const row = (name: string, price: string) =>
+    `<li style="display:flex;justify-content:space-between;padding:22px 10px;border-bottom:2px solid #eee;font-size:28px"><span>${name}</span><span style="color:#888">${price}</span><a style="color:#ff8a5b">Remove</a></li>`;
+  return `<!doctype html><html><body style="margin:0;background:#fff;font-family:system-ui;color:#222;padding:40px 60px"><h1 style="font-size:40px;margin:0 0 20px">${escapeHtml(goal)}</h1>
+<ul style="list-style:none;padding:0;margin:0;max-width:900px">${row('Stripy socks', '£6')}${row('Wool hikers', '£12')}${row('Ankle trio', '£9')}</ul></body></html>`;
 }
 
 /** Demo mode: the mockup a lead puts on the screen as the slice starts. */

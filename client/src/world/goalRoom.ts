@@ -1,3 +1,4 @@
+import { openQuestion } from '../../../shared/artifacts';
 import type { Agent, GoalNote } from '../../../shared/types';
 
 // What a team station shows of its goal beyond the lead's own screen: whether its briefing room is in session, on the
@@ -5,12 +6,14 @@ import type { Agent, GoalNote } from '../../../shared/types';
 
 /**
  * How a goal room stands, seen from its door: no goal there, the lead at work, waiting on you to approve something,
- * waiting for your reply, waiting for a free slot to start, or stopped.
+ * waiting for your reply, waiting for a free slot to start, or stopped. A question the lead's asked you (with visual
+ * options) waits on you too, while nothing more pressing does.
  */
 export type GoalRoomTone = 'free' | 'in-session' | 'needs-you' | 'your-turn' | 'queued' | 'stopped';
 
-export function goalRoomState(lead: Pick<Agent, 'status'> | undefined): { tone: GoalRoomTone; label: string } {
+export function goalRoomState(lead: Pick<Agent, 'status' | 'lead'> | undefined): { tone: GoalRoomTone; label: string } {
   if (!lead) return { tone: 'free', label: 'Free' };
+  if (openQuestion(lead) && lead.status !== 'waiting' && lead.status !== 'error' && lead.status !== 'stopped') return { tone: 'needs-you', label: 'Your answer' };
   switch (lead.status) {
     case 'waiting':
       return { tone: 'needs-you', label: 'Needs you' };

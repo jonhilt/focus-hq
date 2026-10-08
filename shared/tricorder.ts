@@ -1,3 +1,4 @@
+import { openQuestion } from './artifacts';
 import { prKey, qaBadge } from './qa';
 import type { Agent, PullRequest, QaReview } from './types';
 import { ACTIVE_STATUSES } from './types';
@@ -8,6 +9,7 @@ import { ACTIVE_STATUSES } from './types';
 /** Something that waits on the manager: nothing moves until they act on it. */
 export type Attention =
   | { kind: 'hand'; agent: Agent }
+  | { kind: 'question'; agent: Agent }
   | { kind: 'error'; agent: Agent }
   /** A goal's lead thinks the goal is done: close it, or carry on. */
   | { kind: 'wrap-up'; agent: Agent }
@@ -24,13 +26,14 @@ export const turnRead = (agent: Pick<Agent, 'status' | 'finishedAt' | 'lead'>): 
 function agentAttention(agent: Agent): Attention | null {
   if (agent.permission) return { kind: 'hand', agent };
   if (agent.status === 'error') return { kind: 'error', agent };
+  if (openQuestion(agent)) return { kind: 'question', agent };
   if (agent.task !== 'lead') return null;
   if (agent.lead?.closing) return { kind: 'wrap-up', agent };
   return agent.status === 'done' && !turnRead(agent) ? { kind: 'turn', agent } : null;
 }
 
 /**
- * The Needs you strip: agents with a raised hand or in error, goals' leads proposing to wrap up or waiting for a reply
+ * The Needs you strip: agents with a raised hand, a question for you or in error, goals' leads proposing to wrap up or waiting for a reply
  * (unless the manager has read that turn: `turnRead`), PRs QA gave up on and PRs that conflict with
  * their base (unless someone's resolving it already). `prs` are the PRs the boards show, so a project's "only my PRs"
  * filter applies here too.

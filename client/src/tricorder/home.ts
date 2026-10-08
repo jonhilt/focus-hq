@@ -1,4 +1,5 @@
 import { statusIcon, statusLine } from '../../../shared/agentStatus';
+import { openQuestion } from '../../../shared/artifacts';
 import { columns, goalState, resolvingAlready } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import { assignWarning, waitsLabel } from '../../../shared/dependencies';
@@ -51,6 +52,8 @@ function needsYouStrip(ctx: HomeContext, attention: Attention[]): HTMLElement {
     switch (a.kind) {
       case 'hand':
         return agentEntry(a.agent, '✋', `${a.agent.name} wants to run`, a.agent.permission?.summary ?? '');
+      case 'question':
+        return agentEntry(a.agent, '❓', `${a.agent.name} asks you`, openQuestion(a.agent)?.question ?? '');
       case 'error':
         return agentEntry(a.agent, '❗', `${a.agent.name} hit a problem`, a.agent.error ?? workLabel(a.agent));
       case 'wrap-up':
