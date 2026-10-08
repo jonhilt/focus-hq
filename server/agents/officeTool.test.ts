@@ -1,0 +1,51 @@
+import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
+import { applyNote, NOTE_LIMITS } from './lead';
+import { noteShape } from './officeTool';
+
+const L = NOTE_LIMITS;
+const schema = z.object(noteShape);
+const text = (n: number) => 'x'.repeat(n);
+const fits = (input: unknown) => schema.safeParse(input).success;
+const officeTakes = (input: Parameters<typeof applyNote>[1]) => !('error' in applyNote({ title: 'Goal' }, input));
+
+describe('the note tool schema', () => {
+  it('carries the limits the office enforces, as JSON schema the lead sees', () => {
+    const json = z.toJSONSchema(schema) as { properties: Record<string, { maxLength?: number; maxItems?: number; items?: { maxLength?: number; properties?: { text: { maxLength?: number } } } }> };
+    const p = json.properties;
+    expect(p.title.maxLength).toBe(L.title);
+    expect(p.done.maxLength).toBe(L.done);
+    expect(p.slice.maxItems).toBe(L.slice);
+    expect(p.slice.items?.properties?.text.maxLength).toBe(L.item);
+    expect(p.learned.maxLength).toBe(L.line);
+    expect(p.allLearned.maxItems).toBe(L.learned);
+    expect(p.allLearned.items?.maxLength).toBe(L.line);
+    expect(p.next.maxItems).toBe(L.next);
+    expect(p.next.items?.maxLength).toBe(L.item);
+  });
+
+  it('says each limit in its description', () => {
+    const says = (field: keyof typeof noteShape, ...numbers: number[]) => numbers.forEach((n) => expect(noteShape[field].description).toContain(String(n)));
+    says('title', L.title);
+    says('done', L.done);
+    says('slice', L.slice, L.item);
+    says('learned', L.line);
+    says('allLearned', L.learned, L.line);
+    says('next', L.next, L.item);
+  });
+
+  it('takes and refuses the same notes as the office', () => {
+    const cases: Parameters<typeof applyNote>[1][] = [
+      { title: text(L.title) }, { title: text(L.title + 1) },
+      { done: text(L.done) }, { done: text(L.done + 1) },
+      { slice: Array.from({ length: L.slice }, () => ({ text: 'a' })) }, { slice: Array.from({ length: L.slice + 1 }, () => ({ text: 'a' })) },
+      { slice: [{ text: text(L.item) }] }, { slice: [{ text: text(L.item + 1) }] },
+      { learned: text(L.line) }, { learned: text(L.line + 1) },
+      { allLearned: Array.from({ length: L.learned }, () => 'a') }, { allLearned: Array.from({ length: L.learned + 1 }, () => 'a') },
+      { allLearned: [text(L.line)] }, { allLearned: [text(L.line + 1)] },
+      { next: Array.from({ length: L.next }, () => 'a') }, { next: Array.from({ length: L.next + 1 }, () => 'a') },
+      { next: [text(L.item)] }, { next: [text(L.item + 1)] },
+    ];
+    for (const input of cases) expect([input, fits(input)]).toEqual([input, officeTakes(input)]);
+  });
+});

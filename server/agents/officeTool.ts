@@ -1,7 +1,24 @@
 import { createSdkMcpServer, type McpSdkServerConfigWithInstance, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { errorMessage } from '../util';
+import { NOTE_LIMITS as L } from './lead';
 import type { OfficeTools } from './types';
+
+/**
+ * The note tool's input, with the limits `checkNote` enforces (`NOTE_LIMITS`), so the lead sees them up front rather
+ * than learning them by being refused. The office still checks the whole note: learned adds to lines already there.
+ */
+export const noteShape = {
+  title: z.string().max(L.title).optional().describe(`A better title for the goal, in a few words (at most ${L.title} characters).`),
+  done: z.string().max(L.done).optional().describe(`What done looks like, as agreed with the captain: a few lines (at most ${L.done} characters).`),
+  slice: z.array(z.object({
+    text: z.string().max(L.item).describe(`One item (at most ${L.item} characters).`),
+    done: z.boolean().optional(),
+  })).max(L.slice).optional().describe(`This slice's checklist, all of it (at most ${L.slice} items of ${L.item} characters each): send it again with items ticked off as you go.`),
+  learned: z.string().max(L.line).optional().describe(`One new line on what a slice taught you, or a decision and why (at most ${L.line} characters).`),
+  allLearned: z.array(z.string().max(L.line)).max(L.learned).optional().describe(`Replaces every learned line: to merge older lessons when the list is full (at most ${L.learned} lines of ${L.line} characters each).`),
+  next: z.array(z.string().max(L.item)).max(L.next).optional().describe(`Up to ${L.next} candidate next slices (at most ${L.item} characters each), replacing the last ones.`),
+};
 
 /** One tool's answer: what happened, in words, or (marked as an error) why it didn't. */
 async function answer(run: () => Promise<string>, failed: string): Promise<{ content: { type: 'text'; text: string }[]; isError?: boolean }> {
@@ -32,14 +49,7 @@ export function officeMcpServer(tools: OfficeTools): McpSdkServerConfigWithInsta
       tool(
         'note',
         'Update the goal\'s note, which survives when your conversation gets summarised and which the captain sees. Send only what changes: each field replaces what was there, except learned, which adds a line. Keep it short; the office refuses a note that grows into a spec.',
-        {
-          title: z.string().optional().describe('A better title for the goal, in a few words (at most 60 characters).'),
-          done: z.string().optional().describe('What done looks like, as agreed with the captain: a few lines.'),
-          slice: z.array(z.object({ text: z.string(), done: z.boolean().optional() })).optional().describe("This slice's checklist, all of it (at most 7 items): send it again with items ticked off as you go."),
-          learned: z.string().optional().describe('One new line on what a slice taught you, or a decision and why.'),
-          allLearned: z.array(z.string()).optional().describe('Replaces every learned line: to merge older lessons when the list is full (at most 10).'),
-          next: z.array(z.string()).optional().describe('Up to 3 candidate next slices, replacing the last ones.'),
-        },
+        noteShape,
         (input) => answer(() => tools.note(input), "Couldn't update the note"),
       ),
       tool(
