@@ -152,3 +152,24 @@ export function transcriptFolders(projectsDir: string, workspacesDir: string): (
     return found;
   };
 }
+
+/** Reads an agent session's transcript by its id, wherever under the agents' folders it is; undefined when it isn't on this machine (a cloud session's). */
+export function transcriptReader(projectsDir: string, workspacesDir: string): (sessionId: string) => Promise<string | undefined> {
+  const prefix = `${workspacesDir.replace(/[^A-Za-z0-9]/g, '-')}-`;
+  const found = new Map<string, string>();
+  return async (sessionId) => {
+    let file = found.get(sessionId);
+    if (!file) {
+      const folders = (await fsp.readdir(projectsDir).catch(() => [] as string[])).filter((f) => f.startsWith(prefix));
+      for (const folder of folders) {
+        const candidate = path.join(projectsDir, folder, `${sessionId}.jsonl`);
+        if (fs.existsSync(candidate)) {
+          file = candidate;
+          found.set(sessionId, file);
+          break;
+        }
+      }
+    }
+    return file ? fsp.readFile(file, 'utf8').catch(() => undefined) : undefined;
+  };
+}

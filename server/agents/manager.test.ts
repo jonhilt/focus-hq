@@ -145,6 +145,25 @@ describe('AgentManager', () => {
     expect(store.agents.has(lead.id)).toBe(false);
   });
 
+  it('digests their session into the ledger when they go home', async () => {
+    const { agents, claude, store, project } = office();
+    const transcript = [
+      { type: 'user', uuid: 'u1', timestamp: '2026-10-08T12:00:00.000Z', message: { content: 'Your workspace, with every repo of the project checked out side by side: …' } },
+      { type: 'assistant', uuid: 'u2', timestamp: '2026-10-08T12:03:00.000Z', message: { content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'ls *.md' } }] } },
+      { type: 'user', uuid: 'u3', timestamp: '2026-10-08T12:04:00.000Z', message: { content: [{ type: 'tool_result', tool_use_id: 't1', is_error: true, content: 'zsh: no matches found: *.md' }] } },
+    ].map((l) => JSON.stringify(l)).join('\n');
+    const reads: string[] = [];
+    agents.readTranscript = (id) => (reads.push(id), Promise.resolve(transcript));
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    claude.turns[0].hooks.cost(0.42);
+    await agents.dismiss(lead.id);
+    await until(() => store.ledger.some((e) => e.kind === 'session-digest'));
+    const digest = store.ledger.find((e) => e.kind === 'session-digest');
+    expect(digest).toMatchObject({ key: 'session-1:u3', sessionId: 'session-1', task: 'lead', goal: 'Saved items', facts: { minutes: 4, toolCalls: 1, failedCalls: 1, wastedCalls: 1, costUsd: 0.42 } });
+    expect(reads).toEqual(['session-1']);
+  });
+
   it('commits a closing goal’s uncommitted work as a WIP snapshot on its branch before its checkouts go', async () => {
     const steps: string[] = [];
     let saves = true;

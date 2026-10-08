@@ -212,7 +212,8 @@ export function renderLedger(events: LedgerEvent[], now: number, days: number): 
   const line = (e: LedgerEvent) => {
     const when = new Date(e.at).toISOString().slice(0, 16).replace('T', ' ');
     if (e.kind === 'goal-closed') return `- ${when} goal closed: “${e.goal.title}” (${e.goal.slices} slices)`;
-    const { kind, at: _at, projectId: _p, repo, pr, ...rest } = e;
+    if (e.kind === 'session-digest') return `- ${when} session ${e.agent} (${e.task}) ${e.prs.map((p) => `${p.repo}#${p.pr}`).join(' ')} ${JSON.stringify(e.facts)}`;
+    const { kind, at: _at, projectId: _p, seq: _s, repo, pr, ...rest } = e;
     return `- ${when} ${kind} ${repo}#${pr} ${JSON.stringify(rest)}`;
   };
   return [`# The ledger: ${headline}`, ...lines.map((l) => `- ${l}`), '', '## Events', ...(recent.length ? recent.map(line) : ['- none yet: the ledger only started recently']), ''].join('\n');

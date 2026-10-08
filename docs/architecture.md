@@ -7,13 +7,14 @@ shared/qa.ts              QA decisions shared by server and board (badges, stale
 shared/board.ts           a project's Kanban columns (to do, in progress, PRs), for the 3D board, its panel and the Tricorder
 shared/agentStatus.ts     how an agent's status reads (icon, one-line status)
 shared/tricorder.ts       what needs you (the Tricorder and Comms), which agents are in flight
-shared/ledger.ts          the ledger of how work went (QA verdicts, merges, conflicts, triage, goals) and its report card
+shared/ledger.ts          the ledger of how work went (QA verdicts, merges, conflicts, triage, goals, session digests): its line format, the check on load, and the report card
 server/
   supervise.ts            runs index.ts and restarts it after an auto update
   updater.ts              auto update: fetch, fast-forward, install/build, restart
   index.ts                express + WebSocket (/ws) + Vite middleware (dev) or dist/ (prod)
   office.ts               projects/rooms, Kanban boards (polling GitHub), auto-assign, settings
   store.ts                ~/.focus/state.json + per-agent terminal logs (jsonl) + the ledger (ledger.jsonl)
+  ledgerLog.ts            the ledger's one writer: numbered lines flushed to disk, the lock file, repairs and damage on load
   routes.ts               REST API used by the panels
   hub.ts                  broadcasts ServerEvents to every browser tab
   previews.ts             Preview: check a PR out, run the project's preview commands, find its links, tear it down (Effect: one Scope per preview)
@@ -39,6 +40,7 @@ server/
     claudeCrew.ts         the crew's read-only Claude Code sessions (Read/Glob/Grep, web search/fetch for Number One, Number One's ship_status and open_project, structured output)
     retro.ts              the chief engineer's retro, pure: transcript digests, the index and its frequent tool errors, prompt, schema, and the check that every proposal cites real moments
     engineer.ts           the chief engineer: finds the agents' transcripts, gathers the evidence into data/retros, runs one retro at a time
+    sessionDigest.ts      a session's span digested from its transcript and the ledger, by code: calls, waste, cost, nudges
     qa.ts                 the QA officer: instructions, the report's schema and parsing, the PR comment
     demoRunner.ts         scripted pretend agents (and a pretend lead, planner, QA officer and Number One) for demo mode
 client/src/

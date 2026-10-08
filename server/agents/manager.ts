@@ -1,6 +1,7 @@
 import { Data, Effect, Exit, Fiber, FiberMap, type Layer, ManagedRuntime, Option, PartitionedSemaphore, Schedule, Scope } from 'effect';
 import { helperFor, leadFor, leadId, plannerFor, qaFor, qaOfficerFor, randomAvatar } from '../../shared/crew';
 import { type Closer, type LedgerEntry, reportCard, type ReportCard } from '../../shared/ledger';
+import { digestEntry, lastDigest, transcriptSpan } from './sessionDigest';
 import { goneReply } from '../../shared/mergeGate';
 import { autoQaFor, autoSendBackFor, prKey, qaBadge, sameCommit } from '../../shared/qa';
 import { afterTriage, triageLabel, type TriageResult, type TriageStep, whenStuck } from '../../shared/triage';
@@ -105,6 +106,10 @@ export class AgentManager {
   private closingGoals = new Set<string>();
   /** The pull requests (prKey) whose merge or close is in the ledger: the office notices some more than once. */
   private landed = new Set<string>();
+  /** Reads an agent session's Claude Code transcript by its id (missing in the demo, which has none). */
+  readTranscript?: (sessionId: string) => Promise<string | undefined>;
+  /** Each session's digest in hand, so two of the same session never overlap. */
+  private digesting = new Map<string, Promise<void>>();
   private readonly runtime: ManagedRuntime.ManagedRuntime<ManagerServices, never>;
   private readonly scope = Scope.makeUnsafe();
   /** Each agent's work in hand, by agent id: their launch, a turn and what follows it, or a compaction. */
@@ -1311,8 +1316,11 @@ export class AgentManager {
     const prs = lead.lead.prs.map((p) => (p.repo === repo && p.number === number ? { ...p, outcome: merged ? ('merged' as const) : ('closed' as const) } : p));
     this.update(lead, { lead: { ...lead.lead, prs } });
     this.print(lead, [{ kind: merged ? 'success' : 'system', text: `${merged ? '🎉' : '✻'} ${repo}#${number} was ${merged ? 'merged' : 'closed'}` }]);
-    // a lead in the middle of a turn carries on: their repos only move at the start of the next one
-    if (sliceLanded(prs)) this.message(lead.id, (this.rt(lead.id).busy ? landedMidTurnNote : landedNote)(lead.lead), 'Office');
+    if (sliceLanded(prs)) {
+      this.digestSession(lead, prs.map((p) => ({ repo: p.repo, pr: p.number })));
+      // a lead in the middle of a turn carries on: their repos only move at the start of the next one
+      this.message(lead.id, (this.rt(lead.id).busy ? landedMidTurnNote : landedNote)(lead.lead), 'Office');
+    }
     return true;
   }
 
@@ -1543,6 +1551,7 @@ export class AgentManager {
       this.hub.toast(pass ? 'success' : 'error', `${pass ? '✅' : '❌'} ${agent.name} ${pass ? 'passed' : 'failed'} ${agent.repo.split('/')[1]}#${number}: ${truncate(report.summary, 120)}`, agent.id);
       this.boardChanged(agent.projectId);
       if (done) yield* this.qaNext(done, { kind: 'verdict', verdict: report.verdict, failedRounds });
+      this.digestSession(agent, [{ repo: agent.repo, pr: number }]);
       this.leadHearsVerdict(agent.repo, number, `QA officer ${agent.name}`, report, failedRounds);
       this.nextReview(agent.projectId);
     });
@@ -2082,6 +2091,7 @@ export class AgentManager {
     return Effect.gen({ self: this }, function* () {
       const agent = this.store.agents.get(id);
       if (!agent) return;
+      this.digestSession(agent, this.prsOf(agent));
       // out of the office first, so their work, as it's interrupted, finds them gone
       this.runtimes.get(id)?.session?.stop();
       this.runtimes.delete(id);
@@ -2131,6 +2141,40 @@ export class AgentManager {
     this.record(projectId, { kind: merged ? 'merged' : 'closed', repo, pr: number, goal: lead?.lead?.title, by, qa, failedRounds: review?.failedRounds ?? 0, triages: review?.triages ?? 0 });
   }
 
+  /**
+   * Digests what's new in the agent's session since its last digest (`sessionDigest.ts`): when they go home, when QA
+   * gives a verdict, and when a lead's slice lands. A span already digested comes out empty, so it's safe to call at
+   * each; a cloud session's transcript isn't on this machine, so it isn't digested.
+   */
+  private digestSession(agent: Agent, prs: { repo: string; pr: number }[]): void {
+    const read = this.readTranscript;
+    const sessionId = agent.sessionId;
+    if (!read || !sessionId || agent.cloud) return;
+    // as they are now: the agent may be gone by the time the transcript's read
+    const who = { id: agent.id, name: agent.name, task: agent.task, sessionId, costUsd: agent.costUsd };
+    const goal = agent.lead?.title ?? prs.map((p) => this.leadWith(p.repo, p.pr)?.lead?.title).find(Boolean);
+    const digest = async () => {
+      const text = await read(sessionId);
+      const span = text && transcriptSpan(text, lastDigest(this.store.ledger, sessionId)?.toUuid);
+      if (!span || this.store.ledger.some((e) => e.kind === 'session-digest' && e.key === `${sessionId}:${span.toUuid}`)) return;
+      this.record(agent.projectId, digestEntry(span, who, prs, this.store.ledger, goal));
+    };
+    const next = (this.digesting.get(sessionId) ?? Promise.resolve())
+      .then(digest)
+      .catch((err: unknown) => console.warn(`Couldn't digest ${agent.name}'s session ${sessionId}: ${errorMessage(err)}`));
+    this.digesting.set(sessionId, next);
+    void next.finally(() => {
+      if (this.digesting.get(sessionId) === next) this.digesting.delete(sessionId);
+    });
+  }
+
+  /** The pull requests an agent's session was for: a lead's slice's, the one QA reviewed, or the one a developer opened. */
+  private prsOf(agent: Agent): { repo: string; pr: number }[] {
+    if (agent.lead) return agent.lead.prs.map((p) => ({ repo: p.repo, pr: p.number }));
+    if (agent.task === 'review') return [{ repo: agent.repo, pr: agent.issue.number }];
+    return agent.pr ? [{ repo: agent.repo, pr: agent.pr.number }] : [];
+  }
+
   /** Writes an entry in the ledger, and shows the chief engineer the new report card. */
   record(projectId: string, entry: LedgerEntry): void {
     this.store.record({ ...entry, at: Date.now(), projectId });
@@ -2139,7 +2183,8 @@ export class AgentManager {
 
   /** The ledger's last 30 days, summed up. */
   report(): ReportCard {
-    return reportCard(this.store.ledger, Date.now());
+    const { problems, notes } = this.store.ledgerHealth;
+    return { ...reportCard(this.store.ledger, Date.now()), ...(problems.length && { warnings: problems }), ...(notes.length && { notes }) };
   }
 
   /** Issues already claimed by an agent who is still in the office. */

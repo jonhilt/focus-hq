@@ -5,7 +5,7 @@ import { Effect, Layer, ManagedRuntime } from 'effect';
 import express from 'express';
 import { BrowserPool } from './agents/browserTool';
 import { ClaudeDrafter, ClaudeEngineer, ClaudeNumberOne, ClaudeTriager } from './agents/claudeCrew';
-import { ChiefEngineer, transcriptFolders } from './agents/engineer';
+import { ChiefEngineer, transcriptFolders, transcriptReader } from './agents/engineer';
 import { ClaudeRunner } from './agents/claudeRunner';
 import { DemoDrafter, DemoEngineer, DemoNumberOne, DemoRunner, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
@@ -78,6 +78,8 @@ async function main() {
   const office = new Office(store, hub, github, previews, planner, numberOne, engineer, new Voice(hub, config.demo), await currentVersion());
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
+  // each agent session is digested into the ledger as it ends: the demo's agents have no transcripts
+  if (!config.demo) office.agents.readTranscript = transcriptReader(paths.transcripts, paths.workspaces);
 
   if (config.demo && store.projects.length === 0) {
     const shop = store.addProject('Sock Shop', '#ff8a5b', 'beach');

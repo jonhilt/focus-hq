@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { qaOfficerFor, randomAvatar } from '../shared/crew';
-import { type LedgerEvent, parseLedger } from '../shared/ledger';
+import type { LedgerEntry, LedgerEvent } from '../shared/ledger';
+import { type LedgerHealth, LedgerLog } from './ledgerLog';
 import { prKey } from '../shared/qa';
 import type { Agent, Board, BrowserFrame, ClosedPr, NumberOneChat, Project, QaReview, Retro, Settings, TermLine } from '../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, EFFORT_LEVELS, ROOM_THEMES, type RoomTheme } from '../shared/types';
@@ -73,6 +74,10 @@ export class Store {
   closedPrs = new Map<string, ClosedPr>();
   /** The ship's log of how work went, oldest first: data/ledger.jsonl, appended to as it grows. */
   ledger: LedgerEvent[] = [];
+  /** What opening the ledger repaired or found wrong. */
+  ledgerHealth: LedgerHealth = { repaired: [], problems: [], notes: [] };
+  /** Its one writer, when saving to disk. */
+  private ledgerLog: LedgerLog | null = null;
   /** QA screenshots by file name, when not persisting (demo). */
   private shots = new Map<string, Buffer>();
   /** Artifacts' pages and pictures when nothing's saved to disk, by `<lead id>/<file>`. */
@@ -84,7 +89,11 @@ export class Store {
   load(): void {
     if (!this.persist) return;
     fs.mkdirSync(paths.logs, { recursive: true });
-    if (fs.existsSync(paths.ledger)) this.ledger = parseLedger(fs.readFileSync(paths.ledger, 'utf8'));
+    const opened = LedgerLog.open(paths.ledger);
+    this.ledgerLog = opened.log;
+    this.ledger = opened.events;
+    this.ledgerHealth = opened.health;
+    for (const line of [...opened.health.repaired, ...opened.health.problems, ...opened.health.notes]) console.warn(`Ledger: ${line}`);
     if (!fs.existsSync(paths.state)) return;
     const raw = JSON.parse(fs.readFileSync(paths.state, 'utf8')) as Partial<PersistedState>;
     this.settings = { ...DEFAULT_SETTINGS, ...raw.settings };
@@ -242,9 +251,11 @@ export class Store {
 
   // ---- the ledger ----
 
-  record(event: LedgerEvent): void {
+  /** Numbers the event and appends it: on disk, flushed before this returns, when saving to disk. */
+  record(entry: LedgerEntry & { at: number; projectId: string }): LedgerEvent {
+    const event = this.ledgerLog?.append(entry) ?? ({ ...entry, seq: (this.ledger.at(-1)?.seq ?? 0) + 1 });
     this.ledger.push(event);
-    if (this.persist) fs.appendFile(paths.ledger, JSON.stringify(event) + '\n', () => undefined);
+    return event;
   }
 
   // ---- QA screenshots ----
