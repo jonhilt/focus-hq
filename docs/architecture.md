@@ -22,6 +22,12 @@ server/
   github/                 GitHub as an Effect service: gh CLI layer (live), in-memory layer (demo), Promise adapter
   agents/
     manager.ts            hire → queue → worktree → run → commit nudge → push → PR; messages, approvals (Effect inside: a fiber per agent's work in a FiberMap)
+    manager/              the manager's parts, each a concern of its own, which AgentManager's public methods hand over to
+      core.ts             what they share: store, hub, the runtime and each agent's fiber, rt/update/print; the Part base class; errors
+      reviews.ts          QA: the review queue, seating a reviewer, their verdict, sending a failed PR back to be fixed
+      triages.ts          stuck PRs: the operations officer's look, one at a time per room, and what they decided
+      cloudMoves.ts       moving an agent to a cloud session, attaching to it, or keeping them local
+      ledger.ts           ledger entries, landings, session digests and backfill, the report card
     services.ts           what the manager needs from outside as Effect services: git on the checkouts, Claude Code sessions (a scoped turn), triage
     schedule.ts           who starts next under the office's and each room's limits
     desks.ts              who sits at a room's two individual desks, and who goes home to make room (never a lead or QA)
