@@ -60,7 +60,7 @@
       "file": "server/hub.ts",
       "pattern": "^  send\\(event: ServerEvent\\): void \\{",
       "title": "Over the WebSocket",
-      "description": "### The hub\n\nEvery event is a `ServerEvent` (defined in `shared/types.ts`, which the server and client both import) sent as JSON over `/ws`. Going the other way, the client calls REST endpoints under `/api` (`server/routes.ts`).\n\nA new tab gets a full `snapshot` first, then the stream of changes."
+      "description": "### The hub\n\nEvery event is a `ServerEvent` (defined in `shared/types/events.ts`; the server and client both import `shared/types`) sent as JSON over `/ws`. Going the other way, the client calls REST endpoints under `/api` (`server/routes.ts`).\n\nA new tab gets a full `snapshot` first, then the stream of changes."
     },
     {
       "file": "client/src/net/state.ts",
