@@ -30,6 +30,8 @@ import { COMMAND_DECK, SUN_POSITION } from './world/layout';
 import { setMerging } from './world/merge';
 import { type Ship, World } from './world/office';
 import { SceneRenderer } from './world/sceneRenderer';
+import { adapt, initialResolution, WINDOW } from './resolution';
+import { FrameStats } from './ui/frameStats';
 import { PortalView } from './world/portal';
 import { loadTeamStation } from './world/teamStation';
 import { stopAt } from './world/turbolift';
@@ -47,8 +49,12 @@ async function ship(): Promise<Ship> {
 
 async function main() {
   // ---------------------------------------------------------------- renderer & scene
-  const renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true }); // stencil: room landscapes
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // no multisampling: the scene's drawn into textures and only a full-screen pass reaches the screen (frame.ts)
+  const renderer = new THREE.WebGLRenderer({ antialias: false });
+  // as fine as the screen (up to 2), and coarser while frames run slow (resolution.ts)
+  const finest = Math.min(window.devicePixelRatio, 2);
+  let resolution = initialResolution(finest);
+  renderer.setPixelRatio(resolution.ratio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.domElement.className = 'world';
@@ -413,6 +419,17 @@ async function main() {
 
   // ---------------------------------------------------------------- loop
   const timer = new THREE.Timer();
+  // ?adapt=0 keeps the pixel ratio where it starts; ?stats=1 shows how frames are going
+  const adapting = params.get('adapt') !== '0';
+  const stats = params.get('stats') === '1' ? new FrameStats(renderer, occlusion) : null;
+  const intervals: number[] = [];
+  /** How long each frame's own work took (ms): its JavaScript and draw calls, not waiting on the GPU. */
+  const busy: number[] = [];
+  let lastFrame = performance.now();
+  let lastAdapt = lastFrame;
+  // the screen's refresh interval: the quickest any window's frames have come (most of them), and no slower than
+  // 60 Hz, so frames slow from the start count as slow
+  let refresh = 1000 / 60;
   let lastPick = 0;
   let lastLocation = 0;
   const loop = (time?: number) => {
@@ -420,6 +437,21 @@ async function main() {
     const dt = Math.min(timer.getDelta(), 0.05);
     const t = timer.getElapsed();
     const now = performance.now();
+    const interval = now - lastFrame;
+    lastFrame = now;
+    // a frame that long is the tab hidden or a hitch, not how fast frames go
+    if (interval < 250) intervals.push(interval);
+    if (now - lastAdapt > WINDOW) {
+      lastAdapt = now;
+      const typical = [...intervals].sort((a, b) => a - b)[intervals.length >> 1];
+      if (typical !== undefined) refresh = Math.max(4, Math.min(refresh, typical));
+      const next = adapting && document.visibilityState === 'visible' ? adapt(resolution, intervals, busy, refresh, finest, now) : resolution;
+      if (next.ratio !== resolution.ratio) renderer.setPixelRatio(next.ratio);
+      resolution = next;
+      intervals.length = 0;
+      busy.length = 0;
+    }
+    stats?.begin();
     player.enabled = !panels.isOpen;
     player.update(dt);
     const through = world.through(camera.position);
@@ -439,6 +471,8 @@ async function main() {
     portalView.render(scene, camera, world.portals, (at) => world.reveal(at));
     world.reveal(camera.position);
     view.render(scene, camera);
+    busy.push(performance.now() - now);
+    stats?.end(interval, now);
     requestAnimationFrame(loop);
   };
   loop();

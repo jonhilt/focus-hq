@@ -568,6 +568,7 @@ select.effort { width: auto; padding: 2px 6px; border-radius: 10px; font-size: 1
 .voice-setup code { font-family: var(--mono); font-size: 13px; padding: 2px 8px; border-radius: 6px; background: var(--surface-2); }
 .voice-progress { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .voice-progress progress { flex: 1; accent-color: var(--lcars-gold); }
+.frame-stats { position: fixed; left: 16px; top: 72px; z-index: 6; pointer-events: none; white-space: pre; font: 12px/1.4 'JetBrains Mono', monospace; color: #e8f4ff; background: rgba(10, 12, 20, 0.7); padding: 6px 10px; border-radius: 6px; }
 
 /* ------------------------------------------------------------------ Comms */
 
