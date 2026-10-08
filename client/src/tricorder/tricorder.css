@@ -89,6 +89,24 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .btn.danger { --tone: var(--lcars-red); }
 .btn:active { filter: brightness(1.2); }
 .btn:disabled { opacity: 0.4; }
+/* the ship's own confirm dialog: a small LCARS frame over whatever panel is open, which stays open underneath */
+.dialog-overlay {
+  position: fixed; inset: 0; z-index: 25; display: grid; place-items: center; padding: 16px;
+  background: #000a;
+}
+.dialog {
+  --accent-c: var(--lcars-gold);
+  width: min(460px, 100%); max-height: calc(100vh - 32px); overflow: auto;
+  background: #000; border-left: 14px solid var(--accent-c); border-radius: 14px 0 0 14px; padding: 0 0 14px 16px;
+  box-shadow: 0 0 0 1px #ffffff14, 0 24px 60px #000c;
+}
+.dialog-head { display: flex; align-items: center; gap: 10px; height: 34px; }
+.dialog-bar { flex: 1; align-self: stretch; background: var(--accent-c); border-radius: 0 999px 999px 0; max-width: 60px; }
+.dialog-head h2 {
+  margin: 0; font-family: var(--ui); font-size: 24px; line-height: 1; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent-c);
+}
+.dialog-message { margin: 12px 16px 16px 0; white-space: pre-line; overflow-wrap: anywhere; line-height: 1.45; }
+.dialog-foot { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; padding-right: 14px; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .actions .btn { flex: 1 1 auto; }
 

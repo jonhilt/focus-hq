@@ -10,6 +10,7 @@ import { roomTheme, THEME_INFO } from '../world/themes';
 import { effortPicker, pickedCloud, pickedEffort, wherePicker } from './agentPanel';
 import type { ManagerTab, Ui } from './context';
 import { withMic } from './dictation';
+import { confirmDialog } from './confirmDialog';
 import { busy, fill, h } from './dom';
 import { SideNav, Switch } from './panels';
 import { plannerCard } from './plannerCard';
@@ -122,9 +123,9 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
         h('button', {
           title: `Disconnect ${repo} from ${p.name}`,
           onclick: () => {
-            if (confirm(`Disconnect ${repo} from ${p.name}? (The GitHub repository is not touched.)`)) {
-              void api.disconnectRepo(p.id, repo).catch((e: Error) => ui.error(e.message));
-            }
+            void confirmDialog({ title: 'Disconnect', message: `Disconnect ${repo} from ${p.name}? (The GitHub repository is not touched.)`, confirmLabel: 'Disconnect', danger: true }).then((ok) => {
+              if (ok) void api.disconnectRepo(p.id, repo).catch((e: Error) => ui.error(e.message));
+            });
           },
         }, 'Disconnect'),
       ),
@@ -190,8 +191,8 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
   const hide = h('button', { class: 'btn small', title: 'Keep it out of sight, say while you demo the office: its holodeck stays in place behind locked doors, and its crew keep working' }, 'Hide');
   hide.onclick = () => void busy(hide, () => api.updateProject(p.id, { hidden: true }), ui.error);
   const remove = h('button', { class: 'btn small danger' }, 'Close project');
-  remove.onclick = () => {
-    if (!confirm(`Close ${p.name}? Its agents are sent home. Nothing on GitHub is deleted.`)) return;
+  remove.onclick = async () => {
+    if (!await confirmDialog({ title: 'Close project', message: `Close ${p.name}? Its agents are sent home. Nothing on GitHub is deleted.`, confirmLabel: 'Close project', danger: true })) return;
     void busy(remove, () => api.deleteProject(p.id), ui.error);
   };
 

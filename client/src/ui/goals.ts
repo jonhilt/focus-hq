@@ -4,6 +4,7 @@ import { LCARS } from '../world/starship';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import type { Ui } from './context';
+import { confirmDialog } from './confirmDialog';
 import { busy, h } from './dom';
 
 // What the goals panel, a lead's panel and the hand-off buttons (the New issue stand, Number One) share.
@@ -84,7 +85,8 @@ export async function closeGoal(lead: Agent): Promise<boolean> {
   const title = lead.lead?.title ?? 'this goal';
   const first = await api.closeGoal(lead.id);
   if ('closed' in first) return true;
-  if (!confirm(`Close “${title}”?\n\n${first.warn.join('\n')}`)) return false;
+  const ok = await confirmDialog({ title: 'Close goal', message: `Close “${title}”?\n\n${first.warn.join('\n')}`, confirmLabel: 'Close goal', danger: true });
+  if (!ok) return false;
   await api.closeGoal(lead.id, true);
   return true;
 }

@@ -73,7 +73,7 @@ Project.goals?: GoalRecord[]   // persisted with the project, newest first, capp
 
 **Ending, both ways:**
 - *The lead proposes.* A new office tool, `mcp__office__propose_close({ reason })`, is for when the goal's "done" is met, or when a slice lands and nothing worthwhile is left. It sets `lead.closing`, the station's sign shows "Ready to wrap up", a toast fires, and the lead stops. You confirm with **Close goal**, or carry on talking, which clears `closing`.
-- *You close it,* any time, with **Close goal** in the lead's panel.
+- *You close it,* any time, with **Close goal** in the lead's panel (by its **Board** link, away from the compose row).
 
 Closing checks first, through a pure `closeCheck(lead, branch, repos)` → `ok | { warn: … }`: uncommitted changes (or a checkout git couldn't look at), commits GitHub hasn't got (unpushed, or a branch it never got), a goal that shipped nothing, or open PRs ("they stay open on GitHub, unowned"). The panel shows the warning and asks again. Then it commits each checkout's uncommitted work as a WIP snapshot on the goal's branch (refusing to close if it can't), files the `GoalRecord` (with the branch and repos) and dismisses the lead.
 

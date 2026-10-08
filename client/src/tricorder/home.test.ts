@@ -2,11 +2,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PullRequest, QaReview } from '../../../shared/types';
 import { api } from '../net/api';
+import { confirmDialog } from '../ui/confirmDialog';
 import { h } from '../ui/dom';
 import { Actions, morph } from './actions';
 import { mergeButton } from './home';
 
 vi.mock('../net/api', () => ({ api: { mergePr: vi.fn(() => Promise.resolve()), mergeWhenPassed: vi.fn(() => Promise.resolve()) } }));
+vi.mock('../ui/confirmDialog', () => ({ confirmDialog: vi.fn(() => Promise.resolve(true)) }));
+
+/** Lets a click that waited on the dialog carry on. */
+const settle = () => new Promise((resolve) => setTimeout(resolve));
 
 const HEAD = 'abc1234def5678';
 const pr = { repo: 'demo/webshop-api', number: 7, title: 'Wishlist endpoints', headSha: HEAD, mergeable: 'MERGEABLE', isDraft: false } as PullRequest;
@@ -29,7 +34,6 @@ function card(first: QaReview | undefined) {
 
 describe('the Tricorder’s merge button', () => {
   afterEach(() => vi.clearAllMocks());
-  vi.stubGlobal('confirm', vi.fn(() => true));
 
   it('asks for the merge once QA passes when QA starts on a PR already on the page', () => {
     const c = card(undefined);
@@ -39,16 +43,17 @@ describe('the Tricorder’s merge button', () => {
     expect(api.mergePr).not.toHaveBeenCalled();
   });
 
-  it('merges straight away once QA has passed it', () => {
+  it('merges straight away once QA has passed it', async () => {
     const c = card(review({ status: 'queued', sha: undefined }));
     c.become(review({ status: 'passed' }));
     expect(c.click()).toBe('⤵ squash & merge');
+    await settle();
     expect(api.mergePr).toHaveBeenCalledWith('p', pr.repo, pr.number);
     expect(api.mergeWhenPassed).not.toHaveBeenCalled();
-    expect(confirm).toHaveBeenCalledWith(`Merge ${pr.repo}#7 "${pr.title}"?`);
+    expect(confirmDialog).toHaveBeenCalledWith({ message: `Merge ${pr.repo}#7 "${pr.title}"?` });
   });
 
-  it('takes the request back while it’s waiting, and asks first when QA failed it', () => {
+  it('takes the request back while it’s waiting, and asks first when QA failed it', async () => {
     const c = card(review({ status: 'testing' }));
     c.become(review({ status: 'testing', mergeRequested: { at: 1 } }));
     c.click();
@@ -57,6 +62,8 @@ describe('the Tricorder’s merge button', () => {
     const passed = card(review({ status: 'passed' }));
     passed.become(review({ status: 'failed' }));
     passed.click();
-    expect(confirm).toHaveBeenLastCalledWith(`QA failed it.\n\nMerge ${pr.repo}#7 "${pr.title}" anyway?`);
+    await settle();
+    expect(confirmDialog).toHaveBeenLastCalledWith({ message: `QA failed it.\n\nMerge ${pr.repo}#7 "${pr.title}" anyway?` });
+    expect(api.mergePr).toHaveBeenCalledWith('p', pr.repo, pr.number);
   });
 });

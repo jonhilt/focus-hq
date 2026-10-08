@@ -7,6 +7,7 @@ import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { voicePrefs, VoiceSession, voiceToggle } from './voiceMode';
 import { type MicMode, withMic } from './dictation';
+import { confirmDialog } from './confirmDialog';
 import { busy, fill, h } from './dom';
 import { handOffControl } from './goals';
 
@@ -124,9 +125,9 @@ function suggestion(ui: Ui, { projectId, idea }: WorkSuggestion): HTMLElement {
   const name = state.project(projectId)?.name ?? 'the project';
   const officer = plannerFor(projectId).name;
   const draft = h('button', { class: 'btn small', title: `${officer} writes it up as one issue at ${name}’s New issue stand` }, 'Draft at the stand');
-  draft.onclick = () => {
+  draft.onclick = async () => {
     const waiting = state.drafts.get(projectId);
-    if (waiting?.status === 'ready' && !confirm(`${officer} has a draft waiting at ${name}’s stand${waiting.title ? ` (“${waiting.title}”)` : ''}. Replace it?`)) return;
+    if (waiting?.status === 'ready' && !await confirmDialog({ title: 'Replace draft', message: `${officer} has a draft waiting at ${name}’s stand${waiting.title ? ` (“${waiting.title}”)` : ''}. Replace it?`, confirmLabel: 'Replace it' })) return;
     void busy(draft, async () => {
       await api.draftIssue(projectId, idea);
       ui.openNewIssue(projectId);

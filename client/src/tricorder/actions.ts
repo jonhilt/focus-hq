@@ -1,3 +1,4 @@
+import { confirmDialog } from '../ui/confirmDialog';
 import { h } from '../ui/dom';
 
 /**
@@ -14,9 +15,9 @@ export class Actions {
   button(key: string, label: string, run: () => Promise<unknown>, opts: { class?: string; disabled?: boolean; confirm?: string } = {}): HTMLButtonElement {
     const pending = this.busy.has(key);
     const button = h('button', { class: `btn ${opts.class ?? ''}`, type: 'button', disabled: pending || !!opts.disabled, attrs: { 'data-action': key } }, pending ? '…' : label);
-    button.onclick = (e) => {
+    button.onclick = async (e) => {
       e.stopPropagation();
-      if (opts.confirm && !confirm(opts.confirm)) return;
+      if (opts.confirm && !await confirmDialog({ message: opts.confirm })) return;
       void this.run(key, run);
     };
     return button;

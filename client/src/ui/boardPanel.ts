@@ -12,6 +12,7 @@ import { state } from '../net/state';
 import { LCARS_STATUS } from '../world/starship';
 import { effortPicker, pickedCloud, pickedEffort, wherePicker } from './agentPanel';
 import type { BoardTab, Ui } from './context';
+import { confirmDialog } from './confirmDialog';
 import { busy, fill, h, timeAgo } from './dom';
 import { Switch } from './panels';
 import { linkHealth } from './previewPanel';
@@ -63,9 +64,9 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
       where.onchange = () => clouds.set(key, pickedCloud(where));
       const assign = h('button', { class: 'btn small primary', title: full ? 'Agents beyond the limit wait in a queue' : '' }, full ? 'Queue agent' : 'Assign agent');
       const waits = waitsLabel(issue.waitsFor);
-      assign.onclick = () => {
+      assign.onclick = async () => {
         const warning = assignWarning(issue);
-        if (warning && !confirm(warning)) return;
+        if (warning && !await confirmDialog({ title: 'Assign agent', message: warning, confirmLabel: 'Assign anyway' })) return;
         void busy(assign, async () => {
           const agent = await api.hire(projectId, issue, pickedEffort(effort), pickedCloud(where));
           ui.hud.toast('success', `${agent.name} is on #${issue.number}`, { label: 'Watch', run: () => ui.goToAgent(agent.id) });
@@ -125,7 +126,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
           ? h('button', { class: 'btn small go', title: 'The office merges the commit QA passes, or tells you if QA fails it' }, 'Merge when QA passes')
           : h('button', { class: 'btn small primary', title: 'Merges once QA passes it. Click to cancel' }, 'Merging when QA passes ✕');
       merge.disabled = pr.mergeable === 'CONFLICTING' || pr.isDraft;
-      merge.onclick = () => {
+      merge.onclick = async () => {
         if (action.kind !== 'merge') {
           const on = action.kind === 'when-passed';
           void busy(merge, async () => {
@@ -137,7 +138,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
         const ask = action.confirm
           ? `${action.confirm}.\n\nMerge ${pr.repo}#${pr.number} "${pr.title}" anyway?`
           : `Merge ${pr.repo}#${pr.number} "${pr.title}"?`;
-        if (!confirm(ask)) return;
+        if (!await confirmDialog({ title: 'Merge', message: ask, confirmLabel: 'Merge' })) return;
         void busy(merge, async () => {
           await api.mergePr(projectId, pr.repo, pr.number);
           ui.hud.toast('success', `Merged #${pr.number}`);

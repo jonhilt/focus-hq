@@ -10,6 +10,7 @@ import { state } from '../net/state';
 import { drawMockPage } from '../world/screen';
 import { LCARS, LCARS_STATUS } from '../world/starship';
 import type { Ui } from './context';
+import { confirmDialog } from './confirmDialog';
 import { withMic } from './dictation';
 import { busy, fill, h, timeAgo } from './dom';
 import { closeGoal, CONTEXT_TONE, EFFORT_HINT, noteView, prLink, reviewing, tasksView } from './goals';
@@ -73,9 +74,16 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
   const input = h('input', { type: 'text', placeholder: `Message ${agent.name}… (they'll read it at their next step)`, autofocus: true });
   const send = h('button', { class: 'btn primary' }, 'Send');
   const stop = h('button', { class: 'btn danger' }, 'Stop');
+  // a lead's Close goal is up with the links, out of the way of Send; anyone else's Send home stays here
   const lead = agent.task === 'lead';
-  const dismiss = h('button', { class: 'btn', title: lead ? 'File the goal in the room’s log and send its lead home, which frees the station' : undefined }, lead ? 'Close goal' : 'Send home');
+  const dismiss = lead ? null : h('button', { class: 'btn' }, 'Send home');
   const footer = h('div', { class: 'compose' }, withMic(ui, input), send, stop, dismiss);
+  // made once and put back on every redraw of the header, so it keeps its busy state while the goal closes
+  const close = lead ? h('button', { class: 'btn small', title: 'File the goal in the room’s log and send its lead home, which frees the station' }, 'Close goal') : null;
+  if (close) close.onclick = () => {
+    const a = state.agents.get(id);
+    if (a) void busy(close, () => closeGoal(a), ui.error);
+  };
 
   const title = h('h2');
   ui.panels.open({ title, body, footer, nav, wide: true, accent: UNIFORM[agent.avatar.division] });
@@ -104,10 +112,9 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
     if (e.key === 'Enter') sendMessage();
   });
   stop.onclick = () => void busy(stop, () => api.stop(id), ui.error);
-  dismiss.onclick = () => {
+  if (dismiss) dismiss.onclick = async () => {
     const a = state.agents.get(id);
-    if (a?.task === 'lead') return void busy(dismiss, () => closeGoal(a), ui.error);
-    if (a && !FINISHED.includes(a.status) && !confirm(`${a.name} is still working. Stop and send them home?`)) return;
+    if (a && !FINISHED.includes(a.status) && !await confirmDialog({ title: 'Send home', message: `${a.name} is still working. Stop and send them home?`, confirmLabel: 'Send home', danger: true })) return;
     void busy(dismiss, async () => {
       await api.dismiss(id);
       ui.panels.close();
@@ -140,6 +147,7 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
         a.task === 'review' ? h('button', { class: 'btn small', onclick: () => ui.openQa(a.projectId) }, 'QA reports') : null,
         a.pr ? h('a', { class: 'btn small go', href: a.pr.url, target: '_blank', rel: 'noreferrer' }, `PR #${a.pr.number} ↗`) : null,
         a.task === 'lead' ? h('button', { class: 'btn small', onclick: () => ui.openBoard(a.projectId, 'prs') }, 'Board') : null,
+        close,
         a.pr && a.status === 'done'
           ? h('button', { class: 'btn small', title: 'Run the PR on your machine and open it in your browser', onclick: () => ui.previewPr(a.projectId, a.repo, a.pr!.number) }, 'Preview')
           : null,
