@@ -6,7 +6,7 @@ import type { ArtifactInput } from './lead';
  * from the time t; `explainerPage` wraps them in the ship's LCARS player (an elbow frame, the beats down the left, the
  * caption under the stage, step and play along the bottom) as a page the office shows like any of show's.
  */
-export const EXPLAINER_LIMITS = { minBeats: 2, maxBeats: 8, label: 16, beatTitle: 60, text: 320, minSeconds: 1, maxSeconds: 30, stageBytes: 1_500_000 } as const;
+export const EXPLAINER_LIMITS = { minBeats: 2, maxBeats: 8, label: 16, beatTitle: 60, text: 320, narration: 600, minSeconds: 1, maxSeconds: 30, stageBytes: 1_500_000 } as const;
 
 /** The stage's box inside the player, in CSS pixels: the lead lays their scene out in it. */
 export const STAGE_SIZE = { w: 1050, h: 500 } as const;
@@ -18,6 +18,8 @@ export interface ExplainerBeat {
   seconds: number;
   /** A word or two for its block down the left and its part of the timeline; the title's first words when missing. */
   label?: string;
+  /** What the voice says over it, talking the captain through the stage; its title and caption when missing. */
+  narration?: string;
 }
 
 export interface ExplainerInput {
@@ -49,6 +51,14 @@ export function beatLabel(beat: ExplainerBeat): string {
   return label || clean(beat.title).slice(0, EXPLAINER_LIMITS.label);
 }
 
+/** What the voice says over a beat: the lead's narration, or failing that its title and caption read out. */
+export function beatNarration(beat: ExplainerBeat): string {
+  const own = beat.narration && clean(beat.narration);
+  if (own) return own;
+  const title = clean(beat.title);
+  return `${title}${/[.!?]$/.test(title) ? '' : '.'} ${clean(beat.text)}`;
+}
+
 /** The player page for an explainer, ready to show under its id and title. Or why it was refused. */
 export function explainerPage(input: ExplainerInput): ArtifactInput | { error: string } {
   const L = EXPLAINER_LIMITS;
@@ -60,6 +70,7 @@ export function explainerPage(input: ExplainerInput): ArtifactInput | { error: s
     if (clean(b.title).length > L.beatTitle) return { error: `${which}'s title is ${clean(b.title).length} characters (at most ${L.beatTitle})` };
     if (!clean(b.text)) return { error: `${which} needs a caption` };
     if (clean(b.text).length > L.text) return { error: `${which}'s caption is ${clean(b.text).length} characters (at most ${L.text}): say less, or split it into two beats` };
+    if (b.narration && clean(b.narration).length > L.narration) return { error: `${which}'s narration is ${clean(b.narration).length} characters (at most ${L.narration}): say less, or split it into two beats` };
     if (b.label && clean(b.label).length > L.label) return { error: `${which}'s label is ${clean(b.label).length} characters (at most ${L.label})` };
     if (!(b.seconds >= L.minSeconds && b.seconds <= L.maxSeconds)) return { error: `${which} plays for ${b.seconds} seconds (${L.minSeconds} to ${L.maxSeconds})` };
   }
@@ -71,7 +82,7 @@ export function explainerPage(input: ExplainerInput): ArtifactInput | { error: s
 
   let at = 0;
   const beats = input.beats.map((b, i) => {
-    const beat = { at, title: clean(b.title), text: clean(b.text), label: beatLabel(b), colour: BEAT_COLOURS[i] };
+    const beat = { at, title: clean(b.title), text: clean(b.text), label: beatLabel(b), colour: BEAT_COLOURS[i], say: beatNarration(b) };
     at += b.seconds;
     return beat;
   });
@@ -80,7 +91,7 @@ export function explainerPage(input: ExplainerInput): ArtifactInput | { error: s
 }
 
 /** The player around the lead's stage. The kit's own script defines its helpers on window, so the lead's names win. */
-function page(title: string, beats: { at: number; title: string; text: string; label: string; colour: string }[], dur: number, stageHtml: string, stageCss: string, stageScript: string): string {
+function page(title: string, beats: { at: number; title: string; text: string; label: string; colour: string; say: string }[], dur: number, stageHtml: string, stageCss: string, stageScript: string): string {
   // the left column holds the beats between the two elbows, however many there are
   const beatH = Math.floor((320 - 6 * (beats.length - 1)) / beats.length);
   // Antonio in capitals is about 0.47em a character: a long title takes the lilac block's room too, then shrinks to fit
@@ -114,6 +125,7 @@ ${stageHtml}
   <button class="btn" id="kit-prev" style="background:var(--lilac)">◀ Step</button>
   <button class="btn" id="kit-pp" style="background:var(--gold);width:118px">▶ Play</button>
   <button class="btn" id="kit-next" style="background:var(--lilac)">Step ▶</button>
+  <button class="btn voice" id="kit-voice" title="A voice talks you through each beat">Voice</button>
   <div id="kit-segs" style="flex:1;display:flex;gap:4px"></div>
   <div class="clock" id="kit-clock"></div>
   <div class="endcap" style="background:var(--peri)"></div>
@@ -153,6 +165,9 @@ const KIT_CSS = String.raw`
   .seg { position:relative; height:34px; background:#241e38; cursor:pointer; overflow:hidden; }
   .seg i { position:absolute; left:0; top:0; bottom:0; background:var(--gold); }
   .seg span { position:absolute; right:8px; top:0; font:500 15px/34px var(--ui); text-transform:uppercase; letter-spacing:.06em; white-space:nowrap; }
+  .btn.voice { display:none; background:var(--muted); }
+  .btn.voice.on { background:var(--green); }
+  .voiced .btn.voice { display:block; }
   .clock { width:64px; color:var(--peach); font:500 19px/34px var(--ui); text-align:right; }
   .rest .stage, .rest .caption { opacity:.35; }
   .run { position:absolute; left:575px; top:272px; width:300px; height:72px; border-radius:36px; border:0; background:var(--gold); color:#000; font:700 32px/72px var(--ui); letter-spacing:.08em; text-transform:uppercase; cursor:pointer; display:none; }
@@ -207,6 +222,9 @@ const KIT_HELPERS = String.raw`
 
 // Playback: play runs to the end; step plays one beat and stops; a beat's block or its part of the timeline jumps there.
 // It rests, dimmed, on the last frame until the captain presses play, so the screen's picture sums it up.
+// Up close, the office's screen offers a voice-over: the page can't reach the office itself (it runs in a sandbox of its
+// own), so it asks the screen around it to say each beat's line, and the screen says when the line is done. While the
+// voice is on it sets the pace: a beat holds on its last frame until its line is finished.
 const KIT_PLAYER = String.raw`
 (function () {
   var BEATS = window.KIT_BEATS, DUR = window.KIT_DUR, el = function (id) { return document.getElementById(id); };
@@ -215,6 +233,12 @@ const KIT_PLAYER = String.raw`
   var end = function (i) { return i + 1 < BEATS.length ? BEATS[i + 1].at : DUR; };
   // hold: the beat a step just finished, whose caption stays up while its last frame does (t is then the next one's start)
   var t = DUR, raf = 0, stopAt = DUR, playing = false, hold = -1;
+  // the voice-over: whether it's on, and the beat whose line is being said (-1 for none), finished or paused
+  var screen = window.parent !== window ? window.parent : null, voice = false;
+  var talk = { beat: -1, done: true, paused: false };
+  var tell = function (message) { if (screen) screen.postMessage(message, '*'); };
+  function say(i) { talk = { beat: i, done: false, paused: false }; tell({ kit: 'say', beat: i }); }
+  function hush() { if (!talk.done) tell({ kit: 'hush' }); talk = { beat: -1, done: true, paused: false }; }
   var beatEls = BEATS.map(function (b, i) {
     var d = document.createElement('div'); d.className = 'beat'; d.style.background = 'var(--' + b.colour + ')';
     d.innerHTML = '<span><b>0' + (i + 1) + '</b></span>'; d.firstChild.appendChild(document.createTextNode(b.label));
@@ -224,13 +248,13 @@ const KIT_PLAYER = String.raw`
   var segEls = BEATS.map(function (b, i) {
     var d = document.createElement('div'); d.className = 'seg'; d.style.flex = String(end(i) - b.at);
     d.innerHTML = '<i></i><span></span>'; d.lastChild.textContent = b.label;
-    d.onclick = function (e) { var r = d.getBoundingClientRect(); stop(); hold = -1; document.body.classList.remove('rest'); t = b.at + Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * (end(i) - b.at); frame(); stop(); };
+    d.onclick = function (e) { var r = d.getBoundingClientRect(); stop(); hush(); hold = -1; document.body.classList.remove('rest'); t = b.at + Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * (end(i) - b.at); frame(); stop(); };
     el('kit-segs').appendChild(d); return d;
   });
   var describe = function (err, at) { return (at === undefined ? '' : 'at t = ' + at.toFixed(2) + 's: ') + (err && err.stack ? err.stack.split('\n').slice(0, 3).join('\n') : String(err)); };
   function frame() {
     if (draw) try { draw(t); } catch (err) { draw = null; window.kitFault(describe(err)); stop(); }
-    var bi = 0; BEATS.forEach(function (b, i) { if (t >= b.at) bi = i; });
+    var bi = beatAt(t);
     if (hold >= 0 && Math.abs(t - end(hold)) < .001) bi = hold;
     el('kit-bt').textContent = BEATS[bi].title; el('kit-bx').textContent = BEATS[bi].text;
     beatEls.forEach(function (d, i) { d.classList.toggle('on', i === bi); });
@@ -241,14 +265,25 @@ const KIT_PLAYER = String.raw`
     });
     el('kit-clock').textContent = t.toFixed(1);
   }
-  function run(from, to) {
+  // carryOn: Play picks up where it paused, its beat's line too; anything else starts afresh, cutting the voice short
+  function run(from, to, carryOn) {
     document.body.classList.remove('rest');
     var playingBeat = beatIndexAt(from);
+    var midLine = talk.beat >= 0 && from > BEATS[talk.beat].at + .01 && from <= end(talk.beat) + .001;
+    if (!carryOn || !midLine) hush();
+    else if (talk.paused) { talk.paused = false; tell({ kit: 'resume' }); }
     cancelAnimationFrame(raf); t = from; stopAt = to; playing = true; hold = -1; el('kit-pp').textContent = '❚❚ Pause';
     var last = performance.now();
     var step = function (now) {
-      t = Math.min(stopAt, t + (now - last) / 1000); last = now;
-      if (t >= stopAt && stopAt < DUR) hold = playingBeat;
+      // the beat being said holds on its last frame until its line is done
+      var until = voice && !talk.done && end(talk.beat) < stopAt && end(talk.beat) >= t ? end(talk.beat) : stopAt;
+      // a frame's timestamp can come from just before the click that started the run: never step back into the beat before
+      t = Math.min(until, t + Math.max(0, now - last) / 1000); last = now;
+      var waiting = until < stopAt && t >= until;
+      if (waiting) hold = talk.beat;
+      else if (t >= stopAt && stopAt < DUR) hold = playingBeat;
+      else hold = -1;
+      if (voice && !waiting && t < stopAt && beatAt(t) !== talk.beat) say(beatAt(t));
       frame();
       if (t < stopAt && playing) raf = requestAnimationFrame(step); else stop();
     };
@@ -258,18 +293,38 @@ const KIT_PLAYER = String.raw`
     playing = false; cancelAnimationFrame(raf); el('kit-pp').textContent = t >= DUR ? '↻ Replay' : '▶ Play';
     if (t >= DUR) window.kitDone = true;
   }
+  function pause() {
+    stop();
+    if (!talk.done && !talk.paused) { talk.paused = true; tell({ kit: 'pause' }); }
+  }
+  // the beat t is in; beatIndexAt allows for t landing a hair short of a beat's start
+  function beatAt(at) { var bi = 0; BEATS.forEach(function (b, i) { if (at >= b.at) bi = i; }); return bi; }
   function beatIndexAt(at) { var bi = 0; BEATS.forEach(function (b, i) { if (at >= b.at - .01) bi = i; }); return bi; }
   var beatIndex = function () { return beatIndexAt(t); };
   // the office records the screen's video by playing it once from the top
   window.kitPlay = function () { window.kitDone = false; run(0, DUR); };
   el('kit-run').onclick = function () { run(0, DUR); };
-  el('kit-pp').onclick = function () { if (playing) stop(); else run(t >= DUR ? 0 : t, DUR); };
+  el('kit-pp').onclick = function () { if (playing) pause(); else run(t >= DUR ? 0 : t, DUR, true); };
   el('kit-next').onclick = function () {
     if (t >= DUR) return run(0, end(0));
     var i = beatIndex(), e = end(i), done = t >= e - .01;
-    run(done ? e : t, done ? end(i + 1) : e);
+    run(done ? e : t, done ? end(i + 1) : e, !done);
   };
   el('kit-prev').onclick = function () { var cur = beatIndex(), i = Math.max(0, cur - (t - BEATS[cur].at < .5 ? 1 : 0)); run(BEATS[i].at, end(i)); };
+  // the screen offers the voice once it has the lines, and says whether it's on; the button asks it to switch
+  el('kit-voice').onclick = function () { tell({ kit: 'voice', on: !voice }); };
+  addEventListener('message', function (e) {
+    var m = e.data;
+    if (!screen || e.source !== screen || !m || typeof m.kit !== 'string') return;
+    if (m.kit === 'voice') {
+      voice = !!m.on;
+      document.body.classList.add('voiced');
+      el('kit-voice').classList.toggle('on', voice);
+      el('kit-voice').textContent = voice ? 'Voice on' : 'Voice off';
+      if (!voice) hush();
+    } else if (m.kit === 'said' && m.beat === talk.beat) talk.done = true;
+  });
+  tell({ kit: 'lines', lines: BEATS.map(function (b) { return b.say; }) });
   addEventListener('keydown', function (e) {
     if (e.key === 'ArrowRight') el('kit-next').click();
     else if (e.key === 'ArrowLeft') el('kit-prev').click();

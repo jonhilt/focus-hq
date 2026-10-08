@@ -149,3 +149,10 @@ export function crewVoice(speaker: CrewSpeaker, projectId: string): CrewVoice {
   const kokoro = post.kokoro[hash(`voice:${speaker}:${SHIPWIDE.includes(speaker) ? '' : projectId}`) % post.kokoro.length];
   return { kokoro, lang: kokoro.startsWith('b') ? 'en-GB' : 'en-US', pitch: post.pitch };
 }
+
+/** The voice a goal's lead narrates their explainers in: an officer's, always the same one for the same lead. */
+export function leadVoice(leadId: string): CrewVoice {
+  const post = VOICES.officer;
+  const kokoro = post.kokoro[hash(`voice:lead:${leadId}`) % post.kokoro.length];
+  return { kokoro, lang: kokoro.startsWith('b') ? 'en-GB' : 'en-US', pitch: post.pitch };
+}

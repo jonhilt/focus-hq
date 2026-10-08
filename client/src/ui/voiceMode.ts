@@ -5,7 +5,7 @@ import { cancelDictation, keptOpenMic, type Microphone, micPerRecording } from '
 import { h } from './dom';
 import { Switch } from './panels';
 
-/** Voice mode's two switches, remembered per browser (under the keys from when briefings had it too). Both start off. */
+/** Voice mode's two switches, and explainers' voice-over, remembered per browser (voice mode under the keys from when briefings had it too). All start off. */
 export const voicePrefs = {
   get voiceMode(): boolean {
     return localStorage.getItem('focus.briefing.voice') === '1';
@@ -18,6 +18,13 @@ export const voicePrefs = {
   },
   set keepMicOpen(on: boolean) {
     localStorage.setItem('focus.briefing.keepMicOpen', on ? '1' : '0');
+  },
+  /** Whether explainers up close are narrated. Off until switched on. */
+  get explainerVoice(): boolean {
+    return localStorage.getItem('focus.explainer.voice') === '1';
+  },
+  set explainerVoice(on: boolean) {
+    localStorage.setItem('focus.explainer.voice', on ? '1' : '0');
   },
 };
 

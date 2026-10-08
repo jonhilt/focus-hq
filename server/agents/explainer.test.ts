@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { beatLabel, EXPLAINER_LIMITS, type ExplainerInput, explainerPage } from './explainer';
+import { beatLabel, beatNarration, EXPLAINER_LIMITS, type ExplainerInput, explainerPage } from './explainer';
 
 const L = EXPLAINER_LIMITS;
 const input = (over: Partial<ExplainerInput> = {}): ExplainerInput => ({
@@ -21,7 +21,7 @@ const refusal = (over: Partial<ExplainerInput>) => {
   const built = explainerPage(input(over));
   return 'error' in built ? built.error : undefined;
 };
-const beatsIn = (html: string) => JSON.parse(/window\.KIT_BEATS = (.*?); window\.KIT_DUR = (\d+(?:\.\d+)?);/.exec(html)![1]) as { at: number; title: string; text: string; label: string; colour: string }[];
+const beatsIn = (html: string) => JSON.parse(/window\.KIT_BEATS = (.*?); window\.KIT_DUR = (\d+(?:\.\d+)?);/.exec(html)![1]) as { at: number; title: string; text: string; label: string; colour: string; say: string }[];
 
 describe('explainerPage', () => {
   it('wraps the stage in the player, under the id and title it was given', () => {
@@ -45,6 +45,21 @@ describe('explainerPage', () => {
     expect(beatLabel({ title: 'Damage in the middle is reported', text: '', seconds: 1 })).toBe('Damage in the');
     expect(beatLabel({ title: 'Checked whole on load', text: '', seconds: 1 })).toBe('Checked whole on');
     expect(beatLabel({ title: 'Supercalifragilisticexpialidocious', text: '', seconds: 1 })).toBe('Supercalifragili');
+  });
+
+  it("gives the voice each beat's narration, or its title and caption read out", () => {
+    const beats = [
+      { title: 'Append, never rewrite', text: 'Each event becomes one line.', seconds: 7, narration: '  On the left   is the file. ' },
+      { title: 'One writer?', text: 'A lock file keeps a second office out.', seconds: 5 },
+    ];
+    expect(beatsIn(page({ beats }).html).map((b) => b.say)).toEqual(['On the left is the file.', 'One writer? A lock file keeps a second office out.']);
+    expect(beatNarration({ title: 'One writer', text: 'Only one.', seconds: 1, narration: ' ' })).toBe('One writer. Only one.');
+  });
+
+  it('refuses a narration too long to say over a beat', () => {
+    const beat = { title: 'A beat', text: 'Its caption', seconds: 3 };
+    expect(refusal({ beats: [beat, { ...beat, narration: 'x'.repeat(L.narration + 1) }] })).toMatch(/narration is 601 characters/);
+    expect(refusal({ beats: [beat, { ...beat, narration: 'x'.repeat(L.narration) }] })).toBeUndefined();
   });
 
   it('never colours a beat red, which the stage keeps for alerts', () => {

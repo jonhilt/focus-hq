@@ -1,4 +1,5 @@
 import { ARTIFACT_SIZE, artifactUrl, latestArtifact, optionUrl, unanswered } from '../../../shared/artifacts';
+import { leadVoice } from '../../../shared/crew';
 import type { GoalArtifact, GoalQuestion, GoalRecord } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
@@ -6,6 +7,7 @@ import { LCARS } from '../world/starship';
 import { sound } from '../sound';
 import type { Ui } from './context';
 import { h } from './dom';
+import { Narrator } from './narrator';
 import { SideNav } from './panels';
 
 /** A question's view's key: `?q1`, which no artifact id can be. */
@@ -68,6 +70,8 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
   // which option of a question you're looking at, and whether you've asked to see them all side by side
   const looking = new Map<string, number>();
   let step: ((by: number) => void) | undefined;
+  // the voice-over for what's on show, if it's an explainer: it hears from the player's page and talks it through
+  let narrator: Narrator | undefined;
 
   /**
    * A question up close: why the lead asks, then one option at a time, large, with what it trades off and its Pick
@@ -150,17 +154,21 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
     shown = key;
     resized.disconnect();
     step = undefined;
+    narrator?.end();
+    narrator = undefined;
     if (question) {
       body.replaceChildren(...questionView(question));
     } else if (artifact) {
       const url = artifactUrl(leadId, artifact, 'html');
+      const shownHere = stage(url, artifact.title);
+      narrator = new Narrator(shownHere.querySelector('iframe')!, leadVoice(leadId));
       body.replaceChildren(
         h('div', { class: 'row artifact-head' },
           h('h3', { class: 'grow' }, artifact.title),
           h('small', { class: 'muted' }, `Shown ${when(artifact.at)}`),
           h('a', { class: 'btn small', href: url, target: '_blank', rel: 'noopener' }, 'Open in a tab'),
         ),
-        stage(url, artifact.title),
+        shownHere,
       );
     } else {
       body.replaceChildren();
@@ -169,6 +177,13 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
   };
   render();
   ui.panels.open({ title, body, accent: LCARS.orange, wide: true, nav });
+  // the player's page loads after this, so its first word to the narrator still arrives
+  const heard = (e: MessageEvent) => narrator?.heard(e);
+  window.addEventListener('message', heard);
+  ui.panels.own(() => {
+    window.removeEventListener('message', heard);
+    narrator?.end();
+  });
   if (live) {
     ui.panels.own(state.on('agent', (agent) => {
       if (agent.id === leadId) render();
