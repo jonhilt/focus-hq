@@ -53,9 +53,9 @@ async function main() {
   // ---------------------------------------------------------------- renderer & scene
   // no multisampling: the scene's drawn into textures and only a full-screen pass reaches the screen (frame.ts)
   const renderer = new THREE.WebGLRenderer({ antialias: false });
-  // to compare: ?ao=0 draws without ambient occlusion
+  // the decks' occlusion is baked and furniture has contact shadows: ?ao=1 adds N8AO's screen-space occlusion to compare
   const params = new URLSearchParams(location.search);
-  const occlusion = params.get('ao') !== '0';
+  const occlusion = params.get('ao') === '1';
   // as fine as the screen (up to 2) with the ambient occlusion, and plainer while frames run slow (resolution.ts)
   const ladder = levels(Math.min(window.devicePixelRatio, 2), occlusion);
   let resolution = initialResolution(ladder);

@@ -8,6 +8,7 @@ import { Character } from './character';
 import { type Box2, type Seat, seatYaw } from './layout';
 import { flat } from './materials';
 import { LCARS, LCARS_FONT, lcarsFrame, workstation } from './starship';
+import { contactShadow } from './contactShadow';
 
 /**
  * The engineering station: where the ship's engineer keeps the ship running, facing their board on the wall, which
@@ -31,6 +32,9 @@ export class EngineeringStation {
     this.group.updateWorldMatrix(true, true);
     const b = new THREE.Box3().setFromObject(this.group);
     this.footprint = { minX: b.min.x - 0.05, maxX: b.max.x + 0.05, minZ: b.min.z - 0.05, maxZ: b.max.z + 0.05 };
+    // the deck's floor has its occlusion baked in, but not under a station built here (contactShadow.ts)
+    const shadow = contactShadow(this.group);
+    if (shadow) this.group.add(shadow);
     const crew = chiefEngineer();
     this.engineer = new Character(engineerView(null));
     station.seat.add(this.engineer.group);

@@ -3,6 +3,7 @@ import { numberOne } from '../../../shared/crew';
 import { state } from '../net/state';
 import { interactive } from './builder';
 import { Character } from './character';
+import { contactShadow } from './contactShadow';
 import { type Box2, type Seat, seatYaw } from './layout';
 import { numberOneView } from './numberOneView';
 import { chair } from './props';
@@ -24,7 +25,11 @@ export class FirstOfficer {
     const g = this.group;
     g.position.copy(seat.at);
     g.rotation.y = seatYaw(seat);
-    g.add(chair('#7b2d43'));
+    const visitor = chair('#7b2d43');
+    g.add(visitor);
+    // the ready room's floor has its occlusion baked in, but not under a chair built here (contactShadow.ts)
+    const shadow = contactShadow(visitor, 'round');
+    if (shadow) visitor.add(shadow);
     // there's no keyboard on the visitor's side of the desk: they read and tap a PADD
     this.character = new Character(numberOneView(state.numberOne), 'padd');
     g.add(this.character.group);

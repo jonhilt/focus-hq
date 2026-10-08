@@ -11,6 +11,7 @@ import { type Builder, type Interaction, interactive } from './builder';
 import { seatHelpers } from './helperSeats';
 import { agentView, Character, type CrewView } from './character';
 import { briefingRoomAt, OVER_DOOR, type RoomSlot, ROOM_DEPTH, ROOM_WIDTH, WALL_H } from './layout';
+import { ContactShadows } from './contactShadow';
 import { box, flat, lighten, toon } from './materials';
 import { ceilingLight, chair, cyl, paperStack, plant } from './props';
 import { holodeckMaterial, holodeckSkin, type Scenery } from './scenery';
@@ -137,11 +138,20 @@ export class ProjectRoom {
     this.group.add(box(0.08, 0.1, boardW + 0.2, frameColor, ON_WALL - 0.01, boardTop, 0));
     for (const s of [-1, 1]) this.group.add(box(0.08, boardTop - boardBottom + 0.2, 0.1, frameColor, ON_WALL - 0.01, boardBottom - 0.1, s * post));
     // with no real wall behind it, the board stands on its own feet
-    if (this.scenery) for (const s of [-1, 1]) this.group.add(box(0.7, 0.14, 0.12, frameColor, ON_WALL - 0.3, 0, s * post));
+    // what stands on the floor shades it round where it stands (contactShadow.ts): one mesh for the room's furniture
+    const shadows = new ContactShadows(this.group);
+    if (this.scenery) {
+      for (const s of [-1, 1]) {
+        const foot = box(0.7, 0.14, 0.12, frameColor, ON_WALL - 0.3, 0, s * post);
+        this.group.add(foot);
+        shadows.add(foot);
+      }
+    }
     interactive(boardMesh, { kind: 'board', projectId: project.id }, () => `Use the ${project.name} board`);
 
     // desks
     for (let i = 0; i < DESKS_PER_ROOM; i++) this.desks.push(this.buildDesk(i, builder));
+    for (const desk of this.desks) shadows.add(desk.station);
 
     // PR review table
     const table = new THREE.Group();
@@ -158,6 +168,7 @@ export class ProjectRoom {
     tableSign.rotation.y = -Math.PI / 2;
     table.add(tableSign);
     this.group.add(table);
+    shadows.add(table, 'round');
     interactive(table, { kind: 'board', projectId: project.id, tab: 'prs' }, () => 'Review pull requests');
     builder.collideObject(top);
 
@@ -168,6 +179,7 @@ export class ProjectRoom {
     this.qaStation = qaStation.group;
     this.group.add(qaStation.group);
     builder.collideObject(qaStation.group);
+    shadows.add(qaStation.group);
     this.qa = new Character(this.qaView());
     qaStation.seat.add(this.qa.group);
 
@@ -175,6 +187,7 @@ export class ProjectRoom {
     for (let i = 0; i < TEAM_STATIONS; i++) {
       const station = new TeamStation(i, [LCARS.gold, LCARS.periwinkle, LCARS.orange, LCARS.lilac][i], teamStation, briefingRoomAt(slot, i));
       this.group.add(station.door);
+      shadows.add(station.door);
       station.connect(builder);
       this.stations.push(station);
     }
@@ -205,6 +218,8 @@ export class ProjectRoom {
     station.rotation.y = Math.PI;
     const stool = chair('#495057');
     station.add(stool);
+    // the stand and the stool behind it, before the officer sits on it
+    shadows.add(kiosk);
     this.planner = new Character(this.plannerView());
     station.add(this.planner.group);
     kiosk.add(station);
@@ -215,6 +230,7 @@ export class ProjectRoom {
       const p = plant(1.1, ['#e07a5f', '#3d405b', '#81b29a', '#f2cc8f'][Math.abs(x + z) % 4 | 0]);
       p.position.set(x, 0, z);
       this.group.add(p);
+      shadows.add(p, 'round');
       builder.collideObject(p.children[0]);
     }
 
@@ -226,6 +242,9 @@ export class ProjectRoom {
         this.group.add(light);
       }
     }
+
+    const shaded = shadows.build();
+    if (shaded) this.group.add(shaded);
 
     this.syncAgents();
     this.syncPlanner();
