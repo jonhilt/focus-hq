@@ -167,7 +167,7 @@ How to work:
 - To ask the captain something best answered by looking (which layout, which diagram reads best), ask it with mcp__office__ask, each option a page of its own. Their pick comes back to you as a message from them: end your turn and wait for it.
 - When a slice is ready, call mcp__office__ship with a title and a summary. The office pushes every repo with new commits and opens (or updates) a pull request in each, and QA reviews them. Then tell the captain what's in the slice, what it taught you, and what you'd do next, and stop there: they review it and decide.
 - Shipping again before the pull requests merge updates them: that's how you fix what QA or the captain finds.
-- You'll hear QA's verdict on each pull request, and when the slice's pull requests have all merged or closed. After that your repos move to fresh code on a new branch for the next slice, and the office brings along any commits you hadn't shipped.
+- You'll hear QA's verdict on each pull request, and when the slice's pull requests have all merged or closed. Your repos move to fresh code on a new branch for the next slice at the start of your next turn, and the office brings along any commits you hadn't shipped. Until then keep working on your current branch: you don't need to end your turn, or commit work in progress, for the move.
 - For independent pieces of work that can run side by side, you can hand them to subagents with the Agent tool. You own what they bring back. Hand broad exploration (reading through a repo, long test runs, combing through logs) to subagents too, and keep their conclusions rather than the details: your context has to last the whole goal.
 - When a decision is the captain's (scope, a trade-off they'd care about), ask and stop. Otherwise make sensible calls and say what you decided.
 - When what done looks like is met, or a slice has landed and nothing worthwhile is left, call mcp__office__propose_close with why, tell the captain, and stop. They close the goal, or carry on with you.
@@ -523,10 +523,26 @@ export function behindNote(folder: string, branch: string): string {
   return `Nothing shipped: GitHub's \`${branch}\` has commits ./${folder} doesn't (the office pushed a merge to it). Pull them with \`git -C ${folder} pull --no-rebase origin ${branch}\`, check the result, then ship again.`;
 }
 
-/** The slice's pull requests have all merged or closed, for the lead. */
+/** The slice's pull requests, each merged or closed unmerged. */
+function landedPrs(work: LeadWork): string {
+  return work.prs.map((p) => `${p.repo}#${p.number} ${p.outcome === 'merged' ? 'merged' : 'was closed unmerged'}`).join(', ');
+}
+
+/** The slice's pull requests have all merged or closed, for a lead who isn't in a turn: it wakes them. */
 export function landedNote(work: LeadWork): string {
-  const prs = work.prs.map((p) => `${p.repo}#${p.number} ${p.outcome === 'merged' ? 'merged' : 'was closed unmerged'}`).join(', ');
-  return `Slice ${work.slice} has landed: ${prs}. Tell the captain what it taught you and what you'd do next.`;
+  return `Slice ${work.slice} has landed: ${landedPrs(work)}. Tell the captain what it taught you and what you'd do next.`;
+}
+
+/**
+ * The slice's pull requests have all merged or closed while the lead is in the middle of a turn. The repos only move at the
+ * start of their next turn, so they carry on: a lead that stops to make the move happen leaves the goal waiting on the captain.
+ */
+export function landedMidTurnNote(work: LeadWork): string {
+  return [
+    `Slice ${work.slice} has landed: ${landedPrs(work)}.`,
+    `Carry on with what you're doing on your current branch: your commits there are safe. The office moves your repos to fresh code at the start of your next turn and brings over any commits you hadn't shipped, so you don't need to end your turn, or commit work in progress, just for the move.`,
+    `Share what the slice taught you whenever you next report to the captain, rather than stopping now to do it.`,
+  ].join(' ');
 }
 
 /**

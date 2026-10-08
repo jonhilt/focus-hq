@@ -466,6 +466,29 @@ describe('AgentManager', () => {
     expect(next.prompt).toMatch(/\[Office\] Slice 1 has landed/);
   });
 
+  it('tells a lead whose slice lands mid-turn to carry on, and moves their repos at the start of the next turn', async () => {
+    const { agents, claude, store, project } = office();
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
+    await until(() => leads().length === 1);
+    await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    const branch = store.agent(lead.id).branch;
+
+    // still in the turn they shipped from when the pull requests merge
+    for (const pr of store.agent(lead.id).lead!.prs) agents.prClosed(pr.repo, pr.number, true);
+    const sent = leads()[0].sent.join('\n');
+    expect(sent).toMatch(/^\[Office\] Slice 1 has landed: .* Carry on with what you're doing on your current branch/);
+    expect(sent).toContain('at the start of your next turn');
+    expect(sent).not.toContain('Tell the captain what it taught you');
+    expect(store.agent(lead.id).branch).toBe(branch);
+
+    leads()[0].end({ ok: true, summary: 'Finished the next piece' });
+    await until(() => store.agent(lead.id).status === 'done');
+    agents.message(lead.id, 'Go ahead');
+    await until(() => leads().length === 2);
+    expect(leads()[1].req.prompt).toMatch(/^Slice 2 starts on fresh code/);
+  });
+
   it('brings commits the lead hadn’t shipped along to the next slice', async () => {
     const picked: { dir: string; commits: string[] }[] = [];
     const { agents, claude, store, project } = office({

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadWork } from '../../shared/types';
-import { afterLanding, answerQuestion, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
+import { afterLanding, answerQuestion, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -179,6 +179,8 @@ describe('what the lead writes and hears', () => {
     expect(prompt).toMatch(/mcp__office__note.*it's a note, not a spec/s);
     expect(prompt).toMatch(/call mcp__office__propose_close with why, tell the captain, and stop/);
     expect(prompt).toMatch(/Hand broad exploration .* to subagents too, and keep their conclusions/);
+    expect(prompt).toMatch(/Your repos move to fresh code on a new branch for the next slice at the start of your next turn/);
+    expect(prompt).toMatch(/Until then keep working on your current branch: you don't need to end your turn, or commit work in progress, for the move/);
   });
 
   it('keeps what changes from slice to slice out of its instructions, which a resumed session never re-reads', () => {
@@ -200,6 +202,13 @@ describe('what the lead writes and hears', () => {
   it('tells the lead when the slice has landed, and where their repos are for the next one', () => {
     const landed = { ...work, prs: [work.prs[0], { ...work.prs[1], outcome: 'closed' as const }] };
     expect(landedNote(landed)).toBe('Slice 2 has landed: acme/web#12 merged, acme/api#7 was closed unmerged. Tell the captain what it taught you and what you\'d do next.');
+    // mid-turn, they carry on: the move waits for their next turn
+    const midTurn = landedMidTurnNote(landed);
+    expect(midTurn).toMatch(/^Slice 2 has landed: acme\/web#12 merged, acme\/api#7 was closed unmerged\. Carry on with what you're doing on your current branch: your commits there are safe\./);
+    expect(midTurn).toContain('moves your repos to fresh code at the start of your next turn and brings over any commits you hadn\'t shipped');
+    expect(midTurn).toContain('you don\'t need to end your turn, or commit work in progress, just for the move');
+    expect(midTurn).toContain('Share what the slice taught you whenever you next report to the captain, rather than stopping now');
+    expect(midTurn).not.toContain('Tell the captain');
     expect(newSliceNote({ ...work, slice: 3, prs: [] }, 'focus/lead-shop-3-cd')).toContain('Slice 3 starts on fresh code');
     expect(heldBack(work, ['api'])).toMatch(/\.\/api still has uncommitted changes, so your repos stay where they are/);
   });
