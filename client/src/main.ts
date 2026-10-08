@@ -2,6 +2,7 @@ import './styles.css';
 import * as THREE from 'three';
 import { api } from './net/api';
 import { state } from './net/state';
+import { record, type TrafficEntry, type TrafficLink } from './net/traffic';
 import { Player } from './player';
 import { agentPanelOpen, openAgentPanel } from './ui/agentPanel';
 import { openHelperPanel } from './ui/helperPanel';
@@ -11,7 +12,7 @@ import { h } from './ui/dom';
 import { Hud } from './ui/hud';
 import { openManagerPanel } from './ui/managerPanel';
 import { openGoalsPanel } from './ui/goalsPanel';
-import { openCommsPanel } from './ui/commsPanel';
+import { linkAction, openCommsPanel } from './ui/commsPanel';
 import { numberOnePanelOpen, openNumberOnePanel } from './ui/numberOnePanel';
 import { Panels } from './ui/panels';
 import { openPreviewPanel } from './ui/previewPanel';
@@ -222,6 +223,11 @@ async function main() {
     world.markPanels();
   };
   state.on('agent', agentChanged);
+  // news for the captain: a toast now, and kept in Comms' recent traffic for when they missed it
+  const notify = (level: TrafficEntry['level'], text: string, link?: TrafficLink) => {
+    record({ at: Date.now(), level, text, link });
+    hud.toast(level, text, link && linkAction(ui, link));
+  };
   // a goal's lead finishing a turn: it's your turn, unless you're already looking at them
   const leadTurns = new Map<string, string>();
   state.on('agent', (a) => {
@@ -229,7 +235,7 @@ async function main() {
     const before = leadTurns.get(a.id);
     leadTurns.set(a.id, a.status);
     if (a.status === 'done' && before && before !== 'done' && !agentPanelOpen(a.id)) {
-      hud.toast('info', `🖖 ${a.name} is waiting for you`, { label: 'Talk', run: () => ui.openAgent(a.id) });
+      notify('info', `🖖 ${a.name} is waiting for you`, { kind: 'agent', id: a.id, talk: true });
     }
   });
   // crew working their consoles: a few blips from a station as its terminal scrolls, now and then rather than per line
@@ -272,25 +278,25 @@ async function main() {
     // a reply can take a while: say so when it lands while you're elsewhere
     if (chat && chat.status !== numberOneStatus && numberOneStatus === 'thinking' && !numberOnePanelOpen()) {
       const name = numberOne().name;
-      if (chat.status === 'waiting') hud.toast('info', `🖖 ${name} has an answer for you`, { label: 'Read it', run: () => ui.openNumberOne() });
-      if (chat.status === 'failed') hud.toast('error', `${name} lost the thread: ${chat.error ?? ''}`, { label: 'Open', run: () => ui.openNumberOne() });
+      if (chat.status === 'waiting') notify('info', `🖖 ${name} has an answer for you`, { kind: 'number-one' });
+      if (chat.status === 'failed') notify('error', `${name} lost the thread: ${chat.error ?? ''}`, { kind: 'number-one' });
     }
     numberOneStatus = chat?.status;
   });
   state.on('toast', (e) => {
     if (!toastShows(e, state.projects, (id) => state.agents.get(id)?.projectId)) return;
     const agentId = e.agentId;
-    hud.toast(e.level, e.text, agentId && state.agents.has(agentId) ? { label: 'Go there', run: () => ui.goToAgent(agentId) } : undefined);
+    notify(e.level, e.text, agentId && state.agents.has(agentId) ? { kind: 'agent', id: agentId } : undefined);
   });
   state.on('preview', ({ preview: p, before }) => {
     if (!p || before?.startedAt !== p.startedAt || before.status === p.status || state.isHidden(p.projectId)) return;
     const link = p.links[0];
     if (p.status === 'running' && link) {
-      const open = { label: `Open${link.name ? ` ${link.name}` : ''} ↗`, run: () => window.open(link.url, '_blank', 'noopener') };
-      if (p.warning) hud.toast('info', `▶ ${p.repo}#${p.number} is up, but: ${p.warning}`, open);
-      else hud.toast('success', `▶ ${p.repo}#${p.number} is running`, open);
+      const open: TrafficLink = { kind: 'url', url: link.url, label: `Open${link.name ? ` ${link.name}` : ''} ↗` };
+      if (p.warning) notify('info', `▶ ${p.repo}#${p.number} is up, but: ${p.warning}`, open);
+      else notify('success', `▶ ${p.repo}#${p.number} is running`, open);
     } else if (p.status === 'failed') {
-      hud.toast('error', `Preview of ${p.repo}#${p.number} failed: ${p.error ?? 'see the log'}`, { label: 'Log', run: () => ui.openPreview(p.projectId) });
+      notify('error', `Preview of ${p.repo}#${p.number} failed: ${p.error ?? 'see the log'}`, { kind: 'preview', projectId: p.projectId });
     }
   });
   state.connect();

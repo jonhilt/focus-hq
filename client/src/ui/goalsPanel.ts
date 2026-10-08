@@ -182,7 +182,9 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
     start.textContent = startsNow ? 'Start the goal' : 'Add it to the line';
     fill(log, ...done.map((g) => recordRow(ui, projectId, g, open > 0)));
   };
-  ui.panels.open({ title: `${project.name} · goals`, body: h('div', null, ...Object.values(views)), nav, accent: project.color });
+  // back out to every goal on the ship, and whoever's waiting on you
+  const comms = h('button', { class: 'btn small', title: 'Comms: who’s waiting on you, and every goal under way on the ship (C)', onclick: () => ui.openComms() }, '◂ Comms');
+  ui.panels.open({ title: `${project.name} · goals`, body: h('div', null, ...Object.values(views)), nav, accent: project.color, headerExtra: [comms] });
   render();
   if (!views.new.hidden) text.focus();
   ui.panels.own(state.on('agent', (a) => a.projectId === projectId && (a.task === 'lead' || !!a.reviewFor) && render()));

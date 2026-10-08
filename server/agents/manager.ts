@@ -1767,7 +1767,6 @@ export class AgentManager {
 
   // ---------------------------------------------------------------- manager actions
 
-  /** Sends the agent a message: the captain's, or (with `from`) news from someone else aboard. */
   /** The captain has read the lead's latest turn: it stops hailing them, on every screen, until their next one ends. */
   readTurn(id: string): void {
     const agent = this.store.agent(id);
@@ -1775,6 +1774,7 @@ export class AgentManager {
     this.update(agent, { lead: { ...agent.lead, readTurn: agent.finishedAt } });
   }
 
+  /** Sends the agent a message: the captain's, or (with `from`) news from someone else aboard. */
   message(id: string, text: string, from?: string): void {
     const agent = this.store.agent(id);
     const rt = this.rt(id);

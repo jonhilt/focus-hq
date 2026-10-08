@@ -8,10 +8,12 @@ import { type Agent, TEAM_STATIONS } from '../../../shared/types';
 import { api } from '../net/api';
 import { attention, markRead } from '../net/attention';
 import { state } from '../net/state';
+import { onTraffic, traffic, type TrafficEntry, type TrafficLink } from '../net/traffic';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
+import type { ToastAction } from './hud';
 import { withMic } from './dictation';
-import { busy, fill, h } from './dom';
+import { busy, fill, h, timeAgo } from './dom';
 import { closeGoal } from './goals';
 
 /** What a hail is about, the same hail from render to render: its card is built once and kept while it stands. */
@@ -71,16 +73,43 @@ const open = (ui: Ui, agent: Agent) => h('button', { class: 'btn small', title: 
 
 /**
  * A lead waiting for the captain: what they last said, and a reply box. Unread, it hails (with Later, to stop it
- * hailing without replying); read, it waits quietly in Your turn until the lead's at work again.
+ * hailing without replying); read (the `read` class), it waits quietly in Your turn until the lead's at work again.
+ * The same card moves from one to the other, half-typed reply and all.
  */
-function turnCard(ui: Ui, lead: Agent, read: boolean): HTMLElement {
-  const later = read ? null : h('button', { class: 'btn small', title: 'Stop hailing about this turn: they’ll hail again when they next wait for you' }, 'Later');
-  if (later) later.onclick = () => markRead(lead, true);
-  return h('div', { class: `hail${read ? ' read' : ''}`, style: `--tone:${LCARS.orange}` },
+function turnCard(ui: Ui, lead: Agent): HTMLElement {
+  const later = h('button', { class: 'btn small later', title: 'Stop hailing about this turn: they’ll hail again when they next wait for you' }, 'Later');
+  later.onclick = () => markRead(lead, true);
+  return h('div', { class: 'hail', style: `--tone:${LCARS.orange}` },
     from(lead),
     quote(lead) ?? h('p', { class: 'hail-what' }, '🖖 Waiting for you'),
     reply(ui, lead, 'Reply…'),
     h('div', { class: 'row' }, open(ui, lead), beam(ui, lead), later),
+  );
+}
+
+/** What a piece of news's button does: the toast's own, rebuilt from the link it was kept with. */
+export function linkAction(ui: Ui, link: TrafficLink): ToastAction | undefined {
+  switch (link.kind) {
+    case 'agent':
+      // gone home since: nowhere to go
+      if (!state.agents.has(link.id)) return undefined;
+      return link.talk ? { label: 'Talk', run: () => ui.openAgent(link.id) } : { label: 'Go there', run: () => ui.goToAgent(link.id) };
+    case 'number-one':
+      return { label: 'Read it', run: () => ui.openNumberOne() };
+    case 'preview':
+      return { label: 'Log', run: () => ui.openPreview(link.projectId) };
+    case 'url':
+      return { label: link.label, run: () => window.open(link.url, '_blank', 'noopener') };
+  }
+}
+
+/** A line of recent traffic: when, what, and its toast's button. */
+function trafficRow(ui: Ui, entry: TrafficEntry): HTMLElement {
+  const action = entry.link && linkAction(ui, entry.link);
+  return h('div', { class: `traffic ${entry.level}` },
+    h('small', { class: 'traffic-at', title: new Date(entry.at).toLocaleString() }, timeAgo(entry.at)),
+    h('span', { class: 'grow' }, entry.text),
+    action ? h('button', { class: 'btn small', onclick: action.run }, action.label) : null,
   );
 }
 
@@ -105,7 +134,7 @@ function hailCard(ui: Ui, a: Attention): HTMLElement {
       return card('#99cc66', from(a.agent), h('p', { class: 'hail-what' }, `🏁 Ready to wrap up: ${a.agent.lead?.closing?.reason ?? ''}`), reply(ui, a.agent, 'Or carry on…'), h('div', { class: 'row' }, close, open(ui, a.agent), beam(ui, a.agent)));
     }
     case 'turn':
-      return turnCard(ui, a.agent, false);
+      return turnCard(ui, a.agent);
     case 'qa':
     case 'conflicts': {
       const review = a.kind === 'qa' ? state.reviews.get(prKey(a.pr.repo, a.pr.number))?.followUp : undefined;
@@ -164,12 +193,22 @@ class KeptCards<T> {
  * Comms: the whole ship's traffic in one place, opened from anywhere with C. Hails first (whatever waits on the
  * captain, from `attention()`, each with what it takes to answer it there and then: a reply, an approval, closing the
  * goal), then the leads whose turn the captain has read but not answered, then the goals getting on without them, then
- * each project's goals panel. Nothing to mark as read: a hail clears when what it's about does (the lead's at work
+ * each project's goals panel, then the recent traffic: the news the toasts brought, for one you missed. Nothing to mark as read: a hail clears when what it's about does (the lead's at work
  * again, the hand's lowered), and a lead's turn, once read, moves to Your turn rather than out of sight.
  */
 export function openCommsPanel(ui: Ui): void {
-  const hails = new KeptCards<Attention>(h('div', { class: 'cards' }), hailKey, (a) => hailCard(ui, a), h('p', { class: 'muted' }, '✓ All quiet. Nobody is waiting on you.'));
-  const read = new KeptCards<Agent>(h('div', { class: 'cards' }), (l) => `${l.id}:${l.finishedAt}`, (l) => turnCard(ui, l, true));
+  // each lead's turn has one card, hailing or read: reading it (on another screen, say) moves it with your draft in it
+  const turns = new Map<string, HTMLElement>();
+  const turn = (lead: Agent, read: boolean) => {
+    const key = `${lead.id}:${lead.finishedAt}`;
+    const card = turns.get(key) ?? turnCard(ui, lead);
+    turns.set(key, card);
+    card.classList.toggle('read', read);
+    return card;
+  };
+  const hails = new KeptCards<Attention>(h('div', { class: 'cards' }), hailKey, (a) => (a.kind === 'turn' ? turn(a.agent, false) : hailCard(ui, a)), h('p', { class: 'muted' }, '✓ All quiet. Nobody is waiting on you.'));
+  const read = new KeptCards<Agent>(h('div', { class: 'cards' }), (l) => `${l.id}:${l.finishedAt}`, (l) => turn(l, true));
+  const recent = h('div', { class: 'traffic-list' });
   const underWay = h('div', { class: 'under-way-list' });
   const gateways = h('div', { class: 'row' });
   const hailsHead = h('h3');
@@ -179,9 +218,17 @@ export function openCommsPanel(ui: Ui): void {
     readHead, read.el,
     h('h3', null, 'Under way'), underWay,
     h('h3', null, 'Goals'), gateways,
+    h('h3', { title: 'The last news the toasts brought, newest first' }, 'Recent traffic'), recent,
   );
 
+  const renderTraffic = () => {
+    const log = traffic();
+    fill(recent, ...(log.length ? log.map((e) => trafficRow(ui, e)) : [h('p', { class: 'muted' }, 'No news yet.')]));
+  };
+
   const render = () => {
+    // a card that moves between lists loses the focus on the way: give it back
+    const focused = document.activeElement instanceof HTMLElement && body.contains(document.activeElement) ? document.activeElement : null;
     const now = attention();
     hails.show(now);
     hailsHead.textContent = now.length ? `Hailing you (${now.length})` : 'Hailing you';
@@ -199,9 +246,12 @@ export function openCommsPanel(ui: Ui): void {
       return h('button', { class: 'btn small', style: `--tone:${p.color}`, title: `${p.name}’s goals: start one, see the line and the closed ones`, onclick: () => ui.openGoals(p.id) },
         `${p.name} · ${state.leadsIn(p.id).length}/${TEAM_STATIONS}${waiting ? ` +${waiting}` : ''}`);
     }));
+    if (focused?.isConnected && document.activeElement !== focused) focused.focus();
   };
 
   ui.panels.open({ title: 'Comms', body, wide: true, accent: LCARS.orange });
   render();
+  renderTraffic();
+  ui.panels.own(onTraffic(renderTraffic));
   for (const event of ['agent', 'agent-removed', 'board', 'review', 'projects'] as const) ui.panels.own(state.on(event, render));
 }
