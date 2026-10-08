@@ -7,6 +7,7 @@ import { sleep } from '../util';
 import type { RetroOfficer, RetroRequest, Transcript } from './engineer';
 import type { NumberOneOfficer, NumberOneReply, NumberOneTurn } from './numberOne';
 import type { Drafter, DraftRequest, DraftResult } from './planner';
+import type { ExplainerInput } from './explainer';
 import { renderText, renderToolUse } from './render';
 import type { TriageDecision, Triager, TriageRequest } from './triage';
 import { type AgentRunner, type AgentSession, type CloudTerminal, type CloudTerminalRequest, type RunHooks, type RunOutcome, type RunRequest, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
@@ -261,6 +262,9 @@ export class DemoRunner implements AgentRunner {
         await think();
         await note({ done: `${goal}: it works end to end, and survives a reload on another device.`, next: ['A thin slice end to end'] });
         await show({ id: 'data-flow', title: 'The data flow', html: demoFlowPage(goal, repos.map((r) => r.folder)) });
+        hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__explain(How a save travels)' }]);
+        const explained = await tools.explain(demoExplainer(repos.map((r) => r.folder))).catch((err: Error) => err.message);
+        hooks.lines([{ kind: 'output', text: `  ⎿  ${explained}` }]);
         hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__ask(Which layout should it start with?)' }]);
         const asked = await tools.ask({
           question: 'Which layout should it start with?',
@@ -723,6 +727,49 @@ function demoFlowPage(goal: string, folders: string[]): string {
   }).join('');
   return `<!doctype html><html><body style="margin:0;background:#0b1020;font-family:system-ui;color:#eee"><div style="padding:50px 60px 0"><h1 style="font-size:48px;margin:0">The data flow</h1><p style="font-size:26px;color:#99ccff;margin:10px 0 0">${escapeHtml(goal)}</p></div>
 <svg viewBox="0 0 1280 500" style="width:100%"><defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0L10 5L0 10z" fill="#ffcc66"/></marker></defs>${svg}</svg></body></html>`;
+}
+
+/**
+ * Demo mode: the explainer a lead walks the captain through first, a save travelling from the shopper through each repo
+ * to the database and waiting out an outage. Its script is written for the explain tool, as a lead's would be.
+ */
+function demoExplainer(folders: string[]): ExplainerInput {
+  const boxes = ['shopper', ...folders, 'database'];
+  const step = 1050 / boxes.length;
+  const html = boxes.map((b, i) =>
+    `<div class="panel box" style="left:${Math.round(i * step)}px;top:150px;width:${Math.round(step - 40)}px;--c:var(--${i === 0 ? 'lilac' : i === boxes.length - 1 ? 'sky' : 'peach'})"><div class="hd"><span>${escapeHtml(b)}</span><span>0${i + 1}</span></div><div class="bd"><span class="state"></span></div></div>`,
+  ).join('') + '<span class="lbl" style="left:0;top:40px">The journey of one save</span><div class="pill" id="save" style="top:330px;--c:var(--gold)">♥ save</div>';
+  const script = `
+const boxes = $$('.box'), last = boxes.length - 1;
+const colours = boxes.map(b => b.style.getPropertyValue('--c'));
+const centre = i => boxes[i].offsetLeft + boxes[i].offsetWidth / 2 - 50;
+// where the save is at t: hops along the boxes in beats 1 and 2, waits at the last repo in beat 3 until the database is back
+function at(t) {
+  if (t < B[1]) return p(t, 1, B[1] - .5);
+  if (t < B[2]) return 1 + (last - 2) * p(t, B[1] + .3, B[2] - .5);
+  return last - 1 + p(t, B[2] + 3.2, B[2] + 4.2);
+}
+function render(t) {
+  const x = at(t), i = Math.floor(x), k = x - i;
+  const pos = i >= last ? centre(last) : centre(i) + (centre(i + 1) - centre(i)) * k;
+  $('#save').style.transform = 'translateX(' + pos + 'px)';
+  const down = t > B[2] + .3 && t < B[2] + 3.2;
+  boxes.forEach((b, n) => {
+    const reached = x >= n - .01;
+    b.style.setProperty('--c', n === last && down ? 'var(--red)' : colours[n]);
+    b.querySelector('.state').innerHTML = n === last ? (down ? tag('offline', 'red') : reached ? tag('saved ✓', 'green') : '') : n === last - 1 && down ? tag('retry queued', 'gold') : reached ? tag('passed on', 'green') : '';
+  });
+}`;
+  return {
+    id: 'save-journey',
+    title: 'How a save travels',
+    beats: [
+      { title: 'The shopper saves an item', text: 'Pressing save sends one small request: which item, and who is saving it. Nothing else changes on the page until it is safely stored.', seconds: 4, label: 'Save' },
+      { title: 'Each repo passes it on', text: `It travels through ${folders.join(' and ')}, each checking what it owns before handing it to the next, and lands as one row in the database.`, seconds: 5, label: 'Pass it on' },
+      { title: 'If the database is down, it waits', text: 'The last repo keeps the save in a retry queue rather than dropping it, and sends it again when the database is back, so the shopper never loses an item.', seconds: 6, label: 'Outage' },
+    ],
+    stage: { html, css: '.box .bd { min-height:60px; }', script },
+  };
 }
 
 /** Demo mode: the other option a lead asks the captain about, a plain list. */

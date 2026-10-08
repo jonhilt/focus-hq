@@ -74,17 +74,23 @@ export class BrowserPool {
 
   /**
    * A picture of a self-contained HTML page, as a JPEG `width` × `height`: in a context of its own, so the page sees no
-   * agent's cookies. Waits for what it loads from the network (a diagram library from a CDN, say), within reason.
+   * agent's cookies. Waits for what it loads from the network (a diagram library from a CDN, say), within reason. Says
+   * what its scripts threw or logged as errors meanwhile, so whoever made the page hears it's broken.
    */
-  async render(html: string, width = ARTIFACT_SIZE.w, height = ARTIFACT_SIZE.h): Promise<Buffer> {
+  async render(html: string, width = ARTIFACT_SIZE.w, height = ARTIFACT_SIZE.h): Promise<{ image: Buffer; errors: string[] }> {
     const browser = await this.shared();
     const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
     try {
       const page = await context.newPage();
+      const errors: string[] = [];
+      page.on('pageerror', (err) => errors.push(err.message));
+      page.on('console', (msg) => {
+        if (msg.type() === 'error') errors.push(msg.text());
+      });
       await page.setContent(html, { waitUntil: 'networkidle', timeout: 15_000 }).catch(() => undefined);
       // scripts that draw after loading (mermaid, charts) get a moment to finish
       await page.waitForTimeout(400);
-      return await page.screenshot({ type: 'jpeg', quality: 85 });
+      return { image: await page.screenshot({ type: 'jpeg', quality: 85 }), errors };
     } finally {
       await context.close().catch(() => undefined);
     }

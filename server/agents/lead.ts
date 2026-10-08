@@ -164,6 +164,7 @@ How to work:
 - Before changing a repo, read its CLAUDE.md or README. Run its tests, type checks and linters, and check UI changes in the browser with the mcp__browser__ tools.
 - Commit in each repo as you go. Never push and never open pull requests yourself.
 - Show the captain what you mean before you build it: put a visual on your station's screen with mcp__office__show (a diagram of how a change fits before a big one, a mockup before UI work, a before-and-after). They switch between what you've shown and open each one up close. Show the same id again to keep one up to date.
+- When the captain needs to understand how something works (a mechanism, what happens when it fails, how data moves, why one design beats another), walk them through it with mcp__office__explain rather than paragraphs: an animated explainer they step through a beat at a time, each beat with a caption. It's worth it for the ideas a choice rests on, not for every small point.
 - To ask the captain something best answered by looking (which layout, which diagram reads best), ask it with mcp__office__ask, each option a page of its own. Their pick comes back to you as a message from them: end your turn and wait for it.
 - When a slice is ready, call mcp__office__ship with a title and a summary. The office pushes every repo with new commits and opens (or updates) a pull request in each, and QA reviews them. Then tell the captain what's in the slice, what it taught you, and what you'd do next, and stop there: they review it and decide.
 - Shipping again before the pull requests merge updates them: that's how you fix what QA or the captain finds.
@@ -270,6 +271,18 @@ export function showArtifact(artifacts: readonly GoalArtifact[], input: Artifact
   if (artifacts.some((a) => a.id === input.id)) return artifacts.map((a) => (a.id === input.id ? shown : a));
   if (artifacts.length >= L.count) return { error: `The screen already has ${L.count} artifacts: show a new version under an existing id instead` };
   return [...artifacts, shown];
+}
+
+/**
+ * What the lead hears when the page they showed reported errors while the office took its picture: the first few, each
+ * cut short, so they know it may be broken on the screen. Nothing when it loaded cleanly.
+ */
+export function pageErrorsNote(errors: readonly string[]): string {
+  const distinct = [...new Set(errors.map((e) => e.replace(/\s+/g, ' ').trim()).filter(Boolean))];
+  if (!distinct.length) return '';
+  const shown = distinct.slice(0, 3).map((e) => (e.length > 200 ? `${e.slice(0, 199)}…` : e));
+  const more = distinct.length > shown.length ? ` (and ${distinct.length - shown.length} more)` : '';
+  return ` But the page reported ${distinct.length === 1 ? 'an error' : 'errors'} as it loaded${more}: ${shown.map((e) => `“${e}”`).join('; ')}. Fix it and show it again under the same id.`;
 }
 
 export const QUESTION_LIMITS = { question: 300, context: 600, label: 60, detail: 500, minOptions: 2, maxOptions: 4, kept: 12, note: 1000 } as const;

@@ -1,6 +1,7 @@
 import { createSdkMcpServer, type McpSdkServerConfigWithInstance, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { errorMessage } from '../util';
+import { EXPLAINER_LIMITS as E, STAGE_SIZE } from './explainer';
 import { NOTE_LIMITS as L } from './lead';
 import type { OfficeTools } from './types';
 
@@ -20,6 +21,26 @@ export const noteShape = {
   next: z.array(z.string().max(L.item)).max(L.next).optional().describe(`Up to ${L.next} candidate next slices (at most ${L.item} characters each), replacing the last ones.`),
 };
 
+/**
+ * The explain tool's input, with the limits `explainerPage` enforces, so the lead sees them up front. The office still
+ * checks it all (and refuses a script that would close its own element).
+ */
+export const explainShape = {
+  id: z.string().describe('A short name for it, lowercase with dashes (like "ledger-crash"): it shares ids with show\'s visuals, and explaining the same id again replaces it.'),
+  title: z.string().describe('What it explains, in a few words (at most 80 characters): it heads the player.'),
+  beats: z.array(z.object({
+    title: z.string().max(E.beatTitle).describe(`The beat's point, in a few words (at most ${E.beatTitle} characters): shown in gold over its caption.`),
+    text: z.string().max(E.text).describe(`The caption while it plays: what's happening and why it matters, in a sentence or two (at most ${E.text} characters).`),
+    seconds: z.number().min(E.minSeconds).max(E.maxSeconds).describe(`How long it plays (${E.minSeconds} to ${E.maxSeconds} seconds): long enough to read the caption and watch the change.`),
+    label: z.string().max(E.label).optional().describe(`A word or two for its block down the left and on the timeline (at most ${E.label} characters); the title's first words if left out.`),
+  })).min(E.minBeats).max(E.maxBeats).describe(`The beats in order (${E.minBeats} to ${E.maxBeats}), each one step of the explanation: they play one after another, and the captain can step through them one at a time.`),
+  stage: z.object({
+    html: z.string().describe(`The scene's elements, laid out in a ${STAGE_SIZE.w} × ${STAGE_SIZE.h} box (absolutely positioned).`),
+    css: z.string().optional().describe('Styles for them.'),
+    script: z.string().describe('Defines render(t), which sets the whole scene for t seconds from the start, and can build elements first.'),
+  }).describe('What plays above the captions.'),
+};
+
 /** One tool's answer: what happened, in words, or (marked as an error) why it didn't. */
 async function answer(run: () => Promise<string>, failed: string): Promise<{ content: { type: 'text'; text: string }[]; isError?: boolean }> {
   try {
@@ -29,7 +50,7 @@ async function answer(run: () => Promise<string>, failed: string): Promise<{ con
   }
 }
 
-/** The office's tools for a goal's lead, as an in-process MCP server: mcp__office__ship, note, show, ask and propose_close. */
+/** The office's tools for a goal's lead, as an in-process MCP server: mcp__office__ship, note, show, explain, ask and propose_close. */
 export function officeMcpServer(tools: OfficeTools): McpSdkServerConfigWithInstance {
   return createSdkMcpServer({
     name: 'office',
@@ -61,6 +82,14 @@ export function officeMcpServer(tools: OfficeTools): McpSdkServerConfigWithInsta
           html: z.string().describe('A self-contained HTML page: inline CSS and SVG, or a script from a CDN (mermaid, say). The screen shows it at 1280 × 800, so make it read well at that size.'),
         },
         (input) => answer(() => tools.show(input), "Couldn't show it"),
+      ),
+      tool(
+        'explain',
+        `Walk the captain through a concept with an animated explainer on your station's screen: how a mechanism behaves, what happens when something fails, how data moves, why one design beats another. Text is hard to take in; an explainer plays it out a beat at a time, each with a caption, and the captain steps through at their own pace. The office wraps your stage in the ship's LCARS player (frame, beats down the left, captions, play and step), so you write only the stage, and shows it like show's visuals: a picture on the screen, live up close. Before the captain presses play it rests, dimmed, on its last frame, so make that frame sum it up.
+
+The stage is a ${STAGE_SIZE.w} × ${STAGE_SIZE.h} box (#stage). Put your elements in html, style them in css, and in script define render(t): it sets the whole scene for t seconds from the start (0 to the beats' seconds added up), and is called every frame and for jumps back and forth, so work everything out from t, never from the frame before. Build repeated elements once in the script, before render. Helpers: p(t, a, b) eases from 0 to 1 between a and b seconds; clamp(x, lo, hi); B[i] is when beat i starts (B[0] = 0) and DUR when it ends; $(selector) and $$(selector) find things in the stage; tag(text, colour) is the HTML for a status capsule. Colours are CSS variables: --orange, --gold, --peach, --lilac, --peri, --sky, --green, --red (for alerts), --text, --muted, --line. Classes: .panel (style="--c:var(--sky)") with a .hd header and a .bd body, .pill (a capsule, coloured by --c), .lbl (a column label), .mono (code). The font is Antonio; JetBrains Mono for code.`,
+        explainShape,
+        (input) => answer(() => tools.explain(input), "Couldn't explain it"),
       ),
       tool(
         'ask',

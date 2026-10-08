@@ -34,6 +34,7 @@ server/
     planner.ts            the officer at each room's New issue stand: issue drafts, their prompt and schema
     lead.ts               each goal's lead: their station, name and branches, their instructions, what shipping a slice does, what they hear back, their helpers
     officeTool.ts         the office's own MCP tools for an agent (the lead's ship)
+    explainer.ts          the LCARS player a lead's explainer plays in: their beats and stage wrapped in one page, pure
     numberOne.ts          Number One's ship-wide chat: turns, prompt, reply schema and the ship_status summariser
     claudeCrew.ts         the crew's read-only Claude Code sessions (Read/Glob/Grep, web search/fetch for Number One, Number One's ship_status and open_project, structured output)
     retro.ts              the chief engineer's retro, pure: transcript digests, the index and its frequent tool errors, prompt, schema, and the check that every proposal cites real moments

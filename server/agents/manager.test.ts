@@ -57,7 +57,7 @@ function office(workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<Git
     Workspace.fromOps(workspace),
     Sessions.fromRunner(claude),
     Triage.fromTriager({ triage: () => Promise.reject(new Error('no officer here')) }),
-    Renderer.fromBrowser({ render: (html) => (html.includes('unrenderable') ? Promise.reject(new Error('no browser')) : Promise.resolve(Buffer.from('jpeg'))) }),
+    Renderer.fromBrowser({ render: (html) => (html.includes('unrenderable') ? Promise.reject(new Error('no browser')) : Promise.resolve({ image: Buffer.from('jpeg'), errors: html.includes('throws') ? ['ReferenceError: nope is not defined'] : [] })) }),
   );
   return { store, project, claude, agents: new AgentManager(store, new Hub(), services, () => undefined) };
 }
@@ -301,6 +301,25 @@ describe('AgentManager', () => {
 
     await agents.closeGoal(lead.id, true);
     expect(await store.readArtifact(lead.id, 'data-flow.html')).toBeUndefined();
+  });
+
+  it('puts the lead’s explainer on their goal in the office’s player, and says when its stage throws', async () => {
+    const { agents, claude, store, project } = office();
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    const explain = (script: string, seconds = 3) => claude.turns[0].req.tools!.explain({
+      id: 'ledger',
+      title: 'The ledger',
+      beats: [{ title: 'Append', text: 'One line per event.', seconds }, { title: 'Crash', text: 'Half a line at the end.', seconds: 4 }],
+      stage: { html: '<div id="file"></div>', script },
+    });
+    expect(await explain('function render(t) {}')).toMatch(/“The ledger” is on your station's screen.*an explainer of 2 beats, 7 seconds in all\.$/);
+    expect(store.agent(lead.id).lead!.artifacts).toEqual([{ id: 'ledger', title: 'The ledger', at: expect.any(Number), image: true }]);
+    const page = (await store.readArtifact(lead.id, 'ledger.html'))!.toString();
+    expect(page).toContain('<div id="file"></div>');
+    expect(page).toContain('Run briefing');
+    expect(await explain('function render(t) { throws(); }')).toMatch(/But the page reported an error as it loaded: “ReferenceError: nope is not defined”\. Fix it/);
+    await expect(explain('function render(t) {}', 99)).rejects.toThrow(/Beat 1 plays for 99 seconds/);
   });
 
   it('puts the lead’s question to the captain with an option apiece, and tells the lead which they picked', async () => {

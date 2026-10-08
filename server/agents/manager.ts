@@ -15,7 +15,8 @@ import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
 import { afterCloudRun, attachAgain, cantMoveToCloud, carryOnInNewSession, fallBackToLocal, terminalDescription } from './cloud';
 import { conflictsAgentModel } from './conflicts';
-import { afterLanding, afterVerdict, answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, behindNote, closeCheck, conflictsResolvedNote, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, everyPr, HELPER_LINGER_MS, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sessionGone, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded, snapshotMessage, type FreshBranch, freshBranchNote, needsFreshBranch, repoBranch } from './lead';
+import { afterLanding, afterVerdict, answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, behindNote, closeCheck, conflictsResolvedNote, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, everyPr, HELPER_LINGER_MS, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pageErrorsNote, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sessionGone, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded, snapshotMessage, type FreshBranch, freshBranchNote, needsFreshBranch, repoBranch } from './lead';
+import { explainerPage, type ExplainerInput } from './explainer';
 import { repoFolders } from './planner';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
 import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
@@ -518,7 +519,7 @@ export class AgentManager {
       outputSchema: agent.task === 'review' ? QA_SCHEMA : undefined,
       cloud: agent.cloud ? { branch: agent.branch } : undefined,
       tools: agent.task === 'lead'
-        ? { ship: (input) => tool(this.shipLead(agent, input)), note: (input) => tool(this.noteGoal(agent, input)), show: (input) => tool(this.showArtifact(agent, input)), ask: (input) => tool(this.askCaptain(agent, input)), proposeClose: (input) => tool(this.proposeClose(agent, input.reason)) }
+        ? { ship: (input) => tool(this.shipLead(agent, input)), note: (input) => tool(this.noteGoal(agent, input)), show: (input) => tool(this.showArtifact(agent, input)), explain: (input) => tool(this.explain(agent, input)), ask: (input) => tool(this.askCaptain(agent, input)), proposeClose: (input) => tool(this.proposeClose(agent, input.reason)) }
         : undefined,
     };
   }
@@ -931,7 +932,7 @@ export class AgentManager {
       if ('error' in checked) return yield* new Refused({ message: checked.error });
       this.store.saveArtifact(agent.id, `${input.id}.html`, Buffer.from(input.html));
       const picture = yield* (yield* Renderer).render(input.html).pipe(
-        Effect.map((bytes) => ({ bytes })),
+        Effect.map(({ image, errors }) => ({ bytes: image, errors })),
         Effect.catch((err) => Effect.succeed({ failed: err.message })),
       );
       if ('bytes' in picture) this.store.saveArtifact(agent.id, `${input.id}.jpg`, picture.bytes);
@@ -943,7 +944,18 @@ export class AgentManager {
       if ('error' in next) return yield* new Refused({ message: next.error });
       this.update(agent, { lead: { ...work, artifacts: next.map((a) => (a.id === input.id && 'bytes' in picture ? { ...a, image: true } : a)) } });
       const where = `“${next.find((a) => a.id === input.id)!.title}” is on your station's screen; the captain can open it up close.`;
-      return 'bytes' in picture ? where : `${where} The office couldn't take a picture of it for the screen (${picture.failed}), so the screen shows only its title.`;
+      return 'bytes' in picture ? `${where}${pageErrorsNote(picture.errors)}` : `${where} The office couldn't take a picture of it for the screen (${picture.failed}), so the screen shows only its title.`;
+    });
+  }
+
+  /** The lead's explain tool: their beats and stage go in the office's player, which goes up like any of show's visuals. */
+  private explain(agent: Agent, input: ExplainerInput): Effect.Effect<string, Refused, Renderer> {
+    return Effect.gen({ self: this }, function* () {
+      const built = explainerPage(input);
+      if ('error' in built) return yield* new Refused({ message: built.error });
+      const shown = yield* this.showArtifact(agent, built);
+      const seconds = input.beats.reduce((sum, b) => sum + b.seconds, 0);
+      return `${shown} It's an explainer of ${input.beats.length} beats, ${Math.round(seconds)} seconds in all.`;
     });
   }
 
@@ -959,7 +971,7 @@ export class AgentManager {
       // the pictures first, in memory: the question's id, and which files are whose, are settled once they're taken
       const renderer = yield* Renderer;
       const pictures: (Buffer | undefined)[] = [];
-      for (const option of input.options) pictures.push(Option.getOrUndefined(yield* renderer.render(option.html).pipe(Effect.option)));
+      for (const option of input.options) pictures.push(Option.getOrUndefined(yield* renderer.render(option.html).pipe(Effect.map((p) => p.image), Effect.option)));
       // taking them takes a moment: the goal may have closed, or the lead asked again, meanwhile
       const work = agent.lead;
       if (!work) return 'The goal closed before the question went up.';

@@ -164,13 +164,18 @@ export class RenderFailed extends Data.TaggedError('RenderFailed')<{ reason: str
   }
 }
 
+/** A picture of a page: a JPEG as a browser shows it, and the errors its scripts reported while it loaded. */
+export interface Picture {
+  image: Buffer;
+  errors: string[];
+}
+
 /** Pictures of the HTML pages a goal's lead puts on their station's screen, for the screen to show. */
 export class Renderer extends Context.Service<Renderer, {
-  /** A JPEG of the page as a browser shows it. */
-  render(html: string): Effect.Effect<Buffer, RenderFailed>;
+  render(html: string): Effect.Effect<Picture, RenderFailed>;
 }>()('focus/agents/Renderer') {
   /** Renders in the agents' shared headless Chromium (`BrowserPool.render`). */
-  static fromBrowser(browser: { render(html: string): Promise<Buffer> }): Layer.Layer<Renderer> {
+  static fromBrowser(browser: { render(html: string): Promise<Picture> }): Layer.Layer<Renderer> {
     return Layer.succeed(Renderer, Renderer.of({
       render: (html) => Effect.tryPromise({ try: () => browser.render(html), catch: (err) => new RenderFailed({ reason: errorMessage(err) }) }),
     }));
