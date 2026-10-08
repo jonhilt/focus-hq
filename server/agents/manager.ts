@@ -12,7 +12,7 @@ import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
 import { afterCloudRun, carryOnInNewSession, fallBackToLocal } from './cloud';
-import { afterLanding, afterVerdict, type ArtifactInput, showArtifact, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, behindNote, closeCheck, conflictsResolvedNote, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, everyPr, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sessionGone, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded, snapshotMessage } from './lead';
+import { afterLanding, afterVerdict, type ArtifactInput, showArtifact, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, behindNote, closeCheck, conflictsResolvedNote, type FreshBranch, freshBranchNote, needsFreshBranch, repoBranch, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, everyPr, HELPER_LINGER_MS, heldBack, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sessionGone, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded, snapshotMessage } from './lead';
 import { repoFolders } from './planner';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
 import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, MAX_SCREENSHOTS, parseQaReport, QA_SCHEMA, qaComment, qaPrompt, qaSystemAppend } from './qa';
@@ -950,7 +950,8 @@ export class AgentManager {
         Effect.all({
           folder: Effect.succeed(r.folder),
           dirty: workspace.hasUncommittedChanges(dir(r.folder)).pipe(Effect.orElseSucceed(() => true)),
-          branch: workspace.branchState(dir(r.folder), agent.branch, r.baseBranch).pipe(Effect.orElseSucceed(() => undefined)),
+          branch: workspace.branchState(dir(r.folder), repoBranch(r, agent.branch), r.baseBranch).pipe(Effect.orElseSucceed(() => undefined)),
+          on: Effect.succeed(r.branch),
         }), { concurrency: 'unbounded' });
       const check = closeCheck(work, agent.branch, repos);
       if (check.kind === 'warn' && !force) return { warn: check.reasons };
@@ -958,7 +959,7 @@ export class AgentManager {
       yield* Effect.forEach(work.repos, (r) =>
         workspace.snapshot(dir(r.folder), snapshotMessage(work.title)).pipe(
           Effect.mapError((err) => new Refused({ message: `Couldn’t commit ./${r.folder}’s uncommitted work as a WIP snapshot (${err.message}), so “${work.title}” stays open` })),
-          Effect.tap((saved) => Effect.sync(() => saved && this.print(agent, [{ kind: 'system', text: `✻ Committed ./${r.folder}’s uncommitted work as a WIP snapshot on ${agent.branch}` }]))),
+          Effect.tap((saved) => Effect.sync(() => saved && this.print(agent, [{ kind: 'system', text: `✻ Committed ./${r.folder}’s uncommitted work as a WIP snapshot on ${repoBranch(r, agent.branch)}` }]))),
         ), { discard: true }).pipe(Effect.onError(() => Effect.sync(() => this.closingGoals.delete(id))));
       const project = this.store.project(agent.projectId);
       const record = goalRecord(agent, Date.now());
@@ -1022,8 +1023,8 @@ export class AgentManager {
         ));
       for (const r of agent.lead!.repos) {
         this.update(agent, { activity: `Checking out ${r.repo}` });
-        this.print(agent, [{ kind: 'system', text: `✻ Checking out ${r.repo} at ./${r.folder} on ${agent.branch}, as it was left` }]);
-        yield* workspace.reopen(r.repo, leadWorktreeId(agent.id, r.folder), agent.branch, (id) => this.store.agents.has(id));
+        this.print(agent, [{ kind: 'system', text: `✻ Checking out ${r.repo} at ./${r.folder} on ${repoBranch(r, agent.branch)}, as it was left` }]);
+        yield* workspace.reopen(r.repo, leadWorktreeId(agent.id, r.folder), repoBranch(r, agent.branch), (id) => this.store.agents.has(id));
       }
       this.update(agent, { lead: { ...agent.lead!, prs, reopening: undefined } });
       if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
@@ -1101,31 +1102,35 @@ export class AgentManager {
       if (this.closingGoals.has(agent.id)) return yield* new Refused({ message: 'The captain is closing the goal: nothing ships now' });
       const github = yield* GitHub;
       const workspace = yield* Workspace;
+      // a repo whose pull request merged moves to a fresh branch first: its own still carries the merged commits
+      const moved = yield* this.freshBranches(agent);
+      const movedNotes = moved.map(freshBranchNote);
+      if (moved.some((m) => !m.applied)) return `Nothing shipped.\n\n${movedNotes.join('\n\n')}`;
       const states = yield* Effect.forEach(
-        work.repos,
+        agent.lead!.repos,
         (r) =>
           Effect.gen(function* () {
             const dir = workspace.dir(leadWorktreeId(agent.id, r.folder));
             const head = yield* workspace.head(dir);
             const changed = !openPr(work, r.repo)?.sha || !sameCommit(head, openPr(work, r.repo)!.sha!);
-            return { ...r, dir, head, changed, dirty: yield* workspace.hasUncommittedChanges(dir), ahead: yield* workspace.commitsAhead(dir, r.baseBranch) };
+            return { ...r, dir, head, branch: repoBranch(r, agent.branch), changed, dirty: yield* workspace.hasUncommittedChanges(dir), ahead: yield* workspace.commitsAhead(dir, r.baseBranch) };
           }),
         { concurrency: 'unbounded' },
       );
       // the office may have pushed a merge to the slice's branch (resolving conflicts): never ship over it
       for (const s of states.filter((x) => x.changed && openPr(work, x.repo))) {
-        if (yield* workspace.missingRemoteCommits(s.dir, agent.branch)) return yield* new Refused({ message: behindNote(s.folder, agent.branch) });
+        if (yield* workspace.missingRemoteCommits(s.dir, s.branch)) return yield* new Refused({ message: behindNote(s.folder, s.branch) });
       }
       const plan = shipPlan(states);
-      if (plan.kind !== 'ship') return notShipped(plan);
+      if (plan.kind !== 'ship') return [notShipped(plan), ...movedNotes].join('\n\n');
       const project = this.store.project(agent.projectId);
       const title = input.title.trim() || `Slice ${work.slice}`;
       const lines: string[] = [];
       for (const s of states.filter((x) => plan.repos.includes(x.repo))) {
         this.update(agent, { status: 'pushing', activity: `Shipping ${s.repo}` });
-        this.print(agent, [{ kind: 'system', text: `✻ Pushing ${agent.branch} in ${s.repo}` }]);
-        yield* this.retrying(agent, `the push in ${s.repo}`, workspace.push(s.dir, agent.branch));
-        const found = openPr(work, s.repo) ?? (yield* this.retrying(agent, 'looking for the pull request', github.findPullRequest(s.repo, agent.branch)));
+        this.print(agent, [{ kind: 'system', text: `✻ Pushing ${s.branch} in ${s.repo}` }]);
+        yield* this.retrying(agent, `the push in ${s.repo}`, workspace.push(s.dir, s.branch));
+        const found = openPr(work, s.repo) ?? (yield* this.retrying(agent, 'looking for the pull request', github.findPullRequest(s.repo, s.branch)));
         let pr: { number: number; url: string };
         if (found) {
           pr = found;
@@ -1133,12 +1138,12 @@ export class AgentManager {
         } else {
           const alongside = plan.repos.filter((r) => r !== s.repo);
           const body = leadPrBody(input.summary, agent, alongside, this.store.settings.attribution);
-          pr = yield* this.retrying(agent, 'opening the pull request', github.createPullRequest(s.repo, { head: agent.branch, base: s.baseBranch, title, body }));
+          pr = yield* this.retrying(agent, 'opening the pull request', github.createPullRequest(s.repo, { head: s.branch, base: s.baseBranch, title, body }));
           lines.push(`Opened ${s.repo}#${pr.number}: ${pr.url}`);
           this.hub.toast('success', `🎉 ${agent.name} opened ${s.repo.split('/')[1]}#${pr.number}: ${title}`, agent.id);
         }
         const others = agent.lead!.prs.filter((p) => !(p.repo === s.repo && p.number === pr.number));
-        this.update(agent, { lead: { ...agent.lead!, prs: [...others, { repo: s.repo, number: pr.number, url: pr.url, sha: s.head }] } });
+        this.update(agent, { lead: { ...agent.lead!, prs: [...others, { repo: s.repo, number: pr.number, url: pr.url, sha: s.head, branch: s.branch }] } });
         this.print(agent, [{ kind: 'success', text: `✔ ${lines.at(-1)}` }]);
         if (autoQaFor(project)) {
           try {
@@ -1150,7 +1155,34 @@ export class AgentManager {
       }
       this.update(agent, { status: 'working', activity: 'Shipped the slice' });
       this.boardChanged(agent.projectId);
-      return shipped(lines);
+      return [shipped(lines), ...movedNotes].join('\n\n');
+    });
+  }
+
+  /**
+   * Moves each of the lead's repos whose pull request merged (`needsFreshBranch`) onto a new branch from its base, with
+   * the commits that hadn't shipped cherry-picked onto it. A repo with uncommitted changes stays put: it can't ship yet.
+   */
+  private freshBranches(agent: Agent): Effect.Effect<FreshBranch[], GitFailed, Workspace> {
+    return Effect.gen({ self: this }, function* () {
+      const workspace = yield* Workspace;
+      const moved: FreshBranch[] = [];
+      for (const r of agent.lead!.repos) {
+        const work = agent.lead!;
+        const from = repoBranch(r, agent.branch);
+        if (!needsFreshBranch(work, r.repo, from)) continue;
+        const dir = workspace.dir(leadWorktreeId(agent.id, r.folder));
+        if (yield* workspace.hasUncommittedChanges(dir)) continue;
+        const commits = yield* workspace.unshippedCommits(dir, r.baseBranch, shippedSha(work, r.repo));
+        const to = sliceBranch(work.title, work.slice, newId('s').slice(-4));
+        this.print(agent, [{ kind: 'system', text: `✻ ${r.repo}'s pull request from ${from} has merged: starting ${to} from ${r.baseBranch}` }]);
+        yield* workspace.freshBranch(dir, to, r.baseBranch);
+        this.update(agent, { lead: { ...agent.lead!, repos: agent.lead!.repos.map((x) => (x.repo === r.repo ? { ...x, branch: to } : x)) } });
+        const applied = commits.length ? yield* workspace.cherryPick(dir, commits).pipe(Effect.as(true), Effect.orElseSucceed(() => false)) : true;
+        if (commits.length) this.print(agent, [{ kind: 'system', text: applied ? `✻ Brought ${commits.length} unshipped commit${commits.length === 1 ? '' : 's'} over to ${to}` : `✻ The unshipped commits didn't apply cleanly to ${to}: they're still on ${from}` }]);
+        moved.push({ folder: r.folder, from, to, baseBranch: r.baseBranch, commits, applied });
+      }
+      return moved;
     });
   }
 

@@ -457,6 +457,7 @@ export const demoWorkspace: WorkspaceOps = {
   head: async () => randomBytes(5).toString('hex'),
   // ...and ship everything they commit
   unshippedCommits: async () => [],
+  freshBranch: async () => undefined,
   cherryPick: async () => undefined,
   push: async () => sleep(800),
   publish: async () => sleep(400),

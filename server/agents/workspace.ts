@@ -264,6 +264,15 @@ export async function unshippedCommits(dir: string, baseBranch: string, shipped?
   return out.split('\n').map((l) => l.trim()).filter(Boolean);
 }
 
+/**
+ * Moves the checkout in `dir` onto a new local `branch` at origin's `baseBranch`, fetched first. Commits on the branch it
+ * was on stay there. (Like a new worktree's, the branch doesn't track the base, so a stray `git push` can't land on it.)
+ */
+export async function freshBranch(dir: string, branch: string, baseBranch: string): Promise<void> {
+  await retryLockRace(() => git(dir, ['fetch', 'origin', `+refs/heads/${baseBranch}:refs/remotes/origin/${baseBranch}`], 5 * 60_000), () => sleep(750));
+  await git(dir, ['checkout', '--no-track', '-B', branch, `origin/${baseBranch}`]);
+}
+
 /** Applies `commits` on top of HEAD, in order. If they don't apply cleanly, HEAD is left as it was and this fails. */
 export async function cherryPick(dir: string, commits: string[]): Promise<void> {
   try {

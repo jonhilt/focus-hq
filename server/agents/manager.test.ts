@@ -465,6 +465,49 @@ describe('AgentManager', () => {
     expect(next).toContain(`- ./webshop-api: the commit you hadn't shipped didn't apply cleanly to fresh code, so it's only on \`${firstBranch}\`. Bring it over with \`git cherry-pick api-next\``);
   });
 
+  it('never ships a repo again from a branch whose pull request merged: it gets a fresh branch with only the unshipped commits', async () => {
+    const fresh: { dir: string; branch: string; base: string }[] = [];
+    const picked: string[][] = [];
+    const opened: { repo: string; head: string }[] = [];
+    const recording = Layer.effect(GitHub, Effect.gen(function* () {
+      const gh = yield* GitHub;
+      return GitHub.of({ ...gh, createPullRequest: (repo, pr) => Effect.suspend(() => (opened.push({ repo, head: pr.head }), gh.createPullRequest(repo, pr))) });
+    })).pipe(Layer.provide(demoLayer));
+    const { agents, claude, store, project } = office({
+      ...demoWorkspace,
+      push: async () => undefined,
+      // the lead carried on after shipping: one new commit in each repo
+      unshippedCommits: async (dir) => [dir.endsWith('/webshop-api') ? 'api-next' : 'web-next'],
+      freshBranch: async (dir, branch, base) => void fresh.push({ dir, branch, base }),
+      cherryPick: async (_dir, commits) => void picked.push(commits),
+    }, recording);
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    const ship = () => claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' }) as Promise<unknown>;
+    await ship();
+    const first = store.agent(lead.id).branch;
+    const web = store.agent(lead.id).lead!.prs.find((p) => p.repo === 'demo/webshop-frontend')!;
+    expect(web.branch).toBe(first);
+
+    // the frontend's pull request is squash-merged while the API's stays open: the slice hasn't landed
+    agents.prClosed(web.repo, web.number, true);
+    const reply = JSON.stringify(await ship());
+    expect(fresh).toEqual([{ dir: expect.stringMatching(/\/webshop-frontend$/) as unknown, branch: expect.not.stringMatching(first) as unknown, base: 'main' }]);
+    expect(picked).toEqual([['web-next']]);
+    const next = fresh[0].branch;
+    const repos = store.agent(lead.id).lead!.repos;
+    expect(repos.find((r) => r.repo === 'demo/webshop-frontend')!.branch).toBe(next);
+    expect(repos.find((r) => r.repo === 'demo/webshop-api')!.branch).toBeUndefined();
+    // a new pull request from the fresh branch; the API's open one is only updated
+    expect(opened.slice(2)).toEqual([{ repo: 'demo/webshop-frontend', head: next }]);
+    expect(reply).toContain(`./webshop-frontend's pull request from \`${first}\` has merged, so the office moved it to a new branch, \`${next}\``);
+    expect(store.agent(lead.id).lead!.prs.find((p) => p.repo === 'demo/webshop-frontend' && !p.outcome)!.branch).toBe(next);
+
+    // shipping again leaves it on that branch, whose pull request is open
+    await ship();
+    expect(fresh).toHaveLength(1);
+  });
+
   it('tells a lead whose conversation can’t be picked back up where the goal stands', async () => {
     const { agents, claude, store, project } = office();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items\nShoppers keep a list across devices') as { agent: { id: string } };

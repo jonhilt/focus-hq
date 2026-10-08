@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { cherryPick, head, unshippedCommits } from './workspace';
+import { cherryPick, freshBranch, head, unshippedCommits } from './workspace';
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-workspace-'));
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
@@ -60,5 +60,28 @@ describe('the lead’s workspace', () => {
     git(fresh, 'reset', '-q', '--hard', 'main');
     await cherryPick(fresh, [next]);
     expect(fs.readFileSync(path.join(fresh, 'saved.ts'), 'utf8')).toBe('save and list');
+  });
+
+  it('moves a repo whose pull request was squash-merged onto a fresh branch that carries only what never shipped', async () => {
+    const { lead, shipped, next } = sliceThatCarriedOn();
+    // the shipped commit lands on main squashed, as a commit of its own, pushed from somewhere else
+    const elsewhere = `${lead}-elsewhere`;
+    git(tmp, 'clone', '-q', '-b', 'main', lead.replace(/-lead$/, ''), elsewhere);
+    git(elsewhere, 'config', 'user.email', 'gh@focus.test');
+    git(elsewhere, 'config', 'user.name', 'GitHub');
+    const squashed = commit(elsewhere, 'saved.ts', 'save');
+    git(elsewhere, 'push', '-q', 'origin', 'main');
+
+    const unshipped = await unshippedCommits(lead, 'main', shipped);
+    await freshBranch(lead, 'focus/slice-1-b', 'main');
+    await cherryPick(lead, unshipped);
+    expect(git(lead, 'branch', '--show-current')).toBe('focus/slice-1-b');
+    // on the squash, with the unshipped commit and none of the shipped one's
+    expect(git(lead, 'rev-list', '--count', 'origin/main..HEAD')).toBe('1');
+    expect(git(lead, 'rev-parse', 'HEAD~1')).toBe(squashed);
+    expect(() => git(lead, 'merge-base', '--is-ancestor', shipped, 'HEAD')).toThrow();
+    expect(fs.readFileSync(path.join(lead, 'saved.ts'), 'utf8')).toBe('save and list');
+    // the old branch keeps its commits
+    expect(git(lead, 'rev-parse', 'focus/slice-1')).toBe(next);
   });
 });

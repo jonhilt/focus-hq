@@ -293,6 +293,8 @@ export interface LeadPr {
   url: string;
   /** The commit last shipped to it, so shipping again leaves it alone until there's something new. */
   sha?: string;
+  /** The branch it was opened from. Missing on ones shipped before it was kept. */
+  branch?: string;
   /** Missing while it's open. */
   outcome?: 'merged' | 'closed';
   /** The slice it shipped in. Set once the slice is over (it lands, or the goal closes); missing on goals closed before. */
@@ -345,8 +347,12 @@ export interface LeadWork {
    * and the Tricorder until their next turn ends.
    */
   readTurn?: number;
-  /** Each repo, checked out at ./<folder> in the lead's workspace, and the branch it ships into. */
-  repos: { repo: string; folder: string; baseBranch: string }[];
+  /**
+   * Each repo, checked out at ./<folder> in the lead's workspace, and the branch it ships into. `branch` is the one it's
+   * on when that isn't the goal's (`Agent.branch`): the office starts a repo a fresh one from its base when it ships
+   * again after its pull request merged (`needsFreshBranch`).
+   */
+  repos: { repo: string; folder: string; baseBranch: string; branch?: string }[];
   /**
    * Reopened from the room's log (the goal closed at `closedAt`), until every repo is checked out again on its branch: the
    * lead's next start does that before picking their conversation back up, however often it fails first.

@@ -34,6 +34,7 @@ export class Workspace extends Context.Service<Workspace, {
   commitsAhead(dir: string, baseBranch: string): Effect.Effect<number, GitFailed>;
   head(dir: string): Effect.Effect<string, GitFailed>;
   unshippedCommits(dir: string, baseBranch: string, shipped?: string): Effect.Effect<string[], GitFailed>;
+  freshBranch(dir: string, branch: string, baseBranch: string): Effect.Effect<void, GitFailed>;
   cherryPick(dir: string, commits: string[]): Effect.Effect<void, GitFailed>;
   push(dir: string, branch: string): Effect.Effect<void, GitFailed>;
   publish(dir: string, branch: string): Effect.Effect<void, GitFailed>;
@@ -60,6 +61,7 @@ export class Workspace extends Context.Service<Workspace, {
       commitsAhead: (dir, baseBranch) => git('count new commits', () => ops.commitsAhead(dir, baseBranch)),
       head: (dir) => git('read the checked-out commit', () => ops.head(dir)),
       unshippedCommits: (dir, baseBranch, shipped) => git('look for unshipped commits', () => ops.unshippedCommits(dir, baseBranch, shipped)),
+      freshBranch: (dir, branch, baseBranch) => git(`start ${branch} from ${baseBranch}`, () => ops.freshBranch(dir, branch, baseBranch)),
       cherryPick: (dir, commits) => git('bring commits over', () => ops.cherryPick(dir, commits)),
       push: (dir, branch) => git(`push ${branch}`, () => ops.push(dir, branch)),
       publish: (dir, branch) => git(`publish ${branch}`, () => ops.publish(dir, branch)),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadWork } from '../../shared/types';
-import { afterLanding, ARTIFACT_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
+import { afterLanding, ARTIFACT_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, everyPr, fileGoal, freshBranchNote, needsFreshBranch, repoBranch, workspaceList, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -94,6 +94,42 @@ describe('slices', () => {
     const prs = [{ repo: 'acme/web', number: 12, url: 'u12', sha: 'aaa', outcome: 'closed' as const }, { repo: 'acme/web', number: 13, url: 'u13', sha: 'bbb' }];
     expect(shippedSha({ ...work, prs }, 'acme/web')).toBe('bbb');
     expect(shippedSha(work, 'acme/api')).toBeUndefined();
+  });
+});
+
+describe('needsFreshBranch', () => {
+  const pr = (number: number, more: Partial<LeadWork['prs'][number]> = {}) => ({ repo: 'acme/web', number, url: `u${number}`, sha: 'aaa', ...more });
+
+  it('starts a fresh branch once a pull request from the branch the repo is on has merged', () => {
+    expect(needsFreshBranch({ prs: [pr(12, { branch: 'focus/a', outcome: 'merged' })] }, 'acme/web', 'focus/a')).toBe(true);
+    // shipped before the branch was kept: it came from the branch the repo is on
+    expect(needsFreshBranch({ prs: [pr(12, { outcome: 'merged' })] }, 'acme/web', 'focus/a')).toBe(true);
+  });
+
+  it('keeps the branch while it has an open pull request, or never had one merged', () => {
+    expect(needsFreshBranch({ prs: [] }, 'acme/web', 'focus/a')).toBe(false);
+    expect(needsFreshBranch({ prs: [pr(12, { branch: 'focus/a' })] }, 'acme/web', 'focus/a')).toBe(false);
+    // closed unmerged: none of its commits are on the base, so the branch can ship again
+    expect(needsFreshBranch({ prs: [pr(12, { branch: 'focus/a', outcome: 'closed' })] }, 'acme/web', 'focus/a')).toBe(false);
+    // another repo's merged pull request leaves this one alone
+    expect(needsFreshBranch({ prs: [pr(12, { repo: 'acme/api', branch: 'focus/a', outcome: 'merged' })] }, 'acme/web', 'focus/a')).toBe(false);
+  });
+
+  it('leaves a repo already on a fresh branch there, until a pull request from that one merges too', () => {
+    const merged = pr(12, { branch: 'focus/a', outcome: 'merged' });
+    expect(needsFreshBranch({ prs: [merged] }, 'acme/web', 'focus/b')).toBe(false);
+    expect(needsFreshBranch({ prs: [merged, pr(13, { branch: 'focus/b' })] }, 'acme/web', 'focus/b')).toBe(false);
+    expect(needsFreshBranch({ prs: [merged, pr(13, { branch: 'focus/b', outcome: 'merged' })] }, 'acme/web', 'focus/b')).toBe(true);
+  });
+
+  it('says where each repo is, and what came of the commits it hadn’t shipped', () => {
+    const moved = { ...work, repos: [{ ...work.repos[0], branch: 'focus/b' }, work.repos[1]] };
+    expect(repoBranch(moved.repos[0], 'focus/a')).toBe('focus/b');
+    expect(workspaceList(moved, 'focus/a')).toBe('- ./web: acme/web, on branch `focus/b` from `main`\n- ./api: acme/api, on branch `focus/a` from `develop`');
+    const fresh = { folder: 'web', from: 'focus/a', to: 'focus/b', baseBranch: 'main' };
+    expect(freshBranchNote({ ...fresh, commits: [], applied: true })).toBe("./web's pull request from `focus/a` has merged, so the office moved it to a new branch, `focus/b`, from fresh `main`.");
+    expect(freshBranchNote({ ...fresh, commits: ['c1', 'c2'], applied: true })).toMatch(/and brought along the 2 commits you hadn't shipped\.$/);
+    expect(freshBranchNote({ ...fresh, commits: ['0123456789abcdef'], applied: false })).toMatch(/only on `focus\/a`\. Bring it over with `git -C web cherry-pick 0123456789`, resolve the conflicts, then ship again\.$/);
   });
 });
 

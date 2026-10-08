@@ -66,7 +66,42 @@ export const sliceLanded = (prs: LeadPr[]): boolean => prs.length > 0 && prs.eve
 export const shippedSha = (work: LeadWork, repo: string): string | undefined => work.prs.findLast((p) => p.repo === repo && p.sha)?.sha;
 
 /** The lead's open pull request in a repo, if the slice has one. */
-export const openPr = (work: LeadWork, repo: string): LeadPr | undefined => work.prs.find((p) => p.repo === repo && !p.outcome);
+export const openPr = (work: Pick<LeadWork, 'prs'>, repo: string): LeadPr | undefined => work.prs.find((p) => p.repo === repo && !p.outcome);
+
+/** The branch one of the lead's repos is on: the goal's, unless the office started it a fresh one (`needsFreshBranch`). */
+export const repoBranch = (repo: Pick<LeadWork['repos'][number], 'branch'>, branch: string): string => repo.branch ?? branch;
+
+/**
+ * Whether a repo has to move to a fresh branch from its base before it ships again: a pull request from the branch it's
+ * on has merged, and the slice has none open in it. A squash merge leaves the branch's own commits off the base, so a
+ * new pull request from it would carry them all again, and conflict. The office starts a new branch from the base
+ * instead, bringing only the commits that haven't shipped, as a new slice does. (A pull request that was closed
+ * unmerged leaves its branch fit to ship again.)
+ */
+export function needsFreshBranch(work: Pick<LeadWork, 'prs'>, repo: string, branch: string): boolean {
+  if (openPr(work, repo)) return false;
+  // a pull request shipped before its branch was kept came from the branch the repo is on: nothing else moved it
+  return work.prs.some((p) => p.repo === repo && p.outcome === 'merged' && (p.branch ?? branch) === branch);
+}
+
+/** A repo the office moved to a fresh branch before shipping it, and whether its unshipped commits came along. */
+export interface FreshBranch {
+  folder: string;
+  from: string;
+  to: string;
+  baseBranch: string;
+  commits: string[];
+  applied: boolean;
+}
+
+/** What the lead hears about a repo the office moved to a fresh branch because its pull request had merged. */
+export function freshBranchNote({ folder, from, to, baseBranch, commits, applied }: FreshBranch): string {
+  const moved = `./${folder}'s pull request from \`${from}\` has merged, so the office moved it to a new branch, \`${to}\`, from fresh \`${baseBranch}\``;
+  const one = commits.length === 1;
+  if (!commits.length) return `${moved}.`;
+  if (applied) return `${moved}, and brought along the ${one ? 'commit' : `${commits.length} commits`} you hadn't shipped.`;
+  return `${moved}, but the ${one ? 'commit' : `${commits.length} commits`} you hadn't shipped didn't apply cleanly to it, so ${one ? "it's" : "they're"} only on \`${from}\`. Bring ${one ? 'it' : 'them'} over with \`git -C ${folder} cherry-pick ${commits.map((c) => c.slice(0, 10)).join(' ')}\`, resolve the conflicts, then ship again.`;
+}
 
 /**
  * One repo of the lead's workspace when they ask to ship: uncommitted changes, commits not on its base branch, and
@@ -106,7 +141,7 @@ export function leadPrBody(summary: string, lead: Pick<Agent, 'name'>, alongside
 
 /** Where the lead's repos are and which branch each is on, for their first message and a new slice. */
 export function workspaceList(work: LeadWork, branch: string): string {
-  return work.repos.map((r) => `- ./${r.folder}: ${r.repo}, on branch \`${branch}\` from \`${r.baseBranch}\``).join('\n');
+  return work.repos.map((r) => `- ./${r.folder}: ${r.repo}, on branch \`${repoBranch(r, branch)}\` from \`${r.baseBranch}\``).join('\n');
 }
 
 /**
@@ -259,6 +294,8 @@ export interface RepoAtClose {
   folder: string;
   dirty: boolean;
   branch?: BranchState;
+  /** The branch it's on, when it isn't the goal's. */
+  on?: string;
 }
 
 /**
@@ -273,7 +310,7 @@ export function closeCheck(work: Pick<LeadWork, 'prs' | 'slice'>, branch: string
   if (dirty.length) reasons.push(`Uncommitted changes in ${list(dirty)} are committed as a WIP snapshot on \`${branch}\`, kept only in the office’s clone.`);
   for (const r of repos) {
     if (!r.branch) reasons.push(`Couldn’t tell whether ./${r.folder}’s commits reached GitHub.`);
-    else if (!r.branch.onOrigin && r.branch.unpushed) reasons.push(`./${r.folder}’s branch \`${branch}\` never reached GitHub: its ${commits(r.branch.unpushed)} stay only in the office’s clone.`);
+    else if (!r.branch.onOrigin && r.branch.unpushed) reasons.push(`./${r.folder}’s branch \`${r.on ?? branch}\` never reached GitHub: its ${commits(r.branch.unpushed)} stay only in the office’s clone.`);
     else if (r.branch.unpushed) reasons.push(`./${r.folder} has ${commits(r.branch.unpushed)} that never reached GitHub, kept only in the office’s clone.`);
   }
   if (work.slice <= 1 && !work.prs.length) reasons.push('The goal never shipped anything: no pull request was opened for it.');
