@@ -109,8 +109,14 @@ export async function handToGoal(ui: Ui, projectId: string, idea: string, to: Ag
     return ui.openAgent(to.id);
   }
   const started = await api.startGoal(projectId, idea, { from });
-  if ('agent' in started) ui.openAgent(started.agent.id);
-  else ui.openGoals(projectId);
+  if (!('agent' in started)) return ui.openGoals(projectId);
+  ui.openAgent(started.agent.id);
+  goalStarted(ui, started.agent);
+}
+
+/** Tells the captain a goal's lead has taken their team station, with a button to beam over to its briefing room. */
+export function goalStarted(ui: Ui, lead: Agent): void {
+  ui.hud.toast('success', `${lead.name} has taken team station ${(lead.lead?.station ?? 0) + 1}`, { label: 'Beam there', run: () => ui.goToAgent(lead.id) });
 }
 
 /** A hand-off control: where the work goes, and the button that sends it. */

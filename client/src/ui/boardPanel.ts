@@ -97,6 +97,9 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
       const note = h('div', { class: `note doing goal ${lead.status}`, title: 'Open the goal' },
         h('div', { class: 't' }, h('span', { class: 'dot', style: `background:${UNIFORM[lead.avatar.division]};margin-right:6px;vertical-align:-2px` }), lead.lead?.title ?? lead.issue.title),
         h('div', { class: 'm' }, h('span', { class: 'chip' }, `team station ${(lead.lead?.station ?? 0) + 1}`), h('span', { class: 'chip' }, lead.name), h('span', null, goalState(lead))),
+        h('div', { class: 'actions' },
+          h('button', { class: 'btn small go', title: 'Teleport to the goal’s briefing room', onclick: (e: MouseEvent) => (e.stopPropagation(), ui.goToAgent(lead.id)) }, 'Beam there'),
+        ),
       );
       note.onclick = () => ui.openAgent(lead.id);
       doing.append(note);

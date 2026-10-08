@@ -7,7 +7,7 @@ import { LCARS_STATUS } from '../world/starship';
 import type { Ui } from './context';
 import { withMic } from './dictation';
 import { busy, fill, h, timeAgo } from './dom';
-import { CONTEXT_TONE, closeGoal, leadEffortPicker, noteView, prLink, reviewing } from './goals';
+import { CONTEXT_TONE, closeGoal, goalStarted, leadEffortPicker, noteView, prLink, reviewing } from './goals';
 import { type NavItem, readout, shownView, SideNav } from './panels';
 
 /** The goals panel's views: the goals under way (and any waiting for a station), a new one, and the closed ones. */
@@ -141,7 +141,10 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
     void busy(start, async () => {
       const started = await api.startGoal(projectId, text.value, { effort: effort.picked(), station: here() });
       text.value = '';
-      if ('agent' in started) return ui.openAgent(started.agent.id);
+      if ('agent' in started) {
+        ui.openAgent(started.agent.id);
+        return goalStarted(ui, started.agent);
+      }
       picked = 'goals'; // it's waiting in line: show it there
       render();
     }, ui.error);
