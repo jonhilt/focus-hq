@@ -13,6 +13,7 @@ import type { Delivery } from './delivery';
 import type { GoalTools } from './goalTools';
 import type { Leads } from './leads';
 import type { Ledger } from './ledger';
+import type { PlanLimit } from './planLimit';
 import type { Reviews } from './reviews';
 import type { Seating } from './seating';
 import type { AgentSessions } from './sessions';
@@ -98,6 +99,7 @@ export class Core {
   triages!: Triages;
   cloud!: CloudMoves;
   ledger!: Ledger;
+  planLimit!: PlanLimit;
 
   constructor(
     readonly store: Store,

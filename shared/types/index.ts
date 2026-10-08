@@ -1,6 +1,7 @@
 // Types shared between the server and the browser client, a file per feature. Import them from here.
 
 export * from './agents';
+export * from './apiKey';
 export * from './drafts';
 export * from './events';
 export * from './github';

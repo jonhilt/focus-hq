@@ -1,8 +1,11 @@
 import { goneReply } from '../../../shared/mergeGate';
-import type { Agent, Effort } from '../../../shared/types';
+import type { Agent, Effort, MessageReply, ResumeHow } from '../../../shared/types';
 import { truncate } from '../../util';
+import { resumeChoice } from '../apiKey';
 import { STOPPED_BY_CAPTAIN } from '../types';
 import { FINISHED, Part, Refused } from './core';
+
+const SENT: MessageReply = { sent: true };
 
 /** The captain's word with an agent: messages, approvals, stopping them, their effort, and reading a lead's turn. */
 export class Comms extends Part {
@@ -23,12 +26,21 @@ export class Comms extends Part {
     this.update(agent, { lead: { ...agent.lead, readTurn: agent.finishedAt } });
   }
 
-  /** Sends the agent a message: the captain's, or (with `from`) news from someone else aboard. */
-  message(id: string, text: string, from?: string): void {
+  /**
+   * Sends the agent a message: the captain's, or (with `from`) news from someone else aboard. When it would pick their
+   * conversation back up on your API key, at a cost worth asking about, the captain's `how` says whether to go ahead or
+   * wait for your plan's limit to reset; without it, the captain is asked first, and anyone else's news waits.
+   */
+  message(id: string, text: string, from?: string, how?: ResumeHow): MessageReply {
     const agent = this.store.agent(id);
     const rt = this.rt(id);
     text = text.trim();
-    if (!text) return;
+    if (!text) return SENT;
+    const pickingUp = !(agent.task === 'review' && agent.prGone) && !agent.handover && !rt.session
+      && agent.status !== 'queued' && !rt.busy && agent.status !== 'setting-up';
+    const cost = pickingUp ? this.core.planLimit.resumeCost(agent) : undefined;
+    const choice = resumeChoice(cost?.usd, how, !from);
+    if (choice === 'ask') return { costly: cost! };
     this.print(agent, [{ kind: 'manager', text: `▶ ${from ?? 'Captain'}: ${text}` }]);
     // the captain carries on with a goal the lead thought was done
     if (!from && agent.lead?.closing) this.update(agent, { lead: { ...agent.lead, closing: undefined } });
@@ -39,28 +51,37 @@ export class Comms extends Part {
       const reply = goneReply(agent.issue.number, agent.prGone);
       this.print(agent, [{ kind: 'system', text: `✻ ${reply}` }]);
       this.hub.toast('info', `${agent.name}: ${reply}`, agent.id);
-      return;
+      return SENT;
     }
 
     if (agent.handover) {
       rt.inbox.push(text);
       this.print(agent, [{ kind: 'system', text: `✻ ${agent.name} will read it once their cloud session has started` }]);
-      return;
+      return SENT;
     }
     if (rt.session?.send(text)) {
       if (!rt.permission) this.update(agent, { activity: 'Reading your message' });
-      return;
+      return SENT;
     }
     if (agent.status === 'queued' || rt.busy || agent.status === 'setting-up') {
       rt.inbox.push(text);
-      return;
+      return SENT;
     }
-    // Finished, stopped or failed: pick the conversation back up (or start over, with no session to go back to) once
-    // there's a free slot, like any agent starting work.
-    rt.nudged = false;
     rt.inbox.push(text);
+    if (choice === 'hold') this.core.planLimit.hold(agent, cost);
+    else this.pickUp(agent);
+    return SENT;
+  }
+
+  /**
+   * Finished, stopped, failed or on hold: they pick their conversation back up (or start over, with no session to go
+   * back to) once there's a free slot, like any agent starting work, hearing what's in their inbox.
+   */
+  pickUp(agent: Agent): void {
+    const rt = this.rt(agent.id);
+    rt.nudged = false;
     rt.resume = !!agent.sessionId;
-    this.update(agent, { status: 'queued', activity: 'Waiting for a free slot', error: undefined });
+    this.update(agent, { status: 'queued', activity: 'Waiting for a free slot', error: undefined, held: undefined });
     this.core.seating.schedule();
   }
 
@@ -82,6 +103,8 @@ export class Comms extends Part {
   stop(id: string): void {
     const agent = this.store.agent(id);
     const rt = this.rt(id);
+    // held for your plan's limit: they don't carry on by themselves when it resets
+    if (agent.held) this.update(agent, { held: undefined, activity: STOPPED_BY_CAPTAIN });
     if (agent.handover) {
       void this.core.cloud.stayLocal(id, false).catch(() => undefined);
     } else if (rt.session) {

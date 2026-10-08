@@ -163,6 +163,11 @@ export interface Agent {
   /** Waiting for a cloud session to take over their work, which the captain starts (`CloudHandover`). */
   handover?: CloudHandover;
   /**
+   * On hold while your plan's usage limit is reached: picking their conversation back up on your API key would cost more
+   * than the office spends without asking. They carry on at `until`, when it resets, or when the captain says to.
+   */
+  held?: { until: number };
+  /**
    * Which of the room's DESKS_PER_ROOM desks they sit at; QA_DESK and LEAD_DESK for QA and leads. An agent saved when
    * rooms had more desks can be off the floor (a desk number past them) until they next start (`offTheFloor`).
    */

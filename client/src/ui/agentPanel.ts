@@ -15,6 +15,7 @@ import { withMic } from './dictation';
 import { busy, fill, h, timeAgo } from './dom';
 import { closeGoal, CONTEXT_TONE, EFFORT_HINT, noteView, prLink, reviewing, tasksView } from './goals';
 import { type NavItem, readout, shownView, SideNav } from './panels';
+import { messageAgent } from './resume';
 import { TermView } from './terminal';
 
 const FINISHED = ['done', 'error', 'stopped'];
@@ -140,8 +141,7 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
     const text = input.value.trim();
     if (!text) return;
     void busy(send, async () => {
-      await api.message(id, text);
-      input.value = '';
+      if (await messageAgent(id, state.agents.get(id)?.name ?? 'They', text)) input.value = '';
     }, ui.error);
   };
   send.onclick = sendMessage;

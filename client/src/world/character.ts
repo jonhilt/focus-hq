@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { STATUS_ICON, statusLine } from '../../../shared/agentStatus';
+import { HELD_ICON, STATUS_ICON, statusLine } from '../../../shared/agentStatus';
 import { UNIFORM } from '../../../shared/crew';
 import type { Agent, AgentStatus, Avatar, Rank } from '../../../shared/types';
 import { canvasTexture, fitText, makeCanvas } from './canvas';
@@ -85,6 +85,7 @@ export function agentView(agent: Agent): CrewView {
     avatar: agent.avatar,
     status: agent.status,
     line: statusLine(agent),
+    icon: agent.held ? HELD_ICON : undefined,
     tag: agent.task === 'lead' ? 'Lead' : `#${agent.issue.number}`,
     thinking: agent.activity === 'Thinking…',
   };

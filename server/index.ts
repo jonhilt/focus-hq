@@ -3,6 +3,8 @@ import http from 'node:http';
 import path from 'node:path';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import express from 'express';
+import { clock } from '../shared/clock';
+import { keyFallback } from './agents/apiKey';
 import { BrowserPool } from './agents/browserTool';
 import { ClaudeDrafter, ClaudeEngineer, ClaudeExtractor, ClaudeNumberOne, ClaudeTriager } from './agents/claudeCrew';
 import { ChiefEngineer, transcriptFolders, transcriptReader } from './agents/engineer';
@@ -58,6 +60,11 @@ async function main() {
   store.load();
 
   const hub = new Hub();
+  keyFallback.onChange = (onKey, spell) => {
+    if (onKey) hub.toast('info', `🔑 Your plan's usage limit is reached until ${clock(spell.until)}: agents carry on with your API key (up to $${keyFallback.budgetUsd})`);
+    else if (spell.until > Date.now()) hub.toast('error', `🔑 Your API key has spent its $${keyFallback.budgetUsd}: agents wait for your plan's usage limit to reset at ${clock(spell.until)}`);
+    else hub.toast('success', `🔑 Your plan's usage limit has reset: agents are back on it (the key spent about $${spell.spentUsd.toFixed(2)})`);
+  };
   // one GitHub for the whole office (the demo's lives in memory), as an Effect service and through the Promise adapter
   const gitHub = Layer.succeed(GitHub, await ManagedRuntime.make(config.demo ? demoLayer : ghCliLayer).runPromise(GitHub.use(Effect.succeed)));
   const github = toProvider(gitHub);
@@ -151,8 +158,10 @@ async function main() {
   server.listen(config.port, config.host, () => {
     console.log(`\n  🏢  Focus office is open: http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
     console.log(`      mode: ${config.demo ? 'demo (fake GitHub, pretend agents)' : 'live (gh CLI + Claude Agent SDK)'}`);
-    if (!config.demo && process.env.ANTHROPIC_API_KEY && process.env.FOCUS_USE_API_KEY !== '1') {
-      console.log('      note: ANTHROPIC_API_KEY is set but agents ignore it and use your Claude login (set FOCUS_USE_API_KEY=1 to use the key).');
+    if (!config.demo && keyFallback.mode === 'fallback') {
+      console.log(`      agents use your Claude login, and ANTHROPIC_API_KEY while your plan's usage limit is reached (up to $${keyFallback.budgetUsd} each time).`);
+    } else if (!config.demo && process.env.ANTHROPIC_API_KEY && keyFallback.mode === 'login') {
+      console.log('      note: ANTHROPIC_API_KEY is set but agents ignore it and use your Claude login (set FOCUS_USE_API_KEY=1 to use the key, or =fallback to use it when your plan runs out).');
     }
     console.log('');
   });

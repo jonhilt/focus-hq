@@ -1,5 +1,5 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
-import { EFFORT_LEVELS, type Effort, type PreviewSet } from '../shared/types';
+import { EFFORT_LEVELS, type Effort, type PreviewSet, type ResumeHow } from '../shared/types';
 import { isKokoroVoice } from '../shared/voice';
 import type { Office } from './office';
 import type { Store } from './store';
@@ -26,6 +26,8 @@ const picks = (v: unknown): PreviewSet | undefined => {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
   return Object.fromEntries(Object.entries(v).filter((e): e is [string, number | null] => e[1] === null || Number.isInteger(e[1])));
 };
+/** The captain's say on picking a conversation back up on your API key: now, or once your plan's limit resets. */
+const resumeHow = (v: unknown): ResumeHow | undefined => (v === 'key' || v === 'wait' ? v : undefined);
 const effort = (v: unknown): Effort | undefined => {
   if (v === undefined || v === '') return undefined;
   const level = EFFORT_LEVELS.find((e) => e === v);
@@ -157,8 +159,9 @@ export function apiRouter(office: Office, store: Store): express.Router {
   ));
   r.delete('/projects/:id/goals/queue/:qid', h((req) => office.agents.dropQueued(param(req, 'id'), param(req, 'qid'))));
   r.get('/agents/:id/lines', h((req) => store.allLines(param(req, 'id'))));
-  r.post('/agents/:id/message', h((req) => office.agents.message(param(req, 'id'), str(req.body.text))));
-  r.post('/agents/:id/answer', h((req) => office.agents.answer(param(req, 'id'), str(req.body.question), str(req.body.option), typeof req.body.note === 'string' ? req.body.note : undefined)));
+  // on your API key, picking a long conversation back up costs enough that the captain says how first (`how`)
+  r.post('/agents/:id/message', h((req) => office.agents.message(param(req, 'id'), str(req.body.text), undefined, resumeHow(req.body.how))));
+  r.post('/agents/:id/answer', h((req) => office.agents.answer(param(req, 'id'), str(req.body.question), str(req.body.option), typeof req.body.note === 'string' ? req.body.note : undefined, resumeHow(req.body.how))));
   r.post('/agents/:id/read', h((req) => office.agents.readTurn(param(req, 'id'))));
   r.post('/agents/:id/permission', h((req) => office.agents.resolvePermission(param(req, 'id'), str(req.body.requestId), req.body.allow === true)));
   r.post('/agents/:id/stop', h((req) => office.agents.stop(param(req, 'id'))));

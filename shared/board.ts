@@ -38,10 +38,11 @@ export function columns(project: Project, board: Board | undefined, agents: Agen
 }
 
 /** Where a goal is, in a few words: which slice, and whether its lead is at it, waiting on a PR, or waiting for you. */
-export function goalState(lead: Pick<Agent, 'status' | 'lead'>): string {
+export function goalState(lead: Pick<Agent, 'status' | 'lead' | 'held'>): string {
   const work = lead.lead;
   if (work?.closing) return 'Ready to wrap up';
   const slice = `Slice ${work?.slice ?? 1}`;
+  if (lead.held) return `${slice} · on hold for your plan's limit`;
   switch (lead.status) {
     case 'waiting':
       return `${slice} · needs approval`;

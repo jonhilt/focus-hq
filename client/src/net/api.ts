@@ -1,4 +1,4 @@
-import type { Agent, Board, ConflictsOutcome, Effort, Issue, IssueDraft, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, Retro, RetroDraft, RoomTheme, Settings, TermLine, VoiceStatus } from '../../../shared/types';
+import type { Agent, Board, ConflictsOutcome, Effort, Issue, IssueDraft, MessageReply, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ResumeHow, Retro, RetroDraft, RoomTheme, Settings, TermLine, VoiceStatus } from '../../../shared/types';
 import type { KokoroVoice } from '../../../shared/voice';
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -67,8 +67,13 @@ export const api = {
   hire: (projectId: string, issue: Issue, effort?: Effort, cloud?: boolean) =>
     call<Agent>('POST', '/agents', { projectId, repo: issue.repo, number: issue.number, title: issue.title, url: issue.url, effort, cloud }),
   lines: (id: string) => call<TermLine[]>('GET', `/agents/${id}/lines`),
-  message: (id: string, text: string) => call('POST', `/agents/${id}/message`, { text }),
-  answer: (id: string, question: string, option: string, note?: string) => call('POST', `/agents/${id}/answer`, { question, option, note }),
+  /**
+   * On your API key, with a long conversation to pick back up, the message isn't sent: it comes back `costly`, for the
+   * captain to say `how` (`messageAgent` asks them).
+   */
+  message: (id: string, text: string, how?: ResumeHow) => call<MessageReply>('POST', `/agents/${id}/message`, { text, how }),
+  answer: (id: string, question: string, option: string, note?: string, how?: ResumeHow) =>
+    call<Agent | MessageReply>('POST', `/agents/${id}/answer`, { question, option, note, how }),
   /** The captain has read the lead's latest turn, here: every screen stops hailing about it. */
   readTurn: (id: string) => call('POST', `/agents/${id}/read`),
   permission: (id: string, requestId: string, allow: boolean) => call('POST', `/agents/${id}/permission`, { requestId, allow }),

@@ -1,7 +1,6 @@
 import { ARTIFACT_SIZE, artifactUrl, latestArtifact, optionUrl, unanswered } from '../../../shared/artifacts';
 import { leadVoice } from '../../../shared/crew';
 import type { GoalArtifact, GoalQuestion, GoalRecord } from '../../../shared/types';
-import { api } from '../net/api';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import { sound } from '../sound';
@@ -9,6 +8,7 @@ import type { Ui } from './context';
 import { h } from './dom';
 import { Narrator } from './narrator';
 import { SideNav } from './panels';
+import { answerLead } from './resume';
 
 /** A question's view's key: `?q1`, which no artifact id can be. */
 const asked = (q: GoalQuestion) => `?${q.id}`;
@@ -83,7 +83,7 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
     const note = h('input', { class: 'grow', type: 'text', placeholder: `Anything to add for ${lead?.name ?? 'the lead'}? (optional)` });
     const pick = (option: string) => {
       sound.press();
-      void api.answer(leadId, q.id, option, note.value).catch((e: Error) => ui.error(e.message));
+      void answerLead(leadId, q.id, option, note.value).catch((e: Error) => ui.error(e.message));
     };
     const answer = q.answer;
     const tabs = q.options.map((o, i) => h('button', { class: 'btn small option-tab', title: o.label, onclick: () => show(i, 'one') }, o.id.toUpperCase()));

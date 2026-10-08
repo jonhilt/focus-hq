@@ -11,9 +11,11 @@ import type { Agent, GoalNote } from '../../../shared/types';
  */
 export type GoalRoomTone = 'free' | 'in-session' | 'needs-you' | 'your-turn' | 'queued' | 'stopped';
 
-export function goalRoomState(lead: Pick<Agent, 'status' | 'lead'> | undefined): { tone: GoalRoomTone; label: string } {
+export function goalRoomState(lead: Pick<Agent, 'status' | 'lead' | 'held'> | undefined): { tone: GoalRoomTone; label: string } {
   if (!lead) return { tone: 'free', label: 'Free' };
   if (openQuestion(lead) && lead.status !== 'waiting' && lead.status !== 'error' && lead.status !== 'stopped') return { tone: 'needs-you', label: 'Your answer' };
+  // waiting for your plan's usage limit to reset, like one waiting for a slot
+  if (lead.held) return { tone: 'queued', label: 'On hold' };
   switch (lead.status) {
     case 'waiting':
       return { tone: 'needs-you', label: 'Needs you' };

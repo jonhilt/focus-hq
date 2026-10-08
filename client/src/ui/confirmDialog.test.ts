@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { confirmDialog } from './confirmDialog';
+import { chooseDialog, confirmDialog } from './confirmDialog';
 
 const dialog = () => document.querySelector<HTMLElement>('.dialog-overlay');
 const button = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('.dialog button')].find((b) => b.textContent === label)!;
@@ -41,6 +41,18 @@ describe('confirmDialog', () => {
     expect(dialog()).not.toBeNull();
     dialog()!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     expect(await answer).toBe(false);
+  });
+
+  it('offers a second way forward, between cancel and confirm', async () => {
+    const pick = (label: string) => {
+      const choice = chooseDialog({ message: 'Carry on?', confirmLabel: 'Now', altLabel: 'Later' });
+      expect([...document.querySelectorAll('.dialog-foot button')].map((b) => b.textContent)).toEqual(['Cancel', 'Later', 'Now']);
+      button(label).click();
+      return choice;
+    };
+    expect(await pick('Later')).toBe('alt');
+    expect(await pick('Now')).toBe('confirm');
+    expect(await pick('Cancel')).toBe('cancel');
   });
 
   it('puts focus on Cancel when the action is dangerous, otherwise on confirm', () => {

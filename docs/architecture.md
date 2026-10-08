@@ -31,7 +31,8 @@ server/
       leads.ts            goals: start, queue, reopen, close; what a lead hears about their PRs
       slices.ts           a goal's slices: every repo checked out side by side, fresh code when a slice lands, the ship tool
       goalTools.ts        the lead's note, show, explain, ask and propose_close tools, and the captain's answer
-      comms.ts            the captain's word with an agent: messages, approvals, stop, effort, reading a lead's turn
+      comms.ts            the captain's word with an agent: messages (asking first when picking one up on the API key costs), approvals, stop, effort, reading a lead's turn
+      planLimit.ts        your plan's usage limit reached: an agent it stopped carries on with the API key, or is held until it resets
       reviews.ts          QA: the review queue, seating a reviewer, their verdict, sending a failed PR back to be fixed
       triages.ts          stuck PRs: the operations officer's look, one at a time per room, and what they decided
       cloudMoves.ts       moving an agent to a cloud session, attaching to it, or keeping them local
@@ -39,7 +40,8 @@ server/
     services.ts           what the manager needs from outside as Effect services: git on the checkouts, Claude Code sessions (a scoped turn), triage
     schedule.ts           who starts next under the office's and each room's limits
     desks.ts              who sits at a room's two individual desks, and who goes home to make room (never a lead or QA)
-    claudeRunner.ts       Claude Agent SDK query() in streaming-input mode, permission callback; cloud agents via --cloud
+    claudeRunner.ts       Claude Agent SDK query() in streaming-input mode, permission callback; cloud agents via --cloud; the plan's limit, and what the key spends
+    apiKey.ts             your login or your API key, pure: which a session signs in with, what a re-read costs on the key, ask, hold or go; keyFallback, where the office stands
     cloud.ts              what happens after a cloud agent's session (push nudge, carrying on in a new session, falling back to local when the CLI refuses --cloud), and moving an agent to the cloud
     terminal.ts           the terminal the office opens to start a cloud session (claude --cloud, recorded with script) and finding the session's id in it
     render.ts             SDK messages → Claude-Code-style terminal lines + "what am I doing" text + screenshots in tool results

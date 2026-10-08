@@ -1,5 +1,5 @@
 import { Effect, Layer, Schedule } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { randomAvatar } from '../../shared/crew';
 import * as demoGitHub from '../github/demo';
 import { prKey } from '../../shared/qa';
@@ -14,6 +14,14 @@ import { Renderer, Sessions, ShipRetry, Triage, Workspace } from './services';
 import type { PullRequest, QaReport } from '../../shared/types';
 import type { AgentRunner, AgentSession, CloudTerminal, CloudTerminalRequest, RunHooks, RunOutcome, RunRequest, WorkspaceOps } from './types';
 import { CLOUD_UNAVAILABLE } from './cloud';
+import { keyFallback } from './apiKey';
+import { CARRY_ON_AFTER_LIMIT } from './manager/planLimit';
+
+// the office falls back on an API key while the plan's usage limit is reached (only the last tests reach it)
+vi.hoisted(() => {
+  process.env.ANTHROPIC_API_KEY = 'sk-test';
+  process.env.FOCUS_USE_API_KEY = 'fallback';
+});
 
 /** A Claude Code stand-in: each turn runs until the test ends it, and remembers being stopped and what it was sent. */
 class FakeClaude implements AgentRunner {
@@ -791,5 +799,62 @@ describe('AgentManager', () => {
       expect(claude.turns[1].req).toMatchObject({ resumeSessionId: 'session-1', cloud: undefined, prompt: 'Carry on here' });
     });
   });
-});
 
+  describe('when the plan’s usage limit is reached', () => {
+    /** A lead mid-turn, `tokens` into their conversation, whom the plan's limit stops for `ms`. */
+    async function limitedLead(tokens: number, ms: number) {
+      const { agents, claude, store, project } = office();
+      const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+      await until(() => claude.turns.length === 1);
+      claude.turns[0].hooks.context!({ percent: 60, tokens, max: 1_000_000 });
+      // what the runner does when Claude Code reports the limit
+      keyFallback.limitHit(Date.now() + ms);
+      claude.turns[0].end({ ok: false, summary: '', limited: true, started: true });
+      return { agents, claude, store, id: lead.id };
+    }
+
+    it('carries a short conversation straight on with the API key', async () => {
+      const { claude, store, id } = await limitedLead(20_000, 300);
+      await until(() => claude.turns.length === 2);
+      expect(claude.turns[1].req).toMatchObject({ resumeSessionId: 'session-1', prompt: CARRY_ON_AFTER_LIMIT });
+      expect(store.agent(id).held).toBeUndefined();
+      await new Promise((r) => setTimeout(r, 300));
+    });
+
+    it('holds a long one, asks the captain before picking it up on the key, and holds anyone else’s news', async () => {
+      const { agents, claude, store, id } = await limitedLead(600_000, 300);
+      await until(() => !!store.agent(id).held);
+      expect(store.agent(id).status).toBe('stopped');
+      const lines = store.recentLines(id).length;
+
+      expect(agents.message(id, 'Go on')).toEqual({ costly: { usd: 3, tokens: 600_000, resetsAt: store.agent(id).held!.until } });
+      expect(store.recentLines(id)).toHaveLength(lines);
+      expect(agents.message(id, 'QA passed it', 'QA')).toEqual({ sent: true });
+      expect(agents.message(id, 'Go on', undefined, 'wait')).toEqual({ sent: true });
+      await new Promise((r) => setTimeout(r, 50));
+      expect(claude.turns).toHaveLength(1);
+
+      expect(agents.message(id, 'Now, please', undefined, 'key')).toEqual({ sent: true });
+      await until(() => claude.turns.length === 2);
+      const turn = claude.turns[1];
+      expect(turn.req.resumeSessionId).toBe('session-1');
+      expect([turn.req.prompt, ...turn.sent].join('\n\n')).toBe(`${CARRY_ON_AFTER_LIMIT}\n\n[QA] QA passed it\n\nGo on\n\nNow, please`);
+      expect(store.agent(id).held).toBeUndefined();
+      await new Promise((r) => setTimeout(r, 300));
+    });
+
+    it('picks a held conversation back up when the limit resets, unless the captain stopped them', async () => {
+      const { claude, store, id } = await limitedLead(600_000, 200);
+      await until(() => !!store.agent(id).held);
+      await until(() => claude.turns.length === 2);
+      expect(claude.turns[1].req).toMatchObject({ resumeSessionId: 'session-1', prompt: CARRY_ON_AFTER_LIMIT });
+      expect(store.agent(id).held).toBeUndefined();
+
+      const second = await limitedLead(600_000, 200);
+      await until(() => !!second.store.agent(second.id).held);
+      second.agents.stop(second.id);
+      await new Promise((r) => setTimeout(r, 1500));
+      expect(second.claude.turns).toHaveLength(1);
+    });
+  });
+});

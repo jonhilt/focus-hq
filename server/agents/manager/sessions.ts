@@ -257,6 +257,8 @@ export class AgentSessions extends Part {
           return this.core.cloud.awaitCloud(agent, attaching.handover);
         }
       }
+      // your plan's usage limit stopped them: they carry on with your API key, now or once it resets
+      if (outcome.limited) return yield* this.core.planLimit.limited(agent, prompt);
       if (outcome.aborted) {
         this.update(agent, { status: 'stopped', activity: STOPPED_BY_CAPTAIN, permission: undefined, finishedAt: Date.now() });
         if (review) this.core.reviews.reviewEnded(agent, STOPPED_BY_CAPTAIN);

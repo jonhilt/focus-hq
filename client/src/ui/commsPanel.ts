@@ -15,6 +15,7 @@ import type { Ui } from './context';
 import type { ToastAction } from './hud';
 import { withMic } from './dictation';
 import { busy, fill, h, timeAgo } from './dom';
+import { messageAgent } from './resume';
 import { closeGoal } from './goals';
 
 /** What a hail is about, the same hail from render to render: its card is built once and kept while it stands. */
@@ -61,8 +62,7 @@ function reply(ui: Ui, agent: Agent, placeholder: string): HTMLElement {
     const text = input.value.trim();
     if (!text) return;
     void busy(send, async () => {
-      await api.message(agent.id, text);
-      input.value = '';
+      if (await messageAgent(agent.id, agent.name, text)) input.value = '';
     }, ui.error);
   };
   input.addEventListener('keydown', (e) => {

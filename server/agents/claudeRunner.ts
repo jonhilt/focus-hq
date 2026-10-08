@@ -1,17 +1,19 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { query, type CanUseTool, type Options, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import { clock } from '../../shared/clock';
 import { cloudSessionUrl } from '../../shared/cloud';
 import type { TermKind, TermLine } from '../../shared/types';
 import { paths } from '../config';
 import { errorMessage, sleep, truncate } from '../util';
+import { keyFallback, limitReached, requestUsd } from './apiKey';
 import { BrowserPool, browserMcpServer } from './browserTool';
 import { CLOUD_UNAVAILABLE, cloudRefused } from './cloud';
 import { officeMcpServer } from './officeTool';
 import { appUrl, renderText, renderToolResult, renderToolUse, screenshotFrame, type ToolCall } from './render';
 import { TASK_TOOLS } from './tasks';
 import { bundledClaude, openTerminal, readTerminal } from './terminal';
-import { type AgentRunner, type AgentSession, type CloudTerminal, type CloudTerminalRequest, type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN } from './types';
+import { type AgentRunner, type AgentSession, type CloudTerminal, type CloudTerminalRequest, type RunHooks, type RunOutcome, type RunRequest, LIMIT_REACHED, STOPPED_BY_CAPTAIN } from './types';
 
 /** Feeds user messages into a streaming-input query; lets the manager talk to a running agent. */
 class InputQueue implements AsyncIterable<SDKUserMessage> {
@@ -66,13 +68,14 @@ function summarizeInput(toolName: string, input: Record<string, unknown>): strin
   return `${toolName}(${truncate(typeof first === 'string' ? first : JSON.stringify(first ?? ''), 300)})`;
 }
 
-/** The environment every Claude Code session gets. */
-export function agentEnv(): Record<string, string | undefined> {
+/**
+ * The environment every Claude Code session gets. Agents run on your Claude login, not on an API key that happens to
+ * be in the environment, unless the office says the key's in use (`keyFallback`): always, or while your plan's usage
+ * limit is reached.
+ */
+export function agentEnv(onKey = keyFallback.onKey()): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: 'focus/0.1.0' };
-  if (process.env.FOCUS_USE_API_KEY !== '1') {
-    // Agents run on your Claude subscription login, not on an API key that happens to be in the environment.
-    delete env.ANTHROPIC_API_KEY;
-  }
+  if (!onKey) delete env.ANTHROPIC_API_KEY;
   return env;
 }
 
@@ -98,6 +101,12 @@ interface RunContext {
   helpers: Map<string, string>;
   /** Subagents (by Agent tool call) whose model we've reported. */
   modelled: Set<string>;
+  /** Signed in with your API key rather than your login. */
+  onKey: boolean;
+  /** The API requests already counted against the key's budget: Claude Code sends each one's usage with every block of it. */
+  counted: Set<string>;
+  /** Your plan's usage limit stopped the session, to carry on with the key (sessions.ts decides when). */
+  limited?: boolean;
 }
 
 /** How full the session's context window is, from Claude Code's own count (its last response's usage, no extra calls). */
@@ -153,7 +162,11 @@ export class ClaudeRunner implements AgentRunner {
           };
     };
 
-    const env = agentEnv();
+    // a cloud session runs on your plan in the cloud, whatever this machine signs in with
+    const onKey = !cloud && keyFallback.onKey();
+    const env = agentEnv(onKey);
+    const resets = keyFallback.resetsAt();
+    if (onKey && resets) hooks.lines([{ kind: 'system', text: `✻ On your API key: your plan's usage limit is reached until ${clock(resets)}` }]);
 
     const stderrTail: string[] = [];
     const options: Options = {
@@ -190,7 +203,7 @@ export class ClaudeRunner implements AgentRunner {
 
     let q: Query | undefined;
     let stopping = false;
-    const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map(), helpers: new Map(), modelled: new Set() };
+    const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map(), helpers: new Map(), modelled: new Set(), onKey, counted: new Set() };
     const done = (async (): Promise<RunOutcome> => {
       let summary = '';
       let structured: unknown;
@@ -202,6 +215,10 @@ export class ClaudeRunner implements AgentRunner {
         for await (const msg of q) {
           if (msg.type === 'system' && msg.subtype === 'init') started = true;
           const result = this.handle(msg, ctx, hooks);
+          if (ctx.limited && !abort.signal.aborted) {
+            abort.abort();
+            input.close();
+          }
           if (result) {
             ok = !result.isError;
             summary = result.text;
@@ -215,8 +232,10 @@ export class ClaudeRunner implements AgentRunner {
           }
         }
         if (stopping) return { ok: false, summary, error: STOPPED_BY_CAPTAIN, aborted: true, started };
+        if (ctx.limited) return { ok: false, summary, error: LIMIT_REACHED, limited: true, started };
         return { ok, summary, structured, error, started };
       } catch (err) {
+        if (ctx.limited && !stopping) return { ok: false, summary, error: LIMIT_REACHED, limited: true, started };
         if (stopping || abort.signal.aborted) return { ok: false, summary, error: STOPPED_BY_CAPTAIN, aborted: true, started };
         if (cloud && cloudRefused(`${errorMessage(err)}\n${stderrTail.join('')}`)) return { ok: false, summary, error: CLOUD_UNAVAILABLE, started };
         const detail = stderrTail.join('').trim().split('\n').slice(-3).join(' ');
@@ -300,6 +319,11 @@ export class ClaudeRunner implements AgentRunner {
       }
 
       case 'assistant': {
+        // what the key spends, against its budget for while your plan's limit is reached
+        if (ctx.onKey && !ctx.counted.has(msg.message.id)) {
+          ctx.counted.add(msg.message.id);
+          keyFallback.spent(requestUsd(msg.message.usage, msg.message.model));
+        }
         if (msg.error) {
           hooks.lines([{ kind: 'error', text: `⚠ ${msg.error}` }]);
         }
@@ -365,12 +389,21 @@ export class ClaudeRunner implements AgentRunner {
         return null;
       }
 
-      case 'rate_limit_event':
-        if (msg.rate_limit_info.status === 'rejected') {
-          hooks.lines([{ kind: 'error', text: '⚠ Subscription rate limit reached – waiting for it to reset' }]);
-          hooks.activity(null, 'Rate limited – waiting');
+      case 'rate_limit_event': {
+        const until = limitReached(msg.rate_limit_info, Date.now());
+        if (until === null) return null;
+        keyFallback.limitHit(until);
+        // a session on your plan stops here, and picks its conversation back up with your API key
+        if (!ctx.onKey && !ctx.cloud && keyFallback.onKey()) {
+          ctx.limited = true;
+          hooks.lines([{ kind: 'error', text: `⚠ Your plan's usage limit is reached until ${clock(until)} – switching to your API key` }]);
+          hooks.activity(null, 'Switching to your API key');
+          return null;
         }
+        hooks.lines([{ kind: 'error', text: `⚠ Your plan's usage limit is reached – waiting for it to reset at ${clock(until)}` }]);
+        hooks.activity(null, 'Rate limited – waiting');
         return null;
+      }
 
       case 'result': {
         hooks.cost(msg.total_cost_usd);

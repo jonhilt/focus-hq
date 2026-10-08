@@ -6,6 +6,7 @@ import { state } from '../net/state';
 import type { Ui } from './context';
 import { confirmDialog } from './confirmDialog';
 import { busy, h } from './dom';
+import { messageAgent } from './resume';
 
 // What the goals panel, a lead's panel and the hand-off buttons (the New issue stand, Number One) share.
 
@@ -107,8 +108,8 @@ export function goalTarget(projectId: string): { el: HTMLSelectElement; picked: 
  */
 export async function handToGoal(ui: Ui, projectId: string, idea: string, to: Agent | undefined, from: string): Promise<void> {
   if (to) {
-    await api.message(to.id, idea);
-    return ui.openAgent(to.id);
+    if (await messageAgent(to.id, to.name, idea)) ui.openAgent(to.id);
+    return;
   }
   const started = await api.startGoal(projectId, idea, { from });
   if (!('agent' in started)) return ui.openGoals(projectId);

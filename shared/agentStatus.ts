@@ -1,3 +1,4 @@
+import { clock } from './clock';
 import type { Agent, AgentStatus } from './types';
 
 // How an agent's status reads, wherever it's shown: the 3D office, its panels and the Tricorder.
@@ -14,9 +15,13 @@ export const STATUS_ICON: Record<AgentStatus, string> = {
   stopped: '💤',
 };
 
-export const statusIcon = (a: Agent): string => STATUS_ICON[a.status];
+/** On hold for your plan's usage limit to reset (`Agent.held`), whatever they were doing. */
+export const HELD_ICON = '⏸';
+
+export const statusIcon = (a: Agent): string => (a.held ? HELD_ICON : STATUS_ICON[a.status]);
 
 export function statusLine(agent: Agent): string {
+  if (agent.held) return `On hold till ${clock(agent.held.until)}: your plan's usage limit`;
   switch (agent.status) {
     case 'waiting':
       return agent.handover ? 'Needs you to start their cloud session' : 'Needs your approval!';

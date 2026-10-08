@@ -5,6 +5,7 @@ import { api } from '../net/api';
 import { markRead } from '../net/attention';
 import { state } from '../net/state';
 import { h } from '../ui/dom';
+import { messageAgent } from '../ui/resume';
 import { TermView } from '../ui/terminal';
 import { type Actions, morph } from './actions';
 import { workLabel } from './home';
@@ -47,8 +48,9 @@ export function agentView(id: string, actions: Actions, back: () => void): View 
   const send = () => {
     const text = input.value.trim();
     if (!text) return;
-    void actions.run(`${scope}:message`, () => api.message(id, text)).then((ok) => {
-      if (ok && input.value.trim() === text) input.value = '';
+    let sent = false;
+    void actions.run(`${scope}:message`, async () => (sent = await messageAgent(id, state.agents.get(id)?.name ?? 'They', text))).then((ok) => {
+      if (ok && sent && input.value.trim() === text) input.value = '';
     });
   };
   compose.onsubmit = (e) => {

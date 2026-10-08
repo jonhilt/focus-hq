@@ -257,7 +257,10 @@ export class Leads extends Part {
     if (!lead) return;
     const text = qaVerdictNote(repo, number, report);
     const step = afterVerdict(report.verdict, failedRounds);
-    if (step === 'wake') return this.core.comms.message(lead.id, text, from);
+    if (step === 'wake') {
+      this.core.comms.message(lead.id, text, from);
+      return;
+    }
     // no turn spent on it: the lead hears it with the captain's next message
     this.noteForLead(lead, from, text);
     if (step === 'needs-you') this.hub.toast('error', `🙋 QA failed ${repo.split('/')[1]}#${number} ${failedRounds} times: ${lead.name} needs you to look`, lead.id);

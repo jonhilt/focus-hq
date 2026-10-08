@@ -134,6 +134,11 @@ export class Store {
       }
       agent.task ??= 'issue'; // saved before agents could be seated on a conflicting PR
       agent.helpers = undefined; // a lead's subagents don't outlive the office
+      if (agent.held) {
+        // whatever waited for your plan's limit to reset waits for the captain now
+        agent.held = undefined;
+        agent.activity = 'Was waiting for your plan’s usage limit when Focus shut down. Send a message to pick it back up.';
+      }
       if (agent.task === 'lead') Object.assign(agent, upgradeLead(agent, this.projects.find((p) => p.id === agent.projectId)?.name ?? 'The project'));
       // saved before the crew wore uniforms
       if (!('division' in agent.avatar)) agent.avatar = agent.task === 'review' ? qaOfficerFor(agent.projectId).avatar : randomAvatar();

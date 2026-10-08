@@ -1,5 +1,5 @@
 import { Effect, Option } from 'effect';
-import type { Agent } from '../../../shared/types';
+import type { Agent, MessageReply, ResumeHow } from '../../../shared/types';
 import { answerMessage } from '../../../shared/artifacts';
 import { answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, applyNote, type NoteInput, pageErrorsNote } from '../lead';
 import { explainerPage, type ExplainerInput } from '../explainer';
@@ -91,15 +91,19 @@ export class GoalTools extends Part {
     });
   }
 
-  /** The captain picks an option of the lead's open question: it's marked answered, and the lead hears which. */
-  answer(id: string, questionId: string, option: string, note?: string): Agent {
+  /**
+   * The captain picks an option of the lead's open question: it's marked answered, and the lead hears which. Unless
+   * hearing it would cost enough on your API key to ask the captain first (`how` is their answer): then nothing changes.
+   */
+  answer(id: string, questionId: string, option: string, note?: string, how?: ResumeHow): Agent | MessageReply {
     const agent = this.store.agent(id);
     const work = agent.lead;
     if (!work) throw new Error(`${agent.name} isn’t leading a goal`);
     const questions = answerQuestion(work.questions ?? [], questionId, option, note, Date.now());
     if ('error' in questions) throw new Error(questions.error);
-    this.update(agent, { lead: { ...work, questions } });
-    this.core.comms.message(id, answerMessage(questions.find((q) => q.id === questionId)!, option, note));
+    const reply = this.core.comms.message(id, answerMessage(questions.find((q) => q.id === questionId)!, option, note), undefined, how);
+    if ('costly' in reply) return reply;
+    this.update(agent, { lead: { ...agent.lead!, questions } });
     return agent;
   }
 

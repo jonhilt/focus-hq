@@ -80,6 +80,9 @@ export interface OfficeTools {
 /** What a run the captain stopped reports, and how a stopped review is told apart from one that failed. */
 export const STOPPED_BY_CAPTAIN = 'Stopped by the captain';
 
+/** What a run your plan's usage limit stopped reports, to carry on with your API key. */
+export const LIMIT_REACHED = "Your plan's usage limit is reached";
+
 export interface RunOutcome {
   ok: boolean;
   /** Claude's final message: becomes the pull request description. */
@@ -90,6 +93,8 @@ export interface RunOutcome {
   aborted?: boolean;
   /** Claude Code got as far as reporting the session. A cloud session that couldn't be reattached to never does. */
   started?: boolean;
+  /** Your plan's usage limit stopped the session, which can carry on with your API key. */
+  limited?: boolean;
 }
 
 export interface AgentSession {

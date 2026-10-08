@@ -1,6 +1,6 @@
 import type { Layer } from 'effect';
 import type { Closer, LedgerEntry, ReportCard } from '../../shared/ledger';
-import type { Agent, ConflictsOutcome, Effort, FailedCheck, PullRequest, QaReview, QueuedGoal } from '../../shared/types';
+import type { Agent, ConflictsOutcome, Effort, FailedCheck, MessageReply, PullRequest, QaReview, QueuedGoal, ResumeHow } from '../../shared/types';
 import type { Hub } from '../hub';
 import type { Store } from '../store';
 import type { Transcript } from './engineer';
@@ -11,6 +11,7 @@ import { Delivery } from './manager/delivery';
 import { GoalTools } from './manager/goalTools';
 import { Leads } from './manager/leads';
 import { Ledger } from './manager/ledger';
+import { PlanLimit } from './manager/planLimit';
 import { Reviews } from './manager/reviews';
 import { Seating } from './manager/seating';
 import { AgentSessions } from './manager/sessions';
@@ -23,7 +24,7 @@ import { Core, type ManagerServices } from './manager/core';
  * agents, for the routes and the office's loops.
  *
  * Each concern is a part of its own in `manager/` (seating, sessions, delivery, conflicts, leads, slices, goal tools,
- * comms, reviews, triages, cloud moves, the ledger), sharing the `Core` (`manager/core.ts`): the store and hub, the one
+ * comms, reviews, triages, cloud moves, the ledger, the plan's usage limit), sharing the `Core` (`manager/core.ts`): the store and hub, the one
  * runtime, and each agent's fiber (`runs`), so they never run twice at once and sending them home interrupts it (and
  * with it their Claude Code session). The public methods below each hand over to their part.
  */
@@ -39,6 +40,7 @@ export class AgentManager {
     this.core.goalTools = new GoalTools(this.core);
     this.core.leads = new Leads(this.core);
     this.core.ledger = new Ledger(this.core);
+    this.core.planLimit = new PlanLimit(this.core);
     this.core.reviews = new Reviews(this.core);
     this.core.seating = new Seating(this.core);
     this.core.sessions = new AgentSessions(this.core);
@@ -117,8 +119,8 @@ export class AgentManager {
     this.core.leads.moveQueued(projectId, queueId, by);
   }
 
-  answer(id: string, questionId: string, option: string, note?: string): Agent {
-    return this.core.goalTools.answer(id, questionId, option, note);
+  answer(id: string, questionId: string, option: string, note?: string, how?: ResumeHow): Agent | MessageReply {
+    return this.core.goalTools.answer(id, questionId, option, note, how);
   }
 
   closeGoal(id: string, force = false): Promise<{ closed: true } | { warn: string[] }> {
@@ -169,8 +171,8 @@ export class AgentManager {
     this.core.comms.readTurn(id);
   }
 
-  message(id: string, text: string, from?: string): void {
-    this.core.comms.message(id, text, from);
+  message(id: string, text: string, from?: string, how?: ResumeHow): MessageReply {
+    return this.core.comms.message(id, text, from, how);
   }
 
   resolvePermission(id: string, requestId: string, allow: boolean): void {
