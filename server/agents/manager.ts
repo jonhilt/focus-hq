@@ -16,7 +16,7 @@ import type { Store } from '../store';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../util';
 import { afterCloudRun, attachAgain, cantMoveToCloud, carryOnInNewSession, fallBackToLocal, terminalDescription } from './cloud';
 import { conflictsAgentModel } from './conflicts';
-import { afterLanding, afterVerdict, answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, behindNote, closeCheck, conflictsResolvedNote, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, everyPr, HELPER_LINGER_MS, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pageErrorsNote, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sessionGone, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded, snapshotMessage, type FreshBranch, freshBranchNote, needsFreshBranch, repoBranch } from './lead';
+import { afterLanding, afterVerdict, answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, carriedNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, behindNote, closeCheck, conflictsResolvedNote, fileGoal, leftLog, freshSessionPrompt, goalBrief, goalEffort, goalOf, goalRecord, goalReviewerId, goalTitle, everyPr, HELPER_LINGER_MS, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, leadWorktreeId, moveQueued, newSliceNote, nextGoal, type NoteInput, notShipped, openPr, pageErrorsNote, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sessionGone, reviewsToStart, shipped, shippedSha, shipPlan, sliceBranch, sliceLanded, snapshotMessage, type FreshBranch, freshBranchNote, needsFreshBranch, repoBranch } from './lead';
 import { explainerPage, type ExplainerInput } from './explainer';
 import { repoFolders } from './planner';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, pickName, pullRequestBody, pushNudge, systemAppend } from './prompts';
@@ -1052,12 +1052,14 @@ export class AgentManager {
         ), { discard: true }).pipe(Effect.onError(() => Effect.sync(() => this.closingGoals.delete(id))));
       const project = this.store.project(agent.projectId);
       const record = goalRecord(agent, Date.now());
-      project.goals = fileGoal(project.goals ?? [], record);
+      const before = project.goals ?? [];
+      project.goals = fileGoal(before, record);
+      // what its lead showed stays with the goal in the log, until the goal drops off the end of it
+      for (const gone of leftLog(before, project.goals)) this.store.dropArtifacts(gone.id);
       this.record(project.id, { kind: 'goal-closed', goal: record });
       this.projectsChanged();
       yield* this.goHome(id);
       this.closingGoals.delete(id);
-      this.store.dropArtifacts(id);
       // the goal's reviewer goes home with its lead; a review they were on, or still waiting, goes to the room's QA officer
       const reviewer = goalReviewerId(id);
       for (const r of this.store.reviews.values()) {

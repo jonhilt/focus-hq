@@ -9,6 +9,7 @@ import { withMic } from './dictation';
 import { busy, fill, h, timeAgo } from './dom';
 import { CONTEXT_TONE, closeGoal, goalStarted, leadEffortPicker, noteView, prLink, reviewing } from './goals';
 import { type NavItem, readout, shownView, SideNav } from './panels';
+import { openClosedGoalShown } from './screenPanel';
 
 /** The goals panel's views: the goals under way (and any waiting for a station), a new one, and the closed ones. */
 type GoalsView = 'goals' | 'new' | 'log';
@@ -94,10 +95,16 @@ function recordRow(ui: Ui, projectId: string, goal: GoalRecord, free: boolean): 
         ui.openAgent(lead.id);
       }, ui.error);
   }
+  // what its lead showed and asked with pictures, kept with the goal
+  const count = (goal.artifacts?.length ?? 0) + (goal.questions?.length ?? 0);
+  const shown = count
+    ? h('button', { class: 'btn small', title: 'The diagrams and mockups its lead showed, and the questions they asked you, as they left them', onclick: () => openClosedGoalShown(ui, goal) }, `Shown (${count})`)
+    : null;
   return h('div', { class: 'card goal-record' },
     h('div', { class: 'row' },
       h('strong', { class: 'grow' }, goal.title),
       h('small', { class: 'muted' }, `${goal.leadName} · ${goal.slices} slice${goal.slices === 1 ? '' : 's'} · closed ${timeAgo(goal.closedAt)}`),
+      shown,
       reopen,
     ),
     goal.branch ? h('small', { class: 'muted', style: 'display:block' }, `On ${goal.branch}`) : null,

@@ -134,6 +134,9 @@ export interface GoalRecord {
   repos?: LeadWork['repos'];
   /** The goal as the captain first put it, for a reopened goal's lead. */
   brief?: string;
+  /** What its lead showed, and asked with pictures, kept to look back at (and for a reopened goal's screen). */
+  artifacts?: GoalArtifact[];
+  questions?: GoalQuestion[];
   openedAt: number;
   closedAt: number;
 }

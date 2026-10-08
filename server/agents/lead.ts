@@ -404,6 +404,7 @@ export function goalRecord(agent: Agent, now: number): GoalRecord {
   return {
     id: agent.id, title: work.title, note: work.note, slices: work.prs.length ? work.slice : work.slice - 1, prs: everyPr(work), slice: work.slice, leadName: agent.name, sessionId: agent.sessionId,
     brief: work.brief, branch: agent.branch, repos: work.repos, openedAt: agent.startedAt, closedAt: now,
+    ...(work.artifacts?.length && { artifacts: work.artifacts }), ...(work.questions?.length && { questions: work.questions }),
   };
 }
 
@@ -422,6 +423,7 @@ export function reopenedWork(goal: GoalRecord, station: number): LeadWork {
   return {
     station, title: goal.title, brief: goal.brief, note: goal.note, repos: goal.repos ?? [], slice, prs: current,
     ...(landed.length && { landed }), reopening: { closedAt: goal.closedAt },
+    ...(goal.artifacts && { artifacts: goal.artifacts }), ...(goal.questions && { questions: goal.questions }),
   };
 }
 
@@ -451,6 +453,9 @@ export const sessionGone = (outcome: RunOutcome, resumed: boolean): boolean =>
   resumed && !outcome.ok && !outcome.aborted && !outcome.started && /no conversation found/i.test(outcome.error ?? '');
 
 /** The room's log with a goal just closed: newest first, the oldest dropping off. */
+/** The goals in `before` that `after` no longer has: what they showed can go. */
+export const leftLog = (before: GoalRecord[], after: GoalRecord[]): GoalRecord[] => before.filter((g) => !after.some((a) => a.id === g.id));
+
 export const fileGoal = (log: GoalRecord[], record: GoalRecord): GoalRecord[] => [record, ...log.filter((g) => g.id !== record.id)].slice(0, GOAL_LOG);
 
 /** The queued goal a freed station offers: the first in line. */

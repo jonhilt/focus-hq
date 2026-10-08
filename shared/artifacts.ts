@@ -15,11 +15,14 @@ export const latestArtifact = (artifacts: readonly GoalArtifact[] | undefined): 
 export const optionUrl = (leadId: string, question: GoalQuestion, option: string, kind: 'html' | 'jpg'): string =>
   `/api/artifacts/${leadId}/${question.id}.${option}.${kind}?v=${question.at}`;
 
-/** The question the lead is waiting on the captain to answer, if there is one. */
-export const openQuestion = (lead: Pick<Agent, 'lead'> | undefined): GoalQuestion | undefined => {
-  const last = lead?.lead?.questions?.at(-1);
+/** The last of a goal's questions, while the captain hasn't answered it. */
+export const unanswered = (questions: readonly GoalQuestion[] | undefined): GoalQuestion | undefined => {
+  const last = questions?.at(-1);
   return last && !last.answer ? last : undefined;
 };
+
+/** The question the lead is waiting on the captain to answer, if there is one. */
+export const openQuestion = (lead: Pick<Agent, 'lead'> | undefined): GoalQuestion | undefined => unanswered(lead?.lead?.questions);
 
 /** What the lead hears when the captain picks an option. */
 export function answerMessage(question: GoalQuestion, option: string, note?: string): string {

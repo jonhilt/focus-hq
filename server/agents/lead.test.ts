@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadWork } from '../../shared/types';
-import { afterLanding, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
+import { leftLog, afterLanding, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -385,6 +385,24 @@ describe('reopening a closed goal', () => {
     const old = { ...record, slice: undefined, prs: work.prs };
     expect(reopenedWork(old, 0)).toMatchObject({ slice: 2, prs: work.prs });
     expect(reopenedWork(old, 0).landed).toBeUndefined();
+  });
+
+  it('keeps what the lead showed and asked with the closed goal, and brings it back when it reopens', () => {
+    const artifacts = [{ id: 'data-flow', title: 'Data flow', at: 1, image: true }];
+    const questions = [{ id: 'q1', question: 'Which?', options: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }], at: 2, answer: { option: 'b', at: 3 } }];
+    const record = goalRecord({ ...lead, lead: { ...work, artifacts, questions } }, closedAt);
+    expect(record).toMatchObject({ artifacts, questions });
+    expect(reopenedWork(record, 1)).toMatchObject({ artifacts, questions });
+    // nothing shown: nothing kept
+    expect(goalRecord(lead, closedAt)).not.toHaveProperty('artifacts');
+    expect(reopenedWork(goalRecord(lead, closedAt), 1)).not.toHaveProperty('questions');
+  });
+
+  it('lets go of what a goal showed once it drops off the end of the log', () => {
+    const log = Array.from({ length: GOAL_LOG }, (_, i) => goalRecord({ ...lead, id: `lead_p1_${i}` }, i));
+    const after = fileGoal(log, goalRecord({ ...lead, id: 'lead_p1_new' }, 99));
+    expect(leftLog(log, after).map((g) => g.id)).toEqual([`lead_p1_${GOAL_LOG - 1}`]);
+    expect(leftLog(after, after)).toEqual([]);
   });
 
   it('tells the lead where their repos are, and where uncommitted work went', () => {

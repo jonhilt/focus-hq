@@ -302,7 +302,7 @@ describe('AgentManager', () => {
     expect(project.goals?.map((g) => g.id)).toEqual([lead.id]);
   });
 
-  it('puts what the lead shows on their goal, with a picture when it can take one, until the goal closes', async () => {
+  it('puts what the lead shows on their goal, with a picture when it can take one, and files it with the goal when it closes', async () => {
     const { agents, claude, store, project } = office();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     await until(() => claude.turns.length === 1);
@@ -319,7 +319,8 @@ describe('AgentManager', () => {
     expect(await store.readArtifact(lead.id, 'mockup.jpg')).toBeUndefined();
 
     await agents.closeGoal(lead.id, true);
-    expect(await store.readArtifact(lead.id, 'data-flow.html')).toBeUndefined();
+    expect(project.goals?.[0].artifacts?.map((a) => a.id)).toEqual(['data-flow', 'mockup']);
+    expect((await store.readArtifact(lead.id, 'data-flow.html'))?.toString()).toBe('<h1>Flow</h1>');
   });
 
   it('puts the lead’s explainer on their goal in the office’s player, and says when its stage throws', async () => {

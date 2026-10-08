@@ -1,5 +1,5 @@
-import { ARTIFACT_SIZE, artifactUrl, latestArtifact, openQuestion, optionUrl } from '../../../shared/artifacts';
-import type { GoalArtifact, GoalQuestion } from '../../../shared/types';
+import { ARTIFACT_SIZE, artifactUrl, latestArtifact, optionUrl, unanswered } from '../../../shared/artifacts';
+import type { GoalArtifact, GoalQuestion, GoalRecord } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
@@ -23,9 +23,21 @@ const when = (at: number) => new Date(at).toLocaleTimeString([], { hour: '2-digi
  */
 export function openScreenPanel(ui: Ui, leadId?: string): void {
   const work = () => (leadId ? state.agents.get(leadId)?.lead : undefined);
-  const artifacts = (): GoalArtifact[] => work()?.artifacts ?? [];
-  const questions = (): GoalQuestion[] => work()?.questions ?? [];
-  if (!artifacts().length && !questions().length) return;
+  if (!leadId || (!work()?.artifacts?.length && !work()?.questions?.length)) return;
+  openShown(ui, 'On the screen', { leadId, artifacts: () => work()?.artifacts ?? [], questions: () => work()?.questions ?? [], live: true });
+}
+
+/** What a closed goal's lead showed and asked, as they left it: to look back at, but not to answer any more. */
+export function openClosedGoalShown(ui: Ui, goal: GoalRecord): void {
+  openShown(ui, `Shown in “${goal.title}”`, { leadId: goal.id, artifacts: () => goal.artifacts ?? [], questions: () => goal.questions ?? [], live: false });
+}
+
+/**
+ * What a lead showed and asked (`live`: their goal's still open, so their open question can be answered and new ones
+ * turn up), one view apiece down the sidebar.
+ */
+function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: () => GoalArtifact[]; questions: () => GoalQuestion[]; live: boolean }): void {
+  const { leadId, artifacts, questions, live } = shownBy;
 
   const body = h('div');
   // each page at the size it was laid out for, scaled to fit its box: up close, it looks as it does on the screen
@@ -43,7 +55,7 @@ export function openScreenPanel(ui: Ui, leadId?: string): void {
     resized.observe(el);
     return el;
   };
-  const open = () => openQuestion({ lead: work() });
+  const open = () => (live ? unanswered(questions()) : undefined);
   let picked = open() ? asked(open()!) : latestArtifact(artifacts())?.id ?? '';
   // what's on show, so a new version (or your answer) redraws it and anything else leaves it be
   let shown = '';
@@ -63,11 +75,11 @@ export function openScreenPanel(ui: Ui, leadId?: string): void {
    * option's page stays loaded, so stepping is instant and each keeps where you'd scrolled to.
    */
   const questionView = (q: GoalQuestion): HTMLElement[] => {
-    const lead = state.agents.get(leadId!);
+    const lead = state.agents.get(leadId);
     const note = h('input', { class: 'grow', type: 'text', placeholder: `Anything to add for ${lead?.name ?? 'the lead'}? (optional)` });
     const pick = (option: string) => {
       sound.press();
-      void api.answer(leadId!, q.id, option, note.value).catch((e: Error) => ui.error(e.message));
+      void api.answer(leadId, q.id, option, note.value).catch((e: Error) => ui.error(e.message));
     };
     const answer = q.answer;
     const tabs = q.options.map((o, i) => h('button', { class: 'btn small option-tab', title: o.label, onclick: () => show(i, 'one') }, o.id.toUpperCase()));
@@ -76,11 +88,11 @@ export function openScreenPanel(ui: Ui, leadId?: string): void {
     const cards = q.options.map((o) => {
       const chosen = answer?.option === o.id;
       return h('div', { class: `question-option${chosen ? ' picked' : ''}${answer && !chosen ? ' passed' : ''}` },
-        stage(optionUrl(leadId!, q, o.id, 'html'), o.label, ' option'),
+        stage(optionUrl(leadId, q, o.id, 'html'), o.label, ' option'),
         h('div', { class: 'option-side' },
           h('b', null, `${o.id.toUpperCase()} · ${o.label}`),
           o.detail ? h('p', null, o.detail) : null,
-          answer ? (chosen ? h('span', { class: 'chip' }, 'Picked') : null) : h('button', { class: 'btn primary', onclick: () => pick(o.id) }, `Pick ${o.id.toUpperCase()}`),
+          answer ? (chosen ? h('span', { class: 'chip' }, 'Picked') : null) : live ? h('button', { class: 'btn primary', onclick: () => pick(o.id) }, `Pick ${o.id.toUpperCase()}`) : null,
         ),
       );
     });
@@ -101,7 +113,7 @@ export function openScreenPanel(ui: Ui, leadId?: string): void {
     return [
       h('div', { class: 'row artifact-head' },
         h('h3', { class: 'grow' }, q.question),
-        h('small', { class: 'muted' }, answer ? `You picked ${answer.option.toUpperCase()} at ${when(answer.at)}` : `Asked ${when(q.at)}`),
+        h('small', { class: 'muted' }, answer ? `You picked ${answer.option.toUpperCase()} at ${when(answer.at)}` : live ? `Asked ${when(q.at)}` : 'Not answered before the goal closed'),
       ),
       q.context ? h('p', { class: 'question-context' }, q.context) : h('span'),
       answer?.note ? h('p', { class: 'muted' }, `You added: ${answer.note}`) : h('span'),
@@ -113,7 +125,7 @@ export function openScreenPanel(ui: Ui, leadId?: string): void {
         side,
       ),
       grid,
-      answer ? h('span') : h('div', { class: 'row question-note' }, note, h('small', { class: 'muted' }, `Your pick goes to ${lead?.name ?? 'the lead'} as a message from you.`)),
+      answer || !live ? h('span') : h('div', { class: 'row question-note' }, note, h('small', { class: 'muted' }, `Your pick goes to ${lead?.name ?? 'the lead'} as a message from you.`)),
     ];
   };
 
@@ -121,18 +133,19 @@ export function openScreenPanel(ui: Ui, leadId?: string): void {
     const list = artifacts();
     const qs = questions();
     const waiting = open();
-    const answered = qs.filter((q) => q.answer).reverse();
+    // answered, or (once the goal's closed) never answered
+    const answered = qs.filter((q) => q.answer || !live).reverse();
     const keys = [...(waiting ? [asked(waiting)] : []), ...list.map((a) => a.id), ...answered.map(asked)];
     if (!keys.includes(picked)) picked = keys[0] ?? '';
     const onScreen = waiting ? asked(waiting) : latestArtifact(list)?.id;
     nav.show([
       ...(waiting ? [{ key: asked(waiting), label: waiting.question, readout: 'ASKS YOU' }] : []),
-      ...list.map((a) => ({ key: a.id, label: a.title, readout: a.id === onScreen ? 'SCREEN' : undefined })),
-      ...answered.map((q) => ({ key: asked(q), label: q.question, readout: `PICKED ${q.answer!.option.toUpperCase()}` })),
+      ...list.map((a) => ({ key: a.id, label: a.title, readout: live && a.id === onScreen ? 'SCREEN' : undefined })),
+      ...answered.map((q) => ({ key: asked(q), label: q.question, readout: q.answer ? `PICKED ${q.answer.option.toUpperCase()}` : 'NOT ANSWERED' })),
     ], picked);
     const question = qs.find((q) => asked(q) === picked);
     const artifact = list.find((a) => a.id === picked);
-    const key = question ? `${asked(question)}@${question.at}:${question.answer?.at ?? ''}` : artifact ? artifactUrl(leadId!, artifact, 'html') : '';
+    const key = question ? `${asked(question)}@${question.at}:${question.answer?.at ?? ''}` : artifact ? artifactUrl(leadId, artifact, 'html') : '';
     if (key === shown) return;
     shown = key;
     resized.disconnect();
@@ -140,7 +153,7 @@ export function openScreenPanel(ui: Ui, leadId?: string): void {
     if (question) {
       body.replaceChildren(...questionView(question));
     } else if (artifact) {
-      const url = artifactUrl(leadId!, artifact, 'html');
+      const url = artifactUrl(leadId, artifact, 'html');
       body.replaceChildren(
         h('div', { class: 'row artifact-head' },
           h('h3', { class: 'grow' }, artifact.title),
@@ -155,10 +168,12 @@ export function openScreenPanel(ui: Ui, leadId?: string): void {
     body.querySelectorAll('.artifact-stage').forEach(fit);
   };
   render();
-  ui.panels.open({ title: 'On the screen', body, accent: LCARS.orange, wide: true, nav });
-  ui.panels.own(state.on('agent', (agent) => {
-    if (agent.id === leadId) render();
-  }));
+  ui.panels.open({ title, body, accent: LCARS.orange, wide: true, nav });
+  if (live) {
+    ui.panels.own(state.on('agent', (agent) => {
+      if (agent.id === leadId) render();
+    }));
+  }
   ui.panels.own(() => resized.disconnect());
   // ← and → step through a question's options, unless you're typing
   const keys = (e: KeyboardEvent) => {
