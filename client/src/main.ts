@@ -25,6 +25,7 @@ import { numberOne } from '../../shared/crew';
 import { toastShows } from '../../shared/hidden';
 import { previewIncludes } from '../../shared/previewSet';
 import { sound } from './sound';
+import { screenPrefs } from './world/screenPanes';
 import { Deck } from './world/deck';
 import { HolodeckDeck } from './world/holodeckDeck';
 import { COMMAND_DECK, SUN_POSITION } from './world/layout';
@@ -386,6 +387,10 @@ async function main() {
         break;
       case 'screen':
         ui.openScreen(i.id);
+        break;
+      case 'pane':
+        sound.press();
+        screenPrefs.set(i.pane, !screenPrefs.current[i.pane]);
         break;
       case 'vacant':
         ui.openManager('new-project');

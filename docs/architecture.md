@@ -42,7 +42,7 @@ server/
     demoRunner.ts         scripted pretend agents (and a pretend lead, planner, QA officer and Number One) for demo mode
 client/src/
   main.ts                 renderer (toon shading + outline pass), loop, interaction, UI wiring
-  world/                  ship layout, holodecks, stations, characters, station screens (screenPanes.ts: which panes side by side, and each viewer's switches), Kanban display
+  world/                  ship layout, holodecks, stations, characters, station screens (screenPanes.ts: which panes side by side, and each viewer's switches; paneSwitches.ts and paneSwitchPanel.ts: the briefing room's wall panel of them), Kanban display
     scenery.ts            stencil "holo walls" that show a landscape built around a room
     themes.ts             the landscapes (beach, forest, desert, moon, city, library)
     teamStation.ts        a goal's team station: its door in the holodeck and its briefing room out in the world, the lead's screen, seats for their helpers and the goal's reviewer (helperSeats.ts: who sits where)

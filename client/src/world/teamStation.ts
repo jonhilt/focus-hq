@@ -7,6 +7,9 @@ import { dress, footprint } from './deck';
 import { type Crew, HELPER_SEATS, type Marker } from './deckExtras';
 import { type GoalRoomTone, goalRoomState, roster } from './goalRoom';
 import { GoalBoard, GoalSign, TONE } from './goalScreens';
+import { PaneSwitches } from './paneSwitchPanel';
+import { PANE_SWITCHES, switchAt, switchLabel } from './paneSwitches';
+import { screenPrefs } from './screenPanes';
 import { type Box2, contains, EYE_HEIGHT, ROOM_WIDTH } from './layout';
 import { toon } from './materials';
 import { mergeStatic } from './merge';
@@ -108,6 +111,8 @@ export class TeamStation {
   private readonly area: Box2;
   private readonly sign = new GoalSign();
   private readonly board = new GoalBoard();
+  /** The switches beside the screen, for which panes it shows: the viewer's, so the same at every station. */
+  private readonly panes = new PaneSwitches();
   /** The lamps either side of the door, lit by how the goal room stands (`update`). */
   private readonly lamp = new THREE.MeshBasicMaterial({ color: HULL.dado });
   private tone: GoalRoomTone = 'free';
@@ -153,6 +158,9 @@ export class TeamStation {
     screen(roomScreens, 'team-station-sign', 'briefing room').material = this.sign.material;
     this.goalBoard = screen(roomScreens, 'team-station-note', 'briefing room');
     this.goalBoard.material = this.board.material;
+    const panes = screen(roomScreens, 'team-station-panes', 'briefing room');
+    panes.material = this.panes.material;
+    panes.userData.interactionAt = (uv: THREE.Vector2) => this.switchAt(uv);
 
     const { place, area } = this.roomKit;
     if (!place || !area) throw new Error('The team station’s briefing room has no place or area marker');
@@ -183,6 +191,14 @@ export class TeamStation {
     if (!row || !id || !name) return null;
     if (row.role === 'Helper' && this.lead.id) return { interaction: { kind: 'helper', leadId: this.lead.id, id }, label: () => `Look at ${name}’s transcript` };
     return { interaction: { kind: 'agent', id }, label: () => `Look at ${name}’s screen` };
+  }
+
+  /** Using a switch on the panel beside the screen: show or hide its pane. The terminal's stays on. */
+  private switchAt(uv: THREE.Vector2): { interaction: Interaction; label: () => string } | null {
+    const i = switchAt(uv);
+    const s = i === undefined ? undefined : PANE_SWITCHES[i];
+    if (!s || s.pane === 'terminal') return null;
+    return { interaction: { kind: 'pane', pane: s.pane }, label: () => switchLabel(s, screenPrefs.current) };
   }
 
   /**
@@ -301,6 +317,7 @@ export class TeamStation {
    * work, pulsing while they need you, steady while it's your turn.
    */
   update(t: number): void {
+    this.panes.update();
     const glow = { free: 0, 'in-session': 0.8 + 0.2 * Math.sin(t * 2), 'needs-you': 0.6 + 0.4 * Math.sin(t * 7), 'your-turn': 1, queued: 0.55, stopped: 1 }[this.tone];
     this.lamp.color.set(HULL.dado).lerp(LIT.set(TONE[this.tone]), glow);
   }
@@ -314,6 +331,7 @@ export class TeamStation {
     this.screen.dispose();
     this.sign.dispose();
     this.board.dispose();
+    this.panes.dispose();
     this.lamp.dispose();
     for (const s of [this.lead, ...this.helpers, this.reviewer]) s.character?.dispose();
   }

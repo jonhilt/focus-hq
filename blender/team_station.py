@@ -61,6 +61,10 @@ SCREEN_W = 3.4
 SCREEN_H = SCREEN_W * 1024 / 1600
 SCREEN_BOTTOM = 1.09
 SIGN_W = 1.3
+#: the pane switches to starboard of the screen, mirroring the sign: PaneSwitches' proportions (800×960)
+PANES_W = 1.0
+PANES_H = PANES_W * 960 / 800
+PANES_BOTTOM = 1.1
 #: the goal board on the starboard wall, beside the table: GoalBoard's proportions (1440×804), its bezel between the
 #: wall's stripe and its header, clear of the heads of the crew in front of it seen from the head of the table
 BOARD_W = 3.4
@@ -189,7 +193,8 @@ def cut(obj, cutter):
 def briefing_room():
     """
     The goal's briefing room: the doorway in the middle of its aft wall, the captain's chair at the near end of a long
-    table, the crew either side of it, and the lead's session on the far wall, with the station's sign beside it.
+    table, the crew either side of it, and the lead's session on the far wall, with the station's sign to port of it
+    and the switches for its panes to starboard.
     Viewports onto space down the port side, and the goal board, with the lead's note on the goal, to starboard.
     """
     module('briefing_room')
@@ -230,6 +235,11 @@ def briefing_room():
     box('sign frame', (SIGN_W + 0.08, 0.04, sign_h + 0.08), toon(HULL['dado']), (sign_x, 0.02, 1.6 - 0.04), frame=far, round=0.015)
     panel('sign', SIGN_W, sign_h, material('#000000', surface='screen', screen='team-station-sign'),
           (sign_x, 0.044, 1.6), far)
+    # and to starboard, mirroring it, the switches for which panes the screen shows
+    box('panes frame', (PANES_W + 0.08, 0.04, PANES_H + 0.08), toon(HULL['dado']), (-sign_x, 0.02, PANES_BOTTOM - 0.04),
+        frame=far, round=0.015)
+    panel('panes', PANES_W, PANES_H, material('#000000', surface='screen', screen='team-station-panes'),
+          (-sign_x, 0.044, PANES_BOTTOM), far)
 
     port = Matrix.Rotation(-math.pi / 2, 4, 'Z')
     starboard = Matrix.Rotation(math.pi / 2, 4, 'Z')

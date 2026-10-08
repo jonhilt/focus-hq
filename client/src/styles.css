@@ -280,23 +280,6 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
 .grow { flex: 1; min-width: 0; }
 .muted { color: var(--muted); }
 
-/* the screen chooser: a picture of a station's screen, its panes side by side, each lit while it's on */
-.screen-map {
-  display: grid; grid-template-columns: 40fr 35fr 25fr; gap: 6px; aspect-ratio: 25 / 16; max-height: 46vh; margin: 4px auto 14px;
-  padding: 10px; border: 3px solid var(--lcars-periwinkle); border-radius: 18px 18px 10px 10px; background: #0d1117;
-}
-.screen-stack { display: grid; grid-template-rows: 1fr 1fr; gap: 6px; }
-.screen-pane {
-  --tone: var(--lcars-sky);
-  display: flex; flex-direction: column; justify-content: space-between; padding: 8px 10px; border: 2px dashed #3a3550; border-radius: 6px;
-  background: transparent; color: var(--muted); font: inherit; font-weight: 600; text-align: left; text-transform: uppercase; letter-spacing: 0.06em;
-}
-.screen-pane small { font-size: 13px; letter-spacing: 0.04em; text-transform: none; font-weight: 400; }
-.screen-pane.on { border: 2px solid var(--tone); background: color-mix(in srgb, var(--tone) 22%, transparent); color: var(--text); }
-button.screen-pane { cursor: pointer; }
-button.screen-pane:hover { border-color: var(--tone); }
-button.screen-pane:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
-.screen-pane.fixed { --tone: var(--lcars-green); }
 /* a lead's artifact up close: its title, then the page itself, live */
 .artifact-head { margin-bottom: 8px; }
 .artifact-head h3 { margin: 0; }

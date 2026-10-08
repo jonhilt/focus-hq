@@ -288,9 +288,10 @@ export class ProjectRoom {
       for (const thing of station.furniture) interactive(thing, use, label);
       if (lead) interactive(station.goalBoard, { kind: 'agent', id: lead.id, view: 'goal' }, () => `Look at ${lead.name}’s goal and to-dos`);
       else interactive(station.goalBoard, use, label);
-      // up close, what the lead's shown, and the panes, which are the captain's to choose; a free station's screen starts a goal
-      if (lead) interactive(station.display, { kind: 'screen', id: lead.id }, () => (openQuestion(lead) ? `Answer ${lead.name}’s question` : lead.lead?.artifacts?.length ? `Look at what ${lead.name} has shown up close` : 'Change what this screen shows'), 10);
-      else interactive(station.display, use, label);
+      // up close, what the lead's shown or asked; otherwise the screen is the station's, as the table is
+      if (lead && (lead.lead?.artifacts?.length || lead.lead?.questions?.length)) {
+        interactive(station.display, { kind: 'screen', id: lead.id }, () => (openQuestion(lead) ? `Answer ${lead.name}’s question` : `Look at what ${lead.name} has shown up close`), 10);
+      } else interactive(station.display, use, label);
       this.sit(station.lead, lead?.id, lead && agentView(lead), use, label);
       this.syncHelpers(station, lead);
       const reviewer = lead && reviewers.find((r) => r.reviewFor === lead.id);
