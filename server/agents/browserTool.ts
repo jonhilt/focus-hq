@@ -6,6 +6,45 @@ import type { BrowserFrame } from '../../shared/types';
 import { errorMessage, truncate } from '../util';
 import type { RunHooks } from './types';
 
+/** How long an evaluate may run before the tool gives up on it. */
+export const EVALUATE_TIMEOUT_MS = 30_000;
+
+const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (body: string) => () => Promise<unknown>;
+
+/**
+ * The body of an async function that runs the agent's code: a single expression (`await` allowed) is returned as it
+ * is (a trailing `;` or two dropped); anything else (statements, `const`s, several lines) runs as the body as written, so it needs its own `return`.
+ */
+export function evaluateBody(src: string): string {
+  const expression = `return (${src.trim().replace(/;+$/, '')}\n);`;
+  try {
+    // only parsed here, never called: the page runs it
+    new AsyncFunction(expression);
+    return expression;
+  } catch {
+    return src;
+  }
+}
+
+/** `work`, or a clear error once `ms` have gone by without it settling. */
+export function withTimeout<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} timed out after ${Math.round(ms / 1000)} s`)), ms);
+  });
+  return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
+}
+
+/** The test hooks the office's own page exposes, for agents working on it (see `client/src/main.ts`). */
+const FOCUS_HQ_HOOKS =
+  ' On the Focus office page, `window.focusHQ` is `{ state, world, player, ui }`: ' +
+  '`ui.places(): { label, position, lookAt, projectId? }[]`, `ui.goTo(place)` teleports there, `ui.goToAgent(id)`, ' +
+  '`ui.openAgent(id)`, `ui.openBoard(projectId)`, `ui.openQa(projectId)`, `ui.openGoals(projectId)`, `ui.openComms()`, ' +
+  '`ui.panels.isOpen` (a getter, not a function) and `ui.panels.close()`; ' +
+  '`state` mirrors the server: `projects[]`, `agents`/`boards`/`previews`/`reviews` (Maps by id), `project(id)`, `agentsIn(projectId)`; ' +
+  '`world.root` is the THREE.Group to `traverse()` (world itself has no traverse), `world.rooms` (Map), `world.room(projectId)`, `world.places()`; ' +
+  '`player.teleport(feet, lookAt)` (THREE.Vector3s), `player.locked`.';
+
 type CallResult = { content: ({ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string })[]; isError?: boolean };
 
 interface Tab {
@@ -193,16 +232,21 @@ export function browserMcpServer(pool: BrowserPool, agentId: string, hooks: Pick
       tool('screenshot', 'Screenshot the current page.', {}, () => act(async () => 'Screenshot', hooks.screenshot)),
       tool(
         'evaluate',
-        'Run a JavaScript expression in the page and return its JSON result.',
+        'Run JavaScript in the page and return its JSON result. A single expression is returned as is (`await` allowed); ' +
+          'statements run as the body of an async function, so `return` the value you want. Gives up after 30 s.' +
+          FOCUS_HQ_HOOKS,
         { expression: z.string() },
         async ({ expression }) => {
           try {
             const { page } = await pool.tab(agentId);
-            const result = await page.evaluate((src) => {
-              // eslint-disable-next-line @typescript-eslint/no-implied-eval -- evaluating the agent's expression in the page is the tool's purpose
-              const value = new Function(`return (${src});`)();
-              return Promise.resolve(value).then((v) => JSON.stringify(v, null, 2));
-            }, expression);
+            const result = await withTimeout(
+              page.evaluate((body) => {
+                const Async = Object.getPrototypeOf(async function () {}).constructor as new (body: string) => () => Promise<unknown>;
+                return new Async(body)().then((v) => JSON.stringify(v, null, 2));
+              }, evaluateBody(expression)),
+              EVALUATE_TIMEOUT_MS,
+              'Evaluation',
+            );
             return { content: [{ type: 'text', text: truncate(String(result), 8000) }] };
           } catch (err) {
             return { content: [{ type: 'text', text: `Evaluation failed: ${errorMessage(err)}` }], isError: true };
