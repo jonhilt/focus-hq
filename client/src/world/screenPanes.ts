@@ -7,12 +7,11 @@ import type { Interaction } from './builder';
 
 export type Pane = 'terminal' | 'browser' | 'artifact' | 'progress';
 
-/** What a viewer has switched on: the agent's browser, a lead's artifacts, Claude's own task list, and a lead's goal note. */
+/** What a viewer has switched on: the agent's browser, a lead's artifacts, and Claude's own task list. */
 export interface PanePrefs {
   browser: boolean;
   artifacts: boolean;
   tasks: boolean;
-  note: boolean;
 }
 
 /** A screen at least this many pixels wide fits all three columns; a smaller one fits two at most. */
@@ -34,8 +33,8 @@ export interface PaneAt {
 /**
  * The panes a screen `width` × `height` pixels shows, in columns left to right: the terminal always, then what the
  * agent has to show (a lead's artifact, which they put up for the captain on purpose, over the page their browser has
- * up when there are both, or beside it on a viewscreen), and the progress column (the agent's task list, a lead's
- * goal note) while there's any. A small screen fits two columns: what there is to show wins. An artifact gets the
+ * up when there are both, or beside it on a viewscreen), and the progress column (the agent's task list) while
+ * there's any. A small screen fits two columns: what there is to show wins. An artifact gets the
  * most room.
  */
 export function screenPanes(width: number, height: number, has: { browser: boolean; artifact?: boolean; progress: boolean }): PaneAt[] {
@@ -84,16 +83,14 @@ export function paneUse(pane: Pane, lead: Agent): { interaction: Interaction; la
     case 'browser':
       return { interaction: { kind: 'agent', id, view: 'browser' }, label: () => `Look at ${name}’s browser up close` };
     case 'progress':
-      return lead.lead?.note
-        ? { interaction: { kind: 'agent', id, view: 'goal' }, label: () => `Look at ${name}’s goal and to-dos` }
-        : { interaction: { kind: 'agent', id, view: 'tasks' }, label: () => `Look at ${name}’s tasks` };
+      return { interaction: { kind: 'agent', id, view: 'tasks' }, label: () => `Look at ${name}’s tasks` };
     case 'terminal':
       return { interaction: { kind: 'agent', id }, label: () => `Look at ${name}’s session up close` };
   }
 }
 
 const KEY = 'focus.screenPanes';
-const DEFAULTS: PanePrefs = { browser: true, artifacts: true, tasks: true, note: true };
+const DEFAULTS: PanePrefs = { browser: true, artifacts: true, tasks: true };
 
 function load(): PanePrefs {
   try {

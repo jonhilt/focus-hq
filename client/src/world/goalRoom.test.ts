@@ -65,12 +65,16 @@ describe('noteSections', () => {
 
   it('puts the slice’s checklist first, ticked items dimmed, then done, next and the latest two lessons', () => {
     const sections = noteSections(note, 2);
-    expect(sections.map((s) => s.heading)).toEqual(['Slice 2', 'Done looks like', 'Next', 'Learned']);
+    expect(sections.map((s) => s.heading)).toEqual(['Slice 2 · 1 of 2', 'Done looks like', 'Next', 'Learned']);
     expect(sections[0].items).toEqual([
       { mark: '☑', text: 'Goal board', dim: true },
       { mark: '☐', text: 'Bigger sign', dim: false },
     ]);
     expect(sections[3].items.map((i) => i.text)).toEqual(['two', 'three']);
+  });
+
+  it('puts the slice and what done looks like under the goal, and next and the lessons under the crew', () => {
+    expect(noteSections(note, 2).map((s) => s.side)).toEqual(['goal', 'goal', 'crew', 'crew']);
   });
 
   it('leaves out sections with nothing in them', () => {

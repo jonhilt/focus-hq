@@ -8,13 +8,12 @@ import { flat } from './materials';
 import { portrait } from './portraits';
 import { LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
 
-// What a team station shows of its goal besides the lead's session, drawn like the holograms over the holodeck pods
-// in Lower Decks: glowing cyan on dark glass. The sign floats over the station's door (and is lit on the dado under the
-// briefing room's viewscreen): the station, its goal and lead, whether its room is in session, and how far through its
-// slice it is.
-// The goal board on the briefing room's wall lists who's in the briefing room and what each is doing, the way the crew
-// leaderboard in Lower Decks does, beside the lead's note on the goal. The team screen hangs on the holodeck's teams
-// wall beside the other stations', for what the team's up to at a glance.
+// What a team station shows of its goal besides the lead's session. What floats in the holodeck is drawn like the
+// holograms over the pods in Lower Decks, glowing cyan on dark glass: the sign over the station's door (also lit on the
+// dado under the briefing room's viewscreen), with the station, its goal and lead, whether its room is in session, and
+// how far through its slice it is; and the team screen over its pod, for what the team's up to at a glance.
+// The goal board on the briefing room's wall is LCARS, like the viewscreen beside it: the goal and the lead's note on
+// it, and who's in the briefing room and what each is doing, the way the crew leaderboard in Lower Decks does.
 
 /** Each goal room tone's colour: cyan in session, as the pods' holograms are; red once stopped, as theirs go. */
 export const TONE: Record<GoalRoomTone, string> = {
@@ -218,11 +217,35 @@ export class GoalSign extends Display {
   }
 }
 
+/** How each of a goal's pull requests stands on the goal board and the screen over its pod: its colour and word. */
+export const PR_LOOK: Record<PrGlance, { color: string; word: string }> = {
+  open: { color: '#a7b4ff', word: 'open' },
+  testing: { color: TONE['in-session'], word: 'QA testing' },
+  passed: { color: TONE['your-turn'], word: 'QA passed' },
+  failed: { color: TONE.stopped, word: 'QA failed' },
+  merged: { color: LCARS.lilac, word: 'merged' },
+  closed: { color: TONE.free, word: 'closed' },
+};
+
+/** The goal board's body type, largest first: it takes the largest that fits all of the note, down to the smallest. */
+const BOARD_TYPE = [30, 28, 26, 24, 22, 20];
+/** The size of the board's headings, whatever size its body type. */
+const HEADING = 34;
+const BOARD_BG = '#000000';
+const DIM = '#6e7681';
+const BODY = '#e6edf3';
+
+/** Each of the note's headings on the board, in its own LCARS colour. */
+const SECTION_COLOR: Record<string, string> = { 'Done looks like': LCARS.peach, Next: LCARS.peach, Learned: LCARS.periwinkle, 'As the captain put it': LCARS.peach };
+
 /**
- * The goal board on the briefing room's wall: the goal and how the room stands across the top; under it, like the
- * crew leaderboard in Lower Decks, who's in the briefing room, each with their face, name, part and what they're doing,
- * beside the lead's note on the goal (noteSections), or before there's a note, the goal as the captain put it. While
- * the station's free, what's next for it.
+ * The goal board on the briefing room's wall, an LCARS screen like the viewscreen beside it (which keeps to the work
+ * going on now): an elbow in the station's colour with its code, the goal in full across the top and how the room
+ * stands; under it, in two columns, this slice's checklist (with a bar for how far through it they are) and what done
+ * looks like, and beside them who's in the briefing room, each with their face, name, part and what they're doing, the
+ * slice's pull requests, what might come next and the latest lessons (noteSections). Before there's a note, the goal
+ * as the captain put it. The type shrinks until it all fits, rather than cutting lines off. While the station's free,
+ * what's next for it.
  */
 export class GoalBoard extends Display {
   static readonly W = 1440;
@@ -234,6 +257,10 @@ export class GoalBoard extends Display {
     super(GoalBoard.W, GoalBoard.H, false);
   }
 
+  protected override keyOf(view: StationView): unknown {
+    return [super.keyOf(view), view.accent, view.prs];
+  }
+
   /** Which crew member's row (in the roster's order) a point on the board is on, from its texture coordinates. */
   rowAt(uv: THREE.Vector2): number | undefined {
     const [x, y] = [uv.x * GoalBoard.W, (1 - uv.y) * GoalBoard.H];
@@ -241,163 +268,287 @@ export class GoalBoard extends Display {
     return i !== undefined && x >= this.rows[i].left && x < this.rows[i].right ? i : undefined;
   }
 
-  protected draw({ index, accent, lead, crew, next }: StationView): void {
+  protected draw({ index, accent, lead, crew, next, prs }: StationView): void {
     const { ctx } = this.c;
     const [W, H] = [GoalBoard.W, GoalBoard.H];
     this.rows = [];
     const { tone, label } = goalRoomState(lead);
     const color = TONE[tone];
-    ctx.fillStyle = '#061a24';
+    ctx.fillStyle = BOARD_BG;
     ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = GLASS;
-    ctx.fillRect(0, 0, W, H);
-    glowRect(ctx, 10, 10, W - 20, H - 20, 26, color, 4);
 
-    // across the top: the station's colour, the goal, and how the room stands
-    const top = 36;
-    const barH = 92;
+    // the elbow, in the station's colour, sweeping from the top bar down the left side
+    const side = 150;
+    const bar = 118;
+    const rule = 10;
+    const r = 60;
     ctx.fillStyle = accent;
     ctx.beginPath();
-    ctx.roundRect(36, top, 26, barH, [13, 0, 0, 13]);
+    ctx.moveTo(0, bar + 120);
+    ctx.lineTo(0, r);
+    ctx.arc(r, r, r, Math.PI, (Math.PI * 3) / 2);
+    ctx.lineTo(side, 0);
+    ctx.lineTo(side, bar + rule);
+    ctx.arc(side + 30, bar + rule + 30, 30, Math.PI * 1.5, Math.PI, true);
+    ctx.lineTo(side, bar + 120);
+    ctx.closePath();
     ctx.fill();
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'left';
-    ctx.font = `600 64px ${LCARS_FONT}`;
-    const title = lead ? (lead.lead?.title ?? lead.issue.title) : `Team station ${index + 1}`;
-    const status = lead ? `${lead.name} · ${label}` : label;
-    ctx.save();
-    ctx.font = `500 40px ${LCARS_FONT}`;
-    const statusW = ctx.measureText(status.toUpperCase()).width;
-    ctx.restore();
-    glowText(ctx, fitText(ctx, title.toUpperCase(), W - 140 - statusW - 60), 82, top + barH / 2, TEXT, 10);
-    ctx.font = `500 40px ${LCARS_FONT}`;
+    // the rule under the top bar, from the elbow to the right-hand end
+    ctx.fillRect(side, bar, W - side - 24, rule);
+    ctx.beginPath();
+    ctx.roundRect(W - 30, bar, 30, rule, [0, rule / 2, rule / 2, 0]);
+    ctx.fill();
+    ctx.fillStyle = '#000000';
     ctx.textAlign = 'right';
-    glowText(ctx, status.toUpperCase(), W - 50, top + barH / 2, color, 10);
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = `600 54px ${LCARS_FONT}`;
+    ctx.fillText(`TS-${index + 1}`, side - 14, bar - 16);
+    // blocks down the left side, as on the viewscreen's frame
+    const blocks: [string, number][] = [[LCARS.lilac, 90], [LCARS.periwinkle, 150], [LCARS.peach, H]];
+    let by = bar + 130;
+    for (const [i, [c, bh]] of blocks.entries()) {
+      const h = Math.min(bh, H - by);
+      ctx.fillStyle = c;
+      ctx.beginPath();
+      ctx.roundRect(0, by, side, h, i === blocks.length - 1 ? [0, 0, 0, r] : 0);
+      ctx.fill();
+      by += h + 8;
+    }
 
-    const y = top + barH + 30;
-    const h = H - y - 40;
-    const note = lead?.lead?.note;
-    if (!lead) return this.message('Free', next ? `Next up: ${next}` : 'Press E at the door, or on this board, to start a goal here.', y, h, color);
-    const gap = 30;
-    const crewW = Math.round((W - 80 - gap) * 0.52);
-    this.crew(crew ?? [], 40, y, crewW, h);
+    // across the top: the goal in full, and how the room stands
+    const status = (lead ? `${lead.name} · ${label}` : label).toUpperCase();
+    ctx.font = `600 34px ${LCARS_FONT}`;
+    const pillW = ctx.measureText(status).width + 56;
+    const pillH = 56;
+    const pillX = W - 24 - pillW;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.roundRect(pillX, (bar - pillH) / 2, pillW, pillH, pillH / 2);
+    ctx.fill();
+    ctx.fillStyle = '#000000';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(status, pillX + pillW / 2, bar / 2 + 2);
+    const title = (lead ? (lead.lead?.title ?? lead.issue.title) : `Team station ${index + 1}`).toUpperCase();
+    const tx = side + 28;
+    const tw = pillX - 28 - tx;
+    let titleLines: string[] = [];
+    for (const px of [54, 46, 40, 36]) {
+      ctx.font = `600 ${px}px ${LCARS_FONT}`;
+      titleLines = wrap(ctx, title, tw, 2);
+      if (wrap(ctx, title, tw).length <= 2) break;
+    }
+    const titleH = parseInt(ctx.font.split(' ')[1], 10) * 1.05;
+    ctx.fillStyle = LCARS.peach;
+    ctx.textAlign = 'left';
+    titleLines.forEach((line, i) => ctx.fillText(line, tx, bar / 2 + (i - (titleLines.length - 1) / 2) * titleH));
+
+    const x = side + 34;
+    const y = bar + rule + 30;
+    const w = W - 30 - x;
+    const h = H - 26 - y;
+    if (!lead) return this.message('Free', next ? `Next up: ${next}` : 'Press E at the door, or on this board, to start a goal here.', x, y, w, h, color);
+
+    const note = lead.lead?.note;
     const sections = note ? noteSections(note, lead.lead?.slice ?? 1) : [];
     const brief = lead.lead?.brief;
-    if (!sections.length && brief) sections.push({ heading: 'As the captain put it', lines: 9, items: [{ mark: '“', text: brief }] });
-    if (!sections.length) sections.push({ heading: 'No note yet', lines: 2, items: [{ mark: '◎', text: `${lead.name} hasn’t written the goal’s note yet.` }] });
-    this.pane(sections, 40 + crewW + gap, y, W - 80 - gap - crewW, h);
+    if (!sections.length && brief) sections.push({ heading: 'As the captain put it', side: 'goal', items: [{ mark: '“', text: brief }] });
+    if (!sections.length) sections.push({ heading: 'No note yet', side: 'goal', items: [{ mark: '◎', text: `${lead.name} hasn’t written the goal’s note yet.` }] });
+    const gap = 44;
+    const leftW = Math.round((w - gap) * 0.54);
+    const rx = x + leftW + gap;
+    const rw = w - leftW - gap;
+    const goal = sections.filter((s) => s.side === 'goal');
+    const ahead = sections.filter((s) => s.side === 'crew');
+    const progress = sliceProgress(note);
+
+    // the crew and their pull requests take what they need of the right-hand column; the note has the rest. The type
+    // is the largest that fits both columns, so they match, moving what's next and the lessons over under the goal
+    // when there's no room for them under the crew, and leaving the lessons out, then what's next, when even the
+    // smallest type can't fit them.
+    const crewBottom = this.crew(crew ?? [], prs ?? [], rx, y, rw);
+    const columns = (kept: number, moved: number) => [[...goal, ...ahead.slice(0, moved)], ahead.slice(moved, kept)];
+    const fits = (px: number, kept: number, moved: number) => {
+      const [left, right] = columns(kept, moved);
+      return this.flow(left, x, y, leftW, h, px, progress, false) && this.flow(right, rx, crewBottom, rw, y + h - crewBottom, px, null, false);
+    };
+    let [size, kept, moved] = [BOARD_TYPE[BOARD_TYPE.length - 1], 0, 0];
+    found: for (let k = ahead.length; k >= 0; k--) {
+      for (const px of BOARD_TYPE) {
+        for (let m = 0; m <= k; m++) {
+          if (fits(px, k, m)) {
+            [size, kept, moved] = [px, k, m];
+            break found;
+          }
+        }
+      }
+    }
+    const [left, right] = columns(kept, moved);
+    this.flow(left, x, y, leftW, h, size, progress, true);
+    this.flow(right, rx, crewBottom, rw, y + h - crewBottom, size, null, true);
   }
 
-  /** The crew in the briefing room, a row each, as many as fit: face, name and part, and what they're doing. */
-  private crew(crew: { who: CrewView; role: string }[], x: number, y: number, w: number, h: number): void {
+  /** An LCARS heading: a rounded tab in its colour, then its words. */
+  private heading(text: string, x: number, y: number, w: number, px: number, color: string): void {
     const { ctx } = this.c;
-    ctx.fillStyle = PANE;
+    ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.roundRect(x, y, w, h, 18);
+    ctx.roundRect(x, y - px * 0.5, px * 0.45, px, [px / 2, 0, 0, px / 2]);
     ctx.fill();
-    const pad = 18;
-    const rowH = Math.min(122, (h - pad * 2) / Math.max(4, crew.length));
-    const tile = rowH - 14;
-    crew.forEach(({ who, role }, i) => {
-      const ry = y + pad + i * rowH;
-      if (ry + rowH > y + h) return;
-      this.rows.push({ left: x, right: x + w, top: ry - 7, bottom: ry + rowH - 7 });
-      // the face in its own glowing cell, as on the leaderboard
-      ctx.fillStyle = 'rgba(8, 50, 66, 0.9)';
-      ctx.beginPath();
-      ctx.roundRect(x + pad, ry, tile, tile, 10);
-      ctx.fill();
-      glowRect(ctx, x + pad, ry, tile, tile, 10, TONE['in-session'], 2);
-      ctx.save();
-      ctx.beginPath();
-      ctx.roundRect(x + pad, ry, tile, tile, 10);
-      ctx.clip();
-      const pic = portrait(who.avatar);
-      if (pic) ctx.drawImage(pic, x + pad, ry, tile, tile);
-      else face(ctx, who.avatar, x + pad + tile / 2, ry + tile * 0.44, tile * 0.42);
-      ctx.restore();
-      const tx = x + pad + tile + 22;
-      const tw = x + w - pad - tx;
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.font = `600 ${Math.round(tile * 0.4)}px ${LCARS_FONT}`;
-      const name = who.name.toUpperCase();
-      glowText(ctx, fitText(ctx, name, tw - 150), tx, ry + tile * 0.3, TONE['in-session'], 10);
-      const nameW = Math.min(ctx.measureText(name).width, tw - 150);
-      ctx.font = `600 ${Math.round(tile * 0.24)}px ${LCARS_FONT}`;
-      ctx.fillStyle = LCARS_STATUS[who.status];
-      ctx.beginPath();
-      ctx.arc(tx + nameW + 22, ry + tile * 0.3, 8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillText(role.toUpperCase(), tx + nameW + 38, ry + tile * 0.31);
-      ctx.font = `${Math.round(tile * 0.27)}px ${UI_FONT}`;
-      ctx.fillStyle = TEXT;
-      ctx.fillText(fitText(ctx, who.line, tw), tx, ry + tile * 0.76);
-    });
-  }
-
-  /** One pane of the board, its sections one under another, as many lines as fit. */
-  private pane(sections: NoteSection[], x: number, y: number, w: number, h: number): void {
-    const { ctx } = this.c;
-    ctx.fillStyle = PANE;
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, h, 18);
-    ctx.fill();
-    const pad = 26;
-    const bottom = y + h - pad;
-    const lineH = 44;
-    let cy = y + pad + 22;
-    ctx.textBaseline = 'middle';
+    ctx.font = `600 ${px}px ${LCARS_FONT}`;
     ctx.textAlign = 'left';
-    for (const section of sections) {
-      if (cy + lineH > bottom) break;
-      ctx.font = `600 42px ${LCARS_FONT}`;
-      glowText(ctx, section.heading.toUpperCase(), x + pad, cy, TONE['in-session'], 8);
-      cy += lineH + 6;
-      ctx.font = `34px ${UI_FONT}`;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(fitText(ctx, text.toUpperCase(), w - px * 0.8), x + px * 0.8, y + 1);
+  }
+
+  /**
+   * Sections one under another in a column, their items wrapped in `px` type; the first section gets a bar for
+   * `progress` under its heading when there is one. Says whether all of it fitted; with `draw`, draws it, as far down
+   * as fits.
+   */
+  private flow(sections: NoteSection[], x: number, y: number, w: number, h: number, px: number, progress: number | null, draw: boolean): boolean {
+    const { ctx } = this.c;
+    const bottom = y + h;
+    const lineH = Math.round(px * 1.32);
+    const headPx = HEADING;
+    const markW = Math.round(px * 1.4);
+    let cy = y;
+    for (const [i, section] of sections.entries()) {
+      const color = i === 0 && section.side === 'goal' ? LCARS.gold : (SECTION_COLOR[section.heading] ?? LCARS.lilac);
+      if (draw && cy + headPx <= bottom) this.heading(section.heading, x, cy + headPx / 2, w, headPx, color);
+      cy += headPx + 10;
+      if (i === 0 && progress !== null) {
+        if (draw && cy + 14 <= bottom) {
+          ctx.fillStyle = '#1c2230';
+          ctx.beginPath();
+          ctx.roundRect(x, cy, w, 14, 7);
+          ctx.fill();
+          if (progress > 0) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.roundRect(x, cy, Math.max(14, (w * progress) / 100), 14, 7);
+            ctx.fill();
+          }
+        }
+        cy += 14 + 12;
+      }
+      ctx.font = `${px}px ${UI_FONT}`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
       for (const item of section.items) {
-        const lines = wrap(ctx, item.text, w - pad * 2 - 48, section.lines);
-        for (const [i, line] of lines.entries()) {
-          if (cy > bottom) break;
-          ctx.fillStyle = item.dim ? '#6f8a93' : TEXT;
-          if (i === 0) ctx.fillText(item.mark, x + pad, cy);
-          ctx.fillText(line, x + pad + 48, cy);
+        for (const [j, line] of wrap(ctx, item.text, w - markW).entries()) {
+          if (draw && cy + lineH <= bottom) {
+            ctx.fillStyle = item.dim ? DIM : BODY;
+            if (j === 0) ctx.fillText(item.mark, x, cy);
+            ctx.fillText(line, x + markW, cy);
+          }
           cy += lineH;
         }
-        cy += 4;
+        cy += Math.round(px * 0.25);
       }
-      cy += 18;
+      cy += Math.round(px * 0.7);
     }
+    return cy - Math.round(px * 0.95) <= bottom;
+  }
+
+  /**
+   * Who's in the briefing room, a row each (face, name and part, and what they're doing), then the slice's pull
+   * requests, at the top of a column. Returns where the column's free below them.
+   */
+  private crew(crew: { who: CrewView; role: string }[], prs: { label: string; state: PrGlance }[], x: number, y: number, w: number): number {
+    const { ctx } = this.c;
+    const headPx = HEADING;
+    this.heading('Crew', x, y + headPx / 2, w, headPx, LCARS.periwinkle);
+    let cy = y + headPx + 14;
+    const tile = 62;
+    const rowH = Math.min(70, 280 / Math.max(4, crew.length));
+    const size = Math.min(tile, rowH - 10);
+    for (const { who, role } of crew) {
+      this.rows.push({ left: x, right: x + w, top: cy - 4, bottom: cy + rowH - 4 });
+      ctx.fillStyle = '#10161f';
+      ctx.beginPath();
+      ctx.roundRect(x, cy, size, size, 10);
+      ctx.fill();
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(x, cy, size, size, 10);
+      ctx.clip();
+      const pic = portrait(who.avatar);
+      if (pic) ctx.drawImage(pic, x, cy, size, size);
+      else face(ctx, who.avatar, x + size / 2, cy + size * 0.44, size * 0.42);
+      ctx.restore();
+      const tx = x + size + 16;
+      const tw = x + w - tx;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.font = `600 ${Math.round(size * 0.44)}px ${LCARS_FONT}`;
+      const name = fitText(ctx, who.name.toUpperCase(), tw - 140);
+      ctx.fillStyle = LCARS.periwinkle;
+      ctx.fillText(name, tx, cy + size * 0.26);
+      const nameW = ctx.measureText(name).width;
+      ctx.fillStyle = LCARS_STATUS[who.status];
+      ctx.beginPath();
+      ctx.arc(tx + nameW + 16, cy + size * 0.26, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.font = `600 ${Math.round(size * 0.32)}px ${LCARS_FONT}`;
+      ctx.fillStyle = LCARS.lilac;
+      ctx.fillText(fitText(ctx, role.toUpperCase(), tw - nameW - 30), tx + nameW + 28, cy + size * 0.28);
+      ctx.font = `${Math.round(size * 0.34)}px ${UI_FONT}`;
+      ctx.fillStyle = '#c8d1db';
+      ctx.fillText(fitText(ctx, who.line, tw), tx, cy + size * 0.74);
+      cy += rowH;
+    }
+    cy += 16;
+
+    // the slice's pull requests, as many as fit on two lines
+    this.heading('Pull requests', x, cy + headPx / 2, w, headPx, LCARS.lilac);
+    cy += headPx + 14;
+    ctx.font = `600 26px ${LCARS_FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (!prs.length) {
+      ctx.textAlign = 'left';
+      ctx.fillStyle = DIM;
+      ctx.fillText('NONE YET', x, cy + 18);
+      return cy + 36 + 30;
+    }
+    const chipH = 38;
+    let cx = x;
+    let line = 0;
+    for (const pr of prs) {
+      const look = PR_LOOK[pr.state];
+      const text = `${pr.label} ${look.word}`.toUpperCase();
+      const cw = Math.min(w, ctx.measureText(text).width + 32);
+      if (cx + cw > x + w && cx > x) {
+        if (++line === 2) break;
+        cx = x;
+        cy += chipH + 10;
+      }
+      ctx.fillStyle = look.color;
+      ctx.beginPath();
+      ctx.roundRect(cx, cy, cw, chipH, chipH / 2);
+      ctx.fill();
+      ctx.fillStyle = '#000000';
+      ctx.fillText(fitText(ctx, text, cw - 24), cx + cw / 2, cy + chipH / 2 + 1);
+      cx += cw + 10;
+    }
+    return cy + chipH + 30;
   }
 
   /** A heading and a few lines in the middle of the board, for when there's no note to show. */
-  private message(heading: string, text: string, y: number, h: number, color: string): void {
+  private message(heading: string, text: string, x: number, y: number, w: number, h: number, color: string): void {
     const { ctx } = this.c;
-    const W = GoalBoard.W;
-    ctx.fillStyle = PANE;
-    ctx.beginPath();
-    ctx.roundRect(40, y, W - 80, h, 18);
-    ctx.fill();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = `600 64px ${LCARS_FONT}`;
-    glowText(ctx, fitText(ctx, heading.toUpperCase(), W - 160), W / 2, y + h * 0.3, color, 14);
+    ctx.font = `600 96px ${LCARS_FONT}`;
+    ctx.fillStyle = color;
+    ctx.fillText(fitText(ctx, heading.toUpperCase(), w - 80), x + w / 2, y + h * 0.3);
     ctx.font = `34px ${UI_FONT}`;
-    ctx.fillStyle = TEXT;
-    const lines = wrap(ctx, text, W - 240, 6);
-    lines.forEach((line, i) => ctx.fillText(line, W / 2, y + h * 0.3 + 90 + i * 46));
+    ctx.fillStyle = BODY;
+    const lines = wrap(ctx, text, w - 160, 6);
+    lines.forEach((line, i) => ctx.fillText(line, x + w / 2, y + h * 0.3 + 100 + i * 46));
   }
 }
-
-/** How each of a goal's pull requests stands on the screen over its pod: its colour and word. */
-export const PR_LOOK: Record<PrGlance, { color: string; word: string }> = {
-  open: { color: '#a7b4ff', word: 'open' },
-  testing: { color: TONE['in-session'], word: 'QA testing' },
-  passed: { color: TONE['your-turn'], word: 'QA passed' },
-  failed: { color: TONE.stopped, word: 'QA failed' },
-  merged: { color: LCARS.lilac, word: 'merged' },
-  closed: { color: TONE.free, word: 'closed' },
-};
 
 /**
  * A team station's screen, hung over its pod as a hologram (hologram.ts), the four round the holodeck so you can watch every team at once

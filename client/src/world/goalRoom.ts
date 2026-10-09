@@ -43,12 +43,13 @@ export function sliceProgress(note: GoalNote | undefined): number | null {
 }
 
 /**
- * A heading on the goal board and what's under it, each item with its mark and wrapped to at most `lines` lines;
- * `dim` for what's done with.
+ * A heading on the goal board and what's under it, each item with its mark; `dim` for what's done with. `side` says
+ * which of the board's columns it goes in: the slice and where it's going under the goal, next and lessons under the
+ * crew.
  */
 export interface NoteSection {
   heading: string;
-  lines: number;
+  side: 'goal' | 'crew';
   items: { mark: string; text: string; dim?: boolean }[];
 }
 
@@ -56,15 +57,15 @@ export interface NoteSection {
 const LESSONS = 2;
 
 /**
- * The goal board's note pane, most pressing first, as far down as it fits: this slice's checklist, what done looks
- * like, what might come next, then the latest lessons. A section with nothing in it is left out.
+ * The goal board's note, most pressing first: this slice's checklist, what done looks like, what might come next,
+ * then the latest lessons. A section with nothing in it is left out.
  */
 export function noteSections(note: GoalNote, slice: number): NoteSection[] {
   const out: NoteSection[] = [];
-  if (note.slice.length) out.push({ heading: `Slice ${slice}`, lines: 2, items: note.slice.map((i) => ({ mark: i.done ? '☑' : '☐', text: i.text, dim: i.done })) });
-  if (note.done) out.push({ heading: 'Done looks like', lines: 3, items: [{ mark: '◎', text: note.done }] });
-  if (note.next.length) out.push({ heading: 'Next', lines: 1, items: note.next.map((text) => ({ mark: '→', text })) });
-  if (note.learned.length) out.push({ heading: 'Learned', lines: 2, items: note.learned.slice(-LESSONS).map((text) => ({ mark: '•', text })) });
+  if (note.slice.length) out.push({ heading: `Slice ${slice} · ${note.slice.filter((i) => i.done).length} of ${note.slice.length}`, side: 'goal', items: note.slice.map((i) => ({ mark: i.done ? '☑' : '☐', text: i.text, dim: i.done })) });
+  if (note.done) out.push({ heading: 'Done looks like', side: 'goal', items: [{ mark: '◎', text: note.done }] });
+  if (note.next.length) out.push({ heading: 'Next', side: 'crew', items: note.next.map((text) => ({ mark: '→', text })) });
+  if (note.learned.length) out.push({ heading: 'Learned', side: 'crew', items: note.learned.slice(-LESSONS).map((text) => ({ mark: '•', text })) });
   return out;
 }
 

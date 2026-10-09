@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { COL, GAP, H, LEFT, PANE_SWITCHES, switchAt, switchLabel, W } from './paneSwitches';
 
-const prefs = { browser: false, artifacts: true, tasks: true, note: true };
+const prefs = { browser: false, artifacts: true, tasks: true };
 /** The texture coordinates of a point on the strip, in its canvas pixels (uv's y runs up the strip). */
 const at = (x: number, y = H / 2) => ({ x: x / W, y: 1 - y / H });
 

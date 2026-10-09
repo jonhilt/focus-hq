@@ -88,8 +88,7 @@ describe('paneUse', () => {
     expect(paneUse('browser', lead()).interaction).toEqual({ kind: 'agent', id: 'lead_p1_a', view: 'browser' });
   });
 
-  it('opens the goal from the progress pane while there’s a note, the tasks before', () => {
-    expect(paneUse('progress', lead({ note: { slice: [] } } as never)).interaction).toEqual({ kind: 'agent', id: 'lead_p1_a', view: 'goal' });
+  it('opens the tasks from the progress pane', () => {
     expect(paneUse('progress', lead()).interaction).toEqual({ kind: 'agent', id: 'lead_p1_a', view: 'tasks' });
   });
 

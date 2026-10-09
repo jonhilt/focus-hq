@@ -16,7 +16,6 @@ export interface PaneSwitch {
 export const PANE_SWITCHES: readonly PaneSwitch[] = [
   { pane: 'artifacts', label: 'Artifacts', what: 'artifacts pane' },
   { pane: 'browser', label: 'Browser', what: 'browser pane' },
-  { pane: 'note', label: 'Goal', what: 'goal pane' },
   { pane: 'tasks', label: 'Tasks', what: 'tasks pane' },
 ];
 

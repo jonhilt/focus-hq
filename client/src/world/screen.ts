@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Agent, BrowserFrame, ClaudeTask, GoalArtifact, GoalNote, GoalQuestion, TermLine } from '../../../shared/types';
+import type { Agent, BrowserFrame, ClaudeTask, GoalArtifact, GoalQuestion, TermLine } from '../../../shared/types';
 import { ARTIFACT_SIZE, artifactUrl, latestArtifact, openQuestion, optionUrl } from '../../../shared/artifacts';
 import { showsBrowser } from '../../../shared/browserView';
 import { plainTermLine } from '../../../shared/termText';
@@ -36,8 +36,9 @@ export const BIG_SCREEN: ScreenSize = { w: 2400, h: 1000, scale: 1.25 };
 
 /**
  * Draws an agent's work onto a canvas used as a station's display, in panes side by side (`screenPanes`): their
- * terminal, their browser when they have a page up, and their progress (the task list Claude keeps for itself, and a
- * lead's goal note) when there's any. Each viewer can switch the browser and progress panes off (`screenPrefs`).
+ * terminal, their browser when they have a page up, and their progress (the task list Claude keeps for itself) when
+ * there's any. Each viewer can switch the browser and progress panes off (`screenPrefs`). A lead's goal note isn't
+ * here: it's on the goal board beside the viewscreen (`GoalBoard`), so the screen keeps to the work going on now.
  */
 export class StationScreen {
   readonly material: THREE.MeshBasicMaterial;
@@ -144,12 +145,10 @@ export class StationScreen {
     const footerH = 34;
     const prefs = screenPrefs.current;
     const tasks = prefs.tasks ? (agent.tasks ?? []) : [];
-    const note = prefs.note && agent.task === 'lead' ? agent.lead?.note : undefined;
-    const hasNote = !!note && (!!note.done || note.slice.length > 0);
     // the lead's open question, while there is one, then what they showed last
     const question = prefs.artifacts && agent.task === 'lead' ? openQuestion(agent) : undefined;
     const artifact = prefs.artifacts && agent.task === 'lead' ? latestArtifact(agent.lead?.artifacts) : undefined;
-    const has = { browser: prefs.browser && showsBrowser(frame), artifact: !!(question ?? artifact), progress: tasks.length > 0 || hasNote };
+    const has = { browser: prefs.browser && showsBrowser(frame), artifact: !!(question ?? artifact), progress: tasks.length > 0 };
     // under the title bar, over the status bar
     const panes = (this.panes = screenPanes(Math.round(W), Math.round(H - 36 - footerH), has).map((p) => ({ ...p, y: p.y + 36 })));
     for (const { pane, x, y, w, h } of panes) {
@@ -157,7 +156,7 @@ export class StationScreen {
       else if (pane === 'browser' && frame) this.drawBrowser(frame, x, y, w, h);
       else if (pane === 'artifact' && question) this.drawQuestion(agent, question, x, y, w, h);
       else if (pane === 'artifact' && artifact) this.drawArtifact(agent, artifact, x, y, w, h);
-      else if (pane === 'progress') this.drawProgress(agent, tasks, hasNote ? note : undefined, x, y, w, h);
+      else if (pane === 'progress') this.drawProgress(tasks, x, y, w, h);
     }
 
     // status bar
@@ -176,10 +175,9 @@ export class StationScreen {
   }
 
   /**
-   * The agent's progress: the task list Claude keeps for itself, each item with what it's doing while it's at it, and,
-   * for a goal's lead, the goal note's what-done-looks-like and this slice's checklist.
+   * The agent's progress: the task list Claude keeps for itself, each item with what it's doing while it's at it.
    */
-  private drawProgress(agent: Agent, tasks: ClaudeTask[], note: GoalNote | undefined, x: number, y: number, w: number, h: number): void {
+  private drawProgress(tasks: ClaudeTask[], x: number, y: number, w: number, h: number): void {
     const ctx = this.c.ctx;
     const pad = 12;
     const lineH = 22;
@@ -218,12 +216,6 @@ export class StationScreen {
         else if (t.status === 'completed') item('✓', t.subject, '#6e7681');
         else item('○', t.subject, LCARS.sky);
       }
-      cy += 8;
-    }
-    if (note && cy < bottom) {
-      heading(`Goal · slice ${agent.lead?.slice ?? 1}`, LCARS.orange);
-      if (note.done) item('◎', note.done, LCARS.peach);
-      for (const i of note.slice) item(i.done ? '☑' : '☐', i.text, i.done ? '#6e7681' : '#e6edf3');
     }
     ctx.restore();
   }
