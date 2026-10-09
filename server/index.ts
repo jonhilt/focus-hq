@@ -6,10 +6,10 @@ import express from 'express';
 import { clock } from '../shared/clock';
 import { keyFallback } from './agents/apiKey';
 import { BrowserPool } from './agents/browserTool';
-import { ClaudeDrafter, ClaudeEngineer, ClaudeExtractor, ClaudeNumberOne, ClaudeTriager } from './agents/claudeCrew';
+import { ClaudeDrafter, ClaudeEngineer, ClaudeNumberOne, ClaudeTriager } from './agents/claudeCrew';
 import { ChiefEngineer, transcriptFolders, transcriptReader } from './agents/engineer';
 import { ClaudeRunner } from './agents/claudeRunner';
-import { DemoDrafter, DemoEngineer, DemoExtractor, DemoNumberOne, DemoRunner, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
+import { DemoDrafter, DemoEngineer, DemoNumberOne, DemoRunner, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
 import { Renderer, Sessions, Triage, Workspace } from './agents/services';
 import { closedGoalPrs, lookUpPrStates, NumberOne, type ShipStatus, summariseShip } from './agents/numberOne';
@@ -80,20 +80,23 @@ async function main() {
     const prStates = await lookUpPrStates(closedGoalPrs(snapshot), (repo, number) => github.pullRequestState(repo, number));
     return summariseShip(snapshot, (id) => workspace.dir(id), prStates);
   });
-  // the chief engineer reads the agents' transcripts (the demo's are scripted), digested into a folder of its own
-  const engineer = new ChiefEngineer(store, hub, config.demo ? new DemoEngineer() : new ClaudeEngineer(), paths.retros);
+  // the chief engineer reads the agents' sessions for frictions at retro time (the demo's are scripted), and writes what
+  // they find to the ledger through the manager, which is up by the time anyone starts a retro
+  const engineer = new ChiefEngineer(store, hub, config.demo ? new DemoEngineer() : new ClaudeEngineer(), paths.retros, {
+    readTranscript: config.demo
+      ? async (id) => (await demoTranscripts()).find((t) => t.sessionId === id)?.read()
+      : transcriptReader(paths.transcripts, paths.workspaces),
+    record: (projectId, entry, at) => office.agents.record(projectId, entry, at),
+    pauseMs: config.demo ? 500 : 20_000,
+  });
   const office = new Office(store, hub, github, previews, planner, numberOne, engineer, new Voice(hub, config.demo), await currentVersion());
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
   // each agent session is digested into the ledger as it ends: the demo's agents have no transcripts
   // the demo's older sessions are its scripted ones, digested without Haiku
-  if (config.demo) {
-    office.agents.transcripts = demoTranscripts;
-    office.agents.extractor = new DemoExtractor();
-  }
+  if (config.demo) office.agents.transcripts = demoTranscripts;
   else {
     office.agents.readTranscript = transcriptReader(paths.transcripts, paths.workspaces);
-    office.agents.extractor = new ClaudeExtractor();
     office.agents.transcripts = transcriptFolders(paths.transcripts, paths.workspaces);
   }
 

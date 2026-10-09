@@ -1,9 +1,10 @@
 import { FRICTION_KINDS, type Friction, type FrictionKind, type LedgerEvent } from '../../shared/ledger';
 import { clip, messageFrom } from './retro';
 
-// What Haiku reads of a session's span, and what's kept of its answer. Code supplies the facts (sessionDigest.ts);
-// Haiku only finds the moments of friction, the work redone and a lesson someone said out loud, and quotes them. A
-// quote that isn't in the text it was given doesn't survive: Haiku never judges, ranks or gives verdicts.
+// What the retro's reader reads of each session's span, and what's kept of its answer. Code supplies the facts
+// (sessionDigest.ts); at retro time a strong model reads the spans not read yet, a batch at a time, and only finds and
+// quotes the moments of friction, reusing the signatures already in the ledger so the same trouble groups together.
+// A quote that isn't in the text it was given doesn't survive: the reader never judges, ranks or gives verdicts.
 
 /** About 10k tokens: a session's span, trimmed to who said what, what failed and the agent's own words. */
 const BUDGET = 40_000;
@@ -26,11 +27,11 @@ function callLine(b: Block): string {
 }
 
 /**
- * The span after `afterUuid` as Haiku reads it: each message to the agent (the captain's in full, with what the agent
- * had just said), each failed call with its error, and the agent's own words; then the ledger's lines on its pull
- * requests. When it runs long, the agent's own words go first, oldest first.
+ * The span after `afterUuid` (to `toUuid`, when given) as the reader reads it: each message to the agent (the
+ * captain's in full, with what the agent had just said), each failed call with its error, and the agent's own words;
+ * then the ledger's lines on its pull requests. When it runs long, the agent's own words go first, oldest first.
  */
-export function extractionInput(jsonl: string, afterUuid: string | undefined, prLines: LedgerEvent[]): string {
+export function extractionInput(jsonl: string, afterUuid: string | undefined, prLines: LedgerEvent[], toUuid?: string): string {
   const lines: { text: string; spare: boolean }[] = [];
   const calls = new Map<string, string>();
   let inSpan = !afterUuid;
@@ -72,6 +73,7 @@ export function extractionInput(jsonl: string, afterUuid: string | undefined, pr
         } else lines.push({ text: `[${at}] ${from.toUpperCase()}: ${clip(b.text, from === 'compacted' ? 120 : 600)}`, spare: false });
       }
     }
+    if (toUuid && line.uuid === toUuid) break;
   }
   const ledger = prLines.map((e) => {
     const { at: _a, projectId: _p, seq: _s, kind, ...rest } = e;
@@ -88,41 +90,44 @@ export function extractionInput(jsonl: string, afterUuid: string | undefined, pr
 
 const KINDS = Object.keys(FRICTION_KINDS) as FrictionKind[];
 
-export function extractorSystemPrompt(): string {
+export function readerSystemPrompt(): string {
   return `
-You read a span of a coding agent's session in an office of Claude Code agents, and pick out moments, quoting them. You don't judge the work, rank anything, or say whether it was good: you only find and quote.
+You read spans of coding agents' sessions in an office of Claude Code agents, and pick out the moments of friction, quoting them. You don't judge the work, rank anything, or say whether it was good: you only find and quote.
 
-The text shows, in order: messages to the agent (CAPTAIN is the human in charge; OFFICE and QA are the office's own), calls that FAILED with their error, the AGENT's own words, and LEDGER lines on the agent's pull requests.
+Each span shows, in order: messages to the agent (CAPTAIN is the human in charge; OFFICE and QA are the office's own), calls that FAILED with their error, the AGENT's own words, and LEDGER lines on the agent's pull requests.
 
-Find:
-- frictions: moments where the office, its tools, the environment or the way of working got in the agent's way and cost time. Not the work itself: a bug the agent or QA found in the code being changed, or a check in that code doing its job, isn't friction. Give each a kind from this list, and a signature: a few lowercase words naming the trouble so the same trouble gets the same words in any session (e.g. "zsh glob no matches", "dcg blocks rm -rf", "demo port in use"). One friction per distinct trouble in the span, however often it repeats.
-${KINDS.map((k) => `  - ${k}: ${FRICTION_KINDS[k]}`).join('\n')}
-- rework: work done again (a QA fail fixed, conflicts resolved, something the captain asked to be redone), each with a few words on what.
-- lesson: only if someone in the span says in so many words what they learned or will do differently. Quote it. Otherwise leave it out: never write one.
+A friction is a moment where the office, its tools, the environment or the way of working got in the agent's way and cost time. Not the work itself: a bug the agent or QA found in the code being changed, or a check in that code doing its job, isn't friction. Give each a kind from this list, and a signature: a few lowercase words naming the trouble. When a signature you've been given fits, use it word for word, so the same trouble groups together across sessions; make a new one only for new trouble. One friction per distinct trouble in a span, however often it repeats.
+${KINDS.map((k) => `- ${k}: ${FRICTION_KINDS[k]}`).join('\n')}
 
-Every quote must be copied exactly from the text, a short stretch of one line (up to about 200 characters). Leave out anything you can't quote. An empty answer is fine.
+Every quote must be copied exactly from that span's text, a short stretch of one line (up to about 200 characters). Leave out anything you can't quote. A span with no friction gets none.
 `.trim();
 }
 
-export const EXTRACTION_SCHEMA: Record<string, unknown> = {
+/** The spans of one batch, each under its label, with the signatures to reuse. */
+export function readerPrompt(batch: { label: string; input: string }[], signatures: string[]): string {
+  return [
+    `Here are ${batch.length} spans, each between <span id="…"> tags. List the frictions of each span that has any, under its id.`,
+    signatures.length ? `Signatures already in use (kind: signature): reuse one when it's the same trouble.\n${signatures.map((s) => `- ${s}`).join('\n')}` : '',
+    ...batch.map((b) => `<span id="${b.label}">\n${b.input}\n</span>`),
+  ].filter(Boolean).join('\n\n');
+}
+
+const FRICTION_ITEM = {
   type: 'object',
   additionalProperties: false,
-  required: ['frictions', 'rework'],
+  required: ['kind', 'signature', 'quote'],
+  properties: { kind: { type: 'string', enum: KINDS }, signature: { type: 'string' }, quote: { type: 'string' } },
+};
+
+export const READ_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['spans'],
   properties: {
-    frictions: {
+    spans: {
       type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['kind', 'signature', 'quote'],
-        properties: { kind: { type: 'string', enum: KINDS }, signature: { type: 'string' }, quote: { type: 'string' } },
-      },
+      items: { type: 'object', additionalProperties: false, required: ['id', 'frictions'], properties: { id: { type: 'string' }, frictions: { type: 'array', items: FRICTION_ITEM } } },
     },
-    rework: {
-      type: 'array',
-      items: { type: 'object', additionalProperties: false, required: ['what', 'quote'], properties: { what: { type: 'string' }, quote: { type: 'string' } } },
-    },
-    lesson: { type: 'string' },
   },
 };
 
@@ -135,29 +140,43 @@ export function signatureOf(text: string): string {
 }
 
 /**
- * Haiku's answer, checked against the text it read: a quote that isn't in it word for word (spacing aside) is dropped
- * with its friction, rework or lesson, and so is anything left empty.
+ * Frictions as the reader gave them for one span, checked against its text: one whose quote isn't in it word for word
+ * (spacing aside), with an unknown kind or an empty signature, is dropped.
  */
-export function parseExtraction(out: unknown, input: string): { frictions: Friction[]; rework: { what: string; quote: string }[]; lesson?: string } {
-  const o = (out ?? {}) as Record<string, unknown>;
+export function checkFrictions(found: unknown, input: string): Friction[] {
   const text = squash(input);
-  const quoted = (q: unknown) => {
-    const quote = squash(str(q));
-    return quote.length >= 3 && text.includes(quote) ? quote : undefined;
-  };
-  const frictions = (Array.isArray(o.frictions) ? o.frictions : []).flatMap((f): Friction[] => {
+  return (Array.isArray(found) ? found : []).flatMap((f): Friction[] => {
     const r = (f ?? {}) as Record<string, unknown>;
-    const quote = quoted(r.quote);
+    const quote = squash(str(r.quote));
     const kind = KINDS.find((k) => k === r.kind);
     const signature = signatureOf(str(r.signature));
-    return quote && kind && signature ? [{ kind, signature, quote }] : [];
+    return quote.length >= 3 && text.includes(quote) && kind && signature ? [{ kind, signature, quote }] : [];
   });
-  const rework = (Array.isArray(o.rework) ? o.rework : []).flatMap((w) => {
-    const r = (w ?? {}) as Record<string, unknown>;
-    const quote = quoted(r.quote);
-    const what = clip(str(r.what), 120);
-    return quote && what ? [{ what, quote }] : [];
-  });
-  const lesson = quoted(o.lesson);
-  return { frictions, rework, ...(lesson && { lesson }) };
+}
+
+/** The reader's answer for a batch: each span's checked frictions by its label (none for a span it didn't list). */
+export function parseRead(out: unknown, batch: { label: string; input: string }[]): Map<string, Friction[]> {
+  const spans = ((out ?? {}) as { spans?: unknown }).spans;
+  const listed = Array.isArray(spans) ? (spans as { id?: unknown; frictions?: unknown }[]) : [];
+  return new Map(batch.map((b) => [b.label, listed.filter((s) => s.id === b.label).flatMap((s) => checkFrictions(s.frictions, b.input))]));
+}
+
+/** About 90k tokens a batch: a fortnight of sessions is three or four. */
+export const BATCH_CHARS = 350_000;
+
+/** Items in order, a batch at a time, each batch as big as fits under `max` characters of input (always at least one). */
+export function batchesOf<T extends { input: string }>(items: T[], max = BATCH_CHARS): T[][] {
+  const out: T[][] = [];
+  let size = 0;
+  for (const item of items) {
+    const last = out.at(-1);
+    if (last && size + item.input.length <= max) {
+      last.push(item);
+      size += item.input.length;
+    } else {
+      out.push([item]);
+      size = item.input.length;
+    }
+  }
+  return out;
 }

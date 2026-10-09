@@ -57,7 +57,7 @@ server/
     retro.ts              the chief engineer's retro, pure: what the engineer reads (the frictions that keep coming back, the ledger, goals), prompt, schema, and the check that every draft rests on real groups, with the evidence added by code; also who a transcript's message is from
     engineer.ts           the chief engineer: groups the digests' frictions, gathers the evidence into data/retros, runs one retro at a time and notes the captain's decisions; also finds the agents' transcripts on disk
     sessionDigest.ts      a session's span digested from its transcript and the ledger, by code: calls, waste, cost, nudges
-    frictions.ts          what Haiku reads of a session's span, the fixed friction kinds it picks from, and the check that every quote is really in it
+    frictions.ts          what the retro's reader reads of each session's span, the batches, prompt and schema, the fixed friction kinds, and the check that every quote is in the span
     qa.ts                 the QA officer: instructions, the report's schema and parsing, the PR comment
     demoRunner.ts         scripted pretend agents (and a pretend lead, planner, QA officer and Number One) for demo mode
 client/src/

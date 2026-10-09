@@ -1,6 +1,6 @@
 import { type Closer, type LedgerEntry, reportCard, type ReportCard } from '../../../shared/ledger';
 import type { Transcript } from '../engineer';
-import { backfillWho, digestEntry, type Extractor, lastDigest, transcriptSpan, withFrictions } from '../sessionDigest';
+import { backfillWho, digestEntry, lastDigest, transcriptSpan } from '../sessionDigest';
 import { prKey, qaBadge } from '../../../shared/qa';
 import type { Agent } from '../../../shared/types';
 import { errorMessage } from '../../util';
@@ -12,8 +12,6 @@ export class Ledger extends Part {
   private landed = new Set<string>();
   /** Reads an agent session's Claude Code transcript by its id (missing in the demo, which has none). */
   readTranscript?: (sessionId: string) => Promise<string | undefined>;
-  /** Reads each digested span for its frictions (Haiku); without one, digests carry the facts alone. */
-  extractor?: Extractor;
   /** The agents' transcripts on this machine, for digesting the ones from before digests began. */
   transcripts?: (since: number) => Promise<Transcript[]>;
   private backfilling = false;
@@ -59,7 +57,7 @@ export class Ledger extends Part {
       const span = text && transcriptSpan(text, lastDigest(this.store.ledger, sessionId)?.toUuid);
       if (!span || this.store.ledger.some((e) => e.kind === 'session-digest' && e.key === `${sessionId}:${span.toUuid}`)) return;
       const entry = digestEntry(span, who, prs, this.store.ledger, goal);
-      this.record(agent.projectId, this.extractor ? await withFrictions(entry, text, this.store.ledger, this.extractor, this.store.settings) : entry);
+      this.record(agent.projectId, entry);
     };
     const next = (this.digesting.get(sessionId) ?? Promise.resolve())
       .then(digest)
@@ -105,7 +103,7 @@ export class Ledger extends Part {
       const who = backfillWho(t, text);
       const facts = digestEntry(span, { id: t.name, name: t.name.split('__')[0], task: who.task, sessionId: t.sessionId, costUsd: who.costUsd ?? 0 }, who.prs, this.store.ledger);
       const entry = { ...facts, facts: { ...facts.facts, costUsd: who.costUsd }, backfilled: true };
-      const digest = this.extractor ? await withFrictions(entry, text, this.store.ledger, this.extractor, this.store.settings) : entry;
+      const digest = entry;
       costUsd += digest.extractCostUsd ?? 0;
       done++;
       this.record(who.projectId, digest, span.to ? Date.parse(span.to) : Date.now());

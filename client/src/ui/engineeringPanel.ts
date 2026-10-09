@@ -27,7 +27,6 @@ export function openEngineeringPanel(ui: Ui): void {
     if (!count) return fill(older);
     const go = h('button', { class: 'btn small' }, 'Digest them');
     go.onclick = () => {
-      if (!confirm(`Digest ${count} older sessions? Haiku reads each one for its frictions: roughly $${(count * 0.04).toFixed(2)} all told, and it runs in the background.`)) return;
       void busy(go, () => api.backfillDigests().then(() => fill(older, h('span', { class: 'muted' }, `Digesting ${count} older sessions: the report card fills in as they’re done`))), ui.error);
     };
     fill(older, h('span', { class: 'muted grow' }, `${count} older agent sessions haven’t been digested`), go);
@@ -40,7 +39,16 @@ export function openEngineeringPanel(ui: Ui): void {
     const running = retro?.status === 'gathering' || retro?.status === 'thinking';
     const start = h('button', { class: 'btn primary' }, retro?.status === 'done' ? 'Start a new retro' : 'Start a retro');
     start.disabled = running;
-    start.onclick = () => void busy(start, () => api.retroStart(Number(days.value)).then(() => undefined), ui.error).then(render);
+    start.onclick = () =>
+      void busy(start, async () => {
+        const window = Number(days.value);
+        const { unread, costUsd } = await api.retroPreview(window);
+        const reading = unread
+          ? `${eng.name} first reads the ${unread} sessions of the last ${window} days no one has read yet, for their frictions: roughly $${costUsd.toFixed(2)} of Claude usage, a batch at a time with a pause between. Sessions read before aren’t read again.`
+          : `Every session of the last ${window} days has been read already, so this only drafts.`;
+        if (!confirm(`Start a retro?\n\n${reading}`)) return;
+        await api.retroStart(window);
+      }, ui.error).then(render);
     const stop = h('button', { class: 'btn' }, 'Stop');
     stop.onclick = () => void busy(stop, () => api.retroStop().then(() => undefined), ui.error);
 

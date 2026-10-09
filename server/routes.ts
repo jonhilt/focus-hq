@@ -111,6 +111,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
   // Number One in the ready room: one ship-wide chat, read-only
   r.post('/number-one/say', h((req) => office.numberOne.say(str(req.body.text))));
   r.post('/number-one/new', h(() => office.numberOne.newConversation()));
+  r.get('/retro/preview', h((req) => office.engineer.preview(Number(req.query.days ?? 14))));
   r.post('/retro/start', h((req) => office.engineer.start(Number(req.body.days ?? 14))));
   r.post('/retro/stop', h(() => office.engineer.stop()));
   r.post('/retro/drafts/:id', h((req) => office.decideDraft(String(req.params.id), req.body.accept === true, typeof req.body.projectId === 'string' ? req.body.projectId : undefined, typeof req.body.repo === 'string' ? req.body.repo : undefined)));

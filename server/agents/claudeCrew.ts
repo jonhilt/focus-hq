@@ -14,8 +14,7 @@ import { parseTriage, TRIAGE_SCHEMA, type TriageDecision, type Triager, type Tri
 import { checkoutLatest } from './workspace';
 import type { RetroOfficer, RetroRequest } from './engineer';
 import { DRAFTS_SCHEMA, engineerPrompt, engineerSystemPrompt } from './retro';
-import { EXTRACTION_SCHEMA, extractorSystemPrompt } from './frictions';
-import type { Extractor } from './sessionDigest';
+import { READ_SCHEMA, readerSystemPrompt } from './frictions';
 import { chiefEngineer } from '../../shared/crew';
 
 // The permanent crew's Claude Code sessions: they read the project's code (and, for Number One, the web) and change
@@ -242,7 +241,29 @@ function numberOneServer(req: NumberOneTurn, activity: (text: string) => void): 
  * The chief engineer on a retro: reads the evidence the office gathered into its own folder (the frictions that keep
  * coming back, the ledger, closed goals) and nothing else, and drafts issues from them.
  */
+/** The model that reads sessions for frictions at retro time: it labels the same trouble the same way (see docs/retro.md). */
+export const READER_MODEL = 'claude-opus-5-5';
+
 export class ClaudeEngineer implements RetroOfficer {
+  /** A batch of sessions' spans for their frictions: no tools, a short system prompt of its own, a structured answer. */
+  async read(req: { prompt: string; settings: Settings; signal: AbortSignal }): Promise<{ structured: unknown; costUsd?: number }> {
+    const result = await runReadOnly({
+      cwd: os.tmpdir(),
+      system: readerSystemPrompt(),
+      systemAppend: '',
+      prompt: req.prompt,
+      settings: req.settings,
+      signal: req.signal,
+      activity: () => undefined,
+      builtins: [],
+      schema: READ_SCHEMA,
+      model: READER_MODEL,
+      maxTurns: 6,
+      timeoutMs: 10 * 60_000,
+    });
+    return { structured: result.structured, costUsd: result.costUsd };
+  }
+
   async retro(req: RetroRequest, activity: (text: string) => void): Promise<{ structured: unknown; text: string; costUsd?: number }> {
     const result = await runReadOnly({
       cwd: req.cwd,
@@ -257,32 +278,5 @@ export class ClaudeEngineer implements RetroOfficer {
       timeoutMs: 15 * 60_000,
     });
     return { structured: result.structured, text: result.text, costUsd: result.costUsd };
-  }
-}
-
-/** The model that reads each session's span for frictions: cheap, and only ever asked to find and quote. */
-export const EXTRACTION_MODEL = 'claude-haiku-4-5';
-
-/**
- * Haiku reading a session's span for its frictions, rework and any lesson said out loud: no tools, a short system
- * prompt of its own (not Claude Code's), and a structured answer that code checks quote by quote.
- */
-export class ClaudeExtractor implements Extractor {
-  async extract(input: string, settings: Settings, signal: AbortSignal): Promise<{ structured: unknown; costUsd?: number }> {
-    const result = await runReadOnly({
-      cwd: os.tmpdir(),
-      system: extractorSystemPrompt(),
-      systemAppend: '',
-      prompt: input,
-      settings,
-      signal,
-      activity: () => undefined,
-      builtins: [],
-      schema: EXTRACTION_SCHEMA,
-      model: EXTRACTION_MODEL,
-      maxTurns: 4,
-      timeoutMs: 3 * 60_000,
-    });
-    return { structured: result.structured, costUsd: result.costUsd };
   }
 }

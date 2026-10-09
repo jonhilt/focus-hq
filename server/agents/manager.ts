@@ -57,14 +57,6 @@ export class AgentManager {
     this.core.ledger.readTranscript = read;
   }
 
-  /** Reads each digested span for its frictions (Haiku); without one, digests carry the facts alone. */
-  get extractor(): Ledger['extractor'] {
-    return this.core.ledger.extractor;
-  }
-
-  set extractor(extractor: Ledger['extractor']) {
-    this.core.ledger.extractor = extractor;
-  }
 
   /** The agents' transcripts on this machine, for digesting the ones from before digests began. */
   get transcripts(): Ledger['transcripts'] {

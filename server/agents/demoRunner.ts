@@ -5,7 +5,6 @@ import type { TermLine } from '../../shared/types';
 import { demoSinceVerdict } from '../demoGit';
 import { sleep } from '../util';
 import type { RetroOfficer, RetroRequest, Transcript } from './engineer';
-import type { Extractor } from './sessionDigest';
 import type { NumberOneOfficer, NumberOneReply, NumberOneTurn } from './numberOne';
 import type { Drafter, DraftRequest, DraftResult } from './planner';
 import type { ExplainerInput } from './explainer';
@@ -834,6 +833,17 @@ export async function demoTranscripts(): Promise<Transcript[]> {
 export class DemoEngineer implements RetroOfficer {
   private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
 
+  /** Finds the port clash the scripted sessions all run into, quoting it. */
+  async read(req: { prompt: string; signal: AbortSignal }): Promise<{ structured: unknown; costUsd?: number }> {
+    await sleep(800 / this.speed);
+    if (req.signal.aborted) throw new Error('Stopped');
+    const spans = [...req.prompt.matchAll(/<span id="([^"]+)">\n([\s\S]*?)\n<\/span>/g)].map(([, id, text]) => {
+      const clash = /EADDRINUSE: address already in use :::\d+/.exec(text)?.[0];
+      return { id, frictions: clash ? [{ kind: 'demo-env', signature: 'demo port in use', quote: clash }] : [] };
+    });
+    return { structured: { spans }, costUsd: 0.02 };
+  }
+
   async retro(req: RetroRequest, activity: (text: string) => void): Promise<{ structured: unknown; text: string; costUsd?: number }> {
     const groups = [...fs.readFileSync(path.join(req.cwd, 'frictions.md'), 'utf8').matchAll(/^## (G\d+): (\S+): (.+) \((\d+) sessions\)$/gm)];
     for (const step of ['Reading frictions.md', 'Reading ledger.md', 'Drafting']) {
@@ -858,10 +868,3 @@ export class DemoEngineer implements RetroOfficer {
   }
 }
 
-/** The demo's Haiku: finds the port clash its scripted sessions all run into, quoting it. */
-export class DemoExtractor implements Extractor {
-  extract(input: string): Promise<{ structured: unknown; costUsd?: number }> {
-    const clash = /EADDRINUSE: address already in use :::\d+/.exec(input)?.[0];
-    return Promise.resolve({ structured: { frictions: clash ? [{ kind: 'demo-env', signature: 'demo port in use', quote: clash }] : [], rework: [] }, costUsd: 0.01 });
-  }
-}

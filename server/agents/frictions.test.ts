@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LedgerEvent } from '../../shared/ledger';
-import { extractionInput, parseExtraction, signatureOf } from './frictions';
+import { batchesOf, checkFrictions, extractionInput, parseRead, readerPrompt, signatureOf } from './frictions';
 
 let n = 0;
 const line = (type: string, content: unknown, minute = 0) => JSON.stringify({ type, uuid: `u${++n}`, timestamp: `2026-10-08T12:${String(minute).padStart(2, '0')}:00.000Z`, message: { content } });
@@ -46,56 +46,55 @@ describe('extractionInput', () => {
   });
 });
 
-describe('parseExtraction', () => {
+describe('checking what the reader found', () => {
   const input = extractionInput(transcript(), undefined, []);
 
   it('keeps what’s quoted word for word, spacing aside', () => {
-    const out = parseExtraction(
-      {
-        frictions: [
-          { kind: 'shell', signature: 'Zsh glob: no matches!', quote: 'zsh: no   matches found: *.md' },
-          { kind: 'captain-nudge', signature: 'nudge', quote: 'CAPTAIN: go' },
-        ],
-        rework: [{ what: 'quoted the glob', quote: 'ls *.md' }],
-        lesson: 'always quote globs in zsh',
-      },
-      input,
-    );
-    expect(out).toEqual({
-      frictions: [
-        { kind: 'shell', signature: 'zsh glob no matches', quote: 'zsh: no matches found: *.md' },
-        { kind: 'captain-nudge', signature: 'nudge', quote: 'CAPTAIN: go' },
-      ],
-      rework: [{ what: 'quoted the glob', quote: 'ls *.md' }],
-      lesson: 'always quote globs in zsh',
-    });
+    expect(checkFrictions([{ kind: 'shell', signature: 'Zsh glob: no matches!', quote: 'zsh: no   matches found: *.md' }, { kind: 'captain-nudge', signature: 'nudge', quote: 'CAPTAIN: go' }], input)).toEqual([
+      { kind: 'shell', signature: 'zsh glob no matches', quote: 'zsh: no matches found: *.md' },
+      { kind: 'captain-nudge', signature: 'nudge', quote: 'CAPTAIN: go' },
+    ]);
   });
 
-  it('drops what isn’t in the text, an unknown kind, an empty signature, and a lesson nobody said', () => {
-    const out = parseExtraction(
-      {
-        frictions: [
-          { kind: 'shell', signature: 'made up', quote: 'the build was slow' },
-          { kind: 'vibes', signature: 'x', quote: 'ls *.md' },
-          { kind: 'shell', signature: '!!!', quote: 'ls *.md' },
-        ],
-        rework: [{ what: '', quote: 'ls *.md' }],
-        lesson: 'Always write tests first.',
-      },
-      input,
-    );
-    expect(out).toEqual({ frictions: [], rework: [] });
-    expect(parseExtraction(undefined, input)).toEqual({ frictions: [], rework: [] });
+  it('drops what isn’t in the text, an unknown kind and an empty signature', () => {
+    expect(checkFrictions([{ kind: 'shell', signature: 'made up', quote: 'the build was slow' }, { kind: 'vibes', signature: 'x', quote: 'ls *.md' }, { kind: 'shell', signature: '!!!', quote: 'ls *.md' }], input)).toEqual([]);
+    expect(checkFrictions(undefined, input)).toEqual([]);
   });
 
   it('keeps a quote with double quotes in it, from what the agent had just said', () => {
     n = 0;
     const said = [line('assistant', [{ type: 'text', text: 'Run "npm test" now?' }]), line('user', 'yes, and quote globs')].join('\n');
-    const text = extractionInput(said, undefined, []);
-    expect(parseExtraction({ frictions: [{ kind: 'captain-nudge', signature: 'go ahead', quote: 'Run "npm test" now?' }], rework: [] }, text).frictions).toHaveLength(1);
+    expect(checkFrictions([{ kind: 'captain-nudge', signature: 'go ahead', quote: 'Run "npm test" now?' }], extractionInput(said, undefined, []))).toHaveLength(1);
+  });
+
+  it('checks each span’s frictions against that span’s own text', () => {
+    const batch = [{ label: 'S1', input: 'FAILED Bash: ls *.md → zsh: no matches found: *.md' }, { label: 'S2', input: 'CAPTAIN: go' }];
+    const zsh = { kind: 'shell', signature: 'zsh glob', quote: 'zsh: no matches found: *.md' };
+    const found = parseRead({ spans: [{ id: 'S1', frictions: [zsh] }, { id: 'S2', frictions: [zsh] }, { id: 'S9', frictions: [] }] }, batch);
+    expect(found.get('S1')).toHaveLength(1);
+    expect(found.get('S2')).toEqual([]);
+    expect([...found.keys()]).toEqual(['S1', 'S2']);
   });
 
   it('turns a signature into a few lowercase words', () => {
-    expect(signatureOf('  DCG blocks `rm -rf` on /tmp, again and again and again ')).toBe('dcg blocks rm -rf on tmp again and');
+    expect(signatureOf('  DCG blocks `ls` on /tmp, again and again and again and again ')).toBe('dcg blocks ls on tmp again and again');
+  });
+});
+
+describe('the reader’s batches and prompt', () => {
+  it('fills each batch up to its size, and never leaves a big span out', () => {
+    const items = [{ input: 'a'.repeat(6) }, { input: 'b'.repeat(4) }, { input: 'c'.repeat(12) }, { input: 'd' }];
+    expect(batchesOf(items, 10).map((b) => b.map((i) => i.input[0]).join(''))).toEqual(['ab', 'c', 'd']);
+  });
+
+  it('labels each span and hands over the signatures to reuse', () => {
+    const prompt = readerPrompt([{ label: 'S1', input: 'one' }, { label: 'S2', input: 'two' }], ['demo-env: demo port in use']);
+    expect(prompt).toContain('<span id="S1">\none\n</span>');
+    expect(prompt).toContain('- demo-env: demo port in use');
+    expect(readerPrompt([{ label: 'S1', input: 'one' }], [])).not.toContain('Signatures already in use');
+  });
+
+  it('stops a span at its last line', () => {
+    expect(extractionInput(transcript(), undefined, [], 'u3')).toBe('[12:00] OFFICE: Please resolve GitHub issue #12 in o/r\n[12:01] AGENT: Shall I ship it?\n[12:02] FAILED Bash: ls *.md → zsh: no matches found: *.md');
   });
 });

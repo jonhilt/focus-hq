@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LedgerEvent } from '../../shared/ledger';
-import { Store } from '../store';
-import { backfillWho, digestEntry, lastDigest, transcriptSpan, withFrictions } from './sessionDigest';
+import { backfillWho, digestEntry, lastDigest, transcriptSpan } from './sessionDigest';
 
 let n = 0;
 const line = (type: string, content: unknown, minute = 0) => JSON.stringify({ type, uuid: `u${++n}`, timestamp: `2026-10-08T12:${String(minute).padStart(2, '0')}:00.000Z`, message: { role: type, content } });
@@ -57,39 +56,6 @@ describe('digestEntry', () => {
     expect(lastDigest(ledger, 's1')).toEqual({ toUuid: 'u3', sessionCostUsd: 0.5 });
     const entry = digestEntry(span, agent, [{ repo: 'o/r', pr: 12 }], ledger, 'A goal');
     expect(entry).toMatchObject({ key: 's1:u8', sessionCostUsd: 1.25, goal: 'A goal', facts: { costUsd: 0.75, qaFails: 1, conflicts: 1, wastedCalls: 3 } });
-  });
-});
-
-describe('withFrictions', () => {
-  const agent = { id: 'a1', name: 'Ens. A', task: 'issue' as const, sessionId: 's1', costUsd: 1 };
-  const settings = new Store(false).settings;
-  const entry = () => digestEntry(transcriptSpan(transcript())!, agent, [{ repo: 'o/r', pr: 12 }], []);
-
-  it('adds what Haiku found, keeping only what it quoted from the span', async () => {
-    const seen: string[] = [];
-    const extractor = {
-      extract: (input: string) => {
-        seen.push(input);
-        return Promise.resolve({ structured: { frictions: [{ kind: 'shell', signature: 'zsh glob', quote: 'zsh: no matches found: --include=*.ts' }, { kind: 'other', signature: 'x', quote: 'never said' }], rework: [] }, costUsd: 0.01 });
-      },
-    };
-    const out = await withFrictions(entry(), transcript(), [], extractor, settings);
-    expect(out).toMatchObject({ frictions: [{ kind: 'shell', signature: 'zsh glob', quote: 'zsh: no matches found: --include=*.ts' }], rework: [], extractCostUsd: 0.01, facts: { wastedCalls: 3 } });
-    expect(seen[0]).toContain('[12:05] CAPTAIN: can you make the doors quieter');
-  });
-
-  it('keeps the facts, and says why, when Haiku fails or takes too long', async () => {
-    const failing = { extract: () => Promise.reject(new Error('rate limited')) };
-    expect(await withFrictions(entry(), transcript(), [], failing, settings)).toMatchObject({ extractError: 'rate limited', facts: { toolCalls: 5 } });
-    const hanging = { extract: (_i: string, _s: unknown, signal: AbortSignal) => new Promise<never>((_r, reject) => signal.addEventListener('abort', () => reject(new Error('aborted')))) };
-    expect((await withFrictions(entry(), transcript(), [], hanging, settings, 10)).extractError).toMatch(/^gave up after/);
-  });
-
-  it('doesn’t ask about a span with next to nothing in it', async () => {
-    const extractor = { extract: () => Promise.reject(new Error('should not be asked')) };
-    const tiny = [JSON.stringify({ type: 'user', uuid: 'v1', message: { content: 'go' } })].join('\n');
-    const small = digestEntry(transcriptSpan(tiny)!, agent, [], []);
-    expect(await withFrictions(small, tiny, [], extractor, settings)).toMatchObject({ frictions: [], rework: [] });
   });
 });
 

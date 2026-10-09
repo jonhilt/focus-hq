@@ -46,6 +46,7 @@ export const api = {
   closeGoal: (id: string, force = false) => call<{ closed: true } | { warn: string[] }>('POST', `/agents/${id}/close`, { force }),
   numberOneSay: (text: string) => call<NumberOneChat>('POST', '/number-one/say', { text }),
   numberOneNew: () => call<NumberOneChat>('POST', '/number-one/new'),
+  retroPreview: (days: number) => call<{ unread: number; costUsd: number }>('GET', `/retro/preview?days=${days}`),
   retroStart: (days: number) => call<Retro>('POST', '/retro/start', { days }),
   retroStop: () => call<Retro>('POST', '/retro/stop'),
   undigested: () => call<{ sessions: number }>('GET', '/digests/backfill'),

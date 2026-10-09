@@ -174,7 +174,7 @@ describe('AgentManager', () => {
     expect(reads).toEqual(['session-1']);
   });
 
-  it('digests older transcripts once each, dated when their session ended, with what Haiku quoted', async () => {
+  it('digests older transcripts once each, dated when their session ended, facts only', async () => {
     const { agents, store } = office();
     const qa = [
       { type: 'user', uuid: 'q1', timestamp: '2026-10-05T09:00:00.000Z', message: { content: 'Please QA pull request #42 in demo/webshop-frontend: Wishlist' } },
@@ -182,18 +182,18 @@ describe('AgentManager', () => {
     ].map((l) => JSON.stringify(l)).join('\n');
     const transcripts = [{ name: 'qa-proj-abc123__11111111', kind: 'qa' as const, sessionId: 's-old', read: () => Promise.resolve(qa) }];
     agents.transcripts = () => Promise.resolve(transcripts);
-    agents.extractor = { extract: () => Promise.resolve({ structured: { frictions: [{ kind: 'demo-env', signature: 'demo port taken', quote: 'The demo port was taken' }], rework: [] }, costUsd: 0.02 }) };
     expect((await agents.undigested()).map((t) => t.sessionId)).toEqual(['s-old']);
     expect(await agents.backfill()).toEqual({ sessions: 1 });
     await until(() => store.ledger.some((e) => e.kind === 'session-digest'));
-    expect(store.ledger.find((e) => e.kind === 'session-digest')).toMatchObject({
+    const digest = store.ledger.find((e) => e.kind === 'session-digest');
+    expect(digest && 'frictions' in digest).toBe(false);
+    expect(digest).toMatchObject({
       projectId: 'proj_abc123',
       at: Date.parse('2026-10-05T09:20:00.000Z'),
       backfilled: true,
       task: 'review',
       prs: [{ repo: 'demo/webshop-frontend', pr: 42 }],
-      frictions: [{ kind: 'demo-env', signature: 'demo port taken', quote: 'The demo port was taken' }],
-      extractCostUsd: 0.02,
+      facts: { minutes: 20 },
     });
     await new Promise((r) => setTimeout(r, 20));
     expect(await agents.undigested()).toEqual([]);

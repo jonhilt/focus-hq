@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkLedger, fixEffects, frictionGroups, type LedgerEvent, ledgerLine, reportCard, reportLines, type SessionFacts } from './ledger';
+import { checkLedger, fixEffects, frictionGroups, knownSignatures, type LedgerEvent, ledgerLine, reportCard, reportLines, type SessionFacts, unreadDigests } from './ledger';
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = 100 * DAY;
@@ -133,5 +133,20 @@ describe('fixEffects', () => {
     const card = reportCard([...beforeIt, accepted, rejected, landing(land), ...after(5, 0, land)], NOW);
     expect(card.fixes).toHaveLength(1);
     expect(reportLines(card).lines.at(-1)).toBe('Retro fixes: 1 accepted · 1 landed · 1 stopped it');
+  });
+});
+
+describe('frictions read at retro time', () => {
+  const span = (id: string, frictions?: { kind: 'shell'; signature: string; quote: string }[]): LedgerEvent => ({ ...(digest({}) as Extract<LedgerEvent, { kind: 'session-digest' }>), key: `${id}:u`, sessionId: id, ...(frictions && { frictions }) });
+  const read = (id: string, signature: string): LedgerEvent => ({ projectId: 'p', seq: ++seq, at: NOW - DAY, kind: 'session-frictions', key: `${id}:u`, sessionId: id, frictions: [{ kind: 'shell', signature, quote: 'q' }], reader: 'retro' });
+
+  it('counts what the reader found, alongside what Haiku found before', () => {
+    const events = [span('a', [{ kind: 'shell', signature: 'zsh glob', quote: 'q' }]), span('b'), span('c'), read('b', 'zsh glob'), read('c', 'zsh glob')];
+    expect(frictionGroups(events, NOW, 14).map((g) => [g.key, g.sessions])).toEqual([['shell: zsh glob', 3]]);
+    expect(knownSignatures(events)).toEqual(['shell: zsh glob']);
+  });
+
+  it('knows which spans are still to be read', () => {
+    expect(unreadDigests([span('a'), span('b'), read('a', 'x')], NOW, 14).map((d) => d.sessionId)).toEqual(['b']);
   });
 });

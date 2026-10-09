@@ -30,6 +30,11 @@ export type LedgerEntry =
   | (PrRef & { kind: 'checks-sent-back'; checks: string[] })
   | (PrRef & { kind: 'triage'; officer: string; action: TriageAction; note: string })
   | { kind: 'goal-closed'; goal: GoalRecord }
+  /**
+   * A digested span's frictions as the retro's reader found them (`key` is the digest's), quoted from its trimmed
+   * text. Written once per span: a span with an entry isn't read again. `missing` says its transcript wasn't there.
+   */
+  | { kind: 'session-frictions'; key: string; sessionId: string; frictions: Friction[]; reader: string; missing?: boolean }
   /** The captain accepted (and filed) or rejected a retro's draft, resting on these friction signatures. */
   | { kind: 'retro-decision'; title: string; signatures: string[]; accepted: boolean; issue?: { repo: string; number: number } }
   /** A span of an agent's session, digested when it ends (or a lead's slice lands): see `SessionFacts`. */
@@ -108,7 +113,7 @@ export interface SessionDigest {
   /** What the session had cost by the end of the span (its running total): where the next span's cost starts. */
   sessionCostUsd?: number;
   facts: SessionFacts;
-  /** What Haiku found in the span, each moment quoted from it (code checks the quotes): friction and work redone. */
+  /** What Haiku found in the span, when digests were read that way (before the retro's reader); code checked the quotes. */
   frictions?: Friction[];
   rework?: { what: string; quote: string }[];
   /** A lesson someone in the session put into words, quoted; never one written for them. */
@@ -302,6 +307,32 @@ export interface FrictionGroup {
   moments: { agent: string; at: number; quote: string }[];
 }
 
+type Digest = Extract<LedgerEvent, { kind: 'session-digest' }>;
+
+/**
+ * Each digested span's frictions, by the digest's key: what the retro's reader found (`session-frictions`), or what
+ * Haiku found when digests were read that way. A span missing from the map hasn't been read yet.
+ */
+export function frictionsByDigest(events: LedgerEvent[]): Map<string, Friction[]> {
+  const found = new Map<string, Friction[]>();
+  for (const e of events) {
+    if (e.kind === 'session-digest' && e.frictions) found.set(e.key, e.frictions);
+    else if (e.kind === 'session-frictions') found.set(e.key, e.frictions);
+  }
+  return found;
+}
+
+/** The digests in the window that no one has read for frictions yet, oldest first: what a retro will read. */
+export function unreadDigests(events: LedgerEvent[], now: number, days: number): Digest[] {
+  const found = frictionsByDigest(events);
+  return events.filter((e): e is Digest => e.kind === 'session-digest' && e.at > now - days * DAY && !found.has(e.key));
+}
+
+/** Every friction signature in the ledger, so a reader gives the same trouble the same words. */
+export function knownSignatures(events: LedgerEvent[]): string[] {
+  return [...new Set([...frictionsByDigest(events).values()].flat().map(frictionKey))].sort();
+}
+
 /**
  * The frictions in the window's session digests, grouped by kind and signature, most widespread first. A group counts
  * sessions, not mentions; groups the captain has already decided on (`retro-decision`) are left out.
@@ -309,10 +340,11 @@ export interface FrictionGroup {
 export function frictionGroups(events: LedgerEvent[], now: number, days: number): FrictionGroup[] {
   const since = now - days * DAY;
   const decided = new Set(events.flatMap((e) => (e.kind === 'retro-decision' ? e.signatures : [])));
+  const found = frictionsByDigest(events);
   const groups = new Map<string, FrictionGroup & { seen: Set<string> }>();
   for (const e of events) {
     if (e.kind !== 'session-digest' || e.at <= since) continue;
-    for (const f of e.frictions ?? []) {
+    for (const f of found.get(e.key) ?? []) {
       const key = frictionKey(f);
       if (decided.has(key)) continue;
       const g = groups.get(key) ?? { key, kind: f.kind, signature: f.signature, sessions: 0, moments: [], seen: new Set<string>() };
@@ -358,14 +390,16 @@ export const FIX_SESSIONS = 5;
  * A session counts once however often a friction came up in it.
  */
 export function fixEffects(events: LedgerEvent[], now: number, days = 14): FixEffect[] {
-  const digests = events.filter((e): e is Extract<LedgerEvent, { kind: 'session-digest' }> => e.kind === 'session-digest');
+  const found = frictionsByDigest(events);
+  // only spans that have been read count: one not read yet can't say either way
+  const digests = events.filter((e): e is Digest => e.kind === 'session-digest' && found.has(e.key));
   const count = (signatures: string[], from: number, to: number) => {
     const sessions = new Set<string>();
     const hits = new Set<string>();
     for (const d of digests) {
       if (d.at <= from || d.at > to) continue;
       sessions.add(d.sessionId);
-      if (d.frictions?.some((f) => signatures.includes(frictionKey(f)))) hits.add(d.sessionId);
+      if (found.get(d.key)?.some((f) => signatures.includes(frictionKey(f)))) hits.add(d.sessionId);
     }
     return { hits: hits.size, sessions: sessions.size };
   };
