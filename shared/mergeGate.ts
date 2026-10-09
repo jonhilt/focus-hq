@@ -1,5 +1,5 @@
 import { qaBadge, sameCommit } from './qa';
-import type { FailedCheck, PullRequest, QaReview } from './types';
+import type { FailedCheck, MergeMethod, PullRequest, QaReview } from './types';
 
 // When a pull request may merge, and what the office does next with one that can't yet. Pure, so it's unit tested
 // (shared/mergeGate.test.ts); office.ts follows the steps on each board refresh while a project has auto-merge on.
@@ -105,6 +105,11 @@ export function unpassedReason(review: QaReview | undefined, pr: Pick<PullReques
 /** Whether PRs the office opened merge by themselves: off unless the project switched it on. */
 export function autoMergeFor(project: { autoMerge?: boolean }): boolean {
   return project.autoMerge === true;
+}
+
+/** How a repo's pull requests merge: the project's choice for that repo, or else the office-wide setting. */
+export function mergeMethodFor(project: { mergeMethods?: Record<string, MergeMethod> } | undefined, repo: string, fallback: MergeMethod): MergeMethod {
+  return project?.mergeMethods?.[repo] ?? fallback;
 }
 
 /** What the board's merge button does: merge now (asking first when QA hasn't passed it), or merge once QA passes. */

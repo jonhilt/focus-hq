@@ -1,4 +1,4 @@
-import type { Agent, Board, ConflictsOutcome, Effort, Issue, IssueDraft, MessageReply, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ResumeHow, Retro, RetroDraft, RoomTheme, Settings, TermLine, VoiceStatus } from '../../../shared/types';
+import type { Agent, Board, ConflictsOutcome, Effort, Issue, IssueDraft, MergeMethod, MessageReply, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ResumeHow, Retro, RetroDraft, RoomTheme, Settings, TermLine, VoiceStatus } from '../../../shared/types';
 import type { KokoroVoice } from '../../../shared/voice';
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -15,6 +15,8 @@ async function send<T>(method: string, url: string, init: RequestInit): Promise<
 export const api = {
   createProject: (name: string, color: string, repos: string[], theme?: RoomTheme) => call<Project>('POST', '/projects', { name, color, repos, theme }),
   updateProject: (id: string, patch: Partial<Project>) => call<Project>('PATCH', `/projects/${id}`, patch),
+  /** An empty method goes back to Settings' merge method for that repo. */
+  setMergeMethod: (id: string, repo: string, method: MergeMethod | '') => call<Project>('PATCH', `/projects/${id}`, { mergeMethod: { repo, method } }),
   deleteProject: (id: string) => call('DELETE', `/projects/${id}`),
   connectRepo: (id: string, repo: string) => call<Project>('POST', `/projects/${id}/repos`, { repo }),
   disconnectRepo: (id: string, repo: string) => call<Project>('DELETE', `/projects/${id}/repos?repo=${encodeURIComponent(repo)}`),

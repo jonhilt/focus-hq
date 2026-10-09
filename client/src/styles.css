@@ -552,6 +552,7 @@ textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
   .agent-grid { grid-template-columns: 1fr; grid-auto-rows: minmax(240px, auto); }
   .controls { display: none; }
 }
+select.merge-method { width: auto; padding: 0 4px; border-radius: 8px; font-size: 13px; border-width: 1px; }
 select.effort { width: auto; padding: 2px 6px; border-radius: 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
 
 /* Dictation: a MIC button in the corner of a text box, red and pulsing while it listens. */

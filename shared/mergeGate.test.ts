@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoMergeFor, type GateOffice, goneReply, mergeAction, mergeStep, requestedMerge, unpassedReason } from './mergeGate';
+import { autoMergeFor, type GateOffice, goneReply, mergeAction, mergeMethodFor, mergeStep, requestedMerge, unpassedReason } from './mergeGate';
 import type { PullRequest, QaReview } from './types';
 
 const HEAD = 'abc1234def5678';
@@ -220,5 +220,16 @@ describe('requestedMerge', () => {
 describe('goneReply', () => {
   it('tells whoever messages QA there is nothing left to review', () => {
     expect(goneReply(139, 'merged')).toBe('PR #139 was merged; nothing to review');
+  });
+});
+
+describe('mergeMethodFor', () => {
+  it('uses the repo’s own choice over the office-wide one', () => {
+    expect(mergeMethodFor({ mergeMethods: { 'o/a': 'rebase' } }, 'o/a', 'squash')).toBe('rebase');
+  });
+  it('falls back to the office-wide setting for a repo without one', () => {
+    expect(mergeMethodFor({ mergeMethods: { 'o/a': 'rebase' } }, 'o/b', 'merge')).toBe('merge');
+    expect(mergeMethodFor({}, 'o/a', 'squash')).toBe('squash');
+    expect(mergeMethodFor(undefined, 'o/a', 'squash')).toBe('squash');
   });
 });

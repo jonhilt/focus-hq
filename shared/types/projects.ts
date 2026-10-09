@@ -6,6 +6,9 @@ import type { PreviewConfig } from './previews';
 
 export type Autonomy = 'ask' | 'auto' | 'full';
 
+export const MERGE_METHODS = ['squash', 'merge', 'rebase'] as const;
+export type MergeMethod = (typeof MERGE_METHODS)[number];
+
 export interface Settings {
   /** Max agents running at once across every project (protects your subscription limits). */
   maxConcurrent: number;
@@ -21,8 +24,8 @@ export interface Settings {
   conflictsModel: string;
   /** How hard those conflict-resolving agents think. Missing = the model's default. */
   conflictsEffort?: Effort;
-  /** How the board's Merge button, and auto-merge, merge a pull request. */
-  mergeMethod: 'squash' | 'merge' | 'rebase';
+  /** How the board's Merge button, and auto-merge, merge a pull request, unless its project picks another for its repo. */
+  mergeMethod: MergeMethod;
   /** Pull requests and QA reports on GitHub name the agent who did the work and mention Focus. */
   attribution: boolean;
   /** Agents read your own ~/.claude/CLAUDE.md (and ~/.claude/rules) as well as Focus's instructions and the repo's CLAUDE.md. */
@@ -46,6 +49,8 @@ export interface Project {
   theme?: RoomTheme;
   /** GitHub repositories as "owner/name". */
   repos: string[];
+  /** How each repo's pull requests merge, overriding Settings' mergeMethod (a repo missing here follows Settings). */
+  mergeMethods?: Record<string, MergeMethod>;
   /** How many agents may work on this project at the same time (the room always has DESKS_PER_ROOM desks). */
   maxAgents: number;
   /** Automatically hire agents for open issues when desks are free. */

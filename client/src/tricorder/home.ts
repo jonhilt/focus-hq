@@ -3,7 +3,7 @@ import { openQuestion } from '../../../shared/artifacts';
 import { columns, goalState, resolvingAlready } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import { assignWarning, waitsLabel } from '../../../shared/dependencies';
-import { mergeAction } from '../../../shared/mergeGate';
+import { mergeAction, mergeMethodFor } from '../../../shared/mergeGate';
 import { prKey, qaBadge } from '../../../shared/qa';
 import { type Attention, inFlight, needsYou } from '../../../shared/tricorder';
 import type { Agent, Issue, Project, PullRequest, QaReview } from '../../../shared/types';
@@ -161,7 +161,7 @@ export function mergeButton(actions: Actions, key: string, projectId: string, pr
   const blocked = pr.mergeable === 'CONFLICTING' || pr.isDraft;
   switch (action.kind) {
     case 'merge':
-      return actions.button(`${key}:${action.confirm ? 'merge-anyway' : 'merge'}`, `⤵ ${state.info?.settings.mergeMethod ?? 'squash'} & merge`, () => api.mergePr(projectId, pr.repo, pr.number), {
+      return actions.button(`${key}:${action.confirm ? 'merge-anyway' : 'merge'}`, `⤵ ${mergeMethodFor(state.project(projectId), pr.repo, state.info?.settings.mergeMethod ?? 'squash')} & merge`, () => api.mergePr(projectId, pr.repo, pr.number), {
         class: 'go',
         disabled: blocked,
         confirm: action.confirm ? `${action.confirm}.\n\nMerge ${pr.repo}#${pr.number} "${pr.title}" anyway?` : `Merge ${pr.repo}#${pr.number} "${pr.title}"?`,

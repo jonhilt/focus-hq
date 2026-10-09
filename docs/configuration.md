@@ -16,3 +16,7 @@
 | `FOCUS_UPDATE_CHECK_MS` | `300000` | how often auto update checks for new commits |
 | `FOCUS_WHISPER_BIN` | `whisper-cli` | whisper.cpp's CLI for [voice input](voice-input.md) |
 | `FOCUS_WHISPER_MODEL` | `~/.focus/models/ggml-large-v3-turbo-q5_0.bin` | the speech model for voice input |
+
+## Merge method
+
+The board's merge button, and auto-merge, merge a pull request with **Settings → merge method** (squash, merge or rebase) in the ready room. A repo can merge its own way: each repository under **Projects** has a picker beside its name, `default` to follow Settings, or squash, merge or rebase for that repo alone, which wins over Settings (`mergeMethodFor` in `shared/mergeGate.ts`). The merge button says which it'll use.

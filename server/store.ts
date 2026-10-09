@@ -5,8 +5,8 @@ import { qaOfficerFor, randomAvatar } from '../shared/crew';
 import type { LedgerEntry, LedgerEvent } from '../shared/ledger';
 import { type LedgerHealth, LedgerLog } from './ledgerLog';
 import { olderVerdict, prKey } from '../shared/qa';
-import type { Agent, Board, BrowserFrame, ClosedPr, NumberOneChat, Project, QaReview, Retro, Settings, TermLine } from '../shared/types';
-import { ACTIVE_STATUSES, DESKS_PER_ROOM, EFFORT_LEVELS, ROOM_THEMES, type RoomTheme } from '../shared/types';
+import type { Agent, Board, BrowserFrame, ClosedPr, MergeMethod, NumberOneChat, Project, QaReview, Retro, Settings, TermLine } from '../shared/types';
+import { ACTIVE_STATUSES, DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS, ROOM_THEMES, type RoomTheme } from '../shared/types';
 import { config, paths } from './config';
 import { takeLock } from './fileLock';
 import { fitDesks } from './agents/desks';
@@ -211,7 +211,7 @@ export class Store {
 
   updateProject(
     id: string,
-    patch: Partial<Pick<Project, 'name' | 'color' | 'theme' | 'maxAgents' | 'autoAssign' | 'autoLabel' | 'onlyMyPrs' | 'preview' | 'autoQa' | 'autoSendBack' | 'autoMerge' | 'qaBrief' | 'qaEffort' | 'hidden'>>,
+    patch: Partial<Pick<Project, 'name' | 'color' | 'theme' | 'maxAgents' | 'autoAssign' | 'autoLabel' | 'onlyMyPrs' | 'preview' | 'autoQa' | 'autoSendBack' | 'autoMerge' | 'qaBrief' | 'qaEffort' | 'hidden'>> & { mergeMethod?: { repo: string; method: MergeMethod | '' } },
   ): Project {
     const project = this.project(id);
     if (patch.name !== undefined) project.name = patch.name.trim() || project.name;
@@ -231,6 +231,14 @@ export class Store {
     if (patch.autoLabel !== undefined) project.autoLabel = patch.autoLabel.trim();
     if (patch.onlyMyPrs !== undefined) project.onlyMyPrs = !!patch.onlyMyPrs;
     if (patch.hidden !== undefined) project.hidden = patch.hidden === true;
+    if (patch.mergeMethod !== undefined) {
+      const { repo, method } = patch.mergeMethod;
+      if (!project.repos.includes(repo)) throw new Error(`${repo} isn’t connected to ${project.name}`);
+      // an empty (or unknown) choice goes back to the office-wide setting
+      const { [repo]: _, ...rest } = project.mergeMethods ?? {};
+      const chosen = MERGE_METHODS.find((m) => m === method);
+      project.mergeMethods = chosen ? { ...rest, [repo]: chosen } : rest;
+    }
     if (patch.preview !== undefined) {
       const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
       const p = patch.preview ?? {};

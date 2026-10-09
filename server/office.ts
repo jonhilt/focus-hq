@@ -1,11 +1,11 @@
 import { chiefEngineer } from '../shared/crew';
 import type { Board, ConflictsOutcome, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, RetroDraft, ServerInfo, Settings, Snapshot } from '../shared/types';
-import { DESKS_PER_ROOM, EFFORT_LEVELS } from '../shared/types';
+import { DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS } from '../shared/types';
 import { carryMergeable } from '../shared/board';
 import { chosenSet, previewPrs } from '../shared/previewSet';
 import { startOrder } from '../shared/dependencies';
 import type { Closer } from '../shared/ledger';
-import { autoMergeFor, type GateMark, mergeStep, type MergeStep, requestedMerge } from '../shared/mergeGate';
+import { autoMergeFor, type GateMark, mergeMethodFor, mergeStep, type MergeStep, requestedMerge } from '../shared/mergeGate';
 import { autoSendBackFor, prKey } from '../shared/qa';
 import type { AgentManager } from './agents/manager';
 import type { ChiefEngineer } from './agents/engineer';
@@ -149,6 +149,7 @@ export class Office {
       throw new Error(`Agents are still working on ${repo}`);
     }
     project.repos = project.repos.filter((r) => r !== repo);
+    if (project.mergeMethods) delete project.mergeMethods[repo];
     this.store.save();
     this.broadcastProjects();
     this.boardChanged(projectId, 0);
@@ -214,7 +215,8 @@ export class Office {
 
   /** `headSha` merges only that commit: GitHub refuses if the branch has moved on since. The office auto-merges; otherwise it's the captain. */
   async mergePullRequest(projectId: string, repo: string, number: number, headSha?: string, by: Closer = 'captain'): Promise<void> {
-    await this.github.mergePullRequest(repo, number, this.store.settings.mergeMethod, headSha);
+    const method = mergeMethodFor(this.store.projects.find((p) => p.id === projectId), repo, this.store.settings.mergeMethod);
+    await this.github.mergePullRequest(repo, number, method, headSha);
     const board = this.store.boards.get(projectId);
     this.agents.prClosed(repo, number, true, by, headSha ?? board?.prs.find((p) => p.repo === repo && p.number === number)?.headSha);
     this.previews.closed(repo, number);
@@ -500,7 +502,8 @@ export class Office {
     if (typeof patch.conflictsModel === 'string') s.conflictsModel = patch.conflictsModel.trim();
     // an empty (or unknown) choice goes back to the model's default
     if (patch.conflictsEffort !== undefined) s.conflictsEffort = EFFORT_LEVELS.find((e) => e === patch.conflictsEffort);
-    if (patch.mergeMethod && ['squash', 'merge', 'rebase'].includes(patch.mergeMethod)) s.mergeMethod = patch.mergeMethod;
+    const mergeMethod = MERGE_METHODS.find((m) => m === patch.mergeMethod);
+    if (mergeMethod) s.mergeMethod = mergeMethod;
     if (typeof patch.attribution === 'boolean') s.attribution = patch.attribution;
     if (typeof patch.userClaudeMd === 'boolean') s.userClaudeMd = patch.userClaudeMd;
     const leadEffort = EFFORT_LEVELS.find((e) => e === patch.leadEffort);

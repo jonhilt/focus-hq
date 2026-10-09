@@ -1,7 +1,7 @@
 import { isHidden } from '../../../shared/hidden';
 import { autoMergeFor } from '../../../shared/mergeGate';
-import type { Autonomy, Effort, PreviewConfig, Project, RoomTheme, SpeechStatus, VoiceStatus } from '../../../shared/types';
-import { DESKS_PER_ROOM, EFFORT_LEVELS, ROOM_THEMES } from '../../../shared/types';
+import type { Autonomy, Effort, MergeMethod, PreviewConfig, Project, RoomTheme, SpeechStatus, VoiceStatus } from '../../../shared/types';
+import { DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS, ROOM_THEMES } from '../../../shared/types';
 import { voiceMissing, WHISPER_INSTALL } from '../../../shared/voice';
 import { api } from '../net/api';
 import { state } from '../net/state';
@@ -120,6 +120,7 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
     ...(p.repos.length ? p.repos : []).map((repo) =>
       h('span', { class: 'chip' },
         h('a', { href: `https://github.com/${repo}`, target: '_blank', rel: 'noreferrer' }, repo),
+        repoMergePicker(ui, p, repo),
         h('button', {
           title: `Disconnect ${repo} from ${p.name}`,
           onclick: () => {
@@ -223,6 +224,18 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
       remove,
     ),
   );
+}
+
+/** How a repo's pull requests merge: its own choice, or the office's (Settings) when left on default. */
+function repoMergePicker(ui: Ui, p: Project, repo: string): HTMLSelectElement {
+  const own = p.mergeMethods?.[repo];
+  const office = state.info?.settings.mergeMethod ?? 'squash';
+  const select = h('select', { class: 'merge-method', title: `How ${repo}’s pull requests merge` },
+    h('option', { value: '', selected: !own }, `default (${office})`),
+    ...MERGE_METHODS.map((m) => h('option', { value: m, selected: own === m }, m)),
+  );
+  select.addEventListener('change', () => void api.setMergeMethod(p.id, repo, select.value as MergeMethod | '').catch((e: Error) => ui.error(e.message)));
+  return select;
 }
 
 function newProjectTab(ui: Ui, openProject: (id: string) => void): HTMLElement {
@@ -365,8 +378,8 @@ function settingsTab(ui: Ui): HTMLElement {
   const conflictsEffort = effortPicker(s.conflictsEffort);
   // an empty choice clears it on the server (undefined wouldn't survive JSON)
   conflictsEffort.addEventListener('change', () => save({ conflictsEffort: (pickedEffort(conflictsEffort) ?? '') as Effort }));
-  const merge = h('select', null, ...(['squash', 'merge', 'rebase'] as const).map((m) => h('option', { value: m, selected: s.mergeMethod === m }, m)));
-  merge.addEventListener('change', () => save({ mergeMethod: merge.value as 'squash' }));
+  const merge = h('select', null, ...MERGE_METHODS.map((m) => h('option', { value: m, selected: s.mergeMethod === m }, m)));
+  merge.addEventListener('change', () => save({ mergeMethod: merge.value as MergeMethod }));
   const attribution = new Switch('Sign pull requests and QA reports', s.attribution, { changed: (on) => save({ attribution: on }) });
   const userClaudeMd = new Switch('Agents read your own CLAUDE.md', s.userClaudeMd, { changed: (on) => save({ userClaudeMd: on }) });
   const leadEffort = h('select', null, ...EFFORT_LEVELS.map((e) => h('option', { value: e, selected: s.leadEffort === e }, e)));

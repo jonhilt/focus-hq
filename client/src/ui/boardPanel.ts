@@ -2,7 +2,7 @@ import { statusLine } from '../../../shared/agentStatus';
 import { columns, goalState, resolvingAlready } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import { assignWarning, waitsLabel } from '../../../shared/dependencies';
-import { mergeAction } from '../../../shared/mergeGate';
+import { mergeAction, mergeMethodFor } from '../../../shared/mergeGate';
 import { previewIncludes, previewSet } from '../../../shared/previewSet';
 import { prKey, qaBadge, sameCommit } from '../../../shared/qa';
 import { triageLabel } from '../../../shared/triage';
@@ -121,7 +121,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
       const review = state.reviews.get(prKey(pr.repo, pr.number));
       const action = mergeAction(review, pr);
       const merge = action.kind === 'merge'
-        ? h('button', { class: 'btn small go' }, `${state.info?.settings.mergeMethod ?? 'squash'} & merge`)
+        ? h('button', { class: 'btn small go' }, `${mergeMethodFor(state.project(projectId), pr.repo, state.info?.settings.mergeMethod ?? 'squash')} & merge`)
         : action.kind === 'when-passed'
           ? h('button', { class: 'btn small go', title: 'The office merges the commit QA passes, or tells you if QA fails it' }, 'Merge when QA passes')
           : h('button', { class: 'btn small primary', title: 'Merges once QA passes it. Click to cancel' }, 'Merging when QA passes ✕');

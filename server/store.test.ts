@@ -28,3 +28,21 @@ describe('Store on disk', () => {
     expect(saved.projects.map((p) => p.name)).toEqual(['Focus']);
   });
 });
+
+describe('a repo’s merge method', () => {
+  const store = new Store(false);
+  const project = store.addProject('Focus');
+  project.repos = ['o/a', 'o/b'];
+
+  it('is set for one repo and cleared back to the office-wide setting', () => {
+    store.updateProject(project.id, { mergeMethod: { repo: 'o/a', method: 'rebase' } });
+    store.updateProject(project.id, { mergeMethod: { repo: 'o/b', method: 'merge' } });
+    expect(project.mergeMethods).toEqual({ 'o/a': 'rebase', 'o/b': 'merge' });
+    store.updateProject(project.id, { mergeMethod: { repo: 'o/a', method: '' } });
+    expect(project.mergeMethods).toEqual({ 'o/b': 'merge' });
+  });
+
+  it('can’t be set for a repo the project hasn’t connected', () => {
+    expect(() => store.updateProject(project.id, { mergeMethod: { repo: 'o/c', method: 'squash' } })).toThrow('isn’t connected');
+  });
+});
