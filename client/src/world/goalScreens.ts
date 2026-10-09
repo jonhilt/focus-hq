@@ -150,15 +150,15 @@ abstract class Display {
 
 /**
  * The station's sign: a strip of holographic glass with the station's code at the left in its own colour, its goal and
- * lead in the middle, and at the right how far through the slice it is (or whether it's free), all edged in its room's
- * tone, so you can tell from across the holodeck which rooms are in session and which need you.
+ * lead in the middle, and at the right how far through the slice it is (or whether it's free), a hologram (hologram.ts)
+ * edged in its room's tone, so you can tell from across the holodeck which rooms are in session and which need you.
  */
 export class GoalSign extends Display {
   static readonly W = 1800;
   static readonly H = 256;
 
   constructor() {
-    super(GoalSign.W, GoalSign.H, true);
+    super(GoalSign.W, GoalSign.H, false);
   }
 
   protected draw({ index, accent, lead, next }: StationView): void {
@@ -168,10 +168,8 @@ export class GoalSign extends Display {
     const color = TONE[tone];
     const m = 14;
     ctx.fillStyle = GLASS;
-    ctx.beginPath();
-    ctx.roundRect(m, m, W - m * 2, H - m * 2, 28);
-    ctx.fill();
-    glowRect(ctx, m, m, W - m * 2, H - m * 2, 28, color, 5);
+    ctx.fillRect(0, 0, W, H);
+    // edged by its hologram's outline, in its room's tone (teamStation.ts)
 
     // the station's code, in its own colour
     const codeW = 230;

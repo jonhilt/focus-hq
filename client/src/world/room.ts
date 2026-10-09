@@ -23,7 +23,7 @@ import { StationScreen } from './screen';
 import { paneUse } from './screenPanes';
 import { Beam } from './transporter';
 import { LCARS, lcarsSign, workstation } from './starship';
-import { hover } from './hologram';
+import { FloorGlow, hover } from './hologram';
 import { OVERLAY_LAYER } from './frame';
 import { Portal } from './portal';
 import { type StationSeat, TEAM_SCREEN, TeamStation, type TeamStationKit } from './teamStation';
@@ -82,6 +82,7 @@ export class ProjectRoom {
   /** The board's hologram, which hovers (hologram.ts). */
   private boardMesh!: THREE.Mesh;
   private boardY = 0;
+  private boardGlow!: FloorGlow;
   private lastT = 0;
   /** The operations officer at the Ops station, who drafts issues and looks into stuck pull requests. */
   private planner!: Character;
@@ -251,6 +252,10 @@ export class ProjectRoom {
     const half = ((top - bottom) * this.board.aspect) / 2 / r;
     const boardMesh = new THREE.Mesh(curvedPanel(r, -half, half, bottom, top, 40), this.board.material);
     this.group.add(boardMesh);
+    // its light on the floor under it, spilling out into the hall
+    const spill = 0.4 / r;
+    this.boardGlow = FloorGlow.arc(r - 3.2, r + 0.3, -half - spill, half + spill, this.board.hologram.tint);
+    this.group.add(this.boardGlow.mesh);
     return boardMesh;
   }
 
@@ -513,6 +518,7 @@ export class ProjectRoom {
     this.youreHere = this.holds(eye) || eye.distanceTo(this.slot.center) < HALF_D + 2;
     if (this.beams.length) this.beams = this.beams.filter((b) => !b.update(now));
     hover(this.boardMesh, this.boardY, t);
+    this.boardGlow.update(t);
     this.board.hologram.update(Math.min(0.1, t - this.lastT));
     this.lastT = t;
     if (this.boardDirty) {
@@ -569,6 +575,7 @@ export class ProjectRoom {
 
   dispose(): void {
     this.board.dispose();
+    this.boardGlow.dispose();
     for (const slot of this.desks) {
       slot.screen.dispose();
       slot.character?.dispose();

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { canvasTexture, makeCanvas } from './canvas';
 
 // Screens drawn as holograms, after the displays over the holodeck pods in Lower Decks: no frame or stand, just light
 // hanging in the air. The drawing keeps its own colours on navy glass, a little see-through where it's dark, inside a
@@ -95,4 +96,69 @@ const FRAGMENT = /* glsl */ `{
 /** Bobs `obj` gently round `baseY`, out of step with its neighbours by `phase`. */
 export function hover(obj: THREE.Object3D, baseY: number, t: number, phase = 0): void {
   obj.position.y = baseY + Math.sin(t * 0.9 + phase) * 0.025;
+}
+
+/** A soft round fall-off, white in the middle to nothing at the edges, made the first time it's needed. */
+let falloff: THREE.Texture | null = null;
+function fadeTexture(): THREE.Texture {
+  if (falloff) return falloff;
+  const { canvas, ctx } = makeCanvas(128, 128);
+  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  g.addColorStop(0.5, 'rgba(255, 255, 255, 0.45)');
+  g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  return (falloff = canvasTexture(canvas));
+}
+
+/** How high a floor glow lies: over the floor's carpets and the contact shadows (contactShadow.ts: 0.015). */
+const GLOW_Y = 0.02;
+const GLOW_DEEP = new THREE.Color('#0a6cff');
+
+/**
+ * A hologram's light on the floor under it, so it reads as hanging over that spot rather than pasted on the scene:
+ * a soft pool in its colour, brightest where it's lowest as it bobs (`hover`). Lie it under the hologram, from
+ * `flat` (a rectangle) or `arc` (a strip bent round, under a curved one).
+ */
+export class FloorGlow {
+  readonly mesh: THREE.Mesh;
+  private readonly material: THREE.MeshBasicMaterial;
+
+  private constructor(geometry: THREE.BufferGeometry, color: THREE.Color) {
+    // deeper than the hologram's own colour, or it washes out to white on a pale floor
+    const deep = new THREE.Color(color).lerp(GLOW_DEEP, 0.5);
+    this.material = new THREE.MeshBasicMaterial({ map: fadeTexture(), color: deep, transparent: true, depthWrite: false, side: THREE.DoubleSide, toneMapped: false });
+    this.mesh = new THREE.Mesh(geometry, this.material);
+    this.mesh.position.y = GLOW_Y;
+  }
+
+  /** `width` along X and `depth` along Z, centred on the mesh's position. */
+  static flat(width: number, depth: number, color: THREE.Color): FloorGlow {
+    const geometry = new THREE.PlaneGeometry(width, depth);
+    geometry.rotateX(-Math.PI / 2);
+    return new FloorGlow(geometry, color);
+  }
+
+  /** Round the origin from angle `a0` to `a1` (as curvedPanel in hallLayout.ts), between radii `r0` and `r1`. */
+  static arc(r0: number, r1: number, a0: number, a1: number, color: THREE.Color, segments = 40): FloorGlow {
+    const geometry = new THREE.PlaneGeometry(1, 1, segments, 1);
+    const pos = geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const a = a0 + (pos.getX(i) + 0.5) * (a1 - a0);
+      const r = r0 + (pos.getY(i) + 0.5) * (r1 - r0);
+      pos.setXYZ(i, r * Math.cos(a), 0, r * Math.sin(a));
+    }
+    return new FloorGlow(geometry, color);
+  }
+
+  /** In step with `hover(…, t, phase)`: brightest at the bottom of its bob. */
+  update(t: number, phase = 0): void {
+    this.material.opacity = 0.55 - 0.08 * Math.sin(t * 0.9 + phase);
+  }
+
+  dispose(): void {
+    this.mesh.geometry.dispose();
+    this.material.dispose();
+  }
 }

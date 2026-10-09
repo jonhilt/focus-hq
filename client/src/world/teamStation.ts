@@ -114,6 +114,10 @@ export class TeamStation {
   private readonly screenCentre: THREE.Vector3;
   private readonly area: Box2;
   private readonly sign = new GoalSign();
+  /** The sign's hologram, over the door and under the briefing room's screen, outlined like the team screen. */
+  private readonly signHologram = new Hologram(this.sign.texture, GoalSign.W / GoalSign.H);
+  /** The sign over the door, which hovers. */
+  private readonly doorSign: THREE.Mesh;
   private readonly board = new GoalBoard();
   private readonly teamScreen = new TeamScreen();
   /** The team screen's hologram, outlined in the colour of the door's lamps (`update`). */
@@ -150,9 +154,10 @@ export class TeamStation {
     this.door.rotation.y = spot.yaw;
     this.door.add(door);
     this.dress(door, (this.doorKit = blank()));
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(DOOR_SIGN.width, (DOOR_SIGN.width * GoalSign.H) / GoalSign.W), this.sign.material);
+    const sign = (this.doorSign = new THREE.Mesh(new THREE.PlaneGeometry(DOOR_SIGN.width, (DOOR_SIGN.width * GoalSign.H) / GoalSign.W), this.signHologram.material));
     sign.position.set(0, DOOR_SIGN.bottom + (DOOR_SIGN.width * GoalSign.H) / GoalSign.W / 2, -DOOR_SIGN.out);
     sign.rotation.y = Math.PI;
+    sign.layers.set(OVERLAY_LAYER);
     door.add(sign);
 
     const room = (this.furnished = kit.room.clone());
@@ -167,7 +172,9 @@ export class TeamStation {
     };
     const display = (this.display = screen(roomScreens, 'team-station', 'briefing room'));
     display.material = this.screen.material;
-    screen(roomScreens, 'team-station-sign', 'briefing room').material = this.sign.material;
+    const roomSign = screen(roomScreens, 'team-station-sign', 'briefing room');
+    roomSign.material = this.signHologram.material;
+    roomSign.layers.set(OVERLAY_LAYER);
     this.goalBoard = screen(roomScreens, 'team-station-note', 'briefing room');
     this.goalBoard.material = this.board.material;
     const panes = screen(roomScreens, 'team-station-panes', 'briefing room');
@@ -358,7 +365,9 @@ export class TeamStation {
     // the team screen's outline glows as the lamps do, but from dim rather than the bulkhead's colour; a free one's in
     // the holograms' own cyan
     this.teamHologram.tint.set(this.tone === 'free' ? HOLO_CYAN : TONE[this.tone]).multiplyScalar(0.35 + 0.65 * glow);
+    this.signHologram.tint.copy(this.teamHologram.tint);
     hover(this.faces, 0, t, this.index * 1.7);
+    hover(this.doorSign, DOOR_SIGN.bottom + (DOOR_SIGN.width * GoalSign.H) / GoalSign.W / 2, t, this.index * 1.7 + 2);
     this.teamHologram.update(Math.min(0.1, t - this.lastT));
     this.lastT = t;
   }
@@ -374,6 +383,7 @@ export class TeamStation {
     this.board.dispose();
     this.teamScreen.dispose();
     this.teamHologram.dispose();
+    this.signHologram.dispose();
     this.panes.dispose();
     this.lamp.dispose();
     for (const s of [this.lead, ...this.helpers, this.reviewer]) s.character?.dispose();
