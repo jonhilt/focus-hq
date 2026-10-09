@@ -1,7 +1,8 @@
-# Builds the ship's decks (npm run ship) when a push to a branch changes the Blender scripts that build them but not the
-# GLBs, and commits the GLBs back to the branch: so changing the ship needs no Blender of your own. Push the script
-# change, and the GLBs follow in a commit from CI a few minutes later (pull it before pushing again). If you built them
-# yourself and committed them with the scripts, CI leaves them be. It bakes on the runner's CPU, so its GLBs' baked
+# Builds the ship's decks (npm run ship) when a branch changes the Blender scripts that build them and has no GLBs built
+# since (scripts/ship-needed.sh), and commits the GLBs back to the branch: so changing the ship needs no Blender of your
+# own. Push the script change, and the GLBs follow in a commit from CI a few minutes later (pull it before pushing
+# again). If you built them yourself and committed them with the scripts, CI leaves them be; so it does when the
+# scripts only changed by merging main, whose GLBs came with them. It bakes on the runner's CPU, so its GLBs' baked
 # occlusion differs from a GPU's by a little noise.
 name: Ship
 
@@ -31,21 +32,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Only if the GLBs weren't built with the scripts
+      - name: Only if the branch's own script changes have no GLBs yet
         id: changed
-        env:
-          BEFORE: ${{ github.event.before }}
         run: |
-          # a new branch's first push has no before: compare with where it left main
-          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
-            BEFORE=$(git merge-base origin/main HEAD)
-          fi
-          if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] && git diff --name-only "$BEFORE" HEAD | grep -q '^client/public/ship/'; then
-            echo "The push has GLBs built with its scripts: leaving them be."
-            echo "build=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "build=true" >> "$GITHUB_OUTPUT"
-          fi
+          # (scripts/ship-needed.sh: what merging main brings in comes with main's GLBs, and doesn't count)
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then build=true; else build=$(scripts/ship-needed.sh origin/main); fi
+          [ "$build" = true ] || echo "Nothing to build: the branch's GLBs are up to date with its scripts."
+          echo "build=$build" >> "$GITHUB_OUTPUT"
 
       - name: Cache Blender
         if: steps.changed.outputs.build == 'true'
