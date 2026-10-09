@@ -12,6 +12,7 @@ import { canvasTexture, fitText, makeCanvas, roundRect } from './canvas';
 import { type Box2, DOOR_W, HALL_HALF, ROOM_WIDTH, roomSlot, rowsFor, type Seat, slotAt, SUN_POSITION } from './layout';
 import { flat } from './materials';
 import { EngineeringStation } from './engineering';
+import { drawMsd } from './msd';
 import { FirstOfficer } from './numberOne';
 import type { Portal } from './portal';
 import { type Region, regionAt, shown } from './regions';
@@ -21,6 +22,7 @@ import { LCARS, LCARS_FONT, lcarsFrame, type SlidingDoors } from './starship';
 import { cruise } from './starfield';
 import type { TeamStationKit } from './teamStation';
 import { createScenery, roomTheme } from './themes';
+import { pulse } from './warpCore';
 
 export interface Place {
   label: string;
@@ -32,12 +34,13 @@ export interface Place {
 
 /**
  * The ship the World builds, its decks built in Blender (blender/): the command deck (the bridge, and the ready room
- * and lounge, with Number One), and the holodeck deck, with a holodeck per project either side of its hallway and the
- * turbolift and engineering at its head.
+ * and lounge, with Number One), the holodeck deck, with a holodeck per project either side of its hallway and the
+ * turbolift at its head, and main engineering, with the warp core and the chief engineer.
  */
 export interface Ship {
   command: Deck;
   holodecks: HolodeckDeck;
+  engineering: Deck;
 }
 
 /** Builds and owns the whole ship: its decks, and a holodeck per project, each with its team stations' briefing rooms. */
@@ -59,15 +62,15 @@ export class World {
   portals: Portal[] = [];
   /** Every team station's briefing room, apart from the holodeck deck they're reached from (regions.ts). */
   private readonly briefingRooms = new THREE.Group();
-  /** Where the command deck is, to tell when the camera's on it. */
-  private readonly commandDeck = new THREE.Box3();
+  /** Where the decks that stand on their own are, to tell when the camera's on one. */
+  private readonly deckBoxes = { command: new THREE.Box3(), engineering: new THREE.Box3() };
   /** Whether to draw only the camera's region (`?cull=0` draws all of them, for the gap and z-fighting scans). */
   culling = true;
   private lastT = 0;
   private dashboard = makeCanvas(1280, 720);
   private dashboardTex = canvasTexture(this.dashboard.canvas);
   /** What the decks built in Blender show on their screens. */
-  private readonly screens: Record<DeckScreen, THREE.Material> = { 'mission-control': flat(this.dashboardTex) };
+  private readonly screens: Record<DeckScreen, THREE.Material> = { 'mission-control': flat(this.dashboardTex), msd: msdScreen() };
   private panelsDirty = true;
   private lastPanels = 0;
   private projectKey = '';
@@ -85,8 +88,9 @@ export class World {
     scene.add(this.root);
     for (const deck of this.decks()) this.mount(deck, this.root);
     this.root.add(this.briefingRooms);
-    // a little beyond its walls, so you're on it in its doorways too
-    this.commandDeck.setFromObject(ship.command.root).expandByScalar(1);
+    // a little beyond their walls, so you're on one in its doorways too
+    this.deckBoxes.command.setFromObject(ship.command.root).expandByScalar(1);
+    this.deckBoxes.engineering.setFromObject(ship.engineering.root).expandByScalar(1);
   }
 
   /**
@@ -94,9 +98,10 @@ export class World {
    * and the far side's before a doorway draws it (PortalView). Null draws all of it.
    */
   reveal(at: THREE.Vector3 | null): void {
-    const region: Region | null = at && this.culling ? regionAt(at, this.commandDeck, (p) => this.inBriefingRoom(p), (p) => this.inHall(p)) : null;
+    const region: Region | null = at && this.culling ? regionAt(at, this.deckBoxes, (p) => this.inBriefingRoom(p), (p) => this.inHall(p)) : null;
     const show = shown(region);
     this.ship.command.root.visible = show.command;
+    this.ship.engineering.root.visible = show.engineering;
     if (this.builder) {
       this.builder.group.visible = show.holodecks;
       this.builder.halls.visible = show.hall;
@@ -122,7 +127,7 @@ export class World {
 
   /** The decks aboard the ship. */
   private decks(): Deck[] {
-    return [this.ship.command, ...this.holodeckDeck];
+    return [this.ship.command, ...this.holodeckDeck, this.ship.engineering];
   }
 
   /** Rebuilds the building when the set of projects (or their names/colours/repos, or which are hidden) changes. */
@@ -146,6 +151,7 @@ export class World {
     if (this.builder) this.root.remove(this.builder.group, this.builder.halls);
     for (const room of this.rooms.values()) room.dispose();
     this.rooms.clear();
+    this.engineering?.group.removeFromParent();
     this.vacant.clear();
     this.engineering?.dispose();
     this.numberOne?.group.removeFromParent();
@@ -181,6 +187,7 @@ export class World {
 
     this.buildHolodeckDeck(b, rows, this.ship.holodecks);
     this.seatNumberOne(b, this.ship.command.seat('number-one'));
+    this.seatEngineer(b, this.ship.engineering.seat('engineer'));
 
     this.root.add(b.group, b.halls);
     this.colliders = [...b.colliders, ...this.decks().flatMap((d) => d.colliders)];
@@ -202,12 +209,12 @@ export class World {
       const { side, center } = roomSlot(i);
       b.slidingDoors(new THREE.Vector3(side * HALL_HALF, 0, center.z), Math.PI / 2, DOOR_W, this.inUse.has(i));
     }
-    this.seatEngineer(b, deck.head.seat('engineer'));
   }
 
   private seatEngineer(b: Builder, seat: Seat): void {
     this.engineering = new EngineeringStation(seat);
-    b.add(this.engineering.group);
+    // on the engineering deck's gallery: drawn with it
+    this.ship.engineering.root.add(this.engineering.group);
     b.colliders.push(this.engineering.footprint);
   }
 
@@ -277,6 +284,7 @@ export class World {
     const dt = Math.min(0.1, t - this.lastT);
     this.lastT = t;
     cruise(t);
+    pulse(t);
     for (const door of this.doors) door.update(camera, dt);
     for (const portal of this.portals) portal.update(camera, dt);
     for (const room of this.rooms.values()) room.update(t, now, camera);
@@ -356,4 +364,11 @@ export class World {
   get interactRoot(): THREE.Object3D {
     return this.root;
   }
+}
+
+/** Main engineering's MSD: a cutaway of the ship, drawn once (msd.ts). */
+function msdScreen(): THREE.Material {
+  const { canvas, ctx } = makeCanvas(1560, 600);
+  drawMsd(ctx, canvas.width, canvas.height);
+  return flat(canvasTexture(canvas));
 }

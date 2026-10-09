@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { interactive } from './builder';
-import { type Crew, type DeckScreen, type Marker, readInteraction, readMarker, readSurface, type ScreenName, type Surface } from './deckExtras';
+import { type Crew, type DeckScreen, isDeckScreen, type Marker, readInteraction, readMarker, readSurface, type ScreenName, type Surface } from './deckExtras';
 import { type Box2, contains, footprint, type Seat } from './layout';
 import { flat, occludedToon, toon } from './materials';
 import { mergeStatic } from './merge';
@@ -9,6 +9,7 @@ import type { Place } from './office';
 import { consoleTexture, lcarsSign, readoutTexture, SlidingDoors, starChartTexture, touchPanelTexture } from './starship';
 import { viewportGlass } from './starfield';
 import { tiled } from './textures';
+import { warpCore } from './warpCore';
 
 // A deck of the ship built in Blender (blender/, `npm run ship`). Its architecture comes from a GLB; markers in it
 // say where the player can't walk, where doors slide, where to teleport to and what each part is called, and its
@@ -69,6 +70,8 @@ function surfaceMaterial(surface: Surface, color: string, ao: THREE.Texture | nu
       return ao ? occludedToon(color, ao) : toon(color);
     case 'lamp':
       return toon(color);
+    case 'warp-core':
+      return warpCore(surface.part);
   }
 }
 
@@ -144,7 +147,7 @@ export class Deck {
     this.root.updateMatrixWorld(true);
     const { screens, accents, lamps } = dress(scene, (o, marker) => this.read(o, marker));
     for (const { screen, mesh } of screens) {
-      if (screen !== 'mission-control') throw new Error(`Deck extras: a deck has a ${screen} screen, which only a team station draws`);
+      if (!isDeckScreen(screen)) throw new Error(`Deck extras: a deck has a ${screen} screen, which only a team station draws`);
       this.screens.push({ screen, mesh });
     }
     if (accents.length) throw new Error(`Deck extras: a deck has an accent (${accents[0].name}), which only a team station paints`);

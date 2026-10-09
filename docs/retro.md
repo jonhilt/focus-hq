@@ -1,6 +1,6 @@
 # The chief engineer's retro
 
-At the engineering station (on the command deck), <kbd>E</kbd> opens Lt. Brennan's panel: the [ledger](ledger.md)'s report card, and **Start a retro**, which looks back over the last 14 days (or however many you choose, up to 60).
+In main engineering (deck 5: take the turbolift, or teleport to 🔧 Engineering), <kbd>E</kbd> on the master systems table, or on Lt. Brennan's station, opens his panel: the [ledger](ledger.md)'s report card, and **Start a retro**, which looks back over the last 14 days (or however many you choose, up to 60).
 
 Each agent session is digested into the ledger as it ends, from code alone (see [Session digests](ledger.md#session-digests)). A retro then:
 

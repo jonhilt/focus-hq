@@ -14,16 +14,17 @@ What the browser reads (client/src/world/deck.ts), all through custom properties
   stops: you stand there in its car, facing along the empty's +Y, and `label` names the deck) or 'portal' (a doorway
   to somewhere else, at its centre in the middle of its wall, the way in along the empty's +Y: `width`, `height`, and
   the `depth` of the alcove behind it, where the browser draws the other end).
-- An object's `interact` has pressing E on it do something: 'manager' (open the ready room console) or 'turbolift' (its
-  controls), with the hint `label`.
+- An object's `interact` has pressing E on it do something: 'manager' (open the ready room console), 'turbolift' (its
+  controls) or 'engineering' (the chief engineer's panel: the report card and retros), with the hint `label`.
 - A material's `surface` has the browser draw it: 'space' (a viewport onto the stars), 'keys' (an LCARS touch panel),
   'readout' (LCARS readouts: `seed`, `w`, `h`), 'console' (an LCARS console top `w`×`h` metres, `seed`, with
   `stations` crew's keys side by side), 'sign' (an LCARS sign: `text`, `color`, optional `sub` and `code`),
-  'screen' (a screen the browser keeps drawing: `screen`, which is 'mission-control', or a team station's
+  'screen' (a screen the browser keeps drawing: `screen`, which is 'mission-control', 'msd' (main engineering's
+  cutaway of the ship), or a team station's
   'team-station', its lead's session, 'team-station-sign', its name, goal and whether it's in session, and
   'team-station-note', the lead's note on the goal), 'star-chart' (long-range sensors), 'accent' (a team station's own
-  colour, or a training hall's project's, lightened by the material's `shade`), 'lamp' (a team station door's lamps, lit while its goal room is in session), 'carpet' (speckled carpet in
-  the material's colour, tiled every 2 m) or 'unlit' (the material's colour, unshaded: lights and ceilings).
+  colour, or a training hall's project's, lightened by the material's `shade`), 'lamp' (a team station door's lamps, lit while its goal room is in session), 'warp-core' (the warp core's glow, pulsing: `part`, 'column' or 'chamber'), 'carpet' (speckled
+  carpet in the material's colour, tiled every 2 m) or 'unlit' (the material's colour, unshaded: lights and ceilings).
   Everything else is a toon material in its base colour.
 """
 

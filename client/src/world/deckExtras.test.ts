@@ -54,13 +54,17 @@ describe('readSurface', () => {
     expect(readSurface({ surface: 'screen', screen: 'team-station' })).toEqual({ kind: 'screen', screen: 'team-station' });
     expect(readSurface({ surface: 'screen', screen: 'team-station-sign' })).toEqual({ kind: 'screen', screen: 'team-station-sign' });
     expect(readSurface({ surface: 'screen', screen: 'team-station-note' })).toEqual({ kind: 'screen', screen: 'team-station-note' });
+    expect(readSurface({ surface: 'screen', screen: 'msd' })).toEqual({ kind: 'screen', screen: 'msd' });
     expect(readSurface({ surface: 'star-chart' })).toEqual({ kind: 'star-chart' });
+    expect(readSurface({ surface: 'warp-core', part: 'column' })).toEqual({ kind: 'warp-core', part: 'column' });
+    expect(readSurface({ surface: 'warp-core', part: 'chamber' })).toEqual({ kind: 'warp-core', part: 'chamber' });
   });
 
   it('fails on a surface it doesn’t know or one missing what it needs', () => {
     expect(() => readSurface({ surface: 'hologram' })).toThrow(/unknown surface/);
     expect(() => readSurface({ surface: 'readout', seed: 3 })).toThrow(/w should be a number/);
     expect(() => readSurface({ surface: 'screen', screen: 'weather' })).toThrow(/unknown screen/);
+    expect(() => readSurface({ surface: 'warp-core', part: 'nacelle' })).toThrow(/unknown part of the warp core/);
   });
 });
 
@@ -76,6 +80,7 @@ describe('readInteraction', () => {
       label: 'Use the ready room console',
     });
     expect(readInteraction({ interact: 'turbolift', label: 'Use the turbolift' })).toEqual({ interaction: { kind: 'turbolift' }, label: 'Use the turbolift' });
+    expect(readInteraction({ interact: 'engineering', label: 'Review the ledger' })).toEqual({ interaction: { kind: 'engineering' }, label: 'Review the ledger' });
   });
 
   it('fails on an interaction it doesn’t know or one without a hint', () => {

@@ -29,7 +29,7 @@ import { sound } from './sound';
 import { screenPrefs } from './world/screenPanes';
 import { Deck } from './world/deck';
 import { HolodeckDeck } from './world/holodeckDeck';
-import { COMMAND_DECK, SUN_POSITION } from './world/layout';
+import { COMMAND_DECK, ENGINEERING_DECK, SUN_POSITION } from './world/layout';
 import { setMerging } from './world/merge';
 import { type Ship, World } from './world/office';
 import { SceneRenderer } from './world/sceneRenderer';
@@ -47,8 +47,12 @@ async function fontsReady(): Promise<void> {
 
 /** The ship's decks, built in Blender (blender/, `npm run ship`). */
 async function ship(): Promise<Ship> {
-  const [command, holodecks] = await Promise.all([Deck.load('/ship/command-deck.glb', COMMAND_DECK), HolodeckDeck.load('/ship/holodeck-deck.glb')]);
-  return { command, holodecks };
+  const [command, holodecks, engineering] = await Promise.all([
+    Deck.load('/ship/command-deck.glb', COMMAND_DECK),
+    HolodeckDeck.load('/ship/holodeck-deck.glb'),
+    Deck.load('/ship/engineering-deck.glb', ENGINEERING_DECK),
+  ]);
+  return { command, holodecks, engineering };
 }
 
 async function main() {

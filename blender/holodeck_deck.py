@@ -1,8 +1,7 @@
-"""The holodeck deck: a hallway running aft from the turbolift with a holodeck's door either side every ROW metres, and
-the engineering station by the turbolift.
+"""The holodeck deck: a hallway running aft from the turbolift with a holodeck's door either side every ROW metres.
 
 It's built as modules the browser puts together for however many holodecks the ship has (world/holodeckDeck.ts): the
-head (the turbolift, engineering, and the way into the hallway), a row (the hallway past a holodeck's door either
+head (the turbolift and the way into the hallway), a row (the hallway past a holodeck's door either
 side, even and odd, so the consoles along it alternate) and the tail (the end wall, with a window). Only the hallway is
 here: each holodeck is a training hall (blender/training_hall.py) standing out in the world, and its door in the
 hallway's wall is a doorway to it (the browser's, with its doors, which lock for hidden projects), where
@@ -16,7 +15,7 @@ import math
 
 from mathutils import Matrix
 
-from kit import (DOOR_H, HULL, LCARS, box, collide_object, door, door_frame, facing, marker, material, module, polygon,
+from kit import (DOOR_H, HULL, LCARS, box, collide_object, door, door_frame, marker, material, module, polygon,
                  readout, rounded_rect, sign, toon, turbolift_car, unlit, walls, window)
 
 # client/src/world/layout.ts
@@ -25,7 +24,7 @@ WALL_T = 0.2
 DOOR_W = 2.4
 HALL = 2.0
 ROW = 12.0
-#: the head: wide and deep enough for engineering beside the way in
+#: the head: the lobby between the turbolift and the way into the hallway
 HEAD_HALF = 7.0
 HEAD = 7.0
 LIFT_DOOR = 2.0
@@ -61,9 +60,9 @@ def build():
 
 def head():
     """
-    The top of the hallway: the turbolift in the forward wall, engineering against the starboard one facing its board,
-    viewports to port, and the Holodecks sign over the way into the hallway, between two pilasters that hide where its
-    walls begin.
+    The top of the hallway: the turbolift in the forward wall, a readout to starboard, viewports to port, and the
+    Holodecks sign over the way into the hallway, between two pilasters that hide where its walls begin. (Engineering
+    has a deck of its own: engineering_deck.py.)
     """
     module('head')
     lift = walls('head wall', [(-HEAD_HALF, 0), (-HEAD_HALF, -HEAD), (HEAD_HALF, -HEAD), (HEAD_HALF, 0)],
@@ -81,10 +80,7 @@ def head():
                 unlit('#ffffff'), down=True)
 
     starboard = Matrix.Translation((HEAD_HALF, -HEAD / 2, 0)) @ Matrix.Rotation(math.pi / 2, 4, 'Z')
-    readout('engineering board', 1.8, 0.8, 43, (0, 0, 1.6), starboard)
-    sign('sign engineering', 'Engineering', 2.0, LCARS['gold'], (0, 0.03, 2.62), starboard, code='04-07')
-    station = (HEAD_HALF - 1.35, -HEAD / 2)
-    marker('engineer', 'seat', (*station, 0), yaw=facing(station, (HEAD_HALF, -HEAD / 2)), crew='engineer')
+    readout('head readout starboard', 1.8, 0.8, 43, (0, 0, 1.6), starboard)
     for y in (-1.9, -5.1):
         window(f'head window {y:.0f}', 2.0, 1.4, (0, 1.9), Matrix.Translation((-HEAD_HALF, y, 0)) @ Matrix.Rotation(-math.pi / 2, 4, 'Z'))
 
@@ -97,9 +93,7 @@ def head():
         collide_object(box(f'hallway pilaster {s}', (0.36, 0.3, WALL_H), frame, (s * HALL, -0.03, 0), round=0.02))
     sign('sign holodecks', 'Holodecks', 3.6, LCARS['periwinkle'], (0, -0.21, 2.4), yaw=math.pi, sub='One per project', code='Deck 4')
 
-    place = (2.4, -1.2)
-    marker('place engineering', 'place', (*place, 0), yaw=facing(place, station), label='🔧 Engineering')
-    marker('area engineering', 'area', (0, -HEAD / 2, 1), scale=(HEAD_HALF + 0.1, HEAD / 2 + 0.1, 1), label='Engineering')
+    marker('area lobby', 'area', (0, -HEAD / 2, 1), scale=(HEAD_HALF + 0.1, HEAD / 2 + 0.1, 1), label='Holodeck deck')
 
 
 def row(name, even):

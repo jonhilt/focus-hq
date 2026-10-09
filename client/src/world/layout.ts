@@ -2,7 +2,8 @@ import * as THREE from 'three';
 
 // The holodeck deck: a hallway running south from z = 0, with a holodeck (one project's room) either side of it every
 // ROOM_WIDTH metres; the decks built in Blender keep to these sizes (blender/holodeck_deck.py). The command deck stands
-// off to the north (COMMAND_DECK), and the team stations' briefing rooms out to either side (briefingRoomAt).
+// off to the north (COMMAND_DECK) with main engineering beyond it (ENGINEERING_DECK), and the team stations' briefing
+// rooms out to either side (briefingRoomAt).
 export const WALL_H = 3.2;
 export const WALL_T = 0.2;
 export const DOOR_W = 2.4;
@@ -22,6 +23,8 @@ export const EYE_HEIGHT = 1.6;
  * viewscreen sees space the way the corridor's end window does.
  */
 export const COMMAND_DECK = new THREE.Vector3(0, 0, 80);
+/** Where main engineering (deck 5, built in Blender) sits: beyond the command deck, where nothing else stands. */
+export const ENGINEERING_DECK = new THREE.Vector3(0, 0, 140);
 /** Where the office's sun light comes from (painted suns in the room landscapes line up with it). */
 export const SUN_POSITION = new THREE.Vector3(6, 10, 4);
 

@@ -13,13 +13,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import bake  # noqa: E402
 import command_deck  # noqa: E402
+import engineering_deck  # noqa: E402
 import holodeck_deck  # noqa: E402
 import kit  # noqa: E402
 import team_station  # noqa: E402
 import training_hall  # noqa: E402
 
-DECKS = {'command-deck': command_deck.build, 'holodeck-deck': holodeck_deck.build, 'team-station': team_station.build,
-         'training-hall': training_hall.build}
+DECKS = {'command-deck': command_deck.build, 'holodeck-deck': holodeck_deck.build, 'engineering-deck': engineering_deck.build,
+         'team-station': team_station.build, 'training-hall': training_hall.build}
 
 
 def main():
