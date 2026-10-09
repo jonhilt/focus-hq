@@ -316,7 +316,7 @@ export class StationScreen {
   private drawQuestion(agent: Agent, question: GoalQuestion, x: number, y: number, w: number, h: number): void {
     const ctx = this.c.ctx;
     this.drawShownBar(`${question.options.length} OPTIONS FOR YOU`, 'E TO ANSWER', LCARS.gold, x, y, w, h);
-    // the question itself, large enough to read from the table: the first thing you see
+    // the question itself, large enough to read from across the briefing room: the first thing you see
     ctx.font = `600 30px ${LCARS_FONT}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';

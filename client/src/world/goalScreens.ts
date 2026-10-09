@@ -31,7 +31,7 @@ const PANE = 'rgba(30, 120, 150, 0.22)';
 const TEXT = '#dcfbff';
 
 /**
- * What a station shows: its number and colour, its lead (none while it's free), who's round its table, and what's
+ * What a station shows: its number and colour, its lead (none while it's free), who's in its briefing room, and what's
  * next in line for it.
  */
 export interface StationView {
@@ -270,7 +270,7 @@ export class GoalBoard extends Display {
     const y = top + barH + 30;
     const h = H - y - 40;
     const note = lead?.lead?.note;
-    if (!lead) return this.message('Free', next ? `Next up: ${next}` : 'Press E at the door, or on the table, to start a goal here.', y, h, color);
+    if (!lead) return this.message('Free', next ? `Next up: ${next}` : 'Press E at the door, or on this board, to start a goal here.', y, h, color);
     const gap = 30;
     const crewW = Math.round((W - 80 - gap) * 0.52);
     this.crew(crew ?? [], 40, y, crewW, h);
