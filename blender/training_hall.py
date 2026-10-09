@@ -1,5 +1,5 @@
-"""The training hall: a holodeck that's bigger on the inside, after the hall of training pods the Cerritos crew drill in
-(Lower Decks, "I, Excretus"), prototyped behind the browser's `?hall=1` (client/src/world/hall.ts).
+"""The training hall: a project's holodeck, bigger on the inside, after the hall of training pods the Cerritos crew drill
+in (Lower Decks, "I, Excretus"). The browser dresses a copy per holodeck (client/src/world/hall.ts), a vacant one too.
 
 A round hall `RADIUS` across its inner faces, `HEIGHT` tall, its entrance in a flat wall across the round one, where the
 round wall would pass behind the hall's middle. The holodeck's door on the deck is a portal to the entrance's doorway,

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { clearOf, insideOf, keepOut, reach } from './footprint';
+import { clearOfHall, insideHall, keepOut } from './footprint';
 import { HALL } from './layout';
 
 const thing = (w: number, h: number, d: number, x: number, z: number) => {
@@ -16,11 +16,11 @@ const nearest = (o: THREE.Object3D) => {
 };
 
 describe('keepOut', () => {
-  it('moves what stands inside a hall out beyond its wall, straight away from the middle', () => {
+  it('moves what stands inside the hall out beyond its wall, straight away from the middle', () => {
     // a sandcastle beside the far wall, and a palm whose leaves reach in
     const castle = thing(1.4, 1.2, 1.4, 10.2, 3.2);
     const palm = thing(7, 7, 7, -3, 12);
-    keepOut('hall', [castle, palm]);
+    keepOut([castle, palm]);
     for (const o of [castle, palm]) expect(nearest(o)).toBeGreaterThan(HALL.radius + 0.5);
     expect(Math.atan2(castle.position.z, castle.position.x)).toBeCloseTo(Math.atan2(3.2, 10.2), 1);
   });
@@ -29,28 +29,16 @@ describe('keepOut', () => {
     const path = thing(2, 0.02, 2, 3, 0);
     const roof = thing(40, 1, 32, 4, 0);
     const far = thing(1, 3, 1, 20, 0);
-    keepOut('hall', [path, roof, far]);
+    keepOut([path, roof, far]);
     expect([path.position.x, roof.position.x, far.position.x]).toEqual([3, 4, 20]);
-  });
-
-  it('leaves today’s room as its themes built it', () => {
-    const castle = thing(1.4, 1.2, 1.4, 5, 3);
-    keepOut('room', [castle]);
-    expect(castle.position.toArray()).toEqual([5, 0, 3]);
   });
 });
 
-describe('a footprint', () => {
-  it('reaches as far as its walls', () => {
-    expect(reach('room')).toBe(10);
-    expect(reach('hall')).toBe(HALL.radius);
-  });
-
+describe('the hall’s footprint', () => {
   it('tells what’s clear of it and what’s inside', () => {
-    const p = new THREE.Vector3(0, 0, 9);
-    expect(clearOf('room', p)).toBe(true);
-    expect(clearOf('hall', p)).toBe(false);
-    expect(insideOf('room', p)).toBe(false);
-    expect(insideOf('hall', p)).toBe(true);
+    const inside = new THREE.Vector3(0, 0, 9);
+    const out = new THREE.Vector3(0, 0, HALL.radius + 1.5);
+    expect([clearOfHall(inside), insideHall(inside)]).toEqual([false, true]);
+    expect([clearOfHall(out), insideHall(out)]).toEqual([true, false]);
   });
 });

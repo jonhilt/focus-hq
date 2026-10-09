@@ -2,8 +2,6 @@ import * as THREE from 'three';
 import type { Project, RoomTheme } from '../../../shared/types';
 import { ROOM_THEMES } from '../../../shared/types';
 import { canvasTexture, makeCanvas, UI_FONT } from './canvas';
-import type { Footprint } from './footprint';
-import { ROOM_DEPTH } from './layout';
 import { hashString, Kit, Scenery } from './scenery';
 import { checkerTexture } from './textures';
 
@@ -17,7 +15,11 @@ export const THEME_INFO: Record<RoomTheme, { label: string; holo: string }> = {
   office: { label: 'Plain holodeck grid', holo: '#ffffff' },
 };
 
-const HALF_D = ROOM_DEPTH / 2;
+/**
+ * Where the fixed props beyond the far wall were laid out from: today's hall reaches further, and anything that lands
+ * inside it is moved out beyond its wall (footprint.ts: keepOut).
+ */
+const HALF_D = 8;
 
 const SCENIC = ROOM_THEMES.filter((t) => t !== 'office');
 
@@ -28,10 +30,10 @@ export function roomTheme(project: Project): RoomTheme {
 
 const BUILDERS: Record<Exclude<RoomTheme, 'office'>, (k: Kit) => void> = { beach, forest, desert, moon, city, library };
 
-/** Builds the landscape around a room, or a training hall. `ref` must be unique per room (it's the stencil value). */
-export function createScenery(theme: RoomTheme, ref: number, seed: string, sunDir: THREE.Vector3, footprint: Footprint = 'room'): Scenery | null {
+/** Builds the landscape around a holodeck's training hall. `ref` must be unique per holodeck (it's the stencil value). */
+export function createScenery(theme: RoomTheme, ref: number, seed: string, sunDir: THREE.Vector3): Scenery | null {
   if (theme === 'office') return null;
-  const kit = new Kit(ref, hashString(seed), sunDir, footprint);
+  const kit = new Kit(ref, hashString(seed), sunDir);
   BUILDERS[theme](kit);
   return new Scenery(kit, THEME_INFO[theme].holo);
 }

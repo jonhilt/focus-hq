@@ -15,7 +15,7 @@ import { EngineeringStation } from './engineering';
 import { FirstOfficer } from './numberOne';
 import type { Portal } from './portal';
 import { type Region, regionAt, shown } from './regions';
-import { buildHiddenRoom, buildVacantRoom, ProjectRoom } from './room';
+import { buildHiddenRoom, ProjectRoom, VacantHall } from './room';
 import type { Scenery } from './scenery';
 import { LCARS, LCARS_FONT, lcarsFrame, type SlidingDoors } from './starship';
 import { cruise } from './starfield';
@@ -45,6 +45,8 @@ export class World {
   readonly root = new THREE.Group();
   colliders: Box2[] = [];
   rooms = new Map<string, ProjectRoom>();
+  /** The vacant holodecks' empty halls, by slot. */
+  private vacant = new Map<number, VacantHall>();
   engineering: EngineeringStation | null = null;
   numberOne: FirstOfficer | null = null;
   /** The holodeck deck, as put together for the rows the ship has now. */
@@ -103,7 +105,7 @@ export class World {
   }
 
   private inHall(p: THREE.Vector3): boolean {
-    for (const room of this.rooms.values()) if (room.holds(p)) return true;
+    for (const room of [...this.rooms.values(), ...this.vacant.values()]) if (room.holds(p)) return true;
     return false;
   }
 
@@ -144,6 +146,7 @@ export class World {
     if (this.builder) this.root.remove(this.builder.group, this.builder.halls);
     for (const room of this.rooms.values()) room.dispose();
     this.rooms.clear();
+    this.vacant.clear();
     this.engineering?.dispose();
     this.numberOne?.group.removeFromParent();
     this.numberOne?.dispose();
@@ -160,7 +163,7 @@ export class World {
     this.sceneries = new Map();
     decks.forEach((deck, i) => {
       const slot = roomSlot(i);
-      if (deck.kind === 'vacant') return void buildVacantRoom(slot, b);
+      if (deck.kind === 'vacant') return void this.vacant.set(i, new VacantHall(slot, b, this.hallKit));
       if (deck.kind === 'in-use') return void buildHiddenRoom(slot, b);
       const { project } = deck;
       const theme = roomTheme(project);
@@ -168,7 +171,7 @@ export class World {
       let scenery = previous.get(key) ?? null;
       previous.delete(key);
       // the stencil value (slot + 1) and the sun direction both depend on the slot, hence the key
-      scenery ??= createScenery(theme, i + 1, project.id, SUN_POSITION.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -slot.rotationY), 'hall');
+      scenery ??= createScenery(theme, i + 1, project.id, SUN_POSITION.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -slot.rotationY));
       if (scenery) this.sceneries.set(key, scenery);
       this.rooms.set(project.id, new ProjectRoom(project, slot, b, scenery, this.teamStation, this.hallKit));
     });
@@ -182,7 +185,7 @@ export class World {
     this.root.add(b.group, b.halls);
     this.colliders = [...b.colliders, ...this.decks().flatMap((d) => d.colliders)];
     this.doors = [...b.doors, ...this.decks().flatMap((d) => d.doors)];
-    this.portals = [...this.rooms.values()].flatMap((r) => r.portals());
+    this.portals = [...[...this.rooms.values()].flatMap((r) => r.portals()), ...[...this.vacant.values()].map((v) => v.portal)];
     this.panelsDirty = true;
   }
 
@@ -191,8 +194,9 @@ export class World {
     const deck = holodecks.assemble(rows);
     this.holodeckDeck = [deck.head, ...deck.rows, deck.tail];
     for (const part of this.holodeckDeck) this.mount(part, b.group);
-    // a project's door is a doorway to its hall, with doors of its own (room.ts)
-    const halls = new Set([...this.rooms.values()].map((r) => r.slot.index));
+    // a project's or vacant holodeck's door is a doorway to its hall, with doors of its own (room.ts); only a hidden
+    // project's needs doors here, locked
+    const halls = new Set([...[...this.rooms.values()].map((r) => r.slot.index), ...this.vacant.keys()]);
     for (let i = 0; i < rows * 2; i++) {
       if (halls.has(i)) continue;
       const { side, center } = roomSlot(i);
@@ -257,6 +261,7 @@ export class World {
       const label = deck.areaAt(p);
       if (label) return { label };
     }
+    for (const hall of this.vacant.values()) if (hall.holds(p)) return { label: 'Vacant holodeck' };
     if (Math.abs(p.x) < HALL_HALF) return { label: 'Corridor' };
     const index = slotAt(Math.floor(-p.z / ROOM_WIDTH), p.x > 0 ? 1 : -1);
     const room = [...this.rooms.values()].find((r) => r.slot.index === index);

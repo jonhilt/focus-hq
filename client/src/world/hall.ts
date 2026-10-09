@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import type { Project } from '../../../shared/types';
 import type { Builder } from './builder';
 import { dress } from './deck';
 import { ENTRANCE_X } from './hallLayout';
@@ -26,17 +25,26 @@ export async function loadTrainingHall(url: string): Promise<THREE.Object3D> {
   return hall;
 }
 
+/** Whose hall it is, for its floor's colour and the sign over its entrance: a project's, or nobody's yet. */
+export interface HallLook {
+  name: string;
+  color: string;
+  sub: string;
+}
+
 /**
  * Puts a copy of the hall's shell (`kit`) into `group` (the hall's frame, standing where hallAt puts it): its floor
- * in the project's colour, still shaded where the walls meet it, the walls, ceiling and entrance, and what the player
- * can't walk through, in world space. A `themed` hall's landscape shows through its walls and ceiling (scenery.ts),
- * so it has no lights on its ceiling. Returns the entrance's doorway (world), for the door on the deck to lead to.
+ * in `look`'s colour, still shaded where the walls meet it, the walls, ceiling and entrance, and what the player can't
+ * walk through, in world space. A `lined` hall's walls and ceiling are hidden behind a skin (scenery.ts: a landscape's,
+ * or an empty holodeck's grid), so it has no lights on its ceiling. Returns the entrance's doorway (world), for the
+ * door on the deck to lead to.
  */
-export function buildHall(group: THREE.Group, kit: THREE.Object3D, project: Project, builder: Builder, themed: boolean): Doorway {
+export function buildHall(group: THREE.Group, kit: THREE.Object3D, look: HallLook, builder: Builder, lined: boolean): Doorway {
   const shell = kit.clone();
   group.add(shell);
   group.updateWorldMatrix(true, true);
-  if (themed) for (const light of shell.children.filter((o) => o.name.startsWith('hall ceiling light'))) light.removeFromParent();
+  // (the loader makes Blender's names safe for animation paths: their spaces become underscores)
+  if (lined) for (const light of shell.children.filter((o) => o.name.startsWith('hall_ceiling_light'))) light.removeFromParent();
 
   // how much lighter than the project's colour each part of the floor is, read before dressing swaps its material
   const shades = new Map<THREE.Object3D, number>();
@@ -54,13 +62,13 @@ export function buildHall(group: THREE.Group, kit: THREE.Object3D, project: Proj
   if (!doorway) throw new Error('The training hall has no doorway');
   for (const mesh of accents) {
     const ao = (mesh.material as THREE.MeshToonMaterial).aoMap ?? null;
-    const color = lighten(project.color, shades.get(mesh) ?? 0.6);
+    const color = lighten(look.color, shades.get(mesh) ?? 0.6);
     mesh.material = ao ? occludedToon(color, ao) : toon(color);
   }
   mergeStatic(shell, accents);
 
-  // the project's name over the entrance, in front of the holodeck's skin (scenery.ts) and the wall's trims
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), flat(lcarsSign(project.name, { color: project.color, sub: 'Training hall' })));
+  // whose it is over the entrance, in front of the holodeck's skin (scenery.ts) and the wall's trims
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), flat(lcarsSign(look.name, { color: look.color, sub: look.sub })));
   sign.rotation.y = Math.PI / 2;
   sign.position.set(ENTRANCE_X + 0.11, DOOR_H + 0.6, 0);
   group.add(sign);

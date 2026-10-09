@@ -390,7 +390,7 @@ export class GoalBoard extends Display {
 }
 
 /** How each of a goal's pull requests stands on the screen over its pod: its colour and word. */
-const PR_LOOK: Record<PrGlance, { color: string; word: string }> = {
+export const PR_LOOK: Record<PrGlance, { color: string; word: string }> = {
   open: { color: '#a7b4ff', word: 'open' },
   testing: { color: TONE['in-session'], word: 'QA testing' },
   passed: { color: TONE['your-turn'], word: 'QA passed' },

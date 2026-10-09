@@ -4,7 +4,7 @@
 | --- | --- |
 | <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / mouse | walk / look |
 | <kbd>Shift</kbd> | run |
-| <kbd>E</kbd> or click | use whatever is under the crosshair (agent, station, board, PR table, Ops station, console) |
+| <kbd>E</kbd> or click | use whatever is under the crosshair (agent, station, board, PADD rack, Ops station, console) |
 | <kbd>C</kbd> | [Comms](comms.md): who's waiting on you across the ship, every goal under way, and each project's goals |
 | <kbd>T</kbd> | teleport to any holodeck or straight to an agent's station |
 | <kbd>M</kbd> | ready room |

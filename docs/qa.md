@@ -1,6 +1,6 @@
 # QA
 
-Every holodeck has a QA officer in blue, sitting at a station beside the pull requests table facing the board, with a display you can look at over their shoulder.
+Every holodeck has a QA officer in blue, sitting at a station in the control ring facing the board, with a display you can look at over their shoulder.
 
 - **When they test:**
   - Automatically, when the office opens a PR or pushes new commits to one. Turn this off per project at the QA station.

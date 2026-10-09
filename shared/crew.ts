@@ -68,7 +68,7 @@ export function plannerFor(projectId: string): Planner {
   return { name: `${RANK_TITLE[avatar.rank]} ${SURNAMES[h % SURNAMES.length]}`, avatar };
 }
 
-/** The QA officer at a room's QA station, beside the pull requests table, who reviews and tests every PR. Sciences: they run the diagnostics. */
+/** The QA officer at a room's QA station, in its control ring, who reviews and tests every PR. Sciences: they run the diagnostics. */
 export function qaOfficerFor(projectId: string): Planner {
   const h = hash(`qa:${projectId}`);
   const avatar = rollAvatar(seeded(h), 'sciences', (h >>> 1) % 3 === 0 ? 'ensign' : 'lieutenant');

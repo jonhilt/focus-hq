@@ -1,12 +1,12 @@
-"""The holodeck deck: a hallway running aft from the turbolift with a holodeck either side every ROW metres, and the
-engineering station by the turbolift.
+"""The holodeck deck: a hallway running aft from the turbolift with a holodeck's door either side every ROW metres, and
+the engineering station by the turbolift.
 
 It's built as modules the browser puts together for however many holodecks the ship has (world/holodeckDeck.ts): the
-head (the turbolift, engineering, and the way into the hallway), a row (the hallway past a holodeck either side, even
-and odd, so the consoles along it alternate) and the tail (the end wall, with a window). Only the architecture is here:
-the holodecks' doors (which lock for hidden projects), floors, contents and landscapes are built in code, against
-walls of the sizes in client/src/world/layout.ts. Keep to them, and keep everything on a holodeck's side of its walls
-within 0.125 of their centre lines, behind the skin its landscape shows through (world/scenery.ts).
+head (the turbolift, engineering, and the way into the hallway), a row (the hallway past a holodeck's door either
+side, even and odd, so the consoles along it alternate) and the tail (the end wall, with a window). Only the hallway is
+here: each holodeck is a training hall (blender/training_hall.py) standing out in the world, and its door in the
+hallway's wall is a doorway to it (the browser's, with its doors, which lock for hidden projects), where
+client/src/world/layout.ts puts it. Nothing's behind the hallway's walls: they're seen only from the hallway.
 
 The head sits just north of the browser's z = 0, with the hallway running south from it, so the holodecks stand where
 layout.ts puts them: Blender's +Y, aft down the hallway, is the browser's -Z.
@@ -25,22 +25,12 @@ WALL_T = 0.2
 DOOR_W = 2.4
 HALL = 2.0
 ROW = 12.0
-OUTER = HALL + 16.0
 #: the head: wide and deep enough for engineering beside the way in
 HEAD_HALF = 7.0
 HEAD = 7.0
 LIFT_DOOR = 2.0
-#: a bulkhead seen from both sides, about its centre line: a dado with the LCARS stripe along its top, as Builder.wall
-#: builds them, never more than 0.125 proud of the line
-BULKHEAD = [(-0.125, 0), (-0.125, 0.9), (-0.125, 0.97), (-0.1, 0.97), (-0.1, WALL_H), (0.1, WALL_H), (0.1, 0.97),
-            (0.125, 0.97), (0.125, 0.9), (0.125, 0)]
-#: a wall seen only from the room, its inner face on the line
+#: a wall seen only from the room (or hallway), its inner face on the line
 LINING = [(-WALL_T, 0), (-WALL_T, WALL_H), (0, WALL_H), (0, 0.97), (0.025, 0.97), (0.025, 0.9), (0.025, 0)]
-
-
-def bulkhead_materials():
-    dado, stripe, bulkhead = toon(HULL['dado']), toon(HULL['stripe']), toon(HULL['bulkhead'])
-    return [dado, stripe, stripe, bulkhead, bulkhead, bulkhead, stripe, stripe, dado]
 
 
 def lining_materials():
@@ -48,9 +38,12 @@ def lining_materials():
     return [bulkhead, bulkhead, bulkhead, stripe, stripe, dado]
 
 
-def bulkhead(name, a, b, doors=()):
-    """A run of bulkhead along its centre line from a to b, with gaps for `doors` (offset from its middle, width)."""
-    return walls(name, [a, b], [(0, offset, width) for offset, width in doors], BULKHEAD, bulkhead_materials(),
+def lining(name, a, b, doors=()):
+    """
+    A run of wall seen only from the room on its left as you go from a to b, its inner face on that line, with gaps
+    for `doors` (offset from its middle, width). Returns each door's frame, on the inner face.
+    """
+    return walls(name, [a, b], [(0, offset, width) for offset, width in doors], LINING, lining_materials(),
                  lintel_from=DOOR_H + 0.1, closed=False)
 
 
@@ -95,7 +88,10 @@ def head():
     for y in (-1.9, -5.1):
         window(f'head window {y:.0f}', 2.0, 1.4, (0, 1.9), Matrix.Translation((-HEAD_HALF, y, 0)) @ Matrix.Rotation(-math.pi / 2, 4, 'Z'))
 
-    # standing out towards the head, so the first holodecks' skins (0.132 aft of the bulkhead's line) cover them
+    # the head's aft wall either side of the way into the hallway, run inboard so the head's on its left, its corners
+    # buried in the head's side walls and, where the hallway's walls begin, behind the pilasters
+    lining('head aft wall starboard', (HEAD_HALF + WALL_T, -WALL_T / 2), (HALL, -WALL_T / 2))
+    lining('head aft wall port', (-HALL, -WALL_T / 2), (-HEAD_HALF - WALL_T, -WALL_T / 2))
     frame = toon(HULL['frame'])
     for s in (-1, 1):
         collide_object(box(f'hallway pilaster {s}', (0.36, 0.3, WALL_H), frame, (s * HALL, -0.03, 0), round=0.02))
@@ -108,8 +104,8 @@ def head():
 
 def row(name, even):
     """
-    The hallway past a holodeck either side: their walls and doorways (their doors are the browser's), the bulkhead
-    between them and the row before, and LCARS consoles between the doors, on alternate sides of them row by row.
+    The hallway past a holodeck's door either side: its walls and their doorways (their doors are the browser's), and
+    LCARS consoles between the doors, on alternate sides of them row by row.
     """
     module(name)
     polygon(f'{name} hallway', rect(-HALL, 0, HALL, ROW), 0, material(HULL['carpet'], surface='carpet'), uv_scale=0.5)
@@ -117,25 +113,25 @@ def row(name, even):
     edge = material(HULL['carpetEdge'])
     polygon(f'{name} edge starboard', rect(HALL - 0.45, 0, HALL - 0.3, ROW), 0.01, edge)
     polygon(f'{name} edge port', rect(-HALL + 0.3, 0, -HALL + 0.45, ROW), 0.01, edge)
-    polygon(f'{name} ceiling', rect(-OUTER, 0, OUTER, ROW), WALL_H, unlit(HULL['ceiling']), down=True)
+    polygon(f'{name} ceiling', rect(-HALL, 0, HALL, ROW), WALL_H, unlit(HULL['ceiling']), down=True)
     polygon(f'{name} light', [(x, ROW / 2 + y) for x, y in rounded_rect(0.5, ROW - 1.2, 0.2)], WALL_H - 0.02, unlit('#ffffff'), down=True)
 
     for side, s in (('starboard', 1), ('port', -1)):
-        # run aft to starboard and forward to port, so each wall's door frame faces into the hallway
-        a, b = (s * HALL, 0), (s * HALL, ROW)
-        doorway = bulkhead(f'{name} hallway wall {side}', *((a, b) if s > 0 else (b, a)), doors=[(0, DOOR_W)])[0]
-        door_frame(f'{name} holodeck door {side}', doorway @ Matrix.Translation((0, WALL_T / 2, 0)), DOOR_W, DOOR_H,
-                   wall=WALL_T, back=0.04, proud=0.04)
-        bulkhead(f'{name} outer wall {side}', (s * OUTER, 0), (s * OUTER, ROW))
-        bulkhead(f'{name} bulkhead {side}', *(((HALL, 0), (OUTER, 0)) if s > 0 else ((-OUTER, 0), (-HALL, 0))))
+        # its inner face where a bulkhead's hallway face was, half a wall in from the doorways' line, run aft to
+        # starboard and forward to port, so the hallway's on its left and each door frame faces into it
+        x = s * (HALL - WALL_T / 2)
+        a, b = (x, 0), (x, ROW)
+        doorway = lining(f'{name} hallway wall {side}', *((a, b) if s > 0 else (b, a)), doors=[(0, DOOR_W)])[0]
+        door_frame(f'{name} holodeck door {side}', doorway, DOOR_W, DOOR_H, wall=WALL_T, back=0.04, proud=0.04)
         y = ROW / 2 + (3.6 if (s > 0) == even else -3.6)
         face = Matrix.Translation((s * (HALL - WALL_T / 2), y, 0)) @ Matrix.Rotation(s * math.pi / 2, 4, 'Z')
         readout(f'{name} console {side}', 1.5, 0.95, (50 if even else 52) + (s < 0), (0, 0, 1.475), face)
 
 
 def tail():
-    """The end of the hallway: a bulkhead across the deck, with a window looking out from the hallway."""
+    """The end of the hallway: a wall across it, with a window looking out from the hallway."""
     module('tail')
-    bulkhead('tail wall', (-OUTER, 0), (OUTER, 0))
+    # its face where a bulkhead's was, across the hallway's walls' ends, which it buries
+    lining('tail wall', (HALL + WALL_T / 2, -WALL_T / 2), (-HALL - WALL_T / 2, -WALL_T / 2))
     # its frame resting on the stripe
     window('tail window', 2.4, 1.6, (0, 1.92), Matrix.Translation((0, -WALL_T / 2, 0)) @ Matrix.Rotation(math.pi, 4, 'Z'))

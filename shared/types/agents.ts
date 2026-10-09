@@ -76,7 +76,7 @@ export type AgentTask = 'issue' | 'conflicts' | 'fix' | 'review' | 'lead';
  */
 export type ConflictsOutcome = { kind: 'merged'; auto?: string[] } | { kind: 'up-to-date' } | { kind: 'agent'; agent: Agent };
 
-/** The QA officer doesn't sit at one of the room's desks but at the QA station by the pull requests table. */
+/** The QA officer doesn't sit at one of the room's desks but at the QA station in the control ring. */
 export const QA_DESK = -1;
 
 /** Nor does a goal's lead, who sits at one of the room's team stations (`LeadWork.station`). */

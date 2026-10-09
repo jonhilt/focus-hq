@@ -1,6 +1,6 @@
 # Drafting issues
 
-Every holodeck has an operations officer sitting at its **Ops** station in the middle of the hall, beside the pull requests table (<kbd>E</kbd> on them or their station, or <kbd>N</kbd> anywhere on the holodeck). The officer is the same person every time; their name comes from the project.
+Every holodeck has an operations officer sitting at its **Ops** station in the middle of the hall, across from QA (<kbd>E</kbd> on them or their station, or <kbd>N</kbd> anywhere on the holodeck). The officer is the same person every time; their name comes from the project.
 
 1. Type a rough idea ("let shoppers save items for later from the cart") and press **Draft it**. You can close the panel and walk off. Their speech bubble shows what they're reading.
 2. The officer reads the project's repositories and writes an issue: a title, **Context** (naming the files involved), **What to build**, **Acceptance criteria** as a checklist, **Out of scope** and any **Assumptions**. They also pick which of the project's repos it belongs in.

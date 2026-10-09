@@ -69,22 +69,6 @@ export function plant(scale = 1, pot = '#e07a5f'): THREE.Group {
   return g;
 }
 
-export function ceilingLight(w = 1.2, d = 0.6): THREE.Mesh {
-  return new THREE.Mesh(new THREE.BoxGeometry(w, 0.04, d), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
-}
-
-/** A stack of paper folders, one per open pull request. */
-export function paperStack(count: number, colors: string[]): THREE.Group {
-  const g = new THREE.Group();
-  for (let i = 0; i < count; i++) {
-    // each folder lying on the one below
-    const folder = box(0.32, 0.035, 0.24, colors[i % colors.length], 0, i * 0.035, 0);
-    folder.rotation.y = (((i * 37) % 11) - 5) * 0.03;
-    g.add(folder);
-  }
-  return g;
-}
-
 /** The PADD's face, drawn once and shared by every PADD. */
 let paddScreen: THREE.MeshBasicMaterial | undefined;
 function paddScreenMaterial(): THREE.MeshBasicMaterial {

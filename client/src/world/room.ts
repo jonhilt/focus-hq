@@ -11,18 +11,20 @@ import { type Builder, type Interaction, interactive, REACH } from './builder';
 import { seatHelpers } from './helperSeats';
 import { agentView, Character, type CrewView } from './character';
 import { buildHall } from './hall';
-import { curvedPanel, deckEntrance, ENTRANCE_X, hallPodSpots, inHall } from './hallLayout';
-import { briefingRoomAt, HALL, hallAt, OVER_DOOR, type RoomSlot, ROOM_DEPTH, ROOM_WIDTH } from './layout';
+import { around, curvedPanel, deckEntrance, ENTRANCE_X, facingIn, hallPodSpots, inHall } from './hallLayout';
+import { briefingRoomAt, footprints, HALL, hallAt, OVER_DOOR, type RoomSlot, ROOM_DEPTH } from './layout';
 import { ContactShadows } from './contactShadow';
 import { prGlance } from './goalRoom';
 import { mergeStatic } from './merge';
-import { box, flat } from './materials';
-import { cyl, paperStack, plant } from './props';
+import { box, flat, toon } from './materials';
+import { padd, plant } from './props';
+import { paddPiles, RACK_PILES } from './paddRack';
+import { PR_LOOK } from './goalScreens';
 import { holodeckMaterial, holodeckSkin, type Scenery } from './scenery';
 import { StationScreen } from './screen';
 import { paneUse } from './screenPanes';
 import { Beam } from './transporter';
-import { LCARS, lcarsSign, workstation } from './starship';
+import { HULL, LCARS, lcarsSign, workstation } from './starship';
 import { FloorGlow, hover } from './hologram';
 import { OVERLAY_LAYER } from './frame';
 import { Portal } from './portal';
@@ -43,8 +45,6 @@ const HALF_D = ROOM_DEPTH / 2;
 const DESK_SEAT = new THREE.Vector3(-0.68, 0, -0.22);
 /** The holodeck's door sign hangs on the hallway side, just proud of the door frame (in the slot's frame, on the deck). */
 const DOOR_SIGN_X = -HALF_D - OVER_DOOR;
-/** A vacant holodeck's poster hangs on its far wall, this far in from its centre line. */
-const ON_WALL = HALF_D - 0.16;
 
 /** A holodeck's number on its door, the way a starship numbers its doors. */
 const doorCode = (slot: RoomSlot) => `04-${String(slot.index + 2).padStart(2, '0')}`;
@@ -52,13 +52,21 @@ const doorCode = (slot: RoomSlot) => `04-${String(slot.index + 2).padStart(2, '0
 /**
  * Where the hall's furniture stands (its frame): in the control ring in the middle, everyone facing the board, the
  * developers' desks nearest the entrance, then the QA officer's and the operations officer's stations either side of
- * the pull requests table; the pods round the wall (hallLayout.ts).
+ * the way up to the board; the PADD rack against the wall to the left as you come in, under a readout, and the pods
+ * round the wall (hallLayout.ts).
  */
+/** The PADD rack: a low console as long as eight piles of PADDs, its top at a hand's height, dark as the consoles' are. */
+const PADD_RACK = { width: 2.8, height: 0.95, depth: 0.55, top: '#2b2735' };
+/** A PADD lying flat (props.ts: 0.03 thick, its cap 0.036): how high its middle is on the rack, and over the one below. */
+const PADD_LIE = 0.013;
+const PADD_STEP = 0.029;
+
 const PLAN = {
   desks: Array.from({ length: DESKS_PER_ROOM }, (_, i) => new THREE.Vector3(-2.4, 0, (i === 0 ? -1 : 1) * 2.0)),
   qa: new THREE.Vector3(1.0, 0, -2.0),
   ops: new THREE.Vector3(1.0, 0, 2.0),
-  prTable: new THREE.Vector3(3.3, 0, 0),
+  /** How far round the wall the PADD rack stands, from straight ahead. */
+  paddRack: THREE.MathUtils.degToRad(-135),
   plants: [[ENTRANCE_X + 2.4, -4.2], [ENTRANCE_X + 2.4, 4.2], [-3.8, -9.4], [-3.8, 9.4]] as const,
   arrival: { position: new THREE.Vector3(ENTRANCE_X + 1.4, 0, 0), lookAt: new THREE.Vector3(HALL.radius, 1.8, 0) },
 };
@@ -73,7 +81,7 @@ function overShoulder(seat: THREE.Vector3): { position: THREE.Vector3; lookAt: T
 
 /**
  * A project's holodeck: through its door on the deck, a training hall (hall.ts) with workstations with agents at them,
- * the Kanban board, a pile of PRs to review, and the team stations' pods round the wall.
+ * the Kanban board, the PADD rack with the pull requests to review, and the team stations' pods round the wall.
  */
 export class ProjectRoom {
   readonly group = new THREE.Group();
@@ -87,14 +95,16 @@ export class ProjectRoom {
   /** The operations officer at the Ops station, who drafts issues and looks into stuck pull requests. */
   private planner!: Character;
   private opsScreen = new StationScreen(null, 'Operations · press N to draft an issue');
-  /** The QA officer at their station beside the pull requests table. */
+  /** The QA officer at their station in the control ring. */
   private qa!: Character;
   private qaScreen = new StationScreen(null, 'QA station · standing by');
   private qaStation!: THREE.Group;
   /** The team stations: one goal each, a door in the room to a briefing room where its lead, helpers and reviewer sit. */
   private stations: TeamStation[] = [];
-  private prPile = new THREE.Group();
-  private prCount = -1;
+  /** The PADDs on the rack, a pile per pull request waiting (paddRack.ts). */
+  private padds = new THREE.Group();
+  /** What the PADDs on the rack show, to rebuild them only when it changes. */
+  private paddKey = '';
   private boardDirty = true;
   /** Crew beaming in or out of their seats right now. */
   private beams: Beam[] = [];
@@ -126,7 +136,7 @@ export class ProjectRoom {
     deck.rotation.y = slot.rotationY;
     builder.add(deck);
     builder.halls.add(this.group);
-    const entrance = buildHall(this.group, hallKit, project, builder, !!scenery);
+    const entrance = buildHall(this.group, hallKit, { name: project.name, color: project.color, sub: 'Training hall' }, builder, !!scenery);
     this.entrance = new Portal(deckEntrance(slot, entrance), entrance);
     builder.add(this.entrance.ends[0].group);
     builder.halls.add(this.entrance.ends[1].group);
@@ -157,26 +167,11 @@ export class ProjectRoom {
     for (let i = 0; i < DESKS_PER_ROOM; i++) this.desks.push(this.buildDesk(i, builder));
     for (const desk of this.desks) shadows.add(desk.station);
 
-    // PR review table
-    const table = new THREE.Group();
-    table.position.copy(PLAN.prTable);
-    const top = cyl(0.65, 0.65, 0.06, '#ffffff', 24);
-    top.position.y = 0.74;
-    const leg = cyl(0.07, 0.12, 0.74, '#868e96');
-    leg.position.y = 0.37;
-    table.add(top, leg);
-    this.prPile.position.set(0.28, 0.77, 0.22);
-    table.add(this.prPile);
-    const tableSign = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.28), flat(lcarsSign('Pull requests', { color: LCARS.lilac, h: 260 })));
-    tableSign.position.set(0, 1.45, 0);
-    tableSign.rotation.y = -Math.PI / 2;
-    table.add(tableSign);
-    this.group.add(table);
-    shadows.add(table, 'round');
-    interactive(table, { kind: 'board', projectId: project.id, tab: 'prs' }, () => 'Review pull requests');
-    builder.collideObject(top);
+    // the PADD rack: the pull requests waiting, each a pile of PADDs, as the crew hand each other a PADD rather than share a file
+    const rack = this.paddRack(builder, shadows);
+    interactive(rack, { kind: 'board', projectId: project.id, tab: 'prs' }, () => 'Review pull requests');
 
-    // the QA station: the QA officer sits beside the pull requests table facing the board, testing on a station you
+    // the QA station: the QA officer sits in the control ring facing the board, testing on a station you
     // can look at over their shoulder, the way you do at the developers'
     const qaStation = workstation(this.qaScreen.material, LCARS.lilac);
     qaStation.group.position.copy(PLAN.qa);
@@ -200,7 +195,7 @@ export class ProjectRoom {
       this.stations.push(station);
     }
 
-    // the Ops station: the operations officer sits beside the pull requests table across from QA, facing the board,
+    // the Ops station: the operations officer sits across from QA, facing the board,
     // drafting issues (N anywhere in the hall, or E on them) and looking into pull requests that are stuck
     const ops = workstation(this.opsScreen.material, LCARS.orange);
     ops.group.position.copy(PLAN.ops);
@@ -231,9 +226,9 @@ export class ProjectRoom {
       ...this.desks.map((d) => d.seat),
       qaStation.seat,
       ops.seat,
-      this.prPile,
+      this.padds,
     ];
-    for (const root of [this.group, ...this.desks.map((d) => d.station), qaStation.group, ops.group, table]) mergeStatic(root, keep);
+    for (const root of [this.group, ...this.desks.map((d) => d.station), qaStation.group, ops.group, rack]) mergeStatic(root, keep);
 
     this.syncAgents();
     this.syncPlanner();
@@ -472,12 +467,65 @@ export class ProjectRoom {
     this.boardDirty = true;
   }
 
-  private rebuildPrPile(board: Board | undefined): void {
-    const count = Math.min(board?.prs.length ?? 0, 12);
-    if (count === this.prCount) return;
-    this.prCount = count;
-    this.prPile.clear();
-    this.prPile.add(paperStack(count, Object.values(LCARS)));
+  /**
+   * The PADD rack against the wall: a low console under the readout there, with the PADDs (`padds`) lying on its top
+   * and its sign standing at the back. Returns it, to use.
+   */
+  private paddRack(builder: Builder, shadows: ContactShadows): THREE.Group {
+    const { width, height, depth } = PADD_RACK;
+    const rack = new THREE.Group();
+    // standing clear of the round wall, its back's ends too (where the wall curves in towards them), and of its trims
+    rack.position.copy(around(HALL.radius - 0.26 - depth / 2, PLAN.paddRack));
+    rack.rotation.y = facingIn(PLAN.paddRack);
+    const body = box(width, height - 0.05, depth, HULL.bulkhead);
+    rack.add(body);
+    rack.add(box(width + 0.04, 0.05, depth + 0.04, PADD_RACK.top, 0, height - 0.05, 0));
+    // a kick in the dado's colour and the LCARS stripe along its front, each a little proud of it
+    rack.add(box(width - 0.02, 0.12, 0.02, HULL.dado, 0, 0, -depth / 2 - 0.005));
+    rack.add(box(width - 0.02, 0.05, 0.02, LCARS.lilac, 0, height - 0.2, -depth / 2 - 0.005));
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.28), flat(lcarsSign('Pull requests', { color: LCARS.lilac, h: 260 })));
+    // standing at the back of its top, facing out of it (-Z)
+    sign.rotation.y = Math.PI;
+    sign.position.set(0, height + 0.16, depth / 2 - 0.06);
+    rack.add(sign);
+    rack.add(box(1.14, 0.02, 0.04, HULL.frame, 0, height, depth / 2 - 0.04));
+    this.padds.position.y = height;
+    rack.add(this.padds);
+    this.group.add(rack);
+    shadows.add(body);
+    rack.updateWorldMatrix(true, true);
+    // turned with the wall, so as a chain of small boxes rather than one round its turned bounds (layout.ts)
+    builder.colliders.push(...footprints(new THREE.Matrix4().multiplyMatrices(body.matrixWorld, new THREE.Matrix4().makeScale(width / 2 + 0.05, 1, depth / 2 + 0.05))));
+    return rack;
+  }
+
+  /** Lays the pull requests waiting on the rack: a pile of PADDs each, the top one's cap lit in how QA has it. */
+  private rebuildPadds(board: Board | undefined): void {
+    const prs = (board?.prs ?? []).map((pr) => ({ number: pr.number, glance: prGlance({}, state.reviews.get(prKey(pr.repo, pr.number))?.status) }));
+    const key = prs.map((p) => `${p.number}:${p.glance}`).join(',');
+    if (key === this.paddKey) return;
+    this.paddKey = key;
+    // each PADD's geometries are its own (props.ts); their materials are shared
+    this.padds.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.geometry.dispose();
+    });
+    this.padds.clear();
+    const piles = paddPiles(prs, (pr) => pr.number);
+    const step = (PADD_RACK.width - 0.3) / RACK_PILES;
+    piles.forEach((pile, i) => {
+      pile.forEach((pr, level) => {
+        const p = padd();
+        // lying on its back, screen up, a little askew on the one below and a little sunk into it (and the bottom one
+        // into the rack's top), so none of their faces lie on another's or hover just off it
+        // (its length front to back, so the piles keep apart however askew)
+        p.rotation.set(0, Math.PI / 2 + (((pr.number * 7 + level * 13) % 9) - 4) * 0.025, -Math.PI / 2, 'YXZ');
+        p.position.set((i - (RACK_PILES - 1) / 2) * step, PADD_LIE + level * PADD_STEP, -0.05);
+        // the cap of each lit in how its pull request stands
+        const cap = p.children[1] as THREE.Mesh;
+        cap.material = toon(PR_LOOK[pr.glance].color);
+        this.padds.add(p);
+      });
+    });
   }
 
   /** The doorways between the holodeck and its team stations' briefing rooms. */
@@ -525,7 +573,7 @@ export class ProjectRoom {
       this.boardDirty = false;
       const board = state.boards.get(this.project.id);
       this.board.draw(this.project, board, state.agentsIn(this.project.id));
-      this.rebuildPrPile(board);
+      this.rebuildPadds(board);
     }
     const inRoom = this.holds(eye);
     if (inRoom) this.planner.update(t, eye.distanceTo(this.planner.group.getWorldPosition(tmp)));
@@ -607,26 +655,15 @@ function overPod(station: TeamStation): void {
   station.podScreen.scale.setScalar(scale);
 }
 
-/** An empty room waiting for a project. */
-/** An empty holodeck: dark, with the yellow grid. */
-function bareHolodeck(slot: RoomSlot, builder: Builder): THREE.Group {
+/**
+ * A hidden project's holodeck: its doors stay locked (the World builds them so) under an "in use" sign that doesn't
+ * say whose, and there's nothing behind them.
+ */
+export function buildHiddenRoom(slot: RoomSlot, builder: Builder): void {
   const group = new THREE.Group();
   group.position.copy(slot.center);
   group.rotation.y = slot.rotationY;
   builder.add(group);
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_DEPTH - 0.2, ROOM_WIDTH - 0.2), holodeckMaterial());
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.y = 0.005;
-  group.add(floor, holodeckSkin());
-  return group;
-}
-
-/**
- * A hidden project's holodeck: its doors stay locked (the World builds them so) under an "in use" sign that doesn't
- * say whose, and nothing of the project is built inside.
- */
-export function buildHiddenRoom(slot: RoomSlot, builder: Builder): THREE.Group {
-  const group = bareHolodeck(slot, builder);
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), flat(lcarsSign('Holodeck in use', { color: LCARS.red, code: doorCode(slot), sub: 'Program running · do not disturb' })));
   sign.rotation.y = -Math.PI / 2;
   sign.position.set(DOOR_SIGN_X, 2.87, 0);
@@ -636,34 +673,64 @@ export function buildHiddenRoom(slot: RoomSlot, builder: Builder): THREE.Group {
   plate.rotation.y = -Math.PI / 2;
   plate.position.set(-HALF_D - 0.075, 1.5, 0);
   group.add(plate);
-  return group;
 }
 
-export function buildVacantRoom(slot: RoomSlot, builder: Builder): THREE.Group {
-  // waiting for a project to load a landscape
-  const group = bareHolodeck(slot, builder);
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), flat(lcarsSign('Holodeck vacant', { color: '#9a94a8', code: doorCode(slot), sub: 'Create a project in the ready room' })));
-  sign.rotation.y = -Math.PI / 2;
-  sign.position.set(DOOR_SIGN_X, 2.87, 0);
-  group.add(sign);
-  const poster = new THREE.Mesh(
-    new THREE.PlaneGeometry(5, 1.4),
-    flat(lcarsSign('Holodeck available', { w: 1024, h: 288, color: LCARS.gold, sub: 'Start a project from the ready room' })),
-  );
-  poster.rotation.y = -Math.PI / 2;
-  poster.position.set(ON_WALL, 1.8, 0);
-  group.add(poster);
-  interactive(poster, { kind: 'manager', tab: 'new-project' }, () => 'Start a new project');
-  // moving boxes
-  const boxes = new THREE.Group();
-  boxes.position.set(1, 0, -2);
-  [[0, 0, 0], [0.7, 0, 0.1], [0.3, 0.5, 0.05], [0.1, 0, 0.8]].forEach(([x, y, z], i) => {
-    const b = box(0.6, 0.5, 0.6, i % 2 ? '#d4a373' : '#ccd5ae', x, y, z);
-    b.rotation.y = i * 0.3;
-    boxes.add(b);
-  });
-  group.add(boxes);
-  interactive(boxes, { kind: 'manager', tab: 'new-project' }, () => 'Start a new project');
-  builder.collideObject(boxes);
-  return group;
+/**
+ * A vacant holodeck, waiting for a project: through its door on the deck, a training hall with nothing running, dark
+ * with the yellow grid, a poster on its far wall and a few moving boxes, each of which starts a project.
+ */
+export class VacantHall {
+  readonly group = new THREE.Group();
+  /** The doorway from its door on the deck to the hall's entrance. */
+  readonly portal: Portal;
+
+  constructor(slot: RoomSlot, builder: Builder, hallKit: THREE.Object3D) {
+    this.group.position.copy(hallAt(slot));
+    this.group.rotation.y = slot.rotationY;
+    builder.halls.add(this.group);
+    const entrance = buildHall(this.group, hallKit, { name: 'Holodeck vacant', color: '#9a94a8', sub: 'Start a project from the ready room' }, builder, true);
+    this.portal = new Portal(deckEntrance(slot, entrance), entrance);
+    builder.add(this.portal.ends[0].group);
+    builder.halls.add(this.portal.ends[1].group);
+
+    const deck = new THREE.Group();
+    deck.position.copy(slot.center);
+    deck.rotation.y = slot.rotationY;
+    builder.add(deck);
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), flat(lcarsSign('Holodeck vacant', { color: '#9a94a8', code: doorCode(slot), sub: 'Create a project in the ready room' })));
+    sign.rotation.y = -Math.PI / 2;
+    sign.position.set(DOOR_SIGN_X, 2.87, 0);
+    deck.add(sign);
+
+    // the grid over the hall's walls, ceiling and floor (the grid's drawn in its mesh's own frame, so the floor's laid
+    // flat in its geometry, not by turning it)
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(HALL.radius, 96).rotateX(-Math.PI / 2), holodeckMaterial());
+    floor.position.y = 0.004;
+    this.group.add(floor, holodeckSkin());
+    const poster = new THREE.Mesh(
+      new THREE.PlaneGeometry(5, 1.4),
+      flat(lcarsSign('Holodeck available', { w: 1024, h: 288, color: LCARS.gold, sub: 'Start one in the ready room' })),
+    );
+    poster.rotation.y = -Math.PI / 2;
+    // flat in front of the round wall's grid: far enough in that its ends, 2.5 m either side, stay in front of it too
+    poster.position.set(HALL.radius - 0.5, 1.8, 0);
+    this.group.add(poster);
+    interactive(poster, { kind: 'manager', tab: 'new-project' }, () => 'Start a new project');
+    // moving boxes
+    const boxes = new THREE.Group();
+    boxes.position.set(1, 0, -2);
+    [[0, 0, 0], [0.7, 0, 0.1], [0.3, 0.5, 0.05], [0.1, 0, 0.8]].forEach(([x, y, z], i) => {
+      const b = box(0.6, 0.5, 0.6, i % 2 ? '#d4a373' : '#ccd5ae', x, y, z);
+      b.rotation.y = i * 0.3;
+      boxes.add(b);
+    });
+    this.group.add(boxes);
+    interactive(boxes, { kind: 'manager', tab: 'new-project' }, () => 'Start a new project');
+    builder.collideObject(boxes);
+  }
+
+  /** Whether a world position is in the hall. */
+  holds(p: THREE.Vector3): boolean {
+    return inHall(this.group.position, p);
+  }
 }
