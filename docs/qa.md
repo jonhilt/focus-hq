@@ -14,8 +14,9 @@ Every holodeck has a QA officer in blue, sitting at a station in the control rin
   3. Review the diff against the base branch.
   4. Run the tests, type checks, linters and build.
   5. Click through UI changes with the browser tool, so you see that on their station's display.
-  6. Finish with a structured report: a verdict, a summary, every check made, the commands run and, on a fail, fix instructions.
+  6. Finish with a structured report: a verdict, a summary, every check made, the commands run, up to three **spot-checks** and, on a fail, fix instructions.
 - **The report:** the office posts it as a comment on the PR (QA never touches GitHub themselves), and the board shows **QA passed**, **QA failed** or, once newer commits land, **QA passed an older commit**. Merging a PR whose latest commit QA hasn't passed asks you to confirm, and says why.
+- **Spot-checks:** you rarely read a whole diff, so QA picks up to three places in it most worth your own eyes, riskiest first (a new route or permission, a changed guard, a weakened test, data that could be lost), each with its file, line and what could go wrong there (`SPOT_CHECKS` in `server/agents/qa.ts`). They're listed under **Worth a human look** on the PR comment and in the QA panel, and on a goal's pull requests they go on its chart, where you tick them off.
 - **Screenshots:** the last 8 screenshots QA takes on purpose (`mcp__browser__screenshot`) go with the report, each with QA's caption. The office commits them to an orphan branch in the PR's repo, `focus-qa-evidence` (created on first use, no shared history with the code, never merged), and embeds them in the comment. A screenshot that fails to upload is left out of the comment and the error shows in QA's terminal.
 - **The QA station** (<kbd>E</kbd> on the officer when they're free, or the QA chip on a PR):
   - **Reports**: every report in full, with its screenshots;

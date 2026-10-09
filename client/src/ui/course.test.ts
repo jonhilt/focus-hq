@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Contact, Waypoint } from '../../../shared/types';
-import { CHART, clearOf, clip, everySlice, plotCourse, seeded, smoothPath } from './course';
+import { CHART, clearOf, clip, everySlice, plotCourse, seeded, shieldState, smoothPath } from './course';
 
 const wp = (slice: number, more: Partial<Waypoint> = {}): Waypoint => ({ slice, startedAt: slice * 10, landedAt: slice * 10 + 5, title: `Slice ${slice}`, ...more });
 const inside = (p: { x: number; y: number }) => p.x >= 0 && p.x <= CHART.width && p.y >= 0 && p.y <= CHART.height;
@@ -134,5 +134,16 @@ describe('chart helpers', () => {
   it('smooths a path through every point', () => {
     expect(smoothPath([{ x: 0, y: 0 }, { x: 10, y: 0 }])).toBe('M0 0 C1.7 0 8.3 0 10 0');
     expect(smoothPath([])).toBe('');
+  });
+});
+
+describe('shields', () => {
+  const shield = (verdict: 'pass' | 'fail', failedRounds = 0, ci?: 'passing' | 'failing') => ({ repo: 'acme/web', pr: 9, verdict, checks: { pass: 1, fail: 0, skip: 0 }, failedRounds, ...(ci && { ci }), at: 0 });
+  it('holds when everything passed first time, absorbs a hit once a fail is fixed, and is down while anything fails', () => {
+    expect(shieldState(undefined)).toBe('none');
+    expect(shieldState([shield('pass'), shield('pass', 0, 'passing')])).toBe('held');
+    expect(shieldState([shield('pass', 1), shield('pass')])).toBe('absorbed');
+    expect(shieldState([shield('pass', 1), shield('fail', 1)])).toBe('down');
+    expect(shieldState([shield('pass', 0, 'failing')])).toBe('down');
   });
 });

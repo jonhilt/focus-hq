@@ -400,6 +400,21 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .chart-wp .hit { fill: transparent; }
 .chart-wp .ring { fill: none; stroke: var(--lcars-gold); stroke-width: 2; opacity: 0; }
 .chart-wp .core { fill: var(--lcars-gold); }
+.chart-wp .shield { fill: none; stroke-width: 3; stroke-dasharray: 17.8 3.3; pointer-events: none; }
+.chart-wp .shield.held { stroke: var(--lcars-green); }
+.chart-wp .shield.absorbed { stroke: var(--lcars-gold); }
+.chart-wp .shield.down { stroke: var(--lcars-red); }
+.chart-shields, .chart-spots { margin: 4px 0 0; padding: 0; list-style: none; }
+.chart-shields li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 6px 0; }
+.chart-shields li small, .chart-spots small { flex-basis: 100%; display: block; color: var(--muted); font-size: 13px; letter-spacing: 0.03em; }
+.chart-shields li.absorbed small { color: var(--lcars-gold); }
+.chart-spots li { margin: 6px 0; }
+.chart-spots label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.chart-spots input { margin-top: 3px; accent-color: var(--lcars-gold); }
+.chart-spots .mono { font-family: var(--mono); font-size: 13px; color: var(--lcars-sky); word-break: break-all; }
+.chart-spots li.looked .mono { color: var(--muted); }
+.qa-spots ul { margin: 4px 0 0; padding-left: 18px; }
+.qa-spots code { font-family: var(--mono); font-size: 12px; color: var(--lcars-sky); }
 .chart-wp .num { fill: #000; font-size: 14px; font-weight: 700; pointer-events: none; }
 .chart-wp .name { fill: var(--text); font-size: 17px; }
 .chart-wp.now .core { fill: var(--lcars-sky); }

@@ -1,10 +1,11 @@
 import type { Agent, Contact, GoalNote, GoalRecord, LeadPr, Waypoint } from '../../../shared/types';
+import { api } from '../net/api';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { fill, h } from './dom';
 import { prLink } from './goals';
-import { clip, type CoursePlot, everySlice, plotCourse, seeded } from './course';
+import { clip, type CoursePlot, everySlice, plotCourse, seeded, shieldState } from './course';
 
 /** What a goal's chart is drawn from, whether it's under way or closed. */
 interface ChartGoal {
@@ -54,6 +55,10 @@ const span = (ms: number) => {
   return hrs < 24 ? `${hrs} h` : `${Math.floor(hrs / 24)} d${hrs % 24 ? ` ${hrs % 24} h` : ''}`;
 };
 const named = (w: Waypoint) => w.title ?? `Slice ${w.slice}`;
+/** The DOM UI's LCARS green (`--lcars-green`), which the 3D palette doesn't have. */
+const GREEN = '#99cc66';
+const SHIELD_WORDS = { none: '', held: 'shields held', absorbed: 'hit absorbed', down: 'shields down' } as const;
+
 /** How a contact stands, in a few words. */
 const standing = (c: Contact) =>
   !c.closed ? `open since waypoint ${c.slice}` : c.closed.as === 'pursued' ? `pursued in waypoint ${c.closed.slice}` : `dropped${c.closed.why ? `: ${c.closed.why}` : ''}`;
@@ -109,11 +114,13 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: number, pick: (sl
   const waypoints = s('g', { class: 'chart-waypoints' },
     ...plot.points.map((p) => {
       const w = p.waypoint;
+      const shields = SHIELD_WORDS[shieldState(w.shields)];
       const g = s('g', { class: `chart-wp ${p.state}${w.slice === selected ? ' picked' : ''}`, tabindex: 0, role: 'button' },
-        s('title', {}, `Waypoint ${w.slice}: ${named(w)}`),
+        s('title', {}, `Waypoint ${w.slice}: ${named(w)}${shields ? ` (${shields})` : ''}`),
         s('circle', { class: 'hit', cx: p.x, cy: p.y, r: 24 }),
         p.state === 'now' ? s('circle', { class: 'ping', cx: p.x, cy: p.y, r: 22 }) : null,
         s('circle', { class: 'ring', cx: p.x, cy: p.y, r: 19 }),
+        shieldState(w.shields) !== 'none' ? s('circle', { class: `shield ${shieldState(w.shields)}`, cx: p.x, cy: p.y, r: 16 }) : null,
         s('circle', { class: 'core', cx: p.x, cy: p.y, r: 12 }),
         s('text', { class: 'num', x: p.x, y: p.y + 5, 'text-anchor': 'middle' }, String(w.slice)),
         s('text', { class: 'name', x: p.label.x, y: p.label.y, 'text-anchor': p.label.anchor }, p.name),
@@ -154,9 +161,11 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: number, pick: (sl
   );
 }
 
+const section = (label: string, tone: string, ...body: (Node | string | null)[]) => h('section', null, h('h4', { style: `--tone:${tone}` }, label), ...body);
+const prOf = (prs: LeadPr[], repo: string, pr: number) => prs.find((p) => p.repo === repo && p.number === pr);
+
 /** The picked waypoint's log: when, what it set out to do, any course correction, what it taught us, its pull requests. */
-function logView(goal: ChartGoal, w: Waypoint | undefined): HTMLElement {
-  const section = (label: string, tone: string, ...body: (Node | string | null)[]) => h('section', null, h('h4', { style: `--tone:${tone}` }, label), ...body);
+function logView(goal: ChartGoal, w: Waypoint | undefined, tick?: (slice: number, index: number, checked: boolean) => void): HTMLElement {
   const objective = section('Objective', LCARS.peach, h('p', null, goal.note?.done || 'Not agreed yet'));
   const threads = (label: string, list: Contact[]) =>
     list.length ? section(label, LCARS.sky, h('ul', { class: 'chart-threads' }, ...list.map((c) => h('li', { class: c.closed?.as ?? 'open' }, h('span', null, c.text), h('small', null, standing(c)))))) : null;
@@ -180,10 +189,50 @@ function logView(goal: ChartGoal, w: Waypoint | undefined): HTMLElement {
     w.summary || !w.title ? section('Intent', LCARS.orange, h('p', null, w.summary ?? 'Nothing shipped yet')) : null,
     w.turnedFrom ? section('Course correction', LCARS.red, h('p', null, 'Was heading for: ', h('em', null, w.turnedFrom))) : null,
     w.learned?.length ? section('Learned', LCARS.lilac, h('ul', { class: 'goal-list' }, ...w.learned.map((l) => h('li', null, l)))) : null,
+    shieldsView(w),
+    spotChecksView(w, goal.prs, tick),
     threads('Noticed here', goal.contacts.filter((c) => c.slice === w.slice)),
     prs.length ? section('Pull requests', LCARS.periwinkle, h('div', { class: 'row' }, ...prs.map(prLink))) : null,
     open,
   );
+}
+
+/** Each of the slice's pull requests' guardrails, as QA last reported on it. */
+function shieldsView(w: Waypoint): HTMLElement | null {
+  if (!w.shields?.length) return null;
+  const state = shieldState(w.shields);
+  const tone = { none: GREEN, held: GREEN, absorbed: LCARS.gold, down: LCARS.red }[state];
+  return section(`Shields · ${SHIELD_WORDS[state]}`, tone, h('ul', { class: 'chart-shields' }, ...w.shields.map((sh) => {
+    const total = sh.checks.pass + sh.checks.fail + sh.checks.skip;
+    const name = `${sh.repo.split('/')[1]} #${sh.pr}`;
+    return h('li', { class: sh.verdict === 'fail' ? 'down' : sh.failedRounds ? 'absorbed' : 'held' },
+      h('b', null, name),
+      h('span', { class: `chip check ${sh.verdict}` }, `QA ${sh.verdict}`),
+      h('span', null, `${sh.checks.pass}/${total} checks`),
+      sh.ci && sh.ci !== 'none' ? h('span', { class: `chip check ${sh.ci === 'passing' ? 'pass' : sh.ci === 'failing' ? 'fail' : 'skip'}` }, `CI ${sh.ci}`) : null,
+      sh.verdict === 'pass' && sh.failedRounds
+        ? h('small', null, `Hit absorbed: QA failed it ${sh.failedRounds === 1 ? 'once' : `${sh.failedRounds} times`} before it was fixed`)
+        : sh.failing?.length ? h('small', null, `Failing: ${sh.failing.join(', ')}`) : null,
+    );
+  })));
+}
+
+/** The places QA picked for a human look: each links to the pull request's files, and ticks off once you've looked. */
+function spotChecksView(w: Waypoint, prs: LeadPr[], tick?: (slice: number, index: number, checked: boolean) => void): HTMLElement | null {
+  const spots = w.spotChecks ?? [];
+  if (!spots.length) return null;
+  const looked = spots.filter((c) => c.checked).length;
+  return section(`Spot-checks · ${looked} of ${spots.length} looked at`, LCARS.gold, h('ul', { class: 'chart-spots' }, ...spots.map((c, i) => {
+    const box = h('input', { type: 'checkbox', checked: !!c.checked, disabled: !tick, title: tick ? 'Ticked once you’ve looked' : undefined });
+    box.onchange = () => tick?.(w.slice, i, box.checked);
+    const pr = prOf(prs, c.repo, c.pr);
+    const where = `${c.file}${c.line ? `:${c.line}` : ''}`;
+    return h('li', { class: c.checked ? 'looked' : '' },
+      h('label', null, box,
+        h('span', null,
+          pr ? h('a', { href: `${pr.url}/files`, target: '_blank', rel: 'noreferrer', class: 'mono' }, where) : h('span', { class: 'mono' }, where),
+          h('small', null, `${c.repo.split('/')[1]} #${c.pr} · ${c.why}`))));
+  })));
 }
 
 /** Along the bottom: how far the voyage has come. */
@@ -192,11 +241,15 @@ function readout(goal: ChartGoal): HTMLElement {
   const turns = goal.waypoints.filter((w) => w.turnedFrom).length;
   const next = goal.note?.next.length ?? 0;
   const open = goal.contacts.filter((c) => !c.closed).length;
+  const hits = goal.waypoints.filter((w) => shieldState(w.shields) === 'absorbed').length;
+  const toLook = goal.waypoints.flatMap((w) => w.spotChecks ?? []).filter((c) => !c.checked).length;
   const parts = [
     `${n} waypoint${n === 1 ? '' : 's'}`,
     `${span((goal.closedAt ?? Date.now()) - goal.openedAt)}${goal.closedAt ? '' : ' under way'}`,
     `${turns} course correction${turns === 1 ? '' : 's'}`,
     `${open} contact${open === 1 ? '' : 's'} open`,
+    ...(hits ? [`${hits} hit${hits === 1 ? '' : 's'} absorbed`] : []),
+    ...(toLook ? [`${toLook} spot-check${toLook === 1 ? '' : 's'}`] : []),
     goal.closedAt ? 'closed' : `${next} projected`,
   ];
   return h('div', { class: 'chart-readout' }, parts.join(' · '));
@@ -221,7 +274,7 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, liveId?: string): 
     };
     fill(body,
       h('div', { class: 'chart-map' }, chartSvg(g, plot, picked, pick), readout(g)),
-      logView(g, g.waypoints.find((w) => w.slice === picked)),
+      logView(g, g.waypoints.find((w) => w.slice === picked), liveId ? (slice, index, checked) => void api.tickSpotCheck(liveId, slice, index, checked).catch((err: Error) => ui.error(err.message)) : undefined),
     );
   };
   render();

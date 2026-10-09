@@ -3,7 +3,7 @@
 // the lead's ideas for what's next fanning out ahead of it, and the loose threads noticed on the way as sensor contacts
 // off to the side of the waypoint that noticed them. Pure, so the chart panel only draws it.
 
-import type { Contact, Waypoint } from '../../../shared/types';
+import type { Contact, Shield, Waypoint } from '../../../shared/types';
 
 export interface Pt {
   x: number;
@@ -262,4 +262,14 @@ export function everySlice(waypoints: Waypoint[] | undefined, upTo: number, star
   const first = Math.min(1, ...kept.keys());
   const last = Math.max(upTo, ...kept.keys());
   return Array.from({ length: Math.max(0, last - first + 1) }, (_, i) => kept.get(first + i) ?? { slice: first + i, startedAt });
+}
+
+/**
+ * How a slice's guardrails stood: down while QA or CI is failing one of its pull requests, absorbed once each passes
+ * but one had failed first (a hit the shields took), held when everything passed first time; none before QA's looked.
+ */
+export function shieldState(shields: readonly Shield[] | undefined): 'none' | 'held' | 'absorbed' | 'down' {
+  if (!shields?.length) return 'none';
+  if (shields.some((s) => s.verdict === 'fail' || s.ci === 'failing')) return 'down';
+  return shields.some((s) => s.failedRounds > 0) ? 'absorbed' : 'held';
 }
