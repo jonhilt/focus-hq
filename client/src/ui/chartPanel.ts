@@ -191,12 +191,13 @@ function readout(goal: ChartGoal): HTMLElement {
   const n = goal.waypoints.length;
   const turns = goal.waypoints.filter((w) => w.turnedFrom).length;
   const next = goal.note?.next.length ?? 0;
+  const open = goal.contacts.filter((c) => !c.closed).length;
   const parts = [
     `${n} waypoint${n === 1 ? '' : 's'}`,
     `${span((goal.closedAt ?? Date.now()) - goal.openedAt)}${goal.closedAt ? '' : ' under way'}`,
     `${turns} course correction${turns === 1 ? '' : 's'}`,
-    `${goal.contacts.filter((c) => !c.closed).length} contacts open`,
-    goal.closedAt ? 'closed' : `${next} projected course${next === 1 ? '' : 's'}`,
+    `${open} contact${open === 1 ? '' : 's'} open`,
+    goal.closedAt ? 'closed' : `${next} projected`,
   ];
   return h('div', { class: 'chart-readout' }, parts.join(' · '));
 }

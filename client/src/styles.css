@@ -366,7 +366,7 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .chart { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 18px; height: calc(100vh - 150px); min-height: 0; }
 .chart-map { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
 .chart-svg { flex: 1; min-height: 0; width: 100%; background: #000; border-radius: 10px; font-family: var(--ui); }
-.chart-readout { flex: none; background: var(--surface-2); color: var(--lcars-peach); border-radius: 999px; padding: 6px 18px; font-size: 17px; letter-spacing: 0.06em; text-transform: uppercase; }
+.chart-readout { flex: none; background: var(--surface-2); color: var(--lcars-peach); border-radius: 999px; padding: 6px 18px; font-size: 16px; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chart-course { fill: none; stroke: var(--lcars-gold); stroke-width: 4; stroke-linecap: round; }
 .chart-launch { fill: var(--lcars-orange); }
 .chart-caption { fill: var(--lcars-peach); font-size: 15px; letter-spacing: 0.12em; }
