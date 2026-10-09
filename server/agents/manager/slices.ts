@@ -5,6 +5,7 @@ import { GitHub, type GitHubError } from '../../github/service';
 import { errorMessage, newId } from '../../util';
 import { afterLanding, carriedNote, behindNote, everyPr, heldBack, leadPrBody, leadWorktreeId, newSliceNote, notShipped, openPr, shipped, shippedSha, shipPlan, sliceBranch, type FreshBranch, freshBranchNote, needsFreshBranch, repoBranch } from '../lead';
 import { repoFolders } from '../planner';
+import { nextWaypoints, shippedWaypoint } from '../waypoints';
 import { type GitFailed, Workspace } from '../services';
 import { type ManagerServices, NothingToCheckOut, Part, Refused } from './core';
 
@@ -53,7 +54,7 @@ export class Slices extends Part {
       const slice = lead.slice + 1;
       yield* Effect.forEach(lead.repos, (r) => workspace.remove(r.repo, leadWorktreeId(agent.id, r.folder)), { discard: true });
       const note = lead.note && { ...lead.note, slice: [] };
-      this.update(agent, { branch: sliceBranch(lead.title, slice, newId('s').slice(-4)), lead: { ...lead, note, repos: [], slice, prs: [], landed: everyPr(lead) } });
+      this.update(agent, { branch: sliceBranch(lead.title, slice, newId('s').slice(-4)), lead: { ...lead, note, repos: [], slice, prs: [], landed: everyPr(lead), waypoints: nextWaypoints(lead, Date.now()) } });
       yield* this.checkOutSlice(agent, project.repos);
       const carried = yield* Effect.forEach(unshipped.filter((r) => r.commits.length), ({ repo, folder, commits }) =>
         Effect.gen({ self: this }, function* () {
@@ -130,7 +131,7 @@ export class Slices extends Part {
           }
         }
       }
-      this.update(agent, { status: 'working', activity: 'Shipped the slice' });
+      this.update(agent, { status: 'working', activity: 'Shipped the slice', lead: { ...agent.lead!, waypoints: shippedWaypoint(agent.lead!, { title, summary: input.summary }, Date.now()) } });
       this.boardChanged(agent.projectId);
       return [shipped(lines), ...movedNotes].join('\n\n');
     });

@@ -6,6 +6,7 @@ import { GitHub } from '../../github/service';
 import { newId } from '../../util';
 import { afterVerdict, closeCheck, fileGoal, leftLog, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, landedMidTurnNote, landedNote, leadWorktreeId, moveQueued, nextGoal, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch } from '../lead';
 import { Workspace } from '../services';
+import { landedWaypoint } from '../waypoints';
 import { type ManagerServices, Part, Refused, type WorkError } from './core';
 
 /** Goals and their leads: starting, queueing, reopening and closing goals, and what the lead hears about their pull requests. */
@@ -51,7 +52,7 @@ export class Leads extends Part {
       activity: `Coming over to team station ${station + 1}`,
       branch: sliceBranch(title, 1, newId('s').slice(-4)),
       baseBranch: 'main',
-      lead: { station, title, brief: goalBrief(text), repos: [], slice: 1, prs: [] },
+      lead: { station, title, brief: goalBrief(text), repos: [], slice: 1, prs: [], waypoints: [{ slice: 1, startedAt: Date.now() }] },
       costUsd: 0,
       startedAt: Date.now(),
     };
@@ -281,7 +282,7 @@ export class Leads extends Part {
     const lead = this.leadWith(repo, number);
     if (!lead?.lead) return false;
     const prs = lead.lead.prs.map((p) => (p.repo === repo && p.number === number ? { ...p, outcome: merged ? ('merged' as const) : ('closed' as const) } : p));
-    this.update(lead, { lead: { ...lead.lead, prs } });
+    this.update(lead, { lead: { ...lead.lead, prs, ...(sliceLanded(prs) && { waypoints: landedWaypoint(lead.lead, Date.now()) }) } });
     this.print(lead, [{ kind: merged ? 'success' : 'system', text: `${merged ? '🎉' : '✻'} ${repo}#${number} was ${merged ? 'merged' : 'closed'}` }]);
     if (sliceLanded(prs)) {
       this.core.ledger.digestSession(lead, prs.map((p) => ({ repo: p.repo, pr: p.number })));

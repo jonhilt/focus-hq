@@ -409,6 +409,7 @@ export function goalRecord(agent: Agent, now: number): GoalRecord {
     id: agent.id, title: work.title, note: work.note, slices: work.prs.length ? work.slice : work.slice - 1, prs: everyPr(work), slice: work.slice, leadName: agent.name, sessionId: agent.sessionId,
     brief: work.brief, branch: agent.branch, repos: work.repos, openedAt: agent.startedAt, closedAt: now,
     ...(work.artifacts?.length && { artifacts: work.artifacts }), ...(work.questions?.length && { questions: work.questions }),
+    ...(work.waypoints?.length && { waypoints: work.waypoints }),
   };
 }
 
@@ -428,6 +429,7 @@ export function reopenedWork(goal: GoalRecord, station: number): LeadWork {
     station, title: goal.title, brief: goal.brief, note: goal.note, repos: goal.repos ?? [], slice, prs: current,
     ...(landed.length && { landed }), reopening: { closedAt: goal.closedAt },
     ...(goal.artifacts && { artifacts: goal.artifacts }), ...(goal.questions && { questions: goal.questions }),
+    ...(goal.waypoints && { waypoints: goal.waypoints }),
   };
 }
 

@@ -3,6 +3,7 @@ import type { Agent, MessageReply, ResumeHow } from '../../../shared/types';
 import { answerMessage } from '../../../shared/artifacts';
 import { answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, applyNote, type NoteInput, pageErrorsNote } from '../lead';
 import { explainerPage, type ExplainerInput } from '../explainer';
+import { notedWaypoint } from '../waypoints';
 import { Renderer } from '../services';
 import { Part, Refused } from './core';
 
@@ -15,7 +16,8 @@ export class GoalTools extends Part {
       if (!work) return yield* new Refused({ message: 'There’s no goal to keep a note on' });
       const next = applyNote(work, input);
       if ('error' in next) return yield* new Refused({ message: next.error });
-      this.update(agent, { lead: { ...work, title: next.title, note: next.note }, issue: { ...agent.issue, title: next.title } });
+      const waypoints = notedWaypoint(work, input, next.note, Date.now());
+      this.update(agent, { lead: { ...work, title: next.title, note: next.note, ...(waypoints && { waypoints }) }, issue: { ...agent.issue, title: next.title } });
       return 'Noted. The captain sees the note on the goal, and you hear it again at each new slice.';
     });
   }

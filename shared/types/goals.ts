@@ -27,6 +27,26 @@ export interface GoalNote {
   next: string[];
 }
 
+/**
+ * One slice of a goal, as a waypoint on its chart: what it set out to do, what it taught us, and when. The office keeps
+ * them as the lead ships, notes and lands each slice (`server/agents/waypoints.ts`).
+ */
+export interface Waypoint {
+  /** Which slice: 1, 2, … */
+  slice: number;
+  /** When the slice started (the goal opened, or the slice before moved on), and when its last pull request landed. */
+  startedAt: number;
+  landedAt?: number;
+  /** What it set out to do: the title it last shipped under. Missing until it ships. */
+  title?: string;
+  /** The opening of what it shipped with (its pull requests' description), cut short. */
+  summary?: string;
+  /** The lessons the lead added to the goal's note during the slice. */
+  learned?: string[];
+  /** What done looked like before the lead changed it during the slice: a course correction. */
+  turnedFrom?: string;
+}
+
 /** A closed goal, in its room's log: enough to look back on, and to pick it back up one day. */
 export interface GoalRecord {
   id: string;
@@ -50,6 +70,8 @@ export interface GoalRecord {
   /** What its lead showed, and asked with pictures, kept to look back at (and for a reopened goal's screen). */
   artifacts?: GoalArtifact[];
   questions?: GoalQuestion[];
+  /** Its slices as waypoints on its chart. Missing on goals closed before they were kept. */
+  waypoints?: Waypoint[];
   openedAt: number;
   closedAt: number;
 }
@@ -109,6 +131,8 @@ export interface LeadWork {
   prs: LeadPr[];
   /** The pull requests of the slices that landed before this one, each with its `slice`, so the closed goal keeps them all. */
   landed?: LeadPr[];
+  /** Every slice so far as a waypoint on the goal's chart, this one last. Missing on goals started before they were kept. */
+  waypoints?: Waypoint[];
   /** What the lead has put on the station's screen, in the order they first showed it. Cleared when the goal closes. */
   artifacts?: GoalArtifact[];
   /** The questions the lead has asked with visual options, oldest first: at most the last one is still open. */
