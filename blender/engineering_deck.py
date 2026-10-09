@@ -130,7 +130,9 @@ def shell():
     lift, = walls('gallery wall', OUTLINE, [(FORWARD, 0.0, LIFT_DOOR)], profile(HEIGHT), wall_materials(), lintel_from=DOOR_H + 0.1)
     door('door turbolift', lift, LIFT_DOOR)
     sign('sign turbolift', 'Turbolift', 1.4, LCARS['gold'], (0, 0.13, 2.82), lift, code='05-01')
-    walls('lower wall', OUTLINE, [], lower_profile(), lower_materials(), lintel_from=0)
+    # swept without colliders: walls() would lay them along the whole outline, across the turbolift's doorway up on
+    # the gallery, and no one walks down there
+    sweep('lower wall', OUTLINE, lower_profile(), lower_materials(), closed=True)
 
     floor_round_well('gallery floor', 0, material(FLOOR, surface='carpet'), uv_scale=0.5)
     floor_round_well('gallery underside', SLAB, toon('#3a3456'), down=True)
