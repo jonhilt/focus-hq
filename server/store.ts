@@ -421,7 +421,7 @@ export class Store {
 
 /** Why the office won't open a data folder another office is using, and what to do instead. */
 export function stateLocked(pid: number, dataDir: string): string {
-  return `Another Focus office (pid ${pid}) is using ${dataDir}. Stop it first, or give this one a data folder of its own (FOCUS_DATA_DIR=<empty folder>), or run npm run demo, which saves nothing.`;
+  return `Another Focus office (pid ${pid}) is using ${dataDir}. Stop it first, or give this one a data folder of its own (FOCUS_DATA_DIR=<empty folder>), or run pnpm run demo, which saves nothing.`;
 }
 
 function isTheme(value: unknown): value is RoomTheme {

@@ -3,7 +3,7 @@
 Agents run on your Claude login. With `FOCUS_USE_API_KEY=fallback` and `ANTHROPIC_API_KEY` set, they carry on with the API key while your plan's usage limit is reached, and go back to your plan when it resets. The key is used through the Agent SDK, so Claude credits that apply to the Agent SDK with an API key cover it.
 
 ```sh
-FOCUS_USE_API_KEY=fallback ANTHROPIC_API_KEY=sk-ant-… FOCUS_API_BUDGET=20 npm start
+FOCUS_USE_API_KEY=fallback ANTHROPIC_API_KEY=sk-ant-… FOCUS_API_BUDGET=20 pnpm start
 ```
 
 (`FOCUS_USE_API_KEY=1` runs every agent on the key all the time, and leaving it unset keeps them on your login, waiting for the limit to reset.)

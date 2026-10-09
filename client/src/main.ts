@@ -45,7 +45,7 @@ async function fontsReady(): Promise<void> {
   await Promise.race([Promise.all(loads), new Promise((r) => setTimeout(r, 2500))]).catch(() => undefined);
 }
 
-/** The ship's decks, built in Blender (blender/, `npm run ship`). */
+/** The ship's decks, built in Blender (blender/, `pnpm run ship`). */
 async function ship(): Promise<Ship> {
   const [command, holodecks, engineering] = await Promise.all([
     Deck.load('/ship/command-deck.glb', COMMAND_DECK),

@@ -27,29 +27,30 @@ GitHub goes through the [`gh` CLI](https://cli.github.com/). Claude runs through
 ## Quick start
 
 ```bash
-npm install
-npm run demo        # fake GitHub + pretend agents, nothing to set up
+corepack enable     # once: provides the pnpm version package.json asks for
+pnpm install
+pnpm run demo       # fake GitHub + pretend agents, nothing to set up
 ```
 
 Open <http://127.0.0.1:4477>, click **Come aboard**, and walk around ([controls](docs/controls.md)).
 
 ### Take the code tour
 
-To see how it works, open the repo in VS Code and take the guided tour. It follows one agent from the GitHub issue you assign them, through their Claude Code session, to the pull request, QA's report and the merge, a step at a time in the code. VS Code offers to install the [CodeTour](https://marketplace.visualstudio.com/items?itemName=vsls-contrib.codetour) extension it needs; once it's in, the tour starts from the CodeTour panel in the Explorer (or **CodeTour: Start Tour** in the command palette). Keep `npm run demo` running beside it to watch each step happen.
+To see how it works, open the repo in VS Code and take the guided tour. It follows one agent from the GitHub issue you assign them, through their Claude Code session, to the pull request, QA's report and the merge, a step at a time in the code. VS Code offers to install the [CodeTour](https://marketplace.visualstudio.com/items?itemName=vsls-contrib.codetour) extension it needs; once it's in, the tour starts from the CodeTour panel in the Explorer (or **CodeTour: Start Tour** in the command palette). Keep `pnpm run demo` running beside it to watch each step happen.
 
 ### The real thing
 
 Prerequisites:
 
-1. **Node.js 20+**
+1. **Node.js 20+**, with pnpm: `corepack enable` (or `npm install -g pnpm`)
 2. **GitHub CLI**, signed in: `gh auth login`
 3. **Claude Code**, signed in with your subscription: run `claude` once and `/login`, or set `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token`.
-4. *(optional, for browser testing)* `npx playwright install chromium`. Without it, agents fall back to your installed Chrome or Edge.
+4. *(optional, for browser testing)* `pnpm exec playwright install chromium`. Without it, agents fall back to your installed Chrome or Edge.
 
 ```bash
-npm run dev         # live mode with hot reload for the 3D client
+pnpm run dev        # live mode with hot reload for the 3D client
 # or
-npm run build && npm start
+pnpm run build && pnpm start
 ```
 
 Then on board:
@@ -91,7 +92,7 @@ Then on board:
 **Working on Focus**
 
 - [Architecture](docs/architecture.md): a map of the code
-- [Scripts](docs/scripts.md): the npm scripts
+- [Scripts](docs/scripts.md): the package.json scripts
 - [CLAUDE.md](CLAUDE.md): commands and conventions for the agents building Focus
 - [Goals plan](docs/goals-plan.md) and [Effect assessment](docs/effect-assessment.md): design notes
 

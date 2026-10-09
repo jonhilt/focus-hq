@@ -1,5 +1,5 @@
 // Finds z-fighting in a scene graph: faces from different meshes that lie in (almost) the same plane, face the same
-// way and overlap, so the depth test flips between them as the camera turns. `npm run zfight` (scripts/zfight.ts)
+// way and overlap, so the depth test flips between them as the camera turns. `pnpm run zfight` (scripts/zfight.ts)
 // imports this into the running office; it isn't part of the client bundle. The gap scan (gaps.ts) shares its
 // triangle handling.
 import * as THREE from 'three';

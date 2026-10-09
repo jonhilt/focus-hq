@@ -409,7 +409,7 @@ function settingsTab(ui: Ui): HTMLElement {
       info.github.error ? h('p', { class: 'muted' }, info.github.error) : null,
       h('p', { class: 'muted', style: 'margin-bottom:0' },
         info.mode === 'demo'
-          ? 'Demo mode: GitHub and the agents are simulated. Run "npm run dev" for the real thing.'
+          ? 'Demo mode: GitHub and the agents are simulated. Run "pnpm run dev" for the real thing.'
           : 'Live mode: GitHub through the gh CLI, agents through the Claude Agent SDK using your Claude login.'),
     ),
     voiceSection(ui),

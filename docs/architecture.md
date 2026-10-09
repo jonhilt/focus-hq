@@ -86,7 +86,7 @@ client/src/
   tricorder/              the phone view at /tricorder (no three.js): home screen, agent drill-down, buttons that survive live re-renders
 client/tricorder/index.html   the Tricorder's page (a second Vite entry), with its home-screen meta tags
 client/public/tricorder/  its web app manifest and home-screen icons
-client/public/ship/       the decks built in Blender, as GLBs (npm run ship writes them, or CI's Ship workflow on a branch, .github/workflows/ship.yml)
+client/public/ship/       the decks built in Blender, as GLBs (pnpm run ship writes them, or CI's Ship workflow on a branch, .github/workflows/ship.yml)
 blender/                  the Blender scripts that build the decks: ship.py (entry), kit.py (walls, furniture, markers), bake.py (each deck's ambient occlusion, baked into a lightmap), command_deck.py (the bridge, ready room and observation lounge), holodeck_deck.py (the holodecks' hallway and the turbolift), engineering_deck.py (main engineering: the gallery, the well, the warp core and the level below), team_station.py (a team station's door and briefing room), training_hall.py (the training hall every holodeck is a copy of)
 ```
 

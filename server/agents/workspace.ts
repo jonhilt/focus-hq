@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { paths } from '../config';
+import { installCommand, lockfilesIn, packageManagerFor, packageManagerIn } from '../packageManager';
 import { errorMessage, KeyedLock, run, sleep } from '../util';
 import { sameCommit } from '../../shared/qa';
 import { autoMergePlan, conflictStages, type MergeRule, mergeRules } from './conflicts';
@@ -231,7 +232,7 @@ export function runChecks(repo: string, number: number, head: string): Promise<C
   return checksLock.with(repo, async () => {
     const sha = await checkoutDetached(repo, dir, `refs/pull/${number}/head`, 'refs/focus/checks');
     if (!sameCommit(sha, head)) return { sha, results: [{ command: 'git checkout', ok: false, output: `the PR moved on to ${sha.slice(0, 7)}` }] };
-    const results = await installAndRun(dir, checkCommands(packageScripts(dir)));
+    const results = await installAndRun(dir, checkCommands(packageScripts(dir), packageManagerIn(dir)));
     return results && { sha, results };
   });
 }
@@ -241,10 +242,14 @@ function packageScripts(dir: string): Record<string, unknown> | undefined {
   return fs.existsSync(pkg) ? (JSON.parse(fs.readFileSync(pkg, 'utf8')) as { scripts?: Record<string, unknown> }).scripts : undefined;
 }
 
-/** Installs the project's dependencies in `dir` and runs `commands`, stopping at the first that fails. Null when there are none. */
+/**
+ * Installs the project's dependencies in `dir`, from its lockfile with the package manager that wrote it, and runs
+ * `commands`, stopping at the first that fails. Null when there are none.
+ */
 async function installAndRun(dir: string, commands: string[][]): Promise<ChecksRun['results'] | null> {
   if (!commands.length) return null;
-  const install = ['npm', fs.existsSync(path.join(dir, 'package-lock.json')) ? 'ci' : 'install', '--no-audit', '--no-fund'];
+  const lockfiles = lockfilesIn(dir);
+  const install = installCommand(packageManagerFor(lockfiles), lockfiles);
   const results: ChecksRun['results'] = [];
   for (const [cmd, ...args] of [install, ...commands]) {
     const command = [cmd, ...args].join(' ');
@@ -267,7 +272,7 @@ function typecheckMerge(repo: string, sha: string): Promise<{ command: string; o
   const dir = path.join(paths.checks, repo.replace('/', '__'));
   return checksLock.with(repo, async () => {
     await lock.with(repo, () => detachAt(mirrorDir(repo), dir, sha));
-    const results = await installAndRun(dir, checkCommands(packageScripts(dir), ['typecheck']));
+    const results = await installAndRun(dir, checkCommands(packageScripts(dir), packageManagerIn(dir), ['typecheck']));
     return results?.find((r) => !r.ok);
   });
 }

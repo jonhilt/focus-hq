@@ -151,7 +151,7 @@ async function main() {
   } else {
     const dist = path.join(config.root, 'dist');
     if (!fs.existsSync(path.join(dist, 'index.html'))) {
-      console.error('No client build found. Run "npm run build" first, or use "npm run dev".');
+      console.error('No client build found. Run "pnpm run build" first, or use "pnpm run dev".');
       process.exit(1);
     }
     app.use(express.static(dist));

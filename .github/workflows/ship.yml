@@ -1,4 +1,4 @@
-# Builds the ship's decks (npm run ship) when a branch changes the Blender scripts that build them and has no GLBs built
+# Builds the ship's decks (pnpm run ship) when a branch changes the Blender scripts that build them and has no GLBs built
 # since (scripts/ship-needed.sh), and commits the GLBs back to the branch: so changing the ship needs no Blender of your
 # own. Push the script change, and the GLBs follow in a commit from CI a few minutes later (pull it before pushing
 # again). If you built them yourself and committed them with the scripts, CI leaves them be; so it does when the
@@ -60,19 +60,23 @@ jobs:
         if: steps.changed.outputs.build == 'true'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 libsm6 libxkbcommon0 libegl1
 
+      # (the version comes from package.json's packageManager)
+      - uses: pnpm/action-setup@v4
+        if: steps.changed.outputs.build == 'true'
+
       - uses: actions/setup-node@v4
         if: steps.changed.outputs.build == 'true'
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
 
       - name: Install
         if: steps.changed.outputs.build == 'true'
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build the decks
         if: steps.changed.outputs.build == 'true'
-        run: BLENDER="$HOME/blender/blender" npm run ship
+        run: BLENDER="$HOME/blender/blender" pnpm run ship
 
       - name: Commit the GLBs to the branch
         if: steps.changed.outputs.build == 'true'

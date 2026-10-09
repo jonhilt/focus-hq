@@ -7,6 +7,7 @@ import type { Preview, PreviewCheckout, PreviewConfig, PreviewLink, PreviewLog, 
 import { config, paths } from './config';
 import type { GitHubProvider } from './github/provider';
 import type { Hub } from './hub';
+import { packageManagerIn } from './packageManager';
 import { CheckoutFailed, type CommandNotStarted, PreviewMachine, type ShellProcess } from './previewMachine';
 import { errorMessage, truncate } from './util';
 
@@ -790,8 +791,7 @@ function detectCommand(dir: string): string | null {
   }
   const script = ['dev', 'start', 'serve', 'preview'].find((s) => pkg.scripts?.[s]);
   if (!script) return null;
-  const has = (file: string) => fs.existsSync(path.join(dir, file));
-  const pm = has('pnpm-lock.yaml') ? 'pnpm' : has('yarn.lock') ? 'yarn' : has('bun.lockb') || has('bun.lock') ? 'bun' : 'npm';
+  const pm = packageManagerIn(dir);
   return `${pm} install && ${pm} run ${script}`;
 }
 

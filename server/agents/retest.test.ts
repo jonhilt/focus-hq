@@ -37,12 +37,17 @@ describe('retestStep', () => {
 
 describe('checkCommands', () => {
   it('runs typecheck, lint and tests when the project has them', () => {
-    expect(checkCommands({ test: 'vitest run', build: 'vite build', typecheck: 'tsc', lint: 'eslint .' })).toEqual([['npm', 'run', 'typecheck'], ['npm', 'run', 'lint'], ['npm', 'test']]);
+    expect(checkCommands({ test: 'vitest run', build: 'vite build', typecheck: 'tsc', lint: 'eslint .' }, 'npm')).toEqual([['npm', 'run', 'typecheck'], ['npm', 'run', 'lint'], ['npm', 'test']]);
+  });
+
+  it('runs them with the project’s package manager', () => {
+    expect(checkCommands({ test: 'vitest run', typecheck: 'tsc', lint: 'eslint .' }, 'pnpm')).toEqual([['pnpm', 'run', 'typecheck'], ['pnpm', 'run', 'lint'], ['pnpm', 'test']]);
+    expect(checkCommands({ test: 'vitest run', typecheck: 'tsc', lint: 'eslint .' }, 'pnpm', ['typecheck'])).toEqual([['pnpm', 'run', 'typecheck']]);
   });
 
   it('finds none in npm’s placeholder test script or no package.json', () => {
-    expect(checkCommands({ test: 'echo "Error: no test specified" && exit 1' })).toEqual([]);
-    expect(checkCommands(undefined)).toEqual([]);
+    expect(checkCommands({ test: 'echo "Error: no test specified" && exit 1' }, 'npm')).toEqual([]);
+    expect(checkCommands(undefined, 'pnpm')).toEqual([]);
   });
 });
 

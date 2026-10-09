@@ -11,7 +11,7 @@ import { viewportGlass } from './starfield';
 import { tiled } from './textures';
 import { warpCore } from './warpCore';
 
-// A deck of the ship built in Blender (blender/, `npm run ship`). Its architecture comes from a GLB; markers in it
+// A deck of the ship built in Blender (blender/, `pnpm run ship`). Its architecture comes from a GLB; markers in it
 // say where the player can't walk, where doors slide, where to teleport to and what each part is called, and its
 // materials say which surfaces the browser draws (LCARS, space). Decks sit side by side in world space rather than
 // stacked: you never see from one into another, and the player only walks on the flat.

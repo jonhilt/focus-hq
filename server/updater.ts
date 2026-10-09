@@ -1,6 +1,7 @@
 import { ACTIVE_STATUSES } from '../shared/types';
 import { config } from './config';
 import type { Hub } from './hub';
+import { dependenciesChanged, installCommand, missingPackageManager, packageManagerFor } from './packageManager';
 import type { Store } from './store';
 import { errorMessage, run } from './util';
 
@@ -26,6 +27,7 @@ export async function currentVersion(): Promise<string> {
 export class Updater {
   private checking = false;
   private waitingToldAt: string | null = null;
+  private missingToldAt: string | null = null;
 
   constructor(
     private readonly store: Store,
@@ -77,16 +79,28 @@ export class Updater {
       return;
     }
 
-    const from = await git(['rev-parse', 'HEAD']);
+    // The package manager the update's lockfile asks for, found before merging, so an office without it stays as it is.
+    const lockfiles = (await git(['ls-tree', '--name-only', target])).split('\n');
+    const pm = packageManagerFor(lockfiles);
+    const install = dependenciesChanged((await git(['diff', '--name-only', 'HEAD', target])).split('\n'));
+    // In dev mode Vite serves the client from source, so only a production office needs a fresh build.
+    const build = !config.dev;
+    if ((install || build) && !(await run(pm, ['--version'], { cwd: config.root }).then(() => true, () => false))) {
+      if (this.missingToldAt === target) return;
+      this.missingToldAt = target;
+      throw new Error(`Focus now installs its dependencies with ${pm}, but ${missingPackageManager(pm)}`);
+    }
+
     const subject = await git(['log', '-1', '--format=%s', target]);
     console.log(`\n  ⬇ Updating Focus to ${target.slice(0, 7)}: ${subject}`);
     this.hub.toast('info', `Updating Focus: ${subject}. Back in a moment…`);
 
     await git(['merge', '--ff-only', '--quiet', target]);
-    const changed = (await git(['diff', '--name-only', from, target])).split('\n');
-    if (changed.some((f) => f === 'package.json' || f === 'package-lock.json')) await run('npm', ['install'], { cwd: config.root, timeoutMs: 10 * 60_000 });
-    // In dev mode Vite serves the client from source, so only a production office needs a fresh build.
-    if (!config.dev) await run('npm', ['run', 'build'], { cwd: config.root, timeoutMs: 10 * 60_000 });
+    if (install) {
+      const [cmd, ...args] = pm === 'npm' ? ['npm', 'install'] : installCommand(pm, lockfiles);
+      await run(cmd, args, { cwd: config.root, timeoutMs: 10 * 60_000 });
+    }
+    if (build) await run(pm, ['run', 'build'], { cwd: config.root, timeoutMs: 10 * 60_000 });
 
     await this.restart();
   }
