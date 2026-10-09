@@ -551,6 +551,47 @@ export class GoalBoard extends Display {
 }
 
 /**
+ * The star chart to starboard of the briefing room's viewscreen (blender/team_station.py), an LCARS screen like the
+ * goal board to port: for now its title over the goal, until it draws the goal's course itself.
+ */
+export class ChartScreen extends Display {
+  static readonly W = GoalBoard.W;
+  static readonly H = GoalBoard.H;
+
+  constructor() {
+    super(ChartScreen.W, ChartScreen.H, false);
+  }
+
+  protected override keyOf(view: StationView): unknown {
+    return [view.index, view.accent, view.lead?.lead?.title, view.lead?.lead?.slice];
+  }
+
+  protected draw({ accent, lead }: StationView): void {
+    const { ctx } = this.c;
+    const [W, H] = [ChartScreen.W, ChartScreen.H];
+    ctx.fillStyle = BOARD_BG;
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.roundRect(0, 0, W, 118, [60, 0, 0, 0]);
+    ctx.fill();
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    ctx.font = `600 64px ${LCARS_FONT}`;
+    ctx.fillStyle = '#000000';
+    ctx.fillText('STELLAR CARTOGRAPHY', 60, 62);
+    const work = lead?.lead;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = accent;
+    ctx.font = `600 72px ${LCARS_FONT}`;
+    ctx.fillText(fitText(ctx, (work?.title ?? 'No goal under way').toUpperCase(), W - 120), W / 2, H * 0.45);
+    ctx.font = `34px ${UI_FONT}`;
+    ctx.fillStyle = BODY;
+    ctx.fillText(work ? `Charting the voyage: waypoint ${work.slice}` : 'The chart of a goal shows here once one starts', W / 2, H * 0.45 + 90);
+  }
+}
+
+/**
  * A team station's screen, hung over its pod as a hologram (hologram.ts), the four round the holodeck so you can watch every team at once
  * without going in: how its room stands across the top in big type (seen from across the holodeck), the goal, what the
  * lead's up to right now, how far through the slice they are and what's left on its checklist, and along the bottom

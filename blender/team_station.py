@@ -46,19 +46,30 @@ BEZEL_DEPTH = 0.22
 #: the station's sign on the dado under the briefing room's screen: GoalSign's proportions (1800×256)
 SIGN_ASPECT = 1800 / 256
 
-#: the briefing room's inner faces, from the doorway's wall to the screen's: wide and shallow, so the screen is close
-ROOM_HALF = 4.0
-ROOM_FAR = WALL / 2 + 7.4
+#: the briefing room is round, like the bridge: a circle of wall this far round its middle, cut flat across the aft for the
+#: doorway, and flat behind each screen and window, so each sits square on its wall (a flat screen on a curved wall would
+#: stand off it at its ends). It has to fit its slot in the world (layout.ts: BRIEFING), alcove and all.
+ROOM_R = 5.5
+ROOM_CY = 5.3
 HEIGHT = 4.4
+#: the flat stretches of wall, as (from, to) degrees counter-clockwise round the middle from dead starboard (+X): the
+#: three screens across the front (the star chart to starboard, the viewscreen dead ahead, the goal board to port, each
+#: facing the middle) and a window down either side
+CHART_FACET = (15, 55)
+SCREEN_FACET = (55, 125)
+BOARD_FACET = (125, 165)
+WINDOW_FACETS = [(-50, -22), (202, 230)]
+#: the rest of the wall curves round in steps no wider than this (degrees)
+CURVE_STEP = 11
 #: a mini bridge, but with no captain's chair (the captain stands): the middle of the command carpet, where the screen
 #: fills the view, with the lead (at the captain's right hand) and the reviewer either side of it, turned a little to
 #: the screen, as the first officer and counsellor are on the bridge, and the floor between them open up to the screen
-COMMAND = 3.9
-FLANK = [('station-lead', 1.85, 3.85), ('station-reviewer', -1.85, 3.85)]
+COMMAND = 5.6
+FLANK = [('station-lead', 1.85, 5.55), ('station-reviewer', -1.85, 5.55)]
 #: the helpers' consoles: two curved ones on an arc round behind, centred on the screen side of where the captain
 #: stands, from and to these angles (degrees), open in the middle for the walk from the door, as the bridge's rail is.
 #: Two helpers sit at each, on the arc's outside, facing in.
-ARC = (0.0, 5.4)
+ARC = (0.0, 7.1)
 ARC_CONSOLE = 3.25
 #: far enough back that a seated Character's boots (0.59 forward of the seat) clear the console's front (0.25 out)
 ARC_SEAT = ARC_CONSOLE + 0.9
@@ -67,10 +78,10 @@ HELPERS = [('station-helper-1', 302), ('station-helper-2', 238), ('station-helpe
 #: a console's cross-section, as the bridge's conn and ops have (kit.bridge_console), whoever sits at it on its +Y side:
 #: (y, z) up its front, the lip, the keys' slope, over its back and down
 CONSOLE = [(0.25, 0), (0.25, 0.55), (0.42, 0.74), (-0.12, 0.92), (-0.2, 0.86), (-0.2, 0)]
-#: the viewscreen, nearly wall to wall: StationScreen's BIG_SCREEN proportions (2400×1000), its bezel clear of the
-#: wall's stripe. It stands proud of the wall's header band, which runs on behind it: its bezel is deeper than the
+#: the viewscreen, nearly across its stretch of wall: StationScreen's BIG_SCREEN proportions (2400×1000), its bezel clear
+#: of the wall's stripe. It stands proud of the wall's header band, which runs on behind it: its bezel is deeper than the
 #: band stands out, and the screen sits in it in front of the band.
-SCREEN_W = 7.0
+SCREEN_W = 6.0
 SCREEN_H = SCREEN_W * 1000 / 2400
 SCREEN_BOTTOM = 1.15
 SCREEN_DEPTH = 0.18
@@ -83,9 +94,9 @@ DADO_PANEL_W = 2.4
 DADO_PANEL_X = 1.7
 DADO_PANEL_BOTTOM = 0.42
 PANES_H = DADO_PANEL_W * 200 / 1600
-#: the goal board on the starboard wall, beside the captain's chair: GoalBoard's proportions (1440×804), its bezel
-#: between the wall's stripe and its header, clear of the heads of the crew in front of it seen from the captain's chair
-BOARD_Y = 4.6
+#: the goal board to port of the viewscreen, and the star chart to starboard, each GoalBoard's proportions (1440×804),
+#: their bezels between the wall's stripe and its header, clear of the heads of the crew in front of them seen from
+#: where the captain stands
 BOARD_W = 3.4
 BOARD_H = BOARD_W * 804 / 1440
 BOARD_BOTTOM = 1.35
@@ -290,7 +301,7 @@ def briefing_room():
     and the goal board, with the lead's note on the goal, to starboard.
     """
     module('briefing_room')
-    outline = [(-ROOM_HALF, WALL / 2), (ROOM_HALF, WALL / 2), (ROOM_HALF, ROOM_FAR), (-ROOM_HALF, ROOM_FAR)]
+    outline = room_outline()
     door = walls('briefing room wall', outline, [(0, 0.0, DOOR_W)], profile(HEIGHT), wall_materials(),
                  lintel_from=DOOR_H + 0.1)[0]
     doorway('briefing room door', door @ Matrix.Translation((0, -WALL / 2, 0)))
@@ -303,19 +314,19 @@ def briefing_room():
     polygon('walkway', [(-0.8, WALL / 2), (0.8, WALL / 2), (0.8, COMMAND - 2.2), (-0.8, COMMAND - 2.2)], 0.004,
             material(HULL['carpetEdge']))
 
-    screen_middle = (0, ROOM_FAR)
+    far = facet(SCREEN_FACET)
+    screen_middle = tuple(far.to_translation().xy)
     for crew, x, y in FLANK:
         yaw = facing((x, y), screen_middle)
         command_chair(crew, (x, y), yaw, CUSHION, 0.8)
         marker(f'seat {crew}', 'seat', (x, y, 0), yaw=yaw, crew=crew)
     helper_consoles()
 
-    far = Matrix.Translation((0, ROOM_FAR, 0)) @ Matrix.Rotation(math.pi, 4, 'Z')
     bezel('screen frame', SCREEN_W, SCREEN_H, 0.1, 0.12, SCREEN_DEPTH, toon(HULL['frame']),
           (0, 0, SCREEN_BOTTOM + SCREEN_H / 2), far)
     panel('screen', SCREEN_W, SCREEN_H, material('#000000', surface='screen', screen='team-station'),
           (0, SCREEN_OUT, SCREEN_BOTTOM), far)
-    # on the dado under it: the sign to port, as you face it (the far wall's +X is the room's -X), and the switches for
+    # on the dado under it: the sign to port, as you face it (the facet's +X is to your left), and the switches for
     # which panes the screen shows to starboard; each in a frame a little buried in the dado
     def dado_panel(name, x, h, screen):
         out = DADO_OUT - 0.005
@@ -326,17 +337,51 @@ def briefing_room():
     dado_panel('sign', DADO_PANEL_X, DADO_PANEL_W / SIGN_ASPECT, 'team-station-sign')
     dado_panel('panes', -DADO_PANEL_X, PANES_H, 'team-station-panes')
 
-    port = Matrix.Rotation(-math.pi / 2, 4, 'Z')
-    starboard = Matrix.Rotation(math.pi / 2, 4, 'Z')
-    for i, y in enumerate((2.4, 5.4)):
-        window(f'briefing room window {i}', 2.2, 1.3, (0, 1.85), Matrix.Translation((-ROOM_HALF, y, 0)) @ port)
-    board = Matrix.Translation((ROOM_HALF, BOARD_Y, 0)) @ starboard
-    bezel('goal board frame', BOARD_W, BOARD_H, 0.1, 0.1, 0.08, toon(HULL['frame']), (0, 0, BOARD_BOTTOM + BOARD_H / 2), board)
-    panel('goal board', BOARD_W, BOARD_H, material('#000000', surface='screen', screen='team-station-note'),
-          (0, 0.012, BOARD_BOTTOM), board)
+    for i, f in enumerate(WINDOW_FACETS):
+        window(f'briefing room window {i}', 1.8, 1.3, (0, 1.85), facet(f))
+    # the goal board to port, the star chart to starboard, either side of the viewscreen
+    for name, f, screen in (('goal board', BOARD_FACET, 'team-station-note'), ('star chart', CHART_FACET, 'team-station-chart')):
+        at = facet(f)
+        bezel(f'{name} frame', BOARD_W, BOARD_H, 0.1, 0.1, 0.08, toon(HULL['frame']), (0, 0, BOARD_BOTTOM + BOARD_H / 2), at)
+        panel(name, BOARD_W, BOARD_H, material('#000000', surface='screen', screen=screen), (0, 0.012, BOARD_BOTTOM), at)
 
     # where the captain stands: the middle of the command carpet, a little back from the crew's chairs
     view = (0, COMMAND - 0.6)
-    marker('place briefing room', 'place', (*view, 0), yaw=facing(view, (0, ROOM_FAR)), label='Briefing room')
-    marker('area briefing room', 'area', (0, (WALL / 2 + ROOM_FAR) / 2, 1),
-           scale=(ROOM_HALF + 0.1, (ROOM_FAR - WALL / 2) / 2 + 0.1, 1), label='Briefing room')
+    marker('place briefing room', 'place', (*view, 0), yaw=facing(view, screen_middle), label='Briefing room')
+    far_y = ROOM_CY + ROOM_R
+    marker('area briefing room', 'area', (0, (WALL / 2 + far_y) / 2, 1),
+           scale=(ROOM_R + 0.1, (far_y - WALL / 2) / 2 + 0.1, 1), label='Briefing room')
+
+
+def round_point(a):
+    """The point on the briefing room's circle of wall at angle `a` (degrees, counter-clockwise from +X)."""
+    return (ROOM_R * math.cos(math.radians(a)), ROOM_CY + ROOM_R * math.sin(math.radians(a)))
+
+
+def room_outline():
+    """
+    The briefing room's inner faces, counter-clockwise from above, starting with the aft wall (its doorway in the
+    middle): straight across the circle's foot where it meets the doorway's wall, then round the circle, flat between
+    the ends of each screen's and window's stretch of wall, and in steps no wider than CURVE_STEP everywhere else.
+    """
+    aft = math.degrees(math.asin((WALL / 2 - ROOM_CY) / ROOM_R))
+    corners = sorted({a for f in (CHART_FACET, SCREEN_FACET, BOARD_FACET, *WINDOW_FACETS) for a in f} | {aft, 180 - aft},
+                     key=lambda a: (a - aft) % 360)
+    flats = {(f[0] % 360, f[1] % 360) for f in (CHART_FACET, SCREEN_FACET, BOARD_FACET, *WINDOW_FACETS)}
+    angles = []
+    for a, b in zip(corners, corners[1:]):
+        span = (b - a) % 360
+        steps = 1 if (a % 360, b % 360) in flats else max(1, math.ceil(span / CURVE_STEP))
+        angles += [a + span * i / steps for i in range(steps)]
+    angles.append(corners[-1])
+    # the circle from the aft wall's starboard end round to its port end, then the aft wall back across
+    points = [round_point(a) for a in angles]
+    return [points[-1], *points[:-1]]
+
+
+def facet(f):
+    """The frame at the middle of a flat stretch of wall from angle f[0] to f[1]: X along it, Y out into the room."""
+    a, b = Vector(round_point(f[0])), Vector(round_point(f[1]))
+    mid = (a + b) / 2
+    inward = (Vector((0, ROOM_CY)) - mid).normalized()
+    return Matrix.Translation((mid.x, mid.y, 0)) @ Matrix.Rotation(math.atan2(-inward.x, inward.y), 4, 'Z')

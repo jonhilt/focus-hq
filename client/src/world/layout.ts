@@ -70,7 +70,7 @@ export function rowsFor(projectCount: number): number {
  * its doorway (to the far wall's back) and `width` across, centred on its holodeck's row, with an alcove `alcove` deep
  * behind its door, so neither the rows' rooms nor the stations' meet.
  */
-export const BRIEFING = { x: 40, step: 10, depth: 7.7, width: 8.4, alcove: 0.9 };
+export const BRIEFING = { x: 40, step: 13, depth: 10.9, width: 11.4, alcove: 0.9 };
 
 /** Where station `station`'s briefing room doorway stands, for the holodeck in `slot`; the room runs south of it. */
 export function briefingRoomAt(slot: RoomSlot, station: number): THREE.Vector3 {

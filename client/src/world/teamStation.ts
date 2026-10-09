@@ -6,7 +6,7 @@ import type { Character, CrewView } from './character';
 import { dress } from './deck';
 import { type Crew, HELPER_SEATS, type Marker } from './deckExtras';
 import { type GoalRoomTone, goalRoomState, roster } from './goalRoom';
-import { GoalBoard, GoalSign, type StationView, TeamScreen, TONE } from './goalScreens';
+import { ChartScreen, GoalBoard, GoalSign, type StationView, TeamScreen, TONE } from './goalScreens';
 import { PaneSwitches } from './paneSwitchPanel';
 import { PANE_SWITCHES, switchAt, switchLabel } from './paneSwitches';
 import { screenPrefs } from './screenPanes';
@@ -119,6 +119,7 @@ export class TeamStation {
   /** The sign over the door, which hovers. */
   private readonly doorSign: THREE.Mesh;
   private readonly board = new GoalBoard();
+  private readonly chart = new ChartScreen();
   private readonly teamScreen = new TeamScreen();
   /** The team screen's hologram, outlined in the colour of the door's lamps (`update`). */
   private readonly teamHologram = new Hologram(this.teamScreen.texture, (TEAM_SCREEN.width + TEAM_SCREEN.rim * 2) / (TEAM_SCREEN.height + TEAM_SCREEN.rim * 2));
@@ -177,6 +178,7 @@ export class TeamStation {
     roomSign.layers.set(OVERLAY_LAYER);
     this.goalBoard = screen(roomScreens, 'team-station-note', 'briefing room');
     this.goalBoard.material = this.board.material;
+    screen(roomScreens, 'team-station-chart', 'briefing room').material = this.chart.material;
     const panes = screen(roomScreens, 'team-station-panes', 'briefing room');
     panes.material = this.panes.material;
     panes.userData.interactionAt = (uv: THREE.Vector2) => this.switchAt(uv);
@@ -350,6 +352,7 @@ export class TeamStation {
     const view = { index: this.index, accent: this.accent, lead, crew, next, prs };
     this.sign.show(view);
     this.board.show(view);
+    this.chart.show(view);
     this.teamScreen.show(view);
     this.tone = goalRoomState(lead).tone;
   }
@@ -381,6 +384,7 @@ export class TeamStation {
     this.screen.dispose();
     this.sign.dispose();
     this.board.dispose();
+    this.chart.dispose();
     this.teamScreen.dispose();
     this.teamHologram.dispose();
     this.signHologram.dispose();

@@ -41,9 +41,9 @@ const isCrew = (v: unknown): v is Crew => (CREW as readonly unknown[]).includes(
  * A screen the browser keeps drawing on: mission control is the World's dashboard, the MSD main engineering's cutaway
  * of the ship; a team station shows its lead's
  * session, its name, goal and whether it's in session on its sign, the lead's note on the goal on its goal board,
- * and the viewer's pane switches beside its screen.
+ * the goal's star chart (stellar cartography) on the other side of it, and the viewer's pane switches beside its screen.
  */
-const SCREENS = ['mission-control', 'msd', 'team-station', 'team-station-sign', 'team-station-note', 'team-station-panes'] as const;
+const SCREENS = ['mission-control', 'msd', 'team-station', 'team-station-sign', 'team-station-note', 'team-station-chart', 'team-station-panes'] as const;
 export type ScreenName = (typeof SCREENS)[number];
 /** The screens a deck has, which the World draws. */
 export type DeckScreen = Extract<ScreenName, 'mission-control' | 'msd'>;
