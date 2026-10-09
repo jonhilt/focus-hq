@@ -43,6 +43,7 @@ describe('a repo’s merge method', () => {
   });
 
   it('can’t be set for a repo the project hasn’t connected', () => {
-    expect(() => store.updateProject(project.id, { mergeMethod: { repo: 'o/c', method: 'squash' } })).toThrow('isn’t connected');
+    expect(() => store.updateProject(project.id, { name: 'Renamed', mergeMethod: { repo: 'o/c', method: 'squash' } })).toThrow('isn’t connected');
+    expect(project.name).toBe('Focus');
   });
 });

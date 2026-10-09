@@ -23,7 +23,7 @@ Every holodeck has a QA officer in blue, sitting at a station in the control rin
   - After 3 failed rounds, or a fix that pushes nothing, the PR is stuck. See [Stuck PRs](#stuck-prs).
   - Teammates' PRs are never sent back. Turn send-back off per project at the QA station.
 - **Auto-merge** (off by default; switch it on per project at the QA station or on the project's card in the ready room): on each board refresh the office takes every PR it opened one step closer to merged, following `mergeStep` in `shared/mergeGate.ts`.
-  - QA passed the PR's current head commit, its checks pass (or it has none) and it merges cleanly: it merges with the repo's merge method (see below), for that exact commit only (`--match-head-commit`), and its developer packs up.
+  - QA passed the PR's current head commit, its checks pass (or it has none) and it merges cleanly: it merges with the repo's merge method ([Configuration → Merge method](configuration.md#merge-method)), for that exact commit only (`--match-head-commit`), and its developer packs up.
   - Commits arrived after QA's verdict: back to QA first.
   - Checks fail: the failed GitHub Actions runs are re-run once (`gh run rerun --failed`). If they fail again, the PR goes back to its developer with the failing checks' names and links, like a QA fail.
   - Conflicts: **Resolve conflicts**, then QA again.

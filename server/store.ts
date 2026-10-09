@@ -214,6 +214,8 @@ export class Store {
     patch: Partial<Pick<Project, 'name' | 'color' | 'theme' | 'maxAgents' | 'autoAssign' | 'autoLabel' | 'onlyMyPrs' | 'preview' | 'autoQa' | 'autoSendBack' | 'autoMerge' | 'qaBrief' | 'qaEffort' | 'hidden'>> & { mergeMethod?: { repo: string; method: MergeMethod | '' } },
   ): Project {
     const project = this.project(id);
+    // checked before anything changes, so a refused patch leaves the project as it was
+    if (patch.mergeMethod && !project.repos.includes(patch.mergeMethod.repo)) throw new Error(`${patch.mergeMethod.repo} isn’t connected to ${project.name}`);
     if (patch.name !== undefined) project.name = patch.name.trim() || project.name;
     if (patch.color !== undefined) project.color = patch.color;
     if (patch.theme !== undefined) {
@@ -233,7 +235,6 @@ export class Store {
     if (patch.hidden !== undefined) project.hidden = patch.hidden === true;
     if (patch.mergeMethod !== undefined) {
       const { repo, method } = patch.mergeMethod;
-      if (!project.repos.includes(repo)) throw new Error(`${repo} isn’t connected to ${project.name}`);
       // an empty (or unknown) choice goes back to the office-wide setting
       const { [repo]: _, ...rest } = project.mergeMethods ?? {};
       const chosen = MERGE_METHODS.find((m) => m === method);
