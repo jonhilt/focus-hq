@@ -10,7 +10,7 @@ import { GoalBoard, GoalSign, type StationView, TeamScreen, TONE } from './goalS
 import { PaneSwitches } from './paneSwitchPanel';
 import { PANE_SWITCHES, switchAt, switchLabel } from './paneSwitches';
 import { screenPrefs } from './screenPanes';
-import { type Box2, contains, EYE_HEIGHT, footprint, footprints, ROOM_WIDTH } from './layout';
+import { type Box2, contains, EYE_HEIGHT, footprint, footprints } from './layout';
 import { occludedToon, toon } from './materials';
 import { mergeStatic } from './merge';
 import { type Doorway, Portal } from './portal';
@@ -26,8 +26,8 @@ import { OVERLAY_LAYER } from './frame';
 // It's a mini bridge: the captain stands a few steps in from the door, facing the lead's session on the far wall, the
 // lead and the goal's QA reviewer either side and their helpers (Claude Code's subagents) at consoles round behind,
 // each with a PADD, with the lead's note on the goal on the board beside them. Both halves are built in Blender (blender/team_station.py); who sits where and what the screens
-// show are drawn here. Each station also has a screen on the holodeck's teams wall (room.ts hangs them side by side),
-// so you can see what every team's up to without going in.
+// show are drawn here. Each station also has a screen hung over its pod (room.ts), so you can see what every team's up
+// to from the middle of the holodeck without going in.
 
 /** The two modules every team station is a copy of: its door, and the briefing room through it. */
 export interface TeamStationKit {
@@ -44,26 +44,13 @@ export async function loadTeamStation(url: string): Promise<TeamStationKit> {
   return { door, room };
 }
 
-/** Where a team station's pod stands: its back against the wall at `wall`, facing into the room, turned `yaw` (room frame). */
+/** Where a team station's pod stands: its back against the wall at `wall`, facing into the hall, turned `yaw` (its frame). */
 export interface PodSpot {
   wall: THREE.Vector3;
   yaw: number;
 }
 
-/**
- * Where the room's four team stations' doors stand (room frame): two against each side wall, facing into the room
- * just in front of the skin a holodeck's landscape shows through (scenery.ts), clear of the desks by the door and the
- * QA station and New issue stand by the board.
- */
-export function roomPodSpots(): PodSpot[] {
-  return [
-    { x: -2.4, side: -1 },
-    { x: 2.4, side: -1 },
-    { x: -2.4, side: 1 },
-    { x: 2.4, side: 1 },
-  ].map(({ x, side }) => ({ wall: new THREE.Vector3(x, 0, (side * ROOM_WIDTH) / 2), yaw: side < 0 ? Math.PI : 0 }));
-}
-/** How far a door's housing stands from its side wall's centre line: clear of its skin (scenery.ts: SKIN_INSET). */
+/** How far a pod's back stands in front of the hall's wall: clear of its skin (scenery.ts) and the wall's trims. */
 const WALL_GAP = 0.16;
 /**
  * The sign floating over the door (the door's frame, -Z out into the room): over the pod's ring and out in front of its
@@ -72,8 +59,8 @@ const WALL_GAP = 0.16;
 const DOOR_SIGN = { width: 2.6, bottom: 2.79, out: 0.85 };
 
 /**
- * The station's screen on the holodeck's teams wall: as wide as four fit side by side across the room, a hologram
- * (hologram.ts) with a face either side `depth` apart, its outline glowing `rim` out from its drawing all round.
+ * The station's screen over its pod (before the room scales it up to hang there): a hologram (hologram.ts) with a face
+ * either side `depth` apart, its outline glowing `rim` out from its drawing all round.
  */
 export const TEAM_SCREEN = { width: 2.2, height: (2.2 * TeamScreen.H) / TeamScreen.W, depth: 0.02, rim: 0.05 };
 
@@ -108,7 +95,7 @@ export class TeamStation {
   /** In the order helpers take them (`seatHelpers`). */
   readonly helpers: StationSeat[];
   readonly reviewer: StationSeat;
-  /** What "use this station" hangs on: the door, and its screen on the teams wall. */
+  /** What "use this station" hangs on: the door, and its screen over the pod. */
   readonly furniture: THREE.Object3D[];
   /** The goal board on the briefing room's wall: using it opens the lead's goal, or a crew member's row, theirs. */
   readonly goalBoard: THREE.Mesh;
@@ -132,10 +119,10 @@ export class TeamStation {
   /** The team screen's hologram, outlined in the colour of the door's lamps (`update`). */
   private readonly teamHologram = new Hologram(this.teamScreen.texture, (TEAM_SCREEN.width + TEAM_SCREEN.rim * 2) / (TEAM_SCREEN.height + TEAM_SCREEN.rim * 2));
   /**
-   * Its screen on the holodeck's teams wall (room frame, hung by the room): the same on both faces, front (+Z) and
-   * back, hovering where it hangs.
+   * Its screen over the pod (the hall's frame, hung by the room): the same on both faces, front (+Z) and back,
+   * hovering where it hangs.
    */
-  readonly wall = new THREE.Group();
+  readonly podScreen = new THREE.Group();
   private readonly faces = new THREE.Group();
   private lastT = 0;
   /** The strip of switches under the screen, for which panes it shows: the viewer's, so the same at every station. */
@@ -204,7 +191,7 @@ export class TeamStation {
       return face;
     });
     this.faces.add(...faces);
-    this.wall.add(this.faces);
+    this.podScreen.add(this.faces);
     this.furniture = [door, ...faces];
 
     const seat = (crew: Crew): StationSeat => {
@@ -346,7 +333,7 @@ export class TeamStation {
 
   /**
    * Shows the station's goal on its sign (over the door and under the screen), its lamps, its goal board and its
-   * screen on the teams wall (with how the slice's pull requests `prs` stand): its lead, or what's `next` in line for it
+   * screen over its pod (with how the slice's pull requests `prs` stand): its lead, or what's `next` in line for it
    * while it's free.
    */
   show(lead: Agent | undefined, next?: string, prs?: StationView['prs']): void {

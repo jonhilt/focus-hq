@@ -66,7 +66,7 @@ function pips(rank: Rank): THREE.Object3D[] {
   return Array.from({ length: count }, (_, i) => onChest(ball(0.022, PIP_GOLD, 10), 0.93, -0.45 - i * 0.26, 0.2));
 }
 
-/** What a character shows: an agent at their desk, or a permanent crew member like the planner at the stand. */
+/** What a character shows: an agent at their desk, or a permanent crew member like the operations officer at Ops. */
 export interface CrewView {
   name: string;
   avatar: Avatar;

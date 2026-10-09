@@ -36,6 +36,7 @@ import { SceneRenderer } from './world/sceneRenderer';
 import { adapt, FEWEST, initialResolution, levels, WINDOW } from './resolution';
 import { FrameStats } from './ui/frameStats';
 import { PortalView } from './world/portal';
+import { loadTrainingHall } from './world/hall';
 import { loadTeamStation } from './world/teamStation';
 import { stopAt } from './world/turbolift';
 
@@ -80,9 +81,8 @@ async function main() {
 
   await fontsReady();
 
-  const [theShip, teamStation] = await Promise.all([ship(), loadTeamStation('/ship/team-station.glb')]);
-  // ?hall=1 opens each project's holodeck door onto a training hall (world/hall.ts), the prototype of a roomier holodeck
-  const world = new World(scene, theShip, teamStation, params.get('hall') === '1');
+  const [theShip, teamStation, hallKit] = await Promise.all([ship(), loadTeamStation('/ship/team-station.glb'), loadTrainingHall('/ship/training-hall.glb')]);
+  const world = new World(scene, theShip, teamStation, hallKit);
   // ?cull=0 draws the whole ship from anywhere, for the gap and z-fighting scans
   world.culling = params.get('cull') !== '0';
   const player = new Player(camera, renderer.domElement);
@@ -278,7 +278,7 @@ async function main() {
     world.room(projectId)?.markBoard();
     world.room(projectId)?.syncQa();
     world.room(projectId)?.syncPlanner();
-    // the teams wall shows how QA has each goal's pull requests
+    // the screens over the pods show how QA has each goal's pull requests
     world.room(projectId)?.syncStations();
   });
   state.on('report', () => world.engineering?.showReport(state.report, state.retro));

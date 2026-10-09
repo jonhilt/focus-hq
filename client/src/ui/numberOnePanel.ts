@@ -120,14 +120,14 @@ export function openNumberOnePanel(ui: Ui): void {
   render();
 }
 
-/** What a reply suggests doing: a draft at the project's stand, or a goal with a lead of its own. */
+/** What a reply suggests doing: a draft at the project's Ops station, or a goal with a lead of its own. */
 function suggestion(ui: Ui, { projectId, idea }: WorkSuggestion): HTMLElement {
   const name = state.project(projectId)?.name ?? 'the project';
   const officer = plannerFor(projectId).name;
-  const draft = h('button', { class: 'btn small', title: `${officer} writes it up as one issue at ${name}’s New issue stand` }, 'Draft at the stand');
+  const draft = h('button', { class: 'btn small', title: `${officer} writes it up as one issue at ${name}’s Ops station` }, 'Draft at Ops');
   draft.onclick = async () => {
     const waiting = state.drafts.get(projectId);
-    if (waiting?.status === 'ready' && !await confirmDialog({ title: 'Replace draft', message: `${officer} has a draft waiting at ${name}’s stand${waiting.title ? ` (“${waiting.title}”)` : ''}. Replace it?`, confirmLabel: 'Replace it' })) return;
+    if (waiting?.status === 'ready' && !await confirmDialog({ title: 'Replace draft', message: `${officer} has a draft waiting at ${name}’s Ops station${waiting.title ? ` (“${waiting.title}”)` : ''}. Replace it?`, confirmLabel: 'Replace it' })) return;
     void busy(draft, async () => {
       await api.draftIssue(projectId, idea);
       ui.openNewIssue(projectId);

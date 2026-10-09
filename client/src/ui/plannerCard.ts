@@ -24,7 +24,7 @@ export interface PlannerCard {
 /**
  * The room's operations officer, at the top of the New issue form: give them a rough idea and they read the code and
  * write the issue up, with acceptance criteria, into the form's fields. Their draft arrives over the websocket, so it
- * waits at the stand if you close the panel and turns up when you come back.
+ * waits at the Ops station if you close the panel and turns up when you come back.
  */
 export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields): PlannerCard {
   const el = h('div', { class: 'card planner' });
@@ -63,7 +63,7 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
       draft?.costUsd ? h('small', { class: 'muted' }, `$${draft.costUsd.toFixed(2)}`) : null,
     );
     // the idea goes to a goal (a new one, or one under way), if there is one; otherwise the goals panel asks for it
-    const leadButton = (idea: () => string, title: string) => handOffControl(ui, pid, idea, 'the New issue stand', title);
+    const leadButton = (idea: () => string, title: string) => handOffControl(ui, pid, idea, 'the Ops station', title);
     const discard = () =>
       h('button', { class: 'btn small', onclick: () => void api.discardDraft(pid).catch((e: Error) => ui.error(e.message)) }, draft?.status === 'drafting' ? 'Stop' : 'Discard draft');
 

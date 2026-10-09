@@ -1,8 +1,8 @@
-// Issue drafts from the planner at a room's New issue stand.
+// Issue drafts from the planner at a room's Ops station.
 
 import type { Avatar } from './agents';
 
-/** The crew member at a room's ＋ New issue stand who turns a rough idea into a well-specified issue. One per project. */
+/** The crew member at a room's Ops station who turns a rough idea into a well-specified issue. One per project. */
 export interface Planner {
   name: string;
   avatar: Avatar;
@@ -12,7 +12,7 @@ export type DraftStatus = 'drafting' | 'ready' | 'failed';
 
 /**
  * An issue the planner is writing, or has written, for a project. Lives in memory until it's filed or discarded, so it
- * waits at the stand if you walk away. One per project at a time.
+ * waits at the Ops station if you walk away. One per project at a time.
  */
 export interface IssueDraft {
   projectId: string;

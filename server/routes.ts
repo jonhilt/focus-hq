@@ -95,7 +95,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
     ),
   ));
 
-  // the planner at each room's ＋ New issue stand: rough idea in, issue draft out (over the websocket)
+  // the planner at each room's Ops station: rough idea in, issue draft out (over the websocket)
   r.post('/projects/:id/draft', h((req) => {
     const revise = req.body.revise;
     return office.planner.start(

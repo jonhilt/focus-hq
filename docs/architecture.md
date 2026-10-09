@@ -48,7 +48,7 @@ server/
     tasks.ts              the task list an agent keeps with Claude Code's task tools, followed from its session (TodoWrite, TaskCreate, TaskUpdate, TaskList)
     browserTool.ts        in-process MCP server driving headless Chromium, streams screenshots
     workspace.ts          git mirrors + worktrees (agents', the per-repo preview checkout, the planner's read-only checkouts)
-    planner.ts            the officer at each room's New issue stand: issue drafts, their prompt and schema
+    planner.ts            the officer at each room's Ops station: issue drafts, their prompt and schema
     lead.ts               each goal's lead: their station, name and branches, their instructions, what shipping a slice does, what they hear back, their helpers
     officeTool.ts         the office's own MCP tools for an agent (the lead's ship)
     explainer.ts          the LCARS player a lead's explainer plays in: their beats and stage wrapped in one page, pure
@@ -66,8 +66,8 @@ client/src/
     scenery.ts            stencil "holo walls" that show a landscape built around a room or a training hall (footprint.ts: which it's built round, and keeping it out of a hall)
     themes.ts             the landscapes (beach, forest, desert, moon, city, library)
     teamStation.ts        a goal's team station: its door in the holodeck and its briefing room out in the world, the lead's screen, seats for their helpers and the goal's reviewer (helperSeats.ts: who sits where)
-    goalScreens.ts        a team station's holographic sign, goal board and screen on the holodeck's teams wall (goalRoom.ts: how its room stands, how the note fills the board, and what the team's up to at a glance; portraits.ts: the crew's portraits)
-    hall.ts               the training hall, a roomier holodeck behind its door's portal (prototype, `?hall=1`): its round shell (hallLayout.ts: where its pods stand, and both ends of its entrance)
+    goalScreens.ts        a team station's holographic sign, goal board and screen over its pod (goalRoom.ts: how its room stands, how the note fills the board, and what the team's up to at a glance; portraits.ts: the crew's portraits)
+    hall.ts               the training hall, each project's holodeck, behind its door's portal: a copy of its shell from Blender (blender/training_hall.py), dressed for its project (hallLayout.ts: where its pods stand, and the door on the deck that leads to it)
     portal.ts             doorways that lead into each other wherever they stand: the far side drawn through the open doors, and walking through (doorway.ts: the geometry)
     transporter.ts        the transporter beam the crew arrive and leave in
     engineering.ts        the engineering station: the engineer, the report card and how their retro stands on the console; E opens their panel
@@ -77,7 +77,7 @@ client/src/
     turbolift.ts          which turbolift stop you're at (the turbolift's controls are in ui/travelPanel.ts)
   ui/                     HUD and panels (agent terminal, a helper's transcript, board, ready room console, teleport, QA station, goals, Comms, the engineering station)
     confirmDialog.ts      the in-game confirm dialog, over whatever panel is open (the Tricorder's buttons ask with it too)
-    numberOnePanel.ts     the chat with Number One: the log, suggestions sent to the stand or started as goals, voice mode
+    numberOnePanel.ts     the chat with Number One: the log, suggestions sent to Ops or started as goals, voice mode
   tricorder/              the phone view at /tricorder (no three.js): home screen, agent drill-down, buttons that survive live re-renders
 client/tricorder/index.html   the Tricorder's page (a second Vite entry), with its home-screen meta tags
 client/public/tricorder/  its web app manifest and home-screen icons

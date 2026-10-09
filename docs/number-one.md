@@ -7,7 +7,7 @@ Number One, the ship's first officer, is there to just talk: ask how something w
 - **Agents' worktrees**: readable, to answer "what has Lt. X done so far?", never to explain how the code works.
 - **Read-only**: Read, Glob, Grep, web search and fetch, and those two tools. They never file, push, edit, start agents, draft issues or talk to the lead. When a chat turns into work, the reply carries a suggestion (`suggest: { projectId, idea }`) for you to send to the stand or start as a goal.
 
-- **From chat to work**: under a reply that suggests some, **Draft at the stand** has the project's officer write it up at its New issue stand (asking first if a draft is already waiting there), and **To a goal** starts it as a new goal (or hands it to one under way, picked beside the button), with the idea as your words to its lead.
+- **From chat to work**: under a reply that suggests some, **Draft at Ops** has the project's officer write it up at its Ops station (asking first if a draft is already waiting there), and **To a goal** starts it as a new goal (or hands it to one under way, picked beside the button), with the idea as your words to its lead.
 
 The chat runs one turn at a time. It's saved in `~/.focus/state.json` with Number One's session, which every message resumes, so it survives a restart. **New conversation** clears the log and starts a fresh session.
 

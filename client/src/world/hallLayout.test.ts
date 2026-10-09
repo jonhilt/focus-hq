@@ -2,36 +2,38 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { hallPodSpots } from './hallLayout';
-import { type Box2, contains, footprint, footprints } from './layout';
+import { around, ENTRANCE_X, hallPodSpots } from './hallLayout';
+import { type Box2, contains, DOOR_H, DOOR_W, footprint, footprints, HALL, WALL_T } from './layout';
 
 // The player is a 0.3 m radius (player.ts), colliding only with boxes square to the world.
 const RADIUS = 0.3;
 const blocks = (boxes: Box2[], p: THREE.Vector3) =>
   boxes.some((b) => p.x + RADIUS > b.minX && p.x - RADIUS < b.maxX && p.z + RADIUS > b.minZ && p.z - RADIUS < b.maxZ);
 
-/** The team station's door module, as Blender exported it: its colliders and its doorway, in its own frame. */
-function podMarkers(): { colliders: THREE.Matrix4[]; doorway: THREE.Matrix4 } {
-  const glb = readFileSync(path.resolve(import.meta.dirname, '../../public/ship/team-station.glb'));
+/** A module's colliders and its doorway, in its own frame, as Blender exported them into `file`. */
+function markers(file: string, module: string): { colliders: THREE.Matrix4[]; doorway: THREE.Matrix4; size: { width: number; height: number; depth: number } } {
+  const glb = readFileSync(path.resolve(import.meta.dirname, '../../public/ship', file));
   const json = JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString('utf8')) as {
-    nodes: { name?: string; children?: number[]; extras?: { marker?: string }; translation?: number[]; rotation?: number[]; scale?: number[] }[];
+    nodes: { name?: string; children?: number[]; extras?: { marker?: string; width?: number; height?: number; depth?: number }; translation?: number[]; rotation?: number[]; scale?: number[] }[];
   };
-  const door = json.nodes.find((n) => n.name === 'station_door')!;
+  const root = json.nodes.find((n) => n.name === module)!;
   const matrix = (n: (typeof json.nodes)[number]) =>
     new THREE.Matrix4().compose(
       new THREE.Vector3(...(n.translation ?? [0, 0, 0])),
       new THREE.Quaternion(...(n.rotation ?? [0, 0, 0, 1])),
       new THREE.Vector3(...(n.scale ?? [1, 1, 1])),
     );
-  const children = (door.children ?? []).map((i) => json.nodes[i]);
+  const children = (root.children ?? []).map((i) => json.nodes[i]);
+  const portal = children.find((n) => n.extras?.marker === 'portal')!;
   return {
     colliders: children.filter((n) => n.extras?.marker === 'collider').map(matrix),
-    doorway: matrix(children.find((n) => n.extras?.marker === 'portal')!),
+    doorway: matrix(portal),
+    size: { width: portal.extras!.width!, height: portal.extras!.height!, depth: portal.extras!.depth! },
   };
 }
 
 describe('the training hall’s pods', () => {
-  const { colliders, doorway } = podMarkers();
+  const { colliders, doorway } = markers('team-station.glb', 'station_door');
 
   it('can all be walked into, however they’re turned', () => {
     expect(colliders.length).toBeGreaterThan(0);
@@ -41,6 +43,39 @@ describe('the training hall’s pods', () => {
       const through = new THREE.Matrix4().multiplyMatrices(frame, doorway);
       // straight up to the doorway from in front of it, and over its middle, where you step through
       for (let z = -1.5; z <= 0.05; z += 0.1) expect(blocks(boxes, new THREE.Vector3(0, 0, z).applyMatrix4(through)), `yaw ${yaw}, ${z.toFixed(1)} m`).toBe(false);
+    }
+  });
+});
+
+describe('the training hall’s shell', () => {
+  const { colliders, doorway, size } = markers('training-hall.glb', 'training_hall');
+  const boxes = colliders.flatMap((m) => footprints(m));
+
+  it('has its entrance in the middle of the flat wall, facing in, as big as the holodeck door on the deck', () => {
+    const at = new THREE.Vector3().setFromMatrixPosition(doorway);
+    expect(at.x).toBeCloseTo(ENTRANCE_X - WALL_T / 2, 3);
+    expect(at.z).toBeCloseTo(0, 3);
+    // a doorway faces into its room along its forward (-Z)
+    const forward = new THREE.Vector3(0, 0, -1).transformDirection(doorway);
+    expect(forward.x).toBeCloseTo(1, 3);
+    expect(size).toEqual({ width: DOOR_W, height: DOOR_H, depth: HALL.alcove });
+  });
+
+  it('can be walked into from the entrance, and out to every pod', () => {
+    // over the entrance's threshold and on to the middle of the floor
+    for (let z = 0.05; z >= -12; z -= 0.1) expect(blocks(boxes, new THREE.Vector3(0, 0, z).applyMatrix4(doorway)), `${z.toFixed(1)} m in`).toBe(false);
+    // and from the middle out to where each pod stands, its back against the wall
+    for (const { wall } of hallPodSpots()) {
+      for (let t = 0; t <= 1; t += 0.02) expect(blocks(boxes, wall.clone().multiplyScalar(t * (HALL.radius - 0.6) / HALL.radius))).toBe(false);
+    }
+  });
+
+  it('keeps you in, all the way round', () => {
+    for (let a = 0; a < Math.PI * 2; a += 0.05) {
+      const out = around(HALL.radius + 0.1, a);
+      // the entrance's doorway is the way out
+      if (Math.abs(out.z) < DOOR_W / 2 && out.x < 0) continue;
+      expect(blocks(boxes, out), `${a.toFixed(2)} rad`).toBe(true);
     }
   });
 });

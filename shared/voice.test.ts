@@ -75,7 +75,7 @@ describe('linesToSpeak', () => {
     { from: 'qa', text: 'Say what **fast** means.' },
     { from: 'system', text: 'The captain asked Lt. Brennan for options.' },
     { from: 'engineer', text: '2 options on the screen. I’d go with A, one module: it’s smaller. And safer.' },
-    { from: 'officer', text: 'It’s written up and waiting at Shop’s stand.' },
+    { from: 'officer', text: 'It’s written up and waiting at Shop’s Ops station.' },
   ];
 
   it('speaks the crew in log order: the officer’s spoken line, the rest as they are', () => {
@@ -83,12 +83,12 @@ describe('linesToSpeak', () => {
       { speaker: 'officer', text: 'Who is it for?' },
       { speaker: 'qa', text: 'Say what fast means.' },
       { speaker: 'engineer', text: '2 options on the screen. I’d go with A, one module: it’s smaller. And safer.' },
-      { speaker: 'officer', text: 'It’s written up and waiting at Shop’s stand.' },
+      { speaker: 'officer', text: 'It’s written up and waiting at Shop’s Ops station.' },
     ]);
   });
 
   it('says nothing that was in the log before `from`', () => {
-    expect(linesToSpeak(messages, 5)).toEqual([{ speaker: 'officer', text: 'It’s written up and waiting at Shop’s stand.' }]);
+    expect(linesToSpeak(messages, 5)).toEqual([{ speaker: 'officer', text: 'It’s written up and waiting at Shop’s Ops station.' }]);
     expect(linesToSpeak(messages, 6)).toEqual([]);
   });
 

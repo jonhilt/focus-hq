@@ -2,19 +2,19 @@
 
 A cartoon, first-person 3D starship where a crew of **Claude Code** agents works through your GitHub issues, and you're the captain.
 
-![A project holodeck: agents at their stations, the Kanban display on the back wall](docs/room.jpg)
+![A project holodeck: a round training hall on a beach, the Kanban display curving round the far wall, team pods round the walls with their screens over them, and the crew at their stations in the middle](docs/room.jpg)
 
 | Over an agent's shoulder | The board up close |
 | --- | --- |
 | ![Live terminal and browser on an agent's station](docs/station.jpg) | ![Kanban panel with issues, agents and PRs](docs/board.jpg) |
 
 - The office is a **starship** in the style of *Star Trek: Lower Decks*: bulkhead corridors, LCARS signs and consoles, viewports onto space (with stars drifting past as the ship cruises), doors that swoosh open as you walk up, and the engines' thrum underneath it all (mute it from the pause menu).
-- Every **project** gets a **holodeck**. A project can span several GitHub repositories.
+- Every **project** gets a **holodeck**. A project can span several GitHub repositories. Through its door on the deck is a round training hall, far bigger than the door's slot, with the board round the far wall and the team stations' pods round the walls.
 - Each holodeck runs a **program**: its walls and ceiling vanish into a landscape, so the stations sit on a beach, in a forest clearing, in a desert canyon, on the moon, on a city rooftop at dusk or in a vast library. A faint holodeck grid shows where the walls are when you get close. Pick one per project in your **ready room**, or keep the plain holodeck grid. Empty holodecks are bare.
 - Every **agent** is a separate Claude Code instance (via the [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk)) with its own workstation and git worktree. The crew wear Starfleet uniforms in their division's colour (command red, operations gold, sciences blue) and come from all over the Federation. They **beam in** to their station when they're assigned and beam out when they go home: a shimmering column of sparkles, the transporter's hum if you're in the room.
 - Walk up behind an agent and you see their **station's display**: the live Claude Code terminal and, while they test, the **browser** they are driving.
-- Each holodeck works on up to four **goals** at once, each with a **lead** of its own at a **team station**: your own Claude Code session for that goal, with every one of the project's repos checked out side by side. Each station is a door on the holodeck's side wall, and through it the goal's briefing room, far bigger than the holodeck could hold: a mini bridge, with nothing between the door and the lead's session on a big screen across the far wall: the lead and the goal's QA reviewer sit either side of where you stand, and their helpers at two curved consoles round behind. You walk straight in: the open door shows the room beyond, and you step through without a cut. Two individual desks by the door take quick issue work. Talk the goal through with them, and they build it a slice at a time, the way you'd work in Claude Code. Each slice ships as a pull request in every repo it touches; QA reviews them, you merge them, and the lead carries on from what the slice taught you.
-- Each holodeck has an **operations officer** at its **New issue** stand. Give them a rough idea and they read the project's code and write it up as an issue with context and **acceptance criteria**, ready for you to edit and file.
+- Each holodeck works on up to four **goals** at once, each with a **lead** of its own at a **team station**: your own Claude Code session for that goal, with every one of the project's repos checked out side by side. Each station is a holo-pod round the holodeck's wall, and through it the goal's briefing room, far bigger than the holodeck could hold: a mini bridge, with nothing between the door and the lead's session on a big screen across the far wall: the lead and the goal's QA reviewer sit either side of where you stand, and their helpers at two curved consoles round behind. You walk straight in: the open door shows the room beyond, and you step through without a cut. Two individual desks in the middle of the holodeck take quick issue work. Talk the goal through with them, and they build it a slice at a time, the way you'd work in Claude Code. Each slice ships as a pull request in every repo it touches; QA reviews them, you merge them, and the lead carries on from what the slice taught you.
+- Each holodeck has an **operations officer** at its **Ops** station. Give them a rough idea and they read the project's code and write it up as an issue with context and **acceptance criteria**, ready for you to edit and file.
 - Each holodeck's **Kanban display** shows what's to do, the goals under way and who's working on what, and which **pull requests** are ready to merge.
 - The captain's **ready room** is where you create projects, connect existing repos or create blank ones, file issues and tune how much the agents may do on their own.
 - **Hide** a project there to keep it out of sight while you demo the office. Its holodeck keeps its place behind locked doors under a *Holodeck in use* sign, and no other room moves or takes its place. Its name, board, crew, toasts and totals show nowhere aboard (the Tricorder and Number One included), while its crew keep working. In the ready room's list it shows only as *Hidden project* with its holodeck number; **👁 Show it** brings it back.
@@ -56,7 +56,7 @@ Then on board:
 
 1. Walk into your **ready room**, off the bridge to port (or press <kbd>M</kbd>) → **New project**. Connect repositories (`owner/name` or a URL), or switch on *A new, blank repository on GitHub too*.
 2. A new holodeck appears down the corridor. Its Kanban display fills with the repos' open issues.
-3. At the board (<kbd>E</kbd>), click **Assign agent** on an issue, or file one at the **New issue** stand and leave *Assign an agent right away* on. The officer at the stand can draft it for you from a one-liner (see [Drafting issues](docs/drafting-issues.md)). The 🧠 picker beside either sets how much effort the agent puts in (`low` to `max`; *default* leaves it to the model).
+3. At the board (<kbd>E</kbd>), click **Assign agent** on an issue, or file one at the **Ops** station (<kbd>N</kbd>) and leave *Assign an agent right away* on. The officer at Ops can draft it for you from a one-liner (see [Drafting issues](docs/drafting-issues.md)). The 🧠 picker beside either sets how much effort the agent puts in (`low` to `max`; *default* leaves it to the model).
 4. Watch them work. Press <kbd>E</kbd> on an agent or their station to open the full terminal, message them, or approve something they need.
 5. When the PR shows up under **Ready to merge**, the holodeck's QA officer tests it and posts their report on it. Press **Preview** to try it yourself, review it on GitHub and merge it from the board.
 
@@ -69,7 +69,7 @@ Then on board:
 - [Controls](docs/controls.md): keys and what they do
 - [Goals and their leads](docs/goals.md): team stations, briefing rooms, shipping a goal a slice at a time
 - [Comms](docs/comms.md): who's waiting on you across the ship, and answering them from anywhere
-- [Drafting issues](docs/drafting-issues.md): the operations officer at the New issue stand
+- [Drafting issues](docs/drafting-issues.md): the operations officer at the Ops station
 - [Number One](docs/number-one.md): the ship-wide chat in the ready room, and its voice mode
 - [How an agent works an issue](docs/agents.md): from hire to merge, their panel and station displays
 - [Cloud agents](docs/cloud-agents.md): agents in Claude Code cloud sessions

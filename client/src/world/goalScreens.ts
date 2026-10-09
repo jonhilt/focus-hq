@@ -40,7 +40,7 @@ export interface StationView {
   lead?: Agent;
   crew?: { who: CrewView; role: string }[];
   next?: string;
-  /** The slice's pull requests and how each stands (the teams wall's). */
+  /** The slice's pull requests and how each stands (the screen over its pod's). */
   prs?: { label: string; state: PrGlance }[];
 }
 
@@ -391,7 +391,7 @@ export class GoalBoard extends Display {
   }
 }
 
-/** How each of a goal's pull requests stands on the teams wall: its colour and word. */
+/** How each of a goal's pull requests stands on the screen over its pod: its colour and word. */
 const PR_LOOK: Record<PrGlance, { color: string; word: string }> = {
   open: { color: '#a7b4ff', word: 'open' },
   testing: { color: TONE['in-session'], word: 'QA testing' },
@@ -402,7 +402,7 @@ const PR_LOOK: Record<PrGlance, { color: string; word: string }> = {
 };
 
 /**
- * A team station's screen on the holodeck's teams wall, a hologram (hologram.ts), the four side by side so you can watch every team at once
+ * A team station's screen, hung over its pod as a hologram (hologram.ts), the four round the holodeck so you can watch every team at once
  * without going in: how its room stands across the top in big type (seen from across the holodeck), the goal, what the
  * lead's up to right now, how far through the slice they are and what's left on its checklist, and along the bottom
  * who else is in the briefing room and the slice's pull requests. A free station says so, or what's next in line for it.

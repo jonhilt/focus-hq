@@ -36,7 +36,7 @@ export interface Drafter {
 }
 
 /**
- * Each room's planner: the operations officer at the ＋ New issue stand. Turns the manager's rough idea into an issue
+ * Each room's planner: the operations officer at its Ops station. Turns the manager's rough idea into an issue
  * with context and acceptance criteria. Drafts live in memory until they're filed or discarded; filing stays with the
  * manager.
  */
@@ -102,7 +102,7 @@ export class IssuePlanner {
           finishedAt: Date.now(),
         } satisfies Partial<IssueDraft>);
         this.broadcast(draft);
-        this.hub.toast('success', `📝 ${planner.name} has a draft ready at ${project.name}'s stand: ${truncate(draft.title ?? '', 60)}`, undefined, project.id);
+        this.hub.toast('success', `📝 ${planner.name} has a draft ready at ${project.name}'s Ops station: ${truncate(draft.title ?? '', 60)}`, undefined, project.id);
       })
       .catch((err) => {
         if (!current()) return; // discarded meanwhile
@@ -154,7 +154,7 @@ export function repoList(repos: string[]): string {
 ${repos.map((r) => `- \`${folders.get(r)}/\`: ${r}`).join('\n')}`;
 }
 
-/** The issue a planner writes at the stand. */
+/** The issue a planner writes at the Ops station. */
 export const ISSUE_FORMAT = `The issue:
 - title: imperative and specific, under 70 characters ("Show stock levels on the product page").
 - body, in Markdown, with these sections:

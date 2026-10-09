@@ -1,15 +1,15 @@
 import * as THREE from 'three';
-import { DOOR_H, DOOR_W, HALL, HALL_HALF, type RoomSlot } from './layout';
+import { HALL, HALL_HALF, type RoomSlot } from './layout';
 import type { Doorway } from './portal';
 import type { PodSpot } from './teamStation';
 
-// Where things stand in a training hall (hall.ts builds its shell): its frame is a room's, +X from the entrance to the
+// Where things stand in a training hall (blender/training_hall.py builds its shell, which keeps to these sizes): its frame is a room's, +X from the entrance to the
 // far wall, the middle of its floor at the origin. Nothing here draws, so it can be tested without a browser.
 
 const R = HALL.radius;
 /** Half the angle the flat wall with the entrance in it takes out of the round wall, either side of straight back. */
-export const GAP = Math.asin(2.4 / R);
-/** Where the flat wall with the entrance in it stands, its centre line, behind the hall's middle. */
+const GAP = Math.asin(2.4 / R);
+/** Where the flat wall with the entrance in it stands, its inner face, behind the hall's middle. */
 export const ENTRANCE_X = -R * Math.cos(GAP);
 
 /** A point `r` from the middle of the hall's floor, `angle` round from straight ahead (+X) towards +Z, `y` up. */
@@ -46,22 +46,14 @@ export function hallPodSpots(): PodSpot[] {
   return POD_ANGLES.map((a) => ({ wall: around(R, a), yaw: facingIn(a) }));
 }
 
-/** The control ring in the middle of the floor, where the desks are. */
-export const CONTROL_RING = 5.2;
-
-/** The hall's entrance (world): its doorway in the flat wall, facing in. */
-export function hallEntrance(group: THREE.Group): Doorway {
-  group.updateWorldMatrix(true, false);
-  // forward (-Z) along +X, into the hall
-  const local = new THREE.Matrix4().makeRotationY(-Math.PI / 2).setPosition(ENTRANCE_X, 0, 0);
-  return { matrix: group.matrixWorld.clone().multiply(local), width: DOOR_W, height: DOOR_H, depth: HALL.alcove };
-}
-
-/** The holodeck's door on the deck (world): in the hallway's wall, facing out into the hallway. */
-export function deckEntrance(slot: RoomSlot): Doorway {
+/**
+ * The holodeck's door on the deck (world): in the hallway's wall, facing out into the hallway, the same size as the
+ * hall's `entrance`, as a portal's two doorways must be.
+ */
+export function deckEntrance(slot: RoomSlot, entrance: Doorway): Doorway {
   // forward (-Z) out into the hallway, the alcove behind it where the holodeck's room was
   const matrix = new THREE.Matrix4().makeRotationY((slot.side * Math.PI) / 2).setPosition(slot.side * HALL_HALF, 0, slot.center.z);
-  return { matrix, width: DOOR_W, height: DOOR_H, depth: HALL.alcove };
+  return { matrix, width: entrance.width, height: entrance.height, depth: entrance.depth };
 }
 
 /** Whether a world position is in the hall whose middle is at `centre` (or the alcove behind its entrance). */

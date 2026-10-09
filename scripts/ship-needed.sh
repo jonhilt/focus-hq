@@ -15,9 +15,10 @@ if git diff --quiet "$base" HEAD -- blender; then
   exit 0
 fi
 
-# the branch's latest commit to change the scripts, and whether GLBs were built after it
-last=$(git rev-list -1 "$base..HEAD" -- blender)
-if [ -n "$last" ] && [ -n "$(git rev-list -1 "$last..HEAD" -- client/public/ship)" ]; then
+# the branch's latest commit of its own to change the scripts, and whether it built GLBs after it: merges of main
+# bring main's scripts and GLBs, and count as neither
+last=$(git rev-list -1 --no-merges "$base..HEAD" -- blender)
+if [ -n "$last" ] && [ -n "$(git rev-list -1 --no-merges "$last..HEAD" -- client/public/ship)" ]; then
   echo false
 else
   echo true

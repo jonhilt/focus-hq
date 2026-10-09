@@ -85,7 +85,7 @@ describe('summariseShip', () => {
       'acme/shop#40 passed QA: ready to merge',
       'acme/shop#41 conflicts with main',
       'acme/shop#42 failed QA and needs you: Failed three rounds',
-      'An issue draft is waiting at the stand: “Add wishlists”',
+      'An issue draft is waiting at Ops: “Add wishlists”',
     ]);
   });
 

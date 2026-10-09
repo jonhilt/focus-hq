@@ -2,7 +2,7 @@ import type * as THREE from 'three';
 
 /**
  * The parts of the ship that never see each other except through a doorway that's a portal (portal.ts): the command
- * deck, the holodeck deck, the training halls (behind `?hall=1`, reached through a holodeck's door) and the team
+ * deck, the holodeck deck, the training halls (each reached through its holodeck's door on the deck) and the team
  * stations' briefing rooms. Decks stand side by side in world space, and briefing rooms and halls out beyond the
  * holodecks, so from any one of them every other would be drawn, hidden behind its walls; the World draws only the one
  * the camera's in.

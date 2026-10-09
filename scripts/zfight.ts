@@ -31,9 +31,6 @@ async function scan(browser: Browser, url: string): Promise<{ pairs: FightingPai
   }, modulePath);
 }
 
-/** `--hall` scans the training halls (`?hall=1`, world/hall.ts) in place of today's holodeck rooms. */
-const HALL = process.argv.includes('--hall') ? '&hall=1' : '';
-
 async function main(): Promise<number> {
   const dataDir = mkdtempSync(path.join(os.tmpdir(), 'focus-zfight-'));
   const port = await freePort();
@@ -46,7 +43,7 @@ async function main(): Promise<number> {
   try {
     await waitForServer(url, server, 60_000);
     browser = await launchBrowser();
-    const { pairs, meshes, padds } = await scan(browser, `${url}?merge=0&cull=0${HALL}`);
+    const { pairs, meshes, padds } = await scan(browser, `${url}?merge=0&cull=0`);
     const fighting = pairs.filter((p) => !allowed(p));
     console.log(`Scanned ${meshes} meshes (${padds} PADDs); ${pairs.length - fighting.length} allowed overlaps skipped.`);
     if (!fighting.length) {

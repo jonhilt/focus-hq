@@ -3,7 +3,7 @@ import type { Agent, GoalNote, LeadPr, QaStatus } from '../../../shared/types';
 
 // What a team station shows of its goal beyond the lead's own screen: whether its briefing room is in session, on the
 // lamps and sign at its door, the lead's note on the goal, on the board in its briefing room, and what the team's up to
-// at a glance, on its screen on the holodeck's teams wall.
+// at a glance, on its screen over its pod in the holodeck.
 
 /**
  * How a goal room stands, seen from its door: no goal there, the lead at work, waiting on you to approve something,
@@ -84,7 +84,7 @@ export function roster<T>(lead: T | undefined, reviewer: T | undefined, helpers:
 }
 
 /**
- * What a goal's lead is up to right now, in a line, for the teams wall: what they need from you while they need
+ * What a goal's lead is up to right now, in a line, for the screen over its pod: what they need from you while they need
  * something, otherwise what they're doing (or last did).
  */
 export function leadNow(lead: Pick<Agent, 'status' | 'activity' | 'permission' | 'lead' | 'error'>): string {
@@ -119,7 +119,7 @@ export function checklistGlance(items: GoalNote['slice'], room: number): { done:
   return { done, items: shown, more: rest.length - shown.length };
 }
 
-/** How a goal's pull request stands, on the teams wall: merged or closed, otherwise how QA has it. */
+/** How a goal's pull request stands, on the screen over its pod: merged or closed, otherwise how QA has it. */
 export type PrGlance = 'open' | 'testing' | 'passed' | 'failed' | 'merged' | 'closed';
 
 export function prGlance(pr: Pick<LeadPr, 'outcome'>, qa: QaStatus | undefined): PrGlance {

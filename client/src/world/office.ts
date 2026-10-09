@@ -77,8 +77,8 @@ export class World {
     private readonly ship: Ship,
     /** The door and briefing room every team station is a copy of (loadTeamStation). */
     private readonly teamStation: TeamStationKit,
-    /** Whether a project's holodeck door opens onto a training hall (hall.ts, `?hall=1`), not today's room. */
-    private readonly halls = false,
+    /** The shell every project's training hall is a copy of (loadTrainingHall), through its holodeck's door. */
+    private readonly hallKit: THREE.Object3D,
   ) {
     scene.add(this.root);
     for (const deck of this.decks()) this.mount(deck, this.root);
@@ -164,14 +164,13 @@ export class World {
       if (deck.kind === 'in-use') return void buildHiddenRoom(slot, b);
       const { project } = deck;
       const theme = roomTheme(project);
-      const footprint = this.halls ? 'hall' : 'room';
-      const key = `${project.id}|${theme}|${i}|${footprint}`;
+      const key = `${project.id}|${theme}|${i}`;
       let scenery = previous.get(key) ?? null;
       previous.delete(key);
       // the stencil value (slot + 1) and the sun direction both depend on the slot, hence the key
-      scenery ??= createScenery(theme, i + 1, project.id, SUN_POSITION.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -slot.rotationY), footprint);
+      scenery ??= createScenery(theme, i + 1, project.id, SUN_POSITION.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -slot.rotationY), 'hall');
       if (scenery) this.sceneries.set(key, scenery);
-      this.rooms.set(project.id, new ProjectRoom(project, slot, b, scenery, this.teamStation, this.halls));
+      this.rooms.set(project.id, new ProjectRoom(project, slot, b, scenery, this.teamStation, this.hallKit));
     });
     for (const scenery of previous.values()) scenery.dispose();
     // the briefing rooms stand apart from the holodeck deck, and are drawn apart from it
@@ -192,8 +191,8 @@ export class World {
     const deck = holodecks.assemble(rows);
     this.holodeckDeck = [deck.head, ...deck.rows, deck.tail];
     for (const part of this.holodeckDeck) this.mount(part, b.group);
-    // a training hall's door is a doorway to it, with doors of its own (room.ts)
-    const halls = new Set([...this.rooms.values()].flatMap((r) => (r.hall ? [r.slot.index] : [])));
+    // a project's door is a doorway to its hall, with doors of its own (room.ts)
+    const halls = new Set([...this.rooms.values()].map((r) => r.slot.index));
     for (let i = 0; i < rows * 2; i++) {
       if (halls.has(i)) continue;
       const { side, center } = roomSlot(i);

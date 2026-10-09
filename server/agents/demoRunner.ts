@@ -672,8 +672,8 @@ export class DemoNumberOne implements NumberOneOfficer {
     if (project && /should we|could we|we need|let'?s|add|build|want/.test(q)) {
       return {
         ...said(
-          `That sounds like work for ${project.name}. I'd start with a draft at the stand; if it turns out bigger than one issue, start it as a goal with a lead of its own instead.`,
-          `That's one for ${project.name}. Want me to send it to the stand, or to the lead?`,
+          `That sounds like work for ${project.name}. I'd start with a draft at Ops; if it turns out bigger than one issue, start it as a goal with a lead of its own instead.`,
+          `That's one for ${project.name}. Want me to send it to Ops, or to the lead?`,
         ),
         suggest: { projectId: project.id, idea: asked },
       };

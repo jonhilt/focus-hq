@@ -73,8 +73,8 @@ export function briefingRoomAt(slot: RoomSlot, station: number): THREE.Vector3 {
 }
 
 /**
- * The training hall (hall.ts): a holodeck that's bigger on the inside, prototyped behind `?hall=1`. Its door on the
- * deck is a Portal to the hall's entrance, so the hall can stand anywhere: out beyond the briefing rooms, one per
+ * The training hall (hall.ts): what a project's holodeck is, bigger on the inside than its slot on the deck. Its door
+ * on the deck is a Portal to the hall's entrance, so the hall can stand anywhere: out beyond the briefing rooms, one per
  * holodeck, each further out the further down the hallway its holodeck is, so none meet. A round floor `radius` across
  * its middle, under a ceiling `height` up, with an alcove `alcove` deep behind its entrance.
  */

@@ -51,11 +51,15 @@ function skinGeometry(footprint: Footprint): THREE.BufferGeometry {
   return geo;
 }
 
-/** How high a training hall's skin reaches, under its ceiling. */
-const HALL_SKIN_TOP = HALL.height - 0.02;
+/**
+ * A training hall's skin: in front of its walls' inner faces by HALL_SKIN_INSET, clear of their trims, ribs and
+ * readouts but behind its entrance's frame (blender/training_hall.py: SKIN), and under the lights on its ceiling.
+ */
+const HALL_SKIN_INSET = 0.1;
+const HALL_SKIN_TOP = HALL.height - 0.04;
+const HALL_SKIN_R = HALL.radius - HALL_SKIN_INSET;
+const HALL_SKIN_X = ENTRANCE_X + HALL_SKIN_INSET;
 /** How far round a hall's round wall its skin reaches, from straight ahead either way, to the entrance wall's skin. */
-const HALL_SKIN_R = HALL.radius - SKIN_INSET;
-const HALL_SKIN_X = ENTRANCE_X + SKIN_INSET;
 const HALL_SKIN_SPAN = Math.acos(HALL_SKIN_X / HALL_SKIN_R);
 
 /** A training hall's skin: in front of its round wall, its entrance wall either side of and over the doorway, and its ceiling. */

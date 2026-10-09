@@ -22,7 +22,7 @@ What the browser reads (client/src/world/deck.ts), all through custom properties
   'screen' (a screen the browser keeps drawing: `screen`, which is 'mission-control', or a team station's
   'team-station', its lead's session, 'team-station-sign', its name, goal and whether it's in session, and
   'team-station-note', the lead's note on the goal), 'star-chart' (long-range sensors), 'accent' (a team station's own
-  colour), 'lamp' (a team station door's lamps, lit while its goal room is in session), 'carpet' (speckled carpet in
+  colour, or a training hall's project's, lightened by the material's `shade`), 'lamp' (a team station door's lamps, lit while its goal room is in session), 'carpet' (speckled carpet in
   the material's colour, tiled every 2 m) or 'unlit' (the material's colour, unshaded: lights and ceilings).
   Everything else is a toon material in its base colour.
 """

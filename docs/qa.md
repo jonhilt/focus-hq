@@ -33,7 +33,7 @@ Every holodeck has a QA officer in blue, sitting at a station beside the pull re
 
 ## Stuck PRs
 
-Before a stuck PR reaches you, the holodeck's operations officer (the one at the **New issue** stand) looks at it. The PR card says **Lt. … is looking**, and so does their speech bubble.
+Before a stuck PR reaches you, the holodeck's operations officer (the one at the **Ops** station) looks at it. The PR card says **Lt. … is looking**, and so does their speech bubble.
 
 - **What they read:** QA's last two reports, GitHub's checks, the diff, the linked issue and a checkout of the PR. It's the same kind of read-only session as their drafting (`Read`, `Glob`, `Grep`, `dontAsk`).
 - **What they do, exactly one of:**

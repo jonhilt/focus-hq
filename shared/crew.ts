@@ -2,7 +2,7 @@ import type { CrewSpeaker, CrewVoice, KokoroVoice } from './voice';
 import { type Avatar, type Division, type Hairstyle, type Planner, type Rank, type Species } from './types';
 
 // Who's aboard. Agents get a random look when they're hired. Permanent crew members, one of each per room (the
-// operations officer at the New issue stand and the QA officer at the QA station), are derived from the project id
+// operations officer at the Ops station and the QA officer at the QA station), are derived from the project id
 // rather than stored, so the same officer is at the same post on every reload and on every client. A goal's lead is
 // derived from the goal when it starts, then kept on its agent record. The ship's engineer is the one crew member who
 // serves every room.
@@ -61,7 +61,7 @@ function seeded(seed: number): () => number {
   };
 }
 
-/** The operations officer at a room's ＋ New issue stand, who drafts issues for it. */
+/** The operations officer at a room's Ops station, who drafts issues for it and looks into stuck pull requests. */
 export function plannerFor(projectId: string): Planner {
   const h = hash(`planner:${projectId}`);
   const avatar = rollAvatar(seeded(h), 'operations', (h >>> 1) % 3 === 0 ? 'ensign' : 'lieutenant');

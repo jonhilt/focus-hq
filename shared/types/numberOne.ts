@@ -1,6 +1,6 @@
 // The captain's chat with Number One.
 
-/** Work Number One suggests a chat turn into: the captain sends it to the project's stand or to its lead. */
+/** Work Number One suggests a chat turn into: the captain sends it to the project's Ops station or to its lead. */
 export interface WorkSuggestion {
   projectId: string;
   idea: string;
