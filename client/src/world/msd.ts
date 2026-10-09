@@ -1,4 +1,10 @@
+import { type ReportCard, reportLines } from '../../../shared/ledger';
+import type { Trace } from '../../../shared/ledgerReview';
+import { fitText } from './canvas';
 import { LCARS, LCARS_FONT, lcarsFrame } from './starship';
+
+/** What the MSD shows beside the ship: the ledger's report card, or the trace picked at the master systems table. */
+export type MsdBoard = { kind: 'report'; card: ReportCard | null } | { kind: 'trace'; trace: Trace };
 
 /** A deck on the MSD: where it is on the cutaway (fractions of the drawing's width and height), and its colour. */
 interface DeckMark {
@@ -15,11 +21,14 @@ const DECKS: DeckMark[] = [
 
 /**
  * Main engineering's master systems display (the 'msd' screen on deck 5's port wall): a cutaway of the ship from
- * the side, its saucer forward to the left, with the decks marked and the warp core glowing in the engineering hull.
+ * the side, its saucer forward to the left, with the decks marked and the warp core glowing in the engineering hull,
+ * and beside it the ledger: its report card, or whichever pull request or goal the captain traced at the table.
  */
-export function drawMsd(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+export function drawMsd(ctx: CanvasRenderingContext2D, w: number, h: number, board: MsdBoard): void {
   const a = lcarsFrame(ctx, w, h, { title: 'Master systems display · U.S.S. Focus', color: LCARS.lilac, seed: 5005 });
-  const X = (f: number) => a.x + a.w * f;
+  drawBoard(ctx, { x: a.x + a.w * 0.55, y: a.y, w: a.w * 0.45, h: a.h }, board);
+  // the ship, in the left half
+  const X = (f: number) => a.x + a.w * 0.53 * f;
   const Y = (f: number) => a.y + a.h * f;
   const hull = '#1e2a4a';
   const line = LCARS.periwinkle;
@@ -113,3 +122,76 @@ export function drawMsd(ctx: CanvasRenderingContext2D, w: number, h: number): vo
   ctx.font = `500 ${Math.round(a.h * 0.05)}px ${LCARS_FONT}`;
   ctx.fillText('YOU ARE HERE', X(0.68), Y(0.84));
 }
+
+type Box = { x: number; y: number; w: number; h: number };
+
+/** The ledger beside the ship: big numbers along the top, then lines of text. */
+function drawBoard(ctx: CanvasRenderingContext2D, b: Box, board: MsdBoard): void {
+  const px = (f: number) => Math.round(b.h * f);
+  ctx.textBaseline = 'top';
+  ctx.textAlign = 'left';
+  const title = (text: string, color: string) => {
+    ctx.fillStyle = color;
+    ctx.font = `600 ${px(0.075)}px ${LCARS_FONT}`;
+    ctx.fillText(fitText(ctx, text.toUpperCase(), b.w), b.x, b.y);
+  };
+  const lines = (from: number, rows: { text: string; color: string; tag?: string }[]) => {
+    ctx.font = `500 ${px(0.065)}px ${LCARS_FONT}`;
+    rows.slice(0, Math.floor((1 - from) / 0.09)).forEach((r, i) => {
+      const y = b.y + b.h * (from + i * 0.09);
+      let x = b.x;
+      if (r.tag) {
+        ctx.fillStyle = r.color;
+        ctx.beginPath();
+        ctx.roundRect(x, y, b.w * 0.17, px(0.06), px(0.03));
+        ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.font = `600 ${px(0.042)}px ${LCARS_FONT}`;
+        ctx.fillText(fitText(ctx, r.tag.toUpperCase(), b.w * 0.15), x + b.w * 0.01, y + px(0.008));
+        ctx.font = `500 ${px(0.065)}px ${LCARS_FONT}`;
+        x += b.w * 0.19;
+      }
+      ctx.fillStyle = r.tag ? '#e8e2ff' : r.color;
+      ctx.fillText(fitText(ctx, r.text, b.x + b.w - x), x, y);
+    });
+  };
+  const tiles = (from: number, list: [string, string][]) => {
+    const w = b.w / list.length;
+    list.forEach(([value, label], i) => {
+      const x = b.x + i * w;
+      ctx.fillStyle = '#1b1630';
+      ctx.beginPath();
+      ctx.roundRect(x, b.y + b.h * from, w - px(0.02), b.h * 0.2, px(0.03));
+      ctx.fill();
+      ctx.fillStyle = LCARS.sky;
+      ctx.font = `600 ${px(0.09)}px ${LCARS_FONT}`;
+      ctx.fillText(fitText(ctx, value, w - px(0.05)), x + px(0.02), b.y + b.h * (from + 0.02));
+      ctx.fillStyle = '#a49db4';
+      ctx.font = `500 ${px(0.042)}px ${LCARS_FONT}`;
+      ctx.fillText(fitText(ctx, label, w - px(0.05)), x + px(0.02), b.y + b.h * (from + 0.13));
+    });
+  };
+
+  if (board.kind === 'report') {
+    const { headline, lines: rows } = board.card ? reportLines(board.card) : { headline: 'Reading the ledger…', lines: [] };
+    title(`Ledger · ${headline}`, LCARS.gold);
+    lines(0.14, rows.map((text) => ({ text, color: LCARS.peach })));
+    return;
+  }
+  const { subject, totals: t, steps, goal } = board.trace;
+  title(subject.kind === 'pr' ? `Trace · ${subject.repo.split('/').pop()} #${subject.pr}` : `Trace · goal`, LCARS.gold);
+  ctx.fillStyle = LCARS.lilac;
+  ctx.font = `500 ${px(0.05)}px ${LCARS_FONT}`;
+  if (goal) ctx.fillText(fitText(ctx, goal, b.w), b.x, b.y + b.h * 0.09);
+  tiles(0.17, [
+    [t.verdicts ? `${t.fails}/${t.verdicts}` : '–', 'QA fails'],
+    [String(t.conflicts), 'conflicts'],
+    [`$${t.costUsd.toFixed(2)}`, `${t.sessions} sessions`],
+    [String(t.wastedCalls), 'wasted calls'],
+  ]);
+  // the latest steps, oldest of them first, so it reads down to where it stands
+  const last = steps.slice(-6);
+  lines(0.42, last.map((s) => ({ tag: s.tag, text: s.title, color: STEP[s.tone] })));
+}
+
+const STEP: Record<string, string> = { ok: LCARS.sky, bad: LCARS.red, warn: LCARS.gold, info: LCARS.lilac };

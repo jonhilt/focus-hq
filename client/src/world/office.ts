@@ -12,7 +12,7 @@ import { canvasTexture, fitText, makeCanvas, roundRect } from './canvas';
 import { type Box2, DOOR_W, HALL_HALF, ROOM_WIDTH, roomSlot, rowsFor, type Seat, slotAt, SUN_POSITION } from './layout';
 import { flat } from './materials';
 import { EngineeringStation } from './engineering';
-import { drawMsd } from './msd';
+import { drawMsd, type MsdBoard } from './msd';
 import { FirstOfficer } from './numberOne';
 import type { Portal, PortalEnd } from './portal';
 import { type Region, regionAt, shown } from './regions';
@@ -70,7 +70,11 @@ export class World {
   private dashboard = makeCanvas(1280, 720);
   private dashboardTex = canvasTexture(this.dashboard.canvas);
   /** What the decks built in Blender show on their screens. */
-  private readonly screens: Record<DeckScreen, THREE.Material> = { 'mission-control': flat(this.dashboardTex), msd: msdScreen() };
+  /** Main engineering's MSD: the ship, and the ledger beside it (msd.ts). */
+  private msd = makeCanvas(1560, 600);
+  private msdTex = canvasTexture(this.msd.canvas);
+  private msdBoard: MsdBoard = { kind: 'report', card: null };
+  private readonly screens: Record<DeckScreen, THREE.Material> = { 'mission-control': flat(this.dashboardTex), msd: flat(this.msdTex) };
   private panelsDirty = true;
   private lastPanels = 0;
   private projectKey = '';
@@ -86,6 +90,7 @@ export class World {
     private readonly hallKit: THREE.Object3D,
   ) {
     scene.add(this.root);
+    this.drawMsd(this.msdBoard);
     for (const deck of this.decks()) this.mount(deck, this.root);
     this.root.add(this.briefingRooms);
     // a little beyond their walls, so you're on one in its doorways too
@@ -276,6 +281,26 @@ export class World {
     return { label: this.inUse.has(index) ? 'Holodeck in use' : 'Vacant holodeck' };
   }
 
+  /**
+   * What main engineering's MSD shows beside the ship: a trace picked at the master systems table (it stays up until
+   * another is), or with none, the ledger's report card as it changes.
+   */
+  showOnMsd(board: MsdBoard): void {
+    if (board.kind === 'report' && this.msdBoard.kind === 'trace') return;
+    this.drawMsd(board);
+  }
+
+  /** Back to the report card, even over a trace. */
+  clearMsd(card: MsdBoard & { kind: 'report' }): void {
+    this.drawMsd(card);
+  }
+
+  private drawMsd(board: MsdBoard): void {
+    this.msdBoard = board;
+    drawMsd(this.msd.ctx, this.msd.canvas.width, this.msd.canvas.height, board);
+    this.msdTex.needsUpdate = true;
+  }
+
   markPanels(): void {
     this.panelsDirty = true;
   }
@@ -364,11 +389,4 @@ export class World {
   get interactRoot(): THREE.Object3D {
     return this.root;
   }
-}
-
-/** Main engineering's MSD: a cutaway of the ship, drawn once (msd.ts). */
-function msdScreen(): THREE.Material {
-  const { canvas, ctx } = makeCanvas(1560, 600);
-  drawMsd(ctx, canvas.width, canvas.height);
-  return flat(canvasTexture(canvas));
 }

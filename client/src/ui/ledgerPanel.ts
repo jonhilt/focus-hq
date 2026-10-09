@@ -127,12 +127,21 @@ export function openLedgerPanel(ui: Ui): void {
     }
     const t = trace(events, subject);
     const s = subject;
+    // up on the wall too, beside the ship, where it stays until another is picked
+    ui.showOnMsd(t);
+    const clear = h('button', { class: 'btn small' }, 'Clear the MSD');
+    clear.onclick = () => {
+      subject = null;
+      ui.showOnMsd(null);
+      render();
+    };
     const goal = t.goal;
     const goalLink = goal && s.kind === 'pr' ? h('button', { class: 'linkish' }, `Goal: ${goal} ›`) : null;
     if (goalLink && goal) goalLink.onclick = () => pick({ kind: 'goal', title: goal });
     const tot = t.totals;
     const sum = (value: string | number, label: string) => h('div', { class: 'ledger-sum' }, h('b', null, value), h('span', null, label));
     fill(traced,
+      h('div', { class: 'row' }, h('span', { class: 'grow' }), clear),
       h('h3', null, s.kind === 'pr' ? `${s.repo.split('/').pop()} #${s.pr}` : `Goal: ${s.title}`),
       goalLink,
       s.kind === 'goal' ? h('small', { class: 'muted' }, `${tot.prs} pull requests in the last ${days} days`) : null,

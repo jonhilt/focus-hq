@@ -76,7 +76,7 @@ client/src/
     transporter.ts        the transporter beam the crew arrive and leave in
     engineering.ts        the engineering station: the engineer, the report card and how their retro stands on the console; E opens their panel
     warpCore.ts           the warp core's glow: the shared materials its 'warp-core' surfaces are drawn with, pulsing
-    msd.ts                main engineering's master systems display: a cutaway of the ship with its decks marked
+    msd.ts                main engineering's master systems display: a cutaway of the ship with its decks marked, and beside it the ledger's report card or the trace picked at the table
     numberOne.ts          Number One in the ready room, across the captain's desk (numberOneView.ts: their bubble)
     deck.ts               a deck built in Blender: loads its GLB, draws its surfaces, reads its markers and what pressing E does (deckExtras.ts: what the markers, surfaces and interactions say)
     holodeckDeck.ts       the holodeck deck, put together from its Blender modules for however many holodecks there are

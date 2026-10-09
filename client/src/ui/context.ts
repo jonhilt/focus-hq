@@ -1,3 +1,4 @@
+import type { Trace } from '../../../shared/ledgerReview';
 import type { AgentView } from './agentPanel';
 import type { Place } from '../world/office';
 import type { Hud } from './hud';
@@ -36,6 +37,8 @@ export interface Ui {
   openEngineering(): void;
   /** Main engineering's master systems table: the ledger's log, and a trace of a pull request or goal. */
   openLedger(): void;
+  /** Puts a trace up on main engineering's MSD, or with null, the ledger's report card back. */
+  showOnMsd(trace: Trace | null): void;
   openManager(tab?: ManagerTab): void;
   openTeleport(): void;
   /** A team station's screen up close: what lead `leadId` has shown, and switches for what station screens show. */

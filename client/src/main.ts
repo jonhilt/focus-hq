@@ -135,6 +135,7 @@ async function main() {
     openNumberOne: () => openNumberOnePanel(ui),
     openEngineering: () => openEngineeringPanel(ui),
     openLedger: () => openLedgerPanel(ui),
+    showOnMsd: (trace) => (trace ? world.showOnMsd({ kind: 'trace', trace }) : world.clearMsd({ kind: 'report', card: state.report })),
     openComms: () => openCommsPanel(ui),
     openGoals: (projectId, station) => openGoalsPanel(ui, projectId, station),
     openManager: (tab) => openManagerPanel(ui, tab),
@@ -287,7 +288,10 @@ async function main() {
     // the screens over the pods show how QA has each goal's pull requests
     world.room(projectId)?.syncStations();
   });
-  state.on('report', () => world.engineering?.showReport(state.report, state.retro));
+  state.on('report', () => {
+    world.engineering?.showReport(state.report, state.retro);
+    world.showOnMsd({ kind: 'report', card: state.report });
+  });
   state.on('retro', () => world.engineering?.showReport(state.report, state.retro));
   let numberOneStatus = state.numberOne?.status;
   state.on('number-one', () => {
