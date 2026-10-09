@@ -16,6 +16,8 @@ import { mergeStatic } from './merge';
 import { type Doorway, Portal } from './portal';
 import { BIG_SCREEN, StationScreen } from './screen';
 import { HULL } from './starship';
+import { HOLO_CYAN, Hologram, hover } from './hologram';
+import { OVERLAY_LAYER } from './frame';
 
 // A team station: where a goal's lead works with the captain. In the holodeck it's a door, with the station's sign
 // floating over it and lamps either side that show whether its goal room is in session; through it is the goal's
@@ -70,10 +72,10 @@ const WALL_GAP = 0.16;
 const DOOR_SIGN = { width: 2.6, bottom: 2.79, out: 0.85 };
 
 /**
- * The station's screen on the holodeck's teams wall: as wide as four fit side by side across the room, a face either
- * side of a bezel `depth` thick and `rim` proud of them all round.
+ * The station's screen on the holodeck's teams wall: as wide as four fit side by side across the room, a hologram
+ * (hologram.ts) with a face either side `depth` apart, its outline glowing `rim` out from its drawing all round.
  */
-export const TEAM_SCREEN = { width: 2.2, height: (2.2 * TeamScreen.H) / TeamScreen.W, depth: 0.06, rim: 0.05 };
+export const TEAM_SCREEN = { width: 2.2, height: (2.2 * TeamScreen.H) / TeamScreen.W, depth: 0.02, rim: 0.05 };
 
 /** Who sits in a seat: the agent (or helper) id, and their Character while they're there. */
 export interface StationSeat {
@@ -127,11 +129,15 @@ export class TeamStation {
   private readonly sign = new GoalSign();
   private readonly board = new GoalBoard();
   private readonly teamScreen = new TeamScreen();
+  /** The team screen's hologram, outlined in the colour of the door's lamps (`update`). */
+  private readonly teamHologram = new Hologram(this.teamScreen.texture, (TEAM_SCREEN.width + TEAM_SCREEN.rim * 2) / (TEAM_SCREEN.height + TEAM_SCREEN.rim * 2));
   /**
    * Its screen on the holodeck's teams wall (room frame, hung by the room): the same on both faces, front (+Z) and
-   * back, either side of a bezel lit like the door's lamps.
+   * back, hovering where it hangs.
    */
   readonly wall = new THREE.Group();
+  private readonly faces = new THREE.Group();
+  private lastT = 0;
   /** The strip of switches under the screen, for which panes it shows: the viewer's, so the same at every station. */
   private readonly panes = new PaneSwitches();
   /** The lamps either side of the door, lit by how the goal room stands (`update`). */
@@ -186,15 +192,19 @@ export class TeamStation {
     this.head = place.clone().applyMatrix4(room.matrixWorld);
     this.area = footprint(new THREE.Matrix4().multiplyMatrices(room.matrixWorld, area));
     this.screenCentre = new THREE.Box3().setFromObject(display).getCenter(new THREE.Vector3());
+    const { width, height, depth, rim } = TEAM_SCREEN;
     const faces = [0, Math.PI].map((turn) => {
-      const face = new THREE.Mesh(new THREE.PlaneGeometry(TEAM_SCREEN.width, TEAM_SCREEN.height), this.teamScreen.material);
+      const face = new THREE.Mesh(new THREE.PlaneGeometry(width + rim * 2, height + rim * 2), this.teamHologram.material);
       face.rotation.y = turn;
-      // a hair proud of the bezel, so neither shares its plane
-      face.position.z = Math.cos(turn) * (TEAM_SCREEN.depth / 2 + 0.004);
+      face.position.z = (Math.cos(turn) * depth) / 2;
+      // drawn over the outlines (frame.ts), so the lines of what's behind it are behind its glass too
+      face.layers.set(OVERLAY_LAYER);
+      // solid while you aim at it, so it's easy to read
+      face.userData.aim = (on: boolean) => (this.teamHologram.aimed = on);
       return face;
     });
-    const { width, height, depth, rim } = TEAM_SCREEN;
-    this.wall.add(new THREE.Mesh(new THREE.BoxGeometry(width + rim * 2, height + rim * 2, depth), this.lamp), ...faces);
+    this.faces.add(...faces);
+    this.wall.add(this.faces);
     this.furniture = [door, ...faces];
 
     const seat = (crew: Crew): StationSeat => {
@@ -358,6 +368,12 @@ export class TeamStation {
     this.panes.update();
     const glow = { free: 0, 'in-session': 0.8 + 0.2 * Math.sin(t * 2), 'needs-you': 0.6 + 0.4 * Math.sin(t * 7), 'your-turn': 1, queued: 0.55, stopped: 1 }[this.tone];
     this.lamp.color.set(HULL.dado).lerp(LIT.set(TONE[this.tone]), glow);
+    // the team screen's outline glows as the lamps do, but from dim rather than the bulkhead's colour; a free one's in
+    // the holograms' own cyan
+    this.teamHologram.tint.set(this.tone === 'free' ? HOLO_CYAN : TONE[this.tone]).multiplyScalar(0.35 + 0.65 * glow);
+    hover(this.faces, 0, t, this.index * 1.7);
+    this.teamHologram.update(Math.min(0.1, t - this.lastT));
+    this.lastT = t;
   }
 
   /** Where the captain stands in the briefing room, looking at the screen (world). */
@@ -370,6 +386,7 @@ export class TeamStation {
     this.sign.dispose();
     this.board.dispose();
     this.teamScreen.dispose();
+    this.teamHologram.dispose();
     this.panes.dispose();
     this.lamp.dispose();
     for (const s of [this.lead, ...this.helpers, this.reviewer]) s.character?.dispose();

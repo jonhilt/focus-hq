@@ -7,20 +7,24 @@ import { triageLabel } from '../../../shared/triage';
 import type { Agent, Board, Project } from '../../../shared/types';
 import { state } from '../net/state';
 import { canvasTexture, fitText, makeCanvas, wrap } from './canvas';
-import { flat } from './materials';
+import { Hologram } from './hologram';
 import { LCARS, LCARS_FONT, LCARS_STATUS, lcarsFrame } from './starship';
 
 const shortRepo = (repo: string) => repo.split('/')[1] ?? repo;
 
-/** The big LCARS display on each room's back wall. */
+/** The big LCARS display hovering by each room's back wall, as a hologram (hologram.ts). */
 export class KanbanBoard {
-  readonly material: THREE.MeshBasicMaterial;
+  readonly hologram: Hologram;
   private readonly c = makeCanvas(1800, 760);
   private readonly texture: THREE.CanvasTexture;
 
   constructor() {
     this.texture = canvasTexture(this.c.canvas);
-    this.material = flat(this.texture);
+    this.hologram = new Hologram(this.texture, this.aspect);
+  }
+
+  get material(): THREE.MeshBasicMaterial {
+    return this.hologram.material;
   }
 
   /** Width / height of the drawing, so the board mesh can match it. */
@@ -161,6 +165,6 @@ export class KanbanBoard {
 
   dispose(): void {
     this.texture.dispose();
-    this.material.dispose();
+    this.hologram.dispose();
   }
 }

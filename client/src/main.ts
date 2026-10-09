@@ -21,6 +21,7 @@ import { openQaPanel } from './ui/qaPanel';
 import { openScreenPanel } from './ui/screenPanel';
 import { openNewIssuePanel, openPausePanel, openTeleportPanel, openTurboliftPanel } from './ui/travelPanel';
 import { type Interaction, REACH } from './world/builder';
+import { OVERLAY_LAYER } from './world/frame';
 import { numberOne } from '../../shared/crew';
 import { toastShows } from '../../shared/hidden';
 import { previewIncludes } from '../../shared/previewSet';
@@ -316,18 +317,30 @@ async function main() {
   const raycaster = new THREE.Raycaster();
   // as far as anything reaches: most things only from REACH (`interactive`), a big screen from across the room
   raycaster.far = 10;
+  // holograms are drawn in the overlay (frame.ts), and can be used
+  raycaster.layers.enable(OVERLAY_LAYER);
   const center = new THREE.Vector2(0, 0);
   let target: { interaction: Interaction; label: () => string } | null = null;
+  // what's aimed at, told when you aim at it and away (`userData.aim`), like a hologram turning solid
+  let aimed: THREE.Object3D | null = null;
+  const aimAt = (o: THREE.Object3D | null) => {
+    if (o === aimed) return;
+    (aimed?.userData.aim as ((on: boolean) => void) | undefined)?.(false);
+    aimed = o;
+    (aimed?.userData.aim as ((on: boolean) => void) | undefined)?.(true);
+  };
 
   const pick = () => {
     if (!player.locked) {
       target = null;
       hud.setHint(null);
+      aimAt(null);
       return;
     }
     raycaster.setFromCamera(center, camera);
     const hits = raycaster.intersectObject(world.root, true);
     target = null;
+    let aiming: THREE.Object3D | null = null;
     for (const hit of hits) {
       // a board with rows of its own to use, like a briefing room's goal board's roster, or its big screen's panes
       const at = hit.object.userData.interactionAt as ((uv: THREE.Vector2) => typeof target) | undefined;
@@ -342,11 +355,13 @@ async function main() {
       if (o) {
         if (hit.distance > ((o.userData.reach as number | undefined) ?? REACH)) break;
         target = { interaction: o.userData.interaction as Interaction, label: o.userData.label as () => string };
+        aiming = o;
         break;
       }
-      if (!(hit.object as THREE.Mesh).isMesh) continue;
+      if (!(hit.object as THREE.Mesh).isMesh || !hit.object.layers.isEnabled(0)) continue; // nor does the overlay
       break; // first solid thing blocks the view
     }
+    aimAt(aiming);
     hud.setHint(target ? target.label() : null);
   };
 

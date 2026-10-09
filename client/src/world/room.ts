@@ -11,7 +11,7 @@ import { type Builder, type Interaction, interactive, REACH } from './builder';
 import { seatHelpers } from './helperSeats';
 import { agentView, Character, type CrewView } from './character';
 import { buildHall } from './hall';
-import { around, curvedPanel, deckEntrance, ENTRANCE_X, facingIn, hallEntrance, hallPodSpots, inHall } from './hallLayout';
+import { curvedPanel, deckEntrance, ENTRANCE_X, hallEntrance, hallPodSpots, inHall } from './hallLayout';
 import { briefingRoomAt, HALL, hallAt, OVER_DOOR, type RoomSlot, ROOM_DEPTH, ROOM_WIDTH, WALL_H } from './layout';
 import { ContactShadows } from './contactShadow';
 import { prGlance } from './goalRoom';
@@ -22,7 +22,9 @@ import { holodeckMaterial, holodeckSkin, type Scenery } from './scenery';
 import { StationScreen } from './screen';
 import { paneUse } from './screenPanes';
 import { Beam } from './transporter';
-import { HULL, LCARS, lcarsSign, workstation } from './starship';
+import { LCARS, lcarsSign, workstation } from './starship';
+import { hover } from './hologram';
+import { OVERLAY_LAYER } from './frame';
 import { Portal } from './portal';
 import { type PodSpot, roomPodSpots, type StationSeat, TEAM_SCREEN, TeamStation, type TeamStationKit } from './teamStation';
 
@@ -127,6 +129,10 @@ export class ProjectRoom {
   readonly group = new THREE.Group();
   readonly desks: DeskSlot[] = [];
   private board = new KanbanBoard();
+  /** The board's hologram, which hovers (hologram.ts). */
+  private boardMesh!: THREE.Mesh;
+  private boardY = 0;
+  private lastT = 0;
   /** The operations officer behind the ＋ New issue stand, who drafts issues. */
   private planner!: Character;
   /** The QA officer at their station beside the pull requests table. */
@@ -202,22 +208,15 @@ export class ProjectRoom {
     deck.add(sign);
     interactive(sign, { kind: 'board', projectId: project.id }, () => `Open ${project.name}'s board`);
 
-    const boardMesh = hall ? this.curvedBoard() : this.wallBoard();
-    const frameColor = HULL.frame;
-    const boardBottom = 0.24;
-    const boardW = (WALL_H - 0.2 - boardBottom) * this.board.aspect;
-    const post = boardW / 2 + 0.05;
-    // with no real wall behind it, the board stands on its own feet
+    const boardMesh = (this.boardMesh = hall ? this.curvedBoard() : this.wallBoard());
+    this.boardY = boardMesh.position.y;
+    // drawn over the outlines (frame.ts), so the lines of what's behind it are behind its glass too
+    boardMesh.layers.set(OVERLAY_LAYER);
     // what stands on the floor shades it round where it stands (contactShadow.ts): one mesh for the room's furniture
     const shadows = new ContactShadows(this.group);
-    if (this.scenery && !hall) {
-      for (const s of [-1, 1]) {
-        const foot = box(0.7, 0.14, 0.12, frameColor, ON_WALL - 0.3, 0, s * post);
-        this.group.add(foot);
-        shadows.add(foot);
-      }
-    }
     interactive(boardMesh, { kind: 'board', projectId: project.id }, () => `Use the ${project.name} board`);
+    // solid while you aim at it, so it's easy to read
+    boardMesh.userData.aim = (on: boolean) => (this.board.hologram.aimed = on);
 
     // desks
     for (let i = 0; i < DESKS_PER_ROOM; i++) this.desks.push(this.buildDesk(i, builder));
@@ -342,45 +341,29 @@ export class ProjectRoom {
     this.beaming = true;
   }
 
-  /** The board on the far wall: as tall as fits between its bottom rail and the ceiling, as wide as its drawing. */
+  /** The board by the far wall: a hologram hovering clear of the floor and the wall, as wide as its drawing. */
   private wallBoard(): THREE.Mesh {
-    const boardBottom = 0.24;
-    const boardTop = WALL_H - 0.2; // the top rail sits under the ceiling
+    const boardBottom = 0.5;
+    const boardTop = WALL_H - 0.3;
     const boardW = (boardTop - boardBottom) * this.board.aspect;
-    const post = boardW / 2 + 0.05;
     const boardMesh = new THREE.Mesh(new THREE.PlaneGeometry(boardW, boardTop - boardBottom), this.board.material);
     boardMesh.rotation.y = -Math.PI / 2;
-    boardMesh.position.set(ON_WALL, (boardBottom + boardTop) / 2, 0);
+    boardMesh.position.set(ON_WALL - 0.35, (boardBottom + boardTop) / 2, 0);
     this.group.add(boardMesh);
-    const frameColor = HULL.frame;
-    this.group.add(box(0.08, 0.1, boardW + 0.2, frameColor, ON_WALL - 0.01, boardBottom - 0.1, 0));
-    this.group.add(box(0.08, 0.1, boardW + 0.2, frameColor, ON_WALL - 0.01, boardTop, 0));
-    for (const s of [-1, 1]) this.group.add(box(0.08, boardTop - boardBottom + 0.2, 0.1, frameColor, ON_WALL - 0.01, boardBottom - 0.1, s * post));
     return boardMesh;
   }
 
   /**
    * A training hall's board: curved round the far wall, in front of it, between the pods either side, big enough to
-   * read from the entrance and high enough to read over the desks, with rails along its top and bottom.
+   * read from the entrance and high enough to read over the desks: a hologram hovering in front of the wall.
    */
   private curvedBoard(): THREE.Mesh {
-    const r = HALL.radius - 0.35;
+    const r = HALL.radius - 0.7;
     const bottom = 1.3;
     const top = 5.6;
     const half = ((top - bottom) * this.board.aspect) / 2 / r;
     const boardMesh = new THREE.Mesh(curvedPanel(r, -half, half, bottom, top, 40), this.board.material);
     this.group.add(boardMesh);
-    const rail = toon(HULL.frame);
-    for (const [y0, y1] of [[bottom - 0.12, bottom], [top, top + 0.12]]) this.group.add(new THREE.Mesh(curvedPanel(r - 0.01, -half - 0.01, half + 0.01, y0, y1, 40), rail));
-    // standing on the floor on its own posts, since a landscape may show where the wall was
-    for (const s of [-1, 1]) {
-      const a = s * (half + 0.006);
-      for (const part of [box(0.12, top + 0.12, 0.1, HULL.frame), box(0.16, 0.14, 0.7, HULL.frame)]) {
-        part.position.add(around(r - 0.02, a));
-        part.rotation.y = facingIn(a);
-        this.group.add(part);
-      }
-    }
     return boardMesh;
   }
 
@@ -643,6 +626,9 @@ export class ProjectRoom {
     // within earshot of a beam: in the room, or on its doorstep in the hallway, or in one of its briefing rooms
     this.youreHere = this.hall ? this.holds(eye) || eye.distanceTo(this.slot.center) < HALF_D + 2 : eye.distanceTo(this.slot.center) < HALF_D + 2;
     if (this.beams.length) this.beams = this.beams.filter((b) => !b.update(now));
+    hover(this.boardMesh, this.boardY, t);
+    this.board.hologram.update(Math.min(0.1, t - this.lastT));
+    this.lastT = t;
     if (this.boardDirty) {
       this.boardDirty = false;
       const board = state.boards.get(this.project.id);

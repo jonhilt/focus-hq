@@ -104,15 +104,24 @@ function glowText(ctx: CanvasRenderingContext2D, text: string, x: number, y: num
 
 /** A canvas drawn only when what it shows changes. */
 abstract class Display {
-  readonly material: THREE.MeshBasicMaterial;
   protected readonly c: ReturnType<typeof makeCanvas>;
-  private readonly texture: THREE.CanvasTexture;
+  /** What it draws into, for a material other than its own to show (a Hologram, hologram.ts). */
+  readonly texture: THREE.CanvasTexture;
+  private flat?: THREE.MeshBasicMaterial;
   private key = '';
 
-  constructor(w: number, h: number, transparent: boolean) {
+  constructor(
+    w: number,
+    h: number,
+    private readonly transparent: boolean,
+  ) {
     this.c = makeCanvas(w, h);
     this.texture = canvasTexture(this.c.canvas);
-    this.material = flat(this.texture, { transparent });
+  }
+
+  /** Its own unlit material, made the first time it's asked for. */
+  get material(): THREE.MeshBasicMaterial {
+    return (this.flat ??= flat(this.texture, { transparent: this.transparent }));
   }
 
   show(view: StationView): void {
@@ -135,7 +144,7 @@ abstract class Display {
 
   dispose(): void {
     this.texture.dispose();
-    this.material.dispose();
+    this.flat?.dispose();
   }
 }
 
@@ -393,7 +402,7 @@ const PR_LOOK: Record<PrGlance, { color: string; word: string }> = {
 };
 
 /**
- * A team station's screen on the holodeck's teams wall, the four side by side so you can watch every team at once
+ * A team station's screen on the holodeck's teams wall, a hologram (hologram.ts), the four side by side so you can watch every team at once
  * without going in: how its room stands across the top in big type (seen from across the holodeck), the goal, what the
  * lead's up to right now, how far through the slice they are and what's left on its checklist, and along the bottom
  * who else is in the briefing room and the slice's pull requests. A free station says so, or what's next in line for it.
@@ -420,7 +429,7 @@ export class TeamScreen extends Display {
     ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = GLASS;
     ctx.fillRect(0, 0, W, H);
-    glowRect(ctx, 12, 12, W - 24, H - 24, 30, color, 6);
+    // edged by its hologram's outline, in its room's tone (teamStation.ts)
 
     // across the top: the station's code in its colour, its lead, and how its room stands, big enough to read from the door
     const top = 36;
