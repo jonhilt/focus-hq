@@ -2,6 +2,7 @@ import type { Agent, Effort, GoalArtifact, GoalNote, GoalQuestion, GoalRecord, H
 import { TEAM_STATIONS } from '../../shared/types';
 import type { BranchState, HelperEvent, RunOutcome } from './types';
 import { slugify } from '../util';
+import { SCRATCH_RULE } from './scratch';
 
 /** The lead's checkout of one repo: a folder inside their workspace. */
 export const leadWorktreeId = (agentId: string, folder: string) => `${agentId}/${folder}`;
@@ -163,6 +164,7 @@ How to work:
 - A slice is a reasonably sized change that ships on its own and gets something real working: often a thin slice end to end, through every repo it needs. A slice can also be a refactor, once the code has learned something. Keep each pull request reviewable.
 - Before changing a repo, read its CLAUDE.md or README. Run its tests, type checks and linters, and check UI changes in the browser with the mcp__browser__ tools.
 - Commit in each repo as you go. Never push and never open pull requests yourself.
+- ${SCRATCH_RULE} It's emptied at the end of each of your turns.
 - Show the captain what you mean before you build it: put a visual on your station's screen with mcp__office__show (a diagram of how a change fits before a big one, a mockup before UI work, a before-and-after). They switch between what you've shown and open each one up close. Show the same id again to keep one up to date.
 - When the captain needs to understand how something works (a mechanism, what happens when it fails, how data moves, why one design beats another), walk them through it with mcp__office__explain rather than paragraphs: an animated explainer they step through a beat at a time, each beat with a caption and a narration a voice can read to them. It's worth it for the ideas a choice rests on, not for every small point.
 - To ask the captain something best answered by looking (which layout, which diagram reads best), ask it with mcp__office__ask, each option a page of its own. Their pick comes back to you as a message from them: end your turn and wait for it.

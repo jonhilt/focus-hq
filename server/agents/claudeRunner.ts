@@ -10,6 +10,7 @@ import { keyFallback, limitReached, requestUsd } from './apiKey';
 import { BrowserPool, browserMcpServer } from './browserTool';
 import { CLOUD_UNAVAILABLE, cloudRefused } from './cloud';
 import { officeMcpServer } from './officeTool';
+import { openScratch } from './scratch';
 import { appUrl, renderText, renderToolResult, renderToolUse, screenshotFrame, type ToolCall } from './render';
 import { TASK_TOOLS } from './tasks';
 import { bundledClaude, openTerminal, readTerminal } from './terminal';
@@ -164,7 +165,9 @@ export class ClaudeRunner implements AgentRunner {
 
     // a cloud session runs on your plan in the cloud, whatever this machine signs in with
     const onKey = !cloud && keyFallback.onKey();
-    const env = agentEnv(onKey);
+    // a local session's scratch dir for throwaway files, deleted when the run ends; a cloud session has its own machine
+    const scratch = cloud ? undefined : openScratch(req.agentId, paths.dcgConfig);
+    const env = { ...agentEnv(onKey), ...scratch?.env };
     const resets = keyFallback.resetsAt();
     if (onKey && resets) hooks.lines([{ kind: 'system', text: `✻ On your API key: your plan's usage limit is reached until ${clock(resets)}` }]);
 
@@ -185,6 +188,7 @@ export class ClaudeRunner implements AgentRunner {
             systemPrompt: { type: 'preset', preset: 'claude_code', append: req.systemAppend, snapshot: true },
             mcpServers: { browser: browserMcpServer(this.browsers, req.agentId, hooks), ...(req.tools && { office: officeMcpServer(req.tools) }) },
             resume: req.resumeSessionId,
+            ...(scratch && { hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [scratch.hook] }] } }),
           }),
       outputFormat: req.outputSchema ? { type: 'json_schema', schema: req.outputSchema } : undefined,
       // the lead's helpers sit round their team station: a line every ~30s on what each is doing, for their speech bubbles
@@ -242,6 +246,7 @@ export class ClaudeRunner implements AgentRunner {
         return { ok: false, summary, error: `${errorMessage(err)}${detail ? ` — ${truncate(detail, 300)}` : ''}`, started };
       } finally {
         input.close();
+        scratch?.close();
         await this.browsers.close(req.agentId);
       }
     })();

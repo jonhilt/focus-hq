@@ -1,6 +1,7 @@
 import type { Agent } from '../../shared/types';
 import type { IssueDetail } from '../github/provider';
 import { truncate } from '../util';
+import { SCRATCH_RULE } from './scratch';
 
 export function systemAppend(agent: Agent): string {
   if (agent.task === 'review') throw new Error('The QA officer gets qaSystemAppend (qa.ts)');
@@ -29,6 +30,7 @@ export function systemAppend(agent: Agent): string {
         '- Do NOT push and do NOT open a pull request: when you finish, the office pushes your branch and opens the PR for you.',
         '- Run the project\'s tests, type checks and linters when they exist, and fix what you break.',
         '- If the change touches a web UI, start the dev server in the background and check your work with the mcp__browser__ tools (open, click, type, screenshot, console).',
+        `- ${SCRATCH_RULE}`,
       ];
   return `
 # You are ${agent.name}, an agent in the Focus office
