@@ -176,6 +176,24 @@ describe('re-test', () => {
     expect(text).toContain('smoke test');
   });
 
+  it('lists last round’s failed and skipped checks with their details, not just its summary', () => {
+    const notes = report({
+      verdict: 'fail',
+      summary: 'Two problems are noted below.',
+      checks: [
+        { name: 'Saves for later', result: 'pass', details: 'ok' },
+        { name: 'Empty cart', result: 'fail', details: 'Page goes blank' },
+        { name: 'Phone layout', result: 'skip', details: 'No mobile viewport available' },
+      ],
+      fixInstructions: 'Guard the empty cart in cart.ts',
+    });
+    const text = qaPrompt('acme/shop', pr, [], { lastRound: { sha: 'fed9876543', report: notes } });
+    expect(text).toContain('Failed checks:\n- Empty cart: Page goes blank');
+    expect(text).toContain('Skipped checks:\n- Phone layout: No mobile viewport available');
+    expect(text).toContain('What needs fixing:\nGuard the empty cart in cart.ts');
+    expect(text).not.toContain('Saves for later');
+  });
+
   it('passes on why the operations officer sent it back to QA', () => {
     expect(qaPrompt('acme/shop', pr, [], { retryNote: 'Lt. Haddad sent it back: QA ran the old build.' })).toContain('Lt. Haddad sent it back: QA ran the old build.');
   });

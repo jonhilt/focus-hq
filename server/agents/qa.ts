@@ -171,7 +171,7 @@ export function qaPrompt(repo: string, pr: PullRequestDetail, issues: IssueDetai
     parts.push(
       '',
       `This is a re-test. Last round you ${report.verdict === 'pass' ? 'passed' : 'failed'} it${sha ? ` at commit ${sha.slice(0, 7)}` : ''}:`,
-      ...qaFindings(report),
+      ...qaFindings(report, { skipped: true }),
       '',
       `Check those findings first. Then focus on what changed since (${since}), and finish with a quick smoke test of the main flow rather than a full review of the whole PR.`,
     );
@@ -211,11 +211,18 @@ function fixAndPush(what: string, branch: string, cloud: boolean): string {
     : `Fix ${what} on \`${branch}\`, run the tests, type checks and linters, and commit. The office pushes your commits to the same pull request and QA tests it again.`;
 }
 
-/** QA's findings on a round: the summary, failed checks and fix instructions. */
-export function qaFindings(report: QaReport): string[] {
-  const failed = report.checks.filter((c) => c.result === 'fail');
+/**
+ * QA's findings on a round: the summary, failed checks and fix instructions. A re-test also gets the checks QA skipped
+ * (`skipped`), so it can try them again.
+ */
+export function qaFindings(report: QaReport, { skipped = false } = {}): string[] {
   const lines = [truncate(report.summary || '(no summary)', 4000)];
-  if (failed.length) lines.push('', 'Failed checks:', ...failed.map((c) => `- ${c.name}${c.details ? `: ${truncate(c.details, 1000)}` : ''}`));
+  const list = (title: string, result: 'fail' | 'skip') => {
+    const checks = report.checks.filter((c) => c.result === result);
+    if (checks.length) lines.push('', title, ...checks.map((c) => `- ${c.name}${c.details ? `: ${truncate(c.details, 1000)}` : ''}`));
+  };
+  list('Failed checks:', 'fail');
+  if (skipped) list('Skipped checks:', 'skip');
   if (report.fixInstructions) lines.push('', 'What needs fixing:', truncate(report.fixInstructions, 8000));
   return lines;
 }
