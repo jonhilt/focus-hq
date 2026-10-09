@@ -60,7 +60,8 @@ FLANK = [('station-lead', 1.85, 3.85), ('station-reviewer', -1.85, 3.85)]
 #: Two helpers sit at each, on the arc's outside, facing in.
 ARC = (0.0, 5.4)
 ARC_CONSOLE = 3.25
-ARC_SEAT = ARC_CONSOLE + 0.75
+#: far enough back that a seated Character's boots (0.59 forward of the seat) clear the console's front (0.25 out)
+ARC_SEAT = ARC_CONSOLE + 0.9
 WINGS = [(200, 251), (289, 340)]
 HELPERS = [('station-helper-1', 302), ('station-helper-2', 238), ('station-helper-3', 327), ('station-helper-4', 213)]
 #: a console's cross-section, as the bridge's conn and ops have (kit.bridge_console), whoever sits at it on its +Y side:
