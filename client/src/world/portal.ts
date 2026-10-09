@@ -114,10 +114,10 @@ export class Portal {
     far.doors.sense(Math.min(a, b), dt, true);
   }
 
-  /** Where stepping through takes you, if `eye` has just stepped into either doorway. */
-  crossing(eye: THREE.Vector3): THREE.Matrix4 | null {
+  /** The end `eye` has just stepped into, if either: `through` it is where that takes you. */
+  crossing(eye: THREE.Vector3): PortalEnd | null {
     for (const end of this.ends) {
-      if (inDoorway(tmp.copy(eye).applyMatrix4(end.inverse), end.doorway.width, end.doorway.depth)) return end.through;
+      if (inDoorway(tmp.copy(eye).applyMatrix4(end.inverse), end.doorway.width, end.doorway.depth)) return end;
     }
     return null;
   }

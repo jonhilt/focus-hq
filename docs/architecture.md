@@ -64,6 +64,7 @@ server/
     demoRunner.ts         scripted pretend agents (and a pretend lead, planner, QA officer and Number One) for demo mode
 client/src/
   main.ts                 renderer (toon shading + outline pass), loop, interaction, UI wiring
+  player.ts               walking, and being carried through a doorway (collision.ts, pure: which moves the colliders allow, never trapping anyone already in one, and sliding someone who comes out of a doorway against its jamb into the opening)
   world/                  ship layout, holodecks, stations, characters, station screens (screenPanes.ts: which panes side by side, and each viewer's switches; paneSwitches.ts and paneSwitchPanel.ts: the briefing room's strip of them under its viewscreen), Kanban display (hologram.ts: a screen floating in the air, see-through where it's dark)
     scenery.ts            stencil "holo walls" that show a landscape built around a training hall (footprint.ts: keeping it out of the hall)
     themes.ts             the landscapes (beach, forest, desert, moon, city, library)

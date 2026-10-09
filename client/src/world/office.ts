@@ -14,7 +14,7 @@ import { flat } from './materials';
 import { EngineeringStation } from './engineering';
 import { drawMsd } from './msd';
 import { FirstOfficer } from './numberOne';
-import type { Portal } from './portal';
+import type { Portal, PortalEnd } from './portal';
 import { type Region, regionAt, shown } from './regions';
 import { buildHiddenRoom, ProjectRoom, VacantHall } from './room';
 import type { Scenery } from './scenery';
@@ -248,11 +248,11 @@ export class World {
     return places;
   }
 
-  /** Where stepping through a doorway takes you, if `eye` has just stepped into one (Player.transport). */
-  through(eye: THREE.Vector3): THREE.Matrix4 | null {
+  /** The doorway `eye` has just stepped into, if any: its `through` is where that takes you (Player.transport). */
+  through(eye: THREE.Vector3): PortalEnd | null {
     for (const portal of this.portals) {
-      const through = portal.crossing(eye);
-      if (through) return through;
+      const end = portal.crossing(eye);
+      if (end) return end;
     }
     return null;
   }

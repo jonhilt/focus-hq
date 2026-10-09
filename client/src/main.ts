@@ -492,7 +492,7 @@ async function main() {
     player.enabled = !panels.isOpen;
     player.update(dt);
     const through = world.through(camera.position);
-    if (through) player.transport(through);
+    if (through) player.transport(through.through, through.other.doorway.matrix);
     world.update(t, now, camera.position);
     sound.listen(camera);
     if (now - lastPick > 90) {
