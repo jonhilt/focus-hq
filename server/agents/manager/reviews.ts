@@ -7,7 +7,7 @@ import { QA_DESK } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../../util';
 import { goalOf, goalReviewerId, reviewsToStart } from '../lead';
-import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, parseQaReport, qaComment, qaPrompt, qaSystemAppend } from '../qa';
+import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, qaSystemAppend } from '../qa';
 import type { QaLoopEvent } from '../qaLoop';
 import { qaNextStep } from '../qaLoop';
 import { carriedComment, retestStep } from '../retest';
@@ -157,6 +157,7 @@ export class Reviews extends Part {
       reviewFor: goal?.id,
       // GitHub numbers pull requests and issues alike; a QA officer's "issue" is the PR under test
       issue: { number: review.number, title: review.title, url },
+      model: qaAgentModel(this.store.settings),
       effort: project.qaEffort,
       desk: QA_DESK,
       status: 'queued',

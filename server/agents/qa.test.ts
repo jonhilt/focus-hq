@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { QaReport } from '../../shared/types';
 import type { PullRequestDetail } from '../github/provider';
-import { evidencePath, fixPrompt, keptCaptions, parseQaReport, qaComment, qaPrompt, qaSystemAppend } from './qa';
+import { evidencePath, fixPrompt, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, qaSystemAppend } from './qa';
 
 const report = (r: Partial<QaReport> = {}): QaReport => ({
   verdict: 'pass',
@@ -218,5 +218,19 @@ describe('fixPrompt', () => {
     const text = fixPrompt(pr, { sha: 'fed9876543', report: failed }, true);
     expect(text).toContain('git push origin HEAD:focus/7-save-for-later-ab12');
     expect(text).not.toContain('The office pushes');
+  });
+});
+
+describe('qaAgentModel', () => {
+  it("uses the office's model when no QA model is set", () => {
+    expect(qaAgentModel({ model: 'claude-opus-5-5', qaModel: '' })).toBe('claude-opus-5-5');
+  });
+
+  it('prefers the QA model', () => {
+    expect(qaAgentModel({ model: 'claude-opus-5-5', qaModel: ' claude-sonnet-5-5 ' })).toBe('claude-sonnet-5-5');
+  });
+
+  it("leaves it to Claude Code's default when neither is set", () => {
+    expect(qaAgentModel({ model: '', qaModel: '' })).toBeUndefined();
   });
 });

@@ -1,4 +1,4 @@
-import type { Agent, FailedCheck, QaReport, QaReview, QaScreenshot } from '../../shared/types';
+import type { Agent, FailedCheck, QaReport, QaReview, QaScreenshot, Settings } from '../../shared/types';
 import type { IssueDetail, PullRequestDetail } from '../github/provider';
 import { truncate } from '../util';
 import { SCRATCH_RULE } from './scratch';
@@ -8,6 +8,14 @@ import { SCRATCH_RULE } from './scratch';
 
 /** How many of the screenshots QA takes on purpose go on the pull request: the last ones. */
 export const MAX_SCREENSHOTS = 8;
+
+/**
+ * The model a QA officer or goal reviewer works on, stamped on them each time they sit down to a review, so a change to
+ * the setting applies from the next review: the office's QA model, else its `model` setting. Missing = Claude Code's default.
+ */
+export function qaAgentModel(settings: Pick<Settings, 'model' | 'qaModel'>): string | undefined {
+  return settings.qaModel.trim() || settings.model.trim() || undefined;
+}
 
 /** JSON schema for the QA officer's structured report (the Agent SDK's outputFormat). */
 export const QA_SCHEMA: Record<string, unknown> = {

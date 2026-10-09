@@ -49,6 +49,7 @@ const DEFAULT_SETTINGS: Settings = {
   autonomy: 'ask',
   model: '',
   conflictsModel: '',
+  qaModel: '',
   mergeMethod: 'squash',
   attribution: true,
   userClaudeMd: true,

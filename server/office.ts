@@ -502,6 +502,7 @@ export class Office {
     if (typeof patch.conflictsModel === 'string') s.conflictsModel = patch.conflictsModel.trim();
     // an empty (or unknown) choice goes back to the model's default
     if (patch.conflictsEffort !== undefined) s.conflictsEffort = EFFORT_LEVELS.find((e) => e === patch.conflictsEffort);
+    if (typeof patch.qaModel === 'string') s.qaModel = patch.qaModel.trim();
     const mergeMethod = MERGE_METHODS.find((m) => m === patch.mergeMethod);
     if (mergeMethod) s.mergeMethod = mergeMethod;
     if (typeof patch.attribution === 'boolean') s.attribution = patch.attribution;

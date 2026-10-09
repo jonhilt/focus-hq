@@ -24,6 +24,8 @@ export interface Settings {
   conflictsModel: string;
   /** How hard those conflict-resolving agents think. Missing = the model's default. */
   conflictsEffort?: Effort;
+  /** Claude model for each room's QA officer and every goal's reviewer. Empty = the `model` setting. */
+  qaModel: string;
   /** How the board's Merge button, and auto-merge, merge a pull request, unless its project picks another for its repo. */
   mergeMethod: MergeMethod;
   /** Pull requests and QA reports on GitHub name the agent who did the work and mention Focus. */
