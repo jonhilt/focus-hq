@@ -80,7 +80,8 @@ async function main() {
   await fontsReady();
 
   const [theShip, teamStation] = await Promise.all([ship(), loadTeamStation('/ship/team-station.glb')]);
-  const world = new World(scene, theShip, teamStation);
+  // ?hall=1 opens each project's holodeck door onto a training hall (world/hall.ts), the prototype of a roomier holodeck
+  const world = new World(scene, theShip, teamStation, params.get('hall') === '1');
   // ?cull=0 draws the whole ship from anywhere, for the gap and z-fighting scans
   world.culling = params.get('cull') !== '0';
   const player = new Player(camera, renderer.domElement);

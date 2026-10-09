@@ -72,6 +72,19 @@ export function briefingRoomAt(slot: RoomSlot, station: number): THREE.Vector3 {
   return new THREE.Vector3(slot.side * (BRIEFING.x + station * BRIEFING.step), 0, slot.center.z + BRIEFING.depth / 2);
 }
 
+/**
+ * The training hall (hall.ts): a holodeck that's bigger on the inside, prototyped behind `?hall=1`. Its door on the
+ * deck is a Portal to the hall's entrance, so the hall can stand anywhere: out beyond the briefing rooms, one per
+ * holodeck, each further out the further down the hallway its holodeck is, so none meet. A round floor `radius` across
+ * its middle, under a ceiling `height` up, with an alcove `alcove` deep behind its entrance.
+ */
+export const HALL = { x: 150, step: 40, radius: 11, height: 6.4, alcove: 0.9 };
+
+/** Where the training hall of the holodeck in `slot` stands: the middle of its floor, its entrance towards the hallway. */
+export function hallAt(slot: RoomSlot): THREE.Vector3 {
+  return new THREE.Vector3(slot.side * (HALL.x + slot.row * HALL.step), 0, slot.center.z);
+}
+
 /** Converts a point in a room's local frame to world space. */
 export function roomToWorld(slot: RoomSlot, local: THREE.Vector3): THREE.Vector3 {
   return local.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), slot.rotationY).add(slot.center);
@@ -93,6 +106,36 @@ export interface Seat {
 /** The turn about Y that faces a seat's chair, and whoever sits in it (built facing +X), towards what they face. */
 export function seatYaw({ at, facing }: Seat): number {
   return Math.atan2(-(facing.z - at.z), facing.x - at.x);
+}
+
+/** The floor an empty cube's box covers, given its world matrix. */
+export function footprint(matrixWorld: THREE.Matrix4): Box2 {
+  const b = new THREE.Box3(new THREE.Vector3(-1, -1, -1), new THREE.Vector3(1, 1, 1)).applyMatrix4(matrixWorld);
+  return { minX: b.min.x, maxX: b.max.x, minZ: b.min.z, maxZ: b.max.z };
+}
+
+/**
+ * The floor an empty cube's box covers, as boxes the player collides with (they're all square to the world): the one
+ * footprint while it's square to the world too, or else a grid of cells no more than `cell` across, each its own
+ * footprint, which follow it closely however it's turned. Turned whole, its footprint could grow over a doorway.
+ */
+export function footprints(matrixWorld: THREE.Matrix4, cell = 0.2): Box2[] {
+  const e = matrixWorld.elements;
+  const square = (Math.abs(e[0]) < 1e-6 || Math.abs(e[2]) < 1e-6) && (Math.abs(e[8]) < 1e-6 || Math.abs(e[10]) < 1e-6);
+  if (square) return [footprint(matrixWorld)];
+  // across and along the cube's floor, from its middle to its edges
+  const nx = Math.max(1, Math.ceil((2 * Math.hypot(e[0], e[2])) / cell));
+  const nz = Math.max(1, Math.ceil((2 * Math.hypot(e[8], e[10])) / cell));
+  const cells: Box2[] = [];
+  const m = new THREE.Matrix4();
+  for (let i = 0; i < nx; i++) {
+    for (let j = 0; j < nz; j++) {
+      // the cell, as a cube of its own in the cube's frame
+      m.makeScale(1 / nx, 1, 1 / nz).setPosition(-1 + (2 * i + 1) / nx, 0, -1 + (2 * j + 1) / nz);
+      cells.push(footprint(m.premultiply(matrixWorld)));
+    }
+  }
+  return cells;
 }
 
 export function contains(b: Box2, p: THREE.Vector3): boolean {

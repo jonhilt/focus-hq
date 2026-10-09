@@ -10,7 +10,9 @@ import { KanbanBoard } from './board';
 import { type Builder, type Interaction, interactive, REACH } from './builder';
 import { seatHelpers } from './helperSeats';
 import { agentView, Character, type CrewView } from './character';
-import { briefingRoomAt, OVER_DOOR, type RoomSlot, ROOM_DEPTH, ROOM_WIDTH, WALL_H } from './layout';
+import { buildHall } from './hall';
+import { around, curvedPanel, deckEntrance, ENTRANCE_X, facingIn, hallEntrance, hallPodSpots, inHall } from './hallLayout';
+import { briefingRoomAt, HALL, hallAt, OVER_DOOR, type RoomSlot, ROOM_DEPTH, ROOM_WIDTH, WALL_H } from './layout';
 import { ContactShadows } from './contactShadow';
 import { prGlance } from './goalRoom';
 import { mergeStatic } from './merge';
@@ -21,8 +23,8 @@ import { StationScreen } from './screen';
 import { paneUse } from './screenPanes';
 import { Beam } from './transporter';
 import { HULL, LCARS, lcarsSign, workstation } from './starship';
-import type { Portal } from './portal';
-import { type StationSeat, TEAM_SCREEN, TeamStation, type TeamStationKit } from './teamStation';
+import { Portal } from './portal';
+import { type PodSpot, roomPodSpots, type StationSeat, TEAM_SCREEN, TeamStation, type TeamStationKit } from './teamStation';
 
 interface DeskSlot {
   index: number;
@@ -73,10 +75,44 @@ export function deskPosition(index: number): THREE.Vector3 {
   return new THREE.Vector3(-HALF_D + 2.4, 0, (index === 0 ? -1 : 1) * 3.8);
 }
 
-/** Where to stand to look over an agent's shoulder at their station's display (room frame). */
-export function deskViewpoint(index: number): { position: THREE.Vector3; lookAt: THREE.Vector3 } {
-  return overShoulder(deskPosition(index).add(DESK_SEAT));
+/** Where a holodeck's furniture stands (room frame): today's room's, or a training hall's (hall.ts). */
+interface Plan {
+  /** Each developer's desk (deskPosition's), facing the board, as everyone in the room but the ops officer does. */
+  desks: THREE.Vector3[];
+  /** The QA officer's seat. */
+  qa: THREE.Vector3;
+  prTable: THREE.Vector3;
+  /** The New issue stand, its operations officer behind it. */
+  kiosk: THREE.Vector3;
+  plants: [number, number][];
+  pods: PodSpot[];
+  /** Where you arrive when you teleport here, and what you look at. */
+  arrival: { position: THREE.Vector3; lookAt: THREE.Vector3 };
 }
+
+const ROOM_PLAN: Plan = {
+  desks: Array.from({ length: DESKS_PER_ROOM }, (_, i) => deskPosition(i)),
+  qa: QA_SEAT,
+  prTable: new THREE.Vector3(HALF_D - 2.0, 0, -HALF_W + 1.6),
+  kiosk: new THREE.Vector3(HALF_D - 2.0, 0, HALF_W - 1.6),
+  plants: [[HALF_D - 0.6, -HALF_W + 0.6], [HALF_D - 0.6, HALF_W - 0.6], [-HALF_D + 0.6, -HALF_W + 0.6], [-HALF_D + 0.6, HALF_W - 0.6]],
+  pods: roomPodSpots(),
+  arrival: { position: new THREE.Vector3(-HALF_D + 1.4, 0, 0), lookAt: new THREE.Vector3(HALF_D, 1.5, 0) },
+};
+
+/**
+ * The training hall's: the desks, QA, the pull requests table and the New issue stand in the control ring in the
+ * middle, all facing the board but the stand; the pods round the wall.
+ */
+const HALL_PLAN: Plan = {
+  desks: Array.from({ length: DESKS_PER_ROOM }, (_, i) => new THREE.Vector3(-2.4, 0, (i === 0 ? -1 : 1) * 2.0)),
+  qa: new THREE.Vector3(1.0, 0, -2.0),
+  prTable: new THREE.Vector3(1.4, 0, 2.0),
+  kiosk: new THREE.Vector3(3.0, 0, 3.2),
+  plants: [[ENTRANCE_X + 2.4, -4.2], [ENTRANCE_X + 2.4, 4.2], [-3.8, -9.4], [-3.8, 9.4]],
+  pods: hallPodSpots(),
+  arrival: { position: new THREE.Vector3(ENTRANCE_X + 1.4, 0, 0), lookAt: new THREE.Vector3(HALL.radius, 1.8, 0) },
+};
 
 /** Behind the right shoulder of whoever sits at `seat`, looking at their workstation's display (room frame). */
 function overShoulder(seat: THREE.Vector3): { position: THREE.Vector3; lookAt: THREE.Vector3 } {
@@ -104,6 +140,10 @@ export class ProjectRoom {
   private boardDirty = true;
   /** Crew beaming in or out of their seats right now. */
   private beams: Beam[] = [];
+  /** Where its furniture stands. */
+  private readonly plan: Plan;
+  /** In a training hall, the doorway from the holodeck's door on the deck to the hall's entrance. */
+  private readonly entrance: Portal | null = null;
   /** Off until the room is first filled, so whoever's already aboard when the page loads doesn't beam in. */
   private beaming = false;
   /** Whether you're in (or at the door of) this room, so you only hear its transporter. */
@@ -112,7 +152,8 @@ export class ProjectRoom {
   /**
    * `scenery` is the landscape the room sits in (null for plain office walls). The World owns it, so it can
    * outlive this room when the building is rebuilt for an unrelated change. `teamStation` is the door and briefing
-   * room each of its team stations is a copy of (loadTeamStation).
+   * room each of its team stations is a copy of (loadTeamStation). A `hall` holodeck is a training hall (hall.ts),
+   * through its door: its furniture stands there, laid out for it, and it has no landscape.
    */
   constructor(
     public project: Project,
@@ -120,20 +161,34 @@ export class ProjectRoom {
     builder: Builder,
     private readonly scenery: Scenery | null,
     teamStation: TeamStationKit,
+    readonly hall = false,
   ) {
-    this.group.position.copy(slot.center);
+    this.plan = hall ? HALL_PLAN : ROOM_PLAN;
+    this.group.position.copy(hall ? hallAt(slot) : slot.center);
     this.group.rotation.y = slot.rotationY;
-    builder.add(this.group);
-
-    const carpet = lighten(project.color, 0.6);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_DEPTH - 0.2, ROOM_WIDTH - 0.2), toon(carpet));
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.y = 0.005;
-    this.group.add(floor);
-    const stripe = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_DEPTH - 2, 1.2), toon(lighten(project.color, 0.35)));
-    stripe.rotation.x = -Math.PI / 2;
-    stripe.position.set(0.5, 0.01, 0);
-    this.group.add(stripe);
+    // a training hall is a region of its own (regions.ts), but the sign over its door is on the deck
+    const deck = hall ? new THREE.Group() : this.group;
+    if (hall) {
+      deck.position.copy(slot.center);
+      deck.rotation.y = slot.rotationY;
+      builder.add(deck);
+      builder.halls.add(this.group);
+      buildHall(this.group, project, builder);
+      this.entrance = new Portal(deckEntrance(slot), hallEntrance(this.group));
+      builder.add(this.entrance.ends[0].group);
+      builder.halls.add(this.entrance.ends[1].group);
+    } else {
+      builder.add(this.group);
+      const carpet = lighten(project.color, 0.6);
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_DEPTH - 0.2, ROOM_WIDTH - 0.2), toon(carpet));
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.y = 0.005;
+      this.group.add(floor);
+      const stripe = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_DEPTH - 2, 1.2), toon(lighten(project.color, 0.35)));
+      stripe.rotation.x = -Math.PI / 2;
+      stripe.position.set(0.5, 0.01, 0);
+      this.group.add(stripe);
+    }
 
     if (scenery) this.group.add(scenery.group); // a themed room's walls and ceiling show it
 
@@ -144,22 +199,14 @@ export class ProjectRoom {
     );
     sign.rotation.y = -Math.PI / 2;
     sign.position.set(DOOR_SIGN_X, 2.87, 0);
-    this.group.add(sign);
+    deck.add(sign);
     interactive(sign, { kind: 'board', projectId: project.id }, () => `Open ${project.name}'s board`);
 
-    // the Kanban display on the far wall: as tall as fits between its bottom rail and the ceiling, as wide as its drawing
-    const boardBottom = 0.24;
-    const boardTop = WALL_H - 0.2; // the top rail sits under the ceiling
-    const boardW = (boardTop - boardBottom) * this.board.aspect;
-    const post = boardW / 2 + 0.05;
-    const boardMesh = new THREE.Mesh(new THREE.PlaneGeometry(boardW, boardTop - boardBottom), this.board.material);
-    boardMesh.rotation.y = -Math.PI / 2;
-    boardMesh.position.set(ON_WALL, (boardBottom + boardTop) / 2, 0);
-    this.group.add(boardMesh);
+    const boardMesh = hall ? this.curvedBoard() : this.wallBoard();
     const frameColor = HULL.frame;
-    this.group.add(box(0.08, 0.1, boardW + 0.2, frameColor, ON_WALL - 0.01, boardBottom - 0.1, 0));
-    this.group.add(box(0.08, 0.1, boardW + 0.2, frameColor, ON_WALL - 0.01, boardTop, 0));
-    for (const s of [-1, 1]) this.group.add(box(0.08, boardTop - boardBottom + 0.2, 0.1, frameColor, ON_WALL - 0.01, boardBottom - 0.1, s * post));
+    const boardBottom = 0.24;
+    const boardW = (WALL_H - 0.2 - boardBottom) * this.board.aspect;
+    const post = boardW / 2 + 0.05;
     // with no real wall behind it, the board stands on its own feet
     // what stands on the floor shades it round where it stands (contactShadow.ts): one mesh for the room's furniture
     const shadows = new ContactShadows(this.group);
@@ -178,7 +225,7 @@ export class ProjectRoom {
 
     // PR review table
     const table = new THREE.Group();
-    table.position.set(HALF_D - 2.0, 0, -HALF_W + 1.6);
+    table.position.copy(this.plan.prTable);
     const top = cyl(0.65, 0.65, 0.06, '#ffffff', 24);
     top.position.y = 0.74;
     const leg = cyl(0.07, 0.12, 0.74, '#868e96');
@@ -198,7 +245,7 @@ export class ProjectRoom {
     // the QA station: the QA officer sits beside the pull requests table facing the board, testing on a station you
     // can look at over their shoulder, the way you do at the developers'
     const qaStation = workstation(this.qaScreen.material, LCARS.lilac);
-    qaStation.group.position.copy(QA_SEAT);
+    qaStation.group.position.copy(this.plan.qa);
     this.qaStation = qaStation.group;
     this.group.add(qaStation.group);
     builder.collideObject(qaStation.group);
@@ -208,20 +255,23 @@ export class ProjectRoom {
 
     // the team stations' doors along the side walls, each to the briefing room where a goal's lead works with the captain
     for (let i = 0; i < TEAM_STATIONS; i++) {
-      const station = new TeamStation(i, [LCARS.gold, LCARS.periwinkle, LCARS.orange, LCARS.lilac][i], teamStation, briefingRoomAt(slot, i));
+      const station = new TeamStation(i, [LCARS.gold, LCARS.periwinkle, LCARS.orange, LCARS.lilac][i], teamStation, briefingRoomAt(slot, i), this.plan.pods[i]);
       this.group.add(station.door);
       shadows.add(station.door);
-      const { at, yaw } = teamsWallSpot(i, TEAM_STATIONS);
-      station.wall.position.copy(at);
-      station.wall.rotation.y = yaw;
+      if (hall) overPod(station);
+      else {
+        const { at, yaw } = teamsWallSpot(i, TEAM_STATIONS);
+        station.wall.position.copy(at);
+        station.wall.rotation.y = yaw;
+      }
       this.group.add(station.wall);
-      station.connect(builder);
+      station.connect(builder, hall ? builder.halls : builder.group);
       this.stations.push(station);
     }
 
     // "new issue" stand with a note pad
     const kiosk = new THREE.Group();
-    kiosk.position.set(HALF_D - 2.0, 0, HALF_W - 1.6);
+    kiosk.position.copy(this.plan.kiosk);
     kiosk.add(box(0.5, 1.0, 0.5, project.color, 0, 0, 0));
     kiosk.add(box(0.6, 0.06, 0.6, '#ffffff', 0, 1.0, 0));
     const pad = box(0.3, 0.08, 0.3, LCARS.peach, 0, 1.06, 0);
@@ -253,7 +303,7 @@ export class ProjectRoom {
     interactive(this.planner.group, { kind: 'new-issue', projectId: project.id }, () => `Ask ${plannerFor(project.id).name} to draft an issue`);
     builder.collideObject(stool);
 
-    for (const [x, z] of [[HALF_D - 0.6, -HALF_W + 0.6], [HALF_D - 0.6, HALF_W - 0.6], [-HALF_D + 0.6, -HALF_W + 0.6], [-HALF_D + 0.6, HALF_W - 0.6]]) {
+    for (const [x, z] of this.plan.plants) {
       const p = plant(1.1, ['#e07a5f', '#3d405b', '#81b29a', '#f2cc8f'][Math.abs(x + z) % 4 | 0]);
       p.position.set(x, 0, z);
       this.group.add(p);
@@ -261,8 +311,8 @@ export class ProjectRoom {
       builder.collideObject(p.children[0]);
     }
 
-    // only a plain office has a ceiling to hang lights from
-    for (const x of this.scenery ? [] : [-4.5, 0.5, 5.5]) {
+    // only a plain office has a ceiling to hang lights from (a training hall has its own)
+    for (const x of this.scenery || hall ? [] : [-4.5, 0.5, 5.5]) {
       for (const z of [-3, 3]) {
         const light = ceilingLight(1.4, 0.7);
         light.position.set(x, WALL_H - 0.03, z);
@@ -290,6 +340,45 @@ export class ProjectRoom {
     this.syncPlanner();
     this.syncQa();
     this.beaming = true;
+  }
+
+  /** The board on the far wall: as tall as fits between its bottom rail and the ceiling, as wide as its drawing. */
+  private wallBoard(): THREE.Mesh {
+    const boardBottom = 0.24;
+    const boardTop = WALL_H - 0.2; // the top rail sits under the ceiling
+    const boardW = (boardTop - boardBottom) * this.board.aspect;
+    const post = boardW / 2 + 0.05;
+    const boardMesh = new THREE.Mesh(new THREE.PlaneGeometry(boardW, boardTop - boardBottom), this.board.material);
+    boardMesh.rotation.y = -Math.PI / 2;
+    boardMesh.position.set(ON_WALL, (boardBottom + boardTop) / 2, 0);
+    this.group.add(boardMesh);
+    const frameColor = HULL.frame;
+    this.group.add(box(0.08, 0.1, boardW + 0.2, frameColor, ON_WALL - 0.01, boardBottom - 0.1, 0));
+    this.group.add(box(0.08, 0.1, boardW + 0.2, frameColor, ON_WALL - 0.01, boardTop, 0));
+    for (const s of [-1, 1]) this.group.add(box(0.08, boardTop - boardBottom + 0.2, 0.1, frameColor, ON_WALL - 0.01, boardBottom - 0.1, s * post));
+    return boardMesh;
+  }
+
+  /**
+   * A training hall's board: curved round the far wall, in front of it, between the pods either side, big enough to
+   * read from the entrance and high enough to read over the desks, with rails along its top and bottom.
+   */
+  private curvedBoard(): THREE.Mesh {
+    const r = HALL.radius - 0.35;
+    const bottom = 1.3;
+    const top = 5.6;
+    const half = ((top - bottom) * this.board.aspect) / 2 / r;
+    const boardMesh = new THREE.Mesh(curvedPanel(r, -half, half, bottom, top, 40), this.board.material);
+    this.group.add(boardMesh);
+    const rail = toon(HULL.frame);
+    for (const [y0, y1] of [[bottom - 0.12, bottom], [top, top + 0.12]]) this.group.add(new THREE.Mesh(curvedPanel(r - 0.01, -half - 0.01, half + 0.01, y0, y1, 40), rail));
+    for (const s of [-1, 1]) {
+      const post = box(0.12, top - bottom + 0.24, 0.1, HULL.frame);
+      post.position.copy(around(r - 0.02, s * (half + 0.006), bottom - 0.12));
+      post.rotation.y = facingIn(s * half);
+      this.group.add(post);
+    }
+    return boardMesh;
   }
 
   /** Puts `character` in `seat`, beaming them in once the room is up and running. */
@@ -392,7 +481,7 @@ export class ProjectRoom {
 
   private buildDesk(index: number, builder: Builder): DeskSlot {
     const group = new THREE.Group();
-    group.position.copy(deskPosition(index));
+    group.position.copy(this.plan.desks[index]);
     this.group.add(group);
     const screen = new StationScreen(null);
     const station = workstation(screen.material, [LCARS.orange, LCARS.periwinkle, LCARS.gold][index % 3]);
@@ -515,7 +604,20 @@ export class ProjectRoom {
 
   /** The doorways between the holodeck and its team stations' briefing rooms. */
   portals(): Portal[] {
-    return this.stations.map((s) => s.portal);
+    const pods = this.stations.map((s) => s.portal);
+    return this.entrance ? [this.entrance, ...pods] : pods;
+  }
+
+  /** Whether a world position is in this holodeck's training hall, if it has one. */
+  holds(p: THREE.Vector3): boolean {
+    return this.hall && inHall(this.group.position, p);
+  }
+
+  /** Where you arrive when you teleport here, and what you look at (world). */
+  arrival(): { position: THREE.Vector3; lookAt: THREE.Vector3 } {
+    this.group.updateWorldMatrix(true, false);
+    const { position, lookAt } = this.plan.arrival;
+    return { position: position.clone().applyMatrix4(this.group.matrixWorld), lookAt: lookAt.clone().applyMatrix4(this.group.matrixWorld) };
   }
 
   /** Its team stations' briefing rooms. */
@@ -534,7 +636,7 @@ export class ProjectRoom {
     const eye = briefing ? briefing.threshold() : camera;
     this.scenery?.update(t, this.group.worldToLocal(tmp.copy(eye)));
     // within earshot of a beam: in the room, or on its doorstep in the hallway, or in one of its briefing rooms
-    this.youreHere = eye.distanceTo(this.slot.center) < HALF_D + 2;
+    this.youreHere = this.hall ? this.holds(eye) || eye.distanceTo(this.slot.center) < HALF_D + 2 : eye.distanceTo(this.slot.center) < HALF_D + 2;
     if (this.beams.length) this.beams = this.beams.filter((b) => !b.update(now));
     if (this.boardDirty) {
       this.boardDirty = false;
@@ -542,7 +644,7 @@ export class ProjectRoom {
       this.board.draw(this.project, board, state.agentsIn(this.project.id));
       this.rebuildPrPile(board);
     }
-    const inRoom = eye.distanceTo(this.slot.center) < ROOM_DEPTH;
+    const inRoom = this.hall ? this.holds(eye) : eye.distanceTo(this.slot.center) < ROOM_DEPTH;
     if (inRoom) this.planner.update(t, eye.distanceTo(this.planner.group.getWorldPosition(tmp)));
     const qaDist = eye.distanceTo(this.qa.group.getWorldPosition(tmp));
     if (inRoom) this.qa.update(t, qaDist);
@@ -582,7 +684,7 @@ export class ProjectRoom {
     if (!slot && !qa && !station) return null;
     // the briefing room is in the world already
     if (station) return station.viewpoint();
-    const v = slot ? deskViewpoint(slot.index) : overShoulder(QA_SEAT);
+    const v = overShoulder(slot ? this.plan.desks[slot.index].clone().add(DESK_SEAT) : this.plan.qa);
     this.group.updateWorldMatrix(true, false);
     return { position: v.position.applyMatrix4(this.group.matrixWorld), lookAt: v.lookAt.applyMatrix4(this.group.matrixWorld) };
   }
@@ -602,6 +704,22 @@ export class ProjectRoom {
 }
 
 const tmp = new THREE.Vector3();
+
+/**
+ * In a training hall, a team station's screen hangs over its pod, over the sign floating there, tipped down to the
+ * middle of the hall: you can see what every team's up to from the control ring without going in.
+ */
+const POD_SCREEN = { scale: 1.4, bottom: 3.3, out: 0.6, tilt: 0.15 };
+
+function overPod(station: TeamStation): void {
+  const { scale, bottom, out, tilt } = POD_SCREEN;
+  const yaw = station.door.rotation.y;
+  const half = ((TEAM_SCREEN.height + TEAM_SCREEN.rim * 2) * scale) / 2;
+  station.wall.position.copy(station.door.position).add(new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw)).multiplyScalar(out)).setY(bottom + half);
+  // its front (+Z) out of the pod, towards the middle
+  station.wall.rotation.set(tilt, yaw + Math.PI, 0, 'YXZ');
+  station.wall.scale.setScalar(scale);
+}
 
 /** An empty room waiting for a project. */
 /** An empty holodeck: dark, with the yellow grid. */

@@ -67,6 +67,7 @@ client/src/
     themes.ts             the landscapes (beach, forest, desert, moon, city, library)
     teamStation.ts        a goal's team station: its door in the holodeck and its briefing room out in the world, the lead's screen, seats for their helpers and the goal's reviewer (helperSeats.ts: who sits where)
     goalScreens.ts        a team station's holographic sign, goal board and screen on the holodeck's teams wall (goalRoom.ts: how its room stands, how the note fills the board, and what the team's up to at a glance; portraits.ts: the crew's portraits)
+    hall.ts               the training hall, a roomier holodeck behind its door's portal (prototype, `?hall=1`): its round shell (hallLayout.ts: where its pods stand, and both ends of its entrance)
     portal.ts             doorways that lead into each other wherever they stand: the far side drawn through the open doors, and walking through (doorway.ts: the geometry)
     transporter.ts        the transporter beam the crew arrive and leave in
     engineering.ts        the engineering station: the engineer, the report card and how their retro stands on the console; E opens their panel

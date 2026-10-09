@@ -37,7 +37,10 @@ export function interactive(obj: THREE.Object3D, interaction: Interaction, label
 
 /** Accumulates static geometry plus the 2D boxes the player collides with. */
 export class Builder {
+  /** The holodeck deck's region (regions.ts). */
   readonly group = new THREE.Group();
+  /** The training halls' region, drawn apart from the deck they're reached from. */
+  readonly halls = new THREE.Group();
   readonly colliders: Box2[] = [];
   readonly doors: SlidingDoors[] = [];
 

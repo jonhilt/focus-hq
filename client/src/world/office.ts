@@ -9,7 +9,7 @@ import type { Deck } from './deck';
 import type { HolodeckDeck } from './holodeckDeck';
 import type { DeckScreen } from './deckExtras';
 import { canvasTexture, fitText, makeCanvas, roundRect } from './canvas';
-import { type Box2, DOOR_W, HALL_HALF, ROOM_DEPTH, ROOM_WIDTH, roomSlot, roomToWorld, rowsFor, type Seat, slotAt, SUN_POSITION } from './layout';
+import { type Box2, DOOR_W, HALL_HALF, ROOM_WIDTH, roomSlot, rowsFor, type Seat, slotAt, SUN_POSITION } from './layout';
 import { flat } from './materials';
 import { EngineeringStation } from './engineering';
 import { FirstOfficer } from './numberOne';
@@ -29,7 +29,6 @@ export interface Place {
   projectId?: string;
 }
 
-const HALF_D = ROOM_DEPTH / 2;
 
 /**
  * The ship the World builds, its decks built in Blender (blender/): the command deck (the bridge, and the ready room
@@ -78,6 +77,8 @@ export class World {
     private readonly ship: Ship,
     /** The door and briefing room every team station is a copy of (loadTeamStation). */
     private readonly teamStation: TeamStationKit,
+    /** Whether a project's holodeck door opens onto a training hall (hall.ts, `?hall=1`), not today's room. */
+    private readonly halls = false,
   ) {
     scene.add(this.root);
     for (const deck of this.decks()) this.mount(deck, this.root);
@@ -91,11 +92,19 @@ export class World {
    * and the far side's before a doorway draws it (PortalView). Null draws all of it.
    */
   reveal(at: THREE.Vector3 | null): void {
-    const region: Region | null = at && this.culling ? regionAt(at, this.commandDeck, (p) => this.inBriefingRoom(p)) : null;
+    const region: Region | null = at && this.culling ? regionAt(at, this.commandDeck, (p) => this.inBriefingRoom(p), (p) => this.inHall(p)) : null;
     const show = shown(region);
     this.ship.command.root.visible = show.command;
-    if (this.builder) this.builder.group.visible = show.holodecks;
+    if (this.builder) {
+      this.builder.group.visible = show.holodecks;
+      this.builder.halls.visible = show.hall;
+    }
     this.briefingRooms.visible = show.briefing;
+  }
+
+  private inHall(p: THREE.Vector3): boolean {
+    for (const room of this.rooms.values()) if (room.holds(p)) return true;
+    return false;
   }
 
   private inBriefingRoom(p: THREE.Vector3): boolean {
@@ -132,7 +141,7 @@ export class World {
   }
 
   private build(projects: Project[]): void {
-    if (this.builder) this.root.remove(this.builder.group);
+    if (this.builder) this.root.remove(this.builder.group, this.builder.halls);
     for (const room of this.rooms.values()) room.dispose();
     this.rooms.clear();
     this.engineering?.dispose();
@@ -159,9 +168,10 @@ export class World {
       let scenery = previous.get(key) ?? null;
       previous.delete(key);
       // the stencil value (slot + 1) and the sun direction both depend on the slot, hence the key
-      scenery ??= createScenery(theme, i + 1, project.id, SUN_POSITION.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -slot.rotationY));
+      // a training hall has no landscape (yet)
+      if (!this.halls) scenery ??= createScenery(theme, i + 1, project.id, SUN_POSITION.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -slot.rotationY));
       if (scenery) this.sceneries.set(key, scenery);
-      this.rooms.set(project.id, new ProjectRoom(project, slot, b, scenery, this.teamStation));
+      this.rooms.set(project.id, new ProjectRoom(project, slot, b, scenery, this.teamStation, this.halls));
     });
     for (const scenery of previous.values()) scenery.dispose();
     // the briefing rooms stand apart from the holodeck deck, and are drawn apart from it
@@ -170,7 +180,7 @@ export class World {
     this.buildHolodeckDeck(b, rows, this.ship.holodecks);
     this.seatNumberOne(b, this.ship.command.seat('number-one'));
 
-    this.root.add(b.group);
+    this.root.add(b.group, b.halls);
     this.colliders = [...b.colliders, ...this.decks().flatMap((d) => d.colliders)];
     this.doors = [...b.doors, ...this.decks().flatMap((d) => d.doors)];
     this.portals = [...this.rooms.values()].flatMap((r) => r.portals());
@@ -182,7 +192,10 @@ export class World {
     const deck = holodecks.assemble(rows);
     this.holodeckDeck = [deck.head, ...deck.rows, deck.tail];
     for (const part of this.holodeckDeck) this.mount(part, b.group);
+    // a training hall's door is a doorway to it, with doors of its own (room.ts)
+    const halls = new Set([...this.rooms.values()].flatMap((r) => (r.hall ? [r.slot.index] : [])));
     for (let i = 0; i < rows * 2; i++) {
+      if (halls.has(i)) continue;
       const { side, center } = roomSlot(i);
       b.slidingDoors(new THREE.Vector3(side * HALL_HALF, 0, center.z), Math.PI / 2, DOOR_W, this.inUse.has(i));
     }
@@ -219,8 +232,7 @@ export class World {
       places.push({
         label: room.project.name,
         projectId: room.project.id,
-        position: roomToWorld(room.slot, new THREE.Vector3(-HALF_D + 1.4, 0, 0)),
-        lookAt: roomToWorld(room.slot, new THREE.Vector3(HALF_D, 1.5, 0)),
+        ...room.arrival(),
       });
     }
     return places;
@@ -238,6 +250,7 @@ export class World {
   /** Human name of where a world position is. */
   locationOf(p: THREE.Vector3): { label: string; projectId?: string } {
     for (const room of this.rooms.values()) {
+      if (room.holds(p)) return { label: room.project.name, projectId: room.project.id };
       const station = room.briefingRoomOf(p);
       if (station !== undefined) return { label: `${room.project.name} · briefing room ${station + 1}`, projectId: room.project.id };
     }

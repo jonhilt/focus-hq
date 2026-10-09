@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { interactive } from './builder';
 import { type Crew, type DeckScreen, type Marker, readInteraction, readMarker, readSurface, type ScreenName, type Surface } from './deckExtras';
-import { type Box2, contains, type Seat } from './layout';
+import { type Box2, contains, footprint, type Seat } from './layout';
 import { flat, occludedToon, toon } from './materials';
 import { mergeStatic } from './merge';
 import type { Place } from './office';
@@ -74,12 +74,6 @@ function surfaceMaterial(surface: Surface, color: string, ao: THREE.Texture | nu
 function placeAt(label: string, at: THREE.Vector3, turn: THREE.Quaternion): Place {
   const ahead = new THREE.Vector3(0, 0, -1).applyQuaternion(turn);
   return { label, position: at.clone().setY(0), lookAt: at.clone().addScaledVector(ahead, 4).setY(1.5) };
-}
-
-/** The floor an empty cube's box covers, given its world matrix. */
-export function footprint(matrixWorld: THREE.Matrix4): Box2 {
-  const b = new THREE.Box3(new THREE.Vector3(-1, -1, -1), new THREE.Vector3(1, 1, 1)).applyMatrix4(matrixWorld);
-  return { minX: b.min.x, maxX: b.max.x, minZ: b.min.z, maxZ: b.max.z };
 }
 
 /**

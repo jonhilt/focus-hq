@@ -3,14 +3,14 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Agent } from '../../../shared/types';
 import type { Builder, Interaction } from './builder';
 import type { Character, CrewView } from './character';
-import { dress, footprint } from './deck';
+import { dress } from './deck';
 import { type Crew, HELPER_SEATS, type Marker } from './deckExtras';
 import { type GoalRoomTone, goalRoomState, roster } from './goalRoom';
 import { GoalBoard, GoalSign, type StationView, TeamScreen, TONE } from './goalScreens';
 import { PaneSwitches } from './paneSwitchPanel';
 import { PANE_SWITCHES, switchAt, switchLabel } from './paneSwitches';
 import { screenPrefs } from './screenPanes';
-import { type Box2, contains, EYE_HEIGHT, ROOM_WIDTH } from './layout';
+import { type Box2, contains, EYE_HEIGHT, footprint, footprints, ROOM_WIDTH } from './layout';
 import { occludedToon, toon } from './materials';
 import { mergeStatic } from './merge';
 import { type Doorway, Portal } from './portal';
@@ -42,17 +42,25 @@ export async function loadTeamStation(url: string): Promise<TeamStationKit> {
   return { door, room };
 }
 
+/** Where a team station's pod stands: its back against the wall at `wall`, facing into the room, turned `yaw` (room frame). */
+export interface PodSpot {
+  wall: THREE.Vector3;
+  yaw: number;
+}
+
 /**
  * Where the room's four team stations' doors stand (room frame): two against each side wall, facing into the room
  * just in front of the skin a holodeck's landscape shows through (scenery.ts), clear of the desks by the door and the
  * QA station and New issue stand by the board.
  */
-const DOOR_SPOTS: { x: number; side: 1 | -1 }[] = [
-  { x: -2.4, side: -1 },
-  { x: 2.4, side: -1 },
-  { x: -2.4, side: 1 },
-  { x: 2.4, side: 1 },
-];
+export function roomPodSpots(): PodSpot[] {
+  return [
+    { x: -2.4, side: -1 },
+    { x: 2.4, side: -1 },
+    { x: -2.4, side: 1 },
+    { x: 2.4, side: 1 },
+  ].map(({ x, side }) => ({ wall: new THREE.Vector3(x, 0, (side * ROOM_WIDTH) / 2), yaw: side < 0 ? Math.PI : 0 }));
+}
 /** How far a door's housing stands from its side wall's centre line: clear of its skin (scenery.ts: SKIN_INSET). */
 const WALL_GAP = 0.16;
 /**
@@ -136,16 +144,17 @@ export class TeamStation {
     kit: TeamStationKit,
     /** Where the briefing room's doorway stands in the world (layout.ts: briefingRoomAt). */
     origin: THREE.Vector3,
+    /** Where its pod stands in the holodeck. */
+    spot: PodSpot,
   ) {
     this.screen = new StationScreen(null, this.freeText(), BIG_SCREEN);
 
-    const spot = DOOR_SPOTS[index];
     const door = kit.door.clone();
-    // its back against the side wall: as far behind its doorway as its deepest part
+    // its back against the wall: as far in front of it as its deepest part is behind its doorway, facing into the room
     const back = new THREE.Box3().setFromObject(door).max.z;
-    this.door.position.set(spot.x, 0, spot.side * (ROOM_WIDTH / 2 - WALL_GAP - back));
-    // facing into the room: its forward (-Z) away from its wall
-    this.door.rotation.y = spot.side < 0 ? Math.PI : 0;
+    const forward = new THREE.Vector3(-Math.sin(spot.yaw), 0, -Math.cos(spot.yaw));
+    this.door.position.copy(spot.wall).addScaledVector(forward, WALL_GAP + back);
+    this.door.rotation.y = spot.yaw;
     this.door.add(door);
     this.dress(door, (this.doorKit = blank()));
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(DOOR_SIGN.width, (DOOR_SIGN.width * GoalSign.H) / GoalSign.W), this.sign.material);
@@ -269,9 +278,10 @@ export class TeamStation {
 
   /**
    * Joins the door, now the room has put it in place, to the briefing room through it, and adds the briefing room,
-   * the doors and what blocks the player to the world.
+   * the doors and what blocks the player to the world: the door's end of the doorway to `here`, the part of the ship
+   * it stands in (regions.ts).
    */
-  connect(builder: Builder): void {
+  connect(builder: Builder, here: THREE.Object3D = builder.group): void {
     const door = this.door.children[0];
     door.updateWorldMatrix(true, false);
     const doorway = (read: Read, frame: THREE.Matrix4): Doorway => {
@@ -281,12 +291,12 @@ export class TeamStation {
     };
     const room = this.furnished.matrixWorld;
     this.portal = new Portal(doorway(this.doorKit, door.matrixWorld), doorway(this.roomKit, room));
-    builder.add(this.portal.ends[0].group);
+    here.add(this.portal.ends[0].group);
     // its doors go with the briefing room, so they're hidden with it
     this.room.add(this.portal.ends[1].group);
     builder.add(this.room);
     for (const [read, frame] of [[this.doorKit, door.matrixWorld], [this.roomKit, room]] as const) {
-      for (const m of read.blocks) builder.colliders.push(footprint(new THREE.Matrix4().multiplyMatrices(frame, m)));
+      for (const m of read.blocks) builder.colliders.push(...footprints(new THREE.Matrix4().multiplyMatrices(frame, m)));
     }
   }
 
