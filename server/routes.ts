@@ -1,5 +1,6 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { EFFORT_LEVELS, type Effort, type PreviewSet, type ResumeHow } from '../shared/types';
+import { ledgerWindow } from '../shared/ledgerReview';
 import { isKokoroVoice } from '../shared/voice';
 import type { Office } from './office';
 import type { Store } from './store';
@@ -111,6 +112,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
   // Number One in the ready room: one ship-wide chat, read-only
   r.post('/number-one/say', h((req) => office.numberOne.say(str(req.body.text))));
   r.post('/number-one/new', h(() => office.numberOne.newConversation()));
+  r.get('/ledger', h((req) => ledgerWindow(store.ledger, Date.now(), Number(req.query.days ?? 14))));
   r.get('/retro/preview', h((req) => office.engineer.preview(Number(req.query.days ?? 14))));
   r.post('/retro/start', h((req) => office.engineer.start(Number(req.body.days ?? 14))));
   r.post('/retro/stop', h(() => office.engineer.stop()));

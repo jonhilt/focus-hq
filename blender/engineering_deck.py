@@ -212,7 +212,8 @@ def lower_level():
 
 
 def table():
-    """The master systems table: a rounded console with an LCARS display across its top, where E reviews the ledger."""
+    """The master systems table: a rounded console with an LCARS display across its top, where E reviews the ledger
+    (the retro is at the engineer's station)."""
     (tx, ty), (w, d) = TABLE, TABLE_SIZE
     outline = [(tx + x, ty + y) for x, y in rounded_rect(w, d, 0.45)]
     inset = [(tx + x, ty + y) for x, y in rounded_rect(w - 0.25, d - 0.25, 0.35)]
@@ -220,7 +221,7 @@ def table():
     top = slab('table top', outline, 0.82, 0.94, toon(HULL['frame']), round=0.03)
     shown = panel('table display', d - 0.5, w - 0.4, material('#000000', surface='readout', seed=61, w=d - 0.5, h=w - 0.4),
                   (tx - (w - 0.4) / 2, ty, 0.943), yaw=math.pi / 2, tilt=math.pi / 2)
-    interact('engineering', 'Review the ledger: the report card and retros', body, top, shown)
+    interact('ledger', 'Review the ledger', body, top, shown)
     collide_object(top)
 
 

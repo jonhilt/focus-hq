@@ -2,6 +2,13 @@
 
 `~/.focus/ledger.jsonl` is the ship's log of how work went, one JSON line per event, appended and never rewritten: each QA verdict (with its commit, round and checks), each PR merged or closed (by whom, and QA's badge on it at that moment, so a merge without a QA pass shows), merge conflicts (cleanly merged by the office, settled by the repo's rules for union and generated files (`auto`), or an agent had to resolve them, with the files that conflicted so the retro can see which keep colliding: see [agents](agents.md)), checks sent back, triage decisions, each goal as it closes (uncapped, unlike the 30 goals `state.json` keeps), and a digest of each agent session as it ends (below). It outlives the reviews, agents and transcripts it's about: `state.json` drops a review when its PR merges and an agent when they go home, and Claude Code deletes transcripts after 30 days unless told otherwise. The engineering station's screen shows the last 30 days of it summed up (`reportCard` in `shared/ledger.ts`), and the [chief engineer's retro](retro.md) reads it too.
 
+## Reviewing it
+
+In main engineering (deck 5), <kbd>E</kbd> on the master systems table opens the ledger for review (`ui/ledgerPanel.ts`, its rules in `shared/ledgerReview.ts`; the office serves the window at `GET /api/ledger?days=`). It changes nothing: the [retro](retro.md), at Lt. Brennan's station, is where anything gets decided, and each panel links to the other.
+
+- **The log:** the last 7, 14, 30 or 90 days, the newest first and grouped by day, each event as one line: `focus #236 · 2 of 7 checks failed · fail 2`, `focus #199 · by the captain · without a QA pass (QA stale)`, `focus #233 · an agent resolved them · 2 files`. Filter by project, and by kind (QA, merged, conflicts, goals, retro, sessions, frictions, each with its count). Sessions and frictions are most of the ledger, so they start hidden: they show in each trace anyway. The log shows its newest 400 lines.
+- **The trace:** pick a line about a pull request to follow it in order, from the sessions that worked on it through its QA rounds, conflicts and triage to its merge, with the frictions found in each session quoted under it, and totals for QA fails, conflicts, sessions (their minutes and cost) and wasted calls. Its goal's name traces the whole goal: every pull request it opened in the window, its sessions, and its closing.
+
 ## A proper log
 
 - **Numbered lines.** Each line starts with the format's version (`"v":2`) and carries a sequence number (`seq`), one more than the line before.

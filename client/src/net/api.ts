@@ -1,4 +1,5 @@
 import type { Agent, Board, ConflictsOutcome, Effort, Issue, IssueDraft, MergeMethod, MessageReply, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ResumeHow, Retro, RetroDraft, RoomTheme, Settings, TermLine, VoiceStatus } from '../../../shared/types';
+import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -51,6 +52,8 @@ export const api = {
   retroPreview: (days: number) => call<{ unread: number; costUsd: number }>('GET', `/retro/preview?days=${days}`),
   retroStart: (days: number) => call<Retro>('POST', '/retro/start', { days }),
   retroStop: () => call<Retro>('POST', '/retro/stop'),
+  /** The ledger's events of the last `days` days, for reviewing at the master systems table. */
+  ledger: (days: number) => call<LedgerEvent[]>('GET', `/ledger?days=${days}`),
   undigested: () => call<{ sessions: number }>('GET', '/digests/backfill'),
   backfillDigests: () => call<{ sessions: number }>('POST', '/digests/backfill'),
   decideDraft: (id: string, accept: boolean, projectId?: string, repo?: string) => call<RetroDraft>('POST', `/retro/drafts/${encodeURIComponent(id)}`, { accept, projectId, repo }),

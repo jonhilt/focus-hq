@@ -1,0 +1,132 @@
+import { describe, expect, it } from 'vitest';
+import type { LedgerEvent, SessionFacts } from './ledger';
+import { byDay, groupCounts, ledgerLog, ledgerRow, ledgerWindow, MAX_DAYS, SHOWN_AT_FIRST, trace } from './ledgerReview';
+
+const REPO = 'jonhilt/focus';
+const GOAL = 'Engineering deck';
+let seq = 0;
+const at = (minute: number) => Date.UTC(2026, 9, 9, 10, minute);
+const ev = (e: Record<string, unknown>, minute: number): LedgerEvent => ({ projectId: 'p1', seq: ++seq, at: at(minute), ...e }) as LedgerEvent;
+const facts = (f: Partial<SessionFacts> = {}): SessionFacts => ({
+  minutes: 10, turns: 20, toolCalls: 12, failedCalls: 0, refusedCalls: 0, repeatedCalls: 0, wastedCalls: 0, captainMessages: 0, nudges: 0,
+  officeMessages: 0, compactions: 0, qaFails: 0, conflicts: 0, costUsd: 1, ...f,
+});
+const verdict = (pr: number, v: 'pass' | 'fail', failedRounds: number, minute: number, goal: string | undefined = GOAL) =>
+  ev({ kind: 'qa-verdict', repo: REPO, pr, goal, verdict: v, reviewer: 'Lt. Oyelaran', checks: v === 'pass' ? { pass: 7, fail: 0, skip: 0 } : { pass: 5, fail: 2, skip: 0 }, failedRounds }, minute);
+const digest = (key: string, pr: number, minute: number, f: Partial<SessionFacts> = {}, goal?: string) =>
+  ev({ kind: 'session-digest', key, sessionId: key, agentId: 'a', agent: 'Lt. Nakamura', task: 'lead', prs: [{ repo: REPO, pr }], toUuid: 'u', goal, facts: facts(f) }, minute);
+
+describe('ledgerRow', () => {
+  it('says how a QA verdict went, and which fail it was', () => {
+    expect(ledgerRow(verdict(236, 'fail', 2, 1)).title).toBe('focus #236 · 2 of 7 checks failed · fail 2');
+    expect(ledgerRow(verdict(236, 'pass', 2, 1)).title).toBe('focus #236 · 7 checks passed · after 2 failed rounds');
+    expect(ledgerRow(verdict(236, 'pass', 0, 1))).toMatchObject({ tag: 'QA pass', tone: 'ok', title: 'focus #236 · 7 checks passed · first time', pr: { repo: REPO, pr: 236 } });
+  });
+
+  it('says who merged a pull request and whether QA had passed it', () => {
+    const merged = ev({ kind: 'merged', repo: REPO, pr: 199, by: 'captain', qa: 'stale', failedRounds: 0, triages: 0 }, 2);
+    expect(ledgerRow(merged)).toMatchObject({ tag: 'Merged', tone: 'warn', title: 'focus #199 · by the captain · without a QA pass (QA stale)' });
+    const clean = ev({ kind: 'merged', repo: REPO, pr: 237, by: 'office', qa: 'passed', failedRounds: 0, triages: 0, closes: [226] }, 2);
+    expect(ledgerRow(clean)).toMatchObject({ tone: 'ok', title: 'focus #237 · by the office · QA passed first time', detail: ' · closed #226' });
+  });
+
+  it('says how conflicts were settled, and which files', () => {
+    const row = ledgerRow(ev({ kind: 'conflicts', repo: REPO, pr: 233, resolved: 'agent', files: ['a.ts', 'b.md'] }, 3));
+    expect(row).toMatchObject({ tone: 'bad', title: 'focus #233 · an agent resolved them · 2 files', detail: 'a.ts, b.md' });
+  });
+
+  it('sums up a session span: who, how long, cost and waste', () => {
+    const row = ledgerRow(digest('s1', 236, 4, { minutes: 48, costUsd: 3.1, wastedCalls: 3, nudges: 1 }));
+    expect(row).toMatchObject({ group: 'sessions', title: 'Lt. Nakamura (lead) · 48 min · $3.10 · 3 wasted calls', detail: 'focus #236 · 1 nudge' });
+  });
+
+  it('quotes the frictions found in a session', () => {
+    const row = ledgerRow(ev({ kind: 'session-frictions', key: 's1', sessionId: 's1', reader: 'retro', frictions: [{ kind: 'demo-env', signature: 'demo port in use', quote: 'EADDRINUSE' }] }, 5));
+    expect(row).toMatchObject({ title: '1 friction found in a session', detail: 'demo-env', quotes: ['demo port in use: “EADDRINUSE”'] });
+  });
+});
+
+describe('ledgerLog', () => {
+  const events = [
+    verdict(236, 'fail', 1, 1),
+    digest('s1', 236, 2),
+    ev({ kind: 'merged', repo: REPO, pr: 237, by: 'office', qa: 'passed', failedRounds: 0, triages: 0 }, 3),
+    { ...ev({ kind: 'conflicts', repo: 'jonhilt/ops', pr: 1, resolved: 'office' }, 4), projectId: 'p2' },
+  ];
+
+  it('shows the groups picked, the newest first, leaving sessions and frictions out at first', () => {
+    expect(ledgerLog(events, new Set(SHOWN_AT_FIRST)).map((r) => r.tag)).toEqual(['Conflicts', 'Merged', 'QA fail']);
+  });
+
+  it('keeps to a project when one is picked', () => {
+    expect(ledgerLog(events, new Set(SHOWN_AT_FIRST), 'p1').map((r) => r.tag)).toEqual(['Merged', 'QA fail']);
+  });
+
+  it('counts each group, for the filters', () => {
+    expect(groupCounts(events)).toMatchObject({ qa: 1, sessions: 1, merged: 1, conflicts: 1, goals: 0 });
+    expect(groupCounts(events, 'p2')).toMatchObject({ qa: 0, conflicts: 1 });
+  });
+
+  it('groups rows by day, keeping their order', () => {
+    const rows = ledgerLog(events, new Set(SHOWN_AT_FIRST));
+    const days = byDay(rows, (t) => (t >= at(3) ? 'later' : 'earlier'));
+    expect(days.map((d) => [d.day, d.rows.length])).toEqual([['later', 2], ['earlier', 1]]);
+  });
+});
+
+describe('trace', () => {
+  const events = [
+    digest('s1', 236, 1, { minutes: 48, costUsd: 3.1, wastedCalls: 3 }, GOAL),
+    verdict(236, 'fail', 1, 2),
+    ev({ kind: 'conflicts', repo: REPO, pr: 236, resolved: 'office' }, 3),
+    ev({ kind: 'conflicts', repo: REPO, pr: 236, resolved: 'up-to-date' }, 3),
+    ev({ kind: 'session-frictions', key: 's1', sessionId: 's1', reader: 'retro', frictions: [{ kind: 'demo-env', signature: 'demo port in use', quote: 'EADDRINUSE' }] }, 4),
+    digest('s2', 236, 5, { minutes: 6, costUsd: 0.7 }),
+    verdict(236, 'pass', 1, 6),
+    ev({ kind: 'merged', repo: REPO, pr: 236, goal: GOAL, by: 'office', qa: 'passed', failedRounds: 1, triages: 0 }, 7),
+    verdict(240, 'pass', 0, 8),
+    verdict(300, 'pass', 0, 9, 'Another goal'),
+    digest('s3', 300, 9),
+  ];
+
+  it('follows a pull request from its first session to its merge, with the frictions folded into their session', () => {
+    const t = trace(events, { kind: 'pr', repo: REPO, pr: 236 });
+    expect(t.steps.map((s) => s.tag)).toEqual(['Session', 'QA fail', 'Conflicts', 'Conflicts', 'Session', 'QA pass', 'Merged']);
+    expect(t.steps[0].quotes).toEqual(['demo port in use: “EADDRINUSE”']);
+    expect(t.goal).toBe(GOAL);
+    expect(t.totals).toEqual({ prs: 1, verdicts: 2, fails: 1, conflicts: 1, sessions: 2, minutes: 54, costUsd: 3.8, wastedCalls: 3, frictions: 1 });
+  });
+
+  it('follows a goal across every pull request it opened, and no other', () => {
+    const t = trace(events, { kind: 'goal', title: GOAL });
+    expect(t.totals.prs).toBe(2);
+    expect(t.totals.verdicts).toBe(3);
+    expect(t.totals.sessions).toBe(2);
+    expect(t.steps.some((s) => s.pr?.pr === 300)).toBe(false);
+  });
+
+  it('includes the goal closing when it has', () => {
+    const closed = ev({ kind: 'goal-closed', goal: { id: 'g', title: GOAL, slices: 2, prs: [], leadName: 'Lt. Halloran', openedAt: at(0), closedAt: at(10) } }, 10);
+    const t = trace([...events, closed], { kind: 'goal', title: GOAL });
+    expect(t.steps[t.steps.length - 1]).toMatchObject({ tag: 'Goal', title: `Closed: ${GOAL}` });
+  });
+});
+
+describe('ledgerWindow', () => {
+  const DAY = 86_400_000;
+  const now = at(0);
+  const old = (days: number) => ({ ...verdict(1, 'pass', 0, 0), at: now - days * DAY });
+  const events = [old(1), old(10), old(20), old(100)];
+
+  it('keeps the last so many days', () => {
+    expect(ledgerWindow(events, now, 14)).toHaveLength(2);
+    expect(ledgerWindow(events, now, 30)).toHaveLength(3);
+  });
+
+  it('looks back no further than MAX_DAYS, and 14 days for nonsense', () => {
+    expect(MAX_DAYS).toBeLessThan(100);
+    expect(ledgerWindow(events, now, 1000)).toHaveLength(3);
+    expect(ledgerWindow(events, now, Number.NaN)).toHaveLength(2);
+    expect(ledgerWindow(events, now, -3)).toHaveLength(2);
+  });
+});

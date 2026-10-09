@@ -379,6 +379,30 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 /* the QA station */
 .qa-toggle { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
 .qa-toggle > :first-child { flex: none; }
+/* reviewing the ledger at main engineering's master systems table: the log on the left, a trace on the right */
+.ledger { display: flex; flex-direction: column; gap: 10px; height: 100%; min-height: 0; }
+.ledger .chip { cursor: pointer; }
+.ledger-filters { gap: 6px; }
+.ledger-cols { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; flex: 1; min-height: 0; }
+.ledger-log, .ledger-trace { overflow-y: auto; min-height: 0; padding-right: 6px; }
+.ledger-trace { background: var(--surface-2); border-radius: var(--radius); padding: 12px 14px; }
+.ledger-log h3, .ledger-trace h3 { margin: 10px 0 4px; font-size: 14px; color: var(--lcars-periwinkle); }
+.ledger-trace h3 { font-size: 18px; color: var(--lcars-peach); margin-top: 0; }
+.ledger-row { display: grid; grid-template-columns: auto 92px 1fr; gap: 10px; align-items: start; padding: 6px 8px; border-left: 4px solid transparent; border-radius: 0 10px 10px 0; font-size: 15px; }
+.ledger-row .chip { justify-content: center; font-size: 12px; cursor: inherit; }
+.ledger-row small { display: block; overflow-wrap: anywhere; }
+.ledger-row q { display: block; color: var(--lcars-peach); font-size: 13px; font-style: italic; quotes: none; }
+.ledger-row.tone-ok { border-left-color: var(--lcars-green); }
+.ledger-row.tone-bad { border-left-color: var(--lcars-red); }
+.ledger-row.tone-warn { border-left-color: var(--lcars-gold); }
+.ledger-row.traceable { cursor: pointer; }
+.ledger-row.traceable:hover { background: #ffffff0d; }
+.ledger-row.picked { background: color-mix(in srgb, var(--lcars-gold) 14%, transparent); }
+.ledger-trace .linkish { background: none; border: 0; padding: 0; color: var(--lcars-lilac); font: inherit; cursor: pointer; text-align: left; }
+.ledger-sums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0 12px; }
+.ledger-sum { background: var(--surface); border-radius: 10px; padding: 6px 10px; }
+.ledger-sum b { display: block; font-size: 22px; color: var(--lcars-sky); }
+.ledger-sum span { font-size: 13px; color: var(--muted); }
 .qa-now { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .qa-now strong { text-transform: uppercase; letter-spacing: 0.06em; }
 .qa-now small { display: block; color: var(--muted); }

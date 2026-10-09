@@ -80,7 +80,8 @@ describe('readInteraction', () => {
       label: 'Use the ready room console',
     });
     expect(readInteraction({ interact: 'turbolift', label: 'Use the turbolift' })).toEqual({ interaction: { kind: 'turbolift' }, label: 'Use the turbolift' });
-    expect(readInteraction({ interact: 'engineering', label: 'Review the ledger' })).toEqual({ interaction: { kind: 'engineering' }, label: 'Review the ledger' });
+    expect(readInteraction({ interact: 'engineering', label: 'Retros' })).toEqual({ interaction: { kind: 'engineering' }, label: 'Retros' });
+    expect(readInteraction({ interact: 'ledger', label: 'Review the ledger' })).toEqual({ interaction: { kind: 'ledger' }, label: 'Review the ledger' });
   });
 
   it('fails on an interaction it doesn’t know or one without a hint', () => {

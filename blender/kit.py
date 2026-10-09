@@ -15,7 +15,8 @@ What the browser reads (client/src/world/deck.ts), all through custom properties
   to somewhere else, at its centre in the middle of its wall, the way in along the empty's +Y: `width`, `height`, and
   the `depth` of the alcove behind it, where the browser draws the other end).
 - An object's `interact` has pressing E on it do something: 'manager' (open the ready room console), 'turbolift' (its
-  controls) or 'engineering' (the chief engineer's panel: the report card and retros), with the hint `label`.
+  controls), 'engineering' (the chief engineer's panel: the report card and retros) or 'ledger' (reviewing the ledger),
+  with the hint `label`.
 - A material's `surface` has the browser draw it: 'space' (a viewport onto the stars), 'keys' (an LCARS touch panel),
   'readout' (LCARS readouts: `seed`, `w`, `h`), 'console' (an LCARS console top `w`×`h` metres, `seed`, with
   `stations` crew's keys side by side), 'sign' (an LCARS sign: `text`, `color`, optional `sub` and `code`),

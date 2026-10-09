@@ -50,6 +50,8 @@ export function openEngineeringPanel(ui: Ui): void {
         await api.retroStart(window);
       }, ui.error).then(render);
     const stop = h('button', { class: 'btn' }, 'Stop');
+    const ledger = h('button', { class: 'btn small' }, 'Review the ledger →');
+    ledger.onclick = () => ui.openLedger();
     stop.onclick = () => void busy(stop, () => api.retroStop().then(() => undefined), ui.error);
 
     fill(body,
@@ -60,6 +62,7 @@ export function openEngineeringPanel(ui: Ui): void {
         h('span', { class: 'muted' }, 'Look back over the last'), days, h('span', { class: 'muted' }, 'days'),
         running ? stop : start,
         h('span', { class: 'grow' }),
+        ledger,
         retro?.costUsd ? h('small', { class: 'muted' }, `$${retro.costUsd.toFixed(2)}`) : null,
       ),
       retro && retro.status !== 'idle' ? status(retro) : null,

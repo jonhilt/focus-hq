@@ -14,6 +14,7 @@ import { openManagerPanel } from './ui/managerPanel';
 import { openGoalsPanel } from './ui/goalsPanel';
 import { linkAction, openCommsPanel } from './ui/commsPanel';
 import { openEngineeringPanel } from './ui/engineeringPanel';
+import { openLedgerPanel } from './ui/ledgerPanel';
 import { numberOnePanelOpen, openNumberOnePanel } from './ui/numberOnePanel';
 import { Panels } from './ui/panels';
 import { openPreviewPanel } from './ui/previewPanel';
@@ -133,6 +134,7 @@ async function main() {
     openQa: (projectId) => openQaPanel(ui, projectId),
     openNumberOne: () => openNumberOnePanel(ui),
     openEngineering: () => openEngineeringPanel(ui),
+    openLedger: () => openLedgerPanel(ui),
     openComms: () => openCommsPanel(ui),
     openGoals: (projectId, station) => openGoalsPanel(ui, projectId, station),
     openManager: (tab) => openManagerPanel(ui, tab),
@@ -393,6 +395,9 @@ async function main() {
         break;
       case 'engineering':
         ui.openEngineering();
+        break;
+      case 'ledger':
+        ui.openLedger();
         break;
       case 'qa':
         ui.openQa(i.projectId);

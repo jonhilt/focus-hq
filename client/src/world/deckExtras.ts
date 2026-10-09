@@ -153,6 +153,7 @@ export function readInteraction(e: Extras): { interaction: Interaction; label: s
     case 'manager':
     case 'turbolift':
     case 'engineering':
+    case 'ledger':
       return { interaction: { kind: e.interact }, label: str(e, 'label') };
     default:
       return fail('unknown interaction', e);

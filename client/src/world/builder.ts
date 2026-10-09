@@ -16,6 +16,8 @@ export type Interaction =
   | { kind: 'number-one' }
   /** The engineering station: the report card and the chief engineer's retro. */
   | { kind: 'engineering' }
+  /** Main engineering's master systems table: review the ledger. */
+  | { kind: 'ledger' }
   | { kind: 'qa'; projectId: string }
   /** A free team station: start a goal there. */
   | { kind: 'station'; projectId: string; station: number }

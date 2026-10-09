@@ -34,6 +34,8 @@ export interface Ui {
   openNumberOne(): void;
   /** The engineering station: the ledger's report card and the chief engineer's retro. */
   openEngineering(): void;
+  /** Main engineering's master systems table: the ledger's log, and a trace of a pull request or goal. */
+  openLedger(): void;
   openManager(tab?: ManagerTab): void;
   openTeleport(): void;
   /** A team station's screen up close: what lead `leadId` has shown, and switches for what station screens show. */
