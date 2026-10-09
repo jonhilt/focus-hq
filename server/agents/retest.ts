@@ -38,14 +38,14 @@ export function retestStep(review: QaReview | undefined, head: string, since: Si
   return { kind: 'checks-only', head: since.head };
 }
 
-/** The project's checks (typecheck, lint, tests), from its package.json scripts; none when it has none of them. */
-export function checkCommands(scripts: Record<string, unknown> | undefined): string[][] {
+/** The project's checks (typecheck, lint, tests, or only those `names`), from its package.json scripts; none when it has none of them. */
+export function checkCommands(scripts: Record<string, unknown> | undefined, names: readonly ('typecheck' | 'lint' | 'test')[] = ['typecheck', 'lint', 'test']): string[][] {
   if (!scripts) return [];
   const has = (name: string) => {
     const script = scripts[name];
     return typeof script === 'string' && !/no test specified/.test(script);
   };
-  return (['typecheck', 'lint', 'test'] as const).filter(has).map((name) => (name === 'test' ? ['npm', 'test'] : ['npm', 'run', name]));
+  return names.filter(has).map((name) => (name === 'test' ? ['npm', 'test'] : ['npm', 'run', name]));
 }
 
 /** `git range-diff` output with every commit pair unchanged ("1: abc = 1: def"). */

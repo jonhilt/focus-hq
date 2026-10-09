@@ -65,7 +65,7 @@ export function conflictsPrompt(agent: Agent): string {
     '',
     `1. \`git fetch origin\`, then \`git merge origin/${agent.baseBranch}\`.`,
     '2. Resolve every conflict so that both sides keep doing what they were meant to do. Read the base branch commits that caused each conflict before choosing.',
-    '3. Run the type checks, tests and linters, and fix what the merge broke.',
+    '3. Run the type checks, tests and linters, and fix what the merge broke, before calling it resolved: a merge git makes by itself can still break the build.',
     agent.cloud ? `4. Commit the merge and push it: \`git push origin HEAD:${agent.branch}\`.` : '4. Commit the merge.',
     '',
     'Merge rather than rebase: the pull request is already open, so its history must stay intact.',

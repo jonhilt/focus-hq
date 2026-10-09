@@ -25,8 +25,12 @@ export type LedgerEntry =
   /** `qa` is the PR's QA badge as it merged: anything but `passed` merged without QA passing its head commit. */
   | (PrRef & { kind: 'merged'; by: Closer; qa: QaBadgeState; failedRounds: number; triages: number; /** Issues it closed, when the office knew. */ closes?: number[] })
   | (PrRef & { kind: 'closed'; by: Closer; qa: QaBadgeState; failedRounds: number; triages: number })
-  /** The PR conflicted with its base: the office merged the base in cleanly, or an agent had to resolve them. */
-  | (PrRef & { kind: 'conflicts'; resolved: 'office' | 'agent' | 'up-to-date' })
+  /**
+   * The PR conflicted with its base: the office merged the base in cleanly, settled the conflicts by the repo's rules
+   * (`auto`: union or generated files), or an agent had to resolve them. `files` are the paths that conflicted (missing
+   * on lines from before they were logged); `broke` the check that failed on a merge git made by itself.
+   */
+  | (PrRef & { kind: 'conflicts'; resolved: 'office' | 'auto' | 'agent' | 'up-to-date'; files?: string[]; broke?: string })
   | (PrRef & { kind: 'checks-sent-back'; checks: string[] })
   | (PrRef & { kind: 'triage'; officer: string; action: TriageAction; note: string })
   | { kind: 'goal-closed'; goal: GoalRecord }

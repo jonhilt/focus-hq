@@ -134,7 +134,15 @@ export interface BranchState {
 
 /** Git operations on an agent's checkout. Faked in demo mode. */
 /** What came of merging a pull request's base branch into it on the office's side: pushed, nothing to do, or a job for an agent. */
-export type BaseMerge = { kind: 'merged'; sha: string; from: string } | { kind: 'up-to-date' } | { kind: 'conflicts' };
+/**
+ * The office's own merge of a PR's base branch: pushed (`auto` lists the conflicted files it settled by rule, see
+ * `MergeRule`), nothing to merge, or left for an agent: `files` are the paths that conflicted, and `broke` the check
+ * that failed on a merge that went through (`npm run typecheck`, say).
+ */
+export type BaseMerge =
+  | { kind: 'merged'; sha: string; from: string; auto?: string[] }
+  | { kind: 'up-to-date' }
+  | { kind: 'conflicts'; files: string[]; broke?: string };
 
 export interface WorkspaceOps {
   /**

@@ -24,8 +24,11 @@ function commit(dir: string, file: string, text: string): string {
   return git(dir, 'rev-parse', 'HEAD');
 }
 
-/** An origin with a PR branch, a developer's clone of it, and the office's mirror (as if it had already cloned). */
-function pullRequest(repo: string) {
+/**
+ * An origin with a PR branch, a developer's clone of it, and the office's mirror (as if it had already cloned). `files`
+ * go on main before the branch starts, and `changes` on the branch.
+ */
+function pullRequest(repo: string, files: Record<string, string> = {}, changes: Record<string, string> = {}) {
   const origin = path.join(tmp, `${repo.replace('/', '__')}.git`);
   git(tmp, 'init', '-q', '--bare', '-b', 'main', origin);
   const dev = path.join(tmp, `${repo.replace('/', '__')}-dev`);
@@ -35,8 +38,10 @@ function pullRequest(repo: string) {
   git(dev, 'checkout', '-qb', 'main');
   commit(dev, 'readme.md', 'hello');
   commit(dev, 'header.ts', 'header');
+  for (const [file, text] of Object.entries(files)) commit(dev, file, text);
   git(dev, 'push', '-q', 'origin', 'main');
   git(dev, 'checkout', '-qb', 'focus/pr');
+  for (const [file, text] of Object.entries(changes)) commit(dev, file, text);
   const pr = commit(dev, 'header.ts', 'header with saved items');
   git(dev, 'push', '-q', '-u', 'origin', 'focus/pr');
   const mirror = path.join(process.env.FOCUS_DATA_DIR!, 'repos', repo.replace('/', '__'));
@@ -51,7 +56,9 @@ function pullRequest(repo: string) {
     git(dev, 'checkout', '-q', 'focus/pr');
   };
   const remoteHead = () => git(origin, 'rev-parse', 'focus/pr');
-  return { dev, pr, land, remoteHead };
+  /** `file` as it is on origin's PR branch. */
+  const remoteFile = (file: string) => git(origin, 'show', `focus/pr:${file}`);
+  return { dev, pr, land, remoteHead, remoteFile };
 }
 
 describe('the office’s own merge of a PR’s base branch', () => {
@@ -71,9 +78,44 @@ describe('the office’s own merge of a PR’s base branch', () => {
   it('leaves the branch alone when the merge conflicts', async () => {
     const { pr, land, remoteHead } = pullRequest('acme/conflict');
     land('header.ts', 'header with a cart');
-    expect(await ws.mergeBase('acme/conflict', 'focus/pr', 'main')).toEqual({ kind: 'conflicts' });
+    expect(await ws.mergeBase('acme/conflict', 'focus/pr', 'main')).toEqual({ kind: 'conflicts', files: ['header.ts'] });
     expect(remoteHead()).toBe(pr);
   });
+
+  const ruled = {
+    '.gitattributes': 'notes.md focus-merge=union\ndeck.glb focus-merge=theirs\n',
+    'notes.md': '# Notes\n- first\n',
+    'deck.glb': 'deck, baked',
+  };
+  const branchSide = { 'notes.md': '# Notes\n- first\n- from the PR\n', 'deck.glb': 'deck, baked on the PR' };
+
+  it('settles conflicts confined to union and generated files by the repo’s rules, and pushes the merge', async () => {
+    const { pr, land, remoteHead, remoteFile } = pullRequest('acme/ruled', ruled, branchSide);
+    land('notes.md', '# Notes\n- first\n- from main\n');
+    land('deck.glb', 'deck, baked on main');
+    const merge = await ws.mergeBase('acme/ruled', 'focus/pr', 'main');
+    expect(merge).toEqual({ kind: 'merged', sha: remoteHead(), from: pr, auto: ['deck.glb', 'notes.md'] });
+    expect(remoteFile('notes.md')).toBe('# Notes\n- first\n- from the PR\n- from main');
+    expect(remoteFile('deck.glb')).toBe('deck, baked on main');
+    expect(remoteFile('header.ts')).toBe('header with saved items');
+  });
+
+  it('leaves it all to an agent when anything else conflicts too', async () => {
+    const { pr, land, remoteHead } = pullRequest('acme/ruled-and-not', ruled, branchSide);
+    land('deck.glb', 'deck, baked on main');
+    land('header.ts', 'header with a cart');
+    expect(await ws.mergeBase('acme/ruled-and-not', 'focus/pr', 'main')).toEqual({ kind: 'conflicts', files: ['deck.glb', 'header.ts'] });
+    expect(remoteHead()).toBe(pr);
+  });
+
+  it('pushes nothing when a merge git makes by itself fails the typecheck', async () => {
+    // the PR's typecheck fails once main's footer is in
+    const typecheck = `node -e "process.exit(require('fs').existsSync('footer.ts') ? 1 : 0)"`;
+    const { pr, land, remoteHead } = pullRequest('acme/broken', {}, { 'package.json': JSON.stringify({ name: 'broken', private: true, scripts: { typecheck } }) });
+    land('footer.ts', 'footer');
+    expect(await ws.mergeBase('acme/broken', 'focus/pr', 'main')).toEqual({ kind: 'conflicts', files: [], broke: 'npm run typecheck' });
+    expect(remoteHead()).toBe(pr);
+  }, 60_000);
 
   it('says so when the branch already has everything from its base', async () => {
     const { pr, remoteHead } = pullRequest('acme/current');

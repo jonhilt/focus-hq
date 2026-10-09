@@ -408,7 +408,8 @@ describe('AgentManager', () => {
   });
 
   it('merges the base into a slice’s conflicting PR itself, and tells the lead to pull once their turn is over', async () => {
-    const { agents, claude, store, project } = office({ ...demoWorkspace, mergeBase: async () => ({ kind: 'merged', sha: 'merge-sha', from: 'old-sha' }) });
+    const auto = ['CLAUDE.md', 'client/public/ship/holodeck-deck.glb'];
+    const { agents, claude, store, project } = office({ ...demoWorkspace, mergeBase: async () => ({ kind: 'merged', sha: 'merge-sha', from: 'old-sha', auto }) });
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
     await until(() => leads().length === 1);
@@ -416,7 +417,10 @@ describe('AgentManager', () => {
     const [pr] = store.agent(lead.id).lead!.prs;
 
     const outcome = await agents.resolveConflicts(project.id, { repo: pr.repo, number: pr.number, branch: store.agent(lead.id).branch, baseBranch: 'main' } as PullRequest);
-    expect(outcome).toEqual({ kind: 'merged' });
+    expect(outcome).toEqual({ kind: 'merged', auto });
+    // settled by the repo's rules, without an agent
+    expect(store.ledger.filter((e) => e.kind === 'conflicts')).toEqual([expect.objectContaining({ repo: pr.repo, pr: pr.number, resolved: 'auto', files: auto })]);
+    expect([...store.agents.values()].some((a) => a.task === 'conflicts')).toBe(false);
     expect(store.agent(lead.id).lead!.prs.find((p) => p.number === pr.number)?.sha).toBe('merge-sha');
     // nothing reaches them mid-turn, and the note doesn't start another one when it ends
     expect(leads()[0].sent).toEqual([]);
@@ -448,6 +452,7 @@ describe('AgentManager', () => {
     const outcome = await agents.resolveConflicts(project.id, { repo: pr.repo, number: pr.number, title: 'Saved items', url: pr.url, branch, baseBranch: 'main' } as PullRequest);
     if (outcome.kind !== 'agent') throw new Error(`expected an agent, got ${outcome.kind}`);
     expect(outcome.agent.task).toBe('conflicts');
+    expect(store.ledger.filter((e) => e.kind === 'conflicts')).toEqual([expect.objectContaining({ resolved: 'agent', files: ['src/header.ts'] })]);
     await expect(agents.resolveConflicts(project.id, { repo: pr.repo, number: pr.number, branch, baseBranch: 'main' } as PullRequest)).rejects.toThrow(/already resolving/);
     const resolver = () => claude.turns.find((t) => t.req.agentId === outcome.agent.id);
     await until(() => !!resolver());

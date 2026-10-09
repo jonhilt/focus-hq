@@ -4,6 +4,7 @@ import path from 'node:path';
 import { paths } from '../config';
 import { errorMessage, KeyedLock, run, sleep } from '../util';
 import { sameCommit } from '../../shared/qa';
+import { autoMergePlan, conflictStages, type MergeRule, mergeRules } from './conflicts';
 import { checkCommands, rangeDiffUnchanged, type SinceVerdict } from './retest';
 import type { BaseMerge, BranchState, ChecksRun } from './types';
 import { claimBranch, heldMessage, orphanedWorkspaces, parseWorktrees, retryLockRace } from './worktrees';
@@ -162,20 +163,25 @@ function checkoutDetached(repo: string, dir: string, source: string, localRef: s
     await ensureMirror(repo);
     await git(mirror, ['fetch', 'origin', `+${source}:${localRef}`], 10 * 60_000);
     const sha = (await git(mirror, ['rev-parse', localRef])).trim();
-    const reused =
-      fs.existsSync(path.join(dir, '.git')) &&
-      (await git(dir, ['checkout', '--detach', '--force', sha]).then(() => true, () => false));
-    if (reused) {
-      await git(dir, ['clean', '-fd']); // untracked files from last time; ignored ones (node_modules, bin/obj) stay
-    } else {
-      // first checkout here, or one broken by an earlier failure or a re-cloned mirror
-      fs.rmSync(dir, { recursive: true, force: true });
-      await git(mirror, ['worktree', 'prune']);
-      fs.mkdirSync(path.dirname(dir), { recursive: true });
-      await git(mirror, ['worktree', 'add', '--detach', dir, sha]);
-    }
+    await detachAt(mirror, dir, sha);
     return sha;
   });
+}
+
+/** Checks `sha`, already in the mirror, out in a reusable folder, detached. Call inside the repo's lock. */
+async function detachAt(mirror: string, dir: string, sha: string): Promise<void> {
+  const reused =
+    fs.existsSync(path.join(dir, '.git')) &&
+    (await git(dir, ['checkout', '--detach', '--force', sha]).then(() => true, () => false));
+  if (reused) {
+    await git(dir, ['clean', '-fd']); // untracked files from last time; ignored ones (node_modules, bin/obj) stay
+  } else {
+    // first checkout here, or one broken by an earlier failure or a re-cloned mirror
+    fs.rmSync(dir, { recursive: true, force: true });
+    await git(mirror, ['worktree', 'prune']);
+    fs.mkdirSync(path.dirname(dir), { recursive: true });
+    await git(mirror, ['worktree', 'add', '--detach', dir, sha]);
+  }
 }
 
 /** The QA officer's checkout: a pull request's head, detached, in their workspace folder. Returns the commit. */
@@ -225,22 +231,44 @@ export function runChecks(repo: string, number: number, head: string): Promise<C
   return checksLock.with(repo, async () => {
     const sha = await checkoutDetached(repo, dir, `refs/pull/${number}/head`, 'refs/focus/checks');
     if (!sameCommit(sha, head)) return { sha, results: [{ command: 'git checkout', ok: false, output: `the PR moved on to ${sha.slice(0, 7)}` }] };
-    const pkg = path.join(dir, 'package.json');
-    const scripts = fs.existsSync(pkg) ? (JSON.parse(fs.readFileSync(pkg, 'utf8')) as { scripts?: Record<string, unknown> }).scripts : undefined;
-    const commands = checkCommands(scripts);
-    if (!commands.length) return null;
-    const install = ['npm', fs.existsSync(path.join(dir, 'package-lock.json')) ? 'ci' : 'install', '--no-audit', '--no-fund'];
-    const results: ChecksRun['results'] = [];
-    for (const [cmd, ...args] of [install, ...commands]) {
-      const command = [cmd, ...args].join(' ');
-      const ok = await run(cmd, args, { cwd: dir, timeoutMs: 20 * 60_000 }).then(() => true, (err: unknown) => {
-        results.push({ command, ok: false, output: errorMessage(err) });
-        return false;
-      });
-      if (!ok) break;
-      results.push({ command, ok: true });
-    }
-    return { sha, results };
+    const results = await installAndRun(dir, checkCommands(packageScripts(dir)));
+    return results && { sha, results };
+  });
+}
+
+function packageScripts(dir: string): Record<string, unknown> | undefined {
+  const pkg = path.join(dir, 'package.json');
+  return fs.existsSync(pkg) ? (JSON.parse(fs.readFileSync(pkg, 'utf8')) as { scripts?: Record<string, unknown> }).scripts : undefined;
+}
+
+/** Installs the project's dependencies in `dir` and runs `commands`, stopping at the first that fails. Null when there are none. */
+async function installAndRun(dir: string, commands: string[][]): Promise<ChecksRun['results'] | null> {
+  if (!commands.length) return null;
+  const install = ['npm', fs.existsSync(path.join(dir, 'package-lock.json')) ? 'ci' : 'install', '--no-audit', '--no-fund'];
+  const results: ChecksRun['results'] = [];
+  for (const [cmd, ...args] of [install, ...commands]) {
+    const command = [cmd, ...args].join(' ');
+    const ok = await run(cmd, args, { cwd: dir, timeoutMs: 20 * 60_000 }).then(() => true, (err: unknown) => {
+      results.push({ command, ok: false, output: errorMessage(err) });
+      return false;
+    });
+    if (!ok) break;
+    results.push({ command, ok: true });
+  }
+  return results;
+}
+
+/**
+ * The office's merge of a PR's base, at `sha` in the mirror (not pushed yet), type-checked in the repo's checks folder:
+ * the command that failed, if one did, with the end of its output. Git can merge two branches cleanly and still break
+ * the tree. Nothing when the project has no typecheck script.
+ */
+function typecheckMerge(repo: string, sha: string): Promise<{ command: string; output?: string } | undefined> {
+  const dir = path.join(paths.checks, repo.replace('/', '__'));
+  return checksLock.with(repo, async () => {
+    await lock.with(repo, () => detachAt(mirrorDir(repo), dir, sha));
+    const results = await installAndRun(dir, checkCommands(packageScripts(dir), ['typecheck']));
+    return results?.find((r) => !r.ok);
   });
 }
 
@@ -339,7 +367,8 @@ export async function pullBranch(dir: string, branch: string): Promise<void> {
 
 /**
  * Merges origin's `baseBranch` into origin's `branch` in a scratch worktree, and pushes the merge when git needed no
- * help. On conflicts nothing is pushed. The push isn't forced, so it fails if someone pushed to the branch meanwhile.
+ * help, or every conflicted file has a rule in the repo's `.gitattributes` (`MergeRule`), and its typecheck passes.
+ * Otherwise nothing is pushed. The push isn't forced, so it fails if someone pushed to the branch meanwhile.
  */
 export async function mergeBase(repo: string, branch: string, baseBranch: string): Promise<BaseMerge> {
   const mirror = mirrorDir(repo);
@@ -352,20 +381,55 @@ export async function mergeBase(repo: string, branch: string, baseBranch: string
   });
   try {
     const before = await head(dir);
+    let auto: string[] = [];
     try {
       await git(dir, ['merge', '--no-edit', '-m', `Merge ${baseBranch} into ${branch}`, `origin/${baseBranch}`]);
     } catch (err) {
-      const conflicted = await git(dir, ['diff', '--name-only', '--diff-filter=U']).catch(() => '');
-      if (!conflicted.trim()) throw err;
-      return { kind: 'conflicts' };
+      const stages = conflictStages(await git(dir, ['ls-files', '-u', '-z']).catch(() => ''));
+      const files = [...stages.keys()];
+      if (!files.length) throw err;
+      const rules = mergeRules(await git(dir, ['check-attr', '-z', 'focus-merge', 'merge', '--', ...files]).catch(() => ''));
+      const plan = autoMergePlan(stages, rules);
+      if (plan.left.length) return { kind: 'conflicts', files };
+      for (const { file, rule } of plan.auto) await settle(dir, file, rule, stages.get(file)!);
+      await git(dir, ['commit', '--no-edit', '--no-verify']);
+      auto = files;
     }
     const after = await head(dir);
     if (after === before) return { kind: 'up-to-date' };
+    const broke = await typecheckMerge(repo, after);
+    if (broke) {
+      console.warn(`The office's merge of ${baseBranch} into ${repo}'s ${branch} failed \`${broke.command}\`: ${broke.output ?? ''}`);
+      return { kind: 'conflicts', files: auto, broke: broke.command };
+    }
     await git(dir, ['push', 'origin', `HEAD:refs/heads/${branch}`], 5 * 60_000);
-    return { kind: 'merged', sha: after, from: before };
+    return { kind: 'merged', sha: after, from: before, ...(auto.length ? { auto } : {}) };
   } finally {
     await lock.with(repo, () => removeDir(mirror, dir));
   }
+}
+
+/** Settles a conflicted file in `dir` by its rule (see `MergeRule`), and stages it. */
+async function settle(dir: string, file: string, rule: MergeRule, stages: Set<number>): Promise<void> {
+  if (rule === 'union') {
+    const scratch = fs.mkdtempSync(path.join(paths.merges, 'union-'));
+    try {
+      const base = path.join(scratch, 'base');
+      const theirs = path.join(scratch, 'theirs');
+      fs.writeFileSync(base, stages.has(1) ? await git(dir, ['show', `:1:${file}`]) : '');
+      fs.writeFileSync(theirs, await git(dir, ['show', `:3:${file}`]));
+      fs.writeFileSync(path.join(dir, file), await git(dir, ['show', `:2:${file}`]));
+      await git(dir, ['merge-file', '--union', file, base, theirs]);
+    } finally {
+      fs.rmSync(scratch, { recursive: true, force: true });
+    }
+  } else if (stages.has(rule === 'ours' ? 2 : 3)) {
+    await git(dir, ['checkout', `--${rule}`, '--', file]);
+  } else {
+    await git(dir, ['rm', '-q', '-f', '--', file]);
+    return;
+  }
+  await git(dir, ['add', '--', file]);
 }
 
 /** Whether origin's `branch` has commits that HEAD doesn't (someone else pushed to it). False while origin hasn't got it. */

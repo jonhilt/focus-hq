@@ -47,7 +47,8 @@ server/
     render.ts             SDK messages → Claude-Code-style terminal lines + "what am I doing" text + screenshots in tool results
     tasks.ts              the task list an agent keeps with Claude Code's task tools, followed from its session (TodoWrite, TaskCreate, TaskUpdate, TaskList)
     browserTool.ts        in-process MCP server driving headless Chromium, streams screenshots
-    workspace.ts          git mirrors + worktrees (agents', the per-repo preview checkout, the planner's read-only checkouts)
+    workspace.ts          git mirrors + worktrees (agents', the per-repo preview checkout, the planner's read-only checkouts), the office's own merge of a PR's base
+    conflicts.ts          merge conflicts, pure: the conflicts agent's model, the rules that settle conflicted files without one (.gitattributes), the ledger's line
     planner.ts            the officer at each room's Ops station: issue drafts, their prompt and schema
     lead.ts               each goal's lead: their station, name and branches, their instructions, what shipping a slice does, what they hear back, their helpers
     officeTool.ts         the office's own MCP tools for an agent (the lead's ship)

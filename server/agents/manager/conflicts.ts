@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { prKey } from '../../../shared/qa';
 import type { Agent, ConflictsOutcome, PullRequest } from '../../../shared/types';
 import { newId } from '../../util';
-import { conflictsAgentModel } from '../conflicts';
+import { conflictsAgentModel, conflictsRecord } from '../conflicts';
 import { conflictsResolvedNote } from '../lead';
 import { conflictsPrompt } from '../prompts';
 import { Workspace } from '../services';
@@ -16,9 +16,10 @@ export class Conflicts extends Part {
 
   /**
    * Gets a pull request's merge conflicts resolved without interrupting anyone. The office first merges the base branch
-   * in itself, and pushes it when git needs no help. Otherwise the developer who opened the PR takes it, if they're still
-   * in the office; for anyone else's, a goal's slice included, a new agent sits down on the PR's branch in a worktree of
-   * their own. A goal's lead hears about it once their turn is over.
+   * in itself, and pushes it when git needs no help (or the repo's rules settle every conflicted file) and it
+   * type-checks. Otherwise the developer who opened the PR takes it, if they're still in the office; for anyone else's,
+   * a goal's slice included, a new agent sits down on the PR's branch in a worktree of their own. A goal's lead hears
+   * about it once their turn is over.
    */
   async resolveConflicts(projectId: string, pr: PullRequest): Promise<ConflictsOutcome> {
     const resolving = [...this.store.agents.values()].find((a) => a.task === 'conflicts' && a.repo === pr.repo && a.pr?.number === pr.number && !FINISHED.includes(a.status));
@@ -27,11 +28,11 @@ export class Conflicts extends Part {
     const owner = lead ? undefined : this.core.seating.prOwner(pr.repo, pr.number);
     const merge = await this.mergeBase(pr);
     if (merge.kind === 'up-to-date') return merge;
-    this.core.ledger.record(projectId, { kind: 'conflicts', repo: pr.repo, pr: pr.number, goal: lead?.lead?.title, resolved: merge.kind === 'merged' ? 'office' : 'agent' });
+    this.core.ledger.record(projectId, { kind: 'conflicts', repo: pr.repo, pr: pr.number, goal: lead?.lead?.title, ...conflictsRecord(merge) });
     if (merge.kind === 'merged') {
       if (lead) this.mergedForLead(lead, pr, merge.sha, 'the office');
       else if (owner) await this.runtime.runPromise(this.catchUp(owner, merge));
-      return { kind: 'merged' };
+      return { kind: 'merged', ...(merge.auto ? { auto: merge.auto } : {}) };
     }
     if (owner) {
       this.update(owner, { baseBranch: pr.baseBranch });
@@ -58,7 +59,7 @@ export class Conflicts extends Part {
     const merge = Workspace.use((w) => w.mergeBase(pr.repo, pr.branch, pr.baseBranch)).pipe(
       Effect.catch((err) => Effect.sync((): BaseMerge => {
         console.warn(`Couldn't merge ${pr.baseBranch} into ${pr.repo}#${pr.number} on the office's side: ${err.message}`);
-        return { kind: 'conflicts' };
+        return { kind: 'conflicts', files: [] };
       })),
     );
     return this.runtime.runPromise(merge).finally(() => this.merging.delete(key));

@@ -498,7 +498,7 @@ export const demoWorkspace: WorkspaceOps = {
   // the demo's conflicting PR always needs an agent, so there's someone to watch resolving it
   mergeBase: async () => {
     await sleep(600);
-    return { kind: 'conflicts' };
+    return { kind: 'conflicts', files: ['src/header.ts'] };
   },
   missingRemoteCommits: async () => false,
   reopen: async (_repo, agentId) => `/demo/${agentId}`,

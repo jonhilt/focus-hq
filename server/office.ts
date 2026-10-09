@@ -425,7 +425,9 @@ export class Office {
         const outcome = await this.agents.resolveConflicts(projectId, pr);
         const said = {
           agent: `– resolving them before QA`,
-          merged: `– the office merged ${pr.baseBranch} in cleanly`,
+          merged: outcome.kind === 'merged' && outcome.auto
+            ? `– the office merged ${pr.baseBranch} in, settling ${outcome.auto.join(', ')} by rule`
+            : `– the office merged ${pr.baseBranch} in cleanly`,
           'up-to-date': `on GitHub, but it already has everything from ${pr.baseBranch}`,
         }[outcome.kind];
         this.hub.toast('info', `🔧 ${where} conflicts with ${pr.baseBranch} ${said}`, outcome.kind === 'agent' ? outcome.agent.id : undefined, projectId);
