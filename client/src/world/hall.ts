@@ -17,9 +17,10 @@ const R = HALL.radius;
 const H = HALL.height;
 /**
  * Builds the hall's shell into `group` (the hall's frame, standing where hallAt puts it): floor, round wall, ceiling
- * and the flat wall with the entrance, and what the player can't walk through, in world space.
+ * and the flat wall with the entrance, and what the player can't walk through, in world space. A `themed` hall's
+ * landscape shows through its walls and ceiling (scenery.ts), where its fittings are hidden behind the skin.
  */
-export function buildHall(group: THREE.Group, project: Project, builder: Builder): void {
+export function buildHall(group: THREE.Group, project: Project, builder: Builder, themed: boolean): void {
   const span = [-Math.PI + GAP, Math.PI - GAP] as const;
   const add = (geo: THREE.BufferGeometry, mat: THREE.Material) => {
     const m = new THREE.Mesh(geo, mat);
@@ -57,12 +58,12 @@ export function buildHall(group: THREE.Group, project: Project, builder: Builder
     add(curvedPanel(R - 0.03, a - 0.16, a + 0.16, 1.25, 2.7, 8), flat(readoutTexture(768, 512, 11 + i)));
   }
 
-  // the ceiling, with a ring of light round the middle
+  // the ceiling, with a ring of light round the middle unless a landscape's sky shows there
   const ceiling = add(new THREE.CircleGeometry(R + 0.1, 96), toon(HULL.ceiling));
   ceiling.rotation.x = Math.PI / 2;
   ceiling.position.y = H;
   const glow = new THREE.MeshBasicMaterial({ color: '#fff6e0', toneMapped: false });
-  for (const geo of [new THREE.RingGeometry(3.4, 4.0, 96), new THREE.CircleGeometry(1.0, 48)]) {
+  for (const geo of themed ? [] : [new THREE.RingGeometry(3.4, 4.0, 96), new THREE.CircleGeometry(1.0, 48)]) {
     const light = add(geo, glow);
     light.rotation.x = Math.PI / 2;
     light.position.y = H - 0.02;
@@ -83,7 +84,8 @@ export function buildHall(group: THREE.Group, project: Project, builder: Builder
   group.add(box(WALL_T + 0.08, 0.12, DOOR_W + 0.28, HULL.frame, ENTRANCE_X, DOOR_H, 0));
   const sign = add(new THREE.PlaneGeometry(3.4, 0.62), flat(lcarsSign(project.name, { color: project.color, sub: 'Training hall' })));
   sign.rotation.y = Math.PI / 2;
-  sign.position.set(ENTRANCE_X + WALL_T / 2 + 0.02, DOOR_H + 0.6, 0);
+  // in front of the holodeck's skin (scenery.ts), as the entrance's frame is
+  sign.position.set(ENTRANCE_X + 0.15, DOOR_H + 0.6, 0);
 
   // what the player can't walk through: a chain of small boxes round the wall, the entrance wall either side of the
   // doorway, and the back of the alcove behind it

@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import type { Project, RoomTheme } from '../../../shared/types';
 import { ROOM_THEMES } from '../../../shared/types';
 import { canvasTexture, makeCanvas, UI_FONT } from './canvas';
-import { ROOM_DEPTH, ROOM_WIDTH } from './layout';
+import type { Footprint } from './footprint';
+import { ROOM_DEPTH } from './layout';
 import { hashString, Kit, Scenery } from './scenery';
 import { checkerTexture } from './textures';
 
@@ -17,7 +18,6 @@ export const THEME_INFO: Record<RoomTheme, { label: string; holo: string }> = {
 };
 
 const HALF_D = ROOM_DEPTH / 2;
-const HALF_W = ROOM_WIDTH / 2;
 
 const SCENIC = ROOM_THEMES.filter((t) => t !== 'office');
 
@@ -28,10 +28,10 @@ export function roomTheme(project: Project): RoomTheme {
 
 const BUILDERS: Record<Exclude<RoomTheme, 'office'>, (k: Kit) => void> = { beach, forest, desert, moon, city, library };
 
-/** Builds the landscape around a room. `ref` must be unique per room (it's the stencil value). */
-export function createScenery(theme: RoomTheme, ref: number, seed: string, sunDir: THREE.Vector3): Scenery | null {
+/** Builds the landscape around a room, or a training hall. `ref` must be unique per room (it's the stencil value). */
+export function createScenery(theme: RoomTheme, ref: number, seed: string, sunDir: THREE.Vector3, footprint: Footprint = 'room'): Scenery | null {
   if (theme === 'office') return null;
-  const kit = new Kit(ref, hashString(seed), sunDir);
+  const kit = new Kit(ref, hashString(seed), sunDir, footprint);
   BUILDERS[theme](kit);
   return new Scenery(kit, THEME_INFO[theme].holo);
 }
@@ -224,9 +224,6 @@ function spacer(minGap: number): (p: THREE.Vector3) => boolean {
   };
 }
 
-/** Is a ground point clear of the room (with a margin)? */
-const clearOfRoom = (p: THREE.Vector3, margin = 1.2) => Math.abs(p.x) > HALF_D + margin || Math.abs(p.z) > HALF_W + margin;
-
 function rock(k: Kit, r: number, color: string, x: number, z: number): THREE.Mesh {
   const m = k.mesh(new THREE.DodecahedronGeometry(r, 0), color, [x, r * 0.35, z]);
   m.scale.set(k.range(0.9, 1.4), k.range(0.5, 0.8), k.range(0.9, 1.3));
@@ -353,7 +350,7 @@ function beach(k: Kit): void {
   }
   for (let i = 0; i < 14; i++) {
     const p = k.around(9, 40);
-    if (p.x > 11 || !clearOfRoom(p)) continue;
+    if (p.x > 11 || !k.clear(p)) continue;
     k.add(k.ball(k.range(0.4, 0.8), k.pick(['#56b15a', '#4aa34f']), p.x, 0.1, p.z, 10)).scale.y = 0.6;
   }
 
@@ -447,7 +444,7 @@ function forest(k: Kit): void {
   for (let i = 0; i < 5; i++) k.add(k.mesh(new THREE.CircleGeometry(0.5, 10).rotateX(-Math.PI / 2), k.basic('#4caf50'), [POND.x + k.range(-4, 4), 0.03, POND.z + k.range(-2.5, 2.5)]));
 
   const free = (p: THREE.Vector3, gap: number) =>
-    clearOfRoom(p, 1.5) && !(p.x > 5 && Math.abs(p.z - pathZ(p.x)) < 3.2 + gap) && p.distanceTo(POND) > 7.5 + gap;
+    k.clear(p, 1.5) && !(p.x > 5 && Math.abs(p.z - pathZ(p.x)) < 3.2 + gap) && p.distanceTo(POND) > 7.5 + gap;
   const ok = spacer(3.4);
   for (let i = 0, placed = 0; i < 900 && placed < 130; i++) {
     const p = k.around(10, 95);
@@ -550,7 +547,7 @@ function desert(k: Kit): void {
   const ok = spacer(4);
   for (let i = 0, placed = 0; i < 300 && placed < 26; i++) {
     const p = k.around(9.5, 60);
-    if (!clearOfRoom(p, 1.5) || !ok(p)) continue;
+    if (!k.clear(p, 1.5) || !ok(p)) continue;
     const c = saguaro(k, k.range(2.2, 4.5));
     c.position.copy(p);
     k.add(c);
@@ -558,7 +555,7 @@ function desert(k: Kit): void {
   }
   for (let i = 0; i < 12; i++) {
     const p = k.around(8.5, 35);
-    if (!clearOfRoom(p, 1)) continue;
+    if (!k.clear(p, 1)) continue;
     for (let j = 0; j < 3; j++) {
       const pad = k.ball(0.32, '#5fae5a', p.x + j * 0.3 - 0.3, 0.35 + (j % 2) * 0.35, p.z, 10);
       pad.scale.set(1, 1.15, 0.35);
@@ -568,12 +565,12 @@ function desert(k: Kit): void {
   }
   for (let i = 0; i < 18; i++) {
     const p = k.around(9, 50);
-    if (clearOfRoom(p, 1)) k.add(rock(k, k.range(0.4, 1.6), k.pick(['#c47a4e', '#b56a42']), p.x, p.z));
+    if (k.clear(p, 1)) k.add(rock(k, k.range(0.4, 1.6), k.pick(['#c47a4e', '#b56a42']), p.x, p.z));
   }
   const weed = k.mesh(new THREE.IcosahedronGeometry(0.45, 1), '#b08850');
   k.animate(weed, (o, t) => {
     const z = ((t * 1.7) % 90) - 45;
-    o.position.set(12 + Math.sin(t * 0.3) * 1.5, 0.45 + Math.abs(Math.sin(t * 3)) * 0.35, z);
+    o.position.set(k.reach + 2 + Math.sin(t * 0.3) * 1.5, 0.45 + Math.abs(Math.sin(t * 3)) * 0.35, z);
     o.rotation.x = z / 0.45;
   });
 }
@@ -596,7 +593,7 @@ function moon(k: Kit): void {
   for (let i = 0, placed = 0; i < 300 && placed < 24; i++) {
     const p = k.around(10, 90);
     const r = k.range(1.2, p.length() > 30 ? 8 : 4);
-    if (!clearOfRoom(p, r + 1) || !ok(p)) continue;
+    if (!k.clear(p, r + 1) || !ok(p)) continue;
     k.add(k.mesh(new THREE.CircleGeometry(r, 24).rotateX(-Math.PI / 2), k.basic('#9b9ea8'), [p.x, 0.01, p.z]));
     const rim = k.mesh(new THREE.TorusGeometry(r, r * 0.16, 6, 28).rotateX(Math.PI / 2), '#aeb1bb', [p.x, 0, p.z]);
     rim.scale.y = 0.45;
@@ -605,7 +602,7 @@ function moon(k: Kit): void {
   }
   for (let i = 0; i < 26; i++) {
     const p = k.around(9, 70);
-    if (clearOfRoom(p, 1)) k.add(rock(k, k.range(0.3, 1.4), k.pick(['#8e919b', '#a3a6b0']), p.x, p.z));
+    if (k.clear(p, 1)) k.add(rock(k, k.range(0.3, 1.4), k.pick(['#8e919b', '#a3a6b0']), p.x, p.z));
   }
   for (let i = 0; i < 13; i++) {
     const a = (i / 13) * Math.PI * 2 + k.range(-0.15, 0.15);
@@ -839,7 +836,7 @@ function library(k: Kit): void {
   const ok = spacer(6);
   for (let i = 0, placed = 0; i < 200 && placed < 9; i++) {
     const p = k.around(10, 26);
-    if (!clearOfRoom(p, 2) || Math.abs(p.z) > 14 || Math.abs(p.z) < 3.5 || !ok(p)) continue;
+    if (!k.clear(p, 2) || Math.abs(p.z) > 14 || Math.abs(p.z) < 3.5 || !ok(p)) continue;
     const t = new THREE.Group();
     t.position.copy(p);
     t.rotation.y = k.pick([0, Math.PI / 2]);
@@ -896,7 +893,7 @@ function library(k: Kit): void {
     const right = k.box(0.5, 0.04, 0.36, cover, 0.26, 0, 0);
     right.rotation.z = -0.5;
     book.add(left, right, k.box(0.42, 0.06, 0.32, '#fffbf0', -0.22, 0.08, 0), k.box(0.42, 0.06, 0.32, '#fffbf0', 0.22, 0.08, 0));
-    const r = 11 + i * 1.6;
+    const r = k.reach + 1 + i * 1.6;
     const h = 4.5 + (i % 3) * 1.8;
     const speed = 0.12 + i * 0.02;
     const phase = i * 1.3;

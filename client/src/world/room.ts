@@ -173,7 +173,7 @@ export class ProjectRoom {
       deck.rotation.y = slot.rotationY;
       builder.add(deck);
       builder.halls.add(this.group);
-      buildHall(this.group, project, builder);
+      buildHall(this.group, project, builder, !!scenery);
       this.entrance = new Portal(deckEntrance(slot), hallEntrance(this.group));
       builder.add(this.entrance.ends[0].group);
       builder.halls.add(this.entrance.ends[1].group);
@@ -210,7 +210,7 @@ export class ProjectRoom {
     // with no real wall behind it, the board stands on its own feet
     // what stands on the floor shades it round where it stands (contactShadow.ts): one mesh for the room's furniture
     const shadows = new ContactShadows(this.group);
-    if (this.scenery) {
+    if (this.scenery && !hall) {
       for (const s of [-1, 1]) {
         const foot = box(0.7, 0.14, 0.12, frameColor, ON_WALL - 0.3, 0, s * post);
         this.group.add(foot);
@@ -372,11 +372,14 @@ export class ProjectRoom {
     this.group.add(boardMesh);
     const rail = toon(HULL.frame);
     for (const [y0, y1] of [[bottom - 0.12, bottom], [top, top + 0.12]]) this.group.add(new THREE.Mesh(curvedPanel(r - 0.01, -half - 0.01, half + 0.01, y0, y1, 40), rail));
+    // standing on the floor on its own posts, since a landscape may show where the wall was
     for (const s of [-1, 1]) {
-      const post = box(0.12, top - bottom + 0.24, 0.1, HULL.frame);
-      post.position.copy(around(r - 0.02, s * (half + 0.006), bottom - 0.12));
-      post.rotation.y = facingIn(s * half);
-      this.group.add(post);
+      const a = s * (half + 0.006);
+      for (const part of [box(0.12, top + 0.12, 0.1, HULL.frame), box(0.16, 0.14, 0.7, HULL.frame)]) {
+        part.position.add(around(r - 0.02, a));
+        part.rotation.y = facingIn(a);
+        this.group.add(part);
+      }
     }
     return boardMesh;
   }
@@ -634,7 +637,9 @@ export class ProjectRoom {
     // from a briefing room, the holodeck is what you see through its door
     const briefing = this.stations.find((s) => s.inside(camera));
     const eye = briefing ? briefing.threshold() : camera;
-    this.scenery?.update(t, this.group.worldToLocal(tmp.copy(eye)));
+    // and from the hallway, a training hall is what you see through its door on the deck: as if beyond its entrance
+    const looking = this.entrance && !briefing && !this.holds(camera) ? tmp.copy(camera).applyMatrix4(this.entrance.ends[0].through) : tmp.copy(eye);
+    this.scenery?.update(t, this.group.worldToLocal(looking));
     // within earshot of a beam: in the room, or on its doorstep in the hallway, or in one of its briefing rooms
     this.youreHere = this.hall ? this.holds(eye) || eye.distanceTo(this.slot.center) < HALF_D + 2 : eye.distanceTo(this.slot.center) < HALF_D + 2;
     if (this.beams.length) this.beams = this.beams.filter((b) => !b.update(now));

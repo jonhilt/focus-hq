@@ -1,10 +1,13 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { DOOR_H, DOOR_W, ROOM_DEPTH, ROOM_WIDTH, WALL_H } from './layout';
+import { clearOf, doorWall, type Footprint, insideOf, keepOut, reach } from './footprint';
+import { ENTRANCE_X } from './hallLayout';
+import { DOOR_H, DOOR_W, HALL, ROOM_DEPTH, ROOM_WIDTH, WALL_H } from './layout';
 import { toonMaterial } from './materials';
 
 // A themed room is a holodeck. Its walls and ceiling are lined with an invisible "skin", and a landscape is
-// built around the room (in room-local coordinates, overlapping the rest of the building). Each frame:
+// built around the room (in room-local coordinates, overlapping the rest of the building). A training hall (hall.ts)
+// is lined the same way, round its round wall: the landscape's built round whichever footprint it's for. Each frame:
 //   1. the office renders as usual, real walls included;
 //   2. the skin stamps this room's stencil value wherever it is visible and pushes the depth there to the far plane;
 //   3. the landscape renders only where the stencil matches, so it shows through this room's walls and nowhere else;
@@ -26,8 +29,9 @@ const noRaycast = () => {};
 /** The skin's geometry's name: the gap scan (gaps.ts) knows it hides whatever is behind it. */
 export const SKIN = 'holodeck skin';
 
-/** The skin: every inner wall face of the room (minus the doorway) plus the ceiling, all facing inwards. */
-function skinGeometry(): THREE.BufferGeometry {
+/** The skin: every inner wall face of the room or hall (minus the doorway) plus the ceiling, all facing inwards. */
+function skinGeometry(footprint: Footprint): THREE.BufferGeometry {
+  if (footprint === 'hall') return hallSkinGeometry();
   const x0 = -HALF_D + SKIN_INSET;
   const x1 = HALF_D - SKIN_INSET;
   const z0 = -HALF_W + SKIN_INSET;
@@ -42,6 +46,36 @@ function skinGeometry(): THREE.BufferGeometry {
     plane(z1 - DOOR_W / 2, SKIN_TOP).rotateY(Math.PI / 2).translate(x0, SKIN_TOP / 2, jamb),
     plane(DOOR_W, SKIN_TOP - DOOR_H).rotateY(Math.PI / 2).translate(x0, (DOOR_H + SKIN_TOP) / 2, 0),
     plane(x1 - x0, z1 - z0).rotateX(Math.PI / 2).translate(0, SKIN_TOP, 0), // ceiling
+  ]);
+  geo.name = SKIN;
+  return geo;
+}
+
+/** How high a training hall's skin reaches, under its ceiling. */
+const HALL_SKIN_TOP = HALL.height - 0.02;
+/** How far round a hall's round wall its skin reaches, from straight ahead either way, to the entrance wall's skin. */
+const HALL_SKIN_R = HALL.radius - SKIN_INSET;
+const HALL_SKIN_X = ENTRANCE_X + SKIN_INSET;
+const HALL_SKIN_SPAN = Math.acos(HALL_SKIN_X / HALL_SKIN_R);
+
+/** A training hall's skin: in front of its round wall, its entrance wall either side of and over the doorway, and its ceiling. */
+function hallSkinGeometry(): THREE.BufferGeometry {
+  const top = HALL_SKIN_TOP;
+  const halfW = HALL_SKIN_R * Math.sin(HALL_SKIN_SPAN);
+  const side = halfW - DOOR_W / 2;
+  // the round wall, round from straight ahead (+X) both ways to the entrance wall (three's cylinders start at +Z and
+  // turn towards +X), facing in: a cylinder's open side faces out, so it's mirrored across the hall, which turns it
+  // inside out and leaves it where it was
+  const wall = new THREE.CylinderGeometry(HALL_SKIN_R, HALL_SKIN_R, top, 128, 1, true, Math.PI / 2 - HALL_SKIN_SPAN, HALL_SKIN_SPAN * 2).translate(0, top / 2, 0);
+  wall.scale(1, 1, -1);
+  const plane = (w: number, h: number) => new THREE.PlaneGeometry(w, h).rotateY(Math.PI / 2);
+  const ceiling = new THREE.CircleGeometry(HALL.radius, 96).rotateX(Math.PI / 2).translate(0, top, 0);
+  const geo = mergeGeometries([
+    wall.toNonIndexed(),
+    plane(side, top).translate(HALL_SKIN_X, top / 2, -(DOOR_W / 2 + side / 2)).toNonIndexed(),
+    plane(side, top).translate(HALL_SKIN_X, top / 2, DOOR_W / 2 + side / 2).toNonIndexed(),
+    plane(DOOR_W, top - DOOR_H).translate(HALL_SKIN_X, (DOOR_H + top) / 2, 0).toNonIndexed(),
+    ceiling.toNonIndexed(),
   ]);
   geo.name = SKIN;
   return geo;
@@ -79,7 +113,20 @@ const gridGlsl = /* glsl */ `
     return a.x > 0.5 ? p.zy : (a.z > 0.5 ? p.xy : p.xz);
   }`;
 
-function portalMaterials(ref: number, tint: THREE.ColorRepresentation) {
+/**
+ * A training hall's walls' grid: round its round wall, as many whole squares round it as come nearest to `size`, so
+ * the grid meets itself behind the entrance; flat on the entrance wall and ceiling.
+ */
+const roundGridGlsl = /* glsl */ `
+  uniform float round;
+  uniform float entrance;
+  vec2 wallUv(vec3 p, vec3 n, float size) {
+    if (round <= 0.0 || abs(n.y) > 0.5 || p.x < entrance + 0.005) return surfaceUv(p, n);
+    float squares = floor(6.2831853 * round / size + 0.5);
+    return vec2(atan(p.z, -p.x) / 6.2831853 * squares * size, p.y);
+  }`;
+
+function portalMaterials(ref: number, tint: THREE.ColorRepresentation, footprint: Footprint) {
   const stamp = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
   stamp.stencilWrite = true;
   stamp.stencilRef = ref;
@@ -101,22 +148,31 @@ function portalMaterials(ref: number, tint: THREE.ColorRepresentation) {
 
   const holo = masked(
     new THREE.ShaderMaterial({
-      uniforms: { eye: { value: new THREE.Vector3() }, time: { value: 0 }, tint: { value: new THREE.Color(tint) } },
+      uniforms: {
+        eye: { value: new THREE.Vector3() },
+        time: { value: 0 },
+        tint: { value: new THREE.Color(tint) },
+        height: { value: footprint === 'hall' ? HALL_SKIN_TOP : WALL_H },
+        round: { value: footprint === 'hall' ? HALL_SKIN_R : 0 },
+        entrance: { value: HALL_SKIN_X },
+      },
       vertexShader: plainVertex,
       fragmentShader: /* glsl */ `
         uniform vec3 eye;
         uniform float time;
         uniform vec3 tint;
+        uniform float height;
         varying vec3 vPos;
         varying vec3 vNormal;
         ${gridGlsl}
+        ${roundGridGlsl}
         void main() {
           float d = distance(vPos, eye);
           float wall = 1.0 - step(0.5, abs(vNormal.y));
           float near = 1.0 - smoothstep(0.7, 2.6, d);
-          float lines = grid(surfaceUv(vPos, vNormal), 0.5) * mix(0.05 * exp(-d * 0.08), 0.65, near * wall);
+          float lines = grid(wallUv(vPos, vNormal, 0.5), 0.5) * mix(0.05 * exp(-d * 0.08), 0.65, near * wall);
           float seam = wall * (1.0 - smoothstep(0.0, 0.05, vPos.y)) * 0.55;
-          float sweep = wall * (1.0 - smoothstep(0.0, 0.035, abs(vPos.y / ${WALL_H.toFixed(2)} - fract(time * 0.07)))) * 0.06;
+          float sweep = wall * (1.0 - smoothstep(0.0, 0.035, abs(vPos.y / height - fract(time * 0.07)))) * 0.06;
           gl_FragColor = vec4(tint, clamp(lines + seam + sweep, 0.0, 0.8));
           #include <colorspace_fragment>
         }`,
@@ -150,7 +206,7 @@ export function holodeckMaterial(): THREE.ShaderMaterial {
 
 /** Holodeck walls for a vacant room (or anywhere): the skin, drawn opaque with the yellow grid. */
 export function holodeckSkin(): THREE.Mesh {
-  const mesh = new THREE.Mesh(skinGeometry(), holodeckMaterial());
+  const mesh = new THREE.Mesh(skinGeometry('room'), holodeckMaterial());
   mesh.raycast = noRaycast;
   return mesh;
 }
@@ -177,8 +233,9 @@ type Animate = (obj: THREE.Object3D, t: number) => void;
 
 /**
  * Toolkit handed to a theme to build its landscape. Coordinates are room-local: the room's floor centre is the
- * origin, +X runs from the door to the far wall, and the room occupies |x| < ROOM_DEPTH / 2, |z| < ROOM_WIDTH / 2 (keep scenery out of it).
- * Static things are merged into a few meshes per material when the landscape is finished.
+ * origin, +X runs from the door to the far wall, and the room occupies |x| < ROOM_DEPTH / 2, |z| < ROOM_WIDTH / 2, or
+ * a hall a circle `reach` round (keep scenery out of it: `clear`). Static things are merged into a few meshes per
+ * material when the landscape is finished; in a hall, any that stand inside it are moved out beyond its wall first.
  */
 export class Kit {
   readonly random: () => number;
@@ -188,14 +245,23 @@ export class Kit {
   readonly statics: THREE.Object3D[] = [];
   readonly animated: { obj: THREE.Object3D; fn?: Animate; merge: boolean }[] = [];
   readonly owned = new Set<{ dispose(): void }>();
+  /** How far the walls reach from the middle of the floor, at most: what to keep moving things beyond. */
+  readonly reach: number;
 
   constructor(
     readonly ref: number,
     seed: number,
     sunDir: THREE.Vector3,
+    readonly footprint: Footprint = 'room',
   ) {
     this.random = mulberry32(seed);
     this.sunDir = sunDir.clone().normalize();
+    this.reach = reach(footprint);
+  }
+
+  /** Whether a ground point is clear of the walls, by `margin`. */
+  clear(p: THREE.Vector3, margin = 1.2): boolean {
+    return clearOf(this.footprint, p, margin);
   }
 
   range(min: number, max: number): number {
@@ -465,10 +531,12 @@ export class Scenery {
   private readonly animated: { obj: THREE.Object3D; fn?: Animate }[];
   private readonly holo: THREE.ShaderMaterial;
   private readonly disposables = new Set<{ dispose(): void }>();
+  private readonly footprint: Footprint;
 
   constructor(kit: Kit, holoTint: THREE.ColorRepresentation) {
-    const skin = skinGeometry();
-    const mats = portalMaterials(kit.ref, holoTint);
+    this.footprint = kit.footprint;
+    const skin = skinGeometry(kit.footprint);
+    const mats = portalMaterials(kit.ref, holoTint, kit.footprint);
     this.holo = mats.holo;
     for (const d of [skin, mats.stamp, mats.clear, mats.restore, mats.holo, ...kit.owned]) this.disposables.add(d);
 
@@ -485,6 +553,7 @@ export class Scenery {
 
     const front = new THREE.Group();
     const glass = new THREE.Group();
+    keepOut(kit.footprint, kit.statics);
     this.bake(kit, front, glass);
     for (const [g, order] of [[front, ORDER.landscape], [this.behind, ORDER.landscape], [glass, ORDER.glass]] as const) {
       g.traverse((o) => (o.renderOrder = o.renderOrder === -1 ? -1 : order));
@@ -498,9 +567,11 @@ export class Scenery {
   /** Merges static meshes per material (and side of the room), adds outline hulls, and files everything into groups. */
   private bake(kit: Kit, front: THREE.Group, glass: THREE.Group): void {
     const box = new THREE.Box3();
+    const back = doorWall(kit.footprint);
+    const top = kit.footprint === 'hall' ? HALL.height : WALL_H;
     const sideOf = (obj: THREE.Object3D) => {
       box.setFromObject(obj);
-      return box.max.x < -HALF_D - 0.2 && box.min.y < WALL_H ? 'behind' : 'front';
+      return box.max.x < back - 0.2 && box.min.y < top ? 'behind' : 'front';
     };
     for (const { mat, geo, key } of this.merge(kit.statics, sideOf)) {
       const mesh = new THREE.Mesh(geo, mat);
@@ -571,7 +642,7 @@ export class Scenery {
 
   /** Call every frame with the camera in room-local coordinates. */
   update(t: number, eye: THREE.Vector3): void {
-    const inside = Math.abs(eye.x) < HALF_D && Math.abs(eye.z) < HALF_W;
+    const inside = insideOf(this.footprint, eye);
     // From further away than this, a doorway is too thin a slit to be worth drawing a landscape through.
     this.group.visible = inside || Math.hypot(eye.x, eye.z) < 34;
     if (!this.group.visible) return;

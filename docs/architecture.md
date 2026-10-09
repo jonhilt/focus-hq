@@ -63,7 +63,7 @@ server/
 client/src/
   main.ts                 renderer (toon shading + outline pass), loop, interaction, UI wiring
   world/                  ship layout, holodecks, stations, characters, station screens (screenPanes.ts: which panes side by side, and each viewer's switches; paneSwitches.ts and paneSwitchPanel.ts: the briefing room's strip of them under its viewscreen), Kanban display
-    scenery.ts            stencil "holo walls" that show a landscape built around a room
+    scenery.ts            stencil "holo walls" that show a landscape built around a room or a training hall (footprint.ts: which it's built round, and keeping it out of a hall)
     themes.ts             the landscapes (beach, forest, desert, moon, city, library)
     teamStation.ts        a goal's team station: its door in the holodeck and its briefing room out in the world, the lead's screen, seats for their helpers and the goal's reviewer (helperSeats.ts: who sits where)
     goalScreens.ts        a team station's holographic sign, goal board and screen on the holodeck's teams wall (goalRoom.ts: how its room stands, how the note fills the board, and what the team's up to at a glance; portraits.ts: the crew's portraits)

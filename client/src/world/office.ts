@@ -164,12 +164,12 @@ export class World {
       if (deck.kind === 'in-use') return void buildHiddenRoom(slot, b);
       const { project } = deck;
       const theme = roomTheme(project);
-      const key = `${project.id}|${theme}|${i}`;
+      const footprint = this.halls ? 'hall' : 'room';
+      const key = `${project.id}|${theme}|${i}|${footprint}`;
       let scenery = previous.get(key) ?? null;
       previous.delete(key);
       // the stencil value (slot + 1) and the sun direction both depend on the slot, hence the key
-      // a training hall has no landscape (yet)
-      if (!this.halls) scenery ??= createScenery(theme, i + 1, project.id, SUN_POSITION.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -slot.rotationY));
+      scenery ??= createScenery(theme, i + 1, project.id, SUN_POSITION.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -slot.rotationY), footprint);
       if (scenery) this.sceneries.set(key, scenery);
       this.rooms.set(project.id, new ProjectRoom(project, slot, b, scenery, this.teamStation, this.halls));
     });
