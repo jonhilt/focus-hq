@@ -246,10 +246,10 @@ function readout(goal: ChartGoal): HTMLElement {
   const parts = [
     `${n} waypoint${n === 1 ? '' : 's'}`,
     `${span((goal.closedAt ?? Date.now()) - goal.openedAt)}${goal.closedAt ? '' : ' under way'}`,
-    `${turns} course correction${turns === 1 ? '' : 's'}`,
-    `${open} contact${open === 1 ? '' : 's'} open`,
+    ...(turns ? [`${turns} course correction${turns === 1 ? '' : 's'}`] : []),
+    ...(open ? [`${open} contact${open === 1 ? '' : 's'} open`] : []),
     ...(hits ? [`${hits} hit${hits === 1 ? '' : 's'} absorbed`] : []),
-    ...(toLook ? [`${toLook} spot-check${toLook === 1 ? '' : 's'}`] : []),
+    ...(toLook ? [`${toLook} spot-check${toLook === 1 ? '' : 's'} to look at`] : []),
     goal.closedAt ? 'closed' : `${next} projected`,
   ];
   return h('div', { class: 'chart-readout' }, parts.join(' · '));
