@@ -234,3 +234,26 @@ describe('qaAgentModel', () => {
     expect(qaAgentModel({ model: '', qaModel: '' })).toBeUndefined();
   });
 });
+
+describe('spot-checks', () => {
+  it('reads QA’s picks, keeping at most three and dropping ones without a file or a why', () => {
+    const parsed = parseQaReport({
+      verdict: 'pass', summary: 'ok', checks: [], commands: [],
+      spotChecks: [
+        { file: ' server/merge.ts ', line: 41, why: ' New merge path ' },
+        { file: 'client/a.ts', line: -3, why: 'Bad line' },
+        { file: '', why: 'No file' },
+        { file: 'b.ts', why: 'Third' },
+        { file: 'c.ts', why: 'Fourth' },
+      ],
+    });
+    expect(parsed?.spotChecks).toEqual([{ file: 'server/merge.ts', line: 41, why: 'New merge path' }, { file: 'client/a.ts', why: 'Bad line' }, { file: 'b.ts', why: 'Third' }]);
+    expect(parseQaReport({ verdict: 'pass', summary: 'ok', checks: [], commands: [] })).not.toHaveProperty('spotChecks');
+  });
+
+  it('lists them on the pull request for a human look', () => {
+    const body = qaComment(report({ spotChecks: [{ file: 'server/merge.ts', line: 41, why: 'New merge path' }, { file: 'b.ts', why: 'Gate changed' }] }), { officer: 'Lt. Moreau' }, [], false);
+    expect(body).toContain('### 🔦 Worth a human look\n\n- `server/merge.ts:41`: New merge path\n- `b.ts`: Gate changed');
+    expect(qaComment(report(), { officer: 'Lt. Moreau' }, [], false)).not.toContain('Worth a human look');
+  });
+});

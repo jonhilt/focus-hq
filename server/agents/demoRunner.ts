@@ -179,6 +179,10 @@ export class DemoRunner implements AgentRunner {
         ],
         screenshots: captions,
         fixInstructions: fails ? `Guard the empty case in \`${changed[0]}\` (treat a missing list as []), show the empty message instead, and add a test for it.` : undefined,
+        spotChecks: [
+          { file: changed[0], line: 12 + (pr % 30), why: 'Reads the saved list straight from storage: a malformed entry would throw before anything renders.' },
+          { file: changed[1], line: 40 + (pr % 20), why: 'New request handler: check it only returns the signed-in shopper\'s items.' },
+        ],
       };
       await say(fails ? 'Found a problem with the empty state. Writing up the report.' : 'All good. Writing up the report.');
       return { ok: true, summary: JSON.stringify(report), structured: report };

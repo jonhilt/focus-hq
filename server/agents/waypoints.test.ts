@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { Agent, GoalNote, LeadWork } from '../../shared/types';
+import type { Agent, GoalNote, LeadWork, QaReport } from '../../shared/types';
 import { goalRecord, reopenedWork } from './lead';
-import { landedWaypoint, nextWaypoints, notedSlice, notedWaypoint, opening, shippedWaypoint, WAYPOINT_LIMITS, withWaypoint } from './waypoints';
+import { landedWaypoint, nextWaypoints, notedSlice, notedWaypoint, opening, shieldedWaypoint, shippedWaypoint, tickedSpotCheck, WAYPOINT_LIMITS, withWaypoint } from './waypoints';
 
 const note = (done: string, learned: string[] = []): GoalNote => ({ done, slice: [], learned, next: [] });
 
@@ -89,5 +89,40 @@ describe('waypoints', () => {
     expect(record.waypoints).toEqual(waypoints);
     expect(reopenedWork(record, 3).waypoints).toEqual(waypoints);
     expect(goalRecord({ ...lead, lead: { ...work, waypoints: undefined } }, 99)).not.toHaveProperty('waypoints');
+  });
+});
+
+describe('shields and spot-checks', () => {
+  const qa = (r: Partial<QaReport> = {}): QaReport => ({ verdict: 'pass', summary: 'ok', checks: [{ name: 'Works', result: 'pass', details: '' }, { name: 'Empty state', result: 'pass', details: '' }], commands: [], captions: [], ...r });
+  const work = { slice: 2, waypoints: [{ slice: 2, startedAt: 5 }] };
+
+  it('takes each pull request’s latest QA verdict as its shield, with how CI stood', () => {
+    const failed = shieldedWaypoint(work, { repo: 'acme/web', pr: 9, report: qa({ verdict: 'fail', checks: [{ name: 'Works', result: 'pass', details: '' }, { name: 'Empty state', result: 'fail', details: '' }] }), failedRounds: 1, ci: 'passing' }, 10);
+    expect(failed[0].shields).toEqual([{ repo: 'acme/web', pr: 9, verdict: 'fail', checks: { pass: 1, fail: 1, skip: 0 }, failing: ['Empty state'], failedRounds: 1, ci: 'passing', at: 10 }]);
+    // fixed and passed: one shield for the pull request, which remembers the round it failed
+    const fixed = shieldedWaypoint({ ...work, waypoints: failed }, { repo: 'acme/web', pr: 9, report: qa(), failedRounds: 1 }, 20);
+    expect(fixed[0].shields).toEqual([{ repo: 'acme/web', pr: 9, verdict: 'pass', checks: { pass: 2, fail: 0, skip: 0 }, failedRounds: 1, at: 20 }]);
+    // another repo's pull request in the same slice has a shield of its own
+    expect(shieldedWaypoint({ ...work, waypoints: fixed }, { repo: 'acme/api', pr: 3, report: qa(), failedRounds: 0 }, 30)[0].shields?.map((s) => s.repo)).toEqual(['acme/web', 'acme/api']);
+  });
+
+  it('keeps this round’s spot-checks, and the captain’s tick on any picked again', () => {
+    const first = shieldedWaypoint(work, { repo: 'acme/web', pr: 9, report: qa({ spotChecks: [{ file: 'a.ts', line: 4, why: 'Gate' }, { file: 'b.ts', why: 'Route' }] }), failedRounds: 0 }, 10);
+    const ticked = tickedSpotCheck({ waypoints: first }, 2, 0, true, 15);
+    if ('error' in ticked) throw new Error(ticked.error);
+    expect(ticked[0].spotChecks?.[0]).toEqual({ file: 'a.ts', line: 4, why: 'Gate', repo: 'acme/web', pr: 9, checked: 15 });
+    const again = shieldedWaypoint({ ...work, waypoints: ticked }, { repo: 'acme/web', pr: 9, report: qa({ spotChecks: [{ file: 'a.ts', line: 4, why: 'Gate, still' }, { file: 'c.ts', why: 'New' }] }), failedRounds: 0 }, 20);
+    expect(again[0].spotChecks).toEqual([{ file: 'a.ts', line: 4, why: 'Gate, still', repo: 'acme/web', pr: 9, checked: 15 }, { file: 'c.ts', why: 'New', repo: 'acme/web', pr: 9 }]);
+  });
+
+  it('lets the captain un-tick one, and refuses one that isn’t there', () => {
+    const picked = shieldedWaypoint(work, { repo: 'acme/web', pr: 9, report: qa({ spotChecks: [{ file: 'a.ts', why: 'Gate' }] }), failedRounds: 0 }, 10);
+    const on = tickedSpotCheck({ waypoints: picked }, 2, 0, true, 15);
+    if ('error' in on) throw new Error(on.error);
+    const off = tickedSpotCheck({ waypoints: on }, 2, 0, false, 16);
+    if ('error' in off) throw new Error(off.error);
+    expect(off[0].spotChecks?.[0]).not.toHaveProperty('checked');
+    expect(tickedSpotCheck({ waypoints: picked }, 2, 5, true, 15)).toEqual({ error: 'There\'s no spot-check 6 on waypoint 2' });
+    expect(tickedSpotCheck({ waypoints: picked }, 7, 0, true, 15)).toHaveProperty('error');
   });
 });

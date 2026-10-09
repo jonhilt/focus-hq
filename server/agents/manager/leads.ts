@@ -6,7 +6,7 @@ import { GitHub } from '../../github/service';
 import { newId } from '../../util';
 import { afterVerdict, closeCheck, fileGoal, leftLog, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, landedMidTurnNote, landedNote, leadWorktreeId, moveQueued, nextGoal, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch } from '../lead';
 import { Workspace } from '../services';
-import { landedWaypoint } from '../waypoints';
+import { landedWaypoint, shieldedWaypoint, tickedSpotCheck } from '../waypoints';
 import { type ManagerServices, Part, Refused, type WorkError } from './core';
 
 /** Goals and their leads: starting, queueing, reopening and closing goals, and what the lead hears about their pull requests. */
@@ -253,6 +253,26 @@ export class Leads extends Part {
   }
 
   /** QA's verdict on one of the lead's pull requests: a fail wakes the lead to fix it, a couple of times at most. */
+  /**
+   * QA's verdict on a lead's pull request goes on its slice's waypoint as its shield, with its spot-checks and how CI
+   * stood: the review and the board's entry are both gone by the time the pull request lands.
+   */
+  leadShielded(projectId: string, repo: string, number: number, report: QaReport, failedRounds: number): void {
+    const lead = this.leadWith(repo, number);
+    if (!lead?.lead) return;
+    const ci = this.store.boards.get(projectId)?.prs.find((p) => p.repo === repo && p.number === number)?.checks;
+    this.update(lead, { lead: { ...lead.lead, waypoints: shieldedWaypoint(lead.lead, { repo, pr: number, report, failedRounds, ci }, Date.now()) } });
+  }
+
+  /** The captain ticks off (or un-ticks) one of the spot-checks QA picked on a slice of a goal under way. */
+  tickSpotCheck(leadId: string, slice: number, index: number, checked: boolean): void {
+    const lead = this.store.agents.get(leadId);
+    if (!lead?.lead) throw new Error('There’s no goal under way there');
+    const waypoints = tickedSpotCheck(lead.lead, slice, index, checked, Date.now());
+    if ('error' in waypoints) throw new Error(waypoints.error);
+    this.update(lead, { lead: { ...lead.lead, waypoints } });
+  }
+
   leadHearsVerdict(repo: string, number: number, from: string, report: QaReport, failedRounds: number): void {
     const lead = this.leadWith(repo, number);
     if (!lead) return;

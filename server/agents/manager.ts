@@ -159,6 +159,11 @@ export class AgentManager {
     return this.core.cloud.stayLocal(id, start);
   }
 
+  /** The captain ticks off (or un-ticks) a spot-check on a slice of a goal under way. */
+  tickSpotCheck(id: string, slice: number, index: number, checked: boolean): void {
+    this.core.leads.tickSpotCheck(id, slice, index, checked);
+  }
+
   readTurn(id: string): void {
     this.core.comms.readTurn(id);
   }

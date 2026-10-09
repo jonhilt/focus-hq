@@ -1,6 +1,8 @@
 // Goals: each a lead at a team station, slice by slice, and the room's log of closed ones.
 
 import type { Effort } from './agents';
+import type { ChecksState } from './github';
+import type { QaSpotCheck } from './qa';
 
 /** A goal waiting for a free team station: what the captain said, and the effort its lead will start at. */
 export interface QueuedGoal {
@@ -45,6 +47,34 @@ export interface Waypoint {
   learned?: string[];
   /** What done looked like before the lead changed it during the slice: a course correction. */
   turnedFrom?: string;
+  /** The guardrails on each of the slice's pull requests, as QA last reported. */
+  shields?: Shield[];
+  /** The places QA picked for the captain to look at, and which the captain has. */
+  spotChecks?: SpotCheck[];
+}
+
+/**
+ * The guardrails on one of a slice's pull requests as QA last reported: its verdict, how its checks went, how many
+ * rounds failed before (a fail then fixed is a hit the shields absorbed), and how CI stood then.
+ */
+export interface Shield {
+  repo: string;
+  pr: number;
+  verdict: 'pass' | 'fail';
+  checks: { pass: number; fail: number; skip: number };
+  /** The checks that failed in that round, by name. */
+  failing?: string[];
+  /** Rounds of QA the pull request failed, the last one included. */
+  failedRounds: number;
+  ci?: ChecksState;
+  at: number;
+}
+
+/** A place QA picked for the captain to look at, on one of the slice's pull requests; `checked` once they have. */
+export interface SpotCheck extends QaSpotCheck {
+  repo: string;
+  pr: number;
+  checked?: number;
 }
 
 /**

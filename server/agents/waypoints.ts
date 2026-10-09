@@ -1,7 +1,7 @@
 // A goal's slices as waypoints on its chart: what each set out to do, what it taught us, and when. The office keeps
 // them as the lead ships, notes and lands each slice; these are the pure decisions, and the manager's parts call them.
 
-import type { GoalNote, LeadWork, Waypoint } from '../../shared/types';
+import type { ChecksState, GoalNote, LeadWork, QaReport, SpotCheck, Waypoint } from '../../shared/types';
 import type { NoteInput } from './lead';
 
 /** How much a waypoint keeps: they all travel with the goal on every update, so each stays a few lines long. */
@@ -77,4 +77,49 @@ export const landedWaypoint = (work: Course, now: number): Waypoint[] => withWay
 /** The waypoints as the next slice starts on fresh code: the last one has landed, and the next starts now. */
 export function nextWaypoints(work: Course, now: number): Waypoint[] {
   return withWaypoint({ slice: work.slice + 1, waypoints: landedWaypoint(work, now) }, now, (w) => w);
+}
+
+/** A QA verdict on one of the slice's pull requests, and how CI stood on it then. */
+export interface Verdict {
+  repo: string;
+  pr: number;
+  report: QaReport;
+  failedRounds: number;
+  ci?: ChecksState;
+}
+
+const sameSpot = (a: SpotCheck, b: Omit<SpotCheck, 'checked'>) => a.repo === b.repo && a.pr === b.pr && a.file === b.file && a.line === b.line;
+
+/**
+ * The waypoints once QA gives its verdict on one of the slice's pull requests: its shield is that verdict (replacing the
+ * last round's), and its spot-checks are this round's picks, keeping the tick on any the captain has already looked at.
+ */
+export function shieldedWaypoint(work: Course, v: Verdict, now: number): Waypoint[] {
+  const checks = { pass: 0, fail: 0, skip: 0 };
+  for (const c of v.report.checks) checks[c.result]++;
+  const failing = v.report.checks.filter((c) => c.result === 'fail').map((c) => c.name).filter(Boolean);
+  const shield = { repo: v.repo, pr: v.pr, verdict: v.report.verdict, checks, ...(failing.length && { failing }), failedRounds: v.failedRounds, ...(v.ci && { ci: v.ci }), at: now };
+  return withWaypoint(work, now, (w) => {
+    const picks = (v.report.spotChecks ?? []).map((c) => ({ ...c, repo: v.repo, pr: v.pr }));
+    const kept = (w.spotChecks ?? []).filter((c) => c.repo !== v.repo || c.pr !== v.pr);
+    const spotChecks = [...kept, ...picks.map((c) => {
+      const checked = w.spotChecks?.find((old) => sameSpot(old, c))?.checked;
+      return checked ? { ...c, checked } : c;
+    })];
+    return {
+      ...w,
+      shields: [...(w.shields ?? []).filter((x) => x.repo !== v.repo || x.pr !== v.pr), shield],
+      ...(spotChecks.length && { spotChecks }),
+    };
+  });
+}
+
+/** The waypoints once the captain ticks off (or un-ticks) the `index`th spot-check of `slice`'s, or why not. */
+export function tickedSpotCheck(work: Pick<LeadWork, 'waypoints'>, slice: number, index: number, checked: boolean, now: number): Waypoint[] | { error: string } {
+  const w = work.waypoints?.find((x) => x.slice === slice);
+  const spot = w?.spotChecks?.[index];
+  if (!w || !spot) return { error: `There's no spot-check ${index + 1} on waypoint ${slice}` };
+  const next = { ...spot, ...(checked && { checked: spot.checked ?? now }) };
+  if (!checked) delete next.checked;
+  return work.waypoints!.map((x) => (x === w ? { ...w, spotChecks: w.spotChecks!.map((c, i) => (i === index ? next : c)) } : x));
 }

@@ -9,6 +9,13 @@ export interface QaCheck {
   details: string;
 }
 
+/** A place in the diff QA thinks most worth a human's eyes, and why: the captain spot-checks rather than reading it all. */
+export interface QaSpotCheck {
+  file: string;
+  line?: number;
+  why: string;
+}
+
 /** The QA officer's verdict on one pull request, as they report it at the end of their session. */
 export interface QaReport {
   verdict: 'pass' | 'fail';
@@ -21,6 +28,8 @@ export interface QaReport {
   fixInstructions?: string;
   /** A caption for each screenshot they took on purpose (mcp__browser__screenshot), in the order they took them. */
   captions: string[];
+  /** The two or three places in the diff most worth a human look. Missing on reports from before they were asked for. */
+  spotChecks?: QaSpotCheck[];
 }
 
 /** A screenshot from a QA review, kept as evidence with the report. */

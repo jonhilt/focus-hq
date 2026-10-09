@@ -17,6 +17,9 @@ export function qaAgentModel(settings: Pick<Settings, 'model' | 'qaModel'>): str
   return settings.qaModel.trim() || settings.model.trim() || undefined;
 }
 
+/** How many places in the diff QA picks for the captain to spot-check, at most. */
+export const SPOT_CHECKS = 3;
+
 /** JSON schema for the QA officer's structured report (the Agent SDK's outputFormat). */
 export const QA_SCHEMA: Record<string, unknown> = {
   type: 'object',
@@ -55,6 +58,21 @@ export const QA_SCHEMA: Record<string, unknown> = {
       description: 'One short caption per mcp__browser__screenshot call you made, in the order you took them. Empty if you took none.',
       items: { type: 'string' },
     },
+    spotChecks: {
+      type: 'array',
+      maxItems: SPOT_CHECKS,
+      description: `The ${SPOT_CHECKS} or fewer places in the diff most worth a human's eyes, riskiest first: the captain spot-checks these rather than reading every line.`,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['file', 'why'],
+        properties: {
+          file: { type: 'string', description: 'The file\'s path in the repo.' },
+          line: { type: 'integer', description: 'The line in the new version of the file where it starts.' },
+          why: { type: 'string', description: 'Why it deserves a look, in a sentence: what could go wrong there.' },
+        },
+      },
+    },
   },
 };
 
@@ -81,6 +99,11 @@ export function parseQaReport(structured: unknown, text = ''): QaReport | null {
   if (r.verdict !== 'pass' && r.verdict !== 'fail') return null;
   const list = (v: unknown) => (Array.isArray(v) ? (v as Record<string, unknown>[]).filter((x) => x && typeof x === 'object') : []);
   const fix = typeof r.fixInstructions === 'string' && r.fixInstructions.trim() ? r.fixInstructions.trim() : undefined;
+  const spotChecks = list(r.spotChecks)
+    .map((c) => ({ file: String(c.file ?? '').trim(), line: Number.isInteger(c.line) && Number(c.line) > 0 ? Number(c.line) : undefined, why: String(c.why ?? '').trim() }))
+    .filter((c) => c.file && c.why)
+    .slice(0, SPOT_CHECKS)
+    .map(({ line, ...c }) => ({ ...c, ...(line && { line }) }));
   return {
     verdict: r.verdict,
     summary: String(r.summary ?? '').trim(),
@@ -92,6 +115,7 @@ export function parseQaReport(structured: unknown, text = ''): QaReport | null {
     commands: list(r.commands).map((c) => ({ command: String(c.command ?? '').trim(), result: String(c.result ?? '').trim() })),
     fixInstructions: r.verdict === 'fail' ? fix : undefined,
     captions: Array.isArray(r.screenshots) ? r.screenshots.map((c) => String(c ?? '').trim()) : [],
+    ...(spotChecks.length && { spotChecks }),
   };
 }
 
@@ -126,6 +150,7 @@ export function qaComment(report: QaReport, by: { officer: string; sha?: string 
     lines.push('', '<details><summary>🧪 Commands run</summary>', '', '| Command | Result |', '|---|---|', ...report.commands.map((c) => `| \`${cell(c.command)}\` | ${cell(c.result)} |`), '', '</details>');
   }
   if (!pass && report.fixInstructions) lines.push('', '### 🔧 What needs fixing', '', report.fixInstructions);
+  if (report.spotChecks?.length) lines.push('', '### 🔦 Worth a human look', '', ...report.spotChecks.map((c) => `- \`${c.file}${c.line ? `:${c.line}` : ''}\`: ${c.why}`));
   lines.push('', '### 📸 Screenshots');
   if (!screenshots.length) lines.push('', 'No screenshots were taken during this review.');
   screenshots.forEach((s, i) => {
@@ -156,7 +181,9 @@ How to test:
 
 Rules: don't change the code under test, don't commit or push, and don't comment on, review or merge anything on GitHub: the office posts your report. Nobody can answer questions while you work, so make sensible calls and say what you assumed.
 
-Finish with the structured QA report: the verdict, a two to four sentence summary, every check you made (acceptance criteria first), the commands you ran with their results, a caption for each screenshot you took and, on a fail, precise fix instructions for the developer.
+Finish with the structured QA report: the verdict, a two to four sentence summary, every check you made (acceptance criteria first), the commands you ran with their results, a caption for each screenshot you took, up to ${SPOT_CHECKS} spot-checks and, on a fail, precise fix instructions for the developer.
+
+Spot-checks: the captain rarely reads a whole diff, but likes to look at the riskiest few places with their own eyes. From your review, pick up to ${SPOT_CHECKS} places most worth that look, riskiest first: a new route or permission, a changed guard or merge gate, a deleted or weakened test, data that could be lost, a tricky concurrency or error path. Give the file, the line where it starts, and in a sentence what could go wrong there. Pick none for a change too small or plain to need it.
 `.trim();
 }
 
