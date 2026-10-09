@@ -2,6 +2,7 @@ import { createSdkMcpServer, type McpSdkServerConfigWithInstance, tool } from '@
 import { z } from 'zod';
 import { errorMessage } from '../util';
 import { EXPLAINER_LIMITS as E, STAGE_SIZE } from './explainer';
+import { CONTACT_LIMITS as C } from './contacts';
 import { NOTE_LIMITS as L } from './lead';
 import type { OfficeTools } from './types';
 
@@ -19,6 +20,12 @@ export const noteShape = {
   learned: z.string().max(L.line).optional().describe(`One new line on what a slice taught you, or a decision and why (at most ${L.line} characters).`),
   allLearned: z.array(z.string().max(L.line)).max(L.learned).optional().describe(`Replaces every learned line: to merge older lessons when the list is full (at most ${L.learned} lines of ${L.line} characters each).`),
   next: z.array(z.string().max(L.item)).max(L.next).optional().describe(`Up to ${L.next} candidate next slices (at most ${L.item} characters each), replacing the last ones.`),
+  contact: z.string().max(C.text).optional().describe(`Log one loose thread you noticed and don't want lost, a question, a risk or an idea off the current path, as a contact on the goal's chart (at most ${C.text} characters, ${C.open} open at once). The office gives it an id (c1, c2…).`),
+  closeContact: z.object({
+    id: z.string().describe('The contact\'s id, like c2.'),
+    as: z.enum(['pursued', 'dropped']).describe('pursued: you\'re taking it up as work; dropped: it isn\'t worth it, or the course moved on.'),
+    why: z.string().max(C.why).optional().describe(`Why, in a line (at most ${C.why} characters).`),
+  }).optional().describe('Close an open contact once you pursue or drop it.'),
 };
 
 /**
@@ -70,7 +77,7 @@ export function officeMcpServer(tools: OfficeTools): McpSdkServerConfigWithInsta
       ),
       tool(
         'note',
-        'Update the goal\'s note, which survives when your conversation gets summarised and which the captain sees. Send only what changes: each field replaces what was there, except learned, which adds a line. Keep it short; the office refuses a note that grows into a spec.',
+        'Update the goal\'s note, which survives when your conversation gets summarised and which the captain sees. Send only what changes: each field replaces what was there, except learned, which adds a line, and contact and closeContact, which log and close loose threads on the goal\'s chart. Keep it short; the office refuses a note that grows into a spec.',
         noteShape,
         (input) => answer(() => tools.note(input), "Couldn't update the note"),
       ),

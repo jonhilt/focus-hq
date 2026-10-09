@@ -3,6 +3,7 @@ import { TEAM_STATIONS } from '../../shared/types';
 import type { BranchState, HelperEvent, RunOutcome } from './types';
 import { slugify } from '../util';
 import { SCRATCH_RULE } from './scratch';
+import { type ContactInput, contactsForPrompt } from './contacts';
 
 /** The lead's checkout of one repo: a folder inside their workspace. */
 export const leadWorktreeId = (agentId: string, folder: string) => `${agentId}/${folder}`;
@@ -160,7 +161,7 @@ Your workspace holds every repo of the project side by side, each in its own fol
 
 How to work:
 - When a goal is new, talk it through briefly: what they want, why, and what done looks like. Don't write a spec or plan the whole route. Agree the first slice and get going.
-- Keep the goal's note with mcp__office__note. It survives when your conversation gets summarised, and the captain sees it, so keep it current and short: it's a note, not a spec. In it: what done looks like (once you've agreed it), this slice's checklist when the slice has more than a couple of parts (tick items off as you go), a line or two on what each slice taught you once it lands, and up to three ideas for what's next. You can also give the goal a better title. When a slice lands the office clears its checklist: carry what's unfinished into the next one, or say in learned that you dropped it.
+- Keep the goal's note with mcp__office__note. It survives when your conversation gets summarised, and the captain sees it, so keep it current and short: it's a note, not a spec. In it: what done looks like (once you've agreed it), this slice's checklist when the slice has more than a couple of parts (tick items off as you go), a line or two on what each slice taught you once it lands, and up to three ideas for what's next. You can also give the goal a better title. When a slice lands the office clears its checklist: carry what's unfinished into the next one, or say in learned that you dropped it. When you notice a loose thread worth keeping (a question, a risk, an idea off the current path), log it as a contact rather than chasing it now, and close it when you pursue or drop it: it stays on the goal's chart until you do.
 - A slice is a reasonably sized change that ships on its own and gets something real working: often a thin slice end to end, through every repo it needs. A slice can also be a refactor, once the code has learned something. Keep each pull request reviewable.
 - Before changing a repo, read its CLAUDE.md or README. Run its tests, type checks and linters, and check UI changes in the browser with the mcp__browser__ tools.
 - Commit in each repo as you go. Never push and never open pull requests yourself.
@@ -188,7 +189,7 @@ export const afterLanding = (dirtyFolders: string[]): 'held-back' | 'next' => (d
  * What a lead's conversation keeps when the captain compacts it: the goal and how it's going, not the details the code
  * and the note already hold.
  */
-export function compactInstructions(work: Pick<LeadWork, 'title' | 'note' | 'brief'>): string {
+export function compactInstructions(work: Pick<LeadWork, 'title' | 'note' | 'brief' | 'contacts'>): string {
   return [
     `Summarise this conversation for the lead of the goal "${work.title}" to carry on from.`,
     'Keep: the goal, what the captain asked for and what done looks like; the decisions made and why; what each slice taught us; what the captain prefers, and anything they asked to keep in mind; the pull requests and what became of them; what to do next.',
@@ -208,9 +209,9 @@ export const emptyNote = (): GoalNote => ({ done: '', slice: [], learned: [], ne
 
 /**
  * What the lead can send through the note tool: each field replaces what was there, except `learned`, which adds a
- * line (`allLearned` replaces them all, to merge old lessons when the list is full).
+ * line (`allLearned` replaces them all, to merge old lessons when the list is full), and the contacts (`contacts.ts`).
  */
-export interface NoteInput {
+export interface NoteInput extends ContactInput {
   title?: string;
   done?: string;
   slice?: { text: string; done?: boolean }[];
@@ -349,7 +350,7 @@ export function answerQuestion(questions: readonly GoalQuestion[], questionId: s
  * The goal as the captain put it and the lead last wrote it down: for a new slice, and anywhere their conversation may
  * have been summarised or lost.
  */
-export function noteForPrompt(work: Pick<LeadWork, 'title' | 'note' | 'brief'>): string {
+export function noteForPrompt(work: Pick<LeadWork, 'title' | 'note' | 'brief' | 'contacts'>): string {
   const n = work.note ?? emptyNote();
   const parts = [`The goal: ${work.title}`];
   if (work.brief && work.brief !== work.title) parts.push(`As the captain first put it:\n${work.brief.split('\n').map((l) => `> ${l}`.trimEnd()).join('\n')}`);
@@ -357,6 +358,8 @@ export function noteForPrompt(work: Pick<LeadWork, 'title' | 'note' | 'brief'>):
   if (n.learned.length) parts.push(`What the slices so far taught us:\n${n.learned.map((l) => `- ${l}`).join('\n')}`);
   if (n.slice.length) parts.push(`This slice:\n${n.slice.map((i) => `- [${i.done ? 'x' : ' '}] ${i.text}`).join('\n')}`);
   if (n.next.length) parts.push(`Ideas for next:\n${n.next.map((x) => `- ${x}`).join('\n')}`);
+  const contacts = contactsForPrompt(work.contacts);
+  if (contacts) parts.push(contacts);
   return parts.join('\n\n');
 }
 
@@ -409,7 +412,7 @@ export function goalRecord(agent: Agent, now: number): GoalRecord {
     id: agent.id, title: work.title, note: work.note, slices: work.prs.length ? work.slice : work.slice - 1, prs: everyPr(work), slice: work.slice, leadName: agent.name, sessionId: agent.sessionId,
     brief: work.brief, branch: agent.branch, repos: work.repos, openedAt: agent.startedAt, closedAt: now,
     ...(work.artifacts?.length && { artifacts: work.artifacts }), ...(work.questions?.length && { questions: work.questions }),
-    ...(work.waypoints?.length && { waypoints: work.waypoints }),
+    ...(work.waypoints?.length && { waypoints: work.waypoints }), ...(work.contacts?.length && { contacts: work.contacts }),
   };
 }
 
@@ -429,7 +432,7 @@ export function reopenedWork(goal: GoalRecord, station: number): LeadWork {
     station, title: goal.title, brief: goal.brief, note: goal.note, repos: goal.repos ?? [], slice, prs: current,
     ...(landed.length && { landed }), reopening: { closedAt: goal.closedAt },
     ...(goal.artifacts && { artifacts: goal.artifacts }), ...(goal.questions && { questions: goal.questions }),
-    ...(goal.waypoints && { waypoints: goal.waypoints }),
+    ...(goal.waypoints && { waypoints: goal.waypoints }), ...(goal.contacts && { contacts: goal.contacts }),
   };
 }
 

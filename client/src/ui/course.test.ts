@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Waypoint } from '../../../shared/types';
+import type { Contact, Waypoint } from '../../../shared/types';
 import { CHART, clearOf, clip, everySlice, plotCourse, seeded, smoothPath } from './course';
 
 const wp = (slice: number, more: Partial<Waypoint> = {}): Waypoint => ({ slice, startedAt: slice * 10, landedAt: slice * 10 + 5, title: `Slice ${slice}`, ...more });
@@ -75,6 +75,40 @@ describe('the course', () => {
     expect(clearOf(objective, { x: 300, y: 400 }, 100, 900)).toEqual({ x: 312, y: 405, anchor: 'start' });
     expect(clearOf(objective, { x: 560, y: 130 }, 100, 900)).toEqual({ x: 548, y: 135, anchor: 'end' });
     expect(clearOf(objective, { x: 880, y: 300 }, 100, 900).anchor).toBe('end');
+  });
+});
+
+describe('contacts on the chart', () => {
+  const contact = (id: string, slice: number, closed?: Contact['closed']) => ({ id, text: `Thread ${id}`, slice, at: 0, ...(closed && { closed }) });
+
+  it('puts each by the waypoint that noticed it, clear of the chart’s edges and of each other', () => {
+    const contacts = [contact('c1', 1), contact('c2', 2), contact('c3', 2), contact('c4', 2), contact('c5', 3)];
+    const plot = plotCourse({ waypoints: [wp(1), wp(2), wp(3)], next: ['Header'], contacts, seed: 'lead_p_1' });
+    expect(plot.contacts).toHaveLength(5);
+    expect(plot.contacts.every(inside)).toBe(true);
+    for (const c of plot.contacts) {
+      const by = plot.points.find((p) => p.waypoint.slice === c.contact.slice)!;
+      expect(Math.hypot(c.x - by.x, c.y - by.y)).toBeLessThan(200);
+    }
+    const spots = plot.contacts.map((c) => `${Math.round(c.x)},${Math.round(c.y)}`);
+    expect(new Set(spots).size).toBe(spots.length);
+  });
+
+  it('marks how each stands, and links a pursued one to the waypoint it went into', () => {
+    const plot = plotCourse({
+      waypoints: [wp(1), wp(2), wp(3)],
+      next: [],
+      contacts: [contact('c1', 1, { as: 'pursued', slice: 3, at: 1 }), contact('c2', 1, { as: 'dropped', why: 'Not needed', slice: 2, at: 1 }), contact('c3', 2)],
+      seed: 's',
+    });
+    expect(plot.contacts.map((c) => c.state)).toEqual(['pursued', 'dropped', 'open']);
+    expect(plot.contacts[0].pursuedAt).toEqual({ x: plot.points[2].x, y: plot.points[2].y });
+    expect(plot.contacts[1].pursuedAt).toBeUndefined();
+  });
+
+  it('puts one noticed in a slice that isn’t on the chart by the last waypoint', () => {
+    const plot = plotCourse({ waypoints: [wp(1)], next: [], contacts: [contact('c1', 9)], seed: 's' });
+    expect(Math.hypot(plot.contacts[0].x - plot.points[0].x, plot.contacts[0].y - plot.points[0].y)).toBeLessThan(200);
   });
 });
 

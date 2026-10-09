@@ -3,6 +3,7 @@ import type { Agent, MessageReply, ResumeHow } from '../../../shared/types';
 import { answerMessage } from '../../../shared/artifacts';
 import { answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, applyNote, type NoteInput, pageErrorsNote } from '../lead';
 import { explainerPage, type ExplainerInput } from '../explainer';
+import { applyContacts } from '../contacts';
 import { notedWaypoint } from '../waypoints';
 import { Renderer } from '../services';
 import { Part, Refused } from './core';
@@ -14,11 +15,15 @@ export class GoalTools extends Part {
     return Effect.gen({ self: this }, function* () {
       const work = agent.lead;
       if (!work) return yield* new Refused({ message: 'There’s no goal to keep a note on' });
+      const now = Date.now();
       const next = applyNote(work, input);
       if ('error' in next) return yield* new Refused({ message: next.error });
-      const waypoints = notedWaypoint(work, input, next.note, Date.now());
-      this.update(agent, { lead: { ...work, title: next.title, note: next.note, ...(waypoints && { waypoints }) }, issue: { ...agent.issue, title: next.title } });
-      return 'Noted. The captain sees the note on the goal, and you hear it again at each new slice.';
+      const contacts = applyContacts(work, input, now);
+      if ('error' in contacts) return yield* new Refused({ message: contacts.error });
+      const waypoints = notedWaypoint(work, input, next.note, now);
+      this.update(agent, { lead: { ...work, title: next.title, note: next.note, ...(waypoints && { waypoints }), ...(contacts.length && { contacts }) }, issue: { ...agent.issue, title: next.title } });
+      const logged = input.contact?.trim() ? ` Logged contact ${contacts.at(-1)!.id}.` : '';
+      return `Noted.${logged} The captain sees the note on the goal, and you hear it again at each new slice.`;
     });
   }
 

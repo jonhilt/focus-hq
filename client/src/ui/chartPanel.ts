@@ -1,4 +1,4 @@
-import type { Agent, GoalNote, GoalRecord, LeadPr, Waypoint } from '../../../shared/types';
+import type { Agent, Contact, GoalNote, GoalRecord, LeadPr, Waypoint } from '../../../shared/types';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
@@ -16,6 +16,7 @@ interface ChartGoal {
   current?: number;
   /** Every pull request it shipped, each with its slice. */
   prs: LeadPr[];
+  contacts: Contact[];
   openedAt: number;
   closedAt?: number;
 }
@@ -30,11 +31,12 @@ const live = (agent: Agent): ChartGoal | undefined => {
     id: agent.id, title: work.title, note: work.note, current: work.slice, openedAt: launched(agent.startedAt, work.waypoints),
     waypoints: everySlice(work.waypoints, work.slice, agent.startedAt),
     prs: [...(work.landed ?? []), ...work.prs.map((p) => ({ ...p, slice: p.slice ?? work.slice }))],
+    contacts: work.contacts ?? [],
   };
 };
 
 const closed = (goal: GoalRecord): ChartGoal => ({
-  id: goal.id, title: goal.title, note: goal.note, prs: goal.prs, openedAt: launched(goal.openedAt, goal.waypoints), closedAt: goal.closedAt,
+  id: goal.id, title: goal.title, note: goal.note, prs: goal.prs, contacts: goal.contacts ?? [], openedAt: launched(goal.openedAt, goal.waypoints), closedAt: goal.closedAt,
   // a slice that started as the goal closed, and never shipped or taught us anything, isn't part of the voyage
   waypoints: everySlice(goal.waypoints, goal.slices, goal.openedAt).filter((w) => w.slice <= goal.slices || w.title || w.learned?.length),
 });
@@ -52,6 +54,9 @@ const span = (ms: number) => {
   return hrs < 24 ? `${hrs} h` : `${Math.floor(hrs / 24)} d${hrs % 24 ? ` ${hrs % 24} h` : ''}`;
 };
 const named = (w: Waypoint) => w.title ?? `Slice ${w.slice}`;
+/** How a contact stands, in a few words. */
+const standing = (c: Contact) =>
+  !c.closed ? `open since waypoint ${c.slice}` : c.closed.as === 'pursued' ? `pursued in waypoint ${c.closed.slice}` : `dropped${c.closed.why ? `: ${c.closed.why}` : ''}`;
 
 const SVG = 'http://www.w3.org/2000/svg';
 function s(tag: string, attrs: Record<string, string | number> = {}, ...children: (Node | string | null | false)[]): SVGElement {
@@ -87,6 +92,19 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: number, pick: (sl
       s('path', { class: 'cross', d: `M${x.to.x - 7} ${x.to.y - 7} l14 14 M${x.to.x + 7} ${x.to.y - 7} l-14 14` }),
       s('text', { x: x.label.x, y: x.label.y, 'text-anchor': x.label.anchor }, s('tspan', { class: 'was' }, 'SCRUBBED '), x.text),
     ]));
+
+  // loose threads: a pursued one points to the waypoint it went into
+  const contacts = s('g', { class: 'chart-contacts' },
+    ...plot.contacts.map((c) => {
+      const g = s('g', { class: `chart-contact ${c.state}`, role: 'button' },
+        s('title', {}, `${c.contact.id}: ${c.contact.text} (${standing(c.contact)})`),
+        c.pursuedAt ? s('path', { class: 'trail', d: `M${c.x} ${c.y} L${c.pursuedAt.x} ${c.pursuedAt.y}` }) : null,
+        s('path', { class: 'blip', d: `M${c.x} ${c.y - 8} l8 8 l-8 8 l-8 -8 Z` }),
+        s('text', { x: c.label.x, y: c.label.y, 'text-anchor': c.label.anchor }, c.text),
+      );
+      g.addEventListener('click', () => pick(c.contact.slice));
+      return g;
+    }));
 
   const waypoints = s('g', { class: 'chart-waypoints' },
     ...plot.points.map((p) => {
@@ -128,6 +146,7 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: number, pick: (sl
       h('div', { class: 'chart-done' }, done ? clip(done, 56) : 'Not agreed yet')),
     projected,
     scrubbed,
+    contacts,
     s('path', { class: 'chart-course', d: plot.path }),
     s('circle', { class: 'chart-launch', cx: plot.launch.x, cy: plot.launch.y, r: 7 }),
     s('text', { class: 'chart-caption launch', x: plot.launch.x - 20, y: plot.launch.y + 30 }, `LAUNCH · ${stardate(goal.openedAt)}`),
@@ -139,7 +158,10 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: number, pick: (sl
 function logView(goal: ChartGoal, w: Waypoint | undefined): HTMLElement {
   const section = (label: string, tone: string, ...body: (Node | string | null)[]) => h('section', null, h('h4', { style: `--tone:${tone}` }, label), ...body);
   const objective = section('Objective', LCARS.peach, h('p', null, goal.note?.done || 'Not agreed yet'));
-  if (!w) return h('div', { class: 'chart-log' }, objective);
+  const threads = (label: string, list: Contact[]) =>
+    list.length ? section(label, LCARS.sky, h('ul', { class: 'chart-threads' }, ...list.map((c) => h('li', { class: c.closed?.as ?? 'open' }, h('span', null, c.text), h('small', null, standing(c)))))) : null;
+  const open = threads(`Open contacts · ${goal.contacts.filter((c) => !c.closed).length}`, goal.contacts.filter((c) => !c.closed));
+  if (!w) return h('div', { class: 'chart-log' }, objective, open);
   const now = w.slice === goal.current && !w.landedAt;
   const when = w.landedAt
     ? `${stardate(w.startedAt)} → ${stardate(w.landedAt)} · ${span(w.landedAt - w.startedAt)}`
@@ -158,7 +180,9 @@ function logView(goal: ChartGoal, w: Waypoint | undefined): HTMLElement {
     w.summary || !w.title ? section('Intent', LCARS.orange, h('p', null, w.summary ?? 'Nothing shipped yet')) : null,
     w.turnedFrom ? section('Course correction', LCARS.red, h('p', null, 'Was heading for: ', h('em', null, w.turnedFrom))) : null,
     w.learned?.length ? section('Learned', LCARS.lilac, h('ul', { class: 'goal-list' }, ...w.learned.map((l) => h('li', null, l)))) : null,
+    threads('Noticed here', goal.contacts.filter((c) => c.slice === w.slice)),
     prs.length ? section('Pull requests', LCARS.periwinkle, h('div', { class: 'row' }, ...prs.map(prLink))) : null,
+    open,
   );
 }
 
@@ -171,6 +195,7 @@ function readout(goal: ChartGoal): HTMLElement {
     `${n} waypoint${n === 1 ? '' : 's'}`,
     `${span((goal.closedAt ?? Date.now()) - goal.openedAt)}${goal.closedAt ? '' : ' under way'}`,
     `${turns} course correction${turns === 1 ? '' : 's'}`,
+    `${goal.contacts.filter((c) => !c.closed).length} contacts open`,
     goal.closedAt ? 'closed' : `${next} projected course${next === 1 ? '' : 's'}`,
   ];
   return h('div', { class: 'chart-readout' }, parts.join(' · '));
@@ -188,7 +213,7 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, liveId?: string): 
   const render = () => {
     const g = goal();
     if (!g) return;
-    const plot = plotCourse({ waypoints: g.waypoints, current: g.current, next: g.note?.next ?? [], seed: g.id });
+    const plot = plotCourse({ waypoints: g.waypoints, current: g.current, next: g.note?.next ?? [], contacts: g.contacts, seed: g.id });
     const pick = (slice: number) => {
       picked = slice;
       render();

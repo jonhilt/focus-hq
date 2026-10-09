@@ -243,7 +243,9 @@ export class DemoRunner implements AgentRunner {
       const landed = /Slice (\d+) has landed/.exec(req.prompt);
       if (landed) {
         await think();
-        await note({ learned: `Slice ${landed[1]}: the data side holds up; the store code needs tidying`, next: ['Show it in the header', 'Tidy the store code it exposed'] });
+        // a loose thread noticed on the way, logged as a contact on the chart; by the next landing it's been dropped
+        const thread = landed[1] === '1' ? { contact: 'Should saved items follow a shopper who signs in on another device?' } : { closeContact: { id: 'c1', as: 'dropped' as const, why: 'Signing in already brings them along' } };
+        await note({ learned: `Slice ${landed[1]}: the data side holds up; the store code needs tidying`, next: ['Show it in the header', 'Tidy the store code it exposed'], ...thread });
         // by the second slice the goal's done: the captain closes it, or carries on
         if (Number(landed[1]) >= 2) {
           hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__propose_close(What done looks like is met)' }]);

@@ -1,8 +1,9 @@
 // Where a goal's waypoints sit on its star chart: a course from the launch point (bottom left) towards the objective (top
 // right), meandering a little, turning away at each course correction with the old heading carrying on, scrubbed, and
-// the lead's ideas for what's next fanning out ahead of it. Pure, so the chart panel only draws it.
+// the lead's ideas for what's next fanning out ahead of it, and the loose threads noticed on the way as sensor contacts
+// off to the side of the waypoint that noticed them. Pure, so the chart panel only draws it.
 
-import type { Waypoint } from '../../../shared/types';
+import type { Contact, Waypoint } from '../../../shared/types';
 
 export interface Pt {
   x: number;
@@ -38,6 +39,16 @@ export interface Projected {
   text: string;
 }
 
+/** A loose thread, as a sensor contact by the waypoint that noticed it: open, pursued (into `pursuedAt`) or dropped. */
+export interface PlottedContact extends Pt {
+  contact: Contact;
+  state: 'open' | 'pursued' | 'dropped';
+  label: Label;
+  text: string;
+  /** Where a pursued one was taken up: the waypoint of the slice it went into, when that's on the chart. */
+  pursuedAt?: Pt;
+}
+
 export interface CoursePlot {
   width: number;
   height: number;
@@ -48,13 +59,18 @@ export interface CoursePlot {
   path: string;
   scrubbed: Scrubbed[];
   projected: Projected[];
+  contacts: PlottedContact[];
 }
 
-/** What the chart's drawn from: the goal's waypoints in slice order, the one under way (an open goal's), what's next. */
+/**
+ * What the chart's drawn from: the goal's waypoints in slice order, the one under way (an open goal's), what's next, and
+ * the loose threads noticed on the way.
+ */
 export interface Voyage {
   waypoints: Waypoint[];
   current?: number;
   next: string[];
+  contacts?: Contact[];
   /** Makes each goal's meander its own, and the same every time it's drawn. */
   seed: string;
 }
@@ -205,7 +221,36 @@ export function plotCourse(voyage: Voyage): CoursePlot {
     return { to, text, label: clearOf(objective, to, text.length * TEXT_W, width) };
   });
 
-  return { width, height, launch, objective, points, path: smoothPath([launch, ...points]), scrubbed, projected };
+  // contacts sit off to the side of the waypoint that noticed them, away from its label where there's room, each placed
+  // where it and its label run into the least that's already on the chart
+  taken.push(
+    { x0: objective.x - objectiveR, y0: objective.y - objectiveR - 24, x1: objective.x + objectiveR, y1: objective.y + objectiveR },
+    ...projected.flatMap((p) => [box(p.label, p.text, 15), { x0: p.to.x - 7, y0: p.to.y - 7, x1: p.to.x + 7, y1: p.to.y + 7 }]),
+  );
+  const at = (slice: number) => points.find((p) => p.waypoint.slice === slice);
+  const nearby = new Map<number, number>();
+  const contacts: PlottedContact[] = (voyage.contacts ?? []).map((contact) => {
+    const wp = at(contact.slice) ?? points.at(-1);
+    const by = wp ?? launch;
+    const k = nearby.get(contact.slice) ?? 0;
+    nearby.set(contact.slice, k + 1);
+    const away = wp?.label.anchor === 'start' ? -1 : 1;
+    const text = clip(contact.text, 26);
+    const tries = [away, -away].flatMap((out) => [58, 92, 126].flatMap((d) => [0, -0.35, 0.35, -0.7, 0.7].map((t) => {
+      const spot = { x: clampX(by.x + side.x * d * out + dir.x * step * (t + (k % 3) * 0.12)), y: clampY(by.y + side.y * d * out + dir.y * step * (t + (k % 3) * 0.12)) };
+      const label: Label = out > 0 ? { x: spot.x + 12, y: spot.y + 5, anchor: 'start' } : { x: spot.x - 12, y: spot.y + 5, anchor: 'end' };
+      const mark = { x0: spot.x - 9, y0: spot.y - 9, x1: spot.x + 9, y1: spot.y + 9 };
+      const room = label.anchor === 'start' ? box(label, text, 15).x1 < width - 4 : box(label, text, 15).x0 > 4;
+      return { spot, label, boxes: [mark, box(label, text, 15)], cost: taken.filter((b) => overlaps(b, mark) || overlaps(b, box(label, text, 15))).length + (room ? 0 : 5) };
+    })));
+    const best = tries.reduce((a, b) => (b.cost < a.cost ? b : a));
+    taken.push(...best.boxes);
+    const closed = contact.closed;
+    const pursued = closed?.as === 'pursued' ? at(closed.slice) : undefined;
+    return { ...best.spot, contact, state: closed?.as ?? 'open', label: best.label, text, ...(pursued && { pursuedAt: { x: pursued.x, y: pursued.y } }) };
+  });
+
+  return { width, height, launch, objective, points, path: smoothPath([launch, ...points]), scrubbed, projected, contacts };
 }
 
 /**

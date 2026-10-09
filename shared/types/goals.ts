@@ -47,6 +47,21 @@ export interface Waypoint {
   turnedFrom?: string;
 }
 
+/**
+ * A loose thread the lead noticed along the way (a question, a risk, an idea off the course), kept as a sensor contact on
+ * the goal's chart until it's pursued or dropped, so it isn't lost the way an idea for next is when that's rewritten.
+ */
+export interface Contact {
+  /** c1, c2, …: unique within the goal. */
+  id: string;
+  text: string;
+  /** The slice it was noticed in, and when. */
+  slice: number;
+  at: number;
+  /** Missing while it's open: pursued (taken up as work) or dropped (with why), in `slice`. */
+  closed?: { as: 'pursued' | 'dropped'; why?: string; slice: number; at: number };
+}
+
 /** A closed goal, in its room's log: enough to look back on, and to pick it back up one day. */
 export interface GoalRecord {
   id: string;
@@ -70,8 +85,9 @@ export interface GoalRecord {
   /** What its lead showed, and asked with pictures, kept to look back at (and for a reopened goal's screen). */
   artifacts?: GoalArtifact[];
   questions?: GoalQuestion[];
-  /** Its slices as waypoints on its chart. Missing on goals closed before they were kept. */
+  /** Its slices as waypoints on its chart, and the loose threads noticed on the way. Missing on goals closed before they were kept. */
   waypoints?: Waypoint[];
+  contacts?: Contact[];
   openedAt: number;
   closedAt: number;
 }
@@ -133,6 +149,8 @@ export interface LeadWork {
   landed?: LeadPr[];
   /** Every slice so far as a waypoint on the goal's chart, this one last. Missing on goals started before they were kept. */
   waypoints?: Waypoint[];
+  /** The loose threads the lead has noticed, open and closed, oldest first. */
+  contacts?: Contact[];
   /** What the lead has put on the station's screen, in the order they first showed it. Cleared when the goal closes. */
   artifacts?: GoalArtifact[];
   /** The questions the lead has asked with visual options, oldest first: at most the last one is still open. */
