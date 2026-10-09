@@ -35,6 +35,9 @@ async function scan(browser: Browser, url: string): Promise<{ gaps: Gap[]; meshe
   }, modulePath);
 }
 
+/** `--hall` scans the training halls (`?hall=1`, world/hall.ts) in place of today's holodeck rooms. */
+const HALL = process.argv.includes('--hall') ? '&hall=1' : '';
+
 async function main(): Promise<number> {
   const dataDir = mkdtempSync(path.join(os.tmpdir(), 'focus-gaps-'));
   const port = await freePort();
@@ -47,7 +50,7 @@ async function main(): Promise<number> {
   try {
     await waitForServer(url, server, 60_000);
     browser = await launchBrowser();
-    const { gaps, meshes } = await scan(browser, `${url}?merge=0&cull=0`);
+    const { gaps, meshes } = await scan(browser, `${url}?merge=0&cull=0${HALL}`);
     const found = gaps.filter((g) => !allowed(g));
     console.log(`Scanned ${meshes} meshes; ${gaps.length - found.length} allowed gaps skipped.`);
     if (!found.length) {

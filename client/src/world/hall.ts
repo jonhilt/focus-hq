@@ -34,9 +34,10 @@ export function buildHall(group: THREE.Group, project: Project, builder: Builder
     m.rotation.x = -Math.PI / 2;
     m.position.y = y;
   };
-  disc(R + 0.1, 0.005, lighten(project.color, 0.6));
-  disc(CONTROL_RING + 0.3, 0.01, LCARS.orange);
-  disc(CONTROL_RING, 0.015, lighten(project.color, 0.4));
+  // all of it under the contact shadows (0.015) and the crew's shadows (0.01), which lie on any floor
+  disc(R + 0.1, 0.001, lighten(project.color, 0.6));
+  disc(CONTROL_RING + 0.3, 0.0035, LCARS.orange);
+  disc(CONTROL_RING, 0.006, lighten(project.color, 0.4));
 
   // the round wall: a dark dado with a stripe over it, pale bulkhead up to a header band under the ceiling, a hair
   // in front of the wall so neither shares its plane, and too little to outline
@@ -69,16 +70,17 @@ export function buildHall(group: THREE.Group, project: Project, builder: Builder
     light.position.y = H - 0.02;
   }
 
-  // the flat wall with the entrance in it, and the entrance's frame
+  // the flat wall with the entrance in it, and the entrance's frame; the wall's edges round the doorway, and the
+  // ends of its dado and stripe, are buried in the frame, so none of their faces lie in the frame's
   const side = 2.4 - DOOR_W / 2;
-  for (const s of [-1, 1]) group.add(box(WALL_T, H, side, HULL.bulkhead, ENTRANCE_X, 0, s * (DOOR_W / 2 + side / 2)));
-  group.add(box(WALL_T, H - DOOR_H, DOOR_W, HULL.bulkhead, ENTRANCE_X, DOOR_H, 0));
+  const buried = 0.04;
+  const wallSide = side - buried;
+  const sideZ = DOOR_W / 2 + buried + wallSide / 2;
+  for (const s of [-1, 1]) group.add(box(WALL_T, H, wallSide, HULL.bulkhead, ENTRANCE_X, 0, s * sideZ));
+  group.add(box(WALL_T, H - DOOR_H - buried, DOOR_W + buried * 2, HULL.bulkhead, ENTRANCE_X, DOOR_H + buried, 0));
   // its dado, stripe and header band, carried on from the round wall's, too little proud of it to outline
   const face = ENTRANCE_X + WALL_T / 2 + 0.01;
-  for (const s of [-1, 1]) {
-    const z = s * (DOOR_W / 2 + side / 2);
-    group.add(box(0.02, 0.9, side, HULL.dado, face, 0, z), box(0.02, 0.08, side, HULL.stripe, face, 0.9, z));
-  }
+  for (const s of [-1, 1]) group.add(box(0.02, 0.9, wallSide, HULL.dado, face, 0, s * sideZ), box(0.02, 0.08, wallSide, HULL.stripe, face, 0.9, s * sideZ));
   group.add(box(0.02, 0.45, 4.8, HULL.dado, face, H - 0.45, 0));
   for (const s of [-1, 1]) group.add(box(WALL_T + 0.08, DOOR_H + 0.12, 0.14, HULL.frame, ENTRANCE_X, 0, s * (DOOR_W / 2 + 0.07)));
   group.add(box(WALL_T + 0.08, 0.12, DOOR_W + 0.28, HULL.frame, ENTRANCE_X, DOOR_H, 0));
