@@ -20,18 +20,21 @@ interface ChartGoal {
   closedAt?: number;
 }
 
+/** When the voyage launched: its first waypoint, since a reopened goal's lead starts afresh. */
+const launched = (since: number, waypoints: Waypoint[] | undefined) => Math.min(since, waypoints?.[0]?.startedAt ?? since);
+
 const live = (agent: Agent): ChartGoal | undefined => {
   const work = agent.lead;
   if (!work) return undefined;
   return {
-    id: agent.id, title: work.title, note: work.note, current: work.slice, openedAt: agent.startedAt,
+    id: agent.id, title: work.title, note: work.note, current: work.slice, openedAt: launched(agent.startedAt, work.waypoints),
     waypoints: everySlice(work.waypoints, work.slice, agent.startedAt),
     prs: [...(work.landed ?? []), ...work.prs.map((p) => ({ ...p, slice: p.slice ?? work.slice }))],
   };
 };
 
 const closed = (goal: GoalRecord): ChartGoal => ({
-  id: goal.id, title: goal.title, note: goal.note, prs: goal.prs, openedAt: goal.openedAt, closedAt: goal.closedAt,
+  id: goal.id, title: goal.title, note: goal.note, prs: goal.prs, openedAt: launched(goal.openedAt, goal.waypoints), closedAt: goal.closedAt,
   // a slice that started as the goal closed, and never shipped or taught us anything, isn't part of the voyage
   waypoints: everySlice(goal.waypoints, goal.slices, goal.openedAt).filter((w) => w.slice <= goal.slices || w.title || w.learned?.length),
 });
