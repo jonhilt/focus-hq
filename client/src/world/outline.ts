@@ -121,13 +121,16 @@ const material = new THREE.ShaderMaterial({
         float step = max(${MIN_STEP.toFixed(3)}, 2.0 * footprint * z) + depthPrecision * z * z;
         color.rgb = mix(color.rgb, outputDisplay ? lineDisplay : lineLinear, edge(c, step));
       }
-      // what's drawn over the scene (linear, premultiplied), blended as it would have been on the screen
+      // what's drawn over the scene (linear, premultiplied), blended as it would have been on the screen: in display
+      // colours, even for a doorway's far side, which is turned back to linear after, or a see-through hologram would
+      // let far more of a bright sky through the doorway than it does once you've stepped through
       if (overlay) {
         vec4 over = texture2D(tOverlay, vUv);
         if (over.a > 0.0) {
-          vec4 rgb = vec4(over.rgb / over.a, 1.0);
-          if (outputDisplay) rgb = sRGBTransferOETF(rgb);
-          color.rgb = mix(color.rgb, rgb.rgb, over.a);
+          vec4 rgb = sRGBTransferOETF(vec4(over.rgb / over.a, 1.0));
+          vec4 under = outputDisplay ? color : sRGBTransferOETF(color);
+          under.rgb = mix(under.rgb, rgb.rgb, over.a);
+          color = outputDisplay ? under : sRGBTransferEOTF(under);
         }
       }
       gl_FragColor = color;
