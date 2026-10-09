@@ -9,6 +9,7 @@ import { withMic } from './dictation';
 import { busy, fill, h, timeAgo } from './dom';
 import { CONTEXT_TONE, closeGoal, goalStarted, leadEffortPicker, noteView, prLink, reviewing } from './goals';
 import { type NavItem, readout, shownView, SideNav } from './panels';
+import { openClosedGoalChart, openGoalChart } from './chartPanel';
 import { openClosedGoalShown } from './screenPanel';
 
 /** The goals panel's views: the goals under way (and any waiting for a station), a new one, and the closed ones. */
@@ -32,6 +33,7 @@ function goalCard(ui: Ui, lead: Agent): HTMLElement {
     h('div', { class: 'goal-main' },
       h('div', { class: 'row' },
         h('strong', { class: 'grow goal-title' }, work?.title ?? lead.issue.title),
+        h('button', { class: 'btn small', title: 'The goal’s star chart: its slices as waypoints on the way to what done looks like', onclick: () => openGoalChart(ui, lead.id) }, 'Chart'),
         close,
         h('button', { class: 'btn small primary', onclick: () => ui.openAgent(lead.id) }, 'Talk'),
       ),
@@ -104,6 +106,7 @@ function recordRow(ui: Ui, projectId: string, goal: GoalRecord, free: boolean): 
     h('div', { class: 'row' },
       h('strong', { class: 'grow' }, goal.title),
       h('small', { class: 'muted' }, `${goal.leadName} · ${goal.slices} slice${goal.slices === 1 ? '' : 's'} · closed ${timeAgo(goal.closedAt)}`),
+      goal.waypoints?.length ? h('button', { class: 'btn small', title: 'Its star chart: the slices as waypoints on the way to what done looked like', onclick: () => openClosedGoalChart(ui, goal) }, 'Chart') : null,
       shown,
       reopen,
     ),

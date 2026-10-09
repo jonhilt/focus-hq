@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent, GoalNote, LeadWork } from '../../shared/types';
 import { goalRecord, reopenedWork } from './lead';
-import { landedWaypoint, nextWaypoints, notedWaypoint, opening, shippedWaypoint, WAYPOINT_LIMITS, withWaypoint } from './waypoints';
+import { landedWaypoint, nextWaypoints, notedSlice, notedWaypoint, opening, shippedWaypoint, WAYPOINT_LIMITS, withWaypoint } from './waypoints';
 
 const note = (done: string, learned: string[] = []): GoalNote => ({ done, slice: [], learned, next: [] });
 
@@ -20,11 +20,12 @@ describe('waypoints', () => {
     expect(after.at(-1)).toEqual({ slice: WAYPOINT_LIMITS.kept + 1, startedAt: 99 });
   });
 
-  it('takes the slice’s intent from what it last shipped with', () => {
+  it('takes the slice’s intent from what it first shipped with', () => {
     const first = shippedWaypoint({ slice: 1, waypoints: [{ slice: 1, startedAt: 0 }] }, { title: 'Saved items  survive a reload', summary: '## What\n\nSaves **items** to [the store](http://x).\n\nTested by hand.' }, 5);
     expect(first).toEqual([{ slice: 1, startedAt: 0, title: 'Saved items survive a reload', summary: 'Saves items to the store.' }]);
-    // shipping again (a QA fix) updates it; an empty summary keeps the last one
-    expect(shippedWaypoint({ slice: 1, waypoints: first }, { title: 'Fix what QA found', summary: '' }, 9)).toEqual([{ ...first[0], title: 'Fix what QA found' }]);
+    // shipping again (to fix what QA found) leaves it, as it leaves what the pull requests say
+    expect(shippedWaypoint({ slice: 1, waypoints: first }, { title: 'Fix what QA found', summary: 'Handles the empty case.' }, 9)).toEqual(first);
+    expect(shippedWaypoint({ slice: 1, waypoints: [{ slice: 1, startedAt: 0 }] }, { title: 'Saved items', summary: '' }, 9)).toEqual([{ slice: 1, startedAt: 0, title: 'Saved items' }]);
   });
 
   it('cuts a long description at a word', () => {
@@ -37,14 +38,27 @@ describe('waypoints', () => {
   });
 
   it('puts a lesson the lead adds on this slice’s waypoint, keeping its last few', () => {
-    const work = { slice: 2, waypoints: [{ slice: 1, startedAt: 0, landedAt: 5 }, { slice: 2, startedAt: 5 }], note: note('Saved items work') };
+    const work = { slice: 2, waypoints: [{ slice: 1, startedAt: 0, landedAt: 5 }, { slice: 2, startedAt: 5, title: 'Header' }], note: note('Saved items work') };
     let after = notedWaypoint(work, { learned: ' The store  is fine ' }, note('Saved items work', ['The store is fine']), 9);
-    expect(after?.[1]).toEqual({ slice: 2, startedAt: 5, learned: ['The store is fine'] });
+    expect(after?.[1]).toEqual({ slice: 2, startedAt: 5, title: 'Header', learned: ['The store is fine'] });
     for (const line of ['b', 'c', 'd']) after = notedWaypoint({ ...work, waypoints: after }, { learned: line }, note('Saved items work'), 9);
     expect(after?.[1].learned).toEqual(['b', 'c', 'd']);
     // merging old lessons, or a note that changes nothing on the course, leaves the waypoints as they were
     expect(notedWaypoint(work, { allLearned: ['merged'] }, note('Saved items work', ['merged']), 9)).toBe(work.waypoints);
     expect(notedWaypoint(work, { next: ['Header'] }, note('Saved items work'), 9)).toBe(work.waypoints);
+  });
+
+  it('puts what the lead notes after a landing on the slice that landed, until the next one ships', () => {
+    const landed = { slice: 1, startedAt: 0, landedAt: 5, title: 'Saved items' };
+    const work = { slice: 2, waypoints: [landed, { slice: 2, startedAt: 5 }], note: note('Saved items work') };
+    expect(notedSlice(work)).toBe(1);
+    const after = notedWaypoint(work, { learned: 'The store holds up', done: 'Saved items, in the header' }, note('Saved items, in the header'), 9);
+    expect(after).toEqual([{ ...landed, learned: ['The store holds up'], turnedFrom: 'Saved items work' }, { slice: 2, startedAt: 5 }]);
+    // once this slice ships, what's noted is about it
+    expect(notedSlice({ slice: 2, waypoints: [landed, { slice: 2, startedAt: 5, title: 'Header' }] })).toBe(2);
+    // with nothing shipped yet, it's the slice under way
+    expect(notedSlice({ slice: 1, waypoints: [{ slice: 1, startedAt: 0 }] })).toBe(1);
+    expect(notedSlice({ slice: 3, waypoints: undefined })).toBe(3);
   });
 
   it('marks a course correction when done changes, from what it was as the slice began', () => {

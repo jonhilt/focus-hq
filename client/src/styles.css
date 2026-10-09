@@ -362,6 +362,44 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .goal-queued, .goal-record { padding: 10px 14px; }
 .goal-record { border-left-color: var(--muted); }
 
+/* a goal's star chart: the course from launch towards the objective, each slice a waypoint, and the picked one's log */
+.chart { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 18px; height: calc(100vh - 150px); min-height: 0; }
+.chart-map { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.chart-svg { flex: 1; min-height: 0; width: 100%; background: #000; border-radius: 10px; font-family: var(--ui); }
+.chart-readout { flex: none; background: var(--surface-2); color: var(--lcars-peach); border-radius: 999px; padding: 6px 18px; font-size: 17px; letter-spacing: 0.06em; text-transform: uppercase; }
+.chart-course { fill: none; stroke: var(--lcars-gold); stroke-width: 4; stroke-linecap: round; }
+.chart-launch { fill: var(--lcars-orange); }
+.chart-caption { fill: var(--lcars-peach); font-size: 15px; letter-spacing: 0.12em; }
+.chart-caption.launch { fill: var(--lcars-orange); letter-spacing: 0.04em; }
+.chart-objective { fill: none; stroke: var(--lcars-peach); stroke-width: 1.5; stroke-dasharray: 3 6; opacity: 0.9; }
+.chart-done { height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; color: #000; font: 600 17px/1.1 var(--ui); overflow: hidden; }
+.chart-projected path { fill: none; stroke: var(--lcars-periwinkle); stroke-width: 2; stroke-dasharray: 2 7; stroke-linecap: round; }
+.chart-projected circle { fill: #000; stroke: var(--lcars-periwinkle); stroke-width: 2; }
+.chart-projected text { fill: var(--lcars-periwinkle); font-size: 15px; }
+.chart-scrubbed path { fill: none; stroke: var(--lcars-red); stroke-width: 2.5; stroke-dasharray: 7 6; }
+.chart-scrubbed path.cross { stroke-dasharray: none; stroke-width: 3; }
+.chart-scrubbed text { fill: var(--muted); font-size: 14px; }
+.chart-scrubbed .was { fill: var(--lcars-red); letter-spacing: 0.06em; }
+.chart-wp { cursor: pointer; outline: none; }
+.chart-wp .hit { fill: transparent; }
+.chart-wp .ring { fill: none; stroke: var(--lcars-gold); stroke-width: 2; opacity: 0; }
+.chart-wp .core { fill: var(--lcars-gold); }
+.chart-wp .num { fill: #000; font-size: 14px; font-weight: 700; pointer-events: none; }
+.chart-wp .name { fill: var(--text); font-size: 17px; }
+.chart-wp.now .core { fill: var(--lcars-sky); }
+.chart-wp.now .name { fill: var(--lcars-sky); }
+.chart-wp.open .core { fill: var(--muted); }
+.chart-wp .ping { fill: none; stroke: var(--lcars-sky); stroke-width: 2; transform-box: fill-box; transform-origin: center; animation: chart-ping 2.4s ease-out infinite; }
+.chart-wp:hover .ring, .chart-wp:focus-visible .ring { opacity: 0.5; }
+.chart-wp.picked .ring { opacity: 1; stroke-width: 2.5; }
+@keyframes chart-ping { from { transform: scale(0.8); opacity: 0.8; } to { transform: scale(1.9); opacity: 0; } }
+.chart-log { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; border-left: 6px solid var(--lcars-gold); padding: 0 4px 0 14px; font-size: 16px; line-height: 1.3; }
+.chart-log section p { margin: 4px 0 0; }
+.chart-log h4 { display: inline-block; margin: 0; padding: 0 10px; border-radius: 999px; background: var(--tone); color: var(--ink); font-size: 13px; line-height: 20px; letter-spacing: 0.08em; text-transform: uppercase; }
+.chart-log em { font-style: normal; color: var(--lcars-peach); }
+.chart-log-head h3 { margin: 0; color: var(--lcars-gold); font-size: 22px; line-height: 1.1; text-transform: uppercase; letter-spacing: 0.03em; }
+.chart-log-head small { display: block; margin-top: 4px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+
 /* the planner at the top of the New issue form */
 .planner { --tone: var(--lcars-peach); border-left-color: var(--tone); margin-bottom: 14px; background: color-mix(in srgb, var(--tone) 10%, var(--surface-2)); }
 .planner p { margin: 8px 0; }

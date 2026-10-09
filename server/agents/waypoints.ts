@@ -9,11 +9,11 @@ export const WAYPOINT_LIMITS = { summary: 280, learned: 3, kept: 40 } as const;
 
 type Course = Pick<LeadWork, 'slice' | 'waypoints'>;
 
-/** The goal's waypoints with this slice's changed by `change`, adding it (starting now) when it isn't there yet. */
-export function withWaypoint(work: Course, now: number, change: (w: Waypoint) => Waypoint): Waypoint[] {
+/** The goal's waypoints with this slice's (or `slice`'s) changed by `change`, adding it (starting now) when it isn't there yet. */
+export function withWaypoint(work: Course, now: number, change: (w: Waypoint) => Waypoint, slice = work.slice): Waypoint[] {
   const all = work.waypoints ?? [];
-  const here = all.find((w) => w.slice === work.slice);
-  const next = change(here ?? { slice: work.slice, startedAt: now });
+  const here = all.find((w) => w.slice === slice);
+  const next = change(here ?? { slice, startedAt: now });
   return (here ? all.map((w) => (w === here ? next : w)) : [...all, next]).slice(-WAYPOINT_LIMITS.kept);
 }
 
@@ -34,16 +34,29 @@ export function opening(markdown: string, max: number = WAYPOINT_LIMITS.summary)
   return `${(word > max / 2 ? cut.slice(0, word) : cut).replace(/[\s,;:.]+$/, '')}…`;
 }
 
-/** The waypoints once the slice ships: what it set out to do is the title and opening it last shipped with. */
+/**
+ * The waypoints once the slice ships: what it set out to do is the title and opening it first shipped with, as its pull
+ * requests keep them (shipping again, to fix what QA found, say, updates their code but not what they say).
+ */
 export function shippedWaypoint(work: Course, input: { title: string; summary: string }, now: number): Waypoint[] {
   const title = input.title.replace(/\s+/g, ' ').trim();
   const summary = opening(input.summary);
-  return withWaypoint(work, now, (w) => ({ ...w, ...(title && { title }), ...(summary && { summary }) }));
+  return withWaypoint(work, now, (w) => ({ ...w, ...(!w.title && title && { title }), ...(!w.summary && summary && { summary }) }));
 }
 
 /**
- * The waypoints once the lead updates the note: a lesson they add goes on this slice's, and so does what done looked
- * like before they changed it (the first time this slice; changing it back is no correction at all).
+ * The slice a note is about: this one once it's shipped, but until then the last one that did, since the lead says what a
+ * slice taught them (and turns the goal's course because of it) after it lands, by when the next one has begun.
+ */
+export function notedSlice(work: Course): number {
+  const all = work.waypoints ?? [];
+  if (all.find((w) => w.slice === work.slice)?.title) return work.slice;
+  return all.filter((w) => w.slice < work.slice && w.title).at(-1)?.slice ?? work.slice;
+}
+
+/**
+ * The waypoints once the lead updates the note: a lesson they add goes on the slice it's about, and so does what done
+ * looked like before they changed it (the first time; changing it back is no correction at all).
  */
 export function notedWaypoint(work: Course & Pick<LeadWork, 'note'>, input: NoteInput, after: GoalNote, now: number): Waypoint[] | undefined {
   const line = input.learned?.replace(/\s+/g, ' ').trim();
@@ -55,7 +68,7 @@ export function notedWaypoint(work: Course & Pick<LeadWork, 'note'>, input: Note
     if (from && after.done !== from) next.turnedFrom = from;
     else delete next.turnedFrom;
     return next;
-  });
+  }, notedSlice(work));
 }
 
 /** The waypoints as the slice's last pull request lands. */
