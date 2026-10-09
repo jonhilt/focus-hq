@@ -42,6 +42,7 @@ describe('readSurface', () => {
     expect(readSurface({ surface: 'accent' })).toEqual({ kind: 'accent' });
     expect(readSurface({ surface: 'lamp' })).toEqual({ kind: 'lamp' });
     expect(readSurface({ surface: 'readout', seed: 21, w: 2.4, h: 0.9 })).toEqual({ kind: 'readout', seed: 21, w: 2.4, h: 0.9 });
+    expect(readSurface({ surface: 'console', seed: 51, w: 2.9, h: 0.45, stations: 2 })).toEqual({ kind: 'console', seed: 51, w: 2.9, h: 0.45, stations: 2 });
     expect(readSurface({ surface: 'sign', text: 'Turbolift', color: '#ff9900', code: '01-12' })).toEqual({
       kind: 'sign',
       text: 'Turbolift',

@@ -17,7 +17,8 @@ What the browser reads (client/src/world/deck.ts), all through custom properties
 - An object's `interact` has pressing E on it do something: 'manager' (open the ready room console) or 'turbolift' (its
   controls), with the hint `label`.
 - A material's `surface` has the browser draw it: 'space' (a viewport onto the stars), 'keys' (an LCARS touch panel),
-  'readout' (LCARS readouts: `seed`, `w`, `h`), 'sign' (an LCARS sign: `text`, `color`, optional `sub` and `code`),
+  'readout' (LCARS readouts: `seed`, `w`, `h`), 'console' (an LCARS console top `w`×`h` metres, `seed`, with
+  `stations` crew's keys side by side), 'sign' (an LCARS sign: `text`, `color`, optional `sub` and `code`),
   'screen' (a screen the browser keeps drawing: `screen`, which is 'mission-control', or a team station's
   'team-station', its lead's session, 'team-station-sign', its name, goal and whether it's in session, and
   'team-station-note', the lead's note on the goal), 'star-chart' (long-range sensors), 'accent' (a team station's own

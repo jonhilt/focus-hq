@@ -416,7 +416,7 @@ export class ProjectRoom {
     slot.view = id ? view : undefined;
     if (!id || !view) return;
     if (!slot.character) {
-      // round the briefing table, with a PADD each
+      // in the briefing room, with a PADD each
       slot.character = new Character(view, 'padd');
       this.arrive(slot.seat, slot.character);
     }
@@ -439,8 +439,8 @@ export class ProjectRoom {
       for (const thing of station.furniture) interactive(thing, use, label);
       if (lead) interactive(station.goalBoard, { kind: 'agent', id: lead.id, view: 'goal' }, () => `Look at ${lead.name}’s goal and to-dos`);
       else interactive(station.goalBoard, use, label);
-      // each of the lead's panes up close (what they've shown or asked, their browser…), from the head of the table;
-      // anywhere else on it, and while it's free, the screen is the station's, as the table is
+      // each of the lead's panes up close (what they've shown or asked, their browser…), from where the captain stands;
+      // anywhere else on it, and while it's free, the screen is the station's, as its door is
       station.display.userData.interactionAt = lead ? (uv: THREE.Vector2) => {
         const pane = station.screen.paneAt(uv);
         return pane ? paneUse(pane, lead) : null;
@@ -453,7 +453,7 @@ export class ProjectRoom {
       const reviewer = lead && reviewers.find((r) => r.reviewFor === lead.id);
       this.sit(station.reviewer, reviewer?.id, reviewer && agentView(reviewer), reviewer ? { kind: 'agent', id: reviewer.id } : use,
         () => (reviewer ? `${reviewer.name}, reviewing “${lead?.lead?.title ?? 'the goal'}”: ${reviewer.activity}` : label()));
-      // once everyone's seated: the sign, the lamps and the goal board, with its roster of who's round the table, and
+      // once everyone's seated: the sign, the lamps and the goal board, with its roster of who's in the room, and
       // the station's screen on the teams wall, with how the slice's pull requests stand
       const prs = lead?.lead?.prs.map((pr) => ({ label: `${pr.repo.split('/')[1]} #${pr.number}`, state: prGlance(pr, state.reviews.get(prKey(pr.repo, pr.number))?.status) }));
       station.show(lead, next, prs);
@@ -661,7 +661,7 @@ export class ProjectRoom {
       station.room.visible = station === briefing || station.portal.ajar;
       // in the briefing room, or seeing into it through the door
       const seen = station.eye(camera, inRoom && !briefing);
-      // everyone round the table fades their bubble by how near you are to its head, so from there, watching the
+      // everyone seated fades their bubble by how near you are to where the captain stands, so from there, watching the
       // screen, none of them cross it
       const atHead = seen ? station.fromHead(seen) : 0;
       if (seen) for (const slot of [station.lead, ...station.helpers, station.reviewer]) slot.character?.update(t, atHead);

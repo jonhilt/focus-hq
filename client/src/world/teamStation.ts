@@ -21,9 +21,9 @@ import { HULL } from './starship';
 // floating over it and lamps either side that show whether its goal room is in session; through it is the goal's
 // briefing room, which stands far off in the world (layout.ts: briefingRoomAt) and is far bigger than the holodeck
 // could hold. The two doorways are a Portal, so you see the briefing room through the open door and walk straight in.
-// The lead, their helpers (Claude Code's subagents) and the goal's QA reviewer sit round its table with their PADDs,
-// the captain's chair at its head, facing the lead's session on the far wall, with the lead's note on the goal on the
-// board beside them. Both halves are built in Blender (blender/team_station.py); who sits where and what the screens
+// It's a mini bridge: the captain stands a few steps in from the door, facing the lead's session on the far wall, the
+// lead and the goal's QA reviewer either side and their helpers (Claude Code's subagents) at consoles round behind,
+// each with a PADD, with the lead's note on the goal on the board beside them. Both halves are built in Blender (blender/team_station.py); who sits where and what the screens
 // show are drawn here. Each station also has a screen on the holodeck's teams wall (room.ts hangs them side by side),
 // so you can see what every team's up to without going in.
 
@@ -106,7 +106,7 @@ export class TeamStation {
   /** In the order helpers take them (`seatHelpers`). */
   readonly helpers: StationSeat[];
   readonly reviewer: StationSeat;
-  /** What "use this station" hangs on: the door, and the briefing room's table. */
+  /** What "use this station" hangs on: the door, and its screen on the teams wall. */
   readonly furniture: THREE.Object3D[];
   /** The goal board on the briefing room's wall: using it opens the lead's goal, or a crew member's row, theirs. */
   readonly goalBoard: THREE.Mesh;
@@ -120,7 +120,7 @@ export class TeamStation {
   private readonly roomKit: Read;
   /** The briefing room's furniture, standing where it does in the world. */
   private readonly furnished: THREE.Object3D;
-  /** Where the captain stands at the head of the table, and the middle of the screen they look at (world). */
+  /** Where the captain stands, on the command carpet, and the middle of the screen they look at (world). */
   private readonly head: THREE.Vector3;
   private readonly screenCentre: THREE.Vector3;
   private readonly area: Box2;
@@ -165,10 +165,7 @@ export class TeamStation {
     const room = (this.furnished = kit.room.clone());
     room.position.copy(origin);
     this.room.add(room);
-    const table = room.getObjectByName('briefing_table');
-    if (!table) throw new Error('The team station’s briefing room has no table');
-    // the table's used, as the door is, once the room says what for (room.ts): it stays itself
-    const roomScreens = this.dress(room, (this.roomKit = blank()), [table]);
+    const roomScreens = this.dress(room, (this.roomKit = blank()));
 
     const screen = (screens: { screen: string; mesh: THREE.Mesh }[], name: string, where: string) => {
       const found = screens.find((s) => s.screen === name);
@@ -198,7 +195,7 @@ export class TeamStation {
     });
     const { width, height, depth, rim } = TEAM_SCREEN;
     this.wall.add(new THREE.Mesh(new THREE.BoxGeometry(width + rim * 2, height + rim * 2, depth), this.lamp), ...faces);
-    this.furniture = [door, table, ...faces];
+    this.furniture = [door, ...faces];
 
     const seat = (crew: Crew): StationSeat => {
       const found = this.roomKit.seats.get(crew);
@@ -213,7 +210,7 @@ export class TeamStation {
     this.goalBoard.userData.interactionAt = (uv: THREE.Vector2) => this.rowAt(uv);
   }
 
-  /** Using a crew member's row on the goal board: their panel, as using them at the table does. */
+  /** Using a crew member’s row on the goal board: their panel, as using them in their seat does. */
   private rowAt(uv: THREE.Vector2): { interaction: Interaction; label: () => string } | null {
     const i = this.board.rowAt(uv);
     const row = i === undefined ? undefined : this.crew[i];
@@ -233,10 +230,10 @@ export class TeamStation {
   }
 
   /**
-   * Reads a module's markers into `read`, paints its accents and lamps, merges the rest of it but `keep` (merge.ts)
-   * and returns its screens.
+   * Reads a module's markers into `read`, paints its accents and lamps, merges the rest of it (merge.ts) and returns
+   * its screens.
    */
-  private dress(module: THREE.Object3D, read: Read, keep: THREE.Object3D[] = []): { screen: string; mesh: THREE.Mesh }[] {
+  private dress(module: THREE.Object3D, read: Read): { screen: string; mesh: THREE.Mesh }[] {
     module.updateMatrixWorld(true);
     const { screens, accents, lamps } = dress(module, (o, marker) => {
       switch (marker.kind) {
@@ -272,7 +269,7 @@ export class TeamStation {
       mesh.material = mat;
     }
     for (const mesh of lamps) mesh.material = this.lamp;
-    mergeStatic(module, [...screens.map((s) => s.mesh), ...accents, ...lamps, ...keep]);
+    mergeStatic(module, [...screens.map((s) => s.mesh), ...accents, ...lamps]);
     return screens;
   }
 
@@ -322,7 +319,7 @@ export class TeamStation {
     return new THREE.Vector3(0, EYE_HEIGHT, 0).applyMatrix4(this.portal.ends[0].doorway.matrix);
   }
 
-  /** How far `eye` is from the head of the table: at it, nobody's bubble hides the screen. */
+  /** How far `eye` is from where the captain stands: there, nobody's bubble hides the screen. */
   fromHead(eye: THREE.Vector3): number {
     return eye.distanceTo(this.head);
   }
@@ -363,7 +360,7 @@ export class TeamStation {
     this.lamp.color.set(HULL.dado).lerp(LIT.set(TONE[this.tone]), glow);
   }
 
-  /** At the head of the briefing room's table, looking down it at the screen (world). */
+  /** Where the captain stands in the briefing room, looking at the screen (world). */
   viewpoint(): { position: THREE.Vector3; lookAt: THREE.Vector3 } {
     return { position: this.head.clone().setY(0), lookAt: this.screenCentre.clone() };
   }

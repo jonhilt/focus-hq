@@ -6,7 +6,7 @@ import { type Box2, contains, footprint, type Seat } from './layout';
 import { flat, occludedToon, toon } from './materials';
 import { mergeStatic } from './merge';
 import type { Place } from './office';
-import { lcarsSign, readoutTexture, SlidingDoors, starChartTexture, touchPanelTexture } from './starship';
+import { consoleTexture, lcarsSign, readoutTexture, SlidingDoors, starChartTexture, touchPanelTexture } from './starship';
 import { viewportGlass } from './starfield';
 import { tiled } from './textures';
 
@@ -55,6 +55,8 @@ function surfaceMaterial(surface: Surface, color: string, ao: THREE.Texture | nu
       return (keys ??= flat(gltfTexture(touchPanelTexture().clone())));
     case 'readout':
       return flat(gltfTexture(readoutTexture(surface.w, surface.h, surface.seed)));
+    case 'console':
+      return flat(gltfTexture(consoleTexture(surface.w, surface.h, surface.seed, surface.stations)));
     case 'sign':
       return flat(gltfTexture(lcarsSign(surface.text, { color: surface.color, sub: surface.sub, code: surface.code })));
     case 'star-chart':

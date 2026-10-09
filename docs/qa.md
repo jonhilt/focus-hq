@@ -5,7 +5,7 @@ Every holodeck has a QA officer in blue, sitting at a station beside the pull re
 - **When they test:**
   - Automatically, when the office opens a PR or pushes new commits to one. Turn this off per project at the QA station.
   - Whenever you press **Send to QA** (or **Re-test**) on a PR on the board, a teammate's PR included.
-- **One at a time, per reviewer:** reviews queue up for the holodeck's officer. A goal's pull requests go instead to the goal's own reviewer, who sits across the briefing table from its lead (and is listed at the QA station), so the holodeck's goals are reviewed side by side. Each goal's reviewer is the same person from review to review, and goes home with the goal; a review they were on, or still waiting for them, goes to the holodeck's officer. QA counts towards **Agents working at once**, but goes ahead of new issues in the queue and doesn't take one of the holodeck's agent slots.
+- **One at a time, per reviewer:** reviews queue up for the holodeck's officer. A goal's pull requests go instead to the goal's own reviewer, who sits at your left hand in the briefing room, across from its lead (and is listed at the QA station), so the holodeck's goals are reviewed side by side. Each goal's reviewer is the same person from review to review, and goes home with the goal; a review they were on, or still waiting for them, goes to the holodeck's officer. QA counts towards **Agents working at once**, but goes ahead of new issues in the queue and doesn't take one of the holodeck's agent slots.
 - **How hard they think:** set at the QA station, for the officer and every goal's reviewer alike, from the next review (the model's default to begin with).
 - **What they do:**
   1. Check the PR's head out, detached, into their own folder.

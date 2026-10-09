@@ -12,7 +12,7 @@ import { LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
 // in Lower Decks: glowing cyan on dark glass. The sign floats over the station's door (and is lit on the dado under the
 // briefing room's viewscreen): the station, its goal and lead, whether its room is in session, and how far through its
 // slice it is.
-// The goal board on the briefing room's wall lists who's round the table and what each is doing, the way the crew
+// The goal board on the briefing room's wall lists who's in the briefing room and what each is doing, the way the crew
 // leaderboard in Lower Decks does, beside the lead's note on the goal. The team screen hangs on the holodeck's teams
 // wall beside the other stations', for what the team's up to at a glance.
 
@@ -213,7 +213,7 @@ export class GoalSign extends Display {
 
 /**
  * The goal board on the briefing room's wall: the goal and how the room stands across the top; under it, like the
- * crew leaderboard in Lower Decks, who's round the table, each with their face, name, part and what they're doing,
+ * crew leaderboard in Lower Decks, who's in the briefing room, each with their face, name, part and what they're doing,
  * beside the lead's note on the goal (noteSections), or before there's a note, the goal as the captain put it. While
  * the station's free, what's next for it.
  */
@@ -281,7 +281,7 @@ export class GoalBoard extends Display {
     this.pane(sections, 40 + crewW + gap, y, W - 80 - gap - crewW, h);
   }
 
-  /** The crew round the table, a row each, as many as fit: face, name and part, and what they're doing. */
+  /** The crew in the briefing room, a row each, as many as fit: face, name and part, and what they're doing. */
   private crew(crew: { who: CrewView; role: string }[], x: number, y: number, w: number, h: number): void {
     const { ctx } = this.c;
     ctx.fillStyle = PANE;
@@ -396,7 +396,7 @@ const PR_LOOK: Record<PrGlance, { color: string; word: string }> = {
  * A team station's screen on the holodeck's teams wall, the four side by side so you can watch every team at once
  * without going in: how its room stands across the top in big type (seen from across the holodeck), the goal, what the
  * lead's up to right now, how far through the slice they are and what's left on its checklist, and along the bottom
- * who else is round the table and the slice's pull requests. A free station says so, or what's next in line for it.
+ * who else is in the briefing room and the slice's pull requests. A free station says so, or what's next in line for it.
  */
 export class TeamScreen extends Display {
   static readonly W = 1600;
@@ -538,7 +538,7 @@ export class TeamScreen extends Display {
       ctx.fillText(fitText(ctx, line.text, W - 160), 106, listY + i * lineH);
     });
 
-    // along the bottom: who else is round the table, and the slice's pull requests
+    // along the bottom: who else is in the briefing room, and the slice's pull requests
     const footY = H - 30 - 76;
     ctx.fillStyle = PANE;
     ctx.beginPath();

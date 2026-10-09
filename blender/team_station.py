@@ -1,7 +1,8 @@
 """A team station: where a goal's lead works with the captain. In the holodeck it's a holo-pod with a door, standing
 against a side wall with the station's sign over it; through it is the goal's briefing room, far bigger than the holodeck
-could hold. The lead, their helpers and the goal's reviewer sit round a long table there, the captain's chair at its
-head, facing the lead's session on a big screen on the far wall.
+could hold. It's a mini bridge: a few steps straight in from the door, the captain stands on the command carpet facing
+the lead's session on a big screen across the far wall, with the lead and the goal's reviewer either side and their
+helpers at consoles round behind, and nothing between the door and the screen.
 
 The briefing room stands somewhere else in the world entirely: the browser (world/teamStation.ts, world/portal.ts)
 draws it through the open door, and moves you there as you step over the threshold, so the two doorways have to
@@ -19,10 +20,10 @@ import bmesh
 import bpy
 from mathutils import Matrix, Vector
 
-from kit import (COMMAND_RED, FRAME_PROUD, HULL, bezel, box, collide_object, collide_points, command_chair, door_frame,
-                 facing, link, lounge_chair, marker, material, mesh_object, module, panel, polygon, rounded_rect, slab,
-                 toon, unlit, walls, window)
-from command_deck import profile, wall_materials
+from kit import (COMMAND_RED, CONSOLE_TOP, CUSHION, FRAME_PROUD, HULL, annulus, bezel, box, bridge_seat, collide_path,
+                 collide_points, command_chair, door_frame, facing, link, marker, material, mesh_object,
+                 module, panel, polygon, ring_points, rounded_rect, sweep, toon, unlit, walls, window)
+from command_deck import CARPET, profile, wall_materials
 
 DOOR_W = 2.0
 #: lower than the ship's other doors, to leave room for the station's sign over it in the holodeck
@@ -45,23 +46,32 @@ BEZEL_DEPTH = 0.22
 #: the station's sign on the dado under the briefing room's screen: GoalSign's proportions (1800×256)
 SIGN_ASPECT = 1800 / 256
 
-#: the briefing room's inner faces, from the doorway's wall to the screen's
-ROOM_HALF = 3.5
-ROOM_FAR = WALL / 2 + 10.0
-HEIGHT = 4.0
-#: the table, along the room, and the chairs either side of it, from the captain's end in the order the crew take them
-TABLE = (0.0, 5.7)
-TABLE_SIZE = (1.6, 4.2)
-SIDE_X = 1.35
-SEATS = [('station-lead', 1, 4.7), ('station-reviewer', -1, 4.7), ('station-helper-1', 1, 5.7),
-         ('station-helper-2', -1, 5.7), ('station-helper-3', 1, 6.7), ('station-helper-4', -1, 6.7)]
-CAPTAIN = 3.0
+#: the briefing room's inner faces, from the doorway's wall to the screen's: wide and shallow, so the screen is close
+ROOM_HALF = 4.0
+ROOM_FAR = WALL / 2 + 7.4
+HEIGHT = 4.4
+#: a mini bridge, but with no captain's chair (the captain stands): the middle of the command carpet, where the screen
+#: fills the view, with the lead (at the captain's right hand) and the reviewer either side of it, turned a little to
+#: the screen, as the first officer and counsellor are on the bridge, and the floor between them open up to the screen
+COMMAND = 3.9
+FLANK = [('station-lead', 1.85, 3.85), ('station-reviewer', -1.85, 3.85)]
+#: the helpers' consoles: two curved ones on an arc round behind, centred on the screen side of where the captain
+#: stands, from and to these angles (degrees), open in the middle for the walk from the door, as the bridge's rail is.
+#: Two helpers sit at each, on the arc's outside, facing in.
+ARC = (0.0, 5.4)
+ARC_CONSOLE = 3.25
+ARC_SEAT = ARC_CONSOLE + 0.75
+WINGS = [(200, 251), (289, 340)]
+HELPERS = [('station-helper-1', 302), ('station-helper-2', 238), ('station-helper-3', 327), ('station-helper-4', 213)]
+#: a console's cross-section, as the bridge's conn and ops have (kit.bridge_console), whoever sits at it on its +Y side:
+#: (y, z) up its front, the lip, the keys' slope, over its back and down
+CONSOLE = [(0.25, 0), (0.25, 0.55), (0.42, 0.74), (-0.12, 0.92), (-0.2, 0.86), (-0.2, 0)]
 #: the viewscreen, nearly wall to wall: StationScreen's BIG_SCREEN proportions (2400×1000), its bezel clear of the
 #: wall's stripe. It stands proud of the wall's header band, which runs on behind it: its bezel is deeper than the
 #: band stands out, and the screen sits in it in front of the band.
-SCREEN_W = 6.0
+SCREEN_W = 7.0
 SCREEN_H = SCREEN_W * 1000 / 2400
-SCREEN_BOTTOM = 1.17
+SCREEN_BOTTOM = 1.15
 SCREEN_DEPTH = 0.18
 SCREEN_OUT = 0.1
 #: how far the wall's dado stands out (command_deck.profile)
@@ -72,8 +82,9 @@ DADO_PANEL_W = 2.4
 DADO_PANEL_X = 1.7
 DADO_PANEL_BOTTOM = 0.42
 PANES_H = DADO_PANEL_W * 200 / 1600
-#: the goal board on the starboard wall, beside the table: GoalBoard's proportions (1440×804), its bezel between the
-#: wall's stripe and its header, clear of the heads of the crew in front of it seen from the head of the table
+#: the goal board on the starboard wall, beside the captain's chair: GoalBoard's proportions (1440×804), its bezel
+#: between the wall's stripe and its header, clear of the heads of the crew in front of it seen from the captain's chair
+BOARD_Y = 4.6
 BOARD_W = 3.4
 BOARD_H = BOARD_W * 804 / 1440
 BOARD_BOTTOM = 1.35
@@ -197,12 +208,85 @@ def cut(obj, cutter):
     bpy.data.objects.remove(cutter)
 
 
+def on_arc(a, r):
+    """The frame at angle `a` (degrees) round ARC, `r` out, its +Y pointing out, away from the middle."""
+    out = Vector((math.cos(math.radians(a)), math.sin(math.radians(a))))
+    at = Vector(ARC) + out * r
+    return Matrix.Translation((at.x, at.y, 0)) @ Matrix.Rotation(facing(at, ARC) + math.pi, 4, 'Z')
+
+
+def touch_strip(name, start, end, seed):
+    """
+    The LCARS touch surface along a curved console's slope from angle `start` to `end` (degrees), a little in from its
+    edges and a hair over it: one strip following the curve, its UVs running along it to the sitter's right, its top
+    (the canvas's) at the slope's back, so the browser draws it as one console top with a station for each sitter.
+    """
+    front, back = Vector(CONSOLE[2]), Vector(CONSOLE[3])
+    up = (back - front).normalized()
+    # out of the slope: up, and towards whoever sits at it
+    normal = Vector((up.y, -up.x))
+    if normal.y < 0:
+        normal = -normal
+    near = front + up * 0.04 + normal * 0.005
+    far = back - up * 0.04 + normal * 0.005
+    a0, a1 = start + 1.5, end - 1.5
+    steps = 24
+    bm = bmesh.new()
+    uv = bm.loops.layers.uv.new()
+    rows = []
+    for i in range(steps + 1):
+        a = math.radians(a0 + (a1 - a0) * i / steps)
+        out = Vector((math.cos(a), math.sin(a)))
+        rows.append([bm.verts.new((*(Vector(ARC) + out * (ARC_CONSOLE + p.x)), p.y)) for p in (near, far)])
+    for i in range(steps):
+        (n0, f0), (n1, f1) = rows[i], rows[i + 1]
+        face = bm.faces.new((n0, n1, f1, f0))
+        for loop, coords in zip(face.loops, [(i / steps, 0), ((i + 1) / steps, 0), ((i + 1) / steps, 1), (i / steps, 1)]):
+            loop[uv].uv = coords
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    if bm.faces[0].normal.z < 0:
+        bmesh.ops.reverse_faces(bm, faces=bm.faces)
+    length = math.radians(a1 - a0) * (ARC_CONSOLE + (near.x + far.x) / 2)
+    mat = material('#000000', surface='console', seed=seed, w=round(length, 3), h=round((far - near).length, 3),
+                   stations=2)
+    return link(mesh_object(name, bm, [mat]))
+
+
+def helper_consoles():
+    """
+    The helpers' two curved consoles, swept round the arc with the bridge consoles' cross-section, the lip under their
+    keys in the station's colour: LCARS keys all along their slope, and a readout standing at the back in front of each
+    helper's seat.
+    """
+    bulkhead = toon(HULL['bulkhead'])
+    accent = material(HULL['dado'], surface='accent')
+    # to the path's left is in towards the middle, away from whoever sits at it
+    profile = [(-y, z) for y, z in CONSOLE]
+    for side, (start, end) in enumerate(WINGS):
+        path = ring_points(*ARC, ARC_CONSOLE, 12, math.radians(start), math.radians(end))
+        sweep(f'helper console {side}', path, profile, [bulkhead, accent, toon(CONSOLE_TOP), bulkhead, bulkhead],
+              caps=True)
+        collide_path(path, -CONSOLE[-1][0], CONSOLE[2][0])
+        touch_strip(f'helper console {side} keys', start, end, 51 + side)
+    for i, (crew, a) in enumerate(HELPERS):
+        console = on_arc(a, ARC_CONSOLE)
+        box(f'helper {i + 1} display', (0.8, 0.06, 0.42), accent, (0, -0.16, 0.88), frame=console, round=0.015)
+        panel(f'helper {i + 1} display screen', 0.72, 0.34,
+              material('#000000', surface='readout', seed=41 + i, w=0.72, h=0.34), (0, -0.125, 0.92), console)
+        # facing in, its back to the arc's outside
+        seat = on_arc(a, ARC_SEAT) @ Matrix.Rotation(math.pi, 4, 'Z')
+        bridge_seat(f'helper {i + 1}', seat)
+        at = seat.to_translation()
+        marker(f'seat {crew}', 'seat', (at.x, at.y, 0), yaw=facing(at.xy, ARC), crew=crew)
+
+
 def briefing_room():
     """
-    The goal's briefing room: the doorway in the middle of its aft wall, the captain's chair at the near end of a long
-    table, the crew either side of it, and the lead's session on a viewscreen across the far wall, with the station's
-    sign on the dado under it to port and the switches for its panes to starboard.
-    Viewports onto space down the port side, and the goal board, with the lead's note on the goal, to starboard.
+    The goal's briefing room, a mini bridge: the doorway in the middle of its aft wall, the command carpet a few steps
+    in, the lead and reviewer either side of it and the helpers at consoles on an arc round behind, open in the middle
+    for the walk in from the door and on up to the screen, all facing the lead's session on a viewscreen across the far wall, with the station's sign on
+    the dado under it to port and the switches for its panes to starboard. Viewports onto space down the port side,
+    and the goal board, with the lead's note on the goal, to starboard.
     """
     module('briefing_room')
     outline = [(-ROOM_HALF, WALL / 2), (ROOM_HALF, WALL / 2), (ROOM_HALF, ROOM_FAR), (-ROOM_HALF, ROOM_FAR)]
@@ -211,26 +295,19 @@ def briefing_room():
     doorway('briefing room door', door @ Matrix.Translation((0, -WALL / 2, 0)))
     polygon('briefing room floor', outline, 0, material('#363b5e', surface='carpet'), uv_scale=0.5)
     polygon('briefing room ceiling', outline, HEIGHT, unlit(HULL['ceiling']), down=True)
-    polygon('briefing room light', [(TABLE[0] + x, TABLE[1] + y) for x, y in rounded_rect(0.9, 3.6, 0.3)], HEIGHT - 0.02,
-            unlit('#ffffff'), down=True)
-    polygon('briefing room rug', [(TABLE[0] + x, TABLE[1] + y) for x, y in rounded_rect(4.0, 6.0, 0.6)], 0.008,
-            material('#4a4e74'))
+    annulus('briefing room light', 0, 1.0, HEIGHT - 0.02, unlit('#ffffff'), at=(0, COMMAND), down=True)
+    # the command carpet round the chairs, as on the bridge, with the walkway in to it from the door
+    annulus('command carpet', 0, 2.1, 0.008, material(CARPET), segments=64, at=(0, COMMAND))
+    annulus('command ring', 2.1, 2.25, 0.008, material(HULL['carpetEdge']), segments=64, at=(0, COMMAND))
+    polygon('walkway', [(-0.8, WALL / 2), (0.8, WALL / 2), (0.8, COMMAND - 2.2), (-0.8, COMMAND - 2.2)], 0.004,
+            material(HULL['carpetEdge']))
 
-    w, length = TABLE_SIZE
-    top = slab('briefing table', [(TABLE[0] + x, TABLE[1] + y) for x, y in rounded_rect(w, length, w / 2 - 0.02, segments=8)],
-               0.72, 0.79, toon('#2b2d42'))
-    collide_object(top)
-    for s in (-1, 1):
-        box(f'briefing table pedestal {s}', (0.5, 0.5, 0.72), toon('#495057'), (TABLE[0], TABLE[1] + s * 1.3, 0))
-    polygon('briefing table strip', [(TABLE[0] + x, TABLE[1] + y) for x, y in rounded_rect(0.12, length - 1.2, 0.05)],
-            0.795, material(HULL['dado'], surface='accent'))
-
-    command_chair('captain', (0, CAPTAIN), 0, COMMAND_RED, 0.85)
-    for crew, side, y in SEATS:
-        at = (side * SIDE_X, y)
-        yaw = facing(at, (0, y))
-        collide_object(lounge_chair(f'chair {crew}', at, yaw), pad=0.1)
-        marker(f'seat {crew}', 'seat', (*at, 0), yaw=yaw, crew=crew)
+    screen_middle = (0, ROOM_FAR)
+    for crew, x, y in FLANK:
+        yaw = facing((x, y), screen_middle)
+        command_chair(crew, (x, y), yaw, CUSHION, 0.8)
+        marker(f'seat {crew}', 'seat', (x, y, 0), yaw=yaw, crew=crew)
+    helper_consoles()
 
     far = Matrix.Translation((0, ROOM_FAR, 0)) @ Matrix.Rotation(math.pi, 4, 'Z')
     bezel('screen frame', SCREEN_W, SCREEN_H, 0.1, 0.12, SCREEN_DEPTH, toon(HULL['frame']),
@@ -250,14 +327,15 @@ def briefing_room():
 
     port = Matrix.Rotation(-math.pi / 2, 4, 'Z')
     starboard = Matrix.Rotation(math.pi / 2, 4, 'Z')
-    for i, y in enumerate((3.9, 7.5)):
+    for i, y in enumerate((2.4, 5.4)):
         window(f'briefing room window {i}', 2.2, 1.3, (0, 1.85), Matrix.Translation((-ROOM_HALF, y, 0)) @ port)
-    board = Matrix.Translation((ROOM_HALF, TABLE[1], 0)) @ starboard
+    board = Matrix.Translation((ROOM_HALF, BOARD_Y, 0)) @ starboard
     bezel('goal board frame', BOARD_W, BOARD_H, 0.1, 0.1, 0.08, toon(HULL['frame']), (0, 0, BOARD_BOTTOM + BOARD_H / 2), board)
     panel('goal board', BOARD_W, BOARD_H, material('#000000', surface='screen', screen='team-station-note'),
           (0, 0.012, BOARD_BOTTOM), board)
 
-    view = (0, CAPTAIN - 0.95)
+    # where the captain stands: the middle of the command carpet, a little back from the crew's chairs
+    view = (0, COMMAND - 0.6)
     marker('place briefing room', 'place', (*view, 0), yaw=facing(view, (0, ROOM_FAR)), label='Briefing room')
     marker('area briefing room', 'area', (0, (WALL / 2 + ROOM_FAR) / 2, 1),
            scale=(ROOM_HALF + 0.1, (ROOM_FAR - WALL / 2) / 2 + 0.1, 1), label='Briefing room')

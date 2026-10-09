@@ -58,6 +58,8 @@ export type Surface =
   | { kind: 'space' }
   | { kind: 'keys' }
   | { kind: 'readout'; seed: number; w: number; h: number }
+  /** An LCARS console top, w×h metres, with a station for each of `stations` crew side by side. */
+  | { kind: 'console'; seed: number; w: number; h: number; stations: number }
   | { kind: 'sign'; text: string; color: string; sub?: string; code?: string }
   | { kind: 'screen'; screen: ScreenName }
   /** The colour of whatever it's part of: a team station's accent. */
@@ -124,6 +126,8 @@ export function readSurface(e: Extras): Surface {
       return { kind: e.surface };
     case 'readout':
       return { kind: 'readout', seed: num(e, 'seed'), w: num(e, 'w'), h: num(e, 'h') };
+    case 'console':
+      return { kind: 'console', seed: num(e, 'seed'), w: num(e, 'w'), h: num(e, 'h'), stations: num(e, 'stations') };
     case 'sign':
       return { kind: 'sign', text: str(e, 'text'), color: str(e, 'color'), sub: optStr(e, 'sub'), code: optStr(e, 'code') };
     case 'screen':
