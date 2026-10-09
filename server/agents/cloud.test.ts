@@ -64,7 +64,16 @@ Without an interactive terminal, --cloud can only send the prompt to an existing
     expect(cloudRefused(notAnId)).toBe(true);
   });
 
+  it('spots Claude Code refusing to attach to a cloud session with the SDK’s stream-json output', () => {
+    const stderr = `Claude Code process exited with code 1
+Error: --cloud <session_id> does not support --output-format stream-json`;
+    expect(cloudRefused(stderr)).toBe(true);
+    // a reworded refusal still counts
+    expect(cloudRefused('Error: --output-format stream-json cannot be combined with --cloud <session_id|url>')).toBe(true);
+  });
+
   it('leaves other failures alone', () => {
+    expect(cloudRefused('Error: --cloud "fix it" cannot also take a positional prompt.\n--output-format stream-json')).toBe(false);
     expect(cloudRefused('Claude Code process exited with code 1')).toBe(false);
     expect(cloudRefused('Error: cloud session session_01 is archived')).toBe(false);
   });

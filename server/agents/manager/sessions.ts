@@ -4,7 +4,7 @@ import { prKey } from '../../../shared/qa';
 import type { Agent, PermissionRequest } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
 import { newId, truncate } from '../../util';
-import { attachAgain, carryOnInNewSession, fallBackToLocal } from '../cloud';
+import { attachAgain, carryOnInNewSession, CLOUD_UNAVAILABLE, fallBackToLocal } from '../cloud';
 import { applyHelperEvent, COMPACT_INSTRUCTIONS, compactInstructions, freshSessionPrompt, HELPER_LINGER_MS, leadSystemAppend, sessionGone, sliceLanded } from '../lead';
 import { carryOnPrompt, conflictsPrompt, issuePrompt, systemAppend } from '../prompts';
 import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
@@ -253,6 +253,11 @@ export class AgentSessions extends Part {
         }
         rt.attaching = undefined;
         if (!outcome.ok && !outcome.aborted && !outcome.started) {
+          // Claude Code won't attach from Focus at all: no session the captain starts would do, so they carry on here
+          if (outcome.error === CLOUD_UNAVAILABLE) {
+            this.core.cloud.attachRefused = true;
+            return yield* this.core.cloud.carryOnHere(agent, attaching.handover);
+          }
           this.print(agent, [{ kind: 'error', text: `✘ Couldn't attach to the cloud session: ${outcome.error ?? 'no reason given'}` }]);
           return this.core.cloud.awaitCloud(agent, attaching.handover);
         }
@@ -271,6 +276,8 @@ export class AgentSessions extends Part {
         const ranInCloud = !!agent.sessionId;
         rt.nudged = false;
         if (!ranInCloud) {
+          // they haven't started, and Claude Code wouldn't attach to a session the captain started either
+          if (this.core.cloud.attachRefused) return yield* this.core.cloud.carryOnHere(agent, { since: Date.now(), fresh: true });
           // they haven't started: the captain starts their cloud session, which a terminal can, or keeps them here
           this.print(agent, [{ kind: 'system', text: "✻ Claude Code won't start a cloud session without a terminal" }]);
           return this.core.cloud.awaitCloud(agent, { since: Date.now(), fresh: true });

@@ -16,6 +16,7 @@ import type { AgentRunner, AgentSession, CloudTerminal, CloudTerminalRequest, Ru
 import { CLOUD_UNAVAILABLE } from './cloud';
 import { keyFallback } from './apiKey';
 import { CARRY_ON_AFTER_LIMIT } from './manager/planLimit';
+import { CARRYING_ON_HERE } from './manager/cloudMoves';
 
 // the office falls back on an API key while the plan's usage limit is reached (only the last tests reach it)
 vi.hoisted(() => {
@@ -774,6 +775,50 @@ describe('AgentManager', () => {
       await until(() => !!store.agent(id).handover);
       expect(store.agent(id)).toMatchObject({ status: 'waiting', handover: { fresh: true } });
       expect(claude.turns).toHaveLength(2);
+    });
+
+    it('carries a cloud hire on here when Claude Code won’t attach to the session the captain started, and stops sending later ones to wait', async () => {
+      const { agents, claude, store, project } = office();
+      const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue, { cloud: true });
+      await until(() => claude.turns.length === 1);
+      claude.turns[0].end({ ok: false, summary: '', error: CLOUD_UNAVAILABLE });
+      await until(() => !!store.agent(id).handover);
+      await agents.attachCloud(id, 'https://claude.ai/code/session_01XYZabc999');
+      await until(() => claude.turns.length === 2);
+
+      // Claude Code refuses --cloud <session_id> with the SDK's stream-json: they start their task on this machine
+      claude.turns[1].end({ ok: false, summary: '', error: CLOUD_UNAVAILABLE });
+      await until(() => claude.turns.length === 3);
+      expect(claude.turns[2].req).toMatchObject({ cloud: undefined, resumeSessionId: undefined });
+      expect(claude.turns[2].req.prompt).toContain('Add a dark mode toggle to the header');
+      expect(store.agent(id)).toMatchObject({ status: 'working', handover: undefined, cloud: undefined, sessionId: 'session-1' });
+      const said = store.recentLines(id).map((l) => l.text);
+      expect(said.filter((t) => t === CARRYING_ON_HERE)).toHaveLength(1);
+      expect(said.some((t) => t.includes('Couldn’t attach') || t.includes("Couldn't attach"))).toBe(false);
+
+      // the next cloud hire Claude Code won't start a session for carries on here rather than waiting for one
+      const next = agents.hire(project.id, 'demo/webshop-api', { number: 2, title: 'Rate-limit the login endpoint' }, { cloud: true });
+      await until(() => claude.turns.length === 4);
+      claude.turns[3].end({ ok: false, summary: '', error: CLOUD_UNAVAILABLE });
+      await until(() => claude.turns.length === 5);
+      expect(claude.turns[4].req).toMatchObject({ cloud: undefined, resumeSessionId: undefined });
+      expect(store.agent(next.id)).toMatchObject({ status: 'working', handover: undefined, cloud: undefined });
+      expect(store.recentLines(next.id).map((l) => l.text)).toContain(CARRYING_ON_HERE);
+    });
+
+    it('carries a moved agent on here, in their own conversation, when Claude Code won’t attach to their cloud session', async () => {
+      const { agents, claude, store, project } = office();
+      const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue);
+      await until(() => claude.turns.length === 1);
+      await agents.moveToCloud(id);
+      await agents.attachCloud(id, 'https://claude.ai/code/session_01XYZabc999');
+      await until(() => claude.turns.length === 2);
+
+      claude.turns[1].end({ ok: false, summary: '', error: CLOUD_UNAVAILABLE });
+      await until(() => claude.turns.length === 3);
+      expect(claude.turns[2].req).toMatchObject({ cloud: undefined, resumeSessionId: 'session-1' });
+      expect(claude.turns[2].req.prompt).toMatch(/^Carry on with the work from where it was left off/);
+      expect(store.agent(id)).toMatchObject({ status: 'working', handover: undefined, cloud: undefined, sessionId: 'session-1' });
     });
 
     it('keeps a waiting agent here: one who hasn’t started starts their task on this machine', async () => {

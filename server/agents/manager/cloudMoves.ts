@@ -6,13 +6,23 @@ import { carryOnPrompt } from '../prompts';
 import { Sessions, Workspace } from '../services';
 import { cloudSessionId } from '../terminal';
 import { STOPPED_BY_CAPTAIN } from '../types';
-import { type ManagerServices, Part, Refused, withNotes } from './core';
+import { type ManagerServices, Part, Refused, withNotes, type WorkError } from './core';
 
 /** What a moved agent's cloud session hears to carry on with: the work may be finished already. */
 const MOVED_ON = 'Carry on with the work from where it was left off, and finish it. If it was already finished, check it over and reply with your summary again.';
 
+/** What an agent's log says when Claude Code won't attach to the cloud session they were handed over to. */
+export const CARRYING_ON_HERE = "✻ Claude Code won't attach to cloud sessions from Focus – carrying on here as a 💻 local agent";
+
 /** Moving an agent to a Claude Code cloud session, attaching to it, or keeping them on this machine. */
 export class CloudMoves extends Part {
+  /**
+   * Claude Code has refused to attach to a cloud session from Focus (it won't with the SDK's stream-json output), so a
+   * session the captain starts is no use: from then on, for as long as the office runs, agents carry on here instead of
+   * waiting for one.
+   */
+  attachRefused = false;
+
   /**
    * The captain's Move to cloud: whatever the agent is doing stops (their session with it), everything they've done
    * goes onto their branch on GitHub, and they wait for a cloud session to carry on in (`awaitCloud`). One who hasn't
@@ -130,6 +140,29 @@ export class CloudMoves extends Part {
       // a session the captain started hasn't had the office's instructions
       yield* this.core.sessions.runSession(agent, `${yield* this.core.sessions.instructions(agent)}\n\n---\n\n${work}`, sessionId);
     }).pipe(this.orFail(agent));
+  }
+
+  /**
+   * Claude Code won't attach to the agent's cloud session: they carry on here as a 💻 local agent, as `stayLocal` would
+   * have them, but without waiting for the captain. One who hadn't started starts their task; one who was moved carries
+   * on from their branch (pulled first, in case it moved on GitHub), in their own conversation if they had one.
+   */
+  carryOnHere(agent: Agent, handover: CloudHandover): Effect.Effect<void, WorkError, ManagerServices> {
+    return Effect.gen({ self: this }, function* () {
+      const rt = this.rt(agent.id);
+      rt.nudged = false;
+      this.update(agent, { handover: undefined, cloud: undefined, sessionId: handover.localSessionId, status: 'setting-up' });
+      this.print(agent, [{ kind: 'system', text: CARRYING_ON_HERE }]);
+      if (handover.fresh) {
+        this.update(agent, { activity: 'Reading the issue' });
+        return yield* this.core.sessions.runSession(agent, withNotes(yield* this.core.sessions.taskPrompt(agent), rt.notes));
+      }
+      this.update(agent, { activity: `Fetching ${agent.branch} from GitHub` });
+      const workspace = yield* Workspace;
+      yield* workspace.pull(workspace.dir(agent.id), agent.branch);
+      const prompt = [MOVED_ON, ...rt.inbox.splice(0)].join('\n\n');
+      return yield* this.core.sessions.runSession(agent, handover.localSessionId ? prompt : carryOnPrompt(agent, prompt), handover.localSessionId);
+    });
   }
 
   /**

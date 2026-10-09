@@ -21,6 +21,7 @@ Joining a cloud session that already exists works without a terminal on every ac
 - **…or paste a claude.ai/code session link**: start a session yourself (on claude.ai/code, or with `claude --cloud` in any terminal) and paste its link or id. Windows terminals aren't recorded, so there you paste the link once the terminal shows it.
 - Which terminal: on macOS the script is a `.command` file that `open` hands to Terminal (or whatever opens `.command` files); on Linux the office tries `x-terminal-emulator`, `gnome-terminal`, `konsole`, `xfce4-terminal`, `kitty`, `alacritty`, `wezterm` and `xterm` in turn; on Windows, `cmd`. Set `FOCUS_TERMINAL` (e.g. `kitty -e`) to use your own, and the script's path goes after it. The scripts and recordings are in `~/.focus/cloud-terminals/`.
 - If the office can't join the session (a wrong link, say), the agent goes back to waiting, and their terminal says why.
+- If Claude Code won't join it from Focus at all (newer versions refuse `--cloud <session_id>` with `--output-format stream-json`, which the Agent SDK always passes), the agent carries on here as a 💻 local agent instead, and their terminal says so: one who hadn't started starts their task in their worktree, and one you moved pulls their branch and carries on in their own conversation. From then on, until the office restarts, a cloud agent Claude Code won't start a session for carries on here too, rather than waiting for one you'd start.
 
 ## Moving an agent to the cloud
 

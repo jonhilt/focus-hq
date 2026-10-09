@@ -67,14 +67,23 @@ export function terminalDescription(agent: Pick<Agent, 'name' | 'repo' | 'issue'
 }
 
 export const CLOUD_UNAVAILABLE =
-  "Cloud sessions can't be started from Focus with the installed Claude Code: it only starts one from an interactive " +
-  'terminal, and the office runs it headlessly through the Agent SDK.';
+  "Cloud sessions can't be used from Focus with the installed Claude Code: it only starts one from an interactive " +
+  "terminal, and won't attach to one at all with the stream-json output the Agent SDK always asks for, which is how " +
+  'the office runs it.';
+
+const STREAM_JSON_REFUSAL =
+  /--cloud\b.*\b(?:not|cannot|can't|unsupported|incompatible)\b.*(?:stream-json|--output-format)|(?:stream-json|--output-format).*\b(?:not|cannot|can't|unsupported|incompatible)\b.*--cloud\b/i;
 
 /**
- * Claude Code starts a new cloud session headlessly only while Anthropic has its headless cloud client switched on for
- * the account (a server-side rollout, with no flag or SDK option to ask for it). Otherwise it exits at once, saying
- * --cloud needs an interactive terminal. Running it under a pseudo-terminal would only hide that.
+ * Claude Code refuses the office's `--cloud` for one of two reasons, neither of which the office can change. It starts
+ * a new cloud session headlessly only while Anthropic has its headless cloud client switched on for the account (a
+ * server-side rollout, with no flag or SDK option to ask for it); otherwise it exits at once, saying --cloud needs an
+ * interactive terminal. And it won't attach to an existing session (`--cloud <session_id>`) with
+ * `--output-format stream-json`, which the Agent SDK always passes. Running it under a pseudo-terminal would only hide
+ * the first. The stream-json refusal is matched loosely (`--cloud` and stream-json or --output-format on a line that
+ * says no), so a change of wording doesn't break it.
  */
 export function cloudRefused(output: string): boolean {
-  return /--cloud requires an interactive terminal|Without an interactive terminal, --cloud/.test(output);
+  if (/--cloud requires an interactive terminal|Without an interactive terminal, --cloud/.test(output)) return true;
+  return STREAM_JSON_REFUSAL.test(output);
 }
