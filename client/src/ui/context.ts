@@ -19,6 +19,8 @@ export interface Ui {
   openAgent(id: string, view?: AgentView): void;
   /** One of a lead's helpers: its own transcript. */
   openHelper(leadId: string, id: string): void;
+  /** One of lead `leadId`'s workflow agents (by its place in workflow `workflowId`): its own screen. */
+  openWorkflowAgent(leadId: string, workflowId: string, index: number): void;
   openBoard(projectId: string, tab?: BoardTab): void;
   /** Starts a preview of the PR unless it's already the one running, then shows its panel. */
   previewPr(projectId: string, repo: string, number: number): void;

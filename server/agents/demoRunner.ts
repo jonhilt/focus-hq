@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { TermLine } from '../../shared/types';
 import { demoSinceVerdict } from '../demoGit';
@@ -195,6 +196,12 @@ export class DemoRunner implements AgentRunner {
     type Job = { label: string; phase: number; ask: string; result?: string; after?: string; secs: [number, number] };
     const runWorkflow = async (name: string, description: string, phases: { title: string; child?: boolean }[], jobs: Job[], cap = 8) => {
       const id = `demo-wf-${randomBytes(3).toString('hex')}`;
+      // each agent's transcript, as Claude Code writes one: agent-<agentId>.jsonl in the workflow's folder
+      const dir = path.join(os.tmpdir(), 'focus-demo-workflows', id);
+      fs.mkdirSync(dir, { recursive: true });
+      const agentId = (e: { index: number }) => `${id.slice(-6)}a${e.index}`;
+      const transcript = (e: { index: number }, ...entries: unknown[]) =>
+        fs.appendFileSync(path.join(dir, `agent-${agentId(e)}.jsonl`), entries.map((x) => `${JSON.stringify(x)}\n`).join(''));
       type Entry = { job: Job; index: number; queuedAt: number; startedAt?: number; doneAt?: number; state: 'start' | 'done' | 'error' };
       const entries: Entry[] = [];
       const ready = (job: Job) => !job.after || entries.some((e) => e.job.label === job.after && e.state !== 'start');
@@ -203,7 +210,7 @@ export class DemoRunner implements AgentRunner {
           ...phases.map((p, i) => ({ type: 'workflow_phase', index: i + 1, title: p.title, ...(p.child && { kind: 'child' }) })),
           ...entries.map((e) => ({
             type: 'workflow_agent', index: e.index, label: e.job.label, phaseIndex: e.job.phase, phaseTitle: phases[e.job.phase - 1]?.title, state: e.state,
-            model: 'claude-sonnet-5-5', queuedAt: e.queuedAt, startedAt: e.startedAt, promptPreview: e.job.ask,
+            model: 'claude-sonnet-5-5', queuedAt: e.queuedAt, startedAt: e.startedAt, promptPreview: e.job.ask, ...(e.startedAt && { agentId: agentId(e) }),
             ...(e.doneAt && e.startedAt && { durationMs: e.doneAt - e.startedAt }),
             ...(e.state === 'done' && { resultPreview: e.job.result }),
             ...(e.state === 'error' && { error: 'The agent hit an error' }),
@@ -214,6 +221,7 @@ export class DemoRunner implements AgentRunner {
       };
       hooks.lines([{ kind: 'tool', text: `⏺ Workflow(${name})` }, { kind: 'output', text: '  ⎿  Launched in the background' }]);
       hooks.workflow?.({ kind: 'started', id, name, description });
+      hooks.workflow?.({ kind: 'transcripts', id, dir });
       const pending = [...jobs];
       const ends = new Map<Entry, number>();
       while (pending.length || entries.some((e) => e.state === 'start')) {
@@ -227,10 +235,21 @@ export class DemoRunner implements AgentRunner {
           if (e.state !== 'start') continue;
           if (e.startedAt === undefined && entries.filter((x) => x.state === 'start' && x.startedAt !== undefined).length < cap) {
             e.startedAt = now;
+            const file = `src/${e.job.label.split(':')[1] ?? 'index'}.ts`;
+            transcript(e,
+              { type: 'user', message: { content: e.job.ask } },
+              { type: 'assistant', message: { content: [{ type: 'text', text: `I'll start with ${file}.` }, { type: 'tool_use', name: 'Read', input: { file_path: file } }] } },
+              { type: 'user', message: { content: [{ type: 'tool_result', content: `export function ${e.job.label.replace(/\W/g, '_')}() {}\n// ${30 + e.index * 7} lines` }] } },
+              { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'pnpm test' } }] } },
+            );
             ends.set(e, now + ((e.job.secs[0] + Math.random() * (e.job.secs[1] - e.job.secs[0])) * 1000) / this.speed);
           } else if (e.startedAt !== undefined && now >= (ends.get(e) ?? Infinity)) {
             e.doneAt = now;
             e.state = e.job.result === undefined ? 'error' : 'done';
+            transcript(e,
+              { type: 'user', message: { content: [{ type: 'tool_result', content: e.state === 'done' ? 'Tests: 44 passed, 44 total' : 'Tests: 2 failed, 42 passed' }] } },
+              { type: 'assistant', message: { content: [{ type: 'text', text: e.job.result ?? 'Two tests fail here: stopping so the lead can look.' }] } },
+            );
           }
         }
         report();
