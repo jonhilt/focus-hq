@@ -1,7 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Effect, Fiber, FiberMap } from 'effect';
 import { helperFor } from '../../../shared/crew';
 import { prKey } from '../../../shared/qa';
-import type { Agent, PermissionRequest } from '../../../shared/types';
+import type { Agent, PermissionRequest, TermLine } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
 import { newId, truncate } from '../../util';
 import { attachAgain, carryOnInNewSession, CLOUD_UNAVAILABLE, fallBackToLocal } from '../cloud';
@@ -10,9 +12,9 @@ import { carryOnPrompt, conflictsPrompt, issuePrompt, systemAppend } from '../pr
 import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
 import { Sessions, Workspace } from '../services';
 import { applyTaskTool } from '../tasks';
-import { applyWorkflowEvent, WORKFLOW_LINGER_MS } from '../workflows';
+import { applyWorkflowEvent, transcriptLines, WORKFLOW_LINGER_MS } from '../workflows';
 import { type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN } from '../types';
-import { EmptyRepository, FINISHED, type ManagerServices, Part, Refused, ReportGone, withNotes, type WorkError } from './core';
+import { EmptyRepository, FINISHED, type ManagerServices, Part, Refused, ReportGone, type Runtime, withNotes, type WorkError } from './core';
 
 /** Running an agent's Claude Code session: launching their task, each turn and its hooks, compacting, and what follows a turn. */
 export class AgentSessions extends Part {
@@ -128,6 +130,10 @@ export class AgentSessions extends Part {
       workflow: (event) => {
         // only a lead's away teams have somewhere to beam in to: the lead's briefing room
         if (agent.task !== 'lead') return;
+        if (event.kind === 'transcripts') {
+          (rt.workflowTranscripts ??= new Map()).set(event.id, event.dir);
+          return;
+        }
         const before = agent.workflows ?? [];
         const workflows = applyWorkflowEvent(before, event, Date.now());
         if (workflows === before) return;
@@ -135,7 +141,10 @@ export class AgentSessions extends Part {
         if (event.kind === 'started') this.print(agent, [{ kind: 'system', text: `✻ Workflow ${event.name}: its away team beams into ${agent.name}'s briefing room a phase at a time` }]);
         // a finished workflow's away team lingers a moment, so you see how it got on
         if (event.kind === 'ended') {
-          this.background(Effect.sleep(WORKFLOW_LINGER_MS).pipe(Effect.andThen(Effect.sync(() => this.update(agent, { workflows: (agent.workflows ?? []).filter((w) => w.id !== event.id) })))));
+          this.background(Effect.sleep(WORKFLOW_LINGER_MS).pipe(Effect.andThen(Effect.sync(() => {
+            this.update(agent, { workflows: (agent.workflows ?? []).filter((w) => w.id !== event.id) });
+            rt.workflowTranscripts?.delete(event.id);
+          }))));
         }
       },
       cost: (usd) => this.update(agent, { costUsd: usd }),
@@ -342,5 +351,22 @@ export class AgentSessions extends Part {
     if (agent.task === 'review') this.core.reviews.reviewEnded(agent, message);
     this.core.reviews.fixEnded(agent, 'failed');
     this.core.seating.schedule();
+  }
+}
+
+/** The id Claude Code gives a workflow agent: nothing that could climb out of its transcripts' folder. */
+const AGENT_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * A lead's workflow agent's transcript, as terminal lines: read from where Claude Code writes it, each time it's asked
+ * for, since it grows as the agent works. Empty until there's one to read.
+ */
+export function workflowAgentLines(rt: Runtime | undefined, workflowId: string, agentId: string): Omit<TermLine, 't'>[] {
+  const dir = rt?.workflowTranscripts?.get(workflowId);
+  if (!dir || !AGENT_ID.test(agentId)) return [];
+  try {
+    return transcriptLines(readFileSync(join(dir, `agent-${agentId}.jsonl`), 'utf8'));
+  } catch {
+    return [];
   }
 }

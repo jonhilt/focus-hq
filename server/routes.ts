@@ -169,6 +169,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
   ));
   r.delete('/projects/:id/goals/queue/:qid', h((req) => office.agents.dropQueued(param(req, 'id'), param(req, 'qid'))));
   r.get('/agents/:id/lines', h((req) => store.allLines(param(req, 'id'))));
+  r.get('/agents/:id/workflows/:workflow/agents/:agent/lines', h((req) => office.agents.workflowAgentLines(param(req, 'id'), param(req, 'workflow'), param(req, 'agent'))));
   // on your API key, picking a long conversation back up costs enough that the captain says how first (`how`)
   r.post('/agents/:id/message', h((req) => office.agents.message(param(req, 'id'), str(req.body.text), undefined, resumeHow(req.body.how))));
   r.post('/agents/:id/answer', h((req) => office.agents.answer(param(req, 'id'), str(req.body.question), str(req.body.option), typeof req.body.note === 'string' ? req.body.note : undefined, resumeHow(req.body.how))));

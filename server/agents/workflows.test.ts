@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Workflow } from '../../shared/types';
-import { applyWorkflowEvent, RECENT_AGENTS, workflowProgress } from './workflows';
+import { applyWorkflowEvent, RECENT_AGENTS, transcriptLines, workflowAsk, WorkflowPermits, workflowProgress } from './workflows';
 
 // as the probes saw it: a snapshot of every phase, and every agent queued so far
 const progress = [
@@ -20,8 +20,8 @@ describe('workflowProgress', () => {
       { index: 2, title: 'Verify', queued: 1, working: 0, done: 0, failed: 0 },
     ]);
     expect(read?.agents).toEqual([
-      { index: 1, label: 'review:bugs', phase: 1, status: 'done', model: 'claude-sonnet-5-5', activity: 'No bugs', finishedAt: 15 },
-      { index: 2, label: 'review:perf', phase: 1, status: 'working', model: undefined, activity: 'Profile the render loop' },
+      { index: 1, label: 'review:bugs', phase: 1, status: 'done', model: 'claude-sonnet-5-5', activity: 'No bugs', finishedAt: 15, agentId: 'a1' },
+      { index: 2, label: 'review:perf', phase: 1, status: 'working', model: undefined, activity: 'Profile the render loop', agentId: 'a2' },
     ]);
   });
 
@@ -89,5 +89,64 @@ describe('applyWorkflowEvent', () => {
 
   it('leaves the list alone for a workflow it doesn’t know', () => {
     expect(applyWorkflowEvent(started, { kind: 'ended', id: 'nope', ok: true }, 9)).toBe(started);
+  });
+});
+
+describe('WorkflowPermits', () => {
+  it('approves the agents of a workflow the captain approved, while it runs', () => {
+    const permits = new WorkflowPermits();
+    permits.approveCall('toolu_1');
+    permits.started('w1', 'toolu_1');
+    permits.seen('w1', [{ agentId: 'a1' }, {}]);
+    expect(permits.approves('a1')).toBe(true);
+    permits.ended('w1');
+    expect(permits.approves('a1')).toBe(false);
+  });
+
+  it('doesn’t approve the lead itself, an agent of a workflow nobody approved, or one it hasn’t heard of', () => {
+    const permits = new WorkflowPermits();
+    permits.started('w2', 'toolu_2'); // ran without being asked about (another autonomy setting)
+    permits.seen('w2', [{ agentId: 'b1' }]);
+    expect(permits.approves(undefined)).toBe(false);
+    expect(permits.approves('b1')).toBe(false);
+    expect(permits.approves('zz')).toBe(false);
+  });
+
+  it('might yet approve an agent it hasn’t heard of only while an approved workflow runs', () => {
+    const permits = new WorkflowPermits();
+    expect(permits.mightApprove('a1')).toBe(false);
+    permits.approveCall('toolu_1');
+    permits.started('w1', 'toolu_1');
+    expect(permits.mightApprove('a1')).toBe(true);
+    permits.seen('w1', [{ agentId: 'a1' }]);
+    expect(permits.mightApprove('a1')).toBe(false);
+    expect(permits.mightApprove(undefined)).toBe(false);
+  });
+});
+
+describe('workflowAsk', () => {
+  it('names the workflow from its script, and says what approving it means', () => {
+    expect(workflowAsk({ script: "export const meta = { name: 'review-changes', description: 'x' }" })).toBe('Run workflow review-changes: its agents run their commands without asking, for this run');
+    expect(workflowAsk({ name: 'saved-one' })).toMatch(/^Run workflow saved-one:/);
+    expect(workflowAsk({})).toMatch(/^Run workflow a workflow:/);
+  });
+});
+
+describe('transcriptLines', () => {
+  const jsonl = [
+    { type: 'user', message: { content: 'Run the bash command: echo hi' } },
+    { type: 'attachment', attachment: {} },
+    { type: 'assistant', message: { content: [{ type: 'thinking', thinking: 'hmm' }, { type: 'tool_use', name: 'Bash', input: { command: 'echo hi' } }] } },
+    { type: 'user', message: { content: [{ type: 'tool_result', content: 'hi' }] } },
+    { type: 'assistant', message: { content: [{ type: 'text', text: 'It printed hi' }] } },
+  ].map((e) => JSON.stringify(e)).join('\n') + '\n{"type":"assist';
+
+  it('reads what it was asked, the tools it used, what came back and what it said, leaving out its thinking', () => {
+    const text = transcriptLines(jsonl).map((l) => l.text).join('\n');
+    expect(text).toMatch(/^▶ Run the bash command: echo hi/);
+    expect(text).toMatch(/Bash\(echo hi\)/);
+    expect(text).toMatch(/hi/);
+    expect(text).toMatch(/It printed hi/);
+    expect(text).not.toMatch(/hmm/);
   });
 });

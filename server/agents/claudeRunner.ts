@@ -13,7 +13,7 @@ import { officeMcpServer } from './officeTool';
 import { openScratch } from './scratch';
 import { appUrl, renderText, renderToolResult, renderToolUse, screenshotFrame, type ToolCall } from './render';
 import { TASK_TOOLS } from './tasks';
-import { workflowProgress } from './workflows';
+import { WorkflowPermits, workflowAsk, workflowProgress } from './workflows';
 import { bundledClaude, openTerminal, readTerminal } from './terminal';
 import { type AgentRunner, type AgentSession, type CloudTerminal, type CloudTerminalRequest, type RunHooks, type RunOutcome, type RunRequest, LIMIT_REACHED, STOPPED_BY_CAPTAIN } from './types';
 
@@ -113,6 +113,8 @@ interface RunContext {
   helpers: Map<string, string>;
   /** Workflows by Claude Code's task id. */
   workflows: Set<string>;
+  /** Which workflows' agents may run their tools without asking. Missing in a context that doesn't ask. */
+  permits?: WorkflowPermits;
   /** Subagents (by Agent tool call) whose model we've reported. */
   modelled: Set<string>;
   /** Signed in with your API key rather than your login. */
@@ -166,12 +168,17 @@ export class ClaudeRunner implements AgentRunner {
     const autonomy = req.settings.autonomy;
     // a cloud agent has to push its own branch, and only that one
     const askCommands = cloud ? [...ASK_MODE_COMMANDS, `Bash(git push origin HEAD:${cloud.branch})`] : ASK_MODE_COMMANDS;
-    const canUseTool: CanUseTool = async (toolName, toolInput, { signal, title }) => {
+    const permits = new WorkflowPermits();
+    const canUseTool: CanUseTool = async (toolName, toolInput, { signal, title, agentID, toolUseID }) => {
       if (autonomy === 'ask' && (ASK_MODE_TOOLS.has(toolName) || toolName.startsWith('mcp__browser__'))) {
         return { behavior: 'allow', updatedInput: toolInput };
       }
-      const summary = title || summarizeInput(toolName, toolInput);
+      // an agent of a workflow the captain approved: its progress may not have named it yet, so give it a moment
+      for (let i = 0; i < 10 && permits.mightApprove(agentID); i++) await sleep(200);
+      if (permits.approves(agentID)) return { behavior: 'allow', updatedInput: toolInput };
+      const summary = toolName === 'Workflow' ? workflowAsk(toolInput) : title || summarizeInput(toolName, toolInput);
       const approved = await hooks.permission(toolName, summary, signal);
+      if (approved && toolName === 'Workflow') permits.approveCall(toolUseID);
       return approved
         ? { behavior: 'allow', updatedInput: toolInput }
         : {
@@ -224,7 +231,7 @@ export class ClaudeRunner implements AgentRunner {
 
     let q: Query | undefined;
     let stopping = false;
-    const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map(), helpers: new Map(), workflows: new Set(), modelled: new Set(), onKey, counted: new Set() };
+    const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map(), helpers: new Map(), workflows: new Set(), permits, modelled: new Set(), onKey, counted: new Set() };
     const done = (async (): Promise<RunOutcome> => {
       let summary = '';
       let structured: unknown;
@@ -335,12 +342,17 @@ export class ClaudeRunner implements AgentRunner {
         } else if (msg.subtype === 'task_started' && msg.task_type === 'local_workflow') {
           // a workflow: its agents report nothing of their own, only how the whole of it stands in its progress
           ctx.workflows.add(msg.task_id);
+          ctx.permits?.started(msg.task_id, msg.tool_use_id);
           hooks.workflow?.({ kind: 'started', id: msg.task_id, name: msg.workflow_name ?? '', description: msg.description });
         } else if (msg.subtype === 'task_progress' && ctx.workflows.has(msg.task_id)) {
           const progress = workflowProgress((msg as { workflow_progress?: unknown }).workflow_progress);
-          if (progress) hooks.workflow?.({ kind: 'progress', id: msg.task_id, ...progress });
+          if (progress) {
+            ctx.permits?.seen(msg.task_id, progress.agents);
+            hooks.workflow?.({ kind: 'progress', id: msg.task_id, ...progress });
+          }
         } else if (msg.subtype === 'task_notification' && ctx.workflows.has(msg.task_id)) {
           hooks.workflow?.({ kind: 'ended', id: msg.task_id, ok: msg.status === 'completed' });
+          ctx.permits?.ended(msg.task_id);
           ctx.workflows.delete(msg.task_id);
         } else if (msg.subtype === 'task_progress') {
           const id = ctx.helpers.get(msg.task_id);
@@ -404,6 +416,11 @@ export class ClaudeRunner implements AgentRunner {
         const content = msg.message.content;
         if (!Array.isArray(content)) return null;
         const results = content.filter((b) => b.type === 'tool_result');
+        // a workflow launched: where its agents' transcripts are written
+        const launched = msg.tool_use_result as { taskId?: unknown; transcriptDir?: unknown } | undefined;
+        if (launched && typeof launched.taskId === 'string' && typeof launched.transcriptDir === 'string') {
+          hooks.workflow?.({ kind: 'transcripts', id: launched.taskId, dir: launched.transcriptDir });
+        }
         for (const block of content) {
           if (block.type !== 'tool_result') continue;
           const call = ctx.calls.get(block.tool_use_id);

@@ -18,7 +18,9 @@ export type HelperEvent =
 export type WorkflowEvent =
   | { kind: 'started'; id: string; name: string; description: string }
   | { kind: 'progress'; id: string; phases: Workflow['phases']; agents: WorkflowAgent[] }
-  | { kind: 'ended'; id: string; ok: boolean };
+  | { kind: 'ended'; id: string; ok: boolean }
+  /** Where Claude Code writes its agents' transcripts (agent-<agentId>.jsonl), on this machine. */
+  | { kind: 'transcripts'; id: string; dir: string };
 
 export interface RunHooks {
   lines(lines: Omit<TermLine, 't'>[]): void;

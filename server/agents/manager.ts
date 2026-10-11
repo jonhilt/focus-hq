@@ -1,6 +1,6 @@
 import type { Layer } from 'effect';
 import type { Closer, LedgerEntry, ReportCard } from '../../shared/ledger';
-import type { Agent, ConflictsOutcome, Effort, FailedCheck, MessageReply, PullRequest, QaReview, QueuedGoal, ResumeHow } from '../../shared/types';
+import type { Agent, ConflictsOutcome, Effort, FailedCheck, MessageReply, PullRequest, QaReview, QueuedGoal, ResumeHow, TermLine } from '../../shared/types';
 import type { Hub } from '../hub';
 import type { Store } from '../store';
 import type { Transcript } from './engineer';
@@ -14,7 +14,7 @@ import { Ledger } from './manager/ledger';
 import { PlanLimit } from './manager/planLimit';
 import { Reviews } from './manager/reviews';
 import { Seating } from './manager/seating';
-import { AgentSessions } from './manager/sessions';
+import { AgentSessions, workflowAgentLines } from './manager/sessions';
 import { Slices } from './manager/slices';
 import { Triages } from './manager/triages';
 import { Core, type ManagerServices } from './manager/core';
@@ -117,6 +117,11 @@ export class AgentManager {
 
   closeGoal(id: string, force = false): Promise<{ closed: true } | { warn: string[] }> {
     return this.core.leads.closeGoal(id, force);
+  }
+
+  /** What one of a lead's workflow agents has done so far, from the transcript Claude Code writes as it works. */
+  workflowAgentLines(id: string, workflowId: string, agentId: string): Omit<TermLine, 't'>[] {
+    return workflowAgentLines(this.core.runtimes.get(id), workflowId, agentId);
   }
 
   setEffort(id: string, effort: Effort): Agent {
