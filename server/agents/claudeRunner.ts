@@ -6,6 +6,7 @@ import { paths } from '../config';
 import { errorMessage, sleep, truncate } from '../util';
 import { keyFallback } from './apiKey';
 import { BrowserPool, browserMcpServer } from './browserTool';
+import { checklistHooks } from './checklist';
 import { CLOUD_UNAVAILABLE, cloudRefused } from './cloud';
 import { officeMcpServer } from './officeTool';
 import { openScratch } from './scratch';
@@ -182,7 +183,11 @@ export class ClaudeRunner implements AgentRunner {
             systemPrompt: { type: 'preset', preset: 'claude_code', append: req.systemAppend, snapshot: true },
             mcpServers: { browser: browserMcpServer(this.browsers, req.agentId, hooks), ...(req.tools && { office: officeMcpServer(req.tools) }) },
             resume: req.resumeSessionId,
-            ...(scratch && { hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [scratch.hook] }] } }),
+            // the scratch dir's guard, and for a lead the hooks that keep its slice checklist current
+            hooks: {
+              ...(scratch && { PreToolUse: [{ matcher: 'Bash', hooks: [scratch.hook] }] }),
+              ...(req.checklist && checklistHooks(req.checklist)),
+            },
           }),
       outputFormat: req.outputSchema ? { type: 'json_schema', schema: req.outputSchema } : undefined,
       // the lead's helpers sit round their team station: a line every ~30s on what each is doing, for their speech bubbles

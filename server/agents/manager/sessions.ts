@@ -232,6 +232,7 @@ export class AgentSessions extends Part {
       tools: agent.task === 'lead'
         ? { ship: (input) => tool(this.core.slices.shipLead(agent, input)), note: (input) => tool(this.core.goalTools.noteGoal(agent, input)), show: (input) => tool(this.core.goalTools.showArtifact(agent, input)), explain: (input) => tool(this.core.goalTools.explain(agent, input)), ask: (input) => tool(this.core.goalTools.askCaptain(agent, input)), proposeClose: (input) => tool(this.core.goalTools.proposeClose(agent, input.reason)) }
         : undefined,
+      checklist: agent.task === 'lead' ? () => this.store.agents.get(agent.id)?.lead?.note?.slice ?? [] : undefined,
     };
   }
 

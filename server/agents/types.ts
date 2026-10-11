@@ -1,6 +1,7 @@
 import type { AgentStatus, BrowserFrame, Effort, Settings, TermLine, Workflow, WorkflowAgent } from '../../shared/types';
 import type { ArtifactInput, NoteInput, QuestionInput } from './lead';
 import type { ExplainerInput } from './explainer';
+import type { ChecklistItem } from './checklist';
 import type { SinceVerdict } from './retest';
 import type { BackgroundEvent } from './backgroundTasks';
 
@@ -83,6 +84,8 @@ export interface RunRequest {
   outputSchema?: Record<string, unknown>;
   /** The office's own tools for this session (a goal's lead's), exposed to Claude Code as mcp__office__*. */
   tools?: OfficeTools;
+  /** The lead's slice checklist as it stands now (its goal's note), read by the hooks that keep it current (`checklist.ts`). */
+  checklist?: () => ChecklistItem[];
   /**
    * Run in a Claude Code cloud session that works on `branch` and pushes it. `resumeSessionId` is then the cloud
    * session's id, and `systemAppend` goes into the first message.
