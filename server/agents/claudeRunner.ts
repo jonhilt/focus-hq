@@ -50,6 +50,16 @@ class InputQueue implements AsyncIterable<SDKUserMessage> {
 }
 
 /**
+ * Whether the session should keep listening after its turn, for these background tasks (their task types): while a
+ * workflow or a background subagent runs, Claude Code keeps the session going and takes its result in a turn of its
+ * own when it ends, so a message sent meanwhile should reach it then and there. A background shell or monitor can run
+ * for as long as it likes (a dev server), so it doesn't.
+ */
+export function holdsInput(background: string[]): boolean {
+  return background.some((type) => type === 'local_workflow' || type === 'local_agent');
+}
+
+/**
  * In "ask" mode these never make an agent raise its hand. Not a sandbox: it only cuts down on interruptions.
  * Plain tools are approved in canUseTool (bare names in allowedTools would bypass the callback entirely);
  * shell commands are matched by Claude Code's own Bash(prefix:*) rules.
@@ -109,6 +119,10 @@ interface RunContext {
   onKey: boolean;
   /** The API requests already counted against the key's budget: Claude Code sends each one's usage with every block of it. */
   counted: Set<string>;
+  /** The kinds of background task the session has running now (not the ambient ones), as Claude Code last listed them. */
+  background?: string[];
+  /** The session's last turn has ended with nothing of ours queued: the input closes once no workflow holds it open. */
+  turnOver?: boolean;
   /** Your plan's usage limit stopped the session, to carry on with the key (sessions.ts decides when). */
   limited?: boolean;
 }
@@ -222,6 +236,9 @@ export class ClaudeRunner implements AgentRunner {
         for await (const msg of q) {
           if (msg.type === 'system' && msg.subtype === 'init') started = true;
           const result = this.handle(msg, ctx, hooks);
+          // a workflow or background subagent still running keeps listening, so a message from the captain reaches
+          // the session now rather than after it's done; otherwise the session's done once its turn is
+          if (!result && ctx.turnOver && !holdsInput(ctx.background ?? [])) input.close();
           if (ctx.limited && !abort.signal.aborted) {
             abort.abort();
             input.close();
@@ -235,7 +252,8 @@ export class ClaudeRunner implements AgentRunner {
             if (!cloud) await reportContext(q, hooks);
             // Messages sent mid-turn are folded into that turn, so don't count results per message: finish once the
             // CLI has nothing queued. Anything still in our queue is delivered before the input reports it is done.
-            if (!result.queued) input.close();
+            ctx.turnOver = !result.queued;
+            if (ctx.turnOver && !holdsInput(ctx.background ?? [])) input.close();
           }
         }
         if (stopping) return { ok: false, summary, error: STOPPED_BY_CAPTAIN, aborted: true, started };
@@ -301,6 +319,9 @@ export class ClaudeRunner implements AgentRunner {
         } else if (msg.subtype === 'api_retry') {
           hooks.lines([{ kind: 'error', text: `  ⚠ API ${msg.error} – retrying (attempt ${msg.attempt}/${msg.max_retries})` }]);
           hooks.activity(null, `Waiting on the API (${msg.error})`);
+        } else if ((msg as { subtype: string }).subtype === 'background_tasks_changed') {
+          const tasks = (msg as { tasks?: { task_type?: string; ambient?: boolean }[] }).tasks ?? [];
+          ctx.background = tasks.filter((t) => !t.ambient).map((t) => t.task_type ?? '');
         } else if (msg.subtype === 'compact_boundary') {
           hooks.lines([{ kind: 'system', text: '✻ Conversation compacted' }]);
         } else if (msg.subtype === 'task_started' && msg.task_type === 'local_agent') {
