@@ -161,10 +161,10 @@ Your workspace holds every repo of the project side by side, each in its own fol
 
 How to work:
 - When a goal is new, talk it through briefly: what they want, why, and what done looks like. Don't write a spec or plan the whole route. Agree the first slice and get going.
-- Keep the goal's note with mcp__office__note. It survives when your conversation gets summarised, and the captain sees it, so keep it current and short: it's a note, not a spec. In it: what done looks like (once you've agreed it), this slice's checklist when the slice has more than a couple of parts (tick items off as you go), a line or two on what each slice taught you once it lands, and up to three ideas for what's next. You can also give the goal a better title. When a slice lands the office clears its checklist: carry what's unfinished into the next one, or say in learned that you dropped it. When you notice a loose thread worth keeping (a question, a risk, an idea off the current path), log it as a contact rather than chasing it now, and close it when you pursue or drop it: it stays on the goal's chart until you do.
+- Keep the goal's note with mcp__office__note. It survives when your conversation gets summarised, and the captain sees it, so keep it current and short: it's a note, not a spec. In it: what done looks like (once you've agreed it), this slice's heading as it starts (what it's heading for, in a few words: the goal's star chart shows it on the slice under way until it ships), this slice's checklist when the slice has more than a couple of parts (tick items off as you go), a line or two on what each slice taught you once it lands, and up to three ideas for what's next. You can also give the goal a better title. When a slice lands the office clears its checklist: carry what's unfinished into the next one, or say in learned that you dropped it. When you notice a loose thread worth keeping (a question, a risk, an idea off the current path), log it as a contact rather than chasing it now, and close it when you pursue or drop it: it stays on the goal's chart until you do.
 - A slice is a reasonably sized change that ships on its own and gets something real working: often a thin slice end to end, through every repo it needs. A slice can also be a refactor, once the code has learned something. Keep each pull request reviewable.
 - Before changing a repo, read its CLAUDE.md or README. Run its tests, type checks and linters, and check UI changes in the browser with the mcp__browser__ tools.
-- Commit in each repo as you go. Never push and never open pull requests yourself.
+- Commit in each repo as you go. Never push and never open pull requests yourself. Ship work in the slice you do it in, rather than holding it back for a later one: the star chart only shows what's on its way.
 - ${SCRATCH_RULE} It's emptied at the end of each of your turns.
 - Show the captain what you mean before you build it: put a visual on your station's screen with mcp__office__show (a diagram of how a change fits before a big one, a mockup before UI work, a before-and-after). They switch between what you've shown and open each one up close. Show the same id again to keep one up to date.
 - When the captain needs to understand how something works (a mechanism, what happens when it fails, how data moves, why one design beats another), walk them through it with mcp__office__explain rather than paragraphs: an animated explainer they step through a beat at a time, each beat with a caption and a narration a voice can read to them. It's worth it for the ideas a choice rests on, not for every small point.
@@ -203,7 +203,7 @@ export const COMPACT_INSTRUCTIONS =
   'Summarise this conversation so you can carry on with your task: keep the task, what you have done and decided and why, and what is left. Drop file contents, diffs, and command and tool output.';
 
 /** How long a goal's note may get: enough to carry the goal, never enough to become a spec. */
-export const NOTE_LIMITS = { title: 60, done: 400, slice: 7, item: 160, learned: 10, line: 200, next: 3 } as const;
+export const NOTE_LIMITS = { title: 60, done: 400, slice: 7, item: 160, learned: 10, line: 200, next: 3, heading: 80 } as const;
 
 export const emptyNote = (): GoalNote => ({ done: '', slice: [], learned: [], next: [] });
 
@@ -213,6 +213,8 @@ export const emptyNote = (): GoalNote => ({ done: '', slice: [], learned: [], ne
  */
 export interface NoteInput extends ContactInput {
   title?: string;
+  /** What the slice under way is heading for, in a few words: its waypoint's name on the chart until it ships. */
+  heading?: string;
   done?: string;
   slice?: { text: string; done?: boolean }[];
   learned?: string;
@@ -578,6 +580,7 @@ export function newSliceNote(work: LeadWork, branch: string): string {
   return [
     `Slice ${work.slice} starts on fresh code. Your repos are now:\n${workspaceList(work, branch)}`,
     `The office cleared the last slice's checklist from your note. Where the goal stands:\n\n${noteForPrompt(work)}`,
+    `As you start this slice, name it with the note tool's heading (what it's heading for, in a few words): until then its waypoint reads "heading not set" on the star chart.`,
   ].join('\n\n');
 }
 

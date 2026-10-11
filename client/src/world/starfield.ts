@@ -59,13 +59,26 @@ float star(float dist, float size, float pixel) {
   return smoothstep(r, r * 0.2, dist) * min(1.0, size * size / (r * r) * 4.0);
 }
 
-/** Stars on a cylinder of radius R around the ship's axis, drifting aft. */
+/**
+ * Stars on a cylinder of radius R around the ship's axis, drifting aft. The eye has to be inside the cylinder: from
+ * outside, a ray looking away from the axis meets it behind the viewer, and those stars stream forward, mirrored. So
+ * an eye more than 3/4 R from the axis (in the briefing rooms out beside the ship) sees the layer as if it stood
+ * nearer, moved in towards the axis, glass and all: by 3/4 R less however much further out it is, and no nearer than
+ * R/2, which leaves room for a window across the room. Nobody on the decks stands that far out (18 m for the
+ * nearest layer; the furthest deck windows are 17 m), so they see what they always have.
+ */
 vec3 drifting(vec3 ro, vec3 rd, float R, float cell) {
+  vec2 eye = cameraPosition.xy - vec2(0.0, AXIS_Y);
+  float far = max(length(eye), 1e-5);
+  ro.xy -= eye * (1.0 - min(far, max(0.5 * R, 1.5 * R - far)) / far);
   vec2 o = ro.xy - vec2(0.0, AXIS_Y);
   float a = dot(rd.xy, rd.xy);
   if (a < 1e-5) return vec3(0.0);
   float b = dot(o, rd.xy);
-  float t = (-b + sqrt(b * b - a * (dot(o, o) - R * R))) / a;
+  float disc = b * b - a * (dot(o, o) - R * R);
+  if (disc < 0.0) return vec3(0.0);
+  float t = (-b + sqrt(disc)) / a;
+  if (t <= 0.0) return vec3(0.0);
   vec3 hit = ro + rd * t;
   float around = floor(TAU * R / cell);
   float u = (atan(hit.y - AXIS_Y, hit.x) / TAU + 0.5) * around;

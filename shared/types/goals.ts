@@ -41,6 +41,11 @@ export interface Waypoint {
   landedAt?: number;
   /** What it set out to do: the title it last shipped under. Missing until it ships. */
   title?: string;
+  /** What the lead said it was heading for as it started (the note tool's heading): its name until it ships. */
+  heading?: string;
+  /** The commits the lead made during it, and the last one's message, so the chart shows work as it's done. */
+  commits?: number;
+  lastCommit?: string;
   /** The opening of what it shipped with (its pull requests' description), cut short. */
   summary?: string;
   /** The lessons the lead added to the goal's note during the slice. */
@@ -53,6 +58,25 @@ export interface Waypoint {
   spotChecks?: SpotCheck[];
   /** What the slice does, seen: the screenshots QA took of its pull requests, as it last tested each. */
   evidence?: Evidence[];
+  /** The helpers the lead sent out to explore during the slice, as probes, the latest few. */
+  probes?: Probe[];
+}
+
+/**
+ * A helper (a subagent) the lead sent out during a slice, as a probe on the goal's chart: it flies out from the waypoint
+ * while it works, transmits what it found back when it reports, and is gone. `id` is the helper's (`Helper.id`).
+ */
+export interface Probe {
+  id: string;
+  description: string;
+  /** The kind of subagent: Explore, general-purpose… */
+  type?: string;
+  launchedAt: number;
+  /** Missing while it's out (or if it never reported: the office restarted under it). */
+  endedAt?: number;
+  ok?: boolean;
+  /** The opening of what it reported, cut short. */
+  summary?: string;
 }
 
 /**

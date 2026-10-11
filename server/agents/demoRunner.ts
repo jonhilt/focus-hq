@@ -320,8 +320,11 @@ export class DemoRunner implements AgentRunner {
         hooks.lines([{ kind: 'output', text: `  ⎿  ${result}` }]);
       };
       const checklist = (ticked: number) => repos.map((r, i) => ({ text: `${r.folder}: the simplest version of ${goal}`, done: i < ticked }));
-      const commit = async (folder: string, text: string) =>
-        tool('Bash', { command: `git -C ${folder} add -A && git -C ${folder} commit -m "${text}"` }, [`[${folder} 4f2a91c] ${text}`, ' 2 files changed, 41 insertions(+)']);
+      const commit = async (folder: string, text: string) => {
+        await tool('Bash', { command: `git -C ${folder} add -A && git -C ${folder} commit -m "${text}"` }, [`[${folder} 4f2a91c] ${text}`, ' 2 files changed, 41 insertions(+)']);
+        // as the real runner reports a commit once git says it worked
+        hooks.commit?.(text);
+      };
 
       if (/^\[QA officer/.test(req.prompt)) {
         await think();
@@ -375,7 +378,7 @@ export class DemoRunner implements AgentRunner {
         return { ok: true, summary: 'Proposed the first slice.' };
       }
       await say('On it: a thin slice first.');
-      await note({ slice: checklist(0) });
+      await note({ heading: `A thin slice of ${goal}`, slice: checklist(0) });
       await show({ id: 'mockup', title: 'A first mockup', html: demoMockupPage(goal) });
       // the explainer goes up last, so the screen plays it while the slice is built
       hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__explain(How a save travels)' }]);
@@ -421,6 +424,12 @@ export class DemoRunner implements AgentRunner {
           hooks.lines([{ kind: 'output', text: `  ⎿  ${h.folder}: ${goal} fits in ${h.files[1]}` }]);
         }
       }
+      // a quick script from the scratch dir to try the idea first: a probe on the goal's chart, as the real runner reports one
+      const probe = `demo-probe-${randomHex(3)}`;
+      const found = `${goal}: the first try works`;
+      hooks.probe?.({ kind: 'started', id: probe, description: 'Script probe.mjs', type: 'script' });
+      await tool('Bash', { command: 'node "$FOCUS_SCRATCH/probe.mjs"' }, [found]);
+      hooks.probe?.({ kind: 'ended', id: probe, ok: true, summary: found });
       for (const r of repos) {
         const files = FILES[kindOf(r.repo)];
         await tool('Read', { file_path: `/work/${r.folder}/${files[0]}` }, [`Read ${60 + files[0].length} lines`]);

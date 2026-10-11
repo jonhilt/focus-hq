@@ -30,4 +30,4 @@ Stopping a held agent keeps them from carrying on at the reset; a message picks 
 
 ## In the code
 
-The decisions are pure, in `server/agents/apiKey.ts` (which sign-in, what a re-read costs, ask, hold or go), with `keyFallback` holding where the office stands. `claudeRunner.ts` signs each session in (`agentEnv`), spots the limit and counts what the key spends; `manager/planLimit.ts` carries agents on or holds them, and `manager/comms.ts` asks before a costly message. The client asks with `messageAgent` in `client/src/ui/resume.ts`.
+The decisions are pure, in `server/agents/apiKey.ts` (which sign-in, what a re-read costs, ask, hold or go), with `keyFallback` holding where the office stands. `claudeRunner.ts` signs each session in (`agentEnv`) and `sdkMessages.ts` spots the limit (`switchesToKey`) and counts what the key spends; `manager/planLimit.ts` carries agents on or holds them, and `manager/comms.ts` asks before a costly message. The client asks with `messageAgent` in `client/src/ui/resume.ts`.

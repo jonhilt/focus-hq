@@ -17,6 +17,7 @@ server/
   store.ts                ~/.focus/state.json + per-agent terminal logs (jsonl) + the ledger (ledger.jsonl)
   ledgerLog.ts            the ledger's one writer: numbered lines flushed to disk, the lock file, repairs and damage on load
   routes.ts               REST API used by the panels
+  frameStats.ts           the frame-stats log: what a browser opened with ?stats=1 sends of how its 3D view ran, a file per page load in ~/.focus/frame-stats/
   hub.ts                  broadcasts ServerEvents to every browser tab
   previews.ts             Preview: check a PR out, run the project's preview commands, find its links, tear it down (Effect: one Scope per preview)
   previewMachine.ts       what a preview does to this machine (shell commands in their own process group, signals, probes) as an Effect service
@@ -41,7 +42,8 @@ server/
     services.ts           what the manager needs from outside as Effect services: git on the checkouts, Claude Code sessions (a scoped turn), triage
     schedule.ts           who starts next under the office's and each room's limits
     desks.ts              who sits at a room's two individual desks, and who goes home to make room (never a lead or QA)
-    claudeRunner.ts       Claude Agent SDK query() in streaming-input mode, permission callback; cloud agents via --cloud; the plan's limit, and what the key spends
+    claudeRunner.ts       Claude Agent SDK query() in streaming-input mode, permission callback; cloud agents via --cloud; the plan's limit stopping a session
+    sdkMessages.ts        each SDK message by type → the run's hooks: lines, activity, helpers, workflows, probes, commits, screenshots, what the key spends, the turn's result
     apiKey.ts             your login or your API key, pure: which a session signs in with, what a re-read costs on the key, ask, hold or go; keyFallback, where the office stands
     cloud.ts              what happens after a cloud agent's session (push nudge, carrying on in a new session, falling back to local when the CLI refuses --cloud), and moving an agent to the cloud
     terminal.ts           the terminal the office opens to start a cloud session (claude --cloud, recorded with script) and finding the session's id in it
@@ -83,6 +85,7 @@ client/src/
     holodeckDeck.ts       the holodeck deck, put together from its Blender modules for however many holodecks there are
     turbolift.ts          which turbolift stop you're at (the turbolift's controls are in ui/travelPanel.ts)
   ui/                     HUD and panels (agent terminal, a helper's transcript, board, ready room console, teleport, QA station, goals, Comms, the engineering station, the ledger review at main engineering's master systems table)
+    frameStats.ts         ?stats=1: how the 3D view runs, top left, and sent to the office each second for its log (frameSamples.ts: the arithmetic; world/gpuTimer.ts: GPU time per pass)
     confirmDialog.ts      the in-game confirm dialog, over whatever panel is open (the Tricorder's buttons ask with it too)
     numberOnePanel.ts     the chat with Number One: the log, suggestions sent to Ops or started as goals, voice mode
   tricorder/              the phone view at /tricorder (no three.js): home screen, agent drill-down, buttons that survive live re-renders
@@ -92,4 +95,4 @@ client/public/ship/       the decks built in Blender, as GLBs (pnpm run ship wri
 blender/                  the Blender scripts that build the decks: ship.py (entry), kit.py (walls, furniture, markers), bake.py (each deck's ambient occlusion, baked into a lightmap), command_deck.py (the bridge, ready room and observation lounge), holodeck_deck.py (the holodecks' hallway and the turbolift), engineering_deck.py (main engineering: the gallery, the well, the warp core and the level below), team_station.py (a team station's door and briefing room), transporter_room.py (a team station's transporter room), training_hall.py (the training hall every holodeck is a copy of)
 ```
 
-The client mirrors server state over the WebSocket. Every action is a small REST call. Laptop screens and Kanban displays are canvases drawn into textures, and only redrawn when something changes. Screens near you redraw faster.
+The client mirrors server state over the WebSocket. Every action is a small REST call. Laptop screens and Kanban displays are canvases drawn into textures, and only redrawn when something changes and you can see them (`world/screenRedraw.ts`): close up often enough to follow, with a busy terminal's cursor blinking; further off now and then; out of sight not until they come into view, since each drawing sends the whole canvas to the GPU again. Before you come aboard, `world/warmUp.ts` compiles the whole ship's shaders and sends its baked lighting to the GPU, so the first step into a holodeck or a briefing room doesn't stall; it runs again whenever the world changes (a new holodeck).

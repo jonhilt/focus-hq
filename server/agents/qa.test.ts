@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { QaReport } from '../../shared/types';
 import type { PullRequestDetail } from '../github/provider';
-import { evidencePath, fixPrompt, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, qaSystemAppend } from './qa';
+import { diffAnchor, evidencePath, fixPrompt, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, qaSystemAppend } from './qa';
 
 const report = (r: Partial<QaReport> = {}): QaReport => ({
   verdict: 'pass',
@@ -251,8 +251,26 @@ describe('spot-checks', () => {
         { file: 'c.ts', why: 'Fourth' },
       ],
     });
-    expect(parsed?.spotChecks).toEqual([{ file: 'server/merge.ts', line: 41, why: 'New merge path' }, { file: 'client/a.ts', why: 'Bad line' }, { file: 'b.ts', why: 'Third' }]);
+    expect(parsed?.spotChecks).toEqual([
+      { file: 'server/merge.ts', line: 41, why: 'New merge path', anchor: diffAnchor('server/merge.ts', 41) },
+      { file: 'client/a.ts', why: 'Bad line', anchor: diffAnchor('client/a.ts') },
+      { file: 'b.ts', why: 'Third', anchor: diffAnchor('b.ts') },
+    ]);
     expect(parseQaReport({ verdict: 'pass', summary: 'ok', checks: [], commands: [] })).not.toHaveProperty('spotChecks');
+  });
+
+  it('finds each one in the pull request’s changed files on GitHub: the SHA-256 of its path, then its line', () => {
+    // GitHub's own anchor for octocat/Hello-World#1's README, read off its changed files page
+    expect(diffAnchor('README')).toBe('diff-2b7814d3fca2e99e56c51b6ff2aa313ea6e9da6424804240aa8ad891fdfe0900');
+    expect(diffAnchor('README', 12)).toBe('diff-2b7814d3fca2e99e56c51b6ff2aa313ea6e9da6424804240aa8ad891fdfe0900R12');
+    // a path QA wrote from the repo's root another way is the same file
+    expect(diffAnchor('./README')).toBe(diffAnchor('README'));
+  });
+
+  it('links each to its file and line on the pull request, when it knows the pull request', () => {
+    const check = { file: 'server/merge.ts', line: 41, why: 'New merge path', anchor: diffAnchor('server/merge.ts', 41) };
+    const body = qaComment(report({ spotChecks: [check] }), { officer: 'Lt. Moreau', pr: 'https://github.com/acme/shop/pull/9' }, [], false);
+    expect(body).toContain(`- [\`server/merge.ts:41\`](https://github.com/acme/shop/pull/9/files#${check.anchor}): New merge path`);
   });
 
   it('lists them on the pull request for a human look', () => {

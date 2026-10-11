@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { HookCallback } from '@anthropic-ai/claude-agent-sdk';
+import { shellCommands } from './shell';
 
 /**
  * Each local session's scratch dir, for throwaway files: `$FOCUS_SCRATCH`. The office makes it when a run starts and
@@ -132,4 +133,40 @@ export function dcgConfig(): string {
     ']',
     '',
   ].join('\n');
+}
+
+/** What runs a script: an interpreter, after any runner (npx tsx …) or subcommand (go run …) in front of it. */
+const INTERPRETERS = new Set(['node', 'tsx', 'ts-node', 'bun', 'deno', 'python', 'python3', 'ruby', 'perl', 'bash', 'sh', 'zsh', 'php', 'go', 'vitest', 'playwright']);
+const RUNNERS = new Set(['npx', 'pnpm', 'pnpx', 'bunx', 'yarn', 'exec', 'dlx', 'run', 'time', 'env', 'nohup', 'timeout', 'test']);
+
+/**
+ * The script a Bash `command` runs from the scratch dir `dir` (its path there), when it runs one: a probe the session
+ * sent out to try something. `node "$FOCUS_SCRATCH/probe.mjs"`, `npx tsx $FOCUS_SCRATCH/render.ts`, `python3 x.py` after a
+ * `cd` into it, or the script itself; not writing one, listing or removing them, or a heredoc's body.
+ */
+export function scratchScript(command: string, dir: string): string | undefined {
+  const inside = (word: string) => {
+    for (const root of [`$${SCRATCH_VAR}/`, `\${${SCRATCH_VAR}}/`, `${dir}/`]) if (word.startsWith(root)) return word.slice(root.length);
+    return undefined;
+  };
+  let here = false;
+  for (const words of shellCommands(command)) {
+    while (words.length && /^\w+=/.test(words[0])) words.shift();
+    if (!words.length) continue;
+    if (words[0] === 'cd') {
+      here = words[1] !== undefined && inside(`${words[1].replace(/\/$/, '')}/`) !== undefined;
+      continue;
+    }
+    // the script itself, run directly
+    const direct = inside(words[0]) ?? (here && words[0].startsWith('./') ? words[0].slice(2) : undefined);
+    if (direct) return direct;
+    let i = 0;
+    while (i < words.length && (RUNNERS.has(words[i]) || words[i].startsWith('-') || /^\d+[smh]?$/.test(words[i]))) i++;
+    if (!INTERPRETERS.has(words[i])) continue;
+    const script = words.slice(i + 1).find((w) => !w.startsWith('-') && w !== 'run');
+    if (!script) continue;
+    const found = inside(script) ?? (here && !/^[/$]/.test(script) && /\.\w+$/.test(script) ? script.replace(/^\.\//, '') : undefined);
+    if (found) return found;
+  }
+  return undefined;
 }

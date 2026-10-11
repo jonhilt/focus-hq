@@ -159,8 +159,8 @@ export class PortalView {
     this.camera.matrixWorldAutoUpdate = false;
   }
 
-  /** `reveal` shows what's drawn from a point in the far room (World.reveal), before it's drawn. */
-  render(scene: THREE.Scene, camera: THREE.PerspectiveCamera, portals: Portal[], reveal: (at: THREE.Vector3) => void = () => undefined): void {
+  /** `reveal` shows what's drawn from a point in the far room (World.reveal), before it's drawn. Says whether it drew one. */
+  render(scene: THREE.Scene, camera: THREE.PerspectiveCamera, portals: Portal[], reveal: (at: THREE.Vector3) => void = () => undefined): boolean {
     camera.updateMatrixWorld();
     this.frustum.setFromProjectionMatrix(this.m.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
     let shown: PortalEnd | undefined;
@@ -178,7 +178,7 @@ export class PortalView {
         nearest = d;
       }
     }
-    if (!shown) return;
+    if (!shown) return false;
 
     const v = this.camera;
     v.matrixWorld.multiplyMatrices(shown.through, camera.matrixWorld);
@@ -207,5 +207,6 @@ export class PortalView {
     this.frame.render(scene, v, this.target);
     this.renderer.setRenderTarget(null);
     shown.view.visible = true;
+    return true;
   }
 }

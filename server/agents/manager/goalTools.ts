@@ -4,7 +4,7 @@ import { answerMessage } from '../../../shared/artifacts';
 import { answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, applyNote, type NoteInput, pageErrorsNote } from '../lead';
 import { explainerPage, type ExplainerInput } from '../explainer';
 import { applyContacts } from '../contacts';
-import { notedWaypoint } from '../waypoints';
+import { headedWaypoint, notedWaypoint } from '../waypoints';
 import { Renderer } from '../services';
 import { Part, Refused } from './core';
 
@@ -20,7 +20,8 @@ export class GoalTools extends Part {
       if ('error' in next) return yield* new Refused({ message: next.error });
       const contacts = applyContacts(work, input, now);
       if ('error' in contacts) return yield* new Refused({ message: contacts.error });
-      const waypoints = notedWaypoint(work, input, next.note, now);
+      const noted = notedWaypoint(work, input, next.note, now);
+      const waypoints = input.heading !== undefined ? headedWaypoint({ slice: work.slice, waypoints: noted ?? work.waypoints }, input.heading, now) : noted;
       this.update(agent, { lead: { ...work, title: next.title, note: next.note, ...(waypoints && { waypoints }), ...(contacts.length && { contacts }) }, issue: { ...agent.issue, title: next.title } });
       const logged = input.contact?.trim() ? ` Logged contact ${contacts.at(-1)!.id}.` : '';
       return `Noted.${logged} The captain sees the note on the goal, and you hear it again at each new slice.`;

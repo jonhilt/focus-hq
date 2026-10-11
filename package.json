@@ -14,6 +14,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "smoke": "tsx scripts/smoke.ts",
+    "perf": "tsx scripts/perf.ts",
     "studio": "tsx scripts/studio.ts",
     "zfight": "tsx scripts/zfight.ts",
     "gaps": "tsx scripts/gaps.ts",

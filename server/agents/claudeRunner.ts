@@ -2,18 +2,15 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { query, type CanUseTool, type Options, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { clock } from '../../shared/clock';
-import { cloudSessionUrl } from '../../shared/cloud';
-import type { TermKind, TermLine } from '../../shared/types';
 import { paths } from '../config';
 import { errorMessage, sleep, truncate } from '../util';
-import { keyFallback, limitReached, requestUsd } from './apiKey';
+import { keyFallback } from './apiKey';
 import { BrowserPool, browserMcpServer } from './browserTool';
 import { CLOUD_UNAVAILABLE, cloudRefused } from './cloud';
 import { officeMcpServer } from './officeTool';
 import { openScratch } from './scratch';
-import { appUrl, renderText, renderToolResult, renderToolUse, screenshotFrame, type ToolCall } from './render';
-import { TASK_TOOLS } from './tasks';
-import { WorkflowPermits, workflowAsk, workflowProgress } from './workflows';
+import { handleMessage, type RunContext, type TurnResult } from './sdkMessages';
+import { WorkflowPermits, workflowAsk } from './workflows';
 import { bundledClaude, openTerminal, readTerminal } from './terminal';
 import { type AgentRunner, type AgentSession, type CloudTerminal, type CloudTerminalRequest, type RunHooks, type RunOutcome, type RunRequest, LIMIT_REACHED, STOPPED_BY_CAPTAIN } from './types';
 
@@ -99,34 +96,6 @@ export function claudeConfig(userClaudeMd: boolean, configDir: string): Pick<Opt
   const settingSources: Options['settingSources'] = ['user', 'project', 'local'];
   if (userClaudeMd) return { settingSources };
   return { settingSources, settings: { claudeMdExcludes: [join(configDir, 'CLAUDE.md'), join(configDir, 'rules', '**')] } };
-}
-
-/** What one run remembers between messages: tool calls waiting for their results, and the page last pointed at. */
-interface RunContext {
-  cwd: string;
-  cloud: boolean;
-  calls: Map<string, ToolCall>;
-  lastUrl?: string;
-  /** The cloud session's id, once the CLI has reported it. */
-  cloudId?: string;
-  /** Subagents by Claude Code's task id: the Agent tool call that started each, which their messages point back to. */
-  helpers: Map<string, string>;
-  /** Workflows by Claude Code's task id. */
-  workflows: Set<string>;
-  /** Which workflows' agents may run their tools without asking. Missing in a context that doesn't ask. */
-  permits?: WorkflowPermits;
-  /** Subagents (by Agent tool call) whose model we've reported. */
-  modelled: Set<string>;
-  /** Signed in with your API key rather than your login. */
-  onKey: boolean;
-  /** The API requests already counted against the key's budget: Claude Code sends each one's usage with every block of it. */
-  counted: Set<string>;
-  /** The kinds of background task the session has running now (not the ambient ones), as Claude Code last listed them. */
-  background?: string[];
-  /** The session's last turn has ended with nothing of ours queued: the input closes once no workflow holds it open. */
-  turnOver?: boolean;
-  /** Your plan's usage limit stopped the session, to carry on with the key (sessions.ts decides when). */
-  limited?: boolean;
 }
 
 /** How full the session's context window is, from Claude Code's own count (its last response's usage, no extra calls). */
@@ -231,7 +200,7 @@ export class ClaudeRunner implements AgentRunner {
 
     let q: Query | undefined;
     let stopping = false;
-    const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map(), helpers: new Map(), workflows: new Set(), permits, modelled: new Set(), onKey, counted: new Set() };
+    const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map(), helpers: new Map(), workflows: new Set(), permits, modelled: new Set(), scratch: scratch?.dir, probes: new Set(), commits: new Map(), onKey, counted: new Set() };
     const done = (async (): Promise<RunOutcome> => {
       let summary = '';
       let structured: unknown;
@@ -300,180 +269,7 @@ export class ClaudeRunner implements AgentRunner {
   }
 
   /** Renders one SDK message; returns the outcome when it is a turn result. */
-  private handle(msg: SDKMessage, ctx: RunContext, hooks: RunHooks): { text: string; isError: boolean; queued: number; structured?: unknown } | null {
-    const { cwd } = ctx;
-    // a subagent's lines: a transcript of its own, or else indented in the session's (in `kind`, when it says)
-    const helperLines = (id: string, lines: Omit<TermLine, 't'>[], kind?: TermKind) =>
-      hooks.helperLines ? hooks.helperLines(id, lines) : hooks.lines(lines.map((l) => ({ ...l, kind: kind ?? l.kind, text: `    ${l.text}` })));
-    switch (msg.type) {
-      case 'system': {
-        // Relayed from a cloud session, init (and later cloud_session_delta) carry the cloud session's own id: the one
-        // `--cloud <id>` reattaches with. The worker's session_id beside it doesn't reattach.
-        const cloudId = (msg as { cloud_session?: { id?: unknown } }).cloud_session?.id;
-        if (ctx.cloud && typeof cloudId === 'string' && cloudId !== ctx.cloudId) {
-          ctx.cloudId = cloudId;
-          hooks.session(cloudId);
-          const url = cloudSessionUrl({ cloud: true, sessionId: cloudId });
-          if (url) hooks.lines([{ kind: 'system', text: `☁ Cloud session: ${url}` }]);
-        }
-        if (msg.subtype === 'init') {
-          if (!ctx.cloud) hooks.session(msg.session_id);
-          hooks.lines([{ kind: 'system', text: `✻ Claude Code ${msg.claude_code_version} · ${msg.model} · ${msg.permissionMode}${ctx.cloud ? ' · ☁ cloud' : ''}` }]);
-        } else if ((msg as { subtype: string }).subtype === 'cloud_session_status') {
-          // the CLI's own notes on the cloud session (starting up, where to watch it)
-          const content = (msg as { content?: unknown }).content;
-          if (typeof content === 'string' && content.trim()) hooks.lines([{ kind: 'system', text: `☁ ${truncate(content.trim(), 300)}` }]);
-        } else if (msg.subtype === 'api_retry') {
-          hooks.lines([{ kind: 'error', text: `  ⚠ API ${msg.error} – retrying (attempt ${msg.attempt}/${msg.max_retries})` }]);
-          hooks.activity(null, `Waiting on the API (${msg.error})`);
-        } else if ((msg as { subtype: string }).subtype === 'background_tasks_changed') {
-          const tasks = (msg as { tasks?: { task_type?: string; ambient?: boolean }[] }).tasks ?? [];
-          ctx.background = tasks.filter((t) => !t.ambient).map((t) => t.task_type ?? '');
-        } else if (msg.subtype === 'compact_boundary') {
-          hooks.lines([{ kind: 'system', text: '✻ Conversation compacted' }]);
-        } else if (msg.subtype === 'task_started' && msg.task_type === 'local_agent') {
-          // a subagent: known by the Agent tool call that started it, which its own messages point back to
-          const id = msg.tool_use_id ?? msg.task_id;
-          ctx.helpers.set(msg.task_id, id);
-          hooks.helper?.({ kind: 'started', id, description: msg.description, type: msg.subagent_type });
-          // their transcript starts with what they were asked
-          const prompt = msg.tool_use_id ? ctx.calls.get(msg.tool_use_id)?.input.prompt : undefined;
-          hooks.helperLines?.(id, [{ kind: 'system', text: `✻ ${msg.description}` }, ...(typeof prompt === 'string' && prompt.trim() ? [{ kind: 'manager' as const, text: `▶ ${prompt.trim()}` }] : [])]);
-        } else if (msg.subtype === 'task_started' && msg.task_type === 'local_workflow') {
-          // a workflow: its agents report nothing of their own, only how the whole of it stands in its progress
-          ctx.workflows.add(msg.task_id);
-          ctx.permits?.started(msg.task_id, msg.tool_use_id);
-          hooks.workflow?.({ kind: 'started', id: msg.task_id, name: msg.workflow_name ?? '', description: msg.description });
-        } else if (msg.subtype === 'task_progress' && ctx.workflows.has(msg.task_id)) {
-          const progress = workflowProgress((msg as { workflow_progress?: unknown }).workflow_progress);
-          if (progress) {
-            ctx.permits?.seen(msg.task_id, progress.agents);
-            hooks.workflow?.({ kind: 'progress', id: msg.task_id, ...progress });
-          }
-        } else if (msg.subtype === 'task_notification' && ctx.workflows.has(msg.task_id)) {
-          hooks.workflow?.({ kind: 'ended', id: msg.task_id, ok: msg.status === 'completed' });
-          ctx.permits?.ended(msg.task_id);
-          ctx.workflows.delete(msg.task_id);
-        } else if (msg.subtype === 'task_progress') {
-          const id = ctx.helpers.get(msg.task_id);
-          const activity = msg.summary ?? (msg.last_tool_name ? `Using ${msg.last_tool_name}` : '');
-          if (id && activity) hooks.helper?.({ kind: 'activity', id, activity: truncate(activity, 100) });
-        } else if (msg.subtype === 'task_notification') {
-          const id = ctx.helpers.get(msg.task_id);
-          if (id) {
-            hooks.helper?.({ kind: 'ended', id, ok: msg.status === 'completed', summary: truncate(msg.summary, 100) });
-            hooks.helperLines?.(id, [msg.status === 'completed' ? { kind: 'success', text: '✔ Done' } : { kind: 'error', text: `✘ ${msg.status}` }]);
-          }
-          ctx.helpers.delete(msg.task_id);
-        }
-        return null;
-      }
-
-      case 'assistant': {
-        // what the key spends, against its budget for while your plan's limit is reached
-        if (ctx.onKey && !ctx.counted.has(msg.message.id)) {
-          ctx.counted.add(msg.message.id);
-          keyFallback.spent(requestUsd(msg.message.usage, msg.message.model));
-        }
-        if (msg.error) {
-          hooks.lines([{ kind: 'error', text: `⚠ ${msg.error}` }]);
-        }
-        const nested = msg.parent_tool_use_id !== null;
-        // a subagent's model is only in its own messages
-        if (nested && msg.message.model && !ctx.modelled.has(msg.parent_tool_use_id!)) {
-          ctx.modelled.add(msg.parent_tool_use_id!);
-          hooks.helper?.({ kind: 'model', id: msg.parent_tool_use_id!, model: msg.message.model });
-          hooks.helperLines?.(msg.parent_tool_use_id!, [{ kind: 'system', text: `✻ ${msg.message.model}` }]);
-        }
-        for (const block of msg.message.content) {
-          if (block.type === 'text' && block.text.trim()) {
-            const lines = renderText(block.text.trim());
-            if (nested) helperLines(msg.parent_tool_use_id!, lines, 'output');
-            else {
-              hooks.lines(lines);
-              hooks.activity(null, truncate(block.text.trim().split('\n')[0], 80));
-            }
-          } else if (block.type === 'thinking') {
-            if (nested) helperLines(msg.parent_tool_use_id!, [{ kind: 'thinking', text: '✻ Thinking…' }]);
-            else hooks.lines([{ kind: 'thinking', text: '✻ Thinking…' }]);
-            hooks.activity(null, 'Thinking…');
-          } else if (block.type === 'tool_use') {
-            const call: ToolCall = { name: block.name, input: (block.input ?? {}) as Record<string, unknown> };
-            ctx.calls.set(block.id, call);
-            ctx.lastUrl = appUrl(call) ?? ctx.lastUrl;
-            const rendered = renderToolUse(call.name, call.input, cwd);
-            if (nested) helperLines(msg.parent_tool_use_id!, rendered.lines);
-            else hooks.lines(rendered.lines);
-            if (rendered.activity || rendered.status) hooks.activity(rendered.status ?? null, rendered.activity ?? '');
-            // a subagent's tool call is what that helper is busy with
-            if (nested && rendered.activity) hooks.helper?.({ kind: 'activity', id: msg.parent_tool_use_id!, activity: rendered.activity });
-          }
-        }
-        return null;
-      }
-
-      case 'user': {
-        const content = msg.message.content;
-        if (!Array.isArray(content)) return null;
-        const results = content.filter((b) => b.type === 'tool_result');
-        // a workflow launched: where its agents' transcripts are written
-        const launched = msg.tool_use_result as { taskId?: unknown; transcriptDir?: unknown } | undefined;
-        if (launched && typeof launched.taskId === 'string' && typeof launched.transcriptDir === 'string') {
-          hooks.workflow?.({ kind: 'transcripts', id: launched.taskId, dir: launched.transcriptDir });
-        }
-        for (const block of content) {
-          if (block.type !== 'tool_result') continue;
-          const call = ctx.calls.get(block.tool_use_id);
-          ctx.calls.delete(block.tool_use_id);
-          // a subagent's results only go in a transcript of its own: indented in the session's, they'd drown it
-          if (msg.parent_tool_use_id === null) hooks.lines(renderToolResult(block as unknown as { type: string }));
-          else hooks.helperLines?.(msg.parent_tool_use_id, renderToolResult(block as unknown as { type: string }));
-          // the agent's own task list (a subagent's is its own business); the structured output is the message's only
-          // when it carries this one result
-          if (call && TASK_TOOLS.has(call.name) && msg.parent_tool_use_id === null) {
-            const said = typeof block.content === 'string' ? block.content : (block.content ?? []).map((c) => (c.type === 'text' ? c.text : '')).join('\n');
-            hooks.taskTool?.(call.name, call.input, results.length === 1 ? msg.tool_use_result : undefined, said);
-          }
-          // an image the agent (or a subagent) looked at goes on its laptop screen, like our browser tool's frames
-          const frame = screenshotFrame(block as unknown as { type: string }, call, ctx.lastUrl, Date.now());
-          if (frame) {
-            hooks.browser(frame);
-            const page = /^https?:\/\//.test(frame.url);
-            hooks.activity(page ? 'testing' : null, `${page ? 'Checking a screenshot of' : 'Looking at'} ${truncate(frame.url, 60)}`);
-          }
-        }
-        return null;
-      }
-
-      case 'rate_limit_event': {
-        const until = limitReached(msg.rate_limit_info, Date.now());
-        if (until === null) return null;
-        keyFallback.limitHit(until);
-        // a session on your plan stops here, and picks its conversation back up with your API key
-        if (!ctx.onKey && !ctx.cloud && keyFallback.onKey()) {
-          ctx.limited = true;
-          hooks.lines([{ kind: 'error', text: `⚠ Your plan's usage limit is reached until ${clock(until)} – switching to your API key` }]);
-          hooks.activity(null, 'Switching to your API key');
-          return null;
-        }
-        hooks.lines([{ kind: 'error', text: `⚠ Your plan's usage limit is reached – waiting for it to reset at ${clock(until)}` }]);
-        hooks.activity(null, 'Rate limited – waiting');
-        return null;
-      }
-
-      case 'result': {
-        hooks.cost(msg.total_cost_usd);
-        if (msg.subtype === 'success') {
-          hooks.lines([{ kind: 'success', text: `✔ Done in ${Math.round(msg.duration_ms / 1000)}s · ${msg.num_turns} turns` }]);
-          return { text: msg.result, isError: msg.is_error, queued: msg.queued_turn_count ?? 0, structured: msg.structured_output };
-        }
-        const text = msg.errors?.join('\n') || msg.subtype;
-        hooks.lines([{ kind: 'error', text: `✘ ${msg.subtype}: ${truncate(text, 300)}` }]);
-        return { text, isError: true, queued: msg.queued_turn_count ?? 0 };
-      }
-
-      default:
-        return null;
-    }
+  private handle(msg: SDKMessage, ctx: RunContext, hooks: RunHooks): TurnResult | null {
+    return handleMessage(msg, ctx, hooks);
   }
 }

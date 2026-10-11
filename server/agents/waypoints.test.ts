@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { Agent, GoalNote, LeadWork, QaReport } from '../../shared/types';
+import type { Agent, GoalNote, LeadWork, QaReport, Waypoint } from '../../shared/types';
 import { goalRecord, reopenedWork } from './lead';
-import { evidenceFile, landedWaypoint, nextWaypoints, notedSlice, notedWaypoint, opening, shieldedWaypoint, shippedWaypoint, tickedSpotCheck, WAYPOINT_LIMITS, withWaypoint } from './waypoints';
+import { committedWaypoint, endedProbe, evidenceFile, headedWaypoint, landedWaypoint, launchedProbe, nextWaypoints, notedSlice, notedWaypoint, opening, shieldedWaypoint, shippedWaypoint, tickedSpotCheck, WAYPOINT_LIMITS, withWaypoint } from './waypoints';
 
 const note = (done: string, learned: string[] = []): GoalNote => ({ done, slice: [], learned, next: [] });
 
@@ -146,5 +146,59 @@ describe('evidence', () => {
     expect(evidenceFile('acme/web', 12, 2, 'x.jpg')).toBe('shot-acme-web-12-3.jpg');
     // the demo's QA screenshots are drawn as SVG: a copy keeps its type, so the browser can show it
     expect(evidenceFile('demo/webshop-frontend', 9, 0, 'demo-webshop-frontend-9-1791-1.svg')).toBe('shot-demo-webshop-frontend-9-1.svg');
+  });
+});
+
+describe('probes', () => {
+  const course = [{ slice: 1, startedAt: 10, landedAt: 40 }, { slice: 2, startedAt: 40 }];
+
+  it('launches one from the slice under way for each helper the lead sends out', () => {
+    const after = launchedProbe({ slice: 2, waypoints: course }, { id: 'toolu_1', description: '  Find how\nthe office sees  tool calls ', type: 'Explore' }, 50);
+    expect(after[1].probes).toEqual([{ id: 'toolu_1', description: 'Find how the office sees tool calls', type: 'Explore', launchedAt: 50 }]);
+    expect(after[0]).toEqual(course[0]);
+    // the same helper again is the same probe
+    expect(launchedProbe({ slice: 2, waypoints: after }, { id: 'toolu_1', description: 'Again' }, 60)).toBe(after);
+  });
+
+  it('keeps the latest few on a slice', () => {
+    let waypoints: Waypoint[] = course;
+    for (let i = 0; i < WAYPOINT_LIMITS.probes + 2; i++) waypoints = launchedProbe({ slice: 2, waypoints }, { id: `h${i}`, description: `Probe ${i}` }, 50 + i);
+    expect(waypoints[1].probes!.map((p) => p.id)).toEqual(Array.from({ length: WAYPOINT_LIMITS.probes }, (_, i) => `h${i + 2}`));
+  });
+
+  it('keeps scripts from crowding out the helpers', () => {
+    let waypoints: Waypoint[] = launchedProbe({ slice: 2, waypoints: course }, { id: 'helper', description: 'Map the repo', type: 'Explore' }, 50);
+    for (let i = 0; i < WAYPOINT_LIMITS.probes + 3; i++) waypoints = launchedProbe({ slice: 2, waypoints }, { id: `s${i}`, description: `Script p${i}.ts`, type: 'script' }, 60 + i);
+    const ids = waypoints[1].probes!.map((p) => p.id);
+    expect(ids[0]).toBe('helper');
+    expect(ids).toHaveLength(WAYPOINT_LIMITS.probes + 1);
+  });
+
+  it('ends one with how it went and the opening of what it reported, on the slice that launched it', () => {
+    const out = launchedProbe({ slice: 1, waypoints: [{ slice: 1, startedAt: 10 }] }, { id: 'h1', description: 'Map the flaky test' }, 20);
+    // the next slice has begun by the time it reports
+    const later = { slice: 2, waypoints: [...out, { slice: 2, startedAt: 30 }] };
+    const after = endedProbe(later, { id: 'h1', ok: true, summary: '## Found\n\nThe **reopen** test races the store.\n\nMore detail.' }, 90)!;
+    expect(after[0].probes).toEqual([{ id: 'h1', description: 'Map the flaky test', launchedAt: 20, endedAt: 90, ok: true, summary: 'The reopen test races the store.' }]);
+    expect(after[1]).toEqual({ slice: 2, startedAt: 30 });
+    // one it never launched, or that has already reported, changes nothing
+    expect(endedProbe(later, { id: 'h9', ok: true }, 90)).toBeUndefined();
+    expect(endedProbe({ slice: 2, waypoints: after }, { id: 'h1', ok: false }, 95)).toBeUndefined();
+  });
+});
+
+describe('the slice under way', () => {
+  const course = [{ slice: 1, startedAt: 10, landedAt: 40, title: 'Chart' }, { slice: 2, startedAt: 40 }];
+  it('wears the heading the lead gives it, until a new one replaces it, and none once it’s cleared', () => {
+    const named = headedWaypoint({ slice: 2, waypoints: course }, '  Live progress\non the chart ', 50);
+    expect(named[1]).toEqual({ slice: 2, startedAt: 40, heading: 'Live progress on the chart' });
+    expect(named[0]).toEqual(course[0]);
+    expect(headedWaypoint({ slice: 2, waypoints: named }, '', 60)[1]).toEqual({ slice: 2, startedAt: 40 });
+  });
+
+  it('counts its commits, keeping the last one’s first line', () => {
+    const once = committedWaypoint({ slice: 2, waypoints: course }, 'Heading on the chart\n\nMore detail', 50);
+    const twice = committedWaypoint({ slice: 2, waypoints: once }, undefined, 60);
+    expect(twice[1]).toEqual({ slice: 2, startedAt: 40, commits: 2, lastCommit: 'Heading on the chart' });
   });
 });

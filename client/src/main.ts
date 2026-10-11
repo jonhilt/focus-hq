@@ -44,6 +44,8 @@ import { loadTrainingHall } from './world/hall';
 import { loadTeamStation } from './world/teamStation';
 import { stopAt } from './world/turbolift';
 import { TransporterFeeds } from './world/transporterFeeds';
+import { warmUp } from './world/warmUp';
+import { gpuFrame } from './world/gpuTimer';
 
 async function fontsReady(): Promise<void> {
   const loads = ['700 40px Fredoka', '500 40px Fredoka', '15px "JetBrains Mono"', '600 40px Antonio', '500 40px Antonio'].map((f) => document.fonts.load(f));
@@ -237,6 +239,25 @@ async function main() {
   });
 
   // ---------------------------------------------------------------- state → world
+  // the whole ship's shaders and textures, ready before you walk into any of it (warmUp.ts), and again as it changes
+  let warming = false;
+  let warmAgain = false;
+  const warm = (): void => {
+    if (warming) {
+      warmAgain = true;
+      return;
+    }
+    warming = true;
+    warmUp(renderer, scene, camera)
+      .catch(() => undefined)
+      .finally(() => {
+        warming = false;
+        if (warmAgain) {
+          warmAgain = false;
+          warm();
+        }
+      });
+  };
   const syncWorld = () => {
     world.sync(state.projects);
     player.colliders = world.colliders;
@@ -247,6 +268,7 @@ async function main() {
     }
     world.numberOne?.sync();
     world.markPanels();
+    warm();
   };
   state.on('snapshot', () => {
     syncWorld();
@@ -499,7 +521,7 @@ async function main() {
 
   // ---------------------------------------------------------------- loop
   const timer = new THREE.Timer();
-  // ?adapt=0 keeps the picture as it starts; ?stats=1 shows how frames are going
+  // ?adapt=0 keeps the picture as it starts; ?stats=1 shows how frames are going, and logs it at the office
   const adapting = params.get('adapt') !== '0';
   const stats = params.get('stats') === '1' ? new FrameStats(renderer) : null;
   const apply = () => {
@@ -553,14 +575,19 @@ async function main() {
       lastLocation = now;
       const where = world.locationOf(camera.position);
       hud.setLocation(where.label, where.projectId ? state.project(where.projectId)?.color : undefined);
+      if (stats) stats.where = where.label;
     }
     // each drawn with only its own part of the ship: a transporter room's feed, the doorway's far side, then where you are
+    gpuFrame('feed');
     feeds.render(scene, world, camera, now);
-    portalView.render(scene, camera, world.portals, (at) => world.reveal(at));
+    gpuFrame('door');
+    const door = portalView.render(scene, camera, world.portals, (at) => world.reveal(at));
     world.reveal(camera.position);
+    gpuFrame('screen');
     view.render(scene, camera);
-    busy.push(performance.now() - now);
-    stats?.end(interval, now);
+    const took = performance.now() - now;
+    busy.push(took);
+    stats?.end(interval, now, took, door);
     requestAnimationFrame(loop);
   };
   loop();

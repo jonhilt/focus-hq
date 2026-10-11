@@ -1,4 +1,4 @@
-import type { Agent, Board, ConflictsOutcome, Effort, Issue, IssueDraft, MergeMethod, MessageReply, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ResumeHow, Retro, RetroDraft, RoomTheme, Settings, TermLine, VoiceStatus } from '../../../shared/types';
+import type { Agent, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ResumeHow, Retro, RetroDraft, RoomTheme, Settings, TermLine, VoiceStatus } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
 
@@ -110,4 +110,7 @@ export const api = {
     if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `${res.status} ${res.statusText}`);
     return res.blob();
   },
+  /** Lines of the frame-stats log (?stats=1), sent even as the page closes (keepalive); the office says where it keeps them. */
+  logFrameStats: (session: string, lines: FrameStatsLine[]) =>
+    send<{ file: string }>('POST', '/frame-stats', { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session, lines }), keepalive: true }),
 };

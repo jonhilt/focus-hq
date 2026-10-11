@@ -1,4 +1,6 @@
-import type { Agent, FailedCheck, QaReport, QaReview, QaScreenshot, Settings } from '../../shared/types';
+import { createHash } from 'node:crypto';
+import type { Agent, FailedCheck, QaReport, QaReview, QaScreenshot, QaSpotCheck, Settings } from '../../shared/types';
+import { spotCheckUrl } from '../../shared/qa';
 import type { IssueDetail, PullRequestDetail } from '../github/provider';
 import { truncate } from '../util';
 import { SCRATCH_RULE } from './scratch';
@@ -103,7 +105,7 @@ export function parseQaReport(structured: unknown, text = ''): QaReport | null {
     .map((c) => ({ file: String(c.file ?? '').trim(), line: Number.isInteger(c.line) && Number(c.line) > 0 ? Number(c.line) : undefined, why: String(c.why ?? '').trim() }))
     .filter((c) => c.file && c.why)
     .slice(0, SPOT_CHECKS)
-    .map(({ line, ...c }) => ({ ...c, ...(line && { line }) }));
+    .map(({ line, ...c }) => ({ ...c, ...(line && { line }), anchor: diffAnchor(c.file, line) }));
   return {
     verdict: r.verdict,
     summary: String(r.summary ?? '').trim(),
@@ -133,12 +135,21 @@ export function evidencePath(pr: number, sha: string | undefined, at: number, in
   return `pr-${pr}/${sha ? `${sha.slice(0, 7)}-` : ''}${at}/${index + 1}.${ext}`;
 }
 
+/**
+ * Where a file (and a line in it, on the new side) is in a pull request's changed files on GitHub: its anchor there is
+ * `diff-` and the SHA-256 of its path from the repo's root, then `R` and the line.
+ */
+export function diffAnchor(file: string, line?: number): string {
+  const path = file.trim().replace(/^\.\//, '').replace(/^\/+/, '');
+  return `diff-${createHash('sha256').update(path).digest('hex')}${line ? `R${line}` : ''}`;
+}
+
 const ICON = { pass: '✅', fail: '❌', skip: '⏭️' } as const;
 /** A table cell: no pipes or line breaks to break the row. */
 const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>') || ' ';
 
 /** The QA report as a pull request comment, with the screenshots that made it to GitHub. */
-export function qaComment(report: QaReport, by: { officer: string; sha?: string }, screenshots: QaScreenshot[], attribution: boolean): string {
+export function qaComment(report: QaReport, by: { officer: string; sha?: string; pr?: string }, screenshots: QaScreenshot[], attribution: boolean): string {
   const pass = report.verdict === 'pass';
   const commit = by.sha ? `commit \`${by.sha.slice(0, 7)}\`` : '';
   const tested = attribution ? [`**Tested by** ${by.officer} (Focus QA officer)`, commit].filter(Boolean).join(' · ') : commit && `**Tested at** ${commit}`;
@@ -150,7 +161,12 @@ export function qaComment(report: QaReport, by: { officer: string; sha?: string 
     lines.push('', '<details><summary>🧪 Commands run</summary>', '', '| Command | Result |', '|---|---|', ...report.commands.map((c) => `| \`${cell(c.command)}\` | ${cell(c.result)} |`), '', '</details>');
   }
   if (!pass && report.fixInstructions) lines.push('', '### 🔧 What needs fixing', '', report.fixInstructions);
-  if (report.spotChecks?.length) lines.push('', '### 🔦 Worth a human look', '', ...report.spotChecks.map((c) => `- \`${c.file}${c.line ? `:${c.line}` : ''}\`: ${c.why}`));
+  // each links to its file and line in the pull request's changed files, when we know the pull request's address
+  const spot = (c: QaSpotCheck) => {
+    const where = `\`${c.file}${c.line ? `:${c.line}` : ''}\``;
+    return by.pr ? `[${where}](${spotCheckUrl(by.pr, c)})` : where;
+  };
+  if (report.spotChecks?.length) lines.push('', '### 🔦 Worth a human look', '', ...report.spotChecks.map((c) => `- ${spot(c)}: ${c.why}`));
   lines.push('', '### 📸 Screenshots');
   if (!screenshots.length) lines.push('', 'No screenshots were taken during this review.');
   screenshots.forEach((s, i) => {

@@ -14,6 +14,11 @@ export interface QaSpotCheck {
   file: string;
   line?: number;
   why: string;
+  /**
+   * Where it is in the pull request's changed files on GitHub (`diff-` and the SHA-256 of its path, then `R` and the
+   * line): worked out by the office as it reads the report. Missing on ones reported before it was kept.
+   */
+  anchor?: string;
 }
 
 /** The QA officer's verdict on one pull request, as they report it at the end of their session. */
