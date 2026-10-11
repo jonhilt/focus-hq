@@ -21,6 +21,10 @@ Focus uses pnpm (`corepack enable` provides the version in `package.json`'s `pac
 
 Unit tests cover the pure decision code (QA verdicts and badges, prompts). Keep new decisions (what happens next, can this merge) in small pure functions with a test next to them, and leave the I/O to the caller. Verify 3D/UI changes by running the demo and taking screenshots with Playwright. `window.focusHQ` exposes `{ state, world, player, ui }`, so a script can teleport (`ui.goTo(ui.places()[i])`, `ui.goToAgent(id)`) and open panels (`ui.openAgent(id)`, `ui.openBoard(projectId)`…; `ui.panels.isOpen` is a getter) without pointer lock. `state` is the server's mirror (`projects`, `agents` Map, `project(id)`), `world.root` is the scene group to traverse (`world` itself isn't), `player.teleport(feet, lookAt)`. The agents' `mcp__browser__evaluate` tool lists the same hooks (`FOCUS_HQ_HOOKS` in `browserTool.ts`).
 
+## Reviewing a pull request
+
+When you QA a pull request, run `pnpm run crap --changed origin/<its base branch>` and report it as a check named **CRAP (advisory)**: how many functions the PR touched, their total, and each one over 30. Never fail a PR on it alone. When the PR adds a function over 30, or makes one worse, say so in your summary with the way down (split it into small pure functions, or test it), and weigh it for a spot-check. Coverage from tests that run code without checking what it does doesn't count: call those tests out. `docs/crap.md` explains the score.
+
 ## Conventions
 
 - Server and client share types through `shared/types/`, a file per feature (`agents.ts`, `goals.ts`, `qa.ts`, `events.ts`…) re-exported by its `index.ts`, so imports stay `from '…/shared/types'`: put a new type in its feature's file (a new feature gets a new file and a line in `index.ts`); server→client traffic is `ServerEvent`s over `/ws`, client→server is REST under `/api`.

@@ -18,10 +18,14 @@ A fully tested function scores its complexity; an untested one scores about its 
 | `pnpm run crap` | runs the unit tests with coverage (about 30 s), then prints how many functions are over 30, the spread of scores and the riskiest 10 |
 | `pnpm run crap --top 25` | the riskiest 25 |
 | `pnpm run crap --all` | `client/src/` and `scripts/` too. Most of the client is checked in the browser, not by unit tests, so it scores high: that's expected, not a to-do list |
-| `pnpm run crap --changed [base]` | also lists what the branch touched since `base` (by default its merge base with `main`): how many functions, their total CRAP, and each one over 30 |
+| `pnpm run crap --changed [base]` | also lists what the branch touched since `base` (from where the branch left it, `main` by default): how many functions, their total CRAP, and each one over 30 |
 | `pnpm run crap --coverage <file>` | scores from an existing `coverage-final.json` rather than running the tests |
 
 The demo's fakes and scripts (`demo*.ts`) are left out unless you pass `--all`. It's advisory: it exits 0 whatever the scores.
+
+## In review
+
+Focus's QA runs `pnpm run crap --changed` on every pull request to this repo (CLAUDE.md asks them to) and reports it as an advisory check, **CRAP (advisory)**, on the PR: the functions it touched, their total and any over 30. It never fails a PR on its own. A new or worsened function over 30 gets a line in the summary saying how to bring it down, and may get a spot-check. QA, in every project, also looks for tests that run code without checking what it does.
 
 ## What it doesn't tell you
 

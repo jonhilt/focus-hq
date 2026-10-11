@@ -11,7 +11,7 @@ Every holodeck has a QA officer in blue, sitting at a station in the control rin
 - **What they do:**
   1. Check the PR's head out, detached, into their own folder.
   2. Read the PR and its linked issues, and work out the acceptance criteria.
-  3. Review the diff against the base branch.
+  3. Review the diff against the base branch, including whether new tests check what the code does or only run it (tests like that raise coverage but catch nothing).
   4. Run the tests, type checks, linters and build.
   5. Click through UI changes with the browser tool, so you see that on their station's display.
   6. Finish with a structured report: a verdict, a summary, every check made, the commands run, up to three **spot-checks** and, on a fail, fix instructions.

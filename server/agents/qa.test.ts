@@ -142,6 +142,10 @@ describe('QA instructions', () => {
     expect(qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop' }, pr, pr.headSha)).not.toContain('from the manager');
   });
 
+  it('ask QA to look for tests that only raise coverage', () => {
+    expect(qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop' }, pr, pr.headSha)).toContain('new tests that run code without checking what it does');
+  });
+
   it('diff against the PR’s base and name the commit under test', () => {
     const text = qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop' }, { ...pr, baseBranch: 'develop' }, pr.headSha);
     expect(text).toContain('git diff origin/develop...HEAD');

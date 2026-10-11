@@ -5,7 +5,7 @@
 //   pnpm run crap                      server/ + shared/, the riskiest 10
 //   pnpm run crap --all                client/src/ and scripts/ too
 //   pnpm run crap --top 25             the riskiest 25
-//   pnpm run crap --changed [base]     also what this branch touched since base (default: its merge base with main)
+//   pnpm run crap --changed [base]     also what this branch touched since it left base (main by default)
 //   pnpm run crap --coverage <file>    score from an existing coverage-final.json instead of running the tests
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
@@ -62,8 +62,9 @@ function scoreAll(files: string[], coverageFile: string): Scored[] {
   });
 }
 
-function mergeBase(): string {
-  for (const ref of ['origin/main', 'main']) {
+/** Where the branch left `base` (or main), so what's landed there since doesn't count as the branch's own changes. */
+function mergeBase(base: string): string {
+  for (const ref of base ? [base] : ['origin/main', 'main']) {
     try {
       return git('merge-base', 'HEAD', ref).trim();
     } catch {
@@ -73,10 +74,10 @@ function mergeBase(): string {
   throw new Error('No main branch to compare with: pass a base, like --changed origin/main');
 }
 
-/** What the branch touched since `base` (its merge base with main when empty). */
+/** What the branch touched since it left `base` (main when empty). */
 function changedSince(base: string, rows: Scored[], files: string[]): string {
-  const ref = base || mergeBase();
-  const label = base || `merge base with main (${ref.slice(0, 8)})`;
+  const ref = mergeBase(base);
+  const label = `merge base with ${base || 'main'} (${ref.slice(0, 8)})`;
   return changedSummary(rows, changedLines(git('diff', '--unified=0', ref, '--', ...files)), label);
 }
 
