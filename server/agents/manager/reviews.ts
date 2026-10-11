@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { plannerFor, qaFor, qaOfficerFor } from '../../../shared/crew';
 import { goneReply } from '../../../shared/mergeGate';
-import { autoSendBackFor, prKey, sameCommit } from '../../../shared/qa';
+import { autoSendBackFor, prKey, pullUrl, sameCommit } from '../../../shared/qa';
 import type { Agent, FailedCheck, FixFor, QaReport, QaReview, QaScreenshot } from '../../../shared/types';
 import { QA_DESK } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
@@ -226,7 +226,7 @@ export class Reviews extends Part {
       const review = this.store.reviews.get(prKey(agent.repo, number));
       const screenshots = yield* this.keepScreenshots(agent, report, review?.sha);
       this.update(agent, { activity: 'Posting the QA report on the PR' });
-      const body = qaComment(report, { officer: agent.name, sha: review?.sha }, screenshots, this.store.settings.attribution);
+      const body = qaComment(report, { officer: agent.name, sha: review?.sha, pr: pullUrl(agent.repo, number) }, screenshots, this.store.settings.attribution);
       const commentUrl = yield* (yield* GitHub).commentOnPullRequest(agent.repo, number, body).pipe(
         Effect.tap((url) => Effect.sync(() => this.print(agent, [{ kind: 'system', text: `✻ Posted the QA report: ${url || 'done'}` }]))),
         Effect.map((url) => url || undefined),

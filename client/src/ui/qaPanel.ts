@@ -1,7 +1,7 @@
 import { statusLine } from '../../../shared/agentStatus';
 import { qaOfficerFor, UNIFORM } from '../../../shared/crew';
 import { autoMergeFor } from '../../../shared/mergeGate';
-import { autoQaFor, autoSendBackFor, qaBadge } from '../../../shared/qa';
+import { autoQaFor, autoSendBackFor, pullUrl, qaBadge, spotCheckUrl } from '../../../shared/qa';
 import { triageLabel } from '../../../shared/triage';
 import type { Effort, QaReview, QaScreenshot } from '../../../shared/types';
 import { api } from '../net/api';
@@ -143,7 +143,8 @@ function reviewCard(ui: Ui, review: QaReview): HTMLElement {
     review.screenshots?.length ? h('div', { class: 'qa-shots' }, ...review.screenshots.map((s, i) => screenshot(s, i))) : null,
     report?.fixInstructions ? h('div', { class: 'qa-fix' }, h('strong', null, 'What needs fixing'), h('p', null, report.fixInstructions)) : null,
     report?.spotChecks?.length
-      ? h('div', { class: 'qa-spots' }, h('strong', null, 'Worth a human look'), h('ul', null, ...report.spotChecks.map((c) => h('li', null, h('code', null, `${c.file}${c.line ? `:${c.line}` : ''}`), ` ${c.why}`))))
+      ? h('div', { class: 'qa-spots' }, h('strong', null, 'Worth a human look'), h('ul', null, ...report.spotChecks.map((c) =>
+        h('li', null, h('a', { href: spotCheckUrl(pullUrl(review.repo, review.number), c), target: '_blank', rel: 'noreferrer' }, h('code', null, `${c.file}${c.line ? `:${c.line}` : ''}`)), ` ${c.why}`))))
       : null,
     report?.commands.length
       ? h('details', null, h('summary', null, `${report.commands.length} command${report.commands.length === 1 ? '' : 's'} run`),
@@ -152,7 +153,7 @@ function reviewCard(ui: Ui, review: QaReview): HTMLElement {
     h('div', { class: 'actions' },
       retest,
       review.commentUrl ? h('a', { class: 'btn small', href: review.commentUrl, target: '_blank', rel: 'noreferrer' }, 'Report on GitHub ↗') : null,
-      h('a', { class: 'btn small', href: `https://github.com/${review.repo}/pull/${review.number}`, target: '_blank', rel: 'noreferrer' }, 'PR ↗'),
+      h('a', { class: 'btn small', href: pullUrl(review.repo, review.number), target: '_blank', rel: 'noreferrer' }, 'PR ↗'),
     ),
   );
 }

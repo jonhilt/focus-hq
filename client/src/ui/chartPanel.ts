@@ -1,6 +1,7 @@
 import type { Agent, Contact, GoalArtifact, GoalNote, GoalQuestion, GoalRecord, Helper, LeadPr, Probe, Waypoint } from '../../../shared/types';
 import { api } from '../net/api';
 import { artifactUrl, optionUrl } from '../../../shared/artifacts';
+import { spotCheckUrl } from '../../../shared/qa';
 import { openClosedGoalShown } from './screenPanel';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
@@ -415,7 +416,7 @@ function spotChecksView(w: Waypoint, prs: LeadPr[], tick?: (slice: number, index
     return h('li', { class: c.checked ? 'looked' : '' },
       h('label', null, box,
         h('span', null,
-          pr ? h('a', { href: `${pr.url}/files`, target: '_blank', rel: 'noreferrer', class: 'mono' }, where) : h('span', { class: 'mono' }, where),
+          pr ? h('a', { href: spotCheckUrl(pr.url, c), target: '_blank', rel: 'noreferrer', class: 'mono', title: 'Open it in the pull request’s changed files' }, where) : h('span', { class: 'mono' }, where),
           h('small', null, `${c.repo.split('/')[1]} #${c.pr} · ${c.why}`))));
   })));
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoQaFor, autoSendBackFor, olderVerdict, qaBadge, sameCommit } from './qa';
+import { autoQaFor, autoSendBackFor, olderVerdict, pullUrl, qaBadge, sameCommit, spotCheckUrl } from './qa';
 import type { QaReview } from './types';
 
 const review = (r: Partial<QaReview> = {}): QaReview => ({
@@ -99,5 +99,14 @@ describe('olderVerdict', () => {
     expect(olderVerdict(undefined, failed)).toBe(false);
     expect(olderVerdict(review({ status: 'queued' }), failed)).toBe(false);
     expect(olderVerdict(passed, review({ status: 'queued', finishedAt: undefined }))).toBe(false);
+  });
+});
+
+describe('spot-check links', () => {
+  it('open the pull request’s changed files at the file and line, or just its changed files for an older one', () => {
+    const pr = pullUrl('acme/shop', 9);
+    expect(pr).toBe('https://github.com/acme/shop/pull/9');
+    expect(spotCheckUrl(pr, { anchor: 'diff-abcR12' })).toBe('https://github.com/acme/shop/pull/9/files#diff-abcR12');
+    expect(spotCheckUrl(pr, {})).toBe('https://github.com/acme/shop/pull/9/files');
   });
 });

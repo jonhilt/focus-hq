@@ -1,4 +1,4 @@
-import type { PullRequest, QaReview } from './types';
+import type { PullRequest, QaReview, QaSpotCheck } from './types';
 
 // QA decisions shared by the server and the board. Pure, so they're unit tested (shared/qa.test.ts).
 
@@ -67,3 +67,9 @@ export function autoSendBackFor(project: { autoSendBack?: boolean }): boolean {
 
 /** Key for a pull request across a project's repos. */
 export const prKey = (repo: string, number: number) => `${repo}#${number}`;
+
+/** A pull request on GitHub. */
+export const pullUrl = (repo: string, number: number) => `https://github.com/${repo}/pull/${number}`;
+
+/** A spot-check in its pull request's changed files: at its file and line when the office knows where (`anchor`). */
+export const spotCheckUrl = (prUrl: string, check: Pick<QaSpotCheck, 'anchor'>) => `${prUrl}/files${check.anchor ? `#${check.anchor}` : ''}`;
