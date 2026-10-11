@@ -23,6 +23,7 @@ import { TransporterOperation } from './transporterOps';
 import { assignRooms, feedCaption, waitingLine } from './workflowRooms';
 import { canvasTexture, fitText, makeCanvas } from './canvas';
 import { FEED_SIZE } from './transporterFeeds';
+import { BackgroundProbes } from './probes';
 
 // A team station: where a goal's lead works with the captain. In the holodeck it's a door, with the station's sign
 // floating over it and lamps either side that show whether its goal room is in session; through it is the goal's
@@ -159,6 +160,10 @@ export class TeamStation {
   /** The lamps either side of the door, lit by how the goal room stands (`update`). */
   private readonly lamp = new THREE.MeshBasicMaterial({ color: HULL.dado });
   private tone: GoalRoomTone = 'free';
+  /** What the lead has running in the background, floating beside their chair (probes.ts). */
+  private readonly probes: BackgroundProbes;
+  /** Whose probes they are, for their labels. */
+  private leadName = '';
 
   constructor(
     readonly index: number,
@@ -241,6 +246,12 @@ export class TeamStation {
     this.lead = seat('station-lead');
     this.helpers = HELPER_SEATS.map(seat);
     this.reviewer = seat('station-reviewer');
+    this.probes = new BackgroundProbes(
+      (taskId) => ({ kind: 'background', projectId, station: index, taskId }),
+      (task) => `Look at ${this.leadName}’s ${task.kind === 'monitor' ? 'monitor' : 'background command'} ${task.description} (${task.status})`,
+    );
+    this.lead.seat.add(this.probes.group);
+    this.probes.awayFrom(this.head);
     this.show(undefined);
     this.goalBoard.userData.interactionAt = (uv: THREE.Vector2) => this.rowAt(uv);
     this.transporterRooms = transporters.map((at, i) => new TransporterRoom(kit.transporter, at, projectId, index, i, accent));
@@ -279,6 +290,12 @@ export class TeamStation {
       for (const mesh of [feed.picture, feed.caption]) interactive(mesh, use, label, FEED_REACH);
     });
     drawStrip(this.feedsStrip, waiting.length, this.accent);
+  }
+
+  /** The lead's background commands and monitors, as probes beside their chair. */
+  showBackground(lead: Agent | undefined): void {
+    this.leadName = lead?.name ?? '';
+    this.probes.show(lead?.background ?? []);
   }
 
   /** Whether transporter room `i`'s feed is worth drawing: there's a workflow in it. */
@@ -475,6 +492,7 @@ export class TeamStation {
     hover(this.doorSign, DOOR_SIGN.bottom + (DOOR_SIGN.width * GoalSign.H) / GoalSign.W / 2, t, this.index * 1.7 + 2);
     this.teamHologram.update(Math.min(0.1, t - this.lastT));
     this.lastT = t;
+    this.probes.update(t);
   }
 
   /** Where the captain stands in the briefing room, looking at the screen (world). */
@@ -492,6 +510,7 @@ export class TeamStation {
     this.signHologram.dispose();
     this.panes.dispose();
     this.lamp.dispose();
+    this.probes.dispose();
     for (const room of this.transporterRooms) room.dispose();
     for (const op of this.operations) op.dispose();
     for (const feed of this.feeds) feed.texture.dispose();

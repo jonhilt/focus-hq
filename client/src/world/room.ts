@@ -333,6 +333,7 @@ export class ProjectRoom {
       const prs = lead?.lead?.prs.map((pr) => ({ label: `${pr.repo.split('/')[1]} #${pr.number}`, state: prGlance(pr, state.reviews.get(prKey(pr.repo, pr.number))?.status) }));
       station.show(lead, next, prs);
       station.showWorkflows(lead, performance.now());
+      station.showBackground(lead);
     }
   }
 
@@ -347,14 +348,16 @@ export class ProjectRoom {
         continue;
       }
       const crew = helperFor(helper.id);
+      // a helper's own helper says whose it is
+      const boss = helper.parent ? helperFor(helper.parent).name : undefined;
       const view: CrewView = {
         name: crew.name,
         avatar: crew.avatar,
-        tag: helper.type && helper.type !== 'general-purpose' ? helper.type : 'Helper',
+        tag: boss ? `for ${boss}` : helper.type && helper.type !== 'general-purpose' ? helper.type : 'Helper',
         status: helper.status === 'working' ? 'working' : helper.status === 'done' ? 'done' : 'error',
         line: helper.status === 'working' ? helper.activity : `${helper.status === 'done' ? '✔' : '✘'} ${helper.activity}`,
       };
-      this.sit(slot, helper.id, view, { kind: 'helper', leadId: lead.id, id: helper.id }, () => `${crew.name}, helping ${lead.name}: ${helper.description}`);
+      this.sit(slot, helper.id, view, { kind: 'helper', leadId: lead.id, id: helper.id }, () => `${crew.name}, helping ${boss ?? lead.name}: ${helper.description}`);
     }
   }
 

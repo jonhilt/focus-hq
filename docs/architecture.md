@@ -72,6 +72,7 @@ client/src/
     scenery.ts            stencil "holo walls" that show a landscape built around a training hall (footprint.ts: keeping it out of the hall)
     themes.ts             the landscapes (beach, forest, desert, moon, city, library)
     teamStation.ts        a goal's team station: its door in the holodeck and its briefing room out in the world, the lead's screen, seats for their helpers and the goal's reviewer (helperSeats.ts: who sits where)
+    probes.ts             the probes by a lead's chair, one per background command or monitor (probeSlots.ts: which show, and their labels); E on one opens ui/backgroundPanel.ts: its output and Stop
     goalScreens.ts        a team station's holographic sign, LCARS goal board and screen over its pod (goalRoom.ts: how its room stands, how the note fills the board, and what the team's up to at a glance; portraits.ts: the crew's portraits)
     hall.ts               the training hall, each project's holodeck, behind its door's portal: a copy of its shell from Blender (blender/training_hall.py), dressed for its project (hallLayout.ts: where its pods stand, and the door on the deck that leads to it)
     portal.ts             doorways that lead into each other wherever they stand: the far side drawn through the open doors, and walking through (doorway.ts: the geometry)

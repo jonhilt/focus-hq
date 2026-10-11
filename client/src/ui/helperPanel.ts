@@ -17,17 +17,20 @@ export function openHelperPanel(ui: Ui, leadId: string, id: string): void {
   const helper = helperOf(lead, id);
   if (!lead || !helper) return ui.openAgent(leadId);
   const crew = helperFor(id);
+  // a helper's own helper works for that helper, for the lead
+  const boss = helper.parent ? helperFor(helper.parent).name : undefined;
+  const helping = boss ? `for ${boss}, helping ${lead.name}` : `helping ${lead.name}`;
 
   const term = new TermView();
   const terminal = term.el;
   const info = h('div', { class: 'row', style: 'margin-bottom:12px' });
   const body = h('div', { style: 'display:flex;flex-direction:column;height:100%;min-height:0' }, info, h('div', { class: 'agent-grid single' }, terminal));
   const talk = h('button', { class: 'btn primary', onclick: () => ui.openAgent(leadId) }, `Talk to ${lead.name}`);
-  const footer = h('div', { class: 'compose' }, h('span', { class: 'grow muted' }, `${crew.name} works for ${lead.name}: talk to them about it.`), talk);
+  const footer = h('div', { class: 'compose' }, h('span', { class: 'grow muted' }, `${crew.name} works for ${boss ? `${boss}, who works for ` : ''}${lead.name}: talk to ${lead.name} about it.`), talk);
   const title = h('h2', null,
     h('span', { class: 'dot', style: `background:${UNIFORM[crew.avatar.division]};margin-right:8px;vertical-align:middle` }),
     `${crew.name} · `,
-    h('span', { class: 'muted', style: 'font-weight:500' }, `helping ${lead.name}: ${helper.description}`),
+    h('span', { class: 'muted', style: 'font-weight:500' }, `${helping}: ${helper.description}`),
   );
   ui.panels.open({ title, body, footer, wide: true, accent: UNIFORM[crew.avatar.division] });
 

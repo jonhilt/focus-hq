@@ -7,6 +7,7 @@ import { Player } from './player';
 import { agentPanelOpen, openAgentPanel } from './ui/agentPanel';
 import { openHelperPanel } from './ui/helperPanel';
 import { openWorkflowAgentPanel } from './ui/workflowAgentPanel';
+import { openBackgroundPanel } from './ui/backgroundPanel';
 import { openBoardPanel } from './ui/boardPanel';
 import type { Ui } from './ui/context';
 import { h } from './ui/dom';
@@ -130,6 +131,7 @@ async function main() {
     openAgent: (id, view) => openAgentPanel(ui, id, view),
     openHelper: (leadId, id) => openHelperPanel(ui, leadId, id),
     openWorkflowAgent: (leadId, workflowId, index) => openWorkflowAgentPanel(ui, leadId, workflowId, index),
+    openBackground: (leadId, taskId) => openBackgroundPanel(ui, leadId, taskId),
     openBoard: (projectId, tab) => openBoardPanel(ui, projectId, tab),
     previewPr: (projectId, repo, number) => {
       const running = state.previews.get(projectId);
@@ -434,6 +436,11 @@ async function main() {
       case 'workflow-agent': {
         const lead = [...state.agents.values()].find((a) => a.projectId === i.projectId && a.task === 'lead' && a.lead?.station === i.station);
         if (lead) ui.openWorkflowAgent(lead.id, i.workflowId, i.index);
+        break;
+      }
+      case 'background': {
+        const lead = [...state.agents.values()].find((a) => a.projectId === i.projectId && a.task === 'lead' && (a.lead?.station ?? 0) === i.station);
+        if (lead) ui.openBackground(lead.id, i.taskId);
         break;
       }
       case 'desk':

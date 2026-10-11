@@ -2,11 +2,12 @@ import { contextLevel, statusLine } from '../../../shared/agentStatus';
 import { cloudSessionUrl } from '../../../shared/cloud';
 import { showsBrowser } from '../../../shared/browserView';
 import { helperFor, UNIFORM } from '../../../shared/crew';
-import type { Agent, BrowserFrame, Effort, Helper, TermLine, Workflow, WorkflowAgent } from '../../../shared/types';
+import type { Agent, BackgroundTask, BrowserFrame, Effort, Helper, TermLine, Workflow, WorkflowAgent } from '../../../shared/types';
 import { EFFORT_LEVELS } from '../../../shared/types';
 import { api } from '../net/api';
 import { markRead } from '../net/attention';
 import { state } from '../net/state';
+import { runningFor } from '../world/probeSlots';
 import { drawMockPage } from '../world/screen';
 import { LCARS, LCARS_STATUS } from '../world/starship';
 import type { Ui } from './context';
@@ -25,6 +26,7 @@ export type AgentView = 'browser' | 'goal' | 'tasks' | 'crew';
 type View = AgentView;
 
 const HELPER_TONE: Record<Helper['status'], string> = { working: LCARS.sky, done: LCARS_STATUS.done, failed: LCARS.red };
+const BACKGROUND_TONE: Record<BackgroundTask['status'], string> = { running: LCARS.sky, done: LCARS_STATUS.done, failed: LCARS.red, stopped: LCARS_STATUS.stopped };
 const WORKFLOW_TONE: Record<Workflow['status'], string> = { running: LCARS.lilac, done: LCARS_STATUS.done, failed: LCARS.red };
 const AGENT_MARK: Record<WorkflowAgent['status'], string> = { queued: '·', working: '▸', done: '✓', failed: '✕' };
 
@@ -33,7 +35,7 @@ function views(a: Agent, frame: BrowserFrame | undefined): NavItem<View>[] {
   const browsing = showsBrowser(frame);
   const tasks = a.tasks ?? [];
   const slice = a.lead?.note?.slice ?? [];
-  const crew = (a.helpers ?? []).length + (a.workflows ?? []).length;
+  const crew = (a.helpers ?? []).length + (a.workflows ?? []).length + (a.background ?? []).length;
   const lead = a.task === 'lead';
   const items: (NavItem<View> | false)[] = [
     { key: 'browser', label: 'Browser', readout: browsing ? 'Live' : '', standby: !browsing },
@@ -291,17 +293,23 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
 
   /**
    * The helpers a lead has handed work to: what each was asked, and what it's doing or how it got on (click one for its
-   * transcript); then the workflows it's running.
+   * transcript); then the workflows it's running, and what it has running in the background (click one for its output).
    */
   const crewView = (a: Agent) =>
     h('div', { class: 'crew' },
       ...(a.helpers ?? []).map((x) =>
         h('div', { class: 'crew-member', style: `--tone:${HELPER_TONE[x.status]}`, title: 'Open their transcript', onclick: () => ui.openHelper(a.id, x.id) },
-          h('h4', { style: 'margin:0' }, `${helperFor(x.id).name} · ${x.status}`),
+          h('h4', { style: 'margin:0' }, `${helperFor(x.id).name}${x.parent ? ` · for ${helperFor(x.parent).name}` : ''} · ${x.status}`),
           h('p', null, x.description),
           x.activity ? h('p', { class: 'muted' }, x.activity) : null,
         )),
       ...(a.workflows ?? []).map(workflowView),
+      ...(a.background ?? []).map((t) =>
+        h('div', { class: 'crew-member', style: `--tone:${BACKGROUND_TONE[t.status]}`, title: 'Open its output', onclick: () => ui.openBackground(a.id, t.id) },
+          h('h4', { style: 'margin:0' }, `${t.kind === 'monitor' ? 'Monitor' : 'Background command'} · ${t.status}`),
+          h('p', { style: 'font-family:var(--mono);font-size:13px' }, t.description),
+          h('p', { class: 'muted' }, t.status === 'running' ? `running for ${runningFor(t, Date.now())}` : (t.summary ?? `ran for ${runningFor(t, Date.now())}`)),
+        )),
     );
 
   /** How full their context is, and (between turns) a button to compact it. */
