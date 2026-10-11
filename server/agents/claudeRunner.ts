@@ -11,6 +11,7 @@ import { BrowserPool, browserMcpServer } from './browserTool';
 import { CLOUD_UNAVAILABLE, cloudRefused } from './cloud';
 import { officeMcpServer } from './officeTool';
 import { openScratch, scratchScript } from './scratch';
+import { gitCommit } from './commits';
 import { appUrl, renderText, renderToolResult, renderToolUse, screenshotFrame, type ToolCall } from './render';
 import { TASK_TOOLS } from './tasks';
 import { workflowProgress } from './workflows';
@@ -118,6 +119,8 @@ interface RunContext {
   /** The scratch dir (a local session's), and the Bash calls running scripts from it: probes, until their results come. */
   scratch?: string;
   probes: Set<string>;
+  /** The Bash calls making commits (the session's own), with their messages, until their results say they worked. */
+  commits: Map<string, string | undefined>;
   /** Signed in with your API key rather than your login. */
   onKey: boolean;
   /** The API requests already counted against the key's budget: Claude Code sends each one's usage with every block of it. */
@@ -227,7 +230,7 @@ export class ClaudeRunner implements AgentRunner {
 
     let q: Query | undefined;
     let stopping = false;
-    const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map(), helpers: new Map(), workflows: new Set(), modelled: new Set(), scratch: scratch?.dir, probes: new Set(), onKey, counted: new Set() };
+    const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map(), helpers: new Map(), workflows: new Set(), modelled: new Set(), scratch: scratch?.dir, probes: new Set(), commits: new Map(), onKey, counted: new Set() };
     const done = (async (): Promise<RunOutcome> => {
       let summary = '';
       let structured: unknown;
@@ -400,6 +403,8 @@ export class ClaudeRunner implements AgentRunner {
             if (nested && rendered.activity) hooks.helper?.({ kind: 'activity', id: msg.parent_tool_use_id!, activity: rendered.activity });
             // a script of the session's own from its scratch dir is a probe it sent out
             const script = !nested && call.name === 'Bash' && ctx.scratch && typeof call.input.command === 'string' ? scratchScript(call.input.command, ctx.scratch) : undefined;
+            const commit = !nested && call.name === 'Bash' && typeof call.input.command === 'string' ? gitCommit(call.input.command) : undefined;
+            if (commit) ctx.commits.set(block.id, commit.message);
             if (script) {
               ctx.probes.add(block.id);
               hooks.probe?.({ kind: 'started', id: block.id, description: `Script ${script}`, type: 'script' });
@@ -417,6 +422,11 @@ export class ClaudeRunner implements AgentRunner {
           if (block.type !== 'tool_result') continue;
           const call = ctx.calls.get(block.tool_use_id);
           ctx.calls.delete(block.tool_use_id);
+          if (ctx.commits.has(block.tool_use_id)) {
+            const message = ctx.commits.get(block.tool_use_id);
+            ctx.commits.delete(block.tool_use_id);
+            if (!block.is_error) hooks.commit?.(message);
+          }
           if (ctx.probes.delete(block.tool_use_id)) {
             const said = typeof block.content === 'string' ? block.content : (block.content ?? []).map((c) => (c.type === 'text' ? c.text : '')).join('\n');
             const first = said.split('\n').map((l) => l.trim()).find(Boolean);

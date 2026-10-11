@@ -30,6 +30,15 @@ describe('the course', () => {
     expect(plot.path.startsWith(`M${plot.launch.x} ${plot.launch.y}`)).toBe(true);
   });
 
+  it('names the slice under way by its heading until it ships, and says so when it has none', () => {
+    const plot = (now: Waypoint) => plotCourse({ waypoints: [wp(1), now], current: 2, next: [], seed: 's' }).points[1];
+    expect(plot({ slice: 2, startedAt: 20 })).toMatchObject({ name: 'Slice 2 · heading not set', named: 'unset' });
+    expect(plot({ slice: 2, startedAt: 20, heading: 'Live progress' })).toMatchObject({ name: 'Live progress', named: 'heading' });
+    expect(plot({ slice: 2, startedAt: 20, heading: 'Live progress', title: 'Shipped title' })).toMatchObject({ name: 'Shipped title', named: 'shipped' });
+    // a slice of a closed goal that never named itself is just its number
+    expect(plotCourse({ waypoints: [wp(1), { slice: 2, startedAt: 20 }], next: [], seed: 's' }).points[1].name).toBe('Slice 2');
+  });
+
   it('keeps a long voyage on the chart', () => {
     const plot = plotCourse({ waypoints: Array.from({ length: 30 }, (_, i) => wp(i + 1)), next: ['a', 'b', 'c'], seed: 'x' });
     expect(plot.points.every(inside)).toBe(true);

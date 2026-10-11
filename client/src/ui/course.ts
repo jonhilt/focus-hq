@@ -19,8 +19,10 @@ export interface Label extends Pt {
 
 export interface PlottedWaypoint extends Pt {
   waypoint: Waypoint;
-  /** What its label says: the slice's title, cut short. */
+  /** What its label says: the title it shipped under, or until then the heading its lead gave it, cut short. */
   name: string;
+  /** Where its name came from: what it shipped as, the lead's heading for it, or nothing yet (the slice under way, unnamed). */
+  named: 'shipped' | 'heading' | 'unset';
   /** Landed, the slice under way, or a slice of a closed goal that never landed. */
   state: 'landed' | 'now' | 'open';
   /** Missing when there's no clear room for it (an older waypoint on a long voyage): its number shows, its name on hover. */
@@ -228,7 +230,9 @@ export function plotCourse(voyage: Voyage, scale = 1): CoursePlot {
     const outward = Math.abs(drift) > swing * 0.3 ? Math.sign(drift) : i % 2 ? 1 : -1;
     outs.push(waypoint.turnedFrom ? -outward : outward);
     const state = waypoint.landedAt ? 'landed' : waypoint.slice === voyage.current ? 'now' : 'open';
-    return { x, y, waypoint, name: clip(waypoint.title ?? `Slice ${waypoint.slice}`, chars('waypoint')), state };
+    const named = waypoint.title ? 'shipped' : waypoint.heading ? 'heading' : 'unset';
+    const name = waypoint.title ?? waypoint.heading ?? (state === 'now' ? `Slice ${waypoint.slice} · heading not set` : `Slice ${waypoint.slice}`);
+    return { x, y, waypoint, name: clip(name, chars('waypoint')), named, state };
   });
 
   // each correction's old heading: on from the turn, further off course, to a cross
@@ -296,7 +300,7 @@ export function plotCourse(voyage: Voyage, scale = 1): CoursePlot {
     const p = points[i];
     const d = 26 + 4 * (scale - 1);
     const spots = [beside(p, side, outs[i], d), beside(p, side, -outs[i], d), ...around(p, d, sizes.waypoint), ...around(p, d * 1.8, sizes.waypoint).map((l) => ({ ...l, leader: true }))];
-    for (const name of [p.name, clip(p.waypoint.title ?? '', Math.round(chars('waypoint') * 0.55))]) {
+    for (const name of [p.name, clip(p.waypoint.title ?? p.waypoint.heading ?? '', Math.round(chars('waypoint') * 0.55))]) {
       const label = name && place(spots, name, sizes.waypoint);
       if (!label) continue;
       p.label = label;
@@ -437,3 +441,4 @@ export function probeFlights(plot: CoursePlot, waypoints: Waypoint[], out: Reado
     });
   });
 }
+

@@ -41,6 +41,8 @@ export interface RunHooks {
   helper?(event: HelperEvent): void;
   /** A script run from the scratch dir started or finished (the session's own, not a subagent's). */
   probe?(event: ProbeEvent): void;
+  /** The session's own `git commit` succeeded, with its message when the command gave it. */
+  commit?(message?: string): void;
   /**
    * A subagent's own lines (`id` as in its HelperEvents): its transcript, kept apart from the session's. Without it they
    * go, indented, in the session's own lines.

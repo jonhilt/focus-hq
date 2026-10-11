@@ -161,3 +161,15 @@ export function endedProbe(work: Course, helper: { id: string; ok: boolean; summ
     probes: w.probes!.map((p) => (p.id === helper.id ? { ...p, endedAt: now, ok: helper.ok, ...(summary && { summary }) } : p)),
   }), at.slice);
 }
+
+/** The waypoints once the lead names the slice under way: its heading, until it ships under its own title. */
+export function headedWaypoint(work: Course, heading: string, now: number): Waypoint[] {
+  const clean = heading.replace(/\s+/g, ' ').trim();
+  return withWaypoint(work, now, (w) => (clean ? { ...w, heading: clean } : (({ heading: _, ...rest }) => rest)(w)));
+}
+
+/** The waypoints once the lead commits during the slice under way: one more commit, with what it said. */
+export function committedWaypoint(work: Course, message: string | undefined, now: number): Waypoint[] {
+  const said = message?.split('\n')[0].trim();
+  return withWaypoint(work, now, (w) => ({ ...w, commits: (w.commits ?? 0) + 1, ...(said && { lastCommit: opening(said, WAYPOINT_LIMITS.probeSummary) }) }));
+}

@@ -13,6 +13,7 @@ import type { OfficeTools } from './types';
 export const noteShape = {
   title: z.string().max(L.title).optional().describe(`A better title for the goal, in a few words (at most ${L.title} characters).`),
   done: z.string().max(L.done).optional().describe(`What done looks like, as agreed with the captain: a few lines (at most ${L.done} characters).`),
+  heading: z.string().max(L.heading).optional().describe(`What this slice is heading for, in a few words (at most ${L.heading} characters): set it as each slice starts. The goal's star chart shows it on the slice under way until it ships under its own title.`),
   slice: z.array(z.object({
     text: z.string().max(L.item).describe(`One item (at most ${L.item} characters).`),
     done: z.boolean().optional(),

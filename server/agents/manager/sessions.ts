@@ -11,7 +11,7 @@ import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
 import { Sessions, Workspace } from '../services';
 import { applyTaskTool } from '../tasks';
 import { applyWorkflowEvent, WORKFLOW_LINGER_MS } from '../workflows';
-import { endedProbe, launchedProbe } from '../waypoints';
+import { committedWaypoint, endedProbe, launchedProbe } from '../waypoints';
 import { type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN } from '../types';
 import { EmptyRepository, FINISHED, type ManagerServices, Part, Refused, ReportGone, withNotes, type WorkError } from './core';
 
@@ -132,6 +132,10 @@ export class AgentSessions extends Part {
         if (event.kind === 'ended') {
           this.background(Effect.sleep(HELPER_LINGER_MS).pipe(Effect.andThen(Effect.sync(() => this.update(agent, { helpers: (agent.helpers ?? []).filter((h) => h.id !== event.id) })))));
         }
+      },
+      commit: (message) => {
+        const work = agent.task === 'lead' ? agent.lead : undefined;
+        if (work) this.update(agent, { lead: { ...work, waypoints: committedWaypoint(work, message, Date.now()) } });
       },
       probe: (event) => {
         const work = agent.task === 'lead' ? agent.lead : undefined;

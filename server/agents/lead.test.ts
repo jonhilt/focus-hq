@@ -210,6 +210,8 @@ describe('what the lead writes and hears', () => {
     expect(midTurn).toContain('Share what the slice taught you whenever you next report to the captain, rather than stopping now');
     expect(midTurn).not.toContain('Tell the captain');
     expect(newSliceNote({ ...work, slice: 3, prs: [] }, 'focus/lead-shop-3-cd')).toContain('Slice 3 starts on fresh code');
+    // and is asked to name it, so the star chart shows what it's for while it's under way
+    expect(newSliceNote({ ...work, slice: 3, prs: [] }, 'focus/lead-shop-3-cd')).toContain("name it with the note tool's heading");
     expect(heldBack(work, ['api'])).toMatch(/\.\/api still has uncommitted changes, so your repos stay where they are/);
   });
 });

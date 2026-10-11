@@ -41,6 +41,11 @@ export interface Waypoint {
   landedAt?: number;
   /** What it set out to do: the title it last shipped under. Missing until it ships. */
   title?: string;
+  /** What the lead said it was heading for as it started (the note tool's heading): its name until it ships. */
+  heading?: string;
+  /** The commits the lead made during it, and the last one's message, so the chart shows work as it's done. */
+  commits?: number;
+  lastCommit?: string;
   /** The opening of what it shipped with (its pull requests' description), cut short. */
   summary?: string;
   /** The lessons the lead added to the goal's note during the slice. */

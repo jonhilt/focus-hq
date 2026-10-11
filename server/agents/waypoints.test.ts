@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent, GoalNote, LeadWork, QaReport, Waypoint } from '../../shared/types';
 import { goalRecord, reopenedWork } from './lead';
-import { endedProbe, evidenceFile, landedWaypoint, launchedProbe, nextWaypoints, notedSlice, notedWaypoint, opening, shieldedWaypoint, shippedWaypoint, tickedSpotCheck, WAYPOINT_LIMITS, withWaypoint } from './waypoints';
+import { committedWaypoint, endedProbe, evidenceFile, headedWaypoint, landedWaypoint, launchedProbe, nextWaypoints, notedSlice, notedWaypoint, opening, shieldedWaypoint, shippedWaypoint, tickedSpotCheck, WAYPOINT_LIMITS, withWaypoint } from './waypoints';
 
 const note = (done: string, learned: string[] = []): GoalNote => ({ done, slice: [], learned, next: [] });
 
@@ -184,5 +184,21 @@ describe('probes', () => {
     // one it never launched, or that has already reported, changes nothing
     expect(endedProbe(later, { id: 'h9', ok: true }, 90)).toBeUndefined();
     expect(endedProbe({ slice: 2, waypoints: after }, { id: 'h1', ok: false }, 95)).toBeUndefined();
+  });
+});
+
+describe('the slice under way', () => {
+  const course = [{ slice: 1, startedAt: 10, landedAt: 40, title: 'Chart' }, { slice: 2, startedAt: 40 }];
+  it('wears the heading the lead gives it, until a new one replaces it, and none once it’s cleared', () => {
+    const named = headedWaypoint({ slice: 2, waypoints: course }, '  Live progress\non the chart ', 50);
+    expect(named[1]).toEqual({ slice: 2, startedAt: 40, heading: 'Live progress on the chart' });
+    expect(named[0]).toEqual(course[0]);
+    expect(headedWaypoint({ slice: 2, waypoints: named }, '', 60)[1]).toEqual({ slice: 2, startedAt: 40 });
+  });
+
+  it('counts its commits, keeping the last one’s first line', () => {
+    const once = committedWaypoint({ slice: 2, waypoints: course }, 'Heading on the chart\n\nMore detail', 50);
+    const twice = committedWaypoint({ slice: 2, waypoints: once }, undefined, 60);
+    expect(twice[1]).toEqual({ slice: 2, startedAt: 40, commits: 2, lastCommit: 'Heading on the chart' });
   });
 });

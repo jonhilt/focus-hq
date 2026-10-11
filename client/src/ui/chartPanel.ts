@@ -8,6 +8,7 @@ import type { Ui } from './context';
 import { fill, h } from './dom';
 import { prLink } from './goals';
 import { clip, type CoursePlot, everySlice, type Label, leaderEnd, plotCourse, type ProbeFlight, probeFlights, probesOut, type Pt, seeded, shieldState } from './course';
+import { sliceProgress } from '../world/goalRoom';
 
 /** What a goal's chart is drawn from, whether it's under way or closed. */
 interface ChartGoal {
@@ -61,7 +62,7 @@ const span = (ms: number) => {
   const hrs = Math.round(m / 60);
   return hrs < 24 ? `${hrs} h` : `${Math.floor(hrs / 24)} d${hrs % 24 ? ` ${hrs % 24} h` : ''}`;
 };
-const named = (w: Waypoint) => w.title ?? `Slice ${w.slice}`;
+const named = (w: Waypoint) => w.title ?? w.heading ?? `Slice ${w.slice}`;
 /** The DOM UI's LCARS green (`--lcars-green`), which the 3D palette doesn't have. */
 const GREEN = '#99cc66';
 const SHIELD_WORDS = { none: '', held: 'shields held', absorbed: 'hit absorbed', down: 'shields down' } as const;
@@ -135,20 +136,27 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: Picked, nav: Nav)
       return g;
     }));
 
+  // the slice under way fills an arc round its waypoint as its checklist is ticked off
+  const pct = sliceProgress(goal.note);
+  const progress = pct === null ? undefined : pct / 100;
+  const ARC = 2 * Math.PI * 20;
   const waypoints = s('g', { class: 'chart-waypoints' },
     ...plot.points.map((p) => {
       const w = p.waypoint;
+      const filled = p.state === 'now' ? progress : undefined;
       const shields = SHIELD_WORDS[shieldState(w.shields)];
       const g = s('g', { class: `chart-wp ${p.state}${w.slice === selected.slice && !selected.contact ? ' picked' : ''}`, tabindex: 0, role: 'button' },
         s('title', {}, `Waypoint ${w.slice}: ${named(w)}${shields ? ` (${shields})` : ''}`),
         s('circle', { class: 'hit', cx: p.x, cy: p.y, r: 24 }),
         p.state === 'now' ? s('circle', { class: 'ping', cx: p.x, cy: p.y, r: 22 }) : null,
+        filled !== undefined ? s('circle', { class: 'track', cx: p.x, cy: p.y, r: 20 }) : null,
+        filled !== undefined ? s('circle', { class: 'progress', cx: p.x, cy: p.y, r: 20, 'stroke-dasharray': `${(filled * ARC).toFixed(1)} ${ARC.toFixed(1)}`, transform: `rotate(-90 ${p.x} ${p.y})` }) : null,
         s('circle', { class: 'ring', cx: p.x, cy: p.y, r: 19 }),
         shieldState(w.shields) !== 'none' ? s('circle', { class: `shield ${shieldState(w.shields)}`, cx: p.x, cy: p.y, r: 16 }) : null,
         s('circle', { class: 'core', cx: p.x, cy: p.y, r: 12 }),
         s('text', { class: 'num', x: p.x, y: p.y + 5, 'text-anchor': 'middle' }, String(w.slice)),
         p.label?.leader ? s('path', { class: 'leader', d: leaderPath(p, p.label, plot.sizes.waypoint) }) : null,
-        p.label ? s('text', { class: 'name', x: p.label.x, y: p.label.y, 'text-anchor': p.label.anchor }, p.name) : null,
+        p.label ? s('text', { class: `name ${p.named}`, x: p.label.x, y: p.label.y, 'text-anchor': p.label.anchor }, p.name) : null,
       );
       g.addEventListener('click', () => nav.slice(w.slice));
       g.addEventListener('keydown', (e) => {
@@ -329,7 +337,12 @@ function logView(goal: ChartGoal, w: Waypoint | undefined, nav: Nav, out: Readon
       ? section(`This slice · ${checklist.filter((i) => i.done).length}/${checklist.length}`, LCARS.sky,
         h('ul', { class: 'goal-list checklist' }, ...checklist.map((i) => h('li', { class: i.done ? 'ticked' : '' }, i.text))))
       : null,
-    w.summary || !w.title ? section('Intent', LCARS.orange, h('p', null, w.summary ?? 'Nothing shipped yet')) : null,
+    w.summary || !w.title
+      ? section('Intent', LCARS.orange, w.summary ? h('p', null, w.summary)
+        : w.heading ? h('p', null, h('em', null, w.heading), h('small', { class: 'chart-aside' }, 'Its heading, until it ships under its own title'))
+        : h('p', { class: 'muted' }, now ? 'Heading not set: the lead names the slice as it starts' : 'Nothing shipped'))
+      : null,
+    w.commits ? section(`Work so far · ${w.commits} commit${w.commits === 1 ? '' : 's'}`, LCARS.peach, w.lastCommit ? h('p', null, 'Last: ', h('em', null, w.lastCommit)) : null) : null,
     w.turnedFrom ? section('Course correction', LCARS.red, h('p', null, 'Was heading for: ', h('em', null, w.turnedFrom))) : null,
     w.learned?.length ? section('Learned', LCARS.lilac, h('ul', { class: 'goal-list' }, ...w.learned.map((l) => h('li', null, l)))) : null,
     evidenceView(goal, w, openShown),

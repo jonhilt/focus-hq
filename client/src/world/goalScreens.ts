@@ -638,7 +638,8 @@ export class ChartScreen extends Display {
     this.flying = flights.length > 0;
     this.sending = flights.some((f) => f.phase === 'transmitting');
     this.drawnAt = performance.now();
-    drawCourse(ctx, plot, work.note?.done, lead.id);
+    const pct = sliceProgress(work.note);
+    drawCourse(ctx, plot, work.note?.done, lead.id, pct === null ? undefined : pct / 100);
     drawProbes(ctx, flights, lead.helpers ?? [], plot.sizes.contact);
     ctx.restore();
 
@@ -746,7 +747,7 @@ function drawProbes(ctx: CanvasRenderingContext2D, flights: ProbeFlight[], helpe
 }
 
 /** The course on a canvas already scaled to the plot's units: as the chart panel draws it (ui/chartPanel.ts), without the fog. */
-function drawCourse(ctx: CanvasRenderingContext2D, plot: CoursePlot, done: string | undefined, seed: string): void {
+function drawCourse(ctx: CanvasRenderingContext2D, plot: CoursePlot, done: string | undefined, seed: string, progress?: number): void {
   const { width, height, objective: o } = plot;
   ctx.strokeStyle = '#1d1a2e';
   ctx.lineWidth = 1;
@@ -882,13 +883,21 @@ function drawCourse(ctx: CanvasRenderingContext2D, plot: CoursePlot, done: strin
       ctx.setLineDash([]);
     }
     if (p.state === 'now') {
-      ctx.strokeStyle = LCARS.sky;
-      ctx.lineWidth = 2;
-      ctx.globalAlpha = 0.5;
+      // how far through its checklist the slice is, as an arc filling round it
+      ctx.strokeStyle = progress === undefined ? LCARS.sky : '#2a2840';
+      ctx.lineWidth = progress === undefined ? 2 : 5;
+      ctx.globalAlpha = progress === undefined ? 0.5 : 1;
       ctx.beginPath();
       ctx.arc(p.x, p.y, 24, 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = 1;
+      if (progress) {
+        ctx.strokeStyle = LCARS.sky;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 24, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
+        ctx.stroke();
+      }
     }
     ctx.fillStyle = p.state === 'now' ? LCARS.sky : p.state === 'open' ? '#a49db4' : LCARS.gold;
     ctx.beginPath();
@@ -909,7 +918,7 @@ function drawCourse(ctx: CanvasRenderingContext2D, plot: CoursePlot, done: strin
       ctx.lineTo(end.x, end.y);
       ctx.stroke();
     }
-    label(p.name, p.label, plot.sizes.waypoint, p.state === 'now' ? LCARS.sky : '#f1eaff');
+    label(p.name, p.label, plot.sizes.waypoint, p.named === 'unset' ? '#a49db4' : p.state === 'now' ? LCARS.sky : '#f1eaff');
   }
 }
 

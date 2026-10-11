@@ -38,7 +38,7 @@ describe('a subagent’s messages', () => {
       ...(withTranscripts && { helperLines: (id: string, l: Line[]) => theirs.set(id, [...(theirs.get(id) ?? []), ...l]) }),
     } as unknown as RunHooks;
     const runner = new ClaudeRunner(null as unknown as BrowserPool) as unknown as { handle(m: SDKMessage, ctx: unknown, h: RunHooks): unknown };
-    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), probes: new Set() };
+    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), probes: new Set(), commits: new Map() };
     for (const m of messages) runner.handle(m, ctx, hooks);
     return { own: own.map((l) => l.text), theirs: (theirs.get('toolu_1') ?? []).map((l) => l.text) };
   };
@@ -74,7 +74,7 @@ describe('a workflow', () => {
     const helpers: unknown[] = [];
     const hooks = { lines: () => undefined, activity: () => undefined, helper: (e: unknown) => helpers.push(e), workflow: (e: WorkflowEvent) => events.push(e) } as unknown as RunHooks;
     const runner = new ClaudeRunner(null as unknown as BrowserPool) as unknown as { handle(m: SDKMessage, ctx: unknown, h: RunHooks): unknown };
-    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), probes: new Set() };
+    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), probes: new Set(), commits: new Map() };
     for (const m of messages) runner.handle(m, ctx, hooks);
     expect(events).toEqual([
       { kind: 'started', id: 'w1', name: 'review-changes', description: 'Review the diff' },
@@ -92,7 +92,7 @@ describe('a script run from the scratch dir', () => {
     const probes: ProbeEvent[] = [];
     const hooks = { lines: () => undefined, activity: () => undefined, helper: () => undefined, helperLines: () => undefined, probe: (e: ProbeEvent) => probes.push(e) } as unknown as RunHooks;
     const runner = new ClaudeRunner(null as unknown as BrowserPool) as unknown as { handle(m: SDKMessage, ctx: unknown, h: RunHooks): unknown };
-    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), modelled: new Set(), scratch: '/tmp/focus-scratch/lead_x', probes: new Set() };
+    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), modelled: new Set(), scratch: '/tmp/focus-scratch/lead_x', probes: new Set(), commits: new Map() };
     for (const m of messages) runner.handle(m as SDKMessage, ctx, hooks);
     return probes;
   };
@@ -134,5 +134,18 @@ describe('the background tasks', () => {
     expect(ctx.background).toEqual(['local_workflow']);
     runner.handle(changed([]), ctx, hooks);
     expect(ctx.background).toEqual([]);
+  });
+});
+
+describe('a commit', () => {
+  const bash = (id: string, command: string) => ({ type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id, name: 'Bash', input: { command } }] } });
+  const result = (id: string, isError = false) => ({ type: 'user', parent_tool_use_id: null, message: { content: [{ type: 'tool_result', tool_use_id: id, content: '', is_error: isError }] } });
+  it('counts once git says it worked, with its message', () => {
+    const commits: (string | undefined)[] = [];
+    const hooks = { lines: () => undefined, activity: () => undefined, commit: (m?: string) => commits.push(m) } as unknown as RunHooks;
+    const runner = new ClaudeRunner(null as unknown as BrowserPool) as unknown as { handle(m: SDKMessage, ctx: unknown, h: RunHooks): unknown };
+    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), modelled: new Set(), probes: new Set(), commits: new Map() };
+    for (const m of [bash('t1', 'git add -A && git commit -m "Heading on the chart"'), result('t1'), bash('t2', 'git commit -m "Nothing to commit"'), result('t2', true)]) runner.handle(m as SDKMessage, ctx, hooks);
+    expect(commits).toEqual(['Heading on the chart']);
   });
 });
