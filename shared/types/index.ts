@@ -4,6 +4,7 @@ export * from './agents';
 export * from './apiKey';
 export * from './drafts';
 export * from './events';
+export * from './frameStats';
 export * from './github';
 export * from './goals';
 export * from './numberOne';

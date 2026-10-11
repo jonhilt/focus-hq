@@ -3,6 +3,8 @@ import { EFFORT_LEVELS, type Effort, type PreviewSet, type ResumeHow } from '../
 import { closedGoals } from '../shared/ledger';
 import { ledgerWindow } from '../shared/ledgerReview';
 import { isKokoroVoice } from '../shared/voice';
+import { paths } from './config';
+import { appendFrameStats } from './frameStats';
 import type { Office } from './office';
 import type { Store } from './store';
 import { errorMessage } from './util';
@@ -42,6 +44,8 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.use(express.json({ limit: '2mb' }));
 
   r.get('/state', h(() => office.snapshot()));
+  // how the 3D view runs in a browser opened with ?stats=1, kept here so a run on another machine can be read where the office is
+  r.post('/frame-stats', h((req) => appendFrameStats(paths.frameStats, req.body.session, req.body.lines)));
   r.get('/qa-shots/:file', async (req, res) => {
     const file = param(req, 'file');
     const bytes = /^[\w-]+\.(jpg|png|svg)$/.test(file) ? await store.readShot(file) : undefined;
