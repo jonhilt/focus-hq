@@ -45,7 +45,10 @@ function runCoverage(all: boolean): string {
     'run', '--coverage.enabled', '--coverage.provider=v8', '--coverage.reporter=json', `--coverage.reportsDirectory=${dir}`,
     '--coverage.reportOnFailure', ...include,
   ], { cwd: ROOT, encoding: 'utf8', shell: process.platform === 'win32' });
-  if (result.status !== 0) console.warn('Some tests failed: coverage counts what ran anyway.\n');
+  if (result.status !== 0) {
+    const failed = `${result.stdout}\n${result.stderr}`.split('\n').filter((line) => /^\s*FAIL\s/.test(line));
+    console.warn(`Some tests failed (coverage counts what ran anyway):\n${failed.join('\n')}\n`);
+  }
   const file = path.join(dir, 'coverage-final.json');
   if (!existsSync(file)) throw new Error(`vitest wrote no coverage:\n${result.stderr || result.stdout}`);
   return file;
@@ -70,17 +73,20 @@ function mergeBase(): string {
   throw new Error('No main branch to compare with: pass a base, like --changed origin/main');
 }
 
+/** What the branch touched since `base` (its merge base with main when empty). */
+function changedSince(base: string, rows: Scored[], files: string[]): string {
+  const ref = base || mergeBase();
+  const label = base || `merge base with main (${ref.slice(0, 8)})`;
+  return changedSummary(rows, changedLines(git('diff', '--unified=0', ref, '--', ...files)), label);
+}
+
 function main() {
   const { all, top, changed, coverage } = args();
   const files = sourceFiles(all);
   const rows = scoreAll(files, coverage ?? runCoverage(all));
-  console.log(`CRAP for ${all ? 'server, shared, client and scripts' : 'server and shared (demo code left out)'}: complexity² × (1 − coverage)³ + complexity\n`);
-  console.log(summary(rows, top));
-  if (changed !== undefined) {
-    const base = changed || mergeBase();
-    const label = changed || `merge base with main (${base.slice(0, 8)})`;
-    console.log(`\n${changedSummary(rows, changedLines(git('diff', '--unified=0', base, '--', ...files)), label)}`);
-  }
+  const scope = all ? 'server, shared, client and scripts' : 'server and shared (demo code left out)';
+  console.log(`CRAP for ${scope}: complexity² × (1 − coverage)³ + complexity\n\n${summary(rows, top)}`);
+  if (changed !== undefined) console.log(`\n${changedSince(changed, rows, files)}`);
 }
 
 main();
