@@ -414,9 +414,10 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
     const scrolled = pickKey === drawnPick ? body.querySelector('.chart-log')?.scrollTop ?? 0 : 0;
     drawn = key;
     drawnPick = pickKey;
-    const plot = plotCourse({ waypoints: g.waypoints, current: g.current, next: g.note?.next ?? [], contacts: g.contacts, seed: g.id });
+    // a closed goal's ideas for next went nowhere: its chart ends at its last waypoint
+    const ideas = g.closedAt ? [] : g.note?.next ?? [];
+    const plot = plotCourse({ waypoints: g.waypoints, current: g.current, next: ideas, contacts: g.contacts, seed: g.id });
     const contact = g.contacts.find((c) => c.id === picked.contact);
-    const ideas = g.note?.next ?? [];
     const log = contact
       ? contactView(g, contact, nav)
       : picked.idea !== undefined && ideas[picked.idea] !== undefined
