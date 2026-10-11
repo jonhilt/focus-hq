@@ -131,6 +131,6 @@ export function tickedSpotCheck(work: Pick<LeadWork, 'waypoints'>, slice: number
 /** How many of each pull request's screenshots a waypoint keeps as evidence: QA's last few. */
 export const EVIDENCE_PER_PR = 4;
 
-/** What a screenshot is called among the goal's own files: the repo, pull request and its place, in QA's format. */
+/** What a screenshot is called among the goal's own files: the repo, pull request and its place, keeping QA's image type. */
 export const evidenceFile = (repo: string, pr: number, index: number, shot: string): string =>
-  `shot-${repo.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${pr}-${index + 1}.${shot.endsWith('.png') ? 'png' : 'jpg'}`;
+  `shot-${repo.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${pr}-${index + 1}.${/\.(png|svg)$/.exec(shot)?.[1] ?? 'jpg'}`;

@@ -144,5 +144,7 @@ describe('evidence', () => {
   it('names its own copy of each screenshot after the repo, pull request and place', () => {
     expect(evidenceFile('Acme/Web.App', 9, 0, 'acme-web-9-123-1.png')).toBe('shot-acme-web-app-9-1.png');
     expect(evidenceFile('acme/web', 12, 2, 'x.jpg')).toBe('shot-acme-web-12-3.jpg');
+    // the demo's QA screenshots are drawn as SVG: a copy keeps its type, so the browser can show it
+    expect(evidenceFile('demo/webshop-frontend', 9, 0, 'demo-webshop-frontend-9-1791-1.svg')).toBe('shot-demo-webshop-frontend-9-1.svg');
   });
 });
