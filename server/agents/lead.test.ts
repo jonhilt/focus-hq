@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadWork } from '../../shared/types';
-import { leftLog, afterLanding, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
+import { afterLanding, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -406,12 +406,6 @@ describe('reopening a closed goal', () => {
     expect(reopenedWork(goalRecord(lead, closedAt), 1)).not.toHaveProperty('questions');
   });
 
-  it('lets go of what a goal showed once it drops off the end of the log', () => {
-    const log = Array.from({ length: GOAL_LOG }, (_, i) => goalRecord({ ...lead, id: `lead_p1_${i}` }, i));
-    const after = fileGoal(log, goalRecord({ ...lead, id: 'lead_p1_new' }, 99));
-    expect(leftLog(log, after).map((g) => g.id)).toEqual([`lead_p1_${GOAL_LOG - 1}`]);
-    expect(leftLog(after, after)).toEqual([]);
-  });
 
   it('tells the lead where their repos are, and where uncommitted work went', () => {
     const record = goalRecord(lead, closedAt);

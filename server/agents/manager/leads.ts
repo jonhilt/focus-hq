@@ -4,7 +4,7 @@ import type { Agent, Effort, QaReport, QueuedGoal } from '../../../shared/types'
 import { LEAD_DESK, TEAM_STATIONS } from '../../../shared/types';
 import { GitHub } from '../../github/service';
 import { newId } from '../../util';
-import { afterVerdict, closeCheck, fileGoal, leftLog, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, landedMidTurnNote, landedNote, leadWorktreeId, moveQueued, nextGoal, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch } from '../lead';
+import { afterVerdict, closeCheck, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, landedMidTurnNote, landedNote, leadWorktreeId, moveQueued, nextGoal, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch } from '../lead';
 import { Workspace } from '../services';
 import { landedWaypoint, shieldedWaypoint, tickedSpotCheck } from '../waypoints';
 import { type ManagerServices, Part, Refused, type WorkError } from './core';
@@ -185,10 +185,7 @@ export class Leads extends Part {
         ), { discard: true }).pipe(Effect.onError(() => Effect.sync(() => this.closingGoals.delete(id))));
       const project = this.store.project(agent.projectId);
       const record = goalRecord(agent, Date.now());
-      const before = project.goals ?? [];
-      project.goals = fileGoal(before, record);
-      // what its lead showed stays with the goal in the log, until the goal drops off the end of it
-      for (const gone of leftLog(before, project.goals)) this.store.dropArtifacts(gone.id);
+      project.goals = fileGoal(project.goals ?? [], record);
       this.core.ledger.record(project.id, { kind: 'goal-closed', goal: record });
       this.projectsChanged();
       yield* this.core.seating.goHome(id);

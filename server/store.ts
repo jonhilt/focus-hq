@@ -345,12 +345,6 @@ export class Store {
     if (this.persist) fs.rm(path.join(paths.artifacts, leadId, file), { force: true }, () => undefined);
   }
 
-  /** Everything a goal's lead showed: the goal's closed. */
-  dropArtifacts(leadId: string): void {
-    for (const key of this.artifacts.keys()) if (key.startsWith(`${leadId}/`)) this.artifacts.delete(key);
-    if (this.persist) fs.rm(path.join(paths.artifacts, leadId), { recursive: true, force: true }, () => undefined);
-  }
-
   // ---- agents ----
 
   agent(id: string): Agent {
