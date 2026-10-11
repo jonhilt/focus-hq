@@ -74,6 +74,21 @@ export class Comms extends Part {
   }
 
   /**
+   * Stops one of a lead's background commands or monitors, and tells the lead, so it doesn't wonder where it went.
+   * Refused when the lead's session isn't listening to ask (it's ended, and the command with it).
+   */
+  async stopBackground(id: string, taskId: string): Promise<{ stopped: boolean }> {
+    const agent = this.store.agents.get(id);
+    const task = agent?.background?.find((t) => t.id === taskId && t.status === 'running');
+    const session = this.rt(id).session;
+    if (!agent || !task || !session?.stopTask) return { stopped: false };
+    if (!(await session.stopTask(taskId))) return { stopped: false };
+    const what = task.kind === 'monitor' ? `your monitor (${task.description})` : `your background command \`${task.description}\``;
+    this.message(id, `I stopped ${what}. Start it again if you still need it.`);
+    return { stopped: true };
+  }
+
+  /**
    * Finished, stopped, failed or on hold: they pick their conversation back up (or start over, with no session to go
    * back to) once there's a free slot, like any agent starting work, hearing what's in their inbox.
    */

@@ -38,7 +38,7 @@ describe('a subagent’s messages', () => {
       ...(withTranscripts && { helperLines: (id: string, l: Line[]) => theirs.set(id, [...(theirs.get(id) ?? []), ...l]) }),
     } as unknown as RunHooks;
     const runner = new ClaudeRunner(null as unknown as BrowserPool) as unknown as { handle(m: SDKMessage, ctx: unknown, h: RunHooks): unknown };
-    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), probes: new Set(), commits: new Map() };
+    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), probes: new Set(), commits: new Map(), parents: new Map() };
     for (const m of messages) runner.handle(m, ctx, hooks);
     return { own: own.map((l) => l.text), theirs: (theirs.get('toolu_1') ?? []).map((l) => l.text) };
   };
@@ -74,7 +74,7 @@ describe('a workflow', () => {
     const helpers: unknown[] = [];
     const hooks = { lines: () => undefined, activity: () => undefined, helper: (e: unknown) => helpers.push(e), workflow: (e: WorkflowEvent) => events.push(e) } as unknown as RunHooks;
     const runner = new ClaudeRunner(null as unknown as BrowserPool) as unknown as { handle(m: SDKMessage, ctx: unknown, h: RunHooks): unknown };
-    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), probes: new Set(), commits: new Map() };
+    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), probes: new Set(), commits: new Map(), parents: new Map() };
     for (const m of messages) runner.handle(m, ctx, hooks);
     expect(events).toEqual([
       { kind: 'started', id: 'w1', name: 'review-changes', description: 'Review the diff' },
@@ -112,14 +112,13 @@ describe('a script run from the scratch dir', () => {
 });
 
 describe('holdsInput', () => {
-  it('keeps listening while a workflow or a background subagent runs', () => {
+  it('keeps listening while anything runs in the background: a workflow, a subagent, a command or a monitor', () => {
     expect(holdsInput(['local_workflow'])).toBe(true);
-    expect(holdsInput(['local_bash', 'local_agent'])).toBe(true);
+    expect(holdsInput(['local_agent'])).toBe(true);
+    expect(holdsInput(['local_bash'])).toBe(true);
   });
 
-  it('doesn’t for a background shell or monitor, which can run for as long as it likes, or for nothing at all', () => {
-    expect(holdsInput(['local_bash'])).toBe(false);
-    expect(holdsInput(['monitor', 'mcp_task'])).toBe(false);
+  it('doesn’t once nothing does', () => {
     expect(holdsInput([])).toBe(false);
   });
 });
@@ -127,7 +126,7 @@ describe('holdsInput', () => {
 describe('the background tasks', () => {
   it('are what Claude Code last listed, leaving out the ambient ones', () => {
     const runner = new ClaudeRunner(null as unknown as BrowserPool) as unknown as { handle(m: SDKMessage, ctx: unknown, h: RunHooks): unknown };
-    const ctx: { background?: string[] } & Record<string, unknown> = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set() };
+    const ctx: { background?: string[] } & Record<string, unknown> = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), parents: new Map() };
     const hooks = { lines: () => undefined, activity: () => undefined } as unknown as RunHooks;
     const changed = (tasks: unknown[]) => ({ type: 'system', subtype: 'background_tasks_changed', tasks }) as unknown as SDKMessage;
     runner.handle(changed([{ task_id: 'w1', task_type: 'local_workflow', description: 'Review' }, { task_id: 'm1', task_type: 'monitor', description: 'Watch', ambient: true }]), ctx, hooks);

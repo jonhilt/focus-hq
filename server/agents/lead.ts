@@ -634,7 +634,7 @@ export const HELPER_LINGER_MS = 8000;
 export function applyHelperEvent(helpers: Helper[], event: HelperEvent, now: number, leadEffort?: Effort): Helper[] {
   if (event.kind === 'started') {
     if (helpers.some((h) => h.id === event.id)) return helpers;
-    return [...helpers, { id: event.id, description: event.description || 'Helping out', type: event.type, effort: leadEffort, status: 'working', activity: 'Getting started', startedAt: now }];
+    return [...helpers, { id: event.id, description: event.description || 'Helping out', type: event.type, effort: leadEffort, status: 'working', activity: 'Getting started', startedAt: now, ...(event.parent && { parent: event.parent }) }];
   }
   const helper = helpers.find((h) => h.id === event.id);
   if (!helper) return helpers;

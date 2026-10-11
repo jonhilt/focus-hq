@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { closeSync, fstatSync, openSync, readFileSync, readSync } from 'node:fs';
 import { join } from 'node:path';
 import { Effect, Fiber, FiberMap } from 'effect';
 import { helperFor } from '../../../shared/crew';
@@ -14,6 +14,7 @@ import { Sessions, Workspace } from '../services';
 import { applyTaskTool } from '../tasks';
 import { applyWorkflowEvent, transcriptLines, WORKFLOW_LINGER_MS } from '../workflows';
 import { committedWaypoint, endedProbe, launchedProbe } from '../waypoints';
+import { applyBackgroundEvent, BACKGROUND_LINGER_MS, OUTPUT_TAIL, outputLines } from '../backgroundTasks';
 import { type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN } from '../types';
 import { EmptyRepository, FINISHED, type ManagerServices, Part, Refused, ReportGone, type Runtime, withNotes, type WorkError } from './core';
 
@@ -145,6 +146,25 @@ export class AgentSessions extends Part {
         const now = Date.now();
         const waypoints = event.kind === 'started' ? launchedProbe(work, event, now) : endedProbe(work, event, now);
         if (waypoints && waypoints !== work.waypoints) this.update(agent, { lead: { ...work, waypoints } });
+      },
+      background: (event) => {
+        // only a lead's have somewhere to float: by their chair in the briefing room
+        if (agent.task !== 'lead') return;
+        if (event.kind === 'output') {
+          (rt.backgroundOutputs ??= new Map()).set(event.id, event.file);
+          return;
+        }
+        const before = agent.background ?? [];
+        const background = applyBackgroundEvent(before, event, Date.now());
+        if (background === before) return;
+        this.update(agent, { background });
+        // one that's ended lingers a moment, so you see how it went
+        if (event.kind === 'ended') {
+          this.background(Effect.sleep(BACKGROUND_LINGER_MS).pipe(Effect.andThen(Effect.sync(() => {
+            this.update(agent, { background: (agent.background ?? []).filter((t) => t.id !== event.id) });
+            rt.backgroundOutputs?.delete(event.id);
+          }))));
+        }
       },
       workflow: (event) => {
         // only a lead's away teams have somewhere to beam in to: the lead's briefing room
@@ -354,7 +374,7 @@ export class AgentSessions extends Part {
       if (lead) {
         // the lead's turn is over: it's the captain's turn, and their work ships when the lead says so, not now. Their
         // subagents and workflows ended with it; any that just finished linger a moment
-        this.update(agent, { status: 'done', activity: 'Your turn', finishedAt: Date.now(), helpers: agent.helpers?.filter((h) => h.status !== 'working'), workflows: agent.workflows?.filter((w) => w.status !== 'running') });
+        this.update(agent, { status: 'done', activity: 'Your turn', finishedAt: Date.now(), helpers: agent.helpers?.filter((h) => h.status !== 'working'), workflows: agent.workflows?.filter((w) => w.status !== 'running'), background: agent.background?.filter((t) => t.status !== 'running') });
         this.core.seating.schedule();
         return;
       }
@@ -387,5 +407,27 @@ export function workflowAgentLines(rt: Runtime | undefined, workflowId: string, 
     return transcriptLines(readFileSync(join(dir, `agent-${agentId}.jsonl`), 'utf8'));
   } catch {
     return [];
+  }
+}
+
+/**
+ * The end of a lead's background command's output, as terminal lines: read from the file it writes to, each time it's
+ * asked for, since it grows as the command runs. Empty until there's one to read.
+ */
+export function backgroundOutputLines(rt: Runtime | undefined, taskId: string): Omit<TermLine, 't'>[] {
+  const file = rt?.backgroundOutputs?.get(taskId);
+  if (!file) return [];
+  let fd: number | undefined;
+  try {
+    fd = openSync(file, 'r');
+    const size = fstatSync(fd).size;
+    const length = Math.min(size, OUTPUT_TAIL);
+    const buffer = Buffer.alloc(length);
+    readSync(fd, buffer, 0, length, size - length);
+    return outputLines(buffer.toString('utf8'));
+  } catch {
+    return [];
+  } finally {
+    if (fd !== undefined) closeSync(fd);
   }
 }

@@ -11,6 +11,7 @@ import { officeMcpServer } from './officeTool';
 import { openScratch } from './scratch';
 import { handleMessage, type RunContext, type TurnResult } from './sdkMessages';
 import { WorkflowPermits, workflowAsk } from './workflows';
+import { BackgroundTracker } from './backgroundTasks';
 import { bundledClaude, openTerminal, readTerminal } from './terminal';
 import { type AgentRunner, type AgentSession, type CloudTerminal, type CloudTerminalRequest, type RunHooks, type RunOutcome, type RunRequest, LIMIT_REACHED, STOPPED_BY_CAPTAIN } from './types';
 
@@ -47,13 +48,13 @@ class InputQueue implements AsyncIterable<SDKUserMessage> {
 }
 
 /**
- * Whether the session should keep listening after its turn, for these background tasks (their task types): while a
- * workflow or a background subagent runs, Claude Code keeps the session going and takes its result in a turn of its
- * own when it ends, so a message sent meanwhile should reach it then and there. A background shell or monitor can run
- * for as long as it likes (a dev server), so it doesn't.
+ * Whether the session should keep listening after its turn, for these background tasks (their task types): while
+ * anything runs in the background (a workflow, a subagent, a command or a monitor), Claude Code keeps the session going
+ * and takes its result in a turn of its own when it ends, so a message sent meanwhile should reach it then and there,
+ * and the captain can stop a command (a stop only reaches a session that's still listening).
  */
 export function holdsInput(background: string[]): boolean {
-  return background.some((type) => type === 'local_workflow' || type === 'local_agent');
+  return background.length > 0;
 }
 
 /**
@@ -200,7 +201,8 @@ export class ClaudeRunner implements AgentRunner {
 
     let q: Query | undefined;
     let stopping = false;
-    const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map(), helpers: new Map(), workflows: new Set(), permits, modelled: new Set(), scratch: scratch?.dir, probes: new Set(), commits: new Map(), onKey, counted: new Set() };
+    const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map(), helpers: new Map(), workflows: new Set(), permits, parents: new Map(), modelled: new Set(), scratch: scratch?.dir, probes: new Set(), commits: new Map(), onKey, counted: new Set() };
+    ctx.tracker = new BackgroundTracker((id) => (id ? ctx.calls.get(id)?.name : undefined));
     const done = (async (): Promise<RunOutcome> => {
       let summary = '';
       let structured: unknown;
@@ -254,6 +256,12 @@ export class ClaudeRunner implements AgentRunner {
     };
     return {
       send: (text) => input.push(text),
+      // a stop only reaches a session that's still listening (its input open)
+      stopTask: async (taskId) => {
+        if (!q || input.closed) return false;
+        await q.stopTask(taskId);
+        return true;
+      },
       // a cloud session's settings live in the cloud: its new effort applies from its next turn
       setEffort: (effort) => {
         if (!cloud) void q?.applyFlagSettings({ effortLevel: effort }).catch(() => undefined);

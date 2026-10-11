@@ -104,6 +104,8 @@ export interface Helper {
   type?: string;
   /** The model it runs on, from its first message: missing until it's sent one. */
   model?: string;
+  /** The helper that started it, when a helper handed on part of its own work (`id` as theirs). */
+  parent?: string;
   /**
    * The effort it thinks at. Claude Code doesn't report a subagent's, and they inherit their session's, so this is the
    * lead's when the helper started.
@@ -169,6 +171,23 @@ export interface Workflow {
 }
 
 /**
+ * A command a goal's lead left running in the background (Claude Code's Bash with run_in_background), or a monitor
+ * watching for something (its Monitor tool): a probe floating by the lead's chair while it runs.
+ */
+export interface BackgroundTask {
+  /** Claude Code's task id for it. */
+  id: string;
+  kind: 'shell' | 'monitor';
+  /** The command line, or what a monitor is watching for. */
+  description: string;
+  status: 'running' | 'done' | 'failed' | 'stopped';
+  startedAt: number;
+  endedAt?: number;
+  /** How it ended, as Claude Code put it (the exit code, or that it was stopped). */
+  summary?: string;
+}
+
+/**
  * An agent waiting for a Claude Code cloud session to take over: the captain moved them to the cloud, or Claude Code
  * wouldn't start the session of a cloud hire without a terminal. The captain starts one (in a terminal the office opens,
  * or on claude.ai) and the office attaches to it, which Claude Code does without a terminal.
@@ -196,6 +215,8 @@ export interface Agent {
   helpers?: Helper[];
   /** The workflows the lead has running right now, and any that just finished ('lead' task only). */
   workflows?: Workflow[];
+  /** The commands and monitors the lead has running in the background, and any that just ended ('lead' task only). */
+  background?: BackgroundTask[];
   /** How full the agent's context window was at the end of its last turn, as Claude Code reports it. */
   context?: { percent: number; tokens: number; max: number };
   /** A goal's own QA reviewer: the goal (its lead's id) whose pull requests they review. Missing on the room's QA officer. */

@@ -2,10 +2,12 @@ import type { AgentStatus, BrowserFrame, Effort, Settings, TermLine, Workflow, W
 import type { ArtifactInput, NoteInput, QuestionInput } from './lead';
 import type { ExplainerInput } from './explainer';
 import type { SinceVerdict } from './retest';
+import type { BackgroundEvent } from './backgroundTasks';
 
 /** What Claude Code says about a subagent the session started: started, busy with something, finished. */
 export type HelperEvent =
-  | { kind: 'started'; id: string; description: string; type?: string }
+  /** `parent`: the helper that started it, when a helper hands on part of its own work. */
+  | { kind: 'started'; id: string; description: string; type?: string; parent?: string }
   | { kind: 'activity'; id: string; activity: string }
   /** The model it runs on, from its first message (Claude Code reports nothing else about it). */
   | { kind: 'model'; id: string; model: string }
@@ -50,6 +52,8 @@ export interface RunHooks {
    * go, indented, in the session's own lines.
    */
   helperLines?(id: string, lines: Omit<TermLine, 't'>[]): void;
+  /** A command or monitor the session left running in the background started, or ended, or where its output goes. */
+  background?(event: BackgroundEvent): void;
   /** A workflow the session ran started, moved on or finished. */
   workflow?(event: WorkflowEvent): void;
   /** How full the session's context window is, at the end of a turn. */
@@ -127,6 +131,8 @@ export interface AgentSession {
   send(text: string): boolean;
   /** Changes how hard Claude thinks, from the session's next request on. */
   setEffort?(effort: Effort): void;
+  /** Stops one of its background commands or monitors. Resolves false when there's no session to ask. */
+  stopTask?(taskId: string): Promise<boolean>;
   stop(): void;
   done: Promise<RunOutcome>;
 }

@@ -14,7 +14,7 @@ import { Ledger } from './manager/ledger';
 import { PlanLimit } from './manager/planLimit';
 import { Reviews } from './manager/reviews';
 import { Seating } from './manager/seating';
-import { AgentSessions, workflowAgentLines } from './manager/sessions';
+import { AgentSessions, backgroundOutputLines, workflowAgentLines } from './manager/sessions';
 import { Slices } from './manager/slices';
 import { Triages } from './manager/triages';
 import { Core, type ManagerServices } from './manager/core';
@@ -122,6 +122,16 @@ export class AgentManager {
   /** What one of a lead's workflow agents has done so far, from the transcript Claude Code writes as it works. */
   workflowAgentLines(id: string, workflowId: string, agentId: string): Omit<TermLine, 't'>[] {
     return workflowAgentLines(this.core.runtimes.get(id), workflowId, agentId);
+  }
+
+  /** The end of one of a lead's background commands' output, from the file it writes to. */
+  backgroundOutput(id: string, taskId: string): Omit<TermLine, 't'>[] {
+    return backgroundOutputLines(this.core.runtimes.get(id), taskId);
+  }
+
+  /** Stops one of a lead's background commands or monitors, and tells the lead (`Comms.stopBackground`). */
+  stopBackground(id: string, taskId: string): Promise<{ stopped: boolean }> {
+    return this.core.comms.stopBackground(id, taskId);
   }
 
   setEffort(id: string, effort: Effort): Agent {

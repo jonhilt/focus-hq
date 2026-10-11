@@ -136,6 +136,7 @@ export class Store {
       agent.task ??= 'issue'; // saved before agents could be seated on a conflicting PR
       agent.helpers = undefined; // a lead's subagents and workflows don't outlive the office
       agent.workflows = undefined;
+      agent.background = undefined;
       if (agent.held) {
         // whatever waited for your plan's limit to reset waits for the captain now
         agent.held = undefined;

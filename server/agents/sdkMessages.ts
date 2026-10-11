@@ -8,6 +8,7 @@ import { gitCommit } from './commits';
 import { appUrl, renderText, renderToolResult, renderToolUse, screenshotFrame, type ToolCall } from './render';
 import { scratchScript } from './scratch';
 import { TASK_TOOLS } from './tasks';
+import { BackgroundTracker } from './backgroundTasks';
 import type { RunHooks } from './types';
 import { type WorkflowPermits, workflowProgress } from './workflows';
 
@@ -31,6 +32,10 @@ export interface RunContext {
   workflows: Set<string>;
   /** Which workflows' agents may run their tools without asking. Missing in a context that doesn't ask. */
   permits?: WorkflowPermits;
+  /** The session's background commands and monitors. Missing in a context that doesn't follow them. */
+  tracker?: BackgroundTracker;
+  /** The helper that made each Agent call a helper made (by the call's id), so the helper it starts knows its parent. */
+  parents?: Map<string, string>;
   /** Subagents (by Agent tool call) whose model we've reported. */
   modelled: Set<string>;
   /** The scratch dir (a local session's), and the Bash calls running scripts from it: probes, until their results come. */
@@ -58,8 +63,24 @@ export interface TurnResult {
   structured?: unknown;
 }
 
+/** Tells the hooks what a message says about the session's background commands and monitors (`BackgroundTracker`). */
+function followBackground(msg: SDKMessage, ctx: RunContext, hooks: RunHooks): void {
+  const tracker = ctx.tracker;
+  if (!tracker || !hooks.background) return;
+  const resultText = (b: { type: string; content?: unknown }): string[] =>
+    b.type !== 'tool_result' ? []
+    : typeof b.content === 'string' ? [b.content]
+    : Array.isArray(b.content) ? (b.content as { type: string; text?: string }[]).flatMap((c) => (c.type === 'text' && c.text ? [c.text] : []))
+    : [];
+  const events = msg.type === 'system' ? tracker.system(msg as Parameters<BackgroundTracker['system']>[0])
+    : msg.type === 'user' && Array.isArray(msg.message.content) ? msg.message.content.flatMap((b) => resultText(b).flatMap((t) => tracker.toolResult(t)))
+    : [];
+  for (const e of events) hooks.background(e);
+}
+
 /** Renders one SDK message; returns the outcome when it is a turn result. */
 export function handleMessage(msg: SDKMessage, ctx: RunContext, hooks: RunHooks): TurnResult | null {
+  followBackground(msg, ctx, hooks);
   switch (msg.type) {
     case 'system':
       systemMessage(msg, ctx, hooks);
@@ -153,7 +174,7 @@ function taskStarted(msg: SDKTaskStartedMessage, ctx: RunContext, hooks: RunHook
     // a subagent: known by the Agent tool call that started it, which its own messages point back to
     const id = msg.tool_use_id ?? msg.task_id;
     ctx.helpers.set(msg.task_id, id);
-    hooks.helper?.({ kind: 'started', id, description: msg.description, type: msg.subagent_type });
+    hooks.helper?.({ kind: 'started', id, description: msg.description, type: msg.subagent_type, parent: ctx.parents?.get(id) });
     const prompt = msg.tool_use_id ? ctx.calls.get(msg.tool_use_id)?.input.prompt : undefined;
     hooks.helperLines?.(id, helperBrief(msg.description, prompt));
   }
@@ -251,6 +272,8 @@ function assistantBlock(block: ContentBlock, parent: string | null, ctx: RunCont
 
 function toolUse(id: string, call: ToolCall, parent: string | null, ctx: RunContext, hooks: RunHooks): void {
   ctx.calls.set(id, call);
+  // a helper starting a helper of its own: the one it starts is known by this call
+  if (parent !== null && (call.name === 'Agent' || call.name === 'Task')) ctx.parents?.set(id, parent);
   ctx.lastUrl = appUrl(call) ?? ctx.lastUrl;
   const rendered = renderToolUse(call.name, call.input, ctx.cwd);
   say(hooks, parent, rendered.lines);
