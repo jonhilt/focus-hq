@@ -8,7 +8,7 @@ One module, `transporter_room`, which the browser stands out in the world three 
 (client/src/world/layout.ts: transporterRoomAt) and dresses (world/transporterRoom.ts). Nobody walks in: you beam in
 and out, so its door is sealed, for show. Its origin is the middle of its floor; the platform runs along its back wall
 (+Y), three tiers of six pads stepping up from the front, with the transporter console in front of it facing it, the
-pattern buffer's columns in niches either side of it, the tactical display on the starboard wall (+X) and the door on
+pattern buffer's columns in niches either side of it, the tactical display turned out from the starboard wall (+X) and the door on
 the port wall. Only the room is here: who stands on the pads, the rings' colours, the buffer's glow and what the screens
 show are the browser's.
 """
@@ -20,7 +20,7 @@ import bpy
 from mathutils import Matrix, Vector
 
 from command_deck import profile, wall_materials
-from kit import (CONSOLE_TOP, DOOR_H, HULL, LCARS, annulus, bezel, box, collide_object, collider, cylinder, door_frame,
+from kit import (CONSOLE_TOP, DOOR_H, HULL, LCARS, annulus, bezel, box, collide_footprint, collide_object, collider, cylinder, door_frame,
                  facing, interact, link, marker, material, mesh_object, module, panel, part, polygon, prism, sign, toon,
                  unlit, walls)
 
@@ -51,12 +51,16 @@ CANOPY_BOTTOM = HEIGHT - 0.3
 #: the transporter console: in front of the platform's middle, facing it, whoever stands at it on its front side
 CONSOLE_Y = -0.55
 CONSOLE_L = 1.7
-#: where you arrive: at the console, where its operator stands, close enough to see over it to the front tier's pads
-ARRIVE_Y = CONSOLE_Y - 0.8
-#: the tactical display on the starboard wall, where it's in view from the console turning a little to starboard
+#: where you arrive: behind the console, far enough back to take in the whole platform and the tactical display at
+#: once, turned a little to starboard between them, the console in front of you
+ARRIVE_Y = CONSOLE_Y - 2.55
+ARRIVE_LOOK = (1.6, 2.0)
+#: the tactical display on the starboard wall, hinged out from it at its front end (nearest the door's wall) and turned
+#: TACTICAL_TURN towards the room, so it faces where you arrive rather than across the room
 TACTICAL_W = 3.6
 TACTICAL_H = 2.0
-TACTICAL_Y = 1.2
+TACTICAL_HINGE = -0.5
+TACTICAL_TURN = math.radians(25)
 TACTICAL_BOTTOM = 1.25
 #: the pattern buffer's readout, on the port wall beside its niche
 BUFFER_W = 1.0
@@ -277,12 +281,17 @@ def transporter_room():
     starboard = Matrix.Rotation(math.pi / 2, 4, 'Z')
     sealed_door(Matrix.Translation((-HALF_W, DOOR_Y, 0)) @ port)
 
-    # the tactical display, in a bezel standing out of the starboard wall
-    wall = Matrix.Translation((HALF_W, TACTICAL_Y, 0)) @ starboard
+    # the tactical display, in a bezel hinged out from the starboard wall at its front end, turned to face where you arrive
+    along = Vector((-math.sin(TACTICAL_TURN), math.cos(TACTICAL_TURN)))
+    middle = Vector((HALF_W - 0.05, TACTICAL_HINGE)) + along * (TACTICAL_W / 2)
+    out = Vector((-math.cos(TACTICAL_TURN), -math.sin(TACTICAL_TURN)))
+    wall = Matrix.Translation((middle.x, middle.y, 0)) @ Matrix.Rotation(facing(middle, middle + out), 4, 'Z')
     bezel('tactical display frame', TACTICAL_W, TACTICAL_H, 0.1, 0.12, 0.14, toon(HULL['frame']),
           (0, 0, TACTICAL_BOTTOM + TACTICAL_H / 2), wall)
     panel('tactical display', TACTICAL_W, TACTICAL_H,
           material('#000000', surface='screen', screen='transporter-tactical'), (0, 0.07, TACTICAL_BOTTOM), wall)
+    # it hangs at head height, so keep the player out from under it (and out of the gap behind it)
+    collide_footprint(wall, -TACTICAL_W / 2 - 0.12, TACTICAL_W / 2 + 0.12, -0.1, 0.2)
 
     # LCARS readouts either side on the front wall, behind whoever's at the console
     for i, x in enumerate((-2.3, 2.3)):
@@ -291,7 +300,7 @@ def transporter_room():
         panel(f'front readout {i}', 1.2, 0.7, material('#000000', surface='readout', seed=81 + i, w=1.2, h=0.7),
               (0, 0.044, 1.35), f)
 
-    marker('place transporter room', 'place', (0, ARRIVE_Y, 0), yaw=0.0, label='Transporter room')
+    marker('place transporter room', 'place', (0, ARRIVE_Y, 0), yaw=facing((0, ARRIVE_Y), ARRIVE_LOOK), label='Transporter room')
     marker('area transporter room', 'area', (0, NICHE_DEEP / 2, 1),
            scale=(HALF_W + 0.1, HALF_D + NICHE_DEEP / 2 + 0.1, 1), label='Transporter room')
     # the feed's camera, looking along its +Y at the platform: turned towards it, then tilted down to it

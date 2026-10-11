@@ -286,6 +286,11 @@ export class TeamStation {
     return !!this.operations[i]?.current;
   }
 
+  /** Transporter room `i`'s monitor in the briefing room, to tell whether it's in view. */
+  feedScreen(i: number): THREE.Mesh | undefined {
+    return this.feeds[i]?.picture;
+  }
+
   /** The pictures the feeds draw each room into (TransporterFeeds), for the monitors of the rooms in use to show. */
   showFeeds(pictures: THREE.Texture[]): void {
     for (const mat of this.live ?? []) mat.dispose();

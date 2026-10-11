@@ -548,7 +548,7 @@ async function main() {
       hud.setLocation(where.label, where.projectId ? state.project(where.projectId)?.color : undefined);
     }
     // each drawn with only its own part of the ship: a transporter room's feed, the doorway's far side, then where you are
-    feeds.render(scene, world, camera.position, now);
+    feeds.render(scene, world, camera, now);
     portalView.render(scene, camera, world.portals, (at) => world.reveal(at));
     world.reveal(camera.position);
     view.render(scene, camera);

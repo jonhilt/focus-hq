@@ -5,12 +5,13 @@ import type { TeamStation } from './teamStation';
 // The live feeds from a team station's transporter rooms, on the monitors down its briefing room's port wall: each
 // room seen from its camera up over the door (TransporterRoom.camera), drawn as the screen draws the ship (frame.ts:
 // the outlines and the speech bubbles too) into a small picture of its own. Only while the captain's in that briefing
-// room, only the rooms with a workflow in them, and a few times a second, one feed a frame at most.
+// room, only the rooms with a workflow in them whose monitor is in view, and a few times a second, one feed a frame at
+// most: each feed is a whole extra frame to draw.
 
 /** A feed's picture, in pixels: the monitors' 16:9. */
 export const FEED_SIZE = new THREE.Vector2(512, 288);
 /** How often each feed is drawn, a second. */
-const FEED_FPS = 12;
+const FEED_FPS = 8;
 
 /** What the feeds need of the world: the briefing room the camera's in, and drawing only the part of the ship at a point. */
 export interface FeedWorld {
@@ -27,26 +28,33 @@ export class TransporterFeeds {
   private readonly drawn: number[] = [];
   private next = 0;
   private station: TeamStation | undefined;
+  private readonly view = new THREE.Frustum();
+  private readonly viewMatrix = new THREE.Matrix4();
 
   constructor(private readonly renderer: THREE.WebGLRenderer) {
     this.frame = new Frame(renderer, false, FEED_SIZE);
   }
 
   /**
-   * Draws the next feed due, if the camera's in a briefing room: before the frame, which then reveals the camera's own
-   * part of the ship again (World.reveal).
+   * Draws the next feed due, if the camera's in a briefing room and can see its monitor: before the frame, which then
+   * reveals the camera's own part of the ship again (World.reveal).
    */
-  render(scene: THREE.Scene, world: FeedWorld, eye: THREE.Vector3, now: number): void {
-    const station = world.stationAt(eye);
+  render(scene: THREE.Scene, world: FeedWorld, viewer: THREE.Camera, now: number): void {
+    const station = world.stationAt(viewer.position);
     if (station !== this.station) {
       this.station = station;
       if (station) this.watch(station, world);
     }
     if (!station) return;
+    this.view.setFromProjectionMatrix(this.viewMatrix.multiplyMatrices(viewer.projectionMatrix, viewer.matrixWorldInverse));
+    const inView = (i: number) => {
+      const screen = station.feedScreen(i);
+      return !!screen && this.view.intersectsObject(screen);
+    };
     const rooms = station.transporterRooms;
     for (let k = 0; k < rooms.length; k++) {
       const i = (this.next + k) % rooms.length;
-      if (!station.feedLive(i) || now - (this.drawn[i] ?? 0) < 1000 / FEED_FPS) continue;
+      if (!station.feedLive(i) || now - (this.drawn[i] ?? 0) < 1000 / FEED_FPS || !inView(i)) continue;
       this.drawn[i] = now;
       this.next = (i + 1) % rooms.length;
       const room = rooms[i];
