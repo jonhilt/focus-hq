@@ -67,3 +67,43 @@ export async function warmUp(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
     renderer.initTexture(texture);
   }
 }
+
+/** How many MB of pictures a frame sends ahead of a doorway, past the first (which always goes). */
+const AHEAD_MB = 4;
+/** How long (ms) the textures found in what's ahead are trusted before it's looked through again (a crew member arrived). */
+const RELOOK = 1000;
+
+/**
+ * Sends what's about to come into view through a doorway (World.ahead) to the GPU a few MB a frame as you near it,
+ * canvases and all, so it isn't all sent in the frame the doors open: entering a briefing room for the first time held
+ * a laptop's frame up for 290 ms while 22 screens and signs went at once.
+ */
+export class TextureFeed {
+  private found = new Map<THREE.Object3D, { textures: THREE.Texture[]; at: number }>();
+
+  constructor(private readonly renderer: THREE.WebGLRenderer) {}
+
+  update(ahead: THREE.Object3D[], now: number): void {
+    const found = new Map<THREE.Object3D, { textures: THREE.Texture[]; at: number }>();
+    let bytes = 0;
+    for (const root of ahead) {
+      let these = this.found.get(root);
+      if (!these || now - these.at > RELOOK) these = { textures: [...texturesIn(root)], at: now };
+      found.set(root, these);
+      for (const texture of these.textures) {
+        if (bytes > AHEAD_MB * 1e6 || !this.unsent(texture)) continue;
+        this.renderer.initTexture(texture);
+        const { width = 0, height = 0 } = texture.image as { width?: number; height?: number };
+        bytes += width * height * 4;
+      }
+    }
+    this.found = found;
+  }
+
+  /** Whether a texture has pixels the GPU hasn't been sent: never sent, or changed since. */
+  private unsent(texture: THREE.Texture): boolean {
+    const image = texture.image as { complete?: boolean } | null | undefined;
+    if (texture.version === 0 || !image || image.complete === false) return false;
+    return (this.renderer.properties.get(texture) as { __version?: number }).__version !== texture.version;
+  }
+}

@@ -12,6 +12,8 @@ interface Drawn {
   programs: number;
   textures: number;
   uploads: number;
+  /** Bytes of geometry sent to the GPU. */
+  buffers: number;
 }
 
 /**
@@ -38,9 +40,10 @@ export class FrameStats {
   private gpuMs: number | null = null;
   private last: Drawn | null = null;
   /** The programs, textures and uploads counted after the last frame, to tell what each frame added. */
-  private counted = { programs: 0, textures: 0, uploads: 0 };
+  private counted = { programs: 0, textures: 0, uploads: 0, buffers: 0 };
   private uploads = 0;
   private uploadBytes = 0;
+  private bufferBytes = 0;
   private lastShown = 0;
   private lastSample = 0;
   private lastSend = 0;
@@ -87,12 +90,12 @@ export class FrameStats {
     // a frame that slow is the previous one's doing: what it drew, and the GPU catching up with it
     if (interval > HITCH && this.last && this.hitches < HITCHES_PER_SAMPLE && document.visibilityState === 'visible') {
       this.hitches++;
-      this.lines.push({ kind: 'hitch', t: this.seconds(now), where: this.where, ms: Math.round(interval), busy: Math.round(this.last.busy), programs: this.last.programs, textures: this.last.textures, uploads: this.last.uploads, door: this.last.door });
+      this.lines.push({ kind: 'hitch', t: this.seconds(now), where: this.where, ms: Math.round(interval), busy: Math.round(this.last.busy), programs: this.last.programs, textures: this.last.textures, uploads: this.last.uploads, bufferKB: Math.round(this.last.buffers / 1e3), door: this.last.door });
     }
     const programs = info.programs?.length ?? 0;
     const textures = info.memory.textures;
-    this.last = { busy, door, programs: programs - this.counted.programs, textures: textures - this.counted.textures, uploads: this.uploads - this.counted.uploads };
-    this.counted = { programs, textures, uploads: this.uploads };
+    this.last = { busy, door, programs: programs - this.counted.programs, textures: textures - this.counted.textures, uploads: this.uploads - this.counted.uploads, buffers: this.bufferBytes - this.counted.buffers };
+    this.counted = { programs, textures, uploads: this.uploads, buffers: this.bufferBytes };
     this.shown.push(interval);
     // a frame that long is the tab hidden, not how fast frames go
     if (interval < 1000) this.window.push({ ms: interval, busy, door });
@@ -132,11 +135,14 @@ export class FrameStats {
       textures: info.memory.textures,
       uploads: this.uploads,
       uploadMB: Math.round(this.uploadBytes / 1e5) / 10,
+      bufferMB: Math.round(this.bufferBytes / 1e5) / 10,
       ...(gpu && { gpu }),
     });
     this.uploads = 0;
     this.uploadBytes = 0;
+    this.bufferBytes = 0;
     this.counted.uploads = 0;
+    this.counted.buffers = 0;
   }
 
   /** Sends the lines so far to the office: every few seconds, and as the page closes. */
@@ -167,7 +173,7 @@ export class FrameStats {
     ].join('\n');
   }
 
-  /** Counts the pictures (canvases and images) sent to the GPU, and their size. */
+  /** Counts the pictures (canvases and images) sent to the GPU, and their size, and the bytes of geometry. */
   private countUploads(gl: WebGL2RenderingContext): void {
     const methods = gl as unknown as Record<'texImage2D' | 'texSubImage2D', (...args: unknown[]) => void>;
     for (const name of ['texImage2D', 'texSubImage2D'] as const) {
@@ -181,5 +187,12 @@ export class FrameStats {
         upload(...args);
       };
     }
+    const buffers = gl as unknown as { bufferData: (...args: unknown[]) => void };
+    const bufferData = buffers.bufferData.bind(gl);
+    buffers.bufferData = (...args: unknown[]) => {
+      const data = args[1];
+      if (ArrayBuffer.isView(data) || data instanceof ArrayBuffer) this.bufferBytes += data.byteLength;
+      bufferData(...args);
+    };
   }
 }

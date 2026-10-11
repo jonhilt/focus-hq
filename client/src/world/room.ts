@@ -28,7 +28,7 @@ import { Beam } from './transporter';
 import { HULL, LCARS, lcarsSign, workstation } from './starship';
 import { FloorGlow, hover } from './hologram';
 import { OVERLAY_LAYER } from './frame';
-import { Portal } from './portal';
+import { AHEAD, Portal } from './portal';
 import { type StationSeat, TEAM_SCREEN, TeamStation, type TeamStationKit } from './teamStation';
 import type { TransporterRoom } from './transporterRoom';
 
@@ -569,6 +569,17 @@ export class ProjectRoom {
     return this.stations;
   }
 
+  /**
+   * What's about to come into view through a door `camera`'s nearing: the hall, from the hallway or one of its briefing
+   * rooms; a briefing room, from the hall.
+   */
+  ahead(camera: THREE.Vector3): THREE.Object3D[] {
+    const briefing = this.stations.find((s) => s.inside(camera));
+    if (briefing) return briefing.portal.near(camera, AHEAD) ? [this.group] : [];
+    if (!this.holds(camera)) return this.entrance.near(camera, AHEAD) ? [this.group] : [];
+    return this.stations.filter((s) => s.portal.near(camera, AHEAD)).map((s) => s.room);
+  }
+
   /** The team station whose briefing room a world position is in, if it's in one of this room's. */
   briefingRoomOf(p: THREE.Vector3): number | undefined {
     return this.stations.find((s) => s.inside(p))?.index;
@@ -595,8 +606,8 @@ export class ProjectRoom {
       this.rebuildPadds(board);
     }
     const inRoom = this.holds(eye);
-    // the hall's screens are seen from in it, through its door from the hallway, or through a briefing room's open door
-    const hallSeen = briefing ? briefing.portal.ajar : this.holds(camera) || this.entrance.ajar;
+    // the hall's screens are seen from in it, or through a door to it (the hallway's or a briefing room's) as you near it
+    const hallSeen = briefing ? briefing.portal.near(camera, AHEAD) : this.holds(camera) || this.entrance.near(camera, AHEAD);
     const hallView = (near: boolean): ScreenView => (!hallSeen ? 'unseen' : near ? 'near' : 'far');
     if (inRoom) this.planner.update(t, eye.distanceTo(this.planner.group.getWorldPosition(tmp)));
     this.opsScreen.maybeDraw(now, hallView(false), undefined, undefined);
@@ -617,7 +628,7 @@ export class ProjectRoom {
       const atHead = seen ? station.fromHead(seen) : 0;
       if (seen) for (const slot of [station.lead, ...station.helpers, station.reviewer]) slot.character?.update(t, atHead);
       const lead = station.lead.id;
-      const view: ScreenView = !station.room.visible ? 'unseen' : seen && station.fromScreen(seen) < 13 ? 'near' : 'far';
+      const view: ScreenView = !station.room.visible && !station.portal.near(camera, AHEAD) ? 'unseen' : seen && station.fromScreen(seen) < 13 ? 'near' : 'far';
       station.screen.maybeDraw(now, view, lead ? state.lines.get(lead) : undefined, lead ? state.browser.get(lead) : undefined);
     }
     for (const slot of this.desks) {

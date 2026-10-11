@@ -45,7 +45,8 @@ import { loadTrainingHall } from './world/hall';
 import { loadTeamStation } from './world/teamStation';
 import { stopAt } from './world/turbolift';
 import { TransporterFeeds } from './world/transporterFeeds';
-import { warmUp } from './world/warmUp';
+import { TextureFeed, warmUp } from './world/warmUp';
+import { patchTexturesOn } from './world/texturePatch';
 import { gpuFrame } from './world/gpuTimer';
 
 async function fontsReady(): Promise<void> {
@@ -91,6 +92,9 @@ async function main() {
   const portalView = new PortalView(renderer);
   const view = new SceneRenderer(renderer);
   const feeds = new TransporterFeeds(renderer);
+  // a blinking cursor's cell goes to the GPU on its own (texturePatch.ts), and a room you near goes ahead of you (warmUp.ts)
+  patchTexturesOn(renderer);
+  const feed = new TextureFeed(renderer);
 
   await fontsReady();
 
@@ -573,6 +577,7 @@ async function main() {
     const through = world.through(camera.position);
     if (through) player.transport(through.through, through.other.doorway.matrix);
     world.update(t, now, camera.position);
+    feed.update(world.ahead(camera.position), now);
     sound.listen(camera);
     if (now - lastPick > 90) {
       lastPick = now;

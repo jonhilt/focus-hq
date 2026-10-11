@@ -107,8 +107,9 @@ export class World {
   /**
    * Draws, from now on, only the part of the ship (regions.ts) that `at` is in: the camera's, before the frame's drawn,
    * and the far side's before a doorway draws it (PortalView). In a transporter room, only that room: a feed of one
-   * reveals from inside it (its `camera.at`) before it renders, and the camera's position puts things back. Null draws
-   * all of it.
+   * reveals from inside it (its `camera.at`) before it renders, and the camera's position puts things back. In a
+   * training hall, only that hall: the others stand out in the world beyond its walls, and from a briefing room's door
+   * the far ones' screens and signs would all be sent to the GPU at once. Null draws all of it.
    */
   reveal(at: THREE.Vector3 | null): void {
     const region: Region | null = at && this.culling ? regionAt(at, this.deckBoxes, (p) => this.inBriefingRoom(p), (p) => this.inHall(p), (p) => !!this.transporterRoomAt(p)) : null;
@@ -120,6 +121,9 @@ export class World {
     if (this.builder) {
       this.builder.group.visible = show.holodecks;
       this.builder.halls.visible = show.hall;
+      const inHall = (hall: ProjectRoom | VacantHall) => (hall.group.visible = region !== 'hall' || (!!at && hall.holds(at)));
+      this.rooms.forEach(inHall);
+      this.vacant.forEach(inHall);
     }
     this.briefingRooms.visible = show.briefing;
   }
@@ -127,6 +131,11 @@ export class World {
   private inHall(p: THREE.Vector3): boolean {
     for (const room of [...this.rooms.values(), ...this.vacant.values()]) if (room.holds(p)) return true;
     return false;
+  }
+
+  /** What's about to come into view through a door `camera`'s nearing (ProjectRoom.ahead). */
+  ahead(camera: THREE.Vector3): THREE.Object3D[] {
+    return [...this.rooms.values()].flatMap((room) => room.ahead(camera));
   }
 
   /** Every holodeck's team stations. */

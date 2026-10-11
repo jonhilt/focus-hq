@@ -114,6 +114,11 @@ export class Portal {
     far.doors.sense(Math.min(a, b), dt, true);
   }
 
+  /** Whether `eye` is within `range` (horizontally) of either end. */
+  near(eye: THREE.Vector3, range: number): boolean {
+    return this.ends.some((e) => Math.hypot(eye.x - e.doorway.matrix.elements[12], eye.z - e.doorway.matrix.elements[14]) < range);
+  }
+
   /** The end `eye` has just stepped into, if either: `through` it is where that takes you. */
   crossing(eye: THREE.Vector3): PortalEnd | null {
     for (const end of this.ends) {
@@ -122,6 +127,12 @@ export class Portal {
     return null;
   }
 }
+
+/**
+ * How near a doorway you are when what's through it is got ready to be seen (its screens drawn, its textures sent to
+ * the GPU a few a frame, warmUp.ts): its doors open at 1.75 m, most of a second's walk on.
+ */
+export const AHEAD = 5;
 
 /** How near an open doorway must be to draw what's through it: the doors only open when you're closer still. */
 const VIEW_RANGE = 12;

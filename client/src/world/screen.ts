@@ -6,8 +6,19 @@ import { plainTermLine } from '../../../shared/termText';
 import { canvasTexture, fitText, makeCanvas, MONO_FONT, roundRect, UI_FONT, wrap } from './canvas';
 import { flat } from './materials';
 import { type Pane, type PaneAt, paneAt, screenPanes, screenPrefs } from './screenPanes';
-import { cursorOn, redrawDue, type ScreenView } from './screenRedraw';
+import { BIG_REDRAW_EVERY, cursorOn, REDRAW_EVERY, redrawDue, type ScreenView } from './screenRedraw';
+import { patchTexture } from './texturePatch';
 import { LCARS, LCARS_FONT, LCARS_STATUS, lcarsFrame } from './starship';
+
+interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** A busy terminal's cursor. */
+const CURSOR = '#e6edf3';
 
 export const TERM_COLORS: Record<TermLine['kind'], string> = {
   system: '#8b949e',
@@ -50,6 +61,14 @@ export class StationScreen {
   private lastDraw = 0;
   /** Whether its cursor was on when it was last drawn. */
   private cursor = true;
+  /**
+   * Where the terminal's cursor blinks, in the canvas's pixels: the cell round it (`at`) and the cursor within it.
+   * Null while there's no terminal on the screen.
+   */
+  private cell: { at: Rect; cursor: Rect } | null = null;
+  /** The cell as it looks without the cursor, and what's sent to the GPU as the cursor blinks. */
+  private readonly under = makeCanvas(1, 1);
+  private readonly patch = makeCanvas(1, 1);
   private image: HTMLImageElement | null = null;
   private imageSrc = '';
   /** The pictures of what the lead's shown, by URL: null while one loads. */
@@ -98,12 +117,39 @@ export class StationScreen {
     }
     // the cursor blinks while the agent is busy
     const blinking = !!this.agent && !['done', 'error', 'stopped'].includes(this.agent.status);
-    if (!redrawDue({ changed: this.dirty, blinking, at: this.lastDraw, cursor: this.cursor }, view, now)) return;
+    const every = this.size === BIG_SCREEN ? BIG_REDRAW_EVERY : REDRAW_EVERY;
+    if (!redrawDue({ changed: this.dirty, blinking, at: this.lastDraw, cursor: this.cursor }, view, now, every)) return;
+    this.cursor = cursorOn(now);
+    // nothing new but the cursor: only its cell goes to the GPU
+    if (!this.dirty && this.blink()) return;
     this.dirty = false;
     this.lastDraw = now;
-    this.cursor = cursorOn(now);
     this.draw(lines ?? [], frame);
     this.texture.needsUpdate = true;
+  }
+
+  /** Turns the cursor on or off in its cell, on the canvas and the GPU; false if the whole canvas has to go instead. */
+  private blink(): boolean {
+    const { cell } = this;
+    if (!cell) return false;
+    const { canvas, ctx } = this.patch;
+    if (canvas.width !== cell.at.w || canvas.height !== cell.at.h) {
+      canvas.width = cell.at.w;
+      canvas.height = cell.at.h;
+    }
+    ctx.drawImage(this.under.canvas, 0, 0);
+    if (this.cursor) {
+      ctx.fillStyle = CURSOR;
+      ctx.fillRect(cell.cursor.x - cell.at.x, cell.cursor.y - cell.at.y, cell.cursor.w, cell.cursor.h);
+    }
+    // the canvas keeps up too, for whenever it's sent whole
+    const main = this.c.ctx;
+    main.save();
+    main.setTransform(1, 0, 0, 1, 0, 0);
+    main.drawImage(canvas, cell.at.x, cell.at.y);
+    main.restore();
+    if (!patchTexture(this.texture, canvas, cell.at.x, cell.at.y)) this.texture.needsUpdate = true;
+    return true;
   }
 
   private draw(lines: TermLine[], frame: BrowserFrame | undefined): void {
@@ -114,6 +160,7 @@ export class StationScreen {
     const H = canvas.height / this.size.scale;
     const agent = this.agent;
     this.panes = [];
+    this.cell = null;
     if (!agent) {
       const area = lcarsFrame(ctx, W, H, { title: 'Focus OS', color: LCARS.periwinkle, seed: 47 });
       ctx.textAlign = 'left';
@@ -250,10 +297,12 @@ export class StationScreen {
       ctx.fillStyle = TERM_COLORS[row.kind];
       ctx.fillText(row.text, x + pad, y + pad + i * lineH);
     });
-    // blinking cursor
+    // blinking cursor, its cell kept as it is without it, for the blinks between drawings (blink)
+    const cursor = { x: x + pad, y: y + pad + Math.min(rows.length, maxRows - 1) * lineH + 2, w: charW, h: lineH - 4 };
+    this.keepCell(cursor);
     if (this.cursor) {
-      ctx.fillStyle = '#e6edf3';
-      ctx.fillRect(x + pad, y + pad + Math.min(rows.length, maxRows - 1) * lineH + 2, charW, lineH - 4);
+      ctx.fillStyle = CURSOR;
+      ctx.fillRect(cursor.x, cursor.y, cursor.w, cursor.h);
     }
     ctx.restore();
   }
@@ -401,6 +450,18 @@ export class StationScreen {
   /** Lets go of the pictures the screen no longer shows. */
   private keepPictures(srcs: string[]): void {
     for (const src of this.pictures.keys()) if (!srcs.includes(src)) this.pictures.delete(src);
+  }
+
+  /** Copies the pixels round the cursor (`cursor`, in the layout's units) before it's drawn. */
+  private keepCell(cursor: Rect): void {
+    const { scale } = this.size;
+    const px = { x: cursor.x * scale, y: cursor.y * scale, w: cursor.w * scale, h: cursor.h * scale };
+    const at = { x: Math.floor(px.x) - 1, y: Math.floor(px.y) - 1, w: Math.ceil(px.w) + 3, h: Math.ceil(px.h) + 3 };
+    const { canvas, ctx } = this.under;
+    canvas.width = at.w;
+    canvas.height = at.h;
+    ctx.drawImage(this.c.canvas, at.x, at.y, at.w, at.h, 0, 0, at.w, at.h);
+    this.cell = { at, cursor: px };
   }
 
   dispose(): void {

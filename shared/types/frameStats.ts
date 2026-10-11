@@ -54,6 +54,8 @@ export interface FrameStatsSample {
   /** Pictures sent to the GPU over the second (canvases and images), and how many MB. */
   uploads: number;
   uploadMB: number;
+  /** Geometry sent to the GPU over the second (MB): a mesh's, the first time it's drawn. */
+  bufferMB?: number;
   /** GPU time per frame (ms) by pass, as `<frame>.<pass>`: the screen's, an open doorway's far side, a transporter feed. */
   gpu?: Record<string, number>;
 }
@@ -66,10 +68,11 @@ export interface FrameStatsHitch {
   /** How long the frame took, and how much of that the main thread was busy (ms). */
   ms: number;
   busy: number;
-  /** Shader programs and textures new in it, and pictures sent to the GPU. */
+  /** Shader programs and textures new in it, pictures sent to the GPU, and geometry (KB). */
   programs: number;
   textures: number;
   uploads: number;
+  bufferKB?: number;
   /** Whether it drew an open doorway's far side as well. */
   door: boolean;
 }

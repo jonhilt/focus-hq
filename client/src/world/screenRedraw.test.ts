@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLINK, cursorOn, REDRAW_EVERY, redrawDue, type ScreenDrawn } from './screenRedraw';
+import { BIG_REDRAW_EVERY, BLINK, cursorOn, REDRAW_EVERY, redrawDue, type ScreenDrawn } from './screenRedraw';
 
 const drawn = (over: Partial<ScreenDrawn> = {}): ScreenDrawn => ({ changed: false, blinking: false, at: 0, cursor: true, ...over });
 
@@ -27,5 +27,11 @@ describe('redrawDue', () => {
     const at = 4 * BLINK;
     expect(redrawDue(drawn({ blinking: true, at, cursor: cursorOn(at) }), 'far', 5 * BLINK)).toBe(false);
     expect(redrawDue(drawn({ blinking: false, at, cursor: cursorOn(at) }), 'near', 5 * BLINK)).toBe(false);
+  });
+
+  it('draws a big screen that’s changed less often', () => {
+    const screen = drawn({ changed: true, at: 1000 });
+    expect(redrawDue(screen, 'near', 1000 + REDRAW_EVERY.near, BIG_REDRAW_EVERY)).toBe(false);
+    expect(redrawDue(screen, 'near', 1000 + BIG_REDRAW_EVERY.near, BIG_REDRAW_EVERY)).toBe(true);
   });
 });

@@ -1,12 +1,17 @@
 // When a station's screen (screen.ts) is drawn again. Each drawing is a whole canvas sent to the GPU again, mipmaps
 // and all (a briefing room's viewscreen is 2400 × 1000), so a screen is drawn only when there's something new to see:
-// what it shows has changed, or, close up, its cursor's due to blink.
+// what it shows has changed, or, close up, its cursor's due to blink (which sends only the cursor's cell).
 
 /** How the captain sees a screen: close enough to read, further off, or not at all (in another part of the ship). */
 export type ScreenView = 'near' | 'far' | 'unseen';
 
 /** How often (ms) a screen that's changed is drawn again: often enough to follow close up, now and then from further off. */
 export const REDRAW_EVERY: Record<Exclude<ScreenView, 'unseen'>, number> = { near: 120, far: 1500 };
+/**
+ * A briefing room's viewscreen, less often: sending its 2400 × 1000 canvas holds a frame up for 70 ms on a laptop's
+ * integrated GPU, so a lead streaming output at the laptop's pace would stall the room every few frames.
+ */
+export const BIG_REDRAW_EVERY: Record<Exclude<ScreenView, 'unseen'>, number> = { near: 1000, far: 2000 };
 /** How long (ms) a busy terminal's cursor stays on, and then off. */
 export const BLINK = 500;
 
@@ -30,8 +35,8 @@ export interface ScreenDrawn {
  * Whether a screen's due to be drawn again at `now`: once it's changed, as often as its view allows; while its agent's
  * busy, close up, as its cursor blinks. Out of sight it waits, and is drawn as it comes into view.
  */
-export function redrawDue(screen: ScreenDrawn, view: ScreenView, now: number): boolean {
+export function redrawDue(screen: ScreenDrawn, view: ScreenView, now: number, every = REDRAW_EVERY): boolean {
   if (view === 'unseen') return false;
-  if (screen.changed) return now - screen.at >= REDRAW_EVERY[view];
+  if (screen.changed) return now - screen.at >= every[view];
   return screen.blinking && view === 'near' && cursorOn(now) !== screen.cursor;
 }

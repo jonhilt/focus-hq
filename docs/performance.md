@@ -9,8 +9,8 @@ It's logged too. The browser sends the office a sample of its frames each second
 Each line is JSON (`shared/types/frameStats.ts`):
 
 - **`session`**, first: the GPU, the browser, the screen and window sizes, the query string, and whether shaders compile off the main thread (`parallelCompile`) and passes can be timed on the GPU (`gpuTimer`).
-- **`sample`**, a second's frames: where you were, frame times and main-thread time (median, 95th percentile, slowest), pixel ratio and size, draw calls and triangles, how many frames also drew an open doorway's far side (`door`), shader programs and textures on the GPU, pictures sent to the GPU (`uploads`, `uploadMB`), and GPU time per frame by pass (`gpu`: `screen.scene`, `screen.outlines`, `door.scene`…; `screen.final`, the pass to the screen, can include waiting for the screen).
-- **`hitch`**, a slow frame: how long it took, how much of that the main thread was busy, and the shader programs, textures and pictures the frame before it added (the slow frame is the one before's doing).
+- **`sample`**, a second's frames: where you were, frame times and main-thread time (median, 95th percentile, slowest), pixel ratio and size, draw calls and triangles, how many frames also drew an open doorway's far side (`door`), shader programs and textures on the GPU, pictures sent to the GPU (`uploads`, `uploadMB`), geometry sent to it (`bufferMB`), and GPU time per frame by pass (`gpu`: `screen.scene`, `screen.outlines`, `door.scene`…; `screen.final`, the pass to the screen, can include waiting for the screen).
+- **`hitch`**, a slow frame: how long it took, how much of that the main thread was busy, and the shader programs, textures, pictures and geometry (`bufferKB`) the frame before it added (the slow frame is the one before's doing).
 
 `?adapt=0` holds the pixel ratio where it starts, rather than letting it drop while frames run slow (`client/src/resolution.ts`), so runs compare.
 
@@ -22,5 +22,7 @@ Walks a busy demo office on the GPU in headless Chromium, from the bridge into a
 
 - Only the part of the ship you're in is drawn (`world/regions.ts`); an open doorway draws its far side as well (`world/portal.ts`).
 - Before you come aboard, `world/warmUp.ts` compiles every shader and sends the baked lighting to the GPU, so walking into a room for the first time doesn't stall.
-- A station's screen is drawn again only when there's something new to see from where you are (`world/screenRedraw.ts`).
+- In a training hall, only that hall is drawn, not the other projects' halls beyond its walls.
+- As you near a door (5 m; it opens at 1.75 m), what's through it is got ready: its screens are drawn, and its textures go to the GPU a few MB a frame (`TextureFeed` in `world/warmUp.ts`), rather than all in the frame the doors open.
+- A station's screen is drawn again only when there's something new to see from where you are (`world/screenRedraw.ts`); a briefing room's viewscreen at most once a second, since sending its 2400 × 1000 canvas holds a laptop's frame up for 70 ms. A busy terminal's blinking cursor sends only its own few pixels (`world/texturePatch.ts`).
 - The pixel ratio drops while frames wait on the GPU (`client/src/resolution.ts`).
