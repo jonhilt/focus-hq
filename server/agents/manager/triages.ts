@@ -7,7 +7,7 @@ import type { PullRequestDetail } from '../../github/provider';
 import { GitHub, type GitHubError } from '../../github/service';
 import { errorMessage, truncate } from '../../util';
 import { Triage, Workspace } from '../services';
-import { triageWorkspaceId } from '../worktrees';
+import { reviewCheckoutId, triageWorkspaceId } from '../worktrees';
 import { type Core, type ManagerServices, Part } from './core';
 
 /** Stuck pull requests: the room's operations officer looks at one and does one thing about it. */
@@ -78,7 +78,7 @@ export class Triages extends Part {
             officer,
             repo: review.repo,
             pr,
-            cwd: workspace.dir(id),
+            cwd: workspace.dir(reviewCheckoutId(id, review.repo, review.number)),
             reason,
             review,
             checks,

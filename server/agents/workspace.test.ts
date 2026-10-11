@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { cherryPick, freshBranch, head, unshippedCommits } from './workspace';
+import { paths } from '../config';
+import { cherryPick, freshBranch, head, removeFolder, unshippedCommits } from './workspace';
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-workspace-'));
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
@@ -83,5 +84,37 @@ describe('the lead’s workspace', () => {
     expect(fs.readFileSync(path.join(lead, 'saved.ts'), 'utf8')).toBe('save and list');
     // the old branch keeps its commits
     expect(git(lead, 'rev-parse', 'focus/slice-1')).toBe(next);
+  });
+});
+
+describe('removing a folder', () => {
+  it('moves it aside for the sweep when it can’t be deleted, so its path is free again', async () => {
+    const workspaces = path.join(tmp, 'workspaces');
+    fs.mkdirSync(workspaces, { recursive: true });
+    const was = paths.workspaces;
+    paths.workspaces = workspaces;
+    const dir = path.join(workspaces, 'qa_lead_p1_ab', 'acme__api-pr7');
+    const stuck = path.join(dir, 'node_modules', '.vite');
+    fs.mkdirSync(stuck, { recursive: true });
+    fs.writeFileSync(path.join(stuck, 'deps.json'), '{}');
+    // a folder whose entries can't be unlinked fails the delete, as one still being written to does
+    fs.chmodSync(stuck, 0o555);
+    try {
+      await removeFolder(dir);
+      expect(fs.existsSync(dir)).toBe(false);
+      const aside = fs.readdirSync(workspaces).filter((n) => n.startsWith('trash_acme__api-pr7_'));
+      expect(aside).toHaveLength(1);
+      fs.chmodSync(path.join(workspaces, aside[0], 'node_modules', '.vite'), 0o755);
+    } finally {
+      paths.workspaces = was;
+    }
+  });
+
+  it('deletes it when nothing holds it, and is fine when it’s already gone', async () => {
+    const dir = path.join(tmp, 'gone-soon');
+    fs.mkdirSync(path.join(dir, 'a', 'b'), { recursive: true });
+    await removeFolder(dir);
+    expect(fs.existsSync(dir)).toBe(false);
+    await removeFolder(dir);
   });
 });

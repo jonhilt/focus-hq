@@ -8,7 +8,7 @@ import { sameCommit } from '../../shared/qa';
 import { autoMergePlan, conflictStages, type MergeRule, mergeRules } from './conflicts';
 import { checkCommands, rangeDiffUnchanged, type SinceVerdict } from './retest';
 import type { BaseMerge, BranchState, ChecksRun } from './types';
-import { claimBranch, heldMessage, orphanedWorkspaces, parseWorktrees, retryLockRace } from './worktrees';
+import { claimBranch, heldMessage, orphanedWorkspaces, parseWorktrees, retryLockRace, reviewCheckoutId, trashName } from './worktrees';
 
 const lock = new KeyedLock();
 /** One run of the checks at a time in each repo's checks folder. */
@@ -101,14 +101,33 @@ export async function reopenWorktree(repo: string, agentId: string, branch: stri
 }
 
 async function removeDir(mirror: string, dir: string): Promise<void> {
-  await git(mirror, ['worktree', 'remove', '--force', dir]).catch(() => fs.rmSync(dir, { recursive: true, force: true }));
+  await git(mirror, ['worktree', 'remove', '--force', dir]).catch(() => removeFolder(dir));
 }
 
+/**
+ * Deletes `dir`, retrying while something still writes into it (a dev server or an install a session left running makes
+ * the delete fail with ENOTEMPTY or EBUSY). If it still won't go, it's renamed aside into data/workspaces, where the sweep
+ * deletes it later, so the path is free either way. Only fails when it can't even be renamed.
+ */
+export async function removeFolder(dir: string): Promise<void> {
+  try {
+    await fs.promises.rm(dir, { recursive: true, force: true, maxRetries: 4, retryDelay: 250 });
+  } catch (err) {
+    const aside = path.join(paths.workspaces, trashName(dir, randomBytes(4).toString('hex')));
+    await fs.promises.rename(dir, aside);
+    console.warn(`Couldn't delete ${dir} (${errorMessage(err)}): moved it to ${aside} for the sweep`);
+  }
+}
+
+/** Removes the agent's checkout (`agentId` may be a folder inside a workspace, like a reviewer's checkout of one PR). */
 export async function removeWorktree(repo: string, agentId: string): Promise<void> {
   const dir = path.join(paths.workspaces, agentId);
   if (!fs.existsSync(dir)) return;
-  await lock.with(repo, () => git(mirrorDir(repo), ['worktree', 'remove', '--force', dir])).catch(() => {
-    fs.rmSync(dir, { recursive: true, force: true });
+  const mirror = mirrorDir(repo);
+  await lock.with(repo, async () => {
+    // a reviewer's workspace holds a checkout per PR rather than being one, so git won't remove it: delete it, and prune
+    await git(mirror, ['worktree', 'remove', '--force', dir]).catch(() => removeFolder(dir));
+    await git(mirror, ['worktree', 'prune']).catch(() => undefined);
   });
 }
 
@@ -178,16 +197,22 @@ async function detachAt(mirror: string, dir: string, sha: string): Promise<void>
     await git(dir, ['clean', '-fd']); // untracked files from last time; ignored ones (node_modules, bin/obj) stay
   } else {
     // first checkout here, or one broken by an earlier failure or a re-cloned mirror
-    fs.rmSync(dir, { recursive: true, force: true });
+    await removeFolder(dir);
     await git(mirror, ['worktree', 'prune']);
     fs.mkdirSync(path.dirname(dir), { recursive: true });
     await git(mirror, ['worktree', 'add', '--detach', dir, sha]);
   }
 }
 
-/** The QA officer's checkout: a pull request's head, detached, in their workspace folder. Returns the commit. */
-export function checkoutPullRequest(repo: string, agentId: string, number: number): Promise<string> {
-  return checkoutDetached(repo, path.join(paths.workspaces, agentId), `refs/pull/${number}/head`, 'refs/focus/qa');
+/**
+ * A reviewer's checkout of a pull request's head, detached, in a folder of its own for that PR inside their workspace
+ * (`reviewCheckoutId`). Returns the commit.
+ */
+export async function checkoutPullRequest(repo: string, agentId: string, number: number): Promise<string> {
+  const workspace = path.join(paths.workspaces, agentId);
+  // a workspace from before reviewers kept a folder per PR is itself a checkout: it goes, rather than nest checkouts in it
+  if (fs.existsSync(path.join(workspace, '.git'))) await removeFolder(workspace);
+  return checkoutDetached(repo, path.join(paths.workspaces, reviewCheckoutId(agentId, repo, number)), `refs/pull/${number}/head`, 'refs/focus/qa');
 }
 
 const isAncestor = (dir: string, a: string, b: string) => git(dir, ['merge-base', '--is-ancestor', a, b]).then(() => true, () => false);

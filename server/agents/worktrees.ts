@@ -88,3 +88,13 @@ export async function retryLockRace<A>(fetch: () => Promise<A>, wait: () => Prom
     }
   }
 }
+
+/**
+ * Where a reviewer (a QA officer, or the room's operations officer looking at a stuck PR) checks pull request `number`
+ * out: a folder of its own inside the reviewer's workspace, one per PR, so a goal's reviewer going from one repo's PR to
+ * another's never checks out over a folder something is still using, and a re-test of the same PR keeps its installs.
+ */
+export const reviewCheckoutId = (reviewerId: string, repo: string, number: number) => `${reviewerId}/${repo.replace('/', '__')}-pr${number}`;
+
+/** What a folder that couldn't be deleted is renamed to, in data/workspaces: owned by no one, so the sweep deletes it later. */
+export const trashName = (dir: string, suffix: string) => `trash_${path.basename(dir)}_${suffix}`;

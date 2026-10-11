@@ -15,6 +15,7 @@ import { applyTaskTool } from '../tasks';
 import { applyWorkflowEvent, transcriptLines, WORKFLOW_LINGER_MS } from '../workflows';
 import { committedWaypoint, endedProbe, launchedProbe } from '../waypoints';
 import { applyBackgroundEvent, BACKGROUND_LINGER_MS, OUTPUT_TAIL, outputLines } from '../backgroundTasks';
+import { reviewCheckoutId } from '../worktrees';
 import { type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN } from '../types';
 import { EmptyRepository, FINISHED, type ManagerServices, Part, Refused, ReportGone, type Runtime, withNotes, type WorkError } from './core';
 
@@ -220,7 +221,7 @@ export class AgentSessions extends Part {
     return {
       agentId: agent.id,
       agentName: agent.name,
-      cwd: this.runtime.runSync(Workspace.use((w) => Effect.succeed(w.dir(agent.id)))),
+      cwd: this.runtime.runSync(Workspace.use((w) => Effect.succeed(w.dir(agent.task === 'review' ? reviewCheckoutId(agent.id, agent.repo, agent.issue.number) : agent.id)))),
       prompt,
       systemAppend: instructions,
       resumeSessionId,

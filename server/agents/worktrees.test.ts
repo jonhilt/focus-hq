@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CommandError } from '../util';
-import { claimBranch, heldMessage, isRefLockRace, orphanedWorkspaces, parseWorktrees, retryLockRace } from './worktrees';
+import { claimBranch, heldMessage, isRefLockRace, orphanedWorkspaces, parseWorktrees, retryLockRace, reviewCheckoutId, trashName } from './worktrees';
 
 const porcelain = `worktree /data/repos/acme__shop
 HEAD aca864f97ead8ad492cb364ebc49dfa3cbe1de51
@@ -147,5 +147,18 @@ describe('orphanedWorkspaces', () => {
 
   it('keeps everything when every folder has an owner', () => {
     expect(orphanedWorkspaces(['agent_a', 'triage_p1'], ['agent_a'], ['p1'])).toEqual([]);
+  });
+});
+
+describe('a reviewer’s checkouts', () => {
+  it('keeps one folder per pull request inside the reviewer’s workspace, so two repos’ PRs never share one', () => {
+    expect(reviewCheckoutId('qa_lead_p1_ab', 'acme/api', 7)).toBe('qa_lead_p1_ab/acme__api-pr7');
+    expect(reviewCheckoutId('qa_lead_p1_ab', 'acme/web', 7)).not.toBe(reviewCheckoutId('qa_lead_p1_ab', 'acme/api', 7));
+  });
+
+  it('moves a folder that won’t delete to one the sweep owns no one for', () => {
+    const name = trashName('/data/workspaces/qa_lead_p1_ab/acme__api-pr7', 'c0ffee');
+    expect(name).toBe('trash_acme__api-pr7_c0ffee');
+    expect(orphanedWorkspaces([name, 'qa_lead_p1_ab'], ['qa_lead_p1_ab'], [])).toEqual([name]);
   });
 });

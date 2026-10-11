@@ -9,7 +9,7 @@ Every holodeck has a QA officer in blue, sitting at a station in the control rin
 - **How hard they think:** set at the QA station, for the officer and every goal's reviewer alike, from the next review (the model's default to begin with).
 - **Which model:** **Model for QA** in the manager's Settings tab, for every room's officer and every goal's reviewer, from their next review: reviewing is lighter work than building, so a cheaper model like `claude-sonnet-5-5` often does while developers and leads stay on the office's **Model**. Empty means the office's **Model**. It's stamped on the reviewer each time they sit down to a review.
 - **What they do:**
-  1. Check the PR's head out, detached, into their own folder.
+  1. Check the PR's head out, detached, into a folder of its own inside their workspace (`<reviewer>/<owner>__<repo>-pr<N>`), so a goal's reviewer moving between its slice's repos never checks one PR out over another, and a re-test keeps its installed dependencies. The folders go when the PR merges or closes. A folder that won't delete (a dev server or install still writing into it) is retried, then moved aside as `trash_…` for the hourly sweep, so it never blocks the next checkout.
   2. Read the PR and its linked issues, and work out the acceptance criteria.
   3. Review the diff against the base branch, including whether new tests check what the code does or only run it (tests like that raise coverage but catch nothing).
   4. Run the tests, type checks, linters and build.

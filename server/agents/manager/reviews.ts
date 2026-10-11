@@ -12,6 +12,7 @@ import type { QaLoopEvent } from '../qaLoop';
 import { qaNextStep } from '../qaLoop';
 import { carriedComment, retestStep } from '../retest';
 import { Workspace } from '../services';
+import { reviewCheckoutId, triageWorkspaceId } from '../worktrees';
 import { STOPPED_BY_CAPTAIN } from '../types';
 import { FINISHED, type ManagerServices, Part, Refused, type WorkError } from './core';
 
@@ -403,6 +404,9 @@ export class Reviews extends Part {
     const review = this.store.reviews.get(prKey(repo, number));
     if (!review) return;
     this.core.triages.stopTriage(prKey(repo, number));
+    // each reviewer kept a checkout of this PR for re-tests: nobody needs them now
+    const reviewers = new Set([review.agentId ?? qaAgentId(review.projectId), qaAgentId(review.projectId), triageWorkspaceId(review.projectId)]);
+    this.background(Workspace.use((w) => Effect.forEach(reviewers, (id) => w.remove(repo, reviewCheckoutId(id, repo, number)), { discard: true })));
     this.store.removeReview(repo, number);
     this.hub.send({ type: 'review-removed', repo, number });
     this.nextReview(review.projectId);
