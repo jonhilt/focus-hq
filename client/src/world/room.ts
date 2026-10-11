@@ -22,6 +22,7 @@ import { paddPiles, RACK_PILES } from './paddRack';
 import { PR_LOOK } from './goalScreens';
 import { holodeckMaterial, holodeckSkin, type Scenery } from './scenery';
 import { StationScreen } from './screen';
+import type { ScreenView } from './screenRedraw';
 import { paneUse } from './screenPanes';
 import { Beam } from './transporter';
 import { HULL, LCARS, lcarsSign, workstation } from './starship';
@@ -591,12 +592,15 @@ export class ProjectRoom {
       this.rebuildPadds(board);
     }
     const inRoom = this.holds(eye);
+    // the hall's screens are seen from in it, through its door from the hallway, or through a briefing room's open door
+    const hallSeen = briefing ? briefing.portal.ajar : this.holds(camera) || this.entrance.ajar;
+    const hallView = (near: boolean): ScreenView => (!hallSeen ? 'unseen' : near ? 'near' : 'far');
     if (inRoom) this.planner.update(t, eye.distanceTo(this.planner.group.getWorldPosition(tmp)));
-    this.opsScreen.maybeDraw(now, false, undefined, undefined);
+    this.opsScreen.maybeDraw(now, hallView(false), undefined, undefined);
     const qaDist = eye.distanceTo(this.qa.group.getWorldPosition(tmp));
     if (inRoom) this.qa.update(t, qaDist);
     const qaAgent = state.qaAgent(this.project.id);
-    this.qaScreen.maybeDraw(now, inRoom && qaDist < 6, qaAgent && state.lines.get(qaAgent.id), qaAgent && state.browser.get(qaAgent.id));
+    this.qaScreen.maybeDraw(now, hallView(inRoom && qaDist < 6), qaAgent && state.lines.get(qaAgent.id), qaAgent && state.browser.get(qaAgent.id));
     for (const station of this.stations) {
       station.update(t);
       station.updateTransporters(t, now, camera, station === briefing);
@@ -609,18 +613,17 @@ export class ProjectRoom {
       const atHead = seen ? station.fromHead(seen) : 0;
       if (seen) for (const slot of [station.lead, ...station.helpers, station.reviewer]) slot.character?.update(t, atHead);
       const lead = station.lead.id;
-      const near = !!seen && station.fromScreen(seen) < 13;
-      station.screen.maybeDraw(now, near, lead ? state.lines.get(lead) : undefined, lead ? state.browser.get(lead) : undefined);
+      const view: ScreenView = !station.room.visible ? 'unseen' : seen && station.fromScreen(seen) < 13 ? 'near' : 'far';
+      station.screen.maybeDraw(now, view, lead ? state.lines.get(lead) : undefined, lead ? state.browser.get(lead) : undefined);
     }
     for (const slot of this.desks) {
       if (!slot.character) {
-        slot.screen.maybeDraw(now, false, undefined, undefined);
+        slot.screen.maybeDraw(now, hallView(false), undefined, undefined);
         continue;
       }
       const dist = eye.distanceTo(slot.character.group.getWorldPosition(tmp));
       if (inRoom) slot.character.update(t, dist);
-      const near = inRoom && dist < 6;
-      slot.screen.maybeDraw(now, near, state.lines.get(slot.agentId!), state.browser.get(slot.agentId!));
+      slot.screen.maybeDraw(now, hallView(inRoom && dist < 6), state.lines.get(slot.agentId!), state.browser.get(slot.agentId!));
     }
   }
 
