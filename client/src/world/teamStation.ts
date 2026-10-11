@@ -99,6 +99,8 @@ export class TeamStation {
   readonly furniture: THREE.Object3D[];
   /** The goal board on the briefing room's wall: using it opens the lead's goal, or a crew member's row, theirs. */
   readonly goalBoard: THREE.Mesh;
+  /** The goal's star chart, to starboard of the viewscreen. */
+  readonly chartScreen: THREE.Mesh;
   /** Who's on the goal board's roster, in its order (`show`). */
   private crew: { who: StationSeat; role: 'Lead' | 'Reviewer' | 'Helper' }[] = [];
   /** The briefing room's viewscreen, which `screen` draws on. */
@@ -178,7 +180,8 @@ export class TeamStation {
     roomSign.layers.set(OVERLAY_LAYER);
     this.goalBoard = screen(roomScreens, 'team-station-note', 'briefing room');
     this.goalBoard.material = this.board.material;
-    screen(roomScreens, 'team-station-chart', 'briefing room').material = this.chart.material;
+    this.chartScreen = screen(roomScreens, 'team-station-chart', 'briefing room');
+    this.chartScreen.material = this.chart.material;
     const panes = screen(roomScreens, 'team-station-panes', 'briefing room');
     panes.material = this.panes.material;
     panes.userData.interactionAt = (uv: THREE.Vector2) => this.switchAt(uv);

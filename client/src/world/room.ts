@@ -309,6 +309,8 @@ export class ProjectRoom {
       for (const thing of station.furniture) interactive(thing, use, label);
       if (lead) interactive(station.goalBoard, { kind: 'agent', id: lead.id, view: 'goal' }, () => `Look at ${lead.name}’s goal and to-dos`);
       else interactive(station.goalBoard, use, label);
+      if (lead) interactive(station.chartScreen, { kind: 'chart', id: lead.id }, () => `Open the star chart of “${lead.lead?.title ?? 'the goal'}”`);
+      else interactive(station.chartScreen, use, label);
       // each of the lead's panes up close (what they've shown or asked, their browser…), from where the captain stands;
       // anywhere else on it, and while it's free, the screen is the station's, as its door is
       station.display.userData.interactionAt = lead ? (uv: THREE.Vector2) => {

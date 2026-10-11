@@ -23,6 +23,8 @@ export type Interaction =
   | { kind: 'station'; projectId: string; station: number }
   /** A team station's big screen, in use by lead `id`: look at what they've shown and asked. */
   | { kind: 'screen'; id: string }
+  /** The star chart beside it: lead `id`'s goal's chart. */
+  | { kind: 'chart'; id: string }
   /** A switch on the panel beside a team station's screen: show or hide that pane, on every station screen. */
   | { kind: 'pane'; pane: keyof PanePrefs }
   | { kind: 'vacant' };

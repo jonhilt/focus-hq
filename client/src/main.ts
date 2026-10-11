@@ -20,6 +20,7 @@ import { Panels } from './ui/panels';
 import { openPreviewPanel } from './ui/previewPanel';
 import { openQaPanel } from './ui/qaPanel';
 import { openScreenPanel } from './ui/screenPanel';
+import { openGoalChart } from './ui/chartPanel';
 import { openNewIssuePanel, openPausePanel, openTeleportPanel, openTurboliftPanel } from './ui/travelPanel';
 import { type Interaction, REACH } from './world/builder';
 import { OVERLAY_LAYER } from './world/frame';
@@ -141,6 +142,7 @@ async function main() {
     openManager: (tab) => openManagerPanel(ui, tab),
     openTeleport: () => openTeleportPanel(ui),
     openScreen: (leadId) => openScreenPanel(ui, leadId),
+    openChart: (leadId) => openGoalChart(ui, leadId),
     openTurbolift: () => {
       const stops = world.stops();
       openTurboliftPanel(ui, stops, stopAt(stops, camera.position));
@@ -417,6 +419,9 @@ async function main() {
         break;
       case 'screen':
         ui.openScreen(i.id);
+        break;
+      case 'chart':
+        ui.openChart(i.id);
         break;
       case 'pane':
         sound.press();

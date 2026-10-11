@@ -39,7 +39,7 @@ export function withTimeout<T>(work: Promise<T>, ms: number, what: string): Prom
 const FOCUS_HQ_HOOKS =
   ' On the Focus office page, `window.focusHQ` is `{ state, world, player, ui }`: ' +
   '`ui.places(): { label, position, lookAt, projectId? }[]`, `ui.goTo(place)` teleports there, `ui.goToAgent(id)`, ' +
-  '`ui.openAgent(id)`, `ui.openBoard(projectId)`, `ui.openQa(projectId)`, `ui.openGoals(projectId)`, `ui.openComms()`, ' +
+  '`ui.openAgent(id)`, `ui.openBoard(projectId)`, `ui.openQa(projectId)`, `ui.openGoals(projectId)`, `ui.openChart(leadId)`, `ui.openComms()`, ' +
   '`ui.panels.isOpen` (a getter, not a function) and `ui.panels.close()`; ' +
   '`state` mirrors the server: `projects[]`, `agents`/`boards`/`previews`/`reviews` (Maps by id), `project(id)`, `agentsIn(projectId)`; ' +
   '`world.root` is the THREE.Group to `traverse()` (world itself has no traverse), `world.rooms` (Map), `world.room(projectId)`, `world.places()`; ' +

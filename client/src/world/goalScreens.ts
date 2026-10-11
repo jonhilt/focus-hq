@@ -7,6 +7,7 @@ import { checklistGlance, type GoalRoomTone, goalRoomState, leadNow, type NoteSe
 import { flat } from './materials';
 import { portrait } from './portraits';
 import { LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
+import { type CoursePlot, everySlice, plotCourse, seeded, shieldState } from '../ui/course';
 
 // What a team station shows of its goal besides the lead's session. What floats in the holodeck is drawn like the
 // holograms over the pods in Lower Decks, glowing cyan on dark glass: the sign over the station's door (also lit on the
@@ -552,7 +553,9 @@ export class GoalBoard extends Display {
 
 /**
  * The star chart to starboard of the briefing room's viewscreen (blender/team_station.py), an LCARS screen like the
- * goal board to port: for now its title over the goal, until it draws the goal's course itself.
+ * goal board to port: the goal's course as the chart panel lays it out (`plotCourse` in ui/course.ts), drawn big
+ * enough to read from the command carpet, and down its right-hand side the waypoint under way, its shields and
+ * spot-checks, and the contacts still open. E on it opens the full chart.
  */
 export class ChartScreen extends Display {
   static readonly W = GoalBoard.W;
@@ -563,31 +566,253 @@ export class ChartScreen extends Display {
   }
 
   protected override keyOf(view: StationView): unknown {
-    return [view.index, view.accent, view.lead?.lead?.title, view.lead?.lead?.slice];
+    const work = view.lead?.lead;
+    return [view.index, view.accent, work && [work.title, work.slice, work.note?.done, work.note?.next, work.waypoints, work.contacts]];
   }
 
   protected draw({ accent, lead }: StationView): void {
     const { ctx } = this.c;
     const [W, H] = [ChartScreen.W, ChartScreen.H];
+    const bar = 96;
     ctx.fillStyle = BOARD_BG;
     ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = accent;
     ctx.beginPath();
-    ctx.roundRect(0, 0, W, 118, [60, 0, 0, 0]);
+    ctx.roundRect(0, 0, W, bar, [48, 0, 0, 0]);
     ctx.fill();
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
-    ctx.font = `600 64px ${LCARS_FONT}`;
+    ctx.font = `600 54px ${LCARS_FONT}`;
     ctx.fillStyle = '#000000';
-    ctx.fillText('STELLAR CARTOGRAPHY', 60, 62);
+    ctx.fillText('STELLAR CARTOGRAPHY', 48, bar / 2 + 2);
     const work = lead?.lead;
-    ctx.textAlign = 'center';
+    if (!lead || !work) {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = accent;
+      ctx.font = `600 72px ${LCARS_FONT}`;
+      ctx.fillText('NO GOAL UNDER WAY', W / 2, H * 0.48);
+      ctx.font = `34px ${UI_FONT}`;
+      ctx.fillStyle = BODY;
+      ctx.fillText('The chart of a goal shows here once one starts', W / 2, H * 0.48 + 80);
+      return;
+    }
+    ctx.textAlign = 'right';
+    ctx.font = `600 40px ${LCARS_FONT}`;
+    ctx.fillText(fitText(ctx, work.title.toUpperCase(), W - 640), W - 32, bar / 2 + 2);
+
+    const waypoints = everySlice(work.waypoints, work.slice, lead.startedAt);
+    const plot = plotCourse({ waypoints, current: work.slice, next: work.note?.next ?? [], contacts: work.contacts, seed: lead.id });
+    const area = { x: 16, y: bar + 16, w: 1010, h: H - bar - 28 };
+    const scale = Math.min(area.w / plot.width, area.h / plot.height);
+    ctx.save();
+    ctx.translate(area.x + (area.w - plot.width * scale) / 2, area.y + (area.h - plot.height * scale) / 2);
+    ctx.scale(scale, scale);
+    drawCourse(ctx, plot, work.note?.done, lead.id);
+    ctx.restore();
+
+    // the waypoint under way, down the right-hand side
+    const x = 1050;
+    const w = W - x - 28;
     ctx.fillStyle = accent;
-    ctx.font = `600 72px ${LCARS_FONT}`;
-    ctx.fillText(fitText(ctx, (work?.title ?? 'No goal under way').toUpperCase(), W - 120), W / 2, H * 0.45);
-    ctx.font = `34px ${UI_FONT}`;
-    ctx.fillStyle = BODY;
-    ctx.fillText(work ? `Charting the voyage: waypoint ${work.slice}` : 'The chart of a goal shows here once one starts', W / 2, H * 0.45 + 90);
+    ctx.fillRect(x - 18, bar + 20, 8, H - bar - 40);
+    const now = waypoints.find((p) => p.slice === work.slice);
+    let y = bar + 44;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    const heading = (text: string, color: string) => {
+      ctx.font = `600 30px ${LCARS_FONT}`;
+      ctx.fillStyle = color;
+      ctx.fillText(text.toUpperCase(), x, y);
+      y += 40;
+    };
+    const lines = (text: string, max: number, color = BODY) => {
+      ctx.font = `28px ${UI_FONT}`;
+      ctx.fillStyle = color;
+      for (const line of wrap(ctx, text, w, max)) {
+        ctx.fillText(line, x, y);
+        y += 36;
+      }
+      y += 14;
+    };
+    heading(`Waypoint ${work.slice} · under way`, LCARS.gold);
+    lines(now?.title ?? 'Nothing shipped yet', 3, '#ffffff');
+    const ticked = work.note?.slice.filter((i) => i.done).length ?? 0;
+    if (work.note?.slice.length) lines(`${ticked} of ${work.note.slice.length} on the checklist`, 1);
+    const shields = shieldState(now?.shields);
+    if (shields !== 'none') {
+      heading('Shields', { held: '#99cc66', absorbed: LCARS.gold, down: LCARS.red }[shields]);
+      lines({ held: 'Held: everything passed first time', absorbed: 'Hit absorbed: QA caught something, since fixed', down: 'Down: QA or CI is failing' }[shields], 2);
+    }
+    const spots = (now?.spotChecks ?? []).filter((c) => !c.checked).length;
+    if (spots) {
+      heading('Spot-checks', LCARS.gold);
+      lines(`${spots} place${spots === 1 ? '' : 's'} worth your look`, 1);
+    }
+    const open = (work.contacts ?? []).filter((c) => !c.closed);
+    if (open.length && y < H - 120) {
+      heading(`Contacts · ${open.length} open`, LCARS.sky);
+      for (const c of open.slice(0, 3)) if (y < H - 60) lines(`◇ ${c.text}`, 1, LCARS.sky);
+    }
+  }
+}
+
+/** How much bigger the chart's words are on the wall than in the panel, to read from the command carpet. */
+const BIG = 1.5;
+
+/** The course on a canvas already scaled to the plot's units: as the chart panel draws it (ui/chartPanel.ts), without the fog. */
+function drawCourse(ctx: CanvasRenderingContext2D, plot: CoursePlot, done: string | undefined, seed: string): void {
+  const { width, height, objective: o } = plot;
+  ctx.strokeStyle = '#1d1a2e';
+  ctx.lineWidth = 1;
+  for (let gx = 0; gx <= width; gx += 60) {
+    ctx.beginPath();
+    ctx.moveTo(gx, 0);
+    ctx.lineTo(gx, height);
+    ctx.stroke();
+  }
+  for (let gy = 0; gy <= height; gy += 60) {
+    ctx.beginPath();
+    ctx.moveTo(0, gy);
+    ctx.lineTo(width, gy);
+    ctx.stroke();
+  }
+  const rand = seeded(`${seed}:stars`);
+  for (let i = 0; i < 200; i++) {
+    ctx.globalAlpha = 0.3 + rand() * 0.6;
+    ctx.fillStyle = rand() < 0.5 ? '#f1eaff' : LCARS.sky;
+    ctx.fillRect(rand() * width, rand() * height, 2, 2);
+  }
+  ctx.globalAlpha = 1;
+
+  // the objective: a hazy nebula, what done looks like inside it
+  const neb = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, o.r * 1.15);
+  neb.addColorStop(0, 'rgba(255,204,153,0.95)');
+  neb.addColorStop(0.35, 'rgba(204,153,204,0.55)');
+  neb.addColorStop(0.75, 'rgba(153,153,255,0.18)');
+  neb.addColorStop(1, 'rgba(153,153,255,0)');
+  ctx.fillStyle = neb;
+  ctx.beginPath();
+  ctx.arc(o.x, o.y, o.r * 1.15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `600 ${18 * BIG}px ${LCARS_FONT}`;
+  ctx.fillStyle = LCARS.peach;
+  ctx.fillText('OBJECTIVE', o.x, o.y - o.r - 14);
+  ctx.font = `600 ${17 * BIG}px ${LCARS_FONT}`;
+  ctx.fillStyle = '#000000';
+  const said = wrap(ctx, done || 'Not agreed yet', o.r * 1.6, 3);
+  said.forEach((line, i) => ctx.fillText(line, o.x, o.y + (i - (said.length - 1) / 2) * 20 * BIG));
+
+  const last = plot.points.at(-1) ?? plot.launch;
+  const label = (text: string, at: { x: number; y: number; anchor: 'start' | 'end' }, size: number, color: string) => {
+    ctx.font = `${size}px ${LCARS_FONT}`;
+    ctx.fillStyle = color;
+    ctx.textAlign = at.anchor === 'start' ? 'left' : 'right';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(text, at.x, at.y);
+  };
+  ctx.setLineDash([2, 7]);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = LCARS.periwinkle;
+  for (const p of plot.projected) {
+    ctx.beginPath();
+    ctx.moveTo(last.x, last.y);
+    ctx.lineTo(p.to.x, p.to.y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  for (const p of plot.projected) {
+    ctx.beginPath();
+    ctx.arc(p.to.x, p.to.y, 6, 0, Math.PI * 2);
+    ctx.stroke();
+    label(p.text, p.label, 16 * BIG, LCARS.periwinkle);
+  }
+
+  ctx.strokeStyle = LCARS.red;
+  for (const x of plot.scrubbed) {
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([7, 6]);
+    ctx.beginPath();
+    ctx.moveTo(x.from.x, x.from.y);
+    ctx.lineTo(x.to.x, x.to.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x.to.x - 7, x.to.y - 7);
+    ctx.lineTo(x.to.x + 7, x.to.y + 7);
+    ctx.moveTo(x.to.x + 7, x.to.y - 7);
+    ctx.lineTo(x.to.x - 7, x.to.y + 7);
+    ctx.stroke();
+    label(`SCRUBBED ${x.text}`, x.label, 15 * BIG, LCARS.red);
+  }
+
+  for (const c of plot.contacts) {
+    const color = c.state === 'pursued' ? '#99cc66' : c.state === 'dropped' ? '#4b4466' : LCARS.sky;
+    if (c.pursuedAt) {
+      ctx.setLineDash([2, 5]);
+      ctx.strokeStyle = '#99cc66';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(c.x, c.y);
+      ctx.lineTo(c.pursuedAt.x, c.pursuedAt.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.beginPath();
+    ctx.moveTo(c.x, c.y - 8);
+    ctx.lineTo(c.x + 8, c.y);
+    ctx.lineTo(c.x, c.y + 8);
+    ctx.lineTo(c.x - 8, c.y);
+    ctx.closePath();
+    ctx.fillStyle = c.state === 'pursued' ? color : '#000000';
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    label(c.text, c.label, 16 * BIG, color);
+  }
+
+  ctx.strokeStyle = LCARS.gold;
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  ctx.stroke(new Path2D(plot.path));
+  ctx.fillStyle = LCARS.orange;
+  ctx.beginPath();
+  ctx.arc(plot.launch.x, plot.launch.y, 7, 0, Math.PI * 2);
+  ctx.fill();
+
+  for (const p of plot.points) {
+    const shield = shieldState(p.waypoint.shields);
+    if (shield !== 'none') {
+      ctx.strokeStyle = { held: '#99cc66', absorbed: LCARS.gold, down: LCARS.red }[shield];
+      ctx.lineWidth = 3;
+      ctx.setLineDash([17.8, 3.3]);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 16, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (p.state === 'now') {
+      ctx.strokeStyle = LCARS.sky;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 24, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = p.state === 'now' ? LCARS.sky : p.state === 'open' ? '#a49db4' : LCARS.gold;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#000000';
+    ctx.font = `700 15px ${LCARS_FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(p.waypoint.slice), p.x, p.y + 1);
+    label(p.name, p.label, 18 * BIG, p.state === 'now' ? LCARS.sky : '#f1eaff');
   }
 }
 

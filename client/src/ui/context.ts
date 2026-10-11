@@ -43,6 +43,8 @@ export interface Ui {
   openTeleport(): void;
   /** A team station's screen up close: what lead `leadId` has shown, and switches for what station screens show. */
   openScreen(leadId?: string): void;
+  /** The star chart of lead `leadId`'s goal (stellar cartography). */
+  openChart(leadId: string): void;
   /** The turbolift's controls, for whichever stop you're at. */
   openTurbolift(): void;
   /** Takes the turbolift to `stop`. */
