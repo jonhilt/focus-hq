@@ -10,6 +10,7 @@ import { openBoardPanel } from './ui/boardPanel';
 import type { Ui } from './ui/context';
 import { h } from './ui/dom';
 import { Hud } from './ui/hud';
+import { Studio } from './ui/studio';
 import { openManagerPanel } from './ui/managerPanel';
 import { openGoalsPanel } from './ui/goalsPanel';
 import { linkAction, openCommsPanel } from './ui/commsPanel';
@@ -98,6 +99,8 @@ async function main() {
   player.teleport(aboard.position, aboard.lookAt);
   const hud = new Hud();
   const panels = new Panels();
+  // ?studio=1: the TV studio's recorder films the office (ui/studio.ts, docs/studio.md)
+  const studio = params.get('studio') === '1' ? new Studio(world, player, hud) : null;
 
   // ---------------------------------------------------------------- ui wiring
   const ui: Ui = {
@@ -528,7 +531,9 @@ async function main() {
     }
     stats?.begin();
     player.enabled = !panels.isOpen;
-    player.update(dt);
+    // the studio holds the camera where its shot puts it
+    if (studio) studio.update(now);
+    else player.update(dt);
     const through = world.through(camera.position);
     if (through) player.transport(through.through, through.other.doorway.matrix);
     world.update(t, now, camera.position);
@@ -554,7 +559,7 @@ async function main() {
   loop();
 
   // handy for debugging from the console
-  Object.assign(window, { focusHQ: { state, world, player, ui } });
+  Object.assign(window, { focusHQ: { state, world, player, ui, ...(studio && { studio }) } });
 }
 
 void main();

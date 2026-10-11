@@ -20,11 +20,12 @@ export function freePort(): Promise<number> {
   });
 }
 
-export function startDemo(port: number, dataDir: string): ChildProcess {
+/** `extra` adds arguments and environment, like the studio's `--studio` and its pacing. */
+export function startDemo(port: number, dataDir: string, extra: { args?: string[]; env?: Record<string, string> } = {}): ChildProcess {
   // Own process group so stopping it also stops whatever tsx and Vite spawn underneath.
-  const child = spawn(process.execPath, [path.join(root, 'node_modules/tsx/dist/cli.mjs'), 'server/index.ts', '--dev', '--demo'], {
+  const child = spawn(process.execPath, [path.join(root, 'node_modules/tsx/dist/cli.mjs'), 'server/index.ts', '--dev', '--demo', ...(extra.args ?? [])], {
     cwd: root,
-    env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', FOCUS_DATA_DIR: dataDir },
+    env: { ...process.env, ...extra.env, PORT: String(port), HOST: '127.0.0.1', FOCUS_DATA_DIR: dataDir },
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: process.platform !== 'win32',
   });
@@ -66,14 +67,15 @@ export async function waitForServer(url: string, child: ChildProcess, timeoutMs:
 }
 
 // Same fallback order as BrowserPool in server/agents/browserTool.ts.
-export async function launchBrowser(): Promise<Browser> {
+/** `args` go to Chromium, like the studio's to draw on the GPU. */
+export async function launchBrowser(args: string[] = []): Promise<Browser> {
   const attempts: LaunchOptions[] = [];
   if (process.env.FOCUS_BROWSER_PATH) attempts.push({ executablePath: process.env.FOCUS_BROWSER_PATH });
   attempts.push({}, { channel: 'chrome' }, { channel: 'msedge' });
   let lastError: unknown;
   for (const opts of attempts) {
     try {
-      return await chromium.launch({ headless: true, ...opts });
+      return await chromium.launch({ headless: true, args, ...opts });
     } catch (err) {
       lastError = err;
     }

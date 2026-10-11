@@ -1,0 +1,171 @@
+# USS Focus TV, episode 1: how subagents work. `pnpm run studio scenes/subagents.yaml` records it (docs/studio.md).
+title: How subagents work
+# the demo's pacing: half the speed of `pnpm run demo`, so there's time to watch the helpers work
+speed: 0.5
+seed: 7
+project: Sock Shop
+goal: Shoppers can save items for later and find them again on any device
+
+beats:
+  - title: Cold open
+    shot: bridge
+    caption: This is the USS Focus. Every member of its crew is a Claude Code session.
+    hold: 7
+
+  - title: A goal
+    do: start-goal
+    shot: station
+    caption: The captain hands a goal to a lead, a long-running Claude Code session at its own team station.
+    until: lead-working
+    hold: 7
+
+  - title: The lead looks around
+    shot: lead
+    glide: 3
+    caption: The lead reads the repos, puts a plan on screen and asks before it builds anything.
+    until: lead-idle
+    hold: 4
+
+  - title: Go ahead
+    do: answer
+    shot: station
+    caption: The captain picks an option, and the lead gets going.
+    until: lead-working
+    hold: 4
+
+  - title: What's a subagent?
+    insert: explainer
+    caption: Before we watch it happen, what a subagent is.
+    hold: 0
+
+  - title: Helpers sit down
+    shot: helpers
+    glide: 3
+    caption: The lead hands each repo to a helper, a subagent with a fresh context of its own, on a smaller, faster model.
+    until: helpers-working
+    hold: 8
+
+  - title: Reading in parallel
+    shot: crew
+    glide: 4
+    caption: The helpers read side by side. None of that reading lands in the lead's context.
+    hold: 8
+
+  - title: Report back
+    shot: lead
+    glide: 3
+    caption: Each helper hands back a short summary, and its own context is thrown away.
+    until: helpers-done
+    hold: 6
+
+  - title: Ship it
+    shot: station
+    caption: With the map in hand, the lead builds the slice across both repos and ships it.
+    until: shipped
+    hold: 8
+
+  - title: Wrap
+    shot: bridge
+    caption: "Subagents: fresh context, a cheaper model, and only the answer comes back."
+    hold: 6
+
+# the cut-away: the same input as a lead's explain tool (server/agents/explainer.ts), played once from the top
+explainer:
+  title: How subagents work
+  beats:
+    - title: One lead, one goal
+      label: The lead
+      text: The lead is one Claude Code session. Everything it reads stays in its context window, which fills as it works.
+      seconds: 5
+    - title: It hands work off
+      label: Hand off
+      text: With the Agent tool, the lead starts a helper for each piece of work, and gives it a task in a few words.
+      seconds: 6
+    - title: Each helper starts fresh
+      label: Fresh context
+      text: A helper has a context window of its own, can run on a smaller model, and reads as much as it needs.
+      seconds: 7
+    - title: Only the answer comes back
+      label: Report back
+      text: Each helper returns a short summary. Its context, and everything it read, is thrown away.
+      seconds: 6
+    - title: The lead stays focused
+      label: Stays focused
+      text: The lead's context holds the answers, not the reading, so it has room left for the real work.
+      seconds: 7
+  stage:
+    html: |
+      <span class="lbl" style="left:40px;top:10px">Parent agent → subagents → results</span>
+      <svg id="wires" width="1050" height="500" style="position:absolute;left:0;top:0">
+        <path id="w0" d="M320 255 C 500 255, 520 125, 690 125" />
+        <path id="w1" d="M320 255 C 500 255, 520 375, 690 375" />
+      </svg>
+      <div class="panel" id="lead" style="left:40px;top:160px;width:280px;--c:var(--orange)">
+        <div class="hd"><span>Lead</span><span>Opus</span></div>
+        <div class="bd">
+          <div class="goal">Goal: save items for later</div>
+          <div id="inbox"></div>
+          <div class="meter"><i id="ghost"></i><i id="ctx-lead"></i></div>
+          <div class="cap"><span>context</span><span id="ghost-lbl">if it read it all itself</span></div>
+        </div>
+      </div>
+      <div class="panel helper" style="left:690px;top:40px;width:320px;--c:var(--sky)">
+        <div class="hd"><span>Helper · Explore</span><span>Haiku 4.5</span></div>
+        <div class="bd"><div class="reads"></div><div class="meter"><i class="ctx"></i></div><div class="cap"><span>its own context</span></div></div>
+      </div>
+      <div class="panel helper" style="left:690px;top:290px;width:320px;--c:var(--lilac)">
+        <div class="hd"><span>Helper · Explore</span><span>Haiku 4.5</span></div>
+        <div class="bd"><div class="reads"></div><div class="meter"><i class="ctx"></i></div><div class="cap"><span>its own context</span></div></div>
+      </div>
+      <div class="pill task" style="--c:var(--sky)">map ./web</div>
+      <div class="pill task" style="--c:var(--lilac)">map ./api</div>
+      <div class="pill result" style="--c:var(--green)">web: fits in Header.tsx</div>
+      <div class="pill result" style="--c:var(--green)">api: fits in routes/auth.ts</div>
+    css: |
+      #wires path { fill: none; stroke: var(--line); stroke-width: 3; stroke-dasharray: 8 8; }
+      .panel { position: absolute; }
+      .panel .bd { font-size: 17px; min-height: 120px; }
+      .goal { color: var(--gold); margin-bottom: 8px; }
+      #inbox div, .reads div { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text); margin: 2px 0; }
+      #inbox div { color: var(--green); }
+      .meter { position: relative; height: 12px; border-radius: 6px; background: rgba(255,255,255,.08); margin-top: 12px; overflow: hidden; }
+      .meter i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; background: var(--c, var(--orange)); }
+      #ghost { background: repeating-linear-gradient(45deg, var(--red) 0 6px, transparent 6px 12px); opacity: .6; }
+      .cap { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 4px; }
+      #ghost-lbl { color: var(--red); }
+      .pill { position: absolute; left: 0; top: 0; white-space: nowrap; }
+    script: |
+      const helpers = $$('.helper'), tasks = $$('.task'), results = $$('.result'), reads = $$('.reads'), ctx = $$('.ctx');
+      const wires = [$('#w0'), $('#w1')];
+      const files = [
+        ['web/src/App.tsx', 'web/src/store/cart.ts', 'web/src/components/Header.tsx'],
+        ['api/src/server.ts', 'api/src/routes/products.ts', 'api/src/routes/auth.ts'],
+      ];
+      const answers = ['web: fits in Header.tsx', 'api: fits in routes/auth.ts'];
+      // a pill riding wire i, k of the way from the lead (0) to its helper (1)
+      function ride(el, i, k) {
+        const pt = wires[i].getPointAtLength(wires[i].getTotalLength() * k);
+        el.style.transform = 'translate(' + (pt.x - el.offsetWidth / 2) + 'px,' + (pt.y - 16) + 'px)';
+      }
+      function render(t) {
+        $('#lead').style.opacity = p(t, 0, .8);
+        const gone = p(t, B[3] + 2.5, B[3] + 4);
+        helpers.forEach((h, i) => {
+          const k = p(t, B[1] + .3 + i * .4, B[1] + 1.3 + i * .4);
+          h.style.opacity = k * (1 - .75 * gone);
+          wires[i].style.opacity = k * (1 - .75 * gone);
+          const n = Math.floor(clamp((t - B[2] - .3) / 1.6, 0, 3));
+          reads[i].innerHTML = files[i].slice(0, n).map(f => '<div>Read ' + f + '</div>').join('');
+          ctx[i].style.width = (8 + 62 * p(t, B[2], B[3]) - 70 * gone) + '%';
+          const go = p(t, B[1] + 1.4 + i * .5, B[1] + 3.4 + i * .5);
+          tasks[i].style.opacity = go > 0 && go < 1 ? 1 : 0;
+          ride(tasks[i], i, go);
+          const back = p(t, B[3] + .3 + i * .6, B[3] + 2.2 + i * .6);
+          results[i].style.opacity = back > 0 && back < 1 ? 1 : 0;
+          ride(results[i], i, 1 - back);
+        });
+        $('#inbox').innerHTML = answers.filter((a, i) => t > B[3] + 2.2 + i * .6).map(a => '<div>⎿ ' + a + '</div>').join('');
+        $('#ctx-lead').style.width = (12 + 4 * p(t, B[3] + 2, B[3] + 3.5)) + '%';
+        $('#ghost').style.width = (85 * p(t, B[4] + .5, B[4] + 3)) + '%';
+        $('#ghost-lbl').style.opacity = p(t, B[4] + 2.5, B[4] + 3.2);
+      }

@@ -624,6 +624,11 @@ export class ProjectRoom {
     }
   }
 
+  /** The team station a goal's lead works at (the studio frames its shots from it). */
+  stationOf(leadId: string): TeamStation | undefined {
+    return this.stations.find((st) => st.lead.id === leadId);
+  }
+
   /** World position and look target for standing behind an agent. */
   viewpoint(agentId: string): { position: THREE.Vector3; lookAt: THREE.Vector3 } | null {
     const slot = this.desks.find((d) => d.agentId === agentId);

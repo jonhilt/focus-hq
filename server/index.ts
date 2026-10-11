@@ -4,6 +4,7 @@ import path from 'node:path';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import express from 'express';
 import { clock } from '../shared/clock';
+import { seededRandom } from '../shared/studio';
 import { keyFallback } from './agents/apiKey';
 import { BrowserPool } from './agents/browserTool';
 import { ClaudeDrafter, ClaudeEngineer, ClaudeNumberOne, ClaudeTriager } from './agents/claudeCrew';
@@ -27,7 +28,7 @@ import { demoPreviewPage, Previews } from './previews';
 import { apiRouter } from './routes';
 import { StateLockedError, Store } from './store';
 import { currentVersion, RESTART_MESSAGE, Updater } from './updater';
-import { errorMessage } from './util';
+import { errorMessage, seedIds } from './util';
 import { Voice } from './voice';
 
 /** How often orphaned agent workspaces are swept up, besides once at startup. */
@@ -57,6 +58,13 @@ const liveWorkspace: WorkspaceOps = {
 };
 
 async function main() {
+  // the studio films the same episode each run: the demo's waits and picks roll the same dice
+  // and its ids, which the crew's names hash from
+  if (config.studio) {
+    const seed = Number(process.env.FOCUS_DEMO_SEED ?? 1);
+    Math.random = seededRandom(seed);
+    seedIds(seededRandom(seed + 1));
+  }
   const store = new Store(!config.demo);
   store.load();
 
@@ -109,11 +117,14 @@ async function main() {
     game.repos = ['demo/space-dodger'];
     // so the demo shows a PR going QA pass → checks green → merged by itself
     game.autoMerge = true;
-    // the demo keeps no ledger: a few days of one, to review at the master systems table
-    store.ledger = demoLedger(shop.id, game.id, Date.now());
-    // two goals under way side by side, each with its own lead at its own team station
-    office.agents.startGoal(shop.id, 'Shoppers can save items for later and find them again on any device');
-    office.agents.startGoal(shop.id, 'Show how many of each sock are left in stock on the product page', { station: 2 });
+    // the studio's recorder starts the one goal it films itself
+    if (!config.studio) {
+      // the demo keeps no ledger: a few days of one, to review at the master systems table
+      store.ledger = demoLedger(shop.id, game.id, Date.now());
+      // two goals under way side by side, each with its own lead at its own team station
+      office.agents.startGoal(shop.id, 'Shoppers can save items for later and find them again on any device');
+      office.agents.startGoal(shop.id, 'Show how many of each sock are left in stock on the product page', { station: 2 });
+    }
   }
 
   const app = express();

@@ -42,8 +42,22 @@ export function decodeImage(dataUrl: string): { ext: string; bytes: Buffer } | n
   return ext ? { ext, bytes: Buffer.from(m[2], 'base64') } : null;
 }
 
+/** The studio's seeded dice (`seedIds`), which ids roll in place of crypto's: names hash from ids, so its cast stays the same. */
+let idDice: (() => number) | null = null;
+
+export function seedIds(roll: () => number): void {
+  idDice = roll;
+}
+
+/** `bytes` random bytes as hex. */
+export function randomHex(bytes: number): string {
+  const roll = idDice;
+  if (!roll) return randomBytes(bytes).toString('hex');
+  return Array.from({ length: bytes }, () => Math.floor(roll() * 256).toString(16).padStart(2, '0')).join('');
+}
+
 export function newId(prefix: string): string {
-  return `${prefix}_${randomBytes(5).toString('hex')}`;
+  return `${prefix}_${randomHex(5)}`;
 }
 
 export function slugify(text: string, max = 40): string {

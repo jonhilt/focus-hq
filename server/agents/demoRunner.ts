@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { TermLine } from '../../shared/types';
 import { demoSinceVerdict } from '../demoGit';
-import { sleep } from '../util';
+import { randomHex, sleep } from '../util';
 import type { RetroOfficer, RetroRequest, Transcript } from './engineer';
 import type { NumberOneOfficer, NumberOneReply, NumberOneTurn } from './numberOne';
 import type { Drafter, DraftRequest, DraftResult } from './planner';
@@ -372,7 +372,7 @@ export class DemoRunner implements AgentRunner {
       await tool('TodoWrite', leadTodos(0));
       // two helpers map the repos side by side while the lead plans: they sit down at the team station while they work
       if (repos.length > 1) {
-        const helpers = repos.map((r) => ({ ...r, id: `demo-helper-${r.folder}-${randomBytes(2).toString('hex')}`, files: FILES[kindOf(r.repo)] }));
+        const helpers = repos.map((r) => ({ ...r, id: `demo-helper-${r.folder}-${randomHex(2)}`, files: FILES[kindOf(r.repo)] }));
         // each helper's lines are its own transcript, as the real runner keeps them
         const helperLines = (id: string, lines: Omit<TermLine, 't'>[]) =>
           hooks.helperLines ? hooks.helperLines(id, lines) : hooks.lines(lines.map((l) => ({ ...l, text: `    ${l.text}` })));

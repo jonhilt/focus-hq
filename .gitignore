@@ -4,5 +4,6 @@ data/
 *.log
 .DS_Store
 smoke-shots/
+studio-out/
 blender/build/
 __pycache__/

@@ -12,5 +12,6 @@ Focus installs with pnpm (`corepack enable`, then `pnpm install`).
 | `pnpm test` | unit tests (vitest) for the pure decision code: QA verdicts, badges, prompts |
 | `pnpm run crap` | [CRAP scores](crap.md): runs the unit tests with coverage and lists the functions riskiest to change (complexity against coverage); `--changed` adds what the branch touched |
 | `pnpm run smoke` | headless Playwright check of the splash screen in demo mode (screenshots in `smoke-shots/`) |
+| `pnpm run studio <scene>` | films a scene script (`scenes/*.yaml`) against a demo office: a 1080p rough cut and a beat sheet in `studio-out/<scene>/`; `--voice <file>` mixes a voiceover into `final.mp4` ([the TV studio](studio.md)) |
 | `pnpm run zfight` | optional, on-demand headless scan of the demo office's 3D scene for z-fighting (coplanar faces from different meshes); fails listing each pair. |
 | `pnpm run gaps` | optional, on-demand headless scan of the demo office's 3D scene for gaps (faces from different meshes facing each other 2 mm to 5 cm apart, like a panel hovering off its wall); fails listing each pair. |

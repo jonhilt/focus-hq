@@ -94,6 +94,7 @@ Then on board:
 - [Architecture](docs/architecture.md): a map of the code
 - [Scripts](docs/scripts.md): the package.json scripts
 - [CRAP scores](docs/crap.md): which functions are riskiest to change, from complexity and test coverage
+- [The TV studio](docs/studio.md): filming episodes on the ship from a scene script, in demo mode
 - [CLAUDE.md](CLAUDE.md): commands and conventions for the agents building Focus
 - [Goals plan](docs/goals-plan.md) and [Effect assessment](docs/effect-assessment.md): design notes
 
