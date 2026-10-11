@@ -185,6 +185,15 @@ describe('handleMessage', () => {
     expect(said.lines).toEqual([]);
   });
 
+  it('shows what a subagent’s busy with from its progress, and nothing for a task it doesn’t know', () => {
+    const { said, hooks } = recorder();
+    const ctx = context({ helpers: new Map([['t1', 'toolu_a']]) });
+    handleMessage(system({ subtype: 'task_progress', task_id: 't1', last_tool_name: 'Grep' }), ctx, hooks);
+    handleMessage(system({ subtype: 'task_progress', task_id: 't2', summary: 'Elsewhere' }), ctx, hooks);
+    handleMessage(system({ subtype: 'task_progress', task_id: 't1' }), ctx, hooks);
+    expect(said.helper).toEqual([{ kind: 'activity', id: 'toolu_a', activity: 'Using Grep' }]);
+  });
+
   it('hands the session’s own task list over, with the structured result when it’s the message’s only one', () => {
     const { said, hooks } = recorder();
     const ctx = context();
