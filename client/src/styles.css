@@ -398,12 +398,17 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .chart-contact .trail { fill: none; stroke: var(--lcars-green); stroke-width: 1.5; stroke-dasharray: 2 5; opacity: 0.7; }
 .chart-contact.dropped .blip { stroke: #4b4466; }
 .chart-contact.dropped text { fill: #4b4466; text-decoration: line-through; }
+.chart-contact.picked .blip { stroke: var(--lcars-gold); stroke-width: 3; }
 .chart-threads { margin: 4px 0 0; padding: 0; list-style: none; }
 .chart-threads li { margin: 4px 0; padding-left: 16px; position: relative; }
+.chart-thread { all: unset; display: block; cursor: pointer; }
+.chart-thread:hover > span, .chart-thread:focus-visible > span { color: var(--lcars-sky); text-decoration: underline; }
+.chart-jump { all: unset; cursor: pointer; color: var(--lcars-gold); }
+.chart-jump:hover, .chart-jump:focus-visible { text-decoration: underline; }
 .chart-threads li::before { content: ''; position: absolute; left: 1px; top: 0.45em; width: 7px; height: 7px; border: 2px solid var(--lcars-sky); transform: rotate(45deg); }
 .chart-threads li.pursued::before { background: var(--lcars-green); border-color: var(--lcars-green); }
 .chart-threads li.dropped { color: var(--muted); }
-.chart-threads li.dropped > span { text-decoration: line-through; }
+.chart-threads li.dropped .chart-thread > span { text-decoration: line-through; }
 .chart-threads li.dropped::before { border-color: #4b4466; }
 .chart-threads small { display: block; color: var(--muted); font-size: 13px; letter-spacing: 0.04em; }
 .chart-wp { cursor: pointer; outline: none; }
