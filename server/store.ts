@@ -91,14 +91,14 @@ export class Store {
   constructor(private readonly persist: boolean) {}
 
   /**
-   * Reads the saved state. Throws if another office holds data/state.json: two offices on one data folder each save
+   * Reads the saved state. Throws a StateLockedError if another office holds data/state.json: two offices on one data folder each save
    * their own copy over the other's, so a review one finished comes back as the other's older one.
    */
   load(): void {
     if (!this.persist) return;
     fs.mkdirSync(paths.logs, { recursive: true });
     const holder = takeLock(`${paths.state}.lock`);
-    if (holder) throw new Error(stateLocked(holder, config.dataDir));
+    if (holder) throw new StateLockedError(holder, config.dataDir);
     // what changed in the last moments before exiting is saved too, before the lock goes
     process.prependListener('exit', () => this.flush());
     const opened = LedgerLog.open(paths.ledger);
@@ -415,6 +415,17 @@ export class Store {
 }
 
 /** Why the office won't open a data folder another office is using, and what to do instead. */
+/** Another live office holds the data folder: an expected refusal, which the office reports in a line, not a crash. */
+export class StateLockedError extends Error {
+  constructor(
+    readonly pid: number,
+    readonly dataDir: string,
+  ) {
+    super(stateLocked(pid, dataDir));
+    this.name = 'StateLockedError';
+  }
+}
+
 export function stateLocked(pid: number, dataDir: string): string {
   return `Another Focus office (pid ${pid}) is using ${dataDir}. Stop it first, or give this one a data folder of its own (FOCUS_DATA_DIR=<empty folder>), or run pnpm run demo, which saves nothing.`;
 }

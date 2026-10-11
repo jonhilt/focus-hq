@@ -6,7 +6,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 // paths come from the environment when config.ts loads, so the data folder is set before the store is imported
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-store-'));
 process.env.FOCUS_DATA_DIR = dir;
-const { Store, stateLocked } = await import('./store');
+const { StateLockedError, Store, stateLocked } = await import('./store');
 
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
@@ -14,6 +14,15 @@ describe('Store on disk', () => {
   it('won’t open a data folder another live office holds', () => {
     fs.writeFileSync(path.join(dir, 'state.json.lock'), String(process.ppid));
     expect(() => new Store(true).load()).toThrow(stateLocked(process.ppid, dir));
+    // index.ts tells this refusal from a crash by its type, and prints just its message
+    let refusal: unknown;
+    try {
+      new Store(true).load();
+    } catch (err) {
+      refusal = err;
+    }
+    expect(refusal).toBeInstanceOf(StateLockedError);
+    expect(refusal).toMatchObject({ pid: process.ppid, dataDir: dir, message: stateLocked(process.ppid, dir) });
     fs.rmSync(path.join(dir, 'state.json.lock'));
   });
 
