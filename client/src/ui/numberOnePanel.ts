@@ -5,6 +5,7 @@ import { api } from '../net/api';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
+import { callView } from './call';
 import { voicePrefs, VoiceSession, voiceToggle } from './voiceMode';
 import { type MicMode, withMic } from './dictation';
 import { confirmDialog } from './confirmDialog';
@@ -92,6 +93,7 @@ export function openNumberOnePanel(ui: Ui): void {
     const cost = h('small', { class: 'muted' }, chat?.costUsd ? `$${chat.costUsd.toFixed(2)} so far` : '');
 
     fill(body,
+      callView(ui.error, render),
       log,
       h('div', null,
         voiceToggle(voice, (next) => {
@@ -117,6 +119,7 @@ export function openNumberOnePanel(ui: Ui): void {
   ui.panels.own(() => voice?.end());
   ui.panels.own(state.on('number-one', render));
   ui.panels.own(state.on('projects', render));
+  ui.panels.own(state.on('call', render));
   render();
 }
 

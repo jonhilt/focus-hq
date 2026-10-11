@@ -22,6 +22,7 @@ server/
   previews.ts             Preview: check a PR out, run the project's preview commands, find its links, tear it down (Effect: one Scope per preview)
   previewMachine.ts       what a preview does to this machine (shell commands in their own process group, signals, probes) as an Effect service
   github/                 GitHub as an Effect service: gh CLI layer (live), in-memory layer (demo), Promise adapter
+  call/                   calls to Number One: gpt-live-1's session and sideband (live.ts), Jev (jev.ts), what the captain asked for (route.ts) and how things stand (status.ts), both pure, the call's XState machine (machine.ts), a call end to end (calls.ts), the demo's scripted captain (demo.ts)
   agents/
     manager.ts            AgentManager: the office's one way in to its agents; each public method hands over to its part in manager/
     manager/              the manager's parts, each a concern of its own (Effect inside: a fiber per agent's work in a FiberMap)
@@ -89,6 +90,7 @@ client/src/
     frameStats.ts         ?stats=1: how the 3D view runs, top left, and sent to the office each second for its log (frameSamples.ts: the arithmetic; world/gpuTimer.ts: GPU time per pass)
     confirmDialog.ts      the in-game confirm dialog, over whatever panel is open (the Tricorder's buttons ask with it too)
     numberOnePanel.ts     the chat with Number One: the log, suggestions sent to Ops or started as goals, voice mode
+    call.ts               a call to Number One: WebRTC to OpenAI, and the call's strip (what it's doing, what waits on your yes, captions, hang up)
   tricorder/              the phone view at /tricorder (no three.js): home screen, agent drill-down, buttons that survive live re-renders
 client/tricorder/index.html   the Tricorder's page (a second Vite entry), with its home-screen meta tags
 client/public/tricorder/  its web app manifest and home-screen icons

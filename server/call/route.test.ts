@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Agent, Project, QueuedGoal, Snapshot } from '../../shared/types';
 import type { JevAnswers } from './jev';
 import { APPROVE_PROBABILITY, decide, nextGoal, routingQuestions, routingState, type StartGoal } from './route';
-import { spokenStatus } from './status';
+import { clip, spokenStatus } from './status';
 
 const queued = (text: string, id = 'q1'): QueuedGoal => ({ id, text, at: 0 });
 const shop = { id: 'p1', name: 'Shop', repos: ['acme/shop'] } as Project;
@@ -28,22 +28,31 @@ const start: StartGoal = { projectId: 'p1', projectName: 'Shop', queueId: 'q1', 
 
 describe('spokenStatus', () => {
   it('says when nothing is going on', () => {
-    expect(spokenStatus(snapshot())).toBe("Shop: nobody's at work. Nothing is waiting on you. No goals are queued.");
+    expect(spokenStatus(snapshot())).toBe('Shop has no goals under way. Nothing is waiting on you. No goals are queued.');
   });
 
-  it('names who is at work on what, what waits on the captain, and the next queued goal', () => {
+  it('names the goals under way, who is at work on what, what waits on the captain, and the next queued goal', () => {
     const ship = snapshot({
       projects: [{ ...shop, goalQueue: [queued('Voice mode for Focus\nwith more detail'), queued('Another', 'q2')] }],
-      agents: [lead(1, { lead: { station: 1, title: 'Chart the voyage' } as Agent['lead'] }), agent({ id: 'a2', permission: { summary: 'Run rm' } as Agent['permission'], status: 'waiting' })],
+      agents: [
+        lead(1, { lead: { station: 1, title: 'Chart the voyage' } as Agent['lead'] }),
+        lead(2, { status: 'done', lead: { station: 2, title: 'Faster boards', readTurn: 5 } as Agent['lead'], finishedAt: 5 }),
+        agent({ id: 'a2', permission: { summary: 'Run rm' } as Agent['permission'], status: 'waiting' }),
+      ],
     });
     expect(spokenStatus(ship)).toBe(
-      'Shop: 2 crew members at work. Lt. Station1 is leading the goal "Chart the voyage". Ensign Reyes is on "Add a wishlist". Waiting on you: Ensign Reyes has a hand up. 2 goals queued; next is "Voice mode for Focus".',
+      'Shop has 2 goals under way: Lt. Station1 on "Chart the voyage", at work; Lt. Station2 on "Faster boards". One crew member at work on issues: Ensign Reyes is on "Add a wishlist". Waiting on you: Ensign Reyes has a hand up. 2 goals queued; next is "Voice mode for Focus".',
     );
+  });
+
+  it('cuts a long status at a sentence, short enough to be said', () => {
+    expect(clip('One. Two. Three.', 10)).toBe("One. Two. There's more on the screens.");
+    expect(clip('Short.', 10)).toBe('Short.');
   });
 
   it('keeps to the project asked about, and leaves hidden ones out', () => {
     const ship = snapshot({ projects: [shop, blog, { id: 'p3', name: 'Secret', repos: ['acme/secret'], hidden: true } as Project] });
-    expect(spokenStatus(ship, 'p2')).toBe("Blog: nobody's at work. Nothing is waiting on you. No goals are queued.");
+    expect(spokenStatus(ship, 'p2')).toBe('Blog has no goals under way. Nothing is waiting on you. No goals are queued.');
     expect(spokenStatus(ship)).not.toContain('Secret');
   });
 });

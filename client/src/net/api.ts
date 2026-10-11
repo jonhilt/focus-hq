@@ -49,6 +49,9 @@ export const api = {
   closeGoal: (id: string, force = false) => call<{ closed: true } | { warn: string[] }>('POST', `/agents/${id}/close`, { force }),
   numberOneSay: (text: string) => call<NumberOneChat>('POST', '/number-one/say', { text }),
   numberOneNew: () => call<NumberOneChat>('POST', '/number-one/new'),
+  /** A call to Number One: the browser's WebRTC offer in, the session's id and answer out (no answer in the demo, which has no audio). */
+  startCall: (sdp: string) => call<{ id: string; sdp: string | null }>('POST', '/call', { sdp }),
+  hangUp: (id: string) => call<{ ok: true }>('POST', `/call/${encodeURIComponent(id)}/hang-up`),
   retroPreview: (days: number) => call<{ unread: number; costUsd: number }>('GET', `/retro/preview?days=${days}`),
   retroStart: (days: number) => call<Retro>('POST', '/retro/start', { days }),
   retroStop: () => call<Retro>('POST', '/retro/stop'),

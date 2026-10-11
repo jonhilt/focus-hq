@@ -1,7 +1,7 @@
 import { isHidden, shownProjects } from '../../../shared/hidden';
 import type { ReportCard } from '../../../shared/ledger';
 import { prKey } from '../../../shared/qa';
-import type { Agent, Board, BrowserFrame, IssueDraft, NumberOneChat, QaReview, Preview, Project, Retro, ServerEvent, ServerInfo, TermLine, VoiceStatus } from '../../../shared/types';
+import type { Agent, Board, BrowserFrame, CallStatus, IssueDraft, NumberOneChat, QaReview, Preview, Project, Retro, ServerEvent, ServerInfo, TermLine, VoiceStatus } from '../../../shared/types';
 
 type Events = {
   snapshot: void;
@@ -26,6 +26,8 @@ type Events = {
   /** A QA review changed or went away (its project id). */
   review: string;
   voice: void;
+  /** The call to Number One changed, or whether the office can take one. */
+  call: void;
   connection: boolean;
 };
 
@@ -53,6 +55,8 @@ export class OfficeState {
   reviews = new Map<string, QaReview>();
   /** Whether dictation can run on the server, and the speech model's download. */
   voice: VoiceStatus | null = null;
+  /** Whether the office can take a call to Number One, and the call under way (or the last one). */
+  call: CallStatus | null = null;
   connected = false;
 
   private listeners = new Map<keyof Events, Set<Listener<never>>>();
@@ -114,9 +118,11 @@ export class OfficeState {
         this.report = s.report;
         this.retro = s.retro;
         this.voice = s.voice;
+        this.call = s.call;
         this.emit('snapshot', undefined);
         this.emit('report', undefined);
         this.emit('voice', undefined);
+        this.emit('call', undefined);
         this.emit('number-one', undefined);
         break;
       }
@@ -187,6 +193,10 @@ export class OfficeState {
       case 'voice':
         this.voice = event.voice;
         this.emit('voice', undefined);
+        break;
+      case 'call':
+        this.call = { ...this.call, call: event.call };
+        this.emit('call', undefined);
         break;
         break;
       case 'report':

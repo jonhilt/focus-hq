@@ -11,6 +11,10 @@ Number One, the ship's first officer, is there to just talk: ask how something w
 
 The chat runs one turn at a time. It's saved in `~/.focus/state.json` with Number One's session, which every message resumes, so it survives a restart. **New conversation** clears the log and starts a fresh session.
 
+## Calls
+
+**📞 Call** at the top of the panel talks to Number One hands-free, through OpenAI's realtime voice model: ask how things stand, or have them start the next queued goal, which they ask you to confirm first. See [Calls to Number One](calls.md).
+
 ## Voice mode
 
 Switch **Voice** on above the message box to talk with Number One instead of reading. It's off by default, and each browser remembers the setting.

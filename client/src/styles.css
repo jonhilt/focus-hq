@@ -567,6 +567,19 @@ textarea.qa-brief { width: 100%; min-height: 160px; font-family: var(--mono); fo
 .briefing-note.error { color: var(--lcars-red); }
 textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
 .voice-controls { margin-bottom: 6px; gap: 12px; }
+.call { margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px; }
+.call small.error { color: var(--lcars-red); }
+.call.on { --tone: var(--lcars-green); border-left: 6px solid var(--tone); border-radius: 0 14px 14px 0; padding: 8px 12px; background: color-mix(in srgb, var(--tone) 10%, var(--surface-2)); }
+.call.on.routing { --tone: var(--lcars-gold); }
+.call.on.confirming { --tone: var(--lcars-orange); }
+.call.on.acting { --tone: var(--lcars-red); }
+.call-step { font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tone); }
+.call-pending { font-weight: 600; color: var(--lcars-orange); }
+.call-lines { max-height: 180px; overflow: auto; display: flex; flex-direction: column; gap: 3px; font-size: 14px; line-height: 1.35; }
+.call-line strong { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+.call-line.captain strong { color: var(--lcars-sky); }
+.call-line.ship strong { color: var(--lcars-lilac); }
+.call-line.office, .call-line.office strong { color: var(--muted); font-size: 12.5px; }
 @media (max-width: 760px) { .briefing-log { max-height: 50vh; } }
 
 /* ------------------------------------------------------------------ agent panel */

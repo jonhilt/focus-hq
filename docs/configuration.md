@@ -16,6 +16,8 @@
 | `FOCUS_UPDATE_CHECK_MS` | `300000` | how often auto update checks for new commits |
 | `FOCUS_WHISPER_BIN` | `whisper-cli` | whisper.cpp's CLI for [voice input](voice-input.md) |
 | `FOCUS_WHISPER_MODEL` | `~/.focus/models/ggml-large-v3-turbo-q5_0.bin` | the speech model for voice input |
+| `OPENAI_API_KEY` / `TYPESAFE_API_KEY` | | both needed for [calls to Number One](calls.md): gpt-live-1 and Jev |
+| `FOCUS_LIVE_VOICE` | `cedar` | gpt-live-1's voice on calls |
 
 ## Merge method
 

@@ -1,7 +1,7 @@
 import { columns } from '../../shared/board';
 import { shownProjects } from '../../shared/hidden';
 import { type Attention, inFlight, needsYou } from '../../shared/tricorder';
-import type { Agent, Project, Snapshot } from '../../shared/types';
+import { ACTIVE_STATUSES, type Agent, type Project, type Snapshot } from '../../shared/types';
 import { prKey } from '../../shared/qa';
 import { goalTitle } from '../agents/lead';
 
@@ -9,14 +9,18 @@ import { goalTitle } from '../agents/lead';
 // voice model to say in its own words. Read straight off the board, so it's exact and instant.
 
 const MAX_AT_WORK = 5;
+/** What the ship is given to say is at most 500 tokens: a status longer than this is cut at a sentence. */
+export const SPOKEN_LIMIT = 1_800;
 
 const quoted = (text: string) => `"${text}"`;
 
 function atWork(agent: Agent): string {
-  if (agent.task === 'lead') return `${agent.name} is leading the goal ${quoted(agent.lead?.title ?? agent.issue.title)}`;
   if (agent.task === 'review') return `${agent.name} is reviewing a pull request`;
   return `${agent.name} is on ${quoted(agent.issue.title)}`;
 }
+
+/** A goal's lead and their goal, and whether they're at it right now (otherwise it's the captain's turn). */
+const goal = (lead: Agent) => `${lead.name} on ${quoted(lead.lead?.title ?? lead.issue.title)}${ACTIVE_STATUSES.includes(lead.status) ? ', at work' : ''}`;
 
 function waiting(a: Attention): string {
   switch (a.kind) {
@@ -38,10 +42,13 @@ function waiting(a: Attention): string {
 }
 
 const count = (n: number, one: string, many = `${one}s`) => `${n === 1 ? 'one' : n} ${n === 1 ? one : many}`;
+const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+const listed = (items: string[]) => `${items.slice(0, MAX_AT_WORK).join('; ')}${items.length > MAX_AT_WORK ? `; and ${items.length - MAX_AT_WORK} more` : ''}`;
 
 function projectStatus(snapshot: Snapshot, project: Project): string {
   const agents = snapshot.agents.filter((a) => a.projectId === project.id);
-  const working = inFlight(project.id, agents);
+  const leads = agents.filter((a) => a.task === 'lead');
+  const working = inFlight(project.id, agents).filter((a) => a.task !== 'lead');
   const board = snapshot.boards.find((b) => b.projectId === project.id);
   const prs = columns(project, board, agents, snapshot.info.github.login).prs.map((pr) => ({ projectId: project.id, pr }));
   const reviews = new Map(snapshot.reviews.map((r) => [prKey(r.repo, r.number), r]));
@@ -49,12 +56,11 @@ function projectStatus(snapshot: Snapshot, project: Project): string {
   const queue = project.goalQueue ?? [];
 
   const lines = [
-    working.length
-      ? `${project.name}: ${count(working.length, 'crew member')} at work. ${working.slice(0, MAX_AT_WORK).map(atWork).join('. ')}${working.length > MAX_AT_WORK ? `, and ${working.length - MAX_AT_WORK} more` : ''}.`
-      : `${project.name}: nobody's at work.`,
+    leads.length ? `${project.name} has ${count(leads.length, 'goal')} under way: ${listed(leads.map(goal))}.` : `${project.name} has no goals under way.`,
+    working.length ? `${sentence(count(working.length, 'crew member'))} at work on issues: ${listed(working.map(atWork))}.` : '',
     needs.length ? `Waiting on you: ${needs.map(waiting).join('; ')}.` : 'Nothing is waiting on you.',
-    queue.length ? `${count(queue.length, 'goal')} queued; next is ${quoted(goalTitle(queue[0].text))}.` : 'No goals are queued.',
-  ];
+    queue.length ? `${sentence(count(queue.length, 'goal'))} queued; next is ${quoted(goalTitle(queue[0].text))}.` : 'No goals are queued.',
+  ].filter(Boolean);
   return lines.join(' ');
 }
 
@@ -62,5 +68,13 @@ function projectStatus(snapshot: Snapshot, project: Project): string {
 export function spokenStatus(snapshot: Snapshot, projectId?: string): string {
   const projects = shownProjects(snapshot.projects).filter((p) => !projectId || p.id === projectId);
   if (!projects.length) return 'There are no projects aboard yet.';
-  return projects.map((p) => projectStatus(snapshot, p)).join(' ');
+  return clip(projects.map((p) => projectStatus(snapshot, p)).join(' '));
+}
+
+/** Text cut to `SPOKEN_LIMIT` at the end of a sentence, saying there's more. */
+export function clip(text: string, limit = SPOKEN_LIMIT): string {
+  if (text.length <= limit) return text;
+  const cut = text.slice(0, limit);
+  const end = cut.lastIndexOf('. ');
+  return `${end > 0 ? cut.slice(0, end + 1) : cut} There's more on the screens.`;
 }

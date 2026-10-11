@@ -2,7 +2,7 @@
 // captain asked for, and a state machine keeps each task on rails (docs/calls.md).
 
 /** Where a call's task stands: the machine's state, for the captain to see. */
-export type CallStep = 'listening' | 'routing' | 'confirming' | 'checking' | 'acting' | 'ended';
+export type CallStep = 'listening' | 'routing' | 'confirming' | 'acting' | 'ended';
 
 /** A line of the call's captions: the captain, the ship's voice, or a note from the office on what it did. */
 export interface CallLine {
