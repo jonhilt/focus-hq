@@ -262,6 +262,31 @@ export class DemoRunner implements AgentRunner {
 
     // reviewing the slice before it ships: a pipeline of scans and checks, a fan-out bigger than the workflow can run at
     // once, and a child workflow; alongside it, a smaller one mapping the repos
+    // commands and monitors left running in the background: each writes its output to a file as it goes, and stops
+    // when the captain stops it, or when the lead's turn is over
+    const jobs = new Map<string, { timer: ReturnType<typeof setInterval>; task: 'shell' | 'monitor' }>();
+    const runInBackground = (task: 'shell' | 'monitor', description: string, line: (n: number) => string) => {
+      const id = `b${randomBytes(4).toString('hex')}`;
+      const file = path.join(os.tmpdir(), 'focus-demo-tasks', `${id}.output`);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, '');
+      let n = 0;
+      const timer = setInterval(() => fs.appendFileSync(file, `${line(++n)}\n`), 1000 / this.speed);
+      jobs.set(id, { timer, task });
+      hooks.lines([{ kind: 'tool', text: task === 'monitor' ? `⏺ Monitor(${description})` : `⏺ Bash(${description})` }, { kind: 'output', text: `  ⎿  Running in the background (${id})` }]);
+      hooks.background?.({ kind: 'started', id, task, description });
+      hooks.background?.({ kind: 'output', id, file });
+      return id;
+    };
+    const endJob = (id: string, status: 'done' | 'stopped', summary: string) => {
+      const job = jobs.get(id);
+      if (!job) return false;
+      clearInterval(job.timer);
+      jobs.delete(id);
+      hooks.background?.({ kind: 'ended', id, status, summary });
+      return true;
+    };
+
     const reviewWorkflows = async (folders: string[], goal: string) => {
       const areas = ['store', 'routes', 'views', 'tests', 'styles', 'config'];
       const review: Job[] = [
@@ -439,8 +464,13 @@ export class DemoRunner implements AgentRunner {
         await note({ slice: checklist(repos.indexOf(r) + 1) });
         await tool('TodoWrite', leadTodos(repos.indexOf(r) + 1));
       }
+      // the app running in the background while the slice is reviewed, and a monitor waiting on the reviews
+      const server = runInBackground('shell', 'pnpm run dev', (n) => (n === 1 ? '  VITE v7.1.2  ready in 412 ms' : n === 2 ? '  ➜  Local:   http://localhost:5173/' : `  [vite] hmr update /src/App.tsx (x${n - 2})`));
+      const monitor = runInBackground('monitor', 'watch for the review workflow to finish', (n) => `waiting… (${n}s)`);
       // a workflow reviews the slice before it ships: its away team beams into the briefing room a phase at a time
       await reviewWorkflows(repos.map((r) => r.folder), goal);
+      endJob(monitor, 'done', 'The review workflow finished');
+      endJob(server, 'done', 'Background command "pnpm run dev" completed (exit code 0)');
       await handleInbox();
       const title = `Thin slice: ${goal}`.slice(0, 70);
       if (await ship(title, `## Summary\n\nA first, thin version of ${goal}, end to end.\n\n## Testing\n\n- Tests pass in every repo`)) {
@@ -575,9 +605,11 @@ export class DemoRunner implements AgentRunner {
         inbox.push(text);
         return true;
       },
+      stopTask: (taskId) => Promise.resolve(endJob(taskId, 'stopped', 'Stopped')),
       stop: () => {
         stopped = true;
         abort.abort();
+        for (const id of [...jobs.keys()]) endJob(id, 'stopped', 'Stopped');
       },
       done,
     };
