@@ -1,9 +1,10 @@
 import * as THREE from 'three';
+import { TEAM_STATIONS } from '../../../shared/types';
 
 // The holodeck deck: a hallway running south from z = 0, with a holodeck (one project's room) either side of it every
 // ROOM_WIDTH metres; the decks built in Blender keep to these sizes (blender/holodeck_deck.py). The command deck stands
-// off to the north (COMMAND_DECK) with main engineering beyond it (ENGINEERING_DECK), and the team stations' briefing
-// rooms out to either side (briefingRoomAt).
+// off to the north (COMMAND_DECK) with main engineering beyond it (ENGINEERING_DECK), the team stations' briefing
+// rooms out to either side (briefingRoomAt), and their transporter rooms far beyond main engineering (transporterRoomAt).
 export const WALL_H = 3.2;
 export const WALL_T = 0.2;
 export const DOOR_W = 2.4;
@@ -75,6 +76,27 @@ export const BRIEFING = { x: 40, step: 13, depth: 10.9, width: 11.4, alcove: 0.9
 /** Where station `station`'s briefing room doorway stands, for the holodeck in `slot`; the room runs south of it. */
 export function briefingRoomAt(slot: RoomSlot, station: number): THREE.Vector3 {
   return new THREE.Vector3(slot.side * (BRIEFING.x + station * BRIEFING.step), 0, slot.center.z + BRIEFING.depth / 2);
+}
+
+/** How many transporter rooms each team station has: one per workflow its lead can run at once (transporterRoom.ts). */
+export const TRANSPORTER_ROOMS = 3;
+
+/**
+ * Where the transporter rooms stand (blender/transporter_room.py): far beyond main engineering, where nothing else
+ * stands or grows, since you only ever beam in. A row of them per holodeck, `step` apart, row after row going on north
+ * from `z`, each row a room for each of its team stations' transporter rooms side by side, `step` apart, either side
+ * of the ship's long axis. Each is `width` across and `depth` from its front wall to the back of its niches, round the
+ * middle of its floor (its origin), its walls' backs included.
+ */
+export const TRANSPORTER = { z: 240, step: 12, width: 9.8, depth: 9.3 };
+
+/**
+ * Where transporter room `room` of the team station `station` of the holodeck in `slot` stands: the middle of its
+ * floor (the room stands unturned, its platform towards -Z).
+ */
+export function transporterRoomAt(slot: RoomSlot, station: number, room: number): THREE.Vector3 {
+  const column = station * TRANSPORTER_ROOMS + room - (TEAM_STATIONS * TRANSPORTER_ROOMS - 1) / 2;
+  return new THREE.Vector3(column * TRANSPORTER.step, 0, TRANSPORTER.z + slot.index * TRANSPORTER.step);
 }
 
 /**

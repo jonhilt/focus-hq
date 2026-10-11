@@ -134,7 +134,8 @@ export class Store {
         agent.permission = undefined;
       }
       agent.task ??= 'issue'; // saved before agents could be seated on a conflicting PR
-      agent.helpers = undefined; // a lead's subagents don't outlive the office
+      agent.helpers = undefined; // a lead's subagents and workflows don't outlive the office
+      agent.workflows = undefined;
       if (agent.held) {
         // whatever waited for your plan's limit to reset waits for the captain now
         agent.held = undefined;

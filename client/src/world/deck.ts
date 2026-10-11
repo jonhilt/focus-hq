@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { interactive } from './builder';
-import { type Crew, type DeckScreen, isDeckScreen, type Marker, readInteraction, readMarker, readSurface, type ScreenName, type Surface } from './deckExtras';
+import { type Crew, type DeckScreen, isDeckScreen, type Marker, type Part, readInteraction, readMarker, readPart, readSurface, type ScreenName, type Surface } from './deckExtras';
 import { type Box2, contains, footprint, type Seat } from './layout';
 import { flat, occludedToon, toon } from './materials';
 import { mergeStatic } from './merge';
@@ -84,15 +84,17 @@ function placeAt(label: string, at: THREE.Vector3, turn: THREE.Quaternion): Plac
 /**
  * Makes a scene from a GLB ready to draw: each material becomes what its surface says, and each object something
  * to use if it says so. Hands each marker to `read` (with its world matrix still up to date), then takes it out of
- * the scene. Returns the screens the browser keeps drawing on, and the meshes to paint in an accent or light up.
+ * the scene. Returns the screens the browser keeps drawing on, the meshes to paint in an accent or light up, and the
+ * parts it changes as it goes.
  */
 export function dress(
   scene: THREE.Object3D,
   read: (o: THREE.Object3D, marker: Marker) => void,
-): { screens: { screen: ScreenName; mesh: THREE.Mesh }[]; accents: THREE.Mesh[]; lamps: THREE.Mesh[] } {
-  const screens: { screen: ScreenName; mesh: THREE.Mesh }[] = [];
+): { screens: { screen: ScreenName; feed?: number; mesh: THREE.Mesh }[]; accents: THREE.Mesh[]; lamps: THREE.Mesh[]; parts: { part: Part; mesh: THREE.Mesh }[] } {
+  const screens: { screen: ScreenName; feed?: number; mesh: THREE.Mesh }[] = [];
   const accents: THREE.Mesh[] = [];
   const lamps: THREE.Mesh[] = [];
+  const parts: { part: Part; mesh: THREE.Mesh }[] = [];
   const markers: THREE.Object3D[] = [];
   scene.traverse((o) => {
     const marker = readMarker(o.userData);
@@ -103,10 +105,15 @@ export function dress(
     }
     const use = readInteraction(o.userData);
     if (use) interactive(o, use.interaction, () => use.label);
+    const part = readPart(o.userData);
+    if (part) {
+      if (!(o instanceof THREE.Mesh)) throw new Error(`Deck extras: a ${part.kind} part (${o.name}) should be a mesh`);
+      parts.push({ part, mesh: o });
+    }
     if (o instanceof THREE.Mesh && o.material instanceof THREE.MeshStandardMaterial) {
       const gltf = o.material;
       const surface = readSurface(gltf.userData);
-      if (surface.kind === 'screen') screens.push({ screen: surface.screen, mesh: flipUVs(o) });
+      if (surface.kind === 'screen') screens.push({ screen: surface.screen, feed: surface.feed, mesh: flipUVs(o) });
       if (surface.kind === 'accent') accents.push(o);
       if (surface.kind === 'lamp') lamps.push(o);
       let mat = surfaces.get(gltf);
@@ -115,7 +122,7 @@ export function dress(
     }
   });
   for (const o of markers) o.removeFromParent();
-  return { screens, accents, lamps };
+  return { screens, accents, lamps, parts };
 }
 
 export class Deck {
@@ -145,13 +152,14 @@ export class Deck {
     scene.position.copy(origin);
     this.root.add(scene);
     this.root.updateMatrixWorld(true);
-    const { screens, accents, lamps } = dress(scene, (o, marker) => this.read(o, marker));
+    const { screens, accents, lamps, parts } = dress(scene, (o, marker) => this.read(o, marker));
     for (const { screen, mesh } of screens) {
       if (!isDeckScreen(screen)) throw new Error(`Deck extras: a deck has a ${screen} screen, which only a team station draws`);
       this.screens.push({ screen, mesh });
     }
     if (accents.length) throw new Error(`Deck extras: a deck has an accent (${accents[0].name}), which only a team station paints`);
     if (lamps.length) throw new Error(`Deck extras: a deck has a lamp (${lamps[0].name}), which only a team station lights`);
+    if (parts.length) throw new Error(`Deck extras: a deck has a ${parts[0].part.kind} (${parts[0].mesh.name}), which only a transporter room has`);
     // hundreds of meshes in a few dozen materials: a draw call each, until they're merged (the World draws on screens)
     mergeStatic(scene, screens.map((s) => s.mesh));
   }
@@ -193,6 +201,9 @@ export class Deck {
       }
       case 'portal':
         throw new Error('Deck extras: a deck has a portal, which only a team station has');
+      case 'pad':
+      case 'camera':
+        throw new Error(`Deck extras: a deck has a transporter room's ${marker.kind}, which only a transporter room has`);
     }
   }
 

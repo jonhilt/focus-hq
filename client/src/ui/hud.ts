@@ -59,6 +59,19 @@ export class Hud {
     }, 900);
   }
 
+  /**
+   * A transporter's shimmer over the view: it sparkles up to white, `between` happens in the glare, and the view
+   * resolves again.
+   */
+  beam(between: () => void): void {
+    this.curtain.classList.add('beam', 'down');
+    setTimeout(() => {
+      between();
+      this.curtain.classList.remove('down');
+      setTimeout(() => this.curtain.classList.remove('beam'), 500);
+    }, 700);
+  }
+
   setVisible(visible: boolean): void {
     this.root.style.display = visible ? '' : 'none';
   }

@@ -1,4 +1,4 @@
-import type { AgentStatus, BrowserFrame, Effort, Settings, TermLine } from '../../shared/types';
+import type { AgentStatus, BrowserFrame, Effort, Settings, TermLine, Workflow, WorkflowAgent } from '../../shared/types';
 import type { ArtifactInput, NoteInput, QuestionInput } from './lead';
 import type { ExplainerInput } from './explainer';
 import type { SinceVerdict } from './retest';
@@ -10,6 +10,15 @@ export type HelperEvent =
   /** The model it runs on, from its first message (Claude Code reports nothing else about it). */
   | { kind: 'model'; id: string; model: string }
   | { kind: 'ended'; id: string; ok: boolean; summary?: string };
+
+/**
+ * What Claude Code says about a workflow the session ran: started, how its phases and agents stand (the whole of it,
+ * each time one of its agents starts or finishes), finished.
+ */
+export type WorkflowEvent =
+  | { kind: 'started'; id: string; name: string; description: string }
+  | { kind: 'progress'; id: string; phases: Workflow['phases']; agents: WorkflowAgent[] }
+  | { kind: 'ended'; id: string; ok: boolean };
 
 export interface RunHooks {
   lines(lines: Omit<TermLine, 't'>[]): void;
@@ -27,6 +36,8 @@ export interface RunHooks {
    * go, indented, in the session's own lines.
    */
   helperLines?(id: string, lines: Omit<TermLine, 't'>[]): void;
+  /** A workflow the session ran started, moved on or finished. */
+  workflow?(event: WorkflowEvent): void;
   /** How full the session's context window is, at the end of a turn. */
   context?(usage: { percent: number; tokens: number; max: number }): void;
   /**

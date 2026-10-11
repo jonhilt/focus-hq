@@ -20,7 +20,8 @@ import { buildHiddenRoom, ProjectRoom, VacantHall } from './room';
 import type { Scenery } from './scenery';
 import { LCARS, LCARS_FONT, lcarsFrame, type SlidingDoors } from './starship';
 import { cruise } from './starfield';
-import type { TeamStationKit } from './teamStation';
+import type { TeamStation, TeamStationKit } from './teamStation';
+import type { TransporterRoom } from './transporterRoom';
 import { createScenery, roomTheme } from './themes';
 import { pulse } from './warpCore';
 
@@ -29,6 +30,8 @@ export interface Place {
   position: THREE.Vector3;
   lookAt: THREE.Vector3;
   projectId?: string;
+  /** Somewhere a script can go (`ui.goTo`) but the teleport panel doesn't list: a transporter room, which you beam into. */
+  unlisted?: boolean;
 }
 
 
@@ -62,6 +65,9 @@ export class World {
   portals: Portal[] = [];
   /** Every team station's briefing room, apart from the holodeck deck they're reached from (regions.ts). */
   private readonly briefingRooms = new THREE.Group();
+  /** Every team station's transporter rooms, each drawn only while the camera's in it, or a feed reveals it (`reveal`). */
+  private readonly transporterGroup = new THREE.Group();
+  transporterRooms: TransporterRoom[] = [];
   /** Where the decks that stand on their own are, to tell when the camera's on one. */
   private readonly deckBoxes = { command: new THREE.Box3(), engineering: new THREE.Box3() };
   /** Whether to draw only the camera's region (`?cull=0` draws all of them, for the gap and z-fighting scans). */
@@ -92,7 +98,7 @@ export class World {
     scene.add(this.root);
     this.drawMsd(this.msdBoard);
     for (const deck of this.decks()) this.mount(deck, this.root);
-    this.root.add(this.briefingRooms);
+    this.root.add(this.briefingRooms, this.transporterGroup);
     // a little beyond their walls, so you're on one in its doorways too
     this.deckBoxes.command.setFromObject(ship.command.root).expandByScalar(1);
     this.deckBoxes.engineering.setFromObject(ship.engineering.root).expandByScalar(1);
@@ -100,11 +106,15 @@ export class World {
 
   /**
    * Draws, from now on, only the part of the ship (regions.ts) that `at` is in: the camera's, before the frame's drawn,
-   * and the far side's before a doorway draws it (PortalView). Null draws all of it.
+   * and the far side's before a doorway draws it (PortalView). In a transporter room, only that room: a feed of one
+   * reveals from inside it (its `camera.at`) before it renders, and the camera's position puts things back. Null draws
+   * all of it.
    */
   reveal(at: THREE.Vector3 | null): void {
-    const region: Region | null = at && this.culling ? regionAt(at, this.deckBoxes, (p) => this.inBriefingRoom(p), (p) => this.inHall(p)) : null;
+    const region: Region | null = at && this.culling ? regionAt(at, this.deckBoxes, (p) => this.inBriefingRoom(p), (p) => this.inHall(p), (p) => !!this.transporterRoomAt(p)) : null;
     const show = shown(region);
+    const transporter = at && region === 'transporter' ? this.transporterRoomAt(at) : undefined;
+    for (const room of this.transporterRooms) room.group.visible = show.transporter && (!region || room === transporter);
     this.ship.command.root.visible = show.command;
     this.ship.engineering.root.visible = show.engineering;
     if (this.builder) {
@@ -117,6 +127,26 @@ export class World {
   private inHall(p: THREE.Vector3): boolean {
     for (const room of [...this.rooms.values(), ...this.vacant.values()]) if (room.holds(p)) return true;
     return false;
+  }
+
+  /** Every holodeck's team stations. */
+  stations(): TeamStation[] {
+    return [...this.rooms.values()].flatMap((r) => r.teamStations());
+  }
+
+  /** The team station whose briefing room a world position is in, if any. */
+  stationAt(p: THREE.Vector3): TeamStation | undefined {
+    return this.stations().find((s) => s.inside(p));
+  }
+
+  /** The team station `station` of `projectId`'s holodeck. */
+  station(projectId: string, station: number): TeamStation | undefined {
+    return this.rooms.get(projectId)?.teamStations()[station];
+  }
+
+  /** The transporter room a world position is in, if it's in one. */
+  transporterRoomAt(p: THREE.Vector3): TransporterRoom | undefined {
+    return this.transporterRooms.find((room) => room.inside(p));
   }
 
   private inBriefingRoom(p: THREE.Vector3): boolean {
@@ -162,6 +192,7 @@ export class World {
     this.numberOne?.group.removeFromParent();
     this.numberOne?.dispose();
     this.briefingRooms.clear();
+    this.transporterGroup.clear();
     const b = new Builder();
     this.builder = b;
 
@@ -189,6 +220,9 @@ export class World {
     for (const scenery of previous.values()) scenery.dispose();
     // the briefing rooms stand apart from the holodeck deck, and are drawn apart from it
     for (const room of this.rooms.values()) for (const briefing of room.briefingRooms()) this.briefingRooms.add(briefing);
+    // and the transporter rooms far off, each drawn apart from all of them
+    this.transporterRooms = [...this.rooms.values()].flatMap((r) => r.transporterRooms());
+    for (const room of this.transporterRooms) this.transporterGroup.add(room.group);
 
     this.buildHolodeckDeck(b, rows, this.ship.holodecks);
     this.seatNumberOne(b, this.ship.command.seat('number-one'));
@@ -250,6 +284,10 @@ export class World {
         ...room.arrival(),
       });
     }
+    for (const t of this.transporterRooms) {
+      const project = this.rooms.get(t.projectId)?.project.name ?? t.projectId;
+      places.push({ label: `Transporter room ${t.index + 1} · TS-${t.station + 1} · ${project}`, position: t.place.at.clone(), lookAt: t.place.lookAt.clone(), unlisted: true });
+    }
     return places;
   }
 
@@ -264,6 +302,11 @@ export class World {
 
   /** Human name of where a world position is. */
   locationOf(p: THREE.Vector3): { label: string; projectId?: string } {
+    const transporter = this.transporterRoomAt(p);
+    if (transporter) {
+      const project = this.rooms.get(transporter.projectId)?.project;
+      return { label: `${project?.name ?? ''} · transporter room ${transporter.index + 1} · TS-${transporter.station + 1}`, projectId: transporter.projectId };
+    }
     for (const room of this.rooms.values()) {
       if (room.holds(p)) return { label: room.project.name, projectId: room.project.id };
       const station = room.briefingRoomOf(p);

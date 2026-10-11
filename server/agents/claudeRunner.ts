@@ -13,6 +13,7 @@ import { officeMcpServer } from './officeTool';
 import { openScratch } from './scratch';
 import { appUrl, renderText, renderToolResult, renderToolUse, screenshotFrame, type ToolCall } from './render';
 import { TASK_TOOLS } from './tasks';
+import { workflowProgress } from './workflows';
 import { bundledClaude, openTerminal, readTerminal } from './terminal';
 import { type AgentRunner, type AgentSession, type CloudTerminal, type CloudTerminalRequest, type RunHooks, type RunOutcome, type RunRequest, LIMIT_REACHED, STOPPED_BY_CAPTAIN } from './types';
 
@@ -100,6 +101,8 @@ interface RunContext {
   cloudId?: string;
   /** Subagents by Claude Code's task id: the Agent tool call that started each, which their messages point back to. */
   helpers: Map<string, string>;
+  /** Workflows by Claude Code's task id. */
+  workflows: Set<string>;
   /** Subagents (by Agent tool call) whose model we've reported. */
   modelled: Set<string>;
   /** Signed in with your API key rather than your login. */
@@ -207,7 +210,7 @@ export class ClaudeRunner implements AgentRunner {
 
     let q: Query | undefined;
     let stopping = false;
-    const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map(), helpers: new Map(), modelled: new Set(), onKey, counted: new Set() };
+    const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map(), helpers: new Map(), workflows: new Set(), modelled: new Set(), onKey, counted: new Set() };
     const done = (async (): Promise<RunOutcome> => {
       let summary = '';
       let structured: unknown;
@@ -308,6 +311,16 @@ export class ClaudeRunner implements AgentRunner {
           // their transcript starts with what they were asked
           const prompt = msg.tool_use_id ? ctx.calls.get(msg.tool_use_id)?.input.prompt : undefined;
           hooks.helperLines?.(id, [{ kind: 'system', text: `✻ ${msg.description}` }, ...(typeof prompt === 'string' && prompt.trim() ? [{ kind: 'manager' as const, text: `▶ ${prompt.trim()}` }] : [])]);
+        } else if (msg.subtype === 'task_started' && msg.task_type === 'local_workflow') {
+          // a workflow: its agents report nothing of their own, only how the whole of it stands in its progress
+          ctx.workflows.add(msg.task_id);
+          hooks.workflow?.({ kind: 'started', id: msg.task_id, name: msg.workflow_name ?? '', description: msg.description });
+        } else if (msg.subtype === 'task_progress' && ctx.workflows.has(msg.task_id)) {
+          const progress = workflowProgress((msg as { workflow_progress?: unknown }).workflow_progress);
+          if (progress) hooks.workflow?.({ kind: 'progress', id: msg.task_id, ...progress });
+        } else if (msg.subtype === 'task_notification' && ctx.workflows.has(msg.task_id)) {
+          hooks.workflow?.({ kind: 'ended', id: msg.task_id, ok: msg.status === 'completed' });
+          ctx.workflows.delete(msg.task_id);
         } else if (msg.subtype === 'task_progress') {
           const id = ctx.helpers.get(msg.task_id);
           const activity = msg.summary ?? (msg.last_tool_name ? `Using ${msg.last_tool_name}` : '');

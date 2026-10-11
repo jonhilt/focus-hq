@@ -41,6 +41,7 @@ import { PortalView } from './world/portal';
 import { loadTrainingHall } from './world/hall';
 import { loadTeamStation } from './world/teamStation';
 import { stopAt } from './world/turbolift';
+import { TransporterFeeds } from './world/transporterFeeds';
 
 async function fontsReady(): Promise<void> {
   const loads = ['700 40px Fredoka', '500 40px Fredoka', '15px "JetBrains Mono"', '600 40px Antonio', '500 40px Antonio'].map((f) => document.fonts.load(f));
@@ -84,10 +85,11 @@ async function main() {
   setMerging(params.get('merge') !== '0');
   const portalView = new PortalView(renderer);
   const view = new SceneRenderer(renderer);
+  const feeds = new TransporterFeeds(renderer);
 
   await fontsReady();
 
-  const [theShip, teamStation, hallKit] = await Promise.all([ship(), loadTeamStation('/ship/team-station.glb'), loadTrainingHall('/ship/training-hall.glb')]);
+  const [theShip, teamStation, hallKit] = await Promise.all([ship(), loadTeamStation('/ship/team-station.glb', '/ship/transporter-room.glb'), loadTrainingHall('/ship/training-hall.glb')]);
   const world = new World(scene, theShip, teamStation, hallKit);
   // ?cull=0 draws the whole ship from anywhere, for the gap and z-fighting scans
   world.culling = params.get('cull') !== '0';
@@ -153,7 +155,22 @@ async function main() {
       hud.blackout(() => player.teleport(stop.position, stop.lookAt));
       player.lock();
     },
+    beamTo: (projectId, station, room) => {
+      const to = world.transporterRooms.find((t) => t.projectId === projectId && t.station === station && t.index === room);
+      if (to) beam(to.place.at, to.place.lookAt);
+    },
+    beamBack: (projectId, station) => {
+      const to = world.station(projectId, station)?.viewpoint();
+      if (to) beam(to.position, to.lookAt);
+    },
   };
+  /** A transporter's beam: its sound and shimmer, and the captain's somewhere else. */
+  function beam(feet: THREE.Vector3, lookAt: THREE.Vector3): void {
+    sound.beam();
+    panels.close(false);
+    hud.beam(() => player.teleport(feet, lookAt));
+    player.lock();
+  }
 
   // every button on a console blips, bar the close button, which has the panel's own closing chirp
   document.addEventListener('click', (e) => {
@@ -430,6 +447,13 @@ async function main() {
       case 'vacant':
         ui.openManager('new-project');
         break;
+      case 'energise':
+        sound.press();
+        if (i.projectId !== undefined && i.station !== undefined) ui.beamBack(i.projectId, i.station);
+        break;
+      case 'beam-to':
+        ui.beamTo(i.projectId, i.station, i.room);
+        break;
     }
   };
 
@@ -518,7 +542,8 @@ async function main() {
       const where = world.locationOf(camera.position);
       hud.setLocation(where.label, where.projectId ? state.project(where.projectId)?.color : undefined);
     }
-    // each drawn with only its own part of the ship: the doorway's far side, then where you are
+    // each drawn with only its own part of the ship: a transporter room's feed, the doorway's far side, then where you are
+    feeds.render(scene, world, camera.position, now);
     portalView.render(scene, camera, world.portals, (at) => world.reveal(at));
     world.reveal(camera.position);
     view.render(scene, camera);

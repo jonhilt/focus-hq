@@ -11,19 +11,30 @@ What the browser reads (client/src/world/deck.ts), all through custom properties
   floor `label` names in the HUD), 'seat' (where a crew member's chair stands, turned along the empty's +Y: `crew`,
   'number-one' in the ready room, 'engineer' at the engineering station, or in a team station's briefing room
   'station-lead', 'station-helper-1' to 'station-helper-4' or 'station-reviewer'), 'turbolift' (where the turbolift
-  stops: you stand there in its car, facing along the empty's +Y, and `label` names the deck) or 'portal' (a doorway
+  stops: you stand there in its car, facing along the empty's +Y, and `label` names the deck), 'portal' (a doorway
   to somewhere else, at its centre in the middle of its wall, the way in along the empty's +Y: `width`, `height`, and
-  the `depth` of the alcove behind it, where the browser draws the other end).
-- An object's `interact` has pressing E on it do something: 'manager' (open the ready room console), 'turbolift' (its
-  controls), 'engineering' (the chief engineer's panel: the report card and retros) or 'ledger' (reviewing the ledger),
-  with the hint `label`.
+  the `depth` of the alcove behind it, where the browser draws the other end), and in a transporter room 'pad' (a
+  transporter pad, at the middle of its top, where whoever beams in stands facing along the empty's +Y: its `tier`, 0
+  at the front to 2 at the back, and its `slot` along the tier, 0 at the door's end to 5) or 'camera' (where the
+  camera for the room's feed stands, looking along the empty's +Y, turned and tilted, with a vertical `fov` in degrees
+  that frames the platform).
+- An object's `interact` has pressing E on it (or on anything hanging from it) do something: 'manager' (open the ready
+  room console), 'turbolift' (its controls), 'engineering' (the chief engineer's panel: the report card and retros),
+  'ledger' (reviewing the ledger) or 'energise' (a transporter room's console: beam back to the briefing room), with
+  the hint `label`.
+- An object's `part` names it for the browser, which finds it to change it as it goes, so it's kept out of merging: in
+  a transporter room, 'pad-ring' (a pad's lit ring, in the colour of whoever's on it) and 'pad-emitter' (the emitter's
+  glow over it), each with the pad's `tier` and `slot`, and 'buffer-glow' (the pattern buffer's glowing columns).
 - A material's `surface` has the browser draw it: 'space' (a viewport onto the stars), 'keys' (an LCARS touch panel),
   'readout' (LCARS readouts: `seed`, `w`, `h`), 'console' (an LCARS console top `w`×`h` metres, `seed`, with
   `stations` crew's keys side by side), 'sign' (an LCARS sign: `text`, `color`, optional `sub` and `code`),
   'screen' (a screen the browser keeps drawing: `screen`, which is 'mission-control', 'msd' (main engineering's
   cutaway of the ship), or a team station's
   'team-station', its lead's session, 'team-station-sign', its name, goal and whether it's in session, and
-  'team-station-note', the lead's note on the goal), 'star-chart' (long-range sensors), 'accent' (a team station's own
+  'team-station-note', the lead's note on the goal, 'team-station-feed' and 'team-station-feed-caption', the live
+  picture from one of its transporter rooms (`feed`, 0 to 2) and its caption, and 'team-station-feeds', how many
+  workflows wait for a room, or a transporter room's 'transporter-tactical', its tactical display
+  of the workflow it's running, and 'transporter-buffer', its pattern buffer's readout), 'star-chart' (long-range sensors), 'accent' (a team station's own
   colour, or a training hall's project's, lightened by the material's `shade`), 'lamp' (a team station door's lamps, lit while its goal room is in session), 'warp-core' (the warp core's glow, pulsing: `part`, 'column' or 'chamber'), 'carpet' (speckled
   carpet in the material's colour, tiled every 2 m) or 'unlit' (the material's colour, unshaded: lights and ceilings).
   Everything else is a toon material in its base colour.
@@ -604,6 +615,14 @@ def interact(kind, label, *objs):
     for obj in objs:
         obj['interact'] = kind
         obj['label'] = label
+
+
+def part(kind, *objs, **props):
+    """Names `objs` as a `kind` of part the browser finds and changes (see the module's docstring), with `props`."""
+    for obj in objs:
+        obj['part'] = kind
+        for k, v in props.items():
+            obj[k] = v
 
 
 def marker(name, kind, at=(0, 0, 0), yaw=0.0, frame=None, scale=(1, 1, 1), **props):

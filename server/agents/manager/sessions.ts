@@ -10,6 +10,7 @@ import { carryOnPrompt, conflictsPrompt, issuePrompt, systemAppend } from '../pr
 import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
 import { Sessions, Workspace } from '../services';
 import { applyTaskTool } from '../tasks';
+import { applyWorkflowEvent, WORKFLOW_LINGER_MS } from '../workflows';
 import { type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN } from '../types';
 import { EmptyRepository, FINISHED, type ManagerServices, Part, Refused, ReportGone, withNotes, type WorkError } from './core';
 
@@ -122,6 +123,19 @@ export class AgentSessions extends Part {
         // a helper that's done lingers a moment, so you see how it got on
         if (event.kind === 'ended') {
           this.background(Effect.sleep(HELPER_LINGER_MS).pipe(Effect.andThen(Effect.sync(() => this.update(agent, { helpers: (agent.helpers ?? []).filter((h) => h.id !== event.id) })))));
+        }
+      },
+      workflow: (event) => {
+        // only a lead's away teams have somewhere to beam in to: the lead's briefing room
+        if (agent.task !== 'lead') return;
+        const before = agent.workflows ?? [];
+        const workflows = applyWorkflowEvent(before, event, Date.now());
+        if (workflows === before) return;
+        this.update(agent, { workflows });
+        if (event.kind === 'started') this.print(agent, [{ kind: 'system', text: `✻ Workflow ${event.name}: its away team beams into ${agent.name}'s briefing room a phase at a time` }]);
+        // a finished workflow's away team lingers a moment, so you see how it got on
+        if (event.kind === 'ended') {
+          this.background(Effect.sleep(WORKFLOW_LINGER_MS).pipe(Effect.andThen(Effect.sync(() => this.update(agent, { workflows: (agent.workflows ?? []).filter((w) => w.id !== event.id) })))));
         }
       },
       cost: (usd) => this.update(agent, { costUsd: usd }),
@@ -311,8 +325,8 @@ export class AgentSessions extends Part {
       if (review) return yield* this.core.reviews.finishReview(agent, outcome.structured, outcome.summary);
       if (lead) {
         // the lead's turn is over: it's the captain's turn, and their work ships when the lead says so, not now. Their
-        // subagents ended with it; any that just finished linger a moment
-        this.update(agent, { status: 'done', activity: 'Your turn', finishedAt: Date.now(), helpers: agent.helpers?.filter((h) => h.status !== 'working') });
+        // subagents and workflows ended with it; any that just finished linger a moment
+        this.update(agent, { status: 'done', activity: 'Your turn', finishedAt: Date.now(), helpers: agent.helpers?.filter((h) => h.status !== 'working'), workflows: agent.workflows?.filter((w) => w.status !== 'running') });
         this.core.seating.schedule();
         return;
       }

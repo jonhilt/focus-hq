@@ -5,7 +5,7 @@ import type { Agent, AgentStatus, Avatar, Rank } from '../../../shared/types';
 import { canvasTexture, fitText, makeCanvas } from './canvas';
 import { Head, PIP_GOLD } from './head';
 import { toon } from './materials';
-import { keyboardPose, type Pose, type PoseInput, paddPose } from './pose';
+import { keyboardPose, type Pose, type PoseInput, paddPose, standingPose } from './pose';
 import { ball, capsule, cyl, padd, PADD_WIDTH } from './props';
 import { LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
 import { OVERLAY_LAYER } from './frame';
@@ -60,10 +60,10 @@ function combadge(): THREE.Group {
   return g;
 }
 
-/** Rank pips on the right of the collar. */
-function pips(rank: Rank): THREE.Object3D[] {
+/** Rank pips on the right of the collar, `lift` above a seated character's. */
+function pips(rank: Rank, lift: number): THREE.Object3D[] {
   const count = rank === 'ensign' ? 1 : 2;
-  return Array.from({ length: count }, (_, i) => onChest(ball(0.022, PIP_GOLD, 10), 0.93, -0.45 - i * 0.26, 0.2));
+  return Array.from({ length: count }, (_, i) => onChest(ball(0.022, PIP_GOLD, 10), 0.93 + lift, -0.45 - i * 0.26, 0.2));
 }
 
 /** What a character shows: an agent at their desk, or a permanent crew member like the operations officer at Ops. */
@@ -94,19 +94,40 @@ export function agentView(agent: Agent): CrewView {
   };
 }
 
-/** What a seated character works with: a workstation's touch panel in front of them, or a PADD in their hands. */
-export type Grip = 'keyboard' | 'padd';
-type Hands = { grip: 'keyboard' } | { grip: 'padd'; padd: THREE.Group };
+/**
+ * What a character works with: seated, a workstation's touch panel in front of them ('keyboard') or a PADD in their
+ * hands ('padd'); or standing on their own two feet, a PADD in hand while they work ('standing').
+ */
+export type Grip = 'keyboard' | 'padd' | 'standing';
+type Hands = { grip: 'keyboard' } | { grip: 'padd' | 'standing'; padd: THREE.Group };
+
+/** How much higher a standing character's body, and everything on it, is than a seated one's. */
+const STAND_LIFT = 0.18;
+/** A standing character's hips, the height they stoop from. */
+const HIP = 0.72;
+/** A seated character's shoulders and head, and their speech bubble. */
+const SHOULDER_Y = 0.95;
+const HEAD_Y = 1.27;
+const BUBBLE_Y = 1.95;
 
 /** The left hand holds a PADD by its lower-left corner. */
 const PADD_GRIP = new THREE.Vector3(0, 0.1, PADD_WIDTH / 2);
 const tmpHand = new THREE.Vector3();
 const tmpGrip = new THREE.Vector3();
 
-/** A chibi Starfleet crew member sitting on a chair, facing +X. */
+/**
+ * A chibi Starfleet crew member facing +X: sitting on a chair at the origin, or, with the 'standing' grip, standing with
+ * their feet on the floor at the origin.
+ */
 export class Character {
   readonly group = new THREE.Group();
+  /** How high the middle of their head is over the group's origin (before any bounce). */
+  readonly headHeight: number;
+  /** How high their speech bubble floats over the group's origin (before it bobs). */
+  readonly bubbleHeight: number;
   private body: THREE.Group;
+  /** A standing character's legs, apart from the body so it can stoop. */
+  private legs?: THREE.Group;
   private head: Head;
   private armL: THREE.Group;
   private armR: THREE.Group;
@@ -118,63 +139,89 @@ export class Character {
   private celebrateUntil = 0;
   private lastStatus: AgentStatus | null = null;
   private hands: Hands;
+  /** How big the speech bubble is, from its usual size. */
+  private readonly bubbleSize: number;
 
   constructor(
     private view: CrewView,
     grip: Grip = 'keyboard',
+    /** A smaller speech bubble (`size`), and one raised `lift` metres, for crew who stand close together. */
+    bubble: { size?: number; lift?: number } = {},
   ) {
     const { division, rank, skin } = view.avatar;
     const colour = UNIFORM[division];
+    const lift = grip === 'standing' ? STAND_LIFT : 0;
+    this.headHeight = HEAD_Y + lift;
+    this.bubbleHeight = BUBBLE_Y + lift + (bubble.lift ?? 0);
+    this.bubbleSize = bubble.size ?? 1;
 
     this.body = new THREE.Group();
     this.group.add(this.body);
     const torso = capsule(0.2, 0.18, SUIT);
-    torso.position.y = 0.78;
+    torso.position.y = 0.78 + lift;
     this.body.add(torso);
     const yoke = new THREE.Mesh(new THREE.SphereGeometry(0.207, 20, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), toon(colour));
-    yoke.position.y = 0.87;
+    yoke.position.y = 0.87 + lift;
     this.body.add(yoke);
-    this.body.add(onChest(combadge(), 0.88, 0.5, 0.214), ...pips(rank));
-    // legs: thighs forward on the seat, shins down
-    for (const s of [-1, 1]) {
-      const thigh = capsule(0.085, 0.26, SUIT);
-      thigh.rotation.z = Math.PI / 2;
-      thigh.position.set(0.2, 0.55, s * 0.1);
-      this.body.add(thigh);
-      const shin = capsule(0.075, 0.3, SUIT);
-      shin.position.set(0.4, 0.3, s * 0.1);
-      this.body.add(shin);
-      const boot = ball(0.09, '#1f2228');
-      boot.scale.set(1.4, 0.6, 1);
-      boot.position.set(0.46, 0.06, s * 0.1);
-      this.body.add(boot);
+    this.body.add(onChest(combadge(), 0.88 + lift, 0.5, 0.214), ...pips(rank, lift));
+    if (grip === 'standing') {
+      // legs: a short straight one each from the boot up into the torso
+      this.legs = new THREE.Group();
+      this.group.add(this.legs);
+      for (const s of [-1, 1]) {
+        const leg = capsule(0.09, 0.52, SUIT);
+        leg.position.set(0, 0.4, s * 0.1);
+        const boot = ball(0.09, '#1f2228');
+        boot.scale.set(1.4, 0.6, 1);
+        boot.position.set(0.05, 0.06, s * 0.1);
+        this.legs.add(leg, boot);
+      }
+      mergeStatic(this.legs);
+    } else {
+      // legs: thighs forward on the seat, shins down
+      for (const s of [-1, 1]) {
+        const thigh = capsule(0.085, 0.26, SUIT);
+        thigh.rotation.z = Math.PI / 2;
+        thigh.position.set(0.2, 0.55, s * 0.1);
+        this.body.add(thigh);
+        const shin = capsule(0.075, 0.3, SUIT);
+        shin.position.set(0.4, 0.3, s * 0.1);
+        this.body.add(shin);
+        const boot = ball(0.09, '#1f2228');
+        boot.scale.set(1.4, 0.6, 1);
+        boot.position.set(0.46, 0.06, s * 0.1);
+        this.body.add(boot);
+      }
     }
 
     this.head = new Head(view.avatar);
-    this.head.group.position.y = 1.27;
+    this.head.group.position.y = this.headHeight;
     this.body.add(this.head.group);
 
     this.armL = arm(colour, skin);
-    this.armL.position.set(0.02, 0.95, -0.25);
+    this.armL.position.set(0.02, SHOULDER_Y + lift, -0.25);
     this.armR = arm(colour, skin);
-    this.armR.position.set(0.02, 0.95, 0.25);
+    this.armR.position.set(0.02, SHOULDER_Y + lift, 0.25);
     this.body.add(this.armL, this.armR);
     switch (grip) {
       case 'keyboard':
         this.hands = { grip };
         break;
       case 'padd':
+      case 'standing':
         this.hands = { grip, padd: padd() };
         this.body.add(this.hands.padd);
         break;
     }
+    // a transporter beam's column (transporter.ts) has to reach over a standing character's head
+    if (grip === 'standing') this.group.userData.height = this.headHeight + 0.45;
 
     // the torso, legs and badges are a draw call each until merged: the head and arms move, and the PADD with them
-    mergeStatic(this.body, [this.head.group, this.armL, this.armR, ...(this.hands.grip === 'padd' ? [this.hands.padd] : [])]);
+    mergeStatic(this.body, [this.head.group, this.armL, this.armR, ...(this.hands.grip === 'keyboard' ? [] : [this.hands.padd])]);
 
     // soft blob shadow
     const shadow = new THREE.Mesh(
-      new THREE.CircleGeometry(0.45, 24),
+      new THREE.CircleGeometry(grip === 'standing' ? 0.3 : 0.45, 24),
       new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.15, depthWrite: false }),
     );
     shadow.rotation.x = -Math.PI / 2;
@@ -183,8 +230,8 @@ export class Character {
 
     this.bubbleTex = canvasTexture(this.bubbleCanvas.canvas);
     this.bubble = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.bubbleTex, depthWrite: false, transparent: true }));
-    this.bubble.scale.set(1.75, 0.49, 1);
-    this.bubble.position.set(0, 1.95, 0);
+    this.bubble.scale.set(1.75 * this.bubbleSize, 0.49 * this.bubbleSize, 1);
+    this.bubble.position.set(0, this.bubbleHeight, 0);
     this.bubble.renderOrder = 10;
     this.bubble.layers.set(OVERLAY_LAYER);
     this.group.add(this.bubble);
@@ -263,11 +310,19 @@ export class Character {
         this.holdPadd(this.hands.padd, pose.lean);
         break;
       }
+      case 'standing': {
+        const pose = standingPose(input);
+        bodyY = this.strike(pose, p);
+        this.stoop(pose.stoop, pose.slump);
+        this.hands.padd.visible = pose.padd !== undefined;
+        if (pose.padd !== undefined) this.holdPadd(this.hands.padd, pose.padd);
+        break;
+      }
     }
 
     // bubble bob, and pulse when the hand is up
-    this.bubble.position.y = 1.95 + Math.sin(p * 2) * 0.03 + bodyY;
-    const pulse = s === 'waiting' ? 1 + Math.sin(p * 8) * 0.06 : 1;
+    this.bubble.position.y = this.bubbleHeight + Math.sin(p * 2) * 0.03 + bodyY;
+    const pulse = (s === 'waiting' ? 1 + Math.sin(p * 8) * 0.06 : 1) * this.bubbleSize;
     this.bubble.scale.set(1.75 * pulse, 0.49 * pulse, 1);
     // gone by the time you're looking over their shoulder (2.2 m from their feet), but not as you walk into the room
     const fade = Math.min(1, Math.max(0, (dist - 2.3) / 0.7));
@@ -282,10 +337,21 @@ export class Character {
     this.head.group.rotation.set(0, headTurn, headTilt);
     this.body.position.y = bodyY;
     this.body.scale.y = 1 + Math.sin(p * 2.2) * 0.008;
+    if (this.legs) this.legs.position.y = bodyY;
 
     // the face follows the pose, blinking now and then
     this.head.express(expression, (p % 4.3) < 0.12);
     return bodyY;
+  }
+
+  /** Bends a standing character forward `stoop` radians from the hips, and drops their shoulders `slump`. */
+  private stoop(stoop: number, slump: number): void {
+    // turning round the hips rather than the feet
+    this.body.rotation.z = -stoop;
+    this.body.position.x = -HIP * Math.sin(stoop);
+    this.body.position.y += HIP * (1 - Math.cos(stoop));
+    const shoulder = SHOULDER_Y + STAND_LIFT - slump;
+    this.armL.position.y = this.armR.position.y = shoulder;
   }
 
   /** Puts the PADD in the left hand, leaning back from upright so its screen faces the eyes. */

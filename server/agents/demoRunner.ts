@@ -9,6 +9,7 @@ import type { NumberOneOfficer, NumberOneReply, NumberOneTurn } from './numberOn
 import type { Drafter, DraftRequest, DraftResult } from './planner';
 import type { ExplainerInput } from './explainer';
 import { renderText, renderToolUse } from './render';
+import { workflowProgress } from './workflows';
 import type { TriageDecision, Triager, TriageRequest } from './triage';
 import { type AgentRunner, type AgentSession, type CloudTerminal, type CloudTerminalRequest, type RunHooks, type RunOutcome, type RunRequest, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
 
@@ -188,6 +189,79 @@ export class DemoRunner implements AgentRunner {
       return { ok: true, summary: JSON.stringify(report), structured: report };
     };
 
+    // a workflow (Claude Code's Workflow tool), played out as Claude Code reports one: at most `cap` agents at work at once
+    // and the rest queued, a pipeline's stages overlapping, agents queued as the script reaches them, some failing. Its
+    // progress goes through the same reading as a real session's
+    type Job = { label: string; phase: number; ask: string; result?: string; after?: string; secs: [number, number] };
+    const runWorkflow = async (name: string, description: string, phases: { title: string; child?: boolean }[], jobs: Job[], cap = 8) => {
+      const id = `demo-wf-${randomBytes(3).toString('hex')}`;
+      type Entry = { job: Job; index: number; queuedAt: number; startedAt?: number; doneAt?: number; state: 'start' | 'done' | 'error' };
+      const entries: Entry[] = [];
+      const ready = (job: Job) => !job.after || entries.some((e) => e.job.label === job.after && e.state !== 'start');
+      const report = () => {
+        const raw = [
+          ...phases.map((p, i) => ({ type: 'workflow_phase', index: i + 1, title: p.title, ...(p.child && { kind: 'child' }) })),
+          ...entries.map((e) => ({
+            type: 'workflow_agent', index: e.index, label: e.job.label, phaseIndex: e.job.phase, phaseTitle: phases[e.job.phase - 1]?.title, state: e.state,
+            model: 'claude-sonnet-5-5', queuedAt: e.queuedAt, startedAt: e.startedAt, promptPreview: e.job.ask,
+            ...(e.doneAt && e.startedAt && { durationMs: e.doneAt - e.startedAt }),
+            ...(e.state === 'done' && { resultPreview: e.job.result }),
+            ...(e.state === 'error' && { error: 'The agent hit an error' }),
+          })),
+        ];
+        const progress = workflowProgress(raw);
+        if (progress) hooks.workflow?.({ kind: 'progress', id, ...progress });
+      };
+      hooks.lines([{ kind: 'tool', text: `⏺ Workflow(${name})` }, { kind: 'output', text: '  ⎿  Launched in the background' }]);
+      hooks.workflow?.({ kind: 'started', id, name, description });
+      const pending = [...jobs];
+      const ends = new Map<Entry, number>();
+      while (pending.length || entries.some((e) => e.state === 'start')) {
+        const now = Date.now();
+        // the script reaches each agent once what it waits on has finished: queued, then started when a slot is free
+        for (const job of pending.filter(ready)) {
+          pending.splice(pending.indexOf(job), 1);
+          entries.push({ job, index: entries.length + 1, queuedAt: now, state: 'start' });
+        }
+        for (const e of entries) {
+          if (e.state !== 'start') continue;
+          if (e.startedAt === undefined && entries.filter((x) => x.state === 'start' && x.startedAt !== undefined).length < cap) {
+            e.startedAt = now;
+            ends.set(e, now + ((e.job.secs[0] + Math.random() * (e.job.secs[1] - e.job.secs[0])) * 1000) / this.speed);
+          } else if (e.startedAt !== undefined && now >= (ends.get(e) ?? Infinity)) {
+            e.doneAt = now;
+            e.state = e.job.result === undefined ? 'error' : 'done';
+          }
+        }
+        report();
+        await wait(0.5, 0.9);
+      }
+      hooks.workflow?.({ kind: 'ended', id, ok: true });
+      const done = entries.filter((e) => e.state === 'done').length;
+      hooks.lines([{ kind: 'output', text: `  ⎿  ${name}: ${done} of ${entries.length} agents finished, ${entries.length - done} failed` }]);
+    };
+
+    // reviewing the slice before it ships: a pipeline of scans and checks, a fan-out bigger than the workflow can run at
+    // once, and a child workflow; alongside it, a smaller one mapping the repos
+    const reviewWorkflows = async (folders: string[], goal: string) => {
+      const areas = ['store', 'routes', 'views', 'tests', 'styles', 'config'];
+      const review: Job[] = [
+        ...areas.flatMap((a, i): Job[] => [
+          { label: `scan:${a}`, phase: 1, ask: `Scan the ${a} for anything ${goal} breaks`, result: i === 3 ? undefined : `${a}: nothing broken`, secs: [3, 7] },
+          { label: `check:${a}`, phase: 2, ask: `Check what the scan of the ${a} found`, result: 'Confirmed', after: `scan:${a}`, secs: [2, 5] },
+        ]),
+        ...Array.from({ length: 24 }, (_, i): Job => ({ label: `fan:${i}`, phase: 3, ask: `Try ${goal} with case ${i}`, result: i === 17 ? undefined : `Case ${i} passes`, after: 'check:config', secs: [2, 5] })),
+        { label: 'child:1', phase: 4, ask: 'Summarise the findings', result: 'Summary written', after: 'fan:23', secs: [2, 3] },
+        { label: 'child:2', phase: 4, ask: 'Draft the PR notes', result: 'Notes drafted', after: 'fan:23', secs: [2, 3] },
+      ];
+      const map: Job[] = folders.map((f) => ({ label: `map:${f}`, phase: 1, ask: `Map ./${f} for ${goal}`, result: `./${f} mapped`, secs: [4, 9] }));
+      hooks.activity('working', 'Waiting on 2 workflows');
+      await Promise.all([
+        runWorkflow('review-slice', `Review ${goal} before it ships`, [{ title: 'Scan' }, { title: 'Check' }, { title: 'Fan' }, { title: '▸ summarise', child: true }], review),
+        wait(2, 3).then(() => runWorkflow('map-repos', `Map each repo for ${goal}`, [{ title: 'Map' }], map)),
+      ]);
+    };
+
     // a goal's lead: talks the goal through, builds a slice across every repo, ships it, and hears back
     const leadScript = async (tools: NonNullable<RunRequest['tools']>): Promise<RunOutcome> => {
       const sessionId = req.resumeSessionId ?? `demo-lead-${randomBytes(4).toString('hex')}`;
@@ -337,6 +411,8 @@ export class DemoRunner implements AgentRunner {
         await note({ slice: checklist(repos.indexOf(r) + 1) });
         await tool('TodoWrite', leadTodos(repos.indexOf(r) + 1));
       }
+      // a workflow reviews the slice before it ships: its away team beams into the briefing room a phase at a time
+      await reviewWorkflows(repos.map((r) => r.folder), goal);
       await handleInbox();
       const title = `Thin slice: ${goal}`.slice(0, 70);
       if (await ship(title, `## Summary\n\nA first, thin version of ${goal}, end to end.\n\n## Testing\n\n- Tests pass in every repo`)) {

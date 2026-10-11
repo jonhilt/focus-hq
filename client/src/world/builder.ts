@@ -27,6 +27,13 @@ export type Interaction =
   | { kind: 'chart'; id: string }
   /** A switch on the panel beside a team station's screen: show or hide that pane, on every station screen. */
   | { kind: 'pane'; pane: keyof PanePrefs }
+  /**
+   * A transporter room's console: beam back to the briefing room of the station it's one of (`projectId`'s holodeck's
+   * team station `station`, its transporter room `room`), which the room fills in as it's dressed.
+   */
+  | { kind: 'energise'; projectId?: string; station?: number; room?: number }
+  /** A feed on a briefing room's wall: beam into the transporter room it shows (`projectId`'s team station `station`'s room `room`). */
+  | { kind: 'beam-to'; projectId: string; station: number; room: number }
   | { kind: 'vacant' };
 
 /** How far away (m) the player can use something with E, unless it says otherwise. */

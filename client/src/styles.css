@@ -101,6 +101,16 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
 
 .curtain { position: fixed; inset: 0; z-index: 6; background: #000; opacity: 0; pointer-events: none; transition: opacity 0.35s ease; }
 .curtain.down { opacity: 1; }
+/* a transporter's shimmer: sparkles over a blue-white glare, rather than the turbolift's black */
+.curtain.beam {
+  transition: opacity 0.45s ease;
+  background:
+    radial-gradient(circle at 20% 30%, #fff 0 2px, transparent 3px) 0 0 / 46px 46px,
+    radial-gradient(circle at 70% 60%, #e4f6ff 0 1.5px, transparent 2.5px) 0 0 / 31px 31px,
+    radial-gradient(ellipse at center, #f4fcff 0%, #a9e2ff 45%, #3d6fa8 100%);
+  animation: shimmer 0.5s linear infinite;
+}
+@keyframes shimmer { to { background-position: 0 -46px, 0 31px, 0 0; } }
 .toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 30; max-width: min(420px, calc(100vw - 32px)); }
 .toast {
   --tone: var(--lcars-periwinkle);

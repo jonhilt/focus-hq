@@ -158,3 +158,98 @@ export function paddPose({ status: s, thinking, celebrating, p }: PoseInput): Pa
       return { ...LAP, headTilt: -0.25 + Math.sin(p * 1.2) * 0.04, headTurn: 0, bodyY: 0, expression: 'asleep' };
   }
 }
+
+/**
+ * A standing pose also says where the PADD is (leaning back by `padd`, as a PaddPose's `lean`; put away while it's
+ * missing), how far the upper body `stoop`s forward from the hips (radians) and how far the shoulders `slump` (metres).
+ */
+export interface StandingPose extends Pose {
+  padd?: number;
+  stoop: number;
+  slump: number;
+}
+
+/** Arms hanging at the sides, a little forward and out from the hips (positive x swings a left arm out, to -Z). */
+const RELAXED = { armL: { x: 0.14, y: 0, z: -1.42 }, armR: { x: -0.14, y: 0, z: -1.42 } };
+
+/**
+ * A character standing, facing +X, a PADD in hand while they work and arms at their sides otherwise. Like the seated
+ * poses, every motion is slow: reading, the odd tap, shifting their weight.
+ */
+export function standingPose({ status: s, thinking, celebrating, p }: PoseInput): StandingPose {
+  const still = { stoop: 0, slump: 0, bodyY: 0 };
+  switch (s) {
+    case 'working':
+    case 'setting-up':
+    case 'pushing':
+    case 'testing': {
+      if (thinking) {
+        return {
+          ...still,
+          armL: ASIDE.armL,
+          armR: { x: -0.5, y: -0.15, z: 0.25 },
+          padd: ASIDE.lean,
+          headTilt: 0.15,
+          headTurn: Math.sin(p) * 0.15,
+          expression: 'thinking',
+        };
+      }
+      // reading, as seated, leaning in a little; every few seconds the right hand lifts to tap the screen
+      const bob = Math.sin(p * 1.3) * 0.03;
+      const tap = Math.max(0, Math.sin(p * 1.4)) ** 6;
+      return {
+        ...still,
+        armL: { ...HOLD.armL, z: HOLD.armL.z + bob },
+        armR: { x: 0, y: HOLD.armR.y + tap * 0.25, z: HOLD.armR.z + bob + tap * 0.22 },
+        padd: HOLD.lean,
+        stoop: 0.05 + Math.sin(p * 0.7) * 0.015,
+        headTilt: -0.14 + Math.sin(p * 0.9) * 0.03,
+        headTurn: Math.sin(p * 0.6) * 0.06,
+        expression: 'focused',
+      };
+    }
+    case 'waiting':
+      return {
+        ...still,
+        armL: RELAXED.armL,
+        armR: { x: 0.2, y: -0.15, z: 1.35 + Math.sin(p * 9) * 0.15 },
+        headTilt: 0.15,
+        headTurn: -0.5,
+        bodyY: Math.abs(Math.sin(p * 4)) * 0.03,
+        expression: 'eager',
+      };
+    case 'done': {
+      if (celebrating) {
+        // a fist pumping in the air, bouncing on their toes
+        return {
+          ...still,
+          armL: RELAXED.armL,
+          armR: { x: 0.35, y: 0, z: 1.35 + Math.sin(p * 12) * 0.15 },
+          headTilt: 0.15,
+          headTurn: 0,
+          bodyY: Math.abs(Math.sin(p * 9)) * 0.05,
+          expression: 'grin',
+        };
+      }
+      // pleased, with a nod every few seconds
+      const nod = Math.max(0, Math.sin(p * 1.2)) ** 8;
+      return { ...still, ...RELAXED, headTilt: 0.1 - nod * 0.3, headTurn: 0, expression: 'happy' };
+    }
+    case 'error':
+      // head down, shoulders slumped, hands hanging in front
+      return {
+        armL: { x: -0.1, y: 0, z: -1.35 },
+        armR: { x: 0.1, y: 0, z: -1.35 },
+        stoop: 0.14,
+        slump: 0.05,
+        bodyY: 0,
+        headTilt: -0.5 + Math.sin(p * 1.1) * 0.03,
+        headTurn: 0,
+        expression: 'worried',
+      };
+    case 'queued':
+      return { ...still, ...RELAXED, headTilt: Math.sin(p * 0.7) * 0.05, headTurn: Math.sin(p * 0.5) * 0.4, expression: 'idle' };
+    case 'stopped':
+      return { ...still, ...RELAXED, stoop: 0.05, headTilt: -0.25 + Math.sin(p * 1.2) * 0.04, headTurn: 0, expression: 'asleep' };
+  }
+}

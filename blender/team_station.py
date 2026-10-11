@@ -58,7 +58,9 @@ HEIGHT = 4.4
 CHART_FACET = (15, 55)
 SCREEN_FACET = (55, 125)
 BOARD_FACET = (125, 165)
-WINDOW_FACETS = [(-50, -22), (202, 230)]
+WINDOW_FACETS = [(-50, -22)]
+#: the stretch of port wall past the goal board that carries the bank of transporter feeds
+FEEDS_FACET = (170, 232)
 #: the rest of the wall curves round in steps no wider than this (degrees)
 CURVE_STEP = 11
 #: a mini bridge, but with no captain's chair (the captain stands): the middle of the command carpet, where the screen
@@ -100,6 +102,19 @@ PANES_H = DADO_PANEL_W * 200 / 1600
 BOARD_W = 3.4
 BOARD_H = BOARD_W * 804 / 1440
 BOARD_BOTTOM = 1.35
+#: the bank of feeds from the station's transporter rooms across the port wall, a monitor per room from the door's end,
+#: in view of the command carpet over the helpers' heads: each a 16:9 picture (the feed's 512×288) with its caption
+#: (1024×100) under it in one bezel, and a strip over the three that says how many workflows wait for a room
+FEED_W = 1.6
+FEED_H = FEED_W * 9 / 16
+CAPTION_H = FEED_W * 100 / 1024
+FEED_GAP = 0.03
+FEED_BOTTOM = 1.5
+#: where each monitor stands along the feeds' stretch of wall (+X is toward the door's end)
+FEED_XS = (1.9, 0.0, -1.9)
+FEEDS_STRIP_W = 5.0
+FEEDS_STRIP_H = FEEDS_STRIP_W * 100 / 2400
+FEEDS_STRIP_BOTTOM = FEED_BOTTOM + CAPTION_H + FEED_GAP + FEED_H + 0.26
 
 
 def build():
@@ -292,13 +307,36 @@ def helper_consoles():
         marker(f'seat {crew}', 'seat', (at.x, at.y, 0), yaw=facing(at.xy, ARC), crew=crew)
 
 
+def feed_bank(wall):
+    """
+    The feeds from the station's three transporter rooms, on the flat stretch of wall at frame `wall`: a monitor each, its live picture over its caption in one bezel, and over them a strip saying how many
+    of the lead's workflows are waiting for a room.
+    """
+    trim = toon(HULL['frame'])
+    h = CAPTION_H + FEED_GAP + FEED_H
+    for i, x in enumerate(FEED_XS):
+        f = wall @ Matrix.Translation((x, 0, 0))
+        bezel(f'transporter feed {i} frame', FEED_W, h, 0.06, 0.08, 0.08, trim, (0, 0, FEED_BOTTOM + h / 2), f)
+        # a backing between the caption and the picture, buried in the bezel, so the wall doesn't show through the gap
+        box(f'transporter feed {i} back', (FEED_W + 0.02, 0.02, h + 0.02), toon('#15131c'), (0, 0.004, FEED_BOTTOM - 0.01), frame=f)
+        panel(f'transporter feed {i} caption', FEED_W, CAPTION_H,
+              material('#000000', surface='screen', screen='team-station-feed-caption', feed=i), (0, 0.03, FEED_BOTTOM), f)
+        panel(f'transporter feed {i}', FEED_W, FEED_H, material('#000000', surface='screen', screen='team-station-feed', feed=i),
+              (0, 0.03, FEED_BOTTOM + CAPTION_H + FEED_GAP), f)
+    f = wall
+    box('transporter feeds strip frame', (FEEDS_STRIP_W + 0.08, 0.04, FEEDS_STRIP_H + 0.08), trim,
+        (0, 0.02, FEEDS_STRIP_BOTTOM - 0.04), frame=f, round=0.015)
+    panel('transporter feeds strip', FEEDS_STRIP_W, FEEDS_STRIP_H, material('#000000', surface='screen', screen='team-station-feeds'),
+          (0, 0.044, FEEDS_STRIP_BOTTOM), f)
+
+
 def briefing_room():
     """
     The goal's briefing room, a mini bridge: the doorway in the middle of its aft wall, the command carpet a few steps
     in, the lead and reviewer either side of it and the helpers at consoles on an arc round behind, open in the middle
     for the walk in from the door and on up to the screen, all facing the lead's session on a viewscreen across the far wall, with the station's sign on
-    the dado under it to port and the switches for its panes to starboard. Viewports onto space down the port side,
-    and the goal board, with the lead's note on the goal, to starboard.
+    the dado under it to port and the switches for its panes to starboard. The feeds from its transporter rooms across the port side,
+    and the goal board and star chart either side of the screen.
     """
     module('briefing_room')
     outline = room_outline()
@@ -344,6 +382,7 @@ def briefing_room():
         at = facet(f)
         bezel(f'{name} frame', BOARD_W, BOARD_H, 0.1, 0.1, 0.08, toon(HULL['frame']), (0, 0, BOARD_BOTTOM + BOARD_H / 2), at)
         panel(name, BOARD_W, BOARD_H, material('#000000', surface='screen', screen=screen), (0, 0.012, BOARD_BOTTOM), at)
+    feed_bank(facet(FEEDS_FACET))
 
     # where the captain stands: the middle of the command carpet, a little back from the crew's chairs
     view = (0, COMMAND - 0.6)
@@ -365,9 +404,9 @@ def room_outline():
     the ends of each screen's and window's stretch of wall, and in steps no wider than CURVE_STEP everywhere else.
     """
     aft = math.degrees(math.asin((WALL / 2 - ROOM_CY) / ROOM_R))
-    corners = sorted({a for f in (CHART_FACET, SCREEN_FACET, BOARD_FACET, *WINDOW_FACETS) for a in f} | {aft, 180 - aft},
+    corners = sorted({a for f in (CHART_FACET, SCREEN_FACET, BOARD_FACET, FEEDS_FACET, *WINDOW_FACETS) for a in f} | {aft, 180 - aft},
                      key=lambda a: (a - aft) % 360)
-    flats = {(f[0] % 360, f[1] % 360) for f in (CHART_FACET, SCREEN_FACET, BOARD_FACET, *WINDOW_FACETS)}
+    flats = {(f[0] % 360, f[1] % 360) for f in (CHART_FACET, SCREEN_FACET, BOARD_FACET, FEEDS_FACET, *WINDOW_FACETS)}
     angles = []
     for a, b in zip(corners, corners[1:]):
         span = (b - a) % 360

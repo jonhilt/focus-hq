@@ -3,7 +3,7 @@ import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { TermLine } from '../../shared/types';
 import type { BrowserPool } from './browserTool';
 import { ClaudeRunner, claudeConfig } from './claudeRunner';
-import type { RunHooks } from './types';
+import type { RunHooks, WorkflowEvent } from './types';
 
 describe('claudeConfig', () => {
   it('loads every settings source, and nothing else, with your own CLAUDE.md on', () => {
@@ -38,7 +38,7 @@ describe('a subagent’s messages', () => {
       ...(withTranscripts && { helperLines: (id: string, l: Line[]) => theirs.set(id, [...(theirs.get(id) ?? []), ...l]) }),
     } as unknown as RunHooks;
     const runner = new ClaudeRunner(null as unknown as BrowserPool) as unknown as { handle(m: SDKMessage, ctx: unknown, h: RunHooks): unknown };
-    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map() };
+    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set() };
     for (const m of messages) runner.handle(m, ctx, hooks);
     return { own: own.map((l) => l.text), theirs: (theirs.get('toolu_1') ?? []).map((l) => l.text) };
   };
@@ -56,5 +56,31 @@ describe('a subagent’s messages', () => {
     const { own } = run(false);
     expect(own).toContain('    ⏺ Looking');
     expect(own.join('\n')).not.toMatch(/export const cart/);
+  });
+});
+
+describe('a workflow', () => {
+  const messages = [
+    { type: 'system', subtype: 'task_started', task_type: 'local_workflow', task_id: 'w1', tool_use_id: 'toolu_9', description: 'Review the diff', workflow_name: 'review-changes' },
+    { type: 'system', subtype: 'task_progress', task_id: 'w1', description: 'Review: review:bugs', usage: {}, workflow_progress: [
+      { type: 'workflow_phase', index: 1, title: 'Review' },
+      { type: 'workflow_agent', index: 1, label: 'review:bugs', phaseIndex: 1, state: 'start', startedAt: 3, promptPreview: 'Find bugs' },
+    ] },
+    { type: 'system', subtype: 'task_notification', task_id: 'w1', status: 'completed', summary: 'Dynamic workflow completed' },
+  ] as unknown as SDKMessage[];
+
+  it('starts, reports how its phases and agents stand, and ends, without seating a helper', () => {
+    const events: WorkflowEvent[] = [];
+    const helpers: unknown[] = [];
+    const hooks = { lines: () => undefined, activity: () => undefined, helper: (e: unknown) => helpers.push(e), workflow: (e: WorkflowEvent) => events.push(e) } as unknown as RunHooks;
+    const runner = new ClaudeRunner(null as unknown as BrowserPool) as unknown as { handle(m: SDKMessage, ctx: unknown, h: RunHooks): unknown };
+    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set() };
+    for (const m of messages) runner.handle(m, ctx, hooks);
+    expect(events).toEqual([
+      { kind: 'started', id: 'w1', name: 'review-changes', description: 'Review the diff' },
+      { kind: 'progress', id: 'w1', phases: [{ index: 1, title: 'Review', queued: 0, working: 1, done: 0, failed: 0 }], agents: [{ index: 1, label: 'review:bugs', phase: 1, status: 'working', model: undefined, activity: 'Find bugs' }] },
+      { kind: 'ended', id: 'w1', ok: true },
+    ]);
+    expect(helpers).toEqual([]);
   });
 });

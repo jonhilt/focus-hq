@@ -18,9 +18,11 @@ import holodeck_deck  # noqa: E402
 import kit  # noqa: E402
 import team_station  # noqa: E402
 import training_hall  # noqa: E402
+import transporter_room  # noqa: E402
 
 DECKS = {'command-deck': command_deck.build, 'holodeck-deck': holodeck_deck.build, 'engineering-deck': engineering_deck.build,
-         'team-station': team_station.build, 'training-hall': training_hall.build}
+         'team-station': team_station.build, 'training-hall': training_hall.build,
+         'transporter-room': transporter_room.build}
 
 
 def main():

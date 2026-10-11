@@ -12,7 +12,7 @@ import { seatHelpers } from './helperSeats';
 import { agentView, Character, type CrewView } from './character';
 import { buildHall } from './hall';
 import { around, curvedPanel, deckEntrance, ENTRANCE_X, facingIn, hallPodSpots, inHall } from './hallLayout';
-import { briefingRoomAt, footprints, HALL, hallAt, OVER_DOOR, type RoomSlot, ROOM_DEPTH } from './layout';
+import { briefingRoomAt, footprints, HALL, hallAt, OVER_DOOR, type RoomSlot, ROOM_DEPTH, TRANSPORTER_ROOMS, transporterRoomAt } from './layout';
 import { ContactShadows } from './contactShadow';
 import { prGlance } from './goalRoom';
 import { mergeStatic } from './merge';
@@ -29,6 +29,7 @@ import { FloorGlow, hover } from './hologram';
 import { OVERLAY_LAYER } from './frame';
 import { Portal } from './portal';
 import { type StationSeat, TEAM_SCREEN, TeamStation, type TeamStationKit } from './teamStation';
+import type { TransporterRoom } from './transporterRoom';
 
 interface DeskSlot {
   index: number;
@@ -186,7 +187,8 @@ export class ProjectRoom {
     // with its screen hung over it
     const pods = hallPodSpots();
     for (let i = 0; i < TEAM_STATIONS; i++) {
-      const station = new TeamStation(i, [LCARS.gold, LCARS.periwinkle, LCARS.orange, LCARS.lilac][i], teamStation, briefingRoomAt(slot, i), pods[i]);
+      const transporters = Array.from({ length: TRANSPORTER_ROOMS }, (_, k) => transporterRoomAt(slot, i, k));
+      const station = new TeamStation(i, [LCARS.gold, LCARS.periwinkle, LCARS.orange, LCARS.lilac][i], teamStation, briefingRoomAt(slot, i), pods[i], project.id, transporters);
       this.group.add(station.door);
       shadows.add(station.door);
       overPod(station);
@@ -329,6 +331,7 @@ export class ProjectRoom {
       // the station's screen over its pod, with how the slice's pull requests stand
       const prs = lead?.lead?.prs.map((pr) => ({ label: `${pr.repo.split('/')[1]} #${pr.number}`, state: prGlance(pr, state.reviews.get(prKey(pr.repo, pr.number))?.status) }));
       station.show(lead, next, prs);
+      station.showWorkflows(lead, performance.now());
     }
   }
 
@@ -552,6 +555,16 @@ export class ProjectRoom {
     return this.stations.map((s) => s.room);
   }
 
+  /** Its team stations' transporter rooms, station by station. */
+  transporterRooms(): TransporterRoom[] {
+    return this.stations.flatMap((s) => s.transporterRooms);
+  }
+
+  /** Its team stations. */
+  teamStations(): readonly TeamStation[] {
+    return this.stations;
+  }
+
   /** The team station whose briefing room a world position is in, if it's in one of this room's. */
   briefingRoomOf(p: THREE.Vector3): number | undefined {
     return this.stations.find((s) => s.inside(p))?.index;
@@ -586,6 +599,7 @@ export class ProjectRoom {
     this.qaScreen.maybeDraw(now, inRoom && qaDist < 6, qaAgent && state.lines.get(qaAgent.id), qaAgent && state.browser.get(qaAgent.id));
     for (const station of this.stations) {
       station.update(t);
+      station.updateTransporters(t, now, camera, station === briefing);
       // only drawn while you're in it, or might see into it through its open door
       station.room.visible = station === briefing || station.portal.ajar;
       // in the briefing room, or seeing into it through the door

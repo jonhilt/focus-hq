@@ -49,4 +49,8 @@ export interface Ui {
   openTurbolift(): void;
   /** Takes the turbolift to `stop`. */
   ride(stop: Place): void;
+  /** Beams the captain into transporter room `room` of `projectId`'s team station `station`, to watch its workflow. */
+  beamTo(projectId: string, station: number, room: number): void;
+  /** Beams the captain back to the briefing room of `projectId`'s team station `station`. */
+  beamBack(projectId: string, station: number): void;
 }

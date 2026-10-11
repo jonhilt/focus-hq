@@ -70,6 +70,7 @@ export class Beam {
   private readonly column: THREE.Mesh;
   private readonly faded: Faded[] = [];
   private readonly start: number;
+  private readonly height: number;
   private finished = false;
 
   constructor(
@@ -84,11 +85,14 @@ export class Beam {
       new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(positions, 3)),
       new THREE.PointsMaterial({ map: dot(), color: '#e4f6ff', size: 0.09, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }),
     );
+    // as tall as the figure says it is (a standing Character), or a seated one's
+    const height = (figure.userData.height as number | undefined) ?? COLUMN.height;
+    this.height = height;
     this.column = new THREE.Mesh(
-      new THREE.CylinderGeometry(COLUMN.radius, COLUMN.radius, COLUMN.height, 24, 1, true),
+      new THREE.CylinderGeometry(COLUMN.radius, COLUMN.radius, height, 24, 1, true),
       new THREE.MeshBasicMaterial({ map: glow(), color: GLOW, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, opacity: 0 }),
     );
-    this.column.position.y = COLUMN.height / 2;
+    this.column.position.y = height / 2;
     this.fx.add(this.column, this.sparkles);
     this.fx.position.copy(figure.position);
     this.fx.rotation.copy(figure.rotation);
@@ -121,7 +125,7 @@ export class Beam {
       if (p > 0 && Math.random() > 0.3) continue;
       const a = Math.random() * Math.PI * 2;
       const r = Math.sqrt(Math.random()) * COLUMN.radius * 0.9;
-      pos.setXYZ(i, Math.cos(a) * r, 0.05 + Math.random() * (COLUMN.height - 0.1), Math.sin(a) * r);
+      pos.setXYZ(i, Math.cos(a) * r, 0.05 + Math.random() * (this.height - 0.1), Math.sin(a) * r);
     }
     pos.needsUpdate = true;
     (this.sparkles.material as THREE.PointsMaterial).opacity = sparkle;

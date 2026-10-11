@@ -2,7 +2,7 @@ import { contextLevel, statusLine } from '../../../shared/agentStatus';
 import { cloudSessionUrl } from '../../../shared/cloud';
 import { showsBrowser } from '../../../shared/browserView';
 import { helperFor, UNIFORM } from '../../../shared/crew';
-import type { Agent, BrowserFrame, Effort, Helper, TermLine } from '../../../shared/types';
+import type { Agent, BrowserFrame, Effort, Helper, TermLine, Workflow, WorkflowAgent } from '../../../shared/types';
 import { EFFORT_LEVELS } from '../../../shared/types';
 import { api } from '../net/api';
 import { markRead } from '../net/attention';
@@ -25,19 +25,21 @@ export type AgentView = 'browser' | 'goal' | 'tasks' | 'crew';
 type View = AgentView;
 
 const HELPER_TONE: Record<Helper['status'], string> = { working: LCARS.sky, done: LCARS_STATUS.done, failed: LCARS.red };
+const WORKFLOW_TONE: Record<Workflow['status'], string> = { running: LCARS.lilac, done: LCARS_STATUS.done, failed: LCARS.red };
+const AGENT_MARK: Record<WorkflowAgent['status'], string> = { queued: '·', working: '▸', done: '✓', failed: '✕' };
 
 /** The sidebar's views for this agent: a goal and a crew only for a lead, each on standby while there's nothing in it. */
 function views(a: Agent, frame: BrowserFrame | undefined): NavItem<View>[] {
   const browsing = showsBrowser(frame);
   const tasks = a.tasks ?? [];
   const slice = a.lead?.note?.slice ?? [];
-  const helpers = a.helpers ?? [];
+  const crew = (a.helpers ?? []).length + (a.workflows ?? []).length;
   const lead = a.task === 'lead';
   const items: (NavItem<View> | false)[] = [
     { key: 'browser', label: 'Browser', readout: browsing ? 'Live' : '', standby: !browsing },
     lead && { key: 'goal', label: 'Goal', readout: slice.length ? `${slice.filter((i) => i.done).length}/${slice.length}` : '' },
     { key: 'tasks', label: 'Tasks', readout: tasks.length ? `${tasks.filter((t) => t.status === 'completed').length}/${tasks.length}` : '', standby: !tasks.length },
-    lead && { key: 'crew', label: 'Crew', readout: helpers.length ? String(helpers.length) : '', standby: !helpers.length },
+    lead && { key: 'crew', label: 'Crew', readout: crew ? String(crew) : '', standby: !crew },
   ];
   return items.filter((i) => i !== false);
 }
@@ -272,7 +274,25 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
     );
   };
 
-  /** The helpers a lead has handed work to: what each was asked, and what it's doing or how it got on. Click one for its transcript. */
+  /** A workflow the lead ran: how many of each phase's agents are queued, working, done and failed, and who's at work. */
+  const workflowView = (w: Workflow) =>
+    h('div', { class: 'crew-member', style: `--tone:${WORKFLOW_TONE[w.status]}` },
+      h('h4', { style: 'margin:0' }, `Workflow ${w.name} · ${w.status}`),
+      w.description ? h('p', null, w.description) : null,
+      ...w.phases.map((p) => {
+        const counts = [p.working && `${p.working} working`, p.queued && `${p.queued} queued`, p.done && `${p.done} done`, p.failed && `${p.failed} failed`].filter(Boolean).join(' · ');
+        const working = w.agents.filter((x) => x.phase === p.index && x.status === 'working');
+        return h('div', null,
+          h('p', { style: 'margin-bottom:0' }, `${p.title || 'Before any phase'}: ${counts || 'nothing yet'}`),
+          ...working.map((x) => h('p', { class: 'muted', style: 'margin:0 0 0 1em' }, `${AGENT_MARK[x.status]} ${x.label}: ${x.activity}`)),
+        );
+      }),
+    );
+
+  /**
+   * The helpers a lead has handed work to: what each was asked, and what it's doing or how it got on (click one for its
+   * transcript); then the workflows it's running.
+   */
   const crewView = (a: Agent) =>
     h('div', { class: 'crew' },
       ...(a.helpers ?? []).map((x) =>
@@ -281,6 +301,7 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
           h('p', null, x.description),
           x.activity ? h('p', { class: 'muted' }, x.activity) : null,
         )),
+      ...(a.workflows ?? []).map(workflowView),
     );
 
   /** How full their context is, and (between turns) a button to compact it. */

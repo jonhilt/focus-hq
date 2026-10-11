@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readInteraction, readMarker, readSurface } from './deckExtras';
+import { readInteraction, readMarker, readPart, readSurface } from './deckExtras';
 
 describe('readMarker', () => {
   it('leaves scenery alone', () => {
@@ -19,6 +19,8 @@ describe('readMarker', () => {
     expect(readMarker({ marker: 'seat', crew: 'station-reviewer' })).toEqual({ kind: 'seat', crew: 'station-reviewer' });
     expect(readMarker({ marker: 'turbolift', label: 'Deck 1 · Bridge' })).toEqual({ kind: 'turbolift', label: 'Deck 1 · Bridge' });
     expect(readMarker({ marker: 'portal', width: 2, height: 2.5, depth: 0.75 })).toEqual({ kind: 'portal', width: 2, height: 2.5, depth: 0.75 });
+    expect(readMarker({ marker: 'pad', tier: 2, slot: 5 })).toEqual({ kind: 'pad', tier: 2, slot: 5 });
+    expect(readMarker({ marker: 'camera', fov: 52 })).toEqual({ kind: 'camera', fov: 52 });
   });
 
   it('fails on a marker it doesn’t know or one missing what it needs', () => {
@@ -29,6 +31,8 @@ describe('readMarker', () => {
     expect(() => readMarker({ marker: 'portal', width: 2, height: 2.5 })).toThrow(/depth should be a number/);
     expect(() => readMarker({ marker: 'seat', crew: 'cook' })).toThrow(/unknown crew/);
     expect(() => readMarker({ marker: 'seat', crew: 'station-helper-5' })).toThrow(/unknown crew/);
+    expect(() => readMarker({ marker: 'pad', tier: 0 })).toThrow(/slot should be a number/);
+    expect(() => readMarker({ marker: 'camera' })).toThrow(/fov should be a number/);
   });
 });
 
@@ -55,6 +59,12 @@ describe('readSurface', () => {
     expect(readSurface({ surface: 'screen', screen: 'team-station-sign' })).toEqual({ kind: 'screen', screen: 'team-station-sign' });
     expect(readSurface({ surface: 'screen', screen: 'team-station-note' })).toEqual({ kind: 'screen', screen: 'team-station-note' });
     expect(readSurface({ surface: 'screen', screen: 'msd' })).toEqual({ kind: 'screen', screen: 'msd' });
+    expect(readSurface({ surface: 'screen', screen: 'transporter-tactical' })).toEqual({ kind: 'screen', screen: 'transporter-tactical' });
+    expect(readSurface({ surface: 'screen', screen: 'transporter-buffer' })).toEqual({ kind: 'screen', screen: 'transporter-buffer' });
+    expect(readSurface({ surface: 'screen', screen: 'team-station-feed', feed: 2 })).toEqual({ kind: 'screen', screen: 'team-station-feed', feed: 2 });
+    expect(readSurface({ surface: 'screen', screen: 'team-station-feed-caption', feed: 0 })).toEqual({ kind: 'screen', screen: 'team-station-feed-caption', feed: 0 });
+    expect(readSurface({ surface: 'screen', screen: 'team-station-feeds' })).toEqual({ kind: 'screen', screen: 'team-station-feeds' });
+    expect(() => readSurface({ surface: 'screen', screen: 'team-station-feed', feed: 'one' })).toThrow(/feed should be a number/);
     expect(readSurface({ surface: 'star-chart' })).toEqual({ kind: 'star-chart' });
     expect(readSurface({ surface: 'warp-core', part: 'column' })).toEqual({ kind: 'warp-core', part: 'column' });
     expect(readSurface({ surface: 'warp-core', part: 'chamber' })).toEqual({ kind: 'warp-core', part: 'chamber' });
@@ -82,10 +92,29 @@ describe('readInteraction', () => {
     expect(readInteraction({ interact: 'turbolift', label: 'Use the turbolift' })).toEqual({ interaction: { kind: 'turbolift' }, label: 'Use the turbolift' });
     expect(readInteraction({ interact: 'engineering', label: 'Retros' })).toEqual({ interaction: { kind: 'engineering' }, label: 'Retros' });
     expect(readInteraction({ interact: 'ledger', label: 'Review the ledger' })).toEqual({ interaction: { kind: 'ledger' }, label: 'Review the ledger' });
+    expect(readInteraction({ interact: 'energise', label: 'Energise' })).toEqual({ interaction: { kind: 'energise' }, label: 'Energise' });
   });
 
   it('fails on an interaction it doesn’t know or one without a hint', () => {
     expect(() => readInteraction({ interact: 'replicator', label: 'Tea, Earl Grey, hot' })).toThrow(/unknown interaction/);
     expect(() => readInteraction({ interact: 'manager' })).toThrow(/label should be a string/);
+  });
+});
+
+describe('readPart', () => {
+  it('leaves anything that isn’t a part alone', () => {
+    expect(readPart({})).toBeNull();
+    expect(readPart({ interact: 'energise', label: 'Energise' })).toBeNull();
+  });
+
+  it('reads the parts a transporter room changes as it goes', () => {
+    expect(readPart({ part: 'pad-ring', tier: 1, slot: 4 })).toEqual({ kind: 'pad-ring', tier: 1, slot: 4 });
+    expect(readPart({ part: 'pad-emitter', tier: 0, slot: 0 })).toEqual({ kind: 'pad-emitter', tier: 0, slot: 0 });
+    expect(readPart({ part: 'buffer-glow' })).toEqual({ kind: 'buffer-glow' });
+  });
+
+  it('fails on a part it doesn’t know, or a pad’s part without its pad', () => {
+    expect(() => readPart({ part: 'warp-coil' })).toThrow(/unknown part/);
+    expect(() => readPart({ part: 'pad-ring', tier: 1 })).toThrow(/slot should be a number/);
   });
 });

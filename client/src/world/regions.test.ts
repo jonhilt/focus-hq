@@ -22,6 +22,9 @@ describe('regionAt', () => {
     expect(regionAt(new THREE.Vector3(150, 1.6, -6), decks, briefing, (p) => p.x > 100)).toBe('briefing');
     expect(regionAt(new THREE.Vector3(150, 1.6, -6), decks, () => false, (p) => p.x > 100)).toBe('hall');
   });
+  it('is a transporter room inside one', () => {
+    expect(regionAt(new THREE.Vector3(0, 1.6, 240), decks, briefing, () => false, (p) => p.z > 200)).toBe('transporter');
+  });
   it('is the holodeck deck anywhere else', () => {
     expect(regionAt(new THREE.Vector3(3, 1.6, -6), decks, briefing)).toBe('holodecks');
   });
@@ -29,21 +32,24 @@ describe('regionAt', () => {
 
 describe('shown', () => {
   it('draws only the command deck from the command deck', () => {
-    expect(shown('command')).toEqual({ command: true, engineering: false, holodecks: false, hall: false, briefing: false });
+    expect(shown('command')).toEqual({ command: true, engineering: false, holodecks: false, hall: false, briefing: false, transporter: false });
   });
   it('draws only main engineering from main engineering', () => {
-    expect(shown('engineering')).toEqual({ command: false, engineering: true, holodecks: false, hall: false, briefing: false });
+    expect(shown('engineering')).toEqual({ command: false, engineering: true, holodecks: false, hall: false, briefing: false, transporter: false });
   });
   it('draws the holodecks from the holodecks, and the briefing rooms, whose doors might be open', () => {
-    expect(shown('holodecks')).toEqual({ command: false, engineering: false, holodecks: true, hall: false, briefing: true });
+    expect(shown('holodecks')).toEqual({ command: false, engineering: false, holodecks: true, hall: false, briefing: true, transporter: false });
   });
   it('draws only the briefing rooms from a briefing room', () => {
-    expect(shown('briefing')).toEqual({ command: false, engineering: false, holodecks: false, hall: false, briefing: true });
+    expect(shown('briefing')).toEqual({ command: false, engineering: false, holodecks: false, hall: false, briefing: true, transporter: false });
   });
   it('draws only the hall from a training hall, and the briefing rooms its pods open onto', () => {
-    expect(shown('hall')).toEqual({ command: false, engineering: false, holodecks: false, hall: true, briefing: true });
+    expect(shown('hall')).toEqual({ command: false, engineering: false, holodecks: false, hall: true, briefing: true, transporter: false });
+  });
+  it('draws only the transporter rooms from a transporter room', () => {
+    expect(shown('transporter')).toEqual({ command: false, engineering: false, holodecks: false, hall: false, briefing: false, transporter: true });
   });
   it('draws everything when not culling', () => {
-    expect(shown(null)).toEqual({ command: true, engineering: true, holodecks: true, hall: true, briefing: true });
+    expect(shown(null)).toEqual({ command: true, engineering: true, holodecks: true, hall: true, briefing: true, transporter: true });
   });
 });

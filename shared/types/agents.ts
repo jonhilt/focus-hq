@@ -115,6 +115,57 @@ export interface Helper {
   startedAt: number;
 }
 
+/** One of a workflow's agents, as Claude Code reports it: queued until the workflow has a slot free to start it. */
+export interface WorkflowAgent {
+  /** Its place in the workflow: Claude Code numbers them in the order they were queued. */
+  index: number;
+  /** The label the workflow's script gave it (review:bugs). */
+  label: string;
+  /** The `index` of the phase it's in: 0 for one started before the script named any phase. */
+  phase: number;
+  status: 'queued' | 'working' | 'done' | 'failed';
+  model?: string;
+  /** What it was asked, while it works; how it finished, once it has. */
+  activity: string;
+  /** When it finished, as Claude Code timed it. */
+  finishedAt?: number;
+}
+
+/**
+ * One of a workflow's phases: a label its agents run under, not a step (a pipeline's phases run side by side), and how
+ * many of its agents stand where.
+ */
+export interface WorkflowPhase {
+  index: number;
+  title: string;
+  /** A child workflow the script ran inside this one: its agents, under its name. */
+  child?: boolean;
+  queued: number;
+  working: number;
+  done: number;
+  failed: number;
+}
+
+/**
+ * A workflow a goal's lead ran (Claude Code's Workflow tool): a script that runs up to 16 agents at once (fewer on a
+ * machine with fewer cores), queueing the rest, up to a thousand over its run. It has a transporter room of its own,
+ * where the agents at work stand on the pads.
+ */
+export interface Workflow {
+  /** Claude Code's task id for it. */
+  id: string;
+  /** The script's name (review-changes). */
+  name: string;
+  /** What it's for, from the script. */
+  description: string;
+  status: 'running' | 'done' | 'failed';
+  /** Every phase it has, in order, with how many of its agents are queued, working, done and failed. */
+  phases: WorkflowPhase[];
+  /** The agents at work now, and the ones that finished most recently (not every one it has run, which could be a thousand). */
+  agents: WorkflowAgent[];
+  startedAt: number;
+}
+
 /**
  * An agent waiting for a Claude Code cloud session to take over: the captain moved them to the cloud, or Claude Code
  * wouldn't start the session of a cloud hire without a terminal. The captain starts one (in a terminal the office opens,
@@ -141,6 +192,8 @@ export interface Agent {
   lead?: LeadWork;
   /** The subagents the lead has working for it right now, and any that just finished ('lead' task only). */
   helpers?: Helper[];
+  /** The workflows the lead has running right now, and any that just finished ('lead' task only). */
+  workflows?: Workflow[];
   /** How full the agent's context window was at the end of its last turn, as Claude Code reports it. */
   context?: { percent: number; tokens: number; max: number };
   /** A goal's own QA reviewer: the goal (its lead's id) whose pull requests they review. Missing on the room's QA officer. */
