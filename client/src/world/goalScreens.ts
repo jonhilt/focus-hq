@@ -7,7 +7,7 @@ import { checklistGlance, type GoalRoomTone, goalRoomState, leadNow, type NoteSe
 import { flat } from './materials';
 import { portrait } from './portraits';
 import { LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
-import { type CoursePlot, everySlice, plotCourse, seeded, shieldState } from '../ui/course';
+import { type CoursePlot, everySlice, type Label, leaderEnd, plotCourse, seeded, shieldState } from '../ui/course';
 
 // What a team station shows of its goal besides the lead's session. What floats in the holodeck is drawn like the
 // holograms over the pods in Lower Decks, glowing cyan on dark glass: the sign over the station's door (also lit on the
@@ -601,7 +601,7 @@ export class ChartScreen extends Display {
     ctx.fillText(fitText(ctx, work.title.toUpperCase(), W - 640), W - 32, bar / 2 + 2);
 
     const waypoints = everySlice(work.waypoints, work.slice, lead.startedAt);
-    const plot = plotCourse({ waypoints, current: work.slice, next: work.note?.next ?? [], contacts: work.contacts, seed: lead.id });
+    const plot = plotCourse({ waypoints, current: work.slice, next: work.note?.next ?? [], contacts: work.contacts, seed: lead.id }, BIG);
     const area = { x: 16, y: bar + 16, w: 1010, h: H - bar - 28 };
     const scale = Math.min(area.w / plot.width, area.h / plot.height);
     ctx.save();
@@ -705,10 +705,11 @@ function drawCourse(ctx: CanvasRenderingContext2D, plot: CoursePlot, done: strin
   said.forEach((line, i) => ctx.fillText(line, o.x, o.y + (i - (said.length - 1) / 2) * 20 * BIG));
 
   const last = plot.points.at(-1) ?? plot.launch;
-  const label = (text: string, at: { x: number; y: number; anchor: 'start' | 'end' }, size: number, color: string) => {
+  const label = (text: string, at: Label | undefined, size: number, color: string) => {
+    if (!at) return;
     ctx.font = `${size}px ${LCARS_FONT}`;
     ctx.fillStyle = color;
-    ctx.textAlign = at.anchor === 'start' ? 'left' : 'right';
+    ctx.textAlign = at.anchor === 'start' ? 'left' : at.anchor === 'end' ? 'right' : 'center';
     ctx.textBaseline = 'alphabetic';
     ctx.fillText(text, at.x, at.y);
   };
@@ -726,7 +727,7 @@ function drawCourse(ctx: CanvasRenderingContext2D, plot: CoursePlot, done: strin
     ctx.beginPath();
     ctx.arc(p.to.x, p.to.y, 6, 0, Math.PI * 2);
     ctx.stroke();
-    label(p.text, p.label, 16 * BIG, LCARS.periwinkle);
+    label(p.text, p.label, plot.sizes.idea, LCARS.periwinkle);
   }
 
   ctx.strokeStyle = LCARS.red;
@@ -745,7 +746,7 @@ function drawCourse(ctx: CanvasRenderingContext2D, plot: CoursePlot, done: strin
     ctx.moveTo(x.to.x + 7, x.to.y - 7);
     ctx.lineTo(x.to.x - 7, x.to.y + 7);
     ctx.stroke();
-    label(`SCRUBBED ${x.text}`, x.label, 15 * BIG, LCARS.red);
+    label(`SCRUBBED ${x.text}`, x.label, plot.sizes.scrubbed, LCARS.red);
   }
 
   for (const c of plot.contacts) {
@@ -771,7 +772,7 @@ function drawCourse(ctx: CanvasRenderingContext2D, plot: CoursePlot, done: strin
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
     ctx.stroke();
-    label(c.text, c.label, 16 * BIG, color);
+    label(c.text, c.label, plot.sizes.contact, color);
   }
 
   ctx.strokeStyle = LCARS.gold;
@@ -812,7 +813,17 @@ function drawCourse(ctx: CanvasRenderingContext2D, plot: CoursePlot, done: strin
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(String(p.waypoint.slice), p.x, p.y + 1);
-    label(p.name, p.label, 18 * BIG, p.state === 'now' ? LCARS.sky : '#f1eaff');
+    if (p.label?.leader) {
+      const end = leaderEnd(p, p.label, plot.sizes.waypoint);
+      const d = Math.hypot(end.x - p.x, end.y - p.y) || 1;
+      ctx.strokeStyle = 'rgba(164,157,180,0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(p.x + ((end.x - p.x) * 16) / d, p.y + ((end.y - p.y) * 16) / d);
+      ctx.lineTo(end.x, end.y);
+      ctx.stroke();
+    }
+    label(p.name, p.label, plot.sizes.waypoint, p.state === 'now' ? LCARS.sky : '#f1eaff');
   }
 }
 

@@ -7,7 +7,7 @@ import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { fill, h } from './dom';
 import { prLink } from './goals';
-import { clip, type CoursePlot, everySlice, plotCourse, seeded, shieldState } from './course';
+import { clip, type CoursePlot, everySlice, type Label, leaderEnd, plotCourse, type Pt, seeded, shieldState } from './course';
 
 /** What a goal's chart is drawn from, whether it's under way or closed. */
 interface ChartGoal {
@@ -78,6 +78,13 @@ function s(tag: string, attrs: Record<string, string | number> = {}, ...children
   return el;
 }
 
+/** A faint line from a mark out to its label, starting clear of the mark. */
+const leaderPath = (p: Pt, l: Label, size: number) => {
+  const end = leaderEnd(p, l, size);
+  const d = Math.hypot(end.x - p.x, end.y - p.y) || 1;
+  return `M${p.x + ((end.x - p.x) * 16) / d} ${p.y + ((end.y - p.y) * 16) / d} L${end.x} ${end.y}`;
+};
+
 /** The star chart itself: the course flown, its waypoints, scrubbed headings, what's next and the objective. */
 function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: number, pick: (slice: number) => void): SVGElement {
   const { width, height } = plot;
@@ -94,15 +101,15 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: number, pick: (sl
   const projected = s('g', { class: 'chart-projected' },
     ...plot.projected.flatMap((p) => [
       s('path', { d: `M${last.x} ${last.y} L${p.to.x} ${p.to.y}` }),
-      s('circle', { cx: p.to.x, cy: p.to.y, r: 6 }),
-      s('text', { x: p.label.x, y: p.label.y, 'text-anchor': p.label.anchor }, p.text),
+      s('circle', { cx: p.to.x, cy: p.to.y, r: 6 }, s('title', {}, `Projected: ${p.text}`)),
+      p.label ? s('text', { x: p.label.x, y: p.label.y, 'text-anchor': p.label.anchor }, p.text) : null,
     ]));
 
   const scrubbed = s('g', { class: 'chart-scrubbed' },
     ...plot.scrubbed.flatMap((x) => [
       s('path', { d: `M${x.from.x} ${x.from.y} L${x.to.x} ${x.to.y}` }),
-      s('path', { class: 'cross', d: `M${x.to.x - 7} ${x.to.y - 7} l14 14 M${x.to.x + 7} ${x.to.y - 7} l-14 14` }),
-      s('text', { x: x.label.x, y: x.label.y, 'text-anchor': x.label.anchor }, s('tspan', { class: 'was' }, 'SCRUBBED '), x.text),
+      s('path', { class: 'cross', d: `M${x.to.x - 7} ${x.to.y - 7} l14 14 M${x.to.x + 7} ${x.to.y - 7} l-14 14` }, s('title', {}, `Scrubbed: ${x.text}`)),
+      x.label ? s('text', { x: x.label.x, y: x.label.y, 'text-anchor': x.label.anchor }, s('tspan', { class: 'was' }, 'SCRUBBED '), x.text) : null,
     ]));
 
   // loose threads: a pursued one points to the waypoint it went into
@@ -112,7 +119,7 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: number, pick: (sl
         s('title', {}, `${c.contact.id}: ${c.contact.text} (${standing(c.contact)})`),
         c.pursuedAt ? s('path', { class: 'trail', d: `M${c.x} ${c.y} L${c.pursuedAt.x} ${c.pursuedAt.y}` }) : null,
         s('path', { class: 'blip', d: `M${c.x} ${c.y - 8} l8 8 l-8 8 l-8 -8 Z` }),
-        s('text', { x: c.label.x, y: c.label.y, 'text-anchor': c.label.anchor }, c.text),
+        c.label ? s('text', { x: c.label.x, y: c.label.y, 'text-anchor': c.label.anchor }, c.text) : null,
       );
       g.addEventListener('click', () => pick(c.contact.slice));
       return g;
@@ -130,7 +137,8 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: number, pick: (sl
         shieldState(w.shields) !== 'none' ? s('circle', { class: `shield ${shieldState(w.shields)}`, cx: p.x, cy: p.y, r: 16 }) : null,
         s('circle', { class: 'core', cx: p.x, cy: p.y, r: 12 }),
         s('text', { class: 'num', x: p.x, y: p.y + 5, 'text-anchor': 'middle' }, String(w.slice)),
-        s('text', { class: 'name', x: p.label.x, y: p.label.y, 'text-anchor': p.label.anchor }, p.name),
+        p.label?.leader ? s('path', { class: 'leader', d: leaderPath(p, p.label, plot.sizes.waypoint) }) : null,
+        p.label ? s('text', { class: 'name', x: p.label.x, y: p.label.y, 'text-anchor': p.label.anchor }, p.name) : null,
       );
       g.addEventListener('click', () => pick(w.slice));
       g.addEventListener('keydown', (e) => {
@@ -298,18 +306,26 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
   if (!first) return;
   const body = h('div', { class: 'chart' });
   let picked = first.current ?? first.waypoints.at(-1)?.slice ?? 1;
+  // what was last drawn: the lead's agent changes far more often than their goal does, and redrawing the same chart
+  // would only flicker its pictures; a change to the same waypoint keeps the log scrolled where it was
+  let drawn = '';
+  let drawnPick = picked;
   const render = () => {
     const g = goal();
     if (!g) return;
+    const key = JSON.stringify(g);
+    if (key === drawn && picked === drawnPick) return;
+    const scrolled = picked === drawnPick ? body.querySelector('.chart-log')?.scrollTop ?? 0 : 0;
+    drawn = key;
+    drawnPick = picked;
     const plot = plotCourse({ waypoints: g.waypoints, current: g.current, next: g.note?.next ?? [], contacts: g.contacts, seed: g.id });
     const pick = (slice: number) => {
       picked = slice;
       render();
     };
-    fill(body,
-      h('div', { class: 'chart-map' }, chartSvg(g, plot, picked, pick), readout(g)),
-      logView(g, g.waypoints.find((w) => w.slice === picked), liveId ? (slice, index, checked) => void api.tickSpotCheck(liveId, slice, index, checked).catch((err: Error) => ui.error(err.message)) : undefined, () => shown(ui)),
-    );
+    const log = logView(g, g.waypoints.find((w) => w.slice === picked), liveId ? (slice, index, checked) => void api.tickSpotCheck(liveId, slice, index, checked).catch((err: Error) => ui.error(err.message)) : undefined, () => shown(ui));
+    fill(body, h('div', { class: 'chart-map' }, chartSvg(g, plot, picked, pick), readout(g)), log);
+    log.scrollTop = scrolled;
   };
   render();
   ui.panels.open({ title: h('h2', null, `Stellar cartography `, h('span', { class: 'muted' }, first.title)), body, accent: LCARS.gold, wide: true });

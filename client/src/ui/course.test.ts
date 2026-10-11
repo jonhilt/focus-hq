@@ -1,9 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import type { Contact, Waypoint } from '../../../shared/types';
-import { CHART, clearOf, clip, everySlice, plotCourse, seeded, shieldState, smoothPath } from './course';
+import { type Box, CHART, clearOf, clip, type CoursePlot, everySlice, labelBox, overlaps, plotCourse, seeded, shieldState, smoothPath } from './course';
 
 const wp = (slice: number, more: Partial<Waypoint> = {}): Waypoint => ({ slice, startedAt: slice * 10, landedAt: slice * 10 + 5, title: `Slice ${slice}`, ...more });
 const inside = (p: { x: number; y: number }) => p.x >= 0 && p.x <= CHART.width && p.y >= 0 && p.y <= CHART.height;
+/** Where every label the plot shows lies. */
+const labelsOf = (plot: CoursePlot): Box[] => [
+  ...plot.points.flatMap((p) => (p.label ? [labelBox(p.label, p.name, plot.sizes.waypoint)] : [])),
+  ...plot.scrubbed.flatMap((x) => (x.label ? [labelBox(x.label, `SCRUBBED ${x.text}`, plot.sizes.scrubbed)] : [])),
+  ...plot.projected.flatMap((p) => (p.label ? [labelBox(p.label, p.text, plot.sizes.idea)] : [])),
+  ...plot.contacts.flatMap((c) => (c.label ? [labelBox(c.label, c.text, plot.sizes.contact)] : [])),
+];
+/** Every mark on the plot, and the objective, as boxes a label mustn't cover. */
+const marksOf = (plot: CoursePlot): Box[] => {
+  const sq = (p: { x: number; y: number }, r: number) => ({ x0: p.x - r, y0: p.y - r, x1: p.x + r, y1: p.y + r });
+  const o = plot.objective;
+  return [...plot.points.map((p) => sq(p, 12)), ...plot.contacts.map((c) => sq(c, 7)), ...plot.projected.map((p) => sq(p.to, 5)), sq(plot.launch, 6), { x0: o.x - o.r * 0.68, y0: o.y - o.r * 0.68, x1: o.x + o.r * 0.68, y1: o.y + o.r * 0.68 }];
+};
 
 describe('the course', () => {
   it('heads from the launch point towards the objective without reaching it', () => {
@@ -41,7 +54,7 @@ describe('the course', () => {
     };
     expect(angle(turn.from, turn.to)).toBeGreaterThan(angle(turn.from, plot.points[2]));
     // and the turn's label stays out of the scrubbed heading's way, on the other side
-    expect(plot.points[1].label.anchor).not.toBe(turn.label.anchor);
+    expect(plot.points[1].label?.anchor).not.toBe(turn.label?.anchor);
   });
 
   it('fans the lead’s next ideas out ahead of the last waypoint', () => {
@@ -53,21 +66,57 @@ describe('the course', () => {
   it('labels each waypoint on the side it drifted to, or alternately while the course runs straight', () => {
     const plot = plotCourse({ waypoints: Array.from({ length: 6 }, (_, i) => wp(i + 1)), next: [], seed: 'labels' });
     for (const p of plot.points) {
+      const label = p.label!;
       const off = (p.x - plot.launch.x) * (plot.launch.y - plot.objective.y) - (p.y - plot.launch.y) * (plot.launch.x - plot.objective.x);
-      const labelOff = (p.label.x - p.x) * (plot.launch.y - plot.objective.y) - (p.label.y - 5 - p.y) * (plot.launch.x - plot.objective.x);
+      const labelOff = (label.x - p.x) * (plot.launch.y - plot.objective.y) - (label.y - 5 - p.y) * (plot.launch.x - plot.objective.x);
       // a waypoint well off the line (30 px) has its label out on the same side
       if (Math.abs(off) / Math.hypot(plot.objective.x - plot.launch.x, plot.objective.y - plot.launch.y) > 30) expect(Math.sign(labelOff)).toBe(Math.sign(off));
     }
   });
 
-  it('moves a label that would land on another to the other side of its waypoint', () => {
-    const plot = plotCourse({ waypoints: [wp(1), wp(2, { title: 'Web push', turnedFrom: 'Push on every phone' }), wp(3, { title: 'PR list + merge' }), wp(4), wp(5)], next: [], seed: 'lead_fake_tricorder' });
-    const boxes = plot.points.map((p) => {
-      const w = p.name.length * 17 * 0.47;
-      const x0 = p.label.anchor === 'start' ? p.label.x : p.label.x - w;
-      return { x0, x1: x0 + w, y0: p.label.y - 17, y1: p.label.y + 3 };
-    });
-    for (const [i, a] of boxes.entries()) for (const b of boxes.slice(i + 1)) expect(a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1).toBe(false);
+  it('never lets a label cover another, a mark or the objective, or run off the chart, however the voyage went', () => {
+    const words = 'Header badge store tidy offline push phones merge review chart waypoint shields evidence contacts briefing room'.split(' ');
+    for (let v = 0; v < 120; v++) {
+      const rand = seeded(`voyage ${v}`);
+      const pick = () => words[Math.floor(rand() * words.length)];
+      const title = () => Array.from({ length: 2 + Math.floor(rand() * 6) }, pick).join(' ');
+      const n = 1 + (v % 12);
+      const waypoints = Array.from({ length: n }, (_, i) => wp(i + 1, { title: title(), ...(rand() < 0.15 && { turnedFrom: title() }) }));
+      const contacts = Array.from({ length: Math.floor(rand() * 9) }, (_, i) => ({ id: `c${i + 1}`, text: title(), slice: 1 + Math.floor(rand() * n), at: 0 }));
+      const next = Array.from({ length: Math.floor(rand() * 4) }, title);
+      for (const scale of [1, 1.5]) {
+        const plot = plotCourse({ waypoints, current: n, next, contacts, seed: `lead_${v}` }, scale);
+        const labels = labelsOf(plot);
+        for (const [i, a] of labels.entries()) {
+          expect(inside({ x: a.x0, y: a.y0 }) && inside({ x: a.x1, y: a.y1 }), `voyage ${v} at ${scale}: a label runs off the chart`).toBe(true);
+          for (const b of [...labels.slice(i + 1), ...marksOf(plot)]) expect(overlaps(a, b), `voyage ${v} at ${scale}: ${JSON.stringify([a, b])}`).toBe(false);
+        }
+        // whatever else goes without, the waypoint under way is always named
+        expect(plot.points.at(-1)!.label).toBeDefined();
+      }
+    }
+  });
+
+  it('names every waypoint and idea, clear of every line, on a voyage like this one', () => {
+    const titles = ['Star chart and waypoints', 'Contacts: loose threads kept on a goal\'s star chart', 'Shields and spot-checks on a goal\'s star chart', 'Round briefing room with three screens across its front', 'Draw the goal\'s course on the briefing room\'s star chart', 'Evidence per waypoint on a goal\'s star chart'];
+    const waypoints = [...titles.map((title, i) => wp(i + 1, { title })), { slice: 7, startedAt: 70 }];
+    const next = ['Fix the demo\'s re-test after a QA fix (contact c1)', 'Steady the flaky reopen test in manager.test.ts'];
+    for (const scale of [1, 1.5]) {
+      const plot = plotCourse({ waypoints, current: 7, next, seed: 'lead_proj_bd529cc4d2_f35fa4' }, scale);
+      expect(plot.points.every((p) => p.label) && plot.projected.every((p) => p.label)).toBe(true);
+      const last = plot.points.at(-1)!;
+      const dots = [...plot.projected.map((p) => [last, p.to] as const), ...[plot.launch, ...plot.points].slice(1).map((p, i) => [[plot.launch, ...plot.points][i], p] as const)]
+        .flatMap(([a, b]) => Array.from({ length: 21 }, (_, k) => ({ x: a.x + ((b.x - a.x) * k) / 20, y: a.y + ((b.y - a.y) * k) / 20 })));
+      for (const box of labelsOf(plot)) expect(dots.some((d) => d.x > box.x0 && d.x < box.x1 && d.y > box.y0 && d.y < box.y1), `${scale}: ${JSON.stringify(box)}`).toBe(false);
+    }
+  });
+
+  it('shrinks the oldest waypoints to their numbers once a voyage runs out of room', () => {
+    const plot = plotCourse({ waypoints: Array.from({ length: 30 }, (_, i) => wp(i + 1, { title: `A long slice title, number ${i + 1}` })), next: [], seed: 'long' });
+    const named = plot.points.map((p) => !!p.label);
+    expect(named.at(-1)).toBe(true);
+    expect(named.filter(Boolean).length).toBeLessThan(30);
+    expect(named.slice(-5).filter(Boolean).length).toBeGreaterThanOrEqual(named.slice(0, 5).filter(Boolean).length);
   });
 
   it('keeps labels clear of the objective', () => {
