@@ -79,6 +79,11 @@ export class Voice {
     return this.speech.speak(text, voice);
   }
 
+  /** Stops Kokoro's process, if it's running, as the office closes. */
+  close(): void {
+    this.speech.close();
+  }
+
   /** Looks for whisper-cli and the model again (after a brew install, say) and tells every browser. */
   refresh(): VoiceStatus {
     const status = this.status();

@@ -7,8 +7,9 @@ import { errorMessage, run } from './util';
 
 /**
  * What the office sends server/supervise.ts, before it starts closing, to be started again. A message rather than an
- * exit code because how the process ends isn't ours to decide: onnxruntime (the crew's voices) can abort on exit on
- * macOS ("mutex lock failed"), and the restart must survive that.
+ * exit code because how the process ends isn't entirely ours to decide: a native module can abort it on exit (onnxruntime
+ * did on macOS, "mutex lock failed", before the crew's voices moved to a process of their own), and the restart must
+ * survive that.
  */
 export const RESTART_MESSAGE = 'restart';
 

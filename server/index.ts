@@ -25,7 +25,7 @@ import { Hub } from './hub';
 import { Office } from './office';
 import { demoPreviewPage, Previews } from './previews';
 import { apiRouter } from './routes';
-import { Store } from './store';
+import { StateLockedError, Store } from './store';
 import { currentVersion, RESTART_MESSAGE, Updater } from './updater';
 import { errorMessage } from './util';
 import { Voice } from './voice';
@@ -192,6 +192,8 @@ async function main() {
     console.log('\nClosing the office…');
     for (const agent of store.agents.values()) office.agents.stop(agent.id);
     store.save();
+    // Kokoro's process goes by SIGKILL (see server/speech.ts): with onnxruntime out of this process, exiting can't abort
+    office.voice.close();
     await Promise.all([browsers.shutdown(), previews.shutdown()]);
     setTimeout(() => process.exit(0), 300);
   };
@@ -205,7 +207,9 @@ async function main() {
   if (config.autoUpdate) await new Updater(store, hub, restart).start();
 }
 
-main().catch((err) => {
-  console.error(err);
+main().catch((err: unknown) => {
+  // another office on the same data folder is expected, and its message says what to do: no stack trace to bury it
+  if (err instanceof StateLockedError) console.error(err.message);
+  else console.error(err);
   process.exit(1);
 });
