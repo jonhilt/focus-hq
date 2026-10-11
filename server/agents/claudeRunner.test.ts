@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { TermLine } from '../../shared/types';
 import type { BrowserPool } from './browserTool';
-import { ClaudeRunner, claudeConfig } from './claudeRunner';
+import { ClaudeRunner, claudeConfig, holdsInput } from './claudeRunner';
 import type { ProbeEvent, RunHooks, WorkflowEvent } from './types';
 
 describe('claudeConfig', () => {
@@ -108,5 +108,31 @@ describe('a script run from the scratch dir', () => {
   it('isn’t when it only writes a scratch file, or when it’s a subagent’s', () => {
     expect(run([bash('toolu_3', 'cat > "$FOCUS_SCRATCH/a.ts" <<\'EOF\'\nx\nEOF'), result('toolu_3', '')])).toEqual([]);
     expect(run([bash('toolu_4', 'node "$FOCUS_SCRATCH/x.mjs"', 'toolu_agent'), result('toolu_4', 'ok', false, 'toolu_agent')])).toEqual([]);
+  });
+});
+
+describe('holdsInput', () => {
+  it('keeps listening while a workflow or a background subagent runs', () => {
+    expect(holdsInput(['local_workflow'])).toBe(true);
+    expect(holdsInput(['local_bash', 'local_agent'])).toBe(true);
+  });
+
+  it('doesn’t for a background shell or monitor, which can run for as long as it likes, or for nothing at all', () => {
+    expect(holdsInput(['local_bash'])).toBe(false);
+    expect(holdsInput(['monitor', 'mcp_task'])).toBe(false);
+    expect(holdsInput([])).toBe(false);
+  });
+});
+
+describe('the background tasks', () => {
+  it('are what Claude Code last listed, leaving out the ambient ones', () => {
+    const runner = new ClaudeRunner(null as unknown as BrowserPool) as unknown as { handle(m: SDKMessage, ctx: unknown, h: RunHooks): unknown };
+    const ctx: { background?: string[] } & Record<string, unknown> = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set() };
+    const hooks = { lines: () => undefined, activity: () => undefined } as unknown as RunHooks;
+    const changed = (tasks: unknown[]) => ({ type: 'system', subtype: 'background_tasks_changed', tasks }) as unknown as SDKMessage;
+    runner.handle(changed([{ task_id: 'w1', task_type: 'local_workflow', description: 'Review' }, { task_id: 'm1', task_type: 'monitor', description: 'Watch', ambient: true }]), ctx, hooks);
+    expect(ctx.background).toEqual(['local_workflow']);
+    runner.handle(changed([]), ctx, hooks);
+    expect(ctx.background).toEqual([]);
   });
 });

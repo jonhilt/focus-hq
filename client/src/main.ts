@@ -43,6 +43,7 @@ import { loadTrainingHall } from './world/hall';
 import { loadTeamStation } from './world/teamStation';
 import { stopAt } from './world/turbolift';
 import { TransporterFeeds } from './world/transporterFeeds';
+import { warmUp } from './world/warmUp';
 
 async function fontsReady(): Promise<void> {
   const loads = ['700 40px Fredoka', '500 40px Fredoka', '15px "JetBrains Mono"', '600 40px Antonio', '500 40px Antonio'].map((f) => document.fonts.load(f));
@@ -235,6 +236,25 @@ async function main() {
   });
 
   // ---------------------------------------------------------------- state → world
+  // the whole ship's shaders and textures, ready before you walk into any of it (warmUp.ts), and again as it changes
+  let warming = false;
+  let warmAgain = false;
+  const warm = (): void => {
+    if (warming) {
+      warmAgain = true;
+      return;
+    }
+    warming = true;
+    warmUp(renderer, scene, camera)
+      .catch(() => undefined)
+      .finally(() => {
+        warming = false;
+        if (warmAgain) {
+          warmAgain = false;
+          warm();
+        }
+      });
+  };
   const syncWorld = () => {
     world.sync(state.projects);
     player.colliders = world.colliders;
@@ -245,6 +265,7 @@ async function main() {
     }
     world.numberOne?.sync();
     world.markPanels();
+    warm();
   };
   state.on('snapshot', () => {
     syncWorld();

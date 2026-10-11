@@ -6,6 +6,7 @@ import { plainTermLine } from '../../../shared/termText';
 import { canvasTexture, fitText, makeCanvas, MONO_FONT, roundRect, UI_FONT, wrap } from './canvas';
 import { flat } from './materials';
 import { type Pane, type PaneAt, paneAt, screenPanes, screenPrefs } from './screenPanes';
+import { cursorOn, redrawDue, type ScreenView } from './screenRedraw';
 import { LCARS, LCARS_FONT, LCARS_STATUS, lcarsFrame } from './starship';
 
 export const TERM_COLORS: Record<TermLine['kind'], string> = {
@@ -47,6 +48,8 @@ export class StationScreen {
   private readonly texture: THREE.CanvasTexture;
   private dirty = true;
   private lastDraw = 0;
+  /** Whether its cursor was on when it was last drawn. */
+  private cursor = true;
   private image: HTMLImageElement | null = null;
   private imageSrc = '';
   /** The pictures of what the lead's shown, by URL: null while one loads. */
@@ -87,19 +90,20 @@ export class StationScreen {
     return paneAt(this.panes, (uv.x * w) / scale, ((1 - uv.y) * h) / scale);
   }
 
-  /** Redraws when something changed, more often when the player is close. */
-  maybeDraw(now: number, near: boolean, lines: TermLine[] | undefined, frame: BrowserFrame | undefined): void {
+  /** Draws it again when there's something new to see from where the captain is (`view`, screenRedraw.ts). */
+  maybeDraw(now: number, view: ScreenView, lines: TermLine[] | undefined, frame: BrowserFrame | undefined): void {
     if (this.prefsVersion !== screenPrefs.version) {
       this.prefsVersion = screenPrefs.version;
       this.dirty = true;
     }
-    if (!this.dirty || now - this.lastDraw < (near ? 120 : 1500)) return;
+    // the cursor blinks while the agent is busy
+    const blinking = !!this.agent && !['done', 'error', 'stopped'].includes(this.agent.status);
+    if (!redrawDue({ changed: this.dirty, blinking, at: this.lastDraw, cursor: this.cursor }, view, now)) return;
     this.dirty = false;
     this.lastDraw = now;
+    this.cursor = cursorOn(now);
     this.draw(lines ?? [], frame);
     this.texture.needsUpdate = true;
-    // keep the cursor blinking while the agent is busy
-    if (this.agent && !['done', 'error', 'stopped'].includes(this.agent.status)) this.dirty = true;
   }
 
   private draw(lines: TermLine[], frame: BrowserFrame | undefined): void {
@@ -247,7 +251,7 @@ export class StationScreen {
       ctx.fillText(row.text, x + pad, y + pad + i * lineH);
     });
     // blinking cursor
-    if (Math.floor(performance.now() / 500) % 2 === 0) {
+    if (this.cursor) {
       ctx.fillStyle = '#e6edf3';
       ctx.fillRect(x + pad, y + pad + Math.min(rows.length, maxRows - 1) * lineH + 2, charW, lineH - 4);
     }
