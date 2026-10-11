@@ -405,6 +405,12 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .chart-wp .shield.absorbed { stroke: var(--lcars-gold); }
 .chart-wp .shield.down { stroke: var(--lcars-red); }
 .chart-shields, .chart-spots { margin: 4px 0 0; padding: 0; list-style: none; }
+.chart-evidence { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 6px; }
+.chart-thumb { display: flex; flex-direction: column; gap: 4px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: #0d0b16; cursor: pointer; text-align: left; overflow: hidden; color: inherit; font: inherit; }
+.chart-thumb:hover { border-color: var(--lcars-peach); }
+.chart-thumb img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; display: block; }
+.chart-thumb-none { aspect-ratio: 16 / 10; display: grid; place-items: center; color: var(--muted); font-size: 13px; }
+.chart-thumb small { padding: 0 6px 5px; font-size: 12px; line-height: 1.2; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .chart-shields li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 6px 0; }
 .chart-shields li small, .chart-spots small { flex-basis: 100%; display: block; color: var(--muted); font-size: 13px; letter-spacing: 0.03em; }
 .chart-shields li.absorbed small { color: var(--lcars-gold); }

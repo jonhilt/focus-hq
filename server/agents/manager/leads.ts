@@ -1,12 +1,12 @@
 import { Effect } from 'effect';
 import { leadFor, leadId } from '../../../shared/crew';
-import type { Agent, Effort, QaReport, QueuedGoal } from '../../../shared/types';
+import type { Agent, Effort, Evidence, QaReport, QaScreenshot, QueuedGoal } from '../../../shared/types';
 import { LEAD_DESK, TEAM_STATIONS } from '../../../shared/types';
 import { GitHub } from '../../github/service';
 import { newId } from '../../util';
 import { afterVerdict, closeCheck, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, landedMidTurnNote, landedNote, leadWorktreeId, moveQueued, nextGoal, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch } from '../lead';
 import { Workspace } from '../services';
-import { landedWaypoint, shieldedWaypoint, tickedSpotCheck } from '../waypoints';
+import { EVIDENCE_PER_PR, evidenceFile, landedWaypoint, shieldedWaypoint, tickedSpotCheck } from '../waypoints';
 import { type ManagerServices, Part, Refused, type WorkError } from './core';
 
 /** Goals and their leads: starting, queueing, reopening and closing goals, and what the lead hears about their pull requests. */
@@ -254,11 +254,23 @@ export class Leads extends Part {
    * QA's verdict on a lead's pull request goes on its slice's waypoint as its shield, with its spot-checks and how CI
    * stood: the review and the board's entry are both gone by the time the pull request lands.
    */
-  leadShielded(projectId: string, repo: string, number: number, report: QaReport, failedRounds: number): void {
-    const lead = this.leadWith(repo, number);
-    if (!lead?.lead) return;
-    const ci = this.store.boards.get(projectId)?.prs.find((p) => p.repo === repo && p.number === number)?.checks;
-    this.update(lead, { lead: { ...lead.lead, waypoints: shieldedWaypoint(lead.lead, { repo, pr: number, report, failedRounds, ci }, Date.now()) } });
+  leadShielded(projectId: string, repo: string, number: number, report: QaReport, failedRounds: number, shots: readonly QaScreenshot[]): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const lead = this.leadWith(repo, number);
+      if (!lead?.lead) return;
+      const ci = this.store.boards.get(projectId)?.prs.find((p) => p.repo === repo && p.number === number)?.checks;
+      // QA's own copies go with its review when the pull request lands: the goal keeps copies of its own, as evidence
+      const evidence: Evidence[] = [];
+      for (const [i, shot] of shots.slice(-EVIDENCE_PER_PR).entries()) {
+        const bytes = yield* Effect.promise(() => this.store.readShot(shot.file));
+        if (!bytes) continue;
+        const file = evidenceFile(repo, number, i, shot.file);
+        this.store.saveArtifact(lead.id, file, bytes);
+        evidence.push({ repo, pr: number, caption: shot.caption, file });
+      }
+      const work = this.store.agent(lead.id).lead ?? lead.lead;
+      this.update(lead, { lead: { ...work, waypoints: shieldedWaypoint(work, { repo, pr: number, report, failedRounds, ci, evidence }, Date.now()) } });
+    });
   }
 
   /** The captain ticks off (or un-ticks) one of the spot-checks QA picked on a slice of a goal under way. */

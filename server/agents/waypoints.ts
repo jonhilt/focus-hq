@@ -1,7 +1,7 @@
 // A goal's slices as waypoints on its chart: what each set out to do, what it taught us, and when. The office keeps
 // them as the lead ships, notes and lands each slice; these are the pure decisions, and the manager's parts call them.
 
-import type { ChecksState, GoalNote, LeadWork, QaReport, SpotCheck, Waypoint } from '../../shared/types';
+import type { ChecksState, Evidence, GoalNote, LeadWork, QaReport, SpotCheck, Waypoint } from '../../shared/types';
 import type { NoteInput } from './lead';
 
 /** How much a waypoint keeps: they all travel with the goal on every update, so each stays a few lines long. */
@@ -86,6 +86,8 @@ export interface Verdict {
   report: QaReport;
   failedRounds: number;
   ci?: ChecksState;
+  /** The screenshots QA took this round, already copied to the goal's own files. */
+  evidence?: Evidence[];
 }
 
 const sameSpot = (a: SpotCheck, b: Omit<SpotCheck, 'checked'>) => a.repo === b.repo && a.pr === b.pr && a.file === b.file && a.line === b.line;
@@ -106,10 +108,12 @@ export function shieldedWaypoint(work: Course, v: Verdict, now: number): Waypoin
       const checked = w.spotChecks?.find((old) => sameSpot(old, c))?.checked;
       return checked ? { ...c, checked } : c;
     })];
+    const evidence = [...(w.evidence ?? []).filter((e) => e.repo !== v.repo || e.pr !== v.pr), ...(v.evidence ?? [])];
     return {
       ...w,
       shields: [...(w.shields ?? []).filter((x) => x.repo !== v.repo || x.pr !== v.pr), shield],
       ...(spotChecks.length && { spotChecks }),
+      ...(evidence.length && { evidence }),
     };
   });
 }
@@ -123,3 +127,10 @@ export function tickedSpotCheck(work: Pick<LeadWork, 'waypoints'>, slice: number
   if (!checked) delete next.checked;
   return work.waypoints!.map((x) => (x === w ? { ...w, spotChecks: w.spotChecks!.map((c, i) => (i === index ? next : c)) } : x));
 }
+
+/** How many of each pull request's screenshots a waypoint keeps as evidence: QA's last few. */
+export const EVIDENCE_PER_PR = 4;
+
+/** What a screenshot is called among the goal's own files: the repo, pull request and its place, in QA's format. */
+export const evidenceFile = (repo: string, pr: number, index: number, shot: string): string =>
+  `shot-${repo.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${pr}-${index + 1}.${shot.endsWith('.png') ? 'png' : 'jpg'}`;

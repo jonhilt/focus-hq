@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent, GoalNote, LeadWork, QaReport } from '../../shared/types';
 import { goalRecord, reopenedWork } from './lead';
-import { landedWaypoint, nextWaypoints, notedSlice, notedWaypoint, opening, shieldedWaypoint, shippedWaypoint, tickedSpotCheck, WAYPOINT_LIMITS, withWaypoint } from './waypoints';
+import { evidenceFile, landedWaypoint, nextWaypoints, notedSlice, notedWaypoint, opening, shieldedWaypoint, shippedWaypoint, tickedSpotCheck, WAYPOINT_LIMITS, withWaypoint } from './waypoints';
 
 const note = (done: string, learned: string[] = []): GoalNote => ({ done, slice: [], learned, next: [] });
 
@@ -124,5 +124,25 @@ describe('shields and spot-checks', () => {
     expect(off[0].spotChecks?.[0]).not.toHaveProperty('checked');
     expect(tickedSpotCheck({ waypoints: picked }, 2, 5, true, 15)).toEqual({ error: 'There\'s no spot-check 6 on waypoint 2' });
     expect(tickedSpotCheck({ waypoints: picked }, 7, 0, true, 15)).toHaveProperty('error');
+  });
+});
+
+describe('evidence', () => {
+  const qa: QaReport = { verdict: 'pass', summary: 'ok', checks: [], commands: [], captions: [] };
+  const shot = (pr: number, caption: string) => ({ repo: 'acme/web', pr, caption, file: `shot-acme-web-${pr}-1.jpg` });
+
+  it('keeps each pull request’s latest round of screenshots on the slice’s waypoint', () => {
+    const work = { slice: 2, waypoints: [{ slice: 2, startedAt: 5 }] };
+    const first = shieldedWaypoint(work, { repo: 'acme/web', pr: 9, report: qa, failedRounds: 0, evidence: [shot(9, 'Empty list')] }, 10);
+    const other = shieldedWaypoint({ ...work, waypoints: first }, { repo: 'acme/web', pr: 10, report: qa, failedRounds: 0, evidence: [shot(10, 'Header')] }, 11);
+    const again = shieldedWaypoint({ ...work, waypoints: other }, { repo: 'acme/web', pr: 9, report: qa, failedRounds: 1, evidence: [shot(9, 'Fixed list')] }, 12);
+    expect(again[0].evidence?.map((e) => e.caption)).toEqual(['Header', 'Fixed list']);
+    // a round with no screenshots leaves none for that pull request
+    expect(shieldedWaypoint({ ...work, waypoints: again }, { repo: 'acme/web', pr: 10, report: qa, failedRounds: 0 }, 13)[0].evidence?.map((e) => e.caption)).toEqual(['Fixed list']);
+  });
+
+  it('names its own copy of each screenshot after the repo, pull request and place', () => {
+    expect(evidenceFile('Acme/Web.App', 9, 0, 'acme-web-9-123-1.png')).toBe('shot-acme-web-app-9-1.png');
+    expect(evidenceFile('acme/web', 12, 2, 'x.jpg')).toBe('shot-acme-web-12-3.jpg');
   });
 });

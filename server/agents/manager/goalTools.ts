@@ -48,7 +48,8 @@ export class GoalTools extends Part {
       if (!work) return 'The goal closed before it went up.';
       const next = showArtifact(work.artifacts ?? [], input, Date.now());
       if ('error' in next) return yield* new Refused({ message: next.error });
-      this.update(agent, { lead: { ...work, artifacts: next.map((a) => (a.id === input.id && 'bytes' in picture ? { ...a, image: true } : a)) } });
+      // each goes on the waypoint of the slice it was last shown in, as evidence of what it set out to do
+      this.update(agent, { lead: { ...work, artifacts: next.map((a) => (a.id === input.id ? { ...a, slice: work.slice, ...('bytes' in picture && { image: true }) } : a)) } });
       const where = `“${next.find((a) => a.id === input.id)!.title}” is on your station's screen; the captain can open it up close.`;
       return 'bytes' in picture ? `${where}${pageErrorsNote(picture.errors)}` : `${where} The office couldn't take a picture of it for the screen (${picture.failed}), so the screen shows only its title.`;
     });
@@ -90,7 +91,7 @@ export class GoalTools extends Part {
         const picture = pictures[i];
         if (picture) this.store.saveArtifact(agent.id, `${asked.id}.${option.id}.jpg`, picture);
       }
-      const questions = next.questions.map((q) => (q.id === asked.id ? { ...q, options: q.options.map((o, i) => (pictures[i] ? { ...o, image: true } : o)) } : q));
+      const questions = next.questions.map((q) => (q.id === asked.id ? { ...q, slice: work.slice, options: q.options.map((o, i) => (pictures[i] ? { ...o, image: true } : o)) } : q));
       this.update(agent, { lead: { ...work, questions } });
       this.print(agent, [{ kind: 'manager', text: `❓ Asked the captain: ${asked.question} (${asked.options.map((o) => `${o.id.toUpperCase()}: ${o.label}`).join(' · ')})` }]);
       const missing = pictures.filter((p) => !p).length;

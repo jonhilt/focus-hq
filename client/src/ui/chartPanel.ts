@@ -1,5 +1,7 @@
-import type { Agent, Contact, GoalNote, GoalRecord, LeadPr, Waypoint } from '../../../shared/types';
+import type { Agent, Contact, GoalArtifact, GoalNote, GoalQuestion, GoalRecord, LeadPr, Waypoint } from '../../../shared/types';
 import { api } from '../net/api';
+import { artifactUrl, optionUrl } from '../../../shared/artifacts';
+import { openClosedGoalShown } from './screenPanel';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
@@ -18,6 +20,9 @@ interface ChartGoal {
   /** Every pull request it shipped, each with its slice. */
   prs: LeadPr[];
   contacts: Contact[];
+  /** What its lead showed and asked on the station's screen, each with the slice it was shown in. */
+  artifacts: GoalArtifact[];
+  questions: GoalQuestion[];
   openedAt: number;
   closedAt?: number;
 }
@@ -33,11 +38,13 @@ const live = (agent: Agent): ChartGoal | undefined => {
     waypoints: everySlice(work.waypoints, work.slice, agent.startedAt),
     prs: [...(work.landed ?? []), ...work.prs.map((p) => ({ ...p, slice: p.slice ?? work.slice }))],
     contacts: work.contacts ?? [],
+    artifacts: work.artifacts ?? [],
+    questions: work.questions ?? [],
   };
 };
 
 const closed = (goal: GoalRecord): ChartGoal => ({
-  id: goal.id, title: goal.title, note: goal.note, prs: goal.prs, contacts: goal.contacts ?? [], openedAt: launched(goal.openedAt, goal.waypoints), closedAt: goal.closedAt,
+  id: goal.id, title: goal.title, note: goal.note, prs: goal.prs, contacts: goal.contacts ?? [], artifacts: goal.artifacts ?? [], questions: goal.questions ?? [], openedAt: launched(goal.openedAt, goal.waypoints), closedAt: goal.closedAt,
   // a slice that started as the goal closed, and never shipped or taught us anything, isn't part of the voyage
   waypoints: everySlice(goal.waypoints, goal.slices, goal.openedAt).filter((w) => w.slice <= goal.slices || w.title || w.learned?.length),
 });
@@ -165,7 +172,7 @@ const section = (label: string, tone: string, ...body: (Node | string | null)[])
 const prOf = (prs: LeadPr[], repo: string, pr: number) => prs.find((p) => p.repo === repo && p.number === pr);
 
 /** The picked waypoint's log: when, what it set out to do, any course correction, what it taught us, its pull requests. */
-function logView(goal: ChartGoal, w: Waypoint | undefined, tick?: (slice: number, index: number, checked: boolean) => void): HTMLElement {
+function logView(goal: ChartGoal, w: Waypoint | undefined, tick?: (slice: number, index: number, checked: boolean) => void, openShown?: () => void): HTMLElement {
   const objective = section('Objective', LCARS.peach, h('p', null, goal.note?.done || 'Not agreed yet'));
   const threads = (label: string, list: Contact[]) =>
     list.length ? section(label, LCARS.sky, h('ul', { class: 'chart-threads' }, ...list.map((c) => h('li', { class: c.closed?.as ?? 'open' }, h('span', null, c.text), h('small', null, standing(c)))))) : null;
@@ -189,12 +196,39 @@ function logView(goal: ChartGoal, w: Waypoint | undefined, tick?: (slice: number
     w.summary || !w.title ? section('Intent', LCARS.orange, h('p', null, w.summary ?? 'Nothing shipped yet')) : null,
     w.turnedFrom ? section('Course correction', LCARS.red, h('p', null, 'Was heading for: ', h('em', null, w.turnedFrom))) : null,
     w.learned?.length ? section('Learned', LCARS.lilac, h('ul', { class: 'goal-list' }, ...w.learned.map((l) => h('li', null, l)))) : null,
+    evidenceView(goal, w, openShown),
     shieldsView(w),
     spotChecksView(w, goal.prs, tick),
     threads('Noticed here', goal.contacts.filter((c) => c.slice === w.slice)),
     prs.length ? section('Pull requests', LCARS.periwinkle, h('div', { class: 'row' }, ...prs.map(prLink))) : null,
     open,
   );
+}
+
+/**
+ * What the slice does, seen rather than read: the screenshots QA last took of each of its pull requests (each opens
+ * full size), then what its lead showed and asked on the station's screen while it was under way (which open up close).
+ */
+function evidenceView(goal: ChartGoal, w: Waypoint, openShown?: () => void): HTMLElement | null {
+  const shots = w.evidence ?? [];
+  const shown = goal.artifacts.filter((a) => a.slice === w.slice);
+  const asked = goal.questions.filter((q) => q.slice === w.slice);
+  if (!shots.length && !shown.length && !asked.length) return null;
+  const thumb = (src: string | undefined, caption: string, open: () => void) =>
+    h('button', { class: 'chart-thumb', title: caption, onclick: open },
+      src ? h('img', { src, alt: caption, loading: 'lazy' }) : h('span', { class: 'chart-thumb-none' }, 'No picture'),
+      h('small', null, caption));
+  return section('Evidence', LCARS.peach, h('div', { class: 'chart-evidence' },
+    ...shots.map((e) => {
+      const src = `/api/artifacts/${goal.id}/${e.file}`;
+      return thumb(src, `${e.repo.split('/')[1]} #${e.pr} · ${e.caption}`, () => window.open(src, '_blank', 'noopener'));
+    }),
+    ...shown.map((a) => thumb(a.image ? artifactUrl(goal.id, a, 'jpg') : undefined, `Shown: ${a.title}`, () => openShown?.())),
+    ...asked.map((q) => {
+      const first = q.options.find((o) => o.image);
+      return thumb(first ? optionUrl(goal.id, q, first.id, 'jpg') : undefined, `Asked: ${q.question}`, () => openShown?.());
+    }),
+  ));
 }
 
 /** Each of the slice's pull requests' guardrails, as QA last reported on it. */
@@ -259,7 +293,7 @@ function readout(goal: ChartGoal): HTMLElement {
  * A goal's star chart (stellar cartography): its slices as waypoints on a course towards the objective, with the
  * picked one's log beside it. `goal` is read afresh on every render, so a live goal's chart follows its lead.
  */
-function openChart(ui: Ui, goal: () => ChartGoal | undefined, liveId?: string): void {
+function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) => void, liveId?: string): void {
   const first = goal();
   if (!first) return;
   const body = h('div', { class: 'chart' });
@@ -274,7 +308,7 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, liveId?: string): 
     };
     fill(body,
       h('div', { class: 'chart-map' }, chartSvg(g, plot, picked, pick), readout(g)),
-      logView(g, g.waypoints.find((w) => w.slice === picked), liveId ? (slice, index, checked) => void api.tickSpotCheck(liveId, slice, index, checked).catch((err: Error) => ui.error(err.message)) : undefined),
+      logView(g, g.waypoints.find((w) => w.slice === picked), liveId ? (slice, index, checked) => void api.tickSpotCheck(liveId, slice, index, checked).catch((err: Error) => ui.error(err.message)) : undefined, () => shown(ui)),
     );
   };
   render();
@@ -302,12 +336,12 @@ export function openGoalChart(ui: Ui, leadId: string): void {
   openChart(ui, () => {
     const agent = state.agents.get(leadId);
     return agent && live(agent);
-  }, leadId);
+  }, (u) => u.openScreen(leadId), leadId);
 }
 
 /** A closed goal's chart, as it stood when it closed. */
 export function openClosedGoalChart(ui: Ui, goal: GoalRecord): void {
   const chart = closed(goal);
-  openChart(ui, () => chart);
+  openChart(ui, () => chart, (u) => openClosedGoalShown(u, goal));
 }
 

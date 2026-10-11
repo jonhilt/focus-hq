@@ -54,11 +54,12 @@ export function apiRouter(office: Office, store: Store): express.Router {
     const lead = param(req, 'lead');
     const file = param(req, 'file');
     // an artifact (data-flow.html) or an option of a question (q1.a.html), and their pictures
-    const ok = /^lead_\w+$/.test(lead) && /^[a-z0-9][a-z0-9-]*(\.[a-d])?\.(html|jpg)$/.test(file);
+    const ok = /^lead_\w+$/.test(lead) && (/^[a-z0-9][a-z0-9-]*(\.[a-d])?\.(html|jpg)$/.test(file) || /^shot-[a-z0-9-]+\.(jpg|png)$/.test(file));
     const bytes = ok ? await store.readArtifact(lead, file) : undefined;
     if (!bytes) return void res.sendStatus(404);
     if (file.endsWith('.html')) return void res.type('html').set({ 'Content-Security-Policy': 'sandbox allow-scripts allow-popups', 'Cache-Control': 'no-cache' }).send(bytes);
-    res.type('jpg').set('Cache-Control', 'max-age=31536000, immutable').send(bytes);
+    // a picture's URL changes with each version (?v=); a waypoint's evidence keeps its name from one QA round to the next
+    res.type(file.endsWith('.png') ? 'png' : 'jpg').set('Cache-Control', file.startsWith('shot-') ? 'no-cache' : 'max-age=31536000, immutable').send(bytes);
   });
   r.post('/github/check', h(() => office.checkGitHub()));
   r.get('/github/repos', h(() => office.listRepos()));

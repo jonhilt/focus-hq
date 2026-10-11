@@ -247,7 +247,7 @@ export class Reviews extends Part {
       this.boardChanged(agent.projectId);
       if (done) yield* this.qaNext(done, { kind: 'verdict', verdict: report.verdict, failedRounds });
       this.core.ledger.digestSession(agent, [{ repo: agent.repo, pr: number }]);
-      this.core.leads.leadShielded(agent.projectId, agent.repo, number, report, failedRounds);
+      yield* this.core.leads.leadShielded(agent.projectId, agent.repo, number, report, failedRounds, screenshots);
       this.core.leads.leadHearsVerdict(agent.repo, number, `QA officer ${agent.name}`, report, failedRounds);
       this.nextReview(agent.projectId);
     });

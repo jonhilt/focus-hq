@@ -51,6 +51,19 @@ export interface Waypoint {
   shields?: Shield[];
   /** The places QA picked for the captain to look at, and which the captain has. */
   spotChecks?: SpotCheck[];
+  /** What the slice does, seen: the screenshots QA took of its pull requests, as it last tested each. */
+  evidence?: Evidence[];
+}
+
+/**
+ * A screenshot QA took of one of a slice's pull requests, kept with the goal (its QA review, and the copy QA kept, go
+ * once the pull request lands): served from /api/artifacts/<lead id>/<file>.
+ */
+export interface Evidence {
+  repo: string;
+  pr: number;
+  caption: string;
+  file: string;
 }
 
 /**
@@ -195,6 +208,8 @@ export interface LeadWork {
  * artifact, as `<question id>.<option id>`). The captain answers by picking one; it stays, answered, for the goal.
  */
 export interface GoalQuestion {
+  /** The slice it was asked in. Missing on questions asked before it was kept. */
+  slice?: number;
   /** q1, q2, …: unique within the goal. */
   id: string;
   question: string;
@@ -211,6 +226,8 @@ export interface GoalQuestion {
  * self-contained HTML page, and a picture of it for the screen. Served from /api/artifacts/<lead id>/<id>.html and .jpg.
  */
 export interface GoalArtifact {
+  /** The slice it was last shown in. Missing on ones shown before it was kept. */
+  slice?: number;
   /** The lead's own name for it: showing the same id again replaces it. */
   id: string;
   title: string;

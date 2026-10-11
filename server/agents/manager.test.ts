@@ -348,8 +348,9 @@ describe('AgentManager', () => {
     expect(await show({ id: 'mockup', title: 'Mockup', html: '<p>unrenderable</p>' })).toMatch(/couldn't take a picture of it for the screen \(no browser\)/);
     await expect(show({ id: '../etc', title: 'Nope', html: '<p>x</p>' })).rejects.toThrow(/lowercase letters/);
     expect(store.agent(lead.id).lead!.artifacts).toEqual([
-      { id: 'data-flow', title: 'Data flow', at: expect.any(Number), image: true },
-      { id: 'mockup', title: 'Mockup', at: expect.any(Number) },
+      // each with the slice it was shown in, for its waypoint's evidence
+      { id: 'data-flow', title: 'Data flow', at: expect.any(Number), image: true, slice: 1 },
+      { id: 'mockup', title: 'Mockup', at: expect.any(Number), slice: 1 },
     ]);
     expect((await store.readArtifact(lead.id, 'data-flow.html'))?.toString()).toBe('<h1>Flow</h1>');
     expect(await store.readArtifact(lead.id, 'data-flow.jpg')).toBeDefined();
@@ -371,7 +372,7 @@ describe('AgentManager', () => {
       stage: { html: '<div id="file"></div>', script },
     });
     expect(await explain('function render(t) {}')).toMatch(/“The ledger” is on your station's screen.*an explainer of 2 beats, 7 seconds in all\.$/);
-    expect(store.agent(lead.id).lead!.artifacts).toEqual([{ id: 'ledger', title: 'The ledger', at: expect.any(Number), image: true }]);
+    expect(store.agent(lead.id).lead!.artifacts).toEqual([{ id: 'ledger', title: 'The ledger', at: expect.any(Number), image: true, slice: 1 }]);
     expect(await store.readArtifact(lead.id, 'ledger.webm')).toBeUndefined();
     const page = (await store.readArtifact(lead.id, 'ledger.html'))!.toString();
     expect(page).toContain('<div id="file"></div>');
