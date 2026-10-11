@@ -46,7 +46,7 @@ export class Workspace extends Context.Service<Workspace, {
   push(dir: string, branch: string): Effect.Effect<void, GitFailed>;
   publish(dir: string, branch: string): Effect.Effect<void, GitFailed>;
   pull(dir: string, branch: string): Effect.Effect<void, GitFailed>;
-  checkoutPullRequest(repo: string, agentId: string, number: number): Effect.Effect<string, GitFailed>;
+  checkoutPullRequest(repo: string, id: string, number: number): Effect.Effect<string, GitFailed>;
   mergeBase(repo: string, branch: string, baseBranch: string): Effect.Effect<BaseMerge, GitFailed>;
   missingRemoteCommits(dir: string, branch: string): Effect.Effect<boolean, GitFailed>;
   /** A worktree on `branch` as it was left (a closed goal's), from the office's clone or else GitHub, never reset. */
@@ -73,7 +73,7 @@ export class Workspace extends Context.Service<Workspace, {
       push: (dir, branch) => git(`push ${branch}`, () => ops.push(dir, branch)),
       publish: (dir, branch) => git(`publish ${branch}`, () => ops.publish(dir, branch)),
       pull: (dir, branch) => git(`fetch ${branch}`, () => ops.pull(dir, branch)),
-      checkoutPullRequest: (repo, agentId, number) => git(`check out PR #${number}`, () => ops.checkoutPullRequest(repo, agentId, number)),
+      checkoutPullRequest: (repo, id, number) => git(`check out PR #${number}`, () => ops.checkoutPullRequest(repo, id, number)),
       mergeBase: (repo, branch, baseBranch) => git(`merge ${baseBranch} into ${branch}`, () => ops.mergeBase(repo, branch, baseBranch)),
       missingRemoteCommits: (dir, branch) => git(`compare with origin's ${branch}`, () => ops.missingRemoteCommits(dir, branch)),
       reopen: (repo, agentId, branch, inOffice) => git(`check out ${branch} again`, () => ops.reopen(repo, agentId, branch, inOffice)),

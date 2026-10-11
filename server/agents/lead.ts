@@ -493,6 +493,13 @@ export function shipped(lines: string[]): string {
 /** A goal's own QA reviewer, reused from review to review like the room's QA officer. */
 export const goalReviewerId = (leadId: string) => `qa_${leadId}`;
 
+/**
+ * The other pull requests of the slice `pr` belongs to, one per repo, which QA checks out beside it to test the slice's
+ * change across repos as one. None when no goal shipped it, or its slice touched no other repo.
+ */
+export const sliceSiblings = (pr: Pick<QaReview, 'repo' | 'number'>, goal: Agent | undefined): LeadPr[] =>
+  goal?.lead?.prs.some((p) => p.repo === pr.repo && p.number === pr.number) ? goal.lead.prs.filter((p) => p.repo !== pr.repo) : [];
+
 /** The goal whose lead shipped this pull request, if one did: its own reviewer reviews it. */
 export const goalOf = (review: Pick<QaReview, 'repo' | 'number'>, leads: Agent[]): Agent | undefined =>
   leads.find((a) => a.task === 'lead' && a.lead?.prs.some((p) => p.repo === review.repo && p.number === review.number));

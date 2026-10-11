@@ -8,7 +8,7 @@ import { sameCommit } from '../../shared/qa';
 import { autoMergePlan, conflictStages, type MergeRule, mergeRules } from './conflicts';
 import { checkCommands, rangeDiffUnchanged, type SinceVerdict } from './retest';
 import type { BaseMerge, BranchState, ChecksRun } from './types';
-import { claimBranch, heldMessage, orphanedWorkspaces, parseWorktrees, retryLockRace, reviewCheckoutId, trashName } from './worktrees';
+import { claimBranch, heldMessage, orphanedWorkspaces, parseWorktrees, retryLockRace, trashName } from './worktrees';
 
 const lock = new KeyedLock();
 /** One run of the checks at a time in each repo's checks folder. */
@@ -205,14 +205,16 @@ async function detachAt(mirror: string, dir: string, sha: string): Promise<void>
 }
 
 /**
- * A reviewer's checkout of a pull request's head, detached, in a folder of its own for that PR inside their workspace
- * (`reviewCheckoutId`). Returns the commit.
+ * A reviewer's checkout of pull request `number`'s head, detached, in `id` (a folder in data/workspaces: `reviewRepoId`).
+ * Returns the commit.
  */
-export async function checkoutPullRequest(repo: string, agentId: string, number: number): Promise<string> {
-  const workspace = path.join(paths.workspaces, agentId);
-  // a workspace from before reviewers kept a folder per PR is itself a checkout: it goes, rather than nest checkouts in it
-  if (fs.existsSync(path.join(workspace, '.git'))) await removeFolder(workspace);
-  return checkoutDetached(repo, path.join(paths.workspaces, reviewCheckoutId(agentId, repo, number)), `refs/pull/${number}/head`, 'refs/focus/qa');
+export async function checkoutPullRequest(repo: string, id: string, number: number): Promise<string> {
+  const dir = path.join(paths.workspaces, id);
+  // a reviewer's folders from an older layout were checkouts themselves: they go, rather than nest checkouts in them
+  for (let above = path.dirname(dir); above.startsWith(paths.workspaces + path.sep); above = path.dirname(above)) {
+    if (fs.existsSync(path.join(above, '.git'))) await removeFolder(above);
+  }
+  return checkoutDetached(repo, dir, `refs/pull/${number}/head`, 'refs/focus/qa');
 }
 
 const isAncestor = (dir: string, a: string, b: string) => git(dir, ['merge-base', '--is-ancestor', a, b]).then(() => true, () => false);

@@ -177,7 +177,28 @@ export function qaComment(report: QaReport, by: { officer: string; sha?: string;
   return lines.join('\n');
 }
 
-export function qaSystemAppend(agent: Pick<Agent, 'name'>, project: { name: string; qaBrief?: string }, pr: PullRequestDetail, sha: string): string {
+/** Another pull request of the same slice, checked out beside the one under test at `../<folder>` (`error` if that failed). */
+export interface QaSibling {
+  repo: string;
+  number: number;
+  folder: string;
+  sha?: string;
+  error?: string;
+}
+
+/** What QA hears about the slice's other PRs, checked out beside the one under test, and how to test them together. */
+export function siblingsSection(siblings: QaSibling[]): string {
+  if (!siblings.length) return '';
+  const list = siblings.map((s) =>
+    s.error ? `- ${s.repo}#${s.number}: couldn't be checked out (${s.error})` : `- \`../${s.folder}\`: ${s.repo}#${s.number}${s.sha ? `, head ${s.sha.slice(0, 7)}` : ''}, detached`);
+  return `
+This pull request is one of a slice that changes several repos together. The slice's other pull requests are checked out beside your directory, at their heads, where the lead had them:
+${list.join('\n')}
+Test this PR on its own first, as below. Then, where the repos depend on each other (an API and its client, a shared package, docs for a feature), run them together from these checkouts and exercise the slice end to end. Your verdict is on this PR only: when a joint check fails because of a sibling, say which, and don't fail this PR for it. Don't change the siblings either.
+`;
+}
+
+export function qaSystemAppend(agent: Pick<Agent, 'name'>, project: { name: string; qaBrief?: string }, pr: PullRequestDetail, sha: string, siblings: QaSibling[] = []): string {
   const brief = project.qaBrief?.trim();
   return `
 # You are ${agent.name}, QA officer for ${project.name} aboard the Focus
@@ -186,7 +207,7 @@ Developers (other Claude Code agents, or the manager's teammates) open pull requ
 
 Pull request #${pr.number} "${pr.title}", branch \`${pr.branch}\` into \`${pr.baseBranch}\`: ${pr.url}
 Your current directory is a throwaway checkout of its head, commit ${sha.slice(0, 7)}, detached.
-${brief ? `\nWhat to check on every PR of this project (from the manager):\n${brief}\n` : ''}
+${siblingsSection(siblings)}${brief ? `\nWhat to check on every PR of this project (from the manager):\n${brief}\n` : ''}
 How to test:
 1. Read the PR description and the linked issue, and work out the acceptance criteria. Check every one.
 2. Review the code as a careful reviewer would: \`git diff origin/${pr.baseBranch}...HEAD\`. Look for bugs, unhandled errors and edge cases, security problems, leftover debug code, new logic without tests, and new tests that run code without checking what it does (they raise coverage but catch nothing).

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { paths } from '../config';
-import { cherryPick, freshBranch, head, removeFolder, unshippedCommits } from './workspace';
+import { checkoutPullRequest, cherryPick, freshBranch, head, removeFolder, unshippedCommits } from './workspace';
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-workspace-'));
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
@@ -116,5 +116,46 @@ describe('removing a folder', () => {
     await removeFolder(dir);
     expect(fs.existsSync(dir)).toBe(false);
     await removeFolder(dir);
+  });
+});
+
+describe('a reviewer’s checkout of a pull request', () => {
+  it('goes in the folder it’s given, clearing a checkout left above it by an older layout', async () => {
+    const was = { workspaces: paths.workspaces, mirrors: paths.mirrors };
+    paths.workspaces = path.join(tmp, 'qa-workspaces');
+    paths.mirrors = path.join(tmp, 'qa-mirrors');
+    try {
+      // an origin with pull request 7, and the office's clone of it
+      const origin = path.join(tmp, 'qa-origin.git');
+      git(tmp, 'init', '-q', '--bare', '-b', 'main', origin);
+      const dev = path.join(tmp, 'qa-dev');
+      git(tmp, 'clone', '-q', origin, dev);
+      git(dev, 'config', 'user.email', 'dev@focus.test');
+      git(dev, 'config', 'user.name', 'Dev');
+      git(dev, 'checkout', '-qb', 'main');
+      commit(dev, 'readme.md', 'hello');
+      git(dev, 'push', '-q', 'origin', 'main');
+      const pr = commit(dev, 'api.ts', 'the change');
+      git(dev, 'push', '-q', 'origin', 'HEAD:refs/pull/7/head');
+      git(tmp, 'clone', '-q', origin, path.join(paths.mirrors, 'acme__api'));
+
+      // the reviewer's folder for PR 7 was itself a checkout, in the layout before repos had folders of their own
+      const old = path.join(paths.workspaces, 'qa_lead_p1_ab', 'acme__api-pr7');
+      fs.mkdirSync(old, { recursive: true });
+      git(old, 'init', '-q');
+      fs.writeFileSync(path.join(old, 'leftover.txt'), 'old');
+
+      expect(await checkoutPullRequest('acme/api', 'qa_lead_p1_ab/acme__api-pr7/api', 7)).toBe(pr);
+      const dir = path.join(old, 'api');
+      expect(await head(dir)).toBe(pr);
+      expect(fs.readFileSync(path.join(dir, 'api.ts'), 'utf8')).toBe('the change');
+      expect(fs.existsSync(path.join(old, '.git'))).toBe(false);
+      expect(fs.existsSync(path.join(old, 'leftover.txt'))).toBe(false);
+
+      // a re-test reuses the checkout
+      expect(await checkoutPullRequest('acme/api', 'qa_lead_p1_ab/acme__api-pr7/api', 7)).toBe(pr);
+    } finally {
+      Object.assign(paths, was);
+    }
   });
 });

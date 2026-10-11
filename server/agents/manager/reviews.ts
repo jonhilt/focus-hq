@@ -6,13 +6,14 @@ import type { Agent, FailedCheck, FixFor, QaReport, QaReview, QaScreenshot } fro
 import { QA_DESK } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../../util';
-import { goalOf, goalReviewerId, reviewsToStart } from '../lead';
-import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, qaSystemAppend } from '../qa';
+import { goalOf, goalReviewerId, reviewsToStart, sliceSiblings } from '../lead';
+import { repoFolders } from '../planner';
+import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, type QaSibling, qaSystemAppend } from '../qa';
 import type { QaLoopEvent } from '../qaLoop';
 import { qaNextStep } from '../qaLoop';
 import { carriedComment, retestStep } from '../retest';
 import { Workspace } from '../services';
-import { reviewCheckoutId, triageWorkspaceId } from '../worktrees';
+import { reviewCheckoutId, reviewRepoId, triageWorkspaceId } from '../worktrees';
 import { STOPPED_BY_CAPTAIN } from '../types';
 import { FINISHED, type ManagerServices, Part, Refused, type WorkError } from './core';
 
@@ -187,16 +188,50 @@ export class Reviews extends Part {
       const issues = linked.filter((i) => i !== null);
       this.update(agent, { baseBranch: pr.baseBranch, issue: { number: pr.number, title: pr.title, url: pr.url }, activity: 'Checking out the pull request' });
       this.print(agent, [{ kind: 'system', text: `✻ Checking out PR #${pr.number} (${pr.branch} into ${pr.baseBranch})` }]);
-      const sha = (yield* workspace.checkoutPullRequest(agent.repo, agent.id, pr.number)) || pr.headSha;
+      const sha = (yield* workspace.checkoutPullRequest(agent.repo, this.reviewDir(agent), pr.number)) || pr.headSha;
+      const siblings = this.siblingsOf(agent);
+      if (siblings.length) {
+        this.update(agent, { activity: `Checking out the slice's other pull request${siblings.length === 1 ? '' : 's'}` });
+        for (const s of siblings) {
+          s.sha = yield* workspace.checkoutPullRequest(s.repo, reviewRepoId(agent.id, { repo: agent.repo, number: pr.number }, s.folder), s.number).pipe(
+            Effect.map((at) => at || s.sha),
+            Effect.catch((err) => Effect.sync(() => {
+              s.error = err.message;
+              return undefined;
+            })),
+          );
+        }
+        this.print(agent, [{ kind: 'system', text: `✻ Checked out the slice's other PRs beside it: ${siblings.map((s) => `../${s.folder} (${s.repo}#${s.number}${s.error ? ', failed' : ''})`).join(', ')}` }]);
+      }
       if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
       const review = this.store.reviews.get(prKey(agent.repo, pr.number));
       if (review) this.putReview({ ...review, status: 'testing', title: pr.title, sha, agentId: agent.id, error: undefined });
-      rt.qaSystem = qaSystemAppend(agent, project, pr, sha);
+      rt.qaSystem = qaSystemAppend(agent, project, pr, sha, siblings);
       rt.shots = undefined;
       let prompt = qaPrompt(agent.repo, pr, issues, review ?? {});
       if (rt.inbox.length) prompt += `\n\nNotes from your manager:\n${rt.inbox.splice(0).map((m) => `- ${m}`).join('\n')}`;
       yield* this.core.sessions.runSession(agent, prompt);
     });
+  }
+
+  /** Which folder a repo's checkout goes in, in a review's folder: the one it has in a lead's workspace. */
+  private folderOf(projectId: string, repo: string): string {
+    return repoFolders(this.store.project(projectId).repos).get(repo) ?? repo.split('/')[1];
+  }
+
+  /** Where the reviewer tests their PR (in data/workspaces): the session's current directory. */
+  reviewDir(agent: Agent): string {
+    return reviewRepoId(agent.id, { repo: agent.repo, number: agent.issue.number }, this.folderOf(agent.projectId, agent.repo));
+  }
+
+  /** The other PRs of the slice the reviewer's PR is part of, with the folders they go in beside it. */
+  private siblingsOf(agent: Agent): QaSibling[] {
+    const pr = { repo: agent.repo, number: agent.issue.number };
+    const project = this.store.project(agent.projectId);
+    const goal = goalOf(pr, this.store.agentsIn(agent.projectId).filter((a) => a.task === 'lead'));
+    return sliceSiblings(pr, goal)
+      .filter((s) => project.repos.includes(s.repo))
+      .map((s) => ({ repo: s.repo, number: s.number, folder: this.folderOf(agent.projectId, s.repo), sha: s.sha }));
   }
 
   /** The QA officer's instructions; rebuilt from GitHub if the office restarted since the review began. */
@@ -206,7 +241,7 @@ export class Reviews extends Part {
       if (!rt.qaSystem) {
         const pr = yield* (yield* GitHub).getPullRequest(agent.repo, agent.issue.number);
         const sha = this.store.reviews.get(prKey(agent.repo, agent.issue.number))?.sha ?? pr.headSha;
-        rt.qaSystem = qaSystemAppend(agent, this.store.project(agent.projectId), pr, sha);
+        rt.qaSystem = qaSystemAppend(agent, this.store.project(agent.projectId), pr, sha, this.siblingsOf(agent));
       }
       return rt.qaSystem;
     });

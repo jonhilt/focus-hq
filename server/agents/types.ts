@@ -212,7 +212,7 @@ export interface WorkspaceOps {
   /** Whether origin has `branch`, and how many of `dir`'s commits it hasn't got (counting from `baseBranch` while it hasn't). */
   branchState(dir: string, branch: string, baseBranch: string): Promise<BranchState>;
   /** A detached checkout of a pull request's head in the agent's workspace (for QA). Returns the commit ('' if unknown). */
-  checkoutPullRequest(repo: string, agentId: string, number: number): Promise<string>;
+  checkoutPullRequest(repo: string, id: string, number: number): Promise<string>;
   /** What came onto a pull request since QA's verdict on `sha`; null when git can't tell (`sha` is gone, say). */
   sinceVerdict(repo: string, number: number, baseBranch: string, sha: string): Promise<SinceVerdict | null>;
   /** Runs the project's checks on the pull request at `head`: null when it has none the office knows how to run. */

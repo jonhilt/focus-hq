@@ -96,5 +96,11 @@ export async function retryLockRace<A>(fetch: () => Promise<A>, wait: () => Prom
  */
 export const reviewCheckoutId = (reviewerId: string, repo: string, number: number) => `${reviewerId}/${repo.replace('/', '__')}-pr${number}`;
 
+/**
+ * One repo's checkout in a review's folder: laid out like the lead's workspace, each repo at its own `folder`, so the PR
+ * under test (the session's current directory) finds the slice's other PRs, checked out beside it, where the lead had them.
+ */
+export const reviewRepoId = (reviewerId: string, pr: { repo: string; number: number }, folder: string) => `${reviewCheckoutId(reviewerId, pr.repo, pr.number)}/${folder}`;
+
 /** What a folder that couldn't be deleted is renamed to, in data/workspaces: owned by no one, so the sweep deletes it later. */
 export const trashName = (dir: string, suffix: string) => `trash_${path.basename(dir)}_${suffix}`;

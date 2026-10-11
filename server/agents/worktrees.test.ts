@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CommandError } from '../util';
-import { claimBranch, heldMessage, isRefLockRace, orphanedWorkspaces, parseWorktrees, retryLockRace, reviewCheckoutId, trashName } from './worktrees';
+import { claimBranch, heldMessage, isRefLockRace, orphanedWorkspaces, parseWorktrees, retryLockRace, reviewCheckoutId, reviewRepoId, trashName } from './worktrees';
 
 const porcelain = `worktree /data/repos/acme__shop
 HEAD aca864f97ead8ad492cb364ebc49dfa3cbe1de51
@@ -154,6 +154,12 @@ describe('a reviewer’s checkouts', () => {
   it('keeps one folder per pull request inside the reviewer’s workspace, so two repos’ PRs never share one', () => {
     expect(reviewCheckoutId('qa_lead_p1_ab', 'acme/api', 7)).toBe('qa_lead_p1_ab/acme__api-pr7');
     expect(reviewCheckoutId('qa_lead_p1_ab', 'acme/web', 7)).not.toBe(reviewCheckoutId('qa_lead_p1_ab', 'acme/api', 7));
+  });
+
+  it('lays a review’s folder out like the lead’s workspace, each repo in its own folder', () => {
+    const pr = { repo: 'acme/api', number: 7 };
+    expect(reviewRepoId('qa_lead_p1_ab', pr, 'api')).toBe('qa_lead_p1_ab/acme__api-pr7/api');
+    expect(reviewRepoId('qa_lead_p1_ab', pr, 'web')).toBe('qa_lead_p1_ab/acme__api-pr7/web');
   });
 
   it('moves a folder that won’t delete to one the sweep owns no one for', () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadWork } from '../../shared/types';
-import { afterLanding, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, checkNote, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
+import { afterLanding, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, checkNote, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -467,6 +467,21 @@ describe('a goal’s own QA reviewer', () => {
     const developer = { id: 'agent_x', task: 'issue', pr: { number: 3 } } as Agent;
     expect(goalOf({ repo: 'acme/api', number: 7 }, [developer, lead])).toBe(lead);
     expect(goalOf({ repo: 'acme/api', number: 3 }, [developer, lead])).toBeUndefined();
+  });
+
+  it('tests a PR beside the other repos’ PRs of the same slice, and nothing else', () => {
+    const prs = [
+      { repo: 'acme/api', number: 7, url: '', sha: 'a1', branch: 'focus/s' },
+      { repo: 'acme/web', number: 40, url: '', sha: 'b2', branch: 'focus/s' },
+      { repo: 'acme/docs', number: 3, url: '', sha: 'c3', branch: 'focus/s' },
+    ];
+    const lead = { id: 'lead_p1_ab', task: 'lead', lead: { ...work, prs } } as Agent;
+    expect(sliceSiblings({ repo: 'acme/api', number: 7 }, lead).map((p) => `${p.repo}#${p.number}`)).toEqual(['acme/web#40', 'acme/docs#3']);
+    // a PR the goal didn't ship, or no goal at all: tested on its own
+    expect(sliceSiblings({ repo: 'acme/api', number: 8 }, lead)).toEqual([]);
+    expect(sliceSiblings({ repo: 'acme/api', number: 7 }, undefined)).toEqual([]);
+    const alone = { ...lead, lead: { ...work, prs: [prs[0]] } } as Agent;
+    expect(sliceSiblings({ repo: 'acme/api', number: 7 }, alone)).toEqual([]);
   });
 });
 

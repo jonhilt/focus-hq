@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { QaReport } from '../../shared/types';
 import type { PullRequestDetail } from '../github/provider';
-import { diffAnchor, evidencePath, fixPrompt, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, qaSystemAppend } from './qa';
+import { diffAnchor, evidencePath, fixPrompt, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, qaSystemAppend, siblingsSection } from './qa';
 
 const report = (r: Partial<QaReport> = {}): QaReport => ({
   verdict: 'pass',
@@ -277,5 +277,21 @@ describe('spot-checks', () => {
     const body = qaComment(report({ spotChecks: [{ file: 'server/merge.ts', line: 41, why: 'New merge path' }, { file: 'b.ts', why: 'Gate changed' }] }), { officer: 'Lt. Moreau' }, [], false);
     expect(body).toContain('### 🔦 Worth a human look\n\n- `server/merge.ts:41`: New merge path\n- `b.ts`: Gate changed');
     expect(qaComment(report(), { officer: 'Lt. Moreau' }, [], false)).not.toContain('Worth a human look');
+  });
+});
+
+describe('siblingsSection', () => {
+  it('says nothing for a PR tested on its own', () => {
+    expect(siblingsSection([])).toBe('');
+  });
+
+  it('points QA at the slice’s other PRs beside them, and keeps the verdict on their own PR', () => {
+    const text = siblingsSection([
+      { repo: 'acme/web', number: 40, folder: 'web', sha: 'abcdef1234' },
+      { repo: 'acme/docs', number: 3, folder: 'docs', error: 'no such ref' },
+    ]);
+    expect(text).toContain('- `../web`: acme/web#40, head abcdef1, detached');
+    expect(text).toContain("- acme/docs#3: couldn't be checked out (no such ref)");
+    expect(text).toContain('Your verdict is on this PR only');
   });
 });

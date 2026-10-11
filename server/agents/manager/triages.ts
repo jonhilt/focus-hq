@@ -7,7 +7,7 @@ import type { PullRequestDetail } from '../../github/provider';
 import { GitHub, type GitHubError } from '../../github/service';
 import { errorMessage, truncate } from '../../util';
 import { Triage, Workspace } from '../services';
-import { reviewCheckoutId, triageWorkspaceId } from '../worktrees';
+import { reviewRepoId, triageWorkspaceId } from '../worktrees';
 import { type Core, type ManagerServices, Part } from './core';
 
 /** Stuck pull requests: the room's operations officer looks at one and does one thing about it. */
@@ -68,7 +68,7 @@ export class Triages extends Part {
           Effect.forEach(pr.linkedIssues.slice(0, 3), (n) => github.getIssue(review.repo, n).pipe(Effect.orElseSucceed(() => null)), { concurrency: 'unbounded' }),
         ], { concurrency: 'unbounded' });
         activity('Checking out the pull request');
-        const id = triageWorkspaceId(review.projectId);
+        const id = reviewRepoId(triageWorkspaceId(review.projectId), review, review.repo.split('/')[1]);
         yield* workspace.checkoutPullRequest(review.repo, id, review.number);
         if (!current()) return { error: 'The manager stepped in' };
         const decision = yield* triager.triage(
@@ -78,7 +78,7 @@ export class Triages extends Part {
             officer,
             repo: review.repo,
             pr,
-            cwd: workspace.dir(reviewCheckoutId(id, review.repo, review.number)),
+            cwd: workspace.dir(id),
             reason,
             review,
             checks,

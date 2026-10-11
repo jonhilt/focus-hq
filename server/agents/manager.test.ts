@@ -147,6 +147,41 @@ describe('AgentManager', () => {
     expect(store.recentLines(qa).at(-1)?.text).toBe(`✻ PR #${pr.number} was merged; nothing to review`);
   });
 
+  it('tests a goal’s PR with its slice’s other PRs checked out beside it, and clears them all away once it merges', async () => {
+    const checkouts: string[] = [];
+    const removed: string[] = [];
+    const { agents, claude, store, project } = office({
+      ...demoWorkspace,
+      checkoutPullRequest: async (repo, id, number) => {
+        checkouts.push(`${repo}#${number} ${id}`);
+        return '';
+      },
+      remove: async (_repo, id) => void removed.push(id),
+    });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    await claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    const prs = store.agent(lead.id).lead!.prs;
+    expect(prs.map((p) => p.repo).sort()).toEqual(['demo/webshop-api', 'demo/webshop-frontend']);
+    const front = prs.find((p) => p.repo === 'demo/webshop-frontend')!;
+    const api = prs.find((p) => p.repo === 'demo/webshop-api')!;
+    const qaTurn = () => claude.turns.find((t) => t.req.agentId === `qa_${lead.id}` && t.req.cwd.includes(`-pr${front.number}/`));
+    if (!store.reviews.get(prKey(front.repo, front.number))) agents.requestReview(project.id, front.repo, front.number, 'Saved items');
+    await until(() => !!qaTurn());
+
+    const folder = `qa_${lead.id}/demo__webshop-frontend-pr${front.number}`;
+    expect(checkouts).toEqual(expect.arrayContaining([
+      `demo/webshop-frontend#${front.number} ${folder}/webshop-frontend`,
+      `demo/webshop-api#${api.number} ${folder}/webshop-api`,
+    ]));
+    // the session runs in the PR's own checkout, and hears where its sibling is
+    expect(qaTurn()!.req.cwd).toBe(`/demo/${folder}/webshop-frontend`);
+    expect(qaTurn()!.req.systemAppend).toContain(`\`../webshop-api\`: demo/webshop-api#${api.number}`);
+
+    agents.prClosed(front.repo, front.number, true);
+    await until(() => removed.includes(folder));
+  });
+
   it('stops their Claude Code session when they’re sent home', async () => {
     const { agents, claude, store, project } = office();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
