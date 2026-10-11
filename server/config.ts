@@ -36,6 +36,8 @@ export const paths = {
   /** The ship's log of how work went (shared/ledger.ts): appended to, never rewritten. */
   ledger: path.join(config.dataDir, 'ledger.jsonl'),
   logs: path.join(config.dataDir, 'logs'),
+  /** How the 3D view ran in each browser opened with ?stats=1 (server/frameStats.ts): a file per page load. */
+  frameStats: path.join(config.dataDir, 'frame-stats'),
   mirrors: path.join(config.dataDir, 'repos'),
   workspaces: path.join(config.dataDir, 'workspaces'),
   /** Scratch worktrees where the office merges a pull request's base branch into it (outside workspaces, so the sweep leaves them be). */

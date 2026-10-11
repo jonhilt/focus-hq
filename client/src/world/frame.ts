@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { gpuBegin, gpuEnd } from './gpuTimer';
 import { Outlines, sceneTarget, stencilToSky } from './outline';
 
 /**
@@ -56,11 +57,16 @@ export class Frame {
     const { renderer, drawn } = this;
     this.scissor(output);
     renderer.setRenderTarget(drawn);
+    gpuBegin('scene');
     renderer.render(scene, camera);
+    gpuBegin('overlay');
     this.drawOverlay(scene, camera);
     renderer.setRenderTarget(drawn);
+    gpuBegin('sky');
     stencilToSky(renderer);
+    gpuBegin('outlines');
     this.outlines.render(renderer, { target: drawn, camera, overlay: this.overlay.texture }, output, this.display);
+    gpuEnd();
   }
 
   /** Sets every target the frame draws into to draw only within its rectangle. */

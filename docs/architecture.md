@@ -17,6 +17,7 @@ server/
   store.ts                ~/.focus/state.json + per-agent terminal logs (jsonl) + the ledger (ledger.jsonl)
   ledgerLog.ts            the ledger's one writer: numbered lines flushed to disk, the lock file, repairs and damage on load
   routes.ts               REST API used by the panels
+  frameStats.ts           the frame-stats log: what a browser opened with ?stats=1 sends of how its 3D view ran, a file per page load in ~/.focus/frame-stats/
   hub.ts                  broadcasts ServerEvents to every browser tab
   previews.ts             Preview: check a PR out, run the project's preview commands, find its links, tear it down (Effect: one Scope per preview)
   previewMachine.ts       what a preview does to this machine (shell commands in their own process group, signals, probes) as an Effect service
@@ -83,6 +84,7 @@ client/src/
     holodeckDeck.ts       the holodeck deck, put together from its Blender modules for however many holodecks there are
     turbolift.ts          which turbolift stop you're at (the turbolift's controls are in ui/travelPanel.ts)
   ui/                     HUD and panels (agent terminal, a helper's transcript, board, ready room console, teleport, QA station, goals, Comms, the engineering station, the ledger review at main engineering's master systems table)
+    frameStats.ts         ?stats=1: how the 3D view runs, top left, and sent to the office each second for its log (frameSamples.ts: the arithmetic; world/gpuTimer.ts: GPU time per pass)
     confirmDialog.ts      the in-game confirm dialog, over whatever panel is open (the Tricorder's buttons ask with it too)
     numberOnePanel.ts     the chat with Number One: the log, suggestions sent to Ops or started as goals, voice mode
   tricorder/              the phone view at /tricorder (no three.js): home screen, agent drill-down, buttons that survive live re-renders

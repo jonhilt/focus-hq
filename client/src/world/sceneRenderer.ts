@@ -3,6 +3,7 @@ import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { CopyShader } from 'three/examples/jsm/shaders/CopyShader.js';
 import { Frame } from './frame';
+import { gpuBegin, gpuEnd } from './gpuTimer';
 
 /**
  * Draws each frame to the screen: the scene as frame.ts draws it, then
@@ -41,13 +42,16 @@ export class SceneRenderer {
     }
     this.frame.setSize(w, h);
     this.frame.render(scene, camera, framed);
+    // to the screen: on some GPUs its time takes in waiting for the screen to be free
+    gpuBegin('final');
     if (renderer.getPixelRatio() >= SMOOTH_BELOW) {
       (this.copy.material as THREE.ShaderMaterial).uniforms.tDiffuse.value = framed.texture;
       renderer.setRenderTarget(null);
       this.copy.render(renderer);
-      return;
+    } else {
+      // to the screen (renderToScreen), so it never writes its first target
+      this.smaa.render(renderer, framed, framed, 0, false);
     }
-    // to the screen (renderToScreen), so it never writes its first target
-    this.smaa.render(renderer, framed, framed, 0, false);
+    gpuEnd();
   }
 }
