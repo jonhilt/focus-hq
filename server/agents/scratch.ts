@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { HookCallback } from '@anthropic-ai/claude-agent-sdk';
+import { shellCommands } from './shell';
 
 /**
  * Each local session's scratch dir, for throwaway files: `$FOCUS_SCRATCH`. The office makes it when a run starts and
@@ -144,14 +145,12 @@ const RUNNERS = new Set(['npx', 'pnpm', 'pnpx', 'bunx', 'yarn', 'exec', 'dlx', '
  * `cd` into it, or the script itself; not writing one, listing or removing them, or a heredoc's body.
  */
 export function scratchScript(command: string, dir: string): string | undefined {
-  const body = command.replace(/<<-?\s*['"]?(\w+)['"]?[^\n]*\n[\s\S]*?\n\s*\1[ \t]*(?=\n|$)/g, '');
   const inside = (word: string) => {
     for (const root of [`$${SCRATCH_VAR}/`, `\${${SCRATCH_VAR}}/`, `${dir}/`]) if (word.startsWith(root)) return word.slice(root.length);
     return undefined;
   };
   let here = false;
-  for (const segment of body.split(/&&|\|\||[;|\n]/)) {
-    const words = (segment.match(/"[^"]*"|'[^']*'|\S+/g) ?? []).map((w) => w.replace(/^["']|["']$/g, ''));
+  for (const words of shellCommands(command)) {
     while (words.length && /^\w+=/.test(words[0])) words.shift();
     if (!words.length) continue;
     if (words[0] === 'cd') {

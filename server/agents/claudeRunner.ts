@@ -103,6 +103,35 @@ export function claudeConfig(userClaudeMd: boolean, configDir: string): Pick<Opt
 }
 
 /** What one run remembers between messages: tool calls waiting for their results, and the page last pointed at. */
+/**
+ * A Bash call of the session's own, watched for what the goal's chart shows: a script from its scratch dir is a probe it
+ * sent out (launched now), and a commit is work done on the slice (counted once its result says it worked).
+ */
+function watchBash(ctx: Pick<RunContext, 'scratch' | 'probes' | 'commits'>, id: string, call: ToolCall, hooks: RunHooks): void {
+  const command = call.name === 'Bash' && typeof call.input.command === 'string' ? call.input.command : undefined;
+  if (!command) return;
+  const commit = gitCommit(command);
+  if (commit) ctx.commits.set(id, commit.message);
+  const script = ctx.scratch ? scratchScript(command, ctx.scratch) : undefined;
+  if (!script) return;
+  ctx.probes.add(id);
+  hooks.probe?.({ kind: 'started', id, description: `Script ${script}`, type: 'script' });
+}
+
+/** A watched Bash call's result: the commit it made counts if it worked, and its probe transmits what it printed first. */
+function watchedResult(ctx: Pick<RunContext, 'probes' | 'commits'>, block: { tool_use_id: string; is_error?: boolean | null; content?: unknown }, hooks: RunHooks): void {
+  const id = block.tool_use_id;
+  if (ctx.commits.has(id)) {
+    const message = ctx.commits.get(id);
+    ctx.commits.delete(id);
+    if (!block.is_error) hooks.commit?.(message);
+  }
+  if (!ctx.probes.delete(id)) return;
+  const said = typeof block.content === 'string' ? block.content : Array.isArray(block.content) ? block.content.map((c: { type?: string; text?: string }) => (c.type === 'text' ? c.text ?? '' : '')).join('\n') : '';
+  const first = said.split('\n').map((l) => l.trim()).find(Boolean);
+  hooks.probe?.({ kind: 'ended', id, ok: !block.is_error, ...(first && { summary: first }) });
+}
+
 interface RunContext {
   cwd: string;
   cloud: boolean;
@@ -401,14 +430,7 @@ export class ClaudeRunner implements AgentRunner {
             if (rendered.activity || rendered.status) hooks.activity(rendered.status ?? null, rendered.activity ?? '');
             // a subagent's tool call is what that helper is busy with
             if (nested && rendered.activity) hooks.helper?.({ kind: 'activity', id: msg.parent_tool_use_id!, activity: rendered.activity });
-            // a script of the session's own from its scratch dir is a probe it sent out
-            const script = !nested && call.name === 'Bash' && ctx.scratch && typeof call.input.command === 'string' ? scratchScript(call.input.command, ctx.scratch) : undefined;
-            const commit = !nested && call.name === 'Bash' && typeof call.input.command === 'string' ? gitCommit(call.input.command) : undefined;
-            if (commit) ctx.commits.set(block.id, commit.message);
-            if (script) {
-              ctx.probes.add(block.id);
-              hooks.probe?.({ kind: 'started', id: block.id, description: `Script ${script}`, type: 'script' });
-            }
+            if (!nested) watchBash(ctx, block.id, call, hooks);
           }
         }
         return null;
@@ -422,16 +444,7 @@ export class ClaudeRunner implements AgentRunner {
           if (block.type !== 'tool_result') continue;
           const call = ctx.calls.get(block.tool_use_id);
           ctx.calls.delete(block.tool_use_id);
-          if (ctx.commits.has(block.tool_use_id)) {
-            const message = ctx.commits.get(block.tool_use_id);
-            ctx.commits.delete(block.tool_use_id);
-            if (!block.is_error) hooks.commit?.(message);
-          }
-          if (ctx.probes.delete(block.tool_use_id)) {
-            const said = typeof block.content === 'string' ? block.content : (block.content ?? []).map((c) => (c.type === 'text' ? c.text : '')).join('\n');
-            const first = said.split('\n').map((l) => l.trim()).find(Boolean);
-            hooks.probe?.({ kind: 'ended', id: block.tool_use_id, ok: !block.is_error, ...(first && { summary: first }) });
-          }
+          watchedResult(ctx, block, hooks);
           // a subagent's results only go in a transcript of its own: indented in the session's, they'd drown it
           if (msg.parent_tool_use_id === null) hooks.lines(renderToolResult(block as unknown as { type: string }));
           else hooks.helperLines?.(msg.parent_tool_use_id, renderToolResult(block as unknown as { type: string }));

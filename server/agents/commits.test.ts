@@ -10,6 +10,20 @@ describe('gitCommit', () => {
     expect(gitCommit('git commit -F msg.txt')).toEqual({});
   });
 
+  it('keeps a quoted ; && or || in the message', () => {
+    expect(gitCommit('git commit -m "Fix: a; b && c || d" && git log -1')).toEqual({ message: 'Fix: a; b && c || d' });
+  });
+
+  it('takes the first line of a message written in a heredoc, as sessions usually commit', () => {
+    const command = `git add -A && git commit -q -m "$(cat <<'EOF'\nHeading on the chart (contact c1)\n\nBody: a; b && c\nEOF\n)"`;
+    expect(gitCommit(command)).toEqual({ message: 'Heading on the chart (contact c1)' });
+  });
+
+  it('leaves out a message only the shell could work out, rather than showing half of it', () => {
+    expect(gitCommit('git commit -m "$(git log -1 --format=%s)"')).toEqual({});
+    expect(gitCommit('git commit -m "$MSG"')).toEqual({});
+  });
+
   it('leaves alone amending, other git commands, and one written into a heredoc', () => {
     expect(gitCommit('git commit --amend --no-edit')).toBeUndefined();
     expect(gitCommit('git log --oneline -1 && git status --short')).toBeUndefined();

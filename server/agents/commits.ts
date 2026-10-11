@@ -1,12 +1,13 @@
+import { shellCommands } from './shell';
+
 /**
- * A Bash command that makes a commit (`git commit -m "…"`, `git -C focus commit …`, after a `git add … &&`), and what
- * its message says when it's given there: the slice under way gets one more commit on the star chart once it succeeds.
- * Amending, or a commit inside a heredoc's body, isn't one.
+ * A Bash command that makes a commit (`git commit -m "…"`, `git -C focus commit …`, after a `git add … &&`), and the
+ * first line of its message when it's given there (`-m "$(cat <<'EOF' … EOF)"` included): the slice under way gets
+ * one more commit on the star chart once it succeeds. Amending, or a commit inside a heredoc's body, isn't one; a
+ * message the shell would only work out as it runs (another command substitution, a variable) is left out.
  */
 export function gitCommit(command: string): { message?: string } | undefined {
-  const body = command.replace(/<<-?\s*['"]?(\w+)['"]?[^\n]*\n[\s\S]*?\n\s*\1[ \t]*(?=\n|$)/g, '');
-  for (const segment of body.split(/&&|\|\||[;\n]/)) {
-    const words = segment.match(/"(?:[^"\\]|\\.)*"|'[^']*'|\S+/g) ?? [];
+  for (const words of shellCommands(command)) {
     let i = 0;
     while (i < words.length && /^\w+=/.test(words[i])) i++;
     if (words[i] !== 'git') continue;
@@ -18,8 +19,8 @@ export function gitCommit(command: string): { message?: string } | undefined {
     if (args.includes('--amend')) return undefined;
     const m = args.findIndex((w) => w === '-m' || w === '--message' || /^-[a-zA-Z]*m$/.test(w));
     const raw = m >= 0 ? args[m + 1] : args.find((w) => w.startsWith('--message='))?.slice('--message='.length);
-    const message = raw?.replace(/^(["'])([\s\S]*)\1$/, '$2').replace(/\\"/g, '"');
-    return message ? { message } : {};
+    const first = raw?.split('\n').map((l) => l.trim()).find(Boolean);
+    return first && !/^\$|^`/.test(first) ? { message: first } : {};
   }
   return undefined;
 }

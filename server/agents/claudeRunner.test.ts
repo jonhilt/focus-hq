@@ -145,7 +145,8 @@ describe('a commit', () => {
     const hooks = { lines: () => undefined, activity: () => undefined, commit: (m?: string) => commits.push(m) } as unknown as RunHooks;
     const runner = new ClaudeRunner(null as unknown as BrowserPool) as unknown as { handle(m: SDKMessage, ctx: unknown, h: RunHooks): unknown };
     const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), modelled: new Set(), probes: new Set(), commits: new Map() };
-    for (const m of [bash('t1', 'git add -A && git commit -m "Heading on the chart"'), result('t1'), bash('t2', 'git commit -m "Nothing to commit"'), result('t2', true)]) runner.handle(m as SDKMessage, ctx, hooks);
-    expect(commits).toEqual(['Heading on the chart']);
+    const heredoc = `git commit -m "$(cat <<'EOF'\nShow the slice under way\n\nBody\nEOF\n)"`;
+    for (const m of [bash('t1', 'git add -A && git commit -m "Heading on the chart"'), result('t1'), bash('t2', 'git commit -m "Nothing to commit"'), result('t2', true), bash('t3', heredoc), result('t3')]) runner.handle(m as SDKMessage, ctx, hooks);
+    expect(commits).toEqual(['Heading on the chart', 'Show the slice under way']);
   });
 });
