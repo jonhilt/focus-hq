@@ -10,7 +10,7 @@ const blog = { id: 'p2', name: 'Blog', repos: ['acme/blog'] } as Project;
 const agent = (patch: Partial<Agent>): Agent =>
   ({ id: 'a1', name: 'Ensign Reyes', projectId: 'p1', repo: 'acme/shop', task: 'issue', issue: { number: 12, title: 'Add a wishlist', url: '' }, status: 'working', startedAt: 1, ...patch }) as Agent;
 const lead = (station: number, patch: Partial<Agent> = {}): Agent =>
-  agent({ id: `lead_${station}`, name: `Lt. Station${station}`, task: 'lead', lead: { station, title: `Goal ${station}` } as Agent['lead'], ...patch });
+  agent({ id: `lead_${station}`, name: `Lt. Station${station}`, task: 'lead', ...patch, lead: { station, title: `Goal ${station}`, prs: [], ...patch.lead } as Agent['lead'] });
 
 function snapshot(patch: Partial<Snapshot> = {}): Snapshot {
   return {
@@ -43,6 +43,25 @@ describe('spokenStatus', () => {
     expect(spokenStatus(ship)).toBe(
       'Shop has 2 goals under way: Lt. Station1 on "Chart the voyage", at work; Lt. Station2 on "Faster boards". One crew member at work on issues: Ensign Reyes is on "Add a wishlist". Waiting on you: Ensign Reyes has a hand up. 2 goals queued; next is "Voice mode for Focus".',
     );
+  });
+
+  it('says what each one waiting on the captain wants', () => {
+    const asked = { id: 'q', question: 'Which?', options: [], at: 1 };
+    const ship = snapshot({
+      agents: [
+        agent({ id: 'a2', name: 'Ensign Broke', status: 'error' }),
+        lead(0, { status: 'done', finishedAt: 5, lead: { station: 0, title: 'Done?', closing: { reason: 'All in', at: 5 } } as Agent['lead'] }),
+        lead(1, { status: 'done', finishedAt: 5, lead: { station: 1, title: 'Turn' } as Agent['lead'] }),
+        lead(2, { status: 'done', finishedAt: 5, lead: { station: 2, title: 'Asks', questions: [asked] } as unknown as Agent['lead'] }),
+      ],
+      boards: [{ projectId: 'p1', issues: [], prs: [{ repo: 'acme/shop', number: 40, title: 'Wishlist', url: '', branch: 'b', headSha: 'a', baseBranch: 'main', isDraft: false, mergeable: 'CONFLICTING', checks: 'passing', failedChecks: [], closes: [], createdAt: '', author: 'captain' }], updatedAt: 0 }],
+    });
+    const said = spokenStatus(ship);
+    expect(said).toContain('Ensign Broke hit a problem');
+    expect(said).toContain('Lt. Station0 thinks their goal is done');
+    expect(said).toContain('Lt. Station1 is waiting for your reply');
+    expect(said).toContain('Lt. Station2 asked you a question');
+    expect(said).toContain('pull request 40 conflicts with its base branch');
   });
 
   it('cuts a long status at a sentence, short enough to be said', () => {

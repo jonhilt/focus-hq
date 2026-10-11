@@ -32,8 +32,8 @@ export function callsMissing(keys: CallKeys, demo: boolean): string | undefined 
   return missing.length ? `Calls need ${missing.join(' and ')} set where the office starts (see docs/calls.md)` : undefined;
 }
 
-/** The step the captain sees for the machine's state. */
-function stepOf(value: unknown): CallStep {
+/** The step the captain sees for the machine's state (`routing` has steps of its own inside). */
+export function stepOf(value: unknown): CallStep {
   const top = typeof value === 'string' ? value : Object.keys(value as object)[0];
   return top === 'routing' || top === 'confirming' || top === 'acting' || top === 'ended' ? top : 'listening';
 }
@@ -157,14 +157,15 @@ export class Calls {
   private readonly runtime: Runtime | null;
   private readonly missing: string | undefined;
 
+  /** `layer`: OpenAI and Jev, or the demo's stand-ins for them (tests bring their own). */
   constructor(
     private readonly hub: Hub,
     private readonly office: CallOffice,
     keys: CallKeys,
     demo: boolean,
+    layer: Layer.Layer<Jev | Live> = demo ? Layer.mergeAll(DemoJev.layer, DemoLive.layer) : Layer.mergeAll(Jev.layer(keys.typesafe ?? ''), Live.layer(keys.openai ?? '')),
   ) {
     this.missing = callsMissing(keys, demo);
-    const layer = demo ? Layer.mergeAll(DemoJev.layer, DemoLive.layer) : Layer.mergeAll(Jev.layer(keys.typesafe ?? ''), Live.layer(keys.openai ?? ''));
     this.runtime = this.missing ? null : ManagedRuntime.make(layer);
   }
 
