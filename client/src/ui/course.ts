@@ -3,7 +3,7 @@
 // the lead's ideas for what's next fanning out ahead of it, and the loose threads noticed on the way as sensor contacts
 // off to the side of the waypoint that noticed them. Pure, so the chart panel only draws it.
 
-import type { Contact, Probe, Shield, Waypoint } from '../../../shared/types';
+import type { Agent, Contact, Probe, Shield, Waypoint } from '../../../shared/types';
 
 export interface Pt {
   x: number;
@@ -368,9 +368,21 @@ export function shieldState(shields: readonly Shield[] | undefined): 'none' | 'h
 
 /** How long a probe takes to transmit what it found back to its waypoint, once it reports, before it's gone. */
 export const TRANSMIT_MS = 6000;
-/** How far out a probe ends up, and how long it takes to get most of the way there. */
-const PROBE_REACH = 190;
-const PROBE_PACE = 20_000;
+/** How far out a probe ends up, and how long it takes to get most of the way there: a script, run in seconds, hops. */
+const PROBE_REACH = { helper: 190, script: 110 };
+const PROBE_PACE = { helper: 20_000, script: 3_000 };
+
+/**
+ * The probes a lead has out: its helpers still working, and the scripts it's running, while it's at work (one left
+ * without a result when the session stopped never reports).
+ */
+export function probesOut(lead: Pick<Agent, 'status' | 'helpers' | 'lead'> | undefined): Set<string> {
+  const out = new Set((lead?.helpers ?? []).filter((x) => x.status === 'working').map((x) => x.id));
+  if (lead && (lead.status === 'working' || lead.status === 'testing')) {
+    for (const w of lead.lead?.waypoints ?? []) for (const p of w.probes ?? []) if (p.type === 'script' && !p.endedAt) out.add(p.id);
+  }
+  return out;
+}
 
 /** A probe in flight on the chart: out from its waypoint, or transmitting home (`sent` of the way through) before it's gone. */
 export interface ProbeFlight extends Pt {
@@ -414,8 +426,9 @@ export function probeFlights(plot: CoursePlot, waypoints: Waypoint[], out: Reado
       // launched together part company
       const ahead = Math.atan2(plot.objective.y - from.y, plot.objective.x - from.x);
       const angle = ahead + (k % 2 ? 1 : -1) * (0.6 + 0.4 * Math.floor(k / 2)) + (seeded(probe.id)() - 0.5) * 0.15;
+      const kind = probe.type === 'script' ? 'script' : 'helper';
       const flown = Math.max(0, (probe.endedAt ?? now) - probe.launchedAt);
-      const d = 40 + (PROBE_REACH - 40) * (1 - Math.exp(-flown / PROBE_PACE));
+      const d = 40 + (PROBE_REACH[kind] - 40) * (1 - Math.exp(-flown / PROBE_PACE[kind]));
       const x = Math.max(pad / 2, Math.min(width - pad / 2, from.x + Math.cos(angle) * d));
       const y = Math.max(pad / 2, Math.min(height - pad / 2, from.y + Math.sin(angle) * d));
       const sent = phase === 'out' ? 0 : Math.min(1, (now - probe.endedAt!) / TRANSMIT_MS);

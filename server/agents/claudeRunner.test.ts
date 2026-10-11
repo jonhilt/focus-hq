@@ -3,7 +3,7 @@ import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { TermLine } from '../../shared/types';
 import type { BrowserPool } from './browserTool';
 import { ClaudeRunner, claudeConfig } from './claudeRunner';
-import type { RunHooks, WorkflowEvent } from './types';
+import type { ProbeEvent, RunHooks, WorkflowEvent } from './types';
 
 describe('claudeConfig', () => {
   it('loads every settings source, and nothing else, with your own CLAUDE.md on', () => {
@@ -38,7 +38,7 @@ describe('a subagent’s messages', () => {
       ...(withTranscripts && { helperLines: (id: string, l: Line[]) => theirs.set(id, [...(theirs.get(id) ?? []), ...l]) }),
     } as unknown as RunHooks;
     const runner = new ClaudeRunner(null as unknown as BrowserPool) as unknown as { handle(m: SDKMessage, ctx: unknown, h: RunHooks): unknown };
-    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set() };
+    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), probes: new Set() };
     for (const m of messages) runner.handle(m, ctx, hooks);
     return { own: own.map((l) => l.text), theirs: (theirs.get('toolu_1') ?? []).map((l) => l.text) };
   };
@@ -74,7 +74,7 @@ describe('a workflow', () => {
     const helpers: unknown[] = [];
     const hooks = { lines: () => undefined, activity: () => undefined, helper: (e: unknown) => helpers.push(e), workflow: (e: WorkflowEvent) => events.push(e) } as unknown as RunHooks;
     const runner = new ClaudeRunner(null as unknown as BrowserPool) as unknown as { handle(m: SDKMessage, ctx: unknown, h: RunHooks): unknown };
-    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set() };
+    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), probes: new Set() };
     for (const m of messages) runner.handle(m, ctx, hooks);
     expect(events).toEqual([
       { kind: 'started', id: 'w1', name: 'review-changes', description: 'Review the diff' },
@@ -82,5 +82,31 @@ describe('a workflow', () => {
       { kind: 'ended', id: 'w1', ok: true },
     ]);
     expect(helpers).toEqual([]);
+  });
+});
+
+describe('a script run from the scratch dir', () => {
+  const bash = (id: string, command: string, parent: string | null = null) => ({ type: 'assistant', parent_tool_use_id: parent, message: { content: [{ type: 'tool_use', id, name: 'Bash', input: { command } }] } });
+  const result = (id: string, content: string, isError = false, parent: string | null = null) => ({ type: 'user', parent_tool_use_id: parent, message: { content: [{ type: 'tool_result', tool_use_id: id, content, is_error: isError }] } });
+  const run = (messages: unknown[]) => {
+    const probes: ProbeEvent[] = [];
+    const hooks = { lines: () => undefined, activity: () => undefined, helper: () => undefined, helperLines: () => undefined, probe: (e: ProbeEvent) => probes.push(e) } as unknown as RunHooks;
+    const runner = new ClaudeRunner(null as unknown as BrowserPool) as unknown as { handle(m: SDKMessage, ctx: unknown, h: RunHooks): unknown };
+    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), modelled: new Set(), scratch: '/tmp/focus-scratch/lead_x', probes: new Set() };
+    for (const m of messages) runner.handle(m as SDKMessage, ctx, hooks);
+    return probes;
+  };
+
+  it('is a probe: launched as the command starts, ended with how it exited and the first line it printed', () => {
+    expect(run([bash('toolu_1', 'npx tsx "$FOCUS_SCRATCH/render.ts"'), result('toolu_1', '\n[[1,122,421]]\nmore')])).toEqual([
+      { kind: 'started', id: 'toolu_1', description: 'Script render.ts', type: 'script' },
+      { kind: 'ended', id: 'toolu_1', ok: true, summary: '[[1,122,421]]' },
+    ]);
+    expect(run([bash('toolu_2', 'node "$FOCUS_SCRATCH/x.mjs"'), result('toolu_2', 'Error: boom', true)]).at(-1)).toEqual({ kind: 'ended', id: 'toolu_2', ok: false, summary: 'Error: boom' });
+  });
+
+  it('isn’t when it only writes a scratch file, or when it’s a subagent’s', () => {
+    expect(run([bash('toolu_3', 'cat > "$FOCUS_SCRATCH/a.ts" <<\'EOF\'\nx\nEOF'), result('toolu_3', '')])).toEqual([]);
+    expect(run([bash('toolu_4', 'node "$FOCUS_SCRATCH/x.mjs"', 'toolu_agent'), result('toolu_4', 'ok', false, 'toolu_agent')])).toEqual([]);
   });
 });

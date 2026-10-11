@@ -7,7 +7,7 @@ import { checklistGlance, type GoalRoomTone, goalRoomState, leadNow, type NoteSe
 import { flat } from './materials';
 import { portrait } from './portraits';
 import { LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
-import { clip, type CoursePlot, everySlice, type Label, leaderEnd, plotCourse, type ProbeFlight, probeFlights, seeded, shieldState } from '../ui/course';
+import { clip, type CoursePlot, everySlice, type Label, leaderEnd, plotCourse, type ProbeFlight, probeFlights, probesOut, seeded, shieldState } from '../ui/course';
 
 // What a team station shows of its goal besides the lead's session. What floats in the holodeck is drawn like the
 // holograms over the pods in Lower Decks, glowing cyan on dark glass: the sign over the station's door (also lit on the
@@ -592,7 +592,7 @@ export class ChartScreen extends Display {
 
   protected override keyOf(view: StationView): unknown {
     const work = view.lead?.lead;
-    const out = view.lead?.helpers?.filter((x) => x.status === 'working').map((x) => x.id);
+    const out = [...probesOut(view.lead)];
     return [view.index, view.accent, work && [work.title, work.slice, work.note?.done, work.note?.next, work.waypoints, work.contacts, out]];
   }
 
@@ -633,7 +633,7 @@ export class ChartScreen extends Display {
     ctx.save();
     ctx.translate(area.x + (area.w - plot.width * scale) / 2, area.y + (area.h - plot.height * scale) / 2);
     ctx.scale(scale, scale);
-    const out = new Set((lead.helpers ?? []).filter((x) => x.status === 'working').map((x) => x.id));
+    const out = probesOut(lead);
     const flights = probeFlights(plot, waypoints, out, Date.now(), BIG);
     this.flying = flights.length > 0;
     this.sending = flights.some((f) => f.phase === 'transmitting');
@@ -732,7 +732,7 @@ function drawProbes(ctx: CanvasRenderingContext2D, flights: ProbeFlight[], helpe
     ctx.closePath();
     ctx.fill();
     ctx.restore();
-    const said = f.phase === 'out' ? helpers.find((x) => x.id === f.probe.id)?.activity ?? 'Exploring' : `${f.probe.ok ? 'Transmitting' : 'Lost'}: ${f.probe.summary ?? (f.probe.ok ? 'done' : 'it hit a problem')}`;
+    const said = f.phase === 'out' ? helpers.find((x) => x.id === f.probe.id)?.activity ?? (f.probe.type === 'script' ? 'Running…' : 'Exploring') : `${f.probe.ok ? 'Transmitting' : 'Lost'}: ${f.probe.summary ?? (f.probe.ok ? 'done' : 'it hit a problem')}`;
     ctx.textAlign = f.label.anchor === 'start' ? 'left' : f.label.anchor === 'end' ? 'right' : 'center';
     ctx.textBaseline = 'alphabetic';
     ctx.font = `600 ${size}px ${LCARS_FONT}`;

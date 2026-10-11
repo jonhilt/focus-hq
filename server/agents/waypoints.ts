@@ -135,11 +135,20 @@ export const EVIDENCE_PER_PR = 4;
 export const evidenceFile = (repo: string, pr: number, index: number, shot: string): string =>
   `shot-${repo.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${pr}-${index + 1}.${/\.(png|svg)$/.exec(shot)?.[1] ?? 'jpg'}`;
 
-/** The waypoints once the lead sends a helper out: a probe from the slice under way (the same helper twice is one probe). */
+/**
+ * The waypoints once the lead sends a helper out, or runs a script from its scratch dir: a probe from the slice under way
+ * (the same one twice is one probe).
+ */
 export function launchedProbe(work: Course, helper: { id: string; description: string; type?: string }, now: number): Waypoint[] {
   if (work.waypoints?.some((w) => w.probes?.some((p) => p.id === helper.id))) return work.waypoints ?? [];
   const probe: Probe = { id: helper.id, description: helper.description.replace(/\s+/g, ' ').trim() || 'Exploring', ...(helper.type && { type: helper.type }), launchedAt: now };
-  return withWaypoint(work, now, (w) => ({ ...w, probes: [...(w.probes ?? []), probe].slice(-WAYPOINT_LIMITS.probes) }));
+  // scripts come thick and fast: they keep the latest few of their own, so they never crowd out the helpers
+  const script = (p: Probe) => p.type === 'script';
+  return withWaypoint(work, now, (w) => {
+    const all = [...(w.probes ?? []), probe];
+    const kept = new Set([...all.filter(script).slice(-WAYPOINT_LIMITS.probes), ...all.filter((p) => !script(p)).slice(-WAYPOINT_LIMITS.probes)]);
+    return { ...w, probes: all.filter((p) => kept.has(p)) };
+  });
 }
 
 /** The waypoints once a helper reports back: its probe, wherever it was launched, ends with how it went and what it said. */

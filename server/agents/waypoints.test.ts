@@ -166,6 +166,14 @@ describe('probes', () => {
     expect(waypoints[1].probes!.map((p) => p.id)).toEqual(Array.from({ length: WAYPOINT_LIMITS.probes }, (_, i) => `h${i + 2}`));
   });
 
+  it('keeps scripts from crowding out the helpers', () => {
+    let waypoints: Waypoint[] = launchedProbe({ slice: 2, waypoints: course }, { id: 'helper', description: 'Map the repo', type: 'Explore' }, 50);
+    for (let i = 0; i < WAYPOINT_LIMITS.probes + 3; i++) waypoints = launchedProbe({ slice: 2, waypoints }, { id: `s${i}`, description: `Script p${i}.ts`, type: 'script' }, 60 + i);
+    const ids = waypoints[1].probes!.map((p) => p.id);
+    expect(ids[0]).toBe('helper');
+    expect(ids).toHaveLength(WAYPOINT_LIMITS.probes + 1);
+  });
+
   it('ends one with how it went and the opening of what it reported, on the slice that launched it', () => {
     const out = launchedProbe({ slice: 1, waypoints: [{ slice: 1, startedAt: 10 }] }, { id: 'h1', description: 'Map the flaky test' }, 20);
     // the next slice has begun by the time it reports

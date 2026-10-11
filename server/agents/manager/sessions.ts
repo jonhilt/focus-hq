@@ -133,6 +133,13 @@ export class AgentSessions extends Part {
           this.background(Effect.sleep(HELPER_LINGER_MS).pipe(Effect.andThen(Effect.sync(() => this.update(agent, { helpers: (agent.helpers ?? []).filter((h) => h.id !== event.id) })))));
         }
       },
+      probe: (event) => {
+        const work = agent.task === 'lead' ? agent.lead : undefined;
+        if (!work) return;
+        const now = Date.now();
+        const waypoints = event.kind === 'started' ? launchedProbe(work, event, now) : endedProbe(work, event, now);
+        if (waypoints && waypoints !== work.waypoints) this.update(agent, { lead: { ...work, waypoints } });
+      },
       workflow: (event) => {
         // only a lead's away teams have somewhere to beam in to: the lead's briefing room
         if (agent.task !== 'lead') return;

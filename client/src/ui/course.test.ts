@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Contact, Waypoint } from '../../../shared/types';
-import { type Box, CHART, clearOf, clip, type CoursePlot, everySlice, labelBox, overlaps, plotCourse, probeFlights, seeded, shieldState, smoothPath, TRANSMIT_MS } from './course';
+import { type Box, CHART, clearOf, clip, type CoursePlot, everySlice, labelBox, overlaps, plotCourse, probeFlights, probesOut, seeded, shieldState, smoothPath, TRANSMIT_MS } from './course';
 
 const wp = (slice: number, more: Partial<Waypoint> = {}): Waypoint => ({ slice, startedAt: slice * 10, landedAt: slice * 10 + 5, title: `Slice ${slice}`, ...more });
 const inside = (p: { x: number; y: number }) => p.x >= 0 && p.x <= CHART.width && p.y >= 0 && p.y <= CHART.height;
@@ -230,6 +230,14 @@ describe('probes on the chart', () => {
     expect(Math.hypot(a.x - c.x, a.y - c.y)).toBeGreaterThan(60);
     // and their labels don't run into each other
     expect(Math.abs(a.label.y - c.label.y)).toBeGreaterThan(plot.sizes.contact * 2);
+  });
+
+  it('counts a lead’s working helpers as out, and its unfinished scripts while it’s at work', () => {
+    const helpers = [{ id: 'h1', description: '', status: 'working' as const, activity: '', startedAt: 0 }, { id: 'h2', description: '', status: 'done' as const, activity: '', startedAt: 0 }];
+    const lead = { slice: 1, prs: [], repos: [], station: 0, title: '', waypoints: [{ slice: 1, startedAt: 0, probes: [probe('s1', 0, { type: 'script' }), probe('s2', 0, { type: 'script', endedAt: 5 }), probe('h1', 0)] }] };
+    expect([...probesOut({ status: 'working', helpers, lead })].sort()).toEqual(['h1', 's1']);
+    expect([...probesOut({ status: 'done', helpers, lead })]).toEqual(['h1']);
+    expect([...probesOut(undefined)]).toEqual([]);
   });
 
   it('draws none that never reported once its helper has gone', () => {

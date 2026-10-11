@@ -7,7 +7,7 @@ import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { fill, h } from './dom';
 import { prLink } from './goals';
-import { clip, type CoursePlot, everySlice, type Label, leaderEnd, plotCourse, type ProbeFlight, probeFlights, type Pt, seeded, shieldState } from './course';
+import { clip, type CoursePlot, everySlice, type Label, leaderEnd, plotCourse, type ProbeFlight, probeFlights, probesOut, type Pt, seeded, shieldState } from './course';
 
 /** What a goal's chart is drawn from, whether it's under way or closed. */
 interface ChartGoal {
@@ -206,7 +206,7 @@ function drawProbes(layer: Element, flights: ProbeFlight[], helpers: Helper[], o
         return s('circle', { class: 'pulse', cx: f.x + (f.from.x - f.x) * along, cy: f.y + (f.from.y - f.y) * along, r: 3.5, opacity: (1 - along * 0.6).toFixed(2) });
       })
       : [];
-    const said = f.phase === 'out' ? helper?.activity ?? 'Exploring' : `${f.probe.ok ? 'Transmitting' : 'Lost'}: ${f.probe.summary ?? (f.probe.ok ? 'done' : 'it hit a problem')}`;
+    const said = f.phase === 'out' ? helper?.activity ?? (f.probe.type === 'script' ? 'Running…' : 'Exploring') : `${f.probe.ok ? 'Transmitting' : 'Lost'}: ${f.probe.summary ?? (f.probe.ok ? 'done' : 'it hit a problem')}`;
     const deg = (f.angle * 180) / Math.PI;
     const g = s('g', { class: `chart-probe ${tone}`, opacity: fade.toFixed(2), role: 'button' },
       s('title', {}, `Probe: ${f.probe.description}${f.probe.type ? ` (${f.probe.type})` : ''}`),
@@ -222,10 +222,13 @@ function drawProbes(layer: Element, flights: ProbeFlight[], helpers: Helper[], o
   }));
 }
 
+/** How long a probe was out: a script's seconds, a helper's minutes. */
+const flight = (ms: number) => (ms < 60_000 ? `${Math.max(1, Math.round(ms / 1000))} s` : span(ms));
+
 /** How a probe went, in a few words: out now, what it transmitted, or that contact was lost. */
 const probeStanding = (p: Probe, out: boolean) =>
-  !p.endedAt ? (out ? `Out now, for ${span(Date.now() - p.launchedAt)}` : 'Lost contact before it reported')
-    : `${p.ok ? 'Transmitted' : 'Lost'} after ${span(p.endedAt - p.launchedAt)}`;
+  !p.endedAt ? (out ? `Out now, for ${flight(Date.now() - p.launchedAt)}` : 'Lost contact before it reported')
+    : `${p.ok ? 'Transmitted' : 'Lost'} after ${flight(p.endedAt - p.launchedAt)}`;
 
 /** The probes a waypoint sent out, each with what it was sent to find and what came back. */
 function probesView(w: Waypoint, out: ReadonlySet<string>): HTMLElement | null {
@@ -439,7 +442,7 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
   let drawnPick = '';
   // the helpers still out, whose probes are in flight
   const helpers = () => (liveId ? state.agents.get(liveId)?.helpers ?? [] : []);
-  const out = () => new Set(helpers().filter((x) => x.status === 'working').map((x) => x.id));
+  const out = () => probesOut(liveId ? state.agents.get(liveId) : undefined);
   // probes move every frame while there are any, without redrawing the rest of the chart
   let plotted: { goal: ChartGoal; plot: CoursePlot } | undefined;
   let frame = 0;
@@ -448,7 +451,7 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
     const layer = body.querySelector('.chart-probes');
     if (!plotted || !layer) return;
     const flights = probeFlights(plotted.plot, plotted.goal.waypoints, out(), Date.now());
-    drawProbes(layer, flights, helpers(), (f) => (f.phase === 'out' && liveId ? ui.openHelper(liveId, f.probe.id) : nav.slice(f.slice)));
+    drawProbes(layer, flights, helpers(), (f) => (f.phase === 'out' && f.probe.type !== 'script' && liveId ? ui.openHelper(liveId, f.probe.id) : nav.slice(f.slice)));
     if (flights.length) frame = requestAnimationFrame(fly);
   };
   ui.panels.own(() => cancelAnimationFrame(frame));
