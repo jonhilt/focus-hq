@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { SDKMessage, SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { BrowserFrame, TermLine } from '../../shared/types';
 import { foregroundTasks, handleMessage, helperActivity, helperBrief, helperEnd, limitNotice, newCloudId, resultText, screenshotActivity, switchesToKey, systemNote, turnResult, type RunContext } from './sdkMessages';
+import { BackgroundTracker, type BackgroundEvent } from './backgroundTasks';
 import type { RunHooks } from './types';
 
 type Line = Omit<TermLine, 't'>;
@@ -217,5 +218,33 @@ describe('handleMessage', () => {
     expect(handleMessage(msg, context(), hooks)).toEqual({ text: 'ok', isError: false, queued: 0, structured: undefined });
     expect(said.costs).toEqual([0.25]);
     expect(said.lines).toEqual([{ kind: 'success', text: '✔ Done in 1s · 1 turns' }]);
+  });
+});
+
+describe('a lead’s background commands, through handleMessage', () => {
+  it('starts one as its task starts, learns its output file from the Bash result, and ends it', () => {
+    const ctx = context({ calls: new Map([['toolu_b', { name: 'Bash', input: {} }]]) });
+    ctx.tracker = new BackgroundTracker((id) => (id ? ctx.calls.get(id)?.name : undefined));
+    const events: BackgroundEvent[] = [];
+    const hooks = { lines: () => undefined, activity: () => undefined, background: (e: BackgroundEvent) => events.push(e) } as unknown as RunHooks;
+    handleMessage(system({ subtype: 'task_started', task_type: 'local_bash', task_id: 'b1', tool_use_id: 'toolu_b', description: 'pnpm run dev', is_backgrounded: true }), ctx, hooks);
+    handleMessage({ type: 'user', parent_tool_use_id: null, message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_b', content: 'Command running in background with ID: b1. Output is being written to: /t/s/tasks/b1.output. You will be notified' }] } } as unknown as SDKMessage, ctx, hooks);
+    handleMessage(system({ subtype: 'task_notification', task_id: 'b1', status: 'stopped', summary: 'pnpm run dev' }), ctx, hooks);
+    expect(events).toEqual([
+      { kind: 'started', id: 'b1', task: 'shell', description: 'pnpm run dev' },
+      { kind: 'output', id: 'b1', file: '/t/s/tasks/b1.output' },
+      { kind: 'ended', id: 'b1', status: 'stopped', summary: 'pnpm run dev' },
+    ]);
+  });
+});
+
+describe('a helper’s own helper', () => {
+  it('knows its parent: the helper whose Agent call started it', () => {
+    const ctx = context({ parents: new Map() });
+    const started: unknown[] = [];
+    const hooks = { lines: () => undefined, activity: () => undefined, helper: (e: { kind: string }) => e.kind === 'started' && started.push(e), helperLines: () => undefined } as unknown as RunHooks;
+    handleMessage({ type: 'assistant', parent_tool_use_id: 'toolu_parent', message: { content: [{ type: 'tool_use', id: 'toolu_child', name: 'Agent', input: { description: 'Find files', prompt: 'ls' } }] } } as unknown as SDKMessage, ctx, hooks);
+    handleMessage(system({ subtype: 'task_started', task_type: 'local_agent', task_id: 't2', tool_use_id: 'toolu_child', description: 'Find files', subagent_type: 'Explore' }), ctx, hooks);
+    expect(started).toEqual([{ kind: 'started', id: 'toolu_child', description: 'Find files', type: 'Explore', parent: 'toolu_parent' }]);
   });
 });
