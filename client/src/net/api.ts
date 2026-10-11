@@ -73,6 +73,8 @@ export const api = {
   hire: (projectId: string, issue: Issue, effort?: Effort, cloud?: boolean) =>
     call<Agent>('POST', '/agents', { projectId, repo: issue.repo, number: issue.number, title: issue.title, url: issue.url, effort, cloud }),
   lines: (id: string) => call<TermLine[]>('GET', `/agents/${id}/lines`),
+  workflowAgentLines: (leadId: string, workflowId: string, agentId: string) =>
+    call<TermLine[]>('GET', `/agents/${leadId}/workflows/${encodeURIComponent(workflowId)}/agents/${encodeURIComponent(agentId)}/lines`),
   /**
    * On your API key, with a long conversation to pick back up, the message isn't sent: it comes back `costly`, for the
    * captain to say `how` (`messageAgent` asks them).

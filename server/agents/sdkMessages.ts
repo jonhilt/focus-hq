@@ -9,7 +9,7 @@ import { appUrl, renderText, renderToolResult, renderToolUse, screenshotFrame, t
 import { scratchScript } from './scratch';
 import { TASK_TOOLS } from './tasks';
 import type { RunHooks } from './types';
-import { workflowProgress } from './workflows';
+import { type WorkflowPermits, workflowProgress } from './workflows';
 
 type Line = Omit<TermLine, 't'>;
 type SystemMessage = Extract<SDKMessage, { type: 'system' }>;
@@ -29,6 +29,8 @@ export interface RunContext {
   helpers: Map<string, string>;
   /** Workflows by Claude Code's task id. */
   workflows: Set<string>;
+  /** Which workflows' agents may run their tools without asking. Missing in a context that doesn't ask. */
+  permits?: WorkflowPermits;
   /** Subagents (by Agent tool call) whose model we've reported. */
   modelled: Set<string>;
   /** The scratch dir (a local session's), and the Bash calls running scripts from it: probes, until their results come. */
@@ -145,6 +147,7 @@ function taskStarted(msg: SDKTaskStartedMessage, ctx: RunContext, hooks: RunHook
   if (msg.task_type === 'local_workflow') {
     // a workflow: its agents report nothing of their own, only how the whole of it stands in its progress
     ctx.workflows.add(msg.task_id);
+    ctx.permits?.started(msg.task_id, msg.tool_use_id);
     hooks.workflow?.({ kind: 'started', id: msg.task_id, name: msg.workflow_name ?? '', description: msg.description });
   } else if (msg.task_type === 'local_agent') {
     // a subagent: known by the Agent tool call that started it, which its own messages point back to
@@ -165,7 +168,10 @@ export function helperBrief(description: string, prompt: unknown): Line[] {
 function taskProgress(msg: SDKTaskProgressMessage, ctx: RunContext, hooks: RunHooks): void {
   if (ctx.workflows.has(msg.task_id)) {
     const progress = workflowProgress((msg as { workflow_progress?: unknown }).workflow_progress);
-    if (progress) hooks.workflow?.({ kind: 'progress', id: msg.task_id, ...progress });
+    if (progress) {
+      ctx.permits?.seen(msg.task_id, progress.agents);
+      hooks.workflow?.({ kind: 'progress', id: msg.task_id, ...progress });
+    }
     return;
   }
   const id = ctx.helpers.get(msg.task_id);
@@ -181,6 +187,7 @@ export function helperActivity(msg: Pick<SDKTaskProgressMessage, 'summary' | 'la
 function taskNotification(msg: SDKTaskNotificationMessage, ctx: RunContext, hooks: RunHooks): void {
   if (ctx.workflows.has(msg.task_id)) {
     hooks.workflow?.({ kind: 'ended', id: msg.task_id, ok: msg.status === 'completed' });
+    ctx.permits?.ended(msg.task_id);
     ctx.workflows.delete(msg.task_id);
     return;
   }
@@ -274,6 +281,11 @@ function userMessage(msg: UserMessage, ctx: RunContext, hooks: RunHooks): void {
   const content = msg.message.content;
   if (!Array.isArray(content)) return;
   const results = content.filter((b) => b.type === 'tool_result');
+  // a workflow launched: where its agents' transcripts are written
+  const launched = msg.tool_use_result as { taskId?: unknown; transcriptDir?: unknown } | undefined;
+  if (launched && typeof launched.taskId === 'string' && typeof launched.transcriptDir === 'string') {
+    hooks.workflow?.({ kind: 'transcripts', id: launched.taskId, dir: launched.transcriptDir });
+  }
   // the structured output is the message's only when it carries this one result
   const structured = results.length === 1 ? msg.tool_use_result : undefined;
   for (const block of results) toolResult(block, msg.parent_tool_use_id, structured, ctx, hooks);

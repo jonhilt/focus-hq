@@ -6,6 +6,7 @@ import { record, type TrafficEntry, type TrafficLink } from './net/traffic';
 import { Player } from './player';
 import { agentPanelOpen, openAgentPanel } from './ui/agentPanel';
 import { openHelperPanel } from './ui/helperPanel';
+import { openWorkflowAgentPanel } from './ui/workflowAgentPanel';
 import { openBoardPanel } from './ui/boardPanel';
 import type { Ui } from './ui/context';
 import { h } from './ui/dom';
@@ -128,6 +129,7 @@ async function main() {
     },
     openAgent: (id, view) => openAgentPanel(ui, id, view),
     openHelper: (leadId, id) => openHelperPanel(ui, leadId, id),
+    openWorkflowAgent: (leadId, workflowId, index) => openWorkflowAgentPanel(ui, leadId, workflowId, index),
     openBoard: (projectId, tab) => openBoardPanel(ui, projectId, tab),
     previewPr: (projectId, repo, number) => {
       const running = state.previews.get(projectId);
@@ -429,6 +431,11 @@ async function main() {
       case 'helper':
         ui.openHelper(i.leadId, i.id);
         break;
+      case 'workflow-agent': {
+        const lead = [...state.agents.values()].find((a) => a.projectId === i.projectId && a.task === 'lead' && a.lead?.station === i.station);
+        if (lead) ui.openWorkflowAgent(lead.id, i.workflowId, i.index);
+        break;
+      }
       case 'desk':
         ui.openBoard(i.projectId, 'todo');
         break;

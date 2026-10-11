@@ -8,6 +8,8 @@ export type Interaction =
   | { kind: 'agent'; id: string; view?: 'browser' | 'goal' | 'tasks' | 'crew' }
   /** One of a lead's helpers at their team station: its own transcript. */
   | { kind: 'helper'; leadId: string; id: string }
+  /** One of a lead's workflow agents on a transporter room's pads: its own transcript. Its room says whose. */
+  | { kind: 'workflow-agent'; projectId: string; station: number; workflowId: string; index: number }
   | { kind: 'desk'; projectId: string }
   | { kind: 'board'; projectId: string; tab?: 'todo' | 'doing' | 'prs' }
   | { kind: 'new-issue'; projectId: string }

@@ -4,6 +4,8 @@ import { Option, Schema } from 'effect';
 import type { Workflow, WorkflowAgent, WorkflowPhase } from '../../shared/types';
 import type { WorkflowEvent } from './types';
 import { truncate } from '../util';
+import { renderText, renderToolResult, renderToolUse } from './render';
+import type { TermLine } from '../../shared/types';
 
 /** How long a finished workflow's away team stays in the briefing room, so you see how it went before it goes. */
 export const WORKFLOW_LINGER_MS = 10_000;
@@ -29,6 +31,7 @@ const Agent = Schema.Struct({
   promptPreview: Schema.optional(Schema.NullOr(Schema.String)),
   resultPreview: Schema.optional(Schema.NullOr(Schema.String)),
   error: Schema.optional(Schema.NullOr(Schema.String)),
+  agentId: Schema.optional(Schema.NullOr(Schema.String)),
 });
 const decodePhase = Schema.decodeUnknownOption(Phase);
 const decodeAgent = Schema.decodeUnknownOption(Agent);
@@ -49,7 +52,10 @@ function agentFrom(entry: typeof Agent.Type): WorkflowAgent {
     : status === 'working' ? firstLine(entry.promptPreview) || 'Working'
     : 'Waiting for a slot';
   const finishedAt = status === 'done' || status === 'failed' ? (entry.startedAt ?? 0) + (entry.durationMs ?? 0) : undefined;
-  return { index: entry.index, label: entry.label, phase: entry.phaseIndex ?? 0, status, model: entry.model ?? undefined, activity, ...(finishedAt !== undefined && { finishedAt }) };
+  return {
+    index: entry.index, label: entry.label, phase: entry.phaseIndex ?? 0, status, model: entry.model ?? undefined, activity,
+    ...(finishedAt !== undefined && { finishedAt }), ...(entry.agentId && { agentId: entry.agentId }),
+  };
 }
 
 /**
@@ -104,6 +110,7 @@ export function applyWorkflowEvent(workflows: Workflow[], event: WorkflowEvent, 
   const workflow = workflows.find((w) => w.id === event.id);
   if (!workflow) return workflows;
   let next: Workflow;
+  if (event.kind === 'transcripts') return workflows;
   if (event.kind === 'progress') {
     if (workflow.status !== 'running') return workflows;
     next = { ...workflow, phases: event.phases.length ? event.phases : workflow.phases, agents: event.agents };
@@ -115,4 +122,86 @@ export function applyWorkflowEvent(workflows: Workflow[], event: WorkflowEvent, 
     next = { ...workflow, status: ending, phases, agents };
   }
   return workflows.map((w) => (w.id === event.id ? next : w));
+}
+
+/**
+ * The workflows the captain approved, in a session that asks before its tools run: approving the Workflow call
+ * approves what its own agents do for that run, rather than each of them raising the lead's hand for every command.
+ * By the approved call (Workflow's tool use id), then by its workflow (task id) once Claude Code starts it, and each
+ * agent (its agentId, as the permission request names it) by the workflow it's in.
+ */
+export class WorkflowPermits {
+  private readonly calls = new Set<string>();
+  private readonly approved = new Set<string>();
+  private readonly agents = new Map<string, string>();
+
+  /** The captain approved this Workflow call. */
+  approveCall(toolUseId: string): void {
+    this.calls.add(toolUseId);
+  }
+
+  /** Claude Code started workflow `id` for the call `toolUseId`. */
+  started(id: string, toolUseId: string | undefined): void {
+    if (toolUseId && this.calls.delete(toolUseId)) this.approved.add(id);
+  }
+
+  /** Workflow `id`'s agents, as its progress lists them. */
+  seen(id: string, agents: { agentId?: string }[]): void {
+    for (const a of agents) if (a.agentId) this.agents.set(a.agentId, id);
+  }
+
+  ended(id: string): void {
+    this.approved.delete(id);
+    for (const [agent, workflow] of this.agents) if (workflow === id) this.agents.delete(agent);
+  }
+
+  /** Whether agent `agentId`'s request is approved already: it's in a workflow the captain approved, still running. */
+  approves(agentId: string | undefined): boolean {
+    return !!agentId && this.approved.has(this.agents.get(agentId) ?? '');
+  }
+
+  /** Whether a request from `agentId` might yet turn out to be approved, once a workflow's progress names it. */
+  mightApprove(agentId: string | undefined): boolean {
+    return !!agentId && !this.agents.has(agentId) && this.approved.size > 0;
+  }
+}
+
+/** What the captain's asked when the lead wants to run a workflow: its name, and what approving it means. */
+export function workflowAsk(input: Record<string, unknown>): string {
+  const script = typeof input.script === 'string' ? input.script : '';
+  const name = /\bname:\s*['"`]([^'"`]+)['"`]/.exec(script)?.[1] ?? (typeof input.name === 'string' ? input.name : 'a workflow');
+  return `Run workflow ${name}: its agents run their commands without asking, for this run`;
+}
+
+type Block = { type: string; text?: string; name?: string; input?: Record<string, unknown>; content?: unknown };
+
+/**
+ * A workflow agent's transcript (the agent-<agentId>.jsonl Claude Code writes as it works) as terminal lines, the way
+ * a session's own read: what it was asked, then what it said, the tools it used and what came back. What it thought,
+ * and Claude Code's own attachments, are left out; so is any line that isn't JSON (one still being written).
+ */
+export function transcriptLines(jsonl: string): Omit<TermLine, 't'>[] {
+  const lines: Omit<TermLine, 't'>[] = [];
+  let asked = false;
+  for (const raw of jsonl.split('\n')) {
+    let entry: { type?: string; message?: { content?: unknown } };
+    try {
+      entry = JSON.parse(raw) as typeof entry;
+    } catch {
+      continue;
+    }
+    const content = entry.message?.content;
+    if (entry.type === 'user' && !asked && typeof content === 'string') {
+      asked = true;
+      lines.push({ kind: 'manager', text: `▶ ${truncate(content.trim(), 1500)}` });
+      continue;
+    }
+    if (!Array.isArray(content)) continue;
+    for (const block of content as Block[]) {
+      if (entry.type === 'assistant' && block.type === 'text' && block.text?.trim()) lines.push(...renderText(block.text.trim()));
+      else if (entry.type === 'assistant' && block.type === 'tool_use' && block.name) lines.push(...renderToolUse(block.name, block.input ?? {}, '').lines);
+      else if (entry.type === 'user' && block.type === 'tool_result') lines.push(...renderToolResult(block));
+    }
+  }
+  return lines;
 }

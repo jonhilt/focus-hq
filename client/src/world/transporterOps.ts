@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { interactive } from './builder';
 import { helperFor } from '../../../shared/crew';
 import type { Workflow, WorkflowAgent } from '../../../shared/types';
 import { sound } from '../sound';
@@ -124,7 +125,13 @@ export class TransporterOperation {
       }
       const view = padView(wf, agent);
       const figure = this.figures[i];
-      if (figure?.key !== occupant.key) this.figures[i] = this.beamIn(i, occupant.key, view);
+      if (figure?.key !== occupant.key) {
+        const arrived = this.beamIn(i, occupant.key, view);
+        this.figures[i] = arrived;
+        // E on them: their own screen, the transcript Claude Code keeps as they work
+        const { projectId, station } = this.room;
+        interactive(arrived.character.group, { kind: 'workflow-agent', projectId, station, workflowId: wf.id, index: agent.index }, () => `See ${agent.label}'s screen`);
+      }
       else figure.character.set(view);
       const phase = wf.phases.find((p) => p.index === occupant.phase);
       const colour = LCARS[phaseColour(phase ?? { index: occupant.phase })];

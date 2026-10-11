@@ -10,6 +10,7 @@ import { CLOUD_UNAVAILABLE, cloudRefused } from './cloud';
 import { officeMcpServer } from './officeTool';
 import { openScratch } from './scratch';
 import { handleMessage, type RunContext, type TurnResult } from './sdkMessages';
+import { WorkflowPermits, workflowAsk } from './workflows';
 import { bundledClaude, openTerminal, readTerminal } from './terminal';
 import { type AgentRunner, type AgentSession, type CloudTerminal, type CloudTerminalRequest, type RunHooks, type RunOutcome, type RunRequest, LIMIT_REACHED, STOPPED_BY_CAPTAIN } from './types';
 
@@ -136,12 +137,17 @@ export class ClaudeRunner implements AgentRunner {
     const autonomy = req.settings.autonomy;
     // a cloud agent has to push its own branch, and only that one
     const askCommands = cloud ? [...ASK_MODE_COMMANDS, `Bash(git push origin HEAD:${cloud.branch})`] : ASK_MODE_COMMANDS;
-    const canUseTool: CanUseTool = async (toolName, toolInput, { signal, title }) => {
+    const permits = new WorkflowPermits();
+    const canUseTool: CanUseTool = async (toolName, toolInput, { signal, title, agentID, toolUseID }) => {
       if (autonomy === 'ask' && (ASK_MODE_TOOLS.has(toolName) || toolName.startsWith('mcp__browser__'))) {
         return { behavior: 'allow', updatedInput: toolInput };
       }
-      const summary = title || summarizeInput(toolName, toolInput);
+      // an agent of a workflow the captain approved: its progress may not have named it yet, so give it a moment
+      for (let i = 0; i < 10 && permits.mightApprove(agentID); i++) await sleep(200);
+      if (permits.approves(agentID)) return { behavior: 'allow', updatedInput: toolInput };
+      const summary = toolName === 'Workflow' ? workflowAsk(toolInput) : title || summarizeInput(toolName, toolInput);
       const approved = await hooks.permission(toolName, summary, signal);
+      if (approved && toolName === 'Workflow') permits.approveCall(toolUseID);
       return approved
         ? { behavior: 'allow', updatedInput: toolInput }
         : {
@@ -194,7 +200,7 @@ export class ClaudeRunner implements AgentRunner {
 
     let q: Query | undefined;
     let stopping = false;
-    const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map(), helpers: new Map(), workflows: new Set(), modelled: new Set(), scratch: scratch?.dir, probes: new Set(), commits: new Map(), onKey, counted: new Set() };
+    const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map(), helpers: new Map(), workflows: new Set(), permits, modelled: new Set(), scratch: scratch?.dir, probes: new Set(), commits: new Map(), onKey, counted: new Set() };
     const done = (async (): Promise<RunOutcome> => {
       let summary = '';
       let structured: unknown;

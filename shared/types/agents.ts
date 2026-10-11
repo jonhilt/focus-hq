@@ -129,6 +129,8 @@ export interface WorkflowAgent {
   activity: string;
   /** When it finished, as Claude Code timed it. */
   finishedAt?: number;
+  /** Claude Code's id for it, once it has started: its transcript is named after it. */
+  agentId?: string;
 }
 
 /**
