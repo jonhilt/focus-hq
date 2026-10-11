@@ -2,7 +2,33 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { dcgConfig, insideScratch, openScratch, SCRATCH_RM, scratchDir, scratchRmDenial, scratchRmTargets } from './scratch';
+import { dcgConfig, insideScratch, openScratch, SCRATCH_RM, scratchDir, scratchRmDenial, scratchRmTargets, scratchScript } from './scratch';
+
+describe('scratchScript', () => {
+  const dir = '/tmp/focus-scratch/lead_x';
+  it('spots a script run from the scratch dir, however it is run', () => {
+    expect(scratchScript('node "$FOCUS_SCRATCH/probe.mjs"', dir)).toBe('probe.mjs');
+    expect(scratchScript('npx tsx $FOCUS_SCRATCH/render.ts', dir)).toBe('render.ts');
+    expect(scratchScript('cd /repo && pnpm exec tsx "${FOCUS_SCRATCH}/w1.ts" 2>&1 | tail -5', dir)).toBe('w1.ts');
+    expect(scratchScript(`python3 ${dir}/rates.py --all`, dir)).toBe('rates.py');
+    expect(scratchScript('FOO=1 bash "$FOCUS_SCRATCH/sweep.sh"', dir)).toBe('sweep.sh');
+    expect(scratchScript('cd "$FOCUS_SCRATCH" && python3 check.py', dir)).toBe('check.py');
+    expect(scratchScript('"$FOCUS_SCRATCH/run.sh"', dir)).toBe('run.sh');
+    expect(scratchScript('npx vitest run $FOCUS_SCRATCH/dbg.test.ts', dir)).toBe('dbg.test.ts');
+  });
+
+  it('leaves alone writing, listing and removing scratch files, and scripts from anywhere else', () => {
+    expect(scratchScript(`cat > "$FOCUS_SCRATCH/render.ts" <<'EOF'\nnode "$FOCUS_SCRATCH/other.js"\nEOF`, dir)).toBeUndefined();
+    expect(scratchScript('ls "$FOCUS_SCRATCH"', dir)).toBeUndefined();
+    expect(scratchScript('wc -c "$FOCUS_SCRATCH/compare.html"', dir)).toBeUndefined();
+    expect(scratchScript('node scripts/build.mjs', dir)).toBeUndefined();
+    expect(scratchScript(`python3 - <<'EOF'\nimport os\nEOF`, dir)).toBeUndefined();
+  });
+
+  it('finds the script after a heredoc that wrote it', () => {
+    expect(scratchScript(`cat > "$FOCUS_SCRATCH/a.ts" <<'EOF'\nconsole.log(1)\nEOF\nnpx tsx "$FOCUS_SCRATCH/a.ts"`, dir)).toBe('a.ts');
+  });
+});
 
 const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'focus-scratch-test-')));
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));

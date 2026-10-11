@@ -1,4 +1,4 @@
-import type { Agent, Contact, GoalArtifact, GoalNote, GoalQuestion, GoalRecord, LeadPr, Waypoint } from '../../../shared/types';
+import type { Agent, Contact, GoalArtifact, GoalNote, GoalQuestion, GoalRecord, Helper, LeadPr, Probe, Waypoint } from '../../../shared/types';
 import { api } from '../net/api';
 import { artifactUrl, optionUrl } from '../../../shared/artifacts';
 import { openClosedGoalShown } from './screenPanel';
@@ -7,7 +7,7 @@ import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { fill, h } from './dom';
 import { prLink } from './goals';
-import { clip, type CoursePlot, everySlice, type Label, leaderEnd, plotCourse, type Pt, seeded, shieldState } from './course';
+import { clip, type CoursePlot, everySlice, type Label, leaderEnd, plotCourse, type ProbeFlight, probeFlights, probesOut, type Pt, seeded, shieldState } from './course';
 
 /** What a goal's chart is drawn from, whether it's under way or closed. */
 interface ChartGoal {
@@ -183,11 +183,63 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: Picked, nav: Nav)
     s('circle', { class: 'chart-launch', cx: plot.launch.x, cy: plot.launch.y, r: 7 }),
     s('text', { class: 'chart-caption launch', x: plot.launch.x - 20, y: plot.launch.y + 30 }, `LAUNCH · ${stardate(goal.openedAt)}`),
     waypoints,
+    s('g', { class: 'chart-probes' }),
   );
 }
 
 const section = (label: string, tone: string, ...body: (Node | string | null)[]) => h('section', null, h('h4', { style: `--tone:${tone}` }, label), ...body);
 const prOf = (prs: LeadPr[], repo: string, pr: number) => prs.find((p) => p.repo === repo && p.number === pr);
+
+/**
+ * The probes in flight, drawn afresh each frame while there are any: one that's out trails back to its waypoint with
+ * what it was sent to find and what it's doing now; one that has reported sends pulses home down its trail (green when
+ * it completed, red when it failed) and fades out as the transmission ends. Clicking one opens its helper while it's out.
+ */
+function drawProbes(layer: Element, flights: ProbeFlight[], helpers: Helper[], open: (f: ProbeFlight) => void): void {
+  layer.replaceChildren(...flights.map((f) => {
+    const helper = helpers.find((x) => x.id === f.probe.id);
+    const fade = f.phase === 'out' ? 1 : 1 - f.sent * f.sent;
+    const tone = f.phase === 'out' ? 'out' : f.probe.ok ? 'sent' : 'lost';
+    const pulses = f.phase === 'transmitting'
+      ? [0, 0.33, 0.66].map((k) => {
+        const along = (f.sent * 3 + k) % 1;
+        return s('circle', { class: 'pulse', cx: f.x + (f.from.x - f.x) * along, cy: f.y + (f.from.y - f.y) * along, r: 3.5, opacity: (1 - along * 0.6).toFixed(2) });
+      })
+      : [];
+    const said = f.phase === 'out' ? helper?.activity ?? (f.probe.type === 'script' ? 'Running…' : 'Exploring') : `${f.probe.ok ? 'Transmitting' : 'Lost'}: ${f.probe.summary ?? (f.probe.ok ? 'done' : 'it hit a problem')}`;
+    const deg = (f.angle * 180) / Math.PI;
+    const g = s('g', { class: `chart-probe ${tone}`, opacity: fade.toFixed(2), role: 'button' },
+      s('title', {}, `Probe: ${f.probe.description}${f.probe.type ? ` (${f.probe.type})` : ''}`),
+      s('path', { class: 'trail', d: `M${f.from.x} ${f.from.y} L${f.x} ${f.y}` }),
+      ...pulses,
+      s('circle', { class: 'glow', cx: f.x, cy: f.y, r: 14 }),
+      s('path', { class: 'ship', d: 'M-5 -5 L8 0 L-5 5 Z', transform: `translate(${f.x} ${f.y}) rotate(${deg.toFixed(1)})` }),
+      s('text', { class: 'what', x: f.label.x, y: f.label.y, 'text-anchor': f.label.anchor }, `PROBE · ${clip(f.probe.description, 40)}`),
+      s('text', { class: 'doing', x: f.label.x, y: f.label.y + 16, 'text-anchor': f.label.anchor }, clip(said, 48)),
+    );
+    g.addEventListener('click', () => open(f));
+    return g;
+  }));
+}
+
+/** How long a probe was out: a script's seconds, a helper's minutes. */
+const flight = (ms: number) => (ms < 60_000 ? `${Math.max(1, Math.round(ms / 1000))} s` : span(ms));
+
+/** How a probe went, in a few words: out now, what it transmitted, or that contact was lost. */
+const probeStanding = (p: Probe, out: boolean) =>
+  !p.endedAt ? (out ? `Out now, for ${flight(Date.now() - p.launchedAt)}` : 'Lost contact before it reported')
+    : `${p.ok ? 'Transmitted' : 'Lost'} after ${flight(p.endedAt - p.launchedAt)}`;
+
+/** The probes a waypoint sent out, each with what it was sent to find and what came back. */
+function probesView(w: Waypoint, out: ReadonlySet<string>): HTMLElement | null {
+  const probes = w.probes ?? [];
+  if (!probes.length) return null;
+  return section(`Probes · ${probes.length}`, LCARS.sky, h('ul', { class: 'chart-threads chart-probe-list' }, ...probes.map((p) =>
+    h('li', { class: !p.endedAt ? (out.has(p.id) ? 'open' : 'dropped') : p.ok ? 'pursued' : 'dropped' },
+      h('span', null, p.description, p.type ? h('small', { class: 'inline' }, ` · ${p.type}`) : null),
+      p.summary ? h('p', null, p.summary) : null,
+      h('small', null, probeStanding(p, out.has(p.id)))))));
+}
 
 /** Which waypoint's log is beside the chart, or which contact's, or which projected course's (its place in what's next). */
 interface Picked {
@@ -255,7 +307,7 @@ function contactView(goal: ChartGoal, c: Contact, nav: Nav): HTMLElement {
 }
 
 /** The picked waypoint's log: when, what it set out to do, any course correction, what it taught us, its pull requests. */
-function logView(goal: ChartGoal, w: Waypoint | undefined, nav: Nav, tick?: (slice: number, index: number, checked: boolean) => void, openShown?: () => void): HTMLElement {
+function logView(goal: ChartGoal, w: Waypoint | undefined, nav: Nav, out: ReadonlySet<string>, tick?: (slice: number, index: number, checked: boolean) => void, openShown?: () => void): HTMLElement {
   const objective = section('Objective', LCARS.peach, h('p', null, goal.note?.done || 'Not agreed yet'));
   const threads = (label: string, list: Contact[]) =>
     list.length ? section(label, LCARS.sky, threadList(list, nav)) : null;
@@ -283,6 +335,7 @@ function logView(goal: ChartGoal, w: Waypoint | undefined, nav: Nav, tick?: (sli
     evidenceView(goal, w, openShown),
     shieldsView(w),
     spotChecksView(w, goal.prs, tick),
+    probesView(w, out),
     threads('Noticed here', goal.contacts.filter((c) => c.slice === w.slice)),
     prs.length ? section('Pull requests', LCARS.periwinkle, h('div', { class: 'row' }, ...prs.map(prLink))) : null,
     ideas.length && w === goal.waypoints.at(-1) && !goal.closedAt ? section(`Projected · ${ideas.length}`, LCARS.periwinkle, ideaList(ideas, nav)) : null,
@@ -387,6 +440,21 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
   // would only flicker its pictures; a change to the same waypoint keeps the log scrolled where it was
   let drawn = '';
   let drawnPick = '';
+  // the helpers still out, whose probes are in flight
+  const helpers = () => (liveId ? state.agents.get(liveId)?.helpers ?? [] : []);
+  const out = () => probesOut(liveId ? state.agents.get(liveId) : undefined);
+  // probes move every frame while there are any, without redrawing the rest of the chart
+  let plotted: { goal: ChartGoal; plot: CoursePlot } | undefined;
+  let frame = 0;
+  const fly = () => {
+    frame = 0;
+    const layer = body.querySelector('.chart-probes');
+    if (!plotted || !layer) return;
+    const flights = probeFlights(plotted.plot, plotted.goal.waypoints, out(), Date.now());
+    drawProbes(layer, flights, helpers(), (f) => (f.phase === 'out' && f.probe.type !== 'script' && liveId ? ui.openHelper(liveId, f.probe.id) : nav.slice(f.slice)));
+    if (flights.length) frame = requestAnimationFrame(fly);
+  };
+  ui.panels.own(() => cancelAnimationFrame(frame));
   const nav: Nav = {
     slice: (slice) => {
       picked.slice = slice;
@@ -422,9 +490,11 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
       ? contactView(g, contact, nav)
       : picked.idea !== undefined && ideas[picked.idea] !== undefined
         ? ideaView(g, ideas, picked.idea, nav)
-        : logView(g, g.waypoints.find((w) => w.slice === picked.slice), nav, liveId ? (slice, index, checked) => void api.tickSpotCheck(liveId, slice, index, checked).catch((err: Error) => ui.error(err.message)) : undefined, () => shown(ui));
+        : logView(g, g.waypoints.find((w) => w.slice === picked.slice), nav, out(), liveId ? (slice, index, checked) => void api.tickSpotCheck(liveId, slice, index, checked).catch((err: Error) => ui.error(err.message)) : undefined, () => shown(ui));
     fill(body, h('div', { class: 'chart-map' }, chartSvg(g, plot, picked, nav), readout(g)), log);
     log.scrollTop = scrolled;
+    plotted = { goal: g, plot };
+    if (!frame) fly();
   };
   render();
   ui.panels.open({ title: h('h2', null, `Stellar cartography `, h('span', { class: 'muted' }, first.title)), body, accent: LCARS.gold, wide: true });

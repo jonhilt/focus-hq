@@ -422,6 +422,11 @@ export class TeamStation {
     return new THREE.Vector3(0, EYE_HEIGHT, 0).applyMatrix4(this.portal.ends[0].doorway.matrix);
   }
 
+  /** Keeps the probes on its star chart moving, while you're in its briefing room to see them. */
+  animateChart(now: number): void {
+    this.chart.animate(now);
+  }
+
   /** How far `eye` is from where the captain stands: there, nobody's bubble hides the screen. */
   fromHead(eye: THREE.Vector3): number {
     return eye.distanceTo(this.head);

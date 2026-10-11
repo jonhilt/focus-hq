@@ -12,6 +12,14 @@ export type HelperEvent =
   | { kind: 'ended'; id: string; ok: boolean; summary?: string };
 
 /**
+ * A script the session ran from its scratch dir (to try something out), as a probe: started when the command starts,
+ * ended with how it went (it exited cleanly or not) and the first line it printed.
+ */
+export type ProbeEvent =
+  | { kind: 'started'; id: string; description: string; type: 'script' }
+  | { kind: 'ended'; id: string; ok: boolean; summary?: string };
+
+/**
  * What Claude Code says about a workflow the session ran: started, how its phases and agents stand (the whole of it,
  * each time one of its agents starts or finishes), finished.
  */
@@ -31,6 +39,8 @@ export interface RunHooks {
   cost(totalUsd: number): void;
   /** A subagent of the session started, got busy or finished. */
   helper?(event: HelperEvent): void;
+  /** A script run from the scratch dir started or finished (the session's own, not a subagent's). */
+  probe?(event: ProbeEvent): void;
   /**
    * A subagent's own lines (`id` as in its HelperEvents): its transcript, kept apart from the session's. Without it they
    * go, indented, in the session's own lines.

@@ -402,6 +402,12 @@ export class DemoRunner implements AgentRunner {
           hooks.lines([{ kind: 'output', text: `  ⎿  ${h.folder}: ${goal} fits in ${h.files[1]}` }]);
         }
       }
+      // a quick script from the scratch dir to try the idea first: a probe on the goal's chart, as the real runner reports one
+      const probe = `demo-probe-${randomHex(3)}`;
+      const found = `${goal}: the first try works`;
+      hooks.probe?.({ kind: 'started', id: probe, description: 'Script probe.mjs', type: 'script' });
+      await tool('Bash', { command: 'node "$FOCUS_SCRATCH/probe.mjs"' }, [found]);
+      hooks.probe?.({ kind: 'ended', id: probe, ok: true, summary: found });
       for (const r of repos) {
         const files = FILES[kindOf(r.repo)];
         await tool('Read', { file_path: `/work/${r.folder}/${files[0]}` }, [`Read ${60 + files[0].length} lines`]);
