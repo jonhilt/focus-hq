@@ -1,7 +1,8 @@
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { type Actor, createActor, fromPromise } from 'xstate';
 import { shownProjects } from '../../shared/hidden';
-import type { Agent, CallLine, CallState, CallStatus, CallStep, Snapshot } from '../../shared/types';
+import type { LedgerEvent } from '../../shared/ledger';
+import type { Agent, CallLine, CallState, CallStatus, CallStep, MessageReply, QueuedGoal, Snapshot } from '../../shared/types';
 import type { Hub } from '../hub';
 import { errorMessage } from '../util';
 import { addCaption } from './captions';
@@ -9,15 +10,19 @@ import { DemoJev, DemoLive } from './demo';
 import { Jev } from './jev';
 import { Live, type LiveEvent, type LiveSession, type Sideband } from './live';
 import { callMachine, type Reply, type RouteInput } from './machine';
-import { decide, type Routing, routingQuestions, routingState, type StartGoal } from './route';
+import { topics } from './brief';
+import { type Act, askFor, type Capture, callNotes, decide, dictated, type Routing, routingQuestions, routingState } from './route';
 
 // Calls to Number One (docs/calls.md): one at a time, each a gpt-live-1 session the office is the backend of. The
 // session's events drive the call's machine; what the machine says goes back over the sideband.
 
-/** What a call needs from the office: how the ship stands, and starting a queued goal. */
+/** What a call needs from the office: how the ship stands, its log, and the acts the captain says yes to. */
 export interface CallOffice {
   snapshot(): Promise<Snapshot>;
+  ledger(): LedgerEvent[];
   startQueued(projectId: string, queueId: string, station: number): Agent;
+  startGoal(projectId: string, text: string): { agent: Agent } | { queued: QueuedGoal };
+  message(agentId: string, text: string): MessageReply;
 }
 
 export interface CallKeys {
@@ -35,7 +40,7 @@ export function callsMissing(keys: CallKeys, demo: boolean): string | undefined 
 /** The step the captain sees for the machine's state (`routing` has steps of its own inside). */
 export function stepOf(value: unknown): CallStep {
   const top = typeof value === 'string' ? value : Object.keys(value as object)[0];
-  return top === 'routing' || top === 'confirming' || top === 'acting' || top === 'ended' ? top : 'listening';
+  return top === 'routing' || top === 'confirming' || top === 'dictating' || top === 'acting' || top === 'ended' ? top : 'listening';
 }
 
 type Runtime = ManagedRuntime.ManagedRuntime<Jev | Live, never>;
@@ -57,11 +62,12 @@ class Call {
       callMachine.provide({
         actors: {
           route: fromPromise<Routing, RouteInput>(({ input }) => this.route(input)),
-          start: fromPromise<string, StartGoal>(({ input }) => this.start(input)),
+          act: fromPromise<string, Act>(({ input }) => Promise.resolve(this.act(input))),
         },
         actions: {
           reply: (_, reply: Reply) => this.reply(reply),
           instruct: (_, text: string) => this.sideband?.send({ type: 'session.instructions.append', delegation_id: null, content: text }),
+          inform: (_, text: string) => this.sideband?.send({ type: 'session.thinking.append', delegation_id: null, content: text }),
         },
       }),
     );
@@ -71,11 +77,13 @@ class Call {
 
   state(): CallState {
     const snapshot = this.actor.getSnapshot();
-    const pending = snapshot.context.pending;
+    const { pending, topic, capture } = snapshot.context;
     return {
       id: this.id,
       step: stepOf(snapshot.value),
-      ...(pending && { pending: `Start "${pending.title}" in ${pending.projectName}, at station ${pending.station + 1}?` }),
+      ...(pending && { pending: askFor(pending) }),
+      ...(topic && { topic: topic.title }),
+      ...(capture && { capture: capturing(capture) }),
       lines: this.lines,
       ...(this.error && { error: this.error }),
     };
@@ -123,14 +131,18 @@ class Call {
     this.changed();
   }
 
-  private reply({ delegation, text }: Reply): void {
+  private reply({ delegation, text, quiet }: Reply): void {
     if (!text) return;
+    if (quiet) return this.sideband?.send({ type: 'session.thinking.append', delegation_id: delegation, content: text });
     this.caption('office', text, Date.now());
     this.sideband?.send({ type: 'session.commentary.append', delegation_id: delegation, content: text });
   }
 
-  /** Jev on what the captain just said, against the ship as it stands now. */
-  private async route({ heard, pending }: RouteInput): Promise<Routing> {
+  /**
+   * Jev on what the captain just said, against the ship as it stands now. Words for a new goal or a lead only need to
+   * know whether they call it off.
+   */
+  private async route({ heard, scene }: RouteInput): Promise<Routing> {
     if (!heard) return { kind: 'say', text: "Sorry, I didn't catch that." };
     const snapshot = await this.office.snapshot();
     const projects = shownProjects(snapshot.projects);
@@ -138,18 +150,36 @@ class Call {
     const answers = await this.runtime.runPromise(
       Effect.gen(function* () {
         const jev = yield* Jev;
-        return yield* jev.ask(routingState(projects, heard, recent, pending ?? undefined), routingQuestions(projects, pending ?? undefined));
+        return yield* jev.ask(routingState(projects, heard, recent, scene), routingQuestions(projects, topics(snapshot), scene));
       }),
     );
-    return decide(snapshot, answers, pending ?? undefined);
+    if (scene.capture) return dictated(scene.capture, heard, answers, callNotes(recent), scene.topic);
+    return decide({ snapshot, ledger: this.office.ledger(), now: Date.now(), scene }, answers);
   }
 
-  /** Starts the goal the captain said yes to: the office checks again that it's still queued and a station is free. */
-  private start(start: StartGoal): Promise<string> {
-    const agent = this.office.startQueued(start.projectId, start.queueId, start.station);
-    return Promise.resolve(`Started: ${agent.name} has "${start.title}" at station ${(agent.lead?.station ?? start.station) + 1}.`);
+  /** Does what the captain said yes to; the office checks again as it does (the goal still queued, a station free). */
+  private act(act: Act): string {
+    switch (act.kind) {
+      case 'start-queued': {
+        const agent = this.office.startQueued(act.start.projectId, act.start.queueId, act.start.station);
+        return `Started: ${agent.name} has "${act.start.title}" at station ${(agent.lead?.station ?? act.start.station) + 1}.`;
+      }
+      case 'new-goal': {
+        const started = this.office.startGoal(act.projectId, act.text);
+        return 'agent' in started
+          ? `Started: ${started.agent.name} has "${act.title}" at station ${(started.agent.lead?.station ?? 0) + 1}.`
+          : `Queued "${act.title}" in ${act.projectName}: every team station has a goal.`;
+      }
+      case 'tell-lead':
+        return 'sent' in this.office.message(act.leadId, act.text)
+          ? `Sent to ${act.leadName}.`
+          : `Not sent yet: picking ${act.leadName}'s conversation back up on the API key needs your say, on the screens.`;
+    }
   }
 }
+
+/** What a capture waits on, for the strip. */
+const capturing = (capture: Capture) => (capture.kind === 'new-goal' ? `What should the new goal in ${capture.projectName} be?` : `What should I tell ${capture.leadName}?`);
 
 /** The office's calls: whether it can take one, and the one under way (or the last, once it's ended). */
 export class Calls {

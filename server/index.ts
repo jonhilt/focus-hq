@@ -101,7 +101,13 @@ async function main() {
     pauseMs: config.demo ? 500 : 20_000,
   });
   // calls to Number One read the ship and start queued goals through the office, which is up by the time anyone calls
-  const calls: Calls = new Calls(hub, { snapshot: (): Promise<Snapshot> => office.snapshot(), startQueued: (projectId, queueId, station) => office.agents.startQueued(projectId, queueId, { station }) }, callKeys, config.demo);
+  const calls: Calls = new Calls(hub, {
+    snapshot: (): Promise<Snapshot> => office.snapshot(),
+    ledger: () => store.ledger,
+    startQueued: (projectId, queueId, station) => office.agents.startQueued(projectId, queueId, { station }),
+    startGoal: (projectId, text) => office.agents.startGoal(projectId, text, { from: 'a call' }),
+    message: (agentId, text) => office.agents.message(agentId, text),
+  }, callKeys, config.demo);
   const office = new Office(store, hub, github, previews, planner, numberOne, engineer, new Voice(hub, config.demo), calls, await currentVersion());
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));

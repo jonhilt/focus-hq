@@ -575,6 +575,8 @@ textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
 .call.on.acting { --tone: var(--lcars-red); }
 .call-step { font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tone); }
 .call-pending { font-weight: 600; color: var(--lcars-orange); }
+.call-topic { font-size: 13px; color: var(--lcars-lilac); }
+.call.on.dictating { --tone: var(--lcars-orange); }
 .call-lines { max-height: 180px; overflow: auto; display: flex; flex-direction: column; gap: 3px; font-size: 14px; line-height: 1.35; }
 .call-line strong { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
 .call-line.captain strong { color: var(--lcars-sky); }

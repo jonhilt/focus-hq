@@ -62,7 +62,8 @@ const STEP: Record<CallStep, string> = {
   listening: 'Listening',
   routing: 'Working it out…',
   confirming: 'Waiting for your yes',
-  acting: 'Starting it…',
+  dictating: 'Waiting for your words',
+  acting: 'Doing it…',
   ended: 'Call ended',
 };
 
@@ -83,7 +84,7 @@ export function callView(error: (message: string) => void, changed: () => void):
   // a call placed on another screen (the phone, say) shows here too, and can be hung up from here
   const live = call && call.step !== 'ended' ? call : null;
   if (!live) {
-    const dial = h('button', { class: 'btn', title: status?.missing ?? 'Talk to Number One hands-free: ask how things stand, or have them start the next queued goal' }, '📞 Call');
+    const dial = h('button', { class: 'btn', title: status?.missing ?? 'Talk to Number One hands-free: ask how things stand, start the next queued goal, or talk a goal or a project through and make it a goal' }, '📞 Call');
     dial.disabled = !status || !!status.missing;
     dial.onclick = () =>
       void busy(dial, async () => {
@@ -105,8 +106,9 @@ export function callView(error: (message: string) => void, changed: () => void):
       changed();
     }, error);
   return h('div', { class: `call on ${live.step}` },
-    h('div', { class: 'row' }, h('span', { class: 'call-step' }, `📞 ${stepLabel(live)}`), h('span', { class: 'grow' }), hang),
+    h('div', { class: 'row' }, h('span', { class: 'call-step' }, `📞 ${stepLabel(live)}`), live.topic ? h('span', { class: 'call-topic' }, `Talking through: ${live.topic}`) : null, h('span', { class: 'grow' }), hang),
     live.pending ? h('div', { class: 'call-pending' }, `${live.pending} Say yes, or make it so.`) : null,
+    live.capture ? h('div', { class: 'call-pending' }, live.capture) : null,
     captions(live.lines),
   );
 }

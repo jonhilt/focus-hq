@@ -1,6 +1,6 @@
 import { Effect, Layer } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Agent, CallState, Project, ServerEvent, Snapshot } from '../../shared/types';
+import type { Agent, CallState, MessageReply, Project, ServerEvent, Snapshot } from '../../shared/types';
 import type { Hub } from '../hub';
 import { type CallOffice, Calls, callsMissing, stepOf } from './calls';
 import { Jev, type JevAnswers } from './jev';
@@ -14,7 +14,7 @@ const shop = { id: 'p1', name: 'Shop', repos: ['acme/shop'], goalQueue: [{ id: '
 const snapshot = { info: { github: { ok: true, login: 'captain' } }, projects: [shop], agents: [], boards: [], reviews: [] } as unknown as Snapshot;
 const choice = (choice: string) => ({ choice, confidence: 0.95 });
 
-function setUp(answers: JevAnswers[]) {
+function setUp(answers: JevAnswers[], messageReply: MessageReply = { sent: true }, ship: Snapshot = snapshot) {
   const sent: LiveClientEvent[] = [];
   const events: ServerEvent[] = [];
   let listener: SidebandListener | undefined;
@@ -28,11 +28,22 @@ function setUp(answers: JevAnswers[]) {
   }));
   const jev = Layer.succeed(Jev, Jev.of({ ask: () => Effect.sync(() => answers.shift() ?? {}) }));
   const started: [string, string, number][] = [];
+  const goals: [string, string][] = [];
+  const messages: [string, string][] = [];
   const office: CallOffice = {
-    snapshot: () => Promise.resolve(snapshot),
+    snapshot: () => Promise.resolve(ship),
+    ledger: () => [],
     startQueued: (projectId, queueId, station) => {
       started.push([projectId, queueId, station]);
       return { name: 'Lt. Data', lead: { station } } as Agent;
+    },
+    startGoal: (projectId, text) => {
+      goals.push([projectId, text]);
+      return { queued: { id: 'q2', text, at: 0 } };
+    },
+    message: (agentId, text) => {
+      messages.push([agentId, text]);
+      return messageReply;
     },
   };
   const hub = { send: (e: ServerEvent) => void events.push(e) } as unknown as Hub;
@@ -47,7 +58,7 @@ function setUp(answers: JevAnswers[]) {
   };
   const call = () => calls.status().call as CallState;
   const replies = () => sent.filter((e) => e.type === 'session.commentary.append');
-  return { calls, sent, events, started, say, call, replies, emit: (e: LiveEvent) => listener!.event(e) };
+  return { calls, sent, events, started, goals, messages, say, call, replies, emit: (e: LiveEvent) => listener!.event(e) };
 }
 
 beforeEach(() => vi.useFakeTimers());
@@ -76,6 +87,35 @@ describe('Calls', () => {
     expect(t.call().step).toBe('listening');
   });
 
+  it('talks a project through: briefs the voice model quietly, then makes the conversation a goal on a yes', async () => {
+    const t = setUp([{ action: choice('talk'), topic: choice('project:p1') }, { action: choice('capture_goal') }, {}, { action: choice('other'), approve: { noul: 0.97 } }]);
+    await t.calls.start('v=0 offer');
+    await t.say("Let's talk about the shop", 'd1');
+    const briefed = t.sent.filter((e) => e.type === 'session.thinking.append');
+    expect(briefed.length).toBeGreaterThan(0);
+    expect(briefed[0]).toMatchObject({ delegation_id: null, content: expect.stringContaining('Topic: Shop as a whole.') as string });
+    expect(t.call().topic).toBe('Shop');
+    t.emit({ type: 'session.output_transcript.delta', delta: 'QA keeps failing on flaky tests.' });
+    await t.say('Make that a goal', 'd2');
+    expect(t.call()).toMatchObject({ step: 'dictating', capture: 'What should the new goal in Shop be?' });
+    await t.say('Fix the flaky tests', 'd3');
+    expect(t.call()).toMatchObject({ step: 'confirming', pending: 'Start a new goal in Shop: "Fix the flaky tests"? It takes the notes from this call with it.' });
+    await t.say('Yes', 'd4');
+    expect(t.goals).toEqual([['p1', expect.stringMatching(/^Fix the flaky tests\n\nFrom a call with the captain about Shop:\n[^]*Ship: QA keeps failing on flaky tests\./) as string]]);
+    expect(t.replies().at(-1)).toMatchObject({ delegation_id: 'd4', content: 'Queued "Fix the flaky tests" in Shop: every team station has a goal.' });
+  });
+
+  it("says when a word for a lead waits on the captain's say about the API key", async () => {
+    const goal = { ...snapshot, agents: [{ id: 'lead_1', name: 'Lt. Data', projectId: 'p1', task: 'lead', lead: { station: 0, title: 'Wishlist', prs: [] } }] } as unknown as Snapshot;
+    const t = setUp([{ action: choice('tell_lead'), topic: choice('goal:lead_1') }, {}, { approve: { noul: 0.95 } }], { costly: {} as never }, goal);
+    await t.calls.start('v=0 offer');
+    await t.say('Tell Data something', 'd1');
+    await t.say('Ship it', 'd2');
+    await t.say('Yes', 'd3');
+    expect(t.messages).toEqual([['lead_1', expect.stringMatching(/^Ship it\n\n\(Said on a call with the captain\./) as string]]);
+    expect(t.replies().at(-1)).toMatchObject({ content: "Not sent yet: picking Lt. Data's conversation back up on the API key needs your say, on the screens." });
+  });
+
   it('captions the ship, notes OpenAI’s errors, and ends when the session does', async () => {
     const t = setUp([]);
     await t.calls.start('v=0 offer');
@@ -99,7 +139,7 @@ describe('Calls', () => {
   });
 
   it("won't take a call without both keys", async () => {
-    const calls = new Calls({ send: () => undefined } as unknown as Hub, { snapshot: () => Promise.resolve(snapshot), startQueued: () => ({}) as Agent }, { openai: 'sk' }, false);
+    const calls = new Calls({ send: () => undefined } as unknown as Hub, { snapshot: () => Promise.resolve(snapshot), ledger: () => [], startQueued: () => ({}) as Agent, startGoal: () => ({ queued: { id: 'q', text: '', at: 0 } }), message: () => ({ sent: true }) }, { openai: 'sk' }, false);
     expect(calls.status()).toEqual({ missing: 'Calls need TYPESAFE_API_KEY set where the office starts (see docs/calls.md)', call: null });
     await expect(calls.start('v=0 offer')).rejects.toThrow('TYPESAFE_API_KEY');
   });

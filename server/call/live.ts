@@ -18,12 +18,15 @@ Hand over to the office whenever the captain asks about the ship, its projects, 
 
 Say what the office tells you in your own words: briefly, like a first officer, warm and crisp, without lists or symbols. When the office asks you to put a question to the captain, ask exactly that, and hand their answer over.
 
-Without the office you can greet the captain, chat briefly, and say what you can do by voice so far: report how things stand, and start the next queued goal.`;
+When the captain wants to talk something through (a goal, a requirement, how something on the ship is or isn't working), hand that over: the office briefs you on it from the ship's records. Then talk it through with them yourself, from the briefing, without handing each turn over: think with them, ask questions, suggest, push back. The briefing is the record of the work, not the code: when something isn't in it, say so rather than guess. Hand over again when they want something done, such as making it a goal or telling a goal's lead, or want the status or a different topic. When the office asks for the captain's words for a goal or a lead, hand over what they say next as they say it.
+
+Without the office you can greet the captain, chat briefly, and say what you can do by voice: report how things stand, start the next queued goal, and talk a goal or a project through and turn it into a new goal or a word for its lead.`;
 
 /** The events the office sends over the sideband. */
 export type LiveClientEvent =
   | { type: 'session.commentary.append'; delegation_id: string | null; content: string }
   | { type: 'session.instructions.append'; delegation_id: string | null; content: string }
+  | { type: 'session.thinking.append'; delegation_id: string | null; content: string }
   | { type: 'session.close' };
 
 const LiveEventSchema = Schema.Union([

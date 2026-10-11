@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent, Project, QueuedGoal, Snapshot } from '../../shared/types';
 import type { JevAnswers } from './jev';
-import { APPROVE_PROBABILITY, decide, nextGoal, routingQuestions, routingState, type StartGoal } from './route';
+import { topics } from './brief';
+import { type Act, APPROVE_PROBABILITY, callNotes, type CallScene, decide, dictated, nextGoal, routingQuestions, routingState, type StartGoal } from './route';
 import { clip, spokenStatus } from './status';
 
 const queued = (text: string, id = 'q1'): QueuedGoal => ({ id, text, at: 0 });
@@ -25,6 +26,7 @@ function snapshot(patch: Partial<Snapshot> = {}): Snapshot {
 
 const choice = (choice: string, confidence = 0.95) => ({ type: 'choice', choice, confidence });
 const start: StartGoal = { projectId: 'p1', projectName: 'Shop', queueId: 'q1', title: 'Voice mode', station: 1 };
+const startAct: Act = { kind: 'start-queued', start };
 
 describe('spokenStatus', () => {
   it('says when nothing is going on', () => {
@@ -77,26 +79,33 @@ describe('spokenStatus', () => {
 });
 
 describe('routingQuestions', () => {
-  it('asks only the action with one project aboard, and the yes only while a start waits on it', () => {
-    expect(Object.keys(routingQuestions([shop]))).toEqual(['action']);
-    expect(Object.keys(routingQuestions([shop, blog], start))).toEqual(['action', 'project', 'approve']);
+  it('asks only the action with one project aboard and nothing to talk about, and the yes only while an act waits on it', () => {
+    expect(Object.keys(routingQuestions([shop], []))).toEqual(['action']);
+    const options = topics(snapshot({ projects: [shop, blog] }));
+    expect(Object.keys(routingQuestions([shop, blog], options, { pending: startAct }))).toEqual(['action', 'project', 'topic', 'approve']);
   });
 
-  it('offers every project, and none of them', () => {
-    const question = routingQuestions([shop, blog]).project;
-    expect(question.type === 'choice' && Object.keys(question.criteria)).toEqual(['p1', 'p2', 'none']);
+  it('offers every project and topic, and none of them', () => {
+    const questions = routingQuestions([shop, blog], topics(snapshot({ projects: [shop, blog] })));
+    expect(questions.project.type === 'choice' && Object.keys(questions.project.criteria)).toEqual(['p1', 'p2', 'none']);
+    expect(questions.topic.type === 'choice' && Object.keys(questions.topic.criteria)).toEqual(['project:p1', 'project:p2', 'none']);
   });
 
   it('puts the exact question the captain is answering to Jev', () => {
-    const approve = routingQuestions([shop], start).approve;
-    expect(approve.instructions).toContain('Start "Voice mode" in Shop, at station 2?');
+    expect(routingQuestions([shop], [], { pending: startAct }).approve.instructions).toContain('Start "Voice mode" in Shop, at station 2?');
+  });
+
+  it('only asks whether the captain called it off, while waiting for their words', () => {
+    expect(Object.keys(routingQuestions([shop, blog], [], { capture: { kind: 'tell-lead', leadId: 'l', leadName: 'Lt. Data' } }))).toEqual(['cancel']);
   });
 });
 
 describe('routingState', () => {
-  it('gives Jev the projects, what waits, the call so far and what the captain just said', () => {
-    const state = routingState([shop, blog], 'yes please', [{ who: 'ship', text: 'Start it?', at: 0 }], start);
+  it('gives Jev the projects, the topic, what waits, the call so far and what the captain just said', () => {
+    const [topic] = topics(snapshot());
+    const state = routingState([shop, blog], 'yes please', [{ who: 'ship', text: 'Start it?', at: 0 }], { pending: startAct, topic });
     expect(state).toContain('Projects aboard: Shop, Blog.');
+    expect(state).toContain(`They are talking through: ${topic.label}.`);
     expect(state).toContain('waiting for the captain\'s answer to: Start "Voice mode" in Shop, at station 2?');
     expect(state).toContain('Ship: Start it?');
     expect(state.endsWith('What the captain just said: "yes please"')).toBe(true);
@@ -108,7 +117,7 @@ describe('nextGoal', () => {
     const ship = snapshot({ projects: [{ ...shop, goalQueue: [queued('Voice mode')] }], agents: [lead(0), lead(1)] });
     expect(nextGoal(ship, ship.projects[0])).toEqual({
       kind: 'confirm',
-      start: { projectId: 'p1', projectName: 'Shop', queueId: 'q1', title: 'Voice mode', station: 2 },
+      act: { kind: 'start-queued', start: { projectId: 'p1', projectName: 'Shop', queueId: 'q1', title: 'Voice mode', station: 2 } },
       ask: 'Start "Voice mode" in Shop, at station 3?',
     });
   });
@@ -121,7 +130,7 @@ describe('nextGoal', () => {
 
   it('without a project, takes the only one with a queue, or asks which', () => {
     const one = snapshot({ projects: [shop, { ...blog, goalQueue: [queued('Posts')] }] });
-    expect(nextGoal(one, undefined)).toMatchObject({ kind: 'confirm', start: { projectId: 'p2', title: 'Posts' } });
+    expect(nextGoal(one, undefined)).toMatchObject({ kind: 'confirm', act: { start: { projectId: 'p2', title: 'Posts' } } });
     const two = snapshot({ projects: [{ ...shop, goalQueue: [queued('Cart')] }, { ...blog, goalQueue: [queued('Posts')] }] });
     expect(nextGoal(two, undefined)).toEqual({ kind: 'say', text: 'Goals are queued in Shop and Blog. Which project?' });
     expect(nextGoal(snapshot({ projects: [shop, blog] }), undefined)).toEqual({ kind: 'say', text: 'There are no goals queued in any project.' });
@@ -129,37 +138,101 @@ describe('nextGoal', () => {
 });
 
 describe('decide', () => {
-  const ship = snapshot({ projects: [{ ...shop, goalQueue: [queued('Voice mode')] }, blog] });
+  const ship = snapshot({ projects: [{ ...shop, goalQueue: [queued('Voice mode')] }, blog], agents: [lead(0, { lead: { station: 0, title: 'Wishlist' } as Agent['lead'] })] });
+  const d = (scene: CallScene = {}) => ({ snapshot: ship, ledger: [], now: 0, scene });
 
   it('answers a status question from the board, for the project named', () => {
-    expect(decide(ship, { action: choice('status'), project: choice('p2') })).toEqual({ kind: 'say', text: spokenStatus(ship, 'p2') });
-    expect(decide(ship, { action: choice('status'), project: choice('none') })).toEqual({ kind: 'say', text: spokenStatus(ship) });
+    expect(decide(d(), { action: choice('status'), project: choice('p2') })).toEqual({ kind: 'say', text: spokenStatus(ship, 'p2') });
+    expect(decide(d(), { action: choice('status'), project: choice('none') })).toEqual({ kind: 'say', text: spokenStatus(ship) });
   });
 
   it('asks before starting the next goal', () => {
-    expect(decide(ship, { action: choice('start_next_goal'), project: choice('p1') })).toMatchObject({ kind: 'confirm', start: { queueId: 'q1', station: 0 } });
+    expect(decide(d(), { action: choice('start_next_goal'), project: choice('p1') })).toMatchObject({ kind: 'confirm', act: { start: { queueId: 'q1', station: 1 } } });
   });
 
   it("doesn't act on an unsure pick of action or project", () => {
-    expect(decide(ship, { action: choice('start_next_goal', 0.5) })).toEqual({ kind: 'say', text: 'By voice I can tell you how things stand and start the next queued goal, nothing else yet.' });
+    expect(decide(d(), { action: choice('start_next_goal', 0.5) })).toEqual({ kind: 'say', text: 'By voice I can tell you how things stand, start the next queued goal, or talk something through with you.' });
     // an unsure project pick falls back to the only project with a queue
-    expect(decide(ship, { action: choice('start_next_goal'), project: choice('p2', 0.4) })).toMatchObject({ kind: 'confirm', start: { projectId: 'p1' } });
+    expect(decide(d(), { action: choice('start_next_goal'), project: choice('p2', 0.4) })).toMatchObject({ kind: 'confirm', act: { start: { projectId: 'p1' } } });
   });
 
-  it('goes ahead only on a clear yes to the start waiting on it', () => {
+  it('goes ahead only on a clear yes to the act waiting on it', () => {
     const yes: JevAnswers = { action: choice('other'), approve: { noul: APPROVE_PROBABILITY } };
-    expect(decide(ship, yes, start)).toEqual({ kind: 'go' });
-    // the same yes with nothing waiting starts nothing
-    expect(decide(ship, yes)).toMatchObject({ kind: 'say' });
-    expect(decide(ship, { action: choice('other'), approve: { noul: 0.89 } }, start)).toEqual({ kind: 'say', text: 'Okay, I\'ve left "Voice mode" queued.' });
+    expect(decide(d({ pending: startAct }), yes)).toEqual({ kind: 'go' });
+    // the same yes with nothing waiting does nothing
+    expect(decide(d(), yes)).toMatchObject({ kind: 'say' });
+    expect(decide(d({ pending: startAct }), { action: choice('other'), approve: { noul: 0.89 } })).toMatchObject({ kind: 'say', text: 'Okay, I\'ve left "Voice mode" queued. By voice I can tell you how things stand, start the next queued goal, or talk something through with you.' });
   });
 
-  it('answers something else said instead of a yes, having left the goal queued', () => {
-    const routing = decide(ship, { action: choice('status'), project: choice('p2'), approve: { noul: 0.02 } }, start);
+  it('answers something else said instead of a yes, having dropped the act', () => {
+    const routing = decide(d({ pending: startAct }), { action: choice('status'), project: choice('p2'), approve: { noul: 0.02 } });
     expect(routing).toEqual({ kind: 'say', text: `Okay, I've left "Voice mode" queued. ${spokenStatus(ship, 'p2')}` });
+    const tell: Act = { kind: 'tell-lead', leadId: 'lead_0', leadName: 'Lt. Station0', said: 'Go', text: 'Go' };
+    expect(decide(d({ pending: tell }), { action: choice('status'), project: choice('p2') })).toMatchObject({ text: expect.stringMatching(/^Okay, I haven't done that\. Blog/) as string });
   });
 
   it('reads a choice confidence from its probabilities when Jev leaves it out', () => {
-    expect(decide(ship, { action: { choice: 'status', probabilities: { status: 0.8 } } })).toMatchObject({ kind: 'say', text: spokenStatus(ship) });
+    expect(decide(d(), { action: { choice: 'status', probabilities: { status: 0.8 } } })).toMatchObject({ kind: 'say', text: spokenStatus(ship) });
+  });
+
+  it('briefs the voice model on the topic named, or asks which', () => {
+    const routing = decide(d(), { action: choice('talk'), topic: choice('goal:lead_0') });
+    expect(routing).toMatchObject({ kind: 'brief', topic: { kind: 'goal', leadId: 'lead_0', title: 'Wishlist' } });
+    expect(routing.kind === 'brief' && routing.pieces.join('\n')).toContain('Topic: the goal "Wishlist" in Shop.');
+    expect(decide(d(), { action: choice('talk'), topic: choice('none') })).toEqual({ kind: 'say', text: 'What would you like to talk through? Goals under way: "Wishlist". Or a project as a whole.' });
+  });
+
+  it('while talking something through, leaves chat to the voice model with a quiet note', () => {
+    const [topic] = topics(ship);
+    expect(decide(d({ topic }), { action: choice('other') })).toMatchObject({ kind: 'say', quiet: true });
+  });
+
+  it("asks for the words of a new goal, in the topic's project", () => {
+    const topic = topics(ship).find((t) => t.kind === 'project' && t.projectId === 'p2')!;
+    expect(decide(d({ topic }), { action: choice('capture_goal') })).toEqual({
+      kind: 'dictate',
+      capture: { kind: 'new-goal', projectId: 'p2', projectName: 'Blog' },
+      ask: 'Ask the captain what the goal should be, in a sentence or two.',
+    });
+    expect(decide(d(), { action: choice('capture_goal') })).toEqual({ kind: 'say', text: 'Which project should the goal go in?' });
+  });
+
+  it("asks what to tell the goal's lead: the one named, or the topic's", () => {
+    const dictate = { kind: 'dictate', capture: { kind: 'tell-lead', leadId: 'lead_0', leadName: 'Lt. Station0' }, ask: 'Ask the captain what to tell Lt. Station0.' };
+    expect(decide(d(), { action: choice('tell_lead'), topic: choice('goal:lead_0') })).toEqual(dictate);
+    expect(decide(d({ topic: topics(ship)[0] }), { action: choice('tell_lead') })).toEqual(dictate);
+    expect(decide(d(), { action: choice('tell_lead') })).toEqual({ kind: 'say', text: 'Which goal’s lead should I pass it to?' });
+  });
+});
+
+describe('dictated', () => {
+  const [topic] = topics(snapshot({ agents: [lead(0, { lead: { station: 0, title: 'Wishlist' } as Agent['lead'] })] }));
+
+  it('reads a new goal back, carrying the call with it', () => {
+    const routing = dictated({ kind: 'new-goal', projectId: 'p1', projectName: 'Shop' }, 'Find out why QA fails.\nMore detail.', {}, 'Captain: why?', topic);
+    expect(routing).toEqual({
+      kind: 'confirm',
+      act: { kind: 'new-goal', projectId: 'p1', projectName: 'Shop', title: 'Find out why QA fails', text: 'Find out why QA fails.\nMore detail.\n\nFrom a call with the captain about Wishlist:\nCaptain: why?' },
+      ask: 'Start a new goal in Shop: "Find out why QA fails"? It takes the notes from this call with it.',
+    });
+  });
+
+  it("reads a lead's message back", () => {
+    const routing = dictated({ kind: 'tell-lead', leadId: 'l', leadName: 'Lt. Data' }, 'Ship it', {}, 'Captain: hm');
+    expect(routing).toMatchObject({ kind: 'confirm', act: { said: 'Ship it', text: 'Ship it\n\n(Said on a call with the captain. The conversation:\nCaptain: hm)' }, ask: 'Send Lt. Data: "Ship it"?' });
+  });
+
+  it('drops it when the captain calls it off', () => {
+    expect(dictated({ kind: 'tell-lead', leadId: 'l', leadName: 'Lt. Data' }, 'Never mind', { cancel: { noul: 0.9 } }, '')).toEqual({ kind: 'say', text: 'Okay, dropped it.' });
+  });
+});
+
+describe('callNotes', () => {
+  it("keeps what the captain and the ship said, not the office's notes, the latest when it's long", () => {
+    expect(callNotes([{ who: 'captain', text: 'Hi', at: 0 }, { who: 'office', text: 'x', at: 0 }, { who: 'ship', text: 'Hello', at: 0 }])).toBe('Captain: Hi\nShip: Hello');
+    const long = Array.from({ length: 200 }, (_, i) => ({ who: 'captain' as const, text: `line ${i} ${'x'.repeat(40)}`, at: 0 }));
+    const notes = callNotes(long);
+    expect(notes.length).toBeLessThanOrEqual(4_000);
+    expect(notes.endsWith(`line 199 ${'x'.repeat(40)}`)).toBe(true);
   });
 });
