@@ -125,7 +125,7 @@ export const callMachine = setup({
                     if (event.output.kind !== 'brief') return;
                     for (const piece of event.output.pieces) enqueue({ type: 'inform', params: piece });
                     enqueue({ type: 'instruct', params: talkThrough(event.output.topic) });
-                    enqueue({ type: 'reply', params: { delegation: context.delegation, text: `You've been briefed on ${event.output.topic.title}. Tell the captain you have the notes in front of you, and ask where they'd like to start.` } });
+                    enqueue({ type: 'reply', params: { delegation: context.delegation, text: `I have the notes on ${event.output.topic.title} in front of me. Where would you like to start?` } });
                   }),
                 ],
               },

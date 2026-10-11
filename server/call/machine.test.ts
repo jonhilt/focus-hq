@@ -142,7 +142,7 @@ describe('callMachine', () => {
     await c.settled('listening');
     expect(c.informed).toEqual(['one', 'two']);
     expect(c.instructions.at(-1)).toContain("You're talking through Shop with the captain.");
-    expect(c.replies.at(-1)).toMatchObject({ delegation: 'd1', text: expect.stringContaining("You've been briefed on Shop.") as string });
+    expect(c.replies.at(-1)).toEqual({ delegation: 'd1', text: 'I have the notes on Shop in front of me. Where would you like to start?' });
     expect(c.actor.getSnapshot().context.topic).toEqual(topic);
     // the topic carries on into what's routed next, and a quiet note goes back quietly
     c.say('Hmm', 'd2');

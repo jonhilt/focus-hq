@@ -192,13 +192,13 @@ describe('decide', () => {
     expect(decide(d({ topic }), { action: choice('capture_goal') })).toEqual({
       kind: 'dictate',
       capture: { kind: 'new-goal', projectId: 'p2', projectName: 'Blog' },
-      ask: 'Ask the captain what the goal should be, in a sentence or two.',
+      ask: 'What should the goal be? A sentence or two will do.',
     });
     expect(decide(d(), { action: choice('capture_goal') })).toEqual({ kind: 'say', text: 'Which project should the goal go in?' });
   });
 
   it("asks what to tell the goal's lead: the one named, or the topic's", () => {
-    const dictate = { kind: 'dictate', capture: { kind: 'tell-lead', leadId: 'lead_0', leadName: 'Lt. Station0' }, ask: 'Ask the captain what to tell Lt. Station0.' };
+    const dictate = { kind: 'dictate', capture: { kind: 'tell-lead', leadId: 'lead_0', leadName: 'Lt. Station0' }, ask: 'What should I tell Lt. Station0?' };
     expect(decide(d(), { action: choice('tell_lead'), topic: choice('goal:lead_0') })).toEqual(dictate);
     expect(decide(d({ topic: topics(ship)[0] }), { action: choice('tell_lead') })).toEqual(dictate);
     expect(decide(d(), { action: choice('tell_lead') })).toEqual({ kind: 'say', text: 'Which goal’s lead should I pass it to?' });
@@ -209,11 +209,19 @@ describe('dictated', () => {
   const [topic] = topics(snapshot({ agents: [lead(0, { lead: { station: 0, title: 'Wishlist' } as Agent['lead'] })] }));
 
   it('reads a new goal back, carrying the call with it', () => {
-    const routing = dictated({ kind: 'new-goal', projectId: 'p1', projectName: 'Shop' }, 'Find out why QA fails.\nMore detail.', {}, 'Captain: why?', topic);
+    const words = 'Find out why pull requests fail QA in the shop, and stop it happening. Then tidy up.';
+    const routing = dictated({ kind: 'new-goal', projectId: 'p1', projectName: 'Shop' }, words, {}, 'Captain: why?', topic);
     expect(routing).toEqual({
       kind: 'confirm',
-      act: { kind: 'new-goal', projectId: 'p1', projectName: 'Shop', title: 'Find out why QA fails', text: 'Find out why QA fails.\nMore detail.\n\nFrom a call with the captain about Wishlist:\nCaptain: why?' },
-      ask: 'Start a new goal in Shop: "Find out why QA fails"? It takes the notes from this call with it.',
+      act: {
+        kind: 'new-goal',
+        projectId: 'p1',
+        projectName: 'Shop',
+        title: 'Find out why pull requests fail QA in the shop, and stop it…',
+        said: 'Find out why pull requests fail QA in the shop, and stop it happening',
+        text: `${words}\n\nFrom a call with the captain about Wishlist:\nCaptain: why?`,
+      },
+      ask: 'Start a new goal in Shop: "Find out why pull requests fail QA in the shop, and stop it happening"? It takes the notes from this call with it.',
     });
   });
 

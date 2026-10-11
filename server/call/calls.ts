@@ -49,6 +49,8 @@ type Runtime = ManagedRuntime.ManagedRuntime<Jev | Live, never>;
 class Call {
   lines: CallLine[] = [];
   error?: string;
+  /** Where the conversation about the call's topic starts in its captions: the notes a capture carries begin there. */
+  private topicFrom = 0;
   sideband?: Sideband;
   private readonly actor: Actor<typeof callMachine>;
 
@@ -72,7 +74,14 @@ class Call {
       }),
     );
     this.actor.start();
-    this.actor.subscribe(() => this.changed());
+    let topic = this.actor.getSnapshot().context.topic;
+    this.actor.subscribe((snapshot) => {
+      if (snapshot.context.topic !== topic) {
+        topic = snapshot.context.topic;
+        this.topicFrom = this.lines.length;
+      }
+      this.changed();
+    });
   }
 
   state(): CallState {
@@ -153,7 +162,7 @@ class Call {
         return yield* jev.ask(routingState(projects, heard, recent, scene), routingQuestions(projects, topics(snapshot), scene));
       }),
     );
-    if (scene.capture) return dictated(scene.capture, heard, answers, callNotes(recent), scene.topic);
+    if (scene.capture) return dictated(scene.capture, heard, answers, callNotes(recent.slice(scene.topic ? this.topicFrom : 0)), scene.topic);
     return decide({ snapshot, ledger: this.office.ledger(), now: Date.now(), scene }, answers);
   }
 

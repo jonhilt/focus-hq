@@ -96,12 +96,14 @@ describe('Calls', () => {
     expect(briefed[0]).toMatchObject({ delegation_id: null, content: expect.stringContaining('Topic: Shop as a whole.') as string });
     expect(t.call().topic).toBe('Shop');
     t.emit({ type: 'session.output_transcript.delta', delta: 'QA keeps failing on flaky tests.' });
+    expect(t.call().lines.map((l) => l.who)).toEqual(['captain', 'office', 'ship']);
     await t.say('Make that a goal', 'd2');
     expect(t.call()).toMatchObject({ step: 'dictating', capture: 'What should the new goal in Shop be?' });
     await t.say('Fix the flaky tests', 'd3');
     expect(t.call()).toMatchObject({ step: 'confirming', pending: 'Start a new goal in Shop: "Fix the flaky tests"? It takes the notes from this call with it.' });
     await t.say('Yes', 'd4');
-    expect(t.goals).toEqual([['p1', expect.stringMatching(/^Fix the flaky tests\n\nFrom a call with the captain about Shop:\n[^]*Ship: QA keeps failing on flaky tests\./) as string]]);
+    // the notes start where the topic did, after the captain asked for it
+    expect(t.goals).toEqual([['p1', expect.stringMatching(/^Fix the flaky tests\n\nFrom a call with the captain about Shop:\nShip: QA keeps failing on flaky tests\./) as string]]);
     expect(t.replies().at(-1)).toMatchObject({ delegation_id: 'd4', content: 'Queued "Fix the flaky tests" in Shop: every team station has a goal.' });
   });
 

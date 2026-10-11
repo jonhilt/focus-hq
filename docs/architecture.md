@@ -22,7 +22,7 @@ server/
   previews.ts             Preview: check a PR out, run the project's preview commands, find its links, tear it down (Effect: one Scope per preview)
   previewMachine.ts       what a preview does to this machine (shell commands in their own process group, signals, probes) as an Effect service
   github/                 GitHub as an Effect service: gh CLI layer (live), in-memory layer (demo), Promise adapter
-  call/                   calls to Number One: gpt-live-1's session and sideband (live.ts), Jev (jev.ts), what the captain asked for (route.ts) and how things stand (status.ts), both pure, the call's XState machine (machine.ts), a call end to end (calls.ts), the demo's scripted captain (demo.ts)
+  call/                   calls to Number One: gpt-live-1's session and sideband (live.ts), Jev (jev.ts), what the captain asked for (route.ts), how things stand (status.ts) and the briefing on a topic to talk through (brief.ts), all pure, the call's XState machine (machine.ts), a call end to end (calls.ts), the demo's scripted captain (demo.ts)
   agents/
     manager.ts            AgentManager: the office's one way in to its agents; each public method hands over to its part in manager/
     manager/              the manager's parts, each a concern of its own (Effect inside: a fiber per agent's work in a FiberMap)

@@ -35,7 +35,7 @@ export interface StartGoal {
 /** Something consequential the call does, once the captain has said yes to it. */
 export type Act =
   | { kind: 'start-queued'; start: StartGoal }
-  | { kind: 'new-goal'; projectId: string; projectName: string; title: string; text: string }
+  | { kind: 'new-goal'; projectId: string; projectName: string; title: string; said: string; text: string }
   | { kind: 'tell-lead'; leadId: string; leadName: string; said: string; text: string };
 
 /** What the captain asked to capture, waiting on their words for it. */
@@ -77,7 +77,7 @@ export function askFor(act: Act): string {
     case 'start-queued':
       return `Start "${act.start.title}" in ${act.start.projectName}, at station ${act.start.station + 1}?`;
     case 'new-goal':
-      return `Start a new goal in ${act.projectName}: "${act.title}"? It takes the notes from this call with it.`;
+      return `Start a new goal in ${act.projectName}: "${act.said}"? It takes the notes from this call with it.`;
     case 'tell-lead':
       return `Send ${act.leadName}: "${act.said}"?`;
   }
@@ -183,7 +183,7 @@ export function talkAbout(snapshot: Snapshot, ledger: LedgerEvent[], answers: Je
 function captureGoal(snapshot: Snapshot, answers: JevAnswers, topic?: Topic): Routing {
   const project = projectMeant(shownProjects(snapshot.projects), answers, topic);
   if (!project) return { kind: 'say', text: 'Which project should the goal go in?' };
-  return { kind: 'dictate', capture: { kind: 'new-goal', projectId: project.id, projectName: project.name }, ask: 'Ask the captain what the goal should be, in a sentence or two.' };
+  return { kind: 'dictate', capture: { kind: 'new-goal', projectId: project.id, projectName: project.name }, ask: 'What should the goal be? A sentence or two will do.' };
 }
 
 /** Passing something on to a goal's lead: the one named, or the lead of the goal being talked through. */
@@ -192,8 +192,11 @@ function captureForLead(snapshot: Snapshot, answers: JevAnswers, topic?: Topic):
   const goal = named?.kind === 'goal' ? named : topic?.kind === 'goal' ? topic : undefined;
   const lead = goal && snapshot.agents.find((a) => a.id === goal.leadId);
   if (!goal || !lead) return { kind: 'say', text: 'Which goal’s lead should I pass it to?' };
-  return { kind: 'dictate', capture: { kind: 'tell-lead', leadId: lead.id, leadName: lead.name }, ask: `Ask the captain what to tell ${lead.name}.` };
+  return { kind: 'dictate', capture: { kind: 'tell-lead', leadId: lead.id, leadName: lead.name }, ask: `What should I tell ${lead.name}?` };
 }
+
+/** What the captain said, as far as its first sentence, for reading back. */
+const firstSentence = (words: string) => (/^[^.!?\n]{1,160}[.!?]?/.exec(words.trim())?.[0] ?? words).replace(/[.!?]$/, '');
 
 /** The captain's words for a capture, as the act the ship reads back; or dropped, when they called it off. */
 export function dictated(capture: Capture, words: string, answers: JevAnswers, notes: string, topic?: Topic): Routing {
@@ -201,7 +204,7 @@ export function dictated(capture: Capture, words: string, answers: JevAnswers, n
   const about = topic ? ` about ${topic.title}` : '';
   const act: Act =
     capture.kind === 'new-goal'
-      ? { kind: 'new-goal', projectId: capture.projectId, projectName: capture.projectName, title: goalTitle(words), text: `${words}\n\nFrom a call with the captain${about}:\n${notes}` }
+      ? { kind: 'new-goal', projectId: capture.projectId, projectName: capture.projectName, title: goalTitle(words), said: firstSentence(words), text: `${words}\n\nFrom a call with the captain${about}:\n${notes}` }
       : { kind: 'tell-lead', leadId: capture.leadId, leadName: capture.leadName, said: words, text: `${words}\n\n(Said on a call with the captain${about}. The conversation:\n${notes})` };
   return { kind: 'confirm', act, ask: askFor(act) };
 }

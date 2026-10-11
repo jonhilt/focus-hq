@@ -13,7 +13,7 @@ The chat runs one turn at a time. It's saved in `~/.focus/state.json` with Numbe
 
 ## Calls
 
-**📞 Call** at the top of the panel talks to Number One hands-free, through OpenAI's realtime voice model: ask how things stand, or have them start the next queued goal, which they ask you to confirm first. See [Calls to Number One](calls.md).
+**📞 Call** at the top of the panel talks to Number One hands-free, through OpenAI's realtime voice model: ask how things stand, have them start the next queued goal, or talk a goal or a project through and turn it into a new goal or a word for its lead; anything that does something waits for your spoken yes. See [Calls to Number One](calls.md).
 
 ## Voice mode
 
