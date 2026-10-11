@@ -384,8 +384,13 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .chart-objective { fill: none; stroke: var(--lcars-peach); stroke-width: 1.5; stroke-dasharray: 3 6; opacity: 0.9; }
 .chart-done { height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; color: #000; font: 600 17px/1.1 var(--ui); overflow: hidden; }
 .chart-projected path { fill: none; stroke: var(--lcars-periwinkle); stroke-width: 2; stroke-dasharray: 2 7; stroke-linecap: round; }
-.chart-projected circle { fill: #000; stroke: var(--lcars-periwinkle); stroke-width: 2; }
+.chart-projected .mark { fill: #000; stroke: var(--lcars-periwinkle); stroke-width: 2; }
+.chart-projected .hit { fill: transparent; }
 .chart-projected text { fill: var(--lcars-periwinkle); font-size: 15px; }
+.chart-idea { cursor: pointer; outline: none; }
+.chart-idea:hover text, .chart-idea:focus-visible text { text-decoration: underline; }
+.chart-idea.picked .mark { stroke: var(--lcars-gold); stroke-width: 3; }
+.chart-idea.picked text { fill: var(--lcars-gold); }
 .chart-scrubbed path { fill: none; stroke: var(--lcars-red); stroke-width: 2.5; stroke-dasharray: 7 6; }
 .chart-scrubbed path.cross { stroke-dasharray: none; stroke-width: 3; }
 .chart-scrubbed text { fill: var(--muted); font-size: 14px; }
@@ -410,6 +415,7 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .chart-threads li.dropped { color: var(--muted); }
 .chart-threads li.dropped .chart-thread > span { text-decoration: line-through; }
 .chart-threads li.dropped::before { border-color: #4b4466; }
+.chart-ideas li::before { border-radius: 50%; transform: none; border-color: var(--lcars-periwinkle); }
 .chart-threads small { display: block; color: var(--muted); font-size: 13px; letter-spacing: 0.04em; }
 .chart-wp { cursor: pointer; outline: none; }
 .chart-wp .hit { fill: transparent; }

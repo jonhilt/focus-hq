@@ -98,12 +98,22 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: Picked, nav: Nav)
   const done = goal.note?.done;
 
   const last = plot.points.at(-1) ?? plot.launch;
+  // what's next: each opens its own log, the idea in full
   const projected = s('g', { class: 'chart-projected' },
-    ...plot.projected.flatMap((p) => [
-      s('path', { d: `M${last.x} ${last.y} L${p.to.x} ${p.to.y}` }),
-      s('circle', { cx: p.to.x, cy: p.to.y, r: 6 }, s('title', {}, `Projected: ${p.text}`)),
-      p.label ? s('text', { x: p.label.x, y: p.label.y, 'text-anchor': p.label.anchor }, p.text) : null,
-    ]));
+    ...plot.projected.map((p, i) => {
+      const g = s('g', { class: `chart-idea${i === selected.idea ? ' picked' : ''}`, tabindex: 0, role: 'button' },
+        s('title', {}, `Projected: ${goal.note?.next[i] ?? p.text}`),
+        s('path', { d: `M${last.x} ${last.y} L${p.to.x} ${p.to.y}` }),
+        s('circle', { class: 'hit', cx: p.to.x, cy: p.to.y, r: 14 }),
+        s('circle', { class: 'mark', cx: p.to.x, cy: p.to.y, r: 6 }),
+        p.label ? s('text', { x: p.label.x, y: p.label.y, 'text-anchor': p.label.anchor }, p.text) : null,
+      );
+      g.addEventListener('click', () => nav.idea(i));
+      g.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') nav.idea(i);
+      });
+      return g;
+    }));
 
   const scrubbed = s('g', { class: 'chart-scrubbed' },
     ...plot.scrubbed.flatMap((x) => [
@@ -179,16 +189,39 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: Picked, nav: Nav)
 const section = (label: string, tone: string, ...body: (Node | string | null)[]) => h('section', null, h('h4', { style: `--tone:${tone}` }, label), ...body);
 const prOf = (prs: LeadPr[], repo: string, pr: number) => prs.find((p) => p.repo === repo && p.number === pr);
 
-/** Which waypoint's log is beside the chart, or which contact's when one's picked. */
+/** Which waypoint's log is beside the chart, or which contact's, or which projected course's (its place in what's next). */
 interface Picked {
   slice: number;
   contact?: string;
+  idea?: number;
 }
 
-/** Picking a waypoint, or a contact, to see beside the chart. */
+/** Picking a waypoint, a contact or a projected course, to see beside the chart. */
 interface Nav {
   slice: (slice: number) => void;
   contact: (id: string) => void;
+  idea: (index: number) => void;
+}
+
+/** What's next as a list, each opening its own log. */
+const ideaList = (ideas: string[], nav: Nav, except?: number) =>
+  h('ul', { class: 'chart-threads chart-ideas' }, ...ideas.flatMap((idea, i) =>
+    i === except ? [] : [h('li', null, h('button', { class: 'chart-thread', onclick: () => nav.idea(i) }, h('span', null, idea)))]));
+
+/** A projected course's log: the lead's idea for what's next in full, where it heads on from, and the other ideas. */
+function ideaView(goal: ChartGoal, ideas: string[], index: number, nav: Nav): HTMLElement {
+  const objective = section('Objective', LCARS.peach, h('p', null, goal.note?.done || 'Not agreed yet'));
+  const from = goal.waypoints.at(-1);
+  return h('div', { class: 'chart-log' },
+    objective,
+    h('div', { class: 'chart-log-head' },
+      h('h3', null, `Projected course ${index + 1} of ${ideas.length}`),
+      h('small', null, 'An idea for what’s next, not yet set')),
+    section('Heading for', LCARS.periwinkle, h('p', null, ideas[index])),
+    from ? section('On from', LCARS.orange, waypointLink(goal, from.slice, nav)) : null,
+    ideas.length > 1 ? section('Other courses', LCARS.periwinkle, ideaList(ideas, nav, index)) : null,
+    h('p', { class: 'muted' }, 'The lead rewrites these as the goal moves on: one becomes a waypoint once a slice ships it.'),
+  );
 }
 
 /** Loose threads as a list, each opening its own log. */
@@ -234,6 +267,7 @@ function logView(goal: ChartGoal, w: Waypoint | undefined, nav: Nav, tick?: (sli
     : now ? `Under way since ${stardate(w.startedAt)} · ${span(Date.now() - w.startedAt)}` : `Started ${stardate(w.startedAt)} · never landed`;
   const checklist = now && goal.note?.slice.length ? goal.note.slice : [];
   const prs = goal.prs.filter((p) => p.slice === w.slice);
+  const ideas = goal.note?.next ?? [];
   return h('div', { class: 'chart-log' },
     objective,
     h('div', { class: 'chart-log-head' },
@@ -251,6 +285,7 @@ function logView(goal: ChartGoal, w: Waypoint | undefined, nav: Nav, tick?: (sli
     spotChecksView(w, goal.prs, tick),
     threads('Noticed here', goal.contacts.filter((c) => c.slice === w.slice)),
     prs.length ? section('Pull requests', LCARS.periwinkle, h('div', { class: 'row' }, ...prs.map(prLink))) : null,
+    ideas.length && w === goal.waypoints.at(-1) && !goal.closedAt ? section(`Projected · ${ideas.length}`, LCARS.periwinkle, ideaList(ideas, nav)) : null,
     open,
   );
 }
@@ -356,10 +391,17 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
     slice: (slice) => {
       picked.slice = slice;
       delete picked.contact;
+      delete picked.idea;
       render();
     },
     contact: (id) => {
       picked.contact = id;
+      delete picked.idea;
+      render();
+    },
+    idea: (index) => {
+      picked.idea = index;
+      delete picked.contact;
       render();
     },
   };
@@ -367,16 +409,19 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
     const g = goal();
     if (!g) return;
     const key = JSON.stringify(g);
-    const pickKey = `${picked.slice}:${picked.contact ?? ''}`;
+    const pickKey = `${picked.slice}:${picked.contact ?? ''}:${picked.idea ?? ''}`;
     if (key === drawn && pickKey === drawnPick) return;
     const scrolled = pickKey === drawnPick ? body.querySelector('.chart-log')?.scrollTop ?? 0 : 0;
     drawn = key;
     drawnPick = pickKey;
     const plot = plotCourse({ waypoints: g.waypoints, current: g.current, next: g.note?.next ?? [], contacts: g.contacts, seed: g.id });
     const contact = g.contacts.find((c) => c.id === picked.contact);
+    const ideas = g.note?.next ?? [];
     const log = contact
       ? contactView(g, contact, nav)
-      : logView(g, g.waypoints.find((w) => w.slice === picked.slice), nav, liveId ? (slice, index, checked) => void api.tickSpotCheck(liveId, slice, index, checked).catch((err: Error) => ui.error(err.message)) : undefined, () => shown(ui));
+      : picked.idea !== undefined && ideas[picked.idea] !== undefined
+        ? ideaView(g, ideas, picked.idea, nav)
+        : logView(g, g.waypoints.find((w) => w.slice === picked.slice), nav, liveId ? (slice, index, checked) => void api.tickSpotCheck(liveId, slice, index, checked).catch((err: Error) => ui.error(err.message)) : undefined, () => shown(ui));
     fill(body, h('div', { class: 'chart-map' }, chartSvg(g, plot, picked, nav), readout(g)), log);
     log.scrollTop = scrolled;
   };
