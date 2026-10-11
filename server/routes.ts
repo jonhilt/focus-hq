@@ -212,6 +212,14 @@ export function apiRouter(office: Office, store: Store): express.Router {
     res.type('audio/wav').send(await office.voice.speak(text.slice(0, 1000), req.body.voice));
   }));
 
+  // calls to Number One: the browser's WebRTC offer in, the session's id and answer out; the office joins the call itself
+  r.post('/call', h((req) => {
+    const sdp = str(req.body.sdp);
+    if (!sdp) throw new Error('Send the WebRTC offer');
+    return office.calls.start(sdp);
+  }));
+  r.post('/call/:id/hang-up', h((req) => office.calls.hangUp(param(req, 'id'))));
+
   r.use((_req, res) => res.status(404).json({ error: 'Not found' }));
   return r;
 }

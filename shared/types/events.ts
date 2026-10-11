@@ -2,6 +2,7 @@
 
 import type { ReportCard } from '../ledger';
 import type { Agent, BrowserFrame, TermLine } from './agents';
+import type { CallState, CallStatus } from './call';
 import type { IssueDraft } from './drafts';
 import type { Board, GitHubStatus } from './github';
 import type { NumberOneChat } from './numberOne';
@@ -33,6 +34,8 @@ export interface Snapshot {
   numberOne: NumberOneChat;
   reviews: QaReview[];
   voice: VoiceStatus;
+  /** Whether the office can take a call, and the one under way. */
+  call: CallStatus;
   /** The ledger's last 30 days, summed up for the chief engineer's screen. */
   report: ReportCard;
   /** The chief engineer's latest retro. */
@@ -57,5 +60,6 @@ export type ServerEvent =
   | { type: 'report'; report: ReportCard }
   | { type: 'retro'; retro: Retro }
   | { type: 'voice'; voice: VoiceStatus }
+  | { type: 'call'; call: CallState | null }
   /** projectId, or the agent's, lets the browser drop toasts about a hidden project. */
   | { type: 'toast'; level: 'info' | 'success' | 'error'; text: string; agentId?: string; projectId?: string };

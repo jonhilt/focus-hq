@@ -70,6 +70,12 @@ export const whisper = {
   modelUrl: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin',
 };
 
+/** The keys for calls to Number One (see server/call/): OpenAI's for gpt-live-1, TypeSafe's for Jev. */
+export const callKeys = {
+  openai: process.env.OPENAI_API_KEY || undefined,
+  typesafe: process.env.TYPESAFE_API_KEY || undefined,
+};
+
 /** Kokoro, the crew's voices (see server/speech.ts), run through kokoro-js in a process of its own (server/speechWorker.ts). */
 export const kokoro = {
   model: 'onnx-community/Kokoro-82M-v1.0-ONNX',

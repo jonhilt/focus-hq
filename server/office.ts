@@ -8,6 +8,7 @@ import type { Closer } from '../shared/ledger';
 import { autoMergeFor, type GateMark, mergeMethodFor, mergeStep, type MergeStep, requestedMerge } from '../shared/mergeGate';
 import { autoSendBackFor, prKey } from '../shared/qa';
 import type { AgentManager } from './agents/manager';
+import type { Calls } from './call/calls';
 import type { ChiefEngineer } from './agents/engineer';
 import type { NumberOne } from './agents/numberOne';
 import type { IssuePlanner } from './agents/planner';
@@ -47,6 +48,7 @@ export class Office {
     readonly numberOne: NumberOne,
     readonly engineer: ChiefEngineer,
     readonly voice: Voice,
+    readonly calls: Calls,
     version: string,
   ) {
     this.info = {
@@ -85,6 +87,7 @@ export class Office {
       numberOne: this.numberOne.current(),
       reviews: [...this.store.reviews.values()],
       voice: this.voice.status(),
+      call: this.calls.status(),
       report: this.agents.report(),
       retro: this.engineer.current(),
     };

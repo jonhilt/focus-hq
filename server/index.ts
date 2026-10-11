@@ -18,7 +18,9 @@ import { IssuePlanner } from './agents/planner';
 import type { WorkspaceOps } from './agents/types';
 import * as git from './agents/workspace';
 import { demoLedger } from './demoLedger';
-import { config, paths } from './config';
+import type { Snapshot } from '../shared/types';
+import { Calls } from './call/calls';
+import { callKeys, config, paths } from './config';
 import { demoLayer, demoPush } from './github/demo';
 import { ghCliLayer } from './github/ghCli';
 import { GitHub, toProvider } from './github/service';
@@ -98,7 +100,9 @@ async function main() {
     record: (projectId, entry, at) => office.agents.record(projectId, entry, at),
     pauseMs: config.demo ? 500 : 20_000,
   });
-  const office = new Office(store, hub, github, previews, planner, numberOne, engineer, new Voice(hub, config.demo), await currentVersion());
+  // calls to Number One read the ship and start queued goals through the office, which is up by the time anyone calls
+  const calls: Calls = new Calls(hub, { snapshot: (): Promise<Snapshot> => office.snapshot(), startQueued: (projectId, queueId, station) => office.agents.startQueued(projectId, queueId, { station }) }, callKeys, config.demo);
+  const office = new Office(store, hub, github, previews, planner, numberOne, engineer, new Voice(hub, config.demo), calls, await currentVersion());
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
   // each agent session is digested into the ledger as it ends: the demo's agents have no transcripts
