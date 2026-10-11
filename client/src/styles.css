@@ -388,6 +388,19 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .chart-projected .hit { fill: transparent; }
 .chart-projected text { fill: var(--lcars-periwinkle); font-size: 15px; }
 .chart-idea { cursor: pointer; outline: none; }
+.chart-probe { cursor: pointer; }
+.chart-probe .trail { fill: none; stroke: var(--lcars-sky); stroke-width: 1.5; stroke-dasharray: 2 6; opacity: 0.55; }
+.chart-probe .glow { fill: var(--lcars-sky); opacity: 0.18; }
+.chart-probe .ship { fill: #f1eaff; stroke: var(--lcars-sky); stroke-width: 1.5; }
+.chart-probe .what { fill: var(--lcars-sky); font-size: 14px; letter-spacing: 0.04em; }
+.chart-probe .doing { fill: var(--muted); font-size: 13px; }
+.chart-probe .pulse { fill: var(--lcars-green); }
+.chart-probe.sent .glow { fill: var(--lcars-green); }
+.chart-probe.sent .doing { fill: var(--lcars-green); }
+.chart-probe.lost .pulse, .chart-probe.lost .glow { fill: var(--lcars-red); }
+.chart-probe.lost .doing { fill: var(--lcars-red); }
+.chart-probe-list p { margin: 2px 0; font-size: 14px; color: var(--text); }
+.chart-probe-list .inline { display: inline; color: var(--muted); }
 .chart-idea:hover text, .chart-idea:focus-visible text { text-decoration: underline; }
 .chart-idea.picked .mark { stroke: var(--lcars-gold); stroke-width: 3; }
 .chart-idea.picked text { fill: var(--lcars-gold); }

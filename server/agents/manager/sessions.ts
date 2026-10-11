@@ -11,6 +11,7 @@ import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
 import { Sessions, Workspace } from '../services';
 import { applyTaskTool } from '../tasks';
 import { applyWorkflowEvent, WORKFLOW_LINGER_MS } from '../workflows';
+import { endedProbe, launchedProbe } from '../waypoints';
 import { type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN } from '../types';
 import { EmptyRepository, FINISHED, type ManagerServices, Part, Refused, ReportGone, withNotes, type WorkError } from './core';
 
@@ -116,9 +117,16 @@ export class AgentSessions extends Part {
         // only a lead's helpers have somewhere to sit: the lead's team station
         if (agent.task !== 'lead') return;
         const before = agent.helpers ?? [];
-        const helpers = applyHelperEvent(before, event, Date.now(), agent.effort);
+        const now = Date.now();
+        const helpers = applyHelperEvent(before, event, now, agent.effort);
         if (helpers === before) return;
-        this.update(agent, { helpers });
+        // each one's a probe on the goal's chart, from the slice under way
+        const work = agent.lead;
+        const waypoints = !work ? undefined
+          : event.kind === 'started' ? launchedProbe(work, event, now)
+          : event.kind === 'ended' ? endedProbe(work, event, now)
+          : undefined;
+        this.update(agent, { helpers, ...(work && waypoints && { lead: { ...work, waypoints } }) });
         if (event.kind === 'started') this.print(agent, [{ kind: 'system', text: `✻ ${helperFor(event.id).name} joins ${agent.name}'s team station: ${event.description}` }]);
         // a helper that's done lingers a moment, so you see how it got on
         if (event.kind === 'ended') {

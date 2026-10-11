@@ -1,11 +1,11 @@
 // A goal's slices as waypoints on its chart: what each set out to do, what it taught us, and when. The office keeps
 // them as the lead ships, notes and lands each slice; these are the pure decisions, and the manager's parts call them.
 
-import type { ChecksState, Evidence, GoalNote, LeadWork, QaReport, SpotCheck, Waypoint } from '../../shared/types';
+import type { ChecksState, Evidence, GoalNote, LeadWork, Probe, QaReport, SpotCheck, Waypoint } from '../../shared/types';
 import type { NoteInput } from './lead';
 
 /** How much a waypoint keeps: they all travel with the goal on every update, so each stays a few lines long. */
-export const WAYPOINT_LIMITS = { summary: 280, learned: 3, kept: 40 } as const;
+export const WAYPOINT_LIMITS = { summary: 280, learned: 3, kept: 40, probes: 6, probeSummary: 200 } as const;
 
 type Course = Pick<LeadWork, 'slice' | 'waypoints'>;
 
@@ -134,3 +134,21 @@ export const EVIDENCE_PER_PR = 4;
 /** What a screenshot is called among the goal's own files: the repo, pull request and its place, keeping QA's image type. */
 export const evidenceFile = (repo: string, pr: number, index: number, shot: string): string =>
   `shot-${repo.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${pr}-${index + 1}.${/\.(png|svg)$/.exec(shot)?.[1] ?? 'jpg'}`;
+
+/** The waypoints once the lead sends a helper out: a probe from the slice under way (the same helper twice is one probe). */
+export function launchedProbe(work: Course, helper: { id: string; description: string; type?: string }, now: number): Waypoint[] {
+  if (work.waypoints?.some((w) => w.probes?.some((p) => p.id === helper.id))) return work.waypoints ?? [];
+  const probe: Probe = { id: helper.id, description: helper.description.replace(/\s+/g, ' ').trim() || 'Exploring', ...(helper.type && { type: helper.type }), launchedAt: now };
+  return withWaypoint(work, now, (w) => ({ ...w, probes: [...(w.probes ?? []), probe].slice(-WAYPOINT_LIMITS.probes) }));
+}
+
+/** The waypoints once a helper reports back: its probe, wherever it was launched, ends with how it went and what it said. */
+export function endedProbe(work: Course, helper: { id: string; ok: boolean; summary?: string }, now: number): Waypoint[] | undefined {
+  const at = work.waypoints?.find((w) => w.probes?.some((p) => p.id === helper.id && !p.endedAt));
+  if (!at) return undefined;
+  const summary = helper.summary && opening(helper.summary, WAYPOINT_LIMITS.probeSummary);
+  return withWaypoint(work, now, (w) => ({
+    ...w,
+    probes: w.probes!.map((p) => (p.id === helper.id ? { ...p, endedAt: now, ok: helper.ok, ...(summary && { summary }) } : p)),
+  }), at.slice);
+}

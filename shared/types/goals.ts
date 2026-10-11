@@ -53,6 +53,25 @@ export interface Waypoint {
   spotChecks?: SpotCheck[];
   /** What the slice does, seen: the screenshots QA took of its pull requests, as it last tested each. */
   evidence?: Evidence[];
+  /** The helpers the lead sent out to explore during the slice, as probes, the latest few. */
+  probes?: Probe[];
+}
+
+/**
+ * A helper (a subagent) the lead sent out during a slice, as a probe on the goal's chart: it flies out from the waypoint
+ * while it works, transmits what it found back when it reports, and is gone. `id` is the helper's (`Helper.id`).
+ */
+export interface Probe {
+  id: string;
+  description: string;
+  /** The kind of subagent: Explore, general-purpose… */
+  type?: string;
+  launchedAt: number;
+  /** Missing while it's out (or if it never reported: the office restarted under it). */
+  endedAt?: number;
+  ok?: boolean;
+  /** The opening of what it reported, cut short. */
+  summary?: string;
 }
 
 /**

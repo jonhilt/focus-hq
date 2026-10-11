@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import { UNIFORM } from '../../../shared/crew';
-import type { Agent, Avatar } from '../../../shared/types';
+import type { Agent, Avatar, Helper } from '../../../shared/types';
 import { canvasTexture, fitFont, fitText, makeCanvas, UI_FONT, wrap } from './canvas';
 import type { CrewView } from './character';
 import { checklistGlance, type GoalRoomTone, goalRoomState, leadNow, type NoteSection, noteSections, type PrGlance, rowAt, sliceProgress } from './goalRoom';
 import { flat } from './materials';
 import { portrait } from './portraits';
 import { LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
-import { type CoursePlot, everySlice, type Label, leaderEnd, plotCourse, seeded, shieldState } from '../ui/course';
+import { clip, type CoursePlot, everySlice, type Label, leaderEnd, plotCourse, type ProbeFlight, probeFlights, seeded, shieldState } from '../ui/course';
 
 // What a team station shows of its goal besides the lead's session. What floats in the holodeck is drawn like the
 // holograms over the pods in Lower Decks, glowing cyan on dark glass: the sign over the station's door (also lit on the
@@ -128,6 +128,11 @@ abstract class Display {
     const key = JSON.stringify(this.keyOf(view));
     if (key === this.key) return;
     this.key = key;
+    this.redraw(view);
+  }
+
+  /** Draws it again, whether or not anything it draws from has changed: for one that moves. */
+  protected redraw(view: StationView): void {
     this.c.ctx.clearRect(0, 0, this.c.canvas.width, this.c.canvas.height);
     this.draw(view);
     this.texture.needsUpdate = true;
@@ -561,13 +566,34 @@ export class ChartScreen extends Display {
   static readonly W = GoalBoard.W;
   static readonly H = GoalBoard.H;
 
+  /** What it last showed, and whether any probes were in flight on it then (and when it was drawn), to keep them moving. */
+  private last?: StationView;
+  private flying = false;
+  private sending = false;
+  private drawnAt = 0;
+
   constructor() {
     super(ChartScreen.W, ChartScreen.H, false);
   }
 
+  override show(view: StationView): void {
+    this.last = view;
+    super.show(view);
+  }
+
+  /**
+   * Draws it again while probes are in flight on it: a dozen times a second while one's transmitting, four while they
+   * only drift on out. Called each frame you're in its room.
+   */
+  animate(now: number): void {
+    if (!this.flying || !this.last || now - this.drawnAt < (this.sending ? 80 : 250)) return;
+    this.redraw(this.last);
+  }
+
   protected override keyOf(view: StationView): unknown {
     const work = view.lead?.lead;
-    return [view.index, view.accent, work && [work.title, work.slice, work.note?.done, work.note?.next, work.waypoints, work.contacts]];
+    const out = view.lead?.helpers?.filter((x) => x.status === 'working').map((x) => x.id);
+    return [view.index, view.accent, work && [work.title, work.slice, work.note?.done, work.note?.next, work.waypoints, work.contacts, out]];
   }
 
   protected draw({ accent, lead }: StationView): void {
@@ -607,7 +633,13 @@ export class ChartScreen extends Display {
     ctx.save();
     ctx.translate(area.x + (area.w - plot.width * scale) / 2, area.y + (area.h - plot.height * scale) / 2);
     ctx.scale(scale, scale);
+    const out = new Set((lead.helpers ?? []).filter((x) => x.status === 'working').map((x) => x.id));
+    const flights = probeFlights(plot, waypoints, out, Date.now(), BIG);
+    this.flying = flights.length > 0;
+    this.sending = flights.some((f) => f.phase === 'transmitting');
+    this.drawnAt = performance.now();
     drawCourse(ctx, plot, work.note?.done, lead.id);
+    drawProbes(ctx, flights, lead.helpers ?? [], plot.sizes.contact);
     ctx.restore();
 
     // the waypoint under way, down the right-hand side
@@ -658,6 +690,60 @@ export class ChartScreen extends Display {
 
 /** How much bigger the chart's words are on the wall than in the panel, to read from the command carpet. */
 const BIG = 1.5;
+
+/** The probes in flight, as the chart panel draws them (ui/chartPanel.ts): out with what they're doing, or transmitting home. */
+function drawProbes(ctx: CanvasRenderingContext2D, flights: ProbeFlight[], helpers: Helper[], size: number): void {
+  const GREEN = '#99cc66';
+  for (const f of flights) {
+    const tone = f.phase === 'out' ? LCARS.sky : f.probe.ok ? GREEN : LCARS.red;
+    ctx.globalAlpha = f.phase === 'out' ? 1 : 1 - f.sent * f.sent;
+    ctx.strokeStyle = LCARS.sky;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([2, 6]);
+    ctx.beginPath();
+    ctx.moveTo(f.from.x, f.from.y);
+    ctx.lineTo(f.x, f.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (f.phase === 'transmitting') {
+      ctx.fillStyle = tone;
+      for (const k of [0, 0.33, 0.66]) {
+        const along = (f.sent * 3 + k) % 1;
+        ctx.beginPath();
+        ctx.arc(f.x + (f.from.x - f.x) * along, f.y + (f.from.y - f.y) * along, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    const glow = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, 20);
+    glow.addColorStop(0, tone);
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, 20, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.save();
+    ctx.translate(f.x, f.y);
+    ctx.rotate(f.angle);
+    ctx.fillStyle = '#f1eaff';
+    ctx.beginPath();
+    ctx.moveTo(-7, -7);
+    ctx.lineTo(11, 0);
+    ctx.lineTo(-7, 7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    const said = f.phase === 'out' ? helpers.find((x) => x.id === f.probe.id)?.activity ?? 'Exploring' : `${f.probe.ok ? 'Transmitting' : 'Lost'}: ${f.probe.summary ?? (f.probe.ok ? 'done' : 'it hit a problem')}`;
+    ctx.textAlign = f.label.anchor === 'start' ? 'left' : f.label.anchor === 'end' ? 'right' : 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = `600 ${size}px ${LCARS_FONT}`;
+    ctx.fillStyle = LCARS.sky;
+    ctx.fillText(`PROBE · ${clip(f.probe.description, 30)}`, f.label.x, f.label.y);
+    ctx.font = `${size * 0.85}px ${LCARS_FONT}`;
+    ctx.fillStyle = f.phase === 'out' ? '#a49db4' : tone;
+    ctx.fillText(clip(said, 36), f.label.x, f.label.y + size);
+    ctx.globalAlpha = 1;
+  }
+}
 
 /** The course on a canvas already scaled to the plot's units: as the chart panel draws it (ui/chartPanel.ts), without the fog. */
 function drawCourse(ctx: CanvasRenderingContext2D, plot: CoursePlot, done: string | undefined, seed: string): void {

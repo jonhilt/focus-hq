@@ -3,7 +3,7 @@
 // the lead's ideas for what's next fanning out ahead of it, and the loose threads noticed on the way as sensor contacts
 // off to the side of the waypoint that noticed them. Pure, so the chart panel only draws it.
 
-import type { Contact, Shield, Waypoint } from '../../../shared/types';
+import type { Contact, Probe, Shield, Waypoint } from '../../../shared/types';
 
 export interface Pt {
   x: number;
@@ -364,4 +364,63 @@ export function shieldState(shields: readonly Shield[] | undefined): 'none' | 'h
   if (!shields?.length) return 'none';
   if (shields.some((s) => s.verdict === 'fail' || s.ci === 'failing')) return 'down';
   return shields.some((s) => s.failedRounds > 0) ? 'absorbed' : 'held';
+}
+
+/** How long a probe takes to transmit what it found back to its waypoint, once it reports, before it's gone. */
+export const TRANSMIT_MS = 6000;
+/** How far out a probe ends up, and how long it takes to get most of the way there. */
+const PROBE_REACH = 190;
+const PROBE_PACE = 20_000;
+
+/** A probe in flight on the chart: out from its waypoint, or transmitting home (`sent` of the way through) before it's gone. */
+export interface ProbeFlight extends Pt {
+  probe: Probe;
+  slice: number;
+  from: Pt;
+  /** Which way it's heading, in radians. */
+  angle: number;
+  phase: 'out' | 'transmitting';
+  sent: number;
+  label: Label;
+}
+
+/**
+ * Where each of the voyage's probes is at `now`: one still out (`out` says which helpers are still working) drifts on
+ * away from the waypoint that launched it, slowing as it goes, off to one side of the way ahead; one that has
+ * reported sits where it was, transmitting, for `TRANSMIT_MS`; after that, or if it never reported, it's not drawn.
+ */
+export function probeFlights(plot: CoursePlot, waypoints: Waypoint[], out: ReadonlySet<string>, now: number, scale = 1): ProbeFlight[] {
+  const { width, height, pad } = CHART;
+  // each label is two lines (what it was sent to find, and what it's doing), moved up or down off any before it
+  const size = LABEL_SIZE.contact * scale;
+  const taken: Box[] = [];
+  const twoLines = (l: Label): Box => {
+    const b = labelBox(l, 'PROBE · '.padEnd(48, 'x'), size * 0.95);
+    return { ...b, y1: b.y1 + size };
+  };
+  const clear = (l: Label): Label => {
+    const tries = [0, 1, -1, 2, -2].map((n) => ({ ...l, y: l.y + n * size * 2.2 }));
+    const found = tries.find((t) => !taken.some((b) => overlaps(b, twoLines(t)))) ?? l;
+    taken.push(twoLines(found));
+    return found;
+  };
+  return waypoints.flatMap((w) => {
+    const from = plot.points.find((p) => p.waypoint.slice === w.slice);
+    if (!from) return [];
+    return (w.probes ?? []).flatMap((probe, k) => {
+      const phase = probe.endedAt ? 'transmitting' : 'out';
+      if (phase === 'out' ? !out.has(probe.id) : now - probe.endedAt! > TRANSMIT_MS) return [];
+      // a waypoint's probes fan out either side of the way ahead, each a little wider than the pair before, so ones
+      // launched together part company
+      const ahead = Math.atan2(plot.objective.y - from.y, plot.objective.x - from.x);
+      const angle = ahead + (k % 2 ? 1 : -1) * (0.6 + 0.4 * Math.floor(k / 2)) + (seeded(probe.id)() - 0.5) * 0.15;
+      const flown = Math.max(0, (probe.endedAt ?? now) - probe.launchedAt);
+      const d = 40 + (PROBE_REACH - 40) * (1 - Math.exp(-flown / PROBE_PACE));
+      const x = Math.max(pad / 2, Math.min(width - pad / 2, from.x + Math.cos(angle) * d));
+      const y = Math.max(pad / 2, Math.min(height - pad / 2, from.y + Math.sin(angle) * d));
+      const sent = phase === 'out' ? 0 : Math.min(1, (now - probe.endedAt!) / TRANSMIT_MS);
+      const label = clear(x < width - 260 * scale ? { x: x + 16, y: y - 8, anchor: 'start' } : { x: x - 16, y: y - 8, anchor: 'end' });
+      return [{ x, y, probe, slice: w.slice, from: { x: from.x, y: from.y }, angle, phase, sent, label }];
+    });
+  });
 }

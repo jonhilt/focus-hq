@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Contact, Waypoint } from '../../../shared/types';
-import { type Box, CHART, clearOf, clip, type CoursePlot, everySlice, labelBox, overlaps, plotCourse, seeded, shieldState, smoothPath } from './course';
+import { type Box, CHART, clearOf, clip, type CoursePlot, everySlice, labelBox, overlaps, plotCourse, probeFlights, seeded, shieldState, smoothPath, TRANSMIT_MS } from './course';
 
 const wp = (slice: number, more: Partial<Waypoint> = {}): Waypoint => ({ slice, startedAt: slice * 10, landedAt: slice * 10 + 5, title: `Slice ${slice}`, ...more });
 const inside = (p: { x: number; y: number }) => p.x >= 0 && p.x <= CHART.width && p.y >= 0 && p.y <= CHART.height;
@@ -194,5 +194,45 @@ describe('shields', () => {
     expect(shieldState([shield('pass', 1), shield('pass')])).toBe('absorbed');
     expect(shieldState([shield('pass', 1), shield('fail', 1)])).toBe('down');
     expect(shieldState([shield('pass', 0, 'failing')])).toBe('down');
+  });
+});
+
+describe('probes on the chart', () => {
+  const probe = (id: string, launchedAt: number, more = {}) => ({ id, description: `Probe ${id}`, launchedAt, ...more });
+  const waypoints = [wp(1), { slice: 2, startedAt: 20, probes: [probe('a', 1000), probe('b', 1000, { endedAt: 61_000, ok: true }), probe('c', 1000)] }];
+  const plot = plotCourse({ waypoints, current: 2, next: [], seed: 's' });
+  const from = plot.points[1];
+
+  it('flies one that’s out away from its waypoint, further the longer it’s been out, and stays on the chart', () => {
+    const [early] = probeFlights(plot, waypoints, new Set(['a']), 2000);
+    const [late] = probeFlights(plot, waypoints, new Set(['a']), 600_000);
+    const dist = (p: { x: number; y: number }) => Math.hypot(p.x - from.x, p.y - from.y);
+    expect(early.phase).toBe('out');
+    expect(early.from).toEqual({ x: from.x, y: from.y });
+    expect(dist(late)).toBeGreaterThan(dist(early));
+    expect(inside(late)).toBe(true);
+    // the same probe flies the same way every time the chart's drawn
+    expect(probeFlights(plot, waypoints, new Set(['a']), 2000)[0]).toEqual(early);
+  });
+
+  it('transmits one that has reported for a while, from where it got to, then it’s gone', () => {
+    const at = (now: number) => probeFlights(plot, waypoints, new Set(), now).filter((f) => f.probe.id === 'b');
+    const [sending] = at(61_000 + TRANSMIT_MS / 2);
+    expect(sending.phase).toBe('transmitting');
+    expect(sending.sent).toBeCloseTo(0.5);
+    expect(at(61_000 + TRANSMIT_MS * 2)).toEqual([]);
+    // it doesn't drift on while it transmits
+    expect(at(62_000)[0].x).toBe(sending.x);
+  });
+
+  it('parts company with another launched from the same waypoint', () => {
+    const [a, c] = probeFlights(plot, waypoints, new Set(['a', 'c']), 30_000);
+    expect(Math.hypot(a.x - c.x, a.y - c.y)).toBeGreaterThan(60);
+    // and their labels don't run into each other
+    expect(Math.abs(a.label.y - c.label.y)).toBeGreaterThan(plot.sizes.contact * 2);
+  });
+
+  it('draws none that never reported once its helper has gone', () => {
+    expect(probeFlights(plot, waypoints, new Set(['a']), 200_000).map((f) => f.probe.id)).toEqual(['a']);
   });
 });

@@ -600,6 +600,7 @@ export class ProjectRoom {
     for (const station of this.stations) {
       station.update(t);
       station.updateTransporters(t, now, camera, station === briefing);
+      if (station === briefing) station.animateChart(now);
       // only drawn while you're in it, or might see into it through its open door
       station.room.visible = station === briefing || station.portal.ajar;
       // in the briefing room, or seeing into it through the door
