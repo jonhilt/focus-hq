@@ -16,7 +16,8 @@
     "smoke": "tsx scripts/smoke.ts",
     "zfight": "tsx scripts/zfight.ts",
     "gaps": "tsx scripts/gaps.ts",
-    "ship": "tsx scripts/ship.ts"
+    "ship": "tsx scripts/ship.ts",
+    "crap": "tsx scripts/crap.ts"
   },
   "engines": {
     "node": ">=20"
@@ -42,6 +43,7 @@
     "@types/node": "^26.6.4",
     "@types/three": "^0.186.0",
     "@types/ws": "^8.18.2",
+    "@vitest/coverage-v8": "5.0.3",
     "eslint": "^10.12.0",
     "happy-dom": "^20.14.5",
     "typescript": "^5.9.3",
