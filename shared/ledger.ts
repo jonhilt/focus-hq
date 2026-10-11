@@ -1,5 +1,5 @@
 import type { QaBadgeState } from './qa';
-import type { AgentTask, GoalRecord, TriageAction } from './types';
+import type { AgentTask, ArchivedGoal, GoalRecord, TriageAction } from './types';
 
 // The ship's log of how work went: what QA said, who merged what and whether QA had passed it, conflicts, triage,
 // closed goals, and a digest of each agent session as it ends. The office appends to it as things happen and never
@@ -235,6 +235,16 @@ export interface ReportCard {
 }
 
 const DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * Every goal the ledger saw close, newest first, in `projectId`'s room or any: the archive of what leads showed, which
+ * outlives the room's log. A goal reopened and closed again is listed once, as it last closed.
+ */
+export function closedGoals(events: LedgerEvent[], projectId?: string): ArchivedGoal[] {
+  const goals = new Map<string, ArchivedGoal>();
+  for (const e of events) if (e.kind === 'goal-closed' && (!projectId || e.projectId === projectId)) goals.set(e.goal.id, { ...e.goal, projectId: e.projectId });
+  return [...goals.values()].sort((a, b) => b.closedAt - a.closedAt);
+}
 
 /** The last `days` of the ledger, summed up. */
 export function reportCard(events: LedgerEvent[], now: number, days = 30): ReportCard {

@@ -1,5 +1,6 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { EFFORT_LEVELS, type Effort, type PreviewSet, type ResumeHow } from '../shared/types';
+import { closedGoals } from '../shared/ledger';
 import { ledgerWindow } from '../shared/ledgerReview';
 import { isKokoroVoice } from '../shared/voice';
 import type { Office } from './office';
@@ -112,6 +113,8 @@ export function apiRouter(office: Office, store: Store): express.Router {
   // Number One in the ready room: one ship-wide chat, read-only
   r.post('/number-one/say', h((req) => office.numberOne.say(str(req.body.text))));
   r.post('/number-one/new', h(() => office.numberOne.newConversation()));
+  // every closed goal the ledger kept, so what its lead showed can be found once it's off the room's log
+  r.get('/goals/archive', h((req) => closedGoals(store.ledger, typeof req.query.project === 'string' ? req.query.project : undefined)));
   r.get('/ledger', h((req) => ledgerWindow(store.ledger, Date.now(), Number(req.query.days ?? 14))));
   r.get('/retro/preview', h((req) => office.engineer.preview(Number(req.query.days ?? 14))));
   r.post('/retro/start', h((req) => office.engineer.start(Number(req.body.days ?? 14))));

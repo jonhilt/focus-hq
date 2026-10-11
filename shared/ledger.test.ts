@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkLedger, fixEffects, frictionGroups, knownSignatures, type LedgerEvent, ledgerLine, reportCard, reportLines, type SessionFacts, unreadDigests } from './ledger';
+import { checkLedger, closedGoals, fixEffects, frictionGroups, knownSignatures, type LedgerEvent, ledgerLine, reportCard, reportLines, type SessionFacts, unreadDigests } from './ledger';
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = 100 * DAY;
@@ -148,5 +148,19 @@ describe('frictions read at retro time', () => {
 
   it('knows which spans are still to be read', () => {
     expect(unreadDigests([span('a'), span('b'), read('a', 'x')], NOW, 14).map((d) => d.sessionId)).toEqual(['b']);
+  });
+});
+
+describe('closedGoals', () => {
+  const closed = (id: string, projectId: string, closedAt: number): LedgerEvent =>
+    ({ projectId, seq: ++seq, at: closedAt, kind: 'goal-closed', goal: { id, title: id, slices: 1, prs: [], leadName: 'Lt. A', openedAt: 0, closedAt } });
+
+  it('lists every goal the ledger saw close, newest first, each once as it last closed, with its room', () => {
+    const goals = closedGoals([closed('g1', 'p', 1), merged(1, 'passed'), closed('g2', 'q', 2), closed('g1', 'p', 3)]);
+    expect(goals.map((g) => [g.id, g.projectId, g.closedAt])).toEqual([['g1', 'p', 3], ['g2', 'q', 2]]);
+  });
+
+  it('keeps to one room when asked', () => {
+    expect(closedGoals([closed('g1', 'p', 1), closed('g2', 'q', 2)], 'q').map((g) => g.id)).toEqual(['g2']);
   });
 });

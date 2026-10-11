@@ -122,6 +122,9 @@ export interface GoalRecord {
   closedAt: number;
 }
 
+/** A closed goal as the ledger keeps it, for good, with the room it was in: its artifacts are served by its `id`. */
+export type ArchivedGoal = GoalRecord & { projectId: string };
+
 /** A pull request a goal's lead shipped, and what became of it. */
 export interface LeadPr {
   repo: string;
