@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ServerEvent, StudioTake, StudioVideo } from '../../shared/types';
 import type { Hub } from '../hub';
 import { freshStudio, type Store } from '../store';
-import { applyTake, applyVideo, STUDIO_LIMITS, studioPrompt, type TakeInput, videoReply } from './studio';
+import { applyRetime, applyTake, applyVideo, STUDIO_LIMITS, studioPrompt, type TakeInput, videoReply } from './studio';
 import { StudioComputer, type StudioOfficer, type StudioTurn } from './studioComputer';
 
 const started = (more: Partial<StudioVideo> = {}): StudioVideo => ({ premise: 'How Claude delegates', beats: [], threads: [], ...more });
@@ -61,10 +61,18 @@ describe('applyTake', () => {
     expect(after.map((t) => [t.id, t.version, t.label, t.error])).toEqual([['a', 3, 'Slower', undefined], ['b', 1, 'B', undefined]]);
   });
 
-  it('keeps only the newest takes on the floor', () => {
+  it('keeps every take on the floor, and refuses a new one once it is full rather than dropping one', () => {
     let takes: StudioTake[] = [];
-    for (let i = 0; i < STUDIO_LIMITS.takes + 2; i++) takes = ok(applyTake(takes, take({ id: `t${i}` }), 0, i));
-    expect(takes.map((t) => t.id)).toEqual(['t2', 't3', 't4', 't5', 't6', 't7']);
+    for (let i = 0; i < STUDIO_LIMITS.takes; i++) takes = ok(applyTake(takes, take({ id: `t${i}` }), 0, i));
+    expect(applyTake(takes, take({ id: 'more' }), 0, 99)).toEqual({ error: expect.stringContaining('drop one first') });
+    expect(ok(applyTake(takes, take({ id: 't0', label: 'Again' }), 0, 99))).toHaveLength(STUDIO_LIMITS.takes);
+  });
+
+  it('keeps its metaphor and phases, and refuses phases that don’t fit its seconds', () => {
+    const [made] = ok(applyTake([], take({ metaphor: ' Runners   sent to stations ', phases: { send: [0, 4], back: [4, 10] } }), 0, 1));
+    expect(made).toMatchObject({ metaphor: 'Runners sent to stations', phases: { send: [0, 4], back: [4, 10] } });
+    expect(applyTake([], take({ phases: { send: [0, 12] } }), 0, 1)).toEqual({ error: expect.stringContaining('Phase send runs [0, 12]') });
+    expect(applyTake([], take({ phases: { 'two words': [0, 1] } }), 0, 1)).toHaveProperty('error');
   });
 
   it('refuses a script that doesn’t parse, a bad id, a beat that isn’t there, or a length out of range', () => {
@@ -73,6 +81,22 @@ describe('applyTake', () => {
     expect(applyTake([], take({ beat: 2 }), 2, 1)).toEqual({ error: expect.stringContaining('no beat 2') });
     expect(applyTake([], take({ seconds: 0.5 }), 0, 1)).toHaveProperty('error');
     expect(ok(applyTake([], take({ beat: 1 }), 2, 1))[0].beat).toBe(1);
+  });
+});
+
+describe('applyRetime', () => {
+  const staged: StudioTake[] = [{ id: 'b', label: 'B', seconds: 10, phases: { send: [0, 4], back: [4, 10] }, script: 'function render(t) {}', version: 2, at: 1, error: 'boom' }];
+
+  it('plays a take slower by stretching its length and every phase, its script untouched, a version on', () => {
+    const [b] = ok(applyRetime(staged, { id: 'B', speed: 0.5 }, 9));
+    expect(b).toEqual({ id: 'b', label: 'B', seconds: 20, phases: { send: [0, 8], back: [8, 20] }, script: 'function render(t) {}', version: 3, at: 9 });
+  });
+
+  it('sets new phases and length as given, and refuses ones that don’t fit or a take that isn’t there', () => {
+    expect(ok(applyRetime(staged, { id: 'b', seconds: 12, phases: { send: [0, 2], back: [2, 12] } }, 9))[0]).toMatchObject({ seconds: 12, phases: { send: [0, 2], back: [2, 12] } });
+    expect(applyRetime(staged, { id: 'b', seconds: 3 }, 9)).toEqual({ error: expect.stringContaining('Phase send') });
+    expect(applyRetime(staged, { id: 'z', speed: 2 }, 9)).toEqual({ error: expect.stringContaining('On the floor: b') });
+    expect(applyRetime(staged, { id: 'b', speed: 0.01 }, 9)).toHaveProperty('error');
   });
 });
 

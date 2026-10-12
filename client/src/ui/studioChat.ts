@@ -2,6 +2,7 @@ import { EFFORT_LEVELS, type StudioSession } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
+import { shownTakes } from '../world/studio';
 import type { Ui } from './context';
 import { withMic } from './dictation';
 import { busy, fill, h } from './dom';
@@ -114,7 +115,7 @@ export function openStudioChat(ui: Ui, beat?: number): void {
     );
     const takes = session?.takes ?? [];
     const onFloor = takes.length
-      ? h('div', { class: 'studio-takes' }, `On the floor: ${takes.slice(-3).map((t) => `${t.id.toUpperCase()} ${t.label}${t.error ? ' (stopped)' : ''}`).join(' · ')}`)
+      ? h('div', { class: 'studio-takes' }, `On the floor: ${shownTakes(takes).map((t) => `${t.id.toUpperCase()}${t.beat !== undefined ? ` (beat ${t.beat + 1})` : ''} ${t.label}${t.error ? ' (stopped)' : ''}`).join(' · ')}`)
       : null;
     fill(body, head, bar, log, onFloor, h('div', null, inputBox, h('div', { class: 'row' }, send)));
     if (messages.length !== shownMessages) {
@@ -148,7 +149,7 @@ function scriptView(session: StudioSession | null, picked?: number): HTMLElement
         h('h3', null, b.title),
         b.point ? h('p', { class: 'point' }, b.point) : null,
         b.lines ? h('blockquote', null, ...b.lines.split(/\n+/).map((l) => h('p', null, l))) : h('p', { class: 'muted' }, 'No lines yet.'),
-        shown.length ? h('p', { class: 'studio-takes' }, `Takes: ${shown.map((t) => `${t.id.toUpperCase()} ${t.label}`).join(' · ')}`) : null,
+        ...shown.map((t) => h('p', { class: 'studio-takes' }, h('b', null, `Take ${t.id.toUpperCase()}`), ` ${t.label}${t.metaphor ? `: ${t.metaphor}` : ''} (${t.seconds}s${t.phases ? `, ${Object.keys(t.phases).join(' → ')}` : ''})`)),
       );
     }),
     open.length || closed.length

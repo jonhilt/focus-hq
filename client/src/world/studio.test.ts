@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { StudioTake } from '../../../shared/types';
 import { ENTRANCE_X } from './hallLayout';
-import { beatsFrom, keepsHallCollider, type Lit, placeLights, plotZ, shownTakes, STUDIO_HALL, STUDIO_SPAN, STUDIO_WALL, studioWalls, TAKE_PLOT, threadLights } from './studio';
+import { beatsFrom, keepsHallCollider, type Lit, placeLights, shownTakes, spotCorners, STUDIO_HALL, STUDIO_SPAN, STUDIO_WALL, studioWalls, TAKE_PLOT, takeSpots, threadLights } from './studio';
 
 const lit = (n: number, settled?: Lit['settled']): Lit => ({ id: `t${n}`, text: `Thread ${n}?`, label: `Thread t${n}`, ...(settled ? { settled } : {}) });
 
@@ -50,21 +50,31 @@ describe('beatsFrom', () => {
 });
 
 describe('the takes on the floor', () => {
-  const take = (id: string): StudioTake => ({ id, label: id, seconds: 5, script: '', version: 1, at: 0 });
+  const take = (id: string, beat?: number): StudioTake => ({ id, label: id, seconds: 5, script: '', version: 1, at: 0, ...(beat !== undefined && { beat }) });
 
-  it('shows the newest few, in the order they were staged', () => {
-    expect(shownTakes(['a', 'b', 'c', 'd'].map(take)).map((t) => t.id)).toEqual(['b', 'c', 'd']);
+  it('shows every take, in beat order, each beat’s as first staged, any for no beat last', () => {
+    expect(shownTakes([take('a', 2), take('b'), take('c', 0), take('d', 2), take('e', 1)]).map((t) => t.id)).toEqual(['c', 'e', 'a', 'd', 'b']);
   });
 
-  it('centres the row across the hall, a plot and a gap apart, inside its round wall', () => {
-    const step = TAKE_PLOT.width + TAKE_PLOT.gap;
-    expect(plotZ(0, 1)).toBe(0);
-    expect([0, 1, 2].map((i) => plotZ(i, 3))).toEqual([-step, 0, step]);
-    // the far corners of the outer plots stay inside the hall's 11 m radius
-    const z = step + TAKE_PLOT.width / 2;
-    const x = TAKE_PLOT.x + TAKE_PLOT.depth / 2;
-    // with room to walk round the outer ones
-    expect(Math.hypot(x, z)).toBeLessThan(STUDIO_HALL.radius - 1.5);
+  it('stands them round the room inside its walls, apart, facing the middle, full size while they fit', () => {
+    for (let n = 1; n <= 12; n++) {
+      const spots = takeSpots(n);
+      expect(spots).toHaveLength(n);
+      for (const c of spots.flatMap(spotCorners)) {
+        expect(Math.hypot(c.x, c.z)).toBeLessThanOrEqual(STUDIO_HALL.radius - 0.29);
+        expect(c.x).toBeGreaterThan(ENTRANCE_X);
+      }
+      // neighbours a floor's width or more apart, round from your left to your right as you face the far wall (−z is your left)
+      for (let i = 1; i < n; i++) {
+        const [a, b] = [spots[i - 1], spots[i]];
+        expect(Math.hypot(b.x - a.x, b.z - a.z)).toBeGreaterThanOrEqual(TAKE_PLOT.width * a.scale);
+        expect(Math.atan2(b.z, b.x)).toBeGreaterThan(Math.atan2(a.z, a.x));
+      }
+      // each one's front (+z, turned by face) points at the middle of the room
+      for (const s of spots) expect(Math.sin(s.face) * s.x + Math.cos(s.face) * s.z).toBeLessThan(0);
+    }
+    expect(takeSpots(4)[0].scale).toBe(1);
+    expect(takeSpots(12)[0].scale).toBeLessThan(1);
   });
 });
 

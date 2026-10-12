@@ -235,13 +235,16 @@ export class ClaudeStudio implements StudioOfficer {
       resume: req.resumeSessionId,
       tools: {
         server: studioServer(req),
-        names: ['video', 'take', 'drop_take'],
-        activity: (name) => ({ video: 'Updating the video', take: 'Staging a take', drop_take: 'Clearing a take' })[name] ?? name,
+        names: ['video', 'take', 'retime_take', 'drop_take'],
+        activity: (name) => ({ video: 'Updating the video', take: 'Staging a take', retime_take: 'Retiming a take', drop_take: 'Clearing a take' })[name] ?? name,
       },
     });
     return { text: result.text, sessionId: result.sessionId, costUsd: result.costUsd, model: result.model };
   }
 }
+
+/** A take's named phases, as its tools send them. */
+const PHASES = z.record(z.string(), z.tuple([z.number(), z.number()]));
 
 /** The studio computer's own tools: the video it's building with the captain, and the takes on the holodeck's floor. */
 function studioServer(req: StudioTurn): McpSdkServerConfigWithInstance {
@@ -283,12 +286,25 @@ function studioServer(req: StudioTurn): McpSdkServerConfigWithInstance {
         {
           id: z.string().describe('A single letter, a, b, c…: the captain refers to takes by it.'),
           label: z.string().max(S.takeLabel).describe('A few words naming the idea.'),
+          metaphor: z.string().max(S.metaphor).describe('Decided before any script: what the concept is shown as, in one sentence, saying what moves and what that movement means.'),
           detail: z.string().max(S.takeDetail).optional().describe('What it tries, and what it trades off, in a line.'),
           beat: z.number().int().optional().describe('Which beat it shows, numbered from 0.'),
           seconds: z.number().min(S.minSeconds).max(S.maxSeconds).describe('How long it plays before it loops.'),
+          phases: PHASES.optional().describe('Its named phases, like {"dispatch": [0, 2], "work": [2, 6]}: time the script by phase(t, name), so retime_take can change the timing later.'),
           script: z.string().max(S.script).describe('Makes the cast with kit, then defines function render(t).'),
         },
         (input) => answer(() => req.tools.take(input)),
+      ),
+      tool(
+        'retime_take',
+        'Change a take\'s timing without touching its script: a speed for the whole take (0.5 is half speed), or new seconds and phases. The quickest way to do "make b slower" or "hold the fold longer".',
+        {
+          id: z.string(),
+          speed: z.number().min(0.1).max(10).optional().describe('Plays the whole take, and every phase, at this speed: 0.5 takes twice as long.'),
+          seconds: z.number().min(S.minSeconds).max(S.maxSeconds).optional().describe('Its new length.'),
+          phases: PHASES.optional().describe('All its phases again, with their new times.'),
+        },
+        (input) => answer(() => req.tools.retime(input)),
       ),
       tool('drop_take', 'Take a take off the floor.', { id: z.string() }, ({ id }) => answer(() => req.tools.dropTake(id))),
     ],

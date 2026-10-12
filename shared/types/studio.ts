@@ -45,6 +45,13 @@ export interface StudioTake {
   label: string;
   /** What it's trying, and what it trades off, in a line. */
   detail?: string;
+  /**
+   * The idea it shows the concept as, in a sentence: what moves, and what that movement means ("subagents are runners
+   * sent to stations, each bringing back one sealed box"). Missing on takes staged before there were metaphors.
+   */
+  metaphor?: string;
+  /** Its named phases, each a stretch of its seconds that its script times things by, so it can be retimed without rewriting. */
+  phases?: Record<string, [number, number]>;
   /** Which beat it's for (its index), if any. */
   beat?: number;
   /** How long it plays before it loops (s). */

@@ -1,21 +1,19 @@
 import * as THREE from 'three';
 import type { StudioTake } from '../../../shared/types';
-import { TAKE_PARAMS, takeBody } from '../../../shared/takeScript';
+import { TAKE_PARAMS, takeBody, takeHelpers } from '../../../shared/takeScript';
 import { canvasTexture, fitFont, makeCanvas, UI_FONT, wrap } from './canvas';
 import { OVERLAY_LAYER } from './frame';
 import { flat } from './materials';
 import { LCARS, LCARS_FONT } from './starship';
-import { plotZ, shownTakes, TAKE_PLOT } from './studio';
-import { ease, TakeKit } from './takeKit';
+import { shownTakes, TAKE_PLOT, takeSpots } from './studio';
+import { TakeKit } from './takeKit';
 
-// The studio computer's takes, playing side by side on the holodeck's floor (studio.ts: where): each its own floor,
-// a plaque at its front edge with its id, label and what it tries, and its cast, made by its script with the kit
+// The studio computer's takes, every one of them standing round the holodeck's floor in beat order (studio.ts: where):
+// each its own floor, a plaque at its front edge with its id, beat, label and metaphor, and its cast, made by its script with the kit
 // (takeKit.ts) and set from t every frame, looping. A take staged again under the same id is torn down and built afresh.
 // The room tells the office how each version ran, so the computer hears about a script that throws.
 
 type Render = (t: number) => void;
-const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
-const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 /** How long a take holds its last frame before it loops (s). */
 const HOLD = 1.2;
 
@@ -52,7 +50,8 @@ class Plot {
       // the computer's own script, run in the captain's browser like the explainers it shows on a station's screen
       // eslint-disable-next-line @typescript-eslint/no-implied-eval
       const made = new Function(...TAKE_PARAMS, takeBody(take.script)) as (...args: unknown[]) => Render | undefined;
-      const render = made(this.kit, THREE, ease, clamp, lerp);
+      const helpers: Record<string, unknown> = { kit: this.kit, THREE, ...takeHelpers(take.phases) };
+      const render = made(...TAKE_PARAMS.map((name) => helpers[name]));
       if (!render) throw new Error('The script never defined render(t)');
       this.render = render;
       this.render(0);
@@ -89,10 +88,11 @@ class Plot {
     ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = '#e8fbff';
     ctx.font = `600 76px ${LCARS_FONT}`;
-    ctx.fillText(wrap(ctx, `${take.label.toUpperCase()}${take.version > 1 ? `  · V${take.version}` : ''}`, 960, 1)[0], 224, 110);
+    const beat = take.beat !== undefined ? `BEAT ${take.beat + 1} · ` : '';
+    ctx.fillText(wrap(ctx, `${beat}${take.label.toUpperCase()}${take.version > 1 ? `  · V${take.version}` : ''}`, 960, 1)[0], 224, 110);
     ctx.fillStyle = this.failed ? '#ff9a9a' : '#9fb3c8';
     ctx.font = `500 44px ${UI_FONT}`;
-    wrap(ctx, this.failed ? `It stopped: ${this.failed}` : (take.detail ?? ''), 950, 2).forEach((l, i) => ctx.fillText(l, 224, 184 + i * 54));
+    wrap(ctx, this.failed ? `It stopped: ${this.failed}` : (take.metaphor ?? take.detail ?? ''), 950, 2).forEach((l, i) => ctx.fillText(l, 224, 184 + i * 54));
     this.signTexture.needsUpdate = true;
   }
 
@@ -133,6 +133,7 @@ export class TakeStage {
 
   show(takes: readonly StudioTake[]): void {
     const shown = shownTakes(takes);
+    const spots = takeSpots(shown.length);
     const next = new Map<string, Plot>();
     shown.forEach((take, i) => {
       let plot = this.plots.get(take.id);
@@ -141,9 +142,11 @@ export class TakeStage {
         plot = new Plot(take, (error) => this.report(take, error));
         this.group.add(plot.group);
       }
-      // across the hall, its front (+z) back towards the entrance (-X)
-      plot.group.position.set(TAKE_PLOT.x, 0, plotZ(i, shown.length));
-      plot.group.rotation.y = -Math.PI / 2;
+      // round the room, its front (+z) towards the middle
+      const { x, z, face, scale } = spots[i];
+      plot.group.position.set(x, 0, z);
+      plot.group.rotation.y = face;
+      plot.group.scale.setScalar(scale);
       next.set(take.id, plot);
     });
     for (const [id, plot] of this.plots) if (next.get(id) !== plot) this.drop(plot);

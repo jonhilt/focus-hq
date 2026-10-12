@@ -77,7 +77,7 @@ function lines(ctx: CanvasRenderingContext2D, text: string, x: number, y: number
 /** The studio's set in a hall (its `group` in the hall's frame): `show` a goal's studio (or none), `update` it every frame. */
 export class StudioSet {
   readonly group = new THREE.Group();
-  private readonly premise = new Holo(2000, 810, GOLD);
+  private readonly premise = new Holo(2400, 620, GOLD);
   private readonly premiseMesh: THREE.Mesh;
   private readonly premiseY: number;
   private cards: { holo: Holo; mesh: THREE.Mesh }[] = [];
@@ -115,8 +115,8 @@ export class StudioSet {
         const m = 90;
         ctx.textBaseline = 'alphabetic';
         this.badge(ctx, m);
-        lines(ctx, 'Describe a video to the computer.', m, m + 230, W - m * 2, `600 104px ${UI_FONT}`, 120, 2, TEXT);
-        lines(ctx, 'Press Enter, or E here, and say what it’s about: the premise goes up here, the beats under it, and it tries ways of showing them on the floor.', m, m + 420, W - m * 2, `500 56px ${UI_FONT}`, 70, 3, DIM);
+        lines(ctx, 'Describe a video to the computer.', m, m + 210, W - m * 2, `600 96px ${UI_FONT}`, 110, 1, TEXT);
+        lines(ctx, 'Press Enter, or E here, and say what it’s about: the premise goes up here, the beats under it, and it tries ways of showing each of them round the floor.', m, m + 330, W - m * 2, `500 54px ${UI_FONT}`, 68, 3, DIM);
       });
     }
     const studio = video;
@@ -129,13 +129,13 @@ export class StudioSet {
       const threads = open ? `${open} OPEN THREAD${open === 1 ? '' : 'S'}` : 'NO OPEN THREADS';
       ctx.fillStyle = open ? QUESTION_LIGHT : DIM;
       ctx.fillText(threads, W - m - ctx.measureText(threads).width, m + 40);
-      let y = lines(ctx, studio.premise, m, m + 200, W - m * 2, `600 92px ${UI_FONT}`, 112, 4, TEXT);
+      let y = lines(ctx, studio.premise, m, m + 180, W - m * 2, `600 76px ${UI_FONT}`, 92, 3, TEXT);
       if (studio.takeaway) {
-        y += 30;
-        ctx.font = `600 46px ${LCARS_FONT}`;
+        y += 20;
+        ctx.font = `600 42px ${LCARS_FONT}`;
         ctx.fillStyle = GOLD;
         ctx.fillText('THE VIEWER COMES AWAY WITH', m, y);
-        lines(ctx, studio.takeaway, m, y + 74, W - m * 2, `500 60px ${UI_FONT}`, 74, 2, TEXT);
+        lines(ctx, studio.takeaway, m, y + 64, W - m * 2, `500 54px ${UI_FONT}`, 64, 1, TEXT);
       }
     });
     this.showBeats(video.beats);
@@ -189,7 +189,7 @@ export class StudioSet {
         ctx.fillStyle = LCARS.periwinkle;
         ctx.fillText(String(i + 1).padStart(2, '0'), m, m + 50);
         const y = lines(ctx, beat.title.toUpperCase(), m, m + 150, W - m * 2, `600 76px ${LCARS_FONT}`, 80, 2, TEXT);
-        if (beat.point) lines(ctx, beat.point, m, y + 22, W - m * 2, `500 50px ${UI_FONT}`, 60, 4, '#b9cadb');
+        if (beat.point) lines(ctx, beat.point, m, y + 22, W - m * 2, `500 46px ${UI_FONT}`, 56, 2, '#b9cadb');
       });
     });
   }

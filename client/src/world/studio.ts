@@ -98,9 +98,10 @@ export function placeLights(
 /**
  * The premise on the far wall (the hall's frame, +X straight ahead from the entrance): a hologram curved round it `r`
  * from the middle, `half` radians either side of straight ahead, from `bottom` to `top`; and the beats' cards in a row
- * round under it, each `card` metres wide with `gap` between, from `cardBottom` to `cardTop`.
+ * round under it, each `card` metres wide with `gap` between, from `cardBottom` to `cardTop`: high enough to read over
+ * the takes standing in front of them.
  */
-export const STUDIO_WALL = { r: 16.3, half: 0.36, bottom: 2.8, top: 7.5, card: 2, gap: 0.22, cardR: 15.9, cardBottom: 0.9, cardTop: 2.5 };
+export const STUDIO_WALL = { r: 16.3, half: 0.42, bottom: 4.4, top: 7.9, card: 2, gap: 0.22, cardR: 15.9, cardBottom: 2.85, cardTop: 4.2 };
 
 /**
  * Where each thread's light hangs (the hall's frame): in a row across the hall between the entrance and the takes, `x`
@@ -109,14 +110,14 @@ export const STUDIO_WALL = { r: 16.3, half: 0.36, bottom: 2.8, top: 7.5, card: 2
  * the middle to the premise clear, and alternately higher and lower so their tags don't sit on each other.
  */
 export const THREAD_SLOTS: readonly { x: number; z: number; y: number }[] = [
-  { x: -6, z: -2, y: 1.9 },
-  { x: -6, z: 2, y: 2.15 },
-  { x: -6.2, z: -4, y: 2.15 },
-  { x: -6.2, z: 4, y: 1.9 },
-  { x: -6.4, z: -6, y: 1.9 },
-  { x: -6.4, z: 6, y: 2.15 },
-  { x: -6.6, z: -8, y: 2.15 },
-  { x: -6.6, z: 8, y: 1.9 },
+  { x: -6, z: -1.6, y: 1.9 },
+  { x: -6, z: 1.6, y: 2.15 },
+  { x: -6.2, z: -3.4, y: 2.15 },
+  { x: -6.2, z: 3.4, y: 1.9 },
+  { x: -6.4, z: -5.2, y: 1.9 },
+  { x: -6.4, z: 5.2, y: 2.15 },
+  { x: -6.6, z: -7, y: 2.15 },
+  { x: -6.6, z: 7, y: 1.9 },
 ];
 
 /** Where the beats' row of cards starts (its first card's left edge), in radians round from straight ahead. */
@@ -125,23 +126,54 @@ export function beatsFrom(count: number): number {
   return -(count * card + (count - 1) * gap) / 2 / cardR;
 }
 
-/** How many takes play on the floor at once: the newest. */
-export const TAKES_SHOWN = 3;
+/** Each take's floor before it's scaled to fit the room: `width` across and `depth` deep, as its script is told. */
+export const TAKE_PLOT = { width: 8, depth: 6 };
+/** Round the room: floors `gap` apart, their outer edges `margin` in from the round wall, and none nearer the entrance wall than `door`. */
+const RING = { gap: 1, margin: 0.8, door: 0.5 };
+/** The smallest a take's floor is scaled to, however many there are. */
+const MIN_SCALE = 0.4;
+
+/** The takes on the floor in the order they stand round the room: by beat (any for no beat last), each beat's as first staged. */
+export function shownTakes(takes: readonly StudioTake[]): StudioTake[] {
+  return takes.map((t, i) => ({ t, i })).sort((a, b) => (a.t.beat ?? Infinity) - (b.t.beat ?? Infinity) || a.i - b.i).map(({ t }) => t);
+}
+
+/** Where a take stands (the hall's frame): its floor's middle, its turn about Y (its front, +z, towards the middle of the room), and its scale. */
+export interface TakeSpot {
+  x: number;
+  z: number;
+  face: number;
+  scale: number;
+}
 
 /**
- * Each take's floor (the hall's frame): `width` across and `depth` deep, side by side across the hall in the order
- * they're shown, left to right as you face the far wall, `x` from the middle towards it; the take's own +z (its front)
- * faces back towards the entrance, where you come in.
+ * Where each of `n` takes stands: in a horseshoe round the middle of the room, in order from the left of the entrance
+ * round to its right, each facing in, so from the middle you can turn and see the whole video. They're full size while
+ * they fit inside the walls, and scaled down together, a step at a time, once there are too many.
  */
-export const TAKE_PLOT = { width: 8, depth: 6, gap: 1.2, x: 3.5 };
-
-/** The takes on the floor: the newest few, in the order they were first staged. */
-export function shownTakes(takes: readonly StudioTake[]): StudioTake[] {
-  return takes.slice(-TAKES_SHOWN);
+export function takeSpots(n: number): TakeSpot[] {
+  if (n <= 0) return [];
+  for (let scale = 1; scale >= MIN_SCALE; scale = Math.round((scale - 0.05) * 100) / 100) {
+    const spots = ring(n, scale);
+    if (spots.every(fits)) return spots;
+  }
+  return ring(n, MIN_SCALE);
 }
 
-/** Where take `i` of `n` stands across the hall (its middle's z in the hall's frame), the row centred on the hall. */
-export function plotZ(i: number, n: number): number {
-  const step = TAKE_PLOT.width + TAKE_PLOT.gap;
-  return (i - (n - 1) / 2) * step;
+function ring(n: number, scale: number): TakeSpot[] {
+  const r = STUDIO_HALL.radius - RING.margin - (TAKE_PLOT.depth * scale) / 2;
+  const step = (TAKE_PLOT.width * scale + RING.gap) / r;
+  return Array.from({ length: n }, (_, i) => {
+    const a = (i - (n - 1) / 2) * step;
+    return { x: r * Math.cos(a), z: r * Math.sin(a), face: -Math.PI / 2 - a, scale };
+  });
 }
+
+/** A take's floor's corners (the hall's frame). */
+export function spotCorners({ x, z, face, scale }: TakeSpot): { x: number; z: number }[] {
+  const w = (TAKE_PLOT.width * scale) / 2;
+  const d = (TAKE_PLOT.depth * scale) / 2;
+  return [[-w, -d], [w, -d], [w, d], [-w, d]].map(([u, v]) => ({ x: x + u * Math.cos(face) + v * Math.sin(face), z: z - u * Math.sin(face) + v * Math.cos(face) }));
+}
+
+const fits = (spot: TakeSpot) => spotCorners(spot).every((c) => Math.hypot(c.x, c.z) <= STUDIO_HALL.radius - 0.3 && c.x >= ENTRANCE_X + RING.door);

@@ -1036,7 +1036,7 @@ function render(t) {
   lead.say(alone ? 'Reading the whole repo' : t < 10 ? 'Handing out the reading' : 'Got three summaries');
 }`;
 
-/** Take b, abstract: a gold core fans out into fresh contexts and folds their answers back in. */
+/** Take c, abstract: a gold core fans out into fresh contexts and folds their answers back in, timed by its phases. */
 const DEMO_TAKE_ABSTRACT = `const from = [0, 1.2, 0.6];
 const targets = [[-2.4, 0.6, -1.5], [-0.8, 2.2, -2], [0.8, 2.2, -2], [2.4, 0.6, -1.5]];
 const core = kit.ball({ r: 0.45, at: from, colour: 'gold', glow: true });
@@ -1044,11 +1044,42 @@ const sats = targets.map(() => kit.ball({ r: 0.22, at: from, colour: 'sky', glow
 const rays = targets.map((to) => kit.line(from, to, { colour: 'lilac', width: 0.04 }));
 const caption = kit.label('Fan out into fresh contexts', { at: [0, 3, 0], colour: 'text', size: 0.28 });
 function render(t) {
-  const k = p(t, 1, 3) * (1 - p(t, 6, 8));
-  sats.forEach((s, i) => { s.visible = k > 0.02; s.position.set(lerp(from[0], targets[i][0], k), lerp(from[1], targets[i][1], k), lerp(from[2], targets[i][2], k)); });
-  rays.forEach((r) => { r.visible = k > 0.02; r.scale.x = Math.max(0.001, k); });
-  core.scale.setScalar(1 + 0.3 * p(t, 7.5, 8.5) * (1 - p(t, 9, 10)));
-  caption.text = t < 6 ? 'Fan out into fresh contexts' : 'Fold back: only answers';
+  const out = phase.start('fan'), back = phase.start('fold');
+  sats.forEach((s, i) => {
+    const k = stagger(t, i, out, phase.end('fan') - 0.45, 0.15) * (1 - stagger(t, i, back, phase.end('fold') - 0.45, 0.15));
+    s.visible = k > 0.02;
+    s.position.set(lerp(from[0], targets[i][0], k), lerp(from[1], targets[i][1], k), lerp(from[2], targets[i][2], k));
+    rays[i].visible = k > 0.02;
+    rays[i].scale.x = Math.max(0.001, k);
+  });
+  core.scale.setScalar(1 + 0.6 * burst(t, phase.end('fold')));
+  caption.text = t < back ? 'Fan out into fresh contexts' : 'Fold back: only answers';
+}`;
+const DEMO_ABSTRACT_PHASES: Record<string, [number, number]> = { fan: [1, 3], fold: [6, 8] };
+
+/** Take a, one session alone: a lead reading everything, its context bar climbing into the red. */
+const DEMO_TAKE_ALONE = `const lead = kit.station({ name: 'Lead', line: 'Reading the whole repo', at: [0, 0, 0.6], colour: 'orange', screen: 'LEAD' });
+const files = [0, 1, 2, 3, 4, 5].map((i) => kit.box({ size: [0.5, 0.06, 0.7], at: [-2.6, 0.9 + i * 0.08, -1], colour: 'peri', glow: true }));
+const context = kit.box({ size: [0.35, 2.2, 0.35], at: [1.6, 0, 0.6], colour: 'green', glow: true });
+function render(t) {
+  const fill = phase(t, 'read');
+  files.forEach((f, i) => { const k = stagger(t, i, phase.start('read'), phase.start('read') + 1.2, 0.8); f.position.x = lerp(-2.6, 0, k); f.visible = k < 1; });
+  context.scale.y = Math.max(0.05, settle(t, phase.start('read'), 0.6) * 1);
+  context.material.color.set(fill > 0.75 ? kit.colours.red : kit.colours.green);
+  lead.say(fill > 0.75 ? 'Slowing down…' : 'Reading the whole repo');
+}`;
+
+/** Take e, when not to: a two-minute job handed off costs a whole helper's briefing. */
+const DEMO_TAKE_SMALL = `const lead = kit.station({ name: 'Lead', line: 'Rename one variable', at: [-1.4, 0, 0.4], colour: 'orange' });
+const helper = kit.person({ name: 'Helper', line: 'Briefing myself…', at: [1.6, 0, -0.8] });
+const brief = kit.box({ size: [0.5, 0.5, 0.5], at: [-1.4, 1, 0.4], colour: 'gold', glow: true });
+const caption = kit.label('The hand-off costs more than the job', { at: [0, 2.6, 0], colour: 'text', size: 0.26 });
+function render(t) {
+  kit.beam(helper, phase(t, 'beam'));
+  const k = phase(t, 'hand');
+  brief.position.set(lerp(-1.4, 1.6, k), 1 + Math.sin(k * Math.PI) * 0.6, lerp(0.4, -0.8, k));
+  brief.scale.setScalar(1 + burst(t, phase.end('hand')) * 0.8);
+  caption.opacity = phase(t, 'verdict');
 }`;
 
 /** Take c, job cards on a conveyor: each card's work done somewhere else, only a slim result returning. */
@@ -1095,13 +1126,20 @@ export class DemoStudio implements StudioOfficer {
       }));
       await tool('Updating the video', () => req.tools.video({ thread: 'What does a subagent see of the lead’s conversation?' }));
       await tool('Updating the video', () => req.tools.video({ thread: 'How many subagents can run at once?' }));
-      await tool('Staging a take', () => req.tools.take({ id: 'a', label: 'Crew at consoles', detail: 'The ship’s own crew: familiar, literal, a little busy', beat: 1, seconds: 14, script: demoTakeCrew(false) }));
-      await tool('Staging a take', () => req.tools.take({ id: 'b', label: 'Fan out, fold back', detail: 'Abstract: cleaner, but you have to say what the balls are', beat: 1, seconds: 11, script: DEMO_TAKE_ABSTRACT }));
-      return reply('The premise is on the far wall, with four beats under it and two loose threads hanging beside them. On the floor are two ways to show the helpers beat: **a** with the crew at consoles, **b** abstract. Walk round them and tell me what to change.');
+      await tool('Staging a take', () => req.tools.take({ id: 'a', label: 'Reading alone', metaphor: 'Every file the lead reads stacks onto its one context bar, which climbs into the red', beat: 0, seconds: 9, phases: { read: [0.5, 7] }, script: DEMO_TAKE_ALONE }));
+      await tool('Staging a take', () => req.tools.take({ id: 'b', label: 'Crew at consoles', metaphor: 'Helpers beam in beside the lead, each reading one part at a console of its own', detail: 'The ship’s own crew: familiar, literal, a little busy', beat: 1, seconds: 14, script: demoTakeCrew(false) }));
+      await tool('Staging a take', () => req.tools.take({ id: 'c', label: 'Fan out, fold back', metaphor: 'A gold core throws out fresh blue contexts and pulls back only their answers', detail: 'Abstract: cleaner, but you have to say what the balls are', beat: 1, seconds: 11, phases: DEMO_ABSTRACT_PHASES, script: DEMO_TAKE_ABSTRACT }));
+      await tool('Staging a take', () => req.tools.take({ id: 'd', label: 'Cards on a conveyor', metaphor: 'Work goes out as fat cards and comes back as thin green results', beat: 2, seconds: 9, script: DEMO_TAKE_CARDS }));
+      await tool('Staging a take', () => req.tools.take({ id: 'e', label: 'Too small to hand off', metaphor: 'A tiny job’s briefing box is bigger than the job: the helper spends longer reading it than doing it', beat: 3, seconds: 8, phases: { beam: [0.5, 2], hand: [2.5, 4.5], verdict: [5, 6] }, script: DEMO_TAKE_SMALL }));
+      return reply('The premise is on the far wall with four beats under it, two loose threads hang by the door, and there’s a take for every beat round the room: **a** reading alone, **b** and **c** two ways to show the helpers, **d** the hand-back, **e** when not to. Stand in the middle and tell me what to change.');
     }
-    if (/slow|one at a time|wave|stagger/.test(q)) {
-      await tool('Staging a take', () => req.tools.take({ id: 'a', label: 'Crew at consoles', detail: 'Helpers now arrive one at a time', beat: 1, seconds: 16, script: demoTakeCrew(true) }));
-      return reply('Take **a** now beams the helpers in one at a time, with a beat between each. Better?');
+    if (/one at a time|wave/.test(q)) {
+      await tool('Staging a take', () => req.tools.take({ id: 'b', label: 'Crew at consoles', metaphor: 'Helpers beam in one at a time, each reading one part at a console of its own', detail: 'Helpers now arrive one at a time', beat: 1, seconds: 16, script: demoTakeCrew(true) }));
+      return reply('Take **b** now beams the helpers in one at a time, with a beat between each. Better?');
+    }
+    if (/slow/.test(q)) {
+      await tool('Retiming a take', () => req.tools.retime({ id: 'c', speed: 0.5 }));
+      return reply('Take **c** now plays at half speed: the fan-out and the fold both take twice as long, the rest as it was.');
     }
     if (/thread|answer|look (it )?up|find out/.test(q)) {
       activity('Searching the web');
@@ -1109,7 +1147,7 @@ export class DemoStudio implements StudioOfficer {
       await tool('Updating the video', () => req.tools.video({ closeThread: { id: 't1', as: 'answered', answer: 'Only the prompt it’s handed, none of the lead’s history.' } }));
       return reply('Looked it up: a subagent starts with only the prompt the lead hands it, none of its history. That thread’s closed; it suits beat 2’s “fresh context” line.');
     }
-    await tool('Staging a take', () => req.tools.take({ id: 'c', label: 'Cards on a conveyor', detail: 'Work as cards: shows the shape of the hand-off, loses the people', beat: 2, seconds: 9, script: DEMO_TAKE_CARDS }));
-    return reply('Here’s a third way, **c**: the work as cards on a conveyor, with only thin results coming back. Want me to keep it?');
+    await tool('Staging a take', () => req.tools.take({ id: 'f', label: 'Cards for the helpers', metaphor: 'Each helper’s part goes out as a card and only a thin result comes back', detail: 'Work as cards: shows the shape of the hand-off, loses the people', beat: 1, seconds: 9, script: DEMO_TAKE_CARDS }));
+    return reply('Here’s a third way to show the helpers, **f**: the work as cards on a conveyor, with only thin results coming back. Want me to keep it?');
   }
 }

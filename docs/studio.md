@@ -138,12 +138,25 @@ view while the computer builds:
   fact to check) hanging as a warm light in a row across the hall, just over your head between the doorway and the
   takes, its question on a tag you can read from where you come in. The computer
   reads the web to answer them: an answered thread turns green and rises away, a dropped one dims and sinks.
-- **Takes** (its `take` tool): rough 3D sketches of a beat, side by side on the floor (each on an 8 × 6 m floor of its own), each a short script the computer
+- **Takes** (its `take` tool): rough 3D sketches of the beats, one or more for each, each a short script the computer
   writes against the studio's kit (`client/src/world/takeKit.ts`: crew standing or at consoles, boxes, balls,
-  transporter pads, glowing lines, floating labels and a beam-in effect), looping. Say what to change ("make a slower")
-  and it stages the take again under the same id: it swaps in place, a version on. Each take's plaque at its front edge
-  says what it tries; one whose script throws turns red and says why, and the computer hears it too
-  (`POST /api/studio/takes/:id/report`), so it can fix it.
+  transporter pads, glowing lines, floating labels and a beam-in effect), looping on an 8 × 6 m floor of its own.
+  Every take stays on the floor (up to 12), in a horseshoe round the room in beat order, from the left of the doorway
+  round to its right, each facing the middle: stand there and turn, and you see the whole video. Up to six stand full
+  size; more and they all shrink together to fit (`takeSpots` in `client/src/world/studio.ts`). The beat cards hang
+  under the premise, above the takes' heads.
+
+  Each take starts from a **metaphor**, decided before any geometry: one sentence on what the concept is shown as, what
+  moves and what that movement means ("a gold core throws out fresh contexts and pulls back only their answers"). Its
+  plaque shows its beat, label and metaphor; the Script tab lists each beat's takes with theirs. Its timing lives in
+  named **phases** (`{"fan": [1, 3], "fold": [6, 8]}`) that its script reads with `phase(t, name)`, so "make c slower"
+  is the `retime_take` tool (a speed, or new seconds and phases) rather than a rewrite: the script stays, and the take
+  plays afresh a version on. Scripts get helpers that, like `render(t)`, depend only on the time (`shared/takeScript.ts`):
+  `p` eases between two times, `settle` glides in without overshooting, `burst` flashes and dies away, `stagger` starts
+  many parts one after another. These ideas come from [anatomy](https://github.com/wheresryan22/anatomy)'s explainers.
+
+  Say what else to change and it stages the take again under the same id: it swaps in place. One whose script throws
+  turns its plaque red and says why, and the computer hears it too (`POST /api/studio/takes/:id/report`), so it can fix it.
 
 It's one Claude Code session for the whole video: each thing you say resumes it, so it remembers the conversation (and,
 should the session be lost, the next turn starts a new one with a recap of the conversation and the video). The chat's
@@ -154,8 +167,9 @@ ran on, and what it's spent.
 One conversation at a time, kept across restarts (`studio` in `data/state.json`); **New video** clears the studio.
 The computer reads the web but nothing of the ship's code (`ClaudeStudio` in `server/agents/claudeCrew.ts`, working
 in `data/studio`), and its take scripts run in your browser as the leads' explainers do. In `pnpm run demo` its
-turns are scripted (`DemoStudio`): describe a video and it puts up a premise, four beats, two threads and two takes;
-ask for one at a time and it revises take a; ask it to look a thread up and it answers t1.
+turns are scripted (`DemoStudio`): describe a video and it puts up a premise, four beats, two threads and a take for
+every beat (two for the second); ask for one at a time and it revises take b; ask for it slower and it retimes take c
+to half speed; ask it to look a thread up and it answers t1.
 
 ## Not yet
 

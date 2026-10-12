@@ -244,9 +244,3 @@ export class TakeKit {
     this.root.clear();
   }
 }
-
-/** Eases from 0 to 1 between `a` and `b` seconds, as the explainers' p() does. */
-export const ease = (t: number, a: number, b: number): number => {
-  const k = THREE.MathUtils.clamp((t - a) / (b - a || 1), 0, 1);
-  return k * k * (3 - 2 * k);
-};

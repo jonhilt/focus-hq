@@ -3,7 +3,7 @@
 // on the holodeck's floor, rough 3D sketches written against the studio's kit (client/src/world/takeKit.ts).
 
 import type { StudioMessage, StudioTake, StudioThread, StudioVideo } from '../../shared/types';
-import { takeSyntaxError } from '../../shared/takeScript';
+import { type TakePhases, takeSyntaxError } from '../../shared/takeScript';
 
 /** How long each part may be, how many beats and open threads a video has room for, and how many takes stay on the floor. */
 export const STUDIO_LIMITS = {
@@ -17,9 +17,11 @@ export const STUDIO_LIMITS = {
   answer: 240,
   open: 8,
   kept: 30,
-  takes: 6,
+  takes: 12,
   takeLabel: 40,
   takeDetail: 200,
+  metaphor: 200,
+  phases: 12,
   script: 16_000,
   minSeconds: 2,
   maxSeconds: 60,
@@ -96,10 +98,35 @@ export interface TakeInput {
   id: string;
   label: string;
   detail?: string;
+  metaphor?: string;
   beat?: number;
   seconds: number;
+  phases?: TakePhases;
   script: string;
 }
+
+/** What the retime tool can send: a take's new length, new phases, or a speed to play it all at. */
+export interface RetimeInput {
+  id: string;
+  seconds?: number;
+  phases?: TakePhases;
+  /** 0.5 plays it at half speed (twice as long), 2 at double. */
+  speed?: number;
+}
+
+/** Why a take's phases won't do for `seconds`, or undefined if they will. */
+export function phasesError(phases: TakePhases, seconds: number): string | undefined {
+  const names = Object.keys(phases);
+  if (names.length > L.phases) return `A take has at most ${L.phases} phases.`;
+  for (const name of names) {
+    if (!/^[a-z][a-z0-9-]{0,23}$/i.test(name)) return `Phase “${name}” needs a short name of letters, digits and dashes.`;
+    const [from, to] = phases[name];
+    if (!(from >= 0 && to > from && to <= seconds + 1e-6)) return `Phase ${name} runs [${from}, ${to}]: it needs 0 ≤ from < to ≤ the take's ${seconds} seconds.`;
+  }
+  return undefined;
+}
+
+const round = (x: number) => Math.round(x * 100) / 100;
 
 /**
  * The takes on the floor after the computer stages one, or why it was refused. One under an id that's already there is
@@ -115,13 +142,50 @@ export function applyTake(takes: readonly StudioTake[], input: TakeInput, beats:
   if (detail.length > L.takeDetail) return { error: `The detail is ${detail.length} characters (at most ${L.takeDetail}).` };
   if (!(input.seconds >= L.minSeconds && input.seconds <= L.maxSeconds)) return { error: `A take plays for ${L.minSeconds} to ${L.maxSeconds} seconds.` };
   if (input.beat !== undefined && !(Number.isInteger(input.beat) && input.beat >= 0 && input.beat < beats)) return { error: `There's no beat ${input.beat}: beats are numbered from 0, and there ${beats === 1 ? 'is 1' : `are ${beats}`}.` };
+  const metaphor = clean(input.metaphor ?? '');
+  if (metaphor.length > L.metaphor) return { error: `The metaphor is ${metaphor.length} characters (at most ${L.metaphor}): one sentence.` };
+  const phases = input.phases && Object.keys(input.phases).length ? input.phases : undefined;
+  const badPhases = phases && phasesError(phases, input.seconds);
+  if (badPhases) return { error: badPhases };
   if (input.script.length > L.script) return { error: `The script is ${input.script.length} characters (at most ${L.script}).` };
   const syntax = takeSyntaxError(input.script);
   if (syntax) return { error: `The script doesn't parse: ${syntax}` };
   const old = takes.find((t) => t.id === id);
-  const take: StudioTake = { id, label, ...(detail && { detail }), ...(input.beat !== undefined && { beat: input.beat }), seconds: input.seconds, script: input.script, version: (old?.version ?? 0) + 1, at: now };
+  const take: StudioTake = {
+    id,
+    label,
+    ...(detail && { detail }),
+    ...(metaphor && { metaphor }),
+    ...(input.beat !== undefined && { beat: input.beat }),
+    seconds: input.seconds,
+    ...(phases && { phases }),
+    script: input.script,
+    version: (old?.version ?? 0) + 1,
+    at: now,
+  };
   if (old) return takes.map((t) => (t === old ? take : t));
-  return [...takes, take].slice(-L.takes);
+  if (takes.length >= L.takes) return { error: `There are ${takes.length} takes on the floor already (at most ${L.takes}): drop one first, or revise one under its id.` };
+  return [...takes, take];
+}
+
+/**
+ * The takes after the computer retimes one, its script untouched: a new length, new phases, or a speed that stretches
+ * (or squeezes) its length and every phase together. It counts a version up, so the room plays it afresh.
+ */
+export function applyRetime(takes: readonly StudioTake[], input: RetimeInput, now: number): StudioTake[] | { error: string } {
+  const old = takes.find((t) => t.id === input.id.trim().toLowerCase());
+  if (!old) return { error: `There's no take ${input.id}. On the floor: ${takes.map((t) => t.id).join(', ') || 'none'}.` };
+  if (input.speed !== undefined && !(input.speed >= 0.1 && input.speed <= 10)) return { error: 'A speed runs from 0.1 (ten times slower) to 10.' };
+  const stretch = 1 / (input.speed ?? 1);
+  const seconds = round((input.seconds ?? old.seconds) * stretch);
+  if (!(seconds >= L.minSeconds && seconds <= L.maxSeconds)) return { error: `That makes it ${seconds} seconds: a take plays for ${L.minSeconds} to ${L.maxSeconds}.` };
+  const given = input.phases ?? old.phases;
+  const phases = given && Object.fromEntries(Object.entries(given).map(([name, [from, to]]) => [name, [round(from * stretch), round(to * stretch)] as [number, number]]));
+  const bad = phases && phasesError(phases, seconds);
+  if (bad) return { error: bad };
+  const { error: _, ...kept } = old;
+  const take: StudioTake = { ...kept, seconds, ...(phases && { phases }), version: old.version + 1, at: now };
+  return takes.map((t) => (t === old ? take : t));
 }
 
 /** The computer's instructions: who it is, how it works with the captain, and the kit its takes are written against. */
@@ -131,10 +195,19 @@ export function studioSystemPrompt(): string {
 How to work:
 - Start with the premise, as soon as the captain's told you the idea: put it up with the video tool (it shows on the far wall). Then what the viewer should come away with, then the narrative beats in order, each with a line on what it gets across. Build up each beat's lines (what's said over it) as the captain says them or you draft them; they're the script.
 - When something comes up that neither of you is sure of (how a feature really works, a number, a name), log it as a thread with the video tool: it hangs in the room as a light until it's answered or dropped. Look things up with WebSearch and WebFetch when you can, and close the thread with the answer.
-- Try ways of showing a beat early, while they're cheap: stage two or three rough takes with the take tool, side by side on the floor, each a different idea (crew and consoles, abstract shapes, cards on a conveyor…), and say in a line how each differs. Name takes a, b, c… (a single letter, so they're easy to say). When the captain says what to change ("make b slower", "try it with one wave at a time"), stage the take again under the same id: it swaps in place. Keep takes rough and quick; a take is a sketch, not a shot.
+- Try ways of showing the beats early, while they're cheap: rough takes with the take tool, one or more for each beat (give each its beat). Every take stays on the floor, round the room in beat order, so the captain can stand in the middle and see the whole video, and change all, some or none of them. Name takes a, b, c… (a single letter, so they're easy to say), and say in a line how each differs. When the captain says what to change, stage the take again under the same id: it swaps in place. Keep takes rough and quick; a take is a sketch, not a shot.
+- Before any geometry, decide the metaphor: what the concept is shown as, in one sentence that says what moves and what that movement means ("subagents are runners sent out to stations; each brings back one sealed box, so the lead's desk stays clear"). The object is the explanation: if the movement doesn't mean something, cut it. Send it as the take's metaphor; the plaque in front of the take shows it.
+- Time each take by named phases (dispatch, work, return…) and read them with phase(t, name), so the timing lives outside the script. Then "make b slower" or "hold the return longer" is retime_take, not a rewrite: quicker for you, and the rest of the take stays as it was.
 - Talk like a collaborator: short replies, plain words, one question at a time. Say what you've put up rather than repeating it.
 
-The take tool's script runs once in the captain's browser, with these in scope: kit, THREE (three.js), p(t, a, b) (eases 0 → 1 between a and b seconds), clamp(x, lo, hi), lerp(a, b, k). Make the cast with the kit at the top of the script, then define function render(t): it sets the whole scene for t seconds into the take (0 to its seconds; it loops), and is called every frame and when it jumps, so work everything out from t, never from the frame before. The take's floor is 8 m wide and 6 m deep: x from -4 (the audience's left) to 4, z from -3 (back) to 3 (front, towards the audience), y up, the floor's middle at the origin. Positions are [x, y, z] arrays. Colours are names (orange, gold, peach, lilac, peri, sky, green, red, text, muted) or CSS colours.
+The take tool's script runs once in the captain's browser, with these in scope: kit, THREE (three.js), and helpers that, like render, depend only on t:
+- p(t, a, b): eases 0 → 1 between a and b seconds.
+- phase(t, name): eases 0 → 1 through the take's named phase; phase.start(name) and phase.end(name) are its times.
+- settle(t, a, speed = 8): 0 until a, then glides to 1 and settles without overshooting: for arrivals.
+- burst(t, at, rise = 0.08, fall = 0.5): a flash at time at, up fast and dying away: for a moment that should land (a result arriving, a hand-off). Add bursts together for repeats.
+- stagger(t, i, a, b, gap = 0.15): p for the i-th of many parts, each starting gap seconds after the last: for fanning out and folding back.
+- clamp(x, lo, hi), lerp(a, b, k).
+Make the cast with the kit at the top of the script, then define function render(t): it sets the whole scene for t seconds into the take (0 to its seconds; it loops), and is called every frame and when it jumps, so work everything out from t, never from the frame before. The take's floor is 8 m wide and 6 m deep: x from -4 (the audience's left) to 4, z from -3 (back) to 3 (front, towards the audience), y up, the floor's middle at the origin. Positions are [x, y, z] arrays. Colours are names (orange, gold, peach, lilac, peri, sky, green, red, text, muted) or CSS colours.
 
 The kit (each returns a THREE.Object3D you can move, turn, scale and hide):
 - kit.person({ name, line, at, face }): a crew member standing, with a speech bubble saying line; .say(text) changes it; .status = 'working' | 'waiting' | 'done' | 'error' changes their pose. face is radians, 0 facing the audience.
@@ -148,14 +221,22 @@ The kit (each returns a THREE.Object3D you can move, turn, scale and hide):
 - kit.colours: the named colours.
 Any THREE object you make yourself can go in with kit.add(obj).
 
-A small example, a lead handing work to two helpers:
+A small example, a lead handing work to two helpers (metaphor: "the lead beams helpers in and hands each a part; only a glowing answer comes back"), with phases {"arrive": [0, 2.5], "hand": [2.5, 4.5], "answer": [6, 8]} over 9 seconds:
 const lead = kit.station({ name: 'Lead', line: 'Reading the repo', at: [0, 0, 0] });
 const helpers = [-2, 2].map((x, i) => kit.person({ name: 'Helper ' + (i + 1), line: 'Reading part ' + (i + 1), at: [x, 0, -1] }));
 const links = helpers.map((h) => kit.line([0, 1, 0], [h.position.x, 1, -1], { colour: 'sky' }));
+const answers = helpers.map((h) => kit.ball({ r: 0.12, at: [h.position.x, 1.2, -1], colour: 'gold', glow: true }));
 function render(t) {
-  helpers.forEach((h, i) => kit.beam(h, p(t, 1 + i * 0.5, 2.5 + i * 0.5)));
-  links.forEach((l, i) => { l.scale.x = Math.max(0.001, p(t, 3 + i * 0.3, 4 + i * 0.3)); });
-  lead.say(t < 5 ? 'Handing out the reading' : 'Answers coming back');
+  const arrive = phase.start('arrive'), hand = phase.start('hand');
+  helpers.forEach((h, i) => kit.beam(h, stagger(t, i, arrive, arrive + 1.5, 0.5)));
+  links.forEach((l, i) => { l.scale.x = Math.max(0.001, stagger(t, i, hand, hand + 1, 0.3)); });
+  answers.forEach((a, i) => {
+    const k = phase(t, 'answer');
+    a.position.x = lerp(helpers[i].position.x, 0, k);
+    a.scale.setScalar(1 + burst(t, phase.end('answer')) * 1.5);
+    a.visible = k > 0;
+  });
+  lead.say(t < phase.start('answer') ? 'Handing out the reading' : 'Answers coming back');
 }`;
 }
 
