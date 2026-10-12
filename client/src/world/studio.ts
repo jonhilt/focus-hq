@@ -2,7 +2,7 @@ import type { StudioTake, StudioThread } from '../../../shared/types';
 
 // The studio: an empty holodeck where the captain and its computer, a Claude session of its own, think a video through
 // (docs/studio.md). Its premise is on the far wall, its beats in a row of cards round under it, each loose thread hangs
-// in the air beside the premise as a light, its question on a tag that comes up as you walk over, and the computer's
+// in the air in a row across the hall as a light, its question on a tag that comes up as you walk over, and the computer's
 // takes play side by side on the floor (studioHall.ts, questionLights.ts, takes.ts). Nothing here draws, so it can be
 // tested without a browser.
 
@@ -68,19 +68,20 @@ export function placeLights(
 export const STUDIO_WALL = { r: 10.3, half: 0.36, bottom: 2.5, top: 5.5, card: 1.7, gap: 0.18, cardR: 9.9, cardBottom: 0.75, cardTop: 2.15 };
 
 /**
- * Where each thread's light hangs, either side of the premise: `across` metres round the wall from straight ahead (to the
- * right as you face it), `out` from the wall, `y` up; alternately left and right, at different heights and depths so
- * their tags don't sit on each other.
+ * Where each thread's light hangs (the hall's frame): in a row across the hall between the entrance and the takes, `x`
+ * from the middle (towards the far wall), `z` across, `y` up, just over your head, so they're in view as you walk in and
+ * their tags read from where you stand; the nearest the middle first, alternately left and right, leaving the view down
+ * the middle to the premise clear, and alternately higher and lower so their tags don't sit on each other.
  */
-export const THREAD_SLOTS: readonly { across: number; out: number; y: number }[] = [
-  { across: -4.6, out: 1.6, y: 3.6 },
-  { across: 4.6, out: 1.9, y: 3.9 },
-  { across: -5.6, out: 2.2, y: 3.0 },
-  { across: 5.6, out: 1.5, y: 3.2 },
-  { across: -4.9, out: 1.2, y: 4.7 },
-  { across: 4.9, out: 1.3, y: 4.8 },
-  { across: -6.4, out: 1.8, y: 4.2 },
-  { across: 6.4, out: 2.1, y: 4.3 },
+export const THREAD_SLOTS: readonly { x: number; z: number; y: number }[] = [
+  { x: -4.2, z: -1.8, y: 1.9 },
+  { x: -4.2, z: 1.8, y: 2.15 },
+  { x: -4.4, z: -3.6, y: 2.15 },
+  { x: -4.4, z: 3.6, y: 1.9 },
+  { x: -4.6, z: -5.4, y: 1.9 },
+  { x: -4.6, z: 5.4, y: 2.15 },
+  { x: -4.8, z: -7.2, y: 2.15 },
+  { x: -4.8, z: 7.2, y: 1.9 },
 ];
 
 /** Where the beats' row of cards starts (its first card's left edge), in radians round from straight ahead. */

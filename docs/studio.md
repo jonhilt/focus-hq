@@ -105,8 +105,10 @@ about. The chat docks down the right, so the room stays in view while the comput
 
 - **The video** (its `video` tool, `server/agents/studio.ts`): the premise on the far wall in a gold-edged hologram,
   with what the viewer should come away with; the narrative beats in numbered cards round under it, each with the lines
-  said over it as the script builds up; and each loose thread (something neither of you is sure how it works, a fact
-  to check) hanging beside it as a warm light, its question on a tag that comes up as you walk over. The computer
+  said over it as the script builds up (**E** on a card opens the chat's **Script** tab at that beat, with the whole
+  video written out to read and narrate from); and each loose thread (something neither of you is sure how it works, a
+  fact to check) hanging as a warm light in a row across the hall, just over your head between the doorway and the
+  takes, its question on a tag you can read from where you come in. The computer
   reads the web to answer them: an answered thread turns green and rises away, a dropped one dims and sinks.
 - **Takes** (its `take` tool): rough 3D sketches of a beat, side by side on the floor, each a short script the computer
   writes against the studio's kit (`client/src/world/takeKit.ts`: crew standing or at consoles, boxes, balls,
@@ -114,6 +116,12 @@ about. The chat docks down the right, so the room stays in view while the comput
   and it stages the take again under the same id: it swaps in place, a version on. Each take's plaque at its front edge
   says what it tries; one whose script throws turns red and says why, and the computer hears it too
   (`POST /api/studio/takes/:id/report`), so it can fix it.
+
+It's one Claude Code session for the whole video: each thing you say resumes it, so it remembers the conversation (and,
+should the session be lost, the next turn starts a new one with a recap of the conversation and the video). The chat's
+head says which model it's on and how hard it thinks, both yours to change from its next turn (kept across videos,
+`POST /api/studio/tune`; the ship's `model` setting and the model's default effort unless you pick), what its last turn
+ran on, and what it's spent.
 
 One conversation at a time, kept across restarts (`studio` in `data/state.json`); **New video** clears the studio.
 The computer reads the web but nothing of the ship's code (`ClaudeStudio` in `server/agents/claudeCrew.ts`, working

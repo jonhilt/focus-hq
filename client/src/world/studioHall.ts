@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import type { StudioSession, StudioTake, StudioVideo } from '../../../shared/types';
+import { interactive } from './builder';
 import { canvasTexture, makeCanvas, UI_FONT, wrap } from './canvas';
 import { OVERLAY_LAYER } from './frame';
-import { around, curvedPanel } from './hallLayout';
+import { curvedPanel } from './hallLayout';
 import { Hologram, hover } from './hologram';
 import { QuestionLights } from './questionLights';
 import { takeDraw } from './screenRedraw';
@@ -12,12 +13,14 @@ import { TakeStage } from './takes';
 
 // What the studio holodeck shows of the video its computer and the captain are building (studio.ts): its premise on a
 // hologram curved round the far wall (or, before there is one, how to start), its beats in a row of cards round under
-// it, its open threads as lights either side, and the computer's takes playing on the floor (takes.ts). Each hologram
+// it, its open threads as lights in a row across the hall, and the computer's takes playing on the floor (takes.ts). Each hologram
 // is drawn again only when what it says changes.
 
 const TEXT = '#e8fbff';
 const DIM = '#8fa3b8';
 const GOLD = LCARS.gold;
+/** How far off (m) you can open a beat's card with E: from where you'd stand to read the row. */
+const CARD_REACH = 6;
 
 /** A canvas on a hologram, drawn by `paint` when its key changes and there's a draw to spare this frame (screenRedraw.ts). */
 class Holo {
@@ -91,7 +94,7 @@ export class StudioSet {
     this.premiseMesh.position.y = bottom;
     this.premiseMesh.layers.set(OVERLAY_LAYER);
     this.premiseMesh.userData.aim = (on: boolean) => (this.premise.hologram.aimed = on);
-    this.lights = new QuestionLights(THREAD_SLOTS.map(({ across, out, y }) => around(r - out, across / (r - out), y)));
+    this.lights = new QuestionLights(THREAD_SLOTS.map(({ x, y, z }) => new THREE.Vector3(x, y, z)));
     this.group.add(this.premiseMesh, this.lights.group, this.takes.group);
     this.premiseMesh.userData.studio = true;
   }
@@ -170,6 +173,7 @@ export class StudioSet {
         const mesh = new THREE.Mesh(undefined, holo.hologram.material);
         mesh.layers.set(OVERLAY_LAYER);
         mesh.userData.aim = (on: boolean) => (holo.hologram.aimed = on);
+        interactive(mesh, { kind: 'studio', beat: i }, () => `Read beat ${i + 1} in full`, CARD_REACH);
         this.group.add(mesh);
         c = this.cards[i] = { holo, mesh };
       }

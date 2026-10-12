@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createSdkMcpServer, type McpSdkServerConfigWithInstance, type Options, query, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
-import type { Settings } from '../../shared/types';
+import type { Effort, Settings } from '../../shared/types';
 import { paths } from '../config';
 import { errorMessage, truncate } from '../util';
 import { agentEnv } from './claudeRunner';
@@ -61,6 +61,8 @@ interface ReadOnlyRun {
   model?: string;
   system?: string;
   timeoutMs?: number;
+  /** How hard it thinks; missing = the model's default. */
+  effort?: Effort;
 }
 
 interface ReadOnlyResult {
@@ -68,6 +70,8 @@ interface ReadOnlyResult {
   structured: unknown;
   sessionId?: string;
   costUsd?: number;
+  /** The model it ran on, as Claude Code reported it. */
+  model?: string;
 }
 
 /** One turn of a read-only session, reporting what it's doing as it goes. */
@@ -93,14 +97,19 @@ async function runReadOnly(run: ReadOnlyRun): Promise<ReadOnlyResult> {
     strictMcpConfig: true,
     outputFormat: run.schema ? { type: 'json_schema', schema: run.schema } : undefined,
     maxTurns: run.maxTurns ?? 40,
+    effort: run.effort,
     resume: run.resume,
     env: agentEnv(),
   };
 
   let sessionId = run.resume;
+  let model: string | undefined;
   try {
     for await (const msg of query({ prompt: run.prompt, options })) {
-      if (msg.type === 'system' && msg.subtype === 'init') sessionId = msg.session_id;
+      if (msg.type === 'system' && msg.subtype === 'init') {
+        sessionId = msg.session_id;
+        model = msg.model;
+      }
       else if (msg.type === 'assistant' && msg.parent_tool_use_id === null) {
         for (const block of msg.message.content) {
           if (block.type === 'tool_use') {
@@ -111,7 +120,7 @@ async function runReadOnly(run: ReadOnlyRun): Promise<ReadOnlyResult> {
         }
       } else if (msg.type === 'result') {
         if (msg.subtype !== 'success' || msg.is_error) throw new Error(msg.subtype === 'success' ? msg.result : (msg.errors?.join('\n') || msg.subtype));
-        return { text: msg.result, structured: msg.structured_output, sessionId, costUsd: msg.total_cost_usd };
+        return { text: msg.result, structured: msg.structured_output, sessionId, costUsd: msg.total_cost_usd, model };
       }
     }
     throw new Error('The session stopped without a result');
@@ -218,6 +227,8 @@ export class ClaudeStudio implements StudioOfficer {
       systemAppend: studioSystemPrompt(),
       prompt: studioPrompt(req.messages, !!req.resumeSessionId, req.video),
       settings: req.settings,
+      model: req.model || undefined,
+      effort: req.effort,
       signal: req.signal,
       activity,
       builtins: WEB_TOOLS,
@@ -228,7 +239,7 @@ export class ClaudeStudio implements StudioOfficer {
         activity: (name) => ({ video: 'Updating the video', take: 'Staging a take', drop_take: 'Clearing a take' })[name] ?? name,
       },
     });
-    return { text: result.text, sessionId: result.sessionId, costUsd: result.costUsd };
+    return { text: result.text, sessionId: result.sessionId, costUsd: result.costUsd, model: result.model };
   }
 }
 

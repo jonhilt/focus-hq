@@ -3,6 +3,8 @@
 // narrative beats with their lines, and the loose threads still to pull), and the takes: rough 3D visualisations the
 // computer stages in the room, cheap to change.
 
+import type { Effort } from './agents';
+
 /** The video as it stands: its premise first, then the rest as it comes. */
 export interface StudioVideo {
   /** The basic idea, in a sentence or two. */
@@ -76,4 +78,10 @@ export interface StudioSession {
   updatedAt: number;
   costUsd: number;
   error?: string;
+  /** The model the captain picked for the computer; missing = the office's `model` setting. Kept across videos. */
+  model?: string;
+  /** How hard it thinks; missing = the model's default. Kept across videos. */
+  effort?: Effort;
+  /** The model its last turn ran on, as Claude Code reported it. */
+  ranOn?: string;
 }

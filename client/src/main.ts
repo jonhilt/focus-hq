@@ -155,7 +155,7 @@ async function main() {
     openNewIssue: (projectId) => openNewIssuePanel(ui, projectId),
     openQa: (projectId) => openQaPanel(ui, projectId),
     openNumberOne: () => openNumberOnePanel(ui),
-    openStudio: () => openStudioChat(ui),
+    openStudio: (beat) => openStudioChat(ui, beat),
     openEngineering: () => openEngineeringPanel(ui),
     openLedger: () => openLedgerPanel(ui),
     showOnMsd: (trace) => (trace ? world.showOnMsd({ kind: 'trace', trace }) : world.clearMsd({ kind: 'report', card: state.report })),
@@ -499,7 +499,7 @@ async function main() {
         ui.openManager('new-project');
         break;
       case 'studio':
-        ui.openStudio();
+        ui.openStudio(i.beat);
         break;
       case 'energise':
         sound.press();
