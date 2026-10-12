@@ -125,7 +125,11 @@ it.
 Before a video is filmed it's thought through, and that happens standing in an empty holodeck with its own computer:
 a Claude session that belongs to the studio, not to a goal or a project. The first vacant holodeck is the studio (the
 sign on its door says so); walk in, press **Enter** (or **E** on the far wall's hologram), and say what the video's
-about. The chat docks down the right, so the room stays in view while the computer builds:
+about. The studio is bigger on the inside than a training hall: it keeps the hall's doorway but sets the rest of its
+shell aside for a grid of its own, its round wall 17 m from the middle (a training hall's is 11 m) and its ceiling 8 m
+up, with nothing on the floor to walk into but its walls (`STUDIO_HALL` and `studioWalls` in
+`client/src/world/studio.ts`, `VacantHall.enlarge` in `room.ts`). The chat docks down the right, so the room stays in
+view while the computer builds:
 
 - **The video** (its `video` tool, `server/agents/studio.ts`): the premise on the far wall in a gold-edged hologram,
   with what the viewer should come away with; the narrative beats in numbered cards round under it, each with the lines
@@ -134,7 +138,7 @@ about. The chat docks down the right, so the room stays in view while the comput
   fact to check) hanging as a warm light in a row across the hall, just over your head between the doorway and the
   takes, its question on a tag you can read from where you come in. The computer
   reads the web to answer them: an answered thread turns green and rises away, a dropped one dims and sinks.
-- **Takes** (its `take` tool): rough 3D sketches of a beat, side by side on the floor, each a short script the computer
+- **Takes** (its `take` tool): rough 3D sketches of a beat, side by side on the floor (each on an 8 × 6 m floor of its own), each a short script the computer
   writes against the studio's kit (`client/src/world/takeKit.ts`: crew standing or at consoles, boxes, balls,
   transporter pads, glowing lines, floating labels and a beam-in effect), looping. Say what to change ("make a slower")
   and it stages the take again under the same id: it swaps in place, a version on. Each take's plaque at its front edge

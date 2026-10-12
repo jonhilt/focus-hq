@@ -1,10 +1,45 @@
 import type { StudioTake, StudioThread } from '../../../shared/types';
+import { ENTRANCE_X } from './hallLayout';
 
 // The studio: an empty holodeck where the captain and its computer, a Claude session of its own, think a video through
 // (docs/studio.md). Its premise is on the far wall, its beats in a row of cards round under it, each loose thread hangs
 // in the air in a row across the hall as a light, its question on a tag that comes up as you walk over, and the computer's
 // takes play side by side on the floor (studioHall.ts, questionLights.ts, takes.ts). Nothing here draws, so it can be
 // tested without a browser.
+
+/**
+ * The studio's hall: bigger than a training hall on the inside, as a holodeck can be. It keeps the hall's entrance, but
+ * its round wall stands `radius` from the middle of the floor (a training hall's is 11 m) and its ceiling `height` up,
+ * so its entrance wall runs wider either side of the doorway, out to where the round wall meets it.
+ */
+export const STUDIO_HALL = { radius: 17, height: 8 };
+/** How far either side of the middle the hall's own entrance wall reaches, which the studio keeps (blender/training_hall.py). */
+const ENTRANCE_HALF = 2.4;
+
+/** How far round the studio's round wall goes, from straight ahead either way, to its entrance wall. */
+export const STUDIO_SPAN = Math.acos(ENTRANCE_X / STUDIO_HALL.radius);
+
+/**
+ * Where the player can't walk past the studio's walls (the hall's frame): small squares `half` either side of points
+ * `step` apart along its round wall and along its entrance wall from either side of the hall's own out to the round one.
+ */
+export function studioWalls(step = 0.3, half = 0.2): { x: number; z: number; half: number }[] {
+  const r = STUDIO_HALL.radius + half / 2;
+  const out: { x: number; z: number; half: number }[] = [];
+  const n = Math.ceil((2 * STUDIO_SPAN * r) / step);
+  for (let i = 0; i <= n; i++) {
+    const a = -STUDIO_SPAN + (2 * STUDIO_SPAN * i) / n;
+    out.push({ x: r * Math.cos(a), z: r * Math.sin(a), half });
+  }
+  const wide = STUDIO_HALL.radius * Math.sin(STUDIO_SPAN);
+  for (let z = ENTRANCE_HALF; z <= wide + step; z += step) for (const side of [-1, 1]) out.push({ x: ENTRANCE_X - half / 2, z: side * z, half });
+  return out;
+}
+
+/** Whether a collider of the hall's own (its middle in the hall's frame) is one the studio keeps: its entrance wall's, round the doorway. */
+export function keepsHallCollider(x: number, z: number): boolean {
+  return x < ENTRANCE_X + 0.35 && Math.abs(z) < ENTRANCE_HALF + 0.1;
+}
 
 /** The warm light an open question glows in. */
 export const QUESTION_LIGHT = '#ffc35c';
@@ -65,7 +100,7 @@ export function placeLights(
  * from the middle, `half` radians either side of straight ahead, from `bottom` to `top`; and the beats' cards in a row
  * round under it, each `card` metres wide with `gap` between, from `cardBottom` to `cardTop`.
  */
-export const STUDIO_WALL = { r: 10.3, half: 0.36, bottom: 2.5, top: 5.5, card: 1.7, gap: 0.18, cardR: 9.9, cardBottom: 0.75, cardTop: 2.15 };
+export const STUDIO_WALL = { r: 16.3, half: 0.36, bottom: 2.8, top: 7.5, card: 2, gap: 0.22, cardR: 15.9, cardBottom: 0.9, cardTop: 2.5 };
 
 /**
  * Where each thread's light hangs (the hall's frame): in a row across the hall between the entrance and the takes, `x`
@@ -74,14 +109,14 @@ export const STUDIO_WALL = { r: 10.3, half: 0.36, bottom: 2.5, top: 5.5, card: 1
  * the middle to the premise clear, and alternately higher and lower so their tags don't sit on each other.
  */
 export const THREAD_SLOTS: readonly { x: number; z: number; y: number }[] = [
-  { x: -4.2, z: -1.8, y: 1.9 },
-  { x: -4.2, z: 1.8, y: 2.15 },
-  { x: -4.4, z: -3.6, y: 2.15 },
-  { x: -4.4, z: 3.6, y: 1.9 },
-  { x: -4.6, z: -5.4, y: 1.9 },
-  { x: -4.6, z: 5.4, y: 2.15 },
-  { x: -4.8, z: -7.2, y: 2.15 },
-  { x: -4.8, z: 7.2, y: 1.9 },
+  { x: -6, z: -2, y: 1.9 },
+  { x: -6, z: 2, y: 2.15 },
+  { x: -6.2, z: -4, y: 2.15 },
+  { x: -6.2, z: 4, y: 1.9 },
+  { x: -6.4, z: -6, y: 1.9 },
+  { x: -6.4, z: 6, y: 2.15 },
+  { x: -6.6, z: -8, y: 2.15 },
+  { x: -6.6, z: 8, y: 1.9 },
 ];
 
 /** Where the beats' row of cards starts (its first card's left edge), in radians round from straight ahead. */
@@ -98,7 +133,7 @@ export const TAKES_SHOWN = 3;
  * they're shown, left to right as you face the far wall, `x` from the middle towards it; the take's own +z (its front)
  * faces back towards the entrance, where you come in.
  */
-export const TAKE_PLOT = { width: 6, depth: 5, gap: 0.6, x: 0.6 };
+export const TAKE_PLOT = { width: 8, depth: 6, gap: 1.2, x: 3.5 };
 
 /** The takes on the floor: the newest few, in the order they were first staged. */
 export function shownTakes(takes: readonly StudioTake[]): StudioTake[] {

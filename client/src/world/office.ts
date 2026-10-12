@@ -446,6 +446,12 @@ export class World {
     const hall = [...this.vacant.values()][0];
     if (!hall || !state.studio) return;
     hall.showStudio(state.studio, (take, error) => void api.studioReport(take.id, take.version, error).catch(() => undefined));
+    // its bigger hall's walls in place of the hall's own, once, in the same array the player walks among
+    const swap = hall.studioColliders;
+    if (swap && swap.drop.size + swap.add.length && !this.colliders.includes(swap.add[0])) {
+      const kept = this.colliders.filter((b) => !swap.drop.has(b));
+      this.colliders.splice(0, this.colliders.length, ...kept, ...swap.add);
+    }
   }
 
   /** The vacant holodecks' empty halls: the studio stages its scenes in one (ui/holoStage.ts). */

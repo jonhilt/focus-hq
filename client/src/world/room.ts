@@ -10,9 +10,9 @@ import { KanbanBoard } from './board';
 import { type Builder, type Interaction, interactive, REACH } from './builder';
 import { seatHelpers } from './helperSeats';
 import { agentView, Character, type CrewView } from './character';
-import { buildHall } from './hall';
+import { buildHall, HALL_SHELL, HALL_SIGN } from './hall';
 import { around, curvedPanel, deckEntrance, ENTRANCE_X, facingIn, hallPodSpots, inHall } from './hallLayout';
-import { briefingRoomAt, footprints, HALL, hallAt, OVER_DOOR, type RoomSlot, ROOM_DEPTH, TRANSPORTER_ROOMS, transporterRoomAt } from './layout';
+import { type Box2, briefingRoomAt, footprints, HALL, hallAt, OVER_DOOR, type RoomSlot, ROOM_DEPTH, TRANSPORTER_ROOMS, transporterRoomAt } from './layout';
 import { ContactShadows } from './contactShadow';
 import { prGlance } from './goalRoom';
 import { mergeStatic } from './merge';
@@ -27,6 +27,7 @@ import { paneUse } from './screenPanes';
 import { Beam } from './transporter';
 import { HULL, LCARS, lcarsSign, workstation } from './starship';
 import { StudioSet } from './studioHall';
+import { keepsHallCollider, STUDIO_HALL, STUDIO_SPAN, studioWalls } from './studio';
 import { FloorGlow, hover } from './hologram';
 import { OVERLAY_LAYER } from './frame';
 import { AHEAD, Portal } from './portal';
@@ -738,11 +739,19 @@ export class VacantHall {
   private readonly code: string;
   /** The studio's set, once it's the studio (`showStudio`). */
   private studio: StudioSet | null = null;
+  /** Its grid floor and skin, which the studio swaps for its bigger hall's. */
+  private floor: THREE.Mesh;
+  private skin: THREE.Mesh;
+  /** What the player can't walk through that the hall put in the world's colliders: its walls and the moving boxes. */
+  private readonly ownColliders: Box2[];
+  /** Once it's the studio, the colliders it swaps in for those: its bigger hall's walls (the world's `syncStudio` makes the swap). */
+  studioColliders: { drop: Set<Box2>; add: Box2[] } | null = null;
 
   constructor(slot: RoomSlot, builder: Builder, hallKit: THREE.Object3D) {
     this.group.position.copy(hallAt(slot));
     this.group.rotation.y = slot.rotationY;
     builder.halls.add(this.group);
+    const firstCollider = builder.colliders.length;
     const entrance = buildHall(this.group, hallKit, { name: 'Holodeck vacant', color: '#9a94a8', sub: 'Start a project from the ready room' }, builder, true);
     this.portal = new Portal(deckEntrance(slot, entrance), entrance);
     builder.add(this.portal.ends[0].group);
@@ -760,9 +769,10 @@ export class VacantHall {
 
     // the grid over the hall's walls, ceiling and floor (the grid's drawn in its mesh's own frame, so the floor's laid
     // flat in its geometry, not by turning it)
-    const floor = new THREE.Mesh(new THREE.CircleGeometry(HALL.radius, 96).rotateX(-Math.PI / 2), holodeckMaterial());
+    const floor = (this.floor = new THREE.Mesh(new THREE.CircleGeometry(HALL.radius, 96).rotateX(-Math.PI / 2), holodeckMaterial()));
     floor.position.y = 0.004;
-    this.group.add(floor, holodeckSkin());
+    this.skin = holodeckSkin();
+    this.group.add(floor, this.skin);
     const poster = new THREE.Mesh(
       new THREE.PlaneGeometry(5, 1.4),
       flat(lcarsSign('Holodeck available', { w: 1024, h: 288, color: LCARS.gold, sub: 'Start one in the ready room' })),
@@ -785,11 +795,55 @@ export class VacantHall {
     this.props.push(boxes);
     interactive(boxes, { kind: 'manager', tab: 'new-project' }, () => 'Start a new project');
     builder.collideObject(boxes);
+    this.ownColliders = builder.colliders.slice(firstCollider);
   }
 
   /** Whether a world position is in the hall. */
   holds(p: THREE.Vector3): boolean {
-    return inHall(this.group.position, p);
+    if (!this.studio) return inHall(this.group.position, p);
+    return Math.hypot(p.x - this.group.position.x, p.z - this.group.position.z) < STUDIO_HALL.radius + 1;
+  }
+
+  /**
+   * Makes the hall the studio's, bigger on the inside (studio.ts: STUDIO_HALL): the hall's own shell goes, but for the
+   * doorway it keeps (the skin's opening frames it), and a bigger grid floor and skin go up round its entrance, and the
+   * walls the player can't pass with them, in place of the hall's and the moving boxes'.
+   */
+  private enlarge(): void {
+    const shell = this.group.getObjectByName(HALL_SHELL);
+    if (shell) shell.visible = false;
+    const inside = this.group.getObjectByName(HALL_SIGN) as THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial> | undefined;
+    if (inside) {
+      inside.material.map?.dispose();
+      inside.material.dispose();
+      inside.material = flat(lcarsSign('Studio', { color: LCARS.gold, sub: 'Make a video with the holodeck computer' }));
+    }
+    for (const old of [this.floor, this.skin]) {
+      this.group.remove(old);
+      old.geometry.dispose();
+      (old.material as THREE.Material).dispose();
+    }
+    const { radius, height } = STUDIO_HALL;
+    // the floor stops at the entrance wall, so none of it reaches into the doorway's alcove
+    const outline = new THREE.Shape().absarc(0, 0, radius, -STUDIO_SPAN, STUDIO_SPAN, false);
+    outline.closePath();
+    this.floor = new THREE.Mesh(new THREE.ShapeGeometry(outline, 96).rotateX(-Math.PI / 2), holodeckMaterial(radius));
+    this.floor.position.y = 0.004;
+    this.skin = holodeckSkin(radius, height);
+    this.group.add(this.floor, this.skin);
+
+    this.group.updateWorldMatrix(true, false);
+    const local = new THREE.Vector3();
+    const drop = new Set(this.ownColliders.filter((b) => {
+      this.group.worldToLocal(local.set((b.minX + b.maxX) / 2, 0, (b.minZ + b.maxZ) / 2));
+      return !keepsHallCollider(local.x, local.z);
+    }));
+    const world = new THREE.Vector3();
+    const add = studioWalls().map(({ x, z, half }) => {
+      this.group.localToWorld(world.set(x, 0, z));
+      return { minX: world.x - half, maxX: world.x + half, minZ: world.z - half, maxZ: world.z + half };
+    });
+    this.studioColliders = { drop, add };
   }
 
   /** Whether it's the studio. */
@@ -811,6 +865,7 @@ export class VacantHall {
       old.map?.dispose();
       old.dispose();
       interactive(this.studio.wall, { kind: 'studio' }, () => 'Talk to the holodeck computer');
+      this.enlarge();
     }
     this.studio.show(session);
   }

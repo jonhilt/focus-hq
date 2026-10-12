@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { StudioTake } from '../../../shared/types';
-import { beatsFrom, type Lit, placeLights, plotZ, shownTakes, STUDIO_WALL, TAKE_PLOT, threadLights } from './studio';
+import { ENTRANCE_X } from './hallLayout';
+import { beatsFrom, keepsHallCollider, type Lit, placeLights, plotZ, shownTakes, STUDIO_HALL, STUDIO_SPAN, STUDIO_WALL, studioWalls, TAKE_PLOT, threadLights } from './studio';
 
 const lit = (n: number, settled?: Lit['settled']): Lit => ({ id: `t${n}`, text: `Thread ${n}?`, label: `Thread t${n}`, ...(settled ? { settled } : {}) });
 
@@ -62,6 +63,28 @@ describe('the takes on the floor', () => {
     // the far corners of the outer plots stay inside the hall's 11 m radius
     const z = step + TAKE_PLOT.width / 2;
     const x = TAKE_PLOT.x + TAKE_PLOT.depth / 2;
-    expect(Math.hypot(x, z)).toBeLessThan(11);
+    // with room to walk round the outer ones
+    expect(Math.hypot(x, z)).toBeLessThan(STUDIO_HALL.radius - 1.5);
+  });
+});
+
+describe('the studio hall', () => {
+  it('walls in its round wall and its entrance wall out to it, leaving the doorway clear', () => {
+    const walls = studioWalls();
+    const r = walls.map((w) => Math.hypot(w.x, w.z));
+    expect(Math.max(...r)).toBeLessThan(STUDIO_HALL.radius + 0.6);
+    // nothing in the middle of the floor, and nothing in the doorway
+    expect(walls.filter((w) => Math.hypot(w.x, w.z) < STUDIO_HALL.radius - 0.5 && w.x > ENTRANCE_X + 0.5)).toEqual([]);
+    expect(walls.filter((w) => w.x < ENTRANCE_X + 1 && Math.abs(w.z) < 2.3)).toEqual([]);
+    // the entrance wall reaches the round wall on both sides
+    const wide = STUDIO_HALL.radius * Math.sin(STUDIO_SPAN);
+    for (const side of [-1, 1]) expect(walls.some((w) => w.x < ENTRANCE_X && side * w.z > wide - 0.3)).toBe(true);
+  });
+
+  it('keeps only the hall\'s own colliders round its doorway', () => {
+    expect(keepsHallCollider(ENTRANCE_X - 0.2, 1.5)).toBe(true);
+    expect(keepsHallCollider(1.3, -1.5)).toBe(false); // the moving boxes
+    expect(keepsHallCollider(10.9, 0)).toBe(false); // the hall's round wall
+    expect(keepsHallCollider(ENTRANCE_X + 0.2, 4)).toBe(false);
   });
 });

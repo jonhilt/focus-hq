@@ -30,21 +30,19 @@ const HALL_SKIN_INSET = 0.1;
 const HALL_SKIN_TOP = HALL.height - 0.04;
 const HALL_SKIN_R = HALL.radius - HALL_SKIN_INSET;
 const HALL_SKIN_X = ENTRANCE_X + HALL_SKIN_INSET;
-/** How far round a hall's round wall its skin reaches, from straight ahead either way, to the entrance wall's skin. */
-const HALL_SKIN_SPAN = Math.acos(HALL_SKIN_X / HALL_SKIN_R);
 
 /** The skin: in front of the hall's round wall, its entrance wall either side of and over the doorway, and its ceiling, all facing in. */
-function skinGeometry(): THREE.BufferGeometry {
-  const top = HALL_SKIN_TOP;
-  const halfW = HALL_SKIN_R * Math.sin(HALL_SKIN_SPAN);
+function skinGeometry(r = HALL_SKIN_R, top = HALL_SKIN_TOP): THREE.BufferGeometry {
+  const span = Math.acos(HALL_SKIN_X / r);
+  const halfW = r * Math.sin(span);
   const side = halfW - DOOR_W / 2;
   // the round wall, round from straight ahead (+X) both ways to the entrance wall (three's cylinders start at +Z and
   // turn towards +X), facing in: a cylinder's open side faces out, so it's mirrored across the hall, which turns it
   // inside out and leaves it where it was
-  const wall = new THREE.CylinderGeometry(HALL_SKIN_R, HALL_SKIN_R, top, 128, 1, true, Math.PI / 2 - HALL_SKIN_SPAN, HALL_SKIN_SPAN * 2).translate(0, top / 2, 0);
+  const wall = new THREE.CylinderGeometry(r, r, top, 128, 1, true, Math.PI / 2 - span, span * 2).translate(0, top / 2, 0);
   wall.scale(1, 1, -1);
   const plane = (w: number, h: number) => new THREE.PlaneGeometry(w, h).rotateY(Math.PI / 2);
-  const ceiling = new THREE.CircleGeometry(HALL.radius, 96).rotateX(Math.PI / 2).translate(0, top, 0);
+  const ceiling = new THREE.CircleGeometry(r + HALL_SKIN_INSET, 96).rotateX(Math.PI / 2).translate(0, top, 0);
   const geo = mergeGeometries([
     wall.toNonIndexed(),
     plane(side, top).translate(HALL_SKIN_X, top / 2, -(DOOR_W / 2 + side / 2)).toNonIndexed(),
@@ -160,13 +158,13 @@ function portalMaterials(ref: number, tint: THREE.ColorRepresentation) {
   return { stamp, clear, restore, holo };
 }
 
-/** An empty holodeck's walls, ceiling and floor: dark, with the yellow grid. Opaque, no stencil needed. */
-export function holodeckMaterial(): THREE.ShaderMaterial {
+/** An empty holodeck's walls, ceiling and floor: dark, with the yellow grid, its round wall `round` from the middle. Opaque, no stencil needed. */
+export function holodeckMaterial(round = HALL_SKIN_R): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: {
       base: { value: new THREE.Color('#1d2030') },
       line: { value: new THREE.Color('#ffc94d') },
-      round: { value: HALL_SKIN_R },
+      round: { value: round },
       entrance: { value: HALL_SKIN_X },
     },
     vertexShader: plainVertex,
@@ -185,9 +183,13 @@ export function holodeckMaterial(): THREE.ShaderMaterial {
   });
 }
 
-/** An empty holodeck's walls and ceiling: the skin, drawn opaque with the yellow grid, over the hall's own. */
-export function holodeckSkin(): THREE.Mesh {
-  const mesh = new THREE.Mesh(skinGeometry(), holodeckMaterial());
+/**
+ * An empty holodeck's walls and ceiling: the skin, drawn opaque with the yellow grid, over the hall's own; or, given
+ * `radius` and `height`, a bigger hall's round its entrance (the studio's, which leaves the hall's own shell behind).
+ */
+export function holodeckSkin(radius?: number, height?: number): THREE.Mesh {
+  const r = radius === undefined ? HALL_SKIN_R : radius - HALL_SKIN_INSET;
+  const mesh = new THREE.Mesh(skinGeometry(r, height === undefined ? HALL_SKIN_TOP : height - 0.04), holodeckMaterial(r));
   mesh.raycast = noRaycast;
   return mesh;
 }
