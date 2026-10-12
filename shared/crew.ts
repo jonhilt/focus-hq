@@ -90,7 +90,7 @@ export const leadId = (projectId: string, suffix: string) => `lead_${projectId}_
 export function leadFor(projectId: string, goalId: string, others: string[] = [], closed: string[] = []): Planner {
   const h = hash(`lead:${projectId}:${goalId}`);
   const avatar = rollAvatar(seeded(h), 'command', 'lieutenant');
-  return { name: `${RANK_TITLE.lieutenant} ${freeSurname(projectId, h, others, closed)}`, avatar };
+  return { name: `${RANK_TITLE.lieutenant} ${freeSurname(projectId, h >>> 3, others, closed)}`, avatar };
 }
 
 /**
@@ -101,18 +101,36 @@ export function leadFor(projectId: string, goalId: string, others: string[] = []
 export function qaFor(projectId: string, goalId: string, others: string[] = []): Planner {
   const h = hash(`qa:${projectId}:${goalId}`);
   const avatar = rollAvatar(seeded(h), 'sciences', (h >>> 1) % 3 === 0 ? 'ensign' : 'lieutenant');
-  return { name: `${RANK_TITLE[avatar.rank]} ${freeSurname(projectId, h, others)}`, avatar };
+  return { name: `${RANK_TITLE[avatar.rank]} ${freeSurname(projectId, h >>> 3, others)}`, avatar };
 }
 
-/** A surname nobody in the room has: not its officers', nor any of `others`, nor of `avoid` while there's another. */
-function freeSurname(projectId: string, h: number, others: string[], avoid: string[] = []): string {
+/**
+ * The name of an agent hired to work at one of the room's desks (or the climber): their rank's title and a surname
+ * nobody in the room's posts or `taken` (the names of everyone in the office) has, `roll` (in [0, 1), like
+ * Math.random) choosing among those free. With every surname taken, they're numbered, so the name is still their own.
+ */
+export function hiredName(projectId: string, rank: Rank, taken: string[], roll: number): string {
+  const name = `${RANK_TITLE[rank]} ${freeSurname(projectId, Math.floor(roll * SURNAMES.length), taken)}`;
+  const names = new Set(taken);
+  let n = 1;
+  while (names.has(n === 1 ? name : `${name} ${n}`)) n++;
+  return n === 1 ? name : `${name} ${n}`;
+}
+
+/**
+ * A surname nobody in the room has: not its officers', nor any of `others`, nor of `avoid` while there's another;
+ * `index` picks among those. With every surname taken, it's still never the officers'.
+ */
+function freeSurname(projectId: string, index: number, others: string[], avoid: string[] = []): string {
   const surnames = (names: string[]) => new Set(names.map((n) => n.split(' ').at(-1)));
-  const taken = surnames([plannerFor(projectId).name, qaOfficerFor(projectId).name, ...others]);
+  const officers = surnames([plannerFor(projectId).name, qaOfficerFor(projectId).name]);
+  const taken = surnames(others);
   const avoided = surnames(avoid);
-  const free = SURNAMES.filter((s) => !taken.has(s));
+  const notOfficers = SURNAMES.filter((s) => !officers.has(s));
+  const free = notOfficers.filter((s) => !taken.has(s));
   const fresh = free.filter((s) => !avoided.has(s));
-  const pool = fresh.length ? fresh : free.length ? free : SURNAMES;
-  return pool[(h >>> 3) % pool.length];
+  const pool = fresh.length ? fresh : free.length ? free : notOfficers;
+  return pool[index % pool.length];
 }
 
 /** A helper the lead brings to their team station: an ensign from sciences or operations, the same for the same task. */

@@ -112,15 +112,3 @@ export function pullRequestBody(agent: Pick<Agent, 'name'> & Partial<Pick<Agent,
 Closes #${agent.issue.number}`;
   return attribution ? `${body}\n\n---\n_Built by **${agent.name}** in the Focus office with Claude Code._` : body;
 }
-
-const NAMES = [
-  'Ada', 'Linus', 'Grace', 'Alan', 'Margaret', 'Dennis', 'Barbara', 'Ken', 'Radia', 'Guido', 'Katherine', 'Tim', 'Hedy',
-  'Bjarne', 'Frances', 'Donald', 'Sophie', 'Anders', 'Yukihiro', 'Brendan', 'Jean', 'Edsger', 'Annie', 'Rasmus', 'Evelyn',
-  'Niklaus', 'Lynn', 'Larry', 'Mary', 'Vint', 'Joan', 'Ward',
-];
-
-export function pickName(taken: Set<string>): string {
-  const free = NAMES.filter((n) => !taken.has(n));
-  if (free.length) return free[Math.floor(Math.random() * free.length)];
-  return `${NAMES[Math.floor(Math.random() * NAMES.length)]} ${taken.size + 1}`;
-}

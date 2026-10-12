@@ -1,12 +1,11 @@
 import { Effect, FiberMap } from 'effect';
-import { randomAvatar } from '../../../shared/crew';
+import { hiredName, randomAvatar } from '../../../shared/crew';
 import { type Closer } from '../../../shared/ledger';
 import { prKey } from '../../../shared/qa';
 import type { Agent, Effort } from '../../../shared/types';
 import { ACTIVE_STATUSES, CLIMB_DESK } from '../../../shared/types';
 import { newId, slugify } from '../../util';
 import { leadWorktreeId, snapshotMessage } from '../lead';
-import { pickName } from '../prompts';
 import { offTheFloor, pickDesk } from '../desks';
 import { deskless, whoStarts } from '../schedule';
 import { Workspace } from '../services';
@@ -66,10 +65,11 @@ export class Seating extends Part {
 
     // the climber stands in main engineering, not at one of the room's desks
     const desk = work.task === 'climb' ? CLIMB_DESK : this.freeDesk(projectId);
-    const name = pickName(new Set([...this.store.agents.values()].map((a) => a.name)));
+    const avatar = randomAvatar();
+    const name = hiredName(projectId, avatar.rank, [...this.store.agents.values()].map((a) => a.name), Math.random());
     const agent: Agent = {
       name,
-      avatar: randomAvatar(),
+      avatar,
       projectId,
       repo,
       ...work,

@@ -10,7 +10,7 @@ The office setting is the default: it applies to agents started from then on, an
 
 ## One agent's mode
 
-Each agent's panel has an **Autonomy** picker in its header, beside their effort and context, showing the mode they work in. Pick another to change it for that agent alone, whether they're working, idle or finished: the office setting and every other agent stay as they are. Their terminal gets a line saying so (`✻ The captain set Ada's autonomy to Full autonomy`).
+Each agent's panel has an **Autonomy** picker in its header, beside their effort and context, showing the mode they work in. Pick another to change it for that agent alone, whether they're working, idle or finished: the office setting and every other agent stay as they are. Their terminal gets a line saying so (`✻ The captain set Ensign Okafor's autonomy to Full autonomy`).
 
 - A session running on this machine switches at once, without restarting (Claude Code's `setPermissionMode`): an agent moved from Raise your hand to Full autonomy runs their next command without raising their hand, and one moved back raises it again. A hand already up stays up until you answer it.
 - A cloud session's permissions are set as its turn starts, so the change applies from their next turn, and the line says so.
