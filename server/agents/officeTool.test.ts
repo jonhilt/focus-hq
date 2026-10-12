@@ -30,7 +30,7 @@ describe('the note tool schema', () => {
     says('title', L.title);
     says('done', L.done);
     says('slice', L.slice, L.item);
-    says('learned', L.line);
+    says('learned', L.line, L.learned);
     says('allLearned', L.learned, L.line);
     says('next', L.next, L.item);
   });
@@ -48,6 +48,27 @@ describe('the note tool schema', () => {
       { next: [text(L.item)] }, { next: [text(L.item + 1)] },
     ];
     for (const input of cases) expect([input, fits(input)]).toEqual([input, officeTakes(input)]);
+  });
+
+  it('refuses in the office\'s words, naming the line to fix, not a bare schema error', () => {
+    const refusal = (input: unknown) => schema.safeParse(input).error?.issues.map((i) => i.message);
+    const long = text(L.line + 5);
+    expect(refusal({ learned: long, next: ['a', 'b', 'c', 'd'] })).toEqual([
+      `the learned line “${text(40)}…” is ${L.line + 5} characters (at most ${L.line})`,
+      `next has 4 ideas (at most ${L.next})`,
+    ]);
+    const office = (input: Parameters<typeof applyNote>[1]) => {
+      const result = applyNote({ title: 'Goal' }, input);
+      return 'error' in result ? result.error : '';
+    };
+    const cases: Parameters<typeof applyNote>[1][] = [
+      { title: text(L.title + 1) }, { done: text(L.done + 1) },
+      { slice: Array.from({ length: L.slice + 1 }, () => ({ text: 'a' })) }, { slice: [{ text: text(L.item + 1) }] },
+      { learned: text(L.line + 1) }, { allLearned: [text(L.line + 1)] }, { next: Array.from({ length: L.next + 1 }, () => 'a') }, { next: [text(L.item + 1)] },
+    ];
+    for (const input of cases) for (const message of refusal(input) ?? ['accepted']) expect(office(input)).toContain(message);
+    expect(refusal({ allLearned: Array.from({ length: L.learned + 1 }, () => 'a') })).toEqual([`allLearned has ${L.learned + 1} lines (at most ${L.learned}: merge the older lessons)`]);
+    expect(refusal({ heading: text(L.heading + 1) })).toEqual([`the heading is ${L.heading + 1} characters (at most ${L.heading})`]);
   });
 });
 

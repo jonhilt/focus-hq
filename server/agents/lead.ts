@@ -222,18 +222,33 @@ export interface NoteInput extends ContactInput {
   next?: string[];
 }
 
-/** Why the note is too long, for the lead to trim: undefined when it fits. */
+/**
+ * Why one part of the note is over its limit, in the words both the office and the note tool's schema refuse with:
+ * a line is named by its first 40 characters, so the lead can find the one to trim.
+ */
+export const noteOver = {
+  field: (what: string, length: number, limit: number) => `${what} is ${length} characters (at most ${limit})`,
+  line: (what: string, text: string, limit: number) => `${what} “${text.length > 40 ? `${text.slice(0, 40)}…` : text}” is ${text.length} characters (at most ${limit})`,
+  slice: (items: number) => `the slice has ${items} items (at most ${NOTE_LIMITS.slice}: split the slice, or merge items)`,
+  learned: (lines: number) => `learned has ${lines} lines (at most ${NOTE_LIMITS.learned}: send allLearned with the older lessons merged)`,
+  allLearned: (lines: number) => `allLearned has ${lines} lines (at most ${NOTE_LIMITS.learned}: merge the older lessons)`,
+  next: (ideas: number) => `next has ${ideas} ideas (at most ${NOTE_LIMITS.next})`,
+};
+
+/** Why the note is too long, every part that's over named, for the lead to trim: undefined when it fits. */
 export function checkNote(title: string, note: GoalNote): string | undefined {
   const L = NOTE_LIMITS;
-  const over: string[] = [];
-  if (title.length > L.title) over.push(`the title is ${title.length} characters (at most ${L.title})`);
-  if (note.done.length > L.done) over.push(`done is ${note.done.length} characters (at most ${L.done})`);
-  if (note.slice.length > L.slice) over.push(`the slice has ${note.slice.length} items (at most ${L.slice}: split the slice, or merge items)`);
-  if (note.slice.some((i) => i.text.length > L.item)) over.push(`a slice item is longer than ${L.item} characters`);
-  if (note.learned.length > L.learned) over.push(`learned has ${note.learned.length} lines (at most ${L.learned}: send allLearned with the older lessons merged)`);
-  if (note.learned.some((l) => l.length > L.line)) over.push(`a learned line is longer than ${L.line} characters`);
-  if (note.next.length > L.next) over.push(`next has ${note.next.length} ideas (at most ${L.next})`);
-  if (note.next.some((n) => n.length > L.item)) over.push(`an idea in next is longer than ${L.item} characters`);
+  const lines = (what: string, texts: string[], limit: number) => texts.filter((t) => t.length > limit).map((t) => noteOver.line(what, t, limit));
+  const over = [
+    ...(title.length > L.title ? [noteOver.field('the title', title.length, L.title)] : []),
+    ...(note.done.length > L.done ? [noteOver.field('done', note.done.length, L.done)] : []),
+    ...(note.slice.length > L.slice ? [noteOver.slice(note.slice.length)] : []),
+    ...lines('the slice item', note.slice.map((i) => i.text), L.item),
+    ...(note.learned.length > L.learned ? [noteOver.learned(note.learned.length)] : []),
+    ...lines('the learned line', note.learned, L.line),
+    ...(note.next.length > L.next ? [noteOver.next(note.next.length)] : []),
+    ...lines('the idea in next', note.next, L.item),
+  ];
   return over.length ? `The note is too long: ${over.join('; ')}. It's a note, not a spec: trim it and try again.` : undefined;
 }
 

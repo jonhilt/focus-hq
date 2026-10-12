@@ -291,6 +291,20 @@ describe('the goal’s note', () => {
     expect(checkNote('ok', emptyNote())).toBeUndefined();
   });
 
+  it('names every line over its limit at once: its first words, its length and the limit', () => {
+    const long = (start: string, n: number) => start + 'x'.repeat(n - start.length);
+    const error = checkNote('ok', {
+      done: '',
+      slice: [{ text: 'fine', done: false }, { text: long('Wire the store to the button and then the', 161), done: false }],
+      learned: ['short', long('The store needs a migration before the API', 201), long('Second lesson that runs on far too long now', 230)],
+      next: [long('An idea for later that is long', 170)],
+    });
+    expect(error).toContain('the slice item “Wire the store to the button and then th…” is 161 characters (at most 160)');
+    expect(error).toContain('the learned line “The store needs a migration before the A…” is 201 characters (at most 200)');
+    expect(error).toContain('the learned line “Second lesson that runs on far too long …” is 230 characters (at most 200)');
+    expect(error).toContain('the idea in next “An idea for later that is longxxxxxxxxxx…” is 170 characters (at most 160)');
+  });
+
   it('reads back as the goal where it stands, leaving out what’s empty', () => {
     expect(noteForPrompt({ title: 'Saved items' })).toBe('The goal: Saved items');
     expect(noteForPrompt({ title: 'Saved items', note: { done: 'Works on any device', slice: [{ text: 'api', done: true }, { text: 'web', done: false }], learned: ['Store is fine'], next: ['Header'] } })).toBe(

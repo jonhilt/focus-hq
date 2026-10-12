@@ -3,24 +3,29 @@ import { z } from 'zod';
 import { errorMessage } from '../util';
 import { EXPLAINER_LIMITS as E, STAGE_SIZE, THREE_VERSION } from './explainer';
 import { CONTACT_LIMITS as C } from './contacts';
-import { NOTE_LIMITS as L } from './lead';
+import { NOTE_LIMITS as L, noteOver } from './lead';
 import type { OfficeTools, ToolReply } from './types';
 
 /**
  * The note tool's input, with the limits `checkNote` enforces (`NOTE_LIMITS`), so the lead sees them up front rather
  * than learning them by being refused. The office still checks the whole note: learned adds to lines already there.
  */
+const field = (what: string, limit: number) => z.string().max(limit, { error: (iss) => noteOver.field(what, String(iss.input).length, limit) });
+const line = (what: string, limit: number) => z.string().max(limit, { error: (iss) => noteOver.line(what, String(iss.input), limit) });
+const atMost = <T extends z.ZodType>(item: T, limit: number, over: (count: number) => string) =>
+  z.array(item).max(limit, { error: (iss) => over(Array.isArray(iss.input) ? iss.input.length : limit + 1) });
+
 export const noteShape = {
-  title: z.string().max(L.title).optional().describe(`A better title for the goal, in a few words (at most ${L.title} characters).`),
-  done: z.string().max(L.done).optional().describe(`What done looks like, as agreed with the captain: a few lines (at most ${L.done} characters).`),
-  heading: z.string().max(L.heading).optional().describe(`What this slice is heading for, in a few words (at most ${L.heading} characters): set it as each slice starts. The goal's star chart shows it on the slice under way until it ships under its own title.`),
-  slice: z.array(z.object({
-    text: z.string().max(L.item).describe(`One item (at most ${L.item} characters).`),
+  title: field('the title', L.title).optional().describe(`A better title for the goal, in a few words (at most ${L.title} characters).`),
+  done: field('done', L.done).optional().describe(`What done looks like, as agreed with the captain: a few lines (at most ${L.done} characters).`),
+  heading: field('the heading', L.heading).optional().describe(`What this slice is heading for, in a few words (at most ${L.heading} characters): set it as each slice starts. The goal's star chart shows it on the slice under way until it ships under its own title.`),
+  slice: atMost(z.object({
+    text: line('the slice item', L.item).describe(`One item (at most ${L.item} characters).`),
     done: z.boolean().optional(),
-  })).max(L.slice).optional().describe(`This slice's checklist, all of it (at most ${L.slice} items of ${L.item} characters each): send it again with items ticked off as you go.`),
-  learned: z.string().max(L.line).optional().describe(`One new line on what a slice taught you, or a decision and why (at most ${L.line} characters).`),
-  allLearned: z.array(z.string().max(L.line)).max(L.learned).optional().describe(`Replaces every learned line: to merge older lessons when the list is full (at most ${L.learned} lines of ${L.line} characters each).`),
-  next: z.array(z.string().max(L.item)).max(L.next).optional().describe(`Up to ${L.next} candidate next slices (at most ${L.item} characters each), replacing the last ones.`),
+  }), L.slice, noteOver.slice).optional().describe(`This slice's checklist, all of it (at most ${L.slice} items of ${L.item} characters each): send it again with items ticked off as you go.`),
+  learned: line('the learned line', L.line).optional().describe(`One new line on what a slice taught you, or a decision and why (at most ${L.line} characters). The note keeps ${L.learned} lines: when it's full, send allLearned instead, with the older lessons merged.`),
+  allLearned: atMost(line('the learned line', L.line), L.learned, noteOver.allLearned).optional().describe(`Replaces every learned line: to merge older lessons when the list is full (at most ${L.learned} lines of ${L.line} characters each).`),
+  next: atMost(line('the idea in next', L.item), L.next, noteOver.next).optional().describe(`Up to ${L.next} candidate next slices (at most ${L.item} characters each), replacing the last ones.`),
   contact: z.string().max(C.text).optional().describe(`Log one loose thread you noticed and don't want lost, a question, a risk or an idea off the current path, as a contact on the goal's chart (at most ${C.text} characters, ${C.open} open at once). The office gives it an id (c1, c2…).`),
   closeContact: z.object({
     id: z.string().describe('The contact\'s id, like c2.'),
