@@ -3,11 +3,17 @@ import * as THREE from 'three';
 export const UI_FONT = '"Fredoka", "Trebuchet MS", system-ui, sans-serif';
 export const MONO_FONT = '"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace';
 
+/**
+ * `?canvas=cpu`, to tell whether drawing the screens on the GPU is what holds frames up on someone's machine: the
+ * browser then draws every canvas in software, on the main thread, rather than in its GPU process as each is sent.
+ */
+export const canvasTest = { software: false };
+
 export function makeCanvas(w: number, h: number): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
-  return { canvas, ctx: canvas.getContext('2d')! };
+  return { canvas, ctx: canvas.getContext('2d', canvasTest.software ? { willReadFrequently: true } : undefined)! };
 }
 
 export function canvasTexture(canvas: HTMLCanvasElement): THREE.CanvasTexture {

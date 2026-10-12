@@ -3,9 +3,9 @@ import type { FrameStatsBench } from '../../../shared/types';
 import { canvasTexture, makeCanvas, MONO_FONT } from '../world/canvas';
 
 // How long this browser takes to send a canvas to the GPU, measured once with ?stats=1 (frameStats.ts): the way the
-// screens send theirs, and the ways that might be cheaper. On a laptop's integrated GPU the screens' canvases cost
-// about 7 ms a MB, thirty times an Apple M4's; in a test with canvases drawn in software, not flipping them and leaving
-// their alpha premultiplied halved it. This says whether it would there.
+// screens send theirs, and the ways that might be cheaper. A simple canvas (lines of text): on the AMD Renoir laptop
+// that began this it took 0.1 ms a MB, so what holds a frame up there as a screen is sent isn't its size, but drawing
+// what was drawn on it, which the browser does on the GPU as it's sent (try ?canvas=cpu, docs/performance.md).
 
 /** How many times each way is timed: the middle time counts. */
 const TIMES = 5;

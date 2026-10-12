@@ -56,6 +56,8 @@ export interface FrameStatsSample {
   uploadMB: number;
   /** Geometry sent to the GPU over the second (MB): a mesh's, the first time it's drawn. */
   bufferMB?: number;
+  /** How much the page's JavaScript holds (MB, Chrome): a drop from one sample to the next is the garbage collector. */
+  heapMB?: number;
   /** GPU time per frame (ms) by pass, as `<frame>.<pass>`: the screen's, an open doorway's far side, a transporter feed. */
   gpu?: Record<string, number>;
 }
@@ -87,4 +89,13 @@ export interface FrameStatsBench {
   msPerMB: Record<string, number>;
 }
 
-export type FrameStatsLine = FrameStatsSession | FrameStatsSample | FrameStatsHitch | FrameStatsBench;
+/** A task that kept the main thread busy over 50 ms: a frame, or work between frames (the office's messages, the garbage collector). */
+export interface FrameStatsLongTask {
+  kind: 'longtask';
+  /** When it started (seconds since the page opened), where, and how long it took (ms). */
+  t: number;
+  where: string;
+  ms: number;
+}
+
+export type FrameStatsLine = FrameStatsSession | FrameStatsSample | FrameStatsHitch | FrameStatsBench | FrameStatsLongTask;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BIG_REDRAW_EVERY, BLINK, DISPLAY_EVERY, cursorOn, REDRAW_EVERY, redrawDue, type ScreenDrawn } from './screenRedraw';
+import { BIG_REDRAW_EVERY, BLINK, DISPLAY_EVERY, DRAWS_PER_FRAME, cursorOn, newFrame, REDRAW_EVERY, redrawDue, type ScreenDrawn, takeDraw } from './screenRedraw';
 
 const drawn = (over: Partial<ScreenDrawn> = {}): ScreenDrawn => ({ changed: false, blinking: false, at: 0, cursor: true, ...over });
 
@@ -40,5 +40,15 @@ describe('redrawDue', () => {
     expect(redrawDue(screen, 'near', 1000 + BIG_REDRAW_EVERY.near, DISPLAY_EVERY)).toBe(false);
     expect(redrawDue(screen, 'near', 1000 + DISPLAY_EVERY.near, DISPLAY_EVERY)).toBe(true);
     expect(redrawDue(screen, 'unseen', 1000 + DISPLAY_EVERY.far, DISPLAY_EVERY)).toBe(false);
+  });
+});
+
+describe('takeDraw', () => {
+  it('lets a frame draw only so many canvases, and the next frame as many again', () => {
+    newFrame();
+    for (let i = 0; i < DRAWS_PER_FRAME; i++) expect(takeDraw()).toBe(true);
+    expect(takeDraw()).toBe(false);
+    newFrame();
+    expect(takeDraw()).toBe(true);
   });
 });

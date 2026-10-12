@@ -15,9 +15,35 @@ export const BIG_REDRAW_EVERY: Record<Exclude<ScreenView, 'unseen'>, number> = {
 /**
  * A station's sign, goal board, chart and the screen over its pod, and a holodeck's Kanban board (goalScreens.ts,
  * board.ts): they change with every line the crew write (the board's roster shows each one's latest), and each is a
- * canvas of several MB to send, which on a laptop's integrated GPU held a frame up about 7 ms a MB.
+ * canvas of several MB; on a laptop's integrated GPU, sending one of these (which is when the browser draws what was
+ * drawn on it) held a frame up 50-100 ms.
  */
 export const DISPLAY_EVERY: Record<Exclude<ScreenView, 'unseen'>, number> = { near: 2000, far: 5000 };
+/**
+ * How many whole canvases (screens, boards, signs) a frame may draw: walking into a hall drew all of its screens in one
+ * frame, which kept a laptop's main thread busy for 112 ms. The rest wait a frame or two.
+ */
+export const DRAWS_PER_FRAME = 2;
+let drawsLeft = DRAWS_PER_FRAME;
+
+/** At the start of each frame: its drawings are all still to take. */
+export function newFrame(): void {
+  drawsLeft = DRAWS_PER_FRAME;
+}
+
+/** Takes one of the frame's drawings, if any are left; false if the canvas should wait for the next frame. */
+export function takeDraw(): boolean {
+  if (drawsLeft <= 0) return false;
+  drawsLeft--;
+  return true;
+}
+
+/**
+ * `?screens=still`, to tell whether redrawing screens is what holds frames up on someone's machine: each screen, board
+ * and sign is drawn once and then left as it is.
+ */
+export const screenTest = { still: false };
+
 /** How long (ms) a busy terminal's cursor stays on, and then off. */
 export const BLINK = 500;
 

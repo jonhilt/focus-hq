@@ -42,6 +42,8 @@ export class FrameStats {
   private readonly shown: number[] = [];
   private window: { ms: number; busy: number; door: boolean }[] = [];
   private hitches = 0;
+  /** Long tasks logged this sample. */
+  private longTasks = 0;
   private draws = 0;
   private gpuMs: number | null = null;
   private last: Drawn | null = null;
@@ -64,6 +66,7 @@ export class FrameStats {
     this.gpu = String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
     this.timer = GpuTimer.for(gl);
     timePasses(this.timer);
+    this.watchLongTasks();
     this.countUploads(gl);
     // counted across every render of a frame (the doorway's, the screen's), not reset at each
     renderer.info.autoReset = false;
@@ -125,6 +128,7 @@ export class FrameStats {
     const frames = this.window;
     this.window = [];
     this.hitches = 0;
+    this.longTasks = 0;
     this.lastSample = now;
     const gpu = this.timer?.take();
     this.gpuMs = gpu ? Object.values(gpu).reduce((a, b) => a + b, 0) : null;
@@ -147,6 +151,7 @@ export class FrameStats {
       uploads: this.uploads,
       uploadMB: Math.round(this.uploadBytes / 1e5) / 10,
       bufferMB: Math.round(this.bufferBytes / 1e5) / 10,
+      ...(heapMB() !== undefined && { heapMB: heapMB() }),
       ...(gpu && { gpu }),
     });
     this.uploads = 0;
@@ -184,6 +189,20 @@ export class FrameStats {
     ].join('\n');
   }
 
+  /**
+   * Logs each task that kept the main thread busy over 50 ms (a long task): one of the frames, or work between them
+   * that `busy` doesn't see, like handling a burst of the office's messages, or the garbage collector.
+   */
+  private watchLongTasks(): void {
+    if (!PerformanceObserver.supportedEntryTypes?.includes('longtask')) return;
+    new PerformanceObserver((list) => {
+      for (const task of list.getEntries()) {
+        if (this.longTasks++ >= HITCHES_PER_SAMPLE) continue;
+        this.lines.push({ kind: 'longtask', t: this.seconds(task.startTime), where: this.where, ms: Math.round(task.duration) });
+      }
+    }).observe({ type: 'longtask' });
+  }
+
   /** Counts the pictures (canvases and images) sent to the GPU, and their size, and the bytes of geometry. */
   private countUploads(gl: WebGL2RenderingContext): void {
     const methods = gl as unknown as Record<'texImage2D' | 'texSubImage2D', (...args: unknown[]) => void>;
@@ -207,4 +226,10 @@ export class FrameStats {
       bufferData(...args);
     };
   }
+}
+
+/** How much the page's JavaScript holds (MB), where the browser says (Chrome): a drop is the garbage collector at work. */
+function heapMB(): number | undefined {
+  const memory = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
+  return memory && Math.round(memory.usedJSHeapSize / 1e5) / 10;
 }

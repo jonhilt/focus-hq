@@ -48,6 +48,8 @@ import { TransporterFeeds } from './world/transporterFeeds';
 import { TextureFeed, warmUp } from './world/warmUp';
 import { patchTexturesOn } from './world/texturePatch';
 import { gpuFrame } from './world/gpuTimer';
+import { canvasTest } from './world/canvas';
+import { newFrame, screenTest } from './world/screenRedraw';
 
 async function fontsReady(): Promise<void> {
   const loads = ['700 40px Fredoka', '500 40px Fredoka', '15px "JetBrains Mono"', '600 40px Antonio', '500 40px Antonio'].map((f) => document.fonts.load(f));
@@ -89,6 +91,9 @@ async function main() {
   const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 250);
   // ?merge=0 leaves the decks' meshes as Blender made them, for the gap and z-fighting scans to name
   setMerging(params.get('merge') !== '0');
+  // tests of what holds frames up on someone's machine (docs/performance.md): screens drawn in software, or never redrawn
+  canvasTest.software = params.get('canvas') === 'cpu';
+  screenTest.still = params.get('screens') === 'still';
   const portalView = new PortalView(renderer);
   const view = new SceneRenderer(renderer);
   const feeds = new TransporterFeeds(renderer);
@@ -576,6 +581,7 @@ async function main() {
     else player.update(dt);
     const through = world.through(camera.position);
     if (through) player.transport(through.through, through.other.doorway.matrix);
+    newFrame();
     world.update(t, now, camera.position);
     feed.update(world.ahead(camera.position), now);
     sound.listen(camera);

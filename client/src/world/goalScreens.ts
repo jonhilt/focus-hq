@@ -6,7 +6,7 @@ import type { CrewView } from './character';
 import { checklistGlance, type GoalRoomTone, goalRoomState, leadNow, type NoteSection, noteSections, type PrGlance, rowAt, sliceProgress } from './goalRoom';
 import { flat } from './materials';
 import { portrait } from './portraits';
-import { DISPLAY_EVERY, redrawDue, type ScreenView } from './screenRedraw';
+import { DISPLAY_EVERY, redrawDue, type ScreenView, screenTest, takeDraw } from './screenRedraw';
 import { LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
 import { clip, type CoursePlot, everySlice, type Label, leaderEnd, plotCourse, type ProbeFlight, probeFlights, probesOut, seeded, shieldState } from '../ui/course';
 
@@ -141,7 +141,8 @@ abstract class Display {
    * off (`view`), since each drawing sends its canvas to the GPU again.
    */
   update(now: number, view: ScreenView): void {
-    if (!this.pending || !redrawDue({ changed: true, blinking: false, at: this.drawn, cursor: false }, view, now, DISPLAY_EVERY)) return;
+    if (!this.pending || (screenTest.still && this.drawn > -Infinity)) return;
+    if (!redrawDue({ changed: true, blinking: false, at: this.drawn, cursor: false }, view, now, DISPLAY_EVERY) || !takeDraw()) return;
     const pending = this.pending;
     this.pending = null;
     this.drawn = now;

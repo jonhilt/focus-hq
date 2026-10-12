@@ -22,7 +22,7 @@ import { paddPiles, RACK_PILES } from './paddRack';
 import { PR_LOOK } from './goalScreens';
 import { holodeckMaterial, holodeckSkin, type Scenery } from './scenery';
 import { StationScreen } from './screen';
-import { DISPLAY_EVERY, redrawDue, type ScreenView } from './screenRedraw';
+import { DISPLAY_EVERY, redrawDue, type ScreenView, screenTest, takeDraw } from './screenRedraw';
 import { paneUse } from './screenPanes';
 import { Beam } from './transporter';
 import { HULL, LCARS, lcarsSign, workstation } from './starship';
@@ -605,7 +605,8 @@ export class ProjectRoom {
     const hallSeen = briefing ? briefing.portal.near(camera, AHEAD) : this.holds(camera) || this.entrance.near(camera, AHEAD);
     const hallView = (near: boolean): ScreenView => (!hallSeen ? 'unseen' : near ? 'near' : 'far');
     // out of sight it's still drawn now and then, so there's little to draw as you come into view (only to send)
-    if (this.boardDirty && redrawDue({ changed: true, blinking: false, at: this.boardDrawn, cursor: false }, inRoom ? 'near' : 'far', now, DISPLAY_EVERY)) {
+    const boardDue = this.boardDirty && !(screenTest.still && this.boardDrawn > -Infinity) && redrawDue({ changed: true, blinking: false, at: this.boardDrawn, cursor: false }, inRoom ? 'near' : 'far', now, DISPLAY_EVERY);
+    if (boardDue && takeDraw()) {
       this.boardDirty = false;
       this.boardDrawn = now;
       const board = state.boards.get(this.project.id);

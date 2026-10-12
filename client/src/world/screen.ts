@@ -6,7 +6,7 @@ import { plainTermLine } from '../../../shared/termText';
 import { canvasTexture, fitText, makeCanvas, MONO_FONT, roundRect, UI_FONT, wrap } from './canvas';
 import { flat } from './materials';
 import { type Pane, type PaneAt, paneAt, screenPanes, screenPrefs } from './screenPanes';
-import { BIG_REDRAW_EVERY, cursorOn, REDRAW_EVERY, redrawDue, type ScreenView } from './screenRedraw';
+import { BIG_REDRAW_EVERY, cursorOn, REDRAW_EVERY, redrawDue, type ScreenView, screenTest, takeDraw } from './screenRedraw';
 import { patchTexture } from './texturePatch';
 import { LCARS, LCARS_FONT, LCARS_STATUS, lcarsFrame } from './starship';
 
@@ -115,23 +115,29 @@ export class StationScreen {
       this.prefsVersion = screenPrefs.version;
       this.dirty = true;
     }
+    if (screenTest.still && this.lastDraw > -Infinity) return;
     // the cursor blinks while the agent is busy
     const blinking = !!this.agent && !['done', 'error', 'stopped'].includes(this.agent.status);
     const every = this.size === BIG_SCREEN ? BIG_REDRAW_EVERY : REDRAW_EVERY;
     if (!redrawDue({ changed: this.dirty, blinking, at: this.lastDraw, cursor: this.cursor }, view, now, every)) return;
-    this.cursor = cursorOn(now);
     // nothing new but the cursor: only its cell goes to the GPU
-    if (!this.dirty && this.blink()) return;
+    if (!this.dirty && this.cell) {
+      this.cursor = cursorOn(now);
+      this.blink();
+      return;
+    }
+    if (!takeDraw()) return;
+    this.cursor = cursorOn(now);
     this.dirty = false;
     this.lastDraw = now;
     this.draw(lines ?? [], frame);
     this.texture.needsUpdate = true;
   }
 
-  /** Turns the cursor on or off in its cell, on the canvas and the GPU; false if the whole canvas has to go instead. */
-  private blink(): boolean {
+  /** Turns the cursor on or off in its cell, on the canvas and the GPU. */
+  private blink(): void {
     const { cell } = this;
-    if (!cell) return false;
+    if (!cell) return;
     const { canvas, ctx } = this.patch;
     if (canvas.width !== cell.at.w || canvas.height !== cell.at.h) {
       canvas.width = cell.at.w;
@@ -149,7 +155,6 @@ export class StationScreen {
     main.drawImage(canvas, cell.at.x, cell.at.y);
     main.restore();
     if (!patchTexture(this.texture, canvas, cell.at.x, cell.at.y)) this.texture.needsUpdate = true;
-    return true;
   }
 
   private draw(lines: TermLine[], frame: BrowserFrame | undefined): void {
