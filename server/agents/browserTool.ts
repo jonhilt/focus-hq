@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { ARTIFACT_SIZE } from '../../shared/artifacts';
 import type { BrowserFrame } from '../../shared/types';
 import { errorMessage, truncate } from '../util';
+import { STAGE_AT, STAGE_SIZE, type StageMoment } from './explainer';
 import type { RunHooks } from './types';
 
 /** How long an evaluate may run before the tool gives up on it. */
@@ -115,11 +116,12 @@ export class BrowserPool {
   /**
    * A picture of a self-contained HTML page, as a JPEG `width` × `height`: in a context of its own, so the page sees no
    * agent's cookies. Waits for what it loads from the network (a diagram library from a CDN, say), within reason. Says
-   * what its scripts threw or logged as errors meanwhile, so whoever made the page hears it's broken.
+   * what its scripts threw or logged as errors meanwhile, so whoever made the page hears it's broken. For an explainer,
+   * `moments` asks for its stage at those times too, in the same visit (a 3D stage loads three.js once).
    */
-  async render(html: string, width = ARTIFACT_SIZE.w, height = ARTIFACT_SIZE.h): Promise<{ image: Buffer; errors: string[] }> {
+  async render(html: string, moments: readonly number[] = []): Promise<{ image: Buffer; errors: string[]; moments?: (StageMoment & { image: Buffer })[] }> {
     const browser = await this.shared();
-    const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
+    const context = await browser.newContext({ viewport: { width: ARTIFACT_SIZE.w, height: ARTIFACT_SIZE.h }, deviceScaleFactor: 1 });
     try {
       const page = await context.newPage();
       const errors: string[] = [];
@@ -132,7 +134,15 @@ export class BrowserPool {
       await page.waitForFunction(() => (window as { kitReady?: boolean }).kitReady !== false, undefined, { timeout: 5000 }).catch(() => undefined);
       // scripts that draw after loading (mermaid, charts) get a moment to finish
       await page.waitForTimeout(400);
-      return { image: await page.screenshot({ type: 'jpeg', quality: 85 }), errors };
+      const image = await page.screenshot({ type: 'jpeg', quality: 85 });
+      if (!moments.length) return { image, errors };
+      const stage: (StageMoment & { image: Buffer })[] = [];
+      for (const at of moments) {
+        await page.evaluate((t) => (window as { kitSeek?: (t: number) => void }).kitSeek?.(t), at);
+        const shot = await page.screenshot({ type: 'jpeg', quality: 70, clip: { ...STAGE_AT, width: STAGE_SIZE.w, height: STAGE_SIZE.h } });
+        stage.push({ at, image: shot, ...(await page.evaluate(seeStage, shot.toString('base64'))) });
+      }
+      return { image, errors, moments: stage };
     } finally {
       await context.close().catch(() => undefined);
     }
@@ -148,6 +158,40 @@ export class BrowserPool {
     await Promise.all([...this.tabs.keys()].map((id) => this.close(id)));
     if (this.browser) await this.browser.then((b) => b.close()).catch(() => undefined);
   }
+}
+
+/**
+ * Runs in the page: what's on its stage, from a picture of it (as base64 JPEG). How much of it is its commonest colour
+ * (counted in coarse steps, so a JPEG's noise doesn't split one colour into many), and the kit3d labels showing.
+ */
+async function seeStage(jpeg: string): Promise<Omit<StageMoment, 'at'>> {
+  const img = new Image();
+  img.src = `data:image/jpeg;base64,${jpeg}`;
+  await img.decode();
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const g = canvas.getContext('2d')!;
+  g.drawImage(img, 0, 0);
+  const px = g.getImageData(0, 0, img.width, img.height).data;
+  const counts = new Map<number, number>();
+  let n = 0;
+  for (let i = 0; i < px.length; i += 8) {
+    const key = ((px[i] >> 4) << 8) | ((px[i + 1] >> 4) << 4) | (px[i + 2] >> 4);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+    n++;
+  }
+  const flat = Math.max(...counts.values()) / n;
+  const stage = document.getElementById('stage')!.getBoundingClientRect();
+  const kit = (window as { __scene?: { labels: { text: string; onScreen: boolean }[] } }).__scene;
+  const labels = [...document.querySelectorAll<HTMLElement>('#stage .kit3d-label')]
+    .filter((el) => el.style.display !== 'none' && Number(el.style.opacity || 1) > 0)
+    .map((el) => {
+      const r = el.getBoundingClientRect();
+      const text = el.textContent ?? '';
+      return { text, x: r.left - stage.left, y: r.top - stage.top, w: r.width, h: r.height, onScreen: kit?.labels.find((l) => l.text === text)?.onScreen ?? true };
+    });
+  return { flat, labels };
 }
 
 /**

@@ -409,7 +409,7 @@ export class DemoRunner implements AgentRunner {
       await show({ id: 'mockup', title: 'A first mockup', html: demoMockupPage(goal) });
       // the explainer goes up last, so the screen plays it while the slice is built
       hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__explain(How a save travels)' }]);
-      const explained = await tools.explain(demoExplainer(repos.map((r) => r.folder))).catch((err: Error) => err.message);
+      const explained = await tools.explain(demoExplainer(repos.map((r) => r.folder))).then((reply) => reply.text, (err: Error) => err.message);
       hooks.lines([{ kind: 'output', text: `  ⎿  ${explained}` }]);
       const leadTodos = (done: number) => ({
         todos: [...repos.map((r) => [`Build ${goal} in ./${r.folder}`, `Building it in ./${r.folder}`]), ['Ship the slice', 'Shipping the slice']].map(([content, activeForm], i) => ({

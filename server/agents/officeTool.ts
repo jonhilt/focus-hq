@@ -4,7 +4,7 @@ import { errorMessage } from '../util';
 import { EXPLAINER_LIMITS as E, STAGE_SIZE, THREE_VERSION } from './explainer';
 import { CONTACT_LIMITS as C } from './contacts';
 import { NOTE_LIMITS as L } from './lead';
-import type { OfficeTools } from './types';
+import type { OfficeTools, ToolReply } from './types';
 
 /**
  * The note tool's input, with the limits `checkNote` enforces (`NOTE_LIMITS`), so the lead sees them up front rather
@@ -47,14 +47,16 @@ export const explainShape = {
     html: z.string().describe(`The scene's elements, laid out in a ${STAGE_SIZE.w} × ${STAGE_SIZE.h} box (absolutely positioned).`),
     css: z.string().optional().describe('Styles for them.'),
     script: z.string().describe('Defines render(t), which sets the whole scene for t seconds from the start, and can build elements first.'),
-    libs: z.array(z.string()).optional().describe(`For a 3D stage: ["three"], plus any three.js addons by path (like "three/addons/environments/RoomEnvironment.js"). They load (three ${THREE_VERSION}) before your script runs, all on window.THREE, addons' classes too (THREE.RoomEnvironment).`),
+    libs: z.array(z.string()).optional().describe(`For a 3D stage: ["three"], plus any three.js addons by path (like "three/addons/geometries/RoundedBoxGeometry.js"). They load (three ${THREE_VERSION}) before your script runs, all on window.THREE, addons' classes too (THREE.RoundedBoxGeometry), with kit3d() to start from.`),
   }).describe('What plays above the captions.'),
 };
 
-/** One tool's answer: what happened, in words, or (marked as an error) why it didn't. */
-async function answer(run: () => Promise<string>, failed: string): Promise<{ content: { type: 'text'; text: string }[]; isError?: boolean }> {
+/** One tool's answer: what happened, in words (and any pictures), or (marked as an error) why it didn't. */
+async function answer(run: () => Promise<string | ToolReply>, failed: string): Promise<{ content: ({ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string })[]; isError?: boolean }> {
   try {
-    return { content: [{ type: 'text', text: await run() }] };
+    const reply = await run();
+    if (typeof reply === 'string') return { content: [{ type: 'text', text: reply }] };
+    return { content: [{ type: 'text', text: reply.text }, ...reply.images.map((image) => ({ type: 'image' as const, data: image.toString('base64'), mimeType: 'image/jpeg' }))] };
   } catch (err) {
     return { content: [{ type: 'text', text: `${failed}: ${errorMessage(err)}` }], isError: true };
   }
@@ -99,7 +101,7 @@ export function officeMcpServer(tools: OfficeTools): McpSdkServerConfigWithInsta
 
 The stage is a ${STAGE_SIZE.w} × ${STAGE_SIZE.h} box (#stage). Put your elements in html, style them in css, and in script define render(t): it sets the whole scene for t seconds from the start (0 to the beats' seconds added up), and is called every frame and for jumps back and forth, so work everything out from t, never from the frame before. Build repeated elements once in the script, before render. Helpers: p(t, a, b) eases from 0 to 1 between a and b seconds; clamp(x, lo, hi); B[i] is when beat i starts (B[0] = 0) and DUR when it ends; $(selector) and $$(selector) find things in the stage; tag(text, colour) is the HTML for a status capsule. Colours are CSS variables: --orange, --gold, --peach, --lilac, --peri, --sky, --green, --red (for alerts), --text, --muted, --line. Classes: .panel (style="--c:var(--sky)") with a .hd header and a .bd body, .pill (a capsule, coloured by --c), .lbl (a column label), .mono (code). The font is Antonio; JetBrains Mono for code.
 
-Make it 3D only when the idea is spatial (a structure, a path through space, layers), with libs ["three"]: in your script, build a WebGLRenderer on a canvas in the stage (${STAGE_SIZE.w} × ${STAGE_SIZE.h}), the scene and its lights once, and have render(t) set the camera and every object from t and call renderer.render itself: no requestAnimationFrame loop, clock or damped controls, and seed any randomness. Plan the beats first: one change per beat, the camera still while things change and moving only between beats. Keep labels as HTML over the canvas, at most a handful at once. If something arrives after load (a texture), call kitRedraw() once it has.`,
+Make it 3D only when the idea is spatial (a structure, a path through space, layers), with libs ["three"]. Plan the beats first: one change per beat. Start from k = kit3d({ grid, fov }): it sets up the renderer behind your HTML, studio lighting, a camera and a grid (grid: 0 for none), and gives k.scene, k.camera, k.add(name, object3D), k.label(text, colour) (an HTML pill: in render call .at(object or [x, y, z], opacity) on every frame it shows, .hide() otherwise), k.shots(t, [{ pos, look }, …]) (a camera shot per beat: it holds through the beat and eases to the next at the beat's start) and k.draw(t), which renders. render(t) sets every object from t, then calls k.draw(t): no requestAnimationFrame loop, clock or damped controls, and seed any randomness. A handful of labels at most. If something arrives after load (a texture), call kitRedraw() once it has. The office replies with a picture of the stage at the middle of each beat and what its checks found (an empty stage, labels out of view or overlapping): look at them, and fix what doesn't read.`,
         explainShape,
         (input) => answer(() => tools.explain(input), "Couldn't explain it"),
       ),

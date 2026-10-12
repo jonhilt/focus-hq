@@ -3,6 +3,7 @@ import { GhServerError, serverStatus } from '../github/runner';
 import { errorMessage } from '../util';
 import type { TriageDecision, Triager, TriageRequest } from './triage';
 import type { SinceVerdict } from './retest';
+import type { StageMoment } from './explainer';
 import type { AgentRunner, AgentSession, BaseMerge, BranchState, ChecksRun, CloudTerminalRequest, RunHooks, RunRequest, WorkspaceOps } from './types';
 
 // What the agent manager needs from the outside world, as Effect services: git on the agents' checkouts, Claude Code
@@ -168,17 +169,20 @@ export class RenderFailed extends Data.TaggedError('RenderFailed')<{ reason: str
 export interface Picture {
   image: Buffer;
   errors: string[];
+  /** For an explainer: the stage at each moment asked for, as a JPEG with what the office saw on it. */
+  moments?: (StageMoment & { image: Buffer })[];
 }
 
 /** Pictures of the HTML pages a goal's lead puts on their station's screen, for the screen to show. */
 export class Renderer extends Context.Service<Renderer, {
-  render(html: string): Effect.Effect<Picture, RenderFailed>;
+  /** `moments`: for an explainer, the times to also take a picture of its stage at (`beatMoments`). */
+  render(html: string, moments?: readonly number[]): Effect.Effect<Picture, RenderFailed>;
 }>()('focus/agents/Renderer') {
   /** Renders in the agents' shared headless Chromium (`BrowserPool.render`). */
-  static fromBrowser(browser: { render(html: string): Promise<Picture> }): Layer.Layer<Renderer> {
+  static fromBrowser(browser: { render(html: string, moments?: readonly number[]): Promise<Picture> }): Layer.Layer<Renderer> {
     const failed = (err: unknown) => new RenderFailed({ reason: errorMessage(err) });
     return Layer.succeed(Renderer, Renderer.of({
-      render: (html) => Effect.tryPromise({ try: () => browser.render(html), catch: failed }),
+      render: (html, moments) => Effect.tryPromise({ try: () => browser.render(html, moments), catch: failed }),
     }));
   }
 }

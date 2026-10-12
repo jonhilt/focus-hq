@@ -2,10 +2,11 @@ import { Effect, Option } from 'effect';
 import type { Agent, MessageReply, ResumeHow } from '../../../shared/types';
 import { answerMessage } from '../../../shared/artifacts';
 import { answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, applyNote, type NoteInput, pageErrorsNote } from '../lead';
-import { explainerPage, type ExplainerInput } from '../explainer';
+import { beatMoments, explainerCheck, explainerPage, type ExplainerInput, momentNotes } from '../explainer';
 import { applyContacts } from '../contacts';
 import { checklistWaypoint, headedWaypoint, notedWaypoint } from '../waypoints';
-import { Renderer } from '../services';
+import { type Picture, Renderer } from '../services';
+import type { ToolReply } from '../types';
 import { Part, Refused } from './core';
 
 /** The lead's office tools besides ship: the goal's note, show, explain, ask (and the captain's answer) and propose_close. */
@@ -35,37 +36,47 @@ export class GoalTools extends Part {
    * can't take a picture of still goes up: the captain can open it, though the screen only shows its title.
    */
   showArtifact(agent: Agent, input: ArtifactInput): Effect.Effect<string, Refused, Renderer> {
+    return Effect.map(this.showPage(agent, input), (shown) => shown.text);
+  }
+
+  /** show's work, with the picture it took: `moments` asks for an explainer's stage at those times too. */
+  private showPage(agent: Agent, input: ArtifactInput, moments?: readonly number[]): Effect.Effect<{ text: string; picture?: Picture }, Refused, Renderer> {
     return Effect.gen({ self: this }, function* () {
       if (!agent.lead) return yield* new Refused({ message: 'There’s no goal to show it on' });
       const checked = showArtifact(agent.lead.artifacts ?? [], input, Date.now());
       if ('error' in checked) return yield* new Refused({ message: checked.error });
       this.store.saveArtifact(agent.id, `${input.id}.html`, Buffer.from(input.html));
-      const picture = yield* (yield* Renderer).render(input.html).pipe(
-        Effect.map(({ image, errors }) => ({ bytes: image, errors })),
+      const picture = yield* (yield* Renderer).render(input.html, moments).pipe(
+        Effect.map((taken) => ({ bytes: taken.image, errors: taken.errors, taken })),
         Effect.catch((err) => Effect.succeed({ failed: err.message })),
       );
       if ('bytes' in picture) this.store.saveArtifact(agent.id, `${input.id}.jpg`, picture.bytes);
       else this.store.deleteArtifact(agent.id, `${input.id}.jpg`);
       // taking the picture takes a moment: the goal may have closed, or the lead shown something else, meanwhile
       const work = agent.lead;
-      if (!work) return 'The goal closed before it went up.';
+      if (!work) return { text: 'The goal closed before it went up.' };
       const next = showArtifact(work.artifacts ?? [], input, Date.now());
       if ('error' in next) return yield* new Refused({ message: next.error });
       // each goes on the waypoint of the slice it was last shown in, as evidence of what it set out to do
       this.update(agent, { lead: { ...work, artifacts: next.map((a) => (a.id === input.id ? { ...a, slice: work.slice, ...('bytes' in picture && { image: true }) } : a)) } });
       const where = `“${next.find((a) => a.id === input.id)!.title}” is on your station's screen; the captain can open it up close.`;
-      return 'bytes' in picture ? `${where}${pageErrorsNote(picture.errors)}` : `${where} The office couldn't take a picture of it for the screen (${picture.failed}), so the screen shows only its title.`;
+      return 'bytes' in picture
+        ? { text: `${where}${pageErrorsNote(picture.errors)}`, picture: picture.taken }
+        : { text: `${where} The office couldn't take a picture of it for the screen (${picture.failed}), so the screen shows only its title.` };
     });
   }
 
   /** The lead's explain tool: their beats and stage go in the office's player, which goes up like any of show's visuals. */
-  explain(agent: Agent, input: ExplainerInput): Effect.Effect<string, Refused, Renderer> {
+  explain(agent: Agent, input: ExplainerInput): Effect.Effect<ToolReply, Refused, Renderer> {
     return Effect.gen({ self: this }, function* () {
       const built = explainerPage(input);
       if ('error' in built) return yield* new Refused({ message: built.error });
-      const shown = yield* this.showArtifact(agent, built);
+      const shown = yield* this.showPage(agent, built, beatMoments(input.beats));
       const seconds = input.beats.reduce((sum, b) => sum + b.seconds, 0);
-      return `${shown} It's an explainer of ${input.beats.length} beats, ${Math.round(seconds)} seconds in all.`;
+      const text = `${shown.text} It's an explainer of ${input.beats.length} beats, ${Math.round(seconds)} seconds in all.`;
+      const moments = shown.picture?.moments ?? [];
+      if (!moments.length) return { text, images: [] };
+      return { text: `${text} ${explainerCheck(momentNotes(moments))}`, images: moments.map((m) => m.image) };
     });
   }
 

@@ -69,7 +69,12 @@ function office(workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<Git
     Sessions.fromRunner(claude),
     Triage.fromTriager({ triage: () => Promise.reject(new Error('no officer here')) }),
     Renderer.fromBrowser({
-      render: (html) => (html.includes('unrenderable') ? Promise.reject(new Error('no browser')) : Promise.resolve({ image: Buffer.from('jpeg'), errors: html.includes('throws') ? ['ReferenceError: nope is not defined'] : [] })),
+      render: (html, moments) => (html.includes('unrenderable') ? Promise.reject(new Error('no browser')) : Promise.resolve({
+        image: Buffer.from('jpeg'),
+        errors: html.includes('throws') ? ['ReferenceError: nope is not defined'] : [],
+        // a stage that says "blank" draws nothing
+        ...(moments && { moments: moments.map((at) => ({ at, image: Buffer.from(`beat at ${at}`), flat: html.includes('blank') ? 1 : 0.7, labels: [] })) }),
+      })),
     }),
   );
   return { store, project, claude, agents: new AgentManager(store, new Hub(), services, () => undefined) };
@@ -451,13 +456,17 @@ describe('AgentManager', () => {
       beats: [{ title: 'Append', text: 'One line per event.', seconds }, { title: 'Crash', text: 'Half a line at the end.', seconds: 4 }],
       stage: { html: '<div id="file"></div>', script },
     });
-    expect(await explain('function render(t) {}')).toMatch(/“The ledger” is on your station's screen.*an explainer of 2 beats, 7 seconds in all\.$/);
+    const shown = await explain('function render(t) {}');
+    expect(shown.text).toMatch(/“The ledger” is on your station's screen.*an explainer of 2 beats, 7 seconds in all\. Here's the stage at the middle of each beat.*found nothing\.$/);
+    // the stage at the middle of each beat, for the lead to look at
+    expect(shown.images.map(String)).toEqual(['beat at 1.5', 'beat at 5']);
     expect(store.agent(lead.id).lead!.artifacts).toEqual([{ id: 'ledger', title: 'The ledger', at: expect.any(Number), image: true, slice: 1 }]);
     expect(await store.readArtifact(lead.id, 'ledger.webm')).toBeUndefined();
     const page = (await store.readArtifact(lead.id, 'ledger.html'))!.toString();
     expect(page).toContain('<div id="file"></div>');
     expect(page).toContain('Run briefing');
-    expect(await explain('function render(t) { throws(); }')).toMatch(/But the page reported an error as it loaded: “ReferenceError: nope is not defined”\. Fix it/);
+    expect((await explain('function render(t) { throws(); }')).text).toMatch(/But the page reported an error as it loaded: “ReferenceError: nope is not defined”\. Fix it/);
+    expect((await explain('function render(t) { /* blank */ }')).text).toMatch(/found: Beat 1 looks empty.* Beat 2 looks empty/);
     await expect(explain('function render(t) {}', 99)).rejects.toThrow(/Beat 1 plays for 99 seconds/);
   });
 

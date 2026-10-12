@@ -10,12 +10,16 @@ export const EXPLAINER_LIMITS = { minBeats: 2, maxBeats: 8, label: 16, beatTitle
 
 /** The stage's box inside the player, in CSS pixels: the lead lays their scene out in it. */
 export const STAGE_SIZE = { w: 1050, h: 500 } as const;
+/** Where the stage sits on the player's 1280 × 800 page. */
+export const STAGE_AT = { x: 200, y: 58 } as const;
 
 /** The three.js a 3D stage loads: the office's own (package.json), so what a lead learns here holds there too. */
 export const THREE_VERSION = '0.186.1';
 const THREE_CDN = `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}`;
 /** Libraries a stage can ask for: three.js, and its addons by path (`three/addons/environments/RoomEnvironment.js`). */
 const LIB = /^three(\/addons\/[\w-]+(\/[\w-]+)*\.js)?$/;
+/** The addon kit3d lights its scenes with, loaded with three whether the stage asks for it or not. */
+const ROOM_ENVIRONMENT = 'three/addons/environments/RoomEnvironment.js';
 
 export interface ExplainerBeat {
   title: string;
@@ -65,6 +69,58 @@ export function beatNarration(beat: ExplainerBeat): string {
   return `${title}${/[.!?]$/.test(title) ? '' : '.'} ${clean(beat.text)}`;
 }
 
+/** The moments the office takes a picture of the stage at, for the lead to check: the middle of each beat. */
+export function beatMoments(beats: readonly Pick<ExplainerBeat, 'seconds'>[]): number[] {
+  let at = 0;
+  return beats.map((b) => {
+    const middle = at + b.seconds / 2;
+    at += b.seconds;
+    return middle;
+  });
+}
+
+/** What the office saw on the stage at one moment: how much of it is one flat colour, and where kit3d's labels landed. */
+export interface StageMoment {
+  at: number;
+  /** The share (0 to 1) of the stage's pixels that are its commonest colour. */
+  flat: number;
+  /** kit3d's labels showing, in stage pixels, and whether what each is pinned to is in view. */
+  labels: { text: string; x: number; y: number; w: number; h: number; onScreen: boolean }[];
+}
+
+/** A stage this close to one colour all over has nothing on it (a lone small label is about 0.997). */
+const EMPTY = 0.999;
+/** More labels than this at once crowd a stage. */
+const MANY_LABELS = 6;
+
+/** What looks wrong at each moment, a line per beat, for the lead to fix: nothing when all looks well. */
+export function momentNotes(moments: readonly StageMoment[]): string[] {
+  return moments.flatMap((m, i) => {
+    const which = `Beat ${i + 1}`;
+    if (m.flat >= EMPTY) return [`${which} looks empty (one flat colour across the stage): check that the camera faces the scene, that it's lit, and that render(t) draws it.`];
+    const seen: string[] = [];
+    for (const l of m.labels) {
+      if (!l.onScreen) seen.push(`the "${l.text}" label's object is out of view`);
+      else if (l.x < 0 || l.y < 0 || l.x + l.w > STAGE_SIZE.w || l.y + l.h > STAGE_SIZE.h) seen.push(`the "${l.text}" label is cut off at the stage's edge`);
+    }
+    m.labels.forEach((a, j) => {
+      for (const b of m.labels.slice(j + 1)) {
+        const across = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+        const down = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+        if (across > 4 && down > 4) seen.push(`the "${a.text}" and "${b.text}" labels overlap`);
+      }
+    });
+    if (m.labels.length > MANY_LABELS) seen.push(`${m.labels.length} labels at once: a handful reads better`);
+    return seen.length ? [`${which}: ${seen.join('; ')}.`] : [];
+  });
+}
+
+/** What the lead hears with the pictures of their explainer's beats: what the office's checks found, and to look. */
+export function explainerCheck(notes: readonly string[]): string {
+  const look = "Here's the stage at the middle of each beat, in order: look at each, and if one doesn't show what its caption says, fix it and explain it again under the same id.";
+  return notes.length ? `${look} The office's checks found: ${notes.join(' ')}` : `${look} The office's checks (an empty stage, labels out of view, cut off or overlapping) found nothing.`;
+}
+
 /** The player page for an explainer, ready to show under its id and title. Or why it was refused. */
 export function explainerPage(input: ExplainerInput): ArtifactInput | { error: string } {
   const L = EXPLAINER_LIMITS;
@@ -96,7 +152,7 @@ export function explainerPage(input: ExplainerInput): ArtifactInput | { error: s
     return beat;
   });
   const title = clean(input.title);
-  return { id: input.id, title, html: page(title, beats, at, html, css, script, [...new Set(libs)]) };
+  return { id: input.id, title, html: page(title, beats, at, html, css, script, libs.length ? [...new Set([...libs, ROOM_ENVIRONMENT])] : []) };
 }
 
 /** The player around the lead's stage. The kit's own script defines its helpers on window, so the lead's names win. */
@@ -142,7 +198,8 @@ ${stageHtml}
 </div>
 <script>window.KIT_BEATS = ${scriptJson(beats)}; window.KIT_DUR = ${dur};</script>
 <script>${KIT_HELPERS}</script>
-${libs.length ? `<script type="text/x-kit" id="kit-stage">
+${libs.length ? `<script type="text/x-kit" id="kit-3d">${KIT_3D}</script>
+<script type="text/x-kit" id="kit-stage">
 ${stageScript}
 </script>
 <script type="text/x-kit" id="kit-player">${KIT_PLAYER}</script>
@@ -202,6 +259,8 @@ const KIT_CSS = String.raw`
   .lbl::before { content:""; width:22px; height:14px; border-radius:7px 0 0 7px; background:var(--peach); }
   .tag { display:inline-block; height:26px; padding:0 14px; border-radius:13px; color:#000; font:600 16px/26px var(--ui); text-transform:uppercase; letter-spacing:.06em; white-space:nowrap; }
   .mono { font-family:var(--mono); font-size:13px; }
+  canvas.kit3d { position:absolute; left:0; top:0; width:100%; height:100%; }
+  .pill.kit3d-label { height:30px; border-radius:15px; font-size:16px; line-height:30px; padding:0 13px; transform:translate(-50%, -100%); pointer-events:none; }
 `;
 
 const FRAME = `<svg class="frame" width="1280" height="800">
@@ -352,6 +411,8 @@ const KIT_PLAYER = String.raw`
   frame(); stop();
   // for a stage whose things arrive later (a texture, a font): draw the frame it's on again
   window.kitRedraw = frame;
+  // the office's pictures of each beat jump straight to a moment, lit as when playing
+  window.kitSeek = function (at) { stop(); hush(); hold = -1; document.body.classList.remove('rest'); t = at; frame(); };
   window.kitReady = true;
 })();
 `;
@@ -363,7 +424,7 @@ const KIT_LOADER = String.raw`
 var libs = LIBS;
 Promise.all(libs.map(function (lib) { return import(lib); })).then(function (mods) {
   window.THREE = Object.assign.apply(Object, [{}].concat(mods));
-  ['kit-stage', 'kit-player'].forEach(function (id) {
+  ['kit-3d', 'kit-stage', 'kit-player'].forEach(function (id) {
     var s = document.createElement('script');
     s.text = document.getElementById(id).textContent;
     document.body.appendChild(s);
@@ -371,4 +432,84 @@ Promise.all(libs.map(function (lib) { return import(lib); })).then(function (mod
 }, function (err) {
   window.kitFault('Couldn’t load ' + libs.join(', ') + ': ' + (err && err.message || err));
 });
+`;
+
+// kit3d(): the scaffold a 3D stage starts from, so a lead writes the scene and render(t), not the setup. A renderer the
+// size of the stage behind its HTML, lit by a soft studio environment and a key light, a camera, a grid to stand on;
+// named objects, camera shots that hold still through a beat and move only at its start, and HTML labels that follow
+// objects. draw(t) renders and leaves window.__scene saying where everything ended up, for the office's checks.
+const KIT_3D = String.raw`
+window.kit3d = function (opts) {
+  opts = opts || {};
+  var W = stage.clientWidth || ${STAGE_SIZE.w}, H = stage.clientHeight || ${STAGE_SIZE.h};
+  var canvas = document.createElement('canvas'); canvas.className = 'kit3d';
+  stage.insertBefore(canvas, stage.firstChild);
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(1); renderer.setSize(W, H, false);
+  renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  var scene = new THREE.Scene();
+  var pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new THREE.RoomEnvironment(), 0.04).texture; pmrem.dispose();
+  var key = new THREE.DirectionalLight(0xffffff, 1.5); key.position.set(5, 10, 7); scene.add(key);
+  var camera = new THREE.PerspectiveCamera(opts.fov || 40, W / H, 0.1, 200);
+  var target = new THREE.Vector3();
+  var size = opts.grid === undefined ? 12 : opts.grid;
+  if (size) scene.add(new THREE.GridHelper(size, size * 2, 0x9999ff, 0x3a3352));
+  var named = {}, labels = [], v = new THREE.Vector3(), box = new THREE.Box3();
+  function look(pos, at) { camera.position.set(pos[0], pos[1], pos[2]); target.set(at[0], at[1], at[2]); camera.lookAt(target); }
+  look([6, 5, 9], [0, 0.5, 0]);
+  function onScreen(p) { return p.z < 1 && Math.abs(p.x) <= 1 && Math.abs(p.y) <= 1; }
+  // where a label sits: just over the top of its object, or at a point
+  function anchor(target) {
+    if (target.isObject3D) { box.setFromObject(target); box.getCenter(v); v.y = box.max.y + 0.15; return v; }
+    return v.set(target[0], target[1], target[2]);
+  }
+  var k = {
+    THREE: THREE, scene: scene, camera: camera, renderer: renderer,
+    add: function (name, obj) { obj.name = name; named[name] = obj; scene.add(obj); return obj; },
+    look: look,
+    // one shot per beat ({ pos, look }): the camera holds through a beat and eases to the next shot in its first seconds
+    shots: function (t, list, move) {
+      move = move || 1.2;
+      var i = 0;
+      B.forEach(function (b, j) { if (t >= b && j < list.length) i = j; });
+      var from = list[Math.max(0, i - 1)], to = list[i], f = i === 0 ? 1 : window.p(t, B[i], B[i] + move);
+      var mix = function (a, b) { return [0, 1, 2].map(function (n) { return a[n] + (b[n] - a[n]) * f; }); };
+      look(mix(from.pos, to.pos), mix(from.look || [0, 0.5, 0], to.look || [0, 0.5, 0]));
+    },
+    label: function (text, colour) {
+      var el = document.createElement('div');
+      el.className = 'pill kit3d-label'; el.style.setProperty('--c', 'var(--' + (colour || 'lilac') + ')'); el.textContent = text;
+      stage.appendChild(el);
+      var l = { text: text, el: el, target: null, opacity: 0 };
+      // at(object or [x, y, z], opacity): call it in render(t) for every frame the label shows; hide() otherwise
+      l.at = function (target, opacity) { l.target = target; l.opacity = opacity === undefined ? 1 : opacity; return l; };
+      l.hide = function () { l.opacity = 0; return l; };
+      labels.push(l);
+      return l;
+    },
+    draw: function (t) {
+      scene.updateMatrixWorld(); camera.updateMatrixWorld();
+      renderer.render(scene, camera);
+      var shown = [];
+      labels.forEach(function (l) {
+        if (!l.target || l.opacity <= 0) { l.el.style.display = 'none'; return; }
+        var at = anchor(l.target).project(camera), seen = onScreen(at);
+        l.el.style.display = at.z < 1 ? '' : 'none';
+        l.el.style.left = ((at.x + 1) / 2 * W) + 'px'; l.el.style.top = ((1 - at.y) / 2 * H) + 'px'; l.el.style.opacity = l.opacity;
+        shown.push({ text: l.text, onScreen: seen });
+      });
+      window.__scene = {
+        t: t,
+        camera: { position: camera.position.toArray(), target: target.toArray() },
+        objects: Object.keys(named).map(function (name) {
+          var o = named[name];
+          return { name: name, visible: o.visible, onScreen: onScreen(o.getWorldPosition(v).project(camera)) };
+        }),
+        labels: shown,
+      };
+    },
+  };
+  return k;
+};
 `;
