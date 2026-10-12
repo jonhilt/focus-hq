@@ -1,4 +1,6 @@
-import { compared, formatValue, measuredAt } from '../../../shared/scorecard';
+import { type ComparedRow, compared, duration, formatValue, glance, measuredAt, type Tile, type Trend } from '../../../shared/scorecard';
+import { aboutMetric, SECTION_ABOUT } from '../../../shared/scorecardAbout';
+import type { Metric, Scorecard, ScorecardSection } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import type { Ui } from './context';
@@ -6,27 +8,61 @@ import { busy, h, timeAgo } from './dom';
 
 const SVG = 'http://www.w3.org/2000/svg';
 
-/** A number's last few measurements as a little line, the latest at the right end; nothing with fewer than two. */
-function sparkline(series: number[], tone: string): SVGElement | null {
-  if (series.length < 2) return null;
-  const [w, hgt] = [56, 14];
-  const lo = Math.min(...series);
-  const span = Math.max(...series) - lo || 1;
-  const points = series.map((v, i) => `${((i / (series.length - 1)) * w).toFixed(1)},${(hgt - 1 - ((v - lo) / span) * (hgt - 2)).toFixed(1)}`);
-  const svg = document.createElementNS(SVG, 'svg');
-  svg.setAttribute('class', `spark ${tone}`);
-  svg.setAttribute('viewBox', `0 0 ${w} ${hgt}`);
-  const line = document.createElementNS(SVG, 'polyline');
-  line.setAttribute('points', points.join(' '));
-  svg.append(line);
-  return svg;
+/** Each section's colour, from LCARS's data tones: green and red stay for better and worse. */
+export const SECTION_TONE: Record<ScorecardSection, string> = {
+  gate: 'var(--lcars-gold)',
+  fence: 'var(--lcars-sky)',
+  effect: 'var(--lcars-periwinkle)',
+  tests: 'var(--lcars-lilac)',
+  office: 'var(--lcars-orange)',
+};
+
+/** Where the panel goes when a tile or a moved number is picked: the section's view, scrolled to it, the number opened. */
+export type Go = (section: ScorecardSection, key?: string) => void;
+
+function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number>): SVGElementTagNameMap[K] {
+  const el = document.createElementNS(SVG, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
+  return el;
 }
 
 /**
- * The scorecard at the top of the engineering panel: the latest measurement of Focus's own code and the office, each
- * number with its change since the one before and a line of its last few, a section at a time (docs/scorecard.md).
+ * A number's measurements as a line, oldest at the left, the latest a dot in its trend's colour: nothing with fewer
+ * than two. `points` names each one (`3 h ago: 224`) for its hover, in the bigger chart a number opens to.
  */
-export function scorecardView(ui: Ui): HTMLElement {
+function sparkline(series: number[], tone: Trend | 'bad', size: { w: number; h: number }, points?: string[]): SVGElement | null {
+  if (series.length < 2) return null;
+  const { w, h: hgt } = size;
+  const pad = 4;
+  const lo = Math.min(...series);
+  const span = Math.max(...series) - lo || 1;
+  const xy = series.map((v, i) => [pad + (i / (series.length - 1)) * (w - 2 * pad), hgt - pad - ((v - lo) / span) * (hgt - 2 * pad)]);
+  const el = svg('svg', { class: `spark ${tone}`, viewBox: `0 0 ${w} ${hgt}`, width: w, height: hgt });
+  el.append(svg('polyline', { points: xy.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ') }));
+  xy.forEach(([x, y], i) => {
+    const last = i === xy.length - 1;
+    if (!last && !points) return;
+    const dot = svg('circle', { cx: x.toFixed(1), cy: y.toFixed(1), r: last ? 3.5 : 2.5, class: last ? 'now' : 'then' });
+    if (points) dot.append(Object.assign(svg('title', {}), { textContent: points[i] }));
+    el.append(dot);
+  });
+  return el;
+}
+
+const ICON: Record<Trend | 'bad', string> = { better: '▲', worse: '▼', same: '–', bad: '✕' };
+
+/** A change as a capsule: its direction's mark and colour, and the change in words, so it never rests on colour alone. */
+function trendPill(row: ComparedRow, tone: Trend | 'bad' = row.trend): HTMLElement {
+  const words = tone === 'bad' ? 'failing'
+    : row.before === undefined ? 'first measured'
+      : row.change ? row.change : 'no change';
+  // a time that moved less than its wobble: shown, but not called a change
+  const noise = tone === 'same' && row.change && row.metric.better !== 'none';
+  return h('span', { class: `sc-pill ${tone}`, title: noise ? 'Within the 10% timings wobble from run to run' : undefined }, `${noise ? '≈' : ICON[tone]} ${words}`);
+}
+
+/** The scorecard's head: which commit it measured and when, Measure now, the MSD, and how a measurement is going. */
+export function scorecardHead(ui: Ui): HTMLElement {
   const desk = state.scorecards;
   const history = desk?.history ?? [];
   const latest = history.at(-1);
@@ -39,31 +75,157 @@ export function scorecardView(ui: Ui): HTMLElement {
   onMsd.disabled = !latest;
   onMsd.onclick = () => ui.showOnMsd('scorecard');
 
-  const head = h('div', { class: 'row' },
-    h('strong', { class: 'grow' }, latest ? `Scorecard · ${measuredAt(latest)} · ${timeAgo(latest.at)}` : 'Scorecard'),
-    measure, onMsd);
   const status = measuring
     ? h('small', { class: 'muted' }, `${desk?.trigger === 'new-commit' ? 'Measuring the new commit the office started on' : 'Running the gate on the office’s own checkout'}${desk?.startedAt ? `, started ${timeAgo(desk.startedAt)}` : ''}: about a minute and a half`)
     : desk?.status === 'failed'
       ? h('small', null, h('span', { class: 'chip bad' }, 'failed'), ' ', desk.error ?? '')
-      : h('small', { class: 'muted' }, latest
-        ? `▲ better, ▼ worse since the one before; each line is the last ${history.length}`
-        : 'Not measured yet. Measure now runs the gate, counts the fence and reads the ledger on the office’s own checkout.');
+      : latest ? null : h('small', { class: 'muted' }, 'Not measured yet. Measure now runs the gate, counts the fence and reads the ledger on the office’s own checkout.');
+  return h('div', { class: 'sc-head' },
+    h('div', { class: 'row' },
+      h('h3', null, 'Scorecard'),
+      latest ? h('span', { class: 'muted grow' }, `${measuredAt(latest)} · measured ${timeAgo(latest.at)}`) : h('span', { class: 'grow' }),
+      measure, onMsd),
+    status,
+  );
+}
 
-  const sections = compared(history).map(({ section, title, rows }) =>
-    h('div', { class: `scorecard-section ${section}` },
-      h('h4', null, title),
-      ...rows.map(({ metric, delta, trend, series }) => h('div', { class: 'scorecard-row' },
-        h('span', { class: 'grow' }, metric.label),
-        sparkline(series, trend),
-        h('strong', null, formatValue(metric.value, metric.format)),
-        h('small', { class: `delta ${trend}` }, delta),
-      )),
-      section === 'office' && latest?.frictions.length
-        ? h('small', { class: 'muted' }, `Most widespread open friction: ${latest.frictions[0].key} (${latest.frictions[0].sessions} sessions)`)
-        : null,
-    ));
+/** The overview's opening sentence: is the gate green, and how many numbers climbed or slipped. */
+function verdict(history: Scorecard[]): HTMLElement | null {
+  const g = glance(history);
+  if (!g) return null;
+  const gate = g.gate
+    ? g.gate.pass
+      ? [h('span', null, 'The gate is '), h('b', { class: 'better' }, 'passing'), g.gate.seconds === undefined ? '' : `, in ${duration(g.gate.seconds)}. `]
+      : [h('span', null, 'The gate is '), h('b', { class: 'worse' }, 'failing'), g.gate.failing.length ? `: ${g.gate.failing.join(', ')}. ` : '. ']
+    : [];
+  const moved = !g.compared
+    ? ['This is the first scorecard: the next will show what moved.']
+    : !g.better && !g.worse
+      ? ['Nothing moved since the one before.']
+      : [
+        'Since the one before, ',
+        g.better ? h('b', { class: 'better' }, `${g.better} ${g.better === 1 ? 'number' : 'numbers'} improved`) : '',
+        g.better && g.worse ? ' and ' : '',
+        g.worse ? h('b', { class: 'worse' }, `${g.worse} slipped`) : '',
+        '.',
+      ];
+  return h('p', { class: 'sc-verdict' }, ...gate, ...moved);
+}
 
-  return h('div', { class: 'card scorecard' }, head, status, sections.length ? h('div', { class: 'scorecard-grid' }, ...sections) : null,
-    latest?.notes.length ? h('small', { class: 'muted' }, latest.notes.join(' · ')) : null);
+/** A few numbers beside the headline, in a line: `128 non-null · 0 any`; times first-named, as people say them. */
+const alsoLine = (rows: ComparedRow[]) => rows.map(({ metric }) => {
+  const short = aboutMetric(metric.key, metric.label).short;
+  return metric.format === 'seconds' ? `${short} ${duration(metric.value)}` : `${formatValue(metric.value, metric.format)} ${short}`;
+}).join(' · ');
+
+function tile(t: Tile, go: Go): HTMLElement {
+  const { metric } = t.hero;
+  const gate = t.section === 'gate' && metric.format === 'pass';
+  const value = gate ? (metric.value ? 'PASS' : 'FAIL') : formatValue(metric.value, metric.format);
+  const caption = gate ? (t.trend !== t.hero ? `in ${duration(t.trend.metric.value)}` : '') : aboutMetric(metric.key, metric.label).short;
+  return h('button', { class: `sc-tile ${t.tone}`, style: `--c:${SECTION_TONE[t.section]}`, title: `${t.title}: open its numbers`, onclick: () => go(t.section) },
+    h('h4', null, t.title),
+    h('small', { class: 'q' }, SECTION_ABOUT[t.section].question),
+    h('div', { class: 'hero' }, value, h('span', null, caption)),
+    h('div', { class: 'row' }, sparkline(t.trend.series, t.tone, { w: 110, h: 26 }), trendPill(t.trend, t.tone)),
+    t.also.length ? h('small', { class: 'also' }, alsoLine(t.also)) : null,
+  );
+}
+
+/** What moved since the card before, the slips first: each opens its number in its section. */
+function movedList(moved: ComparedRow[], go: Go): HTMLElement {
+  const SHOWN = 7;
+  return h('div', { class: 'card sc-moved' },
+    h('h4', null, 'What moved since the one before'),
+    moved.length
+      ? h('div', { class: 'sc-moved-rows' }, ...moved.slice(0, SHOWN).map((r) =>
+        h('button', { class: 'sc-moved-row', onclick: () => go(r.metric.section, r.metric.key) },
+          h('span', { class: 'dot', style: `background:${SECTION_TONE[r.metric.section]}` }),
+          h('span', { class: 'grow' }, r.metric.label),
+          h('b', null, formatValue(r.metric.value, r.metric.format)),
+          trendPill(r))))
+      : h('small', { class: 'muted' }, 'Nothing yet: it fills in once there are two scorecards to compare.'),
+    moved.length > SHOWN ? h('small', { class: 'muted' }, `and ${moved.length - SHOWN} more: open a section to see them`) : null,
+  );
+}
+
+/** The overview: the verdict, a tile per section, what moved, and `beside` it (how it's getting better). */
+export function scorecardOverview(ui: Ui, go: Go, beside: HTMLElement): HTMLElement {
+  const history = state.scorecards?.history ?? [];
+  const g = glance(history);
+  const notes = history.at(-1)?.notes ?? [];
+  return h('div', { class: 'sc' },
+    scorecardHead(ui),
+    verdict(history),
+    g ? h('div', { class: 'sc-tiles' }, ...g.tiles.map((t) => tile(t, go))) : null,
+    h('div', { class: 'sc-split' }, g ? movedList(g.moved, go) : null, beside),
+    notes.length ? h('small', { class: 'muted' }, `Not measured: ${notes.join(' · ')}`) : null,
+  );
+}
+
+/** An explanation's `code` spans as code, the rest as text. */
+const withCode = (text: string) => text.split('`').map((part, i) => (i % 2 ? h('code', null, part) : part));
+
+const BETTER: Record<Metric['better'], string> = { lower: 'Lower is better', higher: 'Higher is better', none: 'Neither way is better' };
+
+/** One number, a line you can open to say what it counts, why it matters, and how it's gone over the history. */
+function metricRow(row: ComparedRow, history: Scorecard[], open: Set<string>): HTMLElement {
+  const { metric } = row;
+  const about = aboutMetric(metric.key, metric.label);
+  const kept = history.filter((c) => c.metrics.some((m) => m.key === metric.key));
+  const points = kept.map((c) => `${timeAgo(c.at)}: ${formatValue(c.metrics.find((m) => m.key === metric.key)?.value ?? 0, metric.format)}`);
+  const chart = sparkline(row.series, row.trend, { w: 300, h: 64 }, points);
+  const lo = Math.min(...row.series);
+  const hi = Math.max(...row.series);
+  const details = h('details', { class: `sc-metric ${row.trend}`, open: open.has(metric.key), attrs: { 'data-key': metric.key } },
+    h('summary', null,
+      h('span', { class: 'name' }, metric.label),
+      sparkline(row.series, row.trend, { w: 72, h: 18 }) ?? h('span'),
+      h('b', null, formatValue(metric.value, metric.format)),
+      trendPill(row),
+    ),
+    h('div', { class: 'sc-about' },
+      h('div', null,
+        h('p', null, h('span', { class: 'lbl' }, 'What it counts'), ...withCode(about.what)),
+        about.why ? h('p', null, h('span', { class: 'lbl' }, 'Why it matters'), ...withCode(about.why)) : null,
+        h('p', { class: 'muted' }, metric.format === 'pass' ? 'It should pass.' : `${BETTER[metric.better]}.`),
+      ),
+      chart
+        ? h('figure', null, chart, h('figcaption', { class: 'muted' },
+          `Last ${row.series.length}, from ${timeAgo(kept[0].at)}: lowest ${formatValue(lo, metric.format)}, highest ${formatValue(hi, metric.format)}`))
+        : h('small', { class: 'muted' }, 'Its history shows once it’s been measured twice.'),
+    ),
+  );
+  details.addEventListener('toggle', () => (details.open ? open.add(metric.key) : open.delete(metric.key)));
+  return details;
+}
+
+/** The gate's time a step at a time, as one bar: where the wait goes. */
+function gateBar(rows: ComparedRow[]): HTMLElement | null {
+  const steps = ['typecheck.seconds', 'lint.seconds', 'test.seconds', 'build.seconds'].flatMap((k) => rows.filter((r) => r.metric.key === k));
+  const total = steps.reduce((n, r) => n + r.metric.value, 0);
+  if (!total) return null;
+  return h('div', { class: 'sc-gatebar', title: 'Where the gate’s time goes' },
+    ...steps.map((r) => h('span', { style: `flex:${r.metric.value} 1 0`, title: `${aboutMetric(r.metric.key, r.metric.label).short}: ${duration(r.metric.value)}` },
+      r.metric.value / total > 0.08 ? `${aboutMetric(r.metric.key, r.metric.label).short} ${duration(r.metric.value)}` : '')),
+  );
+}
+
+/** Each of `sections` in full: what it's for, and every number in it, each opening to explain itself. */
+export function scorecardSections(sections: ScorecardSection[], open: Set<string>, after?: Partial<Record<ScorecardSection, HTMLElement | null>>): HTMLElement[] {
+  const history = state.scorecards?.history ?? [];
+  return compared(history).filter((s) => sections.includes(s.section)).map(({ section, title, rows }) => {
+    const better = rows.filter((r) => r.trend === 'better').length;
+    const worse = rows.filter((r) => r.trend === 'worse').length;
+    return h('section', { class: 'card sc-section', id: `sc-${section}`, style: `--c:${SECTION_TONE[section]}` },
+      h('div', { class: 'row' },
+        h('h4', { class: 'grow' }, title, h('span', null, SECTION_ABOUT[section].question)),
+        better ? h('span', { class: 'sc-pill better' }, `▲ ${better} better`) : null,
+        worse ? h('span', { class: 'sc-pill worse' }, `▼ ${worse} worse`) : null),
+      h('p', { class: 'muted sc-section-about' }, SECTION_ABOUT[section].about),
+      section === 'gate' ? gateBar(rows) : null,
+      h('div', { class: 'sc-rows' }, ...rows.map((r) => metricRow(r, history, open))),
+      after?.[section] ?? null,
+    );
+  });
 }

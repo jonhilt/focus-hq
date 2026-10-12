@@ -29,11 +29,13 @@ It takes about a minute and a quarter. It always exits 0: it measures, it doesn'
 The [climber](climber.md) works from it: each climb measures the scorecard before and after its one change.
 
 
-The engineering panel (<kbd>E</kbd> at Lt. Brennan's station on deck 5) opens with the latest scorecard, above the report card and the retro:
-- each number, a section at a time;
-- its change since the one before, ▲ or ▼;
-- a little line of its last ten, green when it last climbed and red when it last slipped;
-- the most widespread open friction.
+The engineering panel (<kbd>E</kbd> at Lt. Brennan's station on deck 5) has four views down its side:
+- **Overview**, where it opens: one sentence on whether the gate passes and how many numbers improved or slipped since the scorecard before; a tile per section, each with the question it answers, its headline number (the gate's pass and time, type assertions, the server's share on Effect, functions over CRAP 30, QA passed first time), a line of its last ten with the latest dot green or red, and the change in words (`3 fewer`, `12s slower`); what moved, the slips first; and beside them the climber and the retro, with the most widespread open frictions. A tile, or a number that moved, opens its section.
+- **Code**: the gate, the fence, Effect and the tests in full, the gate's time split by step. Each section says what it's for, and each number opens to say what it counts, why it matters, which way is better, and its history (hover a point for when and how much).
+- **Office**: the ledger's numbers as the scorecard measured them, the same way, then the ledger as it stands now (the report card, with what the scorecard doesn't count: conflicts, triage, closed PRs, goals, spend) and the open frictions.
+- **Retro**: the [chief engineer's retro](retro.md), its drafts and the fixes it led to.
+
+A time that moves less than its 10% wobble shows as `≈`, and a change too small to show isn't counted as a climb or a slip. The explanations live in `shared/scorecardAbout.ts`, and the overview's summary in `glance` (`shared/scorecard.ts`): a number added to the scorecard should get a line there too.
 
 **Measure now** runs `pnpm run scorecard` on the office's own checkout (the one it runs from, which auto update keeps on the latest main). It takes about a minute and a half, one measurement at a time, and the panel says when it's under way or why it failed. **Show on the MSD** puts the scorecard up on the master systems display beside the ship: four big numbers (the gate's time, type assertions, functions over CRAP 30, the server's share on Effect) and then the rest, with what moved since the one before listed first. It stays up until you pick a trace at the table or **Clear the MSD**. The demo office's scorecards are made up and kept in memory, so the demo never writes to `~/.focus/scorecards/`.
 

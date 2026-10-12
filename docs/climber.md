@@ -11,7 +11,7 @@ Main engineering's climber takes the [scorecard](scorecard.md)'s worst gap in Fo
 
 ## Keep climbing
 
-The **Climber** card on the engineering panel (<kbd>E</kbd> at Lt. Brennan's station on deck 5) has the **Keep climbing** switch. It's off to begin with.
+The **Climber** card on the engineering panel's overview (<kbd>E</kbd> at Lt. Brennan's station on deck 5) has the **Keep climbing** switch. It's off to begin with.
 
 - **What it climbs.** It climbs the project that holds the office's own repo, which the office finds from its checkout's `origin` remote. The demo office has no repo of its own, so it climbs its first project's first repo. With no project holding the repo, the switch says to connect it first.
 - **One climb at a time.** With the switch on and no climb open, a climb starts. The next starts only once you merge or close the last one's pull request.

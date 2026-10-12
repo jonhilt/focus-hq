@@ -1,27 +1,37 @@
 import { chiefEngineer } from '../../../shared/crew';
 import { FIX_SESSIONS, type FixEffect, type FixStatus, reportLines } from '../../../shared/ledger';
-import type { FixKind, Retro, RetroDraft } from '../../../shared/types';
+import { formatValue, glance } from '../../../shared/scorecard';
+import type { FixKind, Retro, RetroDraft, ScorecardSection } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { busy, fill, h, timeAgo } from './dom';
 import { climberView } from './climberView';
-import { scorecardView } from './scorecardView';
+import { type NavItem, readout, shownView, SideNav } from './panels';
+import { scorecardHead, scorecardOverview, scorecardSections } from './scorecardView';
 import { markdownHtml } from './terminal';
 
 const KIND: Record<FixKind, string> = { check: 'Check', 'qa-rule': 'QA rule', pointer: 'Pointer', delete: 'Delete' };
 
+type View = 'overview' | 'code' | 'office' | 'retro';
+
+/** Which view each section's numbers live in. */
+const VIEW_OF: Record<ScorecardSection, View> = { gate: 'code', fence: 'code', effect: 'code', tests: 'code', office: 'office' };
+
 /**
- * The engineering station: the scorecard, the ledger's report card, and the chief engineer's retro. On the captain's word they look
- * over the session digests' frictions that keep coming back and draft an issue for each. They change nothing: the
- * captain accepts a draft (it's filed in the repository picked beside it) or rejects it.
+ * The engineering station, a view at a time: the scorecard at a glance (with the climber and the retro beside it), the
+ * code's numbers and the office's in full, each explaining itself, and the chief engineer's retro. On the captain's
+ * word they look over the session digests' frictions that keep coming back and draft an issue for each. They change
+ * nothing: the captain accepts a draft (it's filed in the repository picked beside it) or rejects it.
  */
 export function openEngineeringPanel(ui: Ui): void {
   const eng = chiefEngineer();
   const body = h('div', { class: 'engineering' });
-  // the window outlives re-renders, so a retro finishing doesn't reset what you typed
+  // the window outlives re-renders, so a retro finishing doesn't reset what you typed, nor close a number you opened
   const days = h('input', { type: 'number', min: '1', max: '60', value: String(state.retro?.days ?? 14), style: 'width:80px' });
+  const open = new Set<string>();
+  let picked: View | undefined;
 
   // the agents' sessions from before digests began: counted once when the panel opens
   const older = h('div', { class: 'row', style: 'margin:10px 0' });
@@ -35,9 +45,20 @@ export function openEngineeringPanel(ui: Ui): void {
   };
   void api.undigested().then((r) => showOlder(r.sessions)).catch(() => undefined);
 
-  const render = () => {
+  const nav = new SideNav<View>((view) => {
+    picked = view;
+    render();
+  });
+  /** To a section's numbers, with `key` opened. */
+  const go = (section: ScorecardSection, key?: string) => {
+    if (key) open.add(key);
+    picked = VIEW_OF[section];
+    render();
+    body.querySelector(key ? `[data-key="${key}"]` : `#sc-${section}`)?.scrollIntoView({ block: 'start' });
+  };
+
+  const retroView = () => {
     const retro = state.retro;
-    const card = state.report ? reportLines(state.report) : undefined;
     const running = retro?.status === 'gathering' || retro?.status === 'thinking';
     const start = h('button', { class: 'btn primary' }, retro?.status === 'done' ? 'Start a new retro' : 'Start a retro');
     start.disabled = running;
@@ -52,32 +73,53 @@ export function openEngineeringPanel(ui: Ui): void {
         await api.retroStart(window);
       }, ui.error).then(render);
     const stop = h('button', { class: 'btn' }, 'Stop');
-    const ledger = h('button', { class: 'btn small' }, 'Review the ledger →');
-    ledger.onclick = () => ui.openLedger();
     stop.onclick = () => void busy(stop, () => api.retroStop().then(() => undefined), ui.error);
-
-    fill(body,
-      scorecardView(ui),
-      climberView(ui),
-      card ? h('div', { class: 'card' }, h('strong', null, card.headline), h('ul', null, ...card.lines.map((l) => h('li', null, l)))) : null,
-      state.report?.fixes.length ? fixes(state.report.fixes) : null,
-      older,
+    const bars = frictionBars(5);
+    return h('div', null,
+      h('div', { class: 'briefing-note' }, `${eng.name} looks over the frictions found in the agents’ sessions in the window, and drafts an issue for each that came up in three or more, with the moments quoted. Accept one and it’s filed; reject it and it isn’t raised again. Nothing changes unless you say so.`),
+      bars ? h('section', { class: 'card sc-section', style: '--c:var(--lcars-orange);margin:14px 0 0' }, h('h4', null, 'Most widespread open frictions', h('span', null, 'Sessions they came up in, over 14 days, with no retro decision yet')), bars) : null,
       h('div', { class: 'row', style: 'margin:14px 0' },
         h('span', { class: 'muted' }, 'Look back over the last'), days, h('span', { class: 'muted' }, 'days'),
         running ? stop : start,
         h('span', { class: 'grow' }),
-        ledger,
         retro?.costUsd ? h('small', { class: 'muted' }, `$${retro.costUsd.toFixed(2)}`) : null,
       ),
       retro && retro.status !== 'idle' ? status(retro) : null,
       retro?.status === 'done' ? findings(ui, retro) : null,
-      !retro || retro.status === 'idle'
-        ? h('div', { class: 'briefing-note' }, `${eng.name} looks over the frictions found in the agents’ sessions in the window, and drafts an issue for each that came up in three or more, with the moments quoted. Accept one and it’s filed; reject it and it isn’t raised again. Nothing changes unless you say so.`)
-        : null,
+      state.report?.fixes.length ? fixes(state.report.fixes) : null,
+      older,
     );
   };
 
-  ui.panels.open({ title: `${eng.name} · Chief engineer`, body, accent: LCARS.gold, wide: true });
+  const render = () => {
+    const retro = state.retro;
+    const g = glance(state.scorecards?.history ?? []);
+    const waiting = retro?.status === 'done' ? retro.drafts.filter((d) => !d.decision).length : 0;
+    const running = retro?.status === 'gathering' || retro?.status === 'thinking';
+    const office = g?.tiles.find((t) => t.section === 'office')?.hero.metric;
+    const items: NavItem<View>[] = [
+      { key: 'overview', label: 'Overview', readout: g?.compared ? `▲${g.better} ▼${g.worse}` : '' },
+      { key: 'code', label: 'Code', readout: g?.gate ? (g.gate.pass ? 'PASS' : 'FAIL') : '', standby: !g },
+      { key: 'office', label: 'Office', readout: office ? formatValue(office.value, office.format) : '' },
+      { key: 'retro', label: 'Retro', readout: running ? 'LIVE' : waiting ? `${waiting} ${waiting === 1 ? 'DRAFT' : 'DRAFTS'}` : '' },
+    ];
+    const view = shownView(items, picked) ?? 'overview';
+    nav.show(items, view);
+    const ledger = h('button', { class: 'btn small' }, 'Review the ledger →');
+    ledger.onclick = () => ui.openLedger();
+    const views: Record<View, () => HTMLElement[]> = {
+      overview: () => [scorecardOverview(ui, go, h('div', { class: 'sc-better' }, climberView(ui), retroSummary(retro, () => {
+        picked = 'retro';
+        render();
+      })))],
+      code: () => [scorecardHead(ui), ...scorecardSections(['gate', 'fence', 'effect', 'tests'], open)],
+      office: () => [scorecardHead(ui), ...scorecardSections(['office'], open), liveLedger(ledger)],
+      retro: () => [retroView()],
+    };
+    fill(body, ...views[view]());
+  };
+
+  ui.panels.open({ title: `${eng.name} · Chief engineer`, body, nav, accent: LCARS.gold, wide: true });
   ui.panels.own(state.on('retro', render));
   ui.panels.own(state.on('report', render));
   ui.panels.own(state.on('scorecards', render));
@@ -87,6 +129,62 @@ export function openEngineeringPanel(ui: Ui): void {
     if (a.id === state.climb?.agentId) render();
   }));
   render();
+}
+
+/** The office's open frictions, the most widespread first, as bars: what the retro will look at. */
+function frictionBars(limit: number): HTMLElement | null {
+  const frictions = state.scorecards?.history.at(-1)?.frictions.slice(0, limit) ?? [];
+  if (!frictions.length) return null;
+  const most = frictions[0].sessions || 1;
+  return h('div', { class: 'sc-frictions' }, ...frictions.map((f) => {
+    const [kind, ...rest] = f.key.split(': ');
+    return h('div', { class: 'sc-friction', title: f.key },
+      h('span', { class: 'grow' }, rest.length ? rest.join(': ') : kind, rest.length ? h('small', { class: 'muted' }, ` ${kind}`) : null),
+      h('span', { class: 'bar' }, h('i', { style: `width:${Math.max(4, (f.sessions / most) * 100)}%` })),
+      h('small', { class: 'muted' }, `${f.sessions} sessions`));
+  }));
+}
+
+/** The retro beside the overview: whether one's under way or waiting on you, and the frictions it would look at. */
+function retroSummary(retro: Retro | null | undefined, open: () => void): HTMLElement {
+  const waiting = retro?.status === 'done' ? retro.drafts.filter((d) => !d.decision).length : 0;
+  const line = retro?.status === 'gathering' || retro?.status === 'thinking'
+    ? retro.activity
+    : waiting ? `${waiting} ${waiting === 1 ? 'draft waits' : 'drafts wait'} for you to accept or reject`
+      : retro?.status === 'failed' ? `The last retro failed: ${retro.error ?? retro.activity}` : 'Drafts an issue for each friction that keeps coming back';
+  const bars = frictionBars(3);
+  return h('div', { class: 'card sc-retro' },
+    h('div', { class: 'row' }, h('strong', { class: 'grow' }, 'Retro'), h('button', { class: 'btn small', onclick: open }, waiting ? 'Review drafts →' : 'Open →')),
+    h('small', { class: 'muted' }, line),
+    bars ? h('small', { class: 'lbl' }, 'Most widespread open frictions') : null,
+    bars,
+  );
+}
+
+/** The ledger as it stands now (the scorecard's office numbers are as of its measurement), with what the scorecard doesn't count. */
+function liveLedger(ledger: HTMLElement): HTMLElement {
+  const card = state.report;
+  const shown = card ? reportLines(card) : undefined;
+  const warnings = [...(card?.warnings ?? []).map((w) => `⚠ Ledger damaged: ${w}`), ...(card?.notes ?? []).map((n) => `Ledger: ${n}`)];
+  const live = card && (card.merged || card.closed || card.verdicts)
+    ? h('div', { class: 'readouts' },
+      readout('Merged', String(card.merged)),
+      readout('QA first time', card.merged ? `${Math.round((card.mergedFirstTime / card.merged) * 100)}%` : '–'),
+      readout('Closed unmerged', String(card.closed)),
+      readout('Conflicts', `${card.conflicts} (${card.conflictsForAgent} for an agent)`),
+      readout('Triaged', String(card.triages)),
+      readout('Goals closed', String(card.goalsClosed)),
+      card.sessions ? readout('Per merge', `$${card.costPerMerge.toFixed(2)}`) : null,
+      readout('Spent', `$${card.costUsd.toFixed(2)}`))
+    : h('small', { class: 'muted' }, shown?.lines.join(' · ') ?? 'Nothing in the ledger yet');
+  const bars = frictionBars(5);
+  return h('section', { class: 'card sc-section', style: '--c:var(--lcars-orange)' },
+    h('div', { class: 'row' }, h('h4', { class: 'grow' }, `The ledger now${card ? `, last ${card.days} days` : ''}`, h('span', null, 'Live, where the scorecard is as of its measurement')), ledger),
+    ...warnings.map((w) => h('small', null, w)),
+    live,
+    bars ? h('h4', null, 'Most widespread open frictions', h('span', null, 'Sessions they came up in, over 14 days: what the retro reads')) : null,
+    bars,
+  );
 }
 
 function status(retro: Retro): HTMLElement {

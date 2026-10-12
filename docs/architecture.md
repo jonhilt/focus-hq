@@ -9,6 +9,7 @@ shared/agentStatus.ts     how an agent's status reads (icon, one-line status)
 shared/tricorder.ts       what needs you (the Tricorder and Comms), which agents are in flight
 shared/ledger.ts          the ledger of how work went (QA verdicts, merges, conflicts, triage, goals, session digests): its line format, the check on load, and the report card
 shared/ledgerReview.ts    reviewing the ledger: each event as a line of the log, the window, and the trace of a pull request or a goal with its totals
+shared/scorecard.ts       how a scorecard reads wherever it's shown (each number's change, the overview's glance); scorecardAbout.ts says what each number means
 server/
   supervise.ts            runs index.ts and restarts it after an auto update
   updater.ts              auto update: fetch, fast-forward, install/build, restart
