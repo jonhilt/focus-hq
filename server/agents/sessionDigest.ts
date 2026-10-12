@@ -1,6 +1,7 @@
 import type { LedgerEvent, SessionDigest, SessionFacts } from '../../shared/ledger';
 import type { Agent } from '../../shared/types';
 import { messageFrom } from './retro';
+import { type Block, blocks, resultText, transcriptLines } from './transcript';
 
 // A digest of a span of an agent's session, from code alone: its Claude Code transcript (from the line after the last
 // digest's to the end) and the ledger's lines on its pull requests. Written when the agent goes home, when QA gives a
@@ -11,15 +12,6 @@ const NUDGE = /^(continue|carry on|keep going|go( ahead| on)?|proceed|yes( pleas
 /** A tool error that's a refusal: a guard, hook or permission check said no. */
 const REFUSED = /denied|blocked|hook error|not allowed|permission/i;
 
-type Block = { type?: string; text?: string; name?: string; id?: string; tool_use_id?: string; input?: unknown; is_error?: boolean; content?: unknown };
-type Line = { type?: string; uuid?: string; timestamp?: string; isMeta?: boolean; message?: { content?: unknown } };
-
-const blocks = (line: Line): Block[] => {
-  const content = line.message?.content;
-  if (typeof content === 'string') return [{ type: 'text', text: content }];
-  return Array.isArray(content) ? (content as Block[]) : [];
-};
-const resultText = (content: unknown) => (typeof content === 'string' ? content : Array.isArray(content) ? (content as Block[]).map((b) => b.text ?? '').join(' ') : '');
 
 /** Which call it is: the tool and its input, leaving out a Bash call's description of itself. */
 function callKey(b: Block): string {
@@ -50,14 +42,7 @@ export function transcriptSpan(jsonl: string, afterUuid?: string): Span | undefi
   // each call's tool and input by its id, and the calls that have failed: running one of those again is a repeat
   const callKeys = new Map<string, string>();
   const failed = new Set<string>();
-  for (const text of jsonl.split('\n')) {
-    if (!text.trim()) continue;
-    let line: Line;
-    try {
-      line = JSON.parse(text) as Line;
-    } catch {
-      continue;
-    }
+  for (const line of transcriptLines(jsonl)) {
     if (!inSpan) {
       if (line.uuid === afterUuid) inSpan = true;
       continue;

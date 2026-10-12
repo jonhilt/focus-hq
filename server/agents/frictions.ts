@@ -1,5 +1,6 @@
 import { FRICTION_KINDS, type Friction, type FrictionKind, type LedgerEvent } from '../../shared/ledger';
 import { clip, messageFrom } from './retro';
+import { type Block, blocks, resultText, transcriptLines } from './transcript';
 
 // What the retro's reader reads of each session's span, and what's kept of its answer. Code supplies the facts
 // (sessionDigest.ts); at retro time a strong model reads the spans not read yet, a batch at a time, and only finds and
@@ -9,15 +10,6 @@ import { clip, messageFrom } from './retro';
 /** About 10k tokens: a session's span, trimmed to who said what, what failed and the agent's own words. */
 const BUDGET = 40_000;
 
-type Block = { type?: string; text?: string; name?: string; id?: string; tool_use_id?: string; input?: unknown; is_error?: boolean; content?: unknown };
-type Line = { type?: string; uuid?: string; timestamp?: string; isMeta?: boolean; message?: { content?: unknown } };
-
-const blocks = (line: Line): Block[] => {
-  const content = line.message?.content;
-  if (typeof content === 'string') return [{ type: 'text', text: content }];
-  return Array.isArray(content) ? (content as Block[]) : [];
-};
-const resultText = (content: unknown) => (typeof content === 'string' ? content : Array.isArray(content) ? (content as Block[]).map((b) => b.text ?? '').join(' ') : '');
 const minute = (at?: string) => (at ? at.slice(11, 16) : '--:--');
 
 /** What a call did, in a line: a Bash command, or the tool and its input. */
@@ -36,14 +28,7 @@ export function extractionInput(jsonl: string, afterUuid: string | undefined, pr
   const calls = new Map<string, string>();
   let inSpan = !afterUuid;
   let lastSaid = '';
-  for (const raw of jsonl.split('\n')) {
-    if (!raw.trim()) continue;
-    let line: Line;
-    try {
-      line = JSON.parse(raw) as Line;
-    } catch {
-      continue;
-    }
+  for (const line of transcriptLines(jsonl)) {
     if (!inSpan) {
       // what the agent last said before the span, in case the captain's first message in it answers it
       if (line.type === 'assistant') for (const b of blocks(line)) if (b.type === 'text' && b.text?.trim()) lastSaid = b.text;
