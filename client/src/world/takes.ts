@@ -17,6 +17,15 @@ import { TakeKit } from './takeKit';
 type Render = (t: number) => void;
 /** How long a take holds its last frame before it loops (s). */
 const HOLD = 1.2;
+/**
+ * A take's plaque: `w` metres wide (`px` on its canvas), at least `minPx` tall (`minH` metres), tipped back `tilt`
+ * radians, its bottom edge `bottom` metres up.
+ */
+const PLAQUE = { w: 2.8, px: 1200, minPx: 300, minH: 0.7, tilt: 0.75, bottom: 0.45 - 0.35 * Math.cos(0.75) };
+const HEAD_FONT = `600 76px ${LCARS_FONT}`;
+const BODY_FONT = `500 44px ${UI_FONT}`;
+/** How wide the plaque's lines run on its canvas, right of its id. */
+const TEXT_W = 950;
 
 /** One take on its floor. */
 class Plot {
@@ -39,12 +48,12 @@ class Plot {
     // its floor: a faint pad on the grid, and its edge
     this.floor = new THREE.Mesh(new THREE.PlaneGeometry(width, depth).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#1b2a55', transparent: true, opacity: 0.55, depthWrite: false }));
     this.floor.position.y = 0.012;
-    const c = makeCanvas(1200, 300);
+    const c = makeCanvas(PLAQUE.px, PLAQUE.minPx);
     this.signTexture = canvasTexture(c.canvas);
-    // a plaque at its front edge, tipped back to read from where you stand, below the premise on the far wall
-    this.sign = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 0.7), flat(this.signTexture, { transparent: true }));
-    this.sign.position.set(0, 0.45, depth / 2 + 0.25);
-    this.sign.rotation.x = -0.75;
+    // a plaque at its front edge, tipped back to read from where you stand, below the premise on the far wall: as tall
+    // as what it says needs (drawSign)
+    this.sign = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), flat(this.signTexture, { transparent: true }));
+    this.sign.rotation.x = -PLAQUE.tilt;
     this.sign.layers.set(OVERLAY_LAYER);
     // E on it reads its beat in the script, without walking to the row of cards over the takes
     if (take.beat !== undefined) interactive(this.sign, { kind: 'studio', beat: take.beat }, () => `Read beat ${take.beat! + 1} in full`);
@@ -62,7 +71,7 @@ class Plot {
     } catch (err) {
       this.fail(err, report);
     }
-    this.drawSign(c);
+    this.drawSign(c, depth);
   }
 
   private fail(err: unknown, report: (error?: string) => void): void {
@@ -71,8 +80,20 @@ class Plot {
     report(this.failed);
   }
 
-  private drawSign({ ctx, canvas }: ReturnType<typeof makeCanvas>): void {
+  /** Draws its plaque, every word of it: the canvas, and the plaque with it, grow taller from its bottom edge to fit. */
+  private drawSign({ ctx, canvas }: ReturnType<typeof makeCanvas>, depth: number): void {
     const { take } = this;
+    const beat = take.beat !== undefined ? `BEAT ${take.beat + 1} · ` : '';
+    const head = `${beat}${take.label.toUpperCase()}${take.version > 1 ? `  · V${take.version}` : ''}`;
+    const text = this.failed ? `It stopped: ${this.failed}` : (take.metaphor ?? take.detail ?? '');
+    ctx.font = HEAD_FONT;
+    const heads = wrap(ctx, head, TEXT_W, 3);
+    ctx.font = BODY_FONT;
+    const body = wrap(ctx, text, TEXT_W, 8);
+    // baselines: the heading's lines from 104, 84 apart, then the body's from 74 under its last, 54 apart
+    const top = 104 + (heads.length - 1) * 84 + 74;
+    canvas.height = Math.max(PLAQUE.minPx, top + (body.length - 1) * 54 + 52);
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
     ctx.beginPath();
@@ -90,13 +111,19 @@ class Plot {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = '#e8fbff';
-    ctx.font = `600 76px ${LCARS_FONT}`;
-    const beat = take.beat !== undefined ? `BEAT ${take.beat + 1} · ` : '';
-    ctx.fillText(wrap(ctx, `${beat}${take.label.toUpperCase()}${take.version > 1 ? `  · V${take.version}` : ''}`, 960, 1)[0], 224, 110);
+    ctx.font = HEAD_FONT;
+    heads.forEach((l, i) => ctx.fillText(l, 224, 104 + i * 84));
     ctx.fillStyle = this.failed ? '#ff9a9a' : '#9fb3c8';
-    ctx.font = `500 44px ${UI_FONT}`;
-    wrap(ctx, this.failed ? `It stopped: ${this.failed}` : (take.metaphor ?? take.detail ?? ''), 950, 2).forEach((l, i) => ctx.fillText(l, 224, 184 + i * 54));
+    ctx.font = BODY_FONT;
+    body.forEach((l, i) => ctx.fillText(l, 224, top + i * 54));
     this.signTexture.needsUpdate = true;
+
+    // the plaque at the canvas's size, its bottom edge where a one-line plaque's is, so a longer one rises back over the take's floor
+    const w = PLAQUE.w;
+    const h = (w * canvas.height) / canvas.width;
+    this.sign.geometry.dispose();
+    this.sign.geometry = new THREE.PlaneGeometry(w, h).translate(0, h / 2, 0);
+    this.sign.position.set(0, PLAQUE.bottom, depth / 2 + 0.25 + (PLAQUE.minH / 2) * Math.sin(PLAQUE.tilt));
   }
 
   /** Plays it on to now, looping; `eye` is how far you are from it, for the crew's bubbles. */
