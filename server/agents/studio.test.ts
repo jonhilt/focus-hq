@@ -100,7 +100,7 @@ describe('StudioComputer', () => {
     const store = { studio: freshStudio(), settings: {}, save: () => undefined } as unknown as Store;
     const sent: ServerEvent[] = [];
     const hub = { send: (e: ServerEvent) => sent.push(e) } as unknown as Hub;
-    const officer: StudioOfficer = { turn: async (req) => ({ text: await turn(req), sessionId: 's1', costUsd: 0.1 }) };
+    const officer: StudioOfficer = { turn: async (req) => ({ text: await turn(req), sessionId: 's1', costUsd: 0.1, model: req.model ?? 'claude-sonnet-5-5' }) };
     return { store, sent, computer: new StudioComputer(store, hub, officer, 50) };
   };
   const settled = (store: Store) => new Promise<void>((resolve) => {
@@ -136,6 +136,23 @@ describe('StudioComputer', () => {
     expect(heard[0]).toContain('failed in the room: kit.boxx is not a function');
     expect(heard[1]).toContain('no one\'s in the studio');
     expect(store.studio.takes.find((t) => t.id === 'a')?.error).toBe('kit.boxx is not a function');
+  });
+
+  it('runs its turns at the model and effort picked, keeps them for the next video, and says what it ran on', async () => {
+    const asked: StudioTurn[] = [];
+    const { store, computer } = setup(async (req) => {
+      asked.push(req);
+      return 'ok';
+    });
+    computer.tune(' claude-opus-5-5 ', 'high');
+    computer.say('Go');
+    await settled(store);
+    expect(asked[0]).toMatchObject({ model: 'claude-opus-5-5', effort: 'high' });
+    expect(store.studio.ranOn).toBe('claude-opus-5-5');
+    computer.newVideo();
+    expect(computer.current()).toMatchObject({ model: 'claude-opus-5-5', effort: 'high', messages: [] });
+    computer.tune('', undefined);
+    expect(computer.current().model).toBeUndefined();
   });
 
   it('starts a new video afresh, dropping a turn still under way', async () => {

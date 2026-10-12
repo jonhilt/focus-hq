@@ -180,6 +180,26 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
 .studio-chat .briefing-msg.captain { --tone: var(--lcars-sky); align-self: flex-end; border-right: 6px solid var(--tone); border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .studio-chat { height: 100%; }
 .studio-chat .studio-takes { font-size: 13px; color: var(--muted, #9fb0d0); }
+.studio-chat .studio-head { margin-bottom: 0; gap: 6px 14px; flex-wrap: nowrap; }
+.studio-chat .studio-head select.effort { font-size: 14px; }
+.studio-chat .studio-head .readout > b { font-size: 16px; }
+.studio-chat .studio-tabs { gap: 6px; }
+.studio-chat .option-tab.on { background: var(--lcars-gold); color: var(--ink); }
+.studio-script { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 4px; }
+.studio-script section { border-left: 6px solid var(--lcars-gold); padding: 4px 0 4px 12px; }
+.studio-script section > small { font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lcars-peach); }
+.studio-script p { margin: 4px 0 0; line-height: 1.45; }
+.studio-script .premise { font-size: 18px; }
+.studio-script .studio-beat { border-left-color: var(--lcars-periwinkle); }
+.studio-script .studio-beat.picked { background: color-mix(in srgb, var(--lcars-periwinkle) 14%, transparent); }
+.studio-script h3 { margin: 2px 0 0; font-size: 20px; text-transform: uppercase; letter-spacing: 0.04em; }
+.studio-script .point { color: var(--muted, #9fb0d0); }
+.studio-script blockquote { margin: 8px 0 0; padding: 6px 10px; border-radius: 10px; background: var(--surface-2); font-size: 16px; }
+.studio-script blockquote p:first-child { margin-top: 0; }
+.studio-script .thread b { color: #ffc35c; margin-right: 4px; }
+.studio-script .thread.closed { color: var(--muted, #9fb0d0); }
+.studio-script .thread.closed b { color: #99ee77; }
+.studio-script .thread span { font-size: 13px; }
 .panel.has-nav { --side: 150px; }
 .panel-elbow { grid-area: elbow; position: relative; z-index: 1; background: var(--accent-c); border-top-left-radius: min(var(--side), var(--bar) + 10px); }
 /* the elbow's inside curve, where the header bar meets the sidebar */

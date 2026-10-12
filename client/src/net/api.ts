@@ -51,6 +51,7 @@ export const api = {
   numberOneNew: () => call<NumberOneChat>('POST', '/number-one/new'),
   studioSay: (text: string) => call<StudioSession>('POST', '/studio/say', { text }),
   studioNew: () => call<StudioSession>('POST', '/studio/new'),
+  studioTune: (model: string, effort?: Effort) => call<StudioSession>('POST', '/studio/tune', { model, effort }),
   /** How a take's version ran in the room: `error` if it threw. */
   studioReport: (id: string, version: number, error?: string) => call<StudioSession>('POST', `/studio/takes/${encodeURIComponent(id)}/report`, { version, error }),
   /** A call to Number One: the browser's WebRTC offer in, the session's id and answer out (no answer in the demo, which has no audio). */

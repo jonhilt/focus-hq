@@ -1,4 +1,4 @@
-import type { Settings, StudioSession, StudioTake } from '../../shared/types';
+import type { Effort, Settings, StudioSession, StudioTake } from '../../shared/types';
 import type { Hub } from '../hub';
 import { freshStudio, type Store, type StoredStudio } from '../store';
 import { errorMessage, truncate } from '../util';
@@ -23,6 +23,9 @@ export interface StudioTurn {
   /** The session so far; missing on the first turn of a conversation. */
   resumeSessionId?: string;
   settings: Settings;
+  /** The captain's picks for it: missing, the office's model and the model's default effort. */
+  model?: string;
+  effort?: Effort;
   signal: AbortSignal;
   tools: StudioTools;
 }
@@ -31,6 +34,8 @@ export interface StudioReply {
   text: string;
   sessionId?: string;
   costUsd?: number;
+  /** The model it ran on. */
+  model?: string;
 }
 
 /** Takes one turn of the conversation. The live one resumes a Claude Code session; the demo one is scripted. */
@@ -75,7 +80,17 @@ export class StudioComputer {
   newVideo(): StudioSession {
     this.running?.abort();
     this.running = null;
-    this.store.studio = freshStudio();
+    const { model, effort } = this.store.studio;
+    this.store.studio = { ...freshStudio(), model, effort };
+    this.changed();
+    return this.current();
+  }
+
+  /** The model and effort the computer runs at, from its next turn (empty = the office's model, the model's default effort). */
+  tune(model: string, effort: Effort | undefined): StudioSession {
+    const session = this.store.studio;
+    session.model = model.trim() || undefined;
+    session.effort = effort;
     this.changed();
     return this.current();
   }
@@ -157,7 +172,7 @@ export class StudioComputer {
     const current = () => this.store.studio === session && this.running === abort;
     void this.officer
       .turn(
-        { messages: [...session.messages], video: session.video, resumeSessionId: session.sessionId, settings: this.store.settings, signal: abort.signal, tools: this.tools(session, current) },
+        { messages: [...session.messages], video: session.video, resumeSessionId: session.sessionId, settings: this.store.settings, model: session.model, effort: session.effort, signal: abort.signal, tools: this.tools(session, current) },
         (text) => {
           if (!current() || !text) return;
           session.activity = truncate(text, 120);
@@ -170,6 +185,7 @@ export class StudioComputer {
         Object.assign(session, {
           sessionId: reply.sessionId ?? session.sessionId,
           costUsd: session.costUsd + (reply.costUsd ?? 0),
+          ranOn: reply.model ?? session.ranOn,
           status: 'waiting',
           activity: 'Waiting for you',
           updatedAt: Date.now(),
