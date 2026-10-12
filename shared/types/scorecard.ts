@@ -33,5 +33,7 @@ export interface Scorecards {
   status: 'idle' | 'measuring' | 'failed';
   history: Scorecard[];
   startedAt?: number;
+  /** Why this measurement: the captain asked, or the office started on a commit with no scorecard yet (a merge to main, say). */
+  trigger?: 'captain' | 'new-commit';
   error?: string;
 }

@@ -37,6 +37,8 @@ The engineering panel (<kbd>E</kbd> at Lt. Brennan's station on deck 5) opens wi
 
 **Measure now** runs `pnpm run scorecard` on the office's own checkout (the one it runs from, which auto update keeps on the latest main). It takes about a minute and a half, one measurement at a time, and the panel says when it's under way or why it failed. **Show on the MSD** puts the scorecard up on the master systems display beside the ship: four big numbers (the gate's time, type assertions, functions over CRAP 30, the server's share on Effect) and then the rest, with what moved since the one before listed first. It stays up until you pick a trace at the table or **Clear the MSD**. The demo office's scorecards are made up and kept in memory, so the demo never writes to `~/.focus/scorecards/`.
 
+**After each merge.** Two minutes after it starts, the office measures the commit it runs from by itself, if that commit has no scorecard yet and the checkout has no uncommitted changes (`measureNewCommit` in `server/scorecards.ts`). [Auto update](auto-update.md) restarts the office on each merge to main, so every merge gets a scorecard, and the trend fills in without anyone pressing Measure now. The panel says when a measurement is one of these. The demo office doesn't do it.
+
 The office reads the latest ten from `~/.focus/scorecards/` when it starts and after each measurement (`server/scorecards.ts`, which decodes each with Effect Schema and skips a file that isn't one). A scorecard saved from the terminal shows up after the next restart or measurement. The build step builds into a temporary folder, never the `dist/` the office may be serving.
 
 ## Comparing

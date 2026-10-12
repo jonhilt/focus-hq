@@ -43,7 +43,7 @@ export function scorecardView(ui: Ui): HTMLElement {
     h('strong', { class: 'grow' }, latest ? `Scorecard · ${measuredAt(latest)} · ${timeAgo(latest.at)}` : 'Scorecard'),
     measure, onMsd);
   const status = measuring
-    ? h('small', { class: 'muted' }, `Running the gate on the office’s own checkout${desk?.startedAt ? `, started ${timeAgo(desk.startedAt)}` : ''}: about a minute and a half`)
+    ? h('small', { class: 'muted' }, `${desk?.trigger === 'new-commit' ? 'Measuring the new commit the office started on' : 'Running the gate on the office’s own checkout'}${desk?.startedAt ? `, started ${timeAgo(desk.startedAt)}` : ''}: about a minute and a half`)
     : desk?.status === 'failed'
       ? h('small', null, h('span', { class: 'chip bad' }, 'failed'), ' ', desk.error ?? '')
       : h('small', { class: 'muted' }, latest

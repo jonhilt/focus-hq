@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Scorecard, ServerEvent } from '../shared/types';
 import type { Hub } from './hub';
-import { readScorecard, SavedScorecards, ScorecardDesk, SHOWN, type ScorecardSource } from './scorecards';
+import { measureNewCommit, readScorecard, SavedScorecards, ScorecardDesk, SHOWN, type ScorecardSource } from './scorecards';
 
 const card = (at: number): Scorecard => ({
   v: 1, at, commit: `c${at}`, branch: 'main', dirty: false, notes: [], frictions: [{ key: 'shell: exit 1', sessions: 3 }],
@@ -69,5 +69,30 @@ describe('ScorecardDesk', () => {
     await settle();
     expect(d.current()).toMatchObject({ status: 'failed', error: 'pnpm: not found', history: [card(1)] });
     expect(d.measure().status).toBe('measuring');
+  });
+});
+
+describe('measureNewCommit', () => {
+  it('measures a clean commit with no scorecard yet, the first one included', () => {
+    expect(measureNewCommit([card(1)], { commit: 'c2', dirty: false })).toBe(true);
+    expect(measureNewCommit([], { commit: 'c2', dirty: false })).toBe(true);
+  });
+
+  it('leaves a commit it measured already, and uncommitted work, alone', () => {
+    expect(measureNewCommit([card(1), card(2)], { commit: 'c2', dirty: false })).toBe(false);
+    expect(measureNewCommit([card(1)], { commit: 'c2', dirty: true })).toBe(false);
+  });
+});
+
+describe('ScorecardDesk.measureIfNew', () => {
+  it('measures the commit the office started on once, saying why', async () => {
+    const { desk: d, sent } = desk(() => Promise.resolve());
+    d.measureIfNew({ commit: 'c2', dirty: false });
+    expect(d.current()).toMatchObject({ status: 'measuring', trigger: 'new-commit' });
+    await settle();
+    // card(2) is the one it measured, at commit c2
+    d.measureIfNew({ commit: 'c2', dirty: false });
+    expect(d.current().status).toBe('idle');
+    expect(sent).toHaveLength(2);
   });
 });

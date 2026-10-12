@@ -20,7 +20,7 @@ import type { WorkspaceOps } from './agents/types';
 import * as git from './agents/workspace';
 import { demoLedger } from './demoLedger';
 import { DemoScorecards } from './demoScorecards';
-import { SavedScorecards, ScorecardDesk } from './scorecards';
+import { checkoutHead, SavedScorecards, ScorecardDesk } from './scorecards';
 import type { Snapshot } from '../shared/types';
 import { Calls } from './call/calls';
 import { callKeys, config, paths } from './config';
@@ -38,6 +38,8 @@ import { Voice } from './voice';
 
 /** How often orphaned agent workspaces are swept up, besides once at startup. */
 const SWEEP_EVERY_MS = 60 * 60_000;
+/** How long after starting the office measures a new commit: long enough for agents to pick up where they left off first. */
+const MEASURE_AFTER_START_MS = 2 * 60_000;
 
 const liveWorkspace: WorkspaceOps = {
   create: git.createWorktree,
@@ -215,6 +217,8 @@ async function main() {
         .catch((err: unknown) => console.error(`Workspace sweep failed: ${errorMessage(err)}`));
     void sweep();
     setInterval(() => void sweep(), SWEEP_EVERY_MS);
+    // a scorecard for each commit the office runs from (auto update restarts it on every merge to main), once it's settled in
+    setTimeout(() => void checkoutHead(config.root).then((head) => scorecards.measureIfNew(head)).catch((err: unknown) => console.error(`Scorecard after start: ${errorMessage(err)}`)), MEASURE_AFTER_START_MS).unref();
     const info = await office.checkGitHub();
     if (!info.github.ok) console.warn(`  ⚠ ${info.github.error}`);
     else console.log(`  GitHub: signed in as ${info.github.login}`);

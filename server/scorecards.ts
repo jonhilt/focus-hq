@@ -40,6 +40,19 @@ export function readScorecard(text: string): Scorecard | undefined {
   })));
 }
 
+/** The commit the office runs from, and whether it has uncommitted changes. */
+export interface Head {
+  commit: string;
+  dirty: boolean;
+}
+
+/**
+ * Whether the office should measure the commit it runs from by itself: it's clean (a captain's work in progress isn't
+ * measured behind their back) and has no scorecard yet. Auto update restarts the office on each merge to main, so
+ * this puts a scorecard on every one.
+ */
+export const measureNewCommit = (history: Pick<Scorecard, 'commit'>[], head: Head) => !head.dirty && history.at(-1)?.commit !== head.commit;
+
 /** Where scorecards come from: the saved ones, and a way to measure another. */
 export interface ScorecardSource {
   history(limit: number): Scorecard[];
@@ -62,6 +75,12 @@ export class SavedScorecards implements ScorecardSource {
   }
 }
 
+/** The commit a checkout is at, and whether it has uncommitted changes. */
+export async function checkoutHead(root: string): Promise<Head> {
+  const [commit, status] = await Promise.all([run('git', ['rev-parse', 'HEAD'], { cwd: root }), run('git', ['status', '--porcelain'], { cwd: root })]);
+  return { commit: commit.trim(), dirty: status.trim().length > 0 };
+}
+
 /**
  * Main engineering's scorecards: the latest few, and measuring another on the captain's word, one at a time. It's
  * advisory, so a measurement that fails says why and leaves the history as it was.
@@ -77,9 +96,14 @@ export class ScorecardDesk {
     return this.state;
   }
 
-  measure(): Scorecards {
+  /** Measures the commit the office runs from, unless it has a scorecard already or has uncommitted changes. */
+  measureIfNew(head: Head): void {
+    if (this.state.status !== 'measuring' && measureNewCommit(this.state.history, head)) this.measure('new-commit');
+  }
+
+  measure(trigger: Scorecards['trigger'] = 'captain'): Scorecards {
     if (this.state.status === 'measuring') throw new Error('A scorecard is already being measured');
-    this.set({ status: 'measuring', startedAt: Date.now() });
+    this.set({ status: 'measuring', startedAt: Date.now(), trigger });
     void this.source.measure().then(
       () => this.set({ status: 'idle', history: this.source.history(SHOWN), startedAt: undefined, error: undefined }),
       (err: unknown) => this.set({ status: 'failed', error: err instanceof Error ? err.message : String(err) }),
