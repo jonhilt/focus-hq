@@ -18,9 +18,12 @@ async function runChecks(page: Page, url: string, errors: string[]): Promise<voi
   const noErrors = (when: string) => check(`no page or console errors ${when}`, errors.length === 0, errors.join(' | '));
 
   await page.goto(url);
+  // the app's ready signal: main.ts sets window.focusHQ last, once the fonts and the ship's GLBs have loaded and the
+  // splash is up, which on a cold dev server (Vite compiling, maybe reloading for new dependencies) is well after load
+  const ready = await page.waitForFunction(() => 'focusHQ' in window, null, { timeout: 90_000 }).then(() => true, () => false);
+  check('the office is ready (window.focusHQ is defined)', ready, errors.join(' | '));
   const splash = page.locator('.splash');
-  // it's added once the fonts and the ship's GLBs have loaded (main.ts), not with the page
-  check('splash is visible', await splash.waitFor({ state: 'visible', timeout: 15_000 }).then(() => true, () => false));
+  check('splash is visible', await splash.isVisible().catch(() => false));
   check('splash shows the FOCUS HQ heading', (await splash.locator('h1').textContent().catch(() => null))?.trim() === 'FOCUS HQ');
   const enter = splash.locator('button.big-button', { hasText: 'Come aboard' });
   check('splash shows the Come aboard button', await enter.isVisible().catch(() => false));
@@ -31,8 +34,6 @@ async function runChecks(page: Page, url: string, errors: string[]): Promise<voi
     .then(() => true, () => false);
   check('status line reaches the demo-mode text (snapshot arrived over /ws)', reached, `last text: "${await status.textContent().catch(() => '')}"`);
 
-  const hasHQ = await page.waitForFunction(() => 'focusHQ' in window, null, { timeout: 15_000 }).then(() => true, () => false);
-  check('window.focusHQ is defined', hasHQ);
   noErrors('during load');
   await page.screenshot({ path: path.join(shotsDir, 'splash.png') });
 
