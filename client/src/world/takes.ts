@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { StudioTake } from '../../../shared/types';
 import { TAKE_PARAMS, takeBody } from '../../../shared/takeScript';
-import { canvasTexture, makeCanvas, UI_FONT, wrap } from './canvas';
+import { canvasTexture, fitFont, makeCanvas, UI_FONT, wrap } from './canvas';
 import { OVERLAY_LAYER } from './frame';
 import { flat } from './materials';
 import { LCARS, LCARS_FONT } from './starship';
@@ -83,8 +83,8 @@ class Plot {
     ctx.fillStyle = '#000000';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = `600 120px ${LCARS_FONT}`;
-    ctx.fillText(take.id.toUpperCase().slice(0, 3), 109, canvas.height / 2);
+    fitFont(ctx, take.id.toUpperCase(), 150, 120, 40, '600', LCARS_FONT);
+    ctx.fillText(take.id.toUpperCase(), 109, canvas.height / 2);
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = '#e8fbff';

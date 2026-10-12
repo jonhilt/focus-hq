@@ -270,7 +270,7 @@ function studioServer(req: StudioTurn): McpSdkServerConfigWithInstance {
         'take',
         'Stage a take on the holodeck floor (the kit and render(t) are in your instructions): a new id adds one beside the others, an id already there swaps it in place. It tells you whether it runs in the room.',
         {
-          id: z.string().describe('A short lowercase name, like a, b or waves: the captain refers to takes by it.'),
+          id: z.string().describe('A single letter, a, b, c…: the captain refers to takes by it.'),
           label: z.string().max(S.takeLabel).describe('A few words naming the idea.'),
           detail: z.string().max(S.takeDetail).optional().describe('What it tries, and what it trades off, in a line.'),
           beat: z.number().int().optional().describe('Which beat it shows, numbered from 0.'),
