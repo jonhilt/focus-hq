@@ -70,12 +70,15 @@ explainer:                      # the same input as a lead's explain tool: title
 ## The holodeck stage
 
 `pnpm run studio --stage delegation` films a scene staged on an empty holodeck instead of the busy ship: only what the
-scene needs beams in (a console, the crew, their context bars), on the yellow grid, played from a timeline rather than
-demo mode, so it's the same every run and can later be timed to a narration. It's a spike so far: one scene,
-`client/src/ui/holoStage.ts`, the first two rungs of "how Claude delegates" (one session alone, its context filling;
-then the same job with three helpers, each reading in its own context and sending back only an answer). The clip lands
-in `studio-out/stage-delegation/clip.mp4`. To watch it live, open `?studio=1&stage=delegation`, come aboard, and call
-`focusHQ.studio.playStage()`.
+scene needs beams in, on the yellow grid, played from a timeline rather than demo mode, so it's the same every run and
+can later be timed to a narration. So far it's one rough scene, `client/src/ui/holoStage.ts`: "how Claude delegates", a
+rung at a time (one session alone, its context filling; subagents reading in their own contexts and sending back
+answers; a helper with helpers of its own, a glowing tree on the floor; a dynamic workflow's waves of 16 on transporter
+pads under its script; /batch's lanes, each agent's work running left to right into its own pull request; then the
+ladder). Its labels (context gauges, jobs and answers in flight, the script, pull requests) are sprites in the scene, as
+the crew's speech bubbles are. The clip lands in `studio-out/stage-delegation/clip.mp4`. To watch it live, open
+`?studio=1&stage=delegation`, come aboard, and call `focusHQ.studio.playStage()` (or `playStage(52)` to start 52 s in,
+though what should have come and gone by then can linger).
 
 ## Not yet
 

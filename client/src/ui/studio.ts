@@ -121,9 +121,9 @@ export class Studio {
     }
   }
 
-  /** Plays the holodeck stage from the top: how long it runs (seconds), or 0 when there's none yet. */
-  playStage(): number {
-    return this.stage?.play() ?? 0;
+  /** Plays the holodeck stage from the top (or `from` seconds in): how long it runs (seconds), or 0 when there's none yet. */
+  playStage(from = 0): number {
+    return this.stage?.play(from) ?? 0;
   }
 
   /** Each frame, before it's drawn: the stage, or the camera's glide and the tags over the crew's heads. */
