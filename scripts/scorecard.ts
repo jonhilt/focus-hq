@@ -52,7 +52,8 @@ function runGate(tmp: string, notes: string[]): { gate: GateResults; vitest?: Vi
   const vitest = readJson<VitestReport>(vitestFile);
   if (!vitest) notes.push('vitest wrote no report, so the test counts are missing');
   step('build');
-  const build = timed('pnpm', ['run', '-s', 'build']);
+  // into a folder of its own: the office measures its own checkout, and may be serving dist/ from it
+  const build = timed(bin('vite'), ['build', '--outDir', path.join(tmp, 'dist'), '--emptyOutDir']);
   const coverageFile = path.join(coverageDir, 'coverage-final.json');
   return {
     gate: {

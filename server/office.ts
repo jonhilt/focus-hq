@@ -11,6 +11,7 @@ import { autoSendBackFor, prKey } from '../shared/qa';
 import type { AgentManager } from './agents/manager';
 import type { Calls } from './call/calls';
 import type { ChiefEngineer } from './agents/engineer';
+import type { ScorecardDesk } from './scorecards';
 import type { NumberOne } from './agents/numberOne';
 import type { StudioComputer } from './agents/studioComputer';
 import type { IssuePlanner } from './agents/planner';
@@ -50,6 +51,7 @@ export class Office {
     readonly numberOne: NumberOne,
     readonly studio: StudioComputer,
     readonly engineer: ChiefEngineer,
+    readonly scorecards: ScorecardDesk,
     readonly voice: Voice,
     readonly calls: Calls,
     version: string,
@@ -94,6 +96,7 @@ export class Office {
       call: this.calls.status(),
       report: this.agents.report(),
       retro: this.engineer.current(),
+      scorecards: this.scorecards.current(),
     };
   }
 

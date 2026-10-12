@@ -16,6 +16,7 @@ server/
   office.ts               projects/rooms, Kanban boards (polling GitHub), auto-assign, settings
   store.ts                ~/.focus/state.json + per-agent terminal logs (jsonl) + the ledger (ledger.jsonl)
   ledgerLog.ts            the ledger's one writer: numbered lines flushed to disk, the lock file, repairs and damage on load
+  scorecards.ts           main engineering's scorecards: the latest saved ones (~/.focus/scorecards), and measuring another on the office's own checkout, one at a time (demoScorecards.ts: the demo's, made up and in memory)
   routes.ts               REST API used by the panels
   frameStats.ts           the frame-stats log: what a browser opened with ?stats=1 sends of how its 3D view ran, a file per page load in ~/.focus/frame-stats/
   hub.ts                  broadcasts ServerEvents to every browser tab
@@ -87,12 +88,12 @@ client/src/
     transporterRoom.ts    a team station's transporter room, where a workflow runs: its pads, console, pattern buffer, tactical display and feed camera
     engineering.ts        the engineering station: the engineer, the report card and how their retro stands on the console; E opens their panel
     warpCore.ts           the warp core's glow: the shared materials its 'warp-core' surfaces are drawn with, pulsing
-    msd.ts                main engineering's master systems display: a cutaway of the ship with its decks marked, and beside it the ledger's report card or the trace picked at the table
+    msd.ts                main engineering's master systems display: a cutaway of the ship with its decks marked, and beside it the ledger's report card, the scorecard, or the trace picked at the table
     numberOne.ts          Number One in the ready room, across the captain's desk (numberOneView.ts: their bubble)
     deck.ts               a deck built in Blender: loads its GLB, draws its surfaces, reads its markers and what pressing E does (deckExtras.ts: what the markers, surfaces and interactions say)
     holodeckDeck.ts       the holodeck deck, put together from its Blender modules for however many holodecks there are
     turbolift.ts          which turbolift stop you're at (the turbolift's controls are in ui/travelPanel.ts)
-  ui/                     HUD and panels (agent terminal, a helper's transcript, board, ready room console, teleport, QA station, goals, Comms, the engineering station, the ledger review at main engineering's master systems table)
+  ui/                     HUD and panels (agent terminal, a helper's transcript, board, ready room console, teleport, QA station, goals, Comms, the engineering station and its scorecard, the ledger review at main engineering's master systems table)
     frameStats.ts         ?stats=1: how the 3D view runs, top left, and sent to the office each second for its log (frameSamples.ts: the arithmetic; world/gpuTimer.ts: GPU time per pass)
     confirmDialog.ts      the in-game confirm dialog, over whatever panel is open (the Tricorder's buttons ask with it too)
     numberOnePanel.ts     the chat with Number One: the log, suggestions sent to Ops or started as goals, voice mode

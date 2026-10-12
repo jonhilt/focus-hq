@@ -24,6 +24,18 @@ It takes about a minute and a quarter. It always exits 0: it measures, it doesn'
   - the report card's numbers over 30 days: QA passed first time, failed QA rounds per merge, merges without a QA pass, conflicts that needed an agent, checks sent back, cost and wasted tool calls per merge, and retro fixes that stopped their friction;
   - the open friction patterns (3 or more sessions in 14 days, with no retro decision yet; see [the retro](retro.md)) and the five most widespread.
 
+## In main engineering
+
+The engineering panel (<kbd>E</kbd> at Lt. Brennan's station on deck 5) opens with the latest scorecard, above the report card and the retro:
+- each number, a section at a time;
+- its change since the one before, ▲ or ▼;
+- a little line of its last ten, green when it last climbed and red when it last slipped;
+- the most widespread open friction.
+
+**Measure now** runs `pnpm run scorecard` on the office's own checkout (the one it runs from, which auto update keeps on the latest main). It takes about a minute and a half, one measurement at a time, and the panel says when it's under way or why it failed. **Show on the MSD** puts the scorecard up on the master systems display beside the ship: four big numbers (the gate's time, type assertions, functions over CRAP 30, the server's share on Effect) and then the rest, with what moved since the one before listed first. It stays up until you pick a trace at the table or **Clear the MSD**. The demo office's scorecards are made up and kept in memory, so the demo never writes to `~/.focus/scorecards/`.
+
+The office reads the latest ten from `~/.focus/scorecards/` when it starts and after each measurement (`server/scorecards.ts`, which decodes each with Effect Schema and skips a file that isn't one). A scorecard saved from the terminal shows up after the next restart or measurement. The build step builds into a temporary folder, never the `dist/` the office may be serving.
+
 ## Comparing
 
 Each number knows which way is better. The printout marks a change since the latest saved scorecard with ▲ (better) or ▼ (worse). A time has to move by more than 10% to count, because timings wobble from run to run. The comparison header names the commit and branch it compares against, and a scorecard measured with uncommitted changes says so.
@@ -33,4 +45,4 @@ To show a change's before and after:
 1. Run it on the base branch first.
 2. Run it on the change with `--no-save`, so the base stays the latest saved one to compare against.
 
-The rules live in `scripts/scorecardRules.ts` (pure, tested next to it). `scripts/scorecard.ts` runs the commands, reads the files and the ledger, and saves the result.
+The rules live in `scripts/scorecardRules.ts` and, for how a scorecard reads wherever it's shown, `shared/scorecard.ts` (both pure, tested next to them). `scripts/scorecard.ts` runs the commands, reads the files and the ledger, and saves the result.

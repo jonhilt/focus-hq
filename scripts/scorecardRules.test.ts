@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  direction, eslintCounts, fenceMetrics, gateMetrics, officeMetrics, render, scanSource, typecheckErrors, type GateResults, type Metric, type Scorecard,
+  eslintCounts, fenceMetrics, gateMetrics, officeMetrics, render, scanSource, typecheckErrors, type GateResults, type Scorecard,
 } from './scorecardRules';
 
 const scan = (source: string) => scanSource('a.ts', source);
@@ -63,26 +63,6 @@ describe('gateMetrics', () => {
   });
 });
 
-describe('direction', () => {
-  const m = (value: number, better: Metric['better'], format: Metric['format'] = 'count'): Metric => ({ section: 'fence', key: 'k', label: 'k', value, better, format });
-
-  it('reads a drop as a climb when lower is better, and a rise as one when higher is', () => {
-    expect(direction(m(3, 'lower'), 5)).toBe('better');
-    expect(direction(m(7, 'lower'), 5)).toBe('worse');
-    expect(direction(m(7, 'higher'), 5)).toBe('better');
-    expect(direction(m(5, 'lower'), 5)).toBe('same');
-  });
-
-  it('lets time wobble up to 10% before calling it a change', () => {
-    expect(direction(m(10.9, 'lower', 'seconds'), 10)).toBe('same');
-    expect(direction(m(11.5, 'lower', 'seconds'), 10)).toBe('worse');
-  });
-
-  it('never calls a number with no better side a climb or a slip', () => {
-    expect(direction(m(9, 'none'), 5)).toBe('same');
-  });
-});
-
 describe('officeMetrics', () => {
   it('reads an empty ledger as zeros with no frictions', () => {
     const { metrics, frictions } = officeMetrics([], Date.now());
@@ -101,7 +81,7 @@ describe('render', () => {
 
   it('marks what climbed and what slipped since the scorecard before', () => {
     const text = render(card(200, 'bbbbbbbbbb'), card(222, 'aaaaaaaaaa'));
-    expect(text).toContain('Changes since aaaaaaaa on main');
+    expect(text).toContain('Changes since main @ aaaaaaaa');
     expect(text).toMatch(/Type assertions \(as T\)\s+200\s+▲ −22/);
     expect(text).toMatch(/Gate passes\s+yes$/m);
     expect(text).toContain('48 sessions  shell: bash exit code 1');

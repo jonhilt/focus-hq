@@ -337,17 +337,16 @@ export class World {
   }
 
   /**
-   * What main engineering's MSD shows beside the ship: a trace picked at the master systems table (it stays up until
-   * another is), or with none, the ledger's report card as it changes.
+   * A change to what main engineering's MSD can show beside the ship (the ledger's report card, or the scorecard):
+   * redrawn only while that's what's up, so whatever the captain put up stays until they put up something else.
    */
   showOnMsd(board: MsdBoard): void {
-    if (board.kind === 'report' && this.msdBoard.kind === 'trace') return;
-    this.drawMsd(board);
+    if (board.kind === this.msdBoard.kind) this.drawMsd(board);
   }
 
-  /** Back to the report card, even over a trace. */
-  clearMsd(card: MsdBoard & { kind: 'report' }): void {
-    this.drawMsd(card);
+  /** Puts `board` up on the MSD: a trace picked at the master systems table, the scorecard, or the report card back. */
+  putOnMsd(board: MsdBoard): void {
+    this.drawMsd(board);
   }
 
   private drawMsd(board: MsdBoard): void {

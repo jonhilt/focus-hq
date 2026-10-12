@@ -1,10 +1,15 @@
 import { type ReportCard, reportLines } from '../../../shared/ledger';
 import type { Trace } from '../../../shared/ledgerReview';
+import { compared, formatValue, measuredAt } from '../../../shared/scorecard';
+import type { Scorecards } from '../../../shared/types';
 import { fitText } from './canvas';
-import { LCARS, LCARS_FONT, lcarsFrame } from './starship';
+import { LCARS, LCARS_FONT, LCARS_STATUS, lcarsFrame } from './starship';
 
-/** What the MSD shows beside the ship: the ledger's report card, or the trace picked at the master systems table. */
-export type MsdBoard = { kind: 'report'; card: ReportCard | null } | { kind: 'trace'; trace: Trace };
+/** What the MSD shows beside the ship: the ledger's report card, the scorecard, or the trace picked at the master systems table. */
+export type MsdBoard =
+  | { kind: 'report'; card: ReportCard | null }
+  | { kind: 'scorecard'; scorecards: Scorecards | null }
+  | { kind: 'trace'; trace: Trace };
 
 /** A deck on the MSD: where it is on the cutaway (fractions of the drawing's width and height), and its colour. */
 interface DeckMark {
@@ -178,6 +183,32 @@ function drawBoard(ctx: CanvasRenderingContext2D, b: Box, board: MsdBoard): void
     lines(0.14, rows.map((text) => ({ text, color: LCARS.peach })));
     return;
   }
+  if (board.kind === 'scorecard') {
+    const latest = board.scorecards?.history.at(-1);
+    if (!latest) {
+      title('Scorecard · not measured yet', LCARS.gold);
+      return;
+    }
+    title(`Scorecard · ${measuredAt(latest)}`, LCARS.gold);
+    const rows = compared(board.scorecards?.history ?? []).flatMap((s) => s.rows);
+    const shown = (key: string) => rows.find((r) => r.metric.key === key);
+    const tile = (key: string, label: string): [string, string] => {
+      const r = shown(key);
+      return [r ? formatValue(r.metric.value, r.metric.format) : '–', `${label}${r?.delta ? ` ${r.delta}` : ''}`];
+    };
+    const passes = shown('gate.pass')?.metric.value !== 0;
+    tiles(0.12, [tile('gate.seconds', passes ? 'gate' : 'GATE FAILS'), tile('fence.typeAssertions', 'as T'), tile('crap.over', 'CRAP > 30'), tile('effect.share', 'on Effect')]);
+    // what moved since the one before first, then the rest; the tiles' numbers aren't repeated
+    const rest = rows.filter((r) => r.metric.better !== 'none' && !TILED.has(r.metric.key) && r.metric.format !== 'seconds');
+    const ordered = [...rest.filter((r) => r.delta), ...rest.filter((r) => !r.delta)];
+    lines(0.37, ordered.map((r) => ({
+      text: `${r.metric.label}: ${formatValue(r.metric.value, r.metric.format)}`,
+      color: LCARS.peach,
+      ...(r.delta && { tag: r.delta }),
+      ...(r.trend !== 'same' && { color: r.trend === 'better' ? LCARS_STATUS.done : LCARS.red }),
+    })));
+    return;
+  }
   const { subject, totals: t, steps, goal } = board.trace;
   title(subject.kind === 'pr' ? `Trace · ${subject.repo.split('/').pop()} #${subject.pr}` : `Trace · goal`, LCARS.gold);
   ctx.fillStyle = LCARS.lilac;
@@ -193,5 +224,7 @@ function drawBoard(ctx: CanvasRenderingContext2D, b: Box, board: MsdBoard): void
   const last = steps.slice(-6);
   lines(0.42, last.map((s) => ({ tag: s.tag, text: s.title, color: STEP[s.tone] })));
 }
+
+const TILED = new Set(['gate.pass', 'gate.seconds', 'fence.typeAssertions', 'crap.over', 'effect.share']);
 
 const STEP: Record<string, string> = { ok: LCARS.sky, bad: LCARS.red, warn: LCARS.gold, info: LCARS.lilac };

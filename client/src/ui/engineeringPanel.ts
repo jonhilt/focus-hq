@@ -6,12 +6,13 @@ import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { busy, fill, h, timeAgo } from './dom';
+import { scorecardView } from './scorecardView';
 import { markdownHtml } from './terminal';
 
 const KIND: Record<FixKind, string> = { check: 'Check', 'qa-rule': 'QA rule', pointer: 'Pointer', delete: 'Delete' };
 
 /**
- * The engineering station: the ledger's report card, and the chief engineer's retro. On the captain's word they look
+ * The engineering station: the scorecard, the ledger's report card, and the chief engineer's retro. On the captain's word they look
  * over the session digests' frictions that keep coming back and draft an issue for each. They change nothing: the
  * captain accepts a draft (it's filed in the repository picked beside it) or rejects it.
  */
@@ -55,6 +56,7 @@ export function openEngineeringPanel(ui: Ui): void {
     stop.onclick = () => void busy(stop, () => api.retroStop().then(() => undefined), ui.error);
 
     fill(body,
+      scorecardView(ui),
       card ? h('div', { class: 'card' }, h('strong', null, card.headline), h('ul', null, ...card.lines.map((l) => h('li', null, l)))) : null,
       state.report?.fixes.length ? fixes(state.report.fixes) : null,
       older,
@@ -76,6 +78,7 @@ export function openEngineeringPanel(ui: Ui): void {
   ui.panels.open({ title: `${eng.name} · Chief engineer`, body, accent: LCARS.gold, wide: true });
   ui.panels.own(state.on('retro', render));
   ui.panels.own(state.on('report', render));
+  ui.panels.own(state.on('scorecards', render));
   render();
 }
 

@@ -1,0 +1,37 @@
+// The scorecard (docs/scorecard.md): Focus measured against its own standard by `pnpm run scorecard`, kept to compare
+// over time, and shown in main engineering.
+
+export type ScorecardSection = 'gate' | 'fence' | 'effect' | 'tests' | 'office';
+export type MetricFormat = 'pass' | 'count' | 'seconds' | 'percent' | 'usd' | 'ratio';
+
+/** One measured number: which way is better, so a comparison can say whether it climbed. */
+export interface Metric {
+  section: ScorecardSection;
+  key: string;
+  label: string;
+  value: number;
+  better: 'lower' | 'higher' | 'none';
+  format: MetricFormat;
+}
+
+export interface Scorecard {
+  v: 1;
+  at: number;
+  commit: string;
+  branch: string;
+  /** Uncommitted changes were measured too: the numbers aren't the commit's alone. */
+  dirty: boolean;
+  metrics: Metric[];
+  /** The office's open frictions (no retro decision yet), the most widespread first. */
+  frictions: { key: string; sessions: number }[];
+  /** What couldn't be measured, and why. */
+  notes: string[];
+}
+
+/** Main engineering's view of the scorecards: the latest few, oldest first, and whether a measurement is under way. */
+export interface Scorecards {
+  status: 'idle' | 'measuring' | 'failed';
+  history: Scorecard[];
+  startedAt?: number;
+  error?: string;
+}

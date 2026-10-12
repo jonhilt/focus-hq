@@ -854,3 +854,19 @@ body.studio .hud, body.studio .toasts { display: none; }
   position: absolute; left: 12vw; right: 12vw; bottom: 5vh; text-align: center; font-size: 34px; color: #fff;
   text-shadow: 0 2px 6px #000, 0 0 2px #000; opacity: 0;
 }
+
+/* the scorecard at the top of the engineering panel (ui/scorecardView.ts) */
+.scorecard { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.scorecard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.scorecard-section { background: var(--surface-2); border-radius: 10px; padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+.scorecard-section.office { grid-column: 1 / -1; }
+.scorecard-section h4 { margin: 0 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--lcars-periwinkle); }
+.scorecard-row { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.scorecard-row strong { min-width: 52px; text-align: right; }
+.scorecard-row .delta { min-width: 64px; color: var(--muted); }
+.scorecard-row .delta.better { color: var(--lcars-green); }
+.scorecard-row .delta.worse { color: var(--lcars-red); }
+.spark { width: 56px; height: 14px; flex: none; }
+.spark polyline { fill: none; stroke: var(--lcars-sky); stroke-width: 1.5; }
+.spark.better polyline { stroke: var(--lcars-green); }
+.spark.worse polyline { stroke: var(--lcars-red); }

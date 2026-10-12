@@ -3,41 +3,10 @@
 // ledger, saves and prints.
 import ts from 'typescript';
 import { frictionGroups, reportCard, type LedgerEvent } from '../shared/ledger';
+import { compared, formatValue, measuredAt } from '../shared/scorecard';
+import type { Metric, MetricFormat as Format, Scorecard, ScorecardSection as Section } from '../shared/types';
 
-export type Section = 'gate' | 'fence' | 'effect' | 'tests' | 'office';
-export type Format = 'pass' | 'count' | 'seconds' | 'percent' | 'usd' | 'ratio';
-
-/** One measured number: which way is better, so a comparison can say whether it climbed. */
-export interface Metric {
-  section: Section;
-  key: string;
-  label: string;
-  value: number;
-  better: 'lower' | 'higher' | 'none';
-  format: Format;
-}
-
-export interface Scorecard {
-  v: 1;
-  at: number;
-  commit: string;
-  branch: string;
-  /** Uncommitted changes were measured too: the numbers aren't the commit's alone. */
-  dirty: boolean;
-  metrics: Metric[];
-  /** The office's open frictions (no retro decision yet), the most widespread first. */
-  frictions: { key: string; sessions: number }[];
-  /** What couldn't be measured, and why. */
-  notes: string[];
-}
-
-export const SECTIONS: Record<Section, string> = {
-  gate: 'Gate',
-  fence: 'Fence (code outside tests)',
-  effect: 'Effect (server)',
-  tests: 'Tests',
-  office: 'Office (ledger)',
-};
+export type { Metric, Scorecard } from '../shared/types';
 
 /** What one source file holds that the standard cares about. */
 export interface SourceCounts {
@@ -223,52 +192,17 @@ export function officeMetrics(events: LedgerEvent[], now: number): { metrics: Me
   return { metrics, frictions: groups.slice(0, 5).map((g) => ({ key: g.key, sessions: g.sessions })) };
 }
 
-export function formatValue(value: number, format: Format): string {
-  switch (format) {
-    case 'pass': return value ? 'yes' : 'NO';
-    case 'seconds': return `${value.toFixed(1)}s`;
-    case 'percent': return `${Math.round(value * 100)}%`;
-    case 'usd': return `$${value.toFixed(2)}`;
-    case 'ratio': return value.toFixed(1);
-    case 'count': return String(value);
-  }
-}
-
-/** Whether moving from `before` to `after` is a climb, a slip, or neither. Seconds wobble, so time counts only past 10%. */
-export function direction(m: Metric, before: number): 'better' | 'worse' | 'same' {
-  const delta = m.value - before;
-  const noise = m.format === 'seconds' ? Math.abs(before) * 0.1 : 1e-9;
-  if (Math.abs(delta) <= noise || m.better === 'none') return 'same';
-  return (delta < 0) === (m.better === 'lower') ? 'better' : 'worse';
-}
-
-const MARK = { better: '▲', worse: '▼', same: ' ' } as const;
-
-/** The change since `before`, marked; nothing when it rounds away to nothing as shown. */
-function deltaText(m: Metric, before: number): string {
-  const delta = m.value - before;
-  if (formatValue(Math.abs(delta), m.format) === formatValue(0, m.format)) return '';
-  const shown = m.format === 'pass' ? formatValue(before, 'pass') : `${delta > 0 ? '+' : '−'}${formatValue(Math.abs(delta), m.format)}`;
-  return `${MARK[direction(m, before)]} ${m.format === 'pass' ? `was ${shown}` : shown}`;
-}
-
 /** The scorecard as text, a section at a time, each number with its change since `previous` when there is one. */
 export function render(card: Scorecard, previous?: Scorecard): string {
-  const was = new Map(previous?.metrics.map((m) => [m.key, m.value]));
   const width = Math.max(...card.metrics.map((m) => m.label.length));
-  const head = `Scorecard · ${card.commit.slice(0, 8)} on ${card.branch}${card.dirty ? ' (with uncommitted changes)' : ''} · ${new Date(card.at).toISOString().slice(0, 16).replace('T', ' ')}`;
-  const against = previous
-    ? `Changes since ${previous.commit.slice(0, 8)} on ${previous.branch}, ${new Date(previous.at).toISOString().slice(0, 16).replace('T', ' ')} (▲ better, ▼ worse)`
-    : 'No earlier scorecard to compare with';
-  const lines = [head, against];
-  for (const [section, title] of Object.entries(SECTIONS)) {
-    const rows = card.metrics.filter((m) => m.section === section);
-    if (!rows.length) continue;
+  const when = (c: Scorecard) => new Date(c.at).toISOString().slice(0, 16).replace('T', ' ');
+  const lines = [
+    `Scorecard · ${measuredAt(card)} · ${when(card)}`,
+    previous ? `Changes since ${measuredAt(previous)}, ${when(previous)} (▲ better, ▼ worse)` : 'No earlier scorecard to compare with',
+  ];
+  for (const { section, title, rows } of compared(previous ? [previous, card] : [card])) {
     lines.push('', title);
-    for (const m of rows) {
-      const before = was.get(m.key);
-      lines.push(`  ${m.label.padEnd(width)}  ${formatValue(m.value, m.format).padStart(7)}  ${before === undefined ? '' : deltaText(m, before)}`.trimEnd());
-    }
+    for (const { metric: m, delta } of rows) lines.push(`  ${m.label.padEnd(width)}  ${formatValue(m.value, m.format).padStart(7)}  ${delta}`.trimEnd());
     if (section === 'office' && card.frictions.length) {
       lines.push('  Most widespread open frictions:');
       for (const f of card.frictions) lines.push(`    ${String(f.sessions).padStart(3)} sessions  ${f.key}`);

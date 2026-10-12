@@ -1,7 +1,7 @@
 import { isHidden, shownProjects } from '../../../shared/hidden';
 import type { ReportCard } from '../../../shared/ledger';
 import { prKey } from '../../../shared/qa';
-import type { Agent, Board, BrowserFrame, CallStatus, IssueDraft, NumberOneChat, Preview, Project, QaReview, Retro, ServerEvent, ServerInfo, StudioSession, TermLine, VoiceStatus } from '../../../shared/types';
+import type { Agent, Board, BrowserFrame, CallStatus, IssueDraft, NumberOneChat, Preview, Project, QaReview, Retro, Scorecards, ServerEvent, ServerInfo, StudioSession, TermLine, VoiceStatus } from '../../../shared/types';
 
 type Events = {
   snapshot: void;
@@ -25,6 +25,8 @@ type Events = {
   report: void;
   /** The chief engineer's retro changed. */
   retro: void;
+  /** Main engineering's scorecards changed: one measured, or a measurement started or failed. */
+  scorecards: void;
   /** A QA review changed or went away (its project id). */
   review: string;
   voice: void;
@@ -54,6 +56,7 @@ export class OfficeState {
   studio: StudioSession | null = null;
   report: ReportCard | null = null;
   retro: Retro | null = null;
+  scorecards: Scorecards | null = null;
   /** The latest QA review per pull request (by prKey). */
   reviews = new Map<string, QaReview>();
   /** Whether dictation can run on the server, and the speech model's download. */
@@ -121,10 +124,12 @@ export class OfficeState {
         this.studio = s.studio;
         this.report = s.report;
         this.retro = s.retro;
+        this.scorecards = s.scorecards;
         this.voice = s.voice;
         this.call = s.call;
         this.emit('snapshot', undefined);
         this.emit('report', undefined);
+        this.emit('scorecards', undefined);
         this.emit('voice', undefined);
         this.emit('call', undefined);
         this.emit('number-one', undefined);
@@ -211,6 +216,10 @@ export class OfficeState {
       case 'retro':
         this.retro = event.retro;
         this.emit('retro', undefined);
+        break;
+      case 'scorecards':
+        this.scorecards = event.scorecards;
+        this.emit('scorecards', undefined);
         break;
       case 'number-one':
         this.numberOne = event.chat;

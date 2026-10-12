@@ -8,7 +8,7 @@ In main engineering (deck 5), <kbd>E</kbd> on the master systems table opens the
 
 - **The log:** the last 7, 14, 30 or 90 days, the newest first and grouped by day, each event as one line: `focus #236 · 2 of 7 checks failed · fail 2`, `focus #199 · by the captain · without a QA pass (QA stale)`, `focus #233 · an agent resolved them · 2 files`. Filter by project, and by kind (QA, merged, conflicts, goals, retro, sessions, frictions, each with its count). Sessions and frictions are most of the ledger, so they start hidden: they show in each trace anyway. The log shows its newest 400 lines.
 - **The trace:** pick a line about a pull request to follow it in order, from the sessions that worked on it through its QA rounds, conflicts and triage to its merge, with the frictions found in each session quoted under it, and totals for QA fails, conflicts, sessions (their minutes and cost) and wasted calls. Its goal's name traces the whole goal: every pull request it opened in the window, its sessions, and its closing.
-- **On the wall:** the MSD beside the table shows the ledger next to the ship (`world/msd.ts`): the report card, or once you pick one, the trace, with its totals and latest steps big enough to read from the gallery. It stays up after you close the panel, until you pick another or **Clear the MSD**.
+- **On the wall:** the MSD beside the table shows the ledger next to the ship (`world/msd.ts`): the report card, the [scorecard](scorecard.md) when it's put up from the engineering panel, or once you pick one, the trace, with its totals and latest steps big enough to read from the gallery. It stays up after you close the panel, until you pick another or **Clear the MSD**.
 
 ## A proper log
 

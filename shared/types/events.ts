@@ -11,6 +11,7 @@ import type { Preview, PreviewLog } from './previews';
 import type { Project, Settings } from './projects';
 import type { QaReview } from './qa';
 import type { Retro } from './retros';
+import type { Scorecards } from './scorecard';
 import type { VoiceStatus } from './voice';
 
 export interface ServerInfo {
@@ -43,6 +44,8 @@ export interface Snapshot {
   report: ReportCard;
   /** The chief engineer's latest retro. */
   retro: Retro;
+  /** The latest scorecards, for main engineering. */
+  scorecards: Scorecards;
 }
 
 export type ServerEvent =
@@ -63,6 +66,7 @@ export type ServerEvent =
   | { type: 'review-removed'; repo: string; number: number }
   | { type: 'report'; report: ReportCard }
   | { type: 'retro'; retro: Retro }
+  | { type: 'scorecards'; scorecards: Scorecards }
   | { type: 'voice'; voice: VoiceStatus }
   | { type: 'call'; call: CallState | null }
   /** projectId, or the agent's, lets the browser drop toasts about a hidden project. */
