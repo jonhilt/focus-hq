@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { paths } from '../config';
-import { checkoutPullRequest, cherryPick, freshBranch, head, installDependencies, removeFolder, unshippedCommits } from './workspace';
+import { checkoutPullRequest, cherryPick, createWorktree, freshBranch, head, installDependencies, removeFolder, reopenWorktree, removeWorktree, unshippedCommits } from './workspace';
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-workspace-'));
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
@@ -154,6 +154,69 @@ describe('a reviewer’s checkout of a pull request', () => {
 
       // a re-test reuses the checkout
       expect(await checkoutPullRequest('acme/api', 'qa_lead_p1_ab/acme__api-pr7/api', 7)).toBe(pr);
+    } finally {
+      Object.assign(paths, was);
+    }
+  });
+});
+
+describe('the local base branch', () => {
+  it('follows origin’s, so a diff against main in a worktree shows only the branch’s own commits', async () => {
+    const was = { workspaces: paths.workspaces, mirrors: paths.mirrors };
+    paths.workspaces = path.join(tmp, 'base-workspaces');
+    paths.mirrors = path.join(tmp, 'base-mirrors');
+    try {
+      // an origin, and the office's clone of it, whose own checkout has main, as `gh repo clone` leaves it
+      const origin = path.join(tmp, 'base-origin.git');
+      git(tmp, 'init', '-q', '--bare', '-b', 'main', origin);
+      const dev = path.join(tmp, 'base-dev');
+      git(tmp, 'clone', '-q', origin, dev);
+      git(dev, 'config', 'user.email', 'dev@focus.test');
+      git(dev, 'config', 'user.name', 'Dev');
+      git(dev, 'checkout', '-qb', 'main');
+      commit(dev, 'readme.md', 'hello');
+      git(dev, 'push', '-q', 'origin', 'main');
+      const mirror = path.join(paths.mirrors, 'acme__base');
+      git(tmp, 'clone', '-q', origin, mirror);
+      let merges = 0;
+      const merged = () => {
+        const sha = commit(dev, 'readme.md', `merge ${++merges}`);
+        git(dev, 'push', '-q', 'origin', 'main');
+        return sha;
+      };
+
+      // main moved on GitHub since the office cloned it
+      let tip = merged();
+      const dir = await createWorktree('acme/base', 'agent_base', 'focus/base', 'main', () => false);
+      expect(git(mirror, 'rev-parse', 'refs/heads/main')).toBe(tip);
+      git(dir, 'config', 'user.email', 'agent@focus.test');
+      git(dir, 'config', 'user.name', 'Agent');
+      const own = commit(dir, 'mine.ts', 'mine');
+      expect(git(dir, 'rev-list', 'main..HEAD')).toBe(own);
+      expect(git(dir, 'diff', '--name-only', 'main...HEAD')).toBe('mine.ts');
+
+      // a lead's next slice starts from fresh code
+      tip = merged();
+      await freshBranch(dir, 'focus/base-2', 'main');
+      expect(git(dir, 'rev-parse', 'main')).toBe(tip);
+
+      // a goal reopened, and QA seated on a pull request, see main as GitHub has it
+      await removeWorktree('acme/base', 'agent_base');
+      tip = merged();
+      await reopenWorktree('acme/base', 'agent_base', 'focus/base-2', () => false);
+      expect(git(mirror, 'rev-parse', 'main')).toBe(tip);
+      tip = merged();
+      git(dev, 'push', '-q', 'origin', 'HEAD:refs/pull/9/head');
+      await checkoutPullRequest('acme/base', 'qa_base/acme__base-pr9/base', 9);
+      expect(git(mirror, 'rev-parse', 'main')).toBe(tip);
+
+      // main checked out in someone's worktree stays as it is, rather than moving under them
+      const holder = path.join(paths.workspaces, 'holder');
+      git(mirror, 'worktree', 'add', '-q', holder, 'main');
+      merged();
+      await freshBranch(dir, 'focus/base-3', 'main');
+      expect(git(holder, 'rev-parse', 'HEAD')).toBe(tip);
+      expect(git(holder, 'status', '--porcelain')).toBe('');
     } finally {
       Object.assign(paths, was);
     }

@@ -29,6 +29,33 @@ async function ensureMirror(repo: string): Promise<void> {
 }
 
 /**
+ * Brings the local `branch` (the base, `main`) up to origin's, just fetched, so `git diff main...HEAD` in an agent's
+ * worktree shows only their own commits. The mirror's own checkout lets go of it first (`gh repo clone` leaves it there,
+ * and git won't move a branch that's checked out). Only ever a fast-forward, and not while a worktree has the branch
+ * checked out: then it stays where it is. Never fails. Call inside the repo's lock when `mirror` is given.
+ */
+export async function followOrigin(dir: string, branch: string, mirror?: string): Promise<void> {
+  if (mirror && (await git(mirror, ['symbolic-ref', '-q', 'HEAD']).then((ref) => ref.trim() === `refs/heads/${branch}`, () => false))) {
+    await git(mirror, ['checkout', '-q', '--detach']).catch(() => undefined);
+  }
+  await git(dir, ['fetch', '-q', '.', `refs/remotes/origin/${branch}:refs/heads/${branch}`]).catch(() => undefined);
+}
+
+/** The branch origin's HEAD points at (`main`), as the clone recorded it, if it did. */
+function defaultBranch(mirror: string): Promise<string | undefined> {
+  return git(mirror, ['symbolic-ref', '-q', '--short', 'refs/remotes/origin/HEAD']).then(
+    (ref) => ref.trim().replace(/^origin\//, '') || undefined,
+    () => undefined,
+  );
+}
+
+/** `followOrigin` for the default branch. */
+async function followDefault(mirror: string): Promise<void> {
+  const branch = await defaultBranch(mirror);
+  if (branch) await followOrigin(mirror, branch, mirror);
+}
+
+/**
  * One clone per repository lives in data/repos; every agent gets its own git worktree of it in
  * data/workspaces/<agent id> so agents on the same repo never trip over each other. A worktree left behind by an agent
  * who isn't `inOffice` any more gives up its branch to the new one. `local` names the branch in the worktree, when it
@@ -47,6 +74,7 @@ export async function createWorktree(
   await lock.with(repo, async () => {
     await ensureMirror(repo);
     await retryLockRace(() => git(mirror, ['fetch', 'origin', '--prune'], 10 * 60_000), () => sleep(750));
+    await followOrigin(mirror, startPoint, mirror);
     if (fs.existsSync(dir)) {
       // Re-hiring the same agent id should never happen, but don't leave a half-made worktree behind.
       await removeDir(mirror, dir);
@@ -77,6 +105,7 @@ export async function reopenWorktree(repo: string, agentId: string, branch: stri
   await lock.with(repo, async () => {
     await ensureMirror(repo);
     await retryLockRace(() => git(mirror, ['fetch', 'origin', '--prune'], 10 * 60_000), () => sleep(750));
+    await followDefault(mirror);
     if (fs.existsSync(dir)) await removeDir(mirror, dir);
     await git(mirror, ['worktree', 'prune']);
     fs.mkdirSync(path.dirname(dir), { recursive: true });
@@ -181,7 +210,9 @@ function checkoutDetached(repo: string, dir: string, source: string, localRef: s
   const mirror = mirrorDir(repo);
   return lock.with(repo, async () => {
     await ensureMirror(repo);
-    await git(mirror, ['fetch', 'origin', `+${source}:${localRef}`], 10 * 60_000);
+    const base = await defaultBranch(mirror);
+    await git(mirror, ['fetch', 'origin', `+${source}:${localRef}`, ...(base ? [`+refs/heads/${base}:refs/remotes/origin/${base}`] : [])], 10 * 60_000);
+    if (base) await followOrigin(mirror, base, mirror);
     const sha = (await git(mirror, ['rev-parse', localRef])).trim();
     await detachAt(mirror, dir, sha);
     return sha;
@@ -358,6 +389,7 @@ export async function unshippedCommits(dir: string, baseBranch: string, shipped?
  */
 export async function freshBranch(dir: string, branch: string, baseBranch: string): Promise<void> {
   await retryLockRace(() => git(dir, ['fetch', 'origin', `+refs/heads/${baseBranch}:refs/remotes/origin/${baseBranch}`], 5 * 60_000), () => sleep(750));
+  await followOrigin(dir, baseBranch);
   await git(dir, ['checkout', '--no-track', '-B', branch, `origin/${baseBranch}`]);
 }
 
