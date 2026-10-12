@@ -4,7 +4,6 @@ import path from 'node:path';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import express from 'express';
 import { clock } from '../shared/clock';
-import { seededRandom } from '../shared/studio';
 import { keyFallback } from './agents/apiKey';
 import { BrowserPool } from './agents/browserTool';
 import { ClaudeDrafter, ClaudeEngineer, ClaudeNumberOne, ClaudeStudio, ClaudeTriager } from './agents/claudeCrew';
@@ -31,7 +30,7 @@ import { demoPreviewPage, Previews } from './previews';
 import { apiRouter } from './routes';
 import { StateLockedError, Store } from './store';
 import { currentVersion, RESTART_MESSAGE, Updater } from './updater';
-import { errorMessage, seedIds } from './util';
+import { errorMessage, seedRandom } from './util';
 import { Voice } from './voice';
 
 /** How often orphaned agent workspaces are swept up, besides once at startup. */
@@ -64,9 +63,7 @@ async function main() {
   // the studio films the same episode each run: the demo's waits and picks roll the same dice
   // and its ids, which the crew's names hash from
   if (config.studio) {
-    const seed = Number(process.env.FOCUS_DEMO_SEED ?? 1);
-    Math.random = seededRandom(seed);
-    seedIds(seededRandom(seed + 1));
+    seedRandom(Number(process.env.FOCUS_DEMO_SEED ?? 1));
   }
   const store = new Store(!config.demo);
   store.load();

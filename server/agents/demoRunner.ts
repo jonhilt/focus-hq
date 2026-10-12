@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -50,7 +49,7 @@ export class DemoRunner implements AgentRunner {
   /** A pretend terminal: the cloud session's link shows up in it after a few seconds. */
   cloudTerminal(_req: CloudTerminalRequest): Promise<CloudTerminal> {
     const opened = Date.now();
-    const id = `session_demo${randomBytes(4).toString('hex')}`;
+    const id = `session_demo${randomHex(4)}`;
     return Promise.resolve({
       read: () => Promise.resolve(Date.now() - opened < 4000 / this.speed ? 'Starting a cloud session…' : `Starting a cloud session…\n\x1b[2m☁ https://claude.ai/code/${id}\x1b[0m`),
     });
@@ -121,7 +120,7 @@ export class DemoRunner implements AgentRunner {
 
     // the QA officer: review the diff, run the tests, click through the UI, report a verdict
     const qaScript = async (): Promise<RunOutcome> => {
-      hooks.session(req.resumeSessionId ?? `demo-qa-${randomBytes(4).toString('hex')}`);
+      hooks.session(req.resumeSessionId ?? `demo-qa-${randomHex(4)}`);
       hooks.lines([{ kind: 'system', text: '✻ Claude Code (demo) · pretend model · QA' }]);
       const match = /pull request #(\d+) in (\S+): (.+)/.exec(req.prompt);
       const pr = Number(match?.[1] ?? 0);
@@ -198,7 +197,7 @@ export class DemoRunner implements AgentRunner {
     // progress goes through the same reading as a real session's
     type Job = { label: string; phase: number; ask: string; result?: string; after?: string; secs: [number, number] };
     const runWorkflow = async (name: string, description: string, phases: { title: string; child?: boolean }[], jobs: Job[], cap = 8) => {
-      const id = `demo-wf-${randomBytes(3).toString('hex')}`;
+      const id = `demo-wf-${randomHex(3)}`;
       // each agent's transcript, as Claude Code writes one: agent-<agentId>.jsonl in the workflow's folder
       const dir = path.join(os.tmpdir(), 'focus-demo-workflows', id);
       fs.mkdirSync(dir, { recursive: true });
@@ -269,7 +268,7 @@ export class DemoRunner implements AgentRunner {
     // when the captain stops it, or when the lead's turn is over
     const jobs = new Map<string, { timer: ReturnType<typeof setInterval>; task: 'shell' | 'monitor' }>();
     const runInBackground = (task: 'shell' | 'monitor', description: string, line: (n: number) => string) => {
-      const id = `b${randomBytes(4).toString('hex')}`;
+      const id = `b${randomHex(4)}`;
       const file = path.join(os.tmpdir(), 'focus-demo-tasks', `${id}.output`);
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, '');
@@ -311,7 +310,7 @@ export class DemoRunner implements AgentRunner {
 
     // a goal's lead: talks the goal through, builds a slice across every repo, ships it, and hears back
     const leadScript = async (tools: NonNullable<RunRequest['tools']>): Promise<RunOutcome> => {
-      const sessionId = req.resumeSessionId ?? `demo-lead-${randomBytes(4).toString('hex')}`;
+      const sessionId = req.resumeSessionId ?? `demo-lead-${randomHex(4)}`;
       hooks.session(sessionId);
       if (!req.resumeSessionId) hooks.lines([{ kind: 'system', text: '✻ Claude Code (demo) · pretend model · acceptEdits' }]);
       // where the repos are comes in the goal's first message and with each new slice; a resumed turn remembers it
@@ -485,7 +484,7 @@ export class DemoRunner implements AgentRunner {
 
     // the office compacting a conversation: what Claude Code's /compact does, in brief
     const compactScript = async (): Promise<RunOutcome> => {
-      hooks.session(req.resumeSessionId ?? `demo-${randomBytes(4).toString('hex')}`);
+      hooks.session(req.resumeSessionId ?? `demo-${randomHex(4)}`);
       hooks.activity('working', 'Compacting the conversation');
       await wait(2, 4);
       hooks.lines([{ kind: 'system', text: '✻ Conversation compacted' }]);
@@ -497,7 +496,7 @@ export class DemoRunner implements AgentRunner {
       if (req.prompt.startsWith('/compact')) return compactScript();
       if (req.outputSchema) return qaScript();
       if (req.tools) return leadScript(req.tools);
-      const sessionId = req.resumeSessionId ?? `${req.cloud ? 'session_demo' : 'demo-'}${randomBytes(4).toString('hex')}`;
+      const sessionId = req.resumeSessionId ?? `${req.cloud ? 'session_demo' : 'demo-'}${randomHex(4)}`;
       hooks.session(sessionId);
       hooks.lines([{ kind: 'system', text: `✻ Claude Code (demo) · ${req.model || req.settings.model || 'pretend model'} · acceptEdits${req.cloud ? ' · ☁ cloud' : ''}` }]);
       if (req.cloud) hooks.lines([{ kind: 'system', text: `☁ Cloud session: https://claude.ai/code/${sessionId}` }]);
@@ -631,7 +630,7 @@ export const demoWorkspace: WorkspaceOps = {
   hasUncommittedChanges: async () => false,
   commitsAhead: async () => 2,
   // demo agents always commit something, so every session ends on a new commit
-  head: async () => randomBytes(5).toString('hex'),
+  head: async () => randomHex(5),
   // ...and ship everything they commit
   unshippedCommits: async () => [],
   freshBranch: async () => undefined,
@@ -735,7 +734,7 @@ export class DemoDrafter implements Drafter {
       '',
       `- This belongs in ${repo}${req.repos.length > 1 ? ' rather than the other repos in the project' : ''}.`,
     ].join('\n');
-    return { repo, title, body, tooBig: demoTooBig(idea), sessionId: `demo-plan-${randomBytes(3).toString('hex')}`, costUsd: 0.11 };
+    return { repo, title, body, tooBig: demoTooBig(idea), sessionId: `demo-plan-${randomHex(3)}`, costUsd: 0.11 };
   }
 }
 
@@ -760,7 +759,7 @@ export class DemoNumberOne implements NumberOneOfficer {
     };
     const asked = req.messages.filter((m) => m.from === 'manager').at(-1)?.text.replace(/\s+/g, ' ').trim() ?? '';
     const q = asked.toLowerCase();
-    const said = (text: string, spoken: string, costUsd = 0.04): NumberOneReply => ({ text, spoken, sessionId: req.resumeSessionId ?? `demo-one-${randomBytes(3).toString('hex')}`, costUsd });
+    const said = (text: string, spoken: string, costUsd = 0.04): NumberOneReply => ({ text, spoken, sessionId: req.resumeSessionId ?? `demo-one-${randomHex(3)}`, costUsd });
     const project = req.projects.find((p) => q.includes(p.name.toLowerCase()) || p.repos.some((r) => q.includes(r.split('/')[1]))) ?? req.projects.find((p) => p.repos.length);
     activity('Thinking…');
     await wait(1);

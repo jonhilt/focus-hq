@@ -84,12 +84,13 @@ export const leadId = (projectId: string, suffix: string) => `lead_${projectId}_
 /**
  * A goal's lead at one of the room's team stations: the captain's own Claude Code session for the goal, building across
  * the project's repos a slice at a time. Command: they lead the work. Never the same surname as the room's other
- * officers, nor as `others` (the names of the room's other leads).
+ * officers, nor as `others` (the names of the room's other leads), and not as `closed` (the leads of the goals in the
+ * room's log) while there's another to be had, so a goal reopened later gets its own lead back.
  */
-export function leadFor(projectId: string, goalId: string, others: string[] = []): Planner {
+export function leadFor(projectId: string, goalId: string, others: string[] = [], closed: string[] = []): Planner {
   const h = hash(`lead:${projectId}:${goalId}`);
   const avatar = rollAvatar(seeded(h), 'command', 'lieutenant');
-  return { name: `${RANK_TITLE.lieutenant} ${freeSurname(projectId, h, others)}`, avatar };
+  return { name: `${RANK_TITLE.lieutenant} ${freeSurname(projectId, h, others, closed)}`, avatar };
 }
 
 /**
@@ -103,11 +104,15 @@ export function qaFor(projectId: string, goalId: string, others: string[] = []):
   return { name: `${RANK_TITLE[avatar.rank]} ${freeSurname(projectId, h, others)}`, avatar };
 }
 
-/** A surname nobody in the room has: not its officers', nor any of `others`. */
-function freeSurname(projectId: string, h: number, others: string[]): string {
-  const taken = new Set([plannerFor(projectId).name, qaOfficerFor(projectId).name, ...others].map((n) => n.split(' ').at(-1)));
+/** A surname nobody in the room has: not its officers', nor any of `others`, nor of `avoid` while there's another. */
+function freeSurname(projectId: string, h: number, others: string[], avoid: string[] = []): string {
+  const surnames = (names: string[]) => new Set(names.map((n) => n.split(' ').at(-1)));
+  const taken = surnames([plannerFor(projectId).name, qaOfficerFor(projectId).name, ...others]);
+  const avoided = surnames(avoid);
   const free = SURNAMES.filter((s) => !taken.has(s));
-  return (free.length ? free : SURNAMES)[(h >>> 3) % (free.length || SURNAMES.length)];
+  const fresh = free.filter((s) => !avoided.has(s));
+  const pool = fresh.length ? fresh : free.length ? free : SURNAMES;
+  return pool[(h >>> 3) % pool.length];
 }
 
 /** A helper the lead brings to their team station: an ensign from sciences or operations, the same for the same task. */

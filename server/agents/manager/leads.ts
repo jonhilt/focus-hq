@@ -35,7 +35,7 @@ export class Leads extends Part {
     }
     const suffix = newId('g').slice(-6);
     const id = leadId(projectId, suffix);
-    const crew = leadFor(projectId, suffix, leads.map((a) => a.name));
+    const crew = leadFor(projectId, suffix, leads.map((a) => a.name), (project.goals ?? []).map((g) => g.leadName));
     const title = goalTitle(text);
     const effort = goalEffort(how.effort, this.store.settings);
     const agent: Agent = {

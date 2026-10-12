@@ -13,6 +13,7 @@
     "typecheck": "tsc -p . && effect-language-service diagnostics --project tsconfig.json --format text",
     "lint": "eslint .",
     "test": "vitest run",
+    "test:repeat": "tsx scripts/repeatTests.ts",
     "smoke": "tsx scripts/smoke.ts",
     "perf": "tsx scripts/perf.ts",
     "studio": "tsx scripts/studio.ts",

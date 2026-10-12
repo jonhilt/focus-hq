@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
+import { seededRandom } from '../shared/studio';
 
 export class CommandError extends Error {
   constructor(
@@ -47,6 +48,16 @@ let idDice: (() => number) | null = null;
 
 export function seedIds(roll: () => number): void {
   idDice = roll;
+}
+
+/**
+ * Rolls every random choice the server makes from `seed`: Math.random (crew looks and names, the demo's waits and
+ * picks) and the ids (`randomHex`, which goal leads' names hash from). The studio films the same episode each run with
+ * it, and the unit tests run the same way each time (`vitest.setup.ts`).
+ */
+export function seedRandom(seed: number): void {
+  Math.random = seededRandom(seed);
+  seedIds(seededRandom(seed + 1));
 }
 
 /** `bytes` random bytes as hex. */
