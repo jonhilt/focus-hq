@@ -138,6 +138,18 @@ view while the computer builds:
   fact to check) hanging as a warm light in a row across the hall, just over your head between the doorway and the
   takes, its question on a tag you can read from where you come in. The computer
   reads the web to answer them: an answered thread turns green and rises away, a dropped one dims and sinks.
+- **Real sessions** (its `sessions` and `session_timeline` tools): for a video about something that really happened in
+  Claude Code, the computer reads the session itself. It can read Claude Code's own session transcripts on this Mac
+  (`~/.claude/projects`, or `CLAUDE_CONFIG_DIR`'s) and nothing else (`server/agents/studioSessions.ts`): it finds one
+  by what it was about (Claude Code's title for it, what was first asked, its folder), then reads it as a timeline
+  (`server/agents/sessionTimeline.ts`), told from code alone: what was asked, what Claude said and ran, and each
+  subagent and workflow it started, stitched in from their own transcripts (`subagents/`, and a workflow run's
+  `subagents/workflows/<run>/` with its journal): a fan-out as one moment, each agent with its brief, when it ran and
+  what it handed back (or that it stopped), a workflow's phases with their agents, models and how many ran at once.
+  The whole session fits about 8k tokens (tool runs, then Claude's words, go first when it's long); a time window
+  zooms in on a stretch, with every call. Then it pitches and builds from what really happened. It shares its reading
+  of transcripts with the ledger's session digests (`server/agents/transcript.ts`, [the ledger](ledger.md)), but the
+  digests count, for the retro, where a timeline tells the story in order, and reads any session, not only the crew's.
 - **Pitches** (its `pitch` tool): before it builds anything for a beat, the computer pitches 3 to 5 ways to show it,
   each a one-sentence metaphor, how big it is and where it stands (a tabletop model, the room round you, something
   hall-sized overhead…), and how it holds up against the real numbers and limits. They're meant to differ in kind and

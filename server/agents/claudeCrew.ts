@@ -11,7 +11,9 @@ import { type Drafter, type DraftRequest, type DraftResult, draftSchema, planner
 import { asNumberOneReply, type ChatProject, type NumberOneOfficer, type NumberOneReply, type NumberOneTurn, numberOnePrompt, numberOneReplySchema, numberOneSystemPrompt } from './numberOne';
 import { renderToolUse } from './render';
 import { STUDIO_LIMITS as S, studioPrompt, studioSystemPrompt } from './studio';
+import { clock, day, sessionTimeline } from './sessionTimeline';
 import type { Staged, StudioOfficer, StudioReply, StudioTurn } from './studioComputer';
+import { listSessions, type SessionSummary, loadSession } from './studioSessions';
 import { parseTriage, TRIAGE_SCHEMA, type TriageDecision, type Triager, type TriageRequest, triagePrompt, triageSystemPrompt } from './triage';
 import { checkoutLatest } from './workspace';
 import type { RetroOfficer, RetroRequest } from './engineer';
@@ -235,12 +237,21 @@ export class ClaudeStudio implements StudioOfficer {
       resume: req.resumeSessionId,
       tools: {
         server: studioServer(req),
-        names: ['video', 'pitch', 'take', 'retime_take', 'drop_take'],
-        activity: (name) => ({ video: 'Updating the video', pitch: 'Pitching ways to show it', take: 'Staging a take', retime_take: 'Retiming a take', drop_take: 'Clearing a take' })[name] ?? name,
+        names: ['video', 'pitch', 'take', 'retime_take', 'drop_take', 'sessions', 'session_timeline'],
+        activity: (name) => ({ sessions: 'Looking through Claude Code sessions', session_timeline: 'Reading a session', video: 'Updating the video', pitch: 'Pitching ways to show it', take: 'Staging a take', retime_take: 'Retiming a take', drop_take: 'Clearing a take' })[name] ?? name,
       },
     });
     return { text: result.text, sessionId: result.sessionId, costUsd: result.costUsd, model: result.model };
   }
+}
+
+/** The sessions tool's answer: a line or two for each. */
+function sessionList(found: SessionSummary[]): string {
+  if (!found.length) return 'No Claude Code sessions match that.';
+  return found.map((s) => {
+    const when = `${day(s.modifiedAt)} ${clock(s.modifiedAt)}`;
+    return `- ${s.id}: ${s.title ?? '(untitled)'} · ${when} · ${(s.bytes / 1e6).toFixed(1)} MB · ${s.agents} agents · ${s.project}${s.asked ? `\n  first asked: ${s.asked}` : ''}`;
+  }).join('\n');
 }
 
 /** A take's named phases, as its tools send them. */
@@ -330,6 +341,25 @@ function studioServer(req: StudioTurn): McpSdkServerConfigWithInstance {
         (input) => staged(() => req.tools.retime(input)),
       ),
       tool('drop_take', 'Take a take off the floor.', { id: z.string() }, ({ id }) => answer(() => req.tools.dropTake(id))),
+      tool(
+        'sessions',
+        'The Claude Code sessions on the captain\'s Mac, newest first: each with its id, Claude Code\'s title for it, what was first asked, when, its size and how many agents it ran. Search by words from its title, first ask or project folder.',
+        {
+          query: z.string().optional().describe('Words that must all appear in its title, first ask or folder; leave out for the newest.'),
+          limit: z.number().int().min(1).max(50).optional().describe('How many (20 unless you say).'),
+        },
+        ({ query, limit }) => answer(async () => sessionList(await listSessions(query, limit))),
+      ),
+      tool(
+        'session_timeline',
+        'A Claude Code session as a timeline, from its transcripts: what was asked, what Claude said and ran, and each subagent and workflow it started (when, how many at once, on which models, what came back). The whole session first; then from and to zoom in on a stretch in detail.',
+        {
+          session: z.string().describe('Its id (from the sessions tool) or its transcript\'s path.'),
+          from: z.string().optional().describe('Zoom in from this time, as the timeline shows it with its date ("2026-10-09 15:35").'),
+          to: z.string().optional().describe('Zoom in to this time.'),
+        },
+        ({ session, from, to }) => answer(async () => sessionTimeline(await loadSession(session), { from, to })),
+      ),
     ],
   });
 }

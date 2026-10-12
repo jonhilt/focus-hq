@@ -71,7 +71,7 @@ export const clock = (t: number) => {
   const d = new Date(t);
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
-const day = (t: number) => {
+export const day = (t: number) => {
   const d = new Date(t);
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };

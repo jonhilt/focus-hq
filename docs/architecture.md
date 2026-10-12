@@ -66,6 +66,9 @@ server/
     engineer.ts           the chief engineer: groups the digests' frictions, gathers the evidence into data/retros, runs one retro at a time and notes the captain's decisions; also finds the agents' transcripts on disk
     sessionDigest.ts      a session's span digested from its transcript and the ledger, by code: calls, waste, cost, nudges
     frictions.ts          what the retro's reader reads of each session's span, the batches, prompt and schema, the fixed friction kinds, and the check that every quote is in the span
+    transcript.ts         reading a Claude Code transcript's lines and blocks, shared by the digests, the friction reader and the studio's timelines
+    sessionTimeline.ts    a session told in order for the studio: asks, words, tool runs, and its subagents and workflows (phases, models, most at once, answers), whole or zoomed
+    studioSessions.ts     the Claude Code sessions the studio may read (Claude Code's projects folder only): found by what they're about, loaded with their agents' transcripts
     qa.ts                 the QA officer: instructions, the report's schema and parsing, the PR comment
     demoRunner.ts         scripted pretend agents (and a pretend lead, planner, QA officer and Number One) for demo mode
 client/src/
