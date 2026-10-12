@@ -80,6 +80,20 @@ the crew's speech bubbles are. The clip lands in `studio-out/stage-delegation/cl
 `?studio=1&stage=delegation`, come aboard, and call `focusHQ.studio.playStage()` (or `playStage(52)` to start 52 s in,
 though what should have come and gone by then can linger).
 
+## The studio holodeck
+
+Before a video is filmed it's thought through, and that happens standing in an empty holodeck. A goal that's making a
+video keeps it with its lead's `mcp__office__studio` tool (`server/agents/studio.ts`): its **premise** (the basic
+idea, the first thing the lead sends), what the viewer should **come away with**, its **beats** in order, and each
+**gap** in what we know that the video needs filled (g1, g2…, up to 8 open), until it's answered (by research, or by
+you) or dropped. The first vacant holodeck becomes that goal's studio (`client/src/world/studio.ts`, `studioHall.ts`):
+the sign on its door on the deck says **Studio** and whose; the poster and moving boxes make way; the premise and
+takeaway float on the far wall in a gold-edged hologram, the beats in a row of numbered cards round under it, and each
+open gap hangs either side as a warm light, its question on a tag that comes up as you walk over. An answered gap turns
+green and rises away; a dropped one dims and sinks. If several goals have a studio, the one whose lead last changed it
+has the holodeck. In `pnpm run demo`, Space Dodger's goal "A short video: how a lead hands work to subagents" fills
+one; reply to its lead and it answers its first gap.
+
 ## Not yet
 
 Packaging (captions, chapters, title, description, a thumbnail) and publishing come in later slices. Lengths aren't

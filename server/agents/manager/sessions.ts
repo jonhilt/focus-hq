@@ -233,7 +233,7 @@ export class AgentSessions extends Part {
       outputSchema: agent.task === 'review' ? QA_SCHEMA : undefined,
       cloud: agent.cloud ? { branch: agent.branch } : undefined,
       tools: agent.task === 'lead'
-        ? { ship: (input) => tool(this.core.slices.shipLead(agent, input)), note: (input) => tool(this.core.goalTools.noteGoal(agent, input)), show: (input) => tool(this.core.goalTools.showArtifact(agent, input)), explain: (input) => tool(this.core.goalTools.explain(agent, input)), ask: (input) => tool(this.core.goalTools.askCaptain(agent, input)), proposeClose: (input) => tool(this.core.goalTools.proposeClose(agent, input.reason)) }
+        ? { ship: (input) => tool(this.core.slices.shipLead(agent, input)), note: (input) => tool(this.core.goalTools.noteGoal(agent, input)), show: (input) => tool(this.core.goalTools.showArtifact(agent, input)), explain: (input) => tool(this.core.goalTools.explain(agent, input)), ask: (input) => tool(this.core.goalTools.askCaptain(agent, input)), proposeClose: (input) => tool(this.core.goalTools.proposeClose(agent, input.reason)), studio: (input) => tool(this.core.goalTools.studio(agent, input)) }
         : undefined,
       checklist: agent.task === 'lead' ? this.checklist(agent) : undefined,
     };

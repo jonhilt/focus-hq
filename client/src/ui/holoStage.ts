@@ -403,7 +403,7 @@ export class HoloStage {
     for (const a of [this.lead, ...this.helpers, this.nest, ...this.subs, ...this.lanes]) {
       if (!a.character) continue;
       a.character.update(now / 1000, this.camera.position.distanceTo(a.console.getWorldPosition(this.tmp)));
-      a.screen.maybeDraw(now, true, undefined, undefined);
+      a.screen.maybeDraw(now, 'near', undefined, undefined);
     }
     // the workflow's crowd wears no bubbles: a distance of 0 fades them out
     for (const p of this.padders.values()) p.character.update(now / 1000, 0);

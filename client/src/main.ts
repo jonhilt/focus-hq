@@ -293,6 +293,7 @@ async function main() {
   const agentChanged = (a: { projectId: string }) => {
     world.room(a.projectId)?.syncAgents();
     world.room(a.projectId)?.syncQa();
+    world.syncStudio();
     world.markPanels();
   };
   state.on('agent', agentChanged);

@@ -26,6 +26,7 @@ import { DISPLAY_EVERY, redrawDue, type ScreenView, screenTest, takeDraw } from 
 import { paneUse } from './screenPanes';
 import { Beam } from './transporter';
 import { HULL, LCARS, lcarsSign, workstation } from './starship';
+import { StudioSet, type StudioView } from './studioHall';
 import { FloorGlow, hover } from './hologram';
 import { OVERLAY_LAYER } from './frame';
 import { AHEAD, Portal } from './portal';
@@ -723,7 +724,8 @@ export function buildHiddenRoom(slot: RoomSlot, builder: Builder): void {
 
 /**
  * A vacant holodeck, waiting for a project: through its door on the deck, a training hall with nothing running, dark
- * with the yellow grid, a poster on its far wall and a few moving boxes, each of which starts a project.
+ * with the yellow grid, a poster on its far wall and a few moving boxes, each of which starts a project. While a goal is
+ * making a video, the first one is its studio (studio.ts): the props make way for the video's premise, beats and gaps.
  */
 export class VacantHall {
   readonly group = new THREE.Group();
@@ -731,6 +733,11 @@ export class VacantHall {
   readonly props: THREE.Object3D[] = [];
   /** The doorway from its door on the deck to the hall's entrance. */
   readonly portal: Portal;
+  /** The sign over its door on the deck, which says whose studio it is while it's one. */
+  private readonly sign: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  private readonly code: string;
+  private readonly studio = new StudioSet();
+  private studioTitle: string | null = null;
 
   constructor(slot: RoomSlot, builder: Builder, hallKit: THREE.Object3D) {
     this.group.position.copy(hallAt(slot));
@@ -745,10 +752,12 @@ export class VacantHall {
     deck.position.copy(slot.center);
     deck.rotation.y = slot.rotationY;
     builder.add(deck);
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), flat(lcarsSign('Holodeck vacant', { color: '#9a94a8', code: doorCode(slot), sub: 'Create a project in the ready room' })));
+    this.code = doorCode(slot);
+    const sign = (this.sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), flat(lcarsSign('Holodeck vacant', { color: '#9a94a8', code: this.code, sub: 'Create a project in the ready room' }))));
     sign.rotation.y = -Math.PI / 2;
     sign.position.set(DOOR_SIGN_X, 2.87, 0);
     deck.add(sign);
+    this.group.add(this.studio.group);
 
     // the grid over the hall's walls, ceiling and floor (the grid's drawn in its mesh's own frame, so the floor's laid
     // flat in its geometry, not by turning it)
@@ -782,5 +791,32 @@ export class VacantHall {
   /** Whether a world position is in the hall. */
   holds(p: THREE.Vector3): boolean {
     return inHall(this.group.position, p);
+  }
+
+  /** Whether it's a goal's studio just now. */
+  get isStudio(): boolean {
+    return this.studioTitle !== null;
+  }
+
+  /** Makes it a goal's studio (the props make way, and the sign on the deck says whose), or vacant again. */
+  showStudio(view: StudioView | undefined): void {
+    this.studio.show(view);
+    for (const prop of this.props) prop.visible = !view;
+    const title = view?.title ?? null;
+    if (title === this.studioTitle) return;
+    this.studioTitle = title;
+    const old = this.sign.material;
+    this.sign.material = flat(title ? lcarsSign('Studio', { color: LCARS.gold, code: this.code, sub: title }) : lcarsSign('Holodeck vacant', { color: '#9a94a8', code: this.code, sub: 'Create a project in the ready room' }));
+    old.map?.dispose();
+    old.dispose();
+  }
+
+  /** Moves the studio on to `t`, as seen from `camera` (world). */
+  update(t: number, camera: THREE.Vector3): void {
+    this.studio.update(t, camera);
+  }
+
+  dispose(): void {
+    this.studio.dispose();
   }
 }

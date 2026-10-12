@@ -134,6 +134,8 @@ async function main() {
       // two goals under way side by side, each with its own lead at its own team station
       office.agents.startGoal(shop.id, 'Shoppers can save items for later and find them again on any device');
       office.agents.startGoal(shop.id, 'Show how many of each sock are left in stock on the product page', { station: 2 });
+      // and one making a video, thought through in the studio holodeck (docs/studio.md)
+      office.agents.startGoal(game.id, 'A short video: how a lead hands work to subagents');
     }
   }
 

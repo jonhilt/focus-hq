@@ -38,6 +38,19 @@ function placeholderShot(url: string, heading: string, caption: string, accent: 
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
 }
 
+/** The beats and research gaps of the demo's video goal, as its lead puts them in the studio. */
+const DEMO_BEATS = [
+  { title: 'One session alone', point: 'Reading everything itself, its context fills and it slows' },
+  { title: 'Helpers beam in', point: 'Each reads one part in a fresh context of its own' },
+  { title: 'Only answers come back', point: 'The lead keeps room to think' },
+  { title: 'When not to', point: 'Small jobs cost more to hand off than to do' },
+];
+const DEMO_GAPS = [
+  'What does a subagent see of the lead’s conversation?',
+  'How many subagents can run at once?',
+  'Do subagents cost more tokens overall?',
+];
+
 /** Pretend agents for `npm run demo`: realistic-looking terminal output, browser testing and the odd raised hand. */
 export class DemoRunner implements AgentRunner {
   private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
@@ -346,6 +359,13 @@ export class DemoRunner implements AgentRunner {
         const result = await tools.show(input).catch((err: Error) => err.message);
         hooks.lines([{ kind: 'output', text: `  ⎿  ${result}` }]);
       };
+      const studio = async (input: Parameters<typeof tools.studio>[0]) => {
+        hooks.lines([{ kind: 'tool', text: `⏺ mcp__office__studio(${Object.keys(input).join(', ')})` }]);
+        const result = await tools.studio(input).catch((err: Error) => err.message);
+        hooks.lines([{ kind: 'output', text: `  ⎿  ${result}` }]);
+      };
+      // a goal that makes a video thinks it through in the studio holodeck: the premise first, then the rest
+      const video = /\bvideo\b/i.test(goal);
       const checklist = (ticked: number) => repos.map((r, i) => ({ text: `${r.folder}: the simplest version of ${goal}`, done: i < ticked }));
       const commit = async (folder: string, text: string) => {
         await tool('Bash', { command: `git -C ${folder} add -A && git -C ${folder} commit -m "${text}"` }, [`[${folder} 4f2a91c] ${text}`, ' 2 files changed, 41 insertions(+)']);
@@ -390,6 +410,12 @@ export class DemoRunner implements AgentRunner {
         }
         await think();
         await note({ done: `${goal}: it works end to end, and survives a reload on another device.`, next: ['A thin slice end to end'] });
+        if (video) {
+          await studio({ premise: 'A lead hands work to subagents: each reads in a fresh context of its own and sends back only what matters.' });
+          await think();
+          await studio({ takeaway: 'Reach for subagents when the reading would swamp one context.', beats: DEMO_BEATS });
+          for (const gap of DEMO_GAPS) await studio({ gap });
+        }
         await show({ id: 'data-flow', title: 'The data flow', html: demoFlowPage(goal, repos.map((r) => r.folder)) });
         hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__ask(Which layout should it start with?)' }]);
         const asked = await tools.ask({
@@ -404,6 +430,7 @@ export class DemoRunner implements AgentRunner {
         await say(`I've had a look around ${repos.map((r) => `./${r.folder}`).join(' and ')}. For "${goal}", I'd start with a thin slice end to end${repos.length > 1 ? ` through ${repos.map((r) => r.folder).join(' and ')}` : ''}: the simplest version that works, so we find out early whether the data model holds. Shall I go ahead?`);
         return { ok: true, summary: 'Proposed the first slice.' };
       }
+      if (video) await studio({ closeGap: { id: 'g1', as: 'answered', answer: 'Each subagent starts with only the prompt it’s handed: none of the lead’s history.' } });
       await say('On it: a thin slice first.');
       await note({ heading: `A thin slice of ${goal}`, slice: checklist(0) });
       await show({ id: 'mockup', title: 'A first mockup', html: demoMockupPage(goal) });

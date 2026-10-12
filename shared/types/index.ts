@@ -13,4 +13,5 @@ export * from './previews';
 export * from './projects';
 export * from './qa';
 export * from './retros';
+export * from './studio';
 export * from './voice';
