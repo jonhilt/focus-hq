@@ -1,6 +1,6 @@
 import type { Layer } from 'effect';
 import type { Closer, LedgerEntry, ReportCard } from '../../shared/ledger';
-import type { Agent, ConflictsOutcome, Effort, FailedCheck, MessageReply, PullRequest, QaReview, QueuedGoal, ResumeHow, TermLine } from '../../shared/types';
+import type { Agent, Autonomy, ConflictsOutcome, Effort, FailedCheck, MessageReply, PullRequest, QaReview, QueuedGoal, ResumeHow, TermLine } from '../../shared/types';
 import type { Hub } from '../hub';
 import type { Store } from '../store';
 import type { Transcript } from './engineer';
@@ -136,6 +136,10 @@ export class AgentManager {
 
   setEffort(id: string, effort: Effort): Agent {
     return this.core.comms.setEffort(id, effort);
+  }
+
+  setAutonomy(id: string, autonomy: Autonomy): Agent {
+    return this.core.comms.setAutonomy(id, autonomy);
   }
 
   leadPrs(projectId: string): { repo: string; number: number }[] {

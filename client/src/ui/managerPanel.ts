@@ -393,7 +393,7 @@ function settingsTab(ui: Ui): HTMLElement {
   recheck.onclick = () => void busy(recheck, () => api.checkGitHub(), ui.error);
 
   return h('div', null,
-    h('div', { class: 'field' }, h('label', null, 'How much can agents do on their own?'), autonomy, h('small', null, 'Applies to agents started from now on.')),
+    h('div', { class: 'field' }, h('label', null, 'How much can agents do on their own?'), autonomy, h('small', null, "Applies to agents started from now on, except any you've given a mode of their own in their panel.")),
     h('div', { class: 'field' }, h('label', null, 'Agents working at once (all projects)'), max, h('small', null, 'Each agent is a full Claude Code session on your subscription – more agents use your limits faster.')),
     h('div', { class: 'field' }, h('label', null, 'Model'), model, h('small', null, 'e.g. claude-opus-5-5 or claude-sonnet-5-5. Leave empty for your Claude Code default.')),
     h('div', { class: 'field' }, h('label', null, 'Model and effort for resolving merge conflicts'), h('div', { class: 'row' }, conflictsModel, conflictsEffort), h('small', null, 'For a new agent seated on a pull request to resolve its conflicts, which is usually mechanical work: e.g. claude-sonnet-5-5. Leave empty for the model above. The developer who opened the PR, if still aboard, resolves them in their own session instead.')),

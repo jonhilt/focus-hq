@@ -1,4 +1,4 @@
-import type { AgentStatus, BrowserFrame, Effort, Settings, TermLine, Workflow, WorkflowAgent } from '../../shared/types';
+import type { AgentStatus, Autonomy, BrowserFrame, Effort, Settings, TermLine, Workflow, WorkflowAgent } from '../../shared/types';
 import type { ArtifactInput, NoteInput, QuestionInput } from './lead';
 import type { ExplainerInput } from './explainer';
 import type { ChecklistSource } from './checklist';
@@ -76,6 +76,8 @@ export interface RunRequest {
   systemAppend: string;
   resumeSessionId?: string;
   settings: Settings;
+  /** What the session may do without asking: the agent's own mode, else the office's (`effectiveAutonomy`). */
+  autonomy: Autonomy;
   /** Missing = the model's default effort. */
   effort?: Effort;
   /** The model chosen for this agent. Missing = `settings.model`. */
@@ -134,6 +136,8 @@ export interface AgentSession {
   send(text: string): boolean;
   /** Changes how hard Claude thinks, from the session's next request on. */
   setEffort?(effort: Effort): void;
+  /** Changes what it may do without asking. Returns false when it can only apply from the session's next turn. */
+  setAutonomy?(autonomy: Autonomy): boolean;
   /** Stops one of its background commands or monitors. Resolves false when there's no session to ask. */
   stopTask?(taskId: string): Promise<boolean>;
   stop(): void;

@@ -1,7 +1,8 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { query, type CanUseTool, type Options, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import { query, type CanUseTool, type Options, type PermissionMode, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { clock } from '../../shared/clock';
+import type { Autonomy } from '../../shared/types';
 import { paths } from '../config';
 import { errorMessage, sleep, truncate } from '../util';
 import { keyFallback } from './apiKey';
@@ -73,6 +74,25 @@ const ASK_MODE_COMMANDS = [
     .map((cmd) => `Bash(${cmd}:*)`),
 ];
 
+/** Claude Code's permission mode for each of the office's. */
+export const PERMISSION_MODE: Record<Autonomy, PermissionMode> = { ask: 'acceptEdits', auto: 'auto', full: 'bypassPermissions' };
+
+/** A tool the session may use without asking in a mode, before Claude Code's own rules or the captain are asked. */
+export function allowedWithoutAsking(autonomy: Autonomy, toolName: string): boolean {
+  return autonomy === 'full' || (autonomy === 'ask' && (ASK_MODE_TOOLS.has(toolName) || toolName.startsWith('mcp__browser__')));
+}
+
+/**
+ * The SDK options for a session's permissions. A cloud session's are fixed for its turn. A local one is set up to switch
+ * to any mode while it runs (`Query.setPermissionMode`): bypassing permissions has to be allowed from the start, and it
+ * carries ask mode's command rules whatever mode it starts in (in auto mode they only spare the classifier a few calls).
+ */
+export function permissionOptions(autonomy: Autonomy, cloud: boolean, askCommands: string[], canUseTool: CanUseTool): Partial<Options> {
+  if (!cloud) return { permissionMode: PERMISSION_MODE[autonomy], allowDangerouslySkipPermissions: true, allowedTools: askCommands, canUseTool };
+  if (autonomy === 'full') return { permissionMode: 'bypassPermissions', allowDangerouslySkipPermissions: true };
+  return autonomy === 'auto' ? { permissionMode: 'auto', canUseTool } : { permissionMode: 'acceptEdits', allowedTools: askCommands, canUseTool };
+}
+
 function summarizeInput(toolName: string, input: Record<string, unknown>): string {
   if (toolName === 'Bash') return `Bash(${truncate(String(input.command ?? ''), 300)})`;
   const first = input.file_path ?? input.url ?? input.pattern ?? Object.values(input)[0];
@@ -136,14 +156,13 @@ export class ClaudeRunner implements AgentRunner {
     // A new cloud session gets its instructions in the first message: which local options reach it is up to the CLI.
     input.push(cloud && !req.resumeSessionId ? `${req.systemAppend}\n\n---\n\n${req.prompt}` : req.prompt);
 
-    const autonomy = req.settings.autonomy;
+    // the captain can change it while the session runs (`setAutonomy`)
+    let autonomy = req.autonomy;
     // a cloud agent has to push its own branch, and only that one
     const askCommands = cloud ? [...ASK_MODE_COMMANDS, `Bash(git push origin HEAD:${cloud.branch})`] : ASK_MODE_COMMANDS;
     const permits = new WorkflowPermits();
     const canUseTool: CanUseTool = async (toolName, toolInput, { signal, title, agentID, toolUseID }) => {
-      if (autonomy === 'ask' && (ASK_MODE_TOOLS.has(toolName) || toolName.startsWith('mcp__browser__'))) {
-        return { behavior: 'allow', updatedInput: toolInput };
-      }
+      if (allowedWithoutAsking(autonomy, toolName)) return { behavior: 'allow', updatedInput: toolInput };
       // an agent of a workflow the captain approved: its progress may not have named it yet, so give it a moment
       for (let i = 0; i < 10 && permits.mightApprove(agentID); i++) await sleep(200);
       if (permits.approves(agentID)) return { behavior: 'allow', updatedInput: toolInput };
@@ -194,11 +213,7 @@ export class ClaudeRunner implements AgentRunner {
         stderrTail.push(data);
         if (stderrTail.length > 20) stderrTail.shift();
       },
-      ...(autonomy === 'full'
-        ? { permissionMode: 'bypassPermissions', allowDangerouslySkipPermissions: true }
-        : autonomy === 'auto'
-          ? { permissionMode: 'auto', canUseTool }
-          : { permissionMode: 'acceptEdits', allowedTools: askCommands, canUseTool }),
+      ...permissionOptions(autonomy, !!cloud, askCommands, canUseTool),
     };
 
     let q: Query | undefined;
@@ -267,6 +282,13 @@ export class ClaudeRunner implements AgentRunner {
       // a cloud session's settings live in the cloud: its new effort applies from its next turn
       setEffort: (effort) => {
         if (!cloud) void q?.applyFlagSettings({ effortLevel: effort }).catch(() => undefined);
+      },
+      // a cloud session's permissions are set as its turn starts: its new mode applies from its next turn
+      setAutonomy: (mode) => {
+        if (cloud) return false;
+        autonomy = mode;
+        void q?.setPermissionMode(PERMISSION_MODE[mode]).catch(() => undefined);
+        return true;
       },
       stop: () => {
         stopping = true;

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { TermLine } from '../../shared/types';
 import type { BrowserPool } from './browserTool';
-import { ClaudeRunner, claudeConfig, holdsInput } from './claudeRunner';
+import { allowedWithoutAsking, ClaudeRunner, claudeConfig, holdsInput, permissionOptions } from './claudeRunner';
 import type { ProbeEvent, RunHooks, WorkflowEvent } from './types';
 
 describe('claudeConfig', () => {
@@ -147,5 +147,37 @@ describe('a commit', () => {
     const heredoc = `git commit -m "$(cat <<'EOF'\nShow the slice under way\n\nBody\nEOF\n)"`;
     for (const m of [bash('t1', 'git add -A && git commit -m "Heading on the chart"'), result('t1'), bash('t2', 'git commit -m "Nothing to commit"'), result('t2', true), bash('t3', heredoc), result('t3')]) runner.handle(m as SDKMessage, ctx, hooks);
     expect(commits).toEqual(['Heading on the chart', 'Show the slice under way']);
+  });
+});
+
+describe('allowedWithoutAsking', () => {
+  it('lets ask mode use its plain tools and the browser, and nothing else', () => {
+    expect(allowedWithoutAsking('ask', 'Edit')).toBe(true);
+    expect(allowedWithoutAsking('ask', 'mcp__browser__open')).toBe(true);
+    expect(allowedWithoutAsking('ask', 'Bash')).toBe(false);
+    expect(allowedWithoutAsking('ask', 'mcp__office__ship')).toBe(false);
+  });
+
+  it('asks the classifier in auto mode, and never asks in full', () => {
+    expect(allowedWithoutAsking('auto', 'Edit')).toBe(false);
+    expect(allowedWithoutAsking('full', 'Bash')).toBe(true);
+    expect(allowedWithoutAsking('full', 'mcp__office__ship')).toBe(true);
+  });
+});
+
+describe('permissionOptions', () => {
+  const canUseTool = () => Promise.resolve({ behavior: 'allow' as const, updatedInput: {} });
+  const rules = ['Bash(git status:*)'];
+
+  it('starts a local session able to switch to any mode', () => {
+    for (const [mode, permissionMode] of [['ask', 'acceptEdits'], ['auto', 'auto'], ['full', 'bypassPermissions']] as const) {
+      expect(permissionOptions(mode, false, rules, canUseTool)).toEqual({ permissionMode, allowDangerouslySkipPermissions: true, allowedTools: rules, canUseTool });
+    }
+  });
+
+  it("gives a cloud session only what its turn's mode needs", () => {
+    expect(permissionOptions('full', true, rules, canUseTool)).toEqual({ permissionMode: 'bypassPermissions', allowDangerouslySkipPermissions: true });
+    expect(permissionOptions('auto', true, rules, canUseTool)).toEqual({ permissionMode: 'auto', canUseTool });
+    expect(permissionOptions('ask', true, rules, canUseTool)).toEqual({ permissionMode: 'acceptEdits', allowedTools: rules, canUseTool });
   });
 });

@@ -1,4 +1,4 @@
-import type { Agent, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ResumeHow, Retro, RetroDraft, RoomTheme, Settings, TermLine, VoiceStatus } from '../../../shared/types';
+import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ResumeHow, Retro, RetroDraft, RoomTheme, Settings, TermLine, VoiceStatus } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
 
@@ -96,6 +96,8 @@ export const api = {
   stop: (id: string) => call('POST', `/agents/${id}/stop`),
   dismiss: (id: string) => call('DELETE', `/agents/${id}`),
   setEffort: (id: string, effort: Effort) => call<Agent>('POST', `/agents/${id}/effort`, { effort }),
+  /** What this one agent may do without asking, from now on: the office's setting stays as it is. */
+  setAutonomy: (id: string, autonomy: Autonomy) => call<Agent>('POST', `/agents/${id}/autonomy`, { autonomy }),
   /** Compacts the agent's conversation between turns, keeping what their work needs. */
   compact: (id: string) => call<Agent>('POST', `/agents/${id}/compact`),
   /** Moves a local agent's work to a Claude Code cloud session, which the captain then starts. */

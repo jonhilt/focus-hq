@@ -1,5 +1,6 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { EFFORT_LEVELS, type Effort, type PreviewSet, type ResumeHow } from '../shared/types';
+import { isAutonomy } from '../shared/autonomy';
 import { closedGoals } from '../shared/ledger';
 import { ledgerWindow } from '../shared/ledgerReview';
 import { isKokoroVoice } from '../shared/voice';
@@ -193,6 +194,11 @@ export function apiRouter(office: Office, store: Store): express.Router {
     const level = effort(req.body.effort);
     if (!level) throw new Error('Pick an effort level');
     return office.agents.setEffort(param(req, 'id'), level);
+  }));
+  r.post('/agents/:id/autonomy', h((req) => {
+    const mode: unknown = req.body.autonomy;
+    if (!isAutonomy(mode)) throw new Error('Pick an autonomy mode: ask, auto or full');
+    return office.agents.setAutonomy(param(req, 'id'), mode);
   }));
   r.delete('/agents/:id', h((req) => office.agents.dismiss(param(req, 'id'))));
 

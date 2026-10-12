@@ -1,8 +1,9 @@
 import { contextLevel, statusLine } from '../../../shared/agentStatus';
+import { AUTONOMY_LABEL, AUTONOMY_MODES, effectiveAutonomy } from '../../../shared/autonomy';
 import { cloudSessionUrl } from '../../../shared/cloud';
 import { showsBrowser } from '../../../shared/browserView';
 import { helperFor, UNIFORM } from '../../../shared/crew';
-import type { Agent, BackgroundTask, BrowserFrame, Effort, Helper, TermLine, Workflow, WorkflowAgent } from '../../../shared/types';
+import type { Agent, Autonomy, BackgroundTask, BrowserFrame, Effort, Helper, TermLine, Workflow, WorkflowAgent } from '../../../shared/types';
 import { EFFORT_LEVELS } from '../../../shared/types';
 import { api } from '../net/api';
 import { markRead } from '../net/attention';
@@ -18,6 +19,12 @@ import { closeGoal, CONTEXT_TONE, EFFORT_HINT, noteView, prLink, reviewing, task
 import { type NavItem, readout, shownView, SideNav } from './panels';
 import { messageAgent } from './resume';
 import { TermView } from './terminal';
+
+const AUTONOMY_HINT: Record<Autonomy, string> = {
+  ask: 'Edits and common dev commands run freely; anything else and they raise their hand.',
+  auto: "Claude Code's auto-mode classifier approves safe actions; they raise their hand only when it can't decide.",
+  full: 'No permission checks at all: they can run any command on this machine, as you, without asking.',
+};
 
 const FINISHED = ['done', 'error', 'stopped'];
 
@@ -179,6 +186,7 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
       a.task === 'lead' ? readout('Station', String((a.lead?.station ?? 0) + 1)) : null,
       a.task === 'lead' ? readout('Slice', String(a.lead?.slice ?? 1)) : null,
       readout('Effort', a.task === 'lead' ? leadEffortPicker(a) : a.effort ?? 'default'),
+      readout('Autonomy', autonomyPicker(a)),
       contextReadout(a),
       readout('Started', timeAgo(a.startedAt)),
       a.costUsd > 0 ? readout('Usage', `~$${a.costUsd.toFixed(2)}`, { title: 'Estimated usage (on a subscription this is not billed)' }) : null,
@@ -332,6 +340,27 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
     select.onchange = () => {
       const level = EFFORT_LEVELS.find((e) => e === select.value);
       if (level) void api.setEffort(id, level).catch((e: Error) => ui.error(e.message));
+    };
+    return select;
+  };
+
+  /**
+   * What the agent may do without asking, changeable any time for them alone: at once if they're working on this
+   * machine, else from their next turn. Shows the office's setting until the captain picks one for them.
+   */
+  const autonomyPicker = (a: Agent) => {
+    const office = state.info?.settings.autonomy ?? 'ask';
+    const mode = effectiveAutonomy(a, { autonomy: office });
+    const select = h('select', {
+      class: 'effort',
+      style: mode === 'full' ? 'color:var(--lcars-red)' : undefined,
+      title: `${AUTONOMY_HINT[mode]}\n\n${a.autonomy ? `Chosen for ${a.name} alone` : 'The office setting'}: a change applies to ${a.name} only, at once if they're working on this machine.`,
+    },
+      ...AUTONOMY_MODES.map((m) => h('option', { value: m, selected: m === mode, title: AUTONOMY_HINT[m] }, AUTONOMY_LABEL[m])),
+    );
+    select.onchange = () => {
+      const picked = AUTONOMY_MODES.find((m) => m === select.value);
+      if (picked) void api.setAutonomy(id, picked).catch((e: Error) => ui.error(e.message));
     };
     return select;
   };

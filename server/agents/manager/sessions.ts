@@ -1,6 +1,7 @@
 import { closeSync, fstatSync, openSync, readFileSync, readSync } from 'node:fs';
 import { join } from 'node:path';
 import { Effect, Fiber, FiberMap } from 'effect';
+import { effectiveAutonomy } from '../../../shared/autonomy';
 import { helperFor } from '../../../shared/crew';
 import { prKey } from '../../../shared/qa';
 import type { Agent, PermissionRequest, TermLine } from '../../../shared/types';
@@ -226,6 +227,7 @@ export class AgentSessions extends Part {
       systemAppend: instructions,
       resumeSessionId,
       settings: this.store.settings,
+      autonomy: effectiveAutonomy(agent, this.store.settings),
       effort: agent.effort,
       model: agent.model,
       outputSchema: agent.task === 'review' ? QA_SCHEMA : undefined,

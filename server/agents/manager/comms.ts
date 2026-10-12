@@ -1,5 +1,6 @@
+import { autonomyChangeLine } from '../../../shared/autonomy';
 import { goneReply } from '../../../shared/mergeGate';
-import type { Agent, Effort, MessageReply, ResumeHow } from '../../../shared/types';
+import type { Agent, Autonomy, Effort, MessageReply, ResumeHow } from '../../../shared/types';
 import { truncate } from '../../util';
 import { resumeChoice } from '../apiKey';
 import { STOPPED_BY_CAPTAIN } from '../types';
@@ -7,7 +8,7 @@ import { FINISHED, Part, Refused } from './core';
 
 const SENT: MessageReply = { sent: true };
 
-/** The captain's word with an agent: messages, approvals, stopping them, their effort, and reading a lead's turn. */
+/** The captain's word with an agent: messages, approvals, stopping them, their effort and autonomy, and reading a lead's turn. */
 export class Comms extends Part {
   /** How hard the agent thinks from now on: from its next request if it's working, else from its next turn. */
   setEffort(id: string, effort: Effort): Agent {
@@ -16,6 +17,20 @@ export class Comms extends Part {
     this.update(agent, { effort });
     this.rt(id).session?.setEffort?.(effort);
     this.print(agent, [{ kind: 'system', text: `✻ The captain set ${agent.name}'s effort to ${effort}` }]);
+    return agent;
+  }
+
+  /**
+   * What the agent may do without asking, for them alone (the office's setting stays as it is): at once in a local
+   * session that's running, from their next turn in a cloud one, and on every later turn and resume.
+   */
+  setAutonomy(id: string, autonomy: Autonomy): Agent {
+    const agent = this.store.agent(id);
+    if (agent.autonomy === autonomy) return agent;
+    this.update(agent, { autonomy });
+    const session = this.rt(id).session;
+    const applied = session ? (session.setAutonomy?.(autonomy) ?? false) : undefined;
+    this.print(agent, [{ kind: 'system', text: autonomyChangeLine(agent.name, autonomy, applied === undefined ? 'none' : applied ? 'live' : 'next-turn') }]);
     return agent;
   }
 

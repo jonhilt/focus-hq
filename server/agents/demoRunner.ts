@@ -62,6 +62,8 @@ export class DemoRunner implements AgentRunner {
     const inbox: string[] = [];
     let stopped = false;
     let finished = false;
+    // the captain can change it while the session runs, as in a real one
+    let autonomy = req.autonomy;
     const abort = new AbortController();
 
     const wait = async (min: number, max: number) => {
@@ -324,7 +326,7 @@ export class DemoRunner implements AgentRunner {
       const ship = async (title: string, summary: string): Promise<boolean> => {
         hooks.lines([{ kind: 'tool', text: `⏺ mcp__office__ship(${title})` }]);
         hooks.activity('pushing', 'Shipping the slice');
-        if (req.settings.autonomy === 'ask' && !(await hooks.permission('mcp__office__ship', `Ship the slice: ${title}`, abort.signal))) {
+        if (autonomy === 'ask' && !(await hooks.permission('mcp__office__ship', `Ship the slice: ${title}`, abort.signal))) {
           if (stopped) throw new Error('stopped');
           hooks.lines([{ kind: 'error', text: '  ⎿  Declined by the captain' }]);
           await say('Holding off on shipping. Tell me what you’d like changed first.');
@@ -606,6 +608,10 @@ export class DemoRunner implements AgentRunner {
         return true;
       },
       stopTask: (taskId) => Promise.resolve(endJob(taskId, 'stopped', 'Stopped')),
+      setAutonomy: (mode) => {
+        autonomy = mode;
+        return true;
+      },
       stop: () => {
         stopped = true;
         abort.abort();

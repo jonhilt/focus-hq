@@ -1,6 +1,7 @@
 // Agents: who they are, what they're doing, and where they sit.
 
 import type { LeadWork } from './goals';
+import type { Autonomy } from './projects';
 
 export type AgentStatus =
   | 'queued' // hired, waiting for a free slot
@@ -229,6 +230,11 @@ export interface Agent {
   issue: { number: number; title: string; url: string };
   /** Chosen when the agent is hired. Missing = the model's default effort. */
   effort?: Effort;
+  /**
+   * How much they may do without asking, chosen by the captain for this agent alone: it carries on through their later
+   * turns and resumes. Missing = the office's `autonomy` setting (`effectiveAutonomy`).
+   */
+  autonomy?: Autonomy;
   /** Claude model chosen for this agent when it was seated (a conflicts agent's). Missing = the office's `model` setting. */
   model?: string;
   /**

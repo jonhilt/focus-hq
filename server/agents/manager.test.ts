@@ -11,7 +11,7 @@ import { Store } from '../store';
 import { demoWorkspace } from './demoRunner';
 import { AgentManager } from './manager';
 import { Renderer, Sessions, ShipRetry, Triage, Workspace } from './services';
-import type { PullRequest, QaReport } from '../../shared/types';
+import type { Autonomy, PullRequest, QaReport } from '../../shared/types';
 import type { AgentRunner, AgentSession, CloudTerminal, CloudTerminalRequest, RunHooks, RunOutcome, RunRequest, WorkspaceOps } from './types';
 import { CLOUD_UNAVAILABLE } from './cloud';
 import { keyFallback } from './apiKey';
@@ -26,7 +26,7 @@ vi.hoisted(() => {
 
 /** A Claude Code stand-in: each turn runs until the test ends it, and remembers being stopped and what it was sent. */
 class FakeClaude implements AgentRunner {
-  turns: { req: RunRequest; hooks: RunHooks; end: (outcome: RunOutcome) => void; stopped: boolean; sent: string[] }[] = [];
+  turns: { req: RunRequest; hooks: RunHooks; end: (outcome: RunOutcome) => void; stopped: boolean; sent: string[]; modes: Autonomy[] }[] = [];
   /** The terminals opened to start cloud sessions, and what they show. */
   terminals: CloudTerminalRequest[] = [];
   shown = '';
@@ -39,12 +39,14 @@ class FakeClaude implements AgentRunner {
   start(req: RunRequest, hooks: RunHooks): AgentSession {
     let end!: (outcome: RunOutcome) => void;
     const done = new Promise<RunOutcome>((resolve) => (end = resolve));
-    const turn = { req, hooks, end, stopped: false, sent: [] as string[] };
+    const turn = { req, hooks, end, stopped: false, sent: [] as string[], modes: [] as Autonomy[] };
     this.turns.push(turn);
     // a new cloud session's id comes once it's started, which Claude Code may refuse to do first
     if (!req.cloud || req.resumeSessionId) hooks.session(req.resumeSessionId ?? 'session-1');
     return {
       send: (text) => (turn.sent.push(text), true),
+      // a cloud session's mode waits for its next turn
+      setAutonomy: (mode) => (turn.modes.push(mode), !req.cloud),
       stop: () => {
         turn.stopped = true;
         end({ ok: false, summary: '', aborted: true });
@@ -103,6 +105,49 @@ describe('AgentManager', () => {
     const second = claude.turns[1];
     expect(second.req.resumeSessionId).toBe('session-1');
     expect([second.req.prompt, ...second.sent].join('\n\n')).toBe('Go ahead\n\nSmall slices, please');
+  });
+
+  it("changes one agent's autonomy, in their running session and on their later turns, and no one else's", async () => {
+    const { agents, claude, store, project } = office();
+    store.settings.autonomy = 'ask';
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string; name: string } };
+    await until(() => claude.turns.length === 1);
+    expect(claude.turns[0].req.autonomy).toBe('ask');
+
+    agents.setAutonomy(lead.id, 'full');
+    expect(claude.turns[0].modes).toEqual(['full']);
+    expect(store.agent(lead.id).autonomy).toBe('full');
+    expect(store.settings.autonomy).toBe('ask');
+    expect(store.recentLines(lead.id).at(-1)?.text).toBe(`✻ The captain set ${lead.name}'s autonomy to Full autonomy`);
+    // the same mode again changes nothing and says nothing
+    const lines = store.recentLines(lead.id).length;
+    agents.setAutonomy(lead.id, 'full');
+    expect(claude.turns[0].modes).toEqual(['full']);
+    expect(store.recentLines(lead.id)).toHaveLength(lines);
+
+    claude.turns[0].end({ ok: true, summary: 'Proposed a slice' });
+    await until(() => store.agent(lead.id).status === 'done');
+    // no session running: it's recorded for their next turn, which starts in it
+    agents.setAutonomy(lead.id, 'auto');
+    expect(store.recentLines(lead.id).at(-1)?.text).toBe(`✻ The captain set ${lead.name}'s autonomy to Auto mode`);
+    agents.message(lead.id, 'Go ahead');
+    await until(() => claude.turns.length === 2);
+    expect(claude.turns[1].req.autonomy).toBe('auto');
+    claude.turns[1].end({ ok: true, summary: 'Shipped' });
+    await until(() => store.agent(lead.id).status === 'done');
+
+    // anyone else follows the office setting, as it is when their turn starts
+    store.settings.autonomy = 'full';
+    const { id } = agents.hire(project.id, 'demo/webshop-frontend', { number: 1, title: 'Add a dark mode toggle to the header' }, { cloud: true });
+    await until(() => claude.turns.length === 3);
+    expect(claude.turns[2].req.autonomy).toBe('full');
+    expect(store.agent(id).autonomy).toBeUndefined();
+    expect(store.agent(lead.id).autonomy).toBe('auto');
+
+    // a cloud session takes its new mode from its next turn, and says so
+    agents.setAutonomy(id, 'ask');
+    expect(claude.turns[2].modes).toEqual(['ask']);
+    expect(store.recentLines(id).at(-1)?.text).toMatch(/autonomy to Raise your hand \(from their next turn\)$/);
   });
 
   it('remembers which of a lead’s turns the captain read, until the next one ends', async () => {
