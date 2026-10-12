@@ -58,7 +58,7 @@ export class StationScreen {
   private prefsVersion = screenPrefs.version;
   private readonly texture: THREE.CanvasTexture;
   private dirty = true;
-  private lastDraw = 0;
+  private lastDraw = -Infinity;
   /** Whether its cursor was on when it was last drawn. */
   private cursor = true;
   /**

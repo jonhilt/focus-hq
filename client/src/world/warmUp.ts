@@ -68,8 +68,11 @@ export async function warmUp(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
   }
 }
 
-/** How many MB of pictures a frame sends ahead of a doorway, past the first (which always goes). */
-const AHEAD_MB = 4;
+/**
+ * How many MB of pictures a frame sends ahead of a doorway, past the first (which always goes): on a laptop's integrated
+ * GPU each MB of canvas held the frame up about 7 ms.
+ */
+const AHEAD_MB = 2;
 /** How long (ms) the textures found in what's ahead are trusted before it's looked through again (a crew member arrived). */
 const RELOOK = 1000;
 

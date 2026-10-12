@@ -15,6 +15,7 @@ import { flat, occludedToon, toon } from './materials';
 import { mergeStatic } from './merge';
 import { type Doorway, Portal } from './portal';
 import { BIG_SCREEN, StationScreen } from './screen';
+import type { ScreenView } from './screenRedraw';
 import { HULL, LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
 import { HOLO_CYAN, Hologram, hover } from './hologram';
 import { OVERLAY_LAYER } from './frame';
@@ -457,6 +458,11 @@ export class TeamStation {
   /** What the station says while it has no goal. */
   freeText(next?: string): string {
     return next ? `Next up: ${next}` : `Team station ${this.index + 1} · start a goal here`;
+  }
+
+  /** Draws its sign, goal board, chart and the screen over its pod, if they've changed and it's time (Display.update). */
+  updateDisplays(now: number, view: ScreenView): void {
+    for (const display of [this.sign, this.board, this.chart, this.teamScreen]) display.update(now, view);
   }
 
   /**

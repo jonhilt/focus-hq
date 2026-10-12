@@ -12,6 +12,12 @@ export const REDRAW_EVERY: Record<Exclude<ScreenView, 'unseen'>, number> = { nea
  * integrated GPU, so a lead streaming output at the laptop's pace would stall the room every few frames.
  */
 export const BIG_REDRAW_EVERY: Record<Exclude<ScreenView, 'unseen'>, number> = { near: 1000, far: 2000 };
+/**
+ * A station's sign, goal board, chart and the screen over its pod, and a holodeck's Kanban board (goalScreens.ts,
+ * board.ts): they change with every line the crew write (the board's roster shows each one's latest), and each is a
+ * canvas of several MB to send, which on a laptop's integrated GPU held a frame up about 7 ms a MB.
+ */
+export const DISPLAY_EVERY: Record<Exclude<ScreenView, 'unseen'>, number> = { near: 2000, far: 5000 };
 /** How long (ms) a busy terminal's cursor stays on, and then off. */
 export const BLINK = 500;
 

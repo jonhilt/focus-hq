@@ -6,6 +6,7 @@ import type { CrewView } from './character';
 import { checklistGlance, type GoalRoomTone, goalRoomState, leadNow, type NoteSection, noteSections, type PrGlance, rowAt, sliceProgress } from './goalRoom';
 import { flat } from './materials';
 import { portrait } from './portraits';
+import { DISPLAY_EVERY, redrawDue, type ScreenView } from './screenRedraw';
 import { LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
 import { clip, type CoursePlot, everySlice, type Label, leaderEnd, plotCourse, type ProbeFlight, probeFlights, probesOut, seeded, shieldState } from '../ui/course';
 
@@ -102,13 +103,16 @@ function glowText(ctx: CanvasRenderingContext2D, text: string, x: number, y: num
   ctx.restore();
 }
 
-/** A canvas drawn only when what it shows changes. */
+/** A canvas drawn only when what it shows changes, and then only as often as `update` says. */
 abstract class Display {
   protected readonly c: ReturnType<typeof makeCanvas>;
   /** What it draws into, for a material other than its own to show (a Hologram, hologram.ts). */
   readonly texture: THREE.CanvasTexture;
   private flat?: THREE.MeshBasicMaterial;
   private key = '';
+  /** What it was last shown, while that's still to be drawn. */
+  private pending: StationView | null = null;
+  private drawn = -Infinity;
 
   constructor(
     w: number,
@@ -124,11 +128,24 @@ abstract class Display {
     return (this.flat ??= flat(this.texture, { transparent: this.transparent }));
   }
 
+  /** What to show: drawn by `update` if it's changed. */
   show(view: StationView): void {
     const key = JSON.stringify(this.keyOf(view));
     if (key === this.key) return;
     this.key = key;
-    this.redraw(view);
+    this.pending = view;
+  }
+
+  /**
+   * Draws what it was last shown, once that's due (screenRedraw.ts): every few seconds at most, less often from further
+   * off (`view`), since each drawing sends its canvas to the GPU again.
+   */
+  update(now: number, view: ScreenView): void {
+    if (!this.pending || !redrawDue({ changed: true, blinking: false, at: this.drawn, cursor: false }, view, now, DISPLAY_EVERY)) return;
+    const pending = this.pending;
+    this.pending = null;
+    this.drawn = now;
+    this.redraw(pending);
   }
 
   /** Draws it again, whether or not anything it draws from has changed: for one that moves. */

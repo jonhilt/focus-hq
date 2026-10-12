@@ -22,7 +22,7 @@ import { paddPiles, RACK_PILES } from './paddRack';
 import { PR_LOOK } from './goalScreens';
 import { holodeckMaterial, holodeckSkin, type Scenery } from './scenery';
 import { StationScreen } from './screen';
-import type { ScreenView } from './screenRedraw';
+import { DISPLAY_EVERY, redrawDue, type ScreenView } from './screenRedraw';
 import { paneUse } from './screenPanes';
 import { Beam } from './transporter';
 import { HULL, LCARS, lcarsSign, workstation } from './starship';
@@ -108,6 +108,7 @@ export class ProjectRoom {
   /** What the PADDs on the rack show, to rebuild them only when it changes. */
   private paddKey = '';
   private boardDirty = true;
+  private boardDrawn = -Infinity;
   /** Crew beaming in or out of their seats right now. */
   private beams: Beam[] = [];
   /** The doorway from the holodeck's door on the deck to the hall's entrance. */
@@ -599,16 +600,18 @@ export class ProjectRoom {
     this.boardGlow.update(t);
     this.board.hologram.update(Math.min(0.1, t - this.lastT));
     this.lastT = t;
-    if (this.boardDirty) {
-      this.boardDirty = false;
-      const board = state.boards.get(this.project.id);
-      this.board.draw(this.project, board, state.agentsIn(this.project.id));
-      this.rebuildPadds(board);
-    }
     const inRoom = this.holds(eye);
     // the hall's screens are seen from in it, or through a door to it (the hallway's or a briefing room's) as you near it
     const hallSeen = briefing ? briefing.portal.near(camera, AHEAD) : this.holds(camera) || this.entrance.near(camera, AHEAD);
     const hallView = (near: boolean): ScreenView => (!hallSeen ? 'unseen' : near ? 'near' : 'far');
+    // out of sight it's still drawn now and then, so there's little to draw as you come into view (only to send)
+    if (this.boardDirty && redrawDue({ changed: true, blinking: false, at: this.boardDrawn, cursor: false }, inRoom ? 'near' : 'far', now, DISPLAY_EVERY)) {
+      this.boardDirty = false;
+      this.boardDrawn = now;
+      const board = state.boards.get(this.project.id);
+      this.board.draw(this.project, board, state.agentsIn(this.project.id));
+      this.rebuildPadds(board);
+    }
     if (inRoom) this.planner.update(t, eye.distanceTo(this.planner.group.getWorldPosition(tmp)));
     this.opsScreen.maybeDraw(now, hallView(false), undefined, undefined);
     const qaDist = eye.distanceTo(this.qa.group.getWorldPosition(tmp));
@@ -630,6 +633,9 @@ export class ProjectRoom {
       const lead = station.lead.id;
       const view: ScreenView = !station.room.visible && !station.portal.near(camera, AHEAD) ? 'unseen' : seen && station.fromScreen(seen) < 13 ? 'near' : 'far';
       station.screen.maybeDraw(now, view, lead ? state.lines.get(lead) : undefined, lead ? state.browser.get(lead) : undefined);
+      // its sign and the screen over its pod are in the hall, its goal board and chart in the briefing room; out of sight
+      // they're still drawn now and then, so there's little to draw as they come into view (only to send)
+      station.updateDisplays(now, view === 'near' ? 'near' : 'far');
     }
     for (const slot of this.desks) {
       if (!slot.character) {

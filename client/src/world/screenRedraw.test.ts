@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BIG_REDRAW_EVERY, BLINK, cursorOn, REDRAW_EVERY, redrawDue, type ScreenDrawn } from './screenRedraw';
+import { BIG_REDRAW_EVERY, BLINK, DISPLAY_EVERY, cursorOn, REDRAW_EVERY, redrawDue, type ScreenDrawn } from './screenRedraw';
 
 const drawn = (over: Partial<ScreenDrawn> = {}): ScreenDrawn => ({ changed: false, blinking: false, at: 0, cursor: true, ...over });
 
@@ -33,5 +33,12 @@ describe('redrawDue', () => {
     const screen = drawn({ changed: true, at: 1000 });
     expect(redrawDue(screen, 'near', 1000 + REDRAW_EVERY.near, BIG_REDRAW_EVERY)).toBe(false);
     expect(redrawDue(screen, 'near', 1000 + BIG_REDRAW_EVERY.near, BIG_REDRAW_EVERY)).toBe(true);
+  });
+
+  it('draws a goal board or sign that’s changed less often still', () => {
+    const screen = drawn({ changed: true, at: 1000 });
+    expect(redrawDue(screen, 'near', 1000 + BIG_REDRAW_EVERY.near, DISPLAY_EVERY)).toBe(false);
+    expect(redrawDue(screen, 'near', 1000 + DISPLAY_EVERY.near, DISPLAY_EVERY)).toBe(true);
+    expect(redrawDue(screen, 'unseen', 1000 + DISPLAY_EVERY.far, DISPLAY_EVERY)).toBe(false);
   });
 });

@@ -73,8 +73,18 @@ export interface FrameStatsHitch {
   textures: number;
   uploads: number;
   bufferKB?: number;
+  /** The pictures sent, by size (`2400x1000`): which screens they were. */
+  pictures?: string[];
   /** Whether it drew an open doorway's far side as well. */
   door: boolean;
 }
 
-export type FrameStatsLine = FrameStatsSession | FrameStatsSample | FrameStatsHitch;
+/** How long sending a canvas to the GPU takes (ms per MB), the way the screens do and ways that might be cheaper: once, a few seconds in. */
+export interface FrameStatsBench {
+  kind: 'bench';
+  /** The canvas sent, in pixels. */
+  canvas: [number, number];
+  msPerMB: Record<string, number>;
+}
+
+export type FrameStatsLine = FrameStatsSession | FrameStatsSample | FrameStatsHitch | FrameStatsBench;

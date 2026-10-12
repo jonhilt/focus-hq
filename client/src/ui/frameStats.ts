@@ -4,6 +4,10 @@ import { HITCH, HITCHES_PER_SAMPLE, SAMPLE_EVERY, SEND_EVERY, sessionId, spread 
 import { api } from '../net/api';
 import { GpuTimer, timePasses } from '../world/gpuTimer';
 import { h } from './dom';
+import { benchUploads } from './uploadBench';
+
+/** How long (ms) after the page opens the canvas uploads are timed (uploadBench.ts). */
+const BENCH_AFTER = 4000;
 
 /** What a frame did, kept until the next shows how long it took. */
 interface Drawn {
@@ -14,6 +18,8 @@ interface Drawn {
   uploads: number;
   /** Bytes of geometry sent to the GPU. */
   buffers: number;
+  /** The pictures it sent, by size. */
+  pictures: string[];
 }
 
 /**
@@ -44,6 +50,8 @@ export class FrameStats {
   private uploads = 0;
   private uploadBytes = 0;
   private bufferBytes = 0;
+  /** The sizes of the pictures sent since the last frame ended. */
+  private sent: string[] = [];
   private lastShown = 0;
   private lastSample = 0;
   private lastSend = 0;
@@ -73,6 +81,8 @@ export class FrameStats {
       gpuTimer: !!this.timer,
     });
     addEventListener('pagehide', () => this.send());
+    // once the office is built and warmed up, while the splash screen's still up
+    setTimeout(() => this.lines.push(benchUploads(renderer)), BENCH_AFTER);
   }
 
   /** Before a frame is drawn. */
@@ -90,11 +100,12 @@ export class FrameStats {
     // a frame that slow is the previous one's doing: what it drew, and the GPU catching up with it
     if (interval > HITCH && this.last && this.hitches < HITCHES_PER_SAMPLE && document.visibilityState === 'visible') {
       this.hitches++;
-      this.lines.push({ kind: 'hitch', t: this.seconds(now), where: this.where, ms: Math.round(interval), busy: Math.round(this.last.busy), programs: this.last.programs, textures: this.last.textures, uploads: this.last.uploads, bufferKB: Math.round(this.last.buffers / 1e3), door: this.last.door });
+      this.lines.push({ kind: 'hitch', t: this.seconds(now), where: this.where, ms: Math.round(interval), busy: Math.round(this.last.busy), programs: this.last.programs, textures: this.last.textures, uploads: this.last.uploads, bufferKB: Math.round(this.last.buffers / 1e3), pictures: this.last.pictures, door: this.last.door });
     }
     const programs = info.programs?.length ?? 0;
     const textures = info.memory.textures;
-    this.last = { busy, door, programs: programs - this.counted.programs, textures: textures - this.counted.textures, uploads: this.uploads - this.counted.uploads, buffers: this.bufferBytes - this.counted.buffers };
+    this.last = { busy, door, programs: programs - this.counted.programs, textures: textures - this.counted.textures, uploads: this.uploads - this.counted.uploads, buffers: this.bufferBytes - this.counted.buffers, pictures: this.sent.slice(0, 8) };
+    this.sent = [];
     this.counted = { programs, textures, uploads: this.uploads, buffers: this.bufferBytes };
     this.shown.push(interval);
     // a frame that long is the tab hidden, not how fast frames go
@@ -181,6 +192,7 @@ export class FrameStats {
       methods[name] = (...args: unknown[]) => {
         const picture = args.find((a): a is { width: number; height: number } => !!a && typeof a === 'object' && 'width' in a && !ArrayBuffer.isView(a));
         if (picture) {
+          this.sent.push(`${picture.width}x${picture.height}`);
           this.uploads++;
           this.uploadBytes += picture.width * picture.height * 4;
         }
