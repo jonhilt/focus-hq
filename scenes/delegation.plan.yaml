@@ -1,238 +1,645 @@
-# Episode 1, "How Claude delegates": the shot plan the holodeck stage plays (docs/studio.md). It's the director's worked
-# plan (studio/director.md, appendix B) with what the stage can't do yet taken out or swapped (see notes). The beats are
-# placeholder narration: re-time them from the real take's transcript, and every shot follows its marks.
+# Episode 1, "How Claude delegates": the shot plan the holodeck stage plays (docs/studio.md), shot against the presenter's
+# real narration (studio-out/narration-delegation: 6:24, words.json and beats.json). The auto-split beats are merged into
+# sentences here; every `at` and mark is a word's start in words.json. The presenter sits picture-in-picture in the bottom
+# right (about 23% of the width), so no subject goes below y 0.68 right of x 0.72.
 #   pnpm run studio --stage delegation
 plan: 1
 episode: how-claude-delegates
-narration: { audio: vo/ep1.wav, beats: vo/ep1.beats.json }
-# no narration yet: show the beats' words as subtitles, so the timing can be watched
-preview: { captions: true }
+narration: { video: studio-out/narration-delegation/narration.mp4, beats: studio-out/narration-delegation/beats.json }
+# the voice is there now: no subtitles (rule 5)
+preview: { captions: false }
 stage: { set: holodeck, frame: [1920, 1080], fps: 30 }
 
 beats:
-  - { id: hook,  at: 0.0,   text: "Claude Code can do a job alone. Or it can run fifty agents at once.", marks: { alone: 1.9, fifty: 3.4 } }
-  - { id: title, at: 6.5,   text: "Here's how Claude delegates, one rung at a time.", marks: { rung: 8.6 } }
-  - { id: r1,    at: 9.8,   text: "Start with one session. Give it a job, and it does every step itself: read a file, then the next, then search.", marks: { job: 11.9, itself: 13.4 } }
-  - { id: r1b,   at: 17.8,  text: "Everything it reads stays in its context window, its working memory. And that fills up.", marks: { context: 20.4, fills: 25.6 } }
-  - { id: r1c,   at: 27.0,  text: "By the time it understands the code, most of that room is gone, before it's written a line.", marks: { gone: 31.2, line: 34.6 } }
-  - { id: r2,    at: 36.8,  text: "Rung two: subagents. Same job, but now it hands pieces off.", marks: { pieces: 42.6 } }
-  - { id: r2b,   at: 44.4,  text: "Each helper beams in with a fresh context of its own, often on a smaller, faster model.", marks: { fresh: 47.6, smaller: 50.8 } }
-  - { id: r2c,   at: 53.4,  text: "They do the reading. Pages of it. None of it lands in the lead's head.", marks: { reading: 54.9, none: 58.7 } }
-  - { id: r2d,   at: 62.0,  text: "When they're done, only the answer comes back, a line or two each, and the helpers are gone.", marks: { answer: 64.9, gone: 69.0 } }
-  - { id: r2e,   at: 70.6,  text: "Same job. A fraction of the context.", marks: { fraction: 72.8 } }
-  - { id: r3,    at: 76.0,  text: "Rung three: helpers can have helpers. A big piece can be split again.", marks: { helpers: 79.4, again: 82.6 } }
-  - { id: r3b,   at: 84.0,  text: "This one owns the API. It sends out two of its own, and only it hears back from them.", marks: { two: 88.0, only: 90.4 } }
-  - { id: r3c,   at: 92.6,  text: "Each level passes up a summary. The lead still gets one line.", marks: { summary: 95.4, one: 98.0 } }
-  - { id: r4,    at: 100.4, text: "Rung four: a workflow. For a big job, Claude writes a script, and the script runs the agents.", marks: { script: 105.6 } }
-  - { id: r4b,   at: 108.4, text: "Fifty files to migrate? Fifty agents, sixteen at a time.", marks: { fifty: 109.0, sixteen: 112.2 } }
-  - { id: r4c,   at: 114.2, text: "As each one finishes, the next steps onto its pad. Wave after wave.", marks: { next: 117.2, wave: 119.6 } }
-  - { id: r4d,   at: 121.6, text: "Their results land in the script, not in Claude's context, and the script boils them down.", marks: { script: 123.9, boils: 127.4 } }
-  - { id: r4e,   at: 129.4, text: "Fifty agents' work. One report.", marks: { one: 131.6 } }
-  - { id: r5,    at: 134.0, text: "Rung five: slash batch. For many changes at once.", marks: { batch: 136.0, many: 137.6 } }
-  - { id: r5b,   at: 139.6, text: "Each change gets its own agent in its own git worktree, a separate copy of the repo, so nobody trips over anyone.", marks: { worktree: 143.4, nobody: 147.0 } }
-  - { id: r5c,   at: 149.4, text: "They work side by side, each testing its own change.", marks: { side: 150.6, testing: 152.6 } }
-  - { id: r5d,   at: 154.6, text: "And every lane ends in its own pull request, ready for review.", marks: { pull: 157.4 } }
-  - { id: recap, at: 160.6, text: "So: one session. Helpers. Helpers with helpers. A workflow. A batch.", marks: { one: 161.6, helpers: 163.4, nested: 165.2, workflow: 167.4, batch: 169.4 } }
-  - { id: end,   at: 171.0, end: 176.0, text: "Same Claude. It just knows when to hand the work off.", marks: { off: 174.4 } }
+  # Intro
+  - { id: hook, at: 0.0, text: "There are lots of ways to get work done in Claude Code, and some of them include doing work in parallel.", marks: { work: 2.36, parallel: 6.41 } }
+  - { id: subs, at: 6.92, text: "So you might have seen, for example, sub-agents that explore your code base and then feed those results back to the main agent to do work.", marks: { subagents: 9.23, explore: 10.38, results: 13.24 } }
+  - { id: new, at: 15.26, text: "Sub-agents have been around a while now, and they've just been joined in the Claude Code harness by something new called dynamic workflows.", marks: { joined: 20.65, called: 23.9, dynamic: 24.35 } }
+  - { id: plan, at: 25.18, text: "So in this video, we're going to look at the difference between working in an agent versus working with sub-agents, and how that compares to dynamic workflows.", marks: { difference: 28.04, agent: 29.26, subagents: 30.43, dynamic: 33.67 } }
+  - { id: jump, at: 38.16, text: "So let's jump in.", marks: { jump: 38.72 } }
+  # 1 · On its own
+  - { id: r1, at: 39.64, text: "First of all, the standard way of working with Claude Code is to start a session as an agent, start typing and just go at it that way.", marks: { start: 45.9, typing: 47.97 } }
+  - { id: r1b, at: 50.26, text: "You choose the model, you choose the effort, you choose the permissions mode.", marks: { model: 51.01, effort: 51.84, permissions: 52.68 } }
+  # 2 · Subagents
+  - { id: r2, at: 53.74, text: "But then sometimes Claude will spin up sub-agents, and it will tell you that it's doing that, and you'll also see them running in Claude Code.", marks: { spin: 57.45, tell: 59.16, see: 61.58 } }
+  - { id: r2b, at: 62.96, text: "And the sub-agent at that point has its own context window.", marks: { own: 65.07, context: 65.74 } }
+  - { id: r2c, at: 66.41, text: "So the main thread, the main session, has its own context window.", marks: { own: 69.26, context: 69.5 } }
+  - { id: r2d, at: 71.03, text: "And while this may be beginning to change a little bit, in general your sessions hit a kind of dumb zone.", marks: { sessions: 76.35, dumb: 77.71 } }
+  - { id: r2e, at: 78.54, text: "The more that context window fills up, the worse they tend to perform.", marks: { fills: 80.36, worse: 81.62 } }
+  - { id: r2f, at: 83.3, text: "And one way to protect that context window and keep it emptier is to use sub-agents.", marks: { protect: 83.97, emptier: 86.73, subagents: 91.11 } }
+  - { id: r2g, at: 92.29, text: "So if you say, for example, please, I want to implement this feature. Please look at the existing code to figure out where this feature can fit in.", marks: { implement: 96.46, existing: 99.26 } }
+  - { id: r2h, at: 102.14, text: "Use several explore agents on a haiku model, let's say, or a sonnet model.", marks: { explore: 103.8, haiku: 104.94, sonnet: 106.7 } }
+  - { id: r2i, at: 107.76, text: "What you'll see is that Claude actually dispatches those agents.", marks: { dispatches: 111.34 } }
+  - { id: r2j, at: 112.71, text: "Those agents run off and use whichever model you just said to explore the code and then present their findings back.", marks: { run: 113.45, to: 115.96, explore: 116.06, findings: 117.82 } }
+  - { id: r2k, at: 118.58, text: "Now, each of those agents gets its own context window. So what it doesn't do is inherit the entire thread of the main session.", marks: { own: 120.66, inherit: 123.75, entire: 124.68 } }
+  - { id: r2l, at: 127.56, text: "Instead, it gets a kind of message from the main session saying, here's your goal or your task. Here's how you should do it. This is what I want you to report back.", marks: { message: 129.51, goal: 131.96, how: 133.84, report: 136.57 } }
+  - { id: r2m, at: 137.49, text: "Armed with that, the sub-agent does its work for as long as it needs to exist to do that work.", marks: { work: 139.96, needs: 141.17 } }
+  - { id: r2n, at: 142.94, text: "And then it sends details back to the main thread.", marks: { sends: 143.61, thread: 145.32 } }
+  - { id: r2o, at: 146.12, text: "Now, the main thread at this point has still got most of its context window available because that work was delegated.", marks: { most: 148.29, available: 149.7, delegated: 152.21 } }
+  - { id: r2p, at: 152.99, text: "You can then do that again as many times as you like. And every time, the main agent's context window tends to stay that bit smaller.", marks: { again: 154.2, every: 156.99, context: 159.24, smaller: 161.48 } }
+  - { id: r2q, at: 162.21, text: "It might do some thinking about the data it's got back. It might present some information to you. It might ask you a question.", marks: { thinking: 163.18, present: 165.79, ask: 167.43 } }
+  - { id: r2r, at: 168.11, text: "Now, sub-agents, just as a quick detail, can also call their own sub-agents. So it's kind of sub-agents all the way down.", marks: { subagents: 168.9, call: 172.55, down: 175.54 } }
+  - { id: r2s, at: 176.09, text: "I believe this might be capped at a certain limit, but occasionally an agent might spawn its own sub-agents to break the work up even further.", marks: { limit: 178.7, occasionally: 181.92, spawn: 183.17, further: 185.29 } }
+  # 3 · Dynamic workflows
+  - { id: r3, at: 185.9, text: "So what about dynamic workflows? Well, these are newer, and the difference comes down to one key thing, which is who holds the plan.", marks: { dynamic: 187.29, difference: 190.53, who: 194.84, plan: 195.83 } }
+  - { id: r3b, at: 196.19, text: "So with sub-agents, Claude is the orchestrator: it sends a helper out, reads what comes back, decides what's next, and every answer lands in its context.", marks: { subagents: 196.75, orchestrator: 199.34, sends: 202.52, back: 204.13, decides: 205.79, answer: 207.63, lands: 208.12, context: 208.94 } }
+  - { id: r3c, at: 209.5, text: "But with a workflow, Claude writes the plan down as a script instead.", marks: { workflow: 210.15, writes: 211.4, plan: 212.17, script: 213.11 } }
+  - { id: r3d, at: 214.26, text: "So you just ask for one, say use workflow, or you can type ultra code and that will trigger it.", marks: { user: 215.66, ultra: 218.64 } }
+  - { id: r3e, at: 220.59, text: "And Claude writes a short program: steps, and a loop to loop over every item.", marks: { program: 221.79, steps: 222.35, loop: 223.75, item: 225.31 } }
+  - { id: r3f, at: 225.64, text: "So then a runtime runs that script in the background, and your session stays free.", marks: { runtime: 226.21, background: 228.37, free: 230.71 } }
+  - { id: r3g, at: 230.95, text: "And slash workflows is a new command you can use: it shows you every phase and every agent as it's going.", marks: { workflows: 231.83, phase: 235.97, agent: 236.88 } }
+  - { id: r3h, at: 238.24, text: "And where it kind of shines is, here's an example: I recently moved a whole course out of a CMS into markdown files.", marks: { shines: 239.79, example: 241.61, course: 244.24, markdown: 246.76 } }
+  - { id: r3i, at: 248.06, text: "And it was the same job for every lesson, which was to fetch the content, convert it, test it.", marks: { same: 249.16, lesson: 250.66, fetch: 253.18, convert: 254.91, test: 255.75 } }
+  - { id: r3j, at: 256.39, text: "And the workflow sent each lesson through those steps, and can run those in parallel.", marks: { sent: 257.89, through: 259.39, steps: 260.68, parallel: 263.01 } }
+  - { id: r3k, at: 263.16, text: "So, like, overlapping: while one lesson is converting, the next can be being fetched, and an earlier one's being tested.", marks: { overlapping: 263.87, converting: 265.88, fetched: 268.12, tested: 270.07 } }
+  - { id: r3l, at: 270.48, text: "And it can do up to 16 agents at once.", marks: { sixteen: 271.46, once: 272.35 } }
+  - { id: r3m, at: 272.74, text: "And because the results go via the script first, not into Claude's context, you essentially get a kind of custom-built harness running all this,", marks: { results: 274.34, script: 276.63, not: 277.56, harness: 282.04 } }
+  - { id: r3n, at: 283.35, text: "which means the Claude context doesn't fill up, however many agents are running.", marks: { fill: 285.38, many: 286.3 } }
+  - { id: r3o, at: 288.31, text: "And at the end, the orchestrating agent gets one report: this many have been migrated, these three need a look.", marks: { close: 288.76, one: 291.64, report: 291.91, migrated: 295.21, three: 295.62 } }
+  - { id: r3p, at: 296.64, text: "And then, yeah, that's kind of it, and for me it converted it really well.", marks: { converted: 299.26 } }
+  - { id: r3q, at: 300.31, text: "So I would say a workflow is a good thing to reach for when it's the same step across lots of items: migrations, big refactors, trimming a test suite.", marks: { reach: 302.32, same: 303.22, migrations: 305.92, refactors: 307.21, trimming: 308.36 } }
+  - { id: r3r, at: 313.32, text: "I think it probably does cost more tokens, just because you're using lots more agents, but it's worth a try for that kind of work.", marks: { cost: 314.48, lots: 316.75, worth: 318.73 } }
+  - { id: r3s, at: 321.15, text: "And of course, if there's something you can extract out of that that's more deterministic, you can always turn it into a command you could just run yourself.", marks: { extract: 324.46, deterministic: 326.35, command: 328.64 } }
+  # How you use it
+  - { id: r4, at: 330.93, text: "So in terms of how you use it, ultra code will do it by default.", marks: { ultra: 332.87, default: 334.98 } }
+  - { id: r4b, at: 335.76, text: "So if you toggle on to ultra code mode, you will get all sorts happening, including dynamic workflows.", marks: { toggle: 336.57, dynamic: 341.29 } }
+  - { id: r4c, at: 342.53, text: "You can just use the phrase use workflow.", marks: { user: 344.17 } }
+  - { id: r4d, at: 345.33, text: "And you can do forward slash workflows as well, to watch, pause, stop, save.", marks: { workflows: 346.96, watch: 348.28, pause: 348.67, stop: 349.05, save: 349.51 } }
+  - { id: r4e, at: 350.2, text: "Up to 16: so you get up to 16 concurrent agents by default, depending on how many CPUs you have available.", marks: { sixteen: 350.93, again: 352.52, concurrent: 353.08, cpus: 357.07 } }
+  - { id: r4f, at: 359.1, text: "I think it can do up to a thousand agent runs per kind of workflow run.", marks: { thousand: 361.43, runs: 362.84 } }
+  - { id: r4g, at: 365.31, text: "You can have multiple workflows running at the same time, depending on how capable your machine is.", marks: { multiple: 366.33, machine: 370.76 } }
+  - { id: r4h, at: 371.37, text: "And the results live in these kind of variables in the script.", marks: { results: 371.77, variables: 373.47, script: 374.43 } }
+  - { id: r4i, at: 374.68, end: 384.2, text: "And then the last thing to know is that the deep research command, which you can do forward slash deep research, does this as its default.", marks: { last: 375.76, deep: 377.91, slash: 380.76, default: 383.44 } }
 
 cast:
   lead:       { kind: crew, name: Claude, tag: LEAD · OPUS, accent: orange, at: [-5, 0, 0], faces: right, turn: 35, line: Working on it }
-  lead.gauge: { kind: gauge, of: lead, at: [-6.4, 0, 0.6], height: 1.5 }   # beside her, never between her and the camera
-  lead.queue:
-    kind: list
-    at: [-2.8, 1.7, 0.4]
-    items: [Read web/src/App.tsx, Read web/src/store/cart.ts, Read web/src/Header.tsx, Read api/src/routes.ts, Read api/src/orders.ts, Search "saved items", Read api/src/auth.ts]
-  web:    { kind: crew, tag: EXPLORE · HAIKU, accent: sky,        at: [-1.5, 0, -3],   faces: left, turn: 35, gauge: true, line: map ./web }
-  api:    { kind: crew, tag: EXPLORE · HAIKU, accent: lilac,      at: [-0.5, 0, 0],    faces: left, turn: 35, gauge: true, line: map ./api }
-  tests:  { kind: crew, tag: EXPLORE · HAIKU, accent: periwinkle, at: [0.5, 0, 3],     faces: left, turn: 35, gauge: true, line: find the tests }
-  routes: { kind: crew, tag: EXPLORE · HAIKU, accent: lilac,      at: [3.5, 0, -1.5],  faces: left, turn: 35, gauge: true, line: check routes }
-  db:     { kind: crew, tag: EXPLORE · HAIKU, accent: lilac,      at: [3.5, 0, 1.5],   faces: left, turn: 35, gauge: true, line: check the db }
-  slate:  { kind: slate, at: [-2.6, 2.3, -0.6], title: "WORKFLOW · migrate.js", text: ["files.map(f => agent('migrate', f))", "16 at once · 50 in all"] }
-  rack:   { kind: label, at: [-1.0, 0.9, 0.6], text: 50 JOBS QUEUED }
+  # beside her, never between her and the camera; not tied to her, so it shows only when the voice names it
+  gauge:      { kind: gauge, at: [-6.4, 0, 0.6], height: 1.5 }
+  # her lists all hang in her lead room, one at a time
+  settings:   { kind: list, at: [-2.8, 1.7, 0.4], style: cards, items: [model · Opus, effort · high, permissions · default] }
+  lead.queue: { kind: list, at: [-2.8, 1.7, 0.4], items: [Read App.tsx, Read cart.ts, Read Header.tsx, Read routes.ts, Read orders.ts, Search "saved", Read auth.ts] }
+  jobs:       { kind: list, at: [-2.8, 1.7, 0.4], style: cards, items: [Explore ./web · Haiku, Explore ./api · Haiku, Explore tests · Haiku] }
+  brief:      { kind: list, at: [-2.8, 1.7, 0.4], style: cards, items: ["Goal: map ./api", "How: read routes, models", "Report: where it fits"] }
+  plan:       { kind: list, at: [-2.8, 1.7, 0.4], items: [Map the API, Check the db, Write the change, Run the tests] }
+  controls:   { kind: list, at: [-2.8, 1.7, 0.4], style: cards, items: ["/workflows · watch", pause, stop, save] }
+  # helpers, in a line going right and back so none hides another or drops under the presenter
+  web:    { kind: crew, tag: EXPLORE · HAIKU, accent: sky,        at: [-1.4, 0, 0.2],  faces: left, turn: 35, gauge: true, line: map ./web }
+  api:    { kind: crew, tag: EXPLORE · HAIKU, accent: lilac,      at: [0.8, 0, -0.6],  faces: left, turn: 35, gauge: true, line: map ./api }
+  tests:  { kind: crew, tag: EXPLORE · HAIKU, accent: periwinkle, at: [3.0, 0, -1.4],  faces: left, turn: 35, gauge: true, line: find the tests }
+  routes: { kind: crew, tag: EXPLORE · HAIKU, accent: lilac,      at: [3.6, 0, -2.4],  faces: left, turn: 35, gauge: true, line: check routes }
+  db:     { kind: crew, tag: EXPLORE · HAIKU, accent: lilac,      at: [4.0, 0, 0.4],   faces: left, turn: 35, gauge: true, line: check the db }
+  # the workflow: its script, where the lesson pipeline runs, and the pads its agents stand on
+  slate:  { kind: slate, at: [-2.6, 2.0, -0.6], title: "WORKFLOW · migrate-course.js", text: ["for (lesson of lessons)", "  fetch(lesson)", "  convert(lesson)", "  test(lesson)"] }
+  slate2: { kind: slate, at: [-1.2, 3.4, -3.6], title: "WORKFLOW · trim-tests.js", text: ["for (file of testFiles)", "  review(file)", "  trim(file)"] }
+  course: { kind: label, at: [-2.6, 0.75, -0.6], text: "COURSE · 48 LESSONS IN A CMS" }
+  fetch:   { kind: crew, tag: FETCH,   accent: sky,        at: [-1.6, 0, 2.6], faces: right, turn: 40, line: "" }
+  convert: { kind: crew, tag: CONVERT, accent: lilac,      at: [0.6, 0, 2.6],  faces: right, turn: 40, line: "" }
+  test:    { kind: crew, tag: TEST,    accent: periwinkle, at: [2.8, 0, 2.6],  faces: right, turn: 40, line: "" }
   pads:   { kind: pad, grid: [4, 4], at: [2, 0, 0], spacing: 1.2 }
-  lanes:  { kind: lane, count: 8, from: [-2, 0, -3.5], to: [5, 0, 3.5], firstPr: 412 }
-  ladder:
+  agenda:
     kind: card
-    title: REACH FOR…
+    title: IN THIS VIDEO
     rows:
-      - [On its own, small, focused jobs]
-      - [Subagents, reading in parallel, keeping the lead light]
-      - [Helpers with helpers, a helper with a big job of its own]
-      - [Workflows, big fan-out jobs; a script runs the fleet]
-      - [/batch, many independent changes, a PR each]
+      - [On its own, one session does every step]
+      - [Subagents, helpers with their own context]
+      - [Dynamic workflows, a script runs the agents]
+  reach:
+    kind: card
+    title: REACH FOR A WORKFLOW
+    rows:
+      - [Same step, across lots of items]
+      - [Migrations, a CMS course to markdown]
+      - [Big refactors, one change in many files]
+      - [Trimming tests, loads of AI-added tests]
 
 shots:
-  # Cold open: one, then many, then the empty hall
-  - { id: s0.1, span: [0, hook.fifty-0.1], idea: "One Claude, on its own.", look: lead,
-      camera: { size: MCU, on: { lead: [0.33, 0.45] }, angle: [25, -4], fov: 32, move: { kind: hold } },
-      do: [{ at: 0, act: beam-in, who: lead }, { at: hook.alone, act: say, who: lead, line: Working on it }],
-      out: { kind: cut } }
-  - { id: s0.2, span: [hook.fifty-0.1, title.rung-0.6], idea: "…or fifty at once (a glimpse of rung 4).", look: pads,
-      camera: { size: ELS, on: { lead: [0.14, 0.62], pads: [0.62, 0.55] }, angle: [0, -30], fov: 40, move: { kind: hold } },
-      do: [{ at: hook.fifty-0.4, act: show, what: pads }, { at: hook.fifty-0.1, act: beam-in, who: pads.1-16, gap: 0.04 }],
-      out: { kind: grid-wipe, over: 0.8, title: HOW CLAUDE DELEGATES, resets: [pads, lead] } }
-  - { id: s0.3, span: [title.rung-0.6, r1+2.8], idea: "The empty holodeck; then one session.", look: lead,
-      camera: { size: ELS, on: { hall: [0.5, 0.55] }, angle: [10, -12], fov: 50, move: { kind: hold } },
-      do: [{ at: title.rung, act: title, text: "1 · ON ITS OWN" }, { at: r1+0.1, act: beam-in, who: lead }],
-      out: { kind: cut } }
-  # Rung 1: one session, its context fills
-  - { id: s1.1, span: [r1+2.8, r1b.context-0.2], idea: "It does every step itself, one at a time.", look: lead.queue,
-      camera: { size: MS, on: { lead: [0.30, 0.60], lead.queue: [0.64, 0.42] }, angle: [20, -6], fov: 35, move: { kind: hold } },
-      do: [{ at: r1.job, act: show, what: lead.queue }, { at: r1.itself, act: tick, what: lead.queue, every: 1.1 }] }
-  - id: s1.2
-    span: [r1b.context-0.2, r1c]
-    idea: Every read stays in its context, and the context fills.
-    look: lead.gauge
-    camera:
-      size: MS
-      on: { lead.gauge: [0.30, 0.45], lead: [0.58, 0.60] }
-      angle: [-15, -6]
-      fov: 35
-      move: { kind: push-in, to: MCU, at: r1b.fills-0.2, over: 3, ease: inOut, why: lands on "fills" }
+  # ------------------------------------------------------------------ intro: one, then helpers, then a workflow
+  - { id: i1, span: [0, hook.parallel-0.1], idea: "One Claude, getting work done.", look: lead,
+      camera: { size: MS, on: { lead: [0.38, 0.68] }, angle: [25, -4], fov: 32, move: { kind: hold } },
+      do: [{ at: 0, act: beam-in, who: lead }, { at: hook.work, act: say, who: lead, line: Working on it }] }
+  - id: i2
+    span: [hook.parallel-0.1, new.called-0.05]
+    idea: Sub-agents explore the code and feed results back to the main agent.
+    look: [web, api, tests]
+    camera: { size: LS, on: { lead: [0.18, 0.56], tests: [0.66, 0.4] }, angle: [0, -26], fov: 40, move: { kind: hold } }
     do:
-      - { at: r1b.context-0.1, act: show, what: lead.gauge }
-      - { at: r1b.context+0.4, act: fill, what: lead.gauge, to: 0.35, over: 2 }
-      - { at: r1b.fills, act: fill, what: lead.gauge, to: 0.82, over: 5 }
-  - { id: s1.3, span: [r1c, r2], idea: "Most of the room is gone before it writes a line.", look: lead.gauge,
-      camera: { size: MLS, on: { lead.gauge: [0.30, 0.48], lead: [0.55, 0.62] }, angle: [20, -6], fov: 35, move: { kind: hold } },
-      do: [{ at: r1c.line, act: glow, what: lead.gauge, over: 1.5 }],
-      out: { kind: grid-wipe, over: 0.8, title: "2 · SUBAGENTS", resets: [lead.gauge, lead.queue] } }
-  # Rung 2: subagents
-  - { id: s2.1, span: [r2, r2b-0.2], idea: "Same job, cut into pieces.", look: lead.queue,
-      camera: { size: MLS, on: { lead: [0.30, 0.60], lead.queue: [0.64, 0.42] }, angle: [20, -6], fov: 35, move: { kind: hold } },
-      do: [{ at: r2+0.6, act: show, what: lead.queue }, { at: r2+0.6, act: show, what: lead.gauge, fill: 0.04 },
-           { at: r2.pieces, act: morph, what: lead.queue, into: [web, api, tests] }],
-      out: { kind: cut } }
-  - { id: s2.2, span: [r2b-0.2, r2c], idea: "Each helper beams in with a fresh, empty context.", look: [web, api, tests],
-      camera: { size: LS, on: { lead: [0.22, 0.56], api: [0.60, 0.50] }, angle: [0, -28], fov: 38, move: { kind: hold } },
-      do: [{ at: r2b, act: send, from: lead, to: [web, api, tests], lane: low, gap: 0.4, text: [map ./web, map ./api, find the tests] },
-           { after: 1.2, act: beam-in, who: [web, api, tests], gap: 0.4 }] }
-  - { id: s2.3, span: [r2c, r2c.none-0.3], idea: "They do the reading.", look: api.gauge,
-      camera: { size: MS, on: { api: [0.40, 0.60], api.gauge: [0.72, 0.45] }, angle: [-25, -24], fov: 35, move: { kind: hold } },
-      do: [{ at: r2c.reading, act: say, who: api, line: [Read routes.ts, Read orders.ts, Read auth.ts], every: 0.7 },
-           { at: r2c.reading, act: fill, what: [web.gauge, api.gauge, tests.gauge], to: 0.6, over: 3 }] }
-  - { id: s2.4, span: [r2c.none-0.3, r2e], idea: "None of it reaches the lead; only answers come back, then the helpers go.", look: lead.gauge,
-      camera: { size: LS, on: { lead: [0.22, 0.56], api: [0.60, 0.50] }, angle: [0, -28], fov: 38, move: { kind: hold } },
-      do: [{ at: r2c.none, act: glow, what: lead.gauge, over: 1.2 },
-           { at: r2d.answer-0.2, act: status, who: [web, api, tests], to: done },
-           { at: r2d.answer, act: send, from: [web, api, tests], to: lead.gauge, lane: high, gap: 0.6,
-             text: [web fits in Header.tsx, add routes/saved.ts, cart.test.ts covers it] },
-           { after: 1.6, act: fill, what: lead.gauge, to: 0.14, over: 1.2 },
-           { at: r2d.gone, act: beam-out, who: [web, api, tests], gap: 0.3 }] }
-  - { id: s2.5, span: [r2e, r3], idea: "Same job, a fraction of the context.", look: lead.gauge,
-      camera: { size: MLS, on: { lead.gauge: [0.36, 0.52], lead: [0.62, 0.64] }, angle: [10, -6], fov: 32, move: { kind: hold } },
-      do: [{ at: r2e.fraction, act: show, what: lead.gauge.ghost, to: 0.82, label: "82% alone · 14% with helpers" }],
-      out: { kind: grid-wipe, over: 0.8, title: "3 · NESTED" } }
-  # Rung 3: helpers with helpers
-  - { id: s3.1, span: [r3, r3b], idea: "A big piece can be split again.", look: api,
-      camera: { size: LS, on: { lead: [0.20, 0.56], api: [0.50, 0.50] }, angle: [0, -28], fov: 42, move: { kind: hold } },
-      do: [{ at: r3+0.4, act: send, from: lead, to: [web, api], lane: low, gap: 0.3, text: [map ./web, own the API] },
-           { after: 1.0, act: beam-in, who: [web, api], gap: 0.3 },
-           { at: r3.again, act: say, who: api, line: Splitting it in two }],
-      out: { kind: move } }
-  - id: s3.2
-    span: [r3b, r3c]
-    idea: The API helper sends out two of its own, and only it hears back.
+      - { at: subs.subagents-0.1, act: send, from: lead, to: [web, api, tests], lane: low, gap: 0.3, text: [map ./web, map ./api, find the tests] }
+      - { after: 0.9, act: beam-in, who: [web, api, tests], gap: 0.3 }
+      - { at: subs.results-0.2, act: status, who: [web, api, tests], to: done }
+      - { at: subs.results, act: send, from: [web, api, tests], to: lead, lane: high, gap: 0.3, text: ["web: Header.tsx", "api: routes.ts", "tests: cart.test.ts"] }
+      - { at: new.joined, act: beam-out, who: [web, api, tests], gap: 0.25 }
+  - id: i3
+    span: [new.called-0.05, plan.difference-0.15]
+    idea: Something new has joined them, a dynamic workflow.
+    look: pads
+    camera: { size: LS, on: { slate: [0.28, 0.32], pads: [0.56, 0.46] }, angle: [-10, -30], fov: 40, move: { kind: hold } }
+    do:
+      - { at: new.dynamic-0.1, act: show, what: [slate, pads] }
+      - { at: new.dynamic+0.2, act: beam-in, who: [pads.1-4, pads.5-8, pads.9-12, pads.13-16], gap: 0.3 }
+  - id: i4
+    span: [plan.difference-0.15, r1]
+    idea: "The three ways, in order: on its own, subagents, workflows."
+    look: agenda
+    camera: { size: MLS, on: { lead: [0.3, 0.66] }, angle: [20, -6], fov: 35, move: { kind: hold } }
+    do:
+      - { at: plan.difference-0.15, act: hide, what: [slate, pads] }
+      - { at: [plan.agent, plan.subagents, plan.dynamic], act: show, what: [agenda.1, agenda.2, agenda.3] }
+    out: { kind: grid-wipe, over: 0.8, title: "1 · ON ITS OWN", resets: [lead, slate, pads, agenda] }
+
+  # ------------------------------------------------------------------ 1 · on its own
+  - id: a1
+    span: [r1, r1.typing-0.3]
+    idea: Start a session, as one agent.
+    look: lead
+    camera: { size: LS, on: { lead: [0.36, 0.6] }, angle: [12, -14], fov: 40, move: { kind: hold } }
+    do:
+      - { at: r1+0.3, act: title, text: "1 · ON ITS OWN" }
+      - { at: r1.start, act: say, who: lead, line: Ready }
+      - { at: r1.start, act: beam-in, who: lead }
+  - id: a2
+    span: [r1.typing-0.3, r2]
+    idea: You type, and choose its model, effort and permissions.
+    look: settings
+    camera: { size: MS, on: { lead: [0.3, 0.6], settings: [0.64, 0.42] }, angle: [20, -6], fov: 35, move: { kind: hold } }
+    do:
+      - { at: r1.typing, act: say, who: lead, line: "› add a dark mode" }
+      - { at: r1b.model-0.1, act: show, what: settings }
+      - { at: r1b.model-0.1, act: tick, what: settings, every: 0.8 }
+    out: { kind: grid-wipe, over: 0.8, title: "2 · SUBAGENTS", resets: [settings] }
+
+  # ------------------------------------------------------------------ 2 · subagents
+  - id: s1
+    span: [r2, r2b]
+    idea: Claude spins up sub-agents, and says so.
+    look: [web, api, tests]
+    camera: { size: LS, on: { lead: [0.18, 0.56], tests: [0.66, 0.4] }, angle: [0, -26], fov: 40, move: { kind: hold } }
+    do:
+      - { at: r2, act: status, who: [web, api, tests], to: working }
+      - { at: r2.spin-0.1, act: send, from: lead, to: [web, api, tests], lane: low, gap: 0.3, text: [map ./web, map ./api, find the tests] }
+      - { after: 1.0, act: beam-in, who: [web, api, tests], gap: 0.3 }
+      - { at: r2.tell, act: say, who: lead, line: Running 3 Explore agents }
+  - id: s2
+    span: [r2b, r2c]
+    idea: A sub-agent has a context window of its own.
+    look: api.gauge
+    camera: { size: MLS, on: { api: [0.34, 0.62], api.gauge: [0.52, 0.6] }, angle: [0, -8], fov: 35, move: { kind: hold } }
+    do:
+      - { at: r2b.context-0.1, act: glow, what: api.gauge, over: 1.2 }
+  - id: s3
+    span: [r2c, r2d]
+    idea: So does the main session.
+    look: gauge
+    camera: { size: MS, on: { gauge: [0.3, 0.46], lead: [0.6, 0.6] }, angle: [12, -6], fov: 35, move: { kind: hold } }
+    do:
+      - { at: r2c, act: beam-out, who: [web, api, tests], gap: 0.2 }
+      - { at: r2c.own-0.1, act: show, what: gauge, fill: 0.06 }
+  - id: s4
+    span: [r2d, r2e]
+    idea: Alone, every read fills it, into the dumb zone.
+    look: gauge
+    camera: { size: LS, on: { gauge: [0.2, 0.5], lead.queue: [0.68, 0.38] }, angle: [15, -8], fov: 35, move: { kind: hold } }
+    do:
+      - { at: r2d+0.2, act: show, what: lead.queue }
+      - { at: r2d+0.6, act: tick, what: lead.queue, every: 0.9 }
+      - { at: r2d+0.8, act: fill, what: gauge, to: 0.55, over: 5.5 }
+      - { at: r2d.dumb, act: glow, what: gauge, label: DUMB ZONE, over: 1.2 }
+  - id: s5
+    span: [r2e, r2f]
+    idea: The fuller it gets, the worse it works.
+    look: gauge
+    camera: { size: MS, on: { gauge: [0.28, 0.5], lead: [0.6, 0.64] }, angle: [-12, -4], fov: 32, move: { kind: hold } }
+    do:
+      - { at: r2e.fills, act: fill, what: gauge, to: 0.9, over: 1.6 }
+      - { at: r2e.worse, act: glow, what: gauge, over: 1.2 }
+  - id: s6
+    span: [r2f, r2g]
+    idea: Sub-agents keep it emptier.
+    look: gauge
+    camera: { size: MLS, on: { gauge: [0.3, 0.48], lead: [0.56, 0.6] }, angle: [20, -6], fov: 35, move: { kind: hold } }
+    do:
+      - { at: r2f.protect, act: glow, what: gauge, over: 1 }
+      - { at: r2f.emptier-0.1, act: show, what: gauge.ghost, to: 0.9, label: "ALONE · 90%" }
+      - { at: r2f.emptier, act: fill, what: gauge, to: 0.08, over: 2 }
+      - { at: r2f.emptier, act: hide, what: lead.queue }
+  - id: s7
+    span: [r2g, r2h]
+    idea: You ask for a feature, and to explore the code first.
+    look: lead
+    camera: { size: MS, on: { lead: [0.4, 0.68] }, angle: [25, -4], fov: 32, move: { kind: hold } }
+    do:
+      - { at: r2g.implement, act: say, who: lead, line: "› add save-for-later" }
+      - { at: r2g.existing, act: say, who: lead, line: "› explore the code first" }
+  - id: s8
+    span: [r2h, r2i.dispatches-0.3]
+    idea: Several Explore agents, on a small, fast model.
+    look: jobs
+    camera: { size: MS, on: { lead: [0.3, 0.6], jobs: [0.64, 0.42] }, angle: [20, -6], fov: 35, move: { kind: hold } }
+    do:
+      - { at: r2h.explore-0.1, act: show, what: jobs }
+      - { at: r2h.haiku, act: glow, what: jobs, over: 1 }
+  - id: s9
+    span: [r2i.dispatches-0.3, r2j.to]
+    idea: Claude dispatches them, and they run off.
+    look: [web, api, tests]
+    camera: { size: LS, on: { lead: [0.18, 0.56], tests: [0.66, 0.4] }, angle: [0, -26], fov: 40, move: { kind: hold } }
+    do:
+      - { at: r2i.dispatches-0.1, act: hide, what: jobs }
+      - { at: r2i.dispatches, act: send, from: lead, to: [web, api, tests], lane: low, gap: 0.35, text: [map ./web, map ./api, find the tests] }
+      - { after: 1.0, act: beam-in, who: [web, api, tests], gap: 0.35 }
+  - id: s10
+    span: [r2j.to, r2k]
+    idea: Each explores the code itself.
     look: api
+    camera: { size: MLS, on: { api: [0.34, 0.62], api.gauge: [0.52, 0.6] }, angle: [-6, -14], fov: 35, move: { kind: hold } }
+    do:
+      - { at: r2j.explore, act: say, who: api, line: [Read routes.ts, Read orders.ts, Read auth.ts], every: 0.8 }
+      - { at: r2j.explore, act: fill, what: [web.gauge, api.gauge, tests.gauge], to: 0.3, over: 2.4 }
+  - id: s11
+    span: [r2k, r2l]
+    idea: Each has its own context; none inherits the lead's thread.
+    look: [web.gauge, api.gauge, tests.gauge]
+    camera: { size: LS, on: { gauge: [0.14, 0.58], tests.gauge: [0.7, 0.42] }, angle: [0, -24], fov: 40, move: { kind: hold } }
+    do:
+      - { at: r2k.own-0.1, act: glow, what: [web.gauge, api.gauge, tests.gauge], gap: 0.3, over: 1 }
+      - { at: r2k.entire-0.1, act: glow, what: gauge, over: 1.2 }
+  - id: s12
+    span: [r2l, r2m]
+    idea: "Instead it gets a brief: the goal, how, and what to report."
+    look: brief
+    camera: { size: MS, on: { lead: [0.3, 0.6], brief: [0.64, 0.42] }, angle: [20, -6], fov: 35, move: { kind: hold } }
+    do:
+      - { at: r2l.message-0.1, act: show, what: brief }
+      - { at: r2l.goal-0.15, act: tick, what: brief, every: 2.2 }
+  - id: s13
+    span: [r2m, r2n]
+    idea: Armed with the brief, it works as long as it needs to.
+    look: api.gauge
+    camera: { size: MLS, on: { api: [0.34, 0.62], api.gauge: [0.52, 0.6] }, angle: [8, -8], fov: 35, move: { kind: hold } }
+    do:
+      - { at: r2m, act: hide, what: brief }
+      - { at: r2m, act: send, from: lead, to: api, lane: low, text: "goal · how · report" }
+      - { at: r2m.work, act: say, who: api, line: [Read models.ts, Read saved.ts, Found it], every: 0.9 }
+      - { at: r2m.work, act: fill, what: api.gauge, to: 0.7, over: 3 }
+      - { at: r2m.work, act: fill, what: [web.gauge, tests.gauge], to: 0.6, over: 3 }
+  - id: s14
+    span: [r2n, r2o.most-0.4]
+    idea: Only the details come back, and the helpers go.
+    look: gauge
+    camera: { size: LS, on: { gauge: [0.14, 0.58], tests.gauge: [0.7, 0.42] }, angle: [0, -24], fov: 40, move: { kind: hold } }
+    do:
+      - { at: r2n.sends-0.2, act: status, who: [web, api, tests], to: done }
+      - { at: r2n.sends, act: send, from: [web, api, tests], to: gauge, lane: high, gap: 0.35, text: ["web: fits in Header.tsx", "api: add routes/saved.ts", "tests: cart.test.ts"] }
+      - { after: 1.5, act: fill, what: gauge, to: 0.14, over: 1 }
+      - { at: r2n.thread, act: beam-out, who: [web, api, tests], gap: 0.25 }
+  - id: s15
+    span: [r2o.most-0.4, r2p]
+    idea: Most of the lead's context is still free, because the work was delegated.
+    look: gauge
+    camera:
+      size: MLS
+      on: { gauge: [0.32, 0.58] }
+      angle: [-6, -4]
+      fov: 32
+      move: { kind: hold }
+    do:
+      - { at: r2o.available-0.1, act: glow, what: gauge, over: 1.2 }
+  - id: s16
+    span: [r2p, r2q]
+    idea: Do it again; each time the lead stays small.
+    look: gauge
+    camera: { size: LS, on: { gauge: [0.14, 0.58], tests.gauge: [0.7, 0.42] }, angle: [0, -24], fov: 40, move: { kind: hold } }
+    do:
+      - { at: r2p, act: fill, what: [web.gauge, api.gauge, tests.gauge], to: 0, over: 0.1 }
+      - { at: r2p, act: status, who: [web, api, tests], to: working }
+      - { at: r2p, act: say, who: web, line: check routes }
+      - { at: r2p, act: say, who: api, line: check the db }
+      - { at: r2p, act: say, who: tests, line: run the tests }
+      - { at: r2p.again-0.1, act: send, from: lead, to: [web, api, tests], lane: low, gap: 0.3, text: [check routes, check the db, run the tests] }
+      - { after: 1.0, act: beam-in, who: [web, api, tests], gap: 0.3 }
+      - { at: r2p.every, act: fill, what: [web.gauge, api.gauge, tests.gauge], to: 0.5, over: 2 }
+      - { at: r2p.context-0.3, act: status, who: [web, api, tests], to: done }
+      - { at: r2p.context, act: send, from: [web, api, tests], to: gauge, lane: high, gap: 0.3, text: ["routes: add one", "db: one new table", "tests: all pass"] }
+      - { at: r2p.smaller-0.2, act: fill, what: gauge, to: 0.2, over: 0.8 }
+  - id: s17
+    span: [r2q, r2r]
+    idea: With room to spare, the lead thinks, reports and asks.
+    look: lead
+    camera: { size: MS, on: { gauge: [0.3, 0.46], lead: [0.6, 0.6] }, angle: [12, -6], fov: 35, move: { kind: hold } }
+    do:
+      - { at: r2q, act: beam-out, who: [web, api, tests], gap: 0.2 }
+      - { at: r2q.thinking, act: say, who: lead, line: Thinking it over… }
+      - { at: r2q.thinking, act: fill, what: gauge, to: 0.24, over: 1.5 }
+      - { at: r2q.present, act: say, who: lead, line: "Here's what I found" }
+      - { at: r2q.ask, act: say, who: lead, line: Account or device? }
+  - id: s18
+    span: [r2r, r2r.call-0.1]
+    idea: A sub-agent with a big piece of its own.
+    look: api
+    camera: { size: LS, on: { lead: [0.18, 0.56], api: [0.6, 0.48] }, angle: [0, -28], fov: 42, move: { kind: hold } }
+    do:
+      - { at: r2r, act: fill, what: api.gauge, to: 0, over: 0.1 }
+      - { at: r2r, act: status, who: api, to: working }
+      - { at: r2r, act: say, who: api, line: own the API }
+      - { at: r2r.subagents-0.1, act: send, from: lead, to: api, lane: low, text: own the API }
+      - { after: 1.0, act: beam-in, who: api }
+  - id: s19
+    span: [r2r.call-0.1, r2s]
+    idea: It calls sub-agents of its own.
+    look: [routes, db]
     camera:
       size: LS
-      on: { lead: [0.20, 0.56], api: [0.50, 0.50] }
+      on: { lead: [0.18, 0.56], api: [0.6, 0.48] }
       angle: [0, -28]
       fov: 42
-      move: { kind: truck, to: { size: MLS, on: { api: [0.30, 0.52], routes: [0.70, 0.38] } }, at: r3b+0.2, over: 2.4, ease: inOut, why: follows the two chips right; rests before they beam in }
+      move: { kind: truck, to: { size: MLS, on: { api: [0.26, 0.52], db: [0.66, 0.5] } }, at: r2r.call, over: 2.2, ease: inOut, why: follows the two chips right and rests before they beam in }
     do:
-      - { at: r3b+0.2, act: send, from: api, to: [routes, db], lane: low, gap: 0.3, text: [check routes, check the db] }
-      - { at: r3b.two, act: beam-in, who: [routes, db], gap: 0.3 }
-      - { at: r3b.only, act: send, from: [routes, db], to: api.gauge, lane: high, gap: 0.4, text: ["routes: add saved.ts", "db: one new table"] }
-    out: { kind: move }
-  - { id: s3.3, span: [r3c, r4], idea: "Each level passes up a summary; the lead gets one line.", look: lead.gauge,
-      camera: { size: MLS, on: { api: [0.30, 0.52] }, angle: [0, -28], fov: 42,
-                move: { kind: pull-out, to: { size: LS, on: { lead: [0.15, 0.56], db: [0.82, 0.62] } }, at: r3c, over: 2.4, ease: out,
-                        why: re-establishes the whole tree for its summary } },
-      do: [{ at: r3c.summary, act: beam-out, who: [routes, db] },
-           { at: r3c.summary+0.3, act: send, from: api, to: lead.gauge, lane: high, text: "api: saved.ts + one table" },
-           { at: r3c.one, act: fill, what: lead.gauge, to: 0.09, over: 0.8 },
-           { after: 1.0, act: beam-out, who: [web, api] }],
-      out: { kind: grid-wipe, over: 0.8, title: "4 · WORKFLOW" } }
-  # Rung 4: a dynamic workflow
-  - { id: s4.1, span: [r4, r4b-0.2], idea: "Claude writes a script that will run the agents.", look: slate,
-      camera: { size: MS, on: { lead: [0.28, 0.60], slate: [0.64, 0.40] }, angle: [20, -6], fov: 35, move: { kind: hold } },
-      do: [{ at: r4.script, act: show, what: slate }, { at: r4.script, act: say, who: lead, line: Writing a workflow }] }
-  - { id: s4.2, span: [r4b-0.2, r4b.sixteen-0.3], idea: "Fifty jobs queue up.", look: rack,
-      camera: { size: MLS, on: { slate: [0.30, 0.38], rack: [0.62, 0.58] }, angle: [-15, -10], fov: 35, move: { kind: hold } },
-      do: [{ at: r4b.fifty, act: show, what: rack }, { at: r4b.fifty, act: show, what: pads }] }
-  - id: s4.3
-    span: [r4b.sixteen-0.3, r4c.next-0.2]
-    idea: Sixteen at a time.
+      - { at: r2r.call, act: send, from: api, to: [routes, db], lane: low, gap: 0.3, text: [check routes, check the db] }
+      - { after: 1.0, act: beam-in, who: [routes, db], gap: 0.3 }
+  - id: s20
+    span: [r2s, r3]
+    idea: Sub-agents all the way down, each level passing up a summary.
+    look: [api, routes, db]
+    camera: { size: LS, on: { lead: [0.1, 0.56], db: [0.66, 0.5] }, angle: [0, -30], fov: 44, move: { kind: hold } }
+    do:
+      - { at: r2s+0.3, act: fill, what: [routes.gauge, db.gauge], to: 0.5, over: 3 }
+      - { at: r2s.limit, act: say, who: routes, line: Read routes.ts }
+      - { at: r2s.occasionally-0.2, act: status, who: [routes, db], to: done }
+      - { at: r2s.occasionally, act: send, from: [routes, db], to: api.gauge, lane: high, gap: 0.35, text: ["routes: add saved.ts", "db: one new table"] }
+      - { at: r2s.spawn+0.3, act: send, from: api, to: gauge, lane: high, text: "api: saved.ts + 1 table" }
+      - { at: r2s.spawn+0.3, act: beam-out, who: [routes, db], gap: 0.2 }
+      - { at: r2s.further-0.2, act: fill, what: gauge, to: 0.27, over: 0.6 }
+    out: { kind: grid-wipe, over: 0.8, title: "3 · DYNAMIC WORKFLOWS", resets: [web, api, tests, routes, db, lead.queue, brief, jobs] }
+
+  # ------------------------------------------------------------------ 3 · dynamic workflows: who holds the plan
+  - id: c1
+    span: [r3, r3b]
+    idea: The difference is who holds the plan.
+    look: plan
+    camera:
+      size: LS
+      on: { lead: [0.36, 0.58] }
+      angle: [15, -12]
+      fov: 38
+      move: { kind: push-in, to: { size: MS, on: { lead: [0.3, 0.6], plan: [0.64, 0.42] }, angle: [20, -6] }, at: r3.difference, over: 3.5, ease: inOut, why: "closes in on the lead as the voice builds to who holds the plan; rests before it appears" }
+    do:
+      - { at: r3+0.3, act: title, text: "3 · DYNAMIC WORKFLOWS" }
+      - { at: r3+0.3, act: say, who: lead, line: Ready }
+      - { at: r3, act: hide, what: gauge.ghost }
+      - { at: r3.plan-0.1, act: show, what: plan }
+  - id: c2
+    span: [r3b, r3c]
+    idea: "With sub-agents, Claude holds the plan: every answer lands in its context."
+    look: gauge
+    camera: { size: LS, on: { gauge: [0.14, 0.56], api: [0.62, 0.46] }, angle: [0, -22], fov: 38, move: { kind: hold } }
+    do:
+      - { at: r3b.subagents, act: status, who: api, to: working }
+      - { at: r3b.subagents, act: say, who: api, line: "" }
+      - { at: r3b.subagents, act: fill, what: api.gauge, to: 0, over: 0.1 }
+      - { at: r3b.subagents, act: beam-in, who: api }
+      - { at: r3b.sends-0.2, act: tick, what: plan, every: 2.6 }
+      - { at: r3b.sends-0.1, act: send, from: lead, to: api, lane: low, text: map the API }
+      - { at: r3b.back-0.1, act: send, from: api, to: gauge, lane: high, text: "routes.ts · orders.ts" }
+      - { after: 1.1, act: fill, what: gauge, to: 0.24, over: 0.6 }
+      - { at: r3b.decides, act: send, from: lead, to: api, lane: low, text: check the db }
+      - { at: r3b.answer-0.1, act: send, from: api, to: gauge, lane: high, text: "db: one new table" }
+      - { at: r3b.lands+0.5, act: fill, what: gauge, to: 0.38, over: 0.6 }
+      - { at: r3b.context, act: glow, what: gauge, over: 1 }
+  - id: c3
+    span: [r3c, r3d]
+    idea: "With a workflow, Claude writes the plan down as a script."
+    look: slate
+    camera: { size: MS, on: { lead: [0.28, 0.62], slate: [0.64, 0.38] }, angle: [-12, -6], fov: 35, move: { kind: hold } }
+    do:
+      - { at: r3c.workflow, act: beam-out, who: api }
+      - { at: r3c.plan-0.1, act: hide, what: plan }
+      - { at: r3c.script-0.1, act: show, what: slate }
+  - id: c4
+    span: [r3d, r3e]
+    idea: You ask for one, or turn on ultracode.
+    look: lead
+    camera: { size: MS, on: { lead: [0.4, 0.68] }, angle: [25, -4], fov: 32, move: { kind: hold } }
+    do:
+      - { at: r3d.user-0.1, act: say, who: lead, line: "› use a workflow" }
+      - { at: r3d.ultra, act: say, who: lead, line: "› ultracode" }
+  - id: c5
+    span: [r3e, r3f]
+    idea: "A short program: steps, and a loop over every item."
+    look: slate
+    camera: { size: FS, on: { slate: [0.46, 0.42] }, angle: [-10, -4], fov: 35, move: { kind: hold } }
+    do:
+      - { at: r3e.program-0.1, act: glow, what: slate, over: 1 }
+      - { at: r3e.loop-0.1, act: glow, what: slate, over: 1 }
+  - id: c6
+    span: [r3f, r3g]
+    idea: A runtime runs the script in the background; the session stays free.
+    look: pads
+    camera: { size: LS, on: { lead: [0.14, 0.58], pads: [0.56, 0.44] }, angle: [0, -30], fov: 42, move: { kind: hold } }
+    do:
+      - { at: r3f.runtime, act: show, what: pads }
+      - { at: r3f.runtime, act: glow, what: slate, over: 1 }
+      - { at: r3f.free-0.1, act: glow, what: gauge, over: 1.2 }
+  - id: c7
+    span: [r3g, r3h.shines-0.3]
+    idea: /workflows shows every phase and every agent as it goes.
+    look: pads
+    camera: { size: LS, on: { pads: [0.46, 0.46] }, angle: [-8, -34], fov: 44, move: { kind: hold } }
+    do:
+      - { at: r3g.workflows, act: count, what: pads, text: "/WORKFLOWS · {running} AGENTS RUNNING" }
+      - { at: r3g.phase, act: count, what: pads, text: "/WORKFLOWS · FETCH · {running} RUNNING" }
+      - { at: r3g.agent-0.1, act: beam-in, who: [pads.6, pads.7, pads.10, pads.11], gap: 0.12 }
+  - id: c8
+    span: [r3h.shines-0.3, r3i.fetch-0.25]
+    idea: "Where it shines: a whole course, moved out of a CMS into markdown."
+    look: course
+    camera: { size: MLS, on: { slate: [0.46, 0.34], course: [0.46, 0.66] }, angle: [12, -6], fov: 35, move: { kind: hold } }
+    do:
+      - { at: r3h.example, act: beam-out, who: [pads.6, pads.7, pads.10, pads.11], gap: 0.1 }
+      - { at: r3h.example, act: count, what: pads, text: /WORKFLOWS · migrate-course.js }
+      - { at: r3h.example+1.5, act: hide, what: pads }
+      - { at: r3h.course-0.1, act: show, what: course }
+      - { at: r3h.markdown-0.1, act: label, what: course, text: "48 LESSONS · CMS → MARKDOWN" }
+      - { at: r3i.same, act: glow, what: slate, over: 1 }
+      - { at: r3i.lesson, act: glow, what: course, over: 1 }
+  - id: c9
+    span: [r3i.fetch-0.25, r3k]
+    idea: "Same job per lesson: fetch, convert, test."
+    look: [fetch, convert, test]
+    camera: { size: LS, on: { fetch: [0.22, 0.5], test: [0.66, 0.5] }, angle: [0, -18], fov: 38, move: { kind: hold } }
+    do:
+      - { at: [r3i.fetch-0.1, r3i.convert-0.1, r3i.test-0.1], act: beam-in, who: [fetch, convert, test] }
+      - { at: r3j.sent-0.1, act: send, from: slate, to: fetch, lane: low, text: lesson 1 }
+      - { at: r3j.through-0.1, act: send, from: fetch, to: convert, lane: low, text: lesson 1 }
+      - { at: r3j.steps-0.1, act: send, from: convert, to: test, lane: low, text: lesson 1 }
+  - id: c10
+    span: [r3k, r3l.sixteen-0.2]
+    idea: "They overlap: one converts while the next is fetched and an earlier one tested."
+    look: convert
+    camera: { size: LS, on: { fetch: [0.22, 0.5], test: [0.68, 0.46] }, angle: [-32, -16], fov: 38, move: { kind: hold } }
+    do:
+      - { at: r3k.overlapping-0.1, act: send, from: [slate, fetch], to: [fetch, convert], lane: low, gap: 0.3, text: [lesson 3, lesson 2] }
+      - { at: r3k.converting-0.1, act: say, who: convert, line: lesson 2 · converting }
+      - { at: r3k.fetched-0.1, act: say, who: fetch, line: lesson 3 · fetching }
+      - { at: r3k.tested-0.1, act: say, who: test, line: lesson 1 · testing }
+  - id: c11
+    span: [r3l.sixteen-0.2, r3m.script-0.3]
+    idea: Sixteen agents at once.
+    look: pads
+    camera: { size: LS, on: { lead: [0.12, 0.58], pads: [0.56, 0.44] }, angle: [0, -32], fov: 44, move: { kind: hold } }
+    do:
+      - { at: r3l.sixteen-0.2, act: beam-out, who: [fetch, convert, test], gap: 0.1 }
+      - { at: r3l.sixteen-0.2, act: show, what: pads }
+      - { at: r3l.sixteen-0.2, act: hide, what: course }
+      - { at: r3l.sixteen, act: beam-in, who: [pads.1-4, pads.5-8, pads.9-12, pads.13-16], gap: 0.35 }
+      - { at: r3l.once, act: count, what: pads, text: "16 AGENTS AT ONCE" }
+      - { at: r3l.sixteen+3.0, act: cycle, what: pads, work: [1.2, 2.2], until: 48 }
+      - { at: r3l.sixteen+3.0, act: count, what: pads, text: "{running} RUNNING · {queued} QUEUED · {done} DONE" }
+  - id: c12
+    span: [r3m.script-0.3, r3m.harness-0.8]
+    idea: Results land in the script, not in Claude's context.
+    look: slate
+    camera: { size: LS, on: { gauge: [0.16, 0.56], slate: [0.6, 0.36] }, angle: [-10, -10], fov: 35, move: { kind: hold } }
+    do:
+      - { at: r3m.script-0.2, act: send, from: [pads.2, pads.7, pads.15], to: slate, lane: high, gap: 0.4, text: [lesson 7 ✓, lesson 9 ✓, lesson 12 ✓] }
+      - { at: r3m.not-0.1, act: glow, what: gauge, over: 1.2 }
+  - id: c13
+    span: [r3m.harness-0.8, r3o]
+    idea: However many agents run, Claude's context doesn't fill.
+    look: gauge
+    camera:
+      size: MCU
+      on: { gauge: [0.4, 0.5] }
+      angle: [0, -14]
+      fov: 40
+      move: { kind: pull-out, to: { size: LS, on: { gauge: [0.12, 0.56], pads: [0.56, 0.44] }, angle: [0, -30] }, at: r3m.harness-0.6, over: 3.6, ease: log, why: "the scale change: the flat gauge stays in frame as the yardstick while the waves of agents come into view; rests before 'fill'" }
+    do:
+      - { at: r3n.fill-0.1, act: glow, what: gauge, over: 1.2 }
+  - id: c14
+    span: [r3o, r3o.migrated-0.2]
+    idea: At the end the lead gets one report.
+    look: gauge
+    camera: { size: MS, on: { lead: [0.32, 0.6], slate: [0.64, 0.38] }, angle: [20, -6], fov: 35, move: { kind: hold } }
+    do:
+      - { at: r3o.close, act: label, what: slate, text: "45 migrated · 3 need a look" }
+      - { at: r3o.close, act: glow, what: slate, over: 1 }
+      - { at: r3o.one-0.2, act: send, from: slate, to: gauge, lane: high, text: "45 migrated · 3 to check" }
+      - { at: r3o.report+0.6, act: fill, what: gauge, to: 0.4, over: 0.6 }
+  - id: c15
+    span: [r3o.migrated-0.2, r3q.reach-0.3]
+    idea: "The workflow's tableau: a busy script, an idle hall, a flat gauge."
+    look: gauge
+    camera: { size: LS, on: { lead: [0.2, 0.58], pads: [0.58, 0.44] }, angle: [8, -28], fov: 40, move: { kind: hold } }
+    do:
+      - { at: r3o.three, act: say, who: lead, line: 3 lessons to check }
+      - { at: r3p.converted, act: status, who: lead, to: done }
+  - id: c16
+    span: [r3q.reach-0.3, r3r]
+    idea: "Reach for one when it's the same step across lots of items."
+    look: reach
+    camera: { size: MLS, on: { lead: [0.3, 0.66] }, angle: [20, -6], fov: 35, move: { kind: hold } }
+    do:
+      - { at: r3q.reach-0.3, act: hide, what: slate }
+      - { at: [r3q.same-0.1, r3q.migrations-0.1, r3q.refactors-0.1, r3q.trimming-0.1], act: show, what: [reach.1, reach.2, reach.3, reach.4] }
+  - id: c17
+    span: [r3r, r3s]
+    idea: It costs more tokens, since it runs more agents.
+    look: pads
+    camera: { size: LS, on: { pads: [0.44, 0.52] }, angle: [0, -28], fov: 40, move: { kind: hold } }
+    do:
+      - { at: r3r, act: hide, what: reach }
+      - { at: r3r.cost-0.1, act: count, what: pads, text: "MORE AGENTS · MORE TOKENS" }
+      # all at once, then a fresh cycle in the same frame: the last one's timers would send them straight off
+      - { at: r3r.lots-0.1, act: beam-in, who: pads.1-16 }
+      - { at: r3r.lots-0.1, act: cycle, what: pads, work: [8.4, 9.2], until: 16 }
+  - id: c18
+    span: [r3s, r4]
+    idea: Whatever's deterministic can become a plain command.
+    look: slate
+    camera: { size: FS, on: { slate: [0.46, 0.42] }, angle: [-15, -8], fov: 35, move: { kind: hold } }
+    do:
+      - { at: r3s, act: show, what: slate }
+      - { at: r3s.extract-0.1, act: glow, what: slate, over: 1 }
+      - { at: r3s.command-0.1, act: label, what: slate, text: "/migrate-lesson · no agents" }
+    out: { kind: dissolve, over: 0.5 }
+
+  # ------------------------------------------------------------------ how you use it
+  - id: c19
+    span: [r4, r4b.dynamic-0.2]
+    idea: Ultracode mode reaches for workflows by default.
+    look: lead
+    camera: { size: MLS, on: { lead: [0.34, 0.66] }, angle: [30, -4], fov: 32, move: { kind: hold } }
+    do:
+      - { at: r4.ultra-0.1, act: status, who: lead, to: working }
+      - { at: r4.ultra-0.1, act: say, who: lead, line: "› ultracode" }
+      - { at: r4b.toggle-0.1, act: say, who: lead, line: ultracode mode · on }
+  - id: c20
+    span: [r4b.dynamic-0.2, r4d]
+    idea: Or just ask for a workflow.
+    look: slate
+    camera: { size: MS, on: { lead: [0.28, 0.62], slate: [0.64, 0.38] }, angle: [-12, -6], fov: 35, move: { kind: hold } }
+    do:
+      - { at: r4b.dynamic, act: glow, what: slate, over: 1 }
+      - { at: r4c.user-0.1, act: say, who: lead, line: "› use a workflow" }
+  - id: c21
+    span: [r4d, r4e]
+    idea: /workflows to watch, pause, stop and save.
+    look: controls
+    camera: { size: MS, on: { lead: [0.3, 0.6], controls: [0.64, 0.42] }, angle: [20, -6], fov: 35, move: { kind: hold } }
+    do:
+      - { at: r4d, act: hide, what: slate }
+      - { at: r4d.workflows-0.1, act: show, what: controls }
+      - { at: r4d.watch-0.1, act: tick, what: controls, every: 0.41 }
+  - id: c22
+    span: [r4e, r4g]
+    idea: Sixteen at once by default, up to a thousand runs per workflow.
     look: pads
     camera:
-      size: CU
-      on: { pads.1: [0.50, 0.55] }
-      angle: [0, -20]
-      fov: 38
-      move: { kind: pull-out, to: { size: LS, on: { lead: [0.12, 0.60], pads: [0.62, 0.55] } }, at: r4b.sixteen, over: 3.5, ease: log,
-              why: "the scale change; the lead comes into frame as the yardstick, and the camera rests before the last row lands" }
+      size: LS
+      on: { pads: [0.46, 0.46] }
+      angle: [0, -26]
+      fov: 30
+      move: { kind: crane, to: { angle: [0, -42] }, at: r4f.thousand-0.2, over: 3, ease: inOut, why: "rises over the grid as 'a thousand' runs start, so the waves read as a mass" }
     do:
-      - { at: r4b.sixteen-0.3, act: send, from: rack, to: pads.1, lane: low }
-      - { at: r4b.sixteen-0.2, act: beam-in, who: pads.1 }
-      - { at: r4b.sixteen+0.5, act: beam-in, who: [pads.2-4, pads.5-8, pads.9-12, pads.13-16], gap: 0.5 }
-      - { at: r4b.sixteen+2.4, act: count, what: pads, text: 16 RUNNING · 34 QUEUED }
-      - { at: r4b.sixteen+2.4, act: label, what: rack, text: 34 JOBS QUEUED }
-  - { id: s4.4, span: [r4c.next-0.2, r4c.wave-0.6], idea: "As one finishes, the next steps on.", look: pads.6,
-      camera: { size: MS, on: { pads.6: [0.55, 0.55] }, angle: [10, -34], fov: 30, move: { kind: hold } },
-      do: [{ at: r4c.next-0.2, act: status, who: pads.6, to: done },
-           { after: 0.2, act: send, from: pads.6, to: slate, lane: high, text: migrated ✓ }, { after: 0.1, act: beam-out, who: pads.6 },
-           { after: 0.5, act: send, from: rack, to: pads.6, lane: low }, { after: 0.3, act: beam-in, who: pads.6 }],
-      out: { kind: cut } }
-  - { id: s4.5, span: [r4c.wave-0.6, r4d.script-0.2], idea: "Wave after wave.", look: pads,
-      camera: { size: LS, on: { pads: [0.55, 0.55] }, angle: [0, -30], fov: 24, move: { kind: hold } },
-      do: [{ at: r4c.wave-0.6, act: cycle, what: pads, work: [0.8, 1.6], until: 50 },
-           { at: r4c.wave-0.6, act: count, what: pads, text: "{running} RUNNING · {queued} QUEUED · {done} DONE" }] }
-  - { id: s4.6, span: [r4d.script-0.2, r4e], idea: "Results land in the script, not in Claude, and it boils them down.", look: slate,
-      camera: { size: MLS, on: { lead: [0.25, 0.62], slate: [0.58, 0.40] }, angle: [-15, -8], fov: 35, move: { kind: hold } },
-      do: [{ at: r4d.script-0.2, act: glow, what: lead.gauge, label: "still 9%" },
-           { at: r4d.boils, act: label, what: slate, text: "50 migrated · 2 need a look" }] }
-  - { id: s4.7, span: [r4e, r5], idea: "Fifty agents' work; one report.", look: lead.gauge,
-      camera: { size: LS, on: { lead: [0.18, 0.60], pads: [0.66, 0.55] }, angle: [0, -24], fov: 38, move: { kind: hold } },
-      do: [{ at: r4e.one-0.4, act: send, from: slate, to: lead.gauge, lane: high, text: "50 migrated · 2 need a look" },
-           { at: r4e.one+0.6, act: fill, what: lead.gauge, to: 0.12, over: 0.6 }],
-      out: { kind: grid-wipe, over: 0.8, title: "5 · /BATCH", resets: [pads, slate, rack] } }
-  # Rung 5: /batch, many changes in parallel worktrees, each its own PR
-  - { id: s5.1, span: [r5, r5b], idea: "/batch: many changes at once.", look: lead,
-      camera: { size: MS, on: { lead: [0.28, 0.60] }, angle: [20, -6], fov: 35, move: { kind: hold } },
-      do: [{ at: r5.batch, act: say, who: lead, line: "/batch rename userId → accountId" }],
-      out: { kind: cut } }
-  - { id: s5.2, span: [r5b, r5b.nobody-0.3], idea: "Each change gets its own agent in its own worktree.", look: lanes,
-      camera: { size: FS, on: { lead: [0.25, 0.62] }, angle: [0, -12], fov: 44,
-                move: { kind: crane, to: { size: LS, angle: [0, -38], on: { lead: [0.12, 0.55], lanes: [0.60, 0.50] } }, at: r5b, over: 3,
-                        ease: inOut, why: "lanes are a layout, best read from above; follows the eight chips out" } },
-      do: [{ at: r5b, act: send, from: lead, to: lanes.heads, lane: low, gap: 0.15, text: rename },
-           { at: r5b.worktree, act: beam-in, who: lanes.tree, gap: 0.15 },
-           { after: 0.6, act: beam-in, who: lanes.console, gap: 0.15 }] }
-  - { id: s5.3, span: [r5b.nobody-0.3, r5c], idea: "A separate copy each, so nobody collides.", look: lanes.3,
-      camera: { size: MCU, on: { lanes.3.console: [0.40, 0.56], lanes.3.tree: [0.70, 0.44] }, angle: [15, -20], fov: 32, move: { kind: hold } },
-      do: [{ at: r5b.nobody, act: glow, what: lanes.3.tree, over: 1 }] }
-  - { id: s5.4, span: [r5c, recap], idea: "Side by side, each tests its change and ends in its own PR.", look: lanes.pr,
-      camera: { size: LS, on: { lead: [0.12, 0.55], lanes: [0.60, 0.50] }, angle: [0, -38], fov: 44, move: { kind: hold } },
-      do: [{ at: r5c.side, act: progress, what: lanes },
-           { at: r5d.pull-1.0, act: send, from: lanes.console, to: lanes.pr, lane: low, gap: 0.12, text: git push },
-           { at: r5d.pull, act: show, what: lanes.pr, gap: 0.25 },
-           { at: r5d.pull+2.0, act: count, what: lanes, text: 8 PULL REQUESTS }],
-      out: { kind: grid-wipe, over: 0.8, title: THE LADDER, resets: [lanes] } }
-  # Recap: up the ladder, one rung per word
-  - { id: s6.1, span: [recap, end], idea: "Five rungs, one after another.", look: ladder,
-      camera: { size: MS, on: { lead: [0.25, 0.60] }, angle: [20, -6], fov: 35, move: { kind: hold } },
-      do: [{ at: recap, act: show, what: ladder },
-           { at: [recap.one, recap.helpers, recap.nested, recap.workflow, recap.batch], act: show, what: [ladder.1, ladder.2, ladder.3, ladder.4, ladder.5] }],
-      out: { kind: move, over: 1.5 } }
-  - { id: s6.2, span: [end, end.end+2], idea: "Same Claude in every rung; it knows when to hand off.", look: lead,
-      camera: { size: MCU, on: { lead: [0.33, 0.48] }, angle: [25, -4], fov: 32, move: { kind: pull-out, to: ELS, at: end.off, over: 3, ease: log, why: leaves her alone on the grid } },
-      do: [{ at: end, act: hide, what: ladder }, { at: end.off, act: say, who: lead, line: Ready for the next job }, { at: end.off+0.6, act: title, text: HOW CLAUDE DELEGATES }],
-      out: { kind: cut } }
+      - { at: r4e, act: hide, what: controls }
+      - { at: r4e, act: show, what: slate }
+      - { at: r4e.sixteen-0.1, act: beam-in, who: pads.1-16 }
+      - { at: r4e.sixteen-0.1, act: cycle, what: pads, work: [9.6, 10.4], until: 1000 }
+      - { at: r4e.again, act: count, what: pads, text: "16 AT ONCE · BY DEFAULT" }
+      - { at: r4f.thousand-0.1, act: cycle, what: pads, work: [0.8, 1.6], until: 1000 }
+      - { at: r4f.thousand-0.1, act: count, what: pads, text: "{done} RUNS DONE · UP TO 1000" }
+  - id: c23
+    span: [r4g, r4h]
+    idea: Several workflows can run at the same time.
+    look: slate2
+    camera: { size: LS, on: { slate: [0.22, 0.42], pads: [0.58, 0.48] }, angle: [-6, -24], fov: 42, move: { kind: hold } }
+    do:
+      - { at: r4g.multiple-0.1, act: show, what: slate2 }
+  - id: c24
+    span: [r4h, r4i.deep-0.3]
+    idea: The results live in the script's variables.
+    look: slate
+    camera: { size: FS, on: { slate: [0.46, 0.42] }, angle: [-10, -4], fov: 35, move: { kind: hold } }
+    do:
+      - { at: r4h.variables-0.1, act: label, what: slate, text: "results = [48 lessons]" }
+      - { at: r4h.script-0.1, act: glow, what: slate, over: 1 }
+  - id: c25
+    span: [r4i.deep-0.3, r4i.end]
+    idea: /deep-research runs this way by default; the whole setup, one last time.
+    look: lead
+    camera:
+      size: MS
+      on: { lead: [0.3, 0.6], slate: [0.64, 0.38] }
+      angle: [20, -6]
+      fov: 40
+      move: { kind: pull-out, to: { size: LS, on: { lead: [0.12, 0.58], pads: [0.56, 0.44] }, angle: [0, -30] }, at: r4i.slash, over: 2.6, ease: log, why: "leaves the lead with her script and the running grid as the last frame" }
+    do:
+      - { at: r4i.deep-0.1, act: say, who: lead, line: "› /deep-research" }
+      - { at: r4i.default-0.6, act: title, text: HOW CLAUDE DELEGATES }
 
 notes:
-  - "swapped: the plinths recap for a card building up 'reach for…' a rung per word"
-  - "swapped: the rack's card stack for a label; morphs into chips for the sends that carry them"
-  - "left out: dim, glow on tags and edges, lanes' tests lights, typing on the slate"
-  - "changed: the crew sit with PADDs rather than at consoles, so a camera in front sees their faces"
-  - "changed: the gauges stand beside the crew, not behind; the lanes show progress on their worktree markers, not bubbles"
+  - "dropped: the /batch rung and its lanes, which this take doesn't cover"
+  - "changed: the gauge isn't tied to the lead, so it shows only when the voice first names her context"
+  - "changed: the pads keep their agents for the cost and the 16-at-once shots by cycling them with long work times"
+  - "new: a pipeline prop (fetch → convert → test stations a lesson card moves along), rather than three crew passing chips"
+  - "new: dim others (rule 3), so the idle cast steps back while the look acts"
+  - "new: a list title of our own (PLAN, BRIEF) rather than TASKS or none"
+  - "new: a way to clear a pad's leftover cycle timers, so pads can be re-filled without a fresh cycle"
