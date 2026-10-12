@@ -93,6 +93,7 @@ export class Delivery extends Part {
       }
       this.print(agent, [{ kind: 'success', text: `✔ Pull request ready: ${pr.url}` }]);
       this.update(agent, { status: 'done', pr, activity: `PR #${pr.number} is ready for review`, finishedAt: Date.now() });
+      if (agent.task === 'climb') this.core.climbs.opened(agent.id, pr);
       const lead = agent.task === 'conflicts' ? this.core.leads.leadWith(agent.repo, pr.number) : undefined;
       if (lead) this.core.conflicts.mergedForLead(lead, { repo: agent.repo, number: pr.number, baseBranch: agent.baseBranch, branch: agent.branch }, yield* workspace.head(dir), agent.name);
       this.boardChanged(agent.projectId);

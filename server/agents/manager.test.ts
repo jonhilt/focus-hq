@@ -1040,6 +1040,23 @@ describe('AgentManager', () => {
       expect(climbers(store)).toHaveLength(1);
     });
 
+    it('holds on to the climb’s pull request from the moment it opens, even once the climber has gone home', async () => {
+      const { agents, claude, store, project } = office();
+      agents.keepClimbing(true, { projectId: project.id, repo: 'demo/webshop-frontend' });
+      await until(() => claude.turns.length === 1);
+      const id = store.climb.agentId!;
+      claude.turns[0].end({ ok: true, summary: '# Narrow the board’s lookups\n\n**Problem**\n\nSix non-null assertions.' });
+      await until(() => !!store.agent(id).pr);
+      const pr = store.agent(id).pr!;
+      expect(store.climb.pr).toEqual({ number: pr.number, url: pr.url });
+
+      // sent home before any board refresh looked at the climb: it waits for its PR rather than switching off
+      await agents.dismiss(id);
+      agents.settleClimb();
+      expect(store.climb).toMatchObject({ keepClimbing: true, pr: { number: pr.number } });
+      expect(climbers(store)).toHaveLength(0);
+    });
+
     it('won’t climb without the office’s own repo in a project', () => {
       const { agents, store } = office();
       expect(() => agents.keepClimbing(true, undefined)).toThrow(/Connect the office’s own repository/);

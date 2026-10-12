@@ -40,6 +40,12 @@ export class Climbs extends Part {
     }
   }
 
+  /** The office opened (or updated) a climber's pull request: the climb holds on to it, whatever happens to the climber next. */
+  opened(agentId: string, pr: { number: number; url: string }): void {
+    if (this.store.climb.agentId !== agentId || this.store.climb.pr?.number === pr.number) return;
+    this.set({ pr: { number: pr.number, url: pr.url } });
+  }
+
   /** A pull request merged or closed: when it was the climb's, the climb is over, and the next one starts if climbing is on. */
   prClosed(repo: string, number: number, merged: boolean): void {
     const climb = this.store.climb;

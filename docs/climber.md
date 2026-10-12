@@ -46,7 +46,7 @@ The climber is an agent like a developer (`task: 'climb'`), with differences:
 
 - **Rules.** `server/agents/climb.ts`, which is pure: the brief, the pull request from the write-up, what to do next (`climbStep`) and where the climbs are.
 - **Running.** `server/agents/manager/climbs.ts` (the `Climbs` part) runs it:
-  - starting a climb, and noting its pull request;
+  - starting a climb, and holding on to its pull request from the moment the office opens it (so the climb outlives its climber going home);
   - starting the next when that merges or closes (from `Seating.prClosed`);
   - switching itself off.
 - **When it looks.** It looks at the climb on every board refresh, and whenever you flip the switch.
