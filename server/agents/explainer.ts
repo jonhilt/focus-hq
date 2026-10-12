@@ -482,7 +482,8 @@ window.kit3d = function (opts) {
       el.className = 'pill kit3d-label'; el.style.setProperty('--c', 'var(--' + (colour || 'lilac') + ')'); el.textContent = text;
       stage.appendChild(el);
       var l = { text: text, el: el, target: null, opacity: 0 };
-      // at(object or [x, y, z], opacity): call it in render(t) for every frame the label shows; hide() otherwise
+      // at(object or [x, y, z], opacity): call it in render(t) for every frame the label shows; a frame that doesn't
+      // hides it, so jumping back to before it appears hides it too (hide() says so outright)
       l.at = function (target, opacity) { l.target = target; l.opacity = opacity === undefined ? 1 : opacity; return l; };
       l.hide = function () { l.opacity = 0; return l; };
       labels.push(l);
@@ -499,6 +500,7 @@ window.kit3d = function (opts) {
         l.el.style.left = ((at.x + 1) / 2 * W) + 'px'; l.el.style.top = ((1 - at.y) / 2 * H) + 'px'; l.el.style.opacity = l.opacity;
         shown.push({ text: l.text, onScreen: seen });
       });
+      labels.forEach(function (l) { l.target = null; l.opacity = 0; });
       window.__scene = {
         t: t,
         camera: { position: camera.position.toArray(), target: target.toArray() },
