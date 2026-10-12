@@ -10,7 +10,9 @@ import os from 'node:os';
 import path from 'node:path';
 import type { Browser, Page } from 'playwright';
 import { parse } from 'yaml';
+import { assemble, beatsFromWords, type NarrationSpec, wordsFromWhisper, type Word } from '../shared/narration';
 import { beatSheet, CUE_TIMEOUT_S, readScene, type Scene, type SceneBeat, type Timing } from '../shared/studio';
+import { whisper } from '../server/config';
 import type { Agent } from '../shared/types';
 import { explainerPage } from '../server/agents/explainer';
 import { CheckFailed, freePort, launchBrowser, root, startDemo, stopDemo, waitForServer } from './demoOffice';
@@ -240,6 +242,11 @@ async function filmStage(name: string): Promise<void> {
     const video = await film.stop();
     ffmpeg(['-i', video, '-vf', `trim=start=${from.toFixed(3)}:end=${to.toFixed(3)},setpts=PTS-STARTPTS,fps=${FPS}`, '-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', path.join(outDir, 'clip.mp4')]);
     console.log(`Studio: ${path.relative(root, outDir)}/clip.mp4 (${(to - from).toFixed(1)}s)`);
+    const narration = path.join(root, 'studio-out', `narration-${name}`, 'narration.mp4');
+    if (existsSync(narration)) {
+      pictureInPicture(path.join(outDir, 'clip.mp4'), narration, path.join(outDir, 'episode.mp4'));
+      console.log(`Studio: ${path.relative(root, outDir)}/episode.mp4, with the presenter picture-in-picture`);
+    }
   } finally {
     await browser?.close().catch(() => undefined);
     await stopDemo(server);
@@ -247,8 +254,75 @@ async function filmStage(name: string): Promise<void> {
   }
 }
 
+/** The presenter in a corner of the stage's picture, their voice under it: as long as the voice. */
+function pictureInPicture(stage: string, presenter: string, out: string): void {
+  const w = 440;
+  const margin = 36;
+  ffmpeg([
+    '-i', stage,
+    '-i', presenter,
+    '-filter_complex',
+    // a 16:9 inset with a thin gold frame, bottom right, over the stage
+    `[1:v]scale=${w}:-2,pad=iw+8:ih+8:4:4:color=0xff9900[pip];[0:v][pip]overlay=W-w-${margin}:H-h-${margin}:shortest=0:eof_action=pass[v]`,
+    '-map', '[v]', '-map', '1:a', '-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-pix_fmt', 'yuv420p', '-r', String(FPS),
+    '-c:a', 'aac', '-b:a', '192k', '-shortest', '-movflags', '+faststart', out,
+  ]);
+}
+
+/** A take's words, from whisper.cpp on this machine; cached beside the narration, since a take doesn't change. */
+function transcribe(take: string, file: string, dir: string): Word[] {
+  const cached = path.join(dir, `${take}.json`);
+  if (!existsSync(cached)) {
+    const wav = path.join(dir, `${take}.wav`);
+    ffmpeg(['-i', file, '-vn', '-ac', '1', '-ar', '16000', wav]);
+    console.log(`  transcribing ${take}`);
+    const done = spawnSync(whisper.bin, ['-m', whisper.model, '-f', wav, '-l', 'en', '-ojf', '-of', cached.replace(/\.json$/, ''), '-np'], { stdio: 'ignore' });
+    if (done.error || done.status !== 0) throw new CheckFailed(`whisper.cpp transcribes ${take} (${done.error?.message ?? `exit ${done.status}`}): see docs/voice-input.md`);
+  }
+  return wordsFromWhisper(JSON.parse(readFileSync(cached, 'utf8')));
+}
+
+/**
+ * Builds a narration from scenes/<name>.narration.yaml: transcribes each take, keeps the spans it names (without
+ * fillers, long pauses shortened), and writes narration.mp4 (picture and voice), words.json and beats.json, the beats
+ * a director plans the shots against.
+ */
+function narrate(name: string): void {
+  const spec = parse(readFileSync(path.join(root, 'scenes', `${name}.narration.yaml`), 'utf8')) as NarrationSpec;
+  const dir = path.join(root, 'studio-out', `narration-${name}`);
+  mkdirSync(dir, { recursive: true });
+  const home = (p: string) => p.replace(/^~(?=\/)/, os.homedir());
+  const wordsByTake = Object.fromEntries(Object.entries(spec.takes).map(([take, file]) => [take, transcribe(take, home(file), dir)]));
+  const { cuts, words } = assemble(spec, wordsByTake);
+  const takes = Object.keys(spec.takes);
+  const parts = cuts.map((c, i) => {
+    const input = takes.indexOf(c.take);
+    return `[${input}:v]trim=start=${c.from.toFixed(3)}:end=${c.to.toFixed(3)},setpts=PTS-STARTPTS,scale=1920:1080,fps=${FPS}[v${i}];[${input}:a]atrim=start=${c.from.toFixed(3)}:end=${c.to.toFixed(3)},asetpts=PTS-STARTPTS,afade=t=in:d=0.02,afade=t=out:st=${Math.max(0, c.to - c.from - 0.02).toFixed(3)}:d=0.02[a${i}]`;
+  });
+  const graph = `${parts.join(';')};${cuts.map((_, i) => `[v${i}][a${i}]`).join('')}concat=n=${cuts.length}:v=1:a=1[v][a]`;
+  const script = path.join(dir, 'cuts.filter');
+  writeFileSync(script, graph);
+  console.log(`  cutting ${cuts.length} pieces from ${takes.length} take(s)`);
+  ffmpeg([...takes.flatMap((t) => ['-i', home(spec.takes[t])]), '-filter_complex_script', script, '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', path.join(dir, 'narration.mp4')]);
+  writeFileSync(path.join(dir, 'words.json'), `${JSON.stringify(words)}\n`);
+  const beats = beatsFromWords(words);
+  writeFileSync(path.join(dir, 'beats.json'), `${JSON.stringify(beats, null, 1)}\n`);
+  const length = words.at(-1)?.end ?? 0;
+  console.log(`Studio: ${path.relative(root, dir)}/narration.mp4 (${Math.floor(length / 60)}:${String(Math.round(length % 60)).padStart(2, '0')}), ${beats.length} beats in beats.json`);
+}
+
 async function main(): Promise<number> {
   const args = process.argv.slice(2);
+  const narrated = args.indexOf('--narrate');
+  if (narrated >= 0) {
+    try {
+      narrate(args[narrated + 1] ?? 'delegation');
+      return 0;
+    } catch (err) {
+      console.error(err instanceof CheckFailed ? `Studio FAILED: ${err.message}` : err);
+      return 1;
+    }
+  }
   const staged = args.indexOf('--stage');
   if (staged >= 0) {
     try {
