@@ -1035,6 +1035,41 @@ describe('AgentManager', () => {
     });
   });
 
+  describe('installing dependencies', () => {
+    /** A workspace whose installs fail everywhere but in the api's checkouts, noting where each ran. */
+    function installs() {
+      const ran: string[] = [];
+      const workspace: WorkspaceOps = {
+        ...demoWorkspace,
+        install: async (dir) => {
+          ran.push(dir);
+          return dir.endsWith('webshop-api') ? undefined : `Couldn't install in ${dir}`;
+        },
+      };
+      return { ran, workspace };
+    }
+
+    it('installs in a new checkout before the agent starts, and tells them up front when it fails', async () => {
+      const { ran, workspace } = installs();
+      const { agents, claude, store, project } = office(workspace);
+      agents.keepClimbing(true, { projectId: project.id, repo: 'demo/webshop-frontend' });
+      await until(() => claude.turns.length === 1);
+      const id = store.climb.agentId!;
+      expect(ran).toEqual([`/demo/${id}`]);
+      expect(claude.turns[0].req.prompt).toContain(`Couldn't install in /demo/${id}`);
+    });
+
+    it('installs in each of a lead’s repos, and the lead hears which failed', async () => {
+      const { ran, workspace } = installs();
+      const { agents, claude, project } = office(workspace);
+      const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+      await until(() => claude.turns.length === 1);
+      expect(ran).toEqual([expect.stringMatching(new RegExp(`${lead.id}/webshop-frontend$`)), expect.stringMatching(new RegExp(`${lead.id}/webshop-api$`))]);
+      expect(claude.turns[0].req.prompt).toContain(`Couldn't install in ${ran[0]}`);
+      expect(claude.turns[0].req.prompt).not.toContain(`Couldn't install in ${ran[1]}`);
+    });
+  });
+
   describe('climbing', () => {
     const climbers = (store: Store) => [...store.agents.values()].filter((a) => a.task === 'climb');
 
