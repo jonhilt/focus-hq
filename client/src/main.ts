@@ -108,7 +108,7 @@ async function main() {
   const hud = new Hud();
   const panels = new Panels();
   // ?studio=1: the TV studio's recorder films the office (ui/studio.ts, docs/studio.md)
-  const studio = params.get('studio') === '1' ? new Studio(world, player, hud) : null;
+  const studio = params.get('studio') === '1' ? new Studio(world, player, hud, params.get('stage')) : null;
 
   // ---------------------------------------------------------------- ui wiring
   const ui: Ui = {

@@ -6,6 +6,7 @@ import type { Player } from '../player';
 import type { World } from '../world/office';
 import type { StationSeat, TeamStation } from '../world/teamStation';
 import { h } from './dom';
+import { HoloStage } from './holoStage';
 import type { Hud } from './hud';
 
 /** Seated, a crew member's head is about this high off the floor. */
@@ -26,10 +27,14 @@ export class Studio {
   private readonly look = new THREE.Vector3();
   private readonly tmp = new THREE.Vector3();
 
+  /** The holodeck stage (`?stage=`), built once there's a vacant holodeck to stage it in. */
+  private stage: HoloStage | null = null;
+
   constructor(
     private readonly world: World,
     private readonly player: Player,
     private readonly hud: Hud,
+    private readonly stageName: string | null = null,
   ) {
     document.body.classList.add('studio');
     document.body.append(this.tags, this.caption);
@@ -116,9 +121,20 @@ export class Studio {
     }
   }
 
-  /** Each frame, before it's drawn: the camera's glide, and the tags over the crew's heads. */
+  /** Plays the holodeck stage from the top: how long it runs (seconds), or 0 when there's none yet. */
+  playStage(): number {
+    return this.stage?.play() ?? 0;
+  }
+
+  /** Each frame, before it's drawn: the stage, or the camera's glide and the tags over the crew's heads. */
   update(now: number): void {
     const camera = this.player.camera;
+    if (this.stageName) {
+      const hall = this.world.vacantHalls()[0];
+      if (!this.stage && hall) this.stage = new HoloStage(hall, camera, (title, text) => this.say(title, text));
+      this.stage?.update(now);
+      return;
+    }
     if (this.glide) {
       const g = this.glide;
       const k = Math.min(1, (now - g.start) / (g.seconds * 1000));

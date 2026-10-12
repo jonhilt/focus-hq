@@ -212,13 +212,56 @@ function voice(outDir: string, file: string): void {
   console.log(`Studio: ${path.relative(root, outDir)}/final.mp4`);
 }
 
+/** Films a holodeck stage (`?stage=`, client/src/ui/holoStage.ts) once from the top, into studio-out/stage-<name>/clip.mp4. */
+async function filmStage(name: string): Promise<void> {
+  const outDir = path.join(root, 'studio-out', `stage-${name}`);
+  const raw = path.join(outDir, 'raw');
+  mkdirSync(raw, { recursive: true });
+  const dataDir = mkdtempSync(path.join(os.tmpdir(), 'focus-studio-'));
+  const port = await freePort();
+  const url = `http://127.0.0.1:${port}/`;
+  console.log(`Studio: filming the ${name} stage on ${url}`);
+  const server = startDemo(port, dataDir, { args: ['--studio'] });
+  let browser: Browser | undefined;
+  try {
+    await waitForServer(url, server, 60_000);
+    browser = await launchBrowser(GPU);
+    const film = await filming(browser, raw);
+    await film.page.goto(`${url}?studio=1&stage=${encodeURIComponent(name)}`);
+    await film.page.locator('.splash button.big-button').click({ timeout: 60_000 });
+    // the stage is built once the office has a vacant holodeck to put it in
+    await film.page.waitForFunction('(window.focusHQ?.studio?.playStage?.() ?? 0) > 0', null, { timeout: 30_000, polling: 250 });
+    const from = film.at();
+    const seconds = Number(await film.page.evaluate('window.focusHQ.studio.playStage()'));
+    await sleep(seconds + 0.5);
+    const to = film.at();
+    const video = await film.stop();
+    ffmpeg(['-i', video, '-vf', `trim=start=${from.toFixed(3)}:end=${to.toFixed(3)},setpts=PTS-STARTPTS,fps=${FPS}`, '-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', path.join(outDir, 'clip.mp4')]);
+    console.log(`Studio: ${path.relative(root, outDir)}/clip.mp4 (${(to - from).toFixed(1)}s)`);
+  } finally {
+    await browser?.close().catch(() => undefined);
+    await stopDemo(server);
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+}
+
 async function main(): Promise<number> {
   const args = process.argv.slice(2);
+  const staged = args.indexOf('--stage');
+  if (staged >= 0) {
+    try {
+      await filmStage(args[staged + 1] ?? 'delegation');
+      return 0;
+    } catch (err) {
+      console.error(err instanceof CheckFailed ? `Studio FAILED: ${err.message}` : err);
+      return 1;
+    }
+  }
   const voiced = args.indexOf('--voice');
   const voiceFile = voiced >= 0 ? args[voiced + 1] : undefined;
   const file = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--voice');
   if (!file || (voiced >= 0 && !voiceFile)) {
-    console.error('Usage: pnpm run studio scenes/<name>.yaml [--voice <voiceover audio>]');
+    console.error('Usage: pnpm run studio scenes/<name>.yaml [--voice <voiceover audio>], or pnpm run studio --stage delegation');
     return 2;
   }
   try {

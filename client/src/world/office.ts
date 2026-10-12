@@ -434,6 +434,11 @@ export class World {
     this.dashboardTex.needsUpdate = true;
   }
 
+  /** The vacant holodecks' empty halls: the studio stages its scenes in one (ui/holoStage.ts). */
+  vacantHalls(): VacantHall[] {
+    return [...this.vacant.values()];
+  }
+
   room(projectId: string): ProjectRoom | undefined {
     return this.rooms.get(projectId);
   }

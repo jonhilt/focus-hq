@@ -782,3 +782,16 @@ body.studio .hud, body.studio .toasts { display: none; }
   background: var(--lcars-sky); color: var(--ink); font-family: var(--ui); font-size: 24px; font-weight: 600;
   box-shadow: 0 4px 16px #0008;
 }
+
+/* the studio's holodeck stage (ui/holoStage.ts): context bars over heads, the lone lead's task queue, chips in flight */
+.stage-overlay { position: fixed; inset: 0; z-index: 4; pointer-events: none; font-family: var(--ui); }
+.stage-overlay > * { position: absolute; left: 0; top: 0; }
+.stage-bar { width: 120px; transition: opacity 0.4s; }
+.stage-bar i { display: block; height: 10px; border-radius: 5px; box-shadow: 0 0 12px #000a; }
+.stage-bar::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 10px; border-radius: 5px; background: #0009; z-index: -1; }
+.stage-bar span { display: block; text-align: center; color: var(--text); font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; text-shadow: 0 1px 4px #000; }
+.stage-queue { display: flex; flex-direction: column; gap: 4px; }
+.stage-queue div { padding: 4px 14px; border-radius: 999px; background: #000c; color: var(--muted); font-size: 22px; white-space: nowrap; }
+.stage-queue div.now { background: var(--lcars-orange); color: var(--ink); }
+.stage-queue div.done { color: var(--lcars-green); }
+.stage-chip { padding: 6px 16px; border-radius: 999px; color: var(--ink); font-size: 22px; font-weight: 600; white-space: nowrap; box-shadow: 0 4px 16px #000a; }

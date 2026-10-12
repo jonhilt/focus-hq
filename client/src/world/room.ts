@@ -726,6 +726,8 @@ export function buildHiddenRoom(slot: RoomSlot, builder: Builder): void {
  */
 export class VacantHall {
   readonly group = new THREE.Group();
+  /** What stands in it: the poster and the moving boxes, which the studio's stage clears away (ui/holoStage.ts). */
+  readonly props: THREE.Object3D[] = [];
   /** The doorway from its door on the deck to the hall's entrance. */
   readonly portal: Portal;
 
@@ -760,6 +762,7 @@ export class VacantHall {
     // flat in front of the round wall's grid: far enough in that its ends, 2.5 m either side, stay in front of it too
     poster.position.set(HALL.radius - 0.5, 1.8, 0);
     this.group.add(poster);
+    this.props.push(poster);
     interactive(poster, { kind: 'manager', tab: 'new-project' }, () => 'Start a new project');
     // moving boxes
     const boxes = new THREE.Group();
@@ -770,6 +773,7 @@ export class VacantHall {
       boxes.add(b);
     });
     this.group.add(boxes);
+    this.props.push(boxes);
     interactive(boxes, { kind: 'manager', tab: 'new-project' }, () => 'Start a new project');
     builder.collideObject(boxes);
   }

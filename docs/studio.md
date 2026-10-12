@@ -67,6 +67,16 @@ explainer:                      # the same input as a lead's explain tool: title
 - **until**: `lead-working`, `lead-idle` (its turn has ended), `helpers-working`, `helpers-done`, `shipped` (its slice
   has a pull request). A cue that hasn't come in three minutes stops the filming and says which.
 
+## The holodeck stage
+
+`pnpm run studio --stage delegation` films a scene staged on an empty holodeck instead of the busy ship: only what the
+scene needs beams in (a console, the crew, their context bars), on the yellow grid, played from a timeline rather than
+demo mode, so it's the same every run and can later be timed to a narration. It's a spike so far: one scene,
+`client/src/ui/holoStage.ts`, the first two rungs of "how Claude delegates" (one session alone, its context filling;
+then the same job with three helpers, each reading in its own context and sending back only an answer). The clip lands
+in `studio-out/stage-delegation/clip.mp4`. To watch it live, open `?studio=1&stage=delegation`, come aboard, and call
+`focusHQ.studio.playStage()`.
+
 ## Not yet
 
 Packaging (captions, chapters, title, description, a thumbnail) and publishing come in later slices. Lengths aren't
