@@ -310,6 +310,8 @@ export class AgentSessions extends Part {
       const lead = agent.task === 'lead' ? agent.lead : undefined;
       // the lead's last slice has landed: their repos move to fresh code before they hear anything else
       if (lead && sliceLanded(lead.prs)) prompt = `${yield* this.core.slices.nextSlice(agent, lead)}\n\n${prompt}`;
+      // a move whose checkout failed left them with no repos (and nothing landed, so no move to retry): check them out again
+      else if (lead && !lead.repos.length) prompt = `${yield* this.core.slices.reposBack(agent)}\n\n${prompt}`;
       // before marking them busy: the QA officer's instructions may need GitHub, and that can fail
       const instructions = yield* this.instructions(agent);
       rt.busy = true;

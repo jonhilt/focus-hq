@@ -672,6 +672,42 @@ describe('AgentManager', () => {
     expect(leads()[1].req.prompt).toMatch(/^Slice 2 starts on fresh code/);
   });
 
+  it('checks a lead’s repos out again on their next message when the move to a new slice couldn’t', async () => {
+    let failNext = false;
+    const { agents, claude, store, project } = office({
+      ...demoWorkspace,
+      create: async (...args) => {
+        // the office restarted mid-move, killing git fetch
+        if (failNext) {
+          failNext = false;
+          throw new Error('git fetch origin --prune failed');
+        }
+        return demoWorkspace.create(...args);
+      },
+    });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
+    await until(() => leads().length === 1);
+    await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    leads()[0].end({ ok: true, summary: 'Shipped the first slice' });
+    await until(() => store.agent(lead.id).status === 'done');
+
+    failNext = true;
+    for (const pr of store.agent(lead.id).lead!.prs) agents.prClosed(pr.repo, pr.number, true);
+    await until(() => store.agent(lead.id).status === 'error');
+    expect(leads()).toHaveLength(1);
+    expect(store.agent(lead.id).lead!.repos).toEqual([]);
+
+    agents.message(lead.id, 'Carry on');
+    await until(() => leads().length === 2);
+    const branch = store.agent(lead.id).branch;
+    expect(store.agent(lead.id).lead!.repos.map((r) => r.repo)).toEqual(project.repos);
+    const prompt = leads()[1].req.prompt;
+    expect(prompt).toMatch(/^\[Office\] Your repos are checked out again/);
+    expect(prompt).toContain(`- ./webshop-frontend: demo/webshop-frontend, on branch \`${branch}\``);
+    expect(prompt).toContain('Carry on');
+  });
+
   it('brings commits the lead hadn’t shipped along to the next slice', async () => {
     const picked: { dir: string; commits: string[] }[] = [];
     const { agents, claude, store, project } = office({

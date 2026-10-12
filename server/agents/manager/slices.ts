@@ -3,7 +3,7 @@ import { autoQaFor, sameCommit } from '../../../shared/qa';
 import type { Agent } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
 import { errorMessage, newId } from '../../util';
-import { afterLanding, carriedNote, behindNote, everyPr, heldBack, leadPrBody, leadWorktreeId, newSliceNote, notShipped, openPr, shipped, shippedSha, shipPlan, sliceBranch, type FreshBranch, freshBranchNote, needsFreshBranch, repoBranch } from '../lead';
+import { afterLanding, carriedNote, behindNote, everyPr, heldBack, leadPrBody, leadWorktreeId, newSliceNote, notShipped, openPr, reposBackNote, shipped, shippedSha, shipPlan, sliceBranch, type FreshBranch, freshBranchNote, needsFreshBranch, repoBranch } from '../lead';
 import { repoFolders } from '../planner';
 import { nextWaypoints, shippedWaypoint } from '../waypoints';
 import { type GitFailed, Workspace } from '../services';
@@ -66,6 +66,15 @@ export class Slices extends Part {
         }),
       );
       return [newSliceNote(agent.lead!, agent.branch), carriedNote(carried, oldBranch)].filter(Boolean).join('\n\n');
+    });
+  }
+
+  /** A lead left with no repos (a slice move whose checkout failed): every repo checked out again on their branch. Succeeds with what they hear. */
+  reposBack(agent: Agent): Effect.Effect<string, GitHubError | GitFailed | NothingToCheckOut, GitHub | Workspace> {
+    return Effect.gen({ self: this }, function* () {
+      this.print(agent, [{ kind: 'system', text: '✻ No repos are checked out (the last checkout didn’t finish): checking them out again' }]);
+      yield* this.checkOutSlice(agent, this.store.project(agent.projectId).repos);
+      return reposBackNote(agent.lead!, agent.branch);
     });
   }
 

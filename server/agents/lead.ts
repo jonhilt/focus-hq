@@ -592,6 +592,17 @@ export function newSliceNote(work: LeadWork, branch: string): string {
 }
 
 /**
+ * What the lead hears when their repos had to be checked out again: a move to a new slice (or a reopening) that failed
+ * part way left them with none. They're on fresh code, so commits that hadn't shipped stayed behind on the old branch.
+ */
+export function reposBackNote(work: LeadWork, branch: string): string {
+  return [
+    `[Office] Your repos are checked out again: the office's last attempt to check them out didn't finish, which left you without them. They're on fresh code for slice ${work.slice}:\n${workspaceList(work, branch)}`,
+    `Any commits you hadn't shipped didn't come along: they're still on your last slice's branch, if you need them.`,
+  ].join('\n\n');
+}
+
+/**
  * A lead's first message in a new Claude Code session. A new goal's lead hears where their repos are and the captain's
  * words. A goal under way whose conversation couldn't be resumed hears where the goal stands first; when its slice has
  * landed, the new slice's note (`newSliceNote`, which goes before this) says where the repos are and where the goal stands.
