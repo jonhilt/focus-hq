@@ -26,6 +26,9 @@ export interface FileCoverage {
   functions: { line: number; covered: boolean }[];
 }
 
+/** The demo's fakes and scripts stand in for GitHub and Claude Code: nothing ships through them. */
+export const isDemo = (file: string) => /(^|\/)demo([A-Z.]|\.ts$)/.test(file);
+
 /** The usual line: above it, a function is too complex for how little of it is tested. */
 export const CRAP_LINE = 30;
 

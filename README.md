@@ -94,6 +94,7 @@ Then on board:
 
 - [Architecture](docs/architecture.md): a map of the code
 - [Scripts](docs/scripts.md): the package.json scripts
+- [The scorecard](docs/scorecard.md): the gate, the fence and the office measured, and compared over time
 - [How the 3D view runs](docs/performance.md): frame stats (`?stats=1`) and their log, and `pnpm run perf`
 - [CRAP scores](docs/crap.md): which functions are riskiest to change, from complexity and test coverage
 - [The TV studio](docs/studio.md): filming episodes on the ship from a scene script, in demo mode

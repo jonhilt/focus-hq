@@ -20,7 +20,8 @@
     "zfight": "tsx scripts/zfight.ts",
     "gaps": "tsx scripts/gaps.ts",
     "ship": "tsx scripts/ship.ts",
-    "crap": "tsx scripts/crap.ts"
+    "crap": "tsx scripts/crap.ts",
+    "scorecard": "tsx scripts/scorecard.ts"
   },
   "engines": {
     "node": ">=20"

@@ -11,13 +11,10 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { changedLines, changedSummary, fromIstanbul, functionsIn, score, summary, type Scored } from './crapScore';
+import { changedLines, changedSummary, fromIstanbul, functionsIn, isDemo, score, summary, type Scored } from './crapScore';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const git = (...args: string[]) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-
-/** The demo's fakes and scripts stand in for GitHub and Claude Code: nothing ships through them. */
-const DEMO = /(^|\/)demo([A-Z.]|\.ts$)/;
 
 function args() {
   const argv = process.argv.slice(2);
@@ -33,7 +30,7 @@ function args() {
 
 function sourceFiles(all: boolean): string[] {
   const globs = all ? ['server/*.ts', 'shared/*.ts', 'client/src/*.ts', 'scripts/*.ts'] : ['server/*.ts', 'shared/*.ts'];
-  return git('ls-files', ...globs).split('\n').filter((f) => f && !f.endsWith('.test.ts') && !f.endsWith('.d.ts') && (all || !DEMO.test(f)));
+  return git('ls-files', ...globs).split('\n').filter((f) => f && !f.endsWith('.test.ts') && !f.endsWith('.d.ts') && (all || !isDemo(f)));
 }
 
 /** Runs vitest with v8 coverage into a temporary folder and returns its coverage-final.json. */
