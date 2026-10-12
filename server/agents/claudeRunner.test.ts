@@ -60,16 +60,18 @@ describe('a subagent’s messages', () => {
 });
 
 describe('a workflow', () => {
+  const script = "export const meta = { name: 'review-changes', phases: [{ title: 'Review' }] }";
   const messages = [
+    { type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: 'toolu_9', name: 'Workflow', input: { script } }] } },
     { type: 'system', subtype: 'task_started', task_type: 'local_workflow', task_id: 'w1', tool_use_id: 'toolu_9', description: 'Review the diff', workflow_name: 'review-changes' },
     { type: 'system', subtype: 'task_progress', task_id: 'w1', description: 'Review: review:bugs', usage: {}, workflow_progress: [
       { type: 'workflow_phase', index: 1, title: 'Review' },
       { type: 'workflow_agent', index: 1, label: 'review:bugs', phaseIndex: 1, state: 'start', startedAt: 3, promptPreview: 'Find bugs' },
     ] },
-    { type: 'system', subtype: 'task_notification', task_id: 'w1', status: 'completed', summary: 'Dynamic workflow completed' },
+    { type: 'system', subtype: 'task_notification', task_id: 'w1', status: 'completed', summary: 'Dynamic workflow completed', usage: { total_tokens: 4200, tool_uses: 31, duration_ms: 9000 } },
   ] as unknown as SDKMessage[];
 
-  it('starts, reports how its phases and agents stand, and ends, without seating a helper', () => {
+  it('starts with its script, reports how its phases and agents stand, and ends with what it used, without seating a helper', () => {
     const events: WorkflowEvent[] = [];
     const helpers: unknown[] = [];
     const hooks = { lines: () => undefined, activity: () => undefined, helper: (e: unknown) => helpers.push(e), workflow: (e: WorkflowEvent) => events.push(e) } as unknown as RunHooks;
@@ -77,9 +79,9 @@ describe('a workflow', () => {
     const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), probes: new Set(), commits: new Map(), parents: new Map() };
     for (const m of messages) runner.handle(m, ctx, hooks);
     expect(events).toEqual([
-      { kind: 'started', id: 'w1', name: 'review-changes', description: 'Review the diff' },
+      { kind: 'started', id: 'w1', name: 'review-changes', description: 'Review the diff', script },
       { kind: 'progress', id: 'w1', phases: [{ index: 1, title: 'Review', queued: 0, working: 1, done: 0, failed: 0 }], agents: [{ index: 1, label: 'review:bugs', phase: 1, status: 'working', model: undefined, activity: 'Find bugs' }] },
-      { kind: 'ended', id: 'w1', ok: true },
+      { kind: 'ended', id: 'w1', ok: true, usage: { tokens: 4200, toolUses: 31 } },
     ]);
     expect(helpers).toEqual([]);
   });

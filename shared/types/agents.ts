@@ -147,6 +147,8 @@ export interface WorkflowAgent {
 export interface WorkflowPhase {
   index: number;
   title: string;
+  /** What the script's meta says the phase is for, when it says. */
+  detail?: string;
   /** A child workflow the script ran inside this one: its agents, under its name. */
   child?: boolean;
   queued: number;
@@ -173,6 +175,26 @@ export interface Workflow {
   /** The agents at work now, and the ones that finished most recently (not every one it has run, which could be a thousand). */
   agents: WorkflowAgent[];
   startedAt: number;
+  /**
+   * The phases the script's meta declares, in order, before it reaches them (`phases` has only those it has reached).
+   * Missing when the office hasn't seen the script.
+   */
+  plan?: { title: string; detail?: string }[];
+  /** What it has used so far, as Claude Code counts it: tokens and tool calls, across all its agents. */
+  usage?: { tokens: number; toolUses: number };
+}
+
+/**
+ * The script behind one of a lead's workflows, as the transporter console shows it: read when asked for, since it's
+ * too big to send with every change to the lead.
+ */
+export interface WorkflowScript {
+  /** The script's source, as the lead wrote it. Empty when the office never saw it. */
+  source: string;
+  /** What the script said with log(), once Claude Code has saved the run (when it ends). */
+  logs: string[];
+  /** What it returned to the lead, once it has (cut short). */
+  result?: string;
 }
 
 /**

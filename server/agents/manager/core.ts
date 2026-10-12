@@ -57,6 +57,8 @@ export interface Runtime {
   inbox: string[];
   /** Where each of a lead's workflows (by task id) has Claude Code write its agents' transcripts. */
   workflowTranscripts?: Map<string, string>;
+  /** Each of a lead's workflows' script (by task id): its source, when the call carried it, and where Claude Code saved it. */
+  workflowScripts?: Map<string, { source?: string; path?: string }>;
   /** Where each of a lead's background commands and monitors (by task id) writes its output. */
   backgroundOutputs?: Map<string, string>;
   /** A lead's notes that wait for the end of the turn they're in, then join the inbox (`noteForLead`). */

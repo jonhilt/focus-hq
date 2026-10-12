@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Workflow } from '../../shared/types';
-import { applyWorkflowEvent, RECENT_AGENTS, transcriptLines, workflowAsk, WorkflowPermits, workflowProgress } from './workflows';
+import { applyWorkflowEvent, RECENT_AGENTS, RESULT_CHARS, runOutcome, scriptPlan, transcriptLines, workflowAsk, WorkflowPermits, workflowProgress } from './workflows';
 
 // as the probes saw it: a snapshot of every phase, and every agent queued so far
 const progress = [
@@ -87,8 +87,70 @@ describe('applyWorkflowEvent', () => {
     expect(applyWorkflowEvent(ended, { kind: 'progress', id: 'w1', phases: [], agents: [] }, 9)).toBe(ended);
   });
 
+  it('plans the phases its script’s meta declares, from the script it started with or one read later, once', () => {
+    const script = "export const meta = { name: 'r', phases: [{ title: 'Review', detail: 'six angles' }, { title: 'Verify' }] }";
+    const [w] = applyWorkflowEvent([], { kind: 'started', id: 'w1', name: 'r', description: '', script }, 5);
+    expect(w?.plan).toEqual([{ title: 'Review', detail: 'six angles' }, { title: 'Verify' }]);
+    const [later] = applyWorkflowEvent(started, { kind: 'plan', id: 'w1', plan: [{ title: 'Map' }] }, 6);
+    expect(later?.plan).toEqual([{ title: 'Map' }]);
+    const planned = applyWorkflowEvent(started, { kind: 'plan', id: 'w1', plan: [{ title: 'Map' }] }, 6);
+    expect(applyWorkflowEvent(planned, { kind: 'plan', id: 'w1', plan: [{ title: 'Other' }] }, 7)).toBe(planned);
+  });
+
+  it('keeps what it has used from its progress, and from how it ended', () => {
+    const read = workflowProgress(progress)!;
+    const running = applyWorkflowEvent(started, { kind: 'progress', id: 'w1', ...read, usage: { tokens: 900, toolUses: 4 } }, 7);
+    expect(running[0]?.usage).toEqual({ tokens: 900, toolUses: 4 });
+    expect(applyWorkflowEvent(running, { kind: 'ended', id: 'w1', ok: true, usage: { tokens: 1200, toolUses: 9 } }, 8)[0]?.usage).toEqual({ tokens: 1200, toolUses: 9 });
+    expect(applyWorkflowEvent(running, { kind: 'ended', id: 'w1', ok: true }, 8)[0]?.usage).toEqual({ tokens: 900, toolUses: 4 });
+  });
+
   it('leaves the list alone for a workflow it doesn’t know', () => {
     expect(applyWorkflowEvent(started, { kind: 'ended', id: 'nope', ok: true }, 9)).toBe(started);
+  });
+});
+
+describe('scriptPlan', () => {
+  it('reads each phase’s title and detail from the meta, in order, whatever the quotes', () => {
+    const script = [
+      'export const meta = {',
+      "  name: 'review-changes',",
+      '  description: "Review [the] diff",',
+      '  phases: [',
+      "    { title: 'Research', detail: 'six parallel researchers, each a different angle' },",
+      '    { title: "Verify", detail: `adversarially check {claims}` },',
+      "    { title: 'Synthesize' },",
+      '  ],',
+      '}',
+      "phase('Research')",
+    ].join('\n');
+    expect(scriptPlan(script)).toEqual([
+      { title: 'Research', detail: 'six parallel researchers, each a different angle' },
+      { title: 'Verify', detail: 'adversarially check {claims}' },
+      { title: 'Synthesize' },
+    ]);
+  });
+
+  it('reads escaped quotes, and leaves out a detail with something interpolated', () => {
+    expect(scriptPlan("export const meta = { phases: [{ title: 'It\\'s', detail: `${x}` }] }")).toEqual([{ title: "It's" }]);
+  });
+
+  it('is empty without a meta, or when the meta declares no phases, even if the script names some later', () => {
+    expect(scriptPlan("phase('Review')")).toEqual([]);
+    expect(scriptPlan("export const meta = { name: 'x' }\nconst phases = [{ title: 'Nope' }]")).toEqual([]);
+  });
+});
+
+describe('runOutcome', () => {
+  it('reads what the run logged and returned, a returned value as JSON', () => {
+    expect(runOutcome({ logs: ['6/6 back', 3], result: { report: 'ok' } })).toEqual({ logs: ['6/6 back'], result: '{\n  "report": "ok"\n}' });
+    expect(runOutcome({ logs: [], result: 'Done' })).toEqual({ logs: [], result: 'Done' });
+  });
+
+  it('cuts a long result short, and has nothing to say of something that isn’t a run', () => {
+    expect(runOutcome({ result: 'x'.repeat(RESULT_CHARS * 2) }).result?.length).toBeLessThanOrEqual(RESULT_CHARS);
+    expect(runOutcome(null)).toEqual({ logs: [] });
+    expect(runOutcome({ logs: 'nope' })).toEqual({ logs: [] });
   });
 });
 

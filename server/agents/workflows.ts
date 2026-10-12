@@ -105,23 +105,94 @@ export function workflowProgress(raw: unknown): { phases: WorkflowPhase[]; agent
 export function applyWorkflowEvent(workflows: Workflow[], event: WorkflowEvent, now: number): Workflow[] {
   if (event.kind === 'started') {
     if (workflows.some((w) => w.id === event.id)) return workflows;
-    return [...workflows, { id: event.id, name: event.name || 'workflow', description: event.description, status: 'running', phases: [], agents: [], startedAt: now }];
+    const plan = event.script ? scriptPlan(event.script) : [];
+    return [...workflows, {
+      id: event.id, name: event.name || 'workflow', description: event.description, status: 'running', phases: [], agents: [], startedAt: now,
+      ...(plan.length && { plan }),
+    }];
   }
   const workflow = workflows.find((w) => w.id === event.id);
   if (!workflow) return workflows;
   let next: Workflow;
   if (event.kind === 'transcripts') return workflows;
-  if (event.kind === 'progress') {
+  if (event.kind === 'plan') {
+    if (workflow.plan || !event.plan.length) return workflows;
+    next = { ...workflow, plan: event.plan };
+  } else if (event.kind === 'progress') {
     if (workflow.status !== 'running') return workflows;
-    next = { ...workflow, phases: event.phases.length ? event.phases : workflow.phases, agents: event.agents };
+    next = { ...workflow, phases: event.phases.length ? event.phases : workflow.phases, agents: event.agents, ...(event.usage && { usage: event.usage }) };
   } else {
     const ending = event.ok ? 'done' : 'failed';
     const agents = workflow.agents.map((a): WorkflowAgent =>
       a.status === 'working' || a.status === 'queued' ? { ...a, status: ending, activity: event.ok ? 'Done' : 'Stopped with the workflow', finishedAt: now } : a);
     const phases = workflow.phases.map((p) => ({ ...p, queued: 0, working: 0, [ending]: p[ending] + p.working + p.queued }));
-    next = { ...workflow, status: ending, phases, agents };
+    next = { ...workflow, status: ending, phases, agents, ...(event.usage && { usage: event.usage }) };
   }
   return workflows.map((w) => (w.id === event.id ? next : w));
+}
+
+/** A string literal's text in a script: quoted ' or " (or ` with nothing interpolated), escapes read. */
+const LITERAL = /(['"`])((?:\\.|(?!\1)[^\\])*)\1/;
+
+function literal(body: string, key: string): string | undefined {
+  const m = new RegExp(`\\b${key}\\s*:\\s*${LITERAL.source}`).exec(body);
+  if (!m || (m[1] === '`' && m[2].includes('${'))) return undefined;
+  return m[2].replace(/\\(.)/g, (_, c: string) => (c === 'n' ? ' ' : c));
+}
+
+/**
+ * The phases a workflow script's meta declares, in order, each with its detail if it has one: read from the source
+ * rather than run, since the meta is a plain literal (Claude Code requires it). Empty when there's no meta or it
+ * declares no phases.
+ */
+export function scriptPlan(source: string): { title: string; detail?: string }[] {
+  const meta = /export\s+const\s+meta\s*=\s*\{/.exec(source);
+  if (!meta) return [];
+  const start = meta.index + meta[0].length;
+  const body = source.slice(start, closing(source, start));
+  const list = /\bphases\s*:\s*\[/.exec(body);
+  if (!list) return [];
+  const from = list.index + list[0].length;
+  const phases: { title: string; detail?: string }[] = [];
+  for (const m of body.slice(from, closing(body, from)).matchAll(/\{((?:[^{}'"`]|'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`)*)\}/g)) {
+    const title = literal(m[1], 'title');
+    if (!title) continue;
+    const detail = literal(m[1], 'detail');
+    phases.push({ title, ...(detail && { detail }) });
+  }
+  return phases;
+}
+
+/** Where the bracket closing the one just before `from` is, past any inside a string: the end if it never closes. */
+function closing(source: string, from: number): number {
+  let depth = 1;
+  let quote = '';
+  for (let i = from; i < source.length; i++) {
+    const c = source[i];
+    if (quote) {
+      if (c === '\\') i++;
+      else if (c === quote) quote = '';
+    } else if (c === "'" || c === '"' || c === '`') quote = c;
+    else if (c === '[' || c === '{') depth++;
+    else if ((c === ']' || c === '}') && !--depth) return i;
+  }
+  return source.length;
+}
+
+/** How much of a workflow's result the console shows. */
+export const RESULT_CHARS = 4000;
+
+/**
+ * What a workflow said with log() and what it returned, from the run Claude Code saves when it ends
+ * (workflows/<runId>.json in the session's folder). Nothing when it isn't one.
+ */
+export function runOutcome(raw: unknown): { logs: string[]; result?: string } {
+  if (!raw || typeof raw !== 'object') return { logs: [] };
+  const run = raw as { logs?: unknown; result?: unknown };
+  const logs = Array.isArray(run.logs) ? run.logs.filter((l): l is string => typeof l === 'string') : [];
+  if (run.result === undefined || run.result === null) return { logs };
+  const text = typeof run.result === 'string' ? run.result : JSON.stringify(run.result, null, 2);
+  return { logs, result: truncate(text, RESULT_CHARS) };
 }
 
 /**

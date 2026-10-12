@@ -1,10 +1,10 @@
 import { closeSync, fstatSync, openSync, readFileSync, readSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { Effect, Fiber, FiberMap } from 'effect';
 import { effectiveAutonomy } from '../../../shared/autonomy';
 import { helperFor } from '../../../shared/crew';
 import { prKey } from '../../../shared/qa';
-import type { Agent, PermissionRequest, TermLine } from '../../../shared/types';
+import type { Agent, PermissionRequest, TermLine, WorkflowScript } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
 import { newId, truncate } from '../../util';
 import { attachAgain, carryOnInNewSession, CLOUD_UNAVAILABLE, fallBackToLocal } from '../cloud';
@@ -14,7 +14,7 @@ import { carryOnPrompt, conflictsPrompt, issuePrompt, systemAppend } from '../pr
 import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
 import { Sessions, Workspace } from '../services';
 import { applyTaskTool } from '../tasks';
-import { applyWorkflowEvent, transcriptLines, WORKFLOW_LINGER_MS } from '../workflows';
+import { applyWorkflowEvent, runOutcome, scriptPlan, transcriptLines, WORKFLOW_LINGER_MS } from '../workflows';
 import { committedWaypoint, endedProbe, launchedProbe, nudgedWaypoint } from '../waypoints';
 import { checklistState, type ChecklistSource } from '../checklist';
 import { applyBackgroundEvent, BACKGROUND_LINGER_MS, OUTPUT_TAIL, outputLines } from '../backgroundTasks';
@@ -176,9 +176,19 @@ export class AgentSessions extends Part {
       workflow: (event) => {
         // only a lead's away teams have somewhere to beam in to: the lead's briefing room
         if (agent.task !== 'lead') return;
+        const scripts = (rt.workflowScripts ??= new Map());
+        if (event.kind === 'started' && event.script) scripts.set(event.id, { ...scripts.get(event.id), source: event.script });
         if (event.kind === 'transcripts') {
           (rt.workflowTranscripts ??= new Map()).set(event.id, event.dir);
-          return;
+          if (!event.scriptPath) return;
+          const script = { ...scripts.get(event.id), path: event.scriptPath };
+          scripts.set(event.id, script);
+          // a saved workflow, or one run from its script's path: what its meta plans is in the file
+          if (script.source) return;
+          const source = readScript(script.path);
+          if (!source) return;
+          scripts.set(event.id, { ...script, source });
+          event = { kind: 'plan', id: event.id, plan: scriptPlan(source) };
         }
         const before = agent.workflows ?? [];
         const workflows = applyWorkflowEvent(before, event, Date.now());
@@ -190,6 +200,7 @@ export class AgentSessions extends Part {
           this.background(Effect.sleep(WORKFLOW_LINGER_MS).pipe(Effect.andThen(Effect.sync(() => {
             this.update(agent, { workflows: (agent.workflows ?? []).filter((w) => w.id !== event.id) });
             rt.workflowTranscripts?.delete(event.id);
+            rt.workflowScripts?.delete(event.id);
           }))));
         }
       },
@@ -428,6 +439,34 @@ export function workflowAgentLines(rt: Runtime | undefined, workflowId: string, 
     return transcriptLines(readFileSync(join(dir, `agent-${agentId}.jsonl`), 'utf8'));
   } catch {
     return [];
+  }
+}
+
+/** A workflow script Claude Code saved, or nothing when it can't be read. */
+function readScript(file: string | undefined): string | undefined {
+  if (!file) return undefined;
+  try {
+    return readFileSync(file, 'utf8');
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The script behind one of a lead's workflows, for the transporter console: its source, and once Claude Code has saved
+ * the run (workflows/<runId>.json in the session's folder, beside subagents/workflows/<runId>/ where its agents'
+ * transcripts are), what it logged and returned. Read each time it's asked for, since the run is saved when it ends.
+ */
+export function workflowScript(rt: Runtime | undefined, workflowId: string): WorkflowScript {
+  const script = rt?.workflowScripts?.get(workflowId);
+  const source = script?.source ?? readScript(script?.path) ?? '';
+  const dir = rt?.workflowTranscripts?.get(workflowId);
+  if (!dir) return { source, logs: [] };
+  try {
+    const run = JSON.parse(readFileSync(join(dir, '..', '..', '..', 'workflows', `${basename(dir)}.json`), 'utf8')) as unknown;
+    return { source, ...runOutcome(run) };
+  } catch {
+    return { source, logs: [] };
   }
 }
 

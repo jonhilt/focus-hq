@@ -27,11 +27,20 @@ export type ProbeEvent =
  * each time one of its agents starts or finishes), finished.
  */
 export type WorkflowEvent =
-  | { kind: 'started'; id: string; name: string; description: string }
-  | { kind: 'progress'; id: string; phases: Workflow['phases']; agents: WorkflowAgent[] }
-  | { kind: 'ended'; id: string; ok: boolean }
-  /** Where Claude Code writes its agents' transcripts (agent-<agentId>.jsonl), on this machine. */
-  | { kind: 'transcripts'; id: string; dir: string };
+  /** `script`: its source, when the Workflow call carried it (not when it named a saved workflow or a script's path). */
+  | { kind: 'started'; id: string; name: string; description: string; script?: string }
+  | { kind: 'progress'; id: string; phases: Workflow['phases']; agents: WorkflowAgent[]; usage?: WorkflowUsage }
+  | { kind: 'ended'; id: string; ok: boolean; usage?: WorkflowUsage }
+  /**
+   * Where Claude Code writes its agents' transcripts (agent-<agentId>.jsonl), on this machine, and where it saved the
+   * script it runs.
+   */
+  | { kind: 'transcripts'; id: string; dir: string; scriptPath?: string }
+  /** The phases the script's meta declares, once the office has read a script it only had the path of. */
+  | { kind: 'plan'; id: string; plan: NonNullable<Workflow['plan']> };
+
+/** What a workflow has used so far, as a task's progress and its ending count it. */
+export type WorkflowUsage = NonNullable<Workflow['usage']>;
 
 export interface RunHooks {
   lines(lines: Omit<TermLine, 't'>[]): void;
