@@ -3,7 +3,7 @@
 // (sessionTimeline.ts). A transcript can be mid-write, so a line that doesn't parse is skipped.
 
 export type Block = { type?: string; text?: string; name?: string; id?: string; tool_use_id?: string; input?: unknown; is_error?: boolean; content?: unknown };
-export type Line = { type?: string; uuid?: string; timestamp?: string; isMeta?: boolean; message?: { content?: unknown } };
+export type Line = { type?: string; uuid?: string; timestamp?: string; isMeta?: boolean; message?: { id?: string; content?: unknown } };
 
 /** A line's content as blocks: a plain string is one text block. */
 export const blocks = (line: Line): Block[] => {
