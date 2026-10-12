@@ -10,6 +10,8 @@ import { agentEnv } from './claudeRunner';
 import { type Drafter, type DraftRequest, type DraftResult, draftSchema, plannerPrompt, plannerSystemPrompt, repoFolders } from './planner';
 import { asNumberOneReply, type ChatProject, type NumberOneOfficer, type NumberOneReply, type NumberOneTurn, numberOnePrompt, numberOneReplySchema, numberOneSystemPrompt } from './numberOne';
 import { renderToolUse } from './render';
+import { STUDIO_LIMITS as S, studioPrompt, studioSystemPrompt } from './studio';
+import type { StudioOfficer, StudioReply, StudioTurn } from './studioComputer';
 import { parseTriage, TRIAGE_SCHEMA, type TriageDecision, type Triager, type TriageRequest, triagePrompt, triageSystemPrompt } from './triage';
 import { checkoutLatest } from './workspace';
 import type { RetroOfficer, RetroRequest } from './engineer';
@@ -202,6 +204,84 @@ export class ClaudeNumberOne implements NumberOneOfficer {
     });
     return { ...asNumberOneReply(result.structured, result.text, ids), sessionId: result.sessionId, costUsd: result.costUsd };
   }
+}
+
+/**
+ * The studio holodeck's computer: one session per video, in a folder of its own with none of the ship's code, that
+ * reads the web for the video's loose threads and builds with its own tools: the video, and takes on the floor.
+ */
+export class ClaudeStudio implements StudioOfficer {
+  async turn(req: StudioTurn, activity: (text: string) => void): Promise<StudioReply> {
+    fs.mkdirSync(paths.studio, { recursive: true });
+    const result = await runReadOnly({
+      cwd: paths.studio,
+      systemAppend: studioSystemPrompt(),
+      prompt: studioPrompt(req.messages, !!req.resumeSessionId, req.video),
+      settings: req.settings,
+      signal: req.signal,
+      activity,
+      builtins: WEB_TOOLS,
+      resume: req.resumeSessionId,
+      tools: {
+        server: studioServer(req),
+        names: ['video', 'take', 'drop_take'],
+        activity: (name) => ({ video: 'Updating the video', take: 'Staging a take', drop_take: 'Clearing a take' })[name] ?? name,
+      },
+    });
+    return { text: result.text, sessionId: result.sessionId, costUsd: result.costUsd };
+  }
+}
+
+/** The studio computer's own tools: the video it's building with the captain, and the takes on the holodeck's floor. */
+function studioServer(req: StudioTurn): McpSdkServerConfigWithInstance {
+  const answer = async (run: () => string | Promise<string>) => {
+    try {
+      return { content: [{ type: 'text' as const, text: await run() }] };
+    } catch (err) {
+      return { content: [{ type: 'text' as const, text: errorMessage(err) }], isError: true };
+    }
+  };
+  return createSdkMcpServer({
+    name: 'studio',
+    version: '1.0.0',
+    alwaysLoad: true,
+    tools: [
+      tool(
+        'video',
+        'Update the video on the holodeck: send only what changes. Each field replaces what was there, except thread and closeThread, which log and close one loose thread.',
+        {
+          premise: z.string().max(S.premise).optional().describe(`The basic idea, in a sentence or two (at most ${S.premise} characters): the first thing to send.`),
+          takeaway: z.string().max(S.takeaway).optional().describe(`What the viewer should come away with (at most ${S.takeaway} characters).`),
+          beats: z.array(z.object({
+            title: z.string().max(S.beatTitle).describe(`The beat in a few words (at most ${S.beatTitle} characters).`),
+            point: z.string().max(S.point).optional().describe(`What it gets across, in a line (at most ${S.point} characters).`),
+            lines: z.string().max(S.lines).optional().describe(`What's said over it so far: the script (at most ${S.lines} characters).`),
+          })).max(S.beats).optional().describe(`The narrative beats in order, all of them (at most ${S.beats}); send them all again when one changes.`),
+          thread: z.string().max(S.thread).optional().describe(`Log one loose thread, as a question (at most ${S.thread} characters, ${S.open} open at once). It gets an id (t1, t2…).`),
+          closeThread: z.object({
+            id: z.string().describe('The thread\'s id, like t2.'),
+            as: z.enum(['answered', 'dropped']),
+            answer: z.string().max(S.answer).optional().describe('The answer, in a line or two.'),
+          }).optional(),
+        },
+        (input) => answer(() => req.tools.video(input)),
+      ),
+      tool(
+        'take',
+        'Stage a take on the holodeck floor (the kit and render(t) are in your instructions): a new id adds one beside the others, an id already there swaps it in place. It tells you whether it runs in the room.',
+        {
+          id: z.string().describe('A single letter, a, b, c…: the captain refers to takes by it.'),
+          label: z.string().max(S.takeLabel).describe('A few words naming the idea.'),
+          detail: z.string().max(S.takeDetail).optional().describe('What it tries, and what it trades off, in a line.'),
+          beat: z.number().int().optional().describe('Which beat it shows, numbered from 0.'),
+          seconds: z.number().min(S.minSeconds).max(S.maxSeconds).describe('How long it plays before it loops.'),
+          script: z.string().max(S.script).describe('Makes the cast with kit, then defines function render(t).'),
+        },
+        (input) => answer(() => req.tools.take(input)),
+      ),
+      tool('drop_take', 'Take a take off the floor.', { id: z.string() }, ({ id }) => answer(() => req.tools.dropTake(id))),
+    ],
+  });
 }
 
 /** Number One's own tools: the ship's state, and a project's code on demand. Neither changes anything aboard. */

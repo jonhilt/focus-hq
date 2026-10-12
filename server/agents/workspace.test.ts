@@ -20,7 +20,7 @@ function commit(dir: string, file: string, text: string): string {
 
 /** An origin, and a clone of it whose slice branch shipped one commit and carried on with another. */
 function sliceThatCarriedOn() {
-  const origin = path.join(tmp, `origin-${Math.random().toString(36).slice(2)}`);
+  const origin = fs.mkdtempSync(path.join(tmp, 'origin-'));
   git(tmp, 'init', '-q', '--bare', '-b', 'main', origin);
   const lead = `${origin}-lead`;
   git(tmp, 'clone', '-q', origin, lead);

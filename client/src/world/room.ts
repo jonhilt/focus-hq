@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { openQuestion } from '../../../shared/artifacts';
 import { helperFor, plannerFor, qaOfficerFor } from '../../../shared/crew';
 import { prKey } from '../../../shared/qa';
-import type { Agent, Board, Helper, Project } from '../../../shared/types';
+import type { Agent, Board, Helper, Project, StudioSession, StudioTake } from '../../../shared/types';
 import { DESKS_PER_ROOM, TEAM_STATIONS } from '../../../shared/types';
 import { state } from '../net/state';
 import { sound } from '../sound';
@@ -26,6 +26,7 @@ import { DISPLAY_EVERY, redrawDue, type ScreenView, screenTest, takeDraw } from 
 import { paneUse } from './screenPanes';
 import { Beam } from './transporter';
 import { HULL, LCARS, lcarsSign, workstation } from './starship';
+import { StudioSet } from './studioHall';
 import { FloorGlow, hover } from './hologram';
 import { OVERLAY_LAYER } from './frame';
 import { AHEAD, Portal } from './portal';
@@ -723,7 +724,8 @@ export function buildHiddenRoom(slot: RoomSlot, builder: Builder): void {
 
 /**
  * A vacant holodeck, waiting for a project: through its door on the deck, a training hall with nothing running, dark
- * with the yellow grid, a poster on its far wall and a few moving boxes, each of which starts a project.
+ * with the yellow grid, a poster on its far wall and a few moving boxes, each of which starts a project. While a goal is
+ * making a video, the first one is its studio (studio.ts): the props make way for the video's premise, beats and gaps.
  */
 export class VacantHall {
   readonly group = new THREE.Group();
@@ -731,6 +733,11 @@ export class VacantHall {
   readonly props: THREE.Object3D[] = [];
   /** The doorway from its door on the deck to the hall's entrance. */
   readonly portal: Portal;
+  /** The sign over its door on the deck, which says it's the studio while it's one. */
+  private readonly sign: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  private readonly code: string;
+  /** The studio's set, once it's the studio (`showStudio`). */
+  private studio: StudioSet | null = null;
 
   constructor(slot: RoomSlot, builder: Builder, hallKit: THREE.Object3D) {
     this.group.position.copy(hallAt(slot));
@@ -745,7 +752,8 @@ export class VacantHall {
     deck.position.copy(slot.center);
     deck.rotation.y = slot.rotationY;
     builder.add(deck);
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), flat(lcarsSign('Holodeck vacant', { color: '#9a94a8', code: doorCode(slot), sub: 'Create a project in the ready room' })));
+    this.code = doorCode(slot);
+    const sign = (this.sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), flat(lcarsSign('Holodeck vacant', { color: '#9a94a8', code: this.code, sub: 'Create a project in the ready room' }))));
     sign.rotation.y = -Math.PI / 2;
     sign.position.set(DOOR_SIGN_X, 2.87, 0);
     deck.add(sign);
@@ -782,5 +790,37 @@ export class VacantHall {
   /** Whether a world position is in the hall. */
   holds(p: THREE.Vector3): boolean {
     return inHall(this.group.position, p);
+  }
+
+  /** Whether it's the studio. */
+  get isStudio(): boolean {
+    return this.studio !== null;
+  }
+
+  /**
+   * Makes it the studio, where the captain and its computer think a video through (studio.ts): the props make way, the
+   * sign on the deck says so, and the set shows `session` as it stands. `report` tells the office how a take ran.
+   */
+  showStudio(session: StudioSession, report: (take: StudioTake, error?: string) => void): void {
+    if (!this.studio) {
+      this.studio = new StudioSet(report);
+      this.group.add(this.studio.group);
+      for (const prop of this.props) prop.visible = false;
+      const old = this.sign.material;
+      this.sign.material = flat(lcarsSign('Studio', { color: LCARS.gold, code: this.code, sub: 'Make a video with the holodeck computer' }));
+      old.map?.dispose();
+      old.dispose();
+      interactive(this.studio.wall, { kind: 'studio' }, () => 'Talk to the holodeck computer');
+    }
+    this.studio.show(session);
+  }
+
+  /** Moves the studio on to `t`, as seen from `camera` (world). */
+  update(t: number, camera: THREE.Vector3): void {
+    this.studio?.update(t, camera);
+  }
+
+  dispose(): void {
+    this.studio?.dispose();
   }
 }

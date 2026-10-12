@@ -6,6 +6,7 @@ import type { CallState, CallStatus } from './call';
 import type { IssueDraft } from './drafts';
 import type { Board, GitHubStatus } from './github';
 import type { NumberOneChat } from './numberOne';
+import type { StudioSession } from './studio';
 import type { Preview, PreviewLog } from './previews';
 import type { Project, Settings } from './projects';
 import type { QaReview } from './qa';
@@ -32,6 +33,8 @@ export interface Snapshot {
   previews: Preview[];
   drafts: IssueDraft[];
   numberOne: NumberOneChat;
+  /** The studio holodeck's conversation, and the video and takes it's built. */
+  studio: StudioSession;
   reviews: QaReview[];
   voice: VoiceStatus;
   /** Whether the office can take a call, and the one under way. */
@@ -55,6 +58,7 @@ export type ServerEvent =
   | { type: 'preview-log'; projectId: string; log: PreviewLog }
   | { type: 'draft'; projectId: string; draft: IssueDraft | null }
   | { type: 'number-one'; chat: NumberOneChat }
+  | { type: 'studio'; session: StudioSession }
   | { type: 'review'; review: QaReview }
   | { type: 'review-removed'; repo: string; number: number }
   | { type: 'report'; report: ReportCard }

@@ -38,7 +38,9 @@ export type Interaction =
   | { kind: 'energise'; projectId?: string; station?: number; room?: number }
   /** A feed on a briefing room's wall: beam into the transporter room it shows (`projectId`'s team station `station`'s room `room`). */
   | { kind: 'beam-to'; projectId: string; station: number; room: number }
-  | { kind: 'vacant' };
+  | { kind: 'vacant' }
+  /** The studio holodeck's computer: the conversation about a video (ui/studioChat.ts). */
+  | { kind: 'studio' };
 
 /** How far away (m) the player can use something with E, unless it says otherwise. */
 export const REACH = 4.5;

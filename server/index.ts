@@ -4,13 +4,13 @@ import path from 'node:path';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import express from 'express';
 import { clock } from '../shared/clock';
-import { seededRandom } from '../shared/studio';
 import { keyFallback } from './agents/apiKey';
 import { BrowserPool } from './agents/browserTool';
-import { ClaudeDrafter, ClaudeEngineer, ClaudeNumberOne, ClaudeTriager } from './agents/claudeCrew';
+import { ClaudeDrafter, ClaudeEngineer, ClaudeNumberOne, ClaudeStudio, ClaudeTriager } from './agents/claudeCrew';
+import { StudioComputer } from './agents/studioComputer';
 import { ChiefEngineer, transcriptFolders, transcriptReader } from './agents/engineer';
 import { ClaudeRunner } from './agents/claudeRunner';
-import { DemoDrafter, DemoEngineer, DemoNumberOne, DemoRunner, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
+import { DemoDrafter, DemoEngineer, DemoNumberOne, DemoRunner, DemoStudio, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
 import { Renderer, Sessions, Triage, Workspace } from './agents/services';
 import { closedGoalPrs, lookUpPrStates, NumberOne, type ShipStatus, summariseShip } from './agents/numberOne';
@@ -30,7 +30,7 @@ import { demoPreviewPage, Previews } from './previews';
 import { apiRouter } from './routes';
 import { StateLockedError, Store } from './store';
 import { currentVersion, RESTART_MESSAGE, Updater } from './updater';
-import { errorMessage, seedIds } from './util';
+import { errorMessage, seedRandom } from './util';
 import { Voice } from './voice';
 
 /** How often orphaned agent workspaces are swept up, besides once at startup. */
@@ -63,9 +63,7 @@ async function main() {
   // the studio films the same episode each run: the demo's waits and picks roll the same dice
   // and its ids, which the crew's names hash from
   if (config.studio) {
-    const seed = Number(process.env.FOCUS_DEMO_SEED ?? 1);
-    Math.random = seededRandom(seed);
-    seedIds(seededRandom(seed + 1));
+    seedRandom(Number(process.env.FOCUS_DEMO_SEED ?? 1));
   }
   const store = new Store(!config.demo);
   store.load();
@@ -108,7 +106,8 @@ async function main() {
     startGoal: (projectId, text) => office.agents.startGoal(projectId, text, { from: 'a call' }),
     message: (agentId, text) => office.agents.message(agentId, text),
   }, callKeys, config.demo);
-  const office = new Office(store, hub, github, previews, planner, numberOne, engineer, new Voice(hub, config.demo), calls, await currentVersion());
+  const studio = new StudioComputer(store, hub, config.demo ? new DemoStudio() : new ClaudeStudio());
+  const office = new Office(store, hub, github, previews, planner, numberOne, studio, engineer, new Voice(hub, config.demo), calls, await currentVersion());
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
   // each agent session is digested into the ledger as it ends: the demo's agents have no transcripts

@@ -7,5 +7,7 @@ export default defineConfig({
     root: '.',
     include: ['server/**/*.test.ts', 'shared/**/*.test.ts', 'client/src/**/*.test.ts', 'scripts/**/*.test.ts'],
     environment: 'node',
+    // seeds the server's random choices in every test (and prints the seed when one fails)
+    setupFiles: ['vitest.setup.ts'],
   },
 });

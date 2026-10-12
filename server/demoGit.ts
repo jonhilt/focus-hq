@@ -1,5 +1,5 @@
-import { randomBytes } from 'node:crypto';
 import type { SinceVerdict } from './agents/retest';
+import { randomHex } from './util';
 
 // The demo's pretend git history of pull requests: the commits pushed to them after they were opened, so the demo
 // workspace can say what came onto a PR since QA's verdict. The demo GitHub records pushes here; nothing touches git.
@@ -9,7 +9,7 @@ const pushed = new Map<string, Pushed>();
 
 /** A new commit on top of `parent`: a clean merge of the base branch, or a change to the PR's own code. */
 export function demoCommit(parent: string, kind: Pushed['kind']): string {
-  const sha = randomBytes(5).toString('hex');
+  const sha = randomHex(5);
   pushed.set(sha, { parent, kind });
   return sha;
 }
