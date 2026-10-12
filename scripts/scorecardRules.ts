@@ -244,9 +244,10 @@ export function direction(m: Metric, before: number): 'better' | 'worse' | 'same
 
 const MARK = { better: '▲', worse: '▼', same: ' ' } as const;
 
+/** The change since `before`, marked; nothing when it rounds away to nothing as shown. */
 function deltaText(m: Metric, before: number): string {
-  if (m.value === before) return '';
   const delta = m.value - before;
+  if (formatValue(Math.abs(delta), m.format) === formatValue(0, m.format)) return '';
   const shown = m.format === 'pass' ? formatValue(before, 'pass') : `${delta > 0 ? '+' : '−'}${formatValue(Math.abs(delta), m.format)}`;
   return `${MARK[direction(m, before)]} ${m.format === 'pass' ? `was ${shown}` : shown}`;
 }

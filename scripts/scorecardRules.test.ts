@@ -107,6 +107,14 @@ describe('render', () => {
     expect(text).toContain('48 sessions  shell: bash exit code 1');
   });
 
+  it('leaves out a change too small to show', () => {
+    const was = card(200, 'aaaaaaaaaa');
+    const now = card(200, 'bbbbbbbbbb');
+    now.metrics.push({ section: 'office', key: 'office.wasted', label: 'Wasted', value: 5.42, better: 'lower', format: 'ratio' });
+    was.metrics.push({ section: 'office', key: 'office.wasted', label: 'Wasted', value: 5.40, better: 'lower', format: 'ratio' });
+    expect(render(now, was)).toMatch(/Wasted\s+5\.4$/m);
+  });
+
   it('says so when there is nothing to compare with', () => {
     expect(render(card(1, 'cccccccc'))).toContain('No earlier scorecard to compare with');
   });
