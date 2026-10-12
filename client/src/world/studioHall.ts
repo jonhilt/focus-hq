@@ -19,8 +19,8 @@ import { TakeStage } from './takes';
 const TEXT = '#e8fbff';
 const DIM = '#8fa3b8';
 const GOLD = LCARS.gold;
-/** How far off (m) you can open a beat's card with E: from where you'd stand to read the row. */
-const CARD_REACH = 6;
+/** How far off (m) you can open a beat's card with E: from anywhere on the floor, since the takes stand between you and the row. */
+const CARD_REACH = 18;
 
 /** A canvas on a hologram, drawn by `paint` when its key changes and there's a draw to spare this frame (screenRedraw.ts). */
 class Holo {

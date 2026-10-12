@@ -385,8 +385,8 @@ async function main() {
 
   // ---------------------------------------------------------------- interaction
   const raycaster = new THREE.Raycaster();
-  // as far as anything reaches: most things only from REACH (`interactive`), a big screen from across the room
-  raycaster.far = 10;
+  // as far as anything reaches: most things only from REACH (`interactive`), a big screen or the studio's beats from across the room
+  raycaster.far = 18;
   // holograms are drawn in the overlay (frame.ts), and can be used
   raycaster.layers.enable(OVERLAY_LAYER);
   const center = new THREE.Vector2(0, 0);
@@ -398,6 +398,11 @@ async function main() {
     (aimed?.userData.aim as ((on: boolean) => void) | undefined)?.(false);
     aimed = o;
     (aimed?.userData.aim as ((on: boolean) => void) | undefined)?.(true);
+  };
+
+  const shown = (o: THREE.Object3D | null): boolean => {
+    for (; o; o = o.parent) if (!o.visible) return false;
+    return true;
   };
 
   const pick = () => {
@@ -412,6 +417,8 @@ async function main() {
     target = null;
     let aiming: THREE.Object3D | null = null;
     for (const hit of hits) {
+      // the raycaster doesn't care what's hidden, like the props that made way for the studio, or its training hall's shell
+      if (!shown(hit.object)) continue;
       // a board with rows of its own to use, like a briefing room's goal board's roster, or its big screen's panes
       const at = hit.object.userData.interactionAt as ((uv: THREE.Vector2) => typeof target) | undefined;
       const reach = (hit.object.userData.reach as number | undefined) ?? REACH;

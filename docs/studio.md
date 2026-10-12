@@ -133,7 +133,7 @@ view while the computer builds:
 
 - **The video** (its `video` tool, `server/agents/studio.ts`): the premise on the far wall in a gold-edged hologram,
   with what the viewer should come away with; the narrative beats in numbered cards round under it, each with the lines
-  said over it as the script builds up (**E** on a card opens the chat's **Script** tab at that beat, with the whole
+  said over it as the script builds up (**E** on a card, from anywhere on the floor, opens the chat's **Script** tab at that beat, with the whole
   video written out to read and narrate from); and each loose thread (something neither of you is sure how it works, a
   fact to check) hanging as a warm light in a row across the hall, just over your head between the doorway and the
   takes, its question on a tag you can read from where you come in. The computer
@@ -148,7 +148,7 @@ view while the computer builds:
 
   Each take starts from a **metaphor**, decided before any geometry: one sentence on what the concept is shown as, what
   moves and what that movement means ("a gold core throws out fresh contexts and pulls back only their answers"). Its
-  plaque shows its beat, label and metaphor; the Script tab lists each beat's takes with theirs. Its timing lives in
+  plaque shows its beat, label and metaphor (**E** on it opens the Script tab at its beat too); the Script tab lists each beat's takes with theirs. Its timing lives in
   named **phases** (`{"fan": [1, 3], "fold": [6, 8]}`) that its script reads with `phase(t, name)`, so "make c slower"
   is the `retime_take` tool (a speed, or new seconds and phases) rather than a rewrite: the script stays, and the take
   plays afresh a version on. Scripts get helpers that, like `render(t)`, depend only on the time (`shared/takeScript.ts`):

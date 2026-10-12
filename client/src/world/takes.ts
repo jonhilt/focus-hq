@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { StudioTake } from '../../../shared/types';
 import { TAKE_PARAMS, takeBody, takeHelpers } from '../../../shared/takeScript';
+import { interactive } from './builder';
 import { canvasTexture, fitFont, makeCanvas, UI_FONT, wrap } from './canvas';
 import { OVERLAY_LAYER } from './frame';
 import { flat } from './materials';
@@ -9,7 +10,7 @@ import { shownTakes, TAKE_PLOT, takeSpots } from './studio';
 import { TakeKit } from './takeKit';
 
 // The studio computer's takes, every one of them standing round the holodeck's floor in beat order (studio.ts: where):
-// each its own floor, a plaque at its front edge with its id, beat, label and metaphor, and its cast, made by its script with the kit
+// each its own floor, a plaque at its front edge with its id, beat, label and metaphor (E on it reads the beat in full), and its cast, made by its script with the kit
 // (takeKit.ts) and set from t every frame, looping. A take staged again under the same id is torn down and built afresh.
 // The room tells the office how each version ran, so the computer hears about a script that throws.
 
@@ -45,6 +46,8 @@ class Plot {
     this.sign.position.set(0, 0.45, depth / 2 + 0.25);
     this.sign.rotation.x = -0.75;
     this.sign.layers.set(OVERLAY_LAYER);
+    // E on it reads its beat in the script, without walking to the row of cards over the takes
+    if (take.beat !== undefined) interactive(this.sign, { kind: 'studio', beat: take.beat }, () => `Read beat ${take.beat! + 1} in full`);
     this.group.add(this.floor, this.sign, this.cast);
     try {
       // the computer's own script, run in the captain's browser like the explainers it shows on a station's screen
