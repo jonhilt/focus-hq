@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Runtime } from './core';
-import { workflowScript } from './sessions';
+import { keepWorkflowFiles, workflowScript } from './sessions';
 
 // a session's folder, as Claude Code lays it out: the run's agents under subagents/workflows/<runId>/, its script under
 // workflows/scripts/, and the run itself in workflows/<runId>.json once it's over
@@ -36,5 +36,31 @@ describe('workflowScript', () => {
   it('is empty for a workflow it knows nothing of', () => {
     expect(workflowScript(undefined, 't1')).toEqual({ source: '', logs: [] });
     expect(workflowScript(runtime(new Map()), 'nope')).toEqual({ source: '', logs: [] });
+  });
+});
+
+describe('keepWorkflowFiles', () => {
+  it('keeps the script a workflow started with, and passes the event on', () => {
+    const rt = runtime(undefined);
+    const started = { kind: 'started' as const, id: 't1', name: 'r', description: '', script: 'src' };
+    expect(keepWorkflowFiles(rt, started)).toBe(started);
+    expect(rt.workflowScripts?.get('t1')).toEqual({ source: 'src' });
+  });
+
+  it('keeps where its files are, and plans its phases from a saved script it had no source for', () => {
+    const { dir, scriptPath } = session();
+    fs.writeFileSync(scriptPath, "export const meta = { phases: [{ title: 'Map', detail: 'each repo' }] }");
+    const rt = runtime(undefined);
+    expect(keepWorkflowFiles(rt, { kind: 'transcripts', id: 't1', dir, scriptPath })).toEqual({ kind: 'plan', id: 't1', plan: [{ title: 'Map', detail: 'each repo' }] });
+    expect(rt.workflowTranscripts?.get('t1')).toBe(dir);
+    expect(rt.workflowScripts?.get('t1')?.source).toContain('Map');
+  });
+
+  it('has nothing more to say of where its files are when it has the source already, or no script path', () => {
+    const { dir, scriptPath } = session();
+    const rt = runtime(new Map([['t1', { source: 'src' }]]));
+    expect(keepWorkflowFiles(rt, { kind: 'transcripts', id: 't1', dir, scriptPath })).toBeUndefined();
+    expect(rt.workflowScripts?.get('t1')).toEqual({ source: 'src', path: scriptPath });
+    expect(keepWorkflowFiles(rt, { kind: 'transcripts', id: 't2', dir })).toBeUndefined();
   });
 });

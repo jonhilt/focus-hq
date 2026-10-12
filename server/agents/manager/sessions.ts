@@ -18,7 +18,7 @@ import { applyWorkflowEvent, runOutcome, scriptPlan, transcriptLines, WORKFLOW_L
 import { committedWaypoint, endedProbe, launchedProbe, nudgedWaypoint } from '../waypoints';
 import { checklistState, type ChecklistSource } from '../checklist';
 import { applyBackgroundEvent, BACKGROUND_LINGER_MS, OUTPUT_TAIL, outputLines } from '../backgroundTasks';
-import { type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN } from '../types';
+import { type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN, type WorkflowEvent } from '../types';
 import { EmptyRepository, FINISHED, type ManagerServices, Part, Refused, ReportGone, type Runtime, withNotes, type WorkError } from './core';
 
 /** Running an agent's Claude Code session: launching their task, each turn and its hooks, compacting, and what follows a turn. */
@@ -176,20 +176,9 @@ export class AgentSessions extends Part {
       workflow: (event) => {
         // only a lead's away teams have somewhere to beam in to: the lead's briefing room
         if (agent.task !== 'lead') return;
-        const scripts = (rt.workflowScripts ??= new Map());
-        if (event.kind === 'started' && event.script) scripts.set(event.id, { ...scripts.get(event.id), source: event.script });
-        if (event.kind === 'transcripts') {
-          (rt.workflowTranscripts ??= new Map()).set(event.id, event.dir);
-          if (!event.scriptPath) return;
-          const script = { ...scripts.get(event.id), path: event.scriptPath };
-          scripts.set(event.id, script);
-          // a saved workflow, or one run from its script's path: what its meta plans is in the file
-          if (script.source) return;
-          const source = readScript(script.path);
-          if (!source) return;
-          scripts.set(event.id, { ...script, source });
-          event = { kind: 'plan', id: event.id, plan: scriptPlan(source) };
-        }
+        const next = keepWorkflowFiles(rt, event);
+        if (!next) return;
+        event = next;
         const before = agent.workflows ?? [];
         const workflows = applyWorkflowEvent(before, event, Date.now());
         if (workflows === before) return;
@@ -440,6 +429,27 @@ export function workflowAgentLines(rt: Runtime | undefined, workflowId: string, 
   } catch {
     return [];
   }
+}
+
+/**
+ * Keeps what a workflow event says about a lead's workflow's files: its script (the source the call carried, and where
+ * Claude Code saved it) and where its agents' transcripts are. What to make of the event then: itself, the phases a
+ * script read from its file plans, or nothing more when it was only about the files.
+ */
+export function keepWorkflowFiles(rt: Runtime, event: WorkflowEvent): WorkflowEvent | undefined {
+  const scripts = (rt.workflowScripts ??= new Map());
+  if (event.kind === 'started' && event.script) scripts.set(event.id, { ...scripts.get(event.id), source: event.script });
+  if (event.kind !== 'transcripts') return event;
+  (rt.workflowTranscripts ??= new Map()).set(event.id, event.dir);
+  if (!event.scriptPath) return undefined;
+  const script = { ...scripts.get(event.id), path: event.scriptPath };
+  scripts.set(event.id, script);
+  // a saved workflow, or one run from its script's path: what its meta plans is in the file
+  if (script.source) return undefined;
+  const source = readScript(script.path);
+  if (!source) return undefined;
+  scripts.set(event.id, { ...script, source });
+  return { kind: 'plan', id: event.id, plan: scriptPlan(source) };
 }
 
 /** A workflow script Claude Code saved, or nothing when it can't be read. */
