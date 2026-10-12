@@ -69,7 +69,8 @@ export class BrowserPool {
     let lastError: unknown;
     for (const opts of attempts) {
       try {
-        return await chromium.launch({ headless: true, ...opts });
+        // WebGL (a 3D explainer's stage) falls back to drawing in software where there's no GPU, as Chrome no longer does by itself
+        return await chromium.launch({ headless: true, args: ['--enable-unsafe-swiftshader'], ...opts });
       } catch (err) {
         lastError = err;
       }
@@ -127,6 +128,8 @@ export class BrowserPool {
         if (msg.type() === 'error') errors.push(msg.text());
       });
       await page.setContent(html, { waitUntil: 'networkidle', timeout: 15_000 }).catch(() => undefined);
+      // an explainer says when it has drawn its resting frame (a 3D stage only starts once three.js has loaded)
+      await page.waitForFunction(() => (window as { kitReady?: boolean }).kitReady !== false, undefined, { timeout: 5000 }).catch(() => undefined);
       // scripts that draw after loading (mermaid, charts) get a moment to finish
       await page.waitForTimeout(400);
       return { image: await page.screenshot({ type: 'jpeg', quality: 85 }), errors };

@@ -96,6 +96,8 @@ Add a pre-flight checklist for self-audit before the verify script runs:
 
 ## 6. Fit for Focus
 
+_Since this was written: stages can now ask for `libs: ["three"]` (see the explain bullet in [goals](goals.md)), and the snapshot waits for `kitReady`. A probe found the snapshot browser already draws WebGL headless (Playwright's Chromium, with or without GPU flags), so gap 2 below didn't bite; `--enable-unsafe-swiftshader` is there for Chrome builds without a GPU._
+
 The `explain` tool already has the right core shape. The stage is a pure `render(t)`, beats are discrete and viewer-paced with captions, and the resting frame `render(DUR)` sums the explainer up. A lead can ship a three.js stage today. The gaps are in how three.js loads and in how the screen's picture is captured:
 
 1. **`render` is captured synchronously.** `KIT_PLAYER` reads `render` once, at load. A `type=module` script runs too late. A dynamic `import()` of `three.module.js` inside the classic script works only with a guard: `render(t)` stores `t`, does nothing until three has loaded, then redraws the last `t`. Nothing in the kit triggers that redraw, and if the lead forgets, the resting frame and snapshot stay blank.
@@ -155,7 +157,7 @@ Later slices: inject the scaffold (renderer, lighting, label overlay, `__scene`)
 
 A lead can already put a three.js animated explainer on its screen with today's code. Nothing in the pipeline blocks WebGL or CDN scripts. The real constraints are how the stage script runs and whether the office's headless screenshot can draw WebGL.
 
-**Where the tools live** (all under ``)
+**Where the tools live** (all under the repo root)
 - **Tool definitions:** `server/agents/officeTool.ts` declares `show`, `explain` and `ask` as an in-process MCP server (zod schemas). `explainShape` takes the limits from `EXPLAINER_LIMITS` and `STAGE_SIZE`.
 - **Handlers:** `server/agents/manager/goalTools.ts`.
   - `showArtifact` checks the page with `showArtifact()` in `server/agents/lead.ts` (`ARTIFACT_LIMITS`: 2 MB, 12 artifacts, id ≤40, title ≤80).

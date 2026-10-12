@@ -11,6 +11,12 @@ export const EXPLAINER_LIMITS = { minBeats: 2, maxBeats: 8, label: 16, beatTitle
 /** The stage's box inside the player, in CSS pixels: the lead lays their scene out in it. */
 export const STAGE_SIZE = { w: 1050, h: 500 } as const;
 
+/** The three.js a 3D stage loads: the office's own (package.json), so what a lead learns here holds there too. */
+export const THREE_VERSION = '0.186.1';
+const THREE_CDN = `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}`;
+/** Libraries a stage can ask for: three.js, and its addons by path (`three/addons/environments/RoomEnvironment.js`). */
+const LIB = /^three(\/addons\/[\w-]+(\/[\w-]+)*\.js)?$/;
+
 export interface ExplainerBeat {
   title: string;
   /** The caption under the stage while it plays. */
@@ -27,7 +33,7 @@ export interface ExplainerInput {
   title: string;
   beats: ExplainerBeat[];
   /** The scene: its elements, their styles, and a script that defines render(t). */
-  stage: { html: string; css?: string; script: string };
+  stage: { html: string; css?: string; script: string; libs?: string[] };
 }
 
 // red is kept for alerts on the stage, so a beat's block never reads as one
@@ -74,8 +80,11 @@ export function explainerPage(input: ExplainerInput): ArtifactInput | { error: s
     if (b.label && clean(b.label).length > L.label) return { error: `${which}'s label is ${clean(b.label).length} characters (at most ${L.label})` };
     if (!(b.seconds >= L.minSeconds && b.seconds <= L.maxSeconds)) return { error: `${which} plays for ${b.seconds} seconds (${L.minSeconds} to ${L.maxSeconds})` };
   }
-  const { html, css = '', script } = input.stage;
+  const { html, css = '', script, libs = [] } = input.stage;
   if (!script.trim()) return { error: 'The stage needs a script that defines render(t)' };
+  const odd = libs.find((lib) => !LIB.test(lib));
+  if (odd !== undefined) return { error: `The stage can't load "${odd}": libs takes "three" and its addons, like "three/addons/environments/RoomEnvironment.js"` };
+  if (libs.length && !libs.includes('three')) return { error: 'Addons need three itself: put "three" in libs too' };
   if (/<\/script/i.test(script)) return { error: 'The stage script can’t contain </script>: build that string in pieces' };
   if (/<\/style/i.test(css)) return { error: 'The stage CSS can’t contain </style>' };
   if (Buffer.byteLength(html + css + script) > L.stageBytes) return { error: `The stage is over ${L.stageBytes / 1_000_000} MB: keep it small` };
@@ -87,11 +96,11 @@ export function explainerPage(input: ExplainerInput): ArtifactInput | { error: s
     return beat;
   });
   const title = clean(input.title);
-  return { id: input.id, title, html: page(title, beats, at, html, css, script) };
+  return { id: input.id, title, html: page(title, beats, at, html, css, script, [...new Set(libs)]) };
 }
 
 /** The player around the lead's stage. The kit's own script defines its helpers on window, so the lead's names win. */
-function page(title: string, beats: { at: number; title: string; text: string; label: string; colour: string; say: string }[], dur: number, stageHtml: string, stageCss: string, stageScript: string): string {
+function page(title: string, beats: { at: number; title: string; text: string; label: string; colour: string; say: string }[], dur: number, stageHtml: string, stageCss: string, stageScript: string, libs: string[]): string {
   // the left column holds the beats between the two elbows, however many there are
   const beatH = Math.floor((320 - 6 * (beats.length - 1)) / beats.length);
   // Antonio in capitals is about 0.47em a character: a long title takes the lilac block's room too, then shrinks to fit
@@ -105,6 +114,7 @@ function page(title: string, beats: { at: number; title: string; text: string; l
   .title { font-size:${titlePx}px; }
 </style>
 <style>${stageCss}</style>
+${libs.length ? `<script type="importmap">${scriptJson({ imports: { three: `${THREE_CDN}/build/three.module.js`, 'three/addons/': `${THREE_CDN}/examples/jsm/` } })}</script>` : ''}
 </head>
 <body class="rest">
 ${FRAME}
@@ -132,10 +142,14 @@ ${stageHtml}
 </div>
 <script>window.KIT_BEATS = ${scriptJson(beats)}; window.KIT_DUR = ${dur};</script>
 <script>${KIT_HELPERS}</script>
-<script>
+${libs.length ? `<script type="text/x-kit" id="kit-stage">
 ${stageScript}
 </script>
-<script>${KIT_PLAYER}</script>
+<script type="text/x-kit" id="kit-player">${KIT_PLAYER}</script>
+<script type="module">${KIT_LOADER.replace('LIBS', scriptJson(libs))}</script>` : `<script>
+${stageScript}
+</script>
+<script>${KIT_PLAYER}</script>`}
 </body></html>
 `;
 }
@@ -212,7 +226,10 @@ const KIT_HELPERS = String.raw`
   window.$$ = function (sel) { return Array.prototype.slice.call(window.stage.querySelectorAll(sel)); };
   window.tag = function (text, colour) { return '<span class="tag" style="background:var(--' + colour + ')">' + text + '</span>'; };
   window.addEventListener('error', function (e) { window.kitFault(e.message || String(e.error)); });
+  // false until the player has drawn its resting frame: the office waits for it before taking the screen's picture
+  window.kitReady = false;
   window.kitFault = function (message) {
+    window.kitReady = true;
     console.error('Stage fault: ' + message);
     document.body.classList.add('faulted');
     document.getElementById('kit-fault-text').textContent = message;
@@ -333,5 +350,25 @@ const KIT_PLAYER = String.raw`
   // a dry run through every moment before resting on the last, so a stage that breaks partway through says so up front
   if (draw) for (var s = 0; s <= DUR; s += .25) try { draw(s); } catch (err) { draw = null; window.kitFault(describe(err, s)); break; }
   frame(); stop();
+  // for a stage whose things arrive later (a texture, a font): draw the frame it's on again
+  window.kitRedraw = frame;
+  window.kitReady = true;
 })();
+`;
+
+// A stage that loads libraries runs once they have: its script and the player wait in inert elements until then, so
+// render(t) can use THREE straight away, as a classic script (its render on window, where the player looks for it).
+// THREE holds three.js and every addon asked for, so an addon's classes sit beside the core's (THREE.RoomEnvironment).
+const KIT_LOADER = String.raw`
+var libs = LIBS;
+Promise.all(libs.map(function (lib) { return import(lib); })).then(function (mods) {
+  window.THREE = Object.assign.apply(Object, [{}].concat(mods));
+  ['kit-stage', 'kit-player'].forEach(function (id) {
+    var s = document.createElement('script');
+    s.text = document.getElementById(id).textContent;
+    document.body.appendChild(s);
+  });
+}, function (err) {
+  window.kitFault('Couldn’t load ' + libs.join(', ') + ': ' + (err && err.message || err));
+});
 `;

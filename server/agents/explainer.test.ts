@@ -1,5 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { beatLabel, beatNarration, EXPLAINER_LIMITS, type ExplainerInput, explainerPage } from './explainer';
+import { beatLabel, beatNarration, EXPLAINER_LIMITS, type ExplainerInput, explainerPage, THREE_VERSION } from './explainer';
 
 const L = EXPLAINER_LIMITS;
 const input = (over: Partial<ExplainerInput> = {}): ExplainerInput => ({
@@ -102,5 +103,32 @@ describe('explainerPage', () => {
     expect(refusal({ stage: { ...stage, script: 'const s = "</script>"; function render() {}' } })).toMatch(/<\/script>/);
     expect(refusal({ stage: { ...stage, css: '</style><script>' } })).toMatch(/<\/style>/);
     expect(refusal({ stage: { ...stage, html: 'x'.repeat(L.stageBytes) } })).toMatch(/MB/);
+  });
+
+  it('loads three.js for a 3D stage before its script runs, and holds the stage and player back until then', () => {
+    const stage = { ...input().stage, libs: ['three', 'three/addons/environments/RoomEnvironment.js'] };
+    const { html } = page({ stage });
+    const map = JSON.parse(/<script type="importmap">(.*?)<\/script>/.exec(html)![1]) as { imports: Record<string, string> };
+    expect(map.imports.three).toBe(`https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/build/three.module.js`);
+    expect(map.imports['three/addons/']).toBe(`https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/examples/jsm/`);
+    expect(html).toMatch(/<script type="text\/x-kit" id="kit-stage">\s*function render\(t\)/);
+    expect(html).toContain('<script type="text/x-kit" id="kit-player">');
+    expect(html).toContain('var libs = ["three","three/addons/environments/RoomEnvironment.js"];');
+    // a flat stage runs as it always has
+    expect(page().html).not.toContain('importmap');
+    expect(page().html).not.toContain('text/x-kit');
+  });
+
+  it("pins the office's own three.js", () => {
+    const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { dependencies: Record<string, string> };
+    expect(pkg.dependencies.three.replace(/^\^/, '')).toBe(THREE_VERSION);
+  });
+
+  it('refuses libraries other than three.js and its addons', () => {
+    const stage = input().stage;
+    expect(refusal({ stage: { ...stage, libs: ['three'] } })).toBeUndefined();
+    expect(refusal({ stage: { ...stage, libs: ['https://evil.example/x.js'] } })).toMatch(/can't load/);
+    expect(refusal({ stage: { ...stage, libs: ['three', 'three/addons/../../x.js'] } })).toMatch(/can't load/);
+    expect(refusal({ stage: { ...stage, libs: ['three/addons/controls/OrbitControls.js'] } })).toMatch(/"three" in libs too/);
   });
 });
