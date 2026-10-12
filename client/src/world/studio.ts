@@ -1,4 +1,4 @@
-import type { StudioTake, StudioThread } from '../../../shared/types';
+import type { StudioPitches, StudioTake, StudioThread } from '../../../shared/types';
 import { ENTRANCE_X } from './hallLayout';
 
 // The studio: an empty holodeck where the captain and its computer, a Claude session of its own, think a video through
@@ -177,3 +177,33 @@ export function spotCorners({ x, z, face, scale }: TakeSpot): { x: number; z: nu
 }
 
 const fits = (spot: TakeSpot) => spotCorners(spot).every((c) => Math.hypot(c.x, c.z) <= STUDIO_HALL.radius - 0.3 && c.x >= ENTRANCE_X + RING.door);
+
+/** A moment on a take's contact sheet: when, and what's ending then, if it's a phase. */
+export interface SheetMoment {
+  t: number;
+  label: string;
+}
+
+/**
+ * The moments a take's contact sheet shows (contactSheet.ts), `count` of them in order: the end of each of its phases
+ * (the moment each lands), as many as fit, filled out with even steps through it, and always its last moment.
+ */
+export function sheetMoments(seconds: number, phases: Record<string, [number, number]> = {}, count = 4): SheetMoment[] {
+  const at = (t: number) => Math.round(Math.min(seconds, Math.max(0, t)) * 10) / 10;
+  const ends = Object.entries(phases)
+    .map(([name, [, to]]) => ({ t: at(to), label: `${name} lands` }))
+    .filter((m) => m.t < at(seconds))
+    .sort((a, b) => a.t - b.t);
+  const picked = ends.filter((_, i) => i % Math.ceil(ends.length / (count - 1)) === 0).slice(0, count - 1);
+  // even steps through it, skipping any too near a moment already picked
+  for (let k = 1; k < count && picked.length < count - 1; k++) {
+    const t = at((seconds * k) / count);
+    if (!picked.some((m) => Math.abs(m.t - t) < seconds / (count * 2))) picked.push({ t, label: '' });
+  }
+  return [...picked.sort((a, b) => a.t - b.t), { t: at(seconds), label: 'the end' }];
+}
+
+/** The pitches still waiting on the captain, oldest first: each beat's latest, until a take is staged for that beat after it. */
+export function openPitches(pitches: readonly StudioPitches[] = [], takes: readonly StudioTake[]): StudioPitches[] {
+  return pitches.filter((set) => !takes.some((t) => t.beat === set.beat && t.at > set.at)).sort((a, b) => a.at - b.at);
+}

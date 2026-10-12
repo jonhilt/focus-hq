@@ -106,7 +106,8 @@ async function main() {
     startGoal: (projectId, text) => office.agents.startGoal(projectId, text, { from: 'a call' }),
     message: (agentId, text) => office.agents.message(agentId, text),
   }, callKeys, config.demo);
-  const studio = new StudioComputer(store, hub, config.demo ? new DemoStudio() : new ClaudeStudio());
+  // FOCUS_STUDIO=live: the real studio computer even in the demo office, to try it on a model without GitHub
+  const studio = new StudioComputer(store, hub, config.demo && process.env.FOCUS_STUDIO !== 'live' ? new DemoStudio() : new ClaudeStudio());
   const office = new Office(store, hub, github, previews, planner, numberOne, studio, engineer, new Voice(hub, config.demo), calls, await currentVersion());
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));

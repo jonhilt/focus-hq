@@ -1,8 +1,8 @@
-import { EFFORT_LEVELS, type StudioSession } from '../../../shared/types';
+import { EFFORT_LEVELS, type StudioPitches, type StudioSession, type StudioVideo } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
-import { shownTakes } from '../world/studio';
+import { openPitches, shownTakes } from '../world/studio';
 import type { Ui } from './context';
 import { withMic } from './dictation';
 import { busy, fill, h } from './dom';
@@ -61,14 +61,14 @@ export function openStudioChat(ui: Ui, beat?: number): void {
   input.placeholder = 'Describe the video, or say what to change (“make b slower”)… Enter to send';
   const inputBox = withMic(ui, input);
   const send = h('button', { class: 'btn primary' }, 'Send');
-  const sendNow = () => {
-    if (!input.value.trim() || send.disabled) return;
-    const text = input.value;
+  const say = (text: string, clear: boolean) => {
+    if (!text.trim() || send.disabled) return;
     void busy(send, async () => {
       await api.studioSay(text);
-      input.value = '';
+      if (clear) input.value = '';
     }, ui.error).then(render);
   };
+  const sendNow = () => say(input.value, true);
   send.onclick = sendNow;
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -110,6 +110,7 @@ export function openStudioChat(ui: Ui, beat?: number): void {
           ...m.text.split(/\n{2,}/).map((p) => h('p', null, ...bold(p))),
         ),
       ),
+      ...openPitches(session?.pitches, session?.takes ?? []).map((set) => pitchBoard(set, session?.video, thinking, (text) => say(text, false))),
       thinking ? h('div', { class: 'briefing-msg computer typing' }, h('strong', null, 'Computer'), h('p', null, session.activity)) : null,
       session?.status === 'failed' ? h('div', { class: 'briefing-note error' }, `${session.error ?? 'Something went wrong'}. Say something to carry on.`) : null,
     );
@@ -149,6 +150,7 @@ function scriptView(session: StudioSession | null, picked?: number): HTMLElement
         h('h3', null, b.title),
         b.point ? h('p', { class: 'point' }, b.point) : null,
         b.lines ? h('blockquote', null, ...b.lines.split(/\n+/).map((l) => h('p', null, l))) : h('p', { class: 'muted' }, 'No lines yet.'),
+        ...(session.pitches?.find((set) => set.beat === i)?.pitches ?? []).map((p, n) => h('p', { class: 'studio-pitched' }, h('b', null, `Pitch ${n + 1}`), ` ${p.title} (${p.scale}): ${p.metaphor}`)),
         ...shown.map((t) => h('p', { class: 'studio-takes' }, h('b', null, `Take ${t.id.toUpperCase()}`), ` ${t.label}${t.metaphor ? `: ${t.metaphor}` : ''} (${t.seconds}s${t.phases ? `, ${Object.keys(t.phases).join(' → ')}` : ''})`)),
       );
     }),
@@ -159,6 +161,29 @@ function scriptView(session: StudioSession | null, picked?: number): HTMLElement
         ...closed.map((t) => h('p', { class: 'thread closed' }, h('b', null, t.id), ' ', t.text, h('br'), h('span', null, t.closed!.as === 'answered' ? `Answered: ${t.closed!.answer ?? ''}` : 'Dropped'))),
       )
       : null,
+  );
+}
+
+/**
+ * The ways the computer's pitched to show a beat, waiting on the captain: each with what it's shown as, how big, and
+ * how it holds up, and a button to build it. Mixing them or pushing back is said in the chat.
+ */
+function pitchBoard(set: StudioPitches, video: StudioVideo | undefined, thinking: boolean, say: (text: string) => void): HTMLElement {
+  const beat = set.beat !== undefined ? video?.beats[set.beat] : undefined;
+  const what = set.beat !== undefined ? `beat ${set.beat + 1}${beat ? ` (“${beat.title}”)` : ''}` : 'the video';
+  return h('div', { class: 'studio-pitches' },
+    h('small', null, `Ways to show ${what}: pick one, or say what to mix or change`),
+    ...set.pitches.map((p, i) => {
+      const build = h('button', { class: 'btn small primary', title: 'Ask the computer to stage this one' }, 'Build this');
+      build.disabled = thinking;
+      build.onclick = () => say(`Build pitch ${i + 1} for ${what}: “${p.title}”.`);
+      return h('div', { class: 'studio-pitch' },
+        h('div', { class: 'row' }, h('b', { class: 'n' }, String(i + 1)), h('strong', null, p.title), h('span', { class: 'pill' }, p.scale)),
+        h('p', null, p.metaphor),
+        p.check ? h('p', { class: 'check' }, p.check) : null,
+        h('div', { class: 'row end' }, build),
+      );
+    }),
   );
 }
 

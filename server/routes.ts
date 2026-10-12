@@ -126,7 +126,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.post('/studio/say', h((req) => office.studio.say(str(req.body.text))));
   r.post('/studio/new', h(() => office.studio.newVideo()));
   r.post('/studio/tune', h((req) => office.studio.tune(typeof req.body.model === 'string' ? req.body.model : '', effort(req.body.effort))));
-  r.post('/studio/takes/:id/report', h((req) => office.studio.report(param(req, 'id'), Number(req.body.version), typeof req.body.error === 'string' ? req.body.error : undefined)));
+  r.post('/studio/takes/:id/report', h((req) => office.studio.report(param(req, 'id'), Number(req.body.version), typeof req.body.error === 'string' ? req.body.error : undefined, typeof req.body.sheet === 'string' ? req.body.sheet : undefined)));
   // every closed goal the ledger kept, so what its lead showed can be found once it's off the room's log
   r.get('/goals/archive', h((req) => closedGoals(store.ledger, typeof req.query.project === 'string' ? req.query.project : undefined)));
   r.get('/ledger', h((req) => ledgerWindow(store.ledger, Date.now(), Number(req.query.days ?? 14))));

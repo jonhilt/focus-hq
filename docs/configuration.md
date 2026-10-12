@@ -5,6 +5,7 @@
 | `PORT` / `HOST` | `4477` / `127.0.0.1` | where the office listens |
 | `FOCUS_DATA_DIR` | `~/.focus` | state, agent logs, repo clones, worktrees and preview checkouts |
 | `FOCUS_MODE=demo` | | same as `--demo` |
+| `FOCUS_STUDIO=live` | | in the demo office, the studio's holodeck computer is a real Claude session, not scripted (`docs/studio.md`) |
 | `FOCUS_BOARD_REFRESH_MS` | `60000` | how often boards re-read issues and PRs |
 | `FOCUS_BROWSER_PATH` | | Chromium/Chrome binary for agent browser testing |
 | `FOCUS_USE_API_KEY=1` | | let agents use `ANTHROPIC_API_KEY` instead of your Claude login |

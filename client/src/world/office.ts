@@ -445,7 +445,7 @@ export class World {
   syncStudio(): void {
     const hall = [...this.vacant.values()][0];
     if (!hall || !state.studio) return;
-    hall.showStudio(state.studio, (take, error) => void api.studioReport(take.id, take.version, error).catch(() => undefined));
+    hall.showStudio(state.studio, (take, error, sheet) => void api.studioReport(take.id, take.version, error, sheet).catch(() => undefined));
     // its bigger hall's walls in place of the hall's own, once, in the same array the player walks among
     const swap = hall.studioColliders;
     if (swap && swap.drop.size + swap.add.length && !this.colliders.includes(swap.add[0])) {

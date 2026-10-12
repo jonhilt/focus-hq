@@ -1092,6 +1092,38 @@ function render(t) {
   results.forEach((r, i) => { const k = p(t, i * 1.2 + 3, i * 1.2 + 4); r.visible = k > 0; r.position.x = lerp(1.2, 2.6, k); r.position.y = 0.5 + i * 0.12 * k; });
 }`;
 
+/** Take g, built from a pitch: work items riding a track through three gates, each moving on the moment its gate's done. */
+const DEMO_TAKE_PIPELINE = `const curve = new THREE.CatmullRomCurve3([[-3.5, 0.6, 1], [-1.5, 1.6, -1], [0.5, 0.8, 1], [3.5, 1.8, -0.5]].map((a) => new THREE.Vector3(...a)));
+kit.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 80, 0.05, 8), new THREE.MeshBasicMaterial({ color: kit.colours.peri })));
+const gates = [0.3, 0.6, 0.85].map((k) => {
+  const g = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.04, 8, 32), new THREE.MeshBasicMaterial({ color: kit.colours.gold }));
+  g.position.copy(curve.getPointAt(k));
+  g.lookAt(curve.getPointAt(k + 0.01));
+  return kit.add(g);
+});
+const N = 24, items = new THREE.InstancedMesh(new THREE.BoxGeometry(0.16, 0.16, 0.16), new THREE.MeshBasicMaterial(), N);
+kit.add(items);
+const m = new THREE.Matrix4(), c = new THREE.Color();
+function render(t) {
+  for (let i = 0; i < N; i++) {
+    const k = clamp((t - phase.start('flow') - i * 0.3) / 6, 0, 1);
+    const at = curve.getPointAt(k);
+    items.setMatrixAt(i, m.makeTranslation(at.x, at.y, at.z));
+    items.setColorAt(i, c.set(k >= 1 ? kit.colours.green : kit.colours.sky));
+  }
+  items.instanceMatrix.needsUpdate = true;
+  items.instanceColor.needsUpdate = true;
+  gates.forEach((g, j) => g.scale.setScalar(1 + 0.15 * Math.sin(t * 4 + j)));
+}`;
+
+/** The ways the demo pitches to show its second beat, helpers beaming in, before building one. */
+const DEMO_PITCHES = [
+  { title: 'Pattern buffer', metaphor: 'Helpers wait as shimmering patterns in the transporter’s buffer and materialise a few at a time, each on its own pad', scale: 'the room round you', check: 'Holds for dozens: the buffer is the queue when more are asked for than run at once' },
+  { title: 'Tactical table', metaphor: 'A glowing table where the lead’s plan fans out into tiny ships, each flying its part and docking back with one result', scale: 'tabletop, looked down on', check: 'Reads well at 3 or 300; loses the feel that each one is a whole agent' },
+  { title: 'Track and gates', metaphor: 'Work items ride a track through three gates; each moves on the moment its own gate is done', scale: 'waist-high, across the floor', check: 'Shows pipeline timing exactly; says less about fresh contexts' },
+  { title: 'Glass columns', metaphor: 'Every helper is a glass column filling with its own context, which collapses into one bright drop for the lead', scale: 'hall-sized, overhead', check: 'Makes the context saving obvious; heavy for a beat about dividing work' },
+];
+
 /** The demo's studio computer: scripted turns that build a video and stage real takes, so the studio shows in the demo. */
 export class DemoStudio implements StudioOfficer {
   private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
@@ -1131,7 +1163,14 @@ export class DemoStudio implements StudioOfficer {
       await tool('Staging a take', () => req.tools.take({ id: 'c', label: 'Fan out, fold back', metaphor: 'A gold core throws out fresh blue contexts and pulls back only their answers', detail: 'Abstract: cleaner, but you have to say what the balls are', beat: 1, seconds: 11, phases: DEMO_ABSTRACT_PHASES, script: DEMO_TAKE_ABSTRACT }));
       await tool('Staging a take', () => req.tools.take({ id: 'd', label: 'Cards on a conveyor', metaphor: 'Work goes out as fat cards and comes back as thin green results', beat: 2, seconds: 9, script: DEMO_TAKE_CARDS }));
       await tool('Staging a take', () => req.tools.take({ id: 'e', label: 'Too small to hand off', metaphor: 'A tiny job’s briefing box is bigger than the job: the helper spends longer reading it than doing it', beat: 3, seconds: 8, phases: { beam: [0.5, 2], hand: [2.5, 4.5], verdict: [5, 6] }, script: DEMO_TAKE_SMALL }));
-      return reply('The premise is on the far wall with four beats under it, two loose threads hang by the door, and there’s a take for every beat round the room: **a** reading alone, **b** and **c** two ways to show the helpers, **d** the hand-back, **e** when not to. Stand in the middle and tell me what to change.');
+      await tool('Pitching ways to show it', () => req.tools.pitch({ beat: 1, pitches: DEMO_PITCHES }));
+      return reply('The premise is on the far wall with four beats under it, two loose threads hang by the door, and there’s a take for every beat round the room: **a** reading alone, **b** and **c** two ways to show the helpers, **d** the hand-back, **e** when not to. I’ve also pitched four more ways to show the helpers, at different scales: pick one, or tell me what to mix.');
+    }
+    const picked = /build pitch (\d)/.exec(q);
+    if (picked) {
+      const pitch = DEMO_PITCHES[Number(picked[1]) - 1] ?? DEMO_PITCHES[2];
+      const staged = await tool('Staging a take', () => req.tools.take({ id: 'g', label: pitch.title, metaphor: pitch.metaphor, beat: 1, seconds: 14, phases: { flow: [0, 13] }, script: DEMO_TAKE_PIPELINE }));
+      return reply(`Take **g**, ${pitch.title.toLowerCase()}, is on the floor with the helpers' takes. ${staged.sheet ? 'I looked at its contact sheet: the gates read from across the room, and the items bunch up nicely at the first one.' : 'No one was in the studio to run it yet.'}`);
     }
     if (/one at a time|wave/.test(q)) {
       await tool('Staging a take', () => req.tools.take({ id: 'b', label: 'Crew at consoles', metaphor: 'Helpers beam in one at a time, each reading one part at a console of its own', detail: 'Helpers now arrive one at a time', beat: 1, seconds: 16, script: demoTakeCrew(true) }));

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { StudioTake } from '../../../shared/types';
 import { ENTRANCE_X } from './hallLayout';
-import { beatsFrom, keepsHallCollider, type Lit, placeLights, shownTakes, spotCorners, STUDIO_HALL, STUDIO_SPAN, STUDIO_WALL, studioWalls, TAKE_PLOT, takeSpots, threadLights } from './studio';
+import { beatsFrom, openPitches, sheetMoments, keepsHallCollider, type Lit, placeLights, shownTakes, spotCorners, STUDIO_HALL, STUDIO_SPAN, STUDIO_WALL, studioWalls, TAKE_PLOT, takeSpots, threadLights } from './studio';
 
 const lit = (n: number, settled?: Lit['settled']): Lit => ({ id: `t${n}`, text: `Thread ${n}?`, label: `Thread t${n}`, ...(settled ? { settled } : {}) });
 
@@ -96,5 +96,35 @@ describe('the studio hall', () => {
     expect(keepsHallCollider(1.3, -1.5)).toBe(false); // the moving boxes
     expect(keepsHallCollider(10.9, 0)).toBe(false); // the hall's round wall
     expect(keepsHallCollider(ENTRANCE_X + 0.2, 4)).toBe(false);
+  });
+});
+
+describe('sheetMoments', () => {
+  it('shows a take without phases at even steps through it, and its last moment', () => {
+    expect(sheetMoments(8)).toEqual([{ t: 2, label: '' }, { t: 4, label: '' }, { t: 6, label: '' }, { t: 8, label: 'the end' }]);
+  });
+
+  it('shows the moment each phase lands, filling out with even steps clear of them', () => {
+    expect(sheetMoments(10, { fan: [1, 3], fold: [6, 8] })).toEqual([
+      { t: 3, label: 'fan lands' },
+      { t: 5, label: '' },
+      { t: 8, label: 'fold lands' },
+      { t: 10, label: 'the end' },
+    ]);
+  });
+
+  it('spreads its picks over many phases, and doesn’t show a phase that ends with the take twice', () => {
+    const many = sheetMoments(12, { a: [0, 1], b: [1, 2], c: [2, 3], d: [3, 4], e: [4, 5], f: [5, 12] });
+    expect(many.map((m) => m.label)).toEqual(['a lands', 'c lands', 'e lands', 'the end']);
+  });
+});
+
+describe('openPitches', () => {
+  const set = (beat: number | undefined, at: number) => ({ ...(beat !== undefined && { beat }), pitches: [{ title: 'A', metaphor: 'M', scale: 'S' }], at });
+  const take = (beat: number, at: number) => ({ id: 'a', label: 'A', beat, seconds: 5, script: '', version: 1, at }) as StudioTake;
+
+  it('keeps a beat’s pitches up until a take is staged for that beat after them, oldest first', () => {
+    const open = openPitches([set(1, 30), set(0, 10), set(undefined, 5)], [take(0, 20), take(1, 25)]);
+    expect(open.map((p) => p.beat)).toEqual([undefined, 1]);
   });
 });

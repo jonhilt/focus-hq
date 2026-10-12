@@ -138,9 +138,25 @@ view while the computer builds:
   fact to check) hanging as a warm light in a row across the hall, just over your head between the doorway and the
   takes, its question on a tag you can read from where you come in. The computer
   reads the web to answer them: an answered thread turns green and rises away, a dropped one dims and sinks.
-- **Takes** (its `take` tool): rough 3D sketches of the beats, one or more for each, each a short script the computer
+- **Pitches** (its `pitch` tool): before it builds anything for a beat, the computer pitches 3 to 5 ways to show it,
+  each a one-sentence metaphor, how big it is and where it stands (a tabletop model, the room round you, something
+  hall-sized overhead…), and how it holds up against the real numbers and limits. They're meant to differ in kind and
+  scale (a physical analogy, something from the Star Trek universe), not be one scene rearranged. They show in the
+  chat, numbered, each with a **Build this** button; to mix them or push back, say so. A beat's pitches stay in the
+  chat until a take is staged for it, and stay listed under the beat in the Script tab (`openPitches` in
+  `client/src/world/studio.ts`). The transporter room was found this way: several metaphors at different scales,
+  checked against how workflows really run, then picked and stretched by the captain.
+- **Takes** (its `take` tool): 3D visualisations of the beats, one or more for each, each a script the computer
   writes against the studio's kit (`client/src/world/takeKit.ts`: crew standing or at consoles, boxes, balls,
-  transporter pads, glowing lines, floating labels and a beam-in effect), looping on an 8 × 6 m floor of its own.
+  transporter pads, glowing lines, floating labels and a beam-in effect) and three.js itself (instancing for dozens of
+  things, tracks, swarms, see-through containers, text on surfaces), looping on an 8 × 6 m floor of its own. It's
+  asked for a bold image that reads from across the room, not a thin sketch.
+
+  The computer looks before you do: when the room runs a take just staged, it renders a **contact sheet** (the take
+  from where you'd stand to watch it, at the moment each of its phases lands and its last moment, two by two, in a
+  scene and on a WebGL renderer of its own: `client/src/world/contactSheet.ts`) and sends it with its report, and the
+  take tool hands the picture to the computer, which looks for anything thin, cluttered, hidden or still and stages it
+  again before telling you it's ready. No browser open, no sheet: the take waits for you as before.
   Every take stays on the floor (up to 12), in a horseshoe round the room in beat order, from the left of the doorway
   round to its right, each facing the middle: stand there and turn, and you see the whole video. Up to six stand full
   size; more and they all shrink together to fit (`takeSpots` in `client/src/world/studio.ts`). The beat cards hang
@@ -169,7 +185,10 @@ The computer reads the web but nothing of the ship's code (`ClaudeStudio` in `se
 in `data/studio`), and its take scripts run in your browser as the leads' explainers do. In `pnpm run demo` its
 turns are scripted (`DemoStudio`): describe a video and it puts up a premise, four beats, two threads and a take for
 every beat (two for the second); ask for one at a time and it revises take b; ask for it slower and it retimes take c
-to half speed; ask it to look a thread up and it answers t1.
+to half speed; ask it to look a thread up and it answers t1. It also pitches four ways to show the second beat, and
+**Build this** on one stages take g from it (a track through gates, built with three.js itself) and says it looked at
+its contact sheet. `FOCUS_STUDIO=live` puts the real computer in the demo office instead, to try the studio with a
+model without GitHub.
 
 ## Not yet
 

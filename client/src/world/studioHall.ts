@@ -86,7 +86,7 @@ export class StudioSet {
   private lastT = 0;
 
   /** `report` tells the office how a take ran in the room. */
-  constructor(report: (take: StudioTake, error?: string) => void) {
+  constructor(report: (take: StudioTake, error?: string, sheet?: string) => void) {
     this.takes = new TakeStage(report);
     const { r, half, bottom, top } = STUDIO_WALL;
     this.premiseMesh = new THREE.Mesh(curvedPanel(r, -half, half, 0, top - bottom, 40), this.premise.hologram.material);

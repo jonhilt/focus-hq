@@ -855,7 +855,7 @@ export class VacantHall {
    * Makes it the studio, where the captain and its computer think a video through (studio.ts): the props make way, the
    * sign on the deck says so, and the set shows `session` as it stands. `report` tells the office how a take ran.
    */
-  showStudio(session: StudioSession, report: (take: StudioTake, error?: string) => void): void {
+  showStudio(session: StudioSession, report: (take: StudioTake, error?: string, sheet?: string) => void): void {
     if (!this.studio) {
       this.studio = new StudioSet(report);
       this.group.add(this.studio.group);

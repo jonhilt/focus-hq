@@ -11,7 +11,7 @@ import { type Drafter, type DraftRequest, type DraftResult, draftSchema, planner
 import { asNumberOneReply, type ChatProject, type NumberOneOfficer, type NumberOneReply, type NumberOneTurn, numberOnePrompt, numberOneReplySchema, numberOneSystemPrompt } from './numberOne';
 import { renderToolUse } from './render';
 import { STUDIO_LIMITS as S, studioPrompt, studioSystemPrompt } from './studio';
-import type { StudioOfficer, StudioReply, StudioTurn } from './studioComputer';
+import type { Staged, StudioOfficer, StudioReply, StudioTurn } from './studioComputer';
 import { parseTriage, TRIAGE_SCHEMA, type TriageDecision, type Triager, type TriageRequest, triagePrompt, triageSystemPrompt } from './triage';
 import { checkoutLatest } from './workspace';
 import type { RetroOfficer, RetroRequest } from './engineer';
@@ -225,7 +225,7 @@ export class ClaudeStudio implements StudioOfficer {
     const result = await runReadOnly({
       cwd: paths.studio,
       systemAppend: studioSystemPrompt(),
-      prompt: studioPrompt(req.messages, !!req.resumeSessionId, req.video),
+      prompt: studioPrompt(req.messages, !!req.resumeSessionId, req.video, req.pitches),
       settings: req.settings,
       model: req.model || undefined,
       effort: req.effort,
@@ -235,8 +235,8 @@ export class ClaudeStudio implements StudioOfficer {
       resume: req.resumeSessionId,
       tools: {
         server: studioServer(req),
-        names: ['video', 'take', 'retime_take', 'drop_take'],
-        activity: (name) => ({ video: 'Updating the video', take: 'Staging a take', retime_take: 'Retiming a take', drop_take: 'Clearing a take' })[name] ?? name,
+        names: ['video', 'pitch', 'take', 'retime_take', 'drop_take'],
+        activity: (name) => ({ video: 'Updating the video', pitch: 'Pitching ways to show it', take: 'Staging a take', retime_take: 'Retiming a take', drop_take: 'Clearing a take' })[name] ?? name,
       },
     });
     return { text: result.text, sessionId: result.sessionId, costUsd: result.costUsd, model: result.model };
@@ -251,6 +251,15 @@ function studioServer(req: StudioTurn): McpSdkServerConfigWithInstance {
   const answer = async (run: () => string | Promise<string>) => {
     try {
       return { content: [{ type: 'text' as const, text: await run() }] };
+    } catch (err) {
+      return { content: [{ type: 'text' as const, text: errorMessage(err) }], isError: true };
+    }
+  };
+  // a take's answer carries its contact sheet, for the computer to look at
+  const staged = async (run: () => Promise<Staged>) => {
+    try {
+      const { text, sheet } = await run();
+      return { content: [{ type: 'text' as const, text }, ...(sheet ? [{ type: 'image' as const, data: sheet, mimeType: 'image/jpeg' }] : [])] };
     } catch (err) {
       return { content: [{ type: 'text' as const, text: errorMessage(err) }], isError: true };
     }
@@ -281,8 +290,22 @@ function studioServer(req: StudioTurn): McpSdkServerConfigWithInstance {
         (input) => answer(() => req.tools.video(input)),
       ),
       tool(
+        'pitch',
+        'Pitch ways to show a beat before building any: they show in the captain\'s chat, numbered 1, 2, 3…, for them to pick, mix or push back. Pitching a beat again replaces its last pitches.',
+        {
+          beat: z.number().int().optional().describe('Which beat they\'re for, numbered from 0; leave out for the video as a whole.'),
+          pitches: z.array(z.object({
+            title: z.string().max(S.pitchTitle).describe(`A few words naming it (at most ${S.pitchTitle} characters).`),
+            metaphor: z.string().max(S.metaphor).describe(`What the concept is shown as, in one sentence: what moves, and what that movement means (at most ${S.metaphor} characters).`),
+            scale: z.string().max(S.pitchScale).describe(`How big it is and where it stands: a tabletop model, the room round the captain, hall-sized overhead… (at most ${S.pitchScale} characters).`),
+            check: z.string().max(S.pitchCheck).optional().describe(`How it holds up against what's true (the real numbers and limits), and where it bends (at most ${S.pitchCheck} characters).`),
+          })).min(S.minPitches).max(S.maxPitches).describe(`${S.minPitches} to ${S.maxPitches} ways, different in kind and scale, not variations on one scene.`),
+        },
+        (input) => answer(() => req.tools.pitch(input)),
+      ),
+      tool(
         'take',
-        'Stage a take on the holodeck floor (the kit and render(t) are in your instructions): a new id adds one beside the others, an id already there swaps it in place. It tells you whether it runs in the room.',
+        'Stage a take on the holodeck floor (the kit and render(t) are in your instructions): a new id adds one beside the others, an id already there swaps it in place. It tells you whether it runs in the room, and hands back a contact sheet of it to look at before you show the captain.',
         {
           id: z.string().describe('A single letter, a, b, c…: the captain refers to takes by it.'),
           label: z.string().max(S.takeLabel).describe('A few words naming the idea.'),
@@ -293,7 +316,7 @@ function studioServer(req: StudioTurn): McpSdkServerConfigWithInstance {
           phases: PHASES.optional().describe('Its named phases, like {"dispatch": [0, 2], "work": [2, 6]}: time the script by phase(t, name), so retime_take can change the timing later.'),
           script: z.string().max(S.script).describe('Makes the cast with kit, then defines function render(t).'),
         },
-        (input) => answer(() => req.tools.take(input)),
+        (input) => staged(() => req.tools.take(input)),
       ),
       tool(
         'retime_take',
@@ -304,7 +327,7 @@ function studioServer(req: StudioTurn): McpSdkServerConfigWithInstance {
           seconds: z.number().min(S.minSeconds).max(S.maxSeconds).optional().describe('Its new length.'),
           phases: PHASES.optional().describe('All its phases again, with their new times.'),
         },
-        (input) => answer(() => req.tools.retime(input)),
+        (input) => staged(() => req.tools.retime(input)),
       ),
       tool('drop_take', 'Take a take off the floor.', { id: z.string() }, ({ id }) => answer(() => req.tools.dropTake(id))),
     ],

@@ -2,7 +2,7 @@
 // video it builds up with the captain (premise, narrative beats with their lines, loose threads) and the takes it stages
 // on the holodeck's floor, rough 3D sketches written against the studio's kit (client/src/world/takeKit.ts).
 
-import type { StudioMessage, StudioTake, StudioThread, StudioVideo } from '../../shared/types';
+import type { StudioMessage, StudioPitches, StudioTake, StudioThread, StudioVideo } from '../../shared/types';
 import { type TakePhases, takeSyntaxError } from '../../shared/takeScript';
 
 /** How long each part may be, how many beats and open threads a video has room for, and how many takes stay on the floor. */
@@ -25,6 +25,11 @@ export const STUDIO_LIMITS = {
   script: 16_000,
   minSeconds: 2,
   maxSeconds: 60,
+  minPitches: 2,
+  maxPitches: 5,
+  pitchTitle: 40,
+  pitchScale: 60,
+  pitchCheck: 200,
 } as const;
 const L = STUDIO_LIMITS;
 
@@ -103,6 +108,31 @@ export interface TakeInput {
   seconds: number;
   phases?: TakePhases;
   script: string;
+}
+
+/** What the pitch tool can send: the ways it'd show one beat (or the whole video), before it builds any. */
+export interface PitchInput {
+  beat?: number;
+  pitches: { title: string; metaphor: string; scale: string; check?: string }[];
+}
+
+/** The pitches after the computer pitches for a beat: they replace the last for that beat, numbered from 1 in order. */
+export function applyPitch(all: readonly StudioPitches[], input: PitchInput, beats: number, now: number): StudioPitches[] | { error: string } {
+  if (input.beat !== undefined && !(Number.isInteger(input.beat) && input.beat >= 0 && input.beat < beats)) return { error: `There's no beat ${input.beat}: the video has ${beats} (numbered from 0).` };
+  if (input.pitches.length < L.minPitches || input.pitches.length > L.maxPitches) return { error: `Pitch ${L.minPitches} to ${L.maxPitches} ways, each different in kind and scale.` };
+  const pitches: StudioPitches['pitches'] = [];
+  for (const [i, raw] of input.pitches.entries()) {
+    const title = clean(raw.title);
+    const metaphor = clean(raw.metaphor);
+    const scale = clean(raw.scale);
+    const check = clean(raw.check ?? '');
+    if (!title || title.length > L.pitchTitle) return { error: `Pitch ${i + 1} needs a title of at most ${L.pitchTitle} characters.` };
+    if (!metaphor || metaphor.length > L.metaphor) return { error: `Pitch ${i + 1} needs a metaphor of at most ${L.metaphor} characters: one sentence.` };
+    if (!scale || scale.length > L.pitchScale) return { error: `Pitch ${i + 1} needs a scale of at most ${L.pitchScale} characters: how big it is, and where it stands.` };
+    if (check.length > L.pitchCheck) return { error: `Pitch ${i + 1}'s check is ${check.length} characters (at most ${L.pitchCheck}).` };
+    pitches.push({ title, metaphor, scale, ...(check && { check }) });
+  }
+  return [...all.filter((p) => p.beat !== input.beat), { ...(input.beat !== undefined && { beat: input.beat }), pitches, at: now }];
 }
 
 /** What the retime tool can send: a take's new length, new phases, or a speed to play it all at. */
@@ -195,8 +225,10 @@ export function studioSystemPrompt(): string {
 How to work:
 - Start with the premise, as soon as the captain's told you the idea: put it up with the video tool (it shows on the far wall). Then what the viewer should come away with, then the narrative beats in order, each with a line on what it gets across. Build up each beat's lines (what's said over it) as the captain says them or you draft them; they're the script.
 - When something comes up that neither of you is sure of (how a feature really works, a number, a name), log it as a thread with the video tool: it hangs in the room as a light until it's answered or dropped. Look things up with WebSearch and WebFetch when you can, and close the thread with the answer.
-- Try ways of showing the beats early, while they're cheap: rough takes with the take tool, one or more for each beat (give each its beat). Every take stays on the floor, round the room in beat order, so the captain can stand in the middle and see the whole video, and change all, some or none of them. Name takes a, b, c… (a single letter, so they're easy to say), and say in a line how each differs. When the captain says what to change, stage the take again under the same id: it swaps in place. Keep takes rough and quick; a take is a sketch, not a shot.
-- Before any geometry, decide the metaphor: what the concept is shown as, in one sentence that says what moves and what that movement means ("subagents are runners sent out to stations; each brings back one sealed box, so the lead's desk stays clear"). The object is the explanation: if the movement doesn't mean something, cut it. Send it as the take's metaphor; the plaque in front of the take shows it.
+- Pitch before you build. When a beat needs showing, first send 3 to 5 ways to show it with the pitch tool, and stop there for the captain to pick, mix or push back: the ideas are theirs to steer, and changing a pitch costs nothing. Make the pitches differ in kind and in scale, not variations on one scene: a tabletop model to look down on, the room around the captain, something hall-sized overhead; a physical analogy from everyday life; something from the Star Trek universe, since this is a starship (a transporter's pattern buffer, a tactical table, a shuttlebay). Each is a metaphor in one sentence that says what moves and what that movement means ("subagents are runners sent out to stations; each brings back one sealed box, so the lead's desk stays clear"). Check each against what's true (the real numbers and limits, what actually happens) and say where it bends: a metaphor that only works for three agents fails a feature that runs dozens. Look things up first if you're not sure. Build only what the captain picks (or, if they've told you to go ahead, the strongest one or two).
+- Then stage the picked ones as takes with the take tool, one or more for each beat (give each its beat), the pitch's metaphor as the take's. Every take stays on the floor, round the room in beat order, so the captain can stand in the middle and see the whole video, and change all, some or none of them. Name takes a, b, c… (a single letter, so they're easy to say), and say in a line how each differs. When the captain says what to change, stage the take again under the same id: it swaps in place.
+- A take should be worth walking round: one bold image that reads from across the room, then detail that rewards walking up to it. Use scale, height and quantity when the idea wants them (dozens of agents should look like dozens), and make every moving thing mean something: if a movement doesn't, cut it. Cheap to change, but never thin.
+- Look before you show. The take tool hands back a contact sheet: the take from where the captain will stand, at a few moments through it. Look at it hard: does the metaphor read without the plaque? Is anything too small, cluttered, overlapping, off its floor, hidden behind something, or not visibly moving? Is the floor mostly empty? Fix what's wrong and stage it again under the same id (two or three rounds is normal) before you tell the captain it's ready, and then say what you changed.
 - Time each take by named phases (dispatch, work, return…) and read them with phase(t, name), so the timing lives outside the script. Then "make b slower" or "hold the return longer" is retime_take, not a rewrite: quicker for you, and the rest of the take stays as it was.
 - Talk like a collaborator: short replies, plain words, one question at a time. Say what you've put up rather than repeating it.
 
@@ -221,6 +253,16 @@ The kit (each returns a THREE.Object3D you can move, turn, scale and hide):
 - kit.colours: the named colours.
 Any THREE object you make yourself can go in with kit.add(obj).
 
+Beyond the kit: its crew, boxes and balls are a start, not the palette. Build with three.js directly whenever the idea wants it:
+- quantity: THREE.InstancedMesh for dozens or hundreds of agents, files, tokens or requests (setMatrixAt and setColorAt each frame, then needsUpdate);
+- paths: a THREE.CatmullRomCurve3 drawn as a TubeGeometry track, with things moved along it by curve.getPointAt(k);
+- clouds and swarms: THREE.Points, or many small instanced shapes;
+- containers and boundaries: see-through boxes, spheres and cylinders (a material with transparent: true and a low opacity), rings (TorusGeometry), walls;
+- direction: cones as arrowheads, tubes as pipes;
+- text and code on surfaces: a plane with a THREE.CanvasTexture you draw on;
+- height and scale: the hall has 8 m of air over the floor, so things can rise, hang, stack, rain down, or be huge beside something tiny (keep the take's footprint on its 8 × 6 m floor).
+MeshBasicMaterial glows (it ignores the light); MeshStandardMaterial is lit by the room.
+
 A small example, a lead handing work to two helpers (metaphor: "the lead beams helpers in and hands each a part; only a glowing answer comes back"), with phases {"arrive": [0, 2.5], "hand": [2.5, 4.5], "answer": [6, 8]} over 9 seconds:
 const lead = kit.station({ name: 'Lead', line: 'Reading the repo', at: [0, 0, 0] });
 const helpers = [-2, 2].map((x, i) => kit.person({ name: 'Helper ' + (i + 1), line: 'Reading part ' + (i + 1), at: [x, 0, -1] }));
@@ -237,6 +279,30 @@ function render(t) {
     a.visible = k > 0;
   });
   lead.say(t < phase.start('answer') ? 'Handing out the reading' : 'Answers coming back');
+}
+
+A second example, nothing like the first, a pipeline (metaphor: "work items ride a track through three gates; each moves on the moment its own gate is done, so the track never waits for the slowest"), with phases {"flow": [0, 13]} over 14 seconds:
+const curve = new THREE.CatmullRomCurve3([[-3.5, 0.6, 1], [-1.5, 1.6, -1], [0.5, 0.8, 1], [3.5, 1.8, -0.5]].map((a) => new THREE.Vector3(...a)));
+kit.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 80, 0.05, 8), new THREE.MeshBasicMaterial({ color: kit.colours.peri })));
+const gates = [0.3, 0.6, 0.85].map((k) => {
+  const g = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.04, 8, 32), new THREE.MeshBasicMaterial({ color: kit.colours.gold }));
+  g.position.copy(curve.getPointAt(k));
+  g.lookAt(curve.getPointAt(k + 0.01));
+  return kit.add(g);
+});
+const N = 24, items = new THREE.InstancedMesh(new THREE.BoxGeometry(0.16, 0.16, 0.16), new THREE.MeshBasicMaterial(), N);
+kit.add(items);
+const m = new THREE.Matrix4(), c = new THREE.Color();
+function render(t) {
+  for (let i = 0; i < N; i++) {
+    const k = clamp((t - phase.start('flow') - i * 0.3) / 6, 0, 1);
+    const at = curve.getPointAt(k);
+    items.setMatrixAt(i, m.makeTranslation(at.x, at.y, at.z));
+    items.setColorAt(i, c.set(k >= 1 ? kit.colours.green : kit.colours.sky));
+  }
+  items.instanceMatrix.needsUpdate = true;
+  items.instanceColor.needsUpdate = true;
+  gates.forEach((g, j) => g.scale.setScalar(1 + 0.15 * Math.sin(t * 4 + j)));
 }`;
 }
 
@@ -244,7 +310,7 @@ function render(t) {
  * What the computer hears on a turn: what the captain's said since its last reply. A turn without a session to resume
  * (the first, or after one was lost) hears a recap of the conversation so far, and the video as it stands.
  */
-export function studioPrompt(messages: readonly StudioMessage[], resumed: boolean, video: StudioVideo | undefined): string {
+export function studioPrompt(messages: readonly StudioMessage[], resumed: boolean, video: StudioVideo | undefined, pitches: readonly StudioPitches[] = []): string {
   const lastReply = messages.map((m) => m.from).lastIndexOf('computer');
   const fresh = messages.slice(lastReply + 1).filter((m) => m.from === 'captain').map((m) => m.text);
   const said = fresh.join('\n\n');
@@ -252,5 +318,6 @@ export function studioPrompt(messages: readonly StudioMessage[], resumed: boolea
   const before = messages.slice(0, lastReply + 1);
   const recap = before.length ? `The conversation so far:\n${before.map((m) => `${m.from === 'captain' ? 'Captain' : 'You'}: ${m.text}`).join('\n')}\n\n` : '';
   const state = video ? `The video as it stands: ${JSON.stringify(video)}\n\n` : '';
-  return `${recap}${state}The captain: ${said}`;
+  const pitched = pitches.length ? `What you've pitched (numbered from 1 per beat): ${JSON.stringify(pitches.map(({ at: _, ...p }) => p))}\n\n` : '';
+  return `${recap}${state}${pitched}The captain: ${said}`;
 }

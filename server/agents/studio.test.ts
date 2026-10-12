@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { ServerEvent, StudioTake, StudioVideo } from '../../shared/types';
 import type { Hub } from '../hub';
 import { freshStudio, type Store } from '../store';
-import { applyRetime, applyTake, applyVideo, STUDIO_LIMITS, studioPrompt, type TakeInput, videoReply } from './studio';
-import { StudioComputer, type StudioOfficer, type StudioTurn } from './studioComputer';
+import { applyPitch, applyRetime, applyTake, applyVideo, STUDIO_LIMITS, studioPrompt, type TakeInput, videoReply } from './studio';
+import { sheetData, type Staged, StudioComputer, type StudioOfficer, type StudioTurn } from './studioComputer';
 
 const started = (more: Partial<StudioVideo> = {}): StudioVideo => ({ premise: 'How Claude delegates', beats: [], threads: [], ...more });
 const ok = <T>(result: T | { error: string }): T => {
@@ -84,6 +84,40 @@ describe('applyTake', () => {
   });
 });
 
+describe('applyPitch', () => {
+  const way = (title: string) => ({ title, metaphor: `${title}: what moves, and what it means`, scale: 'the room round you' });
+
+  it('numbers a beat’s pitches in order, and replaces the beat’s last pitches but no other beat’s', () => {
+    const first = ok(applyPitch([], { beat: 0, pitches: [way('Pattern buffer'), way('Tactical table')] }, 2, 1));
+    const second = ok(applyPitch(first, { beat: 1, pitches: [way('Shuttlebay'), way('Duty roster'), way('Conveyor')] }, 2, 2));
+    const again = ok(applyPitch(second, { beat: 0, pitches: [way('Glass columns'), way('Away team')] }, 2, 3));
+    expect(again.map((p) => [p.beat, p.pitches.map((x) => x.title)])).toEqual([[1, ['Shuttlebay', 'Duty roster', 'Conveyor']], [0, ['Glass columns', 'Away team']]]);
+  });
+
+  it('keeps each pitch’s scale and check, tidied', () => {
+    const [set] = ok(applyPitch([], { pitches: [{ ...way('A'), check: '  Holds for   1000 agents ' }, way('B')] }, 0, 1));
+    expect(set.beat).toBeUndefined();
+    expect(set.pitches[0]).toMatchObject({ scale: 'the room round you', check: 'Holds for 1000 agents' });
+  });
+
+  it('refuses too few or too many, a beat that isn’t there, or a pitch without a metaphor or scale', () => {
+    expect(applyPitch([], { beat: 0, pitches: [way('A')] }, 1, 1)).toHaveProperty('error');
+    expect(applyPitch([], { beat: 0, pitches: Array.from({ length: STUDIO_LIMITS.maxPitches + 1 }, (_, i) => way(`P${i}`)) }, 1, 1)).toHaveProperty('error');
+    expect(applyPitch([], { beat: 3, pitches: [way('A'), way('B')] }, 2, 1)).toHaveProperty('error');
+    expect(applyPitch([], { pitches: [way('A'), { ...way('B'), metaphor: ' ' }] }, 0, 1)).toHaveProperty('error');
+    expect(applyPitch([], { pitches: [way('A'), { ...way('B'), scale: '' }] }, 0, 1)).toHaveProperty('error');
+  });
+});
+
+describe('sheetData', () => {
+  it('takes a JPEG data URL’s base64, and nothing else', () => {
+    expect(sheetData('data:image/jpeg;base64,/9j/4AAQSkZJRg==')).toBe('/9j/4AAQSkZJRg==');
+    expect(sheetData('data:image/png;base64,iVBORw0KGgo=')).toBeUndefined();
+    expect(sheetData('data:image/jpeg;base64,<script>')).toBeUndefined();
+    expect(sheetData(42)).toBeUndefined();
+  });
+});
+
 describe('applyRetime', () => {
   const staged: StudioTake[] = [{ id: 'b', label: 'B', seconds: 10, phases: { send: [0, 4], back: [4, 10] }, script: 'function render(t) {}', version: 2, at: 1, error: 'boom' }];
 
@@ -116,6 +150,11 @@ describe('studioPrompt', () => {
     expect(prompt).toContain('Captain: A video on subagents\nYou: The premise is up.');
     expect(prompt).toContain('"premise":"How Claude delegates"');
     expect(prompt.endsWith('The captain: Make b slower')).toBe(true);
+  });
+
+  it('recaps what it pitched for a session that starts afresh', () => {
+    const prompt = studioPrompt(messages, false, started(), [{ beat: 0, pitches: [{ title: 'Pattern buffer', metaphor: 'Agents wait', scale: 'the room' }], at: 1 }]);
+    expect(prompt).toContain('What you\'ve pitched (numbered from 1 per beat): [{"beat":0,"pitches":[{"title":"Pattern buffer"');
   });
 });
 
@@ -151,8 +190,8 @@ describe('StudioComputer', () => {
     const { store, computer } = setup(async (req) => {
       const staged = req.tools.take({ id: 'a', label: 'A', seconds: 5, script: 'function render(t) {}' });
       setTimeout(() => computer.report('a', 1, 'kit.boxx is not a function'), 10);
-      heard.push(await staged);
-      heard.push(await req.tools.take({ id: 'b', label: 'B', seconds: 5, script: 'function render(t) {}' }));
+      heard.push((await staged).text);
+      heard.push((await req.tools.take({ id: 'b', label: 'B', seconds: 5, script: 'function render(t) {}' })).text);
       return 'done';
     });
     computer.say('Show me');
@@ -160,6 +199,25 @@ describe('StudioComputer', () => {
     expect(heard[0]).toContain('failed in the room: kit.boxx is not a function');
     expect(heard[1]).toContain('no one\'s in the studio');
     expect(store.studio.takes.find((t) => t.id === 'a')?.error).toBe('kit.boxx is not a function');
+  });
+
+  it('hands the computer the room’s contact sheet of a take that ran, and shows its pitches to the captain', async () => {
+    let staged: Staged | undefined;
+    let pitched = '';
+    const { store, computer } = setup(async (req) => {
+      req.tools.video({ premise: 'Workflows', beats: [{ title: 'Fan out' }] });
+      pitched = req.tools.pitch({ beat: 0, pitches: [{ title: 'Pattern buffer', metaphor: 'Agents wait in the buffer', scale: 'the room' }, { title: 'Tactical table', metaphor: 'Ships on a table', scale: 'tabletop' }] });
+      const take = req.tools.take({ id: 'a', label: 'A', seconds: 5, script: 'function render(t) {}' });
+      setTimeout(() => computer.report('a', 1, undefined, 'data:image/jpeg;base64,/9j/4AAQ'), 10);
+      staged = await take;
+      return 'Pitched';
+    });
+    computer.say('Workflows');
+    await settled(store);
+    expect(pitched).toContain('numbered 1 to 2');
+    expect(store.studio.pitches?.[0].pitches.map((p) => p.title)).toEqual(['Pattern buffer', 'Tactical table']);
+    expect(staged).toMatchObject({ sheet: '/9j/4AAQ' });
+    expect(staged?.text).toContain('contact sheet');
   });
 
   it('runs its turns at the model and effort picked, keeps them for the next video, and says what it ran on', async () => {

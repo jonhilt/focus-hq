@@ -64,6 +64,28 @@ export interface StudioTake {
   error?: string;
 }
 
+/**
+ * One way the computer pitches to show a beat, before it builds anything: the captain picks, mixes or pushes back, and
+ * only then does it stage takes.
+ */
+export interface StudioPitch {
+  /** A few words naming it. */
+  title: string;
+  /** What the concept is shown as, in a sentence: what moves, and what that movement means. */
+  metaphor: string;
+  /** How big it is and where it stands: a tabletop model, the room round you, something hall-sized overhead… */
+  scale: string;
+  /** How it holds up against what's true (the numbers, the limits), and where it bends. */
+  check?: string;
+}
+
+/** The pitches for one beat (or the whole video, without one), numbered 1, 2, 3… in order: the latest for that beat. */
+export interface StudioPitches {
+  beat?: number;
+  pitches: StudioPitch[];
+  at: number;
+}
+
 export interface StudioMessage {
   from: 'captain' | 'computer';
   text: string;
@@ -82,6 +104,8 @@ export interface StudioSession {
   video?: StudioVideo;
   /** On the holodeck's floor, oldest first. */
   takes: StudioTake[];
+  /** The ways the computer's pitched to show each beat, the latest per beat; missing before it's pitched any. */
+  pitches?: StudioPitches[];
   updatedAt: number;
   costUsd: number;
   error?: string;

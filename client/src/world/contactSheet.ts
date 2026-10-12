@@ -1,0 +1,104 @@
+import * as THREE from 'three';
+import type { StudioTake } from '../../../shared/types';
+import { TAKE_PARAMS, takeBody, takeHelpers } from '../../../shared/takeScript';
+import { makeCanvas } from './canvas';
+import { LCARS, LCARS_FONT } from './starship';
+import { sheetMoments, TAKE_PLOT } from './studio';
+import { TakeKit } from './takeKit';
+
+// A take's contact sheet: the take from where the captain stands, at a few moments through it (studio.ts:
+// sheetMoments), in one picture the room sends the office, so the computer can look at what it made before the
+// captain does (docs/studio.md). It runs the take's script afresh, in a scene of its own, on a renderer of its own,
+// so the room's frame and the take playing on its floor are left as they were.
+
+type Render = (t: number) => void;
+
+/** Runs a take's script with `kit` and the helpers, and hands back its render(t). */
+export function runTake(take: StudioTake, kit: TakeKit): Render {
+  // the computer's own script, run in the captain's browser like the explainers it shows on a station's screen
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  const made = new Function(...TAKE_PARAMS, takeBody(take.script)) as (...args: unknown[]) => Render | undefined;
+  const helpers: Record<string, unknown> = { kit, THREE, ...takeHelpers(take.phases) };
+  const render = made(...TAKE_PARAMS.map((name) => helpers[name]));
+  if (!render) throw new Error('The script never defined render(t)');
+  return render;
+}
+
+/** Each moment's picture, and the sheet of them two by two. */
+const TILE = { w: 640, h: 400 };
+/** Where the captain stands to look at a take: in front of its floor, a little above eye height, its floor filling the picture. */
+const EYE = new THREE.Vector3(0, 3.4, 6.6);
+const LOOK = new THREE.Vector3(0, 0.9, -0.6);
+
+let renderer: THREE.WebGLRenderer | null = null;
+
+/** A JPEG data URL of `take` at its sheet's moments, or undefined if it can't be drawn (no WebGL, or the script throws). */
+export function contactSheet(take: StudioTake): string | undefined {
+  const scene = new THREE.Scene();
+  const root = new THREE.Group();
+  const kit = new TakeKit(root);
+  try {
+    renderer ??= new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.setPixelRatio(1);
+    renderer.setSize(TILE.w, TILE.h, false);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    stage(scene);
+    scene.add(root);
+    const render = runTake(take, kit);
+    const camera = new THREE.PerspectiveCamera(52, TILE.w / TILE.h, 0.1, 100);
+    camera.position.copy(EYE);
+    camera.lookAt(LOOK);
+    camera.layers.enableAll();
+    const moments = sheetMoments(take.seconds, take.phases);
+    const { canvas, ctx } = makeCanvas(TILE.w * 2, TILE.h * Math.ceil(moments.length / 2));
+    moments.forEach(({ t, label }, i) => {
+      render(t);
+      kit.update(t, EYE.length());
+      renderer!.render(scene, camera);
+      const x = (i % 2) * TILE.w;
+      const y = Math.floor(i / 2) * TILE.h;
+      ctx.drawImage(renderer!.domElement, x, y);
+      caption(ctx, x, y, `${t.toFixed(1)}s${label ? ` · ${label}` : ''}`);
+    });
+    return canvas.toDataURL('image/jpeg', 0.8);
+  } catch {
+    return undefined;
+  } finally {
+    // the kit's own, as the room's takes are disposed (the crew's share the room's materials, so nothing else is)
+    kit.dispose();
+    for (const own of scene.children) if (own instanceof THREE.Mesh || own instanceof THREE.LineSegments) {
+      own.geometry.dispose();
+      (own.material as THREE.Material).dispose();
+    }
+  }
+}
+
+/** The holodeck round it: navy, the yellow grid, the take's floor, and light like the room's. */
+function stage(scene: THREE.Scene): void {
+  scene.background = new THREE.Color('#141a33');
+  const grid = new THREE.GridHelper(24, 24, LCARS.gold, LCARS.gold);
+  (grid.material as THREE.Material).transparent = true;
+  (grid.material as THREE.Material).opacity = 0.5;
+  scene.add(grid);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(TAKE_PLOT.width, TAKE_PLOT.depth).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#1b2a55' }));
+  floor.position.y = 0.005;
+  scene.add(floor);
+  scene.add(new THREE.HemisphereLight('#ffffff', '#d9c7a8', 1.9));
+  const sun = new THREE.DirectionalLight('#fff4e0', 1.3);
+  sun.position.set(3, 8, 6);
+  scene.add(sun, new THREE.AmbientLight('#ffffff', 0.35));
+}
+
+/** The moment's time (and what lands then) in its corner. */
+function caption(ctx: CanvasRenderingContext2D, x: number, y: number, text: string): void {
+  ctx.font = `600 26px ${LCARS_FONT}`;
+  const w = ctx.measureText(text).width + 28;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+  ctx.fillRect(x + 10, y + 10, w, 40);
+  ctx.fillStyle = LCARS.gold;
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x + 24, y + 31);
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x, y, TILE.w, TILE.h);
+}

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { StudioTake } from '../../../shared/types';
-import { TAKE_PARAMS, takeBody, takeHelpers } from '../../../shared/takeScript';
 import { interactive } from './builder';
+import { contactSheet, runTake } from './contactSheet';
 import { canvasTexture, fitFont, makeCanvas, UI_FONT, wrap } from './canvas';
 import { OVERLAY_LAYER } from './frame';
 import { flat } from './materials';
@@ -17,6 +17,8 @@ import { TakeKit } from './takeKit';
 type Render = (t: number) => void;
 /** How long a take holds its last frame before it loops (s). */
 const HOLD = 1.2;
+/** Whether a take was staged moments ago, so the computer's waiting to hear how it ran (not one the room's catching up on). */
+const fresh = (take: StudioTake) => Date.now() - take.at < 20_000;
 /**
  * A take's plaque: `w` metres wide (`px` on its canvas), at least `minPx` tall (`minH` metres), tipped back `tilt`
  * radians, its bottom edge `bottom` metres up.
@@ -41,7 +43,7 @@ class Plot {
 
   constructor(
     readonly take: StudioTake,
-    report: (error?: string) => void,
+    report: (error?: string, sheet?: string) => void,
   ) {
     this.kit = new TakeKit(this.cast);
     const { width, depth } = TAKE_PLOT;
@@ -59,15 +61,10 @@ class Plot {
     if (take.beat !== undefined) interactive(this.sign, { kind: 'studio', beat: take.beat }, () => `Read beat ${take.beat! + 1} in full`);
     this.group.add(this.floor, this.sign, this.cast);
     try {
-      // the computer's own script, run in the captain's browser like the explainers it shows on a station's screen
-      // eslint-disable-next-line @typescript-eslint/no-implied-eval
-      const made = new Function(...TAKE_PARAMS, takeBody(take.script)) as (...args: unknown[]) => Render | undefined;
-      const helpers: Record<string, unknown> = { kit: this.kit, THREE, ...takeHelpers(take.phases) };
-      const render = made(...TAKE_PARAMS.map((name) => helpers[name]));
-      if (!render) throw new Error('The script never defined render(t)');
-      this.render = render;
+      this.render = runTake(take, this.kit);
       this.render(0);
-      report();
+      // a take just staged sends its contact sheet with word that it runs, for the computer to look at
+      report(undefined, fresh(take) ? contactSheet(take) : undefined);
     } catch (err) {
       this.fail(err, report);
     }
@@ -159,7 +156,7 @@ export class TakeStage {
   private plots = new Map<string, Plot>();
   private readonly at = new THREE.Vector3();
 
-  constructor(private readonly report: (take: StudioTake, error?: string) => void) {}
+  constructor(private readonly report: (take: StudioTake, error?: string, sheet?: string) => void) {}
 
   show(takes: readonly StudioTake[]): void {
     const shown = shownTakes(takes);
@@ -169,7 +166,7 @@ export class TakeStage {
       let plot = this.plots.get(take.id);
       if (!plot || plot.take.version !== take.version || plot.take.at !== take.at) {
         if (plot) this.drop(plot);
-        plot = new Plot(take, (error) => this.report(take, error));
+        plot = new Plot(take, (error, sheet) => this.report(take, error, sheet));
         this.group.add(plot.group);
       }
       // round the room, its front (+z) towards the middle
