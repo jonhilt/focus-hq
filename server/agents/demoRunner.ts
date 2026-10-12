@@ -630,6 +630,7 @@ export class DemoRunner implements AgentRunner {
 export const demoWorkspace: WorkspaceOps = {
   create: async (_repo, agentId) => `/demo/${agentId}`,
   remove: async () => undefined,
+  install: async () => undefined,
   dir: (agentId) => `/demo/${agentId}`,
   hasUncommittedChanges: async () => false,
   commitsAhead: async () => 2,

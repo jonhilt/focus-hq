@@ -189,6 +189,7 @@ export class Reviews extends Part {
       this.update(agent, { baseBranch: pr.baseBranch, issue: { number: pr.number, title: pr.title, url: pr.url }, activity: 'Checking out the pull request' });
       this.print(agent, [{ kind: 'system', text: `✻ Checking out PR #${pr.number} (${pr.branch} into ${pr.baseBranch})` }]);
       const sha = (yield* workspace.checkoutPullRequest(agent.repo, this.reviewDir(agent), pr.number)) || pr.headSha;
+      yield* this.install(agent, workspace.dir(this.reviewDir(agent)));
       const siblings = this.siblingsOf(agent);
       if (siblings.length) {
         this.update(agent, { activity: `Checking out the slice's other pull request${siblings.length === 1 ? '' : 's'}` });

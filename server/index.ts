@@ -44,6 +44,7 @@ const MEASURE_AFTER_START_MS = 2 * 60_000;
 const liveWorkspace: WorkspaceOps = {
   create: git.createWorktree,
   remove: git.removeWorktree,
+  install: (dir) => git.installDependencies(dir),
   dir: git.workspaceDir,
   hasUncommittedChanges: git.hasUncommittedChanges,
   commitsAhead: git.commitsAhead,

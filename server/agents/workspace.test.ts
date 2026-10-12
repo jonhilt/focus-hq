@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { paths } from '../config';
-import { checkoutPullRequest, cherryPick, freshBranch, head, removeFolder, unshippedCommits } from './workspace';
+import { checkoutPullRequest, cherryPick, freshBranch, head, installDependencies, removeFolder, unshippedCommits } from './workspace';
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-workspace-'));
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
@@ -157,5 +157,72 @@ describe('a reviewer’s checkout of a pull request', () => {
     } finally {
       Object.assign(paths, was);
     }
+  });
+});
+
+describe('installing a checkout’s dependencies', () => {
+  /** A checkout with a pnpm project at its root and an npm one in e2e/, and an exec that records what it ran. */
+  function checkout() {
+    const dir = fs.mkdtempSync(path.join(tmp, 'deps-'));
+    const write = (file: string, text: string) => {
+      fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+      fs.writeFileSync(path.join(dir, file), text);
+    };
+    write('package.json', '{"name":"app"}');
+    write('pnpm-lock.yaml', 'lockfileVersion: 9');
+    write('e2e/package.json', '{"name":"e2e"}');
+    write('e2e/package-lock.json', '{"lockfileVersion":3}');
+    // a package.json with no lockfile of its own (a workspace package) is the root install's
+    write('docs/package.json', '{"name":"docs"}');
+    const ran: string[] = [];
+    const exec = async (cmd: string, args: string[], opts: { cwd?: string } = {}) => {
+      ran.push(`${path.relative(dir, opts.cwd ?? dir) || '.'}: ${[cmd, ...args].join(' ')}`);
+      return '';
+    };
+    return { dir, write, ran, exec };
+  }
+
+  it('installs the root and each folder with a lockfile of its own, then skips them until a lockfile changes', async () => {
+    const { dir, write, ran, exec } = checkout();
+    expect(await installDependencies(dir, exec)).toBeUndefined();
+    expect(ran.splice(0)).toEqual(['.: pnpm install --frozen-lockfile', 'e2e: npm ci --no-audit --no-fund']);
+
+    expect(await installDependencies(dir, exec)).toBeUndefined();
+    expect(ran).toEqual([]);
+
+    write('e2e/package-lock.json', '{"lockfileVersion":3,"packages":{}}');
+    await installDependencies(dir, exec);
+    expect(ran.splice(0)).toEqual(['e2e: npm ci --no-audit --no-fund']);
+
+    // node_modules gone (a fresh worktree of the same commit, or cleared by hand): installs again
+    fs.rmSync(path.join(dir, 'node_modules'), { recursive: true });
+    await installDependencies(dir, exec);
+    expect(ran).toEqual(['.: pnpm install --frozen-lockfile']);
+  });
+
+  it('tells the agent what failed, and tries again next time', async () => {
+    const { dir, ran, exec } = checkout();
+    const failing = async (cmd: string, args: string[], opts: { cwd?: string } = {}) => {
+      if (cmd === 'pnpm') throw new Error('spawn pnpm ENOENT');
+      return exec(cmd, args, opts);
+    };
+    const note = await installDependencies(dir, failing);
+    expect(note).toContain(`${dir}: \`pnpm install --frozen-lockfile\` failed: pnpm isn't on the PATH: run \`corepack enable\``);
+    expect(note).not.toContain('e2e');
+    ran.length = 0;
+    await installDependencies(dir, exec);
+    expect(ran).toEqual(['.: pnpm install --frozen-lockfile']);
+  });
+
+  it('leaves a project with no lockfile alone, rather than write one into the checkout', async () => {
+    const dir = fs.mkdtempSync(path.join(tmp, 'deps-'));
+    fs.writeFileSync(path.join(dir, 'package.json'), '{}');
+    const ran: string[] = [];
+    const exec = async (cmd: string) => {
+      ran.push(cmd);
+      return '';
+    };
+    expect(await installDependencies(dir, exec)).toBeUndefined();
+    expect(ran).toEqual([]);
   });
 });

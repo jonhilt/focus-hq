@@ -236,6 +236,7 @@ export class Leads extends Part {
         this.update(agent, { activity: `Checking out ${r.repo}` });
         this.print(agent, [{ kind: 'system', text: `✻ Checking out ${r.repo} at ./${r.folder} on ${repoBranch(r, agent.branch)}, as it was left` }]);
         yield* workspace.reopen(r.repo, leadWorktreeId(agent.id, r.folder), repoBranch(r, agent.branch), (id) => this.store.agents.has(id));
+        yield* this.install(agent, workspace.dir(leadWorktreeId(agent.id, r.folder)));
       }
       this.update(agent, { lead: { ...agent.lead!, prs, reopening: undefined } });
       if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;

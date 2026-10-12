@@ -28,6 +28,7 @@ export class Slices extends Part {
         this.update(agent, { activity: `Checking out ${repo}` });
         this.print(agent, [{ kind: 'system', text: `✻ Checking out ${repo} at ./${folder} on ${agent.branch}` }]);
         yield* workspace.create(repo, leadWorktreeId(agent.id, folder), agent.branch, info.defaultBranch, (id) => this.store.agents.has(id));
+        yield* this.install(agent, workspace.dir(leadWorktreeId(agent.id, folder)));
         checkouts.push({ repo, folder, baseBranch: info.defaultBranch });
       }
       if (!checkouts.length) return yield* new NothingToCheckOut();
@@ -167,6 +168,7 @@ export class Slices extends Part {
         const to = sliceBranch(work.title, work.slice, newId('s').slice(-4));
         this.print(agent, [{ kind: 'system', text: `✻ ${r.repo}'s pull request from ${from} has merged: starting ${to} from ${r.baseBranch}` }]);
         yield* workspace.freshBranch(dir, to, r.baseBranch);
+        yield* this.install(agent, dir);
         this.update(agent, { lead: { ...agent.lead!, repos: agent.lead!.repos.map((x) => (x.repo === r.repo ? { ...x, branch: to } : x)) } });
         const applied = commits.length ? yield* workspace.cherryPick(dir, commits).pipe(Effect.as(true), Effect.orElseSucceed(() => false)) : true;
         if (commits.length) this.print(agent, [{ kind: 'system', text: applied ? `✻ Brought ${commits.length} unshipped commit${commits.length === 1 ? '' : 's'} over to ${to}` : `✻ The unshipped commits didn't apply cleanly to ${to}: they're still on ${from}` }]);

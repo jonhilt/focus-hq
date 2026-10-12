@@ -4,7 +4,7 @@ import type { GitHub, GitHubError } from '../../github/service';
 import type { Hub } from '../../hub';
 import type { Store } from '../../store';
 import { errorMessage } from '../../util';
-import { type GitFailed, type Renderer, retryServerErrors, SHIP_RETRIES, type Sessions, type Triage, type Workspace } from '../services';
+import { type GitFailed, type Renderer, retryServerErrors, SHIP_RETRIES, type Sessions, type Triage, Workspace } from '../services';
 import type { AgentSession } from '../types';
 import type { CloudMoves } from './cloudMoves';
 import type { Comms } from './comms';
@@ -242,5 +242,20 @@ export abstract class Part {
 
   protected retrying<A, E, R>(agent: Agent, what: string, effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> {
     return this.core.retrying(agent, what, effect);
+  }
+
+  /**
+   * Installs the dependencies in `dir`, a checkout `agent` is about to work in. If that fails, they hear why with what
+   * they hear next (after the turn they're in, if they're in one), rather than from their first failing check.
+   */
+  protected install(agent: Agent, dir: string): Effect.Effect<void, never, Workspace> {
+    return Effect.gen({ self: this }, function* () {
+      this.update(agent, { activity: 'Installing the dependencies' });
+      const failed = yield* (yield* Workspace).install(dir);
+      if (!failed) return;
+      this.print(agent, [{ kind: 'system', text: `✻ ${failed}` }]);
+      const rt = this.rt(agent.id);
+      (rt.busy ? (rt.afterTurn ??= []) : rt.inbox).push(failed);
+    });
   }
 }

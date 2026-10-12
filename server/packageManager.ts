@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -38,6 +39,32 @@ export function packageManagerIn(dir: string): PackageManager {
 export function installCommand(pm: PackageManager, files: Iterable<string>): string[] {
   if (pm === 'npm') return ['npm', new Set(files).has('package-lock.json') ? 'ci' : 'install', '--no-audit', '--no-fund'];
   return [pm, 'install', '--frozen-lockfile'];
+}
+
+/** Whether the office installs a folder's dependencies: it has a package.json and a lockfile to install exactly from. */
+export function installable(files: Iterable<string>): boolean {
+  const names = new Set(files);
+  return names.has('package.json') && LOCKFILES.some(([lockfile]) => names.has(lockfile));
+}
+
+/** Where the office notes what it last installed in a folder: inside node_modules, so deleting them forgets it too. */
+export const INSTALL_STAMP = path.join('node_modules', '.focus-install');
+
+/**
+ * What an install depends on, as one hash: the package manager and the contents of `files` (package.json and the
+ * lockfiles, by name). The same stamp as the one left by the last install means there's nothing to install.
+ */
+export function installStamp(pm: PackageManager, files: Record<string, string>): string {
+  const hash = createHash('sha256').update(pm);
+  for (const name of Object.keys(files).sort()) hash.update(`\0${name}\0${files[name]}`);
+  return hash.digest('hex');
+}
+
+/** What the agent hears when the office couldn't install the dependencies in a folder of their checkout. */
+export function installFailedNote(failures: { dir: string; command: string; reason: string }[]): string | undefined {
+  if (!failures.length) return undefined;
+  const each = failures.map((f) => `- ${f.dir}: \`${f.command}\` failed: ${f.reason}`);
+  return `The office couldn't install the dependencies in your checkout, so the checks will fail until you do:\n${each.join('\n')}`;
 }
 
 /** Whether a change to the files `changed` (paths from the project's root) needs the dependencies installed again. */

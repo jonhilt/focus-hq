@@ -195,6 +195,11 @@ export interface WorkspaceOps {
    */
   create(repo: string, agentId: string, branch: string, startPoint: string, inOffice: (agentId: string) => boolean, local?: string): Promise<string>;
   remove(repo: string, agentId: string): Promise<void>;
+  /**
+   * Installs the dependencies in a checkout, from its lockfiles, unless they haven't changed since the last install there.
+   * Never rejects: a failure comes back as a note for the agent working there.
+   */
+  install(dir: string): Promise<string | undefined>;
   dir(agentId: string): string;
   hasUncommittedChanges(dir: string): Promise<boolean>;
   commitsAhead(dir: string, baseBranch: string): Promise<number>;

@@ -54,6 +54,8 @@ export class AgentSessions extends Part {
       // local branch of their own, which the office pushes to the PR's
       const local = agent.task === 'conflicts' ? `${agent.branch}-conflicts-${agent.id.slice(-4)}` : undefined;
       yield* workspace.create(agent.repo, agent.id, agent.branch, startPoint, (id) => this.store.agents.has(id), local);
+      // a cloud session works in a clone of its own, so it installs there
+      if (!agent.cloud) yield* this.install(agent, workspace.dir(agent.id));
       if (agent.cloud) {
         // a cloud session clones its branch from GitHub, so a new one has to be there first
         this.update(agent, { activity: 'Publishing the branch for the cloud session' });

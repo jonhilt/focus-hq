@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { paths } from '../config';
-import { installCommand, lockfilesIn, packageManagerFor, packageManagerIn } from '../packageManager';
+import { INSTALL_STAMP, installable, installCommand, installFailedNote, installStamp, lockfilesIn, missingPackageManager, packageManagerFor, packageManagerIn } from '../packageManager';
 import { errorMessage, KeyedLock, run, sleep } from '../util';
 import { sameCommit } from '../../shared/qa';
 import { autoMergePlan, conflictStages, type MergeRule, mergeRules } from './conflicts';
@@ -288,6 +288,34 @@ async function installAndRun(dir: string, commands: string[][]): Promise<ChecksR
     results.push({ command, ok: true });
   }
   return results;
+}
+
+/**
+ * Installs the dependencies in a checkout an agent is about to work in, from the lockfile, in `dir` and in each folder
+ * directly inside it with a lockfile of its own (`e2e/`), so the agent's first typecheck or test doesn't fail on missing
+ * packages. A folder whose package.json and lockfile haven't changed since its last install (`INSTALL_STAMP`) is skipped.
+ * Never fails: what went wrong comes back as a note for the agent.
+ */
+export async function installDependencies(dir: string, exec: typeof run = run): Promise<string | undefined> {
+  const folders = [dir, ...subfolders(dir).filter((name) => !name.startsWith('.') && name !== 'node_modules').map((name) => path.join(dir, name))];
+  const failures: { dir: string; command: string; reason: string }[] = [];
+  for (const folder of folders.filter((f) => installable(fs.readdirSync(f)))) {
+    const lockfiles = lockfilesIn(folder);
+    const pm = packageManagerFor(lockfiles);
+    const stampFile = path.join(folder, INSTALL_STAMP);
+    const stamp = installStamp(pm, Object.fromEntries(['package.json', ...lockfiles].map((name) => [name, fs.readFileSync(path.join(folder, name), 'utf8')])));
+    if (fs.existsSync(stampFile) && fs.readFileSync(stampFile, 'utf8') === stamp) continue;
+    const [cmd, ...args] = installCommand(pm, lockfiles);
+    try {
+      await exec(cmd, args, { cwd: folder, timeoutMs: 15 * 60_000 });
+      fs.mkdirSync(path.dirname(stampFile), { recursive: true });
+      fs.writeFileSync(stampFile, stamp);
+    } catch (err) {
+      const reason = /ENOENT/.test(errorMessage(err)) ? missingPackageManager(pm) : errorMessage(err);
+      failures.push({ dir: folder, command: [cmd, ...args].join(' '), reason });
+    }
+  }
+  return installFailedNote(failures);
 }
 
 /**

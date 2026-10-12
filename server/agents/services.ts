@@ -37,6 +37,8 @@ export class Workspace extends Context.Service<Workspace, {
   create(repo: string, agentId: string, branch: string, startPoint: string, inOffice: (agentId: string) => boolean, local?: string): Effect.Effect<string, GitFailed>;
   /** Never fails: a checkout that won't go is left for the sweep. */
   remove(repo: string, agentId: string): Effect.Effect<void>;
+  /** Installs a checkout's dependencies. Never fails: what went wrong is a note for the agent working there. */
+  install(dir: string): Effect.Effect<string | undefined>;
   dir(agentId: string): string;
   hasUncommittedChanges(dir: string): Effect.Effect<boolean, GitFailed>;
   commitsAhead(dir: string, baseBranch: string): Effect.Effect<number, GitFailed>;
@@ -64,6 +66,7 @@ export class Workspace extends Context.Service<Workspace, {
     return Layer.succeed(Workspace, Workspace.of({
       create: (repo, agentId, branch, startPoint, inOffice, local) => git(`check out ${branch}`, () => ops.create(repo, agentId, branch, startPoint, inOffice, local)),
       remove: (repo, agentId) => Effect.ignore(git('remove a checkout', () => ops.remove(repo, agentId))),
+      install: (dir) => Effect.promise(() => ops.install(dir)),
       dir: (agentId) => ops.dir(agentId),
       hasUncommittedChanges: (dir) => git('look for uncommitted changes', () => ops.hasUncommittedChanges(dir)),
       commitsAhead: (dir, baseBranch) => git('count new commits', () => ops.commitsAhead(dir, baseBranch)),
