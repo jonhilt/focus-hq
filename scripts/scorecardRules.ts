@@ -260,10 +260,10 @@ export function render(card: Scorecard, previous?: Scorecard): string {
     ? `Changes since ${previous.commit.slice(0, 8)} on ${previous.branch}, ${new Date(previous.at).toISOString().slice(0, 16).replace('T', ' ')} (▲ better, ▼ worse)`
     : 'No earlier scorecard to compare with';
   const lines = [head, against];
-  for (const section of Object.keys(SECTIONS) as Section[]) {
+  for (const [section, title] of Object.entries(SECTIONS)) {
     const rows = card.metrics.filter((m) => m.section === section);
     if (!rows.length) continue;
-    lines.push('', SECTIONS[section]);
+    lines.push('', title);
     for (const m of rows) {
       const before = was.get(m.key);
       lines.push(`  ${m.label.padEnd(width)}  ${formatValue(m.value, m.format).padStart(7)}  ${before === undefined ? '' : deltaText(m, before)}`.trimEnd());

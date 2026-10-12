@@ -75,9 +75,8 @@ interface VitestReport {
 const tracked = (...globs: string[]) => git('ls-files', ...globs).split('\n').filter((f) => f && !f.endsWith('.d.ts'));
 const isTest = (f: string) => f.endsWith('.test.ts');
 
-function scanned(files: string[]): Map<string, SourceCounts> {
-  return new Map(files.map((f) => [f, scanSource(f, readFileSync(path.join(ROOT, f), 'utf8'))]));
-}
+const scanned = (files: string[]): (SourceCounts & { file: string })[] =>
+  files.map((file) => ({ file, ...scanSource(file, readFileSync(path.join(ROOT, file), 'utf8')) }));
 
 /** CRAP over server/ and shared/ as `pnpm run crap` scores it, from the gate's own coverage run. */
 function crapOf(coverageFile: string): CrapResults {
@@ -101,11 +100,10 @@ function measure(): Scorecard {
   const { gate, coverageFile } = runGate(tmp, notes);
   if (!coverageFile) notes.push('vitest wrote no coverage, so CRAP is missing');
 
-  const code = tracked('server/*.ts', 'shared/*.ts', 'client/src/*.ts', 'scripts/*.ts');
-  const counts = scanned(code);
-  const source = code.filter((f) => !isTest(f)).map((f) => counts.get(f)!);
-  const server = code.filter((f) => f.startsWith('server/') && !isTest(f) && !isDemo(f)).map((f) => counts.get(f)!);
-  const tests = code.filter(isTest);
+  const code = scanned(tracked('server/*.ts', 'shared/*.ts', 'client/src/*.ts', 'scripts/*.ts'));
+  const source = code.filter((f) => !isTest(f.file));
+  const server = source.filter((f) => f.file.startsWith('server/') && !isDemo(f.file));
+  const tests = code.filter((f) => isTest(f.file));
 
   const now = Date.now();
   const ledger = existsSync(paths.ledger) ? checkLedger(readFileSync(paths.ledger, 'utf8')).events : undefined;
@@ -123,7 +121,7 @@ function measure(): Scorecard {
       ...fenceMetrics(source),
       ...effectMetrics(server),
       ...testMetrics(
-        { total: gate.test.tests, files: tests.length, propertyFiles: tests.filter((f) => counts.get(f)!.importsFastCheck).length },
+        { total: gate.test.tests, files: tests.length, propertyFiles: tests.filter((f) => f.importsFastCheck).length },
         coverageFile ? crapOf(coverageFile) : undefined,
       ),
       ...(office?.metrics ?? []),
