@@ -66,6 +66,7 @@ const SCREENS = [
   'team-station-feeds',
   'transporter-tactical',
   'transporter-buffer',
+  'transporter-script',
 ] as const;
 export type ScreenName = (typeof SCREENS)[number];
 /** The screens a deck has, which the World draws. */

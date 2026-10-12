@@ -10,6 +10,8 @@ export type Interaction =
   | { kind: 'helper'; leadId: string; id: string }
   /** One of a lead's workflow agents on a transporter room's pads: its own transcript. Its room says whose. */
   | { kind: 'workflow-agent'; projectId: string; station: number; workflowId: string; index: number }
+  /** A transporter room's console, while a lead's workflow runs there: its script, full size. Its room says whose. */
+  | { kind: 'workflow-script'; projectId: string; station: number; workflowId: string }
   /** One of a lead's background commands or monitors, a probe by their chair: its output, and a way to stop it. Its station says whose. */
   | { kind: 'background'; projectId: string; station: number; taskId: string }
   | { kind: 'desk'; projectId: string }

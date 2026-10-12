@@ -6,7 +6,7 @@ import { dress } from './deck';
 import { type Box2, contains, footprint, footprints } from './layout';
 import { flat, occludedToon, toon } from './materials';
 import { mergeStatic } from './merge';
-import { LCARS, lcarsFrame, LCARS_FONT } from './starship';
+import { consoleTexture, LCARS, lcarsFrame, LCARS_FONT } from './starship';
 
 // A transporter room, as on the Enterprise-D: where a goal's lead runs a workflow (one of TRANSPORTER_ROOMS per team
 // station, standing far out in the world: layout.ts, transporterRoomAt). Built in Blender (blender/transporter_room.py):
@@ -65,9 +65,15 @@ function paint(accent: string, ao: THREE.Texture | null): THREE.Material {
   return mat;
 }
 
-let standbyScreens: { tactical: THREE.Material; buffer: THREE.Material } | null = null;
-/** What the screens show until whoever runs the room draws on them: an LCARS frame standing by, shared by every room. */
-function standby(): { tactical: THREE.Material; buffer: THREE.Material } {
+/** The console's screen, a metre and a half across its sloping top: its size in metres. */
+export const CONSOLE_SCREEN = { w: 1.58, h: 0.638 };
+
+let standbyScreens: { tactical: THREE.Material; buffer: THREE.Material; script: THREE.Material } | null = null;
+/**
+ * What the screens show until whoever runs the room draws on them, shared by every room: an LCARS frame standing by,
+ * and the console's LCARS keys.
+ */
+function standby(): { tactical: THREE.Material; buffer: THREE.Material; script: THREE.Material } {
   if (standbyScreens) return standbyScreens;
   const draw = (w: number, h: number, title: string, color: string, line: string) => {
     const { canvas, ctx } = makeCanvas(w, h);
@@ -82,6 +88,7 @@ function standby(): { tactical: THREE.Material; buffer: THREE.Material } {
   return (standbyScreens = {
     tactical: draw(1440, 800, 'Transporter operations', LCARS.orange, 'STANDING BY · NO WORKFLOW RUNNING'),
     buffer: draw(640, 397, 'Pattern buffer', LCARS.lilac, 'BUFFER CLEAR'),
+    script: flat(consoleTexture(CONSOLE_SCREEN.w, CONSOLE_SCREEN.h, 71)),
   });
 }
 
@@ -105,6 +112,12 @@ export class TransporterRoom {
   readonly buffer: { glow: THREE.Group; light: THREE.MeshBasicMaterial; readout: THREE.Mesh };
   /** The tactical display on the starboard wall, a screen 3.6 × 2 m: set its material to what it shows (UVs the three.js way round). */
   readonly tactical: THREE.Mesh;
+  /**
+   * The screen across the console's sloping top (CONSOLE_SCREEN), facing whoever stands behind it: LCARS keys until
+   * it's set to show the script of the workflow the room's running (as `tactical`). Pressing E on it energises too,
+   * until it's given an interaction of its own.
+   */
+  readonly script: THREE.Mesh;
   /** Where the camera for the room's feed stands, up in the front corner over the door, what it looks at, and its vertical field of view (degrees) that frames the platform. */
   readonly camera: Viewpoint & { fov: number };
   /** What the player can't walk into (world): its walls, the platform, the console and the buffer's columns. */
@@ -191,12 +204,15 @@ export class TransporterRoom {
       if (!found) throw new Error(`The transporter room has no ${name} screen`);
       return found.mesh;
     };
-    for (const s of screens) if (s.screen !== 'transporter-tactical' && s.screen !== 'transporter-buffer') throw new Error(`The transporter room has a ${s.screen} screen, which it can't draw`);
+    const drawn = ['transporter-tactical', 'transporter-buffer', 'transporter-script'];
+    for (const s of screens) if (!drawn.includes(s.screen)) throw new Error(`The transporter room has a ${s.screen} screen, which it can't draw`);
     this.tactical = screen('transporter-tactical');
     this.tactical.material = standby().tactical;
     const readout = screen('transporter-buffer');
     readout.material = standby().buffer;
     this.buffer = { glow, light, readout };
+    this.script = screen('transporter-script');
+    this.script.material = standby().script;
 
     const consoles: THREE.Object3D[] = [];
     module.traverse((o) => {

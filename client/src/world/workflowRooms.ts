@@ -1,6 +1,6 @@
 // What a team station's transporter rooms show of its lead's workflows: which workflow is in which room, who stands on
-// which pad, the phases' colours, and what the tactical display, the pattern buffer and the briefing room's feeds say.
-// Pure: no Three.js, so it's testable outside the browser (transporterOps.ts and transporterFeeds.ts draw it).
+// which pad, the phases' colours, and what the tactical display, the pattern buffer, the console's script and the
+// briefing room's feeds say. Pure: no Three.js, so it's testable outside the browser (transporterOps.ts and transporterFeeds.ts draw it).
 import type { Workflow, WorkflowAgent, WorkflowPhase } from '../../../shared/types';
 
 /** A transporter room's platform: three tiers of six pads, tier 0 at the front, slot 0 at the door's end. */
@@ -135,6 +135,8 @@ export interface Counts {
 export interface PhaseRow extends Counts {
   index: number;
   title: string;
+  /** What the script's meta says it's for, if it says. */
+  detail?: string;
   child: boolean;
   colour: LcarsColour;
   total: number;
@@ -155,14 +157,37 @@ const sum = (rows: Counts[]): Counts & { total: number } => {
 };
 
 /**
+ * A workflow's phases with the ones its script's meta plans but it hasn't reached yet, in the plan's order (numbered
+ * by their place in it, as Claude Code numbers them, unless that's taken), each with its detail from the plan.
+ */
+export function plannedPhases(wf: Pick<Workflow, 'phases' | 'plan'>): WorkflowPhase[] {
+  const plan = wf.plan ?? [];
+  const detail = (title: string) => plan.find((p) => p.title === title)?.detail;
+  const phases = wf.phases.map((p) => {
+    const d = p.detail ?? detail(p.title);
+    return d ? { ...p, detail: d } : p;
+  });
+  const taken = new Set(phases.map((p) => p.index));
+  let next = Math.max(0, plan.length, ...taken) + 1;
+  for (const [i, p] of plan.entries()) {
+    if (phases.some((x) => x.title === p.title)) continue;
+    const index = taken.has(i + 1) ? next++ : i + 1;
+    taken.add(index);
+    phases.push({ index, title: p.title, ...(p.detail && { detail: p.detail }), queued: 0, working: 0, done: 0, failed: 0 });
+  }
+  return phases.sort((a, b) => a.index - b.index);
+}
+
+/**
  * What the tactical display shows of a workflow: its name, how it stands and how long it's been going (until
  * `endedAt`, once it's over), and a row per phase with its colour and how many of its agents stand where, then the
- * totals. Phases nobody has reached yet still get their row.
+ * totals. Phases nobody has reached yet still get their row, the ones its script plans too.
  */
-export function tacticalSummary(wf: Pick<Workflow, 'name' | 'status' | 'phases' | 'startedAt'>, now: number, endedAt?: number): TacticalSummary {
-  const rows = wf.phases.map((p): PhaseRow => ({
+export function tacticalSummary(wf: Pick<Workflow, 'name' | 'status' | 'phases' | 'startedAt' | 'plan'>, now: number, endedAt?: number): TacticalSummary {
+  const rows = plannedPhases(wf).map((p): PhaseRow => ({
     index: p.index,
     title: p.title,
+    ...(p.detail && { detail: p.detail }),
     child: !!p.child,
     colour: phaseColour(p),
     queued: p.queued,
@@ -172,6 +197,56 @@ export function tacticalSummary(wf: Pick<Workflow, 'name' | 'status' | 'phases' 
     total: p.queued + p.working + p.done + p.failed,
   }));
   return { name: wf.name, status: wf.status, elapsed: elapsed((endedAt ?? now) - wf.startedAt), rows, totals: sum(rows) };
+}
+
+/** A string literal in a line of script: its quote and its text. */
+const LITERAL = /(['"`])((?:\\.|(?!\1)[^\\])*)\1/;
+
+/**
+ * The lines of a workflow's script that are running now, each with the phase it's running in: where it named a phase
+ * that has agents at work (`phase('Review')`), and where it labels an agent at work, by the label as written or the
+ * start of one built from a template (`label: \`review:${d.key}\``). A guess from the script's words, since Claude Code
+ * doesn't say which line it's on.
+ */
+export function runningLines(source: string, wf: Pick<Workflow, 'phases' | 'agents'>): Map<number, number> {
+  const lit = new Map<number, number>();
+  const working = wf.agents.filter((a) => a.status === 'working');
+  if (!working.length) return lit;
+  const busy = new Map(wf.phases.filter((p) => p.working > 0).map((p) => [p.title, p.index]));
+  source.split('\n').forEach((line, i) => {
+    const named = new RegExp(`\\bphase\\(\\s*${LITERAL.source}`).exec(line);
+    const phase = named ? busy.get(named[2]) : undefined;
+    if (phase !== undefined) return void lit.set(i, phase);
+    const label = new RegExp(`\\blabel\\s*:\\s*${LITERAL.source}`).exec(line);
+    if (!label) return;
+    const template = label[1] === '`' && label[2].includes('${');
+    const prefix = template ? label[2].slice(0, label[2].indexOf('${')) : label[2];
+    const agent = working.find((a) => (template ? !!prefix && a.label.startsWith(prefix) : a.label === prefix));
+    if (agent) lit.set(i, agent.phase);
+  });
+  return lit;
+}
+
+/**
+ * Which `rows` of a script's `total` lines a screen shows: from the top, or so the first running line sits a third of
+ * the way down, as far as the script goes. The first line's index.
+ */
+export function scriptWindow(total: number, lit: Iterable<number>, rows: number): number {
+  const first = Math.min(Infinity, ...lit);
+  if (!Number.isFinite(first)) return 0;
+  return Math.max(0, Math.min(first - Math.floor(rows / 3), total - rows));
+}
+
+/** A count of tokens, short: 412, 41.2K, 4.1M. */
+export function shortCount(n: number): string {
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) return `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}K`;
+  return `${(n / 1_000_000).toFixed(1)}M`;
+}
+
+/** What a workflow has used, in a few words: tokens and tool calls. Empty before it's counted any. */
+export function usageLine(usage: Workflow['usage']): string {
+  return usage ? `${shortCount(usage.tokens)} tokens · ${usage.toolUses} tool calls` : '';
 }
 
 /**

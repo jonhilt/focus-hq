@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { WorkflowPhase } from '../../../shared/types';
 import {
   assignRooms, barSegments, bufferGlow, bufferLine, elapsed, feedCaption, PAD_COUNT, type PadAgent, type PadOccupant, phaseColour,
-  standOnPads, tacticalSummary, waitingLine,
+  plannedPhases, runningLines, scriptWindow, shortCount, standOnPads, tacticalSummary, usageLine, waitingLine,
 } from './workflowRooms';
 
 const wf = (id: string, startedAt: number) => ({ id, startedAt });
@@ -114,6 +114,63 @@ describe('tacticalSummary', () => {
 
   it('stops the clock once the workflow ends', () => {
     expect(tacticalSummary(run, 900_000, 61_000).elapsed).toBe('1:00');
+  });
+
+  it('adds the phases the script plans but hasn’t reached, with their details', () => {
+    const s = tacticalSummary({ ...run, phases: run.phases.slice(0, 1), plan: [{ title: 'Scan', detail: 'one per area' }, { title: 'Check', detail: 'confirm it' }] }, 2000);
+    expect(s.rows.map((r) => [r.index, r.title, r.detail, r.total])).toEqual([[1, 'Scan', 'one per area', 6], [2, 'Check', 'confirm it', 0]]);
+  });
+});
+
+describe('plannedPhases', () => {
+  it('numbers a planned phase by its place in the plan, or after the rest when that’s taken', () => {
+    const phases = [phase(1, 'Review'), phase(2, 'Extra')];
+    expect(plannedPhases({ phases, plan: [{ title: 'Review' }, { title: 'Verify' }, { title: 'Write' }] }).map((p) => [p.index, p.title])).toEqual([[1, 'Review'], [2, 'Extra'], [3, 'Write'], [4, 'Verify']]);
+  });
+
+  it('is the phases as they are without a plan', () => {
+    const phases = [phase(1, 'Review')];
+    expect(plannedPhases({ phases })).toEqual(phases);
+  });
+});
+
+describe('runningLines', () => {
+  const script = [
+    "export const meta = { name: 'r', phases: [{ title: 'Review' }, { title: 'Verify' }] }",
+    "phase('Review')",
+    'const out = await pipeline(DIMS,',
+    '  d => agent(d.prompt, { label: `review:${d.key}` }),',
+    "  r => agent(check(r), { label: 'verify', phase: 'Verify' }))",
+    "phase('Write')",
+  ].join('\n');
+  const agent = (label: string, phase: number, status: 'working' | 'done' = 'working') => ({ index: 1, label, phase, status, activity: '' });
+
+  it('lights where the script named a phase at work, and where it labels an agent at work, with its phase', () => {
+    const lit = runningLines(script, { phases: [phase(1, 'Review', { working: 1 }), phase(2, 'Verify', { working: 1 })], agents: [agent('review:bugs', 1), agent('verify', 2)] });
+    expect([...lit]).toEqual([[1, 1], [3, 1], [4, 2]]);
+  });
+
+  it('lights nothing when nobody’s at work, or a label only something else starts with', () => {
+    expect(runningLines(script, { phases: [phase(1, 'Review', { done: 1 })], agents: [agent('review:bugs', 1, 'done')] }).size).toBe(0);
+    expect([...runningLines(script, { phases: [phase(1, 'Other', { working: 1 })], agents: [agent('verify:x', 1)] })]).toEqual([]);
+  });
+});
+
+describe('scriptWindow', () => {
+  it('starts at the top with nothing running, and puts the first running line a third of the way down otherwise', () => {
+    expect(scriptWindow(100, [], 12)).toBe(0);
+    expect(scriptWindow(100, [40, 41], 12)).toBe(36);
+    expect(scriptWindow(100, [2], 12)).toBe(0);
+    expect(scriptWindow(100, [98], 12)).toBe(88);
+    expect(scriptWindow(5, [4], 12)).toBe(0);
+  });
+});
+
+describe('usageLine', () => {
+  it('counts tokens short, and says nothing before there’s any', () => {
+    expect([412, 4120, 41_200, 4_120_000].map(shortCount)).toEqual(['412', '4.1K', '41K', '4.1M']);
+    expect(usageLine({ tokens: 783_805, toolUses: 328 })).toBe('784K tokens · 328 tool calls');
+    expect(usageLine(undefined)).toBe('');
   });
 });
 

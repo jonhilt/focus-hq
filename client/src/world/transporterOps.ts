@@ -1,28 +1,31 @@
 import * as THREE from 'three';
 import { interactive } from './builder';
 import { helperFor } from '../../../shared/crew';
-import type { Workflow, WorkflowAgent } from '../../../shared/types';
+import type { Workflow, WorkflowAgent, WorkflowScript } from '../../../shared/types';
 import { sound } from '../sound';
-import { canvasTexture, fitText, makeCanvas, roundRect } from './canvas';
+import { canvasTexture, fitText, makeCanvas, MONO_FONT, roundRect } from './canvas';
 import { Character, type CrewView } from './character';
 import { flat } from './materials';
 import { LCARS, LCARS_FONT, LCARS_STATUS, lcarsFrame } from './starship';
 import { Beam } from './transporter';
-import type { TransporterRoom } from './transporterRoom';
+import { CONSOLE_SCREEN, type TransporterRoom } from './transporterRoom';
 import {
-  agentKey, barSegments, bufferGlow, bufferLine, type Counts, PAD_COUNT, type PadOccupant, phaseColour, standOnPads, tacticalSummary,
-  type TacticalSummary,
+  agentKey, barSegments, bufferGlow, bufferLine, type Counts, PAD_COUNT, type PadOccupant, phaseColour, plannedPhases, runningLines,
+  scriptWindow, standOnPads, tacticalSummary, type TacticalSummary, usageLine,
 } from './workflowRooms';
 
 // A workflow running in a transporter room (transporterRoom.ts): its agents at work standing on the pads, beaming in as
 // they start and out once they've finished, each pad lit in its agent's phase colour; the pattern buffer glowing with
-// the agents still queued, and its readout counting them; the tactical display following the operation phase by phase.
-// Who stands where is workflowRooms.ts's; this draws it.
+// the agents still queued, and its readout counting them; the tactical display following the operation phase by phase;
+// and the console showing the script that runs it all, the lines running now lit in their phases' colours, who's at
+// work, and once it's over what it logged and returned. Who stands where is workflowRooms.ts's; this draws it.
 
 /** How often the pads are looked at again, for the finished to beam out once they've lingered (ms). */
 const RESTAND_MS = 250;
 /** How often a watched room's screens are checked for something new to draw: the clock ticks by the second. */
 const SCREENS_MS = 500;
+/** After a workflow ends, when its script is read again: Claude Code saves what it logged and returned as it ends (ms). */
+const OUTCOME_RETRY_MS = 3000;
 /** A pad's ring and emitter while nobody's on it. */
 const DIM = 0.16;
 
@@ -64,7 +67,7 @@ export class TransporterOperation {
   private watched = false;
   /** Whether the captain's in the room, to hear it. */
   private hearing = false;
-  private readonly idle: { tactical: THREE.Material | THREE.Material[]; buffer: THREE.Material | THREE.Material[] };
+  private readonly idle: { tactical: THREE.Material | THREE.Material[]; buffer: THREE.Material | THREE.Material[]; script: THREE.Material | THREE.Material[] };
   private readonly tactical = makeCanvas(1440, 800);
   private readonly tacticalTex = canvasTexture(this.tactical.canvas);
   private readonly tacticalMat = flat(this.tacticalTex);
@@ -73,14 +76,24 @@ export class TransporterOperation {
   private readonly bufferTex = canvasTexture(this.buffer.canvas);
   private readonly bufferMat = flat(this.bufferTex);
   private bufferKey = '';
+  private readonly script = makeCanvas(Math.round(CONSOLE_SCREEN.w * 1000), Math.round(CONSOLE_SCREEN.h * 1000));
+  private readonly scriptTex = canvasTexture(this.script.canvas);
+  private readonly scriptMat = flat(this.scriptTex);
+  private scriptKey = '';
+  /** The script of the workflow in the room, once it's been read (`id`: its workflow's). */
+  private source: { id: string; script: WorkflowScript } | undefined;
   private queued = 0;
   private readonly glow: THREE.Color;
   private readonly ringLit: THREE.Color;
   private readonly emitterLit: THREE.Color;
   private readonly tmp = new THREE.Vector3();
 
-  constructor(readonly room: TransporterRoom) {
-    this.idle = { tactical: room.tactical.material, buffer: room.buffer.readout.material };
+  constructor(
+    readonly room: TransporterRoom,
+    /** Reads the script behind a workflow of the station's lead, with what it has logged and returned so far. */
+    private readonly readScript: (workflowId: string) => Promise<WorkflowScript | undefined>,
+  ) {
+    this.idle = { tactical: room.tactical.material, buffer: room.buffer.readout.material, script: room.script.material };
     this.glow = room.buffer.light.color.clone();
     this.ringLit = (room.pads[0].ring.material as THREE.MeshBasicMaterial).color.clone();
     this.emitterLit = (room.pads[0].emitter.material as THREE.MeshBasicMaterial).color.clone();
@@ -91,13 +104,43 @@ export class TransporterOperation {
 
   /** The workflow in the room now, or none: its agents take the pads, or leave them. */
   show(workflow: Workflow | undefined, now: number): void {
-    if (workflow?.id !== this.workflow?.id) this.endedAt = undefined;
+    const was = this.workflow;
+    if (workflow?.id !== was?.id) {
+      this.endedAt = undefined;
+      this.source = undefined;
+      this.useConsole(workflow);
+    }
     if (workflow && workflow.status !== 'running') this.endedAt ??= Date.now();
     this.workflow = workflow;
+    // its script once it's here, and again as it ends, for what it logged and returned
+    if (workflow && (workflow.id !== was?.id || (workflow.status !== 'running' && was?.status === 'running'))) {
+      this.read(workflow.id);
+      if (workflow.status !== 'running') setTimeout(() => this.read(workflow.id), OUTCOME_RETRY_MS);
+    }
     this.queued = workflow?.phases.reduce((n, p) => n + p.queued, 0) ?? 0;
     this.stand(now);
     this.tacticalKey = '';
     if (this.watched) this.drawScreens();
+  }
+
+  private read(id: string): void {
+    void this.readScript(id).then((script) => {
+      if (!script || this.workflow?.id !== id) return;
+      this.source = { id, script };
+      this.scriptKey = '';
+      if (this.watched) this.drawScreens();
+    }).catch(() => undefined);
+  }
+
+  /** E on the console's screen: the script of the workflow running here, or, with none, energise as the rest of it does. */
+  private useConsole(workflow: Workflow | undefined): void {
+    const screen = this.room.script;
+    if (!workflow) {
+      delete screen.userData.interaction;
+      return;
+    }
+    const { projectId, station } = this.room;
+    interactive(screen, { kind: 'workflow-script', projectId, station, workflowId: workflow.id }, () => `Read the script of ${workflow.name}`);
   }
 
   /** The workflow in the room, if any. */
@@ -197,9 +240,11 @@ export class TransporterOperation {
     if (!wf) {
       this.room.tactical.material = this.idle.tactical;
       this.room.buffer.readout.material = this.idle.buffer;
-      this.tacticalKey = this.bufferKey = '';
+      this.room.script.material = this.idle.script;
+      this.tacticalKey = this.bufferKey = this.scriptKey = '';
       return;
     }
+    this.drawScript(wf);
     const summary = tacticalSummary(wf, Date.now(), this.endedAt);
     const key = JSON.stringify(summary);
     if (key !== this.tacticalKey) {
@@ -218,6 +263,32 @@ export class TransporterOperation {
     }
   }
 
+  /** The console's screen: the script, redrawn only when what it shows has changed. */
+  private drawScript(wf: Workflow): void {
+    const script = this.source?.id === wf.id ? this.source.script : undefined;
+    const lines = (script?.source ?? '').replace(/\t/g, '  ').split('\n');
+    const lit = script ? runningLines(script.source, wf) : new Map<number, number>();
+    const phases = plannedPhases(wf);
+    const colourOf = (phase: number) => LCARS[phaseColour(phases.find((p) => p.index === phase) ?? { index: phase })];
+    const view: ScriptView = {
+      name: wf.name,
+      status: wf.status,
+      lines: script?.source ? lines : [],
+      lit: [...lit].map(([line, phase]) => [line, colourOf(phase)]),
+      working: wf.agents.filter((a) => a.status === 'working').map((a) => ({ label: a.label, colour: colourOf(a.phase) })),
+      logs: script?.logs ?? [],
+      result: script?.result,
+      usage: usageLine(wf.usage),
+      reading: !script,
+    };
+    const key = JSON.stringify({ ...view, lines: view.lines.length });
+    if (key === this.scriptKey) return;
+    this.scriptKey = key;
+    drawScript(this.script.ctx, this.script.canvas, view, this.room.index);
+    this.scriptTex.needsUpdate = true;
+    this.room.script.material = this.scriptMat;
+  }
+
   dispose(): void {
     for (const beam of this.beams) beam.finish();
     for (const figure of this.figures) figure?.character.dispose();
@@ -225,6 +296,8 @@ export class TransporterOperation {
     this.tacticalMat.dispose();
     this.bufferTex.dispose();
     this.bufferMat.dispose();
+    this.scriptTex.dispose();
+    this.scriptMat.dispose();
   }
 }
 
@@ -300,9 +373,16 @@ function drawTactical(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, 
     ctx.fill();
     ctx.fillStyle = colour;
     ctx.textAlign = 'left';
-    ctx.font = `600 ${Math.round(Math.min(44, rowH * 0.55))}px ${LCARS_FONT}`;
     const title = row.child && !row.title.startsWith('▸') ? `▸ ${row.title}` : row.title;
-    ctx.fillText(fitText(ctx, title.toUpperCase(), titleW - 16), area.x + 56, y);
+    // what the script's meta says the phase is for, under its title, where there's room
+    const detail = row.detail && rowH >= 60;
+    ctx.font = `600 ${Math.round(Math.min(detail ? 38 : 44, rowH * (detail ? 0.44 : 0.55)))}px ${LCARS_FONT}`;
+    ctx.fillText(fitText(ctx, title.toUpperCase(), titleW - 16), area.x + 56, detail ? y - rowH * 0.16 : y);
+    if (detail) {
+      ctx.fillStyle = '#a29cb8';
+      ctx.font = `500 ${Math.round(Math.min(24, rowH * 0.28))}px ${LCARS_FONT}`;
+      ctx.fillText(fitText(ctx, row.detail ?? '', titleW - 16), area.x + 56, y + rowH * 0.27);
+    }
     // the bar: its whole length dim, then who's done, failed, at work and queued
     ctx.fillStyle = '#1d1a26';
     ctx.fillRect(barX, y - barH / 2, barW, barH);
@@ -368,5 +448,114 @@ function drawBuffer(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, he
     ctx.textAlign = 'right';
     ctx.font = `500 26px ${LCARS_FONT}`;
     ctx.fillText(`+${total - fits}`, area.x + area.w, area.y + 14);
+  }
+}
+
+/** What the console's screen shows of a workflow's script. */
+interface ScriptView {
+  name: string;
+  status: Workflow['status'];
+  /** The script's lines: none when it isn't to hand. */
+  lines: string[];
+  /** The lines running now, each in its phase's colour. */
+  lit: [number, string][];
+  /** The agents at work, each in its phase's colour. */
+  working: { label: string; colour: string }[];
+  logs: string[];
+  result?: string;
+  usage: string;
+  /** Still reading the script. */
+  reading: boolean;
+}
+
+/**
+ * The console's screen: the script down the left, from the top or round the lines running now, which are lit in their
+ * phases' colours; down the right who's at work, then once it's over what it logged and the start of what it
+ * returned; and what it has used along the bottom.
+ */
+function drawScript(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, v: ScriptView, room: number): void {
+  const area = lcarsFrame(ctx, canvas.width, canvas.height, { title: `Script · ${v.name}`, color: LCARS.gold, seed: 7105 + room });
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  const codeW = Math.round(area.w * 0.64);
+  const rowH = 31;
+  const rows = Math.floor(area.h / rowH);
+  if (!v.lines.length) {
+    ctx.fillStyle = LCARS.peach;
+    ctx.font = `500 34px ${LCARS_FONT}`;
+    ctx.fillText(v.reading ? 'READING THE SCRIPT…' : 'THE SCRIPT ISN’T TO HAND', area.x, area.y + 30);
+  }
+  const lit = new Map(v.lit);
+  const first = scriptWindow(v.lines.length, lit.keys(), rows);
+  const numW = 52;
+  ctx.font = `500 21px ${MONO_FONT}`;
+  for (let r = 0; r < rows && first + r < v.lines.length; r++) {
+    const i = first + r;
+    const y = area.y + r * rowH + rowH / 2;
+    const colour = lit.get(i);
+    if (colour) {
+      ctx.fillStyle = colour;
+      ctx.globalAlpha = 0.28;
+      roundRect(ctx, area.x + numW - 8, y - rowH / 2 + 2, codeW - numW + 8, rowH - 4, 6);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      roundRect(ctx, area.x, y - rowH / 2 + 4, 10, rowH - 8, 5);
+      ctx.fill();
+    }
+    ctx.fillStyle = colour ?? '#5d5870';
+    ctx.textAlign = 'right';
+    ctx.fillText(String(i + 1), area.x + numW - 16, y);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = colour ? '#ffffff' : '#a29cb8';
+    ctx.fillText(fitText(ctx, v.lines[i], codeW - numW - 8), area.x + numW, y);
+  }
+
+  // down the right: who's at work, then what it logged and returned
+  const x = area.x + codeW + 36;
+  const w = area.x + area.w - x;
+  let y = area.y + 14;
+  const heading = (text: string, colour: string) => {
+    ctx.fillStyle = colour;
+    ctx.font = `600 28px ${LCARS_FONT}`;
+    ctx.fillText(text, x, y);
+    y += 36;
+  };
+  const bottom = area.y + area.h - 52;
+  const line = (text: string, colour: string) => {
+    if (y > bottom) return;
+    ctx.fillStyle = colour;
+    ctx.fillText(fitText(ctx, text, w), x, y);
+    y += 27;
+  };
+  if (v.working.length) {
+    heading(`AT WORK · ${v.working.length}`, LCARS.peach);
+    ctx.font = `500 19px ${MONO_FONT}`;
+    const shown = v.working.length > 6 ? v.working.slice(0, 5) : v.working;
+    for (const a of shown) line(a.label, a.colour);
+    if (shown.length < v.working.length) line(`+${v.working.length - shown.length} more`, '#a29cb8');
+    y += 10;
+  }
+  if (v.logs.length) {
+    heading('LOG', LCARS.lilac);
+    ctx.font = `500 19px ${MONO_FONT}`;
+    for (const l of v.logs.slice(-4)) line(l, LCARS.lilac);
+    y += 10;
+  }
+  if (v.result !== undefined) {
+    heading('RETURNED', v.status === 'failed' ? LCARS.red : LCARS_STATUS.done);
+    ctx.font = `500 19px ${MONO_FONT}`;
+    for (const l of v.result.split('\n').filter((t) => t.trim()).slice(0, 4)) line(l.trim(), '#d8d4e6');
+  }
+  if (!v.working.length && !v.logs.length && v.result === undefined && v.status === 'running') {
+    ctx.fillStyle = '#a29cb8';
+    ctx.font = `500 26px ${LCARS_FONT}`;
+    ctx.fillText('NOBODY AT WORK YET', x, y);
+  }
+
+  // what it has used
+  if (v.usage) {
+    ctx.fillStyle = LCARS.gold;
+    ctx.font = `500 28px ${LCARS_FONT}`;
+    ctx.fillText(fitText(ctx, v.usage.toUpperCase(), w), x, area.y + area.h - 18);
   }
 }

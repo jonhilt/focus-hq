@@ -1,4 +1,4 @@
-import type { Agent, Autonomy, Board, Climb, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ResumeHow, Retro, RetroDraft, RoomTheme, Scorecards, Settings, StudioSession, TermLine, VoiceStatus } from '../../../shared/types';
+import type { Agent, Autonomy, Board, Climb, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ResumeHow, Retro, RetroDraft, RoomTheme, Scorecards, Settings, StudioSession, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
 
@@ -87,6 +87,7 @@ export const api = {
   backgroundOutput: (leadId: string, taskId: string) => call<Omit<TermLine, 't'>[]>('GET', `/agents/${leadId}/background/${encodeURIComponent(taskId)}/output`),
   /** Stops it, and tells the lead; `stopped` is false when the lead's session can't be asked. */
   stopBackground: (leadId: string, taskId: string) => call<{ stopped: boolean }>('POST', `/agents/${leadId}/background/${encodeURIComponent(taskId)}/stop`),
+  workflowScript: (leadId: string, workflowId: string) => call<WorkflowScript>('GET', `/agents/${leadId}/workflows/${encodeURIComponent(workflowId)}/script`),
   workflowAgentLines: (leadId: string, workflowId: string, agentId: string) =>
     call<TermLine[]>('GET', `/agents/${leadId}/workflows/${encodeURIComponent(workflowId)}/agents/${encodeURIComponent(agentId)}/lines`),
   /**

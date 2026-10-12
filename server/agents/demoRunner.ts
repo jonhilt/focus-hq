@@ -198,11 +198,17 @@ export class DemoRunner implements AgentRunner {
     // and the rest queued, a pipeline's stages overlapping, agents queued as the script reaches them, some failing. Its
     // progress goes through the same reading as a real session's
     type Job = { label: string; phase: number; ask: string; result?: string; after?: string; secs: [number, number] };
-    const runWorkflow = async (name: string, description: string, phases: { title: string; child?: boolean }[], jobs: Job[], cap = 8) => {
+    const runWorkflow = async (name: string, description: string, script: string, phases: { title: string; child?: boolean }[], jobs: Job[], logs: (done: number, of: number) => string[], cap = 8) => {
       const id = `demo-wf-${randomHex(3)}`;
-      // each agent's transcript, as Claude Code writes one: agent-<agentId>.jsonl in the workflow's folder
-      const dir = path.join(os.tmpdir(), 'focus-demo-workflows', id);
+      // laid out as Claude Code lays out a session's folder: each agent's transcript, agent-<agentId>.jsonl, in the
+      // run's folder under subagents/workflows/, the script saved under workflows/scripts/, and the run under
+      // workflows/ once it's over
+      const session = path.join(os.tmpdir(), 'focus-demo-workflows', `session-${id}`);
+      const dir = path.join(session, 'subagents', 'workflows', id);
+      const scriptPath = path.join(session, 'workflows', 'scripts', `${name}.js`);
       fs.mkdirSync(dir, { recursive: true });
+      fs.mkdirSync(path.dirname(scriptPath), { recursive: true });
+      fs.writeFileSync(scriptPath, script);
       const agentId = (e: { index: number }) => `${id.slice(-6)}a${e.index}`;
       const transcript = (e: { index: number }, ...entries: unknown[]) =>
         fs.appendFileSync(path.join(dir, `agent-${agentId(e)}.jsonl`), entries.map((x) => `${JSON.stringify(x)}\n`).join(''));
@@ -221,11 +227,18 @@ export class DemoRunner implements AgentRunner {
           })),
         ];
         const progress = workflowProgress(raw);
-        if (progress) hooks.workflow?.({ kind: 'progress', id, ...progress });
+        if (progress) hooks.workflow?.({ kind: 'progress', id, ...progress, usage: usage() });
+      };
+      // what it's used: tokens as each agent works, and a few tool calls each
+      const usage = () => {
+        const now = Date.now();
+        const started = entries.filter((e) => e.startedAt !== undefined);
+        const tokens = started.reduce((n, e) => n + Math.round((((e.doneAt ?? now) - (e.startedAt ?? now)) / 1000) * this.speed * 1800), 0);
+        return { tokens, toolUses: started.length * 2 + entries.filter((e) => e.doneAt).length * 2 };
       };
       hooks.lines([{ kind: 'tool', text: `⏺ Workflow(${name})` }, { kind: 'output', text: '  ⎿  Launched in the background' }]);
-      hooks.workflow?.({ kind: 'started', id, name, description });
-      hooks.workflow?.({ kind: 'transcripts', id, dir });
+      hooks.workflow?.({ kind: 'started', id, name, description, script });
+      hooks.workflow?.({ kind: 'transcripts', id, dir, scriptPath });
       const pending = [...jobs];
       const ends = new Map<Entry, number>();
       while (pending.length || entries.some((e) => e.state === 'start')) {
@@ -259,8 +272,10 @@ export class DemoRunner implements AgentRunner {
         report();
         await wait(0.5, 0.9);
       }
-      hooks.workflow?.({ kind: 'ended', id, ok: true });
       const done = entries.filter((e) => e.state === 'done').length;
+      const result = Object.fromEntries(entries.map((e) => [e.job.label, e.job.result ?? null]));
+      fs.writeFileSync(path.join(session, 'workflows', `${id}.json`), JSON.stringify({ runId: id, workflowName: name, logs: logs(done, entries.length), result, status: 'completed' }));
+      hooks.workflow?.({ kind: 'ended', id, ok: true, usage: usage() });
       hooks.lines([{ kind: 'output', text: `  ⎿  ${name}: ${done} of ${entries.length} agents finished, ${entries.length - done} failed` }]);
     };
 
@@ -305,8 +320,9 @@ export class DemoRunner implements AgentRunner {
       const map: Job[] = folders.map((f) => ({ label: `map:${f}`, phase: 1, ask: `Map ./${f} for ${goal}`, result: `./${f} mapped`, secs: [4, 9] }));
       hooks.activity('working', 'Waiting on 2 workflows');
       await Promise.all([
-        runWorkflow('review-slice', `Review ${goal} before it ships`, [{ title: 'Scan' }, { title: 'Check' }, { title: 'Fan' }, { title: '▸ summarise', child: true }], review),
-        wait(2, 3).then(() => runWorkflow('map-repos', `Map each repo for ${goal}`, [{ title: 'Map' }], map)),
+        runWorkflow('review-slice', `Review ${goal} before it ships`, DEMO_REVIEW_SCRIPT, [{ title: 'Scan' }, { title: 'Check' }, { title: 'Fan' }, { title: '▸ summarise', child: true }], review,
+          (done, of) => [`${areas.length}/${areas.length} areas scanned and checked`, `${review.filter((j) => j.phase === 3 && j.result).length}/24 cases pass`, `${done} of ${of} agents finished`]),
+        wait(2, 3).then(() => runWorkflow('map-repos', `Map each repo for ${goal}`, DEMO_MAP_SCRIPT, [{ title: 'Map' }], map, (done) => [`${done} repos mapped`])),
       ]);
     };
 
@@ -1040,6 +1056,54 @@ function render(t) {
   caption.text = alone ? 'One context, filling up' : t < 10 ? 'Each helper reads in a context of its own' : 'Only answers come back';
   lead.say(alone ? 'Reading the whole repo' : t < 10 ? 'Handing out the reading' : 'Got three summaries');
 }`;
+
+/** The script a demo lead reviews its slice with: a pipeline of scans and checks, a fan-out, and a summary. */
+const DEMO_REVIEW_SCRIPT = `export const meta = {
+  name: 'review-slice',
+  description: 'Review the slice before it ships',
+  phases: [
+    { title: 'Scan', detail: 'one scanner per area of the app' },
+    { title: 'Check', detail: 'confirm what each scan found' },
+    { title: 'Fan', detail: 'try the change against 24 cases' },
+    { title: '▸ summarise', detail: 'write up what was found' },
+  ],
+}
+
+const AREAS = ['store', 'routes', 'views', 'tests', 'styles', 'config']
+const FINDINGS = { type: 'object', properties: { broken: { type: 'array' } } }
+
+phase('Scan')
+const checked = await pipeline(AREAS,
+  area => agent(\`Scan the \${area} for anything the slice breaks\`, { label: \`scan:\${area}\`, schema: FINDINGS }),
+  (found, area) => agent(\`Check what the scan of the \${area} found\`, { label: \`check:\${area}\`, phase: 'Check' }))
+log(\`\${checked.filter(Boolean).length}/\${AREAS.length} areas scanned and checked\`)
+
+phase('Fan')
+const cases = await parallel(Array.from({ length: 24 }, (_, i) => () =>
+  agent(\`Try the slice with case \${i}\`, { label: \`fan:\${i}\` })))
+log(\`\${cases.filter(Boolean).length}/24 cases pass\`)
+
+phase('▸ summarise')
+const [summary, notes] = await parallel([
+  () => agent('Summarise the findings', { label: 'child:1' }),
+  () => agent('Draft the PR notes', { label: 'child:2' }),
+])
+return { summary, notes, failing: cases.filter((c) => !c).length }
+`;
+
+/** The script a demo lead maps its repos with: an agent per repo, side by side. */
+const DEMO_MAP_SCRIPT = `export const meta = {
+  name: 'map-repos',
+  description: 'Map each repo for the goal',
+  phases: [{ title: 'Map', detail: 'one agent per repo, side by side' }],
+}
+
+phase('Map')
+const maps = await parallel(args.repos.map((repo) => () =>
+  agent(\`Map ./\${repo} for the goal\`, { label: \`map:\${repo}\` })))
+log(\`\${maps.filter(Boolean).length} repos mapped\`)
+return maps
+`;
 
 /** Take c, abstract: a gold core fans out into fresh contexts and folds their answers back in, timed by its phases. */
 const DEMO_TAKE_ABSTRACT = `const from = [0, 1.2, 0.6];

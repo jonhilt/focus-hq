@@ -21,6 +21,8 @@ export interface Ui {
   openHelper(leadId: string, id: string): void;
   /** One of lead `leadId`'s workflow agents (by its place in workflow `workflowId`): its own screen. */
   openWorkflowAgent(leadId: string, workflowId: string, index: number): void;
+  /** The script behind one of a lead's workflows, from its transporter room's console. */
+  openWorkflowScript(leadId: string, workflowId: string): void;
   /** One of lead `leadId`'s background commands or monitors: its output, and a way to stop it. */
   openBackground(leadId: string, taskId: string): void;
   openBoard(projectId: string, tab?: BoardTab): void;

@@ -225,7 +225,7 @@ def transporter_console():
     top = prism('transporter console', shape, CONSOLE_L, [bulkhead, accent, toon(CONSOLE_TOP), trim, bulkhead, dado],
                 frame=f, round=0.015)
     parts.append(top)
-    # the LCARS keys on its slope, a hair over it
+    # its screen on its slope, a hair over it: the script of the workflow the room is running, or LCARS keys standing by
     up = Vector((0, back[0] - front[0], back[1] - front[1]))
     length = up.length
     up.normalize()
@@ -233,8 +233,8 @@ def transporter_console():
     normal = Vector((0, math.cos(tilt), math.sin(tilt)))
     start = Vector((0, front[0], front[1])) + up * 0.04 + normal * 0.005
     w, h = round(CONSOLE_L - 0.12, 3), round(length - 0.08, 3)
-    parts.append(panel('transporter console keys', w, h,
-                       material('#000000', surface='console', seed=71, w=w, h=h, stations=1), tuple(start), f, tilt=tilt))
+    parts.append(panel('transporter console screen', w, h,
+                       material('#000000', surface='screen', screen='transporter-script'), tuple(start), f, tilt=tilt))
     collide_object(top, pad=0.08)
 
     # all of it under one empty, which says what pressing E on it does

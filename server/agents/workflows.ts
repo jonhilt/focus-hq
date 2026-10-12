@@ -33,6 +33,11 @@ const Agent = Schema.Struct({
   error: Schema.optional(Schema.NullOr(Schema.String)),
   agentId: Schema.optional(Schema.NullOr(Schema.String)),
 });
+const Run = Schema.Struct({
+  logs: Schema.optional(Schema.Array(Schema.Unknown)),
+  result: Schema.optional(Schema.Unknown),
+});
+const decodeRun = Schema.decodeUnknownOption(Run);
 const decodePhase = Schema.decodeUnknownOption(Phase);
 const decodeAgent = Schema.decodeUnknownOption(Agent);
 
@@ -187,12 +192,12 @@ export const RESULT_CHARS = 4000;
  * (workflows/<runId>.json in the session's folder). Nothing when it isn't one.
  */
 export function runOutcome(raw: unknown): { logs: string[]; result?: string } {
-  if (!raw || typeof raw !== 'object') return { logs: [] };
-  const run = raw as { logs?: unknown; result?: unknown };
-  const logs = Array.isArray(run.logs) ? run.logs.filter((l): l is string => typeof l === 'string') : [];
-  if (run.result === undefined || run.result === null) return { logs };
-  const text = typeof run.result === 'string' ? run.result : JSON.stringify(run.result, null, 2);
-  return { logs, result: truncate(text, RESULT_CHARS) };
+  const run = decodeRun(raw);
+  if (Option.isNone(run)) return { logs: [] };
+  const logs = (run.value.logs ?? []).filter((l): l is string => typeof l === 'string');
+  const result = run.value.result;
+  if (result === undefined || result === null) return { logs };
+  return { logs, result: truncate(typeof result === 'string' ? result : JSON.stringify(result, null, 2), RESULT_CHARS) };
 }
 
 /**

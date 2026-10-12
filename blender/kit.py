@@ -34,7 +34,7 @@ What the browser reads (client/src/world/deck.ts), all through custom properties
   'team-station-note', the lead's note on the goal, 'team-station-feed' and 'team-station-feed-caption', the live
   picture from one of its transporter rooms (`feed`, 0 to 2) and its caption, and 'team-station-feeds', how many
   workflows wait for a room, or a transporter room's 'transporter-tactical', its tactical display
-  of the workflow it's running, and 'transporter-buffer', its pattern buffer's readout), 'star-chart' (long-range sensors), 'accent' (a team station's own
+  of the workflow it's running, 'transporter-buffer', its pattern buffer's readout, and 'transporter-script', the script on its console), 'star-chart' (long-range sensors), 'accent' (a team station's own
   colour, or a training hall's project's, lightened by the material's `shade`), 'lamp' (a team station door's lamps, lit while its goal room is in session), 'warp-core' (the warp core's glow, pulsing: `part`, 'column' or 'chamber'), 'carpet' (speckled
   carpet in the material's colour, tiled every 2 m) or 'unlit' (the material's colour, unshaded: lights and ceilings).
   Everything else is a toon material in its base colour.

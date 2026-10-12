@@ -25,6 +25,7 @@ import { assignRooms, feedCaption, waitingLine } from './workflowRooms';
 import { canvasTexture, fitText, makeCanvas } from './canvas';
 import { FEED_SIZE } from './transporterFeeds';
 import { BackgroundProbes } from './probes';
+import { api } from '../net/api';
 
 // A team station: where a goal's lead works with the captain. In the holodeck it's a door, with the station's sign
 // floating over it and lamps either side that show whether its goal room is in session; through it is the goal's
@@ -114,6 +115,8 @@ export class TeamStation {
   private readonly operations: TransporterOperation[];
   /** Which of the lead's workflows is in which room (`assignRooms`). */
   private held: (string | undefined)[] = [];
+  /** The station's lead while it has one, whose workflows' scripts the transporter consoles read. */
+  private leadId: string | undefined;
   /** The monitors down the port wall, one per transporter room: its live picture and its caption. */
   private readonly feeds: { picture: THREE.Mesh; caption: THREE.Mesh; canvas: ReturnType<typeof makeCanvas>; texture: THREE.CanvasTexture; key: string }[];
   /** The strip over them, saying how many workflows wait for a room. */
@@ -256,7 +259,7 @@ export class TeamStation {
     this.show(undefined);
     this.goalBoard.userData.interactionAt = (uv: THREE.Vector2) => this.rowAt(uv);
     this.transporterRooms = transporters.map((at, i) => new TransporterRoom(kit.transporter, at, projectId, index, i, accent));
-    this.operations = this.transporterRooms.map((room) => new TransporterOperation(room));
+    this.operations = this.transporterRooms.map((room) => new TransporterOperation(room, (workflowId) => (this.leadId ? api.workflowScript(this.leadId, workflowId) : Promise.resolve(undefined))));
     this.feeds = this.transporterRooms.map((_, i) => {
       const canvas = makeCanvas(1024, 100);
       const texture = canvasTexture(canvas.canvas);
@@ -277,6 +280,7 @@ export class TeamStation {
    * room, each captioned with how it stands: E on one beams you there.
    */
   showWorkflows(lead: Agent | undefined, now: number): void {
+    this.leadId = lead?.id;
     const workflows = lead?.workflows ?? [];
     const { rooms, waiting } = assignRooms(this.held.length ? this.held : this.transporterRooms.map(() => undefined), workflows);
     this.held = rooms;
