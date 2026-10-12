@@ -71,6 +71,12 @@ export function notedWaypoint(work: Course & Pick<LeadWork, 'note'>, input: Note
   }, notedSlice(work));
 }
 
+/** The waypoints once the lead sends the slice's checklist: the commits so far are ones they've had the chance to tick off. */
+export const checklistWaypoint = (work: Course, now: number): Waypoint[] => withWaypoint(work, now, (w) => ({ ...w, checklistAt: w.commits ?? 0 }));
+
+/** The waypoints once the office holds the lead's turn up over unticked items: it won't again for the same commits. */
+export const nudgedWaypoint = (work: Course, now: number): Waypoint[] => withWaypoint(work, now, (w) => ({ ...w, nudgedAt: w.commits ?? 0 }));
+
 /** The waypoints as the slice's last pull request lands. */
 export const landedWaypoint = (work: Course, now: number): Waypoint[] => withWaypoint(work, now, (w) => ({ ...w, landedAt: w.landedAt ?? now }));
 

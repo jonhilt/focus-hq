@@ -46,6 +46,12 @@ export interface Waypoint {
   /** The commits the lead made during it, and the last one's message, so the chart shows work as it's done. */
   commits?: number;
   lastCommit?: string;
+  /**
+   * `commits` as the lead last sent the note's checklist, and as the office last held the lead's turn up for not ticking
+   * it (`server/agents/checklist.ts`): commits beyond both are ones the lead hasn't been asked to tick off yet.
+   */
+  checklistAt?: number;
+  nudgedAt?: number;
   /** The opening of what it shipped with (its pull requests' description), cut short. */
   summary?: string;
   /** The lessons the lead added to the goal's note during the slice. */

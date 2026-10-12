@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent, GoalNote, LeadWork, QaReport, Waypoint } from '../../shared/types';
 import { goalRecord, reopenedWork } from './lead';
-import { committedWaypoint, endedProbe, evidenceFile, headedWaypoint, landedWaypoint, launchedProbe, nextWaypoints, notedSlice, notedWaypoint, opening, shieldedWaypoint, shippedWaypoint, tickedSpotCheck, WAYPOINT_LIMITS, withWaypoint } from './waypoints';
+import { checklistWaypoint, committedWaypoint, nudgedWaypoint, endedProbe, evidenceFile, headedWaypoint, landedWaypoint, launchedProbe, nextWaypoints, notedSlice, notedWaypoint, opening, shieldedWaypoint, shippedWaypoint, tickedSpotCheck, WAYPOINT_LIMITS, withWaypoint } from './waypoints';
 
 const note = (done: string, learned: string[] = []): GoalNote => ({ done, slice: [], learned, next: [] });
 
@@ -200,5 +200,14 @@ describe('the slice under way', () => {
     const once = committedWaypoint({ slice: 2, waypoints: course }, 'Heading on the chart\n\nMore detail', 50);
     const twice = committedWaypoint({ slice: 2, waypoints: once }, undefined, 60);
     expect(twice[1]).toEqual({ slice: 2, startedAt: 40, commits: 2, lastCommit: 'Heading on the chart' });
+  });
+});
+
+describe('checklistWaypoint and nudgedWaypoint', () => {
+  it("mark the slice under way's commit count, starting its waypoint when there isn't one", () => {
+    const work = { slice: 2, waypoints: [{ slice: 1, startedAt: 0, commits: 4 }, { slice: 2, startedAt: 5, commits: 3 }] };
+    expect(checklistWaypoint(work, 9).at(-1)).toEqual({ slice: 2, startedAt: 5, commits: 3, checklistAt: 3 });
+    expect(nudgedWaypoint(work, 9).at(-1)).toEqual({ slice: 2, startedAt: 5, commits: 3, nudgedAt: 3 });
+    expect(checklistWaypoint({ slice: 1 }, 9)).toEqual([{ slice: 1, startedAt: 9, checklistAt: 0 }]);
   });
 });
