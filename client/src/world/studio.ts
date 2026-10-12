@@ -185,22 +185,28 @@ export interface SheetMoment {
 }
 
 /**
- * The moments a take's contact sheet shows (contactSheet.ts), `count` of them in order: the end of each of its phases
- * (the moment each lands), as many as fit, filled out with even steps through it, and always its last moment.
+ * The moments a take's contact sheet shows (contactSheet.ts), `count` of them in order: the middle of each of its
+ * phases (what happens during it) and its end (the moment it lands), spread out when there are more than fit, filled
+ * out with even steps through it, and always its last moment.
  */
-export function sheetMoments(seconds: number, phases: Record<string, [number, number]> = {}, count = 4): SheetMoment[] {
+export function sheetMoments(seconds: number, phases: Record<string, [number, number]> = {}, count = 6): SheetMoment[] {
   const at = (t: number) => Math.round(Math.min(seconds, Math.max(0, t)) * 10) / 10;
-  const ends = Object.entries(phases)
-    .map(([name, [, to]]) => ({ t: at(to), label: `${name} lands` }))
-    .filter((m) => m.t < at(seconds))
-    .sort((a, b) => a.t - b.t);
-  const picked = ends.filter((_, i) => i % Math.ceil(ends.length / (count - 1)) === 0).slice(0, count - 1);
-  // even steps through it, skipping any too near a moment already picked
-  for (let k = 1; k < count && picked.length < count - 1; k++) {
-    const t = at((seconds * k) / count);
-    if (!picked.some((m) => Math.abs(m.t - t) < seconds / (count * 2))) picked.push({ t, label: '' });
+  const end = at(seconds);
+  const near = (list: readonly SheetMoment[], t: number) => list.some((m) => Math.abs(m.t - t) < seconds / (count * 2));
+  const candidates: SheetMoment[] = [];
+  for (const [name, [from, to]] of Object.entries(phases).sort((a, b) => a[1][0] - b[1][0])) {
+    for (const m of [{ t: at((from + to) / 2), label: `${name} under way` }, { t: at(to), label: `${name} lands` }]) {
+      if (m.t < end && !near(candidates, m.t)) candidates.push(m);
+    }
   }
-  return [...picked.sort((a, b) => a.t - b.t), { t: at(seconds), label: 'the end' }];
+  const room = count - 1;
+  const picked = candidates.length > room ? Array.from({ length: room }, (_, i) => candidates[Math.round((i * (candidates.length - 1)) / (room - 1))]) : candidates;
+  // even steps through it, skipping any too near a moment already picked
+  for (let k = 1; k < count && picked.length < room; k++) {
+    const t = at((seconds * k) / count);
+    if (!near(picked, t)) picked.push({ t, label: '' });
+  }
+  return [...picked.sort((a, b) => a.t - b.t), { t: end, label: 'the end' }];
 }
 
 /** The pitches still waiting on the captain, oldest first: each beat's latest, until a take is staged for that beat after it. */

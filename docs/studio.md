@@ -153,7 +153,7 @@ view while the computer builds:
   asked for a bold image that reads from across the room, not a thin sketch.
 
   The computer looks before you do: when the room runs a take just staged, it renders a **contact sheet** (the take
-  from where you'd stand to watch it, at the moment each of its phases lands and its last moment, two by two, in a
+  from where you'd stand to watch it, at six moments (each phase under way and as it lands, and its last), in a
   scene and on a WebGL renderer of its own: `client/src/world/contactSheet.ts`) and sends it with its report, and the
   take tool hands the picture to the computer, which looks for anything thin, cluttered, hidden or still and stages it
   again before telling you it's ready. No browser open, no sheet: the take waits for you as before.

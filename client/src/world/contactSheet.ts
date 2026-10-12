@@ -24,8 +24,9 @@ export function runTake(take: StudioTake, kit: TakeKit): Render {
   return render;
 }
 
-/** Each moment's picture, and the sheet of them two by two. */
-const TILE = { w: 640, h: 400 };
+/** Each moment's picture, and the sheet of them three by two. */
+const TILE = { w: 512, h: 320 };
+const COLUMNS = 3;
 /** Where the captain stands to look at a take: in front of its floor, a little above eye height, its floor filling the picture. */
 const EYE = new THREE.Vector3(0, 3.4, 6.6);
 const LOOK = new THREE.Vector3(0, 0.9, -0.6);
@@ -50,13 +51,13 @@ export function contactSheet(take: StudioTake): string | undefined {
     camera.lookAt(LOOK);
     camera.layers.enableAll();
     const moments = sheetMoments(take.seconds, take.phases);
-    const { canvas, ctx } = makeCanvas(TILE.w * 2, TILE.h * Math.ceil(moments.length / 2));
+    const { canvas, ctx } = makeCanvas(TILE.w * COLUMNS, TILE.h * Math.ceil(moments.length / COLUMNS));
     moments.forEach(({ t, label }, i) => {
       render(t);
       kit.update(t, EYE.length());
       renderer!.render(scene, camera);
-      const x = (i % 2) * TILE.w;
-      const y = Math.floor(i / 2) * TILE.h;
+      const x = (i % COLUMNS) * TILE.w;
+      const y = Math.floor(i / COLUMNS) * TILE.h;
       ctx.drawImage(renderer!.domElement, x, y);
       caption(ctx, x, y, `${t.toFixed(1)}s${label ? ` · ${label}` : ''}`);
     });
@@ -91,7 +92,7 @@ function stage(scene: THREE.Scene): void {
 
 /** The moment's time (and what lands then) in its corner. */
 function caption(ctx: CanvasRenderingContext2D, x: number, y: number, text: string): void {
-  ctx.font = `600 26px ${LCARS_FONT}`;
+  ctx.font = `600 22px ${LCARS_FONT}`;
   const w = ctx.measureText(text).width + 28;
   ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
   ctx.fillRect(x + 10, y + 10, w, 40);

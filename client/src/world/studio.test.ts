@@ -101,21 +101,26 @@ describe('the studio hall', () => {
 
 describe('sheetMoments', () => {
   it('shows a take without phases at even steps through it, and its last moment', () => {
-    expect(sheetMoments(8)).toEqual([{ t: 2, label: '' }, { t: 4, label: '' }, { t: 6, label: '' }, { t: 8, label: 'the end' }]);
+    expect(sheetMoments(12).map((m) => m.t)).toEqual([2, 4, 6, 8, 10, 12]);
   });
 
-  it('shows the moment each phase lands, filling out with even steps clear of them', () => {
+  it('shows each phase under way and as it lands, filling out with even steps clear of them', () => {
     expect(sheetMoments(10, { fan: [1, 3], fold: [6, 8] })).toEqual([
+      { t: 2, label: 'fan under way' },
       { t: 3, label: 'fan lands' },
       { t: 5, label: '' },
+      { t: 7, label: 'fold under way' },
       { t: 8, label: 'fold lands' },
       { t: 10, label: 'the end' },
     ]);
   });
 
-  it('spreads its picks over many phases, and doesn’t show a phase that ends with the take twice', () => {
-    const many = sheetMoments(12, { a: [0, 1], b: [1, 2], c: [2, 3], d: [3, 4], e: [4, 5], f: [5, 12] });
-    expect(many.map((m) => m.label)).toEqual(['a lands', 'c lands', 'e lands', 'the end']);
+  it('spreads its picks over many phases, and doesn’t show a phase that lands with the take twice', () => {
+    const many = sheetMoments(24, { a: [0, 4], b: [4, 8], c: [8, 12], d: [12, 16], e: [16, 24] });
+    expect(many).toHaveLength(6);
+    expect(many[0].label).toBe('a under way');
+    expect(many.at(-1)).toEqual({ t: 24, label: 'the end' });
+    expect(many.filter((m) => m.label === 'e lands')).toHaveLength(0);
   });
 });
 

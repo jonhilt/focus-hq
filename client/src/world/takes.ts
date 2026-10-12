@@ -23,7 +23,7 @@ const fresh = (take: StudioTake) => Date.now() - take.at < 20_000;
  * A take's plaque: `w` metres wide (`px` on its canvas), at least `minPx` tall (`minH` metres), tipped back `tilt`
  * radians, its bottom edge `bottom` metres up.
  */
-const PLAQUE = { w: 2.8, px: 1200, minPx: 300, minH: 0.7, tilt: 0.75, bottom: 0.45 - 0.35 * Math.cos(0.75) };
+const PLAQUE = { w: 2.8, px: 1200, minPx: 300, minH: 0.7, tilt: 1.1, bottom: 0.08 };
 const HEAD_FONT = `600 76px ${LCARS_FONT}`;
 const BODY_FONT = `500 44px ${UI_FONT}`;
 /** How wide the plaque's lines run on its canvas, right of its id. */
@@ -52,8 +52,8 @@ class Plot {
     this.floor.position.y = 0.012;
     const c = makeCanvas(PLAQUE.px, PLAQUE.minPx);
     this.signTexture = canvasTexture(c.canvas);
-    // a plaque at its front edge, tipped back to read from where you stand, below the premise on the far wall: as tall
-    // as what it says needs (drawSign)
+    // a footplate at its front edge, lying well back near the floor so it reads as you walk up but doesn't hide the take
+    // from across the room: as tall as what it says needs (drawSign)
     this.sign = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), flat(this.signTexture, { transparent: true }));
     this.sign.rotation.x = -PLAQUE.tilt;
     this.sign.layers.set(OVERLAY_LAYER);

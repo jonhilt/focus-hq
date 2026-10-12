@@ -159,7 +159,7 @@ export class StudioComputer {
         if ('error' in next) throw new Error(next.error);
         session.pitches = next;
         this.changed();
-        const what = input.beat !== undefined ? `beat ${input.beat}` : 'the video';
+        const what = input.beat !== undefined ? `beat ${input.beat + 1} (as the captain counts)` : 'the video';
         return `The captain sees ${input.pitches.length} ways to show ${what}, numbered 1 to ${input.pitches.length}. Stop here and let them pick, mix or push back before you stage any.`;
       },
       take: (input) => {
