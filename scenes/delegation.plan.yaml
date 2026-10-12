@@ -1,0 +1,238 @@
+# Episode 1, "How Claude delegates": the shot plan the holodeck stage plays (docs/studio.md). It's the director's worked
+# plan (studio/director.md, appendix B) with what the stage can't do yet taken out or swapped (see notes). The beats are
+# placeholder narration: re-time them from the real take's transcript, and every shot follows its marks.
+#   pnpm run studio --stage delegation
+plan: 1
+episode: how-claude-delegates
+narration: { audio: vo/ep1.wav, beats: vo/ep1.beats.json }
+# no narration yet: show the beats' words as subtitles, so the timing can be watched
+preview: { captions: true }
+stage: { set: holodeck, frame: [1920, 1080], fps: 30 }
+
+beats:
+  - { id: hook,  at: 0.0,   text: "Claude Code can do a job alone. Or it can run fifty agents at once.", marks: { alone: 1.9, fifty: 3.4 } }
+  - { id: title, at: 6.5,   text: "Here's how Claude delegates, one rung at a time.", marks: { rung: 8.6 } }
+  - { id: r1,    at: 9.8,   text: "Start with one session. Give it a job, and it does every step itself: read a file, then the next, then search.", marks: { job: 11.9, itself: 13.4 } }
+  - { id: r1b,   at: 17.8,  text: "Everything it reads stays in its context window, its working memory. And that fills up.", marks: { context: 20.4, fills: 25.6 } }
+  - { id: r1c,   at: 27.0,  text: "By the time it understands the code, most of that room is gone, before it's written a line.", marks: { gone: 31.2, line: 34.6 } }
+  - { id: r2,    at: 36.8,  text: "Rung two: subagents. Same job, but now it hands pieces off.", marks: { pieces: 42.6 } }
+  - { id: r2b,   at: 44.4,  text: "Each helper beams in with a fresh context of its own, often on a smaller, faster model.", marks: { fresh: 47.6, smaller: 50.8 } }
+  - { id: r2c,   at: 53.4,  text: "They do the reading. Pages of it. None of it lands in the lead's head.", marks: { reading: 54.9, none: 58.7 } }
+  - { id: r2d,   at: 62.0,  text: "When they're done, only the answer comes back, a line or two each, and the helpers are gone.", marks: { answer: 64.9, gone: 69.0 } }
+  - { id: r2e,   at: 70.6,  text: "Same job. A fraction of the context.", marks: { fraction: 72.8 } }
+  - { id: r3,    at: 76.0,  text: "Rung three: helpers can have helpers. A big piece can be split again.", marks: { helpers: 79.4, again: 82.6 } }
+  - { id: r3b,   at: 84.0,  text: "This one owns the API. It sends out two of its own, and only it hears back from them.", marks: { two: 88.0, only: 90.4 } }
+  - { id: r3c,   at: 92.6,  text: "Each level passes up a summary. The lead still gets one line.", marks: { summary: 95.4, one: 98.0 } }
+  - { id: r4,    at: 100.4, text: "Rung four: a workflow. For a big job, Claude writes a script, and the script runs the agents.", marks: { script: 105.6 } }
+  - { id: r4b,   at: 108.4, text: "Fifty files to migrate? Fifty agents, sixteen at a time.", marks: { fifty: 109.0, sixteen: 112.2 } }
+  - { id: r4c,   at: 114.2, text: "As each one finishes, the next steps onto its pad. Wave after wave.", marks: { next: 117.2, wave: 119.6 } }
+  - { id: r4d,   at: 121.6, text: "Their results land in the script, not in Claude's context, and the script boils them down.", marks: { script: 123.9, boils: 127.4 } }
+  - { id: r4e,   at: 129.4, text: "Fifty agents' work. One report.", marks: { one: 131.6 } }
+  - { id: r5,    at: 134.0, text: "Rung five: slash batch. For many changes at once.", marks: { batch: 136.0, many: 137.6 } }
+  - { id: r5b,   at: 139.6, text: "Each change gets its own agent in its own git worktree, a separate copy of the repo, so nobody trips over anyone.", marks: { worktree: 143.4, nobody: 147.0 } }
+  - { id: r5c,   at: 149.4, text: "They work side by side, each testing its own change.", marks: { side: 150.6, testing: 152.6 } }
+  - { id: r5d,   at: 154.6, text: "And every lane ends in its own pull request, ready for review.", marks: { pull: 157.4 } }
+  - { id: recap, at: 160.6, text: "So: one session. Helpers. Helpers with helpers. A workflow. A batch.", marks: { one: 161.6, helpers: 163.4, nested: 165.2, workflow: 167.4, batch: 169.4 } }
+  - { id: end,   at: 171.0, end: 176.0, text: "Same Claude. It just knows when to hand the work off.", marks: { off: 174.4 } }
+
+cast:
+  lead:       { kind: crew, name: Claude, tag: LEAD · OPUS, accent: orange, at: [-5, 0, 0], faces: right, turn: 35, line: Working on it }
+  lead.gauge: { kind: gauge, of: lead, at: [-6.4, 0, 0.6], height: 1.5 }   # beside her, never between her and the camera
+  lead.queue:
+    kind: list
+    at: [-2.8, 1.7, 0.4]
+    items: [Read web/src/App.tsx, Read web/src/store/cart.ts, Read web/src/Header.tsx, Read api/src/routes.ts, Read api/src/orders.ts, Search "saved items", Read api/src/auth.ts]
+  web:    { kind: crew, tag: EXPLORE · HAIKU, accent: sky,        at: [-1.5, 0, -3],   faces: left, turn: 35, gauge: true, line: map ./web }
+  api:    { kind: crew, tag: EXPLORE · HAIKU, accent: lilac,      at: [-0.5, 0, 0],    faces: left, turn: 35, gauge: true, line: map ./api }
+  tests:  { kind: crew, tag: EXPLORE · HAIKU, accent: periwinkle, at: [0.5, 0, 3],     faces: left, turn: 35, gauge: true, line: find the tests }
+  routes: { kind: crew, tag: EXPLORE · HAIKU, accent: lilac,      at: [3.5, 0, -1.5],  faces: left, turn: 35, gauge: true, line: check routes }
+  db:     { kind: crew, tag: EXPLORE · HAIKU, accent: lilac,      at: [3.5, 0, 1.5],   faces: left, turn: 35, gauge: true, line: check the db }
+  slate:  { kind: slate, at: [-2.6, 2.3, -0.6], title: "WORKFLOW · migrate.js", text: ["files.map(f => agent('migrate', f))", "16 at once · 50 in all"] }
+  rack:   { kind: label, at: [-1.0, 0.9, 0.6], text: 50 JOBS QUEUED }
+  pads:   { kind: pad, grid: [4, 4], at: [2, 0, 0], spacing: 1.2 }
+  lanes:  { kind: lane, count: 8, from: [-2, 0, -3.5], to: [5, 0, 3.5], firstPr: 412 }
+  ladder:
+    kind: card
+    title: REACH FOR…
+    rows:
+      - [On its own, small, focused jobs]
+      - [Subagents, reading in parallel, keeping the lead light]
+      - [Helpers with helpers, a helper with a big job of its own]
+      - [Workflows, big fan-out jobs; a script runs the fleet]
+      - [/batch, many independent changes, a PR each]
+
+shots:
+  # Cold open: one, then many, then the empty hall
+  - { id: s0.1, span: [0, hook.fifty-0.1], idea: "One Claude, on its own.", look: lead,
+      camera: { size: MCU, on: { lead: [0.33, 0.45] }, angle: [25, -4], fov: 32, move: { kind: hold } },
+      do: [{ at: 0, act: beam-in, who: lead }, { at: hook.alone, act: say, who: lead, line: Working on it }],
+      out: { kind: cut } }
+  - { id: s0.2, span: [hook.fifty-0.1, title.rung-0.6], idea: "…or fifty at once (a glimpse of rung 4).", look: pads,
+      camera: { size: ELS, on: { lead: [0.14, 0.62], pads: [0.62, 0.55] }, angle: [0, -30], fov: 40, move: { kind: hold } },
+      do: [{ at: hook.fifty-0.4, act: show, what: pads }, { at: hook.fifty-0.1, act: beam-in, who: pads.1-16, gap: 0.04 }],
+      out: { kind: grid-wipe, over: 0.8, title: HOW CLAUDE DELEGATES, resets: [pads, lead] } }
+  - { id: s0.3, span: [title.rung-0.6, r1+2.8], idea: "The empty holodeck; then one session.", look: lead,
+      camera: { size: ELS, on: { hall: [0.5, 0.55] }, angle: [10, -12], fov: 50, move: { kind: hold } },
+      do: [{ at: title.rung, act: title, text: "1 · ON ITS OWN" }, { at: r1+0.1, act: beam-in, who: lead }],
+      out: { kind: cut } }
+  # Rung 1: one session, its context fills
+  - { id: s1.1, span: [r1+2.8, r1b.context-0.2], idea: "It does every step itself, one at a time.", look: lead.queue,
+      camera: { size: MS, on: { lead: [0.30, 0.60], lead.queue: [0.64, 0.42] }, angle: [20, -6], fov: 35, move: { kind: hold } },
+      do: [{ at: r1.job, act: show, what: lead.queue }, { at: r1.itself, act: tick, what: lead.queue, every: 1.1 }] }
+  - id: s1.2
+    span: [r1b.context-0.2, r1c]
+    idea: Every read stays in its context, and the context fills.
+    look: lead.gauge
+    camera:
+      size: MS
+      on: { lead.gauge: [0.30, 0.45], lead: [0.58, 0.60] }
+      angle: [-15, -6]
+      fov: 35
+      move: { kind: push-in, to: MCU, at: r1b.fills-0.2, over: 3, ease: inOut, why: lands on "fills" }
+    do:
+      - { at: r1b.context-0.1, act: show, what: lead.gauge }
+      - { at: r1b.context+0.4, act: fill, what: lead.gauge, to: 0.35, over: 2 }
+      - { at: r1b.fills, act: fill, what: lead.gauge, to: 0.82, over: 5 }
+  - { id: s1.3, span: [r1c, r2], idea: "Most of the room is gone before it writes a line.", look: lead.gauge,
+      camera: { size: MLS, on: { lead.gauge: [0.30, 0.48], lead: [0.55, 0.62] }, angle: [20, -6], fov: 35, move: { kind: hold } },
+      do: [{ at: r1c.line, act: glow, what: lead.gauge, over: 1.5 }],
+      out: { kind: grid-wipe, over: 0.8, title: "2 · SUBAGENTS", resets: [lead.gauge, lead.queue] } }
+  # Rung 2: subagents
+  - { id: s2.1, span: [r2, r2b-0.2], idea: "Same job, cut into pieces.", look: lead.queue,
+      camera: { size: MLS, on: { lead: [0.30, 0.60], lead.queue: [0.64, 0.42] }, angle: [20, -6], fov: 35, move: { kind: hold } },
+      do: [{ at: r2+0.6, act: show, what: lead.queue }, { at: r2+0.6, act: show, what: lead.gauge, fill: 0.04 },
+           { at: r2.pieces, act: morph, what: lead.queue, into: [web, api, tests] }],
+      out: { kind: cut } }
+  - { id: s2.2, span: [r2b-0.2, r2c], idea: "Each helper beams in with a fresh, empty context.", look: [web, api, tests],
+      camera: { size: LS, on: { lead: [0.22, 0.56], api: [0.60, 0.50] }, angle: [0, -28], fov: 38, move: { kind: hold } },
+      do: [{ at: r2b, act: send, from: lead, to: [web, api, tests], lane: low, gap: 0.4, text: [map ./web, map ./api, find the tests] },
+           { after: 1.2, act: beam-in, who: [web, api, tests], gap: 0.4 }] }
+  - { id: s2.3, span: [r2c, r2c.none-0.3], idea: "They do the reading.", look: api.gauge,
+      camera: { size: MS, on: { api: [0.40, 0.60], api.gauge: [0.72, 0.45] }, angle: [-25, -24], fov: 35, move: { kind: hold } },
+      do: [{ at: r2c.reading, act: say, who: api, line: [Read routes.ts, Read orders.ts, Read auth.ts], every: 0.7 },
+           { at: r2c.reading, act: fill, what: [web.gauge, api.gauge, tests.gauge], to: 0.6, over: 3 }] }
+  - { id: s2.4, span: [r2c.none-0.3, r2e], idea: "None of it reaches the lead; only answers come back, then the helpers go.", look: lead.gauge,
+      camera: { size: LS, on: { lead: [0.22, 0.56], api: [0.60, 0.50] }, angle: [0, -28], fov: 38, move: { kind: hold } },
+      do: [{ at: r2c.none, act: glow, what: lead.gauge, over: 1.2 },
+           { at: r2d.answer-0.2, act: status, who: [web, api, tests], to: done },
+           { at: r2d.answer, act: send, from: [web, api, tests], to: lead.gauge, lane: high, gap: 0.6,
+             text: [web fits in Header.tsx, add routes/saved.ts, cart.test.ts covers it] },
+           { after: 1.6, act: fill, what: lead.gauge, to: 0.14, over: 1.2 },
+           { at: r2d.gone, act: beam-out, who: [web, api, tests], gap: 0.3 }] }
+  - { id: s2.5, span: [r2e, r3], idea: "Same job, a fraction of the context.", look: lead.gauge,
+      camera: { size: MLS, on: { lead.gauge: [0.36, 0.52], lead: [0.62, 0.64] }, angle: [10, -6], fov: 32, move: { kind: hold } },
+      do: [{ at: r2e.fraction, act: show, what: lead.gauge.ghost, to: 0.82, label: "82% alone · 14% with helpers" }],
+      out: { kind: grid-wipe, over: 0.8, title: "3 · NESTED" } }
+  # Rung 3: helpers with helpers
+  - { id: s3.1, span: [r3, r3b], idea: "A big piece can be split again.", look: api,
+      camera: { size: LS, on: { lead: [0.20, 0.56], api: [0.50, 0.50] }, angle: [0, -28], fov: 42, move: { kind: hold } },
+      do: [{ at: r3+0.4, act: send, from: lead, to: [web, api], lane: low, gap: 0.3, text: [map ./web, own the API] },
+           { after: 1.0, act: beam-in, who: [web, api], gap: 0.3 },
+           { at: r3.again, act: say, who: api, line: Splitting it in two }],
+      out: { kind: move } }
+  - id: s3.2
+    span: [r3b, r3c]
+    idea: The API helper sends out two of its own, and only it hears back.
+    look: api
+    camera:
+      size: LS
+      on: { lead: [0.20, 0.56], api: [0.50, 0.50] }
+      angle: [0, -28]
+      fov: 42
+      move: { kind: truck, to: { size: MLS, on: { api: [0.30, 0.52], routes: [0.70, 0.38] } }, at: r3b+0.2, over: 2.4, ease: inOut, why: follows the two chips right; rests before they beam in }
+    do:
+      - { at: r3b+0.2, act: send, from: api, to: [routes, db], lane: low, gap: 0.3, text: [check routes, check the db] }
+      - { at: r3b.two, act: beam-in, who: [routes, db], gap: 0.3 }
+      - { at: r3b.only, act: send, from: [routes, db], to: api.gauge, lane: high, gap: 0.4, text: ["routes: add saved.ts", "db: one new table"] }
+    out: { kind: move }
+  - { id: s3.3, span: [r3c, r4], idea: "Each level passes up a summary; the lead gets one line.", look: lead.gauge,
+      camera: { size: MLS, on: { api: [0.30, 0.52] }, angle: [0, -28], fov: 42,
+                move: { kind: pull-out, to: { size: LS, on: { lead: [0.15, 0.56], db: [0.82, 0.62] } }, at: r3c, over: 2.4, ease: out,
+                        why: re-establishes the whole tree for its summary } },
+      do: [{ at: r3c.summary, act: beam-out, who: [routes, db] },
+           { at: r3c.summary+0.3, act: send, from: api, to: lead.gauge, lane: high, text: "api: saved.ts + one table" },
+           { at: r3c.one, act: fill, what: lead.gauge, to: 0.09, over: 0.8 },
+           { after: 1.0, act: beam-out, who: [web, api] }],
+      out: { kind: grid-wipe, over: 0.8, title: "4 · WORKFLOW" } }
+  # Rung 4: a dynamic workflow
+  - { id: s4.1, span: [r4, r4b-0.2], idea: "Claude writes a script that will run the agents.", look: slate,
+      camera: { size: MS, on: { lead: [0.28, 0.60], slate: [0.64, 0.40] }, angle: [20, -6], fov: 35, move: { kind: hold } },
+      do: [{ at: r4.script, act: show, what: slate }, { at: r4.script, act: say, who: lead, line: Writing a workflow }] }
+  - { id: s4.2, span: [r4b-0.2, r4b.sixteen-0.3], idea: "Fifty jobs queue up.", look: rack,
+      camera: { size: MLS, on: { slate: [0.30, 0.38], rack: [0.62, 0.58] }, angle: [-15, -10], fov: 35, move: { kind: hold } },
+      do: [{ at: r4b.fifty, act: show, what: rack }, { at: r4b.fifty, act: show, what: pads }] }
+  - id: s4.3
+    span: [r4b.sixteen-0.3, r4c.next-0.2]
+    idea: Sixteen at a time.
+    look: pads
+    camera:
+      size: CU
+      on: { pads.1: [0.50, 0.55] }
+      angle: [0, -20]
+      fov: 38
+      move: { kind: pull-out, to: { size: LS, on: { lead: [0.12, 0.60], pads: [0.62, 0.55] } }, at: r4b.sixteen, over: 3.5, ease: log,
+              why: "the scale change; the lead comes into frame as the yardstick, and the camera rests before the last row lands" }
+    do:
+      - { at: r4b.sixteen-0.3, act: send, from: rack, to: pads.1, lane: low }
+      - { at: r4b.sixteen-0.2, act: beam-in, who: pads.1 }
+      - { at: r4b.sixteen+0.5, act: beam-in, who: [pads.2-4, pads.5-8, pads.9-12, pads.13-16], gap: 0.5 }
+      - { at: r4b.sixteen+2.4, act: count, what: pads, text: 16 RUNNING · 34 QUEUED }
+      - { at: r4b.sixteen+2.4, act: label, what: rack, text: 34 JOBS QUEUED }
+  - { id: s4.4, span: [r4c.next-0.2, r4c.wave-0.6], idea: "As one finishes, the next steps on.", look: pads.6,
+      camera: { size: MS, on: { pads.6: [0.55, 0.55] }, angle: [10, -34], fov: 30, move: { kind: hold } },
+      do: [{ at: r4c.next-0.2, act: status, who: pads.6, to: done },
+           { after: 0.2, act: send, from: pads.6, to: slate, lane: high, text: migrated ✓ }, { after: 0.1, act: beam-out, who: pads.6 },
+           { after: 0.5, act: send, from: rack, to: pads.6, lane: low }, { after: 0.3, act: beam-in, who: pads.6 }],
+      out: { kind: cut } }
+  - { id: s4.5, span: [r4c.wave-0.6, r4d.script-0.2], idea: "Wave after wave.", look: pads,
+      camera: { size: LS, on: { pads: [0.55, 0.55] }, angle: [0, -30], fov: 24, move: { kind: hold } },
+      do: [{ at: r4c.wave-0.6, act: cycle, what: pads, work: [0.8, 1.6], until: 50 },
+           { at: r4c.wave-0.6, act: count, what: pads, text: "{running} RUNNING · {queued} QUEUED · {done} DONE" }] }
+  - { id: s4.6, span: [r4d.script-0.2, r4e], idea: "Results land in the script, not in Claude, and it boils them down.", look: slate,
+      camera: { size: MLS, on: { lead: [0.25, 0.62], slate: [0.58, 0.40] }, angle: [-15, -8], fov: 35, move: { kind: hold } },
+      do: [{ at: r4d.script-0.2, act: glow, what: lead.gauge, label: "still 9%" },
+           { at: r4d.boils, act: label, what: slate, text: "50 migrated · 2 need a look" }] }
+  - { id: s4.7, span: [r4e, r5], idea: "Fifty agents' work; one report.", look: lead.gauge,
+      camera: { size: LS, on: { lead: [0.18, 0.60], pads: [0.66, 0.55] }, angle: [0, -24], fov: 38, move: { kind: hold } },
+      do: [{ at: r4e.one-0.4, act: send, from: slate, to: lead.gauge, lane: high, text: "50 migrated · 2 need a look" },
+           { at: r4e.one+0.6, act: fill, what: lead.gauge, to: 0.12, over: 0.6 }],
+      out: { kind: grid-wipe, over: 0.8, title: "5 · /BATCH", resets: [pads, slate, rack] } }
+  # Rung 5: /batch, many changes in parallel worktrees, each its own PR
+  - { id: s5.1, span: [r5, r5b], idea: "/batch: many changes at once.", look: lead,
+      camera: { size: MS, on: { lead: [0.28, 0.60] }, angle: [20, -6], fov: 35, move: { kind: hold } },
+      do: [{ at: r5.batch, act: say, who: lead, line: "/batch rename userId → accountId" }],
+      out: { kind: cut } }
+  - { id: s5.2, span: [r5b, r5b.nobody-0.3], idea: "Each change gets its own agent in its own worktree.", look: lanes,
+      camera: { size: FS, on: { lead: [0.25, 0.62] }, angle: [0, -12], fov: 44,
+                move: { kind: crane, to: { size: LS, angle: [0, -38], on: { lead: [0.12, 0.55], lanes: [0.60, 0.50] } }, at: r5b, over: 3,
+                        ease: inOut, why: "lanes are a layout, best read from above; follows the eight chips out" } },
+      do: [{ at: r5b, act: send, from: lead, to: lanes.heads, lane: low, gap: 0.15, text: rename },
+           { at: r5b.worktree, act: beam-in, who: lanes.tree, gap: 0.15 },
+           { after: 0.6, act: beam-in, who: lanes.console, gap: 0.15 }] }
+  - { id: s5.3, span: [r5b.nobody-0.3, r5c], idea: "A separate copy each, so nobody collides.", look: lanes.3,
+      camera: { size: MCU, on: { lanes.3.console: [0.40, 0.56], lanes.3.tree: [0.70, 0.44] }, angle: [15, -20], fov: 32, move: { kind: hold } },
+      do: [{ at: r5b.nobody, act: glow, what: lanes.3.tree, over: 1 }] }
+  - { id: s5.4, span: [r5c, recap], idea: "Side by side, each tests its change and ends in its own PR.", look: lanes.pr,
+      camera: { size: LS, on: { lead: [0.12, 0.55], lanes: [0.60, 0.50] }, angle: [0, -38], fov: 44, move: { kind: hold } },
+      do: [{ at: r5c.side, act: progress, what: lanes },
+           { at: r5d.pull-1.0, act: send, from: lanes.console, to: lanes.pr, lane: low, gap: 0.12, text: git push },
+           { at: r5d.pull, act: show, what: lanes.pr, gap: 0.25 },
+           { at: r5d.pull+2.0, act: count, what: lanes, text: 8 PULL REQUESTS }],
+      out: { kind: grid-wipe, over: 0.8, title: THE LADDER, resets: [lanes] } }
+  # Recap: up the ladder, one rung per word
+  - { id: s6.1, span: [recap, end], idea: "Five rungs, one after another.", look: ladder,
+      camera: { size: MS, on: { lead: [0.25, 0.60] }, angle: [20, -6], fov: 35, move: { kind: hold } },
+      do: [{ at: recap, act: show, what: ladder },
+           { at: [recap.one, recap.helpers, recap.nested, recap.workflow, recap.batch], act: show, what: [ladder.1, ladder.2, ladder.3, ladder.4, ladder.5] }],
+      out: { kind: move, over: 1.5 } }
+  - { id: s6.2, span: [end, end.end+2], idea: "Same Claude in every rung; it knows when to hand off.", look: lead,
+      camera: { size: MCU, on: { lead: [0.33, 0.48] }, angle: [25, -4], fov: 32, move: { kind: pull-out, to: ELS, at: end.off, over: 3, ease: log, why: leaves her alone on the grid } },
+      do: [{ at: end, act: hide, what: ladder }, { at: end.off, act: say, who: lead, line: Ready for the next job }, { at: end.off+0.6, act: title, text: HOW CLAUDE DELEGATES }],
+      out: { kind: cut } }
+
+notes:
+  - "swapped: the plinths recap for a card building up 'reach for…' a rung per word"
+  - "swapped: the rack's card stack for a label; morphs into chips for the sends that carry them"
+  - "left out: dim, glow on tags and edges, lanes' tests lights, typing on the slate"
+  - "changed: the crew sit with PADDs rather than at consoles, so a camera in front sees their faces"
+  - "changed: the gauges stand beside the crew, not behind; the lanes show progress on their worktree markers, not bubbles"

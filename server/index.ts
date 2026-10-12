@@ -138,6 +138,13 @@ async function main() {
 
   const app = express();
   app.use('/api', apiRouter(office, store));
+  // the studio's holodeck stage plays a shot plan from scenes/ (docs/studio.md), parsed in the browser
+  if (config.studio)
+    app.get('/studio/plans/:name', (req, res) => {
+      const file = path.join(config.root, 'scenes', `${path.basename(String(req.params.name))}.plan.yaml`);
+      if (!fs.existsSync(file)) return void res.status(404).type('text').send(`There's no scenes/${path.basename(file)}`);
+      res.type('text/yaml').send(fs.readFileSync(file, 'utf8'));
+    });
   if (config.demo) {
     app.get('/demo-preview/:owner/:name/:number', (req, res) => {
       const repo = `${req.params.owner}/${req.params.name}`;

@@ -1072,7 +1072,7 @@ export class DemoStudio implements StudioOfficer {
     };
     const said = req.messages.filter((m) => m.from === 'captain').at(-1)?.text.replace(/\s+/g, ' ').trim() ?? '';
     const q = said.toLowerCase();
-    const reply = (text: string): StudioReply => ({ text, sessionId: req.resumeSessionId ?? `demo-studio-${randomBytes(3).toString('hex')}`, costUsd: 0.05 });
+    const reply = (text: string): StudioReply => ({ text, sessionId: req.resumeSessionId ?? `demo-studio-${randomHex(3)}`, costUsd: 0.05 });
     const tool = async <T>(what: string, run: () => T | Promise<T>) => {
       activity(what);
       await wait(0.8);

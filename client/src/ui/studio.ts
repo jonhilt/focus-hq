@@ -6,7 +6,8 @@ import type { Player } from '../player';
 import type { World } from '../world/office';
 import type { StationSeat, TeamStation } from '../world/teamStation';
 import { h } from './dom';
-import { HoloStage } from './holoStage';
+import { compilePlan, readPlan } from '../../../shared/stagePlan';
+import { HoloStage } from './stage/player';
 import type { Hud } from './hud';
 
 /** Seated, a crew member's head is about this high off the floor. */
@@ -27,8 +28,9 @@ export class Studio {
   private readonly look = new THREE.Vector3();
   private readonly tmp = new THREE.Vector3();
 
-  /** The holodeck stage (`?stage=`), built once there's a vacant holodeck to stage it in. */
+  /** The holodeck stage (`?stage=`), built once its plan has loaded and there's a vacant holodeck to stage it in. */
   private stage: HoloStage | null = null;
+  private plan: ReturnType<typeof compilePlan> | null = null;
 
   constructor(
     private readonly world: World,
@@ -38,6 +40,25 @@ export class Studio {
   ) {
     document.body.classList.add('studio');
     document.body.append(this.tags, this.caption);
+    if (stageName) void this.loadPlan(stageName);
+  }
+
+  /** Fetches the stage's shot plan (scenes/<name>.plan.yaml, served by a --studio office) and compiles it. */
+  private async loadPlan(name: string): Promise<void> {
+    try {
+      const res = await fetch(`/studio/plans/${encodeURIComponent(name)}`);
+      if (!res.ok) throw new Error(await res.text());
+      const { parse } = await import('yaml');
+      this.plan = compilePlan(readPlan(parse(await res.text())));
+    } catch (err) {
+      this.say('The plan', `couldn't be played: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(err);
+    }
+  }
+
+  /** What the plan asked of the stage that it can't do yet. */
+  stageReport(): string[] {
+    return [...(this.stage?.unsupported ?? [])];
   }
 
   /** The goal's lead the studio films: the only one in its office. */
@@ -131,7 +152,7 @@ export class Studio {
     const camera = this.player.camera;
     if (this.stageName) {
       const hall = this.world.vacantHalls()[0];
-      if (!this.stage && hall) this.stage = new HoloStage(hall, camera, (title, text) => this.say(title, text));
+      if (!this.stage && hall && this.plan) this.stage = new HoloStage(hall, camera, this.plan);
       this.stage?.update(now);
       return;
     }
