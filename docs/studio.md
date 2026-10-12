@@ -69,16 +69,32 @@ explainer:                      # the same input as a lead's explain tool: title
 
 ## The holodeck stage
 
-`pnpm run studio --stage delegation` films a scene staged on an empty holodeck instead of the busy ship: only what the
-scene needs beams in, on the yellow grid, played from a timeline rather than demo mode, so it's the same every run and
-can later be timed to a narration. So far it's one rough scene, `client/src/ui/holoStage.ts`: "how Claude delegates", a
-rung at a time (one session alone, its context filling; subagents reading in their own contexts and sending back
-answers; a helper with helpers of its own, a glowing tree on the floor; a dynamic workflow's waves of 16 on transporter
-pads under its script; /batch's lanes, each agent's work running left to right into its own pull request; then the
-ladder). Its labels (context gauges, jobs and answers in flight, the script, pull requests) are sprites in the scene, as
-the crew's speech bubbles are. The clip lands in `studio-out/stage-delegation/clip.mp4`. To watch it live, open
-`?studio=1&stage=delegation`, come aboard, and call `focusHQ.studio.playStage()` (or `playStage(52)` to start 52 s in,
-though what should have come and gone by then can linger).
+`pnpm run studio --stage delegation` films a **shot plan** on an empty holodeck instead of the busy ship: only what the
+plan casts beams in, on the yellow grid, so it's the same every run and follows the narration's timing. A plan is
+`scenes/<name>.plan.yaml`, in the format the director writes (`studio/director.md`, "The shot plan"):
+
+- **`beats`**: the narration, a sentence each, with the start of each stressed word as a mark. Every time in the plan is
+  an anchor on them (`r2`, `r2.fresh`, `r2.fresh-0.2`, `r1+2.8`, `r2.end`), so re-timing the beats from a real take moves
+  every shot with it. `preview: { captions: true }` shows the beats' words as subtitles while there's no voice yet.
+- **`cast`**: `crew` (in a bridge seat with a PADD, facing `left` or `right` on screen and `turn`ed towards the audience,
+  with `gauge: true` for a context column beside them), `gauge` (a big in-world context column, `of` a crew member),
+  `list` (a task queue), `slate` (the workflow's script), `label`, `pad` (a grid of transporter pads), `lane` (a
+  `/batch` lane: a crew member in a worktree, its marker, and its pull request card) and `card` (the closing ladder).
+- **`shots`**, back to back: a `span`, a `camera` and what happens (`do`). The camera is **framed**, not placed: a shot
+  size, where each subject sits on screen (`on`), the `angle` and `fov`, and the stage solves where the camera goes
+  (`shared/framing.ts`), with an optional move (`push-in`, `pull-out`, `truck`, `crane`, `orbit`, `zoom`) or a list of
+  `keys`. Each shot hands over by `cut`, `move` (the camera carries on into the next shot), `dissolve` (a dip through
+  dark) or `grid-wipe` (a band of holodeck grid with a chapter card, which `resets` props behind it).
+- **Acts**: `beam-in`/`beam-out`, `say`, `status`, `fill` (a gauge), `show`/`hide` (including a gauge's `ghost`, an
+  earlier level marked), `send` (jobs fly low, answers high), `tick` (a queue), `label`/`count`, `glow`, `cycle` (pads
+  run waves until a total), `progress` (lanes) and `title` (a chapter card). Lists of targets spread by `gap`.
+
+`shared/stagePlan.ts` reads a plan and compiles it into a timeline (with tests); the browser's player is
+`client/src/ui/stage/`. A `--studio` office serves the plans at `/studio/plans/<name>`, and `?studio=1&stage=<name>`
+plays one: come aboard and call `focusHQ.studio.playStage()` (or `playStage(52)` to start 52 s in, though what should
+have come and gone by then can linger). Filming prints anything the plan asked for that the stage can't do yet.
+Episode 1 is `scenes/delegation.plan.yaml`, the director's plan with placeholder narration; the clip lands in
+`studio-out/stage-delegation/clip.mp4`.
 
 ## Not yet
 

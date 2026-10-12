@@ -212,7 +212,7 @@ function voice(outDir: string, file: string): void {
   console.log(`Studio: ${path.relative(root, outDir)}/final.mp4`);
 }
 
-/** Films a holodeck stage (`?stage=`, client/src/ui/holoStage.ts) once from the top, into studio-out/stage-<name>/clip.mp4. */
+/** Films a shot plan (scenes/<name>.plan.yaml) on the holodeck stage (client/src/ui/stage/) once from the top, into studio-out/stage-<name>/clip.mp4. */
 async function filmStage(name: string): Promise<void> {
   const outDir = path.join(root, 'studio-out', `stage-${name}`);
   const raw = path.join(outDir, 'raw');
@@ -235,6 +235,8 @@ async function filmStage(name: string): Promise<void> {
     const seconds = Number(await film.page.evaluate('window.focusHQ.studio.playStage()'));
     await sleep(seconds + 0.5);
     const to = film.at();
+    const missing = await film.page.evaluate<string[]>('window.focusHQ.studio.stageReport()');
+    if (missing.length) console.log(`  the plan asked for what the stage can't do yet:\n    ${missing.join('\n    ')}`);
     const video = await film.stop();
     ffmpeg(['-i', video, '-vf', `trim=start=${from.toFixed(3)}:end=${to.toFixed(3)},setpts=PTS-STARTPTS,fps=${FPS}`, '-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', path.join(outDir, 'clip.mp4')]);
     console.log(`Studio: ${path.relative(root, outDir)}/clip.mp4 (${(to - from).toFixed(1)}s)`);
