@@ -43,7 +43,7 @@ function from(agent: Agent): HTMLElement {
   const work = agent.lead;
   return h('div', { class: 'hail-from' },
     h('strong', null, agent.name),
-    work ? ` · Station ${work.station + 1} · “${work.title}”` : ` · ${agent.task === 'issue' ? '#' : 'PR #'}${agent.issue.number} ${agent.issue.title}`,
+    work ? ` · Station ${work.station + 1} · “${work.title}”` : agent.task === 'climb' ? ` · Climb: ${agent.issue.title}` : ` · ${agent.task === 'issue' ? '#' : 'PR #'}${agent.issue.number} ${agent.issue.title}`,
     project ? h('span', { class: 'hail-project', style: `--tone:${project.color}` }, project.name) : null,
   );
 }

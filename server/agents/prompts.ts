@@ -1,6 +1,7 @@
 import type { Agent } from '../../shared/types';
 import type { IssueDetail } from '../github/provider';
 import { truncate } from '../util';
+import { CLIMB_ASSIGNMENT, CLIMB_SUMMARY } from './climb';
 import { SCRATCH_RULE } from './scratch';
 
 export function systemAppend(agent: Agent): string {
@@ -10,11 +11,13 @@ export function systemAppend(agent: Agent): string {
     issue: `Your manager assigned you GitHub issue #${agent.issue.number} in ${agent.repo}.`,
     conflicts: `Your manager assigned you pull request #${agent.issue.number} in ${agent.repo}: it has merge conflicts with \`${agent.baseBranch}\` that you need to resolve.`,
     fix: `Your manager assigned you pull request #${agent.issue.number} in ${agent.repo}: it failed QA and you need to fix what QA found.`,
+    climb: CLIMB_ASSIGNMENT,
   }[agent.task];
   const summary = {
     issue: 'Your final message becomes the pull request description. Write it in Markdown with a short "Summary" and "Testing" section. No preamble.',
     conflicts: 'Your final message goes to the manager: say briefly how you resolved each conflict and what you checked. No preamble.',
     fix: 'Your final message goes to the manager: say briefly what you fixed and how you checked it. No preamble.',
+    climb: CLIMB_SUMMARY,
   }[agent.task];
   const where = agent.cloud
     ? [
@@ -102,8 +105,9 @@ export const COMMIT_NUDGE =
   'Your working tree still has uncommitted changes. Commit everything that belongs to this change now ' +
   '(leave out build output, dependencies and secrets), then reply with your pull request description again.';
 
-export function pullRequestBody(agent: Pick<Agent, 'name'> & { issue: Pick<Agent['issue'], 'number'> }, summary: string, attribution: boolean): string {
-  const body = `${summary.trim() || `Resolves the issue below.`}
+export function pullRequestBody(agent: Pick<Agent, 'name'> & Partial<Pick<Agent, 'task'>> & { issue: Pick<Agent['issue'], 'number'> }, summary: string, attribution: boolean): string {
+  // a climb has no issue of its own: the climber says `Closes #n` themselves when they took one of the retro's
+  const body = agent.task === 'climb' ? summary.trim() : `${summary.trim() || `Resolves the issue below.`}
 
 Closes #${agent.issue.number}`;
   return attribution ? `${body}\n\n---\n_Built by **${agent.name}** in the Focus office with Claude Code._` : body;

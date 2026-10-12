@@ -1,13 +1,14 @@
 import { isAutonomy } from '../shared/autonomy';
 import { chiefEngineer } from '../shared/crew';
-import type { Board, ConflictsOutcome, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, RetroDraft, ServerInfo, Settings, Snapshot } from '../shared/types';
-import { DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS } from '../shared/types';
+import type { Board, Climb, ConflictsOutcome, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, RetroDraft, ServerInfo, Settings, Snapshot } from '../shared/types';
+import { DESKS_PER_ROOM, EFFORT_LEVELS, isClimbBranch, MERGE_METHODS } from '../shared/types';
 import { carryMergeable } from '../shared/board';
 import { chosenSet, previewPrs } from '../shared/previewSet';
 import { startOrder } from '../shared/dependencies';
 import type { Closer } from '../shared/ledger';
 import { autoMergeFor, type GateMark, mergeMethodFor, mergeStep, type MergeStep, requestedMerge } from '../shared/mergeGate';
 import { autoSendBackFor, prKey } from '../shared/qa';
+import { climbHome } from './agents/climb';
 import type { AgentManager } from './agents/manager';
 import type { Calls } from './call/calls';
 import type { ChiefEngineer } from './agents/engineer';
@@ -36,6 +37,8 @@ function normalizeRepo(input: string): string {
 /** The office itself: projects (rooms), their Kanban boards, and the manager's actions. */
 export class Office {
   agents!: AgentManager;
+  /** The office's own repo (`owner/repo`, from its checkout's remote): what main engineering's climber works on. */
+  ownRepo: string | undefined;
   private info: ServerInfo;
   private refreshTimers = new Map<string, NodeJS.Timeout>();
   private refreshing = new Map<string, Promise<void>>();
@@ -97,6 +100,7 @@ export class Office {
       report: this.agents.report(),
       retro: this.engineer.current(),
       scorecards: this.scorecards.current(),
+      climb: this.agents.climb(),
     };
   }
 
@@ -341,6 +345,15 @@ export class Office {
     await this.requestedMerges(projectId, board);
     await this.autoMerge(projectId, board);
     this.autoAssign(projectId, board);
+    this.agents.settleClimb();
+  }
+
+  /**
+   * The captain's Keep climbing switch (docs/climber.md): climbs on the project with the office's own repo, one pull
+   * request at a time, each waiting for the captain to merge it.
+   */
+  keepClimbing(on: boolean): Climb {
+    return this.agents.keepClimbing(on, climbHome(this.store.projects, this.ownRepo, config.demo));
   }
 
   /** Merges the PRs the captain asked to merge once QA passed them, at exactly the commit QA passed. */
@@ -390,6 +403,7 @@ export class Office {
       const key = prKey(pr.repo, pr.number);
       const step = mergeStep(pr, this.store.reviews.get(key), {
         openedByOffice: this.agents.openedByOffice(pr.repo, pr.number),
+        captainMerges: isClimbBranch(pr.branch),
         developerBusy: this.agents.busyOn(pr.repo, pr.number),
         autoSendBack: autoSendBackFor(project),
         mark: this.gateMarks.get(key),

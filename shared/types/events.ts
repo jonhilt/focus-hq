@@ -3,6 +3,7 @@
 import type { ReportCard } from '../ledger';
 import type { Agent, BrowserFrame, TermLine } from './agents';
 import type { CallState, CallStatus } from './call';
+import type { Climb } from './climb';
 import type { IssueDraft } from './drafts';
 import type { Board, GitHubStatus } from './github';
 import type { NumberOneChat } from './numberOne';
@@ -46,6 +47,8 @@ export interface Snapshot {
   retro: Retro;
   /** The latest scorecards, for main engineering. */
   scorecards: Scorecards;
+  /** Main engineering's climber: the captain's switch and the climb under way. */
+  climb: Climb;
 }
 
 export type ServerEvent =
@@ -67,6 +70,7 @@ export type ServerEvent =
   | { type: 'report'; report: ReportCard }
   | { type: 'retro'; retro: Retro }
   | { type: 'scorecards'; scorecards: Scorecards }
+  | { type: 'climb'; climb: Climb }
   | { type: 'voice'; voice: VoiceStatus }
   | { type: 'call'; call: CallState | null }
   /** projectId, or the agent's, lets the browser drop toasts about a hidden project. */

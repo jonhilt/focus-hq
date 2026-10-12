@@ -6,6 +6,7 @@ import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { busy, fill, h, timeAgo } from './dom';
+import { climberView } from './climberView';
 import { scorecardView } from './scorecardView';
 import { markdownHtml } from './terminal';
 
@@ -57,6 +58,7 @@ export function openEngineeringPanel(ui: Ui): void {
 
     fill(body,
       scorecardView(ui),
+      climberView(ui),
       card ? h('div', { class: 'card' }, h('strong', null, card.headline), h('ul', null, ...card.lines.map((l) => h('li', null, l)))) : null,
       state.report?.fixes.length ? fixes(state.report.fixes) : null,
       older,
@@ -79,6 +81,11 @@ export function openEngineeringPanel(ui: Ui): void {
   ui.panels.own(state.on('retro', render));
   ui.panels.own(state.on('report', render));
   ui.panels.own(state.on('scorecards', render));
+  ui.panels.own(state.on('climb', render));
+  // the climber's activity, as they work
+  ui.panels.own(state.on('agent', (a) => {
+    if (a.id === state.climb?.agentId) render();
+  }));
   render();
 }
 

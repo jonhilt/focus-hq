@@ -134,6 +134,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.post('/retro/start', h((req) => office.engineer.start(Number(req.body.days ?? 14))));
   r.post('/retro/stop', h(() => office.engineer.stop()));
   r.post('/scorecards/measure', h(() => office.scorecards.measure()));
+  r.post('/climb', h((req) => office.keepClimbing(req.body.on === true)));
   r.post('/retro/drafts/:id', h((req) => office.decideDraft(String(req.params.id), req.body.accept === true, typeof req.body.projectId === 'string' ? req.body.projectId : undefined, typeof req.body.repo === 'string' ? req.body.repo : undefined)));
   r.get('/digests/backfill', h(async () => ({ sessions: (await office.agents.undigested()).length })));
   r.post('/digests/backfill', h(() => office.agents.backfill()));

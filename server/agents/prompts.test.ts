@@ -67,4 +67,8 @@ describe('pullRequestBody', () => {
   it('leaves out the agent and Focus when attribution is off', () => {
     expect(pullRequestBody(agent(), 'Adds a cart.', false)).toBe('Adds a cart.\n\nCloses #7');
   });
+
+  it('closes no issue of its own for a climb, which has none', () => {
+    expect(pullRequestBody(agent({ task: 'climb', issue: { number: 0, title: 'Climbing', url: '' } }), '**Problem**\n\nSlow.', false)).toBe('**Problem**\n\nSlow.');
+  });
 });

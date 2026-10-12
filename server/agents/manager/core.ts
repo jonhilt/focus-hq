@@ -15,6 +15,7 @@ import type { Leads } from './leads';
 import type { Ledger } from './ledger';
 import type { PlanLimit } from './planLimit';
 import type { Reviews } from './reviews';
+import type { Climbs } from './climbs';
 import type { Seating } from './seating';
 import type { AgentSessions } from './sessions';
 import type { Slices } from './slices';
@@ -101,6 +102,7 @@ export class Core {
   comms!: Comms;
   reviews!: Reviews;
   triages!: Triages;
+  climbs!: Climbs;
   cloud!: CloudMoves;
   ledger!: Ledger;
   planLimit!: PlanLimit;

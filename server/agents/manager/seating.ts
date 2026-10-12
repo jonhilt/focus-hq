@@ -3,7 +3,7 @@ import { randomAvatar } from '../../../shared/crew';
 import { type Closer } from '../../../shared/ledger';
 import { prKey } from '../../../shared/qa';
 import type { Agent, Effort } from '../../../shared/types';
-import { ACTIVE_STATUSES } from '../../../shared/types';
+import { ACTIVE_STATUSES, CLIMB_DESK } from '../../../shared/types';
 import { newId, slugify } from '../../util';
 import { leadWorktreeId, snapshotMessage } from '../lead';
 import { pickName } from '../prompts';
@@ -46,7 +46,7 @@ export class Seating extends Part {
   /** An agent of the office opened the PR (QA's review remembers it after they've gone home). */
   openedByOffice(repo: string, number: number): boolean {
     return !!this.store.reviews.get(prKey(repo, number))?.openedByOffice
-      || [...this.store.agents.values()].some((a) => a.task === 'issue' && a.repo === repo && a.pr?.number === number);
+      || [...this.store.agents.values()].some((a) => (a.task === 'issue' || a.task === 'climb') && a.repo === repo && a.pr?.number === number);
   }
 
   /** Someone in the office is working on the PR right now, or queued to. */
@@ -64,7 +64,8 @@ export class Seating extends Part {
     );
     if (existing) throw new Refused({ message: `${existing.name} is already working on #${work.issue.number}` });
 
-    const desk = this.freeDesk(projectId);
+    // the climber stands in main engineering, not at one of the room's desks
+    const desk = work.task === 'climb' ? CLIMB_DESK : this.freeDesk(projectId);
     const name = pickName(new Set([...this.store.agents.values()].map((a) => a.name)));
     const agent: Agent = {
       name,
@@ -80,7 +81,7 @@ export class Seating extends Part {
     };
     this.store.putAgent(agent);
     this.hub.send({ type: 'agent', agent });
-    this.print(agent, [{ kind: 'system', text: `✻ ${name} joined ${project.name} to work on ${repo}#${work.issue.number} (${work.model ? `${work.model}, ` : ''}${work.effort ?? 'default'} effort${work.cloud ? ', in the cloud' : ''})` }]);
+    this.print(agent, [{ kind: 'system', text: `✻ ${name} joined ${project.name} to ${work.task === 'climb' ? `climb ${repo}` : `work on ${repo}#${work.issue.number}`} (${work.model ? `${work.model}, ` : ''}${work.effort ?? 'default'} effort${work.cloud ? ', in the cloud' : ''})` }]);
     this.schedule();
     return agent;
   }
@@ -149,6 +150,7 @@ export class Seating extends Part {
     this.core.ledger.recordLanding(repo, number, merged, by, headSha);
     this.core.reviews.reviewGone(repo, number, merged);
     if (this.core.leads.leadPrClosed(repo, number, merged)) return;
+    this.core.climbs.prClosed(repo, number, merged);
     const agent = this.prOwner(repo, number);
     if (!agent || this.leaving.has(agent.id)) return;
     this.leaving.add(agent.id);

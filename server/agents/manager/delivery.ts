@@ -4,6 +4,7 @@ import type { Agent } from '../../../shared/types';
 import { GitHub } from '../../github/service';
 import { errorMessage } from '../../util';
 import { afterCloudRun } from '../cloud';
+import { climbPullRequest } from '../climb';
 import { COMMIT_NUDGE, pullRequestBody, pushNudge } from '../prompts';
 import { Workspace } from '../services';
 import { type ManagerServices, Part, Refused, type WorkError } from './core';
@@ -79,11 +80,14 @@ export class Delivery extends Part {
         this.hub.toast('success', `${agent.name} updated PR #${pr.number}`, agent.id);
       } else {
         this.update(agent, { activity: 'Opening the pull request' });
+        // a climb's title is the first line of the climber's own write-up
+        const { title, body } = agent.task === 'climb' ? climbPullRequest(summary) : { title: agent.issue.title, body: summary };
+        if (title !== agent.issue.title) this.update(agent, { issue: { ...agent.issue, title } });
         pr = yield* this.retrying(agent, 'opening the pull request', github.createPullRequest(agent.repo, {
           head: agent.branch,
           base: agent.baseBranch,
-          title: agent.issue.title,
-          body: pullRequestBody(agent, summary, this.store.settings.attribution),
+          title,
+          body: pullRequestBody(agent, body, this.store.settings.attribution),
         }));
         this.hub.toast('success', `🎉 ${agent.name} opened PR #${pr.number}: ${agent.issue.title}`, agent.id);
       }

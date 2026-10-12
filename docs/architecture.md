@@ -39,6 +39,7 @@ server/
       planLimit.ts        your plan's usage limit reached: an agent it stopped carries on with the API key, or is held until it resets
       reviews.ts          QA: the review queue, seating a reviewer, their verdict, sending a failed PR back to be fixed
       triages.ts          stuck PRs: the operations officer's look, one at a time per room, and what they decided
+      climbs.ts           main engineering's climber: one climb at a time while the captain keeps climbing, the next once its PR merges or closes
       cloudMoves.ts       moving an agent to a cloud session, attaching to it, or keeping them local
       ledger.ts           ledger entries, landings, session digests and backfill, the report card
     services.ts           what the manager needs from outside as Effect services: git on the checkouts, Claude Code sessions (a scoped turn), triage
@@ -64,6 +65,7 @@ server/
     numberOne.ts          Number One's ship-wide chat: turns, prompt, reply schema and the ship_status summariser
     claudeCrew.ts         the crew's read-only Claude Code sessions (Read/Glob/Grep, web search/fetch for Number One, Number One's ship_status and open_project, structured output)
     retro.ts              the chief engineer's retro, pure: what the engineer reads (the frictions that keep coming back, the ledger, goals), prompt, schema, and the check that every draft rests on real groups, with the evidence added by code; also who a transcript's message is from
+    climb.ts              the climber, pure: the climb's brief, its PR from the write-up, what to do next, and where the climbs are (docs/climber.md)
     engineer.ts           the chief engineer: groups the digests' frictions, gathers the evidence into data/retros, runs one retro at a time and notes the captain's decisions; also finds the agents' transcripts on disk
     sessionDigest.ts      a session's span digested from its transcript and the ledger, by code: calls, waste, cost, nudges
     frictions.ts          what the retro's reader reads of each session's span, the batches, prompt and schema, the fixed friction kinds, and the check that every quote is in the span

@@ -5,8 +5,8 @@ import { qaOfficerFor, randomAvatar } from '../shared/crew';
 import type { LedgerEntry, LedgerEvent } from '../shared/ledger';
 import { type LedgerHealth, LedgerLog } from './ledgerLog';
 import { olderVerdict, prKey } from '../shared/qa';
-import type { Agent, Board, BrowserFrame, ClosedPr, MergeMethod, NumberOneChat, Project, QaReview, Retro, Settings, StudioSession, TermLine } from '../shared/types';
-import { ACTIVE_STATUSES, DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS, ROOM_THEMES, type RoomTheme } from '../shared/types';
+import type { Agent, Board, BrowserFrame, Climb, ClosedPr, MergeMethod, NumberOneChat, Project, QaReview, Retro, Settings, StudioSession, TermLine } from '../shared/types';
+import { ACTIVE_STATUSES, DESKS_PER_ROOM, EFFORT_LEVELS, freshClimb, MERGE_METHODS, ROOM_THEMES, type RoomTheme } from '../shared/types';
 import { config, paths } from './config';
 import { takeLock } from './fileLock';
 import { fitDesks } from './agents/desks';
@@ -50,6 +50,7 @@ interface PersistedState {
   numberOne?: StoredNumberOne;
   studio?: StoredStudio;
   retro?: Retro;
+  climb?: Climb;
   reviews?: QaReview[];
   closedPrs?: ClosedPr[];
 }
@@ -83,6 +84,8 @@ export class Store {
   studio: StoredStudio = freshStudio();
   /** The chief engineer's latest retro. */
   retro: Retro = freshRetro();
+  /** Main engineering's climber: the captain's switch and the climb under way. */
+  climb: Climb = freshClimb();
   /** The latest QA review per pull request (by prKey). */
   reviews = new Map<string, QaReview>();
   /** PRs the operations officer closed as the wrong approach, by prKey of the issue they were for. */
@@ -124,6 +127,7 @@ export class Store {
     if (raw.numberOne) this.numberOne = numberOneAfterRestart(raw.numberOne);
     if (raw.studio) this.studio = studioAfterRestart(raw.studio);
     if (raw.retro) this.retro = retroAfterRestart(raw.retro);
+    if (raw.climb) this.climb = { ...freshClimb(), ...raw.climb };
     for (const review of raw.reviews ?? []) {
       if (review.status === 'queued' || review.status === 'testing') {
         Object.assign(review, { status: 'error', error: 'Interrupted when Focus shut down. Send it to QA again.' });
@@ -184,6 +188,7 @@ export class Store {
       numberOne: this.numberOne,
       studio: this.studio,
       retro: this.retro,
+      climb: this.climb,
       reviews: [...this.reviews.values()],
       closedPrs: [...this.closedPrs.values()],
     };

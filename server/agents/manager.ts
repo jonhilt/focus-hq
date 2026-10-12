@@ -1,9 +1,10 @@
 import type { Layer } from 'effect';
 import type { Closer, LedgerEntry, ReportCard } from '../../shared/ledger';
-import type { Agent, Autonomy, ConflictsOutcome, Effort, FailedCheck, MessageReply, PullRequest, QaReview, QueuedGoal, ResumeHow, TermLine } from '../../shared/types';
+import type { Agent, Autonomy, Climb, ConflictsOutcome, Effort, FailedCheck, MessageReply, PullRequest, QaReview, QueuedGoal, ResumeHow, TermLine } from '../../shared/types';
 import type { Hub } from '../hub';
 import type { Store } from '../store';
 import type { Transcript } from './engineer';
+import { Climbs } from './manager/climbs';
 import { CloudMoves } from './manager/cloudMoves';
 import { Comms } from './manager/comms';
 import { Conflicts } from './manager/conflicts';
@@ -46,6 +47,7 @@ export class AgentManager {
     this.core.sessions = new AgentSessions(this.core);
     this.core.slices = new Slices(this.core);
     this.core.triages = new Triages(this.core);
+    this.core.climbs = new Climbs(this.core);
   }
 
   /** Reads an agent session's Claude Code transcript by its id (missing in the demo, which has none). */
@@ -221,6 +223,20 @@ export class AgentManager {
 
   record(projectId: string, entry: LedgerEntry, at = Date.now()): void {
     this.core.ledger.record(projectId, entry, at);
+  }
+
+  /** Main engineering's climber: the captain's switch and the climb under way (docs/climber.md). */
+  climb(): Climb {
+    return this.core.climbs.current();
+  }
+
+  keepClimbing(on: boolean, home: { projectId: string; repo: string } | undefined): Climb {
+    return this.core.climbs.keepClimbing(on, home);
+  }
+
+  /** Looks at the climb under way: starts the next, or switches climbing off when the last ended without a pull request. */
+  settleClimb(): void {
+    this.core.climbs.settle();
   }
 
   report(): ReportCard {

@@ -1,4 +1,4 @@
-import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ResumeHow, Retro, RetroDraft, RoomTheme, Scorecards, Settings, StudioSession, TermLine, VoiceStatus } from '../../../shared/types';
+import type { Agent, Autonomy, Board, Climb, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ResumeHow, Retro, RetroDraft, RoomTheme, Scorecards, Settings, StudioSession, TermLine, VoiceStatus } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
 
@@ -61,6 +61,7 @@ export const api = {
   retroStart: (days: number) => call<Retro>('POST', '/retro/start', { days }),
   retroStop: () => call<Retro>('POST', '/retro/stop'),
   measureScorecard: () => call<Scorecards>('POST', '/scorecards/measure'),
+  keepClimbing: (on: boolean) => call<Climb>('POST', '/climb', { on }),
   /** The ledger's events of the last `days` days, for reviewing at the master systems table. */
   ledger: (days: number) => call<LedgerEvent[]>('GET', `/ledger?days=${days}`),
   undigested: () => call<{ sessions: number }>('GET', '/digests/backfill'),

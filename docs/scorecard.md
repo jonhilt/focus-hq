@@ -26,6 +26,9 @@ It takes about a minute and a quarter. It always exits 0: it measures, it doesn'
 
 ## In main engineering
 
+The [climber](climber.md) works from it: each climb measures the scorecard before and after its one change.
+
+
 The engineering panel (<kbd>E</kbd> at Lt. Brennan's station on deck 5) opens with the latest scorecard, above the report card and the retro:
 - each number, a section at a time;
 - its change since the one before, ▲ or ▼;

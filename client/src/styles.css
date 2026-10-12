@@ -870,3 +870,5 @@ body.studio .hud, body.studio .toasts { display: none; }
 .spark polyline { fill: none; stroke: var(--lcars-sky); stroke-width: 1.5; }
 .spark.better polyline { stroke: var(--lcars-green); }
 .spark.worse polyline { stroke: var(--lcars-red); }
+/* main engineering's climber, under the scorecard (ui/climberView.ts) */
+.climber { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }

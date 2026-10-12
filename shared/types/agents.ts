@@ -66,10 +66,11 @@ export type Effort = (typeof EFFORT_LEVELS)[number];
 
 /**
  * What an agent was seated for: an issue to resolve, an open pull request whose branch conflicts with its base, an open
- * pull request that failed QA, (the room's QA officer) a pull request to review and test, or (a goal's lead) the
- * captain's own Claude Code session for one goal, across all the project's repos.
+ * pull request that failed QA, (the room's QA officer) a pull request to review and test, (a goal's lead) the
+ * captain's own Claude Code session for one goal, across all the project's repos, or (main engineering's climber) the
+ * scorecard's worst gap in Focus's own repo, one pull request at a time (docs/climber.md).
  */
-export type AgentTask = 'issue' | 'conflicts' | 'fix' | 'review' | 'lead';
+export type AgentTask = 'issue' | 'conflicts' | 'fix' | 'review' | 'lead' | 'climb';
 
 /**
  * What the office did about a pull request's merge conflicts: merged its base branch in by itself (`auto`: the conflicted
@@ -82,6 +83,9 @@ export const QA_DESK = -1;
 
 /** Nor does a goal's lead, who sits at one of the room's team stations (`LeadWork.station`). */
 export const LEAD_DESK = -2;
+
+/** Nor does main engineering's climber, who stands behind the master systems table on deck 5. */
+export const CLIMB_DESK = -3;
 
 /** How many goals a room can work on at once: each has its own team station, and a lead at it. */
 export const TEAM_STATIONS = 4;

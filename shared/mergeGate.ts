@@ -29,6 +29,8 @@ export interface GateOffice {
   developerBusy: boolean;
   /** The project sends failed PRs back to a developer. */
   autoSendBack: boolean;
+  /** Only the captain merges it, whatever QA says: main engineering's climbs (docs/climber.md). */
+  captainMerges?: boolean;
   mark?: GateMark;
 }
 
@@ -36,6 +38,7 @@ type GatePr = Pick<PullRequest, 'headSha' | 'isDraft' | 'mergeable' | 'checks' |
 
 export function mergeStep(pr: GatePr, review: QaReview | undefined, office: GateOffice): MergeStep {
   if (!office.openedByOffice) return { kind: 'blocked', reason: 'a teammate opened it' };
+  if (office.captainMerges) return { kind: 'blocked', reason: 'the captain merges climbs' };
   if (pr.isDraft) return { kind: 'blocked', reason: 'it’s a draft' };
   const head = pr.headSha;
   if (!head) return { kind: 'blocked', reason: 'GitHub didn’t say which commit it’s at' };

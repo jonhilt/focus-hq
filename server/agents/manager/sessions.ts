@@ -9,6 +9,7 @@ import { GitHub, type GitHubError } from '../../github/service';
 import { newId, truncate } from '../../util';
 import { attachAgain, carryOnInNewSession, CLOUD_UNAVAILABLE, fallBackToLocal } from '../cloud';
 import { applyHelperEvent, COMPACT_INSTRUCTIONS, compactInstructions, freshSessionPrompt, HELPER_LINGER_MS, leadSystemAppend, sessionGone, sliceLanded } from '../lead';
+import { climbBrief } from '../climb';
 import { carryOnPrompt, conflictsPrompt, issuePrompt, systemAppend } from '../prompts';
 import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
 import { Sessions, Workspace } from '../services';
@@ -35,7 +36,7 @@ export class AgentSessions extends Part {
       this.update(agent, { status: 'setting-up', activity: 'Picking up where they left off' });
       return this.runSession(agent, rt.inbox.splice(0).join('\n\n'), agent.sessionId).pipe(this.orFail(agent));
     }
-    this.update(agent, { status: 'setting-up', activity: agent.task === 'review' ? 'Reading the pull request' : 'Reading the issue', error: undefined });
+    this.update(agent, { status: 'setting-up', activity: agent.task === 'review' ? 'Reading the pull request' : agent.task === 'climb' ? 'Reading the brief' : 'Reading the issue', error: undefined });
     return Effect.gen({ self: this }, function* () {
       if (agent.task === 'review') return yield* this.core.reviews.launchReview(agent);
       if (agent.task === 'lead') return yield* this.core.leads.launchLead(agent);
@@ -43,10 +44,10 @@ export class AgentSessions extends Part {
       const workspace = yield* Workspace;
       const info = yield* github.repoInfo(agent.repo);
       if (info.isEmpty) return yield* new EmptyRepository({ repo: agent.repo });
-      if (agent.task === 'issue') this.update(agent, { baseBranch: info.defaultBranch });
+      if (agent.task === 'issue' || agent.task === 'climb') this.update(agent, { baseBranch: info.defaultBranch });
       const prompt = yield* this.taskPrompt(agent);
-      // an issue starts a new branch from the base; conflicts and QA's findings are fixed on the PR's own branch
-      const startPoint = agent.task === 'issue' ? agent.baseBranch : agent.branch;
+      // an issue or a climb starts a new branch from the base; conflicts and QA's findings are fixed on the PR's own branch
+      const startPoint = agent.task === 'issue' || agent.task === 'climb' ? agent.baseBranch : agent.branch;
       this.print(agent, [{ kind: 'system', text: `✻ Setting up a worktree for ${agent.repo} on ${agent.branch}` }]);
       this.update(agent, { activity: 'Cloning the repository' });
       // the PR's branch may be checked out in its goal's lead's workspace: someone resolving its conflicts works on a
@@ -79,6 +80,8 @@ export class AgentSessions extends Part {
         }
         case 'conflicts':
           return conflictsPrompt(agent);
+        case 'climb':
+          return climbBrief(agent, this.store.ledger, Date.now());
         case 'fix': {
           const review = this.store.reviews.get(prKey(agent.repo, agent.issue.number));
           if (!review?.report) return yield* new ReportGone({ number: agent.issue.number });

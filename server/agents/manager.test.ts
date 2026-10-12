@@ -12,6 +12,7 @@ import { demoWorkspace } from './demoRunner';
 import { AgentManager } from './manager';
 import { Renderer, Sessions, ShipRetry, Triage, Workspace } from './services';
 import type { Autonomy, PullRequest, QaReport } from '../../shared/types';
+import { CLIMB_DESK } from '../../shared/types';
 import type { AgentRunner, AgentSession, CloudTerminal, CloudTerminalRequest, RunHooks, RunOutcome, RunRequest, WorkspaceOps } from './types';
 import { CLOUD_UNAVAILABLE } from './cloud';
 import { keyFallback } from './apiKey';
@@ -995,6 +996,54 @@ describe('AgentManager', () => {
       second.agents.stop(second.id);
       await new Promise((r) => setTimeout(r, 1500));
       expect(second.claude.turns).toHaveLength(1);
+    });
+  });
+
+  describe('climbing', () => {
+    const climbers = (store: Store) => [...store.agents.values()].filter((a) => a.task === 'climb');
+
+    it('climbs one pull request at a time while the captain keeps climbing, and starts the next once it merges', async () => {
+      const { agents, claude, store, project } = office();
+      agents.keepClimbing(true, { projectId: project.id, repo: 'demo/webshop-frontend' });
+      await until(() => claude.turns.length === 1);
+      const id = store.climb.agentId!;
+      // the climber stands in main engineering, not at one of the room's desks
+      expect(store.agent(id)).toMatchObject({ task: 'climb', desk: CLIMB_DESK, branch: expect.stringMatching(/^focus\/climb-/) });
+      expect(claude.turns[0].req.prompt).toMatch(/^Climb demo\/webshop-frontend one step/);
+
+      claude.turns[0].end({ ok: true, summary: '# Narrow the board’s lookups\n\n**Problem**\n\nSix non-null assertions.' });
+      await until(() => !!store.agent(id).pr);
+      const pr = store.agent(id).pr!;
+      expect(store.agent(id).issue.title).toBe('Narrow the board’s lookups');
+      agents.settleClimb();
+      expect(store.climb).toMatchObject({ keepClimbing: true, cycles: 1, pr: { number: pr.number } });
+      agents.settleClimb();
+      expect(climbers(store)).toHaveLength(1);
+
+      agents.prClosed('demo/webshop-frontend', pr.number, true, 'captain');
+      await until(() => store.climb.cycles === 2);
+      expect(store.climb.last).toMatchObject({ pr: pr.number, outcome: 'merged' });
+      expect(store.climb.agentId).not.toBe(id);
+    });
+
+    it('switches climbing off, saying why, when a climb ends without a pull request', async () => {
+      const { agents, claude, store, project } = office({ ...demoWorkspace, commitsAhead: () => Promise.resolve(0) });
+      agents.keepClimbing(true, { projectId: project.id, repo: 'demo/webshop-frontend' });
+      await until(() => claude.turns.length === 1);
+      const id = store.climb.agentId!;
+      claude.turns[0].end({ ok: true, summary: 'Nothing worth changing: the scorecard is clean.' });
+      await until(() => store.agent(id).status === 'done');
+      agents.settleClimb();
+      expect(store.climb).toMatchObject({ keepClimbing: false, agentId: undefined, last: { outcome: 'nothing' } });
+      expect(store.climb.stoppedWhy).toMatch(/found nothing to change/);
+      agents.settleClimb();
+      expect(climbers(store)).toHaveLength(1);
+    });
+
+    it('won’t climb without the office’s own repo in a project', () => {
+      const { agents, store } = office();
+      expect(() => agents.keepClimbing(true, undefined)).toThrow(/Connect the office’s own repository/);
+      expect(store.climb.keepClimbing).toBe(false);
     });
   });
 });

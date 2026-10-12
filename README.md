@@ -88,6 +88,7 @@ Then on board:
 - [Data and backups](docs/data.md): what lives in `~/.focus/` and what to back up
 - [The ledger](docs/ledger.md): the log of how work went, and the report card
 - [The chief engineer's retro](docs/retro.md): a look back over the agents' sessions, with proposals for how the office works
+- [The climber](docs/climber.md): main engineering's crew member who fixes the scorecard's worst gap, one pull request at a time
 - [Auto update](docs/auto-update.md): keeping the office on the latest code
 
 **Working on Focus**
