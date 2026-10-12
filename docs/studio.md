@@ -96,6 +96,30 @@ have come and gone by then can linger). Filming prints anything the plan asked f
 Episode 1 is `scenes/delegation.plan.yaml`, the director's plan with placeholder narration; the clip lands in
 `studio-out/stage-delegation/clip.mp4`.
 
+## Narration
+
+The narration is recorded first, to camera, and the shot plan is timed to it. `scenes/<name>.narration.yaml` names the
+takes (video files) and the spans of each to keep, in order:
+
+```yaml
+takes:
+  t1: ~/Movies/2026-10-12 13-36-19.mp4
+  t2: ~/Movies/2026-10-12 14-07-53.mp4
+keep:
+  - { take: t1, from: 0, to: 186.7 }
+  - { take: t2, from: 0, to: 133.95 }
+  - { take: t2, from: 140.2, to: 204.6 }   # skips a repeated line
+maxPause: 0.6
+```
+
+`pnpm run studio --narrate <name>` transcribes each take with whisper.cpp on this machine (the same `whisper-cli` and
+model as voice input, `docs/voice-input.md`; cached per take), keeps the spans without fillers (um, uh) and with pauses
+longer than `maxPause` shortened, and writes `studio-out/narration-<name>/`: `narration.mp4` (the presenter's picture and
+voice), `words.json` (every word's time in it) and `beats.json` (the words grouped into beats, for the director to plan
+against). `shared/narration.ts` does the cutting decisions, with tests. When a stage's narration exists, filming it also
+writes `episode.mp4`: the holodeck with the presenter picture-in-picture in the bottom-right corner and their voice under
+it.
+
 ## The studio holodeck
 
 Before a video is filmed it's thought through, and that happens standing in an empty holodeck with its own computer:
