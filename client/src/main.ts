@@ -19,6 +19,7 @@ import { linkAction, openCommsPanel } from './ui/commsPanel';
 import { openEngineeringPanel } from './ui/engineeringPanel';
 import { openLedgerPanel } from './ui/ledgerPanel';
 import { numberOnePanelOpen, openNumberOnePanel } from './ui/numberOnePanel';
+import { openStudioChat } from './ui/studioChat';
 import { Panels } from './ui/panels';
 import { openPreviewPanel } from './ui/previewPanel';
 import { openQaPanel } from './ui/qaPanel';
@@ -154,6 +155,7 @@ async function main() {
     openNewIssue: (projectId) => openNewIssuePanel(ui, projectId),
     openQa: (projectId) => openQaPanel(ui, projectId),
     openNumberOne: () => openNumberOnePanel(ui),
+    openStudio: () => openStudioChat(ui),
     openEngineering: () => openEngineeringPanel(ui),
     openLedger: () => openLedgerPanel(ui),
     showOnMsd: (trace) => (trace ? world.showOnMsd({ kind: 'trace', trace }) : world.clearMsd({ kind: 'report', card: state.report })),
@@ -293,10 +295,10 @@ async function main() {
   const agentChanged = (a: { projectId: string }) => {
     world.room(a.projectId)?.syncAgents();
     world.room(a.projectId)?.syncQa();
-    world.syncStudio();
     world.markPanels();
   };
   state.on('agent', agentChanged);
+  state.on('studio', () => world.syncStudio());
   // news for the captain: a toast now, and kept in Comms' recent traffic for when they missed it
   const notify = (level: TrafficEntry['level'], text: string, link?: TrafficLink) => {
     record({ at: Date.now(), level, text, link });
@@ -496,6 +498,9 @@ async function main() {
       case 'vacant':
         ui.openManager('new-project');
         break;
+      case 'studio':
+        ui.openStudio();
+        break;
       case 'energise':
         sound.press();
         if (i.projectId !== undefined && i.station !== undefined) ui.beamBack(i.projectId, i.station);
@@ -515,6 +520,10 @@ async function main() {
       KeyM: () => ui.openManager(),
       KeyN: () => ui.openNewIssue(world.locationOf(camera.position).projectId),
       Digit1: () => ui.openNumberOne(),
+      // in the studio, Enter talks to its computer
+      Enter: () => {
+        if (world.locationOf(camera.position).label === 'Studio') ui.openStudio();
+      },
       KeyC: () => ui.openComms(),
       // the goals of the holodeck you're in; anywhere else, every goal's in Comms
       KeyL: () => {

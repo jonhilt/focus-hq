@@ -1,7 +1,6 @@
 import type { AgentStatus, Autonomy, BrowserFrame, Effort, Settings, TermLine, Workflow, WorkflowAgent } from '../../shared/types';
 import type { ArtifactInput, NoteInput, QuestionInput } from './lead';
 import type { ExplainerInput } from './explainer';
-import type { StudioInput } from './studio';
 import type { ChecklistSource } from './checklist';
 import type { SinceVerdict } from './retest';
 import type { BackgroundEvent } from './backgroundTasks';
@@ -110,8 +109,6 @@ export interface OfficeTools {
   ask(input: QuestionInput): Promise<string>;
   /** The lead thinks the goal is done: the captain closes it, or carries on. */
   proposeClose(input: { reason: string }): Promise<string>;
-  /** Keeps the video the goal is making (its premise, beats and research gaps), which the studio holodeck shows. */
-  studio(input: StudioInput): Promise<string>;
 }
 
 /** What a run the captain stopped reports, and how a stopped review is told apart from one that failed. */

@@ -17,7 +17,7 @@ import { FirstOfficer } from './numberOne';
 import { AHEAD, type Portal, type PortalEnd } from './portal';
 import { type Region, regionAt, shown } from './regions';
 import { buildHiddenRoom, ProjectRoom, VacantHall } from './room';
-import { studioOf } from './studio';
+import { api } from '../net/api';
 import type { Scenery } from './scenery';
 import { LCARS, LCARS_FONT, lcarsFrame, type SlidingDoors } from './starship';
 import { cruise } from './starfield';
@@ -439,12 +439,13 @@ export class World {
   }
 
   /**
-   * The studio: the first vacant holodeck shows the video the goal whose lead last changed its studio is making
-   * (studio.ts), and the others stay vacant.
+   * The studio: the first vacant holodeck, where the captain and its computer think a video through (studio.ts). It
+   * stays the studio while the ship has a vacant holodeck; a new project takes the next one.
    */
   syncStudio(): void {
-    const found = studioOf([...state.agents.values()].filter((a) => a.task === 'lead'));
-    [...this.vacant.values()].forEach((hall, i) => hall.showStudio(i === 0 && found ? { title: found.lead.lead?.title ?? 'A video', studio: found.studio } : undefined));
+    const hall = [...this.vacant.values()][0];
+    if (!hall || !state.studio) return;
+    hall.showStudio(state.studio, (take, error) => void api.studioReport(take.id, take.version, error).catch(() => undefined));
   }
 
   /** The vacant holodecks' empty halls: the studio stages its scenes in one (ui/holoStage.ts). */

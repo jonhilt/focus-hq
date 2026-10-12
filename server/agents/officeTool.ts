@@ -4,7 +4,6 @@ import { errorMessage } from '../util';
 import { EXPLAINER_LIMITS as E, STAGE_SIZE } from './explainer';
 import { CONTACT_LIMITS as C } from './contacts';
 import { NOTE_LIMITS as L } from './lead';
-import { STUDIO_LIMITS as S } from './studio';
 import type { OfficeTools } from './types';
 
 /**
@@ -51,22 +50,6 @@ export const explainShape = {
   }).describe('What plays above the captions.'),
 };
 
-/** The studio tool's input, with the limits `applyStudio` enforces. */
-export const studioShape = {
-  premise: z.string().max(S.premise).optional().describe(`The video's basic idea, in a sentence or two (at most ${S.premise} characters): the first thing to send, and what the studio shows first.`),
-  takeaway: z.string().max(S.takeaway).optional().describe(`What the viewer should come away with, in a line (at most ${S.takeaway} characters).`),
-  beats: z.array(z.object({
-    title: z.string().max(S.beatTitle).describe(`The beat in a few words (at most ${S.beatTitle} characters).`),
-    point: z.string().max(S.point).optional().describe(`What it gets across, in a line (at most ${S.point} characters).`),
-  })).max(S.beats).optional().describe(`The video's beats in order, all of them (at most ${S.beats}): send them again as they change.`),
-  gap: z.string().max(S.gap).optional().describe(`Log one gap in what we know that the video needs filled, as a question (at most ${S.gap} characters, ${S.open} open at once). The office gives it an id (g1, g2…).`),
-  closeGap: z.object({
-    id: z.string().describe('The gap\'s id, like g2.'),
-    as: z.enum(['answered', 'dropped']).describe('answered: research or the captain filled it; dropped: the video doesn\'t need it after all.'),
-    answer: z.string().max(S.answer).optional().describe(`The answer, in a line (at most ${S.answer} characters).`),
-  }).optional().describe('Close an open gap once it\'s answered or dropped.'),
-};
-
 /** One tool's answer: what happened, in words, or (marked as an error) why it didn't. */
 async function answer(run: () => Promise<string>, failed: string): Promise<{ content: { type: 'text'; text: string }[]; isError?: boolean }> {
   try {
@@ -76,7 +59,7 @@ async function answer(run: () => Promise<string>, failed: string): Promise<{ con
   }
 }
 
-/** The office's tools for a goal's lead, as an in-process MCP server: mcp__office__ship, note, show, explain, ask, studio and propose_close. */
+/** The office's tools for a goal's lead, as an in-process MCP server: mcp__office__ship, note, show, explain, ask and propose_close. */
 export function officeMcpServer(tools: OfficeTools): McpSdkServerConfigWithInstance {
   return createSdkMcpServer({
     name: 'office',
@@ -130,12 +113,6 @@ The stage is a ${STAGE_SIZE.w} × ${STAGE_SIZE.h} box (#stage). Put your element
           })).describe('2 to 4 options: the captain sees them lettered A, B, C, D in this order.'),
         },
         (input) => answer(() => tools.ask(input), "Couldn't ask"),
-      ),
-      tool(
-        'studio',
-        "Keep the video this goal is making, in the studio: an empty holodeck where the captain stands while you think it through together, which shows it as you go. Start with the premise (the basic idea), then what the viewer should come away with, the beats, and each gap in what we know that the video needs filled (research it, with subagents if it's broad, or ask the captain, and close it with the answer). Send only what changes: each field replaces what was there, except gap and closeGap, which log and close one.",
-        studioShape,
-        (input) => answer(() => tools.studio(input), "Couldn't update the studio"),
       ),
       tool(
         'propose_close',

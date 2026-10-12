@@ -1,19 +1,10 @@
-import type { Agent, Studio, StudioGap } from '../../../shared/types';
+import type { StudioTake, StudioThread } from '../../../shared/types';
 
-// The studio: an empty holodeck taken over by the goal that's making a video, where the captain stands while its lead
-// and they think it through (docs/studio.md). Its premise is on the far wall, its beats in a row of cards round under
-// it, and each gap in what we know hangs in the air beside the premise as a light, its question on a tag that comes up
-// as you walk over (studioHall.ts, questionLights.ts). Nothing here draws, so it can be tested without a browser.
-
-/** The goal whose studio the holodeck shows: of the leads with one, the one whose lead last changed it. */
-export function studioOf(leads: readonly Agent[]): { lead: Agent; studio: Studio } | undefined {
-  let best: { lead: Agent; studio: Studio } | undefined;
-  for (const lead of leads) {
-    const studio = lead.lead?.studio;
-    if (studio && (!best || studio.at > best.studio.at)) best = { lead, studio };
-  }
-  return best;
-}
+// The studio: an empty holodeck where the captain and its computer, a Claude session of its own, think a video through
+// (docs/studio.md). Its premise is on the far wall, its beats in a row of cards round under it, each loose thread hangs
+// in the air beside the premise as a light, its question on a tag that comes up as you walk over, and the computer's
+// takes play side by side on the floor (studioHall.ts, questionLights.ts, takes.ts). Nothing here draws, so it can be
+// tested without a browser.
 
 /** The warm light an open question glows in. */
 export const QUESTION_LIGHT = '#ffc35c';
@@ -29,13 +20,13 @@ export interface Lit {
   settled?: Settled;
 }
 
-/** The studio's gaps as lights: answered ones went up, dropped ones down. */
-export function gapLights(gaps: readonly StudioGap[]): Lit[] {
-  return gaps.map((g) => ({
-    id: g.id,
-    text: g.text,
-    label: `Gap ${g.id}`,
-    ...(g.closed && { settled: g.closed.as === 'answered' ? ('up' as const) : ('down' as const) }),
+/** The video's loose threads as lights: answered ones went up, dropped ones down. */
+export function threadLights(threads: readonly StudioThread[]): Lit[] {
+  return threads.map((t) => ({
+    id: t.id,
+    text: t.text,
+    label: `Thread ${t.id}`,
+    ...(t.closed && { settled: t.closed.as === 'answered' ? ('up' as const) : ('down' as const) }),
   }));
 }
 
@@ -77,11 +68,11 @@ export function placeLights(
 export const STUDIO_WALL = { r: 10.3, half: 0.36, bottom: 2.5, top: 5.5, card: 1.7, gap: 0.18, cardR: 9.9, cardBottom: 0.75, cardTop: 2.15 };
 
 /**
- * Where each gap's light hangs, either side of the premise: `across` metres round the wall from straight ahead (to the
+ * Where each thread's light hangs, either side of the premise: `across` metres round the wall from straight ahead (to the
  * right as you face it), `out` from the wall, `y` up; alternately left and right, at different heights and depths so
  * their tags don't sit on each other.
  */
-export const GAP_SLOTS: readonly { across: number; out: number; y: number }[] = [
+export const THREAD_SLOTS: readonly { across: number; out: number; y: number }[] = [
   { across: -4.6, out: 1.6, y: 3.6 },
   { across: 4.6, out: 1.9, y: 3.9 },
   { across: -5.6, out: 2.2, y: 3.0 },
@@ -96,4 +87,25 @@ export const GAP_SLOTS: readonly { across: number; out: number; y: number }[] = 
 export function beatsFrom(count: number): number {
   const { card, gap, cardR } = STUDIO_WALL;
   return -(count * card + (count - 1) * gap) / 2 / cardR;
+}
+
+/** How many takes play on the floor at once: the newest. */
+export const TAKES_SHOWN = 3;
+
+/**
+ * Each take's floor (the hall's frame): `width` across and `depth` deep, side by side across the hall in the order
+ * they're shown, left to right as you face the far wall, `x` from the middle towards it; the take's own +z (its front)
+ * faces back towards the entrance, where you come in.
+ */
+export const TAKE_PLOT = { width: 6, depth: 5, gap: 0.6, x: 0.6 };
+
+/** The takes on the floor: the newest few, in the order they were first staged. */
+export function shownTakes(takes: readonly StudioTake[]): StudioTake[] {
+  return takes.slice(-TAKES_SHOWN);
+}
+
+/** Where take `i` of `n` stands across the hall (its middle's z in the hall's frame), the row centred on the hall. */
+export function plotZ(i: number, n: number): number {
+  const step = TAKE_PLOT.width + TAKE_PLOT.gap;
+  return (i - (n - 1) / 2) * step;
 }

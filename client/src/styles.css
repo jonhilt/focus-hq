@@ -173,6 +173,13 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
   animation: pop 0.2s ease-out;
 }
 .panel.wide { width: min(1280px, 100%); height: calc(100vh - 32px); }
+/* docked down the right, the world still in view to its left (the studio's chat) */
+.overlay.docked { background: transparent; place-items: stretch end; }
+.panel.docked { width: min(440px, 100%); height: calc(100vh - 32px); }
+.studio-chat .briefing-msg.computer { --tone: var(--lcars-gold); align-self: flex-start; border-left: 6px solid var(--tone); border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.studio-chat .briefing-msg.captain { --tone: var(--lcars-sky); align-self: flex-end; border-right: 6px solid var(--tone); border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.studio-chat { height: 100%; }
+.studio-chat .studio-takes { font-size: 13px; color: var(--muted, #9fb0d0); }
 .panel.has-nav { --side: 150px; }
 .panel-elbow { grid-area: elbow; position: relative; z-index: 1; background: var(--accent-c); border-top-left-radius: min(var(--side), var(--bar) + 10px); }
 /* the elbow's inside curve, where the header bar meets the sidebar */

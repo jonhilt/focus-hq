@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { openQuestion } from '../../../shared/artifacts';
 import { helperFor, plannerFor, qaOfficerFor } from '../../../shared/crew';
 import { prKey } from '../../../shared/qa';
-import type { Agent, Board, Helper, Project } from '../../../shared/types';
+import type { Agent, Board, Helper, Project, StudioSession, StudioTake } from '../../../shared/types';
 import { DESKS_PER_ROOM, TEAM_STATIONS } from '../../../shared/types';
 import { state } from '../net/state';
 import { sound } from '../sound';
@@ -26,7 +26,7 @@ import { DISPLAY_EVERY, redrawDue, type ScreenView, screenTest, takeDraw } from 
 import { paneUse } from './screenPanes';
 import { Beam } from './transporter';
 import { HULL, LCARS, lcarsSign, workstation } from './starship';
-import { StudioSet, type StudioView } from './studioHall';
+import { StudioSet } from './studioHall';
 import { FloorGlow, hover } from './hologram';
 import { OVERLAY_LAYER } from './frame';
 import { AHEAD, Portal } from './portal';
@@ -733,11 +733,11 @@ export class VacantHall {
   readonly props: THREE.Object3D[] = [];
   /** The doorway from its door on the deck to the hall's entrance. */
   readonly portal: Portal;
-  /** The sign over its door on the deck, which says whose studio it is while it's one. */
+  /** The sign over its door on the deck, which says it's the studio while it's one. */
   private readonly sign: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   private readonly code: string;
-  private readonly studio = new StudioSet();
-  private studioTitle: string | null = null;
+  /** The studio's set, once it's the studio (`showStudio`). */
+  private studio: StudioSet | null = null;
 
   constructor(slot: RoomSlot, builder: Builder, hallKit: THREE.Object3D) {
     this.group.position.copy(hallAt(slot));
@@ -757,7 +757,6 @@ export class VacantHall {
     sign.rotation.y = -Math.PI / 2;
     sign.position.set(DOOR_SIGN_X, 2.87, 0);
     deck.add(sign);
-    this.group.add(this.studio.group);
 
     // the grid over the hall's walls, ceiling and floor (the grid's drawn in its mesh's own frame, so the floor's laid
     // flat in its geometry, not by turning it)
@@ -793,30 +792,35 @@ export class VacantHall {
     return inHall(this.group.position, p);
   }
 
-  /** Whether it's a goal's studio just now. */
+  /** Whether it's the studio. */
   get isStudio(): boolean {
-    return this.studioTitle !== null;
+    return this.studio !== null;
   }
 
-  /** Makes it a goal's studio (the props make way, and the sign on the deck says whose), or vacant again. */
-  showStudio(view: StudioView | undefined): void {
-    this.studio.show(view);
-    for (const prop of this.props) prop.visible = !view;
-    const title = view?.title ?? null;
-    if (title === this.studioTitle) return;
-    this.studioTitle = title;
-    const old = this.sign.material;
-    this.sign.material = flat(title ? lcarsSign('Studio', { color: LCARS.gold, code: this.code, sub: title }) : lcarsSign('Holodeck vacant', { color: '#9a94a8', code: this.code, sub: 'Create a project in the ready room' }));
-    old.map?.dispose();
-    old.dispose();
+  /**
+   * Makes it the studio, where the captain and its computer think a video through (studio.ts): the props make way, the
+   * sign on the deck says so, and the set shows `session` as it stands. `report` tells the office how a take ran.
+   */
+  showStudio(session: StudioSession, report: (take: StudioTake, error?: string) => void): void {
+    if (!this.studio) {
+      this.studio = new StudioSet(report);
+      this.group.add(this.studio.group);
+      for (const prop of this.props) prop.visible = false;
+      const old = this.sign.material;
+      this.sign.material = flat(lcarsSign('Studio', { color: LCARS.gold, code: this.code, sub: 'Make a video with the holodeck computer' }));
+      old.map?.dispose();
+      old.dispose();
+      interactive(this.studio.wall, { kind: 'studio' }, () => 'Talk to the holodeck computer');
+    }
+    this.studio.show(session);
   }
 
   /** Moves the studio on to `t`, as seen from `camera` (world). */
   update(t: number, camera: THREE.Vector3): void {
-    this.studio.update(t, camera);
+    this.studio?.update(t, camera);
   }
 
   dispose(): void {
-    this.studio.dispose();
+    this.studio?.dispose();
   }
 }

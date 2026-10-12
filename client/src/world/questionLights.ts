@@ -4,7 +4,7 @@ import { OVERLAY_LAYER } from './frame';
 import { type Lit, placeLights, QUESTION_LIGHT, type Settled } from './studio';
 import { LCARS_FONT } from './starship';
 
-// Open questions hanging in the air as warm lights (the studio's gaps, studio.ts), each bobbing and breathing on its own.
+// Open questions hanging in the air as warm lights (the video's loose threads, studio.ts), each bobbing and breathing on its own.
 // Its words are on a tag over it that comes up as you walk over, so from across the hall you see how many are open, and
 // up close what they ask. When one's settled it says how: answered, it turns green and rises away; dropped, it dims
 // and sinks. Everything is on OVERLAY_LAYER, as the holograms are.

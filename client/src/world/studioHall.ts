@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Studio } from '../../../shared/types';
+import type { StudioSession, StudioTake, StudioVideo } from '../../../shared/types';
 import { canvasTexture, makeCanvas, UI_FONT, wrap } from './canvas';
 import { OVERLAY_LAYER } from './frame';
 import { around, curvedPanel } from './hallLayout';
@@ -7,21 +7,17 @@ import { Hologram, hover } from './hologram';
 import { QuestionLights } from './questionLights';
 import { takeDraw } from './screenRedraw';
 import { LCARS, LCARS_FONT } from './starship';
-import { beatsFrom, GAP_SLOTS, gapLights, QUESTION_LIGHT, STUDIO_WALL } from './studio';
+import { beatsFrom, QUESTION_LIGHT, STUDIO_WALL, THREAD_SLOTS, threadLights } from './studio';
+import { TakeStage } from './takes';
 
-// What the studio holodeck shows of the video a goal is making (studio.ts): its premise on a hologram curved round the
-// far wall, its beats in a row of cards round under it, and its open gaps as lights either side. Built once with the
-// hall and hidden until a goal has a studio; each hologram is drawn again only when what it says changes.
+// What the studio holodeck shows of the video its computer and the captain are building (studio.ts): its premise on a
+// hologram curved round the far wall (or, before there is one, how to start), its beats in a row of cards round under
+// it, its open threads as lights either side, and the computer's takes playing on the floor (takes.ts). Each hologram
+// is drawn again only when what it says changes.
 
 const TEXT = '#e8fbff';
 const DIM = '#8fa3b8';
 const GOLD = LCARS.gold;
-
-/** What the studio shows: the goal's title and its studio. */
-export interface StudioView {
-  title: string;
-  studio: Studio;
-}
 
 /** A canvas on a hologram, drawn by `paint` when its key changes and there's a draw to spare this frame (screenRedraw.ts). */
 class Holo {
@@ -83,45 +79,53 @@ export class StudioSet {
   private readonly premiseY: number;
   private cards: { holo: Holo; mesh: THREE.Mesh }[] = [];
   private readonly lights: QuestionLights;
+  private readonly takes: TakeStage;
   private lastT = 0;
 
-  constructor() {
+  /** `report` tells the office how a take ran in the room. */
+  constructor(report: (take: StudioTake, error?: string) => void) {
+    this.takes = new TakeStage(report);
     const { r, half, bottom, top } = STUDIO_WALL;
     this.premiseMesh = new THREE.Mesh(curvedPanel(r, -half, half, 0, top - bottom, 40), this.premise.hologram.material);
     this.premiseY = bottom;
     this.premiseMesh.position.y = bottom;
     this.premiseMesh.layers.set(OVERLAY_LAYER);
     this.premiseMesh.userData.aim = (on: boolean) => (this.premise.hologram.aimed = on);
-    this.lights = new QuestionLights(GAP_SLOTS.map(({ across, out, y }) => around(r - out, across / (r - out), y)));
-    this.group.add(this.premiseMesh, this.lights.group);
-    this.group.visible = false;
+    this.lights = new QuestionLights(THREAD_SLOTS.map(({ across, out, y }) => around(r - out, across / (r - out), y)));
+    this.group.add(this.premiseMesh, this.lights.group, this.takes.group);
+    this.premiseMesh.userData.studio = true;
   }
 
-  /** Shows a goal's studio, or hides the set while no goal has one. */
-  show(view: StudioView | undefined): void {
-    this.group.visible = !!view;
-    if (!view) return this.lights.show([]);
-    const { title, studio } = view;
-    const open = studio.gaps.filter((g) => !g.closed).length;
-    this.premise.show(JSON.stringify([title, studio.premise, studio.takeaway, open]), (ctx, W) => {
+  /** The premise's hologram: pressing E on it talks to the computer. */
+  get wall(): THREE.Mesh {
+    return this.premiseMesh;
+  }
+
+  /** Shows the studio's conversation as it stands: the video so far, and the takes on the floor. */
+  show(session: StudioSession): void {
+    this.takes.show(session.takes);
+    const video = session.video;
+    if (!video) {
+      this.showBeats([]);
+      this.lights.show([]);
+      return this.premise.show('welcome', (ctx, W) => {
+        const m = 90;
+        ctx.textBaseline = 'alphabetic';
+        this.badge(ctx, m);
+        lines(ctx, 'Describe a video to the computer.', m, m + 230, W - m * 2, `600 104px ${UI_FONT}`, 120, 2, TEXT);
+        lines(ctx, 'Press Enter, or E here, and say what it’s about: the premise goes up here, the beats under it, and it tries ways of showing them on the floor.', m, m + 420, W - m * 2, `500 56px ${UI_FONT}`, 70, 3, DIM);
+      });
+    }
+    const studio = video;
+    const open = video.threads.filter((g) => !g.closed).length;
+    this.premise.show(JSON.stringify([studio.premise, studio.takeaway, open]), (ctx, W) => {
       const m = 90;
       ctx.textBaseline = 'alphabetic';
-      ctx.fillStyle = GOLD;
-      ctx.beginPath();
-      ctx.roundRect(m, m - 20, 300, 84, [42, 12, 12, 42]);
-      ctx.fill();
-      ctx.fillStyle = '#000000';
-      ctx.textAlign = 'center';
-      ctx.font = `600 64px ${LCARS_FONT}`;
-      ctx.fillText('STUDIO', m + 150, m + 44);
-      ctx.textAlign = 'left';
+      this.badge(ctx, m);
       ctx.font = `600 52px ${LCARS_FONT}`;
-      ctx.fillStyle = DIM;
-      const gaps = open ? `${open} OPEN GAP${open === 1 ? '' : 'S'}` : 'NO OPEN GAPS';
-      const gapsW = ctx.measureText(gaps).width;
-      ctx.fillText(wrap(ctx, title.toUpperCase(), W - m * 2 - 360 - gapsW - 60, 1)[0], m + 340, m + 40);
+      const threads = open ? `${open} OPEN THREAD${open === 1 ? '' : 'S'}` : 'NO OPEN THREADS';
       ctx.fillStyle = open ? QUESTION_LIGHT : DIM;
-      ctx.fillText(gaps, W - m - gapsW, m + 40);
+      ctx.fillText(threads, W - m - ctx.measureText(threads).width, m + 40);
       let y = lines(ctx, studio.premise, m, m + 200, W - m * 2, `600 92px ${UI_FONT}`, 112, 4, TEXT);
       if (studio.takeaway) {
         y += 30;
@@ -131,14 +135,27 @@ export class StudioSet {
         lines(ctx, studio.takeaway, m, y + 74, W - m * 2, `500 60px ${UI_FONT}`, 74, 2, TEXT);
       }
     });
-    this.showBeats(studio);
-    this.lights.show(gapLights(studio.gaps));
+    this.showBeats(video.beats);
+    this.lights.show(threadLights(video.threads));
+  }
+
+  /** The STUDIO capsule at the premise's top left. */
+  private badge(ctx: CanvasRenderingContext2D, m: number): void {
+    ctx.fillStyle = GOLD;
+    ctx.beginPath();
+    ctx.roundRect(m, m - 20, 300, 84, [42, 12, 12, 42]);
+    ctx.fill();
+    ctx.fillStyle = '#000000';
+    ctx.textAlign = 'center';
+    ctx.font = `600 64px ${LCARS_FONT}`;
+    ctx.fillText('STUDIO', m + 150, m + 44);
+    ctx.textAlign = 'left';
   }
 
   /** A card for each beat, in a row round the wall under the premise, numbered in order. */
-  private showBeats(studio: Studio): void {
+  private showBeats(beats: StudioVideo['beats']): void {
     const { card, gap, cardR, cardBottom, cardTop } = STUDIO_WALL;
-    const n = studio.beats.length;
+    const n = beats.length;
     while (this.cards.length > n) {
       const gone = this.cards.pop()!;
       this.group.remove(gone.mesh);
@@ -146,7 +163,7 @@ export class StudioSet {
       gone.holo.dispose();
     }
     const from = beatsFrom(n);
-    studio.beats.forEach((beat, i) => {
+    beats.forEach((beat, i) => {
       let c = this.cards[i];
       if (!c) {
         const holo = new Holo(680, Math.round((680 * (cardTop - cardBottom)) / card), LCARS.periwinkle);
@@ -173,9 +190,8 @@ export class StudioSet {
     });
   }
 
-  /** Moves it on to `t`, the gaps' tags readable from `eye` (world) as you near them. */
+  /** Moves it on to `t`, the threads' tags readable from `eye` (world) as you near them. */
   update(t: number, eye: THREE.Vector3): void {
-    if (!this.group.visible) return;
     const dt = Math.min(0.1, t - this.lastT);
     this.lastT = t;
     hover(this.premiseMesh, this.premiseY, t);
@@ -185,6 +201,7 @@ export class StudioSet {
       c.holo.update(dt);
     });
     this.lights.update(t, eye);
+    this.takes.update(t, eye);
   }
 
   dispose(): void {
@@ -195,5 +212,6 @@ export class StudioSet {
       c.mesh.geometry.dispose();
     }
     this.lights.dispose();
+    this.takes.dispose();
   }
 }

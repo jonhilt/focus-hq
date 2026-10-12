@@ -37,6 +37,8 @@ export interface Ui {
   openComms(): void;
   /** The ready room's chat with Number One. */
   openNumberOne(): void;
+  /** The studio holodeck's chat with its computer, docked so the room stays in view. */
+  openStudio(): void;
   /** The engineering station: the ledger's report card and the chief engineer's retro. */
   openEngineering(): void;
   /** Main engineering's master systems table: the ledger's log, and a trace of a pull request or goal. */

@@ -4,12 +4,11 @@ import { answerMessage } from '../../../shared/artifacts';
 import { answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, applyNote, type NoteInput, pageErrorsNote } from '../lead';
 import { explainerPage, type ExplainerInput } from '../explainer';
 import { applyContacts } from '../contacts';
-import { applyStudio, type StudioInput, studioReply } from '../studio';
 import { checklistWaypoint, headedWaypoint, notedWaypoint } from '../waypoints';
 import { Renderer } from '../services';
 import { Part, Refused } from './core';
 
-/** The lead's office tools besides ship: the goal's note, show, explain, ask (and the captain's answer), propose_close and the studio. */
+/** The lead's office tools besides ship: the goal's note, show, explain, ask (and the captain's answer) and propose_close. */
 export class GoalTools extends Part {
   /** The lead's note tool: the goal's note and title, as they want them. */
   noteGoal(agent: Agent, input: NoteInput): Effect.Effect<string, Refused> {
@@ -117,18 +116,6 @@ export class GoalTools extends Part {
     if ('costly' in reply) return reply;
     this.update(agent, { lead: { ...agent.lead!, questions } });
     return agent;
-  }
-
-  /** The lead's studio tool: the video the goal is making, which the studio holodeck shows (docs/studio.md). */
-  studio(agent: Agent, input: StudioInput): Effect.Effect<string, Refused> {
-    return Effect.gen({ self: this }, function* () {
-      const work = agent.lead;
-      if (!work) return yield* new Refused({ message: 'There’s no goal to make a video for' });
-      const studio = applyStudio(work.studio, input, Date.now());
-      if ('error' in studio) return yield* new Refused({ message: studio.error });
-      this.update(agent, { lead: { ...work, studio } });
-      return studioReply(work.studio, studio);
-    });
   }
 
   /** The lead's propose_close tool: the captain hears the goal looks done, and closes it or carries on. */

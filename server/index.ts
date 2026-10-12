@@ -7,10 +7,11 @@ import { clock } from '../shared/clock';
 import { seededRandom } from '../shared/studio';
 import { keyFallback } from './agents/apiKey';
 import { BrowserPool } from './agents/browserTool';
-import { ClaudeDrafter, ClaudeEngineer, ClaudeNumberOne, ClaudeTriager } from './agents/claudeCrew';
+import { ClaudeDrafter, ClaudeEngineer, ClaudeNumberOne, ClaudeStudio, ClaudeTriager } from './agents/claudeCrew';
+import { StudioComputer } from './agents/studioComputer';
 import { ChiefEngineer, transcriptFolders, transcriptReader } from './agents/engineer';
 import { ClaudeRunner } from './agents/claudeRunner';
-import { DemoDrafter, DemoEngineer, DemoNumberOne, DemoRunner, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
+import { DemoDrafter, DemoEngineer, DemoNumberOne, DemoRunner, DemoStudio, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
 import { Renderer, Sessions, Triage, Workspace } from './agents/services';
 import { closedGoalPrs, lookUpPrStates, NumberOne, type ShipStatus, summariseShip } from './agents/numberOne';
@@ -108,7 +109,8 @@ async function main() {
     startGoal: (projectId, text) => office.agents.startGoal(projectId, text, { from: 'a call' }),
     message: (agentId, text) => office.agents.message(agentId, text),
   }, callKeys, config.demo);
-  const office = new Office(store, hub, github, previews, planner, numberOne, engineer, new Voice(hub, config.demo), calls, await currentVersion());
+  const studio = new StudioComputer(store, hub, config.demo ? new DemoStudio() : new ClaudeStudio());
+  const office = new Office(store, hub, github, previews, planner, numberOne, studio, engineer, new Voice(hub, config.demo), calls, await currentVersion());
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
   // each agent session is digested into the ledger as it ends: the demo's agents have no transcripts
@@ -134,8 +136,6 @@ async function main() {
       // two goals under way side by side, each with its own lead at its own team station
       office.agents.startGoal(shop.id, 'Shoppers can save items for later and find them again on any device');
       office.agents.startGoal(shop.id, 'Show how many of each sock are left in stock on the product page', { station: 2 });
-      // and one making a video, thought through in the studio holodeck (docs/studio.md)
-      office.agents.startGoal(game.id, 'A short video: how a lead hands work to subagents');
     }
   }
 

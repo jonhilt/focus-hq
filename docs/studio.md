@@ -82,17 +82,28 @@ though what should have come and gone by then can linger).
 
 ## The studio holodeck
 
-Before a video is filmed it's thought through, and that happens standing in an empty holodeck. A goal that's making a
-video keeps it with its lead's `mcp__office__studio` tool (`server/agents/studio.ts`): its **premise** (the basic
-idea, the first thing the lead sends), what the viewer should **come away with**, its **beats** in order, and each
-**gap** in what we know that the video needs filled (g1, g2…, up to 8 open), until it's answered (by research, or by
-you) or dropped. The first vacant holodeck becomes that goal's studio (`client/src/world/studio.ts`, `studioHall.ts`):
-the sign on its door on the deck says **Studio** and whose; the poster and moving boxes make way; the premise and
-takeaway float on the far wall in a gold-edged hologram, the beats in a row of numbered cards round under it, and each
-open gap hangs either side as a warm light, its question on a tag that comes up as you walk over. An answered gap turns
-green and rises away; a dropped one dims and sinks. If several goals have a studio, the one whose lead last changed it
-has the holodeck. In `pnpm run demo`, Space Dodger's goal "A short video: how a lead hands work to subagents" fills
-one; reply to its lead and it answers its first gap.
+Before a video is filmed it's thought through, and that happens standing in an empty holodeck with its own computer:
+a Claude session that belongs to the studio, not to a goal or a project. The first vacant holodeck is the studio (the
+sign on its door says so); walk in, press **Enter** (or **E** on the far wall's hologram), and say what the video's
+about. The chat docks down the right, so the room stays in view while the computer builds:
+
+- **The video** (its `video` tool, `server/agents/studio.ts`): the premise on the far wall in a gold-edged hologram,
+  with what the viewer should come away with; the narrative beats in numbered cards round under it, each with the lines
+  said over it as the script builds up; and each loose thread (something neither of you is sure how it works, a fact
+  to check) hanging beside it as a warm light, its question on a tag that comes up as you walk over. The computer
+  reads the web to answer them: an answered thread turns green and rises away, a dropped one dims and sinks.
+- **Takes** (its `take` tool): rough 3D sketches of a beat, side by side on the floor, each a short script the computer
+  writes against the studio's kit (`client/src/world/takeKit.ts`: crew standing or at consoles, boxes, balls,
+  transporter pads, glowing lines, floating labels and a beam-in effect), looping. Say what to change ("make a slower")
+  and it stages the take again under the same id: it swaps in place, a version on. Each take's plaque at its front edge
+  says what it tries; one whose script throws turns red and says why, and the computer hears it too
+  (`POST /api/studio/takes/:id/report`), so it can fix it.
+
+One conversation at a time, kept across restarts (`studio` in `data/state.json`); **New video** clears the studio.
+The computer reads the web but nothing of the ship's code (`ClaudeStudio` in `server/agents/claudeCrew.ts`, working
+in `data/studio`), and its take scripts run in your browser as the leads' explainers do. In `pnpm run demo` its
+turns are scripted (`DemoStudio`): describe a video and it puts up a premise, four beats, two threads and two takes;
+ask for one at a time and it revises take a; ask it to look a thread up and it answers t1.
 
 ## Not yet
 

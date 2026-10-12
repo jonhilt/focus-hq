@@ -12,6 +12,7 @@ import type { AgentManager } from './agents/manager';
 import type { Calls } from './call/calls';
 import type { ChiefEngineer } from './agents/engineer';
 import type { NumberOne } from './agents/numberOne';
+import type { StudioComputer } from './agents/studioComputer';
 import type { IssuePlanner } from './agents/planner';
 import { config } from './config';
 import type { GitHubProvider } from './github/provider';
@@ -47,6 +48,7 @@ export class Office {
     readonly previews: Previews,
     readonly planner: IssuePlanner,
     readonly numberOne: NumberOne,
+    readonly studio: StudioComputer,
     readonly engineer: ChiefEngineer,
     readonly voice: Voice,
     readonly calls: Calls,
@@ -86,6 +88,7 @@ export class Office {
       previews: this.previews.list(),
       drafts: this.planner.list(),
       numberOne: this.numberOne.current(),
+      studio: this.studio.current(),
       reviews: [...this.store.reviews.values()],
       voice: this.voice.status(),
       call: this.calls.status(),

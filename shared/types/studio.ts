@@ -1,32 +1,79 @@
-/**
- * A video a goal is making, as the lead and captain think it through standing in the studio: a holodeck it takes over
- * (docs/studio.md). The lead keeps it with its studio tool; the holodeck shows it, the premise first.
- */
-export interface Studio {
-  /** The video's basic idea, in a sentence or two. */
+// The studio: an empty holodeck where the captain and the holodeck's computer, a Claude session of its own (not a goal),
+// think a video through and try out ways to show it (docs/studio.md). What they build up is the video (its premise,
+// narrative beats with their lines, and the loose threads still to pull), and the takes: rough 3D visualisations the
+// computer stages in the room, cheap to change.
+
+/** The video as it stands: its premise first, then the rest as it comes. */
+export interface StudioVideo {
+  /** The basic idea, in a sentence or two. */
   premise: string;
   /** What the viewer should come away with. */
   takeaway?: string;
-  /** The video's beats, in order: each a point it makes. */
+  /** The narrative, in order. */
   beats: StudioBeat[];
-  /** What we still need to find out to make it, open and closed, oldest first. */
-  gaps: StudioGap[];
-  /** When the lead last changed it: the newest studio has the holodeck. */
-  at: number;
+  /** Loose threads (something we're not sure how it works, a fact to check), open and closed, oldest first. */
+  threads: StudioThread[];
 }
 
 export interface StudioBeat {
   title: string;
   /** What it gets across, in a line. */
   point?: string;
+  /** What's said over it so far: the script, built up as we go. */
+  lines?: string;
 }
 
-/** A gap in what we know that the video needs filled: open until it's answered (by research, or the captain) or dropped. */
-export interface StudioGap {
-  /** g1, g2, …: unique within the studio. */
+/** A loose thread: open until it's answered (research, or the captain) or dropped. */
+export interface StudioThread {
+  /** t1, t2, …: unique within the video. */
   id: string;
   text: string;
   at: number;
-  /** Missing while it's open. */
   closed?: { as: 'answered' | 'dropped'; answer?: string; at: number };
+}
+
+/**
+ * A take: one rough way of showing something, a script the computer wrote against the studio's 3D kit
+ * (client/src/world/takeKit.ts) that plays on the holodeck's floor, looping. Staged again under the same id, it's
+ * swapped in place (`version` counts up).
+ */
+export interface StudioTake {
+  /** a, b, c… as the computer names it: short, so the captain can say "make b slower". */
+  id: string;
+  label: string;
+  /** What it's trying, and what it trades off, in a line. */
+  detail?: string;
+  /** Which beat it's for (its index), if any. */
+  beat?: number;
+  /** How long it plays before it loops (s). */
+  seconds: number;
+  /** Builds the cast with `kit` once, and defines render(t). */
+  script: string;
+  version: number;
+  at: number;
+  /** What went wrong the last time the room ran this version, if anything. */
+  error?: string;
+}
+
+export interface StudioMessage {
+  from: 'captain' | 'computer';
+  text: string;
+  at: number;
+}
+
+export type StudioStatus = 'thinking' | 'waiting' | 'failed';
+
+/** The studio's one conversation, and what it's built so far. */
+export interface StudioSession {
+  status: StudioStatus;
+  /** What the computer's doing right now, while it thinks. */
+  activity: string;
+  messages: StudioMessage[];
+  /** Missing until the computer has the premise. */
+  video?: StudioVideo;
+  /** On the holodeck's floor, oldest first. */
+  takes: StudioTake[];
+  updatedAt: number;
+  costUsd: number;
+  error?: string;
 }

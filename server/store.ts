@@ -5,7 +5,7 @@ import { qaOfficerFor, randomAvatar } from '../shared/crew';
 import type { LedgerEntry, LedgerEvent } from '../shared/ledger';
 import { type LedgerHealth, LedgerLog } from './ledgerLog';
 import { olderVerdict, prKey } from '../shared/qa';
-import type { Agent, Board, BrowserFrame, ClosedPr, MergeMethod, NumberOneChat, Project, QaReview, Retro, Settings, TermLine } from '../shared/types';
+import type { Agent, Board, BrowserFrame, ClosedPr, MergeMethod, NumberOneChat, Project, QaReview, Retro, Settings, StudioSession, TermLine } from '../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS, ROOM_THEMES, type RoomTheme } from '../shared/types';
 import { config, paths } from './config';
 import { takeLock } from './fileLock';
@@ -28,6 +28,15 @@ export function retroAfterRestart(saved: Retro): Retro {
 
 export const freshNumberOne = (): StoredNumberOne => ({ status: 'waiting', activity: '', messages: [], updatedAt: Date.now(), costUsd: 0 });
 
+export type StoredStudio = StudioSession & { sessionId?: string };
+export const freshStudio = (): StoredStudio => ({ status: 'waiting', activity: '', messages: [], takes: [], updatedAt: Date.now(), costUsd: 0 });
+
+/** The studio's saved conversation as it picks up after a restart: a turn in flight when Focus shut down ends. */
+export function studioAfterRestart(saved: StoredStudio): StoredStudio {
+  if (saved.status !== 'thinking') return saved;
+  return { ...saved, status: 'failed', activity: 'Interrupted', error: 'Interrupted when Focus shut down. Say it again.' };
+}
+
 /** Number One's saved chat as it picks up after a restart: a turn in flight when Focus shut down ends, and the chat stays usable. */
 export function numberOneAfterRestart(saved: StoredNumberOne): StoredNumberOne {
   if (saved.status !== 'thinking') return saved;
@@ -39,6 +48,7 @@ interface PersistedState {
   projects: Project[];
   agents: Agent[];
   numberOne?: StoredNumberOne;
+  studio?: StoredStudio;
   retro?: Retro;
   reviews?: QaReview[];
   closedPrs?: ClosedPr[];
@@ -70,6 +80,7 @@ export class Store {
   browser = new Map<string, BrowserFrame>();
   /** The captain's chat with Number One. */
   numberOne: StoredNumberOne = freshNumberOne();
+  studio: StoredStudio = freshStudio();
   /** The chief engineer's latest retro. */
   retro: Retro = freshRetro();
   /** The latest QA review per pull request (by prKey). */
@@ -111,6 +122,7 @@ export class Store {
     this.settings = { ...DEFAULT_SETTINGS, ...raw.settings };
     this.projects = raw.projects ?? [];
     if (raw.numberOne) this.numberOne = numberOneAfterRestart(raw.numberOne);
+    if (raw.studio) this.studio = studioAfterRestart(raw.studio);
     if (raw.retro) this.retro = retroAfterRestart(raw.retro);
     for (const review of raw.reviews ?? []) {
       if (review.status === 'queued' || review.status === 'testing') {
@@ -170,6 +182,7 @@ export class Store {
       projects: this.projects,
       agents: [...this.agents.values()],
       numberOne: this.numberOne,
+      studio: this.studio,
       retro: this.retro,
       reviews: [...this.reviews.values()],
       closedPrs: [...this.closedPrs.values()],

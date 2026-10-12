@@ -3,7 +3,6 @@
 import type { Effort } from './agents';
 import type { ChecksState } from './github';
 import type { QaSpotCheck } from './qa';
-import type { Studio } from './studio';
 
 /** A goal waiting for a free team station: what the captain said, and the effort its lead will start at. */
 export interface QueuedGoal {
@@ -228,8 +227,6 @@ export interface LeadWork {
   waypoints?: Waypoint[];
   /** The loose threads the lead has noticed, open and closed, oldest first. */
   contacts?: Contact[];
-  /** The video the goal is making, once the lead has put its premise in the studio (studio.ts). */
-  studio?: Studio;
   /** What the lead has put on the station's screen, in the order they first showed it. Cleared when the goal closes. */
   artifacts?: GoalArtifact[];
   /** The questions the lead has asked with visual options, oldest first: at most the last one is still open. */

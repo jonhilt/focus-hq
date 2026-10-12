@@ -7,6 +7,7 @@ import { demoSinceVerdict } from '../demoGit';
 import { randomHex, sleep } from '../util';
 import type { RetroOfficer, RetroRequest, Transcript } from './engineer';
 import type { NumberOneOfficer, NumberOneReply, NumberOneTurn } from './numberOne';
+import type { StudioOfficer, StudioReply, StudioTurn } from './studioComputer';
 import type { Drafter, DraftRequest, DraftResult } from './planner';
 import type { ExplainerInput } from './explainer';
 import { renderText, renderToolUse } from './render';
@@ -37,19 +38,6 @@ function placeholderShot(url: string, heading: string, caption: string, accent: 
 <text x="550" y="600" text-anchor="middle" font-family="sans-serif" font-size="16" fill="#888">Demo placeholder screenshot</text></svg>`;
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
 }
-
-/** The beats and research gaps of the demo's video goal, as its lead puts them in the studio. */
-const DEMO_BEATS = [
-  { title: 'One session alone', point: 'Reading everything itself, its context fills and it slows' },
-  { title: 'Helpers beam in', point: 'Each reads one part in a fresh context of its own' },
-  { title: 'Only answers come back', point: 'The lead keeps room to think' },
-  { title: 'When not to', point: 'Small jobs cost more to hand off than to do' },
-];
-const DEMO_GAPS = [
-  'What does a subagent see of the lead’s conversation?',
-  'How many subagents can run at once?',
-  'Do subagents cost more tokens overall?',
-];
 
 /** Pretend agents for `npm run demo`: realistic-looking terminal output, browser testing and the odd raised hand. */
 export class DemoRunner implements AgentRunner {
@@ -359,13 +347,6 @@ export class DemoRunner implements AgentRunner {
         const result = await tools.show(input).catch((err: Error) => err.message);
         hooks.lines([{ kind: 'output', text: `  ⎿  ${result}` }]);
       };
-      const studio = async (input: Parameters<typeof tools.studio>[0]) => {
-        hooks.lines([{ kind: 'tool', text: `⏺ mcp__office__studio(${Object.keys(input).join(', ')})` }]);
-        const result = await tools.studio(input).catch((err: Error) => err.message);
-        hooks.lines([{ kind: 'output', text: `  ⎿  ${result}` }]);
-      };
-      // a goal that makes a video thinks it through in the studio holodeck: the premise first, then the rest
-      const video = /\bvideo\b/i.test(goal);
       const checklist = (ticked: number) => repos.map((r, i) => ({ text: `${r.folder}: the simplest version of ${goal}`, done: i < ticked }));
       const commit = async (folder: string, text: string) => {
         await tool('Bash', { command: `git -C ${folder} add -A && git -C ${folder} commit -m "${text}"` }, [`[${folder} 4f2a91c] ${text}`, ' 2 files changed, 41 insertions(+)']);
@@ -410,12 +391,6 @@ export class DemoRunner implements AgentRunner {
         }
         await think();
         await note({ done: `${goal}: it works end to end, and survives a reload on another device.`, next: ['A thin slice end to end'] });
-        if (video) {
-          await studio({ premise: 'A lead hands work to subagents: each reads in a fresh context of its own and sends back only what matters.' });
-          await think();
-          await studio({ takeaway: 'Reach for subagents when the reading would swamp one context.', beats: DEMO_BEATS });
-          for (const gap of DEMO_GAPS) await studio({ gap });
-        }
         await show({ id: 'data-flow', title: 'The data flow', html: demoFlowPage(goal, repos.map((r) => r.folder)) });
         hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__ask(Which layout should it start with?)' }]);
         const asked = await tools.ask({
@@ -430,7 +405,6 @@ export class DemoRunner implements AgentRunner {
         await say(`I've had a look around ${repos.map((r) => `./${r.folder}`).join(' and ')}. For "${goal}", I'd start with a thin slice end to end${repos.length > 1 ? ` through ${repos.map((r) => r.folder).join(' and ')}` : ''}: the simplest version that works, so we find out early whether the data model holds. Shall I go ahead?`);
         return { ok: true, summary: 'Proposed the first slice.' };
       }
-      if (video) await studio({ closeGap: { id: 'g1', as: 'answered', answer: 'Each subagent starts with only the prompt it’s handed: none of the lead’s history.' } });
       await say('On it: a thin slice first.');
       await note({ heading: `A thin slice of ${goal}`, slice: checklist(0) });
       await show({ id: 'mockup', title: 'A first mockup', html: demoMockupPage(goal) });
@@ -1043,3 +1017,100 @@ export class DemoEngineer implements RetroOfficer {
   }
 }
 
+
+// ---------------------------------------------------------------- the studio
+
+/** Take a, crew at consoles: one session alone, its context filling, then helpers beaming in. `oneAtATime` is its revision. */
+const demoTakeCrew = (oneAtATime: boolean) => `const lead = kit.station({ name: 'Lead', line: 'Reading the whole repo', at: [0, 0, 0.8], colour: 'orange', screen: 'LEAD' });
+const context = kit.box({ size: [0.3, 2, 0.3], at: [1.2, 0, 0.8], colour: 'green', glow: true });
+const helpers = [-2.2, 0, 2.2].map((x, i) => kit.person({ name: 'Helper ' + (i + 1), line: 'Reading part ' + (i + 1), at: [x, 0, -1.6] }));
+const links = helpers.map((h) => kit.line([0, 0.05, 0.8], [h.position.x, 0.05, -1.6], { colour: 'sky', width: 0.08 }));
+const caption = kit.label('One context, filling up', { at: [0, 2.7, 0.8], colour: 'gold', size: 0.3 });
+const arrive = (i) => ${oneAtATime ? '4.5 + i * 1.6' : '4.5 + i * 0.3'};
+function render(t) {
+  const alone = t < 4;
+  context.scale.y = Math.max(0.05, alone ? p(t, 0, 4) : 1 - 0.6 * p(t, 10, 12));
+  context.material.color.set(alone && t > 3 ? kit.colours.red : kit.colours.green);
+  helpers.forEach((h, i) => kit.beam(h, p(t, arrive(i), arrive(i) + 1.4)));
+  links.forEach((l, i) => { l.visible = t > arrive(i) + 1.4; l.scale.x = Math.max(0.001, p(t, arrive(i) + 1.4, arrive(i) + 2.2)); });
+  caption.text = alone ? 'One context, filling up' : t < 10 ? 'Each helper reads in a context of its own' : 'Only answers come back';
+  lead.say(alone ? 'Reading the whole repo' : t < 10 ? 'Handing out the reading' : 'Got three summaries');
+}`;
+
+/** Take b, abstract: a gold core fans out into fresh contexts and folds their answers back in. */
+const DEMO_TAKE_ABSTRACT = `const from = [0, 1.2, 0.6];
+const targets = [[-2.4, 0.6, -1.5], [-0.8, 2.2, -2], [0.8, 2.2, -2], [2.4, 0.6, -1.5]];
+const core = kit.ball({ r: 0.45, at: from, colour: 'gold', glow: true });
+const sats = targets.map(() => kit.ball({ r: 0.22, at: from, colour: 'sky', glow: true }));
+const rays = targets.map((to) => kit.line(from, to, { colour: 'lilac', width: 0.04 }));
+const caption = kit.label('Fan out into fresh contexts', { at: [0, 3, 0], colour: 'text', size: 0.28 });
+function render(t) {
+  const k = p(t, 1, 3) * (1 - p(t, 6, 8));
+  sats.forEach((s, i) => { s.visible = k > 0.02; s.position.set(lerp(from[0], targets[i][0], k), lerp(from[1], targets[i][1], k), lerp(from[2], targets[i][2], k)); });
+  rays.forEach((r) => { r.visible = k > 0.02; r.scale.x = Math.max(0.001, k); });
+  core.scale.setScalar(1 + 0.3 * p(t, 7.5, 8.5) * (1 - p(t, 9, 10)));
+  caption.text = t < 6 ? 'Fan out into fresh contexts' : 'Fold back: only answers';
+}`;
+
+/** Take c, job cards on a conveyor: each card's work done somewhere else, only a slim result returning. */
+const DEMO_TAKE_CARDS = `const belt = kit.box({ size: [5.6, 0.12, 0.7], at: [0, 0, 0], colour: 'muted' });
+const cards = [0, 1, 2, 3].map((i) => kit.box({ size: [0.6, 0.4, 0.05], at: [-2.6, 0.5, 0], colour: ['sky', 'lilac', 'peri', 'gold'][i], glow: true }));
+const results = cards.map(() => kit.box({ size: [0.6, 0.08, 0.05], at: [2.6, 0.5, 0], colour: 'green', glow: true }));
+const caption = kit.label('Work goes out, results come back', { at: [0, 2.2, 0], colour: 'text', size: 0.28 });
+function render(t) {
+  cards.forEach((c, i) => { const k = p(t, i * 1.2, i * 1.2 + 3); c.position.x = lerp(-2.6, 1.2, k); c.visible = k < 1; });
+  results.forEach((r, i) => { const k = p(t, i * 1.2 + 3, i * 1.2 + 4); r.visible = k > 0; r.position.x = lerp(1.2, 2.6, k); r.position.y = 0.5 + i * 0.12 * k; });
+}`;
+
+/** The demo's studio computer: scripted turns that build a video and stage real takes, so the studio shows in the demo. */
+export class DemoStudio implements StudioOfficer {
+  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
+
+  async turn(req: StudioTurn, activity: (text: string) => void): Promise<StudioReply> {
+    const wait = async (seconds: number) => {
+      await sleep((seconds * 1000) / this.speed);
+      if (req.signal.aborted) throw new Error('Stopped');
+    };
+    const said = req.messages.filter((m) => m.from === 'captain').at(-1)?.text.replace(/\s+/g, ' ').trim() ?? '';
+    const q = said.toLowerCase();
+    const reply = (text: string): StudioReply => ({ text, sessionId: req.resumeSessionId ?? `demo-studio-${randomBytes(3).toString('hex')}`, costUsd: 0.05 });
+    const tool = async <T>(what: string, run: () => T | Promise<T>) => {
+      activity(what);
+      await wait(0.8);
+      return run();
+    };
+    activity('Thinking…');
+    await wait(1);
+
+    if (!req.video) {
+      const premise = said.length > 20 ? (said.length > 280 ? `${said.slice(0, 279)}…` : said) : 'How Claude hands work to subagents, and why it keeps the lead’s head clear.';
+      await tool('Updating the video', () => req.tools.video({ premise }));
+      await tool('Updating the video', () => req.tools.video({
+        takeaway: 'Reach for subagents when the reading would swamp one context.',
+        beats: [
+          { title: 'One session alone', point: 'Reading everything itself, its context fills and it slows', lines: 'Here’s Claude on its own, reading a whole codebase. Watch the context fill.' },
+          { title: 'Helpers beam in', point: 'Each reads one part in a fresh context of its own' },
+          { title: 'Only answers come back', point: 'The lead keeps room to think' },
+          { title: 'When not to', point: 'Small jobs cost more to hand off than to do' },
+        ],
+      }));
+      await tool('Updating the video', () => req.tools.video({ thread: 'What does a subagent see of the lead’s conversation?' }));
+      await tool('Updating the video', () => req.tools.video({ thread: 'How many subagents can run at once?' }));
+      await tool('Staging a take', () => req.tools.take({ id: 'a', label: 'Crew at consoles', detail: 'The ship’s own crew: familiar, literal, a little busy', beat: 1, seconds: 14, script: demoTakeCrew(false) }));
+      await tool('Staging a take', () => req.tools.take({ id: 'b', label: 'Fan out, fold back', detail: 'Abstract: cleaner, but you have to say what the balls are', beat: 1, seconds: 11, script: DEMO_TAKE_ABSTRACT }));
+      return reply('The premise is on the far wall, with four beats under it and two loose threads hanging beside them. On the floor are two ways to show the helpers beat: **a** with the crew at consoles, **b** abstract. Walk round them and tell me what to change.');
+    }
+    if (/slow|one at a time|wave|stagger/.test(q)) {
+      await tool('Staging a take', () => req.tools.take({ id: 'a', label: 'Crew at consoles', detail: 'Helpers now arrive one at a time', beat: 1, seconds: 16, script: demoTakeCrew(true) }));
+      return reply('Take **a** now beams the helpers in one at a time, with a beat between each. Better?');
+    }
+    if (/thread|answer|look (it )?up|find out/.test(q)) {
+      activity('Searching the web');
+      await wait(1.5);
+      await tool('Updating the video', () => req.tools.video({ closeThread: { id: 't1', as: 'answered', answer: 'Only the prompt it’s handed, none of the lead’s history.' } }));
+      return reply('Looked it up: a subagent starts with only the prompt the lead hands it, none of its history. That thread’s closed; it suits beat 2’s “fresh context” line.');
+    }
+    await tool('Staging a take', () => req.tools.take({ id: 'c', label: 'Cards on a conveyor', detail: 'Work as cards: shows the shape of the hand-off, loses the people', beat: 2, seconds: 9, script: DEMO_TAKE_CARDS }));
+    return reply('Here’s a third way, **c**: the work as cards on a conveyor, with only thin results coming back. Want me to keep it?');
+  }
+}
