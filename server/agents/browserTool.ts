@@ -12,19 +12,46 @@ export const EVALUATE_TIMEOUT_MS = 30_000;
 
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (body: string) => () => Promise<unknown>;
 
+/** Whether `body` parses as the body of an async function (only parsed here, never called: the page runs it). */
+function parses(body: string): boolean {
+  try {
+    new AsyncFunction(body);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const returning = (expression: string) => `return (${expression.replace(/[\s;]+$/, '')}\n);`;
+
+/** Where a line break can end a statement before `tail`: not when `tail` would carry the line on (`(`, `[`, `.`, an operator…). */
+const startsStatement = (tail: string) => /^\s*[\p{L}\p{Nl}_$0-9'"!~]/u.test(tail);
+
 /**
  * The body of an async function that runs the agent's code: a single expression (`await` allowed) is returned as it
- * is (a trailing `;` or two dropped); anything else (statements, `const`s, several lines) runs as the body as written, so it needs its own `return`.
+ * is (a trailing `;` or two dropped); statements run as the body, returning the value of the last one when it's an
+ * expression (`a(); 'ok'` gives `'ok'`), and an explicit `return` still works. Code that doesn't parse is left as it
+ * is, for the page to report.
  */
 export function evaluateBody(src: string): string {
-  const expression = `return (${src.trim().replace(/;+$/, '')}\n);`;
-  try {
-    // only parsed here, never called: the page runs it
-    new AsyncFunction(expression);
-    return expression;
-  } catch {
-    return src;
+  const expression = returning(src.trim());
+  if (parses(expression)) return expression;
+  if (!parses(src)) return src;
+  // Take the earliest split where the rest is one expression, so the last statement comes whole even if a split
+  // inside it got past the checks below.
+  for (let at = 0; at < src.length; at++) {
+    const ch = src[at];
+    if (ch !== ';' && ch !== '\n') continue;
+    const head = src.slice(0, at + 1);
+    const tail = src.slice(at + 1);
+    if (!tail.replace(/[\s;]+/g, '')) break;
+    if (ch === '\n' && !startsStatement(tail)) continue;
+    // a head ending inside a line comment would swallow the ` (` and still parse
+    if (!parses(head) || parses(`${head} (`)) continue;
+    const body = `${head}\n${returning(tail)}`;
+    if (parses(body)) return body;
   }
+  return src;
 }
 
 /** `work`, or a clear error once `ms` have gone by without it settling. */
@@ -280,7 +307,8 @@ export function browserMcpServer(pool: BrowserPool, agentId: string, hooks: Pick
       tool(
         'evaluate',
         'Run JavaScript in the page and return its JSON result. A single expression is returned as is (`await` allowed); ' +
-          'statements run as the body of an async function, so `return` the value you want. Gives up after 30 s.' +
+          "statements run as the body of an async function, returning the last one's value when it's an expression " +
+          "(`a(); 'ok'` gives 'ok'), or what you `return`. Gives up after 30 s." +
           FOCUS_HQ_HOOKS,
         { expression: z.string() },
         async ({ expression }) => {

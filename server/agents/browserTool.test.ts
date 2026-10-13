@@ -27,6 +27,35 @@ describe('evaluateBody', () => {
   it('returns an expression with a trailing semicolon', async () => {
     expect(await run(' 1 + 1; ')).toBe(2);
   });
+
+  it('returns the last expression statement after other statements', async () => {
+    const calls: string[] = [];
+    (globalThis as { probe?: (s: string) => void }).probe = (s) => calls.push(s);
+    expect(await run("probe('a'); 'ok'")).toBe('ok');
+    expect(calls).toEqual(['a']);
+    expect(await run('const x = await Promise.resolve(2);\nconst y = 3;\nx * y;')).toBe(6);
+    expect(await run('let n = 0\nfor (const i of [1, 2, 3]) n += i\nn')).toBe(6);
+    expect(await run('const xs = [1, 2];\nxs.map((x) => {\n  return x * 2;\n})')).toEqual([2, 4]);
+  });
+
+  it('keeps a line that carries on the one before it as one expression', async () => {
+    expect(await run('const f = (x) => x + 1;\nf\n(2)')).toBe(3);
+    expect(await run('const a = [1, 2];\na\n.length')).toBe(2);
+  });
+
+  it('returns nothing when the code ends in a declaration or an operand of it', async () => {
+    expect(await run('const v = 1\n+ 2')).toBeUndefined();
+    expect(await run('const v = 1; // last; v')).toBeUndefined();
+    expect(await run('if (true) { 1 }')).toBeUndefined();
+  });
+
+  it('leaves an explicit return alone', async () => {
+    expect(await run('const x = 2;\nif (x > 1) return "big";\nreturn "small";')).toBe('big');
+  });
+
+  it('leaves code that does not parse for the page to report', () => {
+    expect(evaluateBody('const = ;')).toBe('const = ;');
+  });
 });
 
 describe('withTimeout', () => {
