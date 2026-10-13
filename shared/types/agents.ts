@@ -195,6 +195,18 @@ export interface WorkflowScript {
   logs: string[];
   /** What it returned to the lead, once it has (cut short). */
   result?: string;
+  /** What each of its agents has returned so far, in the order they came back, from the journal Claude Code keeps as it runs. */
+  results: WorkflowResult[];
+}
+
+/** What one of a workflow's agents returned to its script. */
+export interface WorkflowResult {
+  /** The label the script gave it (review:bugs). */
+  label: string;
+  /** The title of the phase it ran in, if it had one. */
+  phase?: string;
+  /** What it returned, as text (JSON when it returned something structured), cut short. */
+  result: string;
 }
 
 /**

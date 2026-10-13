@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Workflow } from '../../shared/types';
-import { applyWorkflowEvent, RECENT_AGENTS, RESULT_CHARS, runOutcome, scriptPlan, transcriptLines, workflowAsk, WorkflowPermits, workflowProgress } from './workflows';
+import { AGENT_RESULT_CHARS, applyWorkflowEvent, journalResults, RECENT_AGENTS, RESULT_CHARS, runOutcome, scriptPlan, transcriptLines, workflowAsk, WorkflowPermits, workflowProgress } from './workflows';
 
 // as the probes saw it: a snapshot of every phase, and every agent queued so far
 const progress = [
@@ -151,6 +151,36 @@ describe('runOutcome', () => {
     expect(runOutcome({ result: 'x'.repeat(RESULT_CHARS * 2) }).result?.length).toBeLessThanOrEqual(RESULT_CHARS);
     expect(runOutcome(null)).toEqual({ logs: [] });
     expect(runOutcome({ logs: 'nope' })).toEqual({ logs: [] });
+  });
+});
+
+describe('journalResults', () => {
+  const line = (e: object) => JSON.stringify(e);
+  it('names each result by the agent that started with its key, in the order they came back, structured ones as JSON', () => {
+    const journal = [
+      line({ type: 'launched' }),
+      line({ type: 'started', key: 'k1', agentId: 'a1', label: 'review:bugs', phase: 'Review' }),
+      line({ type: 'started', key: 'k2', agentId: 'a2', label: 'review:perf', phase: 'Review' }),
+      line({ type: 'result', key: 'k2', agentId: 'a2', result: { findings: 2 } }),
+      line({ type: 'result', key: 'k1', agentId: 'a1', result: 'No bugs' }),
+    ].join('\n');
+    expect(journalResults(journal)).toEqual([
+      { label: 'review:perf', phase: 'Review', result: '{\n  "findings": 2\n}' },
+      { label: 'review:bugs', phase: 'Review', result: 'No bugs' },
+    ]);
+  });
+
+  it('leaves out an agent with nothing returned, a line still being written, and cuts a long result short', () => {
+    const journal = [
+      line({ type: 'started', key: 'k1', label: 'a', phase: null }),
+      line({ type: 'result', key: 'k1', result: null }),
+      line({ type: 'result', key: 'k9', agentId: 'a9', result: 'x'.repeat(AGENT_RESULT_CHARS * 2) }),
+      '{"type":"result","key":"k1","res',
+    ].join('\n');
+    const results = journalResults(journal);
+    expect(results).toHaveLength(1);
+    expect(results[0]?.label).toBe('a9');
+    expect(results[0]?.result.length).toBeLessThanOrEqual(AGENT_RESULT_CHARS);
   });
 });
 

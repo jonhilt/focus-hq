@@ -1,7 +1,7 @@
 // A lead's workflows (Claude Code's Workflow tool), from what the session reports about them. Pure: the runner reads the
 // messages, the manager keeps the result on the lead.
 import { Option, Schema } from 'effect';
-import type { Workflow, WorkflowAgent, WorkflowPhase } from '../../shared/types';
+import type { Workflow, WorkflowAgent, WorkflowPhase, WorkflowResult } from '../../shared/types';
 import type { WorkflowEvent } from './types';
 import { truncate } from '../util';
 import { renderText, renderToolResult, renderToolUse } from './render';
@@ -198,6 +198,47 @@ export function runOutcome(raw: unknown): { logs: string[]; result?: string } {
   const result = run.value.result;
   if (result === undefined || result === null) return { logs };
   return { logs, result: truncate(typeof result === 'string' ? result : JSON.stringify(result, null, 2), RESULT_CHARS) };
+}
+
+/** How much of each agent's result the console and the script's panel show. */
+export const AGENT_RESULT_CHARS = 1500;
+
+const JournalEntry = Schema.Struct({
+  type: Schema.String,
+  key: Schema.optional(Schema.String),
+  agentId: Schema.optional(Schema.String),
+  label: Schema.optional(Schema.String),
+  phase: Schema.optional(Schema.NullOr(Schema.String)),
+  result: Schema.optional(Schema.Unknown),
+});
+const decodeJournalEntry = Schema.decodeUnknownOption(JournalEntry);
+
+/**
+ * What a workflow's agents have returned so far, from the journal Claude Code appends to as the run goes
+ * (journal.jsonl in its agents' folder): a `started` line names each agent, by its key, and a `result` line says
+ * what it returned, in the order they came back. Lines it can't read (one still being written) are left out.
+ */
+export function journalResults(jsonl: string): WorkflowResult[] {
+  const started = new Map<string, { label: string; phase?: string }>();
+  const results: WorkflowResult[] = [];
+  for (const raw of jsonl.split('\n')) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      continue;
+    }
+    const entry = decodeJournalEntry(parsed);
+    if (Option.isNone(entry)) continue;
+    const { type, key, agentId, label, phase, result } = entry.value;
+    const id = key ?? agentId;
+    if (!id) continue;
+    if (type === 'started' && label) started.set(id, { label, ...(phase && { phase }) });
+    if (type !== 'result' || result === undefined || result === null) continue;
+    const who = started.get(id) ?? { label: agentId ?? 'agent' };
+    results.push({ ...who, result: truncate(typeof result === 'string' ? result : JSON.stringify(result, null, 2), AGENT_RESULT_CHARS) });
+  }
+  return results;
 }
 
 /**

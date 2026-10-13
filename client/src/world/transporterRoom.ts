@@ -12,7 +12,8 @@ import { consoleTexture, LCARS, lcarsFrame, LCARS_FONT } from './starship';
 // station, standing far out in the world: layout.ts, transporterRoomAt). Built in Blender (blender/transporter_room.py):
 // a platform of three tiers of six pads along its back wall, each with a lit ring and an emitter over it, the transporter
 // console in front of it, the pattern buffer's glowing columns in niches either side, a tactical display on the
-// starboard wall and a sealed door. Nobody walks in or out: you beam in, and back to the briefing room from the console.
+// starboard wall and a sealed door. Nobody walks in or out: you beam in, and back to the briefing room from the console
+// or the door.
 // This dresses a copy of the module and hands out its parts, in world coordinates; who stands on the pads, the rings'
 // colours, the buffer's glow and what the screens show are up to whoever runs the room.
 
@@ -114,8 +115,8 @@ export class TransporterRoom {
   readonly tactical: THREE.Mesh;
   /**
    * The screen across the console's sloping top (CONSOLE_SCREEN), facing whoever stands behind it: LCARS keys until
-   * it's set to show the script of the workflow the room's running (as `tactical`). Pressing E on it energises too,
-   * until it's given an interaction of its own.
+   * it's set to show the script of the workflow the room's running (as `tactical`), with an energise button of its own
+   * then. Pressing E on it energises too, until it's given an interaction of its own.
    */
   readonly script: THREE.Mesh;
   /** Where the camera for the room's feed stands, up in the front corner over the door, what it looks at, and its vertical field of view (degrees) that frames the platform. */
@@ -216,14 +217,15 @@ export class TransporterRoom {
     this.script = screen('transporter-script');
     this.script.material = standby().script;
 
-    const consoles: THREE.Object3D[] = [];
+    // the console energises, and so does the sealed door
+    const energisers: THREE.Object3D[] = [];
     module.traverse((o) => {
-      if ((o.userData.interaction as Interaction | undefined)?.kind === 'energise') consoles.push(o);
+      if ((o.userData.interaction as Interaction | undefined)?.kind === 'energise') energisers.push(o);
     });
+    const consoles = energisers.filter((o) => o.name.includes('console'));
     if (consoles.length !== 1) throw new Error('The transporter room needs one console to energise from');
     this.console = consoles[0];
-    const label = this.console.userData.label as () => string;
-    interactive(this.console, { kind: 'energise', projectId, station, room: index }, label);
+    for (const o of energisers) interactive(o, { kind: 'energise', projectId, station, room: index }, o.userData.label as () => string);
 
     const at = place.at.setY(0);
     this.place = { at, lookAt: at.clone().addScaledVector(place.forward, 4).setY(1.4) };

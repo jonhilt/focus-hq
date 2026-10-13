@@ -14,7 +14,8 @@ const workflowOf = (lead: Agent | undefined, id: string): Workflow | undefined =
 /**
  * The script behind one of a lead's workflows, from its transporter room's console: the source with the lines running
  * now lit in their phases' colours, and beside it the phases its meta plans with what each is for and how its agents
- * stand, then what it logged and returned once it's over, and what it has used. You talk to the lead about it.
+ * stand, what it logged and returned once it's over, what each agent has returned as it comes back (newest first),
+ * and what it has used. You talk to the lead about it.
  */
 export function openWorkflowScriptPanel(ui: Ui, leadId: string, workflowId: string): void {
   const lead = state.agents.get(leadId);
@@ -31,6 +32,8 @@ export function openWorkflowScriptPanel(ui: Ui, leadId: string, workflowId: stri
   ui.panels.open({ title, body, footer, wide: true, accent: LCARS.gold });
 
   let scrolled = false;
+  /** The results opened to read in full, by their agents' labels. */
+  const opened = new Set<string>();
   const render = () => {
     const wf = workflow;
     if (!wf) return;
@@ -63,6 +66,18 @@ export function openWorkflowScriptPanel(ui: Ui, leadId: string, workflowId: stri
         : [h('div', { class: 'muted' }, 'It hasn’t named any yet.')])),
       script?.logs.length ? section('Log', LCARS.lilac, ...script.logs.map((l) => h('div', { class: 'script-mono' }, l))) : null,
       script?.result !== undefined ? section('Returned', wf.status === 'failed' ? LCARS.red : '#9c6', h('pre', { class: 'script-result' }, script.result)) : null,
+      script?.results.length ? section(`Back · ${script.results.length}`, '#9c6', ...[...script.results].reverse().map((r) => {
+        const phase = phases.find((p) => p.title === r.phase);
+        const colour = phase ? LCARS[phaseColour(phase)] : LCARS.sky;
+        const first = r.result.split('\n').find((l) => l.trim()) ?? '';
+        const details = h('details', { class: 'script-back', style: `--c:${colour}` },
+          h('summary', null, h('b', null, r.label), h('span', { class: 'muted' }, ` ${first}`)),
+          h('pre', { class: 'script-result' }, r.result));
+        // stays open through the panel's redraws until it's closed
+        details.open = opened.has(r.label);
+        details.addEventListener('toggle', () => (details.open ? opened.add(r.label) : opened.delete(r.label)));
+        return details;
+      })) : null,
       wf.usage ? section('Used', LCARS.gold, h('div', null, usageLine(wf.usage))) : null,
     );
   };

@@ -23,19 +23,30 @@ describe('workflowScript', () => {
   it('reads the script from where Claude Code saved it, with nothing logged or returned while it runs', () => {
     const { dir, scriptPath } = session();
     const rt = runtime(new Map([['t1', { path: scriptPath }]]), new Map([['t1', dir]]));
-    expect(workflowScript(rt, 't1')).toEqual({ source: "export const meta = { name: 'review' }", logs: [] });
+    expect(workflowScript(rt, 't1')).toEqual({ source: "export const meta = { name: 'review' }", logs: [], results: [] });
   });
 
   it('takes what it logged and returned from the run, once Claude Code has saved it', () => {
     const { root, dir } = session();
     fs.writeFileSync(path.join(root, 'workflows', 'wf_1.json'), JSON.stringify({ logs: ['3 reviewed'], result: 'All good' }));
     const rt = runtime(new Map([['t1', { source: 'inline' }]]), new Map([['t1', dir]]));
-    expect(workflowScript(rt, 't1')).toEqual({ source: 'inline', logs: ['3 reviewed'], result: 'All good' });
+    expect(workflowScript(rt, 't1')).toEqual({ source: 'inline', logs: ['3 reviewed'], result: 'All good', results: [] });
+  });
+
+  it('reads what each agent has returned so far from the journal, while it runs', () => {
+    const { dir } = session();
+    fs.writeFileSync(path.join(dir, 'journal.jsonl'), [
+      { type: 'launched' },
+      { type: 'started', key: 'k1', agentId: 'a1', label: 'review:bugs', phase: 'Review' },
+      { type: 'result', key: 'k1', agentId: 'a1', result: 'No bugs' },
+    ].map((e) => JSON.stringify(e)).join('\n'));
+    const rt = runtime(new Map([['t1', { source: 'src' }]]), new Map([['t1', dir]]));
+    expect(workflowScript(rt, 't1').results).toEqual([{ label: 'review:bugs', phase: 'Review', result: 'No bugs' }]);
   });
 
   it('is empty for a workflow it knows nothing of', () => {
-    expect(workflowScript(undefined, 't1')).toEqual({ source: '', logs: [] });
-    expect(workflowScript(runtime(new Map()), 'nope')).toEqual({ source: '', logs: [] });
+    expect(workflowScript(undefined, 't1')).toEqual({ source: '', logs: [], results: [] });
+    expect(workflowScript(runtime(new Map()), 'nope')).toEqual({ source: '', logs: [], results: [] });
   });
 });
 

@@ -213,6 +213,9 @@ export class DemoRunner implements AgentRunner {
       fs.mkdirSync(path.dirname(scriptPath), { recursive: true });
       fs.writeFileSync(scriptPath, script);
       const agentId = (e: { index: number }) => `${id.slice(-6)}a${e.index}`;
+      // the journal Claude Code appends to as the run goes: each agent as it starts, and what it returned
+      const journal = (entry: object) => fs.appendFileSync(path.join(dir, 'journal.jsonl'), `${JSON.stringify(entry)}\n`);
+      journal({ type: 'launched' });
       const transcript = (e: { index: number }, ...entries: unknown[]) =>
         fs.appendFileSync(path.join(dir, `agent-${agentId(e)}.jsonl`), entries.map((x) => `${JSON.stringify(x)}\n`).join(''));
       type Entry = { job: Job; index: number; queuedAt: number; startedAt?: number; doneAt?: number; state: 'start' | 'done' | 'error' };
@@ -255,6 +258,7 @@ export class DemoRunner implements AgentRunner {
           if (e.state !== 'start') continue;
           if (e.startedAt === undefined && entries.filter((x) => x.state === 'start' && x.startedAt !== undefined).length < cap) {
             e.startedAt = now;
+            journal({ type: 'started', key: `k${e.index}`, agentId: agentId(e), label: e.job.label, phase: phases[e.job.phase - 1]?.title ?? null });
             const file = `src/${e.job.label.split(':')[1] ?? 'index'}.ts`;
             transcript(e,
               { type: 'user', message: { content: e.job.ask } },
@@ -266,6 +270,7 @@ export class DemoRunner implements AgentRunner {
           } else if (e.startedAt !== undefined && now >= (ends.get(e) ?? Infinity)) {
             e.doneAt = now;
             e.state = e.job.result === undefined ? 'error' : 'done';
+            if (e.job.result !== undefined) journal({ type: 'result', key: `k${e.index}`, agentId: agentId(e), result: e.job.result });
             transcript(e,
               { type: 'user', message: { content: [{ type: 'tool_result', content: e.state === 'done' ? 'Tests: 44 passed, 44 total' : 'Tests: 2 failed, 42 passed' }] } },
               { type: 'assistant', message: { content: [{ type: 'text', text: e.job.result ?? 'Two tests fail here: stopping so the lead can look.' }] } },
@@ -389,6 +394,13 @@ export class DemoRunner implements AgentRunner {
           await say(`QA passed it. It's ready for you to merge whenever you're happy with it.`);
         }
         return { ok: true, summary: 'Heard back from QA.' };
+      }
+      // asked to run a workflow: the review plays out in the transporter rooms there and then, to watch
+      if (/\brun a workflow\b/i.test(req.prompt)) {
+        await say('Running the review workflow now: beam into a transporter room to watch it.');
+        await reviewWorkflows(repos.map((r) => r.folder), goal);
+        await say('The workflow is done: its results are on the transporter console.');
+        return { ok: true, summary: 'Ran a workflow.' };
       }
       const landed = /Slice (\d+) has landed/.exec(req.prompt);
       if (landed) {

@@ -21,7 +21,8 @@ import {
 // they start and out once they've finished, each pad lit in its agent's phase colour; the pattern buffer glowing with
 // the agents still queued, and its readout counting them; the tactical display following the operation phase by phase;
 // and the console showing the script that runs it all, the lines running now lit in their phases' colours, who's at
-// work, and once it's over what it logged and returned, with a switch for the hologram; and over it all the script's flow as a hologram, beams down to
+// work and what's come back from the journal, and once it's over what it logged and returned, with a switch for the
+// hologram; and over it all the script's flow as a hologram, beams down to
 // the agents at work and their results rising back into it (flowHologram.ts). Who stands where is workflowRooms.ts's;
 // this draws it.
 
@@ -29,20 +30,35 @@ import {
 const RESTAND_MS = 250;
 /** How often a watched room's screens are checked for something new to draw: the clock ticks by the second. */
 const SCREENS_MS = 500;
+/** How many of a workflow's agents have come back, done or failed. */
+const backCount = (wf: Workflow) => wf.phases.reduce((n, p) => n + p.done + p.failed, 0);
+/** How long after an agent comes back its script is read again for what it returned, and so the most often (ms). */
+const RESULTS_READ_MS = 1500;
 /** After a workflow ends, when its script is read again: Claude Code saves what it logged and returned as it ends (ms). */
 const OUTCOME_RETRY_MS = 3000;
 /** How high the flow hologram's middle hangs: its bottom clear of the agents' speech bubbles, seen from where you arrive (m). */
 const FLOW_Y = 2.62;
-/** The switch for the flow hologram in the console screen's bottom right corner, in the screen's canvas px. */
-const SWITCH = { w: 300, h: 56, inset: 40 };
+/**
+ * The buttons in the console screen's bottom right corner, in the screen's canvas px: energise, which beams you back to
+ * the briefing room (the screen covers most of the console's top, which energises everywhere else), and the switch for
+ * the flow hologram.
+ */
+const BUTTON = { w: 200, h: 56, gap: 16, inset: 40 };
 const SCRIPT_CANVAS = { w: Math.round(CONSOLE_SCREEN.w * 1000), h: Math.round(CONSOLE_SCREEN.h * 1000) };
-const switchRect = () => ({ x: SCRIPT_CANVAS.w - SWITCH.inset - SWITCH.w, y: SCRIPT_CANVAS.h - SWITCH.inset - SWITCH.h, ...SWITCH });
-/** Whether a point on the console's screen (its UVs) is on the switch. */
-function onSwitch(uv: THREE.Vector2): boolean {
-  const r = switchRect();
+type ConsoleButton = 'energise' | 'flow';
+const BUTTONS: ConsoleButton[] = ['energise', 'flow'];
+const buttonRect = (b: ConsoleButton) => {
+  const fromRight = BUTTONS.length - 1 - BUTTONS.indexOf(b);
+  return { x: SCRIPT_CANVAS.w - BUTTON.inset - BUTTON.w - fromRight * (BUTTON.w + BUTTON.gap), y: SCRIPT_CANVAS.h - BUTTON.inset - BUTTON.h, w: BUTTON.w, h: BUTTON.h };
+};
+/** Which button a point on the console's screen (its UVs) is on, if any. */
+export function buttonAt(uv: { x: number; y: number }): ConsoleButton | undefined {
   const x = uv.x * SCRIPT_CANVAS.w;
   const y = (1 - uv.y) * SCRIPT_CANVAS.h;
-  return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+  return BUTTONS.find((b) => {
+    const r = buttonRect(b);
+    return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+  });
 }
 const FLOW_SWITCH: { interaction: Interaction; label: () => string } = {
   interaction: { kind: 'flow-hologram' },
@@ -102,6 +118,9 @@ export class TransporterOperation {
   private readonly scriptTex = canvasTexture(this.script.canvas);
   private readonly scriptMat = flat(this.scriptTex);
   private scriptKey = '';
+  /** How many of its agents had come back when the script was last read, and whether a read's on its way. */
+  private backRead = 0;
+  private reading = false;
   /** The script of the workflow in the room, once it's been read (`id`: its workflow's). */
   private source: { id: string; script: WorkflowScript } | undefined;
   private queued = 0;
@@ -130,8 +149,16 @@ export class TransporterOperation {
     const front = room.pads.filter((p) => p.tier === 0).reduce((sum, p) => sum.add(p.at), new THREE.Vector3()).divideScalar(PAD_COUNT / 3);
     this.flow = new FlowHologram(consoleAt.lerp(front, 0.3).setY(FLOW_Y), room.place.at);
     room.offFeed.add(this.flow.group);
-    // the switch in the corner of the console's screen shows or hides it
-    room.script.userData.interactionAt = (uv: THREE.Vector2) => (this.workflow && onSwitch(uv) ? FLOW_SWITCH : null);
+    // the buttons in the corner of the console's screen: energise, and show or hide the hologram
+    const energise: { interaction: Interaction; label: () => string } = {
+      interaction: { kind: 'energise', projectId: room.projectId, station: room.station, room: room.index },
+      label: () => 'Energise: beam back to the briefing room',
+    };
+    room.script.userData.interactionAt = (uv: THREE.Vector2) => {
+      if (!this.workflow) return null;
+      const button = buttonAt(uv);
+      return button === 'energise' ? energise : button === 'flow' ? FLOW_SWITCH : null;
+    };
   }
 
   /** The workflow in the room now, or none: its agents take the pads, or leave them. */
@@ -149,7 +176,16 @@ export class TransporterOperation {
     if (workflow && (workflow.id !== was?.id || (workflow.status !== 'running' && was?.status === 'running'))) {
       this.read(workflow.id);
       if (workflow.status !== 'running') setTimeout(() => this.read(workflow.id), OUTCOME_RETRY_MS);
+    } else if (workflow && this.watched && backCount(workflow) > this.backRead && !this.reading) {
+      // an agent has come back since the script was last read: read it again for what it returned, a moment later
+      // so the journal has it, and at most so often
+      this.reading = true;
+      setTimeout(() => {
+        this.reading = false;
+        this.read(workflow.id);
+      }, RESULTS_READ_MS);
     }
+    if (workflow?.id !== was?.id) this.backRead = 0;
     this.queued = workflow?.phases.reduce((n, p) => n + p.queued, 0) ?? 0;
     this.stand(now);
     this.tacticalKey = '';
@@ -157,8 +193,10 @@ export class TransporterOperation {
   }
 
   private read(id: string): void {
+    const back = this.workflow?.id === id ? backCount(this.workflow) : 0;
     void this.readScript(id).then((script) => {
       if (!script || this.workflow?.id !== id) return;
+      this.backRead = Math.max(this.backRead, back);
       this.source = { id, script };
       this.scriptKey = '';
       if (this.watched) this.drawScreens();
@@ -322,6 +360,12 @@ export class TransporterOperation {
       lines: script?.source ? lines : [],
       lit: [...lit].map(([line, phase]) => [line, colourOf(phase)]),
       working: wf.agents.filter((a) => a.status === 'working').map((a) => ({ label: a.label, colour: colourOf(a.phase) })),
+      back: (script?.results ?? []).slice(-3).reverse().map((r) => ({
+        label: r.label,
+        line: r.result.split('\n').map((l) => l.trim()).find((l) => l && l !== '{' && l !== '[') ?? '',
+        colour: LCARS[phaseColour(phases.find((p) => p.title === r.phase) ?? { index: 0 })],
+      })),
+      backTotal: script?.results.length ?? 0,
       logs: script?.logs ?? [],
       result: script?.result,
       usage: usageLine(wf.usage),
@@ -509,6 +553,9 @@ interface ScriptView {
   lit: [number, string][];
   /** The agents at work, each in its phase's colour. */
   working: { label: string; colour: string }[];
+  /** The last few results to come back, newest first, each its agent's label, its first line and its phase's colour. */
+  back: { label: string; line: string; colour: string }[];
+  backTotal: number;
   logs: string[];
   result?: string;
   usage: string;
@@ -570,7 +617,7 @@ function drawScript(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, v:
     ctx.fillText(text, x, y);
     y += 36;
   };
-  const bottom = switchRect().y - 64;
+  const bottom = buttonRect('flow').y - 64;
   const line = (text: string, colour: string) => {
     if (y > bottom) return;
     ctx.fillStyle = colour;
@@ -583,6 +630,16 @@ function drawScript(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, v:
     const shown = v.working.length > 6 ? v.working.slice(0, 5) : v.working;
     for (const a of shown) line(a.label, a.colour);
     if (shown.length < v.working.length) line(`+${v.working.length - shown.length} more`, '#a29cb8');
+    y += 10;
+  }
+  // while it runs, what came back last; once it's over, what it logged and returned instead
+  if (v.back.length && v.result === undefined) {
+    heading(`BACK · ${v.backTotal}`, LCARS_STATUS.done);
+    ctx.font = `500 19px ${MONO_FONT}`;
+    for (const b of v.back) {
+      line(b.label, b.colour);
+      line(`  ${b.line}`, '#d8d4e6');
+    }
     y += 10;
   }
   if (v.logs.length) {
@@ -602,19 +659,24 @@ function drawScript(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, v:
     ctx.fillText('NOBODY AT WORK YET', x, y);
   }
 
-  // what it has used, over the switch for the flow hologram
-  const sw = switchRect();
+  // what it has used, over the buttons: energise, and the switch for the flow hologram
+  const top = buttonRect('flow').y;
   if (v.usage) {
     ctx.fillStyle = LCARS.gold;
     ctx.font = `500 28px ${LCARS_FONT}`;
-    ctx.fillText(fitText(ctx, v.usage.toUpperCase(), w), x, sw.y - 26);
+    ctx.fillText(fitText(ctx, v.usage.toUpperCase(), w), x, top - 26);
   }
-  ctx.fillStyle = v.flow ? '#8aedff' : '#4a4658';
-  roundRect(ctx, sw.x, sw.y, sw.w, sw.h, sw.h / 2);
-  ctx.fill();
-  ctx.fillStyle = '#000000';
-  ctx.textAlign = 'center';
-  ctx.font = `600 30px ${LCARS_FONT}`;
-  ctx.fillText(v.flow ? 'HOLOGRAM · ON' : 'HOLOGRAM · OFF', sw.x + sw.w / 2, sw.y + sw.h / 2 + 1);
+  const button = (b: ConsoleButton, text: string, colour: string) => {
+    const r = buttonRect(b);
+    ctx.fillStyle = colour;
+    roundRect(ctx, r.x, r.y, r.w, r.h, r.h / 2);
+    ctx.fill();
+    ctx.fillStyle = '#000000';
+    ctx.textAlign = 'center';
+    ctx.font = `600 28px ${LCARS_FONT}`;
+    ctx.fillText(text, r.x + r.w / 2, r.y + r.h / 2 + 1);
+  };
+  button('energise', 'ENERGISE', LCARS.orange);
+  button('flow', v.flow ? 'HOLOGRAM · ON' : 'HOLOGRAM · OFF', v.flow ? '#8aedff' : '#4a4658');
   ctx.textAlign = 'left';
 }

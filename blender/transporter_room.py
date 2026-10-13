@@ -250,13 +250,16 @@ def transporter_console():
 
 def sealed_door(f):
     """A door on the wall at `f` (its centre on the wall's inner face, Y into the room) that never opens: nobody walks in
-    or out of a transporter room. Its leaves look like the ship's sliding doors (world/starship.ts: SlidingDoors)."""
+    or out of a transporter room, though pressing E on it beams you back. Its leaves look like the ship's sliding doors
+    (world/starship.ts: SlidingDoors)."""
     door_frame('transporter room door', f, DOOR_W, DOOR_H)
     # from just inside the wall out over its dado and stripe, buried in the frame's jambs and head
-    box('transporter room door leaves', (DOOR_W + 0.06, 0.1, DOOR_H + 0.03), toon(HULL['door']), (0, 0.04, -0.01), frame=f)
+    leaves = box('transporter room door leaves', (DOOR_W + 0.06, 0.1, DOOR_H + 0.03), toon(HULL['door']), (0, 0.04, -0.01), frame=f)
     # the band across them and the seam between them standing out of them, each from a different depth inside them
-    box('transporter room door band', (DOOR_W + 0.04, 0.115, 0.14), toon(HULL['dado']), (0, 0.0525, DOOR_H * 0.42), frame=f)
-    box('transporter room door seam', (0.05, 0.132, DOOR_H + 0.04), toon(HULL['frame']), (0, 0.051, -0.015), frame=f)
+    band = box('transporter room door band', (DOOR_W + 0.04, 0.115, 0.14), toon(HULL['dado']), (0, 0.0525, DOOR_H * 0.42), frame=f)
+    seam = box('transporter room door seam', (0.05, 0.132, DOOR_H + 0.04), toon(HULL['frame']), (0, 0.051, -0.015), frame=f)
+    # nobody walks out, but pressing E on it beams you back, as the console does
+    interact('energise', 'Energise: beam back to the briefing room', leaves, band, seam)
     # its sign over it, on a plate a little buried in the wall
     box('transporter room sign plate', (1.58, 0.03, 0.37), toon(HULL['dado']), (0, 0.005, 2.81), frame=f)
     sign('transporter room sign', 'Transporter room', 1.5, LCARS['orange'], (0, 0.024, 2.85), f)

@@ -14,7 +14,7 @@ import { carryOnPrompt, conflictsPrompt, issuePrompt, systemAppend } from '../pr
 import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
 import { Sessions, Workspace } from '../services';
 import { applyTaskTool } from '../tasks';
-import { applyWorkflowEvent, runOutcome, scriptPlan, transcriptLines, WORKFLOW_LINGER_MS } from '../workflows';
+import { applyWorkflowEvent, journalResults, runOutcome, scriptPlan, transcriptLines, WORKFLOW_LINGER_MS } from '../workflows';
 import { committedWaypoint, endedProbe, launchedProbe, nudgedWaypoint } from '../waypoints';
 import { checklistState, type ChecklistSource } from '../checklist';
 import { applyBackgroundEvent, BACKGROUND_LINGER_MS, OUTPUT_TAIL, outputLines } from '../backgroundTasks';
@@ -447,14 +447,14 @@ export function keepWorkflowFiles(rt: Runtime, event: WorkflowEvent): WorkflowEv
   scripts.set(event.id, script);
   // a saved workflow, or one run from its script's path: what its meta plans is in the file
   if (script.source) return undefined;
-  const source = readScript(script.path);
+  const source = readText(script.path);
   if (!source) return undefined;
   scripts.set(event.id, { ...script, source });
   return { kind: 'plan', id: event.id, plan: scriptPlan(source) };
 }
 
-/** A workflow script Claude Code saved, or nothing when it can't be read. */
-function readScript(file: string | undefined): string | undefined {
+/** A file Claude Code writes (a workflow's script, its journal), or nothing when it can't be read (not there yet). */
+function readText(file: string | undefined): string | undefined {
   if (!file) return undefined;
   try {
     return readFileSync(file, 'utf8');
@@ -466,18 +466,20 @@ function readScript(file: string | undefined): string | undefined {
 /**
  * The script behind one of a lead's workflows, for the transporter console: its source, and once Claude Code has saved
  * the run (workflows/<runId>.json in the session's folder, beside subagents/workflows/<runId>/ where its agents'
- * transcripts are), what it logged and returned. Read each time it's asked for, since the run is saved when it ends.
+ * transcripts are), what it logged and returned, and from the journal there what each agent has returned so far. Read
+ * each time it's asked for, since the journal grows as agents finish and the run is saved when it ends.
  */
 export function workflowScript(rt: Runtime | undefined, workflowId: string): WorkflowScript {
   const script = rt?.workflowScripts?.get(workflowId);
-  const source = script?.source ?? readScript(script?.path) ?? '';
+  const source = script?.source ?? readText(script?.path) ?? '';
   const dir = rt?.workflowTranscripts?.get(workflowId);
-  if (!dir) return { source, logs: [] };
+  if (!dir) return { source, logs: [], results: [] };
+  const results = journalResults(readText(join(dir, 'journal.jsonl')) ?? '');
   try {
     const run = JSON.parse(readFileSync(join(dir, '..', '..', '..', 'workflows', `${basename(dir)}.json`), 'utf8')) as unknown;
-    return { source, ...runOutcome(run) };
+    return { source, ...runOutcome(run), results };
   } catch {
-    return { source, logs: [] };
+    return { source, logs: [], results };
   }
 }
 
