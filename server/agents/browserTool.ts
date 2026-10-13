@@ -236,13 +236,12 @@ async function flatness(jpeg: string): Promise<StageMoment['flat']> {
  * page doesn't have.
  */
 export function focusHQShape(): string | null {
-  const hq = (window as { focusHQ?: Record<string, unknown> }).focusHQ;
-  if (!hq) return null;
+  if (!('focusHQ' in window) || typeof window.focusHQ !== 'object' || window.focusHQ === null) return null;
   const lines: string[] = [];
-  for (const [hook, o] of Object.entries(hq)) {
+  for (const [hook, o] of Object.entries(window.focusHQ)) {
     if (typeof o !== 'object' || o === null) continue;
     const names = new Map<string, string>();
-    for (let p: object | null = o; p && p !== Object.prototype; p = Object.getPrototypeOf(p) as object | null) {
+    for (let p: object | null = o; p && p !== Object.prototype; p = Object.getPrototypeOf(p)) {
       for (const name of Object.getOwnPropertyNames(p)) {
         if (name === 'constructor' || name.startsWith('_') || names.has(name)) continue;
         const d = Object.getOwnPropertyDescriptor(p, name);
