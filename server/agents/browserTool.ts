@@ -73,6 +73,24 @@ const FOCUS_HQ_HOOKS =
   '`world.root` is the THREE.Group to `traverse()` (world itself has no traverse), `world.rooms` (Map), `world.room(projectId)`, `world.places()`; ' +
   '`player.teleport(feet, lookAt)` (THREE.Vector3s), `player.locked`.';
 
+/**
+ * What to add to a failed evaluate's error so the agent can recover without guessing: the page navigated mid-run, a
+ * module's import used as a global, the app's source imported, or a path that isn't there (with `shape`, what
+ * `window.focusHQ` has right now, from `focusHQShape`, when the page has it). Nothing when there's no advice.
+ */
+export function evaluateHint(message: string, shape: string | null): string | undefined {
+  if (/Execution context was destroyed/.test(message))
+    return "The page navigated or reloaded while your code ran (a link, a `location` change, or Vite reloading it after a file changed), so nothing came back. Run it again once it's loaded; a screenshot shows where it is.";
+  const global = /ReferenceError: (\S+) is not defined/.exec(message);
+  if (global)
+    return `\`${global[1]}\` isn't a global on this page: only what the page puts on \`window\` is in scope, not its modules' imports. Reach what you need through an object you already have (\`.constructor\` of one gives you its class).`;
+  if (/Failed to fetch dynamically imported module/.test(message))
+    return "The page couldn't load that module (a built office serves no source files). Reach the running app through `window.focusHQ` instead.";
+  if (!/TypeError: (Cannot (read|set) properties of (undefined|null)|.+ is not a function)/.test(message)) return undefined;
+  if (shape) return `Something your code reached for isn't there. What the page's hooks have right now:\n${shape}`;
+  return "Something your code reached for isn't there. Check the path one step at a time (`Object.keys(x)`) before using it.";
+}
+
 type CallResult = { content: ({ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string })[]; isError?: boolean };
 
 interface Tab {
@@ -212,6 +230,30 @@ async function flatness(jpeg: string): Promise<StageMoment['flat']> {
   return Math.max(...counts.values()) / n;
 }
 
+/**
+ * Runs in the page: a line for each of `window.focusHQ`'s hooks listing what it has (methods with `()`, getters
+ * marked), or null on a page without them. No functions named inside it: tsx wraps those in a `__name` helper the
+ * page doesn't have.
+ */
+export function focusHQShape(): string | null {
+  const hq = (window as { focusHQ?: Record<string, unknown> }).focusHQ;
+  if (!hq) return null;
+  const lines: string[] = [];
+  for (const [hook, o] of Object.entries(hq)) {
+    if (typeof o !== 'object' || o === null) continue;
+    const names = new Map<string, string>();
+    for (let p: object | null = o; p && p !== Object.prototype; p = Object.getPrototypeOf(p) as object | null) {
+      for (const name of Object.getOwnPropertyNames(p)) {
+        if (name === 'constructor' || name.startsWith('_') || names.has(name)) continue;
+        const d = Object.getOwnPropertyDescriptor(p, name);
+        names.set(name, d?.get ? `${name} (getter)` : typeof d?.value === 'function' ? `${name}()` : name);
+      }
+    }
+    lines.push(`window.focusHQ.${hook}: ${[...names.values()].join(', ')}`);
+  }
+  return lines.join('\n');
+}
+
 /** Runs in the page: the kit3d labels showing on its stage, where they are on it. */
 function stageLabels(): StageMoment['labels'] {
   const stage = document.getElementById('stage')?.getBoundingClientRect() ?? new DOMRect();
@@ -328,7 +370,15 @@ export function browserMcpServer(pool: BrowserPool, agentId: string, hooks: Pick
             );
             return { content: [{ type: 'text', text: truncate(String(result), 8000) }] };
           } catch (err) {
-            return { content: [{ type: 'text', text: `Evaluation failed: ${errorMessage(err)}` }], isError: true };
+            const message = errorMessage(err);
+            const shape = /TypeError/.test(message)
+              ? await pool
+                  .tab(agentId)
+                  .then(({ page }) => page.evaluate(focusHQShape))
+                  .catch(() => null)
+              : null;
+            const hint = evaluateHint(message, shape && truncate(shape, 2500));
+            return { content: [{ type: 'text', text: `Evaluation failed: ${message}${hint ? `\n\n${hint}` : ''}` }], isError: true };
           }
         },
       ),

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { EVALUATE_TIMEOUT_MS, evaluateBody, withTimeout } from './browserTool';
+import { EVALUATE_TIMEOUT_MS, evaluateBody, evaluateHint, focusHQShape, withTimeout } from './browserTool';
 
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (body: string) => () => Promise<unknown>;
 const run = (src: string) => new AsyncFunction(evaluateBody(src))();
@@ -72,5 +72,67 @@ describe('withTimeout', () => {
 
   it('passes a result through in time', async () => {
     expect(await withTimeout(Promise.resolve('ok'), 1000, 'x')).toBe('ok');
+  });
+});
+
+describe('evaluateHint', () => {
+  const shape = 'world: root, rooms, room()';
+
+  it('says to run it again once the page has loaded when a navigation cut it off', () => {
+    const hint = evaluateHint('page.evaluate: Execution context was destroyed, most likely because of a navigation.', shape);
+    expect(hint).toMatch(/navigated or reloaded/);
+    expect(hint).not.toContain(shape);
+  });
+
+  it('says what the page offers when the code reached for something that is not there', () => {
+    for (const message of [
+      "page.evaluate: TypeError: Cannot read properties of undefined (reading 'traverse')",
+      "page.evaluate: TypeError: Cannot set properties of undefined (setting 'length')",
+      "page.evaluate: TypeError: Cannot read properties of null (reading 'click')",
+      'page.evaluate: TypeError: u.panels.isOpen is not a function',
+    ]) {
+      const hint = evaluateHint(message, shape);
+      expect(hint, message).toContain(shape);
+    }
+  });
+
+  it('says to check each step of the path on a page without the office hooks', () => {
+    const hint = evaluateHint("page.evaluate: TypeError: Cannot read properties of undefined (reading 'id')", null);
+    expect(hint).toMatch(/one step at a time/);
+  });
+
+  it('says that only what the page puts on window is in scope', () => {
+    expect(evaluateHint('page.evaluate: ReferenceError: THREE is not defined', shape)).toMatch(/`THREE` isn't a global/);
+  });
+
+  it("says to reach the running app through its hooks rather than importing its source", () => {
+    const hint = evaluateHint('page.evaluate: TypeError: Failed to fetch dynamically imported module: http://127.0.0.1:4597/shared/crew.ts', shape);
+    expect(hint).toMatch(/window\.focusHQ/);
+    expect(hint).not.toContain(shape);
+  });
+
+  it('adds nothing to a failure it has no advice for', () => {
+    expect(evaluateHint('Evaluation timed out after 30 s', shape)).toBeUndefined();
+    expect(evaluateHint("page.evaluate: Error: boom", shape)).toBeUndefined();
+  });
+});
+
+describe('focusHQShape', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('lists what each of the hooks has: fields, methods (own and inherited) and getters', () => {
+    class World {
+      root = {};
+      rooms = new Map();
+      room() {}
+    }
+    const player = { teleport() {}, _velocity: 0, get locked() { return false; } };
+    vi.stubGlobal('window', { focusHQ: { world: new World(), player, mode: 'demo' } });
+    expect(focusHQShape()).toBe('window.focusHQ.world: root, rooms, room()\nwindow.focusHQ.player: teleport(), locked (getter)');
+  });
+
+  it('is null on a page without the hooks', () => {
+    vi.stubGlobal('window', {});
+    expect(focusHQShape()).toBeNull();
   });
 });
