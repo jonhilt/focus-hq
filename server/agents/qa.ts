@@ -4,6 +4,7 @@ import { spotCheckUrl } from '../../shared/qa';
 import type { IssueDetail, PullRequestDetail } from '../github/provider';
 import { truncate } from '../util';
 import { SCRATCH_RULE } from './scratch';
+import { WAIT_RULE } from './wait';
 
 // The QA officer's instructions, their report's schema, and the PR comment the office posts. Pure, so they're unit
 // tested (qa.test.ts).
@@ -214,7 +215,7 @@ How to test:
 3. Install dependencies if needed, then run the project's test suite, linters, type checks and build (whichever exist).
 4. If the change touches a web UI, start its dev server in the background and exercise the change with the mcp__browser__ tools: click through it, try the edge cases, and check the console for errors. Stop the server afterwards.
    Call mcp__browser__screenshot on each state that shows the change working or failing: the last ${MAX_SCREENSHOTS} go on the pull request with your report, each with the caption you give it.
-5. You may write throwaway scripts to probe behaviour, but don't commit them. ${SCRATCH_RULE}
+5. You may write throwaway scripts to probe behaviour, but don't commit them. ${SCRATCH_RULE} ${WAIT_RULE}
 
 Rules: don't change the code under test, don't commit or push, and don't comment on, review or merge anything on GitHub: the office posts your report. Nobody can answer questions while you work, so make sensible calls and say what you assumed.
 

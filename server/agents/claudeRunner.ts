@@ -11,6 +11,7 @@ import { sessionHooks } from './checklist';
 import { CLOUD_UNAVAILABLE, cloudRefused } from './cloud';
 import { officeMcpServer } from './officeTool';
 import { openScratch } from './scratch';
+import { withWaitHelper } from './wait';
 import { handleMessage, type RunContext, type TurnResult } from './sdkMessages';
 import { WorkflowPermits, workflowAsk } from './workflows';
 import { BackgroundTracker } from './backgroundTasks';
@@ -225,9 +226,10 @@ export class ClaudeRunner implements AgentRunner {
     // a cloud session runs on your plan in the cloud, whatever this machine signs in with
     const onKey = !cloud && keyFallback.onKey();
     hooks.signIn?.(onKey);
-    // a local session's scratch dir for throwaway files, deleted when the run ends; a cloud session has its own machine
+    // a local session's scratch dir for throwaway files, deleted when the run ends, and the office's focus-wait on its
+    // PATH; a cloud session has its own machine
     const scratch = cloud ? undefined : openScratch(req.agentId, paths.dcgConfig);
-    const env = { ...agentEnv(onKey), ...scratch?.env };
+    const env = cloud ? agentEnv(onKey) : withWaitHelper({ ...agentEnv(onKey), ...scratch?.env });
     const resets = keyFallback.resetsAt();
     if (onKey && resets) hooks.lines([{ kind: 'system', text: `✻ On your API key: your plan's usage limit is reached until ${clock(resets)}` }]);
 

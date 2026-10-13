@@ -3,6 +3,7 @@ import type { IssueDetail } from '../github/provider';
 import { truncate } from '../util';
 import { CLIMB_ASSIGNMENT, CLIMB_SUMMARY } from './climb';
 import { SCRATCH_RULE } from './scratch';
+import { WAIT_RULE } from './wait';
 
 export function systemAppend(agent: Agent): string {
   if (agent.task === 'review') throw new Error('The QA officer gets qaSystemAppend (qa.ts)');
@@ -34,6 +35,7 @@ export function systemAppend(agent: Agent): string {
         '- Run the project\'s tests, type checks and linters when they exist, and fix what you break.',
         '- If the change touches a web UI, start the dev server in the background and check your work with the mcp__browser__ tools (open, click, type, screenshot, console).',
         `- ${SCRATCH_RULE}`,
+        `- ${WAIT_RULE}`,
       ];
   return `
 # You are ${agent.name}, an agent in the Focus office

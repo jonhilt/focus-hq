@@ -1,0 +1,40 @@
+#!/bin/sh
+# focus-wait --until '<check>' [--timeout SECONDS] [--every SECONDS]
+#
+# Runs <check> in sh every --every seconds (2) until it exits 0, then prints its output and exits 0. After --timeout
+# seconds (120) it gives up: exit 1, with the check's last output on stderr. The Focus office puts this on its agents'
+# PATH (server/agents/wait.ts), because Claude Code refuses a foreground `sleep N; <check>`.
+
+usage() {
+  echo "usage: focus-wait --until '<check>' [--timeout SECONDS] [--every SECONDS]" >&2
+  exit 2
+}
+
+until_cmd=
+timeout=120
+every=2
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --until) [ $# -ge 2 ] || usage; until_cmd=$2; shift 2 ;;
+    --timeout) [ $# -ge 2 ] || usage; timeout=$2; shift 2 ;;
+    --every) [ $# -ge 2 ] || usage; every=$2; shift 2 ;;
+    *) usage ;;
+  esac
+done
+[ -n "$until_cmd" ] || usage
+case "$timeout" in '' | *[!0-9]*) usage ;; esac
+
+start=$(date +%s)
+while :; do
+  if out=$(sh -c "$until_cmd" 2>&1); then
+    [ -n "$out" ] && printf '%s\n' "$out"
+    exit 0
+  fi
+  elapsed=$(( $(date +%s) - start ))
+  if [ "$elapsed" -ge "$timeout" ]; then
+    echo "focus-wait: still not true after ${elapsed}s: $until_cmd" >&2
+    [ -n "$out" ] && printf '%s\n' "$out" | tail -n 20 >&2
+    exit 1
+  fi
+  sleep "$every"
+done

@@ -27,6 +27,11 @@ describe('systemAppend', () => {
     expect(text).toContain('mcp__browser__');
   });
 
+  it('has a local agent wait with focus-wait, which only their PATH has', () => {
+    expect(systemAppend(agent())).toContain('focus-wait --until');
+    expect(systemAppend(agent({ cloud: true }))).not.toContain('focus-wait');
+  });
+
   it('has a cloud agent push their own branch, and only that one', () => {
     const text = systemAppend(agent({ cloud: true }));
     expect(text).toContain('git push origin HEAD:focus/7-save-items-for-later-ab12');

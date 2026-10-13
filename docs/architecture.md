@@ -58,6 +58,7 @@ server/
     tasks.ts              the task list an agent keeps with Claude Code's task tools, followed from its session (TodoWrite, TaskCreate, TaskUpdate, TaskList)
     browserTool.ts        in-process MCP server driving headless Chromium, streams screenshots
     scratch.ts            each local session's scratch dir ($FOCUS_SCRATCH), the office's dcg layer that allows rm -rf in it, and the hook that checks its paths
+    wait.ts               the office's bin/ (focus-wait, for waiting on a server, build or log without `sleep N; cmd`) first on each local session's PATH, and the line that tells them so
     workspace.ts          git mirrors (their local base branch kept up with origin's) + worktrees (agents', the per-repo preview checkout, the planner's read-only checkouts), the office's own merge of a PR's base, installing a checkout's dependencies before its agent starts
     conflicts.ts          merge conflicts, pure: the conflicts agent's model, the rules that settle conflicted files without one (.gitattributes), the ledger's line
     planner.ts            the officer at each room's Ops station: issue drafts, their prompt and schema
