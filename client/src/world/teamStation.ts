@@ -297,6 +297,12 @@ export class TeamStation {
     drawStrip(this.feedsStrip, waiting.length, this.accent);
   }
 
+  /** Which of the station's transporter rooms workflow `id` runs in, while it has one. */
+  roomOf(id: string): number | undefined {
+    const i = this.held.indexOf(id);
+    return i < 0 ? undefined : i;
+  }
+
   /** The lead's background commands and monitors, as probes beside their chair. */
   showBackground(lead: Agent | undefined): void {
     this.leadName = lead?.name ?? '';

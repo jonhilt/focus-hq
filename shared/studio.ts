@@ -5,11 +5,11 @@ import { readScenario, type Scenario } from './scenarios';
 import { ACTIVE_STATUSES, type Agent, type Helper } from './types';
 
 /** Where the camera looks, by name: the director (client/src/ui/studio.ts) works out where that is. */
-export const SHOTS = ['bridge', 'holodeck', 'station', 'lead', 'helpers', 'crew'] as const;
+export const SHOTS = ['bridge', 'holodeck', 'station', 'lead', 'helpers', 'crew', 'transporter'] as const;
 export type Shot = (typeof SHOTS)[number];
 
 /** What a beat waits for, read off the goal's lead (`cueMet`). */
-export const CUES = ['lead-working', 'lead-idle', 'helpers-working', 'helpers-done', 'shipped'] as const;
+export const CUES = ['lead-working', 'lead-idle', 'helpers-working', 'helpers-done', 'workflows-running', 'workflows-done', 'shipped'] as const;
 export type Cue = (typeof CUES)[number];
 
 /** What a beat does as it starts, as the captain would: start the goal, pick the lead's first option, or reply. */
@@ -122,6 +122,11 @@ export function cueMet(cue: Cue, lead: Agent | undefined): boolean {
       return helpers.some((h) => h.status === 'working');
     case 'helpers-done':
       return helpers.length > 0 && helpers.every((h) => h.status !== 'working');
+    // a finished workflow lingers a few seconds before it leaves the lead: long enough for a cue to see it
+    case 'workflows-running':
+      return (lead.workflows ?? []).some((w) => w.status === 'running');
+    case 'workflows-done':
+      return (lead.workflows ?? []).length > 0 && (lead.workflows ?? []).every((w) => w.status !== 'running');
     case 'shipped':
       return (lead.lead?.prs.length ?? 0) > 0;
   }

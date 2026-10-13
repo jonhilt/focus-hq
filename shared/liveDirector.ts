@@ -10,8 +10,12 @@ export interface LiveBeat {
   cuedAt?: number;
 }
 
-/** What the captain does in a beat the recorder would act out for them. */
-export function captainsMove(beat: SceneBeat): string | undefined {
+/**
+ * What the captain does in a beat the recorder would act out for them; and, whenever the lead `asks` permission (to
+ * ship, say), which the recorder grants as it's asked, to grant it.
+ */
+export function captainsMove(beat: SceneBeat, asks = false): string | undefined {
+  if (asks && !beat.do) return 'Approve what the lead asks for';
   switch (beat.do) {
     case 'start-goal':
       return 'Start the goal at a free team station';

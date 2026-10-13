@@ -1,9 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { beatSheet, cueMet, helperTag, modelLabel, readScene, seededRandom, stamp } from './studio';
 import type { Agent } from './types';
+import { SCENARIOS } from './scenarios';
 
 const lead = (over: Partial<Agent>): Agent => ({ status: 'working', helpers: [], lead: { prs: [] }, ...over }) as unknown as Agent;
 const beat = { title: 'Open', caption: 'The bridge' };
@@ -15,6 +16,12 @@ describe('readScene', () => {
     expect(scene.beats.some((b) => b.insert === 'explainer')).toBe(true);
     expect(scene.explainer?.beats.length).toBeGreaterThanOrEqual(2);
     expect(scene.scenario).toBe('subagents');
+  });
+
+  it('has a scene for every scenario the training console offers, and every scene reads', () => {
+    const dir = path.join(import.meta.dirname, '../scenes');
+    const scenes = readdirSync(dir).filter((f) => /^[^.]+\.yaml$/.test(f)).map((f) => readScene(parse(readFileSync(path.join(dir, f), 'utf8'))));
+    expect(new Set(scenes.map((s) => s.scenario))).toEqual(new Set(SCENARIOS));
   });
 
   it('fills in a beat’s hold and the scene’s pacing', () => {
@@ -53,6 +60,14 @@ describe('cueMet', () => {
     expect(cueMet('helpers-done', lead({ helpers: [] }))).toBe(false);
     expect(cueMet('helpers-done', lead({ helpers: [working, { ...working, status: 'done' }] }))).toBe(false);
     expect(cueMet('helpers-done', lead({ helpers: [{ ...working, status: 'done' }] }))).toBe(true);
+  });
+
+  it('follows the workflows', () => {
+    const running = { id: 'w', name: 'review-slice', description: '', status: 'running' as const, phases: [], agents: [], startedAt: 0 };
+    expect(cueMet('workflows-running', lead({ workflows: [running] }))).toBe(true);
+    expect(cueMet('workflows-done', lead({ workflows: [] }))).toBe(false);
+    expect(cueMet('workflows-done', lead({ workflows: [running, { ...running, status: 'done' }] }))).toBe(false);
+    expect(cueMet('workflows-done', lead({ workflows: [{ ...running, status: 'done' }, { ...running, status: 'failed' }] }))).toBe(true);
   });
 
   it('knows when the slice has shipped', () => {

@@ -29,6 +29,8 @@ export class LiveDirector {
   holding = false;
   private glide: { from: THREE.Vector3; fromLook: THREE.Vector3; to: THREE.Vector3; toLook: THREE.Vector3; start: number; seconds: number } | null = null;
   private readonly look = new THREE.Vector3();
+  /** Whether the lead is waiting on the captain's permission for something. */
+  private asks = false;
   private readonly caption = h('div', { class: 'studio-caption live-caption' });
   private readonly status = h('div', { class: 'live-status' });
 
@@ -87,8 +89,14 @@ export class LiveDirector {
   private draw(): void {
     const beat = this.scene?.beats[this.at.index];
     const up = !!beat && this.shown;
-    // what the captain does, until they've done it (the beat's cue has come)
-    const move = beat && this.at.cuedAt === undefined ? (captainsMove(beat) ?? (beat.insert ? 'Cut-away: the scene’s explainer plays here in the film' : undefined)) : undefined;
+    // what the captain does, until they've done it (the beat's cue has come), and whenever the lead waits on their say-so
+    const move = !beat
+      ? undefined
+      : this.asks && !beat.do
+        ? captainsMove(beat, true)
+        : this.at.cuedAt === undefined
+          ? (captainsMove(beat) ?? (beat.insert ? 'Cut-away: the scene’s explainer plays here in the film' : undefined))
+          : undefined;
     this.caption.replaceChildren(
       ...(beat ? [h('div', { class: 'studio-title' }, beat.title), h('div', { class: 'studio-text' }, beat.caption)] : []),
       ...(move ? [h('div', { class: 'live-move' }, move)] : []),
@@ -101,8 +109,13 @@ export class LiveDirector {
   /** Each frame: the beats' cues, the shot still to take, and the camera's glide while the director holds it. */
   update(now: number): void {
     if (!this.scene) return;
+    const lead = this.lead();
+    if (!!lead?.permission !== this.asks) {
+      this.asks = !!lead?.permission;
+      this.draw();
+    }
     const beat = this.scene.beats[this.at.index];
-    const next = liveTick(this.scene.beats, this.at, !!beat?.until && cueMet(beat.until, this.lead()), now);
+    const next = liveTick(this.scene.beats, this.at, !!beat?.until && cueMet(beat.until, lead), now);
     if (next !== this.at) {
       if (next.index === this.at.index) {
         this.at = next;

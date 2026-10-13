@@ -1,0 +1,61 @@
+# USS Focus TV: how a workflow fans out. `pnpm run studio scenes/workflow.yaml` records it, and the training console on
+# the demo ship's bridge plays it live (docs/studio.md).
+title: How workflows fan out
+# the demo's pacing: half the speed of `pnpm run demo`, so there's time to watch the away teams
+speed: 0.5
+seed: 7
+project: Sock Shop
+goal: Show how many of each sock are left in stock on the product page
+# the lead's story with workflows but no helpers, explainer or background jobs (shared/scenarios.ts)
+scenario: workflow
+
+beats:
+  - title: Cold open
+    shot: bridge
+    caption: Some jobs are too wide for one session to read alone. A workflow sends dozens of agents at them at once.
+    hold: 7
+
+  - title: A goal
+    do: start-goal
+    shot: station
+    caption: The captain hands a goal to a lead, a long-running Claude Code session at its own team station.
+    until: lead-working
+    hold: 6
+
+  - title: The lead looks around
+    shot: lead
+    glide: 3
+    caption: The lead reads the repos, puts a plan on screen and asks before it builds anything.
+    until: lead-idle
+    hold: 4
+
+  - title: Go ahead
+    do: answer
+    shot: station
+    caption: The captain picks an option, and the lead builds the slice in each repo.
+    until: lead-working
+    hold: 4
+
+  - title: A workflow
+    shot: lead
+    glide: 3
+    caption: Before it ships, the lead writes a workflow, a script that fans the review out across the whole slice.
+    until: workflows-running
+    hold: 4
+
+  - title: The away team
+    shot: transporter
+    caption: Each agent beams onto a pad in a transporter room of its own, phase by phase, a few dozen over the run.
+    until: workflows-done
+    hold: 6
+
+  - title: Only the findings come back
+    shot: station
+    caption: The workflow hands the lead its findings, not every file its agents read.
+    until: shipped
+    hold: 8
+
+  - title: Wrap
+    shot: bridge
+    caption: "Workflows: a script, a fan of agents, and only the results back to the lead."
+    hold: 6

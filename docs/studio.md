@@ -62,11 +62,12 @@ explainer:                      # the same input as a lead's explain tool: title
 
 - **shot**: `bridge` (where you come aboard), `holodeck` (the project's training hall), `station` (the captain's view
   of the goal's screen), `lead` (the lead, three-quarters on), `helpers` (the helpers at their consoles), `crew`
-  (the whole briefing room from a corner by the screen).
+  (the whole briefing room from a corner by the screen), `transporter` (the transporter room the lead's longest-running
+  workflow beamed into, from its feed's camera: it waits for a workflow to start).
 - **do**: `start-goal` (the scene's goal, at the first free team station), `answer` (picks the first option of the
   lead's open question), `reply` (sends `say:` to the lead). The goal starts before anything else acts on its lead.
-- **until**: `lead-working`, `lead-idle` (its turn has ended), `helpers-working`, `helpers-done`, `shipped` (its slice
-  has a pull request). A cue that hasn't come in three minutes stops the filming and says which.
+- **until**: `lead-working`, `lead-idle` (its turn has ended), `helpers-working`, `helpers-done`, `workflows-running`,
+  `workflows-done` (every workflow it has finished, caught while they linger), `shipped` (its slice has a pull request). A cue that hasn't come in three minutes stops the filming and says which.
 
 ## Scenarios
 
@@ -79,6 +80,9 @@ shot of the station isn't busy with things the narration never mentions:
   repos and review the slice in the transporter rooms.
 - **`subagents`**: the helpers (an Explore subagent per repo, side by side), and none of the rest.
 - **`workflow`**: the workflows, and none of the rest.
+
+Each has a scene of its own in `scenes/` (`subagents.yaml`, `workflow.yaml`, `full.yaml`), which the recorder films and
+the training console plays live; a test checks every scenario has one and every scene reads.
 
 Looking round, asking, building, shipping, hearing back from QA and the slice landing play in every scenario. The
 recorder hands the scene's scenario to its office as `FOCUS_DEMO_SCENARIO`; a goal keeps the scenario it started with.
@@ -109,7 +113,8 @@ through its beats over live play (`client/src/ui/liveDirector.ts`, its decisions
 - Its shot takes the camera (a cut through a blackout, or a glide) and holds it there until you walk; the mouse still
   looks round. A station's shots wait for its lead to sit down. The frames are the recorder's (`ui/shots.ts`).
 - A beat the recorder would act out says what you do instead: start the goal, answer the lead, or what to tell it.
-  An explainer insert says it's a cut-away in the film.
+  While the lead waits on your permission (to ship, say), which the recorder grants as it's asked, it says to approve
+  it. An explainer insert says it's a cut-away in the film.
 - A beat with a cue (`until`) moves on by itself once the cue has come and its hold is up; one without waits for you.
   **]** moves on and **[** goes back any time; **O** hides the captions and stops the camera moves, while the beats
   keep counting by their cues.

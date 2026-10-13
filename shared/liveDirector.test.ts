@@ -12,6 +12,11 @@ describe('captainsMove', () => {
     expect(captainsMove(beat({ do: 'reply', say: 'Ship it' }))).toBe('Tell the lead: “Ship it”');
     expect(captainsMove(beat())).toBeUndefined();
   });
+
+  it('asks the captain to approve what the lead asks for, as the recorder would', () => {
+    expect(captainsMove(beat({ until: 'shipped' }), true)).toBe('Approve what the lead asks for');
+    expect(captainsMove(beat({ do: 'answer' }), true)).toMatch(/Answer the lead/);
+  });
 });
 
 describe('liveTick', () => {

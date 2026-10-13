@@ -30,6 +30,13 @@ export function frameShot(world: World, name: Shot, lead: Agent | undefined, pro
   }
   const station = lead && world.room(lead.projectId)?.stationOf(lead.id);
   if (!station) return null;
+  if (name === 'transporter') {
+    // the room the lead's longest-running workflow beamed into, from its feed's camera: none yet, no shot
+    const workflow = [...(lead.workflows ?? [])].sort((a, b) => a.startedAt - b.startedAt).find((w) => w.status === 'running') ?? lead.workflows?.[0];
+    const index = workflow && station.roomOf(workflow.id);
+    const room = index === undefined ? undefined : world.transporterRooms.find((t) => t.projectId === lead.projectId && t.station === station.index && t.index === index);
+    return room ? { position: room.camera.at.clone(), lookAt: room.camera.lookAt.clone() } : null;
+  }
   const view = station.viewpoint();
   const captain = view.position.clone().setY(1.6);
   const seat = (s: StationSeat) => s.seat.getWorldPosition(new THREE.Vector3()).setY(SEATED_HEAD);
