@@ -160,7 +160,7 @@ async function main() {
     openNumberOne: () => openNumberOnePanel(ui),
     openStudio: (beat) => openStudioChat(ui, beat),
     openEngineering: () => openEngineeringPanel(ui),
-    openLedger: () => openLedgerPanel(ui),
+    openLedger: (subject) => openLedgerPanel(ui, subject),
     showOnMsd: (what) => world.putOnMsd(
       what === 'scorecard' ? { kind: 'scorecard', scorecards: state.scorecards } : what ? { kind: 'trace', trace: what } : { kind: 'report', card: state.report },
     ),

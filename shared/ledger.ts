@@ -311,6 +311,12 @@ function reportBody(card: ReportCard): { headline: string; lines: string[] } {
 /** A friction's group: its kind and signature, as `<kind>: <signature>`. */
 export const frictionKey = (f: Pick<Friction, 'kind' | 'signature'>) => `${f.kind}: ${f.signature}`;
 
+/** A friction's key back into its kind and signature; a key with no kind is all signature. */
+export function frictionName(key: string): { kind: string; signature: string } {
+  const at = key.indexOf(': ');
+  return at < 0 ? { kind: '', signature: key } : { kind: key.slice(0, at), signature: key.slice(at + 2) };
+}
+
 export interface FrictionGroup {
   key: string;
   kind: FrictionKind;

@@ -894,11 +894,12 @@ body.studio .hud, body.studio .toasts { display: none; }
 .sc-moved-row .sc-pill { min-width: 96px; }
 .sc .lbl, .sc-about .lbl, .sc-retro .lbl { display: block; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lcars-peach); }
 .sc-frictions { display: flex; flex-direction: column; gap: 4px; }
-.sc-friction { display: grid; grid-template-columns: minmax(0, 1fr) 30% 80px; align-items: center; gap: 10px; font-size: 14px; }
+.sc-friction { all: unset; box-sizing: border-box; cursor: pointer; padding: 3px 6px; margin: 0 -6px; border-radius: 6px; display: grid; grid-template-columns: minmax(0, 1fr) 30% 80px; align-items: center; gap: 10px; font-size: 14px; }
 .sc-friction > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc-friction .bar { height: 8px; border-radius: 4px; background: var(--surface); overflow: hidden; }
 .sc-friction .bar i { display: block; height: 100%; border-radius: 4px; background: var(--lcars-orange); }
 .sc-friction small { text-align: right; }
+.sc-friction:hover, .sc-friction:focus-visible { background: var(--surface); }
 .sc-section { --c: var(--lcars-lilac); border-left-color: var(--c); display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
 .sc-section h4 { color: var(--c); font-size: 15px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .sc-section h4 span { font-size: 13px; letter-spacing: 0.02em; text-transform: none; color: var(--text); }

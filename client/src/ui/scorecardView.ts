@@ -1,4 +1,4 @@
-import { type ComparedRow, compared, duration, formatValue, glance, measuredAt, type Tile, type Trend } from '../../../shared/scorecard';
+import { changeMark, type ComparedRow, compared, duration, formatValue, glance, measuredAt, type Tile, tileFace, type Trend, verdictPhrases } from '../../../shared/scorecard';
 import { aboutMetric, SECTION_ABOUT } from '../../../shared/scorecardAbout';
 import type { Metric, Scorecard, ScorecardSection } from '../../../shared/types';
 import { api } from '../net/api';
@@ -49,16 +49,10 @@ function sparkline(series: number[], tone: Trend | 'bad', size: { w: number; h: 
   return el;
 }
 
-const ICON: Record<Trend | 'bad', string> = { better: '▲', worse: '▼', same: '–', bad: '✕' };
-
 /** A change as a capsule: its direction's mark and colour, and the change in words, so it never rests on colour alone. */
 function trendPill(row: ComparedRow, tone: Trend | 'bad' = row.trend): HTMLElement {
-  const words = tone === 'bad' ? 'failing'
-    : row.before === undefined ? 'first measured'
-      : row.change ? row.change : 'no change';
-  // a time that moved less than its wobble: shown, but not called a change
-  const noise = tone === 'same' && row.change && row.metric.better !== 'none';
-  return h('span', { class: `sc-pill ${tone}`, title: noise ? 'Within the 10% timings wobble from run to run' : undefined }, `${noise ? '≈' : ICON[tone]} ${words}`);
+  const mark = changeMark(row, tone);
+  return h('span', { class: `sc-pill ${mark.tone}`, title: mark.noise ? 'Within the 10% timings wobble from run to run' : undefined }, `${mark.icon} ${mark.words}`);
 }
 
 /** The scorecard's head: which commit it measured and when, Measure now, the MSD, and how a measurement is going. */
@@ -92,43 +86,17 @@ export function scorecardHead(ui: Ui): HTMLElement {
 /** The overview's opening sentence: is the gate green, and how many numbers climbed or slipped. */
 function verdict(history: Scorecard[]): HTMLElement | null {
   const g = glance(history);
-  if (!g) return null;
-  const gate = g.gate
-    ? g.gate.pass
-      ? [h('span', null, 'The gate is '), h('b', { class: 'better' }, 'passing'), g.gate.seconds === undefined ? '' : `, in ${duration(g.gate.seconds)}. `]
-      : [h('span', null, 'The gate is '), h('b', { class: 'worse' }, 'failing'), g.gate.failing.length ? `: ${g.gate.failing.join(', ')}. ` : '. ']
-    : [];
-  const moved = !g.compared
-    ? ['This is the first scorecard: the next will show what moved.']
-    : !g.better && !g.worse
-      ? ['Nothing moved since the one before.']
-      : [
-        'Since the one before, ',
-        g.better ? h('b', { class: 'better' }, `${g.better} ${g.better === 1 ? 'number' : 'numbers'} improved`) : '',
-        g.better && g.worse ? ' and ' : '',
-        g.worse ? h('b', { class: 'worse' }, `${g.worse} slipped`) : '',
-        '.',
-      ];
-  return h('p', { class: 'sc-verdict' }, ...gate, ...moved);
+  return g ? h('p', { class: 'sc-verdict' }, ...verdictPhrases(g).map((p) => (p.tone ? h('b', { class: p.tone }, p.text) : p.text))) : null;
 }
 
-/** A few numbers beside the headline, in a line: `128 non-null · 0 any`; times first-named, as people say them. */
-const alsoLine = (rows: ComparedRow[]) => rows.map(({ metric }) => {
-  const short = aboutMetric(metric.key, metric.label).short;
-  return metric.format === 'seconds' ? `${short} ${duration(metric.value)}` : `${formatValue(metric.value, metric.format)} ${short}`;
-}).join(' · ');
-
 function tile(t: Tile, go: Go): HTMLElement {
-  const { metric } = t.hero;
-  const gate = t.section === 'gate' && metric.format === 'pass';
-  const value = gate ? (metric.value ? 'PASS' : 'FAIL') : formatValue(metric.value, metric.format);
-  const caption = gate ? (t.trend !== t.hero ? `in ${duration(t.trend.metric.value)}` : '') : aboutMetric(metric.key, metric.label).short;
+  const face = tileFace(t);
   return h('button', { class: `sc-tile ${t.tone}`, style: `--c:${SECTION_TONE[t.section]}`, title: `${t.title}: open its numbers`, onclick: () => go(t.section) },
     h('h4', null, t.title),
     h('small', { class: 'q' }, SECTION_ABOUT[t.section].question),
-    h('div', { class: 'hero' }, value, h('span', null, caption)),
+    h('div', { class: 'hero' }, face.value, h('span', null, face.caption)),
     h('div', { class: 'row' }, sparkline(t.trend.series, t.tone, { w: 110, h: 26 }), trendPill(t.trend, t.tone)),
-    t.also.length ? h('small', { class: 'also' }, alsoLine(t.also)) : null,
+    face.also ? h('small', { class: 'also' }, face.also) : null,
   );
 }
 

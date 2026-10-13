@@ -1,4 +1,4 @@
-import type { LedgerEvent } from '../../../shared/ledger';
+import { frictionName, type LedgerEvent } from '../../../shared/ledger';
 import { byDay, GROUP_LABEL, groupCounts, ledgerLog, type LedgerRow, REVIEW_GROUPS, type ReviewGroup, SHOWN_AT_FIRST, trace, type TraceSubject } from '../../../shared/ledgerReview';
 import { api } from '../net/api';
 import { state } from '../net/state';
@@ -33,12 +33,13 @@ function dayOf(at: number): string {
  * Reviewing the ledger at main engineering's master systems table: the log of what happened over a window, filtered by
  * kind and project, and the trace of whichever pull request or goal you pick in it, everything the ledger says about
  * it in order with what it cost. Read-only: the retro, at Lt. Brennan's station, is where anything gets decided.
+ * Opened on a `traced` subject (a friction picked on the engineering panel), it traces that straight away.
  */
-export function openLedgerPanel(ui: Ui): void {
+export function openLedgerPanel(ui: Ui, traced?: TraceSubject): void {
   let days = 14;
   let projectId = '';
   let events: LedgerEvent[] = [];
-  let subject: TraceSubject | null = null;
+  let subject: TraceSubject | null = traced ?? null;
   const show = new Set<ReviewGroup>(SHOWN_AT_FIRST);
 
   const windows = h('div', { class: 'row' });
@@ -51,11 +52,11 @@ export function openLedgerPanel(ui: Ui): void {
   retro.onclick = () => ui.openEngineering();
   const filters = h('div', { class: 'row ledger-filters' });
   const log = h('div', { class: 'ledger-log' });
-  const traced = h('div', { class: 'ledger-trace' });
+  const tracePane = h('div', { class: 'ledger-trace' });
   const body = h('div', { class: 'ledger' },
     h('div', { class: 'row' }, h('span', { class: 'label' }, 'Look back'), windows, projects, h('span', { class: 'grow' }), retro),
     filters,
-    h('div', { class: 'ledger-cols' }, log, traced),
+    h('div', { class: 'ledger-cols' }, log, tracePane),
   );
 
   const load = () => {
@@ -122,7 +123,7 @@ export function openLedgerPanel(ui: Ui): void {
 
   const renderTrace = () => {
     if (!subject) {
-      fill(traced, h('p', { class: 'muted' }, 'Pick a pull request in the log to follow it from its first session to its merge: QA rounds, conflicts, the sessions that worked on it, what they cost and what got in their way. From there, its goal traces every pull request the goal opened.'));
+      fill(tracePane, h('p', { class: 'muted' }, 'Pick a pull request in the log to follow it from its first session to its merge: QA rounds, conflicts, the sessions that worked on it, what they cost and what got in their way. From there, its goal traces every pull request the goal opened.'));
       return;
     }
     const t = trace(events, subject);
@@ -140,17 +141,25 @@ export function openLedgerPanel(ui: Ui): void {
     if (goalLink && goal) goalLink.onclick = () => pick({ kind: 'goal', title: goal });
     const tot = t.totals;
     const sum = (value: string | number, label: string) => h('div', { class: 'ledger-sum' }, h('b', null, value), h('span', null, label));
-    fill(traced,
+    const friction = s.kind === 'friction' ? frictionName(s.key) : null;
+    fill(tracePane,
       h('div', { class: 'row' }, h('span', { class: 'grow' }), clear),
-      h('h3', null, s.kind === 'pr' ? `${s.repo.split('/').pop()} #${s.pr}` : `Goal: ${s.title}`),
+      h('h3', null, s.kind === 'pr' ? `${s.repo.split('/').pop()} #${s.pr}` : s.kind === 'goal' ? `Goal: ${s.title}` : `Friction: ${friction?.signature}`),
       goalLink,
       s.kind === 'goal' ? h('small', { class: 'muted' }, `${tot.prs} pull requests in the last ${days} days`) : null,
-      h('div', { class: 'ledger-sums' },
-        sum(tot.verdicts ? `${tot.fails}/${tot.verdicts}` : '–', 'QA fails'),
-        sum(tot.conflicts, 'conflicts'),
-        sum(`$${tot.costUsd.toFixed(2)}`, `${tot.sessions} sessions · ${tot.minutes} min`),
-        sum(tot.wastedCalls, `wasted calls · ${tot.frictions} frictions`),
-      ),
+      friction ? h('small', { class: 'muted' }, `${friction.kind} · every session it came up in over the last ${days} days, with the moment quoted`) : null,
+      friction
+        ? h('div', { class: 'ledger-sums' },
+          sum(tot.sessions, `sessions · ${tot.frictions} times`),
+          sum(tot.prs, 'pull requests held up'),
+          sum(`$${tot.costUsd.toFixed(2)}`, `those sessions · ${tot.minutes} min`),
+          sum(tot.wastedCalls, 'wasted calls in them'))
+        : h('div', { class: 'ledger-sums' },
+          sum(tot.verdicts ? `${tot.fails}/${tot.verdicts}` : '–', 'QA fails'),
+          sum(tot.conflicts, 'conflicts'),
+          sum(`$${tot.costUsd.toFixed(2)}`, `${tot.sessions} sessions · ${tot.minutes} min`),
+          sum(tot.wastedCalls, `wasted calls · ${tot.frictions} frictions`),
+        ),
       ...(t.steps.length ? t.steps.map((r) => logRow(r, true)) : [h('p', { class: 'muted' }, `Nothing about it in the last ${days} days.`)]),
     );
   };

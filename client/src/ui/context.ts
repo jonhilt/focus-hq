@@ -1,4 +1,4 @@
-import type { Trace } from '../../../shared/ledgerReview';
+import type { Trace, TraceSubject } from '../../../shared/ledgerReview';
 import type { AgentView } from './agentPanel';
 import type { Place } from '../world/office';
 import type { Hud } from './hud';
@@ -45,7 +45,8 @@ export interface Ui {
   /** The engineering station: the ledger's report card and the chief engineer's retro. */
   openEngineering(): void;
   /** Main engineering's master systems table: the ledger's log, and a trace of a pull request or goal. */
-  openLedger(): void;
+  /** The ledger review, tracing `subject` when given (a friction from the engineering panel, say). */
+  openLedger(subject?: TraceSubject): void;
   /** Puts a trace or the scorecard up on main engineering's MSD, or with null, the ledger's report card back. */
   showOnMsd(what: Trace | 'scorecard' | null): void;
   openManager(tab?: ManagerTab): void;

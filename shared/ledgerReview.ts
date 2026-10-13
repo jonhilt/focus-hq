@@ -1,7 +1,7 @@
-import type { Friction, LedgerEvent, SessionDigest } from './ledger';
+import { type Friction, frictionKey, frictionsByDigest, type LedgerEvent, type SessionDigest } from './ledger';
 
 // Reviewing the ledger at main engineering's master systems table: each event as a line of the log, and the trace of a
-// pull request or a goal, everything the ledger says about it in order, with what it cost. Pure, so the panel only draws.
+// pull request, a goal or a friction, everything the ledger says about it in order, with what it cost. Pure, so the panel only draws.
 
 /** How far back the review can look: the ledger's a few thousand lines at most in that time. */
 export const MAX_DAYS = 90;
@@ -52,7 +52,11 @@ export function groupOf(e: LedgerEvent): ReviewGroup {
 }
 
 /** What a trace follows: one pull request, or every one a goal opened. */
-export type TraceSubject = { kind: 'pr'; repo: string; pr: number } | { kind: 'goal'; title: string };
+export type TraceSubject =
+  | { kind: 'pr'; repo: string; pr: number }
+  | { kind: 'goal'; title: string }
+  /** A friction, by its `<kind>: <signature>` key: every session it came up in. */
+  | { kind: 'friction'; key: string };
 
 export type Tone = 'ok' | 'bad' | 'warn' | 'info';
 
@@ -231,6 +235,7 @@ export interface Trace {
  * step, and the totals. A span counts towards a goal by its goal, or by working on one of the goal's pull requests.
  */
 export function trace(events: LedgerEvent[], subject: TraceSubject): Trace {
+  if (subject.kind === 'friction') return frictionTrace(events, subject);
   const samePr = (p: { repo: string; pr: number }) => subject.kind === 'pr' && p.repo === subject.repo && p.pr === subject.pr;
   const goalPrs = new Set<string>();
   if (subject.kind === 'goal')
@@ -280,4 +285,32 @@ export function trace(events: LedgerEvent[], subject: TraceSubject): Trace {
   });
   totals.prs = subject.kind === 'pr' ? 1 : prs.size;
   return { subject, goal: subject.kind === 'pr' ? goal : subject.title, steps, totals };
+}
+
+/**
+ * Every session a friction came up in, oldest first, each quoting the moment (or moments) it did, and any retro
+ * decision taken on it, with the sessions' totals: what the trouble cost, and which pull requests it got in the way of.
+ */
+function frictionTrace(events: LedgerEvent[], subject: Extract<TraceSubject, { kind: 'friction' }>): Trace {
+  const found = frictionsByDigest(events);
+  const totals: TraceTotals = { prs: 0, verdicts: 0, fails: 0, conflicts: 0, sessions: 0, minutes: 0, costUsd: 0, wastedCalls: 0, frictions: 0 };
+  const prs = new Set<string>();
+  const sessions = new Set<string>();
+  const steps: LedgerRow[] = [];
+  for (const e of [...events].sort((a, b) => a.at - b.at || a.seq - b.seq)) {
+    if (e.kind === 'retro-decision' && e.signatures.includes(subject.key)) steps.push(ledgerRow(e));
+    if (e.kind !== 'session-digest') continue;
+    const hits = (found.get(e.key) ?? []).filter((f) => frictionKey(f) === subject.key);
+    if (!hits.length) continue;
+    steps.push({ ...ledgerRow(e), quotes: hits.map((f) => `“${f.quote}”`) });
+    for (const p of e.prs) prs.add(`${p.repo}#${p.pr}`);
+    if (!sessions.has(e.sessionId)) totals.sessions++;
+    sessions.add(e.sessionId);
+    totals.minutes += e.facts.minutes;
+    totals.costUsd += e.facts.costUsd ?? 0;
+    totals.wastedCalls += e.facts.wastedCalls;
+    totals.frictions += hits.length;
+  }
+  totals.prs = prs.size;
+  return { subject, steps, totals };
 }

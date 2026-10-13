@@ -1,4 +1,5 @@
 // How a scorecard reads, wherever it's shown: the terminal (`pnpm run scorecard`), the engineering panel and the MSD.
+import { aboutMetric } from './scorecardAbout';
 import type { Metric, MetricFormat, Scorecard, ScorecardSection } from './types';
 
 export const SECTIONS: Record<ScorecardSection, string> = {
@@ -168,5 +169,63 @@ export function glance(history: Scorecard[]): Glance | undefined {
     worse: moved.filter((r) => r.trend === 'worse').length,
     tiles,
     moved: [...moved.filter((r) => r.trend === 'worse'), ...moved.filter((r) => r.trend === 'better')],
+  };
+}
+
+/** A piece of a sentence, coloured when it's news: `passing`, `3 slipped`. */
+export interface Phrase {
+  text: string;
+  tone?: 'better' | 'worse';
+}
+
+/** The overview's opening sentence, in phrases: is the gate green, and how many numbers climbed or slipped. */
+export function verdictPhrases(g: Glance): Phrase[] {
+  const gate: Phrase[] = !g.gate ? []
+    : g.gate.pass
+      ? [{ text: 'The gate is ' }, { text: 'passing', tone: 'better' }, { text: g.gate.seconds === undefined ? '. ' : `, in ${duration(g.gate.seconds)}. ` }]
+      : [{ text: 'The gate is ' }, { text: 'failing', tone: 'worse' }, { text: g.gate.failing.length ? `: ${g.gate.failing.join(', ')}. ` : '. ' }];
+  if (!g.compared) return [...gate, { text: 'This is the first scorecard: the next will show what moved.' }];
+  if (!g.better && !g.worse) return [...gate, { text: 'Nothing moved since the one before.' }];
+  return [
+    ...gate,
+    { text: 'Since the one before, ' },
+    ...(g.better ? [{ text: `${g.better} ${g.better === 1 ? 'number' : 'numbers'} improved`, tone: 'better' as const }] : []),
+    ...(g.better && g.worse ? [{ text: ' and ' }] : []),
+    ...(g.worse ? [{ text: `${g.worse} slipped`, tone: 'worse' as const }] : []),
+    { text: '.' },
+  ];
+}
+
+/** A change as its capsule says it: a mark and words, so it never rests on colour alone. */
+export interface ChangeMark {
+  icon: string;
+  words: string;
+  tone: Trend | 'bad';
+  /** A time that moved less than its wobble: shown, but not called a change. */
+  noise: boolean;
+}
+
+const ICON: Record<Trend | 'bad', string> = { better: '▲', worse: '▼', same: '–', bad: '✕' };
+
+export function changeMark(row: ComparedRow, tone: Trend | 'bad' = row.trend): ChangeMark {
+  const words = tone === 'bad' ? 'failing'
+    : row.before === undefined ? 'first measured'
+      : row.change ? row.change : 'no change';
+  const noise = tone === 'same' && !!row.change && row.metric.better !== 'none';
+  return { icon: noise ? '≈' : ICON[tone], words, tone, noise };
+}
+
+/** What a section's tile shows: its headline value, a few words under it, and the numbers beside it in a line. */
+export function tileFace(t: Tile): { value: string; caption: string; also: string } {
+  const { metric } = t.hero;
+  const gate = t.section === 'gate' && metric.format === 'pass';
+  return {
+    value: gate ? (metric.value ? 'PASS' : 'FAIL') : formatValue(metric.value, metric.format),
+    caption: gate ? (t.trend !== t.hero ? `in ${duration(t.trend.metric.value)}` : '') : aboutMetric(metric.key, metric.label).short,
+    // times first-named, as people say them: `typecheck 56s · 128 non-null`
+    also: t.also.map(({ metric: m }) => {
+      const short = aboutMetric(m.key, m.label).short;
+      return m.format === 'seconds' ? `${short} ${duration(m.value)}` : `${formatValue(m.value, m.format)} ${short}`;
+    }).join(' · '),
   };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkLedger, closedGoals, fixEffects, frictionGroups, knownSignatures, type LedgerEvent, ledgerLine, reportCard, reportLines, type SessionFacts, unreadDigests } from './ledger';
+import { checkLedger, closedGoals, fixEffects, frictionGroups, frictionName, knownSignatures, type LedgerEvent, ledgerLine, reportCard, reportLines, type SessionFacts, unreadDigests } from './ledger';
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = 100 * DAY;
@@ -162,5 +162,13 @@ describe('closedGoals', () => {
 
   it('keeps to one room when asked', () => {
     expect(closedGoals([closed('g1', 'p', 1), closed('g2', 'q', 2)], 'q').map((g) => g.id)).toEqual(['g2']);
+  });
+});
+
+describe('frictionName', () => {
+  it('splits a friction key back into its kind and signature, at the first colon', () => {
+    expect(frictionName('shell: bash exit code 1')).toEqual({ kind: 'shell', signature: 'bash exit code 1' });
+    expect(frictionName('captain-nudge: agent stopped: says continue')).toEqual({ kind: 'captain-nudge', signature: 'agent stopped: says continue' });
+    expect(frictionName('no kind')).toEqual({ kind: '', signature: 'no kind' });
   });
 });

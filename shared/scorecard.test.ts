@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { changeWords, compared, deltaText, direction, duration, glance, measuredAt } from './scorecard';
+import { changeMark, changeWords, compared, deltaText, direction, duration, glance, measuredAt, tileFace, verdictPhrases } from './scorecard';
 import type { Metric, Scorecard } from './types';
 
 const m = (value: number, better: Metric['better'], format: Metric['format'] = 'count', key = 'k'): Metric => ({ section: 'fence', key, label: key, value, better, format });
@@ -135,5 +135,50 @@ describe('glance', () => {
     const g = glance([full(), full({ 'fence.typeAssertions': 190, 'fence.nonNull': 104, 'office.merged': 30 })]);
     expect(g).toMatchObject({ compared: true, better: 1, worse: 1 });
     expect(g?.moved.map((r) => [r.metric.key, r.change])).toEqual([['fence.nonNull', '4 more'], ['fence.typeAssertions', '10 fewer']]);
+  });
+});
+
+describe('what the overview says', () => {
+  const metric = (section: Metric['section'], key: string, value: number, better: Metric['better'] = 'lower', format: Metric['format'] = 'count', label = key): Metric =>
+    ({ section, key, label, value, better, format });
+  const card = (over: Partial<Record<string, number>> = {}): Scorecard => ({
+    v: 1, at: 0, commit: 'c', branch: 'main', dirty: false, frictions: [], notes: [],
+    metrics: [
+      metric('gate', 'gate.pass', over['gate.pass'] ?? 1, 'higher', 'pass'),
+      metric('gate', 'gate.seconds', over['gate.seconds'] ?? 105, 'lower', 'seconds'),
+      metric('gate', 'typecheck.seconds', 56, 'lower', 'seconds'),
+      metric('gate', 'test.failed', over['test.failed'] ?? 0, 'lower', 'count', 'Tests failing'),
+      metric('fence', 'fence.typeAssertions', over['fence.typeAssertions'] ?? 200),
+      metric('fence', 'fence.nonNull', over['fence.nonNull'] ?? 100),
+    ],
+  });
+  const said = (cards: Scorecard[]) => {
+    const g = glance(cards);
+    return g ? verdictPhrases(g).map((p) => (p.tone ? `[${p.text}]` : p.text)).join('') : '';
+  };
+
+  it('opens on the gate, then counts what climbed and slipped, marking the news', () => {
+    expect(said([card()])).toBe('The gate is [passing], in 1m 45s. This is the first scorecard: the next will show what moved.');
+    expect(said([card(), card()])).toBe('The gate is [passing], in 1m 45s. Nothing moved since the one before.');
+    expect(said([card(), card({ 'fence.typeAssertions': 190, 'fence.nonNull': 110 })])).toBe('The gate is [passing], in 1m 45s. Since the one before, [1 number improved] and [1 slipped].');
+  });
+
+  it('names what failed the gate', () => {
+    expect(said([card({ 'gate.pass': 0, 'test.failed': 2 })])).toMatch(/^The gate is \[failing\]: 2 tests failing\. /);
+  });
+
+  it('marks a change by its direction, a time inside its wobble with ≈, and a failing gate with ✕', () => {
+    const rows = compared([card(), card({ 'gate.seconds': 100, 'fence.nonNull': 104 })]).flatMap((s) => s.rows);
+    const row = (key: string) => rows.find((r) => r.metric.key === key)!;
+    expect(changeMark(row('fence.nonNull'))).toMatchObject({ icon: '▼', words: '4 more', tone: 'worse', noise: false });
+    expect(changeMark(row('gate.seconds'))).toMatchObject({ icon: '≈', words: '5.0s faster', noise: true });
+    expect(changeMark(row('fence.typeAssertions'))).toMatchObject({ icon: '–', words: 'no change' });
+    expect(changeMark(row('gate.pass'), 'bad')).toMatchObject({ icon: '✕', words: 'failing' });
+  });
+
+  it('shows the gate as PASS and its time, and other tiles as their number and a few words', () => {
+    const [gate, fence] = glance([card()])!.tiles;
+    expect(tileFace(gate)).toEqual({ value: 'PASS', caption: 'in 1m 45s', also: 'typecheck 56s' });
+    expect(tileFace(fence)).toEqual({ value: '200', caption: 'type assertions', also: '100 non-null' });
   });
 });

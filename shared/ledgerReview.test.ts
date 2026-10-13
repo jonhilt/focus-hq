@@ -110,6 +110,20 @@ describe('trace', () => {
     const t = trace([...events, closed], { kind: 'goal', title: GOAL });
     expect(t.steps[t.steps.length - 1]).toMatchObject({ tag: 'Goal', title: `Closed: ${GOAL}` });
   });
+
+  it('follows a friction through every session it came up in, quoting only it, and the retro decision on it', () => {
+    const port = { kind: 'demo-env', signature: 'demo port in use' };
+    const withFriction = [
+      ...events,
+      digest('s4', 301, 10, { minutes: 20, costUsd: 2, wastedCalls: 4 }),
+      ev({ kind: 'session-frictions', key: 's4', sessionId: 's4', reader: 'retro', frictions: [{ ...port, quote: 'port 4477 taken' }, { ...port, quote: 'again' }, { kind: 'shell', signature: 'bash exit code 1', quote: 'exit 1' }] }, 11),
+      ev({ kind: 'retro-decision', title: 'Give the demo its own port', signatures: ['demo-env: demo port in use'], accepted: true }, 12),
+    ];
+    const t = trace(withFriction, { kind: 'friction', key: 'demo-env: demo port in use' });
+    expect(t.steps.map((s) => s.tag)).toEqual(['Session', 'Session', 'Retro']);
+    expect(t.steps[1].quotes).toEqual(['“port 4477 taken”', '“again”']);
+    expect(t.totals).toEqual({ prs: 2, verdicts: 0, fails: 0, conflicts: 0, sessions: 2, minutes: 68, costUsd: 5.1, wastedCalls: 7, frictions: 3 });
+  });
 });
 
 describe('ledgerWindow', () => {
