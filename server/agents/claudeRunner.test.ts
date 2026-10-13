@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { TermLine } from '../../shared/types';
 import type { BrowserPool } from './browserTool';
-import { allowedWithoutAsking, ClaudeRunner, claudeConfig, holdsInput, permissionOptions } from './claudeRunner';
-import type { ProbeEvent, RunHooks, WorkflowEvent } from './types';
+import { allowedWithoutAsking, ClaudeRunner, claudeConfig, endedOutcome, failedOutcome, holdsInput, permissionOptions, withResult, type SoFar } from './claudeRunner';
+import { CLOUD_UNAVAILABLE } from './cloud';
+import { LIMIT_REACHED, STOPPED_BY_CAPTAIN, type ProbeEvent, type RunHooks, type WorkflowEvent } from './types';
 
 describe('claudeConfig', () => {
   it('loads every settings source, and nothing else, with your own CLAUDE.md on', () => {
@@ -181,5 +182,51 @@ describe('permissionOptions', () => {
     expect(permissionOptions('full', true, rules, canUseTool)).toEqual({ permissionMode: 'bypassPermissions', allowDangerouslySkipPermissions: true });
     expect(permissionOptions('auto', true, rules, canUseTool)).toEqual({ permissionMode: 'auto', canUseTool });
     expect(permissionOptions('ask', true, rules, canUseTool)).toEqual({ permissionMode: 'acceptEdits', allowedTools: rules, canUseTool });
+  });
+});
+
+describe('a session’s outcome', () => {
+  const fresh: SoFar = { ok: false, summary: '', started: true };
+  const answered = withResult(fresh, { text: 'Done', isError: false, queued: 0, structured: { verdict: 'pass' } });
+  const calm = { stopping: false, limited: false };
+  const failure = { ...calm, aborted: false, cloud: false, stderr: '' };
+
+  it('is its last turn’s result, keeping the structured answer when a later turn gives none', () => {
+    const later = withResult(answered, { text: 'And a follow-up', isError: false, queued: 0 });
+    expect(endedOutcome(later, calm)).toEqual({ ok: true, summary: 'And a follow-up', structured: { verdict: 'pass' }, started: true });
+  });
+
+  it('fails with the turn’s text when the last turn was an error, after one that passed', () => {
+    const failed = withResult(answered, { text: 'Prompt is too long', isError: true, queued: 0 });
+    expect(endedOutcome(failed, calm)).toMatchObject({ ok: false, summary: 'Prompt is too long', error: 'Prompt is too long' });
+  });
+
+  it('is a stop when the captain sent them home, even once the usage limit was reached too', () => {
+    expect(endedOutcome(answered, { stopping: true, limited: true })).toEqual({ ok: false, summary: 'Done', error: STOPPED_BY_CAPTAIN, aborted: true, started: true });
+  });
+
+  it('is the usage limit when that ended the session', () => {
+    expect(endedOutcome(answered, { stopping: false, limited: true })).toEqual({ ok: false, summary: 'Done', error: LIMIT_REACHED, limited: true, started: true });
+  });
+
+  it('is the usage limit when Claude Code throws after reaching it, unless the captain stopped them', () => {
+    expect(failedOutcome(answered, new Error('aborted'), { ...failure, limited: true, aborted: true })).toMatchObject({ error: LIMIT_REACHED, limited: true });
+    expect(failedOutcome(answered, new Error('aborted'), { ...failure, limited: true, stopping: true })).toMatchObject({ error: STOPPED_BY_CAPTAIN, aborted: true });
+  });
+
+  it('is a stop when Claude Code throws because the session was aborted', () => {
+    expect(failedOutcome(fresh, new Error('Claude Code process aborted'), { ...failure, aborted: true })).toEqual({ ok: false, summary: '', error: STOPPED_BY_CAPTAIN, aborted: true, started: true });
+  });
+
+  it('is the cloud being unavailable when the CLI refused to start a cloud session, and only for a cloud session', () => {
+    const refusal = { ...failure, stderr: 'Error: --cloud requires an interactive terminal\n' };
+    expect(failedOutcome({ ...fresh, started: false }, new Error('exited with code 1'), { ...refusal, cloud: true })).toEqual({ ok: false, summary: '', error: CLOUD_UNAVAILABLE, started: false });
+    expect(failedOutcome(fresh, new Error('exited with code 1'), refusal).error).not.toBe(CLOUD_UNAVAILABLE);
+  });
+
+  it('is the error, with the last three lines Claude Code wrote, otherwise', () => {
+    const stderr = 'one\ntwo\nthree\nfour\n';
+    expect(failedOutcome(answered, new Error('exited with code 1'), { ...failure, stderr })).toEqual({ ok: false, summary: 'Done', error: 'exited with code 1 — two three four', started: true });
+    expect(failedOutcome(answered, new Error('exited with code 1'), failure).error).toBe('exited with code 1');
   });
 });

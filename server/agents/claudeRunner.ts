@@ -135,6 +135,51 @@ async function reportContext(q: Query, hooks: RunHooks): Promise<void> {
  * runs through the bundled CLI's headless `--cloud` mode: the CLI starts (or reattaches to) a Claude Code cloud session
  * and relays it in the same message stream, so it renders like a local one.
  */
+/** What a session has come to so far: its last turn's result, and whether Claude Code reported the session. */
+export interface SoFar {
+  ok: boolean;
+  summary: string;
+  structured?: unknown;
+  error?: string;
+  started: boolean;
+}
+
+/** `so` with a turn's result taken in: the session comes to its last turn's result, keeping the structured answer from before when this turn gave none. */
+export function withResult(so: SoFar, result: TurnResult): SoFar {
+  return { ...so, ok: !result.isError, summary: result.text, structured: result.structured ?? so.structured, error: result.isError ? result.text : undefined };
+}
+
+/** What stopped a session other than its own messages: the captain sending them home, or your plan's usage limit. */
+export interface Interruptions {
+  stopping: boolean;
+  limited: boolean;
+}
+
+/** What a session comes to once its messages run out: the captain's stop first, then the usage limit, else its last turn's result. */
+export function endedOutcome(so: SoFar, { stopping, limited }: Interruptions): RunOutcome {
+  const { summary, started } = so;
+  if (stopping) return { ok: false, summary, error: STOPPED_BY_CAPTAIN, aborted: true, started };
+  if (limited) return { ok: false, summary, error: LIMIT_REACHED, limited: true, started };
+  return { ok: so.ok, summary, structured: so.structured, error: so.error, started };
+}
+
+/**
+ * What a session comes to when Claude Code throws: the usage limit (unless the captain stopped them), a stop or abort,
+ * a cloud session the server refused, or else the error with the last three lines Claude Code wrote to stderr.
+ */
+export function failedOutcome(
+  so: SoFar,
+  err: unknown,
+  { stopping, limited, aborted, cloud, stderr }: Interruptions & { aborted: boolean; cloud: boolean; stderr: string },
+): RunOutcome {
+  const { summary, started } = so;
+  if (limited && !stopping) return { ok: false, summary, error: LIMIT_REACHED, limited: true, started };
+  if (stopping || aborted) return { ok: false, summary, error: STOPPED_BY_CAPTAIN, aborted: true, started };
+  if (cloud && cloudRefused(`${errorMessage(err)}\n${stderr}`)) return { ok: false, summary, error: CLOUD_UNAVAILABLE, started };
+  const detail = stderr.trim().split('\n').slice(-3).join(' ');
+  return { ok: false, summary, error: `${errorMessage(err)}${detail ? ` — ${truncate(detail, 300)}` : ''}`, started };
+}
+
 export class ClaudeRunner implements AgentRunner {
   constructor(private readonly browsers: BrowserPool) {}
 
@@ -221,15 +266,11 @@ export class ClaudeRunner implements AgentRunner {
     const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map(), helpers: new Map(), workflows: new Set(), permits, parents: new Map(), modelled: new Set(), scratch: scratch?.dir, probes: new Set(), commits: new Map(), onKey, counted: new Set() };
     ctx.tracker = new BackgroundTracker((id) => (id ? ctx.calls.get(id)?.name : undefined));
     const done = (async (): Promise<RunOutcome> => {
-      let summary = '';
-      let structured: unknown;
-      let ok = false;
-      let error: string | undefined;
-      let started = false;
+      let so: SoFar = { ok: false, summary: '', started: false };
       try {
         q = query({ prompt: input, options });
         for await (const msg of q) {
-          if (msg.type === 'system' && msg.subtype === 'init') started = true;
+          if (msg.type === 'system' && msg.subtype === 'init') so = { ...so, started: true };
           const result = this.handle(msg, ctx, hooks);
           // a workflow or background subagent still running keeps listening, so a message from the captain reaches
           // the session now rather than after it's done; otherwise the session's done once its turn is
@@ -239,10 +280,7 @@ export class ClaudeRunner implements AgentRunner {
             input.close();
           }
           if (result) {
-            ok = !result.isError;
-            summary = result.text;
-            structured = result.structured ?? structured;
-            error = result.isError ? result.text : undefined;
+            so = withResult(so, result);
             // how full the context is now, asked while the session's still there to answer
             if (!cloud) await reportContext(q, hooks);
             // Messages sent mid-turn are folded into that turn, so don't count results per message: finish once the
@@ -251,15 +289,9 @@ export class ClaudeRunner implements AgentRunner {
             if (ctx.turnOver && !holdsInput(ctx.background ?? [])) input.close();
           }
         }
-        if (stopping) return { ok: false, summary, error: STOPPED_BY_CAPTAIN, aborted: true, started };
-        if (ctx.limited) return { ok: false, summary, error: LIMIT_REACHED, limited: true, started };
-        return { ok, summary, structured, error, started };
+        return endedOutcome(so, { stopping, limited: !!ctx.limited });
       } catch (err) {
-        if (ctx.limited && !stopping) return { ok: false, summary, error: LIMIT_REACHED, limited: true, started };
-        if (stopping || abort.signal.aborted) return { ok: false, summary, error: STOPPED_BY_CAPTAIN, aborted: true, started };
-        if (cloud && cloudRefused(`${errorMessage(err)}\n${stderrTail.join('')}`)) return { ok: false, summary, error: CLOUD_UNAVAILABLE, started };
-        const detail = stderrTail.join('').trim().split('\n').slice(-3).join(' ');
-        return { ok: false, summary, error: `${errorMessage(err)}${detail ? ` — ${truncate(detail, 300)}` : ''}`, started };
+        return failedOutcome(so, err, { stopping, limited: !!ctx.limited, aborted: abort.signal.aborted, cloud: !!cloud, stderr: stderrTail.join('') });
       } finally {
         input.close();
         scratch?.close();
