@@ -150,11 +150,16 @@ export class KeyFallback {
 
   /** When your plan's limit resets, while it's reached. */
   resetsAt(): number | undefined {
-    return this.spell && this.spell.until > this.now() ? this.spell.until : undefined;
+    return this.reached()?.until;
   }
 
   spentUsd(): number {
-    return this.resetsAt() ? this.spell!.spentUsd : 0;
+    return this.reached()?.spentUsd ?? 0;
+  }
+
+  /** The spell at the plan's limit, while it lasts. */
+  private reached(): Spell | undefined {
+    return this.spell && this.spell.until > this.now() ? this.spell : undefined;
   }
 
   /** A session ran into the plan's limit, which resets at `until`. */

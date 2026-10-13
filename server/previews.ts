@@ -266,7 +266,7 @@ export class Previews {
       this.update(run, { checkouts: refs });
       const port = yield* machine.freePort;
       const expand = (template: string) => expandCommand(template, { port, number, repo, repos: run.repos, dirs });
-      run.cwd = dirs.get(repo)!;
+      run.cwd = previewDir(projectId, repo, run.repos);
       run.paths = [...dirs.values()];
       run.env = previewEnv(port, !cfg.command);
       const stopCommand = cfg.stopCommand ? expand(cfg.stopCommand) : undefined;
@@ -281,7 +281,7 @@ export class Previews {
       }
 
       for (const { repo: r, ref } of refs) {
-        const dir = dirs.get(r)!;
+        const dir = previewDir(projectId, r, run.repos);
         this.update(run, { activity: `Fetching ${shortName(r)} ${refName(ref)}` });
         const checkout = yield* machine.checkout(r, dir, ref);
         this.checkedOut(run, r, checkout.sha);
@@ -760,7 +760,11 @@ function referencedRepos(text: string, repos: string[]): Effect.Effect<string[],
 /** Fills in {port}, {pr}, {repo} and {dir} / {dir:<repo>}; every {dir:<repo>} is in `dirs` by now (referencedRepos). */
 function expandCommand(template: string, ctx: { port: number; number: number; repo: string; repos: string[]; dirs: Map<string, string> }): string {
   return template.replace(/\{(port|pr|repo|dir)(?::([^}]+))?\}/g, (whole, key: string, arg?: string) => {
-    if (key === 'dir') return shellQuote(ctx.dirs.get(arg ? (resolveRepo(arg, ctx.repos) as string) : ctx.repo)!);
+    if (key === 'dir') {
+      const wanted = arg ? resolveRepo(arg, ctx.repos) : ctx.repo;
+      const dir = typeof wanted === 'string' ? ctx.dirs.get(wanted) : undefined;
+      return dir ? shellQuote(dir) : whole;
+    }
     if (arg) return whole;
     return key === 'port' ? String(ctx.port) : key === 'pr' ? String(ctx.number) : ctx.repo;
   });
@@ -901,7 +905,7 @@ function demoLogs(projectId: string, unhealthy: boolean): string {
 
 /** Stand-in "site" for demo previews. */
 export function demoPreviewPage(repo: string, number: number, title: string, site: string): string {
-  const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+  const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(site)} · ${esc(repo)} #${number}</title>
 <style>body{font:18px system-ui,sans-serif;margin:0;background:#fff8e7;color:#1b1b1b}header{background:#ff8a5b;padding:18px 28px;border-bottom:4px solid #1b1b1b;font-weight:700}
 main{max-width:720px;margin:48px auto;padding:0 24px}.card{background:#fff;border:3px solid #1b1b1b;border-radius:18px;box-shadow:6px 6px 0 #1b1b1b;padding:24px}</style></head>

@@ -489,12 +489,13 @@ export class Office {
       }
     }
     for (const agent of this.store.agentsIn(projectId)) {
-      if (!agent.pr || agent.status !== 'done') continue;
-      if (board.prs.some((p) => p.repo === agent.repo && p.number === agent.pr!.number)) continue;
+      const pr = agent.pr;
+      if (!pr || agent.status !== 'done') continue;
+      if (board.prs.some((p) => p.repo === agent.repo && p.number === pr.number)) continue;
       if (board.error?.includes(agent.repo)) continue;
       try {
-        const state = await this.github.pullRequestState(agent.repo, agent.pr.number);
-        if (state !== 'OPEN') this.agents.prClosed(agent.repo, agent.pr.number, state === 'MERGED');
+        const state = await this.github.pullRequestState(agent.repo, pr.number);
+        if (state !== 'OPEN') this.agents.prClosed(agent.repo, pr.number, state === 'MERGED');
       } catch {
         // try again next refresh
       }

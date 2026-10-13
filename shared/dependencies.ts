@@ -24,29 +24,29 @@ function graph(issues: Issue[]) {
     issues.map((i) => [issueKey(i.repo, i.number), dependsOn(i.body).map((n) => issueKey(i.repo, n)).filter((k) => open.has(k) && k !== issueKey(i.repo, i.number))]),
   );
 
-  // Tarjan's strongly connected components, so cycle members can be recognised
+  // Tarjan's strongly connected components, so cycle members can be recognised: `visit` returns the lowest index it reached
   const component = new Map<string, number>();
   const index = new Map<string, number>();
-  const low = new Map<string, number>();
   const stack: string[] = [];
   let next = 0;
-  const visit = (k: string) => {
-    index.set(k, next);
-    low.set(k, next++);
+  const visit = (k: string): number => {
+    const at = next++;
+    index.set(k, at);
     stack.push(k);
-    for (const d of edges.get(k)!) {
-      if (!index.has(d)) {
-        visit(d);
-        low.set(k, Math.min(low.get(k)!, low.get(d)!));
-      } else if (!component.has(d)) low.set(k, Math.min(low.get(k)!, index.get(d)!));
+    let low = at;
+    for (const d of edges.get(k) ?? []) {
+      const seen = index.get(d);
+      if (seen === undefined) low = Math.min(low, visit(d));
+      else if (!component.has(d)) low = Math.min(low, seen);
     }
-    if (low.get(k) === index.get(k)) {
-      let member: string;
+    if (low === at) {
+      let member: string | undefined;
       do {
-        member = stack.pop()!;
-        component.set(member, index.get(k)!);
-      } while (member !== k);
+        member = stack.pop();
+        if (member !== undefined) component.set(member, at);
+      } while (member !== undefined && member !== k);
     }
+    return low;
   };
   for (const k of open.keys()) if (!index.has(k)) visit(k);
 
@@ -58,7 +58,7 @@ function graph(issues: Issue[]) {
 export function waitingFor(issues: Issue[]): Map<string, number[]> {
   const { open, waits } = graph(issues);
   const waiting = new Map<string, number[]>();
-  for (const [k, deps] of waits) if (deps.length) waiting.set(k, deps.map((d) => open.get(d)!.number));
+  for (const [k, deps] of waits) if (deps.length) waiting.set(k, deps.flatMap((d) => open.get(d)?.number ?? []));
   return waiting;
 }
 
@@ -66,16 +66,16 @@ export function waitingFor(issues: Issue[]): Map<string, number[]> {
 export function startOrder(issues: Issue[]): Issue[] {
   const { open, waits } = graph(issues);
   const dependents = new Map<string, string[]>([...open.keys()].map((k) => [k, []]));
-  for (const [k, deps] of waits) for (const d of deps) dependents.get(d)!.push(k);
+  for (const [k, deps] of waits) for (const d of deps) dependents.get(d)?.push(k);
   // without the edges inside cycles the graph is acyclic, so this recursion ends
   const chain = new Map<string, number>();
   const chainOf = (k: string): number => {
     let n = chain.get(k);
-    if (n === undefined) chain.set(k, (n = Math.max(0, ...dependents.get(k)!.map((d) => 1 + chainOf(d)))));
+    if (n === undefined) chain.set(k, (n = Math.max(0, ...(dependents.get(k) ?? []).map((d) => 1 + chainOf(d)))));
     return n;
   };
   return [...open]
-    .filter(([k]) => !waits.get(k)!.length)
+    .filter(([k]) => !waits.get(k)?.length)
     .sort(([a, ia], [b, ib]) => chainOf(b) - chainOf(a) || ia.createdAt.localeCompare(ib.createdAt))
     .map(([, issue]) => issue);
 }

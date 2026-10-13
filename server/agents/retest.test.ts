@@ -19,7 +19,7 @@ describe('retestStep', () => {
   });
 
   it('runs only the checks when a clean merge of the base is all that came in', () => {
-    expect(retestStep(review('passed'), 'bbbbbbb2222', since())).toEqual({ kind: 'checks-only', head: 'bbbbbbb2222' });
+    expect(retestStep(review('passed'), 'bbbbbbb2222', since())).toEqual({ kind: 'checks-only', head: 'bbbbbbb2222', passed: 'aaaaaaa1111' });
     expect(retestStep(review('passed'), 'bbbbbbb2222', since({ commits: [merge, { ...merge, sha: 'nnnnnnn' }] })).kind).toBe('checks-only');
   });
 

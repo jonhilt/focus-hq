@@ -1,3 +1,4 @@
+import path from 'node:path';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { EFFORT_LEVELS, type Effort, type PreviewSet, type ResumeHow } from '../shared/types';
 import { isAutonomy } from '../shared/autonomy';
@@ -51,7 +52,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
     const file = param(req, 'file');
     const bytes = /^[\w-]+\.(jpg|png|svg)$/.test(file) ? await store.readShot(file) : undefined;
     if (!bytes) return void res.sendStatus(404);
-    res.type(file.split('.').pop()!).set('Cache-Control', 'max-age=31536000, immutable').send(bytes);
+    res.type(path.extname(file)).set('Cache-Control', 'max-age=31536000, immutable').send(bytes);
   });
   // what a goal's lead put on their station's screen: the page itself runs sandboxed in an origin of its own, so its
   // scripts can't reach the office; the picture's URL changes with each new version (?v=), so it can be kept
@@ -64,7 +65,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
     if (!bytes) return void res.sendStatus(404);
     if (file.endsWith('.html')) return void res.type('html').set({ 'Content-Security-Policy': 'sandbox allow-scripts allow-popups', 'Cache-Control': 'no-cache' }).send(bytes);
     // a picture's URL changes with each version (?v=); a waypoint's evidence keeps its name from one QA round to the next
-    const ext = file.split('.').pop()!;
+    const ext = path.extname(file).slice(1);
     // an SVG screenshot is served from the office's own origin: nothing in it runs or loads
     if (ext === 'svg') res.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
     res.type(ext).set('Cache-Control', file.startsWith('shot-') ? 'no-cache' : 'max-age=31536000, immutable').send(bytes);

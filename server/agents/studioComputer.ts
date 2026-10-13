@@ -187,7 +187,8 @@ export class StudioComputer {
   private async stage(session: StoredStudio, id: string, next: StudioTake[] | { error: string }): Promise<Staged> {
     if ('error' in next) throw new Error(next.error);
     session.takes = next;
-    const take = next.find((t) => t.id === id.trim().toLowerCase())!;
+    const take = next.find((t) => t.id === id.trim().toLowerCase());
+    if (!take) throw new Error(`There's no take ${id} on the floor`);
     const heard = this.heard(take);
     this.changed();
     const report = await heard;

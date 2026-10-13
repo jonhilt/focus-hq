@@ -483,7 +483,7 @@ export async function mergeBase(repo: string, branch: string, baseBranch: string
       const rules = mergeRules(await git(dir, ['check-attr', '-z', 'focus-merge', 'merge', '--', ...files]).catch(() => ''));
       const plan = autoMergePlan(stages, rules);
       if (plan.left.length) return { kind: 'conflicts', files };
-      for (const { file, rule } of plan.auto) await settle(dir, file, rule, stages.get(file)!);
+      for (const { file, rule } of plan.auto) await settle(dir, file, rule, stages.get(file) ?? new Set());
       await git(dir, ['commit', '--no-edit', '--no-verify']);
       auto = files;
     }

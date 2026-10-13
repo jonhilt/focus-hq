@@ -64,7 +64,7 @@ class Call {
       callMachine.provide({
         actors: {
           route: fromPromise<Routing, RouteInput>(({ input }) => this.route(input)),
-          act: fromPromise<string, Act>(({ input }) => Promise.resolve(this.act(input))),
+          act: fromPromise<string, Act | null>(({ input }) => (input ? Promise.resolve(this.act(input)) : Promise.reject(new Error('there was nothing waiting for a yes')))),
         },
         actions: {
           reply: (_, reply: Reply) => this.reply(reply),

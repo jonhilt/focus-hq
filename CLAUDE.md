@@ -9,7 +9,7 @@ When you change a feature, update its page under `docs/`, not the README (add a 
 Focus uses pnpm (`corepack enable` provides the version in `package.json`'s `packageManager`); `pnpm install` hard-links packages from one store per machine, so a fresh worktree installs in seconds. Don't add a `package-lock.json`.
 
 - `pnpm run typecheck`: run after every change; covers `server/`, `client/src/` and `shared/`. It runs `tsc`, then `@effect/language-service`'s diagnostics, which fail on a floating (un-yielded, un-run) Effect.
-- `pnpm run lint`: run after every change; ESLint with type-aware typescript-eslint rules (floating and misused promises) over the same files.
+- `pnpm run lint`: run after every change; ESLint with type-aware typescript-eslint rules (floating and misused promises) over the same files, and no non-null assertions (`x!`) in `server/` and `shared/` outside tests: narrow instead (a check, `??`, or a type guard like `hasLeadWork`, which turns an `Agent` into a `LeadAgent` whose `lead` is there).
 - `pnpm run demo`: fake GitHub + scripted agents (`FOCUS_DEMO_SPEED=3` speeds them up). Use it to check UI and 3D changes. To watch a workflow in a transporter room, message a demo lead "run a workflow" (`POST /api/agents/<leadId>/message`) once their turn is over.
 - `pnpm run demo:start` (`--built` to serve a build, without hot reload), `demo:status`, `demo:stop`: the demo office as an agent should run it, in the background on a free port, outliving the Bash call that started it; `start` waits until it answers and prints its URL. Use it instead of a hand-rolled `nohup npx tsx server/index.ts --demo &`, and stop only your own with `demo:stop` (never by port or process name).
 - `pnpm run build`: Vite build of the client into `dist/`.

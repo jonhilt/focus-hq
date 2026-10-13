@@ -230,7 +230,7 @@ export function compilePlan(plan: Plan): Timeline {
     if (Math.abs(gap) > 0.05) throw new Error(`Shots ${shots[i - 1].id} and ${shots[i].id} ${gap > 0 ? `leave ${gap.toFixed(2)} s uncovered` : `overlap by ${(-gap).toFixed(2)} s`}: shots play back to back`);
   }
   const acts = plan.shots.flatMap((s, i) => shotActs(s, shots[i].start, beats)).sort((a, b) => a.at - b.at);
-  return { episode: plan.episode, duration: shots.at(-1)!.end, beats, cast: plan.cast, shots, acts, captions: !!plan.preview?.captions };
+  return { episode: plan.episode, duration: shots.at(-1)?.end ?? 0, beats, cast: plan.cast, shots, acts, captions: !!plan.preview?.captions };
 }
 
 export const EASES: Record<Ease, (k: number) => number> = {

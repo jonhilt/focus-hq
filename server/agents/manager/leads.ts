@@ -1,10 +1,10 @@
 import { Effect } from 'effect';
 import { leadFor, leadId } from '../../../shared/crew';
-import type { Agent, Effort, Evidence, QaReport, QaScreenshot, QueuedGoal } from '../../../shared/types';
+import type { Agent, Effort, Evidence, LeadAgent, QaReport, QaScreenshot, QueuedGoal } from '../../../shared/types';
 import { LEAD_DESK, TEAM_STATIONS } from '../../../shared/types';
 import { GitHub } from '../../github/service';
 import { newId } from '../../util';
-import { afterVerdict, closeCheck, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, landedMidTurnNote, landedNote, leadWorktreeId, moveQueued, nextGoal, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch } from '../lead';
+import { afterVerdict, closeCheck, hasLeadWork, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, landedMidTurnNote, landedNote, leadWorktreeId, moveQueued, nextGoal, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch } from '../lead';
 import { Workspace } from '../services';
 import { EVIDENCE_PER_PR, evidenceFile, landedWaypoint, shieldedWaypoint, tickedSpotCheck } from '../waypoints';
 import { type ManagerServices, Part, Refused, type WorkError } from './core';
@@ -80,21 +80,21 @@ export class Leads extends Part {
     const leads = this.store.agentsIn(projectId).filter((a) => a.task === 'lead');
     const free = pickStation(leads.map((a) => a.lead?.station ?? 0), station) ?? pickStation(leads.map((a) => a.lead?.station ?? 0));
     if (free === undefined) throw new Refused({ message: `Every team station in ${project.name} has a goal: close one first` });
-    const crew = leadFor(projectId, goal.id.split('_').at(-1)!, leads.map((a) => a.name));
+    const crew = leadFor(projectId, goal.id.slice(goal.id.lastIndexOf('_') + 1), leads.map((a) => a.name));
     const agent: Agent = {
       id: goal.id,
       name: leads.some((a) => a.name === goal.leadName) ? crew.name : goal.leadName,
       avatar: crew.avatar,
       projectId,
-      repo: goal.repos![0].repo,
+      repo: goal.repos[0].repo,
       task: 'lead',
       issue: { number: 0, title: goal.title, url: '' },
       effort: goalEffort(undefined, this.store.settings),
       desk: LEAD_DESK,
       status: 'queued',
       activity: `Coming back to team station ${free + 1}`,
-      branch: goal.branch!,
-      baseBranch: goal.repos![0].baseBranch,
+      branch: goal.branch,
+      baseBranch: goal.repos[0].baseBranch,
       lead: reopenedWork(goal, free),
       sessionId: goal.sessionId,
       costUsd: 0,
@@ -162,8 +162,8 @@ export class Leads extends Part {
   closeGoal(id: string, force = false): Promise<{ closed: true } | { warn: string[] }> {
     return this.runtime.runPromise(Effect.gen({ self: this }, function* () {
       const agent = this.store.agent(id);
+      if (agent.task !== 'lead' || !hasLeadWork(agent)) return yield* new Refused({ message: `${agent.name} isn’t leading a goal` });
       const work = agent.lead;
-      if (agent.task !== 'lead' || !work) return yield* new Refused({ message: `${agent.name} isn’t leading a goal` });
       const workspace = yield* Workspace;
       const dir = (folder: string) => workspace.dir(leadWorktreeId(id, folder));
       // a check that fails counts against closing: changes git couldn't look for are treated as there. A reopened goal
@@ -206,14 +206,14 @@ export class Leads extends Part {
   }
 
   /** Checks out every repo of the project side by side, on the goal's first branch, then hands the lead the captain's words. */
-  launchLead(agent: Agent): Effect.Effect<void, WorkError, ManagerServices> {
+  launchLead(agent: LeadAgent): Effect.Effect<void, WorkError, ManagerServices> {
     return Effect.gen({ self: this }, function* () {
       const rt = this.rt(agent.id);
       const project = this.store.project(agent.projectId);
       yield* this.core.slices.checkOutSlice(agent, project.repos);
       if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
       // a new goal, or one whose conversation couldn't be resumed: the lead hears where it stands
-      yield* this.core.sessions.runSession(agent, freshSessionPrompt(agent.lead!, agent.branch, rt.inbox.splice(0), sliceLanded(agent.lead!.prs)));
+      yield* this.core.sessions.runSession(agent, freshSessionPrompt(agent.lead, agent.branch, rt.inbox.splice(0), sliceLanded(agent.lead.prs)));
     });
   }
 
@@ -221,27 +221,27 @@ export class Leads extends Part {
    * A reopened goal's lead: its pull requests as GitHub has them now, every repo checked out on the goal's branch as it
    * was left, then the conversation picked back up (or a new one, when there's none to go back to).
    */
-  launchReopened(agent: Agent, closedAt: number): Effect.Effect<void, WorkError, ManagerServices> {
+  launchReopened(agent: LeadAgent, closedAt: number): Effect.Effect<void, WorkError, ManagerServices> {
     return Effect.gen({ self: this }, function* () {
       const rt = this.rt(agent.id);
       const github = yield* GitHub;
       const workspace = yield* Workspace;
       // a pull request may have merged or closed while the goal was closed, with no lead to hear about it
-      const prs = yield* Effect.forEach(agent.lead!.prs, (p) =>
+      const prs = yield* Effect.forEach(agent.lead.prs, (p) =>
         p.outcome ? Effect.succeed(p) : github.pullRequestState(p.repo, p.number).pipe(
           Effect.map((state) => (state === 'OPEN' ? p : { ...p, outcome: state === 'MERGED' ? 'merged' as const : 'closed' as const })),
           Effect.orElseSucceed(() => p),
         ));
-      for (const r of agent.lead!.repos) {
+      for (const r of agent.lead.repos) {
         this.update(agent, { activity: `Checking out ${r.repo}` });
         this.print(agent, [{ kind: 'system', text: `✻ Checking out ${r.repo} at ./${r.folder} on ${repoBranch(r, agent.branch)}, as it was left` }]);
         yield* workspace.reopen(r.repo, leadWorktreeId(agent.id, r.folder), repoBranch(r, agent.branch), (id) => this.store.agents.has(id));
         yield* this.install(agent, workspace.dir(leadWorktreeId(agent.id, r.folder)));
       }
-      this.update(agent, { lead: { ...agent.lead!, prs, reopening: undefined } });
+      this.update(agent, { lead: { ...agent.lead, prs, reopening: undefined } });
       if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
-      const note = [reopenedNote(agent.lead!, agent.branch, closedAt), ...rt.inbox.splice(0)].join('\n\n');
-      yield* this.core.sessions.runSession(agent, agent.sessionId ? note : freshSessionPrompt(agent.lead!, agent.branch, [note], sliceLanded(prs)), agent.sessionId);
+      const note = [reopenedNote(agent.lead, agent.branch, closedAt), ...rt.inbox.splice(0)].join('\n\n');
+      yield* this.core.sessions.runSession(agent, agent.sessionId ? note : freshSessionPrompt(agent.lead, agent.branch, [note], sliceLanded(prs)), agent.sessionId);
     });
   }
 

@@ -30,4 +30,12 @@ export default tseslint.config(
       '@typescript-eslint/no-base-to-string': 'off',
     },
   },
+  {
+    // A wrong `x!` in the office's server is a crash mid-run; say what's missing instead (tests may still assert).
+    files: ['shared/**/*.ts', 'server/**/*.ts'],
+    ignores: ['**/*.test.ts'],
+    rules: {
+      '@typescript-eslint/no-non-null-assertion': 'error',
+    },
+  },
 );

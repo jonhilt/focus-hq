@@ -8,7 +8,7 @@ import type { Agent, PermissionRequest, TermLine, WorkflowScript } from '../../.
 import { GitHub, type GitHubError } from '../../github/service';
 import { newId, truncate } from '../../util';
 import { attachAgain, carryOnInNewSession, CLOUD_UNAVAILABLE, fallBackToLocal } from '../cloud';
-import { applyHelperEvent, COMPACT_INSTRUCTIONS, compactInstructions, freshSessionPrompt, HELPER_LINGER_MS, leadSystemAppend, sessionGone, sliceLanded } from '../lead';
+import { applyHelperEvent, COMPACT_INSTRUCTIONS, compactInstructions, freshSessionPrompt, hasLeadWork, HELPER_LINGER_MS, leadSystemAppend, sessionGone, sliceLanded } from '../lead';
 import { climbBrief } from '../climb';
 import { carryOnPrompt, conflictsPrompt, issuePrompt, systemAppend } from '../prompts';
 import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
@@ -26,7 +26,7 @@ export class AgentSessions extends Part {
   launch(agent: Agent): Effect.Effect<void, never, ManagerServices> {
     const rt = this.rt(agent.id);
     // a reopened goal's repos are checked out before anything else, however many tries that takes
-    if (agent.task === 'lead' && agent.lead?.reopening) {
+    if (agent.task === 'lead' && hasLeadWork(agent) && agent.lead.reopening) {
       rt.resume = false;
       this.update(agent, { status: 'setting-up', activity: 'Checking the goal’s branch out again', error: undefined });
       return this.core.leads.launchReopened(agent, agent.lead.reopening.closedAt).pipe(this.orFail(agent));
@@ -39,7 +39,10 @@ export class AgentSessions extends Part {
     this.update(agent, { status: 'setting-up', activity: agent.task === 'review' ? 'Reading the pull request' : agent.task === 'climb' ? 'Reading the brief' : 'Reading the issue', error: undefined });
     return Effect.gen({ self: this }, function* () {
       if (agent.task === 'review') return yield* this.core.reviews.launchReview(agent);
-      if (agent.task === 'lead') return yield* this.core.leads.launchLead(agent);
+      if (agent.task === 'lead') {
+        if (!hasLeadWork(agent)) return yield* new Refused({ message: `${agent.name} has no goal to lead` });
+        return yield* this.core.leads.launchLead(agent);
+      }
       const github = yield* GitHub;
       const workspace = yield* Workspace;
       const info = yield* github.repoInfo(agent.repo);
@@ -310,11 +313,11 @@ export class AgentSessions extends Part {
     return Effect.gen({ self: this }, function* () {
       const rt = this.rt(agent.id);
       const review = agent.task === 'review';
-      const lead = agent.task === 'lead' ? agent.lead : undefined;
+      const lead = agent.task === 'lead' && hasLeadWork(agent) ? agent : undefined;
       // the lead's last slice has landed: their repos move to fresh code before they hear anything else
-      if (lead && sliceLanded(lead.prs)) prompt = `${yield* this.core.slices.nextSlice(agent, lead)}\n\n${prompt}`;
+      if (lead && sliceLanded(lead.lead.prs)) prompt = `${yield* this.core.slices.nextSlice(lead)}\n\n${prompt}`;
       // a move whose checkout failed left them with no repos (and nothing landed, so no move to retry): check them out again
-      else if (lead && !lead.repos.length) prompt = `${yield* this.core.slices.reposBack(agent)}\n\n${prompt}`;
+      else if (lead && !lead.lead.repos.length) prompt = `${yield* this.core.slices.reposBack(lead)}\n\n${prompt}`;
       // before marking them busy: the QA officer's instructions may need GitHub, and that can fail
       const instructions = yield* this.instructions(agent);
       rt.busy = true;
@@ -377,7 +380,7 @@ export class AgentSessions extends Part {
       if (lead && sessionGone(outcome, !!resumeSessionId)) {
         this.print(agent, [{ kind: 'system', text: '✻ Claude Code no longer has their conversation – carrying on in a new one' }]);
         this.update(agent, { sessionId: undefined });
-        return yield* this.runSession(agent, freshSessionPrompt(agent.lead!, agent.branch, [prompt], false));
+        return yield* this.runSession(agent, freshSessionPrompt(lead.lead, agent.branch, [prompt], false));
       }
       if (agent.cloud && carryOnInNewSession(outcome, !!resumeSessionId)) {
         // everything the old session did is on the branch: a new one picks it up from there

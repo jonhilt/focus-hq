@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Agent, Contact, LeadWork } from '../../shared/types';
+import type { Contact, LeadAgent, LeadWork } from '../../shared/types';
 import { applyContacts, CONTACT_LIMITS, contactsForPrompt } from './contacts';
 import { goalRecord, noteForPrompt, reopenedWork } from './lead';
 
@@ -63,7 +63,7 @@ describe('contacts', () => {
   it('travel with a closed goal and come back when it reopens', () => {
     const contacts: Contact[] = [{ id: 'c1', text: 'Auth off the LAN?', slice: 1, at: 0 }];
     const work: LeadWork = { station: 0, title: 'Tricorder', repos: [{ repo: 'acme/web', folder: 'web', baseBranch: 'main' }], slice: 1, prs: [], contacts };
-    const lead = { id: 'lead_p_1', name: 'Lt. Varga', branch: 'focus/tricorder-1-ab12', startedAt: 0, lead: work } as Agent;
+    const lead = { id: 'lead_p_1', name: 'Lt. Varga', branch: 'focus/tricorder-1-ab12', startedAt: 0, lead: work } as LeadAgent;
     expect(reopenedWork(goalRecord(lead, 9), 2).contacts).toEqual(contacts);
   });
 });

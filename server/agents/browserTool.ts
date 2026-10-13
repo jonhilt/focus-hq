@@ -198,7 +198,8 @@ async function seeStage(jpeg: string): Promise<Omit<StageMoment, 'at'>> {
   const canvas = document.createElement('canvas');
   canvas.width = img.width;
   canvas.height = img.height;
-  const g = canvas.getContext('2d')!;
+  const g = canvas.getContext('2d');
+  if (!g) throw new Error('The page has no 2D canvas to read its stage with');
   g.drawImage(img, 0, 0);
   const px = g.getImageData(0, 0, img.width, img.height).data;
   const counts = new Map<number, number>();
@@ -209,7 +210,7 @@ async function seeStage(jpeg: string): Promise<Omit<StageMoment, 'at'>> {
     n++;
   }
   const flat = Math.max(...counts.values()) / n;
-  const stage = document.getElementById('stage')!.getBoundingClientRect();
+  const stage = document.getElementById('stage')?.getBoundingClientRect() ?? new DOMRect();
   const kit = (window as { __scene?: { labels: { text: string; onScreen: boolean }[] } }).__scene;
   const labels = [...document.querySelectorAll<HTMLElement>('#stage .kit3d-label')]
     .filter((el) => el.style.display !== 'none' && Number(el.style.opacity || 1) > 0)

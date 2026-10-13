@@ -8,7 +8,8 @@ export class Hub {
 
   /** `refuse` says why a connection isn't let in (another site's page, say), or nothing to let it in. */
   attach(server: Server, snapshot: () => Promise<Snapshot>, refuse: (req: IncomingMessage) => string | undefined = () => undefined): void {
-    this.wss = new WebSocketServer({ noServer: true });
+    const wss = new WebSocketServer({ noServer: true });
+    this.wss = wss;
     server.on('upgrade', (req, socket, head) => {
       if (req.url !== '/ws') return; // leave other upgrades (Vite HMR) alone
       const why = refuse(req);
@@ -16,9 +17,9 @@ export class Hub {
         console.warn(`Refused a connection to /ws: ${why}`);
         return void socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
       }
-      this.wss!.handleUpgrade(req, socket, head, (ws) => this.wss!.emit('connection', ws, req));
+      wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
     });
-    this.wss.on('connection', (ws) => {
+    wss.on('connection', (ws) => {
       void snapshot().then((s) => ws.send(JSON.stringify({ type: 'snapshot', snapshot: s } satisfies ServerEvent)));
     });
   }

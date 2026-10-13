@@ -111,8 +111,7 @@ export class DemoRunner implements AgentRunner {
     };
 
     const handleInbox = async () => {
-      while (inbox.length) {
-        const message = inbox.shift()!;
+      for (let message = inbox.shift(); message !== undefined; message = inbox.shift()) {
         await think();
         await say(`Good call – ${message.length > 60 ? 'I\'ll take that into account' : `"${message}"`}. Updating my changes.`);
         const file = pick(files, 1)[0];
@@ -905,7 +904,7 @@ export class DemoTriager implements Triager {
   }
 }
 
-const escapeHtml = (text: string) => text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+const escapeHtml = (text: string) => text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
 
 /** Demo mode: the diagram a lead puts on the screen while proposing the first slice, a box per repo. */
 function demoFlowPage(goal: string, folders: string[]): string {

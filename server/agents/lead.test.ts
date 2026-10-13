@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
-import type { Agent, LeadWork } from '../../shared/types';
-import { afterLanding, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, checkNote, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
+import type { Agent, LeadAgent, LeadWork } from '../../shared/types';
+import { afterLanding, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, checkNote, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -67,6 +67,12 @@ describe('a goal’s lead', () => {
     expect(upgradeLead(current, 'Shop')).toBe(current);
     const developer = { id: 'agent_x', task: 'issue' } as Agent;
     expect(upgradeLead(developer, 'Shop')).toBe(developer);
+  });
+
+  it('carries the goal’s work only when it has some, which is what lets the lead’s parts read it without asserting', () => {
+    expect(hasLeadWork({ id: 'lead_p1_ab12', task: 'lead', lead: work } as Agent)).toBe(true);
+    expect(hasLeadWork({ id: 'lead_p1_ab12', task: 'lead' } as Agent)).toBe(false);
+    expect(hasLeadWork({ id: 'agent_x', task: 'issue' } as Agent)).toBe(false);
   });
 });
 
@@ -367,7 +373,7 @@ describe('closing a goal', () => {
   });
 
   it('files the goal in the room’s log, newest first, keeping a few dozen', () => {
-    const lead = { id: 'lead_p1_ab', name: 'Lt. Okafor', sessionId: 's1', branch: 'focus/saved-items-2-ab12', startedAt: 10, lead: work } as Agent;
+    const lead = { id: 'lead_p1_ab', name: 'Lt. Okafor', sessionId: 's1', branch: 'focus/saved-items-2-ab12', startedAt: 10, lead: work } as LeadAgent;
     const record = goalRecord(lead, 99);
     expect(record).toEqual({
       id: 'lead_p1_ab', title: 'Saved items', note: undefined, slices: 2, prs: work.prs.map((p) => ({ ...p, slice: 2 })), slice: 2, leadName: 'Lt. Okafor', sessionId: 's1',
@@ -388,7 +394,7 @@ describe('closing a goal', () => {
     // slice 1 lands, and the next slice starts with no pull requests of its own
     const slice1: LeadWork = { ...work, slice: 1, prs: [first] };
     const slice2: LeadWork = { ...slice1, slice: 2, prs: [second], landed: everyPr(slice1) };
-    const lead = { id: 'lead_p1_ab', name: 'Lt. Okafor', startedAt: 10, lead: slice2 } as Agent;
+    const lead = { id: 'lead_p1_ab', name: 'Lt. Okafor', startedAt: 10, lead: slice2 } as LeadAgent;
     const record = goalRecord(lead, 99);
     expect(record.prs).toEqual([{ ...first, slice: 1 }, { ...second, slice: 2 }]);
     expect(record.slices).toBe(2);
@@ -399,7 +405,7 @@ describe('closing a goal', () => {
 });
 
 describe('reopening a closed goal', () => {
-  const lead = { id: 'lead_p1_ab', name: 'Lt. Okafor', sessionId: 's1', branch: 'focus/saved-items-2-ab12', startedAt: 10, lead: { ...work, brief: 'Saved items\nAcross devices' } } as Agent;
+  const lead = { id: 'lead_p1_ab', name: 'Lt. Okafor', sessionId: 's1', branch: 'focus/saved-items-2-ab12', startedAt: 10, lead: { ...work, brief: 'Saved items\nAcross devices' } } as LeadAgent;
   const closedAt = Date.UTC(2026, 9, 7, 12);
 
   it('picks up the slice it was on, with its pull requests, at its new station', () => {
@@ -647,8 +653,8 @@ describe('questions', () => {
   it('replaces a question still open, and keeps the answered ones', () => {
     const first = ask([]).questions;
     const answered = answerQuestion(first, 'q1', 'b', '  but keep the header  ', 6);
-    expect(answered).toEqual([{ ...first[0], answer: { option: 'b', note: 'but keep the header', at: 6 } }]);
-    const second = ask(answered as never, 'Which colour?');
+    expect(answered).toEqual({ questions: [{ ...first[0], answer: { option: 'b', note: 'but keep the header', at: 6 } }], question: first[0] });
+    const second = ask('error' in answered ? [] : answered.questions, 'Which colour?');
     const third = ask(second.questions, 'Which colour, really?');
     expect(third.questions.map((q) => q.id)).toEqual(['q1', 'q3']);
     expect(third.dropped.map((q) => q.id)).toEqual(['q2']);
@@ -682,8 +688,8 @@ describe('questions', () => {
     const { questions } = ask([]);
     expect(answerQuestion(questions, 'q9', 'a', undefined, 2)).toHaveProperty('error');
     expect(answerQuestion(questions, 'q1', 'c', undefined, 2)).toHaveProperty('error');
-    const answered = answerQuestion(questions, 'q1', 'a', ' ', 2) as never;
-    expect(answered).toEqual([{ ...questions[0], answer: { option: 'a', at: 2 } }]);
-    expect(answerQuestion(answered, 'q1', 'b', undefined, 3)).toHaveProperty('error');
+    const answered = answerQuestion(questions, 'q1', 'a', ' ', 2);
+    expect(answered).toEqual({ questions: [{ ...questions[0], answer: { option: 'a', at: 2 } }], question: questions[0] });
+    expect(answerQuestion('error' in answered ? [] : answered.questions, 'q1', 'b', undefined, 3)).toHaveProperty('error');
   });
 });

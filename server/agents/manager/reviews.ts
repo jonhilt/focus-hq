@@ -106,7 +106,7 @@ export class Reviews extends Part {
         if (failed) console.log(`${review.repo}#${review.number}: ${failed.command} failed after merging ${pr.baseBranch}, so QA re-tests it: ${failed.output ?? ''}`);
         return;
       }
-      const body = carriedComment(pr.baseBranch, step.head, last.sha!, run.results.map((r) => r.command));
+      const body = carriedComment(pr.baseBranch, step.head, step.passed, run.results.map((r) => r.command));
       const commentUrl = yield* github.commentOnPullRequest(review.repo, review.number, body).pipe(Effect.map((url) => url || undefined), Effect.orElseSucceed(() => undefined));
       // the PR may have merged or closed while the comment went up
       if (!current()) return;

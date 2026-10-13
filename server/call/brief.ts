@@ -3,7 +3,8 @@ import type { LedgerEvent } from '../../shared/ledger';
 import { frictionGroups } from '../../shared/ledger';
 import { trace } from '../../shared/ledgerReview';
 import { prKey, qaBadge } from '../../shared/qa';
-import type { Agent, Contact, GoalNote, GoalRecord, Project, Snapshot, Waypoint } from '../../shared/types';
+import type { Contact, GoalNote, GoalRecord, LeadAgent, Project, Snapshot, Waypoint } from '../../shared/types';
+import { hasLeadWork } from '../agents/lead';
 
 // What the captain can talk through on a call, and the briefing the voice model talks from: the record (a goal's brief,
 // its lead's note, its slices, its pull requests, and what the ledger saw of it), not the code. Pure, so it's unit
@@ -32,8 +33,9 @@ export function topics(snapshot: Snapshot): Topic[] {
   const projects = shownProjects(snapshot.projects);
   const open = projects.flatMap((p) =>
     snapshot.agents
-      .filter((a) => a.projectId === p.id && a.task === 'lead' && a.lead)
-      .map((a): Topic => ({ kind: 'goal', id: `goal:${a.id}`, label: `The goal "${a.lead!.title}" in ${p.name}, led by ${a.name}`, projectId: p.id, leadId: a.id, title: a.lead!.title })),
+      .filter(hasLeadWork)
+      .filter((a) => a.projectId === p.id && a.task === 'lead')
+      .map((a): Topic => ({ kind: 'goal', id: `goal:${a.id}`, label: `The goal "${a.lead.title}" in ${p.name}, led by ${a.name}`, projectId: p.id, leadId: a.id, title: a.lead.title })),
   );
   const closed = projects.flatMap((p) =>
     (p.goals ?? [])
@@ -78,8 +80,8 @@ function ledgerLines(ledger: LedgerEvent[], title: string): string {
     .join('\n');
 }
 
-function openGoal(snapshot: Snapshot, ledger: LedgerEvent[], lead: Agent, project: Project): string[] {
-  const work = lead.lead!;
+function openGoal(snapshot: Snapshot, ledger: LedgerEvent[], lead: LeadAgent, project: Project): string[] {
+  const work = lead.lead;
   const reviews = new Map(snapshot.reviews.map((r) => [prKey(r.repo, r.number), r]));
   const board = snapshot.boards.find((b) => b.projectId === project.id);
   const prs = work.prs.map((p) => {
@@ -108,14 +110,14 @@ function closedGoal(ledger: LedgerEvent[], goal: GoalRecord, project: Project): 
 }
 
 function wholeProject(snapshot: Snapshot, ledger: LedgerEvent[], project: Project, now: number): string[] {
-  const leads = snapshot.agents.filter((a) => a.projectId === project.id && a.task === 'lead' && a.lead);
+  const leads = snapshot.agents.filter(hasLeadWork).filter((a) => a.projectId === project.id && a.task === 'lead');
   const mine = ledger.filter((e) => e.projectId === project.id);
   const recent = mine.filter((e) => e.at >= now - PROJECT_DAYS * DAY_MS);
   const verdicts = recent.filter((e) => e.kind === 'qa-verdict');
   const issues = snapshot.boards.find((b) => b.projectId === project.id)?.issues ?? [];
   return [
     `Topic: ${project.name} as a whole.`,
-    bullets('Goals under way', leads.map((a) => `"${a.lead!.title}", led by ${a.name}${a.lead!.note?.done ? `: done looks like ${a.lead!.note.done}` : ''}`)),
+    bullets('Goals under way', leads.map((a) => `"${a.lead.title}", led by ${a.name}${a.lead.note?.done ? `: done looks like ${a.lead.note.done}` : ''}`)),
     bullets('Goals queued', (project.goalQueue ?? []).map((q) => q.text.split('\n')[0])),
     bullets('Closed goals, newest first', (project.goals ?? []).slice(0, CLOSED_PER_PROJECT).map((g) => `"${g.title}"${g.note?.learned.length ? `; learned: ${g.note.learned.join(' / ')}` : ''}`)),
     bullets('Open issues', issues.slice(0, MAX_ISSUES).map((i) => `${i.number}: ${i.title}`)),
@@ -134,7 +136,7 @@ export function briefing(snapshot: Snapshot, ledger: LedgerEvent[], topic: Topic
   const lines = (() => {
     switch (topic.kind) {
       case 'goal': {
-        const lead = snapshot.agents.find((a) => a.id === topic.leadId && a.lead);
+        const lead = snapshot.agents.filter(hasLeadWork).find((a) => a.id === topic.leadId);
         return lead ? openGoal(snapshot, ledger, lead, project) : [];
       }
       case 'closed-goal': {
@@ -153,7 +155,7 @@ export function pieces(text: string, size = PIECE_CHARS): string[] {
   const out: string[] = [];
   let current = '';
   for (const part of text.split(/(?<=\n)/)) {
-    for (const chunk of part.length > size ? part.match(new RegExp(`[^]{1,${size}}`, 'g'))! : [part]) {
+    for (const chunk of part.length > size ? part.match(new RegExp(`[^]{1,${size}}`, 'g')) ?? [part] : [part]) {
       if (current.length + chunk.length > size) {
         out.push(current.trim());
         current = '';

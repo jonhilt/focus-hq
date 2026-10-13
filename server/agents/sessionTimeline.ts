@@ -122,7 +122,7 @@ const workflowName = (script: unknown) => (typeof script === 'string' ? /name:\s
 /** The session's events in order, its subagents and workflows in where they started. */
 function events(logs: SessionLogs): { events: Event[]; first?: number; last?: number } {
   const runs = logs.agents.map(agentRun);
-  const bySpawn = new Map(runs.filter((r) => r.meta.toolUseId && !r.workflow).map((r) => [r.meta.toolUseId!, r]));
+  const bySpawn = new Map(runs.flatMap((r) => (r.meta.toolUseId && !r.workflow ? [[r.meta.toolUseId, r] as const] : [])));
   const byWorkflow = new Map<string, Run[]>();
   for (const r of runs) if (r.workflow) byWorkflow.set(r.workflow, [...(byWorkflow.get(r.workflow) ?? []), r]);
   const placed = new Set<Run>();
@@ -176,10 +176,10 @@ function events(logs: SessionLogs): { events: Event[]; first?: number; last?: nu
         const ran = b.type === 'tool_result' && b.tool_use_id ? bySpawn.get(b.tool_use_id) : undefined;
         const said = ran ? resultText(b.content) : '';
         if (ran && !ran.answered && said.trim() && !/^(Async agent launched|\[Tool call interrupted)/.test(said)) Object.assign(ran, { answer: said, answered: true });
-        if (b.type === 'tool_result' && b.tool_use_id && workflows.has(b.tool_use_id)) {
+        const started = b.type === 'tool_result' && b.tool_use_id ? workflows.get(b.tool_use_id) : undefined;
+        if (started && b.tool_use_id) {
           // the Workflow tool says where its run's transcripts are
           const run = /subagents\/workflows\/(wf_[\w-]+)/.exec(resultText(b.content))?.[1];
-          const started = workflows.get(b.tool_use_id)!;
           workflows.delete(b.tool_use_id);
           const agents = (run && byWorkflow.get(run)) || [];
           agents.forEach((r) => placed.add(r));
@@ -187,10 +187,11 @@ function events(logs: SessionLogs): { events: Event[]; first?: number; last?: nu
           tools = null;
         }
         // what's left once Claude Code's reminders are taken out
-        if (b.type !== 'text' || !clip(b.text ?? '', 1)) continue;
-        const from = messageFrom(b.text!);
+        const text = b.type === 'text' ? b.text ?? '' : '';
+        if (!clip(text, 1)) continue;
+        const from = messageFrom(text);
         if (!from) continue;
-        out.push({ at, kind: from === 'captain' ? 'ask' : 'note', text: b.text!, from });
+        out.push({ at, kind: from === 'captain' ? 'ask' : 'note', text, from });
         tools = null;
         spawning = null;
       }
@@ -201,7 +202,7 @@ function events(logs: SessionLogs): { events: Event[]; first?: number; last?: nu
   const looseRuns = new Map<string, Run[]>();
   for (const r of loose) looseRuns.set(r.workflow ?? `agent:${r.start}`, [...(looseRuns.get(r.workflow ?? `agent:${r.start}`) ?? []), r]);
   for (const [key, group] of looseRuns) {
-    const at = Math.min(...group.map((r) => r.start!));
+    const at = Math.min(...group.flatMap((r) => r.start ?? []));
     out.push(key.startsWith('wf_') ? { at, kind: 'workflow', name: key, runs: group } : { at, kind: 'agents', runs: group });
   }
   out.sort((a, b) => a.at - b.at);
@@ -212,7 +213,7 @@ function events(logs: SessionLogs): { events: Event[]; first?: number; last?: nu
 function runLine(r: Run, zoom: boolean): string {
   const what = r.meta.description ? `“${r.meta.description}”` : 'an agent';
   const kind = [r.meta.agentType && r.meta.agentType !== 'workflow-subagent' ? r.meta.agentType : '', r.meta.model ?? '', r.meta.spawnDepth && r.meta.spawnDepth > 1 ? `nested ${r.meta.spawnDepth} deep` : ''].filter(Boolean).join(', ');
-  const ran = r.start !== undefined ? ` ran ${clock(r.start)}–${clock(r.end!)} (${minutes(r.start, r.end)}m, ${total(r.calls)} calls${zoom && r.calls.size ? `: ${counted(r.calls)}` : ''})` : '';
+  const ran = r.start !== undefined ? ` ran ${clock(r.start)}–${clock(r.end ?? r.start)} (${minutes(r.start, r.end)}m, ${total(r.calls)} calls${zoom && r.calls.size ? `: ${counted(r.calls)}` : ''})` : '';
   const brief = zoom && r.brief ? `\n      asked: ${clip(r.brief, 500)}` : '';
   const answer = r.answered ? `\n      came back: ${clip(r.answer, zoom ? 800 : 200)}` : `\n      stopped without handing back${r.answer ? `; its last words: ${clip(r.answer, zoom ? 400 : 120)}` : ''}`;
   return `  - ${what}${kind ? ` (${kind})` : ''}${ran}${brief}${answer}`;

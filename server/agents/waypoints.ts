@@ -126,12 +126,14 @@ export function shieldedWaypoint(work: Course, v: Verdict, now: number): Waypoin
 
 /** The waypoints once the captain ticks off (or un-ticks) the `index`th spot-check of `slice`'s, or why not. */
 export function tickedSpotCheck(work: Pick<LeadWork, 'waypoints'>, slice: number, index: number, checked: boolean, now: number): Waypoint[] | { error: string } {
-  const w = work.waypoints?.find((x) => x.slice === slice);
-  const spot = w?.spotChecks?.[index];
+  const waypoints = work.waypoints ?? [];
+  const w = waypoints.find((x) => x.slice === slice);
+  const spotChecks = w?.spotChecks ?? [];
+  const spot = spotChecks[index];
   if (!w || !spot) return { error: `There's no spot-check ${index + 1} on waypoint ${slice}` };
   const next = { ...spot, ...(checked && { checked: spot.checked ?? now }) };
   if (!checked) delete next.checked;
-  return work.waypoints!.map((x) => (x === w ? { ...w, spotChecks: w.spotChecks!.map((c, i) => (i === index ? next : c)) } : x));
+  return waypoints.map((x) => (x === w ? { ...w, spotChecks: spotChecks.map((c, i) => (i === index ? next : c)) } : x));
 }
 
 /** How many of each pull request's screenshots a waypoint keeps as evidence: QA's last few. */
@@ -164,7 +166,7 @@ export function endedProbe(work: Course, helper: { id: string; ok: boolean; summ
   const summary = helper.summary && opening(helper.summary, WAYPOINT_LIMITS.probeSummary);
   return withWaypoint(work, now, (w) => ({
     ...w,
-    probes: w.probes!.map((p) => (p.id === helper.id ? { ...p, endedAt: now, ok: helper.ok, ...(summary && { summary }) } : p)),
+    probes: (w.probes ?? []).map((p) => (p.id === helper.id ? { ...p, endedAt: now, ok: helper.ok, ...(summary && { summary }) } : p)),
   }), at.slice);
 }
 

@@ -1,4 +1,4 @@
-import type { Agent, Effort, GoalArtifact, GoalNote, GoalQuestion, GoalRecord, Helper, LeadPr, LeadWork, QaReport, QaReview, QueuedGoal, Settings } from '../../shared/types';
+import type { Agent, Effort, LeadAgent, GoalArtifact, GoalNote, GoalQuestion, GoalRecord, Helper, LeadPr, LeadWork, QaReport, QaReview, QueuedGoal, Settings } from '../../shared/types';
 import { TEAM_STATIONS } from '../../shared/types';
 import type { BranchState, HelperEvent, RunOutcome } from './types';
 import { slugify } from '../util';
@@ -53,6 +53,9 @@ export function upgradeLead(agent: Agent, projectName: string): Agent {
   const title = `${projectName}’s first goal`;
   return { ...agent, issue: { ...agent.issue, title }, lead: { ...agent.lead, station: 0, title } };
 }
+
+/** Whether the agent carries a goal's lead work, as every lead does from the moment it's made. */
+export const hasLeadWork = (agent: Agent): agent is LeadAgent => agent.lead !== undefined;
 
 /** Whether the slice has landed: it shipped, and every pull request it opened has merged or closed. */
 export const sliceLanded = (prs: LeadPr[]): boolean => prs.length > 0 && prs.every((p) => p.outcome);
@@ -346,14 +349,14 @@ export function askQuestion(questions: readonly GoalQuestion[], input: QuestionI
 }
 
 /** The goal's questions once the captain picks an option of an open one, or why it can't be picked. */
-export function answerQuestion(questions: readonly GoalQuestion[], questionId: string, option: string, note: string | undefined, at: number): GoalQuestion[] | { error: string } {
+export function answerQuestion(questions: readonly GoalQuestion[], questionId: string, option: string, note: string | undefined, at: number): { questions: GoalQuestion[]; question: GoalQuestion } | { error: string } {
   const question = questions.find((q) => q.id === questionId);
   if (!question) return { error: 'That question isn’t there any more: the lead may have asked another' };
   if (question.answer) return { error: `You already picked ${question.answer.option.toUpperCase()}` };
   if (!question.options.some((o) => o.id === option)) return { error: `There’s no option ${option}` };
   const said = note?.trim();
   if (said && said.length > QUESTION_LIMITS.note) return { error: `Keep the note under ${QUESTION_LIMITS.note} characters` };
-  return questions.map((q) => (q.id === questionId ? { ...q, answer: { option, ...(said ? { note: said } : {}), at } } : q));
+  return { questions: questions.map((q) => (q.id === questionId ? { ...q, answer: { option, ...(said ? { note: said } : {}), at } } : q)), question };
 }
 
 /**
@@ -416,8 +419,8 @@ export const GOAL_LOG = 30;
 export const everyPr = (work: Pick<LeadWork, 'slice' | 'prs' | 'landed'>): LeadPr[] => [...(work.landed ?? []), ...work.prs.map((p) => ({ ...p, slice: p.slice ?? work.slice }))];
 
 /** The goal for the room's log, as it closes: its slices are the ones that shipped, and it keeps every one's pull requests. */
-export function goalRecord(agent: Agent, now: number): GoalRecord {
-  const work = agent.lead!;
+export function goalRecord(agent: LeadAgent, now: number): GoalRecord {
+  const work = agent.lead;
   return {
     id: agent.id, title: work.title, note: work.note, slices: work.prs.length ? work.slice : work.slice - 1, prs: everyPr(work), slice: work.slice, leadName: agent.name, sessionId: agent.sessionId,
     brief: work.brief, branch: agent.branch, repos: work.repos, openedAt: agent.startedAt, closedAt: now,
@@ -426,8 +429,11 @@ export function goalRecord(agent: Agent, now: number): GoalRecord {
   };
 }
 
+/** A closed goal that kept its branch and the repos it was checked out from. */
+export type ReopenableGoal = GoalRecord & { branch: string; repos: [LeadWork['repos'][number], ...LeadWork['repos']] };
+
 /** Whether a closed goal can be reopened: it kept its branch and repos (goals closed before they were kept didn't). */
-export const reopenable = (goal: GoalRecord): boolean => !!goal.branch && !!goal.repos?.length;
+export const reopenable = (goal: GoalRecord): goal is ReopenableGoal => !!goal.branch && !!goal.repos?.length;
 
 /**
  * A closed goal's work as it stood when it closed, at `station`: the slice it was on, with that slice's pull requests,

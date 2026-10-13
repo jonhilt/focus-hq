@@ -26,7 +26,8 @@ export class GoalTools extends Part {
       // the checklist sent again: the commits so far are ones the lead has had the chance to tick off (`checklist.ts`)
       const waypoints = input.slice !== undefined ? checklistWaypoint({ slice: work.slice, waypoints: headed ?? work.waypoints }, now) : headed;
       this.update(agent, { lead: { ...work, title: next.title, note: next.note, ...(waypoints && { waypoints }), ...(contacts.length && { contacts }) }, issue: { ...agent.issue, title: next.title } });
-      const logged = input.contact?.trim() ? ` Logged contact ${contacts.at(-1)!.id}.` : '';
+      const contact = input.contact?.trim() ? contacts.at(-1) : undefined;
+      const logged = contact ? ` Logged contact ${contact.id}.` : '';
       return `Noted.${logged} The captain sees the note on the goal, and you hear it again at each new slice.`;
     });
   }
@@ -59,7 +60,7 @@ export class GoalTools extends Part {
       if ('error' in next) return yield* new Refused({ message: next.error });
       // each goes on the waypoint of the slice it was last shown in, as evidence of what it set out to do
       this.update(agent, { lead: { ...work, artifacts: next.map((a) => (a.id === input.id ? { ...a, slice: work.slice, ...('bytes' in picture && { image: true }) } : a)) } });
-      const where = `“${next.find((a) => a.id === input.id)!.title}” is on your station's screen; the captain can open it up close.`;
+      const where = `“${next.find((a) => a.id === input.id)?.title ?? input.title}” is on your station's screen; the captain can open it up close.`;
       return 'bytes' in picture
         ? { text: `${where}${pageErrorsNote(picture.errors)}`, picture: picture.taken }
         : { text: `${where} The office couldn't take a picture of it for the screen (${picture.failed}), so the screen shows only its title.` };
@@ -121,11 +122,11 @@ export class GoalTools extends Part {
     const agent = this.store.agent(id);
     const work = agent.lead;
     if (!work) throw new Error(`${agent.name} isn’t leading a goal`);
-    const questions = answerQuestion(work.questions ?? [], questionId, option, note, Date.now());
-    if ('error' in questions) throw new Error(questions.error);
-    const reply = this.core.comms.message(id, answerMessage(questions.find((q) => q.id === questionId)!, option, note), undefined, how);
+    const answered = answerQuestion(work.questions ?? [], questionId, option, note, Date.now());
+    if ('error' in answered) throw new Error(answered.error);
+    const reply = this.core.comms.message(id, answerMessage(answered.question, option, note), undefined, how);
     if ('costly' in reply) return reply;
-    this.update(agent, { lead: { ...agent.lead!, questions } });
+    this.update(agent, { lead: { ...work, questions: answered.questions } });
     return agent;
   }
 

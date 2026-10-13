@@ -45,7 +45,10 @@ export function aboutSession(head: string): { title?: string; asked?: string } {
     const raw = line as { type?: string; aiTitle?: string };
     if (raw.type === 'ai-title' && raw.aiTitle) title ??= raw.aiTitle;
     if (!asked && line.type === 'user' && !line.isMeta) {
-      for (const b of blocks(line)) if (b.type === 'text' && clip(b.text ?? '', 1) && messageFrom(b.text!) === 'captain') asked = clip(b.text!, 240);
+      for (const b of blocks(line)) {
+        const text = b.type === 'text' ? b.text ?? '' : '';
+        if (clip(text, 1) && messageFrom(text) === 'captain') asked = clip(text, 240);
+      }
     }
     if (title && asked) break;
   }

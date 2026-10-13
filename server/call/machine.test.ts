@@ -14,7 +14,7 @@ function call(routes: (Routing | Error | Promise<Routing>)[], started: () => Pro
   const routed: RouteInput[] = [];
   const replies: Reply[] = [];
   const instructions: string[] = [];
-  const starts: Act[] = [];
+  const starts: (Act | null)[] = [];
   const informed: string[] = [];
   const actor = createActor(
     callMachine.provide({
@@ -24,7 +24,7 @@ function call(routes: (Routing | Error | Promise<Routing>)[], started: () => Pro
           const next = routes.shift() ?? new Error('No routing left');
           return next instanceof Error ? Promise.reject(next) : Promise.resolve(next);
         }),
-        act: fromPromise<string, Act>(({ input }) => {
+        act: fromPromise<string, Act | null>(({ input }) => {
           starts.push(input);
           return started();
         }),

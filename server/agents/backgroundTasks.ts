@@ -52,13 +52,13 @@ export class BackgroundTracker {
       const task = this.toolName(msg.tool_use_id) === 'Monitor' ? 'monitor' : 'shell';
       const command = { task, description: truncate(msg.description ?? '', 300), background: !!msg.is_backgrounded } as const;
       this.commands.set(id, command);
-      return command.background ? this.started(id) : [];
+      return command.background ? this.started(id, command) : [];
     }
     const command = this.commands.get(id);
     if (!command) return [];
     if (msg.subtype === 'task_updated' && msg.patch?.is_backgrounded && !command.background) {
       command.background = true;
-      return this.started(id);
+      return this.started(id, command);
     }
     if (msg.subtype === 'task_notification') {
       this.commands.delete(id);
@@ -77,8 +77,7 @@ export class BackgroundTracker {
     return [{ kind: 'output', id: found.id, file: found.file }];
   }
 
-  private started(id: string): BackgroundEvent[] {
-    const command = this.commands.get(id)!;
+  private started(id: string, command: { task: BackgroundTask['kind']; description: string }): BackgroundEvent[] {
     const events: BackgroundEvent[] = [{ kind: 'started', id, task: command.task, description: command.description }];
     // a monitor's result doesn't say where its output goes: where the session's commands' does
     if (this.folder) events.push({ kind: 'output', id, file: `${this.folder}${id}.output` });

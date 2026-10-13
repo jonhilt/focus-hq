@@ -13,7 +13,7 @@ It takes about a minute and a quarter. It always exits 0: it measures, it doesn'
 ## What it measures
 
 - **Gate:** whether `typecheck`, `lint`, the unit tests and `build` all pass, and how long each takes. Typecheck errors are tsc's plus the Effect language service's. Lint errors and warnings come from ESLint's JSON report. The tests run once, with coverage, and the CRAP numbers below come from that same run.
-- **Fence:** over `server/`, `shared/`, `client/src/` and `scripts/`, tests left out: type assertions (`as T` and `<T>x`, but not `as const`), non-null assertions (`x!`), `any` written out, `eslint-disable` comments and `@ts-ignore`/`@ts-expect-error`/`@ts-nocheck`. Comments are read with TypeScript's scanner, so the same words inside a string don't count.
+- **Fence:** over `server/`, `shared/`, `client/src/` and `scripts/`, tests left out: type assertions (`as T` and `<T>x`, but not `as const`), non-null assertions (`x!`), `any` written out, `eslint-disable` comments and `@ts-ignore`/`@ts-expect-error`/`@ts-nocheck`. Comments are read with TypeScript's scanner, so the same words inside a string don't count. Lint forbids non-null assertions in `server/` and `shared/` outside tests, so the ones counted are in `client/src/` and `scripts/`.
 - **Effect:** in `server/` (demo code left out):
   - how many files import Effect, and what share of the server that is;
   - the calls that run an Effect (`runPromise`, `runFork`, `runSync`, `runCallback` and their `…Exit` forms), each an edge where Effect hands over to Promise code, and how many files they're in;

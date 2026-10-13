@@ -36,9 +36,8 @@ const planningDir = (projectId: string) => path.join(paths.planning, projectId);
 
 async function checkouts(projectId: string, repos: string[], activity: (text: string) => void): Promise<string> {
   const cwd = planningDir(projectId);
-  const folders = repoFolders(repos);
   activity(`Pulling the latest ${repos.length === 1 ? 'code' : `code of ${repos.length} repos`}`);
-  await Promise.all(repos.map((repo) => checkoutLatest(repo, path.join(cwd, folders.get(repo)!))));
+  await Promise.all([...repoFolders(repos)].map(([repo, folder]) => checkoutLatest(repo, path.join(cwd, folder))));
   return cwd;
 }
 
@@ -115,7 +114,7 @@ async function runReadOnly(run: ReadOnlyRun): Promise<ReadOnlyResult> {
       else if (msg.type === 'assistant' && msg.parent_tool_use_id === null) {
         for (const block of msg.message.content) {
           if (block.type === 'tool_use') {
-            if (prefix && block.name.startsWith(prefix)) run.activity(run.tools!.activity(block.name.slice(prefix.length)));
+            if (run.tools && prefix && block.name.startsWith(prefix)) run.activity(run.tools.activity(block.name.slice(prefix.length)));
             else run.activity(renderToolUse(block.name, (block.input ?? {}) as Record<string, unknown>, run.cwd).activity ?? '');
           } else if (block.type === 'thinking') run.activity('Thinking…');
           else if (block.type === 'text' && block.text.trim()) run.activity(truncate(block.text.trim().split('\n')[0], 100));
@@ -386,8 +385,8 @@ function numberOneServer(req: NumberOneTurn, activity: (text: string) => void): 
           if (!found.repos.length) return text(`${found.name} has no repositories yet.`, true);
           try {
             const cwd = await checkouts(found.id, found.repos, activity);
-            const folders = repoFolders(found.repos);
-            return text(`${found.name} is checked out at its default branch:\n${found.repos.map((r) => `- ${path.relative(paths.planning, path.join(cwd, folders.get(r)!))}/ (${r})`).join('\n')}`);
+            const folders = [...repoFolders(found.repos)];
+            return text(`${found.name} is checked out at its default branch:\n${folders.map(([r, folder]) => `- ${path.relative(paths.planning, path.join(cwd, folder))}/ (${r})`).join('\n')}`);
           } catch (err) {
             return text(`The checkout of ${found.name} failed: ${errorMessage(err)}`, true);
           }

@@ -82,7 +82,7 @@ export function assemble(spec: NarrationSpec, wordsByTake: Record<string, Word[]
     }
     for (const run of runs) {
       const from = Math.max(k.from, run[0].start - pad);
-      const to = Math.min(k.to, run.at(-1)!.end + pad);
+      const to = Math.min(k.to, run[run.length - 1].end + pad);
       cuts.push({ take: k.take, from, to, at });
       for (const w of run) words.push({ text: w.text, start: at + (w.start - from), end: at + (Math.min(w.end, to) - from) });
       at += to - from;
@@ -101,7 +101,7 @@ export function beatsFromWords(words: Word[], { pause = 0.45, longest = 12 } = {
   const close = () => {
     if (!current.length) return;
     const id = `b${beats.length + 1}`;
-    beats.push({ id, at: current[0].start, end: current.at(-1)!.end, text: current.map((w) => w.text).join(' '), words: current.map((w) => [w.text, Number(w.start.toFixed(2))]) });
+    beats.push({ id, at: current[0].start, end: current[current.length - 1].end, text: current.map((w) => w.text).join(' '), words: current.map((w) => [w.text, Number(w.start.toFixed(2))]) });
     current = [];
   };
   for (const [i, w] of words.entries()) {

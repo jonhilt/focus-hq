@@ -165,7 +165,10 @@ export class Store {
       this.lines.set(agent.id, this.readLog(agent.id, MEMORY_LINES));
     }
     // rooms had six desks before team stations: anyone at a desk that's gone takes a free one, or waits off the floor
-    for (const [id, desk] of fitDesks([...this.agents.values()])) this.agents.get(id)!.desk = desk;
+    for (const [id, desk] of fitDesks([...this.agents.values()])) {
+      const agent = this.agents.get(id);
+      if (agent) agent.desk = desk;
+    }
     for (const project of this.projects) project.maxAgents = Math.min(project.maxAgents, DESKS_PER_ROOM);
   }
 
@@ -281,8 +284,8 @@ export class Store {
   putReview(review: QaReview): boolean {
     const key = prKey(review.repo, review.number);
     const current = this.reviews.get(key);
-    if (olderVerdict(current, review)) {
-      console.warn(`Not putting back QA's older verdict on ${key} (${review.status} at ${review.sha?.slice(0, 7)}): it has since ${current!.status} ${current!.sha?.slice(0, 7)}`);
+    if (current && olderVerdict(current, review)) {
+      console.warn(`Not putting back QA's older verdict on ${key} (${review.status} at ${review.sha?.slice(0, 7)}): it has since ${current.status} ${current.sha?.slice(0, 7)}`);
       return false;
     }
     this.dropShots(current, review);

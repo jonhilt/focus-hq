@@ -70,7 +70,7 @@ export function shellCommands(command: string): string[][] {
       endCommand();
       i++;
       // the bodies of the heredocs opened on the line just ended are input, not commands
-      while (pending.length) i = pastBody(i, pending.shift()!);
+      for (const delimiter of pending.splice(0)) i = pastBody(i, delimiter);
     } else if ((c === '&' && command[i + 1] === '&') || (c === '|' && command[i + 1] === '|')) {
       endCommand();
       i += 2;

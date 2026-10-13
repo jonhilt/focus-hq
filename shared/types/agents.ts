@@ -308,5 +308,8 @@ export interface Agent {
   error?: string;
 }
 
+/** An agent leading a goal, with the goal's work on it (`hasLeadWork` narrows an `Agent` to one). */
+export type LeadAgent = Agent & { lead: LeadWork };
+
 /** A room's individual desks, for quick issue work; goals have team stations of their own (TEAM_STATIONS). */
 export const DESKS_PER_ROOM = 2;

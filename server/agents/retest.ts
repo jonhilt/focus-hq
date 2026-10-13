@@ -21,8 +21,8 @@ export interface SinceVerdict {
 export type RetestStep =
   /** QA already has a verdict on the head: nothing to do. */
   | { kind: 'skip'; reason: string }
-  /** Only the base branch came in: the office runs the checks and carries the pass over if they're green. */
-  | { kind: 'checks-only'; head: string }
+  /** Only the base branch came in since QA passed `passed`: the office runs the checks and carries the pass over if they're green. */
+  | { kind: 'checks-only'; head: string; passed: string }
   | { kind: 'retest'; reason: string };
 
 /** Whether `review`, the last round, settles the PR at `head` without the QA officer. `since` is null when git couldn't tell. */
@@ -36,7 +36,7 @@ export function retestStep(review: QaReview | undefined, head: string, since: Si
   if (!since.commits.every((c) => c.mergesBase)) return { kind: 'retest', reason: 'new commits besides merges of the base branch' };
   if (!since.commits.every((c) => c.clean)) return { kind: 'retest', reason: 'the merge of the base branch needed conflicts resolving' };
   if (!since.sameChanges) return { kind: 'retest', reason: 'the PR’s own changes differ from what QA passed' };
-  return { kind: 'checks-only', head: since.head };
+  return { kind: 'checks-only', head: since.head, passed: review.sha };
 }
 
 /**

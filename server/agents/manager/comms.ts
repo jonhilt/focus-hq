@@ -55,7 +55,7 @@ export class Comms extends Part {
       && agent.status !== 'queued' && !rt.busy && agent.status !== 'setting-up';
     const cost = pickingUp ? this.core.planLimit.resumeCost(agent) : undefined;
     const choice = resumeChoice(cost?.usd, how, !from);
-    if (choice === 'ask') return { costly: cost! };
+    if (choice === 'ask' && cost) return { costly: cost };
     this.print(agent, [{ kind: 'manager', text: `▶ ${from ?? 'Captain'}: ${text}` }]);
     // the captain carries on with a goal the lead thought was done
     if (!from && agent.lead?.closing) this.update(agent, { lead: { ...agent.lead, closing: undefined } });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Agent, GoalNote, LeadWork, QaReport, Waypoint } from '../../shared/types';
+import type { GoalNote, LeadAgent, LeadWork, QaReport, Waypoint } from '../../shared/types';
 import { goalRecord, reopenedWork } from './lead';
 import { checklistWaypoint, committedWaypoint, nudgedWaypoint, endedProbe, evidenceFile, headedWaypoint, landedWaypoint, launchedProbe, nextWaypoints, notedSlice, notedWaypoint, opening, shieldedWaypoint, shippedWaypoint, tickedSpotCheck, WAYPOINT_LIMITS, withWaypoint } from './waypoints';
 
@@ -84,7 +84,7 @@ describe('waypoints', () => {
   it('travel with a closed goal and come back when it reopens', () => {
     const waypoints = [{ slice: 1, startedAt: 0, landedAt: 5, title: 'Saved items' }, { slice: 2, startedAt: 5 }];
     const work: LeadWork = { station: 1, title: 'Saved items', repos: [{ repo: 'acme/web', folder: 'web', baseBranch: 'main' }], slice: 2, prs: [], waypoints };
-    const lead = { id: 'lead_p_1', name: 'Lt. Varga', branch: 'focus/saved-2-ab12', startedAt: 0, lead: work } as Agent;
+    const lead = { id: 'lead_p_1', name: 'Lt. Varga', branch: 'focus/saved-2-ab12', startedAt: 0, lead: work } as LeadAgent;
     const record = goalRecord(lead, 99);
     expect(record.waypoints).toEqual(waypoints);
     expect(reopenedWork(record, 3).waypoints).toEqual(waypoints);

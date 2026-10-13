@@ -58,7 +58,8 @@ export const callMachine = setup({
   },
   actors: {
     route: fromPromise<Routing, RouteInput>(notProvided('router')),
-    act: fromPromise<string, Act>(notProvided('act')),
+    /** What the captain said yes to: routing only says go while something is pending, so it's never null in practice. */
+    act: fromPromise<string, Act | null>(notProvided('act')),
   },
   actions: {
     /** Something for the ship to say. */
@@ -177,7 +178,7 @@ export const callMachine = setup({
     acting: {
       invoke: {
         src: 'act',
-        input: ({ context }) => context.pending!,
+        input: ({ context }) => context.pending,
         onDone: {
           target: 'listening',
           actions: [assign({ pending: null }), { type: 'reply', params: ({ context, event }) => ({ delegation: context.delegation, text: event.output }) }],
