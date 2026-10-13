@@ -1,7 +1,7 @@
 // A lead's workflows (Claude Code's Workflow tool), from what the session reports about them. Pure: the runner reads the
 // messages, the manager keeps the result on the lead.
 import { Option, Schema } from 'effect';
-import type { Workflow, WorkflowAgent, WorkflowPhase, WorkflowResult } from '../../shared/types';
+import type { Workflow, WorkflowAgent, WorkflowPhase, WorkflowResult, WorkflowRollEntry } from '../../shared/types';
 import type { WorkflowEvent } from './types';
 import { truncate } from '../util';
 import { renderText, renderToolResult, renderToolUse } from './render';
@@ -66,10 +66,10 @@ function agentFrom(entry: typeof Agent.Type): WorkflowAgent {
 /**
  * A workflow's phases and agents from the `workflow_progress` a task_progress message carries (not in the SDK's types):
  * the whole of it each time, every agent it has queued so far. Each phase counts its agents; only the agents at work,
- * and the RECENT_AGENTS that finished last, are kept. Entries it doesn't recognise are left out; null when it isn't a
- * list at all.
+ * and the RECENT_AGENTS that finished last, are kept in full, and every one in the roll, briefly. Entries it doesn't
+ * recognise are left out; null when it isn't a list at all.
  */
-export function workflowProgress(raw: unknown): { phases: WorkflowPhase[]; agents: WorkflowAgent[] } | null {
+export function workflowProgress(raw: unknown): { phases: WorkflowPhase[]; agents: WorkflowAgent[]; roll: WorkflowRollEntry[] } | null {
   if (!Array.isArray(raw)) return null;
   const phases = new Map<number, WorkflowPhase>();
   const phaseOf = (index: number, title = '') => {
@@ -79,6 +79,7 @@ export function workflowProgress(raw: unknown): { phases: WorkflowPhase[]; agent
   };
   const working: WorkflowAgent[] = [];
   const finished: WorkflowAgent[] = [];
+  const all: WorkflowAgent[] = [];
   for (const entry of raw) {
     const phase = decodePhase(entry);
     if (Option.isSome(phase)) {
@@ -92,6 +93,7 @@ export function workflowProgress(raw: unknown): { phases: WorkflowPhase[]; agent
     const agent = agentFrom(decoded.value);
     // agents started before any phase was named have one of their own, untitled
     phaseOf(agent.phase)[agent.status]++;
+    all.push(agent);
     if (agent.status === 'working') working.push(agent);
     else if (agent.status !== 'queued') finished.push(agent);
   }
@@ -99,6 +101,7 @@ export function workflowProgress(raw: unknown): { phases: WorkflowPhase[]; agent
   return {
     phases: [...phases.values()].sort((a, b) => a.index - b.index),
     agents: [...working, ...recent].sort((a, b) => a.index - b.index),
+    roll: all.sort((a, b) => a.index - b.index).map(({ label, phase, status }) => ({ label, phase, status })),
   };
 }
 
@@ -112,7 +115,7 @@ export function applyWorkflowEvent(workflows: Workflow[], event: WorkflowEvent, 
     if (workflows.some((w) => w.id === event.id)) return workflows;
     const plan = event.script ? scriptPlan(event.script) : [];
     return [...workflows, {
-      id: event.id, name: event.name || 'workflow', description: event.description, status: 'running', phases: [], agents: [], startedAt: now,
+      id: event.id, name: event.name || 'workflow', description: event.description, status: 'running', phases: [], agents: [], roll: [], startedAt: now,
       ...(plan.length && { plan }),
     }];
   }
@@ -125,13 +128,14 @@ export function applyWorkflowEvent(workflows: Workflow[], event: WorkflowEvent, 
     next = { ...workflow, plan: event.plan };
   } else if (event.kind === 'progress') {
     if (workflow.status !== 'running') return workflows;
-    next = { ...workflow, phases: event.phases.length ? event.phases : workflow.phases, agents: event.agents, ...(event.usage && { usage: event.usage }) };
+    next = { ...workflow, phases: event.phases.length ? event.phases : workflow.phases, agents: event.agents, roll: event.roll, ...(event.usage && { usage: event.usage }) };
   } else {
     const ending = event.ok ? 'done' : 'failed';
     const agents = workflow.agents.map((a): WorkflowAgent =>
       a.status === 'working' || a.status === 'queued' ? { ...a, status: ending, activity: event.ok ? 'Done' : 'Stopped with the workflow', finishedAt: now } : a);
+    const roll = workflow.roll.map((a): WorkflowRollEntry => (a.status === 'working' || a.status === 'queued' ? { ...a, status: ending } : a));
     const phases = workflow.phases.map((p) => ({ ...p, queued: 0, working: 0, [ending]: p[ending] + p.working + p.queued }));
-    next = { ...workflow, status: ending, phases, agents, ...(event.usage && { usage: event.usage }) };
+    next = { ...workflow, status: ending, phases, agents, roll, ...(event.usage && { usage: event.usage }) };
   }
   return workflows.map((w) => (w.id === event.id ? next : w));
 }

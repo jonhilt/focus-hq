@@ -81,7 +81,7 @@ describe('a workflow', () => {
     for (const m of messages) runner.handle(m, ctx, hooks);
     expect(events).toEqual([
       { kind: 'started', id: 'w1', name: 'review-changes', description: 'Review the diff', script },
-      { kind: 'progress', id: 'w1', phases: [{ index: 1, title: 'Review', queued: 0, working: 1, done: 0, failed: 0 }], agents: [{ index: 1, label: 'review:bugs', phase: 1, status: 'working', model: undefined, activity: 'Find bugs' }] },
+      { kind: 'progress', id: 'w1', phases: [{ index: 1, title: 'Review', queued: 0, working: 1, done: 0, failed: 0 }], agents: [{ index: 1, label: 'review:bugs', phase: 1, status: 'working', model: undefined, activity: 'Find bugs' }], roll: [{ label: 'review:bugs', phase: 1, status: 'working' }] },
       { kind: 'ended', id: 'w1', ok: true, usage: { tokens: 4200, toolUses: 31 } },
     ]);
     expect(helpers).toEqual([]);

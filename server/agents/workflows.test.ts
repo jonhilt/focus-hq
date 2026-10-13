@@ -25,6 +25,15 @@ describe('workflowProgress', () => {
     ]);
   });
 
+  it('rolls every agent it has queued, the queued too, in the order it queued them', () => {
+    const read = workflowProgress([...progress].reverse());
+    expect(read?.roll).toEqual([
+      { label: 'review:bugs', phase: 1, status: 'done' },
+      { label: 'review:perf', phase: 1, status: 'working' },
+      { label: 'verify:store', phase: 2, status: 'queued' },
+    ]);
+  });
+
   it('calls an agent that failed, errored or was stopped failed, saying why', () => {
     const agent = (state: string) => workflowProgress([{ type: 'workflow_agent', index: 1, label: 'x', phaseIndex: 1, state, startedAt: 1, error: 'Bad schema' }])?.agents[0];
     expect(['failed', 'error', 'killed', 'stopped'].map((s) => agent(s)?.status)).toEqual(['failed', 'failed', 'failed', 'failed']);
@@ -53,6 +62,8 @@ describe('workflowProgress', () => {
     expect(read.phases[0]).toMatchObject({ done: 980, working: 8, queued: 12 });
     expect(read.agents.filter((a) => a.status === 'working')).toHaveLength(8);
     expect(read.agents.filter((a) => a.status === 'done').map((a) => a.index)).toEqual(Array.from({ length: RECENT_AGENTS }, (_, i) => 981 - RECENT_AGENTS + i));
+    expect(read.roll).toHaveLength(1000);
+    expect(read.roll[999]).toEqual({ label: 'fan:999', phase: 1, status: 'queued' });
   });
 
   it('is null when there is no list', () => {
@@ -65,7 +76,7 @@ describe('applyWorkflowEvent', () => {
   const started = applyWorkflowEvent([], { kind: 'started', id: 'w1', name: 'review-changes', description: 'Review the diff' }, 5);
 
   it('starts a workflow running with no agents yet, once', () => {
-    expect(started).toEqual([{ id: 'w1', name: 'review-changes', description: 'Review the diff', status: 'running', phases: [], agents: [], startedAt: 5 }]);
+    expect(started).toEqual([{ id: 'w1', name: 'review-changes', description: 'Review the diff', status: 'running', phases: [], agents: [], roll: [], startedAt: 5 }]);
     expect(applyWorkflowEvent(started, { kind: 'started', id: 'w1', name: 'again', description: '' }, 6)).toBe(started);
   });
 
@@ -74,6 +85,7 @@ describe('applyWorkflowEvent', () => {
     const [w] = applyWorkflowEvent(started, { kind: 'progress', id: 'w1', ...read }, 7);
     expect(w?.phases).toHaveLength(2);
     expect(w?.agents.map((a) => a.status)).toEqual(['done', 'working']);
+    expect(w?.roll.map((a) => a.status)).toEqual(['done', 'working', 'queued']);
   });
 
   it('finishes the agents still at work, and the ones queued, along with it, and ignores progress after', () => {
@@ -83,8 +95,9 @@ describe('applyWorkflowEvent', () => {
     const [w] = ended as [Workflow];
     expect(w.status).toBe('failed');
     expect(w.agents.map((a) => a.status)).toEqual(['done', 'failed']);
+    expect(w.roll.map((a) => a.status)).toEqual(['done', 'failed', 'failed']);
     expect(w.phases.map((p) => [p.queued, p.working, p.done, p.failed])).toEqual([[0, 0, 1, 1], [0, 0, 0, 1]]);
-    expect(applyWorkflowEvent(ended, { kind: 'progress', id: 'w1', phases: [], agents: [] }, 9)).toBe(ended);
+    expect(applyWorkflowEvent(ended, { kind: 'progress', id: 'w1', phases: [], agents: [], roll: [] }, 9)).toBe(ended);
   });
 
   it('plans the phases its script’s meta declares, from the script it started with or one read later, once', () => {

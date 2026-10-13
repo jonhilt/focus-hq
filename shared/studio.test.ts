@@ -63,7 +63,7 @@ describe('cueMet', () => {
   });
 
   it('follows the workflows', () => {
-    const running = { id: 'w', name: 'review-slice', description: '', status: 'running' as const, phases: [], agents: [], startedAt: 0 };
+    const running = { id: 'w', name: 'review-slice', description: '', status: 'running' as const, phases: [], agents: [], roll: [], startedAt: 0 };
     expect(cueMet('workflows-running', lead({ workflows: [running] }))).toBe(true);
     expect(cueMet('workflows-done', lead({ workflows: [] }))).toBe(false);
     expect(cueMet('workflows-done', lead({ workflows: [running, { ...running, status: 'done' }] }))).toBe(false);

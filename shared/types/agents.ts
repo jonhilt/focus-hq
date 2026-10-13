@@ -141,6 +141,16 @@ export interface WorkflowAgent {
 }
 
 /**
+ * One of a workflow's agents in its roll, every one it has queued so far: no more than where it is and how it stands, so
+ * a thousand of them stay small enough to send with every change.
+ */
+export interface WorkflowRollEntry {
+  label: string;
+  phase: number;
+  status: WorkflowAgent['status'];
+}
+
+/**
  * One of a workflow's phases: a label its agents run under, not a step (a pipeline's phases run side by side), and how
  * many of its agents stand where.
  */
@@ -174,6 +184,8 @@ export interface Workflow {
   phases: WorkflowPhase[];
   /** The agents at work now, and the ones that finished most recently (not every one it has run, which could be a thousand). */
   agents: WorkflowAgent[];
+  /** Every agent it has queued so far, in the order it queued them, briefly: where each is and how it stands. */
+  roll: WorkflowRollEntry[];
   startedAt: number;
   /**
    * The phases the script's meta declares, in order, before it reaches them (`phases` has only those it has reached).

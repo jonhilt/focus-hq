@@ -29,7 +29,7 @@ export type ProbeEvent =
 export type WorkflowEvent =
   /** `script`: its source, when the Workflow call carried it (not when it named a saved workflow or a script's path). */
   | { kind: 'started'; id: string; name: string; description: string; script?: string }
-  | { kind: 'progress'; id: string; phases: Workflow['phases']; agents: WorkflowAgent[]; usage?: WorkflowUsage }
+  | { kind: 'progress'; id: string; phases: Workflow['phases']; agents: WorkflowAgent[]; roll: Workflow['roll']; usage?: WorkflowUsage }
   | { kind: 'ended'; id: string; ok: boolean; usage?: WorkflowUsage }
   /**
    * Where Claude Code writes its agents' transcripts (agent-<agentId>.jsonl), on this machine, and where it saved the
