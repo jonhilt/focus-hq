@@ -5,6 +5,9 @@ Focus installs with pnpm (`corepack enable`, then `pnpm install`).
 | | |
 | --- | --- |
 | `pnpm run demo` | demo mode with hot reload |
+| `pnpm run demo:start` | a demo office in the background that outlives the shell that started it: on a free port of its own, it waits until the office answers and prints its URL, pid, log and data folder (`--built` builds the client first and serves that, so your edits don't reload the page under test). Run it again and it keeps the one that's up. Its record, log and data live in the checkout's `.demo/` (gitignored), so every worktree has its own |
+| `pnpm run demo:status` | whether this checkout's demo office is up (exits 0) or not, where, and whether the checkout has moved on from the commit it started on |
+| `pnpm run demo:stop` | stops this checkout's demo office, its whole process group, by the pid in its record: never anything by port or name, so another agent's demo is safe |
 | `pnpm run dev` | live mode with hot reload |
 | `pnpm run build` | build the client into `dist/` |
 | `pnpm start` | serve `dist/` in live mode |

@@ -7,3 +7,4 @@ smoke-shots/
 studio-out/
 blender/build/
 __pycache__/
+.demo/

@@ -8,6 +8,9 @@
   "scripts": {
     "dev": "tsx server/supervise.ts --dev",
     "demo": "tsx server/index.ts --dev --demo",
+    "demo:start": "tsx scripts/demoServer.ts start",
+    "demo:stop": "tsx scripts/demoServer.ts stop",
+    "demo:status": "tsx scripts/demoServer.ts status",
     "build": "vite build",
     "start": "tsx server/supervise.ts",
     "typecheck": "tsc -p . && effect-language-service diagnostics --project tsconfig.json --format text",
