@@ -1,6 +1,7 @@
 // The TV studio (docs/studio.md): a scene script (scenes/*.yaml) the recorder plays against a demo office, its cues and
 // its beat sheet. Pure, so it's testable and shared by the recorder (scripts/studio.ts) and the browser's director.
 
+import { readScenario, type Scenario } from './scenarios';
 import { ACTIVE_STATUSES, type Agent, type Helper } from './types';
 
 /** Where the camera looks, by name: the director (client/src/ui/studio.ts) works out where that is. */
@@ -47,6 +48,8 @@ export interface Scene {
   seed: number;
   project: string;
   goal: string;
+  /** Which parts of the demo lead's story the goal plays (shared/scenarios.ts): `full` without one. */
+  scenario: Scenario;
   beats: SceneBeat[];
   explainer?: SceneExplainer;
 }
@@ -99,6 +102,7 @@ export function readScene(raw: unknown): Scene {
     seed: typeof s.seed === 'number' ? s.seed : 1,
     project: typeof s.project === 'string' ? s.project : 'Sock Shop',
     goal: text(s.goal, 'The goal'),
+    scenario: readScenario(s.scenario),
     beats,
     explainer: s.explainer as SceneExplainer | undefined,
   };

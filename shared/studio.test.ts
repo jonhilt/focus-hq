@@ -14,18 +14,20 @@ describe('readScene', () => {
     expect(scene.beats.length).toBeGreaterThan(4);
     expect(scene.beats.some((b) => b.insert === 'explainer')).toBe(true);
     expect(scene.explainer?.beats.length).toBeGreaterThanOrEqual(2);
+    expect(scene.scenario).toBe('subagents');
   });
 
   it('fills in a beat’s hold and the scene’s pacing', () => {
     const scene = readScene({ title: 'T', goal: 'G', beats: [beat] });
     expect(scene.beats[0].hold).toBe(4);
-    expect(scene).toMatchObject({ speed: 1, seed: 1, project: 'Sock Shop' });
+    expect(scene).toMatchObject({ speed: 1, seed: 1, project: 'Sock Shop', scenario: 'full' });
   });
 
   it('names what’s wrong', () => {
     expect(() => readScene({ title: 'T', goal: 'G', beats: [{ ...beat, shot: 'sky' }] })).toThrow(/Beat 1's shot is "sky"/);
     expect(() => readScene({ title: 'T', goal: 'G', beats: [{ ...beat, do: 'reply' }] })).toThrow(/needs what to say/);
     expect(() => readScene({ title: 'T', goal: 'G', beats: [{ ...beat, insert: 'explainer' }] })).toThrow(/has none/);
+    expect(() => readScene({ title: 'T', goal: 'G', scenario: 'everything', beats: [beat] })).toThrow(/scenario is "everything"/);
   });
 
   it('starts the goal before anything waits on its lead', () => {

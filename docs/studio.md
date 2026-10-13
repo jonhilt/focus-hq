@@ -45,6 +45,7 @@ speed: 0.5          # the demo's pacing: below 1 is slower than `pnpm run demo`
 seed: 7             # the same seed casts the same crew and rolls the same waits
 project: Sock Shop  # the demo project the goal goes to (it has two repos, so the lead starts two helpers)
 goal: Shoppers can save items for later and find them again on any device
+scenario: subagents # which parts of the demo lead's story it plays (below); without one, the whole story
 beats:
   - title: Helpers sit down     # shown over the caption, and the beat's name in beats.md
     caption: The lead hands each repo to a helper…
@@ -66,6 +67,21 @@ explainer:                      # the same input as a lead's explain tool: title
   lead's open question), `reply` (sends `say:` to the lead). The goal starts before anything else acts on its lead.
 - **until**: `lead-working`, `lead-idle` (its turn has ended), `helpers-working`, `helpers-done`, `shipped` (its slice
   has a pull request). A cue that hasn't come in three minutes stops the filming and says which.
+
+## Scenarios
+
+A demo goal's lead plays one story: it looks round, asks which layout to start with, then builds a slice across every
+repo and ships it. A scene's `scenario` keeps that story to what the episode is about (`shared/scenarios.ts`), so a
+shot of the station isn't busy with things the narration never mentions:
+
+- **`full`** (the default, and what `pnpm run demo` plays): all of it, including the explainer on the station's screen,
+  a helper per repo, a probe script with the dev server and a monitor in the background, and the workflows that map the
+  repos and review the slice in the transporter rooms.
+- **`subagents`**: the helpers (an Explore subagent per repo, side by side), and none of the rest.
+- **`workflow`**: the workflows, and none of the rest.
+
+Looking round, asking, building, shipping, hearing back from QA and the slice landing play in every scenario. The
+recorder hands the scene's scenario to its office as `FOCUS_DEMO_SCENARIO`; a goal keeps the scenario it started with.
 
 ## The holodeck stage
 

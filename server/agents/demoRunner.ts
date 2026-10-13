@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { readScenario, type Scenario, scenarioParts } from '../../shared/scenarios';
 import type { TermLine } from '../../shared/types';
 import { demoSinceVerdict } from '../demoGit';
 import { randomHex, sleep } from '../util';
@@ -44,7 +45,9 @@ export class DemoRunner implements AgentRunner {
   /** How full each pretend session's context is. */
   private context = new Map<string, number>();
   /** Each lead's repos and goal, by session: a resumed turn doesn't hear them again. */
-  private leads = new Map<string, { repos: { folder: string; repo: string }[]; goal: string }>();
+  private leads = new Map<string, { repos: { folder: string; repo: string }[]; goal: string; scenario: Scenario }>();
+  /** Which parts of its story a new goal's lead plays (shared/scenarios.ts): a goal keeps the one it started with. */
+  scenario: Scenario = readScenario(process.env.FOCUS_DEMO_SCENARIO);
 
   /** A pretend terminal: the cloud session's link shows up in it after a few seconds. */
   cloudTerminal(_req: CloudTerminalRequest): Promise<CloudTerminal> {
@@ -340,7 +343,9 @@ export class DemoRunner implements AgentRunner {
       const message = req.prompt.replace(/^(Your workspace|Slice \d+ starts)[^\n]*\n(- [^\n]*(\n|$))*/, '').replace(/\s+/g, ' ').trim();
       // a resumed session doesn't hear the goal again, and a goal's lead keeps the one goal
       const goal = known?.goal ?? (message.replace(/[.!?]$/, '').slice(0, 60) || 'saved items');
-      this.leads.set(sessionId, { repos, goal });
+      const scenario = known?.scenario ?? this.scenario;
+      const parts = scenarioParts(scenario);
+      this.leads.set(sessionId, { repos, goal, scenario });
       const ship = async (title: string, summary: string): Promise<boolean> => {
         hooks.lines([{ kind: 'tool', text: `⏺ mcp__office__ship(${title})` }]);
         hooks.activity('pushing', 'Shipping the slice');
@@ -426,9 +431,11 @@ export class DemoRunner implements AgentRunner {
       await note({ heading: `A thin slice of ${goal}`, slice: checklist(0) });
       await show({ id: 'mockup', title: 'A first mockup', html: demoMockupPage(goal) });
       // the explainer goes up last, so the screen plays it while the slice is built
-      hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__explain(How a save travels)' }]);
-      const explained = await tools.explain(demoExplainer(repos.map((r) => r.folder))).then((reply) => reply.text, (err: Error) => err.message);
-      hooks.lines([{ kind: 'output', text: `  ⎿  ${explained}` }]);
+      if (parts.explain) {
+        hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__explain(How a save travels)' }]);
+        const explained = await tools.explain(demoExplainer(repos.map((r) => r.folder))).then((reply) => reply.text, (err: Error) => err.message);
+        hooks.lines([{ kind: 'output', text: `  ⎿  ${explained}` }]);
+      }
       const leadTodos = (done: number) => ({
         todos: [...repos.map((r) => [`Build ${goal} in ./${r.folder}`, `Building it in ./${r.folder}`]), ['Ship the slice', 'Shipping the slice']].map(([content, activeForm], i) => ({
           content,
@@ -438,7 +445,7 @@ export class DemoRunner implements AgentRunner {
       });
       await tool('TodoWrite', leadTodos(0));
       // two helpers map the repos side by side while the lead plans: they sit down at the team station while they work
-      if (repos.length > 1) {
+      if (parts.helpers && repos.length > 1) {
         const helpers = repos.map((r) => ({ ...r, id: `demo-helper-${r.folder}-${randomHex(2)}`, files: FILES[kindOf(r.repo)] }));
         // each helper's lines are its own transcript, as the real runner keeps them
         const helperLines = (id: string, lines: Omit<TermLine, 't'>[]) =>
@@ -470,11 +477,13 @@ export class DemoRunner implements AgentRunner {
         }
       }
       // a quick script from the scratch dir to try the idea first: a probe on the goal's chart, as the real runner reports one
-      const probe = `demo-probe-${randomHex(3)}`;
-      const found = `${goal}: the first try works`;
-      hooks.probe?.({ kind: 'started', id: probe, description: 'Script probe.mjs', type: 'script' });
-      await tool('Bash', { command: 'node "$FOCUS_SCRATCH/probe.mjs"' }, [found]);
-      hooks.probe?.({ kind: 'ended', id: probe, ok: true, summary: found });
+      if (parts.background) {
+        const probe = `demo-probe-${randomHex(3)}`;
+        const found = `${goal}: the first try works`;
+        hooks.probe?.({ kind: 'started', id: probe, description: 'Script probe.mjs', type: 'script' });
+        await tool('Bash', { command: 'node "$FOCUS_SCRATCH/probe.mjs"' }, [found]);
+        hooks.probe?.({ kind: 'ended', id: probe, ok: true, summary: found });
+      }
       for (const r of repos) {
         const files = FILES[kindOf(r.repo)];
         await tool('Read', { file_path: `/work/${r.folder}/${files[0]}` }, [`Read ${60 + files[0].length} lines`]);
@@ -485,12 +494,12 @@ export class DemoRunner implements AgentRunner {
         await tool('TodoWrite', leadTodos(repos.indexOf(r) + 1));
       }
       // the app running in the background while the slice is reviewed, and a monitor waiting on the reviews
-      const server = runInBackground('shell', 'pnpm run dev', (n) => (n === 1 ? '  VITE v7.1.2  ready in 412 ms' : n === 2 ? '  ➜  Local:   http://localhost:5173/' : `  [vite] hmr update /src/App.tsx (x${n - 2})`));
-      const monitor = runInBackground('monitor', 'watch for the review workflow to finish', (n) => `waiting… (${n}s)`);
+      const server = parts.background && runInBackground('shell', 'pnpm run dev', (n) => (n === 1 ? '  VITE v7.1.2  ready in 412 ms' : n === 2 ? '  ➜  Local:   http://localhost:5173/' : `  [vite] hmr update /src/App.tsx (x${n - 2})`));
+      const monitor = parts.background && parts.workflows && runInBackground('monitor', 'watch for the review workflow to finish', (n) => `waiting… (${n}s)`);
       // a workflow reviews the slice before it ships: its away team beams into the briefing room a phase at a time
-      await reviewWorkflows(repos.map((r) => r.folder), goal);
-      endJob(monitor, 'done', 'The review workflow finished');
-      endJob(server, 'done', 'Background command "pnpm run dev" completed (exit code 0)');
+      if (parts.workflows) await reviewWorkflows(repos.map((r) => r.folder), goal);
+      if (monitor) endJob(monitor, 'done', 'The review workflow finished');
+      if (server) endJob(server, 'done', 'Background command "pnpm run dev" completed (exit code 0)');
       await handleInbox();
       const title = `Thin slice: ${goal}`.slice(0, 70);
       if (await ship(title, `## Summary\n\nA first, thin version of ${goal}, end to end.\n\n## Testing\n\n- Tests pass in every repo`)) {

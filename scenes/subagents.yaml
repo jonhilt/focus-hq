@@ -5,6 +5,8 @@ speed: 0.5
 seed: 7
 project: Sock Shop
 goal: Shoppers can save items for later and find them again on any device
+# the lead's story with helpers but no workflows, explainer or background jobs (shared/scenarios.ts)
+scenario: subagents
 
 beats:
   - title: Cold open

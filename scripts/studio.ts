@@ -179,7 +179,7 @@ async function record(scene: Scene, outDir: string): Promise<void> {
   const port = await freePort();
   const url = `http://127.0.0.1:${port}/`;
   console.log(`Studio: filming "${scene.title}" against a demo office on ${url}`);
-  const server = startDemo(port, dataDir, { args: ['--studio'], env: { FOCUS_DEMO_SPEED: String(scene.speed), FOCUS_DEMO_SEED: String(scene.seed) } });
+  const server = startDemo(port, dataDir, { args: ['--studio'], env: { FOCUS_DEMO_SPEED: String(scene.speed), FOCUS_DEMO_SEED: String(scene.seed), FOCUS_DEMO_SCENARIO: scene.scenario } });
   let browser: Browser | undefined;
   try {
     await waitForServer(url, server, 60_000);

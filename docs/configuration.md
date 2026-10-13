@@ -13,6 +13,7 @@
 | `FOCUS_API_BUDGET` | `20` | the most, in dollars, the key spends each time your plan's limit is reached (with `FOCUS_USE_API_KEY=fallback`) |
 | `FOCUS_TERMINAL` | | the command that opens a terminal running a script, e.g. `kitty -e`, for starting [cloud sessions](cloud-agents.md); tried before the platform's own |
 | `FOCUS_DEMO_SPEED` | `1` | speed up the pretend agents in demo mode |
+| `FOCUS_DEMO_SCENARIO` | `full` | which parts of its story a demo goal's lead plays: `full`, `subagents` or `workflow` ([the studio](studio.md#scenarios)) |
 | `FOCUS_AUTO_UPDATE=0` | | turn off auto update |
 | `FOCUS_UPDATE_CHECK_MS` | `300000` | how often auto update checks for new commits |
 | `FOCUS_WHISPER_BIN` | `whisper-cli` | whisper.cpp's CLI for [voice input](voice-input.md) |
