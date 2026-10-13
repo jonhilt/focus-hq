@@ -349,9 +349,12 @@ export function flowNodes(wf: Pick<Workflow, 'phases' | 'plan' | 'status'>): Flo
   return [...nodes, ret];
 }
 
-/** How bright each beam from a node to its agents is: fainter the more of them there are past six, so a crowd isn't a blaze. */
-export function beamOpacity(beams: number): number {
-  return beams <= 6 ? 0.5 : (0.5 * 6) / beams;
+/**
+ * How brightly a pad glows under its agent at `t` seconds, 0 to 1: breathing while they work (each pad out of step
+ * with its neighbours, by `slot`), steady once they've finished, as their green or red shows before they beam out.
+ */
+export function padGlow(status: PadOccupant['status'], t: number, slot: number): number {
+  return status === 'working' ? 0.75 + 0.25 * Math.sin(t * 3 + slot * 1.7) : 1;
 }
 
 /** The pads whose agent was at work at the last look and has finished since, still standing there: their results rise to the hologram. */

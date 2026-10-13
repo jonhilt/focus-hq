@@ -9,6 +9,7 @@ import { flat } from './materials';
 import { LCARS, LCARS_FONT, LCARS_STATUS, lcarsFrame } from './starship';
 import { Beam } from './transporter';
 import { FlowHologram } from './flowHologram';
+import { PadGlows } from './padGlow';
 import { flowPrefs } from './flowPrefs';
 import type { Interaction } from './builder';
 import { CONSOLE_SCREEN, type TransporterRoom } from './transporterRoom';
@@ -18,13 +19,12 @@ import {
 } from './workflowRooms';
 
 // A workflow running in a transporter room (transporterRoom.ts): its agents at work standing on the pads, beaming in as
-// they start and out once they've finished, each pad lit in its agent's phase colour; the pattern buffer glowing with
+// they start and out once they've finished, each pad glowing in its agent's phase colour; the pattern buffer glowing with
 // the agents still queued, and its readout counting them; the tactical display following the operation phase by phase;
 // and the console showing the script that runs it all, the lines running now lit in their phases' colours, who's at
 // work and what's come back from the journal, and once it's over what it logged and returned, with a switch for the
-// hologram; and over it all the script's flow as a hologram, beams down to
-// the agents at work and their results rising back into it (flowHologram.ts). Who stands where is workflowRooms.ts's;
-// this draws it.
+// hologram; and over it all the script's flow as a hologram, a key to the pads' colours, with the agents' results
+// rising back into it (flowHologram.ts). Who stands where is workflowRooms.ts's; this draws it.
 
 /** How often the pads are looked at again, for the finished to beam out once they've lingered (ms). */
 const RESTAND_MS = 250;
@@ -126,6 +126,8 @@ export class TransporterOperation {
   private queued = 0;
   /** The script's flow, hanging between the console and the platform. */
   private readonly flow: FlowHologram;
+  /** The light on each pad under whoever's on it, in their phase's colour. */
+  private readonly glows: PadGlows;
   private lastT = 0;
   private readonly glow: THREE.Color;
   private readonly ringLit: THREE.Color;
@@ -149,6 +151,7 @@ export class TransporterOperation {
     const front = room.pads.filter((p) => p.tier === 0).reduce((sum, p) => sum.add(p.at), new THREE.Vector3()).divideScalar(PAD_COUNT / 3);
     this.flow = new FlowHologram(consoleAt.lerp(front, 0.3).setY(FLOW_Y), room.place.at);
     room.offFeed.add(this.flow.group);
+    this.glows = new PadGlows(room.group, room.pads);
     // the buttons in the corner of the console's screen: energise, and show or hide the hologram
     const energise: { interaction: Interaction; label: () => string } = {
       interaction: { kind: 'energise', projectId: room.projectId, station: room.station, room: room.index },
@@ -236,6 +239,7 @@ export class TransporterOperation {
         this.figures[i] = undefined;
         this.light(this.room.pads[i].ring, this.ringLit, DIM);
         this.light(this.room.pads[i].emitter, this.emitterLit, DIM);
+        this.glows.set(i, undefined);
         continue;
       }
       const view = padView(wf, agent);
@@ -250,7 +254,9 @@ export class TransporterOperation {
       else figure.character.set(view);
       const phase = wf.phases.find((p) => p.index === occupant.phase);
       const colour = LCARS[phaseColour(phase ?? { index: occupant.phase })];
-      this.light(this.room.pads[i].ring, tint.set(occupant.status === 'working' ? colour : READY[occupant.status]), 1);
+      const lit = occupant.status === 'working' ? colour : READY[occupant.status];
+      this.light(this.room.pads[i].ring, tint.set(lit), 1);
+      this.glows.set(i, { colour: lit, status: occupant.status });
       this.light(this.room.pads[i].emitter, tint.set(colour).lerp(WHITE, 0.45), 0.85);
     }
     // what the finished have found rises to the hologram, if anyone's watching
@@ -307,8 +313,8 @@ export class TransporterOperation {
     const dt = Math.min(0.1, Math.max(0, t - this.lastT));
     this.lastT = t;
     if (!eye) return;
-    const working = this.pads.flatMap((o, i) => (o?.status === 'working' ? [{ phase: o.phase, at: this.room.pads[i].at }] : []));
-    this.flow.update(t, dt, working);
+    this.flow.update(t, dt);
+    this.glows.update(t);
     for (const figure of this.figures) figure?.character.update(t, eye.distanceTo(figure.character.group.getWorldPosition(this.tmp)));
     this.room.buffer.light.color.copy(this.glow).multiplyScalar(bufferGlow(this.queued, t));
     if (!was || now - this.lastScreens > SCREENS_MS) {
@@ -390,6 +396,7 @@ export class TransporterOperation {
     this.scriptTex.dispose();
     this.scriptMat.dispose();
     this.flow.dispose();
+    this.glows.dispose();
   }
 }
 

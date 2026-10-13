@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { WorkflowPhase } from '../../../shared/types';
 import {
   assignRooms, barSegments, bufferGlow, bufferLine, elapsed, feedCaption, PAD_COUNT, type PadAgent, type PadOccupant, phaseColour,
-  beamOpacity, finishedOnPads, flowNodes, plannedPhases, runningLines, scriptWindow, shortCount, standOnPads, tacticalSummary, usageLine, waitingLine,
+  finishedOnPads, padGlow, flowNodes, plannedPhases, runningLines, scriptWindow, shortCount, standOnPads, tacticalSummary, usageLine, waitingLine,
 } from './workflowRooms';
 
 const wf = (id: string, startedAt: number) => ({ id, startedAt });
@@ -235,10 +235,18 @@ describe('flowNodes', () => {
   });
 });
 
-describe('beamOpacity', () => {
-  it('is steady up to six beams, then fades so the lot stays as bright as six', () => {
-    expect(beamOpacity(1)).toBe(beamOpacity(6));
-    expect(beamOpacity(12) * 12).toBeCloseTo(beamOpacity(6) * 6);
+describe('padGlow', () => {
+  it('breathes between half and full while its agent works, out of step with the next pad', () => {
+    const levels = Array.from({ length: 60 }, (_, i) => padGlow('working', i / 10, 0));
+    expect(Math.min(...levels)).toBeGreaterThanOrEqual(0.5);
+    expect(Math.max(...levels)).toBeLessThanOrEqual(1);
+    expect(Math.max(...levels) - Math.min(...levels)).toBeGreaterThan(0.3);
+    expect(padGlow('working', 1, 0)).not.toBeCloseTo(padGlow('working', 1, 1));
+  });
+
+  it('holds steady once its agent has finished', () => {
+    expect(padGlow('done', 0, 0)).toBe(1);
+    expect(padGlow('failed', 2.5, 3)).toBe(1);
   });
 });
 

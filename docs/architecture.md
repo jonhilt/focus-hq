@@ -91,7 +91,8 @@ client/src/
     hall.ts               the training hall, each project's holodeck, behind its door's portal: a copy of its shell from Blender (blender/training_hall.py), dressed for its project (hallLayout.ts: where its pods stand, and the door on the deck that leads to it)
     portal.ts             doorways that lead into each other wherever they stand: the far side drawn through the open doors, and walking through (doorway.ts: the geometry)
     transporter.ts        the transporter beam the crew arrive and leave in
-    flowHologram.ts       the hologram of a workflow's flow over a transporter room's console: its phases, beams down to the agents at work, their results rising back
+    flowHologram.ts       the hologram of a workflow's flow over a transporter room's console: its phases, a key to the pads' colours, their results rising back
+    padGlow.ts            the light on each transporter pad under its agent, in their phase's colour
     transporterRoom.ts    a team station's transporter room, where a workflow runs: its pads, console (and the screen on it that shows the script), pattern buffer, tactical display and feed camera
     engineering.ts        the engineering station: the engineer, the report card and how their retro stands on the console; E opens their panel
     warpCore.ts           the warp core's glow: the shared materials its 'warp-core' surfaces are drawn with, pulsing

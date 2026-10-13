@@ -5,14 +5,15 @@ import { flowPrefs } from './flowPrefs';
 import { OVERLAY_LAYER } from './frame';
 import { fadeTexture, HOLO_CYAN, Hologram } from './hologram';
 import { LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
-import { beamOpacity, elapsed, type FlowNode, flowNodes } from './workflowRooms';
+import { elapsed, type FlowNode, flowNodes } from './workflowRooms';
 
 // The flow of a workflow's script, hanging in the air between the transporter console and the platform, in the
 // holograms' navy glass (hologram.ts): its phases as nodes in a row, in their colours, glowing while they've agents at
-// work, then where it returns to the lead. A faint beam runs down from each phase at work to each of its agents on the pads; as an agent finishes, a spark
-// of light rises from its pad into its phase (green, or red if it failed), and when the workflow's over one beams up out
-// of the return, towards the briefing room. What the nodes say is drawn on the hologram when it changes; the beams,
-// sparks and glows round the nodes at work move every frame, all on OVERLAY_LAYER. The viewer can switch it off from the
+// work, then where it returns to the lead: a key to the pads, which glow in their agents' phases' colours
+// (transporterOps.ts). As an agent finishes, a spark of light rises from its pad into its phase (green, or red if it
+// failed), and when the workflow's over one beams up out of the return, towards the briefing room. What the nodes say is
+// drawn on the hologram when it changes; the sparks and glows round the nodes at work move every frame, all on
+// OVERLAY_LAYER. The viewer can switch it off from the
 // console's screen (flowPrefs.ts).
 
 /** The hologram's size (m), and the canvas drawn on it. */
@@ -28,7 +29,7 @@ const SPARK_S = 1.1;
 const RETURN_S = 1.6;
 /** The captain's eye height, which it tips down to face (m). */
 const EYE = 1.6;
-/** How high over a pad a beam ends: about an agent's chest (m). */
+/** How high over a pad a spark sets off: about an agent's chest (m). */
 const CHEST = 1.15;
 
 const FINISHED = { done: LCARS_STATUS.done, failed: '#ff6a6a' };
@@ -57,15 +58,11 @@ export class FlowHologram {
   /** A glow round each node, pulsing while its phase is at work and flaring as a spark arrives. */
   private readonly glows: THREE.Sprite[] = [];
   private readonly flare: number[] = [];
-  private readonly beams: THREE.Mesh[] = [];
-  private readonly beamGeometry = new THREE.CylinderGeometry(0.006, 0.022, 1, 8, 1, true).translate(0, 0.5, 0);
   private sparks: Spark[] = [];
   private readonly idleSparks: THREE.Sprite[] = [];
   /** 0 gone, 1 there: fades in with a workflow and out once it's gone. */
   private presence = 0;
   private present = false;
-  private readonly tmp = new THREE.Vector3();
-  private readonly up = new THREE.Vector3(0, 1, 0);
 
   constructor(
     /** Where its middle hangs (world), and where it faces: where the captain arrives (on the floor). */
@@ -156,11 +153,8 @@ export class FlowHologram {
     });
   }
 
-  /**
-   * Moves it on: `t` seconds, `dt` since the last frame, and `working` the agents at work on the pads, each with its
-   * phase and where it stands, for the beams.
-   */
-  update(t: number, dt: number, working: { phase: number; at: THREE.Vector3 }[]): void {
+  /** Moves it on: `t` seconds, and `dt` since the last frame. */
+  update(t: number, dt: number): void {
     const wanted = this.present && flowPrefs.on;
     this.presence = THREE.MathUtils.clamp(this.presence + (wanted ? dt : -dt) / 0.6, 0, 1);
     this.group.visible = this.presence > 0;
@@ -180,26 +174,6 @@ export class FlowHologram {
       glow.scale.setScalar(0.3 + 0.25 * (this.flare[i] ?? 0));
     });
 
-    // a beam from each phase at work down to each of its agents
-    const shown = working.filter((w) => this.nodes.some((n) => n.index === w.phase));
-    const perPhase = new Map<number, number>();
-    for (const w of shown) perPhase.set(w.phase, (perPhase.get(w.phase) ?? 0) + 1);
-    shown.forEach((w, k) => {
-      const beam = this.beams[k] ?? this.makeBeam();
-      const node = this.nodes.findIndex((n) => n.index === w.phase);
-      const from = this.nodeAt(node, this.tmp);
-      const to = w.at.clone().setY(w.at.y + CHEST);
-      const dir = to.sub(from);
-      beam.position.copy(from);
-      beam.scale.set(1, dir.length(), 1);
-      beam.quaternion.setFromUnitVectors(this.up, dir.normalize());
-      const mat = beam.material as THREE.MeshBasicMaterial;
-      mat.color.set(LCARS[this.nodes[node]?.colour ?? 'sky']);
-      mat.opacity = beamOpacity(perPhase.get(w.phase) ?? 1) * (0.8 + 0.2 * Math.sin(t * 4 + k)) * this.presence;
-      beam.visible = true;
-    });
-    for (let k = shown.length; k < this.beams.length; k++) this.beams[k].visible = false;
-
     // the sparks: rising in a gentle arc, fading in and out, and lighting their node as they land
     const now = performance.now() / 1000;
     this.sparks = this.sparks.filter((s) => {
@@ -217,16 +191,6 @@ export class FlowHologram {
       s.sprite.material.opacity = Math.min(1, Math.sin(p * Math.PI) * 1.6) * this.presence;
       return true;
     });
-  }
-
-  private makeBeam(): THREE.Mesh {
-    const mat = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, side: THREE.DoubleSide });
-    const beam = new THREE.Mesh(this.beamGeometry, mat);
-    beam.layers.set(OVERLAY_LAYER);
-    beam.renderOrder = 8;
-    this.beams.push(beam);
-    this.group.add(beam);
-    return beam;
   }
 
   /** What the hologram says: the workflow and its clock, then each node with what it's for and how it stands. */
@@ -314,8 +278,6 @@ export class FlowHologram {
     this.texture.dispose();
     this.hologram.dispose();
     this.panel.geometry.dispose();
-    this.beamGeometry.dispose();
-    for (const beam of this.beams) (beam.material as THREE.Material).dispose();
     for (const s of [...this.glows, ...this.idleSparks, ...this.sparks.map((x) => x.sprite)]) s.material.dispose();
   }
 }
