@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { WorkflowPhase } from '../../../shared/types';
 import {
   assignRooms, barSegments, bufferGlow, bufferLine, elapsed, feedCaption, PAD_COUNT, type PadAgent, type PadOccupant, phaseColour,
-  plannedPhases, runningLines, scriptWindow, shortCount, standOnPads, tacticalSummary, usageLine, waitingLine,
+  beamOpacity, finishedOnPads, flowNodes, plannedPhases, runningLines, scriptWindow, shortCount, standOnPads, tacticalSummary, usageLine, waitingLine,
 } from './workflowRooms';
 
 const wf = (id: string, startedAt: number) => ({ id, startedAt });
@@ -212,5 +212,42 @@ describe('feeds and the buffer', () => {
     expect(bufferGlow(0, 1)).toBeLessThan(bufferGlow(2, 0));
     expect(bufferGlow(2, 0)).toBeLessThan(bufferGlow(24, 0));
     expect(bufferGlow(100, 0.3)).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('flowNodes', () => {
+  it('has a node per phase, planned ones too, then the return, spaced evenly, each saying how it stands', () => {
+    const nodes = flowNodes({
+      status: 'running',
+      phases: [phase(1, 'Scan', { done: 4, failed: 1 }), phase(2, 'Check', { working: 2, done: 1 })],
+      plan: [{ title: 'Scan', detail: 'one per area' }, { title: 'Check' }, { title: 'Write' }],
+    });
+    expect(nodes.map((n) => [n.title, n.state, n.working, n.back, n.x])).toEqual([
+      ['Scan', 'done', 0, 5, 0.125], ['Check', 'active', 2, 1, 0.375], ['Write', 'waiting', 0, 0, 0.625], ['Return', 'waiting', 0, 0, 0.875],
+    ]);
+    expect(nodes[0]?.detail).toBe('one per area');
+    expect(nodes.at(-1)?.colour).toBe('gold');
+  });
+
+  it('marks the return done or failed with the workflow', () => {
+    expect(flowNodes({ status: 'done', phases: [] }).at(-1)?.state).toBe('done');
+    expect(flowNodes({ status: 'failed', phases: [] }).at(-1)?.state).toBe('failed');
+  });
+});
+
+describe('beamOpacity', () => {
+  it('is steady up to six beams, then fades so the lot stays as bright as six', () => {
+    expect(beamOpacity(1)).toBe(beamOpacity(6));
+    expect(beamOpacity(12) * 12).toBeCloseTo(beamOpacity(6) * 6);
+  });
+});
+
+describe('finishedOnPads', () => {
+  it('finds the agents that were at work and have finished since, still on their pads', () => {
+    const at = (key: string, status: PadOccupant['status']): PadOccupant => ({ key, phase: 1, status });
+    const before = [at('a', 'working'), at('b', 'working'), at('c', 'done'), undefined, at('e', 'working')];
+    const after = [at('a', 'done'), at('b', 'working'), at('c', 'done'), at('d', 'failed'), at('x', 'done')];
+    expect(finishedOnPads(before, after)).toEqual([0]);
+    expect(finishedOnPads([at('a', 'working')], [at('a', 'failed')])).toEqual([0]);
   });
 });

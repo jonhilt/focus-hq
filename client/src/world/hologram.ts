@@ -100,7 +100,7 @@ export function hover(obj: THREE.Object3D, baseY: number, t: number, phase = 0):
 
 /** A soft round fall-off, white in the middle to nothing at the edges, made the first time it's needed. */
 let falloff: THREE.Texture | null = null;
-function fadeTexture(): THREE.Texture {
+export function fadeTexture(): THREE.Texture {
   if (falloff) return falloff;
   const { canvas, ctx } = makeCanvas(128, 128);
   const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);

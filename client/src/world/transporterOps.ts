@@ -8,9 +8,12 @@ import { Character, type CrewView } from './character';
 import { flat } from './materials';
 import { LCARS, LCARS_FONT, LCARS_STATUS, lcarsFrame } from './starship';
 import { Beam } from './transporter';
+import { FlowHologram } from './flowHologram';
+import { flowPrefs } from './flowPrefs';
+import type { Interaction } from './builder';
 import { CONSOLE_SCREEN, type TransporterRoom } from './transporterRoom';
 import {
-  agentKey, barSegments, bufferGlow, bufferLine, type Counts, PAD_COUNT, type PadOccupant, phaseColour, plannedPhases, runningLines,
+  agentKey, barSegments, bufferGlow, bufferLine, type Counts, finishedOnPads, PAD_COUNT, type PadOccupant, phaseColour, plannedPhases, runningLines,
   scriptWindow, standOnPads, tacticalSummary, type TacticalSummary, usageLine,
 } from './workflowRooms';
 
@@ -18,7 +21,9 @@ import {
 // they start and out once they've finished, each pad lit in its agent's phase colour; the pattern buffer glowing with
 // the agents still queued, and its readout counting them; the tactical display following the operation phase by phase;
 // and the console showing the script that runs it all, the lines running now lit in their phases' colours, who's at
-// work, and once it's over what it logged and returned. Who stands where is workflowRooms.ts's; this draws it.
+// work, and once it's over what it logged and returned, with a switch for the hologram; and over it all the script's flow as a hologram, beams down to
+// the agents at work and their results rising back into it (flowHologram.ts). Who stands where is workflowRooms.ts's;
+// this draws it.
 
 /** How often the pads are looked at again, for the finished to beam out once they've lingered (ms). */
 const RESTAND_MS = 250;
@@ -26,6 +31,23 @@ const RESTAND_MS = 250;
 const SCREENS_MS = 500;
 /** After a workflow ends, when its script is read again: Claude Code saves what it logged and returned as it ends (ms). */
 const OUTCOME_RETRY_MS = 3000;
+/** How high the flow hologram's middle hangs: its bottom clear of the agents' speech bubbles, seen from where you arrive (m). */
+const FLOW_Y = 2.62;
+/** The switch for the flow hologram in the console screen's bottom right corner, in the screen's canvas px. */
+const SWITCH = { w: 300, h: 56, inset: 40 };
+const SCRIPT_CANVAS = { w: Math.round(CONSOLE_SCREEN.w * 1000), h: Math.round(CONSOLE_SCREEN.h * 1000) };
+const switchRect = () => ({ x: SCRIPT_CANVAS.w - SWITCH.inset - SWITCH.w, y: SCRIPT_CANVAS.h - SWITCH.inset - SWITCH.h, ...SWITCH });
+/** Whether a point on the console's screen (its UVs) is on the switch. */
+function onSwitch(uv: THREE.Vector2): boolean {
+  const r = switchRect();
+  const x = uv.x * SCRIPT_CANVAS.w;
+  const y = (1 - uv.y) * SCRIPT_CANVAS.h;
+  return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+}
+const FLOW_SWITCH: { interaction: Interaction; label: () => string } = {
+  interaction: { kind: 'flow-hologram' },
+  label: () => (flowPrefs.on ? 'Switch the flow hologram off' : 'Switch the flow hologram on'),
+};
 /** A pad's ring and emitter while nobody's on it. */
 const DIM = 0.16;
 
@@ -76,13 +98,16 @@ export class TransporterOperation {
   private readonly bufferTex = canvasTexture(this.buffer.canvas);
   private readonly bufferMat = flat(this.bufferTex);
   private bufferKey = '';
-  private readonly script = makeCanvas(Math.round(CONSOLE_SCREEN.w * 1000), Math.round(CONSOLE_SCREEN.h * 1000));
+  private readonly script = makeCanvas(SCRIPT_CANVAS.w, SCRIPT_CANVAS.h);
   private readonly scriptTex = canvasTexture(this.script.canvas);
   private readonly scriptMat = flat(this.scriptTex);
   private scriptKey = '';
   /** The script of the workflow in the room, once it's been read (`id`: its workflow's). */
   private source: { id: string; script: WorkflowScript } | undefined;
   private queued = 0;
+  /** The script's flow, hanging between the console and the platform. */
+  private readonly flow: FlowHologram;
+  private lastT = 0;
   private readonly glow: THREE.Color;
   private readonly ringLit: THREE.Color;
   private readonly emitterLit: THREE.Color;
@@ -100,6 +125,13 @@ export class TransporterOperation {
     for (const pad of room.pads) this.light(pad.ring, this.ringLit, DIM);
     for (const pad of room.pads) this.light(pad.emitter, this.emitterLit, DIM);
     room.buffer.light.color.copy(this.glow).multiplyScalar(bufferGlow(0, 0));
+    // nearer the console than the platform's front tier, facing where you arrive
+    const consoleAt = room.console.getWorldPosition(new THREE.Vector3());
+    const front = room.pads.filter((p) => p.tier === 0).reduce((sum, p) => sum.add(p.at), new THREE.Vector3()).divideScalar(PAD_COUNT / 3);
+    this.flow = new FlowHologram(consoleAt.lerp(front, 0.3).setY(FLOW_Y), room.place.at);
+    room.offFeed.add(this.flow.group);
+    // the switch in the corner of the console's screen shows or hides it
+    room.script.userData.interactionAt = (uv: THREE.Vector2) => (this.workflow && onSwitch(uv) ? FLOW_SWITCH : null);
   }
 
   /** The workflow in the room now, or none: its agents take the pads, or leave them. */
@@ -112,6 +144,7 @@ export class TransporterOperation {
     }
     if (workflow && workflow.status !== 'running') this.endedAt ??= Date.now();
     this.workflow = workflow;
+    this.flow.show(workflow, this.endedAt);
     // its script once it's here, and again as it ends, for what it logged and returned
     if (workflow && (workflow.id !== was?.id || (workflow.status !== 'running' && was?.status === 'running'))) {
       this.read(workflow.id);
@@ -137,10 +170,11 @@ export class TransporterOperation {
     const screen = this.room.script;
     if (!workflow) {
       delete screen.userData.interaction;
+      delete this.flow.panel.userData.interaction;
       return;
     }
     const { projectId, station } = this.room;
-    interactive(screen, { kind: 'workflow-script', projectId, station, workflowId: workflow.id }, () => `Read the script of ${workflow.name}`);
+    for (const mesh of [screen, this.flow.panel]) interactive(mesh, { kind: 'workflow-script', projectId, station, workflowId: workflow.id }, () => `Read the script of ${workflow.name}`);
   }
 
   /** The workflow in the room, if any. */
@@ -180,6 +214,13 @@ export class TransporterOperation {
       const colour = LCARS[phaseColour(phase ?? { index: occupant.phase })];
       this.light(this.room.pads[i].ring, tint.set(occupant.status === 'working' ? colour : READY[occupant.status]), 1);
       this.light(this.room.pads[i].emitter, tint.set(colour).lerp(WHITE, 0.45), 0.85);
+    }
+    // what the finished have found rises to the hologram, if anyone's watching
+    if (this.watched) {
+      for (const i of finishedOnPads(this.pads, next)) {
+        const occupant = next[i];
+        if (occupant && occupant.status !== 'working') this.flow.rise(occupant.phase, this.room.pads[i].at, occupant.status);
+      }
     }
     this.pads = next;
   }
@@ -225,7 +266,11 @@ export class TransporterOperation {
     this.hearing = hearing;
     if (now - this.lastStand > RESTAND_MS) this.stand(now);
     if (this.beams.length) this.beams = this.beams.filter((b) => !b.update(now));
+    const dt = Math.min(0.1, Math.max(0, t - this.lastT));
+    this.lastT = t;
     if (!eye) return;
+    const working = this.pads.flatMap((o, i) => (o?.status === 'working' ? [{ phase: o.phase, at: this.room.pads[i].at }] : []));
+    this.flow.update(t, dt, working);
     for (const figure of this.figures) figure?.character.update(t, eye.distanceTo(figure.character.group.getWorldPosition(this.tmp)));
     this.room.buffer.light.color.copy(this.glow).multiplyScalar(bufferGlow(this.queued, t));
     if (!was || now - this.lastScreens > SCREENS_MS) {
@@ -245,6 +290,7 @@ export class TransporterOperation {
       return;
     }
     this.drawScript(wf);
+    this.flow.show(wf, this.endedAt);
     const summary = tacticalSummary(wf, Date.now(), this.endedAt);
     const key = JSON.stringify(summary);
     if (key !== this.tacticalKey) {
@@ -280,6 +326,7 @@ export class TransporterOperation {
       result: script?.result,
       usage: usageLine(wf.usage),
       reading: !script,
+      flow: flowPrefs.on,
     };
     const key = JSON.stringify({ ...view, lines: view.lines.length });
     if (key === this.scriptKey) return;
@@ -298,6 +345,7 @@ export class TransporterOperation {
     this.bufferMat.dispose();
     this.scriptTex.dispose();
     this.scriptMat.dispose();
+    this.flow.dispose();
   }
 }
 
@@ -466,6 +514,8 @@ interface ScriptView {
   usage: string;
   /** Still reading the script. */
   reading: boolean;
+  /** Whether the flow hologram's on, for the switch in the corner. */
+  flow: boolean;
 }
 
 /**
@@ -520,7 +570,7 @@ function drawScript(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, v:
     ctx.fillText(text, x, y);
     y += 36;
   };
-  const bottom = area.y + area.h - 52;
+  const bottom = switchRect().y - 64;
   const line = (text: string, colour: string) => {
     if (y > bottom) return;
     ctx.fillStyle = colour;
@@ -552,10 +602,19 @@ function drawScript(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, v:
     ctx.fillText('NOBODY AT WORK YET', x, y);
   }
 
-  // what it has used
+  // what it has used, over the switch for the flow hologram
+  const sw = switchRect();
   if (v.usage) {
     ctx.fillStyle = LCARS.gold;
     ctx.font = `500 28px ${LCARS_FONT}`;
-    ctx.fillText(fitText(ctx, v.usage.toUpperCase(), w), x, area.y + area.h - 18);
+    ctx.fillText(fitText(ctx, v.usage.toUpperCase(), w), x, sw.y - 26);
   }
+  ctx.fillStyle = v.flow ? '#8aedff' : '#4a4658';
+  roundRect(ctx, sw.x, sw.y, sw.w, sw.h, sw.h / 2);
+  ctx.fill();
+  ctx.fillStyle = '#000000';
+  ctx.textAlign = 'center';
+  ctx.font = `600 30px ${LCARS_FONT}`;
+  ctx.fillText(v.flow ? 'HOLOGRAM · ON' : 'HOLOGRAM · OFF', sw.x + sw.w / 2, sw.y + sw.h / 2 + 1);
+  ctx.textAlign = 'left';
 }

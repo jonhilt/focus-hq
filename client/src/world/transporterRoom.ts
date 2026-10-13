@@ -120,6 +120,8 @@ export class TransporterRoom {
   readonly script: THREE.Mesh;
   /** Where the camera for the room's feed stands, up in the front corner over the door, what it looks at, and its vertical field of view (degrees) that frames the platform. */
   readonly camera: Viewpoint & { fov: number };
+  /** What's in the room but left out of its feed on the briefing room's monitors, like the flow hologram: add it here. */
+  readonly offFeed = new THREE.Group();
   /** What the player can't walk into (world): its walls, the platform, the console and the buffer's columns. */
   readonly colliders: Box2[] = [];
   private readonly area: Box2;
@@ -138,7 +140,7 @@ export class TransporterRoom {
   ) {
     const module = kit.clone();
     module.position.copy(origin);
-    this.group.add(module);
+    this.group.add(module, this.offFeed);
     this.group.updateMatrixWorld(true);
 
     const pads = new Map<string, { tier: number; slot: number; at: THREE.Vector3; yaw: number }>();

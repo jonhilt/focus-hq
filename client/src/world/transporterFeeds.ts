@@ -65,7 +65,10 @@ export class TransporterFeeds {
       cam.lookAt(room.camera.lookAt);
       cam.updateMatrixWorld();
       world.reveal(room.camera.at);
+      // the monitors show the platform, not what hangs over the console for whoever's in the room
+      room.offFeed.visible = false;
       this.frame.render(scene, cam, this.targets.get(station)![i]);
+      room.offFeed.visible = true;
       this.renderer.setRenderTarget(null);
       return;
     }

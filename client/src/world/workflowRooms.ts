@@ -1,6 +1,6 @@
 // What a team station's transporter rooms show of its lead's workflows: which workflow is in which room, who stands on
-// which pad, the phases' colours, and what the tactical display, the pattern buffer, the console's script and the
-// briefing room's feeds say. Pure: no Three.js, so it's testable outside the browser (transporterOps.ts and transporterFeeds.ts draw it).
+// which pad, the phases' colours, and what the tactical display, the pattern buffer, the console's script, the flow
+// hologram and the briefing room's feeds say. Pure: no Three.js, so it's testable outside the browser (transporterOps.ts and transporterFeeds.ts draw it).
 import type { Workflow, WorkflowAgent, WorkflowPhase } from '../../../shared/types';
 
 /** A transporter room's platform: three tiers of six pads, tier 0 at the front, slot 0 at the door's end. */
@@ -304,4 +304,62 @@ export function bufferGlow(queued: number, t: number): number {
   const load = Math.min(1, queued / 24);
   const base = 0.45 + 0.4 * load;
   return Math.min(1, base + 0.15 * Math.sin(t * (2 + 4 * load)));
+}
+
+/** A node on the flow hologram: one of the script's phases, or where it returns to the lead. */
+export interface FlowNode {
+  /** The phase's index, or -1 for the return. */
+  index: number;
+  title: string;
+  detail?: string;
+  /** Its colour: the phase's, or the return's (gold). */
+  colour: LcarsColour;
+  /** Across the hologram, 0 to 1. */
+  x: number;
+  /** Agents at work in it, and how many have come back (done or failed) and failed. */
+  working: number;
+  back: number;
+  failed: number;
+  /** Not reached yet, with agents at work or queued, or over. The return is done once the workflow is, failed if it failed. */
+  state: 'waiting' | 'active' | 'done' | 'failed';
+}
+
+/**
+ * The flow hologram's nodes: each phase the workflow has reached or its script plans, in order, and the return after
+ * them, spaced evenly across it.
+ */
+export function flowNodes(wf: Pick<Workflow, 'phases' | 'plan' | 'status'>): FlowNode[] {
+  const phases = plannedPhases(wf);
+  const n = phases.length + 1;
+  const nodes = phases.map((p, i): FlowNode => ({
+    index: p.index,
+    title: p.title,
+    ...(p.detail && { detail: p.detail }),
+    colour: phaseColour(p),
+    x: (i + 0.5) / n,
+    working: p.working,
+    back: p.done + p.failed,
+    failed: p.failed,
+    state: p.working + p.queued > 0 ? 'active' : p.done + p.failed > 0 ? 'done' : 'waiting',
+  }));
+  const ret: FlowNode = {
+    index: -1, title: 'Return', colour: 'gold', x: (n - 0.5) / n, working: 0, back: 0, failed: 0,
+    state: wf.status === 'done' ? 'done' : wf.status === 'failed' ? 'failed' : 'waiting',
+  };
+  return [...nodes, ret];
+}
+
+/** How bright each beam from a node to its agents is: fainter the more of them there are past six, so a crowd isn't a blaze. */
+export function beamOpacity(beams: number): number {
+  return beams <= 6 ? 0.5 : (0.5 * 6) / beams;
+}
+
+/** The pads whose agent was at work at the last look and has finished since, still standing there: their results rise to the hologram. */
+export function finishedOnPads(before: (PadOccupant | undefined)[], after: (PadOccupant | undefined)[]): number[] {
+  const out: number[] = [];
+  after.forEach((now, i) => {
+    const was = before[i];
+    if (now && was && now.key === was.key && was.status === 'working' && now.status !== 'working') out.push(i);
+  });
+  return out;
 }
