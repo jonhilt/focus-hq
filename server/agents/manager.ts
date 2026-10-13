@@ -101,6 +101,11 @@ export class AgentManager {
     return this.core.leads.reopenGoal(projectId, goalId, station);
   }
 
+  /** Puts a goal in line at the project's team stations without starting it, even with a station free: the captain starts it. */
+  queueGoal(projectId: string, text: string, how: { effort?: Effort; from?: string } = {}): QueuedGoal {
+    return this.core.leads.queueGoal(projectId, text, how);
+  }
+
   startQueued(projectId: string, queueId: string, edits: { text?: string; effort?: Effort; station?: number } = {}): Agent {
     return this.core.leads.startQueued(projectId, queueId, edits);
   }

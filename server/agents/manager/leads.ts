@@ -111,7 +111,7 @@ export class Leads extends Part {
   }
 
   /** Puts a goal in line for the next free team station. It waits there for the captain to start it. */
-  private queueGoal(projectId: string, text: string, how: { effort?: Effort; from?: string }): QueuedGoal {
+  queueGoal(projectId: string, text: string, how: { effort?: Effort; from?: string } = {}): QueuedGoal {
     const project = this.store.project(projectId);
     const queued: QueuedGoal = { id: newId('q'), text: text.trim(), effort: how.effort, from: how.from, at: Date.now() };
     const ahead = project.goalQueue?.length ?? 0;

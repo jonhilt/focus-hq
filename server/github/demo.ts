@@ -59,6 +59,9 @@ const RUN_IDS = 4000;
 /** Pushes to an open demo PR: a merge of its base branch, or a change of its own. Set while a demo GitHub is around. */
 export let demoPush: ((repo: string, number: number, kind: 'merge-base' | 'change') => string) | undefined;
 
+/** Puts the demo GitHub back as it started: the seed repos, and nothing the office did to them. Set while one is around. */
+export let demoReset: (() => void) | undefined;
+
 export const demoLayer = Layer.sync(GitHub, () => {
   const repos = new Map<string, FakeRepo>();
   demoPush = (name, number, kind) => {
@@ -68,63 +71,70 @@ export const demoLayer = Layer.sync(GitHub, () => {
     p.updatedAt = new Date().toISOString();
     return p.headSha;
   };
-  const start = Date.now() - 5 * 86400_000;
-  for (const [name, seed] of Object.entries(SEED)) {
-    const issues = seed.issues.map(([title, body, labels], i) => ({
-      repo: name,
-      number: i + 1,
-      title,
-      body,
-      labels,
-      url: `https://github.com/${name}/issues/${i + 1}`,
-      author: 'you',
-      createdAt: new Date(start + i * 3600_000).toISOString(),
-    }));
-    const number = issues.length + 1;
-    // a teammate's PR, so the board's "only my PRs" filter has something to hide
-    const prs: FakeRepo['prs'] = [{
-      repo: name,
-      number,
-      title: 'Tidy up README badges',
-      url: `https://github.com/${name}/pull/${number}`,
-      branch: 'sam/readme-badges',
-      headSha: (number * 0x9e3779b1 >>> 0).toString(16).padStart(8, '0') + '5ab',
-      baseBranch: 'main',
-      author: 'sam-teammate',
-      isDraft: false,
-      // one of them conflicts, so there is something to hand to an agent
-      mergeable: name === 'demo/webshop-api' ? 'CONFLICTING' : 'MERGEABLE',
-      checks: 'passing',
-      failedChecks: [],
-      closes: [],
-      createdAt: new Date(start + 86400_000).toISOString(),
-      state: 'OPEN',
-    }];
-    // pairs of PRs closing feature:-labelled issues in both shop repos, so ▶ Preview has a set to bring along
-    for (const [title, closes, hoursAgo] of seed.prs ?? []) {
-      const n = number + prs.length;
-      prs.push({
+  const plant = () => {
+    const start = Date.now() - 5 * 86400_000;
+    for (const [name, seed] of Object.entries(SEED)) {
+      const issues = seed.issues.map(([title, body, labels], i) => ({
         repo: name,
-        number: n,
+        number: i + 1,
         title,
-        url: `https://github.com/${name}/pull/${n}`,
-        branch: `focus/${closes}-${title.toLowerCase().replace(/\W+/g, '-').replace(/-$/, '')}-${n}`,
-        headSha: (n * 0x85ebca6b >>> 0).toString(16).padStart(8, '0') + 'f00',
+        body,
+        labels,
+        url: `https://github.com/${name}/issues/${i + 1}`,
+        author: 'you',
+        createdAt: new Date(start + i * 3600_000).toISOString(),
+      }));
+      const number = issues.length + 1;
+      // a teammate's PR, so the board's "only my PRs" filter has something to hide
+      const prs: FakeRepo['prs'] = [{
+        repo: name,
+        number,
+        title: 'Tidy up README badges',
+        url: `https://github.com/${name}/pull/${number}`,
+        branch: 'sam/readme-badges',
+        headSha: (number * 0x9e3779b1 >>> 0).toString(16).padStart(8, '0') + '5ab',
         baseBranch: 'main',
-        author: 'demo-manager',
+        author: 'sam-teammate',
         isDraft: false,
-        mergeable: 'MERGEABLE',
+        // one of them conflicts, so there is something to hand to an agent
+        mergeable: name === 'demo/webshop-api' ? 'CONFLICTING' : 'MERGEABLE',
         checks: 'passing',
         failedChecks: [],
-        closes: [closes],
-        createdAt: new Date(Date.now() - (hoursAgo + 3) * 3600_000).toISOString(),
-        updatedAt: new Date(Date.now() - hoursAgo * 3600_000).toISOString(),
+        closes: [],
+        createdAt: new Date(start + 86400_000).toISOString(),
         state: 'OPEN',
-        body: `Adds ${title.toLowerCase()}.\n\nCloses #${closes}`,
-      });
+      }];
+      // pairs of PRs closing feature:-labelled issues in both shop repos, so ▶ Preview has a set to bring along
+      for (const [title, closes, hoursAgo] of seed.prs ?? []) {
+        const n = number + prs.length;
+        prs.push({
+          repo: name,
+          number: n,
+          title,
+          url: `https://github.com/${name}/pull/${n}`,
+          branch: `focus/${closes}-${title.toLowerCase().replace(/\W+/g, '-').replace(/-$/, '')}-${n}`,
+          headSha: (n * 0x85ebca6b >>> 0).toString(16).padStart(8, '0') + 'f00',
+          baseBranch: 'main',
+          author: 'demo-manager',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          checks: 'passing',
+          failedChecks: [],
+          closes: [closes],
+          createdAt: new Date(Date.now() - (hoursAgo + 3) * 3600_000).toISOString(),
+          updatedAt: new Date(Date.now() - hoursAgo * 3600_000).toISOString(),
+          state: 'OPEN',
+          body: `Adds ${title.toLowerCase()}.\n\nCloses #${closes}`,
+        });
+      }
+      repos.set(name, { description: seed.description, issues, prs, nextNumber: number + prs.length });
     }
-    repos.set(name, { description: seed.description, issues, prs, nextNumber: number + prs.length });
-  }
+  };
+  plant();
+  demoReset = () => {
+    repos.clear();
+    plant();
+  };
 
   const repo = (name: string): Effect.Effect<FakeRepo, GitHubNotFound> => {
     const found = repos.get(name);

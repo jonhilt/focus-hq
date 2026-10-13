@@ -28,6 +28,7 @@ import { openQaPanel } from './ui/qaPanel';
 import { openScreenPanel } from './ui/screenPanel';
 import { openGoalChart } from './ui/chartPanel';
 import { openNewIssuePanel, openPausePanel, openTeleportPanel, openTurboliftPanel } from './ui/travelPanel';
+import { openTrainingPanel } from './ui/trainingPanel';
 import { type Interaction, REACH } from './world/builder';
 import { OVERLAY_LAYER } from './world/frame';
 import { numberOne } from '../../shared/crew';
@@ -174,6 +175,7 @@ async function main() {
     openTeleport: () => openTeleportPanel(ui),
     openScreen: (leadId) => openScreenPanel(ui, leadId),
     openChart: (leadId) => openGoalChart(ui, leadId),
+    openTraining: () => openTrainingPanel(ui),
     openTurbolift: () => {
       const stops = world.stops();
       openTurboliftPanel(ui, stops, stopAt(stops, camera.position));
@@ -281,6 +283,7 @@ async function main() {
       });
   };
   const syncWorld = () => {
+    world.demo = state.info?.mode === 'demo';
     world.sync(state.projects);
     player.colliders = world.colliders;
     for (const room of world.rooms.values()) {
@@ -511,6 +514,9 @@ async function main() {
         break;
       case 'turbolift':
         ui.openTurbolift();
+        break;
+      case 'training':
+        ui.openTraining();
         break;
       case 'screen':
         ui.openScreen(i.id);

@@ -739,6 +739,9 @@ textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
 .places { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
 .btn.place { text-align: left; padding: 10px 26px 10px 18px; border-radius: 0 999px 999px 0; overflow: hidden; }
 .place small { display: block; font-weight: 500; overflow: hidden; text-overflow: ellipsis; text-transform: none; letter-spacing: 0.02em; }
+/* the training console's scenarios: a row each, so the whole of what each plays reads */
+.places.scenarios { grid-template-columns: 1fr; }
+.places.scenarios .place small { white-space: normal; }
 
 @media (max-width: 800px) {
   .projects { grid-template-columns: 1fr; }

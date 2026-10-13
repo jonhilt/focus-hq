@@ -1,6 +1,7 @@
 import type { Agent, Autonomy, Board, Climb, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ResumeHow, Retro, RetroDraft, RoomTheme, Scorecards, Settings, StudioSession, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
+import type { Scenario } from '../../../shared/scenarios';
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   return send<T>(method, url, body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -39,6 +40,8 @@ export const api = {
    */
   startGoal: (projectId: string, text: string, how: { station?: number; effort?: Effort; from?: string } = {}) =>
     call<{ agent: Agent } | { queued: QueuedGoal }>('POST', `/projects/${projectId}/goals`, { text, ...how }),
+  /** Demo only: resets the ship and readies `scenario`'s goal (the training console). */
+  startTraining: (scenario: Scenario) => call<{ projectId: string; queued: QueuedGoal }>('POST', '/demo/training', { scenario }),
   startQueued: (projectId: string, queueId: string, edits: { text?: string; effort?: Effort; station?: number } = {}) =>
     call<Agent>('POST', `/projects/${projectId}/goals/queue/${queueId}/start`, edits),
   moveQueued: (projectId: string, queueId: string, by: -1 | 1) => call('POST', `/projects/${projectId}/goals/queue/${queueId}/move`, { by }),

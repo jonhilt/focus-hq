@@ -55,6 +55,8 @@ export interface Ui {
   openScreen(leadId?: string): void;
   /** The star chart of lead `leadId`'s goal (stellar cartography). */
   openChart(leadId: string): void;
+  /** The demo ship's training console: pick a scenario to reset the ship for. */
+  openTraining(): void;
   /** The turbolift's controls, for whichever stop you're at. */
   openTurbolift(): void;
   /** Takes the turbolift to `stop`. */

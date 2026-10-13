@@ -82,6 +82,24 @@ shot of the station isn't busy with things the narration never mentions:
 
 Looking round, asking, building, shipping, hearing back from QA and the slice landing play in every scenario. The
 recorder hands the scene's scenario to its office as `FOCUS_DEMO_SCENARIO`; a goal keeps the scenario it started with.
+As with real Claude Code, whose Workflow tool waits until you ask for one in your own words, telling a demo lead to
+"run a workflow" (or "use a workflow", or ultracode) brings the workflows into that turn, whatever the scenario
+(`asksForWorkflow`).
+
+## The training console
+
+To play a scenario live rather than film it, the demo ship has a training console on the bridge: a gold workstation
+on the starboard side aft of the rail, on your right as you come aboard (`world/trainingConsole.ts`, only in a demo
+office). **E** on it lists the scenarios (`ui/trainingPanel.ts`); picking one resets the ship to the quiet start the
+studio films from (`server/training.ts`, `POST /api/demo/training`):
+
+1. everyone goes home, then goals, the line of goals waiting for a team station, QA reviews and the ledger are cleared;
+2. the demo GitHub goes back to its seed repos and pull requests (`demoReset`), and the dice roll from the top
+   (`TRAINING_SEED`), so the same crew plays the same waits each run;
+3. the demo runner takes the scenario for the next goal, whose goal (`TRAINING` in `shared/scenarios.ts`) waits in line
+   at Sock Shop's team stations, and every browser starts over from a fresh snapshot.
+
+Then you play it: walk to a free team station in Sock Shop's holodeck, **E**, **Start it**, and answer the lead.
 
 ## The holodeck stage
 

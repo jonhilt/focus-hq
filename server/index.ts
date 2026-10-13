@@ -24,7 +24,9 @@ import { checkoutHead, SavedScorecards, ScorecardDesk } from './scorecards';
 import type { Snapshot } from '../shared/types';
 import { Calls } from './call/calls';
 import { callKeys, config, paths } from './config';
-import { demoLayer, demoPush } from './github/demo';
+import { demoLayer, demoPush, demoReset } from './github/demo';
+import { startTraining } from './training';
+import { readScenario } from '../shared/scenarios';
 import { ghCliLayer } from './github/ghCli';
 import { GitHub, toProvider } from './github/service';
 import { allowedHosts, listensBeyondLoopback, refusal } from './hostGuard';
@@ -89,7 +91,8 @@ async function main() {
   const gitHub = Layer.succeed(GitHub, await ManagedRuntime.make(config.demo ? demoLayer : ghCliLayer).runPromise(GitHub.use(Effect.succeed)));
   const github = toProvider(gitHub);
   const browsers = new BrowserPool();
-  const runner = config.demo ? new DemoRunner() : new ClaudeRunner(browsers);
+  const demoRunner = config.demo ? new DemoRunner() : undefined;
+  const runner = demoRunner ?? new ClaudeRunner(browsers);
   const previews = new Previews(hub, github, config.demo);
   const planner = new IssuePlanner(store, hub, config.demo ? new DemoDrafter() : new ClaudeDrafter());
   const workspace = config.demo ? demoWorkspace : liveWorkspace;
@@ -162,6 +165,31 @@ async function main() {
     console.warn(`Refused ${req.method} ${req.originalUrl}: ${why}`);
     res.status(403).type('text').send(`${why}. Add it to FOCUS_ALLOWED_HOSTS if it's yours.`);
   });
+  // the demo ship's training console: back to a quiet ship, with a scenario's goal waiting to be started (docs/studio.md)
+  if (demoRunner) {
+    let training = false;
+    app.post('/api/demo/training', express.json(), (req, res) => {
+      if (training) return void res.status(409).json({ error: 'The ship is already resetting for training' });
+      let scenario;
+      try {
+        scenario = readScenario((req.body as { scenario?: unknown } | undefined)?.scenario);
+      } catch (err) {
+        return void res.status(400).json({ error: errorMessage(err) });
+      }
+      training = true;
+      startTraining(scenario, {
+        store,
+        hub,
+        agents: office.agents,
+        resetGitHub: () => demoReset?.(),
+        setScenario: (s) => (demoRunner.scenario = s),
+        refreshBoards: () => office.refreshAll(),
+        snapshot: () => office.snapshot(),
+      })
+        .then((ready) => res.json(ready), (err: unknown) => res.status(500).json({ error: errorMessage(err) }))
+        .finally(() => (training = false));
+    });
+  }
   app.use('/api', apiRouter(office, store));
   // the studio's holodeck stage plays a shot plan from scenes/ (docs/studio.md), parsed in the browser
   if (config.studio)

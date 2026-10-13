@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { readScenario, type Scenario, scenarioParts } from '../../shared/scenarios';
+import { readScenario, type Scenario, turnParts } from '../../shared/scenarios';
 import type { TermLine } from '../../shared/types';
 import { demoSinceVerdict } from '../demoGit';
 import { randomHex, sleep } from '../util';
@@ -349,7 +349,8 @@ export class DemoRunner implements AgentRunner {
       // a resumed session doesn't hear the goal again, and a goal's lead keeps the one goal
       const goal = known?.goal ?? (message.replace(/[.!?]$/, '').slice(0, 60) || 'saved items');
       const scenario = known?.scenario ?? this.scenario;
-      const parts = scenarioParts(scenario);
+      // the captain can ask for a workflow in their own words, as with real Claude Code: the turn runs them whatever the scenario
+      const parts = turnParts(scenario, message);
       this.leads.set(sessionId, { repos, goal, scenario });
       const ship = async (title: string, summary: string): Promise<boolean> => {
         hooks.lines([{ kind: 'tool', text: `⏺ mcp__office__ship(${title})` }]);
