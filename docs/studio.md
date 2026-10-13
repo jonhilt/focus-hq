@@ -101,6 +101,21 @@ studio films from (`server/training.ts`, `POST /api/demo/training`):
 
 Then you play it: walk to a free team station in Sock Shop's holodeck, **E**, **Start it**, and answer the lead.
 
+When a scene in `scenes/` plays the scenario (its `scenario:`, or none for `full`; the first by file name), its goal,
+project and seed stand in for the console's own (`sceneFor` in `server/training.ts`), and the director takes you
+through its beats over live play (`client/src/ui/liveDirector.ts`, its decisions in `shared/liveDirector.ts`):
+
+- Each beat's caption goes up as the recorder would film it, with where you are in the scene top right.
+- Its shot takes the camera (a cut through a blackout, or a glide) and holds it there until you walk; the mouse still
+  looks round. A station's shots wait for its lead to sit down. The frames are the recorder's (`ui/shots.ts`).
+- A beat the recorder would act out says what you do instead: start the goal, answer the lead, or what to tell it.
+  An explainer insert says it's a cut-away in the film.
+- A beat with a cue (`until`) moves on by itself once the cue has come and its hold is up; one without waits for you.
+  **]** moves on and **[** goes back any time; **O** hides the captions and stops the camera moves, while the beats
+  keep counting by their cues.
+
+The director lives in the page: reloading it, or picking another scenario, starts over.
+
 ## The holodeck stage
 
 `pnpm run studio --stage delegation` films a **shot plan** on an empty holodeck instead of the busy ship: only what the

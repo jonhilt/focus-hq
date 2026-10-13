@@ -16,8 +16,9 @@ export function openTrainingPanel(ui: Ui): void {
         const t = TRAINING[scenario];
         const button = h('button', { class: 'btn place' }, t.label, h('small', null, t.blurb));
         button.onclick = () => void busy(button, async () => {
-          await api.startTraining(scenario);
+          const ready = await api.startTraining(scenario);
           ui.panels.close();
+          if (ready.scene) ui.direct(ready.scene.raw, ready.projectId);
         }, ui.error);
         return button;
       }),

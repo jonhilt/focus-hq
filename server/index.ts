@@ -185,6 +185,15 @@ async function main() {
         setScenario: (s) => (demoRunner.scenario = s),
         refreshBoards: () => office.refreshAll(),
         snapshot: () => office.snapshot(),
+        // a scene script for the scenario brings its goal, seed and beats (scenes/*.yaml, bar shot plans and narrations)
+        // yaml is a dev dependency, as the demo's own are: loaded only when the console's used
+        scenes: async () => {
+          const { parse } = await import('yaml');
+          const dir = path.join(config.root, 'scenes');
+          return fs.readdirSync(dir)
+            .filter((f) => /^[^.]+\.yaml$/.test(f))
+            .map((f) => ({ name: f.replace(/\.yaml$/, ''), raw: parse(fs.readFileSync(path.join(dir, f), 'utf8')) as unknown }));
+        },
       })
         .then((ready) => res.json(ready), (err: unknown) => res.status(500).json({ error: errorMessage(err) }))
         .finally(() => (training = false));

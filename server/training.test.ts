@@ -3,7 +3,7 @@ import type { QueuedGoal, ServerEvent, Snapshot } from '../shared/types';
 import type { AgentManager } from './agents/manager';
 import type { Hub } from './hub';
 import { Store } from './store';
-import { clearForTraining, startTraining, type TrainingShip } from './training';
+import { clearForTraining, sceneFor, type SceneFile, startTraining, type TrainingShip } from './training';
 
 function busyStore(): Store {
   const store = new Store(false);
@@ -17,7 +17,7 @@ function busyStore(): Store {
 }
 
 /** A ship whose crew go home when asked and whose steps are written down in order. */
-function ship(store: Store) {
+function ship(store: Store, scenes: SceneFile[] = []) {
   const steps: string[] = [];
   const sent: ServerEvent[] = [];
   store.agents.set('lead_1', { id: 'lead_1' } as never);
@@ -44,6 +44,7 @@ function ship(store: Store) {
     setScenario: (s) => steps.push(`scenario ${s}`),
     refreshBoards: () => (steps.push('boards'), Promise.resolve()),
     snapshot: () => Promise.resolve({ agents: [...store.agents.values()] } as unknown as Snapshot),
+    scenes: () => Promise.resolve(scenes),
   };
   return { training, steps, sent };
 }
@@ -72,5 +73,27 @@ describe('startTraining', () => {
   it('says so when the scenario’s project is missing', async () => {
     const store = new Store(false);
     await expect(startTraining('full', ship(store).training)).rejects.toThrow(/no project called Sock Shop/);
+  });
+
+  it('takes the goal from the scene that plays the scenario, and hands the scene back', async () => {
+    const store = busyStore();
+    const raw = { title: 'Ep', goal: 'Socks come in pairs', scenario: 'subagents', seed: 3, beats: [{ title: 'Go', caption: 'Go', do: 'start-goal' }] };
+    const { training, steps } = ship(store, [{ name: 'subagents', raw }]);
+    const ready = await startTraining('subagents', training);
+    expect(steps.at(-1)).toBe('queue Socks come in pairs');
+    expect(ready.scene).toEqual({ name: 'subagents', raw });
+  });
+});
+
+describe('sceneFor', () => {
+  const scene = (name: string, scenario?: string): SceneFile => ({ name, raw: { title: name, goal: 'G', scenario, beats: [{ title: 'B', caption: 'C' }] } });
+
+  it('finds the first scene, by name, that plays the scenario', () => {
+    expect(sceneFor('workflow', [scene('b', 'workflow'), scene('a', 'workflow'), scene('c', 'subagents')])?.name).toBe('a');
+  });
+
+  it('counts a scene without a scenario as the full story, and passes over one that doesn’t read', () => {
+    expect(sceneFor('full', [{ name: 'broken', raw: { title: 'x' } }, scene('plain')])?.name).toBe('plain');
+    expect(sceneFor('subagents', [scene('plain')])).toBeUndefined();
   });
 });

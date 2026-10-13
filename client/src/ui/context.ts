@@ -57,6 +57,8 @@ export interface Ui {
   openChart(leadId: string): void;
   /** The demo ship's training console: pick a scenario to reset the ship for. */
   openTraining(): void;
+  /** Directs live play through a scene script (its YAML, parsed): captions, shots and cues over `projectId`'s goal. */
+  direct(scene: unknown, projectId?: string): void;
   /** The turbolift's controls, for whichever stop you're at. */
   openTurbolift(): void;
   /** Takes the turbolift to `stop`. */

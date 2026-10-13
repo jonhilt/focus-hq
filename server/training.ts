@@ -2,6 +2,7 @@
 // readies a scenario's goal for the captain to start and play live.
 
 import { type Scenario, TRAINING, TRAINING_SEED } from '../shared/scenarios';
+import { readScene, type Scene } from '../shared/studio';
 import { freshClimb, type QueuedGoal, type Snapshot } from '../shared/types';
 import type { AgentManager } from './agents/manager';
 import type { Hub } from './hub';
@@ -19,6 +20,27 @@ export interface TrainingShip {
   setScenario: (scenario: Scenario) => void;
   refreshBoards: () => Promise<void>;
   snapshot: () => Promise<Snapshot>;
+  /** The scene scripts in scenes/, by file name, as parsed from their YAML. */
+  scenes: () => Promise<SceneFile[]>;
+}
+
+/** A scene script as it was read from scenes/: its name, and its YAML, parsed but not yet checked. */
+export interface SceneFile {
+  name: string;
+  raw: unknown;
+}
+
+/** The first scene that plays `scenario`, by file name, read and checked; scenes that don't read are passed over. */
+export function sceneFor(scenario: Scenario, files: SceneFile[]): { name: string; scene: Scene; raw: unknown } | undefined {
+  for (const file of [...files].sort((a, b) => a.name.localeCompare(b.name))) {
+    try {
+      const scene = readScene(file.raw);
+      if (scene.scenario === scenario) return { name: file.name, scene, raw: file.raw };
+    } catch {
+      // a scene that doesn't read is the recorder's to complain about
+    }
+  }
+  return undefined;
 }
 
 /** Clears what a run leaves behind once everyone's gone home: goals, the line for the stations, reviews and the log. */
@@ -36,21 +58,23 @@ export function clearForTraining(store: Store): void {
 
 /**
  * Sends everyone home, clears the ship, rolls the dice from the top and puts the scenario's goal in line at its
- * project's team stations: the goal, and where it waits.
+ * project's team stations: the goal, where it waits, and the scene that plays the scenario, if one does (its goal,
+ * project and seed stand in for the console's own, and the browser steps through its beats over live play).
  */
-export async function startTraining(scenario: Scenario, ship: TrainingShip): Promise<{ projectId: string; queued: QueuedGoal }> {
-  const training = TRAINING[scenario];
+export async function startTraining(scenario: Scenario, ship: TrainingShip): Promise<{ projectId: string; queued: QueuedGoal; scene?: { name: string; raw: unknown } }> {
+  const found = sceneFor(scenario, await ship.scenes());
+  const training = found ? found.scene : TRAINING[scenario];
   const project = ship.store.projects.find((p) => p.name === training.project);
   if (!project) throw new Error(`The demo office has no project called ${training.project}`);
   await Promise.all([...ship.store.agents.keys()].map((id) => ship.agents.dismiss(id)));
   // after they've gone: each goes home with a digest of their session in the ledger
   clearForTraining(ship.store);
   ship.resetGitHub();
-  seedRandom(TRAINING_SEED);
+  seedRandom(found?.scene.seed ?? TRAINING_SEED);
   ship.setScenario(scenario);
   await ship.refreshBoards();
   const queued = ship.agents.queueGoal(project.id, training.goal, { from: 'the training console' });
   // every browser starts over from the quiet ship, as it does on reconnecting
   ship.hub.send({ type: 'snapshot', snapshot: await ship.snapshot() });
-  return { projectId: project.id, queued };
+  return { projectId: project.id, queued, ...(found && { scene: { name: found.name, raw: found.raw } }) };
 }
