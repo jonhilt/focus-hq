@@ -19,7 +19,7 @@ export function openTrainingPanel(ui: Ui): void {
           const ready = await api.startTraining(scenario);
           ui.panels.close();
           // beamed to where the goal waits, with its steps for ] and [
-          ui.train(ready.projectId, ready.steps);
+          ui.train(ready.projectId, ready.steps, ready.speed);
         }, ui.error);
         return button;
       }),

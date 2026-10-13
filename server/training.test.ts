@@ -42,6 +42,7 @@ function ship(store: Store, scenes: SceneFile[] = []) {
     agents,
     resetGitHub: () => steps.push('github'),
     setScenario: (s) => steps.push(`scenario ${s}`),
+    setSpeed: (s) => steps.push(`speed ${s}`),
     refreshBoards: () => (steps.push('boards'), Promise.resolve()),
     snapshot: () => Promise.resolve({ agents: [...store.agents.values()] } as unknown as Snapshot),
     scenes: () => Promise.resolve(scenes),
@@ -64,9 +65,9 @@ describe('startTraining', () => {
     const store = busyStore();
     const { training, steps, sent } = ship(store);
     const ready = await startTraining('workflow', training);
-    expect(steps).toEqual(['home lead_1', 'github', 'scenario workflow', 'boards', 'queue Show how many of each sock are left in stock on the product page']);
+    expect(steps).toEqual(['home lead_1', 'github', 'scenario workflow', 'speed 0.5', 'boards', 'queue Show how many of each sock are left in stock on the product page']);
     expect(store.ledger).toEqual([]);
-    expect(ready).toMatchObject({ projectId: store.projects[0].id, queued: { id: 'q2' }, steps: [{ do: 'start-goal' }, { do: 'answer' }, { do: 'approve' }, { do: 'merge' }] });
+    expect(ready).toMatchObject({ projectId: store.projects[0].id, queued: { id: 'q2' }, steps: [{ do: 'start-goal' }, { do: 'answer' }, { do: 'approve' }, { do: 'merge' }], speed: 0.5 });
     expect(sent).toEqual([{ type: 'snapshot', snapshot: { agents: [] } }]);
   });
 
@@ -77,11 +78,13 @@ describe('startTraining', () => {
 
   it('takes the goal and the captain’s steps from the scene that plays the scenario', async () => {
     const store = busyStore();
-    const raw = { title: 'Ep', goal: 'Socks come in pairs', scenario: 'subagents', seed: 3, steps: ['start-goal', { reply: 'Go' }], beats: [{ title: 'Go', caption: 'Go', do: 'start-goal' }] };
+    const raw = { title: 'Ep', goal: 'Socks come in pairs', scenario: 'subagents', seed: 3, speed: 0.25, steps: ['start-goal', { reply: 'Go' }], beats: [{ title: 'Go', caption: 'Go', do: 'start-goal' }] };
     const { training, steps } = ship(store, [{ name: 'subagents', raw }]);
     const ready = await startTraining('subagents', training);
     expect(steps.at(-1)).toBe('queue Socks come in pairs');
     expect(ready.steps).toEqual([{ do: 'start-goal' }, { do: 'reply', say: 'Go' }]);
+    expect(ready.speed).toBe(0.25);
+    expect(steps).toContain('speed 0.25');
   });
 });
 

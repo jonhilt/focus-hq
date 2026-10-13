@@ -42,7 +42,9 @@ export const api = {
   startGoal: (projectId: string, text: string, how: { station?: number; effort?: Effort; from?: string } = {}) =>
     call<{ agent: Agent } | { queued: QueuedGoal }>('POST', `/projects/${projectId}/goals`, { text, ...how }),
   /** Demo only: resets the ship and readies `scenario`'s goal (the training console). */
-  startTraining: (scenario: Scenario) => call<{ projectId: string; queued: QueuedGoal; steps: TrainingStep[] }>('POST', '/demo/training', { scenario }),
+  startTraining: (scenario: Scenario) => call<{ projectId: string; queued: QueuedGoal; steps: TrainingStep[]; speed: number }>('POST', '/demo/training', { scenario }),
+  /** Demo only: how fast the pretend agents go (below 1 is slower than `pnpm run demo`). */
+  demoSpeed: (speed: number) => call<{ speed: number }>('POST', '/demo/speed', { speed }),
   startQueued: (projectId: string, queueId: string, edits: { text?: string; effort?: Effort; station?: number } = {}) =>
     call<Agent>('POST', `/projects/${projectId}/goals/queue/${queueId}/start`, edits),
   moveQueued: (projectId: string, queueId: string, by: -1 | 1) => call('POST', `/projects/${projectId}/goals/queue/${queueId}/move`, { by }),

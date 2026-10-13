@@ -1,3 +1,4 @@
+import { nextSpeed } from '../../../shared/scenarios';
 import { arrive, type StepAt, stepPill, stepTick, type TrainingStep } from '../../../shared/trainingSteps';
 import { ACTIVE_STATUSES, type Agent } from '../../../shared/types';
 import { api } from '../net/api';
@@ -26,6 +27,8 @@ export class TrainingSteps {
   /** What a move is waiting for, while it waits. */
   private waiting: string | null = null;
   private running = false;
+  /** How fast the demo's agents go, which `-` and `=` change as the captain plays. */
+  private speed = 1;
   private readonly pill = h('div', { class: 'training-steps' });
   private drawn = '';
 
@@ -33,22 +36,38 @@ export class TrainingSteps {
     document.body.append(this.pill);
   }
 
-  /** Starts a scenario's steps from the first, over `projectId`'s goal. */
-  start(projectId: string, steps: TrainingStep[]): void {
+  /** Starts a scenario's steps from the first, over `projectId`'s goal, at the demo's pace `speed`. */
+  start(projectId: string, steps: TrainingStep[], speed: number): void {
     this.projectId = projectId;
     this.steps = steps;
+    this.speed = speed;
     this.typing = null;
     this.at = arrive(steps, 0, this.lead());
     this.draw();
   }
 
-  /** `]` makes the next move and `[` steps back: whether it took the key. */
+  /** `]` makes the next move, `[` steps back, `-` and `=` slow the demo down and speed it up: whether it took the key. */
   key(code: string): boolean {
-    if (!this.steps.length || (code !== 'BracketRight' && code !== 'BracketLeft')) return false;
+    if (!this.steps.length) return false;
+    if (code === 'Minus' || code === 'Equal') {
+      void this.pace(code === 'Minus' ? -1 : 1);
+      return true;
+    }
+    if (code !== 'BracketRight' && code !== 'BracketLeft') return false;
     if (code === 'BracketRight') void this.next();
     else if (!this.running) this.at = arrive(this.steps, this.at.index - 1, this.lead());
     this.draw();
     return true;
+  }
+
+  /** Slows the demo's agents a step (`by` -1) or speeds them up (+1): from their next wait on. */
+  private async pace(by: 1 | -1): Promise<void> {
+    try {
+      this.speed = (await api.demoSpeed(nextSpeed(this.speed, by))).speed;
+    } catch (err) {
+      this.onError(err instanceof Error ? err.message : String(err));
+    }
+    this.draw();
   }
 
   /** Each frame: a move made (by `]` or by hand) moves the pill on. */
@@ -147,10 +166,11 @@ export class TrainingSteps {
     const { where, next } = stepPill(this.steps, this.at, lead);
     const text = this.typing === null ? next : `Tell the lead: “${this.typing}▌`;
     const keys = this.waiting ?? (this.running ? 'working…' : '] next · [ back');
-    const key = `${this.steps.length}|${where}|${text}|${keys}`;
+    const pace = `${this.speed}× · - slower · = faster`;
+    const key = `${this.steps.length}|${where}|${text}|${keys}|${pace}`;
     if (key === this.drawn) return;
     this.drawn = key;
     this.pill.classList.toggle('up', this.steps.length > 0);
-    this.pill.replaceChildren(h('b', null, where), text, h('span', { class: 'keys' }, keys));
+    this.pill.replaceChildren(h('b', null, where), text, h('span', { class: 'keys' }, keys), h('span', { class: 'keys' }, pace));
   }
 }

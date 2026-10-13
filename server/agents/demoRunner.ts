@@ -41,7 +41,8 @@ function placeholderShot(url: string, heading: string, caption: string, accent: 
 
 /** Pretend agents for `npm run demo`: realistic-looking terminal output, browser testing and the odd raised hand. */
 export class DemoRunner implements AgentRunner {
-  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
+  /** How fast the pretend agents go: the training console sets it, and changes it as the captain asks (docs/studio.md). */
+  speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
   /** How full each pretend session's context is. */
   private context = new Map<string, number>();
   /** Each lead's repos and goal, by session: a resumed turn doesn't hear them again. */

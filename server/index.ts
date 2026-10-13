@@ -26,7 +26,7 @@ import { Calls } from './call/calls';
 import { callKeys, config, paths } from './config';
 import { demoLayer, demoPush, demoReset } from './github/demo';
 import { startTraining } from './training';
-import { readScenario } from '../shared/scenarios';
+import { clampSpeed, readScenario } from '../shared/scenarios';
 import { ghCliLayer } from './github/ghCli';
 import { GitHub, toProvider } from './github/service';
 import { allowedHosts, listensBeyondLoopback, refusal } from './hostGuard';
@@ -183,6 +183,7 @@ async function main() {
         agents: office.agents,
         resetGitHub: () => demoReset?.(),
         setScenario: (s) => (demoRunner.scenario = s),
+        setSpeed: (s) => (demoRunner.speed = s),
         refreshBoards: () => office.refreshAll(),
         snapshot: () => office.snapshot(),
         // a scene script for the scenario brings its goal, seed and beats (scenes/*.yaml, bar shot plans and narrations)
@@ -200,6 +201,12 @@ async function main() {
         .finally(() => (training = false));
     });
   }
+  // and its pace, which the captain changes as they play (- and = in training)
+  if (demoRunner)
+    app.post('/api/demo/speed', express.json(), (req, res) => {
+      demoRunner.speed = clampSpeed((req.body as { speed?: unknown } | undefined)?.speed);
+      res.json({ speed: demoRunner.speed });
+    });
   app.use('/api', apiRouter(office, store));
   // the studio's holodeck stage plays a shot plan from scenes/ (docs/studio.md), parsed in the browser
   if (config.studio)

@@ -122,6 +122,9 @@ steps:
 - **]** makes the next move for you, as you would through its screen. A reply is typed out in the pill first, so it
   reads as typed on a recording. An answer or reply waits for the lead to finish its turn, as you would.
 - **[** steps back one, so **]** can make that move again: nothing's undone.
+- **-** and **=** slow the demo's agents down and speed them up (0.1× to 3×, `SPEEDS` in `shared/scenarios.ts`), from
+  their next wait on, so a workflow's away team beams in slowly enough to narrate over. A reset starts at the scene's
+  `speed` (0.5×, half `pnpm run demo`'s; `POST /api/demo/speed`), and the pill shows where it is.
 - A move you make by hand through a screen moves the pill on too (a reply leaves nothing to tell it by, so only **]**
   moves past one).
 

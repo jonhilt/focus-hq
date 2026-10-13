@@ -58,8 +58,8 @@ export interface Ui {
   openChart(leadId: string): void;
   /** The demo ship's training console: pick a scenario to reset the ship for. */
   openTraining(): void;
-  /** After the training console's reset: beams the captain to `projectId`'s team station 1, with `steps` for ] and [ to run. */
-  train(projectId: string, steps: TrainingStep[]): void;
+  /** After the training console's reset: beams the captain to `projectId`'s team station 1, with `steps` for ] and [ to run, at the demo's pace `speed`. */
+  train(projectId: string, steps: TrainingStep[], speed: number): void;
   /** The turbolift's controls, for whichever stop you're at. */
   openTurbolift(): void;
   /** Takes the turbolift to `stop`. */

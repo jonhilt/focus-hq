@@ -179,8 +179,8 @@ async function main() {
     openScreen: (leadId) => openScreenPanel(ui, leadId),
     openChart: (leadId) => openGoalChart(ui, leadId),
     openTraining: () => openTrainingPanel(ui),
-    train: (projectId, list) => {
-      steps.start(projectId, list);
+    train: (projectId, list, speed) => {
+      steps.start(projectId, list, speed);
       ui.beamBack(projectId, 0);
     },
     openTurbolift: () => {
