@@ -190,6 +190,7 @@ async function main() {
         scenes: async () => {
           const { parse } = await import('yaml');
           const dir = path.join(config.root, 'scenes');
+          if (!fs.existsSync(dir)) return [];
           return fs.readdirSync(dir)
             .filter((f) => /^[^.]+\.yaml$/.test(f))
             .map((f) => ({ name: f.replace(/\.yaml$/, ''), raw: parse(fs.readFileSync(path.join(dir, f), 'utf8')) as unknown }));

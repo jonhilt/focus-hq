@@ -40,11 +40,12 @@ export class LiveDirector {
     document.body.append(this.caption, this.status);
   }
 
-  /** Starts directing a scene from its first beat, over `projectId`'s goal. */
-  play(scene: Scene, projectId: string | undefined): void {
-    this.scene = scene;
+  /** Starts directing a scene from its first beat, over `projectId`'s goal; without one, stops directing. */
+  play(scene: Scene | undefined, projectId: string | undefined): void {
+    this.scene = scene ?? null;
     this.projectId = projectId;
     this.shown = true;
+    this.release();
     this.enter({ index: 0 });
   }
 

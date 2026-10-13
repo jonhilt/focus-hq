@@ -180,7 +180,7 @@ async function main() {
     openScreen: (leadId) => openScreenPanel(ui, leadId),
     openChart: (leadId) => openGoalChart(ui, leadId),
     openTraining: () => openTrainingPanel(ui),
-    direct: (scene, projectId) => director?.play(readScene(scene), projectId),
+    direct: (scene, projectId) => director?.play(scene === undefined ? undefined : readScene(scene), projectId),
     openTurbolift: () => {
       const stops = world.stops();
       openTurboliftPanel(ui, stops, stopAt(stops, camera.position));
