@@ -233,10 +233,10 @@ export class GoalSign extends Display {
     const w = rx - 30 - x;
     ctx.textAlign = 'left';
     ctx.font = `600 100px ${LCARS_FONT}`;
-    const title = lead ? (lead.lead?.title ?? lead.issue.title) : next ? 'Free' : `Team station ${index + 1}`;
+    const title = lead ? (lead.lead?.title ?? lead.issue.title) : next ? 'Next up' : `Team station ${index + 1}`;
     glowText(ctx, fitText(ctx, title.toUpperCase(), w), x, H / 2 - 32, TEXT, 10);
     ctx.font = `500 50px ${LCARS_FONT}`;
-    const sub = lead ? `${lead.name} · ${label}` : next ? `Next up: ${next}` : 'Free · start a goal here';
+    const sub = lead ? `${lead.name} · ${label}` : next ?? 'Free · start a goal here';
     glowText(ctx, fitText(ctx, sub.toUpperCase(), w), x, H / 2 + 50, color, 8);
   }
 }

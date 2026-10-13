@@ -30,14 +30,7 @@ export function pickStation(taken: number[], wanted?: number): number | undefine
   return undefined;
 }
 
-/** A goal's title from the captain's first words: their first line, cut at a word to about 60 characters. */
-export function goalTitle(text: string): string {
-  const line = text.split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).find(Boolean) ?? '';
-  const plain = line.replace(/[.!?:;,]+$/, '');
-  if (plain.length <= 60) return plain || 'A new goal';
-  const cut = plain.slice(0, 60);
-  return `${cut.slice(0, cut.lastIndexOf(' ') > 30 ? cut.lastIndexOf(' ') : 60).replace(/[\s.,;:]+$/, '')}…`;
-}
+export { goalTitle } from '../../shared/goalTitle';
 
 /** How much of the captain's first words on a goal it keeps, to hear again at each new slice. */
 export const BRIEF_LIMIT = 2000;

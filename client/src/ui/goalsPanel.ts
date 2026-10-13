@@ -1,5 +1,6 @@
 import { contextLevel, statusLine } from '../../../shared/agentStatus';
 import { UNIFORM } from '../../../shared/crew';
+import { goalTitle } from '../../../shared/goalTitle';
 import { type Agent, type GoalRecord, type QueuedGoal, TEAM_STATIONS } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
@@ -62,12 +63,16 @@ function queuedCard(ui: Ui, projectId: string, goal: QueuedGoal, place: number, 
   up.onclick = () => void busy(up, () => api.moveQueued(projectId, goal.id, -1), ui.error);
   down.onclick = () => void busy(down, () => api.moveQueued(projectId, goal.id, 1), ui.error);
   drop.onclick = () => void busy(drop, () => api.dropQueued(projectId, goal.id), ui.error);
-  const head = h('div', { class: 'row' },
-    h('strong', { class: 'grow' }, `${place === 0 ? 'Next up: ' : `${place + 1}. `}${goal.text.split('\n')[0]}`),
+  // titled as it will be once it starts, with the captain's words in full under it (a few lines, the rest on a click)
+  const title = goalTitle(goal.text);
+  const head = h('div', null,
+    h('div', { class: 'row' }, h('strong', { class: 'grow' }, `${place === 0 ? 'Next up: ' : `${place + 1}. `}${title}`), up, down, drop),
     h('small', { class: 'muted' }, `${goal.from ? `from ${goal.from} · ` : ''}${goal.effort ?? state.info?.settings.leadEffort ?? 'high'} effort · ${timeAgo(goal.at)}`),
-    up, down, drop,
   );
-  if (place !== 0 || !free) return h('div', { class: 'card goal-queued' }, head);
+  const words = goal.text.trim();
+  const brief = words !== title ? h('p', { class: 'goal-queued-text', title: 'Show it all, or fold it away' }, words) : null;
+  if (brief) brief.onclick = () => brief.classList.toggle('open');
+  if (place !== 0 || !free) return h('div', { class: 'card goal-queued' }, head, brief);
   // a station is free: the first goal in line starts with a press, as it stands or as the captain edits it
   const text = h('textarea', { class: 'planner-input', value: goal.text });
   const effort = leadEffortPicker(goal.effort ?? state.info?.settings.leadEffort);
@@ -132,10 +137,13 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
   const text = h('textarea', { class: 'planner-input', placeholder: 'What are we working on? e.g. shoppers can save items for later and find them again on any device' });
   const effort = leadEffortPicker(state.info?.settings.leadEffort);
   const start = h('button', { class: 'btn primary' }, 'Start the goal');
+  // with goals in line and a station free, a new one can still go ahead of them, at the first free station
+  const jump = h('button', { class: 'btn', title: 'Start it at the first free team station, ahead of the goals in line' }, 'Start it now');
   const intro = h('p', { style: 'margin-top:0' });
+  const hint = h('small', { class: 'muted' });
   const views: Record<GoalsView, HTMLElement> = {
     goals: h('div', null, list, queue),
-    new: h('div', null, free, intro, withMic(ui, text), h('div', { class: 'row', style: 'margin-top:8px' }, start, effort.el, h('small', { class: 'muted' }, 'Ctrl+Enter starts'))),
+    new: h('div', null, free, intro, withMic(ui, text), h('div', { class: 'row', style: 'margin-top:8px' }, start, jump, effort.el, hint)),
     log,
   };
 
@@ -147,9 +155,9 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
     if (view === 'new') text.focus();
   });
 
-  start.onclick = () =>
-    void busy(start, async () => {
-      const started = await api.startGoal(projectId, text.value, { effort: effort.picked(), station: here() });
+  const submit = (button: HTMLButtonElement, at: () => number | undefined) =>
+    void busy(button, async () => {
+      const started = await api.startGoal(projectId, text.value, { effort: effort.picked(), station: at() });
       text.value = '';
       if ('agent' in started) {
         ui.openAgent(started.agent.id);
@@ -158,6 +166,8 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
       picked = 'goals'; // it's waiting in line: show it there
       render();
     }, ui.error);
+  start.onclick = () => submit(start, here);
+  jump.onclick = () => submit(jump, firstFree);
   text.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) start.click();
   });
@@ -165,6 +175,10 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
   // the station the captain walked up to, while it's still free: a goal written there starts there, even with goals
   // waiting in line (those wait for the captain to start them, and the captain's chosen this station for this one)
   const here = () => (station !== undefined && !state.leadsIn(projectId).some((a) => a.lead?.station === station) ? station : undefined);
+  const firstFree = () => {
+    const taken = state.leadsIn(projectId).map((a) => a.lead?.station ?? 0);
+    return Array.from({ length: TEAM_STATIONS }, (_, i) => i).find((i) => !taken.includes(i));
+  };
 
   const render = () => {
     const p = state.project(projectId);
@@ -192,8 +206,12 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
     );
     intro.textContent = startsNow
       ? `A lead of its own takes a free team station, with ${p.repos.length === 1 ? p.repos[0] : `all ${p.repos.length} of ${p.name}'s repos`} checked out side by side: your own Claude Code session for the goal. Talk it through, then let them build it a slice at a time. Each slice ships as a pull request per repo it touches, QA reviews it, and you merge it.`
-      : 'Every team station has a goal, or goals are waiting for one: this one joins the line, and you start it once a station is free.';
+      : open > 0
+        ? `Goals are waiting in line, and ${open === 1 ? 'a team station is' : `${open} team stations are`} free: add this one to the end of the line, or start it now, ahead of them.`
+        : 'Every team station has a goal: this one joins the line, and you start it once a station is free.';
     start.textContent = startsNow ? 'Start the goal' : 'Add it to the line';
+    jump.hidden = startsNow || open <= 0;
+    hint.textContent = startsNow ? 'Ctrl+Enter starts' : 'Ctrl+Enter adds it to the line';
     fill(log, ...done.map((g) => recordRow(ui, projectId, g, open > 0)));
   };
   // back out to every goal on the ship, and whoever's waiting on you

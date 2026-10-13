@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { goalTitle } from '../../../shared/goalTitle';
 import { openQuestion } from '../../../shared/artifacts';
 import { helperFor, plannerFor, qaOfficerFor } from '../../../shared/crew';
 import { prKey } from '../../../shared/qa';
@@ -304,7 +305,8 @@ export class ProjectRoom {
   syncStations(): void {
     const leads = state.leadsIn(this.project.id);
     const reviewers = state.reviewersIn(this.project.id);
-    const next = this.project.goalQueue?.[0]?.text.split('\n')[0];
+    const queued = this.project.goalQueue?.[0];
+    const next = queued && goalTitle(queued.text);
     for (const station of this.stations) {
       const lead = leads.find((a) => (a.lead?.station ?? 0) === station.index);
       const n = station.index + 1;
