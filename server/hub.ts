@@ -1,4 +1,4 @@
-import type { Server } from 'node:http';
+import type { IncomingMessage, Server } from 'node:http';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { ServerEvent, Snapshot } from '../shared/types';
 
@@ -6,10 +6,16 @@ import type { ServerEvent, Snapshot } from '../shared/types';
 export class Hub {
   private wss: WebSocketServer | null = null;
 
-  attach(server: Server, snapshot: () => Promise<Snapshot>): void {
+  /** `refuse` says why a connection isn't let in (another site's page, say), or nothing to let it in. */
+  attach(server: Server, snapshot: () => Promise<Snapshot>, refuse: (req: IncomingMessage) => string | undefined = () => undefined): void {
     this.wss = new WebSocketServer({ noServer: true });
     server.on('upgrade', (req, socket, head) => {
       if (req.url !== '/ws') return; // leave other upgrades (Vite HMR) alone
+      const why = refuse(req);
+      if (why) {
+        console.warn(`Refused a connection to /ws: ${why}`);
+        return void socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
+      }
       this.wss!.handleUpgrade(req, socket, head, (ws) => this.wss!.emit('connection', ws, req));
     });
     this.wss.on('connection', (ws) => {

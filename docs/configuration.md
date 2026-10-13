@@ -2,7 +2,8 @@
 
 | Env var | Default | |
 | --- | --- | --- |
-| `PORT` / `HOST` | `4477` / `127.0.0.1` | where the office listens |
+| `PORT` / `HOST` | `4477` / `127.0.0.1` | where the office listens. Any other `HOST` than a loopback one puts the office, which has no login, in reach of anyone who can reach the port, and it says so as it starts |
+| `FOCUS_ALLOWED_HOSTS` | | more names a browser may reach the office by, comma-separated (`.example.com` for any name under it); see [who the office answers](#who-the-office-answers) |
 | `FOCUS_DATA_DIR` | `~/.focus` | state, agent logs, repo clones, worktrees and preview checkouts |
 | `FOCUS_MODE=demo` | | same as `--demo` |
 | `FOCUS_STUDIO=live` | | in the demo office, the studio's holodeck computer is a real Claude session, not scripted (`docs/studio.md`) |
@@ -20,6 +21,10 @@
 | `FOCUS_WHISPER_MODEL` | `~/.focus/models/ggml-large-v3-turbo-q5_0.bin` | the speech model for voice input |
 | `OPENAI_API_KEY` / `TYPESAFE_API_KEY` | | both needed for [calls to Number One](calls.md): gpt-live-1 and Jev |
 | `FOCUS_LIVE_VOICE` | `cedar` | gpt-live-1's voice on calls |
+
+## Who the office answers
+
+The office has no login, so it only answers your own browser. A request whose `Host` isn't one it knows is refused with a 403: that's another site's name pointed at your machine (DNS rebinding). So is one whose `Origin` isn't: that's another site's page, or a sandboxed one like a lead's artifact, trying to drive your agents. This applies to `/api`, the pages and the `/ws` socket. Requests with no `Origin` (scripts, `curl`) need only a known `Host`. The office knows `localhost`, `127.0.0.1`, `[::1]`, anything under `.ts.net` (the [Tricorder](tricorder.md) through Tailscale Serve), `HOST` itself (with `HOST=0.0.0.0`, the machine's name and addresses), and `FOCUS_ALLOWED_HOSTS`. Each refusal is logged with its reason. The check is `refusal` in `server/hostGuard.ts`.
 
 ## Merge method
 

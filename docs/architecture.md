@@ -8,6 +8,7 @@ shared/board.ts           a project's Kanban columns (to do, in progress, PRs), 
 shared/agentStatus.ts     how an agent's status reads (icon, one-line status)
 shared/tricorder.ts       what needs you (the Tricorder and Comms), which agents are in flight
 shared/ledger.ts          the ledger of how work went (QA verdicts, merges, conflicts, triage, goals, session digests): its line format, the check on load, and the report card
+shared/usage.ts           how main engineering reads out your plan's usage (rows, tones, sign-in), for the panel and the MSD
 shared/ledgerReview.ts    reviewing the ledger: each event as a line of the log, the window, and the trace of a pull request or a goal with its totals
 shared/scorecard.ts       how a scorecard reads wherever it's shown (each number's change, the overview's glance); scorecardAbout.ts says what each number means
 server/
@@ -17,9 +18,11 @@ server/
   office.ts               projects/rooms, Kanban boards (polling GitHub), auto-assign, settings
   store.ts                ~/.focus/state.json + per-agent terminal logs (jsonl) + the ledger (ledger.jsonl)
   ledgerLog.ts            the ledger's one writer: numbered lines flushed to disk, the lock file, repairs and damage on load
+  usage.ts                main engineering's plan usage: read from Claude Code's structured /usage every few minutes, with how the office signs in
   scorecards.ts           main engineering's scorecards: the latest saved ones (~/.focus/scorecards), and measuring another on the office's own checkout, one at a time (demoScorecards.ts: the demo's, made up and in memory)
   routes.ts               REST API used by the panels
   frameStats.ts           the frame-stats log: what a browser opened with ?stats=1 sends of how its 3D view ran, a file per page load in ~/.focus/frame-stats/
+  hostGuard.ts            who the office answers: known Host and Origin only (DNS rebinding, other sites' pages), for /api, pages and /ws
   hub.ts                  broadcasts ServerEvents to every browser tab
   previews.ts             Preview: check a PR out, run the project's preview commands, find its links, tear it down (Effect: one Scope per preview)
   previewMachine.ts       what a preview does to this machine (shell commands in their own process group, signals, probes) as an Effect service

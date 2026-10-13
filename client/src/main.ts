@@ -162,7 +162,11 @@ async function main() {
     openEngineering: () => openEngineeringPanel(ui),
     openLedger: (subject) => openLedgerPanel(ui, subject),
     showOnMsd: (what) => world.putOnMsd(
-      what === 'scorecard' ? { kind: 'scorecard', scorecards: state.scorecards } : what ? { kind: 'trace', trace: what } : { kind: 'report', card: state.report },
+      what === 'scorecard'
+        ? { kind: 'scorecard', scorecards: state.scorecards }
+        : what === 'usage'
+          ? { kind: 'usage', usage: state.usage }
+          : what ? { kind: 'trace', trace: what } : { kind: 'report', card: state.report },
     ),
     openComms: () => openCommsPanel(ui),
     openGoals: (projectId, station) => openGoalsPanel(ui, projectId, station),
@@ -359,6 +363,7 @@ async function main() {
   });
   state.on('retro', () => world.engineering?.showReport(state.report, state.retro));
   state.on('scorecards', () => world.showOnMsd({ kind: 'scorecard', scorecards: state.scorecards }));
+  state.on('usage', () => world.showOnMsd({ kind: 'usage', usage: state.usage }));
   let numberOneStatus = state.numberOne?.status;
   state.on('number-one', () => {
     world.numberOne?.sync();

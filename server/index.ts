@@ -27,6 +27,7 @@ import { callKeys, config, paths } from './config';
 import { demoLayer, demoPush } from './github/demo';
 import { ghCliLayer } from './github/ghCli';
 import { GitHub, toProvider } from './github/service';
+import { allowedHosts, listensBeyondLoopback, refusal } from './hostGuard';
 import { Hub } from './hub';
 import { Office } from './office';
 import { demoPreviewPage, Previews } from './previews';
@@ -34,6 +35,7 @@ import { apiRouter } from './routes';
 import { StateLockedError, Store } from './store';
 import { currentVersion, RESTART_MESSAGE, Updater } from './updater';
 import { errorMessage, run, seedRandom } from './util';
+import { demoPlanUsage, readPlanUsage, UsageWatch } from './usage';
 import { Voice } from './voice';
 
 /** How often orphaned agent workspaces are swept up, besides once at startup. */
@@ -75,7 +77,10 @@ async function main() {
   store.load();
 
   const hub = new Hub();
+  // main engineering's readout of your plan's usage (the demo's is made up)
+  const usage = new UsageWatch(hub, keyFallback, config.demo ? demoPlanUsage : () => readPlanUsage(config.dataDir));
   keyFallback.onChange = (onKey, spell) => {
+    usage.changed();
     if (onKey) hub.toast('info', `🔑 Your plan's usage limit is reached until ${clock(spell.until)}: agents carry on with your API key (up to $${keyFallback.budgetUsd})`);
     else if (spell.until > Date.now()) hub.toast('error', `🔑 Your API key has spent its $${keyFallback.budgetUsd}: agents wait for your plan's usage limit to reset at ${clock(spell.until)}`);
     else hub.toast('success', `🔑 Your plan's usage limit has reset: agents are back on it (the key spent about $${spell.spentUsd.toFixed(2)})`);
@@ -116,7 +121,7 @@ async function main() {
   }, callKeys, config.demo);
   // FOCUS_STUDIO=live: the real studio computer even in the demo office, to try it on a model without GitHub
   const studio = new StudioComputer(store, hub, config.demo && process.env.FOCUS_STUDIO !== 'live' ? new DemoStudio() : new ClaudeStudio());
-  const office = new Office(store, hub, github, previews, planner, numberOne, studio, engineer, scorecards, new Voice(hub, config.demo), calls, await currentVersion());
+  const office = new Office(store, hub, github, previews, planner, numberOne, studio, engineer, scorecards, usage, new Voice(hub, config.demo), calls, await currentVersion());
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
   // the climber works on the office's own repo (the demo has none, and climbs its first project's)
@@ -148,6 +153,15 @@ async function main() {
   }
 
   const app = express();
+  // the office has no login: it only answers the captain's own browser (server/hostGuard.ts)
+  const hosts = allowedHosts(config.host, process.env.FOCUS_ALLOWED_HOSTS);
+  const refuse = (req: http.IncomingMessage) => refusal({ host: req.headers.host, origin: req.headers.origin }, hosts);
+  app.use((req, res, next) => {
+    const why = refuse(req);
+    if (!why) return next();
+    console.warn(`Refused ${req.method} ${req.originalUrl}: ${why}`);
+    res.status(403).type('text').send(`${why}. Add it to FOCUS_ALLOWED_HOSTS if it's yours.`);
+  });
   app.use('/api', apiRouter(office, store));
   // the studio's holodeck stage plays a shot plan from scenes/ (docs/studio.md), parsed in the browser
   if (config.studio)
@@ -178,7 +192,7 @@ async function main() {
   // the Tricorder's page lives in a folder (client/tricorder/index.html), and its relative URLs need the slash
   app.get('/tricorder', (req, res, next) => (req.path.endsWith('/') ? next() : res.redirect(req.originalUrl.replace('/tricorder', '/tricorder/'))));
   const server = http.createServer(app);
-  hub.attach(server, () => office.snapshot());
+  hub.attach(server, () => office.snapshot(), refuse);
 
   if (config.dev) {
     const { createServer } = await import('vite');
@@ -207,10 +221,14 @@ async function main() {
     } else if (!config.demo && process.env.ANTHROPIC_API_KEY && keyFallback.mode === 'login') {
       console.log('      note: ANTHROPIC_API_KEY is set but agents ignore it and use your Claude login (set FOCUS_USE_API_KEY=1 to use the key, or =fallback to use it when your plan runs out).');
     }
+    if (listensBeyondLoopback(config.host)) {
+      console.log(`      ⚠ HOST=${config.host}: anyone who can reach this port can drive your agents, which act with your GitHub and Claude logins.`);
+    }
     console.log('');
   });
 
   await office.start();
+  usage.start();
   if (!config.demo) {
     const sweep = () =>
       git

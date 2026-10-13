@@ -84,6 +84,7 @@ Then on board:
 **Running the office**
 
 - [Configuration](docs/configuration.md): environment variables
+- [Your plan's usage](docs/usage.md): your plan's limits and what each agent signs in with, in main engineering
 - [Your API key when your plan runs out](docs/api-key.md): carrying on with `ANTHROPIC_API_KEY` while your plan's usage limit is reached
 - [Data and backups](docs/data.md): what lives in `~/.focus/` and what to back up
 - [The ledger](docs/ledger.md): the log of how work went, and the report card

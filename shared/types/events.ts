@@ -13,6 +13,7 @@ import type { Project, Settings } from './projects';
 import type { QaReview } from './qa';
 import type { Retro } from './retros';
 import type { Scorecards } from './scorecard';
+import type { Usage } from './usage';
 import type { VoiceStatus } from './voice';
 
 export interface ServerInfo {
@@ -47,6 +48,8 @@ export interface Snapshot {
   retro: Retro;
   /** The latest scorecards, for main engineering. */
   scorecards: Scorecards;
+  /** Your plan's usage and how the office signs in, for main engineering. */
+  usage: Usage;
   /** Main engineering's climber: the captain's switch and the climb under way. */
   climb: Climb;
 }
@@ -70,6 +73,7 @@ export type ServerEvent =
   | { type: 'report'; report: ReportCard }
   | { type: 'retro'; retro: Retro }
   | { type: 'scorecards'; scorecards: Scorecards }
+  | { type: 'usage'; usage: Usage }
   | { type: 'climb'; climb: Climb }
   | { type: 'voice'; voice: VoiceStatus }
   | { type: 'call'; call: CallState | null }

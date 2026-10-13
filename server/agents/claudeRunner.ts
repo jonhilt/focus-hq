@@ -224,6 +224,7 @@ export class ClaudeRunner implements AgentRunner {
 
     // a cloud session runs on your plan in the cloud, whatever this machine signs in with
     const onKey = !cloud && keyFallback.onKey();
+    hooks.signIn?.(onKey);
     // a local session's scratch dir for throwaway files, deleted when the run ends; a cloud session has its own machine
     const scratch = cloud ? undefined : openScratch(req.agentId, paths.dcgConfig);
     const env = { ...agentEnv(onKey), ...scratch?.env };

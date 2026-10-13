@@ -288,6 +288,8 @@ export interface Agent {
   sessionId?: string;
   pr?: { number: number; url: string };
   permission?: PermissionRequest;
+  /** The session signed in with your API key rather than your plan (a local session; a cloud one is always on the plan). */
+  onKey?: boolean;
   costUsd: number;
   startedAt: number;
   finishedAt?: number;

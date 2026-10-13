@@ -11,6 +11,7 @@ import { climberView } from './climberView';
 import { type NavItem, readout, shownView, SideNav } from './panels';
 import { scorecardHead, scorecardOverview, scorecardSections } from './scorecardView';
 import { markdownHtml } from './terminal';
+import { usageView } from './usageView';
 
 const KIND: Record<FixKind, string> = { check: 'Check', 'qa-rule': 'QA rule', pointer: 'Pointer', delete: 'Delete' };
 
@@ -20,7 +21,7 @@ type View = 'overview' | 'code' | 'office' | 'retro';
 const VIEW_OF: Record<ScorecardSection, View> = { gate: 'code', fence: 'code', effect: 'code', tests: 'code', office: 'office' };
 
 /**
- * The engineering station, a view at a time: the scorecard at a glance (with the climber and the retro beside it), the
+ * The engineering station, a view at a time: your plan's usage and the scorecard at a glance (with the climber and the retro beside it), the
  * code's numbers and the office's in full, each explaining itself, and the chief engineer's retro. On the captain's
  * word they look over the session digests' frictions that keep coming back and draft an issue for each. They change
  * nothing: the captain accepts a draft (it's filed in the repository picked beside it) or rejects it.
@@ -108,7 +109,7 @@ export function openEngineeringPanel(ui: Ui): void {
     const ledger = h('button', { class: 'btn small' }, 'Review the ledger →');
     ledger.onclick = () => ui.openLedger();
     const views: Record<View, () => HTMLElement[]> = {
-      overview: () => [scorecardOverview(ui, go, h('div', { class: 'sc-better' }, climberView(ui), retroSummary(ui, retro, () => {
+      overview: () => [usageView(ui), scorecardOverview(ui, go, h('div', { class: 'sc-better' }, climberView(ui), retroSummary(ui, retro, () => {
         picked = 'retro';
         render();
       })))],
@@ -123,6 +124,7 @@ export function openEngineeringPanel(ui: Ui): void {
   ui.panels.own(state.on('retro', render));
   ui.panels.own(state.on('report', render));
   ui.panels.own(state.on('scorecards', render));
+  ui.panels.own(state.on('usage', render));
   ui.panels.own(state.on('climb', render));
   // the climber's activity, as they work
   ui.panels.own(state.on('agent', (a) => {

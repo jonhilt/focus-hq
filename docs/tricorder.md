@@ -9,7 +9,7 @@ The office also serves a phone-sized page, the **Tricorder**, at `/tricorder`. I
 The office only listens on `127.0.0.1`, so reach it from your iPhone over [Tailscale](https://tailscale.com):
 
 1. Install Tailscale on the Mac and on the iPhone, and sign both in to the same tailnet.
-2. On the Mac, with the office running, run `tailscale serve --bg 4477`. This puts the office on your tailnet over HTTPS (`tailscale serve status` shows the address, `tailscale serve reset` takes it down).
+2. On the Mac, with the office running, run `tailscale serve --bg 4477`. This puts the office on your tailnet over HTTPS (the office answers names under `.ts.net`; another name needs `FOCUS_ALLOWED_HOSTS`, see [configuration](configuration.md#who-the-office-answers)) (`tailscale serve status` shows the address, `tailscale serve reset` takes it down).
 3. On the iPhone, open `https://<mac>.<tailnet>.ts.net/tricorder` in Safari, then **Share → Add to Home Screen**. It opens full screen from there, and reconnects when you come back to it.
 
 Anyone on your tailnet who can reach the Mac can control the office, and the office runs agents as you, with your GitHub credentials. The API has no login of its own: the tailnet is the only lock, so don't share the machine with people you wouldn't hand your laptop to.

@@ -1,7 +1,7 @@
 import { isHidden, shownProjects } from '../../../shared/hidden';
 import type { ReportCard } from '../../../shared/ledger';
 import { prKey } from '../../../shared/qa';
-import type { Agent, Board, BrowserFrame, CallStatus, Climb, IssueDraft, NumberOneChat, Preview, Project, QaReview, Retro, Scorecards, ServerEvent, ServerInfo, StudioSession, TermLine, VoiceStatus } from '../../../shared/types';
+import type { Agent, Board, BrowserFrame, CallStatus, Climb, IssueDraft, NumberOneChat, Preview, Project, QaReview, Retro, Scorecards, ServerEvent, ServerInfo, StudioSession, TermLine, Usage, VoiceStatus } from '../../../shared/types';
 
 type Events = {
   snapshot: void;
@@ -27,6 +27,8 @@ type Events = {
   retro: void;
   /** Main engineering's scorecards changed: one measured, or a measurement started or failed. */
   scorecards: void;
+  /** Your plan's usage was read again, or how the office signs in changed. */
+  usage: void;
   /** Main engineering's climber: the captain's switch, or the climb under way, changed. */
   climb: void;
   /** A QA review changed or went away (its project id). */
@@ -59,6 +61,7 @@ export class OfficeState {
   report: ReportCard | null = null;
   retro: Retro | null = null;
   scorecards: Scorecards | null = null;
+  usage: Usage | null = null;
   climb: Climb | null = null;
   /** The latest QA review per pull request (by prKey). */
   reviews = new Map<string, QaReview>();
@@ -128,12 +131,14 @@ export class OfficeState {
         this.report = s.report;
         this.retro = s.retro;
         this.scorecards = s.scorecards;
+        this.usage = s.usage;
         this.climb = s.climb;
         this.voice = s.voice;
         this.call = s.call;
         this.emit('snapshot', undefined);
         this.emit('report', undefined);
         this.emit('scorecards', undefined);
+        this.emit('usage', undefined);
         this.emit('climb', undefined);
         this.emit('voice', undefined);
         this.emit('call', undefined);
@@ -225,6 +230,10 @@ export class OfficeState {
       case 'scorecards':
         this.scorecards = event.scorecards;
         this.emit('scorecards', undefined);
+        break;
+      case 'usage':
+        this.usage = event.usage;
+        this.emit('usage', undefined);
         break;
       case 'climb':
         this.climb = event.climb;

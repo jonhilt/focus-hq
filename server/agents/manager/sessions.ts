@@ -194,6 +194,7 @@ export class AgentSessions extends Part {
         }
       },
       cost: (usd) => this.update(agent, { costUsd: usd }),
+      signIn: (onKey) => this.update(agent, { onKey }),
       permission: (tool, summary, signal) =>
         new Promise<boolean>((resolve) => {
           const req: PermissionRequest = { id: newId('ask'), tool, summary: truncate(summary, 300), at: Date.now() };

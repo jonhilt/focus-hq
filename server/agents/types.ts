@@ -51,6 +51,8 @@ export interface RunHooks {
   screenshot(frame: BrowserFrame): void;
   session(sessionId: string): void;
   cost(totalUsd: number): void;
+  /** The session signs in with your API key (true) or your plan (false), as it starts. */
+  signIn?(onKey: boolean): void;
   /** A subagent of the session started, got busy or finished. */
   helper?(event: HelperEvent): void;
   /** A script run from the scratch dir started or finished (the session's own, not a subagent's). */

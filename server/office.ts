@@ -13,6 +13,7 @@ import type { AgentManager } from './agents/manager';
 import type { Calls } from './call/calls';
 import type { ChiefEngineer } from './agents/engineer';
 import type { ScorecardDesk } from './scorecards';
+import type { UsageWatch } from './usage';
 import type { NumberOne } from './agents/numberOne';
 import type { StudioComputer } from './agents/studioComputer';
 import type { IssuePlanner } from './agents/planner';
@@ -55,6 +56,7 @@ export class Office {
     readonly studio: StudioComputer,
     readonly engineer: ChiefEngineer,
     readonly scorecards: ScorecardDesk,
+    readonly usage: UsageWatch,
     readonly voice: Voice,
     readonly calls: Calls,
     version: string,
@@ -100,6 +102,7 @@ export class Office {
       report: this.agents.report(),
       retro: this.engineer.current(),
       scorecards: this.scorecards.current(),
+      usage: this.usage.current(),
       climb: this.agents.climb(),
     };
   }
