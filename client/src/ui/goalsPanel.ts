@@ -162,8 +162,9 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) start.click();
   });
 
-  // the station the captain walked up to, while it's still free and no goal is waiting ahead of a new one
-  const here = () => (station !== undefined && !state.leadsIn(projectId).some((a) => a.lead?.station === station) && !state.project(projectId)?.goalQueue?.length ? station : undefined);
+  // the station the captain walked up to, while it's still free: a goal written there starts there, even with goals
+  // waiting in line (those wait for the captain to start them, and the captain's chosen this station for this one)
+  const here = () => (station !== undefined && !state.leadsIn(projectId).some((a) => a.lead?.station === station) ? station : undefined);
 
   const render = () => {
     const p = state.project(projectId);
@@ -172,7 +173,7 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
     const waiting = p.goalQueue ?? [];
     const done = p.goals ?? [];
     const open = TEAM_STATIONS - leads.length;
-    const startsNow = open > 0 && !waiting.length;
+    const startsNow = here() !== undefined || (open > 0 && !waiting.length);
     const items: NavItem<GoalsView>[] = [
       { key: 'goals', label: 'Under way', readout: `${leads.length}/${TEAM_STATIONS}${waiting.length ? ` +${waiting.length}` : ''}`, standby: !leads.length && !waiting.length },
       { key: 'new', label: 'New goal', readout: startsNow ? `${open} free` : 'Queue' },
