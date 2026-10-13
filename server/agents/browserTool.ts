@@ -167,7 +167,7 @@ export class BrowserPool {
       for (const at of moments) {
         await page.evaluate((t) => (window as { kitSeek?: (t: number) => void }).kitSeek?.(t), at);
         const shot = await page.screenshot({ type: 'jpeg', quality: 70, clip: { ...STAGE_AT, width: STAGE_SIZE.w, height: STAGE_SIZE.h } });
-        stage.push({ at, image: shot, ...(await page.evaluate(seeStage, shot.toString('base64'))) });
+        stage.push({ at, image: shot, flat: await page.evaluate(flatness, shot.toString('base64')), labels: await page.evaluate(stageLabels) });
       }
       return { image, errors, moments: stage };
     } finally {
@@ -188,10 +188,10 @@ export class BrowserPool {
 }
 
 /**
- * Runs in the page: what's on its stage, from a picture of it (as base64 JPEG). How much of it is its commonest colour
- * (counted in coarse steps, so a JPEG's noise doesn't split one colour into many), and the kit3d labels showing.
+ * Runs in the page: how much of a picture of its stage (as base64 JPEG) is its commonest colour, counted in coarse steps,
+ * so a JPEG's noise doesn't split one colour into many.
  */
-async function seeStage(jpeg: string): Promise<Omit<StageMoment, 'at'>> {
+async function flatness(jpeg: string): Promise<StageMoment['flat']> {
   const img = new Image();
   img.src = `data:image/jpeg;base64,${jpeg}`;
   await img.decode();
@@ -209,17 +209,20 @@ async function seeStage(jpeg: string): Promise<Omit<StageMoment, 'at'>> {
     counts.set(key, (counts.get(key) ?? 0) + 1);
     n++;
   }
-  const flat = Math.max(...counts.values()) / n;
+  return Math.max(...counts.values()) / n;
+}
+
+/** Runs in the page: the kit3d labels showing on its stage, where they are on it. */
+function stageLabels(): StageMoment['labels'] {
   const stage = document.getElementById('stage')?.getBoundingClientRect() ?? new DOMRect();
   const kit = (window as { __scene?: { labels: { text: string; onScreen: boolean }[] } }).__scene;
-  const labels = [...document.querySelectorAll<HTMLElement>('#stage .kit3d-label')]
+  return [...document.querySelectorAll<HTMLElement>('#stage .kit3d-label')]
     .filter((el) => el.style.display !== 'none' && Number(el.style.opacity || 1) > 0)
     .map((el) => {
       const r = el.getBoundingClientRect();
       const text = el.textContent ?? '';
       return { text, x: r.left - stage.left, y: r.top - stage.top, w: r.width, h: r.height, onScreen: kit?.labels.find((l) => l.text === text)?.onScreen ?? true };
     });
-  return { flat, labels };
 }
 
 /**
