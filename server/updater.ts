@@ -21,6 +21,20 @@ export async function currentVersion(): Promise<string> {
 }
 
 /**
+ * Why the checkout can't be fast-forwarded to its upstream, and what to do about it, or null when it can. `ahead` and
+ * `behind` count commits against the upstream; `dirty` is uncommitted changes to tracked files.
+ */
+export function updateBlocked(s: { ahead: number; behind: number; dirty: boolean; upstream: string }): string | null {
+  const commits = (n: number) => `${n} commit${n === 1 ? '' : 's'}`;
+  if (s.ahead > 0) {
+    return `Auto update skipped: this checkout has ${commits(s.ahead)} that ${s.upstream} doesn't (and is ${commits(s.behind)} behind it), so it can't fast-forward. ` +
+      `Push them or rebase them onto ${s.upstream} (git pull --rebase), and the next check updates it.`;
+  }
+  if (s.dirty) return `Auto update skipped: this checkout has uncommitted changes. Commit or stash them, and the next check updates it to ${s.upstream}.`;
+  return null;
+}
+
+/**
  * Keeps a running office on the latest code: when the Focus checkout's upstream branch (usually origin/main) moves,
  * fast-forward to it, reinstall and rebuild as needed, and restart. Waits until no agent is busy, because a restart
  * interrupts every running Claude session.
@@ -29,6 +43,7 @@ export class Updater {
   private checking = false;
   private waitingToldAt: string | null = null;
   private missingToldAt: string | null = null;
+  private skippedToldAt: string | null = null;
 
   constructor(
     private readonly store: Store,
@@ -66,9 +81,16 @@ export class Updater {
     if (behind === 0) return;
 
     const ahead = Number(await git(['rev-list', '--count', `${target}..HEAD`]));
-    if (ahead > 0) return console.warn('  ⚠ Auto update skipped: this checkout has local commits, so it cannot fast-forward');
-    if (await git(['status', '--porcelain', '--untracked-files=no'])) {
-      return console.warn('  ⚠ Auto update skipped: this checkout has uncommitted changes');
+    const dirty = ahead === 0 && (await git(['status', '--porcelain', '--untracked-files=no'])) !== '';
+    const upstream = await git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']).catch(() => 'its upstream');
+    const skipped = updateBlocked({ ahead, behind, dirty, upstream });
+    if (skipped) {
+      // Once per upstream commit rather than every check: the checkout stays as it is until the captain sorts it out.
+      if (this.skippedToldAt === target) return;
+      this.skippedToldAt = target;
+      console.warn(`  ⚠ ${skipped}`);
+      this.hub.toast('info', skipped);
+      return;
     }
 
     const busy = [...this.store.agents.values()].filter((a) => a.status === 'queued' || ACTIVE_STATUSES.includes(a.status));
