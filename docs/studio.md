@@ -103,23 +103,30 @@ studio films from (`server/training.ts`, `POST /api/demo/training`):
 3. the demo runner takes the scenario for the next goal, whose goal (`TRAINING` in `shared/scenarios.ts`) waits in line
    at Sock Shop's team stations, and every browser starts over from a fresh snapshot.
 
-Then you play it: walk to a free team station in Sock Shop's holodeck, **E**, **Start it**, and answer the lead.
-
 When a scene in `scenes/` plays the scenario (its `scenario:`, or none for `full`; the first by file name), its goal,
-project and seed stand in for the console's own (`sceneFor` in `server/training.ts`), and the director takes you
-through its beats over live play (`client/src/ui/liveDirector.ts`, its decisions in `shared/liveDirector.ts`):
+project, seed and steps stand in for the console's own (`sceneFor` in `server/training.ts`).
 
-- Each beat's caption goes up as the recorder would film it, with where you are in the scene top right.
-- Its shot takes the camera (a cut through a blackout, or a glide) and holds it there until you walk; the mouse still
-  looks round. A station's shots wait for its lead to sit down. The frames are the recorder's (`ui/shots.ts`).
-- A beat the recorder would act out says what you do instead: start the goal, answer the lead, or what to tell it.
-  While the lead waits on your permission (to ship, say), which the recorder grants as it's asked, it says to approve
-  it. An explainer insert says it's a cut-away in the film.
-- A beat with a cue (`until`) moves on by itself once the cue has come and its hold is up; one without waits for you.
-  **]** moves on and **[** goes back any time; **O** hides the captions and stops the camera moves, while the beats
-  keep counting by their cues.
+Then you're beamed to Sock Shop's team station 1, where the goal waits, and you play it, walking wherever you like. A
+pill over the bottom of the screen says which of your moves comes next, from the scene's `steps:`
+(`shared/trainingSteps.ts`, `ui/trainingSteps.ts`):
 
-The director lives in the page: reloading it, or picking another scenario, starts over.
+```yaml
+steps:
+  - start-goal            # starts the waiting goal at team station 1
+  - answer                # takes the first option of the lead's question
+  - approve               # grants what the lead asks permission for (to ship, say)
+  - merge                 # merges the slice's pull requests
+  - reply: Go ahead with the next slice, and run a workflow to review it before you ship
+```
+
+- **]** makes the next move for you, as you would through its screen. A reply is typed out in the pill first, so it
+  reads as typed on a recording. An answer or reply waits for the lead to finish its turn, as you would.
+- **[** steps back one, so **]** can make that move again: nothing's undone.
+- A move you make by hand through a screen moves the pill on too (a reply leaves nothing to tell it by, so only **]**
+  moves past one).
+
+A scene without `steps:` gets start the goal, answer, approve, merge. The steps live in the page: reloading it, or
+picking another scenario, starts over.
 
 ## The holodeck stage
 

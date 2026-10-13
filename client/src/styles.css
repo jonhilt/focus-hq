@@ -821,13 +821,15 @@ body.studio .hud, body.studio .toasts { display: none; }
 .studio-caption.up { opacity: 1; transform: none; }
 .studio-title { color: var(--lcars-gold); font-size: 28px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
 .studio-text { color: var(--text); font-size: 38px; line-height: 1.2; margin-top: 4px; }
-/* the director over live play (ui/liveDirector.ts): the studio's caption, what the captain does, and where it is */
-.live-move { margin-top: 10px; display: inline-block; padding: 6px 18px; border-radius: 999px; background: var(--lcars-gold); color: var(--ink); font-size: 22px; font-weight: 600; }
-.live-status {
-  position: fixed; right: 2vw; top: 10vh; z-index: 5; padding: 6px 14px; border-radius: 8px; background: #000b;
-  color: var(--lcars-gold); font-family: var(--ui); font-size: 16px; opacity: 0; transition: opacity 0.5s ease;
+/* the training console's steps (ui/trainingSteps.ts): where you are, and what ] does next */
+.training-steps {
+  position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); z-index: 5; padding: 8px 20px; border-radius: 999px;
+  background: #000c; border-left: 14px solid var(--lcars-gold); color: var(--text); font-family: var(--ui); font-size: 18px;
+  white-space: nowrap; display: none;
 }
-.live-status.up { opacity: 1; }
+.training-steps.up { display: block; }
+.training-steps b { color: var(--lcars-gold); font-weight: 600; margin-right: 10px; }
+.training-steps .keys { color: var(--muted); margin-left: 14px; font-size: 15px; }
 .studio-tags { position: fixed; inset: 0; z-index: 4; pointer-events: none; }
 .studio-tag {
   position: absolute; left: 0; top: 0; white-space: nowrap; padding: 6px 16px; border-radius: 999px;

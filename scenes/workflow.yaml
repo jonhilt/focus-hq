@@ -8,6 +8,12 @@ project: Sock Shop
 goal: Show how many of each sock are left in stock on the product page
 # the lead's story with workflows but no helpers, explainer or background jobs (shared/scenarios.ts)
 scenario: workflow
+# the captain's moves when the training console plays it live: ] makes the next, [ steps back (shared/trainingSteps.ts)
+steps:
+  - start-goal
+  - answer
+  - approve
+  - merge
 
 beats:
   - title: Cold open

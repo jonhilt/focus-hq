@@ -2,6 +2,7 @@ import type { Trace, TraceSubject } from '../../../shared/ledgerReview';
 import type { AgentView } from './agentPanel';
 import type { Place } from '../world/office';
 import type { Hud } from './hud';
+import type { TrainingStep } from '../../../shared/trainingSteps';
 import type { Panels } from './panels';
 
 export type ManagerTab = 'projects' | 'new-project' | 'issue' | 'settings';
@@ -57,8 +58,8 @@ export interface Ui {
   openChart(leadId: string): void;
   /** The demo ship's training console: pick a scenario to reset the ship for. */
   openTraining(): void;
-  /** Directs live play through a scene script (its YAML, parsed): captions, shots and cues over `projectId`'s goal; without one, stops. */
-  direct(scene: unknown, projectId?: string): void;
+  /** After the training console's reset: beams the captain to `projectId`'s team station 1, with `steps` for ] and [ to run. */
+  train(projectId: string, steps: TrainingStep[]): void;
   /** The turbolift's controls, for whichever stop you're at. */
   openTurbolift(): void;
   /** Takes the turbolift to `stop`. */

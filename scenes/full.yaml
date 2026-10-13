@@ -8,6 +8,12 @@ project: Sock Shop
 goal: Shoppers can save items for later and find them again on any device
 # the lead's whole story: the explainer, helpers, background jobs and workflows (shared/scenarios.ts)
 scenario: full
+# the captain's moves when the training console plays it live: ] makes the next, [ steps back (shared/trainingSteps.ts)
+steps:
+  - start-goal
+  - answer
+  - approve
+  - merge
 
 beats:
   - title: Cold open

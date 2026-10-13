@@ -15,8 +15,7 @@ import type { Ui } from './ui/context';
 import { h } from './ui/dom';
 import { Hud } from './ui/hud';
 import { Studio } from './ui/studio';
-import { LiveDirector } from './ui/liveDirector';
-import { readScene } from '../../shared/studio';
+import { TrainingSteps } from './ui/trainingSteps';
 import { openManagerPanel } from './ui/managerPanel';
 import { openGoalsPanel } from './ui/goalsPanel';
 import { linkAction, openCommsPanel } from './ui/commsPanel';
@@ -120,8 +119,8 @@ async function main() {
   const panels = new Panels();
   // ?studio=1: the TV studio's recorder films the office (ui/studio.ts, docs/studio.md)
   const studio = params.get('studio') === '1' ? new Studio(world, player, hud, params.get('stage')) : null;
-  // the director over live play, once the training console hands it a scene (ui/liveDirector.ts)
-  const director = studio ? null : new LiveDirector(world, player, hud);
+  // the training console's steps: ] does the captain's next move, [ steps back (ui/trainingSteps.ts)
+  const steps = new TrainingSteps((message) => ui.error(message));
 
   // ---------------------------------------------------------------- ui wiring
   const ui: Ui = {
@@ -180,7 +179,10 @@ async function main() {
     openScreen: (leadId) => openScreenPanel(ui, leadId),
     openChart: (leadId) => openGoalChart(ui, leadId),
     openTraining: () => openTrainingPanel(ui),
-    direct: (scene, projectId) => director?.play(scene === undefined ? undefined : readScene(scene), projectId),
+    train: (projectId, list) => {
+      steps.start(projectId, list);
+      ui.beamBack(projectId, 0);
+    },
     openTurbolift: () => {
       const stops = world.stops();
       openTurboliftPanel(ui, stops, stopAt(stops, camera.position));
@@ -552,7 +554,7 @@ async function main() {
   window.addEventListener('keydown', (e) => {
     if (!started || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
     if (panels.isOpen) return;
-    if (director?.key(e.code)) return;
+    if (steps.key(e.code)) return;
     const hotkeys: Record<string, (() => void) | undefined> = {
       KeyE: interact,
       KeyT: () => ui.openTeleport(),
@@ -628,9 +630,8 @@ async function main() {
     // the studio holds the camera where its shot puts it
     if (studio) studio.update(now);
     else {
-      // the live director holds the camera where its shot put it, until the captain walks
-      director?.update(now);
-      if (!director?.holding) player.update(dt);
+      steps.update();
+      player.update(dt);
     }
     const through = world.through(camera.position);
     if (through) player.transport(through.through, through.other.doorway.matrix);

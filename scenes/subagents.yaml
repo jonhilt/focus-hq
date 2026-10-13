@@ -7,6 +7,16 @@ project: Sock Shop
 goal: Shoppers can save items for later and find them again on any device
 # the lead's story with helpers but no workflows, explainer or background jobs (shared/scenarios.ts)
 scenario: subagents
+# the captain's moves when the training console plays it live: ] makes the next, [ steps back (shared/trainingSteps.ts)
+steps:
+  - start-goal
+  - answer
+  - approve
+  - merge
+  # the next slice, with a workflow the captain asks for in their own words, as real Claude Code needs
+  - reply: Go ahead with the next slice, and run a workflow to review it before you ship
+  - approve
+  - merge
 
 beats:
   - title: Cold open

@@ -14,9 +14,8 @@ export interface Framing {
 }
 
 /**
- * Where a shot puts the camera (eye) and what it looks at, in the world: the studio's recorder and the director over
- * live play (liveDirector.ts) frame the same shots, of `lead` and its team station; the holodeck's is `projectId`'s, which
- * live play knows before the goal has a lead.
+ * Where the studio's recorder puts the camera (eye) for a shot, and what it looks at, in the world: shots of `lead` and
+ * its team station, and the holodeck of `projectId` (the lead's, by default).
  */
 export function frameShot(world: World, name: Shot, lead: Agent | undefined, projectId = lead?.projectId): Framing | null {
   const places = world.places();

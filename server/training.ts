@@ -3,6 +3,7 @@
 
 import { type Scenario, TRAINING, TRAINING_SEED } from '../shared/scenarios';
 import { readScene, type Scene } from '../shared/studio';
+import { DEFAULT_STEPS, type TrainingStep } from '../shared/trainingSteps';
 import { freshClimb, type QueuedGoal, type Snapshot } from '../shared/types';
 import type { AgentManager } from './agents/manager';
 import type { Hub } from './hub';
@@ -31,11 +32,11 @@ export interface SceneFile {
 }
 
 /** The first scene that plays `scenario`, by file name, read and checked; scenes that don't read are passed over. */
-export function sceneFor(scenario: Scenario, files: SceneFile[]): { name: string; scene: Scene; raw: unknown } | undefined {
+export function sceneFor(scenario: Scenario, files: SceneFile[]): { name: string; scene: Scene } | undefined {
   for (const file of [...files].sort((a, b) => a.name.localeCompare(b.name))) {
     try {
       const scene = readScene(file.raw);
-      if (scene.scenario === scenario) return { name: file.name, scene, raw: file.raw };
+      if (scene.scenario === scenario) return { name: file.name, scene };
     } catch {
       // a scene that doesn't read is the recorder's to complain about
     }
@@ -58,10 +59,10 @@ export function clearForTraining(store: Store): void {
 
 /**
  * Sends everyone home, clears the ship, rolls the dice from the top and puts the scenario's goal in line at its
- * project's team stations: the goal, where it waits, and the scene that plays the scenario, if one does (its goal,
- * project and seed stand in for the console's own, and the browser steps through its beats over live play).
+ * project's team stations: the goal, where it waits, and the captain's moves for `]` to make. A scene that plays the
+ * scenario brings its goal, project, seed and steps in place of the console's own.
  */
-export async function startTraining(scenario: Scenario, ship: TrainingShip): Promise<{ projectId: string; queued: QueuedGoal; scene?: { name: string; raw: unknown } }> {
+export async function startTraining(scenario: Scenario, ship: TrainingShip): Promise<{ projectId: string; queued: QueuedGoal; steps: TrainingStep[] }> {
   const found = sceneFor(scenario, await ship.scenes());
   const training = found ? found.scene : TRAINING[scenario];
   const project = ship.store.projects.find((p) => p.name === training.project);
@@ -76,5 +77,5 @@ export async function startTraining(scenario: Scenario, ship: TrainingShip): Pro
   const queued = ship.agents.queueGoal(project.id, training.goal, { from: 'the training console' });
   // every browser starts over from the quiet ship, as it does on reconnecting
   ship.hub.send({ type: 'snapshot', snapshot: await ship.snapshot() });
-  return { projectId: project.id, queued, ...(found && { scene: { name: found.name, raw: found.raw } }) };
+  return { projectId: project.id, queued, steps: found?.scene.steps ?? DEFAULT_STEPS };
 }

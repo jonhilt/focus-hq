@@ -18,8 +18,8 @@ export function openTrainingPanel(ui: Ui): void {
         button.onclick = () => void busy(button, async () => {
           const ready = await api.startTraining(scenario);
           ui.panels.close();
-          // a scenario without a scene stops whatever scene was being directed: the ship it ran over is gone
-          ui.direct(ready.scene?.raw, ready.projectId);
+          // beamed to where the goal waits, with its steps for ] and [
+          ui.train(ready.projectId, ready.steps);
         }, ui.error);
         return button;
       }),

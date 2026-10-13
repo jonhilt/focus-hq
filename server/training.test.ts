@@ -66,7 +66,7 @@ describe('startTraining', () => {
     const ready = await startTraining('workflow', training);
     expect(steps).toEqual(['home lead_1', 'github', 'scenario workflow', 'boards', 'queue Show how many of each sock are left in stock on the product page']);
     expect(store.ledger).toEqual([]);
-    expect(ready).toMatchObject({ projectId: store.projects[0].id, queued: { id: 'q2' } });
+    expect(ready).toMatchObject({ projectId: store.projects[0].id, queued: { id: 'q2' }, steps: [{ do: 'start-goal' }, { do: 'answer' }, { do: 'approve' }, { do: 'merge' }] });
     expect(sent).toEqual([{ type: 'snapshot', snapshot: { agents: [] } }]);
   });
 
@@ -75,13 +75,13 @@ describe('startTraining', () => {
     await expect(startTraining('full', ship(store).training)).rejects.toThrow(/no project called Sock Shop/);
   });
 
-  it('takes the goal from the scene that plays the scenario, and hands the scene back', async () => {
+  it('takes the goal and the captain’s steps from the scene that plays the scenario', async () => {
     const store = busyStore();
-    const raw = { title: 'Ep', goal: 'Socks come in pairs', scenario: 'subagents', seed: 3, beats: [{ title: 'Go', caption: 'Go', do: 'start-goal' }] };
+    const raw = { title: 'Ep', goal: 'Socks come in pairs', scenario: 'subagents', seed: 3, steps: ['start-goal', { reply: 'Go' }], beats: [{ title: 'Go', caption: 'Go', do: 'start-goal' }] };
     const { training, steps } = ship(store, [{ name: 'subagents', raw }]);
     const ready = await startTraining('subagents', training);
     expect(steps.at(-1)).toBe('queue Socks come in pairs');
-    expect(ready.scene).toEqual({ name: 'subagents', raw });
+    expect(ready.steps).toEqual([{ do: 'start-goal' }, { do: 'reply', say: 'Go' }]);
   });
 });
 

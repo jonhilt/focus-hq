@@ -2,6 +2,7 @@
 // its beat sheet. Pure, so it's testable and shared by the recorder (scripts/studio.ts) and the browser's director.
 
 import { readScenario, type Scenario } from './scenarios';
+import { readSteps, type TrainingStep } from './trainingSteps';
 import { ACTIVE_STATUSES, type Agent, type Helper } from './types';
 
 /** Where the camera looks, by name: the director (client/src/ui/studio.ts) works out where that is. */
@@ -50,6 +51,8 @@ export interface Scene {
   goal: string;
   /** Which parts of the demo lead's story the goal plays (shared/scenarios.ts): `full` without one. */
   scenario: Scenario;
+  /** The captain's moves when the training console plays it live, which `]` makes one at a time (shared/trainingSteps.ts). */
+  steps: TrainingStep[];
   beats: SceneBeat[];
   explainer?: SceneExplainer;
 }
@@ -103,6 +106,7 @@ export function readScene(raw: unknown): Scene {
     project: typeof s.project === 'string' ? s.project : 'Sock Shop',
     goal: text(s.goal, 'The goal'),
     scenario: readScenario(s.scenario),
+    steps: readSteps(s.steps),
     beats,
     explainer: s.explainer as SceneExplainer | undefined,
   };
