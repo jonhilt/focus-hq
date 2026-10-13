@@ -2,12 +2,14 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { paths } from '../config';
 import { checkoutPullRequest, cherryPick, createWorktree, freshBranch, head, installDependencies, removeFolder, reopenWorktree, removeWorktree, unshippedCommits } from './workspace';
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-workspace-'));
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
+// each test runs a few dozen git commands: a couple of seconds alone, but well past vitest's 5 s on a busy machine
+vi.setConfig({ testTimeout: 30_000 });
 
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 

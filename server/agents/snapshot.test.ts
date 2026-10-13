@@ -2,12 +2,14 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // a data folder of its own, set before the workspace module reads the config
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-snapshot-'));
 process.env.FOCUS_DATA_DIR = path.join(tmp, 'data');
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
+// each test runs a few dozen git commands: a couple of seconds alone, but well past vitest's 5 s on a busy machine
+vi.setConfig({ testTimeout: 30_000 });
 
 let ws: typeof import('./workspace');
 beforeAll(async () => {

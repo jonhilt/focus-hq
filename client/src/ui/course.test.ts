@@ -96,10 +96,12 @@ describe('the course', () => {
       for (const scale of [1, 1.5]) {
         const plot = plotCourse({ waypoints, current: n, next, contacts, seed: `lead_${v}` }, scale);
         const labels = labelsOf(plot);
-        for (const [i, a] of labels.entries()) {
-          expect(inside({ x: a.x0, y: a.y0 }) && inside({ x: a.x1, y: a.y1 }), `voyage ${v} at ${scale}: a label runs off the chart`).toBe(true);
-          for (const b of [...labels.slice(i + 1), ...marksOf(plot)]) expect(overlaps(a, b), `voyage ${v} at ${scale}: ${JSON.stringify([a, b])}`).toBe(false);
-        }
+        const marks = marksOf(plot);
+        // gathered and checked once a voyage: an expect (and its message) per pair is most of this test's time
+        const offChart = labels.filter((a) => !(inside({ x: a.x0, y: a.y0 }) && inside({ x: a.x1, y: a.y1 })));
+        const clashes = labels.flatMap((a, i) => [...labels.slice(i + 1), ...marks].filter((b) => overlaps(a, b)).map((b) => [a, b]));
+        expect(offChart, `voyage ${v} at ${scale}: labels run off the chart`).toEqual([]);
+        expect(clashes, `voyage ${v} at ${scale}: labels cover something`).toEqual([]);
         // whatever else goes without, the waypoint under way is always named
         expect(plot.points.at(-1)!.label).toBeDefined();
       }
