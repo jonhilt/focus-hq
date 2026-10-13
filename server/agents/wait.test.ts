@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { WAIT_BIN, WAIT_RULE, withWaitHelper } from './wait';
+import { sessionEnv, WAIT_BIN, WAIT_RULE, withWaitHelper } from './wait';
 
 interface Result { code: number; stdout: string; stderr: string }
 
@@ -59,6 +59,11 @@ describe('withWaitHelper', () => {
   it('puts the office’s bin first on the PATH, and keeps the rest', () => {
     expect(withWaitHelper({ PATH: '/usr/bin', HOME: '/h' })).toEqual({ PATH: `${WAIT_BIN}${path.delimiter}/usr/bin`, HOME: '/h' });
     expect(withWaitHelper({}).PATH).toBe(WAIT_BIN);
+  });
+
+  it('gives a local session its scratch dir and the helper, and a cloud session neither', () => {
+    expect(sessionEnv({ PATH: '/usr/bin' }, { FOCUS_SCRATCH: '/tmp/s' })).toEqual({ PATH: `${WAIT_BIN}${path.delimiter}/usr/bin`, FOCUS_SCRATCH: '/tmp/s' });
+    expect(sessionEnv({ PATH: '/usr/bin' })).toEqual({ PATH: '/usr/bin' });
   });
 
   it('tells sessions to wait with it rather than sleep', () => {

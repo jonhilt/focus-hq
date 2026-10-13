@@ -13,6 +13,14 @@ export function withWaitHelper(env: Record<string, string | undefined>, bin = WA
   return { ...env, PATH: env.PATH ? `${bin}${path.delimiter}${env.PATH}` : bin };
 }
 
+/**
+ * A session's environment: a local session's (one with a scratch dir) gets its scratch dir's variables and the office's
+ * helpers on its PATH; a cloud session works on a machine of its own, so it gets neither.
+ */
+export function sessionEnv(env: Record<string, string | undefined>, scratchEnv?: Record<string, string>): Record<string, string | undefined> {
+  return scratchEnv ? withWaitHelper({ ...env, ...scratchEnv }) : env;
+}
+
 /** What every local session is told about waiting (the developers', QA's and the leads' prompts). */
 export const WAIT_RULE =
   'To wait for something (a server to answer, a build to finish, a line in a log), don\'t write `sleep N; <check>`: Claude Code refuses a foreground sleep. ' +
