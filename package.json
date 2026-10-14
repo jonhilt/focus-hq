@@ -26,7 +26,8 @@
     "crap": "tsx scripts/crap.ts",
     "scorecard": "tsx scripts/scorecard.ts",
     "climb:replay": "tsx scripts/climbReplay.ts",
-    "flow": "tsx scripts/flow.ts"
+    "flow": "tsx scripts/flow.ts",
+    "qa-catch": "tsx scripts/qaCatch.ts"
   },
   "engines": {
     "node": ">=20"

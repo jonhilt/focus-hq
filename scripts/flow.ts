@@ -13,6 +13,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { paths } from '../server/config';
 import { flowLines, flowReport, goalFlow, transcriptMoments } from '../server/agents/flow';
+import { catchGuard, type CatchRun } from '../server/agents/qaCatch';
 import { reworkLines, reworkTotals } from '../server/agents/rework';
 import { checkLedger, closedGoals } from '../shared/ledger';
 import { measureRework } from './flowRework';
@@ -59,10 +60,13 @@ const report = flowReport(flows, goals, ledger);
 const merged = flows.flatMap((f) => (goals.find((g) => g.id === f.id)?.prs ?? []).filter((p) => p.outcome === 'merged').map((p) => ({ repo: p.repo, pr: p.number, goal: f.title })));
 const rework = args.includes('--no-rework') ? undefined : await measureRework(merged, paths.mirrors);
 const totals = rework && reworkTotals(rework.measured);
+// the latest of `pnpm run qa-catch`'s runs, if there's been one
+const catches = existsSync(paths.qaCatch) ? readdirSync(paths.qaCatch).filter((f) => f.endsWith('.json')).sort() : [];
+const caught = catches.length ? (JSON.parse(readFileSync(path.join(paths.qaCatch, catches[catches.length - 1]), 'utf8')) as CatchRun) : undefined;
 
-if (args.includes('--json')) console.log(JSON.stringify({ ...report, rework: rework && { ...totals, measured: rework.measured, skipped: rework.skipped } }, null, 2));
+if (args.includes('--json')) console.log(JSON.stringify({ ...report, rework: rework && { ...totals, measured: rework.measured, skipped: rework.skipped }, qaCatch: caught }, null, 2));
 else {
   const skipped = rework?.skipped.length ? [`  (${rework.skipped.length} merged pull request${rework.skipped.length === 1 ? '' : 's'} not measured: ${rework.skipped.slice(0, 3).join('; ')}${rework.skipped.length > 3 ? '; …' : ''})`] : [];
-  console.log(flowLines(report, 5, [...(totals ? reworkLines(totals) : []), ...skipped]).join('\n'));
+  console.log(flowLines(report, 5, [...(totals ? reworkLines(totals) : []), ...skipped, catchGuard(caught)]).join('\n'));
   if (missing.length) console.log(`\n${missing.length} goal${missing.length === 1 ? '' : 's'} left out, their lead's transcript gone: ${missing.join('; ')}`);
 }
