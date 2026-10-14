@@ -2,10 +2,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Scorecard, ServerEvent } from '../shared/types';
 import type { Hub } from './hub';
 import { checkoutHead, measureNewCommit, readScorecard, SavedScorecards, ScorecardDesk, SHOWN, type ScorecardSource } from './scorecards';
+
+// checkoutHead's test runs real git: a budget fit for a busy machine
+vi.setConfig({ testTimeout: 30_000 });
 
 const card = (at: number): Scorecard => ({
   v: 1, at, commit: `c${at}`, branch: 'main', dirty: false, notes: [], frictions: [{ key: 'shell: exit 1', sessions: 3 }],
