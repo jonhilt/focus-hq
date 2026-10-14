@@ -92,7 +92,6 @@ describe('readInteraction', () => {
     expect(readInteraction({ interact: 'turbolift', label: 'Use the turbolift' })).toEqual({ interaction: { kind: 'turbolift' }, label: 'Use the turbolift' });
     expect(readInteraction({ interact: 'engineering', label: 'Retros' })).toEqual({ interaction: { kind: 'engineering' }, label: 'Retros' });
     expect(readInteraction({ interact: 'ledger', label: 'Review the ledger' })).toEqual({ interaction: { kind: 'ledger' }, label: 'Review the ledger' });
-    expect(readInteraction({ interact: 'cartography', label: 'Take flight' })).toEqual({ interaction: { kind: 'cartography' }, label: 'Take flight' });
     expect(readInteraction({ interact: 'energise', label: 'Energise' })).toEqual({ interaction: { kind: 'energise' }, label: 'Energise' });
   });
 

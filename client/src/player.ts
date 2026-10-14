@@ -7,18 +7,8 @@ import { EYE_HEIGHT } from './world/layout';
 const RADIUS = 0.3;
 const WALK = 4.2;
 const RUN = 7.5;
-const FLY = 5;
 
-/** Where the player can fly: anywhere within `radius` of `centre`, free of the floor and of what they'd walk into. */
-export interface Flight {
-  centre: THREE.Vector3;
-  radius: number;
-}
-
-/**
- * First-person walking with WASD + mouse look, sliding along walls; or, in flight, flying the way you look, with Space
- * to rise and Shift to sink.
- */
+/** First-person walking with WASD + mouse look, sliding along walls. */
 export class Player {
   readonly controls: PointerLockControls;
   private keys = new Set<string>();
@@ -26,8 +16,6 @@ export class Player {
   private bob = 0;
   enabled = true;
   colliders: Box2[] = [];
-  /** Where they're flying, while they are: null while they walk. */
-  flight: Flight | null = null;
 
   constructor(
     readonly camera: THREE.PerspectiveCamera,
@@ -61,9 +49,8 @@ export class Player {
     this.keys.clear();
   }
 
-  /** Puts the player somewhere, looking at a point, back on their feet if they were flying. */
+  /** Puts the player somewhere, looking at a point. */
   teleport(feet: THREE.Vector3, lookAt: THREE.Vector3): void {
-    this.flight = null;
     this.camera.position.set(feet.x, EYE_HEIGHT, feet.z);
     this.camera.lookAt(lookAt);
     this.velocity.set(0, 0, 0);
@@ -93,7 +80,6 @@ export class Player {
 
   update(dt: number): void {
     const active = this.enabled && this.controls.isLocked;
-    if (this.flight) return this.fly(dt, active, this.flight);
     const forward = new THREE.Vector3();
     this.camera.getWorldDirection(forward);
     forward.y = 0;
@@ -120,27 +106,5 @@ export class Player {
     const moving = this.velocity.length();
     this.bob += dt * moving * 2.2;
     pos.y = EYE_HEIGHT + Math.sin(this.bob) * 0.035 * Math.min(1, moving / WALK);
-  }
-
-  /** Flies the way the camera looks, up and down too, through anything, but never out of the flight's sphere. */
-  private fly(dt: number, active: boolean, { centre, radius }: Flight): void {
-    const forward = new THREE.Vector3();
-    this.camera.getWorldDirection(forward);
-    const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
-    const wish = new THREE.Vector3();
-    if (active) {
-      if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) wish.add(forward);
-      if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) wish.sub(forward);
-      if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) wish.add(right);
-      if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) wish.sub(right);
-      if (this.keys.has('Space')) wish.y += 1;
-      if (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight')) wish.y -= 1;
-    }
-    if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(FLY);
-    // drifting to a stop rather than walking's sharp one
-    this.velocity.lerp(wish, Math.min(1, dt * 4));
-    const pos = this.camera.position.addScaledVector(this.velocity, dt);
-    const out = pos.clone().sub(centre);
-    if (out.length() > radius) pos.copy(centre).addScaledVector(out.normalize(), radius);
   }
 }
