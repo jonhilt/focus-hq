@@ -60,6 +60,18 @@ export function seedRandom(seed: number): void {
   seedIds(seededRandom(seed + 1));
 }
 
+/** The dice the demo office's ids roll from: any fixed number would do. */
+const DEMO_ID_SEED = 226;
+
+/**
+ * Rolls the demo office's ids from the same dice each time it starts, so its projects and goal leads keep their ids
+ * across a restart and a script driving its API can go on using the ones it read. Only the ids: Math.random still
+ * varies the demo's waits and picks.
+ */
+export function seedDemoIds(): void {
+  seedIds(seededRandom(DEMO_ID_SEED));
+}
+
 /** `bytes` random bytes as hex. */
 export function randomHex(bytes: number): string {
   const roll = idDice;

@@ -7,6 +7,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-store-'));
 process.env.FOCUS_DATA_DIR = dir;
 const { StateLockedError, Store, stateLocked } = await import('./store');
+const { seedDemoIds, seedRandom } = await import('./util');
 
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
@@ -54,5 +55,21 @@ describe('a repo’s merge method', () => {
   it('can’t be set for a repo the project hasn’t connected', () => {
     expect(() => store.updateProject(project.id, { name: 'Renamed', mergeMethod: { repo: 'o/c', method: 'squash' } })).toThrow('isn’t connected');
     expect(project.name).toBe('Focus');
+  });
+});
+
+describe('the demo office’s ids', () => {
+  const demoIds = (otherDice: number) => {
+    // whatever was rolled before (another test, the office's startup) mustn't matter
+    seedRandom(otherDice);
+    seedDemoIds();
+    const store = new Store(false);
+    return [store.addProject('Sock Shop').id, store.addProject('Space Dodger').id];
+  };
+
+  it('are the same each time it starts, so a script can keep using them across a restart', () => {
+    const first = demoIds(1);
+    expect(demoIds(2)).toEqual(first);
+    expect(new Set(first).size).toBe(2);
   });
 });
