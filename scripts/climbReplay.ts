@@ -1,0 +1,97 @@
+// The climber's memory, put to the test (docs/climber.md#replay): fresh read-only sessions rank the gaps from the
+// climb brief, a control with the log of past climbs as it is and a treatment with the control's first pick planted in
+// it as a climb the captain closed. A judge (a cheaper model) says which picks are the same gap; scripts/
+// climbReplayRules.ts has the rules. It costs real sessions, so it's run by hand, not in the gate.
+//
+//   pnpm run climb:replay                         3 sessions each side, on the latest saved scorecard
+//   pnpm run climb:replay --runs 5 --card x.json  more sessions, on a scorecard you choose (`scorecard --json`)
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
+import { climbBrief, climbLog } from '../server/agents/climb';
+import { config, paths } from '../server/config';
+import type { PastPullRequest } from '../server/github/provider';
+import { CLIMB_BRANCH, type Scorecard } from '../shared/types';
+import { PICK_SCHEMA, plantRejection, rankOnly, replayVerdict, SAME_SCHEMA, sameGapQuestion, type ClimbPick } from './climbReplayRules';
+import { render } from './scorecardRules';
+
+const ROOT = path.resolve(import.meta.dirname, '..');
+const arg = (name: string) => (process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : undefined);
+const RUNS = Number(arg('--runs') ?? 3);
+const JUDGE = arg('--judge') ?? 'claude-haiku-4-5-20251001';
+const REASON = 'Not this one: it isn’t where the office hurts right now, and it would take the next climb off what matters. Pick another gap.';
+
+const gh = (...args: string[]) => execFileSync('gh', args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+const repo = gh('repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner').trim();
+
+function pastClimbs(): PastPullRequest[] {
+  const raw = JSON.parse(gh('pr', 'list', '-R', repo, '--state', 'all', '--search', `head:${CLIMB_BRANCH}`, '--limit', '100', '--json', 'number,title,body,url,headRefName,state,createdAt,closedAt,comments')) as {
+    number: number; title: string; body: string; url: string; headRefName: string; state: PastPullRequest['state']; createdAt: string; closedAt?: string; comments: { author?: { login: string }; body: string }[];
+  }[];
+  return raw.filter((p) => p.headRefName.startsWith(CLIMB_BRANCH)).map((p) => ({
+    ...p, branch: p.headRefName, closedAt: p.closedAt ?? undefined, comments: p.comments.map((c) => ({ author: c.author?.login ?? '', body: c.body })),
+  }));
+}
+
+function scorecard(): Scorecard {
+  const file = arg('--card') ?? (existsSync(paths.scorecards) ? readdirSync(paths.scorecards).filter((f) => f.endsWith('.json')).sort().map((f) => path.join(paths.scorecards, f)).at(-1) : undefined);
+  if (!file) throw new Error('No scorecard to rank from: run `pnpm run scorecard` first, or pass --card');
+  return JSON.parse(readFileSync(file, 'utf8')) as Scorecard;
+}
+
+/** One read-only session to its structured answer. */
+async function ask<T>(prompt: string, schema: object, opts: Partial<Options> = {}): Promise<{ answer: T; costUsd: number }> {
+  const options: Options = {
+    cwd: ROOT, tools: ['Read', 'Glob', 'Grep'], allowedTools: ['Read', 'Glob', 'Grep'], permissionMode: 'dontAsk', settingSources: [],
+    outputFormat: { type: 'json_schema', schema: schema as Record<string, unknown> }, maxTurns: 40, ...opts,
+  };
+  for await (const msg of query({ prompt, options })) {
+    if (msg.type === 'result') {
+      if (msg.subtype !== 'success' || msg.is_error) throw new Error(msg.subtype === 'success' ? msg.result : msg.subtype);
+      return { answer: msg.structured_output as T, costUsd: msg.total_cost_usd };
+    }
+  }
+  throw new Error('The session stopped without a result');
+}
+
+async function main() {
+  const login = gh('api', 'user', '-q', '.login').trim();
+  const log = climbLog(pastClimbs(), [], login);
+  const card = render(scorecard());
+  const agent = { repo, baseBranch: 'main', branch: `${CLIMB_BRANCH}replay` };
+  let cost = 0;
+  const picks = async (side: string, prompt: string) => Promise.all(Array.from({ length: RUNS }, async (_, i) => {
+    const { answer, costUsd } = await ask<ClimbPick>(prompt, PICK_SCHEMA);
+    cost += costUsd;
+    process.stderr.write(`${side} ${i + 1}: ${answer.gap}\n  ${answer.target}\n`);
+    return answer;
+  }));
+  const same = async (rejected: ClimbPick, pick: ClimbPick) => {
+    const { answer, costUsd } = await ask<{ same: boolean; why: string }>(sameGapQuestion(rejected, pick), SAME_SCHEMA, { model: JUDGE, tools: [], allowedTools: [], maxTurns: 3 });
+    cost += costUsd;
+    return answer;
+  };
+
+  process.stderr.write(`Replaying the climb brief: ${log.length} past climbs, ${RUNS} sessions each side\n`);
+  const control = await picks('control', rankOnly(climbBrief(agent, [], Date.now(), log), card));
+  const rejected = control[0];
+  const treatment = await picks('treatment', rankOnly(climbBrief(agent, [], Date.now(), plantRejection(log, rejected, REASON, Date.now())), card));
+  const controlSame = await Promise.all(control.slice(1).map((p) => same(rejected, p)));
+  const treatmentSame = await Promise.all(treatment.map((p) => same(rejected, p)));
+  const result = replayVerdict(controlSame.map((j) => j.same), treatmentSame.map((j) => j.same));
+
+  const out = { at: Date.now(), commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim(), runs: RUNS, judge: JUDGE, rejected, control, treatment, controlSame, treatmentSame, result, costUsd: cost };
+  const dir = path.join(config.dataDir, 'climb-replays');
+  mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `${new Date(out.at).toISOString().replace(/[:.]/g, '-')}.json`);
+  writeFileSync(file, `${JSON.stringify(out, null, 2)}\n`);
+  console.log([
+    `Rejected (the control's first pick): ${rejected.gap}`,
+    `Control: ${result.control.same} of ${result.control.of} other sessions took the same gap`,
+    `Treatment, told the captain closed it: ${result.treatment.same} of ${result.treatment.of} took it again`,
+    `Verdict: ${result.verdict} · $${cost.toFixed(2)} · saved ${file}`,
+  ].join('\n'));
+}
+
+await main();

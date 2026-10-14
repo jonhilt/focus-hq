@@ -24,7 +24,8 @@
     "gaps": "tsx scripts/gaps.ts",
     "ship": "tsx scripts/ship.ts",
     "crap": "tsx scripts/crap.ts",
-    "scorecard": "tsx scripts/scorecard.ts"
+    "scorecard": "tsx scripts/scorecard.ts",
+    "climb:replay": "tsx scripts/climbReplay.ts"
   },
   "engines": {
     "node": ">=20"
