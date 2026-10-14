@@ -142,6 +142,12 @@ describe('QA instructions', () => {
     expect(qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop' }, pr, pr.headSha)).not.toContain('from the manager');
   });
 
+  it('ask QA to read the changed lines no test exercises, since a green suite says nothing about them', () => {
+    const text = qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop' }, pr, pr.headSha);
+    expect(text).toContain('read, one by one, the changed lines no test exercises');
+    expect(text).toContain('an argument or index read from the wrong place');
+  });
+
   it('ask QA to look for tests that only raise coverage', () => {
     expect(qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop' }, pr, pr.headSha)).toContain('new tests that run code without checking what it does');
   });

@@ -8,6 +8,8 @@
 | `pnpm run qa-catch --prs 4` | fewer (or more) |
 | `pnpm run qa-catch --repo owner/name` | only one repo's |
 | `pnpm run qa-catch --dry` | plants the bugs and says where, without running any review (free, a few seconds) |
+| `pnpm run qa-catch --again` | the same pull requests as the last run, so the same bugs: to compare QA before and after a change to it |
+| `pnpm run qa-catch --control` | also reviews each pull request with no bug planted, and counts the clean ones QA fails (false alarms): twice the reviews |
 
 Each review costs what a QA review in the office does: about $0.60 and a few minutes on the office's QA model. A run of 10 is about $6–10 and half an hour or so. Each run is saved in `~/.focus/qa-catch/`, and [`pnpm run flow`](flow.md) shows the latest among its quality guards.
 
@@ -24,7 +26,8 @@ For each of the goals' merged pull requests, newest first, in repos the office h
 
 - **Missed** is the number to watch: a bug that would have reached `main`. Read each missed one's planted line, printed with the result.
 - **Failed for something else** can mean QA found a different real problem in the pull request, or failed it for a reason that isn't one. It isn't counted as caught.
-- Run it again after changing QA (its prompt, its model, its checks) and compare.
+- **False alarms** (with `--control`): clean pull requests QA failed. A change that raises the catch rate by failing everything shows here, so judge a change to QA by both.
+- Run it again after changing QA (its prompt, its model, its checks) with `--again --control`, and compare. Run the same thing twice before trusting a difference of one or two: the same review can go either way from run to run.
 
 ## What it can't tell
 
