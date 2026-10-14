@@ -9,6 +9,7 @@ It takes about a minute and a quarter. It always exits 0: it measures, it doesn'
 | `pnpm run scorecard` | measures, saves the result in `~/.focus/scorecards/`, and prints it next to the latest saved one |
 | `pnpm run scorecard --no-save` | measures and compares, without saving (on a branch you're still working on, say) |
 | `pnpm run scorecard --json` | prints the scorecard as JSON |
+| `pnpm run scorecard --repeat 5` | measures 5 times on this commit and saves how far each number wobbles, its [noise floor](#noise-floor), in `~/.focus/scorecards/noise/` (with `--no-save`, only prints it) |
 
 ## What it measures
 
@@ -39,13 +40,17 @@ A time that moves less than its 10% wobble shows as `≈`, and a change too smal
 
 **Measure now** runs `pnpm run scorecard` on the office's own checkout (the one it runs from, which auto update keeps on the latest main). It takes about a minute and a half, one measurement at a time, and the panel says when it's under way or why it failed. **Show on the MSD** puts the scorecard up on the master systems display beside the ship, as the overview has it: the same sentence on the gate and what moved, the same tile per section (its headline number, a few words, and its change in words), then what moved, the slips first. The overview and the MSD share their wording (`verdictPhrases`, `tileFace` and `changeMark` in `shared/scorecard.ts`), so they always say the same thing. It stays up until you pick a trace at the table or **Clear the MSD**. The demo office's scorecards are made up and kept in memory, so the demo never writes to `~/.focus/scorecards/`.
 
-**After each merge.** Two minutes after it starts, the office measures the commit it runs from by itself, if that commit has no scorecard yet and the checkout has no uncommitted changes (`measureNewCommit` in `server/scorecards.ts`). [Auto update](auto-update.md) restarts the office on each merge to main, so every merge gets a scorecard, and the trend fills in without anyone pressing Measure now. The panel says when a measurement is one of these. The demo office doesn't do it.
+**After each merge.** Two minutes after it starts, the office measures the commit it runs from by itself, if that commit has no scorecard yet and the checkout has no uncommitted changes to tracked files (an untracked folder, like an editor's `.idea/`, doesn't count: the scorecard only reads tracked files) (`measureNewCommit` in `server/scorecards.ts`). [Auto update](auto-update.md) restarts the office on each merge to main, so every merge gets a scorecard, and the trend fills in without anyone pressing Measure now. The panel says when a measurement is one of these. The demo office doesn't do it.
 
 The office reads the latest ten from `~/.focus/scorecards/` when it starts and after each measurement (`server/scorecards.ts`, which decodes each with Effect Schema and skips a file that isn't one). A scorecard saved from the terminal shows up after the next restart or measurement. The build step builds into a temporary folder, never the `dist/` the office may be serving.
 
 ## Comparing
 
-Each number knows which way is better. The printout marks a change since the latest saved scorecard with ▲ (better) or ▼ (worse). A time has to move by more than 10% to count, because timings wobble from run to run. The comparison header names the commit and branch it compares against, and a scorecard measured with uncommitted changes says so.
+Each number knows which way is better. The printout marks a change since the latest saved scorecard with ▲ (better) or ▼ (worse), but only when it moved further than it wobbles: past its spread in the latest [noise floor](#noise-floor), or, for a number without one, past 10% for a time and any change at all for a count.
+
+### Noise floor
+
+`pnpm run scorecard --repeat 5` measures the same commit 5 times (it needs no uncommitted changes) and keeps each number's lowest and highest (`noiseOf` in `shared/scorecard.ts`). The counts read from the code hold still; the times don't, and the office's numbers drift as the ledger fills. Every comparison in the terminal uses the latest saved one, and says which. Take a new one when the machine or the gate changes a lot. The panel and the MSD still use the 10% rule for times. The comparison header names the commit and branch it compares against, and a scorecard measured with uncommitted changes says so.
 
 To show a change's before and after:
 

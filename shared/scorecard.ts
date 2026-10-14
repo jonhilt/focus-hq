@@ -1,6 +1,6 @@
 // How a scorecard reads, wherever it's shown: the terminal (`pnpm run scorecard`), the engineering panel and the MSD.
 import { aboutMetric } from './scorecardAbout';
-import type { Metric, MetricFormat, Scorecard, ScorecardSection } from './types';
+import type { Metric, MetricFormat, Scorecard, ScorecardNoise, ScorecardSection } from './types';
 
 export const SECTIONS: Record<ScorecardSection, string> = {
   gate: 'Gate',
@@ -23,26 +23,47 @@ export function formatValue(value: number, format: MetricFormat): string {
   }
 }
 
-/** Whether moving from `before` to `after` is a climb, a slip, or neither. Seconds wobble, so time counts only past 10%. */
-export function direction(m: Metric, before: number): 'better' | 'worse' | 'same' {
+/** Each number's spread over repeated runs on one commit (they must all be the same commit, measured clean). */
+export function noiseOf(cards: Scorecard[]): ScorecardNoise | undefined {
+  const first = cards[0];
+  if (cards.length < 2 || cards.some((c) => c.commit !== first.commit || c.dirty)) return undefined;
+  const spread: ScorecardNoise['spread'] = {};
+  for (const m of first.metrics) {
+    const values = cards.flatMap((c) => c.metrics.filter((x) => x.key === m.key).map((x) => x.value));
+    if (values.length === cards.length) spread[m.key] = { min: Math.min(...values), max: Math.max(...values) };
+  }
+  return { v: 1, at: Math.max(...cards.map((c) => c.at)), commit: first.commit, runs: cards.length, spread };
+}
+
+/**
+ * How far a number has to move to count: its measured spread when there's a noise floor for it, else a guess (10% for
+ * a time, nothing for a count).
+ */
+export function wobble(m: Metric, before: number, noise?: ScorecardNoise): number {
+  const measured = noise?.spread[m.key];
+  if (measured) return Math.max(measured.max - measured.min, 1e-9);
+  return m.format === 'seconds' ? Math.abs(before) * 0.1 : 1e-9;
+}
+
+/** Whether moving from `before` to `after` is a climb, a slip, or neither: it has to move further than it wobbles. */
+export function direction(m: Metric, before: number, noise?: ScorecardNoise): 'better' | 'worse' | 'same' {
   const delta = m.value - before;
-  const noise = m.format === 'seconds' ? Math.abs(before) * 0.1 : 1e-9;
-  if (Math.abs(delta) <= noise || m.better === 'none') return 'same';
+  if (Math.abs(delta) <= wobble(m, before, noise) || m.better === 'none') return 'same';
   return (delta < 0) === (m.better === 'lower') ? 'better' : 'worse';
 }
 
 export const MARK = { better: '▲', worse: '▼', same: ' ' } as const;
 
 /** The change since `before`, marked; nothing when it rounds away to nothing as shown. */
-export function deltaText(m: Metric, before: number): string {
+export function deltaText(m: Metric, before: number, noise?: ScorecardNoise): string {
   const delta = m.value - before;
   if (formatValue(Math.abs(delta), m.format) === formatValue(0, m.format)) return '';
   const shown = m.format === 'pass' ? `was ${formatValue(before, 'pass')}` : `${delta > 0 ? '+' : '−'}${formatValue(Math.abs(delta), m.format)}`;
-  return `${MARK[direction(m, before)]} ${shown}`;
+  return `${MARK[direction(m, before, noise)]} ${shown}`;
 }
 
 /** Each of the latest card's numbers with its change since the card before, a section at a time. */
-export function compared(history: Scorecard[]): { section: ScorecardSection; title: string; rows: ComparedRow[] }[] {
+export function compared(history: Scorecard[], noise?: ScorecardNoise): { section: ScorecardSection; title: string; rows: ComparedRow[] }[] {
   const latest = history.at(-1);
   if (!latest) return [];
   const previous = history.at(-2);
@@ -52,14 +73,14 @@ export function compared(history: Scorecard[]): { section: ScorecardSection; tit
     title: SECTIONS[section],
     rows: latest.metrics.filter((m) => m.section === section).map((metric) => {
       const before = previous?.metrics.find((m) => m.key === metric.key)?.value;
-      const delta = before === undefined ? '' : deltaText(metric, before);
+      const delta = before === undefined ? '' : deltaText(metric, before, noise);
       return {
         metric,
         before,
         delta,
         change: before === undefined ? '' : changeWords(metric, before),
         // a change too small to show isn't called a climb or a slip either
-        trend: before === undefined || !delta ? 'same' : direction(metric, before),
+        trend: before === undefined || !delta ? 'same' : direction(metric, before, noise),
         series: series(metric.key),
       };
     }),

@@ -5,7 +5,7 @@ import path from 'node:path';
 import ts from 'typescript';
 import { frictionGroups, reportCard, type LedgerEvent } from '../shared/ledger';
 import { compared, formatValue, measuredAt } from '../shared/scorecard';
-import type { Metric, MetricFormat as Format, Scorecard, ScorecardSection as Section } from '../shared/types';
+import type { Metric, MetricFormat as Format, Scorecard, ScorecardNoise, ScorecardSection as Section } from '../shared/types';
 
 export type { Metric, Scorecard } from '../shared/types';
 
@@ -227,15 +227,19 @@ export function officeMetrics(events: LedgerEvent[], now: number): { metrics: Me
   return { metrics, frictions: groups.slice(0, 5).map((g) => ({ key: g.key, sessions: g.sessions })) };
 }
 
-/** The scorecard as text, a section at a time, each number with its change since `previous` when there is one. */
-export function render(card: Scorecard, previous?: Scorecard): string {
+/**
+ * The scorecard as text, a section at a time, each number with its change since `previous` when there is one: marked
+ * ▲ or ▼ only when it moved further than `noise` says it wobbles.
+ */
+export function render(card: Scorecard, previous?: Scorecard, noise?: ScorecardNoise): string {
   const width = Math.max(...card.metrics.map((m) => m.label.length));
-  const when = (c: Scorecard) => new Date(c.at).toISOString().slice(0, 16).replace('T', ' ');
+  const when = (c: { at: number }) => new Date(c.at).toISOString().slice(0, 16).replace('T', ' ');
   const lines = [
     `Scorecard · ${measuredAt(card)} · ${when(card)}`,
     previous ? `Changes since ${measuredAt(previous)}, ${when(previous)} (▲ better, ▼ worse)` : 'No earlier scorecard to compare with',
+    noise ? `A change counts past the noise floor from ${noise.runs} runs on ${noise.commit.slice(0, 8)}, ${when(noise)}` : 'No noise floor yet (pnpm run scorecard --repeat 5): a time counts past 10%',
   ];
-  for (const { section, title, rows } of compared(previous ? [previous, card] : [card])) {
+  for (const { section, title, rows } of compared(previous ? [previous, card] : [card], noise)) {
     lines.push('', title);
     for (const { metric: m, delta } of rows) lines.push(`  ${m.label.padEnd(width)}  ${formatValue(m.value, m.format).padStart(7)}  ${delta}`.trimEnd());
     if (section === 'office' && card.frictions.length) {
@@ -244,5 +248,21 @@ export function render(card: Scorecard, previous?: Scorecard): string {
     }
   }
   if (card.notes.length) lines.push('', ...card.notes.map((n) => `Note: ${n}`));
+  return lines.join('\n');
+}
+
+/** A noise floor as text: each number that wobbled, by how much, and how many held still. */
+export function renderNoise(noise: ScorecardNoise, card: Scorecard): string {
+  const width = Math.max(...card.metrics.map((m) => m.label.length));
+  const lines = [`Noise floor · ${noise.runs} runs on ${noise.commit.slice(0, 8)} · each number's lowest to highest`, ''];
+  const still: string[] = [];
+  for (const m of card.metrics) {
+    const s = noise.spread[m.key];
+    if (!s) continue;
+    if (s.max === s.min) still.push(m.label);
+    else lines.push(`  ${m.label.padEnd(width)}  ${formatValue(s.min, m.format).padStart(7)} to ${formatValue(s.max, m.format).padEnd(7)}  ±${formatValue((s.max - s.min) / 2, m.format)}`);
+  }
+  if (lines.length === 2) lines.push('  Nothing wobbled.');
+  lines.push('', `Held still (${still.length}): ${still.join(', ')}`);
   return lines.join('\n');
 }

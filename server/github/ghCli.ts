@@ -42,6 +42,18 @@ const RawPr = Schema.Struct({
   updatedAt: Schema.optional(Schema.String),
 });
 
+const RawPastPr = Schema.Struct({
+  number: Schema.Number,
+  title: Schema.String,
+  body: Schema.optional(Schema.NullOr(Schema.String)),
+  url: Schema.String,
+  headRefName: Schema.String,
+  state: Schema.Literals(['OPEN', 'CLOSED', 'MERGED']),
+  createdAt: Schema.String,
+  closedAt: Schema.optional(Schema.NullOr(Schema.String)),
+  comments: Schema.Array(Schema.Struct({ author: Login, body: Schema.String })),
+});
+
 const RawRepo = Schema.Struct({
   nameWithOwner: Schema.String,
   defaultBranchRef: Schema.NullOr(Schema.Struct({ name: Schema.String })),
@@ -170,6 +182,27 @@ const make = Effect.gen(function* () {
             closes: linkedIssues(p.closingIssuesReferences, p.body ?? ''),
             createdAt: p.createdAt,
             updatedAt: p.updatedAt,
+          })),
+        ),
+      ),
+
+    pullRequestsFrom: (repo, prefix) =>
+      ghJson(Schema.Array(RawPastPr), [
+        'pr', 'list', '-R', repo, '--state', 'all', '--search', `head:${prefix}`, '--limit', '100',
+        '--json', 'number,title,body,url,headRefName,state,createdAt,closedAt,comments',
+      ]).pipe(
+        Effect.map((raw) =>
+          // the search matches words in the branch name loosely: keep only the branches that really start with it
+          raw.filter((p) => p.headRefName.startsWith(prefix)).map((p) => ({
+            number: p.number,
+            title: p.title,
+            body: p.body ?? '',
+            url: p.url,
+            branch: p.headRefName,
+            state: p.state,
+            createdAt: p.createdAt,
+            closedAt: p.closedAt ?? undefined,
+            comments: p.comments.map((c) => ({ author: c.author?.login ?? '', body: c.body })),
           })),
         ),
       ),

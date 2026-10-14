@@ -203,6 +203,19 @@ export const demoLayer = Layer.sync(GitHub, () => {
         ),
       ),
 
+    pullRequestsFrom: (name, prefix) =>
+      repo(name).pipe(
+        Effect.map((r) =>
+          r.prs
+            .filter((p) => p.branch.startsWith(prefix))
+            .reverse()
+            .map((p) => ({
+              number: p.number, title: p.title, body: p.body ?? '', url: p.url, branch: p.branch, state: p.state, createdAt: p.createdAt,
+              comments: (p.comments ?? []).map((body) => ({ author: 'demo-manager', body })),
+            })),
+        ),
+      ),
+
     pullRequestState: (name, number) => repo(name).pipe(Effect.map((r) => r.prs.find((p) => p.number === number)?.state ?? 'CLOSED')),
 
     findPullRequest: (name, branch) =>

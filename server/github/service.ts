@@ -1,6 +1,6 @@
 import { Context, Data, Effect, ManagedRuntime, type Layer } from 'effect';
 import type { GitHubStatus, Issue, PullRequest } from '../../shared/types';
-import type { CreatePullRequest, GitHubProvider, IssueDetail, PullRequestDetail, RepoInfo } from './provider';
+import type { CreatePullRequest, GitHubProvider, IssueDetail, PastPullRequest, PullRequestDetail, RepoInfo } from './provider';
 import type { GhBadOutput, GhCommandError } from './runner';
 
 /** The demo GitHub has no such repo, issue or PR. */
@@ -26,6 +26,8 @@ export class GitHub extends Context.Service<GitHub, {
   pullRequestState(repo: string, number: number): Op<'OPEN' | 'CLOSED' | 'MERGED'>;
   findPullRequest(repo: string, branch: string): Op<{ number: number; url: string } | null>;
   getPullRequest(repo: string, number: number): Op<PullRequestDetail>;
+  /** Every pull request, open or not, whose branch starts with `prefix`, newest first (at most 100), with its comments. */
+  pullRequestsFrom(repo: string, prefix: string): Op<PastPullRequest[]>;
   commentOnPullRequest(repo: string, number: number, body: string): Op<string>;
   uploadQaEvidence(repo: string, path: string, bytes: Buffer): Op<string>;
   createPullRequest(repo: string, pr: CreatePullRequest): Op<{ number: number; url: string }>;

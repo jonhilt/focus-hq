@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Option, Schema } from 'effect';
-import type { Scorecard, Scorecards } from '../shared/types';
+import type { Scorecard, ScorecardNoise, Scorecards } from '../shared/types';
 import type { Hub } from './hub';
 import { run } from './util';
 
@@ -40,6 +40,19 @@ export function readScorecard(text: string): Scorecard | undefined {
   })));
 }
 
+const decodeNoise = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Struct({
+  v: Schema.Literal(1),
+  at: Schema.Number,
+  commit: Schema.String,
+  runs: Schema.Number,
+  spread: Schema.Record(Schema.String, Schema.Struct({ min: Schema.Number, max: Schema.Number })),
+})));
+
+/** A saved noise floor, or nothing for a file that isn't one. */
+export function readNoise(text: string): ScorecardNoise | undefined {
+  return Option.getOrUndefined(Option.map(decodeNoise(text), (n) => ({ ...n, spread: { ...n.spread } })));
+}
+
 /** The commit the office runs from, and whether it has uncommitted changes. */
 export interface Head {
   commit: string;
@@ -56,6 +69,8 @@ export const measureNewCommit = (history: Pick<Scorecard, 'commit'>[], head: Hea
 /** Where scorecards come from: the saved ones, and a way to measure another. */
 export interface ScorecardSource {
   history(limit: number): Scorecard[];
+  /** The latest noise floor (`pnpm run scorecard --repeat`), if one's been taken. */
+  noise(): ScorecardNoise | undefined;
   measure(): Promise<void>;
 }
 
@@ -70,14 +85,21 @@ export class SavedScorecards implements ScorecardSource {
     return files.flatMap((f) => readScorecard(fs.readFileSync(path.join(this.dir, f), 'utf8')) ?? []);
   }
 
+  noise(): ScorecardNoise | undefined {
+    const dir = path.join(this.dir, 'noise');
+    if (!fs.existsSync(dir)) return undefined;
+    const latest = fs.readdirSync(dir).filter((f) => f.endsWith('.json')).sort().at(-1);
+    return latest ? readNoise(fs.readFileSync(path.join(dir, latest), 'utf8')) : undefined;
+  }
+
   async measure(): Promise<void> {
     await run('pnpm', ['run', '-s', 'scorecard'], { cwd: this.root, timeoutMs: 15 * 60_000 });
   }
 }
 
-/** The commit a checkout is at, and whether it has uncommitted changes. */
+/** The commit a checkout is at, and whether it has uncommitted changes to tracked files (untracked ones aren't measured). */
 export async function checkoutHead(root: string): Promise<Head> {
-  const [commit, status] = await Promise.all([run('git', ['rev-parse', 'HEAD'], { cwd: root }), run('git', ['status', '--porcelain'], { cwd: root })]);
+  const [commit, status] = await Promise.all([run('git', ['rev-parse', 'HEAD'], { cwd: root }), run('git', ['status', '--porcelain', '--untracked-files=no'], { cwd: root })]);
   return { commit: commit.trim(), dirty: status.trim().length > 0 };
 }
 

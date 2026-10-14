@@ -1,10 +1,14 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { describe, expect, it, vi } from 'vitest';
 import type { Scorecard, ServerEvent } from '../shared/types';
 import type { Hub } from './hub';
-import { measureNewCommit, readScorecard, SavedScorecards, ScorecardDesk, SHOWN, type ScorecardSource } from './scorecards';
+import { checkoutHead, measureNewCommit, readScorecard, SavedScorecards, ScorecardDesk, SHOWN, type ScorecardSource } from './scorecards';
+
+// checkoutHead's test runs real git: a budget fit for a busy machine
+vi.setConfig({ testTimeout: 30_000 });
 
 const card = (at: number): Scorecard => ({
   v: 1, at, commit: `c${at}`, branch: 'main', dirty: false, notes: [], frictions: [{ key: 'shell: exit 1', sessions: 3 }],
@@ -41,7 +45,7 @@ describe('SavedScorecards', () => {
 function desk(measure: () => Promise<void>) {
   const cards = [card(1)];
   const sent: ServerEvent[] = [];
-  const source: ScorecardSource = { history: () => [...cards], measure: () => measure().then(() => void cards.push(card(2))) };
+  const source: ScorecardSource = { history: () => [...cards], noise: () => undefined, measure: () => measure().then(() => void cards.push(card(2))) };
   return { desk: new ScorecardDesk({ send: (e: ServerEvent) => sent.push(e) } as unknown as Hub, source), sent };
 }
 
@@ -94,5 +98,35 @@ describe('ScorecardDesk.measureIfNew', () => {
     d.measureIfNew({ commit: 'c2', dirty: false });
     expect(d.current().status).toBe('idle');
     expect(sent).toHaveLength(2);
+  });
+});
+
+describe('checkoutHead', () => {
+  it('calls a checkout dirty for a change to a tracked file, not for an untracked one like an editor’s folder', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-head-'));
+    const git = (...args: string[]) => execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { cwd: dir });
+    git('init', '-q');
+    fs.writeFileSync(path.join(dir, 'a.ts'), 'one');
+    git('add', '.');
+    git('commit', '-qm', 'one');
+    fs.mkdirSync(path.join(dir, '.idea'));
+    fs.writeFileSync(path.join(dir, '.idea', 'workspace.xml'), '<x/>');
+    expect((await checkoutHead(dir)).dirty).toBe(false);
+    fs.writeFileSync(path.join(dir, 'a.ts'), 'two');
+    expect((await checkoutHead(dir)).dirty).toBe(true);
+  });
+});
+
+describe('SavedScorecards.noise', () => {
+  it('reads the latest noise floor saved by --repeat, and skips a file that isn’t one', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-noise-'));
+    const saved = new SavedScorecards(dir, dir);
+    expect(saved.noise()).toBeUndefined();
+    fs.mkdirSync(path.join(dir, 'noise'));
+    const noise = { v: 1, at: 5, commit: 'abc', runs: 5, spread: { 'gate.seconds': { min: 60, max: 70 } } };
+    fs.writeFileSync(path.join(dir, 'noise', '2026-01-01-abc.json'), JSON.stringify(noise));
+    expect(saved.noise()).toEqual(noise);
+    fs.writeFileSync(path.join(dir, 'noise', '2026-01-02-def.json'), '{"v":1,"at":');
+    expect(saved.noise()).toBeUndefined();
   });
 });

@@ -28,6 +28,20 @@ export interface Scorecard {
   notes: string[];
 }
 
+/**
+ * How far each number wobbles when nothing changes: the scorecard measured `runs` times on one commit (`pnpm run
+ * scorecard --repeat`). A change counts only when it moves further than its spread; the counts read from the code
+ * don't wobble at all, the times do, and the office's numbers drift as the ledger fills.
+ */
+export interface ScorecardNoise {
+  v: 1;
+  at: number;
+  commit: string;
+  runs: number;
+  /** Each number's lowest and highest over the runs, by metric key. */
+  spread: Record<string, { min: number; max: number }>;
+}
+
 /** Main engineering's view of the scorecards: the latest few, oldest first, and whether a measurement is under way. */
 export interface Scorecards {
   status: 'idle' | 'measuring' | 'failed';

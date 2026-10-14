@@ -26,6 +26,19 @@ export interface PullRequestDetail {
   linkedIssues: number[];
 }
 
+/** A pull request of any state, with its conversation: the record of past work on a line of branches (the climbs'). */
+export interface PastPullRequest {
+  number: number;
+  title: string;
+  body: string;
+  url: string;
+  branch: string;
+  state: 'OPEN' | 'CLOSED' | 'MERGED';
+  createdAt: string;
+  closedAt?: string;
+  comments: { author: string; body: string }[];
+}
+
 /** The orphan branch QA's screenshots go on: no shared history with the code, never merged. */
 export const QA_EVIDENCE_BRANCH = 'focus-qa-evidence';
 
