@@ -69,7 +69,9 @@ server/
     officeTool.ts         the office's own MCP tools for an agent (the lead's ship)
     explainer.ts          the LCARS player a lead's explainer plays in: their beats and stage wrapped in one page, pure
     studio.ts             the studio computer's tools, pure: the scenes (takes) it stages in the middle of the hall, and retiming them; its instructions
-    studioSource.ts       which files the studio's model check may read (checkouts, worktrees, the office's code)
+    studioSource.ts       which files a model check may read (checkouts, worktrees, the office's code; a lead's own workspace)
+    modelPage.ts          a lead's system model as a page for its station's screen: the three views, stepping and picking by CSS, the cited code carried in it
+    modelSchema.ts        a system model as the crew's tools take it (zod), shared by the studio's computer and the leads
     studioComputer.ts     the studio holodeck's computer: one conversation, its turns (ClaudeStudio in claudeCrew.ts, DemoStudio in the demo), and how scenes ran in the room
     numberOne.ts          Number One's ship-wide chat: turns, prompt, reply schema and the ship_status summariser
     claudeCrew.ts         the crew's read-only Claude Code sessions (Read/Glob/Grep, web search/fetch for Number One, Number One's ship_status and open_project, structured output)

@@ -471,6 +471,31 @@ describe('AgentManager', () => {
     expect((await store.readArtifact(lead.id, 'data-flow.html'))?.toString()).toBe('<h1>Flow</h1>');
   });
 
+  it('puts the lead’s model on their goal as a page of the three views, checked against their workspace', async () => {
+    const { agents, claude, store, project } = office();
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    const model = {
+      question: 'How is an item saved?',
+      nodes: [
+        { id: 'page', label: 'Saved page', kind: 'ui' as const, layer: 'UI', cite: { file: '/nowhere/Page.tsx', line: 3 }, change: 'added' as const },
+        { id: 'api', label: 'Save endpoint', kind: 'route' as const, layer: 'API' },
+      ],
+      edges: [{ from: 'page', to: 'api', kind: 'calls' as const }],
+      trace: [{ from: 'page', to: 'api', label: 'POST the item', payload: 'Item { id }' }],
+      simplified: [],
+    };
+    const said = await claude.turns[0].req.tools!.model({ id: 'save-flow', title: 'Saving an item', model });
+    expect(said).toMatch(/“Saving an item” is on your station's screen/);
+    // nothing it cites is in the lead's workspace, so the check says so, for the lead to fix
+    expect(said).toMatch(/found 3 problems.*Part page: \/nowhere\/Page\.tsx isn't there.*Part api has no cite.*Connection page → api has no cite/);
+    const page = (await store.readArtifact(lead.id, 'save-flow.html'))!.toString();
+    expect(page).toContain('data-part="page"');
+    expect(page).toContain('data-steps=" 0 "');
+    expect(page).toContain('NEW');
+    await expect(claude.turns[0].req.tools!.model({ id: 'bad', title: 'Bad', model: { ...model, trace: [{ from: 'api', to: 'nope', label: 'x' }] } })).rejects.toThrow(/doesn't follow a connection/);
+  });
+
   it('puts the lead’s explainer on their goal in the office’s player, and says when its stage throws', async () => {
     const { agents, claude, store, project } = office();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };

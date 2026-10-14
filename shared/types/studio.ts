@@ -40,6 +40,9 @@ export type ModelKind = (typeof MODEL_KINDS)[number];
 /** How one part reaches another. */
 export const MODEL_EDGE_KINDS = ['calls', 'reads', 'writes', 'emits', 'renders'] as const;
 export type ModelEdgeKind = (typeof MODEL_EDGE_KINDS)[number];
+/** What a change (a slice, a pull request) does to a part or connection: new, changed, or gone. */
+export const MODEL_CHANGES = ['added', 'changed', 'removed'] as const;
+export type ModelChange = (typeof MODEL_CHANGES)[number];
 
 /** Where in the code something is: an absolute path, as the computer read it, and a line (from 1). */
 export interface ModelCite {
@@ -60,6 +63,8 @@ export interface ModelNode {
   cite?: ModelCite;
   /** Whether the office found its cite in the code (set by the check). */
   found?: boolean;
+  /** What the change being shown does to it, if it's a model of a change. */
+  change?: ModelChange;
 }
 
 /** One part reaching another, cited where it does. */
@@ -72,6 +77,8 @@ export interface ModelEdge {
   cite?: ModelCite;
   /** Whether the office found `to`'s symbol at (or within two lines of) the cite (set by the check). */
   backed?: boolean;
+  /** What the change being shown does to it, if it's a model of a change. */
+  change?: ModelChange;
 }
 
 /** One step of the scenario: data moving along an edge, in order. */

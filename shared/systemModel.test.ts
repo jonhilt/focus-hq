@@ -127,3 +127,13 @@ describe('the check\'s advice', () => {
     expect(traceGaps(jumpy)).toEqual(['Step 2 starts at db, but step 1 ended at api: the scenario jumps there.']);
   });
 });
+
+describe('a model of a change', () => {
+  it('doesn\'t check what the change removed, since it\'s only in the code it was removed from', () => {
+    const m = model({ nodes: [...model().nodes.slice(0, 2), { ...model().nodes[2], change: 'removed', cite: { file: '/r/Gone.cs', line: 9 } }], edges: [model().edges[0], { ...model().edges[1], change: 'removed' }] });
+    const { model: checked, problems } = checkModel(m, (f) => files[f]);
+    expect(problems).toEqual([]);
+    expect(checked.nodes[2].found).toBeUndefined();
+    expect(modelError(model({ nodes: [{ ...model().nodes[0], change: 'moved' as 'added' }, ...model().nodes.slice(1)] }))).toContain('change is one of');
+  });
+});

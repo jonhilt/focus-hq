@@ -4,7 +4,7 @@ import { shownProjects } from '../../shared/hidden';
 import { freshStudio, type Store, type StoredStudio } from '../store';
 import { errorMessage, truncate } from '../util';
 import type { ChatProject, ShipStatus } from './numberOne';
-import { checkModel, modelError, modelPhases, modelSeconds, traceGaps } from '../../shared/systemModel';
+import { checkModel, modelError, modelPhases, modelReport, modelSeconds } from '../../shared/systemModel';
 import { applyRecall, applyRetime, applyTake, type RetimeInput, type TakeInput } from './studio';
 
 // The studio holodeck's computer: the captain's conversation with a Claude session of its own (not a goal's lead), and
@@ -205,13 +205,7 @@ export class StudioComputer {
         const { model, problems } = checkModel(input.model, this.readSource);
         const take: TakeInput = { id: input.id, label: input.label, metaphor: model.question, seconds: modelSeconds(model), phases: modelPhases(model), script: '', model };
         const staged = await this.stage(session, input.id, applyTake(session.takes, take, Date.now()));
-        const checked = problems.length
-          ? `The check against the code found ${problems.length} problem${problems.length === 1 ? '' : 's'}, drawn flagged in red: ${problems.join(' ')} Fix each (cite the line that really does it, or drop what isn't in the code) and send the model again under the same id.`
-          : 'Every cite checked out against the code.';
-        const gaps = traceGaps(model);
-        const jumps = gaps.length ? ` Where the scenario jumps (add the step between, or say why it jumps): ${gaps.join(' ')}` : '';
-        const size = model.nodes.length > 16 ? ` It has ${model.nodes.length} parts: more than 16 is hard to take in, so fold the plumbing into the parts it serves.` : '';
-        return { ...staged, text: `${staged.text} ${checked}${jumps}${size}` };
+        return { ...staged, text: `${staged.text} ${modelReport(model, problems)}` };
       },
       retime: async (input) => {
         live();

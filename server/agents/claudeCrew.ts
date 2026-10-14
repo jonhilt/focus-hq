@@ -10,8 +10,7 @@ import { agentEnv } from './claudeRunner';
 import { type Drafter, type DraftRequest, type DraftResult, draftSchema, plannerPrompt, plannerSystemPrompt, repoFolders } from './planner';
 import { asNumberOneReply, type ChatProject, type NumberOneOfficer, type NumberOneReply, type NumberOneTurn, numberOnePrompt, numberOneReplySchema, numberOneSystemPrompt, type ShipStatus } from './numberOne';
 import { renderToolUse } from './render';
-import { MODEL_LIMITS } from '../../shared/systemModel';
-import { MODEL_EDGE_KINDS, MODEL_KINDS } from '../../shared/types';
+import { MODEL_SCHEMA } from './modelSchema';
 import { STUDIO_LIMITS as S, studioPrompt, studioSystemPrompt } from './studio';
 import { clock, day, sessionTimeline } from './sessionTimeline';
 import type { Staged, StudioOfficer, StudioReply, StudioTurn } from './studioComputer';
@@ -257,9 +256,6 @@ function sessionList(found: SessionSummary[]): string {
   }).join('\n');
 }
 
-/** Where in the code something is, as a model cites it. */
-const CITE = z.object({ file: z.string().describe('The file\'s absolute path, as you read it.'), line: z.number().int().min(1) });
-
 /** A scene's named phases, as its tools send them. */
 const PHASES = z.record(z.string(), z.tuple([z.number(), z.number()]));
 
@@ -306,32 +302,7 @@ function studioServer(req: StudioTurn, activity: (text: string) => void): McpSdk
         {
           id: z.string().describe('A short lowercase name for the scene, like save-proposal.'),
           label: z.string().max(S.takeLabel).describe('A few words naming it.'),
-          model: z.object({
-            question: z.string().max(MODEL_LIMITS.question).describe('The question it answers, in a sentence.'),
-            nodes: z.array(z.object({
-              id: z.string().describe('Short, lowercase, letters, digits and dashes.'),
-              label: z.string().max(MODEL_LIMITS.label).describe('What it is, in a few words.'),
-              kind: z.enum(MODEL_KINDS).describe('ui (a page or component), route (an endpoint), handler, service, store (a table, cache or file), queue (a channel, event bus or message queue), external (another system), job (background work), type (a data shape that matters).'),
-              layer: z.string().describe('Its layer or owner (UI, API, Domain, Data, External…): parts in the same layer share a colour. Use few layers.'),
-              symbol: z.string().optional().describe('Its name in the code (class, function, component, table), as written there: the check looks for it at its cite, and connections to it should mention it.'),
-              cite: CITE.optional().describe('Where it is defined.'),
-            })).max(MODEL_LIMITS.nodes),
-            edges: z.array(z.object({
-              from: z.string(),
-              to: z.string(),
-              kind: z.enum(MODEL_EDGE_KINDS),
-              label: z.string().optional(),
-              cite: CITE.optional().describe('The line where `from` reaches `to`: it (or a line within two of it) must mention `to`\'s symbol.'),
-            })).max(MODEL_LIMITS.edges),
-            trace: z.array(z.object({
-              from: z.string(),
-              to: z.string(),
-              label: z.string().describe('What happens at this step, in a few words.'),
-              payload: z.string().optional().describe('What moves: the data\'s type and its fields that matter, like "ProposalDto { title, body }".'),
-            })).max(MODEL_LIMITS.steps).describe('One concrete scenario, in order, each step along a connection (either way along it).'),
-            simplified: z.array(z.string()).max(MODEL_LIMITS.simplified).describe('What you left out or simplified.'),
-            checks: z.array(z.object({ q: z.string(), a: z.string(), cite: CITE.optional() })).max(MODEL_LIMITS.checks).optional().describe('Two or three questions the captain should be able to answer from it, with the answer and the line that confirms it.'),
-          }),
+          model: MODEL_SCHEMA,
         },
         (input) => staged(() => req.tools.model(input)),
       ),

@@ -2,7 +2,7 @@
 // cites against the code, how long its scenario plays, and where its parts stand. The same in the office (to refuse or
 // check a model) and in the browser (to lay it out), so a model always lands the same way.
 
-import { MODEL_EDGE_KINDS, MODEL_KINDS, type ModelCite, type ModelEdge, type ModelNode, type ModelStep, type SystemModel } from './types';
+import { MODEL_CHANGES, MODEL_EDGE_KINDS, MODEL_KINDS, type ModelCite, type ModelEdge, type ModelNode, type ModelStep, type SystemModel } from './types';
 
 export const MODEL_LIMITS = { nodes: 40, edges: 80, steps: 24, label: 48, question: 200, simplified: 8, checks: 5 } as const;
 const L = MODEL_LIMITS;
@@ -45,6 +45,7 @@ function nodeError(n: ModelNode, ids: Set<string>): string | undefined {
   if (!n.label.trim() || n.label.length > L.label) return `Part ${n.id} needs a label of at most ${L.label} characters.`;
   if (!(MODEL_KINDS as readonly string[]).includes(n.kind)) return `Part ${n.id}'s kind is one of ${MODEL_KINDS.join(', ')}.`;
   if (!n.layer.trim()) return `Part ${n.id} needs a layer.`;
+  if (n.change && !(MODEL_CHANGES as readonly string[]).includes(n.change)) return `Part ${n.id}'s change is one of ${MODEL_CHANGES.join(', ')}.`;
   return citeError(n.cite, `Part ${n.id}`);
 }
 
@@ -52,6 +53,7 @@ function edgeError(e: ModelEdge, ids: ReadonlySet<string>): string | undefined {
   const name = `${e.from} → ${e.to}`;
   if (!ids.has(e.from) || !ids.has(e.to)) return `Connection ${name} names a part that isn't in the model.`;
   if (!(MODEL_EDGE_KINDS as readonly string[]).includes(e.kind)) return `Connection ${name}'s kind is one of ${MODEL_EDGE_KINDS.join(', ')}.`;
+  if (e.change && !(MODEL_CHANGES as readonly string[]).includes(e.change)) return `Connection ${name}'s change is one of ${MODEL_CHANGES.join(', ')}.`;
   return citeError(e.cite, `Connection ${name}`);
 }
 
@@ -85,6 +87,8 @@ export function checkModel(m: SystemModel, lines: (file: string) => string[] | u
   };
   const byId = new Map(m.nodes.map((n) => [n.id, n]));
   const nodes = m.nodes.map((n) => {
+    // what a change removed is only in the code it was removed from, not the code being checked
+    if (n.change === 'removed') return n;
     if (!n.cite) {
       problems.push(`Part ${n.id} has no cite.`);
       return { ...n, found: false };
@@ -98,6 +102,7 @@ export function checkModel(m: SystemModel, lines: (file: string) => string[] | u
   });
   const edges = m.edges.map((e) => {
     const name = `${e.from} → ${e.to}`;
+    if (e.change === 'removed') return e;
     if (!e.cite) {
       problems.push(`Connection ${name} has no cite.`);
       return { ...e, backed: false };
@@ -211,4 +216,18 @@ function order(m: SystemModel): string[] {
   for (const s of m.trace) for (const id of [s.from, s.to]) if (!seen.includes(id) && m.nodes.some((n) => n.id === id)) seen.push(id);
   for (const n of m.nodes) if (!seen.includes(n.id)) seen.push(n.id);
   return seen;
+}
+
+/**
+ * What the office tells whoever sent a model after checking it: what didn't check out (drawn flagged), where the
+ * scenario jumps, and whether it's too big to take in, each with what to do about it.
+ */
+export function modelReport(m: SystemModel, problems: readonly string[]): string {
+  const checked = problems.length
+    ? `The check against the code found ${problems.length} problem${problems.length === 1 ? '' : 's'}, drawn flagged in red: ${problems.join(' ')} Fix each (cite the line that really does it, or drop what isn't in the code) and send the model again under the same id.`
+    : 'Every cite checked out against the code.';
+  const gaps = traceGaps(m);
+  const jumps = gaps.length ? ` Where the scenario jumps (add the step between, or say why it jumps): ${gaps.join(' ')}` : '';
+  const size = m.nodes.length > 16 ? ` It has ${m.nodes.length} parts: more than 16 is hard to take in, so fold the plumbing into the parts it serves.` : '';
+  return `${checked}${jumps}${size}`;
 }

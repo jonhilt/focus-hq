@@ -16,7 +16,7 @@ export function paintDrawing(ctx: CanvasRenderingContext2D, d: Drawing, k = 1): 
 }
 
 function finish(ctx: CanvasRenderingContext2D, s: { fill?: string; stroke?: string; sw?: number; dash?: boolean }): void {
-  if (s.fill) {
+  if (s.fill && s.fill !== 'none') {
     ctx.fillStyle = s.fill;
     ctx.fill();
   }

@@ -125,3 +125,16 @@ describe('partShape', () => {
     expect(new Set(outlines.map((o) => JSON.stringify(o.map((s) => ({ ...s, part: undefined }))))).size).toBe(kinds.length);
   });
 });
+
+describe('a change\'s marks', () => {
+  it('tags what a change added, changed or removed, keys it, and greys out what it removed', () => {
+    const m = model();
+    m.nodes[0].change = 'added';
+    m.nodes[1].change = 'changed';
+    m.nodes[2].change = 'removed';
+    m.edges[1].change = 'removed';
+    const d = structureView(m);
+    expect(texts(d.shapes)).toEqual(expect.arrayContaining(['NEW', 'CHANGED', 'REMOVED', 'new in this change', 'removed in this change', 'REMOVED · writes']));
+    expect(lines(d.shapes)[1]).toMatchObject({ stroke: INK.muted, dash: true });
+  });
+});

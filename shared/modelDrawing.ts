@@ -5,14 +5,19 @@
 // part picked, so picking a part or a step in one lights it up in the others.
 
 import { edgeFor, layoutLayers } from './systemModel';
-import type { ModelEdgeKind, ModelKind, ModelNode, SystemModel } from './types';
+import type { ModelChange, ModelEdge, ModelEdgeKind, ModelKind, ModelNode, SystemModel } from './types';
 
-export type Shape =
-  | { t: 'rect'; x: number; y: number; w: number; h: number; r?: number; fill?: string; stroke?: string; sw?: number; dash?: boolean; part?: string }
-  | { t: 'ellipse'; cx: number; cy: number; rx: number; ry: number; fill?: string; stroke?: string; sw?: number; dash?: boolean; part?: string }
-  | { t: 'poly'; pts: number[]; fill?: string; stroke?: string; sw?: number; dash?: boolean; part?: string }
-  | { t: 'line'; x1: number; y1: number; x2: number; y2: number; stroke: string; sw: number; dash?: boolean; arrow?: boolean }
-  | { t: 'text'; x: number; y: number; text: string; size: number; fill: string; bold?: boolean; mono?: boolean; anchor?: 'start' | 'middle' | 'end'; part?: string };
+/** What any shape can carry for a page that steps and picks by CSS alone: the scenario's steps it belongs to, and a class. */
+type Marks = { steps?: number[]; cls?: string };
+
+export type Shape = Marks &
+  (
+    | { t: 'rect'; x: number; y: number; w: number; h: number; r?: number; fill?: string; stroke?: string; sw?: number; dash?: boolean; part?: string }
+    | { t: 'ellipse'; cx: number; cy: number; rx: number; ry: number; fill?: string; stroke?: string; sw?: number; dash?: boolean; part?: string }
+    | { t: 'poly'; pts: number[]; fill?: string; stroke?: string; sw?: number; dash?: boolean; part?: string }
+    | { t: 'line'; x1: number; y1: number; x2: number; y2: number; stroke: string; sw: number; dash?: boolean; arrow?: boolean }
+    | { t: 'text'; x: number; y: number; text: string; size: number; fill: string; bold?: boolean; mono?: boolean; anchor?: 'start' | 'middle' | 'end'; part?: string }
+  );
 
 export interface Drawing {
   w: number;
@@ -24,9 +29,21 @@ export interface Drawing {
 export interface ModelFocus {
   step?: number;
   picked?: string;
+  /**
+   * For a page that steps by CSS (server/agents/modelPage.ts): each shape the scenario lights is marked with its steps,
+   * and the rows' highlights are always drawn, empty until a step's on.
+   */
+  marks?: boolean;
 }
 
-export const INK = { bg: '#050b18', panel: '#0d1430', text: '#e8fbff', muted: '#8fa3b8', gold: '#ffcc66', red: '#ff5c5c', line: '#2a3555' } as const;
+export const INK = { bg: '#050b18', panel: '#0d1430', text: '#e8fbff', muted: '#8fa3b8', gold: '#ffcc66', red: '#ff5c5c', line: '#2a3555', added: '#99cc66', changed: '#ff9900' } as const;
+/** How a change's marks read: a tag over the part, in a colour of its own. */
+export const CHANGE_TAGS: Record<ModelChange, { text: string; colour: string }> = { added: { text: 'NEW', colour: INK.added }, changed: { text: 'CHANGED', colour: INK.changed }, removed: { text: 'REMOVED', colour: INK.muted } };
+
+/** The steps of the scenario that move along connection `e`. */
+export function stepsAlong(m: SystemModel, e: ModelEdge): number[] {
+  return m.trace.flatMap((s, i) => (edgeFor(m.edges, s.from, s.to) === e ? [i] : []));
+}
 /** Layers take these colours, in the order they first appear. */
 const LAYER_COLOURS = ['#99ccff', '#ff9966', '#cc99cc', '#99cc66', '#ffcc66', '#9999ff', '#ff9900', '#e8fbff'];
 /** What each kind of connection is drawn in. */
@@ -85,24 +102,29 @@ export function structureView(m: SystemModel, focus: ModelFocus = {}): Drawing {
     const [x2, y2] = clipToBox(b, a);
     const on = e === active;
     const lit = touches(e.from) || touches(e.to);
-    const colour = on ? INK.gold : e.backed === false ? INK.red : EDGE_COLOURS[e.kind];
-    shapes.push({ t: 'line', x1, y1, x2, y2, stroke: colour, sw: on ? 7 : lit ? 5 : 3, dash: e.backed === false, arrow: true });
-    // its label only where the line's long enough to carry it
+    const gone = e.change === 'removed';
+    const colour = on ? INK.gold : gone ? INK.muted : e.backed === false ? INK.red : EDGE_COLOURS[e.kind];
+    const steps = focus.marks ? stepsAlong(m, e) : undefined;
+    shapes.push({ t: 'line', x1, y1, x2, y2, stroke: colour, sw: on ? 7 : lit ? 5 : 3, dash: e.backed === false || gone, arrow: true, steps, cls: steps && 'edge' });
+    // its label only where the line's long enough to carry it, a change's mark before it
     const room = Math.hypot(x2 - x1, y2 - y1) - 30;
-    const label = e.label ?? e.kind;
-    if (room > width(label, 18) || room > 120) shapes.push({ t: 'text', x: (x1 + x2) / 2, y: (y1 + y2) / 2 - 10, text: fit(label, 18, room), size: 18, fill: on ? INK.gold : INK.muted, anchor: 'middle' });
+    const label = `${e.change ? `${CHANGE_TAGS[e.change].text} · ` : ''}${e.label ?? e.kind}`;
+    const labelColour = on ? INK.gold : e.change ? CHANGE_TAGS[e.change].colour : INK.muted;
+    if (room > width(label, 18) || room > 120) shapes.push({ t: 'text', x: (x1 + x2) / 2, y: (y1 + y2) / 2 - 10, text: fit(label, 18, room), size: 18, fill: labelColour, anchor: 'middle', steps });
   }
   for (const n of m.nodes) {
     const c = centres.get(n.id);
     if (!c) continue;
     const inStep = !!step && (step.from === n.id || step.to === n.id);
-    const stroke = touches(n.id) ? INK.text : inStep ? INK.gold : n.found === false ? INK.red : (colours.get(n.layer) ?? INK.muted);
-    shapes.push(...partShape(n.kind, c.x, c.y, { fill: INK.panel, stroke, sw: touches(n.id) || inStep ? 6 : 3, dash: n.found === false, part: n.id }));
+    const gone = n.change === 'removed';
+    const stroke = touches(n.id) ? INK.text : inStep ? INK.gold : gone ? INK.muted : n.found === false ? INK.red : (colours.get(n.layer) ?? INK.muted);
+    shapes.push(...partShape(n.kind, c.x, c.y, { fill: INK.panel, stroke, sw: touches(n.id) || inStep ? 6 : 3, dash: n.found === false || gone, part: n.id }));
+    if (n.change) shapes.push(...changeTag(n.change, c.x, c.y - BOX.h / 2 - 16));
     shapes.push({ t: 'text', x: c.x, y: c.y - 2, text: fit(n.label, 22, BOX.w - 20), size: 22, fill: colours.get(n.layer) ?? INK.text, bold: true, anchor: 'middle', part: n.id });
     shapes.push({ t: 'text', x: c.x, y: c.y + 26, text: fit(citeText(n), 17, BOX.w - 20), size: 17, fill: n.found === false ? INK.red : INK.muted, mono: true, anchor: 'middle', part: n.id });
   }
   // the token, halfway along the step's connection, and the step in words over the legend, its payload with it
-  if (step && focus.step !== undefined) {
+  if (step && focus.step !== undefined && !focus.marks) {
     const a = centres.get(step.from);
     const b = centres.get(step.to);
     if (a && b) shapes.push({ t: 'ellipse', cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, rx: 13, ry: 13, fill: INK.gold });
@@ -132,6 +154,13 @@ export function structurePositions(m: SystemModel): Map<string, { x: number; y: 
     const cellH = (bottom - top) / n;
     return [id, { x: STRUCT.pad + cellW * (s.col + 0.5), y: top + cellH * (s.row + 0.5) }];
   }));
+}
+
+/** A change's tag, a capsule centred on (x, y). */
+function changeTag(change: ModelChange, x: number, y: number): Shape[] {
+  const { text, colour } = CHANGE_TAGS[change];
+  const w = width(text, 16) + 24;
+  return [{ t: 'rect', x: x - w / 2, y: y - 14, w, h: 26, r: 13, fill: colour }, { t: 'text', x, y: y + 5, text, size: 16, fill: INK.bg, bold: true, anchor: 'middle' }];
 }
 
 /** Where the line from `a` towards `b` leaves `a`'s box. */
@@ -185,7 +214,8 @@ function legend(m: SystemModel, colours: Map<string, string>, top: number, w: nu
   out.push({ t: 'text', x: 40, y: top + 34, text: `SHAPE = KIND: ${kinds.map((k) => `${k} ${KIND_SHAPES[k]}`).join(' · ')}`, size: 19, fill: INK.muted });
   row(top + 76, [...colours].map(([l, c]) => [l, c]));
   const kindsUsed = (Object.keys(EDGE_COLOURS) as ModelEdgeKind[]).filter((k) => m.edges.some((e) => e.kind === k));
-  row(top + 118, [...kindsUsed.map((k): [string, string] => [k, EDGE_COLOURS[k]]), ['the step under way', INK.gold], ['not found in the code', INK.red]]);
+  const changes = (Object.keys(CHANGE_TAGS) as ModelChange[]).filter((c) => m.nodes.some((n) => n.change === c) || m.edges.some((e) => e.change === c));
+  row(top + 118, [...kindsUsed.map((k): [string, string] => [k, EDGE_COLOURS[k]]), ['the step under way', INK.gold], ['not found in the code', INK.red], ...changes.map((c): [string, string] => [`${CHANGE_TAGS[c].text.toLowerCase()} in this change`, CHANGE_TAGS[c].colour])]);
   return out;
 }
 
@@ -225,13 +255,14 @@ export function sequenceView(m: SystemModel, focus: ModelFocus = {}): Drawing {
     const on = focus.step === i;
     const x1 = xOf(s.from);
     const x2 = xOf(s.to);
-    if (on) shapes.push({ t: 'rect', x: 8, y: y - 52, w: W - 16, h: SEQ.row - 6, r: 8, fill: '#2a2410' });
-    shapes.push({ t: 'text', x: 20, y: y - 18, text: String(i + 1), size: 22, fill: on ? INK.gold : INK.muted, bold: true });
-    shapes.push({ t: 'line', x1, y1: y, x2, y2: y, stroke: on ? INK.gold : edgeFor(m.edges, s.from, s.to)?.backed === false ? INK.red : INK.text, sw: on ? 5 : 3, arrow: true });
+    const steps = focus.marks ? [i] : undefined;
+    if (on || focus.marks) shapes.push({ t: 'rect', x: 8, y: y - 52, w: W - 16, h: SEQ.row - 6, r: 8, fill: on ? '#2a2410' : 'none', steps, cls: steps && 'row' });
+    shapes.push({ t: 'text', x: 20, y: y - 18, text: String(i + 1), size: 22, fill: on ? INK.gold : INK.muted, bold: true, steps });
+    shapes.push({ t: 'line', x1, y1: y, x2, y2: y, stroke: on ? INK.gold : edgeFor(m.edges, s.from, s.to)?.backed === false ? INK.red : INK.text, sw: on ? 5 : 3, arrow: true, steps, cls: steps && 'edge' });
     const mid = (x1 + x2) / 2;
     const room = Math.max(560, Math.abs(x2 - x1) - 20);
-    shapes.push({ t: 'text', x: mid, y: y - 30, text: fit(s.label, 21, room), size: 21, fill: on ? INK.gold : INK.text, anchor: 'middle' });
-    if (s.payload) shapes.push({ t: 'text', x: mid, y: y - 8, text: fit(s.payload, 17, room), size: 17, fill: on ? INK.gold : INK.muted, mono: true, anchor: 'middle' });
+    shapes.push({ t: 'text', x: mid, y: y - 30, text: fit(s.label, 21, room), size: 21, fill: on ? INK.gold : INK.text, anchor: 'middle', steps });
+    if (s.payload) shapes.push({ t: 'text', x: mid, y: y - 8, text: fit(s.payload, 17, room), size: 17, fill: on ? INK.gold : INK.muted, mono: true, anchor: 'middle', steps });
   });
   return { w: W, h, shapes };
 }
@@ -250,10 +281,11 @@ export function dataView(m: SystemModel, focus: ModelFocus = {}): Drawing {
   let y = DATA.head + 20;
   m.trace.forEach((s, i) => {
     const on = focus.step === i;
-    if (on) shapes.push({ t: 'rect', x: 20, y: y - 38, w: DATA.w - 40, h: DATA.row - 4, r: 8, fill: '#2a2410' });
-    shapes.push({ t: 'text', x: 40, y: y - 10, text: `${i + 1}`, size: 20, fill: on ? INK.gold : INK.muted, bold: true });
-    shapes.push({ t: 'text', x: 80, y: y - 12, text: fit(`${name(s.from)} → ${name(s.to)}`, 18, 420), size: 18, fill: on ? INK.gold : INK.muted });
-    shapes.push({ t: 'text', x: 520, y: y - 12, text: fit(s.payload ?? '—', 19, DATA.w - 560), size: 19, fill: on ? INK.gold : INK.text, mono: true });
+    const steps = focus.marks ? [i] : undefined;
+    if (on || focus.marks) shapes.push({ t: 'rect', x: 20, y: y - 38, w: DATA.w - 40, h: DATA.row - 4, r: 8, fill: on ? '#2a2410' : 'none', steps, cls: steps && 'row' });
+    shapes.push({ t: 'text', x: 40, y: y - 10, text: `${i + 1}`, size: 20, fill: on ? INK.gold : INK.muted, bold: true, steps });
+    shapes.push({ t: 'text', x: 80, y: y - 12, text: fit(`${name(s.from)} → ${name(s.to)}`, 18, 420), size: 18, fill: on ? INK.gold : INK.muted, steps });
+    shapes.push({ t: 'text', x: 520, y: y - 12, text: fit(s.payload ?? '—', 19, DATA.w - 560), size: 19, fill: on ? INK.gold : INK.text, mono: true, steps });
     shapes.push({ t: 'text', x: 80, y: y + 12, text: fit(s.label, 17, DATA.w - 120), size: 17, fill: INK.muted });
     y += DATA.row;
   });
@@ -282,7 +314,7 @@ export function toSvg(d: Drawing): string {
 }
 
 function svgShape(s: Shape): string {
-  const part = 'part' in s && s.part ? ` data-part="${esc(s.part)}" style="cursor:pointer"` : '';
+  const part = ('part' in s && s.part ? ` data-part="${esc(s.part)}" style="cursor:pointer"` : '') + (s.steps?.length ? ` data-steps=" ${s.steps.join(' ')} "` : '') + (s.cls ? ` class="${esc(s.cls)}"` : '');
   const paint = (p: { fill?: string; stroke?: string; sw?: number; dash?: boolean }) =>
     ` fill="${p.fill ?? 'none'}"${p.stroke ? ` stroke="${p.stroke}" stroke-width="${p.sw ?? 2}"` : ''}${p.dash ? ' stroke-dasharray="10 7"' : ''}`;
   switch (s.t) {
@@ -293,7 +325,7 @@ function svgShape(s: Shape): string {
     case 'poly':
       return `<polygon points="${s.pts.join(' ')}"${paint(s)}${part}/>`;
     case 'line':
-      return `<line x1="${s.x1}" y1="${s.y1}" x2="${s.x2}" y2="${s.y2}" stroke="${s.stroke}" stroke-width="${s.sw}"${s.dash ? ' stroke-dasharray="10 7"' : ''}${s.arrow ? ' marker-end="url(#arrow)"' : ''}/>`;
+      return `<line x1="${s.x1}" y1="${s.y1}" x2="${s.x2}" y2="${s.y2}" stroke="${s.stroke}" stroke-width="${s.sw}"${s.dash ? ' stroke-dasharray="10 7"' : ''}${s.arrow ? ' marker-end="url(#arrow)"' : ''}${part}/>`;
     case 'text':
       return `<text x="${s.x}" y="${s.y}" font-size="${s.size}" fill="${s.fill}"${s.bold ? ' font-weight="600"' : ''}${s.mono ? ' font-family="JetBrains Mono, monospace"' : ''} text-anchor="${s.anchor ?? 'start'}"${part}>${esc(s.text)}</text>`;
   }

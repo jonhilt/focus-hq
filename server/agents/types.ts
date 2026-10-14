@@ -1,4 +1,4 @@
-import type { AgentStatus, Autonomy, BrowserFrame, Effort, Settings, TermLine, Workflow, WorkflowAgent } from '../../shared/types';
+import type { AgentStatus, Autonomy, BrowserFrame, Effort, Settings, SystemModel, TermLine, Workflow, WorkflowAgent } from '../../shared/types';
 import type { ArtifactInput, NoteInput, QuestionInput } from './lead';
 import type { ExplainerInput } from './explainer';
 import type { ChecklistSource } from './checklist';
@@ -120,6 +120,8 @@ export interface OfficeTools {
   note(input: NoteInput): Promise<string>;
   /** Puts a visual on the lead's station's screen, or replaces the one with that id. Throws, in words, when it's refused. */
   show(input: ArtifactInput): Promise<string>;
+  /** Puts a system model on the lead's station's screen, checked against the lead's workspace, drawn as the studio draws them. */
+  model(input: { id: string; title: string; model: SystemModel }): Promise<string>;
   /** Puts an animated explainer on the lead's station's screen: their beats and stage in the office's player, shown like show's. */
   explain(input: ExplainerInput): Promise<ToolReply>;
   /** Puts a question to the captain with visual options, on the lead's station's screen. Their pick comes back as a message. */

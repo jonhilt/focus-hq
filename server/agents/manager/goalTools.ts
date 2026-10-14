@@ -5,11 +5,15 @@ import { answerInChat, answerQuestion, type ArtifactInput, askQuestion, type Que
 import { beatMoments, explainerCheck, explainerPage, type ExplainerInput, momentNotes } from '../explainer';
 import { applyContacts } from '../contacts';
 import { checklistWaypoint, headedWaypoint, notedWaypoint } from '../waypoints';
-import { type Picture, Renderer } from '../services';
+import { type Picture, Renderer, Workspace } from '../services';
+import { checkModel, modelError, modelReport } from '../../../shared/systemModel';
+import type { SystemModel } from '../../../shared/types';
+import { citedLines, modelPage } from '../modelPage';
+import { sourceReader } from '../studioSource';
 import type { ToolReply } from '../types';
 import { Part, Refused } from './core';
 
-/** The lead's office tools besides ship: the goal's note, show, explain, ask (and the captain's answer) and propose_close. */
+/** The lead's office tools besides ship: the goal's note, show, model, explain, ask (and the captain's answer) and propose_close. */
 export class GoalTools extends Part {
   /** The lead's note tool: the goal's note and title, as they want them. */
   noteGoal(agent: Agent, input: NoteInput): Effect.Effect<string, Refused> {
@@ -64,6 +68,23 @@ export class GoalTools extends Part {
       return 'bytes' in picture
         ? { text: `${where}${pageErrorsNote(picture.errors)}`, picture: picture.taken }
         : { text: `${where} The office couldn't take a picture of it for the screen (${picture.failed}), so the screen shows only its title.` };
+    });
+  }
+
+  /**
+   * The lead's model tool: a system model of how its code works (or what its change does), checked against the lead's
+   * own workspace, drawn as the studio draws them, and shown like any of show's visuals, the code it cites carried in the
+   * page. What didn't check out is drawn flagged and said back, for the lead to fix.
+   */
+  showModel(agent: Agent, input: { id: string; title: string; model: SystemModel }): Effect.Effect<string, Refused, Renderer | Workspace> {
+    return Effect.gen({ self: this }, function* () {
+      const bad = modelError(input.model);
+      if (bad) return yield* new Refused({ message: bad });
+      const read = sourceReader([(yield* Workspace).dir(agent.id)]);
+      const { model, problems } = checkModel(input.model, read);
+      const html = modelPage(model, input.title, citedLines(model, read));
+      const shown = yield* this.showPage(agent, { id: input.id, title: input.title, html });
+      return `${shown.text} ${modelReport(model, problems)}`;
     });
   }
 
