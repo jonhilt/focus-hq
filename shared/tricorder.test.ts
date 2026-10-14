@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { prKey } from './qa';
-import { inFlight, needsYou } from './tricorder';
+import { inFlight, needLine, needsYou } from './tricorder';
 import type { Agent, PullRequest, QaReview } from './types';
 import { QA_DESK } from './types';
 
@@ -112,6 +112,31 @@ describe('needsYou', () => {
   it('leaves out a conflicting PR someone is resolving', () => {
     const resolving = { ...pr({ mergeable: 'CONFLICTING' }), resolver: agent({ task: 'conflicts' }) };
     expect(needsYou([], [{ projectId: 'p', pr: resolving }], new Map())).toEqual([]);
+  });
+});
+
+describe('needsYou order', () => {
+  it('puts what stopped an agent first, then what holds a goal up, then the PRs, oldest first within each', () => {
+    const lead = { title: 'Wishlist', station: 0, repos: [], slice: 1, prs: [] };
+    const conflicting = pr({ number: 13, mergeable: 'CONFLICTING' });
+    const laterTurn = agent({ id: 't2', task: 'lead', status: 'done', finishedAt: 9, lead });
+    const earlierTurn = agent({ id: 't1', task: 'lead', status: 'done', finishedAt: 4, lead });
+    const broken = agent({ id: 'e', status: 'error', finishedAt: 8 });
+    const hand = agent({ id: 'h', status: 'waiting', permission: { id: 'r1', tool: 'Bash', summary: 'npm i', at: 10 } });
+    const order = needsYou([laterTurn, broken, earlierTurn, hand], [{ projectId: 'p', pr: conflicting }], new Map())
+      .map((a) => ('agent' in a ? `${a.kind}:${a.agent.id}` : a.kind));
+    expect(order).toEqual(['hand:h', 'error:e', 'turn:t1', 'turn:t2', 'conflicts']);
+  });
+});
+
+describe('needLine', () => {
+  it('says what each hail needs from the captain in a line', () => {
+    const hand = agent({ status: 'waiting', permission: { id: 'r1', tool: 'Bash', summary: 'npm i', at: 0 } });
+    expect(needLine({ kind: 'hand', agent: hand }, new Map())).toEqual({ icon: '✋', what: 'Approve: npm i' });
+    expect(needLine({ kind: 'error', agent: agent({ error: 'boom' }) }, new Map()).what).toBe('Stuck: boom');
+    expect(needLine({ kind: 'turn', agent: agent() }, new Map()).what).toBe('Waiting for your reply');
+    expect(needLine({ kind: 'qa', projectId: 'p', pr: pr() }, new Map([[prKey('acme/shop', 12), failedNeedsYou]])).what).toBe('QA needs you: it failed QA 3 times');
+    expect(needLine({ kind: 'qa', projectId: 'p', pr: pr() }, new Map()).what).toBe('QA needs you');
   });
 });
 

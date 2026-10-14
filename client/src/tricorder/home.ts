@@ -1,11 +1,10 @@
 import { statusIcon, statusLine } from '../../../shared/agentStatus';
-import { openQuestion } from '../../../shared/artifacts';
 import { columns, goalState, resolvingAlready } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import { assignWarning, waitsLabel } from '../../../shared/dependencies';
 import { mergeAction, mergeMethodFor } from '../../../shared/mergeGate';
 import { prKey, qaBadge } from '../../../shared/qa';
-import { type Attention, inFlight, needsYou } from '../../../shared/tricorder';
+import { type Attention, inFlight, needLine, needsYou } from '../../../shared/tricorder';
 import type { Agent, Issue, Project, PullRequest, QaReview } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
@@ -48,26 +47,8 @@ export function home(ctx: HomeContext): HTMLElement {
 }
 
 function needsYouStrip(ctx: HomeContext, attention: Attention[]): HTMLElement {
-  const items = attention.map((a) => {
-    switch (a.kind) {
-      case 'hand':
-        return agentEntry(a.agent, '✋', `${a.agent.name} wants to run`, a.agent.permission?.summary ?? '');
-      case 'question':
-        return agentEntry(a.agent, '❓', `${a.agent.name} asks you`, openQuestion(a.agent)?.question ?? '');
-      case 'error':
-        return agentEntry(a.agent, '❗', `${a.agent.name} hit a problem`, a.agent.error ?? workLabel(a.agent));
-      case 'wrap-up':
-        return agentEntry(a.agent, '🏁', `${a.agent.name} is ready to wrap up`, a.agent.lead?.closing?.reason ?? '');
-      case 'turn':
-        return agentEntry(a.agent, '🖖', `${a.agent.name} is waiting for you`, a.agent.activity);
-      case 'qa': {
-        const reason = state.reviews.get(prKey(a.pr.repo, a.pr.number))?.followUp;
-        return prEntry(ctx, a.projectId, a.pr, '🙋', 'QA needs you', reason?.kind === 'needs-you' ? reason.reason : a.pr.title);
-      }
-      case 'conflicts':
-        return prEntry(ctx, a.projectId, a.pr, '⚠', 'Conflicts', a.pr.title);
-    }
-  });
+  // the same line as Comms says (`needLine`), most urgent first
+  const items = attention.map((a) => ('agent' in a ? agentEntry(a.agent, needLine(a, state.reviews)) : prEntry(ctx, a.projectId, a.pr, needLine(a, state.reviews))));
   return h('section', { class: `needs-you ${items.length ? 'alert' : 'clear'}` },
     h('h2', { class: 'bar' }, h('span', null, 'Needs you'), h('span', { class: 'count' }, items.length)),
     items.length
@@ -76,19 +57,19 @@ function needsYouStrip(ctx: HomeContext, attention: Attention[]): HTMLElement {
   );
 }
 
-function agentEntry(agent: Agent, icon: string, what: string, detail: string): HTMLElement {
+function agentEntry(agent: Agent, { icon, what }: { icon: string; what: string }): HTMLElement {
   const project = state.project(agent.projectId);
   return h('li', null, h('a', { class: 'entry', href: agentHref(agent.id), style: `--accent:${project?.color ?? 'var(--lcars-gold)'}` },
     h('span', { class: 'icon' }, icon),
-    h('span', { class: 'text' }, h('strong', null, what), h('span', { class: 'detail' }, detail), h('small', null, `${project?.name ?? ''} · ${workLabel(agent)}`)),
+    h('span', { class: 'text' }, h('strong', null, what), h('small', null, `${agent.name} · ${project?.name ?? ''} · ${workLabel(agent)}`)),
   ));
 }
 
-function prEntry(ctx: HomeContext, projectId: string, pr: PullRequest, icon: string, what: string, detail: string): HTMLElement {
+function prEntry(ctx: HomeContext, projectId: string, pr: PullRequest, { icon, what }: { icon: string; what: string }): HTMLElement {
   const project = state.project(projectId);
   return h('li', null, h('button', { class: 'entry', type: 'button', style: `--accent:${project?.color ?? 'var(--lcars-gold)'}`, attrs: { 'data-key': prCardId(projectId, pr) }, onclick: () => ctx.showPr(projectId, pr) },
     h('span', { class: 'icon' }, icon),
-    h('span', { class: 'text' }, h('strong', null, `${what} · PR #${pr.number}`), h('span', { class: 'detail' }, detail), h('small', null, `${project?.name ?? ''} · ${pr.repo}`)),
+    h('span', { class: 'text' }, h('strong', null, what), h('small', null, `${project?.name ?? ''} · ${pr.repo}#${pr.number} ${pr.title}`)),
   ));
 }
 

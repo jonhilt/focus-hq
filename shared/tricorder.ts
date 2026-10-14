@@ -32,8 +32,14 @@ function agentAttention(agent: Agent): Attention | null {
   return agent.status === 'done' && !turnRead(agent) ? { kind: 'turn', agent } : null;
 }
 
+/** How urgent each kind is, most first: what has stopped an agent mid-work, then what's holding a goal up, then the PRs. */
+const URGENCY: Attention['kind'][] = ['hand', 'error', 'question', 'turn', 'wrap-up', 'qa', 'conflicts'];
+
+/** When an agent's hail began, for oldest first within a kind: the hand's raised, or the turn ended. */
+const since = (a: Attention): number => ('agent' in a ? (a.kind === 'hand' ? a.agent.permission?.at : a.agent.finishedAt) ?? 0 : 0);
+
 /**
- * The Needs you strip: agents with a raised hand, a question for you or in error, goals' leads proposing to wrap up or waiting for a reply
+ * The Needs you strip, most urgent first (`URGENCY`, then oldest first): agents with a raised hand, a question for you or in error, goals' leads proposing to wrap up or waiting for a reply
  * (unless the manager has read that turn: `turnRead`), PRs QA gave up on and PRs that conflict with
  * their base (unless someone's resolving it already). `prs` are the PRs the boards show, so a project's "only my PRs"
  * filter applies here too.
@@ -48,7 +54,29 @@ export function needsYou(
     ...(qaBadge(reviews.get(prKey(pr.repo, pr.number)), pr).state === 'needs-you' ? [{ kind: 'qa' as const, projectId, pr }] : []),
     ...(pr.mergeable === 'CONFLICTING' && !pr.resolver ? [{ kind: 'conflicts' as const, projectId, pr }] : []),
   ]);
-  return [...fromAgents, ...fromPrs];
+  return [...fromAgents, ...fromPrs].sort((a, b) => URGENCY.indexOf(a.kind) - URGENCY.indexOf(b.kind) || since(a) - since(b));
+}
+
+/** What a hail needs from the captain, in a few words, the same in Comms and on the Tricorder: an icon and a line. */
+export function needLine(a: Attention, reviews: ReadonlyMap<string, QaReview>): { icon: string; what: string } {
+  switch (a.kind) {
+    case 'hand':
+      return { icon: '✋', what: `Approve: ${a.agent.permission?.summary ?? 'something'}` };
+    case 'error':
+      return { icon: '❗', what: `Stuck: ${a.agent.error ?? 'hit a problem'}` };
+    case 'question':
+      return { icon: '❓', what: `Pick: ${openQuestion(a.agent)?.question ?? 'they ask you'}` };
+    case 'turn':
+      return { icon: '💬', what: 'Waiting for your reply' };
+    case 'wrap-up':
+      return { icon: '🏁', what: `Ready to close${a.agent.lead?.closing?.reason ? `: ${a.agent.lead.closing.reason}` : ''}` };
+    case 'qa': {
+      const followUp = reviews.get(prKey(a.pr.repo, a.pr.number))?.followUp;
+      return { icon: '🙋', what: `QA needs you${followUp?.kind === 'needs-you' ? `: ${followUp.reason}` : ''}` };
+    }
+    case 'conflicts':
+      return { icon: '⚠', what: 'Resolve conflicts with its base branch' };
+  }
 }
 
 /** A project's agents at work or waiting for a slot, oldest first. The QA officer counts while they're reviewing. */

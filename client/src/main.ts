@@ -2,7 +2,6 @@ import './styles.css';
 import * as THREE from 'three';
 import { api } from './net/api';
 import { state } from './net/state';
-import { record, type TrafficEntry, type TrafficLink } from './net/traffic';
 import { Player } from './player';
 import { agentPanelOpen, openAgentPanel } from './ui/agentPanel';
 import { openHelperPanel } from './ui/helperPanel';
@@ -18,7 +17,8 @@ import { Studio } from './ui/studio';
 import { TrainingSteps } from './ui/trainingSteps';
 import { openManagerPanel } from './ui/managerPanel';
 import { openGoalsPanel } from './ui/goalsPanel';
-import { linkAction, openCommsPanel } from './ui/commsPanel';
+import { openCommsPanel } from './ui/commsPanel';
+import { linkAction, type NewsLink } from './ui/newsLink';
 import { openEngineeringPanel } from './ui/engineeringPanel';
 import { openLedgerPanel } from './ui/ledgerPanel';
 import { numberOnePanelOpen, openNumberOnePanel } from './ui/numberOnePanel';
@@ -318,9 +318,8 @@ async function main() {
   };
   state.on('agent', agentChanged);
   state.on('studio', () => world.syncStudio());
-  // news for the captain: a toast now, and kept in Comms' recent traffic for when they missed it
-  const notify = (level: TrafficEntry['level'], text: string, link?: TrafficLink) => {
-    record({ at: Date.now(), level, text, link });
+  // news for the captain: a toast (anything in it that needs them stays in Comms' Needs you)
+  const notify = (level: 'info' | 'success' | 'error', text: string, link?: NewsLink) => {
     hud.toast(level, text, link && linkAction(ui, link));
   };
   // a goal's lead finishing a turn: it's your turn, unless you're already looking at them
@@ -395,7 +394,7 @@ async function main() {
     if (!p || before?.startedAt !== p.startedAt || before.status === p.status || state.isHidden(p.projectId)) return;
     const link = p.links[0];
     if (p.status === 'running' && link) {
-      const open: TrafficLink = { kind: 'url', url: link.url, label: `Open${link.name ? ` ${link.name}` : ''} ↗` };
+      const open: NewsLink = { kind: 'url', url: link.url, label: `Open${link.name ? ` ${link.name}` : ''} ↗` };
       if (p.warning) notify('info', `▶ ${p.repo}#${p.number} is up, but: ${p.warning}`, open);
       else notify('success', `▶ ${p.repo}#${p.number} is running`, open);
     } else if (p.status === 'failed') {

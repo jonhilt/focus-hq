@@ -802,14 +802,6 @@ select.effort { width: auto; padding: 2px 6px; border-radius: 10px; font-size: 1
 .under-way { --tone: var(--lcars-lilac); display: flex; gap: 12px; align-items: center; background: var(--surface-2); border-radius: 0 var(--radius) var(--radius) 0; padding-right: 12px; }
 .under-way-station { background: var(--tone); color: var(--ink); align-self: stretch; display: flex; align-items: center; justify-content: flex-end; border-radius: 18px 0 0 18px; padding: 0 8px 0 18px; font-size: 18px; font-weight: 600; }
 .under-way small { display: block; }
-/* recent traffic: the toasts' news, a line each, coloured as its toast was */
-.traffic-fold { margin-top: 18px; }
-.traffic-fold summary { cursor: pointer; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--lcars-lilac); margin-bottom: 8px; }
-.traffic-list { display: flex; flex-direction: column; gap: 4px; }
-.traffic { --tone: var(--lcars-periwinkle); display: flex; gap: 12px; align-items: center; padding: 4px 10px; border-left: 6px solid var(--tone); background: var(--surface-2); border-radius: 0 999px 999px 0; }
-.traffic.success { --tone: var(--lcars-green); }
-.traffic.error { --tone: var(--lcars-red); }
-.traffic-at { color: var(--muted); min-width: 4.5em; white-space: nowrap; }
 
 /* the TV studio (?studio=1, ui/studio.ts): no HUD, a caption across the bottom and tags over the crew's heads */
 body.studio .hud, body.studio .toasts { display: none; }
