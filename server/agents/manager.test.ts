@@ -243,6 +243,29 @@ describe('AgentManager', () => {
     expect(store.agents.has(lead.id)).toBe(false);
   });
 
+  it('works out where the goal’s time has gone as its lead’s turn ends, for its screens', async () => {
+    const { agents, claude, store, project } = office();
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    // the goal opened a minute ago; its lead proposed a slice and asked leave to go ahead
+    const goal = store.agents.get(lead.id);
+    if (goal) goal.startedAt -= 60_000;
+    const opened = goal?.startedAt ?? 0;
+    const at = (s: number) => new Date(opened + s * 1000).toISOString();
+    agents.readTranscript = () =>
+      Promise.resolve(
+        [
+          { type: 'user', timestamp: at(0), message: { content: 'Your workspace, with every repo of the project checked out side by side: …' } },
+          { type: 'assistant', timestamp: at(20), message: { content: [{ type: 'text', text: 'I’d start with a thin slice end to end. Shall I go ahead?' }] } },
+        ].map((l) => JSON.stringify(l)).join('\n'),
+      );
+    claude.turns[0].end({ ok: true, summary: 'Proposed a slice' });
+    await until(() => store.agents.get(lead.id)?.lead?.flow?.now.state === 'captain');
+    const flow = store.agents.get(lead.id)?.lead?.flow;
+    expect(flow?.now).toEqual({ state: 'captain', since: opened + 20_000, reason: 'go-ahead' });
+    expect(flow?.active.working).toBe(20_000);
+  });
+
   it('digests their session into the ledger when they go home', async () => {
     const { agents, claude, store, project } = office();
     const transcript = [

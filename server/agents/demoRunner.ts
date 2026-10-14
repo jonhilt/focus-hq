@@ -49,8 +49,18 @@ export class DemoRunner implements AgentRunner {
   private context = new Map<string, number>();
   /** Each lead's repos and goal, by session: a resumed turn doesn't hear them again. */
   private leads = new Map<string, { repos: { folder: string; repo: string }[]; goal: string; scenario: Scenario }>();
+  /**
+   * Each pretend lead's session as Claude Code's transcript would have it, by session: the messages that started its
+   * turns, what it said and the tools it called, so its goal's flow (docs/flow.md) has something to read in the demo.
+   */
+  private journals = new Map<string, string[]>();
   /** Which parts of its story a new goal's lead plays (shared/scenarios.ts): a goal keeps the one it started with. */
   scenario: Scenario = readScenario(process.env.FOCUS_DEMO_SCENARIO);
+
+  /** A pretend lead's transcript so far, as JSONL: its goal's flow reads it as it would a real one. */
+  transcript(sessionId: string): string | undefined {
+    return this.journals.get(sessionId)?.join('\n');
+  }
 
   /** A pretend terminal: the cloud session's link shows up in it after a few seconds. */
   cloudTerminal(_req: CloudTerminalRequest): Promise<CloudTerminal> {
@@ -72,6 +82,22 @@ export class DemoRunner implements AgentRunner {
     let autonomy = req.autonomy;
     const abort = new AbortController();
 
+    // a lead's turn as its transcript would have it, starting with the message that began it
+    const began = new Date().toISOString();
+    const journal = (type: 'user' | 'assistant', content: unknown[]) => {
+      if (!session.startsWith('demo-lead-')) return;
+      const lines = this.journals.get(session) ?? [];
+      if (!lines.some((l) => l.includes(`"began":"${began}"`))) lines.push(JSON.stringify({ type: 'user', timestamp: began, began, message: { content: req.prompt } }));
+      lines.push(JSON.stringify({ type, timestamp: new Date().toISOString(), message: { content } }));
+      this.journals.set(session, lines);
+    };
+    let calls = 0;
+    const journalCall = (name: string, input: unknown, output: string) => {
+      const id = `demo_call_${++calls}`;
+      journal('assistant', [{ type: 'tool_use', id, name, input }]);
+      return () => journal('user', [{ type: 'tool_result', tool_use_id: id, content: output }]);
+    };
+
     const wait = async (min: number, max: number) => {
       await sleep(((min + Math.random() * (max - min)) * 1000) / this.speed);
       if (stopped) throw new Error('stopped');
@@ -79,21 +105,25 @@ export class DemoRunner implements AgentRunner {
     const tool = async (name: string, input: Record<string, unknown>, output: string[] = []) => {
       const r = renderToolUse(name, input, '/work');
       hooks.lines(r.lines);
+      const answered = journalCall(name, input, output.join('\n'));
       // the agent's own task list, as Claude Code's task tools would report it
       if (name === 'TodoWrite') hooks.taskTool?.(name, input, undefined, '');
       if (r.activity || r.status) hooks.activity(r.status ?? null, r.activity ?? '');
       await wait(1.2, 3.2);
+      answered();
       if (output.length) {
         hooks.lines(output.slice(0, 4).map((text, i) => ({ kind: 'output', text: `  ${i === 0 ? '⎿' : ' '}  ${text}` })));
       }
     };
     const say = async (text: string) => {
       hooks.lines(renderText(text));
+      journal('assistant', [{ type: 'text', text }]);
       hooks.activity(null, text.split('\n')[0].slice(0, 80));
       await wait(1, 2.5);
     };
     const think = async () => {
       hooks.lines([{ kind: 'thinking', text: '✻ Thinking…' }]);
+      journal('assistant', [{ type: 'thinking', thinking: '' }]);
       hooks.activity('working', 'Thinking…');
       await wait(1.5, 3.5);
     };
@@ -364,6 +394,7 @@ export class DemoRunner implements AgentRunner {
           return false;
         }
         const result = await tools.ship({ title, summary });
+        journalCall('mcp__office__ship', { title, summary }, result)();
         hooks.lines(result.split('\n').filter((l) => l.trim()).slice(0, 4).map((text, i) => ({ kind: 'output', text: `  ${i === 0 ? '⎿' : ' '}  ${text}` })));
         return true;
       };
@@ -415,6 +446,7 @@ export class DemoRunner implements AgentRunner {
         if (Number(landed[1]) >= 2) {
           hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__propose_close(What done looks like is met)' }]);
           await tools.proposeClose({ reason: `${goal} works end to end, on every device, which is what we said done looks like` });
+          journalCall('mcp__office__propose_close', {}, 'The captain will see it')();
           await say(`That's what we said done looks like: ${goal} works end to end. I think we can wrap this goal up. Close it if you agree, or tell me what's next.`);
           return { ok: true, summary: 'Proposed closing the goal.' };
         }
@@ -438,6 +470,7 @@ export class DemoRunner implements AgentRunner {
             { label: 'A plain list', html: demoListPage(goal), detail: 'Quick to build and dense: the API sends names and prices only. Plainer to look at.' },
           ],
         }).catch((err: Error) => err.message);
+        journalCall('mcp__office__ask', { question: 'Which layout should it start with?' }, asked)();
         hooks.lines([{ kind: 'output', text: `  ⎿  ${asked}` }]);
         await say(`I've had a look around ${repos.map((r) => `./${r.folder}`).join(' and ')}. For "${goal}", I'd start with a thin slice end to end${repos.length > 1 ? ` through ${repos.map((r) => r.folder).join(' and ')}` : ''}: the simplest version that works, so we find out early whether the data model holds. Shall I go ahead?`);
         return { ok: true, summary: 'Proposed the first slice.' };

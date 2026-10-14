@@ -1,5 +1,5 @@
 import type { LedgerEvent } from '../../shared/ledger';
-import type { ArchivedGoal } from '../../shared/types';
+import type { ArchivedGoal, CaptainReason, FlowNow, FlowState, LeadFlow, Said } from '../../shared/types';
 import { messageFrom } from './retro';
 import { blocks, resultText, transcriptLines } from './transcript';
 
@@ -7,8 +7,6 @@ import { blocks, resultText, transcriptLines } from './transcript';
 // at work and when it sat between turns, the ship tool's results say when each pull request went out, and the
 // ledger's QA verdicts and merges say what the lead was waiting on meanwhile. Every moment from the goal opening to
 // it closing lands in exactly one state, so the states add up to the goal's lead time. The I/O is in scripts/flow.ts.
-
-export type FlowState = 'queued' | 'working' | 'rework' | 'background' | 'qa' | 'review' | 'captain';
 
 /** The states in the order a report lists them, with what each means. */
 export const FLOW_STATES: Record<FlowState, string> = {
@@ -30,15 +28,6 @@ interface PrKey {
   repo: string;
   pr: number;
 }
-
-/**
- * How the lead ended up handing a turn back: proposing the goal closes, asking with pictures (the ask tool), asking
- * leave to go on with what it proposed, asking something else, or just reporting.
- */
-export type Said = 'close' | 'ask' | 'go-ahead' | 'question' | 'report';
-
-/** Why the lead waited on the captain: how its last turn ended, or that QA had failed and it stopped. */
-export type CaptainReason = Said | 'next-slice' | 'qa-failed';
 
 export const CAPTAIN_REASONS: Record<CaptainReason, string> = {
   'go-ahead': 'the lead asked leave to go on with what it proposed ("shall I…?")',
@@ -126,11 +115,6 @@ export interface GoalFlow {
   now?: FlowNow;
 }
 
-export interface FlowNow {
-  state: FlowState;
-  since: number;
-  reason?: CaptainReason;
-}
 
 const emptyReasons = (): GoalFlow['captainBy'] => {
   const r = () => ({ ms: 0, away: 0, waits: [] });
@@ -267,6 +251,14 @@ export function goalFlow(goal: ArchivedGoal, moments: Moment[], ledger: LedgerEv
   const leadMs = closedAt - openedAt;
   const activeMs = leadMs - Object.values(away).reduce((n, t) => n + t, 0);
   return { id: goal.id, title: goal.title, projectId: goal.projectId, openedAt, closedAt, leadMs, activeMs, slices: goal.slices, prs: prs.length, ms, away, captainWaits, captainBy, now };
+}
+
+/** What an open goal carries of its flow for its screens: the state it's in now, and its time so far while someone was around. */
+export function leadFlow(f: GoalFlow, at: number): LeadFlow | undefined {
+  if (!f.now) return undefined;
+  const active = emptyStates();
+  for (const s of Object.keys(active) as FlowState[]) active[s] = f.ms[s] - f.away[s];
+  return { at, now: f.now, active };
 }
 
 /** The nearest-rank percentile (0 to 1) of some numbers; 0 for none. */

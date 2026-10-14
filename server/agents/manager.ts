@@ -59,6 +59,11 @@ export class AgentManager {
     this.core.ledger.readTranscript = read;
   }
 
+  /** Reads a lead's transcript for its goal's flow, when that isn't `readTranscript` (the demo's stand-in). */
+  set flowTranscript(read: Ledger['flowTranscript']) {
+    this.core.ledger.flowTranscript = read;
+  }
+
 
   /** The agents' transcripts on this machine, for digesting the ones from before digests began. */
   get transcripts(): Ledger['transcripts'] {

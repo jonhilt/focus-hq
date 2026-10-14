@@ -33,8 +33,18 @@ The lead is **at a turn** from the message that starts it (the captain's, the of
 - **Quality guards**, over the goals' pull requests: merges without a current QA pass (QA's badge as it merged wasn't `passed`), QA passing first time, failed rounds, and conflicts an agent had to resolve. Lead time that comes down while these get worse hasn't really come down.
 - **Slowest five**, with their active time and where most of it went.
 
+## Live, on the goal board
+
+Each open goal's flow is worked out as it goes, the same way, and carried on the goal (`LeadWork.flow`): as its lead's turns start and end, QA reports on its pull requests and its slices land, the office reads the lead's transcript and the ledger again (`refreshFlow` in `server/agents/manager/ledger.ts`), with the goal's closing time taken as now and a lead in the middle of a turn counted as at work. The goal board in its briefing room shows it along the bottom (`client/src/world/goalScreens.ts`, worded by `shared/flow.ts`):
+
+- **What it's doing now, and for how long:** at work, reworking after QA, waiting on its own work, on QA, for your merge, or on you, with why when it's you ("asked leave to go on with what it proposed", "a slice landed: waiting to hear what next"…). The time counts up a minute at a time.
+- **A bar of where its time has gone** while someone was around (idle stretches of 4 hours or more left out): green at work, red reworking, then the waits, you in orange; and the same in words underneath, `2.4 h so far · at work 52% · QA 14% · your merge 12% · you 22%`.
+
+The demo's pretend leads keep a stand-in transcript of their turns (`DemoRunner.transcript`), so the board shows it in the demo too.
+
 ## What it can't see
 
 - A goal whose lead's transcript is gone isn't counted: Claude Code deletes transcripts after 30 days unless told otherwise, and a cloud session's transcript isn't on this machine. The report lists the goals it left out.
 - A verdict counts for a pull request's latest ship if it came after that ship. QA reviews commits, not ships, so this is close but not exact. A pull request merged on a stale pass shows its last stretch as **qa**.
-- Goals still open aren't counted, only those the ledger saw close.
+- `pnpm run flow` counts only goals the ledger saw close; open goals' flow is on their goal boards.
+- A cloud lead's transcript isn't on this machine, so its goal board shows no flow.

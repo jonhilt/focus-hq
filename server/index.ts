@@ -130,8 +130,11 @@ async function main() {
   office.ownRepo = config.demo ? undefined : githubRepo(await run('git', ['remote', 'get-url', 'origin'], { cwd: config.root }).catch(() => ''));
   // each agent session is digested into the ledger as it ends: the demo's agents have no transcripts
   // the demo's older sessions are its scripted ones, digested without Haiku
-  if (config.demo) office.agents.transcripts = demoTranscripts;
-  else {
+  if (config.demo) {
+    office.agents.transcripts = demoTranscripts;
+    // its pretend leads keep a transcript of their own, for their goals' flow
+    if (demoRunner) office.agents.flowTranscript = (id) => Promise.resolve(demoRunner.transcript(id));
+  } else {
     office.agents.readTranscript = transcriptReader(paths.transcripts, paths.workspaces);
     office.agents.transcripts = transcriptFolders(paths.transcripts, paths.workspaces);
   }

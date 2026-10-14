@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { UNIFORM } from '../../../shared/crew';
-import type { Agent, Avatar, Helper } from '../../../shared/types';
+import { flowNow, flowShares, flowSummary } from '../../../shared/flow';
+import type { Agent, Avatar, FlowState, Helper, LeadFlow } from '../../../shared/types';
 import { canvasTexture, fitFont, fitText, makeCanvas, UI_FONT, wrap } from './canvas';
 import type { CrewView } from './character';
 import { checklistGlance, type GoalRoomTone, goalRoomState, leadNow, type NoteSection, noteSections, type PrGlance, rowAt, sliceProgress } from './goalRoom';
@@ -128,8 +129,12 @@ abstract class Display {
     return (this.flat ??= flat(this.texture, { transparent: this.transparent }));
   }
 
+  /** What it was last shown, drawn or not. */
+  protected shown: StationView | null = null;
+
   /** What to show: drawn by `update` if it's changed. */
   show(view: StationView): void {
+    this.shown = view;
     const key = JSON.stringify(this.keyOf(view));
     if (key === this.key) return;
     this.key = key;
@@ -256,6 +261,16 @@ const BOARD_TYPE = [30, 28, 26, 24, 22, 20];
 /** The size of the board's headings, whatever size its body type. */
 const HEADING = 34;
 const BOARD_BG = '#000000';
+/** Each flow state's colour on the goal board's bar: green at work, red reworking, the waits in LCARS tones, you in orange. */
+const FLOW_COLOR: Record<FlowState, string> = {
+  working: '#7cc4a4',
+  rework: '#ff5c5c',
+  background: LCARS.periwinkle,
+  qa: LCARS.lilac,
+  review: LCARS.gold,
+  captain: LCARS.orange,
+  queued: '#6e7681',
+};
 const DIM = '#6e7681';
 const BODY = '#e6edf3';
 
@@ -281,8 +296,62 @@ export class GoalBoard extends Display {
     super(GoalBoard.W, GoalBoard.H, false);
   }
 
+  /** The minute the goal's flow readout was last shown for: it counts up, so it's shown again each minute. */
+  private minute = 0;
+
   protected override keyOf(view: StationView): unknown {
-    return [super.keyOf(view), view.accent, view.prs];
+    const flow = view.lead?.lead?.flow;
+    return [super.keyOf(view), view.accent, view.prs, flow && [flow.now, flow.active, this.minute]];
+  }
+
+  override update(now: number, view: ScreenView): void {
+    const minute = Math.floor(Date.now() / 60_000);
+    if (minute !== this.minute) {
+      this.minute = minute;
+      if (this.shown?.lead?.lead?.flow) this.show(this.shown);
+    }
+    super.update(now, view);
+  }
+
+  /**
+   * Along the bottom, the goal's flow (docs/flow.md): what it's waiting on now and for how long (and why, when it's
+   * you), then a bar of where its time has gone while someone was around, and that in words.
+   */
+  private flowStrip(flow: LeadFlow, x: number, y: number, w: number): void {
+    const { ctx } = this.c;
+    const now = flowNow(flow, Date.now());
+    ctx.fillStyle = '#232a3a';
+    ctx.fillRect(x, y, w, 3);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    let cx = x;
+    const put = (text: string, font: string, color: string) => {
+      ctx.font = font;
+      ctx.fillStyle = color;
+      const t = fitText(ctx, text, x + w - cx);
+      ctx.fillText(t, cx, y + 46);
+      cx += ctx.measureText(t).width + 18;
+    };
+    put(now.words.toUpperCase(), `600 36px ${LCARS_FONT}`, FLOW_COLOR[now.state]);
+    put(now.for.toUpperCase(), `600 36px ${LCARS_FONT}`, BODY);
+    if (now.why) put(now.why, `26px ${UI_FONT}`, DIM);
+    const by = y + 62;
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(x, by, w, 16, 8);
+    ctx.clip();
+    ctx.fillStyle = '#232a3a';
+    ctx.fillRect(x, by, w, 16);
+    let sx = x;
+    for (const s of flowShares(flow)) {
+      ctx.fillStyle = FLOW_COLOR[s.state];
+      ctx.fillRect(sx, by, s.share * w, 16);
+      sx += s.share * w;
+    }
+    ctx.restore();
+    ctx.font = `20px ${LCARS_FONT}`;
+    ctx.fillStyle = DIM;
+    ctx.fillText(fitText(ctx, flowSummary(flow).toUpperCase(), w), x, by + 42);
   }
 
   /** Which crew member's row (in the roster's order) a point on the board is on, from its texture coordinates. */
@@ -370,7 +439,10 @@ export class GoalBoard extends Display {
     const x = side + 34;
     const y = bar + rule + 30;
     const w = W - 30 - x;
-    const h = H - 26 - y;
+    const flow = lead?.lead?.flow;
+    const strip = flow ? 112 : 0;
+    const h = H - 26 - y - strip;
+    if (flow) this.flowStrip(flow, x, H - 26 - strip + 14, w);
     if (!lead) return this.message('Free', next ? `Next up: ${next}` : 'Press E at the door, or on this board, to start a goal here.', x, y, w, h, color);
 
     const note = lead.lead?.note;
