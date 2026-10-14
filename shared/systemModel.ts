@@ -2,7 +2,7 @@
 // cites against the code, how long its scenario plays, and where its parts stand. The same in the office (to refuse or
 // check a model) and in the browser (to lay it out), so a model always lands the same way.
 
-import { MODEL_EDGE_KINDS, MODEL_KINDS, type ModelCite, type ModelEdge, type SystemModel } from './types';
+import { MODEL_EDGE_KINDS, MODEL_KINDS, type ModelCite, type ModelEdge, type ModelNode, type ModelStep, type SystemModel } from './types';
 
 export const MODEL_LIMITS = { nodes: 40, edges: 80, steps: 24, label: 48, question: 200, simplified: 8, checks: 5 } as const;
 const L = MODEL_LIMITS;
@@ -15,33 +15,49 @@ const citeError = (c: ModelCite | undefined, what: string) =>
 
 /** Why a model won't do, or undefined if it holds together. */
 export function modelError(m: SystemModel): string | undefined {
+  const ids = new Set<string>();
+  return sizeError(m) ?? first(m.nodes, (n) => nodeError(n, ids)) ?? first(m.edges, (e) => edgeError(e, ids)) ?? first(m.trace, (s, i) => stepError(m.edges, s, i));
+}
+
+/** The first error `check` finds in `list`, in order. */
+function first<T>(list: readonly T[], check: (item: T, i: number) => string | undefined): string | undefined {
+  for (const [i, item] of list.entries()) {
+    const bad = check(item, i);
+    if (bad) return bad;
+  }
+  return undefined;
+}
+
+function sizeError(m: SystemModel): string | undefined {
   if (!m.question.trim() || m.question.length > L.question) return `Say the question it answers, in at most ${L.question} characters.`;
   if (!m.nodes.length || m.nodes.length > L.nodes) return `A model has 1 to ${L.nodes} parts.`;
   if (m.edges.length > L.edges) return `A model has at most ${L.edges} connections.`;
   if (m.trace.length > L.steps) return `A scenario has at most ${L.steps} steps.`;
   if (m.simplified.length > L.simplified || (m.checks?.length ?? 0) > L.checks) return `At most ${L.simplified} simplifications and ${L.checks} checks.`;
-  const ids = new Set<string>();
-  for (const n of m.nodes) {
-    if (!ID.test(n.id)) return `Part id “${n.id}” needs to be short, lowercase letters, digits and dashes.`;
-    if (ids.has(n.id)) return `Two parts have the id ${n.id}.`;
-    ids.add(n.id);
-    if (!n.label.trim() || n.label.length > L.label) return `Part ${n.id} needs a label of at most ${L.label} characters.`;
-    if (!(MODEL_KINDS as readonly string[]).includes(n.kind)) return `Part ${n.id}'s kind is one of ${MODEL_KINDS.join(', ')}.`;
-    if (!n.layer.trim()) return `Part ${n.id} needs a layer.`;
-    const bad = citeError(n.cite, `Part ${n.id}`);
-    if (bad) return bad;
-  }
-  for (const e of m.edges) {
-    const name = `${e.from} → ${e.to}`;
-    if (!ids.has(e.from) || !ids.has(e.to)) return `Connection ${name} names a part that isn't in the model.`;
-    if (!(MODEL_EDGE_KINDS as readonly string[]).includes(e.kind)) return `Connection ${name}'s kind is one of ${MODEL_EDGE_KINDS.join(', ')}.`;
-    const bad = citeError(e.cite, `Connection ${name}`);
-    if (bad) return bad;
-  }
-  for (const [i, s] of m.trace.entries()) {
-    if (!edgeFor(m.edges, s.from, s.to)) return `Step ${i + 1} (${s.from} → ${s.to}) doesn't follow a connection in the model: add the connection, or route the step along one.`;
-    if (!s.label.trim()) return `Step ${i + 1} needs a label.`;
-  }
+  return undefined;
+}
+
+/** What's wrong with part `n`, adding its id to `ids` (the ids seen so far). */
+function nodeError(n: ModelNode, ids: Set<string>): string | undefined {
+  if (!ID.test(n.id)) return `Part id “${n.id}” needs to be short, lowercase letters, digits and dashes.`;
+  if (ids.has(n.id)) return `Two parts have the id ${n.id}.`;
+  ids.add(n.id);
+  if (!n.label.trim() || n.label.length > L.label) return `Part ${n.id} needs a label of at most ${L.label} characters.`;
+  if (!(MODEL_KINDS as readonly string[]).includes(n.kind)) return `Part ${n.id}'s kind is one of ${MODEL_KINDS.join(', ')}.`;
+  if (!n.layer.trim()) return `Part ${n.id} needs a layer.`;
+  return citeError(n.cite, `Part ${n.id}`);
+}
+
+function edgeError(e: ModelEdge, ids: ReadonlySet<string>): string | undefined {
+  const name = `${e.from} → ${e.to}`;
+  if (!ids.has(e.from) || !ids.has(e.to)) return `Connection ${name} names a part that isn't in the model.`;
+  if (!(MODEL_EDGE_KINDS as readonly string[]).includes(e.kind)) return `Connection ${name}'s kind is one of ${MODEL_EDGE_KINDS.join(', ')}.`;
+  return citeError(e.cite, `Connection ${name}`);
+}
+
+function stepError(edges: readonly ModelEdge[], s: ModelStep, i: number): string | undefined {
+  if (!edgeFor(edges, s.from, s.to)) return `Step ${i + 1} (${s.from} → ${s.to}) doesn't follow a connection in the model: add the connection, or route the step along one.`;
+  if (!s.label.trim()) return `Step ${i + 1} needs a label.`;
   return undefined;
 }
 

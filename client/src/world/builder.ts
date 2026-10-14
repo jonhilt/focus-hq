@@ -48,7 +48,9 @@ export type Interaction =
   | { kind: 'beam-to'; projectId: string; station: number; room: number }
   | { kind: 'vacant' }
   /** The studio holodeck's computer: the conversation (ui/studioChat.ts). */
-  | { kind: 'studio' };
+  | { kind: 'studio' }
+  /** The studio's system model, up close (ui/modelPanel.ts). */
+  | { kind: 'studio-model' };
 
 /** How far away (m) the player can use something with E, unless it says otherwise. */
 export const REACH = 4.5;

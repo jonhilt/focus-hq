@@ -59,6 +59,7 @@ export const api = {
   studioNew: () => call<StudioSession>('POST', '/studio/new'),
   studioTune: (model: string, effort?: Effort) => call<StudioSession>('POST', '/studio/tune', { model, effort }),
   /** How a take's version ran in the room: `error` if it threw. */
+  studioSource: (file: string, line: number) => call<{ file: string; line: number; from: number; lines: string[] }>('GET', `/studio/source?file=${encodeURIComponent(file)}&line=${line}`),
   studioRecall: (id: string) => call<StudioSession>('POST', `/studio/takes/${encodeURIComponent(id)}/recall`),
   studioReport: (id: string, version: number, error?: string, sheet?: string) => call<StudioSession>('POST', `/studio/takes/${encodeURIComponent(id)}/report`, { version, error, sheet }),
   /** A call to Number One: the browser's WebRTC offer in, the session's id and answer out (no answer in the demo, which has no audio). */

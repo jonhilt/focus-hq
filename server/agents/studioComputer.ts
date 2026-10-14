@@ -161,6 +161,18 @@ export class StudioComputer {
     return this.current();
   }
 
+  /**
+   * The lines round a cite, for the model up close: `around` either side of `line`, from a file the model check may read
+   * (studioSource.ts), or why not.
+   */
+  source(file: string, line: number, around = 8): { file: string; line: number; from: number; lines: string[] } {
+    const all = this.readSource(file);
+    if (!all) throw new Error(`${file} isn't a file the studio can read`);
+    const at = Math.max(1, Math.min(all.length, Math.floor(line) || 1));
+    const from = Math.max(1, at - around);
+    return { file, line: at, from, lines: all.slice(from - 1, at + around) };
+  }
+
   /** The room ran a take (or tried to): `error` is what went wrong, if anything; `sheet` its contact sheet (sheetData). */
   report(id: string, version: number, error?: string, sheet?: string): StudioSession {
     const take = this.store.studio.takes.find((t) => t.id === id && t.version === version);

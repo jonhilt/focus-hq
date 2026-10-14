@@ -42,6 +42,8 @@ export interface Ui {
   openNumberOne(): void;
   /** The studio holodeck's chat with its computer, docked so the room stays in view. */
   openStudio(): void;
+  /** The system model standing in the studio, up close (modelPanel.ts). */
+  openModel(): void;
   /** The engineering station: the ledger's report card and the chief engineer's retro. */
   openEngineering(): void;
   /** Main engineering's master systems table: the ledger's log, and a trace of a pull request or goal. */

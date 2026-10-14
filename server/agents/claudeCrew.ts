@@ -302,7 +302,7 @@ function studioServer(req: StudioTurn, activity: (text: string) => void): McpSdk
       ),
       tool(
         'model',
-        'Show how a real system works as a model recovered from its code: its parts, how they connect, and one scenario as steps along the connections, every part and connection cited. The holodeck draws it one fixed way (shape = kind, colour = layer, a line = a connection, a moving token = data, with a legend), lays it out itself, and animates the scenario. The office checks every cite against the code and tells you what didn\'t check out (drawn flagged in red) so you can fix it. Use it, not scene, for anything about how real code works.',
+        'Show how a real system works as a model recovered from its code: its parts, how they connect, and one scenario as steps along the connections, every part and connection cited. The holodeck draws it one fixed way on three boards round the captain (its structure, the scenario as a sequence diagram, and the data at each step), lays it out itself, and steps the scenario across all three; up close the captain can pick any part to see the code it cites. The office checks every cite against the code and tells you what didn\'t check out (drawn flagged in red) so you can fix it. Use it, not scene, for anything about how real code works.',
         {
           id: z.string().describe('A short lowercase name for the scene, like save-proposal.'),
           label: z.string().max(S.takeLabel).describe('A few words naming it.'),

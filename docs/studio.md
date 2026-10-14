@@ -212,15 +212,20 @@ floor to walk into but its walls (`STUDIO_HALL` and `studioWalls` in `client/src
   worktrees and the office's own code: `server/agents/studioSource.ts`): a part is found when its file has the line
   and its symbol is within two lines of it, a connection is backed when its cited line (or one within two of it)
   mentions the part it reaches. What didn't check out is drawn in red and told to the computer, which fixes it and
-  sends the model again before saying it's ready. The holodeck draws every model the one fixed way
-  (`client/src/world/modelScene.ts`): shape for kind (a panel, hexagon, cube, slab, drum, pipe, globe, cone or gem),
-  colour for layer, a bar coloured by the kind of connection with an arrowhead towards the part it reaches, each part's
-  name and file:line over it, laid out by the office rather than the model (`layoutModel`: columns down the
-  connections from left to right, each column's parts stacked one above another), and the scenario as a gold token
-  moving along the connections in order, carrying its payload, with the step over it all ("Step 4 of 8 · Open the pull
-  request"). A legend floats overhead, facing you wherever you stand, with what was simplified and two or three
-  questions to check yourself with. A model is a scene like any other: its steps are its phases (s1, s2…), so it plays,
-  pauses, scrubs, spins, retimes and goes on the shelf the same way.
+  sends the model again before saying it's ready. The holodeck draws every model the one fixed way, flat, on three solid hologram boards standing in an
+  arc round the middle of the hall like a war room (`client/src/world/modelScene.ts`), each a view of the same model
+  (`shared/modelDrawing.ts`, a list of shapes drawn to a canvas for the boards and to SVG up close, so both match):
+  **structure** in the middle (each part a shape for its kind (window, hexagon, square, rounded box, cylinder, pill,
+  ellipse, triangle or diamond) outlined in its layer's colour with its name and file:line, laid out by the office in
+  columns down the connections (`layoutModel`), each connection an arrow coloured by its kind, a key along the foot),
+  the scenario as a **sequence** diagram on the right (a lifeline for each part it passes through, an arrow for each
+  step with its payload over it), and **what moves at each step** on the left (with what was simplified and two or
+  three questions to check yourself with). The step under way is gold on all three at once, in time with the scene's
+  clock, so a model plays, pauses, scrubs, retimes and goes on the shelf like any scene (its steps are its phases, s1,
+  s2…). What the code check couldn't confirm is red and dashed. **E** on a board opens the model up close
+  (`client/src/ui/modelPanel.ts`): the three views live and crisp, ◀ ▶ (or ← →) to step through the scenario, and a
+  click on a part in any view picks it in all of them and shows the lines of code it cites (`GET /api/studio/source`,
+  through the same reader as the check), with its connections and their cites.
 - **Scenes** (its `scene` tool, `server/agents/studio.ts`): for metaphors, ideas and things that might be built, which
   it says are illustrative. The computer builds straight away from what you said, rather than pitching or asking first, and the scene stands on a round stage 6 m across the middle of the hall
   (`SCENE_STAGE`), up to the ceiling, its front to the doorway. Motion is the point: it decides first what moves and

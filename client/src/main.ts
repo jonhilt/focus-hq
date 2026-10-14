@@ -22,6 +22,7 @@ import { linkAction, type NewsLink } from './ui/newsLink';
 import { openEngineeringPanel } from './ui/engineeringPanel';
 import { openLedgerPanel } from './ui/ledgerPanel';
 import { numberOnePanelOpen, openNumberOnePanel } from './ui/numberOnePanel';
+import { openModelPanel } from './ui/modelPanel';
 import { openStudioChat } from './ui/studioChat';
 import { StudioVoice } from './ui/studioVoice';
 import { Panels } from './ui/panels';
@@ -165,6 +166,10 @@ async function main() {
     openQa: (projectId) => openQaPanel(ui, projectId),
     openNumberOne: () => openNumberOnePanel(ui),
     openStudio: () => openStudioChat(ui),
+    openModel: () => {
+      const model = world.studioScene()?.model;
+      if (model) openModelPanel(ui, model);
+    },
     openEngineering: () => openEngineeringPanel(ui),
     openLedger: (subject) => openLedgerPanel(ui, subject),
     showOnMsd: (what) => world.putOnMsd(
@@ -545,6 +550,9 @@ async function main() {
         break;
       case 'studio':
         ui.openStudio();
+        break;
+      case 'studio-model':
+        ui.openModel();
         break;
       case 'energise':
         sound.press();

@@ -5,6 +5,7 @@ shared/types/             types shared by server and client, a file per feature 
 shared/crew.ts            how the crew look (uniforms, species), and the permanent crew per room (the ops officer, the QA officer), derived from the project id
 shared/qa.ts              QA decisions shared by server and board (badges, stale verdicts)
 shared/systemModel.ts     the studio's system models: whether one holds together, checking its cites against the code, its timing and layout
+shared/modelDrawing.ts    a system model's three flat views (structure, sequence, data) as shapes, and as SVG
 shared/board.ts           a project's Kanban columns (to do, in progress, PRs), for the 3D board, its panel and the Tricorder
 shared/agentStatus.ts     how an agent's status reads (icon, one-line status)
 shared/tricorder.ts       what needs you (the Tricorder and Comms), which agents are in flight
@@ -90,7 +91,8 @@ client/src/
     themes.ts             the landscapes (beach, forest, desert, moon, city, library)
     teamStation.ts        a goal's team station: its door in the holodeck and its briefing room out in the world, the lead's screen, seats for their helpers and the goal's reviewer (helperSeats.ts: who sits where)
     probes.ts             the probes by a lead's chair, one per background command or monitor (probeSlots.ts: which show, and their labels); E on one opens ui/backgroundPanel.ts: its output and Stop
-    modelScene.ts         a system model drawn the one fixed way (shape = kind, colour = layer, the scenario's token, legend)
+    modelScene.ts         a system model on three hologram boards (structure, sequence, data), the scenario stepping across them
+    drawingCanvas.ts      a model drawing painted onto a canvas
     studioHall.ts         the studio holodeck's set: the scene the computer built last, on a round stage in the middle of the hall (takes.ts, built with takeKit.ts), the far wall's hologram saying what it is and how to play it (studio.ts: the stage, and ScenePlayback, the captain's spin, pause, scrub and speed), and the shelf of kept scenes to call back (sceneShelf.ts)
     goalScreens.ts        a team station's holographic sign, LCARS goal board and screen over its pod (goalRoom.ts: how its room stands, how the note fills the board, and what the team's up to at a glance; portraits.ts: the crew's portraits)
     hall.ts               the training hall, each project's holodeck, behind its door's portal: a copy of its shell from Blender (blender/training_hall.py), dressed for its project (hallLayout.ts: where its pods stand, and the door on the deck that leads to it)
@@ -113,6 +115,7 @@ client/src/
     confirmDialog.ts      the in-game confirm dialog, over whatever panel is open (the Tricorder's buttons ask with it too)
     numberOnePanel.ts     the chat with Number One: the log, suggestions sent to Ops or started as goals, voice mode
     studioChat.ts         the studio's chat with its computer, docked down the right so the room stays in view
+    modelPanel.ts         a studio model up close: its three views live as SVG, stepping, and a picked part's cited code
     call.ts               a call to Number One: WebRTC to OpenAI, and the call's strip (what it's doing, what waits on your yes, captions, hang up)
   tricorder/              the phone view at /tricorder (no three.js): home screen, agent drill-down, buttons that survive live re-renders
 client/tricorder/index.html   the Tricorder's page (a second Vite entry), with its home-screen meta tags
