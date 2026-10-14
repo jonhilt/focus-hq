@@ -27,7 +27,7 @@ import { Panels } from './ui/panels';
 import { openPreviewPanel } from './ui/previewPanel';
 import { openQaPanel } from './ui/qaPanel';
 import { openScreenPanel } from './ui/screenPanel';
-import { openGoalChart } from './ui/chartPanel';
+import { openClosedGoalChart, openGoalChart } from './ui/chartPanel';
 import { openNewIssuePanel, openPausePanel, openTeleportPanel, openTurboliftPanel } from './ui/travelPanel';
 import { openTrainingPanel } from './ui/trainingPanel';
 import { type Interaction, REACH } from './world/builder';
@@ -39,7 +39,7 @@ import { sound } from './sound';
 import { screenPrefs } from './world/screenPanes';
 import { Deck } from './world/deck';
 import { HolodeckDeck } from './world/holodeckDeck';
-import { COMMAND_DECK, ENGINEERING_DECK, SUN_POSITION } from './world/layout';
+import { CARTOGRAPHY_DECK, COMMAND_DECK, ENGINEERING_DECK, SUN_POSITION } from './world/layout';
 import { setMerging } from './world/merge';
 import { type Ship, World } from './world/office';
 import { SCRUB_STEP } from './world/studio';
@@ -64,12 +64,13 @@ async function fontsReady(): Promise<void> {
 
 /** The ship's decks, built in Blender (blender/, `pnpm run ship`). */
 async function ship(): Promise<Ship> {
-  const [command, holodecks, engineering] = await Promise.all([
+  const [command, holodecks, engineering, cartography] = await Promise.all([
     Deck.load('/ship/command-deck.glb', COMMAND_DECK),
     HolodeckDeck.load('/ship/holodeck-deck.glb'),
     Deck.load('/ship/engineering-deck.glb', ENGINEERING_DECK),
+    Deck.load('/ship/cartography-deck.glb', CARTOGRAPHY_DECK),
   ]);
-  return { command, holodecks, engineering };
+  return { command, holodecks, engineering, cartography };
 }
 
 async function main() {
@@ -408,6 +409,8 @@ async function main() {
   const raycaster = new THREE.Raycaster();
   // as far as anything reaches: most things only from REACH (`interactive`), a big screen or the studio's beats from across the room
   raycaster.far = 18;
+  // but for stellar cartography's stars, from across its sphere
+  const cartographyFar = 26;
   // holograms are drawn in the overlay (frame.ts), and can be used
   raycaster.layers.enable(OVERLAY_LAYER);
   const center = new THREE.Vector2(0, 0);
@@ -434,6 +437,7 @@ async function main() {
       return;
     }
     raycaster.setFromCamera(center, camera);
+    raycaster.far = world.cartography.holds(camera.position) ? cartographyFar : 18;
     const hits = raycaster.intersectObject(world.root, true);
     target = null;
     let aiming: THREE.Object3D | null = null;
@@ -461,6 +465,20 @@ async function main() {
     }
     aimAt(aiming);
     hud.setHint(target ? target.label() : null);
+  };
+
+  // in stellar cartography, F (or its console) takes flight through the sphere, and F again lands you back on its platform
+  const takeFlight = () => {
+    if (!world.cartography.holds(camera.position) || player.flight) return;
+    sound.press();
+    player.flight = world.cartography.flight;
+    notify('info', 'Flight: WASD to fly where you look, Space to rise, Shift to sink, F to land');
+  };
+  const flightKey = () => {
+    if (!player.flight) return takeFlight();
+    const landing = world.landing();
+    sound.beam();
+    hud.beam(() => player.teleport(landing.position, landing.lookAt));
   };
 
   const interact = () => {
@@ -545,6 +563,18 @@ async function main() {
       case 'studio':
         ui.openStudio();
         break;
+      case 'cartography':
+        takeFlight();
+        break;
+      case 'goal-star': {
+        sound.press();
+        if (i.live) ui.openChart(i.id);
+        else {
+          const goal = state.project(i.projectId)?.goals?.find((g) => g.id === i.id);
+          if (goal) openClosedGoalChart(ui, goal);
+        }
+        break;
+      }
       case 'energise':
         sound.press();
         if (i.projectId !== undefined && i.station !== undefined) ui.beamBack(i.projectId, i.station);
@@ -623,6 +653,7 @@ async function main() {
     const hotkeys: Record<string, (() => void) | undefined> = {
       KeyE: interact,
       KeyT: () => ui.openTeleport(),
+      KeyF: flightKey,
       KeyM: () => ui.openManager(),
       KeyN: () => ui.openNewIssue(world.locationOf(camera.position).projectId),
       Digit1: () => ui.openNumberOne(),

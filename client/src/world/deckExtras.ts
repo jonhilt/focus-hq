@@ -190,6 +190,7 @@ export function readInteraction(e: Extras): { interaction: Interaction; label: s
     case 'engineering':
     case 'energise':
     case 'ledger':
+    case 'cartography':
       return { interaction: { kind: e.interact }, label: str(e, 'label') };
     default:
       return fail('unknown interaction', e);

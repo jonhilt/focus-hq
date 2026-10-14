@@ -20,7 +20,7 @@ What the browser reads (client/src/world/deck.ts), all through custom properties
   that frames the platform).
 - An object's `interact` has pressing E on it (or on anything hanging from it) do something: 'manager' (open the ready
   room console), 'turbolift' (its controls), 'engineering' (the chief engineer's panel: the report card and retros),
-  'ledger' (reviewing the ledger) or 'energise' (a transporter room's console: beam back to the briefing room), with
+  'ledger' (reviewing the ledger), 'cartography' (stellar cartography's console: take flight) or 'energise' (a transporter room's console: beam back to the briefing room), with
   the hint `label`.
 - An object's `part` names it for the browser, which finds it to change it as it goes, so it's kept out of merging: in
   a transporter room, 'pad-ring' (a pad's lit ring, in the colour of whoever's on it) and 'pad-emitter' (the emitter's

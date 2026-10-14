@@ -9,11 +9,13 @@ import type { Deck } from './deck';
 import type { HolodeckDeck } from './holodeckDeck';
 import type { DeckScreen } from './deckExtras';
 import { canvasTexture, fitText, makeCanvas, roundRect } from './canvas';
-import { type Box2, DOOR_W, HALL_HALF, ROOM_WIDTH, roomSlot, rowsFor, type Seat, slotAt, SUN_POSITION } from './layout';
+import { type Box2, CARTOGRAPHY_DECK, DOOR_W, HALL_HALF, ROOM_WIDTH, roomSlot, rowsFor, type Seat, slotAt, SUN_POSITION } from './layout';
 import { flat } from './materials';
 import { EngineeringStation } from './engineering';
 import { drawMsd, type MsdBoard } from './msd';
 import { FirstOfficer } from './numberOne';
+import { SPHERE, StellarCartography } from './cartography';
+import { goalStars } from './galaxy';
 import { TrainingConsole } from './trainingConsole';
 import { AHEAD, type Portal, type PortalEnd } from './portal';
 import { type Region, regionAt, shown } from './regions';
@@ -48,6 +50,8 @@ export interface Ship {
   command: Deck;
   holodecks: HolodeckDeck;
   engineering: Deck;
+  /** Stellar cartography: a sphere you walk out into, with every goal round you as a star (cartography.ts). */
+  cartography: Deck;
 }
 
 /** Builds and owns the whole ship: its decks, and a holodeck per project, each with its team stations' briefing rooms. */
@@ -74,6 +78,9 @@ export class World {
   private vacant = new Map<number, VacantHall>();
   engineering: EngineeringStation | null = null;
   numberOne: FirstOfficer | null = null;
+  /** What stellar cartography's sphere shows: every goal, as a star. */
+  readonly cartography: StellarCartography;
+  private lastGoals = 0;
   /** The training console on the bridge: only in a demo office (`demo`, set before the first sync). */
   training: TrainingConsole | null = null;
   demo = false;
@@ -91,7 +98,7 @@ export class World {
   private readonly transporterGroup = new THREE.Group();
   transporterRooms: TransporterRoom[] = [];
   /** Where the decks that stand on their own are, to tell when the camera's on one. */
-  private readonly deckBoxes = { command: new THREE.Box3(), engineering: new THREE.Box3() };
+  private readonly deckBoxes = { command: new THREE.Box3(), engineering: new THREE.Box3(), cartography: new THREE.Box3() };
   /** Whether to draw only the camera's region (`?cull=0` draws all of them, for the gap and z-fighting scans). */
   culling = true;
   private lastT = 0;
@@ -124,6 +131,10 @@ export class World {
     // a little beyond their walls, so you're on one in its doorways too
     this.deckBoxes.command.setFromObject(ship.command.root).expandByScalar(1);
     this.deckBoxes.engineering.setFromObject(ship.engineering.root).expandByScalar(1);
+    this.deckBoxes.cartography.setFromObject(ship.cartography.root).expandByScalar(1);
+    // in the sphere, round the middle of its platform (the deck's origin)
+    this.cartography = new StellarCartography(CARTOGRAPHY_DECK.clone().add(SPHERE.centre));
+    ship.cartography.root.add(this.cartography.group);
   }
 
   /**
@@ -140,6 +151,7 @@ export class World {
     for (const room of this.transporterRooms) room.group.visible = show.transporter && (!region || room === transporter);
     this.ship.command.root.visible = show.command;
     this.ship.engineering.root.visible = show.engineering;
+    this.ship.cartography.root.visible = show.cartography;
     if (this.builder) {
       this.builder.group.visible = show.holodecks;
       this.builder.halls.visible = show.hall;
@@ -193,7 +205,7 @@ export class World {
 
   /** The decks aboard the ship. */
   private decks(): Deck[] {
-    return [this.ship.command, ...this.holodeckDeck, this.ship.engineering];
+    return [this.ship.command, ...this.holodeckDeck, this.ship.engineering, this.ship.cartography];
   }
 
   /** Rebuilds the building when the set of projects (or their names/colours/repos, or which are hidden) changes. */
@@ -321,6 +333,11 @@ export class World {
     return this.ship.command.places[0];
   }
 
+  /** Where you land in stellar cartography after flying: in the middle of its platform. */
+  landing(): Place {
+    return this.ship.cartography.places[0];
+  }
+
   /** Where the turbolift stops: in each deck's car. */
   stops(): Place[] {
     return this.decks().flatMap((d) => d.stops);
@@ -410,6 +427,11 @@ export class World {
     for (const hall of this.vacant.values()) if (hall.holds(camera) || hall.portal.near(camera, AHEAD)) hall.update(t, camera);
     this.engineering?.update(t, camera);
     this.numberOne?.update(t, camera);
+    if (now - this.lastGoals > 1000) {
+      this.lastGoals = now;
+      this.cartography.sync(goalStars(state.shown, state.shownAgents()), (id) => state.project(id)?.name ?? '');
+    }
+    this.cartography.update(t);
     if (this.panelsDirty && now - this.lastPanels > 1000) {
       this.panelsDirty = false;
       this.lastPanels = now;

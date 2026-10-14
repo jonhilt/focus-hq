@@ -48,7 +48,11 @@ export type Interaction =
   | { kind: 'beam-to'; projectId: string; station: number; room: number }
   | { kind: 'vacant' }
   /** The studio holodeck's computer: the conversation (ui/studioChat.ts). */
-  | { kind: 'studio' };
+  | { kind: 'studio' }
+  /** Stellar cartography's console: take flight through the sphere (cartography.ts). */
+  | { kind: 'cartography' }
+  /** A goal's star in stellar cartography: its chart (a live goal's by its lead `id`, a closed goal's by its record's). */
+  | { kind: 'goal-star'; projectId: string; id: string; live: boolean };
 
 /** How far away (m) the player can use something with E, unless it says otherwise. */
 export const REACH = 4.5;

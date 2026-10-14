@@ -100,6 +100,8 @@ client/src/
     transporterRoom.ts    a team station's transporter room, where a workflow runs: its pads, console (and the screen on it that shows the script), pattern buffer, tactical display and feed camera
     engineering.ts        the engineering station: the engineer, the report card and how their retro stands on the console; E opens their panel
     warpCore.ts           the warp core's glow: the shared materials its 'warp-core' surfaces are drawn with, pulsing
+    cartography.ts        stellar cartography's sphere: its sky and grid, and every goal as a star you can aim at
+    galaxy.ts             which goals stellar cartography shows, in time order, and where each lies on its spiral arm
     msd.ts                main engineering's master systems display: a cutaway of the ship with its decks marked, and beside it the ledger's report card, the scorecard, or the trace picked at the table
     numberOne.ts          Number One in the ready room, across the captain's desk (numberOneView.ts: their bubble)
     deck.ts               a deck built in Blender: loads its GLB, draws its surfaces, reads its markers and what pressing E does (deckExtras.ts: what the markers, surfaces and interactions say)
@@ -115,7 +117,7 @@ client/src/
 client/tricorder/index.html   the Tricorder's page (a second Vite entry), with its home-screen meta tags
 client/public/tricorder/  its web app manifest and home-screen icons
 client/public/ship/       the decks built in Blender, as GLBs (pnpm run ship writes them, or CI's Ship workflow on a branch, .github/workflows/ship.yml)
-blender/                  the Blender scripts that build the decks: ship.py (entry), kit.py (walls, furniture, markers), bake.py (each deck's ambient occlusion, baked into a lightmap), command_deck.py (the bridge, ready room and observation lounge), holodeck_deck.py (the holodecks' hallway and the turbolift), engineering_deck.py (main engineering: the gallery, the well, the warp core and the level below), team_station.py (a team station's door and briefing room), transporter_room.py (a team station's transporter room), training_hall.py (the training hall every holodeck is a copy of)
+blender/                  the Blender scripts that build the decks: ship.py (entry), kit.py (walls, furniture, markers), bake.py (each deck's ambient occlusion, baked into a lightmap), command_deck.py (the bridge, ready room and observation lounge), holodeck_deck.py (the holodecks' hallway and the turbolift), engineering_deck.py (main engineering: the gallery, the well, the warp core and the level below), team_station.py (a team station's door and briefing room), transporter_room.py (a team station's transporter room), training_hall.py (the training hall every holodeck is a copy of), cartography_deck.py (stellar cartography: the sphere, its gantry and platform)
 ```
 
 The client mirrors server state over the WebSocket. Every action is a small REST call. Laptop screens and Kanban displays are canvases drawn into textures, and only redrawn when something changes and you can see them (`world/screenRedraw.ts`): close up often enough to follow, with a busy terminal's cursor blinking; further off now and then; out of sight not until they come into view, since each drawing sends the whole canvas to the GPU again. Before you come aboard, `world/warmUp.ts` compiles the whole ship's shaders and sends its baked lighting to the GPU, so the first step into a holodeck or a briefing room doesn't stall; it runs again whenever the world changes (a new holodeck).

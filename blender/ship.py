@@ -12,6 +12,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import bake  # noqa: E402
+import cartography_deck  # noqa: E402
 import command_deck  # noqa: E402
 import engineering_deck  # noqa: E402
 import holodeck_deck  # noqa: E402
@@ -22,7 +23,7 @@ import transporter_room  # noqa: E402
 
 DECKS = {'command-deck': command_deck.build, 'holodeck-deck': holodeck_deck.build, 'engineering-deck': engineering_deck.build,
          'team-station': team_station.build, 'training-hall': training_hall.build,
-         'transporter-room': transporter_room.build}
+         'transporter-room': transporter_room.build, 'cartography-deck': cartography_deck.build}
 
 
 def main():

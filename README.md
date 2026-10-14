@@ -69,6 +69,7 @@ Then on board:
 
 - [Controls](docs/controls.md): keys and what they do
 - [Goals and their leads](docs/goals.md): team stations, briefing rooms, shipping a goal a slice at a time
+- [Stellar cartography](docs/stellar-cartography.md): every goal on the ship as a star round you, and flying through them
 - [Comms](docs/comms.md): who's waiting on you across the ship, and answering them from anywhere
 - [Drafting issues](docs/drafting-issues.md): the operations officer at the Ops station
 - [Number One](docs/number-one.md): the ship-wide chat in the ready room, and its voice mode
