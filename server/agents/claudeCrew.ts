@@ -8,7 +8,7 @@ import { paths } from '../config';
 import { errorMessage, truncate } from '../util';
 import { agentEnv } from './claudeRunner';
 import { type Drafter, type DraftRequest, type DraftResult, draftSchema, plannerPrompt, plannerSystemPrompt, repoFolders } from './planner';
-import { asNumberOneReply, type ChatProject, type NumberOneOfficer, type NumberOneReply, type NumberOneTurn, numberOnePrompt, numberOneReplySchema, numberOneSystemPrompt } from './numberOne';
+import { asNumberOneReply, type ChatProject, type NumberOneOfficer, type NumberOneReply, type NumberOneTurn, numberOnePrompt, numberOneReplySchema, numberOneSystemPrompt, type ShipStatus } from './numberOne';
 import { renderToolUse } from './render';
 import { STUDIO_LIMITS as S, studioPrompt, studioSystemPrompt } from './studio';
 import { clock, day, sessionTimeline } from './sessionTimeline';
@@ -217,28 +217,29 @@ export class ClaudeNumberOne implements NumberOneOfficer {
 }
 
 /**
- * The studio holodeck's computer: one session per conversation, in a folder of its own with none of the ship's code,
- * that builds what the captain describes as scenes in the middle of the hall, reading the web and Claude Code sessions
- * when it needs to.
+ * The studio holodeck's computer: one session per conversation, in a folder of its own, that builds what the captain
+ * describes as scenes in the middle of the hall, reading the web, Claude Code sessions, the ship's state and its
+ * projects' code (checked out, as Number One's are) when it needs to.
  */
 export class ClaudeStudio implements StudioOfficer {
   async turn(req: StudioTurn, activity: (text: string) => void): Promise<StudioReply> {
     fs.mkdirSync(paths.studio, { recursive: true });
     const result = await runReadOnly({
       cwd: paths.studio,
-      systemAppend: studioSystemPrompt(),
+      readable: [paths.planning, paths.workspaces],
+      systemAppend: studioSystemPrompt({ projects: req.projects, planning: paths.planning }),
       prompt: studioPrompt(req.messages, !!req.resumeSessionId, req.takes),
       settings: req.settings,
       model: req.model || undefined,
       effort: req.effort,
       signal: req.signal,
       activity,
-      builtins: WEB_TOOLS,
+      builtins: [...CODE_TOOLS, ...WEB_TOOLS],
       resume: req.resumeSessionId,
       tools: {
-        server: studioServer(req),
-        names: ['scene', 'retime_scene', 'drop_scene', 'sessions', 'session_timeline'],
-        activity: (name) => ({ sessions: 'Looking through Claude Code sessions', session_timeline: 'Reading a session', scene: 'Building the scene', retime_scene: 'Retiming the scene', drop_scene: 'Clearing a scene' })[name] ?? name,
+        server: studioServer(req, activity),
+        names: ['scene', 'retime_scene', 'drop_scene', 'sessions', 'session_timeline', 'ship_status', 'open_project'],
+        activity: (name) => ({ sessions: 'Looking through Claude Code sessions', session_timeline: 'Reading a session', scene: 'Building the scene', retime_scene: 'Retiming the scene', drop_scene: 'Clearing a scene', ship_status: 'Checking the ship’s status', open_project: 'Opening a project' })[name] ?? name,
       },
     });
     return { text: result.text, sessionId: result.sessionId, costUsd: result.costUsd, model: result.model };
@@ -257,8 +258,8 @@ function sessionList(found: SessionSummary[]): string {
 /** A scene's named phases, as its tools send them. */
 const PHASES = z.record(z.string(), z.tuple([z.number(), z.number()]));
 
-/** The studio computer's own tools: the scenes it builds in the middle of the hall, and reading Claude Code sessions. */
-function studioServer(req: StudioTurn): McpSdkServerConfigWithInstance {
+/** The studio computer's own tools: the scenes it builds in the middle of the hall, and reading Claude Code sessions, the ship and its projects' code. */
+function studioServer(req: StudioTurn, activity: (text: string) => void): McpSdkServerConfigWithInstance {
   const answer = async (run: () => string | Promise<string>) => {
     try {
       return { content: [{ type: 'text' as const, text: await run() }] };
@@ -325,41 +326,50 @@ function studioServer(req: StudioTurn): McpSdkServerConfigWithInstance {
         },
         ({ session, from, to }) => answer(async () => sessionTimeline(await loadSession(session), { from, to })),
       ),
+      ...shipTools(req, activity, (dir) => dir),
     ],
   });
 }
 
 /** Number One's own tools: the ship's state, and a project's code on demand. Neither changes anything aboard. */
 function numberOneServer(req: NumberOneTurn, activity: (text: string) => void): McpSdkServerConfigWithInstance {
-  const text = (t: string, isError = false) => ({ content: [{ type: 'text' as const, text: t }], ...(isError && { isError }) });
-  const project = (id: string): ChatProject | undefined => req.projects.find((p) => p.id === id);
   return createSdkMcpServer({
     name: 'number-one',
     version: '1.0.0',
     alwaysLoad: true,
-    tools: [
-      tool('ship_status', "The ship right now: per project, its agents (with their worktree paths), open pull requests with QA verdicts and checks, what needs the captain, and its closed goals (newest first) with each PR's state on GitHub right now (stale: true when it couldn't be looked up, so it's only the recorded outcome).", {}, async () =>
-        text(JSON.stringify(await req.shipStatus(), null, 1)),
-      ),
-      tool(
-        'open_project',
-        "Checks out a project's repositories at their latest default branch, into <projectId>/<repo folder>/ under your current directory, so you can read its code.",
-        { projectId: z.string().describe('The project id, as listed in your instructions') },
-        async ({ projectId }) => {
-          const found = project(projectId);
-          if (!found) return text(`There's no project with id ${projectId}. The projects are: ${req.projects.map((p) => `${p.name} (${p.id})`).join(', ') || 'none'}.`, true);
-          if (!found.repos.length) return text(`${found.name} has no repositories yet.`, true);
-          try {
-            const cwd = await checkouts(found.id, found.repos, activity);
-            const folders = [...repoFolders(found.repos)];
-            return text(`${found.name} is checked out at its default branch:\n${folders.map(([r, folder]) => `- ${path.relative(paths.planning, path.join(cwd, folder))}/ (${r})`).join('\n')}`);
-          } catch (err) {
-            return text(`The checkout of ${found.name} failed: ${errorMessage(err)}`, true);
-          }
-        },
-      ),
-    ],
+    tools: shipTools(req, activity, (dir) => path.relative(paths.planning, dir)),
   });
+}
+
+/**
+ * The ship's state and a project's code on demand, for a crew session that reads the ship (Number One, the studio's
+ * computer): `shown` says where a checkout went, as the session should read it.
+ */
+function shipTools(req: { projects: ChatProject[]; shipStatus: () => Promise<ShipStatus> }, activity: (text: string) => void, shown: (dir: string) => string) {
+  const text = (t: string, isError = false) => ({ content: [{ type: 'text' as const, text: t }], ...(isError && { isError }) });
+  const project = (id: string): ChatProject | undefined => req.projects.find((p) => p.id === id);
+  return [
+    tool('ship_status', "The ship right now: per project, its agents (with their worktree paths), open pull requests with QA verdicts and checks, what needs the captain, and its closed goals (newest first) with each PR's state on GitHub right now (stale: true when it couldn't be looked up, so it's only the recorded outcome).", {}, async () =>
+      text(JSON.stringify(await req.shipStatus(), null, 1)),
+    ),
+    tool(
+      'open_project',
+      "Checks out a project's repositories at their latest default branch, so you can read its code: it says where each went.",
+      { projectId: z.string().describe('The project id, as listed in your instructions') },
+      async ({ projectId }) => {
+        const found = project(projectId);
+        if (!found) return text(`There's no project with id ${projectId}. The projects are: ${req.projects.map((p) => `${p.name} (${p.id})`).join(', ') || 'none'}.`, true);
+        if (!found.repos.length) return text(`${found.name} has no repositories yet.`, true);
+        try {
+          const cwd = await checkouts(found.id, found.repos, activity);
+          const folders = [...repoFolders(found.repos)];
+          return text(`${found.name} is checked out at its default branch:\n${folders.map(([r, folder]) => `- ${shown(path.join(cwd, folder))}/ (${r})`).join('\n')}`);
+        } catch (err) {
+          return text(`The checkout of ${found.name} failed: ${errorMessage(err)}`, true);
+        }
+      },
+    ),
+  ];
 }
 
 /**

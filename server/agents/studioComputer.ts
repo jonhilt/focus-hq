@@ -1,7 +1,9 @@
 import type { Effort, Settings, StudioSession, StudioTake } from '../../shared/types';
 import type { Hub } from '../hub';
+import { shownProjects } from '../../shared/hidden';
 import { freshStudio, type Store, type StoredStudio } from '../store';
 import { errorMessage, truncate } from '../util';
+import type { ChatProject, ShipStatus } from './numberOne';
 import { applyRetime, applyTake, type RetimeInput, type TakeInput } from './studio';
 
 // The studio holodeck's computer: the captain's conversation with a Claude session of its own (not a goal's lead), and
@@ -34,6 +36,10 @@ export interface StudioTurn {
   messages: StudioSession['messages'];
   /** The scenes it's built, for a session that starts afresh. */
   takes: StudioTake[];
+  /** The projects aboard (hidden ones left out), whose code it can open to build scenes of what's really there. */
+  projects: ChatProject[];
+  /** The ship as it is right now: what each project's agents and goals are doing. */
+  shipStatus: () => Promise<ShipStatus>;
   /** The session so far; missing on the first turn of a conversation. */
   resumeSessionId?: string;
   settings: Settings;
@@ -81,6 +87,7 @@ export class StudioComputer {
     private readonly store: Store,
     private readonly hub: Hub,
     private readonly officer: StudioOfficer,
+    private readonly shipStatus: () => Promise<ShipStatus>,
     private readonly reportWaitMs = REPORT_WAIT_MS,
   ) {}
 
@@ -200,7 +207,7 @@ export class StudioComputer {
     const current = () => this.store.studio === session && this.running === abort;
     void this.officer
       .turn(
-        { messages: [...session.messages], takes: [...session.takes], resumeSessionId: session.sessionId, settings: this.store.settings, model: session.model, effort: session.effort, signal: abort.signal, tools: this.tools(session, current) },
+        { messages: [...session.messages], takes: [...session.takes], projects: shownProjects(this.store.projects).map(({ id, name, repos }) => ({ id, name, repos: [...repos] })), shipStatus: this.shipStatus, resumeSessionId: session.sessionId, settings: this.store.settings, model: session.model, effort: session.effort, signal: abort.signal, tools: this.tools(session, current) },
         (text) => {
           if (!current() || !text) return;
           session.activity = truncate(text, 120);

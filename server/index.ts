@@ -93,13 +93,14 @@ async function main() {
   const previews = new Previews(hub, github, config.demo);
   const planner = new IssuePlanner(store, hub, config.demo ? new DemoDrafter() : new ClaudeDrafter());
   const workspace = config.demo ? demoWorkspace : liveWorkspace;
-  // Number One reads the ship through the office, which is up by the time anyone asks
-  const numberOne = new NumberOne(store, hub, config.demo ? new DemoNumberOne() : new ClaudeNumberOne(), async (): Promise<ShipStatus> => {
+  // Number One and the studio's computer read the ship through the office, which is up by the time anyone asks
+  const shipStatus = async (): Promise<ShipStatus> => {
     const snapshot = await office.snapshot();
     // closed goals' PRs, looked up live on every call: one that fails falls back to what was recorded
     const prStates = await lookUpPrStates(closedGoalPrs(snapshot), (repo, number) => github.pullRequestState(repo, number));
     return summariseShip(snapshot, (id) => workspace.dir(id), prStates);
-  });
+  };
+  const numberOne = new NumberOne(store, hub, config.demo ? new DemoNumberOne() : new ClaudeNumberOne(), shipStatus);
   // the chief engineer reads the agents' sessions for frictions at retro time (the demo's are scripted), and writes what
   // they find to the ledger through the manager, which is up by the time anyone starts a retro
   const engineer = new ChiefEngineer(store, hub, config.demo ? new DemoEngineer() : new ClaudeEngineer(), paths.retros, {
@@ -120,7 +121,7 @@ async function main() {
     message: (agentId, text) => office.agents.message(agentId, text),
   }, callKeys, config.demo);
   // FOCUS_STUDIO=live: the real studio computer even in the demo office, to try it on a model without GitHub
-  const studio = new StudioComputer(store, hub, config.demo && process.env.FOCUS_STUDIO !== 'live' ? new DemoStudio() : new ClaudeStudio());
+  const studio = new StudioComputer(store, hub, config.demo && process.env.FOCUS_STUDIO !== 'live' ? new DemoStudio() : new ClaudeStudio(), shipStatus);
   const office = new Office(store, hub, github, previews, planner, numberOne, studio, engineer, scorecards, usage, new Voice(hub, config.demo), calls, await currentVersion());
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));

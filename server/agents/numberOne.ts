@@ -301,13 +301,13 @@ export function summariseShip(snapshot: Snapshot, worktree: (agentId: string) =>
 
 // ---------------------------------------------------------------- prompts and reply
 
-/** Where each project's checkout goes once `open_project` has fetched it, relative to Number One's cwd. */
-function projectList(projects: ChatProject[]): string {
+/** Where each project's checkout goes once `open_project` has fetched it: under `base` (Number One's cwd when it's empty). */
+export function projectList(projects: ChatProject[], base = ''): string {
   if (!projects.length) return 'There are no projects aboard yet.';
   return projects
     .map((p) => {
       const folders = repoFolders(p.repos);
-      const repos = p.repos.length ? p.repos.map((r) => `\`${p.id}/${folders.get(r)}/\` (${r})`).join(', ') : 'no repositories yet';
+      const repos = p.repos.length ? p.repos.map((r) => `\`${base}${p.id}/${folders.get(r)}/\` (${r})`).join(', ') : 'no repositories yet';
       return `- ${p.name}, id \`${p.id}\`: ${repos}`;
     })
     .join('\n');

@@ -3,7 +3,8 @@ import type { ServerEvent, StudioTake } from '../../shared/types';
 import { currentTake } from '../../shared/takeScript';
 import type { Hub } from '../hub';
 import { freshStudio, type Store } from '../store';
-import { applyRetime, applyTake, STUDIO_LIMITS, studioPrompt, type TakeInput } from './studio';
+import { applyRetime, applyTake, STUDIO_LIMITS, studioPrompt, studioSystemPrompt, type TakeInput } from './studio';
+import type { ShipStatus } from './numberOne';
 import { sheetData, type Staged, StudioComputer, type StudioOfficer, type StudioTurn } from './studioComputer';
 
 const ok = <T>(result: T | { error: string }): T => {
@@ -101,17 +102,39 @@ describe('studioPrompt', () => {
   });
 });
 
+describe('studioSystemPrompt', () => {
+  it('lists the projects aboard and where their code goes once opened, and says to read the real thing first', () => {
+    const prompt = studioSystemPrompt({ projects: [{ id: 'p1', name: 'Thomas', repos: ['jonhilt/thomas'] }], planning: '/data/planning' });
+    expect(prompt).toContain('- Thomas, id `p1`: `/data/planning/p1/thomas/` (jonhilt/thomas)');
+    expect(prompt).toContain('open_project');
+    expect(prompt).toContain('ship_status');
+  });
+});
+
 describe('StudioComputer', () => {
   const setup = (turn: (req: StudioTurn) => Promise<string>) => {
-    const store = { studio: freshStudio(), settings: {}, save: () => undefined } as unknown as Store;
+    const store = { studio: freshStudio(), settings: {}, projects: [], save: () => undefined } as unknown as Store;
     const sent: ServerEvent[] = [];
     const hub = { send: (e: ServerEvent) => sent.push(e) } as unknown as Hub;
     const officer: StudioOfficer = { turn: async (req) => ({ text: await turn(req), sessionId: 's1', costUsd: 0.1, model: req.model ?? 'claude-sonnet-5-5' }) };
-    return { store, sent, computer: new StudioComputer(store, hub, officer, 50) };
+    return { store, sent, computer: new StudioComputer(store, hub, officer, async (): Promise<ShipStatus> => ({ projects: [] }), 50) };
   };
   const settled = (store: Store) => new Promise<void>((resolve) => {
     const check = () => (store.studio.status === 'thinking' ? setTimeout(check, 5) : resolve());
     check();
+  });
+
+  it('hands each turn the projects aboard, hidden ones left out, and the ship as it stands', async () => {
+    const asked: StudioTurn[] = [];
+    const { store, computer } = setup(async (req) => {
+      asked.push(req);
+      return 'ok';
+    });
+    store.projects = [{ id: 'p1', name: 'Thomas', repos: ['jonhilt/thomas'] }, { id: 'p2', name: 'Secret', repos: ['x/y'], hidden: true }] as unknown as Store['projects'];
+    computer.say('Show me how proposals move through Thomas');
+    await settled(store);
+    expect(asked[0].projects).toEqual([{ id: 'p1', name: 'Thomas', repos: ['jonhilt/thomas'] }]);
+    expect(await asked[0].shipStatus()).toEqual({ projects: [] });
   });
 
   it('builds a scene with its tools on a turn, and replies', async () => {

@@ -236,6 +236,14 @@ floor to walk into but its walls (`STUDIO_HALL` and `studioWalls` in `client/src
   (`server/agents/transcript.ts`, [the ledger](ledger.md)), but the digests count, for the retro, where a timeline
   tells the story in order, and reads any session, not only the crew's.
 
+- **The ship and its projects** (its `ship_status` and `open_project` tools, the same as [Number One](number-one.md)'s,
+  `shipTools` in `server/agents/claudeCrew.ts`): for something aboard, like how proposals move through one of your
+  projects or how the office runs a workflow, the computer reads the real thing before it builds. `ship_status` is the
+  ship right now (each project's agents, goals and pull requests); `open_project` checks a project's repos out at their
+  default branch, into the same `data/planning/<project>/` folders Number One reads, and the computer reads them with
+  Read, Glob and Grep. Hidden projects are left out. Its instructions list the projects aboard and where each one's code
+  goes once opened.
+
 It's one Claude Code session for the whole conversation: each thing you say resumes it, so it remembers what it built
 (and, should the session be lost, the next turn starts a new one with a recap of the conversation and the scenes it
 kept). The chat's head says which model it's on and how hard it thinks, both yours to change from its next turn (kept
@@ -243,8 +251,8 @@ when you start over, `POST /api/studio/tune`; the ship's `model` setting and the
 pick), what its last turn ran on, and what it's spent.
 
 One conversation at a time, kept across restarts (`studio` in `data/state.json`); **Start over** clears the studio.
-The computer reads the web but nothing of the ship's code (`ClaudeStudio` in `server/agents/claudeCrew.ts`, working
-in `data/studio`), and its scene scripts run in your browser as the leads' explainers do. In `pnpm run demo` its
+The computer reads the web, Claude Code sessions, the ship's state and its projects' checked-out code, and changes
+nothing (`ClaudeStudio` in `server/agents/claudeCrew.ts`, working in `data/studio`), and its scene scripts run in your browser as the leads' explainers do. In `pnpm run demo` its
 turns are scripted (`DemoStudio`): describe anything and it builds **fan-out**, a gold core beaming eight agents in on
 pads round it and folding their answers back; ask for more and it runs sixteen; ask for it slower and it retimes it to
 half speed; mention a pipeline, track or gates and it builds **pipeline**, work riding a track through three gates.
