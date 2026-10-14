@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { randomAvatar } from '../../shared/crew';
 import * as demoGitHub from '../github/demo';
 import { prKey } from '../../shared/qa';
+import { openQuestion } from '../../shared/artifacts';
 import { demoLayer } from '../github/demo';
 import { GhServerError } from '../github/runner';
 import { GitHub } from '../github/service';
@@ -497,6 +498,35 @@ describe('AgentManager', () => {
     expect(store.agent(lead.id).lead!.questions![0].answer).toMatchObject({ option: 'b', note: 'Keep the header' });
     expect(claude.turns[0].sent).toEqual(['I picked B, “List”, for your question “Which layout, really?”.\n\nKeep the header']);
     expect(() => agents.answer(lead.id, 'q5', 'a')).toThrow(/already picked B/);
+  });
+
+  it('settles the lead’s open question when the captain replies in chat instead of picking', async () => {
+    const { agents, claude, store, project } = office();
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    const ask = (question: string) => claude.turns[0].req.tools!.ask({ question, options: [{ label: 'Cards', html: '<p>A</p>' }, { label: 'List', html: '<p>B</p>' }] });
+    const questions = () => store.agent(lead.id).lead!.questions!;
+
+    // news from someone else aboard isn't the captain's answer
+    await ask('Which layout?');
+    agents.message(lead.id, 'The build is green', 'Office');
+    expect(openQuestion(store.agent(lead.id))).toBeDefined();
+
+    agents.message(lead.id, '  Go with the list  ');
+    expect(openQuestion(store.agent(lead.id))).toBeUndefined();
+    expect(questions().at(-1)!.answer).toEqual({ note: 'Go with the list', at: expect.any(Number) });
+    expect(claude.turns[0].sent.at(-1)).toBe('Go with the list');
+    expect(() => agents.answer(lead.id, 'q1', 'b')).toThrow(/already answered it in chat/);
+
+    // with nothing open, a message changes nothing
+    const before = structuredClone(questions());
+    agents.message(lead.id, 'Thanks');
+    expect(questions()).toEqual(before);
+
+    // a pick on screen is recorded with its option, not also as a reply in chat
+    await ask('Which colour?');
+    agents.answer(lead.id, 'q2', 'a');
+    expect(questions().at(-1)!.answer).toEqual({ option: 'a', at: expect.any(Number) });
   });
 
   it('merges the base into a slice’s conflicting PR itself, and tells the lead to pull once their turn is over', async () => {
@@ -1004,8 +1034,11 @@ describe('AgentManager', () => {
       expect(store.agent(id).status).toBe('stopped');
       const lines = store.recentLines(id).length;
 
+      // a question they'd asked stays open while the captain's message hasn't gone
+      store.agent(id).lead!.questions = [{ id: 'q1', question: 'Which?', options: [], at: 1 }];
       expect(agents.message(id, 'Go on')).toEqual({ costly: { usd: 3, tokens: 600_000, resetsAt: store.agent(id).held!.until } });
       expect(store.recentLines(id)).toHaveLength(lines);
+      expect(openQuestion(store.agent(id))).toBeDefined();
       expect(agents.message(id, 'QA passed it', 'QA')).toEqual({ sent: true });
       expect(agents.message(id, 'Go on', undefined, 'wait')).toEqual({ sent: true });
       await new Promise((r) => setTimeout(r, 50));

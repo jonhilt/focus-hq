@@ -1,7 +1,7 @@
 import { Effect, Option } from 'effect';
 import type { Agent, MessageReply, ResumeHow } from '../../../shared/types';
-import { answerMessage } from '../../../shared/artifacts';
-import { answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, applyNote, type NoteInput, pageErrorsNote } from '../lead';
+import { answerMessage, openQuestion } from '../../../shared/artifacts';
+import { answerInChat, answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, applyNote, type NoteInput, pageErrorsNote } from '../lead';
 import { beatMoments, explainerCheck, explainerPage, type ExplainerInput, momentNotes } from '../explainer';
 import { applyContacts } from '../contacts';
 import { checklistWaypoint, headedWaypoint, notedWaypoint } from '../waypoints';
@@ -126,8 +126,22 @@ export class GoalTools extends Part {
     if ('error' in answered) throw new Error(answered.error);
     const reply = this.core.comms.message(id, answerMessage(answered.question, option, note), undefined, how);
     if ('costly' in reply) return reply;
-    this.update(agent, { lead: { ...work, questions: answered.questions } });
+    // read again: sending it may have changed the goal (a proposal to close dropped)
+    if (agent.lead) this.update(agent, { lead: { ...agent.lead, questions: answered.questions } });
     return agent;
+  }
+
+  /**
+   * The captain's chat message to an agent: once it's sent, a lead's open question counts as answered in chat (they
+   * replied in words instead of picking an option). Not the message `answer` sends, which records the pick itself.
+   */
+  captainMessage(id: string, text: string, how?: ResumeHow): MessageReply {
+    const reply = this.core.comms.message(id, text, undefined, how);
+    if ('costly' in reply) return reply;
+    const agent = this.store.agent(id);
+    const work = agent.lead;
+    if (work && text.trim() && openQuestion(agent)) this.update(agent, { lead: { ...work, questions: answerInChat(work.questions ?? [], text, Date.now()) } });
+    return reply;
   }
 
   /** The lead's propose_close tool: the captain hears the goal looks done, and closes it or carries on. */

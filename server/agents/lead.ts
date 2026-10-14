@@ -1,5 +1,6 @@
 import type { Agent, Effort, LeadAgent, GoalArtifact, GoalNote, GoalQuestion, GoalRecord, Helper, LeadPr, LeadWork, QaReport, QaReview, QueuedGoal, Settings } from '../../shared/types';
 import { TEAM_STATIONS } from '../../shared/types';
+import { unanswered } from '../../shared/artifacts';
 import type { BranchState, HelperEvent, RunOutcome } from './types';
 import { slugify } from '../util';
 import { SCRATCH_RULE } from './scratch';
@@ -354,11 +355,23 @@ export function askQuestion(questions: readonly GoalQuestion[], input: QuestionI
 export function answerQuestion(questions: readonly GoalQuestion[], questionId: string, option: string, note: string | undefined, at: number): { questions: GoalQuestion[]; question: GoalQuestion } | { error: string } {
   const question = questions.find((q) => q.id === questionId);
   if (!question) return { error: 'That question isn’t there any more: the lead may have asked another' };
-  if (question.answer) return { error: `You already picked ${question.answer.option.toUpperCase()}` };
+  if (question.answer) return { error: question.answer.option ? `You already picked ${question.answer.option.toUpperCase()}` : 'You already answered it in chat' };
   if (!question.options.some((o) => o.id === option)) return { error: `There’s no option ${option}` };
   const said = note?.trim();
   if (said && said.length > QUESTION_LIMITS.note) return { error: `Keep the note under ${QUESTION_LIMITS.note} characters` };
   return { questions: questions.map((q) => (q.id === questionId ? { ...q, answer: { option, ...(said ? { note: said } : {}), at } } : q)), question };
+}
+
+/**
+ * The goal's questions once the captain sends the lead a chat message: an open one counts as answered in chat, with
+ * what they said as its note (the lead reads the message and acts on it; which option they meant isn't guessed). The
+ * same questions when none is open.
+ */
+export function answerInChat(questions: readonly GoalQuestion[], text: string, at: number): GoalQuestion[] {
+  const open = unanswered(questions);
+  if (!open) return [...questions];
+  const said = text.trim().slice(0, QUESTION_LIMITS.note);
+  return questions.map((q) => (q === open ? { ...q, answer: { ...(said ? { note: said } : {}), at } } : q));
 }
 
 /**

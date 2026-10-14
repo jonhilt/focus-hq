@@ -24,6 +24,10 @@ export const unanswered = (questions: readonly GoalQuestion[] | undefined): Goal
 /** The question the lead is waiting on the captain to answer, if there is one. */
 export const openQuestion = (lead: Pick<Agent, 'lead'> | undefined): GoalQuestion | undefined => unanswered(lead?.lead?.questions);
 
+/** How the station screen's list sums up a settled question: the option picked, answered in chat, or never answered. */
+export const answeredReadout = (question: GoalQuestion): string =>
+  !question.answer ? 'NOT ANSWERED' : question.answer.option ? `PICKED ${question.answer.option.toUpperCase()}` : 'ANSWERED IN CHAT';
+
 /** What the lead hears when the captain picks an option. */
 export function answerMessage(question: GoalQuestion, option: string, note?: string): string {
   const picked = question.options.find((o) => o.id === option);

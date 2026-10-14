@@ -1,4 +1,4 @@
-import { ARTIFACT_SIZE, artifactUrl, latestArtifact, optionUrl, unanswered } from '../../../shared/artifacts';
+import { ARTIFACT_SIZE, answeredReadout, artifactUrl, latestArtifact, optionUrl, unanswered } from '../../../shared/artifacts';
 import { leadVoice } from '../../../shared/crew';
 import type { GoalArtifact, GoalQuestion, GoalRecord } from '../../../shared/types';
 import { state } from '../net/state';
@@ -117,10 +117,10 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
     return [
       h('div', { class: 'row artifact-head' },
         h('h3', { class: 'grow' }, q.question),
-        h('small', { class: 'muted' }, answer ? `You picked ${answer.option.toUpperCase()} at ${when(answer.at)}` : live ? `Asked ${when(q.at)}` : 'Not answered before the goal closed'),
+        h('small', { class: 'muted' }, answer ? `${answer.option ? `You picked ${answer.option.toUpperCase()}` : 'You answered in chat'} at ${when(answer.at)}` : live ? `Asked ${when(q.at)}` : 'Not answered before the goal closed'),
       ),
       q.context ? h('p', { class: 'question-context' }, q.context) : h('span'),
-      answer?.note ? h('p', { class: 'muted' }, `You added: ${answer.note}`) : h('span'),
+      answer?.note ? h('p', { class: 'muted' }, `${answer.option ? 'You added' : 'You said'}: ${answer.note}`) : h('span'),
       h('div', { class: 'row question-steps' },
         h('button', { class: 'btn small', title: 'The option before (←)', onclick: () => step?.(-1) }, '◀'),
         ...tabs,
@@ -145,7 +145,7 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
     nav.show([
       ...(waiting ? [{ key: asked(waiting), label: waiting.question, readout: 'ASKS YOU' }] : []),
       ...list.map((a) => ({ key: a.id, label: a.title, readout: live && a.id === onScreen ? 'SCREEN' : undefined })),
-      ...answered.map((q) => ({ key: asked(q), label: q.question, readout: q.answer ? `PICKED ${q.answer.option.toUpperCase()}` : 'NOT ANSWERED' })),
+      ...answered.map((q) => ({ key: asked(q), label: q.question, readout: answeredReadout(q) })),
     ], picked);
     const question = qs.find((q) => asked(q) === picked);
     const artifact = list.find((a) => a.id === picked);

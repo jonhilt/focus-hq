@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { answerMessage, artifactUrl, latestArtifact, openQuestion, optionUrl } from './artifacts';
+import { answeredReadout, answerMessage, artifactUrl, latestArtifact, openQuestion, optionUrl } from './artifacts';
 
 describe('artifacts', () => {
   it('shows the one shown last, wherever it stands in the list', () => {
@@ -20,7 +20,14 @@ describe('questions', () => {
   it('is open until the captain answers the last one', () => {
     expect(openQuestion({ lead: { questions: [question] } as never })).toBe(question);
     expect(openQuestion({ lead: { questions: [{ ...question, answer: { option: 'a', at: 10 } }] } as never })).toBeUndefined();
+    expect(openQuestion({ lead: { questions: [{ ...question, answer: { note: 'B please', at: 10 } }] } as never })).toBeUndefined();
     expect(openQuestion(undefined)).toBeUndefined();
+  });
+
+  it('sums up a settled question by the option picked, or as answered in chat', () => {
+    expect(answeredReadout({ ...question, answer: { option: 'b', at: 10 } })).toBe('PICKED B');
+    expect(answeredReadout({ ...question, answer: { note: 'B please', at: 10 } })).toBe('ANSWERED IN CHAT');
+    expect(answeredReadout(question)).toBe('NOT ANSWERED');
   });
 
   it('serves each option beside the artifacts, under a name no artifact can have', () => {

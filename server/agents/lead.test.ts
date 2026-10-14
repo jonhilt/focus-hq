@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadAgent, LeadWork } from '../../shared/types';
-import { afterLanding, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, checkNote, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
+import { afterLanding, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, checkNote, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -691,5 +691,20 @@ describe('questions', () => {
     const answered = answerQuestion(questions, 'q1', 'a', ' ', 2);
     expect(answered).toEqual({ questions: [{ ...questions[0], answer: { option: 'a', at: 2 } }], question: questions[0] });
     expect(answerQuestion('error' in answered ? [] : answered.questions, 'q1', 'b', undefined, 3)).toHaveProperty('error');
+  });
+
+  it('settles the open question when the captain replies in chat, keeping what they said and picking nothing', () => {
+    const { questions } = ask([]);
+    const settled = answerInChat(questions, '  Go with B, but keep the header  ', 7);
+    expect(settled).toEqual([{ ...questions[0], answer: { note: 'Go with B, but keep the header', at: 7 } }]);
+    expect(answerInChat(questions, 'x'.repeat(QUESTION_LIMITS.note + 50), 7)[0].answer?.note).toHaveLength(QUESTION_LIMITS.note);
+    expect(answerQuestion(settled, 'q1', 'b', undefined, 8)).toEqual({ error: 'You already answered it in chat' });
+  });
+
+  it('leaves the questions as they are when none is open', () => {
+    const picked = answerQuestion(ask([]).questions, 'q1', 'a', undefined, 2);
+    const answered = 'error' in picked ? [] : picked.questions;
+    expect(answerInChat(answered, 'Thanks', 9)).toEqual(answered);
+    expect(answerInChat([], 'Hello', 9)).toEqual([]);
   });
 });

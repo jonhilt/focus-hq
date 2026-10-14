@@ -235,7 +235,8 @@ export interface LeadWork {
 
 /**
  * A question the lead put to the captain with the office's ask tool, each option a page of its own (served like an
- * artifact, as `<question id>.<option id>`). The captain answers by picking one; it stays, answered, for the goal.
+ * artifact, as `<question id>.<option id>`). The captain answers by picking one, or by telling the lead in chat
+ * instead; it stays, answered, for the goal.
  */
 export interface GoalQuestion {
   /** The slice it was asked in. Missing on questions asked before it was kept. */
@@ -248,7 +249,8 @@ export interface GoalQuestion {
   /** a, b, c, d in the order the lead gave them, each with what it means and trades off (`detail`). */
   options: { id: string; label: string; detail?: string; image?: boolean }[];
   at: number;
-  answer?: { option: string; note?: string; at: number };
+  /** How the captain answered: the `option` they picked on screen (with what they added), or no `option` when they replied in chat (`note` is what they said). */
+  answer?: { option?: string; note?: string; at: number };
 }
 
 /**

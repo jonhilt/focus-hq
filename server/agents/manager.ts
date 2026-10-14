@@ -200,7 +200,7 @@ export class AgentManager {
   }
 
   message(id: string, text: string, from?: string, how?: ResumeHow): MessageReply {
-    return this.core.comms.message(id, text, from, how);
+    return from === undefined ? this.core.goalTools.captainMessage(id, text, how) : this.core.comms.message(id, text, from, how);
   }
 
   resolvePermission(id: string, requestId: string, allow: boolean): void {

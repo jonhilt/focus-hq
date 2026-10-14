@@ -19,13 +19,16 @@ describe('goalRoomState', () => {
   });
 
   it('needs your answer while the lead has a question open, unless something more pressing is up', () => {
-    const asking = (status: AgentStatus, answered = false) => ({
+    const asking = (status: AgentStatus, answered: false | 'picked' | 'chat' = false) => ({
       status,
-      lead: { questions: [{ id: 'q1', question: 'Which?', options: [], at: 1, ...(answered ? { answer: { option: 'a', at: 2 } } : {}) }] } as never,
+      lead: { questions: [{ id: 'q1', question: 'Which?', options: [], at: 1, ...(answered ? { answer: answered === 'picked' ? { option: 'a', at: 2 } : { note: 'B, please', at: 2 } } : {}) }] } as never,
     });
     expect(goalRoomState(asking('done'))).toEqual({ tone: 'needs-you', label: 'Your answer' });
     expect(goalRoomState(asking('working'))).toEqual({ tone: 'needs-you', label: 'Your answer' });
-    expect(goalRoomState(asking('done', true))).toEqual({ tone: 'your-turn', label: 'Your turn' });
+    expect(goalRoomState(asking('done', 'picked'))).toEqual({ tone: 'your-turn', label: 'Your turn' });
+    // answered in chat: the lead's working on the reply
+    expect(goalRoomState(asking('working', 'chat'))).toEqual(goalRoomState(asking('working', 'picked')));
+    expect(goalRoomState(asking('working', 'chat')).label).not.toBe('Your answer');
     expect(goalRoomState(asking('waiting'))).toEqual({ tone: 'needs-you', label: 'Needs you' });
     expect(goalRoomState(asking('error')).tone).toBe('stopped');
   });
@@ -128,6 +131,7 @@ describe('leadNow', () => {
     expect(leadNow(lead('waiting', { permission: { id: 'p', tool: 'ship', summary: 'Ship slice 2', at: 1 } }))).toBe('Asking you: Ship slice 2');
     const question = { id: 'q1', question: 'Which layout?', options: [], at: 1 };
     expect(leadNow(lead('working', { lead: { questions: [question] } }))).toBe('Asked you: Which layout?');
+    expect(leadNow(lead('working', { lead: { questions: [{ ...question, answer: { note: 'B', at: 2 } }] } }))).toBe('Writing the wishlist API');
     expect(leadNow(lead('done', { lead: { closing: { reason: 'Done looks done', at: 1 } } }))).toBe('Ready to wrap up: Done looks done');
   });
 
