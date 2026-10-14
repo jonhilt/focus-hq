@@ -36,7 +36,7 @@ import { demoPreviewPage, Previews } from './previews';
 import { apiRouter } from './routes';
 import { StateLockedError, Store } from './store';
 import { currentVersion, RESTART_MESSAGE, Updater } from './updater';
-import { errorMessage, run, seedDemoIds, seedRandom } from './util';
+import { errorMessage, run, seedOffice } from './util';
 import { demoPlanUsage, readPlanUsage, UsageWatch } from './usage';
 import { Voice } from './voice';
 
@@ -70,14 +70,8 @@ const liveWorkspace: WorkspaceOps = {
 };
 
 async function main() {
-  // the studio films the same episode each run: the demo's waits and picks roll the same dice
-  // and its ids, which the crew's names hash from
-  if (config.studio) {
-    seedRandom(Number(process.env.FOCUS_DEMO_SEED ?? 1));
-  } else if (config.demo) {
-    // the demo's projects and goal leads keep their ids across a restart
-    seedDemoIds();
-  }
+  // the studio rolls the same dice each run, the demo the same ids
+  seedOffice(config, Number(process.env.FOCUS_DEMO_SEED ?? 1));
   const store = new Store(!config.demo);
   store.load();
 

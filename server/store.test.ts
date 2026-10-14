@@ -7,7 +7,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-store-'));
 process.env.FOCUS_DATA_DIR = dir;
 const { StateLockedError, Store, stateLocked } = await import('./store');
-const { seedDemoIds, seedRandom } = await import('./util');
+const { seedOffice, seedRandom } = await import('./util');
 
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
@@ -62,7 +62,7 @@ describe('the demo office’s ids', () => {
   const demoIds = (otherDice: number) => {
     // whatever was rolled before (another test, the office's startup) mustn't matter
     seedRandom(otherDice);
-    seedDemoIds();
+    seedOffice({ demo: true, studio: false }, 1);
     const store = new Store(false);
     return [store.addProject('Sock Shop').id, store.addProject('Space Dodger').id];
   };
