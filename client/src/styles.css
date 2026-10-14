@@ -406,27 +406,53 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .goal-record { border-left-color: var(--muted); }
 
 /* a goal's star chart: the course from launch towards the objective, each slice a waypoint, and the picked one's log */
-.chart { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 18px; height: calc(100vh - 150px); min-height: 0; }
-.chart-map { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.chart { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; height: 100%; min-height: 0; }
+.chart-map { position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.chart-whole { position: absolute; top: 10px; left: 10px; }
+/* a slice's work round its waypoint: small and quiet round each, named round the one in focus */
+.chart-node { cursor: pointer; outline: none; }
+.chart-node .hit { fill: transparent; }
+.chart-node .link { fill: none; stroke: var(--tone); stroke-width: 0.8; opacity: 0.35; }
+.chart-node .mark { fill: var(--tone); stroke: var(--tone); stroke-width: 1.2; }
+.chart-node.open .mark { fill: #000; }
+.chart-node.active .mark { animation: chart-node-pulse 1.4s ease-in-out infinite; }
+.chart-node text { fill: var(--tone); font-size: calc(13px / var(--z, 1)); }
+.chart-node.done text { opacity: 0.85; }
+.chart-constellation:not(.focus) .chart-node { opacity: 0.75; }
+.chart-constellation.focus .link { stroke-width: 1.2; opacity: 0.55; }
+.chart-node:hover .mark, .chart-node:focus-visible .mark { stroke: #fff; }
+.chart-node:hover text, .chart-node:focus-visible text { text-decoration: underline; }
+.chart-node.picked .mark { stroke: #fff; stroke-width: 2; }
+.chart-node.picked text { fill: #fff; }
+@keyframes chart-node-pulse { 50% { opacity: 0.35; } }
+.chart-log-head .chart-kind { display: block; color: var(--tone, var(--lcars-orange)); font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; }
+.chart-work { margin: 4px 0 0; padding: 0; list-style: none; }
+.chart-work li { margin: 3px 0; padding-left: 14px; position: relative; }
+.chart-work li::before { content: ''; position: absolute; left: 0; top: 0.5em; width: 7px; height: 7px; border-radius: 2px; background: var(--tone); }
+.chart-work li.open::before { background: none; border: 1.5px solid var(--tone); width: 4px; height: 4px; }
+.chart-work small { color: var(--tone); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; margin-right: 6px; }
+.chart-work .chart-thread:hover > span { color: var(--tone); text-decoration: underline; }
+.chart-work li.done span { color: var(--muted); }
+.chart-evidence.one { grid-template-columns: 1fr; }
 .chart-svg { flex: 1; min-height: 0; width: 100%; background: #000; border-radius: 10px; font-family: var(--ui); }
 .chart-readout { flex: none; background: var(--surface-2); color: var(--lcars-peach); border-radius: 999px; padding: 6px 18px; font-size: 16px; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chart-course { fill: none; stroke: var(--lcars-gold); stroke-width: 4; stroke-linecap: round; }
 .chart-launch { fill: var(--lcars-orange); }
-.chart-caption { fill: var(--lcars-peach); font-size: 15px; letter-spacing: 0.12em; }
+.chart-caption { fill: var(--lcars-peach); font-size: calc(15px / max(1, var(--z, 1))); letter-spacing: 0.12em; }
 .chart-caption.launch { fill: var(--lcars-orange); letter-spacing: 0.04em; }
 .chart-objective { fill: none; stroke: var(--lcars-peach); stroke-width: 1.5; stroke-dasharray: 3 6; opacity: 0.9; }
 .chart-done { height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; color: #000; font: 600 17px/1.1 var(--ui); overflow: hidden; }
 .chart-projected path { fill: none; stroke: var(--lcars-periwinkle); stroke-width: 2; stroke-dasharray: 2 7; stroke-linecap: round; }
 .chart-projected .mark { fill: #000; stroke: var(--lcars-periwinkle); stroke-width: 2; }
 .chart-projected .hit { fill: transparent; }
-.chart-projected text { fill: var(--lcars-periwinkle); font-size: 15px; }
+.chart-projected text { fill: var(--lcars-periwinkle); font-size: calc(15px / max(1, var(--z, 1))); }
 .chart-idea { cursor: pointer; outline: none; }
 .chart-probe { cursor: pointer; }
 .chart-probe .trail { fill: none; stroke: var(--lcars-sky); stroke-width: 1.5; stroke-dasharray: 2 6; opacity: 0.55; }
 .chart-probe .glow { fill: var(--lcars-sky); opacity: 0.18; }
 .chart-probe .ship { fill: #f1eaff; stroke: var(--lcars-sky); stroke-width: 1.5; }
-.chart-probe .what { fill: var(--lcars-sky); font-size: 14px; letter-spacing: 0.04em; }
-.chart-probe .doing { fill: var(--muted); font-size: 13px; }
+.chart-probe .what { fill: var(--lcars-sky); font-size: calc(14px / max(1, var(--z, 1))); letter-spacing: 0.04em; }
+.chart-probe .doing { fill: var(--muted); font-size: calc(13px / max(1, var(--z, 1))); }
 .chart-probe .pulse { fill: var(--lcars-green); }
 .chart-probe.sent .glow { fill: var(--lcars-green); }
 .chart-probe.sent .doing { fill: var(--lcars-green); }
@@ -439,11 +465,11 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .chart-idea.picked text { fill: var(--lcars-gold); }
 .chart-scrubbed path { fill: none; stroke: var(--lcars-red); stroke-width: 2.5; stroke-dasharray: 7 6; }
 .chart-scrubbed path.cross { stroke-dasharray: none; stroke-width: 3; }
-.chart-scrubbed text { fill: var(--muted); font-size: 14px; }
+.chart-scrubbed text { fill: var(--muted); font-size: calc(14px / max(1, var(--z, 1))); }
 .chart-scrubbed .was { fill: var(--lcars-red); letter-spacing: 0.06em; }
 .chart-contact { cursor: pointer; }
 .chart-contact .blip { fill: #000; stroke: var(--lcars-sky); stroke-width: 2; }
-.chart-contact text { fill: var(--lcars-sky); font-size: 15px; }
+.chart-contact text { fill: var(--lcars-sky); font-size: calc(15px / max(1, var(--z, 1))); }
 .chart-contact.pursued .blip { fill: var(--lcars-green); stroke: var(--lcars-green); }
 .chart-contact.pursued text { fill: var(--lcars-green); }
 .chart-contact .trail { fill: none; stroke: var(--lcars-green); stroke-width: 1.5; stroke-dasharray: 2 5; opacity: 0.7; }
@@ -489,7 +515,7 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .qa-spots ul { margin: 4px 0 0; padding-left: 18px; }
 .qa-spots code { font-family: var(--mono); font-size: 12px; color: var(--lcars-sky); }
 .chart-wp .num { fill: #000; font-size: 14px; font-weight: 700; pointer-events: none; }
-.chart-wp .name { fill: var(--text); font-size: 17px; }
+.chart-wp .name { fill: var(--text); font-size: calc(17px / max(1, var(--z, 1))); }
 .chart-wp .name.heading { font-style: italic; }
 .chart-wp .name.unset { fill: var(--muted); }
 .chart-wp .track { fill: none; stroke: #2a2840; stroke-width: 4; }
