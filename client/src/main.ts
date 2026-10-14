@@ -8,7 +8,7 @@ import { agentPanelOpen, openAgentPanel } from './ui/agentPanel';
 import { openHelperPanel } from './ui/helperPanel';
 import { openWorkflowAgentPanel } from './ui/workflowAgentPanel';
 import { openWorkflowScriptPanel } from './ui/workflowScriptPanel';
-import { flowPrefs } from './world/flowPrefs';
+import { flowPrefs, railPrefs } from './world/flowPrefs';
 import { openBackgroundPanel } from './ui/backgroundPanel';
 import { openBoardPanel } from './ui/boardPanel';
 import type { Ui } from './ui/context';
@@ -481,6 +481,10 @@ async function main() {
       case 'flow-hologram':
         sound.press();
         flowPrefs.set(!flowPrefs.on);
+        break;
+      case 'tactical-view':
+        sound.press();
+        railPrefs.set(!railPrefs.on);
         break;
       case 'workflow-script': {
         const lead = [...state.agents.values()].find((a) => a.projectId === i.projectId && a.task === 'lead' && (a.lead?.station ?? 0) === i.station);

@@ -14,6 +14,8 @@ export type Interaction =
   | { kind: 'workflow-script'; projectId: string; station: number; workflowId: string }
   /** The switch on a transporter console's screen: show or hide the flow hologram over every console. */
   | { kind: 'flow-hologram' }
+  /** E on a transporter room's tactical display: the rail map, or the LCARS view (flowPrefs.ts). */
+  | { kind: 'tactical-view' }
   /** One of a lead's background commands or monitors, a probe by their chair: its output, and a way to stop it. Its station says whose. */
   | { kind: 'background'; projectId: string; station: number; taskId: string }
   | { kind: 'desk'; projectId: string }

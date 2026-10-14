@@ -95,6 +95,8 @@ client/src/
     transporter.ts        the transporter beam the crew arrive and leave in
     flowHologram.ts       the hologram of a workflow's flow over a transporter room's console: its phases, a key to the pads' colours, their results rising back
     padGlow.ts            the light on each transporter pad under its agent, in their phase's colour
+    railMap.ts            a workflow as a rail map, from its roll: stations per phase, a track per item, bundles past eight
+    railMapScreen.ts      the rail map drawn on a transporter room's tactical display
     transporterRoom.ts    a team station's transporter room, where a workflow runs: its pads, console (and the screen on it that shows the script), pattern buffer, tactical display and feed camera
     engineering.ts        the engineering station: the engineer, the report card and how their retro stands on the console; E opens their panel
     warpCore.ts           the warp core's glow: the shared materials its 'warp-core' surfaces are drawn with, pulsing

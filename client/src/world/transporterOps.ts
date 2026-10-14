@@ -10,7 +10,9 @@ import { LCARS, LCARS_FONT, LCARS_STATUS, lcarsFrame } from './starship';
 import { Beam } from './transporter';
 import { FlowHologram } from './flowHologram';
 import { PadGlows } from './padGlow';
-import { flowPrefs } from './flowPrefs';
+import { flowPrefs, railPrefs } from './flowPrefs';
+import { railMap } from './railMap';
+import { drawRailMap } from './railMapScreen';
 import type { Interaction } from './builder';
 import { CONSOLE_SCREEN, type TransporterRoom } from './transporterRoom';
 import {
@@ -63,6 +65,10 @@ export function buttonAt(uv: { x: number; y: number }): ConsoleButton | undefine
 const FLOW_SWITCH: { interaction: Interaction; label: () => string } = {
   interaction: { kind: 'flow-hologram' },
   label: () => (flowPrefs.on ? 'Switch the flow hologram off' : 'Switch the flow hologram on'),
+};
+const VIEW_SWITCH: { interaction: Interaction; label: () => string } = {
+  interaction: { kind: 'tactical-view' },
+  label: () => (railPrefs.on ? 'Show the LCARS view' : 'Show the rail map'),
 };
 /** A pad's ring and emitter while nobody's on it. */
 const DIM = 0.16;
@@ -212,8 +218,10 @@ export class TransporterOperation {
     if (!workflow) {
       delete screen.userData.interaction;
       delete this.flow.panel.userData.interaction;
+      delete this.room.tactical.userData.interaction;
       return;
     }
+    interactive(this.room.tactical, VIEW_SWITCH.interaction, VIEW_SWITCH.label);
     const { projectId, station } = this.room;
     for (const mesh of [screen, this.flow.panel]) interactive(mesh, { kind: 'workflow-script', projectId, station, workflowId: workflow.id }, () => `Read the script of ${workflow.name}`);
   }
@@ -336,10 +344,12 @@ export class TransporterOperation {
     this.drawScript(wf);
     this.flow.show(wf, this.endedAt);
     const summary = tacticalSummary(wf, Date.now(), this.endedAt);
-    const key = JSON.stringify(summary);
+    const map = railPrefs.on ? railMap(wf) : undefined;
+    const key = JSON.stringify(map ? [map, summary.elapsed] : summary);
     if (key !== this.tacticalKey) {
       this.tacticalKey = key;
-      drawTactical(this.tactical.ctx, this.tactical.canvas, summary, wf.description, this.room.index);
+      if (map) drawRailMap(this.tactical.ctx, this.tactical.canvas, map, railHeader(wf, summary.elapsed));
+      else drawTactical(this.tactical.ctx, this.tactical.canvas, summary, wf.description, this.room.index);
       this.tacticalTex.needsUpdate = true;
       this.room.tactical.material = this.tacticalMat;
     }
@@ -398,6 +408,14 @@ export class TransporterOperation {
     this.flow.dispose();
     this.glows.dispose();
   }
+}
+
+/** What the rail map says over it: the workflow, how its agents stand, its clock, and what E on the screen does. */
+function railHeader(wf: Workflow, clock: string): { name: string; counts: string; clock: string; hint: string } {
+  const n = (s: WorkflowAgent['status']) => wf.roll.filter((a) => a.status === s).length;
+  const counts = [`${n('working')} at work`, `${n('done')} done`, n('failed') ? `${n('failed')} failed` : '', n('queued') ? `${n('queued')} queued` : '']
+    .filter(Boolean).join(' · ');
+  return { name: wf.name, counts, clock: `T+ ${clock}`, hint: 'E · LCARS view' };
 }
 
 const tint = new THREE.Color();
