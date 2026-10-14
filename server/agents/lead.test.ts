@@ -189,6 +189,13 @@ describe('what the lead writes and hears', () => {
     expect(prompt).toMatch(/Until then keep working on your current branch: you don't need to end your turn, or commit work in progress, for the move/);
   });
 
+  it('has a lead carry on into the next slice once one lands, asking first only when it’s the captain’s call', () => {
+    const prompt = leadSystemAppend({ name: 'Lt. Okafor' }, 'Shop', 1);
+    expect(prompt).toContain('stop there while it\'s in review');
+    expect(prompt).toContain('When a slice lands (you\'ll hear), carry on into the next one without waiting to be told');
+    expect(prompt).toContain("Ask first only when what's next is the captain's call");
+  });
+
   it('keeps what changes from slice to slice out of its instructions, which a resumed session never re-reads', () => {
     const prompt = leadSystemAppend({ name: 'Lt. Okafor' }, 'Shop', 1);
     expect(prompt).not.toMatch(/focus\//);
@@ -207,7 +214,12 @@ describe('what the lead writes and hears', () => {
 
   it('tells the lead when the slice has landed, and where their repos are for the next one', () => {
     const landed = { ...work, prs: [work.prs[0], { ...work.prs[1], outcome: 'closed' as const }] };
-    expect(landedNote(landed)).toBe('Slice 2 has landed: acme/web#12 merged, acme/api#7 was closed unmerged. Tell the captain what it taught you and what you\'d do next.');
+    const idle = landedNote(landed);
+    expect(idle).toMatch(/^Slice 2 has landed: acme\/web#12 merged, acme\/api#7 was closed unmerged\. Carry on into the next slice now, without waiting to be told/);
+    // what's next: the captain's word if they gave it, else the note's first idea; asking first only when it's their call
+    expect(idle).toContain("what the captain asked for next, if they said, or else the first of your note's next ideas");
+    expect(idle).toContain("Stop to ask first only when what's next is the captain's call");
+    expect(idle).toContain('propose closing the goal instead');
     // mid-turn, they carry on: the move waits for their next turn
     const midTurn = landedMidTurnNote(landed);
     expect(midTurn).toMatch(/^Slice 2 has landed: acme\/web#12 merged, acme\/api#7 was closed unmerged\. Carry on with what you're doing on your current branch: your commits there are safe\./);

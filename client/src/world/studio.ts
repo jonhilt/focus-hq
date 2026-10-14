@@ -129,3 +129,62 @@ export function sheetMoments(seconds: number, phases: Record<string, [number, nu
   }
   return [...picked.sort((a, b) => a.t - b.t), { t: end, label: 'the end' }];
 }
+
+/** The shelf's arc of cards round you: `distance` from your eyes, `step` radians apart, as many as `reach` either side of the one picked shown. */
+export const SHELF = { distance: 2.6, step: 0.6, reach: 3, drop: 0.15 };
+
+/** Where a card on the shelf sits: its turn round you from straight ahead (radians, + to your left), how big it is, and how solid. */
+export interface ShelfSpot {
+  angle: number;
+  scale: number;
+  opacity: number;
+}
+
+/**
+ * Where each of `n` cards sits on the shelf's arc while `at` (the one picked, eased, so it can be between two) is in
+ * front of you: later ones to your right, the one in front bigger, those further round fading out past `reach`.
+ */
+export function shelfSpots(n: number, at: number): ShelfSpot[] {
+  return Array.from({ length: n }, (_, i) => {
+    const off = i - at;
+    const away = Math.abs(off);
+    return {
+      angle: -off * SHELF.step,
+      scale: 1 + 0.35 * Math.max(0, 1 - away),
+      opacity: Math.max(0, Math.min(1, SHELF.reach + 0.5 - away)),
+    };
+  });
+}
+
+/**
+ * How a card hung `a` radians round from +Z about you turns (about Y, in the same frame) so its face (+Z) points back
+ * at you: set as a rotation in the hall's frame, not with lookAt, which wants the world's.
+ */
+export function cardTurn(a: number): number {
+  return a + Math.PI;
+}
+
+/** The shelf's pick: which card's in front, moved `by` and kept on the shelf of `n`. */
+export function shelfMove(picked: number, by: number, n: number): number {
+  return Math.max(0, Math.min(n - 1, picked + by));
+}
+
+/** What the far wall's hologram says at its top right, and in what tone. */
+export interface SignStatus {
+  text: string;
+  tone: 'red' | 'gold' | 'sky' | 'dim';
+}
+
+/**
+ * What the far wall says is going on: what the computer's doing while it works (so you can follow it hands free, with
+ * the chat shut), else that the scene stopped, or how it's playing. Null with nothing to say (no scene, computer idle).
+ */
+export function signStatus(o: { thinking: boolean; activity: string; scene: boolean; failed: boolean; paused: boolean; speed: number }): SignStatus | null {
+  if (o.thinking) {
+    const doing = (o.activity.trim() || 'Thinking').replace(/[….]+$/, '').toUpperCase();
+    return { text: `COMPUTER · ${doing.length > 34 ? `${doing.slice(0, 33)}…` : `${doing}…`}`, tone: 'sky' };
+  }
+  if (!o.scene) return null;
+  if (o.failed) return { text: 'STOPPED', tone: 'red' };
+  return { text: `${o.paused ? 'PAUSED' : 'PLAYING'}${o.speed !== 1 ? `  ×${o.speed}` : ''}`, tone: o.paused ? 'gold' : 'dim' };
+}

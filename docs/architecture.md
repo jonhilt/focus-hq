@@ -4,6 +4,7 @@
 shared/types/             types shared by server and client, a file per feature (agents, goals, projects, github, qa, previews, events…) behind index.ts
 shared/crew.ts            how the crew look (uniforms, species), and the permanent crew per room (the ops officer, the QA officer), derived from the project id
 shared/qa.ts              QA decisions shared by server and board (badges, stale verdicts)
+shared/systemModel.ts     the studio's system models: whether one holds together, checking its cites against the code, its timing and layout
 shared/board.ts           a project's Kanban columns (to do, in progress, PRs), for the 3D board, its panel and the Tricorder
 shared/agentStatus.ts     how an agent's status reads (icon, one-line status)
 shared/tricorder.ts       what needs you (the Tricorder and Comms), which agents are in flight
@@ -67,6 +68,7 @@ server/
     officeTool.ts         the office's own MCP tools for an agent (the lead's ship)
     explainer.ts          the LCARS player a lead's explainer plays in: their beats and stage wrapped in one page, pure
     studio.ts             the studio computer's tools, pure: the scenes (takes) it stages in the middle of the hall, and retiming them; its instructions
+    studioSource.ts       which files the studio's model check may read (checkouts, worktrees, the office's code)
     studioComputer.ts     the studio holodeck's computer: one conversation, its turns (ClaudeStudio in claudeCrew.ts, DemoStudio in the demo), and how scenes ran in the room
     numberOne.ts          Number One's ship-wide chat: turns, prompt, reply schema and the ship_status summariser
     claudeCrew.ts         the crew's read-only Claude Code sessions (Read/Glob/Grep, web search/fetch for Number One, Number One's ship_status and open_project, structured output)
@@ -88,7 +90,8 @@ client/src/
     themes.ts             the landscapes (beach, forest, desert, moon, city, library)
     teamStation.ts        a goal's team station: its door in the holodeck and its briefing room out in the world, the lead's screen, seats for their helpers and the goal's reviewer (helperSeats.ts: who sits where)
     probes.ts             the probes by a lead's chair, one per background command or monitor (probeSlots.ts: which show, and their labels); E on one opens ui/backgroundPanel.ts: its output and Stop
-    studioHall.ts         the studio holodeck's set: the scene the computer built last, on a round stage in the middle of the hall (takes.ts, built with takeKit.ts), and the far wall's hologram saying what it is and how to play it (studio.ts: the stage, and ScenePlayback, the captain's spin, pause, scrub and speed)
+    modelScene.ts         a system model drawn the one fixed way (shape = kind, colour = layer, the scenario's token, legend)
+    studioHall.ts         the studio holodeck's set: the scene the computer built last, on a round stage in the middle of the hall (takes.ts, built with takeKit.ts), the far wall's hologram saying what it is and how to play it (studio.ts: the stage, and ScenePlayback, the captain's spin, pause, scrub and speed), and the shelf of kept scenes to call back (sceneShelf.ts)
     goalScreens.ts        a team station's holographic sign, LCARS goal board and screen over its pod (goalRoom.ts: how its room stands, how the note fills the board, and what the team's up to at a glance; portraits.ts: the crew's portraits)
     hall.ts               the training hall, each project's holodeck, behind its door's portal: a copy of its shell from Blender (blender/training_hall.py), dressed for its project (hallLayout.ts: where its pods stand, and the door on the deck that leads to it)
     portal.ts             doorways that lead into each other wherever they stand: the far side drawn through the open doors, and walking through (doorway.ts: the geometry)

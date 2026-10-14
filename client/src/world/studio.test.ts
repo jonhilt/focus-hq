@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ENTRANCE_X } from './hallLayout';
-import { keepsHallCollider, SCENE_HOLD, SCENE_STAGE, ScenePlayback, sheetMoments, SPIN_RATE, STUDIO_HALL, STUDIO_SPAN, studioWalls } from './studio';
+import { cardTurn, keepsHallCollider, signStatus, SCENE_HOLD, SHELF, shelfMove, shelfSpots, SCENE_STAGE, ScenePlayback, sheetMoments, SPIN_RATE, STUDIO_HALL, STUDIO_SPAN, studioWalls } from './studio';
 
 describe('the studio hall', () => {
   it('walls in its round wall and its entrance wall out to it, leaving the doorway clear', () => {
@@ -107,5 +107,56 @@ describe('ScenePlayback', () => {
     play.scrub(3, 10);
     play.restart();
     expect(play).toMatchObject({ t: 0, paused: false, spin: 1, speed: 2 });
+  });
+});
+
+describe('the scene shelf', () => {
+  it('puts the picked card in front, bigger, later ones to the right, and fades those far round', () => {
+    const spots = shelfSpots(6, 1);
+    expect(spots[1]).toEqual({ angle: -0, scale: 1.35, opacity: 1 });
+    expect(spots[2].angle).toBeCloseTo(-SHELF.step);
+    expect(spots[0].angle).toBeCloseTo(SHELF.step);
+    expect(spots[5].opacity).toBe(0);
+    expect(spots[4].opacity).toBe(0.5);
+  });
+
+  it('glides between two cards while the pick eases over', () => {
+    const [a, b] = shelfSpots(2, 0.5);
+    expect(a.scale).toBeCloseTo(1.175);
+    expect(b.scale).toBeCloseTo(1.175);
+    expect(a.angle).toBeCloseTo(-b.angle);
+  });
+
+  it('turns every card to face you squarely, wherever round you it hangs', () => {
+    for (const a of [0, 0.6, -1.2, 2.5]) {
+      const turn = cardTurn(a);
+      // the card's face (+Z turned by `turn` about Y) against the way back from the card to you
+      const face = [Math.sin(turn), Math.cos(turn)];
+      const back = [-Math.sin(a), -Math.cos(a)];
+      expect(face[0] * back[0] + face[1] * back[1]).toBeCloseTo(1);
+    }
+  });
+
+  it('keeps the pick on the shelf', () => {
+    expect(shelfMove(0, -1, 4)).toBe(0);
+    expect(shelfMove(2, 1, 4)).toBe(3);
+    expect(shelfMove(3, 1, 4)).toBe(3);
+  });
+});
+
+describe('signStatus', () => {
+  const base = { thinking: false, activity: '', scene: true, failed: false, paused: false, speed: 1 };
+
+  it('says what the computer is doing while it works, even before there is a scene', () => {
+    expect(signStatus({ ...base, scene: false, thinking: true, activity: 'Building the scene' })).toEqual({ text: 'COMPUTER · BUILDING THE SCENE…', tone: 'sky' });
+    expect(signStatus({ ...base, thinking: true, activity: 'Thinking…' })?.text).toBe('COMPUTER · THINKING…');
+    expect(signStatus({ ...base, thinking: true, activity: 'Looking through Claude Code sessions for the one' })?.text).toHaveLength(45);
+  });
+
+  it('otherwise says how the scene is playing, or that it stopped, and nothing with no scene', () => {
+    expect(signStatus(base)).toEqual({ text: 'PLAYING', tone: 'dim' });
+    expect(signStatus({ ...base, paused: true, speed: 0.5 })).toEqual({ text: 'PAUSED  ×0.5', tone: 'gold' });
+    expect(signStatus({ ...base, failed: true })).toEqual({ text: 'STOPPED', tone: 'red' });
+    expect(signStatus({ ...base, scene: false })).toBeNull();
   });
 });

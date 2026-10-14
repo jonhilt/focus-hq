@@ -1,10 +1,11 @@
-import type { Effort, Settings, StudioSession, StudioTake } from '../../shared/types';
+import type { Effort, Settings, StudioSession, StudioTake, SystemModel } from '../../shared/types';
 import type { Hub } from '../hub';
 import { shownProjects } from '../../shared/hidden';
 import { freshStudio, type Store, type StoredStudio } from '../store';
 import { errorMessage, truncate } from '../util';
 import type { ChatProject, ShipStatus } from './numberOne';
-import { applyRetime, applyTake, type RetimeInput, type TakeInput } from './studio';
+import { checkModel, modelError, modelPhases, modelSeconds } from '../../shared/systemModel';
+import { applyRecall, applyRetime, applyTake, type RetimeInput, type TakeInput } from './studio';
 
 // The studio holodeck's computer: the captain's conversation with a Claude session of its own (not a goal's lead), and
 // the tools it builds with: scenes (takes, in the code) that stand in the middle of the hall. One conversation, one turn
@@ -21,9 +22,21 @@ export interface Staged {
 export interface StudioTools {
   /** Stages a scene, and waits a moment for the room to say whether it runs, and to send its contact sheet. */
   take(input: TakeInput): Promise<Staged>;
+  /**
+   * Stages a system model as a scene, drawn by the holodeck's own renderer, after checking its cites against the code:
+   * what didn't check out is drawn flagged and said back, for the computer to fix.
+   */
+  model(input: ModelInput): Promise<Staged>;
   /** Retimes a scene without touching its script, and waits as take does. */
   retime(input: RetimeInput): Promise<Staged>;
   dropTake(id: string): string;
+}
+
+/** What the model tool can send: a system model, staged as a scene under `id`. */
+export interface ModelInput {
+  id: string;
+  label: string;
+  model: SystemModel;
 }
 
 /** What the room says about a take it's run: what went wrong, if anything, and its contact sheet. */
@@ -88,8 +101,15 @@ export class StudioComputer {
     private readonly hub: Hub,
     private readonly officer: StudioOfficer,
     private readonly shipStatus: () => Promise<ShipStatus>,
-    private readonly reportWaitMs = REPORT_WAIT_MS,
-  ) {}
+    opts: { reportWaitMs?: number; readSource?: (file: string) => string[] | undefined } = {},
+  ) {
+    this.reportWaitMs = opts.reportWaitMs ?? REPORT_WAIT_MS;
+    this.readSource = opts.readSource ?? (() => undefined);
+  }
+
+  private readonly reportWaitMs: number;
+  /** A cited file's lines, for checking a model against the code (studioSource.ts). */
+  private readonly readSource: (file: string) => string[] | undefined;
 
   current(): StudioSession {
     return publicView(this.store.studio);
@@ -125,6 +145,22 @@ export class StudioComputer {
     return this.current();
   }
 
+  /**
+   * The captain calls a kept scene back from the shelf: it stands in the hall again, and the chat says so, so the
+   * computer hears it with whatever the captain says next.
+   */
+  recall(id: string): StudioSession {
+    const session = this.store.studio;
+    const next = applyRecall(session.takes, id, Date.now());
+    if ('error' in next) throw new Error(next.error);
+    session.takes = next;
+    const take = next.find((t) => t.id === id);
+    session.messages.push({ from: 'captain', text: `(Brought back **${id}**${take ? `, ${take.label}` : ''}, from the shelf.)`, at: Date.now() });
+    session.updatedAt = Date.now();
+    this.changed();
+    return this.current();
+  }
+
   /** The room ran a take (or tried to): `error` is what went wrong, if anything; `sheet` its contact sheet (sheetData). */
   report(id: string, version: number, error?: string, sheet?: string): StudioSession {
     const take = this.store.studio.takes.find((t) => t.id === id && t.version === version);
@@ -149,6 +185,18 @@ export class StudioComputer {
       take: (input) => {
         live();
         return this.stage(session, input.id, applyTake(session.takes, input, Date.now()));
+      },
+      model: async (input) => {
+        live();
+        const bad = modelError(input.model);
+        if (bad) throw new Error(bad);
+        const { model, problems } = checkModel(input.model, this.readSource);
+        const take: TakeInput = { id: input.id, label: input.label, metaphor: model.question, seconds: modelSeconds(model), phases: modelPhases(model), script: '', model };
+        const staged = await this.stage(session, input.id, applyTake(session.takes, take, Date.now()));
+        const checked = problems.length
+          ? `The check against the code found ${problems.length} problem${problems.length === 1 ? '' : 's'}, drawn flagged in red: ${problems.join(' ')} Fix each (cite the line that really does it, or drop what isn't in the code) and send the model again under the same id.`
+          : 'Every cite checked out against the code.';
+        return { ...staged, text: `${staged.text} ${checked}` };
       },
       retime: async (input) => {
         live();

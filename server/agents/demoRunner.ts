@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { readScenario, type Scenario, turnParts } from '../../shared/scenarios';
-import type { TermLine } from '../../shared/types';
+import type { ModelCite, SystemModel, TermLine } from '../../shared/types';
+import { config } from '../config';
 import { demoSinceVerdict } from '../demoGit';
 import { randomHex, sleep } from '../util';
 import type { RetroOfficer, RetroRequest, Transcript } from './engineer';
@@ -1168,6 +1169,62 @@ log(\`\${maps.filter(Boolean).length} repos mapped\`)
 return maps
 `;
 
+/**
+ * Where `needle` first turns up in `file` (relative to the office's own code), as a model cites it, so the demo's model
+ * keeps pointing at the right lines as the code moves; line 1 if it's gone (and the check will say so).
+ */
+function demoCite(file: string, needle: string): ModelCite {
+  const at = path.join(config.root, file);
+  let line = 1;
+  try {
+    const found = fs.readFileSync(at, 'utf8').split(/\r?\n/).findIndex((l) => l.includes(needle));
+    if (found >= 0) line = found + 1;
+  } catch {
+    // the check against the code reports the missing file
+  }
+  return { file: at, line };
+}
+
+/** The demo's system model: how a lead's ship tool becomes pushed branches, a pull request and a QA review, from the office's own code. */
+export function demoShipModel(): SystemModel {
+  const slices = 'server/agents/manager/slices.ts';
+  return {
+    question: 'How does a lead’s ship become a pull request that QA reviews?',
+    nodes: [
+      { id: 'lead', label: 'Lead’s session', kind: 'external', layer: 'Agents', cite: demoCite('server/agents/manager/sessions.ts', 'ship: (input) =>') },
+      { id: 'ship-tool', label: 'ship tool', kind: 'route', layer: 'Office', symbol: 'ship', cite: demoCite('server/agents/officeTool.ts', "'ship',") },
+      { id: 'ship-lead', label: 'Slices.shipLead', kind: 'handler', layer: 'Office', symbol: 'shipLead', cite: demoCite(slices, 'shipLead(agent: Agent') },
+      { id: 'push', label: 'Workspace.push', kind: 'service', layer: 'Office', symbol: 'push', cite: demoCite('server/agents/services.ts', 'push(dir: string, branch: string)') },
+      { id: 'create-pr', label: 'GitHub.createPullRequest', kind: 'service', layer: 'GitHub', symbol: 'createPullRequest', cite: demoCite('server/github/service.ts', 'createPullRequest(repo: string') },
+      { id: 'gh', label: 'gh pr create', kind: 'external', layer: 'GitHub', symbol: "'pr', 'create'", cite: demoCite('server/github/ghCli.ts', "'pr', 'create'") },
+      { id: 'review', label: 'Reviews.requestReview', kind: 'handler', layer: 'QA', symbol: 'requestReview', cite: demoCite('server/agents/manager/reviews.ts', 'requestReview(projectId: string') },
+    ],
+    edges: [
+      { from: 'lead', to: 'ship-tool', kind: 'calls', label: 'mcp__office__ship', cite: demoCite('server/agents/officeTool.ts', 'tools.ship(') },
+      { from: 'ship-tool', to: 'ship-lead', kind: 'calls', cite: demoCite('server/agents/manager/sessions.ts', 'slices.shipLead(') },
+      { from: 'ship-lead', to: 'push', kind: 'calls', cite: demoCite(slices, 'workspace.push(') },
+      { from: 'ship-lead', to: 'create-pr', kind: 'calls', cite: demoCite(slices, 'github.createPullRequest(') },
+      { from: 'create-pr', to: 'gh', kind: 'calls', cite: demoCite('server/github/ghCli.ts', "'pr', 'create'") },
+      { from: 'ship-lead', to: 'review', kind: 'emits', cite: demoCite(slices, 'reviews.requestReview(') },
+    ],
+    trace: [
+      { from: 'lead', to: 'ship-tool', label: 'The lead calls ship', payload: '{ title, summary }' },
+      { from: 'ship-tool', to: 'ship-lead', label: 'The office takes it over', payload: 'agent, { title, summary }' },
+      { from: 'ship-lead', to: 'push', label: 'Push each repo with new commits', payload: 'dir, branch' },
+      { from: 'ship-lead', to: 'create-pr', label: 'Open the pull request (or update it)', payload: '{ head, base, title, body }' },
+      { from: 'create-pr', to: 'gh', label: 'gh pr create', payload: '--head --base --title --body-file -' },
+      { from: 'gh', to: 'create-pr', label: 'GitHub answers', payload: '{ number, url }' },
+      { from: 'ship-lead', to: 'review', label: 'Ask QA to review it', payload: 'repo, number, title' },
+      { from: 'ship-tool', to: 'lead', label: 'The lead hears what opened', payload: '"Opened owner/repo#N"' },
+    ],
+    simplified: ['Retries, and refusing to ship with uncommitted changes, left out', 'One repo shown; shipLead does this for every repo with new commits'],
+    checks: [
+      { q: 'Who pushes the lead’s branch: the lead, or the office?', a: 'The office, in shipLead, through Workspace.push.', cite: demoCite(slices, 'workspace.push(') },
+      { q: 'What starts QA’s review of the pull request?', a: 'shipLead asks Reviews.requestReview once the PR is open.', cite: demoCite(slices, 'reviews.requestReview(') },
+    ],
+  };
+}
+
 /** The demo's studio computer: scripted turns that stage real scenes in the middle of the hall, so the studio shows in the demo. */
 export class DemoStudio implements StudioOfficer {
   private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
@@ -1189,6 +1246,11 @@ export class DemoStudio implements StudioOfficer {
     activity('Thinking…');
     await wait(1);
 
+    if (/how does|how do|architecture|data flow|model|ship/.test(q)) {
+      const staged = await tool('Checking the model against the code', () => req.tools.model({ id: 'ship-flow', label: 'Lead ships a slice', model: demoShipModel() }));
+      const problems = /found (\d+) problem/.exec(staged.text)?.[1];
+      return reply(`**ship-flow** is up: how a lead's ship becomes a pull request QA reviews, recovered from the office's own code. Seven parts, six connections, an eight-step scenario. ${problems ? `${problems} cites didn't check out; they're red.` : 'Every cite checked out against the code.'} ${looked(staged)}`);
+    }
     const current = currentTake(req.takes);
     if (current && /slow/.test(q)) {
       await tool('Retiming the scene', () => req.tools.retime({ id: current.id, speed: 0.5 }));

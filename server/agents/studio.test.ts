@@ -3,8 +3,12 @@ import type { ServerEvent, StudioTake } from '../../shared/types';
 import { currentTake } from '../../shared/takeScript';
 import type { Hub } from '../hub';
 import { freshStudio, type Store } from '../store';
-import { applyRetime, applyTake, STUDIO_LIMITS, studioPrompt, studioSystemPrompt, type TakeInput } from './studio';
+import { applyRecall, applyRetime, applyTake, STUDIO_LIMITS, studioPrompt, studioSystemPrompt, type TakeInput } from './studio';
 import type { ShipStatus } from './numberOne';
+import { checkModel, modelError } from '../../shared/systemModel';
+import { config } from '../config';
+import { demoShipModel } from './demoRunner';
+import { sourceReader } from './studioSource';
 import { sheetData, type Staged, StudioComputer, type StudioOfficer, type StudioTurn } from './studioComputer';
 
 const ok = <T>(result: T | { error: string }): T => {
@@ -78,6 +82,15 @@ describe('applyRetime', () => {
   });
 });
 
+describe('applyRecall', () => {
+  it('brings a kept scene back to the hall, the same version, and refuses one that isn’t kept', () => {
+    const kept: StudioTake[] = [{ id: 'a', label: 'A', seconds: 5, script: '', version: 2, at: 1 }, { id: 'b', label: 'B', seconds: 5, script: '', version: 1, at: 2 }];
+    const after = ok(applyRecall(kept, 'a', 9));
+    expect(currentTake(after)).toMatchObject({ id: 'a', version: 2, at: 9 });
+    expect(applyRecall(kept, 'z', 9)).toEqual({ error: expect.stringContaining('no scene z') });
+  });
+});
+
 describe('studioPrompt', () => {
   const messages = [
     { from: 'captain' as const, text: 'Show me subagents fanning out', at: 1 },
@@ -117,7 +130,7 @@ describe('StudioComputer', () => {
     const sent: ServerEvent[] = [];
     const hub = { send: (e: ServerEvent) => sent.push(e) } as unknown as Hub;
     const officer: StudioOfficer = { turn: async (req) => ({ text: await turn(req), sessionId: 's1', costUsd: 0.1, model: req.model ?? 'claude-sonnet-5-5' }) };
-    return { store, sent, computer: new StudioComputer(store, hub, officer, async (): Promise<ShipStatus> => ({ projects: [] }), 50) };
+    return { store, sent, computer: new StudioComputer(store, hub, officer, async (): Promise<ShipStatus> => ({ projects: [] }), { reportWaitMs: 50 }) };
   };
   const settled = (store: Store) => new Promise<void>((resolve) => {
     const check = () => (store.studio.status === 'thinking' ? setTimeout(check, 5) : resolve());
@@ -135,6 +148,51 @@ describe('StudioComputer', () => {
     await settled(store);
     expect(asked[0].projects).toEqual([{ id: 'p1', name: 'Thomas', repos: ['jonhilt/thomas'] }]);
     expect(await asked[0].shipStatus()).toEqual({ projects: [] });
+  });
+
+  it('calls a kept scene back without a turn, and tells the computer with what the captain says next', async () => {
+    const heard: string[] = [];
+    const { store, computer } = setup(async (req) => {
+      heard.push(studioPrompt(req.messages, true));
+      return 'ok';
+    });
+    store.studio.takes = [{ id: 'a', label: 'Fan out', seconds: 5, script: '', version: 1, at: 1 }, { id: 'b', label: 'B', seconds: 5, script: '', version: 1, at: 2 }];
+    computer.recall('a');
+    expect(store.studio.status).toBe('waiting');
+    expect(currentTake(store.studio.takes)?.id).toBe('a');
+    computer.say('Slower');
+    await settled(store);
+    expect(heard[0]).toBe('(Brought back **a**, Fan out, from the shelf.)\n\nSlower');
+    expect(() => computer.recall('z')).toThrow('no scene z');
+  });
+
+  it('stages a model checked against the code, flagged where it doesn\'t check out, and says what to fix', async () => {
+    let heard = '';
+    const files: Record<string, string[]> = { '/r/a.ts': ['export function save() {', '  db.insert(row);', '}'] };
+    const store = { studio: freshStudio(), settings: {}, projects: [], save: () => undefined } as unknown as Store;
+    const hub = { send: () => undefined } as unknown as Hub;
+    const officer: StudioOfficer = {
+      turn: async (req) => {
+        heard = (await req.tools.model({ id: 'save', label: 'Save', model: {
+          question: 'How is a row saved?',
+          nodes: [{ id: 'save', label: 'save()', kind: 'handler', layer: 'API', symbol: 'save', cite: { file: '/r/a.ts', line: 1 } }, { id: 'db', label: 'Rows', kind: 'store', layer: 'Data', symbol: 'Rows', cite: { file: '/r/b.ts', line: 1 } }],
+          edges: [{ from: 'save', to: 'db', kind: 'writes', cite: { file: '/r/a.ts', line: 2 } }],
+          trace: [{ from: 'save', to: 'db', label: 'Insert' }],
+          simplified: [],
+        } })).text;
+        return { text: 'ok' };
+      },
+    };
+    const computer = new StudioComputer(store, hub, officer, async (): Promise<ShipStatus> => ({ projects: [] }), { reportWaitMs: 20, readSource: (f) => files[f] });
+    computer.say('How is a row saved?');
+    await settled(store);
+    const [take] = store.studio.takes;
+    expect(take).toMatchObject({ id: 'save', script: '', seconds: 2 + 1.8 + 1.5, phases: { s1: [2, 3.8] } });
+    expect(take.model?.nodes.map((n) => n.found)).toEqual([true, false]);
+    expect(take.model?.edges[0].backed).toBe(false);
+    expect(heard).toContain('found 2 problems');
+    expect(heard).toContain('Part db: /r/b.ts isn\'t there');
+    expect(heard).toContain('r/a.ts:2 doesn\'t mention Rows');
   });
 
   it('builds a scene with its tools on a turn, and replies', async () => {
@@ -207,5 +265,13 @@ describe('StudioComputer', () => {
     await new Promise((r) => setTimeout(r, 10));
     expect(store.studio.messages).toEqual([]);
     expect(store.studio.status).toBe('waiting');
+  });
+});
+
+describe('the demo\'s model of the office', () => {
+  it('holds together, and every cite checks out against the office\'s own code', () => {
+    const model = demoShipModel();
+    expect(modelError(model)).toBeUndefined();
+    expect(checkModel(model, sourceReader([config.root])).problems).toEqual([]);
   });
 });

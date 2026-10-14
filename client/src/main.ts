@@ -23,6 +23,7 @@ import { openEngineeringPanel } from './ui/engineeringPanel';
 import { openLedgerPanel } from './ui/ledgerPanel';
 import { numberOnePanelOpen, openNumberOnePanel } from './ui/numberOnePanel';
 import { openStudioChat } from './ui/studioChat';
+import { StudioVoice } from './ui/studioVoice';
 import { Panels } from './ui/panels';
 import { openPreviewPanel } from './ui/previewPanel';
 import { openQaPanel } from './ui/qaPanel';
@@ -569,11 +570,46 @@ async function main() {
     else return false;
     return true;
   };
+  // the studio's shelf: Tab hangs every kept scene round you, the arrows or the wheel swipe, E or Enter calls the one in
+  // front back to the middle of the hall, Tab or Esc puts it away
+  const studioSet = () => (world.locationOf(camera.position).label === 'Studio' ? world.studioSet() : null);
+  const recall = (shelf: NonNullable<ReturnType<typeof studioSet>>['shelf']) => {
+    const picked = shelf.picked;
+    shelf.close();
+    if (picked && picked.id !== world.studioScene()?.id) {
+      sound.press();
+      void api.studioRecall(picked.id).catch((e: Error) => ui.error(e.message));
+    }
+  };
+  const shelfKey = (code: string): boolean => {
+    const set = studioSet();
+    if (!set) return false;
+    if (code === 'Tab') return set.toggleShelf(camera.position, camera.getWorldDirection(new THREE.Vector3()));
+    if (!set.shelf.isOpen) return false;
+    if (code === 'ArrowLeft' || code === 'ArrowRight') set.shelf.move(code === 'ArrowLeft' ? -1 : 1);
+    else if (code === 'KeyE' || code === 'Enter') recall(set.shelf);
+    else if (code === 'Escape') set.shelf.close();
+    else return false;
+    return true;
+  };
+  let lastSwipe = 0;
+  window.addEventListener('wheel', (e) => {
+    const shelf = studioSet()?.shelf;
+    if (!shelf?.isOpen || panels.isOpen || Math.abs(e.deltaY) < 4 || performance.now() - lastSwipe < 160) return;
+    lastSwipe = performance.now();
+    shelf.move(Math.sign(e.deltaY));
+  });
+  // hold V in the studio to talk to its computer: what you say is sent as you let go
+  const voice = new StudioVoice(ui);
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'KeyV') void voice.up();
+  });
   window.addEventListener('keyup', (e) => {
     const playback = world.studioPlayback();
     if (playback && (e.code === 'KeyQ' || e.code === 'KeyR')) playback.turning = 0;
   });
   window.addEventListener('blur', () => {
+    voice.cancel();
     const playback = world.studioPlayback();
     if (playback) playback.turning = 0;
   });
@@ -581,6 +617,15 @@ async function main() {
   window.addEventListener('keydown', (e) => {
     if (!started || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
     if (panels.isOpen && !panels.docked) return;
+    if (e.code === 'KeyV' && studioSet()) {
+      e.preventDefault();
+      if (!e.repeat) voice.down();
+      return;
+    }
+    if (!e.repeat && !panels.isOpen && shelfKey(e.code)) {
+      e.preventDefault();
+      return;
+    }
     if (sceneKey(e.code, e.repeat)) {
       e.preventDefault();
       return;

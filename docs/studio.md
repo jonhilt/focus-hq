@@ -195,8 +195,34 @@ its own, its round wall 17 m from the middle (a training hall's is 11 m) and its
 floor to walk into but its walls (`STUDIO_HALL` and `studioWalls` in `client/src/world/studio.ts`,
 `VacantHall.enlarge` in `room.ts`). The chat docks down the right, so the room stays in view while the computer builds.
 
-- **Scenes** (its `scene` tool, `server/agents/studio.ts`): the computer builds straight away from what you said, rather
-  than pitching or asking first, and the scene stands on a round stage 6 m across the middle of the hall
+- **Saying it**: hold **V** anywhere in the studio, say what you want to see, and let go. The recording is transcribed
+  on this machine, as [voice input](voice-input.md) is, and sent straight to the computer, as if typed in its chat; a
+  pill over the bottom of the screen says it's listening, transcribing, and what it sent
+  (`client/src/ui/studioVoice.ts`). While the computer works, the far wall's hologram says what it's doing at its top
+  right ("COMPUTER · BUILDING THE SCENE…", `signStatus` in `client/src/world/studio.ts`), so you can follow along with
+  the chat shut. V does nothing while the computer is still on the last thing you said. It needs voice input set up
+  (whisper.cpp and its model); in the demo every recording is the demo sentence, which builds fan-out.
+- **Models** (its `model` tool): for how real code works (a feature, a data flow, an architecture), the computer
+  doesn't draw freehand. It recovers a **system model** from the code itself (routes, handlers, components, types,
+  calls, schema), not from docs: the parts (each a kind: ui, route, handler, service, store, queue, external, job or
+  type, and a layer), the connections between them (calls, reads, writes, emits or renders), and one concrete
+  scenario as ordered steps along the connections, each with the payload that moves. Every part cites the file and
+  line where it's defined, and every connection the line where one part reaches the other. The office **checks each
+  cite against the code** (`checkModel` in `shared/systemModel.ts`, reading only the projects' checkouts, the agents'
+  worktrees and the office's own code: `server/agents/studioSource.ts`): a part is found when its file has the line
+  and its symbol is within two lines of it, a connection is backed when its cited line (or one within two of it)
+  mentions the part it reaches. What didn't check out is drawn in red and told to the computer, which fixes it and
+  sends the model again before saying it's ready. The holodeck draws every model the one fixed way
+  (`client/src/world/modelScene.ts`): shape for kind (a panel, hexagon, cube, slab, drum, pipe, globe, cone or gem),
+  colour for layer, a bar coloured by the kind of connection with an arrowhead towards the part it reaches, each part's
+  name and file:line over it, laid out by the office rather than the model (`layoutModel`: columns down the
+  connections from left to right, each column's parts stacked one above another), and the scenario as a gold token
+  moving along the connections in order, carrying its payload, with the step over it all ("Step 4 of 8 · Open the pull
+  request"). A legend floats overhead, facing you wherever you stand, with what was simplified and two or three
+  questions to check yourself with. A model is a scene like any other: its steps are its phases (s1, s2…), so it plays,
+  pauses, scrubs, spins, retimes and goes on the shelf the same way.
+- **Scenes** (its `scene` tool, `server/agents/studio.ts`): for metaphors, ideas and things that might be built, which
+  it says are illustrative. The computer builds straight away from what you said, rather than pitching or asking first, and the scene stands on a round stage 6 m across the middle of the hall
   (`SCENE_STAGE`), up to the ceiling, its front to the doorway. Motion is the point: it decides first what moves and
   what that movement means, in one sentence (the scene's metaphor), then writes a script against the studio's kit
   (`client/src/world/takeKit.ts`: crew standing or at consoles, boxes, balls, transporter pads, glowing lines, floating
@@ -218,6 +244,13 @@ floor to walk into but its walls (`STUDIO_HALL` and `studioWalls` in `client/src
   kept, and the one staged or retimed last is the one in the hall (`currentTake`), so retiming an earlier one brings it
   back. One whose script throws turns the hologram red and says why, and the computer hears it too
   (`POST /api/studio/takes/:id/report`), so it can fix it.
+- **The shelf**: **Tab** hangs every scene kept as a hologram card in an arc at eye height round where you stand, each
+  with a picture of it (drawn once a version in the browser, three quarters of the way through it: `sceneThumbnail` in
+  `client/src/world/contactSheet.ts`), the one in the hall picked and marked. The arrow keys or the mouse wheel swipe
+  another card in front; **E** or **Enter** calls that scene back to the middle of the hall (`POST
+  /api/studio/takes/:id/recall`, from its start), and **Tab** or **Esc** puts the shelf away. Calling one back adds a
+  line to the chat, so the computer hears which scene is in the hall with whatever you say next
+  (`client/src/world/sceneShelf.ts`, its arc in `shelfSpots`).
 - **Looking before you do**: when the room runs a scene just staged, it renders a **contact sheet** (six moments
   through it, each phase under way and as it lands, and its last, each from a little further round it, as you'd see it
   walking round, in a scene and on a WebGL renderer of its own: `client/src/world/contactSheet.ts`) and sends it with
@@ -253,7 +286,9 @@ pick), what its last turn ran on, and what it's spent.
 One conversation at a time, kept across restarts (`studio` in `data/state.json`); **Start over** clears the studio.
 The computer reads the web, Claude Code sessions, the ship's state and its projects' checked-out code, and changes
 nothing (`ClaudeStudio` in `server/agents/claudeCrew.ts`, working in `data/studio`), and its scene scripts run in your browser as the leads' explainers do. In `pnpm run demo` its
-turns are scripted (`DemoStudio`): describe anything and it builds **fan-out**, a gold core beaming eight agents in on
+turns are scripted (`DemoStudio`): ask how something works (or how a lead ships) and it stages **ship-flow**, a model of how a lead's ship becomes a
+pull request QA reviews, recovered from the office's own code with every cite found at runtime (a test checks they all
+hold); describe anything else and it builds **fan-out**, a gold core beaming eight agents in on
 pads round it and folding their answers back; ask for more and it runs sixteen; ask for it slower and it retimes it to
 half speed; mention a pipeline, track or gates and it builds **pipeline**, work riding a track through three gates.
 `FOCUS_STUDIO=live` puts the real computer in the demo office instead, to try the studio with a model without GitHub.

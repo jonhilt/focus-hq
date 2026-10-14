@@ -838,6 +838,13 @@ body.studio .hud, body.studio .toasts { display: none; }
 .training-steps.up { display: block; }
 .training-steps b { color: var(--lcars-gold); font-weight: 600; margin-right: 10px; }
 .training-steps .keys { color: var(--muted); margin-left: 14px; font-size: 15px; }
+.studio-voice {
+  position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); z-index: 5; padding: 8px 20px; border-radius: 999px;
+  background: #000c; border-left: 14px solid var(--lcars-sky); color: var(--text); font-family: var(--ui); font-size: 18px;
+  max-width: 70vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: none;
+}
+.studio-voice.up { display: block; }
+.studio-voice b { color: var(--lcars-sky); font-weight: 600; margin-right: 10px; }
 .studio-tags { position: fixed; inset: 0; z-index: 4; pointer-events: none; }
 .studio-tag {
   position: absolute; left: 0; top: 0; white-space: nowrap; padding: 6px 16px; border-radius: 999px;

@@ -858,6 +858,11 @@ export class VacantHall {
     return this.studio?.playback ?? null;
   }
 
+  /** The studio's set, if it's the studio. */
+  get studioSet(): StudioSet | null {
+    return this.studio;
+  }
+
   /** The scene standing in the studio, if it's the studio and there is one. */
   get studioScene(): StudioTake | null {
     return this.studio?.scene ?? null;

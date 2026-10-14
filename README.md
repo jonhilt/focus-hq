@@ -88,6 +88,7 @@ Then on board:
 - [Your API key when your plan runs out](docs/api-key.md): carrying on with `ANTHROPIC_API_KEY` while your plan's usage limit is reached
 - [Data and backups](docs/data.md): what lives in `~/.focus/` and what to back up
 - [The ledger](docs/ledger.md): the log of how work went, and the report card
+- [Where goals' time goes](docs/flow.md): lead time, the states it splits into, the biggest wait, and the quality guards
 - [The chief engineer's retro](docs/retro.md): a look back over the agents' sessions, with proposals for how the office works
 - [The climber](docs/climber.md): main engineering's crew member who fixes the scorecard's worst gap, one pull request at a time
 - [Auto update](docs/auto-update.md): keeping the office on the latest code

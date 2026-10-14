@@ -19,6 +19,7 @@ import { AHEAD, type Portal, type PortalEnd } from './portal';
 import { type Region, regionAt, shown } from './regions';
 import { buildHiddenRoom, ProjectRoom, VacantHall } from './room';
 import type { ScenePlayback } from './studio';
+import type { StudioSet } from './studioHall';
 import { api } from '../net/api';
 import type { Scenery } from './scenery';
 import { LCARS, LCARS_FONT, lcarsFrame, type SlidingDoors } from './starship';
@@ -57,6 +58,11 @@ export class World {
   /** The captain's controls for the scene in the studio, if there's a studio. */
   studioPlayback(): ScenePlayback | null {
     return [...this.vacant.values()][0]?.studioPlayback ?? null;
+  }
+
+  /** The studio's set, if there's a studio: its shelf, opened round the camera. */
+  studioSet(): StudioSet | null {
+    return [...this.vacant.values()][0]?.studioSet ?? null;
   }
 
   /** The scene standing in the studio, if there is one. */

@@ -6,7 +6,8 @@ import { curvedPanel } from './hallLayout';
 import { Hologram, hover } from './hologram';
 import { takeDraw } from './screenRedraw';
 import { LCARS, LCARS_FONT } from './starship';
-import { STUDIO_WALL } from './studio';
+import { SceneShelf } from './sceneShelf';
+import { type SignStatus, signStatus, STUDIO_WALL } from './studio';
 import { TakeStage } from './takes';
 
 // What the studio holodeck shows (studio.ts): the scene its computer built last, playing in the middle of the hall
@@ -18,7 +19,8 @@ const DIM = '#8fa3b8';
 const GOLD = LCARS.gold;
 const RED = '#ff5c5c';
 /** How to play the scene, along the hologram's foot. */
-const KEYS = 'Q / R  SPIN    P  PAUSE    [ / ]  SCRUB    − / =  SPEED    ENTER  TALK';
+const KEYS = 'HOLD V  SPEAK    Q / R  SPIN    P  PAUSE    [ / ]  SCRUB    − / =  SPEED    TAB  SHELF    ENTER  CHAT';
+const TONE: Record<SignStatus['tone'], string> = { red: RED, gold: GOLD, sky: LCARS.sky, dim: DIM };
 
 /** A canvas on a hologram, drawn by `paint` when its key changes and there's a draw to spare this frame (screenRedraw.ts). */
 class Holo {
@@ -79,6 +81,11 @@ export class StudioSet {
   private readonly signMesh: THREE.Mesh;
   private readonly signY: number;
   private readonly stage: TakeStage;
+  /** Every scene kept, to swipe through and call one back. */
+  readonly shelf = new SceneShelf();
+  private takes: readonly StudioTake[] = [];
+  /** What the computer's doing, while it works. */
+  private working: { thinking: boolean; activity: string } = { thinking: false, activity: '' };
   private lastT = 0;
 
   /** `report` tells the office how a scene ran. */
@@ -90,7 +97,7 @@ export class StudioSet {
     this.signMesh.position.y = bottom;
     this.signMesh.layers.set(OVERLAY_LAYER);
     this.signMesh.userData.aim = (on: boolean) => (this.sign.hologram.aimed = on);
-    this.group.add(this.signMesh, this.stage.group);
+    this.group.add(this.signMesh, this.stage.group, this.shelf.group);
     this.signMesh.userData.studio = true;
   }
 
@@ -111,38 +118,65 @@ export class StudioSet {
 
   /** Shows the studio's conversation as it stands: the scene it built last, in the middle of the hall. */
   show(session: StudioSession): void {
+    this.takes = session.takes;
+    this.working = { thinking: session.status === 'thinking', activity: session.activity };
     this.stage.show(session.takes);
     this.drawSign();
   }
 
-  /** The far wall's hologram: how to start, or the scene in the hall, how it's playing, and how to play it. */
+  /**
+   * Opens the shelf round the camera at `eye` (world), looking along `dir` (world), or closes it if it's open; false if
+   * there's nothing on it.
+   */
+  toggleShelf(eye: THREE.Vector3, dir: THREE.Vector3): boolean {
+    if (this.shelf.isOpen) {
+      this.shelf.close();
+      return true;
+    }
+    if (!this.takes.length) return false;
+    const at = this.group.worldToLocal(eye.clone());
+    const ahead = this.group.worldToLocal(eye.clone().add(dir)).sub(at);
+    this.shelf.open(this.takes, this.stage.current, at, Math.atan2(ahead.x, ahead.z));
+    return true;
+  }
+
+  /** The far wall's hologram: how to start, or the scene in the hall, how it's playing, and how to play it; and what the computer's doing. */
   private drawSign(): void {
     const scene = this.stage.current;
-    if (!scene) {
-      return this.sign.show('welcome', (ctx, W) => {
-        const m = 90;
-        ctx.textBaseline = 'alphabetic';
-        this.badge(ctx, m);
-        lines(ctx, 'Describe something to see.', m, m + 210, W - m * 2, `600 96px ${UI_FONT}`, 110, 1, TEXT);
-        lines(ctx, 'Press Enter, or E here, and say what you want to see: the computer builds it in the middle of the room, moving, for you to walk round, spin and scrub through.', m, m + 330, W - m * 2, `500 54px ${UI_FONT}`, 68, 3, DIM);
-      });
-    }
     const failed = this.stage.failed;
     const { paused, speed } = this.stage.playback;
-    const state = failed ? 'STOPPED' : `${paused ? 'PAUSED' : 'PLAYING'}${speed !== 1 ? `  ×${speed}` : ''}`;
-    this.sign.show(JSON.stringify([scene.id, scene.version, scene.label, scene.metaphor, failed, state]), (ctx, W, H) => {
-      const m = 90;
-      ctx.textBaseline = 'alphabetic';
-      this.badge(ctx, m);
+    const status = signStatus({ ...this.working, scene: !!scene, failed: !!failed, paused, speed });
+    const corner = (ctx: CanvasRenderingContext2D, W: number, m: number) => {
+      if (!status) return;
       ctx.font = `600 52px ${LCARS_FONT}`;
-      ctx.fillStyle = failed ? RED : paused ? GOLD : DIM;
-      ctx.fillText(state, W - m - ctx.measureText(state).width, m + 40);
-      const y = lines(ctx, scene.label, m, m + 190, W - m * 2, `600 84px ${UI_FONT}`, 96, 1, TEXT);
-      const text = failed ? `It stopped: ${failed}` : (scene.metaphor ?? scene.detail ?? '');
-      lines(ctx, text, m, y + 10, W - m * 2, `500 52px ${UI_FONT}`, 64, 3, failed ? '#ff9a9a' : DIM);
+      ctx.fillStyle = TONE[status.tone];
+      ctx.fillText(status.text, W - m - ctx.measureText(status.text).width, m + 40);
+    };
+    const keys = (ctx: CanvasRenderingContext2D, m: number, H: number) => {
       ctx.font = `600 40px ${LCARS_FONT}`;
       ctx.fillStyle = GOLD;
       ctx.fillText(KEYS, m, H - 50);
+    };
+    if (!scene) {
+      return this.sign.show(JSON.stringify(['welcome', status]), (ctx, W, H) => {
+        const m = 90;
+        ctx.textBaseline = 'alphabetic';
+        this.badge(ctx, m);
+        corner(ctx, W, m);
+        lines(ctx, 'Describe something to see.', m, m + 210, W - m * 2, `600 96px ${UI_FONT}`, 110, 1, TEXT);
+        lines(ctx, 'Hold V and say what you want to see (or press Enter to type it): the computer builds it in the middle of the room, moving, for you to walk round, spin and scrub through.', m, m + 330, W - m * 2, `500 54px ${UI_FONT}`, 68, 3, DIM);
+        keys(ctx, m, H);
+      });
+    }
+    this.sign.show(JSON.stringify([scene.id, scene.version, scene.label, scene.metaphor, failed, status]), (ctx, W, H) => {
+      const m = 90;
+      ctx.textBaseline = 'alphabetic';
+      this.badge(ctx, m);
+      corner(ctx, W, m);
+      const y = lines(ctx, scene.label, m, m + 190, W - m * 2, `600 84px ${UI_FONT}`, 96, 1, TEXT);
+      const text = failed ? `It stopped: ${failed}` : (scene.metaphor ?? scene.detail ?? '');
+      lines(ctx, text, m, y + 10, W - m * 2, `500 52px ${UI_FONT}`, 64, 3, failed ? '#ff9a9a' : DIM);
+      keys(ctx, m, H);
     });
   }
 
@@ -165,6 +199,7 @@ export class StudioSet {
     this.lastT = t;
     hover(this.signMesh, this.signY, t);
     this.stage.update(t, eye);
+    this.shelf.update(dt);
     // a pause, a speed or a fault changes what the sign says
     this.drawSign();
     this.sign.update(dt);
@@ -174,5 +209,6 @@ export class StudioSet {
     this.sign.dispose();
     this.signMesh.geometry.dispose();
     this.stage.dispose();
+    this.shelf.dispose();
   }
 }
