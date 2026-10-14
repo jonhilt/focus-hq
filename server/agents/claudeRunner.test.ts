@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { TermLine } from '../../shared/types';
 import type { BrowserPool } from './browserTool';
-import { allowedWithoutAsking, ClaudeRunner, claudeConfig, endedOutcome, failedOutcome, holdsInput, Listening, permissionOptions, withResult, type SoFar } from './claudeRunner';
+import { allowedWithoutAsking, ClaudeRunner, claudeConfig, endedOutcome, failedOutcome, holdsInput, Listening, permissionOptions, runningInBackground, withResult, type SoFar } from './claudeRunner';
 import { CLOUD_UNAVAILABLE } from './cloud';
 import { LIMIT_REACHED, STOPPED_BY_CAPTAIN, type ProbeEvent, type RunHooks, type WorkflowEvent } from './types';
 
@@ -126,13 +126,25 @@ describe('holdsInput', () => {
   });
 });
 
+describe('runningInBackground', () => {
+  it('is what Claude Code listed', () => {
+    expect(runningInBackground(['local_bash'], 0)).toEqual(['local_bash']);
+    expect(runningInBackground(['local_workflow'], 1)).toEqual(['local_workflow']);
+  });
+
+  it('counts a workflow the office has seen start and not end, even when the list leaves it out', () => {
+    expect(runningInBackground([], 1)).toEqual(['local_workflow']);
+    expect(holdsInput(runningInBackground([], 2))).toBe(true);
+  });
+});
+
 describe('Listening', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
   const session = () => {
-    const closed = { count: 0 };
-    return { closed, listening: new Listening(() => closed.count++, 1000) };
+    const closed = { count: 0, waited: [] as boolean[] };
+    return { closed, listening: new Listening((waited) => (closed.count++, closed.waited.push(waited)), 1000) };
   };
 
   it('stops once a turn is over with nothing queued and nothing in the background', () => {
@@ -174,6 +186,7 @@ describe('Listening', () => {
     expect(closed.count).toBe(0);
     vi.advanceTimersByTime(1);
     expect(closed.count).toBe(1);
+    expect(closed.waited).toEqual([true]);
   });
 
   it('doesn’t wait for a turn when a background task ends during one', () => {

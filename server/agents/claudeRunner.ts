@@ -60,6 +60,16 @@ export function holdsInput(background: string[]): boolean {
   return background.length > 0;
 }
 
+/**
+ * What runs in the background, by kind: what Claude Code last listed, and any workflow the office has seen start and
+ * not end. A workflow's agents ask the office for approval as the lead's own tools do, so the input mustn't close
+ * under them even if a list leaves the workflow out (a run's agents were all refused at once, a minute after their own
+ * background commands ended).
+ */
+export function runningInBackground(listed: string[], workflows: number): string[] {
+  return workflows > 0 && !listed.includes('local_workflow') ? [...listed, 'local_workflow'] : listed;
+}
+
 /** How long a session that's done waits, once its last background task ends, for the turn that takes its result. */
 export const REPORT_TURN_GRACE_MS = 60_000;
 
@@ -69,7 +79,7 @@ export const REPORT_TURN_GRACE_MS = 60_000;
  * turn needs the office as much as any other (to approve a tool, or for the office's own tools): closing the input as
  * the task ended left it no one to ask, and Claude Code cancelled each such tool with "The user doesn't want to take
  * this action right now". So the input stays open for that turn, and closes when it's over; if no turn comes, it
- * closes after `graceMs`.
+ * closes after `graceMs`, saying so (`waited`), since a session still at work would lose its approvals from then on.
  */
 export class Listening {
   private turnOver = false;
@@ -77,7 +87,7 @@ export class Listening {
   private grace?: ReturnType<typeof setTimeout>;
 
   constructor(
-    private readonly close: () => void,
+    private readonly close: (waited: boolean) => void,
     private readonly graceMs = REPORT_TURN_GRACE_MS,
   ) {}
 
@@ -90,10 +100,10 @@ export class Listening {
   /** A turn has ended, with `queued` messages still to take. */
   turnEnded(queued: boolean): void {
     this.turnOver = !queued;
-    if (this.turnOver && !holdsInput(this.background)) this.close();
+    if (this.turnOver && !holdsInput(this.background)) this.close(false);
   }
 
-  /** Claude Code has listed the session's background tasks (their kinds) anew. */
+  /** What runs in the background (by kind), as it stands after a message: it only matters when it changes. */
   backgroundChanged(background: string[]): void {
     const ended = holdsInput(this.background) && !holdsInput(background);
     this.background = background;
@@ -101,7 +111,7 @@ export class Listening {
     this.cancelGrace();
     this.grace = setTimeout(() => {
       this.grace = undefined;
-      if (this.turnOver && !holdsInput(this.background)) this.close();
+      if (this.turnOver && !holdsInput(this.background)) this.close(true);
     }, this.graceMs);
   }
 
@@ -323,7 +333,10 @@ export class ClaudeRunner implements AgentRunner {
     let stopping = false;
     const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map(), helpers: new Map(), workflows: new Set(), permits, parents: new Map(), modelled: new Set(), scratch: scratch?.dir, probes: new Set(), commits: new Map(), onKey, counted: new Set() };
     // a background task still running keeps listening, so a message from the captain reaches the session now
-    const listening = new Listening(() => input.close());
+    const listening = new Listening((waited) => {
+      if (waited) hooks.lines([{ kind: 'system', text: `✻ Stopped listening: no turn came ${REPORT_TURN_GRACE_MS / 1000}s after the last background task ended` }]);
+      input.close();
+    });
     ctx.tracker = new BackgroundTracker((id) => (id ? ctx.calls.get(id)?.name : undefined));
     const done = (async (): Promise<RunOutcome> => {
       let so: SoFar = { ok: false, summary: '', started: false };
@@ -333,7 +346,7 @@ export class ClaudeRunner implements AgentRunner {
           if (msg.type === 'system' && msg.subtype === 'init') so = { ...so, started: true };
           if (msg.type === 'assistant' || (msg.type === 'system' && msg.subtype === 'init')) listening.turnStarted();
           const result = this.handle(msg, ctx, hooks);
-          if (msg.type === 'system' && msg.subtype === 'background_tasks_changed') listening.backgroundChanged(ctx.background ?? []);
+          listening.backgroundChanged(runningInBackground(ctx.background ?? [], ctx.workflows.size));
           if (ctx.limited && !abort.signal.aborted) {
             abort.abort();
             input.close();
