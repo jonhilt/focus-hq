@@ -13,11 +13,11 @@ const asked = new Set<string>();
 /**
  * The captain is reading the lead's latest turn (their panel is open, say): it stops hailing them on every screen until
  * the lead's next one. Only on the screen they're looking at: a panel left open on a desk while they're on their
- * phone reads nothing. `force`: they said so (Later), wherever the focus is.
+ * phone reads nothing.
  */
-export function markRead(agent: Agent, force = false): void {
+export function markRead(agent: Agent): void {
   if (!agent.lead || agent.status !== 'done' || turnRead(agent)) return;
-  if (!force && (document.visibilityState !== 'visible' || !document.hasFocus())) return;
+  if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
   const key = `${agent.id}:${agent.finishedAt}`;
   if (asked.has(key)) return;
   asked.add(key);

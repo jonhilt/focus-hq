@@ -3,22 +3,19 @@ import { openQuestion } from '../../../shared/artifacts';
 import { goalState } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import { prKey } from '../../../shared/qa';
-import { lastReply } from '../../../shared/termText';
 import { type Attention, turnRead } from '../../../shared/tricorder';
 import { type Agent, TEAM_STATIONS } from '../../../shared/types';
 import { api } from '../net/api';
-import { attention, markRead } from '../net/attention';
+import { attention } from '../net/attention';
 import { state } from '../net/state';
 import { onTraffic, traffic, type TrafficEntry, type TrafficLink } from '../net/traffic';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import type { ToastAction } from './hud';
-import { withMic } from './dictation';
 import { busy, fill, h, timeAgo } from './dom';
-import { messageAgent } from './resume';
 import { closeGoal } from './goals';
 
-/** What a hail is about, the same hail from render to render: its card is built once and kept while it stands. */
+/** What a hail is about, the same hail from render to render: its row is built once and kept while it stands. */
 function hailKey(a: Attention): string {
   switch (a.kind) {
     case 'hand':
@@ -37,57 +34,34 @@ function hailKey(a: Attention): string {
   }
 }
 
-/** Who's hailing, and from where: a lead's station and goal, or what anyone else is on, and the project. */
+/** Who and where, on the line under what's needed: a lead's station and goal, or what anyone else is on, and the project. */
 function from(agent: Agent): HTMLElement {
   const project = state.project(agent.projectId);
   const work = agent.lead;
-  return h('div', { class: 'hail-from' },
-    h('strong', null, agent.name),
-    work ? ` · Station ${work.station + 1} · “${work.title}”` : agent.task === 'climb' ? ` · Climb: ${agent.issue.title}` : ` · ${agent.task === 'issue' ? '#' : 'PR #'}${agent.issue.number} ${agent.issue.title}`,
+  return h('small', { class: 'need-from' },
+    agent.name,
+    work ? ` · Station ${work.station + 1} · ${work.title}` : agent.task === 'climb' ? ` · Climb: ${agent.issue.title}` : ` · ${agent.task === 'issue' ? '#' : 'PR #'}${agent.issue.number} ${agent.issue.title}`,
     project ? h('span', { class: 'hail-project', style: `--tone:${project.color}` }, project.name) : null,
   );
 }
 
-/** What the lead last said, a few lines of it: the rest is in their panel. */
-function quote(agent: Agent): HTMLElement | null {
-  const said = lastReply(state.lines.get(agent.id) ?? []);
-  return said ? h('blockquote', { class: 'hail-said' }, said) : null;
-}
+const beam = (ui: Ui, agent: Agent) => h('button', { class: 'btn small', title: 'Teleport to them', onclick: () => ui.goToAgent(agent.id) }, 'Beam there');
+const talk = (ui: Ui, agent: Agent, label: string) => h('button', { class: 'btn small primary', title: 'Their panel: terminal, goal and crew', onclick: () => ui.openAgent(agent.id) }, label);
 
-/** A reply box straight into the agent's session: Enter sends it, and the hail clears once they're at work on it. */
-function reply(ui: Ui, agent: Agent, placeholder: string): HTMLElement {
-  const input = h('input', { type: 'text', placeholder, autocomplete: 'off' });
-  const send = h('button', { class: 'btn small primary' }, 'Send');
-  send.onclick = () => {
-    const text = input.value.trim();
-    if (!text) return;
-    void busy(send, async () => {
-      if (await messageAgent(agent.id, agent.name, text)) input.value = '';
-    }, ui.error);
-  };
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') send.click();
-  });
-  return h('div', { class: 'row hail-reply' }, h('div', { class: 'grow' }, withMic(ui, input)), send);
-}
-
-const beam = (ui: Ui, agent: Agent) => h('button', { class: 'btn small go', title: 'Teleport to them', onclick: () => ui.goToAgent(agent.id) }, 'Beam there');
-const open = (ui: Ui, agent: Agent) => h('button', { class: 'btn small', title: 'Their panel: terminal, goal and crew', onclick: () => ui.openAgent(agent.id) }, 'Open');
-
-/**
- * A lead waiting for the captain: what they last said, and a reply box. Unread, it hails (with Later, to stop it
- * hailing without replying); read (the `read` class), it waits quietly in Your turn until the lead's at work again.
- * The same card moves from one to the other, half-typed reply and all.
- */
-function turnCard(ui: Ui, lead: Agent): HTMLElement {
-  const later = h('button', { class: 'btn small later', title: 'Stop hailing about this turn: they’ll hail again when they next wait for you' }, 'Later');
-  later.onclick = () => markRead(lead, true);
-  return h('div', { class: 'hail', style: `--tone:${LCARS.orange}` },
-    from(lead),
-    quote(lead) ?? h('p', { class: 'hail-what' }, '🖖 Waiting for you'),
-    reply(ui, lead, 'Reply…'),
-    h('div', { class: 'row' }, open(ui, lead), beam(ui, lead), later),
+/** One line of Needs you: an icon, what's needed, who and where under it, and the buttons that answer it. */
+function needRow(tone: string, icon: string, what: string, where: HTMLElement, ...actions: HTMLElement[]): HTMLElement {
+  return h('div', { class: 'need', style: `--tone:${tone}` },
+    h('span', { class: 'need-icon' }, icon),
+    h('div', { class: 'grow' }, h('div', { class: 'need-what', title: what }, what), where),
+    ...actions,
   );
+}
+
+/** A lead waiting for the captain's reply: Reply opens their panel, where the conversation is. Read, it's quieter. */
+function turnRow(ui: Ui, lead: Agent, read: boolean): HTMLElement {
+  const row = needRow(LCARS.orange, '💬', read ? 'Waiting for your reply · read' : 'Waiting for your reply', from(lead), talk(ui, lead, 'Reply'), beam(ui, lead));
+  row.classList.toggle('read', read);
+  return row;
 }
 
 /** What a piece of news's button does: the toast's own, rebuilt from the link it was kept with. */
@@ -116,8 +90,7 @@ function trafficRow(ui: Ui, entry: TrafficEntry): HTMLElement {
   );
 }
 
-function hailCard(ui: Ui, a: Attention): HTMLElement {
-  const card = (tone: string, ...children: (Node | null)[]) => h('div', { class: 'hail', style: `--tone:${tone}` }, ...children);
+function hailRow(ui: Ui, a: Attention): HTMLElement {
   switch (a.kind) {
     case 'hand': {
       const req = a.agent.permission;
@@ -127,34 +100,31 @@ function hailCard(ui: Ui, a: Attention): HTMLElement {
         allow.onclick = () => void busy(allow, () => api.permission(a.agent.id, req.id, true), ui.error);
         deny.onclick = () => void busy(deny, () => api.permission(a.agent.id, req.id, false), ui.error);
       }
-      return card(LCARS.gold, from(a.agent), h('p', { class: 'hail-what' }, `✋ Wants to run ${req?.summary ?? 'something'}`), h('div', { class: 'row' }, allow, deny, open(ui, a.agent), beam(ui, a.agent)));
+      return needRow(LCARS.gold, '✋', `Approve: ${req?.summary ?? 'something'}`, from(a.agent), allow, deny, talk(ui, a.agent, 'Open'));
     }
     case 'question': {
       // the options are pictures: they're picked on the station's screen, up close
-      const pick = h('button', { class: 'btn small go', title: 'See the options up close and pick one', onclick: () => ui.openScreen(a.agent.id) }, 'See the options');
-      return card(LCARS.gold, from(a.agent), h('p', { class: 'hail-what' }, `❓ ${openQuestion(a.agent)?.question ?? 'Asks you'}`), h('div', { class: 'row' }, pick, open(ui, a.agent), beam(ui, a.agent)));
+      const pick = h('button', { class: 'btn small primary', title: 'See the options up close and pick one', onclick: () => ui.openScreen(a.agent.id) }, 'Pick one');
+      return needRow(LCARS.gold, '❓', `Pick: ${openQuestion(a.agent)?.question ?? 'they ask you'}`, from(a.agent), pick, beam(ui, a.agent));
     }
     case 'error':
-      return card(LCARS.red, from(a.agent), h('p', { class: 'hail-what' }, `❗ ${a.agent.error ?? 'Hit a problem'}`), reply(ui, a.agent, 'Tell them how to carry on…'), h('div', { class: 'row' }, open(ui, a.agent), beam(ui, a.agent)));
+      return needRow(LCARS.red, '❗', `Stuck: ${a.agent.error ?? 'hit a problem'}`, from(a.agent), talk(ui, a.agent, 'Open'), beam(ui, a.agent));
     case 'wrap-up': {
       const close = h('button', { class: 'btn small go', title: 'File the goal in the room’s log and send its lead home, which frees the station' }, 'Close goal');
       close.onclick = () => void busy(close, () => closeGoal(a.agent), ui.error);
-      return card('#99cc66', from(a.agent), h('p', { class: 'hail-what' }, `🏁 Ready to wrap up: ${a.agent.lead?.closing?.reason ?? ''}`), reply(ui, a.agent, 'Or carry on…'), h('div', { class: 'row' }, close, open(ui, a.agent), beam(ui, a.agent)));
+      return needRow('#99cc66', '🏁', `Ready to close: ${a.agent.lead?.closing?.reason ?? ''}`, from(a.agent), close, talk(ui, a.agent, 'Carry on'));
     }
     case 'turn':
-      return turnCard(ui, a.agent);
+      return turnRow(ui, a.agent, false);
     case 'qa':
     case 'conflicts': {
       const review = a.kind === 'qa' ? state.reviews.get(prKey(a.pr.repo, a.pr.number))?.followUp : undefined;
-      const what = a.kind === 'qa' ? `🙋 QA needs you${review?.kind === 'needs-you' ? `: ${review.reason}` : ''}` : '⚠ Conflicts with its base branch';
+      const what = a.kind === 'qa' ? `QA needs you${review?.kind === 'needs-you' ? `: ${review.reason}` : ''}` : 'Resolve conflicts with its base branch';
       const project = state.project(a.projectId);
-      return card(a.kind === 'qa' ? LCARS.lilac : LCARS.red,
-        h('div', { class: 'hail-from' }, h('strong', null, `${a.pr.repo.split('/')[1] ?? a.pr.repo}#${a.pr.number}`), ` · ${a.pr.title}`, project ? h('span', { class: 'hail-project', style: `--tone:${project.color}` }, project.name) : null),
-        h('p', { class: 'hail-what' }, what),
-        h('div', { class: 'row' },
-          h('button', { class: 'btn small', onclick: () => ui.openBoard(a.projectId, 'prs') }, 'Pull requests'),
-          h('a', { class: 'btn small', href: a.pr.url, target: '_blank', rel: 'noopener' }, 'GitHub ↗'),
-        ),
+      return needRow(a.kind === 'qa' ? LCARS.lilac : LCARS.red, a.kind === 'qa' ? '🙋' : '⚠', what,
+        h('small', { class: 'need-from' }, `${a.pr.repo.split('/')[1] ?? a.pr.repo}#${a.pr.number} · ${a.pr.title}`, project ? h('span', { class: 'hail-project', style: `--tone:${project.color}` }, project.name) : null),
+        h('button', { class: 'btn small primary', onclick: () => ui.openBoard(a.projectId, 'prs') }, 'Pull requests'),
+        h('a', { class: 'btn small', href: a.pr.url, target: '_blank', rel: 'noopener' }, 'GitHub ↗'),
       );
     }
   }
@@ -169,64 +139,62 @@ function underWayRow(ui: Ui, lead: Agent): HTMLElement {
       h('div', null, h('strong', null, lead.lead?.title ?? lead.issue.title), project ? h('span', { class: 'hail-project', style: `--tone:${project.color}` }, project.name) : null),
       h('small', { class: 'muted' }, `${lead.name} · ${goalState(lead)} · ${statusLine(lead)}`),
     ),
-    h('button', { class: 'btn small primary', onclick: () => ui.openAgent(lead.id) }, 'Talk'),
+    h('button', { class: 'btn small', onclick: () => ui.openAgent(lead.id) }, 'Talk'),
     beam(ui, lead),
   );
 }
 
 /**
- * Cards kept by key while they stand, so a half-typed reply survives the next render: the list is only touched when
- * its cards change, since moving a card would take the focus off its reply box.
+ * Rows kept by key while they stand: the list is only rebuilt when what's in it changes, so a button that's busy
+ * (Approve, Close goal) isn't swapped for a fresh one under the pointer by the next render.
  */
-class KeptCards<T> {
-  private cards = new Map<string, HTMLElement>();
+class KeptRows<T> {
+  private rows = new Map<string, HTMLElement>();
 
   constructor(
     readonly el: HTMLElement,
     private readonly key: (item: T) => string,
     private readonly build: (item: T) => HTMLElement,
-    private readonly empty: HTMLElement | null = null,
+    private readonly empty: HTMLElement,
   ) {}
 
   show(items: readonly T[]): void {
-    const next = new Map(items.map((item) => [this.key(item), this.cards.get(this.key(item)) ?? this.build(item)]));
-    if ([...next.keys()].join('|') !== [...this.cards.keys()].join('|') || !this.el.childElementCount) {
+    const next = new Map(items.map((item) => [this.key(item), this.rows.get(this.key(item)) ?? this.build(item)]));
+    if ([...next.keys()].join('|') !== [...this.rows.keys()].join('|') || !this.el.childElementCount) {
       fill(this.el, ...(next.size ? next.values() : [this.empty]));
     }
-    this.cards = next;
+    this.rows = next;
   }
 }
 
+/** A line of Needs you: a hail, or a lead whose turn the captain has read but not answered yet. */
+type Need = { hail: Attention } | { read: Agent };
+
 /**
- * Comms: the whole ship's traffic in one place, opened from anywhere with C. Hails first (whatever waits on the
- * captain, from `attention()`, each with what it takes to answer it there and then: a reply, an approval, closing the
- * goal), then the leads whose turn the captain has read but not answered, then the goals getting on without them, then
- * each project's goals panel, then the recent traffic: the news the toasts brought, for one you missed. Nothing to mark as read: a hail clears when what it's about does (the lead's at work
- * again, the hand's lowered), and a lead's turn, once read, moves to Your turn rather than out of sight.
+ * Comms: what needs the captain, across the ship, opened from anywhere with C. Needs you comes first, a line each
+ * saying what's needed and the buttons that answer it: the hails from `attention()`, then the leads whose turn the
+ * captain has read but not answered (quieter, and not on the badge). The conversation itself is in the lead's panel,
+ * which Reply opens. Then the goals getting on without them, each project's goals panel, and, folded away, the recent
+ * traffic the toasts brought. Nothing to mark as read: a line clears when what it's about does.
  */
 export function openCommsPanel(ui: Ui): void {
-  // each lead's turn has one card, hailing or read: reading it (on another screen, say) moves it with your draft in it
-  const turns = new Map<string, HTMLElement>();
-  const turn = (lead: Agent, read: boolean) => {
-    const key = `${lead.id}:${lead.finishedAt}`;
-    const card = turns.get(key) ?? turnCard(ui, lead);
-    turns.set(key, card);
-    card.classList.toggle('read', read);
-    return card;
-  };
-  const hails = new KeptCards<Attention>(h('div', { class: 'cards' }), hailKey, (a) => (a.kind === 'turn' ? turn(a.agent, false) : hailCard(ui, a)), h('p', { class: 'muted' }, '✓ All quiet. Nobody is waiting on you.'));
-  const read = new KeptCards<Agent>(h('div', { class: 'cards' }), (l) => `${l.id}:${l.finishedAt}`, (l) => turn(l, true));
+  const needs = new KeptRows<Need>(
+    h('div', { class: 'needs' }),
+    (n) => ('hail' in n ? hailKey(n.hail) : `read:${n.read.id}:${n.read.finishedAt}`),
+    (n) => ('hail' in n ? hailRow(ui, n.hail) : turnRow(ui, n.read, true)),
+    h('p', { class: 'muted' }, '✓ All quiet. Nothing needs you.'),
+  );
   const recent = h('div', { class: 'traffic-list' });
+  const recentFold = h('details', { class: 'traffic-fold' }, h('summary', { title: 'The last news the toasts brought, newest first' }, 'Recent traffic'), recent);
   const underWay = h('div', { class: 'under-way-list' });
+  const underWayHead = h('h3', null, 'Under way');
   const gateways = h('div', { class: 'row' });
-  const hailsHead = h('h3');
-  const readHead = h('h3', { title: 'Leads whose turn you’ve read: still waiting for your reply, but not hailing' }, 'Your turn · read');
+  const needsHead = h('h3');
   const body = h('div', { class: 'comms' },
-    hailsHead, hails.el,
-    readHead, read.el,
-    h('h3', null, 'Under way'), underWay,
+    needsHead, needs.el,
+    underWayHead, underWay,
     h('h3', null, 'Goals'), gateways,
-    h('h3', { title: 'The last news the toasts brought, newest first' }, 'Recent traffic'), recent,
+    recentFold,
   );
 
   const renderTraffic = () => {
@@ -235,26 +203,23 @@ export function openCommsPanel(ui: Ui): void {
   };
 
   const render = () => {
-    // a card that moves between lists loses the focus on the way: give it back
-    const focused = document.activeElement instanceof HTMLElement && body.contains(document.activeElement) ? document.activeElement : null;
     const now = attention();
-    hails.show(now);
-    hailsHead.textContent = now.length ? `Hailing you (${now.length})` : 'Hailing you';
-
     const hailing = new Set(now.flatMap((a) => ('agent' in a ? [a.agent.id] : [])));
-    const all = state.shown.flatMap((p) => state.leadsIn(p.id)).filter((l) => !hailing.has(l.id));
-    const yourTurn = all.filter((l) => turnRead(l));
-    read.show(yourTurn);
-    readHead.hidden = read.el.hidden = !yourTurn.length;
-    const leads = all.filter((l) => !turnRead(l));
-    fill(underWay, ...(leads.length ? leads.map((l) => underWayRow(ui, l)) : [h('p', { class: 'muted' }, hailing.size || yourTurn.length ? 'Every goal under way is waiting on you.' : 'No goals under way.')]));
+    const leads = state.shown.flatMap((p) => state.leadsIn(p.id)).filter((l) => !hailing.has(l.id));
+    const read = leads.filter((l) => turnRead(l));
+    needs.show([...now.map((hail) => ({ hail })), ...read.map((l) => ({ read: l }))]);
+    const count = now.length + read.length;
+    needsHead.textContent = count ? `Needs you (${count})` : 'Needs you';
+
+    const going = leads.filter((l) => !turnRead(l));
+    underWayHead.hidden = underWay.hidden = !going.length;
+    fill(underWay, ...going.map((l) => underWayRow(ui, l)));
 
     fill(gateways, ...state.shown.map((p) => {
       const waiting = p.goalQueue?.length ?? 0;
       return h('button', { class: 'btn small', style: `--tone:${p.color}`, title: `${p.name}’s goals: start one, see the line and the closed ones`, onclick: () => ui.openGoals(p.id) },
         `${p.name} · ${state.leadsIn(p.id).length}/${TEAM_STATIONS}${waiting ? ` +${waiting}` : ''}`);
     }));
-    if (focused?.isConnected && document.activeElement !== focused) focused.focus();
   };
 
   ui.panels.open({ title: 'Comms', body, wide: true, accent: LCARS.orange });

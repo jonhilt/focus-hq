@@ -788,23 +788,23 @@ select.effort { width: auto; padding: 2px 6px; border-radius: 10px; font-size: 1
 
 .comms h3 { margin: 18px 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--lcars-lilac); }
 .comms h3:first-child { margin-top: 0; }
-.hail { --tone: var(--lcars-orange); background: var(--surface-2); border-left: 10px solid var(--tone); border-radius: 0 var(--radius) var(--radius) 0; padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+.hail-project { --tone: var(--lcars-lilac); margin-left: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; background: var(--tone); color: var(--ink); border-radius: 999px; padding: 0 8px; vertical-align: 1px; }
+/* Needs you: a line each, what's needed in bold, who and where under it, the buttons that answer it on the right */
+.needs { display: flex; flex-direction: column; gap: 6px; }
+.need { --tone: var(--lcars-orange); display: flex; gap: 12px; align-items: center; background: var(--surface-2); border-left: 10px solid var(--tone); border-radius: 0 var(--radius) var(--radius) 0; padding: 8px 12px; }
+.need .grow { min-width: 0; }
+.need-icon { font-size: 18px; }
+.need-what { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.need-from { display: block; color: var(--lcars-peach); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* a lead's turn you've read: still waiting for your reply, but quieter */
-.hail.read { --tone: var(--lcars-lilac) !important; background: color-mix(in srgb, var(--surface-2) 60%, #000); }
-.hail.read .later { display: none; }
-.hail-from { color: var(--lcars-peach); }
-.hail-from strong { color: var(--text); }
-.hail-project { --tone: var(--lcars-lilac); margin-left: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; background: var(--tone); color: var(--ink); border-radius: 999px; padding: 0 8px; vertical-align: 2px; }
-.hail-what { margin: 0; font-weight: 600; }
-.hail-said {
-  margin: 0; padding-left: 10px; border-left: 2px solid var(--line); white-space: pre-wrap; line-height: 1.35; max-height: 9.5em; overflow: auto;
-}
-.hail-reply input { width: 100%; }
+.need.read { --tone: var(--lcars-lilac) !important; background: color-mix(in srgb, var(--surface-2) 60%, #000); opacity: 0.75; }
 .under-way-list { display: flex; flex-direction: column; gap: 6px; }
 .under-way { --tone: var(--lcars-lilac); display: flex; gap: 12px; align-items: center; background: var(--surface-2); border-radius: 0 var(--radius) var(--radius) 0; padding-right: 12px; }
 .under-way-station { background: var(--tone); color: var(--ink); align-self: stretch; display: flex; align-items: center; justify-content: flex-end; border-radius: 18px 0 0 18px; padding: 0 8px 0 18px; font-size: 18px; font-weight: 600; }
 .under-way small { display: block; }
 /* recent traffic: the toasts' news, a line each, coloured as its toast was */
+.traffic-fold { margin-top: 18px; }
+.traffic-fold summary { cursor: pointer; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--lcars-lilac); margin-bottom: 8px; }
 .traffic-list { display: flex; flex-direction: column; gap: 4px; }
 .traffic { --tone: var(--lcars-periwinkle); display: flex; gap: 12px; align-items: center; padding: 4px 10px; border-left: 6px solid var(--tone); background: var(--surface-2); border-radius: 0 999px 999px 0; }
 .traffic.success { --tone: var(--lcars-green); }
