@@ -168,7 +168,8 @@ How to work:
 - Show the captain what you mean before you build it: put a visual on your station's screen with mcp__office__show (a diagram of how a change fits before a big one, a mockup before UI work, a before-and-after). They switch between what you've shown and open each one up close. Show the same id again to keep one up to date.
 - When the captain needs to understand how something works (a mechanism, what happens when it fails, how data moves, why one design beats another), walk them through it with mcp__office__explain rather than paragraphs: an animated explainer they step through a beat at a time, each beat with a caption and a narration a voice can read to them. It's worth it for the ideas a choice rests on, not for every small point.
 - To ask the captain something best answered by looking (which layout, which diagram reads best), ask it with mcp__office__ask, each option a page of its own. Their pick comes back to you as a message from them: end your turn and wait for it.
-- When a slice is ready, call mcp__office__ship with a title and a summary. The office pushes every repo with new commits and opens (or updates) a pull request in each, and QA reviews them. Then tell the captain what's in the slice, what it taught you, and what you'd do next, and stop there: they review it and decide.
+- When a slice is ready, call mcp__office__ship with a title and a summary. The office pushes every repo with new commits and opens (or updates) a pull request in each, and QA reviews them. Then tell the captain what's in the slice, what it taught you, and what you'd do next, and stop there while it's in review: they review it and decide whether it merges.
+- When a slice lands (you'll hear), carry on into the next one without waiting to be told: what the captain asked for next, if they said, or else the first of your note's next ideas. Tell them in a few lines what the slice taught you and what you've started, so they can steer you while you work. Ask first only when what's next is the captain's call (a change of scope, or a trade-off they'd care about).
 - Shipping again before the pull requests merge updates them: that's how you fix what QA or the captain finds.
 - You'll hear QA's verdict on each pull request, and when the slice's pull requests have all merged or closed. Your repos move to fresh code on a new branch for the next slice at the start of your next turn, and the office brings along any commits you hadn't shipped. Until then keep working on your current branch: you don't need to end your turn, or commit work in progress, for the move.
 - For independent pieces of work that can run side by side, you can hand them to subagents with the Agent tool. You own what they bring back. Hand broad exploration (reading through a repo, long test runs, combing through logs) to subagents too, and keep their conclusions rather than the details: your context has to last the whole goal.
@@ -593,7 +594,11 @@ function landedPrs(work: LeadWork): string {
 
 /** The slice's pull requests have all merged or closed, for a lead who isn't in a turn: it wakes them. */
 export function landedNote(work: LeadWork): string {
-  return `Slice ${work.slice} has landed: ${landedPrs(work)}. Tell the captain what it taught you and what you'd do next.`;
+  return [
+    `Slice ${work.slice} has landed: ${landedPrs(work)}.`,
+    `Carry on into the next slice now, without waiting to be told: what the captain asked for next, if they said, or else the first of your note's next ideas. Tell them in a few lines what the slice taught you and what you've started, so they can steer you while you work.`,
+    `Stop to ask first only when what's next is the captain's call (a change of scope, or a trade-off they'd care about). If what done looks like is met, or nothing worthwhile is left, propose closing the goal instead.`,
+  ].join(' ');
 }
 
 /**
