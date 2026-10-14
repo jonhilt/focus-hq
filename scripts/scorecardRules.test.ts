@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  eslintCounts, fenceMetrics, gateMetrics, officeMetrics, render, scanSource, typecheckErrors, type GateResults, type Scorecard,
+  eslintCounts, failedTests, fenceMetrics, gateMetrics, officeMetrics, render, scanSource, typecheckErrors, type GateResults, type Scorecard,
+  type VitestReport,
 } from './scorecardRules';
 
 const scan = (source: string) => scanSource('a.ts', source);
@@ -60,6 +61,34 @@ describe('gateMetrics', () => {
     expect(value(gate, 'gate.pass')).toBe(1);
     expect(value(gate, 'gate.seconds')).toBe(40);
     expect(value({ ...gate, build: { pass: false, seconds: 1 } }, 'gate.pass')).toBe(0);
+  });
+});
+
+describe('failedTests', () => {
+  const test = (title: string, status: string, failureMessages: string[] | null = null) => ({ ancestorTitles: ['the bridge'], title, status, failureMessages });
+  const report = (testResults: VitestReport['testResults']): VitestReport => ({ numTotalTests: 0, numFailedTests: 0, testResults });
+
+  it('names each failed test, why it failed, and how to run it again on the same seed', () => {
+    const lines = failedTests(report([
+      { name: '/repo/server/a.test.ts', status: 'failed', message: '', assertionResults: [
+        test('seats the lead', 'passed'),
+        test('sends the QA (officer) home', 'failed', ['AssertionError: expected 1 to be 2\n    at a.test.ts:4:2']),
+      ] },
+      { name: '/repo/server/b.test.ts', status: 'passed', message: '', assertionResults: [test('docks', 'passed')] },
+    ]), '/repo', 7);
+    expect(lines).toEqual([
+      "server/a.test.ts › the bridge › sends the QA (officer) home: AssertionError: expected 1 to be 2\n"
+        + "  FOCUS_TEST_SEED=7 pnpm test server/a.test.ts -t 'sends the QA \\(officer\\) home'",
+    ]);
+  });
+
+  it('names a file that failed before any of its tests ran', () => {
+    const lines = failedTests(report([{ name: '/repo/shared/c.test.ts', status: 'failed', message: "Cannot find module './gone'\nRequire stack", assertionResults: [] }]), '/repo', 1);
+    expect(lines).toEqual(["shared/c.test.ts: Cannot find module './gone'\n  FOCUS_TEST_SEED=1 pnpm test shared/c.test.ts"]);
+  });
+
+  it('says nothing when everything passed', () => {
+    expect(failedTests(report([{ name: '/repo/a.test.ts', status: 'passed', message: '', assertionResults: [test('docks', 'passed')] }]), '/repo', 1)).toEqual([]);
   });
 });
 

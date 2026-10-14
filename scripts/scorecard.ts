@@ -15,8 +15,8 @@ import { paths } from '../server/config';
 import { checkLedger } from '../shared/ledger';
 import { CRAP_LINE, fromIstanbul, functionsIn, isDemo, score } from './crapScore';
 import {
-  effectMetrics, eslintCounts, fenceMetrics, gateMetrics, officeMetrics, render, scanSource, testMetrics, typecheckErrors,
-  type CrapResults, type GateResults, type GateStep, type Scorecard, type SourceCounts,
+  effectMetrics, eslintCounts, failedTests, fenceMetrics, gateMetrics, officeMetrics, render, scanSource, testMetrics, typecheckErrors,
+  type CrapResults, type GateResults, type GateStep, type Scorecard, type SourceCounts, type VitestReport,
 } from './scorecardRules';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -51,6 +51,8 @@ function runGate(tmp: string, notes: string[]): { gate: GateResults; vitest?: Vi
   ]);
   const vitest = readJson<VitestReport>(vitestFile);
   if (!vitest) notes.push('vitest wrote no report, so the test counts are missing');
+  // each failure by name, with the command that runs it again on its seed (vitest.setup.ts)
+  for (const failure of vitest ? failedTests(vitest, ROOT, Number(process.env.FOCUS_TEST_SEED ?? 1)) : []) process.stderr.write(`    failed: ${failure.replaceAll('\n', '\n    ')}\n`);
   step('build');
   // into a folder of its own: the office measures its own checkout, and may be serving dist/ from it
   const build = timed(bin('vite'), ['build', '--outDir', path.join(tmp, 'dist'), '--emptyOutDir']);
@@ -65,12 +67,6 @@ function runGate(tmp: string, notes: string[]): { gate: GateResults; vitest?: Vi
     vitest,
     coverageFile: existsSync(coverageFile) ? coverageFile : undefined,
   };
-}
-
-interface VitestReport {
-  numTotalTests: number;
-  numFailedTests: number;
-  testResults: { name: string }[];
 }
 
 const tracked = (...globs: string[]) => git('ls-files', ...globs).split('\n').filter((f) => f && !f.endsWith('.d.ts'));

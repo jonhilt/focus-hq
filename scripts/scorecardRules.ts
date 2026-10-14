@@ -1,6 +1,7 @@
 // The pure half of `pnpm run scorecard`: what each number is, how it's counted from source and from the tools' own
 // reports, and how two scorecards compare. scripts/scorecard.ts does the I/O: runs the gate, reads the files and the
 // ledger, saves and prints.
+import path from 'node:path';
 import ts from 'typescript';
 import { frictionGroups, reportCard, type LedgerEvent } from '../shared/ledger';
 import { compared, formatValue, measuredAt } from '../shared/scorecard';
@@ -92,6 +93,40 @@ export function typecheckErrors(output: string): number {
   const effect = /(\d+) errors?, \d+ warnings?/.exec(output);
   return tsc + (effect ? Number(effect[1]) : 0);
 }
+
+/** Vitest's JSON report (`--reporter=json`), as much of it as the scorecard reads. */
+export interface VitestReport {
+  numTotalTests: number;
+  numFailedTests: number;
+  testResults: {
+    /** The test file's absolute path. */
+    name: string;
+    status: string;
+    /** Why the file failed before its tests could run (an import that threw), else empty. */
+    message: string;
+    assertionResults: { ancestorTitles: string[]; title: string; status: string; failureMessages: string[] | null }[];
+  }[];
+}
+
+/**
+ * Each test the run failed, as where it is, why (the error's first line), and the command that runs it again on the
+ * same dice (`vitest.setup.ts`), so a red gate says what to look at rather than leaving it to be called flaky. A file
+ * that failed before any of its tests ran is one too.
+ */
+export function failedTests(report: VitestReport, root: string, seed: number): string[] {
+  return report.testResults.filter((file) => file.status === 'failed').flatMap((file) => {
+    const where = path.relative(root, file.name).split(path.sep).join('/');
+    const rerun = `  FOCUS_TEST_SEED=${seed} pnpm test ${where}`;
+    const tests = file.assertionResults.filter((t) => t.status === 'failed');
+    if (!tests.length) return [`${where}: ${firstLine(file.message)}\n${rerun}`];
+    return tests.map((t) => `${[where, ...t.ancestorTitles, t.title].join(' › ')}: ${firstLine(t.failureMessages?.[0] ?? '')}\n${rerun} -t ${shellQuote(regexEscape(t.title))}`);
+  });
+}
+
+const firstLine = (text: string) => text.split('\n')[0].trim() || 'no message';
+// `-t` is a regular expression, and the command goes through a shell
+const regexEscape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const shellQuote = (text: string) => `'${text.replaceAll("'", "'\\''")}'`;
 
 const metric = (section: Section, key: string, label: string, value: number, better: Metric['better'], format: Format): Metric =>
   ({ section, key, label, value, better, format });
