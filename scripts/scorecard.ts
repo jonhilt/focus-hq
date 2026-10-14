@@ -7,15 +7,19 @@
 //   pnpm run scorecard                 measure, save, and compare with the latest saved one
 //   pnpm run scorecard --no-save       measure and compare without saving
 //   pnpm run scorecard --json          print the scorecard as JSON instead
+//   pnpm run scorecard --repeat 5      measure 5 times on this commit and save how far each number wobbles (its noise
+//                                      floor), which every comparison after uses: a change has to move further to count
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { paths } from '../server/config';
 import { checkLedger } from '../shared/ledger';
+import { noiseOf } from '../shared/scorecard';
+import type { ScorecardNoise } from '../shared/types';
 import { CRAP_LINE, fromIstanbul, functionsIn, isDemo, score } from './crapScore';
 import {
-  effectMetrics, eslintCounts, failedTests, fenceMetrics, gateMetrics, officeMetrics, render, scanSource, testMetrics, typecheckErrors,
+  effectMetrics, eslintCounts, failedTests, fenceMetrics, gateMetrics, officeMetrics, render, renderNoise, scanSource, testMetrics, typecheckErrors,
   type CrapResults, type GateResults, type GateStep, type Scorecard, type SourceCounts, type VitestReport,
 } from './scorecardRules';
 
@@ -91,6 +95,15 @@ function latestSaved(): Scorecard | undefined {
   return latest ? readJson<Scorecard>(path.join(paths.scorecards, latest)) : undefined;
 }
 
+const noiseDir = path.join(paths.scorecards, 'noise');
+
+/** The latest noise floor saved by `--repeat`, if any. */
+function latestNoise(): ScorecardNoise | undefined {
+  if (!existsSync(noiseDir)) return undefined;
+  const latest = readdirSync(noiseDir).filter((f) => f.endsWith('.json')).sort().at(-1);
+  return latest ? readJson<ScorecardNoise>(path.join(noiseDir, latest)) : undefined;
+}
+
 function measure(): Scorecard {
   const notes: string[] = [];
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'focus-scorecard-'));
@@ -112,7 +125,8 @@ function measure(): Scorecard {
     at: now,
     commit: git('rev-parse', 'HEAD'),
     branch: git('rev-parse', '--abbrev-ref', 'HEAD'),
-    dirty: git('status', '--porcelain').length > 0,
+    // untracked files (an editor's folder, say) aren't measured, so they don't make the commit's numbers someone else's
+    dirty: git('status', '--porcelain', '--untracked-files=no').length > 0,
     metrics: [
       ...gateMetrics(gate),
       ...fenceMetrics(source),
@@ -128,8 +142,33 @@ function measure(): Scorecard {
   };
 }
 
+/** `--repeat n`: n measurements of this commit, saved as its noise floor (they never join the scorecards' history). */
+function repeat(times: number, save: boolean, json: boolean) {
+  const cards = Array.from({ length: times }, (_, i) => {
+    process.stderr.write(`\nRun ${i + 1} of ${times}\n`);
+    return measure();
+  });
+  const noise = noiseOf(cards);
+  if (!noise) {
+    process.stderr.write('Can’t take a noise floor: the runs need one commit and no uncommitted changes.\n');
+    process.exit(1);
+  }
+  if (save) {
+    mkdirSync(noiseDir, { recursive: true });
+    const file = path.join(noiseDir, `${new Date(noise.at).toISOString().replace(/[:.]/g, '-')}-${noise.commit.slice(0, 8)}.json`);
+    writeFileSync(file, `${JSON.stringify(noise, null, 2)}\n`);
+    process.stderr.write(`Saved ${file}\n\n`);
+  }
+  console.log(json ? JSON.stringify(noise, null, 2) : renderNoise(noise, cards[0]));
+}
+
 function main() {
   const argv = process.argv.slice(2);
+  const times = argv.includes('--repeat') ? Number(argv[argv.indexOf('--repeat') + 1] ?? 5) : 0;
+  if (times) {
+    if (!Number.isInteger(times) || times < 2) throw new Error('--repeat needs a whole number of runs, 2 or more');
+    return repeat(times, !argv.includes('--no-save'), argv.includes('--json'));
+  }
   const previous = latestSaved();
   const card = measure();
   if (!argv.includes('--no-save')) {
@@ -138,7 +177,7 @@ function main() {
     writeFileSync(file, `${JSON.stringify(card, null, 2)}\n`);
     process.stderr.write(`Saved ${file}\n\n`);
   }
-  console.log(argv.includes('--json') ? JSON.stringify(card, null, 2) : render(card, previous));
+  console.log(argv.includes('--json') ? JSON.stringify(card, null, 2) : render(card, previous, latestNoise()));
 }
 
 main();

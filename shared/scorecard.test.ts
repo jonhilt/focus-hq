@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { changeMark, changeWords, compared, deltaText, direction, duration, glance, measuredAt, tileFace, verdictPhrases } from './scorecard';
+import { changeMark, changeWords, compared, deltaText, direction, duration, glance, measuredAt, noiseOf, tileFace, verdictPhrases, wobble } from './scorecard';
 import type { Metric, Scorecard } from './types';
 
 const m = (value: number, better: Metric['better'], format: Metric['format'] = 'count', key = 'k'): Metric => ({ section: 'fence', key, label: key, value, better, format });
@@ -36,6 +36,33 @@ describe('deltaText', () => {
 const card = (commit: string, values: Record<string, number>): Scorecard => ({
   v: 1, at: 0, commit, branch: 'main', dirty: false, frictions: [], notes: [],
   metrics: Object.entries(values).map(([key, value]) => ({ ...m(value, 'lower', 'count', key), section: key === 'gate' ? 'gate' : 'fence' })),
+});
+
+describe('noise floor', () => {
+  const runs = [card('a', { asserts: 9, secs: 60 }), card('a', { asserts: 9, secs: 66 }), card('a', { asserts: 9, secs: 57 })];
+
+  it('takes each number’s lowest and highest over repeated runs on one commit', () => {
+    expect(noiseOf(runs)).toMatchObject({ commit: 'a', runs: 3, spread: { asserts: { min: 9, max: 9 }, secs: { min: 57, max: 66 } } });
+  });
+
+  it('won’t call runs on different commits, uncommitted changes or a single run a noise floor', () => {
+    expect(noiseOf([...runs, card('b', { asserts: 9, secs: 60 })])).toBeUndefined();
+    expect(noiseOf([runs[0], { ...runs[1], dirty: true }])).toBeUndefined();
+    expect(noiseOf([runs[0]])).toBeUndefined();
+  });
+
+  it('counts a change only past the measured spread, in place of the 10% guess for a time', () => {
+    const noise = noiseOf(runs);
+    const secs = (v: number) => m(v, 'lower', 'seconds', 'secs');
+    expect(wobble(secs(60), 60, noise)).toBe(9);
+    // 10% would call this a climb; the runs wobbled by 9s, so 7s is noise
+    expect(direction(secs(53), 60)).toBe('better');
+    expect(direction(secs(53), 60, noise)).toBe('same');
+    expect(direction(secs(50), 60, noise)).toBe('better');
+    // a count that never wobbled still counts on a change of one
+    expect(direction(m(8, 'lower', 'count', 'asserts'), 9, noise)).toBe('better');
+    expect(compared([card('a', { secs: 60 }), card('b', { secs: 53 })], noise)[0].rows[0].trend).toBe('same');
+  });
 });
 
 describe('compared', () => {
