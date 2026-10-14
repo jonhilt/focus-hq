@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { LedgerEvent } from '../../shared/ledger';
 import { freshClimb, type Agent, type Climb, type Scorecard } from '../../shared/types';
 import type { PastPullRequest } from '../github/provider';
-import { climbBrief, climbHome, climbLog, climbPullRequest, climbStep, climbTarget, githubRepo, openRetroIssues, ownWords, section } from './climb';
+import { climbBrief, climbHome, climbLog, climbLogText, climbPullRequest, climbStep, climbTarget, gapScore, githubRepo, openRetroIssues, ownWords, ranked, section, shortlistOf } from './climb';
 
 const REPO = 'jonhilt/focus';
 let seq = 0;
@@ -113,6 +113,49 @@ describe('reading a climb’s pull request', () => {
     ];
     expect(ownWords(comments, 'jonhilt')).toEqual(['Not this: the fence matters less than the gate’s time right now.']);
     expect(ownWords(comments, undefined)).toEqual(['Not this: the fence matters less than the gate’s time right now.']);
+  });
+});
+
+describe('the shortlist', () => {
+  const body = [
+    '**Shortlist**',
+    '| # | Gap | Harm | Distance | Size | Score |',
+    '|---|---|:-:|:-:|---|---|',
+    '| 1 | Ledger counts merges twice | 4 | 3 | S | 11 |',
+    '| 2 | Test the merge loop | 3 | 4 | L | 10 |',
+    '| 3 | Narrow the board | 2 | 3 | small | 7 |',
+    '| 4 | Not scored | ? | 3 | S | ? |',
+    '',
+    '**Hypothesis**',
+    'Fewer merges counted.',
+  ].join('\n');
+
+  it('scores harm double, then distance, and breaks a tie with the smaller change', () => {
+    expect(gapScore({ harm: 4, distance: 3 })).toBe(11);
+    const tie = [{ gap: 'big', harm: 3, distance: 4, size: 'L' as const }, { gap: 'small', harm: 4, distance: 2, size: 'S' as const }];
+    expect(ranked(tie).map((e) => e.gap)).toEqual(['small', 'big']);
+  });
+
+  it('reads the table from a pull request, best first, skipping a row it can’t score', () => {
+    expect(shortlistOf(body)).toEqual([
+      { gap: 'Ledger counts merges twice', harm: 4, distance: 3, size: 'S' },
+      { gap: 'Test the merge loop', harm: 3, distance: 4, size: 'L' },
+      { gap: 'Narrow the board', harm: 2, distance: 3, size: 'S' },
+    ]);
+    expect(shortlistOf('**Problem**\nNo table here.')).toEqual([]);
+  });
+
+  it('puts what a climb passed over in the log, so the next one sees the runners-up', () => {
+    const [record] = climbLog([pr({ number: 12, body })], [], 'jonhilt');
+    expect(record.passedOver?.map((e) => e.gap)).toEqual(['Test the merge loop', 'Narrow the board']);
+    expect(climbLogText([record])).toContain('Passed over: Test the merge loop (10); Narrow the board (7)');
+  });
+
+  it('asks for the scored table before the choice, and scores a turned-down gap with nothing new at no harm', () => {
+    const brief = climbBrief({ repo: REPO, baseBranch: 'main', branch: 'focus/climb-x' }, [], 0);
+    expect(brief).toContain('Score = 2 × Harm + Distance');
+    expect(brief).toContain('`| # | Gap | Harm | Distance | Size | Score |`');
+    expect(brief).toContain('A gap a closed climb took, with nothing changed since, scores Harm 0.');
   });
 });
 

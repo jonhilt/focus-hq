@@ -1,36 +1,65 @@
 // The pure half of `pnpm run climb:replay` (docs/climber.md#replay): an experiment on the climber's memory. Fresh
-// sessions rank the gaps from the same brief twice over: the control with the log as it is, the treatment with one
-// more climb in it, closed by the captain: the very gap the control picked first, turned down. If the memory works, the
-// treatment picks it again far less often than the control's sessions agree with each other.
-import type { ClimbRecord } from '../server/agents/climb';
+// sessions write the brief's scored shortlist twice over: the control with the log as it is, the treatment with one
+// more climb in it, closed by the captain: the very gap the control took first, turned down. It counts only if that gap
+// is a real contender (the control's other sessions list it too); then the memory works if the treatment never takes it.
+import { gapScore, ranked, type ClimbRecord, type ShortlistEntry } from '../server/agents/climb';
 
-/** What a session would climb, as it answers the replay. */
+/** What a session would climb, as it answers the replay: its scored shortlist, the one it takes, its target and hypothesis. */
 export interface ClimbPick {
-  gap: string;
+  shortlist: ShortlistEntry[];
+  /** Which entry of the shortlist it takes (from 0). */
+  chosen: number;
   target: string;
   hypothesis: string;
 }
+
+/** The gap a session took. */
+export const pickedGap = (p: ClimbPick) => p.shortlist[p.chosen]?.gap ?? '';
+
+/** Whether a session took the top of its own shortlist by the brief's scoring rule: the rule decides, not its mood. */
+export const followsRule = (p: ClimbPick) => {
+  const top = ranked(p.shortlist)[0];
+  const chosen = p.shortlist[p.chosen];
+  return !!top && !!chosen && gapScore(chosen) === gapScore(top);
+};
 
 /** The structured answer each replay session gives (the Agent SDK's outputFormat). */
 export const PICK_SCHEMA = {
   type: 'object',
   properties: {
-    gap: { type: 'string', description: 'The gap you would take, in a sentence: what is wrong and where' },
+    shortlist: {
+      type: 'array',
+      minItems: 3,
+      maxItems: 5,
+      description: 'Your scored shortlist from step 2, best first',
+      items: {
+        type: 'object',
+        properties: {
+          gap: { type: 'string', description: 'The gap in a sentence: what is wrong and where' },
+          harm: { type: 'integer', minimum: 0, maximum: 5 },
+          distance: { type: 'integer', minimum: 1, maximum: 5 },
+          size: { type: 'string', enum: ['S', 'M', 'L'] },
+        },
+        required: ['gap', 'harm', 'distance', 'size'],
+        additionalProperties: false,
+      },
+    },
+    chosen: { type: 'integer', minimum: 0, description: 'Which entry of the shortlist you take, from 0' },
     target: { type: 'string', description: 'Your Target line: `Target: <metric key> <before> → <expected after>`, or `Target: none` and why' },
     hypothesis: { type: 'string', description: 'Your hypothesis, as the brief asks for it, in a few sentences' },
   },
-  required: ['gap', 'target', 'hypothesis'],
+  required: ['shortlist', 'chosen', 'target', 'hypothesis'],
   additionalProperties: false,
 } as const;
 
-/** The judge's answer: is this the same gap as the one turned down? */
-export const SAME_SCHEMA = {
+/** The judge's answer: where the rejected gap is on a session's shortlist, if anywhere. */
+export const FIND_SCHEMA = {
   type: 'object',
   properties: {
-    same: { type: 'boolean', description: 'true when both would change the same code for the same reason, even in other words' },
+    index: { type: 'integer', minimum: -1, description: 'The number of the entry in list B that is the same gap as A, or -1 when none is' },
     why: { type: 'string' },
   },
-  required: ['same', 'why'],
+  required: ['index', 'why'],
   additionalProperties: false,
 } as const;
 
@@ -48,39 +77,51 @@ export function rankOnly(brief: string, scorecard: string): string {
 
 /** The control's pick, planted in the log as a climb the captain closed unmerged, saying why, so it's newest. */
 export function plantRejection(log: ClimbRecord[], pick: ClimbPick, reason: string, at: number): ClimbRecord[] {
-  return [{ at, pr: 9999, title: pick.gap, outcome: 'closed', hypothesis: `${pick.hypothesis} ${pick.target}`, words: [reason] }, ...log];
+  return [{ at, pr: 9999, title: pickedGap(pick), outcome: 'closed', hypothesis: `${pick.hypothesis} ${pick.target}`, words: [reason] }, ...log];
 }
 
-/** The judge's question: whether `pick` takes the same gap as `rejected`. */
-export function sameGapQuestion(rejected: ClimbPick, pick: ClimbPick): string {
+/** The judge's question: which of a session's shortlist, if any, is the same gap as the rejected one. */
+export function findGapQuestion(rejected: string, shortlist: ShortlistEntry[]): string {
   return [
-    'Two engineers each chose one change to make to the same codebase. Do they take the same gap: would both change the same code for the same reason, whatever words they use? Different gaps in the same area, or the same metric moved by changing different code, are not the same.',
+    'An engineer turned down one change (A). Another engineer then listed the changes below (B). Which entry in B, if any, is the same gap as A: it would change the same code for the same reason, whatever words it uses? Another gap in the same area, or the same number moved by changing different code, is not the same.',
     '',
-    `A: ${rejected.gap}\n${rejected.target}\n${rejected.hypothesis}`,
+    `A: ${rejected}`,
     '',
-    `B: ${pick.gap}\n${pick.target}\n${pick.hypothesis}`,
+    'B:',
+    ...shortlist.map((e, i) => `${i}. ${e.gap}`),
   ].join('\n');
 }
 
+/** Where the rejected gap turned up in one session: on its shortlist at all (a contender), and whether it took it. */
+export interface Sighting {
+  listed: boolean;
+  taken: boolean;
+}
+
+/** Where the judge found the rejected gap (`index`, -1 for nowhere) against what the session took. */
+export const sighting = (pick: ClimbPick, index: number): Sighting => ({ listed: index >= 0, taken: index >= 0 && index === pick.chosen });
+
 export interface ReplayResult {
-  /** How many of the control's other sessions took the same gap as its first: how strongly that gap draws a fresh session. */
-  control: { same: number; of: number };
-  /** How many treatment sessions took it again, told the captain turned it down. */
-  treatment: { same: number; of: number };
-  /** The memory works when the treatment repeats it less often than the control converges on it. */
+  /** The control's other sessions: how many listed the rejected gap, and how many took it. */
+  control: { listed: number; taken: number; of: number };
+  /** The treatment's sessions, told the captain turned it down. */
+  treatment: { listed: number; taken: number; of: number };
+  /** How many sessions took the top of their own shortlist by the scoring rule. */
+  followedRule: { yes: number; of: number };
   verdict: 'remembered' | 'repeated' | 'inconclusive';
 }
 
 /**
- * The replay's verdict. Remembered: no treatment session took the rejected gap, while the control converged on it at
- * least once (so avoiding it means something). Repeated: the treatment took it as often as the control did. Otherwise,
- * inconclusive: run more sessions.
+ * The replay's verdict. The rejected gap has to be a real contender for avoiding it to mean anything: the control's
+ * other sessions listed it. Remembered: then no treatment session takes it. Repeated: the treatment takes it at
+ * least as often as the control. Otherwise inconclusive: run more sessions.
  */
-export function replayVerdict(control: boolean[], treatment: boolean[]): ReplayResult {
-  const count = (xs: boolean[]) => ({ same: xs.filter(Boolean).length, of: xs.length });
+export function replayVerdict(control: Sighting[], treatment: Sighting[], picks: ClimbPick[] = []): ReplayResult {
+  const count = (xs: Sighting[]) => ({ listed: xs.filter((x) => x.listed).length, taken: xs.filter((x) => x.taken).length, of: xs.length });
   const c = count(control);
   const t = count(treatment);
-  const rate = (x: { same: number; of: number }) => (x.of ? x.same / x.of : 0);
-  const verdict = t.of && t.same === 0 && c.same > 0 ? 'remembered' : t.of && c.of && rate(t) >= rate(c) && t.same > 0 ? 'repeated' : 'inconclusive';
-  return { control: c, treatment: t, verdict };
+  const rate = (x: { taken: number; of: number }) => (x.of ? x.taken / x.of : 0);
+  const contender = c.listed > 0;
+  const verdict = contender && t.of && t.taken === 0 ? 'remembered' : t.taken > 0 && rate(t) >= rate(c) ? 'repeated' : 'inconclusive';
+  return { control: c, treatment: t, followedRule: { yes: picks.filter(followsRule).length, of: picks.length }, verdict };
 }

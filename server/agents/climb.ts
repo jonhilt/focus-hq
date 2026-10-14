@@ -16,7 +16,8 @@ export const CLIMB_ASSIGNMENT =
 
 export const CLIMB_SUMMARY =
   'Your final message becomes the pull request: its first line is `# ` and the title (imperative, under 70 characters), ' +
-  'then five sections: **Hypothesis** (as you wrote it before changing anything, with its `Target:` line, and whether it held), ' +
+  'then six sections: **Shortlist** (your scored table from step 2, as you wrote it), ' +
+  '**Hypothesis** (as you wrote it before changing anything, with its `Target:` line, and whether it held), ' +
   '**Problem** (what was wrong, with the evidence), **Solution** (what changed, and why this way), ' +
   '**Before** and **After** (the scorecard\'s numbers and anything else you measured, measured the same way both times). ' +
   'Then, if you skipped anything that needs the captain\'s sign-off, a **Needs your sign-off** list. No preamble.';
@@ -72,6 +73,44 @@ export function ownWords(comments: PastPullRequest['comments'], captain: string 
     .filter(Boolean);
 }
 
+/** One gap on a climb's shortlist, scored as step 2 of the brief asks. */
+export interface ShortlistEntry {
+  gap: string;
+  /** Harm to the captain and the office, 1 to 5. */
+  harm: number;
+  /** How far the code is from its standard, 1 to 5. */
+  distance: number;
+  size: 'S' | 'M' | 'L';
+}
+
+const SIZE_ORDER = { S: 0, M: 1, L: 2 } as const;
+
+/** A gap's score: harm counts double, then distance; size only breaks a tie (smaller first). */
+export const gapScore = (e: Pick<ShortlistEntry, 'harm' | 'distance'>) => 2 * e.harm + e.distance;
+
+/** A shortlist best first, by the brief's rule: score, then the smaller change. */
+export function ranked<T extends ShortlistEntry>(entries: T[]): T[] {
+  return [...entries].sort((a, b) => gapScore(b) - gapScore(a) || SIZE_ORDER[a.size] - SIZE_ORDER[b.size]);
+}
+
+/** The shortlist table from a climb's pull request (`| # | Gap | Harm | Distance | Size | Score |`), best first. */
+export function shortlistOf(body: string): ShortlistEntry[] {
+  const table = section(body, 'Shortlist');
+  if (!table) return [];
+  const rows = table.split('\n').filter((l) => l.trim().startsWith('|')).map((l) => l.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim()));
+  const header = rows[0]?.map((c) => c.toLowerCase()) ?? [];
+  const col = (name: string) => header.findIndex((h) => h.startsWith(name));
+  const [gap, harm, distance, size] = [col('gap'), col('harm'), col('distance'), col('size')];
+  if ([gap, harm, distance, size].some((i) => i < 0)) return [];
+  const entries = rows.slice(1).filter((r) => !r.every((c) => /^:?-+:?$/.test(c))).flatMap((r): ShortlistEntry[] => {
+    const h = Number(r[harm]);
+    const d = Number(r[distance]);
+    const z = r[size]?.toUpperCase().charAt(0);
+    return r[gap] && Number.isFinite(h) && Number.isFinite(d) && (z === 'S' || z === 'M' || z === 'L') ? [{ gap: r[gap], harm: h, distance: d, size: z }] : [];
+  });
+  return ranked(entries);
+}
+
 /** One climb, as the next climb's brief remembers it. */
 export interface ClimbRecord {
   at: number;
@@ -82,6 +121,8 @@ export interface ClimbRecord {
   target?: ClimbTarget;
   /** The captain's own words on it. */
   words: string[];
+  /** What else was on its shortlist, best first: the gaps it passed over. */
+  passedOver?: ShortlistEntry[];
   /** For a merged climb with a target: whether main has held the gain since (from scorecards measured after it merged). */
   since?: { held: boolean; now: number; label: string; format: Parameters<typeof formatValue>[1] };
 }
@@ -114,6 +155,8 @@ export function climbLog(prs: PastPullRequest[], ends: ClimbEnd[], captain: stri
       hypothesis: firstSentences(hypothesis ?? section(p.body, 'Problem') ?? p.body),
       target,
       words: ownWords(p.comments, captain),
+      // the top of the shortlist is the one it took
+      passedOver: shortlistOf(p.body).slice(1, 5),
       since: outcome === 'merged' && target ? heldSince(target, at, main, noise) : undefined,
     };
   });
@@ -135,6 +178,7 @@ export function climbLogText(log: ClimbRecord[], limit = 25): string {
     if (r.target) lines.push(`  Target: ${r.target.key} ${r.target.before} → ${r.target.after}`);
     if (r.since) lines.push(`  On main since: ${r.since.label} is ${formatValue(r.since.now, r.since.format)}, ${r.since.held ? 'held' : 'SLIPPED back past the target'}`);
     for (const w of r.words) lines.push(`  The captain said: “${firstSentences(w, 400)}”`);
+    if (r.passedOver?.length) lines.push(`  Passed over: ${r.passedOver.map((e) => `${firstSentences(e.gap, 100)} (${gapScore(e)})`).join('; ')}`);
     return lines.join('\n');
   }).join('\n');
 }
@@ -162,7 +206,7 @@ export function climbBrief(agent: Pick<Agent, 'repo' | 'baseBranch' | 'branch'>,
     'Times swing with the machine\'s load (other agents run beside you): if your target is a time, measure it interleaved, base and change taking turns on the same machine (at least 5 of each, the base in a worktree of its own), and compare medians.',
     '',
     '## 2. Rank',
-    'Put every gap on one scale: harm to the captain and the office first, then how far the code is from the standard, then size. Pick the top one that fits in one reviewable pull request. The gaps include:',
+    'Put every gap on one scale, then write a **Shortlist**: the 3 to 5 strongest, as a table, before you choose. Score each the same way: **Harm** to the captain and the office, 1 to 5 (5: it breaks or misleads the office now; 1: cosmetic), **Distance** from the standard, 1 to 5, and **Size** S, M or L. Score = 2 × Harm + Distance; take the highest, the smaller on a tie, that fits in one reviewable pull request. A gap a closed climb took, with nothing changed since, scores Harm 0. Write it as `| # | Gap | Harm | Distance | Size | Score |`. The gaps include:',
     '- the scorecard\'s numbers: a gate that fails or is slow, type assertions and non-null assertions, the server\'s edges between Effect and Promise code, functions over CRAP 30, no property tests;',
     frictions.length
       ? `- the office's open frictions: what got in the agents' way in 3 or more sessions in the last ${FRICTION_DAYS} days, with no retro decision yet:\n${frictions.map((g) => `  - ${g.key} (${g.sessions} sessions)`).join('\n')}`

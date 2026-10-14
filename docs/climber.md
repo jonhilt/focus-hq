@@ -38,13 +38,14 @@ A climb is an agent's work like a developer's (`task: 'climb'`), with difference
     - the scorecard's numbers;
     - the office's open frictions (3 or more sessions in 14 days, with no retro decision yet);
     - the retro's accepted issues that no merge has closed.
+  - **Shortlist.** Before choosing, the 3 to 5 strongest gaps as a scored table: Harm (1 to 5) and Distance from the standard (1 to 5), Score = 2 × Harm + Distance, Size (S, M, L) breaking a tie. They take the top that fits one pull request; a gap you turned down, with nothing changed since, scores no harm. Writing the scores down makes the pick a rule the next climb can check, rather than one session's feel (three fresh sessions on one brief once picked three different gaps).
   - **Hypothesis.** Before changing anything: which gap, the number it will move and by how much, and what would show them wrong, ending in a `Target: <metric key> <before> → <after>` line. It's the pull request's first section, with whether it held.
   - **Sign-off.** Anything that needs your sign-off (a dependency version, how the office merges or deploys) is listed, not done.
   - **Fix.** A check first when the bad pattern can come back, then the smallest change. A planted bug proves each new test can fail.
   - **Prove.** The whole gate, then the scorecard again; those numbers are the After.
   - **Never:** `--no-verify`, loosening a rule or test, changing a dependency version, or two reasons in one pull request.
 - **The pull request.** The office pushes their branch and opens it from their final message (`climbPullRequest`). Its first line (`# …`) is the title. The rest is the body:
-  - **Hypothesis**, **Problem**, **Solution**, **Before** and **After**;
+  - **Shortlist**, **Hypothesis**, **Problem**, **Solution**, **Before** and **After**;
   - then anything that needs your sign-off.
 
   It closes no issue of its own; when the climber took a retro issue, they say `Closes #n` themselves.
@@ -54,7 +55,7 @@ A climb is an agent's work like a developer's (`task: 'climb'`), with difference
 
 Each climb starts a fresh session, so what Lt. Rhee knows of the climbs before comes from the brief (`Climbs.brief`, `climbLog` in `server/agents/climb.ts`), built from the raw record each time rather than from a summary the office keeps:
 
-- **GitHub**: every pull request on a `focus/climb-` branch, open, merged or closed (`pullRequestsFrom`), with its hypothesis (or, from before hypotheses, its Problem) and its `Target:` line. A comment of yours on one goes in word for word: the office's own reports (QA's, the operations officer's), posted from the same account, are told apart by how they start, and bots are left out. To turn a climb down so the next one learns from it, close its pull request with a comment saying why.
+- **GitHub**: every pull request on a `focus/climb-` branch, open, merged or closed (`pullRequestsFrom`), with its hypothesis (or, from before hypotheses, its Problem), its `Target:` line, and the gaps its shortlist passed over, with their scores (`shortlistOf`). A comment of yours on one goes in word for word: the office's own reports (QA's, the operations officer's), posted from the same account, are told apart by how they start, and bots are left out. To turn a climb down so the next one learns from it, close its pull request with a comment saying why.
 - **The office**: the climbs that ended without a pull request, and why (`Climb.ends`, the last 20).
 - **The scorecards**: for a merged climb with a target, whether main has held the gain, on the latest clean scorecard of main measured since it merged (`heldSince`). A gain that slipped back past its target is flagged as a gap worth taking.
 
@@ -62,13 +63,13 @@ GitHub failing costs the climb its log, not the climb: the terminal says so.
 
 ### Replay
 
-`pnpm run climb:replay` tests the memory with an experiment rather than by reading the brief (`scripts/climbReplay.ts`, rules in `scripts/climbReplayRules.ts`). Fresh read-only sessions do steps 0 to 2 of the brief from a measured scorecard (the latest saved, or `--card`), changing nothing:
+`pnpm run climb:replay` tests the memory with an experiment rather than by reading the brief (`scripts/climbReplay.ts`, rules in `scripts/climbReplayRules.ts`). Fresh read-only sessions do steps 0 to 2 of the brief from a measured scorecard (the latest saved, or `--card`), changing nothing, and answer with their scored shortlist and the one they'd take:
 
-- the **control** gets the log as it is; its first pick becomes the rejected gap;
+- the **control** gets the log as it is; its first session's pick becomes the rejected gap;
 - the **treatment** gets the same log with that pick planted as a climb you closed, with a reason;
-- a judge (`--judge`, Haiku by default) says which picks are the same gap.
+- a judge (`--judge`, Haiku by default) finds the rejected gap on each session's shortlist, if it's there.
 
-It's **remembered** when no treatment session takes the rejected gap again while the control's other sessions converged on it at least once, **repeated** when the treatment takes it as often as the control does, and otherwise **inconclusive** (try `--runs 5`). Each run is saved in `~/.focus/climb-replays/` with every pick and judgement and what it cost. It runs real sessions, so it's by hand, not in the gate.
+It's **remembered** when the rejected gap is a real contender (the control's other sessions list it too) and no treatment session takes it; **repeated** when the treatment takes it at least as often as the control; otherwise **inconclusive** (try `--runs 5`). It also counts how many sessions took the top of their own shortlist by the scoring rule. Each run is saved in `~/.focus/climb-replays/` with every shortlist and judgement and what it cost. It runs real sessions, so it's by hand, not in the gate.
 
 ## Where it lives
 

@@ -1,7 +1,7 @@
-// The climber's memory, put to the test (docs/climber.md#replay): fresh read-only sessions rank the gaps from the
-// climb brief, a control with the log of past climbs as it is and a treatment with the control's first pick planted in
-// it as a climb the captain closed. A judge (a cheaper model) says which picks are the same gap; scripts/
-// climbReplayRules.ts has the rules. It costs real sessions, so it's run by hand, not in the gate.
+// The climber's memory, put to the test (docs/climber.md#replay): fresh read-only sessions write the climb brief's
+// scored shortlist, a control with the log of past climbs as it is and a treatment with the control's first pick
+// planted in it as a climb the captain closed. A judge (a cheaper model) finds the rejected gap on each shortlist;
+// scripts/climbReplayRules.ts has the rules. It costs real sessions, so it's run by hand, not in the gate.
 //
 //   pnpm run climb:replay                         3 sessions each side, on the latest saved scorecard
 //   pnpm run climb:replay --runs 5 --card x.json  more sessions, on a scorecard you choose (`scorecard --json`)
@@ -14,7 +14,7 @@ import { config, paths } from '../server/config';
 import type { PastPullRequest } from '../server/github/provider';
 import { SavedScorecards } from '../server/scorecards';
 import { CLIMB_BRANCH, type Scorecard } from '../shared/types';
-import { PICK_SCHEMA, plantRejection, rankOnly, replayVerdict, SAME_SCHEMA, sameGapQuestion, type ClimbPick } from './climbReplayRules';
+import { FIND_SCHEMA, findGapQuestion, followsRule, PICK_SCHEMA, pickedGap, plantRejection, rankOnly, replayVerdict, sighting, type ClimbPick } from './climbReplayRules';
 import { render } from './scorecardRules';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -68,32 +68,33 @@ async function main() {
   const picks = async (side: string, prompt: string) => Promise.all(Array.from({ length: RUNS }, async (_, i) => {
     const { answer, costUsd } = await ask<ClimbPick>(prompt, PICK_SCHEMA);
     cost += costUsd;
-    process.stderr.write(`${side} ${i + 1}: ${answer.gap}\n  ${answer.target}\n`);
+    process.stderr.write(`${side} ${i + 1}: ${pickedGap(answer)}${followsRule(answer) ? '' : ' (not the top by its own scores)'}\n${answer.shortlist.map((e, j) => `  ${j === answer.chosen ? '→' : ' '} ${2 * e.harm + e.distance} ${e.size} ${e.gap.slice(0, 110)}`).join('\n')}\n`);
     return answer;
   }));
-  const same = async (rejected: ClimbPick, pick: ClimbPick) => {
-    const { answer, costUsd } = await ask<{ same: boolean; why: string }>(sameGapQuestion(rejected, pick), SAME_SCHEMA, { model: JUDGE, tools: [], allowedTools: [], maxTurns: 3 });
+  const find = async (rejected: string, pick: ClimbPick) => {
+    const { answer, costUsd } = await ask<{ index: number; why: string }>(findGapQuestion(rejected, pick.shortlist), FIND_SCHEMA, { model: JUDGE, tools: [], allowedTools: [], maxTurns: 3 });
     cost += costUsd;
-    return answer;
+    return { ...answer, ...sighting(pick, answer.index) };
   };
 
   process.stderr.write(`Replaying the climb brief: ${log.length} past climbs, ${RUNS} sessions each side\n`);
   const control = await picks('control', rankOnly(climbBrief(agent, [], Date.now(), log, noise), card));
   const rejected = control[0];
   const treatment = await picks('treatment', rankOnly(climbBrief(agent, [], Date.now(), plantRejection(log, rejected, REASON, Date.now()), noise), card));
-  const controlSame = await Promise.all(control.slice(1).map((p) => same(rejected, p)));
-  const treatmentSame = await Promise.all(treatment.map((p) => same(rejected, p)));
-  const result = replayVerdict(controlSame.map((j) => j.same), treatmentSame.map((j) => j.same));
+  const controlSeen = await Promise.all(control.slice(1).map((p) => find(pickedGap(rejected), p)));
+  const treatmentSeen = await Promise.all(treatment.map((p) => find(pickedGap(rejected), p)));
+  const result = replayVerdict(controlSeen, treatmentSeen, [...control, ...treatment]);
 
-  const out = { at: Date.now(), commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim(), runs: RUNS, judge: JUDGE, rejected, control, treatment, controlSame, treatmentSame, result, costUsd: cost };
+  const out = { at: Date.now(), commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim(), runs: RUNS, judge: JUDGE, rejected, control, treatment, controlSeen, treatmentSeen, result, costUsd: cost };
   const dir = path.join(config.dataDir, 'climb-replays');
   mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${new Date(out.at).toISOString().replace(/[:.]/g, '-')}.json`);
   writeFileSync(file, `${JSON.stringify(out, null, 2)}\n`);
   console.log([
-    `Rejected (the control's first pick): ${rejected.gap}`,
-    `Control: ${result.control.same} of ${result.control.of} other sessions took the same gap`,
-    `Treatment, told the captain closed it: ${result.treatment.same} of ${result.treatment.of} took it again`,
+    `Rejected (the control's first pick): ${pickedGap(rejected)}`,
+    `Control: ${result.control.listed} of ${result.control.of} other sessions listed it, ${result.control.taken} took it`,
+    `Treatment, told the captain closed it: ${result.treatment.listed} of ${result.treatment.of} listed it, ${result.treatment.taken} took it`,
+    `Took the top of their own shortlist: ${result.followedRule.yes} of ${result.followedRule.of}`,
     `Verdict: ${result.verdict} · $${cost.toFixed(2)} · saved ${file}`,
   ].join('\n'));
 }
