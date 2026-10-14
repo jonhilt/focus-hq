@@ -5,7 +5,7 @@ import { sceneThumbnail } from './contactSheet';
 import { OVERLAY_LAYER } from './frame';
 import { Hologram } from './hologram';
 import { LCARS, LCARS_FONT } from './starship';
-import { SHELF, shelfMove, shelfSpots } from './studio';
+import { cardTurn, SHELF, shelfMove, shelfSpots } from './studio';
 
 // The studio's shelf (docs/studio.md): every scene the computer's kept, as a hologram card with a picture of it, hung in
 // an arc at eye height round where you stood when you opened it. Swipe to bring another card in front, and pick it to
@@ -61,7 +61,6 @@ export class SceneShelf {
   private at = 0;
   private readonly eye = new THREE.Vector3();
   private yaw = 0;
-  private readonly spot = new THREE.Vector3();
 
   get isOpen(): boolean {
     return this.cards.length > 0;
@@ -115,7 +114,7 @@ export class SceneShelf {
       const { angle, scale, opacity } = spots[i];
       const a = this.yaw + angle;
       c.mesh.position.set(this.eye.x + Math.sin(a) * SHELF.distance, this.eye.y - SHELF.drop, this.eye.z + Math.cos(a) * SHELF.distance);
-      c.mesh.lookAt(this.spot.set(this.eye.x, this.eye.y - SHELF.drop, this.eye.z));
+      c.mesh.rotation.set(0, cardTurn(a), 0);
       c.mesh.scale.setScalar(scale);
       c.mesh.visible = opacity > 0.01;
       c.hologram.material.opacity = opacity;

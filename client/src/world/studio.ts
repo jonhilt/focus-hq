@@ -156,6 +156,14 @@ export function shelfSpots(n: number, at: number): ShelfSpot[] {
   });
 }
 
+/**
+ * How a card hung `a` radians round from +Z about you turns (about Y, in the same frame) so its face (+Z) points back
+ * at you: set as a rotation in the hall's frame, not with lookAt, which wants the world's.
+ */
+export function cardTurn(a: number): number {
+  return a + Math.PI;
+}
+
 /** The shelf's pick: which card's in front, moved `by` and kept on the shelf of `n`. */
 export function shelfMove(picked: number, by: number, n: number): number {
   return Math.max(0, Math.min(n - 1, picked + by));

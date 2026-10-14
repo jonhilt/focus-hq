@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ENTRANCE_X } from './hallLayout';
-import { keepsHallCollider, SCENE_HOLD, SHELF, shelfMove, shelfSpots, SCENE_STAGE, ScenePlayback, sheetMoments, SPIN_RATE, STUDIO_HALL, STUDIO_SPAN, studioWalls } from './studio';
+import { cardTurn, keepsHallCollider, SCENE_HOLD, SHELF, shelfMove, shelfSpots, SCENE_STAGE, ScenePlayback, sheetMoments, SPIN_RATE, STUDIO_HALL, STUDIO_SPAN, studioWalls } from './studio';
 
 describe('the studio hall', () => {
   it('walls in its round wall and its entrance wall out to it, leaving the doorway clear', () => {
@@ -125,6 +125,16 @@ describe('the scene shelf', () => {
     expect(a.scale).toBeCloseTo(1.175);
     expect(b.scale).toBeCloseTo(1.175);
     expect(a.angle).toBeCloseTo(-b.angle);
+  });
+
+  it('turns every card to face you squarely, wherever round you it hangs', () => {
+    for (const a of [0, 0.6, -1.2, 2.5]) {
+      const turn = cardTurn(a);
+      // the card's face (+Z turned by `turn` about Y) against the way back from the card to you
+      const face = [Math.sin(turn), Math.cos(turn)];
+      const back = [-Math.sin(a), -Math.cos(a)];
+      expect(face[0] * back[0] + face[1] * back[1]).toBeCloseTo(1);
+    }
   });
 
   it('keeps the pick on the shelf', () => {
