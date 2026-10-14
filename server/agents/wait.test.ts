@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { BASH } from './agentShell';
 import { sessionEnv, WAIT_BIN, WAIT_RULE, withWaitHelper } from './wait';
 
 interface Result { code: number; stdout: string; stderr: string }
@@ -61,8 +62,8 @@ describe('withWaitHelper', () => {
     expect(withWaitHelper({}).PATH).toBe(WAIT_BIN);
   });
 
-  it('gives a local session its scratch dir and the helper, and a cloud session neither', () => {
-    expect(sessionEnv({ PATH: '/usr/bin' }, { FOCUS_SCRATCH: '/tmp/s' })).toEqual({ PATH: `${WAIT_BIN}${path.delimiter}/usr/bin`, FOCUS_SCRATCH: '/tmp/s' });
+  it('gives a local session its scratch dir, the helper and bash, and a cloud session none of them', () => {
+    expect(sessionEnv({ PATH: '/usr/bin' }, { FOCUS_SCRATCH: '/tmp/s' })).toEqual({ PATH: `${WAIT_BIN}${path.delimiter}/usr/bin`, FOCUS_SCRATCH: '/tmp/s', CLAUDE_CODE_SHELL: BASH });
     expect(sessionEnv({ PATH: '/usr/bin' })).toEqual({ PATH: '/usr/bin' });
   });
 

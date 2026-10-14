@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { config } from '../config';
+import { withBash } from './agentShell';
 
 /**
  * Where the office's helpers for its agents' shells live (`bin/` in the Focus checkout): `focus-wait`, which polls a
@@ -14,11 +15,11 @@ export function withWaitHelper(env: Record<string, string | undefined>, bin = WA
 }
 
 /**
- * A session's environment: a local session's (one with a scratch dir) gets its scratch dir's variables and the office's
- * helpers on its PATH; a cloud session works on a machine of its own, so it gets neither.
+ * A session's environment: a local session's (one with a scratch dir) gets its scratch dir's variables, the office's
+ * helpers on its PATH and bash for its Bash tool; a cloud session works on a machine of its own, so it gets none of them.
  */
 export function sessionEnv(env: Record<string, string | undefined>, scratchEnv?: Record<string, string>): Record<string, string | undefined> {
-  return scratchEnv ? withWaitHelper({ ...env, ...scratchEnv }) : env;
+  return scratchEnv ? withBash(withWaitHelper({ ...env, ...scratchEnv })) : env;
 }
 
 /** What every local session is told about waiting (the developers', QA's and the leads' prompts). */
