@@ -367,8 +367,8 @@ const most = (ms: Record<FlowState, number>, of: FlowState[]) => of.reduce((a, b
 
 const WAITS: FlowState[] = ['qa', 'review', 'captain', 'queued'];
 
-/** The report as the terminal prints it. */
-export function flowLines(r: FlowReport, slowest = 5): string[] {
+/** The report as the terminal prints it, with any more guards measured elsewhere (rework after merge) among its own. */
+export function flowLines(r: FlowReport, slowest = 5, guards: string[] = []): string[] {
   const states = (Object.keys(FLOW_STATES) as FlowState[]).filter((s) => s !== 'queued' || r.totals[s] > 0);
   const around = Object.fromEntries(states.map((s) => [s, r.totals[s] - r.away[s]])) as Record<FlowState, number>;
   const biggest = most(around, WAITS);
@@ -395,6 +395,7 @@ export function flowLines(r: FlowReport, slowest = 5): string[] {
     'Quality guards (the goals’ pull requests):',
     `  merged ${g.merged} · ${g.mergedWithoutPass} without a current QA pass (${pct(g.mergedWithoutPass, g.merged)})`,
     `  QA passed ${g.passedFirstTime} of ${g.reviewed} first time (${pct(g.passedFirstTime, g.reviewed)}) · ${g.qaFails} failed rounds · ${g.agentConflicts} conflicts an agent resolved`,
+    ...guards,
     '',
     `Slowest ${Math.min(slowest, r.goals.length)} (lead time, active time, where most of the active time went):`,
     ...[...r.goals]

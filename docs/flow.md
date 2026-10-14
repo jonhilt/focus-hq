@@ -7,7 +7,8 @@
 | `pnpm run flow` | every closed goal |
 | `pnpm run flow --since 2026-10-10` | goals closed since a date (`--until` too), to compare before and after a change |
 | `pnpm run flow --project proj_…` | one room's goals |
-| `pnpm run flow --json` | the report as JSON, each goal's states included |
+| `pnpm run flow --json` | the report as JSON, each goal's states and each pull request's rework included |
+| `pnpm run flow --no-rework` | leaves out rework after merge, which asks GitHub about every merged pull request (about 30 s for 150) |
 
 ## Where it comes from
 
@@ -31,6 +32,7 @@ The lead is **at a turn** from the message that starts it (the captain's, the of
 - **Each wait on the captain** of a minute or more, p50 and p85. Shorter ones are messages sent while the lead was still at work.
 - **Waiting on the captain, by why**, from how the lead's turn before the wait ended: a slice had landed and the lead waited to hear what next (**next-slice**: the turn began with the office's `Slice … starts` message); it proposed closing the goal (**close**, the propose-close tool) or asked with pictures (**ask**, the ask tool); its last words asked leave to go on with what it proposed (**go-ahead**: "shall I…?", "want me to…?", "do you want…?") or asked something else (**question**); it reported and stopped (**report**); or QA had failed a pull request and it stopped (**qa-failed**). For each: the time while around, its share of the captain's, how many waits and the median one. The go-ahead and next-slice waits are the ones a lead could often have skipped by carrying on.
 - **Quality guards**, over the goals' pull requests: merges without a current QA pass (QA's badge as it merged wasn't `passed`), QA passing first time, failed rounds, and conflicts an agent had to resolve. Lead time that comes down while these get worse hasn't really come down.
+- **Rework after merge**: of the lines the goals' merged pull requests added, how many were changed or deleted on their base branch within 7 days, and the pull requests with the most (`server/agents/rework.ts`, its I/O in `scripts/flowRework.ts`). GitHub (`gh pr view`) says what each added, file by file, and which commits it was; `git blame` in the office's clone of its repo (`~/.focus/repos`), at the base branch as it stood 7 days after the merge, says how many of those lines still come from them. A pull request rebased or squashed onto its base counts the commits it landed as too (its merge commit, and those before it carrying its commits' messages). Lock files, pictures, models and builds don't count. One merged less than 7 days ago counts so far, and the line says how many are past 7 days.
 - **Slowest five**, with their active time and where most of it went.
 
 ## Live, on the goal board
@@ -48,5 +50,6 @@ The demo's pretend leads keep a stand-in transcript of their turns (`DemoRunner.
 
 - A goal whose lead's transcript is gone isn't counted: Claude Code deletes transcripts after 30 days unless told otherwise, and a cloud session's transcript isn't on this machine. The report lists the goals it left out.
 - A verdict counts for a pull request's latest ship if it came after that ship. QA reviews commits, not ships, so this is close but not exact. A pull request merged on a stale pass shows its last stretch as **qa**.
+- Rework counts every change to a line within 7 days, a fix or a change of mind alike: the captain trying something and then going another way counts the same as a bug. Read the pull requests it names to tell which. A file renamed counts as its lines reworked.
 - `pnpm run flow` counts only goals the ledger saw close; open goals' flow is on their goal boards.
 - A cloud lead's transcript isn't on this machine, so its goal board shows no flow.
