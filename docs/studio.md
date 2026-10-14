@@ -209,15 +209,20 @@ floor to walk into but its walls (`STUDIO_HALL` and `studioWalls` in `client/src
   scenario as ordered steps along the connections, each with the payload that moves. Every part cites the file and
   line where it's defined, and every connection the line where one part reaches the other. The office **checks each
   cite against the code** (`checkModel` in `shared/systemModel.ts`, reading only the projects' checkouts, the agents'
-  worktrees and the office's own code: `server/agents/studioSource.ts`): a part is found when its file has the line
+  worktrees and the office's own code: `server/agents/studioSource.ts`; the computer can read the office's own code
+  without opening it as a project): a part is found when its file has the line
   and its symbol is within two lines of it, a connection is backed when its cited line (or one within two of it)
-  mentions the part it reaches. What didn't check out is drawn in red and told to the computer, which fixes it and
+  mentions the part it reaches (an import line doesn't count as where a part is defined, except for something outside
+  the code). It also tells the computer where the scenario jumps (a step that starts neither where the last ended nor
+  where it started) and when a model has more than 16 parts. What didn't check out is drawn in red and told to the computer, which fixes it and
   sends the model again before saying it's ready. The holodeck draws every model the one fixed way, flat, on three solid hologram boards standing in an
   arc round the middle of the hall like a war room (`client/src/world/modelScene.ts`), each a view of the same model
   (`shared/modelDrawing.ts`, a list of shapes drawn to a canvas for the boards and to SVG up close, so both match):
   **structure** in the middle (each part a shape for its kind (window, hexagon, square, rounded box, cylinder, pill,
-  ellipse, triangle or diamond) outlined in its layer's colour with its name and file:line, laid out by the office in
-  columns down the connections (`layoutModel`), each connection an arrow coloured by its kind, a key along the foot),
+  ellipse, triangle or diamond) outlined in its layer's colour with its name and file:line, laid out by the office as a layered
+  diagram (`layoutLayers`: loops back are broken first, each part's column is the longest run of connections into
+  it, each column ordered by its neighbours to cut crossings, one part to a place; a bigger model grows the drawing
+  rather than squeezing it, and up close each view keeps a readable scale and scrolls sideways), each connection an arrow coloured by its kind, a key along the foot),
   the scenario as a **sequence** diagram on the right (a lifeline for each part it passes through, an arrow for each
   step with its payload over it), and **what moves at each step** on the left (with what was simplified and two or
   three questions to check yourself with). The step under way is gold on all three at once, in time with the scene's

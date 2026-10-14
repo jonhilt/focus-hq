@@ -4,7 +4,7 @@
 shared/types/             types shared by server and client, a file per feature (agents, goals, projects, github, qa, previews, events…) behind index.ts
 shared/crew.ts            how the crew look (uniforms, species), and the permanent crew per room (the ops officer, the QA officer), derived from the project id
 shared/qa.ts              QA decisions shared by server and board (badges, stale verdicts)
-shared/systemModel.ts     the studio's system models: whether one holds together, checking its cites against the code, its timing and layout
+shared/systemModel.ts     the studio's system models: whether one holds together, checking its cites against the code, its timing, and its layered layout
 shared/modelDrawing.ts    a system model's three flat views (structure, sequence, data) as shapes, and as SVG
 shared/board.ts           a project's Kanban columns (to do, in progress, PRs), for the 3D board, its panel and the Tricorder
 shared/agentStatus.ts     how an agent's status reads (icon, one-line status)

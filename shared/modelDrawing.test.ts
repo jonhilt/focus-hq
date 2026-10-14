@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dataView, fit, INK, participants, sequenceView, type Shape, structurePositions, structureView, toSvg } from './modelDrawing';
+import { dataView, fit, INK, participants, partShape, sequenceView, type Shape, structurePositions, structureView, toSvg } from './modelDrawing';
 import type { SystemModel } from './types';
 
 const model = (): SystemModel => ({
@@ -87,5 +87,41 @@ describe('toSvg and fit', () => {
   it('cuts text that won\'t fit, with an ellipsis', () => {
     expect(fit('short', 20, 400)).toBe('short');
     expect(fit('a very long label indeed', 20, 100).endsWith('…')).toBe(true);
+  });
+});
+
+describe('a real-sized model', () => {
+  it('lays twenty parts with loops back out with no two overlapping, growing the drawing rather than squeezing it', () => {
+    const ids = Array.from({ length: 20 }, (_, i) => `p${i}`);
+    const big: SystemModel = {
+      question: 'Big?',
+      nodes: ids.map((id, i) => ({ id, label: id, kind: 'service', layer: `L${i % 4}` })),
+      // a chain with fan-outs, and replies looping back to earlier parts
+      edges: [
+        ...ids.slice(1).map((id, i) => ({ from: ids[Math.floor(i / 2)], to: id, kind: 'calls' as const })),
+        { from: 'p19', to: 'p3', kind: 'emits' },
+        { from: 'p15', to: 'p0', kind: 'emits' },
+      ],
+      trace: [],
+      simplified: [],
+    };
+    const at = [...structurePositions(big).values()];
+    for (const [i, a] of at.entries()) for (const b of at.slice(i + 1)) expect(Math.abs(a.x - b.x) >= 270 || Math.abs(a.y - b.y) >= 96).toBe(true);
+    const d = structureView(big);
+    expect(d.w).toBeGreaterThanOrEqual(1600);
+    for (const p of at) expect(p.x + 135).toBeLessThanOrEqual(d.w);
+  });
+});
+
+describe('partShape', () => {
+  it('draws each kind of part as its own outline, pickable, round the place it\'s given', () => {
+    const kinds = ['ui', 'route', 'handler', 'service', 'store', 'queue', 'external', 'job', 'type'] as const;
+    const outlines = kinds.map((k) => partShape(k, 500, 300, { stroke: '#fff', part: k }));
+    for (const [i, shapes] of outlines.entries()) {
+      expect(shapes.length).toBeGreaterThan(0);
+      expect(shapes.some((s) => 'part' in s && s.part === kinds[i])).toBe(true);
+    }
+    // no two kinds look the same
+    expect(new Set(outlines.map((o) => JSON.stringify(o.map((s) => ({ ...s, part: undefined }))))).size).toBe(kinds.length);
   });
 });

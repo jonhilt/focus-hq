@@ -4,7 +4,7 @@ import path from 'node:path';
 import { createSdkMcpServer, type McpSdkServerConfigWithInstance, type Options, query, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import type { Effort, Settings } from '../../shared/types';
-import { paths } from '../config';
+import { config, paths } from '../config';
 import { errorMessage, truncate } from '../util';
 import { agentEnv } from './claudeRunner';
 import { type Drafter, type DraftRequest, type DraftResult, draftSchema, plannerPrompt, plannerSystemPrompt, repoFolders } from './planner';
@@ -228,8 +228,8 @@ export class ClaudeStudio implements StudioOfficer {
     fs.mkdirSync(paths.studio, { recursive: true });
     const result = await runReadOnly({
       cwd: paths.studio,
-      readable: [paths.planning, paths.workspaces],
-      systemAppend: studioSystemPrompt({ projects: req.projects, planning: paths.planning }),
+      readable: [paths.planning, paths.workspaces, config.root],
+      systemAppend: studioSystemPrompt({ projects: req.projects, planning: paths.planning, office: config.root }),
       prompt: studioPrompt(req.messages, !!req.resumeSessionId, req.takes),
       settings: req.settings,
       model: req.model || undefined,

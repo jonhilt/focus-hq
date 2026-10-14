@@ -1007,7 +1007,8 @@ body.studio .hud, body.studio .toasts { display: none; }
 .model-main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 360px; gap: 12px; }
 .model-views { overflow: auto; display: flex; flex-direction: column; gap: 10px; }
 .model-views svg { width: 100%; height: auto; display: block; border-radius: 12px; }
-.model-row { display: grid; grid-template-columns: 1.45fr 1fr; gap: 10px; align-items: start; }
+.model-row { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 10px; align-items: start; }
+.model-view { overflow-x: auto; border-radius: 12px; }
 .model-part { overflow: auto; background: var(--surface-2); border-radius: 12px; padding: 10px 14px; font-size: 15px; }
 .model-part h3 { margin: 4px 0; color: var(--lcars-gold); }
 .model-part h4 { margin: 12px 0 4px; color: var(--lcars-peach); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; }

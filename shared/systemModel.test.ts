@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkModel, edgeFor, layoutModel, modelError, modelPhases, modelSeconds } from './systemModel';
+import { checkModel, edgeFor, layoutLayers, modelError, modelPhases, modelSeconds, traceGaps } from './systemModel';
 import type { SystemModel } from './types';
 
 const model = (more: Partial<SystemModel> = {}): SystemModel => ({
@@ -74,35 +74,56 @@ describe('timing and layout', () => {
     expect(modelPhases(model())).toEqual({ s1: [2, 3.8], s2: [3.8, 5.6], s3: [5.6, 7.4] });
   });
 
-  it('stands parts in columns down the connections, within the stage, the same every time', () => {
-    const at = layoutModel(model());
-    const xs = ['page', 'api', 'db'].map((id) => at.get(id)?.x ?? NaN);
-    expect(xs[0]).toBeLessThan(xs[1]);
-    expect(xs[1]).toBeLessThan(xs[2]);
-    expect([...at.values()].every((p) => Math.hypot(p.x, p.z) <= 5 + 1e-9)).toBe(true);
-    expect([...at.values()].every((p) => p.y >= 1.2)).toBe(true);
-    expect(layoutModel(model())).toEqual(at);
+  it('puts parts in columns down the connections, one to a place, the same every time', () => {
+    const { at, cols, rows } = layoutLayers(model());
+    expect(['page', 'api', 'db'].map((id) => at.get(id)?.col)).toEqual([0, 1, 2]);
+    expect({ cols, rows }).toEqual({ cols: 3, rows: 1 });
+    expect(layoutLayers(model()).at).toEqual(at);
   });
 
-  it('stacks a column\'s parts one above another, then another stack behind', () => {
-    const many = model({
-      nodes: [model().nodes[0], ...Array.from({ length: 6 }, (_, i) => ({ id: `n${i}`, label: `N${i}`, kind: 'service' as const, layer: 'API' }))],
-      edges: Array.from({ length: 6 }, (_, i) => ({ from: 'page', to: `n${i}`, kind: 'calls' as const })),
+  it('breaks a loop back rather than letting it push everything on, and never shares a place', () => {
+    const loop = model({ edges: [...model().edges, { from: 'db', to: 'page', kind: 'emits' }, { from: 'db', to: 'api', kind: 'emits' }] });
+    const { at, cols } = layoutLayers(loop);
+    expect(cols).toBe(3);
+    expect(at.get('page')?.col).toBe(0);
+    const places = [...at.values()].map((s) => `${s.col},${s.row}`);
+    expect(new Set(places).size).toBe(places.length);
+  });
+
+  it('orders a column by where its neighbours sit, to cut crossings', () => {
+    // a and b fan out to their own children; the children's column follows a, b's order however the model lists them
+    const fan = model({
+      nodes: ['a', 'b', 'b2', 'a2'].map((id) => ({ id, label: id, kind: 'service' as const, layer: 'X' })),
+      edges: [{ from: 'b', to: 'b2', kind: 'calls' }, { from: 'a', to: 'a2', kind: 'calls' }],
       trace: [],
     });
-    const at = layoutModel(many);
-    const column = Array.from({ length: 6 }, (_, i) => at.get(`n${i}`));
-    expect(new Set(column.map((p) => p?.x)).size).toBe(1);
-    expect(new Set(column.slice(0, 4).map((p) => p?.y)).size).toBe(4);
-    expect(column[4]?.z).toBeLessThan(column[0]?.z ?? 0);
-  });
-
-  it('settles a cycle rather than running on', () => {
-    const loop = model({ edges: [...model().edges, { from: 'db', to: 'page', kind: 'emits' }] });
-    expect(layoutModel(loop).size).toBe(3);
+    const { at } = layoutLayers(fan);
+    expect((at.get('a2')?.row ?? 0) < (at.get('b2')?.row ?? 0)).toBe((at.get('a')?.row ?? 0) < (at.get('b')?.row ?? 0));
   });
 
   it('finds a step\'s connection either way along it', () => {
     expect(edgeFor(model().edges, 'api', 'page')?.from).toBe('page');
+  });
+});
+
+describe('the check\'s advice', () => {
+  it('doesn\'t count an import as where a part is defined, unless it\'s outside the code', () => {
+    const m = model({
+      nodes: [
+        { ...model().nodes[0], cite: { file: '/r/Imports.ts', line: 1 } },
+        { ...model().nodes[1], kind: 'external', cite: { file: '/r/Imports.ts', line: 2 } },
+        model().nodes[2],
+      ],
+    });
+    const lines = (f: string) => (f === '/r/Imports.ts' ? ['import { ProposalPage } from "./page";', "import { SaveProposal } from 'sdk';"] : files[f]);
+    const { model: checked, problems } = checkModel(m, lines);
+    expect(checked.nodes.map((n) => n.found)).toEqual([false, true, true]);
+    expect(problems[0]).toBe('Part page: r/Imports.ts:1 is an import, not where it\'s defined.');
+  });
+
+  it('points out where the scenario jumps, but not a fan-out or a reply', () => {
+    expect(traceGaps(model())).toEqual([]);
+    const jumpy = model({ trace: [{ from: 'page', to: 'api', label: 'a' }, { from: 'db', to: 'api', label: 'b' }, { from: 'db', to: 'page', label: 'c' }] });
+    expect(traceGaps(jumpy)).toEqual(['Step 2 starts at db, but step 1 ended at api: the scenario jumps there.']);
   });
 });

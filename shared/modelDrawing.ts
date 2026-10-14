@@ -4,7 +4,7 @@
 // (the holodeck's boards, and their contact sheet), and can be tested here. Each view shows the step under way and the
 // part picked, so picking a part or a step in one lights it up in the others.
 
-import { edgeFor, layoutModel } from './systemModel';
+import { edgeFor, layoutLayers } from './systemModel';
 import type { ModelEdgeKind, ModelKind, ModelNode, SystemModel } from './types';
 
 export type Shape =
@@ -55,12 +55,23 @@ export function fit(text: string, size: number, max: number): string {
 // ------------------------------------------------------------------ structure
 
 const BOX = { w: 270, h: 96 };
-const STRUCT = { w: 1600, h: 1000, legend: 150, strip: 70, pad: 50 };
+/** The structure view's frame: at least `w` × `h`, growing a column (`cellW`) or a row (`cellH`) at a time as the model needs. */
+const STRUCT = { w: 1600, h: 1000, legend: 150, strip: 70, pad: 50, cellW: 330, cellH: 150 };
+
+/** How big a structure view of `m` is: wide and tall enough for its layers' columns and rows, never squeezed. */
+export function structureSize(m: SystemModel): { w: number; h: number } {
+  const { cols, rows } = layoutLayers(m);
+  return {
+    w: Math.max(STRUCT.w, STRUCT.pad * 2 + cols * STRUCT.cellW),
+    h: Math.max(STRUCT.h, STRUCT.pad * 2 + rows * STRUCT.cellH + STRUCT.strip + STRUCT.legend),
+  };
+}
 
 /** The parts as shapes for their kinds, coloured by layer, and their connections as arrows, the step under way gold. */
 export function structureView(m: SystemModel, focus: ModelFocus = {}): Drawing {
   const shapes: Shape[] = [];
   const colours = layerColours(m);
+  const { w: W, h: H } = structureSize(m);
   const centres = structurePositions(m);
   const step = focus.step !== undefined ? m.trace[focus.step] : undefined;
   const active = step && edgeFor(m.edges, step.from, step.to);
@@ -95,27 +106,32 @@ export function structureView(m: SystemModel, focus: ModelFocus = {}): Drawing {
     const a = centres.get(step.from);
     const b = centres.get(step.to);
     if (a && b) shapes.push({ t: 'ellipse', cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, rx: 13, ry: 13, fill: INK.gold });
-    const y = STRUCT.h - STRUCT.legend - STRUCT.strip / 2 + 8;
+    const y = H - STRUCT.legend - STRUCT.strip / 2 + 8;
     const head = `STEP ${focus.step + 1} OF ${m.trace.length} · ${step.label}`;
     shapes.push({ t: 'text', x: 40, y, text: fit(head, 26, 760), size: 26, fill: INK.gold, bold: true });
-    if (step.payload) shapes.push({ t: 'text', x: STRUCT.w - 40, y, text: fit(step.payload, 21, 760), size: 21, fill: INK.gold, mono: true, anchor: 'end' });
+    if (step.payload) shapes.push({ t: 'text', x: W - 40, y, text: fit(step.payload, 21, 760), size: 21, fill: INK.gold, mono: true, anchor: 'end' });
   }
-  shapes.push(...legend(m, colours, STRUCT.h - STRUCT.legend, STRUCT.w));
-  return { w: STRUCT.w, h: STRUCT.h, shapes: [{ t: 'rect', x: 0, y: 0, w: STRUCT.w, h: STRUCT.h, fill: INK.bg }, ...shapes] };
+  shapes.push(...legend(m, colours, H - STRUCT.legend, W));
+  return { w: W, h: H, shapes: [{ t: 'rect', x: 0, y: 0, w: W, h: H, fill: INK.bg }, ...shapes] };
 }
 
-/** Each part's middle on the structure view: layoutModel's columns and stacks, flattened (its depth folded across). */
+/**
+ * Each part's middle on the structure view: its layer's column and its row in it (layoutLayers), the columns spread
+ * evenly across and each column's parts centred down the space above the step strip, so no two parts ever share a place.
+ */
 export function structurePositions(m: SystemModel): Map<string, { x: number; y: number }> {
-  const at = layoutModel(m, 100);
-  const xs = [...at.values()].map((p) => p.x + p.z * 0.35);
-  const ys = [...at.values()].map((p) => p.y);
-  const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-  const left = STRUCT.pad + BOX.w / 2;
-  const right = STRUCT.w - STRUCT.pad - BOX.w / 2;
-  const top = STRUCT.pad + BOX.h / 2;
-  const bottom = STRUCT.h - STRUCT.legend - STRUCT.strip - STRUCT.pad - BOX.h / 2;
-  const span = (v: number, lo: number, hi: number, from: number, to: number) => (hi - lo < 1e-6 ? (from + to) / 2 : from + ((v - lo) / (hi - lo)) * (to - from));
-  return new Map([...at].map(([id, p]) => [id, { x: span(p.x + p.z * 0.35, minX, maxX, left, right), y: span(p.y, minY, maxY, bottom, top) }]));
+  const { at, cols } = layoutLayers(m);
+  const { w, h } = structureSize(m);
+  const counts = new Map<number, number>();
+  for (const s of at.values()) counts.set(s.col, (counts.get(s.col) ?? 0) + 1);
+  const cellW = (w - STRUCT.pad * 2) / cols;
+  const top = STRUCT.pad;
+  const bottom = h - STRUCT.legend - STRUCT.strip - STRUCT.pad;
+  return new Map([...at].map(([id, s]) => {
+    const n = counts.get(s.col) ?? 1;
+    const cellH = (bottom - top) / n;
+    return [id, { x: STRUCT.pad + cellW * (s.col + 0.5), y: top + cellH * (s.row + 0.5) }];
+  }));
 }
 
 /** Where the line from `a` towards `b` leaves `a`'s box. */
@@ -175,7 +191,8 @@ function legend(m: SystemModel, colours: Map<string, string>, top: number, w: nu
 
 // ------------------------------------------------------------------ sequence
 
-const SEQ = { w: 1600, head: 150, row: 92, pad: 40, foot: 40 };
+/** The sequence view: at least `w` wide, each lifeline at least `lane` apart, so names don't shrink to nothing. */
+const SEQ = { w: 1600, lane: 190, head: 150, row: 92, pad: 40, foot: 40 };
 
 /** The parts the scenario passes through, in the order it first reaches them. */
 export function participants(m: SystemModel): string[] {
@@ -190,9 +207,10 @@ export function sequenceView(m: SystemModel, focus: ModelFocus = {}): Drawing {
   const colours = layerColours(m);
   const byId = new Map(m.nodes.map((n) => [n.id, n]));
   const h = SEQ.head + Math.max(1, m.trace.length) * SEQ.row + SEQ.foot;
-  const gap = (SEQ.w - SEQ.pad * 2) / Math.max(1, who.length);
+  const W = Math.max(SEQ.w, SEQ.pad * 2 + who.length * SEQ.lane);
+  const gap = (W - SEQ.pad * 2) / Math.max(1, who.length);
   const xOf = (id: string) => SEQ.pad + gap * (who.indexOf(id) + 0.5);
-  const shapes: Shape[] = [{ t: 'rect', x: 0, y: 0, w: SEQ.w, h, fill: INK.bg }];
+  const shapes: Shape[] = [{ t: 'rect', x: 0, y: 0, w: W, h, fill: INK.bg }];
   for (const id of who) {
     const n = byId.get(id);
     const x = xOf(id);
@@ -207,7 +225,7 @@ export function sequenceView(m: SystemModel, focus: ModelFocus = {}): Drawing {
     const on = focus.step === i;
     const x1 = xOf(s.from);
     const x2 = xOf(s.to);
-    if (on) shapes.push({ t: 'rect', x: 8, y: y - 52, w: SEQ.w - 16, h: SEQ.row - 6, r: 8, fill: '#2a2410' });
+    if (on) shapes.push({ t: 'rect', x: 8, y: y - 52, w: W - 16, h: SEQ.row - 6, r: 8, fill: '#2a2410' });
     shapes.push({ t: 'text', x: 20, y: y - 18, text: String(i + 1), size: 22, fill: on ? INK.gold : INK.muted, bold: true });
     shapes.push({ t: 'line', x1, y1: y, x2, y2: y, stroke: on ? INK.gold : edgeFor(m.edges, s.from, s.to)?.backed === false ? INK.red : INK.text, sw: on ? 5 : 3, arrow: true });
     const mid = (x1 + x2) / 2;
@@ -215,7 +233,7 @@ export function sequenceView(m: SystemModel, focus: ModelFocus = {}): Drawing {
     shapes.push({ t: 'text', x: mid, y: y - 30, text: fit(s.label, 21, room), size: 21, fill: on ? INK.gold : INK.text, anchor: 'middle' });
     if (s.payload) shapes.push({ t: 'text', x: mid, y: y - 8, text: fit(s.payload, 17, room), size: 17, fill: on ? INK.gold : INK.muted, mono: true, anchor: 'middle' });
   });
-  return { w: SEQ.w, h, shapes };
+  return { w: W, h, shapes };
 }
 
 // ------------------------------------------------------------------ data

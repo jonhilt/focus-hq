@@ -117,7 +117,8 @@ describe('studioPrompt', () => {
 
 describe('studioSystemPrompt', () => {
   it('lists the projects aboard and where their code goes once opened, and says to read the real thing first', () => {
-    const prompt = studioSystemPrompt({ projects: [{ id: 'p1', name: 'Thomas', repos: ['jonhilt/thomas'] }], planning: '/data/planning' });
+    const prompt = studioSystemPrompt({ projects: [{ id: 'p1', name: 'Thomas', repos: ['jonhilt/thomas'] }], planning: '/data/planning', office: '/src/focus' });
+    expect(prompt).toContain('its own code, already here at `/src/focus/`');
     expect(prompt).toContain('- Thomas, id `p1`: `/data/planning/p1/thomas/` (jonhilt/thomas)');
     expect(prompt).toContain('open_project');
     expect(prompt).toContain('ship_status');

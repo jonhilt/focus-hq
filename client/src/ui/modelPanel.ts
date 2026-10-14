@@ -1,4 +1,4 @@
-import { dataView, type ModelFocus, sequenceView, structureView, toSvg } from '../../../shared/modelDrawing';
+import { dataView, type Drawing, type ModelFocus, sequenceView, structureView, toSvg } from '../../../shared/modelDrawing';
 import { edgeFor } from '../../../shared/systemModel';
 import type { ModelCite, SystemModel } from '../../../shared/types';
 import { api } from '../net/api';
@@ -10,6 +10,9 @@ import { fill, h } from './dom';
 // top, the sequence and the data under it. Step through the scenario (the arrows, or ← and →) and every view follows;
 // click a part in any of them to pick it there and in the others, and see the lines of code it cites, with what it
 // connects to and where.
+
+/** The smallest a view is drawn up close, as a share of its drawing's size, so its text stays readable. */
+const READABLE = 0.62;
 
 /** Opens `model` up close. */
 export function openModelPanel(ui: Ui, model: SystemModel): void {
@@ -32,7 +35,11 @@ export function openModelPanel(ui: Ui, model: SystemModel): void {
   const draw = () => {
     const s = focus.step !== undefined ? model.trace[focus.step] : undefined;
     where.textContent = s && focus.step !== undefined ? `Step ${focus.step + 1} of ${model.trace.length}: ${s.label}` : `Before the scenario starts · ${model.trace.length} steps`;
-    views.innerHTML = `<div class="model-structure">${toSvg(structureView(model, focus))}</div><div class="model-row"><div>${toSvg(sequenceView(model, focus))}</div><div>${toSvg(dataView(model, focus))}</div></div>`;
+    // each view at a readable scale at least, scrolling sideways when the model's wider than the panel
+    const view = (d: Drawing) => `<div class="model-view"><div style="min-width:${Math.round(d.w * READABLE)}px">${toSvg(d)}</div></div>`;
+    const keep = [...views.querySelectorAll<HTMLElement>('.model-view')].map((v) => v.scrollLeft);
+    views.innerHTML = `<div class="model-structure">${view(structureView(model, focus))}</div><div class="model-row">${view(sequenceView(model, focus))}${view(dataView(model, focus))}</div>`;
+    views.querySelectorAll<HTMLElement>('.model-view').forEach((v, i) => (v.scrollLeft = keep[i] ?? 0));
   };
 
   views.addEventListener('click', (e) => {

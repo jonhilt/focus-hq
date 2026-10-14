@@ -79,9 +79,9 @@ export function checkModel(m: SystemModel, lines: (file: string) => string[] | u
   const problems: string[] = [];
   const near = (c: ModelCite) => {
     const all = lines(c.file);
-    if (!all) return { text: undefined, why: `${c.file} isn't there (or isn't one the office can read)` };
-    if (c.line > all.length) return { text: undefined, why: `${short(c.file)} has only ${all.length} lines` };
-    return { text: all.slice(Math.max(0, c.line - 1 - NEAR), c.line + NEAR).join('\n'), why: '' };
+    if (!all) return { text: undefined, line: '', why: `${c.file} isn't there (or isn't one the office can read)` };
+    if (c.line > all.length) return { text: undefined, line: '', why: `${short(c.file)} has only ${all.length} lines` };
+    return { text: all.slice(Math.max(0, c.line - 1 - NEAR), c.line + NEAR).join('\n'), line: all[c.line - 1] ?? '', why: '' };
   };
   const byId = new Map(m.nodes.map((n) => [n.id, n]));
   const nodes = m.nodes.map((n) => {
@@ -89,9 +89,11 @@ export function checkModel(m: SystemModel, lines: (file: string) => string[] | u
       problems.push(`Part ${n.id} has no cite.`);
       return { ...n, found: false };
     }
-    const { text, why } = near(n.cite);
-    const found = text !== undefined && (!n.symbol || text.includes(n.symbol));
-    if (!found) problems.push(`Part ${n.id}: ${why || `${short(n.cite.file)}:${n.cite.line} doesn't mention ${n.symbol}`}.`);
+    const { text, line, why } = near(n.cite);
+    // an import mentions a part but isn't where it's defined (except for something outside the code, which is only imported)
+    const imported = n.kind !== 'external' && /^\s*(import|using|from|require)\b/.test(line);
+    const found = text !== undefined && !imported && (!n.symbol || text.includes(n.symbol));
+    if (!found) problems.push(`Part ${n.id}: ${why || (imported ? `${short(n.cite.file)}:${n.cite.line} is an import, not where it's defined` : `${short(n.cite.file)}:${n.cite.line} doesn't mention ${n.symbol}`)}.`);
     return { ...n, found };
   });
   const edges = m.edges.map((e) => {
@@ -112,6 +114,18 @@ export function checkModel(m: SystemModel, lines: (file: string) => string[] | u
 
 const short = (file: string) => file.split(/[\\/]/).slice(-2).join('/');
 
+/**
+ * Where the scenario jumps: a step that starts neither where the step before it ended nor where it started (a fan-out
+ * from the same part), so the token would leap across the diagram. Advice, not an error: say why, or add the step between.
+ */
+export function traceGaps(m: SystemModel): string[] {
+  return m.trace.flatMap((s, i) => {
+    const prev = m.trace[i - 1] as ModelStep | undefined;
+    if (!prev || s.from === prev.to || s.from === prev.from) return [];
+    return [`Step ${i + 1} starts at ${s.from}, but step ${i} ended at ${prev.to}: the scenario jumps there.`];
+  });
+}
+
 /** How long a model's scenario plays: a lead-in, each step, and a hold. */
 export function modelSeconds(m: SystemModel): number {
   return Math.min(60, Math.max(4, MODEL_TIMING.lead + m.trace.length * MODEL_TIMING.step + MODEL_TIMING.hold));
@@ -125,54 +139,76 @@ export function modelPhases(m: SystemModel): Record<string, [number, number]> {
 
 const round = (x: number) => Math.round(x * 100) / 100;
 
-/** How a model's parts are spaced: columns `gapX` apart, up to `stack` parts one above another `gapY` apart from `base` up, then another stack `gapZ` behind. */
-export const MODEL_LAYOUT = { gapX: 3, gapY: 1.5, gapZ: 2, base: 1.2, stack: 4 } as const;
+/** Where a part sits in a layered layout: its column (how far down the connections it is) and its row in that column. */
+export interface Slot {
+  col: number;
+  row: number;
+}
 
 /**
- * Where each part stands on the stage: in columns by how far down the connections it is (the parts nothing reaches
- * first, on the left as seen from the front), a column's parts stacked one above another like a diagram standing up,
- * then in another stack behind once a column's full; centred, and squeezed across to fit within `radius`. Computed, so
- * the same model always lands the same way.
+ * A layered layout of the model's parts, as a professional diagram lays one out (the Sugiyama method), computed so the
+ * same model always lands the same way and no two parts share a place:
+ * - loops are broken first: a connection back to a part still being followed (in the order the scenario reaches parts,
+ *   then the model's order) doesn't count for the columns, so a reply or a callback can't drag everything rightwards;
+ * - each part's column is the longest run of connections into it from a part nothing reaches;
+ * - each column's parts are ordered by where their neighbours in the column before sit (two sweeps), to cut crossings.
  */
-export function layoutModel(m: SystemModel, radius = 5): Map<string, { x: number; y: number; z: number }> {
-  const depth = new Map(m.nodes.map((n) => [n.id, 0]));
-  // longest path from a source, relaxed at most once per part, so a cycle can't run on
-  for (let pass = 0; pass < m.nodes.length; pass++) {
+export function layoutLayers(m: SystemModel): { at: Map<string, Slot>; cols: number; rows: number } {
+  const ids = order(m);
+  const out = new Map<string, string[]>(ids.map((id) => [id, []]));
+  for (const e of m.edges) if (e.from !== e.to) out.get(e.from)?.push(e.to);
+  // depth-first from each part in order, marking connections back onto the path being followed
+  const back = new Set<string>();
+  const state = new Map<string, 'on' | 'done'>();
+  const visit = (id: string) => {
+    state.set(id, 'on');
+    for (const to of out.get(id) ?? []) {
+      if (state.get(to) === 'on') back.add(`${id}>${to}`);
+      else if (!state.has(to)) visit(to);
+    }
+    state.set(id, 'done');
+  };
+  for (const id of ids) if (!state.has(id)) visit(id);
+  const forward = m.edges.filter((e) => e.from !== e.to && !back.has(`${e.from}>${e.to}`));
+  // longest path: with the loops broken it settles within a pass per part
+  const col = new Map(ids.map((id) => [id, 0]));
+  for (let pass = 0; pass < ids.length; pass++) {
     let moved = false;
-    for (const e of m.edges) {
-      if (e.from === e.to) continue;
-      const next = (depth.get(e.from) ?? 0) + 1;
-      if (next > (depth.get(e.to) ?? 0) && next < m.nodes.length) {
-        depth.set(e.to, next);
+    for (const e of forward) {
+      const next = (col.get(e.from) ?? 0) + 1;
+      if (next > (col.get(e.to) ?? 0)) {
+        col.set(e.to, next);
         moved = true;
       }
     }
     if (!moved) break;
   }
-  const columns = new Map<number, string[]>();
-  for (const n of m.nodes) {
-    const d = depth.get(n.id) ?? 0;
-    columns.set(d, [...(columns.get(d) ?? []), n.id]);
-  }
-  const ordered = [...columns.keys()].sort((a, b) => a - b);
-  const { gapX, gapY, gapZ, base, stack } = MODEL_LAYOUT;
-  const deepest = Math.max(...ordered.map((d) => Math.ceil((columns.get(d)?.length ?? 1) / stack)));
-  const spanX = Math.max(0.001, ((ordered.length - 1) / 2) * gapX);
-  const k = Math.min(1, (radius * 0.9) / spanX);
-  const out = new Map<string, { x: number; y: number; z: number }>();
-  ordered.forEach((d, ci) => {
-    const ids = columns.get(d) ?? [];
-    const tall = Math.min(stack, ids.length);
-    ids.forEach((id, i) => {
-      const row = i % stack;
-      const back = Math.floor(i / stack);
-      out.set(id, {
-        x: (ci - (ordered.length - 1) / 2) * gapX * k,
-        // a short column sits round the middle of a full one's height
-        y: base + ((stack - tall) / 2 + (tall - 1 - row)) * gapY,
-        z: ((deepest - 1) / 2 - back) * gapZ,
+  const cols = Math.max(...col.values()) + 1;
+  const columns: string[][] = Array.from({ length: cols }, () => []);
+  for (const id of ids) columns[col.get(id) ?? 0].push(id);
+  // order each column by its neighbours' rows in the column before (and after, on the way back), to cut crossings
+  const rowOf = () => new Map(columns.flatMap((c) => c.map((id, i) => [id, i] as const)));
+  const near = (id: string, side: -1 | 1) => forward.filter((e) => (side < 0 ? e.to === id : e.from === id)).map((e) => (side < 0 ? e.from : e.to)).filter((x) => col.get(x) === (col.get(id) ?? 0) + side);
+  for (const side of [-1, 1, -1] as const) {
+    const rows = rowOf();
+    const range = side < 0 ? columns.keys() : [...columns.keys()].reverse();
+    for (const c of range) {
+      const keyed = columns[c].map((id, i) => {
+        const n = near(id, side);
+        return { id, key: n.length ? n.reduce((sum, x) => sum + (rows.get(x) ?? 0), 0) / n.length : i };
       });
-    });
-  });
-  return out;
+      columns[c] = keyed.sort((a, b) => a.key - b.key).map((k) => k.id);
+    }
+  }
+  const at = new Map<string, Slot>();
+  columns.forEach((c, ci) => c.forEach((id, row) => at.set(id, { col: ci, row })));
+  return { at, cols, rows: Math.max(...columns.map((c) => c.length)) };
+}
+
+/** The parts in the order the scenario first reaches them, then the rest in the model's order. */
+function order(m: SystemModel): string[] {
+  const seen: string[] = [];
+  for (const s of m.trace) for (const id of [s.from, s.to]) if (!seen.includes(id) && m.nodes.some((n) => n.id === id)) seen.push(id);
+  for (const n of m.nodes) if (!seen.includes(n.id)) seen.push(n.id);
+  return seen;
 }

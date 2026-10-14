@@ -27,6 +27,10 @@ const BOARDS: { view: View; width: number; at: [number, number]; turn: number; t
 /** How high a board's foot stands off the floor, and how sharp its picture is (canvas pixels per drawing unit). */
 const FOOT = 0.7;
 const SHARP = 1.25;
+/** The width a board's drawing is laid out for; a wider drawing gets a wider board. */
+const BASE_W = 1600;
+/** The biggest a board's canvas gets on a side (px). */
+const MAX_TEXTURE = 4096;
 
 class Board {
   readonly mesh: THREE.Mesh;
@@ -38,7 +42,7 @@ class Board {
   constructor(private readonly view: View, private readonly model: SystemModel, width: number, tint: string, kit: TakeKit) {
     const first = view(model, {});
     this.width = width;
-    this.c = makeCanvas(Math.round(first.w * SHARP), Math.round(first.h * SHARP));
+    this.c = makeCanvas(1, 1);
     this.texture = kit.keep(canvasTexture(this.c.canvas));
     this.hologram = kit.keep(new Hologram(this.texture, first.w / first.h));
     this.hologram.tint.set(tint);
@@ -53,13 +57,17 @@ class Board {
   /** Draws its view at `focus`, sized to what it draws (a longer scenario makes a taller sequence). */
   draw(focus: ModelFocus): void {
     const d = this.view(this.model, focus);
-    const w = Math.round(d.w * SHARP);
-    const h = Math.round(d.h * SHARP);
+    // no sharper than a texture can be on any GPU
+    const k = Math.min(SHARP, MAX_TEXTURE / Math.max(d.w, d.h));
+    const w = Math.round(d.w * k);
+    const h = Math.round(d.h * k);
     if (this.c.canvas.width !== w || this.c.canvas.height !== h) Object.assign(this.c.canvas, { width: w, height: h });
-    paintDrawing(this.c.ctx, d, SHARP);
+    paintDrawing(this.c.ctx, d, k);
     this.texture.needsUpdate = true;
-    const tall = (this.width * d.h) / d.w;
-    this.mesh.scale.set(this.width, tall, 1);
+    // a wider drawing (a bigger model) stands a wider board, up to a point
+    const wide = Math.min(this.width * 1.3, this.width * Math.max(1, d.w / BASE_W));
+    const tall = (wide * d.h) / d.w;
+    this.mesh.scale.set(wide, tall, 1);
     this.mesh.position.y = FOOT + tall / 2;
   }
 
