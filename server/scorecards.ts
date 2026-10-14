@@ -75,9 +75,9 @@ export class SavedScorecards implements ScorecardSource {
   }
 }
 
-/** The commit a checkout is at, and whether it has uncommitted changes. */
+/** The commit a checkout is at, and whether it has uncommitted changes to tracked files (untracked ones aren't measured). */
 export async function checkoutHead(root: string): Promise<Head> {
-  const [commit, status] = await Promise.all([run('git', ['rev-parse', 'HEAD'], { cwd: root }), run('git', ['status', '--porcelain'], { cwd: root })]);
+  const [commit, status] = await Promise.all([run('git', ['rev-parse', 'HEAD'], { cwd: root }), run('git', ['status', '--porcelain', '--untracked-files=no'], { cwd: root })]);
   return { commit: commit.trim(), dirty: status.trim().length > 0 };
 }
 
