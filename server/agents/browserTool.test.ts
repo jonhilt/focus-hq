@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { EVALUATE_TIMEOUT_MS, evaluateBody, evaluateHint, focusHQShape, withTimeout } from './browserTool';
+import { EVALUATE_TIMEOUT_MS, evaluateBody, evaluateHint, focusHQShape, machineLoad, withTimeout } from './browserTool';
 
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (body: string) => () => Promise<unknown>;
 const run = (src: string) => new AsyncFunction(evaluateBody(src))();
@@ -134,5 +134,20 @@ describe('focusHQShape', () => {
   it('is null on a page without the hooks', () => {
     vi.stubGlobal('window', {});
     expect(focusHQShape()).toBeNull();
+  });
+});
+
+describe('machineLoad', () => {
+  it('says the machine was busy when more work was waiting than it has CPUs', () => {
+    expect(machineLoad({ oneMinute: 23.4, cpus: 10 })).toBe('Machine load when it failed: 23.4 (1-minute average) on 10 CPUs: busy, more work waiting than CPUs.');
+  });
+
+  it('says it was not busy at or under one per CPU', () => {
+    expect(machineLoad({ oneMinute: 10, cpus: 10 })).toBe('Machine load when it failed: 10.0 (1-minute average) on 10 CPUs: not busy.');
+    expect(machineLoad({ oneMinute: 0.21, cpus: 8 })).toBe('Machine load when it failed: 0.2 (1-minute average) on 8 CPUs: not busy.');
+  });
+
+  it('says nothing where the system has no load average', () => {
+    expect(machineLoad(null)).toBeUndefined();
   });
 });

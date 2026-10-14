@@ -1,5 +1,6 @@
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import type { Browser, BrowserContext, LaunchOptions, Page } from 'playwright';
+import os from 'node:os';
 import { z } from 'zod';
 import { ARTIFACT_SIZE } from '../../shared/artifacts';
 import type { BrowserFrame } from '../../shared/types';
@@ -90,6 +91,27 @@ export function evaluateHint(message: string, shape: string | null): string | un
   if (shape) return `Something your code reached for isn't there. What the page's hooks have right now:\n${shape}`;
   return "Something your code reached for isn't there. Check the path one step at a time (`Object.keys(x)`) before using it.";
 }
+
+/** The machine's 1-minute load average and how many CPUs it has, or null where there's no load average (Windows). */
+type Load = { oneMinute: number; cpus: number } | null;
+
+const loadNow = (): Load => (process.platform === 'win32' ? null : { oneMinute: os.loadavg()[0], cpus: os.availableParallelism() });
+
+/**
+ * A line on how busy the machine was, added to every failed browser call so a timeout can be told apart from a page
+ * that never answered (the retro reads it from the transcript): busy when more work was waiting than there are CPUs.
+ */
+export function machineLoad(load: Load): string | undefined {
+  if (!load) return undefined;
+  const busy = load.oneMinute > load.cpus ? 'busy, more work waiting than CPUs' : 'not busy';
+  return `Machine load when it failed: ${load.oneMinute.toFixed(1)} (1-minute average) on ${load.cpus} CPUs: ${busy}.`;
+}
+
+/** A failed call's text: what went wrong, then the advice and the machine's load, each in a paragraph of its own. */
+const failure = (...parts: (string | undefined)[]): CallResult => ({
+  content: [{ type: 'text', text: parts.filter((p) => p).join('\n\n') }],
+  isError: true,
+});
 
 type CallResult = { content: ({ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string })[]; isError?: boolean };
 
@@ -297,7 +319,7 @@ export function browserMcpServer(pool: BrowserPool, agentId: string, hooks: Pick
       await tab.page.waitForLoadState('domcontentloaded', { timeout: 5000 }).catch(() => undefined);
       return await snapshot(tab, note, keep);
     } catch (err) {
-      return { content: [{ type: 'text', text: `Browser error: ${errorMessage(err)}` }], isError: true };
+      return failure(`Browser error: ${errorMessage(err)}`, machineLoad(loadNow()));
     }
   };
 
@@ -377,7 +399,7 @@ export function browserMcpServer(pool: BrowserPool, agentId: string, hooks: Pick
                   .catch(() => null)
               : null;
             const hint = evaluateHint(message, shape && truncate(shape, 2500));
-            return { content: [{ type: 'text', text: `Evaluation failed: ${message}${hint ? `\n\n${hint}` : ''}` }], isError: true };
+            return failure(`Evaluation failed: ${message}`, hint, machineLoad(loadNow()));
           }
         },
       ),
