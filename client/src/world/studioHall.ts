@@ -6,6 +6,7 @@ import { curvedPanel } from './hallLayout';
 import { Hologram, hover } from './hologram';
 import { takeDraw } from './screenRedraw';
 import { LCARS, LCARS_FONT } from './starship';
+import { SceneShelf } from './sceneShelf';
 import { STUDIO_WALL } from './studio';
 import { TakeStage } from './takes';
 
@@ -18,7 +19,7 @@ const DIM = '#8fa3b8';
 const GOLD = LCARS.gold;
 const RED = '#ff5c5c';
 /** How to play the scene, along the hologram's foot. */
-const KEYS = 'Q / R  SPIN    P  PAUSE    [ / ]  SCRUB    − / =  SPEED    ENTER  TALK';
+const KEYS = 'Q / R  SPIN    P  PAUSE    [ / ]  SCRUB    − / =  SPEED    TAB  SHELF    ENTER  TALK';
 
 /** A canvas on a hologram, drawn by `paint` when its key changes and there's a draw to spare this frame (screenRedraw.ts). */
 class Holo {
@@ -79,6 +80,9 @@ export class StudioSet {
   private readonly signMesh: THREE.Mesh;
   private readonly signY: number;
   private readonly stage: TakeStage;
+  /** Every scene kept, to swipe through and call one back. */
+  readonly shelf = new SceneShelf();
+  private takes: readonly StudioTake[] = [];
   private lastT = 0;
 
   /** `report` tells the office how a scene ran. */
@@ -90,7 +94,7 @@ export class StudioSet {
     this.signMesh.position.y = bottom;
     this.signMesh.layers.set(OVERLAY_LAYER);
     this.signMesh.userData.aim = (on: boolean) => (this.sign.hologram.aimed = on);
-    this.group.add(this.signMesh, this.stage.group);
+    this.group.add(this.signMesh, this.stage.group, this.shelf.group);
     this.signMesh.userData.studio = true;
   }
 
@@ -111,8 +115,25 @@ export class StudioSet {
 
   /** Shows the studio's conversation as it stands: the scene it built last, in the middle of the hall. */
   show(session: StudioSession): void {
+    this.takes = session.takes;
     this.stage.show(session.takes);
     this.drawSign();
+  }
+
+  /**
+   * Opens the shelf round the camera at `eye` (world), looking along `dir` (world), or closes it if it's open; false if
+   * there's nothing on it.
+   */
+  toggleShelf(eye: THREE.Vector3, dir: THREE.Vector3): boolean {
+    if (this.shelf.isOpen) {
+      this.shelf.close();
+      return true;
+    }
+    if (!this.takes.length) return false;
+    const at = this.group.worldToLocal(eye.clone());
+    const ahead = this.group.worldToLocal(eye.clone().add(dir)).sub(at);
+    this.shelf.open(this.takes, this.stage.current, at, Math.atan2(ahead.x, ahead.z));
+    return true;
   }
 
   /** The far wall's hologram: how to start, or the scene in the hall, how it's playing, and how to play it. */
@@ -165,6 +186,7 @@ export class StudioSet {
     this.lastT = t;
     hover(this.signMesh, this.signY, t);
     this.stage.update(t, eye);
+    this.shelf.update(dt);
     // a pause, a speed or a fault changes what the sign says
     this.drawSign();
     this.sign.update(dt);
@@ -174,5 +196,6 @@ export class StudioSet {
     this.sign.dispose();
     this.signMesh.geometry.dispose();
     this.stage.dispose();
+    this.shelf.dispose();
   }
 }

@@ -3,7 +3,7 @@ import type { ServerEvent, StudioTake } from '../../shared/types';
 import { currentTake } from '../../shared/takeScript';
 import type { Hub } from '../hub';
 import { freshStudio, type Store } from '../store';
-import { applyRetime, applyTake, STUDIO_LIMITS, studioPrompt, studioSystemPrompt, type TakeInput } from './studio';
+import { applyRecall, applyRetime, applyTake, STUDIO_LIMITS, studioPrompt, studioSystemPrompt, type TakeInput } from './studio';
 import type { ShipStatus } from './numberOne';
 import { sheetData, type Staged, StudioComputer, type StudioOfficer, type StudioTurn } from './studioComputer';
 
@@ -78,6 +78,15 @@ describe('applyRetime', () => {
   });
 });
 
+describe('applyRecall', () => {
+  it('brings a kept scene back to the hall, the same version, and refuses one that isn’t kept', () => {
+    const kept: StudioTake[] = [{ id: 'a', label: 'A', seconds: 5, script: '', version: 2, at: 1 }, { id: 'b', label: 'B', seconds: 5, script: '', version: 1, at: 2 }];
+    const after = ok(applyRecall(kept, 'a', 9));
+    expect(currentTake(after)).toMatchObject({ id: 'a', version: 2, at: 9 });
+    expect(applyRecall(kept, 'z', 9)).toEqual({ error: expect.stringContaining('no scene z') });
+  });
+});
+
 describe('studioPrompt', () => {
   const messages = [
     { from: 'captain' as const, text: 'Show me subagents fanning out', at: 1 },
@@ -135,6 +144,22 @@ describe('StudioComputer', () => {
     await settled(store);
     expect(asked[0].projects).toEqual([{ id: 'p1', name: 'Thomas', repos: ['jonhilt/thomas'] }]);
     expect(await asked[0].shipStatus()).toEqual({ projects: [] });
+  });
+
+  it('calls a kept scene back without a turn, and tells the computer with what the captain says next', async () => {
+    const heard: string[] = [];
+    const { store, computer } = setup(async (req) => {
+      heard.push(studioPrompt(req.messages, true));
+      return 'ok';
+    });
+    store.studio.takes = [{ id: 'a', label: 'Fan out', seconds: 5, script: '', version: 1, at: 1 }, { id: 'b', label: 'B', seconds: 5, script: '', version: 1, at: 2 }];
+    computer.recall('a');
+    expect(store.studio.status).toBe('waiting');
+    expect(currentTake(store.studio.takes)?.id).toBe('a');
+    computer.say('Slower');
+    await settled(store);
+    expect(heard[0]).toBe('(Brought back **a**, Fan out, from the shelf.)\n\nSlower');
+    expect(() => computer.recall('z')).toThrow('no scene z');
   });
 
   it('builds a scene with its tools on a turn, and replies', async () => {

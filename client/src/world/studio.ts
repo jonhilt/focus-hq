@@ -129,3 +129,34 @@ export function sheetMoments(seconds: number, phases: Record<string, [number, nu
   }
   return [...picked.sort((a, b) => a.t - b.t), { t: end, label: 'the end' }];
 }
+
+/** The shelf's arc of cards round you: `distance` from your eyes, `step` radians apart, as many as `reach` either side of the one picked shown. */
+export const SHELF = { distance: 2.6, step: 0.6, reach: 3, drop: 0.15 };
+
+/** Where a card on the shelf sits: its turn round you from straight ahead (radians, + to your left), how big it is, and how solid. */
+export interface ShelfSpot {
+  angle: number;
+  scale: number;
+  opacity: number;
+}
+
+/**
+ * Where each of `n` cards sits on the shelf's arc while `at` (the one picked, eased, so it can be between two) is in
+ * front of you: later ones to your right, the one in front bigger, those further round fading out past `reach`.
+ */
+export function shelfSpots(n: number, at: number): ShelfSpot[] {
+  return Array.from({ length: n }, (_, i) => {
+    const off = i - at;
+    const away = Math.abs(off);
+    return {
+      angle: -off * SHELF.step,
+      scale: 1 + 0.35 * Math.max(0, 1 - away),
+      opacity: Math.max(0, Math.min(1, SHELF.reach + 0.5 - away)),
+    };
+  });
+}
+
+/** The shelf's pick: which card's in front, moved `by` and kept on the shelf of `n`. */
+export function shelfMove(picked: number, by: number, n: number): number {
+  return Math.max(0, Math.min(n - 1, picked + by));
+}

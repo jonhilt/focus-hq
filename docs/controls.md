@@ -15,3 +15,4 @@
 | <kbd>Esc</kbd> | pause / close a panel |
 | In the [studio](studio.md#the-studio-holodeck): <kbd>Enter</kbd> | talk to the holodeck computer |
 | In the studio: hold <kbd>Q</kbd> / <kbd>R</kbd>, <kbd>P</kbd>, <kbd>[</kbd> / <kbd>]</kbd>, <kbd>-</kbd> / <kbd>=</kbd> | spin the scene, pause it, scrub through it, slow it down or speed it up |
+| In the studio: <kbd>Tab</kbd>, then <kbd>←</kbd> / <kbd>→</kbd> or the wheel, <kbd>E</kbd> | open the shelf of kept scenes, swipe through it, call one back |

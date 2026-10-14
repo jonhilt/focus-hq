@@ -113,6 +113,16 @@ export function applyRetime(takes: readonly StudioTake[], input: RetimeInput, no
 }
 
 /**
+ * The scenes after the captain calls one back from the shelf: it's staged afresh (the same version, a new time), so it
+ * stands in the hall again, or why not.
+ */
+export function applyRecall(takes: readonly StudioTake[], id: string, now: number): StudioTake[] | { error: string } {
+  const found = takes.find((t) => t.id === id);
+  if (!found) return { error: `There's no scene ${id} kept.` };
+  return takes.map((t) => (t === found ? { ...t, at: now } : t));
+}
+
+/**
  * The computer's instructions: who it is, how it works with the captain, the projects aboard whose code it can open
  * (checked out under `planning`), and the kit its scenes are written against.
  */

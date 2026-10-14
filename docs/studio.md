@@ -218,6 +218,13 @@ floor to walk into but its walls (`STUDIO_HALL` and `studioWalls` in `client/src
   kept, and the one staged or retimed last is the one in the hall (`currentTake`), so retiming an earlier one brings it
   back. One whose script throws turns the hologram red and says why, and the computer hears it too
   (`POST /api/studio/takes/:id/report`), so it can fix it.
+- **The shelf**: **Tab** hangs every scene kept as a hologram card in an arc at eye height round where you stand, each
+  with a picture of it (drawn once a version in the browser, three quarters of the way through it: `sceneThumbnail` in
+  `client/src/world/contactSheet.ts`), the one in the hall picked and marked. The arrow keys or the mouse wheel swipe
+  another card in front; **E** or **Enter** calls that scene back to the middle of the hall (`POST
+  /api/studio/takes/:id/recall`, from its start), and **Tab** or **Esc** puts the shelf away. Calling one back adds a
+  line to the chat, so the computer hears which scene is in the hall with whatever you say next
+  (`client/src/world/sceneShelf.ts`, its arc in `shelfSpots`).
 - **Looking before you do**: when the room runs a scene just staged, it renders a **contact sheet** (six moments
   through it, each phase under way and as it lands, and its last, each from a little further round it, as you'd see it
   walking round, in a scene and on a WebGL renderer of its own: `client/src/world/contactSheet.ts`) and sends it with

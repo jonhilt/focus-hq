@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ENTRANCE_X } from './hallLayout';
-import { keepsHallCollider, SCENE_HOLD, SCENE_STAGE, ScenePlayback, sheetMoments, SPIN_RATE, STUDIO_HALL, STUDIO_SPAN, studioWalls } from './studio';
+import { keepsHallCollider, SCENE_HOLD, SHELF, shelfMove, shelfSpots, SCENE_STAGE, ScenePlayback, sheetMoments, SPIN_RATE, STUDIO_HALL, STUDIO_SPAN, studioWalls } from './studio';
 
 describe('the studio hall', () => {
   it('walls in its round wall and its entrance wall out to it, leaving the doorway clear', () => {
@@ -107,5 +107,29 @@ describe('ScenePlayback', () => {
     play.scrub(3, 10);
     play.restart();
     expect(play).toMatchObject({ t: 0, paused: false, spin: 1, speed: 2 });
+  });
+});
+
+describe('the scene shelf', () => {
+  it('puts the picked card in front, bigger, later ones to the right, and fades those far round', () => {
+    const spots = shelfSpots(6, 1);
+    expect(spots[1]).toEqual({ angle: -0, scale: 1.35, opacity: 1 });
+    expect(spots[2].angle).toBeCloseTo(-SHELF.step);
+    expect(spots[0].angle).toBeCloseTo(SHELF.step);
+    expect(spots[5].opacity).toBe(0);
+    expect(spots[4].opacity).toBe(0.5);
+  });
+
+  it('glides between two cards while the pick eases over', () => {
+    const [a, b] = shelfSpots(2, 0.5);
+    expect(a.scale).toBeCloseTo(1.175);
+    expect(b.scale).toBeCloseTo(1.175);
+    expect(a.angle).toBeCloseTo(-b.angle);
+  });
+
+  it('keeps the pick on the shelf', () => {
+    expect(shelfMove(0, -1, 4)).toBe(0);
+    expect(shelfMove(2, 1, 4)).toBe(3);
+    expect(shelfMove(3, 1, 4)).toBe(3);
   });
 });

@@ -4,7 +4,7 @@ import { shownProjects } from '../../shared/hidden';
 import { freshStudio, type Store, type StoredStudio } from '../store';
 import { errorMessage, truncate } from '../util';
 import type { ChatProject, ShipStatus } from './numberOne';
-import { applyRetime, applyTake, type RetimeInput, type TakeInput } from './studio';
+import { applyRecall, applyRetime, applyTake, type RetimeInput, type TakeInput } from './studio';
 
 // The studio holodeck's computer: the captain's conversation with a Claude session of its own (not a goal's lead), and
 // the tools it builds with: scenes (takes, in the code) that stand in the middle of the hall. One conversation, one turn
@@ -121,6 +121,22 @@ export class StudioComputer {
     const session = this.store.studio;
     session.model = model.trim() || undefined;
     session.effort = effort;
+    this.changed();
+    return this.current();
+  }
+
+  /**
+   * The captain calls a kept scene back from the shelf: it stands in the hall again, and the chat says so, so the
+   * computer hears it with whatever the captain says next.
+   */
+  recall(id: string): StudioSession {
+    const session = this.store.studio;
+    const next = applyRecall(session.takes, id, Date.now());
+    if ('error' in next) throw new Error(next.error);
+    session.takes = next;
+    const take = next.find((t) => t.id === id);
+    session.messages.push({ from: 'captain', text: `(Brought back **${id}**${take ? `, ${take.label}` : ''}, from the shelf.)`, at: Date.now() });
+    session.updatedAt = Date.now();
     this.changed();
     return this.current();
   }
