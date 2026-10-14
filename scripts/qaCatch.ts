@@ -9,9 +9,11 @@
 //   pnpm run qa-catch --prs 4         fewer (or more)
 //   pnpm run qa-catch --repo o/r      only one repo's
 //   pnpm run qa-catch --dry           plant the bugs and say where, without running any review
+//   pnpm run qa-catch --again         the same pull requests as the last run (so the same bugs), to compare
+//   pnpm run qa-catch --control       each pull request reviewed again with no bug planted: does QA fail clean code?
 
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -19,10 +21,10 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import { paths } from '../server/config';
 import { claudeConfig } from '../server/agents/claudeRunner';
 import { parseQaReport, QA_SCHEMA, qaAgentModel, qaPrompt, qaSystemAppend } from '../server/agents/qa';
-import { addedLines, type CatchResult, catchLines, plant, type Planted, scoreReport } from '../server/agents/qaCatch';
+import { addedLines, type CatchResult, type CatchRun, catchLines, controlLine, type ControlResult, plant, type Planted, scoreControl, scoreReport } from '../server/agents/qaCatch';
 import type { PullRequestDetail } from '../server/github/provider';
 import { checkLedger, closedGoals } from '../shared/ledger';
-import type { Project, Settings } from '../shared/types';
+import type { Project, QaReport, Settings } from '../shared/types';
 
 const run = promisify(execFile);
 const BIG = { maxBuffer: 64 * 1024 * 1024 };
@@ -36,14 +38,24 @@ const opt = (name: string) => {
 const wanted = Number(opt('prs') ?? 10);
 const onlyRepo = opt('repo');
 const dry = args.includes('--dry');
+const again = args.includes('--again');
+const control = args.includes('--control');
 
 const state = JSON.parse(readFileSync(paths.state, 'utf8')) as { settings: Settings; projects: Project[] };
 const ledger = checkLedger(readFileSync(paths.ledger, 'utf8')).events;
-// the goals' merged pull requests, newest first, in repos the office has a copy of
-const candidates = closedGoals(ledger)
-  .flatMap((g) => g.prs.filter((p) => p.outcome === 'merged').map((p) => ({ repo: p.repo, pr: p.number, at: g.closedAt })))
-  .filter((p) => (!onlyRepo || p.repo === onlyRepo) && existsSync(path.join(paths.mirrors, p.repo.replace('/', '__'))))
-  .sort((a, b) => b.at - a.at);
+/** The latest saved run, for --again. */
+function lastRun(): CatchRun | undefined {
+  const files = existsSync(paths.qaCatch) ? readdirSync(paths.qaCatch).filter((f) => f.endsWith('.json')).sort() : [];
+  return files.length ? (JSON.parse(readFileSync(path.join(paths.qaCatch, files[files.length - 1]), 'utf8')) as CatchRun) : undefined;
+}
+// the last run's pull requests in its order, or the goals' merged ones, newest first, in repos the office has a copy of
+const candidates = again
+  ? (lastRun()?.results ?? []).map((r) => ({ repo: r.repo, pr: r.pr }))
+  : closedGoals(ledger)
+      .flatMap((g) => g.prs.filter((p) => p.outcome === 'merged').map((p) => ({ repo: p.repo, pr: p.number, at: g.closedAt })))
+      .filter((p) => (!onlyRepo || p.repo === onlyRepo) && existsSync(path.join(paths.mirrors, p.repo.replace('/', '__'))))
+      .sort((a, b) => b.at - a.at);
+if (again && !candidates.length) throw new Error(`--again: no saved run in ${paths.qaCatch}`);
 
 interface Pr {
   number: number;
@@ -57,8 +69,8 @@ interface Pr {
   author: { login: string } | null;
 }
 
-/** A clone of the pull request's head with one bug planted and committed on top, or why there's none. */
-async function prepare(repo: string, number: number, root: string): Promise<{ dir: string; pr: PullRequestDetail; planted: Planted } | string> {
+/** A clone of the pull request's head with one bug planted and committed on top, and a clean one for a control, or why there's none. */
+async function prepare(repo: string, number: number, root: string): Promise<{ dir: string; pr: PullRequestDetail; planted: Planted; clean?: string } | string> {
   const { stdout } = await run('gh', ['pr', 'view', String(number), '-R', repo, '--json', 'number,title,body,url,headRefName,baseRefName,headRefOid,baseRefOid,author'], BIG);
   const info = JSON.parse(stdout) as Pr;
   const dir = path.join(root, `${repo.replace('/', '__')}-${number}`);
@@ -74,6 +86,13 @@ async function prepare(repo: string, number: number, root: string): Promise<{ di
   await git('update-ref', `refs/remotes/origin/${info.baseRefName}`, info.baseRefOid);
   const planted = plant(addedLines(await git('diff', '-U0', `${info.baseRefOid}...${info.headRefOid}`)), number);
   if (!planted) return `${repo}#${number}: nothing it added could take a bug`;
+  // the control: the same code as the pull request merged it, in a clone of its own
+  const clean = control && !dry ? `${dir}-control` : undefined;
+  if (clean) {
+    await run('git', ['clone', '--quiet', '--shared', '--no-checkout', dir, clean], BIG);
+    await run('git', ['-C', clean, 'checkout', '--quiet', '--detach', info.headRefOid], BIG);
+    await run('git', ['-C', clean, 'update-ref', `refs/remotes/origin/${info.baseRefName}`, info.baseRefOid], BIG);
+  }
   const file = path.join(dir, planted.file);
   const lines = readFileSync(file, 'utf8').split('\n');
   if (lines[planted.line - 1] !== planted.before) return `${repo}#${number}: ${planted.file}:${planted.line} isn't the line the diff said`;
@@ -84,15 +103,16 @@ async function prepare(repo: string, number: number, root: string): Promise<{ di
     number, title: info.title, body: info.body, url: info.url, branch: info.headRefName, baseBranch: info.baseRefName,
     headSha: (await git('rev-parse', 'HEAD')).trim(), author: info.author?.login, linkedIssues: [],
   };
-  return { dir, pr, planted };
+  return { dir, pr, planted, clean };
 }
 
-/** The QA officer's review of the planted clone, as the office runs one, scored against the bug. */
-async function review(repo: string, dir: string, pr: PullRequestDetail, planted: Planted): Promise<CatchResult> {
+/** The QA officer's review of a clone, as the office runs one: its report (null if it gave none), cost and minutes. */
+async function review(repo: string, dir: string, pr: PullRequestDetail): Promise<{ report: QaReport | null; costUsd?: number; minutes: number; error?: string }> {
   const project = state.projects.find((p) => p.repos.includes(repo)) ?? { name: repo };
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), REVIEW_MS);
   const started = Date.now();
+  const minutes = () => Math.round((Date.now() - started) / 60_000);
   try {
     let structured: unknown;
     let text = '';
@@ -119,19 +139,31 @@ async function review(repo: string, dir: string, pr: PullRequestDetail, planted:
         text = msg.result;
       }
     }
-    const report = parseQaReport(structured, text);
-    const minutes = Math.round((Date.now() - started) / 60_000);
-    if (!report) return { repo, pr: pr.number, planted, outcome: 'error', summary: 'QA finished without a report', costUsd, minutes };
-    return { repo, pr: pr.number, planted, outcome: scoreReport(report, planted), summary: report.summary, costUsd, minutes };
+    return { report: parseQaReport(structured, text), costUsd, minutes: minutes() };
   } catch (err) {
-    return { repo, pr: pr.number, planted, outcome: 'error', summary: (err as Error).message.split('\n')[0], minutes: Math.round((Date.now() - started) / 60_000) };
+    return { report: null, minutes: minutes(), error: (err as Error).message.split('\n')[0] };
   } finally {
     clearTimeout(timer);
   }
 }
 
+/** The planted clone's review, scored against its bug. */
+async function planted(repo: string, dir: string, pr: PullRequestDetail, bug: Planted): Promise<CatchResult> {
+  const r = await review(repo, dir, pr);
+  const base = { repo, pr: pr.number, planted: bug, costUsd: r.costUsd, minutes: r.minutes };
+  return r.report ? { ...base, outcome: scoreReport(r.report, bug), summary: r.report.summary } : { ...base, outcome: 'error', summary: r.error ?? 'QA finished without a report' };
+}
+
+/** The clean clone's review: QA failing it is a false alarm. */
+async function controlled(repo: string, dir: string, pr: PullRequestDetail): Promise<ControlResult> {
+  const r = await review(repo, dir, { ...pr, headSha: (await run('git', ['-C', dir, 'rev-parse', 'HEAD'])).stdout.trim() });
+  const base = { repo, pr: pr.number, costUsd: r.costUsd, minutes: r.minutes };
+  return r.report ? { ...base, outcome: scoreControl(r.report), summary: r.report.summary } : { ...base, outcome: 'error', summary: r.error ?? 'QA finished without a report' };
+}
+
 const root = mkdtempSync(path.join(os.tmpdir(), 'focus-qa-catch-'));
 const results: CatchResult[] = [];
+const controls: ControlResult[] = [];
 const skipped: string[] = [];
 try {
   const queue = [...candidates];
@@ -147,9 +179,15 @@ try {
       results.push(placeholder);
       console.log(`planted in ${next.repo}#${next.pr}: ${ready.planted.file}:${ready.planted.line} ${ready.planted.bug}`);
       if (dry) continue;
-      Object.assign(placeholder, await review(next.repo, ready.dir, ready.pr, ready.planted));
-      console.log(`  ${placeholder.outcome} (${placeholder.minutes ?? '?'} min, $${(placeholder.costUsd ?? 0).toFixed(2)})`);
+      Object.assign(placeholder, await planted(next.repo, ready.dir, ready.pr, ready.planted));
+      console.log(`  ${next.repo}#${next.pr} ${placeholder.outcome} (${placeholder.minutes ?? '?'} min, $${(placeholder.costUsd ?? 0).toFixed(2)})`);
       rmSync(ready.dir, { recursive: true, force: true });
+      if (ready.clean) {
+        const c = await controlled(next.repo, ready.clean, ready.pr);
+        controls.push(c);
+        console.log(`  ${next.repo}#${next.pr} control: ${c.outcome} (${c.minutes ?? '?'} min, $${(c.costUsd ?? 0).toFixed(2)})`);
+        rmSync(ready.clean, { recursive: true, force: true });
+      }
     }
   };
   await Promise.all(Array.from({ length: dry ? 1 : 2 }, worker));
@@ -157,11 +195,12 @@ try {
   rmSync(root, { recursive: true, force: true });
 }
 
-if (!dry) console.log(`\n${catchLines(results).join('\n')}`);
+if (!dry) console.log(`\n${catchLines(results).join('\n')}${controls.length ? `\n\n${controlLine(controls)}` : ''}`);
 if (skipped.length) console.log(`\n${skipped.length} pull request${skipped.length === 1 ? '' : 's'} passed over: ${skipped.slice(0, 5).join('; ')}${skipped.length > 5 ? '; …' : ''}`);
 if (!dry && results.length) {
   mkdirSync(paths.qaCatch, { recursive: true });
   const file = path.join(paths.qaCatch, `${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
-  writeFileSync(file, JSON.stringify({ at: Date.now(), model: qaAgentModel(state.settings) ?? 'default', results }, null, 2));
+  const saved: CatchRun = { at: Date.now(), model: qaAgentModel(state.settings) ?? 'default', results, ...(controls.length && { controls }) };
+  writeFileSync(file, JSON.stringify(saved, null, 2));
   console.log(`\nSaved in ${file}`);
 }

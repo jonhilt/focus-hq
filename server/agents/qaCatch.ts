@@ -144,11 +144,35 @@ export function catchLines(results: CatchResult[]): string[] {
   ];
 }
 
-/** A saved run of `pnpm run qa-catch`, as ~/.focus/qa-catch/ keeps it. */
+/**
+ * A control: the same pull request reviewed with no bug planted, so a QA that fails everything can't look like one
+ * that catches everything. `false-alarm` when QA failed the clean code.
+ */
+export interface ControlResult {
+  repo: string;
+  pr: number;
+  outcome: 'clean' | 'false-alarm' | 'error';
+  summary: string;
+  costUsd?: number;
+  minutes?: number;
+}
+
+export const scoreControl = (report: QaReport): ControlResult['outcome'] => (report.verdict === 'pass' ? 'clean' : 'false-alarm');
+
+/** The controls in a line: how many clean pull requests QA failed. */
+export function controlLine(controls: ControlResult[]): string {
+  const finished = controls.filter((c) => c.outcome !== 'error');
+  const alarms = finished.filter((c) => c.outcome === 'false-alarm');
+  const cost = controls.reduce((n, c) => n + (c.costUsd ?? 0), 0);
+  return `Controls: QA failed ${alarms.length} of ${finished.length} pull requests with no bug planted (false alarms)${alarms.length ? `: ${alarms.map((c) => `${c.repo.split('/')[1] ?? c.repo}#${c.pr}`).join(', ')}` : ''} · $${cost.toFixed(2)}`;
+}
+
+/** A saved run of `pnpm run qa-catch`, as ~/.focus/qa-catch/ keeps it: the planted bugs' results, and the controls' if it ran them. */
 export interface CatchRun {
   at: number;
   model: string;
   results: CatchResult[];
+  controls?: ControlResult[];
 }
 
 /** The latest run as a quality guard in `pnpm run flow`: how many planted bugs QA caught, when, and on which model. */
@@ -156,5 +180,7 @@ export function catchGuard(run: CatchRun | undefined): string {
   if (!run) return '  QA catch rate: not measured yet (pnpm run qa-catch plants bugs in merged pull requests and runs QA on them)';
   const t = catchTotals(run.results);
   const day = new Date(run.at).toISOString().slice(0, 10);
-  return `  QA catch rate: caught ${t.caught} of ${t.runs - t.errors} planted bugs (${Math.round(t.rate * 100)}%), ${t.failedElsewhere} failed for something else, ${t.missed} missed · ${day}, ${run.model}`;
+  const controls = run.controls?.filter((c) => c.outcome !== 'error') ?? [];
+  const alarms = controls.length ? `, ${controls.filter((c) => c.outcome === 'false-alarm').length} of ${controls.length} clean ones failed` : '';
+  return `  QA catch rate: caught ${t.caught} of ${t.runs - t.errors} planted bugs (${Math.round(t.rate * 100)}%), ${t.failedElsewhere} failed for something else, ${t.missed} missed${alarms} · ${day}, ${run.model}`;
 }
