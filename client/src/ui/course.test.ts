@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Contact, Waypoint } from '../../../shared/types';
-import { type Box, CHART, clearOf, clip, type CoursePlot, everySlice, labelBox, overlaps, plotCourse, probeFlights, probesOut, seeded, shieldState, smoothPath, TRANSMIT_MS } from './course';
+import { type Box, CHART, clearOf, clip, type CoursePlot, everySlice, hitCounter, hitsAmong, labelBox, overlaps, plotCourse, probeFlights, probesOut, seeded, shieldState, smoothPath, TRANSMIT_MS } from './course';
 
 const wp = (slice: number, more: Partial<Waypoint> = {}): Waypoint => ({ slice, startedAt: slice * 10, landedAt: slice * 10 + 5, title: `Slice ${slice}`, ...more });
 const inside = (p: { x: number; y: number }) => p.x >= 0 && p.x <= CHART.width && p.y >= 0 && p.y <= CHART.height;
@@ -120,6 +120,22 @@ describe('the course', () => {
         .flatMap(([a, b]) => Array.from({ length: 21 }, (_, k) => ({ x: a.x + ((b.x - a.x) * k) / 20, y: a.y + ((b.y - a.y) * k) / 20 })));
       for (const box of labelsOf(plot)) expect(dots.some((d) => d.x > box.x0 && d.x < box.x1 && d.y > box.y0 && d.y < box.y1), `${scale}: ${JSON.stringify(box)}`).toBe(false);
     }
+  });
+
+  it('counts the boxes a box runs into the same from its columns as one by one, however wide they are or wherever they lie', () => {
+    const rand = seeded('boxes');
+    const box = (w: number, h: number): Box => {
+      const x0 = rand() * 900 - 100;
+      const y0 = rand() * 600 - 100;
+      return { x0, y0, x1: x0 + w, y1: y0 + h };
+    };
+    // little squares like the lines', with a few long ones among them, which reach into columns left of their own
+    const boxes = Array.from({ length: 300 }, (_, i) => (i % 25 ? box(6, 6) : box(rand() * 200, rand() * 40)));
+    const hits = hitCounter(boxes);
+    const spots = Array.from({ length: 2000 }, () => box(rand() * 160, rand() * 30));
+    const mismatches = spots.filter((b) => hits(b) !== hitsAmong(boxes, b));
+    expect(mismatches).toEqual([]);
+    expect(spots.some((b) => hitsAmong(boxes, b) > 1)).toBe(true);
   });
 
   it('shrinks the oldest waypoints to their numbers once a voyage runs out of room', () => {

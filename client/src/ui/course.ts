@@ -112,6 +112,33 @@ export const labelBox = (l: Label, text: string, size: number): Box => {
 export const overlaps = (a: Box, b: Box) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
 const square = (p: Pt, r: number): Box => ({ x0: p.x - r, y0: p.y - r, x1: p.x + r, y1: p.y + r });
 
+/** How many of `boxes` a box overlaps, counted in loops rather than filtered (no array for each of thousands of spots). */
+export function hitsAmong(boxes: Box[], b: Box): number {
+  let hits = 0;
+  for (const o of boxes) if (overlaps(o, b)) hits++;
+  return hits;
+}
+
+/**
+ * `hitsAmong(boxes, b)` for boxes that don't change, kept in columns `column` wide by their left edge, so a box is only
+ * weighed against those in the columns it spans (and, to its left, as far as the widest of them reaches).
+ */
+export function hitCounter(boxes: Box[], column = 32): (b: Box) => number {
+  const reach = boxes.reduce((w, o) => Math.max(w, o.x1 - o.x0), 0);
+  const columns = new Map<number, Box[]>();
+  for (const o of boxes) {
+    const k = Math.floor(o.x0 / column);
+    const inColumn = columns.get(k);
+    if (inColumn) inColumn.push(o);
+    else columns.set(k, [o]);
+  }
+  return (b) => {
+    let hits = 0;
+    for (let k = Math.floor((b.x0 - reach) / column); k <= Math.floor(b.x1 / column); k++) hits += hitsAmong(columns.get(k) ?? [], b);
+    return hits;
+  };
+}
+
 /** A label off to one side of the course (`out` 1 to its right as it heads up the chart, -1 to its left). */
 const beside = (p: Pt, side: Pt, out: number, d = 26): Label => ({ x: p.x + side.x * d * out, y: p.y + side.y * d * out + 5, anchor: out > 0 ? 'start' : 'end' });
 
@@ -274,7 +301,9 @@ export function plotCourse(voyage: Voyage, scale = 1): CoursePlot {
     ...projected.flatMap((p) => along(last, p.to)),
   ];
   const inChart = (b: Box) => b.x0 >= 4 && b.x1 <= width - 4 && b.y0 >= 4 && b.y1 <= height - 4;
-  const cost = (b: Box) => (inChart(b) ? 0 : 1000) + solid.filter((o) => overlaps(o, b)).length * 100 + lines.filter((o) => overlaps(o, b)).length;
+  // a voyage with contacts weighs a few thousand spots against the lines, which don't change, so they're kept in columns
+  const linesHit = hitCounter(lines);
+  const cost = (b: Box) => (inChart(b) ? 0 : 1000) + hitsAmong(solid, b) * 100 + linesHit(b);
   // the first of the candidates (in order of preference) that's clear, crossing the fewest lines; none if none is clear
   const place = (candidates: Label[], text: string, size: number, claim = true): Label | undefined => {
     let best: { label: Label; cost: number } | undefined;
