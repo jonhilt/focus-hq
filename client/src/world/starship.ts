@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { AgentStatus } from '../../../shared/types';
+import type { AgentStatus, FlowState } from '../../../shared/types';
 import { sound } from '../sound';
 import { canvasTexture, fitText, makeCanvas, roundRect } from './canvas';
 import { box, flat, lighten, toon } from './materials';
@@ -43,6 +43,20 @@ export const LCARS_STATUS: Record<AgentStatus, string> = {
   done: '#99cc66',
   error: LCARS.red,
   stopped: '#8d86a0',
+};
+
+/**
+ * Each state of a goal's flow (docs/flow.md) as a colour, wherever it's shown (the goal board's bar, the goals list,
+ * Comms): green at work, red reworking, the waits in LCARS tones, the captain in orange.
+ */
+export const FLOW_COLOR: Record<FlowState, string> = {
+  working: '#7cc4a4',
+  rework: '#ff5c5c',
+  background: LCARS.periwinkle,
+  qa: LCARS.lilac,
+  review: LCARS.gold,
+  captain: LCARS.orange,
+  queued: '#6e7681',
 };
 
 export const LCARS_FONT = '"Antonio", "Arial Narrow", "Roboto Condensed", sans-serif';

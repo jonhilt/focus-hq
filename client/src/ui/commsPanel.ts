@@ -10,6 +10,7 @@ import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { busy, fill, h } from './dom';
+import { flowLive, keepFlowsLive } from './flowTags';
 import { closeGoal } from './goals';
 
 /** What a hail is about, the same hail from render to render: its row is built once and kept while it stands. */
@@ -39,6 +40,7 @@ function from(agent: Agent): HTMLElement {
     agent.name,
     work ? ` · Station ${work.station + 1} · ${work.title}` : agent.task === 'climb' ? ` · Climb: ${agent.issue.title}` : ` · ${agent.task === 'issue' ? '#' : 'PR #'}${agent.issue.number} ${agent.issue.title}`,
     project ? h('span', { class: 'hail-project', style: `--tone:${project.color}` }, project.name) : null,
+    flowLive(agent, 'flow-tag'),
   );
 }
 
@@ -108,7 +110,7 @@ function underWayRow(ui: Ui, lead: Agent): HTMLElement {
     h('span', { class: 'under-way-station' }, String((lead.lead?.station ?? 0) + 1).padStart(2, '0')),
     h('div', { class: 'grow' },
       h('div', null, h('strong', null, lead.lead?.title ?? lead.issue.title), project ? h('span', { class: 'hail-project', style: `--tone:${project.color}` }, project.name) : null),
-      h('small', { class: 'muted' }, `${lead.name} · ${goalState(lead)} · ${statusLine(lead)}`),
+      h('small', { class: 'muted' }, `${lead.name} · ${goalState(lead)} · ${statusLine(lead)}`, flowLive(lead, 'flow-tag')),
     ),
     h('button', { class: 'btn small', onclick: () => ui.openAgent(lead.id) }, 'Talk'),
     beam(ui, lead),
@@ -183,9 +185,11 @@ export function openCommsPanel(ui: Ui): void {
       return h('button', { class: 'btn small', style: `--tone:${p.color}`, title: `${p.name}’s goals: start one, see the line and the closed ones`, onclick: () => ui.openGoals(p.id) },
         `${p.name} · ${state.leadsIn(p.id).length}/${TEAM_STATIONS}${waiting ? ` +${waiting}` : ''}`);
     }));
+    flows();
   };
 
   ui.panels.open({ title: 'Comms', body, wide: true, accent: LCARS.orange });
+  const flows = keepFlowsLive(ui, body);
   render();
   for (const event of ['agent', 'agent-removed', 'board', 'review', 'projects'] as const) ui.panels.own(state.on(event, render));
 }

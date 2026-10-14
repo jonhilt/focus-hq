@@ -40,6 +40,8 @@ Each open goal's flow is worked out as it goes, the same way, and carried on the
 - **What it's doing now, and for how long:** at work, reworking after QA, waiting on its own work, on QA, for your merge, or on you, with why when it's you ("asked leave to go on with what it proposed", "a slice landed: waiting to hear what next"…). The time counts up a minute at a time.
 - **A bar of where its time has gone** while someone was around (idle stretches of 4 hours or more left out): green at work, red reworking, then the waits, you in orange; and the same in words underneath, `2.4 h so far · at work 52% · QA 14% · your merge 12% · you 22%`.
 
+The goals list shows the same as a **Flow** readout on each goal's card, and Comms as a tag on each goal's line, with why and where its time has gone on hover (`client/src/ui/flowTags.ts`, which writes them again each minute while the panel's open, since nothing in the office changes while a goal waits on you). Each carries the state the goal is in on to now from when the office last worked it out (`flowSoFar`), so the minutes and the shares agree.
+
 The demo's pretend leads keep a stand-in transcript of their turns (`DemoRunner.transcript`), so the board shows it in the demo too.
 
 ## What it can't see

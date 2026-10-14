@@ -1,14 +1,14 @@
 import * as THREE from 'three';
 import { UNIFORM } from '../../../shared/crew';
 import { flowNow, flowShares, flowSummary } from '../../../shared/flow';
-import type { Agent, Avatar, FlowState, Helper, LeadFlow } from '../../../shared/types';
+import type { Agent, Avatar, Helper, LeadFlow } from '../../../shared/types';
 import { canvasTexture, fitFont, fitText, makeCanvas, UI_FONT, wrap } from './canvas';
 import type { CrewView } from './character';
 import { checklistGlance, type GoalRoomTone, goalRoomState, leadNow, type NoteSection, noteSections, type PrGlance, rowAt, sliceProgress } from './goalRoom';
 import { flat } from './materials';
 import { portrait } from './portraits';
 import { DISPLAY_EVERY, redrawDue, type ScreenView, screenTest, takeDraw } from './screenRedraw';
-import { LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
+import { FLOW_COLOR, LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
 import { clip, type CoursePlot, everySlice, type Label, leaderEnd, plotCourse, type ProbeFlight, probeFlights, probesOut, seeded, shieldState } from '../ui/course';
 
 // What a team station shows of its goal besides the lead's session. What floats in the holodeck is drawn like the
@@ -261,16 +261,6 @@ const BOARD_TYPE = [30, 28, 26, 24, 22, 20];
 /** The size of the board's headings, whatever size its body type. */
 const HEADING = 34;
 const BOARD_BG = '#000000';
-/** Each flow state's colour on the goal board's bar: green at work, red reworking, the waits in LCARS tones, you in orange. */
-const FLOW_COLOR: Record<FlowState, string> = {
-  working: '#7cc4a4',
-  rework: '#ff5c5c',
-  background: LCARS.periwinkle,
-  qa: LCARS.lilac,
-  review: LCARS.gold,
-  captain: LCARS.orange,
-  queued: '#6e7681',
-};
 const DIM = '#6e7681';
 const BODY = '#e6edf3';
 
@@ -343,7 +333,7 @@ export class GoalBoard extends Display {
     ctx.fillStyle = '#232a3a';
     ctx.fillRect(x, by, w, 16);
     let sx = x;
-    for (const s of flowShares(flow)) {
+    for (const s of flowShares(flow, Date.now())) {
       ctx.fillStyle = FLOW_COLOR[s.state];
       ctx.fillRect(sx, by, s.share * w, 16);
       sx += s.share * w;
@@ -351,7 +341,7 @@ export class GoalBoard extends Display {
     ctx.restore();
     ctx.font = `20px ${LCARS_FONT}`;
     ctx.fillStyle = DIM;
-    ctx.fillText(fitText(ctx, flowSummary(flow).toUpperCase(), w), x, by + 42);
+    ctx.fillText(fitText(ctx, flowSummary(flow, Date.now()).toUpperCase(), w), x, by + 42);
   }
 
   /** Which crew member's row (in the roster's order) a point on the board is on, from its texture coordinates. */
