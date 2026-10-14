@@ -1,0 +1,15 @@
+/* B+3 · bracket frame: an angular amber bracket (sidebar and header bar joined at a 45° cut) round each panel */
+.panel { padding: 8px; grid-template-rows: 44px auto minmax(0, 1fr) auto 12px; grid-template-areas: 'elbow head' 'nav body' 'side body' 'side foot' 'base base'; }
+.panel:not(.has-nav) { --side: 22px; }
+.panel-elbow { display: block; background: #f5a524; border-radius: 0; clip-path: polygon(18px 0, 100% 0, 100% 100%, 0 100%, 0 18px); }
+.panel-elbow::after { display: block; content: ''; position: absolute; left: 100%; top: 100%; width: 16px; height: 16px; background: #f5a524; clip-path: polygon(0 0, 100% 0, 0 100%); }
+.panel-head { background: transparent; border: 0; padding: 0 0 0 6px; gap: 5px; align-items: stretch; }
+.panel-head::after { display: none; }
+.panel-head h2 { order: 0; flex: 0 1 auto; align-self: center; padding: 0 10px; }
+.panel-bar { display: block; background: #f5a524; clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%); }
+.panel-head > .btn, .panel-close { align-self: stretch; display: flex; align-items: center; }
+.panel-side::before { display: block; background: #f5a524; }
+.panel-side::after { display: block; height: 22px; background: #2ec4b6; }
+.panel.has-nav .panel-nav { padding: 0 0 4px; }
+.panel-base { display: block; background: #f5a524; border-radius: 0; clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%); }
+.panel-body { padding: 14px 10px 14px 18px; }

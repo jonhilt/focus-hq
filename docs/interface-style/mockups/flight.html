@@ -1,0 +1,69 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono&display=swap"><style>*{box-sizing:border-box}body{margin:0;width:1280px;height:800px;overflow:hidden}
+.scene{position:relative;width:1280px;height:800px}
+.hud{position:absolute;left:24px;right:24px;top:18px;display:flex;justify-content:space-between}
+.stats{display:flex;gap:10px}
+.dlg{position:absolute;left:24px;top:84px;width:700px;height:620px;display:flex;flex-direction:column}
+.dh{display:flex;align-items:center;justify-content:space-between}
+.db{flex:1;display:flex;min-height:0}
+nav{display:flex;flex-direction:column;gap:8px;width:120px}
+main{flex:1;display:flex;flex-direction:column;gap:14px;min-width:0}
+.readouts{display:flex;gap:26px}.readouts div{display:flex;flex-direction:column}
+.term{flex:1;overflow:hidden}
+.row{display:flex;gap:8px}.row input{flex:1}
+.chips{display:flex;gap:8px}
+.wall{position:absolute;left:770px;top:110px;width:480px}
+.screen{height:290px;display:flex;flex-direction:column}
+.sh{display:flex;align-items:center;gap:10px}.st-title{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sg{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:6px 20px;padding-top:10px}.sg .full{grid-column:1/3}
+.sg h4{margin:0 0 4px}.sg p{margin:2px 0}.sg em{font-style:normal;opacity:.6;margin-left:6px}
+.cap{font:11px system-ui;color:#fff8;text-align:center;margin-top:8px;letter-spacing:.05em}
+.sign{position:absolute;left:800px;top:560px;display:flex;align-items:center}
+
+body{background:linear-gradient(#3a3f48,#1a1d22);font:14px "IBM Plex Sans",sans-serif;color:#e9edf2}
+.scene:before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,#ffffff05 0 1px,transparent 1px 120px)}
+.loc,.stat{background:#15181d;border:1px solid #3a424e;padding:6px 14px;font:600 14px "Chakra Petch";clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+.loc{border-left:3px solid #f5a524}
+.dot{display:inline-block;width:8px;height:8px;background:#f5a524;margin-right:8px;transform:rotate(45deg)}
+.tag{font:600 10px "IBM Plex Mono";color:#f5a524;border:1px solid #f5a52488;padding:0 5px;margin-left:8px}
+.comms b{background:#f5a524;color:#15181d;padding:0 6px;margin-left:6px}
+.dlg{background:#15181d;border:1px solid #3a424e;padding:0;clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px);box-shadow:0 20px 50px #0009}
+.dh{background:#1e232b;padding:12px 18px 12px 26px;border-bottom:1px solid #3a424e;position:relative}
+.dh:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:#f5a524}
+.title{font:600 19px "Chakra Petch";letter-spacing:.01em}.who{color:#f5a524}.sep{color:#56606e}
+.x{background:#2a3039;border:1px solid #4a5361;color:#e9edf2;padding:5px 12px;font:500 12px "IBM Plex Mono";text-transform:uppercase;letter-spacing:.08em}
+.db{padding:16px 18px}
+nav{margin-right:18px;border-right:1px solid #2b313a;padding-right:12px}nav a{padding:8px 10px;color:#8a94a3;font:500 13px "Chakra Petch";letter-spacing:.04em;border-left:2px solid transparent}nav a:before{content:"0" counter(n) "  ";counter-increment:n;font:11px "IBM Plex Mono";color:#56606e}nav{counter-reset:n}nav a.on{color:#fff;border-left-color:#2ec4b6;background:linear-gradient(90deg,#2ec4b622,transparent)}
+label{font:500 10.5px "IBM Plex Mono";letter-spacing:.12em;text-transform:uppercase;color:#7d8794}.readouts{border-bottom:1px dashed #3a424e;padding-bottom:12px}.readouts b{font:600 18px "Chakra Petch"}.ok{color:#8bd450}
+.term{background:#0d0f12;border:1px solid #2b313a;padding:12px 14px;font:12.5px/1.6 "IBM Plex Mono";color:#c9d1d9;background-image:linear-gradient(#2ec4b610 1px,transparent 1px);background-size:100% 20px}.q{color:#f5a524}
+.chip{font:500 11.5px "IBM Plex Mono";padding:2px 8px;border:1px solid #4a5361;color:#c9d1d9}.chip.ok{color:#8bd450;border-color:#8bd45088}.chip.bad{color:#ef4b4b;border-color:#ef4b4b88}
+input{background:#0d0f12;border:1px solid #4a5361;padding:10px 12px;color:#fff;font:14px "IBM Plex Sans"}
+.b{padding:0 18px;font:600 13px "Chakra Petch";letter-spacing:.06em;text-transform:uppercase;background:#2a3039;color:#e9edf2;border:1px solid #4a5361;clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px)}.b.pri{background:#f5a524;color:#15181d;border-color:#f5a524}
+.bezel{background:#2a2f37;padding:12px 30px;border:1px solid #4a5361;border-radius:6px;position:relative;box-shadow:0 10px 30px #0008}
+.bezel:before,.bezel:after{content:"";position:absolute;top:40px;bottom:40px;width:12px;background:repeating-linear-gradient(#4a5361 0 18px,transparent 18px 34px)}.bezel:before{left:9px}.bezel:after{right:9px}
+.screen{background:#0b0d10;border:1px solid #000;padding:14px 16px;background-image:linear-gradient(#2ec4b60c 1px,transparent 1px),linear-gradient(90deg,#2ec4b60c 1px,transparent 1px);background-size:24px 24px}
+.code{font:600 12px "IBM Plex Mono";color:#15181d;background:#2ec4b6;padding:1px 6px}.st-title{font:600 16px "Chakra Petch"}.st{font:500 11px "IBM Plex Mono";color:#f5a524;border:1px solid #f5a524;padding:1px 6px}
+.sh{border-bottom:1px solid #2b313a;padding-bottom:8px}
+.sg h4{font:500 10.5px "IBM Plex Mono";letter-spacing:.14em;text-transform:uppercase;color:#2ec4b6}.sg h4:before{content:"▸ "}.sg p{font-size:14px}.warn{color:#f5a524}
+.meter{height:8px;background:repeating-linear-gradient(90deg,#2b313a 0 6px,transparent 6px 8px)}.meter span{display:block;width:60%;height:100%;background:repeating-linear-gradient(90deg,#8bd450 0 6px,transparent 6px 8px)}
+.sign{background:#15181d;border:1px solid #4a5361;padding:8px 16px;gap:14px;border-left:4px solid #f5a524}.sgn{font:600 20px "Chakra Petch"}.sgc{font:500 12px "IBM Plex Mono";color:#8a94a3}
+</style></head><body><div class="scene">
+<div class="hud"><div class="loc"><i class="dot"></i>Bridge <span class="tag">Demo</span></div><div class="stats"><span class="stat">2 working</span><span class="stat">6 PRs</span><span class="stat comms">Comms <b>3</b></span></div></div>
+<div class="dlg">
+ <div class="dh"><div class="title"><span class="who">Lt. Lindqvist</span> <span class="sep">/</span> Shoppers can save items for later</div><button class="x">Close</button></div>
+ <div class="db">
+  <nav><a>Browser</a><a class="on">Goal</a><a>Tasks</a><a>Crew</a></nav>
+  <main>
+   <div class="readouts"><div><label>Status</label><b class="ok">Done</b></div><div><label>Activity</label><b>Your turn</b></div><div><label>Slice</label><b>1</b></div><div><label>Context</label><b>21%</b></div></div>
+   <div class="term">● Read(webshop-frontend/CLAUDE.md)<br>&nbsp;&nbsp;⎿ Read 78 lines<br>● mcp__office__note(done, next)<br><span class="q">? Asked the captain: which layout should it start with?</span><br>● I'd start with a thin slice end to end through the frontend and API, so we find out early whether the data model holds.</div>
+   <div class="chips"><span class="chip">webshop-frontend</span><span class="chip ok">checks pass</span><span class="chip bad">conflicts</span></div>
+   <div class="row"><input placeholder="Talk to Lt. Lindqvist"><button class="b pri">Send</button><button class="b">Stop</button></div>
+  </main>
+ </div>
+</div>
+<div class="wall"><div class="bezel"><div class="screen">
+ <div class="sh"><span class="code">TS-1</span><span class="st-title">Shoppers can save items for later</span><span class="st">Your answer</span></div>
+ <div class="sg"><div><h4>Crew</h4><p>Lt. Lindqvist <em>lead</em></p><p>QA officer <em>idle</em></p></div><div><h4>Pull requests</h4><p>#8 Wishlist page <span class="ok">✓</span></p><p>#7 Wishlist API <span class="warn">review</span></p></div><div class="full"><h4>Next</h4><p>→ A thin slice end to end</p></div></div>
+ <div class="meter"><span></span></div>
+</div></div><div class="cap">wall screen · team station</div></div>
+<div class="sign"><span class="sgn">Main engineering</span><span class="sgc">Deck 5</span></div>
+</div></body></html>

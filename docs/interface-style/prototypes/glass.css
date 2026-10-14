@@ -1,0 +1,28 @@
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Inter:wght@400;500;600;700;800&display=swap');
+:root {
+  --lcars-orange: #5ce1e6; --lcars-lilac: #8fb0ff; --lcars-periwinkle: #8a9dff; --lcars-peach: #9fd8ff; --lcars-red: #ff6b8b;
+  --lcars-gold: #ffb547; --lcars-sky: #5ce1e6; --lcars-green: #7cf2b0;
+  --t-font: 'Inter', sans-serif; --t-display: 'Sora', sans-serif; --t-mono: 'JetBrains Mono', monospace;
+  --t-ink: #06202a; --t-text: #e6f6ff; --t-muted: #8fb3c7; --t-label: #8fb3c7; --t-value: #e6f6ff; --t-title: #5ce1e6;
+  --t-panel: linear-gradient(160deg, rgba(40,80,115,.66), rgba(10,22,38,.86)); --t-surface: rgba(10,24,40,.6); --t-surface2: rgba(140,225,255,.07);
+  --t-line: rgba(140,225,255,.25); --t-well: rgba(3,10,18,.6);
+  --t-head: transparent; --t-head-ink: #e6f6ff; --t-head-muted: #8fb3c7; --t-head-border: 1px solid rgba(140,225,255,.2);
+  --t-border: 1px solid rgba(140,225,255,.42); --t-shadow: 0 20px 60px #0009, inset 0 1px 0 rgba(255,255,255,.22);
+  --t-hud: rgba(14,34,54,.6); --t-hud-border: 1px solid rgba(140,225,255,.38); --t-hud-shadow: 0 0 18px rgba(92,225,230,.12) inset;
+  --t-r-lg: 18px; --t-r: 12px; --t-r-sm: 10px; --t-r-xs: 6px; --t-rule: linear-gradient(90deg, #5ce1e6, #7cf2b0);
+  --t-nav-hover: rgba(140,225,255,.08); --t-nav-on: rgba(92,225,230,.16); --t-nav-on-ink: #fff;
+  --t-col-head: rgba(140,225,255,.08); --t-col-ink: #cfefff; --t-col-on: rgba(92,225,230,.2); --t-col-on-ink: #fff;
+}
+.overlay, .dialog-overlay { background: #0006; }
+.panel, .dialog, .splash .card, .hint, .location, .stat, .comms-badge, .toast { backdrop-filter: blur(16px); }
+.panel-head h2 .muted { font-weight: 400; }
+.btn, .panel-close { background: color-mix(in srgb, var(--tone, #8fb0ff) 16%, transparent); color: var(--tone, #cfefff); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone, #8fb0ff) 55%, transparent); font-weight: 600; }
+.btn:hover { background: color-mix(in srgb, var(--tone) 28%, transparent); }
+.btn.primary, .big-button { background: linear-gradient(#5ce1e6, #2bb5c4); color: #06202a; box-shadow: 0 0 18px #5ce1e655; }
+.panel-close { --tone: #cfefff; }
+.chip { background: color-mix(in srgb, var(--tone) 14%, transparent); color: var(--tone); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 50%, transparent); font-weight: 500; }
+.nav-btn.on { box-shadow: inset 2px 0 0 #5ce1e6; }
+.note { background: rgba(140,225,255,.05); border: 1px solid rgba(140,225,255,.14); border-left: 3px solid var(--tone); }
+.kanban .col { background: rgba(4,14,26,.45); border: 1px solid rgba(140,225,255,.18); }
+.kanban h3 { border-bottom: 1px solid rgba(140,225,255,.2); }
+.location .mode { background: transparent; color: #ffb547; box-shadow: inset 0 0 0 1px #ffb54788; }

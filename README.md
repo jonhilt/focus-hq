@@ -100,6 +100,7 @@ Then on board:
 - [How the 3D view runs](docs/performance.md): frame stats (`?stats=1`) and their log, and `pnpm run perf`
 - [CRAP scores](docs/crap.md): which functions are riskiest to change, from complexity and test coverage
 - [The TV studio](docs/studio.md): filming episodes on the ship from a scene script, in demo mode
+- [Focus's own interface style](docs/interface-style.md): moving off LCARS: where it lives, the line we hold, and the designs tried
 - [CLAUDE.md](CLAUDE.md): commands and conventions for the agents building Focus
 - [Goals plan](docs/goals-plan.md) and [Effect assessment](docs/effect-assessment.md): design notes
 

@@ -1,0 +1,18 @@
+/* B+2 · colour blocks: solid, colour-coded tabs, column heads and chips with cut corners */
+.side-nav { gap: 4px; }
+.nav-btn { --tab: #5b8def; background: var(--tab); color: #111418; font-weight: 600; border-radius: 0; box-shadow: none;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%); }
+.nav-btn:nth-child(4n+2) { --tab: #2ec4b6; } .nav-btn:nth-child(4n+3) { --tab: #aeb6c2; } .nav-btn:nth-child(4n+4) { --tab: #8bd450; }
+.nav-btn:hover { background: color-mix(in srgb, var(--tab) 75%, #fff); }
+.nav-btn.on { --tab: #f5a524; background: var(--tab); color: #111418; box-shadow: none; }
+.nav-num { color: #1114189a; }
+.kanban .col { padding-top: 0; }
+.kanban h3 { color: #111418; border: 0; font-family: var(--t-display); font-size: 15px; letter-spacing: 0.06em; clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%); }
+.kanban .col:nth-child(1) h3 { background: #2ec4b6; } .kanban .col:nth-child(2) h3 { background: #5b8def; } .kanban .col:nth-child(3) h3 { background: #8bd450; }
+.kanban .col.on h3 { background: #f5a524; color: #111418; box-shadow: none; }
+.chip { background: var(--tone); color: #111418; box-shadow: none; font-weight: 600; }
+.chip.off { background: #3a424e; color: #e9edf2; }
+.panel-close { background: #ef4b4b; color: #111418; outline: 0; }
+.goal-station { border-radius: 0; clip-path: polygon(0 0, 100% 0, 100% 100%, 12px 100%, 0 calc(100% - 12px)); }
+.nav-btn.standby, .nav-btn.standby:hover { background: color-mix(in srgb, var(--tab) 22%, #15181d); color: #8a94a3; opacity: 1; }
+.nav-btn.on.standby { background: var(--tab); color: #111418; }

@@ -1,0 +1,27 @@
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@500;600;700;800&display=swap');
+:root {
+  --lcars-orange: #ff7a59; --lcars-lilac: #b59cff; --lcars-periwinkle: #7d8cff; --lcars-peach: #ffd88a; --lcars-red: #ff5d73;
+  --lcars-gold: #ffc93c; --lcars-sky: #4cc9f0; --lcars-green: #43d9ad;
+  --t-font: 'Nunito', sans-serif; --t-display: 'Fredoka', sans-serif; --t-mono: 'JetBrains Mono', monospace;
+  --t-ink: #1d1b33; --t-text: #fff7e8; --t-muted: #aab2e0; --t-label: #a9b2e6; --t-value: #ffe08a; --t-title: #ffc93c;
+  --t-panel: #26305a; --t-surface: #1f2850; --t-surface2: #2f3a70; --t-line: #4a548f; --t-well: #161b38;
+  --t-head: #ffc93c; --t-head-ink: #1d1b33; --t-head-muted: #6b5212; --t-head-border: 4px solid #1d1b33;
+  --t-border: 4px solid #1d1b33; --t-shadow: 0 8px 0 #1d1b33, 0 24px 60px #0008;
+  --t-hud: #26305a; --t-hud-border: 3px solid #1d1b33; --t-hud-shadow: 0 4px 0 #1d1b33;
+  --t-r-lg: 22px; --t-r: 14px; --t-r-sm: 12px; --t-r-xs: 8px; --t-rule: repeating-linear-gradient(-45deg, #ffc93c 0 10px, #ff7a59 10px 20px);
+  --t-nav-hover: #2f3a70; --t-nav-on: #4cc9f0; --t-nav-on-ink: #1d1b33;
+  --t-col-head: #3d4a86; --t-col-ink: #fff7e8; --t-col-on: #ffc93c; --t-col-on-ink: #1d1b33;
+}
+.btn, .chip, .panel-close, .big-button { border: 3px solid #1d1b33; }
+.btn, .panel-close, .big-button { box-shadow: 0 3px 0 #1d1b33; font-family: var(--t-display); font-weight: 600; }
+.btn:active, .big-button:active { transform: translateY(3px); box-shadow: none; filter: none; }
+.chip { border-width: 2px; font-weight: 800; }
+.panel-close { background: #ff7a59; color: #fff; }
+.nav-btn.on { border: 3px solid #1d1b33; box-shadow: 0 3px 0 #1d1b33; }
+.note { border: 3px solid #1d1b33; border-left: 8px solid var(--tone); background: color-mix(in srgb, var(--tone) 10%, #26305a); }
+.kanban .col { border: 3px solid #1d1b33; }
+.kanban h3 { border-bottom: 3px solid #1d1b33; }
+.terminal, input[type='text'], textarea, select { border: 3px solid #1d1b33; }
+.terminal { box-shadow: inset 0 3px 0 #0006; }
+.location .mode, .hint kbd, .controls kbd, kbd.k { border: 2px solid #1d1b33; }
+.comms-badge { overflow: hidden; }

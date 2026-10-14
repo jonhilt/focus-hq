@@ -1,0 +1,11 @@
+/* B+1 · signal rail: a slanted, multi-colour rail under every header, and solid blocks with slanted ends on the HUD */
+:root { --rail: linear-gradient(115deg, #f5a524 0 36%, transparent 36% 37%, #2ec4b6 37% 57%, transparent 57% 58%, #5b8def 58% 73%, transparent 73% 74%, #8bd450 74% 82%, transparent 82% 83%, #ef4b4b 83% 87%, transparent 87%); }
+.panel-head, .dialog-head { position: relative; padding-bottom: 16px; }
+.panel-head::after, .dialog-head::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 7px; background: var(--rail); }
+.panel-head h2, .dialog-head h2 { color: #f5a524; }
+.panel-head h2 .muted { color: #e9edf2; }
+.splash h1::after { height: 10px; width: 70%; background: var(--rail); border-radius: 0; }
+.location { background: #f5a524; color: #111418; border: 0; padding-right: 30px; clip-path: polygon(0 0, 100% 0, calc(100% - 16px) 100%, 0 100%); }
+.location .mode { background: #111418; color: #f5a524; box-shadow: none; }
+.stat, .comms-badge { border: 0; border-left: 6px solid #2ec4b6; padding-right: 26px; clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%); }
+.comms-badge { border-left-color: #f5a524; }
