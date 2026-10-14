@@ -195,6 +195,13 @@ its own, its round wall 17 m from the middle (a training hall's is 11 m) and its
 floor to walk into but its walls (`STUDIO_HALL` and `studioWalls` in `client/src/world/studio.ts`,
 `VacantHall.enlarge` in `room.ts`). The chat docks down the right, so the room stays in view while the computer builds.
 
+- **Saying it**: hold **V** anywhere in the studio, say what you want to see, and let go. The recording is transcribed
+  on this machine, as [voice input](voice-input.md) is, and sent straight to the computer, as if typed in its chat; a
+  pill over the bottom of the screen says it's listening, transcribing, and what it sent
+  (`client/src/ui/studioVoice.ts`). While the computer works, the far wall's hologram says what it's doing at its top
+  right ("COMPUTER · BUILDING THE SCENE…", `signStatus` in `client/src/world/studio.ts`), so you can follow along with
+  the chat shut. V does nothing while the computer is still on the last thing you said. It needs voice input set up
+  (whisper.cpp and its model); in the demo every recording is the demo sentence, which builds fan-out.
 - **Scenes** (its `scene` tool, `server/agents/studio.ts`): the computer builds straight away from what you said, rather
   than pitching or asking first, and the scene stands on a round stage 6 m across the middle of the hall
   (`SCENE_STAGE`), up to the ceiling, its front to the doorway. Motion is the point: it decides first what moves and

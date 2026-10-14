@@ -8,7 +8,7 @@ import { encodeWav, insertTranscript, toMono16k } from './speech';
 type Field = HTMLInputElement | HTMLTextAreaElement;
 type Phase = 'idle' | 'listening' | 'transcribing';
 
-interface Recording {
+export interface Recording {
   /** Ends the recording and hands back the audio as a 16 kHz WAV. */
   stop(): Promise<ArrayBuffer>;
   cancel(): void;
@@ -203,7 +203,10 @@ export function withMic(ui: Ui, field: Field, mode: () => MicMode = () => DICTAT
   return wrap;
 }
 
-async function record(mic: Microphone): Promise<Recording> {
+/** Starts recording from the mic, for a caller that transcribes it itself (the studio's hold-to-talk key). */
+export const startRecording = (): Promise<Recording> => record(micPerRecording);
+
+export async function record(mic: Microphone): Promise<Recording> {
   const stream = await mic.open();
   const recorder = new MediaRecorder(stream);
   const chunks: Blob[] = [];
@@ -239,7 +242,7 @@ async function toWav(blob: Blob): Promise<ArrayBuffer> {
   return encodeWav(toMono16k(channels, audio.sampleRate));
 }
 
-function micError(err: unknown): string {
+export function micError(err: unknown): string {
   const name = err instanceof DOMException ? err.name : '';
   if (name === 'NotAllowedError' || name === 'SecurityError') return 'microphone access was denied. Allow it for this site in the browser and try again.';
   if (name === 'NotFoundError') return 'no microphone found.';

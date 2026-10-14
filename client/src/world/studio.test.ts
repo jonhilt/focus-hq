@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ENTRANCE_X } from './hallLayout';
-import { cardTurn, keepsHallCollider, SCENE_HOLD, SHELF, shelfMove, shelfSpots, SCENE_STAGE, ScenePlayback, sheetMoments, SPIN_RATE, STUDIO_HALL, STUDIO_SPAN, studioWalls } from './studio';
+import { cardTurn, keepsHallCollider, signStatus, SCENE_HOLD, SHELF, shelfMove, shelfSpots, SCENE_STAGE, ScenePlayback, sheetMoments, SPIN_RATE, STUDIO_HALL, STUDIO_SPAN, studioWalls } from './studio';
 
 describe('the studio hall', () => {
   it('walls in its round wall and its entrance wall out to it, leaving the doorway clear', () => {
@@ -141,5 +141,22 @@ describe('the scene shelf', () => {
     expect(shelfMove(0, -1, 4)).toBe(0);
     expect(shelfMove(2, 1, 4)).toBe(3);
     expect(shelfMove(3, 1, 4)).toBe(3);
+  });
+});
+
+describe('signStatus', () => {
+  const base = { thinking: false, activity: '', scene: true, failed: false, paused: false, speed: 1 };
+
+  it('says what the computer is doing while it works, even before there is a scene', () => {
+    expect(signStatus({ ...base, scene: false, thinking: true, activity: 'Building the scene' })).toEqual({ text: 'COMPUTER · BUILDING THE SCENE…', tone: 'sky' });
+    expect(signStatus({ ...base, thinking: true, activity: 'Thinking…' })?.text).toBe('COMPUTER · THINKING…');
+    expect(signStatus({ ...base, thinking: true, activity: 'Looking through Claude Code sessions for the one' })?.text).toHaveLength(45);
+  });
+
+  it('otherwise says how the scene is playing, or that it stopped, and nothing with no scene', () => {
+    expect(signStatus(base)).toEqual({ text: 'PLAYING', tone: 'dim' });
+    expect(signStatus({ ...base, paused: true, speed: 0.5 })).toEqual({ text: 'PAUSED  ×0.5', tone: 'gold' });
+    expect(signStatus({ ...base, failed: true })).toEqual({ text: 'STOPPED', tone: 'red' });
+    expect(signStatus({ ...base, scene: false })).toBeNull();
   });
 });

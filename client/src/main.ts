@@ -23,6 +23,7 @@ import { openEngineeringPanel } from './ui/engineeringPanel';
 import { openLedgerPanel } from './ui/ledgerPanel';
 import { numberOnePanelOpen, openNumberOnePanel } from './ui/numberOnePanel';
 import { openStudioChat } from './ui/studioChat';
+import { StudioVoice } from './ui/studioVoice';
 import { Panels } from './ui/panels';
 import { openPreviewPanel } from './ui/previewPanel';
 import { openQaPanel } from './ui/qaPanel';
@@ -628,11 +629,17 @@ async function main() {
     lastSwipe = performance.now();
     shelf.move(Math.sign(e.deltaY));
   });
+  // hold V in the studio to talk to its computer: what you say is sent as you let go
+  const voice = new StudioVoice(ui);
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'KeyV') void voice.up();
+  });
   window.addEventListener('keyup', (e) => {
     const playback = world.studioPlayback();
     if (playback && (e.code === 'KeyQ' || e.code === 'KeyR')) playback.turning = 0;
   });
   window.addEventListener('blur', () => {
+    voice.cancel();
     const playback = world.studioPlayback();
     if (playback) playback.turning = 0;
   });
@@ -640,6 +647,11 @@ async function main() {
   window.addEventListener('keydown', (e) => {
     if (!started || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
     if (panels.isOpen && !panels.docked) return;
+    if (e.code === 'KeyV' && studioSet()) {
+      e.preventDefault();
+      if (!e.repeat) voice.down();
+      return;
+    }
     if (!e.repeat && !panels.isOpen && shelfKey(e.code)) {
       e.preventDefault();
       return;

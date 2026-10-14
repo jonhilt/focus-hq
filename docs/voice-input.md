@@ -1,6 +1,6 @@
 # Voice input
 
-Every box where you write to the crew has a **Mic** button: an agent's message box, a new goal, the New issue idea, notes, title and description, and the QA brief. Click it (or press **Ctrl+M** in the box) and speak, then click again to stop, or hold it while you speak and let go. The text lands at the cursor for you to check. Nothing is sent until you send it (except in Number One's [voice mode](number-one.md#voice-mode)).
+Every box where you write to the crew has a **Mic** button: an agent's message box, a new goal, the New issue idea, notes, title and description, and the QA brief. Click it (or press **Ctrl+M** in the box) and speak, then click again to stop, or hold it while you speak and let go. The text lands at the cursor for you to check. Nothing is sent until you send it (except in Number One's [voice mode](number-one.md#voice-mode), and the studio's hold-V key, which sends what you say to [the holodeck computer](studio.md#the-studio-holodeck)).
 
 [whisper.cpp](https://github.com/ggml-org/whisper.cpp) transcribes on your machine with the `large-v3-turbo` model, so your audio never leaves it. On Apple Silicon it runs on the GPU. Set it up once:
 

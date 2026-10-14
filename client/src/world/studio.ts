@@ -168,3 +168,23 @@ export function cardTurn(a: number): number {
 export function shelfMove(picked: number, by: number, n: number): number {
   return Math.max(0, Math.min(n - 1, picked + by));
 }
+
+/** What the far wall's hologram says at its top right, and in what tone. */
+export interface SignStatus {
+  text: string;
+  tone: 'red' | 'gold' | 'sky' | 'dim';
+}
+
+/**
+ * What the far wall says is going on: what the computer's doing while it works (so you can follow it hands free, with
+ * the chat shut), else that the scene stopped, or how it's playing. Null with nothing to say (no scene, computer idle).
+ */
+export function signStatus(o: { thinking: boolean; activity: string; scene: boolean; failed: boolean; paused: boolean; speed: number }): SignStatus | null {
+  if (o.thinking) {
+    const doing = (o.activity.trim() || 'Thinking').replace(/[….]+$/, '').toUpperCase();
+    return { text: `COMPUTER · ${doing.length > 34 ? `${doing.slice(0, 33)}…` : `${doing}…`}`, tone: 'sky' };
+  }
+  if (!o.scene) return null;
+  if (o.failed) return { text: 'STOPPED', tone: 'red' };
+  return { text: `${o.paused ? 'PAUSED' : 'PLAYING'}${o.speed !== 1 ? `  ×${o.speed}` : ''}`, tone: o.paused ? 'gold' : 'dim' };
+}

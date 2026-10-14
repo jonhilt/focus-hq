@@ -14,6 +14,7 @@
 | <kbd>Alt</kbd>+<kbd>1</kbd>… | pick a view from a panel's sidebar by its number (an agent's browser, goal, tasks or crew; the ready room's sections) |
 | <kbd>Esc</kbd> | pause / close a panel |
 | In [stellar cartography](stellar-cartography.md): <kbd>F</kbd> | take flight (<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> where you look, <kbd>Space</kbd> / <kbd>Shift</kbd> up and down), and <kbd>F</kbd> again to land |
-| In the [studio](studio.md#the-studio-holodeck): <kbd>Enter</kbd> | talk to the holodeck computer |
+| In the [studio](studio.md#the-studio-holodeck): hold <kbd>V</kbd> | say what you want to see; it's sent to the holodeck computer as you let go |
+| In the studio: <kbd>Enter</kbd> | the holodeck computer's chat |
 | In the studio: hold <kbd>Q</kbd> / <kbd>R</kbd>, <kbd>P</kbd>, <kbd>[</kbd> / <kbd>]</kbd>, <kbd>-</kbd> / <kbd>=</kbd> | spin the scene, pause it, scrub through it, slow it down or speed it up |
 | In the studio: <kbd>Tab</kbd>, then <kbd>←</kbd> / <kbd>→</kbd> or the wheel, <kbd>E</kbd> | open the shelf of kept scenes, swipe through it, call one back |
