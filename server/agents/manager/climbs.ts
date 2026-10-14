@@ -1,9 +1,14 @@
-import type { Climb } from '../../../shared/types';
+import { Effect } from 'effect';
+import type { Agent, Climb, Scorecard, ScorecardNoise } from '../../../shared/types';
 import { climbingEngineer } from '../../../shared/crew';
-import { CLIMB_BRANCH, CLIMBER_ID } from '../../../shared/types';
+import { CLIMB_BRANCH, CLIMB_ENDS_KEPT, CLIMBER_ID } from '../../../shared/types';
 import { errorMessage, newId } from '../../util';
-import { climbStep } from '../climb';
+import { GitHub } from '../../github/service';
+import { climbBrief, climbLog, climbStep } from '../climb';
 import { Part, Refused } from './core';
+
+/** How many of main's latest scorecards a brief looks through, to see whether past gains held. */
+const SCORECARDS_READ = 30;
 
 /**
  * Main engineering's climber (docs/climber.md): while the captain keeps climbing switched on, one climb at a time on the
@@ -13,6 +18,30 @@ import { Part, Refused } from './core';
  * closed; a climb that ends without a pull request switches climbing off, saying why.
  */
 export class Climbs extends Part {
+  /** Where a climb's brief reads main's scorecards and the noise floor from (the office's own, set as it starts). */
+  scorecards: { history(limit: number): Scorecard[]; noise(): ScorecardNoise | undefined } = { history: () => [], noise: () => undefined };
+
+  /**
+   * The climb's first message: the brief, with every climb before it as GitHub and the office remember them (the
+   * captain's own words on each, and whether a merged gain has held on main). GitHub failing costs the log, not the climb.
+   */
+  brief(agent: Agent): Effect.Effect<string, never, GitHub> {
+    return Effect.gen({ self: this }, function* () {
+      const github = yield* GitHub;
+      const status = yield* github.status;
+      const prs = yield* github.pullRequestsFrom(agent.repo, CLIMB_BRANCH).pipe(
+        Effect.catch((err) => Effect.sync(() => {
+          this.print(agent, [{ kind: 'system', text: `✻ Couldn’t read the past climbs from GitHub, so the brief has none: ${err.message}` }]);
+          return [];
+        })),
+      );
+      // this climb's own pull request isn't open yet; one left open from before is still part of the record
+      const noise = this.scorecards.noise();
+      const log = climbLog(prs.filter((p) => p.branch !== agent.branch), this.store.climb.ends ?? [], status.login, this.scorecards.history(SCORECARDS_READ), noise);
+      return climbBrief(agent, this.store.ledger, Date.now(), log, noise);
+    });
+  }
+
   current(): Climb {
     return this.store.climb;
   }
@@ -38,7 +67,8 @@ export class Climbs extends Part {
     const step = climbStep(this.store.climb, climber);
     if (step.kind === 'start') this.start();
     if (step.kind === 'stop') {
-      this.set({ keepClimbing: false, agentId: undefined, stoppedWhy: step.why, last: { outcome: step.outcome, at: Date.now() } });
+      const end = { at: Date.now(), outcome: step.outcome, why: step.why };
+      this.set({ keepClimbing: false, agentId: undefined, stoppedWhy: step.why, last: { outcome: step.outcome, at: end.at }, ends: [...(climb.ends ?? []), end].slice(-CLIMB_ENDS_KEPT) });
       this.hub.toast('info', `Climbing switched off: ${step.why}`, climb.agentId);
     }
   }

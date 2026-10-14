@@ -42,7 +42,7 @@ describe('SavedScorecards', () => {
 function desk(measure: () => Promise<void>) {
   const cards = [card(1)];
   const sent: ServerEvent[] = [];
-  const source: ScorecardSource = { history: () => [...cards], measure: () => measure().then(() => void cards.push(card(2))) };
+  const source: ScorecardSource = { history: () => [...cards], noise: () => undefined, measure: () => measure().then(() => void cards.push(card(2))) };
   return { desk: new ScorecardDesk({ send: (e: ServerEvent) => sent.push(e) } as unknown as Hub, source), sent };
 }
 
@@ -111,5 +111,19 @@ describe('checkoutHead', () => {
     expect((await checkoutHead(dir)).dirty).toBe(false);
     fs.writeFileSync(path.join(dir, 'a.ts'), 'two');
     expect((await checkoutHead(dir)).dirty).toBe(true);
+  });
+});
+
+describe('SavedScorecards.noise', () => {
+  it('reads the latest noise floor saved by --repeat, and skips a file that isn’t one', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-noise-'));
+    const saved = new SavedScorecards(dir, dir);
+    expect(saved.noise()).toBeUndefined();
+    fs.mkdirSync(path.join(dir, 'noise'));
+    const noise = { v: 1, at: 5, commit: 'abc', runs: 5, spread: { 'gate.seconds': { min: 60, max: 70 } } };
+    fs.writeFileSync(path.join(dir, 'noise', '2026-01-01-abc.json'), JSON.stringify(noise));
+    expect(saved.noise()).toEqual(noise);
+    fs.writeFileSync(path.join(dir, 'noise', '2026-01-02-def.json'), '{"v":1,"at":');
+    expect(saved.noise()).toBeUndefined();
   });
 });

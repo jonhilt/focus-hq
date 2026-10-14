@@ -1135,6 +1135,9 @@ describe('AgentManager', () => {
       expect(store.agent(id).pr).toBeUndefined();
       expect(store.agent(id).branch).not.toBe(branch);
       expect(claude.turns[1].req.resumeSessionId).toBeUndefined();
+      // and they remember the climb before, read from GitHub
+      expect(claude.turns[0].req.prompt).toContain('This is your first climb.');
+      expect(claude.turns[1].req.prompt).toContain(`#${pr.number} Narrow the board’s lookups (`);
     });
 
     it('switches climbing off, saying why, when a climb ends without a pull request', async () => {

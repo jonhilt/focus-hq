@@ -245,6 +245,11 @@ export class AgentManager {
   }
 
   /** Looks at the climb under way: starts the next, or switches climbing off when the last ended without a pull request. */
+  /** Where a climb's brief reads main's scorecards and the noise floor from. */
+  climbsMeasuredBy(source: Climbs['scorecards']): void {
+    this.core.climbs.scorecards = source;
+  }
+
   settleClimb(): void {
     this.core.climbs.settle();
   }

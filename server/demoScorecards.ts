@@ -67,6 +67,10 @@ export class DemoScorecards implements ScorecardSource {
     return this.cards.slice(-limit);
   }
 
+  noise(): undefined {
+    return undefined;
+  }
+
   async measure(): Promise<void> {
     await sleep(6000 / this.speed);
     this.cards.push(demoCard(this.cards.length, Date.now()));

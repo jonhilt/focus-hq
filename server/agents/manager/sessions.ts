@@ -9,7 +9,6 @@ import { GitHub, type GitHubError } from '../../github/service';
 import { newId, truncate } from '../../util';
 import { attachAgain, carryOnInNewSession, CLOUD_UNAVAILABLE, fallBackToLocal } from '../cloud';
 import { applyHelperEvent, COMPACT_INSTRUCTIONS, compactInstructions, freshSessionPrompt, hasLeadWork, HELPER_LINGER_MS, leadSystemAppend, sessionGone, sliceLanded } from '../lead';
-import { climbBrief } from '../climb';
 import { carryOnPrompt, conflictsPrompt, issuePrompt, systemAppend } from '../prompts';
 import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
 import { Sessions, Workspace } from '../services';
@@ -86,7 +85,7 @@ export class AgentSessions extends Part {
         case 'conflicts':
           return conflictsPrompt(agent);
         case 'climb':
-          return climbBrief(agent, this.store.ledger, Date.now());
+          return yield* this.core.climbs.brief(agent);
         case 'fix': {
           const review = this.store.reviews.get(prKey(agent.repo, agent.issue.number));
           if (!review?.report) return yield* new ReportGone({ number: agent.issue.number });

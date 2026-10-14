@@ -111,7 +111,8 @@ async function main() {
     pauseMs: config.demo ? 500 : 20_000,
   });
   // main engineering's scorecards, measured on the office's own checkout (the demo's are made up, and kept in memory)
-  const scorecards = new ScorecardDesk(hub, config.demo ? new DemoScorecards() : new SavedScorecards(paths.scorecards, config.root));
+  const scorecardSource = config.demo ? new DemoScorecards() : new SavedScorecards(paths.scorecards, config.root);
+  const scorecards = new ScorecardDesk(hub, scorecardSource);
   // calls to Number One read the ship and start queued goals through the office, which is up by the time anyone calls
   const calls: Calls = new Calls(hub, {
     snapshot: (): Promise<Snapshot> => office.snapshot(),
@@ -125,6 +126,7 @@ async function main() {
   const office = new Office(store, hub, github, previews, planner, numberOne, studio, engineer, scorecards, usage, new Voice(hub, config.demo), calls, await currentVersion());
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
+  office.agents.climbsMeasuredBy(scorecardSource);
   // the climber works on the office's own repo (the demo has none, and climbs its first project's)
   office.ownRepo = config.demo ? undefined : githubRepo(await run('git', ['remote', 'get-url', 'origin'], { cwd: config.root }).catch(() => ''));
   // each agent session is digested into the ledger as it ends: the demo's agents have no transcripts

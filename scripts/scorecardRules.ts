@@ -5,7 +5,7 @@ import path from 'node:path';
 import ts from 'typescript';
 import { frictionGroups, reportCard, type LedgerEvent } from '../shared/ledger';
 import { compared, formatValue, measuredAt } from '../shared/scorecard';
-import type { Metric, MetricFormat as Format, Scorecard, ScorecardSection as Section } from '../shared/types';
+import type { Metric, MetricFormat as Format, Scorecard, ScorecardNoise, ScorecardSection as Section } from '../shared/types';
 
 export type { Metric, Scorecard } from '../shared/types';
 
@@ -233,7 +233,7 @@ export function officeMetrics(events: LedgerEvent[], now: number): { metrics: Me
  */
 export function render(card: Scorecard, previous?: Scorecard, noise?: ScorecardNoise): string {
   const width = Math.max(...card.metrics.map((m) => m.label.length));
-  const when = (c: Scorecard) => new Date(c.at).toISOString().slice(0, 16).replace('T', ' ');
+  const when = (c: { at: number }) => new Date(c.at).toISOString().slice(0, 16).replace('T', ' ');
   const lines = [
     `Scorecard · ${measuredAt(card)} · ${when(card)}`,
     previous ? `Changes since ${measuredAt(previous)}, ${when(previous)} (▲ better, ▼ worse)` : 'No earlier scorecard to compare with',

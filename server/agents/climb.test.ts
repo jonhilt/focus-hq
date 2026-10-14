@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { LedgerEvent } from '../../shared/ledger';
-import { freshClimb, type Agent, type Climb } from '../../shared/types';
-import { climbBrief, climbHome, climbPullRequest, climbStep, githubRepo, openRetroIssues } from './climb';
+import { freshClimb, type Agent, type Climb, type Scorecard } from '../../shared/types';
+import type { PastPullRequest } from '../github/provider';
+import { climbBrief, climbHome, climbLog, climbPullRequest, climbStep, climbTarget, githubRepo, openRetroIssues, ownWords, section } from './climb';
 
 const REPO = 'jonhilt/focus';
 let seq = 0;
@@ -80,6 +81,87 @@ describe('climbBrief', () => {
     const brief = climbBrief(agent, [], 2000);
     expect(brief).toContain('none came up in 3 or more sessions lately');
     expect(brief).toContain('the retro\'s accepted issues: none are open.');
+  });
+});
+
+const pr = (over: Partial<PastPullRequest>): PastPullRequest => ({
+  number: 1, title: 'A climb', body: '', url: 'u', branch: 'focus/climb-aaaaaa', state: 'MERGED', createdAt: '2026-10-01T10:00:00Z', closedAt: '2026-10-01T12:00:00Z', comments: [], ...over,
+});
+
+describe('reading a climb’s pull request', () => {
+  const body = '## Hypothesis\nThe board’s lookups assert six times.\nTarget: `fence.nonNull` 130 → 124\n\n**Problem**\nSix `x!`.\n\n**Solution**\nNarrow.';
+
+  it('finds a section by its heading, in either style the climbers wrote', () => {
+    expect(section(body, 'Hypothesis')).toBe('The board’s lookups assert six times.\nTarget: `fence.nonNull` 130 → 124');
+    expect(section(body, 'Problem')).toBe('Six `x!`.');
+    expect(section(body, 'After')).toBeUndefined();
+  });
+
+  it('reads the target line, with or without code marks and thousands separators', () => {
+    expect(climbTarget(body)).toEqual({ key: 'fence.nonNull', before: 130, after: 124 });
+    expect(climbTarget('Target: tests.total 1,150 -> 1,162')).toEqual({ key: 'tests.total', before: 1150, after: 1162 });
+    expect(climbTarget('Target: none, the scorecard can’t see it')).toBeUndefined();
+  });
+
+  it('keeps the captain’s own words, not the office’s reports posted from the same account, nor a bot’s', () => {
+    const comments = [
+      { author: 'jonhilt', body: '## 🔍 QA report: ✅ Passed\nAll good.' },
+      { author: 'jonhilt', body: '🧭 Lt. Abara, the Focus office’s operations officer, closed this pull request: stuck.' },
+      { author: 'qodo-code-review', body: '<!-- qodo:billing-blocked -->\nTrial ended.' },
+      { author: 'someone-bot', body: 'Beep.' },
+      { author: 'jonhilt', body: 'Not this: the fence matters less than the gate’s time right now.' },
+    ];
+    expect(ownWords(comments, 'jonhilt')).toEqual(['Not this: the fence matters less than the gate’s time right now.']);
+    expect(ownWords(comments, undefined)).toEqual(['Not this: the fence matters less than the gate’s time right now.']);
+  });
+});
+
+describe('climbLog', () => {
+  const metric = (value: number) => ({ section: 'fence' as const, key: 'fence.nonNull', label: 'Non-null assertions (x!)', value, better: 'lower' as const, format: 'count' as const });
+  const main = (at: number, value: number, over: Partial<Scorecard> = {}): Scorecard => ({ v: 1, at, commit: `c${at}`, branch: 'main', dirty: false, metrics: [metric(value)], frictions: [], notes: [], ...over });
+  const merged = pr({ number: 7, title: 'Narrow the board’s lookups', body: '**Hypothesis**\nSix asserts go.\nTarget: fence.nonNull 130 → 124' });
+  const mergedAt = Date.parse('2026-10-01T12:00:00Z');
+
+  it('lists every climb newest first: pull requests in any state, and the climbs that ended without one', () => {
+    const closed = pr({ number: 9, state: 'CLOSED', closedAt: '2026-10-03T00:00:00Z', comments: [{ author: 'jonhilt', body: 'Wrong gap.' }] });
+    const log = climbLog([closed, merged], [{ at: Date.parse('2026-10-02T00:00:00Z'), outcome: 'nothing', why: 'The last climb found nothing to change' }], 'jonhilt');
+    expect(log.map((r) => [r.pr, r.outcome])).toEqual([[9, 'closed'], [undefined, 'nothing'], [7, 'merged']]);
+    expect(log[0].words).toEqual(['Wrong gap.']);
+    expect(log[2]).toMatchObject({ hypothesis: 'Six asserts go. Target: fence.nonNull 130 → 124', target: { key: 'fence.nonNull', after: 124 } });
+  });
+
+  it('falls back to the problem for a climb from before hypotheses', () => {
+    expect(climbLog([pr({ body: '**Problem**\nThe gate is red.\n\n**Solution**\nFix.' })], [], 'jonhilt')[0].hypothesis).toBe('The gate is red.');
+  });
+
+  it('says whether a merged gain has held on main, from clean main scorecards measured after it merged', () => {
+    const held = climbLog([merged], [], 'jonhilt', [main(mergedAt - 1, 140), main(mergedAt + 1, 124)])[0];
+    expect(held.since).toMatchObject({ held: true, now: 124 });
+    const slipped = climbLog([merged], [], 'jonhilt', [main(mergedAt + 1, 124), main(mergedAt + 2, 129)])[0];
+    expect(slipped.since).toMatchObject({ held: false, now: 129 });
+    // nothing measured on main since, or only a branch or uncommitted changes: nothing to say yet
+    expect(climbLog([merged], [], 'jonhilt', [main(mergedAt - 1, 129), main(mergedAt + 1, 129, { branch: 'x' }), main(mergedAt + 2, 129, { dirty: true })])[0].since).toBeUndefined();
+  });
+});
+
+describe('the brief’s memory', () => {
+  const agent = { repo: REPO, baseBranch: 'main', branch: 'focus/climb-abc123' };
+
+  it('lists past climbs with the captain’s words, and asks for a hypothesis with a target before any change', () => {
+    const log = climbLog([pr({ number: 9, title: 'Split the manager', state: 'CLOSED', comments: [{ author: 'jonhilt', body: 'Too big to review.' }] })], [], 'jonhilt');
+    const brief = climbBrief(agent, [], 2000, log);
+    expect(brief).toContain('#9 Split the manager (CLOSED UNMERGED by the captain)');
+    expect(brief).toContain('The captain said: “Too big to review.”');
+    expect(brief).toContain("don't take its gap again unless your **Hypothesis** says what has changed since");
+    expect(brief).toContain('`Target: <metric key> <before> → <expected after>`');
+    expect(brief.indexOf('## Hypothesis')).toBeLessThan(brief.indexOf('## 3. Fix'));
+  });
+
+  it('gives the noise floor when there is one, and how to take one when there isn’t', () => {
+    const noise = { v: 1 as const, at: 0, commit: 'abcdef123', runs: 5, spread: { 'gate.seconds': { min: 100, max: 118.2 }, 'fence.nonNull': { min: 130, max: 130 } } };
+    expect(climbBrief(agent, [], 2000, [], noise)).toContain('noise floor of 5 runs on abcdef12, and marks a change ▲ or ▼ only past it. Claim a gain only where it does. What wobbled: gate.seconds ±9.1.');
+    expect(climbBrief(agent, [], 2000)).toContain('`pnpm run scorecard --repeat 3 --no-save`');
+    expect(climbBrief(agent, [], 2000)).toContain('This is your first climb.');
   });
 });
 
