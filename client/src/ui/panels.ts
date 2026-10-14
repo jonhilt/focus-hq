@@ -12,6 +12,8 @@ export interface PanelOptions {
   body: HTMLElement;
   accent?: string;
   wide?: boolean;
+  /** Fills the window, for what wants every pixel (a lead's screen up close). */
+  full?: boolean;
   /** The panel's views: the sidebar widens to hold their buttons. */
   nav?: PanelNav;
   footer?: HTMLElement;
@@ -36,6 +38,8 @@ export class Panels {
   constructor() {
     window.addEventListener('keydown', (e) => {
       if (!this.overlay) return;
+      // Escape leaves full screen first; the panel stays open behind it
+      if (e.key === 'Escape' && document.fullscreenElement) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         this.close();
@@ -58,7 +62,7 @@ export class Panels {
     const title = typeof opts.title === 'string' ? h('h2', null, opts.title) : opts.title;
     const panel = h(
       'div',
-      { class: `panel${opts.wide ? ' wide' : ''}${opts.docked ? ' docked' : ''}${opts.nav ? ' has-nav' : ''}`, style: opts.accent ? `--accent:${opts.accent}` : undefined },
+      { class: `panel${opts.wide ? ' wide' : ''}${opts.full ? ' full' : ''}${opts.docked ? ' docked' : ''}${opts.nav ? ' has-nav' : ''}`, style: opts.accent ? `--accent:${opts.accent}` : undefined },
       h('div', { class: 'panel-elbow' }),
       h('div', { class: 'panel-head' },
         ...(opts.headerExtra ?? []),

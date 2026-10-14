@@ -41,7 +41,7 @@ export function openClosedGoalShown(ui: Ui, goal: GoalRecord): void {
 function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: () => GoalArtifact[]; questions: () => GoalQuestion[]; live: boolean }): void {
   const { leadId, artifacts, questions, live } = shownBy;
 
-  const body = h('div');
+  const body = h('div', { class: 'shown-body' });
   // each page at the size it was laid out for, scaled to fit its box: up close, it looks as it does on the screen
   const fit = (stage: Element) => {
     const frame = stage.querySelector('iframe');
@@ -54,8 +54,15 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
   const stage = (url: string, title: string, cls = '') => {
     const el = h('div', { class: `artifact-stage${cls}` },
       h('iframe', { src: url, title, style: `width:${ARTIFACT_SIZE.w}px;height:${ARTIFACT_SIZE.h}px`, attrs: { sandbox: 'allow-scripts allow-popups' } }));
+    // on hover, a button to fill the screen with it (Esc comes back); the fit follows it there, since its box resizes
+    el.append(h('button', { class: 'stage-full', title: 'Fill the screen with it (Esc to come back)', onclick: () => toggleFull(el) }, 'Full screen'));
     resized.observe(el);
     return el;
+  };
+  const toggleFull = (el: HTMLElement) => {
+    sound.press();
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else el.requestFullscreen().catch((e: Error) => ui.error(e.message));
   };
   const open = () => (live ? unanswered(questions()) : undefined);
   let picked = open() ? asked(open()!) : latestArtifact(artifacts())?.id ?? '';
@@ -166,6 +173,7 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
         h('div', { class: 'row artifact-head' },
           h('h3', { class: 'grow' }, artifact.title),
           h('small', { class: 'muted' }, `Shown ${when(artifact.at)}`),
+          h('button', { class: 'btn small', title: 'Fill the screen with it (Esc to come back)', onclick: () => toggleFull(shownHere) }, 'Full screen'),
           h('a', { class: 'btn small', href: url, target: '_blank', rel: 'noopener' }, 'Open in a tab'),
         ),
         shownHere,
@@ -176,7 +184,7 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
     body.querySelectorAll('.artifact-stage').forEach(fit);
   };
   render();
-  ui.panels.open({ title, body, accent: LCARS.orange, wide: true, nav });
+  ui.panels.open({ title, body, accent: LCARS.orange, wide: true, full: true, nav });
   // the player's page loads after this, so its first word to the narrator still arrives
   const heard = (e: MessageEvent) => narrator?.heard(e);
   window.addEventListener('message', heard);
@@ -189,7 +197,16 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
       if (agent.id === leadId) render();
     }));
   }
-  ui.panels.own(() => resized.disconnect());
+  // the button on a page filling the screen takes you back
+  const fullChanged = () => body.querySelectorAll('.stage-full').forEach((b) => {
+    b.textContent = b.parentElement === document.fullscreenElement ? 'Exit full screen' : 'Full screen';
+  });
+  document.addEventListener('fullscreenchange', fullChanged);
+  ui.panels.own(() => {
+    resized.disconnect();
+    document.removeEventListener('fullscreenchange', fullChanged);
+    if (document.fullscreenElement) void document.exitFullscreen();
+  });
   // ← and → step through a question's options, unless you're typing
   const keys = (e: KeyboardEvent) => {
     if (!step || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;

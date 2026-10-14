@@ -165,7 +165,8 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
   --gap: 5px;
   --curve: 20px;
   display: grid; grid-template-columns: var(--side) minmax(0, 1fr);
-  grid-template-rows: var(--bar) auto minmax(0, 1fr) auto 16px;
+  /* the views take the room they need, and scroll once there are more than fit */
+  grid-template-rows: var(--bar) minmax(0, auto) minmax(0, 1fr) auto 16px;
   grid-template-areas: 'elbow head' 'nav body' 'side body' 'side foot' 'base base';
   background: #000; border-radius: 14px; padding: 10px;
   box-shadow: 0 0 0 1px #ffffff14, 0 24px 60px #000c;
@@ -173,6 +174,8 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
   animation: pop 0.2s ease-out;
 }
 .panel.wide { width: min(1280px, 100%); height: calc(100vh - 32px); }
+.overlay:has(> .panel.full) { padding: 8px; }
+.panel.full { width: 100%; height: calc(100vh - 16px); max-height: none; }
 /* docked down the right, the world still in view to its left (the studio's chat) */
 .overlay.docked { background: transparent; place-items: stretch end; }
 .panel.docked { width: min(440px, 100%); height: calc(100vh - 32px); }
@@ -238,7 +241,7 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
 .panel-close:hover { background: color-mix(in srgb, var(--accent-c) 70%, #fff); }
 .panel-close:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 /* the sidebar: under the elbow, the views (if any), then a long segment and a short one that turns into the bottom bar */
-.panel-nav { grid-area: nav; display: flex; flex-direction: column; gap: var(--gap); padding-bottom: var(--gap); }
+.panel-nav { grid-area: nav; display: flex; flex-direction: column; gap: var(--gap); padding-bottom: var(--gap); min-height: 0; }
 .panel-nav::before { content: ''; height: 26px; background: var(--accent-c); }
 .panel-side { grid-area: side; display: flex; flex-direction: column; gap: var(--gap); min-height: 0; }
 .panel-side::before { content: ''; flex: 1; background: var(--accent-c); }
@@ -272,7 +275,8 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
 .dialog-foot { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; padding-right: 14px; }
 
 /* a panel's views, down its sidebar: number top left (Alt+number picks it), readout top right, label bottom right */
-.side-nav { display: flex; flex-direction: column; gap: var(--gap); }
+.side-nav { display: flex; flex-direction: column; gap: var(--gap); min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--accent-c) transparent; }
+.side-nav > .nav-btn { flex: none; }
 .nav-btn {
   --tone: var(--lcars-periwinkle);
   display: grid; grid-template-columns: auto 1fr; align-content: space-between; gap: 2px 6px; min-height: 54px; padding: 4px 10px 4px 8px;
@@ -331,10 +335,23 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
 .grow { flex: 1; min-width: 0; }
 .muted { color: var(--muted); }
 
-/* a lead's artifact up close: its title, then the page itself, live */
+/* a lead's artifact up close: its title, then the page itself, live, taking whatever height is left */
+.shown-body { display: flex; flex-direction: column; min-height: 100%; }
+.shown-body > .artifact-stage:not(.option) { flex: 1; height: auto; min-height: 320px; }
 .artifact-head { margin-bottom: 8px; }
 .artifact-head h3 { margin: 0; }
 .artifact-stage { position: relative; height: calc(100vh - 210px); overflow: hidden; }
+/* full screen: the page alone, as large as the screen holds it */
+.artifact-stage:fullscreen { height: 100vh; background: #000; }
+.artifact-stage:fullscreen iframe { border-radius: 0; }
+.stage-full {
+  position: absolute; top: 8px; right: 8px; z-index: 1; opacity: 0; transition: opacity 0.15s;
+  border: none; border-radius: 999px; padding: 4px 12px; cursor: pointer; font: inherit; font-size: 14px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em; background: var(--lcars-gold); color: var(--ink); box-shadow: 0 2px 8px #0008;
+}
+.artifact-stage:hover .stage-full, .stage-full:focus-visible { opacity: 0.92; }
+.artifact-stage:fullscreen .stage-full { opacity: 0; }
+.artifact-stage:fullscreen:hover .stage-full { opacity: 0.6; }
 .artifact-stage.option { height: auto; aspect-ratio: 16 / 10; }
 /* a lead's question up close: one option at a time, large, with its detail and Pick beside it, or all side by side */
 .question-context { margin: 0 0 10px; max-width: 80ch; color: var(--text); }
@@ -343,7 +360,9 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
 .question-note { margin-top: 10px; }
 .question-options.one .question-option { display: none; grid-template-columns: 1fr 280px; gap: 14px; }
 .question-options.one .question-option.current { display: grid; }
-.question-options.one .artifact-stage.option { height: calc(100vh - 330px); aspect-ratio: auto; }
+.shown-body > .question-options.one { flex: 1; min-height: 320px; display: flex; flex-direction: column; }
+.question-options.one .question-option.current { flex: 1; }
+.question-options.one .artifact-stage.option { height: auto; aspect-ratio: auto; }
 .question-options.all { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .question-options.all.n3 { grid-template-columns: 1fr 1fr 1fr; }
 .question-options.all .question-option { display: flex; flex-direction: column; gap: 6px; }
