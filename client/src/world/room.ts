@@ -28,7 +28,7 @@ import { paneUse } from './screenPanes';
 import { Beam } from './transporter';
 import { HULL, LCARS, lcarsSign, workstation } from './starship';
 import { StudioSet } from './studioHall';
-import { keepsHallCollider, STUDIO_HALL, STUDIO_SPAN, studioWalls } from './studio';
+import { keepsHallCollider, type ScenePlayback, STUDIO_HALL, STUDIO_SPAN, studioWalls } from './studio';
 import { FloorGlow, hover } from './hologram';
 import { OVERLAY_LAYER } from './frame';
 import { AHEAD, Portal } from './portal';
@@ -818,7 +818,7 @@ export class VacantHall {
     if (inside) {
       inside.material.map?.dispose();
       inside.material.dispose();
-      inside.material = flat(lcarsSign('Studio', { color: LCARS.gold, sub: 'Make a video with the holodeck computer' }));
+      inside.material = flat(lcarsSign('Studio', { color: LCARS.gold, sub: 'Describe it, and walk round it' }));
     }
     for (const old of [this.floor, this.skin]) {
       this.group.remove(old);
@@ -853,9 +853,19 @@ export class VacantHall {
     return this.studio !== null;
   }
 
+  /** The captain's controls for the studio's scene (spin, pause, scrub, speed), if it's the studio. */
+  get studioPlayback(): ScenePlayback | null {
+    return this.studio?.playback ?? null;
+  }
+
+  /** The scene standing in the studio, if it's the studio and there is one. */
+  get studioScene(): StudioTake | null {
+    return this.studio?.scene ?? null;
+  }
+
   /**
-   * Makes it the studio, where the captain and its computer think a video through (studio.ts): the props make way, the
-   * sign on the deck says so, and the set shows `session` as it stands. `report` tells the office how a take ran.
+   * Makes it the studio, where the captain describes something and its computer builds it (studio.ts): the props make
+   * way, the sign on the deck says so, and the set shows `session` as it stands. `report` tells the office how a scene ran.
    */
   showStudio(session: StudioSession, report: (take: StudioTake, error?: string, sheet?: string) => void): void {
     if (!this.studio) {
@@ -863,7 +873,7 @@ export class VacantHall {
       this.group.add(this.studio.group);
       for (const prop of this.props) prop.visible = false;
       const old = this.sign.material;
-      this.sign.material = flat(lcarsSign('Studio', { color: LCARS.gold, code: this.code, sub: 'Make a video with the holodeck computer' }));
+      this.sign.material = flat(lcarsSign('Studio', { color: LCARS.gold, code: this.code, sub: 'Describe it, and walk round it' }));
       old.map?.dispose();
       old.dispose();
       interactive(this.studio.wall, { kind: 'studio' }, () => 'Talk to the holodeck computer');

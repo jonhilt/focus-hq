@@ -99,7 +99,7 @@ Then on board:
 - [The scorecard](docs/scorecard.md): the gate, the fence and the office measured, and compared over time
 - [How the 3D view runs](docs/performance.md): frame stats (`?stats=1`) and their log, and `pnpm run perf`
 - [CRAP scores](docs/crap.md): which functions are riskiest to change, from complexity and test coverage
-- [The TV studio](docs/studio.md): filming episodes on the ship from a scene script, in demo mode
+- [The TV studio](docs/studio.md): filming episodes on the ship from a scene script, in demo mode, and the studio holodeck, where you describe something and walk round it as a moving 3D scene
 - [Focus's own interface style](docs/interface-style.md): moving off LCARS: where it lives, the line we hold, and the designs tried
 - [CLAUDE.md](CLAUDE.md): commands and conventions for the agents building Focus
 - [Goals plan](docs/goals-plan.md) and [Effect assessment](docs/effect-assessment.md): design notes

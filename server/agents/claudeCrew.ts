@@ -217,8 +217,9 @@ export class ClaudeNumberOne implements NumberOneOfficer {
 }
 
 /**
- * The studio holodeck's computer: one session per video, in a folder of its own with none of the ship's code, that
- * reads the web for the video's loose threads and builds with its own tools: the video, and takes on the floor.
+ * The studio holodeck's computer: one session per conversation, in a folder of its own with none of the ship's code,
+ * that builds what the captain describes as scenes in the middle of the hall, reading the web and Claude Code sessions
+ * when it needs to.
  */
 export class ClaudeStudio implements StudioOfficer {
   async turn(req: StudioTurn, activity: (text: string) => void): Promise<StudioReply> {
@@ -226,7 +227,7 @@ export class ClaudeStudio implements StudioOfficer {
     const result = await runReadOnly({
       cwd: paths.studio,
       systemAppend: studioSystemPrompt(),
-      prompt: studioPrompt(req.messages, !!req.resumeSessionId, req.video, req.pitches),
+      prompt: studioPrompt(req.messages, !!req.resumeSessionId, req.takes),
       settings: req.settings,
       model: req.model || undefined,
       effort: req.effort,
@@ -236,8 +237,8 @@ export class ClaudeStudio implements StudioOfficer {
       resume: req.resumeSessionId,
       tools: {
         server: studioServer(req),
-        names: ['video', 'pitch', 'take', 'retime_take', 'drop_take', 'sessions', 'session_timeline'],
-        activity: (name) => ({ sessions: 'Looking through Claude Code sessions', session_timeline: 'Reading a session', video: 'Updating the video', pitch: 'Pitching ways to show it', take: 'Staging a take', retime_take: 'Retiming a take', drop_take: 'Clearing a take' })[name] ?? name,
+        names: ['scene', 'retime_scene', 'drop_scene', 'sessions', 'session_timeline'],
+        activity: (name) => ({ sessions: 'Looking through Claude Code sessions', session_timeline: 'Reading a session', scene: 'Building the scene', retime_scene: 'Retiming the scene', drop_scene: 'Clearing a scene' })[name] ?? name,
       },
     });
     return { text: result.text, sessionId: result.sessionId, costUsd: result.costUsd, model: result.model };
@@ -253,10 +254,10 @@ function sessionList(found: SessionSummary[]): string {
   }).join('\n');
 }
 
-/** A take's named phases, as its tools send them. */
+/** A scene's named phases, as its tools send them. */
 const PHASES = z.record(z.string(), z.tuple([z.number(), z.number()]));
 
-/** The studio computer's own tools: the video it's building with the captain, and the takes on the holodeck's floor. */
+/** The studio computer's own tools: the scenes it builds in the middle of the hall, and reading Claude Code sessions. */
 function studioServer(req: StudioTurn): McpSdkServerConfigWithInstance {
   const answer = async (run: () => string | Promise<string>) => {
     try {
@@ -265,7 +266,7 @@ function studioServer(req: StudioTurn): McpSdkServerConfigWithInstance {
       return { content: [{ type: 'text' as const, text: errorMessage(err) }], isError: true };
     }
   };
-  // a take's answer carries its contact sheet, for the computer to look at
+  // a scene's answer carries its contact sheet, for the computer to look at
   const staged = async (run: () => Promise<Staged>) => {
     try {
       const { text, sheet } = await run();
@@ -280,66 +281,31 @@ function studioServer(req: StudioTurn): McpSdkServerConfigWithInstance {
     alwaysLoad: true,
     tools: [
       tool(
-        'video',
-        'Update the video on the holodeck: send only what changes. Each field replaces what was there, except thread and closeThread, which log and close one loose thread.',
+        'scene',
+        'Build a scene in the middle of the holodeck (the kit and render(t) are in your instructions): it stands there at once, in place of the last. A new id makes a new scene; an id you\'ve used before swaps that one in, changed. It tells you whether it runs in the room, and hands back a contact sheet of it to look at before you tell the captain it\'s ready.',
         {
-          premise: z.string().max(S.premise).optional().describe(`The basic idea, in a sentence or two (at most ${S.premise} characters): the first thing to send.`),
-          takeaway: z.string().max(S.takeaway).optional().describe(`What the viewer should come away with (at most ${S.takeaway} characters).`),
-          beats: z.array(z.object({
-            title: z.string().max(S.beatTitle).describe(`The beat in a few words (at most ${S.beatTitle} characters).`),
-            point: z.string().max(S.point).optional().describe(`What it gets across, in a line (at most ${S.point} characters).`),
-            lines: z.string().max(S.lines).optional().describe(`What's said over it so far: the script (at most ${S.lines} characters).`),
-          })).max(S.beats).optional().describe(`The narrative beats in order, all of them (at most ${S.beats}); send them all again when one changes.`),
-          thread: z.string().max(S.thread).optional().describe(`Log one loose thread, as a question (at most ${S.thread} characters, ${S.open} open at once). It gets an id (t1, t2…).`),
-          closeThread: z.object({
-            id: z.string().describe('The thread\'s id, like t2.'),
-            as: z.enum(['answered', 'dropped']),
-            answer: z.string().max(S.answer).optional().describe('The answer, in a line or two.'),
-          }).optional(),
-        },
-        (input) => answer(() => req.tools.video(input)),
-      ),
-      tool(
-        'pitch',
-        'Pitch ways to show a beat before building any: they show in the captain\'s chat, numbered 1, 2, 3…, for them to pick, mix or push back. Pitching a beat again replaces its last pitches.',
-        {
-          beat: z.number().int().optional().describe('Which beat they\'re for, numbered from 0; leave out for the video as a whole.'),
-          pitches: z.array(z.object({
-            title: z.string().max(S.pitchTitle).describe(`A few words naming it (at most ${S.pitchTitle} characters).`),
-            metaphor: z.string().max(S.metaphor).describe(`What the concept is shown as, in one sentence: what moves, and what that movement means (at most ${S.metaphor} characters).`),
-            scale: z.string().max(S.pitchScale).describe(`How big it is and where it stands: a tabletop model, the room round the captain, hall-sized overhead… (at most ${S.pitchScale} characters).`),
-            check: z.string().max(S.pitchCheck).optional().describe(`How it holds up against what's true (the real numbers and limits), and where it bends (at most ${S.pitchCheck} characters).`),
-          })).min(S.minPitches).max(S.maxPitches).describe(`${S.minPitches} to ${S.maxPitches} ways, different in kind and scale, not variations on one scene.`),
-        },
-        (input) => answer(() => req.tools.pitch(input)),
-      ),
-      tool(
-        'take',
-        'Stage a take on the holodeck floor (the kit and render(t) are in your instructions): a new id adds one beside the others, an id already there swaps it in place. It tells you whether it runs in the room, and hands back a contact sheet of it to look at before you show the captain.',
-        {
-          id: z.string().describe('A single letter, a, b, c…: the captain refers to takes by it.'),
-          label: z.string().max(S.takeLabel).describe('A few words naming the idea.'),
-          metaphor: z.string().max(S.metaphor).describe('Decided before any script: what the concept is shown as, in one sentence, saying what moves and what that movement means.'),
-          detail: z.string().max(S.takeDetail).optional().describe('What it tries, and what it trades off, in a line.'),
-          beat: z.number().int().optional().describe('Which beat it shows, numbered from 0.'),
+          id: z.string().describe('A short lowercase name, like fan-out or tides: the captain can call it back by it.'),
+          label: z.string().max(S.takeLabel).describe('A few words naming it.'),
+          metaphor: z.string().max(S.metaphor).describe('Decided before any script: what it shows the idea as, in one sentence, saying what moves and what that movement means.'),
+          detail: z.string().max(S.takeDetail).optional().describe('What it simplifies or leaves out, in a line.'),
           seconds: z.number().min(S.minSeconds).max(S.maxSeconds).describe('How long it plays before it loops.'),
-          phases: PHASES.optional().describe('Its named phases, like {"dispatch": [0, 2], "work": [2, 6]}: time the script by phase(t, name), so retime_take can change the timing later.'),
+          phases: PHASES.optional().describe('Its named phases, like {"dispatch": [0, 2], "work": [2, 6]}: time the script by phase(t, name), so retime_scene can change the timing later.'),
           script: z.string().max(S.script).describe('Makes the cast with kit, then defines function render(t).'),
         },
         (input) => staged(() => req.tools.take(input)),
       ),
       tool(
-        'retime_take',
-        'Change a take\'s timing without touching its script: a speed for the whole take (0.5 is half speed), or new seconds and phases. The quickest way to do "make b slower" or "hold the fold longer".',
+        'retime_scene',
+        'Change a scene\'s timing without touching its script, and bring it back to the middle of the hall: a speed for the whole scene (0.5 is half speed), or new seconds and phases. The quickest way to do "slower" or "hold the fold longer".',
         {
           id: z.string(),
-          speed: z.number().min(0.1).max(10).optional().describe('Plays the whole take, and every phase, at this speed: 0.5 takes twice as long.'),
+          speed: z.number().min(0.1).max(10).optional().describe('Plays the whole scene, and every phase, at this speed: 0.5 takes twice as long.'),
           seconds: z.number().min(S.minSeconds).max(S.maxSeconds).optional().describe('Its new length.'),
           phases: PHASES.optional().describe('All its phases again, with their new times.'),
         },
         (input) => staged(() => req.tools.retime(input)),
       ),
-      tool('drop_take', 'Take a take off the floor.', { id: z.string() }, ({ id }) => answer(() => req.tools.dropTake(id))),
+      tool('drop_scene', 'Forget a scene you\'ve built.', { id: z.string() }, ({ id }) => answer(() => req.tools.dropTake(id))),
       tool(
         'sessions',
         'The Claude Code sessions on the captain\'s Mac, newest first: each with its id, Claude Code\'s title for it, what was first asked, when, its size and how many agents it ran. Search by words from its title, first ask or project folder.',

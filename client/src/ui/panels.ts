@@ -57,6 +57,11 @@ export class Panels {
     return this.overlay !== null;
   }
 
+  /** Whether the open panel is docked, leaving the world in view (the studio's chat). */
+  get docked(): boolean {
+    return this.overlay?.classList.contains('docked') ?? false;
+  }
+
   open(opts: PanelOptions): void {
     this.close(false);
     const title = typeof opts.title === 'string' ? h('h2', null, opts.title) : opts.title;

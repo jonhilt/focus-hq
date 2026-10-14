@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { columns } from '../../../shared/board';
 import { holodecks } from '../../../shared/hidden';
-import type { Project } from '../../../shared/types';
+import type { Project, StudioTake } from '../../../shared/types';
 import { ACTIVE_STATUSES } from '../../../shared/types';
 import { state } from '../net/state';
 import { Builder } from './builder';
@@ -18,6 +18,7 @@ import { TrainingConsole } from './trainingConsole';
 import { AHEAD, type Portal, type PortalEnd } from './portal';
 import { type Region, regionAt, shown } from './regions';
 import { buildHiddenRoom, ProjectRoom, VacantHall } from './room';
+import type { ScenePlayback } from './studio';
 import { api } from '../net/api';
 import type { Scenery } from './scenery';
 import { LCARS, LCARS_FONT, lcarsFrame, type SlidingDoors } from './starship';
@@ -53,6 +54,16 @@ export class World {
   readonly root = new THREE.Group();
   colliders: Box2[] = [];
   rooms = new Map<string, ProjectRoom>();
+  /** The captain's controls for the scene in the studio, if there's a studio. */
+  studioPlayback(): ScenePlayback | null {
+    return [...this.vacant.values()][0]?.studioPlayback ?? null;
+  }
+
+  /** The scene standing in the studio, if there is one. */
+  studioScene(): StudioTake | null {
+    return [...this.vacant.values()][0]?.studioScene ?? null;
+  }
+
   /** The vacant holodecks' empty halls, by slot. */
   private vacant = new Map<number, VacantHall>();
   engineering: EngineeringStation | null = null;
@@ -461,7 +472,7 @@ export class World {
   }
 
   /**
-   * The studio: the first vacant holodeck, where the captain and its computer think a video through (studio.ts). It
+   * The studio: the first vacant holodeck, where the captain describes something and its computer builds it (studio.ts). It
    * stays the studio while the ship has a vacant holodeck; a new project takes the next one.
    */
   syncStudio(): void {

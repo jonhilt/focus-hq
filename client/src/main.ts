@@ -42,6 +42,7 @@ import { HolodeckDeck } from './world/holodeckDeck';
 import { COMMAND_DECK, ENGINEERING_DECK, SUN_POSITION } from './world/layout';
 import { setMerging } from './world/merge';
 import { type Ship, World } from './world/office';
+import { SCRUB_STEP } from './world/studio';
 import { SceneRenderer } from './world/sceneRenderer';
 import { adapt, FEWEST, initialResolution, levels, WINDOW } from './resolution';
 import { FrameStats } from './ui/frameStats';
@@ -162,7 +163,7 @@ async function main() {
     openNewIssue: (projectId) => openNewIssuePanel(ui, projectId),
     openQa: (projectId) => openQaPanel(ui, projectId),
     openNumberOne: () => openNumberOnePanel(ui),
-    openStudio: (beat) => openStudioChat(ui, beat),
+    openStudio: () => openStudioChat(ui),
     openEngineering: () => openEngineeringPanel(ui),
     openLedger: (subject) => openLedgerPanel(ui, subject),
     showOnMsd: (what) => world.putOnMsd(
@@ -542,7 +543,7 @@ async function main() {
         ui.openManager('new-project');
         break;
       case 'studio':
-        ui.openStudio(i.beat);
+        ui.openStudio();
         break;
       case 'energise':
         sound.press();
@@ -554,8 +555,36 @@ async function main() {
     }
   };
 
+  // in the studio, the scene in the middle of the hall is yours to play: hold Q or R to spin it, P pauses, [ and ]
+  // scrub, - and = change its speed (the chat can be docked open meanwhile, but not typed in)
+  const studioPlayback = () => (world.locationOf(camera.position).label === 'Studio' ? world.studioPlayback() : null);
+  const sceneKey = (code: string, repeat: boolean): boolean => {
+    const playback = studioPlayback();
+    const seconds = world.studioScene()?.seconds;
+    if (!playback || seconds === undefined) return false;
+    if (code === 'KeyQ' || code === 'KeyR') playback.turning = code === 'KeyQ' ? 1 : -1;
+    else if (code === 'KeyP' && !repeat) playback.paused = !playback.paused;
+    else if (code === 'BracketLeft' || code === 'BracketRight') playback.scrub(code === 'BracketLeft' ? -SCRUB_STEP : SCRUB_STEP, seconds);
+    else if ((code === 'Minus' || code === 'Equal') && !repeat) playback.stepSpeed(code === 'Minus' ? -1 : 1);
+    else return false;
+    return true;
+  };
+  window.addEventListener('keyup', (e) => {
+    const playback = world.studioPlayback();
+    if (playback && (e.code === 'KeyQ' || e.code === 'KeyR')) playback.turning = 0;
+  });
+  window.addEventListener('blur', () => {
+    const playback = world.studioPlayback();
+    if (playback) playback.turning = 0;
+  });
+
   window.addEventListener('keydown', (e) => {
     if (!started || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+    if (panels.isOpen && !panels.docked) return;
+    if (sceneKey(e.code, e.repeat)) {
+      e.preventDefault();
+      return;
+    }
     if (panels.isOpen) return;
     if (steps.key(e.code)) return;
     const hotkeys: Record<string, (() => void) | undefined> = {

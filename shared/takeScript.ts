@@ -74,3 +74,8 @@ export function takeSyntaxError(script: string): string | undefined {
     return err instanceof Error ? err.message : String(err);
   }
 }
+
+/** The scene standing in the hall: the one staged or retimed last. */
+export function currentTake<T extends { at: number }>(takes: readonly T[]): T | undefined {
+  return takes.reduce<T | undefined>((last, t) => (!last || t.at >= last.at ? t : last), undefined);
+}

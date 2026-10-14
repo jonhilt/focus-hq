@@ -41,8 +41,7 @@ export interface Ui {
   /** The ready room's chat with Number One. */
   openNumberOne(): void;
   /** The studio holodeck's chat with its computer, docked so the room stays in view. */
-  /** The studio's chat, or its script open at beat `beat` (from 0). */
-  openStudio(beat?: number): void;
+  openStudio(): void;
   /** The engineering station: the ledger's report card and the chief engineer's retro. */
   openEngineering(): void;
   /** Main engineering's master systems table: the ledger's log, and a trace of a pull request or goal. */

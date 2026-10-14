@@ -3,12 +3,12 @@ import type { StudioTake } from '../../../shared/types';
 import { TAKE_PARAMS, takeBody, takeHelpers } from '../../../shared/takeScript';
 import { makeCanvas } from './canvas';
 import { LCARS, LCARS_FONT } from './starship';
-import { sheetMoments, TAKE_PLOT } from './studio';
+import { SCENE_STAGE, sheetMoments } from './studio';
 import { TakeKit } from './takeKit';
 
-// A take's contact sheet: the take from where the captain stands, at a few moments through it (studio.ts:
-// sheetMoments), in one picture the room sends the office, so the computer can look at what it made before the
-// captain does (docs/studio.md). It runs the take's script afresh, in a scene of its own, on a renderer of its own,
+// A scene's contact sheet: the scene at a few moments through it (studio.ts: sheetMoments), each from a little further
+// round it, as the captain would see it walking round, in one picture the room sends the office, so the computer can
+// look at what it made before the captain does (docs/studio.md). It runs the take's script afresh, in a scene of its own, on a renderer of its own,
 // so the room's frame and the take playing on its floor are left as they were.
 
 type Render = (t: number) => void;
@@ -27,13 +27,12 @@ export function runTake(take: StudioTake, kit: TakeKit): Render {
 /** Each moment's picture, and the sheet of them three by two. */
 const TILE = { w: 512, h: 320 };
 const COLUMNS = 3;
-/** Where the captain stands to look at a take: in front of its floor, a little above eye height, its floor filling the picture. */
-const EYE = new THREE.Vector3(0, 3.4, 6.6);
-const LOOK = new THREE.Vector3(0, 0.9, -0.6);
+/** Where the captain looks at a scene from: out beyond its stage, a little above eye height, swinging round from its left to its right through the moments. */
+const VIEW = { distance: 13, height: 4.2, look: new THREE.Vector3(0, 1.6, 0), sweep: THREE.MathUtils.degToRad(100) };
 
 let renderer: THREE.WebGLRenderer | null = null;
 
-/** A JPEG data URL of `take` at its sheet's moments, or undefined if it can't be drawn (no WebGL, or the script throws). */
+/** A JPEG data URL of the scene `take` at its sheet's moments, or undefined if it can't be drawn (no WebGL, or the script throws). */
 export function contactSheet(take: StudioTake): string | undefined {
   const scene = new THREE.Scene();
   const root = new THREE.Group();
@@ -47,14 +46,15 @@ export function contactSheet(take: StudioTake): string | undefined {
     scene.add(root);
     const render = runTake(take, kit);
     const camera = new THREE.PerspectiveCamera(52, TILE.w / TILE.h, 0.1, 100);
-    camera.position.copy(EYE);
-    camera.lookAt(LOOK);
     camera.layers.enableAll();
     const moments = sheetMoments(take.seconds, take.phases);
     const { canvas, ctx } = makeCanvas(TILE.w * COLUMNS, TILE.h * Math.ceil(moments.length / COLUMNS));
     moments.forEach(({ t, label }, i) => {
+      const yaw = moments.length > 1 ? -VIEW.sweep / 2 + (VIEW.sweep * i) / (moments.length - 1) : 0;
+      camera.position.set(Math.sin(yaw) * VIEW.distance, VIEW.height, Math.cos(yaw) * VIEW.distance);
+      camera.lookAt(VIEW.look);
       render(t);
-      kit.update(t, EYE.length());
+      kit.update(t, VIEW.distance);
       renderer!.render(scene, camera);
       const x = (i % COLUMNS) * TILE.w;
       const y = Math.floor(i / COLUMNS) * TILE.h;
@@ -74,14 +74,14 @@ export function contactSheet(take: StudioTake): string | undefined {
   }
 }
 
-/** The holodeck round it: navy, the yellow grid, the take's floor, and light like the room's. */
+/** The holodeck round it: navy, the yellow grid, the scene's round stage, and light like the room's. */
 function stage(scene: THREE.Scene): void {
   scene.background = new THREE.Color('#141a33');
-  const grid = new THREE.GridHelper(24, 24, LCARS.gold, LCARS.gold);
+  const grid = new THREE.GridHelper(34, 34, LCARS.gold, LCARS.gold);
   (grid.material as THREE.Material).transparent = true;
   (grid.material as THREE.Material).opacity = 0.5;
   scene.add(grid);
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(TAKE_PLOT.width, TAKE_PLOT.depth).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#1b2a55' }));
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(SCENE_STAGE.radius, 64).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#1b2a55' }));
   floor.position.y = 0.005;
   scene.add(floor);
   scene.add(new THREE.HemisphereLight('#ffffff', '#d9c7a8', 1.9));

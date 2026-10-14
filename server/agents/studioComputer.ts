@@ -1,29 +1,25 @@
-import type { Effort, Settings, StudioPitches, StudioSession, StudioTake } from '../../shared/types';
+import type { Effort, Settings, StudioSession, StudioTake } from '../../shared/types';
 import type { Hub } from '../hub';
 import { freshStudio, type Store, type StoredStudio } from '../store';
 import { errorMessage, truncate } from '../util';
-import { applyPitch, applyRetime, applyTake, applyVideo, type PitchInput, type RetimeInput, type TakeInput, type VideoInput, videoReply } from './studio';
+import { applyRetime, applyTake, type RetimeInput, type TakeInput } from './studio';
 
-// The studio holodeck's computer: the captain's conversation with a Claude session of its own (not a goal's lead) about
-// a video, and the tools it builds with, the video (premise, beats, threads) and takes on the holodeck's floor. One
-// conversation, one turn at a time, each resuming the same session, so it survives a restart. Number One's chat is the
-// pattern (numberOne.ts).
+// The studio holodeck's computer: the captain's conversation with a Claude session of its own (not a goal's lead), and
+// the tools it builds with: scenes (takes, in the code) that stand in the middle of the hall. One conversation, one turn
+// at a time, each resuming the same session, so it survives a restart. Number One's chat is the pattern (numberOne.ts).
 
-/** What staging a take says back: how it ran in the room, and the room's contact sheet of it, if it made one. */
+/** What staging a scene says back: how it ran in the room, and the room's contact sheet of it, if it made one. */
 export interface Staged {
   text: string;
-  /** A JPEG of the take at a few moments, from where the captain stands, base64 (no data: prefix). */
+  /** A JPEG of the scene at a few moments, from round where the captain stands, base64 (no data: prefix). */
   sheet?: string;
 }
 
 /** The computer's tools, as its session calls them: each says what happened, in words, or throws why it didn't. */
 export interface StudioTools {
-  video(input: VideoInput): string;
-  /** Pitches ways to show a beat, for the captain to pick from before anything's built. */
-  pitch(input: PitchInput): string;
-  /** Stages a take, and waits a moment for the room to say whether it runs, and to send its contact sheet. */
+  /** Stages a scene, and waits a moment for the room to say whether it runs, and to send its contact sheet. */
   take(input: TakeInput): Promise<Staged>;
-  /** Retimes a take without touching its script, and waits as take does. */
+  /** Retimes a scene without touching its script, and waits as take does. */
   retime(input: RetimeInput): Promise<Staged>;
   dropTake(id: string): string;
 }
@@ -36,9 +32,8 @@ export interface RoomReport {
 
 export interface StudioTurn {
   messages: StudioSession['messages'];
-  video: StudioSession['video'];
-  /** What it's pitched so far, for a session that starts afresh. */
-  pitches: StudioPitches[];
+  /** The scenes it's built, for a session that starts afresh. */
+  takes: StudioTake[];
   /** The session so far; missing on the first turn of a conversation. */
   resumeSessionId?: string;
   settings: Settings;
@@ -62,7 +57,7 @@ export interface StudioOfficer {
   turn(req: StudioTurn, activity: (text: string) => void): Promise<StudioReply>;
 }
 
-/** How long a staged take waits for the room to run it, and draw its contact sheet, before saying no one's watching. */
+/** How long a staged scene waits for the room to run it, and draw its contact sheet, before saying no one's watching. */
 const REPORT_WAIT_MS = 8000;
 /** A contact sheet is a JPEG, base64, of at most this many characters (about 1.5 MB). */
 const SHEET_MAX = 2_000_000;
@@ -104,8 +99,8 @@ export class StudioComputer {
     return publicView(session);
   }
 
-  /** Clears the studio for a new video (stopping the computer mid-thought if need be): the next message starts a fresh session. */
-  newVideo(): StudioSession {
+  /** Clears the studio, its conversation and scenes (stopping the computer mid-thought if need be): the next message starts a fresh session. */
+  startOver(): StudioSession {
     this.running?.abort();
     this.running = null;
     const { model, effort } = this.store.studio;
@@ -141,30 +136,12 @@ export class StudioComputer {
 
   private tools(session: StoredStudio, current: () => boolean): StudioTools {
     const live = () => {
-      if (!current()) throw new Error('The studio was cleared for a new video');
+      if (!current()) throw new Error('The studio was cleared');
     };
     return {
-      video: (input) => {
-        live();
-        const next = applyVideo(session.video, input, Date.now());
-        if ('error' in next) throw new Error(next.error);
-        const reply = videoReply(session.video, next);
-        session.video = next;
-        this.changed();
-        return reply;
-      },
-      pitch: (input) => {
-        live();
-        const next = applyPitch(session.pitches ?? [], input, session.video?.beats.length ?? 0, Date.now());
-        if ('error' in next) throw new Error(next.error);
-        session.pitches = next;
-        this.changed();
-        const what = input.beat !== undefined ? `beat ${input.beat + 1} (as the captain counts)` : 'the video';
-        return `The captain sees ${input.pitches.length} ways to show ${what}, numbered 1 to ${input.pitches.length}. Stop here and let them pick, mix or push back before you stage any.`;
-      },
       take: (input) => {
         live();
-        return this.stage(session, input.id, applyTake(session.takes, input, session.video?.beats.length ?? 0, Date.now()));
+        return this.stage(session, input.id, applyTake(session.takes, input, Date.now()));
       },
       retime: async (input) => {
         live();
@@ -175,32 +152,32 @@ export class StudioComputer {
       dropTake: (id) => {
         live();
         const found = session.takes.find((t) => t.id === id.trim().toLowerCase());
-        if (!found) throw new Error(`There's no take ${id}. On the floor: ${session.takes.map((t) => t.id).join(', ') || 'none'}.`);
+        if (!found) throw new Error(`There's no scene ${id}. Kept: ${session.takes.map((t) => t.id).join(', ') || 'none'}.`);
         session.takes = session.takes.filter((t) => t !== found);
         this.changed();
-        return `Take ${found.id} is off the floor.`;
+        return `Scene ${found.id} is gone.`;
       },
     };
   }
 
-  /** Puts the takes on the floor after staging (or retiming) take `id`, and says how it ran in the room, with its contact sheet. */
+  /** Keeps the scenes after staging (or retiming) scene `id`, which stands in the hall, and says how it ran there, with its contact sheet. */
   private async stage(session: StoredStudio, id: string, next: StudioTake[] | { error: string }): Promise<Staged> {
     if ('error' in next) throw new Error(next.error);
     session.takes = next;
     const take = next.find((t) => t.id === id.trim().toLowerCase());
-    if (!take) throw new Error(`There's no take ${id} on the floor`);
+    if (!take) throw new Error(`There's no scene ${id}`);
     const heard = this.heard(take);
     this.changed();
     const report = await heard;
-    const name = `Take ${take.id} (version ${take.version})`;
-    if (!report) return { text: `${name} is on the holodeck floor, but no one's in the studio to run it yet: it'll play when the captain walks in.` };
-    if (report.error) return { text: `${name} is on the floor, but it failed in the room: ${report.error}. Fix the script and stage it again under the same id.` };
+    const name = `Scene ${take.id} (version ${take.version})`;
+    if (!report) return { text: `${name} stands in the hall, but no one's in the studio to run it yet: it'll play when the captain walks in.` };
+    if (report.error) return { text: `${name} stands in the hall, but it failed there: ${report.error}. Fix the script and stage it again under the same id.` };
     const sheet = sheetData(report.sheet);
-    if (!sheet) return { text: `${name} is playing on the holodeck floor (the room sent no contact sheet this time).` };
-    return { text: `${name} is playing on the holodeck floor. Here's its contact sheet, from where the captain stands, at the moments marked: look hard at it before you tell the captain it's ready.`, sheet };
+    if (!sheet) return { text: `${name} is playing in the middle of the hall (the room sent no contact sheet this time).` };
+    return { text: `${name} is playing in the middle of the hall. Here's its contact sheet, walking round it from where the captain stands, at the moments marked: look hard at it before you tell the captain it's ready.`, sheet };
   }
 
-  /** What the room says about a take once it's run it, or null if no one ran it in time. */
+  /** What the room says about a scene once it's run it, or null if no one ran it in time. */
   private heard(take: StudioTake): Promise<RoomReport | null> {
     const k = key(take.id, take.version);
     return new Promise((resolve) => {
@@ -216,14 +193,14 @@ export class StudioComputer {
     });
   }
 
-  /** Runs the computer's turn in the background; a turn superseded by a new video drops its reply. */
+  /** Runs the computer's turn in the background; a turn superseded by starting over drops its reply. */
   private run(session: StoredStudio): void {
     const abort = new AbortController();
     this.running = abort;
     const current = () => this.store.studio === session && this.running === abort;
     void this.officer
       .turn(
-        { messages: [...session.messages], video: session.video, pitches: session.pitches ?? [], resumeSessionId: session.sessionId, settings: this.store.settings, model: session.model, effort: session.effort, signal: abort.signal, tools: this.tools(session, current) },
+        { messages: [...session.messages], takes: [...session.takes], resumeSessionId: session.sessionId, settings: this.store.settings, model: session.model, effort: session.effort, signal: abort.signal, tools: this.tools(session, current) },
         (text) => {
           if (!current() || !text) return;
           session.activity = truncate(text, 120);

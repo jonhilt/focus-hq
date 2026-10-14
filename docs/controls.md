@@ -13,3 +13,5 @@
 | <kbd>1</kbd> | talk to Number One |
 | <kbd>Alt</kbd>+<kbd>1</kbd>… | pick a view from a panel's sidebar by its number (an agent's browser, goal, tasks or crew; the ready room's sections) |
 | <kbd>Esc</kbd> | pause / close a panel |
+| In the [studio](studio.md#the-studio-holodeck): <kbd>Enter</kbd> | talk to the holodeck computer |
+| In the studio: hold <kbd>Q</kbd> / <kbd>R</kbd>, <kbd>P</kbd>, <kbd>[</kbd> / <kbd>]</kbd>, <kbd>-</kbd> / <kbd>=</kbd> | spin the scene, pause it, scrub through it, slow it down or speed it up |

@@ -186,24 +186,45 @@ it.
 
 ## The studio holodeck
 
-Before a video is filmed it's thought through, and that happens standing in an empty holodeck with its own computer:
-a Claude session that belongs to the studio, not to a goal or a project. The first vacant holodeck is the studio (the
-sign on its door says so); walk in, press **Enter** (or **E** on the far wall's hologram), and say what the video's
-about. The studio is bigger on the inside than a training hall: it keeps the hall's doorway but sets the rest of its
-shell aside for a grid of its own, its round wall 17 m from the middle (a training hall's is 11 m) and its ceiling 8 m
-up, with nothing on the floor to walk into but its walls (`STUDIO_HALL` and `studioWalls` in
-`client/src/world/studio.ts`, `VacantHall.enlarge` in `room.ts`). The chat docks down the right, so the room stays in
-view while the computer builds:
+Walk into the studio, say what you want to see, and the holodeck builds it in front of you as a moving 3D scene you can
+walk round. It's an empty holodeck with a computer of its own: a Claude session that belongs to the studio, not to a goal
+or a project. The first vacant holodeck is the studio (the sign on its door says so); walk in, press **Enter** (or **E** on
+the far wall's hologram), and describe something: a mechanism, a process, a system, a metaphor for one. The studio is
+bigger on the inside than a training hall: it keeps the hall's doorway but sets the rest of its shell aside for a grid of
+its own, its round wall 17 m from the middle (a training hall's is 11 m) and its ceiling 8 m up, with nothing on the
+floor to walk into but its walls (`STUDIO_HALL` and `studioWalls` in `client/src/world/studio.ts`,
+`VacantHall.enlarge` in `room.ts`). The chat docks down the right, so the room stays in view while the computer builds.
 
-- **The video** (its `video` tool, `server/agents/studio.ts`): the premise on the far wall in a gold-edged hologram,
-  with what the viewer should come away with; the narrative beats in numbered cards round under it, each with the lines
-  said over it as the script builds up (**E** on a card, from anywhere on the floor, opens the chat's **Script** tab at that beat, with the whole
-  video written out to read and narrate from); and each loose thread (something neither of you is sure how it works, a
-  fact to check) hanging as a warm light in a row across the hall, just over your head between the doorway and the
-  takes, its question on a tag you can read from where you come in. The computer
-  reads the web to answer them: an answered thread turns green and rises away, a dropped one dims and sinks.
-- **Real sessions** (its `sessions` and `session_timeline` tools): for a video about something that really happened in
-  Claude Code, the computer reads the session itself. It can read Claude Code's own session transcripts on this Mac
+- **Scenes** (its `scene` tool, `server/agents/studio.ts`): the computer builds straight away from what you said, rather
+  than pitching or asking first, and the scene stands on a round stage 6 m across the middle of the hall
+  (`SCENE_STAGE`), up to the ceiling, its front to the doorway. Motion is the point: it decides first what moves and
+  what that movement means, in one sentence (the scene's metaphor), then writes a script against the studio's kit
+  (`client/src/world/takeKit.ts`: crew standing or at consoles, boxes, balls, transporter pads, glowing lines, floating
+  labels and a beam-in effect) and three.js itself (instancing for dozens of things, tracks, swarms, see-through
+  containers, text on surfaces). It's asked to build in the round, since you'll see it from every side. The code still
+  calls a scene a take (`StudioTake`, `takes.ts`).
+- **Playing it**: the scene runs on a clock of its own (`ScenePlayback` in `client/src/world/studio.ts`), so it's yours
+  to play while you stand in the studio, with the chat open or not (but not while typing in it): hold **Q** or **R** to
+  spin it, **P** pauses it, **[** and **]** scrub half a second back or on (pausing it), and **-** and **=** step its
+  speed from a quarter to double. A light runs round the stage's edge once a run through, and the far wall's hologram
+  says what the scene is, its metaphor, whether it's playing or paused and at what speed, and the keys. It loops,
+  holding its last frame a moment first.
+- **Changing it**: say what to change and the computer stages it again under the same id, which swaps it in place.
+  Its timing lives in named **phases** (`{"fan": [1, 3], "fold": [6, 8]}`) that its script reads with `phase(t, name)`,
+  so "slower" is the `retime_scene` tool (a speed, or new seconds and phases) rather than a rewrite. Scripts get helpers
+  that, like `render(t)`, depend only on the time (`shared/takeScript.ts`): `p` eases between two times, `settle` glides
+  in without overshooting, `burst` flashes and dies away, `stagger` starts many parts one after another. These ideas
+  come from [anatomy](https://github.com/wheresryan22/anatomy)'s explainers. A new id makes a new scene; the last 12 are
+  kept, and the one staged or retimed last is the one in the hall (`currentTake`), so retiming an earlier one brings it
+  back. One whose script throws turns the hologram red and says why, and the computer hears it too
+  (`POST /api/studio/takes/:id/report`), so it can fix it.
+- **Looking before you do**: when the room runs a scene just staged, it renders a **contact sheet** (six moments
+  through it, each phase under way and as it lands, and its last, each from a little further round it, as you'd see it
+  walking round, in a scene and on a WebGL renderer of its own: `client/src/world/contactSheet.ts`) and sends it with
+  its report, and the scene tool hands the picture to the computer, which looks for anything thin, cluttered, hidden or
+  still and stages it again before telling you it's ready. No browser open, no sheet: the scene waits for you.
+- **Real sessions** (its `sessions` and `session_timeline` tools): for something that really happened in Claude Code,
+  the computer reads the session itself. It can read Claude Code's own session transcripts on this Mac
   (`~/.claude/projects`, or `CLAUDE_CONFIG_DIR`'s) and nothing else (`server/agents/studioSessions.ts`): it finds one
   by what it was about (Claude Code's title for it, what was first asked, its folder), then reads it as a timeline
   (`server/agents/sessionTimeline.ts`), told from code alone: what was asked, what Claude said and ran, and each
@@ -211,60 +232,23 @@ view while the computer builds:
   `subagents/workflows/<run>/` with its journal): a fan-out as one moment, each agent with its brief, when it ran and
   what it handed back (or that it stopped), a workflow's phases with their agents, models and how many ran at once.
   The whole session fits about 8k tokens (tool runs, then Claude's words, go first when it's long); a time window
-  zooms in on a stretch, with every call. Then it pitches and builds from what really happened. It shares its reading
-  of transcripts with the ledger's session digests (`server/agents/transcript.ts`, [the ledger](ledger.md)), but the
-  digests count, for the retro, where a timeline tells the story in order, and reads any session, not only the crew's.
-- **Pitches** (its `pitch` tool): before it builds anything for a beat, the computer pitches 3 to 5 ways to show it,
-  each a one-sentence metaphor, how big it is and where it stands (a tabletop model, the room round you, something
-  hall-sized overhead…), and how it holds up against the real numbers and limits. They're meant to differ in kind and
-  scale (a physical analogy, something from the Star Trek universe), not be one scene rearranged. They show in the
-  chat, numbered, each with a **Build this** button; to mix them or push back, say so. A beat's pitches stay in the
-  chat until a take is staged for it, and stay listed under the beat in the Script tab (`openPitches` in
-  `client/src/world/studio.ts`). The transporter room was found this way: several metaphors at different scales,
-  checked against how workflows really run, then picked and stretched by the captain.
-- **Takes** (its `take` tool): 3D visualisations of the beats, one or more for each, each a script the computer
-  writes against the studio's kit (`client/src/world/takeKit.ts`: crew standing or at consoles, boxes, balls,
-  transporter pads, glowing lines, floating labels and a beam-in effect) and three.js itself (instancing for dozens of
-  things, tracks, swarms, see-through containers, text on surfaces), looping on an 8 × 6 m floor of its own. It's
-  asked for a bold image that reads from across the room, not a thin sketch.
+  zooms in on a stretch, with every call. It shares its reading of transcripts with the ledger's session digests
+  (`server/agents/transcript.ts`, [the ledger](ledger.md)), but the digests count, for the retro, where a timeline
+  tells the story in order, and reads any session, not only the crew's.
 
-  The computer looks before you do: when the room runs a take just staged, it renders a **contact sheet** (the take
-  from where you'd stand to watch it, at six moments (each phase under way and as it lands, and its last), in a
-  scene and on a WebGL renderer of its own: `client/src/world/contactSheet.ts`) and sends it with its report, and the
-  take tool hands the picture to the computer, which looks for anything thin, cluttered, hidden or still and stages it
-  again before telling you it's ready. No browser open, no sheet: the take waits for you as before.
-  Every take stays on the floor (up to 12), in a horseshoe round the room in beat order, from the left of the doorway
-  round to its right, each facing the middle: stand there and turn, and you see the whole video. Up to six stand full
-  size; more and they all shrink together to fit (`takeSpots` in `client/src/world/studio.ts`). The beat cards hang
-  under the premise, above the takes' heads.
+It's one Claude Code session for the whole conversation: each thing you say resumes it, so it remembers what it built
+(and, should the session be lost, the next turn starts a new one with a recap of the conversation and the scenes it
+kept). The chat's head says which model it's on and how hard it thinks, both yours to change from its next turn (kept
+when you start over, `POST /api/studio/tune`; the ship's `model` setting and the model's default effort unless you
+pick), what its last turn ran on, and what it's spent.
 
-  Each take starts from a **metaphor**, decided before any geometry: one sentence on what the concept is shown as, what
-  moves and what that movement means ("a gold core throws out fresh contexts and pulls back only their answers"). Its
-  plaque shows its beat, label and metaphor (**E** on it opens the Script tab at its beat too); the Script tab lists each beat's takes with theirs. Its timing lives in
-  named **phases** (`{"fan": [1, 3], "fold": [6, 8]}`) that its script reads with `phase(t, name)`, so "make c slower"
-  is the `retime_take` tool (a speed, or new seconds and phases) rather than a rewrite: the script stays, and the take
-  plays afresh a version on. Scripts get helpers that, like `render(t)`, depend only on the time (`shared/takeScript.ts`):
-  `p` eases between two times, `settle` glides in without overshooting, `burst` flashes and dies away, `stagger` starts
-  many parts one after another. These ideas come from [anatomy](https://github.com/wheresryan22/anatomy)'s explainers.
-
-  Say what else to change and it stages the take again under the same id: it swaps in place. One whose script throws
-  turns its plaque red and says why, and the computer hears it too (`POST /api/studio/takes/:id/report`), so it can fix it.
-
-It's one Claude Code session for the whole video: each thing you say resumes it, so it remembers the conversation (and,
-should the session be lost, the next turn starts a new one with a recap of the conversation and the video). The chat's
-head says which model it's on and how hard it thinks, both yours to change from its next turn (kept across videos,
-`POST /api/studio/tune`; the ship's `model` setting and the model's default effort unless you pick), what its last turn
-ran on, and what it's spent.
-
-One conversation at a time, kept across restarts (`studio` in `data/state.json`); **New video** clears the studio.
+One conversation at a time, kept across restarts (`studio` in `data/state.json`); **Start over** clears the studio.
 The computer reads the web but nothing of the ship's code (`ClaudeStudio` in `server/agents/claudeCrew.ts`, working
-in `data/studio`), and its take scripts run in your browser as the leads' explainers do. In `pnpm run demo` its
-turns are scripted (`DemoStudio`): describe a video and it puts up a premise, four beats, two threads and a take for
-every beat (two for the second); ask for one at a time and it revises take b; ask for it slower and it retimes take c
-to half speed; ask it to look a thread up and it answers t1. It also pitches four ways to show the second beat, and
-**Build this** on one stages take g from it (a track through gates, built with three.js itself) and says it looked at
-its contact sheet. `FOCUS_STUDIO=live` puts the real computer in the demo office instead, to try the studio with a
-model without GitHub.
+in `data/studio`), and its scene scripts run in your browser as the leads' explainers do. In `pnpm run demo` its
+turns are scripted (`DemoStudio`): describe anything and it builds **fan-out**, a gold core beaming eight agents in on
+pads round it and folding their answers back; ask for more and it runs sixteen; ask for it slower and it retimes it to
+half speed; mention a pipeline, track or gates and it builds **pipeline**, work riding a track through three gates.
+`FOCUS_STUDIO=live` puts the real computer in the demo office instead, to try the studio with a model without GitHub.
 
 ## Not yet
 
