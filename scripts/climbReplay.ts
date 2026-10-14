@@ -12,6 +12,7 @@ import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
 import { climbBrief, climbLog } from '../server/agents/climb';
 import { config, paths } from '../server/config';
 import type { PastPullRequest } from '../server/github/provider';
+import { SavedScorecards } from '../server/scorecards';
 import { CLIMB_BRANCH, type Scorecard } from '../shared/types';
 import { PICK_SCHEMA, plantRejection, rankOnly, replayVerdict, SAME_SCHEMA, sameGapQuestion, type ClimbPick } from './climbReplayRules';
 import { render } from './scorecardRules';
@@ -57,7 +58,10 @@ async function ask<T>(prompt: string, schema: object, opts: Partial<Options> = {
 
 async function main() {
   const login = gh('api', 'user', '-q', '.login').trim();
-  const log = climbLog(pastClimbs(), [], login);
+  // the brief as a climb gets it: main's scorecards for whether gains held, and the noise floor
+  const saved = new SavedScorecards(paths.scorecards, ROOT);
+  const noise = saved.noise();
+  const log = climbLog(pastClimbs(), [], login, saved.history(30), noise);
   const card = render(scorecard());
   const agent = { repo, baseBranch: 'main', branch: `${CLIMB_BRANCH}replay` };
   let cost = 0;
@@ -74,9 +78,9 @@ async function main() {
   };
 
   process.stderr.write(`Replaying the climb brief: ${log.length} past climbs, ${RUNS} sessions each side\n`);
-  const control = await picks('control', rankOnly(climbBrief(agent, [], Date.now(), log), card));
+  const control = await picks('control', rankOnly(climbBrief(agent, [], Date.now(), log, noise), card));
   const rejected = control[0];
-  const treatment = await picks('treatment', rankOnly(climbBrief(agent, [], Date.now(), plantRejection(log, rejected, REASON, Date.now())), card));
+  const treatment = await picks('treatment', rankOnly(climbBrief(agent, [], Date.now(), plantRejection(log, rejected, REASON, Date.now()), noise), card));
   const controlSame = await Promise.all(control.slice(1).map((p) => same(rejected, p)));
   const treatmentSame = await Promise.all(treatment.map((p) => same(rejected, p)));
   const result = replayVerdict(controlSame.map((j) => j.same), treatmentSame.map((j) => j.same));
