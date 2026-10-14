@@ -122,6 +122,22 @@ describe('goalFlow', () => {
   });
 });
 
+describe('the state a goal is in now', () => {
+  it('is the last stretch’s, since it began, with why when the captain is the one being waited on', () => {
+    expect(goalFlow(goal(80), transcriptMoments(story()), ledger()).now).toEqual({ state: 'captain', since: min(62), reason: 'report' });
+  });
+
+  it('is the lead at work while it’s in the middle of a turn, however long since its last line', () => {
+    expect(goalFlow(goal(80), transcriptMoments(story()), ledger(), true).now).toEqual({ state: 'working', since: min(60) });
+  });
+
+  it('is waiting on QA while a shipped pull request has no verdict yet', () => {
+    n = 0;
+    const jsonl = [said('Your workspace', 0), ship('s1', 1), shipped('s1', 'Opened o/r#1', 2), work(3)].join('\n');
+    expect(goalFlow(goal(20), transcriptMoments(jsonl), []).now).toEqual({ state: 'qa', since: min(3) });
+  });
+});
+
 describe('endsWith', () => {
   it('tells asking leave from asking something else, from asking nothing', () => {
     expect(endsWith('Slice 2 is small. Shall I go ahead?')).toBe('go-ahead');

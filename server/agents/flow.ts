@@ -122,6 +122,14 @@ export interface GoalFlow {
   captainWaits: number[];
   /** The time waiting on the captain by why, the time away of it, and each wait of `SHORT_WAIT_MS` or more. */
   captainBy: Record<CaptainReason, { ms: number; away: number; waits: number[] }>;
+  /** The state the goal ended in (for an open goal, the one it's in now), since when, and why, when it's waiting on the captain. */
+  now?: FlowNow;
+}
+
+export interface FlowNow {
+  state: FlowState;
+  since: number;
+  reason?: CaptainReason;
 }
 
 const emptyReasons = (): GoalFlow['captainBy'] => {
@@ -144,7 +152,7 @@ interface Stretch {
 }
 
 /** The goal's time as turns and the gaps between them, clipped to when it was open. */
-function stretches(moments: Moment[], openedAt: number, closedAt: number): Stretch[] {
+function stretches(moments: Moment[], openedAt: number, closedAt: number, busyNow: boolean): Stretch[] {
   const out: Stretch[] = [];
   const add = (s: Stretch) => {
     const start = Math.max(s.start, openedAt);
@@ -179,14 +187,21 @@ function stretches(moments: Moment[], openedAt: number, closedAt: number): Stret
   }
   if (turn === undefined) add({ start: openedAt, end: closedAt, busy: false });
   else {
-    add({ start: turn, end: last, busy: true });
-    add({ start: last, end: closedAt, busy: false, after: { said: tool ?? said, slice } });
+    if (busyNow) add({ start: turn, end: closedAt, busy: true });
+    else {
+      add({ start: turn, end: last, busy: true });
+      add({ start: last, end: closedAt, busy: false, after: { said: tool ?? said, slice } });
+    }
   }
   return out;
 }
 
-/** Where a goal's time went, from its lead's transcript and the ledger's lines on its pull requests. */
-export function goalFlow(goal: ArchivedGoal, moments: Moment[], ledger: LedgerEvent[]): GoalFlow {
+/**
+ * Where a goal's time went, from its lead's transcript and the ledger's lines on its pull requests. For a goal still
+ * open, `closedAt` is now, and `busyNow` says whether its lead is in the middle of a turn (its transcript can't tell a
+ * long tool call from the turn being over).
+ */
+export function goalFlow(goal: ArchivedGoal, moments: Moment[], ledger: LedgerEvent[], busyNow = false): GoalFlow {
   const { openedAt, closedAt } = goal;
   const ships = moments.flatMap((m) => (m.kind === 'ship' ? m.prs.map((p) => ({ ...p, at: m.at })) : []));
   const prs: PrKey[] = [];
@@ -221,7 +236,8 @@ export function goalFlow(goal: ArchivedGoal, moments: Moment[], ledger: LedgerEv
   const captainWaits: number[] = [];
   const captainBy = emptyReasons();
   const breaks = [...ships.map((s) => s.at), ...verdicts.map((v) => v.at), ...ends.map((e) => e.at)];
-  const all = stretches(moments, openedAt, closedAt);
+  const all = stretches(moments, openedAt, closedAt, busyNow);
+  let now: FlowNow | undefined;
   for (const s of all) {
     const queued = !s.busy && s === all[0] && !moments.some((m) => m.at <= s.start);
     const long = !s.busy && !queued && s.end - s.start >= LONG_WAIT_MS;
@@ -234,9 +250,10 @@ export function goalFlow(goal: ArchivedGoal, moments: Moment[], ledger: LedgerEv
       const state: FlowState = queued ? 'queued' : s.busy ? (reworking(a) ? 'rework' : 'working') : !waiting ? 'background' : waiting === 'failed' ? 'captain' : waiting;
       ms[state] += b - a;
       if (long) away[state] += b - a;
-      if (waiting === 'captain' || waiting === 'failed') {
+      const r = waiting === 'captain' || waiting === 'failed' ? why(waiting, s.after) : undefined;
+      if (!now || now.state !== state || now.reason !== r) now = { state, since: a, ...(r ? { reason: r } : {}) };
+      if (r) {
         captain += b - a;
-        const r = why(waiting, s.after);
         reason ??= r;
         captainBy[r].ms += b - a;
         if (long) captainBy[r].away += b - a;
@@ -249,7 +266,7 @@ export function goalFlow(goal: ArchivedGoal, moments: Moment[], ledger: LedgerEv
   }
   const leadMs = closedAt - openedAt;
   const activeMs = leadMs - Object.values(away).reduce((n, t) => n + t, 0);
-  return { id: goal.id, title: goal.title, projectId: goal.projectId, openedAt, closedAt, leadMs, activeMs, slices: goal.slices, prs: prs.length, ms, away, captainWaits, captainBy };
+  return { id: goal.id, title: goal.title, projectId: goal.projectId, openedAt, closedAt, leadMs, activeMs, slices: goal.slices, prs: prs.length, ms, away, captainWaits, captainBy, now };
 }
 
 /** The nearest-rank percentile (0 to 1) of some numbers; 0 for none. */
