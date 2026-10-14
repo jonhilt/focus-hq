@@ -31,13 +31,44 @@ interface PrKey {
   pr: number;
 }
 
-/** What a lead's transcript says happened when: a message starting a turn, the lead at work, or a pull request shipped. */
+/**
+ * How the lead ended up handing a turn back: proposing the goal closes, asking with pictures (the ask tool), asking
+ * leave to go on with what it proposed, asking something else, or just reporting.
+ */
+export type Said = 'close' | 'ask' | 'go-ahead' | 'question' | 'report';
+
+/** Why the lead waited on the captain: how its last turn ended, or that QA had failed and it stopped. */
+export type CaptainReason = Said | 'next-slice' | 'qa-failed';
+
+export const CAPTAIN_REASONS: Record<CaptainReason, string> = {
+  'go-ahead': 'the lead asked leave to go on with what it proposed ("shall I…?")',
+  question: 'the lead asked something else, in words',
+  ask: 'the lead asked with pictures (the ask tool)',
+  'next-slice': 'a slice had landed and the lead waited to hear what next',
+  report: 'the lead reported and stopped, asking nothing',
+  close: 'the lead proposed closing the goal',
+  'qa-failed': 'QA failed a pull request and the lead stopped',
+};
+
+/** What a lead's transcript says happened when: a message starting a turn, the lead at work or saying something, or a pull request shipped. */
 export type Moment =
-  | { at: number; kind: 'message'; from: 'captain' | 'office' | 'background' }
+  | { at: number; kind: 'message'; from: 'captain' | 'office' | 'background'; /** The office saying a slice landed. */ slice?: boolean }
   | { at: number; kind: 'activity' }
+  | { at: number; kind: 'said'; said: Said }
   | { at: number; kind: 'ship'; prs: PrKey[] };
 
 const SHIPPED = /([\w.-]+\/[\w.-]+)#(\d+)/g;
+/** A question asking leave to do something, rather than asking what to do. */
+const GO_AHEAD = /\b(shall i|should i|want me to|do you want|would you like me to|ok(ay)? (to|if i)|happy for me to|go ahead|carry on|proceed|ready for me to)\b/i;
+
+/** How a message of the lead's ends: with a question asking leave, another question, or not a question. */
+export function endsWith(text: string): 'go-ahead' | 'question' | 'report' {
+  const t = text.trim().replace(/[\s*_`)"'\u201d]+$/, '');
+  if (!t.endsWith('?')) return 'report';
+  const line = t.slice(t.lastIndexOf('\n') + 1);
+  const sentence = line.split(/(?<=[.!?])\s+/).at(-1) ?? line;
+  return GO_AHEAD.test(sentence) ? 'go-ahead' : 'question';
+}
 
 /** A lead's transcript as moments, in order: the messages that start turns, the lead's own lines, and each ship's pull requests. */
 export function transcriptMoments(jsonl: string): Moment[] {
@@ -48,7 +79,12 @@ export function transcriptMoments(jsonl: string): Moment[] {
     if (Number.isNaN(at)) continue;
     if (line.type === 'assistant') {
       moments.push({ at, kind: 'activity' });
-      for (const b of blocks(line)) if (b.type === 'tool_use' && b.name === 'mcp__office__ship' && b.id) ships.add(b.id);
+      for (const b of blocks(line)) {
+        if (b.type === 'tool_use' && b.name === 'mcp__office__ship' && b.id) ships.add(b.id);
+        if (b.type === 'tool_use' && b.name === 'mcp__office__ask') moments.push({ at, kind: 'said', said: 'ask' });
+        if (b.type === 'tool_use' && b.name === 'mcp__office__propose_close') moments.push({ at, kind: 'said', said: 'close' });
+        if (b.type === 'text' && b.text?.trim()) moments.push({ at, kind: 'said', said: endsWith(b.text) });
+      }
     } else if (line.type === 'user' && !line.isMeta) {
       for (const b of blocks(line)) {
         if (b.type === 'tool_result') {
@@ -57,7 +93,7 @@ export function transcriptMoments(jsonl: string): Moment[] {
         } else if (b.type === 'text' && b.text?.trim()) {
           const from = messageFrom(b.text);
           if (from === 'captain') moments.push({ at, kind: 'message', from: 'captain' });
-          else if (from === 'office' || from === 'qa') moments.push({ at, kind: 'message', from: 'office' });
+          else if (from === 'office' || from === 'qa') moments.push({ at, kind: 'message', from: 'office', ...(b.text.startsWith('Slice ') ? { slice: true } : {}) });
           else if (from === 'compacted') moments.push({ at, kind: 'activity' });
           else if (b.text.trimStart().startsWith('<task-notification')) moments.push({ at, kind: 'message', from: 'background' });
         }
@@ -84,7 +120,14 @@ export interface GoalFlow {
   activeMs: number;
   /** Each time the lead waited on the captain between turns, for `SHORT_WAIT_MS` or more, and how long. */
   captainWaits: number[];
+  /** The time waiting on the captain by why, the time away of it, and each wait of `SHORT_WAIT_MS` or more. */
+  captainBy: Record<CaptainReason, { ms: number; away: number; waits: number[] }>;
 }
+
+const emptyReasons = (): GoalFlow['captainBy'] => {
+  const r = () => ({ ms: 0, away: 0, waits: [] });
+  return { 'go-ahead': r(), question: r(), ask: r(), 'next-slice': r(), report: r(), close: r(), 'qa-failed': r() };
+};
 
 const emptyStates = (): Record<FlowState, number> => ({ queued: 0, working: 0, rework: 0, background: 0, qa: 0, review: 0, captain: 0 });
 
@@ -96,6 +139,8 @@ interface Stretch {
   end: number;
   busy: boolean;
   endedBy?: 'captain' | 'office' | 'background';
+  /** Between turns: how the turn before ended (the ask or close tool if it used one, else its last words), and whether it began with a slice landing. */
+  after?: { said?: Said; slice: boolean };
 }
 
 /** The goal's time as turns and the gaps between them, clipped to when it was open. */
@@ -108,23 +153,34 @@ function stretches(moments: Moment[], openedAt: number, closedAt: number): Stret
   };
   let turn: number | undefined;
   let last = openedAt;
+  let said: Said | undefined;
+  let tool: Said | undefined;
+  let slice = false;
+  const begin = (m: Moment) => {
+    turn = m.at;
+    said = tool = undefined;
+    slice = m.kind === 'message' && !!m.slice;
+  };
   for (const m of moments) {
     if (turn === undefined) {
       add({ start: openedAt, end: m.at, busy: false });
-      turn = last = m.at;
-      continue;
-    }
-    if (m.kind === 'message' && m.at > last) {
+      begin(m);
+      last = m.at;
+    } else if (m.kind === 'message' && m.at > last) {
       add({ start: turn, end: last, busy: true });
-      add({ start: last, end: m.at, busy: false, endedBy: m.from });
-      turn = m.at;
+      add({ start: last, end: m.at, busy: false, endedBy: m.from, after: { said: tool ?? said, slice } });
+      begin(m);
+    }
+    if (m.kind === 'said') {
+      if (m.said === 'close' || (m.said === 'ask' && tool !== 'close')) tool = m.said;
+      else said = m.said;
     }
     last = Math.max(last, m.at);
   }
   if (turn === undefined) add({ start: openedAt, end: closedAt, busy: false });
   else {
     add({ start: turn, end: last, busy: true });
-    add({ start: last, end: closedAt, busy: false });
+    add({ start: last, end: closedAt, busy: false, after: { said: tool ?? said, slice } });
   }
   return out;
 }
@@ -140,12 +196,19 @@ export function goalFlow(goal: ArchivedGoal, moments: Moment[], ledger: LedgerEv
   const lastShip = (p: PrKey, t: number) => Math.max(-Infinity, ...ships.filter((s) => same(p)(s) && s.at <= t).map((s) => s.at));
 
   /** Between turns at `t`: what the goal's open pull requests were waiting on. */
-  const waitingOn = (t: number): 'qa' | 'review' | 'captain' => {
+  const waitingOn = (t: number): 'qa' | 'review' | 'captain' | 'failed' => {
     const open = prs.filter((p) => lastShip(p, t) > -Infinity && !ends.some((e) => same(p)(e) && e.at <= t));
     if (!open.length) return 'captain';
     const latest = open.map((p) => verdicts.filter((v) => same(p)(v) && v.at <= t && v.at >= lastShip(p, t)).at(-1));
     if (latest.some((v) => !v)) return 'qa';
-    return latest.every((v) => v?.verdict === 'pass') ? 'review' : 'captain';
+    return latest.every((v) => v?.verdict === 'pass') ? 'review' : 'failed';
+  };
+  /** Why the lead was waiting on the captain after a turn that ended like `after`. */
+  const why = (waiting: 'captain' | 'failed', after: Stretch['after']): CaptainReason => {
+    if (waiting === 'failed') return 'qa-failed';
+    const said = after?.said;
+    if (said === 'close' || said === 'ask') return said;
+    return after?.slice ? 'next-slice' : (said ?? 'report');
   };
   /** At a turn at `t`: reworking when QA failed one of the goal's pull requests since the lead last shipped. */
   const reworking = (t: number) => {
@@ -156,6 +219,7 @@ export function goalFlow(goal: ArchivedGoal, moments: Moment[], ledger: LedgerEv
   const ms = emptyStates();
   const away = emptyStates();
   const captainWaits: number[] = [];
+  const captainBy = emptyReasons();
   const breaks = [...ships.map((s) => s.at), ...verdicts.map((v) => v.at), ...ends.map((e) => e.at)];
   const all = stretches(moments, openedAt, closedAt);
   for (const s of all) {
@@ -163,18 +227,29 @@ export function goalFlow(goal: ArchivedGoal, moments: Moment[], ledger: LedgerEv
     const long = !s.busy && !queued && s.end - s.start >= LONG_WAIT_MS;
     const cuts = [s.start, ...breaks.filter((t) => t > s.start && t < s.end).sort((a, b) => a - b), s.end];
     let captain = 0;
+    let reason: CaptainReason | undefined;
     for (let i = 0; i < cuts.length - 1; i++) {
       const [a, b] = [cuts[i], cuts[i + 1]];
-      const state: FlowState = queued ? 'queued' : s.busy ? (reworking(a) ? 'rework' : 'working') : s.endedBy === 'background' ? 'background' : waitingOn(a);
+      const waiting = queued || s.busy || s.endedBy === 'background' ? undefined : waitingOn(a);
+      const state: FlowState = queued ? 'queued' : s.busy ? (reworking(a) ? 'rework' : 'working') : !waiting ? 'background' : waiting === 'failed' ? 'captain' : waiting;
       ms[state] += b - a;
       if (long) away[state] += b - a;
-      if (state === 'captain') captain += b - a;
+      if (waiting === 'captain' || waiting === 'failed') {
+        captain += b - a;
+        const r = why(waiting, s.after);
+        reason ??= r;
+        captainBy[r].ms += b - a;
+        if (long) captainBy[r].away += b - a;
+      }
     }
-    if (captain >= SHORT_WAIT_MS) captainWaits.push(captain);
+    if (reason && captain >= SHORT_WAIT_MS) {
+      captainWaits.push(captain);
+      captainBy[reason].waits.push(captain);
+    }
   }
   const leadMs = closedAt - openedAt;
   const activeMs = leadMs - Object.values(away).reduce((n, t) => n + t, 0);
-  return { id: goal.id, title: goal.title, projectId: goal.projectId, openedAt, closedAt, leadMs, activeMs, slices: goal.slices, prs: prs.length, ms, away, captainWaits };
+  return { id: goal.id, title: goal.title, projectId: goal.projectId, openedAt, closedAt, leadMs, activeMs, slices: goal.slices, prs: prs.length, ms, away, captainWaits, captainBy };
 }
 
 /** The nearest-rank percentile (0 to 1) of some numbers; 0 for none. */
@@ -212,6 +287,8 @@ export interface FlowReport {
   activeTotal: number;
   captainWaitP50: number;
   captainWaitP85: number;
+  /** The goals' time waiting on the captain by why, summed. */
+  captainBy: GoalFlow['captainBy'];
   guards: QualityGuards;
 }
 
@@ -234,6 +311,13 @@ export function flowReport(goals: GoalFlow[], allGoals: ArchivedGoal[], ledger: 
   const firsts = new Map<string, boolean>();
   for (const v of verdicts) if (!firsts.has(`${v.repo}#${v.pr}`)) firsts.set(`${v.repo}#${v.pr}`, v.verdict === 'pass');
   const waits = goals.flatMap((g) => g.captainWaits);
+  const captainBy = emptyReasons();
+  for (const g of goals)
+    for (const r of Object.keys(captainBy) as CaptainReason[]) {
+      captainBy[r].ms += g.captainBy[r].ms;
+      captainBy[r].away += g.captainBy[r].away;
+      captainBy[r].waits.push(...g.captainBy[r].waits);
+    }
   return {
     goals,
     leadP50: percentile(goals.map((g) => g.leadMs), 0.5),
@@ -247,6 +331,7 @@ export function flowReport(goals: GoalFlow[], allGoals: ArchivedGoal[], ledger: 
     activeTotal: goals.reduce((n, g) => n + g.activeMs, 0),
     captainWaitP50: percentile(waits, 0.5),
     captainWaitP85: percentile(waits, 0.85),
+    captainBy,
     guards: {
       merged: merges.length,
       mergedWithoutPass: merges.filter((m) => m.qa !== 'passed').length,
@@ -291,6 +376,12 @@ export function flowLines(r: FlowReport, slowest = 5): string[] {
     `  each wait on the captain of ${span(SHORT_WAIT_MS)} or more: p50 ${span(r.captainWaitP50)} · p85 ${span(r.captainWaitP85)}`,
     '',
     `Biggest wait while around: ${biggest}, ${pct(around[biggest], r.activeTotal)} of the active time.`,
+    '',
+    'Waiting on the captain, by why:                 while around   waits   p50',
+    ...(Object.keys(CAPTAIN_REASONS) as CaptainReason[])
+      .map((k) => ({ k, near: r.captainBy[k].ms - r.captainBy[k].away, waits: r.captainBy[k].waits }))
+      .sort((a, b) => b.near - a.near)
+      .map(({ k, near, waits }) => `  ${k.padEnd(10)} ${CAPTAIN_REASONS[k].padEnd(62).slice(0, 62)} ${span(near).padStart(6)} ${pct(near, around.captain).padStart(4)} ${String(waits.length).padStart(5)} ${span(percentile(waits, 0.5)).padStart(5)}`),
     '',
     'Quality guards (the goals’ pull requests):',
     `  merged ${g.merged} · ${g.mergedWithoutPass} without a current QA pass (${pct(g.mergedWithoutPass, g.merged)})`,

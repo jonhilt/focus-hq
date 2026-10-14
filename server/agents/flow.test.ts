@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LedgerEvent } from '../../shared/ledger';
 import type { ArchivedGoal } from '../../shared/types';
-import { flowLines, flowReport, goalFlow, LONG_WAIT_MS, percentile, span, transcriptMoments } from './flow';
+import { endsWith, flowLines, flowReport, goalFlow, LONG_WAIT_MS, percentile, span, transcriptMoments } from './flow';
 
 const T0 = Date.parse('2026-10-08T12:00:00.000Z');
 const min = (m: number) => T0 + m * 60_000;
@@ -119,6 +119,46 @@ describe('goalFlow', () => {
     const f = goalFlow(goal(20), transcriptMoments(jsonl), [verdict('pass', 5), merged(20, 'stale')]);
     expect(f.ms.qa).toBe((4 + 14) * 60_000);
     expect(f.ms.review).toBe(0);
+  });
+});
+
+describe('endsWith', () => {
+  it('tells asking leave from asking something else, from asking nothing', () => {
+    expect(endsWith('Slice 2 is small. Shall I go ahead?')).toBe('go-ahead');
+    expect(endsWith('I’d do 1 and 2 together.\n\nDo you want it next, or idea 1?**')).toBe('go-ahead');
+    expect(endsWith('Shall I start? Which way would you lean on doorways: softer, or fewer effects?')).toBe('question');
+    expect(endsWith('Shipped as #12. QA is on it.')).toBe('report');
+  });
+});
+
+describe('why the lead waited on the captain', () => {
+  const said = (text: string, minute: number) => line('assistant', [{ type: 'text', text }], minute);
+  it('goes by how the turn before ended: a landed slice, the ask or close tool, a question, or a report', () => {
+    n = 0;
+    const jsonl = [
+      line('user', 'Your workspace, with every repo', 0),
+      said('Built it. Shall I carry on with the board?', 1),
+      line('user', 'yes', 11),
+      line('assistant', [{ type: 'tool_use', id: 'a1', name: 'mcp__office__ask', input: {} }, { type: 'text', text: 'Options are on your screen.' }], 12),
+      line('user', 'B', 20),
+      said('Done with B.', 21),
+      line('user', 'Slice 2 starts on fresh code. Your repos are now:', 30),
+      said('Next I’d do the chart. Shall I?', 31),
+      line('user', 'go', 41),
+      line('assistant', [{ type: 'tool_use', id: 'c1', name: 'mcp__office__propose_close', input: {} }], 42),
+    ].join('\n');
+    const f = goalFlow(goal(50), transcriptMoments(jsonl), []);
+    const by = Object.fromEntries(Object.entries(f.captainBy).map(([k, v]) => [k, v.ms / 60_000]));
+    expect(by).toEqual({ 'go-ahead': 10, question: 0, ask: 8, 'next-slice': 10, report: 9, close: 8, 'qa-failed': 0 });
+    expect(f.captainBy['next-slice'].waits).toEqual([10 * 60_000]);
+  });
+
+  it('puts a lead stopped after QA failed down to the failure', () => {
+    n = 0;
+    const jsonl = [line('user', 'Your workspace', 0), ship('s1', 1), shipped('s1', 'Opened o/r#1', 1), said('Shipped. Shall I wait?', 2), line('user', '[QA officer Lt. Q] QA failed o/r#1', 5), said('QA found a bug.', 6), line('user', 'fix it', 16)].join('\n');
+    const f = goalFlow(goal(16), transcriptMoments(jsonl), [verdict('fail', 5)]);
+    expect(f.captainBy['qa-failed'].ms).toBe(10 * 60_000);
+    expect(f.ms.qa).toBe(3 * 60_000);
   });
 });
 
