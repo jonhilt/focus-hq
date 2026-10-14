@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Contact, Waypoint } from '../../../shared/types';
-import { type Box, CHART, clearOf, clip, type CoursePlot, everySlice, hitCounter, hitsAmong, labelBox, overlaps, plotCourse, probeFlights, probesOut, seeded, shieldState, smoothPath, TRANSMIT_MS } from './course';
+import { type Box, CHART, cheapest, clearOf, clip, type CoursePlot, everySlice, hitCounter, hitsAmong, labelBox, overlaps, plotCourse, probeFlights, probesOut, seeded, shieldState, smoothPath, TRANSMIT_MS } from './course';
 
 const wp = (slice: number, more: Partial<Waypoint> = {}): Waypoint => ({ slice, startedAt: slice * 10, landedAt: slice * 10 + 5, title: `Slice ${slice}`, ...more });
 const inside = (p: { x: number; y: number }) => p.x >= 0 && p.x <= CHART.width && p.y >= 0 && p.y <= CHART.height;
@@ -136,6 +136,25 @@ describe('the course', () => {
     const mismatches = spots.filter((b) => hits(b) !== hitsAmong(boxes, b));
     expect(mismatches).toEqual([]);
     expect(spots.some((b) => hitsAmong(boxes, b) > 1)).toBe(true);
+  });
+
+  it('picks the same try as weighing every one, first among equals, while weighing fewer', () => {
+    const rand = seeded('tries');
+    // how often each part of a try's cost was weighed, against how many tries there were
+    const weighed = { first: 0, then: 0, listed: 0 };
+    for (let round = 0; round < 500; round++) {
+      // whole costs, so ties are common; floors that climb down the list, sometimes by nothing
+      let floor = 0;
+      const tries = Array.from({ length: 1 + Math.floor(rand() * 40) }, () => ({ floor: (floor += rand() < 0.5 ? 0 : Math.floor(rand() * 3)), first: Math.floor(rand() * 4), then: Math.floor(rand() * 4) }));
+      const all = tries.map((t) => t.first + t.then + t.floor);
+      const want = all.indexOf(Math.min(...all));
+      const got = cheapest(tries, (t) => t.floor, (t) => (weighed.first++, t.first), (t) => (weighed.then++, t.then));
+      expect(got && { at: tries.indexOf(got.at), cost: got.cost }, `round ${round}`).toEqual({ at: want, cost: all[want] });
+      weighed.listed += tries.length;
+    }
+    // it stops before the end of the list, and skips the second part of most of the tries it does weigh
+    expect(weighed.first).toBeLessThan(weighed.listed / 2);
+    expect(weighed.then).toBeLessThan(weighed.first * 0.8);
   });
 
   it('shrinks the oldest waypoints to their numbers once a voyage runs out of room', () => {

@@ -139,6 +139,24 @@ export function hitCounter(boxes: Box[], column = 32): (b: Box) => number {
   };
 }
 
+/**
+ * The first of `tries` that costs least, where a try costs `least(t, i)`, which never falls further down the list, plus
+ * `first(t)` and then `then(t)`, none of them negative: the same as weighing every try, but it stops once none further
+ * down can beat the best, and doesn't weigh `then` for a try that `first` has already put out of the running.
+ */
+export function cheapest<T>(tries: readonly T[], least: (t: T, i: number) => number, first: (t: T) => number, then: (t: T) => number = () => 0): { at: T; cost: number } | undefined {
+  let best: { at: T; cost: number } | undefined;
+  for (const [i, t] of tries.entries()) {
+    const floor = least(t, i);
+    if (best && best.cost <= floor) break;
+    const before = first(t);
+    if (best && before + floor >= best.cost) continue;
+    const cost = before + then(t) + floor;
+    if (!best || cost < best.cost) best = { at: t, cost };
+  }
+  return best;
+}
+
 /** A label off to one side of the course (`out` 1 to its right as it heads up the chart, -1 to its left). */
 const beside = (p: Pt, side: Pt, out: number, d = 26): Label => ({ x: p.x + side.x * d * out, y: p.y + side.y * d * out + 5, anchor: out > 0 ? 'start' : 'end' });
 
@@ -306,14 +324,10 @@ export function plotCourse(voyage: Voyage, scale = 1): CoursePlot {
   const cost = (b: Box) => (inChart(b) ? 0 : 1000) + hitsAmong(solid, b) * 100 + linesHit(b);
   // the first of the candidates (in order of preference) that's clear, crossing the fewest lines; none if none is clear
   const place = (candidates: Label[], text: string, size: number, claim = true): Label | undefined => {
-    let best: { label: Label; cost: number } | undefined;
-    for (const [i, label] of candidates.entries()) {
-      const c = cost(labelBox(label, text, size)) * 10 + i;
-      if (!best || c < best.cost) best = { label, cost: c };
-    }
+    const best = cheapest(candidates, (_, i) => i, (label) => cost(labelBox(label, text, size)) * 10);
     if (!best || best.cost >= 1000) return undefined;
-    if (claim) solid.push(labelBox(best.label, text, size));
-    return best.label;
+    if (claim) solid.push(labelBox(best.at, text, size));
+    return best.at;
   };
 
   const scrubbed: Scrubbed[] = turns.map((t) => {
@@ -357,17 +371,17 @@ export function plotCourse(voyage: Voyage, scale = 1): CoursePlot {
     const tries = [away, -away].flatMap((out) => [58, 92, 126, 170].flatMap((d) => [0, -0.35, 0.35, -0.7, 0.7].map((t) => {
       const spot = { x: clampX(by.x + side.x * d * out + dir.x * step * (t + (k % 3) * 0.12)), y: clampY(by.y + side.y * d * out + dir.y * step * (t + (k % 3) * 0.12)) };
       const label: Label = out > 0 ? { x: spot.x + 12, y: spot.y + 5, anchor: 'start' } : { x: spot.x - 12, y: spot.y + 5, anchor: 'end' };
-      return { spot, label, cost: cost(square(spot, 9)) * 3 + cost(labelBox(label, text, sizes.contact)) };
+      return { spot, label, further: 0 };
     })));
     // failing those, anywhere further round it, nearest first
     for (let r = 60; r <= 300; r += 40) {
       for (let a = 0; a < 12; a++) {
         const spot = { x: clampX(by.x + Math.cos((a * Math.PI) / 6) * r), y: clampY(by.y + Math.sin((a * Math.PI) / 6) * r) };
-        const label: Label = { x: spot.x + 12, y: spot.y + 5, anchor: 'start' };
-        tries.push({ spot, label, cost: cost(square(spot, 9)) * 3 + cost(labelBox(label, text, sizes.contact)) + r / 1000 });
+        tries.push({ spot, label: { x: spot.x + 12, y: spot.y + 5, anchor: 'start' }, further: r / 1000 });
       }
     }
-    const best = tries.reduce((a, b) => (b.cost < a.cost ? b : a));
+    // its mark matters most, weighed before its label; a try further out costs a touch more, so the nearest wins a tie
+    const best = cheapest(tries, (t) => t.further, (t) => cost(square(t.spot, 9)) * 3, (t) => cost(labelBox(t.label, text, sizes.contact)))?.at ?? tries[0];
     solid.push(square(best.spot, 9));
     const label = place([best.label, ...around(best.spot, 12, sizes.contact)], text, sizes.contact);
     const closed = contact.closed;
