@@ -147,6 +147,15 @@ export function chiefEngineer(): Planner {
 }
 
 /**
+ * Main engineering's climbing engineer (docs/climber.md): one for the whole ship, the same person every climb, whose
+ * job is moving the office's own repo up its scorecard. Operations, like the chief engineer, but they write the code.
+ */
+export function climbingEngineer(): Planner {
+  const avatar = rollAvatar(seeded(hash('climber')), 'operations', 'lieutenant');
+  return { name: `${RANK_TITLE.lieutenant} Rhee`, avatar };
+}
+
+/**
  * Number One, the ship's first officer in the ready room: one for the whole ship, who talks anything through with the
  * captain, reading any project's code and the ship's live state. Command, like the captain.
  */

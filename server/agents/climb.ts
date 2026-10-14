@@ -1,6 +1,6 @@
 // Main engineering's climber (docs/climber.md), after ratstack's hill-climb prompt: each climb measures Focus with the
 // scorecard, takes the worst gap, fixes it, proves the fix with the same numbers, and ships one pull request. Pure: the
-// manager's Climbs part does the hiring and the bookkeeping.
+// manager's Climbs part seats the climbing engineer and does the bookkeeping.
 import { frictionGroups, type LedgerEvent } from '../../shared/ledger';
 import type { Agent, AgentStatus, Climb, Project } from '../../shared/types';
 
@@ -81,7 +81,8 @@ export function climbPullRequest(summary: string): { title: string; body: string
 /**
  * What to do about the climb now: start one (climbing is on and none is open), wait for the one under way (its
  * climber is working, or its pull request is open), or stop climbing because the last one ended without a pull
- * request. `climber` is the climb's agent while they're in the office.
+ * request. `climber` is the climbing engineer while they're in the office: a new climb also waits while they're still
+ * busy with the last (a pull request closed while they were fixing QA's findings), since every climb is theirs.
  */
 export type ClimbStep = { kind: 'start' } | { kind: 'wait' } | { kind: 'stop'; why: string; outcome: 'nothing' | 'failed' } | { kind: 'idle' };
 
@@ -94,7 +95,8 @@ export function climbStep(climb: Climb, climber: Pick<Agent, 'status' | 'pr' | '
     if (climber.status === 'done') return { kind: 'stop', why: `The last climb found nothing to change: ${climber.activity}`, outcome: 'nothing' };
     return { kind: 'stop', why: `The last climb ${climber.status === 'stopped' ? 'was stopped' : 'failed'}${climber.error ? `: ${climber.error}` : ''}`, outcome: 'failed' };
   }
-  return climb.keepClimbing ? { kind: 'start' } : { kind: 'idle' };
+  if (!climb.keepClimbing) return { kind: 'idle' };
+  return climber && !FINISHED.includes(climber.status) ? { kind: 'wait' } : { kind: 'start' };
 }
 
 /** `owner/repo` from a git remote's URL (`https://github.com/o/r.git`, `git@github.com:o/r.git`), or nothing for another host. */

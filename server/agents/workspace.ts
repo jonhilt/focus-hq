@@ -76,7 +76,7 @@ export async function createWorktree(
     await retryLockRace(() => git(mirror, ['fetch', 'origin', '--prune'], 10 * 60_000), () => sleep(750));
     await followOrigin(mirror, startPoint, mirror);
     if (fs.existsSync(dir)) {
-      // Re-hiring the same agent id should never happen, but don't leave a half-made worktree behind.
+      // The climbing engineer's last climb, or a half-made worktree: start clean.
       await removeDir(mirror, dir);
     }
     await git(mirror, ['worktree', 'prune']);

@@ -16,6 +16,13 @@ describe('climbStep', () => {
     expect(climbStep(freshClimb(), undefined)).toEqual({ kind: 'idle' });
   });
 
+  it('starts the next climb with the same engineer once they’ve finished the last, and waits while they’re still busy with it', () => {
+    expect(climbStep(on, climber({ status: 'done' }))).toEqual({ kind: 'start' });
+    expect(climbStep(on, climber({ status: 'error' }))).toEqual({ kind: 'start' });
+    expect(climbStep(on, climber({ status: 'working' }))).toEqual({ kind: 'wait' });
+    expect(climbStep(freshClimb(), climber({ status: 'working' }))).toEqual({ kind: 'idle' });
+  });
+
   it('waits while the climber works, and while their pull request is open, even after they’ve gone home', () => {
     expect(climbStep({ ...on, agentId: 'a' }, climber({}))).toEqual({ kind: 'wait' });
     expect(climbStep({ ...on, agentId: 'a' }, climber({ status: 'done', pr: { number: 4, url: 'u' } }))).toEqual({ kind: 'wait' });

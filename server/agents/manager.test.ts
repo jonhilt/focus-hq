@@ -1,6 +1,6 @@
 import { Effect, Layer, Schedule } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
-import { randomAvatar } from '../../shared/crew';
+import { climbingEngineer, randomAvatar } from '../../shared/crew';
 import * as demoGitHub from '../github/demo';
 import { prKey } from '../../shared/qa';
 import { openQuestion } from '../../shared/artifacts';
@@ -1112,7 +1112,8 @@ describe('AgentManager', () => {
       await until(() => claude.turns.length === 1);
       const id = store.climb.agentId!;
       // the climber stands in main engineering, not at one of the room's desks
-      expect(store.agent(id)).toMatchObject({ task: 'climb', desk: CLIMB_DESK, branch: expect.stringMatching(/^focus\/climb-/) });
+      expect(store.agent(id)).toMatchObject({ task: 'climb', desk: CLIMB_DESK, name: climbingEngineer().name, branch: expect.stringMatching(/^focus\/climb-/) });
+      const branch = store.agent(id).branch;
       expect(claude.turns[0].req.prompt).toMatch(/^Climb demo\/webshop-frontend one step/);
 
       claude.turns[0].end({ ok: true, summary: '# Narrow the board’s lookups\n\n**Problem**\n\nSix non-null assertions.' });
@@ -1127,7 +1128,13 @@ describe('AgentManager', () => {
       agents.prClosed('demo/webshop-frontend', pr.number, true, 'captain');
       await until(() => store.climb.cycles === 2);
       expect(store.climb.last).toMatchObject({ pr: pr.number, outcome: 'merged' });
-      expect(store.climb.agentId).not.toBe(id);
+      // the same engineer climbs again, in a fresh session on a new branch, their terminal carrying on
+      expect(store.climb.agentId).toBe(id);
+      await until(() => claude.turns.length === 2);
+      expect(store.agent(id)).toMatchObject({ name: climbingEngineer().name, status: expect.not.stringMatching(/done/) });
+      expect(store.agent(id).pr).toBeUndefined();
+      expect(store.agent(id).branch).not.toBe(branch);
+      expect(claude.turns[1].req.resumeSessionId).toBeUndefined();
     });
 
     it('switches climbing off, saying why, when a climb ends without a pull request', async () => {

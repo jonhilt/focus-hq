@@ -1,6 +1,6 @@
 # The climber
 
-Main engineering's climber takes the [scorecard](scorecard.md)'s worst gap in Focus's own repo and fixes it. Each fix is one pull request with the numbers measured before and after. You approve each one. It's a hill-climb, after [ratstack's hill-climb prompt](https://ratstack.sh/prompts/hill-climb):
+Main engineering's climber, Lt. Rhee, takes the [scorecard](scorecard.md)'s worst gap in Focus's own repo and fixes it. Each fix is one pull request with the numbers measured before and after. You approve each one. It's a hill-climb, after [ratstack's hill-climb prompt](https://ratstack.sh/prompts/hill-climb):
 
 1. measure;
 2. take the top gap;
@@ -20,9 +20,15 @@ The **Climber** card on the engineering panel's overview (<kbd>E</kbd> at Lt. Br
 
 The card shows the climber at work: what they're doing, their pull request, and a button to their terminal. It also shows how the last climb ended (merged, closed, found nothing, or failed) and how many there have been.
 
+## One engineer
+
+Every climb is Lt. Rhee's: one crew member owns the hill, rather than a new hire each time (`climbingEngineer` in `shared/crew.ts`). They keep one record (`CLIMBER_ID`), so their name, face and terminal carry on from climb to climb, but each climb is a fresh Claude Code session on a new branch, starting clean. The next climb waits while they're still busy with the last one (fixing QA's findings on a pull request you've just closed, say).
+
+They're not the chief engineer, Lt. Brennan: Brennan's retros only read the code and draft issues, and the climber is who changes it, taking those issues as gaps.
+
 ## A climb
 
-The climber is an agent like a developer (`task: 'climb'`), with differences:
+A climb is an agent's work like a developer's (`task: 'climb'`), with differences:
 
 - **Branch and desk.** They work on a branch of their own (`focus/climb-…`) and don't take one of the room's desks: they're main engineering's.
 - **The brief** (`climbBrief` in `server/agents/climb.ts`):

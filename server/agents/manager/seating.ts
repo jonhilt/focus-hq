@@ -2,7 +2,7 @@ import { Effect, FiberMap } from 'effect';
 import { hiredName, randomAvatar } from '../../../shared/crew';
 import { type Closer } from '../../../shared/ledger';
 import { prKey } from '../../../shared/qa';
-import type { Agent, Effort } from '../../../shared/types';
+import type { Agent, Effort, Planner } from '../../../shared/types';
 import { ACTIVE_STATUSES, CLIMB_DESK } from '../../../shared/types';
 import { newId, slugify } from '../../util';
 import { leadWorktreeId, snapshotMessage } from '../lead';
@@ -54,7 +54,8 @@ export class Seating extends Part {
     return !!owner && !FINISHED.includes(owner.status);
   }
 
-  seat(projectId: string, repo: string, work: Pick<Agent, 'id' | 'task' | 'issue' | 'branch' | 'baseBranch' | 'pr' | 'effort' | 'model' | 'cloud'>): Agent {
+  /** `crew` is who sits down when it's always the same person (the climbing engineer); otherwise someone new is hired. */
+  seat(projectId: string, repo: string, work: Pick<Agent, 'id' | 'task' | 'issue' | 'branch' | 'baseBranch' | 'pr' | 'effort' | 'model' | 'cloud'>, crew?: Planner): Agent {
     const project = this.store.project(projectId);
     if (!project.repos.includes(repo)) throw new Refused({ message: `${repo} is not connected to ${project.name}` });
     // QA reviewing the PR, or a goal's lead, isn't working on it the way a developer would
@@ -65,8 +66,8 @@ export class Seating extends Part {
 
     // the climber stands in main engineering, not at one of the room's desks
     const desk = work.task === 'climb' ? CLIMB_DESK : this.freeDesk(projectId);
-    const avatar = randomAvatar();
-    const name = hiredName(projectId, avatar.rank, [...this.store.agents.values()].map((a) => a.name), Math.random());
+    const avatar = crew?.avatar ?? randomAvatar();
+    const name = crew?.name ?? hiredName(projectId, avatar.rank, [...this.store.agents.values()].map((a) => a.name), Math.random());
     const agent: Agent = {
       name,
       avatar,
@@ -81,7 +82,7 @@ export class Seating extends Part {
     };
     this.store.putAgent(agent);
     this.hub.send({ type: 'agent', agent });
-    this.print(agent, [{ kind: 'system', text: `✻ ${name} joined ${project.name} to ${work.task === 'climb' ? `climb ${repo}` : `work on ${repo}#${work.issue.number}`} (${work.model ? `${work.model}, ` : ''}${work.effort ?? 'default'} effort${work.cloud ? ', in the cloud' : ''})` }]);
+    this.print(agent, [{ kind: 'system', text: `${work.task === 'climb' ? `──────── ✻ ${name} starts a climb on ${repo}` : `✻ ${name} joined ${project.name} to work on ${repo}#${work.issue.number}`} (${work.model ? `${work.model}, ` : ''}${work.effort ?? 'default'} effort${work.cloud ? ', in the cloud' : ''})` }]);
     this.schedule();
     return agent;
   }
