@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { TermLine } from '../../shared/types';
 import type { BrowserPool } from './browserTool';
-import { allowedWithoutAsking, ClaudeRunner, claudeConfig, endedOutcome, failedOutcome, holdsInput, permissionOptions, withResult, type SoFar } from './claudeRunner';
+import { allowedWithoutAsking, ClaudeRunner, claudeConfig, endedOutcome, failedOutcome, holdsInput, Listening, permissionOptions, withResult, type SoFar } from './claudeRunner';
 import { CLOUD_UNAVAILABLE } from './cloud';
 import { LIMIT_REACHED, STOPPED_BY_CAPTAIN, type ProbeEvent, type RunHooks, type WorkflowEvent } from './types';
 
@@ -123,6 +123,67 @@ describe('holdsInput', () => {
 
   it('doesn’t once nothing does', () => {
     expect(holdsInput([])).toBe(false);
+  });
+});
+
+describe('Listening', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const session = () => {
+    const closed = { count: 0 };
+    return { closed, listening: new Listening(() => closed.count++, 1000) };
+  };
+
+  it('stops once a turn is over with nothing queued and nothing in the background', () => {
+    const { closed, listening } = session();
+    listening.turnEnded(false);
+    expect(closed.count).toBe(1);
+  });
+
+  it('keeps listening while a message is queued, or a task runs in the background', () => {
+    const { closed, listening } = session();
+    listening.turnEnded(true);
+    listening.backgroundChanged(['local_bash']);
+    listening.turnStarted();
+    listening.turnEnded(false);
+    expect(closed.count).toBe(0);
+  });
+
+  // the cause of "The user doesn't want to take this action right now": the turn that took a background command's
+  // result found the input closed, and Claude Code cancelled every tool that needed approval
+  it('keeps listening through the turn Claude Code takes when the background task ends, and stops once it’s over', () => {
+    const { closed, listening } = session();
+    listening.backgroundChanged(['local_bash']);
+    listening.turnEnded(false);
+    listening.backgroundChanged([]);
+    expect(closed.count).toBe(0);
+    listening.turnStarted();
+    vi.advanceTimersByTime(5000);
+    expect(closed.count).toBe(0);
+    listening.turnEnded(false);
+    expect(closed.count).toBe(1);
+  });
+
+  it('stops after a while when no turn comes once the background task ends', () => {
+    const { closed, listening } = session();
+    listening.backgroundChanged(['local_workflow']);
+    listening.turnEnded(false);
+    listening.backgroundChanged([]);
+    vi.advanceTimersByTime(999);
+    expect(closed.count).toBe(0);
+    vi.advanceTimersByTime(1);
+    expect(closed.count).toBe(1);
+  });
+
+  it('doesn’t wait for a turn when a background task ends during one', () => {
+    const { closed, listening } = session();
+    listening.backgroundChanged(['local_bash']);
+    listening.backgroundChanged([]);
+    vi.advanceTimersByTime(5000);
+    expect(closed.count).toBe(0);
+    listening.turnEnded(false);
+    expect(closed.count).toBe(1);
   });
 });
 

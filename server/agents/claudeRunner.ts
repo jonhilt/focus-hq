@@ -60,6 +60,61 @@ export function holdsInput(background: string[]): boolean {
   return background.length > 0;
 }
 
+/** How long a session that's done waits, once its last background task ends, for the turn that takes its result. */
+export const REPORT_TURN_GRACE_MS = 60_000;
+
+/**
+ * When the session's done listening (its input closes): once its turn is over with nothing queued and nothing running
+ * in the background. When the last background task ends, Claude Code takes its result in a turn of its own, and that
+ * turn needs the office as much as any other (to approve a tool, or for the office's own tools): closing the input as
+ * the task ended left it no one to ask, and Claude Code cancelled each such tool with "The user doesn't want to take
+ * this action right now". So the input stays open for that turn, and closes when it's over; if no turn comes, it
+ * closes after `graceMs`.
+ */
+export class Listening {
+  private turnOver = false;
+  private background: string[] = [];
+  private grace?: ReturnType<typeof setTimeout>;
+
+  constructor(
+    private readonly close: () => void,
+    private readonly graceMs = REPORT_TURN_GRACE_MS,
+  ) {}
+
+  /** A turn has started: Claude Code's own, to take a background task's result, or one for a message. */
+  turnStarted(): void {
+    this.turnOver = false;
+    this.cancelGrace();
+  }
+
+  /** A turn has ended, with `queued` messages still to take. */
+  turnEnded(queued: boolean): void {
+    this.turnOver = !queued;
+    if (this.turnOver && !holdsInput(this.background)) this.close();
+  }
+
+  /** Claude Code has listed the session's background tasks (their kinds) anew. */
+  backgroundChanged(background: string[]): void {
+    const ended = holdsInput(this.background) && !holdsInput(background);
+    this.background = background;
+    if (!ended || !this.turnOver) return;
+    this.cancelGrace();
+    this.grace = setTimeout(() => {
+      this.grace = undefined;
+      if (this.turnOver && !holdsInput(this.background)) this.close();
+    }, this.graceMs);
+  }
+
+  dispose(): void {
+    this.cancelGrace();
+  }
+
+  private cancelGrace(): void {
+    clearTimeout(this.grace);
+    this.grace = undefined;
+  }
+}
+
 /**
  * In "ask" mode these never make an agent raise its hand. Not a sandbox: it only cuts down on interruptions.
  * Plain tools are approved in canUseTool (bare names in allowedTools would bypass the callback entirely);
@@ -267,6 +322,8 @@ export class ClaudeRunner implements AgentRunner {
     let q: Query | undefined;
     let stopping = false;
     const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map(), helpers: new Map(), workflows: new Set(), permits, parents: new Map(), modelled: new Set(), scratch: scratch?.dir, probes: new Set(), commits: new Map(), onKey, counted: new Set() };
+    // a background task still running keeps listening, so a message from the captain reaches the session now
+    const listening = new Listening(() => input.close());
     ctx.tracker = new BackgroundTracker((id) => (id ? ctx.calls.get(id)?.name : undefined));
     const done = (async (): Promise<RunOutcome> => {
       let so: SoFar = { ok: false, summary: '', started: false };
@@ -274,10 +331,9 @@ export class ClaudeRunner implements AgentRunner {
         q = query({ prompt: input, options });
         for await (const msg of q) {
           if (msg.type === 'system' && msg.subtype === 'init') so = { ...so, started: true };
+          if (msg.type === 'assistant' || (msg.type === 'system' && msg.subtype === 'init')) listening.turnStarted();
           const result = this.handle(msg, ctx, hooks);
-          // a workflow or background subagent still running keeps listening, so a message from the captain reaches
-          // the session now rather than after it's done; otherwise the session's done once its turn is
-          if (!result && ctx.turnOver && !holdsInput(ctx.background ?? [])) input.close();
+          if (msg.type === 'system' && msg.subtype === 'background_tasks_changed') listening.backgroundChanged(ctx.background ?? []);
           if (ctx.limited && !abort.signal.aborted) {
             abort.abort();
             input.close();
@@ -288,14 +344,14 @@ export class ClaudeRunner implements AgentRunner {
             if (!cloud) await reportContext(q, hooks);
             // Messages sent mid-turn are folded into that turn, so don't count results per message: finish once the
             // CLI has nothing queued. Anything still in our queue is delivered before the input reports it is done.
-            ctx.turnOver = !result.queued;
-            if (ctx.turnOver && !holdsInput(ctx.background ?? [])) input.close();
+            listening.turnEnded(result.queued > 0);
           }
         }
         return endedOutcome(so, { stopping, limited: !!ctx.limited });
       } catch (err) {
         return failedOutcome(so, err, { stopping, limited: !!ctx.limited, aborted: abort.signal.aborted, cloud: !!cloud, stderr: stderrTail.join('') });
       } finally {
+        listening.dispose();
         input.close();
         scratch?.close();
         await this.browsers.close(req.agentId);

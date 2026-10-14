@@ -49,8 +49,6 @@ export interface RunContext {
   counted: Set<string>;
   /** The kinds of background task the session has running now (not the ambient ones), as Claude Code last listed them. */
   background?: string[];
-  /** The session's last turn has ended with nothing of ours queued: the input closes once no workflow holds it open. */
-  turnOver?: boolean;
   /** Your plan's usage limit stopped the session, to carry on with the key (sessions.ts decides when). */
   limited?: boolean;
 }
