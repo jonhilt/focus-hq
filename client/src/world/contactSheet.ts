@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { StudioTake } from '../../../shared/types';
 import { TAKE_PARAMS, takeBody, takeHelpers } from '../../../shared/takeScript';
 import { makeCanvas } from './canvas';
+import { modelScene } from './modelScene';
 import { LCARS, LCARS_FONT } from './starship';
 import { SCENE_STAGE, sheetMoments } from './studio';
 import { TakeKit } from './takeKit';
@@ -15,6 +16,8 @@ type Render = (t: number) => void;
 
 /** Runs a take's script with `kit` and the helpers, and hands back its render(t). */
 export function runTake(take: StudioTake, kit: TakeKit): Render {
+  // a system model is drawn by the holodeck's own renderer, the same way every time
+  if (take.model) return modelScene(take.model, kit, take.phases);
   // the computer's own script, run in the captain's browser like the explainers it shows on a station's screen
   // eslint-disable-next-line @typescript-eslint/no-implied-eval
   const made = new Function(...TAKE_PARAMS, takeBody(take.script)) as (...args: unknown[]) => Render | undefined;

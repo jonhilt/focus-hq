@@ -149,6 +149,12 @@ export class TakeKit {
     return g;
   }
 
+  /** Keeps something made outside the kit (a geometry, a material, a texture) to dispose of with the take. */
+  keep<T extends { dispose(): void }>(thing: T): T {
+    this.made.push(thing);
+    return thing;
+  }
+
   /** Puts a THREE object the script made itself in the take (its geometry and materials are the script's to keep). */
   add<T extends THREE.Object3D>(obj: T): T {
     this.root.add(obj);
