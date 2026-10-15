@@ -115,6 +115,8 @@ export class Office {
   updateProject(id: string, patch: Parameters<Store['updateProject']>[1]): Project {
     const project = this.store.updateProject(id, patch);
     this.broadcastProjects();
+    // a plugin switched on (or off) for the project starts (or stops) its work there
+    if (patch.plugin) this.agents.plugins.projectChanged(id);
     if (patch.autoAssign || patch.autoMerge || patch.maxAgents !== undefined) {
       this.agents.schedule();
       this.boardChanged(id, 0);

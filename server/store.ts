@@ -1,3 +1,4 @@
+import { switchPlugin } from '../shared/projectPlugins';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -216,11 +217,13 @@ export class Store {
 
   updateProject(
     id: string,
-    patch: Partial<Pick<Project, 'name' | 'color' | 'theme' | 'maxAgents' | 'autoAssign' | 'autoLabel' | 'onlyMyPrs' | 'preview' | 'autoQa' | 'autoSendBack' | 'autoMerge' | 'qaBrief' | 'qaEffort' | 'hidden'>> & { mergeMethod?: { repo: string; method: MergeMethod | '' } },
+    patch: Partial<Pick<Project, 'name' | 'color' | 'theme' | 'maxAgents' | 'autoAssign' | 'autoLabel' | 'onlyMyPrs' | 'preview' | 'autoQa' | 'autoSendBack' | 'autoMerge' | 'qaBrief' | 'qaEffort' | 'hidden'>> & { mergeMethod?: { repo: string; method: MergeMethod | '' }; plugin?: { id: string; on: boolean } },
   ): Project {
     const project = this.project(id);
     // checked before anything changes, so a refused patch leaves the project as it was
     if (patch.mergeMethod && !project.repos.includes(patch.mergeMethod.repo)) throw new Error(`${patch.mergeMethod.repo} isn’t connected to ${project.name}`);
+    // one plugin at a time, so two windows switching different ones don't undo each other
+    const plugins = patch.plugin ? switchPlugin(project.plugins, String(patch.plugin.id), patch.plugin.on === true) : undefined;
     if (patch.name !== undefined) project.name = patch.name.trim() || project.name;
     if (patch.color !== undefined) project.color = patch.color;
     if (patch.theme !== undefined) {
@@ -238,6 +241,7 @@ export class Store {
     if (patch.autoLabel !== undefined) project.autoLabel = patch.autoLabel.trim();
     if (patch.onlyMyPrs !== undefined) project.onlyMyPrs = !!patch.onlyMyPrs;
     if (patch.hidden !== undefined) project.hidden = patch.hidden === true;
+    if (plugins) project.plugins = plugins;
     if (patch.mergeMethod !== undefined) {
       const { repo, method } = patch.mergeMethod;
       // an empty (or unknown) choice goes back to the office-wide setting

@@ -81,6 +81,10 @@ export class Plugins {
     return [...this.parts].flatMap(([plugin, parts]) => (parts.leadTools ?? []).map((tool) => ({ plugin, tool })));
   }
 
+  projectChanged(projectId: string): void {
+    this.each('projectChanged', (parts) => parts.projectChanged?.(projectId));
+  }
+
   boardRefreshed(projectId: string): void {
     this.each('boardRefreshed', (parts) => parts.boardRefreshed?.(projectId));
   }

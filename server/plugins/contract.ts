@@ -32,6 +32,8 @@ export interface PluginParts {
   boardRefreshed?(projectId: string): void;
   /** The office opened, or updated, the pull request of an agent on one of this plugin's briefs. */
   prOpened?(agent: Agent, pr: { number: number; url: string }): void;
+  /** A project's settings changed: a plugin switched on or off for it, say (`host.on`). */
+  projectChanged?(projectId: string): void;
   /** A pull request in any project merged or closed, a goal's too (after the goal has heard). */
   prClosed?(repo: string, number: number, merged: boolean): void;
   /**
@@ -50,7 +52,7 @@ export interface PluginParts {
   ledgerRecorded?(event: LedgerEvent): void;
   /** Whether only the captain merges this pull request, whatever QA says. By its branch, since a pull request outlives its agent. */
   captainMerges?(pr: { branch: string }): boolean;
-  /** Tools it adds to every goal lead's office, beside ship, note and show (`mcp__office__<name>`). */
+  /** Tools it adds to the office of every goal lead whose project it's switched on for, beside ship, note and show (`mcp__office__<name>`). */
   leadTools?: LeadTool[];
 }
 
@@ -115,6 +117,12 @@ export interface PluginHost {
    */
   state<S extends object>(fresh: () => S, how?: { saved?: boolean }): PluginState<S>;
   projects(): Project[];
+  /**
+   * Whether this plugin is switched on for project `projectId`, in its settings (`Project.plugins`). A plugin that works
+   * per project does nothing for a project it's off for; the office already keeps its lead tools and holodeck screens
+   * away from one.
+   */
+  on(projectId: string): boolean;
   agent(id: string): Agent | undefined;
   /** Every agent in the office now, of every project. */
   agents(): Agent[];

@@ -2,6 +2,7 @@
 // The plugins' parts in the browser (docs/plugins.md): each plugin folder's client.ts, found as the client's built.
 // Only the plugins the office has switched on (`info.plugins`) show.
 import type * as THREE from 'three';
+import { pluginOn } from '../../shared/projectPlugins';
 import type { Agent, AgentStatus } from '../../shared/types';
 import { state } from './net/state';
 import type { Ui } from './ui/context';
@@ -24,6 +25,11 @@ export interface ClientPlugin {
   hall?: (projectId: string) => HallScreen[];
   /** What it says about a goal under way, on the goal's own surfaces. */
   goal?: GoalPart;
+  /**
+   * It works per project: a switch for it in each project's settings (the manager's Projects tab), off until it's
+   * switched on there (`Project.plugins`). Its holodeck screens and its lead tools come only to projects it's on for.
+   */
+  project?: { label: string; about: string };
   /** Keys it adds to the lists of controls, on the splash screen and the HUD: `{ key: 'G', label: 'the gallery' }`, say. */
   legend?: { key: string; label: string }[];
   /**
@@ -83,10 +89,17 @@ export interface HallScreen {
   closeUp?(ui: Ui): void;
 }
 
-/** The screens the plugins switched on hang in `projectId`'s holodeck, each with its plugin's id. */
+/** The screens the plugins switched on for `projectId` hang in its holodeck, each with its plugin's id. */
 export function hallScreens(projectId: string): { plugin: string; screen: HallScreen }[] {
-  return clientPlugins().flatMap((p) => (p.hall?.(projectId) ?? []).map((screen) => ({ plugin: p.id, screen })));
+  const project = state.project(projectId);
+  return clientPlugins()
+    .filter((p) => pluginOn(project, p.id))
+    .flatMap((p) => (p.hall?.(projectId) ?? []).map((screen) => ({ plugin: p.id, screen })));
 }
+
+/** The plugins switched on in the office that work per project, for a project's settings to switch on and off. */
+export const projectPlugins = (): (ClientPlugin & Required<Pick<ClientPlugin, 'project'>>)[] =>
+  clientPlugins().filter((p): p is ClientPlugin & Required<Pick<ClientPlugin, 'project'>> => !!p.project);
 
 /**
  * A plugin's word on a goal under way, which the core places on the goal's surfaces: its card in the goals list and

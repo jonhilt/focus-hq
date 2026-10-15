@@ -78,6 +78,11 @@ export interface Project {
   hidden?: boolean;
   /** How hard the room's QA (its officer, and each goal's reviewer) thinks. Missing = the model's default. */
   qaEffort?: Effort;
+  /**
+   * The plugins switched on for this project, by id (shared/projectPlugins.ts): a plugin that works per project, like
+   * cartography, does nothing for it otherwise. Missing = none.
+   */
+  plugins?: string[];
   /** Goals waiting for a free team station, first up first. They never start by themselves. */
   goalQueue?: QueuedGoal[];
   /** Goals that have been closed, newest first (a few dozen at most). */

@@ -1,3 +1,4 @@
+import { pluginOn } from '../../../shared/projectPlugins';
 import type { Issue, PluginStates, Snapshot } from '../../../shared/types';
 import type { ShipStatus } from '../shipStatus';
 import type { BriefWork, PluginHost, PluginState } from '../../plugins/contract';
@@ -50,6 +51,7 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
       });
     },
     projects: () => core.store.projects,
+    on: (projectId) => pluginOn(core.store.projects.find((p) => p.id === projectId), id),
     agent: (agentId) => core.store.agents.get(agentId),
     agents: () => [...core.store.agents.values()],
     // read as it's asked for: the office sets the manager's reader once the plugins have started

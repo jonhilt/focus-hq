@@ -130,6 +130,8 @@ async function main() {
     game.repos = ['demo/space-dodger'];
     // so the demo shows a PR going QA pass → checks green → merged by itself
     game.autoMerge = true;
+    // and what each plugin that works per project does, in both: switched on for them all (the others don't look)
+    for (const p of [shop, game]) p.plugins = office.agents.plugins.ids();
     // the studio's recorder starts the one goal it films itself
     if (!config.studio) {
       // the demo keeps no ledger: a few days of one, to review at the master systems table

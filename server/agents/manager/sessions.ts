@@ -1,3 +1,4 @@
+import { pluginOn } from '../../../shared/projectPlugins';
 import { closeSync, fstatSync, openSync, readFileSync, readSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { Effect, Fiber, FiberMap } from 'effect';
@@ -252,9 +253,11 @@ export class AgentSessions extends Part {
     };
   }
 
-  /** The plugins' tools in a lead's office, bound to them: their checkouts (in `workspace`), and their station's screen. */
+  /** The tools of the plugins switched on for a lead's project, in their office, bound to them: their checkouts (in `workspace`), and their station's screen. */
   private leadTools(agent: Agent, workspace: string): ExtraTool[] {
-    return this.core.plugins.leadTools().map(({ tool }) => ({
+    // only the plugins switched on for the lead's project
+    const project = this.store.projects.find((p) => p.id === agent.projectId);
+    return this.core.plugins.leadTools().filter(({ plugin }) => pluginOn(project, plugin)).map(({ tool }) => ({
       name: tool.name,
       description: tool.description,
       input: tool.input,

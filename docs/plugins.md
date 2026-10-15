@@ -43,6 +43,17 @@ A required plugin lends what it shares through `provides`, returned from its `st
 
 The climber's pure rules still borrow two of the scorecard's formatting helpers (`direction`, `formatValue`) by path, which is fine while both live in this repo; plugins in repos of their own need those in a published package.
 
+## Switched on per project
+
+`FOCUS_PLUGINS` switches a plugin on for the office. A plugin that works per project, like cartography, also has to be switched on for each project it should work on: a switch in the project's settings (the manager's **Projects** tab, under **Plugins**), off until you switch it on. The project keeps the list (`Project.plugins`, `shared/projectPlugins.ts`), and the office:
+
+- shows the switch only for the plugins switched on in the office whose `client.ts` declares `project` (a `label` and an `about`);
+- keeps a plugin's lead tools out of the offices of goals in projects it's off for, and its holodeck screens out of their halls;
+- tells the plugins when a project's settings change (`projectChanged`), so one switched on starts its work there at once, and one switched off drops what it had;
+- answers `host.on(projectId)` for the plugin to ask itself.
+
+Plugins about the office as a whole (the scorecard, the climber) don't declare `project`, and take no notice of the switch. The demo switches every plugin on for its two projects.
+
 ## What a plugin adds
 
 A plugin is a folder with a `server.ts` that default-exports a `FocusPlugin` (`server/plugins/contract.ts`): an `id` and a `start(host)` that returns what it adds. Every part is optional:
@@ -60,8 +71,9 @@ A plugin is a folder with a `server.ts` that default-exports a `FocusPlugin` (`s
   - `prClosed`: any pull request merged or closed, a goal's too (once the goal has heard).
   - `turn`: an agent's turn started or ended, any agent's (the flow plugin keeps leads). A turn cut short still ends, and a turn can start and end more than once in what looks like one (carrying on, a retry, a new session), so take each as how the agent stands now. `end` comes before the office acts on how the turn went, so the agent's status still says `working`: go by the phase.
   - `ledgerRecorded`: a line went in the ship's log, any kind. It's heard as it's written, before the office has acted on what it says (a goal's pull request merging is logged before the goal knows), so read the office afresh a moment later rather than straight away.
+  - `projectChanged`: a project's settings changed, a plugin switched on or off for it, say.
   - `captainMerges`: whether only the captain merges a pull request, whatever QA and auto-merge say. It goes by branch, since a pull request outlives its agent.
-- **Lead tools.** `leadTools`: tools added to every goal lead's office beside ship, note and show, as `mcp__office__<name>`. Each has a `name` (lowercase, digits and underscores; one the office's own tools have, or another plugin's already took, is left out), a `description` the lead reads, an `input` of zod fields, and `run(lead, input)`, which answers in words (a throw is said back as the tool failing). `lead` is a `LeadToolContext`: the lead's agent, their `checkouts` of the goal's repos as they stand in their workspace, and `show(page)`, which puts a page on their station's screen as their show tool does. The cartography plugin's `map` tool is the first.
+- **Lead tools.** `leadTools`: tools added to the office of every goal lead whose project the plugin's switched on for beside ship, note and show, as `mcp__office__<name>`. Each has a `name` (lowercase, digits and underscores; one the office's own tools have, or another plugin's already took, is left out), a `description` the lead reads, an `input` of zod fields, and `run(lead, input)`, which answers in words (a throw is said back as the tool failing). `lead` is a `LeadToolContext`: the lead's agent, their `checkouts` of the goal's repos as they stand in their workspace, and `show(page)`, which puts a page on their station's screen as their show tool does. The cartography plugin's `map` tool is the first.
 
 A hook that throws is logged and skipped, so one plugin's bug never stops the office's loops.
 

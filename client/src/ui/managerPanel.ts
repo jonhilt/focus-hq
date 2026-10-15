@@ -1,3 +1,5 @@
+import { pluginOn } from '../../../shared/projectPlugins';
+import { projectPlugins } from '../plugins';
 import { isHidden } from '../../../shared/hidden';
 import { autoMergeFor } from '../../../shared/mergeGate';
 import type { Autonomy, Effort, MergeMethod, PreviewConfig, Project, RoomTheme, SpeechStatus, VoiceStatus } from '../../../shared/types';
@@ -186,6 +188,12 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
     title: 'Merges a PR the crew opened once QA passed its latest commit and its checks are green',
     changed: (on) => void api.updateProject(p.id, { autoMerge: on }).catch((e: Error) => ui.error(e.message)),
   });
+  // the plugins that work per project, each off until it's switched on here
+  const plugins = projectPlugins().map((plugin) =>
+    new Switch(plugin.project.label, pluginOn(p, plugin.id), {
+      title: plugin.project.about,
+      changed: (on) => void api.updateProject(p.id, { plugin: { id: plugin.id, on } }).catch((e: Error) => ui.error(e.message)),
+    }).el);
   const theme = themeSelect(roomTheme(p));
   theme.addEventListener('change', () => void api.updateProject(p.id, { theme: theme.value as RoomTheme }).catch((e: Error) => ui.error(e.message)));
 
@@ -213,6 +221,7 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
     h('div', { class: 'row' }, h('div', { class: 'grow' }, repoInput), connect, repoDatalist(listId)),
     h('div', { class: 'row', style: 'margin-top:8px' }, h('div', { class: 'grow' }, newRepo), newRepoPrivate.el, create),
     previews,
+    plugins.length ? h('div', { class: 'row', style: 'margin-top:14px' }, h('span', { class: 'label' }, 'Plugins'), ...plugins) : null,
     h('div', { class: 'row', style: 'margin-top:14px' },
       h('label', { class: 'row label', style: 'gap:6px' }, 'Holodeck program', theme),
       h('label', { class: 'row label', style: 'gap:6px' }, 'Agents at once', maxAgents),

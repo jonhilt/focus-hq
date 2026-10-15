@@ -27,7 +27,7 @@ async function send<T>(method: string, url: string, init: RequestInit): Promise<
 
 export const api = {
   createProject: (name: string, color: string, repos: string[], theme?: RoomTheme) => call<Project>('POST', '/projects', { name, color, repos, theme }),
-  updateProject: (id: string, patch: Partial<Project>) => call<Project>('PATCH', `/projects/${id}`, patch),
+  updateProject: (id: string, patch: Partial<Project> & { plugin?: { id: string; on: boolean } }) => call<Project>('PATCH', `/projects/${id}`, patch),
   /** An empty method goes back to Settings' merge method for that repo. */
   setMergeMethod: (id: string, repo: string, method: MergeMethod | '') => call<Project>('PATCH', `/projects/${id}`, { mergeMethod: { repo, method } }),
   deleteProject: (id: string) => call('DELETE', `/projects/${id}`),

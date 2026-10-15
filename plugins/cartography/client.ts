@@ -1,5 +1,6 @@
 // The cartography plugin in the browser (README.md): each project's architecture map on the engineering station, its
 // views drawn by draw.ts, each with how to read it, and in sentences; and a screen per view in the project's holodeck.
+import { pluginOn } from '../../shared/projectPlugins';
 import { api } from '../../client/src/net/api';
 import { state } from '../../client/src/net/state';
 import { type ClientPlugin, pluginState } from '../../client/src/plugins';
@@ -32,18 +33,28 @@ function repoMap(map: RepoMap, open: Set<string>): HTMLElement[] {
 
 function projectMaps(ui: Ui, open: Set<string>): HTMLElement[] {
   const now = maps();
-  return state.projects.map((project) => {
+  const on = state.projects.filter((p) => pluginOn(p, CARTOGRAPHY));
+  const off = state.projects.length - on.length;
+  // the projects it's off for are only counted: switching it on is in each project's settings
+  const offNote = off
+    ? h('small', { class: 'muted' }, `Switched off for ${off} project${off === 1 ? '' : 's'}: switch Architecture map on in a project's settings (the manager's Projects tab) to map it.`)
+    : null;
+  return [...on.map((project) => {
     const remap = h('button', { class: 'btn small', onclick: () => void api.plugin(CARTOGRAPHY, '/map', { projectId: project.id }).catch((err: Error) => ui.error(err.message)) },
       now?.mapping.includes(project.id) ? 'Mapping…' : 'Map again');
     const repos = now?.maps[project.id];
     return h('div', { class: 'card' },
       h('div', { class: 'row' }, h('strong', { class: 'grow' }, project.name), remap),
       ...(repos ? repos.flatMap((m) => repoMap(m, open)) : [h('small', { class: 'muted' }, `Not mapped yet. Each repo keeps its model in ${MODEL_FILE}.`)]));
-  });
+  }), ...(offNote ? [offNote] : [])];
 }
 
 const cartography: ClientPlugin = {
   id: CARTOGRAPHY,
+  project: {
+    label: 'Architecture map',
+    about: `Maps the project's architecture from the model each repo keeps in ${MODEL_FILE}: on the engineering station, a screen per view in its holodeck, and its leads' map tool`,
+  },
   engineering: {
     views: [
       {
@@ -53,7 +64,7 @@ const cartography: ClientPlugin = {
           const drift = Object.values(maps()?.maps ?? {}).flat().reduce((n, m) => n + m.problems.length, 0);
           return drift ? `${drift} DRIFT` : '';
         },
-        standby: () => !Object.keys(maps()?.maps ?? {}).length,
+        standby: () => !state.projects.some((p) => pluginOn(p, CARTOGRAPHY)),
         render: (ui, _go, open) => projectMaps(ui, open),
       },
     ],

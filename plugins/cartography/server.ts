@@ -1,5 +1,6 @@
 // The cartography plugin (README.md): each project's architecture map, from the model its repos keep in MODEL_FILE and
-// the imports their code makes, made again as the office starts and whenever a pull request merges into one of them.
+// the imports their code makes, made again as the office starts and whenever a pull request merges into one of them,
+// for each project it's switched on for in the project's settings.
 // FOCUS_PLUGINS=cartography.
 import path from 'node:path';
 import { config } from '../../server/config';
@@ -38,6 +39,8 @@ class Cartographer {
     }
     const project = this.host.projects().find((p) => p.id === id);
     if (!project) return;
+    // switched off for the project: what was mapped of it goes
+    if (!this.host.on(id)) return this.drop(id);
     this.state.set({ mapping: [...this.state.get().mapping, id] });
     const maps: RepoMap[] = [];
     for (const repo of project.repos) {
@@ -48,13 +51,20 @@ class Cartographer {
     if (this.again.delete(id)) await this.map(id);
   }
 
+  /** Forgets project `id`'s maps. */
+  drop(id: string): void {
+    const { [id]: _, ...rest } = this.state.get().maps;
+    if (_) this.state.set({ maps: rest });
+  }
+
+  /** Maps every project it's switched on for. */
   mapAll(): Promise<void> {
-    return Promise.all(this.host.projects().map((p) => this.map(p.id))).then(() => undefined);
+    return Promise.all(this.host.projects().filter((p) => this.host.on(p.id)).map((p) => this.map(p.id))).then(() => undefined);
   }
 
   /** A pull request merged into `repo`: its projects' maps are out of date. */
   merged(repo: string): void {
-    for (const p of this.host.projects()) if (p.repos.includes(repo)) void this.map(p.id).catch((err: unknown) => console.error(`Cartography of ${p.name}: ${errorMessage(err)}`));
+    for (const p of this.host.projects()) if (p.repos.includes(repo) && this.host.on(p.id)) void this.map(p.id).catch((err: unknown) => console.error(`Cartography of ${p.name}: ${errorMessage(err)}`));
   }
 }
 
@@ -73,11 +83,14 @@ const cartography: FocusPlugin = {
           path: '/map',
           handle: ({ body }) => {
             const id = typeof body.projectId === 'string' ? body.projectId : undefined;
+            if (id && !host.on(id)) throw new Error('Cartography isn’t switched on for that project: switch it on in its settings');
             void (id ? cartographer.map(id) : cartographer.mapAll()).catch((err: unknown) => console.error(`Cartography: ${errorMessage(err)}`));
             return { ok: true };
           },
         },
       ],
+      // switched on for a project, it maps it; switched off, its maps go
+      projectChanged: (projectId) => void cartographer.map(projectId).catch((err: unknown) => console.error(`Cartography: ${errorMessage(err)}`)),
       prClosed: (repo, _number, merged) => {
         if (merged) cartographer.merged(repo);
       },

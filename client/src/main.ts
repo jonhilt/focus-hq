@@ -335,7 +335,11 @@ async function main() {
       ? `${info.mode === 'demo' ? 'Demo mode – simulated GitHub and agents.' : 'Live mode.'} ${info.github.ok ? `GitHub: ${info.github.login}` : 'GitHub not connected – run "gh auth login".'}`
       : '';
   });
-  state.on('projects', syncWorld);
+  state.on('projects', () => {
+    syncWorld();
+    // a plugin switched on or off for a project hangs or takes down its screens there
+    world.syncHallScreens();
+  });
   // the plugins' screens round the holodecks follow which are switched on, and their state
   state.on('info', () => {
     world.markPanels();

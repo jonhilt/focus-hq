@@ -199,3 +199,21 @@ describe('loading a saved office', () => {
     expect(store.plugins).toEqual({ retro: state.retro, 'number-one': { chat: state.numberOne } });
   });
 });
+
+describe('a project’s plugins', () => {
+  const store = new Store(false);
+  const project = store.addProject('Focus');
+
+  it('are switched on and off one at a time', () => {
+    store.updateProject(project.id, { plugin: { id: 'cartography', on: true } });
+    store.updateProject(project.id, { plugin: { id: 'flow', on: true } });
+    expect(project.plugins).toEqual(['cartography', 'flow']);
+    store.updateProject(project.id, { plugin: { id: 'cartography', on: false } });
+    expect(project.plugins).toEqual(['flow']);
+  });
+
+  it('refuse a bad id before anything changes', () => {
+    expect(() => store.updateProject(project.id, { name: 'Renamed', plugin: { id: 'No Such', on: true } })).toThrow('isn’t a plugin’s id');
+    expect(project.name).toBe('Focus');
+  });
+});

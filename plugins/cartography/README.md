@@ -1,6 +1,6 @@
 # Cartography
 
-A plugin (`FOCUS_PLUGINS=cartography`, [plugins](../../docs/plugins.md)).
+A plugin (`FOCUS_PLUGINS=cartography`, [plugins](../../docs/plugins.md)), switched on per project: **Architecture map** in a project's settings (the manager's **Projects** tab). It maps only the projects it's on for, maps one as soon as it's switched on, and forgets one switched off; their leads get the map tool, and their holodecks its screens.
 
 Each project's architecture, as a map that keeps up with its code. A repo keeps its model in `.focus/cartography.yaml`, versioned with the code. The model says only two things:
 

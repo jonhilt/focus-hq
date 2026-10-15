@@ -26,6 +26,14 @@ function started(saved: PluginStates, ...plugins: FocusPlugin[]): Plugins {
 }
 
 describe('Plugins', () => {
+  it('tells every plugin a project changed, one that throws not stopping the rest', () => {
+    const heard: string[] = [];
+    const plugins = started({}, plugin('broken', { projectChanged: () => { throw new Error('boom'); } }), plugin('maps', { projectChanged: (id) => heard.push(id) }));
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    plugins.projectChanged('p1');
+    expect(heard).toEqual(['p1']);
+  });
+
   it('gathers the tools the plugins add to a lead’s office, with whose they are', () => {
     const map = { name: 'map', description: 'A map', input: {}, run: () => Promise.resolve('shown') };
     const plugins = started({}, plugin('cartography', { leadTools: [map] }), plugin('quiet', {}));
