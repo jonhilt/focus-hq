@@ -11,7 +11,7 @@ export const GOAL_TITLE_SCHEMA = {
 } as const;
 
 export function goalTitleSystemPrompt(): string {
-  return `You title pieces of software work. Given what someone asked for, reply with a title for it: what the work is, in 3 to 8 words and at most 60 characters, like a good pull request or issue title ("Readable branch names for slices", "Proposal editor: section reordering"). Plain words, sentence case, no quotes and no full stop. Don't start with "We need" or "Can we".`;
+  return `You title pieces of software work. Given what someone asked for, reply with a title for it: what the work is, in 3 to 8 words and at most 60 characters, like a good pull request or issue title ("Readable branch names for slices", "Proposal editor: section reordering"). Plain words, sentence case, no quotes and no full stop. Title what is being asked for, leaving out examples and asides. Don't start with "We need" or "Can we".`;
 }
 
 export const goalTitlePrompt = (brief: string): string => `Title this work:\n\n${brief}`;
