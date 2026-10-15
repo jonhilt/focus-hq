@@ -77,6 +77,7 @@ A plugin's `client.ts` default-exports a `ClientPlugin` (`client/src/plugins.ts`
 
   The station's own views are the overview (your plan's usage, then the plugins' parts and the retro), the **Ledger** (the report card as it stands, and the open frictions) and the **Retro**.
 - **A board on the MSD** (`msd`): what it draws beside the ship in main engineering while it's put up there, with `ui.showOnMsd({ plugin: id })`. It's drawn again as the plugin's state changes.
+- **Screens in a project's holodeck** (`hall`): given a project's id, the screens it hangs round that holodeck's wall, either side of the entrance, each a hologram you walk up to (`world/hallScreens.ts`). A screen has a `key`, a `title` (aiming at it reads *Look at …*), a `version`, and `draw(ctx, w, h)` on a 1280 × 800 canvas, which may be async. It's drawn again only when its `version` changes, at most as often as the board is. `closeUp(ui)` is what E on it opens. They're asked for again whenever the plugin's state changes. A hall has room for `HALL_SCREENS` (6) in all, given out in the order `FOCUS_PLUGINS` lists the plugins. The cartography plugin hangs a screen per view.
 
 ## Writing one
 

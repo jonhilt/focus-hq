@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { around, ENTRANCE_X, hallPodSpots } from './hallLayout';
+import { around, ENTRANCE_X, HALL_SCREEN, HALL_SCREEN_ANGLES, HALL_SCREENS, hallPodSpots, hallScreenSpots, POD_ANGLES } from './hallLayout';
 import { type Box2, contains, DOOR_H, DOOR_W, footprint, footprints, HALL, WALL_T } from './layout';
 
 // The player is a 0.3 m radius (player.ts), colliding only with boxes square to the world.
@@ -97,5 +97,24 @@ describe('footprints', () => {
     // and a point 0.4 m off its side, which its whole footprint would cover, is in none
     expect(contains(footprint(m), across.clone().multiplyScalar(0.6))).toBe(true);
     expect(cells.some((c) => contains(c, across.clone().multiplyScalar(0.6)))).toBe(false);
+  });
+});
+
+describe('hall screens', () => {
+  it('hang either side of the entrance, clear of the pods and the entrance’s wall, facing the middle', () => {
+    const spots = hallScreenSpots(HALL_SCREENS + 2);
+    expect(spots).toHaveLength(HALL_SCREENS);
+    const half = HALL_SCREEN.width / 2 / HALL_SCREEN.r;
+    const gap = Math.asin(2.4 / HALL.radius);
+    for (const a of HALL_SCREEN_ANGLES) {
+      // clear of the pods (±90°, ±45°: a pod is about 1.2 m either side of its middle at the wall) and the entrance's flat wall
+      for (const pod of POD_ANGLES) expect(Math.abs(Math.abs(a) - Math.abs(pod))).toBeGreaterThan(half + 1.2 / HALL.radius);
+      expect(Math.abs(a) + half).toBeLessThan(Math.PI - gap);
+    }
+    for (const { at, yaw } of spots) {
+      // a plane's front (+Z) turned by yaw points back at the middle
+      const front = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+      expect(front.dot(new THREE.Vector3(-at.x, 0, -at.z).normalize())).toBeCloseTo(1);
+    }
   });
 });

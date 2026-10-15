@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { hallScreens } from '../plugins';
 import { columns } from '../../../shared/board';
 import { holodecks } from '../../../shared/hidden';
 import type { Project, StudioTake } from '../../../shared/types';
@@ -211,6 +212,11 @@ export class World {
     }
     this.projectKey = key;
     this.build(projects);
+  }
+
+  /** The plugins' screens in each holodeck, hung again from what the plugins switched on say now. */
+  syncHallScreens(): void {
+    for (const room of this.rooms.values()) room.hallScreens.sync(hallScreens(room.project.id));
   }
 
   private build(projects: Project[]): void {

@@ -20,6 +20,8 @@ export type Interaction =
   | { kind: 'background'; projectId: string; station: number; taskId: string }
   | { kind: 'desk'; projectId: string }
   | { kind: 'board'; projectId: string; tab?: 'todo' | 'doing' | 'prs' }
+  /** One of a plugin's screens round a holodeck's wall (hallScreens.ts): up close. */
+  | { kind: 'hall-screen'; projectId: string; plugin: string; key: string }
   | { kind: 'new-issue'; projectId: string }
   | { kind: 'manager'; tab?: 'projects' | 'new-project' | 'issue' | 'settings' }
   | { kind: 'turbolift' }

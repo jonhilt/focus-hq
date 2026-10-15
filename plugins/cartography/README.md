@@ -39,13 +39,14 @@ On the engineering station (<kbd>E</kbd> at Lt. Brennan's station on deck 5), un
 - **A view** stands each of its parts in its layer's column, with what it does. An arrow goes from a part to a part whose code it uses, as thick as its imports. Each arrow carries a number, and the numbered sentences under the drawing say what goes across it: *Panels and HUD uses state, api, attention, markRead from Mirror of the office (63 imports)*. A view reads best with up to about nine parts.
 - **The whole map** (every part) is a dependency matrix, since a drawing of every connection is more lines than anyone can follow. Each row imports from the columns it has a number in, and the number is how many imports. Orange cells are two parts that import each other, where the code is tangled. Its key reads out its busiest cell as an example, and hovering a cell says what it takes.
 
+**In the project's holodeck**, each view has a screen of its own round the wall, either side of the entrance: its question over its drawing, solid as you aim at it. E on one opens it up close, filling the window, with its numbered sentences. The repos' own views come first, then each repo's whole map, six at most (the hall's room for plugins' screens).
+
 The drawings are SVG made by `draw.ts`, at their own size, shrunk to fit the station but never blown up. **Map again** makes a project's maps again.
 
 Maps are made from each repo's default branch, checked out under `~/.focus/cartography/`: 20 seconds after the office starts, and again whenever a pull request merges into one of the project's repos. They're kept in memory only, not in `state.json`. The demo office's repos are made up, so it maps the office's own checkout for each of them.
 
 ## What's next
 
-- A place in the ship for the views, one per wall, rather than a panel.
 - Connections that imports can't show (HTTP, the WebSocket, events), from traces of a seeded demo run.
 - How the map changes over time, from the model compared across merged pull requests and the repo's history.
 
@@ -58,4 +59,4 @@ Maps are made from each repo's default branch, checked out under `~/.focus/carto
 - `map.ts`: making a repo's map from a checkout (git ls-files, then scan.ts).
 - `draw.ts`: drawing a view and the matrix as SVG, and a view's connections as sentences.
 - `views.ts`: a map's views, and what the Maps view says in words.
-- `server.ts`: when maps are made, and the `/map` route. `client.ts`: the **Maps** view.
+- `server.ts`: when maps are made, and the `/map` route. `client.ts`: the **Maps** view. `panel.ts`: a view as the browser shows it, and up close. `hall.ts`: the holodeck's screens.

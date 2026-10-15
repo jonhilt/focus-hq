@@ -1,31 +1,16 @@
-// The cartography plugin in the browser (README.md): each project's architecture map on the engineering station: its
-// views drawn by draw.ts, each with how to read it, and in sentences.
+// The cartography plugin in the browser (README.md): each project's architecture map on the engineering station, its
+// views drawn by draw.ts, each with how to read it, and in sentences; and a screen per view in the project's holodeck.
 import { api } from '../../client/src/net/api';
 import { state } from '../../client/src/net/state';
 import { type ClientPlugin, pluginState } from '../../client/src/plugins';
 import type { Ui } from '../../client/src/ui/context';
 import { h } from '../../client/src/ui/dom';
-import { matrixExample, matrixSvg, viewSentences, viewSvg } from './draw';
-import { CARTOGRAPHY, type CartographyState, MODEL_FILE, type MapView, type RepoMap } from './shared';
-import { coverage, MATRIX_KEY, openingView, VIEW_KEY, viewsOf, WHOLE } from './views';
+import { hallMaps } from './hall';
+import { viewBody } from './panel';
+import { CARTOGRAPHY, type CartographyState, MODEL_FILE, type RepoMap } from './shared';
+import { coverage, openingView, viewsOf } from './views';
 
 const maps = () => pluginState<CartographyState>(CARTOGRAPHY);
-
-/** An SVG drawing, at its own size (readable), scrolling sideways when it's wider than the station. */
-function drawing(svg: string): HTMLElement {
-  const box = h('div', { class: 'cg-drawing' });
-  box.innerHTML = svg;
-  return box;
-}
-
-/** A view's body: the drawing, how to read it, and (for a view of a few parts) what it shows in sentences. */
-function viewBody(map: RepoMap, view: MapView): HTMLElement[] {
-  if (view.id === WHOLE.id) {
-    const example = matrixExample(map);
-    return [h('small', { class: 'muted' }, MATRIX_KEY, example ? ` ${example}` : ''), drawing(matrixSvg(map))];
-  }
-  return [h('small', { class: 'muted' }, VIEW_KEY), drawing(viewSvg(map, view)), h('ol', { class: 'cg-sentences' }, ...viewSentences(map, view).map((s) => h('li', null, s)))];
-}
 
 function repoMap(map: RepoMap, open: Set<string>): HTMLElement[] {
   const head = h('div', { class: 'row' }, h('strong', { class: 'grow' }, map.repo), map.commit ? h('small', { class: 'muted' }, map.commit.slice(0, 7)) : null);
@@ -73,6 +58,8 @@ const cartography: ClientPlugin = {
       },
     ],
   },
+  // a screen per view round the project's holodeck
+  hall: (projectId) => hallMaps(maps()?.maps[projectId] ?? []),
 };
 
 export default cartography;

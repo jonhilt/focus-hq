@@ -19,3 +19,22 @@ export function coverage(map: RepoMap): string {
 /** How to read a view, under its question. */
 export const VIEW_KEY = 'An arrow goes from a part to a part whose code it uses: the thicker, the more it imports. Its number is its line below, which says what it takes.';
 export const MATRIX_KEY = 'Each row imports from the columns it has a number in: the number is how many imports. Orange: two parts that import each other.';
+
+/**
+ * Which of a project's views get a screen in its holodeck, in the order they're hung: every repo's own views first,
+ * the questions someone chose to ask, then each repo's whole map.
+ */
+export function hallViews(maps: readonly RepoMap[]): { map: RepoMap; view: MapView }[] {
+  const drawn = maps.filter((m) => m.model && !m.error);
+  const each = drawn.map((map) => viewsOf(map).map((view) => ({ map, view })));
+  return [...each.flatMap((views) => views.filter((v) => v.view.id !== WHOLE.id)), ...each.flatMap((views) => views.filter((v) => v.view.id === WHOLE.id))];
+}
+
+/** What a view's screen shows changes only with the commit it was mapped from and the view itself. */
+export const screenVersion = (map: RepoMap, view: MapView): string => `${map.commit ?? ''}|${view.id}|${view.parts.join(',')}|${map.connections.length}`;
+
+/** Where a drawing `w` × `h` goes in `box`, as big as fits without stretching, in the middle. */
+export function fitInto(w: number, h: number, box: { x: number; y: number; w: number; h: number }): { x: number; y: number; w: number; h: number } {
+  const scale = Math.min(box.w / w, box.h / h);
+  return { x: box.x + (box.w - w * scale) / 2, y: box.y + (box.h - h * scale) / 2, w: w * scale, h: h * scale };
+}

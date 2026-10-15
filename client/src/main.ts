@@ -325,7 +325,11 @@ async function main() {
       : '';
   });
   state.on('projects', syncWorld);
-  state.on('info', () => world.markPanels());
+  // the plugins' screens round the holodecks follow which are switched on, and their state
+  state.on('info', () => {
+    world.markPanels();
+    world.syncHallScreens();
+  });
   const agentChanged = (a: { projectId: string }) => {
     world.room(a.projectId)?.syncAgents();
     world.room(a.projectId)?.syncQa();
@@ -390,6 +394,7 @@ async function main() {
   state.on('plugin', (id) => {
     const board = pluginBoard(id);
     if (board) world.showOnMsd(board);
+    world.syncHallScreens();
   });
   state.on('usage', () => world.showOnMsd({ kind: 'usage', usage: state.usage }));
   let numberOneStatus = state.numberOne?.status;
@@ -519,6 +524,9 @@ async function main() {
         break;
       case 'board':
         ui.openBoard(i.projectId, i.tab);
+        break;
+      case 'hall-screen':
+        world.room(i.projectId)?.hallScreens.find(i.plugin, i.key)?.closeUp?.(ui);
         break;
       case 'new-issue':
         ui.openNewIssue(i.projectId);

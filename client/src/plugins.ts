@@ -12,6 +12,31 @@ export interface ClientPlugin {
   engineering?: EngineeringPart;
   /** What it draws on main engineering's MSD beside the ship, while it's put up there (`ui.showOnMsd({ plugin })`). */
   msd?: (ctx: CanvasRenderingContext2D, box: Box) => void;
+  /**
+   * Screens it hangs round the wall of a project's holodeck, each a hologram you walk up to (`world/hallScreens.ts`).
+   * Asked again whenever the plugin's state changes; a hall has room for `HALL_SCREENS` in all, given out in the order
+   * the plugins switched on list them.
+   */
+  hall?: (projectId: string) => HallScreen[];
+}
+
+/** One of a plugin's screens in a project's holodeck. */
+export interface HallScreen {
+  /** Which of the plugin's screens it is, the same from one asking to the next. */
+  key: string;
+  /** What it shows, in a few words: the hint as you aim at it reads `Look at <title>`. */
+  title: string;
+  /** Changes whenever what it draws would: the screen is drawn again only then. */
+  version: string;
+  /** Draws it on a `w` × `h` canvas (1280 × 800), cleared first; the screen shows it once it's done. */
+  draw(ctx: CanvasRenderingContext2D, w: number, h: number): void | Promise<void>;
+  /** E on the screen: what it shows, up close. */
+  closeUp?(ui: Ui): void;
+}
+
+/** The screens the plugins switched on hang in `projectId`'s holodeck, each with its plugin's id. */
+export function hallScreens(projectId: string): { plugin: string; screen: HallScreen }[] {
+  return clientPlugins().flatMap((p) => (p.hall?.(projectId) ?? []).map((screen) => ({ plugin: p.id, screen })));
 }
 
 /**

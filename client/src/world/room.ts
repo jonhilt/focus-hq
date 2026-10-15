@@ -30,6 +30,8 @@ import { HULL, LCARS, lcarsSign, workstation } from './starship';
 import { StudioSet } from './studioHall';
 import { keepsHallCollider, type ScenePlayback, STUDIO_HALL, STUDIO_SPAN, studioWalls } from './studio';
 import { FloorGlow, hover } from './hologram';
+import { HallScreens } from './hallScreens';
+import { hallScreens } from '../plugins';
 import { OVERLAY_LAYER } from './frame';
 import { AHEAD, Portal } from './portal';
 import { type StationSeat, TEAM_SCREEN, TeamStation, type TeamStationKit } from './teamStation';
@@ -97,6 +99,8 @@ export class ProjectRoom {
   private boardY = 0;
   private boardGlow!: FloorGlow;
   private lastT = 0;
+  /** The plugins' screens round the wall either side of the entrance. */
+  readonly hallScreens: HallScreens;
   /** The operations officer at the Ops station, who drafts issues and looks into stuck pull requests. */
   private planner!: Character;
   private opsScreen = new StationScreen(null, 'Operations · press N to draft an issue');
@@ -236,6 +240,11 @@ export class ProjectRoom {
       this.padds,
     ];
     for (const root of [this.group, ...this.desks.map((d) => d.station), qaStation.group, ops.group, rack]) mergeStatic(root, keep);
+
+    // after the merge, since what's on them comes and goes with the plugins' state
+    this.hallScreens = new HallScreens(project.id);
+    this.group.add(this.hallScreens.group);
+    this.hallScreens.sync(hallScreens(project.id));
 
     this.syncAgents();
     this.syncPlanner();
@@ -602,7 +611,8 @@ export class ProjectRoom {
     if (this.beams.length) this.beams = this.beams.filter((b) => !b.update(now));
     hover(this.boardMesh, this.boardY, t);
     this.boardGlow.update(t);
-    this.board.hologram.update(Math.min(0.1, t - this.lastT));
+    const dt = Math.min(0.1, t - this.lastT);
+    this.board.hologram.update(dt);
     this.lastT = t;
     const inRoom = this.holds(eye);
     // the hall's screens are seen from in it, or through a door to it (the hallway's or a briefing room's) as you near it
@@ -617,6 +627,7 @@ export class ProjectRoom {
       this.board.draw(this.project, board, state.agentsIn(this.project.id));
       this.rebuildPadds(board);
     }
+    this.hallScreens.update(t, dt, now, hallView(inRoom));
     if (inRoom) this.planner.update(t, eye.distanceTo(this.planner.group.getWorldPosition(tmp)));
     this.opsScreen.maybeDraw(now, hallView(false), undefined, undefined);
     const qaDist = eye.distanceTo(this.qa.group.getWorldPosition(tmp));
@@ -673,6 +684,7 @@ export class ProjectRoom {
 
   dispose(): void {
     this.board.dispose();
+    this.hallScreens.dispose();
     this.boardGlow.dispose();
     for (const slot of this.desks) {
       slot.screen.dispose();

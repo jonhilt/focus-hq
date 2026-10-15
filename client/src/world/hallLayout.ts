@@ -47,6 +47,22 @@ export function hallPodSpots(): PodSpot[] {
 }
 
 /**
+ * Where plugins' screens hang (plugins.ts `hall`), in the order they fill: either side of the entrance, between the pods
+ * and the entrance's flat wall, the nearest the pods first. Over the plants and the PADD rack, under the pods' screens.
+ */
+export const HALL_SCREEN_ANGLES = [105, -105, 125, -125, 145, -145].map((d) => THREE.MathUtils.degToRad(d));
+export const HALL_SCREENS = HALL_SCREEN_ANGLES.length;
+/** A plugin's screen: how far round from the middle it hangs (as the board does), how wide, its aspect and its bottom edge (m). */
+export const HALL_SCREEN = { r: R - 0.7, width: 3, aspect: 1.6, bottom: 1.45 } as const;
+
+/** Where the first `n` plugins' screens hang (at most HALL_SCREENS): each's middle, and its turn to face the hall's middle. */
+export function hallScreenSpots(n: number): { at: THREE.Vector3; yaw: number }[] {
+  const h = HALL_SCREEN.width / HALL_SCREEN.aspect;
+  // a plane faces +Z, where what facingIn turns is built facing -Z
+  return HALL_SCREEN_ANGLES.slice(0, n).map((a) => ({ at: around(HALL_SCREEN.r, a, HALL_SCREEN.bottom + h / 2), yaw: facingIn(a) + Math.PI }));
+}
+
+/**
  * The holodeck's door on the deck (world): in the hallway's wall, facing out into the hallway, the same size as the
  * hall's `entrance`, as a portal's two doorways must be.
  */
