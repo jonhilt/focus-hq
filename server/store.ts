@@ -43,6 +43,41 @@ export function numberOneAfterRestart(saved: StoredNumberOne): StoredNumberOne {
   return { ...saved, status: 'failed', activity: 'Interrupted', error: 'Interrupted when Focus shut down. Ask again.' };
 }
 
+/** A QA review as it picks up after a restart: one queued or under way ends, and a PR the operations officer was looking at goes to the captain. */
+export function reviewAfterRestart(saved: QaReview): QaReview {
+  let review = saved;
+  if (review.status === 'queued' || review.status === 'testing') {
+    review = { ...review, status: 'error', error: 'Interrupted when Focus shut down. Send it to QA again.' };
+  }
+  if (review.followUp?.kind === 'triaging') {
+    review = { ...review, followUp: { kind: 'needs-you', reason: `${review.followUp.officer} was looking at it when Focus shut down` } };
+  }
+  return review;
+}
+
+/**
+ * An agent as they pick up after a restart (`projectName` is their room's, for a lead saved before team stations): whoever was at
+ * work stops, and waits for a message; what doesn't outlive the office (a lead's subagents, workflows and background work, a hold
+ * for the plan's usage limit) goes; and one saved before a field existed gets it.
+ */
+export function agentAfterRestart(saved: Agent, projectName: string): Agent {
+  let agent: Agent = { ...saved, task: saved.task ?? 'issue', helpers: undefined, workflows: undefined, background: undefined };
+  if (agent.handover) {
+    // still waiting for the captain to start their cloud session; a terminal opened before isn't watched any more
+    agent = { ...agent, status: 'waiting', activity: 'Waiting for a cloud session', handover: { ...agent.handover, terminalAt: undefined } };
+  } else if (ACTIVE_STATUSES.includes(agent.status) || agent.status === 'queued') {
+    agent = { ...agent, status: 'stopped', activity: 'Interrupted when Focus shut down. Send a message to pick it back up.', permission: undefined };
+  }
+  if (agent.held) {
+    // whatever waited for your plan's limit to reset waits for the captain now
+    agent = { ...agent, held: undefined, activity: 'Was waiting for your plan’s usage limit when Focus shut down. Send a message to pick it back up.' };
+  }
+  agent = upgradeLead(agent, projectName);
+  // saved before the crew wore uniforms
+  if (!('division' in agent.avatar)) agent = { ...agent, avatar: agent.task === 'review' ? qaOfficerFor(agent.projectId).avatar : randomAvatar() };
+  return agent;
+}
+
 interface PersistedState {
   settings: Settings;
   projects: Project[];
@@ -128,39 +163,13 @@ export class Store {
     if (raw.studio) this.studio = studioAfterRestart(raw.studio);
     if (raw.retro) this.retro = retroAfterRestart(raw.retro);
     if (raw.climb) this.climb = { ...freshClimb(), ...raw.climb };
-    for (const review of raw.reviews ?? []) {
-      if (review.status === 'queued' || review.status === 'testing') {
-        Object.assign(review, { status: 'error', error: 'Interrupted when Focus shut down. Send it to QA again.' });
-      }
-      if (review.followUp?.kind === 'triaging') {
-        review.followUp = { kind: 'needs-you', reason: `${review.followUp.officer} was looking at it when Focus shut down` };
-      }
+    for (const saved of raw.reviews ?? []) {
+      const review = reviewAfterRestart(saved);
       this.reviews.set(prKey(review.repo, review.number), review);
     }
     for (const closed of raw.closedPrs ?? []) this.closedPrs.set(prKey(closed.repo, closed.issue), closed);
-    for (const agent of raw.agents ?? []) {
-      if (agent.handover) {
-        // still waiting for the captain to start their cloud session; a terminal opened before isn't watched any more
-        agent.status = 'waiting';
-        agent.activity = 'Waiting for a cloud session';
-        agent.handover.terminalAt = undefined;
-      } else if (ACTIVE_STATUSES.includes(agent.status) || agent.status === 'queued') {
-        agent.status = 'stopped';
-        agent.activity = 'Interrupted when Focus shut down. Send a message to pick it back up.';
-        agent.permission = undefined;
-      }
-      agent.task ??= 'issue'; // saved before agents could be seated on a conflicting PR
-      agent.helpers = undefined; // a lead's subagents and workflows don't outlive the office
-      agent.workflows = undefined;
-      agent.background = undefined;
-      if (agent.held) {
-        // whatever waited for your plan's limit to reset waits for the captain now
-        agent.held = undefined;
-        agent.activity = 'Was waiting for your plan’s usage limit when Focus shut down. Send a message to pick it back up.';
-      }
-      if (agent.task === 'lead') Object.assign(agent, upgradeLead(agent, this.projects.find((p) => p.id === agent.projectId)?.name ?? 'The project'));
-      // saved before the crew wore uniforms
-      if (!('division' in agent.avatar)) agent.avatar = agent.task === 'review' ? qaOfficerFor(agent.projectId).avatar : randomAvatar();
+    for (const saved of raw.agents ?? []) {
+      const agent = agentAfterRestart(saved, this.projects.find((p) => p.id === saved.projectId)?.name ?? 'The project');
       this.agents.set(agent.id, agent);
       this.lines.set(agent.id, this.readLog(agent.id, MEMORY_LINES));
     }
