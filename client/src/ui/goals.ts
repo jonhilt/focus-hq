@@ -71,8 +71,8 @@ export function tasksView(tasks: ClaudeTask[] | undefined): HTMLElement | null {
 }
 
 /** A pull request a goal's lead shipped, as a link that says what became of it. */
-export const prLink = (p: { repo: string; number: number; url: string; outcome?: string }) =>
-  h('a', { class: `btn small${p.outcome ? '' : ' go'}`, href: p.url, target: '_blank', rel: 'noreferrer' },
+export const prLink = (p: { repo: string; number: number; url: string; outcome?: string; branch?: string }) =>
+  h('a', { class: `btn small${p.outcome ? '' : ' go'}`, href: p.url, target: '_blank', rel: 'noreferrer', title: p.branch ? `From ${p.branch}` : undefined },
     `${p.repo.split('/')[1]} #${p.number} · ${p.outcome ?? 'open'} ↗`);
 
 /** The goal's own QA reviewer, while they're on one of its pull requests. */

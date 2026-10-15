@@ -404,6 +404,9 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .goal-queued-text { margin: 6px 0 0; color: var(--muted); white-space: pre-line; cursor: pointer; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .goal-queued-text.open { display: block; }
 .goal-record { border-left-color: var(--muted); }
+.goal-prs { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.goal-prs .row { flex-wrap: nowrap; }
+.goal-prs .mono { font-family: var(--mono); font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* a goal's star chart: the course from launch towards the objective, each slice a waypoint, and the picked one's log */
 .chart { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; height: 100%; min-height: 0; }

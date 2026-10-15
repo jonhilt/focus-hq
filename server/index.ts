@@ -6,7 +6,7 @@ import express from 'express';
 import { clock } from '../shared/clock';
 import { keyFallback } from './agents/apiKey';
 import { BrowserPool } from './agents/browserTool';
-import { ClaudeDrafter, ClaudeEngineer, ClaudeNumberOne, ClaudeStudio, ClaudeTriager } from './agents/claudeCrew';
+import { ClaudeDrafter, ClaudeEngineer, ClaudeNumberOne, ClaudeStudio, ClaudeTriager, titleGoal } from './agents/claudeCrew';
 import { StudioComputer } from './agents/studioComputer';
 import { githubRepo } from './agents/climb';
 import { ChiefEngineer, transcriptFolders, transcriptReader } from './agents/engineer';
@@ -140,6 +140,7 @@ async function main() {
     if (demoRunner) office.agents.flowTranscript = (id) => Promise.resolve(demoRunner.transcript(id));
   } else {
     office.agents.readTranscript = transcriptReader(paths.transcripts, paths.workspaces);
+    office.agents.titleGoal = (brief) => titleGoal(brief, store.settings);
     office.agents.transcripts = transcriptFolders(paths.transcripts, paths.workspaces);
   }
 
