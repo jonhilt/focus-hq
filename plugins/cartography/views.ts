@@ -1,28 +1,21 @@
-// A map's views as system models, so the studio's drawing (shared/modelDrawing.ts) lays them out. Pure, and free of
-// Node, since the browser draws them.
-import type { SystemModel } from '../../shared/types';
+// A map's views, and what the Maps view says about a map in words. Pure, and free of Node, since the browser shows them.
 import type { MapView, RepoMap } from './shared';
 
-/** The view every map has: all its parts. */
+/** The view every map has: all its parts, drawn as a matrix (draw.ts). */
 export const WHOLE: MapView = { id: 'whole', question: 'What are its parts, and which depend on which?', parts: [] };
 
 /** A map's views, the whole of it first. */
 export const viewsOf = (map: RepoMap): MapView[] => (map.model ? [{ ...WHOLE, parts: map.model.parts.map((p) => p.id) }, ...map.model.views] : []);
 
-/** View `view` of `map` as a model: its parts, and the connections the code makes between them, labelled with their imports. */
-export function viewModel(map: RepoMap, view: MapView): SystemModel {
-  const shown = new Set(view.parts);
-  const parts = (map.model?.parts ?? []).filter((p) => shown.has(p.id));
-  return {
-    question: view.question,
-    nodes: parts.map((p) => ({ id: p.id, label: p.label, kind: p.kind, layer: p.layer, symbol: p.paths.length > 1 ? `${p.paths[0]} +${p.paths.length - 1}` : p.paths[0] })),
-    edges: map.connections
-      .filter((c) => shown.has(c.from) && shown.has(c.to))
-      .map((c) => ({ from: c.from, to: c.to, kind: 'calls', label: `${c.imports} import${c.imports === 1 ? '' : 's'}` })),
-    trace: [],
-    simplified: [],
-  };
+/** The view a map opens on: its model's first, since the whole of a big map is a lot to take in first. */
+export const openingView = (map: RepoMap): string => map.model?.views[0]?.id ?? WHOLE.id;
+
+/** How much of the repo the map covers, in a line. */
+export function coverage(map: RepoMap): string {
+  const share = map.files ? Math.round((map.mapped / map.files) * 100) : 0;
+  return `${map.model?.parts.length ?? 0} parts own ${map.mapped} of ${map.files} source files (${share}%) · ${map.connections.length} connections, read from the imports`;
 }
 
-/** The view a map opens on: its model's first, since the whole of a big map is more lines than anyone can follow. */
-export const openingView = (map: RepoMap): string => map.model?.views[0]?.id ?? WHOLE.id;
+/** How to read a view, under its question. */
+export const VIEW_KEY = 'An arrow goes from a part to a part whose code it uses: the thicker, the more it imports. Its number is its line below, which says what it takes.';
+export const MATRIX_KEY = 'Each row imports from the columns it has a number in: the number is how many imports. Orange: two parts that import each other.';

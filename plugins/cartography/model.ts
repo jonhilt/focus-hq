@@ -31,7 +31,8 @@ function part(id: string, raw: unknown): MapPart {
   if (!MODEL_KINDS.includes(kind as ModelKind)) throw new Error(`Part ${id}'s kind is one of ${MODEL_KINDS.join(', ')}`);
   const paths = texts(r.paths, `Part ${id}'s paths`).map(normalPath);
   if (!paths.length) throw new Error(`Part ${id} needs the paths of its code`);
-  return { id, label: text(r.label, `Part ${id}'s label`), layer: text(r.layer, `Part ${id}'s layer`), kind: kind as ModelKind, paths };
+  const does = r.does === undefined ? undefined : text(r.does, `Part ${id}'s does`);
+  return { id, label: text(r.label, `Part ${id}'s label`), layer: text(r.layer, `Part ${id}'s layer`), kind: kind as ModelKind, paths, ...(does ? { does } : {}) };
 }
 
 function view(id: string, raw: unknown, parts: ReadonlySet<string>): MapView {

@@ -7,11 +7,11 @@ Each project's architecture, as a map that keeps up with its code. A repo keeps 
 - **Which code belongs to which part.** Each part names its paths: a folder (ending in `/`) or a file. When paths overlap, the longest wins, so a part can claim a file out of another part's folder.
 - **Its views.** Each view is a question the map answers, with the parts it takes to answer it.
 
-Nobody draws the connections. The office reads every source file's imports with TypeScript's own scanner and adds them up part to part, so a connection on the map is one the code makes. Tests (`*.test.*`, `*.spec.*`) and declarations are left out, since tests import whatever they test.
+Nobody draws the connections. The office reads every source file's imports with TypeScript's parser and adds them up part to part, with the names each takes, so a connection on the map is one the code makes, and says what goes across it. Tests (`*.test.*`, `*.spec.*`) and declarations are left out, since tests import whatever they test.
 
 ```yaml
 parts:
-  api: { label: API, layer: Server, kind: route, paths: [server/routes.ts] }
+  api: { label: API, layer: Server, kind: route, paths: [server/routes.ts], does: "Answers the browser's requests" }
   core: { label: Core, layer: Server, paths: [server/] }   # kind: service unless it says
   types: { label: Shared types, layer: Shared, kind: type, paths: [shared/types/] }
 ignore: [scripts/]
@@ -21,7 +21,7 @@ views:
     parts: [api, core, types]
 ```
 
-A part's `kind` is one of the studio's (ui, route, handler, service, store, queue, external, job, type), and its `layer` gives it its colour, as in a lead's system model. Focus's own model is [`.focus/cartography.yaml`](../../.focus/cartography.yaml).
+A part's `does` is what it does, in a line, shown in its box. Its `layer` puts it in a column, and gives it its colour; the layers go left to right in the order the model first names them. Its `kind` is one of the studio's (ui, route, handler, service, store, queue, external, job, type). Focus's own model is [`.focus/cartography.yaml`](../../.focus/cartography.yaml).
 
 ## When the map and the code disagree
 
@@ -34,7 +34,12 @@ It also says how many of the repo's source files a part owns. `map.test.ts` hold
 
 ## Where it shows
 
-On the engineering station (<kbd>E</kbd> at Lt. Brennan's station on deck 5), under **Maps**: each project, each of its repos, and each view drawn as the studio draws a lead's models. The model's first view opens first, and the whole map (every part) is a view of its own. **Map again** makes a project's maps again.
+On the engineering station (<kbd>E</kbd> at Lt. Brennan's station on deck 5), under **Maps**: each project, each of its repos, and each of its views, with a line on how to read it. The model's first view opens first.
+
+- **A view** stands each of its parts in its layer's column, with what it does. An arrow goes from a part to a part whose code it uses, as thick as its imports. Each arrow carries a number, and the numbered sentences under the drawing say what goes across it: *Panels and HUD uses state, api, attention, markRead from Mirror of the office (63 imports)*. A view reads best with up to about nine parts.
+- **The whole map** (every part) is a dependency matrix, since a drawing of every connection is more lines than anyone can follow. Each row imports from the columns it has a number in, and the number is how many imports. Orange cells are two parts that import each other, where the code is tangled. Its key reads out its busiest cell as an example, and hovering a cell says what it takes.
+
+The drawings are SVG made by `draw.ts`, at their own size, shrunk to fit the station but never blown up. **Map again** makes a project's maps again.
 
 Maps are made from each repo's default branch, checked out under `~/.focus/cartography/`: 20 seconds after the office starts, and again whenever a pull request merges into one of the project's repos. They're kept in memory only, not in `state.json`. The demo office's repos are made up, so it maps the office's own checkout for each of them.
 
@@ -49,6 +54,8 @@ Maps are made from each repo's default branch, checked out under `~/.focus/carto
 - `shared.ts`: the model and the map's types.
 - `model.ts`: reading a model from its YAML, saying what's wrong with one.
 - `graph.ts`: the map's rules, pure: which files it reads, where an import leads, which part owns a file, connections and drift.
-- `map.ts`: making a repo's map from a checkout (git ls-files, TypeScript's `preProcessFile`).
-- `views.ts`: a map's views as system models, for `shared/modelDrawing.ts` to draw.
+- `scan.ts`: what a file imports, and the names it takes (TypeScript's parser, no type-checking).
+- `map.ts`: making a repo's map from a checkout (git ls-files, then scan.ts).
+- `draw.ts`: drawing a view and the matrix as SVG, and a view's connections as sentences.
+- `views.ts`: a map's views, and what the Maps view says in words.
 - `server.ts`: when maps are made, and the `/map` route. `client.ts`: the **Maps** view.

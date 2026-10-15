@@ -15,6 +15,8 @@ export interface MapPart {
   layer: string;
   kind: ModelKind;
   paths: string[];
+  /** What it does, in a line. */
+  does?: string;
 }
 
 /** A question the model answers, drawn with only the parts it names. */
@@ -32,11 +34,20 @@ export interface ArchitectureModel {
   ignore: string[];
 }
 
-/** One part importing another: how many imports go across, file to file. */
+/** One part importing another: how many imports go across, file to file, and what they bring. */
 export interface MapConnection {
   from: string;
   to: string;
   imports: number;
+  /** The names `from` takes from `to`, the most imported first (`default`, or `*` for a whole module). */
+  names: string[];
+}
+
+/** One file importing another, and the names it takes. */
+export interface FileEdge {
+  from: string;
+  to: string;
+  names: readonly string[];
 }
 
 /** A repo's map, made from its default branch: its model, the connections the code makes, and what doesn't hold. */

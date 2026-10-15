@@ -1,23 +1,23 @@
 // Making a repo's map from a checkout of it: its model file, its source files (as git knows them) and their imports,
-// read with TypeScript's own scanner. The rules are in graph.ts.
+// read with TypeScript's parser (scan.ts). The rules are in graph.ts.
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import ts from 'typescript';
 import { parse } from 'yaml';
 import { errorMessage, run } from '../../server/util';
 import { isSource, mapOf, resolveImport } from './graph';
 import { readModel } from './model';
-import { MODEL_FILE, type RepoMap } from './shared';
+import { importsIn } from './scan';
+import { type FileEdge, MODEL_FILE, type RepoMap } from './shared';
 
-/** Each source file's imports that lead to another source file in the repo, file to file. */
-async function imports(dir: string, files: readonly string[]): Promise<[string, string][]> {
+/** Each source file's imports that lead to another source file in the repo, file to file, with the names they take. */
+async function imports(dir: string, files: readonly string[]): Promise<FileEdge[]> {
   const known = new Set(files);
-  const found: [string, string][] = [];
+  const found: FileEdge[] = [];
   for (const file of files) {
     const text = await fs.readFile(path.join(dir, file), 'utf8').catch(() => '');
-    for (const spec of ts.preProcessFile(text, true, true).importedFiles) {
-      const to = resolveImport(file, spec.fileName, known);
-      if (to) found.push([file, to]);
+    for (const { spec, names } of importsIn(file, text)) {
+      const to = resolveImport(file, spec, known);
+      if (to) found.push({ from: file, to, names });
     }
   }
   return found;

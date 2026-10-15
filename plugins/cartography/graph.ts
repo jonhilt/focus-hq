@@ -1,7 +1,10 @@
 // The map's pure rules: which files it looks at, where an import leads, which part owns a file, and the connections
 // between parts that the imports make. Nothing here reads a disk (map.ts does).
 import path from 'node:path';
-import type { ArchitectureModel, MapConnection, RepoMap } from './shared';
+import type { ArchitectureModel, FileEdge, MapConnection, RepoMap } from './shared';
+
+/** How many of a connection's names it keeps, the most imported first. */
+export const NAMES_KEPT = 8;
 
 /** Source the map reads imports from: TypeScript and JavaScript, but not tests, which import everything they test. */
 export const isSource = (file: string): boolean => /\.(ts|tsx|mts|js|jsx|mjs)$/.test(file) && !/\.d\.ts$/.test(file) && !/\.(test|spec)\.[a-z]+$/.test(file);
@@ -33,19 +36,25 @@ export function ownerOf(file: string, model: ArchitectureModel): string | undefi
   return owner?.id;
 }
 
-/** File-to-file imports gathered into part-to-part connections, the busiest first; a part's imports of itself drop out. */
-export function connections(imports: readonly (readonly [string, string])[], owner: (file: string) => string | undefined): MapConnection[] {
-  const counts = new Map<string, MapConnection>();
-  for (const [a, b] of imports) {
-    const from = owner(a);
-    const to = owner(b);
+/**
+ * File-to-file imports gathered into part-to-part connections, the busiest first, each with the names it brings (the
+ * most imported first); a part's imports of itself drop out.
+ */
+export function connections(imports: readonly FileEdge[], owner: (file: string) => string | undefined): MapConnection[] {
+  const found = new Map<string, { from: string; to: string; imports: number; names: Map<string, number> }>();
+  for (const edge of imports) {
+    const from = owner(edge.from);
+    const to = owner(edge.to);
     if (!from || !to || from === to) continue;
     const key = `${from} ${to}`;
-    const c = counts.get(key) ?? { from, to, imports: 0 };
+    const c = found.get(key) ?? { from, to, imports: 0, names: new Map<string, number>() };
     c.imports++;
-    counts.set(key, c);
+    for (const n of edge.names) c.names.set(n, (c.names.get(n) ?? 0) + 1);
+    found.set(key, c);
   }
-  return [...counts.values()].sort((x, y) => y.imports - x.imports || x.from.localeCompare(y.from) || x.to.localeCompare(y.to));
+  return [...found.values()]
+    .map(({ names, ...c }) => ({ ...c, names: [...names].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, NAMES_KEPT).map(([n]) => n) }))
+    .sort((x, y) => y.imports - x.imports || x.from.localeCompare(y.from) || x.to.localeCompare(y.to));
 }
 
 /** Where the model and the code disagree: a path that names nothing, a part that owns no code. */
@@ -60,7 +69,7 @@ export function problems(model: ArchitectureModel, files: readonly string[], siz
 }
 
 /** The map of a repo's code (its source files, and their imports file to file) by its model. */
-export function mapOf(repo: string, model: ArchitectureModel, files: readonly string[], imports: readonly (readonly [string, string])[]): RepoMap {
+export function mapOf(repo: string, model: ArchitectureModel, files: readonly string[], imports: readonly FileEdge[]): RepoMap {
   const owners = new Map(files.map((f) => [f, ownerOf(f, model)]));
   const sizes: Record<string, number> = {};
   for (const id of owners.values()) if (id) sizes[id] = (sizes[id] ?? 0) + 1;

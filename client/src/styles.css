@@ -966,6 +966,10 @@ body.studio .hud, body.studio .toasts { display: none; }
 .sc-gatebar span:nth-child(3) { background: color-mix(in srgb, var(--c) 55%, var(--surface-2)); }
 .sc-gatebar span:nth-child(4) { background: color-mix(in srgb, var(--c) 40%, var(--surface-2)); }
 .sc-rows { display: flex; flex-direction: column; }
+/* the cartography plugin's maps: drawn at their own size, shrunk to fit the station but never blown up */
+.cg-drawing { overflow-x: auto; margin: 8px 0; background: #0b1020; border-radius: 12px; padding: 8px; }
+.cg-drawing svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+.cg-sentences { margin: 6px 0 2px; padding-left: 18px; font-size: 15px; line-height: 1.5; }
 .sc-metric { border-top: 1px solid var(--line); }
 .sc-metric > summary { display: grid; grid-template-columns: minmax(0, 1fr) 72px 80px 140px; align-items: center; gap: 12px; padding: 6px 4px; cursor: pointer; font-size: 15px; list-style: none; }
 .sc-metric > summary::-webkit-details-marker { display: none; }

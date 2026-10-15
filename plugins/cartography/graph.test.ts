@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { connections, isSource, mapOf, ownerOf, problems, resolveImport } from './graph';
+import { connections, isSource, mapOf, NAMES_KEPT, ownerOf, problems, resolveImport } from './graph';
 import type { ArchitectureModel } from './shared';
 
 const model: ArchitectureModel = {
@@ -52,22 +52,28 @@ describe('ownerOf', () => {
 });
 
 describe('connections', () => {
-  it('counts imports across parts, busiest first, and drops a part’s imports of itself', () => {
+  it('counts imports across parts, busiest first, with what they take, and drops a part’s imports of itself', () => {
     const owner = (f: string) => ownerOf(f, model);
     const found = connections(
       [
-        ['server/a.ts', 'shared/t.ts'],
-        ['server/b.ts', 'shared/t.ts'],
-        ['server/agents/tools.ts', 'server/a.ts'],
-        ['server/a.ts', 'server/b.ts'],
-        ['client/x.ts', 'shared/t.ts'],
+        { from: 'server/a.ts', to: 'shared/t.ts', names: ['Agent', 'Goal'] },
+        { from: 'server/b.ts', to: 'shared/t.ts', names: ['Goal'] },
+        { from: 'server/agents/tools.ts', to: 'server/a.ts', names: ['default'] },
+        { from: 'server/a.ts', to: 'server/b.ts', names: ['x'] },
+        { from: 'client/x.ts', to: 'shared/t.ts', names: ['Goal'] },
       ],
       owner,
     );
     expect(found).toEqual([
-      { from: 'server', to: 'shared', imports: 2 },
-      { from: 'tools', to: 'server', imports: 1 },
+      { from: 'server', to: 'shared', imports: 2, names: ['Goal', 'Agent'] },
+      { from: 'tools', to: 'server', imports: 1, names: ['default'] },
     ]);
+  });
+
+  it('keeps the most imported names only', () => {
+    const names = Array.from({ length: NAMES_KEPT + 3 }, (_, i) => `n${i}`);
+    const [c] = connections([{ from: 'server/a.ts', to: 'shared/t.ts', names }], (f) => ownerOf(f, model));
+    expect(c.names).toHaveLength(NAMES_KEPT);
   });
 });
 
@@ -87,7 +93,7 @@ describe('problems', () => {
 
 describe('mapOf', () => {
   it('counts the files it looks at (not the ignored ones), how many parts own, and each part’s', () => {
-    const map = mapOf('o/r', model, ['server/a.ts', 'server/agents/tools.ts', 'server/generated/g.ts', 'shared/t.ts', 'client/x.ts'], [['server/a.ts', 'shared/t.ts']]);
-    expect(map).toMatchObject({ repo: 'o/r', files: 4, mapped: 3, sizes: { server: 1, tools: 1, shared: 1 }, connections: [{ from: 'server', to: 'shared', imports: 1 }], problems: [] });
+    const map = mapOf('o/r', model, ['server/a.ts', 'server/agents/tools.ts', 'server/generated/g.ts', 'shared/t.ts', 'client/x.ts'], [{ from: 'server/a.ts', to: 'shared/t.ts', names: ['T'] }]);
+    expect(map).toMatchObject({ repo: 'o/r', files: 4, mapped: 3, sizes: { server: 1, tools: 1, shared: 1 }, connections: [{ from: 'server', to: 'shared', imports: 1, names: ['T'] }], problems: [] });
   });
 });
