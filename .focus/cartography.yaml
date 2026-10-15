@@ -1,0 +1,111 @@
+# Focus's architecture model, for the cartography plugin (plugins/cartography/README.md). Each part owns the code under
+# its paths (a folder ends in /; the longest path wins, so a part can claim a file out of another's folder). The office
+# works out the connections between parts from the imports, so only the parts and views are written here.
+
+parts:
+  # the browser
+  ship:
+    label: The ship in 3D
+    layer: Client
+    kind: ui
+    paths: [client/src/world/]
+  station-screens:
+    label: Team station screens
+    layer: Client
+    kind: ui
+    paths: [client/src/world/goalScreens.ts, client/src/world/screenPanes.ts, client/src/world/goalRoom.ts]
+  panels:
+    label: Panels and HUD
+    layer: Client
+    kind: ui
+    paths: [client/src/ui/]
+  client-net:
+    label: Mirror of the office
+    layer: Client
+    kind: store
+    paths: [client/src/net/]
+  client-app:
+    label: Browser app and plugins
+    layer: Client
+    kind: ui
+    paths: [client/src/]
+  tricorder:
+    label: Tricorder phone view
+    layer: Client
+    kind: ui
+    paths: [client/src/tricorder/]
+
+  # both sides
+  types:
+    label: Shared types
+    layer: Shared
+    kind: type
+    paths: [shared/types/]
+  artifacts:
+    label: Lead artifacts
+    layer: Shared
+    kind: type
+    paths: [shared/artifacts.ts]
+  shared:
+    label: Shared rules
+    layer: Shared
+    kind: service
+    paths: [shared/]
+
+  # the office
+  http:
+    label: Office, routes and hub
+    layer: Server
+    kind: route
+    paths: [server/index.ts, server/routes.ts, server/hub.ts, server/office.ts]
+  manager:
+    label: Agent manager
+    layer: Server
+    kind: service
+    paths: [server/agents/manager/, server/agents/manager.ts, server/agents/services.ts]
+  office-tools:
+    label: Lead's office tools
+    layer: Server
+    kind: handler
+    paths: [server/agents/officeTool.ts, server/agents/manager/goalTools.ts]
+  agents:
+    label: Agent sessions
+    layer: Server
+    kind: service
+    paths: [server/agents/]
+  github:
+    label: GitHub
+    layer: Server
+    kind: external
+    paths: [server/github/]
+  plugin-host:
+    label: Plugin host
+    layer: Server
+    kind: service
+    paths: [server/plugins/]
+  calls:
+    label: Voice calls
+    layer: Server
+    kind: service
+    paths: [server/call/, server/voice.ts, server/speech.ts, server/speechWorker.ts]
+  server-core:
+    label: Store, config, previews
+    layer: Server
+    kind: store
+    paths: [server/]
+
+  plugins:
+    label: Plugins
+    layer: Plugins
+    kind: service
+    paths: [plugins/]
+
+ignore: [scripts/, eslint.config.js, vite.config.ts, vitest.config.ts, vitest.setup.ts]
+
+views:
+  show-to-screen:
+    question: How does a lead's show reach the station's screen?
+    parts: [office-tools, manager, http, client-net, artifacts, station-screens, panels]
+  plugins:
+    question: How do plugins plug into the office?
+    parts: [plugins, plugin-host, manager, http, client-app, panels]

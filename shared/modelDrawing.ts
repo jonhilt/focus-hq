@@ -58,7 +58,8 @@ export function layerColours(m: SystemModel): Map<string, string> {
 }
 
 const file = (path: string) => path.split(/[\\/]/).pop() ?? path;
-const citeText = (n: ModelNode) => (n.cite ? `${file(n.cite.file)}:${n.cite.line}` : 'no cite');
+// a part without a cite (a cartography map's, which owns a folder) shows its name in the code instead
+const citeText = (n: ModelNode) => (n.cite ? `${file(n.cite.file)}:${n.cite.line}` : (n.symbol ?? 'no cite'));
 /** A rough width for `text` at `size`, for laying things out without a font to measure with. */
 const width = (text: string, size: number) => text.length * size * 0.56;
 

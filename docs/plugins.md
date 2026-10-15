@@ -20,6 +20,7 @@ A plugin's saved state stays in `state.json` while it's switched off, so switchi
 ## Plugins today
 
 - [The scorecard](../plugins/scorecard/README.md) (`scorecard`): main engineering's scorecards of the office's own repo, on the engineering station and the MSD. The `pnpm run scorecard` and `pnpm run crap` scripts live in it too, and work whether it's switched on or not.
+- [Cartography](../plugins/cartography/README.md) (`cartography`): each project's architecture map, from the model its repos keep in `.focus/cartography.yaml` and the imports their code makes, on the engineering station's **Maps** view.
 - [The climber](../plugins/climber/README.md) (`climber`): main engineering's crew member, who fixes the scorecard's worst gap in the office's own repo, one pull request at a time. It requires the scorecard plugin: switched on without it, it's left out, saying why.
 
 ## Plugins that need each other
