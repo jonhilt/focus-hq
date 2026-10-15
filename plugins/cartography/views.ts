@@ -59,3 +59,6 @@ export function pickView(maps: readonly RepoMap[], id: string): { map: RepoMap; 
   if (found.length > 1) return { error: `More than one repo has a view "${id}": say which with repo (${found.map((f) => f.map.repo).join(', ')}).` };
   return found[0];
 }
+
+/** A view's question as a screen's title, which has at most `max` characters: cut short with an ellipsis when it's longer. */
+export const screenTitle = (question: string, max: number): string => (question.length <= max ? question : `${question.slice(0, max - 1).trimEnd()}…`);

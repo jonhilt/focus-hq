@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RepoMap } from './shared';
-import { coverage, fitInto, hallViews, openingView, pickView, screenVersion, viewList, viewsOf } from './views';
+import { coverage, fitInto, hallViews, openingView, pickView, screenTitle, screenVersion, viewList, viewsOf } from './views';
 
 export const MAP: RepoMap = {
   repo: 'o/r',
@@ -80,5 +80,14 @@ describe('pickView', () => {
     expect(pickView([MAP, other], 'front')).toMatchObject({ map: { repo: 'o/r' }, view: { id: 'front' } });
     expect(pickView([MAP], 'nope')).toEqual({ error: 'There\'s no view "nope".' });
     expect(pickView([MAP, other], 'whole')).toEqual({ error: 'More than one repo has a view "whole": say which with repo (o/r, o/other).' });
+  });
+});
+
+describe('screenTitle', () => {
+  it('keeps a question that fits, and cuts a longer one short with an ellipsis, within the limit', () => {
+    expect(screenTitle('What does the API reach?', 80)).toBe('What does the API reach?');
+    const cut = screenTitle('x '.repeat(60), 80);
+    expect(cut.length).toBeLessThanOrEqual(80);
+    expect(cut.endsWith('…')).toBe(true);
   });
 });
