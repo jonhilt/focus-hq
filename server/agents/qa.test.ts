@@ -145,7 +145,7 @@ describe('QA instructions', () => {
   it('ask QA to read the changed lines no test exercises, since a green suite says nothing about them', () => {
     const text = qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop' }, pr, pr.headSha);
     expect(text).toContain('go through every file the diff changes (`git diff --stat origin/main...HEAD` lists them all: however many there are, don\'t pick a few)');
-    expect(text).toContain('Read each of those files\' changed lines one by one');
+    expect(text).toContain('Read each of those files\' changed lines one by one, its diff whole (`git diff origin/main...HEAD -- <file>`, a file at a time, never cut short with head or tail');
     expect(text).toContain('an argument or index read from the wrong place');
   });
 
