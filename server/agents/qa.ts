@@ -149,15 +149,24 @@ export function unaccounted(report: QaReport, changed: string[]): string[] {
   return changed.filter((c) => !named.some((n) => n === c || c.endsWith(`/${n}`) || n.endsWith(`/${c}`)));
 }
 
-/** What QA hears when its report leaves files out: go back to them, then report again in full. Asked once a review. */
-export function filesPrompt(missing: string[]): string {
-  const shown = missing.slice(0, NAMED_FILES);
+/** What QA said it only skimmed, glanced at or didn't read, in its own words. */
+const UNREAD = /\b(skim(med|ming)?|glanced?|not (read|reviewed|opened)|didn['’]t (read|review|open)|did not (read|review|open)|unread|unreviewed)\b/i;
+
+/** The changed files QA's report says it only skimmed or didn't read: its own account, taken at its word. */
+export const skimmed = (report: QaReport): string[] => (report.files ?? []).filter((f) => UNREAD.test(f.checked)).map((f) => f.file);
+
+/**
+ * What QA hears when its report leaves files out, or says it only skimmed some: go back to them, then report again in
+ * full. Asked once a review.
+ */
+export function filesPrompt(missing: string[], skimmedFiles: string[] = []): string {
+  const list = (files: string[]) => [...files.slice(0, NAMED_FILES).map((f) => `- ${f}`), ...(files.length > NAMED_FILES ? [`- …and ${files.length - NAMED_FILES} more (\`git diff --name-only\` lists them)`] : [])];
   return [
-    `Your report leaves out ${missing.length} of the files this pull request changes:`,
-    ...shown.map((f) => `- ${f}`),
-    ...(missing.length > shown.length ? [`- …and ${missing.length - shown.length} more (\`git diff --name-only\` lists them)`] : []),
+    ...(missing.length ? [`Your report leaves out ${missing.length} of the files this pull request changes:`, ...list(missing)] : []),
+    ...(missing.length && skimmedFiles.length ? [''] : []),
+    ...(skimmedFiles.length ? [`Your report says you only skimmed, or didn't read, ${skimmedFiles.length === 1 ? 'this file' : `these ${skimmedFiles.length} files`}:`, ...list(skimmedFiles)] : []),
     '',
-    "Review each the same way: what tests exercise its changes, and for one no test does, read every changed line asking what would make it wrong. Then give your whole report again, every file in it, with the verdict it now deserves.",
+    "Review each properly: what tests exercise its changes, and for one no test does, read its diff whole, every changed line, asking what would make it wrong. Then give your whole report again, every file in it, with the verdict it now deserves.",
   ].join('\n');
 }
 

@@ -20,7 +20,7 @@ import { promisify } from 'node:util';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { paths } from '../server/config';
 import { claudeConfig } from '../server/agents/claudeRunner';
-import { filesPrompt, parseQaReport, QA_SCHEMA, qaAgentModel, qaPrompt, qaSystemAppend, unaccounted } from '../server/agents/qa';
+import { filesPrompt, parseQaReport, QA_SCHEMA, qaAgentModel, qaPrompt, qaSystemAppend, skimmed, unaccounted } from '../server/agents/qa';
 import { addedLines, type CatchResult, type CatchRun, catchLines, controlLine, type ControlResult, plant, type Planted, scoreControl, scoreReport } from '../server/agents/qaCatch';
 import type { PullRequestDetail } from '../server/github/provider';
 import { checkLedger, closedGoals } from '../shared/ledger';
@@ -148,9 +148,10 @@ async function review(repo: string, dir: string, pr: PullRequestDetail): Promise
     const changed = (await run('git', ['-C', dir, 'diff', '--name-only', `origin/${pr.baseBranch}...HEAD`], BIG)).stdout.split('\n').filter(Boolean);
     let report = await turn(qaPrompt(repo, pr, [], {}, changed));
     const missing = report ? unaccounted(report, changed) : [];
-    if (report && missing.length) {
-      console.log(`  ${repo}#${pr.number}: the report left out ${missing.length} of ${changed.length} changed files: sent back once`);
-      report = (await turn(filesPrompt(missing))) ?? report;
+    const unread = report ? skimmed(report) : [];
+    if (report && (missing.length || unread.length)) {
+      console.log(`  ${repo}#${pr.number}: the report left out ${missing.length} and only skimmed ${unread.length} of ${changed.length} changed files: sent back once`);
+      report = (await turn(filesPrompt(missing, unread))) ?? report;
     }
     return { report, costUsd, minutes: minutes() };
   } catch (err) {

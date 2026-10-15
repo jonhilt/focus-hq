@@ -8,7 +8,7 @@ import { GitHub, type GitHubError } from '../../github/service';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../../util';
 import { goalOf, goalReviewerId, reviewsToStart, sliceSiblings } from '../lead';
 import { repoFolders } from '../planner';
-import { checksFixPrompt, evidencePath, filesPrompt, fixPrompt, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, type QaSibling, qaSystemAppend, unaccounted } from '../qa';
+import { checksFixPrompt, evidencePath, filesPrompt, fixPrompt, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, type QaSibling, qaSystemAppend, skimmed, unaccounted } from '../qa';
 import type { QaLoopEvent } from '../qaLoop';
 import { qaNextStep } from '../qaLoop';
 import { carriedComment, retestStep } from '../retest';
@@ -264,10 +264,12 @@ export class Reviews extends Part {
       // misses what's in the files it skipped (docs/qa-catch.md)
       const files = this.rt(agent.id).qaFiles;
       const missing = files && !files.askedAgain ? unaccounted(report, files.changed) : [];
-      if (files && missing.length && agent.sessionId) {
+      const unread = files && !files.askedAgain ? skimmed(report) : [];
+      if (files && (missing.length || unread.length) && agent.sessionId) {
         files.askedAgain = true;
-        this.print(agent, [{ kind: 'system', text: `✻ The report leaves out ${missing.length} changed file${missing.length === 1 ? '' : 's'}: back to QA to account for ${missing.length === 1 ? 'it' : 'them'}` }]);
-        return yield* this.core.sessions.runSession(agent, filesPrompt(missing), agent.sessionId).pipe(
+        const n = missing.length + unread.length;
+        this.print(agent, [{ kind: 'system', text: `✻ The report leaves out or only skimmed ${n} changed file${n === 1 ? '' : 's'}: back to QA to review ${n === 1 ? 'it' : 'them'} properly` }]);
+        return yield* this.core.sessions.runSession(agent, filesPrompt(missing, unread), agent.sessionId).pipe(
           Effect.catch((err) => Effect.sync(() => this.core.sessions.fail(agent, err.message))),
         );
       }

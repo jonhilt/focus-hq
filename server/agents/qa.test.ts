@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { QaReport } from '../../shared/types';
 import type { PullRequestDetail } from '../github/provider';
-import { diffAnchor, evidencePath, filesPrompt, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPrompt, qaSystemAppend, siblingsSection, unaccounted } from './qa';
+import { diffAnchor, evidencePath, filesPrompt, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPrompt, qaSystemAppend, siblingsSection, skimmed, unaccounted } from './qa';
 
 const report = (r: Partial<QaReport> = {}): QaReport => ({
   verdict: 'pass',
@@ -320,9 +320,17 @@ describe('every changed file, accounted for', () => {
     expect(parseQaReport({ verdict: 'pass', summary: '', checks: [], commands: [] })?.files).toBeUndefined();
   });
 
-  it('sends QA back to the files it left out, to report again in full', () => {
+  it('sends QA back to the files it left out, or says it only skimmed, to report again in full', () => {
     const text = filesPrompt(['scripts/sync.ts', 'schema.json']);
     expect(text).toMatch(/^Your report leaves out 2 of the files this pull request changes:\n- scripts\/sync\.ts\n- schema\.json\n/);
     expect(text).toContain('give your whole report again, every file in it');
+    expect(filesPrompt([], ['server/crew.ts'])).toMatch(/^Your report says you only skimmed, or didn't read, this file:\n- server\/crew\.ts\n\nReview each properly/);
+    expect(filesPrompt(['a.ts'], ['b.ts', 'c.ts'])).toContain('- a.ts\n\nYour report says you only skimmed, or didn\'t read, these 2 files:\n- b.ts\n- c.ts');
+  });
+
+  it('takes QA at its word on the files it only skimmed or didn’t read', () => {
+    const file = (f: string, checked: string) => ({ file: f, tests: 'none', checked });
+    const report = parseQaReport({ verdict: 'pass', summary: '', checks: [], commands: [], files: [file('a.ts', 'Scene tools; skimmed.'), file('b.ts', 'Read every changed line'), file('c.ts', "Didn't read: generated"), file('d.ts', 'glanced at the diff'), file('e.ts', 'Not reviewed in depth')] });
+    expect(report && skimmed(report)).toEqual(['a.ts', 'c.ts', 'd.ts', 'e.ts']);
   });
 });
