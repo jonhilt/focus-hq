@@ -8,7 +8,7 @@ import { GitHub, type GitHubError } from '../../github/service';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../../util';
 import { goalOf, goalReviewerId, reviewsToStart, sliceSiblings } from '../lead';
 import { repoFolders } from '../planner';
-import { checksFixPrompt, evidencePath, filesPrompt, fixPrompt, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, type QaSibling, qaSystemAppend, skimmed, unaccounted } from '../qa';
+import { checksFixPrompt, evidencePath, filesPrompt, filesToRevisit, fixPrompt, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, type QaSibling, qaSystemAppend } from '../qa';
 import type { QaLoopEvent } from '../qaLoop';
 import { qaNextStep } from '../qaLoop';
 import { carriedComment, retestStep } from '../retest';
@@ -249,6 +249,17 @@ export class Reviews extends Part {
     });
   }
 
+  /** Sends QA back once, in the same session, to the changed files its report left out or only skimmed. */
+  private revisitFiles(agent: Agent, sessionId: string, { missing, unread }: { missing: string[]; unread: string[] }): Effect.Effect<void, never, ManagerServices> {
+    const files = this.rt(agent.id).qaFiles;
+    if (files) files.askedAgain = true;
+    const n = missing.length + unread.length;
+    this.print(agent, [{ kind: 'system', text: `✻ The report leaves out or only skimmed ${n} changed file${n === 1 ? '' : 's'}: back to QA to review ${n === 1 ? 'it' : 'them'} properly` }]);
+    return this.core.sessions.runSession(agent, filesPrompt(missing, unread), sessionId).pipe(
+      Effect.catch((err) => Effect.sync(() => this.core.sessions.fail(agent, err.message))),
+    );
+  }
+
   /** Records the QA officer's verdict, posts it on the pull request, and moves on to the next review. */
   finishReview(agent: Agent, structured: unknown, text: string): Effect.Effect<void, never, ManagerServices> {
     return Effect.gen({ self: this }, function* () {
@@ -262,17 +273,8 @@ export class Reviews extends Part {
       if (agent.prGone) return;
       // a report that leaves changed files out goes back to QA once, naming them: a reviewer that skims a big diff
       // misses what's in the files it skipped (docs/qa-catch.md)
-      const files = this.rt(agent.id).qaFiles;
-      const missing = files && !files.askedAgain ? unaccounted(report, files.changed) : [];
-      const unread = files && !files.askedAgain ? skimmed(report) : [];
-      if (files && (missing.length || unread.length) && agent.sessionId) {
-        files.askedAgain = true;
-        const n = missing.length + unread.length;
-        this.print(agent, [{ kind: 'system', text: `✻ The report leaves out or only skimmed ${n} changed file${n === 1 ? '' : 's'}: back to QA to review ${n === 1 ? 'it' : 'them'} properly` }]);
-        return yield* this.core.sessions.runSession(agent, filesPrompt(missing, unread), agent.sessionId).pipe(
-          Effect.catch((err) => Effect.sync(() => this.core.sessions.fail(agent, err.message))),
-        );
-      }
+      const revisit = filesToRevisit(report, this.rt(agent.id).qaFiles);
+      if (revisit && agent.sessionId) return yield* this.revisitFiles(agent, agent.sessionId, revisit);
       const pass = report.verdict === 'pass';
       const review = this.store.reviews.get(prKey(agent.repo, number));
       const screenshots = yield* this.keepScreenshots(agent, report, review?.sha);

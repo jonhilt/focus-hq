@@ -156,6 +156,17 @@ const UNREAD = /\b(skim(med|ming)?|glanced?|not (read|reviewed|opened)|didn['’
 export const skimmed = (report: QaReport): string[] => (report.files ?? []).filter((f) => UNREAD.test(f.checked)).map((f) => f.file);
 
 /**
+ * The changed files a report should go back to QA for: those it leaves out and those it says it only skimmed. Nothing
+ * once QA has been sent back already this review, or when the office doesn't know the changed files.
+ */
+export function filesToRevisit(report: QaReport, files: { changed: string[]; askedAgain: boolean } | undefined): { missing: string[]; unread: string[] } | undefined {
+  if (!files || files.askedAgain) return undefined;
+  const missing = unaccounted(report, files.changed);
+  const unread = skimmed(report);
+  return missing.length || unread.length ? { missing, unread } : undefined;
+}
+
+/**
  * What QA hears when its report leaves files out, or says it only skimmed some: go back to them, then report again in
  * full. Asked once a review.
  */

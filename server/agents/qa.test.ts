@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { QaReport } from '../../shared/types';
 import type { PullRequestDetail } from '../github/provider';
-import { diffAnchor, evidencePath, filesPrompt, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPrompt, qaSystemAppend, siblingsSection, skimmed, unaccounted } from './qa';
+import { diffAnchor, evidencePath, filesPrompt, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPrompt, qaSystemAppend, siblingsSection, skimmed, unaccounted, filesToRevisit } from './qa';
 
 const report = (r: Partial<QaReport> = {}): QaReport => ({
   verdict: 'pass',
@@ -332,5 +332,17 @@ describe('every changed file, accounted for', () => {
     const file = (f: string, checked: string) => ({ file: f, tests: 'none', checked });
     const report = parseQaReport({ verdict: 'pass', summary: '', checks: [], commands: [], files: [file('a.ts', 'Scene tools; skimmed.'), file('b.ts', 'Read every changed line'), file('c.ts', "Didn't read: generated"), file('d.ts', 'glanced at the diff'), file('e.ts', 'Not reviewed in depth')] });
     expect(report && skimmed(report)).toEqual(['a.ts', 'c.ts', 'd.ts', 'e.ts']);
+  });
+});
+
+describe('filesToRevisit', () => {
+  const report = parseQaReport({ verdict: 'pass', summary: '', checks: [], commands: [], files: [{ file: 'a.ts', tests: 'none', checked: 'skimmed' }, { file: 'b.ts', tests: 'none', checked: 'read every line' }] });
+  it('names what to go back to once a review, and nothing when there’s nothing or it was asked already', () => {
+    if (!report) throw new Error('no report');
+    expect(filesToRevisit(report, { changed: ['a.ts', 'b.ts', 'c.ts'], askedAgain: false })).toEqual({ missing: ['c.ts'], unread: ['a.ts'] });
+    expect(filesToRevisit(report, { changed: ['a.ts', 'b.ts', 'c.ts'], askedAgain: true })).toBeUndefined();
+    expect(filesToRevisit(report, undefined)).toBeUndefined();
+    const clean = parseQaReport({ verdict: 'pass', summary: '', checks: [], commands: [], files: [{ file: 'b.ts', tests: 'none', checked: 'read' }] });
+    expect(clean && filesToRevisit(clean, { changed: ['b.ts'], askedAgain: false })).toBeUndefined();
   });
 });
