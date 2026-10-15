@@ -48,6 +48,16 @@ export interface QaFile {
   checked: string;
 }
 
+/**
+ * What the office knows of how QA covered a pull request's changed files: the files, those its session opened by its
+ * own tool calls (missing when the office couldn't read them: the demo, a cloud session), and how many it was sent back to.
+ */
+export interface FileAccount {
+  changed: string[];
+  opened?: string[];
+  sentBack?: number;
+}
+
 /** A screenshot from a QA review, kept as evidence with the report. */
 export interface QaScreenshot {
   caption: string;
@@ -98,6 +108,8 @@ export interface QaReview {
   screenshots?: QaScreenshot[];
   /** The QA report posted on the pull request. */
   commentUrl?: string;
+  /** How QA covered the changed files this round. Missing on reviews from before it was kept. */
+  files?: FileAccount;
   /** The QA officer's session for this review, while their record is around. */
   agentId?: string;
   error?: string;

@@ -1,7 +1,7 @@
 import { statusLine } from '../../../shared/agentStatus';
 import { qaOfficerFor, UNIFORM } from '../../../shared/crew';
 import { autoMergeFor } from '../../../shared/mergeGate';
-import { autoQaFor, autoSendBackFor, pullUrl, qaBadge, spotCheckUrl } from '../../../shared/qa';
+import { autoQaFor, autoSendBackFor, filesCovered, pullUrl, qaBadge, spotCheckUrl } from '../../../shared/qa';
 import { triageLabel } from '../../../shared/triage';
 import type { Effort, QaReview, QaScreenshot } from '../../../shared/types';
 import { api } from '../net/api';
@@ -146,6 +146,7 @@ function reviewCard(ui: Ui, review: QaReview): HTMLElement {
       ? h('div', { class: 'qa-spots' }, h('strong', null, 'Worth a human look'), h('ul', null, ...report.spotChecks.map((c) =>
         h('li', null, h('a', { href: spotCheckUrl(pullUrl(review.repo, review.number), c), target: '_blank', rel: 'noreferrer' }, h('code', null, `${c.file}${c.line ? `:${c.line}` : ''}`)), ` ${c.why}`))))
       : null,
+    report ? filesReviewed(review) : null,
     report?.commands.length
       ? h('details', null, h('summary', null, `${report.commands.length} command${report.commands.length === 1 ? '' : 's'} run`),
           h('ul', null, ...report.commands.map((c) => h('li', null, h('code', null, c.command), ` → ${c.result}`))))
@@ -156,6 +157,39 @@ function reviewCard(ui: Ui, review: QaReview): HTMLElement {
       h('a', { class: 'btn small', href: pullUrl(review.repo, review.number), target: '_blank', rel: 'noreferrer' }, 'PR ↗'),
     ),
   );
+}
+
+/** Above this many files the table starts folded away, behind its headline. */
+const OPEN_ROWS = 12;
+const OPENED = { yes: '✓', no: '✗ never', na: '–', unknown: '' } as const;
+
+/**
+ * How QA covered each changed file, as on its PR comment (`filesCovered`): a headline that turns red when code went
+ * unopened or was left out of the report, then a row per file, gaps first.
+ */
+function filesReviewed(review: QaReview): HTMLElement | null {
+  const c = review.report && filesCovered(review.report, review.files);
+  if (!c) return null;
+  const gap = (c.evidence && c.opened < c.code) || c.missing > 0;
+  const head = h('summary', { class: gap ? 'gap' : '' },
+    h('strong', null, 'Files reviewed: '),
+    c.evidence ? `${c.opened} of ${c.code} code files opened` : `${c.rows.length} files`,
+    c.untested ? h('span', { class: 'warn' }, ` · ${c.untested} with no test`) : null,
+    c.missing ? h('span', { class: 'bad' }, ` · ${c.missing} left out`) : null,
+    c.sentBack ? ` · sent back once for ${c.sentBack}` : '',
+  );
+  const row = (r: (typeof c.rows)[number]) => h('tr', null,
+    h('td', null, h('code', null, r.file)),
+    c.evidence ? h('td', { class: r.opened === 'no' ? 'bad' : r.opened === 'yes' ? 'ok' : 'muted' }, OPENED[r.opened]) : null,
+    h('td', { class: r.untested ? 'warn' : '' }, r.said ? r.said.tests : 'not in the report'),
+    h('td', null, r.said?.checked ?? ''),
+  );
+  const table = h('table', { class: 'qa-checks qa-files' },
+    h('tr', null, h('th', null, 'File'), c.evidence ? h('th', null, 'Opened') : null, h('th', null, 'Tests'), h('th', null, 'What QA checked')),
+    ...c.rows.map(row));
+  const details = h('details', { class: 'qa-files-account' }, head, table);
+  details.open = c.rows.length <= OPEN_ROWS;
+  return details;
 }
 
 function screenshot(shot: QaScreenshot, index: number): HTMLElement {

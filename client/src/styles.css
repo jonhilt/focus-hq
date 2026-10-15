@@ -594,6 +594,16 @@ textarea.qa-brief { width: 100%; min-height: 160px; font-family: var(--mono); fo
 .chip.check.pass { --tone: var(--lcars-green); }
 .chip.check.fail { --tone: var(--lcars-red); }
 .qa-checks td:nth-child(2) { width: 32%; }
+/* how QA covered each changed file: the headline turns red on a gap */
+.qa-files-account { margin: 8px 0; }
+.qa-files-account summary.gap strong { color: var(--lcars-red); }
+.qa-files-account .warn { color: var(--lcars-gold); }
+.qa-files-account .bad { color: var(--lcars-red); }
+.qa-files-account .ok { color: var(--lcars-green); }
+.qa-files th { text-align: left; font-weight: normal; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 5px 6px; }
+.qa-files code { font-family: var(--mono); font-size: 12px; color: var(--lcars-sky); }
+.qa-files td:first-child { width: auto; }
+.qa-files td:nth-child(2) { width: auto; white-space: nowrap; }
 .qa-shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin: 8px 0; }
 .qa-shots figure { margin: 0; }
 .qa-shots img { display: block; width: 100%; aspect-ratio: 11 / 7; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
