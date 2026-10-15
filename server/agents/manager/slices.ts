@@ -3,7 +3,7 @@ import { autoQaFor, sameCommit } from '../../../shared/qa';
 import type { Agent, LeadAgent } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
 import { errorMessage, newId } from '../../util';
-import { afterLanding, hasLeadWork, carriedNote, behindNote, everyPr, heldBack, leadPrBody, leadWorktreeId, newSliceNote, notShipped, openPr, reposBackNote, shipped, shippedSha, shipPlan, sliceBranch, type FreshBranch, freshBranchNote, needsFreshBranch, repoBranch } from '../lead';
+import { afterLanding, hasLeadWork, carriedNote, behindNote, everyPr, heldBack, leadPrBody, leadWorktreeId, newSliceNote, notShipped, openPr, reposBackNote, shipped, shippedSha, shipPlan, shipBranch, sliceBranch, type FreshBranch, freshBranchNote, needsFreshBranch, repoBranch } from '../lead';
 import { repoFolders } from '../planner';
 import { nextWaypoints, shippedWaypoint } from '../waypoints';
 import { type GitFailed, Workspace } from '../services';
@@ -90,7 +90,8 @@ export class Slices extends Part {
       const github = yield* GitHub;
       const workspace = yield* Workspace;
       // a repo whose pull request merged moves to a fresh branch first: its own still carries the merged commits
-      const moved = yield* this.freshBranches(agent);
+      const title = input.title.trim() || `Slice ${work.slice}`;
+      const moved = yield* this.freshBranches(agent, title);
       const movedNotes = moved.map(freshBranchNote);
       if (moved.some((m) => !m.applied)) return `Nothing shipped.\n\n${movedNotes.join('\n\n')}`;
       const states = yield* Effect.forEach(
@@ -112,10 +113,10 @@ export class Slices extends Part {
       const plan = shipPlan(states);
       if (plan.kind !== 'ship') return [notShipped(plan), ...movedNotes].join('\n\n');
       const project = this.store.project(agent.projectId);
-      const title = input.title.trim() || `Slice ${work.slice}`;
       const lines: string[] = [];
       const toReview: { repo: string; number: number }[] = [];
-      for (const s of states.filter((x) => plan.repos.includes(x.repo))) {
+      for (const shipping of states.filter((x) => plan.repos.includes(x.repo))) {
+        const s = { ...shipping, branch: yield* this.nameAfterWork(agent, shipping, title, lines) };
         this.update(agent, { status: 'pushing', activity: `Shipping ${s.repo}` });
         this.print(agent, [{ kind: 'system', text: `✻ Pushing ${s.branch} in ${s.repo}` }]);
         yield* this.retrying(agent, `the push in ${s.repo}`, workspace.push(s.dir, s.branch));
@@ -154,7 +155,26 @@ export class Slices extends Part {
    * Moves each of the lead's repos whose pull request merged (`needsFreshBranch`) onto a new branch from its base, with
    * the commits that hadn't shipped cherry-picked onto it. A repo with uncommitted changes stays put: it can't ship yet.
    */
-  private freshBranches(agent: LeadAgent): Effect.Effect<FreshBranch[], GitFailed, Workspace> {
+  /**
+   * The branch a repo ships from: at its first ship in the slice, the office renames the slice's working branch after
+   * the slice's work (`shipBranch`), so the pull request's branch says what it does. A repo with a pull request open
+   * keeps the branch it's on, and so does one git won't rename (the name's taken).
+   */
+  private nameAfterWork(agent: LeadAgent, s: { repo: string; folder: string; dir: string; branch: string }, title: string, lines: string[]): Effect.Effect<string, never, Workspace> {
+    return Effect.gen({ self: this }, function* () {
+      const named = openPr(agent.lead, s.repo) ? undefined : shipBranch(title, s.branch);
+      if (!named || named === s.branch) return s.branch;
+      const workspace = yield* Workspace;
+      const renamed = yield* workspace.renameBranch(s.dir, s.branch, named).pipe(Effect.as(true), Effect.orElseSucceed(() => false));
+      if (!renamed) return s.branch;
+      this.print(agent, [{ kind: 'system', text: `✻ Renamed ${s.branch} to ${named} in ${s.repo}, after the slice's work` }]);
+      this.update(agent, { lead: { ...agent.lead, repos: agent.lead.repos.map((x) => (x.repo === s.repo ? { ...x, branch: named } : x)) } });
+      lines.push(`./${s.folder} is now on \`${named}\`, named after the slice's work.`);
+      return named;
+    });
+  }
+
+  private freshBranches(agent: LeadAgent, title: string): Effect.Effect<FreshBranch[], GitFailed, Workspace> {
     return Effect.gen({ self: this }, function* () {
       const workspace = yield* Workspace;
       const moved: FreshBranch[] = [];
@@ -165,7 +185,8 @@ export class Slices extends Part {
         const dir = workspace.dir(leadWorktreeId(agent.id, r.folder));
         if (yield* workspace.hasUncommittedChanges(dir)) continue;
         const commits = yield* workspace.unshippedCommits(dir, r.baseBranch, shippedSha(work, r.repo));
-        const to = sliceBranch(work.title, work.slice, newId('s').slice(-4));
+        const working = sliceBranch(work.title, work.slice, newId('s').slice(-4));
+        const to = shipBranch(title, working) ?? working;
         this.print(agent, [{ kind: 'system', text: `✻ ${r.repo}'s pull request from ${from} has merged: starting ${to} from ${r.baseBranch}` }]);
         yield* workspace.freshBranch(dir, to, r.baseBranch);
         yield* this.install(agent, dir);

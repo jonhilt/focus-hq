@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { QaReport } from '../../shared/types';
 import type { PullRequestDetail } from '../github/provider';
-import { diffAnchor, evidencePath, filesPrompt, filesSection, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPrompt, qaSystemAppend, siblingsSection, skimmed, unaccounted, filesToRevisit, mustOpen, openedFiles, toolCalls } from './qa';
+import { diffAnchor, evidencePath, filesPrompt, filesSection, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPrompt, qaSystemAppend, siblingsSection, skimmed, unaccounted, filesToRevisit, openedFiles, toolCalls } from './qa';
+import { mustOpen } from '../../shared/qa';
 
 const report = (r: Partial<QaReport> = {}): QaReport => ({
   verdict: 'pass',
@@ -93,7 +94,7 @@ describe('filesSection', () => {
   const changed = ['server/gate.ts', 'scripts/plant.ts', 'docs/qa.md', 'shared/schema.json'];
 
   it('heads with code files opened by evidence, those with no test, those left out and the send-back, untested unopened code first', () => {
-    const lines = filesSection(report({ files }), { changed, opened: new Set(['server/gate.ts']), sentBack: 2 });
+    const lines = filesSection(report({ files }), { changed, opened: ['server/gate.ts'], sentBack: 2 });
     expect(lines.slice(0, 4)).toEqual(['', '### 📂 Files reviewed', '', '**1 of 3** changed code files opened by QA (from its tool calls) · **2** code files with no test · **1** left out of QA\'s report · sent back once for 2 files']);
     expect(lines).toContain('<details open><summary>Each file</summary>');
     expect(lines.filter((l) => l.startsWith('| `'))).toEqual([
@@ -159,7 +160,7 @@ describe('qaComment', () => {
   });
 
   it('puts the per-file account after the spot-checks, before the screenshots', () => {
-    const body = qaComment(report({ files: [{ file: 'a.ts', tests: 'a.test.ts', checked: 'read it' }] }), { officer: 'X' }, [], true, { changed: ['a.ts'], opened: new Set(['a.ts']) });
+    const body = qaComment(report({ files: [{ file: 'a.ts', tests: 'a.test.ts', checked: 'read it' }] }), { officer: 'X' }, [], true, { changed: ['a.ts'], opened: ['a.ts'] });
     expect(body.indexOf('### 📂 Files reviewed')).toBeGreaterThan(-1);
     expect(body.indexOf('### 📂 Files reviewed')).toBeLessThan(body.indexOf('### 📸 Screenshots'));
   });

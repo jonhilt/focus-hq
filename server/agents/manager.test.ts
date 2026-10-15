@@ -372,6 +372,25 @@ describe('AgentManager', () => {
     expect(project.goals![0]).toMatchObject({ id: lead.id, branch, sessionId: 'session-1', repos: [{ folder: 'webshop-frontend' }, { folder: 'webshop-api' }] });
   });
 
+  it('retitles a new goal once Haiku answers, unless it was retitled meanwhile', async () => {
+    const { agents, store, project } = office();
+    let answer!: (title: string | undefined) => void;
+    agents.titleGoal = () => new Promise((resolve) => (answer = resolve));
+    const { agent: lead } = agents.startGoal(project.id, 'we need better branch names - when merging PRS for example') as { agent: { id: string } };
+    expect(store.agent(lead.id).lead!.title).toBe('we need better branch names - when merging PRS for example');
+    answer('Readable branch names for slices');
+    await until(() => store.agent(lead.id).lead!.title === 'Readable branch names for slices');
+    expect(store.agent(lead.id).issue.title).toBe('Readable branch names for slices');
+
+    // the lead titled the next goal before Haiku answered: theirs stays
+    const { agent: other } = agents.startGoal(project.id, 'wishlists') as { agent: { id: string } };
+    const work = store.agent(other.id).lead!;
+    store.agent(other.id).lead = { ...work, title: 'Wishlists, by the lead' };
+    answer('Wishlists for shoppers');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(store.agent(other.id).lead!.title).toBe('Wishlists, by the lead');
+  });
+
   it('reopens a closed goal on its branch, with the same lead picking their conversation back up', async () => {
     const reopened: { id: string; branch: string }[] = [];
     const { agents, claude, store, project } = office({ ...demoWorkspace, reopen: async (_repo, id, branch) => (reopened.push({ id, branch }), `/demo/${id}`) });
@@ -392,7 +411,9 @@ describe('AgentManager', () => {
     expect(project.goals).toEqual([]);
     expect(() => agents.reopenGoal(project.id, lead.id)).toThrow(/isn’t in the room’s log/);
     await until(() => leads().length === 2);
-    expect(reopened).toEqual(work!.repos.map((r) => ({ id: `${lead.id}/${r.folder}`, branch })));
+    // each repo comes back on the branch it shipped from, named after the slice's work
+    expect(reopened).toEqual(work!.repos.map((r) => ({ id: `${lead.id}/${r.folder}`, branch: r.branch })));
+    expect(work!.repos.map((r) => r.branch)).toEqual(work!.repos.map(() => expect.stringMatching(/^focus\/saved-items-first-slice-/) as unknown));
     expect(leads()[1].req.resumeSessionId).toBe('session-1');
     expect(leads()[1].req.prompt).toMatch(new RegExp(`^\\[Office\\] The captain reopened this goal, .* checked out again on \`${branch}\`, as you left them: \\./webshop-frontend, \\./webshop-api\\. .* Still open on GitHub: `));
     expect(store.agent(lead.id).lead).toMatchObject({ repos: work!.repos, prs: work!.prs });
@@ -846,19 +867,24 @@ describe('AgentManager', () => {
     await until(() => claude.turns.length === 1);
     const ship = () => claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' }) as Promise<unknown>;
     await ship();
-    const first = store.agent(lead.id).branch;
+    const working = store.agent(lead.id).branch;
     const web = store.agent(lead.id).lead!.prs.find((p) => p.repo === 'demo/webshop-frontend')!;
-    expect(web.branch).toBe(first);
+    // the first ship renamed the slice's working branch after its work
+    const first = web.branch!;
+    expect(first).toBe(`focus/saved-items-first-slice-${working.slice(-4)}`);
+    expect(store.agent(lead.id).lead!.repos.find((r) => r.repo === 'demo/webshop-frontend')!.branch).toBe(first);
 
     // the frontend's pull request is squash-merged while the API's stays open: the slice hasn't landed
     agents.prClosed(web.repo, web.number, true);
     const reply = JSON.stringify(await ship());
     expect(fresh).toEqual([{ dir: expect.stringMatching(/\/webshop-frontend$/) as unknown, branch: expect.not.stringMatching(first) as unknown, base: 'main' }]);
     expect(picked).toEqual([['web-next']]);
+    // ...named after the slice's work, like the first
     const next = fresh[0].branch;
+    expect(next).toMatch(/^focus\/saved-items-first-slice-/);
     const repos = store.agent(lead.id).lead!.repos;
     expect(repos.find((r) => r.repo === 'demo/webshop-frontend')!.branch).toBe(next);
-    expect(repos.find((r) => r.repo === 'demo/webshop-api')!.branch).toBeUndefined();
+    expect(repos.find((r) => r.repo === 'demo/webshop-api')!.branch).toBe(`focus/saved-items-first-slice-${working.slice(-4)}`);
     // a new pull request from the fresh branch; the API's open one is only updated
     expect(opened.slice(2)).toEqual([{ repo: 'demo/webshop-frontend', head: next }]);
     expect(reply).toContain(`./webshop-frontend's pull request from \`${first}\` has merged, so the office moved it to a new branch, \`${next}\``);

@@ -220,6 +220,11 @@ export class DemoRunner implements AgentRunner {
         ],
         screenshots: captions,
         fixInstructions: fails ? `Guard the empty case in \`${changed[0]}\` (treat a missing list as []), show the empty message instead, and add a test for it.` : undefined,
+        files: changed.map((file, i) => ({
+          file,
+          tests: i === 0 && fails ? 'none' : `${file.replace(/\.(\w+)$/, '.test.$1')}`,
+          checked: i === 0 && fails ? 'Read every changed line; the empty list isn\'t handled' : 'Read every changed line; ran its tests',
+        })),
         spotChecks: [
           { file: changed[0], line: 12 + (pr % 30), why: 'Reads the saved list straight from storage: a malformed entry would throw before anything renders.' },
           { file: changed[1], line: 40 + (pr % 20), why: 'New request handler: check it only returns the signed-in shopper\'s items.' },
@@ -712,6 +717,7 @@ export const demoWorkspace: WorkspaceOps = {
   // ...and ship everything they commit
   unshippedCommits: async () => [],
   freshBranch: async () => undefined,
+  renameBranch: async () => undefined,
   cherryPick: async () => undefined,
   push: async () => sleep(800),
   publish: async () => sleep(400),

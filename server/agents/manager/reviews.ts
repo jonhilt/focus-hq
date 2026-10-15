@@ -298,8 +298,9 @@ export class Reviews extends Part {
       const pass = report.verdict === 'pass';
       const review = this.store.reviews.get(prKey(agent.repo, number));
       const screenshots = yield* this.keepScreenshots(agent, report, review?.sha);
+      const account = files && { changed: files.changed, opened: opened && [...opened], sentBack: files.sentBack };
       this.update(agent, { activity: 'Posting the QA report on the PR' });
-      const body = qaComment(report, { officer: agent.name, sha: review?.sha, pr: pullUrl(agent.repo, number) }, screenshots, this.store.settings.attribution, files && { ...files, opened });
+      const body = qaComment(report, { officer: agent.name, sha: review?.sha, pr: pullUrl(agent.repo, number) }, screenshots, this.store.settings.attribution, account);
       const commentUrl = yield* (yield* GitHub).commentOnPullRequest(agent.repo, number, body).pipe(
         Effect.tap((url) => Effect.sync(() => this.print(agent, [{ kind: 'system', text: `✻ Posted the QA report: ${url || 'done'}` }]))),
         Effect.map((url) => url || undefined),
@@ -312,7 +313,7 @@ export class Reviews extends Part {
       const checks = { pass: 0, fail: 0, skip: 0 };
       for (const c of report.checks) checks[c.result]++;
       this.core.ledger.record(agent.projectId, { kind: 'qa-verdict', repo: agent.repo, pr: number, goal: this.core.leads.leadWith(agent.repo, number)?.lead?.title, verdict: report.verdict, sha: review?.sha, reviewer: agent.name, checks, failedRounds });
-      const done: QaReview | undefined = review && { ...review, status: pass ? 'passed' : 'failed', report, screenshots, commentUrl, failedRounds, finishedAt: Date.now(), error: undefined };
+      const done: QaReview | undefined = review && { ...review, status: pass ? 'passed' : 'failed', report, screenshots, commentUrl, files: account, failedRounds, finishedAt: Date.now(), error: undefined };
       if (done) this.putReview(done);
       this.print(agent, [{ kind: pass ? 'success' : 'error', text: `${pass ? '✅ QA passed' : '❌ QA failed'} PR #${number} · ${report.checks.length} checks` }]);
       this.update(agent, { status: 'done', activity: `${pass ? '✅ Passed' : '❌ Failed'} PR #${number}`, finishedAt: Date.now() });

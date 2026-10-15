@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import type { Agent, FailedCheck, QaReport, QaReview, QaScreenshot, QaSpotCheck, Settings } from '../../shared/types';
-import { spotCheckUrl } from '../../shared/qa';
+import type { Agent, FailedCheck, FileAccount, QaReport, QaReview, QaScreenshot, QaSpotCheck, Settings } from '../../shared/types';
+import { filesCovered, mustOpen, spotCheckUrl } from '../../shared/qa';
 import type { IssueDetail, PullRequestDetail } from '../github/provider';
 import { truncate } from '../util';
 import { blocks, transcriptLines } from './transcript';
@@ -169,10 +169,6 @@ export function toolCalls(jsonl: string): ToolCall[] {
   );
 }
 
-/** Code a reviewer has to open to have checked it: not tests (running them checks them), docs, lock files or pictures. */
-const CODE_FILE = /\.(ts|tsx|js|jsx|mjs|cjs|py|cs|go|rs|java|kt|rb|sql|json|ya?ml|toml)$/;
-const NOT_CODE = /(^|\/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|packages\.lock\.json)$|\.(test|spec)\.|(^|\/)tests?\/|Tests?\.|(^|\/)(dist|build)\//;
-export const mustOpen = (file: string) => CODE_FILE.test(file) && !NOT_CODE.test(file);
 
 /** A command that shows only part of what it reads, or only where a pattern matches: it doesn't count as opening a file. */
 const PARTIAL = /\|\s*(head|tail|grep|rg|wc)\b|^\s*(grep|rg|ls|wc|stat|git\s+(log|blame|show\s+--stat))\b|--stat\b|--name-only\b|--name-status\b/;
@@ -258,56 +254,33 @@ const ICON = { pass: '✅', fail: '❌', skip: '⏭️' } as const;
 /** A table cell: no pipes or line breaks to break the row. */
 const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>') || ' ';
 
-/**
- * What the office knows of how QA covered the changed files: the files, the ones its session opened by its own tool
- * calls (when the office could read them), and how many it was sent back to.
- */
-export interface FileAccount {
-  changed: string[];
-  opened?: Set<string>;
-  sentBack?: number;
-}
-
-/** A tests cell that names none. */
-const NO_TESTS = /^\s*(none\b|no\b|n\/a\b|-+\s*$|$)/i;
 /** Above this many files the table starts folded away, behind its headline. */
 const OPEN_ROWS = 12;
+const OPENED = { yes: '✅', no: '❌', na: '–', unknown: '' } as const;
 
 /**
- * The per-file account as a section of the comment: a headline (code files opened by evidence, files with no test,
- * files QA was sent back to), then each changed file with whether it was opened, its tests and what QA checked. Code
- * that no test exercises and QA never opened comes first, since that's where a bug gets through; docs, tests and config
- * last. Nothing when the report
- * accounts for no files and the office doesn't know them either.
+ * The per-file account as a section of the comment (`filesCovered`): a headline (code files opened by evidence, files
+ * with no test, files left out of the report and sent back to), then each changed file with whether it was opened, its
+ * tests and what QA checked, gaps first. Nothing when neither the report nor the office knows the files.
  */
 export function filesSection(report: QaReport, account: FileAccount | undefined): string[] {
-  const told = report.files ?? [];
-  const changed = account?.changed.length ? account.changed : told.map((f) => f.file);
-  if (!changed.length) return [];
-  const opened = account?.opened;
-  const rows = changed.map((file) => {
-    const said = told.find((f) => { const n = f.file.replace(/^\.?\//, ''); return n === file || file.endsWith(`/${n}`) || n.endsWith(`/${file}`); });
-    const untested = !said || NO_TESTS.test(said.tests);
-    const open = !mustOpen(file) ? '–' : !opened ? '' : opened.has(file) ? '✅' : '❌';
-    return { file, said, untested, open, rank: open === '–' ? 4 : (open === '❌' ? 0 : 2) + (untested ? 0 : 1) };
-  });
-  const code = rows.filter((r) => mustOpen(r.file));
+  const c = filesCovered(report, account);
+  if (!c) return [];
   const head = [
-    opened ? `**${code.filter((r) => r.open === '✅').length} of ${code.length}** changed code files opened by QA (from its tool calls)` : `**${changed.length}** changed files`,
-    `**${rows.filter((r) => r.untested && mustOpen(r.file)).length}** code files with no test`,
-    ...(rows.some((r) => !r.said) ? [`**${rows.filter((r) => !r.said).length}** left out of QA's report`] : []),
-    ...(account?.sentBack ? [`sent back once for ${account.sentBack} file${account.sentBack === 1 ? '' : 's'}`] : []),
+    c.evidence ? `**${c.opened} of ${c.code}** changed code files opened by QA (from its tool calls)` : `**${c.rows.length}** changed files`,
+    `**${c.untested}** code files with no test`,
+    ...(c.missing ? [`**${c.missing}** left out of QA's report`] : []),
+    ...(c.sentBack ? [`sent back once for ${c.sentBack} file${c.sentBack === 1 ? '' : 's'}`] : []),
   ].join(' · ');
-  const sorted = [...rows].sort((a, b) => a.rank - b.rank);
   return [
     '', '### 📂 Files reviewed', '', head, '',
-    `<details${rows.length <= OPEN_ROWS ? ' open' : ''}><summary>Each file</summary>`, '',
-    opened ? '| File | Opened | Tests | What QA checked |' : '| File | Tests | What QA checked |',
-    opened ? '|---|---|---|---|' : '|---|---|---|',
-    ...sorted.map((r) => {
-      const tests = r.said ? `${r.untested && mustOpen(r.file) ? '⚠️ ' : ''}${cell(truncate(r.said.tests, 160))}` : '⚠️ not in the report';
+    `<details${c.rows.length <= OPEN_ROWS ? ' open' : ''}><summary>Each file</summary>`, '',
+    c.evidence ? '| File | Opened | Tests | What QA checked |' : '| File | Tests | What QA checked |',
+    c.evidence ? '|---|---|---|---|' : '|---|---|---|',
+    ...c.rows.map((r) => {
+      const tests = r.said ? `${r.untested ? '⚠️ ' : ''}${cell(truncate(r.said.tests, 160))}` : '⚠️ not in the report';
       const checked = r.said ? cell(truncate(r.said.checked, 240)) : ' ';
-      return `| \`${cell(r.file)}\` |${opened ? ` ${r.open} |` : ''} ${tests} | ${checked} |`;
+      return `| \`${cell(r.file)}\` |${c.evidence ? ` ${OPENED[r.opened]} |` : ''} ${tests} | ${checked} |`;
     }),
     '', '</details>',
   ];

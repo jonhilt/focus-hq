@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { autoQaFor, autoSendBackFor, olderVerdict, pullUrl, qaBadge, sameCommit, spotCheckUrl } from './qa';
-import type { QaReview } from './types';
+import { autoQaFor, autoSendBackFor, filesCovered, olderVerdict, pullUrl, qaBadge, sameCommit, spotCheckUrl } from './qa';
+import type { QaReport, QaReview } from './types';
 
 const review = (r: Partial<QaReview> = {}): QaReview => ({
   projectId: 'p',
@@ -108,5 +108,31 @@ describe('spot-check links', () => {
     expect(pr).toBe('https://github.com/acme/shop/pull/9');
     expect(spotCheckUrl(pr, { anchor: 'diff-abcR12' })).toBe('https://github.com/acme/shop/pull/9/files#diff-abcR12');
     expect(spotCheckUrl(pr, {})).toBe('https://github.com/acme/shop/pull/9/files');
+  });
+});
+
+describe('filesCovered', () => {
+  const report = (files: QaReport['files']): QaReport => ({ verdict: 'pass', summary: '', checks: [], commands: [], captions: [], files });
+  const files = [
+    { file: 'server/gate.ts', tests: 'gate.test.ts', checked: 'read it' },
+    { file: 'scripts/plant.ts', tests: 'None', checked: 'read it' },
+    { file: 'docs/qa.md', tests: 'none', checked: 'read it' },
+  ];
+  it('puts untested code QA never opened first and what needn’t be opened last, and counts the gaps', () => {
+    const c = filesCovered(report(files), { changed: ['docs/qa.md', 'server/gate.ts', 'scripts/plant.ts', 'shared/x.json'], opened: ['server/gate.ts'], sentBack: 1 });
+    expect(c?.rows.map((r) => [r.file, r.opened, r.untested])).toEqual([
+      ['scripts/plant.ts', 'no', true],
+      ['shared/x.json', 'no', true],
+      ['server/gate.ts', 'yes', false],
+      ['docs/qa.md', 'na', false],
+    ]);
+    expect(c).toMatchObject({ evidence: true, code: 3, opened: 1, untested: 2, missing: 1, sentBack: 1 });
+  });
+
+  it('says opened is unknown without the evidence, takes the report’s files when the office has none, and is undefined with no files', () => {
+    const c = filesCovered(report(files), undefined);
+    expect(c?.evidence).toBe(false);
+    expect(c?.rows.map((r) => r.opened)).toEqual(['unknown', 'unknown', 'na']);
+    expect(filesCovered(report(undefined), { changed: [] })).toBeUndefined();
   });
 });

@@ -1,6 +1,7 @@
 import { contextLevel, statusLine } from '../../../shared/agentStatus';
 import { UNIFORM } from '../../../shared/crew';
 import { goalTitle } from '../../../shared/goalTitle';
+import { leftOn } from '../../../shared/goalLog';
 import { type Agent, type GoalRecord, type QueuedGoal, TEAM_STATIONS } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
@@ -94,7 +95,7 @@ function recordRow(ui: Ui, projectId: string, goal: GoalRecord, free: boolean): 
     ? h('button', {
       class: 'btn small',
       disabled: !free,
-      title: free ? `Bring ${goal.leadName} back to a free team station, on ${goal.branch} as it was left, to carry on the conversation` : 'Every team station has a goal: close one first',
+      title: free ? `Bring ${goal.leadName} back to a free team station, ${leftOn(goal)?.replace(/^Left on/, 'on') ?? ''}, as it was left, to carry on the conversation` : 'Every team station has a goal: close one first',
     }, 'Reopen')
     : null;
   if (reopen) {
@@ -117,9 +118,9 @@ function recordRow(ui: Ui, projectId: string, goal: GoalRecord, free: boolean): 
       shown,
       reopen,
     ),
-    goal.branch ? h('small', { class: 'muted', style: 'display:block' }, `On ${goal.branch}`) : null,
+    leftOn(goal) ? h('small', { class: 'muted', style: 'display:block' }, leftOn(goal)) : null,
     goal.note?.learned.length ? h('ul', { class: 'goal-list' }, ...goal.note.learned.map((l) => h('li', null, l))) : null,
-    goal.prs.length ? h('div', { class: 'row' }, ...goal.prs.map(prLink)) : null,
+    goal.prs.length ? h('div', { class: 'goal-prs' }, ...goal.prs.map((p) => h('div', { class: 'row' }, prLink(p), p.branch ? h('small', { class: 'muted mono', title: p.branch }, p.branch) : null))) : null,
   );
 }
 

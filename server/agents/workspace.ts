@@ -399,6 +399,11 @@ export async function freshBranch(dir: string, branch: string, baseBranch: strin
   await git(dir, ['checkout', '--no-track', '-B', branch, `origin/${baseBranch}`]);
 }
 
+/** Renames the branch checked out in `dir` from `from` to `to`; fails if a branch called `to` is already there. */
+export async function renameBranch(dir: string, from: string, to: string): Promise<void> {
+  await git(dir, ['branch', '-m', from, to]);
+}
+
 /** Applies `commits` on top of HEAD, in order. If they don't apply cleanly, HEAD is left as it was and this fails. */
 export async function cherryPick(dir: string, commits: string[]): Promise<void> {
   try {

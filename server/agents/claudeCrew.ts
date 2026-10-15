@@ -21,6 +21,8 @@ import type { RetroOfficer, RetroRequest } from './engineer';
 import { DRAFTS_SCHEMA, engineerPrompt, engineerSystemPrompt } from './retro';
 import { READ_SCHEMA, readerSystemPrompt } from './frictions';
 import { chiefEngineer } from '../../shared/crew';
+import { tidyGoalTitle } from '../../shared/goalTitle';
+import { GOAL_TITLE_SCHEMA, goalTitlePrompt, goalTitleSystemPrompt } from './goalTitles';
 
 // The permanent crew's Claude Code sessions: they read the project's code (and, for Number One, the web) and change
 // nothing. Read-only because they only have Read, Glob and Grep, plus WebSearch and WebFetch for Number One and the
@@ -466,4 +468,26 @@ export class ClaudeEngineer implements RetroOfficer {
     });
     return { structured: result.structured, text: result.text, costUsd: result.costUsd };
   }
+}
+
+/** The model that titles a new goal: a quick, cheap job. */
+export const TITLE_MODEL = 'claude-haiku-4-5-20251001';
+
+/** A short title for a goal from the captain's first words, by Haiku; undefined when it doesn't give a usable one. */
+export async function titleGoal(brief: string, settings: Settings): Promise<string | undefined> {
+  const result = await runReadOnly({
+    cwd: os.tmpdir(),
+    system: goalTitleSystemPrompt(),
+    systemAppend: '',
+    prompt: goalTitlePrompt(brief),
+    settings,
+    signal: new AbortController().signal,
+    activity: () => undefined,
+    builtins: [],
+    schema: GOAL_TITLE_SCHEMA,
+    model: TITLE_MODEL,
+    maxTurns: 2,
+    timeoutMs: 60_000,
+  });
+  return tidyGoalTitle((result.structured as { title?: unknown } | undefined)?.title);
 }
