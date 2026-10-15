@@ -4,7 +4,7 @@ import type { Agent } from '../../shared/types';
 import type { Scorecard } from '../scorecard/types';
 import type { PastPullRequest } from '../../server/github/provider';
 import { freshClimb, type Climb } from './shared';
-import { climbBrief, climbHome, climbLog, climbLogText, climbPullRequest, climbStep, climbTarget, gapScore, openRetroIssues, ownWords, ranked, section, shortlistOf } from './climb';
+import { climbBrief, climbHome, climbLog, type MainScorecards, climbLogText, climbPullRequest, climbStep, climbTarget, gapScore, openRetroIssues, ownWords, ranked, section, shortlistOf } from './climb';
 
 const REPO = 'jonhilt/focus';
 let seq = 0;
@@ -166,6 +166,12 @@ describe('climbLog', () => {
   const main = (at: number, value: number, over: Partial<Scorecard> = {}): Scorecard => ({ v: 1, at, commit: `c${at}`, branch: 'main', dirty: false, metrics: [metric(value)], frictions: [], notes: [], ...over });
   const merged = pr({ number: 7, title: 'Narrow the board’s lookups', body: '**Hypothesis**\nSix asserts go.\nTarget: fence.nonNull 130 → 124' });
   const mergedAt = Date.parse('2026-10-01T12:00:00Z');
+  // the scorecard's reading, plainly: any move counts, and lower is better
+  const onMain = (...history: Scorecard[]): MainScorecards => ({
+    history,
+    direction: (m, before) => (m.value === before ? 'same' : m.value < before ? 'better' : 'worse'),
+    formatValue: (value) => String(value),
+  });
 
   it('lists every climb newest first: pull requests in any state, and the climbs that ended without one', () => {
     const closed = pr({ number: 9, state: 'CLOSED', closedAt: '2026-10-03T00:00:00Z', comments: [{ author: 'jonhilt', body: 'Wrong gap.' }] });
@@ -180,12 +186,12 @@ describe('climbLog', () => {
   });
 
   it('says whether a merged gain has held on main, from clean main scorecards measured after it merged', () => {
-    const held = climbLog([merged], [], 'jonhilt', [main(mergedAt - 1, 140), main(mergedAt + 1, 124)])[0];
-    expect(held.since).toMatchObject({ held: true, now: 124 });
-    const slipped = climbLog([merged], [], 'jonhilt', [main(mergedAt + 1, 124), main(mergedAt + 2, 129)])[0];
+    const held = climbLog([merged], [], 'jonhilt', onMain(main(mergedAt - 1, 140), main(mergedAt + 1, 124)))[0];
+    expect(held.since).toMatchObject({ held: true, now: 124, shown: '124' });
+    const slipped = climbLog([merged], [], 'jonhilt', onMain(main(mergedAt + 1, 124), main(mergedAt + 2, 129)))[0];
     expect(slipped.since).toMatchObject({ held: false, now: 129 });
     // nothing measured on main since, or only a branch or uncommitted changes: nothing to say yet
-    expect(climbLog([merged], [], 'jonhilt', [main(mergedAt - 1, 129), main(mergedAt + 1, 129, { branch: 'x' }), main(mergedAt + 2, 129, { dirty: true })])[0].since).toBeUndefined();
+    expect(climbLog([merged], [], 'jonhilt', onMain(main(mergedAt - 1, 129), main(mergedAt + 1, 129, { branch: 'x' }), main(mergedAt + 2, 129, { dirty: true })))[0].since).toBeUndefined();
   });
 });
 

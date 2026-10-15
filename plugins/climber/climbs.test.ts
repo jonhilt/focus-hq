@@ -13,7 +13,7 @@ import { climbingEngineer, type Climb } from './shared';
 const scorecard: FocusPlugin = {
   id: 'scorecard',
   start: () => {
-    const provides: ScorecardService = { history: () => [], noise: () => undefined };
+    const provides: ScorecardService = { history: () => [], noise: () => undefined, direction: () => 'same', formatValue: String };
     return { provides };
   },
 };

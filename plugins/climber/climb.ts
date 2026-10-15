@@ -3,8 +3,7 @@
 // manager's Climbs part seats the climbing engineer and does the bookkeeping.
 import { frictionGroups, type LedgerEvent, OPEN_FRICTION_DAYS } from '../../shared/ledger';
 import type { Agent, AgentStatus, Project } from '../../shared/types';
-import { direction, formatValue } from '../scorecard/scorecard';
-import type { Scorecard, ScorecardNoise } from '../scorecard/types';
+import type { Scorecard, ScorecardNoise, ScorecardService } from '../scorecard/types';
 import type { PastPullRequest } from '../../server/github/provider';
 import type { Climb, ClimbEnd } from './shared';
 
@@ -126,8 +125,11 @@ export interface ClimbRecord {
   /** What else was on its shortlist, best first: the gaps it passed over. */
   passedOver?: ShortlistEntry[];
   /** For a merged climb with a target: whether main has held the gain since (from scorecards measured after it merged). */
-  since?: { held: boolean; now: number; label: string; format: Parameters<typeof formatValue>[1] };
+  since?: { held: boolean; now: number; shown: string; label: string };
 }
+
+/** Main's scorecards, the latest last, and the scorecard's reading of a number (what the scorecard plugin provides). */
+export type MainScorecards = Pick<ScorecardService, 'direction' | 'formatValue'> & { history: Scorecard[] };
 
 const firstSentences = (text: string, max = 240) => {
   const flat = text.replace(/```[\s\S]*?```/g, '').replace(/\s+/g, ' ').trim();
@@ -135,15 +137,15 @@ const firstSentences = (text: string, max = 240) => {
 };
 
 /** Whether a merged climb's gain has held on main: the target number on the latest clean main scorecard measured after it merged. */
-export function heldSince(target: ClimbTarget, mergedAt: number, main: Scorecard[], noise?: ScorecardNoise): ClimbRecord['since'] {
-  const card = main.filter((c) => c.branch === 'main' && !c.dirty && c.at > mergedAt).at(-1);
+export function heldSince(target: ClimbTarget, mergedAt: number, main: MainScorecards): ClimbRecord['since'] {
+  const card = main.history.filter((c) => c.branch === 'main' && !c.dirty && c.at > mergedAt).at(-1);
   const metric = card?.metrics.find((m) => m.key === target.key);
   if (!metric) return undefined;
-  return { held: direction(metric, target.after, noise) !== 'worse', now: metric.value, label: metric.label, format: metric.format };
+  return { held: main.direction(metric, target.after) !== 'worse', now: metric.value, shown: main.formatValue(metric.value, metric.format), label: metric.label };
 }
 
 /** Every climb so far, newest first: the pull requests on GitHub, and the climbs that ended without one. */
-export function climbLog(prs: PastPullRequest[], ends: ClimbEnd[], captain: string | undefined, main: Scorecard[] = [], noise?: ScorecardNoise): ClimbRecord[] {
+export function climbLog(prs: PastPullRequest[], ends: ClimbEnd[], captain: string | undefined, main?: MainScorecards): ClimbRecord[] {
   const fromPrs = prs.map((p): ClimbRecord => {
     const at = Date.parse(p.closedAt ?? p.createdAt);
     const hypothesis = section(p.body, 'Hypothesis');
@@ -159,7 +161,7 @@ export function climbLog(prs: PastPullRequest[], ends: ClimbEnd[], captain: stri
       words: ownWords(p.comments, captain),
       // the top of the shortlist is the one it took
       passedOver: shortlistOf(p.body).slice(1, 5),
-      since: outcome === 'merged' && target ? heldSince(target, at, main, noise) : undefined,
+      since: outcome === 'merged' && target && main ? heldSince(target, at, main) : undefined,
     };
   });
   const fromEnds = ends.map((e): ClimbRecord => ({ at: e.at, outcome: e.outcome, hypothesis: e.why, words: [] }));
@@ -178,7 +180,7 @@ export function climbLogText(log: ClimbRecord[], limit = 25): string {
     const lines = [head];
     if (r.hypothesis) lines.push(`  ${r.pr ? 'Hypothesis' : 'Why'}: ${r.hypothesis}`);
     if (r.target) lines.push(`  Target: ${r.target.key} ${r.target.before} → ${r.target.after}`);
-    if (r.since) lines.push(`  On main since: ${r.since.label} is ${formatValue(r.since.now, r.since.format)}, ${r.since.held ? 'held' : 'SLIPPED back past the target'}`);
+    if (r.since) lines.push(`  On main since: ${r.since.label} is ${r.since.shown}, ${r.since.held ? 'held' : 'SLIPPED back past the target'}`);
     for (const w of r.words) lines.push(`  The captain said: “${firstSentences(w, 400)}”`);
     if (r.passedOver?.length) lines.push(`  Passed over: ${r.passedOver.map((e) => `${firstSentences(e.gap, 100)} (${gapScore(e)})`).join('; ')}`);
     return lines.join('\n');

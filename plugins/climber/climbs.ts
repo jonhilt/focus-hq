@@ -44,7 +44,11 @@ export class Climbs {
       );
       // this climb's own pull request isn't open yet; one left open from before is still part of the record
       const noise = this.scorecards.noise();
-      const log = climbLog(prs.filter((p) => p.branch !== agent.branch), this.climb.get().ends ?? [], status.login, this.scorecards.history(SCORECARDS_READ), noise);
+      const log = climbLog(prs.filter((p) => p.branch !== agent.branch), this.climb.get().ends ?? [], status.login, {
+        history: this.scorecards.history(SCORECARDS_READ),
+        direction: (m, before) => this.scorecards.direction(m, before),
+        formatValue: (value, format) => this.scorecards.formatValue(value, format),
+      });
       return climbBrief(agent, this.host.ledger(), Date.now(), log, noise);
     });
   }

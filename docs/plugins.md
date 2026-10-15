@@ -41,7 +41,7 @@ A required plugin lends what it shares through `provides`, returned from its `st
 | off | on | the scorecard alone: it needs nothing |
 | on | off | the climber is left out, saying why: its routes, card and briefs aren't there, and its saved state waits |
 
-The climber's pure rules still borrow two of the scorecard's formatting helpers (`direction`, `formatValue`) by path, which is fine while both live in this repo; plugins in repos of their own need those in a published package.
+The scorecard provides how to read a number too (`direction`: whether it's moved past its wobble; `formatValue`: how it's written), so the climber's pure rules take them from what it provides rather than from its code. Only the climber's replay script (`pnpm run climb:replay`), a tool for working on the climber's prompt, imports the scorecard's code by path.
 
 ## Switched on per project
 

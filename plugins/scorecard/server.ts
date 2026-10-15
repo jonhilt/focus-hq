@@ -4,6 +4,7 @@ import { config } from '../../server/config';
 import type { FocusPlugin } from '../../server/plugins/contract';
 import { errorMessage } from '../../server/util';
 import { checkoutHead, officeScorecards, ScorecardDesk } from './desk';
+import { direction, formatValue } from './scorecard';
 import { SCORECARD, type ScorecardService, type Scorecards } from './types';
 
 /** How long after the office starts it measures the commit it runs from, once it's settled in. */
@@ -21,7 +22,12 @@ const scorecard: FocusPlugin = {
       // a scorecard for each commit the office runs from (auto update restarts it on every merge to main)
       setTimeout(() => void checkoutHead(config.root).then((head) => desk.measureIfNew(head)).catch((err: unknown) => console.error(`Scorecard after start: ${errorMessage(err)}`)), MEASURE_AFTER_START_MS).unref();
     }
-    const provides: ScorecardService = { history: (limit) => source.history(limit), noise: () => source.noise() };
+    const provides: ScorecardService = {
+      history: (limit) => source.history(limit),
+      noise: () => source.noise(),
+      direction: (m, before) => direction(m, before, source.noise()),
+      formatValue,
+    };
     return { provides, routes: [{ method: 'post', path: '/measure', handle: () => desk.measure() }] };
   },
 };

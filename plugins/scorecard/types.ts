@@ -57,9 +57,12 @@ export interface Scorecards {
 
 /**
  * What the scorecard plugin provides the plugins that require it (`host.uses('scorecard')`): main's scorecards, the
- * latest last, and how far each number wobbles. The climber's briefs read them.
+ * latest last, how far each number wobbles, and how to read a number: whether it's moved further than it wobbles since
+ * `before` (`direction`), and how it's written (`formatValue`). The climber's briefs read them.
  */
 export interface ScorecardService {
   history(limit: number): Scorecard[];
   noise(): ScorecardNoise | undefined;
+  direction(m: Metric, before: number): 'better' | 'worse' | 'same';
+  formatValue(value: number, format: MetricFormat): string;
 }

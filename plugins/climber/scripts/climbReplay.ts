@@ -13,6 +13,7 @@ import { climbBrief, climbLog } from '../climb';
 import { config } from '../../../server/config';
 import type { PastPullRequest } from '../../../server/github/provider';
 import { SavedScorecards, SCORECARDS_DIR } from '../../scorecard/desk';
+import { direction, formatValue } from '../../scorecard/scorecard';
 import type { Scorecard } from '../../scorecard/types';
 import { CLIMB_BRANCH } from '../shared';
 import { FIND_SCHEMA, findGapQuestion, followsRule, PICK_SCHEMA, pickedGap, plantRejection, rankOnly, replayVerdict, sighting, type ClimbPick } from './climbReplayRules';
@@ -62,7 +63,7 @@ async function main() {
   // the brief as a climb gets it: main's scorecards for whether gains held, and the noise floor
   const saved = new SavedScorecards(SCORECARDS_DIR, ROOT);
   const noise = saved.noise();
-  const log = climbLog(pastClimbs(), [], login, saved.history(30), noise);
+  const log = climbLog(pastClimbs(), [], login, { history: saved.history(30), direction: (m, before) => direction(m, before, noise), formatValue });
   const card = render(scorecard());
   const agent = { repo, baseBranch: 'main', branch: `${CLIMB_BRANCH}replay` };
   let cost = 0;
