@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createSdkMcpServer, type McpSdkServerConfigWithInstance, type Options, query, tool } from '@anthropic-ai/claude-agent-sdk';
+import { createSdkMcpServer, type McpSdkServerConfigWithInstance, type Options, query, type SDKAssistantMessage, type SDKMessage, type SDKResultMessage, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import type { Effort, Settings } from '../../shared/types';
 import { config, paths } from '../config';
@@ -42,7 +42,7 @@ async function checkouts(projectId: string, repos: string[], activity: (text: st
   return cwd;
 }
 
-interface ReadOnlyRun {
+export interface ReadOnlyRun {
   cwd: string;
   systemAppend: string;
   prompt: string;
@@ -67,7 +67,7 @@ interface ReadOnlyRun {
   effort?: Effort;
 }
 
-interface ReadOnlyResult {
+export interface ReadOnlyResult {
   text: string;
   structured: unknown;
   sessionId?: string;
@@ -76,16 +76,17 @@ interface ReadOnlyResult {
   model?: string;
 }
 
-/** One turn of a read-only session, reporting what it's doing as it goes. */
-async function runReadOnly(run: ReadOnlyRun): Promise<ReadOnlyResult> {
-  const abort = new AbortController();
-  const onAbort = () => abort.abort();
-  run.signal.addEventListener('abort', onAbort);
-  const timeoutMs = run.timeoutMs ?? TURN_TIMEOUT_MS;
-  const timer = setTimeout(onAbort, timeoutMs);
-  const prefix = run.tools ? `mcp__${run.tools.server.name}__` : undefined;
-  const extra = run.tools ? run.tools.names.map((n) => `${prefix}${n}`) : [];
-  const options: Options = {
+/** Claude Code's `query`, or a fake stream of its messages in a test. */
+export type Ask = (params: { prompt: string; options: Options }) => AsyncIterable<SDKMessage>;
+
+/**
+ * The session's options: only the tools it's given, all pre-approved, `dontAsk` for anything else, none of your
+ * settings, hooks or MCP servers, and the office's own tools under `mcp__<server>__`.
+ */
+export function readOnlyOptions(run: ReadOnlyRun, abort: AbortController): Options {
+  const tools = run.tools;
+  const extra = tools ? tools.names.map((n) => `${toolPrefix(tools)}${n}`) : [];
+  return {
     cwd: run.cwd,
     additionalDirectories: run.readable,
     abortController: abort,
@@ -95,7 +96,7 @@ async function runReadOnly(run: ReadOnlyRun): Promise<ReadOnlyResult> {
     allowedTools: [...run.builtins, ...extra],
     permissionMode: 'dontAsk',
     settingSources: [],
-    mcpServers: run.tools ? { [run.tools.server.name]: run.tools.server } : {},
+    mcpServers: tools ? { [tools.server.name]: tools.server } : {},
     strictMcpConfig: true,
     outputFormat: run.schema ? { type: 'json_schema', schema: run.schema } : undefined,
     maxTurns: run.maxTurns ?? 40,
@@ -103,33 +104,73 @@ async function runReadOnly(run: ReadOnlyRun): Promise<ReadOnlyResult> {
     resume: run.resume,
     env: agentEnv(),
   };
+}
 
-  let sessionId = run.resume;
-  let model: string | undefined;
+const toolPrefix = (tools: NonNullable<ReadOnlyRun['tools']>) => `mcp__${tools.server.name}__`;
+
+type Block = SDKAssistantMessage['message']['content'][number];
+
+/** What the activity line says for one block of the session's reply, or undefined for a block that doesn't show. */
+export function blockActivity(block: Block, run: Pick<ReadOnlyRun, 'tools' | 'cwd'>): string | undefined {
+  if (block.type === 'tool_use') {
+    const prefix = run.tools ? toolPrefix(run.tools) : undefined;
+    if (run.tools && prefix !== undefined && block.name.startsWith(prefix)) return run.tools.activity(block.name.slice(prefix.length));
+    return renderToolUse(block.name, (block.input ?? {}) as Record<string, unknown>, run.cwd).activity ?? '';
+  }
+  if (block.type === 'thinking') return 'Thinking…';
+  if (block.type === 'text' && block.text.trim()) return truncate(block.text.trim().split('\n')[0], 100);
+  return undefined;
+}
+
+/** What a turn's last message comes to: what it answered, or the error it ended in. */
+export function turnResult(msg: SDKResultMessage, seen: Seen): ReadOnlyResult | Error {
+  if (msg.subtype !== 'success') return new Error(msg.errors?.join('\n') || msg.subtype);
+  if (msg.is_error) return new Error(msg.result);
+  return { text: msg.result, structured: msg.structured_output, sessionId: seen.sessionId, costUsd: msg.total_cost_usd, model: seen.model };
+}
+
+/** Why a turn that threw ended: the captain stopped it, it ran out of time, or what it threw. */
+export function turnFailure(err: unknown, why: { stopped: boolean; timedOut: boolean; timeoutMs: number }): Error {
+  if (why.stopped) return new Error('Stopped', { cause: err });
+  if (why.timedOut) return new Error(`Gave up after ${why.timeoutMs / 60_000} minutes`, { cause: err });
+  return new Error(errorMessage(err), { cause: err });
+}
+
+/** The session and model Claude Code reported when the turn started. */
+interface Seen {
+  sessionId?: string;
+  model?: string;
+}
+
+/** Reads one message of the turn: notes the session it's in, shows what it's doing, and returns its result at the end. */
+function readMessage(msg: SDKMessage, run: ReadOnlyRun, seen: Seen): ReadOnlyResult | Error | undefined {
+  if (msg.type === 'system' && msg.subtype === 'init') Object.assign(seen, { sessionId: msg.session_id, model: msg.model });
+  else if (msg.type === 'assistant' && msg.parent_tool_use_id === null) {
+    for (const block of msg.message.content) {
+      const line = blockActivity(block, run);
+      if (line !== undefined) run.activity(line);
+    }
+  } else if (msg.type === 'result') return turnResult(msg, seen);
+  return undefined;
+}
+
+/** One turn of a read-only session, reporting what it's doing as it goes. */
+export async function runReadOnly(run: ReadOnlyRun, ask: Ask = query): Promise<ReadOnlyResult> {
+  const abort = new AbortController();
+  const onAbort = () => abort.abort();
+  run.signal.addEventListener('abort', onAbort);
+  const timeoutMs = run.timeoutMs ?? TURN_TIMEOUT_MS;
+  const timer = setTimeout(onAbort, timeoutMs);
+  const seen: Seen = { sessionId: run.resume };
   try {
-    for await (const msg of query({ prompt: run.prompt, options })) {
-      if (msg.type === 'system' && msg.subtype === 'init') {
-        sessionId = msg.session_id;
-        model = msg.model;
-      }
-      else if (msg.type === 'assistant' && msg.parent_tool_use_id === null) {
-        for (const block of msg.message.content) {
-          if (block.type === 'tool_use') {
-            if (run.tools && prefix && block.name.startsWith(prefix)) run.activity(run.tools.activity(block.name.slice(prefix.length)));
-            else run.activity(renderToolUse(block.name, (block.input ?? {}) as Record<string, unknown>, run.cwd).activity ?? '');
-          } else if (block.type === 'thinking') run.activity('Thinking…');
-          else if (block.type === 'text' && block.text.trim()) run.activity(truncate(block.text.trim().split('\n')[0], 100));
-        }
-      } else if (msg.type === 'result') {
-        if (msg.subtype !== 'success' || msg.is_error) throw new Error(msg.subtype === 'success' ? msg.result : (msg.errors?.join('\n') || msg.subtype));
-        return { text: msg.result, structured: msg.structured_output, sessionId, costUsd: msg.total_cost_usd, model };
-      }
+    for await (const msg of ask({ prompt: run.prompt, options: readOnlyOptions(run, abort) })) {
+      const end = readMessage(msg, run, seen);
+      if (end instanceof Error) throw end;
+      if (end) return end;
     }
     throw new Error('The session stopped without a result');
   } catch (err) {
-    if (run.signal.aborted) throw new Error('Stopped', { cause: err });
-    if (abort.signal.aborted) throw new Error(`Gave up after ${timeoutMs / 60_000} minutes`, { cause: err });
-    throw new Error(errorMessage(err), { cause: err });
+    throw turnFailure(err, { stopped: run.signal.aborted, timedOut: abort.signal.aborted, timeoutMs });
   } finally {
     clearTimeout(timer);
     run.signal.removeEventListener('abort', onAbort);
