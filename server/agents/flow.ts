@@ -227,8 +227,7 @@ export function goalFlow(goal: ArchivedGoal, moments: Moment[], ledger: LedgerEv
   const captainWaits: number[] = [];
   const captainBy = emptyReasons();
   const breaks = [...ships.map((s) => s.at), ...verdicts.map((v) => v.at), ...ends.map((e) => e.at)];
-  const lastMerge = Math.max(-Infinity, ...ends.filter((e) => e.kind === 'merged' && e.at <= closedAt).map((e) => e.at));
-  let awayBeforeMerge = 0;
+  const awaySpans: [number, number][] = [];
   const all = stretches(moments, openedAt, closedAt, busyNow);
   let now: FlowNow | undefined;
   for (const s of all) {
@@ -242,8 +241,10 @@ export function goalFlow(goal: ArchivedGoal, moments: Moment[], ledger: LedgerEv
       const waiting = queued || s.busy || s.endedBy === 'background' ? undefined : waitingOn(a);
       const state: FlowState = queued ? 'queued' : s.busy ? (reworking(a) ? 'rework' : 'working') : !waiting ? 'background' : waiting === 'failed' ? 'captain' : waiting;
       ms[state] += b - a;
-      if (long) away[state] += b - a;
-      if (long) awayBeforeMerge += Math.max(0, Math.min(b, lastMerge) - a);
+      if (long) {
+        away[state] += b - a;
+        awaySpans.push([a, b]);
+      }
       const r = waiting === 'captain' || waiting === 'failed' ? why(waiting, s.after) : undefined;
       if (!now || now.state !== state || now.reason !== r) now = { state, since: a, ...(r ? { reason: r } : {}) };
       if (r) {
@@ -260,8 +261,16 @@ export function goalFlow(goal: ArchivedGoal, moments: Moment[], ledger: LedgerEv
   }
   const leadMs = closedAt - openedAt;
   const activeMs = leadMs - Object.values(away).reduce((n, t) => n + t, 0);
-  const delivered = lastMerge > -Infinity ? { deliveredMs: Math.max(0, lastMerge - openedAt), deliveredActiveMs: Math.max(0, lastMerge - openedAt - awayBeforeMerge) } : {};
+  const delivered = deliveredBy(openedAt, ends.flatMap((e) => (e.kind === 'merged' && e.at <= closedAt ? [e.at] : [])), awaySpans);
   return { id: goal.id, title: goal.title, projectId: goal.projectId, openedAt, closedAt, leadMs, activeMs, ...delivered, slices: goal.slices, prs: prs.length, ms, away, captainWaits, captainBy, now };
+}
+
+/** A goal's time to its last merge (`merges`), and that less the time away (`awaySpans`) before it; nothing when none merged. */
+function deliveredBy(openedAt: number, merges: number[], awaySpans: [number, number][]): Pick<GoalFlow, 'deliveredMs' | 'deliveredActiveMs'> {
+  if (!merges.length) return {};
+  const last = Math.max(...merges);
+  const away = awaySpans.reduce((n, [a, b]) => n + Math.max(0, Math.min(b, last) - a), 0);
+  return { deliveredMs: Math.max(0, last - openedAt), deliveredActiveMs: Math.max(0, last - openedAt - away) };
 }
 
 /** What an open goal carries of its flow for its screens: the state it's in now, and its time so far while someone was around. */
