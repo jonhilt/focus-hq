@@ -8,7 +8,7 @@ import { GitHub, type GitHubError } from '../../github/service';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../../util';
 import { goalOf, goalReviewerId, reviewsToStart, sliceSiblings } from '../lead';
 import { repoFolders } from '../planner';
-import { checksFixPrompt, evidencePath, filesPrompt, filesToRevisit, fixPrompt, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, type QaSibling, qaSystemAppend } from '../qa';
+import { checksFixPrompt, evidencePath, filesPrompt, filesToRevisit, fixPrompt, openedFiles, type Revisit, toolCalls, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, type QaSibling, qaSystemAppend } from '../qa';
 import type { QaLoopEvent } from '../qaLoop';
 import { qaNextStep } from '../qaLoop';
 import { carriedComment, retestStep } from '../retest';
@@ -249,13 +249,25 @@ export class Reviews extends Part {
     });
   }
 
-  /** Sends QA back once, in the same session, to the changed files its report left out or only skimmed. */
-  private revisitFiles(agent: Agent, sessionId: string, { missing, unread }: { missing: string[]; unread: string[] }): Effect.Effect<void, never, ManagerServices> {
+  /**
+   * The changed files QA's session opened, from its tool calls in its transcript, when the office can read it (not in
+   * the demo, nor for a cloud session) and hasn't sent QA back already this review.
+   */
+  private openedBy(agent: Agent): Effect.Effect<Set<string> | undefined> {
+    const files = this.rt(agent.id).qaFiles;
+    const read = this.core.ledger.readTranscript;
+    const sessionId = agent.sessionId;
+    if (!files || files.askedAgain || !read || !sessionId || agent.cloud) return Effect.succeed(undefined);
+    return Effect.promise(() => read(sessionId).catch(() => undefined)).pipe(Effect.map((text) => (text ? openedFiles(toolCalls(text), files.changed) : undefined)));
+  }
+
+  /** Sends QA back once, in the same session, to the changed files its report left out or only skimmed, or it never opened. */
+  private revisitFiles(agent: Agent, sessionId: string, revisit: Revisit): Effect.Effect<void, never, ManagerServices> {
     const files = this.rt(agent.id).qaFiles;
     if (files) files.askedAgain = true;
-    const n = missing.length + unread.length;
-    this.print(agent, [{ kind: 'system', text: `✻ The report leaves out or only skimmed ${n} changed file${n === 1 ? '' : 's'}: back to QA to review ${n === 1 ? 'it' : 'them'} properly` }]);
-    return this.core.sessions.runSession(agent, filesPrompt(missing, unread), sessionId).pipe(
+    const n = revisit.missing.length + revisit.unread.length + revisit.unopened.length;
+    this.print(agent, [{ kind: 'system', text: `✻ The report leaves out, only skimmed or never opened ${n} changed file${n === 1 ? '' : 's'}: back to QA to review ${n === 1 ? 'it' : 'them'} properly` }]);
+    return this.core.sessions.runSession(agent, filesPrompt(revisit), sessionId).pipe(
       Effect.catch((err) => Effect.sync(() => this.core.sessions.fail(agent, err.message))),
     );
   }
@@ -273,7 +285,7 @@ export class Reviews extends Part {
       if (agent.prGone) return;
       // a report that leaves changed files out goes back to QA once, naming them: a reviewer that skims a big diff
       // misses what's in the files it skipped (docs/qa-catch.md)
-      const revisit = filesToRevisit(report, this.rt(agent.id).qaFiles);
+      const revisit = filesToRevisit(report, this.rt(agent.id).qaFiles, yield* this.openedBy(agent));
       if (revisit && agent.sessionId) return yield* this.revisitFiles(agent, agent.sessionId, revisit);
       const pass = report.verdict === 'pass';
       const review = this.store.reviews.get(prKey(agent.repo, number));

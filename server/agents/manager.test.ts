@@ -199,6 +199,27 @@ describe('AgentManager', () => {
     expect(claude.turns).toHaveLength(2);
   });
 
+  it('sends QA back to a changed file its session never opened, whatever its report says, by its transcript', async () => {
+    const { agents, claude, store, project } = office({ ...demoWorkspace, changedFiles: () => Promise.resolve(['src/cart.ts', 'scripts/sync.ts']) });
+    // QA read src/cart.ts, and only listed the files
+    agents.readTranscript = () => Promise.resolve([
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'git diff --stat origin/main...HEAD' } }] } },
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read', input: { file_path: '/review/src/cart.ts' } }] } },
+    ].map((l) => JSON.stringify(l)).join('\n'));
+    const [pr] = await Effect.runPromise(Effect.gen(function* () {
+      return yield* (yield* GitHub).listPullRequests('demo/webshop-frontend');
+    }).pipe(Effect.provide(demoLayer)));
+    agents.requestReview(project.id, pr.repo, pr.number, pr.title);
+    await until(() => claude.turns.length === 1);
+    claude.turns[0].hooks.session('qa-session');
+    const files = ['src/cart.ts', 'scripts/sync.ts'].map((file) => ({ file, tests: 'none', checked: 'read every changed line' }));
+    claude.turns[0].end({ ok: true, summary: '', structured: { verdict: 'pass', summary: 'Works.', checks: [], commands: [], files } });
+    await until(() => claude.turns.length === 2);
+    expect(claude.turns[1].req.prompt).toMatch(/^Your session never opened this file, whatever your report says about it:\n- scripts\/sync\.ts\n/);
+    claude.turns[1].end({ ok: true, summary: '', structured: { verdict: 'pass', summary: 'Works.', checks: [], commands: [], files } });
+    await until(() => store.reviews.get(prKey(pr.repo, pr.number))?.status === 'passed');
+  });
+
   it('stops a QA session whose PR merged, and won’t resume it for a message', async () => {
     const { agents, claude, store, project } = office();
     const [pr] = await Effect.runPromise(Effect.gen(function* () {

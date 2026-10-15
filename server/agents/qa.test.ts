@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { QaReport } from '../../shared/types';
 import type { PullRequestDetail } from '../github/provider';
-import { diffAnchor, evidencePath, filesPrompt, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPrompt, qaSystemAppend, siblingsSection, skimmed, unaccounted, filesToRevisit } from './qa';
+import { diffAnchor, evidencePath, filesPrompt, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPrompt, qaSystemAppend, siblingsSection, skimmed, unaccounted, filesToRevisit, mustOpen, openedFiles, toolCalls } from './qa';
 
 const report = (r: Partial<QaReport> = {}): QaReport => ({
   verdict: 'pass',
@@ -321,11 +321,12 @@ describe('every changed file, accounted for', () => {
   });
 
   it('sends QA back to the files it left out, or says it only skimmed, to report again in full', () => {
-    const text = filesPrompt(['scripts/sync.ts', 'schema.json']);
+    const text = filesPrompt({ missing: ['scripts/sync.ts', 'schema.json'], unread: [], unopened: [] });
     expect(text).toMatch(/^Your report leaves out 2 of the files this pull request changes:\n- scripts\/sync\.ts\n- schema\.json\n/);
     expect(text).toContain('give your whole report again, every file in it');
-    expect(filesPrompt([], ['server/crew.ts'])).toMatch(/^Your report says you only skimmed, or didn't read, this file:\n- server\/crew\.ts\n\nReview each properly/);
-    expect(filesPrompt(['a.ts'], ['b.ts', 'c.ts'])).toContain('- a.ts\n\nYour report says you only skimmed, or didn\'t read, these 2 files:\n- b.ts\n- c.ts');
+    expect(filesPrompt({ missing: [], unread: ['server/crew.ts'], unopened: [] })).toMatch(/^Your report says you only skimmed, or didn't read, this file:\n- server\/crew\.ts\n\nReview each properly/);
+    expect(filesPrompt({ missing: ['a.ts'], unread: ['b.ts', 'c.ts'], unopened: [] })).toContain('- a.ts\n\nYour report says you only skimmed, or didn\'t read, these 2 files:\n- b.ts\n- c.ts');
+    expect(filesPrompt({ missing: [], unread: [], unopened: ['server/crew.ts'] })).toMatch(/^Your session never opened this file, whatever your report says about it:\n- server\/crew\.ts\n\nReview each properly/);
   });
 
   it('takes QA at its word on the files it only skimmed or didn’t read', () => {
@@ -339,10 +340,38 @@ describe('filesToRevisit', () => {
   const report = parseQaReport({ verdict: 'pass', summary: '', checks: [], commands: [], files: [{ file: 'a.ts', tests: 'none', checked: 'skimmed' }, { file: 'b.ts', tests: 'none', checked: 'read every line' }] });
   it('names what to go back to once a review, and nothing when there’s nothing or it was asked already', () => {
     if (!report) throw new Error('no report');
-    expect(filesToRevisit(report, { changed: ['a.ts', 'b.ts', 'c.ts'], askedAgain: false })).toEqual({ missing: ['c.ts'], unread: ['a.ts'] });
+    expect(filesToRevisit(report, { changed: ['a.ts', 'b.ts', 'c.ts'], askedAgain: false })).toEqual({ missing: ['c.ts'], unread: ['a.ts'], unopened: [] });
+    // the evidence: b.ts was never opened, whatever the report says; a.ts and c.ts are already named
+    expect(filesToRevisit(report, { changed: ['a.ts', 'b.ts', 'c.ts'], askedAgain: false }, new Set())).toEqual({ missing: ['c.ts'], unread: ['a.ts'], unopened: ['b.ts'] });
     expect(filesToRevisit(report, { changed: ['a.ts', 'b.ts', 'c.ts'], askedAgain: true })).toBeUndefined();
     expect(filesToRevisit(report, undefined)).toBeUndefined();
     const clean = parseQaReport({ verdict: 'pass', summary: '', checks: [], commands: [], files: [{ file: 'b.ts', tests: 'none', checked: 'read' }] });
     expect(clean && filesToRevisit(clean, { changed: ['b.ts'], askedAgain: false })).toBeUndefined();
+  });
+});
+
+describe('what QA actually opened', () => {
+  const changed = ['server/crew.ts', 'shared/types.ts', 'scripts/sync.ts'];
+  const bash = (command: string) => ({ name: 'Bash', input: { command } });
+  it('counts a file read, or printed whole, and not one only listed, grepped or cut short', () => {
+    expect([...openedFiles([{ name: 'Read', input: { file_path: '/tmp/clone/server/crew.ts' } }], changed)]).toEqual(['server/crew.ts']);
+    expect([...openedFiles([bash('git diff origin/main...HEAD -- shared/types.ts scripts/sync.ts')], changed)]).toEqual(['shared/types.ts', 'scripts/sync.ts']);
+    expect([...openedFiles([bash('sed -n 1,400p server/crew.ts')], changed)]).toEqual(['server/crew.ts']);
+    expect(openedFiles([bash('git diff origin/main...HEAD -- server/crew.ts | head -250'), bash('grep -n tools server/crew.ts'), bash('git diff --stat origin/main...HEAD')], changed).size).toBe(0);
+  });
+
+  it('counts a whole diff of the pull request, not cut short, as opening every file', () => {
+    expect(openedFiles([bash('git diff origin/main...HEAD')], changed).size).toBe(3);
+    expect(openedFiles([bash('git diff origin/main...HEAD | head -400')], changed).size).toBe(0);
+  });
+
+  it('reads the tool calls from a transcript, and asks for code files only', () => {
+    const jsonl = [
+      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'Looking' }, { type: 'tool_use', name: 'Read', input: { file_path: 'a.ts' } }] } }),
+      JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', content: 'x' }] } }),
+    ].join('\n');
+    expect(toolCalls(jsonl)).toEqual([{ name: 'Read', input: { file_path: 'a.ts' } }]);
+    expect(['server/crew.ts', 'config/app.yml', 'package.json'].every(mustOpen)).toBe(true);
+    expect(['server/crew.test.ts', 'docs/qa.md', 'pnpm-lock.yaml', 'client/public/deck.glb'].some(mustOpen)).toBe(false);
   });
 });

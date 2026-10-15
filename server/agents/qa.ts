@@ -3,6 +3,7 @@ import type { Agent, FailedCheck, QaReport, QaReview, QaScreenshot, QaSpotCheck,
 import { spotCheckUrl } from '../../shared/qa';
 import type { IssueDetail, PullRequestDetail } from '../github/provider';
 import { truncate } from '../util';
+import { blocks, transcriptLines } from './transcript';
 import { SCRATCH_RULE } from './scratch';
 import { WAIT_RULE } from './wait';
 
@@ -155,27 +156,76 @@ const UNREAD = /\b(skim(med|ming)?|glanced?|not (read|reviewed|opened)|didn['’
 /** The changed files QA's report says it only skimmed or didn't read: its own account, taken at its word. */
 export const skimmed = (report: QaReport): string[] => (report.files ?? []).filter((f) => UNREAD.test(f.checked)).map((f) => f.file);
 
+/** A tool call from QA's session: the tool and what it was given. */
+export interface ToolCall {
+  name: string;
+  input: Record<string, unknown>;
+}
+
+/** Each tool call in a Claude Code transcript (JSONL), in order. */
+export function toolCalls(jsonl: string): ToolCall[] {
+  return [...transcriptLines(jsonl)].flatMap((line) =>
+    line.type === 'assistant' ? blocks(line).flatMap((b) => (b.type === 'tool_use' && b.name ? [{ name: b.name, input: (b.input ?? {}) as Record<string, unknown> }] : [])) : [],
+  );
+}
+
+/** Code a reviewer has to open to have checked it: not tests (running them checks them), docs, lock files or pictures. */
+const CODE_FILE = /\.(ts|tsx|js|jsx|mjs|cjs|py|cs|go|rs|java|kt|rb|sql|json|ya?ml|toml)$/;
+const NOT_CODE = /(^|\/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|packages\.lock\.json)$|\.(test|spec)\.|(^|\/)tests?\/|Tests?\.|(^|\/)(dist|build)\//;
+export const mustOpen = (file: string) => CODE_FILE.test(file) && !NOT_CODE.test(file);
+
+/** A command that shows only part of what it reads, or only where a pattern matches: it doesn't count as opening a file. */
+const PARTIAL = /\|\s*(head|tail|grep|rg|wc)\b|^\s*(grep|rg|ls|wc|stat|git\s+(log|blame|show\s+--stat))\b|--stat\b|--name-only\b|--name-status\b/;
+
 /**
- * The changed files a report should go back to QA for: those it leaves out and those it says it only skimmed. Nothing
- * once QA has been sent back already this review, or when the office doesn't know the changed files.
+ * The changed files QA's session actually opened, from its tool calls: one it read, or a command that printed it whole
+ * (`git diff … -- file`, `cat`, `sed -n`, …). A whole diff of the pull request, not cut short, opens every file.
  */
-export function filesToRevisit(report: QaReport, files: { changed: string[]; askedAgain: boolean } | undefined): { missing: string[]; unread: string[] } | undefined {
-  if (!files || files.askedAgain) return undefined;
-  const missing = unaccounted(report, files.changed);
-  const unread = skimmed(report);
-  return missing.length || unread.length ? { missing, unread } : undefined;
+export function openedFiles(calls: ToolCall[], changed: string[]): Set<string> {
+  const opened = new Set<string>();
+  for (const { name, input } of calls) {
+    const path = typeof input.file_path === 'string' ? input.file_path : '';
+    const command = typeof input.command === 'string' ? input.command : '';
+    if (name === 'Read') for (const f of changed) if (path === f || path.endsWith(`/${f}`)) opened.add(f);
+    if (!command || PARTIAL.test(command)) continue;
+    const named = changed.filter((f) => command.includes(f));
+    if (named.length) named.forEach((f) => opened.add(f));
+    else if (/\bgit\s+diff\b[^|;&]*\.\.\./.test(command) && !/\s--\s/.test(command)) changed.forEach((f) => opened.add(f));
+  }
+  return opened;
+}
+
+/** The changed files to send QA back to: left out of its report, said to be only skimmed, or never opened at all. */
+export interface Revisit {
+  missing: string[];
+  unread: string[];
+  unopened: string[];
 }
 
 /**
- * What QA hears when its report leaves files out, or says it only skimmed some: go back to them, then report again in
- * full. Asked once a review.
+ * The changed files a report should go back to QA for: those it leaves out, those it says it only skimmed, and the code
+ * files its session never opened (`opened`, when the office could read its tool calls). Nothing once QA has been sent
+ * back already this review, or when the office doesn't know the changed files.
  */
-export function filesPrompt(missing: string[], skimmedFiles: string[] = []): string {
+export function filesToRevisit(report: QaReport, files: { changed: string[]; askedAgain: boolean } | undefined, opened?: Set<string>): Revisit | undefined {
+  if (!files || files.askedAgain) return undefined;
+  const missing = unaccounted(report, files.changed);
+  const unread = skimmed(report);
+  const unopened = opened ? files.changed.filter((f) => mustOpen(f) && !opened.has(f) && !missing.includes(f) && !unread.some((u) => u === f || f.endsWith(`/${u}`))) : [];
+  return missing.length || unread.length || unopened.length ? { missing, unread, unopened } : undefined;
+}
+
+/** What QA hears when its report leaves files out, says it only skimmed some, or its session never opened some: go back to them, then report again in full. Asked once a review. */
+export function filesPrompt({ missing, unread, unopened }: Revisit): string {
   const list = (files: string[]) => [...files.slice(0, NAMED_FILES).map((f) => `- ${f}`), ...(files.length > NAMED_FILES ? [`- …and ${files.length - NAMED_FILES} more (\`git diff --name-only\` lists them)`] : [])];
+  const these = (n: number) => (n === 1 ? 'this file' : `these ${n} files`);
+  const sections = [
+    missing.length ? [`Your report leaves out ${missing.length} of the files this pull request changes:`, ...list(missing)] : [],
+    unread.length ? [`Your report says you only skimmed, or didn't read, ${these(unread.length)}:`, ...list(unread)] : [],
+    unopened.length ? [`Your session never opened ${these(unopened.length)}, whatever your report says about ${unopened.length === 1 ? 'it' : 'them'}:`, ...list(unopened)] : [],
+  ].filter((s) => s.length);
   return [
-    ...(missing.length ? [`Your report leaves out ${missing.length} of the files this pull request changes:`, ...list(missing)] : []),
-    ...(missing.length && skimmedFiles.length ? [''] : []),
-    ...(skimmedFiles.length ? [`Your report says you only skimmed, or didn't read, ${skimmedFiles.length === 1 ? 'this file' : `these ${skimmedFiles.length} files`}:`, ...list(skimmedFiles)] : []),
+    ...sections.flatMap((s, i) => (i ? ['', ...s] : s)),
     '',
     "Review each properly: what tests exercise its changes, and for one no test does, read its diff whole, every changed line, asking what would make it wrong. Then give your whole report again, every file in it, with the verdict it now deserves.",
   ].join('\n');

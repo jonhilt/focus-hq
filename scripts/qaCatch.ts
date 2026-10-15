@@ -20,7 +20,7 @@ import { promisify } from 'node:util';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { paths } from '../server/config';
 import { claudeConfig } from '../server/agents/claudeRunner';
-import { filesPrompt, filesToRevisit, parseQaReport, QA_SCHEMA, qaAgentModel, qaPrompt, qaSystemAppend } from '../server/agents/qa';
+import { filesPrompt, filesToRevisit, openedFiles, parseQaReport, QA_SCHEMA, qaAgentModel, qaPrompt, qaSystemAppend, type ToolCall } from '../server/agents/qa';
 import { addedLines, type CatchResult, type CatchRun, catchLines, controlLine, type ControlResult, plant, type Planted, scoreControl, scoreReport } from '../server/agents/qaCatch';
 import type { PullRequestDetail } from '../server/github/provider';
 import { checkLedger, closedGoals } from '../shared/ledger';
@@ -115,6 +115,8 @@ async function review(repo: string, dir: string, pr: PullRequestDetail): Promise
   const minutes = () => Math.round((Date.now() - started) / 60_000);
   let costUsd = 0;
   let sessionId: string | undefined;
+  // what QA's session did: which files it actually opened, as the office reads from its transcript
+  const calls: ToolCall[] = [];
   const turn = async (prompt: string) => {
     let structured: unknown;
     let text = '';
@@ -135,6 +137,7 @@ async function review(repo: string, dir: string, pr: PullRequestDetail): Promise
       },
     })) {
       sessionId = msg.session_id;
+      if (msg.type === 'assistant') for (const b of msg.message.content) if (b.type === 'tool_use') calls.push({ name: b.name, input: (b.input ?? {}) as Record<string, unknown> });
       if (msg.type !== 'result') continue;
       costUsd += msg.total_cost_usd;
       if (msg.subtype === 'success') {
@@ -147,10 +150,10 @@ async function review(repo: string, dir: string, pr: PullRequestDetail): Promise
   try {
     const changed = (await run('git', ['-C', dir, 'diff', '--name-only', `origin/${pr.baseBranch}...HEAD`], BIG)).stdout.split('\n').filter(Boolean);
     let report = await turn(qaPrompt(repo, pr, [], {}, changed));
-    const revisit = report && filesToRevisit(report, { changed, askedAgain: false });
+    const revisit = report && filesToRevisit(report, { changed, askedAgain: false }, openedFiles(calls, changed));
     if (revisit) {
-      console.log(`  ${repo}#${pr.number}: the report left out ${revisit.missing.length} and only skimmed ${revisit.unread.length} of ${changed.length} changed files: sent back once`);
-      report = (await turn(filesPrompt(revisit.missing, revisit.unread))) ?? report;
+      console.log(`  ${repo}#${pr.number}: of ${changed.length} changed files the report left out ${revisit.missing.length}, only skimmed ${revisit.unread.length}, never opened ${revisit.unopened.length}: sent back once`);
+      report = (await turn(filesPrompt(revisit))) ?? report;
     }
     return { report, costUsd, minutes: minutes() };
   } catch (err) {
