@@ -23,12 +23,26 @@ views:
 
 A part's `does` is what it does, in a line, shown in its box. Its `layer` puts it in a column, and gives it its colour; the layers go left to right in the order the model first names them. Its `kind` is one of the studio's (ui, route, handler, service, store, queue, external, job, type). Focus's own model is [`.focus/cartography.yaml`](../../.focus/cartography.yaml).
 
+## What the imports can't show
+
+A browser and its server don't import each other: they talk over HTTP and WebSockets. A repo can keep a recorded run of that traffic beside its model, in `.focus/cartography-flows.json` (`shared/flows.ts`): each kind of message (an event's type, or a request's method and route), which file sent it, which received it, and how often, with what the run was and the commit it was recorded on.
+
+```json
+{ "run": "the demo office at speed 3 for 120 s…", "commit": "eec5747…",
+  "flows": [{ "via": "ws", "name": "agent", "from": "server/agents/manager/core.ts", "to": "client/src/net/state.ts", "count": 36 }] }
+```
+
+The map puts each file under its part, as it does an import, and a view draws what one part sends another as a dashed gold arrow, numbered on after the imports: *Agent manager sends lines, agent, plugin to Mirror of the office over the WebSocket (78 events in the recorded run)*.
+
+Focus records its own with `pnpm run record-flows` ([scripts](../../docs/scripts.md)): a demo office with `FOCUS_FLOWS` set counts each event the hub sends against the file that asked it to (its stack), and each `/api` request against the browser's file that made it, which the browser names in a header while it's opened with `?flows`. Another project records its own however suits it, in the same shape. The recording is evidence from one run, not every path: what the run didn't do isn't in it.
+
 ## When the map and the code disagree
 
 The map lists its drift beside it, and the station's **Maps** button shows how much:
 
 - a part's path that names no code (renamed or deleted);
-- a part that owns no code, because other parts claim all of it.
+- a part that owns no code, because other parts claim all of it;
+- a recorded run that names files gone from the code since: time to record it again.
 
 It also says how many of the repo's source files a part owns. `map.test.ts` holds Focus's own model to all of it, so a pull request that leaves a new file without a part, or renames one from under its part, fails `pnpm test`.
 
@@ -47,14 +61,14 @@ Maps are made from each repo's default branch, checked out under `~/.focus/carto
 
 ## What's next
 
-- Connections that imports can't show (HTTP, the WebSocket, events), from traces of a seeded demo run.
+- Recorded flows inside the office too (events between its own parts, Effect's spans), and runs that cover more of what a captain does.
 - How the map changes over time, from the model compared across merged pull requests and the repo's history.
 
 ## Where it lives
 
 - `shared.ts`: the model and the map's types.
-- `model.ts`: reading a model from its YAML, saying what's wrong with one.
-- `graph.ts`: the map's rules, pure: which files it reads, where an import leads, which part owns a file, connections and drift.
+- `model.ts`: reading a model from its YAML, and a recorded run from its JSON, saying what's wrong with either.
+- `graph.ts`: the map's rules, pure: which files it reads, where an import leads, which part owns a file, connections, a recorded run's flows part to part, and drift.
 - `scan.ts`: what a file imports, and the names it takes (TypeScript's parser, no type-checking).
 - `map.ts`: making a repo's map from a checkout (git ls-files, then scan.ts).
 - `draw.ts`: drawing a view and the matrix as SVG, and a view's connections as sentences.

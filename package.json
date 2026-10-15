@@ -19,6 +19,7 @@
     "test:repeat": "tsx scripts/repeatTests.ts",
     "smoke": "tsx scripts/smoke.ts",
     "perf": "tsx scripts/perf.ts",
+    "record-flows": "tsx scripts/flows.ts",
     "studio": "tsx scripts/studio.ts",
     "zfight": "tsx scripts/zfight.ts",
     "gaps": "tsx scripts/gaps.ts",

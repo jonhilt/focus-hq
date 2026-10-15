@@ -1,3 +1,4 @@
+import { callerOf, FLOW_FROM_HEADER, FLOWS_PARAM } from '../../../shared/flows';
 import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ResumeHow, Retro, RetroDraft, RoomTheme, Settings, StudioSession, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
@@ -8,8 +9,17 @@ async function call<T>(method: string, url: string, body?: unknown): Promise<T> 
   return send<T>(method, url, body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 }
 
+/** While a run's flows are recorded (`?flows`, shared/flows.ts), each request names the file that made it. */
+// (no location where tests run the module under Node)
+const recording = new URLSearchParams((globalThis as { location?: Location }).location?.search ?? '').has(FLOWS_PARAM);
+
+function from(init: RequestInit): RequestInit {
+  const file = recording && callerOf(new Error().stack, ['client/src/net/api.ts']);
+  return file ? { ...init, headers: { ...(init.headers as Record<string, string> | undefined), [FLOW_FROM_HEADER]: file } } : init;
+}
+
 async function send<T>(method: string, url: string, init: RequestInit): Promise<T> {
-  const res = await fetch(`/api${url}`, { method, ...init });
+  const res = await fetch(`/api${url}`, { method, ...from(init) });
   const data = (await res.json().catch(() => ({}))) as T & { error?: string };
   if (!res.ok) throw new Error(data.error ?? `${res.status} ${res.statusText}`);
   return data;

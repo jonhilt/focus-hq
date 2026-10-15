@@ -1,0 +1,62 @@
+{
+  "run": "the demo office at speed 3 for 120 s, the captain opening the engineering station, its Maps, the ledger and comms",
+  "flows": [
+    {
+      "via": "ws",
+      "name": "lines",
+      "from": "server/agents/manager/core.ts",
+      "to": "client/src/net/state.ts",
+      "count": 38
+    },
+    {
+      "via": "ws",
+      "name": "agent",
+      "from": "server/agents/manager/core.ts",
+      "to": "client/src/net/state.ts",
+      "count": 36
+    },
+    {
+      "via": "ws",
+      "name": "board",
+      "from": "server/office.ts",
+      "to": "client/src/net/state.ts",
+      "count": 6
+    },
+    {
+      "via": "ws",
+      "name": "plugin",
+      "from": "server/agents/manager/pluginHost.ts",
+      "to": "client/src/net/state.ts",
+      "count": 4
+    },
+    {
+      "via": "http",
+      "name": "GET /api/digests/backfill",
+      "from": "client/src/ui/engineeringPanel.ts",
+      "to": "server/routes.ts",
+      "count": 2
+    },
+    {
+      "via": "http",
+      "name": "GET /api/ledger",
+      "from": "client/src/ui/ledgerPanel.ts",
+      "to": "server/routes.ts",
+      "count": 1
+    },
+    {
+      "via": "ws",
+      "name": "info",
+      "from": "server/office.ts",
+      "to": "client/src/net/state.ts",
+      "count": 1
+    },
+    {
+      "via": "ws",
+      "name": "usage",
+      "from": "server/usage.ts",
+      "to": "client/src/net/state.ts",
+      "count": 1
+    }
+  ],
+  "commit": "eec57471a2bf579a61e40f2104840c114ad157e5"
+}

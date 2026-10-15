@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { connections, isSource, mapOf, NAMES_KEPT, ownerOf, problems, resolveImport } from './graph';
+import { connections, flowsGone, isSource, mapOf, NAMES_KEPT, ownerOf, partFlows, problems, resolveImport } from './graph';
 import type { ArchitectureModel } from './shared';
 
 const model: ArchitectureModel = {
@@ -95,5 +95,40 @@ describe('mapOf', () => {
   it('counts the files it looks at (not the ignored ones), how many parts own, and each part’s', () => {
     const map = mapOf('o/r', model, ['server/a.ts', 'server/agents/tools.ts', 'server/generated/g.ts', 'shared/t.ts', 'client/x.ts'], [{ from: 'server/a.ts', to: 'shared/t.ts', names: ['T'] }]);
     expect(map).toMatchObject({ repo: 'o/r', files: 4, mapped: 3, sizes: { server: 1, tools: 1, shared: 1 }, connections: [{ from: 'server', to: 'shared', imports: 1, names: ['T'] }], problems: [] });
+  });
+});
+
+describe('partFlows', () => {
+  it('gathers a recorded run’s flows part to part and by how they went, the most sent first, dropping a part’s to itself', () => {
+    const owner = (f: string) => ownerOf(f, model);
+    const found = partFlows(
+      [
+        { via: 'ws', name: 'agent', from: 'server/a.ts', to: 'shared/t.ts', count: 5 },
+        { via: 'ws', name: 'board', from: 'server/b.ts', to: 'shared/t.ts', count: 9 },
+        { via: 'http', name: 'GET /api/x', from: 'shared/t.ts', to: 'server/a.ts', count: 2 },
+        { via: 'ws', name: 'toast', from: 'server/a.ts', to: 'server/b.ts', count: 3 },
+      ],
+      owner,
+    );
+    expect(found).toEqual([
+      { from: 'server', to: 'shared', via: 'ws', count: 14, names: ['board', 'agent'] },
+      { from: 'shared', to: 'server', via: 'http', count: 2, names: ['GET /api/x'] },
+    ]);
+  });
+});
+
+describe('flowsGone', () => {
+  it('says to record again when the recording names files gone from the code', () => {
+    const recording = { run: 'r', flows: [{ via: 'ws' as const, name: 'agent', from: 'server/old.ts', to: 'shared/t.ts', count: 1 }] };
+    expect(flowsGone(recording, ['shared/t.ts'])).toEqual(['the recorded flows name server/old.ts, gone from the code since: record them again (pnpm run record-flows)']);
+    expect(flowsGone(recording, ['shared/t.ts', 'server/old.ts'])).toEqual([]);
+  });
+
+  it('lays a recording over the map, with what it was', () => {
+    const recording = { run: 'a demo run', commit: 'abc', flows: [{ via: 'ws' as const, name: 'agent', from: 'server/a.ts', to: 'shared/t.ts', count: 2 }] };
+    const map = mapOf('o/r', model, ['server/a.ts', 'shared/t.ts'], [], recording);
+    expect(map.flows).toEqual([{ from: 'server', to: 'shared', via: 'ws', count: 2, names: ['agent'] }]);
+    expect(map.flowsRun).toEqual({ run: 'a demo run', commit: 'abc' });
+    expect(mapOf('o/r', model, ['server/a.ts'], []).flows).toBeUndefined();
   });
 });

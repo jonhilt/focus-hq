@@ -1,7 +1,8 @@
 // The map's pure rules: which files it looks at, where an import leads, which part owns a file, and the connections
 // between parts that the imports make. Nothing here reads a disk (map.ts does).
 import path from 'node:path';
-import type { ArchitectureModel, FileEdge, MapConnection, RepoMap } from './shared';
+import type { Flow, FlowRecording } from '../../shared/flows';
+import type { ArchitectureModel, FileEdge, MapConnection, MapFlow, RepoMap } from './shared';
 
 /** How many of a connection's names it keeps, the most imported first. */
 export const NAMES_KEPT = 8;
@@ -68,8 +69,33 @@ export function problems(model: ArchitectureModel, files: readonly string[], siz
   return found;
 }
 
-/** The map of a repo's code (its source files, and their imports file to file) by its model. */
-export function mapOf(repo: string, model: ArchitectureModel, files: readonly string[], imports: readonly FileEdge[]): RepoMap {
+/** A recorded run's file-to-file flows gathered part to part and by how they went, the busiest first; a part's to itself drop out. */
+export function partFlows(flows: readonly Flow[], owner: (file: string) => string | undefined): MapFlow[] {
+  const found = new Map<string, { from: string; to: string; via: Flow['via']; count: number; names: Map<string, number> }>();
+  for (const flow of flows) {
+    const from = owner(flow.from);
+    const to = owner(flow.to);
+    if (!from || !to || from === to) continue;
+    const key = `${from} ${to} ${flow.via}`;
+    const f = found.get(key) ?? { from, to, via: flow.via, count: 0, names: new Map<string, number>() };
+    f.count += flow.count;
+    f.names.set(flow.name, (f.names.get(flow.name) ?? 0) + flow.count);
+    found.set(key, f);
+  }
+  return [...found.values()]
+    .map(({ names, ...f }) => ({ ...f, names: [...names].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([n]) => n) }))
+    .sort((x, y) => y.count - x.count || x.from.localeCompare(y.from) || x.to.localeCompare(y.to));
+}
+
+/** Files a recording names that are gone from the code since: it's time to record again. */
+export function flowsGone(recording: FlowRecording, files: readonly string[]): string[] {
+  const known = new Set(files);
+  const gone = [...new Set(recording.flows.flatMap((f) => [f.from, f.to]))].filter((f) => !known.has(f)).sort();
+  return gone.length ? [`the recorded flows name ${gone.join(', ')}, gone from the code since: record them again (pnpm run record-flows)`] : [];
+}
+
+/** The map of a repo's code (its source files, and their imports file to file) by its model, with its recorded run's flows if it has one. */
+export function mapOf(repo: string, model: ArchitectureModel, files: readonly string[], imports: readonly FileEdge[], recording?: FlowRecording): RepoMap {
   const owners = new Map(files.map((f) => [f, ownerOf(f, model)]));
   const sizes: Record<string, number> = {};
   for (const id of owners.values()) if (id) sizes[id] = (sizes[id] ?? 0) + 1;
@@ -81,6 +107,7 @@ export function mapOf(repo: string, model: ArchitectureModel, files: readonly st
     mapped: Object.values(sizes).reduce((a, b) => a + b, 0),
     sizes,
     connections: connections(imports, (f) => owners.get(f)),
-    problems: problems(model, files, sizes),
+    ...(recording ? { flows: partFlows(recording.flows, (f) => owners.get(f)), flowsRun: { run: recording.run, commit: recording.commit } } : {}),
+    problems: [...problems(model, files, sizes), ...(recording ? flowsGone(recording, files) : [])],
   };
 }

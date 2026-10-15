@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { esc, fit, layerColours, matrixExample, matrixOrder, matrixSvg, namesLabel, placeView, viewSentences, viewSvg, wrap } from './draw';
+import { esc, fit, layerColours, matrixExample, matrixOrder, matrixSvg, namesLabel, placeView, viewLines, viewSentences, viewSvg, wrap } from './draw';
 import { viewsOf } from './views';
 import { MAP } from './views.test';
 
@@ -73,5 +73,28 @@ describe('matrix', () => {
 
   it('gives each layer its own colour, in the order the model names them', () => {
     expect([...layerColours(MAP.model?.parts ?? []).keys()]).toEqual(['Server', 'Domain', 'Data']);
+  });
+});
+
+describe('flows in a view', () => {
+  const withFlows = { ...MAP, flows: [
+    { from: 'core', to: 'api', via: 'ws' as const, names: ['agent', 'board'], count: 40 },
+    { from: 'api', to: 'core', via: 'http' as const, names: ['POST /api/goals'], count: 1 },
+    { from: 'db', to: 'api', via: 'ws' as const, names: ['toast'], count: 2 },
+  ] };
+
+  it('says them after the imports, numbered on: what goes over the WebSocket, and what’s asked for', () => {
+    expect(viewSentences(withFlows, front).slice(2)).toEqual([
+      'Core sends agent, board to API over the WebSocket (40 events in the recorded run)',
+      'API calls POST /api/goals on Core (1 request in the recorded run)',
+    ]);
+  });
+
+  it('draws them dashed in gold, a line each beside the imports between the same two parts', () => {
+    const svg = viewSvg(withFlows, front);
+    expect(svg.match(/stroke-dasharray/g)).toHaveLength(2);
+    expect(svg.match(/marker-end="url\(#cg-flow\)"/g)).toHaveLength(2);
+    expect(svg.match(/marker-end="url\(#cg-arrow\)"/g)).toHaveLength(2);
+    expect(viewLines(withFlows, front).map((l) => l.kind)).toEqual(['import', 'import', 'flow', 'flow']);
   });
 });

@@ -43,6 +43,17 @@ export interface MapConnection {
   names: string[];
 }
 
+/** One part sending another messages while it runs, in a recorded run (shared/flows.ts): events over /ws, or /api requests. */
+export interface MapFlow {
+  from: string;
+  to: string;
+  via: 'http' | 'ws';
+  /** The kinds of message, the most sent first: events' types, or requests' method and route. */
+  names: string[];
+  /** How many went, in the recorded run. */
+  count: number;
+}
+
 /** One file importing another, and the names it takes. */
 export interface FileEdge {
   from: string;
@@ -62,6 +73,10 @@ export interface RepoMap {
   /** Each part's file count, by its id. */
   sizes: Record<string, number>;
   connections: MapConnection[];
+  /** What parts send each other at runtime, from the repo's recorded run, if it has one. */
+  flows?: MapFlow[];
+  /** What that run was, and the commit it was recorded on. */
+  flowsRun?: { run: string; commit?: string };
   /** Where the model and the code disagree, in words. */
   problems: string[];
   /** Why there's no map: no model file, or one that doesn't read. */

@@ -13,11 +13,13 @@ export const openingView = (map: RepoMap): string => map.model?.views[0]?.id ?? 
 /** How much of the repo the map covers, in a line. */
 export function coverage(map: RepoMap): string {
   const share = map.files ? Math.round((map.mapped / map.files) * 100) : 0;
-  return `${map.model?.parts.length ?? 0} parts own ${map.mapped} of ${map.files} source files (${share}%) · ${map.connections.length} connections, read from the imports`;
+  const flows = map.flows ? ` · ${map.flows.length} flows, from ${map.flowsRun?.run ?? 'a recorded run'}${map.flowsRun?.commit ? ` (at ${map.flowsRun.commit.slice(0, 7)})` : ''}` : '';
+  return `${map.model?.parts.length ?? 0} parts own ${map.mapped} of ${map.files} source files (${share}%) · ${map.connections.length} connections, read from the imports${flows}`;
 }
 
 /** How to read a view, under its question. */
-export const VIEW_KEY = 'An arrow goes from a part to a part whose code it uses: the thicker, the more it imports. Its number is its line below, which says what it takes.';
+export const VIEW_KEY =
+  'An arrow goes from a part to a part whose code it uses: the thicker, the more it imports. A dashed gold one is what a part sends another as it runs, from a recorded run. Each number is its line below.';
 export const MATRIX_KEY = 'Each row imports from the columns it has a number in: the number is how many imports. Orange: two parts that import each other.';
 
 /**
@@ -31,7 +33,7 @@ export function hallViews(maps: readonly RepoMap[]): { map: RepoMap; view: MapVi
 }
 
 /** What a view's screen shows changes only with the commit it was mapped from and the view itself. */
-export const screenVersion = (map: RepoMap, view: MapView): string => `${map.commit ?? ''}|${view.id}|${view.parts.join(',')}|${map.connections.length}`;
+export const screenVersion = (map: RepoMap, view: MapView): string => `${map.commit ?? ''}|${view.id}|${view.parts.join(',')}|${map.connections.length}|${map.flows?.length ?? 0}`;
 
 /** Where a drawing `w` × `h` goes in `box`, as big as fits without stretching, in the middle. */
 export function fitInto(w: number, h: number, box: { x: number; y: number; w: number; h: number }): { x: number; y: number; w: number; h: number } {

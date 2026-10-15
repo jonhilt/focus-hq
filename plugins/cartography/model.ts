@@ -1,5 +1,6 @@
 // A repo's architecture model from its parsed YAML (MODEL_FILE), or an error saying what's wrong with it. Pure.
 import { MODEL_KINDS, type ModelKind } from '../../shared/types';
+import type { Flow, FlowRecording } from '../../shared/flows';
 import type { ArchitectureModel, MapPart, MapView } from './shared';
 
 const ID = /^[a-z][a-z0-9-]{0,31}$/;
@@ -52,4 +53,17 @@ export function readModel(raw: unknown): ArchitectureModel {
   const ids = new Set(parts.map((p) => p.id));
   const views = Object.entries(record(r.views, 'Its views')).map(([id, v]) => view(id, v, ids));
   return { parts, views, ignore: texts(r.ignore, 'Its ignore').map(normalPath) };
+}
+
+/** A recorded run's flows from its parsed JSON (FLOWS_FILE), or an error saying what's wrong with it. */
+export function readRecording(raw: unknown): FlowRecording {
+  const r = record(raw, 'The recording');
+  if (!Array.isArray(r.flows)) throw new Error('The recording needs its flows');
+  const flows = r.flows.map((f: unknown, i): Flow => {
+    const x = record(f, `Flow ${i + 1}`);
+    if (x.via !== 'http' && x.via !== 'ws') throw new Error(`Flow ${i + 1} goes by http or ws`);
+    if (typeof x.count !== 'number' || x.count < 1) throw new Error(`Flow ${i + 1} needs a count`);
+    return { via: x.via, name: text(x.name, `Flow ${i + 1}'s name`), from: text(x.from, `Flow ${i + 1}'s from`), to: text(x.to, `Flow ${i + 1}'s to`), count: x.count };
+  });
+  return { run: typeof r.run === 'string' ? r.run : 'a recorded run', ...(typeof r.commit === 'string' ? { commit: r.commit } : {}), flows };
 }

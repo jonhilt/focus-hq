@@ -1,6 +1,7 @@
 import type { IncomingMessage, Server } from 'node:http';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { ServerEvent, Snapshot } from '../shared/types';
+import { flowRecorder } from './flows';
 
 /** Pushes office events to every open browser tab over a WebSocket at /ws. */
 export class Hub {
@@ -26,6 +27,7 @@ export class Hub {
 
   send(event: ServerEvent): void {
     if (!this.wss) return;
+    flowRecorder?.ws(event.type);
     const data = JSON.stringify(event);
     for (const client of this.wss.clients) {
       if (client.readyState === WebSocket.OPEN) client.send(data);

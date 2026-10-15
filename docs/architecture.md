@@ -6,6 +6,7 @@ shared/crew.ts            how the crew look (uniforms, species), and the permane
 shared/qa.ts              QA decisions shared by server and board (badges, stale verdicts)
 shared/systemModel.ts     the studio's system models: whether one holds together, checking its cites against the code, its timing, and its layered layout
 shared/modelDrawing.ts    a system model's three flat views (structure, sequence, data) as shapes, and as SVG
+shared/flows.ts           a recorded run's flows between the browser and the office (`pnpm run record-flows`): stack frames to repo files, counting, for net/api.ts and server/flows.ts
 shared/board.ts           a project's Kanban columns (to do, in progress, PRs), for the 3D board, its panel and the Tricorder
 shared/agentStatus.ts     how an agent's status reads (icon, one-line status)
 shared/tricorder.ts       what needs you (the Tricorder and Comms), which agents are in flight
@@ -24,6 +25,7 @@ server/
   frameStats.ts           the frame-stats log: what a browser opened with ?stats=1 sends of how its 3D view ran, a file per page load in ~/.focus/frame-stats/
   hostGuard.ts            who the office answers: known Host and Origin only (DNS rebinding, other sites' pages), for /api, pages and /ws
   hub.ts                  broadcasts ServerEvents to every browser tab
+  flows.ts                with FOCUS_FLOWS set, counts each event the hub sends and each /api request against the files that sent them, handed over at GET /api/flows
   previews.ts             Preview: check a PR out, run the project's preview commands, find its links, tear it down (Effect: one Scope per preview)
   previewMachine.ts       what a preview does to this machine (shell commands in their own process group, signals, probes) as an Effect service
   plugins/                what a plugin is to the office (contract.ts), the ones switched on (registry.ts), loading what FOCUS_PLUGINS names (load.ts), and state saved from before (migrate.ts): docs/plugins.md

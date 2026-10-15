@@ -30,6 +30,7 @@ import { ghCliLayer } from './github/ghCli';
 import { GitHub, toProvider } from './github/service';
 import { allowedHosts, listensBeyondLoopback, refusal } from './hostGuard';
 import { Hub } from './hub';
+import { flowRecorder } from './flows';
 import { loadPlugins } from './plugins/load';
 import { Office } from './office';
 import { demoPreviewPage, Previews } from './previews';
@@ -166,6 +167,12 @@ async function main() {
     console.warn(`Refused ${req.method} ${req.originalUrl}: ${why}`);
     res.status(403).type('text').send(`${why}. Add it to FOCUS_ALLOWED_HOSTS if it's yours.`);
   });
+  // recording a run's flows (`pnpm run flows`): each /api request, against the browser's file that made it
+  const recorder = flowRecorder;
+  if (recorder) {
+    app.use(recorder.http);
+    app.get('/api/flows', (_req, res) => res.json(recorder.recording(process.env.FOCUS_FLOWS ?? '')));
+  }
   // the demo ship's training console: back to a quiet ship, with a scenario's goal waiting to be started (docs/studio.md)
   if (demoRunner) {
     let training = false;

@@ -5,7 +5,8 @@ import path from 'node:path';
 import { parse } from 'yaml';
 import { errorMessage, run } from '../../server/util';
 import { isSource, mapOf, resolveImport } from './graph';
-import { readModel } from './model';
+import { FLOWS_FILE, type FlowRecording } from '../../shared/flows';
+import { readModel, readRecording } from './model';
 import { importsIn } from './scan';
 import { type FileEdge, MODEL_FILE, type RepoMap } from './shared';
 
@@ -23,6 +24,17 @@ async function imports(dir: string, files: readonly string[]): Promise<FileEdge[
   return found;
 }
 
+/** The repo's recorded run, if it has one: or why it doesn't read. */
+async function recorded(dir: string): Promise<{ ok?: FlowRecording; error?: string } | undefined> {
+  const raw = await fs.readFile(path.join(dir, FLOWS_FILE), 'utf8').catch(() => undefined);
+  if (raw === undefined) return undefined;
+  try {
+    return { ok: readRecording(JSON.parse(raw)) };
+  } catch (err) {
+    return { error: `${FLOWS_FILE}: ${errorMessage(err)}` };
+  }
+}
+
 const empty = (repo: string, error: string, commit?: string): RepoMap => ({ repo, commit, files: 0, mapped: 0, sizes: {}, connections: [], problems: [], error });
 
 /** The map of `repo`, checked out in `dir`: the model its file says, laid over the imports its code makes. */
@@ -36,6 +48,8 @@ export async function mapRepo(repo: string, dir: string): Promise<RepoMap> {
   } catch (err) {
     return empty(repo, `${MODEL_FILE}: ${errorMessage(err)}`, commit);
   }
+  const recording = await recorded(dir);
   const files = (await run('git', ['ls-files'], { cwd: dir })).split('\n').filter(isSource);
-  return { ...mapOf(repo, model, files, await imports(dir, files)), commit };
+  const map = mapOf(repo, model, files, await imports(dir, files), recording?.ok);
+  return { ...map, commit, problems: [...map.problems, ...(recording?.error ? [recording.error] : [])] };
 }
