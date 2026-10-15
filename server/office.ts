@@ -1,7 +1,7 @@
 import { isAutonomy } from '../shared/autonomy';
 import type { Board, ConflictsOutcome, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
 import { DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS } from '../shared/types';
-import { carryMergeable } from '../shared/board';
+import { carryMergeable, prsOffBoard } from '../shared/board';
 import { chosenSet, previewPrs } from '../shared/previewSet';
 import { startOrder } from '../shared/dependencies';
 import type { Closer } from '../shared/ledger';
@@ -453,36 +453,16 @@ export class Office {
   }
 
   private async noticeClosedPullRequests(projectId: string, board: Board): Promise<void> {
-    // QA reviews of PRs that left the board (asked of GitHub, since a PR opened a moment ago may not be listed yet)
-    for (const review of [...this.store.reviews.values()].filter((r) => r.projectId === projectId)) {
-      if (board.prs.some((p) => p.repo === review.repo && p.number === review.number) || board.error?.includes(review.repo)) continue;
-      try {
-        const state = await this.github.pullRequestState(review.repo, review.number);
-        if (state === 'OPEN') continue;
-        this.agents.recordLanding(review.repo, review.number, state === 'MERGED');
-        this.agents.reviewGone(review.repo, review.number, state === 'MERGED');
-      } catch {
-        // try again next refresh
-      }
-    }
-    // the leads' pull requests, merged or closed on GitHub
-    for (const pr of this.agents.leadPrs(projectId)) {
-      if (board.prs.some((p) => p.repo === pr.repo && p.number === pr.number) || board.error?.includes(pr.repo)) continue;
+    const reviews = [...this.store.reviews.values()].filter((r) => r.projectId === projectId);
+    const held = { reviews, leadPrs: this.agents.leadPrs(projectId), agents: this.store.agentsIn(projectId) };
+    for (const pr of prsOffBoard(board, held)) {
       try {
         const state = await this.github.pullRequestState(pr.repo, pr.number);
-        if (state !== 'OPEN') this.agents.prClosed(pr.repo, pr.number, state === 'MERGED');
-      } catch {
-        // try again next refresh
-      }
-    }
-    for (const agent of this.store.agentsIn(projectId)) {
-      const pr = agent.pr;
-      if (!pr || agent.status !== 'done') continue;
-      if (board.prs.some((p) => p.repo === agent.repo && p.number === pr.number)) continue;
-      if (board.error?.includes(agent.repo)) continue;
-      try {
-        const state = await this.github.pullRequestState(agent.repo, pr.number);
-        if (state !== 'OPEN') this.agents.prClosed(agent.repo, pr.number, state === 'MERGED');
+        if (state === 'OPEN') continue;
+        if (pr.kind === 'review') {
+          this.agents.recordLanding(pr.repo, pr.number, state === 'MERGED');
+          this.agents.reviewGone(pr.repo, pr.number, state === 'MERGED');
+        } else this.agents.prClosed(pr.repo, pr.number, state === 'MERGED');
       } catch {
         // try again next refresh
       }

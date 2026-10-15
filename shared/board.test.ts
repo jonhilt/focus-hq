@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { carryMergeable, columns, goalState, resolvingAlready } from './board';
+import { carryMergeable, columns, goalState, prsOffBoard, resolvingAlready } from './board';
 import type { Agent, Board, LeadWork, Project, PullRequest } from './types';
 
 const pr = (mergeable: PullRequest['mergeable'], over: Partial<PullRequest> = {}): PullRequest => ({
@@ -98,5 +98,34 @@ describe('goals on the board', () => {
     const prs = [{ repo: 'acme/shop', number: 4, url: '' }, { repo: 'acme/api', number: 9, url: '' }, { repo: 'acme/api', number: 3, url: '', outcome: 'merged' as const }];
     expect(goalState(lead('l', 'done', { prs }))).toBe('Slice 2 · 2 PRs open');
     expect(goalState(lead('l', 'working', { closing: { reason: 'All shipped', at: 0 } }))).toBe('Ready to wrap up');
+  });
+});
+
+describe('prsOffBoard', () => {
+  const none = { reviews: [], leadPrs: [], agents: [] };
+  const done = (number: number, over: Partial<Agent> = {}) => ({ repo: 'acme/shop', status: 'done' as const, pr: { number, url: '' }, ...over });
+
+  it('asks about the reviews, leads’ PRs and finished agents’ PRs that left the board, reviews first', () => {
+    const held = { reviews: [{ repo: 'acme/api', number: 2 }], leadPrs: [{ repo: 'acme/shop', number: 5 }], agents: [done(8)] };
+    expect(prsOffBoard({ prs: [] }, held)).toEqual([
+      { repo: 'acme/api', number: 2, kind: 'review' },
+      { repo: 'acme/shop', number: 5, kind: 'seat' },
+      { repo: 'acme/shop', number: 8, kind: 'seat' },
+    ]);
+  });
+
+  it('leaves out a PR still on the board, matching its repo as well as its number', () => {
+    const held = { reviews: [{ repo: 'acme/shop', number: 7 }, { repo: 'acme/api', number: 7 }], leadPrs: [{ repo: 'acme/shop', number: 7 }], agents: [done(7)] };
+    expect(prsOffBoard({ prs: [pr('MERGEABLE')] }, held)).toEqual([{ repo: 'acme/api', number: 7, kind: 'review' }]);
+  });
+
+  it('waits on a repo GitHub couldn’t list', () => {
+    const held = { reviews: [{ repo: 'acme/shop', number: 2 }, { repo: 'acme/api', number: 3 }], leadPrs: [{ repo: 'acme/shop', number: 5 }], agents: [done(8)] };
+    expect(prsOffBoard({ prs: [], error: 'acme/shop: rate limited' }, held)).toEqual([{ repo: 'acme/api', number: 3, kind: 'review' }]);
+  });
+
+  it('only asks about an agent’s PR once the agent is done with it', () => {
+    const agents = [done(1, { status: 'working' }), done(2, { status: 'error' }), { repo: 'acme/shop', status: 'done' as const }];
+    expect(prsOffBoard({ prs: [] }, { ...none, agents })).toEqual([]);
   });
 });

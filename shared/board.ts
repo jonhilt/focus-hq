@@ -80,3 +80,27 @@ export function carryMergeable(previous: PullRequest[], fresh: PullRequest[]): P
     return { ...pr, mergeable: before.mergeable };
   });
 }
+
+/** A pull request the office still holds work for: a QA review (`review`), or a lead's or a finished agent's (`seat`). */
+export interface HeldPr {
+  repo: string;
+  number: number;
+  kind: 'review' | 'seat';
+}
+
+/**
+ * The pull requests the office holds work for that have left the board, so GitHub is asked whether they merged or closed:
+ * QA reviews first, then the leads' PRs, then finished agents'. One opened a moment ago may not be listed yet, so it's
+ * asked about rather than taken as closed; a repo GitHub couldn't list (named in `board.error`) is left until it can.
+ */
+export function prsOffBoard(
+  board: Pick<Board, 'prs' | 'error'>,
+  held: { reviews: { repo: string; number: number }[]; leadPrs: { repo: string; number: number }[]; agents: Pick<Agent, 'repo' | 'status' | 'pr'>[] },
+): HeldPr[] {
+  const done = held.agents.flatMap((a) => (a.pr && a.status === 'done' ? [{ repo: a.repo, number: a.pr.number }] : []));
+  const all: HeldPr[] = [
+    ...held.reviews.map((r) => ({ repo: r.repo, number: r.number, kind: 'review' as const })),
+    ...[...held.leadPrs, ...done].map((p) => ({ repo: p.repo, number: p.number, kind: 'seat' as const })),
+  ];
+  return all.filter((p) => !board.error?.includes(p.repo) && !board.prs.some((b) => b.repo === p.repo && b.number === p.number));
+}
