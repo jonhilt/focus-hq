@@ -1,9 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { config } from '../../server/config';
+import { DemoScorecards } from './demoScorecards';
 import { Option, Schema } from 'effect';
-import type { Scorecard, ScorecardNoise, Scorecards } from '../shared/types';
-import type { Hub } from './hub';
-import { run } from './util';
+import { run } from '../../server/util';
+import type { Scorecard, ScorecardNoise, Scorecards } from './types';
 
 /** How many of the latest scorecards main engineering shows: enough for a trend at a glance. */
 export const SHOWN = 10;
@@ -53,6 +54,9 @@ export function readNoise(text: string): ScorecardNoise | undefined {
   return Option.getOrUndefined(Option.map(decodeNoise(text), (n) => ({ ...n, spread: { ...n.spread } })));
 }
 
+/** Where `pnpm run scorecard` saves each scorecard (and, under noise/, each noise floor), to compare over time. */
+export const SCORECARDS_DIR = path.join(config.dataDir, 'scorecards');
+
 /** The commit the office runs from, and whether it has uncommitted changes. */
 export interface Head {
   commit: string;
@@ -97,6 +101,17 @@ export class SavedScorecards implements ScorecardSource {
   }
 }
 
+let source: ScorecardSource | undefined;
+
+/**
+ * The office's scorecards, one source for every plugin that reads them (main engineering's desk, the climber's briefs):
+ * the saved ones, or the demo's, made up and kept in memory.
+ */
+export function officeScorecards(demo: boolean): ScorecardSource {
+  source ??= demo ? new DemoScorecards() : new SavedScorecards(SCORECARDS_DIR, config.root);
+  return source;
+}
+
 /** The commit a checkout is at, and whether it has uncommitted changes to tracked files (untracked ones aren't measured). */
 export async function checkoutHead(root: string): Promise<Head> {
   const [commit, status] = await Promise.all([run('git', ['rev-parse', 'HEAD'], { cwd: root }), run('git', ['status', '--porcelain', '--untracked-files=no'], { cwd: root })]);
@@ -110,7 +125,8 @@ export async function checkoutHead(root: string): Promise<Head> {
 export class ScorecardDesk {
   private state: Scorecards = { status: 'idle', history: [] };
 
-  constructor(private readonly hub: Hub, private readonly source: ScorecardSource) {
+  /** `changed` hears each change: the plugin sends it to every browser. */
+  constructor(private readonly changed: (state: Scorecards) => void, private readonly source: ScorecardSource) {
     this.state.history = source.history(SHOWN);
   }
 
@@ -135,6 +151,6 @@ export class ScorecardDesk {
 
   private set(change: Partial<Scorecards>): void {
     this.state = { ...this.state, ...change };
-    this.hub.send({ type: 'scorecards', scorecards: this.state });
+    this.changed(this.state);
   }
 }

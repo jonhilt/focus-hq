@@ -20,8 +20,6 @@ import type { WorkspaceOps } from './agents/types';
 import * as git from './agents/workspace';
 import { sourceReader } from './agents/studioSource';
 import { demoLedger } from './demoLedger';
-import { DemoScorecards } from './demoScorecards';
-import { checkoutHead, SavedScorecards, ScorecardDesk } from './scorecards';
 import type { Snapshot } from '../shared/types';
 import { Calls } from './call/calls';
 import { callKeys, config, paths } from './config';
@@ -44,8 +42,6 @@ import { Voice } from './voice';
 
 /** How often orphaned agent workspaces are swept up, besides once at startup. */
 const SWEEP_EVERY_MS = 60 * 60_000;
-/** How long after starting the office measures a new commit: long enough for agents to pick up where they left off first. */
-const MEASURE_AFTER_START_MS = 2 * 60_000;
 
 const liveWorkspace: WorkspaceOps = {
   create: git.createWorktree,
@@ -114,9 +110,6 @@ async function main() {
     record: (projectId, entry, at) => office.agents.record(projectId, entry, at),
     pauseMs: config.demo ? 500 : 20_000,
   });
-  // main engineering's scorecards, measured on the office's own checkout (the demo's are made up, and kept in memory)
-  const scorecardSource = config.demo ? new DemoScorecards() : new SavedScorecards(paths.scorecards, config.root);
-  const scorecards = new ScorecardDesk(hub, scorecardSource);
   // calls to Number One read the ship and start queued goals through the office, which is up by the time anyone calls
   const calls: Calls = new Calls(hub, {
     snapshot: (): Promise<Snapshot> => office.snapshot(),
@@ -127,12 +120,12 @@ async function main() {
   }, callKeys, config.demo);
   // FOCUS_STUDIO=live: the real studio computer even in the demo office, to try it on a model without GitHub
   const studio = new StudioComputer(store, hub, config.demo && process.env.FOCUS_STUDIO !== 'live' ? new DemoStudio() : new ClaudeStudio(), shipStatus, { readSource: sourceReader([paths.planning, paths.workspaces, config.root]) });
-  const office = new Office(store, hub, github, previews, planner, numberOne, studio, engineer, scorecards, usage, new Voice(hub, config.demo), calls, await currentVersion());
+  const office = new Office(store, hub, github, previews, planner, numberOne, studio, engineer, usage, new Voice(hub, config.demo), calls, await currentVersion());
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
   // the office's own repo, for plugins that work on it (the demo has none)
   office.ownRepo = config.demo ? undefined : githubRepo(await run('git', ['remote', 'get-url', 'origin'], { cwd: config.root }).catch(() => ''));
-  office.startPlugins(await loadPlugins(config.plugins, config.root), scorecardSource);
+  office.startPlugins(await loadPlugins(config.plugins, config.root));
   // each agent session is digested into the ledger as it ends: the demo's agents have no transcripts
   // the demo's older sessions are its scripted ones, digested without Haiku
   if (config.demo) {
@@ -289,8 +282,6 @@ async function main() {
         .catch((err: unknown) => console.error(`Workspace sweep failed: ${errorMessage(err)}`));
     void sweep();
     setInterval(() => void sweep(), SWEEP_EVERY_MS);
-    // a scorecard for each commit the office runs from (auto update restarts it on every merge to main), once it's settled in
-    setTimeout(() => void checkoutHead(config.root).then((head) => scorecards.measureIfNew(head)).catch((err: unknown) => console.error(`Scorecard after start: ${errorMessage(err)}`)), MEASURE_AFTER_START_MS).unref();
     const info = await office.checkGitHub();
     if (!info.github.ok) console.warn(`  ⚠ ${info.github.error}`);
     else console.log(`  GitHub: signed in as ${info.github.login}`);

@@ -23,8 +23,8 @@
     "zfight": "tsx scripts/zfight.ts",
     "gaps": "tsx scripts/gaps.ts",
     "ship": "tsx scripts/ship.ts",
-    "crap": "tsx scripts/crap.ts",
-    "scorecard": "tsx scripts/scorecard.ts",
+    "crap": "tsx plugins/scorecard/scripts/crap.ts",
+    "scorecard": "tsx plugins/scorecard/scripts/scorecard.ts",
     "climb:replay": "tsx plugins/climber/scripts/climbReplay.ts",
     "flow": "tsx scripts/flow.ts",
     "qa-catch": "tsx scripts/qaCatch.ts"

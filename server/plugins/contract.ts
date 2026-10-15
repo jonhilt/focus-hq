@@ -5,7 +5,6 @@ import type { Effect } from 'effect';
 import type { LedgerEvent } from '../../shared/ledger';
 import type { Agent, Planner, Project } from '../../shared/types';
 import type { GitHub } from '../github/service';
-import type { ScorecardSource } from '../scorecards';
 
 export interface FocusPlugin {
   /** Its name in FOCUS_PLUGINS: also its state's key in state.json, and its routes' prefix (`/api/plugins/<id>`). */
@@ -64,8 +63,11 @@ export interface PluginRoute {
 export interface PluginHost {
   /** The demo office: fake GitHub and scripted agents. */
   readonly demo: boolean;
-  /** The plugin's own slot in the office's saved state, `fresh()` until it's first set. Setting it saves and tells every browser. */
-  state<S extends object>(fresh: () => S): PluginState<S>;
+  /**
+   * The plugin's own state, `fresh()` until it's first set: setting it tells every browser. It's saved in state.json
+   * unless `saved` is false (state that's read again as the office starts, like main engineering's scorecards).
+   */
+  state<S extends object>(fresh: () => S, how?: { saved?: boolean }): PluginState<S>;
   projects(): Project[];
   agent(id: string): Agent | undefined;
   /** The ship's log of how work went, oldest first. */
@@ -79,16 +81,11 @@ export interface PluginHost {
   /** A line in an agent's terminal, from the office. */
   print(agent: Agent, text: string): void;
   toast(level: 'info' | 'success' | 'error', text: string, agentId?: string): void;
-  /** Main engineering's scorecards of the office's own repo: the latest ones, and how much each number wobbles. */
-  readonly scorecards: ScorecardReader;
 }
-
-/** Main engineering's scorecards, read-only. */
-export type ScorecardReader = Pick<ScorecardSource, 'history' | 'noise'>;
 
 export interface PluginState<S> {
   get(): S;
-  /** Saves the patch, and sends the new state to every browser. */
+  /** Applies the patch (saving it, for saved state), and sends the new state to every browser. */
   set(patch: Partial<S>): void;
 }
 

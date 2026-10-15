@@ -1,5 +1,8 @@
-// The scorecard (docs/scorecard.md): Focus measured against its own standard by `pnpm run scorecard`, kept to compare
+// The scorecard (README.md): Focus measured against its own standard by `pnpm run scorecard`, kept to compare
 // over time, and shown in main engineering.
+
+/** The plugin's id, as FOCUS_PLUGINS names it. */
+export const SCORECARD = 'scorecard';
 
 export type ScorecardSection = 'gate' | 'fence' | 'effect' | 'tests' | 'office';
 export type MetricFormat = 'pass' | 'count' | 'seconds' | 'percent' | 'usd' | 'ratio';

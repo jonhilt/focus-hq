@@ -12,7 +12,6 @@ import type { AgentManager } from './agents/manager';
 import type { Calls } from './call/calls';
 import type { ChiefEngineer } from './agents/engineer';
 import type { FocusPlugin } from './plugins/contract';
-import type { ScorecardDesk, ScorecardSource } from './scorecards';
 import type { UsageWatch } from './usage';
 import type { NumberOne } from './agents/numberOne';
 import type { StudioComputer } from './agents/studioComputer';
@@ -55,7 +54,6 @@ export class Office {
     readonly numberOne: NumberOne,
     readonly studio: StudioComputer,
     readonly engineer: ChiefEngineer,
-    readonly scorecards: ScorecardDesk,
     readonly usage: UsageWatch,
     readonly voice: Voice,
     readonly calls: Calls,
@@ -102,7 +100,6 @@ export class Office {
       call: this.calls.status(),
       report: this.agents.report(),
       retro: this.engineer.current(),
-      scorecards: this.scorecards.current(),
       usage: this.usage.current(),
       plugins: this.agents.plugins.states(),
     };
@@ -352,9 +349,9 @@ export class Office {
     this.agents.plugins.boardRefreshed(projectId);
   }
 
-  /** Starts the plugins switched on (docs/plugins.md), lending them the office's own repo and main engineering's scorecards. */
-  startPlugins(plugins: FocusPlugin[], scorecards: ScorecardSource): void {
-    this.agents.startPlugins(plugins, { demo: config.demo, ownRepo: () => this.ownRepo, scorecards });
+  /** Starts the plugins switched on (docs/plugins.md), lending them the office's own repo. */
+  startPlugins(plugins: FocusPlugin[]): void {
+    this.agents.startPlugins(plugins, { demo: config.demo, ownRepo: () => this.ownRepo });
     this.info.plugins = this.agents.plugins.ids();
     // its saved state is kept, but nothing of it runs: no briefs, hooks, or pull requests kept for the captain
     for (const id of this.agents.plugins.dormant()) console.warn(`Plugin ${id} has saved state but isn't switched on: add it to FOCUS_PLUGINS to bring it back`);

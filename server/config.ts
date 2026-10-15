@@ -57,8 +57,6 @@ export const paths = {
   planning: path.join(config.dataDir, 'planning'),
   /** The chief engineer's retros: the evidence gathered for each, and what came of it. */
   retros: path.join(config.dataDir, 'retros'),
-  /** Each `pnpm run scorecard` (scripts/scorecard.ts): the gate, the fence and the office measured, to compare over time. */
-  scorecards: path.join(config.dataDir, 'scorecards'),
   /** Each `pnpm run qa-catch` (scripts/qaCatch.ts): bugs planted in merged pull requests, and whether QA caught them. */
   qaCatch: path.join(config.dataDir, 'qa-catch'),
   /** Where Claude Code keeps session transcripts, the agents' among them (one folder per working directory). */

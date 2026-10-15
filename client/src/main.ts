@@ -58,6 +58,14 @@ import { patchTexturesOn } from './world/texturePatch';
 import { gpuFrame } from './world/gpuTimer';
 import { canvasTest } from './world/canvas';
 import { newFrame, screenTest } from './world/screenRedraw';
+import type { MsdBoard } from './world/msd';
+import { clientPlugin } from './plugins';
+
+/** A plugin's board for main engineering's MSD (the scorecard's), while the plugin's on and draws one. */
+function pluginBoard(id: string): MsdBoard | undefined {
+  const draw = clientPlugin(id)?.msd;
+  return draw && { kind: 'plugin', id, draw };
+}
 
 async function fontsReady(): Promise<void> {
   const loads = ['700 40px Fredoka', '500 40px Fredoka', '15px "JetBrains Mono"', '600 40px Antonio', '500 40px Antonio'].map((f) => document.fonts.load(f));
@@ -173,10 +181,10 @@ async function main() {
     openEngineering: () => openEngineeringPanel(ui),
     openLedger: (subject) => openLedgerPanel(ui, subject),
     showOnMsd: (what) => world.putOnMsd(
-      what === 'scorecard'
-        ? { kind: 'scorecard', scorecards: state.scorecards }
-        : what === 'usage'
-          ? { kind: 'usage', usage: state.usage }
+      what === 'usage'
+        ? { kind: 'usage', usage: state.usage }
+        : what && 'plugin' in what
+          ? pluginBoard(what.plugin) ?? { kind: 'report', card: state.report }
           : what ? { kind: 'trace', trace: what } : { kind: 'report', card: state.report },
     ),
     openComms: () => openCommsPanel(ui),
@@ -378,7 +386,11 @@ async function main() {
     world.showOnMsd({ kind: 'report', card: state.report });
   });
   state.on('retro', () => world.engineering?.showReport(state.report, state.retro));
-  state.on('scorecards', () => world.showOnMsd({ kind: 'scorecard', scorecards: state.scorecards }));
+  // a plugin's board on the MSD follows its state, while it's up there
+  state.on('plugin', (id) => {
+    const board = pluginBoard(id);
+    if (board) world.showOnMsd(board);
+  });
   state.on('usage', () => world.showOnMsd({ kind: 'usage', usage: state.usage }));
   let numberOneStatus = state.numberOne?.status;
   state.on('number-one', () => {

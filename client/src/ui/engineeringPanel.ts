@@ -1,30 +1,27 @@
 import { chiefEngineer } from '../../../shared/crew';
 import { FIX_SESSIONS, type FixEffect, type FixStatus, frictionName, reportLines } from '../../../shared/ledger';
-import { formatValue, glance } from '../../../shared/scorecard';
-import type { FixKind, Retro, RetroDraft, ScorecardSection } from '../../../shared/types';
+import type { FixKind, Retro, RetroDraft } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
-import { clientPlugins } from '../plugins';
+import { clientPlugins, type EngineeringGo } from '../plugins';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { busy, fill, h, timeAgo } from './dom';
 import { type NavItem, readout, shownView, SideNav } from './panels';
-import { scorecardHead, scorecardOverview, scorecardSections } from './scorecardView';
 import { markdownHtml } from './terminal';
 import { usageView } from './usageView';
 
 const KIND: Record<FixKind, string> = { check: 'Check', 'qa-rule': 'QA rule', pointer: 'Pointer', delete: 'Delete' };
 
-type View = 'overview' | 'code' | 'office' | 'retro';
-
-/** Which view each section's numbers live in. */
-const VIEW_OF: Record<ScorecardSection, View> = { gate: 'code', fence: 'code', effect: 'code', tests: 'code', office: 'office' };
+/** A view of the station: the overview, the ledger and the retro are the core's, and plugins add their own (the scorecard's). */
+type View = string;
 
 /**
- * The engineering station, a view at a time: your plan's usage and the scorecard at a glance (with the plugins' cards, like the climber's, and the retro beside it), the
- * code's numbers and the office's in full, each explaining itself, and the chief engineer's retro. On the captain's
- * word they look over the session digests' frictions that keep coming back and draft an issue for each. They change
- * nothing: the captain accepts a draft (it's filed in the repository picked beside it) or rejects it.
+ * The engineering station, a view at a time: your plan's usage and the plugins' parts at a glance (the scorecard's
+ * overview, the climber's card) with the retro beside them, the ledger as it stands, each plugin's views (the
+ * scorecard's code and office numbers), and the chief engineer's retro. On the captain's word they look over the
+ * session digests' frictions that keep coming back and draft an issue for each. They change nothing: the captain
+ * accepts a draft (it's filed in the repository picked beside it) or rejects it.
  */
 export function openEngineeringPanel(ui: Ui): void {
   const eng = chiefEngineer();
@@ -50,12 +47,13 @@ export function openEngineeringPanel(ui: Ui): void {
     picked = view;
     render();
   });
-  /** To a section's numbers, with `key` opened. */
-  const go = (section: ScorecardSection, key?: string) => {
-    if (key) open.add(key);
-    picked = VIEW_OF[section];
+  /** To one of the views, scrolled to what's asked for, with `at.key` opened. */
+  const go: EngineeringGo = (view, at = {}) => {
+    if (at.key) open.add(at.key);
+    picked = view;
     render();
-    body.querySelector(key ? `[data-key="${key}"]` : `#sc-${section}`)?.scrollIntoView({ block: 'start' });
+    const target = at.key ? `[data-key="${at.key}"]` : at.anchor ? `#${at.anchor}` : undefined;
+    if (target) body.querySelector(target)?.scrollIntoView({ block: 'start' });
   };
 
   const retroView = () => {
@@ -94,36 +92,37 @@ export function openEngineeringPanel(ui: Ui): void {
 
   const render = () => {
     const retro = state.retro;
-    const g = glance(state.scorecards?.history ?? []);
+    const parts = clientPlugins().flatMap((plugin) => (plugin.engineering ? [plugin.engineering] : []));
+    const pluginViews = parts.flatMap((part) => part.views ?? []);
     const waiting = retro?.status === 'done' ? retro.drafts.filter((d) => !d.decision).length : 0;
     const running = retro?.status === 'gathering' || retro?.status === 'thinking';
-    const office = g?.tiles.find((t) => t.section === 'office')?.hero.metric;
     const items: NavItem<View>[] = [
-      { key: 'overview', label: 'Overview', readout: g?.compared ? `▲${g.better} ▼${g.worse}` : '' },
-      { key: 'code', label: 'Code', readout: g?.gate ? (g.gate.pass ? 'PASS' : 'FAIL') : '', standby: !g },
-      { key: 'office', label: 'Office', readout: office ? formatValue(office.value, office.format) : '' },
+      { key: 'overview', label: 'Overview', readout: parts.map((part) => part.readout?.() ?? '').find(Boolean) ?? '' },
+      ...pluginViews.map((v) => ({ key: v.key, label: v.label, readout: v.readout?.() ?? '', standby: v.standby?.() })),
+      { key: 'ledger', label: 'Ledger', readout: state.report?.merged ? `${Math.round((state.report.mergedFirstTime / state.report.merged) * 100)}%` : '' },
       { key: 'retro', label: 'Retro', readout: running ? 'LIVE' : waiting ? `${waiting} ${waiting === 1 ? 'DRAFT' : 'DRAFTS'}` : '' },
     ];
     const view = shownView(items, picked) ?? 'overview';
     nav.show(items, view);
     const ledger = h('button', { class: 'btn small' }, 'Review the ledger →');
     ledger.onclick = () => ui.openLedger();
-    const views: Record<View, () => HTMLElement[]> = {
-      overview: () => [usageView(ui), scorecardOverview(ui, go, h('div', { class: 'sc-better' }, ...clientPlugins().map((plugin) => plugin.engineering?.(ui) ?? null), retroSummary(ui, retro, () => {
-        picked = 'retro';
-        render();
-      })))],
-      code: () => [scorecardHead(ui), ...scorecardSections(['gate', 'fence', 'effect', 'tests'], open)],
-      office: () => [scorecardHead(ui), ...scorecardSections(['office'], open), liveLedger(ui, ledger)],
-      retro: () => [retroView()],
+    const overview = () => {
+      // every plugin's card, and the retro's, laid out by the first plugin with an overview of its own (the scorecard's), or on their own
+      const cards = h('div', { class: 'sc-better' }, ...parts.map((part) => part.card?.(ui) ?? null), retroSummary(ui, retro, () => go('retro')));
+      const laidOut = parts.find((part) => part.overview)?.overview?.(ui, cards, go);
+      return [usageView(ui), laidOut ?? cards];
     };
-    fill(body, ...views[view]());
+    const plugged = pluginViews.find((v) => v.key === view);
+    const shown = view === 'overview' ? overview()
+      : view === 'ledger' ? [liveLedger(ui, ledger)]
+        : view === 'retro' ? [retroView()]
+          : plugged ? plugged.render(ui, go, open) : overview();
+    fill(body, ...shown);
   };
 
   ui.panels.open({ title: `${eng.name} · Chief engineer`, body, nav, accent: LCARS.gold, wide: true });
   ui.panels.own(state.on('retro', render));
   ui.panels.own(state.on('report', render));
-  ui.panels.own(state.on('scorecards', render));
   ui.panels.own(state.on('usage', render));
   ui.panels.own(state.on('plugin', render));
   // what agents on a plugin's brief are doing, as they work (the climber's card)
@@ -135,7 +134,7 @@ export function openEngineeringPanel(ui: Ui): void {
 
 /** The office's open frictions, the most widespread first, as bars: what the retro will look at. Each opens its trace in the ledger review. */
 function frictionBars(ui: Ui, limit: number): HTMLElement | null {
-  const frictions = state.scorecards?.history.at(-1)?.frictions.slice(0, limit) ?? [];
+  const frictions = state.report?.frictions.slice(0, limit) ?? [];
   if (!frictions.length) return null;
   const most = frictions[0].sessions || 1;
   return h('div', { class: 'sc-frictions' }, ...frictions.map((f) => {
@@ -163,7 +162,7 @@ function retroSummary(ui: Ui, retro: Retro | null | undefined, open: () => void)
   );
 }
 
-/** The ledger as it stands now (the scorecard's office numbers are as of its measurement), with what the scorecard doesn't count. */
+/** The ledger as it stands now: the report card's numbers, and the open frictions the retro reads. */
 function liveLedger(ui: Ui, ledger: HTMLElement): HTMLElement {
   const card = state.report;
   const shown = card ? reportLines(card) : undefined;
@@ -181,7 +180,7 @@ function liveLedger(ui: Ui, ledger: HTMLElement): HTMLElement {
     : h('small', { class: 'muted' }, shown?.lines.join(' · ') ?? 'Nothing in the ledger yet');
   const bars = frictionBars(ui, 5);
   return h('section', { class: 'card sc-section', style: '--c:var(--lcars-orange)' },
-    h('div', { class: 'row' }, h('h4', { class: 'grow' }, `The ledger now${card ? `, last ${card.days} days` : ''}`, h('span', null, 'Live, where the scorecard is as of its measurement')), ledger),
+    h('div', { class: 'row' }, h('h4', { class: 'grow' }, `The ledger now${card ? `, last ${card.days} days` : ''}`, h('span', null, 'Live, as the ledger fills')), ledger),
     ...warnings.map((w) => h('small', null, w)),
     live,
     bars ? h('h4', null, 'Most widespread open frictions', h('span', null, 'Sessions they came up in, over 14 days: what the retro reads')) : null,

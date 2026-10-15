@@ -1,12 +1,15 @@
-import { changeMark, type ComparedRow, compared, duration, formatValue, glance, measuredAt, type Tile, tileFace, type Trend, verdictPhrases } from '../../../shared/scorecard';
-import { aboutMetric, SECTION_ABOUT } from '../../../shared/scorecardAbout';
-import type { Metric, Scorecard, ScorecardSection } from '../../../shared/types';
-import { api } from '../net/api';
-import { state } from '../net/state';
-import type { Ui } from './context';
-import { busy, h, timeAgo } from './dom';
+import { changeMark, type ComparedRow, compared, duration, formatValue, glance, measuredAt, type Tile, tileFace, type Trend, verdictPhrases } from './scorecard';
+import { aboutMetric, SECTION_ABOUT } from './about';
+import { api } from '../../client/src/net/api';
+import { state } from '../../client/src/net/state';
+import type { Ui } from '../../client/src/ui/context';
+import { busy, h, timeAgo } from '../../client/src/ui/dom';
+import { type Metric, type Scorecard, SCORECARD, type Scorecards, type ScorecardSection } from './types';
 
 const SVG = 'http://www.w3.org/2000/svg';
+
+/** Main engineering's scorecards, as the plugin's server part sends them (its state). */
+export const scorecards = (): Scorecards | null => (state.plugins[SCORECARD] as Scorecards | undefined) ?? null;
 
 /** Each section's colour, from LCARS's data tones: green and red stay for better and worse. */
 export const SECTION_TONE: Record<ScorecardSection, string> = {
@@ -57,17 +60,17 @@ function trendPill(row: ComparedRow, tone: Trend | 'bad' = row.trend): HTMLEleme
 
 /** The scorecard's head: which commit it measured and when, Measure now, the MSD, and how a measurement is going. */
 export function scorecardHead(ui: Ui): HTMLElement {
-  const desk = state.scorecards;
+  const desk = scorecards();
   const history = desk?.history ?? [];
   const latest = history.at(-1);
   const measuring = desk?.status === 'measuring';
 
   const measure = h('button', { class: 'btn primary small' }, measuring ? 'Measuring…' : 'Measure now');
   measure.disabled = measuring;
-  measure.onclick = () => void busy(measure, () => api.measureScorecard().then(() => undefined), ui.error);
+  measure.onclick = () => void busy(measure, () => api.plugin<Scorecards>(SCORECARD, '/measure').then(() => undefined), ui.error);
   const onMsd = h('button', { class: 'btn small' }, 'Show on the MSD');
   onMsd.disabled = !latest;
-  onMsd.onclick = () => ui.showOnMsd('scorecard');
+  onMsd.onclick = () => ui.showOnMsd({ plugin: SCORECARD });
 
   const status = measuring
     ? h('small', { class: 'muted' }, `${desk?.trigger === 'new-commit' ? 'Measuring the new commit the office started on' : 'Running the gate on the office’s own checkout'}${desk?.startedAt ? `, started ${timeAgo(desk.startedAt)}` : ''}: about a minute and a half`)
@@ -119,7 +122,7 @@ function movedList(moved: ComparedRow[], go: Go): HTMLElement {
 
 /** The overview: the verdict, a tile per section, what moved, and `beside` it (how it's getting better). */
 export function scorecardOverview(ui: Ui, go: Go, beside: HTMLElement): HTMLElement {
-  const history = state.scorecards?.history ?? [];
+  const history = scorecards()?.history ?? [];
   const g = glance(history);
   const notes = history.at(-1)?.notes ?? [];
   return h('div', { class: 'sc' },
@@ -181,7 +184,7 @@ function gateBar(rows: ComparedRow[]): HTMLElement | null {
 
 /** Each of `sections` in full: what it's for, and every number in it, each opening to explain itself. */
 export function scorecardSections(sections: ScorecardSection[], open: Set<string>, after?: Partial<Record<ScorecardSection, HTMLElement | null>>): HTMLElement[] {
-  const history = state.scorecards?.history ?? [];
+  const history = scorecards()?.history ?? [];
   return compared(history).filter((s) => sections.includes(s.section)).map(({ section, title, rows }) => {
     const better = rows.filter((r) => r.trend === 'better').length;
     const worse = rows.filter((r) => r.trend === 'worse').length;

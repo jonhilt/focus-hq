@@ -156,7 +156,7 @@ export function changedLines(diff: string): Map<string, [number, number][]> {
     if (hunk && file) {
       const start = Number(hunk[1]);
       const count = hunk[2] === undefined ? 1 : Number(hunk[2]);
-      if (count > 0) ranges.get(file)!.push([start, start + count - 1]);
+      if (count > 0) ranges.get(file)?.push([start, start + count - 1]);
     }
   }
   return ranges;

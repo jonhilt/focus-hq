@@ -50,7 +50,7 @@ function auditor(agents: AgentManager) {
         captainMerges: (pr) => pr.branch.startsWith('focus/audit-'),
       };
     },
-  }], { demo: false, ownRepo: () => undefined, scorecards: { history: () => [], noise: () => undefined } });
+  }], { demo: false, ownRepo: () => undefined });
   return {
     heard,
     host: () => {

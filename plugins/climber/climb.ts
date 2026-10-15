@@ -2,8 +2,9 @@
 // scorecard, takes the worst gap, fixes it, proves the fix with the same numbers, and ships one pull request. Pure: the
 // manager's Climbs part seats the climbing engineer and does the bookkeeping.
 import { frictionGroups, type LedgerEvent } from '../../shared/ledger';
-import { direction, formatValue } from '../../shared/scorecard';
-import type { Agent, AgentStatus, Project, Scorecard, ScorecardNoise } from '../../shared/types';
+import type { Agent, AgentStatus, Project } from '../../shared/types';
+import { direction, formatValue } from '../scorecard/scorecard';
+import type { Scorecard, ScorecardNoise } from '../scorecard/types';
 import type { PastPullRequest } from '../../server/github/provider';
 import type { Climb, ClimbEnd } from './shared';
 

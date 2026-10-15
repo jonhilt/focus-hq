@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { changedLines, changedSummary, fromIstanbul, functionsIn, isDemo, score, summary, type Scored } from './crapScore';
 
-const ROOT = path.resolve(import.meta.dirname, '..');
+const ROOT = path.resolve(import.meta.dirname, '../../..');
 const git = (...args: string[]) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 
 function args() {
@@ -29,14 +29,14 @@ function args() {
 }
 
 function sourceFiles(all: boolean): string[] {
-  const globs = all ? ['server/*.ts', 'shared/*.ts', 'client/src/*.ts', 'scripts/*.ts'] : ['server/*.ts', 'shared/*.ts'];
+  const globs = all ? ['server/*.ts', 'shared/*.ts', 'plugins/*.ts', 'client/src/*.ts', 'scripts/*.ts'] : ['server/*.ts', 'shared/*.ts', 'plugins/*.ts'];
   return git('ls-files', ...globs).split('\n').filter((f) => f && !f.endsWith('.test.ts') && !f.endsWith('.d.ts') && (all || !isDemo(f)));
 }
 
 /** Runs vitest with v8 coverage into a temporary folder and returns its coverage-final.json. */
 function runCoverage(all: boolean): string {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'focus-crap-'));
-  const include = (all ? ['server', 'shared', 'client/src', 'scripts'] : ['server', 'shared']).map((d) => `--coverage.include=${d}/**/*.ts`);
+  const include = (all ? ['server', 'shared', 'plugins', 'client/src', 'scripts'] : ['server', 'shared', 'plugins']).map((d) => `--coverage.include=${d}/**/*.ts`);
   console.log('Running the unit tests with coverage…');
   const result = spawnSync(path.join(ROOT, 'node_modules/.bin/vitest'), [
     'run', '--coverage.enabled', '--coverage.provider=v8', '--coverage.reporter=json', `--coverage.reportsDirectory=${dir}`,

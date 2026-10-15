@@ -52,6 +52,6 @@ function climberView(ui: Ui): HTMLElement {
   );
 }
 
-const climber: ClientPlugin = { id: CLIMBER, engineering: climberView };
+const climber: ClientPlugin = { id: CLIMBER, engineering: { card: climberView } };
 
 export default climber;

@@ -228,6 +228,8 @@ export interface ReportCard {
   costUsd: number;
   /** Each retro fix the captain accepted, and whether its frictions stopped coming up once it landed (whenever it was accepted). */
   fixes: FixEffect[];
+  /** The open frictions (no retro decision yet) of the last OPEN_FRICTION_DAYS, the most widespread first: the top few. */
+  frictions: { key: string; sessions: number }[];
   /** Damage found in the ledger when the office opened it: it needs a look. */
   warnings?: string[];
   /** Not damage, but worth knowing: another office holds the ledger, so this one's lines aren't kept. */
@@ -235,6 +237,9 @@ export interface ReportCard {
 }
 
 const DAY = 24 * 60 * 60 * 1000;
+
+/** The window the report card's open frictions cover, as the retro looks at them. */
+export const OPEN_FRICTION_DAYS = 14;
 
 /**
  * Every goal the ledger saw close, newest first, in `projectId`'s room or any: the archive of what leads showed, which
@@ -269,6 +274,7 @@ export function reportCard(events: LedgerEvent[], now: number, days = 30): Repor
     goalsClosed: of('goal-closed').length,
     ...spend(of('session-digest'), merged.length),
     fixes: fixEffects(events, now),
+    frictions: frictionGroups(events, now, OPEN_FRICTION_DAYS).slice(0, 5).map((g) => ({ key: g.key, sessions: g.sessions })),
   };
 }
 

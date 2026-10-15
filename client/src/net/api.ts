@@ -1,4 +1,4 @@
-import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ResumeHow, Retro, RetroDraft, RoomTheme, Scorecards, Settings, StudioSession, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
+import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ResumeHow, Retro, RetroDraft, RoomTheme, Settings, StudioSession, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
 import type { Scenario } from '../../../shared/scenarios';
@@ -68,7 +68,6 @@ export const api = {
   retroPreview: (days: number) => call<{ unread: number; costUsd: number }>('GET', `/retro/preview?days=${days}`),
   retroStart: (days: number) => call<Retro>('POST', '/retro/start', { days }),
   retroStop: () => call<Retro>('POST', '/retro/stop'),
-  measureScorecard: () => call<Scorecards>('POST', '/scorecards/measure'),
   /** A plugin's own route (docs/plugins.md), under `/api/plugins/<id>`. */
   plugin: <T>(id: string, path: string, body?: unknown) => call<T>('POST', `/plugins/${encodeURIComponent(id)}${path}`, body),
   /** The ledger's events of the last `days` days, for reviewing at the master systems table. */

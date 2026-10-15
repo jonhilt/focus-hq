@@ -1,13 +1,12 @@
 import type { PluginStates } from '../../../shared/types';
-import type { BriefWork, PluginHost, PluginState, ScorecardReader } from '../../plugins/contract';
+import type { BriefWork, PluginHost, PluginState } from '../../plugins/contract';
 import type { Core } from './core';
 import { Refused } from './core';
 
-/** What the office lends a plugin that the manager doesn't have: where it runs, and what it measures. */
+/** What the office lends a plugin that the manager doesn't have: where it runs, and its own repo. */
 export interface Lent {
   demo: boolean;
   ownRepo: () => string | undefined;
-  scorecards: ScorecardReader;
 }
 
 /** A plugin's slot in `saved`, `fresh()` with what was saved on top (a field added since starts fresh). */
@@ -28,10 +27,13 @@ function slot<S extends object>(saved: () => PluginStates, id: string, fresh: ()
 export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
   return {
     demo: lent.demo,
-    state: (fresh) => slot(() => core.store.plugins, id, fresh, (state) => {
-      core.store.save();
-      core.hub.send({ type: 'plugin', id, state });
-    }),
+    state: (fresh, how) => {
+      const saved = how?.saved ?? true;
+      return slot(() => (saved ? core.store.plugins : core.plugins.unsaved), id, fresh, () => {
+        if (saved) core.store.save();
+        core.hub.send({ type: 'plugin', id, state: core.plugins.stateOf(id) });
+      });
+    },
     projects: () => core.store.projects,
     agent: (agentId) => core.store.agents.get(agentId),
     ledger: () => core.store.ledger,
@@ -51,6 +53,5 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
     forget: (agentId) => void core.runtimes.delete(agentId),
     print: (agent, text) => core.print(agent, [{ kind: 'system', text }]),
     toast: (level, text, agentId) => core.hub.toast(level, text, agentId),
-    scorecards: lent.scorecards,
   };
 }

@@ -1,8 +1,8 @@
 // The demo office's scorecards: a made-up history that climbs a little each time, kept in memory so the demo never
 // writes to ~/.focus/scorecards/.
-import type { Metric, Scorecard } from '../shared/types';
-import type { ScorecardSource } from './scorecards';
-import { sleep } from './util';
+import { sleep } from '../../server/util';
+import type { Metric, Scorecard } from './types';
+import type { ScorecardSource } from './desk';
 
 type Row = [Metric['section'], string, string, number, Metric['better'], Metric['format'], number];
 

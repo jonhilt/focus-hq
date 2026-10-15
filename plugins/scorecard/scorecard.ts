@@ -1,5 +1,5 @@
 // How a scorecard reads, wherever it's shown: the terminal (`pnpm run scorecard`), the engineering panel and the MSD.
-import { aboutMetric } from './scorecardAbout';
+import { aboutMetric } from './about';
 import type { Metric, MetricFormat, Scorecard, ScorecardNoise, ScorecardSection } from './types';
 
 export const SECTIONS: Record<ScorecardSection, string> = {

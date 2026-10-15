@@ -10,7 +10,7 @@ import { climbingEngineer, type Climb } from './shared';
 /** The pretend office with the climber switched on, its own repo the shop's frontend unless `ownRepo` says otherwise (null: none). */
 function climbing(workspace: WorkspaceOps = demoWorkspace, ownRepo: string | null = 'demo/webshop-frontend') {
   const o = office(workspace);
-  o.agents.startPlugins([climber], { demo: false, ownRepo: () => ownRepo ?? undefined, scorecards: { history: () => [], noise: () => undefined } });
+  o.agents.startPlugins([climber], { demo: false, ownRepo: () => ownRepo ?? undefined });
   const keep = o.agents.plugins.routes().find((r) => r.plugin === 'climber' && r.route.path === '/keep-climbing');
   return {
     ...o,

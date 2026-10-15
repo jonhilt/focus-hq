@@ -13,17 +13,18 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { paths } from '../server/config';
-import { checkLedger } from '../shared/ledger';
-import { noiseOf } from '../shared/scorecard';
-import type { ScorecardNoise } from '../shared/types';
+import { paths } from '../../../server/config';
+import { SCORECARDS_DIR } from '../desk';
+import { checkLedger } from '../../../shared/ledger';
+import { noiseOf } from '../scorecard';
+import type { ScorecardNoise } from '../types';
 import { CRAP_LINE, fromIstanbul, functionsIn, isDemo, score } from './crapScore';
 import {
   effectMetrics, eslintCounts, failedTests, fenceMetrics, gateMetrics, officeMetrics, render, renderNoise, scanSource, testMetrics, typecheckErrors,
   type CrapResults, type GateResults, type GateStep, type Scorecard, type SourceCounts, type VitestReport,
 } from './scorecardRules';
 
-const ROOT = path.resolve(import.meta.dirname, '..');
+const ROOT = path.resolve(import.meta.dirname, '../../..');
 const git = (...args: string[]) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).trim();
 const bin = (name: string) => path.join(ROOT, 'node_modules/.bin', name);
 
@@ -51,7 +52,7 @@ function runGate(tmp: string, notes: string[]): { gate: GateResults; vitest?: Vi
   const coverageDir = path.join(tmp, 'coverage');
   const test = timed(bin('vitest'), [
     'run', '--reporter=json', `--outputFile=${vitestFile}`, '--coverage.enabled', '--coverage.provider=v8', '--coverage.reporter=json',
-    `--coverage.reportsDirectory=${coverageDir}`, '--coverage.reportOnFailure', '--coverage.include=server/**/*.ts', '--coverage.include=shared/**/*.ts',
+    `--coverage.reportsDirectory=${coverageDir}`, '--coverage.reportOnFailure', '--coverage.include=server/**/*.ts', '--coverage.include=shared/**/*.ts', '--coverage.include=plugins/**/*.ts',
   ]);
   const vitest = readJson<VitestReport>(vitestFile);
   if (!vitest) notes.push('vitest wrote no report, so the test counts are missing');
@@ -82,7 +83,7 @@ const scanned = (files: string[]): (SourceCounts & { file: string })[] =>
 /** CRAP over server/ and shared/ as `pnpm run crap` scores it, from the gate's own coverage run. */
 function crapOf(coverageFile: string): CrapResults {
   const coverage = JSON.parse(readFileSync(coverageFile, 'utf8')) as Record<string, Parameters<typeof fromIstanbul>[0]>;
-  const rows = tracked('server/*.ts', 'shared/*.ts').filter((f) => !isTest(f) && !isDemo(f)).flatMap((f) => {
+  const rows = tracked('server/*.ts', 'shared/*.ts', 'plugins/*.ts').filter((f) => !isTest(f) && !isDemo(f)).flatMap((f) => {
     const entry = coverage[path.join(ROOT, f)];
     return score(functionsIn(f, readFileSync(path.join(ROOT, f), 'utf8')), entry && fromIstanbul(entry));
   });
@@ -90,12 +91,12 @@ function crapOf(coverageFile: string): CrapResults {
 }
 
 function latestSaved(): Scorecard | undefined {
-  if (!existsSync(paths.scorecards)) return undefined;
-  const latest = readdirSync(paths.scorecards).filter((f) => f.endsWith('.json')).sort().at(-1);
-  return latest ? readJson<Scorecard>(path.join(paths.scorecards, latest)) : undefined;
+  if (!existsSync(SCORECARDS_DIR)) return undefined;
+  const latest = readdirSync(SCORECARDS_DIR).filter((f) => f.endsWith('.json')).sort().at(-1);
+  return latest ? readJson<Scorecard>(path.join(SCORECARDS_DIR, latest)) : undefined;
 }
 
-const noiseDir = path.join(paths.scorecards, 'noise');
+const noiseDir = path.join(SCORECARDS_DIR, 'noise');
 
 /** The latest noise floor saved by `--repeat`, if any. */
 function latestNoise(): ScorecardNoise | undefined {
@@ -110,7 +111,7 @@ function measure(): Scorecard {
   const { gate, coverageFile } = runGate(tmp, notes);
   if (!coverageFile) notes.push('vitest wrote no coverage, so CRAP is missing');
 
-  const code = scanned(tracked('server/*.ts', 'shared/*.ts', 'client/src/*.ts', 'scripts/*.ts'));
+  const code = scanned(tracked('server/*.ts', 'shared/*.ts', 'plugins/*.ts', 'client/src/*.ts', 'scripts/*.ts'));
   const source = code.filter((f) => !isTest(f.file));
   const server = source.filter((f) => f.file.startsWith('server/') && !isDemo(f.file));
   const tests = code.filter((f) => isTest(f.file));
@@ -172,8 +173,8 @@ function main() {
   const previous = latestSaved();
   const card = measure();
   if (!argv.includes('--no-save')) {
-    mkdirSync(paths.scorecards, { recursive: true });
-    const file = path.join(paths.scorecards, `${new Date(card.at).toISOString().replace(/[:.]/g, '-')}-${card.commit.slice(0, 8)}.json`);
+    mkdirSync(SCORECARDS_DIR, { recursive: true });
+    const file = path.join(SCORECARDS_DIR, `${new Date(card.at).toISOString().replace(/[:.]/g, '-')}-${card.commit.slice(0, 8)}.json`);
     writeFileSync(file, `${JSON.stringify(card, null, 2)}\n`);
     process.stderr.write(`Saved ${file}\n\n`);
   }

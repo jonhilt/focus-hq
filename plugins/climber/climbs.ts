@@ -3,6 +3,7 @@ import type { Agent } from '../../shared/types';
 import { GitHub } from '../../server/github/service';
 import type { PluginHost, PluginState } from '../../server/plugins/contract';
 import { errorMessage, newId } from '../../server/util';
+import { officeScorecards } from '../scorecard/desk';
 import { climbBrief, climbHome, climbLog, climbStep } from './climb';
 import { CLIMB_BRANCH, CLIMB_ENDS_KEPT, CLIMBER_ID, climbingEngineer, freshClimb, type Climb } from './shared';
 
@@ -38,8 +39,9 @@ export class Climbs {
         })),
       );
       // this climb's own pull request isn't open yet; one left open from before is still part of the record
-      const noise = this.host.scorecards.noise();
-      const log = climbLog(prs.filter((p) => p.branch !== agent.branch), this.climb.get().ends ?? [], status.login, this.host.scorecards.history(SCORECARDS_READ), noise);
+      const scorecards = officeScorecards(this.host.demo);
+      const noise = scorecards.noise();
+      const log = climbLog(prs.filter((p) => p.branch !== agent.branch), this.climb.get().ends ?? [], status.login, scorecards.history(SCORECARDS_READ), noise);
       return climbBrief(agent, this.host.ledger(), Date.now(), log, noise);
     });
   }

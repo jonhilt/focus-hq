@@ -10,13 +10,13 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import path from 'node:path';
 import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
 import { climbBrief, climbLog } from '../climb';
-import { config, paths } from '../../../server/config';
+import { config } from '../../../server/config';
 import type { PastPullRequest } from '../../../server/github/provider';
-import { SavedScorecards } from '../../../server/scorecards';
-import type { Scorecard } from '../../../shared/types';
+import { SavedScorecards, SCORECARDS_DIR } from '../../scorecard/desk';
+import type { Scorecard } from '../../scorecard/types';
 import { CLIMB_BRANCH } from '../shared';
 import { FIND_SCHEMA, findGapQuestion, followsRule, PICK_SCHEMA, pickedGap, plantRejection, rankOnly, replayVerdict, sighting, type ClimbPick } from './climbReplayRules';
-import { render } from '../../../scripts/scorecardRules';
+import { render } from '../../scorecard/scripts/scorecardRules';
 
 const ROOT = path.resolve(import.meta.dirname, '../../..');
 const arg = (name: string) => (process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : undefined);
@@ -37,7 +37,7 @@ function pastClimbs(): PastPullRequest[] {
 }
 
 function scorecard(): Scorecard {
-  const file = arg('--card') ?? (existsSync(paths.scorecards) ? readdirSync(paths.scorecards).filter((f) => f.endsWith('.json')).sort().map((f) => path.join(paths.scorecards, f)).at(-1) : undefined);
+  const file = arg('--card') ?? (existsSync(SCORECARDS_DIR) ? readdirSync(SCORECARDS_DIR).filter((f) => f.endsWith('.json')).sort().map((f) => path.join(SCORECARDS_DIR, f)).at(-1) : undefined);
   if (!file) throw new Error('No scorecard to rank from: run `pnpm run scorecard` first, or pass --card');
   return JSON.parse(readFileSync(file, 'utf8')) as Scorecard;
 }
@@ -60,7 +60,7 @@ async function ask<T>(prompt: string, schema: object, opts: Partial<Options> = {
 async function main() {
   const login = gh('api', 'user', '-q', '.login').trim();
   // the brief as a climb gets it: main's scorecards for whether gains held, and the noise floor
-  const saved = new SavedScorecards(paths.scorecards, ROOT);
+  const saved = new SavedScorecards(SCORECARDS_DIR, ROOT);
   const noise = saved.noise();
   const log = climbLog(pastClimbs(), [], login, saved.history(30), noise);
   const card = render(scorecard());

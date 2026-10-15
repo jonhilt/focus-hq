@@ -12,7 +12,6 @@ import type { Preview, PreviewLog } from './previews';
 import type { Project, Settings } from './projects';
 import type { QaReview } from './qa';
 import type { Retro } from './retros';
-import type { Scorecards } from './scorecard';
 import type { Usage } from './usage';
 import type { VoiceStatus } from './voice';
 
@@ -48,8 +47,6 @@ export interface Snapshot {
   report: ReportCard;
   /** The chief engineer's latest retro. */
   retro: Retro;
-  /** The latest scorecards, for main engineering. */
-  scorecards: Scorecards;
   /** Your plan's usage and how the office signs in, for main engineering. */
   usage: Usage;
   /** Each plugin's state, by plugin id (docs/plugins.md). */
@@ -74,7 +71,6 @@ export type ServerEvent =
   | { type: 'review-removed'; repo: string; number: number }
   | { type: 'report'; report: ReportCard }
   | { type: 'retro'; retro: Retro }
-  | { type: 'scorecards'; scorecards: Scorecards }
   | { type: 'usage'; usage: Usage }
   /** A plugin's state changed. */
   | { type: 'plugin'; id: string; state: unknown }

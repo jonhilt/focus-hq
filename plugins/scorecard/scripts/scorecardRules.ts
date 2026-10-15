@@ -3,11 +3,11 @@
 // ledger, saves and prints.
 import path from 'node:path';
 import ts from 'typescript';
-import { frictionGroups, reportCard, type LedgerEvent } from '../shared/ledger';
-import { compared, formatValue, measuredAt } from '../shared/scorecard';
-import type { Metric, MetricFormat as Format, Scorecard, ScorecardNoise, ScorecardSection as Section } from '../shared/types';
+import { frictionGroups, reportCard, type LedgerEvent } from '../../../shared/ledger';
+import { compared, formatValue, measuredAt } from '../scorecard';
+import type { Metric, MetricFormat as Format, Scorecard, ScorecardNoise, ScorecardSection as Section } from '../types';
 
-export type { Metric, Scorecard } from '../shared/types';
+export type { Metric, Scorecard } from '../types';
 
 /** What one source file holds that the standard cares about. */
 export interface SourceCounts {

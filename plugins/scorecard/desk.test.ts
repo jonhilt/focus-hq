@@ -3,9 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { describe, expect, it, vi } from 'vitest';
-import type { Scorecard, ServerEvent } from '../shared/types';
-import type { Hub } from './hub';
-import { checkoutHead, measureNewCommit, readScorecard, SavedScorecards, ScorecardDesk, SHOWN, type ScorecardSource } from './scorecards';
+import { checkoutHead, measureNewCommit, readScorecard, SavedScorecards, ScorecardDesk, SHOWN, type ScorecardSource } from './desk';
+import type { Scorecard, Scorecards } from './types';
 
 // checkoutHead's test runs real git: a budget fit for a busy machine
 vi.setConfig({ testTimeout: 30_000 });
@@ -44,9 +43,9 @@ describe('SavedScorecards', () => {
 
 function desk(measure: () => Promise<void>) {
   const cards = [card(1)];
-  const sent: ServerEvent[] = [];
+  const sent: Scorecards[] = [];
   const source: ScorecardSource = { history: () => [...cards], noise: () => undefined, measure: () => measure().then(() => void cards.push(card(2))) };
-  return { desk: new ScorecardDesk({ send: (e: ServerEvent) => sent.push(e) } as unknown as Hub, source), sent };
+  return { desk: new ScorecardDesk((s) => sent.push(s), source), sent };
 }
 
 const settle = () => new Promise((r) => setTimeout(r, 0));
@@ -58,7 +57,7 @@ describe('ScorecardDesk', () => {
     expect(d.measure().status).toBe('measuring');
     await settle();
     expect(d.current()).toMatchObject({ status: 'idle', history: [card(1), card(2)] });
-    expect(sent.map((e) => e.type === 'scorecards' && e.scorecards.status)).toEqual(['measuring', 'idle']);
+    expect(sent.map((s) => s.status)).toEqual(['measuring', 'idle']);
   });
 
   it('measures one at a time', () => {

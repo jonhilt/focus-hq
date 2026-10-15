@@ -8,6 +8,8 @@ import type { BriefSpec, FocusPlugin, PluginHost, PluginParts, PluginRoute } fro
  */
 export class Plugins {
   private readonly parts = new Map<string, PluginParts>();
+  /** Each plugin's state that isn't saved, by id: read again as the office starts (`PluginHost.state` with `saved: false`). */
+  readonly unsaved: PluginStates = {};
 
   /** `saved` is the office's saved state of every plugin, by id (`Store.plugins`). */
   constructor(private readonly saved: () => PluginStates) {}
@@ -27,8 +29,18 @@ export class Plugins {
 
   /** Each plugin's state, for the browser: only those switched on (a plugin switched off keeps its state for later). */
   states(): PluginStates {
-    const saved = this.saved();
-    return Object.fromEntries(this.ids().flatMap((id) => (id in saved ? [[id, saved[id]]] : [])));
+    return Object.fromEntries(this.ids().flatMap((id) => {
+      const state = this.stateOf(id);
+      return state === undefined ? [] : [[id, state]];
+    }));
+  }
+
+  /** A plugin's state as the browser has it: what's saved, with what isn't over it. */
+  stateOf(id: string): unknown {
+    const saved = this.saved()[id];
+    const unsaved = this.unsaved[id];
+    const both = typeof saved === 'object' && saved !== null && typeof unsaved === 'object' && unsaved !== null;
+    return both ? { ...saved, ...unsaved } : unsaved ?? saved;
   }
 
   /** The plugins with state saved from before that aren't switched on now (probably missing from FOCUS_PLUGINS). */
