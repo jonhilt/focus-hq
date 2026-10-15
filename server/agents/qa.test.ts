@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { QaReport } from '../../shared/types';
 import type { PullRequestDetail } from '../github/provider';
-import { diffAnchor, evidencePath, filesPrompt, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPrompt, qaSystemAppend, siblingsSection, skimmed, unaccounted, filesToRevisit, mustOpen, openedFiles, toolCalls } from './qa';
+import { diffAnchor, evidencePath, filesPrompt, filesSection, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPrompt, qaSystemAppend, siblingsSection, skimmed, unaccounted, filesToRevisit, mustOpen, openedFiles, toolCalls } from './qa';
 
 const report = (r: Partial<QaReport> = {}): QaReport => ({
   verdict: 'pass',
@@ -84,6 +84,40 @@ describe('evidencePath', () => {
   });
 });
 
+describe('filesSection', () => {
+  const files = [
+    { file: 'server/gate.ts', tests: 'gate.test.ts', checked: 'Read every changed line' },
+    { file: 'scripts/plant.ts', tests: 'none', checked: 'Read the | pipes' },
+    { file: 'docs/qa.md', tests: 'none', checked: 'Read against the code' },
+  ];
+  const changed = ['server/gate.ts', 'scripts/plant.ts', 'docs/qa.md', 'shared/schema.json'];
+
+  it('heads with code files opened by evidence, those with no test, those left out and the send-back, untested unopened code first', () => {
+    const lines = filesSection(report({ files }), { changed, opened: new Set(['server/gate.ts']), sentBack: 2 });
+    expect(lines.slice(0, 4)).toEqual(['', '### 📂 Files reviewed', '', '**1 of 3** changed code files opened by QA (from its tool calls) · **2** code files with no test · **1** left out of QA\'s report · sent back once for 2 files']);
+    expect(lines).toContain('<details open><summary>Each file</summary>');
+    expect(lines.filter((l) => l.startsWith('| `'))).toEqual([
+      '| `scripts/plant.ts` | ❌ | ⚠️ none | Read the \\| pipes |',
+      '| `shared/schema.json` | ❌ | ⚠️ not in the report |   |',
+      '| `server/gate.ts` | ✅ | gate.test.ts | Read every changed line |',
+      '| `docs/qa.md` | – | none | Read against the code |',
+    ]);
+  });
+
+  it('drops the opened column when the office couldn’t read QA’s tool calls, and folds a long table away', () => {
+    const many = Array.from({ length: 13 }, (_, i) => `src/f${i}.ts`);
+    const lines = filesSection(report({ files }), { changed: many });
+    expect(lines[3]).toBe('**13** changed files · **13** code files with no test · **13** left out of QA\'s report');
+    expect(lines).toContain('<details><summary>Each file</summary>');
+    expect(lines).toContain('| File | Tests | What QA checked |');
+  });
+
+  it('falls back on the report’s own files, and is nothing when there are none', () => {
+    expect(filesSection(report({ files }), undefined)[3]).toBe('**3** changed files · **1** code files with no test');
+    expect(filesSection(report(), undefined)).toEqual([]);
+  });
+});
+
 describe('qaComment', () => {
   it('leads with the verdict, the tester and the commit', () => {
     const body = qaComment(report(), { officer: 'Lt. Varga', sha: 'abc1234def5678' }, [], true);
@@ -122,6 +156,12 @@ describe('qaComment', () => {
     const second = body.indexOf('**2. Saved [for] later**\n\n![Saved for later](https://github.com/acme/shop/blob/focus-qa-evidence/pr-12/1/2.jpg?raw=true)');
     expect(first).toBeGreaterThan(-1);
     expect(second).toBeGreaterThan(first);
+  });
+
+  it('puts the per-file account after the spot-checks, before the screenshots', () => {
+    const body = qaComment(report({ files: [{ file: 'a.ts', tests: 'a.test.ts', checked: 'read it' }] }), { officer: 'X' }, [], true, { changed: ['a.ts'], opened: new Set(['a.ts']) });
+    expect(body.indexOf('### 📂 Files reviewed')).toBeGreaterThan(-1);
+    expect(body.indexOf('### 📂 Files reviewed')).toBeLessThan(body.indexOf('### 📸 Screenshots'));
   });
 
   it('says so when the review has no screenshots', () => {

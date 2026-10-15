@@ -251,14 +251,14 @@ export class Reviews extends Part {
 
   /**
    * The changed files QA's session opened, from its tool calls in its transcript, when the office can read it (not in
-   * the demo, nor for a cloud session) and hasn't sent QA back already this review.
+   * the demo, nor for a cloud session): both rounds, when it was sent back.
    */
   private openedBy(agent: Agent): Effect.Effect<Set<string> | undefined> {
     const files = this.rt(agent.id).qaFiles;
     const read = this.core.ledger.readTranscript;
     const sessionId = agent.sessionId;
     return Effect.promise(async () => {
-      if (!files || files.askedAgain || !read || !sessionId || agent.cloud) return undefined;
+      if (!files || !read || !sessionId || agent.cloud) return undefined;
       const text = await read(sessionId).catch(() => undefined);
       return text ? openedFiles(toolCalls(text), files.changed) : undefined;
     });
@@ -267,8 +267,11 @@ export class Reviews extends Part {
   /** Sends QA back once, in the same session, to the changed files its report left out or only skimmed, or it never opened. */
   private revisitFiles(agent: Agent, sessionId: string, revisit: Revisit): Effect.Effect<void, never, ManagerServices> {
     const files = this.rt(agent.id).qaFiles;
-    if (files) files.askedAgain = true;
     const n = revisit.missing.length + revisit.unread.length + revisit.unopened.length;
+    if (files) {
+      files.askedAgain = true;
+      files.sentBack = n;
+    }
     this.print(agent, [{ kind: 'system', text: `✻ The report leaves out, only skimmed or never opened ${n} changed file${n === 1 ? '' : 's'}: back to QA to review ${n === 1 ? 'it' : 'them'} properly` }]);
     return this.core.sessions.runSession(agent, filesPrompt(revisit), sessionId).pipe(
       Effect.catch((err) => Effect.sync(() => this.core.sessions.fail(agent, err.message))),
@@ -288,13 +291,15 @@ export class Reviews extends Part {
       if (agent.prGone) return;
       // a report that leaves changed files out goes back to QA once, naming them: a reviewer that skims a big diff
       // misses what's in the files it skipped (docs/qa-catch.md)
-      const revisit = filesToRevisit(report, this.rt(agent.id).qaFiles, yield* this.openedBy(agent));
+      const files = this.rt(agent.id).qaFiles;
+      const opened = yield* this.openedBy(agent);
+      const revisit = filesToRevisit(report, files, opened);
       if (revisit && agent.sessionId) return yield* this.revisitFiles(agent, agent.sessionId, revisit);
       const pass = report.verdict === 'pass';
       const review = this.store.reviews.get(prKey(agent.repo, number));
       const screenshots = yield* this.keepScreenshots(agent, report, review?.sha);
       this.update(agent, { activity: 'Posting the QA report on the PR' });
-      const body = qaComment(report, { officer: agent.name, sha: review?.sha, pr: pullUrl(agent.repo, number) }, screenshots, this.store.settings.attribution);
+      const body = qaComment(report, { officer: agent.name, sha: review?.sha, pr: pullUrl(agent.repo, number) }, screenshots, this.store.settings.attribution, files && { ...files, opened });
       const commentUrl = yield* (yield* GitHub).commentOnPullRequest(agent.repo, number, body).pipe(
         Effect.tap((url) => Effect.sync(() => this.print(agent, [{ kind: 'system', text: `✻ Posted the QA report: ${url || 'done'}` }]))),
         Effect.map((url) => url || undefined),

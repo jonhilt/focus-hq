@@ -258,8 +258,63 @@ const ICON = { pass: '✅', fail: '❌', skip: '⏭️' } as const;
 /** A table cell: no pipes or line breaks to break the row. */
 const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>') || ' ';
 
-/** The QA report as a pull request comment, with the screenshots that made it to GitHub. */
-export function qaComment(report: QaReport, by: { officer: string; sha?: string; pr?: string }, screenshots: QaScreenshot[], attribution: boolean): string {
+/**
+ * What the office knows of how QA covered the changed files: the files, the ones its session opened by its own tool
+ * calls (when the office could read them), and how many it was sent back to.
+ */
+export interface FileAccount {
+  changed: string[];
+  opened?: Set<string>;
+  sentBack?: number;
+}
+
+/** A tests cell that names none. */
+const NO_TESTS = /^\s*(none\b|no\b|n\/a\b|-+\s*$|$)/i;
+/** Above this many files the table starts folded away, behind its headline. */
+const OPEN_ROWS = 12;
+
+/**
+ * The per-file account as a section of the comment: a headline (code files opened by evidence, files with no test,
+ * files QA was sent back to), then each changed file with whether it was opened, its tests and what QA checked. Code
+ * that no test exercises and QA never opened comes first, since that's where a bug gets through; docs, tests and config
+ * last. Nothing when the report
+ * accounts for no files and the office doesn't know them either.
+ */
+export function filesSection(report: QaReport, account: FileAccount | undefined): string[] {
+  const told = report.files ?? [];
+  const changed = account?.changed.length ? account.changed : told.map((f) => f.file);
+  if (!changed.length) return [];
+  const opened = account?.opened;
+  const rows = changed.map((file) => {
+    const said = told.find((f) => { const n = f.file.replace(/^\.?\//, ''); return n === file || file.endsWith(`/${n}`) || n.endsWith(`/${file}`); });
+    const untested = !said || NO_TESTS.test(said.tests);
+    const open = !mustOpen(file) ? '–' : !opened ? '' : opened.has(file) ? '✅' : '❌';
+    return { file, said, untested, open, rank: open === '–' ? 4 : (open === '❌' ? 0 : 2) + (untested ? 0 : 1) };
+  });
+  const code = rows.filter((r) => mustOpen(r.file));
+  const head = [
+    opened ? `**${code.filter((r) => r.open === '✅').length} of ${code.length}** changed code files opened by QA (from its tool calls)` : `**${changed.length}** changed files`,
+    `**${rows.filter((r) => r.untested && mustOpen(r.file)).length}** code files with no test`,
+    ...(rows.some((r) => !r.said) ? [`**${rows.filter((r) => !r.said).length}** left out of QA's report`] : []),
+    ...(account?.sentBack ? [`sent back once for ${account.sentBack} file${account.sentBack === 1 ? '' : 's'}`] : []),
+  ].join(' · ');
+  const sorted = [...rows].sort((a, b) => a.rank - b.rank);
+  return [
+    '', '### 📂 Files reviewed', '', head, '',
+    `<details${rows.length <= OPEN_ROWS ? ' open' : ''}><summary>Each file</summary>`, '',
+    opened ? '| File | Opened | Tests | What QA checked |' : '| File | Tests | What QA checked |',
+    opened ? '|---|---|---|---|' : '|---|---|---|',
+    ...sorted.map((r) => {
+      const tests = r.said ? `${r.untested && mustOpen(r.file) ? '⚠️ ' : ''}${cell(truncate(r.said.tests, 160))}` : '⚠️ not in the report';
+      const checked = r.said ? cell(truncate(r.said.checked, 240)) : ' ';
+      return `| \`${cell(r.file)}\` |${opened ? ` ${r.open} |` : ''} ${tests} | ${checked} |`;
+    }),
+    '', '</details>',
+  ];
+}
+
+/** The QA report as a pull request comment, with the screenshots that made it to GitHub and, when known, how it covered each changed file. */
+export function qaComment(report: QaReport, by: { officer: string; sha?: string; pr?: string }, screenshots: QaScreenshot[], attribution: boolean, account?: FileAccount): string {
   const pass = report.verdict === 'pass';
   const commit = by.sha ? `commit \`${by.sha.slice(0, 7)}\`` : '';
   const tested = attribution ? [`**Tested by** ${by.officer} (Focus QA officer)`, commit].filter(Boolean).join(' · ') : commit && `**Tested at** ${commit}`;
@@ -277,6 +332,7 @@ export function qaComment(report: QaReport, by: { officer: string; sha?: string;
     return by.pr ? `[${where}](${spotCheckUrl(by.pr, c)})` : where;
   };
   if (report.spotChecks?.length) lines.push('', '### 🔦 Worth a human look', '', ...report.spotChecks.map((c) => `- ${spot(c)}: ${c.why}`));
+  lines.push(...filesSection(report, account));
   lines.push('', '### 📸 Screenshots');
   if (!screenshots.length) lines.push('', 'No screenshots were taken during this review.');
   screenshots.forEach((s, i) => {
