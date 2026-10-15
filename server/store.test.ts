@@ -183,7 +183,6 @@ describe('loading a saved office', () => {
       numberOne: { status: 'thinking', activity: '', messages: [], updatedAt: 0, costUsd: 0 },
       studio: { status: 'thinking', activity: '', messages: [], takes: [], updatedAt: 0, costUsd: 0 },
       retro: { status: 'thinking', activity: '', days: 14, sessions: 0, drafts: [], watch: [], costUsd: 0 },
-      climb: { keepClimbing: true },
     };
     fs.writeFileSync(path.join(dir, 'state.json'), JSON.stringify(state));
     const store = new Store(true);
@@ -195,6 +194,5 @@ describe('loading a saved office', () => {
     expect(store.reviews.get('acme/shop#3')?.status).toBe('error');
     expect(store.closedPrs.get('acme/shop#7')?.pr).toBe(3);
     expect([store.numberOne.status, store.studio.status, store.retro.status]).toEqual(['failed', 'failed', 'failed']);
-    expect(store.climb.keepClimbing).toBe(true);
   });
 });

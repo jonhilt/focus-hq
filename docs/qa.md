@@ -32,7 +32,7 @@ Every holodeck has a QA officer in blue, sitting at a station in the control rin
   - Commits arrived after QA's verdict: back to QA first.
   - Checks fail: the failed GitHub Actions runs are re-run once (`gh run rerun --failed`). If they fail again, the PR goes back to its developer with the failing checks' names and links, like a QA fail.
   - Conflicts: **Resolve conflicts**, then QA again.
-  - A refused merge (required reviews, say) shows GitHub's reason and isn't retried for that commit. Teammates' PRs never merge by themselves, and nor do [the climber](climber.md)'s: the captain merges climbs.
+  - A refused merge (required reviews, say) shows GitHub's reason and isn't retried for that commit. Teammates' PRs never merge by themselves, and nor do [the climber](../plugins/climber/README.md)'s: the captain merges climbs.
 - **Merge when QA passes:** while QA is queued or testing a PR, its merge button becomes **Merge when QA passes** (any PR, a teammate's too, auto-merge on or off). The office remembers the request with the review and, once QA passes, merges exactly the commit QA passed (`requestedMerge` in `shared/mergeGate.ts`); if QA fails it, can't finish, or GitHub refuses, it tells you and forgets the request. Commits that arrive after the pass go back to QA first. Press the button again to take the request back. Merging a PR QA failed or hasn't tested still works, after a confirm.
 - **Following up:** message the QA officer like any agent, to have them look at something else. Once their PR has merged or closed, their session is over: a message gets "PR #n was merged; nothing to review" instead of resuming it.
 

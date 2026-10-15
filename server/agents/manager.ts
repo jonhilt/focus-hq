@@ -1,10 +1,11 @@
 import type { Layer } from 'effect';
 import type { Closer, LedgerEntry, ReportCard } from '../../shared/ledger';
-import type { Agent, Autonomy, Climb, ConflictsOutcome, Effort, FailedCheck, MessageReply, PullRequest, QaReview, QueuedGoal, ResumeHow, TermLine, WorkflowScript } from '../../shared/types';
+import type { Agent, Autonomy, ConflictsOutcome, Effort, FailedCheck, MessageReply, PullRequest, QaReview, QueuedGoal, ResumeHow, TermLine, WorkflowScript } from '../../shared/types';
 import type { Hub } from '../hub';
+import type { FocusPlugin } from '../plugins/contract';
+import type { Plugins } from '../plugins/registry';
 import type { Store } from '../store';
 import type { Transcript } from './engineer';
-import { Climbs } from './manager/climbs';
 import { CloudMoves } from './manager/cloudMoves';
 import { Comms } from './manager/comms';
 import { Conflicts } from './manager/conflicts';
@@ -13,6 +14,7 @@ import { GoalTools } from './manager/goalTools';
 import { Leads } from './manager/leads';
 import { Ledger } from './manager/ledger';
 import { PlanLimit } from './manager/planLimit';
+import { type Lent, pluginHost } from './manager/pluginHost';
 import { Reviews } from './manager/reviews';
 import { Seating } from './manager/seating';
 import { AgentSessions, backgroundOutputLines, workflowAgentLines, workflowScript } from './manager/sessions';
@@ -47,7 +49,6 @@ export class AgentManager {
     this.core.sessions = new AgentSessions(this.core);
     this.core.slices = new Slices(this.core);
     this.core.triages = new Triages(this.core);
-    this.core.climbs = new Climbs(this.core);
   }
 
   /** Reads an agent session's Claude Code transcript by its id (missing in the demo, which has none). */
@@ -245,23 +246,14 @@ export class AgentManager {
     this.core.ledger.record(projectId, entry, at);
   }
 
-  /** Main engineering's climber: the captain's switch and the climb under way (docs/climber.md). */
-  climb(): Climb {
-    return this.core.climbs.current();
+  /** Starts the plugins switched on (docs/plugins.md), lending each the manager's seating and terminals, and what the office lends. */
+  startPlugins(plugins: FocusPlugin[], lent: Lent): void {
+    this.core.plugins.start(plugins, (plugin) => pluginHost(this.core, plugin.id, lent));
   }
 
-  keepClimbing(on: boolean, home: { projectId: string; repo: string } | undefined): Climb {
-    return this.core.climbs.keepClimbing(on, home);
-  }
-
-  /** Looks at the climb under way: starts the next, or switches climbing off when the last ended without a pull request. */
-  /** Where a climb's brief reads main's scorecards and the noise floor from. */
-  climbsMeasuredBy(source: Climbs['scorecards']): void {
-    this.core.climbs.scorecards = source;
-  }
-
-  settleClimb(): void {
-    this.core.climbs.settle();
+  /** The plugins switched on: the office's way to their states, routes and hooks. */
+  get plugins(): Plugins {
+    return this.core.plugins;
   }
 
   report(): ReportCard {

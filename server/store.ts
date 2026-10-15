@@ -5,12 +5,13 @@ import { qaOfficerFor, randomAvatar } from '../shared/crew';
 import type { LedgerEntry, LedgerEvent } from '../shared/ledger';
 import { type LedgerHealth, LedgerLog } from './ledgerLog';
 import { olderVerdict, prKey } from '../shared/qa';
-import type { Agent, Board, BrowserFrame, Climb, ClosedPr, MergeMethod, NumberOneChat, Project, QaReview, Retro, Settings, StudioSession, TermLine } from '../shared/types';
-import { ACTIVE_STATUSES, DESKS_PER_ROOM, EFFORT_LEVELS, freshClimb, MERGE_METHODS, ROOM_THEMES, type RoomTheme } from '../shared/types';
+import type { Agent, Board, BrowserFrame, ClosedPr, MergeMethod, NumberOneChat, PluginStates, Project, QaReview, Retro, Settings, StudioSession, TermLine } from '../shared/types';
+import { ACTIVE_STATUSES, DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS, ROOM_THEMES, type RoomTheme } from '../shared/types';
 import { config, paths } from './config';
 import { takeLock } from './fileLock';
 import { fitDesks } from './agents/desks';
 import { upgradeLead } from './agents/lead';
+import { fromBeforePlugins, type SavedBeforePlugins } from './plugins/migrate';
 import { newId } from './util';
 
 /** Number One's chat as saved: with their session, so the next message resumes it. */
@@ -85,7 +86,8 @@ interface PersistedState {
   numberOne?: StoredNumberOne;
   studio?: StoredStudio;
   retro?: Retro;
-  climb?: Climb;
+  /** Each plugin's state, by plugin id: kept while a plugin's switched off, for when it's back. */
+  plugins?: PluginStates;
   reviews?: QaReview[];
   closedPrs?: ClosedPr[];
 }
@@ -119,8 +121,8 @@ export class Store {
   studio: StoredStudio = freshStudio();
   /** The chief engineer's latest retro. */
   retro: Retro = freshRetro();
-  /** Main engineering's climber: the captain's switch and the climb under way. */
-  climb: Climb = freshClimb();
+  /** Each plugin's own state, by plugin id (`PluginHost.state`, docs/plugins.md). */
+  plugins: PluginStates = {};
   /** The latest QA review per pull request (by prKey). */
   reviews = new Map<string, QaReview>();
   /** PRs the operations officer closed as the wrong approach, by prKey of the issue they were for. */
@@ -156,13 +158,14 @@ export class Store {
     this.ledgerHealth = opened.health;
     for (const line of [...opened.health.repaired, ...opened.health.problems, ...opened.health.notes]) console.warn(`Ledger: ${line}`);
     if (!fs.existsSync(paths.state)) return;
-    const raw = JSON.parse(fs.readFileSync(paths.state, 'utf8')) as Partial<PersistedState>;
+    const raw = JSON.parse(fs.readFileSync(paths.state, 'utf8')) as Partial<PersistedState> & SavedBeforePlugins;
+    fromBeforePlugins(raw);
     this.settings = { ...DEFAULT_SETTINGS, ...raw.settings };
     this.projects = raw.projects ?? [];
     if (raw.numberOne) this.numberOne = numberOneAfterRestart(raw.numberOne);
     if (raw.studio) this.studio = studioAfterRestart(raw.studio);
     if (raw.retro) this.retro = retroAfterRestart(raw.retro);
-    if (raw.climb) this.climb = { ...freshClimb(), ...raw.climb };
+    this.plugins = raw.plugins ?? {};
     for (const saved of raw.reviews ?? []) {
       const review = reviewAfterRestart(saved);
       this.reviews.set(prKey(review.repo, review.number), review);
@@ -200,7 +203,7 @@ export class Store {
       numberOne: this.numberOne,
       studio: this.studio,
       retro: this.retro,
-      climb: this.climb,
+      plugins: this.plugins,
       reviews: [...this.reviews.values()],
       closedPrs: [...this.closedPrs.values()],
     };

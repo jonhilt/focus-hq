@@ -3,7 +3,6 @@
 export * from './agents';
 export * from './apiKey';
 export * from './call';
-export * from './climb';
 export * from './drafts';
 export * from './events';
 export * from './flow';
@@ -11,6 +10,7 @@ export * from './frameStats';
 export * from './github';
 export * from './goals';
 export * from './numberOne';
+export * from './plugins';
 export * from './previews';
 export * from './projects';
 export * from './qa';

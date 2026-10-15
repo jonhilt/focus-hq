@@ -1,10 +1,11 @@
-// Main engineering's climber (docs/climber.md), after ratstack's hill-climb prompt: each climb measures Focus with the
+// Main engineering's climber (README.md), after ratstack's hill-climb prompt: each climb measures Focus with the
 // scorecard, takes the worst gap, fixes it, proves the fix with the same numbers, and ships one pull request. Pure: the
 // manager's Climbs part seats the climbing engineer and does the bookkeeping.
 import { frictionGroups, type LedgerEvent } from '../../shared/ledger';
 import { direction, formatValue } from '../../shared/scorecard';
-import type { Agent, AgentStatus, Climb, ClimbEnd, Project, Scorecard, ScorecardNoise } from '../../shared/types';
-import type { PastPullRequest } from '../github/provider';
+import type { Agent, AgentStatus, Project, Scorecard, ScorecardNoise } from '../../shared/types';
+import type { PastPullRequest } from '../../server/github/provider';
+import type { Climb, ClimbEnd } from './shared';
 
 const FINISHED: AgentStatus[] = ['done', 'error', 'stopped'];
 
@@ -267,11 +268,6 @@ export function climbStep(climb: Climb, climber: Pick<Agent, 'status' | 'pr' | '
   }
   if (!climb.keepClimbing) return { kind: 'idle' };
   return climber && !FINISHED.includes(climber.status) ? { kind: 'wait' } : { kind: 'start' };
-}
-
-/** `owner/repo` from a git remote's URL (`https://github.com/o/r.git`, `git@github.com:o/r.git`), or nothing for another host. */
-export function githubRepo(remoteUrl: string): string | undefined {
-  return /github\.com[:/]([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/.exec(remoteUrl.trim())?.[1];
 }
 
 /**

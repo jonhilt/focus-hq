@@ -26,7 +26,7 @@ export interface PullRequestDetail {
   linkedIssues: number[];
 }
 
-/** A pull request of any state, with its conversation: the record of past work on a line of branches (the climbs'). */
+/** A pull request of any state, with its conversation: the record of past work on a line of branches (a plugin's, like the climbs'). */
 export interface PastPullRequest {
   number: number;
   title: string;

@@ -8,7 +8,7 @@ import { keyFallback } from './agents/apiKey';
 import { BrowserPool } from './agents/browserTool';
 import { ClaudeDrafter, ClaudeEngineer, ClaudeNumberOne, ClaudeStudio, ClaudeTriager, titleGoal } from './agents/claudeCrew';
 import { StudioComputer } from './agents/studioComputer';
-import { githubRepo } from './agents/climb';
+import { githubRepo } from './github/repo';
 import { ChiefEngineer, transcriptFolders, transcriptReader } from './agents/engineer';
 import { ClaudeRunner } from './agents/claudeRunner';
 import { DemoDrafter, DemoEngineer, DemoNumberOne, DemoRunner, DemoStudio, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
@@ -32,6 +32,7 @@ import { ghCliLayer } from './github/ghCli';
 import { GitHub, toProvider } from './github/service';
 import { allowedHosts, listensBeyondLoopback, refusal } from './hostGuard';
 import { Hub } from './hub';
+import { loadPlugins } from './plugins/load';
 import { Office } from './office';
 import { demoPreviewPage, Previews } from './previews';
 import { apiRouter } from './routes';
@@ -129,9 +130,9 @@ async function main() {
   const office = new Office(store, hub, github, previews, planner, numberOne, studio, engineer, scorecards, usage, new Voice(hub, config.demo), calls, await currentVersion());
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
-  office.agents.climbsMeasuredBy(scorecardSource);
-  // the climber works on the office's own repo (the demo has none, and climbs its first project's)
+  // the office's own repo, for plugins that work on it (the demo has none)
   office.ownRepo = config.demo ? undefined : githubRepo(await run('git', ['remote', 'get-url', 'origin'], { cwd: config.root }).catch(() => ''));
+  office.startPlugins(await loadPlugins(config.plugins, config.root), scorecardSource);
   // each agent session is digested into the ledger as it ends: the demo's agents have no transcripts
   // the demo's older sessions are its scripted ones, digested without Haiku
   if (config.demo) {

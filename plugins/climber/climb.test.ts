@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { LedgerEvent } from '../../shared/ledger';
-import { freshClimb, type Agent, type Climb, type Scorecard } from '../../shared/types';
-import type { PastPullRequest } from '../github/provider';
-import { climbBrief, climbHome, climbLog, climbLogText, climbPullRequest, climbStep, climbTarget, gapScore, githubRepo, openRetroIssues, ownWords, ranked, section, shortlistOf } from './climb';
+import type { Agent, Scorecard } from '../../shared/types';
+import type { PastPullRequest } from '../../server/github/provider';
+import { freshClimb, type Climb } from './shared';
+import { climbBrief, climbHome, climbLog, climbLogText, climbPullRequest, climbStep, climbTarget, gapScore, openRetroIssues, ownWords, ranked, section, shortlistOf } from './climb';
 
 const REPO = 'jonhilt/focus';
 let seq = 0;
@@ -205,15 +206,6 @@ describe('the brief’s memory', () => {
     expect(climbBrief(agent, [], 2000, [], noise)).toContain('noise floor of 5 runs on abcdef12, and marks a change ▲ or ▼ only past it. Claim a gain only where it does. What wobbled: gate.seconds ±9.1.');
     expect(climbBrief(agent, [], 2000)).toContain('`pnpm run scorecard --repeat 3 --no-save`');
     expect(climbBrief(agent, [], 2000)).toContain('This is your first climb.');
-  });
-});
-
-describe('githubRepo', () => {
-  it('reads owner/repo from either form of a GitHub remote, and nothing from another host', () => {
-    expect(githubRepo('https://github.com/jonhilt/focus.git\n')).toBe(REPO);
-    expect(githubRepo('git@github.com:jonhilt/focus.git')).toBe(REPO);
-    expect(githubRepo('https://github.com/jonhilt/focus')).toBe(REPO);
-    expect(githubRepo('https://gitlab.com/jonhilt/focus.git')).toBeUndefined();
   });
 });
 

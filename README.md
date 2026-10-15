@@ -91,7 +91,8 @@ Then on board:
 - [Where goals' time goes](docs/flow.md): lead time, the states it splits into, the biggest wait, and the quality guards
 - [QA's catch rate](docs/qa-catch.md): bugs planted in merged pull requests, and how many QA catches
 - [The chief engineer's retro](docs/retro.md): a look back over the agents' sessions, with proposals for how the office works
-- [The climber](docs/climber.md): main engineering's crew member who fixes the scorecard's worst gap, one pull request at a time
+- [Plugins](docs/plugins.md): what the office does beyond its core, switched on by name with `FOCUS_PLUGINS`
+- [The climber](plugins/climber/README.md): a plugin; main engineering's crew member who fixes the scorecard's worst gap, one pull request at a time
 - [Auto update](docs/auto-update.md): keeping the office on the latest code
 
 **Working on Focus**

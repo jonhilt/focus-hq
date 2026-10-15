@@ -3,7 +3,7 @@ import { hiredName, randomAvatar } from '../../../shared/crew';
 import { type Closer } from '../../../shared/ledger';
 import { prKey } from '../../../shared/qa';
 import type { Agent, Effort, Planner } from '../../../shared/types';
-import { ACTIVE_STATUSES, CLIMB_DESK } from '../../../shared/types';
+import { ACTIVE_STATUSES, AWAY_DESK } from '../../../shared/types';
 import { newId, slugify } from '../../util';
 import { leadWorktreeId, snapshotMessage } from '../lead';
 import { offTheFloor, pickDesk } from '../desks';
@@ -45,7 +45,7 @@ export class Seating extends Part {
   /** An agent of the office opened the PR (QA's review remembers it after they've gone home). */
   openedByOffice(repo: string, number: number): boolean {
     return !!this.store.reviews.get(prKey(repo, number))?.openedByOffice
-      || [...this.store.agents.values()].some((a) => (a.task === 'issue' || a.task === 'climb') && a.repo === repo && a.pr?.number === number);
+      || [...this.store.agents.values()].some((a) => (a.task === 'issue' || a.task === 'brief') && a.repo === repo && a.pr?.number === number);
   }
 
   /** Someone in the office is working on the PR right now, or queued to. */
@@ -54,18 +54,19 @@ export class Seating extends Part {
     return !!owner && !FINISHED.includes(owner.status);
   }
 
-  /** `crew` is who sits down when it's always the same person (the climbing engineer); otherwise someone new is hired. */
-  seat(projectId: string, repo: string, work: Pick<Agent, 'id' | 'task' | 'issue' | 'branch' | 'baseBranch' | 'pr' | 'effort' | 'model' | 'cloud'>, crew?: Planner): Agent {
+  /** `crew` is who sits down when it's always the same person (a plugin's, on its brief); otherwise someone new is hired. */
+  seat(projectId: string, repo: string, work: Pick<Agent, 'id' | 'task' | 'brief' | 'issue' | 'branch' | 'baseBranch' | 'pr' | 'effort' | 'model' | 'cloud'>, crew?: Planner): Agent {
     const project = this.store.project(projectId);
     if (!project.repos.includes(repo)) throw new Refused({ message: `${repo} is not connected to ${project.name}` });
-    // QA reviewing the PR, or a goal's lead, isn't working on it the way a developer would
-    const existing = [...this.store.agents.values()].find(
-      (a) => a.task !== 'review' && a.task !== 'lead' && a.repo === repo && a.issue.number === work.issue.number && !FINISHED.includes(a.status),
-    );
-    if (existing) throw new Refused({ message: `${existing.name} is already working on #${work.issue.number}` });
+    // QA reviewing the PR, or a goal's lead, isn't working on it the way a developer would; a brief has no issue to share
+    const sameWork = (a: Agent) => work.task === 'brief'
+      ? a.id === work.id
+      : a.task !== 'review' && a.task !== 'lead' && a.task !== 'brief' && a.repo === repo && a.issue.number === work.issue.number;
+    const existing = [...this.store.agents.values()].find((a) => sameWork(a) && !FINISHED.includes(a.status));
+    if (existing) throw new Refused({ message: work.task === 'brief' ? `${existing.name} is still at work` : `${existing.name} is already working on #${work.issue.number}` });
 
-    // the climber stands in main engineering, not at one of the room's desks
-    const desk = work.task === 'climb' ? CLIMB_DESK : this.freeDesk(projectId);
+    // some briefs are worked away from the room's desks (main engineering's climber)
+    const desk = this.core.plugins.brief(work.brief)?.away ? AWAY_DESK : this.freeDesk(projectId);
     const avatar = crew?.avatar ?? randomAvatar();
     const name = crew?.name ?? hiredName(projectId, avatar.rank, [...this.store.agents.values()].map((a) => a.name), Math.random());
     const agent: Agent = {
@@ -82,7 +83,7 @@ export class Seating extends Part {
     };
     this.store.putAgent(agent);
     this.hub.send({ type: 'agent', agent });
-    this.print(agent, [{ kind: 'system', text: `${work.task === 'climb' ? `──────── ✻ ${name} starts a climb on ${repo}` : `✻ ${name} joined ${project.name} to work on ${repo}#${work.issue.number}`} (${work.model ? `${work.model}, ` : ''}${work.effort ?? 'default'} effort${work.cloud ? ', in the cloud' : ''})` }]);
+    this.print(agent, [{ kind: 'system', text: `${work.brief ? `──────── ✻ ${name} starts on ${repo}: ${work.brief.icon} ${work.brief.label}` : `✻ ${name} joined ${project.name} to work on ${repo}#${work.issue.number}`} (${work.model ? `${work.model}, ` : ''}${work.effort ?? 'default'} effort${work.cloud ? ', in the cloud' : ''})` }]);
     this.schedule();
     return agent;
   }
@@ -151,7 +152,7 @@ export class Seating extends Part {
     this.core.ledger.recordLanding(repo, number, merged, by, headSha);
     this.core.reviews.reviewGone(repo, number, merged);
     if (this.core.leads.leadPrClosed(repo, number, merged)) return;
-    this.core.climbs.prClosed(repo, number, merged);
+    this.core.plugins.prClosed(repo, number, merged);
     const agent = this.prOwner(repo, number);
     if (!agent || this.leaving.has(agent.id)) return;
     this.leaving.add(agent.id);

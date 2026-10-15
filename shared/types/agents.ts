@@ -1,6 +1,7 @@
 // Agents: who they are, what they're doing, and where they sit.
 
 import type { LeadWork } from './goals';
+import type { Brief } from './plugins';
 import type { Autonomy } from './projects';
 
 export type AgentStatus =
@@ -67,10 +68,10 @@ export type Effort = (typeof EFFORT_LEVELS)[number];
 /**
  * What an agent was seated for: an issue to resolve, an open pull request whose branch conflicts with its base, an open
  * pull request that failed QA, (the room's QA officer) a pull request to review and test, (a goal's lead) the
- * captain's own Claude Code session for one goal, across all the project's repos, or (main engineering's climber) the
- * scorecard's worst gap in Focus's own repo, one pull request at a time (docs/climber.md).
+ * captain's own Claude Code session for one goal, across all the project's repos, or a plugin's brief in place of an
+ * issue (`Agent.brief`, docs/plugins.md), which opens a pull request like an issue's.
  */
-export type AgentTask = 'issue' | 'conflicts' | 'fix' | 'review' | 'lead' | 'climb';
+export type AgentTask = 'issue' | 'conflicts' | 'fix' | 'review' | 'lead' | 'brief';
 
 /**
  * What the office did about a pull request's merge conflicts: merged its base branch in by itself (`auto`: the conflicted
@@ -84,8 +85,8 @@ export const QA_DESK = -1;
 /** Nor does a goal's lead, who sits at one of the room's team stations (`LeadWork.station`). */
 export const LEAD_DESK = -2;
 
-/** Nor does main engineering's climber, who stands behind the master systems table on deck 5. */
-export const CLIMB_DESK = -3;
+/** Nor does an agent on a plugin's brief that works away from the room (main engineering's climber). */
+export const AWAY_DESK = -3;
 
 /** How many goals a room can work on at once: each has its own team station, and a lead at it. */
 export const TEAM_STATIONS = 4;
@@ -260,6 +261,8 @@ export interface Agent {
   projectId: string;
   repo: string;
   task: AgentTask;
+  /** Whose brief it is, and its label ('brief' task only). */
+  brief?: Brief;
   /** A goal's lead's station, repos and pull requests ('lead' task only). */
   lead?: LeadWork;
   /** The subagents the lead has working for it right now, and any that just finished ('lead' task only). */

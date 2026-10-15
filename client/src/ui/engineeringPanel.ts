@@ -4,10 +4,10 @@ import { formatValue, glance } from '../../../shared/scorecard';
 import type { FixKind, Retro, RetroDraft, ScorecardSection } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
+import { clientPlugins } from '../plugins';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { busy, fill, h, timeAgo } from './dom';
-import { climberView } from './climberView';
 import { type NavItem, readout, shownView, SideNav } from './panels';
 import { scorecardHead, scorecardOverview, scorecardSections } from './scorecardView';
 import { markdownHtml } from './terminal';
@@ -21,7 +21,7 @@ type View = 'overview' | 'code' | 'office' | 'retro';
 const VIEW_OF: Record<ScorecardSection, View> = { gate: 'code', fence: 'code', effect: 'code', tests: 'code', office: 'office' };
 
 /**
- * The engineering station, a view at a time: your plan's usage and the scorecard at a glance (with the climber and the retro beside it), the
+ * The engineering station, a view at a time: your plan's usage and the scorecard at a glance (with the plugins' cards, like the climber's, and the retro beside it), the
  * code's numbers and the office's in full, each explaining itself, and the chief engineer's retro. On the captain's
  * word they look over the session digests' frictions that keep coming back and draft an issue for each. They change
  * nothing: the captain accepts a draft (it's filed in the repository picked beside it) or rejects it.
@@ -109,7 +109,7 @@ export function openEngineeringPanel(ui: Ui): void {
     const ledger = h('button', { class: 'btn small' }, 'Review the ledger →');
     ledger.onclick = () => ui.openLedger();
     const views: Record<View, () => HTMLElement[]> = {
-      overview: () => [usageView(ui), scorecardOverview(ui, go, h('div', { class: 'sc-better' }, climberView(ui), retroSummary(ui, retro, () => {
+      overview: () => [usageView(ui), scorecardOverview(ui, go, h('div', { class: 'sc-better' }, ...clientPlugins().map((plugin) => plugin.engineering?.(ui) ?? null), retroSummary(ui, retro, () => {
         picked = 'retro';
         render();
       })))],
@@ -125,10 +125,10 @@ export function openEngineeringPanel(ui: Ui): void {
   ui.panels.own(state.on('report', render));
   ui.panels.own(state.on('scorecards', render));
   ui.panels.own(state.on('usage', render));
-  ui.panels.own(state.on('climb', render));
-  // the climber's activity, as they work
+  ui.panels.own(state.on('plugin', render));
+  // what agents on a plugin's brief are doing, as they work (the climber's card)
   ui.panels.own(state.on('agent', (a) => {
-    if (a.id === state.climb?.agentId) render();
+    if (a.brief) render();
   }));
   render();
 }

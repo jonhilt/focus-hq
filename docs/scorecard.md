@@ -27,7 +27,7 @@ It takes about a minute and a quarter. It always exits 0: it measures, it doesn'
 
 ## In main engineering
 
-The [climber](climber.md) works from it: each climb measures the scorecard before and after its one change.
+The [climber](../plugins/climber/README.md) plugin works from it: each climb measures the scorecard before and after its one change.
 
 
 The engineering panel (<kbd>E</kbd> at Lt. Brennan's station on deck 5) has four views down its side:

@@ -1,8 +1,8 @@
-// The pure half of `pnpm run climb:replay` (docs/climber.md#replay): an experiment on the climber's memory. Fresh
+// The pure half of `pnpm run climb:replay` (README.md#replay): an experiment on the climber's memory. Fresh
 // sessions write the brief's scored shortlist twice over: the control with the log as it is, the treatment with one
 // more climb in it, closed by the captain: the very gap the control took first, turned down. It counts only if that gap
 // is a real contender (the control's other sessions list it too); then the memory works if the treatment never takes it.
-import { gapScore, ranked, type ClimbRecord, type ShortlistEntry } from '../server/agents/climb';
+import { gapScore, ranked, type ClimbRecord, type ShortlistEntry } from '../climb';
 
 /** What a session would climb, as it answers the replay: its scored shortlist, the one it takes, its target and hypothesis. */
 export interface ClimbPick {

@@ -1,7 +1,7 @@
 import { isHidden, shownProjects } from '../../../shared/hidden';
 import type { ReportCard } from '../../../shared/ledger';
 import { prKey } from '../../../shared/qa';
-import type { Agent, Board, BrowserFrame, CallStatus, Climb, IssueDraft, NumberOneChat, Preview, Project, QaReview, Retro, Scorecards, ServerEvent, ServerInfo, StudioSession, TermLine, Usage, VoiceStatus } from '../../../shared/types';
+import type { Agent, Board, BrowserFrame, CallStatus, IssueDraft, NumberOneChat, PluginStates, Preview, Project, QaReview, Retro, Scorecards, ServerEvent, ServerInfo, StudioSession, TermLine, Usage, VoiceStatus } from '../../../shared/types';
 
 type Events = {
   snapshot: void;
@@ -29,8 +29,8 @@ type Events = {
   scorecards: void;
   /** Your plan's usage was read again, or how the office signs in changed. */
   usage: void;
-  /** Main engineering's climber: the captain's switch, or the climb under way, changed. */
-  climb: void;
+  /** A plugin's state changed (its id). */
+  plugin: string;
   /** A QA review changed or went away (its project id). */
   review: string;
   voice: void;
@@ -62,7 +62,8 @@ export class OfficeState {
   retro: Retro | null = null;
   scorecards: Scorecards | null = null;
   usage: Usage | null = null;
-  climb: Climb | null = null;
+  /** Each plugin's state, by plugin id: only the plugins switched on (`info.plugins`). */
+  plugins: PluginStates = {};
   /** The latest QA review per pull request (by prKey). */
   reviews = new Map<string, QaReview>();
   /** Whether dictation can run on the server, and the speech model's download. */
@@ -132,14 +133,14 @@ export class OfficeState {
         this.retro = s.retro;
         this.scorecards = s.scorecards;
         this.usage = s.usage;
-        this.climb = s.climb;
+        this.plugins = s.plugins ?? {};
         this.voice = s.voice;
         this.call = s.call;
         this.emit('snapshot', undefined);
         this.emit('report', undefined);
         this.emit('scorecards', undefined);
         this.emit('usage', undefined);
-        this.emit('climb', undefined);
+        for (const id of Object.keys(this.plugins)) this.emit('plugin', id);
         this.emit('voice', undefined);
         this.emit('call', undefined);
         this.emit('number-one', undefined);
@@ -235,9 +236,9 @@ export class OfficeState {
         this.usage = event.usage;
         this.emit('usage', undefined);
         break;
-      case 'climb':
-        this.climb = event.climb;
-        this.emit('climb', undefined);
+      case 'plugin':
+        this.plugins = { ...this.plugins, [event.id]: event.state };
+        this.emit('plugin', event.id);
         break;
       case 'number-one':
         this.numberOne = event.chat;

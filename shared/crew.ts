@@ -105,7 +105,7 @@ export function qaFor(projectId: string, goalId: string, others: string[] = []):
 }
 
 /**
- * The name of an agent hired to work at one of the room's desks (or the climber): their rank's title and a surname
+ * The name of an agent hired to work at one of the room's desks: their rank's title and a surname
  * nobody in the room's posts or `taken` (the names of everyone in the office) has, `roll` (in [0, 1), like
  * Math.random) choosing among those free. With every surname taken, they're numbered, so the name is still their own.
  */
@@ -146,13 +146,9 @@ export function chiefEngineer(): Planner {
   return { name: `${RANK_TITLE.lieutenant} Brennan`, avatar };
 }
 
-/**
- * Main engineering's climbing engineer (docs/climber.md): one for the whole ship, the same person every climb, whose
- * job is moving the office's own repo up its scorecard. Operations, like the chief engineer, but they write the code.
- */
-export function climbingEngineer(): Planner {
-  const avatar = rollAvatar(seeded(hash('climber')), 'operations', 'lieutenant');
-  return { name: `${RANK_TITLE.lieutenant} Rhee`, avatar };
+/** Someone who's always the same person, at a post of their own (a plugin's crew): their look is rolled from `key`. */
+export function fixedCrew(key: string, division: Division, rank: Rank, surname: string): Planner {
+  return { name: `${RANK_TITLE[rank]} ${surname}`, avatar: rollAvatar(seeded(hash(key)), division, rank) };
 }
 
 /**

@@ -24,9 +24,9 @@ export const agentHref = (id: string) => `#agent/${encodeURIComponent(id)}`;
 export const prCardId = (projectId: string, pr: Pick<PullRequest, 'repo' | 'number'>) => `pr:${projectId}:${prKey(pr.repo, pr.number)}`;
 export const projectKey = (projectId: string) => `project:${projectId}`;
 
-/** What the agent is on: a goal, an issue, or a pull request for conflicts, fixes and QA. */
+/** What the agent is on: a goal, a plugin's brief, an issue, or a pull request for conflicts, fixes and QA. */
 export const workLabel = (a: Agent) =>
-  a.task === 'lead' ? `🎯 ${a.lead?.title ?? a.issue.title}` : a.task === 'climb' ? `🧗 ${a.issue.title}` : `${a.task === 'issue' ? '#' : 'PR #'}${a.issue.number} ${a.issue.title}`;
+  a.task === 'lead' ? `🎯 ${a.lead?.title ?? a.issue.title}` : a.brief ? `${a.brief.icon} ${a.issue.title}` : `${a.task === 'issue' ? '#' : 'PR #'}${a.issue.number} ${a.issue.title}`;
 
 const FINISHED = ['done', 'error', 'stopped'];
 

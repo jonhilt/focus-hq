@@ -104,6 +104,8 @@ export interface RunRequest {
    * session's id, and `systemAppend` goes into the first message.
    */
   cloud?: { branch: string };
+  /** What the demo office's scripted stand-in writes up, for a plugin's brief (`BriefSpec.demo`): a real session ignores it. */
+  scripted?: { title: string; summary: string };
 }
 
 /** A tool's answer with pictures for Claude to look at: JPEGs, after the words. */
