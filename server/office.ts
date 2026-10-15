@@ -356,6 +356,8 @@ export class Office {
   startPlugins(plugins: FocusPlugin[], scorecards: ScorecardSource): void {
     this.agents.startPlugins(plugins, { demo: config.demo, ownRepo: () => this.ownRepo, scorecards });
     this.info.plugins = this.agents.plugins.ids();
+    // its saved state is kept, but nothing of it runs: no briefs, hooks, or pull requests kept for the captain
+    for (const id of this.agents.plugins.dormant()) console.warn(`Plugin ${id} has saved state but isn't switched on: add it to FOCUS_PLUGINS to bring it back`);
   }
 
   /** Merges the PRs the captain asked to merge once QA passed them, at exactly the commit QA passed. */

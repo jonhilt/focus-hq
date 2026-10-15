@@ -31,6 +31,11 @@ export class Plugins {
     return Object.fromEntries(this.ids().flatMap((id) => (id in saved ? [[id, saved[id]]] : [])));
   }
 
+  /** The plugins with state saved from before that aren't switched on now (probably missing from FOCUS_PLUGINS). */
+  dormant(): string[] {
+    return Object.keys(this.saved()).filter((id) => !this.parts.has(id));
+  }
+
   /** What an agent's brief is, while its plugin is on. */
   brief(brief: Pick<Brief, 'plugin' | 'kind'> | undefined): BriefSpec | undefined {
     return brief && this.parts.get(brief.plugin)?.briefs?.[brief.kind];

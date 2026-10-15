@@ -37,6 +37,8 @@ describe('Plugins', () => {
     const plugins = started({ auditor: { audits: 2 }, climber: { cycles: 4 } }, plugin('auditor', {}), plugin('quiet', {}));
     expect(plugins.ids()).toEqual(['auditor', 'quiet']);
     expect(plugins.states()).toEqual({ auditor: { audits: 2 } });
+    // the climber's state waits for it to be switched on again
+    expect(plugins.dormant()).toEqual(['climber']);
   });
 
   it('tells only the agent’s own plugin that their pull request opened, and every plugin that one closed', () => {

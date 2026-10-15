@@ -15,7 +15,7 @@ FOCUS_PLUGINS=climber pnpm start
 
 A plugin that can't be found, or doesn't load, is left out with a line in the office's log saying why. A typo never keeps the office from starting. `info.plugins` in the snapshot lists the plugins that did start.
 
-A plugin's saved state stays in `state.json` while it's switched off, so switching it back on picks up where it was.
+A plugin's saved state stays in `state.json` while it's switched off, so switching it back on picks up where it was. Nothing of it runs meanwhile, not even its hold on pull requests only the captain merges, so the office warns as it starts when there's saved state for a plugin that isn't switched on.
 
 ## Plugins today
 
