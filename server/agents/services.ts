@@ -44,6 +44,8 @@ export class Workspace extends Context.Service<Workspace, {
   commitsAhead(dir: string, baseBranch: string): Effect.Effect<number, GitFailed>;
   head(dir: string): Effect.Effect<string, GitFailed>;
   unshippedCommits(dir: string, baseBranch: string, shipped?: string): Effect.Effect<string[], GitFailed>;
+  /** The files a review's checkout changes against its base; none when git can't say (QA's report then isn't checked against them). */
+  changedFiles(dir: string, baseBranch: string): Effect.Effect<string[]>;
   freshBranch(dir: string, branch: string, baseBranch: string): Effect.Effect<void, GitFailed>;
   cherryPick(dir: string, commits: string[]): Effect.Effect<void, GitFailed>;
   push(dir: string, branch: string): Effect.Effect<void, GitFailed>;
@@ -72,6 +74,7 @@ export class Workspace extends Context.Service<Workspace, {
       commitsAhead: (dir, baseBranch) => git('count new commits', () => ops.commitsAhead(dir, baseBranch)),
       head: (dir) => git('read the checked-out commit', () => ops.head(dir)),
       unshippedCommits: (dir, baseBranch, shipped) => git('look for unshipped commits', () => ops.unshippedCommits(dir, baseBranch, shipped)),
+      changedFiles: (dir, baseBranch) => git('list the changed files', () => ops.changedFiles?.(dir, baseBranch) ?? Promise.resolve([])).pipe(Effect.orElseSucceed((): string[] => [])),
       freshBranch: (dir, branch, baseBranch) => git(`start ${branch} from ${baseBranch}`, () => ops.freshBranch(dir, branch, baseBranch)),
       cherryPick: (dir, commits) => git('bring commits over', () => ops.cherryPick(dir, commits)),
       push: (dir, branch) => git(`push ${branch}`, () => ops.push(dir, branch)),

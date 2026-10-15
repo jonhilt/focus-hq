@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { QaReport } from '../../shared/types';
 import type { PullRequestDetail } from '../github/provider';
-import { diffAnchor, evidencePath, fixPrompt, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, qaSystemAppend, siblingsSection } from './qa';
+import { diffAnchor, evidencePath, filesPrompt, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPrompt, qaSystemAppend, siblingsSection, unaccounted } from './qa';
 
 const report = (r: Partial<QaReport> = {}): QaReport => ({
   verdict: 'pass',
@@ -300,5 +300,29 @@ describe('siblingsSection', () => {
     expect(text).toContain('- `../web`: acme/web#40, head abcdef1, detached');
     expect(text).toContain("- acme/docs#3: couldn't be checked out (no such ref)");
     expect(text).toContain('Your verdict is on this PR only');
+  });
+});
+
+describe('every changed file, accounted for', () => {
+  it('asks for the files in the report, and names them in the prompt', () => {
+    expect((QA_SCHEMA as { required: string[] }).required).toContain('files');
+    const prompt = qaPrompt('acme/shop', pr, [], {}, ['src/cart.ts', 'scripts/sync.ts']);
+    expect(prompt).toContain("The files it changes (2): your report's files accounts for every one.\n- src/cart.ts\n- scripts/sync.ts");
+    expect(qaPrompt('acme/shop', pr, [])).not.toContain('The files it changes');
+    const many = Array.from({ length: 205 }, (_, i) => `f${i}.ts`);
+    expect(qaPrompt('acme/shop', pr, [], {}, many)).toContain('- …and 5 more (`git diff --name-only` lists them)');
+  });
+
+  it('reads the report’s files, and finds the changed ones it leaves out', () => {
+    const parsed = parseQaReport({ verdict: 'pass', summary: '', checks: [], commands: [], files: [{ file: './src/cart.ts', tests: 'cart.test.ts', checked: 'read' }, { tests: 'none' }] });
+    expect(parsed?.files).toEqual([{ file: './src/cart.ts', tests: 'cart.test.ts', checked: 'read' }]);
+    expect(parsed && unaccounted(parsed, ['src/cart.ts', 'scripts/sync.ts', 'web/src/cart.ts'])).toEqual(['scripts/sync.ts']);
+    expect(parseQaReport({ verdict: 'pass', summary: '', checks: [], commands: [] })?.files).toBeUndefined();
+  });
+
+  it('sends QA back to the files it left out, to report again in full', () => {
+    const text = filesPrompt(['scripts/sync.ts', 'schema.json']);
+    expect(text).toMatch(/^Your report leaves out 2 of the files this pull request changes:\n- scripts\/sync\.ts\n- schema\.json\n/);
+    expect(text).toContain('give your whole report again, every file in it');
   });
 });

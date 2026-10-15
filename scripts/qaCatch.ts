@@ -20,7 +20,7 @@ import { promisify } from 'node:util';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { paths } from '../server/config';
 import { claudeConfig } from '../server/agents/claudeRunner';
-import { parseQaReport, QA_SCHEMA, qaAgentModel, qaPrompt, qaSystemAppend } from '../server/agents/qa';
+import { filesPrompt, parseQaReport, QA_SCHEMA, qaAgentModel, qaPrompt, qaSystemAppend, unaccounted } from '../server/agents/qa';
 import { addedLines, type CatchResult, type CatchRun, catchLines, controlLine, type ControlResult, plant, type Planted, scoreControl, scoreReport } from '../server/agents/qaCatch';
 import type { PullRequestDetail } from '../server/github/provider';
 import { checkLedger, closedGoals } from '../shared/ledger';
@@ -106,22 +106,25 @@ async function prepare(repo: string, number: number, root: string): Promise<{ di
   return { dir, pr, planted, clean };
 }
 
-/** The QA officer's review of a clone, as the office runs one: its report (null if it gave none), cost and minutes. */
+/** The QA officer's review of a clone, as the office runs one: a report that leaves changed files out goes back once, naming them. */
 async function review(repo: string, dir: string, pr: PullRequestDetail): Promise<{ report: QaReport | null; costUsd?: number; minutes: number; error?: string }> {
   const project = state.projects.find((p) => p.repos.includes(repo)) ?? { name: repo };
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), REVIEW_MS);
   const started = Date.now();
   const minutes = () => Math.round((Date.now() - started) / 60_000);
-  try {
+  const changed = (await run('git', ['-C', dir, 'diff', '--name-only', `origin/${pr.baseBranch}...HEAD`], BIG)).stdout.split('\n').filter(Boolean);
+  let costUsd = 0;
+  let sessionId: string | undefined;
+  const turn = async (prompt: string) => {
     let structured: unknown;
     let text = '';
-    let costUsd: number | undefined;
     for await (const msg of query({
-      prompt: qaPrompt(repo, pr, []),
+      prompt,
       options: {
         cwd: dir,
         abortController: abort,
+        resume: sessionId,
         model: qaAgentModel(state.settings),
         ...claudeConfig(state.settings.userClaudeMd, process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude')),
         systemPrompt: { type: 'preset', preset: 'claude_code', append: qaSystemAppend({ name: 'Lt. Replay' }, project, pr, pr.headSha) },
@@ -132,16 +135,26 @@ async function review(repo: string, dir: string, pr: PullRequestDetail): Promise
         allowDangerouslySkipPermissions: true,
       },
     })) {
+      sessionId = msg.session_id;
       if (msg.type !== 'result') continue;
-      costUsd = msg.total_cost_usd;
+      costUsd += msg.total_cost_usd;
       if (msg.subtype === 'success') {
         structured = msg.structured_output;
         text = msg.result;
       }
     }
-    return { report: parseQaReport(structured, text), costUsd, minutes: minutes() };
+    return parseQaReport(structured, text);
+  };
+  try {
+    let report = await turn(qaPrompt(repo, pr, [], {}, changed));
+    const missing = report ? unaccounted(report, changed) : [];
+    if (report && missing.length) {
+      console.log(`  ${repo}#${pr.number}: the report left out ${missing.length} of ${changed.length} changed files: sent back once`);
+      report = (await turn(filesPrompt(missing))) ?? report;
+    }
+    return { report, costUsd, minutes: minutes() };
   } catch (err) {
-    return { report: null, minutes: minutes(), error: (err as Error).message.split('\n')[0] };
+    return { report: null, costUsd, minutes: minutes(), error: (err as Error).message.split('\n')[0] };
   } finally {
     clearTimeout(timer);
   }

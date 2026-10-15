@@ -27,7 +27,7 @@ export const SPOT_CHECKS = 3;
 export const QA_SCHEMA: Record<string, unknown> = {
   type: 'object',
   additionalProperties: false,
-  required: ['verdict', 'summary', 'checks', 'commands'],
+  required: ['verdict', 'summary', 'checks', 'commands', 'files'],
   properties: {
     verdict: { type: 'string', enum: ['pass', 'fail'], description: 'pass only if the change works and meets the acceptance criteria' },
     summary: { type: 'string', description: 'Two to four sentences for the pull request comment.' },
@@ -60,6 +60,20 @@ export const QA_SCHEMA: Record<string, unknown> = {
       type: 'array',
       description: 'One short caption per mcp__browser__screenshot call you made, in the order you took them. Empty if you took none.',
       items: { type: 'string' },
+    },
+    files: {
+      type: 'array',
+      description: 'Every file the pull request changes, each accounted for: none left out, however many there are.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['file', 'tests', 'checked'],
+        properties: {
+          file: { type: 'string', description: 'The file\'s path in the repo, as the diff names it.' },
+          tests: { type: 'string', description: 'The tests that exercise its changes, or "none".' },
+          checked: { type: 'string', description: 'What you did with it: read every changed line (and what you found), ran it, or why it needed no reading (generated, a lock file).' },
+        },
+      },
     },
     spotChecks: {
       type: 'array',
@@ -102,6 +116,9 @@ export function parseQaReport(structured: unknown, text = ''): QaReport | null {
   if (r.verdict !== 'pass' && r.verdict !== 'fail') return null;
   const list = (v: unknown) => (Array.isArray(v) ? (v as Record<string, unknown>[]).filter((x) => x && typeof x === 'object') : []);
   const fix = typeof r.fixInstructions === 'string' && r.fixInstructions.trim() ? r.fixInstructions.trim() : undefined;
+  const files = list(r.files)
+    .map((f) => ({ file: String(f.file ?? '').trim(), tests: String(f.tests ?? '').trim(), checked: String(f.checked ?? '').trim() }))
+    .filter((f) => f.file);
   const spotChecks = list(r.spotChecks)
     .map((c) => ({ file: String(c.file ?? '').trim(), line: Number.isInteger(c.line) && Number(c.line) > 0 ? Number(c.line) : undefined, why: String(c.why ?? '').trim() }))
     .filter((c) => c.file && c.why)
@@ -119,7 +136,29 @@ export function parseQaReport(structured: unknown, text = ''): QaReport | null {
     fixInstructions: r.verdict === 'fail' ? fix : undefined,
     captions: Array.isArray(r.screenshots) ? r.screenshots.map((c) => String(c ?? '').trim()) : [],
     ...(spotChecks.length && { spotChecks }),
+    ...(files.length && { files }),
   };
+}
+
+/** How many changed files QA's prompt names, at most: a pull request bigger than that is named in part. */
+export const NAMED_FILES = 200;
+
+/** The files a pull request changes that QA's report doesn't account for. */
+export function unaccounted(report: QaReport, changed: string[]): string[] {
+  const named = (report.files ?? []).map((f) => f.file.replace(/^\.?\//, ''));
+  return changed.filter((c) => !named.some((n) => n === c || c.endsWith(`/${n}`) || n.endsWith(`/${c}`)));
+}
+
+/** What QA hears when its report leaves files out: go back to them, then report again in full. Asked once a review. */
+export function filesPrompt(missing: string[]): string {
+  const shown = missing.slice(0, NAMED_FILES);
+  return [
+    `Your report leaves out ${missing.length} of the files this pull request changes:`,
+    ...shown.map((f) => `- ${f}`),
+    ...(missing.length > shown.length ? [`- …and ${missing.length - shown.length} more (\`git diff --name-only\` lists them)`] : []),
+    '',
+    "Review each the same way: what tests exercise its changes, and for one no test does, read every changed line asking what would make it wrong. Then give your whole report again, every file in it, with the verdict it now deserves.",
+  ].join('\n');
 }
 
 /**
@@ -213,7 +252,7 @@ How to test:
 1. Read the PR description and the linked issue, and work out the acceptance criteria. Check every one.
 2. Review the code as a careful reviewer would: \`git diff origin/${pr.baseBranch}...HEAD\`. Look for bugs, unhandled errors and edge cases, security problems, leftover debug code, new logic without tests, and new tests that run code without checking what it does (they raise coverage but catch nothing).
 3. Install dependencies if needed, then run the project's test suite, linters, type checks and build (whichever exist).
-4. Then go through every file the diff changes (\`git diff --stat origin/${pr.baseBranch}...HEAD\` lists them all: however many there are, don't pick a few), and find those whose changes no test exercises. Scripts, schemas, prompts and config often aren't tested, and a coverage report may not reach them. Read each of those files' changed lines one by one: a green suite says nothing about them, and they're where bugs get through. For each line, ask what input or state makes it wrong: a comparison off by one, a condition or guard the wrong way round, an argument or index read from the wrong place, a flag, default or schema setting flipped. A real bug there fails the PR like any other: name its file and line.
+4. Then go through every file the diff changes (\`git diff --stat origin/${pr.baseBranch}...HEAD\` lists them all: however many there are, don't pick a few), and find those whose changes no test exercises. Scripts, schemas, prompts and config often aren't tested, and a coverage report may not reach them. Read each of those files' changed lines one by one: a green suite says nothing about them, and they're where bugs get through. For each line, ask what input or state makes it wrong: a comparison off by one, a condition or guard the wrong way round, an argument or index read from the wrong place, a flag, default or schema setting flipped. A real bug there fails the PR like any other: name its file and line. Your report's files lists every changed file, none left out: the tests that exercise it (or none) and what you checked.
 5. If the change touches a web UI, start its dev server in the background and exercise the change with the mcp__browser__ tools: click through it, try the edge cases, and check the console for errors. Stop the server afterwards.
    Call mcp__browser__screenshot on each state that shows the change working or failing: the last ${MAX_SCREENSHOTS} go on the pull request with your report, each with the caption you give it.
 6. You may write throwaway scripts to probe behaviour, but don't commit them. ${SCRATCH_RULE} ${WAIT_RULE}
@@ -226,7 +265,11 @@ Spot-checks: the captain rarely reads a whole diff, but likes to look at the ris
 `.trim();
 }
 
-export function qaPrompt(repo: string, pr: PullRequestDetail, issues: IssueDetail[], round: Pick<QaReview, 'lastRound' | 'retryNote'> = {}): string {
+/**
+ * The message that starts a review: the pull request, its linked issues, and the files it changes (`changed`, from the
+ * checkout's diff), each of which QA's report accounts for; on a re-test, the last round's findings.
+ */
+export function qaPrompt(repo: string, pr: PullRequestDetail, issues: IssueDetail[], round: Pick<QaReview, 'lastRound' | 'retryNote'> = {}, changed: string[] = []): string {
   const { lastRound, retryNote } = round;
   const parts = [
     `Please QA pull request #${pr.number} in ${repo}: ${pr.title}`,
@@ -240,6 +283,11 @@ export function qaPrompt(repo: string, pr: PullRequestDetail, issues: IssueDetai
     parts.push('', `Linked issue #${issue.number}: ${issue.title}`, truncate(issue.body.trim() || '(no description)', 12_000));
   }
   if (!issues.length) parts.push('', 'No linked issue: work out what the PR is meant to do from its title, description and commits.');
+  if (changed.length) {
+    const shown = changed.slice(0, NAMED_FILES);
+    parts.push('', `The files it changes (${changed.length}): your report's files accounts for every one.`, ...shown.map((f) => `- ${f}`));
+    if (changed.length > shown.length) parts.push(`- …and ${changed.length - shown.length} more (\`git diff --name-only\` lists them)`);
+  }
   if (lastRound) {
     const { sha, report } = lastRound;
     const since = sha ? `\`git diff ${sha.slice(0, 7)}..HEAD\`` : 'the commits pushed since';

@@ -220,6 +220,8 @@ export interface WorkspaceOps {
   head(dir: string): Promise<string>;
   /** The commits on HEAD not on the base branch nor in `shipped`, oldest first. */
   unshippedCommits(dir: string, baseBranch: string, shipped?: string): Promise<string[]>;
+  /** The files HEAD changes against origin's `baseBranch` (a review's checkout): what QA's report accounts for. Missing where there are no real checkouts. */
+  changedFiles?(dir: string, baseBranch: string): Promise<string[]>;
   /** Moves `dir`'s checkout onto a new `branch` at origin's (freshly fetched) `baseBranch`. */
   freshBranch(dir: string, branch: string, baseBranch: string): Promise<void>;
   /** Applies `commits` on top of HEAD; fails, leaving HEAD as it was, if they don't apply cleanly. */

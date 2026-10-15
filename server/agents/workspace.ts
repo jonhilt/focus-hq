@@ -383,6 +383,12 @@ export async function unshippedCommits(dir: string, baseBranch: string, shipped?
   return out.split('\n').map((l) => l.trim()).filter(Boolean);
 }
 
+/** The files HEAD changes against origin's `baseBranch`, as the three-dot diff QA reviews names them. */
+export async function changedFiles(dir: string, baseBranch: string): Promise<string[]> {
+  const out = await git(dir, ['diff', '--name-only', `origin/${baseBranch}...HEAD`]);
+  return out.split('\n').map((l) => l.trim()).filter(Boolean);
+}
+
 /**
  * Moves the checkout in `dir` onto a new local `branch` at origin's `baseBranch`, fetched first. Commits on the branch it
  * was on stay there. (Like a new worktree's, the branch doesn't track the base, so a stray `git push` can't land on it.)

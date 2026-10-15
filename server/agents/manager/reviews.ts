@@ -8,7 +8,7 @@ import { GitHub, type GitHubError } from '../../github/service';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../../util';
 import { goalOf, goalReviewerId, reviewsToStart, sliceSiblings } from '../lead';
 import { repoFolders } from '../planner';
-import { checksFixPrompt, evidencePath, fixPrompt, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, type QaSibling, qaSystemAppend } from '../qa';
+import { checksFixPrompt, evidencePath, filesPrompt, fixPrompt, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, type QaSibling, qaSystemAppend, unaccounted } from '../qa';
 import type { QaLoopEvent } from '../qaLoop';
 import { qaNextStep } from '../qaLoop';
 import { carriedComment, retestStep } from '../retest';
@@ -190,6 +190,7 @@ export class Reviews extends Part {
       this.print(agent, [{ kind: 'system', text: `✻ Checking out PR #${pr.number} (${pr.branch} into ${pr.baseBranch})` }]);
       const sha = (yield* workspace.checkoutPullRequest(agent.repo, this.reviewDir(agent), pr.number)) || pr.headSha;
       yield* this.install(agent, workspace.dir(this.reviewDir(agent)));
+      rt.qaFiles = { changed: yield* workspace.changedFiles(workspace.dir(this.reviewDir(agent)), pr.baseBranch), askedAgain: false };
       const siblings = this.siblingsOf(agent);
       if (siblings.length) {
         this.update(agent, { activity: `Checking out the slice's other pull request${siblings.length === 1 ? '' : 's'}` });
@@ -209,7 +210,7 @@ export class Reviews extends Part {
       if (review) this.putReview({ ...review, status: 'testing', title: pr.title, sha, agentId: agent.id, error: undefined });
       rt.qaSystem = qaSystemAppend(agent, project, pr, sha, siblings);
       rt.shots = undefined;
-      let prompt = qaPrompt(agent.repo, pr, issues, review ?? {});
+      let prompt = qaPrompt(agent.repo, pr, issues, review ?? {}, rt.qaFiles.changed);
       if (rt.inbox.length) prompt += `\n\nNotes from your manager:\n${rt.inbox.splice(0).map((m) => `- ${m}`).join('\n')}`;
       yield* this.core.sessions.runSession(agent, prompt);
     });
@@ -259,6 +260,17 @@ export class Reviews extends Part {
       }
       // the PR merged or closed while they were at it: a verdict now would land on a PR that's gone
       if (agent.prGone) return;
+      // a report that leaves changed files out goes back to QA once, naming them: a reviewer that skims a big diff
+      // misses what's in the files it skipped (docs/qa-catch.md)
+      const files = this.rt(agent.id).qaFiles;
+      const missing = files && !files.askedAgain ? unaccounted(report, files.changed) : [];
+      if (files && missing.length && agent.sessionId) {
+        files.askedAgain = true;
+        this.print(agent, [{ kind: 'system', text: `✻ The report leaves out ${missing.length} changed file${missing.length === 1 ? '' : 's'}: back to QA to account for ${missing.length === 1 ? 'it' : 'them'}` }]);
+        return yield* this.core.sessions.runSession(agent, filesPrompt(missing), agent.sessionId).pipe(
+          Effect.catch((err) => Effect.sync(() => this.core.sessions.fail(agent, err.message))),
+        );
+      }
       const pass = report.verdict === 'pass';
       const review = this.store.reviews.get(prKey(agent.repo, number));
       const screenshots = yield* this.keepScreenshots(agent, report, review?.sha);

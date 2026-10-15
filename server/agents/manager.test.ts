@@ -179,6 +179,26 @@ describe('AgentManager', () => {
     expect(store.agent(lead.id).lead?.readTurn).toBe(first);
   });
 
+  it('sends a QA report that leaves changed files out back to QA once, naming them, then takes the verdict', async () => {
+    const { agents, claude, store, project } = office({ ...demoWorkspace, changedFiles: () => Promise.resolve(['src/cart.ts', 'scripts/sync.ts']) });
+    const [pr] = await Effect.runPromise(Effect.gen(function* () {
+      return yield* (yield* GitHub).listPullRequests('demo/webshop-frontend');
+    }).pipe(Effect.provide(demoLayer)));
+    agents.requestReview(project.id, pr.repo, pr.number, pr.title);
+    await until(() => claude.turns.length === 1);
+    expect(claude.turns[0].req.prompt).toContain("The files it changes (2): your report's files accounts for every one.\n- src/cart.ts\n- scripts/sync.ts");
+    claude.turns[0].hooks.session('qa-session');
+    const report = (files: string[]) => ({ verdict: 'pass', summary: 'Works.', checks: [], commands: [], files: files.map((file) => ({ file, tests: 'none', checked: 'read every changed line' })) });
+    claude.turns[0].end({ ok: true, summary: '', structured: report(['src/cart.ts']) });
+    await until(() => claude.turns.length === 2);
+    expect(claude.turns[1].req.resumeSessionId).toBe('qa-session');
+    expect(claude.turns[1].req.prompt).toMatch(/^Your report leaves out 1 of the files this pull request changes:\n- scripts\/sync\.ts\n/);
+    // asked once a review: a second report still short is taken as it is
+    claude.turns[1].end({ ok: true, summary: '', structured: report(['src/cart.ts']) });
+    await until(() => store.reviews.get(prKey(pr.repo, pr.number))?.status === 'passed');
+    expect(claude.turns).toHaveLength(2);
+  });
+
   it('stops a QA session whose PR merged, and won’t resume it for a message', async () => {
     const { agents, claude, store, project } = office();
     const [pr] = await Effect.runPromise(Effect.gen(function* () {

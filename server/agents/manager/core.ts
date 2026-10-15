@@ -72,6 +72,8 @@ export interface Runtime {
   resume?: boolean;
   /** The QA officer's instructions for the review in hand (they depend on the PR). */
   qaSystem?: string;
+  /** The files the review in hand's pull request changes, which its report accounts for, and whether QA has been sent back once for leaving some out. */
+  qaFiles?: { changed: string[]; askedAgain: boolean };
   /** The screenshots the QA officer took on purpose this review: how many, and the last MAX_SCREENSHOTS of them. */
   shots?: { taken: number; frames: BrowserFrame[] };
   /** Attaching to a cloud session the captain started: how often it was still busy, and the hand-over to go back to if it fails. */

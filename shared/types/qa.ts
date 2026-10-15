@@ -35,6 +35,17 @@ export interface QaReport {
   captions: string[];
   /** The two or three places in the diff most worth a human look. Missing on reports from before they were asked for. */
   spotChecks?: QaSpotCheck[];
+  /** Every file the pull request changes, accounted for: what tests exercise it and what QA checked. Missing on reports from before they were asked for. */
+  files?: QaFile[];
+}
+
+/** A file the pull request changes, as QA accounted for it. */
+export interface QaFile {
+  file: string;
+  /** The tests that exercise its changes, or "none". */
+  tests: string;
+  /** What QA did with it: read every changed line, ran it, why a generated file needed no reading. */
+  checked: string;
 }
 
 /** A screenshot from a QA review, kept as evidence with the report. */
