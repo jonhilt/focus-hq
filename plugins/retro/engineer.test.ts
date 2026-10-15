@@ -88,6 +88,17 @@ describe('ChiefEngineer', () => {
     expect(eng.current().drafts[0].decision?.accepted).toBe(true);
   });
 
+  it('files a draft accepted twice at once only once', async () => {
+    const { eng, store, project, filed } = engineer(drafted, ['a', 'b', 'c']);
+    eng.start(14);
+    const [draft] = (await finished(eng)).drafts;
+    const [first, second] = await Promise.allSettled([eng.decide(draft.id, true, project.id, 'demo/webshop-api'), eng.decide(draft.id, true, project.id, 'demo/webshop-api')]);
+    expect(first.status).toBe('fulfilled');
+    expect(second).toMatchObject({ status: 'rejected', reason: { message: 'That draft is being decided on already' } });
+    expect(filed).toHaveLength(1);
+    expect(store.ledger.filter((e) => e.kind === 'retro-decision')).toHaveLength(1);
+  });
+
   it('reads the sessions no one has read yet, once, and drafts from what it found', async () => {
     const { eng, store, prompts, asked } = engineer(drafted, ['a', 'b', 'c', 'd'], { unread: true, missing: ['d'] });
     expect(eng.preview(14)).toEqual({ unread: 4, costUsd: 0.1 });

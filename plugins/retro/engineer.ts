@@ -50,6 +50,8 @@ const UNSET: Pick<Retro, 'startedAt' | 'finishedAt' | 'summary' | 'error'> = { s
  */
 export class ChiefEngineer {
   private running: AbortController | null = null;
+  /** Drafts being decided on right now: a second click while the first is still filing is refused, not filed twice. */
+  private readonly deciding = new Set<string>();
 
   /**
    * `retrosDir` is where each retro's evidence goes; `pauseMs` is a breather between batches, so a retro doesn't take
@@ -181,6 +183,17 @@ export class ChiefEngineer {
    */
   async decide(id: string, accepted: boolean, projectId?: string, repo?: string): Promise<RetroDraft> {
     const draft = undecided(this.current(), id);
+    if (this.deciding.has(id)) throw new Error('That draft is being decided on already');
+    this.deciding.add(id);
+    try {
+      return await this.decided(draft, accepted, projectId, repo);
+    } finally {
+      this.deciding.delete(id);
+    }
+  }
+
+  private async decided(draft: RetroDraft, accepted: boolean, projectId?: string, repo?: string): Promise<RetroDraft> {
+    const id = draft.id;
     let issue: { repo: string; number: number; url: string } | undefined;
     if (accepted) {
       if (!projectId || !repo) throw new Error('Pick the repository to file it in');
