@@ -970,6 +970,50 @@ describe('AgentManager', () => {
     expect(claude.turns[0].req.prompt).toContain(`#${number}`);
   });
 
+  /** A demo pull request the tests can push to, and its head. */
+  const pushable = () => {
+    const repo = 'demo/webshop-frontend';
+    const push = demoGitHub.demoPush!;
+    const number = [...Array(20).keys()].find((n) => {
+      try {
+        push(repo, n, 'change');
+        return true;
+      } catch {
+        return false;
+      }
+    })!;
+    return { repo, number, push: () => push(repo, number, 'change') };
+  };
+
+  it('re-tests a lead’s ship after a verdict even while GitHub still answers with the commit QA tested', async () => {
+    const { agents, claude, store, project } = office();
+    const { repo, number, push } = pushable();
+    const report: QaReport = { verdict: 'fail', summary: 'Broken', checks: [], commands: [], captions: [] };
+    store.putReview({ projectId: project.id, repo, number, title: 'PR', status: 'failed', sha: push(), report, requestedAt: 1, finishedAt: 2 });
+
+    // GitHub hasn't caught up with the push yet: its head is still the one QA failed
+    agents.requestReview(project.id, repo, number, 'PR', undefined, false, 'abc1234def5678');
+    await until(() => claude.turns.length === 1);
+    expect(store.reviews.get(`${repo}#${number}`)).toMatchObject({ status: 'testing', shippedHead: 'abc1234def5678' });
+  });
+
+  it('sends a PR the lead shipped again while QA tested it straight back to QA once they give their verdict', async () => {
+    const { agents, claude, store, project } = office();
+    const { repo, number, push } = pushable();
+    agents.requestReview(project.id, repo, number, 'PR');
+    await until(() => claude.turns.length === 1);
+    const tested = store.reviews.get(`${repo}#${number}`)?.sha;
+
+    // the lead ships a fix while QA is still at the commit before
+    const shipped = push();
+    agents.requestReview(project.id, repo, number, 'PR', undefined, false, shipped);
+    expect(store.reviews.get(`${repo}#${number}`)).toMatchObject({ status: 'testing', sha: tested, shippedHead: shipped });
+
+    claude.turns[0].end({ ok: true, summary: '', structured: { verdict: 'fail', summary: 'Broken.', checks: [], commands: [], files: [] } });
+    await until(() => claude.turns.length === 2);
+    expect(claude.turns[1].req.prompt).toContain(`#${number}`);
+  });
+
   describe('moving to the cloud', () => {
     const issue = { number: 1, title: 'Add a dark mode toggle to the header' };
 

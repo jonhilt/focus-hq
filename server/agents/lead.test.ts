@@ -217,6 +217,10 @@ describe('what the lead writes and hears', () => {
       'QA failed acme/api#7: Empty list crashes\n\nWhat to fix: Guard the empty case\n\nFix it and ship again, or tell the captain why not.',
     );
     expect(qaVerdictNote('acme/web', 12, { verdict: 'pass', summary: 'Works' })).toMatch(/^QA passed acme\/web#12: Works\n\nIt waits for the captain to merge it\.$/);
+    // a verdict on a commit the lead has shipped past says so, and that QA is on the latest
+    expect(qaVerdictNote('acme/web', 12, { verdict: 'fail', summary: 'Broken' }, { tested: '815552ff4dd1', shipped: 'd01f0319aae5' })).toBe(
+      'QA failed acme/web#12 at 815552f, before your last ship (d01f031): Broken\n\nQA is reviewing d01f031 now, and you\'ll hear that verdict too. Fix only what your last ship didn\'t already.',
+    );
   });
 
   it('tells the lead when the slice has landed, and where their repos are for the next one', () => {

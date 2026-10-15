@@ -169,8 +169,8 @@ export class AgentManager {
     return this.core.leads.leadPrs(projectId);
   }
 
-  requestReview(projectId: string, repo: string, number: number, title: string, retryNote?: string, asked = false): QaReview {
-    return this.core.reviews.requestReview(projectId, repo, number, title, retryNote, asked);
+  requestReview(projectId: string, repo: string, number: number, title: string, retryNote?: string, asked = false, shippedHead?: string): QaReview {
+    return this.core.reviews.requestReview(projectId, repo, number, title, retryNote, asked, shippedHead);
   }
 
   requestMerge(repo: string, number: number, on: boolean): QaReview {

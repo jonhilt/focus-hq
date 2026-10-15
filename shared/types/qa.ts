@@ -101,6 +101,11 @@ export interface QaReview {
   status: QaStatus;
   /** The commit QA checked out and tested. */
   sha?: string;
+  /**
+   * The commit a lead's ship pushed when it asked for this review. QA re-tests from it rather than from GitHub's
+   * head, which can lag a push, and a verdict on an earlier commit sends the PR straight back to QA.
+   */
+  shippedHead?: string;
   /** QA passed this commit, the one before a merge of the base branch that the office checked itself and carried the pass over from. */
   carriedFrom?: string;
   report?: QaReport;

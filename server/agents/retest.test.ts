@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { QaReview } from '../../shared/types';
-import { carriedComment, checkCommands, rangeDiffUnchanged, retestStep, type SinceVerdict } from './retest';
+import { carriedComment, checkCommands, rangeDiffUnchanged, retestStep, shippedSinceTested, type SinceVerdict } from './retest';
 
 const review = (status: QaReview['status'], sha = 'aaaaaaa1111'): QaReview => ({ projectId: 'p', repo: 'o/r', number: 1, title: 't', status, sha, requestedAt: 0 });
 const merge = { sha: 'mmmmmmm', mergesBase: true, clean: true };
@@ -64,4 +64,13 @@ it('carriedComment says it was a merge of the base only, and where the checks we
   const body = carriedComment('main', 'bbbbbbb2222', 'aaaaaaa1111', ['npm test']);
   expect(body).toContain('Merge of main only; checks green at `bbbbbbb`');
   expect(body).toContain('`aaaaaaa`');
+});
+
+describe('shippedSinceTested', () => {
+  it('names the commit a lead shipped while QA tested an earlier one, and nothing when QA tested the latest', () => {
+    expect(shippedSinceTested({ sha: '815552ff4dd1', shippedHead: 'd01f0319aae5' })).toBe('d01f0319aae5');
+    expect(shippedSinceTested({ sha: 'd01f0319aae5ee78', shippedHead: 'd01f031' })).toBeUndefined();
+    expect(shippedSinceTested({ sha: '815552ff4dd1' })).toBeUndefined();
+    expect(shippedSinceTested({ shippedHead: 'd01f0319aae5' })).toBeUndefined();
+  });
 });

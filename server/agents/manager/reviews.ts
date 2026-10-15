@@ -11,7 +11,7 @@ import { repoFolders } from '../planner';
 import { checksFixPrompt, evidencePath, filesPrompt, filesToRevisit, fixPrompt, openedFiles, type Revisit, toolCalls, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, type QaSibling, qaSystemAppend } from '../qa';
 import type { QaLoopEvent } from '../qaLoop';
 import { qaNextStep } from '../qaLoop';
-import { carriedComment, retestStep } from '../retest';
+import { carriedComment, retestStep, shippedSinceTested } from '../retest';
 import { Workspace } from '../services';
 import { reviewCheckoutId, reviewRepoId, triageWorkspaceId } from '../worktrees';
 import { STOPPED_BY_CAPTAIN } from '../types';
@@ -28,13 +28,19 @@ export class Reviews extends Part {
   /** Asks the room's QA officer to review and test a pull request. Queued if they're busy with another. */
   /**
    * `retryNote` tells QA why the operations officer sent it back to them. Unless the captain `asked` for it, or the
-   * operations officer did, a PR QA already gave a verdict on is looked at first (`precheck`).
+   * operations officer did, a PR QA already gave a verdict on is looked at first (`precheck`). `shippedHead` is the
+   * commit a lead's ship just pushed: one that lands while QA is already at the PR goes back to them once they finish.
    */
-  requestReview(projectId: string, repo: string, number: number, title: string, retryNote?: string, asked = false): QaReview {
+  requestReview(projectId: string, repo: string, number: number, title: string, retryNote?: string, asked = false, shippedHead?: string): QaReview {
     const project = this.store.project(projectId);
     if (!project.repos.includes(repo)) throw new Refused({ message: `${repo} is not connected to ${project.name}` });
     const existing = this.store.reviews.get(prKey(repo, number));
-    if (existing && (existing.status === 'queued' || existing.status === 'testing')) return existing;
+    if (existing && (existing.status === 'queued' || existing.status === 'testing')) {
+      if (!shippedHead) return existing;
+      const marked = { ...existing, shippedHead };
+      this.putReview(marked);
+      return marked;
+    }
     // a re-test from the board overrides the operations officer
     this.core.triages.stopTriage(prKey(repo, number));
     const review: QaReview = {
@@ -51,6 +57,7 @@ export class Reviews extends Part {
       triage: existing?.triage,
       retryNote,
       mergeRequested: existing?.mergeRequested,
+      shippedHead,
     };
     this.putReview(review);
     if (existing?.sha && (existing.status === 'passed' || existing.status === 'failed') && !retryNote && !asked) {
@@ -87,10 +94,12 @@ export class Reviews extends Part {
       const github = yield* GitHub;
       const workspace = yield* Workspace;
       const pr = yield* github.getPullRequest(review.repo, review.number);
-      const since = last.status === 'passed' && last.sha && pr.headSha && !sameCommit(last.sha, pr.headSha)
+      // GitHub can still answer with the commit before a push for a few seconds: the one the ship pushed is the head
+      const head = this.store.reviews.get(key)?.shippedHead || pr.headSha;
+      const since = last.status === 'passed' && last.sha && head && !sameCommit(last.sha, head)
         ? yield* workspace.sinceVerdict(review.repo, review.number, pr.baseBranch, last.sha).pipe(Effect.orElseSucceed(() => null))
         : null;
-      const step = retestStep(last, pr.headSha, since);
+      const step = retestStep(last, head, since);
       if (!current()) return;
       if (step.kind === 'skip') {
         console.log(`Not sending ${review.repo}#${review.number} to QA: ${step.reason}`);
@@ -324,7 +333,11 @@ export class Reviews extends Part {
       const lead = this.core.leads.leadWith(agent.repo, number);
       if (lead) this.core.ledger.refreshFlow(lead.id);
       yield* this.core.leads.leadShielded(agent.projectId, agent.repo, number, report, failedRounds, screenshots);
-      this.core.leads.leadHearsVerdict(agent.repo, number, `QA officer ${agent.name}`, report, failedRounds);
+      // the lead shipped again while QA tested: the verdict stands for the commit QA had, and QA goes on to the latest
+      // (from GitHub's head, which has caught up by now, so a PR someone else pushed past the ship doesn't loop)
+      const behind = done?.sha ? shippedSinceTested(done) : undefined;
+      this.core.leads.leadHearsVerdict(agent.repo, number, `QA officer ${agent.name}`, report, failedRounds, behind && done?.sha ? { tested: done.sha, shipped: behind } : undefined);
+      if (done && behind) this.requestReview(done.projectId, done.repo, done.number, done.title);
       this.nextReview(agent.projectId);
     });
   }

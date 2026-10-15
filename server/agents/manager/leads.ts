@@ -5,7 +5,7 @@ import { LEAD_DESK, TEAM_STATIONS } from '../../../shared/types';
 import { GitHub } from '../../github/service';
 import { errorMessage, newId } from '../../util';
 import { takesTitle } from '../goalTitles';
-import { afterVerdict, closeCheck, hasLeadWork, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, landedMidTurnNote, landedNote, leadWorktreeId, moveQueued, nextGoal, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch } from '../lead';
+import { afterVerdict, closeCheck, hasLeadWork, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, landedMidTurnNote, landedNote, leadWorktreeId, moveQueued, nextGoal, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch, type VerdictBehind } from '../lead';
 import { Workspace } from '../services';
 import { EVIDENCE_PER_PR, evidenceFile, landedWaypoint, shieldedWaypoint, tickedSpotCheck } from '../waypoints';
 import { type ManagerServices, Part, Refused, type WorkError } from './core';
@@ -306,11 +306,12 @@ export class Leads extends Part {
     this.update(lead, { lead: { ...lead.lead, waypoints } });
   }
 
-  leadHearsVerdict(repo: string, number: number, from: string, report: QaReport, failedRounds: number): void {
+  leadHearsVerdict(repo: string, number: number, from: string, report: QaReport, failedRounds: number, behind?: VerdictBehind): void {
     const lead = this.leadWith(repo, number);
     if (!lead) return;
-    const text = qaVerdictNote(repo, number, report);
-    const step = afterVerdict(report.verdict, failedRounds);
+    const text = qaVerdictNote(repo, number, report, behind);
+    // a verdict on a commit they've shipped past costs no turn: the one on their latest will
+    const step = behind ? 'pass-on' : afterVerdict(report.verdict, failedRounds);
     if (step === 'wake') {
       this.core.comms.message(lead.id, text, from);
       return;

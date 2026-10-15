@@ -114,7 +114,7 @@ export class Slices extends Part {
       if (plan.kind !== 'ship') return [notShipped(plan), ...movedNotes].join('\n\n');
       const project = this.store.project(agent.projectId);
       const lines: string[] = [];
-      const toReview: { repo: string; number: number }[] = [];
+      const toReview: { repo: string; number: number; head: string }[] = [];
       for (const shipping of states.filter((x) => plan.repos.includes(x.repo))) {
         const s = { ...shipping, branch: yield* this.nameAfterWork(agent, shipping, title, lines) };
         this.update(agent, { status: 'pushing', activity: `Shipping ${s.repo}` });
@@ -135,12 +135,12 @@ export class Slices extends Part {
         const others = agent.lead.prs.filter((p) => !(p.repo === s.repo && p.number === pr.number));
         this.update(agent, { lead: { ...agent.lead, prs: [...others, { repo: s.repo, number: pr.number, url: pr.url, sha: s.head, branch: s.branch }] } });
         this.print(agent, [{ kind: 'success', text: `✔ ${lines.at(-1)}` }]);
-        toReview.push({ repo: s.repo, number: pr.number });
+        toReview.push({ repo: s.repo, number: pr.number, head: s.head });
       }
       // only now the slice's PRs are all open, so QA checks each out with the others beside it
       for (const pr of autoQaFor(project) ? toReview : []) {
         try {
-          this.core.reviews.requestReview(agent.projectId, pr.repo, pr.number, title);
+          this.core.reviews.requestReview(agent.projectId, pr.repo, pr.number, title, undefined, false, pr.head);
         } catch (err) {
           this.print(agent, [{ kind: 'error', text: `✘ Couldn't hand ${pr.repo}#${pr.number} to QA: ${errorMessage(err)}` }]);
         }

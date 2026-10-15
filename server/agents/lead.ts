@@ -581,11 +581,21 @@ export function afterVerdict(verdict: QaReport['verdict'], failedRounds: number)
 }
 
 /** QA's verdict on one of the slice's pull requests, for the lead. */
-export function qaVerdictNote(repo: string, number: number, report: Pick<QaReport, 'verdict' | 'summary' | 'fixInstructions'>): string {
+export function qaVerdictNote(repo: string, number: number, report: Pick<QaReport, 'verdict' | 'summary' | 'fixInstructions'>, behind?: VerdictBehind): string {
   const verdict = report.verdict === 'pass' ? 'passed' : 'failed';
   const fix = report.verdict === 'fail' && report.fixInstructions ? `\n\nWhat to fix: ${report.fixInstructions}` : '';
+  if (behind) {
+    const what = `QA ${verdict} ${repo}#${number} at ${behind.tested.slice(0, 7)}, before your last ship (${behind.shipped.slice(0, 7)}): ${report.summary}${fix}`;
+    return `${what}\n\nQA is reviewing ${behind.shipped.slice(0, 7)} now, and you'll hear that verdict too. Fix only what your last ship didn't already.`;
+  }
   const next = report.verdict === 'pass' ? 'It waits for the captain to merge it.' : 'Fix it and ship again, or tell the captain why not.';
   return `QA ${verdict} ${repo}#${number}: ${report.summary}${fix}\n\n${next}`;
+}
+
+/** A verdict on the commit QA `tested`, which the lead has `shipped` past while QA was at it. */
+export interface VerdictBehind {
+  tested: string;
+  shipped: string;
 }
 
 /**

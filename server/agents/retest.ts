@@ -40,6 +40,15 @@ export function retestStep(review: QaReview | undefined, head: string, since: Si
 }
 
 /**
+ * The commit QA owes a review of once they've given a verdict: one the office shipped while they were testing an
+ * earlier one. Undefined when the verdict is on the latest ship (or nothing shipped).
+ */
+export function shippedSinceTested(review: Pick<QaReview, 'sha' | 'shippedHead'>): string | undefined {
+  const { sha, shippedHead } = review;
+  return shippedHead && sha && !sameCommit(sha, shippedHead) ? shippedHead : undefined;
+}
+
+/**
  * The project's checks (typecheck, lint, tests, or only those `names`), from its package.json scripts, run with its
  * package manager `pm`; none when it has none of them.
  */
