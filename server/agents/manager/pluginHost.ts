@@ -1,12 +1,14 @@
-import type { PluginStates } from '../../../shared/types';
+import type { Issue, PluginStates } from '../../../shared/types';
 import type { BriefWork, PluginHost, PluginState } from '../../plugins/contract';
 import type { Core } from './core';
 import { Refused } from './core';
 
-/** What the office lends a plugin that the manager doesn't have: where it runs, its own repo, and the demo's transcripts. */
+/** What the office lends a plugin that the manager doesn't have: where it runs, its own repo, filing issues, and the demo's transcripts. */
 export interface Lent {
   demo: boolean;
   ownRepo: () => string | undefined;
+  /** Files an issue and puts it on the project's board (`Office.fileIssue`): none in a test that doesn't need it. */
+  fileIssue?: (projectId: string, repo: string, title: string, body: string) => Promise<Issue>;
   /** Reads a session's transcript in place of the manager's `readTranscript`: the demo's stand-ins for its scripted agents. */
   transcript?: (sessionId: string) => Promise<string | undefined>;
 }
@@ -42,6 +44,15 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
     // read as it's asked for: the office sets the manager's reader once the plugins have started
     transcript: (sessionId) => (lent.transcript ?? core.ledger.readTranscript)?.(sessionId) ?? Promise.resolve(undefined),
     ledger: () => core.store.ledger,
+    record: (projectId, entry, at) => core.ledger.record(projectId, entry, at),
+    settings: () => core.store.settings,
+    fileIssue: (projectId, repo, title, body) => {
+      // a plugin files only where the captain works: in one of the project's own repos
+      const project = core.store.projects.find((p) => p.id === projectId);
+      if (!project?.repos.includes(repo)) return Promise.reject(new Refused({ message: `${repo} isn’t one of ${project ? `${project.name}’s` : 'the project’s'} repositories` }));
+      if (!lent.fileIssue) return Promise.reject(new Refused({ message: 'This office can’t file issues' }));
+      return lent.fileIssue(projectId, repo, title, body);
+    },
     ownRepo: lent.ownRepo,
     seat: (projectId, repo, work: BriefWork, crew) => {
       const brief = core.plugins.brief({ plugin: id, kind: work.kind });

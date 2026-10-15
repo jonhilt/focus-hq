@@ -136,8 +136,9 @@ async function main() {
     office.agents.titleGoal = (brief) => titleGoal(brief, store.settings);
     office.agents.transcripts = transcriptFolders(paths.transcripts, paths.workspaces);
   }
-  // plugins read the agents' transcripts as the office does; in the demo, its pretend leads keep transcripts of their own
-  office.startPlugins(await loadPlugins(config.plugins, config.root), demoRunner && ((id) => Promise.resolve(demoRunner.transcript(id))));
+  // plugins read the agents' transcripts as the office does; in the demo, its pretend leads keep transcripts of their
+  // own, and its older sessions are the scripted ones
+  office.startPlugins(await loadPlugins(config.plugins, config.root), demoRunner && (async (id) => demoRunner.transcript(id) ?? (await demoTranscripts()).find((t) => t.sessionId === id)?.read()));
 
   if (config.demo && store.projects.length === 0) {
     const shop = store.addProject('Sock Shop', '#ff8a5b', 'beach');

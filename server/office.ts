@@ -353,7 +353,7 @@ export class Office {
 
   /** Starts the plugins switched on (docs/plugins.md), lending them the office's own repo, and in the demo its agents' transcripts. */
   startPlugins(plugins: FocusPlugin[], transcript?: Lent['transcript']): void {
-    this.agents.startPlugins(plugins, { demo: config.demo, ownRepo: () => this.ownRepo, transcript });
+    this.agents.startPlugins(plugins, { demo: config.demo, ownRepo: () => this.ownRepo, fileIssue: (...issue) => this.fileIssue(...issue), transcript });
     this.info.plugins = this.agents.plugins.ids();
     // its saved state is kept, but nothing of it runs: no briefs, hooks, or pull requests kept for the captain
     for (const id of this.agents.plugins.dormant()) console.warn(`Plugin ${id} has saved state but isn't switched on: add it to FOCUS_PLUGINS to bring it back`);

@@ -3,8 +3,8 @@
 // folder under plugins/ (or anywhere, by path) whose server.ts default-exports a FocusPlugin.
 import type { Effect } from 'effect';
 import type { ZodType } from 'zod';
-import type { LedgerEvent } from '../../shared/ledger';
-import type { Agent, Planner, Project } from '../../shared/types';
+import type { LedgerEntry, LedgerEvent } from '../../shared/ledger';
+import type { Agent, Issue, Planner, Project, Settings } from '../../shared/types';
 import type { GitHub } from '../github/service';
 
 export interface FocusPlugin {
@@ -124,6 +124,18 @@ export interface PluginHost {
   transcript(sessionId: string): Promise<string | undefined>;
   /** The ship's log of how work went, oldest first. */
   ledger(): LedgerEvent[];
+  /**
+   * Writes a line in the ship's log for `projectId` (at `at`, or now), and sends the new report card. Every plugin
+   * hears it on `ledgerRecorded`, the one writing it too.
+   */
+  record(projectId: string, entry: LedgerEntry, at?: number): void;
+  /** The captain's settings (the model read-only sessions run on, say), as they are now. */
+  settings(): Readonly<Settings>;
+  /**
+   * Files an issue on GitHub in `repo`, which has to be one of `projectId`'s repos (it throws, in words, for any
+   * other), and puts it on the project's board straight away.
+   */
+  fileIssue(projectId: string, repo: string, title: string, body: string): Promise<Issue>;
   /** The office's own repo (`owner/repo`, from its checkout's remote): none in the demo. */
   ownRepo(): string | undefined;
   /** Hands one of the plugin's briefs to an agent: `crew` sits down when it's always the same person, else someone's hired. Throws, in words, when it can't. */

@@ -11,7 +11,7 @@ import type { PluginHost } from '../plugins/contract';
 import { demoWorkspace } from './demoRunner';
 import { office, until } from './fakeOffice';
 import type { AgentManager } from './manager';
-import type { PullRequest, QaReport } from '../../shared/types';
+import type { Issue, PullRequest, QaReport } from '../../shared/types';
 import { AWAY_DESK } from '../../shared/types';
 import type { WorkspaceOps } from './types';
 import { CLOUD_UNAVAILABLE } from './cloud';
@@ -1297,6 +1297,26 @@ describe('AgentManager', () => {
       expect(agents.plugins.states()).toEqual({ auditor: { audits: 1, strict: false } });
       store.plugins.auditor = { audits: 2 };
       expect(state.get()).toEqual({ audits: 2, strict: false });
+    });
+
+    it('lends plugins the ledger to write in, the captain’s settings, and filing issues only in the project’s own repos', async () => {
+      const { agents, store, project } = office();
+      const filed: string[] = [];
+      let lent: PluginHost | undefined;
+      agents.startPlugins([{ id: 'filer', start: (host) => ((lent = host), {}) }], {
+        demo: false,
+        ownRepo: () => undefined,
+        fileIssue: (projectId, repo, title, body) => (filed.push(`${projectId} ${repo} ${title}`), Promise.resolve<Issue>({ repo, number: 7, title, body, url: `https://github.com/${repo}/issues/7`, labels: [], createdAt: '' })),
+      });
+      const host = lent!;
+      host.record(project.id, { kind: 'closed', repo: 'demo/webshop-api', pr: 3, by: 'github', qa: 'none', failedRounds: 0, triages: 0 }, 1000);
+      expect(store.ledger.at(-1)).toMatchObject({ kind: 'closed', projectId: project.id, at: 1000 });
+      store.settings.model = 'claude-opus-5-5';
+      expect(host.settings().model).toBe('claude-opus-5-5');
+      expect((await host.fileIssue(project.id, 'demo/webshop-api', 'Ports', 'body')).number).toBe(7);
+      await expect(host.fileIssue(project.id, 'someone/else', 'Ports', 'body')).rejects.toThrow('someone/else isn’t one of Shop’s repositories');
+      await expect(host.fileIssue('nowhere', 'demo/webshop-api', 'Ports', 'body')).rejects.toThrow('isn’t one of the project’s repositories');
+      expect(filed).toEqual([`${project.id} demo/webshop-api Ports`]);
     });
   });
 });
