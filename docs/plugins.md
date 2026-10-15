@@ -115,4 +115,4 @@ A plugin outside the office's folder can be switched on by path, but for now it 
 - `server/plugins/load.ts`: finding and loading what `FOCUS_PLUGINS` names (`all` too).
 - `server/agents/manager/pluginHost.ts`: the `PluginHost` the manager lends each plugin, and its state slot.
 - `server/plugins/migrate.ts`: state saved before parts of the office became plugins, moved into their slots as `state.json` is read (or dropped, like a goal's flow, which the flow plugin works out again).
-- `client/src/plugins.ts`: the plugins' parts in the browser, and `goalTags` and `goalStrips`, which the goals list, Comms and the goal board place.
+- `client/src/plugins.ts`: the plugins' parts in the browser, `goalTags` and `goalStrips`, which the goals list, Comms and the goal board place, and `stationSays`, what the engineer at the engineering station says.
