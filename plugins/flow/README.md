@@ -1,6 +1,6 @@
 # Where goals' time goes
 
-A plugin (`FOCUS_PLUGINS=flow`, [plugins](../../docs/plugins.md)): each open goal's flow, live on its goal board, its card in the goals list and its lines in Comms. Its scripts, `pnpm run flow` and [`pnpm run qa-catch`](qa-catch.md), work in the terminal whether it's switched on or not.
+A plugin (`FOCUS_PLUGINS=flow`, [plugins](../../docs/plugins.md)): each open goal's flow, live on its goal board, its card in the goals list and its lines in Comms. Its scripts, `pnpm run flow`, [`pnpm run before-after`](#before-and-after) and [`pnpm run qa-catch`](qa-catch.md), work in the terminal whether it's switched on or not.
 
 `pnpm run flow` measures how long goals take and where that time goes, so a change meant to make goals faster can be judged by numbers taken before and after it, not by feel. It reads every goal the [ledger](../../docs/ledger.md) saw close, splits each one's time from opening to closing into states, and prints lead time, where the time went, the biggest wait, and the quality guards that must hold while lead time comes down. It reads and never writes, and takes a few seconds.
 
@@ -50,13 +50,19 @@ The goals list shows the same as a **Flow** readout on each goal's card, and Com
 
 The demo's pretend leads keep a stand-in transcript of their turns (`DemoRunner.transcript`, lent to plugins as `host.transcript`), so the board shows it in the demo too. Without the plugin, the goal board, the goals list and Comms show none of it, and nothing works it out.
 
+## Before and after
+
+`pnpm run before-after` judges a change to how agents are steered (CLAUDE.md, a prompt) by what agents did either side of it: the ledger's 7 days before the moment against the 7 after (or up to now). By default the moment is the last commit to CLAUDE.md in this checkout; `--at <date>` picks another, `--days <n>` widens the window, `--project proj_…` keeps to one room (a repo's CLAUDE.md only steers its own room's sessions) and `--task lead` to one kind of session.
+
+It prints, per session digest: turns, tool calls, wasted and refused calls, captain messages and nudges, compactions and cost; the share of sessions read for frictions that hit each kind (a guard block, a captain correction…); and QA's pass rate and how many pull requests merged first time. It warns while either side has fewer than 20 sessions. Nothing else is held still, so read it as evidence, not proof: the goals worked on differ from week to week. The rules are in `beforeAfter.ts`.
+
 ## Where it lives
 
 - `server.ts`: the plugin, on the `turn` and `ledgerRecorded` hooks; `flows.ts` works each open goal's flow out as they fire, one at a time per goal.
 - `flow.ts`: the rules, pure (`transcriptMoments`, `goalFlow`, `leadFlow`, the report); `rework.ts`: rework after merge; `qaCatch.ts`: QA's catch rate's rules.
 - `shared.ts`: the states and the plugin's state (`FlowPluginState`); `words.ts`: how a flow reads.
 - `client.ts`: its goal part in the browser: `tags.ts` (the goals list's readout and Comms' tag), `board.ts` (the goal board's strip), `colors.ts`.
-- `scripts/`: `flow.ts` and `flowRework.ts` (`pnpm run flow`), `qaCatch.ts` and `qaCatchRuns.ts` (`pnpm run qa-catch`, and its runs in `~/.focus/qa-catch/`).
+- `scripts/`: `flow.ts` and `flowRework.ts` (`pnpm run flow`), `qaCatch.ts` and `qaCatchRuns.ts` (`pnpm run qa-catch`, and its runs in `~/.focus/qa-catch/`), `beforeAfter.ts` (`pnpm run before-after`).
 
 ## What it can't see
 

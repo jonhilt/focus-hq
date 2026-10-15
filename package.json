@@ -28,7 +28,8 @@
     "scorecard": "tsx plugins/scorecard/scripts/scorecard.ts",
     "climb:replay": "tsx plugins/climber/scripts/climbReplay.ts",
     "flow": "tsx plugins/flow/scripts/flow.ts",
-    "qa-catch": "tsx plugins/flow/scripts/qaCatch.ts"
+    "qa-catch": "tsx plugins/flow/scripts/qaCatch.ts",
+    "before-after": "tsx plugins/flow/scripts/beforeAfter.ts"
   },
   "engines": {
     "node": ">=20"
