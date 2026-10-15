@@ -112,6 +112,12 @@ parts:
     kind: store
     paths: [server/]
 
+  plugin-api:
+    label: Plugin API
+    does: "All a plugin may import of the office, and the line its test holds"
+    layer: Plugins
+    kind: service
+    paths: [plugin-api/]
   plugins:
     label: Plugins
     does: "What's beyond the core: scorecard, climber, cartography, flow, retro, Number One"

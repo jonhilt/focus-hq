@@ -1,6 +1,6 @@
 // What both halves of the cartography plugin (README.md) share: a project's architecture model, kept in each repo
 // it maps, and the map the office makes of it from the code.
-import type { ModelKind } from '../../shared/types';
+import type { ModelKind } from '../../plugin-api/shared';
 import type { MapHistory } from './history';
 
 export const CARTOGRAPHY = 'cartography';

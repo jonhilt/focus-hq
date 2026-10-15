@@ -1,7 +1,6 @@
 // A view of a map as the browser shows it, on the engineering station and up close from its screen in the holodeck:
 // the drawing, how to read it, and what it shows in sentences.
-import type { Ui } from '../../client/src/ui/context';
-import { h } from '../../client/src/ui/dom';
+import { h, type Ui } from '../../plugin-api/client';
 import { viewDrawing } from './draw';
 import type { MapView, RepoMap } from './shared';
 

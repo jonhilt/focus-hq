@@ -1,6 +1,5 @@
 // A repo's architecture model from its parsed YAML (MODEL_FILE), or an error saying what's wrong with it. Pure.
-import { MODEL_KINDS, type ModelKind } from '../../shared/types';
-import type { Flow, FlowRecording } from '../../shared/flows';
+import { type Flow, type FlowRecording, MODEL_KINDS, type ModelKind } from '../../plugin-api/shared';
 import type { ArchitectureModel, MapPart, MapView } from './shared';
 
 const ID = /^[a-z][a-z0-9-]{0,31}$/;

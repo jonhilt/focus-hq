@@ -3,10 +3,9 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { parse } from 'yaml';
-import { errorMessage, run } from '../../server/util';
+import { errorMessage, FLOWS_FILE, type FlowRecording, run } from '../../plugin-api/server';
 import { isSource, mapOf, ownerOf, resolveImport } from './graph';
 import { historyOf, LOG_ARGS, readLog } from './history';
-import { FLOWS_FILE, type FlowRecording } from '../../shared/flows';
 import { readModel, readRecording } from './model';
 import { importsIn } from './scan';
 import { type FileEdge, MODEL_FILE, type RepoMap } from './shared';

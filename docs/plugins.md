@@ -86,13 +86,14 @@ A hook that throws is logged and skipped, so one plugin's bug never stops the of
 - **Reading the office.** Its projects, an agent by id or every agent (`agents`), the ledger, an agent session's Claude Code transcript by its session id (`transcript`: none for a cloud session's, and the scripted stand-ins in the demo, its pretend leads' and its older sessions'), the captain's settings (`settings`: the model a read-only session runs on, say), and the office's own repo (`ownRepo`, from its checkout's remote; none in the demo).
 - **Writing the ledger.** `record` writes a line in the ship's log and sends the new report card. Every plugin hears it on `ledgerRecorded`, the one writing it too.
 - **Filing an issue.** `fileIssue` files one on GitHub and puts it on the project's board straight away. Only in one of that project's own repos: the office refuses any other.
+- **Files and checkouts.** `dataDir()` is the plugin's own folder for what it keeps (`<data dir>/plugins/<id>`). `checkout(repo)` checks out a repo's default branch as it is on GitHub now, in a folder of the plugin's own, and says where: only one of the office's projects' repos. `officeDir` is the office's own checkout, a real repo in the demo too (the cartography plugin maps it there, since the demo's repos are made up).
 - **The whole office.** `snapshot` is the office as a browser gets it when it connects: projects, every agent with their recent terminal lines, boards, QA's reviews, the Ops stations' drafts and every plugin's state. It's a lot, so ask for it when it's needed (a call's answer), not on a timer, and only read it. `shipStatus` is the ship as the crew's `ship_status` tool tells it (`server/agents/shipStatus.ts`, which the studio's computer reads too): who's on what and where their worktree is, the open pull requests, what needs the captain, and each closed goal's pull requests looked up on GitHub now. Number One reads both.
 - **The captain's goals.** `goals.start` starts a goal with a lead of its own at a free team station, or queues it when every station has one, saying where it came `from` (Number One's calls start theirs `from: 'a call'`); `goals.startQueued` starts a queued one at a station; `goals.message` passes a lead a word, as the captain's. Do these only on the captain's word.
 - **Talking.** A line in an agent's terminal (`print`), and a toast.
 
 ## In the browser
 
-A plugin's `client.ts` default-exports a `ClientPlugin` (`client/src/plugins.ts`). The client finds every `plugins/*/client.ts` as it's built, and shows only those the office switched on. In the browser, a plugin's state is `state.plugins[id]`, and the `plugin` event says whose changed. A plugin can add:
+A plugin's `client.ts` default-exports a `ClientPlugin` (`client/src/plugins.ts`). The client finds every `plugins/*/client.ts` as it's built, and shows only those the office switched on. In the browser, a plugin reads its state with `pluginState(id)`, the office as the browser has it through `office` (read-only: its projects), and calls its own routes with `callPlugin(id, path, body)`, all from `plugin-api/client`. A plugin can add:
 
 - **To the engineering station** (`engineering`), which the panel draws again whenever the plugin's state changes, or an agent on a brief does:
   - `card`: a card on the overview, beside the others (the climber's, the retro's), with `go` to open one of the station's views from it;
@@ -125,12 +126,26 @@ plugins/<id>/
   *.test.ts     its tests (vitest finds plugins/**/*.test.ts)
 ```
 
-A plugin imports the office's code by path (`../../server/plugins/contract`, `../../shared/types`): its contract, its types, and helpers like `server/agents/fakeOffice.ts`, a pretend office its tests can switch it on in. For another plugin, see [plugins that need each other](#plugins-that-need-each-other): it reaches what that plugin provides through the host, not its code. Typecheck, lint (no non-null assertions outside tests, as in `server/`), the scorecard's fence and CRAP cover `plugins/` like the rest.
+### The plugin API
 
-A plugin outside the office's folder can be switched on by path, but for now it still imports the office's code by relative path, and its `client.ts` isn't found (only `plugins/` inside the checkout is). Plugins in repos of their own need a published contract first.
+A plugin reaches the office only through `plugin-api/`, the core's one published surface for plugins:
+
+- `plugin-api/shared.ts`: the office's types and pure values both halves use (`Agent`, `Project`, `LedgerEvent`, `ModelKind`, the recorded flows…);
+- `plugin-api/server.ts`: the contract a `server.ts` implements (`FocusPlugin`, `PluginHost`…) and the helpers it shares with the core (`errorMessage`, `run`), with everything in `shared.ts`;
+- `plugin-api/client.ts`: the contract a `client.ts` implements (`ClientPlugin`…), `pluginState`, `office`, `callPlugin` and the station's UI kit (`h`, `Ui`), with everything in `shared.ts`;
+- `plugin-api/testing.ts`, for its tests only: `office()`, a pretend office its tests can switch it on in, `until`, and `OFFICE_DIR`.
+
+Whatever the API doesn't re-export, the core can change without a plugin noticing. When a plugin needs more of the office, the API grows: what the office does for a plugin (files, checkouts, GitHub, sessions) goes on the host, so the core decides what a plugin can do and a test can lend it a fake; a type or a pure helper is re-exported. For another plugin, see [plugins that need each other](#plugins-that-need-each-other): it reaches what that plugin provides through the host, and imports only that plugin's types.
+
+`plugin-api/boundary.test.ts` holds the repo to it, resolving every import as TypeScript does: a plugin imports only its own files, `plugin-api/` (`testing.ts` from tests alone), npm packages and another plugin's types, and the core never imports a plugin. The plugins not yet moved behind the API are listed in its `NOT_YET_BEHIND`, with how many imports of theirs still cross: exactly that many, so one more fails, and one fewer means bringing the count down. A new plugin isn't on the list, so it has to import through the API from the start.
+
+Typecheck, lint (no non-null assertions outside tests, as in `server/`), the scorecard's fence and CRAP cover `plugins/` like the rest.
+
+A plugin outside the office's folder can be switched on by path, but for now it still imports `plugin-api/` by relative path, and its `client.ts` isn't found (only `plugins/` inside the checkout is). Plugins in repos of their own need the API published as a package first.
 
 ## Where it lives
 
+- `plugin-api/`: what a plugin may import of the office, and `boundary.ts`, the line its test holds the repo to.
 - `server/plugins/contract.ts`: what a plugin is, what it adds and what the office lends it.
 - `server/plugins/registry.ts`: `Plugins`, the core's one way to the plugins switched on (briefs, states, routes, hooks). The manager's core holds it (`core.plugins`), and the office reaches it through `office.agents.plugins`.
 - `server/plugins/load.ts`: finding and loading what `FOCUS_PLUGINS` names (`all` too).

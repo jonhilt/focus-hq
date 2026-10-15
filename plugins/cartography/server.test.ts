@@ -1,8 +1,7 @@
 // The cartography plugin follows the switch in each project's settings: it maps only the projects it's on for, maps one
 // as it's switched on, and forgets one as it's switched off. In the demo it maps the office's own checkout.
 import { describe, expect, it, vi } from 'vitest';
-import type { PluginHost, PluginState } from '../../server/plugins/contract';
-import type { Project } from '../../shared/types';
+import type { PluginHost, PluginState, Project } from '../../plugin-api/server';
 import cartography from './server';
 import type { CartographyState } from './shared';
 

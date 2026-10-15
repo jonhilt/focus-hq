@@ -1,6 +1,6 @@
 // The project's maps in its holodeck (plugins.ts `hall`): a screen per view round the wall, each its question over its
 // drawing, and E on it opens it up close.
-import type { HallScreen } from '../../client/src/plugins';
+import type { HallScreen } from '../../plugin-api/client';
 import { viewDrawing } from './draw';
 import { openView } from './panel';
 import type { MapView, RepoMap } from './shared';

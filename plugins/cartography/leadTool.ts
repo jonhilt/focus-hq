@@ -2,8 +2,7 @@
 // station's screen, mapped from their own checkout, so a view they add to the model in their slice shows at once, and
 // every later goal reuses it once it merges. With no view, it lists them.
 import { z } from 'zod';
-import { ARTIFACT_LIMITS } from '../../server/agents/lead';
-import type { LeadTool, LeadToolContext } from '../../server/plugins/contract';
+import { ARTIFACT_LIMITS, type LeadTool, type LeadToolContext } from '../../plugin-api/server';
 import { mapRepo } from './map';
 import { mapPage } from './page';
 import { MODEL_FILE, type RepoMap } from './shared';

@@ -161,6 +161,15 @@ export interface PluginHost {
   fileIssue(projectId: string, repo: string, title: string, body: string): Promise<Issue>;
   /** The office's own repo (`owner/repo`, from its checkout's remote): none in the demo. */
   ownRepo(): string | undefined;
+  /** The office's own checkout (its root folder): a real repo on this machine, in the demo too. */
+  readonly officeDir: string;
+  /** The plugin's own folder for files it keeps (`<data dir>/plugins/<id>`), made when it's first asked for. */
+  dataDir(): string;
+  /**
+   * Checks out `repo`'s default branch as it is on GitHub now, detached, in a folder of the plugin's own (in its
+   * `dataDir`), and says where. `repo` has to be one of the office's projects' repos: it throws, in words, for any other.
+   */
+  checkout(repo: string): Promise<string>;
   /** Hands one of the plugin's briefs to an agent: `crew` sits down when it's always the same person, else someone's hired. Throws, in words, when it can't. */
   seat(projectId: string, repo: string, work: BriefWork, crew?: Planner): Agent;
   /** Forgets what the office keeps of an agent's last session (what waited to be said, their notes), so their next brief starts afresh. */

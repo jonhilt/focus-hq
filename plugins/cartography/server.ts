@@ -2,11 +2,7 @@
 // the imports their code makes, made again as the office starts and whenever a pull request merges into one of them,
 // for each project it's switched on for in the project's settings.
 // FOCUS_PLUGINS=cartography.
-import path from 'node:path';
-import { config } from '../../server/config';
-import { checkoutLatest } from '../../server/agents/workspace';
-import type { FocusPlugin, PluginHost, PluginState } from '../../server/plugins/contract';
-import { errorMessage } from '../../server/util';
+import { errorMessage, type FocusPlugin, type PluginHost, type PluginState } from '../../plugin-api/server';
 import { mapTool } from './leadTool';
 import { mapRepo } from './map';
 import { CARTOGRAPHY, type CartographyState, type RepoMap } from './shared';
@@ -15,12 +11,7 @@ import { CARTOGRAPHY, type CartographyState, type RepoMap } from './shared';
 const MAP_AFTER_START_MS = 20_000;
 
 /** Where a repo is checked out to be mapped: the office's own checkout in the demo, whose projects' repos are made up. */
-async function checkout(repo: string, demo: boolean): Promise<string> {
-  if (demo) return config.root;
-  const dir = path.join(config.dataDir, 'cartography', repo.replace('/', '__'));
-  await checkoutLatest(repo, dir);
-  return dir;
-}
+const checkout = (host: PluginHost, repo: string): Promise<string> => (host.demo ? Promise.resolve(host.officeDir) : host.checkout(repo));
 
 class Cartographer {
   /** Projects asked to be mapped again while they were being mapped. */
@@ -44,7 +35,7 @@ class Cartographer {
     this.state.set({ mapping: [...this.state.get().mapping, id] });
     const maps: RepoMap[] = [];
     for (const repo of project.repos) {
-      maps.push(await checkout(repo, this.host.demo).then((dir) => mapRepo(repo, dir)).catch((err: unknown) => ({ repo, files: 0, mapped: 0, sizes: {}, connections: [], problems: [], error: errorMessage(err) })));
+      maps.push(await checkout(this.host, repo).then((dir) => mapRepo(repo, dir)).catch((err: unknown) => ({ repo, files: 0, mapped: 0, sizes: {}, connections: [], problems: [], error: errorMessage(err) })));
     }
     const now = this.state.get();
     this.state.set({ maps: { ...now.maps, [id]: maps }, mapping: now.mapping.filter((p) => p !== id) });

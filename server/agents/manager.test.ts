@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { Effect, Layer } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 import { randomAvatar } from '../../shared/crew';
@@ -1286,6 +1288,13 @@ describe('AgentManager', () => {
       expect(await lent!.transcript('session-1')).toBeUndefined();
       agents.readTranscript = (id) => Promise.resolve(`the transcript of ${id}`);
       expect(await lent!.transcript('session-1')).toBe('the transcript of session-1');
+    });
+
+    it('checks out only the office’s own repos for a plugin, and lends it the office’s checkout', async () => {
+      const { agents } = office();
+      const host = auditor(agents).host();
+      await expect(host.checkout('someone/else')).rejects.toThrow('someone/else isn’t one of the office’s repositories');
+      expect(fs.existsSync(path.join(host.officeDir, 'package.json'))).toBe(true);
     });
 
     it('keeps the plugin’s state in its own slot, with what it adds later filled in fresh', () => {

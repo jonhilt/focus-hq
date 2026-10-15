@@ -1,7 +1,7 @@
 // The map's pure rules: which files it looks at, where an import leads, which part owns a file, and the connections
 // between parts that the imports make. Nothing here reads a disk (map.ts does).
 import path from 'node:path';
-import type { Flow, FlowRecording } from '../../shared/flows';
+import type { Flow, FlowRecording } from '../../plugin-api/shared';
 import type { ArchitectureModel, FileEdge, MapConnection, MapFlow, RepoMap } from './shared';
 
 /** How many of a connection's names it keeps, the most imported first. */

@@ -74,7 +74,7 @@ On the engineering station (<kbd>E</kbd> at Lt. Brennan's station on deck 5), un
 
 The drawings are SVG made by `draw.ts`, at their own size, shrunk to fit the station but never blown up. **Map again** makes a project's maps again.
 
-Maps are made from each repo's default branch, checked out under `~/.focus/cartography/`: 20 seconds after the office starts, and again whenever a pull request merges into one of the project's repos. They're kept in memory only, not in `state.json`. The demo office's repos are made up, so it maps the office's own checkout for each of them.
+Maps are made from each repo's default branch, checked out in the plugin's own folder, under `~/.focus/plugins/cartography/`: 20 seconds after the office starts, and again whenever a pull request merges into one of the project's repos. They're kept in memory only, not in `state.json`. The demo office's repos are made up, so it maps the office's own checkout for each of them.
 
 ## What's next
 

@@ -5,17 +5,15 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { ARTIFACT_LIMITS } from '../../server/agents/lead';
-import { config } from '../../server/config';
-import type { Agent } from '../../shared/types';
-import type { LeadToolContext } from '../../server/plugins/contract';
+import { type Agent, ARTIFACT_LIMITS, type LeadToolContext } from '../../plugin-api/server';
+import { OFFICE_DIR } from '../../plugin-api/testing';
 import { mapTool } from './leadTool';
 
 // mapping runs real git (ls-files, rev-parse), which takes longer than vitest's 5 s on a busy machine
 vi.setConfig({ testTimeout: 30_000 });
 
 /** A lead with `checkouts`, whose screen refuses a title over the show tool's limit, as the office's does. */
-function lead(checkouts = [{ repo: 'jonhilt/focus', dir: config.root }]): { context: LeadToolContext; shown: { id: string; title: string; html: string }[] } {
+function lead(checkouts = [{ repo: 'jonhilt/focus', dir: OFFICE_DIR }]): { context: LeadToolContext; shown: { id: string; title: string; html: string }[] } {
   const shown: { id: string; title: string; html: string }[] = [];
   const context: LeadToolContext = {
     agent: { id: 'lead_p_1' } as Agent,

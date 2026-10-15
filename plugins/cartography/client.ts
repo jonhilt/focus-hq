@@ -1,11 +1,6 @@
 // The cartography plugin in the browser (README.md): each project's architecture map on the engineering station, its
 // views drawn by draw.ts, each with how to read it, and in sentences; and a screen per view in the project's holodeck.
-import { pluginOn } from '../../shared/projectPlugins';
-import { api } from '../../client/src/net/api';
-import { state } from '../../client/src/net/state';
-import { type ClientPlugin, pluginState } from '../../client/src/plugins';
-import type { Ui } from '../../client/src/ui/context';
-import { h } from '../../client/src/ui/dom';
+import { callPlugin, type ClientPlugin, h, office, pluginOn, pluginState, type Ui } from '../../plugin-api/client';
 import { hallMaps } from './hall';
 import { viewBody } from './panel';
 import { CARTOGRAPHY, type CartographyState, MODEL_FILE, type RepoMap } from './shared';
@@ -34,14 +29,14 @@ function repoMap(map: RepoMap, open: Set<string>): HTMLElement[] {
 
 function projectMaps(ui: Ui, open: Set<string>): HTMLElement[] {
   const now = maps();
-  const on = state.projects.filter((p) => pluginOn(p, CARTOGRAPHY));
-  const off = state.projects.length - on.length;
+  const on = office.projects.filter((p) => pluginOn(p, CARTOGRAPHY));
+  const off = office.projects.length - on.length;
   // the projects it's off for are only counted: switching it on is in each project's settings
   const offNote = off
     ? h('small', { class: 'muted' }, `Switched off for ${off} project${off === 1 ? '' : 's'}: switch Architecture map on in a project's settings (the manager's Projects tab) to map it.`)
     : null;
   return [...on.map((project) => {
-    const remap = h('button', { class: 'btn small', onclick: () => void api.plugin(CARTOGRAPHY, '/map', { projectId: project.id }).catch((err: Error) => ui.error(err.message)) },
+    const remap = h('button', { class: 'btn small', onclick: () => void callPlugin(CARTOGRAPHY, '/map', { projectId: project.id }).catch((err: Error) => ui.error(err.message)) },
       now?.mapping.includes(project.id) ? 'Mapping…' : 'Map again');
     const repos = now?.maps[project.id];
     return h('div', { class: 'card' },
@@ -65,7 +60,7 @@ const cartography: ClientPlugin = {
           const drift = Object.values(maps()?.maps ?? {}).flat().reduce((n, m) => n + m.problems.length, 0);
           return drift ? `${drift} DRIFT` : '';
         },
-        standby: () => !state.projects.some((p) => pluginOn(p, CARTOGRAPHY)),
+        standby: () => !office.projects.some((p) => pluginOn(p, CARTOGRAPHY)),
         render: (ui, _go, open) => projectMaps(ui, open),
       },
     ],

@@ -1,9 +1,13 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { config } from '../../config';
 import { pluginOn } from '../../../shared/projectPlugins';
 import type { Issue, PluginStates, Snapshot } from '../../../shared/types';
 import type { ShipStatus } from '../shipStatus';
 import type { BriefWork, PluginHost, PluginState } from '../../plugins/contract';
 import type { Core } from './core';
 import { Refused } from './core';
+import { checkoutLatest } from '../workspace';
 
 /**
  * What the office lends a plugin that the manager doesn't have: where it runs, its own repo, filing issues, the demo's
@@ -41,6 +45,11 @@ function slot<S extends object>(saved: () => PluginStates, id: string, fresh: ()
 
 /** What the office lends the plugin `id` (docs/plugins.md): the manager's seating, its terminals and toasts, and the store. */
 export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
+  const dataDir = () => {
+    const dir = path.join(config.dataDir, 'plugins', id);
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  };
   return {
     demo: lent.demo,
     state: (fresh, how) => {
@@ -74,6 +83,15 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
       return lent.fileIssue(projectId, repo, title, body);
     },
     ownRepo: lent.ownRepo,
+    officeDir: config.root,
+    dataDir,
+    checkout: async (repo) => {
+      // a plugin checks out only the captain's repos, and only into its own folder
+      if (!core.store.projects.some((p) => p.repos.includes(repo))) throw new Refused({ message: `${repo} isn’t one of the office’s repositories` });
+      const dir = path.join(dataDir(), 'checkouts', repo.replace('/', '__'));
+      await checkoutLatest(repo, dir);
+      return dir;
+    },
     seat: (projectId, repo, work: BriefWork, crew) => {
       const brief = core.plugins.brief({ plugin: id, kind: work.kind });
       if (!brief) throw new Refused({ message: `${id} has no brief called ${work.kind}` });
