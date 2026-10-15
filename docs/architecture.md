@@ -28,6 +28,7 @@ server/
   hub.ts                  broadcasts ServerEvents to every browser tab
   previews.ts             Preview: check a PR out, run the project's preview commands, find its links, tear it down (Effect: one Scope per preview)
   previewMachine.ts       what a preview does to this machine (shell commands in their own process group, signals, probes) as an Effect service
+  plugins/                what a plugin is to the office (contract.ts), the ones switched on (registry.ts), loading what FOCUS_PLUGINS names (load.ts), and state saved from before (migrate.ts): docs/plugins.md
   github/                 GitHub as an Effect service: gh CLI layer (live), in-memory layer (demo), Promise adapter
   call/                   calls to Number One: gpt-live-1's session and sideband (live.ts), Jev (jev.ts), what the captain asked for (route.ts), how things stand (status.ts) and the briefing on a topic to talk through (brief.ts), all pure, the call's XState machine (machine.ts), a call end to end (calls.ts), the demo's scripted captain (demo.ts)
   agents/
@@ -45,7 +46,7 @@ server/
       planLimit.ts        your plan's usage limit reached: an agent it stopped carries on with the API key, or is held until it resets
       reviews.ts          QA: the review queue, seating a reviewer, their verdict, sending a failed PR back to be fixed
       triages.ts          stuck PRs: the operations officer's look, one at a time per room, and what they decided
-      climbs.ts           main engineering's climber: one climb at a time while the captain keeps climbing, the next once its PR merges or closes
+      pluginHost.ts       what the manager lends each plugin (docs/plugins.md): seating an agent on its brief, its state slot, terminal lines and toasts
       cloudMoves.ts       moving an agent to a cloud session, attaching to it, or keeping them local
       ledger.ts           ledger entries, landings, session digests and backfill, the report card
     services.ts           what the manager needs from outside as Effect services: git on the checkouts, Claude Code sessions (a scoped turn), triage
@@ -76,7 +77,7 @@ server/
     numberOne.ts          Number One's ship-wide chat: turns, prompt, reply schema and the ship_status summariser
     claudeCrew.ts         the crew's read-only Claude Code sessions (Read/Glob/Grep, web search/fetch for Number One, Number One's ship_status and open_project, structured output)
     retro.ts              the chief engineer's retro, pure: what the engineer reads (the frictions that keep coming back, the ledger, goals), prompt, schema, and the check that every draft rests on real groups, with the evidence added by code; also who a transcript's message is from
-    climb.ts              the climber, pure: the climb's brief, its PR from the write-up, what to do next, and where the climbs are (docs/climber.md)
+    fakeOffice.ts         a pretend office for tests (the manager's and plugins'): demo GitHub and checkouts, and a Claude Code stand-in whose turns the test ends
     engineer.ts           the chief engineer: groups the digests' frictions, gathers the evidence into data/retros, runs one retro at a time and notes the captain's decisions; also finds the agents' transcripts on disk
     sessionDigest.ts      a session's span digested from its transcript and the ledger, by code: calls, waste, cost, nudges
     frictions.ts          what the retro's reader reads of each session's span, the batches, prompt and schema, the fixed friction kinds, and the check that every quote is in the span
@@ -119,9 +120,11 @@ client/src/
     studioChat.ts         the studio's chat with its computer, docked down the right so the room stays in view
     modelPanel.ts         a studio model up close: its three views live as SVG, stepping, and a picked part's cited code
     call.ts               a call to Number One: WebRTC to OpenAI, and the call's strip (what it's doing, what waits on your yes, captions, hang up)
+  plugins.ts              the plugins' parts in the browser: each plugins/*/client.ts, shown when the office switched it on
   tricorder/              the phone view at /tricorder (no three.js): home screen, agent drill-down, buttons that survive live re-renders
 client/tricorder/index.html   the Tricorder's page (a second Vite entry), with its home-screen meta tags
 client/public/tricorder/  its web app manifest and home-screen icons
+plugins/                  what the office does beyond its core, a folder per plugin (server.ts, client.ts, shared.ts, its tests and README), switched on by FOCUS_PLUGINS: climber/ (main engineering's climber)
 client/public/ship/       the decks built in Blender, as GLBs (pnpm run ship writes them, or CI's Ship workflow on a branch, .github/workflows/ship.yml)
 blender/                  the Blender scripts that build the decks: ship.py (entry), kit.py (walls, furniture, markers), bake.py (each deck's ambient occlusion, baked into a lightmap), command_deck.py (the bridge, ready room and observation lounge), holodeck_deck.py (the holodecks' hallway and the turbolift), engineering_deck.py (main engineering: the gallery, the well, the warp core and the level below), team_station.py (a team station's door and briefing room), transporter_room.py (a team station's transporter room), training_hall.py (the training hall every holodeck is a copy of)
 ```
