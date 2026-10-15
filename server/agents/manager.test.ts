@@ -1,20 +1,19 @@
-import { Effect, Layer, Schedule } from 'effect';
+import { Effect, Layer } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
-import { climbingEngineer, randomAvatar } from '../../shared/crew';
+import { randomAvatar } from '../../shared/crew';
 import * as demoGitHub from '../github/demo';
 import { prKey } from '../../shared/qa';
 import { openQuestion } from '../../shared/artifacts';
 import { demoLayer } from '../github/demo';
 import { GhServerError } from '../github/runner';
 import { GitHub } from '../github/service';
-import { Hub } from '../hub';
-import { Store } from '../store';
+import type { PluginHost } from '../plugins/contract';
 import { demoWorkspace } from './demoRunner';
-import { AgentManager } from './manager';
-import { Renderer, Sessions, ShipRetry, Triage, Workspace } from './services';
-import type { Autonomy, PullRequest, QaReport } from '../../shared/types';
-import { CLIMB_DESK } from '../../shared/types';
-import type { AgentRunner, AgentSession, CloudTerminal, CloudTerminalRequest, RunHooks, RunOutcome, RunRequest, WorkspaceOps } from './types';
+import { office, until } from './fakeOffice';
+import type { AgentManager } from './manager';
+import type { PullRequest, QaReport } from '../../shared/types';
+import { AWAY_DESK } from '../../shared/types';
+import type { WorkspaceOps } from './types';
 import { CLOUD_UNAVAILABLE } from './cloud';
 import { keyFallback } from './apiKey';
 import { CARRY_ON_AFTER_LIMIT } from './manager/planLimit';
@@ -26,66 +25,39 @@ vi.hoisted(() => {
   process.env.FOCUS_USE_API_KEY = 'fallback';
 });
 
-/** A Claude Code stand-in: each turn runs until the test ends it, and remembers being stopped and what it was sent. */
-class FakeClaude implements AgentRunner {
-  turns: { req: RunRequest; hooks: RunHooks; end: (outcome: RunOutcome) => void; stopped: boolean; sent: string[]; modes: Autonomy[] }[] = [];
-  /** The terminals opened to start cloud sessions, and what they show. */
-  terminals: CloudTerminalRequest[] = [];
-  shown = '';
-
-  cloudTerminal(req: CloudTerminalRequest): Promise<CloudTerminal> {
-    this.terminals.push(req);
-    return Promise.resolve({ read: () => Promise.resolve(this.shown) });
-  }
-
-  start(req: RunRequest, hooks: RunHooks): AgentSession {
-    let end!: (outcome: RunOutcome) => void;
-    const done = new Promise<RunOutcome>((resolve) => (end = resolve));
-    const turn = { req, hooks, end, stopped: false, sent: [] as string[], modes: [] as Autonomy[] };
-    this.turns.push(turn);
-    // a new cloud session's id comes once it's started, which Claude Code may refuse to do first
-    if (!req.cloud || req.resumeSessionId) hooks.session(req.resumeSessionId ?? 'session-1');
-    return {
-      send: (text) => (turn.sent.push(text), true),
-      // a cloud session's mode waits for its next turn
-      setAutonomy: (mode) => (turn.modes.push(mode), !req.cloud),
-      stop: () => {
-        turn.stopped = true;
-        end({ ok: false, summary: '', aborted: true });
-      },
-      done,
-    };
-  }
-}
-
-function office(workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<GitHub> = demoLayer) {
-  const store = new Store(false);
-  const project = store.addProject('Shop');
-  project.repos = ['demo/webshop-frontend', 'demo/webshop-api'];
-  const claude = new FakeClaude();
-  const services = Layer.mergeAll(
-    github,
-    // retries after a GitHub 5xx come straight away
-    Layer.succeed(ShipRetry, Schedule.spaced(0)),
-    Workspace.fromOps(workspace),
-    Sessions.fromRunner(claude),
-    Triage.fromTriager({ triage: () => Promise.reject(new Error('no officer here')) }),
-    Renderer.fromBrowser({
-      render: (html, moments) => (html.includes('unrenderable') ? Promise.reject(new Error('no browser')) : Promise.resolve({
-        image: Buffer.from('jpeg'),
-        errors: html.includes('throws') ? ['ReferenceError: nope is not defined'] : [],
-        // a stage that says "blank" draws nothing
-        ...(moments && { moments: moments.map((at) => ({ at, image: Buffer.from(`beat at ${at}`), flat: html.includes('blank') ? 1 : 0.7, labels: [] })) }),
-      })),
-    }),
-  );
-  return { store, project, claude, agents: new AgentManager(store, new Hub(), services, () => undefined) };
-}
-
-/** Waits (a few seconds at most) for the office to get there. */
-async function until(check: () => boolean): Promise<void> {
-  for (let i = 0; i < 300 && !check(); i++) await new Promise((r) => setTimeout(r, 10));
-  expect(check()).toBe(true);
+/** A plugin with one brief, worked away from the room, whose pull requests only the captain merges: what its hooks heard. */
+function auditor(agents: AgentManager) {
+  const heard: string[] = [];
+  let lent: PluginHost | undefined;
+  agents.startPlugins([{
+    id: 'auditor',
+    start: (host) => {
+      lent = host;
+      return {
+        briefs: {
+          audit: {
+            label: 'Audit',
+            icon: '🔎',
+            away: true,
+            assignment: 'You are the auditor.',
+            summary: 'End with a title.',
+            brief: (agent) => Effect.succeed(`Audit ${agent.repo}.`),
+            pullRequest: (summary) => ({ title: summary.split('\n')[0].replace(/^# /, ''), body: summary }),
+          },
+        },
+        prOpened: (_agent, pr) => void heard.push(`opened #${pr.number}`),
+        prClosed: (_repo, number) => void heard.push(`closed #${number}`),
+        captainMerges: (pr) => pr.branch.startsWith('focus/audit-'),
+      };
+    },
+  }], { demo: false, ownRepo: () => undefined, scorecards: { history: () => [], noise: () => undefined } });
+  return {
+    heard,
+    host: () => {
+      if (!lent) throw new Error('The auditor didn’t start');
+      return lent;
+    },
+  };
 }
 
 describe('AgentManager', () => {
@@ -1173,10 +1145,9 @@ describe('AgentManager', () => {
 
     it('installs in a new checkout before the agent starts, and tells them up front when it fails', async () => {
       const { ran, workspace } = installs();
-      const { agents, claude, store, project } = office(workspace);
-      agents.keepClimbing(true, { projectId: project.id, repo: 'demo/webshop-frontend' });
+      const { agents, claude, project } = office(workspace);
+      const { id } = auditor(agents).host().seat(project.id, 'demo/webshop-frontend', { id: 'auditor', kind: 'audit', title: 'Auditing', branch: 'focus/audit-1', baseBranch: 'main' });
       await until(() => claude.turns.length === 1);
-      const id = store.climb.agentId!;
       expect(ran).toEqual([`/demo/${id}`]);
       expect(claude.turns[0].req.prompt).toContain(`Couldn't install in /demo/${id}`);
     });
@@ -1192,78 +1163,39 @@ describe('AgentManager', () => {
     });
   });
 
-  describe('climbing', () => {
-    const climbers = (store: Store) => [...store.agents.values()].filter((a) => a.task === 'climb');
-
-    it('climbs one pull request at a time while the captain keeps climbing, and starts the next once it merges', async () => {
+  describe('a plugin’s brief', () => {
+    it('hands it to an agent away from the room’s desks, and opens their pull request as the plugin names it', async () => {
       const { agents, claude, store, project } = office();
-      agents.keepClimbing(true, { projectId: project.id, repo: 'demo/webshop-frontend' });
+      const auditing = auditor(agents);
+      const agent = auditing.host().seat(project.id, 'demo/webshop-frontend', { id: 'auditor', kind: 'audit', title: 'Auditing', branch: 'focus/audit-1', baseBranch: 'main' });
+      expect(agent).toMatchObject({ task: 'brief', desk: AWAY_DESK, brief: { plugin: 'auditor', kind: 'audit', label: 'Audit', icon: '🔎' } });
       await until(() => claude.turns.length === 1);
-      const id = store.climb.agentId!;
-      // the climber stands in main engineering, not at one of the room's desks
-      expect(store.agent(id)).toMatchObject({ task: 'climb', desk: CLIMB_DESK, name: climbingEngineer().name, branch: expect.stringMatching(/^focus\/climb-/) });
-      const branch = store.agent(id).branch;
-      expect(claude.turns[0].req.prompt).toMatch(/^Climb demo\/webshop-frontend one step/);
+      expect(claude.turns[0].req.prompt).toBe('Audit demo/webshop-frontend.');
+      expect(claude.turns[0].req.systemAppend).toContain('You are the auditor.');
+      expect(claude.turns[0].req.systemAppend).toContain('End with a title.');
 
-      claude.turns[0].end({ ok: true, summary: '# Narrow the board’s lookups\n\n**Problem**\n\nSix non-null assertions.' });
-      await until(() => !!store.agent(id).pr);
-      const pr = store.agent(id).pr!;
-      expect(store.agent(id).issue.title).toBe('Narrow the board’s lookups');
-      agents.settleClimb();
-      expect(store.climb).toMatchObject({ keepClimbing: true, cycles: 1, pr: { number: pr.number } });
-      agents.settleClimb();
-      expect(climbers(store)).toHaveLength(1);
+      claude.turns[0].end({ ok: true, summary: '# Tighten the checks\n\nThree gaps.' });
+      await until(() => !!store.agent(agent.id).pr);
+      const pr = store.agent(agent.id).pr!;
+      expect(store.agent(agent.id).issue.title).toBe('Tighten the checks');
+      expect(auditing.heard).toEqual([`opened #${pr.number}`]);
+      // its pull request is the plugin's to merge or not, even once the agent's gone
+      expect(agents.plugins.captainMerges({ branch: 'focus/audit-1' })).toBe(true);
+      expect(agents.plugins.captainMerges({ branch: 'focus/7-cart' })).toBe(false);
 
       agents.prClosed('demo/webshop-frontend', pr.number, true, 'captain');
-      await until(() => store.climb.cycles === 2);
-      expect(store.climb.last).toMatchObject({ pr: pr.number, outcome: 'merged' });
-      // the same engineer climbs again, in a fresh session on a new branch, their terminal carrying on
-      expect(store.climb.agentId).toBe(id);
-      await until(() => claude.turns.length === 2);
-      expect(store.agent(id)).toMatchObject({ name: climbingEngineer().name, status: expect.not.stringMatching(/done/) });
-      expect(store.agent(id).pr).toBeUndefined();
-      expect(store.agent(id).branch).not.toBe(branch);
-      expect(claude.turns[1].req.resumeSessionId).toBeUndefined();
-      // and they remember the climb before, read from GitHub
-      expect(claude.turns[0].req.prompt).toContain('This is your first climb.');
-      expect(claude.turns[1].req.prompt).toContain(`#${pr.number} Narrow the board’s lookups (`);
+      expect(auditing.heard).toEqual([`opened #${pr.number}`, `closed #${pr.number}`]);
     });
 
-    it('switches climbing off, saying why, when a climb ends without a pull request', async () => {
-      const { agents, claude, store, project } = office({ ...demoWorkspace, commitsAhead: () => Promise.resolve(0) });
-      agents.keepClimbing(true, { projectId: project.id, repo: 'demo/webshop-frontend' });
-      await until(() => claude.turns.length === 1);
-      const id = store.climb.agentId!;
-      claude.turns[0].end({ ok: true, summary: 'Nothing worth changing: the scorecard is clean.' });
-      await until(() => store.agent(id).status === 'done');
-      agents.settleClimb();
-      expect(store.climb).toMatchObject({ keepClimbing: false, agentId: undefined, last: { outcome: 'nothing' } });
-      expect(store.climb.stoppedWhy).toMatch(/found nothing to change/);
-      agents.settleClimb();
-      expect(climbers(store)).toHaveLength(1);
-    });
-
-    it('holds on to the climb’s pull request from the moment it opens, even once the climber has gone home', async () => {
-      const { agents, claude, store, project } = office();
-      agents.keepClimbing(true, { projectId: project.id, repo: 'demo/webshop-frontend' });
-      await until(() => claude.turns.length === 1);
-      const id = store.climb.agentId!;
-      claude.turns[0].end({ ok: true, summary: '# Narrow the board’s lookups\n\n**Problem**\n\nSix non-null assertions.' });
-      await until(() => !!store.agent(id).pr);
-      const pr = store.agent(id).pr!;
-      expect(store.climb.pr).toEqual({ number: pr.number, url: pr.url });
-
-      // sent home before any board refresh looked at the climb: it waits for its PR rather than switching off
-      await agents.dismiss(id);
-      agents.settleClimb();
-      expect(store.climb).toMatchObject({ keepClimbing: true, pr: { number: pr.number } });
-      expect(climbers(store)).toHaveLength(0);
-    });
-
-    it('won’t climb without the office’s own repo in a project', () => {
+    it('keeps the plugin’s state in its own slot, with what it adds later filled in fresh', () => {
       const { agents, store } = office();
-      expect(() => agents.keepClimbing(true, undefined)).toThrow(/Connect the office’s own repository/);
-      expect(store.climb.keepClimbing).toBe(false);
+      const host = auditor(agents).host();
+      const state = host.state(() => ({ audits: 0, strict: false }));
+      state.set({ audits: 1 });
+      expect(store.plugins.auditor).toEqual({ audits: 1, strict: false });
+      expect(agents.plugins.states()).toEqual({ auditor: { audits: 1, strict: false } });
+      store.plugins.auditor = { audits: 2 };
+      expect(state.get()).toEqual({ audits: 2, strict: false });
     });
   });
 });

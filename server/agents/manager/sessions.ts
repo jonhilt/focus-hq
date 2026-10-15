@@ -35,7 +35,7 @@ export class AgentSessions extends Part {
       this.update(agent, { status: 'setting-up', activity: 'Picking up where they left off' });
       return this.runSession(agent, rt.inbox.splice(0).join('\n\n'), agent.sessionId).pipe(this.orFail(agent));
     }
-    this.update(agent, { status: 'setting-up', activity: agent.task === 'review' ? 'Reading the pull request' : agent.task === 'climb' ? 'Reading the brief' : 'Reading the issue', error: undefined });
+    this.update(agent, { status: 'setting-up', activity: agent.task === 'review' ? 'Reading the pull request' : agent.task === 'brief' ? 'Reading the brief' : 'Reading the issue', error: undefined });
     return Effect.gen({ self: this }, function* () {
       if (agent.task === 'review') return yield* this.core.reviews.launchReview(agent);
       if (agent.task === 'lead') {
@@ -46,10 +46,10 @@ export class AgentSessions extends Part {
       const workspace = yield* Workspace;
       const info = yield* github.repoInfo(agent.repo);
       if (info.isEmpty) return yield* new EmptyRepository({ repo: agent.repo });
-      if (agent.task === 'issue' || agent.task === 'climb') this.update(agent, { baseBranch: info.defaultBranch });
+      if (agent.task === 'issue' || agent.task === 'brief') this.update(agent, { baseBranch: info.defaultBranch });
       const prompt = yield* this.taskPrompt(agent);
-      // an issue or a climb starts a new branch from the base; conflicts and QA's findings are fixed on the PR's own branch
-      const startPoint = agent.task === 'issue' || agent.task === 'climb' ? agent.baseBranch : agent.branch;
+      // an issue or a brief starts a new branch from the base; conflicts and QA's findings are fixed on the PR's own branch
+      const startPoint = agent.task === 'issue' || agent.task === 'brief' ? agent.baseBranch : agent.branch;
       this.print(agent, [{ kind: 'system', text: `✻ Setting up a worktree for ${agent.repo} on ${agent.branch}` }]);
       this.update(agent, { activity: 'Cloning the repository' });
       // the PR's branch may be checked out in its goal's lead's workspace: someone resolving its conflicts works on a
@@ -84,8 +84,11 @@ export class AgentSessions extends Part {
         }
         case 'conflicts':
           return conflictsPrompt(agent);
-        case 'climb':
-          return yield* this.core.climbs.brief(agent);
+        case 'brief': {
+          const brief = this.core.plugins.brief(agent.brief);
+          if (!brief) return yield* new Refused({ message: `${agent.brief?.plugin ?? 'The plugin'} whose brief this is isn’t switched on` });
+          return yield* brief.brief(agent);
+        }
         case 'fix': {
           const review = this.store.reviews.get(prKey(agent.repo, agent.issue.number));
           if (!review?.report) return yield* new ReportGone({ number: agent.issue.number });
@@ -220,7 +223,7 @@ export class AgentSessions extends Part {
   instructions(agent: Agent): Effect.Effect<string, GitHubError, GitHub> {
     if (agent.task === 'review') return this.core.reviews.qaSystem(agent);
     if (agent.task === 'lead' && agent.lead) return Effect.succeed(leadSystemAppend(agent, this.store.project(agent.projectId).name, agent.lead.station));
-    return Effect.succeed(systemAppend(agent));
+    return Effect.succeed(systemAppend(agent, this.core.plugins.brief(agent.brief)));
   }
 
   /** One turn of the agent's session: the same tools and instructions on every turn, so a resumed session stays itself. */
@@ -240,6 +243,7 @@ export class AgentSessions extends Part {
       model: agent.model,
       outputSchema: agent.task === 'review' ? QA_SCHEMA : undefined,
       cloud: agent.cloud ? { branch: agent.branch } : undefined,
+      scripted: this.core.plugins.brief(agent.brief)?.demo,
       tools: agent.task === 'lead'
         ? { ship: (input) => tool(this.core.slices.shipLead(agent, input)), note: (input) => tool(this.core.goalTools.noteGoal(agent, input)), show: (input) => tool(this.core.goalTools.showArtifact(agent, input)), model: (input) => tool(this.core.goalTools.showModel(agent, input)), explain: (input) => tool(this.core.goalTools.explain(agent, input)), ask: (input) => tool(this.core.goalTools.askCaptain(agent, input)), proposeClose: (input) => tool(this.core.goalTools.proposeClose(agent, input.reason)) }
         : undefined,

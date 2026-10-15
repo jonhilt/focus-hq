@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { climbBrief, climbLogText } from '../server/agents/climb';
+import { climbBrief, climbLogText } from '../climb';
 import { findGapQuestion, followsRule, pickedGap, plantRejection, rankOnly, replayVerdict, sighting, type ClimbPick } from './climbReplayRules';
 
 const pick: ClimbPick = {

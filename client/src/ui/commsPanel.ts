@@ -38,7 +38,7 @@ function from(agent: Agent): HTMLElement {
   const work = agent.lead;
   return h('small', { class: 'need-from' },
     agent.name,
-    work ? ` · Station ${work.station + 1} · ${work.title}` : agent.task === 'climb' ? ` · Climb: ${agent.issue.title}` : ` · ${agent.task === 'issue' ? '#' : 'PR #'}${agent.issue.number} ${agent.issue.title}`,
+    work ? ` · Station ${work.station + 1} · ${work.title}` : agent.brief ? ` · ${agent.brief.label}: ${agent.issue.title}` : ` · ${agent.task === 'issue' ? '#' : 'PR #'}${agent.issue.number} ${agent.issue.title}`,
     project ? h('span', { class: 'hail-project', style: `--tone:${project.color}` }, project.name) : null,
     flowLive(agent, 'flow-tag'),
   );

@@ -29,6 +29,8 @@ export const config = {
   autoUpdate: process.env.FOCUS_AUTO_UPDATE !== '0' && !demo,
   /** How often auto update fetches the upstream branch. */
   updateCheckMs: Number(process.env.FOCUS_UPDATE_CHECK_MS ?? 5 * 60_000),
+  /** The plugins to switch on (docs/plugins.md): names of folders under plugins/, or paths to plugin folders anywhere. */
+  plugins: (process.env.FOCUS_PLUGINS ?? '').split(',').map((name) => name.trim()).filter(Boolean),
 };
 
 export const paths = {

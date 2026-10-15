@@ -4,7 +4,7 @@
 import { type Scenario, TRAINING, TRAINING_SEED, TRAINING_SPEED } from '../shared/scenarios';
 import { readScene, type Scene } from '../shared/studio';
 import { DEFAULT_STEPS, type TrainingStep } from '../shared/trainingSteps';
-import { freshClimb, type QueuedGoal, type Snapshot } from '../shared/types';
+import type { QueuedGoal, Snapshot } from '../shared/types';
 import type { AgentManager } from './agents/manager';
 import type { Hub } from './hub';
 import type { Store } from './store';
@@ -55,7 +55,7 @@ export function clearForTraining(store: Store): void {
   store.ledger = [];
   store.reviews.clear();
   store.closedPrs.clear();
-  store.climb = freshClimb();
+  store.plugins = {};
   store.save();
 }
 

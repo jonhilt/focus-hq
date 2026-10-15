@@ -2,6 +2,7 @@ import { Data, Effect, type Fiber, FiberMap, type Layer, ManagedRuntime, Scope }
 import type { Agent, AgentStatus, BrowserFrame, CloudHandover, PermissionRequest, TermLine } from '../../../shared/types';
 import type { GitHub, GitHubError } from '../../github/service';
 import type { Hub } from '../../hub';
+import { Plugins } from '../../plugins/registry';
 import type { Store } from '../../store';
 import { errorMessage } from '../../util';
 import { type GitFailed, type Renderer, retryServerErrors, SHIP_RETRIES, type Sessions, type Triage, Workspace } from '../services';
@@ -15,7 +16,6 @@ import type { Leads } from './leads';
 import type { Ledger } from './ledger';
 import type { PlanLimit } from './planLimit';
 import type { Reviews } from './reviews';
-import type { Climbs } from './climbs';
 import type { Seating } from './seating';
 import type { AgentSessions } from './sessions';
 import type { Slices } from './slices';
@@ -106,10 +106,11 @@ export class Core {
   comms!: Comms;
   reviews!: Reviews;
   triages!: Triages;
-  climbs!: Climbs;
   cloud!: CloudMoves;
   ledger!: Ledger;
   planLimit!: PlanLimit;
+  /** The plugins switched on (docs/plugins.md): the parts reach them only through here. */
+  readonly plugins: Plugins;
 
   constructor(
     readonly store: Store,
@@ -117,6 +118,7 @@ export class Core {
     services: Layer.Layer<ManagerServices>,
     readonly boardChanged: (projectId: string) => void,
   ) {
+    this.plugins = new Plugins(() => store.plugins);
     this.runtime = ManagedRuntime.make(services);
     this.runs = this.runtime.runSync(FiberMap.make<string, void, never>().pipe(Scope.provide(this.scope)));
   }

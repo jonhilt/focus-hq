@@ -1,10 +1,10 @@
-import { climbingEngineer } from '../../../shared/crew';
-import type { Climb } from '../../../shared/types';
-import { api } from '../net/api';
-import { state } from '../net/state';
-import type { Ui } from './context';
-import { h, timeAgo } from './dom';
-import { Switch } from './panels';
+import { api } from '../../client/src/net/api';
+import { state } from '../../client/src/net/state';
+import type { ClientPlugin } from '../../client/src/plugins';
+import type { Ui } from '../../client/src/ui/context';
+import { h, timeAgo } from '../../client/src/ui/dom';
+import { Switch } from '../../client/src/ui/panels';
+import { CLIMBER, climbingEngineer, type Climb } from './shared';
 
 const OUTCOME: Record<NonNullable<Climb['last']>['outcome'], string> = {
   merged: 'merged',
@@ -14,16 +14,17 @@ const OUTCOME: Record<NonNullable<Climb['last']>['outcome'], string> = {
 };
 
 /**
- * Main engineering's climber on the engineering panel (docs/climber.md): the climbing engineer, the captain's Keep
+ * Main engineering's climber on the engineering panel (README.md): the climbing engineer, the captain's Keep
  * climbing switch, the climb under way (what they're doing, its pull request) and how the last one ended.
  */
-export function climberView(ui: Ui): HTMLElement {
-  const climb = state.climb;
+function climberView(ui: Ui): HTMLElement {
+  // the plugin's own state, as its server part saves it
+  const climb = state.plugins[CLIMBER] as Climb | undefined;
   const engineer = climbingEngineer().name;
   const climber = climb?.agentId ? state.agents.get(climb.agentId) : undefined;
   const keep = new Switch('Keep climbing', !!climb?.keepClimbing, {
     title: 'One climb at a time on the office’s own repo: each opens a pull request that waits for you to merge it',
-    changed: (on) => void api.keepClimbing(on).catch((err: Error) => {
+    changed: (on) => void api.plugin<Climb>(CLIMBER, '/keep-climbing', { on }).catch((err: Error) => {
       keep.on = !on;
       ui.error(err.message);
     }),
@@ -50,3 +51,7 @@ export function climberView(ui: Ui): HTMLElement {
       : null,
   );
 }
+
+const climber: ClientPlugin = { id: CLIMBER, engineering: climberView };
+
+export default climber;

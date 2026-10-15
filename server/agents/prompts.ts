@@ -1,25 +1,31 @@
 import type { Agent } from '../../shared/types';
 import type { IssueDetail } from '../github/provider';
 import { truncate } from '../util';
-import { CLIMB_ASSIGNMENT, CLIMB_SUMMARY } from './climb';
+import type { BriefSpec } from '../plugins/contract';
 import { SCRATCH_RULE } from './scratch';
 import { WAIT_RULE } from './wait';
 
-export function systemAppend(agent: Agent): string {
+const PULL_REQUEST_SUMMARY = 'Your final message becomes the pull request description. Write it in Markdown with a short "Summary" and "Testing" section. No preamble.';
+
+/** A brief whose plugin was switched off since: the brief itself is in their first message. */
+const UNKNOWN_BRIEF = { assignment: 'Your manager handed you a brief: it\'s in your first message.', summary: PULL_REQUEST_SUMMARY };
+
+/** `brief` is what a plugin's brief says of the work (task `brief`). */
+export function systemAppend(agent: Agent, brief?: Pick<BriefSpec, 'assignment' | 'summary'>): string {
   if (agent.task === 'review') throw new Error('The QA officer gets qaSystemAppend (qa.ts)');
   if (agent.task === 'lead') throw new Error('The project lead gets leadSystemAppend (lead.ts)');
-  const assignment = {
-    issue: `Your manager assigned you GitHub issue #${agent.issue.number} in ${agent.repo}.`,
-    conflicts: `Your manager assigned you pull request #${agent.issue.number} in ${agent.repo}: it has merge conflicts with \`${agent.baseBranch}\` that you need to resolve.`,
-    fix: `Your manager assigned you pull request #${agent.issue.number} in ${agent.repo}: it failed QA and you need to fix what QA found.`,
-    climb: CLIMB_ASSIGNMENT,
-  }[agent.task];
-  const summary = {
-    issue: 'Your final message becomes the pull request description. Write it in Markdown with a short "Summary" and "Testing" section. No preamble.',
-    conflicts: 'Your final message goes to the manager: say briefly how you resolved each conflict and what you checked. No preamble.',
-    fix: 'Your final message goes to the manager: say briefly what you fixed and how you checked it. No preamble.',
-    climb: CLIMB_SUMMARY,
-  }[agent.task];
+  const { assignment, summary } = agent.task === 'brief' ? brief ?? UNKNOWN_BRIEF : {
+    assignment: {
+      issue: `Your manager assigned you GitHub issue #${agent.issue.number} in ${agent.repo}.`,
+      conflicts: `Your manager assigned you pull request #${agent.issue.number} in ${agent.repo}: it has merge conflicts with \`${agent.baseBranch}\` that you need to resolve.`,
+      fix: `Your manager assigned you pull request #${agent.issue.number} in ${agent.repo}: it failed QA and you need to fix what QA found.`,
+    }[agent.task],
+    summary: {
+      issue: PULL_REQUEST_SUMMARY,
+      conflicts: 'Your final message goes to the manager: say briefly how you resolved each conflict and what you checked. No preamble.',
+      fix: 'Your final message goes to the manager: say briefly what you fixed and how you checked it. No preamble.',
+    }[agent.task],
+  };
   const where = agent.cloud
     ? [
         `- You work in a Claude Code cloud session, in a clone of ${agent.repo}. Work on branch \`${agent.branch}\` (created from \`${agent.baseBranch}\`): if you're on any other branch, run \`git fetch origin ${agent.branch}\` and \`git checkout ${agent.branch}\` first. This overrides any other branch you were told to develop on.`,
@@ -108,8 +114,8 @@ export const COMMIT_NUDGE =
   '(leave out build output, dependencies and secrets), then reply with your pull request description again.';
 
 export function pullRequestBody(agent: Pick<Agent, 'name'> & Partial<Pick<Agent, 'task'>> & { issue: Pick<Agent['issue'], 'number'> }, summary: string, attribution: boolean): string {
-  // a climb has no issue of its own: the climber says `Closes #n` themselves when they took one of the retro's
-  const body = agent.task === 'climb' ? summary.trim() : `${summary.trim() || `Resolves the issue below.`}
+  // a plugin's brief has no issue of its own: its write-up says `Closes #n` itself when it took one on
+  const body = agent.task === 'brief' ? summary.trim() : `${summary.trim() || `Resolves the issue below.`}
 
 Closes #${agent.issue.number}`;
   return attribution ? `${body}\n\n---\n_Built by **${agent.name}** in the Focus office with Claude Code._` : body;

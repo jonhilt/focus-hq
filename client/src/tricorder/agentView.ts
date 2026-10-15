@@ -79,7 +79,7 @@ export function agentView(id: string, actions: Actions, back: () => void): View 
         h('div', { class: 'pills' },
           h('span', { class: `pill status ${a.status}` }, `${statusIcon(a)} ${a.status}`),
           a.task === 'issue' ? h('a', { class: 'pill link', href: a.issue.url, target: '_blank', rel: 'noreferrer' }, `Issue #${a.issue.number} ↗`) : null,
-          a.task !== 'issue' && a.task !== 'lead' && a.task !== 'climb' ? h('a', { class: 'pill link', href: a.issue.url, target: '_blank', rel: 'noreferrer' }, `PR #${a.issue.number} ↗`) : null,
+          a.task !== 'issue' && a.task !== 'lead' && a.task !== 'brief' ? h('a', { class: 'pill link', href: a.issue.url, target: '_blank', rel: 'noreferrer' }, `PR #${a.issue.number} ↗`) : null,
           a.pr ? h('a', { class: 'pill link go', href: a.pr.url, target: '_blank', rel: 'noreferrer' }, `PR #${a.pr.number} ↗`) : null,
           FINISHED.includes(a.status) ? null : actions.button(`${scope}:stop`, '■ Stop', () => api.stop(id), { class: 'danger small' }),
         ),

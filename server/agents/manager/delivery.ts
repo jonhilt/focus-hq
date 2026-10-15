@@ -4,7 +4,6 @@ import type { Agent } from '../../../shared/types';
 import { GitHub } from '../../github/service';
 import { errorMessage } from '../../util';
 import { afterCloudRun } from '../cloud';
-import { climbPullRequest } from '../climb';
 import { COMMIT_NUDGE, pullRequestBody, pushNudge } from '../prompts';
 import { Workspace } from '../services';
 import { type ManagerServices, Part, Refused, type WorkError } from './core';
@@ -80,8 +79,9 @@ export class Delivery extends Part {
         this.hub.toast('success', `${agent.name} updated PR #${pr.number}`, agent.id);
       } else {
         this.update(agent, { activity: 'Opening the pull request' });
-        // a climb's title is the first line of the climber's own write-up
-        const { title, body } = agent.task === 'climb' ? climbPullRequest(summary) : { title: agent.issue.title, body: summary };
+        // a plugin's brief names its own pull request, from the write-up
+        const brief = agent.task === 'brief' ? this.core.plugins.brief(agent.brief) : undefined;
+        const { title, body } = brief ? brief.pullRequest(summary) : { title: agent.issue.title, body: summary };
         if (title !== agent.issue.title) this.update(agent, { issue: { ...agent.issue, title } });
         pr = yield* this.retrying(agent, 'opening the pull request', github.createPullRequest(agent.repo, {
           head: agent.branch,
@@ -93,7 +93,7 @@ export class Delivery extends Part {
       }
       this.print(agent, [{ kind: 'success', text: `✔ Pull request ready: ${pr.url}` }]);
       this.update(agent, { status: 'done', pr, activity: `PR #${pr.number} is ready for review`, finishedAt: Date.now() });
-      if (agent.task === 'climb') this.core.climbs.opened(agent.id, pr);
+      if (agent.task === 'brief') this.core.plugins.prOpened(agent, pr);
       const lead = agent.task === 'conflicts' ? this.core.leads.leadWith(agent.repo, pr.number) : undefined;
       if (lead) this.core.conflicts.mergedForLead(lead, { repo: agent.repo, number: pr.number, baseBranch: agent.baseBranch, branch: agent.branch }, yield* workspace.head(dir), agent.name);
       this.boardChanged(agent.projectId);

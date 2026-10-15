@@ -1,8 +1,8 @@
 import type { Agent, Project } from '../../shared/types';
-import { ACTIVE_STATUSES } from '../../shared/types';
+import { ACTIVE_STATUSES, AWAY_DESK } from '../../shared/types';
 
-/** QA officers, leads and the climber don't sit at one of a room's desks, and don't count against its limit (only the global one). */
-export const deskless = (a: Pick<Agent, 'task'>) => a.task === 'review' || a.task === 'lead' || a.task === 'climb';
+/** QA officers, leads and agents on a brief away from the room don't sit at one of its desks, and don't count against its limit (only the global one). */
+export const deskless = (a: Pick<Agent, 'task' | 'desk'>) => a.task === 'review' || a.task === 'lead' || a.desk === AWAY_DESK;
 
 /**
  * Which queued agents start now, under the office's limit (`maxConcurrent`, everyone counts) and each room's

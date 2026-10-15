@@ -1,7 +1,7 @@
-// The climber's memory, put to the test (docs/climber.md#replay): fresh read-only sessions write the climb brief's
+// The climber's memory, put to the test (README.md#replay): fresh read-only sessions write the climb brief's
 // scored shortlist, a control with the log of past climbs as it is and a treatment with the control's first pick
 // planted in it as a climb the captain closed. A judge (a cheaper model) finds the rejected gap on each shortlist;
-// scripts/climbReplayRules.ts has the rules. It costs real sessions, so it's run by hand, not in the gate.
+// climbReplayRules.ts has the rules. It costs real sessions, so it's run by hand, not in the gate.
 //
 //   pnpm run climb:replay                         3 sessions each side, on the latest saved scorecard
 //   pnpm run climb:replay --runs 5 --card x.json  more sessions, on a scorecard you choose (`scorecard --json`)
@@ -9,15 +9,16 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
-import { climbBrief, climbLog } from '../server/agents/climb';
-import { config, paths } from '../server/config';
-import type { PastPullRequest } from '../server/github/provider';
-import { SavedScorecards } from '../server/scorecards';
-import { CLIMB_BRANCH, type Scorecard } from '../shared/types';
+import { climbBrief, climbLog } from '../climb';
+import { config, paths } from '../../../server/config';
+import type { PastPullRequest } from '../../../server/github/provider';
+import { SavedScorecards } from '../../../server/scorecards';
+import type { Scorecard } from '../../../shared/types';
+import { CLIMB_BRANCH } from '../shared';
 import { FIND_SCHEMA, findGapQuestion, followsRule, PICK_SCHEMA, pickedGap, plantRejection, rankOnly, replayVerdict, sighting, type ClimbPick } from './climbReplayRules';
-import { render } from './scorecardRules';
+import { render } from '../../../scripts/scorecardRules';
 
-const ROOT = path.resolve(import.meta.dirname, '..');
+const ROOT = path.resolve(import.meta.dirname, '../../..');
 const arg = (name: string) => (process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : undefined);
 const RUNS = Number(arg('--runs') ?? 3);
 const JUDGE = arg('--judge') ?? 'claude-haiku-4-5-20251001';

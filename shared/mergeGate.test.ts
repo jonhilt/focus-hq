@@ -40,8 +40,8 @@ describe('mergeStep', () => {
     expect(mergeStep(pr(), review(), office())).toEqual({ kind: 'merge', sha: HEAD });
   });
 
-  it('never merges a climb, however well QA did: the captain merges those', () => {
-    expect(mergeStep(pr(), review(), office({ captainMerges: true }))).toEqual({ kind: 'blocked', reason: 'the captain merges climbs' });
+  it('never merges a pull request a plugin keeps for the captain (a climb), however well QA did', () => {
+    expect(mergeStep(pr(), review(), office({ captainMerges: true }))).toEqual({ kind: 'blocked', reason: 'only the captain merges it' });
   });
 
   it('merges a PR without checks', () => {

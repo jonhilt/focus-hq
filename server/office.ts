@@ -1,18 +1,18 @@
 import { isAutonomy } from '../shared/autonomy';
 import { chiefEngineer } from '../shared/crew';
-import type { Board, Climb, ConflictsOutcome, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, RetroDraft, ServerInfo, Settings, Snapshot } from '../shared/types';
-import { DESKS_PER_ROOM, EFFORT_LEVELS, isClimbBranch, MERGE_METHODS } from '../shared/types';
+import type { Board, ConflictsOutcome, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, RetroDraft, ServerInfo, Settings, Snapshot } from '../shared/types';
+import { DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS } from '../shared/types';
 import { carryMergeable } from '../shared/board';
 import { chosenSet, previewPrs } from '../shared/previewSet';
 import { startOrder } from '../shared/dependencies';
 import type { Closer } from '../shared/ledger';
 import { autoMergeFor, type GateMark, mergeMethodFor, mergeStep, type MergeStep, requestedMerge } from '../shared/mergeGate';
 import { autoSendBackFor, prKey } from '../shared/qa';
-import { climbHome } from './agents/climb';
 import type { AgentManager } from './agents/manager';
 import type { Calls } from './call/calls';
 import type { ChiefEngineer } from './agents/engineer';
-import type { ScorecardDesk } from './scorecards';
+import type { FocusPlugin } from './plugins/contract';
+import type { ScorecardDesk, ScorecardSource } from './scorecards';
 import type { UsageWatch } from './usage';
 import type { NumberOne } from './agents/numberOne';
 import type { StudioComputer } from './agents/studioComputer';
@@ -38,7 +38,7 @@ function normalizeRepo(input: string): string {
 /** The office itself: projects (rooms), their Kanban boards, and the manager's actions. */
 export class Office {
   agents!: AgentManager;
-  /** The office's own repo (`owner/repo`, from its checkout's remote): what main engineering's climber works on. */
+  /** The office's own repo (`owner/repo`, from its checkout's remote), lent to plugins (main engineering's climber works on it). */
   ownRepo: string | undefined;
   private info: ServerInfo;
   private refreshTimers = new Map<string, NodeJS.Timeout>();
@@ -67,6 +67,7 @@ export class Office {
       github: { ok: false, error: 'Checking…' },
       settings: store.settings,
       deskCount: DESKS_PER_ROOM,
+      plugins: [],
     };
   }
 
@@ -103,7 +104,7 @@ export class Office {
       retro: this.engineer.current(),
       scorecards: this.scorecards.current(),
       usage: this.usage.current(),
-      climb: this.agents.climb(),
+      plugins: this.agents.plugins.states(),
     };
   }
 
@@ -348,15 +349,13 @@ export class Office {
     await this.requestedMerges(projectId, board);
     await this.autoMerge(projectId, board);
     this.autoAssign(projectId, board);
-    this.agents.settleClimb();
+    this.agents.plugins.boardRefreshed(projectId);
   }
 
-  /**
-   * The captain's Keep climbing switch (docs/climber.md): climbs on the project with the office's own repo, one pull
-   * request at a time, each waiting for the captain to merge it.
-   */
-  keepClimbing(on: boolean): Climb {
-    return this.agents.keepClimbing(on, climbHome(this.store.projects, this.ownRepo, config.demo));
+  /** Starts the plugins switched on (docs/plugins.md), lending them the office's own repo and main engineering's scorecards. */
+  startPlugins(plugins: FocusPlugin[], scorecards: ScorecardSource): void {
+    this.agents.startPlugins(plugins, { demo: config.demo, ownRepo: () => this.ownRepo, scorecards });
+    this.info.plugins = this.agents.plugins.ids();
   }
 
   /** Merges the PRs the captain asked to merge once QA passed them, at exactly the commit QA passed. */
@@ -406,7 +405,7 @@ export class Office {
       const key = prKey(pr.repo, pr.number);
       const step = mergeStep(pr, this.store.reviews.get(key), {
         openedByOffice: this.agents.openedByOffice(pr.repo, pr.number),
-        captainMerges: isClimbBranch(pr.branch),
+        captainMerges: this.agents.plugins.captainMerges(pr),
         developerBusy: this.agents.busyOn(pr.repo, pr.number),
         autoSendBack: autoSendBackFor(project),
         mark: this.gateMarks.get(key),

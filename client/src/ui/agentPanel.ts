@@ -178,7 +178,7 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
   const renderHeader = (a: Agent) => {
     // a bar coming or going above the terminal (a hand up, a cloud session to start) leaves it scrolled to the end
     const atEnd = terminal.scrollHeight - terminal.scrollTop - terminal.clientHeight < 60;
-    title.replaceChildren(a.name, h('span', { class: 'muted' }, ` · ${a.task === 'lead' ? a.lead?.title ?? 'Goal' : a.task === 'climb' ? `Climb: ${a.issue.title}` : `#${a.issue.number} ${a.issue.title}`}`));
+    title.replaceChildren(a.name, h('span', { class: 'muted' }, ` · ${a.task === 'lead' ? a.lead?.title ?? 'Goal' : a.brief ? `${a.brief.label}: ${a.issue.title}` : `#${a.issue.number} ${a.issue.title}`}`));
     fill(
       readouts,
       readout('Status', a.status, { tone: LCARS_STATUS[a.status] }),

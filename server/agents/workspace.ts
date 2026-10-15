@@ -76,7 +76,7 @@ export async function createWorktree(
     await retryLockRace(() => git(mirror, ['fetch', 'origin', '--prune'], 10 * 60_000), () => sleep(750));
     await followOrigin(mirror, startPoint, mirror);
     if (fs.existsSync(dir)) {
-      // The climbing engineer's last climb, or a half-made worktree: start clean.
+      // The last work of someone who keeps one record (a plugin's crew, like the climber), or a half-made worktree: start clean.
       await removeDir(mirror, dir);
     }
     await git(mirror, ['worktree', 'prune']);

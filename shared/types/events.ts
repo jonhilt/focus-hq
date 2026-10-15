@@ -3,10 +3,10 @@
 import type { ReportCard } from '../ledger';
 import type { Agent, BrowserFrame, TermLine } from './agents';
 import type { CallState, CallStatus } from './call';
-import type { Climb } from './climb';
 import type { IssueDraft } from './drafts';
 import type { Board, GitHubStatus } from './github';
 import type { NumberOneChat } from './numberOne';
+import type { PluginStates } from './plugins';
 import type { StudioSession } from './studio';
 import type { Preview, PreviewLog } from './previews';
 import type { Project, Settings } from './projects';
@@ -23,6 +23,8 @@ export interface ServerInfo {
   github: GitHubStatus;
   settings: Settings;
   deskCount: number;
+  /** The plugins switched on (FOCUS_PLUGINS), by id. */
+  plugins: string[];
 }
 
 export interface Snapshot {
@@ -50,8 +52,8 @@ export interface Snapshot {
   scorecards: Scorecards;
   /** Your plan's usage and how the office signs in, for main engineering. */
   usage: Usage;
-  /** Main engineering's climber: the captain's switch and the climb under way. */
-  climb: Climb;
+  /** Each plugin's state, by plugin id (docs/plugins.md). */
+  plugins: PluginStates;
 }
 
 export type ServerEvent =
@@ -74,7 +76,8 @@ export type ServerEvent =
   | { type: 'retro'; retro: Retro }
   | { type: 'scorecards'; scorecards: Scorecards }
   | { type: 'usage'; usage: Usage }
-  | { type: 'climb'; climb: Climb }
+  /** A plugin's state changed. */
+  | { type: 'plugin'; id: string; state: unknown }
   | { type: 'voice'; voice: VoiceStatus }
   | { type: 'call'; call: CallState | null }
   /** projectId, or the agent's, lets the browser drop toasts about a hidden project. */

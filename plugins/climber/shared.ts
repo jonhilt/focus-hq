@@ -1,5 +1,17 @@
-// Main engineering's climber (docs/climber.md): one engineer who takes the scorecard's worst gap in Focus's own repo and
-// ships one pull request for it at a time, while the captain keeps climbing switched on.
+// Main engineering's climber (README.md): one engineer who takes the scorecard's worst gap in Focus's own repo and
+// ships one pull request for it at a time, while the captain keeps climbing switched on. What the server and the
+// browser share of it.
+import { fixedCrew } from '../../shared/crew';
+import type { Planner } from '../../shared/types';
+
+/** The plugin's id, as FOCUS_PLUGINS names it. */
+export const CLIMBER = 'climber';
+
+/**
+ * Main engineering's climbing engineer: one for the whole ship, the same person every climb, whose job is moving the
+ * office's own repo up its scorecard. Operations, like the chief engineer, but they write the code.
+ */
+export const climbingEngineer = (): Planner => fixedCrew('climber', 'operations', 'lieutenant', 'Rhee');
 
 /** Every climb's branch starts with this, so the office knows a climb's pull request even after the climber has gone home. */
 export const CLIMB_BRANCH = 'focus/climb-';

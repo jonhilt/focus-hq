@@ -131,9 +131,9 @@ export class DemoRunner implements AgentRunner {
     const titleMatch = /issue #(\d+) in (\S+)\.\s*\n\s*\nTitle: (.+)/.exec(req.prompt);
     const issueNumber = Number(titleMatch?.[1] ?? 0);
     const repo = titleMatch?.[2] ?? 'demo/app';
-    // main engineering's climber gets a brief rather than an issue, and writes up a climb
-    const climbing = /^Climb \S+ one step/.test(req.prompt);
-    const title = climbing ? 'Narrow the board’s non-null assertions to checked lookups' : titleMatch?.[3]?.trim() ?? 'the task';
+    // a plugin's brief comes with what its stand-in writes up, rather than an issue
+    const scripted = req.scripted;
+    const title = scripted?.title ?? titleMatch?.[3]?.trim() ?? 'the task';
     const kind = /api/.test(repo) ? 'api' : /game|dodger/.test(repo) ? 'game' : 'web';
     const files = FILES[kind];
     const accent = ['#ff8a5b', '#5bc0eb', '#9bc53d', '#c879ff'][issueNumber % 4];
@@ -657,8 +657,8 @@ export class DemoRunner implements AgentRunner {
         ' 3 files changed, 58 insertions(+), 9 deletions(-)',
       ]);
       await push();
-      const summary = climbing
-        ? `# ${title}\n\n**Problem**\n\n\`shared/board.ts\` asserted 6 lookups non-null; one crashed the board when a PR's agent had gone home.\n\n**Solution**\n\nChecked lookups with a fallback, and a lint rule that flags new \`!\` in \`shared/\` (it failed first on the old code).\n\n**Before**\n\n- Non-null assertions (x!): 128\n- Gate passes in 74s\n\n**After**\n\n- Non-null assertions (x!): 122 ▲ −6\n- Gate passes in 75s`
+      const summary = scripted
+        ? scripted.summary
         : `## Summary\n\nResolves "${title}".\n\n- Updated ${pick(files, 2).join(' and ')}\n- Added tests in \`test/issue-${issueNumber}.test.ts\`\n\n## Testing\n\n- \`npm test\` passes${kind !== 'api' ? '\n- Checked the flow in the browser' : ''}`;
       await say('Done! Committed the change with tests. Summary for the pull request:');
       hooks.lines(summary.split('\n').map((text) => ({ kind: 'text', text: `  ${text}` })));

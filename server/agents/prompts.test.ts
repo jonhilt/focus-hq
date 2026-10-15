@@ -41,6 +41,14 @@ describe('systemAppend', () => {
     // screenshots only reach the laptop screen when they come back through a tool result
     expect(text).toContain('Read tool');
   });
+
+  it('tells an agent on a plugin’s brief what the brief says of the work, or that it’s in their first message once the plugin’s off', () => {
+    const briefed = agent({ task: 'brief', issue: { number: 0, title: 'Auditing', url: '' } });
+    const text = systemAppend(briefed, { assignment: 'You are the auditor.', summary: 'End with the findings.' });
+    expect(text).toContain('You are the auditor.');
+    expect(text).toContain('End with the findings.');
+    expect(systemAppend(briefed)).toContain('it\'s in your first message');
+  });
 });
 
 describe('cloud follow-ups', () => {
@@ -73,7 +81,7 @@ describe('pullRequestBody', () => {
     expect(pullRequestBody(agent(), 'Adds a cart.', false)).toBe('Adds a cart.\n\nCloses #7');
   });
 
-  it('closes no issue of its own for a climb, which has none', () => {
-    expect(pullRequestBody(agent({ task: 'climb', issue: { number: 0, title: 'Climbing', url: '' } }), '**Problem**\n\nSlow.', false)).toBe('**Problem**\n\nSlow.');
+  it('closes no issue of its own for a plugin’s brief, which has none', () => {
+    expect(pullRequestBody(agent({ task: 'brief', issue: { number: 0, title: 'Climbing', url: '' } }), '**Problem**\n\nSlow.', false)).toBe('**Problem**\n\nSlow.');
   });
 });
