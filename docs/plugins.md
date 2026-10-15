@@ -19,7 +19,8 @@ A plugin's saved state stays in `state.json` while it's switched off, so switchi
 
 ## Plugins today
 
-- [The climber](../plugins/climber/README.md) (`climber`): main engineering's crew member, who fixes the scorecard's worst gap in the office's own repo, one pull request at a time.
+- [The scorecard](../plugins/scorecard/README.md) (`scorecard`): main engineering's scorecards of the office's own repo, on the engineering station and the MSD. The `pnpm run scorecard` and `pnpm run crap` scripts live in it too, and work whether it's switched on or not.
+- [The climber](../plugins/climber/README.md) (`climber`): main engineering's crew member, who fixes the scorecard's worst gap in the office's own repo, one pull request at a time. It reads the scorecards through the scorecard plugin's code (`officeScorecards`), so it works without that plugin switched on, but you'll want both.
 
 ## What a plugin adds
 
@@ -44,14 +45,23 @@ A hook that throws is logged and skipped, so one plugin's bug never stops the of
 
 `start` gets a `PluginHost`:
 
-- **State.** `host.state(fresh)` is the plugin's own slot in `state.json` (`plugins.<id>`). `set` saves it and sends it to every browser as a `plugin` event; the snapshot carries each plugin's state in `plugins`. A field the plugin adds later starts at its `fresh()` value.
+- **State.** `host.state(fresh)` is the plugin's own slot in `state.json` (`plugins.<id>`). `set` saves it and sends it to every browser as a `plugin` event; the snapshot carries each plugin's state in `plugins`. A field the plugin adds later starts at its `fresh()` value. With `{ saved: false }` it's kept in memory only, for state the plugin reads again as the office starts (the scorecards, read from disk).
 - **Seating.** `host.seat` hands one of its briefs to an agent: someone new, or `crew` when it's always the same person, who keeps one record (and terminal) from brief to brief. `host.forget` drops what the office kept of their last session, so the next starts afresh.
-- **Reading the office.** Its projects, an agent by id, the ledger, the office's own repo (`ownRepo`, from its checkout's remote; none in the demo) and main engineering's scorecards.
+- **Reading the office.** Its projects, an agent by id, the ledger, and the office's own repo (`ownRepo`, from its checkout's remote; none in the demo).
 - **Talking.** A line in an agent's terminal (`print`), and a toast.
 
 ## In the browser
 
-A plugin's `client.ts` default-exports a `ClientPlugin` (`client/src/plugins.ts`): its id, and a card for the engineering station's overview (`engineering`). The panel draws it again whenever the plugin's state changes, or an agent on a brief does. The client finds every `plugins/*/client.ts` as it's built, and shows only those the office switched on.
+A plugin's `client.ts` default-exports a `ClientPlugin` (`client/src/plugins.ts`). The client finds every `plugins/*/client.ts` as it's built, and shows only those the office switched on. In the browser, a plugin's state is `state.plugins[id]`, and the `plugin` event says whose changed. A plugin can add:
+
+- **To the engineering station** (`engineering`), which the panel draws again whenever the plugin's state changes, or an agent on a brief does:
+  - `card`: a card on the overview, beside the others (the climber's);
+  - `overview`: the overview's main block, with every card laid out in it (the scorecard puts them beside what moved); the first plugin's wins, and without one the cards stand on their own;
+  - `readout`: what the overview's button on the side nav reads;
+  - `views`: views of its own on the side nav, after the overview (the scorecard's Code and Office), each with a readout. A view gets `go`, to move to another view and scroll to what's in it.
+
+  The station's own views are the overview (your plan's usage, then the plugins' parts and the retro), the **Ledger** (the report card as it stands, and the open frictions) and the **Retro**.
+- **A board on the MSD** (`msd`): what it draws beside the ship in main engineering while it's put up there, with `ui.showOnMsd({ plugin: id })`. It's drawn again as the plugin's state changes.
 
 ## Writing one
 
@@ -64,7 +74,7 @@ plugins/<id>/
   *.test.ts     its tests (vitest finds plugins/**/*.test.ts)
 ```
 
-A plugin imports the office's code by path (`../../server/plugins/contract`, `../../shared/types`): its contract, its types, and helpers like `server/agents/fakeOffice.ts`, a pretend office its tests can switch it on in. Typecheck and lint cover `plugins/` like the rest.
+A plugin imports the office's code by path (`../../server/plugins/contract`, `../../shared/types`): its contract, its types, and helpers like `server/agents/fakeOffice.ts`, a pretend office its tests can switch it on in. It can import another plugin's code the same way (the climber reads scorecards through `../scorecard/desk`). Typecheck, lint (no non-null assertions outside tests, as in `server/`), the scorecard's fence and CRAP cover `plugins/` like the rest.
 
 A plugin outside the office's folder can be switched on by path, but for now it still imports the office's code by relative path, and its `client.ts` isn't found (only `plugins/` inside the checkout is). Plugins in repos of their own need a published contract first.
 

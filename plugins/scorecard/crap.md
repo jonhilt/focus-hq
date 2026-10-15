@@ -1,6 +1,6 @@
 # CRAP scores
 
-`pnpm run crap` scores every function in `server/` and `shared/` by how risky it is to change: its CRAP score (Change Risk Anti-Patterns, Savoia & Evans, 2007).
+`pnpm run crap` scores every function in `server/`, `shared/` and `plugins/` by how risky it is to change: its CRAP score (Change Risk Anti-Patterns, Savoia & Evans, 2007).
 
 ```
 CRAP = complexity² × (1 − coverage)³ + complexity

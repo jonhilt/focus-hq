@@ -2,7 +2,7 @@
 
 A plugin (`FOCUS_PLUGINS=climber`, [plugins](../../docs/plugins.md)).
 
-Main engineering's climber, Lt. Rhee, takes the [scorecard](../../docs/scorecard.md)'s worst gap in Focus's own repo and fixes it. Each fix is one pull request with the numbers measured before and after. You approve each one. It's a hill-climb, after [ratstack's hill-climb prompt](https://ratstack.sh/prompts/hill-climb):
+Main engineering's climber, Lt. Rhee, takes the [scorecard](../scorecard/README.md)'s worst gap in Focus's own repo and fixes it. Each fix is one pull request with the numbers measured before and after. You approve each one. It's a hill-climb, after [ratstack's hill-climb prompt](https://ratstack.sh/prompts/hill-climb):
 
 1. measure;
 2. take the top gap;
@@ -35,7 +35,7 @@ A climb is an agent's work like a developer's (`task: 'climb'`), with difference
 - **Branch and desk.** They work on a branch of their own (`focus/climb-…`) and don't take one of the room's desks: they're main engineering's.
 - **The brief** (`climbBrief` in `climb.ts`):
   - **What they've climbed before.** Every climb so far, newest first (see [Memory](#memory)): merged ones aren't redone, and a gap you turned down isn't taken again unless their hypothesis says what's changed.
-  - **Measure.** They run `pnpm run scorecard --no-save` before changing anything; those numbers are the Before. The brief gives the [noise floor](../../docs/scorecard.md#noise-floor), and a gain only counts past it. A time is measured interleaved (base and change taking turns, 5 of each, medians compared), since the machine's load swings it far more than any one change.
+  - **Measure.** They run `pnpm run scorecard --no-save` before changing anything; those numbers are the Before. The brief gives the [noise floor](../scorecard/README.md#noise-floor), and a gain only counts past it. A time is measured interleaved (base and change taking turns, 5 of each, medians compared), since the machine's load swings it far more than any one change.
   - **Rank.** They put every gap on one scale: harm first, then distance from the standard, then size. The gaps include:
     - the scorecard's numbers;
     - the office's open frictions (3 or more sessions in 14 days, with no retro decision yet);

@@ -201,7 +201,7 @@ export function climbBrief(agent: Pick<Agent, 'repo' | 'baseBranch' | 'branch'>,
       : 'This is your first climb.',
     '',
     '## 1. Measure',
-    'Read CLAUDE.md and docs/scorecard.md. Run `pnpm install` and then `pnpm run scorecard --no-save` before you change anything: its numbers are your **Before**. Every number you report must come from a command you ran, never from reading code by eye.',
+    'Read CLAUDE.md and plugins/scorecard/README.md. Run `pnpm install` and then `pnpm run scorecard --no-save` before you change anything: its numbers are your **Before**. Every number you report must come from a command you ran, never from reading code by eye.',
     noise
       ? `Numbers wobble: the scorecard compares against a noise floor of ${noise.runs} runs on ${noise.commit.slice(0, 8)}, and marks a change ▲ or ▼ only past it. Claim a gain only where it does. What wobbled: ${noiseText(noise)}.`
       : 'There\'s no noise floor yet, so a time has to move more than 10% to count. If your target is a time, run `pnpm run scorecard --repeat 3 --no-save` for its spread first, and claim only a move past it.',

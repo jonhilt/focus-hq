@@ -1,5 +1,5 @@
 // What each part of the scorecard means, in plain words, for wherever it's explained: the engineering panel opens a
-// number to show its `what` and `why` (docs/scorecard.md).
+// number to show its `what` and `why` (plugins/scorecard/README.md).
 import type { ScorecardSection } from './types';
 
 export interface SectionAbout {
@@ -131,7 +131,7 @@ export const METRIC_ABOUT: Record<string, MetricAbout> = {
   'crap.over': {
     short: 'over CRAP 30',
     what: 'Functions in server and shared with a CRAP score over 30: too complex for how little the tests cover them.',
-    why: 'They’re the riskiest to change. Split one into small pure functions, or test it, and it drops (docs/crap.md).',
+    why: 'They’re the riskiest to change. Split one into small pure functions, or test it, and it drops (plugins/scorecard/crap.md).',
   },
   'crap.total': {
     short: 'total CRAP',
