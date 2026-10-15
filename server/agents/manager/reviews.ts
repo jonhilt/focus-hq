@@ -257,8 +257,11 @@ export class Reviews extends Part {
     const files = this.rt(agent.id).qaFiles;
     const read = this.core.ledger.readTranscript;
     const sessionId = agent.sessionId;
-    if (!files || files.askedAgain || !read || !sessionId || agent.cloud) return Effect.succeed(undefined);
-    return Effect.promise(() => read(sessionId).catch(() => undefined)).pipe(Effect.map((text) => (text ? openedFiles(toolCalls(text), files.changed) : undefined)));
+    return Effect.promise(async () => {
+      if (!files || files.askedAgain || !read || !sessionId || agent.cloud) return undefined;
+      const text = await read(sessionId).catch(() => undefined);
+      return text ? openedFiles(toolCalls(text), files.changed) : undefined;
+    });
   }
 
   /** Sends QA back once, in the same session, to the changed files its report left out or only skimmed, or it never opened. */
