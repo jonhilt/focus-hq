@@ -10,6 +10,7 @@ import { hallMaps } from './hall';
 import { viewBody } from './panel';
 import { CARTOGRAPHY, type CartographyState, MODEL_FILE, type RepoMap } from './shared';
 import { coverage, openingView, viewsOf } from './views';
+import './cartography.css';
 
 const maps = () => pluginState<CartographyState>(CARTOGRAPHY);
 

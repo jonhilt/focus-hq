@@ -39,7 +39,7 @@ export function retroCard(ui: Ui, go: EngineeringGo): HTMLElement {
     : drafts ? `${drafts} ${drafts === 1 ? 'draft waits' : 'drafts wait'} for you to accept or reject`
       : retro?.status === 'failed' ? `The last retro failed: ${retro.error ?? retro.activity}` : 'Drafts an issue for each friction that keeps coming back';
   const bars = frictionBars(ui, 3);
-  return h('div', { class: 'card sc-card' },
+  return h('div', { class: 'card retro-card' },
     h('div', { class: 'row' }, h('strong', { class: 'grow' }, 'Retro'), h('button', { class: 'btn small', onclick: () => go(RETRO) }, drafts ? 'Review drafts →' : 'Open →')),
     h('small', { class: 'muted' }, line),
     bars ? h('small', { class: 'lbl' }, 'Most widespread open frictions') : null,
@@ -68,7 +68,7 @@ export function retroView(ui: Ui): HTMLElement {
   const bars = frictionBars(ui, 5);
   return h('div', null,
     h('div', { class: 'briefing-note' }, `${eng.name} looks over the frictions found in the agents’ sessions in the window, and drafts an issue for each that came up in three or more, with the moments quoted. Accept one and it’s filed; reject it and it isn’t raised again. Nothing changes unless you say so.`),
-    bars ? h('section', { class: 'card sc-section', style: '--c:var(--lcars-orange);margin:14px 0 0' }, h('h4', null, 'Most widespread open frictions', h('span', null, 'Sessions they came up in, over 14 days, with no retro decision yet')), bars) : null,
+    bars ? h('section', { class: 'card eng-section', style: '--c:var(--lcars-orange);margin:14px 0 0' }, h('h4', null, 'Most widespread open frictions', h('span', null, 'Sessions they came up in, over 14 days, with no retro decision yet')), bars) : null,
     h('div', { class: 'row', style: 'margin:14px 0' },
       h('span', { class: 'muted' }, 'Look back over the last'), days(), h('span', { class: 'muted' }, 'days'),
       running(retro) ? stop : start,

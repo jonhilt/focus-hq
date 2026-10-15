@@ -3,6 +3,7 @@
 import type { ClientPlugin } from '../../client/src/plugins';
 import { RETRO, running, stationLine, waiting } from './shared';
 import { latest, retroCard, retroView } from './view';
+import './retro.css';
 
 const retro: ClientPlugin = {
   id: RETRO,

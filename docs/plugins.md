@@ -119,6 +119,7 @@ A plugin's `client.ts` is loaded whether it's switched on or not (the client fin
 plugins/<id>/
   server.ts     default-exports the FocusPlugin
   client.ts     optional: default-exports the ClientPlugin
+  <id>.css      optional: its styles, imported by client.ts (bundled whether it's on or not, so its own class names)
   shared.ts     types and constants both halves use (its state's type)
   README.md     what it does, and where it lives
   *.test.ts     its tests (vitest finds plugins/**/*.test.ts)

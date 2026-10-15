@@ -63,7 +63,7 @@ export function openEngineeringPanel(ui: Ui): void {
     ledger.onclick = () => ui.openLedger();
     const overview = () => {
       // every plugin's card, laid out by the first plugin with an overview of its own (the scorecard's), or on their own
-      const cards = h('div', { class: 'sc-better' }, ...parts.map((part) => part.card?.(ui, go) ?? null));
+      const cards = h('div', { class: 'eng-cards' }, ...parts.map((part) => part.card?.(ui, go) ?? null));
       const laidOut = parts.find((part) => part.overview)?.overview?.(ui, cards, go);
       return [usageView(ui), laidOut ?? cards];
     };
@@ -90,9 +90,9 @@ export function frictionBars(ui: Ui, limit: number): HTMLElement | null {
   const frictions = state.report?.frictions.slice(0, limit) ?? [];
   if (!frictions.length) return null;
   const most = frictions[0].sessions || 1;
-  return h('div', { class: 'sc-frictions' }, ...frictions.map((f) => {
+  return h('div', { class: 'eng-frictions' }, ...frictions.map((f) => {
     const { kind, signature } = frictionName(f.key);
-    return h('button', { class: 'sc-friction', title: `${f.key}: open every session it came up in`, onclick: () => ui.openLedger({ kind: 'friction', key: f.key }) },
+    return h('button', { class: 'eng-friction', title: `${f.key}: open every session it came up in`, onclick: () => ui.openLedger({ kind: 'friction', key: f.key }) },
       h('span', { class: 'grow' }, signature, kind ? h('small', { class: 'muted' }, ` ${kind}`) : null),
       h('span', { class: 'bar' }, h('i', { style: `width:${Math.max(4, (f.sessions / most) * 100)}%` })),
       h('small', { class: 'muted' }, `${f.sessions} sessions ›`));
@@ -116,7 +116,7 @@ function liveLedger(ui: Ui, ledger: HTMLElement): HTMLElement {
       readout('Spent', `$${card.costUsd.toFixed(2)}`))
     : h('small', { class: 'muted' }, shown?.lines.join(' · ') ?? 'Nothing in the ledger yet');
   const bars = frictionBars(ui, 5);
-  return h('section', { class: 'card sc-section', style: '--c:var(--lcars-orange)' },
+  return h('section', { class: 'card eng-section', style: '--c:var(--lcars-orange)' },
     h('div', { class: 'row' }, h('h4', { class: 'grow' }, `The ledger now${card ? `, last ${card.days} days` : ''}`, h('span', null, 'Live, as the ledger fills')), ledger),
     ...warnings.map((w) => h('small', null, w)),
     live,

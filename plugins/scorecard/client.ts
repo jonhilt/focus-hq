@@ -5,6 +5,7 @@ import { drawScorecard } from './msd';
 import { formatValue, glance } from './scorecard';
 import { SCORECARD, type ScorecardSection } from './types';
 import { type Go, scorecardHead, scorecardOverview, scorecards, scorecardSections } from './view';
+import './scorecard.css';
 
 /** Which of the plugin's views each section's numbers live in. */
 const VIEW_OF: Record<ScorecardSection, string> = { gate: 'code', fence: 'code', effect: 'code', tests: 'code', office: 'office' };

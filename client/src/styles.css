@@ -893,96 +893,20 @@ body.studio .hud, body.studio .toasts { display: none; }
 .usage-agents { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
 .usage-agents th { text-align: left; font-weight: 500; color: var(--muted); }
 .usage-agents td, .usage-agents th { padding: 3px 4px; border-bottom: 1px solid var(--line); }
-/* the scorecard in the engineering panel (ui/scorecardView.ts): the overview's tiles, and each section's numbers opening to explain themselves */
-.sc { display: flex; flex-direction: column; gap: 14px; }
-.sc-head { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
-.sc .sc-head { margin-bottom: 0; }
-.sc-head h3 { margin: 0; font-size: 24px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--lcars-gold); }
-.sc-verdict { margin: 0; font-size: 19px; line-height: 1.35; }
-.sc-verdict b, .sc-pill { font-weight: 600; }
-.sc-verdict .better { color: var(--lcars-green); }
-.sc-verdict .worse { color: var(--lcars-red); }
-.sc-pill { display: inline-flex; align-items: center; gap: 4px; padding: 1px 9px; border-radius: 999px; font-size: 12px; letter-spacing: 0.04em; white-space: nowrap; background: var(--line); color: var(--muted); }
-.sc-pill.better { background: color-mix(in srgb, var(--lcars-green) 22%, transparent); color: color-mix(in srgb, var(--lcars-green) 60%, #fff); }
-.sc-pill.worse, .sc-pill.bad { background: color-mix(in srgb, var(--lcars-red) 26%, transparent); color: color-mix(in srgb, var(--lcars-red) 45%, #fff); }
-.sc-tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
-.sc-tile {
-  all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 6px; min-width: 0;
-  background: var(--surface-2); border-left: 6px solid var(--c); border-radius: 0 var(--radius) var(--radius) 0; padding: 12px 14px;
-}
-.sc-tile:hover, .sc-tile:focus-visible { background: color-mix(in srgb, var(--c) 12%, var(--surface-2)); }
-.sc-tile.bad { box-shadow: inset 0 0 0 2px var(--lcars-red); }
-.sc-tile h4 { margin: 0; font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--c); }
-.sc-tile .q { color: var(--muted); font-size: 12px; min-height: 2.5em; }
-.sc-tile .hero { font-size: 40px; font-weight: 600; line-height: 1; display: flex; flex-direction: column; gap: 4px; }
-.sc-tile .hero span { font-size: 14px; font-weight: 400; color: var(--text); }
-.sc-tile .row { gap: 8px; flex-wrap: wrap; }
-.sc-tile .also { color: var(--muted); font-size: 12px; }
-.sc-split { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; align-items: start; }
-.sc-better { display: flex; flex-direction: column; gap: 14px; }
-.sc-better .climber { margin-bottom: 0; border-left-color: var(--lcars-gold); }
-.sc-moved, .sc-card { display: flex; flex-direction: column; gap: 8px; }
-.sc-card { border-left-color: var(--lcars-orange); }
-.sc-moved h4, .sc-section h4 { margin: 0; font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
-.sc-moved-rows { display: flex; flex-direction: column; }
-.sc-moved-row { all: unset; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 5px 6px; border-radius: 8px; font-size: 15px; }
-.sc-moved-row:hover, .sc-moved-row:focus-visible { background: var(--surface); }
-.sc-moved-row .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-.sc-moved-row b { min-width: 60px; text-align: right; font-variant-numeric: tabular-nums; }
-.sc-moved-row .sc-pill { min-width: 96px; }
-.sc .lbl, .sc-about .lbl, .sc-card .lbl { display: block; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lcars-peach); }
-.sc-frictions { display: flex; flex-direction: column; gap: 4px; }
-.sc-friction { all: unset; box-sizing: border-box; cursor: pointer; padding: 3px 6px; margin: 0 -6px; border-radius: 6px; display: grid; grid-template-columns: minmax(0, 1fr) 30% 80px; align-items: center; gap: 10px; font-size: 14px; }
-.sc-friction > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sc-friction .bar { height: 8px; border-radius: 4px; background: var(--surface); overflow: hidden; }
-.sc-friction .bar i { display: block; height: 100%; border-radius: 4px; background: var(--lcars-orange); }
-.sc-friction small { text-align: right; }
-.sc-friction:hover, .sc-friction:focus-visible { background: var(--surface); }
-.sc-section { --c: var(--lcars-lilac); border-left-color: var(--c); display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
-.sc-section h4 { color: var(--c); font-size: 15px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.sc-section h4 span { font-size: 13px; letter-spacing: 0.02em; text-transform: none; color: var(--text); }
-.sc-section-about { margin: 0; font-size: 14px; }
-.sc-section .readouts { margin: 0; }
-.sc-gatebar { display: flex; gap: 2px; height: 22px; border-radius: 6px; overflow: hidden; }
-.sc-gatebar span { display: flex; align-items: center; padding: 0 8px; font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; background: var(--c); }
-.sc-gatebar span:nth-child(2) { background: color-mix(in srgb, var(--c) 75%, var(--surface-2)); }
-.sc-gatebar span:nth-child(3) { background: color-mix(in srgb, var(--c) 55%, var(--surface-2)); }
-.sc-gatebar span:nth-child(4) { background: color-mix(in srgb, var(--c) 40%, var(--surface-2)); }
-.sc-rows { display: flex; flex-direction: column; }
-/* the cartography plugin's maps: drawn at their own size, shrunk to fit the station but never blown up */
-.cg-drawing { overflow-x: auto; margin: 8px 0; background: #0b1020; border-radius: 12px; padding: 8px; }
-.cg-drawing svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
-.cg-sentences { margin: 6px 0 2px; padding-left: 18px; font-size: 15px; line-height: 1.5; }
-.sc-metric { border-top: 1px solid var(--line); }
-.sc-metric > summary { display: grid; grid-template-columns: minmax(0, 1fr) 72px 80px 140px; align-items: center; gap: 12px; padding: 6px 4px; cursor: pointer; font-size: 15px; list-style: none; }
-.sc-metric > summary::-webkit-details-marker { display: none; }
-.sc-metric > summary .name::before { content: '▸'; display: inline-block; width: 1.1em; color: var(--muted); transition: transform 0.15s; }
-.sc-metric[open] > summary .name::before { transform: rotate(90deg); }
-.sc-metric > summary:hover { background: var(--surface); }
-.sc-metric > summary b { text-align: right; font-variant-numeric: tabular-nums; }
-.sc-metric > summary .sc-pill { justify-self: start; }
-.sc-about { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; padding: 4px 4px 12px 1.4em; font-size: 14px; }
-.sc-about p { margin: 0 0 8px; }
-.sc-about code { font-family: var(--mono); font-size: 12px; color: var(--lcars-sky); }
-.sc-about figure { margin: 0; display: flex; flex-direction: column; gap: 4px; }
-.sc-about figcaption { font-size: 12px; }
-.spark { flex: none; overflow: visible; }
-.spark polyline { fill: none; stroke: var(--muted); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; opacity: 0.7; }
-.spark circle { fill: var(--muted); }
-.spark circle.then { fill: var(--surface-2); stroke: var(--muted); stroke-width: 1.5; }
-.spark circle.then:hover { fill: var(--text); }
-.spark.better circle.now { fill: var(--lcars-green); }
-.spark.worse circle.now, .spark.bad circle.now { fill: var(--lcars-red); }
-@media (max-width: 1000px) {
-  .sc-tiles { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
-}
-@media (max-width: 900px) {
-  .sc-split, .sc-about { grid-template-columns: 1fr; }
-  .sc-metric > summary { grid-template-columns: minmax(0, 1fr) 70px 110px; }
-  .sc-metric > summary .spark { display: none; }
-}
-/* main engineering's climber, under the scorecard (ui/climberView.ts) */
-.climber { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+/* the engineering station's own parts (ui/engineeringPanel.ts), which plugins' views use too: the overview's cards, a section, and the open frictions as bars */
+.eng-cards { display: flex; flex-direction: column; gap: 14px; }
+.eng-cards > .card { margin-bottom: 0; }
+.eng-section { --c: var(--lcars-lilac); border-left-color: var(--c); display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.eng-section h4 { margin: 0; letter-spacing: 0.1em; text-transform: uppercase; color: var(--c); font-size: 15px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.eng-section h4 span { font-size: 13px; letter-spacing: 0.02em; text-transform: none; color: var(--text); }
+.eng-section .readouts { margin: 0; }
+.eng-frictions { display: flex; flex-direction: column; gap: 4px; }
+.eng-friction { all: unset; box-sizing: border-box; cursor: pointer; padding: 3px 6px; margin: 0 -6px; border-radius: 6px; display: grid; grid-template-columns: minmax(0, 1fr) 30% 80px; align-items: center; gap: 10px; font-size: 14px; }
+.eng-friction > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eng-friction .bar { height: 8px; border-radius: 4px; background: var(--surface); overflow: hidden; }
+.eng-friction .bar i { display: block; height: 100%; border-radius: 4px; background: var(--lcars-orange); }
+.eng-friction small { text-align: right; }
+.eng-friction:hover, .eng-friction:focus-visible { background: var(--surface); }
 /* a workflow's script, from its transporter room's console (ui/workflowScriptPanel.ts) */
 .script-panel { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; height: 100%; min-height: 0; }
 .script-code { overflow: auto; background: #07060c; border-radius: 10px; padding: 10px 0; font: 13px/1.55 "JetBrains Mono", ui-monospace, Menlo, monospace; color: #a29cb8; }

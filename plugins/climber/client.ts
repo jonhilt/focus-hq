@@ -5,6 +5,7 @@ import type { Ui } from '../../client/src/ui/context';
 import { h, timeAgo } from '../../client/src/ui/dom';
 import { Switch } from '../../client/src/ui/panels';
 import { CLIMBER, climbingEngineer, type Climb } from './shared';
+import './climber.css';
 
 const OUTCOME: Record<NonNullable<Climb['last']>['outcome'], string> = {
   merged: 'merged',

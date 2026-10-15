@@ -1,0 +1,3 @@
+/* main engineering's climber's card on the engineering station's overview (client.ts) */
+.climber { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.eng-cards .climber { border-left-color: var(--lcars-gold); }

@@ -188,7 +188,7 @@ export function scorecardSections(sections: ScorecardSection[], open: Set<string
   return compared(history).filter((s) => sections.includes(s.section)).map(({ section, title, rows }) => {
     const better = rows.filter((r) => r.trend === 'better').length;
     const worse = rows.filter((r) => r.trend === 'worse').length;
-    return h('section', { class: 'card sc-section', id: `sc-${section}`, style: `--c:${SECTION_TONE[section]}` },
+    return h('section', { class: 'card eng-section', id: `sc-${section}`, style: `--c:${SECTION_TONE[section]}` },
       h('div', { class: 'row' },
         h('h4', { class: 'grow' }, title, h('span', null, SECTION_ABOUT[section].question)),
         better ? h('span', { class: 'sc-pill better' }, `▲ ${better} better`) : null,
