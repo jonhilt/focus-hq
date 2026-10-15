@@ -26,7 +26,7 @@ For each of the goals' merged pull requests, newest first, in repos the office h
 
 - **Missed** is the number to watch: a bug that would have reached `main`. Read each missed one's planted line, printed with the result.
 - **Failed for something else** can mean QA found a different real problem in the pull request, or failed it for a reason that isn't one. It isn't counted as caught.
-- **False alarms** (with `--control`): clean pull requests QA failed. A change that raises the catch rate by failing everything shows here, so judge a change to QA by both.
+- **False alarms** (with `--control`): clean pull requests QA failed. Read why before counting one: QA can find a real bug the pull request merged with (the first one here was #368's gantry railings, whose colliders stood in the walkway). A change that raises the catch rate by failing everything shows here, so judge a change to QA by both.
 - Run it again after changing QA (its prompt, its model, its checks) with `--again --control`, and compare. Run the same thing twice before trusting a difference of one or two: the same review can go either way from run to run.
 
 ## What it can't tell
