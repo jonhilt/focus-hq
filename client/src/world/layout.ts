@@ -100,6 +100,19 @@ export function transporterRoomAt(slot: RoomSlot, station: number, room: number)
 }
 
 /**
+ * The plugins' spaces (`ShipHost.space`): places of their own, like the cartography plugin's architecture space,
+ * reached only by being sent there. They stand furthest out of all, beyond the holodeck deck's far end, the first at
+ * `z` and each next `step` further on, and everything within `radius` of one's middle is in it (regions.ts): what a
+ * space builds stays inside that, within sight of the camera's far plane.
+ */
+export const SPACE = { z: -1000, step: 300, radius: 90 };
+
+/** Where the plugins' space `index` stands: the middle of its floor. */
+export function spaceAt(index: number): THREE.Vector3 {
+  return new THREE.Vector3(0, 0, SPACE.z - index * SPACE.step);
+}
+
+/**
  * The training hall (hall.ts): what a project's holodeck is, bigger on the inside than its slot on the deck. Its door
  * on the deck is a Portal to the hall's entrance, so the hall can stand anywhere: out beyond the briefing rooms, one per
  * holodeck, each further out the further down the hallway its holodeck is, so none meet. A round floor `radius` across

@@ -1,6 +1,6 @@
 # Cartography
 
-A plugin (`FOCUS_PLUGINS=cartography`, [plugins](../../docs/plugins.md)), switched on per project: **Architecture map** in a project's settings (the manager's **Projects** tab). It maps only the projects it's on for, maps one as soon as it's switched on, and forgets one switched off; their leads get the map tool, and their holodecks its screens.
+A plugin (`FOCUS_PLUGINS=cartography`, [plugins](../../docs/plugins.md)), switched on per project: **Architecture map** in a project's settings (the manager's **Projects** tab). It maps only the projects it's on for, maps one as soon as it's switched on, and forgets one switched off; their leads get the map tool, and their holodecks the astrometrics table that takes you into their architecture space.
 
 Each project's architecture, as a map that keeps up with its code. A repo keeps its model in `.focus/cartography.yaml`, versioned with the code. The model says only two things:
 
@@ -51,7 +51,7 @@ The plugin adds `mcp__office__map` to every goal lead's office (`leadTool.ts`), 
 - **With no view**, it lists each repo's views and their questions.
 - **With a view** (`show-to-screen`, `whole` for the matrix, or `changes` for how it changes), it maps the lead's own checkout (their branch, uncommitted work and all) and shows the view as a page (`page.ts`): its question, the drawing and its numbered sentences, like show's visuals. It says how many parts it took, and any drift between the model and their code.
 
-When no view answers what a lead wants to show, they add one to the model in their slice, a question and its parts, and show it at once; once it merges, every later goal has it, on the engineering station and in the holodeck too.
+When no view answers what a lead wants to show, they add one to the model in their slice, a question and its parts, and show it at once; once it merges, every later goal has it, on the engineering station and in the architecture space too.
 
 ## When the map and the code disagree
 
@@ -70,7 +70,7 @@ On the engineering station (<kbd>E</kbd> at Lt. Brennan's station on deck 5), un
 - **A view** stands each of its parts in its layer's column, with what it does. An arrow goes from a part to a part whose code it uses, as thick as its imports. Each arrow carries a number, and the numbered sentences under the drawing say what goes across it: *Panels and HUD uses state, api, attention, markRead from Mirror of the office (63 imports)*. A view reads best with up to about nine parts.
 - **The whole map** (every part) is a dependency matrix, since a drawing of every connection is more lines than anyone can follow. Each row imports from the columns it has a number in, and the number is how many imports. Orange cells are two parts that import each other, where the code is tangled. Its key reads out its busiest cell as an example, and hovering a cell says what it takes.
 
-**In the project's holodeck**, each view has a screen of its own round the wall, either side of the entrance: its question over its drawing, solid as you aim at it. E on one opens it up close, filling the window, with its numbered sentences. The repos' own views come first, then each repo's whole map, then how each changes, six at most (the hall's room for plugins' screens).
+**In the project's holodeck** stands an astrometrics table, on the floor between the control ring and the wall on the entrance's side, opposite the PADD rack (`table.ts`): the project's map floats over it in miniature, turning slowly in a column of light (`miniature.ts`), each layer a ring of its parts, the first on top, each part as big as its share of the code, and a gold line for each import. E on it (*Step into the map*) and the view rushes into it (`ui.dive`), and you come out in the **architecture space** (`space.ts`): a platform out among the stars, the project's whole map straight ahead, big, and its other views floating round you in two rings, each a hologram with its question over its drawing, solid as you aim at it. E on one, from anywhere on the platform, opens it up close, filling the window, with its numbered sentences. Each repo's whole map comes first, then the repos' own views, then how each changes, 17 at most (`spaceLayout.ts`, `spaceViews`). You leave by the holodeck's arch behind you (`arch.ts`: *Computer, exit*, its grid showing through it), back to the holodeck you came from, standing by its table. One space serves every project: it shows the views of the project whose table you came through, and puts them up again as its maps change while you're there. The space is the plugin's own (`ShipHost.space`), far out beyond the rest of the ship and drawn only while you're in it.
 
 The drawings are SVG made by `draw.ts`, at their own size, shrunk to fit the station but never blown up. **Map again** makes a project's maps again.
 
@@ -92,4 +92,4 @@ Maps are made from each repo's default branch, checked out in the plugin's own f
 - `draw.ts`: drawing a view, the matrix and the changes as SVG, with their sentences (`viewDrawing`, which every place a view shows goes through).
 - `views.ts`: a map's views, and what the Maps view says in words.
 - `leadTool.ts`: the lead's map tool. `page.ts`: a view as a page for a station's screen.
-- `server.ts`: when maps are made, and the `/map` route. `client.ts`: the **Maps** view. `panel.ts`: a view as the browser shows it, and up close. `hall.ts`: the holodeck's screens.
+- `server.ts`: when maps are made, and the `/map` route. `client.ts`: the **Maps** view. `panel.ts`: a view as the browser shows it, and up close. `table.ts`: the astrometrics table, with `miniature.ts` (the map in miniature, pure). `space.ts`: the architecture space, its arch in `arch.ts`, with `spaceLayout.ts` (where its views, the platform and the holodeck's table stand, pure) and `screen.ts` (a view drawn as a screen).

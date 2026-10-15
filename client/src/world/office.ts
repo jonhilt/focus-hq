@@ -12,7 +12,7 @@ import type { Deck } from './deck';
 import type { HolodeckDeck } from './holodeckDeck';
 import type { DeckScreen } from './deckExtras';
 import { canvasTexture, fitText, makeCanvas, roundRect } from './canvas';
-import { type Box2, DOOR_W, HALL_HALF, ROOM_WIDTH, roomSlot, rowsFor, type Seat, slotAt, SUN_POSITION } from './layout';
+import { type Box2, DOOR_W, HALL_HALF, ROOM_WIDTH, roomSlot, rowsFor, type Seat, slotAt, SPACE, spaceAt, SUN_POSITION } from './layout';
 import { flat } from './materials';
 import { EngineeringStation } from './engineering';
 import { drawMsd, type MsdBoard } from './msd';
@@ -80,6 +80,8 @@ export class World {
   /** The plugins' parts of the ship as it stands, and what they put on its decks. */
   private pluginParts: ShipPart[] = [];
   private pluginMounts: THREE.Object3D[] = [];
+  /** The plugins' spaces (`ShipHost.space`), each a region of its own. */
+  private readonly spaces = new THREE.Group();
   /** The training console on the bridge: only in a demo office (`demo`, set before the first sync). */
   training: TrainingConsole | null = null;
   demo = false;
@@ -126,7 +128,7 @@ export class World {
     scene.add(this.root);
     this.drawMsd(this.msdBoard);
     for (const deck of this.decks()) this.mount(deck, this.root);
-    this.root.add(this.briefingRooms, this.transporterGroup);
+    this.root.add(this.briefingRooms, this.transporterGroup, this.spaces);
     // a little beyond their walls, so you're on one in its doorways too
     this.deckBoxes.command.setFromObject(ship.command.root).expandByScalar(1);
     this.deckBoxes.engineering.setFromObject(ship.engineering.root).expandByScalar(1);
@@ -140,7 +142,7 @@ export class World {
    * the far ones' screens and signs would all be sent to the GPU at once. Null draws all of it.
    */
   reveal(at: THREE.Vector3 | null): void {
-    const region: Region | null = at && this.culling ? regionAt(at, this.deckBoxes, (p) => this.inBriefingRoom(p), (p) => this.inHall(p), (p) => !!this.transporterRoomAt(p)) : null;
+    const region: Region | null = at && this.culling ? regionAt(at, this.deckBoxes, (p) => this.inBriefingRoom(p), (p) => this.inHall(p), (p) => !!this.transporterRoomAt(p), (p) => !!this.spaceAt(p)) : null;
     const show = shown(region);
     const transporter = at && region === 'transporter' ? this.transporterRoomAt(at) : undefined;
     for (const room of this.transporterRooms) room.group.visible = show.transporter && (!region || room === transporter);
@@ -154,6 +156,13 @@ export class World {
       this.vacant.forEach(inHall);
     }
     this.briefingRooms.visible = show.briefing;
+    const space = region === 'space' && at ? this.spaceAt(at) : undefined;
+    for (const s of this.spaces.children) s.visible = show.space && (!space || s === space);
+  }
+
+  /** The plugin's space a world position is in, if any. */
+  private spaceAt(p: THREE.Vector3): THREE.Object3D | undefined {
+    return this.spaces.children.find((s) => s.position.distanceTo(p) < SPACE.radius);
   }
 
   private inHall(p: THREE.Vector3): boolean {
@@ -202,9 +211,12 @@ export class World {
     return [this.ship.command, ...this.holodeckDeck, this.ship.engineering];
   }
 
-  /** Rebuilds the building when the set of projects (or their names/colours/repos, or which are hidden) changes. */
+  /**
+   * Rebuilds the building when the set of projects (or their names/colours/repos, which are hidden, or which plugins
+   * they have on, since a plugin can stand things in their halls) changes.
+   */
   sync(projects: Project[]): void {
-    const key = JSON.stringify([this.demo, projects.map((p) => [p.id, p.name, p.color, p.repos, p.theme, p.hidden === true])]);
+    const key = JSON.stringify([this.demo, projects.map((p) => [p.id, p.name, p.color, p.repos, p.theme, p.hidden === true, p.plugins ?? []])]);
     if (key === this.projectKey) {
       for (const room of this.rooms.values()) {
         room.project = projects.find((p) => p.id === room.project.id) ?? room.project;
@@ -313,13 +325,35 @@ export class World {
         this.pluginMounts.push(object);
       },
       collide: (box) => b.colliders.push(box),
-      interactive: (object, label, use) => interactive(object, { kind: 'plugin', use }, label),
+      interactive: (object, label, use, reach) => interactive(object, { kind: 'plugin', use }, label, reach),
+      hall: (projectId) => {
+        const room = this.rooms.get(projectId);
+        if (!room) return undefined;
+        return {
+          mount: (object) => {
+            room.group.add(object);
+            this.pluginMounts.push(object);
+          },
+          toWorld: (local) => {
+            room.group.updateWorldMatrix(true, false);
+            return local.clone().applyMatrix4(room.group.matrixWorld);
+          },
+        };
+      },
+      space: (label) => {
+        const root = new THREE.Group();
+        root.userData.label = label;
+        root.position.copy(spaceAt(this.spaces.children.length));
+        this.spaces.add(root);
+        return { root, toWorld: (local) => local.clone().add(root.position) };
+      },
     };
     this.pluginParts = shipParts(this.shipPlugins(), host);
   }
 
   private unbuildPlugins(): void {
     for (const object of this.pluginMounts) object.removeFromParent();
+    this.spaces.clear();
     for (const part of this.pluginParts) part.dispose();
     this.pluginMounts = [];
     this.pluginParts = [];
@@ -378,6 +412,8 @@ export class World {
 
   /** Human name of where a world position is. */
   locationOf(p: THREE.Vector3): { label: string; projectId?: string } {
+    const space = this.spaceAt(p);
+    if (space) return { label: (space.userData.label as () => string)() };
     const transporter = this.transporterRoomAt(p);
     if (transporter) {
       const project = this.rooms.get(transporter.projectId)?.project;

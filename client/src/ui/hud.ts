@@ -77,6 +77,16 @@ export class Hud {
     }, 700);
   }
 
+  /** A dive into what you're looking at: the view rushes in to a bright light, `between` happens in it, and it clears. */
+  dive(between: () => void): void {
+    this.curtain.classList.add('dive', 'down');
+    setTimeout(() => {
+      between();
+      this.curtain.classList.remove('down');
+      setTimeout(() => this.curtain.classList.remove('dive'), 1000);
+    }, 900);
+  }
+
   setVisible(visible: boolean): void {
     this.root.style.display = visible ? '' : 'none';
   }

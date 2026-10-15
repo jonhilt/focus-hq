@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TEAM_STATIONS } from '../../../shared/types';
-import { type Box2, BRIEFING, briefingRoomAt, ENGINEERING_DECK, HALL, HALL_HALF, hallAt, ROOM_DEPTH, roomSlot, TRANSPORTER, TRANSPORTER_ROOMS, transporterRoomAt } from './layout';
+import { type Box2, BRIEFING, briefingRoomAt, ENGINEERING_DECK, HALL, HALL_HALF, hallAt, ROOM_DEPTH, roomSlot, SPACE, spaceAt, TRANSPORTER, TRANSPORTER_ROOMS, transporterRoomAt } from './layout';
 
 const meet = (a: Box2, b: Box2) => a.minX < b.maxX && b.minX < a.maxX && a.minZ < b.maxZ && b.minZ < a.maxZ;
 
@@ -65,5 +65,13 @@ describe('transporterRoomAt', () => {
   it('stands them far beyond main engineering and the halls’ landscapes, where nothing else stands', () => {
     // main engineering is under 40 m long; a training hall's landscape reaches up to 210 m from its middle
     for (const t of transporters) expect(t.minZ).toBeGreaterThan(Math.max(ENGINEERING_DECK.z + 40, hallAt(roomSlot(0)).z + 210));
+  });
+});
+
+describe('spaceAt', () => {
+  it('stands each space clear of the next, and of the furthest holodeck, hall and briefing room', () => {
+    expect(spaceAt(0).distanceTo(spaceAt(1))).toBeGreaterThan(SPACE.radius * 2);
+    const far = roomSlot(2 * 30 - 1);
+    for (const p of [far.center, hallAt(far), briefingRoomAt(far, TEAM_STATIONS - 1)]) expect(spaceAt(0).distanceTo(p)).toBeGreaterThan(SPACE.radius * 2);
   });
 });

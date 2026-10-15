@@ -35,14 +35,15 @@ export const CHANGES_KEY =
   'From git: each bar is how many commits changed a part, the busiest first. Each numbered line is two parts that keep changing together; with no import between them, the map\'s arrows don\'t show what ties them.';
 
 /**
- * Which of a project's views get a screen in its holodeck, in the order they're hung: every repo's own views first,
- * the questions someone chose to ask, then each repo's whole map, then how each repo changes.
+ * A project's views in its architecture space, in the order they're placed (spaceLayout.ts): each repo's whole map
+ * first (the first straight ahead), then every repo's own views, the questions someone chose to ask, then how each repo
+ * changes.
  */
-export function hallViews(maps: readonly RepoMap[]): { map: RepoMap; view: MapView }[] {
+export function spaceViews(maps: readonly RepoMap[]): { map: RepoMap; view: MapView }[] {
   const drawn = maps.filter((m) => m.model && !m.error);
   const each = drawn.map((map) => viewsOf(map).map((view) => ({ map, view })));
   const of = (id: string) => each.flatMap((views) => views.filter((v) => v.view.id === id));
-  return [...each.flatMap((views) => views.filter((v) => !isBuiltIn(v.view))), ...of(WHOLE.id), ...of(CHANGES.id)];
+  return [...of(WHOLE.id), ...each.flatMap((views) => views.filter((v) => !isBuiltIn(v.view))), ...of(CHANGES.id)];
 }
 
 /** What a view's screen shows changes only with the commit it was mapped from and the view itself. */

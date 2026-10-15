@@ -61,10 +61,42 @@ export interface ShipHost {
   seat(deck: 'command' | 'engineering', name: Crew): Seat | undefined;
   /** Puts `object`, in world coordinates, on the deck: drawn and culled with it, and taken off before the ship is built again. */
   mount(deck: 'command' | 'engineering', object: THREE.Object3D): void;
-  /** A box on the floor the player can't walk into. */
+  /** A box on the floor the player can't walk into, in world coordinates. */
   collide(box: Box2): void;
-  /** Makes `object` something the captain uses with E: `label` is the hint, `use` what it does. */
-  interactive(object: THREE.Object3D, label: () => string, use: (ui: Ui) => void): void;
+  /**
+   * Makes `object` something the captain uses with E: `label` is the hint, `use` what it does, from as far as `reach`
+   * metres (4.5 unless it says).
+   */
+  interactive(object: THREE.Object3D, label: () => string, use: (ui: Ui) => void, reach?: number): void;
+  /** The training hall of `projectId`'s holodeck, to stand things in; undefined when it has none (it's hidden). */
+  hall(projectId: string): HallHost | undefined;
+  /**
+   * A space of the plugin's own, far out beyond the rest of the ship and drawn only while the camera's in it, like a
+   * transporter room: nothing leads there, so the captain's sent there (`ui.dive`, `ui.goTo`) and back. Its floor is
+   * at y 0 round its middle, and it should stay within `SPACE.radius` of that; it starts empty, under the ship's sky
+   * and lights, so it brings its own sky. `label` names where you are while you're in it (the HUD's place). Each call
+   * gives another.
+   */
+  space(label: () => string): PluginSpace;
+}
+
+/** A project's training hall, lent to a plugin as the ship's built. */
+export interface HallHost {
+  /**
+   * Stands `object` in the hall, placed in the hall's own frame (`world/hallLayout.ts`: +X from the entrance to the
+   * board, the middle of its floor at the origin): drawn and culled with it, and taken off before the ship is built again.
+   */
+  mount(object: THREE.Object3D): void;
+  /** A point in the hall's frame, in world coordinates (for `collide`, and for sending the captain there). */
+  toWorld(local: THREE.Vector3): THREE.Vector3;
+}
+
+/** A plugin's own space (`ShipHost.space`). */
+export interface PluginSpace {
+  /** Its group, at its middle: what the plugin adds to it is placed round that. */
+  root: THREE.Group;
+  /** A point round its middle, in world coordinates. */
+  toWorld(local: THREE.Vector3): THREE.Vector3;
 }
 
 /** A plugin's part of the ship, while it stands. */

@@ -67,4 +67,6 @@ export interface Ui {
   beamTo(projectId: string, station: number, room: number): void;
   /** Beams the captain back to the briefing room of `projectId`'s team station `station`. */
   beamBack(projectId: string, station: number): void;
+  /** The view dives into what the captain's looking at, a rush of light, and comes out at `place` (a plugin's space, say). */
+  dive(place: Place): void;
 }

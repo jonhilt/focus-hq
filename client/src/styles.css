@@ -111,6 +111,16 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
   animation: shimmer 0.5s linear infinite;
 }
 @keyframes shimmer { to { background-position: 0 -46px, 0 31px, 0 0; } }
+/* a dive into what you're looking at: rings of light rush out from the middle over a blue-white glare */
+.curtain.dive {
+  transition: opacity 0.6s ease-in;
+  background:
+    repeating-radial-gradient(circle at center, rgba(255, 255, 255, 0.5) 0 2px, transparent 3px 46px),
+    radial-gradient(circle at center, #ffffff 0%, #d8f0ff 35%, #7fb6e6 75%, #2e5a8c 100%);
+  background-position: center;
+  animation: dive-rush 0.5s linear infinite;
+}
+@keyframes dive-rush { from { background-size: 100% 100%, 100% 100%; } to { background-size: 160% 160%, 100% 100%; } }
 .toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 30; max-width: min(420px, calc(100vw - 32px)); }
 .toast {
   --tone: var(--lcars-periwinkle);

@@ -214,6 +214,11 @@ async function main() {
       const to = world.station(projectId, station)?.viewpoint();
       if (to) beam(to.position, to.lookAt);
     },
+    dive: (place) => {
+      panels.close(false);
+      hud.dive(() => player.teleport(place.position, place.lookAt));
+      player.lock();
+    },
   };
   /** A transporter's beam: its sound and shimmer, and the captain's somewhere else. */
   function beam(feet: THREE.Vector3, lookAt: THREE.Vector3): void {

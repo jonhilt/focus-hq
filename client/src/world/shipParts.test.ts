@@ -5,13 +5,20 @@ import { shipParts } from './shipParts';
 
 function recordingHost() {
   const done: string[] = [];
+  const spaces = new THREE.Group();
   const host: ShipHost = {
     seat: () => undefined,
     mount: (_deck, object) => done.push(`mount ${object.name}`),
     collide: (box) => done.push(`collide ${box.minX}`),
     interactive: (object) => done.push(`interactive ${object.name}`),
+    hall: (projectId) => ({ mount: (object) => done.push(`hall ${projectId} ${object.name}`), toWorld: (local) => local.clone() }),
+    space: () => {
+      const root = new THREE.Group();
+      spaces.add(root);
+      return { root, toWorld: (local) => local.clone() };
+    },
   };
-  return { host, done };
+  return { host, done, spaces };
 }
 
 describe('shipParts', () => {
@@ -53,5 +60,33 @@ describe('shipParts', () => {
     shipParts([{ id: 'broken', ship: broken }, { id: 'fine', ship: fine }], host);
     expect(done).toEqual(['collide 2', 'interactive kept', 'mount kept']);
     error.mockRestore();
+  });
+
+  it('drops what a part that throws stood in a hall, and the space it made', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { host, done, spaces } = recordingHost();
+    const named = (name: string) => Object.assign(new THREE.Group(), { name });
+    const broken = (h: ShipHost) => {
+      h.hall('p')?.mount(named('lost'));
+      h.space(() => 'a space');
+      throw new Error('half built');
+    };
+    const fine = (h: ShipHost): ShipPart => {
+      h.hall('p')?.mount(named('kept'));
+      h.space(() => 'a space');
+      return { dispose: () => undefined };
+    };
+    shipParts([{ id: 'broken', ship: broken }, { id: 'fine', ship: fine }], host);
+    expect(done).toEqual(['hall p kept']);
+    expect(spaces.children).toHaveLength(1);
+    error.mockRestore();
+  });
+
+  it('does what a part asks once it stands there and then', () => {
+    const { host, done } = recordingHost();
+    let later: ShipHost | undefined;
+    shipParts([{ id: 'views', ship: (h) => ((later = h), { dispose: () => undefined }) }], host);
+    later?.interactive(Object.assign(new THREE.Group(), { name: 'view' }), () => 'view', () => undefined);
+    expect(done).toEqual(['interactive view']);
   });
 });

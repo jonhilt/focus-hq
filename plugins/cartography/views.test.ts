@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RepoMap } from './shared';
-import { coverage, fitInto, hallViews, openingView, pickView, screenTitle, screenVersion, viewList, viewsOf } from './views';
+import { coverage, fitInto, openingView, pickView, screenTitle, screenVersion, spaceViews, viewList, viewsOf } from './views';
 
 export const MAP: RepoMap = {
   repo: 'o/r',
@@ -44,11 +44,11 @@ describe('coverage', () => {
   });
 });
 
-describe('hallViews', () => {
-  it('hangs every repo’s own views first, then each repo’s whole map, leaving out maps that failed', () => {
+describe('spaceViews', () => {
+  it('places each repo’s whole map first, then every repo’s own views, leaving out maps that failed', () => {
     const other: RepoMap = { ...MAP, repo: 'o/other' };
     const failed: RepoMap = { ...MAP, repo: 'o/failed', error: 'No model' };
-    expect(hallViews([MAP, other, failed]).map(({ map, view }) => `${map.repo}#${view.id}`)).toEqual(['o/r#front', 'o/other#front', 'o/r#whole', 'o/other#whole']);
+    expect(spaceViews([MAP, other, failed]).map(({ map, view }) => `${map.repo}#${view.id}`)).toEqual(['o/r#whole', 'o/other#whole', 'o/r#front', 'o/other#front']);
   });
 });
 
@@ -95,10 +95,10 @@ describe('screenTitle', () => {
 describe('the changes view', () => {
   const changing: RepoMap = { ...MAP, history: { days: 90, commits: 3, parts: [{ id: 'api', commits: 3, lines: 9 }], coupling: [] } };
 
-  it('comes with a history, after the whole map, and hangs after every repo\'s whole map', () => {
+  it('comes with a history, after the whole map, and is placed after every repo\'s own views', () => {
     expect(viewsOf(changing).map((v) => v.id)).toEqual(['whole', 'changes', 'front']);
-    expect(hallViews([changing, { ...changing, repo: 'o/other' }]).map(({ map, view }) => `${map.repo}#${view.id}`)).toEqual([
-      'o/r#front', 'o/other#front', 'o/r#whole', 'o/other#whole', 'o/r#changes', 'o/other#changes',
+    expect(spaceViews([changing, { ...changing, repo: 'o/other' }]).map(({ map, view }) => `${map.repo}#${view.id}`)).toEqual([
+      'o/r#whole', 'o/other#whole', 'o/r#front', 'o/other#front', 'o/r#changes', 'o/other#changes',
     ]);
     expect(viewList([changing])).toContain('- changes: how its parts changed in git over 90 days, and which change together');
   });

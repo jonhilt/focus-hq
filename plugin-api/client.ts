@@ -6,12 +6,17 @@ import { api } from '../client/src/net/api';
 import { state } from '../client/src/net/state';
 
 export * from './shared';
-export type { ClientPlugin, EngineeringGo, EngineeringPart, EngineeringView, GoalPart, GoalStrip, GoalTagPlace, HallScreen, StationSays } from '../client/src/plugins';
+export type { ClientPlugin, EngineeringGo, EngineeringPart, EngineeringView, GoalPart, GoalStrip, GoalTagPlace, HallHost, HallScreen, PluginSpace, ShipHost, ShipPart, StationSays } from '../client/src/plugins';
 export { pluginState } from '../client/src/plugins';
 export type { Ui } from '../client/src/ui/context';
 export { busy, h, timeAgo } from '../client/src/ui/dom';
 /** The LCARS kit, for what a plugin draws on a canvas (the MSD, a goal board's strip, a hall's screen). */
-export { fitText, UI_FONT } from '../client/src/world/canvas';
+export { canvasTexture, fitText, makeCanvas, UI_FONT } from '../client/src/world/canvas';
+/** What a plugin's ship part needs to stand things in the holodeck and in a space of its own. */
+export { OVERLAY_LAYER } from '../client/src/world/frame';
+export { Hologram, hover } from '../client/src/world/hologram';
+export { around, SPACE } from './layout';
+export type { Place } from '../client/src/world/office';
 export type { Box } from '../client/src/world/msd';
 export { LCARS, LCARS_FONT, LCARS_STATUS } from '../client/src/world/starship';
 
