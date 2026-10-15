@@ -3,7 +3,7 @@
 // ledger, saves and prints.
 import path from 'node:path';
 import ts from 'typescript';
-import { frictionGroups, OPEN_FRICTION_DAYS, reportCard, type LedgerEvent } from '../../../shared/ledger';
+import { frictionGroups, OPEN_FRICTION_DAYS, reportCard, type LedgerEvent } from '../../../plugin-api/shared';
 import { compared, formatValue, measuredAt } from '../scorecard';
 import type { Metric, MetricFormat as Format, Scorecard, ScorecardNoise, ScorecardSection as Section } from '../types';
 

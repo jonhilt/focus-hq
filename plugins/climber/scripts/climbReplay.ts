@@ -12,7 +12,7 @@ import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
 import { climbBrief, climbLog } from '../climb';
 import { config } from '../../../server/config';
 import type { PastPullRequest } from '../../../server/github/provider';
-import { SavedScorecards, SCORECARDS_DIR } from '../../scorecard/desk';
+import { SavedScorecards, scorecardsDir } from '../../scorecard/desk';
 import { direction, formatValue } from '../../scorecard/scorecard';
 import type { Scorecard } from '../../scorecard/types';
 import { CLIMB_BRANCH } from '../shared';
@@ -38,7 +38,8 @@ function pastClimbs(): PastPullRequest[] {
 }
 
 function scorecard(): Scorecard {
-  const file = arg('--card') ?? (existsSync(SCORECARDS_DIR) ? readdirSync(SCORECARDS_DIR).filter((f) => f.endsWith('.json')).sort().map((f) => path.join(SCORECARDS_DIR, f)).at(-1) : undefined);
+  const dir = scorecardsDir();
+  const file = arg('--card') ?? (existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.json')).sort().map((f) => path.join(dir, f)).at(-1) : undefined);
   if (!file) throw new Error('No scorecard to rank from: run `pnpm run scorecard` first, or pass --card');
   return JSON.parse(readFileSync(file, 'utf8')) as Scorecard;
 }
@@ -61,7 +62,7 @@ async function ask<T>(prompt: string, schema: object, opts: Partial<Options> = {
 async function main() {
   const login = gh('api', 'user', '-q', '.login').trim();
   // the brief as a climb gets it: main's scorecards for whether gains held, and the noise floor
-  const saved = new SavedScorecards(SCORECARDS_DIR, ROOT);
+  const saved = new SavedScorecards(scorecardsDir(), ROOT);
   const noise = saved.noise();
   const log = climbLog(pastClimbs(), [], login, { history: saved.history(30), direction: (m, before) => direction(m, before, noise), formatValue });
   const card = render(scorecard());

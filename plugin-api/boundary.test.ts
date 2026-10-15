@@ -8,7 +8,7 @@ import { crossings, importsOf, pluginOf, project, refusal } from './boundary';
  * plugin's code: the counts may only fall (and are brought down here as they do), and a plugin leaves the list once it reaches none. Any plugin not listed,
  * a new one too, has to have none.
  */
-const NOT_YET_BEHIND: Record<string, number> = { climber: 30, flow: 42, 'number-one': 72, retro: 31, scorecard: 17 };
+const NOT_YET_BEHIND: Record<string, number> = { climber: 30, flow: 42, 'number-one': 72, retro: 31 };
 
 const root = path.resolve(import.meta.dirname, '..');
 
@@ -69,5 +69,6 @@ describe('the line between the core and its plugins', () => {
       // exactly: one more is a new crossing to take out; one fewer, a count to bring down here
       else expect(theirs.length, `${plugin}'s crossings, NOT_YET_BEHIND says ${allowed}:\n${say(theirs).join('\n')}`).toBe(allowed);
     }
-  });
+    // it parses every file in the repo: a second or two, longer while the rest of the suite runs beside it
+  }, 30_000);
 });

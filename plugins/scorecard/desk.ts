@@ -1,10 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { config } from '../../server/config';
 import { DemoScorecards } from './demoScorecards';
 import { Option, Schema } from 'effect';
-import { run } from '../../server/util';
-import type { Scorecard, ScorecardNoise, Scorecards } from './types';
+import { pluginDataDir, run } from '../../plugin-api/server';
+import { SCORECARD, type Scorecard, type ScorecardNoise, type Scorecards } from './types';
 
 /** How many of the latest scorecards main engineering shows: enough for a trend at a glance. */
 export const SHOWN = 10;
@@ -54,8 +53,11 @@ export function readNoise(text: string): ScorecardNoise | undefined {
   return Option.getOrUndefined(Option.map(decodeNoise(text), (n) => ({ ...n, spread: { ...n.spread } })));
 }
 
-/** Where `pnpm run scorecard` saves each scorecard (and, under noise/, each noise floor), to compare over time. */
-export const SCORECARDS_DIR = path.join(config.dataDir, 'scorecards');
+/**
+ * Where `pnpm run scorecard` saves each scorecard (and, under noise/, each noise floor), to compare over time: the
+ * plugin's own folder, with what the office kept in `~/.focus/scorecards/` before it was a plugin moved in.
+ */
+export const scorecardsDir = (): string => pluginDataDir(SCORECARD, { movedFrom: 'scorecards' });
 
 /** The commit the office runs from, and whether it has uncommitted changes. */
 export interface Head {
@@ -107,8 +109,8 @@ let source: ScorecardSource | undefined;
  * The office's scorecards, one source for the desk and for what the plugin provides (the climber's briefs read them):
  * the saved ones, or the demo's, made up and kept in memory.
  */
-export function officeScorecards(demo: boolean): ScorecardSource {
-  source ??= demo ? new DemoScorecards() : new SavedScorecards(SCORECARDS_DIR, config.root);
+export function officeScorecards(demo: boolean, officeDir: string): ScorecardSource {
+  source ??= demo ? new DemoScorecards() : new SavedScorecards(scorecardsDir(), officeDir);
   return source;
 }
 

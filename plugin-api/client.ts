@@ -9,7 +9,11 @@ export * from './shared';
 export type { ClientPlugin, EngineeringGo, EngineeringPart, EngineeringView, GoalPart, GoalStrip, GoalTagPlace, HallScreen, StationSays } from '../client/src/plugins';
 export { pluginState } from '../client/src/plugins';
 export type { Ui } from '../client/src/ui/context';
-export { h } from '../client/src/ui/dom';
+export { busy, h, timeAgo } from '../client/src/ui/dom';
+/** The LCARS kit, for what a plugin draws on a canvas (the MSD, a goal board's strip, a hall's screen). */
+export { fitText, UI_FONT } from '../client/src/world/canvas';
+export type { Box } from '../client/src/world/msd';
+export { LCARS, LCARS_FONT, LCARS_STATUS } from '../client/src/world/starship';
 
 /** The office as the browser has it now, read-only: what a plugin's views may show. */
 export const office = {

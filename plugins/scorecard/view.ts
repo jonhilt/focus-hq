@@ -1,9 +1,6 @@
 import { changeMark, type ComparedRow, compared, duration, formatValue, glance, measuredAt, type Tile, tileFace, type Trend, verdictPhrases } from './scorecard';
 import { aboutMetric, SECTION_ABOUT } from './about';
-import { api } from '../../client/src/net/api';
-import { pluginState } from '../../client/src/plugins';
-import type { Ui } from '../../client/src/ui/context';
-import { busy, h, timeAgo } from '../../client/src/ui/dom';
+import { busy, callPlugin, h, pluginState, timeAgo, type Ui } from '../../plugin-api/client';
 import { type Metric, type Scorecard, SCORECARD, type Scorecards, type ScorecardSection } from './types';
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -67,7 +64,7 @@ export function scorecardHead(ui: Ui): HTMLElement {
 
   const measure = h('button', { class: 'btn primary small' }, measuring ? 'Measuring…' : 'Measure now');
   measure.disabled = measuring;
-  measure.onclick = () => void busy(measure, () => api.plugin<Scorecards>(SCORECARD, '/measure').then(() => undefined), ui.error);
+  measure.onclick = () => void busy(measure, () => callPlugin<Scorecards>(SCORECARD, '/measure').then(() => undefined), ui.error);
   const onMsd = h('button', { class: 'btn small' }, 'Show on the MSD');
   onMsd.disabled = !latest;
   onMsd.onclick = () => ui.showOnMsd({ plugin: SCORECARD });

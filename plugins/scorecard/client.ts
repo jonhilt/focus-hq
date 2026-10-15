@@ -1,6 +1,6 @@
 // The scorecard in the browser (README.md): its overview on the engineering station, the code's numbers and the office's
 // in views of their own, and its board on main engineering's MSD.
-import type { ClientPlugin, EngineeringGo } from '../../client/src/plugins';
+import type { ClientPlugin, EngineeringGo } from '../../plugin-api/client';
 import { drawScorecard } from './msd';
 import { formatValue, glance } from './scorecard';
 import { SCORECARD, type ScorecardSection } from './types';

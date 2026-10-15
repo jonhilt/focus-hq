@@ -10,5 +10,6 @@ describe("the office's own map", () => {
     expect(map.problems).toEqual([]);
     expect(map.mapped).toBe(map.files);
     expect(map.connections.length).toBeGreaterThan(0);
-  });
+    // it reads every source file and the repo's whole git log: seconds, longer while the rest of the suite runs beside it
+  }, 30_000);
 });

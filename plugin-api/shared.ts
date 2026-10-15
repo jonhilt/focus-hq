@@ -4,6 +4,8 @@
 export type { Agent, AgentStatus, Issue, ModelKind, Planner, Project, Settings } from '../shared/types';
 export { MODEL_KINDS } from '../shared/types';
 export type { LedgerEntry, LedgerEvent } from '../shared/ledger';
+/** The ledger read as the office reads it: the report card, and the open frictions, grouped. */
+export { frictionGroups, OPEN_FRICTION_DAYS, reportCard } from '../shared/ledger';
 export type { Flow, FlowRecording } from '../shared/flows';
 export { FLOWS_FILE } from '../shared/flows';
 export { pluginOn } from '../shared/projectPlugins';

@@ -5,4 +5,7 @@ export * from './shared';
 export type { BriefSpec, BriefWork, FocusPlugin, LeadTool, LeadToolContext, PluginHost, PluginParts, PluginRoute, PluginState } from '../server/plugins/contract';
 /** The limits on a page a lead tool puts on the lead's screen (`LeadToolContext.show`): its id's and title's length. */
 export { ARTIFACT_LIMITS } from '../server/agents/lead';
-export { errorMessage, run } from '../server/util';
+export { errorMessage, run, sleep } from '../server/util';
+/** A plugin's own folder for files, for its scripts (its server part has `host.dataDir()`, the same folder). */
+export { pluginDataDir } from '../server/plugins/dataDir';
+export { officeLedger } from './ledger';

@@ -8,10 +8,10 @@ It takes about a minute and a quarter. It always exits 0: it measures, it doesn'
 
 | | |
 | --- | --- |
-| `pnpm run scorecard` | measures, saves the result in `~/.focus/scorecards/`, and prints it next to the latest saved one |
+| `pnpm run scorecard` | measures, saves the result in `~/.focus/plugins/scorecard/`, and prints it next to the latest saved one |
 | `pnpm run scorecard --no-save` | measures and compares, without saving (on a branch you're still working on, say) |
 | `pnpm run scorecard --json` | prints the scorecard as JSON |
-| `pnpm run scorecard --repeat 5` | measures 5 times on this commit and saves how far each number wobbles, its [noise floor](#noise-floor), in `~/.focus/scorecards/noise/` (with `--no-save`, only prints it) |
+| `pnpm run scorecard --repeat 5` | measures 5 times on this commit and saves how far each number wobbles, its [noise floor](#noise-floor), in `~/.focus/plugins/scorecard/noise/` (with `--no-save`, only prints it) |
 
 ## What it measures
 
@@ -40,11 +40,11 @@ The engineering panel (<kbd>E</kbd> at Lt. Brennan's station on deck 5) is the c
 
 A time that moves less than its 10% wobble shows as `≈`, and a change too small to show isn't counted as a climb or a slip. The explanations live in `about.ts`, and the overview's summary in `glance` (`scorecard.ts`): a number added to the scorecard should get a line there too.
 
-**Measure now** runs `pnpm run scorecard` on the office's own checkout (the one it runs from, which auto update keeps on the latest main). It takes about a minute and a half, one measurement at a time, and the panel says when it's under way or why it failed. **Show on the MSD** puts the scorecard up on the master systems display beside the ship, as the overview has it: the same sentence on the gate and what moved, the same tile per section (its headline number, a few words, and its change in words), then what moved, the slips first. The overview and the MSD share their wording (`verdictPhrases`, `tileFace` and `changeMark` in `scorecard.ts`; the MSD's board is `msd.ts`), so they always say the same thing. It stays up until you pick a trace at the table or **Clear the MSD**. The demo office's scorecards are made up and kept in memory, so the demo never writes to `~/.focus/scorecards/`.
+**Measure now** runs `pnpm run scorecard` on the office's own checkout (the one it runs from, which auto update keeps on the latest main). It takes about a minute and a half, one measurement at a time, and the panel says when it's under way or why it failed. **Show on the MSD** puts the scorecard up on the master systems display beside the ship, as the overview has it: the same sentence on the gate and what moved, the same tile per section (its headline number, a few words, and its change in words), then what moved, the slips first. The overview and the MSD share their wording (`verdictPhrases`, `tileFace` and `changeMark` in `scorecard.ts`; the MSD's board is `msd.ts`), so they always say the same thing. It stays up until you pick a trace at the table or **Clear the MSD**. The demo office's scorecards are made up and kept in memory, so the demo never writes to `~/.focus/plugins/scorecard/`.
 
 **After each merge.** Two minutes after it starts, the office measures the commit it runs from by itself, if that commit has no scorecard yet and the checkout has no uncommitted changes to tracked files (an untracked folder, like an editor's `.idea/`, doesn't count: the scorecard only reads tracked files) (`measureNewCommit` in `desk.ts`). [Auto update](../../docs/auto-update.md) restarts the office on each merge to main, so every merge gets a scorecard, and the trend fills in without anyone pressing Measure now. The panel says when a measurement is one of these. The demo office doesn't do it.
 
-The office reads the latest ten from `~/.focus/scorecards/` when it starts and after each measurement (`desk.ts`, which decodes each with Effect Schema and skips a file that isn't one). A scorecard saved from the terminal shows up after the next restart or measurement. The build step builds into a temporary folder, never the `dist/` the office may be serving.
+The office reads the latest ten from `~/.focus/plugins/scorecard/` when it starts and after each measurement (`desk.ts`, which decodes each with Effect Schema and skips a file that isn't one). A scorecard saved from the terminal shows up after the next restart or measurement. The build step builds into a temporary folder, never the `dist/` the office may be serving.
 
 ## Comparing
 

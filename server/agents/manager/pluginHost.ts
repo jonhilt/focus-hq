@@ -8,6 +8,7 @@ import type { BriefWork, PluginHost, PluginState } from '../../plugins/contract'
 import type { Core } from './core';
 import { Refused } from './core';
 import { checkoutLatest } from '../workspace';
+import { pluginDataDir } from '../../plugins/dataDir';
 
 /**
  * What the office lends a plugin that the manager doesn't have: where it runs, its own repo, filing issues, the demo's
@@ -46,7 +47,7 @@ function slot<S extends object>(saved: () => PluginStates, id: string, fresh: ()
 /** What the office lends the plugin `id` (docs/plugins.md): the manager's seating, its terminals and toasts, and the store. */
 export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
   const dataDir = () => {
-    const dir = path.join(config.dataDir, 'plugins', id);
+    const dir = pluginDataDir(id);
     fs.mkdirSync(dir, { recursive: true });
     return dir;
   };

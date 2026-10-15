@@ -1,7 +1,5 @@
 // The scorecard on main engineering's MSD (client/src/world/msd.ts), beside the ship, while the captain has put it up there.
-import { fitText } from '../../client/src/world/canvas';
-import type { Box } from '../../client/src/world/msd';
-import { LCARS, LCARS_FONT, LCARS_STATUS } from '../../client/src/world/starship';
+import { type Box, fitText, LCARS, LCARS_FONT, LCARS_STATUS } from '../../plugin-api/client';
 import { changeMark, formatValue, glance, measuredAt, SECTIONS, tileFace, type Trend, verdictPhrases } from './scorecard';
 import type { ScorecardSection, Scorecards } from './types';
 

@@ -1,6 +1,6 @@
 // The demo office's scorecards: a made-up history that climbs a little each time, kept in memory so the demo never
 // writes to ~/.focus/scorecards/.
-import { sleep } from '../../server/util';
+import { sleep } from '../../plugin-api/server';
 import type { Metric, Scorecard } from './types';
 import type { ScorecardSource } from './desk';
 

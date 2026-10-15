@@ -1,7 +1,7 @@
 // Scorecard: measures Focus against its own standard, every number from a command run here, never from reading code by
 // eye: the gate (typecheck, lint, tests with coverage, build) and how long it takes, the fence (type assertions, `any`,
 // suppressions), how far the server is along the Effect path, the tests and CRAP, and the office's own health from the
-// ledger. It saves each one in ~/.focus/scorecards/ and prints it with what changed since the one before
+// ledger. It saves each one in the plugin's folder (~/.focus/plugins/scorecard/) and prints it with what changed since the one before
 // (scripts/scorecardRules.ts has the rules). It measures; it exits 0 whatever the numbers unless it couldn't measure.
 //
 //   pnpm run scorecard                 measure, save, and compare with the latest saved one
@@ -13,9 +13,8 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { paths } from '../../../server/config';
-import { SCORECARDS_DIR } from '../desk';
-import { checkLedger } from '../../../shared/ledger';
+import { officeLedger } from '../../../plugin-api/server';
+import { scorecardsDir } from '../desk';
 import { noiseOf } from '../scorecard';
 import type { ScorecardNoise } from '../types';
 import { CRAP_LINE, fromIstanbul, functionsIn, isDemo, score } from './crapScore';
@@ -25,6 +24,7 @@ import {
 } from './scorecardRules';
 
 const ROOT = path.resolve(import.meta.dirname, '../../..');
+const SCORECARDS_DIR = scorecardsDir();
 const git = (...args: string[]) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).trim();
 const bin = (name: string) => path.join(ROOT, 'node_modules/.bin', name);
 
@@ -117,8 +117,8 @@ function measure(): Scorecard {
   const tests = code.filter((f) => isTest(f.file));
 
   const now = Date.now();
-  const ledger = existsSync(paths.ledger) ? checkLedger(readFileSync(paths.ledger, 'utf8')).events : undefined;
-  if (!ledger) notes.push(`no ledger at ${paths.ledger}, so the office's numbers are missing`);
+  const { file: ledgerFile, events: ledger } = officeLedger();
+  if (!ledger) notes.push(`no ledger at ${ledgerFile}, so the office's numbers are missing`);
   const office = ledger ? officeMetrics(ledger, now) : undefined;
 
   return {
