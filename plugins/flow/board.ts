@@ -1,8 +1,4 @@
-import { type GoalStrip, pluginState } from '../../client/src/plugins';
-import { fitText, UI_FONT } from '../../client/src/world/canvas';
-import type { Box } from '../../client/src/world/msd';
-import { LCARS_FONT } from '../../client/src/world/starship';
-import type { Agent } from '../../shared/types';
+import { type Agent, type Box, fitText, type GoalStrip, LCARS_FONT, pluginState, UI_FONT } from '../../plugin-api/client';
 import { FLOW_COLOR } from './colors';
 import { FLOW, type FlowPluginState, type LeadFlow } from './shared';
 import { flowNow, flowShares, flowSummary } from './words';

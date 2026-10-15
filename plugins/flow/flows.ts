@@ -1,11 +1,7 @@
 // Each open goal's flow as it goes (README.md): worked out again from its lead's transcript and the ledger as the
 // lead's turns start and end, QA gives a verdict and its pull requests land, and kept in the plugin's state for the
 // goal's screens. The rules are in flow.ts; this is when to run them.
-import { goalRecord, hasLeadWork } from '../../server/agents/lead';
-import type { PluginHost, PluginState } from '../../server/plugins/contract';
-import { errorMessage } from '../../server/util';
-import type { LedgerEvent } from '../../shared/ledger';
-import type { Agent } from '../../shared/types';
+import { type Agent, errorMessage, goalRecord, hasLeadWork, type LedgerEvent, type PluginHost, type PluginState } from '../../plugin-api/server';
 import { goalFlow, leadFlow, transcriptMoments } from './flow';
 import type { FlowPluginState, LeadFlow } from './shared';
 

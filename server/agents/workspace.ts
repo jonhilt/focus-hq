@@ -16,7 +16,8 @@ const checksLock = new KeyedLock();
 
 const git = (cwd: string, args: string[], timeoutMs?: number) => run('git', args, { cwd, timeoutMs });
 
-function mirrorDir(repo: string): string {
+/** The office's own clone of `repo` on this machine (made the first time an agent works in it). */
+export function mirrorDir(repo: string): string {
   return path.join(paths.mirrors, repo.replace('/', '__'));
 }
 

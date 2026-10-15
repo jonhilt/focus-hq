@@ -22,5 +22,8 @@ export const office = {
   },
 };
 
+/** Calls `fn` whenever plugin `id`'s state changes in the browser; returns what stops it. */
+export const onPluginState = (id: string, fn: () => void): (() => void) => state.on('plugin', (changed) => changed === id && fn());
+
 /** Calls one of plugin `id`'s own routes (`/api/plugins/<id><path>`), POSTing `body`; rejects with the office's word on why. */
 export const callPlugin = <T>(id: string, path: string, body?: unknown): Promise<T> => api.plugin<T>(id, path, body);

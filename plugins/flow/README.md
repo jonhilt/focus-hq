@@ -1,6 +1,6 @@
 # Where goals' time goes
 
-A plugin (`FOCUS_PLUGINS=flow`, [plugins](../../docs/plugins.md)): each open goal's flow, live on its goal board, its card in the goals list and its lines in Comms. Its scripts, `pnpm run flow`, [`pnpm run before-after`](#before-and-after) and [`pnpm run qa-catch`](qa-catch.md), work in the terminal whether it's switched on or not.
+A plugin (`FOCUS_PLUGINS=flow`, [plugins](../../docs/plugins.md)): each open goal's flow, live on its goal board, its card in the goals list and its lines in Comms. Its scripts, `pnpm run flow` and [`pnpm run before-after`](#before-and-after), work in the terminal whether it's switched on or not.
 
 `pnpm run flow` measures how long goals take and where that time goes, so a change meant to make goals faster can be judged by numbers taken before and after it, not by feel. It reads every goal the [ledger](../../docs/ledger.md) saw close, splits each one's time from opening to closing into states, and prints lead time, where the time went, the biggest wait, and the quality guards that must hold while lead time comes down. It reads and never writes, and takes a few seconds.
 
@@ -36,7 +36,7 @@ The lead is **at a turn** from the message that starts it (the captain's, the of
 - **Waiting on the captain, by why**, from how the lead's turn before the wait ended: a slice had landed and the lead waited to hear what next (**next-slice**: the turn began with the office's `Slice … starts` message); it proposed closing the goal (**close**, the propose-close tool) or asked with pictures (**ask**, the ask tool); its last words asked leave to go on with what it proposed (**go-ahead**: "shall I…?", "want me to…?", "do you want…?") or asked something else (**question**); it reported and stopped (**report**); or QA had failed a pull request and it stopped (**qa-failed**). For each: the time while around, its share of the captain's, how many waits and the median one. The go-ahead and next-slice waits are the ones a lead could often have skipped by carrying on.
 - **Quality guards**, over the goals' pull requests: merges without a current QA pass (QA's badge as it merged wasn't `passed`), QA passing first time, failed rounds, and conflicts an agent had to resolve. Lead time that comes down while these get worse hasn't really come down.
 - **Rework after merge**: of the lines the goals' merged pull requests added, how many were changed or deleted on their base branch within 7 days, and the pull requests with the most (`rework.ts`, its I/O in `scripts/flowRework.ts`). GitHub (`gh pr view`) says what each added, file by file, and which commits it was; `git blame` in the office's clone of its repo (`~/.focus/repos`), at the base branch as it stood 7 days after the merge, says how many of those lines still come from them. A pull request rebased or squashed onto its base counts the commits it landed as too (its merge commit, and those before it carrying its commits' messages). Lock files, pictures, models and builds don't count. One merged less than 7 days ago counts so far, and the line says how many are past 7 days.
-- **QA catch rate**: the latest run of [`pnpm run qa-catch`](qa-catch.md), this plugin's other script, which plants a known bug in each of a few merged pull requests and runs QA's own review on it: how many QA caught, failed for something else, or missed.
+- **QA catch rate**: the latest run of [`pnpm run qa-catch`](../../docs/qa-catch.md), the office's own script (read through the plugin API's `latestQaCatch`), which plants a known bug in each of a few merged pull requests and runs QA's own review on it: how many QA caught, failed for something else, or missed.
 - **Slowest five**, with their active time and where most of it went.
 
 ## Live, on the goal board
@@ -59,10 +59,10 @@ It prints, per session digest: turns, tool calls, wasted and refused calls, capt
 ## Where it lives
 
 - `server.ts`: the plugin, on the `turn` and `ledgerRecorded` hooks; `flows.ts` works each open goal's flow out as they fire, one at a time per goal.
-- `flow.ts`: the rules, pure (`transcriptMoments`, `goalFlow`, `leadFlow`, the report); `rework.ts`: rework after merge; `qaCatch.ts`: QA's catch rate's rules.
+- `flow.ts`: the rules, pure (`transcriptMoments`, `goalFlow`, `leadFlow`, the report); `rework.ts`: rework after merge; `qaGuard.ts`: QA's catch rate as a guard.
 - `shared.ts`: the states and the plugin's state (`FlowPluginState`); `words.ts`: how a flow reads.
 - `client.ts`: its goal part in the browser: `tags.ts` (the goals list's readout and Comms' tag), `board.ts` (the goal board's strip), `colors.ts`.
-- `scripts/`: `flow.ts` and `flowRework.ts` (`pnpm run flow`), `qaCatch.ts` and `qaCatchRuns.ts` (`pnpm run qa-catch`, and its runs in `~/.focus/qa-catch/`), `beforeAfter.ts` (`pnpm run before-after`).
+- `scripts/`: `flow.ts` and `flowRework.ts` (`pnpm run flow`), `beforeAfter.ts` (`pnpm run before-after`).
 
 ## What it can't see
 

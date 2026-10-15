@@ -1,6 +1,4 @@
-import { blocks, messageFrom, resultText, transcriptLines } from '../../server/agents/transcript';
-import type { LedgerEvent } from '../../shared/ledger';
-import type { ArchivedGoal } from '../../shared/types';
+import { type ArchivedGoal, blocks, type LedgerEvent, messageFrom, resultText, transcriptLines } from '../../plugin-api/server';
 import type { CaptainReason, FlowNow, FlowState, LeadFlow, Said } from './shared';
 
 // Where a goal's time goes (README.md), from code alone: its lead's Claude Code transcript says when the lead was

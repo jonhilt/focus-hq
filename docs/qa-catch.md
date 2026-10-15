@@ -1,6 +1,6 @@
 # QA's catch rate
 
-Part of the [flow plugin](README.md): one of its scripts, which works whether the plugin's switched on or not (it runs in the terminal, never in the office).
+A script of the office's own (it runs in the terminal, never in the office): it measures QA, which is the core's. The [flow plugin](../plugins/flow/README.md) shows the latest run among `pnpm run flow`'s quality guards, through the plugin API (`latestQaCatch`).
 
 `pnpm run qa-catch` measures how many real bugs QA catches. QA passing nine pull requests in ten first time could be good work or a weak check, and only bugs planted on purpose tell which. It takes recently merged goal pull requests, plants one known bug in each, runs the QA officer's own review on that code, and counts how many QA catches.
 
@@ -13,14 +13,14 @@ Part of the [flow plugin](README.md): one of its scripts, which works whether th
 | `pnpm run qa-catch --again` | the same pull requests as the last run, so the same bugs: to compare QA before and after a change to it |
 | `pnpm run qa-catch --control` | also reviews each pull request with no bug planted, and counts the clean ones QA fails (false alarms): twice the reviews |
 
-Each review costs what a QA review in the office does: about $0.60 and a few minutes on the office's QA model. A run of 10 is about $6–10 and half an hour or so. Each run is saved in `~/.focus/qa-catch/` (`scripts/qaCatchRuns.ts`), and [`pnpm run flow`](README.md) shows the latest among its quality guards.
+Each review costs what a QA review in the office does: about $0.60 and a few minutes on the office's QA model. A run of 10 is about $6–10 and half an hour or so. Each run is saved in `~/.focus/qa-catch/` (`server/agents/qaCatchRuns.ts`), and [`pnpm run flow`](../plugins/flow/README.md) shows the latest among its quality guards.
 
 ## How a run goes
 
 For each of the goals' merged pull requests, newest first, in repos the office has a copy of (`~/.focus/repos`):
 
 1. **A throwaway clone** of its head, made from the office's copy (`git clone --shared`, so it's quick) in a temporary folder, with `origin/<base>` set to the base the pull request was opened against. A head or base the office's copy never saw is fetched from GitHub into the clone alone. Nothing is pushed, and no real pull request is touched.
-2. **One bug, planted** in a line the pull request added (`plant` in `qaCatch.ts`, here in the plugin, whose rules are tested next to it; the clones, git and the review sessions are in `scripts/qaCatch.ts`), and committed on top as "Tidy up", so it's part of the diff QA reviews. The bug is a small, plausible one: a comparison flipped or off by one, a condition the wrong way round, a guard dropped, a true turned false. It goes only in code QA can catch a bug in by reading the diff and running the tests, not in UI code (the replay has no browser), tests, docs or config. The same pull request always gets the same bug. A pull request with nothing that could take one is passed over.
+2. **One bug, planted** in a line the pull request added (`plant` in `server/agents/qaCatch.ts`, whose rules are tested next to it; the clones, git and the review sessions are in `scripts/qaCatch.ts`), and committed on top as "Tidy up", so it's part of the diff QA reviews. The bug is a small, plausible one: a comparison flipped or off by one, a condition the wrong way round, a guard dropped, a true turned false. It goes only in code QA can catch a bug in by reading the diff and running the tests, not in UI code (the replay has no browser), tests, docs or config. The same pull request always gets the same bug. A pull request with nothing that could take one is passed over.
 3. **QA's own review**: a Claude Code session with the QA officer's system prompt (`qaSystemAppend`, with the project's QA brief), the same prompt (`qaPrompt`), report schema (`QA_SCHEMA`), model (`qaAgentModel`) and Claude Code settings as the office's, run in the clone, with the changed files named in its prompt and a report that leaves some out, says it skimmed some, or whose session never opened some sent back once, as the office does (the replay reads QA's tool calls from the SDK's messages, the office from its transcript). It runs with permissions bypassed, since nobody is there to answer a prompt, and the clone is deleted afterwards.
 4. **The score** (`scoreReport`): **caught** when QA fails the pull request and its report points at the bug (the file, by name, in a failed check or the fix instructions, or a spot-check within 5 lines of it); **failed for something else** when it fails it without pointing there; **missed** when it passes it. The rate is caught over the reviews that finished.
 

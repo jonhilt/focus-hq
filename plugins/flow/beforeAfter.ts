@@ -1,8 +1,7 @@
 // Before and after a change to how agents are steered (a CLAUDE.md, a prompt): the same window of the ledger either side
 // of a moment, per session, so a change can be judged by what agents did rather than by feel. Pure; scripts/beforeAfter.ts
 // reads the ledger.
-import { FRICTION_KINDS, frictionsByDigest, type FrictionKind, type LedgerEvent, type SessionFacts } from '../../shared/ledger';
-import type { AgentTask } from '../../shared/types';
+import { type AgentTask, FRICTION_KINDS, frictionsByDigest, type FrictionKind, type LedgerEvent, type SessionFacts } from '../../plugin-api/shared';
 
 const DAY = 24 * 60 * 60 * 1000;
 /** Fewer sessions than this on either side and a difference is more likely luck than the change. */

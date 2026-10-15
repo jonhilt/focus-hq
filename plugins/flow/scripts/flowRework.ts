@@ -4,7 +4,6 @@
 
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import path from 'node:path';
 import { promisify } from 'node:util';
 import { countsFile, landedCommits, type PrRework, REWORK_MS, survivingLines } from '../rework';
 
@@ -20,9 +19,9 @@ interface Pr {
 }
 
 /** One pull request's rework, or why it couldn't be measured. */
-async function measure(repo: string, pr: number, goal: string | undefined, mirrors: string, now: number): Promise<PrRework | string> {
-  const clone = path.join(mirrors, repo.replace('/', '__'));
-  if (!existsSync(clone)) return `${repo}#${pr}: no clone of ${repo} in ${mirrors}`;
+async function measure(repo: string, pr: number, goal: string | undefined, mirrorOf: (repo: string) => string, now: number): Promise<PrRework | string> {
+  const clone = mirrorOf(repo);
+  if (!existsSync(clone)) return `${repo}#${pr}: no clone of ${repo} at ${clone}`;
   const { stdout } = await run('gh', ['pr', 'view', String(pr), '-R', repo, '--json', 'commits,mergeCommit,files,mergedAt,baseRefName'], BIG);
   const info = JSON.parse(stdout) as Pr;
   if (!info.mergedAt) return `${repo}#${pr}: not merged`;
@@ -49,13 +48,13 @@ async function measure(repo: string, pr: number, goal: string | undefined, mirro
 }
 
 /** Each merged pull request's rework, a few at a time; those it couldn't measure, with why. */
-export async function measureRework(prs: { repo: string; pr: number; goal?: string }[], mirrors: string, now = Date.now()): Promise<{ measured: PrRework[]; skipped: string[] }> {
+export async function measureRework(prs: { repo: string; pr: number; goal?: string }[], mirrorOf: (repo: string) => string, now = Date.now()): Promise<{ measured: PrRework[]; skipped: string[] }> {
   const measured: PrRework[] = [];
   const skipped: string[] = [];
   const queue = [...prs];
   const worker = async () => {
     for (let next = queue.shift(); next; next = queue.shift()) {
-      const r = await measure(next.repo, next.pr, next.goal, mirrors, now).catch((err: Error) => `${next.repo}#${next.pr}: ${err.message.split('\n')[0]}`);
+      const r = await measure(next.repo, next.pr, next.goal, mirrorOf, now).catch((err: Error) => `${next.repo}#${next.pr}: ${err.message.split('\n')[0]}`);
       if (typeof r === 'string') skipped.push(r);
       else measured.push(r);
     }

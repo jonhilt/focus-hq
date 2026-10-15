@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { LedgerEvent } from '../../shared/ledger';
-import type { ArchivedGoal } from '../../shared/types';
+import type { ArchivedGoal, LedgerEvent } from '../../plugin-api/shared';
 import { endsWith, flowLines, flowReport, goalFlow, LONG_WAIT_MS, percentile, span, transcriptMoments } from './flow';
 
 const T0 = Date.parse('2026-10-08T12:00:00.000Z');

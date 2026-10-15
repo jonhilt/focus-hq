@@ -9,15 +9,11 @@
 //   pnpm run flow --json                 the report as JSON
 //   pnpm run flow --no-rework            leave out rework after merge (it asks GitHub about each merged pull request)
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
-import { paths } from '../../../server/config';
-import { checkLedger, closedGoals } from '../../../shared/ledger';
+import { closedGoals, latestQaCatch, officeLedger, officeMirror, officeTranscript } from '../../../plugin-api/server';
 import { flowLines, flowReport, goalFlow, transcriptMoments } from '../flow';
-import { catchGuard } from '../qaCatch';
+import { catchGuard } from '../qaGuard';
 import { reworkLines, reworkTotals } from '../rework';
 import { measureRework } from './flowRework';
-import { latestRun } from './qaCatchRuns';
 
 const args = process.argv.slice(2);
 const opt = (name: string) => {
@@ -33,36 +29,29 @@ const date = (name: string) => {
 const since = date('since');
 const until = date('until');
 
-if (!existsSync(paths.ledger)) {
-  console.error(`No ledger at ${paths.ledger}.`);
+const { file, events: ledger } = officeLedger();
+if (!ledger) {
+  console.error(`No ledger at ${file}.`);
   process.exit(1);
 }
-const ledger = checkLedger(readFileSync(paths.ledger, 'utf8')).events;
 const goals = closedGoals(ledger, opt('project')).filter((g) => (since === undefined || g.closedAt >= since) && (until === undefined || g.closedAt < until));
 
-/** Every transcript on this machine by its session id. */
-const transcripts = new Map<string, string>();
-if (existsSync(paths.transcripts))
-  for (const dir of readdirSync(paths.transcripts, { withFileTypes: true }))
-    if (dir.isDirectory())
-      for (const f of readdirSync(path.join(paths.transcripts, dir.name))) if (f.endsWith('.jsonl')) transcripts.set(f.slice(0, -'.jsonl'.length), path.join(paths.transcripts, dir.name, f));
-
 const missing: string[] = [];
-const flows = goals.flatMap((g) => {
-  const file = g.sessionId && transcripts.get(g.sessionId);
-  if (!file) {
+const flows = (await Promise.all(goals.map(async (g) => {
+  const transcript = g.sessionId ? await officeTranscript(g.sessionId) : undefined;
+  if (!transcript) {
     missing.push(g.title);
     return [];
   }
-  return [goalFlow(g, transcriptMoments(readFileSync(file, 'utf8')), ledger)];
-});
+  return [goalFlow(g, transcriptMoments(transcript), ledger)];
+}))).flat();
 const report = flowReport(flows, goals, ledger);
 
 const merged = flows.flatMap((f) => (goals.find((g) => g.id === f.id)?.prs ?? []).filter((p) => p.outcome === 'merged').map((p) => ({ repo: p.repo, pr: p.number, goal: f.title })));
-const rework = args.includes('--no-rework') ? undefined : await measureRework(merged, paths.mirrors);
+const rework = args.includes('--no-rework') ? undefined : await measureRework(merged, officeMirror);
 const totals = rework && reworkTotals(rework.measured);
 // the latest of `pnpm run qa-catch`'s runs, if there's been one
-const caught = latestRun();
+const caught = latestQaCatch();
 
 if (args.includes('--json')) console.log(JSON.stringify({ ...report, rework: rework && { ...totals, measured: rework.measured, skipped: rework.skipped }, qaCatch: caught }, null, 2));
 else {

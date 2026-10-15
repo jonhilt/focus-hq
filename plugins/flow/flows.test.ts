@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { office, until } from '../../server/agents/fakeOffice';
-import type { LedgerEvent } from '../../shared/ledger';
-import type { Agent } from '../../shared/types';
+import type { Agent, LedgerEvent } from '../../plugin-api/server';
+import { office, until } from '../../plugin-api/testing';
 import flowPlugin from './server';
 import { goalMoved, withFlow, withoutClosed } from './flows';
 import { FLOW, type FlowPluginState, type LeadFlow } from './shared';

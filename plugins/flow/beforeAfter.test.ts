@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { LedgerEvent, SessionFacts } from '../../shared/ledger';
+import type { LedgerEvent, SessionFacts } from '../../plugin-api/shared';
 import { beforeAfter, beforeAfterLines, windowStats } from './beforeAfter';
 
 const DAY = 24 * 60 * 60 * 1000;

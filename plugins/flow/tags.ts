@@ -1,7 +1,4 @@
-import { state } from '../../client/src/net/state';
-import { type GoalTagPlace, pluginState } from '../../client/src/plugins';
-import { h } from '../../client/src/ui/dom';
-import type { Agent } from '../../shared/types';
+import { type Agent, type GoalTagPlace, h, onPluginState, pluginState } from '../../plugin-api/client';
 import { FLOW_COLOR } from './colors';
 import { FLOW, type FlowPluginState, type LeadFlow } from './shared';
 import { flowNow, flowText, flowTitle } from './words';
@@ -48,5 +45,5 @@ function keepLive(): void {
   live = true;
   const refresh = () => document.querySelectorAll<HTMLElement>('[data-flow-of]').forEach(write);
   window.setInterval(refresh, 60_000);
-  state.on('plugin', (id) => id === FLOW && refresh());
+  onPluginState(FLOW, refresh);
 }

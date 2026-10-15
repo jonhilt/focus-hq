@@ -1,5 +1,5 @@
-// QA's catch rate (../qa-catch.md): takes recently merged goal pull requests, and for each plants one known bug in
-// a line it added (../qaCatch.ts), in a throwaway clone of its code, then runs the QA officer's own review
+// QA's catch rate (docs/qa-catch.md): takes recently merged goal pull requests, and for each plants one known bug in
+// a line it added (server/agents/qaCatch.ts), in a throwaway clone of its code, then runs the QA officer's own review
 // on it (its system prompt, prompt, report schema and model) and scores whether QA failed it and pointed at the bug.
 // Nothing goes to GitHub and no real pull request is touched: each clone is made from the office's copy of the repo
 // (~/.focus/repos), reviewed where it is and deleted. It saves each run in ~/.focus/qa-catch/, which `pnpm run flow`
@@ -18,14 +18,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import { claudeConfig } from '../../../server/agents/claudeRunner';
-import { filesPrompt, filesToRevisit, openedFiles, parseQaReport, QA_SCHEMA, qaAgentModel, qaPrompt, qaSystemAppend, type ToolCall } from '../../../server/agents/qa';
-import { paths } from '../../../server/config';
-import type { PullRequestDetail } from '../../../server/github/provider';
-import { checkLedger, closedGoals } from '../../../shared/ledger';
-import type { Project, QaReport, Settings } from '../../../shared/types';
-import { addedLines, type CatchResult, type CatchRun, catchLines, controlLine, type ControlResult, plant, type Planted, scoreControl, scoreReport } from '../qaCatch';
-import { latestRun, QA_CATCH_DIR } from './qaCatchRuns';
+import { claudeConfig } from '../server/agents/claudeRunner';
+import { filesPrompt, filesToRevisit, openedFiles, parseQaReport, QA_SCHEMA, qaAgentModel, qaPrompt, qaSystemAppend, type ToolCall } from '../server/agents/qa';
+import { paths } from '../server/config';
+import type { PullRequestDetail } from '../server/github/provider';
+import { checkLedger, closedGoals } from '../shared/ledger';
+import type { Project, QaReport, Settings } from '../shared/types';
+import { addedLines, type CatchResult, type CatchRun, catchLines, controlLine, type ControlResult, plant, type Planted, scoreControl, scoreReport } from '../server/agents/qaCatch';
+import { latestRun, QA_CATCH_DIR } from '../server/agents/qaCatchRuns';
 
 const run = promisify(execFile);
 const BIG = { maxBuffer: 64 * 1024 * 1024 };

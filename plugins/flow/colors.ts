@@ -1,4 +1,4 @@
-import { LCARS } from '../../client/src/world/starship';
+import { LCARS } from '../../plugin-api/client';
 import type { FlowState } from './shared';
 
 /**

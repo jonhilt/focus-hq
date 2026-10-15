@@ -1,7 +1,7 @@
 // The flow plugin (README.md): where each open goal's time has gone so far, and what it's waiting on now, worked out
 // as its lead's turns start and end, QA reports and its pull requests land, for the goal's screens. Its scripts
 // (`pnpm run flow`, `pnpm run qa-catch`) work whether it's switched on or not. FOCUS_PLUGINS=flow.
-import type { FocusPlugin } from '../../server/plugins/contract';
+import type { FocusPlugin } from '../../plugin-api/server';
 import { Flows } from './flows';
 import { FLOW, type FlowPluginState } from './shared';
 
