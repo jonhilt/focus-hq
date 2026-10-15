@@ -21,7 +21,6 @@ import { openCommsPanel } from './ui/commsPanel';
 import { linkAction, type NewsLink } from './ui/newsLink';
 import { openEngineeringPanel } from './ui/engineeringPanel';
 import { openLedgerPanel } from './ui/ledgerPanel';
-import { numberOnePanelOpen, openNumberOnePanel } from './ui/numberOnePanel';
 import { openModelPanel } from './ui/modelPanel';
 import { openStudioChat } from './ui/studioChat';
 import { StudioVoice } from './ui/studioVoice';
@@ -34,7 +33,6 @@ import { openNewIssuePanel, openPausePanel, openTeleportPanel, openTurboliftPane
 import { openTrainingPanel } from './ui/trainingPanel';
 import { type Interaction, REACH } from './world/builder';
 import { OVERLAY_LAYER } from './world/frame';
-import { numberOne } from '../../shared/crew';
 import { toastShows } from '../../shared/hidden';
 import { previewIncludes } from '../../shared/previewSet';
 import { sound } from './sound';
@@ -59,7 +57,7 @@ import { gpuFrame } from './world/gpuTimer';
 import { canvasTest } from './world/canvas';
 import { newFrame, screenTest } from './world/screenRedraw';
 import type { MsdBoard } from './world/msd';
-import { clientPlugin, stationSays } from './plugins';
+import { type ClientParts, clientPlugin, clientPlugins, stationSays } from './plugins';
 
 /** A plugin's board for main engineering's MSD (the scorecard's), while the plugin's on and draws one. */
 function pluginBoard(id: string): MsdBoard | undefined {
@@ -121,6 +119,7 @@ async function main() {
 
   const [theShip, teamStation, hallKit] = await Promise.all([ship(), loadTeamStation('/ship/team-station.glb', '/ship/transporter-room.glb'), loadTrainingHall('/ship/training-hall.glb')]);
   const world = new World(scene, theShip, teamStation, hallKit);
+  world.shipPlugins = clientPlugins;
   // ?cull=0 draws the whole ship from anywhere, for the gap and z-fighting scans
   world.culling = params.get('cull') !== '0';
   const player = new Player(camera, renderer.domElement);
@@ -172,7 +171,6 @@ async function main() {
     openPreview: (projectId) => openPreviewPanel(ui, projectId),
     openNewIssue: (projectId) => openNewIssuePanel(ui, projectId),
     openQa: (projectId) => openQaPanel(ui, projectId),
-    openNumberOne: () => openNumberOnePanel(ui),
     openStudio: () => openStudioChat(ui),
     openModel: () => {
       const model = world.studioScene()?.model;
@@ -243,20 +241,21 @@ async function main() {
   // splash screen until the first click
   let started = false;
   const splashStatus = h('p', { class: 'muted' }, 'Hailing the ship…');
+  const pauseKey = h('span', null, h('kbd', { class: 'k' }, 'Esc'), 'pause');
+  const splashKeys = h('div', { class: 'keys' },
+    h('span', null, h('kbd', { class: 'k' }, 'WASD'), 'walk'),
+    h('span', null, h('kbd', { class: 'k' }, 'Mouse'), 'look around'),
+    h('span', null, h('kbd', { class: 'k' }, 'E'), 'use / talk'),
+    h('span', null, h('kbd', { class: 'k' }, 'T'), 'teleport'),
+    h('span', null, h('kbd', { class: 'k' }, 'M'), 'ready room'),
+    pauseKey,
+  );
   const enter = h('button', { class: 'big-button' }, 'Come aboard');
   const splash = h('div', { class: 'splash' },
     h('div', { class: 'card' },
       h('h1', null, 'FOCUS HQ'),
       h('p', null, 'A starship crewed by Claude Code agents. Every project gets a holodeck, every agent a station you can look over their shoulder at.'),
-      h('div', { class: 'keys' },
-        h('span', null, h('kbd', { class: 'k' }, 'WASD'), 'walk'),
-        h('span', null, h('kbd', { class: 'k' }, 'Mouse'), 'look around'),
-        h('span', null, h('kbd', { class: 'k' }, 'E'), 'use / talk'),
-        h('span', null, h('kbd', { class: 'k' }, 'T'), 'teleport'),
-        h('span', null, h('kbd', { class: 'k' }, 'M'), 'ready room'),
-        h('span', null, h('kbd', { class: 'k' }, '1'), 'Number One'),
-        h('span', null, h('kbd', { class: 'k' }, 'Esc'), 'pause'),
-      ),
+      splashKeys,
       enter,
       splashStatus,
     ),
@@ -313,11 +312,23 @@ async function main() {
       room.syncPlanner();
       room.syncQa();
     }
-    world.numberOne?.sync();
     world.markPanels();
     warm();
   };
+  // each plugin switched on starts once, as the first snapshot says which are, before the world's built with their parts
+  const pluginParts = new Map<string, ClientParts>();
+  const startPlugins = () => {
+    for (const plugin of clientPlugins()) {
+      if (pluginParts.has(plugin.id)) continue;
+      pluginParts.set(plugin.id, plugin.start?.({ ui }) ?? {});
+      const keys = plugin.legend ?? [];
+      for (const { key, label } of keys) pauseKey.before(h('span', null, h('kbd', { class: 'k' }, key), label));
+      hud.addKeys(keys);
+    }
+  };
+  state.on('info', startPlugins);
   state.on('snapshot', () => {
+    startPlugins();
     syncWorld();
     const info = state.info;
     splashStatus.textContent = info
@@ -401,18 +412,6 @@ async function main() {
     world.syncHallScreens();
   });
   state.on('usage', () => world.showOnMsd({ kind: 'usage', usage: state.usage }));
-  let numberOneStatus = state.numberOne?.status;
-  state.on('number-one', () => {
-    world.numberOne?.sync();
-    const chat = state.numberOne;
-    // a reply can take a while: say so when it lands while you're elsewhere
-    if (chat && chat.status !== numberOneStatus && numberOneStatus === 'thinking' && !numberOnePanelOpen()) {
-      const name = numberOne().name;
-      if (chat.status === 'waiting') notify('info', `🖖 ${name} has an answer for you`, { kind: 'number-one' });
-      if (chat.status === 'failed') notify('error', `${name} lost the thread: ${chat.error ?? ''}`, { kind: 'number-one' });
-    }
-    numberOneStatus = chat?.status;
-  });
   state.on('toast', (e) => {
     if (!toastShows(e, state.projects, (id) => state.agents.get(id)?.projectId)) return;
     const agentId = e.agentId;
@@ -535,9 +534,6 @@ async function main() {
       case 'new-issue':
         ui.openNewIssue(i.projectId);
         break;
-      case 'number-one':
-        ui.openNumberOne();
-        break;
       case 'engineering':
         ui.openEngineering();
         break;
@@ -584,6 +580,9 @@ async function main() {
         break;
       case 'beam-to':
         ui.beamTo(i.projectId, i.station, i.room);
+        break;
+      case 'plugin':
+        i.use(ui);
         break;
     }
   };
@@ -649,6 +648,12 @@ async function main() {
   window.addEventListener('keydown', (e) => {
     if (!started || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
     if (panels.isOpen && !panels.docked) return;
+    for (const parts of pluginParts.values()) {
+      if (parts.keydown?.(e)) {
+        e.preventDefault();
+        return;
+      }
+    }
     if (e.code === 'KeyV' && studioSet()) {
       e.preventDefault();
       if (!e.repeat) voice.down();
@@ -669,7 +674,6 @@ async function main() {
       KeyT: () => ui.openTeleport(),
       KeyM: () => ui.openManager(),
       KeyN: () => ui.openNewIssue(world.locationOf(camera.position).projectId),
-      Digit1: () => ui.openNumberOne(),
       // in the studio, Enter talks to its computer
       Enter: () => {
         if (world.locationOf(camera.position).label === 'Studio') ui.openStudio();

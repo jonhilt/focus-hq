@@ -1,7 +1,7 @@
 import { Effect, Layer } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Agent, CallState, MessageReply, Project, ServerEvent, Snapshot } from '../../shared/types';
-import type { Hub } from '../hub';
+import type { Agent, MessageReply, Project, Snapshot } from '../../../shared/types';
+import type { CallState, CallStatus } from '../shared';
 import { type CallOffice, Calls, callsMissing, stepOf } from './calls';
 import { Jev, type JevAnswers } from './jev';
 import { Live, type LiveClientEvent, type LiveEvent, type SidebandListener } from './live';
@@ -16,7 +16,7 @@ const choice = (choice: string) => ({ choice, confidence: 0.95 });
 
 function setUp(answers: JevAnswers[], messageReply: MessageReply = { sent: true }, ship: Snapshot = snapshot) {
   const sent: LiveClientEvent[] = [];
-  const events: ServerEvent[] = [];
+  const events: CallStatus[] = [];
   let listener: SidebandListener | undefined;
   const live = Layer.succeed(Live, Live.of({
     create: () => Effect.succeed({ id: 'live_1', sdp: 'v=0 answer' }),
@@ -46,8 +46,7 @@ function setUp(answers: JevAnswers[], messageReply: MessageReply = { sent: true 
       return messageReply;
     },
   };
-  const hub = { send: (e: ServerEvent) => void events.push(e) } as unknown as Hub;
-  const calls = new Calls(hub, office, { openai: 'sk', typesafe: 'ts' }, false, Layer.mergeAll(live, jev));
+  const calls = new Calls((status) => void events.push(status), office, { openai: 'sk', typesafe: 'ts' }, false, Layer.mergeAll(live, jev));
   /** The captain says something, and the voice model hands it over. */
   const say = async (text: string, delegation: string) => {
     for (const e of [
@@ -71,7 +70,7 @@ describe('Calls', () => {
     await t.say("What's going on?", 'd1');
     expect(t.replies()).toEqual([{ type: 'session.commentary.append', delegation_id: 'd1', content: expect.stringContaining('Shop has no goals under way') as string }]);
     expect(t.call().lines.map((l) => l.who)).toEqual(['captain', 'office']);
-    expect(t.events.at(-1)).toMatchObject({ type: 'call', call: { id: 'live_1', step: 'listening' } });
+    expect(t.events.at(-1)).toMatchObject({ call: { id: 'live_1', step: 'listening' } });
   });
 
   it('starts the next queued goal on a yes, after asking', async () => {
@@ -141,15 +140,15 @@ describe('Calls', () => {
   });
 
   it("won't take a call without both keys", async () => {
-    const calls = new Calls({ send: () => undefined } as unknown as Hub, { snapshot: () => Promise.resolve(snapshot), ledger: () => [], startQueued: () => ({}) as Agent, startGoal: () => ({ queued: { id: 'q', text: '', at: 0 } }), message: () => ({ sent: true }) }, { openai: 'sk' }, false);
-    expect(calls.status()).toEqual({ missing: 'Calls need TYPESAFE_API_KEY set where the office starts (see docs/calls.md)', call: null });
+    const calls = new Calls(() => undefined, { snapshot: () => Promise.resolve(snapshot), ledger: () => [], startQueued: () => ({}) as Agent, startGoal: () => ({ queued: { id: 'q', text: '', at: 0 } }), message: () => ({ sent: true }) }, { openai: 'sk' }, false);
+    expect(calls.status()).toEqual({ missing: 'Calls need TYPESAFE_API_KEY set where the office starts (see plugins/number-one/calls.md)', call: null });
     await expect(calls.start('v=0 offer')).rejects.toThrow('TYPESAFE_API_KEY');
   });
 });
 
 describe('callsMissing', () => {
   it('names each missing key, and needs none in the demo', () => {
-    expect(callsMissing({}, false)).toBe('Calls need OPENAI_API_KEY and TYPESAFE_API_KEY set where the office starts (see docs/calls.md)');
+    expect(callsMissing({}, false)).toBe('Calls need OPENAI_API_KEY and TYPESAFE_API_KEY set where the office starts (see plugins/number-one/calls.md)');
     expect(callsMissing({ openai: 'a', typesafe: 'b' }, false)).toBeUndefined();
     expect(callsMissing({}, true)).toBeUndefined();
   });

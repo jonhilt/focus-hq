@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Agent, Project, QueuedGoal, Snapshot } from '../../shared/types';
+import type { Agent, Project, QueuedGoal, Snapshot } from '../../../shared/types';
 import type { JevAnswers } from './jev';
 import { topics } from './brief';
 import { type Act, APPROVE_PROBABILITY, callNotes, type CallScene, decide, dictated, nextGoal, routingQuestions, routingState, type StartGoal } from './route';

@@ -3,13 +3,13 @@ import type { Hub } from '../hub';
 import { shownProjects } from '../../shared/hidden';
 import { freshStudio, type Store, type StoredStudio } from '../store';
 import { errorMessage, truncate } from '../util';
-import type { ChatProject, ShipStatus } from './numberOne';
+import type { ChatProject, ShipStatus } from './shipStatus';
 import { checkModel, modelError, modelPhases, modelReport, modelSeconds } from '../../shared/systemModel';
 import { applyRecall, applyRetime, applyTake, type RetimeInput, type TakeInput } from './studio';
 
 // The studio holodeck's computer: the captain's conversation with a Claude session of its own (not a goal's lead), and
 // the tools it builds with: scenes (takes, in the code) that stand in the middle of the hall. One conversation, one turn
-// at a time, each resuming the same session, so it survives a restart. Number One's chat is the pattern (numberOne.ts).
+// at a time, each resuming the same session, so it survives a restart.
 
 /** What staging a scene says back: how it ran in the room, and the room's contact sheet of it, if it made one. */
 export interface Staged {

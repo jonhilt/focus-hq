@@ -1,9 +1,9 @@
-import { columns } from '../../shared/board';
-import { shownProjects } from '../../shared/hidden';
-import { type Attention, inFlight, needsYou } from '../../shared/tricorder';
-import { ACTIVE_STATUSES, type Agent, type Project, type Snapshot } from '../../shared/types';
-import { prKey } from '../../shared/qa';
-import { goalTitle } from '../agents/lead';
+import { columns } from '../../../shared/board';
+import { shownProjects } from '../../../shared/hidden';
+import { type Attention, inFlight, needsYou } from '../../../shared/tricorder';
+import { ACTIVE_STATUSES, type Agent, type Project, type Snapshot } from '../../../shared/types';
+import { prKey } from '../../../shared/qa';
+import { goalTitle } from '../../../server/agents/lead';
 
 // What the ship says when the captain asks how things stand on a call: plain sentences, no paths or symbols, for the
 // voice model to say in its own words. Read straight off the board, so it's exact and instant.

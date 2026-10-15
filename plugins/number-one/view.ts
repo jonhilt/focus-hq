@@ -1,6 +1,5 @@
-import { numberOne } from '../../../shared/crew';
-import type { NumberOneChat } from '../../../shared/types';
-import type { CrewView } from './character';
+import type { CrewView } from '../../client/src/world/character';
+import { numberOne, type NumberOneChat } from './shared';
 
 /** Number One's bubble: thinking with what they're doing, waiting for you to start or to answer, or lost the thread. */
 export function numberOneView(chat: NumberOneChat | null): CrewView {
@@ -17,4 +16,14 @@ export function numberOneView(chat: NumberOneChat | null): CrewView {
         ? { ...base, status: 'waiting', icon: '🖖', line: 'Your turn' }
         : { ...base, status: 'waiting', line: 'Ready when you are' };
   }
+}
+
+/**
+ * What to say when a reply Number One was thinking over lands (`before` is how the chat stood until now): an answer, or
+ * that they lost the thread. Nothing for anything else.
+ */
+export function replyNews(before: NumberOneChat['status'] | undefined, chat: NumberOneChat | null): { level: 'info' | 'error'; text: string } | null {
+  if (before !== 'thinking' || !chat || chat.status === 'thinking') return null;
+  const name = numberOne().name;
+  return chat.status === 'waiting' ? { level: 'info', text: `🖖 ${name} has an answer for you` } : { level: 'error', text: `${name} lost the thread: ${chat.error ?? ''}` };
 }

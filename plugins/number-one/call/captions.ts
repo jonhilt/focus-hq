@@ -1,4 +1,4 @@
-import type { CallLine } from '../../shared/types';
+import type { CallLine } from '../shared';
 
 // A call's captions, built from the transcript fragments the session streams: pure, so it's unit tested
 // (captions.test.ts).

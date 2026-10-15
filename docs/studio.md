@@ -279,7 +279,7 @@ floor to walk into but its walls (`STUDIO_HALL` and `studioWalls` in `client/src
   (`server/agents/transcript.ts`, [the ledger](ledger.md)), but the digests count (for the report card, and the retro's friction reading), where a timeline
   tells the story in order, and reads any session, not only the crew's.
 
-- **The ship and its projects** (its `ship_status` and `open_project` tools, the same as [Number One](number-one.md)'s,
+- **The ship and its projects** (its `ship_status` and `open_project` tools, the same as [Number One](../plugins/number-one/README.md)'s,
   `shipTools` in `server/agents/claudeCrew.ts`): for something aboard, like how proposals move through one of your
   projects or how the office runs a workflow, the computer reads the real thing before it builds. `ship_status` is the
   ship right now (each project's agents, goals and pull requests); `open_project` checks a project's repos out at their

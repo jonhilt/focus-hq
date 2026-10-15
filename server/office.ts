@@ -8,11 +8,9 @@ import type { Closer } from '../shared/ledger';
 import { autoMergeFor, type GateMark, mergeMethodFor, mergeStep, type MergeStep, requestedMerge } from '../shared/mergeGate';
 import { autoQaFor, autoSendBackFor, prKey, verdictBehindHead } from '../shared/qa';
 import type { AgentManager } from './agents/manager';
-import type { Calls } from './call/calls';
 import type { Lent } from './agents/manager/pluginHost';
 import type { FocusPlugin } from './plugins/contract';
 import type { UsageWatch } from './usage';
-import type { NumberOne } from './agents/numberOne';
 import type { StudioComputer } from './agents/studioComputer';
 import type { IssuePlanner } from './agents/planner';
 import { config } from './config';
@@ -50,11 +48,9 @@ export class Office {
     private readonly github: GitHubProvider,
     readonly previews: Previews,
     readonly planner: IssuePlanner,
-    readonly numberOne: NumberOne,
     readonly studio: StudioComputer,
     readonly usage: UsageWatch,
     readonly voice: Voice,
-    readonly calls: Calls,
     version: string,
   ) {
     this.info = {
@@ -91,11 +87,9 @@ export class Office {
       browser: Object.fromEntries(this.store.browser),
       previews: this.previews.list(),
       drafts: this.planner.list(),
-      numberOne: this.numberOne.current(),
       studio: this.studio.current(),
       reviews: [...this.store.reviews.values()],
       voice: this.voice.status(),
-      call: this.calls.status(),
       report: this.agents.report(),
       usage: this.usage.current(),
       plugins: this.agents.plugins.states(),
@@ -327,8 +321,9 @@ export class Office {
   }
 
   /** Starts the plugins switched on (docs/plugins.md), lending them the office's own repo, and in the demo its agents' transcripts. */
-  startPlugins(plugins: FocusPlugin[], transcript?: Lent['transcript']): void {
-    this.agents.startPlugins(plugins, { demo: config.demo, ownRepo: () => this.ownRepo, fileIssue: (...issue) => this.fileIssue(...issue), transcript });
+  /** `more`: the demo's transcripts, and the ship's status, which needs GitHub and the agents' worktrees. */
+  startPlugins(plugins: FocusPlugin[], more: Pick<Lent, 'transcript' | 'shipStatus'>): void {
+    this.agents.startPlugins(plugins, { demo: config.demo, ownRepo: () => this.ownRepo, fileIssue: (...issue) => this.fileIssue(...issue), snapshot: () => this.snapshot(), ...more });
     this.info.plugins = this.agents.plugins.ids();
     // its saved state is kept, but nothing of it runs: no briefs, hooks, or pull requests kept for the captain
     for (const id of this.agents.plugins.dormant()) console.warn(`Plugin ${id} has saved state but isn't switched on: add it to FOCUS_PLUGINS to bring it back`);

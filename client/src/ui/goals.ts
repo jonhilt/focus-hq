@@ -8,7 +8,7 @@ import { confirmDialog } from './confirmDialog';
 import { busy, h } from './dom';
 import { messageAgent } from './resume';
 
-// What the goals panel, a lead's panel and the hand-off buttons (the Ops station, Number One) share.
+// What the goals panel, a lead's panel and the hand-off buttons (the Ops station, a plugin's crew) share.
 
 /** What each effort level means for a lead, from Anthropic's guidance for the current models. */
 export const EFFORT_HINT: Record<Effort, string> = {

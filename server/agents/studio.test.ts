@@ -4,7 +4,7 @@ import { currentTake } from '../../shared/takeScript';
 import type { Hub } from '../hub';
 import { freshStudio, type Store } from '../store';
 import { applyRecall, applyRetime, applyTake, STUDIO_LIMITS, studioPrompt, studioSystemPrompt, type TakeInput } from './studio';
-import type { ShipStatus } from './numberOne';
+import type { ShipStatus } from './shipStatus';
 import { checkModel, modelError } from '../../shared/systemModel';
 import { config } from '../config';
 import { demoShipModel } from './demoRunner';

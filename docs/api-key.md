@@ -12,7 +12,7 @@ FOCUS_USE_API_KEY=fallback ANTHROPIC_API_KEY=sk-ant-… FOCUS_API_BUDGET=20 pnpm
 
 Claude Code says so in the session's stream (a rejected `rate_limit_event`, with when the limit resets; when extra usage carries on past the limit, nothing changes). From then until the reset:
 
-- **New sessions start on the key**: new hires, QA reviews, leads, and the crew (the officer at the Ops station, Number One, the chief engineer). A 🔑 toast says so, and the agent's terminal says it's on the key.
+- **New sessions start on the key**: new hires, QA reviews, leads, and the crew (the officer at the Ops station, the chief engineer, and Number One with the [`number-one` plugin](../plugins/number-one/README.md)). A 🔑 toast says so, and the agent's terminal says it's on the key.
 - **An agent the limit stopped mid-turn** picks their conversation back up on the key straight away, told to carry on where they left off. Claude Code keeps conversations on this machine, so the new sign-in finds it.
 - **Unless that would cost more than $1.** A new sign-in has nothing in the prompt cache, so Claude re-reads the whole conversation at full price before doing anything else: a lead 400k tokens into a goal costs about $2 on Opus just to start again. Such an agent is held ⏸ until the limit resets, then carries on by themselves.
 

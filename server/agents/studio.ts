@@ -4,7 +4,7 @@
 
 import type { StudioMessage, StudioTake, SystemModel } from '../../shared/types';
 import { currentTake, type TakePhases, takeSyntaxError } from '../../shared/takeScript';
-import { type ChatProject, projectList } from './numberOne';
+import { type ChatProject, projectList } from './shipStatus';
 
 /** How long each part of a scene may be, and how many scenes are kept (the oldest goes when there are more). */
 export const STUDIO_LIMITS = {

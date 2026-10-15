@@ -1,11 +1,17 @@
-import type { CallLine, CallState, CallStep } from '../../../shared/types';
-import { api } from '../net/api';
-import { state } from '../net/state';
-import { busy, h } from './dom';
+import { api } from '../../client/src/net/api';
+import { state } from '../../client/src/net/state';
+import { pluginState } from '../../client/src/plugins';
+import { busy, h } from '../../client/src/ui/dom';
+import { type CallLine, type CallState, type CallStatus, type CallStep, NUMBER_ONE, type NumberOneState } from './shared';
 
-// Calls to Number One (docs/calls.md): this browser carries the audio, straight to OpenAI over WebRTC; the office
-// joins the call on a line of its own, and tells every screen how it's going (`state.call`). The call outlives Number
+// Calls to Number One (calls.md): this browser carries the audio, straight to OpenAI over WebRTC; the office joins the
+// call on a line of its own, and tells every screen how it's going (the plugin's `call`). The call outlives Number
 // One's panel, so the captain can walk round the ship while they talk.
+
+/** Whether the office can take a call, and the call under way (or the last one): none until the plugin's state arrives. */
+const callStatus = (): CallStatus | undefined => pluginState<NumberOneState>(NUMBER_ONE)?.call;
+const startCall = (sdp: string) => api.plugin<{ id: string; sdp: string | null }>(NUMBER_ONE, '/call', { sdp });
+const hangUp = (id: string) => api.plugin(NUMBER_ONE, '/hang-up', { id });
 
 /** A call this browser is on: its audio, and the session it's for. */
 class PhoneCall {
@@ -17,7 +23,7 @@ class PhoneCall {
 
   /** Opens the mic, offers the call to the office, and plays the ship's voice. The demo's calls have no audio. */
   static async dial(): Promise<PhoneCall> {
-    if (state.info?.mode === 'demo') return new PhoneCall((await api.startCall('demo')).id, null, null);
+    if (state.info?.mode === 'demo') return new PhoneCall((await startCall('demo')).id, null, null);
     const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
     const peer = new RTCPeerConnection();
     try {
@@ -29,7 +35,7 @@ class PhoneCall {
       peer.createDataChannel('oai-events');
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
-      const session = await api.startCall(offer.sdp ?? '');
+      const session = await startCall(offer.sdp ?? '');
       if (session.sdp) await peer.setRemoteDescription({ type: 'answer', sdp: session.sdp });
       return new PhoneCall(session.id, peer, mic);
     } catch (err) {
@@ -43,20 +49,22 @@ class PhoneCall {
   hangUp(): Promise<unknown> {
     this.peer?.close();
     for (const track of this.mic?.getTracks() ?? []) track.stop();
-    return api.hangUp(this.id);
+    return hangUp(this.id);
   }
 }
 
 let current: PhoneCall | null = null;
 
-
-// the office ended the call (the captain hung up elsewhere, or the line dropped): let go of the mic here too
-state.on('call', () => {
-  if (current && (!state.call?.call || state.call.call.id !== current.id || state.call.call.step === 'ended')) {
-    void current.hangUp().catch(() => undefined);
-    current = null;
-  }
-});
+/** Lets go of this browser's mic when the office ends the call (the captain hung up elsewhere, or the line dropped). */
+export function followCalls(): void {
+  state.on('plugin', (id) => {
+    const call = callStatus()?.call;
+    if (id === NUMBER_ONE && current && (!call || call.id !== current.id || call.step === 'ended')) {
+      void current.hangUp().catch(() => undefined);
+      current = null;
+    }
+  });
+}
 
 const STEP: Record<CallStep, string> = {
   listening: 'Listening',
@@ -79,7 +87,7 @@ const WHO: Record<CallLine['who'], string> = { captain: 'You', ship: 'Number One
  * going, what waits on your yes, the captions, and Hang up. `error` shows what went wrong placing it.
  */
 export function callView(error: (message: string) => void, changed: () => void): HTMLElement {
-  const status = state.call;
+  const status = callStatus();
   const call = status?.call ?? null;
   // a call placed on another screen (the phone, say) shows here too, and can be hung up from here
   const live = call && call.step !== 'ended' ? call : null;
@@ -92,7 +100,7 @@ export function callView(error: (message: string) => void, changed: () => void):
         changed();
       }, error);
     const ended = call?.step === 'ended' && call.lines.length ? call : null;
-    return h('div', { class: 'call' },
+    return h('div', { class: 'number-one-call' },
       h('div', { class: 'row' }, dial, ended ? h('small', { class: ended.error ? 'error' : 'muted' }, ended.error ?? 'The last call:') : null),
       ended ? captions(ended.lines) : null,
     );
@@ -102,19 +110,19 @@ export function callView(error: (message: string) => void, changed: () => void):
     void busy(hang, async () => {
       const mine = current?.id === live.id ? current : null;
       if (mine) current = null;
-      await (mine ? mine.hangUp() : api.hangUp(live.id));
+      await (mine ? mine.hangUp() : hangUp(live.id));
       changed();
     }, error);
-  return h('div', { class: `call on ${live.step}` },
-    h('div', { class: 'row' }, h('span', { class: 'call-step' }, `📞 ${stepLabel(live)}`), live.topic ? h('span', { class: 'call-topic' }, `Talking through: ${live.topic}`) : null, h('span', { class: 'grow' }), hang),
-    live.pending ? h('div', { class: 'call-pending' }, `${live.pending} Say yes, or make it so.`) : null,
-    live.capture ? h('div', { class: 'call-pending' }, live.capture) : null,
+  return h('div', { class: `number-one-call on ${live.step}` },
+    h('div', { class: 'row' }, h('span', { class: 'number-one-call-step' }, `📞 ${stepLabel(live)}`), live.topic ? h('span', { class: 'number-one-call-topic' }, `Talking through: ${live.topic}`) : null, h('span', { class: 'grow' }), hang),
+    live.pending ? h('div', { class: 'number-one-call-pending' }, `${live.pending} Say yes, or make it so.`) : null,
+    live.capture ? h('div', { class: 'number-one-call-pending' }, live.capture) : null,
     captions(live.lines),
   );
 }
 
 function captions(lines: CallLine[]): HTMLElement {
-  const list = h('div', { class: 'call-lines' }, ...lines.map((l) => h('div', { class: `call-line ${l.who}` }, h('strong', null, WHO[l.who]), ` ${l.text}`)));
+  const list = h('div', { class: 'number-one-call-lines' }, ...lines.map((l) => h('div', { class: `number-one-call-line ${l.who}` }, h('strong', null, WHO[l.who]), ` ${l.text}`)));
   requestAnimationFrame(() => (list.scrollTop = list.scrollHeight));
   return list;
 }

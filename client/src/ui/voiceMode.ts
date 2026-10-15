@@ -99,7 +99,7 @@ async function play(line: Queued): Promise<void> {
 }
 
 /**
- * Voice mode while Number One's panel is open: them speaking, and the mic you answer on. The mic opens for each
+ * Voice mode while a crew member's chat is open (a plugin's): them speaking, and the mic you answer on. The mic opens for each
  * recording, or once for the whole session with "keep the mic open". Ending it stops everything and lets go of the mic.
  */
 export class VoiceSession {

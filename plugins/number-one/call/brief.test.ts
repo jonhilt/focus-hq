@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { LedgerEvent, SessionFacts } from '../../shared/ledger';
-import type { Agent, GoalRecord, Project, Snapshot } from '../../shared/types';
+import type { LedgerEvent, SessionFacts } from '../../../shared/ledger';
+import type { Agent, GoalRecord, Project, Snapshot } from '../../../shared/types';
 import { briefing, PIECE_CHARS, pieces, type Topic, topics } from './brief';
 
 const NOW = Date.UTC(2026, 9, 12);

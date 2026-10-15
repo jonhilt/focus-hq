@@ -171,6 +171,11 @@ export class Deck {
     return seat;
   }
 
+  /** Where `crew` sits on this deck, if it has a seat for them: for a plugin's crew, which may sit on a deck of its own choosing. */
+  seatOf(crew: Crew): Seat | undefined {
+    return this.seats.get(crew);
+  }
+
   private read(o: THREE.Object3D, marker: Marker): void {
     const at = o.getWorldPosition(new THREE.Vector3());
     const turn = o.getWorldQuaternion(new THREE.Quaternion());

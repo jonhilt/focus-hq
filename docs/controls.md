@@ -10,7 +10,7 @@
 | <kbd>M</kbd> | ready room |
 | <kbd>N</kbd> | new issue for the holodeck you're in |
 | <kbd>L</kbd> | the goals of the holodeck you're in: talk to their leads, or start another (anywhere else, Comms) |
-| <kbd>1</kbd> | talk to Number One |
+| <kbd>1</kbd> | talk to [Number One](../plugins/number-one/README.md), with the `number-one` plugin on |
 | <kbd>Alt</kbd>+<kbd>1</kbd>… | pick a view from a panel's sidebar by its number (an agent's browser, goal, tasks or crew; the ready room's sections) |
 | <kbd>Esc</kbd> | pause / close a panel |
 | In [stellar cartography](stellar-cartography.md): <kbd>F</kbd> | take flight (<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> where you look, <kbd>Space</kbd> / <kbd>Shift</kbd> up and down), and <kbd>F</kbd> again to land |

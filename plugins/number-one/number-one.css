@@ -1,0 +1,18 @@
+/* Number One's chat in the ready room, beside the core's .briefing-* chat, and the call strip over it (README.md) */
+.briefing-msg.number-one { --tone: var(--lcars-lilac); align-self: flex-start; border-left: 6px solid var(--tone); border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.briefing-chat.number-one { height: 100%; max-width: 860px; margin: 0 auto; }
+.number-one-call { margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px; }
+.number-one-call small.error { color: var(--lcars-red); }
+.number-one-call.on { --tone: var(--lcars-green); border-left: 6px solid var(--tone); border-radius: 0 14px 14px 0; padding: 8px 12px; background: color-mix(in srgb, var(--tone) 10%, var(--surface-2)); }
+.number-one-call.on.routing { --tone: var(--lcars-gold); }
+.number-one-call.on.confirming { --tone: var(--lcars-orange); }
+.number-one-call.on.acting { --tone: var(--lcars-red); }
+.number-one-call-step { font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tone); }
+.number-one-call-pending { font-weight: 600; color: var(--lcars-orange); }
+.number-one-call-topic { font-size: 13px; color: var(--lcars-lilac); }
+.number-one-call.on.dictating { --tone: var(--lcars-orange); }
+.number-one-call-lines { max-height: 180px; overflow: auto; display: flex; flex-direction: column; gap: 3px; font-size: 14px; line-height: 1.35; }
+.number-one-call-line strong { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+.number-one-call-line.captain strong { color: var(--lcars-sky); }
+.number-one-call-line.ship strong { color: var(--lcars-lilac); }
+.number-one-call-line.office, .number-one-call-line.office strong { color: var(--muted); font-size: 12.5px; }

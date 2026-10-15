@@ -151,25 +151,15 @@ export function fixedCrew(key: string, division: Division, rank: Rank, surname: 
   return { name: `${RANK_TITLE[rank]} ${surname}`, avatar: rollAvatar(seeded(hash(key)), division, rank) };
 }
 
-/**
- * Number One, the ship's first officer in the ready room: one for the whole ship, who talks anything through with the
- * captain, reading any project's code and the ship's live state. Command, like the captain.
- */
-export function numberOne(): Planner {
-  const avatar = rollAvatar(seeded(hash('number-one')), 'command', 'lieutenant');
-  return { name: 'Cmdr. Adair', avatar };
-}
-
-/** Each post's voices, none shared between the posts, so the officer, QA and the engineer never sound alike; Number One borrows one, at a pitch of their own. */
+/** Each post's voices, none shared between the posts, so the officer, QA and the engineer never sound alike. */
 const VOICES: Record<CrewSpeaker, { kokoro: KokoroVoice[]; pitch: number }> = {
   officer: { kokoro: ['af_heart', 'am_michael', 'bf_emma', 'bm_george'], pitch: 1 },
   qa: { kokoro: ['af_bella', 'am_puck', 'bf_isabella', 'bm_fable'], pitch: 1.3 },
   engineer: { kokoro: ['am_fenrir'], pitch: 0.75 },
-  'number-one': { kokoro: ['bm_george'], pitch: 0.9 },
 };
 
-/** The ship has one engineer and one Number One: the same voice whichever project they're talking about. */
-const SHIPWIDE: CrewSpeaker[] = ['engineer', 'number-one'];
+/** The ship has one engineer: the same voice whichever project they're talking about. */
+const SHIPWIDE: CrewSpeaker[] = ['engineer'];
 
 /** The voice a crew member speaks in about the project: always the same one for the same person. */
 export function crewVoice(speaker: CrewSpeaker, projectId: string): CrewVoice {

@@ -5,7 +5,7 @@ import { qaOfficerFor, randomAvatar } from '../shared/crew';
 import type { LedgerEntry, LedgerEvent } from '../shared/ledger';
 import { type LedgerHealth, LedgerLog } from './ledgerLog';
 import { olderVerdict, prKey } from '../shared/qa';
-import type { Agent, Board, BrowserFrame, ClosedPr, MergeMethod, NumberOneChat, PluginStates, Project, QaReview, Settings, StudioSession, TermLine } from '../shared/types';
+import type { Agent, Board, BrowserFrame, ClosedPr, MergeMethod, PluginStates, Project, QaReview, Settings, StudioSession, TermLine } from '../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS, ROOM_THEMES, type RoomTheme } from '../shared/types';
 import { config, paths } from './config';
 import { takeLock } from './fileLock';
@@ -14,11 +14,6 @@ import { upgradeLead } from './agents/lead';
 import { fromBeforePlugins, type SavedBeforePlugins } from './plugins/migrate';
 import { newId } from './util';
 
-/** Number One's chat as saved: with their session, so the next message resumes it. */
-export type StoredNumberOne = NumberOneChat & { sessionId?: string };
-
-export const freshNumberOne = (): StoredNumberOne => ({ status: 'waiting', activity: '', messages: [], updatedAt: Date.now(), costUsd: 0 });
-
 export type StoredStudio = StudioSession & { sessionId?: string };
 export const freshStudio = (): StoredStudio => ({ status: 'waiting', activity: '', messages: [], takes: [], updatedAt: Date.now(), costUsd: 0 });
 
@@ -26,12 +21,6 @@ export const freshStudio = (): StoredStudio => ({ status: 'waiting', activity: '
 export function studioAfterRestart(saved: StoredStudio): StoredStudio {
   if (saved.status !== 'thinking') return saved;
   return { ...saved, status: 'failed', activity: 'Interrupted', error: 'Interrupted when Focus shut down. Say it again.' };
-}
-
-/** Number One's saved chat as it picks up after a restart: a turn in flight when Focus shut down ends, and the chat stays usable. */
-export function numberOneAfterRestart(saved: StoredNumberOne): StoredNumberOne {
-  if (saved.status !== 'thinking') return saved;
-  return { ...saved, status: 'failed', activity: 'Interrupted', error: 'Interrupted when Focus shut down. Ask again.' };
 }
 
 /** A QA review as it picks up after a restart: one queued or under way ends, and a PR the operations officer was looking at goes to the captain. */
@@ -73,7 +62,6 @@ interface PersistedState {
   settings: Settings;
   projects: Project[];
   agents: Agent[];
-  numberOne?: StoredNumberOne;
   studio?: StoredStudio;
   /** Each plugin's state, by plugin id: kept while a plugin's switched off, for when it's back. */
   plugins?: PluginStates;
@@ -105,8 +93,6 @@ export class Store {
   boards = new Map<string, Board>();
   private lines = new Map<string, TermLine[]>();
   browser = new Map<string, BrowserFrame>();
-  /** The captain's chat with Number One. */
-  numberOne: StoredNumberOne = freshNumberOne();
   studio: StoredStudio = freshStudio();
   /** Each plugin's own state, by plugin id (`PluginHost.state`, docs/plugins.md). */
   plugins: PluginStates = {};
@@ -149,7 +135,6 @@ export class Store {
     fromBeforePlugins(raw);
     this.settings = { ...DEFAULT_SETTINGS, ...raw.settings };
     this.projects = raw.projects ?? [];
-    if (raw.numberOne) this.numberOne = numberOneAfterRestart(raw.numberOne);
     if (raw.studio) this.studio = studioAfterRestart(raw.studio);
     this.plugins = raw.plugins ?? {};
     for (const saved of raw.reviews ?? []) {
@@ -186,7 +171,6 @@ export class Store {
       settings: this.settings,
       projects: this.projects,
       agents: [...this.agents.values()],
-      numberOne: this.numberOne,
       studio: this.studio,
       plugins: this.plugins,
       reviews: [...this.reviews.values()],

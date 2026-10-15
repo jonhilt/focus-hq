@@ -1,10 +1,10 @@
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { type Actor, createActor, fromPromise } from 'xstate';
-import { shownProjects } from '../../shared/hidden';
-import type { LedgerEvent } from '../../shared/ledger';
-import type { Agent, CallLine, CallState, CallStatus, CallStep, MessageReply, QueuedGoal, Snapshot } from '../../shared/types';
-import type { Hub } from '../hub';
-import { errorMessage } from '../util';
+import { shownProjects } from '../../../shared/hidden';
+import type { LedgerEvent } from '../../../shared/ledger';
+import type { Agent, MessageReply, QueuedGoal, Snapshot } from '../../../shared/types';
+import type { CallLine, CallState, CallStatus, CallStep } from '../shared';
+import { errorMessage } from '../../../server/util';
 import { addCaption } from './captions';
 import { DemoJev, DemoLive } from './demo';
 import { Jev } from './jev';
@@ -13,7 +13,7 @@ import { callMachine, type Reply, type RouteInput } from './machine';
 import { topics } from './brief';
 import { type Act, askFor, type Capture, callNotes, decide, dictated, type Routing, routingQuestions, routingState } from './route';
 
-// Calls to Number One (docs/calls.md): one at a time, each a gpt-live-1 session the office is the backend of. The
+// Calls to Number One (../calls.md): one at a time, each a gpt-live-1 session the office is the backend of. The
 // session's events drive the call's machine; what the machine says goes back over the sideband.
 
 /** What a call needs from the office: how the ship stands, its log, and the acts the captain says yes to. */
@@ -34,7 +34,7 @@ export interface CallKeys {
 export function callsMissing(keys: CallKeys, demo: boolean): string | undefined {
   if (demo) return undefined;
   const missing = [!keys.openai && 'OPENAI_API_KEY', !keys.typesafe && 'TYPESAFE_API_KEY'].filter(Boolean);
-  return missing.length ? `Calls need ${missing.join(' and ')} set where the office starts (see docs/calls.md)` : undefined;
+  return missing.length ? `Calls need ${missing.join(' and ')} set where the office starts (see plugins/number-one/calls.md)` : undefined;
 }
 
 /** The step the captain sees for the machine's state (`routing` has steps of its own inside). */
@@ -196,9 +196,9 @@ export class Calls {
   private readonly runtime: Runtime | null;
   private readonly missing: string | undefined;
 
-  /** `layer`: OpenAI and Jev, or the demo's stand-ins for them (tests bring their own). */
+  /** `publish` tells every screen how the calls stand; `layer`: OpenAI and Jev, or the demo's stand-ins for them (tests bring their own). */
   constructor(
-    private readonly hub: Hub,
+    private readonly publish: (status: CallStatus) => void,
     private readonly office: CallOffice,
     keys: CallKeys,
     demo: boolean,
@@ -223,7 +223,7 @@ export class Calls {
         return yield* live.create(sdp);
       }),
     );
-    const call = new Call(session.id, runtime, this.office, () => this.publish(call));
+    const call = new Call(session.id, runtime, this.office, () => this.changed(call));
     this.call = call;
     try {
       call.sideband = await runtime.runPromise(
@@ -236,7 +236,7 @@ export class Calls {
       call.end(errorMessage(err));
       throw err;
     }
-    this.publish(call);
+    this.changed(call);
     return session;
   }
 
@@ -244,7 +244,7 @@ export class Calls {
     if (this.call?.id === id) this.call.hangUp();
   }
 
-  private publish(call: Call): void {
-    if (call === this.call) this.hub.send({ type: 'call', call: call.state() });
+  private changed(call: Call): void {
+    if (call === this.call) this.publish(this.status());
   }
 }

@@ -1,9 +1,13 @@
-import type { Issue, PluginStates } from '../../../shared/types';
+import type { Issue, PluginStates, Snapshot } from '../../../shared/types';
+import type { ShipStatus } from '../shipStatus';
 import type { BriefWork, PluginHost, PluginState } from '../../plugins/contract';
 import type { Core } from './core';
 import { Refused } from './core';
 
-/** What the office lends a plugin that the manager doesn't have: where it runs, its own repo, filing issues, and the demo's transcripts. */
+/**
+ * What the office lends a plugin that the manager doesn't have: where it runs, its own repo, filing issues, the demo's
+ * transcripts, the whole office's snapshot and the ship's status.
+ */
 export interface Lent {
   demo: boolean;
   ownRepo: () => string | undefined;
@@ -11,7 +15,14 @@ export interface Lent {
   fileIssue?: (projectId: string, repo: string, title: string, body: string) => Promise<Issue>;
   /** Reads a session's transcript in place of the manager's `readTranscript`: the demo's stand-ins for its scripted agents. */
   transcript?: (sessionId: string) => Promise<string | undefined>;
+  /** The office's snapshot (`Office.snapshot`): none in a test that doesn't need it. */
+  snapshot?: () => Promise<Snapshot>;
+  /** The ship's status, with closed goals' pull requests looked up on GitHub (index.ts): none in a test that doesn't need it. */
+  shipStatus?: () => Promise<ShipStatus>;
 }
+
+/** What a test office (one without it) answers for something the office lends. */
+const missing = (what: string) => Promise.reject(new Refused({ message: `This office has no ${what}` }));
 
 /** A plugin's slot in `saved`, `fresh()` with what was saved on top (a field added since starts fresh). */
 function slot<S extends object>(saved: () => PluginStates, id: string, fresh: () => S, changed: (state: S) => void): PluginState<S> {
@@ -46,6 +57,13 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
     ledger: () => core.store.ledger,
     record: (projectId, entry, at) => core.ledger.record(projectId, entry, at),
     settings: () => core.store.settings,
+    snapshot: () => lent.snapshot?.() ?? missing('snapshot'),
+    shipStatus: () => lent.shipStatus?.() ?? missing('ship’s status'),
+    goals: {
+      start: (projectId, text, how) => core.leads.startGoal(projectId, text, { from: how.from }),
+      startQueued: (projectId, queueId, station) => core.leads.startQueued(projectId, queueId, { station }),
+      message: (agentId, text) => core.goalTools.captainMessage(agentId, text),
+    },
     fileIssue: (projectId, repo, title, body) => {
       // a plugin files only where the captain works: in one of the project's own repos
       const project = core.store.projects.find((p) => p.id === projectId);

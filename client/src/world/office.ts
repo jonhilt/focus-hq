@@ -5,7 +5,9 @@ import { holodecks } from '../../../shared/hidden';
 import type { Project, StudioTake } from '../../../shared/types';
 import { ACTIVE_STATUSES } from '../../../shared/types';
 import { state } from '../net/state';
-import { Builder } from './builder';
+import { Builder, interactive } from './builder';
+import type { ClientPlugin, ShipHost, ShipPart } from '../plugins';
+import { shipParts } from './shipParts';
 import type { Deck } from './deck';
 import type { HolodeckDeck } from './holodeckDeck';
 import type { DeckScreen } from './deckExtras';
@@ -14,7 +16,6 @@ import { type Box2, DOOR_W, HALL_HALF, ROOM_WIDTH, roomSlot, rowsFor, type Seat,
 import { flat } from './materials';
 import { EngineeringStation } from './engineering';
 import { drawMsd, type MsdBoard } from './msd';
-import { FirstOfficer } from './numberOne';
 import { TrainingConsole } from './trainingConsole';
 import { AHEAD, type Portal, type PortalEnd } from './portal';
 import { type Region, regionAt, shown } from './regions';
@@ -42,7 +43,7 @@ export interface Place {
 
 /**
  * The ship the World builds, its decks built in Blender (blender/): the command deck (the bridge, and the ready room
- * and lounge, with Number One), the holodeck deck, with a holodeck per project either side of its hallway and the
+ * and lounge), the holodeck deck, with a holodeck per project either side of its hallway and the
  * turbolift at its head, and main engineering, with the warp core and the chief engineer.
  */
 export interface Ship {
@@ -74,7 +75,11 @@ export class World {
   /** The vacant holodecks' empty halls, by slot. */
   private vacant = new Map<number, VacantHall>();
   engineering: EngineeringStation | null = null;
-  numberOne: FirstOfficer | null = null;
+  /** The plugins with a part in the ship (`ClientPlugin.ship`), switched on: main sets it before the first sync. */
+  shipPlugins: () => ClientPlugin[] = () => [];
+  /** The plugins' parts of the ship as it stands, and what they put on its decks. */
+  private pluginParts: ShipPart[] = [];
+  private pluginMounts: THREE.Object3D[] = [];
   /** The training console on the bridge: only in a demo office (`demo`, set before the first sync). */
   training: TrainingConsole | null = null;
   demo = false;
@@ -227,8 +232,7 @@ export class World {
     for (const hall of this.vacant.values()) hall.dispose();
     this.vacant.clear();
     this.engineering?.dispose();
-    this.numberOne?.group.removeFromParent();
-    this.numberOne?.dispose();
+    this.unbuildPlugins();
     this.training?.group.removeFromParent();
     this.training?.dispose();
     this.training = null;
@@ -266,8 +270,8 @@ export class World {
     for (const room of this.transporterRooms) this.transporterGroup.add(room.group);
 
     this.buildHolodeckDeck(b, rows, this.ship.holodecks);
-    this.seatNumberOne(b, this.ship.command.seat('number-one'));
     this.seatEngineer(b, this.ship.engineering.seat('engineer'));
+    this.buildPlugins(b);
     if (this.demo) this.placeTraining(b);
 
     this.root.add(b.group, b.halls);
@@ -300,11 +304,25 @@ export class World {
     b.colliders.push(this.engineering.footprint);
   }
 
-  private seatNumberOne(b: Builder, seat: Seat): void {
-    this.numberOne = new FirstOfficer(seat);
-    // in the ready room: drawn with the command deck
-    this.ship.command.root.add(this.numberOne.group);
-    b.colliders.push(this.numberOne.footprint);
+  /** Each plugin's part of the ship (`ClientPlugin.ship`): one that throws is left out, with all it asked for, and the ship is built without it. */
+  private buildPlugins(b: Builder): void {
+    const host: ShipHost = {
+      seat: (deck, name) => this.ship[deck].seatOf(name),
+      mount: (deck, object) => {
+        this.ship[deck].root.add(object);
+        this.pluginMounts.push(object);
+      },
+      collide: (box) => b.colliders.push(box),
+      interactive: (object, label, use) => interactive(object, { kind: 'plugin', use }, label),
+    };
+    this.pluginParts = shipParts(this.shipPlugins(), host);
+  }
+
+  private unbuildPlugins(): void {
+    for (const object of this.pluginMounts) object.removeFromParent();
+    for (const part of this.pluginParts) part.dispose();
+    this.pluginMounts = [];
+    this.pluginParts = [];
   }
 
   /**
@@ -416,7 +434,7 @@ export class World {
     for (const room of this.rooms.values()) room.update(t, now, camera);
     for (const hall of this.vacant.values()) if (hall.holds(camera) || hall.portal.near(camera, AHEAD)) hall.update(t, camera);
     this.engineering?.update(t, camera);
-    this.numberOne?.update(t, camera);
+    for (const part of this.pluginParts) part.update?.(t, camera);
     if (this.panelsDirty && now - this.lastPanels > 1000) {
       this.panelsDirty = false;
       this.lastPanels = now;

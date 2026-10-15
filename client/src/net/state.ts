@@ -1,7 +1,7 @@
 import { isHidden, shownProjects } from '../../../shared/hidden';
 import type { ReportCard } from '../../../shared/ledger';
 import { prKey } from '../../../shared/qa';
-import type { Agent, Board, BrowserFrame, CallStatus, IssueDraft, NumberOneChat, PluginStates, Preview, Project, QaReview, ServerEvent, ServerInfo, StudioSession, TermLine, Usage, VoiceStatus } from '../../../shared/types';
+import type { Agent, Board, BrowserFrame, IssueDraft, PluginStates, Preview, Project, QaReview, ServerEvent, ServerInfo, StudioSession, TermLine, Usage, VoiceStatus } from '../../../shared/types';
 
 type Events = {
   snapshot: void;
@@ -18,7 +18,6 @@ type Events = {
   toast: Extract<ServerEvent, { type: 'toast' }>;
   /** A project's issue draft changed (project id). */
   draft: string;
-  'number-one': void;
   /** The studio holodeck's conversation, video or takes changed. */
   studio: void;
   /** The ledger's report card changed. */
@@ -30,8 +29,6 @@ type Events = {
   /** A QA review changed or went away (its project id). */
   review: string;
   voice: void;
-  /** The call to Number One changed, or whether the office can take one. */
-  call: void;
   connection: boolean;
 };
 
@@ -51,8 +48,6 @@ export class OfficeState {
   previews = new Map<string, Preview>();
   /** The planner's issue draft per project id, while one is being written or waits to be filed. */
   drafts = new Map<string, IssueDraft>();
-  /** The captain's chat with Number One in the ready room. */
-  numberOne: NumberOneChat | null = null;
   studio: StudioSession | null = null;
   report: ReportCard | null = null;
   usage: Usage | null = null;
@@ -62,8 +57,6 @@ export class OfficeState {
   reviews = new Map<string, QaReview>();
   /** Whether dictation can run on the server, and the speech model's download. */
   voice: VoiceStatus | null = null;
-  /** Whether the office can take a call to Number One, and the call under way (or the last one). */
-  call: CallStatus | null = null;
   connected = false;
 
   private listeners = new Map<keyof Events, Set<Listener<never>>>();
@@ -121,20 +114,16 @@ export class OfficeState {
         this.previews = new Map((s.previews ?? []).map((p) => [p.projectId, p]));
         this.drafts = new Map((s.drafts ?? []).map((d) => [d.projectId, d]));
         this.reviews = new Map((s.reviews ?? []).map((r) => [prKey(r.repo, r.number), r]));
-        this.numberOne = s.numberOne;
         this.studio = s.studio;
         this.report = s.report;
         this.usage = s.usage;
         this.plugins = s.plugins ?? {};
         this.voice = s.voice;
-        this.call = s.call;
         this.emit('snapshot', undefined);
         this.emit('report', undefined);
         this.emit('usage', undefined);
         for (const id of Object.keys(this.plugins)) this.emit('plugin', id);
         this.emit('voice', undefined);
-        this.emit('call', undefined);
-        this.emit('number-one', undefined);
         this.emit('studio', undefined);
         break;
       }
@@ -206,10 +195,6 @@ export class OfficeState {
         this.voice = event.voice;
         this.emit('voice', undefined);
         break;
-      case 'call':
-        this.call = { ...this.call, call: event.call };
-        this.emit('call', undefined);
-        break;
       case 'report':
         this.report = event.report;
         this.emit('report', undefined);
@@ -221,10 +206,6 @@ export class OfficeState {
       case 'plugin':
         this.plugins = { ...this.plugins, [event.id]: event.state };
         this.emit('plugin', event.id);
-        break;
-      case 'number-one':
-        this.numberOne = event.chat;
-        this.emit('number-one', undefined);
         break;
       case 'studio':
         this.studio = event.session;

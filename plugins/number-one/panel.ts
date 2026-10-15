@@ -1,16 +1,22 @@
-import { crewVoice, numberOne, plannerFor } from '../../../shared/crew';
-import type { NumberOneChat, WorkSuggestion } from '../../../shared/types';
-import { linesToSpeak } from '../../../shared/voice';
-import { api } from '../net/api';
-import { state } from '../net/state';
-import { LCARS } from '../world/starship';
-import type { Ui } from './context';
-import { callView } from './call';
-import { voicePrefs, VoiceSession, voiceToggle } from './voiceMode';
-import { type MicMode, withMic } from './dictation';
-import { confirmDialog } from './confirmDialog';
-import { busy, fill, h } from './dom';
-import { handOffControl } from './goals';
+// Number One's chat in the browser (README.md): the panel in the ready room, with voice mode and the call strip.
+import { plannerFor } from '../../shared/crew';
+import { linesToSpeak } from '../../shared/voice';
+import { api } from '../../client/src/net/api';
+import { state } from '../../client/src/net/state';
+import { pluginState } from '../../client/src/plugins';
+import type { Ui } from '../../client/src/ui/context';
+import { confirmDialog } from '../../client/src/ui/confirmDialog';
+import { type MicMode, withMic } from '../../client/src/ui/dictation';
+import { busy, fill, h } from '../../client/src/ui/dom';
+import { handOffControl } from '../../client/src/ui/goals';
+import { voicePrefs, VoiceSession, voiceToggle } from '../../client/src/ui/voiceMode';
+import { LCARS } from '../../client/src/world/starship';
+import { callView } from './callView';
+import { chatNow, NUMBER_ONE, NUMBER_ONE_VOICE, numberOne, type NumberOneChat, type NumberOneState, type WorkSuggestion } from './shared';
+
+/** The chat as it stands this moment: none until the plugin's state arrives. */
+export const currentChat = (): NumberOneChat | null => chatNow(pluginState<NumberOneState>(NUMBER_ONE));
+const say = (text: string) => api.plugin<NumberOneChat>(NUMBER_ONE, '/say', { text });
 
 let open = false;
 /** Whether the Number One panel is showing (so the office doesn't toast a reply you can already see). */
@@ -29,15 +35,15 @@ export function openNumberOnePanel(ui: Ui): void {
   // in voice mode Number One speaks their replies, and Mic / Ctrl+M sends what you say
   let voice = voicePrefs.voiceMode ? new VoiceSession(voicePrefs.keepMicOpen) : null;
   const micMode = (): MicMode =>
-    voice ? { kind: 'talk', mic: voice.mic, started: () => voice?.speaker.hush(), send: (text) => api.numberOneSay(text).then(() => undefined) } : { kind: 'dictate' };
+    voice ? { kind: 'talk', mic: voice.mic, started: () => voice?.speaker.hush(), send: (text) => say(text).then(() => undefined) } : { kind: 'dictate' };
   const inputBox = withMic(ui, input, micMode);
   // what was in the log when the panel opened has been said: only replies after it are spoken
-  let heard = state.numberOne?.messages.length ?? 0;
+  let heard = currentChat()?.messages.length ?? 0;
   const speak = (chat: NumberOneChat) => {
     // a new conversation starts the log again
     const lines = linesToSpeak(chat.messages, heard <= chat.messages.length ? heard : 0);
     heard = chat.messages.length;
-    for (const line of lines) voice?.speaker.say(line.text, crewVoice(line.speaker, ''));
+    for (const line of lines) voice?.speaker.say(line.text, NUMBER_ONE_VOICE);
   };
   const send = h('button', { class: 'btn primary' }, 'Send');
   const sendNow = () => {
@@ -45,7 +51,7 @@ export function openNumberOnePanel(ui: Ui): void {
     const text = input.value;
     // busy hands the button back enabled: render again so it stays off while Number One thinks
     void busy(send, async () => {
-      await api.numberOneSay(text);
+      await say(text);
       input.value = '';
     }, ui.error).then(render);
   };
@@ -59,7 +65,7 @@ export function openNumberOnePanel(ui: Ui): void {
   let shownMessages = -1;
 
   const render = () => {
-    const chat = state.numberOne;
+    const chat = currentChat();
     if (chat) speak(chat);
     const messages = chat?.messages ?? [];
     const thinking = chat?.status === 'thinking';
@@ -88,7 +94,7 @@ export function openNumberOnePanel(ui: Ui): void {
     fresh.onclick = () =>
       void busy(fresh, async () => {
         voice?.speaker.hush();
-        await api.numberOneNew();
+        await api.plugin(NUMBER_ONE, '/new');
       }, ui.error);
     const cost = h('small', { class: 'muted' }, chat?.costUsd ? `$${chat.costUsd.toFixed(2)} so far` : '');
 
@@ -117,9 +123,9 @@ export function openNumberOnePanel(ui: Ui): void {
   open = true;
   ui.panels.own(() => (open = false));
   ui.panels.own(() => voice?.end());
-  ui.panels.own(state.on('number-one', render));
+  // the chat and the call are both the plugin's state
+  ui.panels.own(state.on('plugin', (id) => id === NUMBER_ONE && render()));
   ui.panels.own(state.on('projects', render));
-  ui.panels.own(state.on('call', render));
   render();
 }
 

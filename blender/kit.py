@@ -9,8 +9,8 @@ What the browser reads (client/src/world/deck.ts), all through custom properties
   player can't walk into), 'door' (sliding doors at a doorway's centre, sliding along the empty's X: `width`,
   `height`), 'place' (a teleport destination, looking along the empty's +Y: `label`), 'area' (an empty cube: the
   floor `label` names in the HUD), 'seat' (where a crew member's chair stands, turned along the empty's +Y: `crew`,
-  'number-one' in the ready room, 'engineer' at the engineering station, or in a team station's briefing room
-  'station-lead', 'station-helper-1' to 'station-helper-4' or 'station-reviewer'), 'turbolift' (where the turbolift
+  'ready-room-guest' at the ready room's visitor chair, 'engineer' at the engineering station, or in a team station's
+  briefing room 'station-lead', 'station-helper-1' to 'station-helper-4' or 'station-reviewer'), 'turbolift' (where the turbolift
   stops: you stand there in its car, facing along the empty's +Y, and `label` names the deck), 'portal' (a doorway
   to somewhere else, at its centre in the middle of its wall, the way in along the empty's +Y: `width`, `height`, and
   the `depth` of the alcove behind it, where the browser draws the other end), and in a transporter room 'pad' (a

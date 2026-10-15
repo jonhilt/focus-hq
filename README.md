@@ -71,8 +71,8 @@ Then on board:
 - [Goals and their leads](docs/goals.md): team stations, briefing rooms, shipping a goal a slice at a time
 - [Comms](docs/comms.md): who's waiting on you across the ship, and answering them from anywhere
 - [Drafting issues](docs/drafting-issues.md): the operations officer at the Ops station
-- [Number One](docs/number-one.md): the ship-wide chat in the ready room, and its voice mode
-- [Calls to Number One](docs/calls.md): talking to the ship hands-free (gpt-live-1, Jev, XState)
+- [Number One](plugins/number-one/README.md): the ship-wide chat in the ready room, and its voice mode (the `number-one` plugin)
+- [Calls to Number One](plugins/number-one/calls.md): talking to the ship hands-free (gpt-live-1, Jev, XState)
 - [How an agent works an issue](docs/agents.md): from hire to merge, their panel and station displays
 - [Cloud agents](docs/cloud-agents.md): agents in Claude Code cloud sessions
 - [QA](docs/qa.md): the QA officer, reports, send-back, auto-merge and stuck PRs

@@ -4,7 +4,7 @@ import { WebSocket } from 'ws';
 // OpenAI's gpt-live-1: a full-duplex voice model that holds the conversation and hands work to a backend (here, the
 // office: "client delegation"). The browser carries the audio over WebRTC; the office creates the session with the
 // browser's offer and attaches a sideband WebSocket of its own to it, which hears what's said and when work is handed
-// over, and sends back what the ship should say (docs/calls.md).
+// over, and sends back what the ship should say (../calls.md).
 
 export const LIVE_URL = process.env.FOCUS_LIVE_URL || 'https://api.openai.com/v1/live/sessions';
 export const LIVE_MODEL = process.env.FOCUS_LIVE_MODEL || 'gpt-live-1';

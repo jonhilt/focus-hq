@@ -67,7 +67,7 @@ Project.goals?: GoalRecord[]   // persisted with the project, newest first, capp
 
 **Talk:** E at an occupied station opens that lead's panel, and messages go to `POST /agents/:id/message` as they do today. **L** opens the nearest station's lead, or the goals list if you're not near one.
 
-**Other ways in:** the planner card's and Number One's "hand to the lead" and the board's 🧭 button now ask *which goal*. The choices are an existing goal, or a new goal. All of that lives in one small picker.
+**Other ways in:** the planner card's and Number One's (the [`number-one` plugin](../plugins/number-one/README.md)) "hand to the lead" and the board's 🧭 button now ask *which goal*. The choices are an existing goal, or a new goal. All of that lives in one small picker.
 
 **When every station is taken, new goals queue.** `Project.goalQueue?: { id, text, from, effort?, at }[]` is persisted with the project and shown in the Goals list, where you can reorder or drop entries. Queued goals never start on their own. When a goal closes, the freed station shows the first queued goal as "Next up", and a toast says the station is free. You start it from the station or the Goals list with one press, with its text and effort already filled in and editable. Until then nothing is seated and nothing runs. A pure `nextGoal(queue)` picks which goal is offered. Starting a goal from the Goals list while the room is full queues it the same way.
 

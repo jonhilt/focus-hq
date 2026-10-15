@@ -11,7 +11,7 @@ import type { PluginHost } from '../plugins/contract';
 import { demoWorkspace } from './demoRunner';
 import { office, until } from './fakeOffice';
 import type { AgentManager } from './manager';
-import type { Issue, PullRequest, QaReport } from '../../shared/types';
+import type { Issue, PullRequest, QaReport, Snapshot } from '../../shared/types';
 import { AWAY_DESK } from '../../shared/types';
 import type { WorkspaceOps } from './types';
 import { CLOUD_UNAVAILABLE } from './cloud';
@@ -1317,6 +1317,38 @@ describe('AgentManager', () => {
       await expect(host.fileIssue(project.id, 'someone/else', 'Ports', 'body')).rejects.toThrow('someone/else isn’t one of Shop’s repositories');
       await expect(host.fileIssue('nowhere', 'demo/webshop-api', 'Ports', 'body')).rejects.toThrow('isn’t one of the project’s repositories');
       expect(filed).toEqual([`${project.id} demo/webshop-api Ports`]);
+    });
+
+    it('lends plugins the office’s snapshot and the ship’s status, and the captain’s goals to act on', async () => {
+      const { agents, claude, store, project } = office();
+      let lent: PluginHost | undefined;
+      agents.startPlugins([{ id: 'xo', start: (host) => ((lent = host), {}) }], {
+        demo: false,
+        ownRepo: () => undefined,
+        snapshot: () => Promise.resolve({ projects: store.projects } as Snapshot),
+        shipStatus: () => Promise.resolve({ projects: [] }),
+      });
+      const host = lent!;
+      expect((await host.snapshot()).projects).toEqual([project]);
+      expect(await host.shipStatus()).toEqual({ projects: [] });
+
+      const started = host.goals.start(project.id, 'Saved items', { from: 'a call' });
+      if (!('agent' in started)) throw new Error('the goal should have a station');
+      const lead = started.agent;
+      expect(store.recentLines(lead.id).map((l) => l.text)).toContain('▶ Captain, from a call: Saved items');
+      await until(() => claude.turns.length === 1);
+      claude.turns[0].end({ ok: true, summary: 'Proposed a slice' });
+      await until(() => store.agent(lead.id).status === 'done');
+      expect(host.goals.message(lead.id, 'Go ahead')).toEqual({ sent: true });
+      await until(() => claude.turns.length === 2);
+      expect(claude.turns[1].req.prompt).toContain('Go ahead');
+    });
+
+    it('tells a plugin in a test office that it has no snapshot or ship’s status to lend', async () => {
+      const { agents } = office();
+      const host = auditor(agents).host();
+      await expect(host.snapshot()).rejects.toThrow('This office has no snapshot');
+      await expect(host.shipStatus()).rejects.toThrow('This office has no ship’s status');
     });
   });
 });

@@ -1,5 +1,5 @@
 import { callerOf, FLOW_FROM_HEADER, FLOWS_PARAM } from '../../../shared/flows';
-import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ResumeHow, RoomTheme, Settings, StudioSession, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
+import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ResumeHow, RoomTheme, Settings, StudioSession, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
 import type { Scenario } from '../../../shared/scenarios';
@@ -63,8 +63,6 @@ export const api = {
   reopenGoal: (projectId: string, goalId: string) => call<Agent>('POST', `/projects/${projectId}/goals/${goalId}/reopen`, {}),
   /** Closes a goal, unless something would be lost or left behind: then it says what, and `force` closes it anyway. */
   closeGoal: (id: string, force = false) => call<{ closed: true } | { warn: string[] }>('POST', `/agents/${id}/close`, { force }),
-  numberOneSay: (text: string) => call<NumberOneChat>('POST', '/number-one/say', { text }),
-  numberOneNew: () => call<NumberOneChat>('POST', '/number-one/new'),
   studioSay: (text: string) => call<StudioSession>('POST', '/studio/say', { text }),
   studioNew: () => call<StudioSession>('POST', '/studio/new'),
   studioTune: (model: string, effort?: Effort) => call<StudioSession>('POST', '/studio/tune', { model, effort }),
@@ -72,9 +70,6 @@ export const api = {
   studioSource: (file: string, line: number) => call<{ file: string; line: number; from: number; lines: string[] }>('GET', `/studio/source?file=${encodeURIComponent(file)}&line=${line}`),
   studioRecall: (id: string) => call<StudioSession>('POST', `/studio/takes/${encodeURIComponent(id)}/recall`),
   studioReport: (id: string, version: number, error?: string, sheet?: string) => call<StudioSession>('POST', `/studio/takes/${encodeURIComponent(id)}/report`, { version, error, sheet }),
-  /** A call to Number One: the browser's WebRTC offer in, the session's id and answer out (no answer in the demo, which has no audio). */
-  startCall: (sdp: string) => call<{ id: string; sdp: string | null }>('POST', '/call', { sdp }),
-  hangUp: (id: string) => call<{ ok: true }>('POST', `/call/${encodeURIComponent(id)}/hang-up`),
   /** A plugin's own route (docs/plugins.md), under `/api/plugins/<id>`. */
   plugin: <T>(id: string, path: string, body?: unknown) => call<T>('POST', `/plugins/${encodeURIComponent(id)}${path}`, body),
   /** The ledger's events of the last `days` days, for reviewing at the master systems table. */

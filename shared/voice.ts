@@ -8,8 +8,8 @@ export type KokoroVoice = (typeof KOKORO_VOICES)[number];
 
 export const isKokoroVoice = (v: unknown): v is KokoroVoice => KOKORO_VOICES.some((k) => k === v);
 
-/** Who speaks aloud: the crew, and Number One in the ready room. */
-export type CrewSpeaker = 'officer' | 'qa' | 'engineer' | 'number-one';
+/** Who among the core's crew speaks aloud (a plugin's crew bring a `CrewVoice` of their own). */
+export type CrewSpeaker = 'officer' | 'qa' | 'engineer';
 
 /** A crew member's voice: Kokoro's, and how the browser's built-in voice stands in for it while Kokoro isn't ready. */
 export interface CrewVoice {
@@ -56,19 +56,23 @@ export function spokenLine(spoken: string | undefined, text: string): string | u
   return firstSentences(forSpeech(question ?? text)) || undefined;
 }
 
-export interface CrewLine {
-  speaker: CrewSpeaker;
+export interface CrewLine<S extends string = CrewSpeaker> {
+  speaker: S;
   text: string;
 }
+
+/** Whether a message is the crew's, not the captain's or the office's. */
+const crewSaid = <S extends string>(from: S): from is Exclude<S, 'manager' | 'system'> => from !== 'manager' && from !== 'system';
 
 /**
  * What the crew say aloud among the messages from index `from` on, in log order: an officer's reply as its spoken
  * line; QA's notes, the engineer's recommendation and the office's fixed officer lines as they are.
  */
-export function linesToSpeak(messages: { from: CrewSpeaker | 'manager' | 'system'; text: string; spoken?: string }[], from: number): CrewLine[] {
+export function linesToSpeak<S extends string>(messages: { from: S; text: string; spoken?: string }[], from: number): CrewLine<Exclude<S, 'manager' | 'system'>>[] {
   return messages.slice(from).flatMap((m) => {
-    if (m.from === 'manager' || m.from === 'system') return [];
+    const speaker = m.from;
+    if (!crewSaid(speaker)) return [];
     const text = forSpeech(m.spoken ?? m.text);
-    return text ? [{ speaker: m.from, text }] : [];
+    return text ? [{ speaker, text }] : [];
   });
 }

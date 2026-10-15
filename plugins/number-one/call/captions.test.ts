@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CallLine } from '../../shared/types';
+import type { CallLine } from '../shared';
 import { addCaption, MAX_LINES, SAME_LINE_MS } from './captions';
 
 describe('addCaption', () => {

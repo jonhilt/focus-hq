@@ -434,7 +434,7 @@ function speechSetup(speech: SpeechStatus, ui: Ui): HTMLElement {
     : [h('span', { class: 'chip bad' }, 'missing'), get];
   return h('div', null,
     h('div', { class: 'voice-row' }, h('span', null, 'Crew voices'), chip),
-    h('small', { class: 'muted' }, 'Kokoro speaks Number One’s replies in voice mode, on this machine. Until it’s ready, the browser’s built-in voice stands in.'),
+    h('small', { class: 'muted' }, 'Kokoro speaks the crew’s replies in voice mode, on this machine. Until it’s ready, the browser’s built-in voice stands in.'),
     engine.state === 'loading' && engine.bytes
       ? h('div', { class: 'voice-progress' },
           h('progress', engine.total ? { max: engine.total, value: engine.bytes } : null),

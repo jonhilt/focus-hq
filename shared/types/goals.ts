@@ -9,7 +9,7 @@ export interface QueuedGoal {
   id: string;
   text: string;
   effort?: Effort;
-  /** Who handed it over, when it wasn't the captain directly: the Ops station, Number One. */
+  /** Who handed it over, when it wasn't the captain directly: the Ops station, or a plugin's crew. */
   from?: string;
   at: number;
 }

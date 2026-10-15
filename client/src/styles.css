@@ -624,36 +624,19 @@ textarea.qa-brief { width: 100%; min-height: 160px; font-family: var(--mono); fo
 .chip.qa.testing, .chip.qa.queued { --tone: var(--lcars-periwinkle); }
 .chip.qa.stale, .chip.qa.error { --tone: var(--lcars-gold); }
 
-/* Number One's chat in the ready room (the classes are from when briefings shared it) */
+/* A crew member's chat: its log, messages and box (the studio's computer, the engineering station, plugins' crew) */
 .briefing-chat { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 .briefing-log { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 4px 4px 0; }
 .briefing-msg { max-width: 85%; border-radius: 14px; padding: 8px 12px; background: color-mix(in srgb, var(--tone) 14%, var(--surface-2)); }
 .briefing-msg strong { font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tone); }
 .briefing-msg p { margin: 4px 0 0; line-height: 1.4; white-space: pre-wrap; }
-.briefing-msg.number-one { --tone: var(--lcars-lilac); align-self: flex-start; border-left: 6px solid var(--tone); border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .briefing-msg .suggest { margin-top: 8px; gap: 8px; }
-.briefing-chat.number-one { height: 100%; max-width: 860px; margin: 0 auto; }
 .briefing-msg.manager { --tone: var(--lcars-sky); align-self: flex-end; border-right: 6px solid var(--tone); border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .briefing-msg.typing p { font-family: var(--mono); font-size: 13px; color: var(--lcars-gold); }
 .briefing-note { align-self: center; color: var(--muted); font-size: 13px; }
 .briefing-note.error { color: var(--lcars-red); }
 textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
 .voice-controls { margin-bottom: 6px; gap: 12px; }
-.call { margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px; }
-.call small.error { color: var(--lcars-red); }
-.call.on { --tone: var(--lcars-green); border-left: 6px solid var(--tone); border-radius: 0 14px 14px 0; padding: 8px 12px; background: color-mix(in srgb, var(--tone) 10%, var(--surface-2)); }
-.call.on.routing { --tone: var(--lcars-gold); }
-.call.on.confirming { --tone: var(--lcars-orange); }
-.call.on.acting { --tone: var(--lcars-red); }
-.call-step { font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tone); }
-.call-pending { font-weight: 600; color: var(--lcars-orange); }
-.call-topic { font-size: 13px; color: var(--lcars-lilac); }
-.call.on.dictating { --tone: var(--lcars-orange); }
-.call-lines { max-height: 180px; overflow: auto; display: flex; flex-direction: column; gap: 3px; font-size: 14px; line-height: 1.35; }
-.call-line strong { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
-.call-line.captain strong { color: var(--lcars-sky); }
-.call-line.ship strong { color: var(--lcars-lilac); }
-.call-line.office, .call-line.office strong { color: var(--muted); font-size: 12.5px; }
 @media (max-width: 760px) { .briefing-log { max-height: 50vh; } }
 
 /* ------------------------------------------------------------------ agent panel */

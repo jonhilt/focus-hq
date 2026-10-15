@@ -38,10 +38,10 @@ export type Marker =
 export const HELPER_SEATS = ['station-helper-1', 'station-helper-2', 'station-helper-3', 'station-helper-4'] as const;
 
 /**
- * Crew a model seats: Number One in the ready room, the chief engineer at the engineering station, and in a team
- * station's briefing room its lead, their helpers and the goal's reviewer.
+ * Crew a model seats: a guest in the ready room's visitor chair (a plugin's, when one sits there), the chief engineer at
+ * the engineering station, and in a team station's briefing room its lead, their helpers and the goal's reviewer.
  */
-const CREW = ['number-one', 'engineer', 'station-lead', ...HELPER_SEATS, 'station-reviewer'] as const;
+const CREW = ['ready-room-guest', 'engineer', 'station-lead', ...HELPER_SEATS, 'station-reviewer'] as const;
 export type Crew = (typeof CREW)[number];
 const isCrew = (v: unknown): v is Crew => (CREW as readonly unknown[]).includes(v);
 

@@ -1,9 +1,12 @@
 /// <reference types="vite/client" />
 // The plugins' parts in the browser (docs/plugins.md): each plugin folder's client.ts, found as the client's built.
 // Only the plugins the office has switched on (`info.plugins`) show.
+import type * as THREE from 'three';
 import type { Agent, AgentStatus } from '../../shared/types';
 import { state } from './net/state';
 import type { Ui } from './ui/context';
+import type { Crew } from './world/deckExtras';
+import type { Box2, Seat } from './world/layout';
 import type { Box } from './world/msd';
 
 export interface ClientPlugin {
@@ -21,6 +24,49 @@ export interface ClientPlugin {
   hall?: (projectId: string) => HallScreen[];
   /** What it says about a goal under way, on the goal's own surfaces. */
   goal?: GoalPart;
+  /** Keys it adds to the lists of controls, on the splash screen and the HUD: `{ key: 'G', label: 'the gallery' }`, say. */
+  legend?: { key: string; label: string }[];
+  /**
+   * Called once, when the office first says the plugin is on (its first snapshot), with the app: what the plugin does
+   * outside any panel (its toasts, say) starts here, never as its module loads, since every plugin's `client.ts` is
+   * loaded whether it's on or not. Returns its parts that run from then on.
+   */
+  start?(host: { ui: Ui }): ClientParts | void;
+  /**
+   * Its part of the ship, built with the rest each time the World builds it (when projects come and go), and disposed
+   * before the next: a figure in a seat, say. One that throws is logged and left out: what it mounted, walled off or
+   * made usable before it threw is dropped with it, and the ship is built without it.
+   */
+  ship?(host: ShipHost): ShipPart | null;
+}
+
+/** A plugin's parts that run once it has started. */
+export interface ClientParts {
+  /**
+   * A key pressed while the captain walks the ship (not typing, nor in a panel that hides the view), before the core's
+   * own keys: true when the plugin used it. Use only keys of its own (its legend's), and check `ui.panels.isOpen`.
+   */
+  keydown?(e: KeyboardEvent): boolean;
+}
+
+/** What the World lends a plugin as it builds the ship. */
+export interface ShipHost {
+  /** Where a seat marker baked into a deck stands (`blender/kit.py`), or undefined when the deck has none of that name. */
+  seat(deck: 'command' | 'engineering', name: Crew): Seat | undefined;
+  /** Puts `object`, in world coordinates, on the deck: drawn and culled with it, and taken off before the ship is built again. */
+  mount(deck: 'command' | 'engineering', object: THREE.Object3D): void;
+  /** A box on the floor the player can't walk into. */
+  collide(box: Box2): void;
+  /** Makes `object` something the captain uses with E: `label` is the hint, `use` what it does. */
+  interactive(object: THREE.Object3D, label: () => string, use: (ui: Ui) => void): void;
+}
+
+/** A plugin's part of the ship, while it stands. */
+export interface ShipPart {
+  /** Each frame, with the time (s) and where the camera is. */
+  update?(t: number, camera: THREE.Vector3): void;
+  /** The ship is being built again: let go of what it holds (its listeners, its GPU memory). */
+  dispose(): void;
 }
 
 /** One of a plugin's screens in a project's holodeck. */

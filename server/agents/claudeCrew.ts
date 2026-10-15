@@ -8,7 +8,7 @@ import { config, paths } from '../config';
 import { errorMessage, truncate } from '../util';
 import { agentEnv } from './claudeRunner';
 import { type Drafter, type DraftRequest, type DraftResult, draftSchema, plannerPrompt, plannerSystemPrompt, repoFolders } from './planner';
-import { asNumberOneReply, type ChatProject, type NumberOneOfficer, type NumberOneReply, type NumberOneTurn, numberOnePrompt, numberOneReplySchema, numberOneSystemPrompt, type ShipStatus } from './numberOne';
+import type { ChatProject, ShipStatus } from './shipStatus';
 import { renderToolUse } from './render';
 import { MODEL_SCHEMA } from './modelSchema';
 import { STUDIO_LIMITS as S, studioPrompt, studioSystemPrompt } from './studio';
@@ -20,14 +20,14 @@ import { checkoutLatest } from './workspace';
 import { tidyGoalTitle } from '../../shared/goalTitle';
 import { GOAL_TITLE_SCHEMA, goalTitlePrompt, goalTitleSystemPrompt } from './goalTitles';
 
-// The permanent crew's Claude Code sessions: they read the project's code (and, for Number One, the web) and change
-// nothing. Read-only because they only have Read, Glob and Grep, plus WebSearch and WebFetch for Number One and the
+// The permanent crew's Claude Code sessions: they read the project's code (and, for some, the web) and change nothing.
+// Read-only because they only have Read, Glob and Grep, plus WebSearch and WebFetch where they're given them and the
 // office's own tools, `dontAsk` denies anything not pre-approved, and none of your settings, hooks or MCP servers load.
 
 /** The built-in tools a crew session may be given: none of them can change anything. */
 type ReadOnlyTool = 'Read' | 'Glob' | 'Grep' | 'WebSearch' | 'WebFetch';
-const CODE_TOOLS: ReadOnlyTool[] = ['Read', 'Glob', 'Grep'];
-const WEB_TOOLS: ReadOnlyTool[] = ['WebSearch', 'WebFetch'];
+export const CODE_TOOLS: ReadOnlyTool[] = ['Read', 'Glob', 'Grep'];
+export const WEB_TOOLS: ReadOnlyTool[] = ['WebSearch', 'WebFetch'];
 const TURN_TIMEOUT_MS = 8 * 60_000;
 
 /** planning/<project>/<repo>: one folder per repo under the session's cwd, so Glob and Grep reach all of them. */
@@ -228,38 +228,9 @@ export class ClaudeTriager implements Triager {
 }
 
 /**
- * Number One: one session for the whole ship, from planning/, so every project's checkout is in reach once it's opened.
- * Agents' worktrees are readable too, to see what an agent has done so far.
- */
-export class ClaudeNumberOne implements NumberOneOfficer {
-  async turn(req: NumberOneTurn, activity: (text: string) => void): Promise<NumberOneReply> {
-    fs.mkdirSync(paths.planning, { recursive: true });
-    const ids = req.projects.map((p) => p.id);
-    const result = await runReadOnly({
-      cwd: paths.planning,
-      readable: [paths.workspaces],
-      systemAppend: numberOneSystemPrompt({ projects: req.projects, workspaces: paths.workspaces }),
-      prompt: numberOnePrompt(req),
-      settings: req.settings,
-      signal: req.signal,
-      activity,
-      builtins: [...CODE_TOOLS, ...WEB_TOOLS],
-      resume: req.resumeSessionId,
-      schema: numberOneReplySchema(ids),
-      tools: {
-        server: numberOneServer(req, activity),
-        names: ['ship_status', 'open_project'],
-        activity: (name) => (name === 'ship_status' ? 'Checking the ship’s status' : 'Opening a project'),
-      },
-    });
-    return { ...asNumberOneReply(result.structured, result.text, ids), sessionId: result.sessionId, costUsd: result.costUsd };
-  }
-}
-
-/**
  * The studio holodeck's computer: one session per conversation, in a folder of its own, that builds what the captain
  * describes as scenes in the middle of the hall, reading the web, Claude Code sessions, the ship's state and its
- * projects' code (checked out, as Number One's are) when it needs to.
+ * projects' code (checked out under planning/) when it needs to.
  */
 export class ClaudeStudio implements StudioOfficer {
   async turn(req: StudioTurn, activity: (text: string) => void): Promise<StudioReply> {
@@ -381,21 +352,11 @@ function studioServer(req: StudioTurn, activity: (text: string) => void): McpSdk
   });
 }
 
-/** Number One's own tools: the ship's state, and a project's code on demand. Neither changes anything aboard. */
-function numberOneServer(req: NumberOneTurn, activity: (text: string) => void): McpSdkServerConfigWithInstance {
-  return createSdkMcpServer({
-    name: 'number-one',
-    version: '1.0.0',
-    alwaysLoad: true,
-    tools: shipTools(req, activity, (dir) => path.relative(paths.planning, dir)),
-  });
-}
-
 /**
- * The ship's state and a project's code on demand, for a crew session that reads the ship (Number One, the studio's
- * computer): `shown` says where a checkout went, as the session should read it.
+ * The ship's state and a project's code on demand, for a crew session that reads the ship (the studio's computer, and
+ * plugins' crew): `shown` says where a checkout went, as the session should read it. Neither changes anything aboard.
  */
-function shipTools(req: { projects: ChatProject[]; shipStatus: () => Promise<ShipStatus> }, activity: (text: string) => void, shown: (dir: string) => string) {
+export function shipTools(req: { projects: ChatProject[]; shipStatus: () => Promise<ShipStatus> }, activity: (text: string) => void, shown: (dir: string) => string) {
   const text = (t: string, isError = false) => ({ content: [{ type: 'text' as const, text: t }], ...(isError && { isError }) });
   const project = (id: string): ChatProject | undefined => req.projects.find((p) => p.id === id);
   return [

@@ -16,7 +16,7 @@ Name a goal under way, a closed goal, or a project as a whole, and the office br
 
 ![Talking Sock Shop through: the ship answers from its briefing, then reads back the goal the captain dictated, waiting for a yes](call-talk.jpg)
 
-- **What it knows.** For a goal: how you first put it, the lead's note (what done looks like, this slice's checklist, what the slices taught, ideas for next, open loose threads), each slice so far, its pull requests and their QA badges, and what the [ledger](ledger.md) saw: QA rounds, conflicts, sessions, and the moments its sessions got stuck, quoted. A closed goal gets the same, from what its room kept. A project gets its goals under way and queued, the latest closed goals and what they taught, its open issues, the last fortnight's QA and merges, and what keeps getting in the way, from the [retro](../plugins/retro/README.md)'s reading of sessions.
+- **What it knows.** For a goal: how you first put it, the lead's note (what done looks like, this slice's checklist, what the slices taught, ideas for next, open loose threads), each slice so far, its pull requests and their QA badges, and what the [ledger](../../docs/ledger.md) saw: QA rounds, conflicts, sessions, and the moments its sessions got stuck, quoted. A closed goal gets the same, from what its room kept. A project gets its goals under way and queued, the latest closed goals and what they taught, its open issues, the last fortnight's QA and merges, and what keeps getting in the way, from the [retro](../retro/README.md)'s reading of sessions.
 - **What it doesn't.** The code, and the lead's own conversation. It says so when something isn't in the record, rather than guessing.
 - **Turning it into work.** "Make that a goal" or "tell the lead": the ship asks what to put in it, you say it, and it reads it back: *Start a new goal in Sock Shop: "Find out why pull requests fail QA, and stop it happening"?* or *Send Lt. Data: "Ship it once the list page works"?* Only a clear yes does it. The new goal, or the message, carries the conversation since you picked the topic, so its lead knows what you talked about. With every station taken, the goal is queued. "Never mind", or a minute's silence, drops it.
 
@@ -32,13 +32,13 @@ Each call costs gpt-live-1's $0.05 a minute, plus Jev's fraction of a cent per h
 
 ## Setting it up
 
-Set both keys where the office starts, then restart it:
+Switch the plugin on and set both keys where the office starts, then restart it:
 
 ```sh
-OPENAI_API_KEY=sk-… TYPESAFE_API_KEY=… pnpm start
+FOCUS_PLUGINS=number-one OPENAI_API_KEY=sk-… TYPESAFE_API_KEY=… pnpm start
 ```
 
-Until both are there, the Call button is greyed out, and its tooltip says which is missing. The browser asks for the microphone the first time you call. On the [Tricorder](tricorder.md), over Tailscale's HTTPS, the same works from your phone once it has a Call button of its own.
+Until both are there, the Call button is greyed out, and its tooltip says which is missing. The browser asks for the microphone the first time you call. On the [Tricorder](../../docs/tricorder.md), over Tailscale's HTTPS, the same works from your phone once it has a Call button of its own.
 
 `FOCUS_LIVE_VOICE` picks gpt-live-1's voice (`cedar` by default; it has 22, among them `marin`, `sage` and `verse`). `FOCUS_LIVE_MODEL`, `FOCUS_LIVE_URL`, `FOCUS_JEV_MODEL` (`jev-latest`) and `FOCUS_JEV_URL` point somewhere else.
 
@@ -46,4 +46,4 @@ In demo mode a call needs no keys and has no audio: the captain's side is script
 
 ## In the code
 
-`server/call/`: `live.ts` (the session and its sideband, and the voice model's instructions), `jev.ts` (Jev's API), `route.ts` (the questions Jev is asked and what its answers mean, pure), `status.ts` (the spoken status, pure), `brief.ts` (what can be talked through, and the briefing on it, pure), `machine.ts` (the rails), `calls.ts` (a call: the session's events into the machine, its replies back out), `demo.ts`. In the browser, `client/src/ui/call.ts`.
+`call/` in the plugin: `live.ts` (the session and its sideband, and the voice model's instructions), `jev.ts` (Jev's API), `route.ts` (the questions Jev is asked and what its answers mean, pure), `status.ts` (the spoken status, pure), `brief.ts` (what can be talked through, and the briefing on it, pure), `machine.ts` (the rails), `calls.ts` (a call: the session's events into the machine, its replies back out, and how it stands into the plugin's unsaved `call`), `demo.ts`. It reads the ship through `host.snapshot` and the ledger, and does what you said yes to through `host.goals` (a new goal comes `from: 'a call'`). In the browser, `callView.ts`.

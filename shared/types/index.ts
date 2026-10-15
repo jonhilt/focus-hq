@@ -2,13 +2,11 @@
 
 export * from './agents';
 export * from './apiKey';
-export * from './call';
 export * from './drafts';
 export * from './events';
 export * from './frameStats';
 export * from './github';
 export * from './goals';
-export * from './numberOne';
 export * from './plugins';
 export * from './previews';
 export * from './projects';

@@ -16,6 +16,7 @@ export class Hud {
   private toasts = h('div', { class: 'toasts' });
   private curtain = h('div', { class: 'curtain' });
   private lastLocation = '';
+  private pauseKey = h('span', null, h('kbd', null, 'Esc'), 'pause');
 
   constructor() {
     this.root.append(
@@ -34,8 +35,7 @@ export class Hud {
         h('span', null, h('kbd', null, 'M'), 'ready room'),
         h('span', null, h('kbd', null, 'N'), 'new issue'),
         h('span', null, h('kbd', null, 'L'), 'goals'),
-        h('span', null, h('kbd', null, '1'), 'Number One'),
-        h('span', null, h('kbd', null, 'Esc'), 'pause'),
+        this.pauseKey,
       ),
     );
     document.body.append(this.root, this.toasts, this.curtain);
@@ -48,6 +48,11 @@ export class Hud {
     state.on('connection', refresh);
     state.on('preview', refresh);
     state.on('review', refresh);
+  }
+
+  /** Adds keys to the controls listed (a plugin's legend), before Esc. */
+  addKeys(keys: { key: string; label: string }[]): void {
+    for (const { key, label } of keys) this.pauseKey.before(h('span', null, h('kbd', null, key), label));
   }
 
   /** Blacks out the view, does `between` in the dark and brings the view back: the length of a turbolift ride. */

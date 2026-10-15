@@ -2,10 +2,8 @@
 
 import type { ReportCard } from '../ledger';
 import type { Agent, BrowserFrame, TermLine } from './agents';
-import type { CallState, CallStatus } from './call';
 import type { IssueDraft } from './drafts';
 import type { Board, GitHubStatus } from './github';
-import type { NumberOneChat } from './numberOne';
 import type { PluginStates } from './plugins';
 import type { StudioSession } from './studio';
 import type { Preview, PreviewLog } from './previews';
@@ -35,13 +33,10 @@ export interface Snapshot {
   browser: Record<string, BrowserFrame>;
   previews: Preview[];
   drafts: IssueDraft[];
-  numberOne: NumberOneChat;
   /** The studio holodeck's conversation, and the video and takes it's built. */
   studio: StudioSession;
   reviews: QaReview[];
   voice: VoiceStatus;
-  /** Whether the office can take a call, and the one under way. */
-  call: CallStatus;
   /** The ledger's last 30 days, summed up for the chief engineer's screen. */
   report: ReportCard;
   /** Your plan's usage and how the office signs in, for main engineering. */
@@ -62,7 +57,6 @@ export type ServerEvent =
   | { type: 'preview'; projectId: string; preview: Preview | null }
   | { type: 'preview-log'; projectId: string; log: PreviewLog }
   | { type: 'draft'; projectId: string; draft: IssueDraft | null }
-  | { type: 'number-one'; chat: NumberOneChat }
   | { type: 'studio'; session: StudioSession }
   | { type: 'review'; review: QaReview }
   | { type: 'review-removed'; repo: string; number: number }
@@ -71,6 +65,5 @@ export type ServerEvent =
   /** A plugin's state changed. */
   | { type: 'plugin'; id: string; state: unknown }
   | { type: 'voice'; voice: VoiceStatus }
-  | { type: 'call'; call: CallState | null }
   /** projectId, or the agent's, lets the browser drop toasts about a hidden project. */
   | { type: 'toast'; level: 'info' | 'success' | 'error'; text: string; agentId?: string; projectId?: string };

@@ -4,7 +4,8 @@
 import type { Effect } from 'effect';
 import type { ZodType } from 'zod';
 import type { LedgerEntry, LedgerEvent } from '../../shared/ledger';
-import type { Agent, Issue, Planner, Project, Settings } from '../../shared/types';
+import type { Agent, Issue, MessageReply, Planner, Project, QueuedGoal, Settings, Snapshot } from '../../shared/types';
+import type { ShipStatus } from '../agents/shipStatus';
 import type { GitHub } from '../github/service';
 
 export interface FocusPlugin {
@@ -132,6 +133,20 @@ export interface PluginHost {
   /** The captain's settings (the model read-only sessions run on, say), as they are now. */
   settings(): Readonly<Settings>;
   /**
+   * The whole office as a browser gets it when it connects: projects, every agent with their recent terminal lines,
+   * boards, QA's reviews, the Ops stations' drafts and every plugin's state. It's a lot: ask when it's needed (an
+   * answer to the captain), not on a timer, and only read it.
+   */
+  snapshot(): Promise<Snapshot>;
+  /**
+   * The ship as the crew's `ship_status` tool tells it (`server/agents/shipStatus.ts`): per project, who's on what and
+   * where their worktree is, the open pull requests, what needs the captain, and each closed goal's pull requests as
+   * they stand on GitHub now. Hidden projects are left out.
+   */
+  shipStatus(): Promise<ShipStatus>;
+  /** The captain's goals, to act on for the captain once they've said so. */
+  readonly goals: PluginGoals;
+  /**
    * Files an issue on GitHub in `repo`, which has to be one of `projectId`'s repos (it throws, in words, for any
    * other), and puts it on the project's board straight away.
    */
@@ -150,6 +165,19 @@ export interface PluginHost {
    * plugin's own type for it (a type-only import, so no code is shared). Throws, in words, for a plugin not required.
    */
   uses<T extends object>(id: string): T;
+}
+
+/** What a plugin can do with the captain's goals, as the captain would from the goals panel; each throws, in words, when it can't. */
+export interface PluginGoals {
+  /**
+   * Starts a goal in the project with a lead of its own at a free team station, or queues it when every station has
+   * one. `from` says where it came from (`a call`), for the goal's record and its lead.
+   */
+  start(projectId: string, text: string, how: { from: string }): { agent: Agent } | { queued: QueuedGoal };
+  /** Starts a queued goal at team station `station` (from 0). */
+  startQueued(projectId: string, queueId: string, station: number): Agent;
+  /** Passes a goal's lead (or any agent) a message, as the captain's. */
+  message(agentId: string, text: string): MessageReply;
 }
 
 export interface PluginState<S> {

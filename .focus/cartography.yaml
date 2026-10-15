@@ -99,12 +99,12 @@ parts:
     layer: Server
     kind: service
     paths: [server/plugins/]
-  calls:
-    label: Voice calls
-    does: "Voice calls with Number One"
+  voice:
+    label: Voice
+    does: "Dictation and the crew's spoken voices"
     layer: Server
     kind: service
-    paths: [server/call/, server/voice.ts, server/speech.ts, server/speechWorker.ts]
+    paths: [server/voice.ts, server/speech.ts, server/speechWorker.ts]
   server-core:
     label: Store, config, previews
     does: "The saved state, config and PR previews"
@@ -114,7 +114,7 @@ parts:
 
   plugins:
     label: Plugins
-    does: "What's beyond the core: scorecard, climber, cartography"
+    does: "What's beyond the core: scorecard, climber, cartography, flow, retro, Number One"
     layer: Plugins
     kind: service
     paths: [plugins/]

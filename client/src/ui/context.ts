@@ -38,8 +38,6 @@ export interface Ui {
   openGoals(projectId: string, station?: number): void;
   /** Comms: whatever waits on the captain across the ship, and every goal under way. */
   openComms(): void;
-  /** The ready room's chat with Number One. */
-  openNumberOne(): void;
   /** The studio holodeck's chat with its computer, docked so the room stays in view. */
   openStudio(): void;
   /** The system model standing in the studio, up close (modelPanel.ts). */

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { Ui } from '../ui/context';
 import { type Box2, DOOR_H, WALL_T } from './layout';
 import type { PanePrefs } from './screenPanes';
 import { SlidingDoors } from './starship';
@@ -27,7 +28,6 @@ export type Interaction =
   | { kind: 'turbolift' }
   /** The demo ship's training console: back to a quiet ship, with a scenario's goal readied. */
   | { kind: 'training' }
-  | { kind: 'number-one' }
   /** The engineering station: the chief engineer's panel, with the report card and the plugins' parts. */
   | { kind: 'engineering' }
   /** Main engineering's master systems table: review the ledger. */
@@ -52,7 +52,9 @@ export type Interaction =
   /** The studio holodeck's computer: the conversation (ui/studioChat.ts). */
   | { kind: 'studio' }
   /** The studio's system model, up close (ui/modelPanel.ts). */
-  | { kind: 'studio-model' };
+  | { kind: 'studio-model' }
+  /** Something a plugin put in the ship (`ShipHost.interactive`): what pressing E on it does. */
+  | { kind: 'plugin'; use: (ui: Ui) => void };
 
 /** How far away (m) the player can use something with E, unless it says otherwise. */
 export const REACH = 4.5;

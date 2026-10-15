@@ -12,7 +12,7 @@ describe('readMarker', () => {
     expect(readMarker({ marker: 'door', width: 2, height: 2.5 })).toEqual({ kind: 'door', width: 2, height: 2.5 });
     expect(readMarker({ marker: 'place', label: '🌌 Bridge' })).toEqual({ kind: 'place', label: '🌌 Bridge' });
     expect(readMarker({ marker: 'area', label: 'Turbolift' })).toEqual({ kind: 'area', label: 'Turbolift' });
-    expect(readMarker({ marker: 'seat', crew: 'number-one' })).toEqual({ kind: 'seat', crew: 'number-one' });
+    expect(readMarker({ marker: 'seat', crew: 'ready-room-guest' })).toEqual({ kind: 'seat', crew: 'ready-room-guest' });
     expect(readMarker({ marker: 'seat', crew: 'engineer' })).toEqual({ kind: 'seat', crew: 'engineer' });
     expect(readMarker({ marker: 'seat', crew: 'station-lead' })).toEqual({ kind: 'seat', crew: 'station-lead' });
     expect(readMarker({ marker: 'seat', crew: 'station-helper-4' })).toEqual({ kind: 'seat', crew: 'station-helper-4' });

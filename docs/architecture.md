@@ -30,7 +30,6 @@ server/
   previewMachine.ts       what a preview does to this machine (shell commands in their own process group, signals, probes) as an Effect service
   plugins/                what a plugin is to the office (contract.ts: briefs, routes, hooks, lead tools), the ones switched on (registry.ts), loading what FOCUS_PLUGINS names (load.ts), and state saved from before (migrate.ts): docs/plugins.md
   github/                 GitHub as an Effect service: gh CLI layer (live), in-memory layer (demo), Promise adapter
-  call/                   calls to Number One: gpt-live-1's session and sideband (live.ts), Jev (jev.ts), what the captain asked for (route.ts), how things stand (status.ts) and the briefing on a topic to talk through (brief.ts), all pure, the call's XState machine (machine.ts), a call end to end (calls.ts), the demo's scripted captain (demo.ts)
   agents/
     manager.ts            AgentManager: the office's one way in to its agents; each public method hands over to its part in manager/
     manager/              the manager's parts, each a concern of its own (Effect inside: a fiber per agent's work in a FiberMap)
@@ -74,15 +73,15 @@ server/
     modelPage.ts          a lead's system model as a page for its station's screen: the three views, stepping and picking by CSS, the cited code carried in it
     modelSchema.ts        a system model as the crew's tools take it (zod), shared by the studio's computer and the leads
     studioComputer.ts     the studio holodeck's computer: one conversation, its turns (ClaudeStudio in claudeCrew.ts, DemoStudio in the demo), and how scenes ran in the room
-    numberOne.ts          Number One's ship-wide chat: turns, prompt, reply schema and the ship_status summariser
-    claudeCrew.ts         the crew's read-only Claude Code sessions (Read/Glob/Grep, web search/fetch for Number One, Number One's ship_status and open_project, structured output)
+    shipStatus.ts         the ship as the crew's ship_status tool tells it, trimmed hard (summariseShip, each closed goal's PRs looked up on GitHub): the studio's computer reads it, and plugins through host.shipStatus
+    claudeCrew.ts         the crew's read-only Claude Code sessions (runReadOnly: Read/Glob/Grep, web search/fetch where given, structured output), and the ship tools (ship_status, open_project) the studio's computer and plugins' crew share
     fakeOffice.ts         a pretend office for tests (the manager's and plugins'): demo GitHub and checkouts, and a Claude Code stand-in whose turns the test ends
     sessionDigest.ts      a session's span digested from its transcript and the ledger, by code: calls, waste, cost, nudges
     transcript.ts         reading a Claude Code transcript: finding the agents' on this machine, its lines and blocks, and who a message is from; shared by the digests, the studio's timelines and plugins (the retro's friction reader)
     sessionTimeline.ts    a session told in order for the studio: asks, words, tool runs, and its subagents and workflows (phases, models, most at once, answers), whole or zoomed
     studioSessions.ts     the Claude Code sessions the studio may read (Claude Code's projects folder only): found by what they're about, loaded with their agents' transcripts
     qa.ts                 the QA officer: instructions, the report's schema and parsing, the PR comment
-    demoRunner.ts         scripted pretend agents (and a pretend lead, planner, QA officer and Number One) for demo mode
+    demoRunner.ts         scripted pretend agents (and a pretend lead, planner and QA officer) for demo mode, and the made-up files of its repos
 client/src/
   main.ts                 renderer (toon shading + outline pass), loop, interaction, UI wiring
   player.ts               walking, and being carried through a doorway (collision.ts, pure: which moves the colliders allow, never trapping anyone already in one, and sliding someone who comes out of a doorway against its jamb into the opening)
@@ -107,22 +106,20 @@ client/src/
     engineering.ts        the engineering station: the engineer, the report card on the console, and what a plugin has them busy with (the station part); E opens their panel
     warpCore.ts           the warp core's glow: the shared materials its 'warp-core' surfaces are drawn with, pulsing
     msd.ts                main engineering's master systems display: a cutaway of the ship with its decks marked, and beside it the ledger's report card, the scorecard, or the trace picked at the table
-    numberOne.ts          Number One in the ready room, across the captain's desk (numberOneView.ts: their bubble)
+    shipParts.ts          the plugins' parts of the ship (ClientPlugin.ship), one that throws left out; the World builds them after the decks, lending a seat, a mount, colliders and E
     deck.ts               a deck built in Blender: loads its GLB, draws its surfaces, reads its markers and what pressing E does (deckExtras.ts: what the markers, surfaces and interactions say)
     holodeckDeck.ts       the holodeck deck, put together from its Blender modules for however many holodecks there are
     turbolift.ts          which turbolift stop you're at (the turbolift's controls are in ui/travelPanel.ts)
   ui/                     HUD and panels (agent terminal, a helper's transcript, board, ready room console, teleport, QA station, goals, Comms, the engineering station and its scorecard, the ledger review at main engineering's master systems table)
     frameStats.ts         ?stats=1: how the 3D view runs, top left, and sent to the office each second for its log (frameSamples.ts: the arithmetic; world/gpuTimer.ts: GPU time per pass)
     confirmDialog.ts      the in-game confirm dialog, over whatever panel is open (the Tricorder's buttons ask with it too)
-    numberOnePanel.ts     the chat with Number One: the log, suggestions sent to Ops or started as goals, voice mode
     studioChat.ts         the studio's chat with its computer, docked down the right so the room stays in view
     modelPanel.ts         a studio model up close: its three views live as SVG, stepping, and a picked part's cited code
-    call.ts               a call to Number One: WebRTC to OpenAI, and the call's strip (what it's doing, what waits on your yes, captions, hang up)
-  plugins.ts              the plugins' parts in the browser: each plugins/*/client.ts, shown when the office switched it on (the engineering station's cards, views and what its engineer says, the MSD's boards, and their words on each goal: goalTags, goalStrips)
+  plugins.ts              the plugins' parts in the browser: each plugins/*/client.ts, shown when the office switched it on (the engineering station's cards, views and what its engineer says, the MSD's boards, their words on each goal: goalTags, goalStrips; what each starts once with its keys and legend, and its part of the ship)
   tricorder/              the phone view at /tricorder (no three.js): home screen, agent drill-down, buttons that survive live re-renders
 client/tricorder/index.html   the Tricorder's page (a second Vite entry), with its home-screen meta tags
 client/public/tricorder/  its web app manifest and home-screen icons
-plugins/                  what the office does beyond its core, a folder per plugin (server.ts, client.ts, shared.ts, its tests and README), switched on by FOCUS_PLUGINS (all: every one): cartography/ (each project's architecture map, from its repos' .focus/cartography.yaml and their imports), climber/ (main engineering's climber), flow/ (where each goal's time goes, on its goal board, card and Comms line, and the flow and qa-catch scripts), retro/ (the chief engineer's retro: frictions read from the agents' sessions, drafts filed on the captain's word, its Retro view), scorecard/ (main engineering's scorecards, and the scorecard and crap scripts)
+plugins/                  what the office does beyond its core, a folder per plugin (server.ts, client.ts, shared.ts, its tests and README), switched on by FOCUS_PLUGINS (all: every one): cartography/ (each project's architecture map, from its repos' .focus/cartography.yaml and their imports), climber/ (main engineering's climber), flow/ (where each goal's time goes, on its goal board, card and Comms line, and the flow and qa-catch scripts), number-one/ (Number One in the ready room: the chat, voice mode, the figure, the 1 key, and calls through gpt-live-1, Jev and an XState machine), retro/ (the chief engineer's retro: frictions read from the agents' sessions, drafts filed on the captain's word, its Retro view), scorecard/ (main engineering's scorecards, and the scorecard and crap scripts)
 client/public/ship/       the decks built in Blender, as GLBs (pnpm run ship writes them, or CI's Ship workflow on a branch, .github/workflows/ship.yml)
 blender/                  the Blender scripts that build the decks: ship.py (entry), kit.py (walls, furniture, markers), bake.py (each deck's ambient occlusion, baked into a lightmap), command_deck.py (the bridge, ready room and observation lounge), holodeck_deck.py (the holodecks' hallway and the turbolift), engineering_deck.py (main engineering: the gallery, the well, the warp core and the level below), team_station.py (a team station's door and briefing room), transporter_room.py (a team station's transporter room), training_hall.py (the training hall every holodeck is a copy of)
 ```

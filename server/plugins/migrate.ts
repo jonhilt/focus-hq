@@ -6,6 +6,7 @@ import type { Brief, PluginStates } from '../../shared/types';
 export interface SavedBeforePlugins {
   climb?: unknown;
   retro?: unknown;
+  numberOne?: unknown;
   plugins?: PluginStates;
   agents?: { task: string; brief?: Brief; lead?: { flow?: unknown } }[];
 }
@@ -24,6 +25,16 @@ function retroWorthKeeping(retro: unknown): boolean {
   return (status !== undefined && status !== 'idle') || (Array.isArray(drafts) && drafts.length > 0);
 }
 
+/**
+ * Whether Number One's chat saved before (the number-one plugin, plugins/number-one) is worth carrying over: one with
+ * something said, or a session to resume. The office saved the chat whether anyone had talked to Number One or not.
+ */
+function chatWorthKeeping(chat: unknown): boolean {
+  if (!chat || typeof chat !== 'object') return false;
+  const { messages, sessionId } = chat as { messages?: unknown; sessionId?: unknown };
+  return (Array.isArray(messages) && messages.length > 0) || (typeof sessionId === 'string' && sessionId !== '');
+}
+
 /** Moves what `raw` holds from before into the plugins' slots, in place. */
 export function fromBeforePlugins(raw: SavedBeforePlugins): void {
   raw.plugins ??= {};
@@ -31,6 +42,9 @@ export function fromBeforePlugins(raw: SavedBeforePlugins): void {
   delete raw.climb;
   if (retroWorthKeeping(raw.retro) && !('retro' in raw.plugins)) raw.plugins.retro = raw.retro;
   delete raw.retro;
+  // the plugin keeps the chat in its slot's `chat`, beside what it doesn't save
+  if (chatWorthKeeping(raw.numberOne) && !('number-one' in raw.plugins)) raw.plugins['number-one'] = { chat: raw.numberOne };
+  delete raw.numberOne;
   for (const agent of raw.agents ?? []) {
     // a goal's flow (the flow plugin, plugins/flow) is worked out again as the office starts, so there's nothing to move
     delete agent.lead?.flow;

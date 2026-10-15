@@ -1,7 +1,8 @@
-import { shownProjects } from '../../shared/hidden';
-import type { LedgerEvent } from '../../shared/ledger';
-import type { CallLine, Project, Snapshot } from '../../shared/types';
-import { goalTitle, pickStation } from '../agents/lead';
+import { shownProjects } from '../../../shared/hidden';
+import type { LedgerEvent } from '../../../shared/ledger';
+import type { Project, Snapshot } from '../../../shared/types';
+import type { CallLine } from '../shared';
+import { goalTitle, pickStation } from '../../../server/agents/lead';
 import { briefing, pieces, type Topic, topics } from './brief';
 import type { JevAnswer, JevAnswers, JevQuestion } from './jev';
 import { spokenStatus } from './status';

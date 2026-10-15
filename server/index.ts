@@ -6,23 +6,21 @@ import express from 'express';
 import { clock } from '../shared/clock';
 import { keyFallback } from './agents/apiKey';
 import { BrowserPool } from './agents/browserTool';
-import { ClaudeDrafter, ClaudeNumberOne, ClaudeStudio, ClaudeTriager, titleGoal } from './agents/claudeCrew';
+import { ClaudeDrafter, ClaudeStudio, ClaudeTriager, titleGoal } from './agents/claudeCrew';
 import { StudioComputer } from './agents/studioComputer';
 import { githubRepo } from './github/repo';
 import { transcriptFolders, transcriptReader } from './agents/transcript';
 import { ClaudeRunner } from './agents/claudeRunner';
-import { DemoDrafter, DemoNumberOne, DemoRunner, DemoStudio, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
+import { DemoDrafter, DemoRunner, DemoStudio, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
 import { Renderer, Sessions, Triage, Workspace } from './agents/services';
-import { closedGoalPrs, lookUpPrStates, NumberOne, type ShipStatus, summariseShip } from './agents/numberOne';
+import { closedGoalPrs, lookUpPrStates, type ShipStatus, summariseShip } from './agents/shipStatus';
 import { IssuePlanner } from './agents/planner';
 import type { WorkspaceOps } from './agents/types';
 import * as git from './agents/workspace';
 import { sourceReader } from './agents/studioSource';
 import { demoLedger } from './demoLedger';
-import type { Snapshot } from '../shared/types';
-import { Calls } from './call/calls';
-import { callKeys, config, paths } from './config';
+import { config, paths } from './config';
 import { demoLayer, demoPush, demoReset } from './github/demo';
 import { startTraining } from './training';
 import { clampSpeed, readScenario } from '../shared/scenarios';
@@ -94,25 +92,16 @@ async function main() {
   const previews = new Previews(hub, github, config.demo);
   const planner = new IssuePlanner(store, hub, config.demo ? new DemoDrafter() : new ClaudeDrafter());
   const workspace = config.demo ? demoWorkspace : liveWorkspace;
-  // Number One and the studio's computer read the ship through the office, which is up by the time anyone asks
+  // the studio's computer and plugins read the ship through the office, which is up by the time anyone asks
   const shipStatus = async (): Promise<ShipStatus> => {
     const snapshot = await office.snapshot();
     // closed goals' PRs, looked up live on every call: one that fails falls back to what was recorded
     const prStates = await lookUpPrStates(closedGoalPrs(snapshot), (repo, number) => github.pullRequestState(repo, number));
     return summariseShip(snapshot, (id) => workspace.dir(id), prStates);
   };
-  const numberOne = new NumberOne(store, hub, config.demo ? new DemoNumberOne() : new ClaudeNumberOne(), shipStatus);
-  // calls to Number One read the ship and start queued goals through the office, which is up by the time anyone calls
-  const calls: Calls = new Calls(hub, {
-    snapshot: (): Promise<Snapshot> => office.snapshot(),
-    ledger: () => store.ledger,
-    startQueued: (projectId, queueId, station) => office.agents.startQueued(projectId, queueId, { station }),
-    startGoal: (projectId, text) => office.agents.startGoal(projectId, text, { from: 'a call' }),
-    message: (agentId, text) => office.agents.message(agentId, text),
-  }, callKeys, config.demo);
   // FOCUS_STUDIO=live: the real studio computer even in the demo office, to try it on a model without GitHub
   const studio = new StudioComputer(store, hub, config.demo && process.env.FOCUS_STUDIO !== 'live' ? new DemoStudio() : new ClaudeStudio(), shipStatus, { readSource: sourceReader([paths.planning, paths.workspaces, config.root]) });
-  const office = new Office(store, hub, github, previews, planner, numberOne, studio, usage, new Voice(hub, config.demo), calls, await currentVersion());
+  const office = new Office(store, hub, github, previews, planner, studio, usage, new Voice(hub, config.demo), await currentVersion());
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
   // the office's own repo, for plugins that work on it (the demo has none)
@@ -128,7 +117,10 @@ async function main() {
   }
   // plugins read the agents' transcripts as the office does; in the demo, its pretend leads keep transcripts of their
   // own, and its older sessions are the scripted ones
-  office.startPlugins(await loadPlugins(config.plugins, config.root), demoRunner && (async (id) => demoRunner.transcript(id) ?? (await demoTranscripts()).find((t) => t.sessionId === id)?.read()));
+  office.startPlugins(await loadPlugins(config.plugins, config.root), {
+    transcript: demoRunner && (async (id) => demoRunner.transcript(id) ?? (await demoTranscripts()).find((t) => t.sessionId === id)?.read()),
+    shipStatus,
+  });
 
   if (config.demo && store.projects.length === 0) {
     const shop = store.addProject('Sock Shop', '#ff8a5b', 'beach');

@@ -46,6 +46,26 @@ describe('fromBeforePlugins', () => {
     expect(since).toEqual({ plugins: { retro: { status: 'done' } } });
   });
 
+  it('moves a chat with Number One into the number-one plugin’s slot, session and all, and drops one never used', () => {
+    const chat = { status: 'waiting', activity: 'Waiting for you', messages: [{ from: 'manager', text: 'Hi', at: 1 }], updatedAt: 1, costUsd: 0.1, sessionId: 's1' };
+    const raw: SavedBeforePlugins = { numberOne: chat };
+    fromBeforePlugins(raw);
+    expect(raw).toEqual({ plugins: { 'number-one': { chat } } });
+
+    const cleared = { status: 'waiting', activity: '', messages: [], updatedAt: 1, costUsd: 0, sessionId: 's2' };
+    const resumable: SavedBeforePlugins = { numberOne: cleared };
+    fromBeforePlugins(resumable);
+    expect(resumable).toEqual({ plugins: { 'number-one': { chat: cleared } } });
+
+    const untouched: SavedBeforePlugins = { numberOne: { status: 'waiting', activity: '', messages: [], updatedAt: 1, costUsd: 0 } };
+    fromBeforePlugins(untouched);
+    expect(untouched).toEqual({ plugins: {} });
+
+    const since: SavedBeforePlugins = { numberOne: chat, plugins: { 'number-one': { chat: { messages: [] } } } };
+    fromBeforePlugins(since);
+    expect(since).toEqual({ plugins: { 'number-one': { chat: { messages: [] } } } });
+  });
+
   it('leaves state saved since alone', () => {
     const raw: SavedBeforePlugins = { plugins: {}, agents: [{ task: 'lead' }] };
     fromBeforePlugins(raw);

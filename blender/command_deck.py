@@ -205,7 +205,7 @@ def screen(name, w, h, kind, at, frame):
 def ready_room():
     """
     The captain's, off the port side: a desk at the far end facing the door, under a window onto space, with the
-    captain's console on it and Number One's chair at its corner; mission control on the forward wall and a couch along
+    captain's console on it and a visitor's seat at its corner; mission control on the forward wall and a couch along
     the aft one.
     """
     near, far = -ROOM_NEAR, -(ROOM_NEAR + 8)
@@ -220,7 +220,8 @@ def ready_room():
     command_chair('ready room', chair_at, -math.pi / 2, COMMAND_RED, 0.85)
     captains_console(Matrix.Translation((desk_x + 0.25, 0, 0.76)) @ Matrix.Rotation(math.pi / 2, 4, 'Z'))
     seat = (desk_x + 1.4, 1.9)
-    marker('number one', 'seat', (seat[0], seat[1], 0.005), yaw=facing(seat, chair_at), crew='number-one')
+    # a guest's seat at the desk: whoever a plugin seats there brings a chair (client/src/plugins.ts, ShipHost.seat)
+    marker('ready room guest', 'seat', (seat[0], seat[1], 0.005), yaw=facing(seat, chair_at), crew='ready-room-guest')
 
     mission = screen('mission control', 2.6, 2.6 * 9 / 16, {'surface': 'screen', 'screen': 'mission-control'}, (0, 1.9),
                      wall_frame(mid + 0.8, ROOM_HALF, math.pi))

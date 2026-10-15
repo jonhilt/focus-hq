@@ -120,9 +120,6 @@ export function apiRouter(office: Office, store: Store): express.Router {
   }));
   r.delete('/projects/:id/draft', h((req) => office.planner.discard(param(req, 'id'))));
 
-  // Number One in the ready room: one ship-wide chat, read-only
-  r.post('/number-one/say', h((req) => office.numberOne.say(str(req.body.text))));
-  r.post('/number-one/new', h(() => office.numberOne.newConversation()));
   // the studio holodeck's computer: one conversation, and the scenes it stages in the middle of the hall
   r.post('/studio/say', h((req) => office.studio.say(str(req.body.text))));
   r.post('/studio/new', h(() => office.studio.startOver()));
@@ -222,14 +219,6 @@ export function apiRouter(office: Office, store: Store): express.Router {
     if (!isKokoroVoice(req.body.voice)) throw new Error('Unknown voice');
     res.type('audio/wav').send(await office.voice.speak(text.slice(0, 1000), req.body.voice));
   }));
-
-  // calls to Number One: the browser's WebRTC offer in, the session's id and answer out; the office joins the call itself
-  r.post('/call', h((req) => {
-    const sdp = str(req.body.sdp);
-    if (!sdp) throw new Error('Send the WebRTC offer');
-    return office.calls.start(sdp);
-  }));
-  r.post('/call/:id/hang-up', h((req) => office.calls.hangUp(param(req, 'id'))));
 
   // each plugin's own routes (docs/plugins.md), under its id
   for (const { plugin, route } of office.agents.plugins.routes()) {
