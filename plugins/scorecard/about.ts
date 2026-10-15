@@ -16,7 +16,7 @@ export const SECTION_ABOUT: Record<ScorecardSection, SectionAbout> = {
   },
   fence: {
     question: 'Where does the code step around the type checker?',
-    about: 'Each of these is a place where TypeScript takes the code’s word for it instead of checking, so a bug can get past it. Counted outside tests, in server, shared, client and scripts.',
+    about: 'Each of these is a place where TypeScript takes the code’s word for it instead of checking, so a bug can get past it. Counted outside tests, in server, shared, plugins, client and scripts.',
   },
   effect: {
     question: 'How far is the server onto Effect?',
@@ -24,7 +24,7 @@ export const SECTION_ABOUT: Record<ScorecardSection, SectionAbout> = {
   },
   tests: {
     question: 'How much code is risky to change?',
-    about: 'How many tests there are, and how much of the server and shared code is too complex for how little the tests cover it (its CRAP score).',
+    about: 'How many tests there are, and how much of the server, shared and plugin code is too complex for how little the tests cover it (its CRAP score).',
   },
   office: {
     question: 'How smoothly does work get merged?',
@@ -130,12 +130,12 @@ export const METRIC_ABOUT: Record<string, MetricAbout> = {
   },
   'crap.over': {
     short: 'over CRAP 30',
-    what: 'Functions in server and shared with a CRAP score over 30: too complex for how little the tests cover them.',
+    what: 'Functions in server, shared and plugins with a CRAP score over 30: too complex for how little the tests cover them.',
     why: 'They’re the riskiest to change. Split one into small pure functions, or test it, and it drops (plugins/scorecard/crap.md).',
   },
   'crap.total': {
     short: 'total CRAP',
-    what: 'Every server and shared function’s CRAP score, added up.',
+    what: 'Every server, shared and plugin function’s CRAP score, added up.',
     why: 'The overall risk, which moves even when no function crosses 30.',
   },
 

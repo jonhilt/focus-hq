@@ -82,7 +82,7 @@ function main() {
   const { all, top, changed, coverage } = args();
   const files = sourceFiles(all);
   const rows = scoreAll(files, coverage ?? runCoverage(all));
-  const scope = all ? 'server, shared, client and scripts' : 'server and shared (demo code left out)';
+  const scope = all ? 'server, shared, plugins, client and scripts' : 'server, shared and plugins (demo code left out)';
   console.log(`CRAP for ${scope}: complexity² × (1 − coverage)³ + complexity\n\n${summary(rows, top)}`);
   if (changed !== undefined) console.log(`\n${changedSince(changed, rows, files)}`);
 }

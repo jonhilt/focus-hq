@@ -196,8 +196,8 @@ export function testMetrics(tests: { total: number; files: number; propertyFiles
     metric('tests', 'tests.files', 'Test files', tests.files, 'higher', 'count'),
     metric('tests', 'tests.propertyFiles', 'Test files with property tests', tests.propertyFiles, 'higher', 'count'),
     ...(crap ? [
-      metric('tests', 'crap.over', 'Functions over CRAP 30 (server, shared)', crap.over, 'lower', 'count'),
-      metric('tests', 'crap.total', 'Total CRAP (server, shared)', Math.round(crap.total), 'lower', 'count'),
+      metric('tests', 'crap.over', 'Functions over CRAP 30 (server, shared, plugins)', crap.over, 'lower', 'count'),
+      metric('tests', 'crap.total', 'Total CRAP (server, shared, plugins)', Math.round(crap.total), 'lower', 'count'),
     ] : []),
   ];
 }
