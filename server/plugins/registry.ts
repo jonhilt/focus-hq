@@ -8,18 +8,36 @@ import type { BriefSpec, FocusPlugin, PluginHost, PluginParts, PluginRoute } fro
  */
 export class Plugins {
   private readonly parts = new Map<string, PluginParts>();
+  /** What each started plugin requires, by id. */
+  private readonly required = new Map<string, string[]>();
   /** Each plugin's state that isn't saved, by id: read again as the office starts (`PluginHost.state` with `saved: false`). */
   readonly unsaved: PluginStates = {};
 
   /** `saved` is the office's saved state of every plugin, by id (`Store.plugins`). */
   constructor(private readonly saved: () => PluginStates) {}
 
-  /** Starts each plugin with what the office lends it (`lend`). */
+  /** The plugins switched on that didn't start, and why (a requirement that isn't on). */
+  readonly leftOut: { id: string; why: string }[] = [];
+
+  /** Starts each plugin with what the office lends it (`lend`), every one after the plugins it requires. */
   start(plugins: FocusPlugin[], lend: (plugin: FocusPlugin) => PluginHost): void {
-    for (const plugin of plugins) {
-      if (this.parts.has(plugin.id)) throw new Error(`Two plugins are called ${plugin.id}`);
+    const { order, leftOut } = startOrder(plugins);
+    for (const out of leftOut) console.error(`Plugin ${out.id} is left out: ${out.why}`);
+    this.leftOut.push(...leftOut);
+    for (const plugin of order) {
+      this.required.set(plugin.id, plugin.requires ?? []);
       this.parts.set(plugin.id, plugin.start(lend(plugin)));
     }
+  }
+
+  /** Whether the started plugin `id` declared that it requires `other`. */
+  requires(id: string, other: string): boolean {
+    return this.required.get(id)?.includes(other) ?? false;
+  }
+
+  /** What a started plugin provides the plugins that require it. */
+  provided(id: string): object | undefined {
+    return this.parts.get(id)?.provides;
   }
 
   /** The plugins switched on, by id. */
@@ -88,4 +106,43 @@ export class Plugins {
       return undefined;
     }
   }
+}
+
+/**
+ * The order plugins start in: each after every plugin it requires. One whose requirement isn't among `plugins` (not
+ * switched on, or itself left out), or that requires itself round a loop, is left out, saying why. Two plugins with one
+ * id is a mistake in FOCUS_PLUGINS, and stops the office.
+ */
+export function startOrder(plugins: FocusPlugin[]): { order: FocusPlugin[]; leftOut: { id: string; why: string }[] } {
+  const byId = new Map<string, FocusPlugin>();
+  for (const plugin of plugins) {
+    if (byId.has(plugin.id)) throw new Error(`Two plugins are called ${plugin.id}`);
+    byId.set(plugin.id, plugin);
+  }
+  const order: FocusPlugin[] = [];
+  const leftOut: { id: string; why: string }[] = [];
+  const state = new Map<string, 'visiting' | 'started' | 'out'>();
+  const visit = (plugin: FocusPlugin, path: string[]): boolean => {
+    const seen = state.get(plugin.id);
+    if (seen === 'started') return true;
+    if (seen === 'out') return false;
+    if (seen === 'visiting') return false;
+    state.set(plugin.id, 'visiting');
+    for (const need of plugin.requires ?? []) {
+      const required = byId.get(need);
+      const why = !required ? `it requires ${need}, which isn't switched on (add it to FOCUS_PLUGINS)`
+        : path.includes(need) || need === plugin.id ? `it requires ${need}, which requires it back (${[...path, plugin.id, need].join(' → ')})`
+          : visit(required, [...path, plugin.id]) ? undefined : `it requires ${need}, which is left out`;
+      if (why) {
+        state.set(plugin.id, 'out');
+        leftOut.push({ id: plugin.id, why });
+        return false;
+      }
+    }
+    state.set(plugin.id, 'started');
+    order.push(plugin);
+    return true;
+  };
+  for (const plugin of plugins) visit(plugin, []);
+  return { order, leftOut };
 }

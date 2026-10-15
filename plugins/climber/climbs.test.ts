@@ -1,16 +1,27 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { AWAY_DESK } from '../../shared/types';
 import { demoWorkspace } from '../../server/agents/demoRunner';
 import { office, until } from '../../server/agents/fakeOffice';
 import type { WorkspaceOps } from '../../server/agents/types';
+import type { FocusPlugin } from '../../server/plugins/contract';
 import type { Store } from '../../server/store';
+import type { ScorecardService } from '../scorecard/types';
 import climber from './server';
 import { climbingEngineer, type Climb } from './shared';
+
+/** A stand-in for the scorecard plugin, which the climber requires: no scorecards measured yet. */
+const scorecard: FocusPlugin = {
+  id: 'scorecard',
+  start: () => {
+    const provides: ScorecardService = { history: () => [], noise: () => undefined };
+    return { provides };
+  },
+};
 
 /** The pretend office with the climber switched on, its own repo the shop's frontend unless `ownRepo` says otherwise (null: none). */
 function climbing(workspace: WorkspaceOps = demoWorkspace, ownRepo: string | null = 'demo/webshop-frontend') {
   const o = office(workspace);
-  o.agents.startPlugins([climber], { demo: false, ownRepo: () => ownRepo ?? undefined });
+  o.agents.startPlugins([climber, scorecard], { demo: false, ownRepo: () => ownRepo ?? undefined });
   const keep = o.agents.plugins.routes().find((r) => r.plugin === 'climber' && r.route.path === '/keep-climbing');
   return {
     ...o,
@@ -95,5 +106,15 @@ describe('the climber', () => {
     const { store, keepClimbing } = climbing(demoWorkspace, null);
     expect(() => keepClimbing(true)).toThrow(/Connect the office’s own repository/);
     expect(store.plugins.climber).toBeUndefined();
+  });
+
+  it('stays out without the scorecard switched on, saying why', () => {
+    const o = office();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    o.agents.startPlugins([climber], { demo: false, ownRepo: () => 'demo/webshop-frontend' });
+    expect(o.agents.plugins.ids()).toEqual([]);
+    expect(o.agents.plugins.leftOut).toEqual([{ id: 'climber', why: expect.stringMatching(/requires scorecard, which isn't switched on/) }]);
+    expect(o.agents.plugins.routes()).toEqual([]);
+    error.mockRestore();
   });
 });

@@ -53,5 +53,11 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
     forget: (agentId) => void core.runtimes.delete(agentId),
     print: (agent, text) => core.print(agent, [{ kind: 'system', text }]),
     toast: (level, text, agentId) => core.hub.toast(level, text, agentId),
+    uses: <T extends object>(other: string) => {
+      const provided = core.plugins.requires(id, other) ? core.plugins.provided(other) : undefined;
+      if (!provided) throw new Error(`${id} uses ${other}, so it has to require it, and ${other} has to provide something`);
+      // a required plugin's own type for what it provides: the plugins agree on it through a type-only import
+      return provided as T;
+    },
   };
 }

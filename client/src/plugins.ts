@@ -50,5 +50,11 @@ export function clientPlugins(): ClientPlugin[] {
   return Object.values(found).map((module) => module.default).filter((plugin) => on.has(plugin.id));
 }
 
+/**
+ * The plugin `id`'s state as the office sent it, in the plugin's own type `S` (its server part's slot): the one place
+ * the browser takes a plugin's word for the shape of its state.
+ */
+export const pluginState = <S>(id: string): S | undefined => state.plugins[id] as S | undefined;
+
 /** The plugin `id`'s part in the browser, while it's switched on. */
 export const clientPlugin = (id: string): ClientPlugin | undefined => clientPlugins().find((p) => p.id === id);

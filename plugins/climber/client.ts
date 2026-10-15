@@ -1,6 +1,6 @@
 import { api } from '../../client/src/net/api';
 import { state } from '../../client/src/net/state';
-import type { ClientPlugin } from '../../client/src/plugins';
+import { type ClientPlugin, pluginState } from '../../client/src/plugins';
 import type { Ui } from '../../client/src/ui/context';
 import { h, timeAgo } from '../../client/src/ui/dom';
 import { Switch } from '../../client/src/ui/panels';
@@ -19,7 +19,7 @@ const OUTCOME: Record<NonNullable<Climb['last']>['outcome'], string> = {
  */
 function climberView(ui: Ui): HTMLElement {
   // the plugin's own state, as its server part saves it
-  const climb = state.plugins[CLIMBER] as Climb | undefined;
+  const climb = pluginState<Climb>(CLIMBER);
   const engineer = climbingEngineer().name;
   const climber = climb?.agentId ? state.agents.get(climb.agentId) : undefined;
   const keep = new Switch('Keep climbing', !!climb?.keepClimbing, {

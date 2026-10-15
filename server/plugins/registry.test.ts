@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 import type { Agent, PluginStates } from '../../shared/types';
 import type { BriefSpec, FocusPlugin, PluginHost, PluginParts } from './contract';
-import { Plugins } from './registry';
+import { Plugins, startOrder } from './registry';
 
 const audit: BriefSpec = {
   label: 'Audit',
@@ -74,5 +74,50 @@ describe('Plugins', () => {
 
   it('won’t start two plugins with the same id', () => {
     expect(() => started({}, plugin('climber', {}), plugin('climber', {}))).toThrow(/Two plugins are called climber/);
+  });
+
+  it('reaches what a required plugin provides, and nothing it didn’t require', () => {
+    const lent = new Map<string, PluginHost>();
+    const registry = new Plugins(() => ({}));
+    const uses = (id: string): FocusPlugin => ({ id, requires: ['scorecard'], start: (h) => (lent.set(id, h), {}) });
+    registry.start([uses('climber'), plugin('scorecard', { provides: { latest: 7 } }), { id: 'other', start: (h) => (lent.set('other', h), {}) }], (p) => ({
+      ...host,
+      uses: <T extends object>(other: string) => {
+        if (!registry.requires(p.id, other)) throw new Error(`${p.id} doesn't require ${other}`);
+        return registry.provided(other) as T;
+      },
+    }));
+    expect(lent.get('climber')?.uses<{ latest: number }>('scorecard')).toEqual({ latest: 7 });
+    expect(() => lent.get('other')?.uses('scorecard')).toThrow(/doesn't require scorecard/);
+  });
+});
+
+describe('startOrder', () => {
+  const needs = (id: string, ...requires: string[]): FocusPlugin => ({ id, requires, start: () => ({}) });
+  const ids = (r: ReturnType<typeof startOrder>) => r.order.map((p) => p.id);
+
+  it('starts each plugin after the ones it requires, whatever order FOCUS_PLUGINS names them in', () => {
+    expect(ids(startOrder([needs('climber', 'scorecard'), needs('scorecard')]))).toEqual(['scorecard', 'climber']);
+    expect(ids(startOrder([needs('a', 'b'), needs('b', 'c'), needs('c')]))).toEqual(['c', 'b', 'a']);
+  });
+
+  it('leaves out a plugin whose requirement isn’t switched on, and the plugins that require it in turn', () => {
+    const r = startOrder([needs('climber', 'scorecard'), needs('auditor', 'climber'), needs('voice')]);
+    expect(ids(r)).toEqual(['voice']);
+    expect(r.leftOut).toEqual([
+      { id: 'climber', why: 'it requires scorecard, which isn\'t switched on (add it to FOCUS_PLUGINS)' },
+      { id: 'auditor', why: 'it requires climber, which is left out' },
+    ]);
+  });
+
+  it('leaves out plugins that require each other round a loop', () => {
+    const r = startOrder([needs('a', 'b'), needs('b', 'a'), needs('c')]);
+    expect(ids(r)).toEqual(['c']);
+    expect(r.leftOut.map((o) => o.id).sort()).toEqual(['a', 'b']);
+    expect(r.leftOut[0].why).toMatch(/requires it back/);
+  });
+
+  it('won’t start two plugins with the same id', () => {
+    expect(() => startOrder([needs('climber'), needs('climber')])).toThrow(/Two plugins are called climber/);
   });
 });

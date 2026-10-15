@@ -104,7 +104,7 @@ export class SavedScorecards implements ScorecardSource {
 let source: ScorecardSource | undefined;
 
 /**
- * The office's scorecards, one source for every plugin that reads them (main engineering's desk, the climber's briefs):
+ * The office's scorecards, one source for the desk and for what the plugin provides (the climber's briefs read them):
  * the saved ones, or the demo's, made up and kept in memory.
  */
 export function officeScorecards(demo: boolean): ScorecardSource {

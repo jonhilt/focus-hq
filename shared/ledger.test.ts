@@ -100,6 +100,11 @@ describe('frictionGroups', () => {
     const decided: LedgerEvent = { projectId: 'p', seq: ++seq, at: NOW - DAY, kind: 'retro-decision', title: 'Ports', signatures: ['demo-env: port in use'], accepted: false };
     expect(frictionGroups([friction('a', 'old', NOW - 20 * DAY), friction('b', 'port in use'), decided], NOW, 14)).toEqual([]);
   });
+
+  it('puts the open ones of the last two weeks on the report card, most widespread first, for the retro to show', () => {
+    const events = [friction('a', 'port in use'), friction('b', 'port in use'), friction('c', 'glob', NOW - DAY, 'shell'), friction('d', 'old', NOW - 20 * DAY)];
+    expect(reportCard(events, NOW).frictions).toEqual([{ key: 'demo-env: port in use', sessions: 2 }, { key: 'shell: glob', sessions: 1 }]);
+  });
 });
 
 describe('fixEffects', () => {

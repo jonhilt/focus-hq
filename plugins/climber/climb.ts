@@ -1,7 +1,7 @@
 // Main engineering's climber (README.md), after ratstack's hill-climb prompt: each climb measures Focus with the
 // scorecard, takes the worst gap, fixes it, proves the fix with the same numbers, and ships one pull request. Pure: the
 // manager's Climbs part seats the climbing engineer and does the bookkeeping.
-import { frictionGroups, type LedgerEvent } from '../../shared/ledger';
+import { frictionGroups, type LedgerEvent, OPEN_FRICTION_DAYS } from '../../shared/ledger';
 import type { Agent, AgentStatus, Project } from '../../shared/types';
 import { direction, formatValue } from '../scorecard/scorecard';
 import type { Scorecard, ScorecardNoise } from '../scorecard/types';
@@ -185,12 +185,10 @@ export function climbLogText(log: ClimbRecord[], limit = 25): string {
   }).join('\n');
 }
 
-/** How many days of frictions the brief lists, as the retro reads them. */
-const FRICTION_DAYS = 14;
 
 /** The climb's first message: the evidence beyond the code (the office's frictions, the retro's open issues) and the steps. */
 export function climbBrief(agent: Pick<Agent, 'repo' | 'baseBranch' | 'branch'>, events: LedgerEvent[], now: number, log: ClimbRecord[] = [], noise?: ScorecardNoise): string {
-  const frictions = frictionGroups(events, now, FRICTION_DAYS).filter((g) => g.sessions >= 3).slice(0, 8);
+  const frictions = frictionGroups(events, now, OPEN_FRICTION_DAYS).filter((g) => g.sessions >= 3).slice(0, 8);
   const issues = openRetroIssues(events, agent.repo);
   return [
     `Climb ${agent.repo} one step towards its standard. You're on \`${agent.branch}\`, fresh from \`${agent.baseBranch}\`.`,
@@ -211,7 +209,7 @@ export function climbBrief(agent: Pick<Agent, 'repo' | 'baseBranch' | 'branch'>,
     'Put every gap on one scale, then write a **Shortlist**: the 3 to 5 strongest, as a table, before you choose. Score each the same way: **Harm** to the captain and the office, 1 to 5 (5: it breaks or misleads the office now; 1: cosmetic), **Distance** from the standard, 1 to 5, and **Size** S, M or L. Score = 2 × Harm + Distance; take the highest, the smaller on a tie, that fits in one reviewable pull request. A gap a closed climb took, with nothing changed since, scores Harm 0. Write it as `| # | Gap | Harm | Distance | Size | Score |`. The gaps include:',
     '- the scorecard\'s numbers: a gate that fails or is slow, type assertions and non-null assertions, the server\'s edges between Effect and Promise code, functions over CRAP 30, no property tests;',
     frictions.length
-      ? `- the office's open frictions: what got in the agents' way in 3 or more sessions in the last ${FRICTION_DAYS} days, with no retro decision yet:\n${frictions.map((g) => `  - ${g.key} (${g.sessions} sessions)`).join('\n')}`
+      ? `- the office's open frictions: what got in the agents' way in 3 or more sessions in the last ${OPEN_FRICTION_DAYS} days, with no retro decision yet:\n${frictions.map((g) => `  - ${g.key} (${g.sessions} sessions)`).join('\n')}`
       : '- the office\'s open frictions: none came up in 3 or more sessions lately;',
     issues.length
       ? `- the retro's accepted issues, still open in ${agent.repo} (if you take one, say \`Closes #n\` in the Solution):\n${issues.map((i) => `  - #${i.number} ${i.title}`).join('\n')}`

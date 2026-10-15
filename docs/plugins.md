@@ -7,7 +7,7 @@ The office's core is what anyone who adds a project needs: rooms and boards, goa
 `FOCUS_PLUGINS` lists the plugins to switch on, comma-separated, in the order they start:
 
 ```sh
-FOCUS_PLUGINS=climber pnpm start
+FOCUS_PLUGINS=scorecard,climber pnpm start
 ```
 
 - **A bare name** is a folder under the office's own `plugins/`, like `climber`.
@@ -20,7 +20,21 @@ A plugin's saved state stays in `state.json` while it's switched off, so switchi
 ## Plugins today
 
 - [The scorecard](../plugins/scorecard/README.md) (`scorecard`): main engineering's scorecards of the office's own repo, on the engineering station and the MSD. The `pnpm run scorecard` and `pnpm run crap` scripts live in it too, and work whether it's switched on or not.
-- [The climber](../plugins/climber/README.md) (`climber`): main engineering's crew member, who fixes the scorecard's worst gap in the office's own repo, one pull request at a time. It reads the scorecards through the scorecard plugin's code (`officeScorecards`), so it works without that plugin switched on, but you'll want both.
+- [The climber](../plugins/climber/README.md) (`climber`): main engineering's crew member, who fixes the scorecard's worst gap in the office's own repo, one pull request at a time. It requires the scorecard plugin: switched on without it, it's left out, saying why.
+
+## Plugins that need each other
+
+A plugin that can't work without another says so: `requires: ['scorecard']` on its `FocusPlugin`. The office starts every plugin after the ones it requires, whatever order `FOCUS_PLUGINS` lists them in, and leaves out a plugin whose requirement isn't switched on, saying why in its log (`it requires scorecard, which isn't switched on (add it to FOCUS_PLUGINS)`). The plugins that require a left-out plugin are left out in turn, and so are plugins that require each other round a loop. The plugins left out, and why, are in `Plugins.leftOut`.
+
+A required plugin lends what it shares through `provides`, returned from its `start` (the scorecard provides main's scorecards: `history` and `noise`). The plugin that requires it asks the host: `host.uses<ScorecardService>('scorecard')`, typed with the providing plugin's own interface, imported as a type only, so no code passes between them. Asking for a plugin it didn't require throws.
+
+| Climber | Scorecard | What happens |
+| --- | --- | --- |
+| on | on | both start, the scorecard first, and the climber's briefs read main's scorecards through it |
+| off | on | the scorecard alone: it needs nothing |
+| on | off | the climber is left out, saying why: its routes, card and briefs aren't there, and its saved state waits |
+
+The climber's pure rules still borrow two of the scorecard's formatting helpers (`direction`, `formatValue`) by path, which is fine while both live in this repo; plugins in repos of their own need those in a published package.
 
 ## What a plugin adds
 
@@ -74,7 +88,7 @@ plugins/<id>/
   *.test.ts     its tests (vitest finds plugins/**/*.test.ts)
 ```
 
-A plugin imports the office's code by path (`../../server/plugins/contract`, `../../shared/types`): its contract, its types, and helpers like `server/agents/fakeOffice.ts`, a pretend office its tests can switch it on in. It can import another plugin's code the same way (the climber reads scorecards through `../scorecard/desk`). Typecheck, lint (no non-null assertions outside tests, as in `server/`), the scorecard's fence and CRAP cover `plugins/` like the rest.
+A plugin imports the office's code by path (`../../server/plugins/contract`, `../../shared/types`): its contract, its types, and helpers like `server/agents/fakeOffice.ts`, a pretend office its tests can switch it on in. For another plugin, see [plugins that need each other](#plugins-that-need-each-other): it reaches what that plugin provides through the host, not its code. Typecheck, lint (no non-null assertions outside tests, as in `server/`), the scorecard's fence and CRAP cover `plugins/` like the rest.
 
 A plugin outside the office's folder can be switched on by path, but for now it still imports the office's code by relative path, and its `client.ts` isn't found (only `plugins/` inside the checkout is). Plugins in repos of their own need a published contract first.
 

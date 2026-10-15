@@ -9,12 +9,19 @@ import type { GitHub } from '../github/service';
 export interface FocusPlugin {
   /** Its name in FOCUS_PLUGINS: also its state's key in state.json, and its routes' prefix (`/api/plugins/<id>`). */
   id: string;
+  /**
+   * The plugins it can't work without, by id. It starts only when every one of them is switched on and started (after
+   * them), and reaches what each provides through `host.uses`; otherwise it's left out, saying why.
+   */
+  requires?: string[];
   /** Called once as the office starts, with what the office lends it; returns what it adds. */
   start(host: PluginHost): PluginParts;
 }
 
 /** What a plugin adds to the office: every part is optional. */
 export interface PluginParts {
+  /** What it lends the plugins that require it (`host.uses(id)` gives them this): the scorecard's scorecards, say. */
+  provides?: object;
   /** Kinds of work it hands agents in place of an issue, by kind. */
   briefs?: Record<string, BriefSpec>;
   /** Its REST routes, mounted under `/api/plugins/<id>`. */
@@ -81,6 +88,11 @@ export interface PluginHost {
   /** A line in an agent's terminal, from the office. */
   print(agent: Agent, text: string): void;
   toast(level: 'info' | 'success' | 'error', text: string, agentId?: string): void;
+  /**
+   * What the plugin `id` provides: one of this plugin's `requires`, so it's on and started already. `T` is that
+   * plugin's own type for it (a type-only import, so no code is shared). Throws, in words, for a plugin not required.
+   */
+  uses<T extends object>(id: string): T;
 }
 
 export interface PluginState<S> {

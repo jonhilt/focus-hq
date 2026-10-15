@@ -3,7 +3,7 @@
 // ledger, saves and prints.
 import path from 'node:path';
 import ts from 'typescript';
-import { frictionGroups, reportCard, type LedgerEvent } from '../../../shared/ledger';
+import { frictionGroups, OPEN_FRICTION_DAYS, reportCard, type LedgerEvent } from '../../../shared/ledger';
 import { compared, formatValue, measuredAt } from '../scorecard';
 import type { Metric, MetricFormat as Format, Scorecard, ScorecardNoise, ScorecardSection as Section } from '../types';
 
@@ -205,7 +205,8 @@ export function testMetrics(tests: { total: number; files: number; propertyFiles
 const DAY = 24 * 60 * 60 * 1000;
 /** The window the office's numbers cover, as the report card's and the retro's. */
 export const OFFICE_DAYS = 30;
-export const FRICTION_DAYS = 14;
+/** The window the open frictions cover: the report card's and the retro's. */
+export const FRICTION_DAYS = OPEN_FRICTION_DAYS;
 
 /** The ledger's report card as metrics, and the open frictions of the last `FRICTION_DAYS`. */
 export function officeMetrics(events: LedgerEvent[], now: number): { metrics: Metric[]; frictions: Scorecard['frictions'] } {

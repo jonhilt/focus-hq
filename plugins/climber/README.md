@@ -75,7 +75,7 @@ It's **remembered** when the rejected gap is a real contender (the control's oth
 
 ## Where it lives
 
-The climber is a [plugin](../../docs/plugins.md): switch it on with `FOCUS_PLUGINS=climber`. Without it, there's no climber, no card and no climbing.
+The climber is a [plugin](../../docs/plugins.md), and it requires the [scorecard](../scorecard/README.md) plugin: switch both on with `FOCUS_PLUGINS=scorecard,climber`. Without the climber there's no climber, no card and no climbing; without the scorecard the climber is left out, saying why in the office's log, since its whole job is moving the scorecard's numbers and main's history only grows while the scorecard measures each merge. Its briefs read main's scorecards through what the scorecard provides (`host.uses('scorecard')`).
 
 - **The plugin.** `server.ts` says what it adds to the office: its one brief (`climb`, worked away from the room's desks), the `POST /api/plugins/climber/keep-climbing {on}` switch, its hooks (board refreshes, a climb's pull request opening and closing) and `captainMerges` for `focus/climb-` branches.
 - **Rules.** `climb.ts`, which is pure: the brief, the pull request from the write-up, what to do next (`climbStep`) and where the climbs are.

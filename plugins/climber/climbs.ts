@@ -3,7 +3,7 @@ import type { Agent } from '../../shared/types';
 import { GitHub } from '../../server/github/service';
 import type { PluginHost, PluginState } from '../../server/plugins/contract';
 import { errorMessage, newId } from '../../server/util';
-import { officeScorecards } from '../scorecard/desk';
+import type { ScorecardService } from '../scorecard/types';
 import { climbBrief, climbHome, climbLog, climbStep } from './climb';
 import { CLIMB_BRANCH, CLIMB_ENDS_KEPT, CLIMBER_ID, climbingEngineer, freshClimb, type Climb } from './shared';
 
@@ -20,7 +20,11 @@ const SCORECARDS_READ = 30;
 export class Climbs {
   private readonly climb: PluginState<Climb>;
 
+  /** Main's scorecards, from the scorecard plugin, which the climber requires. */
+  private readonly scorecards: ScorecardService;
+
   constructor(private readonly host: PluginHost) {
+    this.scorecards = host.uses<ScorecardService>('scorecard');
     this.climb = host.state(freshClimb);
   }
 
@@ -39,9 +43,8 @@ export class Climbs {
         })),
       );
       // this climb's own pull request isn't open yet; one left open from before is still part of the record
-      const scorecards = officeScorecards(this.host.demo);
-      const noise = scorecards.noise();
-      const log = climbLog(prs.filter((p) => p.branch !== agent.branch), this.climb.get().ends ?? [], status.login, scorecards.history(SCORECARDS_READ), noise);
+      const noise = this.scorecards.noise();
+      const log = climbLog(prs.filter((p) => p.branch !== agent.branch), this.climb.get().ends ?? [], status.login, this.scorecards.history(SCORECARDS_READ), noise);
       return climbBrief(agent, this.host.ledger(), Date.now(), log, noise);
     });
   }

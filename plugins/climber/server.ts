@@ -9,6 +9,8 @@ const DEMO_TITLE = 'Narrow the board’s non-null assertions to checked lookups'
 
 const climber: FocusPlugin = {
   id: CLIMBER,
+  // its whole job is moving the scorecard's numbers, and main's history only grows while the scorecard measures merges
+  requires: ['scorecard'],
   start(host) {
     const climbs = new Climbs(host);
     return {

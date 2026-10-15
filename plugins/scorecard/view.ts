@@ -1,7 +1,7 @@
 import { changeMark, type ComparedRow, compared, duration, formatValue, glance, measuredAt, type Tile, tileFace, type Trend, verdictPhrases } from './scorecard';
 import { aboutMetric, SECTION_ABOUT } from './about';
 import { api } from '../../client/src/net/api';
-import { state } from '../../client/src/net/state';
+import { pluginState } from '../../client/src/plugins';
 import type { Ui } from '../../client/src/ui/context';
 import { busy, h, timeAgo } from '../../client/src/ui/dom';
 import { type Metric, type Scorecard, SCORECARD, type Scorecards, type ScorecardSection } from './types';
@@ -9,7 +9,7 @@ import { type Metric, type Scorecard, SCORECARD, type Scorecards, type Scorecard
 const SVG = 'http://www.w3.org/2000/svg';
 
 /** Main engineering's scorecards, as the plugin's server part sends them (its state). */
-export const scorecards = (): Scorecards | null => (state.plugins[SCORECARD] as Scorecards | undefined) ?? null;
+export const scorecards = (): Scorecards | null => pluginState<Scorecards>(SCORECARD) ?? null;
 
 /** Each section's colour, from LCARS's data tones: green and red stay for better and worse. */
 export const SECTION_TONE: Record<ScorecardSection, string> = {

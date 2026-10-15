@@ -54,3 +54,12 @@ export interface Scorecards {
   trigger?: 'captain' | 'new-commit';
   error?: string;
 }
+
+/**
+ * What the scorecard plugin provides the plugins that require it (`host.uses('scorecard')`): main's scorecards, the
+ * latest last, and how far each number wobbles. The climber's briefs read them.
+ */
+export interface ScorecardService {
+  history(limit: number): Scorecard[];
+  noise(): ScorecardNoise | undefined;
+}
