@@ -1,8 +1,7 @@
 // Reading a Claude Code transcript (its session's JSONL, one line per message or event), shared by the ledger's
-// session digests (sessionDigest.ts), the retro's friction reader (frictions.ts), the studio's session timelines
-// (sessionTimeline.ts) and plugins (through `PluginHost.transcript`): finding the agents' transcripts on this machine,
-// reading one, and telling who a message in it is from. A transcript can be mid-write, so a line that doesn't parse is
-// skipped.
+// session digests (sessionDigest.ts), the studio's session timelines (sessionTimeline.ts) and plugins (through
+// `PluginHost.transcript`): finding the agents' transcripts on this machine, reading one, and telling who a message in
+// it is from. A transcript can be mid-write, so a line that doesn't parse is skipped.
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';

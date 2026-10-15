@@ -133,10 +133,6 @@ export function apiRouter(office: Office, store: Store): express.Router {
   // every closed goal the ledger kept, so what its lead showed can be found once it's off the room's log
   r.get('/goals/archive', h((req) => closedGoals(store.ledger, typeof req.query.project === 'string' ? req.query.project : undefined)));
   r.get('/ledger', h((req) => ledgerWindow(store.ledger, Date.now(), Number(req.query.days ?? 14))));
-  r.get('/retro/preview', h((req) => office.engineer.preview(Number(req.query.days ?? 14))));
-  r.post('/retro/start', h((req) => office.engineer.start(Number(req.body.days ?? 14))));
-  r.post('/retro/stop', h(() => office.engineer.stop()));
-  r.post('/retro/drafts/:id', h((req) => office.decideDraft(String(req.params.id), req.body.accept === true, typeof req.body.projectId === 'string' ? req.body.projectId : undefined, typeof req.body.repo === 'string' ? req.body.repo : undefined)));
   r.get('/digests/backfill', h(async () => ({ sessions: (await office.agents.undigested()).length })));
   r.post('/digests/backfill', h(() => office.agents.backfill()));
   r.post('/prs/qa', h((req) => office.requestReview(str(req.body.projectId), str(req.body.repo), Number(req.body.number))));

@@ -182,6 +182,7 @@ describe('loading a saved office', () => {
       closedPrs: [{ repo: 'acme/shop', issue: 7, pr: 3, officer: 'Lt. Ops', note: 'Wrong approach', at: 0 }],
       numberOne: { status: 'thinking', activity: '', messages: [], updatedAt: 0, costUsd: 0 },
       studio: { status: 'thinking', activity: '', messages: [], takes: [], updatedAt: 0, costUsd: 0 },
+      // saved before the retro was a plugin: it moves into the plugin's slot, which ends it as the plugin starts
       retro: { status: 'thinking', activity: '', days: 14, sessions: 0, drafts: [], watch: [], costUsd: 0 },
     };
     fs.writeFileSync(path.join(dir, 'state.json'), JSON.stringify(state));
@@ -193,6 +194,7 @@ describe('loading a saved office', () => {
     expect(store.agents.get('agent_ab12')?.desk).toBeLessThan(2);
     expect(store.reviews.get('acme/shop#3')?.status).toBe('error');
     expect(store.closedPrs.get('acme/shop#7')?.pr).toBe(3);
-    expect([store.numberOne.status, store.studio.status, store.retro.status]).toEqual(['failed', 'failed', 'failed']);
+    expect([store.numberOne.status, store.studio.status]).toEqual(['failed', 'failed']);
+    expect(store.plugins).toEqual({ retro: state.retro });
   });
 });

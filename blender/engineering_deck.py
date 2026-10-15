@@ -213,7 +213,7 @@ def lower_level():
 
 def table():
     """The master systems table: a rounded console with an LCARS display across its top, where E reviews the ledger
-    (the retro is at the engineer's station)."""
+    (the engineer's own panel is at their station)."""
     (tx, ty), (w, d) = TABLE, TABLE_SIZE
     outline = [(tx + x, ty + y) for x, y in rounded_rect(w, d, 0.45)]
     inset = [(tx + x, ty + y) for x, y in rounded_rect(w - 0.25, d - 0.25, 0.35)]

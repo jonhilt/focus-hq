@@ -123,7 +123,7 @@ function wholeProject(snapshot: Snapshot, ledger: LedgerEvent[], project: Projec
     bullets('Open issues', issues.slice(0, MAX_ISSUES).map((i) => `${i.number}: ${i.title}`)),
     `In the last ${PROJECT_DAYS} days the log has ${verdicts.length} QA verdicts (${verdicts.filter((e) => e.kind === 'qa-verdict' && e.verdict === 'fail').length} failed), ${recent.filter((e) => e.kind === 'conflicts' && e.resolved !== 'up-to-date').length} merge conflicts and ${recent.filter((e) => e.kind === 'merged').length} merges.`,
     bullets(
-      'What keeps getting in the way (from the retro’s reading of sessions)',
+      'What keeps getting in the way (the frictions found in the agents’ sessions)',
       frictionGroups(mine, now, PROJECT_DAYS).slice(0, MAX_QUOTES).map((g) => `${g.signature}, in ${g.sessions} sessions: “${g.moments[0]?.quote ?? ''}”`),
     ),
   ];

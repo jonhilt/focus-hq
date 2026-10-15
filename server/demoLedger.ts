@@ -12,7 +12,7 @@ const PORT_IN_USE: Friction = { kind: 'demo-env', signature: 'demo port in use',
 /**
  * A few days of the ledger for the demo office, which keeps none of its own: a Sock Shop goal whose API pull request
  * failed QA once, conflicted and passed, and a Space Dodger pull request an agent untangled and the captain merged
- * before QA was done. Every session's frictions are already read, so the demo's retro doesn't go looking for them.
+ * before QA was done. Every session's frictions are already read, so nothing in the demo goes looking for them.
  */
 export function demoLedger(shopId: string, gameId: string, now: number): LedgerEvent[] {
   const checkout = 'Checkout remembers your address';

@@ -59,7 +59,7 @@ import { gpuFrame } from './world/gpuTimer';
 import { canvasTest } from './world/canvas';
 import { newFrame, screenTest } from './world/screenRedraw';
 import type { MsdBoard } from './world/msd';
-import { clientPlugin } from './plugins';
+import { clientPlugin, stationSays } from './plugins';
 
 /** A plugin's board for main engineering's MSD (the scorecard's), while the plugin's on and draws one. */
 function pluginBoard(id: string): MsdBoard | undefined {
@@ -385,15 +385,18 @@ async function main() {
     // the screens over the pods show how QA has each goal's pull requests
     world.room(projectId)?.syncStations();
   });
+  // the engineering station's screen shows the report card, and its engineer what a plugin has them busy with
+  const showEngineering = () => world.engineering?.showReport(state.report, stationSays());
   state.on('report', () => {
-    world.engineering?.showReport(state.report, state.retro);
+    showEngineering();
     world.showOnMsd({ kind: 'report', card: state.report });
   });
-  state.on('retro', () => world.engineering?.showReport(state.report, state.retro));
-  // a plugin's board on the MSD follows its state, while it's up there, and so do its words on the goal boards
+  // a plugin's board on the MSD follows its state, while it's up there, and so do its words on the goal boards and
+  // the engineering station
   state.on('plugin', (id) => {
     const board = pluginBoard(id);
     if (board) world.showOnMsd(board);
+    if (clientPlugin(id)?.engineering?.station) showEngineering();
     if (clientPlugin(id)?.goal) for (const room of world.rooms.values()) room.syncStations();
     world.syncHallScreens();
   });

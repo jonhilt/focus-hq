@@ -44,7 +44,7 @@ export interface Ui {
   openStudio(): void;
   /** The system model standing in the studio, up close (modelPanel.ts). */
   openModel(): void;
-  /** The engineering station: the ledger's report card and the chief engineer's retro. */
+  /** The engineering station: the chief engineer's panel, with the ledger's report card and the plugins' parts. */
   openEngineering(): void;
   /** Main engineering's master systems table: the ledger's log, and a trace of a pull request or goal. */
   /** The ledger review, tracing `subject` when given (a friction from the engineering panel, say). */

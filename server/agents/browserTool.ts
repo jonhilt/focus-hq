@@ -99,7 +99,7 @@ const loadNow = (): Load => (process.platform === 'win32' ? null : { oneMinute: 
 
 /**
  * A line on how busy the machine was, added to every failed browser call so a timeout can be told apart from a page
- * that never answered (the retro reads it from the transcript): busy when more work was waiting than there are CPUs.
+ * that never answered (it stays in the agent's transcript for whoever reads it later): busy when more work was waiting than there are CPUs.
  */
 export function machineLoad(load: Load): string | undefined {
   if (!load) return undefined;

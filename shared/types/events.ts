@@ -11,7 +11,6 @@ import type { StudioSession } from './studio';
 import type { Preview, PreviewLog } from './previews';
 import type { Project, Settings } from './projects';
 import type { QaReview } from './qa';
-import type { Retro } from './retros';
 import type { Usage } from './usage';
 import type { VoiceStatus } from './voice';
 
@@ -45,8 +44,6 @@ export interface Snapshot {
   call: CallStatus;
   /** The ledger's last 30 days, summed up for the chief engineer's screen. */
   report: ReportCard;
-  /** The chief engineer's latest retro. */
-  retro: Retro;
   /** Your plan's usage and how the office signs in, for main engineering. */
   usage: Usage;
   /** Each plugin's state, by plugin id (docs/plugins.md). */
@@ -70,7 +67,6 @@ export type ServerEvent =
   | { type: 'review'; review: QaReview }
   | { type: 'review-removed'; repo: string; number: number }
   | { type: 'report'; report: ReportCard }
-  | { type: 'retro'; retro: Retro }
   | { type: 'usage'; usage: Usage }
   /** A plugin's state changed. */
   | { type: 'plugin'; id: string; state: unknown }

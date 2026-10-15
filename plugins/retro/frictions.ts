@@ -1,8 +1,8 @@
 import { FRICTION_KINDS, type Friction, type FrictionKind, type LedgerEvent } from '../../shared/ledger';
-import { type Block, blocks, clip, messageFrom, resultText, transcriptLines } from './transcript';
+import { type Block, blocks, clip, messageFrom, resultText, transcriptLines } from '../../server/agents/transcript';
 
 // What the retro's reader reads of each session's span, and what's kept of its answer. Code supplies the facts
-// (sessionDigest.ts); at retro time a strong model reads the spans not read yet, a batch at a time, and only finds and
+// (server/agents/sessionDigest.ts); at retro time a strong model reads the spans not read yet, a batch at a time, and only finds and
 // quotes the moments of friction, reusing the signatures already in the ledger so the same trouble groups together.
 // A quote that isn't in the text it was given doesn't survive: the reader never judges, ranks or gives verdicts.
 

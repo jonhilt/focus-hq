@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 // The plugins' parts in the browser (docs/plugins.md): each plugin folder's client.ts, found as the client's built.
 // Only the plugins the office has switched on (`info.plugins`) show.
-import type { Agent } from '../../shared/types';
+import type { Agent, AgentStatus } from '../../shared/types';
 import { state } from './net/state';
 import type { Ui } from './ui/context';
 import type { Box } from './world/msd';
@@ -76,14 +76,26 @@ export interface GoalStrip {
  * Every part is optional.
  */
 export interface EngineeringPart {
-  /** A card on the overview, beside the others (the climber's). */
-  card?: (ui: Ui) => HTMLElement | null;
+  /** A card on the overview, beside the others (the climber's); `go` opens one of the station's views from it. */
+  card?: (ui: Ui, go: EngineeringGo) => HTMLElement | null;
   /** The overview's main block, with every card laid out in it (the scorecard puts them beside what moved). The first plugin's wins. */
   overview?: (ui: Ui, cards: HTMLElement, go: EngineeringGo) => HTMLElement;
   /** What the overview's side-nav button reads (the scorecard's ▲14 ▼1). */
   readout?: () => string;
   /** Views of its own on the side nav, after the overview. */
   views?: EngineeringView[];
+  /**
+   * What the chief engineer is busy with at the station in main engineering, when it's the plugin's work: their
+   * status and a line, which their bubble says and the station's screen shows under the report card. Null when they
+   * aren't; the first plugin with something to say is heard.
+   */
+  station?: () => StationSays | null;
+}
+
+/** What the engineer at the engineering station says they're doing. */
+export interface StationSays {
+  status: AgentStatus;
+  line: string;
 }
 
 export interface EngineeringView {
@@ -124,6 +136,9 @@ export function goalTags(lead: Agent, where: GoalTagPlace): { label: string; el:
 
 /** The plugins' strips along the bottom of a goal board, by its lead. */
 export const goalStrips = (lead: Agent): GoalStrip[] => clientPlugins().flatMap((plugin) => plugin.goal?.board?.(lead) ?? []);
+
+/** What the engineer at the engineering station says: the first plugin's with something to say, or null. */
+export const stationSays = (): StationSays | null => clientPlugins().map((plugin) => plugin.engineering?.station?.() ?? null).find((says) => says !== null) ?? null;
 
 /** The plugin `id`'s part in the browser, while it's switched on. */
 export const clientPlugin = (id: string): ClientPlugin | undefined => clientPlugins().find((p) => p.id === id);

@@ -6,13 +6,12 @@ import express from 'express';
 import { clock } from '../shared/clock';
 import { keyFallback } from './agents/apiKey';
 import { BrowserPool } from './agents/browserTool';
-import { ClaudeDrafter, ClaudeEngineer, ClaudeNumberOne, ClaudeStudio, ClaudeTriager, titleGoal } from './agents/claudeCrew';
+import { ClaudeDrafter, ClaudeNumberOne, ClaudeStudio, ClaudeTriager, titleGoal } from './agents/claudeCrew';
 import { StudioComputer } from './agents/studioComputer';
 import { githubRepo } from './github/repo';
-import { ChiefEngineer } from './agents/engineer';
 import { transcriptFolders, transcriptReader } from './agents/transcript';
 import { ClaudeRunner } from './agents/claudeRunner';
-import { DemoDrafter, DemoEngineer, DemoNumberOne, DemoRunner, DemoStudio, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
+import { DemoDrafter, DemoNumberOne, DemoRunner, DemoStudio, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
 import { Renderer, Sessions, Triage, Workspace } from './agents/services';
 import { closedGoalPrs, lookUpPrStates, NumberOne, type ShipStatus, summariseShip } from './agents/numberOne';
@@ -103,15 +102,6 @@ async function main() {
     return summariseShip(snapshot, (id) => workspace.dir(id), prStates);
   };
   const numberOne = new NumberOne(store, hub, config.demo ? new DemoNumberOne() : new ClaudeNumberOne(), shipStatus);
-  // the chief engineer reads the agents' sessions for frictions at retro time (the demo's are scripted), and writes what
-  // they find to the ledger through the manager, which is up by the time anyone starts a retro
-  const engineer = new ChiefEngineer(store, hub, config.demo ? new DemoEngineer() : new ClaudeEngineer(), paths.retros, {
-    readTranscript: config.demo
-      ? async (id) => (await demoTranscripts()).find((t) => t.sessionId === id)?.read()
-      : transcriptReader(paths.transcripts, paths.workspaces),
-    record: (projectId, entry, at) => office.agents.record(projectId, entry, at),
-    pauseMs: config.demo ? 500 : 20_000,
-  });
   // calls to Number One read the ship and start queued goals through the office, which is up by the time anyone calls
   const calls: Calls = new Calls(hub, {
     snapshot: (): Promise<Snapshot> => office.snapshot(),
@@ -122,7 +112,7 @@ async function main() {
   }, callKeys, config.demo);
   // FOCUS_STUDIO=live: the real studio computer even in the demo office, to try it on a model without GitHub
   const studio = new StudioComputer(store, hub, config.demo && process.env.FOCUS_STUDIO !== 'live' ? new DemoStudio() : new ClaudeStudio(), shipStatus, { readSource: sourceReader([paths.planning, paths.workspaces, config.root]) });
-  const office = new Office(store, hub, github, previews, planner, numberOne, studio, engineer, usage, new Voice(hub, config.demo), calls, await currentVersion());
+  const office = new Office(store, hub, github, previews, planner, numberOne, studio, usage, new Voice(hub, config.demo), calls, await currentVersion());
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
   // the office's own repo, for plugins that work on it (the demo has none)

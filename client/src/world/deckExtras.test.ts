@@ -90,7 +90,7 @@ describe('readInteraction', () => {
       label: 'Use the ready room console',
     });
     expect(readInteraction({ interact: 'turbolift', label: 'Use the turbolift' })).toEqual({ interaction: { kind: 'turbolift' }, label: 'Use the turbolift' });
-    expect(readInteraction({ interact: 'engineering', label: 'Retros' })).toEqual({ interaction: { kind: 'engineering' }, label: 'Retros' });
+    expect(readInteraction({ interact: 'engineering', label: 'Engineering' })).toEqual({ interaction: { kind: 'engineering' }, label: 'Engineering' });
     expect(readInteraction({ interact: 'ledger', label: 'Review the ledger' })).toEqual({ interaction: { kind: 'ledger' }, label: 'Review the ledger' });
     expect(readInteraction({ interact: 'energise', label: 'Energise' })).toEqual({ interaction: { kind: 'energise' }, label: 'Energise' });
   });

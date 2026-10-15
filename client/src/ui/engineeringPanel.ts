@@ -1,33 +1,26 @@
 import { chiefEngineer } from '../../../shared/crew';
-import { FIX_SESSIONS, type FixEffect, type FixStatus, frictionName, reportLines } from '../../../shared/ledger';
-import type { FixKind, Retro, RetroDraft } from '../../../shared/types';
+import { frictionName, reportLines } from '../../../shared/ledger';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { clientPlugins, type EngineeringGo } from '../plugins';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
-import { busy, fill, h, timeAgo } from './dom';
+import { busy, fill, h } from './dom';
 import { type NavItem, readout, shownView, SideNav } from './panels';
-import { markdownHtml } from './terminal';
 import { usageView } from './usageView';
 
-const KIND: Record<FixKind, string> = { check: 'Check', 'qa-rule': 'QA rule', pointer: 'Pointer', delete: 'Delete' };
-
-/** A view of the station: the overview, the ledger and the retro are the core's, and plugins add their own (the scorecard's). */
+/** A view of the station: the overview and the ledger are the core's, and plugins add their own (the scorecard's). */
 type View = string;
 
 /**
  * The engineering station, a view at a time: your plan's usage and the plugins' parts at a glance (the scorecard's
- * overview, the climber's card) with the retro beside them, the ledger as it stands, each plugin's views (the
- * scorecard's code and office numbers), and the chief engineer's retro. On the captain's word they look over the
- * session digests' frictions that keep coming back and draft an issue for each. They change nothing: the captain
- * accepts a draft (it's filed in the repository picked beside it) or rejects it.
+ * overview, the plugins' cards), each plugin's views (the scorecard's code and office numbers), and the ledger as it
+ * stands, with the agents' older sessions to digest.
  */
 export function openEngineeringPanel(ui: Ui): void {
   const eng = chiefEngineer();
   const body = h('div', { class: 'engineering' });
-  // the window outlives re-renders, so a retro finishing doesn't reset what you typed, nor close a number you opened
-  const days = h('input', { type: 'number', min: '1', max: '60', value: String(state.retro?.days ?? 14), style: 'width:80px' });
+  // what the captain opened outlives re-renders
   const open = new Set<string>();
   let picked: View | undefined;
 
@@ -56,72 +49,32 @@ export function openEngineeringPanel(ui: Ui): void {
     if (target) body.querySelector(target)?.scrollIntoView({ block: 'start' });
   };
 
-  const retroView = () => {
-    const retro = state.retro;
-    const running = retro?.status === 'gathering' || retro?.status === 'thinking';
-    const start = h('button', { class: 'btn primary' }, retro?.status === 'done' ? 'Start a new retro' : 'Start a retro');
-    start.disabled = running;
-    start.onclick = () =>
-      void busy(start, async () => {
-        const window = Number(days.value);
-        const { unread, costUsd } = await api.retroPreview(window);
-        const reading = unread
-          ? `${eng.name} first reads the ${unread} sessions of the last ${window} days no one has read yet, for their frictions: roughly $${costUsd.toFixed(2)} of Claude usage, a batch at a time with a pause between. Sessions read before aren’t read again.`
-          : `Every session of the last ${window} days has been read already, so this only drafts.`;
-        if (!confirm(`Start a retro?\n\n${reading}`)) return;
-        await api.retroStart(window);
-      }, ui.error).then(render);
-    const stop = h('button', { class: 'btn' }, 'Stop');
-    stop.onclick = () => void busy(stop, () => api.retroStop().then(() => undefined), ui.error);
-    const bars = frictionBars(ui, 5);
-    return h('div', null,
-      h('div', { class: 'briefing-note' }, `${eng.name} looks over the frictions found in the agents’ sessions in the window, and drafts an issue for each that came up in three or more, with the moments quoted. Accept one and it’s filed; reject it and it isn’t raised again. Nothing changes unless you say so.`),
-      bars ? h('section', { class: 'card sc-section', style: '--c:var(--lcars-orange);margin:14px 0 0' }, h('h4', null, 'Most widespread open frictions', h('span', null, 'Sessions they came up in, over 14 days, with no retro decision yet')), bars) : null,
-      h('div', { class: 'row', style: 'margin:14px 0' },
-        h('span', { class: 'muted' }, 'Look back over the last'), days, h('span', { class: 'muted' }, 'days'),
-        running ? stop : start,
-        h('span', { class: 'grow' }),
-        retro?.costUsd ? h('small', { class: 'muted' }, `$${retro.costUsd.toFixed(2)}`) : null,
-      ),
-      retro && retro.status !== 'idle' ? status(retro) : null,
-      retro?.status === 'done' ? findings(ui, retro) : null,
-      state.report?.fixes.length ? fixes(state.report.fixes) : null,
-      older,
-    );
-  };
-
   const render = () => {
-    const retro = state.retro;
     const parts = clientPlugins().flatMap((plugin) => (plugin.engineering ? [plugin.engineering] : []));
     const pluginViews = parts.flatMap((part) => part.views ?? []);
-    const waiting = retro?.status === 'done' ? retro.drafts.filter((d) => !d.decision).length : 0;
-    const running = retro?.status === 'gathering' || retro?.status === 'thinking';
     const items: NavItem<View>[] = [
       { key: 'overview', label: 'Overview', readout: parts.map((part) => part.readout?.() ?? '').find(Boolean) ?? '' },
       ...pluginViews.map((v) => ({ key: v.key, label: v.label, readout: v.readout?.() ?? '', standby: v.standby?.() })),
       { key: 'ledger', label: 'Ledger', readout: state.report?.merged ? `${Math.round((state.report.mergedFirstTime / state.report.merged) * 100)}%` : '' },
-      { key: 'retro', label: 'Retro', readout: running ? 'LIVE' : waiting ? `${waiting} ${waiting === 1 ? 'DRAFT' : 'DRAFTS'}` : '' },
     ];
     const view = shownView(items, picked) ?? 'overview';
     nav.show(items, view);
     const ledger = h('button', { class: 'btn small' }, 'Review the ledger →');
     ledger.onclick = () => ui.openLedger();
     const overview = () => {
-      // every plugin's card, and the retro's, laid out by the first plugin with an overview of its own (the scorecard's), or on their own
-      const cards = h('div', { class: 'sc-better' }, ...parts.map((part) => part.card?.(ui) ?? null), retroSummary(ui, retro, () => go('retro')));
+      // every plugin's card, laid out by the first plugin with an overview of its own (the scorecard's), or on their own
+      const cards = h('div', { class: 'sc-better' }, ...parts.map((part) => part.card?.(ui, go) ?? null));
       const laidOut = parts.find((part) => part.overview)?.overview?.(ui, cards, go);
       return [usageView(ui), laidOut ?? cards];
     };
     const plugged = pluginViews.find((v) => v.key === view);
     const shown = view === 'overview' ? overview()
-      : view === 'ledger' ? [liveLedger(ui, ledger)]
-        : view === 'retro' ? [retroView()]
-          : plugged ? plugged.render(ui, go, open) : overview();
+      : view === 'ledger' ? [liveLedger(ui, ledger), older]
+        : plugged ? plugged.render(ui, go, open) : overview();
     fill(body, ...shown);
   };
 
   ui.panels.open({ title: `${eng.name} · Chief engineer`, body, nav, accent: LCARS.gold, wide: true });
-  ui.panels.own(state.on('retro', render));
   ui.panels.own(state.on('report', render));
   ui.panels.own(state.on('usage', render));
   ui.panels.own(state.on('plugin', render));
@@ -132,8 +85,8 @@ export function openEngineeringPanel(ui: Ui): void {
   render();
 }
 
-/** The office's open frictions, the most widespread first, as bars: what the retro will look at. Each opens its trace in the ledger review. */
-function frictionBars(ui: Ui, limit: number): HTMLElement | null {
+/** The office's open frictions, the most widespread first, as bars (plugins' views show them too). Each opens its trace in the ledger review. */
+export function frictionBars(ui: Ui, limit: number): HTMLElement | null {
   const frictions = state.report?.frictions.slice(0, limit) ?? [];
   if (!frictions.length) return null;
   const most = frictions[0].sessions || 1;
@@ -146,23 +99,7 @@ function frictionBars(ui: Ui, limit: number): HTMLElement | null {
   }));
 }
 
-/** The retro beside the overview: whether one's under way or waiting on you, and the frictions it would look at. */
-function retroSummary(ui: Ui, retro: Retro | null | undefined, open: () => void): HTMLElement {
-  const waiting = retro?.status === 'done' ? retro.drafts.filter((d) => !d.decision).length : 0;
-  const line = retro?.status === 'gathering' || retro?.status === 'thinking'
-    ? retro.activity
-    : waiting ? `${waiting} ${waiting === 1 ? 'draft waits' : 'drafts wait'} for you to accept or reject`
-      : retro?.status === 'failed' ? `The last retro failed: ${retro.error ?? retro.activity}` : 'Drafts an issue for each friction that keeps coming back';
-  const bars = frictionBars(ui, 3);
-  return h('div', { class: 'card sc-retro' },
-    h('div', { class: 'row' }, h('strong', { class: 'grow' }, 'Retro'), h('button', { class: 'btn small', onclick: open }, waiting ? 'Review drafts →' : 'Open →')),
-    h('small', { class: 'muted' }, line),
-    bars ? h('small', { class: 'lbl' }, 'Most widespread open frictions') : null,
-    bars,
-  );
-}
-
-/** The ledger as it stands now: the report card's numbers, and the open frictions the retro reads. */
+/** The ledger as it stands now: the report card's numbers, and the open frictions. */
 function liveLedger(ui: Ui, ledger: HTMLElement): HTMLElement {
   const card = state.report;
   const shown = card ? reportLines(card) : undefined;
@@ -183,91 +120,7 @@ function liveLedger(ui: Ui, ledger: HTMLElement): HTMLElement {
     h('div', { class: 'row' }, h('h4', { class: 'grow' }, `The ledger now${card ? `, last ${card.days} days` : ''}`, h('span', null, 'Live, as the ledger fills')), ledger),
     ...warnings.map((w) => h('small', null, w)),
     live,
-    bars ? h('h4', null, 'Most widespread open frictions', h('span', null, 'Sessions they came up in, over 14 days: what the retro reads')) : null,
+    bars ? h('h4', null, 'Most widespread open frictions', h('span', null, 'Sessions they came up in, over 14 days, with no decision on them yet')) : null,
     bars,
-  );
-}
-
-function status(retro: Retro): HTMLElement {
-  const tone = retro.status === 'failed' ? 'bad' : retro.status === 'done' ? 'ok' : 'warn';
-  return h('div', { class: 'qa-now' },
-    h('span', { class: `chip ${tone}` }, retro.status),
-    h('div', { class: 'grow' },
-      h('strong', null, retro.status === 'failed' ? (retro.error ?? retro.activity) : retro.activity),
-      h('small', null, [
-        retro.sessions ? `${retro.sessions} sessions over ${retro.days} days` : `the last ${retro.days} days`,
-        retro.startedAt ? `started ${timeAgo(retro.startedAt)}` : '',
-      ].filter(Boolean).join(' · ')),
-    ),
-  );
-}
-
-function findings(ui: Ui, retro: Retro): HTMLElement {
-  return h('div', { class: 'cards' },
-    retro.summary ? h('p', null, retro.summary) : null,
-    retro.drafts.length ? h('h3', null, `Drafts (${retro.drafts.length})`) : null,
-    ...retro.drafts.map((d, i) => draft(ui, d, i)),
-    retro.watch.length ? h('h3', null, 'To watch: seen in two sessions') : null,
-    retro.watch.length ? h('ul', null, ...retro.watch.map((w) => h('li', null, w))) : null,
-  );
-}
-
-/** Where an accepted draft is filed: the last repository picked, kept between drafts and visits. */
-const FILE_IN = 'focus.retro.fileIn';
-
-function draft(ui: Ui, d: RetroDraft, i: number): HTMLElement {
-  const head = h('div', { class: 'row' }, h('strong', { class: 'grow' }, `${i + 1}. ${d.title}`), h('span', { class: 'chip' }, KIND[d.kind]), h('span', { class: 'chip off' }, `${d.sessions} sessions`));
-  const text = h('div', { class: 'markdown' });
-  text.innerHTML = markdownHtml(d.body);
-  const details = h('details', null, h('summary', null, 'The issue as it would be filed'), text);
-  const tags = h('p', null, h('span', { class: 'label' }, 'Measure '), d.measure, h('br'), h('small', { class: 'muted' }, d.signatures.join(' · ')));
-  if (d.decision) {
-    const issue = d.decision.issue;
-    const said = d.decision.accepted
-      ? h('span', { class: 'chip ok' }, issue ? h('a', { href: issue.url, target: '_blank' }, `Filed ${issue.repo}#${issue.number}`) : 'Accepted')
-      : h('span', { class: 'chip off' }, 'Rejected');
-    return h('div', { class: 'card retro-draft' }, head, tags, details, h('div', { class: 'row' }, said, h('small', { class: 'muted' }, timeAgo(d.decision.at))));
-  }
-  const repos = state.projects.flatMap((p) => p.repos.map((repo) => ({ projectId: p.id, repo, label: `${repo} (${p.name})` })));
-  const pick = h('select', null, ...repos.map((r) => h('option', { value: `${r.projectId} ${r.repo}` }, r.label)));
-  const last = localStorage.getItem(FILE_IN);
-  if (last && repos.some((r) => `${r.projectId} ${r.repo}` === last)) pick.value = last;
-  const accept = h('button', { class: 'btn primary small' }, 'Accept and file');
-  const reject = h('button', { class: 'btn small' }, 'Reject');
-  accept.disabled = !repos.length;
-  accept.onclick = () => {
-    const [projectId, repo] = pick.value.split(' ');
-    localStorage.setItem(FILE_IN, pick.value);
-    void busy(accept, () => api.decideDraft(d.id, true, projectId, repo).then(() => undefined), ui.error);
-  };
-  reject.onclick = () => void busy(reject, () => api.decideDraft(d.id, false).then(() => undefined), ui.error);
-  return h('div', { class: 'card retro-draft' }, head, tags, details, h('div', { class: 'row' }, h('small', { class: 'muted' }, 'File in'), pick, accept, reject));
-}
-
-const FIX: Record<FixStatus, { tone: string; label: string }> = {
-  waiting: { tone: 'off', label: 'waiting for its fix' },
-  'too-early': { tone: 'warn', label: 'too early to tell' },
-  stopped: { tone: 'ok', label: 'stopped it' },
-  fewer: { tone: 'ok', label: 'fewer' },
-  recurring: { tone: 'bad', label: 'still recurring' },
-};
-
-const share = (c: { hits: number; sessions: number }) => `${c.hits} of ${c.sessions} sessions`;
-
-/** Each retro fix the captain accepted: did its frictions stop coming up once it landed? */
-function fixes(list: FixEffect[]): HTMLElement {
-  return h('div', { class: 'cards', style: 'margin-top:12px' },
-    h('h3', null, 'Retro fixes'),
-    ...list.map((f) => {
-      const { tone, label } = FIX[f.status];
-      const issue = f.issue ? `${f.issue.repo}#${f.issue.number}` : 'not filed';
-      const since = f.landed
-        ? `since ${f.landed.repo}#${f.landed.pr} merged ${timeAgo(f.landed.at)}: ${share(f.after)}${f.status === 'too-early' ? ` (says once ${FIX_SESSIONS} are in)` : ''}`
-        : 'its issue hasn’t been closed by a merge yet';
-      return h('div', { class: 'card' },
-        h('div', { class: 'row' }, h('strong', { class: 'grow' }, f.title), h('span', { class: `chip ${tone}` }, label)),
-        h('small', { class: 'muted' }, `${issue} · before: ${share(f.before)} · ${since}`),
-      );
-    }),
   );
 }

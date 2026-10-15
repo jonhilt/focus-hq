@@ -19,7 +19,7 @@ What the browser reads (client/src/world/deck.ts), all through custom properties
   camera for the room's feed stands, looking along the empty's +Y, turned and tilted, with a vertical `fov` in degrees
   that frames the platform).
 - An object's `interact` has pressing E on it (or on anything hanging from it) do something: 'manager' (open the ready
-  room console), 'turbolift' (its controls), 'engineering' (the chief engineer's panel: the report card and retros),
+  room console), 'turbolift' (its controls), 'engineering' (the chief engineer's panel: the report card and the plugins' parts),
   'ledger' (reviewing the ledger) or 'energise' (a transporter room's console: beam back to the briefing room), with
   the hint `label`.
 - An object's `part` names it for the browser, which finds it to change it as it goes, so it's kept out of merging: in

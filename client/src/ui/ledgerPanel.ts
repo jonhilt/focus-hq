@@ -32,7 +32,7 @@ function dayOf(at: number): string {
 /**
  * Reviewing the ledger at main engineering's master systems table: the log of what happened over a window, filtered by
  * kind and project, and the trace of whichever pull request or goal you pick in it, everything the ledger says about
- * it in order with what it cost. Read-only: the retro, at Lt. Brennan's station, is where anything gets decided.
+ * it in order with what it cost. Read-only: anything gets decided elsewhere (Lt. Brennan's station, beside it).
  * Opened on a `traced` subject (a friction picked on the engineering panel), it traces that straight away.
  */
 export function openLedgerPanel(ui: Ui, traced?: TraceSubject): void {
@@ -48,13 +48,13 @@ export function openLedgerPanel(ui: Ui, traced?: TraceSubject): void {
     projectId = projects.value;
     render();
   };
-  const retro = h('button', { class: 'btn small' }, 'Retro →');
-  retro.onclick = () => ui.openEngineering();
+  const engineering = h('button', { class: 'btn small' }, 'Engineering →');
+  engineering.onclick = () => ui.openEngineering();
   const filters = h('div', { class: 'row ledger-filters' });
   const log = h('div', { class: 'ledger-log' });
   const tracePane = h('div', { class: 'ledger-trace' });
   const body = h('div', { class: 'ledger' },
-    h('div', { class: 'row' }, h('span', { class: 'label' }, 'Look back'), windows, projects, h('span', { class: 'grow' }), retro),
+    h('div', { class: 'row' }, h('span', { class: 'label' }, 'Look back'), windows, projects, h('span', { class: 'grow' }), engineering),
     filters,
     h('div', { class: 'ledger-cols' }, log, tracePane),
   );

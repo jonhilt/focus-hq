@@ -1,23 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FrictionGroup } from '../../shared/ledger';
-import { freshRetro, retroAfterRestart } from '../store';
 import { parseDrafts, renderFrictions } from './retro';
-import { messageFrom } from './transcript';
-
-describe('messageFrom', () => {
-  it('knows the office’s and QA’s messages by how they open', () => {
-    expect(messageFrom('[Office] Slice 1 has landed')).toBe('office');
-    expect(messageFrom('[QA officer Ensign Halloran] QA failed jonhilt/focus#154')).toBe('qa');
-    expect(messageFrom('Please QA pull request #12 in demo/shop')).toBe('office');
-    expect(messageFrom('This session is being continued from a previous conversation')).toBe('compacted');
-  });
-
-  it('leaves out the harness’s own messages, and takes the rest as the captain’s', () => {
-    expect(messageFrom('<system-reminder>…</system-reminder>')).toBeNull();
-    expect(messageFrom('<task-notification>done</task-notification>')).toBeNull();
-    expect(messageFrom('can we make the doors quieter?')).toBe('captain');
-  });
-});
+import { freshRetro, type RetroDraft, retroAfterRestart, stationLine } from './shared';
 
 const DAY = 24 * 60 * 60 * 1000;
 const group = (key: string, sessions: number): FrictionGroup => {
@@ -69,5 +53,22 @@ describe('retroAfterRestart', () => {
   it('gives a retro saved before drafts none', () => {
     const { drafts: _d, ...old } = freshRetro();
     expect(retroAfterRestart({ ...old, status: 'done' } as never).drafts).toEqual([]);
+  });
+});
+
+describe('stationLine', () => {
+  const draft = (decided: boolean): RetroDraft => ({ id: 'd', title: 't', body: 'b', kind: 'check', measure: 'm', signatures: [], sessions: 3, ...(decided && { decision: { accepted: true, at: 1 } }) });
+
+  it('leaves the engineer keeping the ship running while no retro has run', () => {
+    expect(stationLine(undefined)).toBeNull();
+    expect(stationLine(freshRetro())).toBeNull();
+  });
+
+  it('says what the retro is doing, how it failed, or what waits on the captain', () => {
+    expect(stationLine({ ...freshRetro(), status: 'thinking', activity: 'Reading frictions.md' })).toEqual({ status: 'working', line: 'Retro: Reading frictions.md' });
+    expect(stationLine({ ...freshRetro(), status: 'failed', error: 'Stopped by the captain' })).toEqual({ status: 'error', line: 'Retro: Stopped by the captain' });
+    expect(stationLine({ ...freshRetro(), status: 'done', drafts: [draft(false), draft(false), draft(true)] })?.line).toBe('Retro: 2 drafts waiting');
+    expect(stationLine({ ...freshRetro(), status: 'done', drafts: [draft(true)] })?.line).toBe('Retro: all drafts decided');
+    expect(stationLine({ ...freshRetro(), status: 'done' })).toEqual({ status: 'done', line: 'Retro: nothing keeps coming back' });
   });
 });

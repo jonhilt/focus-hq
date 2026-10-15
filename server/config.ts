@@ -58,8 +58,6 @@ export const paths = {
   artifacts: path.join(config.dataDir, 'artifacts'),
   /** Read-only checkouts of each project's repos at their default branch, for the planner. */
   planning: path.join(config.dataDir, 'planning'),
-  /** The chief engineer's retros: the evidence gathered for each, and what came of it. */
-  retros: path.join(config.dataDir, 'retros'),
   /** Where Claude Code keeps session transcripts, the agents' among them (one folder per working directory). */
   transcripts: path.join(process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude'), 'projects'),
   /** The terminals the office opens to start agents' cloud sessions: each one's script and what it showed, a folder per agent. */

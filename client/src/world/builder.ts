@@ -28,7 +28,7 @@ export type Interaction =
   /** The demo ship's training console: back to a quiet ship, with a scenario's goal readied. */
   | { kind: 'training' }
   | { kind: 'number-one' }
-  /** The engineering station: the report card and the chief engineer's retro. */
+  /** The engineering station: the chief engineer's panel, with the report card and the plugins' parts. */
   | { kind: 'engineering' }
   /** Main engineering's master systems table: review the ledger. */
   | { kind: 'ledger' }

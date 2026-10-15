@@ -93,7 +93,7 @@ export type FrictionKind = keyof typeof FRICTION_KINDS;
 /** A moment of friction, quoted word for word from the session. */
 export interface Friction {
   kind: FrictionKind;
-  /** A few words naming it, the same each time it comes up (`zsh glob no matches`): how the retro groups them. */
+  /** A few words naming it, the same each time it comes up (`zsh glob no matches`): how `frictionGroups` groups them. */
   signature: string;
   quote: string;
 }
@@ -238,7 +238,7 @@ export interface ReportCard {
 
 const DAY = 24 * 60 * 60 * 1000;
 
-/** The window the report card's open frictions cover, as the retro looks at them. */
+/** The window the report card's open frictions cover. */
 export const OPEN_FRICTION_DAYS = 14;
 
 /**
@@ -348,7 +348,7 @@ export function frictionsByDigest(events: LedgerEvent[]): Map<string, Friction[]
   return found;
 }
 
-/** The digests in the window that no one has read for frictions yet, oldest first: what a retro will read. */
+/** The digests in the window that no one has read for frictions yet, oldest first: what reading for frictions reads next. */
 export function unreadDigests(events: LedgerEvent[], now: number, days: number): Digest[] {
   const found = frictionsByDigest(events);
   return events.filter((e): e is Digest => e.kind === 'session-digest' && e.at > now - days * DAY && !found.has(e.key));

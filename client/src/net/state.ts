@@ -1,7 +1,7 @@
 import { isHidden, shownProjects } from '../../../shared/hidden';
 import type { ReportCard } from '../../../shared/ledger';
 import { prKey } from '../../../shared/qa';
-import type { Agent, Board, BrowserFrame, CallStatus, IssueDraft, NumberOneChat, PluginStates, Preview, Project, QaReview, Retro, ServerEvent, ServerInfo, StudioSession, TermLine, Usage, VoiceStatus } from '../../../shared/types';
+import type { Agent, Board, BrowserFrame, CallStatus, IssueDraft, NumberOneChat, PluginStates, Preview, Project, QaReview, ServerEvent, ServerInfo, StudioSession, TermLine, Usage, VoiceStatus } from '../../../shared/types';
 
 type Events = {
   snapshot: void;
@@ -23,8 +23,6 @@ type Events = {
   studio: void;
   /** The ledger's report card changed. */
   report: void;
-  /** The chief engineer's retro changed. */
-  retro: void;
   /** Your plan's usage was read again, or how the office signs in changed. */
   usage: void;
   /** A plugin's state changed (its id). */
@@ -57,7 +55,6 @@ export class OfficeState {
   numberOne: NumberOneChat | null = null;
   studio: StudioSession | null = null;
   report: ReportCard | null = null;
-  retro: Retro | null = null;
   usage: Usage | null = null;
   /** Each plugin's state, by plugin id: only the plugins switched on (`info.plugins`). */
   plugins: PluginStates = {};
@@ -127,7 +124,6 @@ export class OfficeState {
         this.numberOne = s.numberOne;
         this.studio = s.studio;
         this.report = s.report;
-        this.retro = s.retro;
         this.usage = s.usage;
         this.plugins = s.plugins ?? {};
         this.voice = s.voice;
@@ -219,9 +215,6 @@ export class OfficeState {
         this.report = event.report;
         this.emit('report', undefined);
         break;
-      case 'retro':
-        this.retro = event.retro;
-        this.emit('retro', undefined);
         break;
       case 'usage':
         this.usage = event.usage;

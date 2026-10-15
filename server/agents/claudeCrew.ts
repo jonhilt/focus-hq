@@ -17,10 +17,6 @@ import type { Staged, StudioOfficer, StudioReply, StudioTurn } from './studioCom
 import { listSessions, type SessionSummary, loadSession } from './studioSessions';
 import { parseTriage, TRIAGE_SCHEMA, type TriageDecision, type Triager, type TriageRequest, triagePrompt, triageSystemPrompt } from './triage';
 import { checkoutLatest } from './workspace';
-import type { RetroOfficer, RetroRequest } from './engineer';
-import { DRAFTS_SCHEMA, engineerPrompt, engineerSystemPrompt } from './retro';
-import { READ_SCHEMA, readerSystemPrompt } from './frictions';
-import { chiefEngineer } from '../../shared/crew';
 import { tidyGoalTitle } from '../../shared/goalTitle';
 import { GOAL_TITLE_SCHEMA, goalTitlePrompt, goalTitleSystemPrompt } from './goalTitles';
 
@@ -59,7 +55,7 @@ export interface ReadOnlyRun {
   tools?: { server: McpSdkServerConfigWithInstance; names: string[]; activity: (name: string) => string };
   /** Folders outside `cwd` the session may read too. */
   readable?: string[];
-  /** For sessions that read a lot (a retro): more turns, and longer, than a quick look. */
+  /** For sessions that read a lot: more turns, and longer, than a quick look. */
   maxTurns?: number;
   /** A model of its own (Haiku, for a cheap extraction), and a system prompt of its own in place of Claude Code's. */
   model?: string;
@@ -424,50 +420,6 @@ function shipTools(req: { projects: ChatProject[]; shipStatus: () => Promise<Shi
       },
     ),
   ];
-}
-
-/**
- * The chief engineer on a retro: reads the evidence the office gathered into its own folder (the frictions that keep
- * coming back, the ledger, closed goals) and nothing else, and drafts issues from them.
- */
-/** The model that reads sessions for frictions at retro time: it labels the same trouble the same way (see docs/retro.md). */
-export const READER_MODEL = 'claude-opus-5-5';
-
-export class ClaudeEngineer implements RetroOfficer {
-  /** A batch of sessions' spans for their frictions: no tools, a short system prompt of its own, a structured answer. */
-  async read(req: { prompt: string; settings: Settings; signal: AbortSignal }): Promise<{ structured: unknown; costUsd?: number }> {
-    const result = await runReadOnly({
-      cwd: os.tmpdir(),
-      system: readerSystemPrompt(),
-      systemAppend: '',
-      prompt: req.prompt,
-      settings: req.settings,
-      signal: req.signal,
-      activity: () => undefined,
-      builtins: [],
-      schema: READ_SCHEMA,
-      model: READER_MODEL,
-      maxTurns: 6,
-      timeoutMs: 10 * 60_000,
-    });
-    return { structured: result.structured, costUsd: result.costUsd };
-  }
-
-  async retro(req: RetroRequest, activity: (text: string) => void): Promise<{ structured: unknown; text: string; costUsd?: number }> {
-    const result = await runReadOnly({
-      cwd: req.cwd,
-      systemAppend: engineerSystemPrompt(chiefEngineer().name),
-      prompt: engineerPrompt(req.days, req.groups),
-      settings: req.settings,
-      signal: req.signal,
-      activity,
-      builtins: CODE_TOOLS,
-      schema: DRAFTS_SCHEMA,
-      maxTurns: 60,
-      timeoutMs: 15 * 60_000,
-    });
-    return { structured: result.structured, text: result.text, costUsd: result.costUsd };
-  }
 }
 
 /** The model that titles a new goal: a quick, cheap job. */

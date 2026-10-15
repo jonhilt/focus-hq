@@ -1,5 +1,6 @@
-import { FIX_KINDS, type GoalRecord, type RetroDraft } from '../../shared/types';
 import { FRICTION_KINDS, type FrictionGroup, type LedgerEvent, reportCard, reportLines } from '../../shared/ledger';
+import type { GoalRecord } from '../../shared/types';
+import { FIX_KINDS, type RetroDraft } from './shared';
 
 // The chief engineer's retro, the pure half. The retro reads the ledger's session digests, not transcripts: code
 // groups their frictions by kind and signature and keeps those that came up in three or more sessions; the engineer

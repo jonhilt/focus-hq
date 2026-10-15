@@ -26,6 +26,26 @@ describe('fromBeforePlugins', () => {
     expect(raw).toEqual({ plugins: {}, agents: [{ task: 'lead', lead: {} }, { task: 'issue' }] });
   });
 
+  it('moves a retro that ran into the retro plugin’s slot, and drops one that never did', () => {
+    const ran = { status: 'thinking', activity: 'Drafting', days: 14, sessions: 3, drafts: [], watch: [], costUsd: 0.2 };
+    const raw: SavedBeforePlugins = { retro: ran };
+    fromBeforePlugins(raw);
+    expect(raw).toEqual({ plugins: { retro: ran } });
+
+    const decided = { status: 'idle', drafts: [{ id: 'd1' }] };
+    const old: SavedBeforePlugins = { retro: decided };
+    fromBeforePlugins(old);
+    expect(old).toEqual({ plugins: { retro: decided } });
+
+    const untouched: SavedBeforePlugins = { retro: { status: 'idle', activity: '', days: 14, sessions: 0, drafts: [], watch: [], costUsd: 0 } };
+    fromBeforePlugins(untouched);
+    expect(untouched).toEqual({ plugins: {} });
+
+    const since: SavedBeforePlugins = { retro: ran, plugins: { retro: { status: 'done' } } };
+    fromBeforePlugins(since);
+    expect(since).toEqual({ plugins: { retro: { status: 'done' } } });
+  });
+
   it('leaves state saved since alone', () => {
     const raw: SavedBeforePlugins = { plugins: {}, agents: [{ task: 'lead' }] };
     fromBeforePlugins(raw);

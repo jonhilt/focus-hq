@@ -1,5 +1,5 @@
 import { callerOf, FLOW_FROM_HEADER, FLOWS_PARAM } from '../../../shared/flows';
-import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ResumeHow, Retro, RetroDraft, RoomTheme, Settings, StudioSession, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
+import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, NumberOneChat, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ResumeHow, RoomTheme, Settings, StudioSession, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
 import type { Scenario } from '../../../shared/scenarios';
@@ -75,16 +75,12 @@ export const api = {
   /** A call to Number One: the browser's WebRTC offer in, the session's id and answer out (no answer in the demo, which has no audio). */
   startCall: (sdp: string) => call<{ id: string; sdp: string | null }>('POST', '/call', { sdp }),
   hangUp: (id: string) => call<{ ok: true }>('POST', `/call/${encodeURIComponent(id)}/hang-up`),
-  retroPreview: (days: number) => call<{ unread: number; costUsd: number }>('GET', `/retro/preview?days=${days}`),
-  retroStart: (days: number) => call<Retro>('POST', '/retro/start', { days }),
-  retroStop: () => call<Retro>('POST', '/retro/stop'),
   /** A plugin's own route (docs/plugins.md), under `/api/plugins/<id>`. */
   plugin: <T>(id: string, path: string, body?: unknown) => call<T>('POST', `/plugins/${encodeURIComponent(id)}${path}`, body),
   /** The ledger's events of the last `days` days, for reviewing at the master systems table. */
   ledger: (days: number) => call<LedgerEvent[]>('GET', `/ledger?days=${days}`),
   undigested: () => call<{ sessions: number }>('GET', '/digests/backfill'),
   backfillDigests: () => call<{ sessions: number }>('POST', '/digests/backfill'),
-  decideDraft: (id: string, accept: boolean, projectId?: string, repo?: string) => call<RetroDraft>('POST', `/retro/drafts/${encodeURIComponent(id)}`, { accept, projectId, repo }),
   sendToQa: (projectId: string, repo: string, number: number) => call<QaReview>('POST', '/prs/qa', { projectId, repo, number }),
   resolveConflicts: (projectId: string, repo: string, number: number) =>
     call<ConflictsOutcome>('POST', '/prs/resolve-conflicts', { projectId, repo, number }),

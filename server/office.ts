@@ -1,6 +1,5 @@
 import { isAutonomy } from '../shared/autonomy';
-import { chiefEngineer } from '../shared/crew';
-import type { Board, ConflictsOutcome, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, RetroDraft, ServerInfo, Settings, Snapshot } from '../shared/types';
+import type { Board, ConflictsOutcome, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
 import { DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS } from '../shared/types';
 import { carryMergeable } from '../shared/board';
 import { chosenSet, previewPrs } from '../shared/previewSet';
@@ -10,7 +9,6 @@ import { autoMergeFor, type GateMark, mergeMethodFor, mergeStep, type MergeStep,
 import { autoQaFor, autoSendBackFor, prKey, verdictBehindHead } from '../shared/qa';
 import type { AgentManager } from './agents/manager';
 import type { Calls } from './call/calls';
-import type { ChiefEngineer } from './agents/engineer';
 import type { Lent } from './agents/manager/pluginHost';
 import type { FocusPlugin } from './plugins/contract';
 import type { UsageWatch } from './usage';
@@ -54,7 +52,6 @@ export class Office {
     readonly planner: IssuePlanner,
     readonly numberOne: NumberOne,
     readonly studio: StudioComputer,
-    readonly engineer: ChiefEngineer,
     readonly usage: UsageWatch,
     readonly voice: Voice,
     readonly calls: Calls,
@@ -100,7 +97,6 @@ export class Office {
       voice: this.voice.status(),
       call: this.calls.status(),
       report: this.agents.report(),
-      retro: this.engineer.current(),
       usage: this.usage.current(),
       plugins: this.agents.plugins.states(),
     };
@@ -194,27 +190,6 @@ export class Office {
     if (fromDraft) this.planner.discard(projectId);
     const agent = assign ? this.agents.hire(projectId, repo, issue, assign) : undefined;
     return { issue, agent };
-  }
-
-  /**
-   * The captain's call on one of the retro's drafts: an accepted one is filed in `repo` (one of `projectId`'s); either
-   * way the decision goes in the ledger with the frictions' signatures, so later retros leave them be and the report
-   * card can tell whether an accepted fix stopped them.
-   */
-  async decideDraft(id: string, accepted: boolean, projectId?: string, repo?: string): Promise<RetroDraft> {
-    const draft = this.engineer.current().drafts.find((d) => d.id === id);
-    if (!draft) throw new Error('That draft isn’t in the latest retro');
-    if (draft.decision) throw new Error(`That draft was already ${draft.decision.accepted ? 'accepted' : 'rejected'}`);
-    let issue: { repo: string; number: number; url: string } | undefined;
-    if (accepted) {
-      if (!projectId || !repo) throw new Error('Pick the repository to file it in');
-      if (!this.store.project(projectId).repos.includes(repo)) throw new Error(`${repo} isn’t one of the project’s repositories`);
-      const filed = await this.fileIssue(projectId, repo, draft.title, `${draft.body}\n\n_Drafted by ${chiefEngineer().name}, the Focus office's chief engineer, from frictions in ${draft.sessions} agent sessions; accepted by the captain._`);
-      issue = { repo, number: filed.number, url: filed.url };
-      this.hub.toast('success', `🔧 Filed ${repo}#${filed.number}: ${draft.title}`, undefined, projectId);
-    }
-    this.agents.record(projectId ?? '', { kind: 'retro-decision', title: draft.title, signatures: draft.signatures, accepted, ...(issue && { issue: { repo: issue.repo, number: issue.number } }) });
-    return this.engineer.decided(id, { accepted, at: Date.now(), issue });
   }
 
   /** Files an issue on GitHub and puts it on the project's board straight away (then refreshes it), without a toast. */

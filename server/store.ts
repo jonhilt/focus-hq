@@ -5,7 +5,7 @@ import { qaOfficerFor, randomAvatar } from '../shared/crew';
 import type { LedgerEntry, LedgerEvent } from '../shared/ledger';
 import { type LedgerHealth, LedgerLog } from './ledgerLog';
 import { olderVerdict, prKey } from '../shared/qa';
-import type { Agent, Board, BrowserFrame, ClosedPr, MergeMethod, NumberOneChat, PluginStates, Project, QaReview, Retro, Settings, StudioSession, TermLine } from '../shared/types';
+import type { Agent, Board, BrowserFrame, ClosedPr, MergeMethod, NumberOneChat, PluginStates, Project, QaReview, Settings, StudioSession, TermLine } from '../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS, ROOM_THEMES, type RoomTheme } from '../shared/types';
 import { config, paths } from './config';
 import { takeLock } from './fileLock';
@@ -16,16 +16,6 @@ import { newId } from './util';
 
 /** Number One's chat as saved: with their session, so the next message resumes it. */
 export type StoredNumberOne = NumberOneChat & { sessionId?: string };
-
-export const freshRetro = (): Retro => ({ status: 'idle', activity: '', days: 14, sessions: 0, drafts: [], watch: [], costUsd: 0 });
-
-/** The latest retro as it picks up after a restart: one under way when Focus shut down ends, so another can start. */
-export function retroAfterRestart(saved: Retro): Retro {
-  // a retro saved before drafts replaced proposals has none
-  saved = { ...saved, drafts: saved.drafts ?? [], watch: saved.watch ?? [] };
-  if (saved.status !== 'gathering' && saved.status !== 'thinking') return saved;
-  return { ...saved, status: 'failed', activity: 'Interrupted', error: 'Interrupted when Focus shut down. Start it again.' };
-}
 
 export const freshNumberOne = (): StoredNumberOne => ({ status: 'waiting', activity: '', messages: [], updatedAt: Date.now(), costUsd: 0 });
 
@@ -85,7 +75,6 @@ interface PersistedState {
   agents: Agent[];
   numberOne?: StoredNumberOne;
   studio?: StoredStudio;
-  retro?: Retro;
   /** Each plugin's state, by plugin id: kept while a plugin's switched off, for when it's back. */
   plugins?: PluginStates;
   reviews?: QaReview[];
@@ -119,8 +108,6 @@ export class Store {
   /** The captain's chat with Number One. */
   numberOne: StoredNumberOne = freshNumberOne();
   studio: StoredStudio = freshStudio();
-  /** The chief engineer's latest retro. */
-  retro: Retro = freshRetro();
   /** Each plugin's own state, by plugin id (`PluginHost.state`, docs/plugins.md). */
   plugins: PluginStates = {};
   /** The latest QA review per pull request (by prKey). */
@@ -164,7 +151,6 @@ export class Store {
     this.projects = raw.projects ?? [];
     if (raw.numberOne) this.numberOne = numberOneAfterRestart(raw.numberOne);
     if (raw.studio) this.studio = studioAfterRestart(raw.studio);
-    if (raw.retro) this.retro = retroAfterRestart(raw.retro);
     this.plugins = raw.plugins ?? {};
     for (const saved of raw.reviews ?? []) {
       const review = reviewAfterRestart(saved);
@@ -202,7 +188,6 @@ export class Store {
       agents: [...this.agents.values()],
       numberOne: this.numberOne,
       studio: this.studio,
-      retro: this.retro,
       plugins: this.plugins,
       reviews: [...this.reviews.values()],
       closedPrs: [...this.closedPrs.values()],
