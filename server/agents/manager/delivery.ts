@@ -94,15 +94,16 @@ export class Delivery extends Part {
       this.print(agent, [{ kind: 'success', text: `✔ Pull request ready: ${pr.url}` }]);
       this.update(agent, { status: 'done', pr, activity: `PR #${pr.number} is ready for review`, finishedAt: Date.now() });
       if (agent.task === 'brief') this.core.plugins.prOpened(agent, pr);
+      const head = yield* workspace.head(dir);
       const lead = agent.task === 'conflicts' ? this.core.leads.leadWith(agent.repo, pr.number) : undefined;
-      if (lead) this.core.conflicts.mergedForLead(lead, { repo: agent.repo, number: pr.number, baseBranch: agent.baseBranch, branch: agent.branch }, yield* workspace.head(dir), agent.name);
+      if (lead) this.core.conflicts.mergedForLead(lead, { repo: agent.repo, number: pr.number, baseBranch: agent.baseBranch, branch: agent.branch }, head, agent.name);
       this.boardChanged(agent.projectId);
       this.core.reviews.fixEnded(agent, 'pushed');
       // new code on the PR: the room's QA officer tests it
       const project = this.store.projects.find((p) => p.id === agent.projectId);
       if (project && autoQaFor(project)) {
         try {
-          this.core.reviews.requestReview(agent.projectId, agent.repo, pr.number, agent.issue.title);
+          this.core.reviews.requestReview(agent.projectId, agent.repo, pr.number, agent.issue.title, undefined, false, head);
         } catch (err) {
           this.print(agent, [{ kind: 'error', text: `✘ Couldn't hand PR #${pr.number} to QA: ${errorMessage(err)}` }]);
         }

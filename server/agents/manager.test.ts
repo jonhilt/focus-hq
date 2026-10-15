@@ -611,6 +611,19 @@ describe('AgentManager', () => {
     expect(questions().at(-1)!.answer).toEqual({ option: 'a', at: expect.any(Number) });
   });
 
+  it('sends a PR back to QA at the office’s merge of the base, so the verdict doesn’t stay on the commit before', async () => {
+    const { agents, claude, store, project } = office({ ...demoWorkspace, mergeBase: async () => ({ kind: 'merged', sha: 'merge-sha1234', from: 'old-sha' }) });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    await claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    const [pr] = store.agent(lead.id).lead!.prs;
+    const report: QaReport = { verdict: 'pass', summary: 'Works', checks: [], commands: [], captions: [] };
+    store.putReview({ projectId: project.id, repo: pr.repo, number: pr.number, title: 'PR', status: 'passed', sha: pr.sha, report, requestedAt: 1, finishedAt: 2 });
+
+    await agents.resolveConflicts(project.id, { repo: pr.repo, number: pr.number, title: 'Saved items', branch: store.agent(lead.id).branch, baseBranch: 'main' } as PullRequest);
+    expect(store.reviews.get(prKey(pr.repo, pr.number))).toMatchObject({ status: 'queued', shippedHead: 'merge-sha1234' });
+  });
+
   it('merges the base into a slice’s conflicting PR itself, and tells the lead to pull once their turn is over', async () => {
     const auto = ['CLAUDE.md', 'client/public/ship/holodeck-deck.glb'];
     const { agents, claude, store, project } = office({ ...demoWorkspace, mergeBase: async () => ({ kind: 'merged', sha: 'merge-sha', from: 'old-sha', auto }) });

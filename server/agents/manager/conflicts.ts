@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
-import { prKey } from '../../../shared/qa';
+import { autoQaFor, prKey } from '../../../shared/qa';
 import type { Agent, ConflictsOutcome, PullRequest } from '../../../shared/types';
-import { newId } from '../../util';
+import { errorMessage, newId } from '../../util';
 import { conflictsAgentModel, conflictsRecord } from '../conflicts';
 import { conflictsResolvedNote } from '../lead';
 import { conflictsPrompt } from '../prompts';
@@ -32,6 +32,7 @@ export class Conflicts extends Part {
     if (merge.kind === 'merged') {
       if (lead) this.mergedForLead(lead, pr, merge.sha, 'the office');
       else if (owner) await this.runtime.runPromise(this.catchUp(owner, merge));
+      this.verdictCatchesUp(projectId, pr, merge.sha);
       return { kind: 'merged', ...(merge.auto ? { auto: merge.auto } : {}) };
     }
     if (owner) {
@@ -49,6 +50,20 @@ export class Conflicts extends Part {
       ...conflictsAgentModel(this.store.settings),
     });
     return { kind: 'agent', agent };
+  }
+
+  /**
+   * The office's merge of the base left QA's verdict on the commit before it: back to QA, who carry a pass over a clean
+   * merge with the project's checks alone (`precheck`), so the PR doesn't wait for the captain at an older commit.
+   */
+  private verdictCatchesUp(projectId: string, pr: PullRequest, sha: string): void {
+    const review = this.store.reviews.get(prKey(pr.repo, pr.number));
+    if (!review || !autoQaFor(this.store.project(projectId))) return;
+    try {
+      this.core.reviews.requestReview(projectId, pr.repo, pr.number, pr.title, undefined, false, sha);
+    } catch (err) {
+      console.warn(`Couldn't hand ${pr.repo}#${pr.number} back to QA after merging ${pr.baseBranch} in: ${errorMessage(err)}`);
+    }
   }
 
   /** The office's own merge of the PR's base branch into it. One that fails for any reason other than conflicts goes to an agent too. */
