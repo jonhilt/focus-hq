@@ -224,6 +224,8 @@ export interface WorkspaceOps {
   changedFiles?(dir: string, baseBranch: string): Promise<string[]>;
   /** Moves `dir`'s checkout onto a new `branch` at origin's (freshly fetched) `baseBranch`. */
   freshBranch(dir: string, branch: string, baseBranch: string): Promise<void>;
+  /** Renames the branch checked out in `dir` (the slice's working name, at its first ship); fails if `to` is taken. */
+  renameBranch(dir: string, from: string, to: string): Promise<void>;
   /** Applies `commits` on top of HEAD; fails, leaving HEAD as it was, if they don't apply cleanly. */
   cherryPick(dir: string, commits: string[]): Promise<void>;
   push(dir: string, branch: string): Promise<void>;

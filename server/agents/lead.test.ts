@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadAgent, LeadWork } from '../../shared/types';
-import { afterLanding, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, checkNote, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
+import { afterLanding, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, checkNote, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, sessionGone, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, shipBranch, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -83,6 +83,13 @@ describe('slices', () => {
     expect(sliceBranch('Internationalisation', 2, 'x')).toBe('focus/internationalisation-2-x');
     expect(sliceBranch('Supercalifragilisticexpialidocious', 1, 'x')).toBe('focus/supercalifragilisticexpi-1-x');
     expect(sliceBranch('!!!', 1, 'x')).toBe('focus/goal-1-x');
+  });
+
+  it('names the branch a pull request ships from after the slice’s work, keeping its working branch’s id', () => {
+    expect(shipBranch('Name branches after the slice’s work', 'focus/we-need-better-branch-1-96a3')).toBe('focus/name-branches-after-the-slice-s-work-96a3');
+    expect(shipBranch('Proposal editor: let the captain reorder sections and keep versions', 'focus/proposal-editor-3-eae1')).toBe('focus/proposal-editor-let-the-captain-reorder-eae1');
+    expect(shipBranch('Fix it', 'focus/fresh')).toBe('focus/fix-it-fresh');
+    expect(shipBranch('!!!', 'focus/goal-1-x')).toBeUndefined();
   });
 
   it('lands once it shipped and every pull request has merged or closed', () => {

@@ -57,6 +57,7 @@ const liveWorkspace: WorkspaceOps = {
   unshippedCommits: git.unshippedCommits,
   changedFiles: git.changedFiles,
   freshBranch: git.freshBranch,
+  renameBranch: git.renameBranch,
   cherryPick: git.cherryPick,
   push: git.pushBranch,
   publish: git.publishBranch,

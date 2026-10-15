@@ -717,6 +717,7 @@ export const demoWorkspace: WorkspaceOps = {
   // ...and ship everything they commit
   unshippedCommits: async () => [],
   freshBranch: async () => undefined,
+  renameBranch: async () => undefined,
   cherryPick: async () => undefined,
   push: async () => sleep(800),
   publish: async () => sleep(400),

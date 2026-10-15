@@ -10,15 +10,31 @@ import { type ContactInput, contactsForPrompt } from './contacts';
 /** The lead's checkout of one repo: a folder inside their workspace. */
 export const leadWorktreeId = (agentId: string, folder: string) => `${agentId}/${folder}`;
 
+/** `text` as a branch-name slug of about `max` characters, cut between words. */
+function branchSlug(text: string, max: number): string {
+  const slug = slugify(text, 60);
+  if (slug.length <= max) return slug;
+  const cut = slug.lastIndexOf('-', max);
+  return slug.slice(0, cut > 8 ? cut : max);
+}
+
 /**
  * A fresh branch for each slice, named after the goal, so a new slice never collides with an earlier one still on GitHub,
- * nor with another goal's.
+ * nor with another goal's. It's a working name: the slice's first ship renames it after its work (`shipBranch`).
  */
 export function sliceBranch(goalTitle: string, slice: number, suffix: string): string {
-  const slug = slugify(goalTitle, 60);
-  // about 24 characters, cut between words
-  const short = slug.length <= 24 ? slug : slug.slice(0, slug.lastIndexOf('-', 24) > 8 ? slug.lastIndexOf('-', 24) : 24);
-  return `focus/${short || 'goal'}-${slice}-${suffix}`;
+  return `focus/${branchSlug(goalTitle, 24) || 'goal'}-${slice}-${suffix}`;
+}
+
+/**
+ * The branch a repo's pull request ships from: named after what the slice did (the ship's title), keeping the id its
+ * working branch ends in so it stays unique. Undefined when the title has nothing to name it by.
+ */
+export function shipBranch(title: string, working: string): string | undefined {
+  const slug = branchSlug(title, 40);
+  if (!slug) return undefined;
+  const id = /[^-/]*$/.exec(working)?.[0];
+  return `focus/${slug}${id ? `-${id}` : ''}`;
 }
 
 /**
