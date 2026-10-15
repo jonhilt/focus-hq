@@ -19,9 +19,16 @@ export const latest = (): Retro | undefined => pluginState<Retro>(RETRO);
 /** One of the plugin's routes. */
 const call = <T>(path: string, body?: unknown) => api.plugin<T>(RETRO, path, body);
 
-// the window outlives re-renders (other plugins' state changes redraw the station), so they don't reset what you typed
-let daysInput: HTMLInputElement | undefined;
-const days = () => (daysInput ??= h('input', { type: 'number', min: '1', max: '60', value: String(latest()?.days ?? 14), style: 'width:80px' }));
+// the window outlives re-renders (other plugins' state changes redraw the station), so they don't reset what you typed;
+// it starts again from a retro's own window when a new one is saved
+let daysInput: { input: HTMLInputElement; seededFrom: number | undefined } | undefined;
+function days(): HTMLInputElement {
+  const retro = latest();
+  if (!daysInput || daysInput.seededFrom !== retro?.startedAt) {
+    daysInput = { input: h('input', { type: 'number', min: '1', max: '60', value: String(retro?.days ?? 14), style: 'width:80px' }), seededFrom: retro?.startedAt };
+  }
+  return daysInput.input;
+}
 
 /** The retro beside the overview: whether one's under way or waiting on you, and the frictions it would look at. */
 export function retroCard(ui: Ui, go: EngineeringGo): HTMLElement {
