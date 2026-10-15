@@ -152,10 +152,6 @@ export class Slices extends Part {
   }
 
   /**
-   * Moves each of the lead's repos whose pull request merged (`needsFreshBranch`) onto a new branch from its base, with
-   * the commits that hadn't shipped cherry-picked onto it. A repo with uncommitted changes stays put: it can't ship yet.
-   */
-  /**
    * The branch a repo ships from: at its first ship in the slice, the office renames the slice's working branch after
    * the slice's work (`shipBranch`), so the pull request's branch says what it does. A repo with a pull request open
    * keeps the branch it's on, and so does one git won't rename (the name's taken).
@@ -174,6 +170,10 @@ export class Slices extends Part {
     });
   }
 
+  /**
+   * Moves each of the lead's repos whose pull request merged (`needsFreshBranch`) onto a new branch from its base, with
+   * the commits that hadn't shipped cherry-picked onto it. A repo with uncommitted changes stays put: it can't ship yet.
+   */
   private freshBranches(agent: LeadAgent, title: string): Effect.Effect<FreshBranch[], GitFailed, Workspace> {
     return Effect.gen({ self: this }, function* () {
       const workspace = yield* Workspace;
