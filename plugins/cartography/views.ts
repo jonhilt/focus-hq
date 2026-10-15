@@ -4,8 +4,18 @@ import type { MapView, RepoMap } from './shared';
 /** The view every map has: all its parts, drawn as a matrix (draw.ts). */
 export const WHOLE: MapView = { id: 'whole', question: 'What are its parts, and which depend on which?', parts: [] };
 
-/** A map's views, the whole of it first. */
-export const viewsOf = (map: RepoMap): MapView[] => (map.model ? [{ ...WHOLE, parts: map.model.parts.map((p) => p.id) }, ...map.model.views] : []);
+/** The view a map with a history has: how its parts have changed, and which change together. */
+export const CHANGES: MapView = { id: 'changes', question: 'Where does the code change, and what changes with what?', parts: [] };
+
+/** The views every map has, by the model's say or the history's, not the model's own. */
+export const isBuiltIn = (view: MapView): boolean => view.id === WHOLE.id || view.id === CHANGES.id;
+
+/** A map's views: the whole of it first, then how it changes (with a history), then the model's own. */
+export function viewsOf(map: RepoMap): MapView[] {
+  if (!map.model) return [];
+  const every = map.model.parts.map((p) => p.id);
+  return [{ ...WHOLE, parts: every }, ...(map.history ? [{ ...CHANGES, parts: every }] : []), ...map.model.views];
+}
 
 /** The view a map opens on: its model's first, since the whole of a big map is a lot to take in first. */
 export const openingView = (map: RepoMap): string => map.model?.views[0]?.id ?? WHOLE.id;
@@ -21,19 +31,23 @@ export function coverage(map: RepoMap): string {
 export const VIEW_KEY =
   'An arrow goes from a part to a part whose code it uses: the thicker, the more it imports. A dashed gold one is what a part sends another as it runs, from a recorded run. Each number is its line below.';
 export const MATRIX_KEY = 'Each row imports from the columns it has a number in: the number is how many imports. Orange: two parts that import each other.';
+export const CHANGES_KEY =
+  'From git: each bar is how many commits changed a part, the busiest first. Each numbered line is two parts that keep changing together; with no import between them, the map\'s arrows don\'t show what ties them.';
 
 /**
  * Which of a project's views get a screen in its holodeck, in the order they're hung: every repo's own views first,
- * the questions someone chose to ask, then each repo's whole map.
+ * the questions someone chose to ask, then each repo's whole map, then how each repo changes.
  */
 export function hallViews(maps: readonly RepoMap[]): { map: RepoMap; view: MapView }[] {
   const drawn = maps.filter((m) => m.model && !m.error);
   const each = drawn.map((map) => viewsOf(map).map((view) => ({ map, view })));
-  return [...each.flatMap((views) => views.filter((v) => v.view.id !== WHOLE.id)), ...each.flatMap((views) => views.filter((v) => v.view.id === WHOLE.id))];
+  const of = (id: string) => each.flatMap((views) => views.filter((v) => v.view.id === id));
+  return [...each.flatMap((views) => views.filter((v) => !isBuiltIn(v.view))), ...of(WHOLE.id), ...of(CHANGES.id)];
 }
 
 /** What a view's screen shows changes only with the commit it was mapped from and the view itself. */
-export const screenVersion = (map: RepoMap, view: MapView): string => `${map.commit ?? ''}|${view.id}|${view.parts.join(',')}|${map.connections.length}|${map.flows?.length ?? 0}`;
+export const screenVersion = (map: RepoMap, view: MapView): string =>
+  `${map.commit ?? ''}|${view.id}|${view.parts.join(',')}|${map.connections.length}|${map.flows?.length ?? 0}|${map.history?.commits ?? 0}`;
 
 /** Where a drawing `w` × `h` goes in `box`, as big as fits without stretching, in the middle. */
 export function fitInto(w: number, h: number, box: { x: number; y: number; w: number; h: number }): { x: number; y: number; w: number; h: number } {
@@ -46,7 +60,9 @@ export function viewList(maps: readonly RepoMap[]): string {
   return maps
     .map((map) => {
       if (map.error || !map.model) return `${map.repo}: no views (${map.error ?? 'no model'}).`;
-      const lines = viewsOf(map).map((v) => `- ${v.id}: ${v.id === WHOLE.id ? 'every part, as a dependency matrix' : `${v.question} (${v.parts.length} parts)`}`);
+      const said = (v: MapView) =>
+        v.id === WHOLE.id ? 'every part, as a dependency matrix' : v.id === CHANGES.id ? `how its parts changed in git over ${map.history?.days ?? 0} days, and which change together` : `${v.question} (${v.parts.length} parts)`;
+      const lines = viewsOf(map).map((v) => `- ${v.id}: ${said(v)}`);
       return `${map.repo}'s views:\n${lines.join('\n')}`;
     })
     .join('\n\n');

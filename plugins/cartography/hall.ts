@@ -1,10 +1,10 @@
 // The project's maps in its holodeck (plugins.ts `hall`): a screen per view round the wall, each its question over its
 // drawing, and E on it opens it up close.
 import type { HallScreen } from '../../client/src/plugins';
-import { matrixSvg, viewSvg } from './draw';
+import { viewDrawing } from './draw';
 import { openView } from './panel';
 import type { MapView, RepoMap } from './shared';
-import { fitInto, hallViews, screenVersion, WHOLE } from './views';
+import { CHANGES, fitInto, hallViews, screenVersion, WHOLE } from './views';
 
 const INK = { bg: 'rgba(8, 14, 32, 0.92)', title: '#ffcc66', muted: '#9aa6c4' };
 const FONT = 'system-ui, sans-serif';
@@ -27,7 +27,7 @@ async function drawView(ctx: CanvasRenderingContext2D, w: number, h: number, map
   ctx.fillStyle = INK.muted;
   ctx.font = `24px ${FONT}`;
   ctx.fillText(`${map.repo}${map.commit ? ` · ${map.commit.slice(0, 7)}` : ''} · E to read it up close`, 48, 90, w - 96);
-  const img = await image(view.id === WHOLE.id ? matrixSvg(map) : viewSvg(map, view));
+  const img = await image(viewDrawing(map, view).svg);
   const at = fitInto(img.naturalWidth || img.width, img.naturalHeight || img.height, { x: 32, y: 140, w: w - 64, h: h - 164 });
   ctx.drawImage(img, at.x, at.y, at.w, at.h);
 }
@@ -36,7 +36,7 @@ async function drawView(ctx: CanvasRenderingContext2D, w: number, h: number, map
 export function hallMaps(maps: readonly RepoMap[]): HallScreen[] {
   return hallViews(maps).map(({ map, view }) => ({
     key: `${map.repo}#${view.id}`,
-    title: view.id === WHOLE.id ? `${map.repo}'s whole map` : `the map: ${view.question}`,
+    title: view.id === WHOLE.id ? `${map.repo}'s whole map` : view.id === CHANGES.id ? `how ${map.repo} changes` : `the map: ${view.question}`,
     version: screenVersion(map, view),
     draw: (ctx, w, h) => drawView(ctx, w, h, map, view),
     closeUp: (ui) => openView(ui, map, view),

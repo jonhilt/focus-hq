@@ -1,6 +1,7 @@
 // A map drawn to be read (README.md): a view as its parts in a column per layer, each arrow saying what one part takes
-// from another, and the whole map as a dependency matrix. Pure SVG strings, free of Node and the DOM.
+// from another, the whole map as a dependency matrix, and how it changes as bars and sentences. Pure SVG strings, free of Node and the DOM.
 import type { MapConnection, MapFlow, MapPart, MapView, RepoMap } from './shared';
+import { CHANGES, CHANGES_KEY, MATRIX_KEY, VIEW_KEY, WHOLE } from './views';
 
 /** Each layer's colour, by its place among the map's layers. */
 const LAYER_COLOURS = ['#8fd3ff', '#ffcc66', '#c9a0ff', '#99dd88', '#ff9f80', '#80e0d0'];
@@ -246,4 +247,56 @@ export function matrixSvg(map: RepoMap): string {
   }
   out.push('</svg>');
   return out.join('');
+}
+
+const BARS = { labels: 280, bar: 560, row: 34, top: 16, shown: 14 } as const;
+
+/** How a map's parts changed in git: a bar each for its commits, the busiest first, in its layer's colour. */
+export function changesSvg(map: RepoMap): string {
+  const parts = map.model?.parts ?? [];
+  const colours = layerColours(parts);
+  const changed = (map.history?.parts ?? []).slice(0, BARS.shown);
+  const most = Math.max(1, ...changed.map((c) => c.commits));
+  const W = BARS.labels + BARS.bar + 230;
+  const H = BARS.top * 2 + Math.max(1, changed.length) * BARS.row;
+  const out = [`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="system-ui,sans-serif">`];
+  changed.forEach((c, i) => {
+    const part = parts.find((p) => p.id === c.id);
+    const colour = (part && colours.get(part.layer)) ?? INK.muted;
+    const y = BARS.top + i * BARS.row;
+    const w = Math.max(3, (c.commits / most) * BARS.bar);
+    out.push(
+      `<g><title>${esc(`${part?.label ?? c.id}: ${times(c.commits, 'commit')}, ${times(c.lines, 'line')} changed`)}</title>`,
+      `<text x="${BARS.labels - 12}" y="${y + 22}" text-anchor="end" font-size="16" fill="${colour}">${esc(fit(part?.label ?? c.id, 16, BARS.labels - 20))}</text>`,
+      `<rect x="${BARS.labels}" y="${y + 6}" width="${w.toFixed(1)}" height="${BARS.row - 12}" rx="4" fill="${colour}" fill-opacity="0.75"/>`,
+      `<text x="${BARS.labels + w + 10}" y="${y + 22}" font-size="14" fill="${INK.text}">${esc(`${times(c.commits, 'commit')} · ${times(c.lines, 'line')}`)}</text></g>`,
+    );
+  });
+  out.push('</svg>');
+  return out.join('');
+}
+
+/** A map's change coupling as sentences: which parts keep changing together, and whether an import says why. */
+export function changeSentences(map: RepoMap): string[] {
+  const label = (id: string) => map.model?.parts.find((p) => p.id === id)?.label ?? id;
+  const talk = (a: string, b: string) => (map.flows ?? []).some((f) => (f.from === a && f.to === b) || (f.from === b && f.to === a));
+  return (map.history?.coupling ?? []).map((c) => {
+    const share = Math.round((c.together / c.either) * 100);
+    // an import says why two parts change together; failing that, a recorded run's flow between them; failing both, nothing on the map does
+    const why = c.imports ? '' : talk(c.a, c.b) ? ', with no import between them: they talk over the wire (the recorded run\'s flows)' : ', with no import between them: what ties them isn\'t on the map';
+    return `${label(c.a)} and ${label(c.b)} changed together in ${c.together} of the ${c.either} commits that changed either (${share}%)${why}`;
+  });
+}
+
+/** Any view of a map as the browser and the screens show it: its drawing, how to read it, and its numbered sentences. */
+export function viewDrawing(map: RepoMap, view: MapView): { svg: string; key: string; sentences: string[] } {
+  if (view.id === WHOLE.id) {
+    const example = matrixExample(map);
+    return { svg: matrixSvg(map), key: `${MATRIX_KEY}${example ? ` ${example}` : ''}`, sentences: [] };
+  }
+  if (view.id === CHANGES.id) {
+    const h = map.history;
+    return { svg: changesSvg(map), key: `${CHANGES_KEY} The last ${h?.days ?? 0} days: ${times(h?.commits ?? 0, 'commit')}.`, sentences: changeSentences(map) };
+  }
+  return { svg: viewSvg(map, view), key: VIEW_KEY, sentences: viewSentences(map, view) };
 }

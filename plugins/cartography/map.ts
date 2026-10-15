@@ -1,10 +1,11 @@
 // Making a repo's map from a checkout of it: its model file, its source files (as git knows them) and their imports,
-// read with TypeScript's parser (scan.ts). The rules are in graph.ts.
+// read with TypeScript's parser (scan.ts), and its git history (history.ts). The rules are in graph.ts.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { parse } from 'yaml';
 import { errorMessage, run } from '../../server/util';
-import { isSource, mapOf, resolveImport } from './graph';
+import { isSource, mapOf, ownerOf, resolveImport } from './graph';
+import { historyOf, LOG_ARGS, readLog } from './history';
 import { FLOWS_FILE, type FlowRecording } from '../../shared/flows';
 import { readModel, readRecording } from './model';
 import { importsIn } from './scan';
@@ -51,5 +52,8 @@ export async function mapRepo(repo: string, dir: string): Promise<RepoMap> {
   const recording = await recorded(dir);
   const files = (await run('git', ['ls-files'], { cwd: dir })).split('\n').filter(isSource);
   const map = mapOf(repo, model, files, await imports(dir, files), recording?.ok);
-  return { ...map, commit, problems: [...map.problems, ...(recording?.error ? [recording.error] : [])] };
+  // the history's files as the map would own them: source the model has a part for, wherever it was then
+  const log = await run('git', LOG_ARGS, { cwd: dir }).catch(() => '');
+  const history = log ? historyOf(readLog(log), (f) => (isSource(f) ? ownerOf(f, model) : undefined), map.connections) : undefined;
+  return { ...map, commit, ...(history?.commits ? { history } : {}), problems: [...map.problems, ...(recording?.error ? [recording.error] : [])] };
 }

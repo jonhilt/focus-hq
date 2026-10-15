@@ -1,6 +1,7 @@
 // What both halves of the cartography plugin (README.md) share: a project's architecture model, kept in each repo
 // it maps, and the map the office makes of it from the code.
 import type { ModelKind } from '../../shared/types';
+import type { MapHistory } from './history';
 
 export const CARTOGRAPHY = 'cartography';
 
@@ -77,6 +78,8 @@ export interface RepoMap {
   flows?: MapFlow[];
   /** What that run was, and the commit it was recorded on. */
   flowsRun?: { run: string; commit?: string };
+  /** How its parts have changed, from the default branch's git history (history.ts). */
+  history?: MapHistory;
   /** Where the model and the code disagree, in words. */
   problems: string[];
   /** Why there's no map: no model file, or one that doesn't read. */

@@ -24,7 +24,7 @@ A plugin's saved state stays in `state.json` while it's switched off, so switchi
 
 - [Where goals' time goes](../plugins/flow/README.md) (`flow`): each open goal's flow (what it's waiting on now, for how long, and where its time has gone) on its goal board, its card in the goals list and its lines in Comms. The `pnpm run flow` and [`pnpm run qa-catch`](../plugins/flow/qa-catch.md) scripts live in it too, and work whether it's switched on or not.
 - [The scorecard](../plugins/scorecard/README.md) (`scorecard`): main engineering's scorecards of the office's own repo, on the engineering station and the MSD. The `pnpm run scorecard` and `pnpm run crap` scripts live in it too, and work whether it's switched on or not.
-- [Cartography](../plugins/cartography/README.md) (`cartography`): each project's architecture map, from the model its repos keep in `.focus/cartography.yaml` and the imports their code makes: on the engineering station's **Maps** view, each view drawn with numbered arrows and said in sentences, and the whole map as a dependency matrix.
+- [Cartography](../plugins/cartography/README.md) (`cartography`): each project's architecture map, from the model its repos keep in `.focus/cartography.yaml` and the imports their code makes: on the engineering station's **Maps** view, each view drawn with numbered arrows and said in sentences, the whole map as a dependency matrix, and how it changes (hotspots and change coupling from git).
 - [The climber](../plugins/climber/README.md) (`climber`): main engineering's crew member, who fixes the scorecard's worst gap in the office's own repo, one pull request at a time. It requires the scorecard plugin: switched on without it, it's left out, saying why.
 
 ## Plugins that need each other

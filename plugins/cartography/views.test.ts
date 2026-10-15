@@ -91,3 +91,20 @@ describe('screenTitle', () => {
     expect(cut.endsWith('…')).toBe(true);
   });
 });
+
+describe('the changes view', () => {
+  const changing: RepoMap = { ...MAP, history: { days: 90, commits: 3, parts: [{ id: 'api', commits: 3, lines: 9 }], coupling: [] } };
+
+  it('comes with a history, after the whole map, and hangs after every repo\'s whole map', () => {
+    expect(viewsOf(changing).map((v) => v.id)).toEqual(['whole', 'changes', 'front']);
+    expect(hallViews([changing, { ...changing, repo: 'o/other' }]).map(({ map, view }) => `${map.repo}#${view.id}`)).toEqual([
+      'o/r#front', 'o/other#front', 'o/r#whole', 'o/other#whole', 'o/r#changes', 'o/other#changes',
+    ]);
+    expect(viewList([changing])).toContain('- changes: how its parts changed in git over 90 days, and which change together');
+  });
+
+  it('is drawn again as the history grows', () => {
+    const [, changes] = viewsOf(changing);
+    expect(screenVersion(changing, changes)).not.toBe(screenVersion({ ...changing, history: { ...changing.history!, commits: 4 } }, changes));
+  });
+});

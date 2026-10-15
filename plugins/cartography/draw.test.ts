@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { esc, fit, layerColours, matrixExample, matrixOrder, matrixSvg, namesLabel, placeView, viewLines, viewSentences, viewSvg, wrap } from './draw';
-import { viewsOf } from './views';
+import { changeSentences, changesSvg, esc, fit, layerColours, matrixExample, matrixOrder, matrixSvg, namesLabel, placeView, viewDrawing, viewLines, viewSentences, viewSvg, wrap } from './draw';
+import { VIEW_KEY, viewsOf } from './views';
 import { MAP } from './views.test';
 
 const front = viewsOf(MAP)[1];
@@ -96,5 +96,48 @@ describe('flows in a view', () => {
     expect(svg.match(/marker-end="url\(#cg-flow\)"/g)).toHaveLength(2);
     expect(svg.match(/marker-end="url\(#cg-arrow\)"/g)).toHaveLength(2);
     expect(viewLines(withFlows, front).map((l) => l.kind)).toEqual(['import', 'import', 'flow', 'flow']);
+  });
+});
+
+describe('how a map changes', () => {
+  const changing = {
+    ...MAP,
+    flows: [{ from: 'db', to: 'api', via: 'ws' as const, names: ['toast'], count: 2 }],
+    history: {
+      days: 90,
+      commits: 20,
+      parts: [{ id: 'core', commits: 12, lines: 300 }, { id: 'api', commits: 8, lines: 90 }, { id: 'db', commits: 1, lines: 1 }],
+      coupling: [
+        { a: 'api', b: 'core', together: 6, either: 14, imports: true },
+        { a: 'api', b: 'db', together: 5, either: 9, imports: false },
+        { a: 'core', b: 'db', together: 5, either: 13, imports: false },
+      ],
+    },
+  };
+
+  it('draws a bar per part that changed, the busiest first, saying its commits and lines', () => {
+    const svg = changesSvg(changing);
+    expect(svg.match(/<rect /g)).toHaveLength(3);
+    expect(svg.indexOf('12 commits · 300 lines')).toBeLessThan(svg.indexOf('8 commits · 90 lines'));
+    expect(svg).toContain('1 commit · 1 line');
+  });
+
+  it('says what changes together, and what ties them: an import, the wire, or nothing on the map', () => {
+    expect(changeSentences(changing)).toEqual([
+      'API and Core changed together in 6 of the 14 commits that changed either (43%)',
+      'API and Store changed together in 5 of the 9 commits that changed either (56%), with no import between them: they talk over the wire (the recorded run\'s flows)',
+      'Core and Store changed together in 5 of the 13 commits that changed either (38%), with no import between them: what ties them isn\'t on the map',
+    ]);
+  });
+
+  it('is a view of its own, drawn and read like the others', () => {
+    const views = viewsOf(changing);
+    expect(views.map((v) => v.id)).toEqual(['whole', 'changes', 'front']);
+    const { svg, key, sentences } = viewDrawing(changing, views[1]);
+    expect(svg).toContain('12 commits');
+    expect(key).toContain('The last 90 days: 20 commits.');
+    expect(sentences).toHaveLength(3);
+    expect(viewDrawing(changing, views[0]).sentences).toEqual([]);
+    expect(viewDrawing(changing, views[2]).key).toBe(VIEW_KEY);
   });
 });
