@@ -113,7 +113,6 @@ async function review(repo: string, dir: string, pr: PullRequestDetail): Promise
   const timer = setTimeout(() => abort.abort(), REVIEW_MS);
   const started = Date.now();
   const minutes = () => Math.round((Date.now() - started) / 60_000);
-  const changed = (await run('git', ['-C', dir, 'diff', '--name-only', `origin/${pr.baseBranch}...HEAD`], BIG)).stdout.split('\n').filter(Boolean);
   let costUsd = 0;
   let sessionId: string | undefined;
   const turn = async (prompt: string) => {
@@ -146,6 +145,7 @@ async function review(repo: string, dir: string, pr: PullRequestDetail): Promise
     return parseQaReport(structured, text);
   };
   try {
+    const changed = (await run('git', ['-C', dir, 'diff', '--name-only', `origin/${pr.baseBranch}...HEAD`], BIG)).stdout.split('\n').filter(Boolean);
     let report = await turn(qaPrompt(repo, pr, [], {}, changed));
     const missing = report ? unaccounted(report, changed) : [];
     if (report && missing.length) {
@@ -194,13 +194,14 @@ try {
       if (dry) continue;
       Object.assign(placeholder, await planted(next.repo, ready.dir, ready.pr, ready.planted));
       console.log(`  ${next.repo}#${next.pr} ${placeholder.outcome} (${placeholder.minutes ?? '?'} min, $${(placeholder.costUsd ?? 0).toFixed(2)})`);
-      rmSync(ready.dir, { recursive: true, force: true });
       if (ready.clean) {
         const c = await controlled(next.repo, ready.clean, ready.pr);
         controls.push(c);
         console.log(`  ${next.repo}#${next.pr} control: ${c.outcome} (${c.minutes ?? '?'} min, $${(c.costUsd ?? 0).toFixed(2)})`);
         rmSync(ready.clean, { recursive: true, force: true });
       }
+      // after the control's review: its clone borrows this one's objects
+      rmSync(ready.dir, { recursive: true, force: true });
     }
   };
   await Promise.all(Array.from({ length: dry ? 1 : 2 }, worker));
