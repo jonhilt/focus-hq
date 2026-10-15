@@ -1,6 +1,5 @@
 import { FRICTION_KINDS, type Friction, type FrictionKind, type LedgerEvent } from '../../shared/ledger';
-import { clip, messageFrom } from './retro';
-import { type Block, blocks, resultText, transcriptLines } from './transcript';
+import { type Block, blocks, clip, messageFrom, resultText, transcriptLines } from './transcript';
 
 // What the retro's reader reads of each session's span, and what's kept of its answer. Code supplies the facts
 // (sessionDigest.ts); at retro time a strong model reads the spans not read yet, a batch at a time, and only finds and

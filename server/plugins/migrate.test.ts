@@ -20,6 +20,12 @@ describe('fromBeforePlugins', () => {
     expect(raw).toEqual({ plugins: { climber: { cycles: 5 } } });
   });
 
+  it('drops the flow saved on goals’ leads, which the flow plugin works out again as it starts', () => {
+    const raw: SavedBeforePlugins = { agents: [{ task: 'lead', lead: { flow: { now: { state: 'qa' } } } }, { task: 'issue' }] };
+    fromBeforePlugins(raw);
+    expect(raw).toEqual({ plugins: {}, agents: [{ task: 'lead', lead: {} }, { task: 'issue' }] });
+  });
+
   it('leaves state saved since alone', () => {
     const raw: SavedBeforePlugins = { plugins: {}, agents: [{ task: 'lead' }] };
     fromBeforePlugins(raw);

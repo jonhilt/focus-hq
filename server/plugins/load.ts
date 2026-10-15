@@ -13,16 +13,34 @@ export function pluginEntry(name: string, root: string, cwd = process.cwd()): st
   return path.join(dir, 'server.ts');
 }
 
+/** What `FOCUS_PLUGINS=all` stands for: every folder under the office's own plugins/ that has a server.ts, by name. */
+export const ALL = 'all';
+
+/**
+ * The plugins FOCUS_PLUGINS names, with `all` standing for every one of `folders` (the office's own plugins/, in
+ * order) where it's listed; a plugin named twice is loaded once, where it's first named.
+ */
+export function pluginNames(names: string[], folders: string[]): string[] {
+  return [...new Set(names.flatMap((name) => (name === ALL ? folders : [name])))];
+}
+
+/** The plugin folders under the office's own plugins/: each with a server.ts. */
+export function ownPlugins(root: string): string[] {
+  const dir = path.join(root, 'plugins');
+  const names = fs.existsSync(dir) ? fs.readdirSync(dir).sort() : [];
+  return names.filter((name) => fs.existsSync(pluginEntry(name, root)));
+}
+
 const isPlugin = (value: unknown): value is FocusPlugin =>
   typeof value === 'object' && value !== null && 'id' in value && typeof value.id === 'string' && 'start' in value && typeof value.start === 'function';
 
 /**
- * Loads the plugins FOCUS_PLUGINS names, in its order. One that can't be found or loaded is left out, saying why, so a
- * typo in the list never keeps the office from starting.
+ * Loads the plugins FOCUS_PLUGINS names, in its order (`all`: every one under the office's own plugins/). One that
+ * can't be found or loaded is left out, saying why, so a typo in the list never keeps the office from starting.
  */
 export async function loadPlugins(names: string[], root: string): Promise<FocusPlugin[]> {
   const plugins: FocusPlugin[] = [];
-  for (const name of names) {
+  for (const name of pluginNames(names, names.includes(ALL) ? ownPlugins(root) : [])) {
     const entry = pluginEntry(name, root);
     if (!fs.existsSync(entry)) {
       console.error(`Plugin ${name}: there's no ${entry}, so it's left out`);

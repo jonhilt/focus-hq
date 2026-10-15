@@ -1,4 +1,4 @@
-// Rework after merge for `pnpm run flow` (docs/flow.md, the rules in server/agents/rework.ts): GitHub says what each
+// Rework after merge for `pnpm run flow` (../README.md, the rules in ../rework.ts): GitHub says what each
 // merged pull request added (gh), and `git blame` in the office's clone of its repo (~/.focus/repos) says how much of
 // that was still there REWORK_DAYS later. Reads only.
 
@@ -6,7 +6,7 @@ import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { countsFile, landedCommits, type PrRework, REWORK_MS, survivingLines } from '../server/agents/rework';
+import { countsFile, landedCommits, type PrRework, REWORK_MS, survivingLines } from '../rework';
 
 const run = promisify(execFile);
 const BIG = { maxBuffer: 64 * 1024 * 1024 };

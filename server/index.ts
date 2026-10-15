@@ -9,7 +9,8 @@ import { BrowserPool } from './agents/browserTool';
 import { ClaudeDrafter, ClaudeEngineer, ClaudeNumberOne, ClaudeStudio, ClaudeTriager, titleGoal } from './agents/claudeCrew';
 import { StudioComputer } from './agents/studioComputer';
 import { githubRepo } from './github/repo';
-import { ChiefEngineer, transcriptFolders, transcriptReader } from './agents/engineer';
+import { ChiefEngineer } from './agents/engineer';
+import { transcriptFolders, transcriptReader } from './agents/transcript';
 import { ClaudeRunner } from './agents/claudeRunner';
 import { DemoDrafter, DemoEngineer, DemoNumberOne, DemoRunner, DemoStudio, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
@@ -126,18 +127,17 @@ async function main() {
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
   // the office's own repo, for plugins that work on it (the demo has none)
   office.ownRepo = config.demo ? undefined : githubRepo(await run('git', ['remote', 'get-url', 'origin'], { cwd: config.root }).catch(() => ''));
-  office.startPlugins(await loadPlugins(config.plugins, config.root));
   // each agent session is digested into the ledger as it ends: the demo's agents have no transcripts
   // the demo's older sessions are its scripted ones, digested without Haiku
   if (config.demo) {
     office.agents.transcripts = demoTranscripts;
-    // its pretend leads keep a transcript of their own, for their goals' flow
-    if (demoRunner) office.agents.flowTranscript = (id) => Promise.resolve(demoRunner.transcript(id));
   } else {
     office.agents.readTranscript = transcriptReader(paths.transcripts, paths.workspaces);
     office.agents.titleGoal = (brief) => titleGoal(brief, store.settings);
     office.agents.transcripts = transcriptFolders(paths.transcripts, paths.workspaces);
   }
+  // plugins read the agents' transcripts as the office does; in the demo, its pretend leads keep transcripts of their own
+  office.startPlugins(await loadPlugins(config.plugins, config.root), demoRunner && ((id) => Promise.resolve(demoRunner.transcript(id))));
 
   if (config.demo && store.projects.length === 0) {
     const shop = store.addProject('Sock Shop', '#ff8a5b', 'beach');

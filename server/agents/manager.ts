@@ -5,7 +5,7 @@ import type { Hub } from '../hub';
 import type { FocusPlugin } from '../plugins/contract';
 import type { Plugins } from '../plugins/registry';
 import type { Store } from '../store';
-import type { Transcript } from './engineer';
+import type { Transcript } from './transcript';
 import { CloudMoves } from './manager/cloudMoves';
 import { Comms } from './manager/comms';
 import { Conflicts } from './manager/conflicts';
@@ -58,11 +58,6 @@ export class AgentManager {
 
   set readTranscript(read: Ledger['readTranscript']) {
     this.core.ledger.readTranscript = read;
-  }
-
-  /** Reads a lead's transcript for its goal's flow, when that isn't `readTranscript` (the demo's stand-in). */
-  set flowTranscript(read: Ledger['flowTranscript']) {
-    this.core.ledger.flowTranscript = read;
   }
 
 

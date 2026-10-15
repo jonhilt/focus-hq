@@ -256,29 +256,6 @@ describe('AgentManager', () => {
     expect(store.agents.has(lead.id)).toBe(false);
   });
 
-  it('works out where the goal’s time has gone as its lead’s turn ends, for its screens', async () => {
-    const { agents, claude, store, project } = office();
-    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
-    await until(() => claude.turns.length === 1);
-    // the goal opened a minute ago; its lead proposed a slice and asked leave to go ahead
-    const goal = store.agents.get(lead.id);
-    if (goal) goal.startedAt -= 60_000;
-    const opened = goal?.startedAt ?? 0;
-    const at = (s: number) => new Date(opened + s * 1000).toISOString();
-    agents.readTranscript = () =>
-      Promise.resolve(
-        [
-          { type: 'user', timestamp: at(0), message: { content: 'Your workspace, with every repo of the project checked out side by side: …' } },
-          { type: 'assistant', timestamp: at(20), message: { content: [{ type: 'text', text: 'I’d start with a thin slice end to end. Shall I go ahead?' }] } },
-        ].map((l) => JSON.stringify(l)).join('\n'),
-      );
-    claude.turns[0].end({ ok: true, summary: 'Proposed a slice' });
-    await until(() => store.agents.get(lead.id)?.lead?.flow?.now.state === 'captain');
-    const flow = store.agents.get(lead.id)?.lead?.flow;
-    expect(flow?.now).toEqual({ state: 'captain', since: opened + 20_000, reason: 'go-ahead' });
-    expect(flow?.active.working).toBe(20_000);
-  });
-
   it('digests their session into the ledger when they go home', async () => {
     const { agents, claude, store, project } = office();
     const transcript = [
@@ -1268,6 +1245,47 @@ describe('AgentManager', () => {
 
       agents.prClosed('demo/webshop-frontend', pr.number, true, 'captain');
       expect(auditing.heard).toEqual([`opened #${pr.number}`, `closed #${pr.number}`]);
+    });
+
+    it('tells plugins of a goal’s pull request merging, once the goal knows it has', async () => {
+      const { agents, claude, store, project } = office();
+      const auditing = auditor(agents);
+      const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+      await until(() => claude.turns.length === 1);
+      await claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+      const [pr] = store.agent(lead.id).lead!.prs;
+      agents.prClosed(pr.repo, pr.number, true);
+      expect(auditing.heard).toEqual([`closed #${pr.number}`]);
+      expect(store.agent(lead.id).lead!.prs[0].outcome).toBe('merged');
+    });
+
+    it('tells plugins as each turn starts and ends, one cut short too, and of each line in the ledger, and lends them transcripts', async () => {
+      const { agents, claude, store, project } = office();
+      const heard: string[] = [];
+      let lent: PluginHost | undefined;
+      agents.startPlugins([{
+        id: 'watcher',
+        start: (host) => {
+          lent = host;
+          return { turn: (a, phase) => void heard.push(`${a.task} ${phase}`), ledgerRecorded: (e) => void heard.push(e.kind) };
+        },
+      }], { demo: false, ownRepo: () => undefined });
+      const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+      await until(() => claude.turns.length === 1);
+      expect(heard).toEqual(['lead start']);
+      claude.turns[0].end({ ok: true, summary: 'Proposed a slice' });
+      await until(() => store.agent(lead.id).status === 'done');
+      agents.message(lead.id, 'Go ahead');
+      await until(() => claude.turns.length === 2);
+      expect(lent!.agents().map((a) => a.id)).toEqual([lead.id]);
+      await agents.dismiss(lead.id);
+      expect(heard).toEqual(['lead start', 'lead end', 'lead start', 'lead end']);
+      agents.record(project.id, { kind: 'closed', repo: 'demo/webshop-api', pr: 3, by: 'github', qa: 'none', failedRounds: 0, triages: 0 });
+      expect(heard.at(-1)).toBe('closed');
+
+      expect(await lent!.transcript('session-1')).toBeUndefined();
+      agents.readTranscript = (id) => Promise.resolve(`the transcript of ${id}`);
+      expect(await lent!.transcript('session-1')).toBe('the transcript of session-1');
     });
 
     it('keeps the plugin’s state in its own slot, with what it adds later filled in fresh', () => {

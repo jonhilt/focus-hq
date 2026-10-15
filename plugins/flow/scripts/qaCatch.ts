@@ -1,5 +1,5 @@
-// QA's catch rate (docs/qa-catch.md): takes recently merged goal pull requests, and for each plants one known bug in
-// a line it added (server/agents/qaCatch.ts), in a throwaway clone of its code, then runs the QA officer's own review
+// QA's catch rate (../qa-catch.md): takes recently merged goal pull requests, and for each plants one known bug in
+// a line it added (../qaCatch.ts), in a throwaway clone of its code, then runs the QA officer's own review
 // on it (its system prompt, prompt, report schema and model) and scores whether QA failed it and pointed at the bug.
 // Nothing goes to GitHub and no real pull request is touched: each clone is made from the office's copy of the repo
 // (~/.focus/repos), reviewed where it is and deleted. It saves each run in ~/.focus/qa-catch/, which `pnpm run flow`
@@ -13,18 +13,19 @@
 //   pnpm run qa-catch --control       each pull request reviewed again with no bug planted: does QA fail clean code?
 
 import { execFile } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import { paths } from '../server/config';
-import { claudeConfig } from '../server/agents/claudeRunner';
-import { filesPrompt, filesToRevisit, openedFiles, parseQaReport, QA_SCHEMA, qaAgentModel, qaPrompt, qaSystemAppend, type ToolCall } from '../server/agents/qa';
-import { addedLines, type CatchResult, type CatchRun, catchLines, controlLine, type ControlResult, plant, type Planted, scoreControl, scoreReport } from '../server/agents/qaCatch';
-import type { PullRequestDetail } from '../server/github/provider';
-import { checkLedger, closedGoals } from '../shared/ledger';
-import type { Project, QaReport, Settings } from '../shared/types';
+import { claudeConfig } from '../../../server/agents/claudeRunner';
+import { filesPrompt, filesToRevisit, openedFiles, parseQaReport, QA_SCHEMA, qaAgentModel, qaPrompt, qaSystemAppend, type ToolCall } from '../../../server/agents/qa';
+import { paths } from '../../../server/config';
+import type { PullRequestDetail } from '../../../server/github/provider';
+import { checkLedger, closedGoals } from '../../../shared/ledger';
+import type { Project, QaReport, Settings } from '../../../shared/types';
+import { addedLines, type CatchResult, type CatchRun, catchLines, controlLine, type ControlResult, plant, type Planted, scoreControl, scoreReport } from '../qaCatch';
+import { latestRun, QA_CATCH_DIR } from './qaCatchRuns';
 
 const run = promisify(execFile);
 const BIG = { maxBuffer: 64 * 1024 * 1024 };
@@ -43,19 +44,14 @@ const control = args.includes('--control');
 
 const state = JSON.parse(readFileSync(paths.state, 'utf8')) as { settings: Settings; projects: Project[] };
 const ledger = checkLedger(readFileSync(paths.ledger, 'utf8')).events;
-/** The latest saved run, for --again. */
-function lastRun(): CatchRun | undefined {
-  const files = existsSync(paths.qaCatch) ? readdirSync(paths.qaCatch).filter((f) => f.endsWith('.json')).sort() : [];
-  return files.length ? (JSON.parse(readFileSync(path.join(paths.qaCatch, files[files.length - 1]), 'utf8')) as CatchRun) : undefined;
-}
 // the last run's pull requests in its order, or the goals' merged ones, newest first, in repos the office has a copy of
 const candidates = again
-  ? (lastRun()?.results ?? []).map((r) => ({ repo: r.repo, pr: r.pr }))
+  ? (latestRun()?.results ?? []).map((r) => ({ repo: r.repo, pr: r.pr }))
   : closedGoals(ledger)
       .flatMap((g) => g.prs.filter((p) => p.outcome === 'merged').map((p) => ({ repo: p.repo, pr: p.number, at: g.closedAt })))
       .filter((p) => (!onlyRepo || p.repo === onlyRepo) && existsSync(path.join(paths.mirrors, p.repo.replace('/', '__'))))
       .sort((a, b) => b.at - a.at);
-if (again && !candidates.length) throw new Error(`--again: no saved run in ${paths.qaCatch}`);
+if (again && !candidates.length) throw new Error(`--again: no saved run in ${QA_CATCH_DIR}`);
 
 interface Pr {
   number: number;
@@ -215,8 +211,8 @@ try {
 if (!dry) console.log(`\n${catchLines(results).join('\n')}${controls.length ? `\n\n${controlLine(controls)}` : ''}`);
 if (skipped.length) console.log(`\n${skipped.length} pull request${skipped.length === 1 ? '' : 's'} passed over: ${skipped.slice(0, 5).join('; ')}${skipped.length > 5 ? '; …' : ''}`);
 if (!dry && results.length) {
-  mkdirSync(paths.qaCatch, { recursive: true });
-  const file = path.join(paths.qaCatch, `${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+  mkdirSync(QA_CATCH_DIR, { recursive: true });
+  const file = path.join(QA_CATCH_DIR, `${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
   const saved: CatchRun = { at: Date.now(), model: qaAgentModel(state.settings) ?? 'default', results, ...(controls.length && { controls }) };
   writeFileSync(file, JSON.stringify(saved, null, 2));
   console.log(`\nSaved in ${file}`);

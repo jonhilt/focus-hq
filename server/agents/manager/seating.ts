@@ -151,8 +151,10 @@ export class Seating extends Part {
   prClosed(repo: string, number: number, merged: boolean, by: Closer = 'github', headSha?: string): void {
     this.core.ledger.recordLanding(repo, number, merged, by, headSha);
     this.core.reviews.reviewGone(repo, number, merged);
-    if (this.core.leads.leadPrClosed(repo, number, merged)) return;
+    const goals = this.core.leads.leadPrClosed(repo, number, merged);
+    // every plugin hears of every pull request landing, a goal's too, once the goal knows
     this.core.plugins.prClosed(repo, number, merged);
+    if (goals) return;
     const agent = this.prOwner(repo, number);
     if (!agent || this.leaving.has(agent.id)) return;
     this.leaving.add(agent.id);

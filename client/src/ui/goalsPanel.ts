@@ -5,6 +5,7 @@ import { leftOn } from '../../../shared/goalLog';
 import { type Agent, type GoalRecord, type QueuedGoal, TEAM_STATIONS } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
+import { clientPlugin, goalTags } from '../plugins';
 import { LCARS_STATUS } from '../world/starship';
 import type { Ui } from './context';
 import { withMic } from './dictation';
@@ -12,7 +13,6 @@ import { busy, fill, h, timeAgo } from './dom';
 import { CONTEXT_TONE, closeGoal, goalStarted, leadEffortPicker, noteView, prLink, reviewing } from './goals';
 import { type NavItem, readout, shownView, SideNav } from './panels';
 import { openClosedGoalChart, openGoalChart } from './chartPanel';
-import { flowLive, keepFlowsLive } from './flowTags';
 import { openClosedGoalShown } from './screenPanel';
 
 /** The goals panel's views: the goals under way (and any waiting for a station), a new one, and the closed ones. */
@@ -43,7 +43,7 @@ function goalCard(ui: Ui, lead: Agent): HTMLElement {
       h('div', { class: 'readouts' },
         readout('Lead', lead.name),
         readout('Status', lead.status, { tone: LCARS_STATUS[lead.status] }),
-        work?.flow ? readout('Flow', flowLive(lead, 'flow-live') ?? '') : null,
+        ...goalTags(lead, 'card').map((tag) => readout(tag.label, tag.el)),
         readout('Activity', statusLine(lead), { grow: true }),
         readout('Slice', String(work?.slice ?? 1)),
         readout('Effort', lead.effort ?? 'default'),
@@ -220,10 +220,11 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
   // back out to every goal on the ship, and whoever's waiting on you
   const comms = h('button', { class: 'btn small', title: 'Comms: who’s waiting on you, and every goal under way on the ship (C)', onclick: () => ui.openComms() }, '◂ Comms');
   ui.panels.open({ title: `${project.name} · goals`, body: h('div', null, ...Object.values(views)), nav, accent: project.color, headerExtra: [comms] });
-  keepFlowsLive(ui, list);
   render();
   if (!views.new.hidden) text.focus();
   ui.panels.own(state.on('agent', (a) => a.projectId === projectId && (a.task === 'lead' || !!a.reviewFor) && render()));
   ui.panels.own(state.on('agent-removed', (a) => a.projectId === projectId && render()));
   ui.panels.own(state.on('projects', render));
+  // the plugins' words on each goal follow their state
+  ui.panels.own(state.on('plugin', (id) => !!clientPlugin(id)?.goal && render()));
 }

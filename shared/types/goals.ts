@@ -1,7 +1,6 @@
 // Goals: each a lead at a team station, slice by slice, and the room's log of closed ones.
 
 import type { Effort } from './agents';
-import type { LeadFlow } from './flow';
 import type { ChecksState } from './github';
 import type { QaSpotCheck } from './qa';
 
@@ -232,8 +231,6 @@ export interface LeadWork {
   artifacts?: GoalArtifact[];
   /** The questions the lead has asked with visual options, oldest first: at most the last one is still open. */
   questions?: GoalQuestion[];
-  /** Where the goal's time has gone so far, and what it's waiting on now (docs/flow.md). Missing until the office first works it out. */
-  flow?: LeadFlow;
 }
 
 /**

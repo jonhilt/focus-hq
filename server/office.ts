@@ -11,6 +11,7 @@ import { autoQaFor, autoSendBackFor, prKey, verdictBehindHead } from '../shared/
 import type { AgentManager } from './agents/manager';
 import type { Calls } from './call/calls';
 import type { ChiefEngineer } from './agents/engineer';
+import type { Lent } from './agents/manager/pluginHost';
 import type { FocusPlugin } from './plugins/contract';
 import type { UsageWatch } from './usage';
 import type { NumberOne } from './agents/numberOne';
@@ -350,9 +351,9 @@ export class Office {
     this.agents.plugins.boardRefreshed(projectId);
   }
 
-  /** Starts the plugins switched on (docs/plugins.md), lending them the office's own repo. */
-  startPlugins(plugins: FocusPlugin[]): void {
-    this.agents.startPlugins(plugins, { demo: config.demo, ownRepo: () => this.ownRepo });
+  /** Starts the plugins switched on (docs/plugins.md), lending them the office's own repo, and in the demo its agents' transcripts. */
+  startPlugins(plugins: FocusPlugin[], transcript?: Lent['transcript']): void {
+    this.agents.startPlugins(plugins, { demo: config.demo, ownRepo: () => this.ownRepo, transcript });
     this.info.plugins = this.agents.plugins.ids();
     // its saved state is kept, but nothing of it runs: no briefs, hooks, or pull requests kept for the captain
     for (const id of this.agents.plugins.dormant()) console.warn(`Plugin ${id} has saved state but isn't switched on: add it to FOCUS_PLUGINS to bring it back`);

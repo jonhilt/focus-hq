@@ -1,5 +1,8 @@
-// Where a goal's time goes (docs/flow.md): the states its time splits into, why the lead waits on the captain, and
-// what an open goal carries of it for its screens (`LeadWork.flow`).
+// Where a goal's time goes (README.md): the states its time splits into, why the lead waits on the captain, and what
+// an open goal carries of it for its screens (the plugin's state, `FlowPluginState`). Both halves of the plugin use it.
+
+/** The plugin's id, as FOCUS_PLUGINS names it. */
+export const FLOW = 'flow';
 
 /** One state a goal's time is in: the lead at work, reworking, or between turns waiting on its own work, QA, a merge or the captain. */
 export type FlowState = 'queued' | 'working' | 'rework' | 'background' | 'qa' | 'review' | 'captain';
@@ -27,4 +30,9 @@ export interface LeadFlow {
   now: FlowNow;
   /** Time in each state so far, leaving out idle stretches of 4 hours or more (nights, days away). */
   active: Record<FlowState, number>;
+}
+
+/** The plugin's state, as the browser has it: each open goal's flow, by its lead's agent id. */
+export interface FlowPluginState {
+  leads: Record<string, LeadFlow>;
 }

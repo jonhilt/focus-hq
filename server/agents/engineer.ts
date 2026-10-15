@@ -8,17 +8,7 @@ import type { Hub } from '../hub';
 import { freshRetro, type Store } from '../store';
 import { errorMessage, newId, sleep, truncate } from '../util';
 import { batchesOf, extractionInput, parseRead, readerPrompt } from './frictions';
-import { parseDrafts, PATTERN_SESSIONS, renderFrictions, renderGoals, renderLedger, type SessionKind } from './retro';
-
-/** One session's transcript, as the office found it. */
-export interface Transcript {
-  /** What its digest is called: unique, and readable in a citation. */
-  name: string;
-  kind: SessionKind;
-  sessionId: string;
-  /** Its JSONL: read one at a time, since a long session's runs to tens of MB. */
-  read(): Promise<string>;
-}
+import { parseDrafts, PATTERN_SESSIONS, renderFrictions, renderGoals, renderLedger } from './retro';
 
 export interface RetroRequest {
   /** The folder the office gathered the evidence in: the engineer's current directory. */
@@ -201,52 +191,4 @@ export class ChiefEngineer {
     this.store.save();
     this.hub.send({ type: 'retro', retro: this.current() });
   }
-}
-
-/**
- * Claude Code keeps each session's transcript under <projects>/<its cwd, with every character but letters and digits
- * turned into ->/<session id>.jsonl. The office's agents all work under data/workspaces, so theirs are the folders
- * that start with that path's name; the kind of agent is the next word (agent_…, lead_…, qa_…).
- */
-export function transcriptFolders(projectsDir: string, workspacesDir: string): (since: number) => Promise<Transcript[]> {
-  const prefix = `${workspacesDir.replace(/[^A-Za-z0-9]/g, '-')}-`;
-  return async (since) => {
-    const folders = await fsp.readdir(projectsDir).catch(() => [] as string[]);
-    const found: Transcript[] = [];
-    for (const folder of folders.filter((f) => f.startsWith(prefix))) {
-      const rest = folder.slice(prefix.length);
-      const kind = (['lead', 'qa', 'agent'] as const).find((k) => rest.startsWith(`${k}-`));
-      if (!kind) continue;
-      const dir = path.join(projectsDir, folder);
-      for (const file of (await fsp.readdir(dir).catch(() => [] as string[])).filter((f) => f.endsWith('.jsonl'))) {
-        const full = path.join(dir, file);
-        const stat = await fsp.stat(full).catch(() => undefined);
-        if (!stat || stat.mtimeMs < since) continue;
-        const sessionId = file.slice(0, -'.jsonl'.length);
-        found.push({ name: `${rest}__${sessionId.slice(0, 8)}`, kind, sessionId, read: () => fsp.readFile(full, 'utf8') });
-      }
-    }
-    return found;
-  };
-}
-
-/** Reads an agent session's transcript by its id, wherever under the agents' folders it is; undefined when it isn't on this machine (a cloud session's). */
-export function transcriptReader(projectsDir: string, workspacesDir: string): (sessionId: string) => Promise<string | undefined> {
-  const prefix = `${workspacesDir.replace(/[^A-Za-z0-9]/g, '-')}-`;
-  const found = new Map<string, string>();
-  return async (sessionId) => {
-    let file = found.get(sessionId);
-    if (!file) {
-      const folders = (await fsp.readdir(projectsDir).catch(() => [] as string[])).filter((f) => f.startsWith(prefix));
-      for (const folder of folders) {
-        const candidate = path.join(projectsDir, folder, `${sessionId}.jsonl`);
-        if (fs.existsSync(candidate)) {
-          file = candidate;
-          found.set(sessionId, file);
-          break;
-        }
-      }
-    }
-    return file ? fsp.readFile(file, 'utf8').catch(() => undefined) : undefined;
-  };
 }

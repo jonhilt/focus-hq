@@ -1,7 +1,6 @@
 import type { LedgerEvent, SessionDigest, SessionFacts } from '../../shared/ledger';
 import type { Agent } from '../../shared/types';
-import { messageFrom } from './retro';
-import { type Block, blocks, resultText, transcriptLines } from './transcript';
+import { type Block, blocks, messageFrom, resultText, transcriptLines } from './transcript';
 
 // A digest of a span of an agent's session, from code alone: its Claude Code transcript (from the line after the last
 // digest's to the end) and the ledger's lines on its pull requests. Written when the agent goes home, when QA gives a

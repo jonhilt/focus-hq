@@ -31,8 +31,22 @@ export interface PluginParts {
   boardRefreshed?(projectId: string): void;
   /** The office opened, or updated, the pull request of an agent on one of this plugin's briefs. */
   prOpened?(agent: Agent, pr: { number: number; url: string }): void;
-  /** A pull request in any project merged or closed. */
+  /** A pull request in any project merged or closed, a goal's too (after the goal has heard). */
   prClosed?(repo: string, number: number, merged: boolean): void;
+  /**
+   * An agent's turn started (they're at work) or ended (they're waiting, or stopped), any agent's: filter for the ones
+   * the plugin cares about. A turn can start and end more than once in what looks like one (carrying on, a retry, a
+   * new session), and a turn that's interrupted still ends, so take each as how they stand now. 'end' is heard as the
+   * turn stops, before the office acts on how it went: the agent's status still says 'working' then (it becomes 'done',
+   * failed or a review's verdict just after), so judge by the phase, not the status.
+   */
+  turn?(agent: Agent, phase: 'start' | 'end'): void;
+  /**
+   * A line went in the ship's log (any kind: filter for the ones that matter). It's heard as it's written, before the
+   * office has acted on what it says (a goal's pull request merging is logged before the goal knows), so read the
+   * office afresh a moment later rather than straight away.
+   */
+  ledgerRecorded?(event: LedgerEvent): void;
   /** Whether only the captain merges this pull request, whatever QA says. By its branch, since a pull request outlives its agent. */
   captainMerges?(pr: { branch: string }): boolean;
   /** Tools it adds to every goal lead's office, beside ship, note and show (`mcp__office__<name>`). */
@@ -101,6 +115,13 @@ export interface PluginHost {
   state<S extends object>(fresh: () => S, how?: { saved?: boolean }): PluginState<S>;
   projects(): Project[];
   agent(id: string): Agent | undefined;
+  /** Every agent in the office now, of every project. */
+  agents(): Agent[];
+  /**
+   * An agent session's Claude Code transcript (its JSONL) by session id: undefined when it isn't on this machine (a
+   * cloud session's). In the demo, the scripted agents' stand-ins.
+   */
+  transcript(sessionId: string): Promise<string | undefined>;
   /** The ship's log of how work went, oldest first. */
   ledger(): LedgerEvent[];
   /** The office's own repo (`owner/repo`, from its checkout's remote): none in the demo. */

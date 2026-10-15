@@ -1,9 +1,9 @@
+import { blocks, messageFrom, resultText, transcriptLines } from '../../server/agents/transcript';
 import type { LedgerEvent } from '../../shared/ledger';
-import type { ArchivedGoal, CaptainReason, FlowNow, FlowState, LeadFlow, Said } from '../../shared/types';
-import { messageFrom } from './retro';
-import { blocks, resultText, transcriptLines } from './transcript';
+import type { ArchivedGoal } from '../../shared/types';
+import type { CaptainReason, FlowNow, FlowState, LeadFlow, Said } from './shared';
 
-// Where a goal's time goes (docs/flow.md), from code alone: its lead's Claude Code transcript says when the lead was
+// Where a goal's time goes (README.md), from code alone: its lead's Claude Code transcript says when the lead was
 // at work and when it sat between turns, the ship tool's results say when each pull request went out, and the
 // ledger's QA verdicts and merges say what the lead was waiting on meanwhile. Every moment from the goal opening to
 // it closing lands in exactly one state, so the states add up to the goal's lead time. The I/O is in scripts/flow.ts.
@@ -233,7 +233,8 @@ export function goalFlow(goal: ArchivedGoal, moments: Moment[], ledger: LedgerEv
   for (const s of all) {
     const queued = !s.busy && s === all[0] && !moments.some((m) => m.at <= s.start);
     const long = !s.busy && !queued && s.end - s.start >= LONG_WAIT_MS;
-    const cuts = [s.start, ...breaks.filter((t) => t > s.start && t < s.end).sort((a, b) => a - b), s.end];
+    // a verdict or landing right at the end still counts, for an open goal worked out the moment it's logged
+    const cuts = [s.start, ...breaks.filter((t) => t > s.start && t <= s.end).sort((a, b) => a - b), s.end];
     let captain = 0;
     let reason: CaptainReason | undefined;
     for (let i = 0; i < cuts.length - 1; i++) {

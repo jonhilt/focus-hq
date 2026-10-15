@@ -299,7 +299,7 @@ export class Reviews extends Part {
       // the PR merged or closed while they were at it: a verdict now would land on a PR that's gone
       if (agent.prGone) return;
       // a report that leaves changed files out goes back to QA once, naming them: a reviewer that skims a big diff
-      // misses what's in the files it skipped (docs/qa-catch.md)
+      // misses what's in the files it skipped (seen when bugs planted in merged PRs went uncaught; docs/qa.md)
       const files = this.rt(agent.id).qaFiles;
       const opened = yield* this.openedBy(agent);
       const revisit = filesToRevisit(report, files, opened);
@@ -330,8 +330,6 @@ export class Reviews extends Part {
       this.boardChanged(agent.projectId);
       if (done) yield* this.qaNext(done, { kind: 'verdict', verdict: report.verdict, failedRounds });
       this.core.ledger.digestSession(agent, [{ repo: agent.repo, pr: number }]);
-      const lead = this.core.leads.leadWith(agent.repo, number);
-      if (lead) this.core.ledger.refreshFlow(lead.id);
       yield* this.core.leads.leadShielded(agent.projectId, agent.repo, number, report, failedRounds, screenshots);
       // the lead shipped again while QA tested: the verdict stands for the commit QA had, and QA goes on to the latest
       // (from GitHub's head, which has caught up by now, so a PR someone else pushed past the ship doesn't loop)

@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
+import type { LedgerEvent } from '../../shared/ledger';
 import type { Agent, PluginStates } from '../../shared/types';
 import type { BriefSpec, FocusPlugin, PluginHost, PluginParts } from './contract';
 import { Plugins, startOrder } from './registry';
@@ -58,6 +59,31 @@ describe('Plugins', () => {
     plugins.prOpened({ brief: { plugin: 'climber', kind: 'climb', label: 'Climb', icon: '🧗' } } as Agent, { number: 7, url: '' });
     plugins.prClosed('acme/shop', 7, true);
     expect(heard).toEqual(['climber opened #7', 'auditor closed #7', 'climber closed #7']);
+  });
+
+  it('tells every plugin of each agent’s turn and each line in the ledger, and skips one that throws', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const heard: string[] = [];
+    const plugins = started({},
+      plugin('broken', {
+        turn: () => {
+          throw new Error('nope');
+        },
+        ledgerRecorded: () => {
+          throw new Error('nor this');
+        },
+      }),
+      plugin('watcher', {
+        turn: (agent, phase) => void heard.push(`${agent.id} ${phase}`),
+        ledgerRecorded: (event) => void heard.push(`${event.kind} #${event.seq}`),
+      }));
+    plugins.turn({ id: 'lead_1' } as Agent, 'start');
+    plugins.ledgerRecorded({ kind: 'qa-verdict', repo: 'acme/shop', pr: 7, verdict: 'pass', at: 1, projectId: 'p', seq: 3 } as LedgerEvent);
+    plugins.turn({ id: 'lead_1' } as Agent, 'end');
+    expect(heard).toEqual(['lead_1 start', 'qa-verdict #3', 'lead_1 end']);
+    expect(error).toHaveBeenCalledWith('Plugin broken\'s turn failed: nope');
+    expect(error).toHaveBeenCalledWith('Plugin broken\'s ledgerRecorded failed: nor this');
+    error.mockRestore();
   });
 
   it('has the captain merge a pull request when any plugin says so', () => {

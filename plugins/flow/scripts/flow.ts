@@ -1,4 +1,4 @@
-// Where goals' time goes (docs/flow.md): every goal the ledger saw close, each split from opening to closing into the
+// Where goals' time goes (../README.md): every goal the ledger saw close, each split from opening to closing into the
 // lead at work, reworking after QA failed, waiting on its own background work, on QA, on a merge, or on the captain,
 // from its lead's Claude Code transcript and the ledger. It prints lead time p50 and p85, where the time went, the
 // biggest wait, and the quality guards that must hold while lead time comes down. It reads; it never writes.
@@ -11,12 +11,13 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { paths } from '../server/config';
-import { flowLines, flowReport, goalFlow, transcriptMoments } from '../server/agents/flow';
-import { catchGuard, type CatchRun } from '../server/agents/qaCatch';
-import { reworkLines, reworkTotals } from '../server/agents/rework';
-import { checkLedger, closedGoals } from '../shared/ledger';
+import { paths } from '../../../server/config';
+import { checkLedger, closedGoals } from '../../../shared/ledger';
+import { flowLines, flowReport, goalFlow, transcriptMoments } from '../flow';
+import { catchGuard } from '../qaCatch';
+import { reworkLines, reworkTotals } from '../rework';
 import { measureRework } from './flowRework';
+import { latestRun } from './qaCatchRuns';
 
 const args = process.argv.slice(2);
 const opt = (name: string) => {
@@ -61,8 +62,7 @@ const merged = flows.flatMap((f) => (goals.find((g) => g.id === f.id)?.prs ?? []
 const rework = args.includes('--no-rework') ? undefined : await measureRework(merged, paths.mirrors);
 const totals = rework && reworkTotals(rework.measured);
 // the latest of `pnpm run qa-catch`'s runs, if there's been one
-const catches = existsSync(paths.qaCatch) ? readdirSync(paths.qaCatch).filter((f) => f.endsWith('.json')).sort() : [];
-const caught = catches.length ? (JSON.parse(readFileSync(path.join(paths.qaCatch, catches[catches.length - 1]), 'utf8')) as CatchRun) : undefined;
+const caught = latestRun();
 
 if (args.includes('--json')) console.log(JSON.stringify({ ...report, rework: rework && { ...totals, measured: rework.measured, skipped: rework.skipped }, qaCatch: caught }, null, 2));
 else {

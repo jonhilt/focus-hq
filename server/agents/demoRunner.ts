@@ -6,7 +6,8 @@ import type { ModelCite, SystemModel, TermLine } from '../../shared/types';
 import { config } from '../config';
 import { demoSinceVerdict } from '../demoGit';
 import { randomHex, sleep } from '../util';
-import type { RetroOfficer, RetroRequest, Transcript } from './engineer';
+import type { RetroOfficer, RetroRequest } from './engineer';
+import type { Transcript } from './transcript';
 import type { NumberOneOfficer, NumberOneReply, NumberOneTurn } from './numberOne';
 import type { Staged, StudioOfficer, StudioReply, StudioTurn } from './studioComputer';
 import { currentTake } from '../../shared/takeScript';
@@ -51,13 +52,14 @@ export class DemoRunner implements AgentRunner {
   private leads = new Map<string, { repos: { folder: string; repo: string }[]; goal: string; scenario: Scenario }>();
   /**
    * Each pretend lead's session as Claude Code's transcript would have it, by session: the messages that started its
-   * turns, what it said and the tools it called, so its goal's flow (docs/flow.md) has something to read in the demo.
+   * turns, what it said and the tools it called, so what reads a real session's transcript (plugins, through
+   * `PluginHost.transcript`) has something to read in the demo.
    */
   private journals = new Map<string, string[]>();
   /** Which parts of its story a new goal's lead plays (shared/scenarios.ts): a goal keeps the one it started with. */
   scenario: Scenario = readScenario(process.env.FOCUS_DEMO_SCENARIO);
 
-  /** A pretend lead's transcript so far, as JSONL: its goal's flow reads it as it would a real one. */
+  /** A pretend lead's transcript so far, as JSONL, to read as a real one would be. */
   transcript(sessionId: string): string | undefined {
     return this.journals.get(sessionId)?.join('\n');
   }

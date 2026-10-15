@@ -46,7 +46,7 @@ server/
       planLimit.ts        your plan's usage limit reached: an agent it stopped carries on with the API key, or is held until it resets
       reviews.ts          QA: the review queue, seating a reviewer, their verdict, sending a failed PR back to be fixed
       triages.ts          stuck PRs: the operations officer's look, one at a time per room, and what they decided
-      pluginHost.ts       what the manager lends each plugin (docs/plugins.md): seating an agent on its brief, its state slot, terminal lines and toasts
+      pluginHost.ts       what the manager lends each plugin (docs/plugins.md): seating an agent on its brief, its state slot, the office's agents and their transcripts, terminal lines and toasts
       cloudMoves.ts       moving an agent to a cloud session, attaching to it, or keeping them local
       ledger.ts           ledger entries, landings, session digests and backfill, the report card
     services.ts           what the manager needs from outside as Effect services: git on the checkouts, Claude Code sessions (a scoped turn), triage
@@ -76,12 +76,12 @@ server/
     studioComputer.ts     the studio holodeck's computer: one conversation, its turns (ClaudeStudio in claudeCrew.ts, DemoStudio in the demo), and how scenes ran in the room
     numberOne.ts          Number One's ship-wide chat: turns, prompt, reply schema and the ship_status summariser
     claudeCrew.ts         the crew's read-only Claude Code sessions (Read/Glob/Grep, web search/fetch for Number One, Number One's ship_status and open_project, structured output)
-    retro.ts              the chief engineer's retro, pure: what the engineer reads (the frictions that keep coming back, the ledger, goals), prompt, schema, and the check that every draft rests on real groups, with the evidence added by code; also who a transcript's message is from
+    retro.ts              the chief engineer's retro, pure: what the engineer reads (the frictions that keep coming back, the ledger, goals), prompt, schema, and the check that every draft rests on real groups, with the evidence added by code
     fakeOffice.ts         a pretend office for tests (the manager's and plugins'): demo GitHub and checkouts, and a Claude Code stand-in whose turns the test ends
-    engineer.ts           the chief engineer: groups the digests' frictions, gathers the evidence into data/retros, runs one retro at a time and notes the captain's decisions; also finds the agents' transcripts on disk
+    engineer.ts           the chief engineer: groups the digests' frictions, gathers the evidence into data/retros, runs one retro at a time and notes the captain's decisions
     sessionDigest.ts      a session's span digested from its transcript and the ledger, by code: calls, waste, cost, nudges
     frictions.ts          what the retro's reader reads of each session's span, the batches, prompt and schema, the fixed friction kinds, and the check that every quote is in the span
-    transcript.ts         reading a Claude Code transcript's lines and blocks, shared by the digests, the friction reader and the studio's timelines
+    transcript.ts         reading a Claude Code transcript: finding the agents' on this machine, its lines and blocks, and who a message is from; shared by the digests, the friction reader, the studio's timelines and plugins
     sessionTimeline.ts    a session told in order for the studio: asks, words, tool runs, and its subagents and workflows (phases, models, most at once, answers), whole or zoomed
     studioSessions.ts     the Claude Code sessions the studio may read (Claude Code's projects folder only): found by what they're about, loaded with their agents' transcripts
     qa.ts                 the QA officer: instructions, the report's schema and parsing, the PR comment
@@ -98,7 +98,7 @@ client/src/
     modelScene.ts         a system model on three hologram boards (structure, sequence, data), the scenario stepping across them
     drawingCanvas.ts      a model drawing painted onto a canvas
     studioHall.ts         the studio holodeck's set: the scene the computer built last, on a round stage in the middle of the hall (takes.ts, built with takeKit.ts), the far wall's hologram saying what it is and how to play it (studio.ts: the stage, and ScenePlayback, the captain's spin, pause, scrub and speed), and the shelf of kept scenes to call back (sceneShelf.ts)
-    goalScreens.ts        a team station's holographic sign, LCARS goal board and screen over its pod (goalRoom.ts: how its room stands, how the note fills the board, and what the team's up to at a glance; portraits.ts: the crew's portraits)
+    goalScreens.ts        a team station's holographic sign, LCARS goal board (with the plugins' strips along its bottom) and screen over its pod (goalRoom.ts: how its room stands, how the note fills the board, and what the team's up to at a glance; portraits.ts: the crew's portraits)
     hall.ts               the training hall, each project's holodeck, behind its door's portal: a copy of its shell from Blender (blender/training_hall.py), dressed for its project (hallLayout.ts: where its pods stand, and the door on the deck that leads to it)
     portal.ts             doorways that lead into each other wherever they stand: the far side drawn through the open doors, and walking through (doorway.ts: the geometry)
     transporter.ts        the transporter beam the crew arrive and leave in
@@ -121,11 +121,11 @@ client/src/
     studioChat.ts         the studio's chat with its computer, docked down the right so the room stays in view
     modelPanel.ts         a studio model up close: its three views live as SVG, stepping, and a picked part's cited code
     call.ts               a call to Number One: WebRTC to OpenAI, and the call's strip (what it's doing, what waits on your yes, captions, hang up)
-  plugins.ts              the plugins' parts in the browser: each plugins/*/client.ts, shown when the office switched it on
+  plugins.ts              the plugins' parts in the browser: each plugins/*/client.ts, shown when the office switched it on (the engineering station's cards and views, the MSD's boards, and their words on each goal: goalTags, goalStrips)
   tricorder/              the phone view at /tricorder (no three.js): home screen, agent drill-down, buttons that survive live re-renders
 client/tricorder/index.html   the Tricorder's page (a second Vite entry), with its home-screen meta tags
 client/public/tricorder/  its web app manifest and home-screen icons
-plugins/                  what the office does beyond its core, a folder per plugin (server.ts, client.ts, shared.ts, its tests and README), switched on by FOCUS_PLUGINS: cartography/ (each project's architecture map, from its repos' .focus/cartography.yaml and their imports), climber/ (main engineering's climber), scorecard/ (main engineering's scorecards, and the scorecard and crap scripts)
+plugins/                  what the office does beyond its core, a folder per plugin (server.ts, client.ts, shared.ts, its tests and README), switched on by FOCUS_PLUGINS (all: every one): cartography/ (each project's architecture map, from its repos' .focus/cartography.yaml and their imports), climber/ (main engineering's climber), flow/ (where each goal's time goes, on its goal board, card and Comms line, and the flow and qa-catch scripts), scorecard/ (main engineering's scorecards, and the scorecard and crap scripts)
 client/public/ship/       the decks built in Blender, as GLBs (pnpm run ship writes them, or CI's Ship workflow on a branch, .github/workflows/ship.yml)
 blender/                  the Blender scripts that build the decks: ship.py (entry), kit.py (walls, furniture, markers), bake.py (each deck's ambient occlusion, baked into a lightmap), command_deck.py (the bridge, ready room and observation lounge), holodeck_deck.py (the holodecks' hallway and the turbolift), engineering_deck.py (main engineering: the gallery, the well, the warp core and the level below), team_station.py (a team station's door and briefing room), transporter_room.py (a team station's transporter room), training_hall.py (the training hall every holodeck is a copy of)
 ```

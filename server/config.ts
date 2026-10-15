@@ -29,8 +29,11 @@ export const config = {
   autoUpdate: process.env.FOCUS_AUTO_UPDATE !== '0' && !demo,
   /** How often auto update fetches the upstream branch. */
   updateCheckMs: Number(process.env.FOCUS_UPDATE_CHECK_MS ?? 5 * 60_000),
-  /** The plugins to switch on (docs/plugins.md): names of folders under plugins/, or paths to plugin folders anywhere. */
-  plugins: (process.env.FOCUS_PLUGINS ?? '').split(',').map((name) => name.trim()).filter(Boolean),
+  /**
+   * The plugins to switch on (docs/plugins.md): names of folders under plugins/, paths to plugin folders anywhere, or
+   * `all` for every one under plugins/. None unless FOCUS_PLUGINS says, except in the demo, which shows them all.
+   */
+  plugins: (process.env.FOCUS_PLUGINS ?? (demo ? 'all' : '')).split(',').map((name) => name.trim()).filter(Boolean),
 };
 
 export const paths = {
@@ -57,8 +60,6 @@ export const paths = {
   planning: path.join(config.dataDir, 'planning'),
   /** The chief engineer's retros: the evidence gathered for each, and what came of it. */
   retros: path.join(config.dataDir, 'retros'),
-  /** Each `pnpm run qa-catch` (scripts/qaCatch.ts): bugs planted in merged pull requests, and whether QA caught them. */
-  qaCatch: path.join(config.dataDir, 'qa-catch'),
   /** Where Claude Code keeps session transcripts, the agents' among them (one folder per working directory). */
   transcripts: path.join(process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude'), 'projects'),
   /** The terminals the office opens to start agents' cloud sessions: each one's script and what it showed, a folder per agent. */

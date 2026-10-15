@@ -6,7 +6,7 @@ import type { Brief, PluginStates } from '../../shared/types';
 export interface SavedBeforePlugins {
   climb?: unknown;
   plugins?: PluginStates;
-  agents?: { task: string; brief?: Brief }[];
+  agents?: { task: string; brief?: Brief; lead?: { flow?: unknown } }[];
 }
 
 /** The climber's climbs, from before it was a plugin (the climber plugin, plugins/climber). */
@@ -18,6 +18,8 @@ export function fromBeforePlugins(raw: SavedBeforePlugins): void {
   if (raw.climb && !('climber' in raw.plugins)) raw.plugins.climber = raw.climb;
   delete raw.climb;
   for (const agent of raw.agents ?? []) {
+    // a goal's flow (the flow plugin, plugins/flow) is worked out again as the office starts, so there's nothing to move
+    delete agent.lead?.flow;
     if (agent.task !== 'climb') continue;
     agent.task = 'brief';
     agent.brief = CLIMB;

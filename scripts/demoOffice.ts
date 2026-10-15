@@ -20,12 +20,13 @@ export function freePort(): Promise<number> {
   });
 }
 
-/** `extra` adds arguments and environment, like the studio's `--studio` and its pacing. */
+/** `extra` adds arguments and environment, like the studio's `--studio` and its pacing. Every plugin is on (FOCUS_PLUGINS=all) whatever the caller's
+ * environment says, so no scripted run quietly loses a feature; `extra.env` can still narrow it. */
 export function startDemo(port: number, dataDir: string, extra: { args?: string[]; env?: Record<string, string> } = {}): ChildProcess {
   // Own process group so stopping it also stops whatever tsx and Vite spawn underneath.
   const child = spawn(process.execPath, [path.join(root, 'node_modules/tsx/dist/cli.mjs'), 'server/index.ts', '--dev', '--demo', ...(extra.args ?? [])], {
     cwd: root,
-    env: { ...process.env, ...extra.env, PORT: String(port), HOST: '127.0.0.1', FOCUS_DATA_DIR: dataDir },
+    env: { ...process.env, FOCUS_PLUGINS: 'all', ...extra.env, PORT: String(port), HOST: '127.0.0.1', FOCUS_DATA_DIR: dataDir },
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: process.platform !== 'win32',
   });

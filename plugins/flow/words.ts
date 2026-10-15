@@ -1,7 +1,7 @@
-import type { CaptainReason, FlowState, LeadFlow } from './types';
+import type { CaptainReason, FlowState, LeadFlow } from './shared';
 
-// How an open goal's flow reads on its screens (docs/flow.md): what it's waiting on now and for how long, and where
-// its time has gone so far. The server works the flow out (server/agents/flow.ts); this only words it.
+// How an open goal's flow reads on its screens (README.md): what it's waiting on now and for how long, and where
+// its time has gone so far. The server works the flow out (flow.ts, as flows.ts says when); this only words it.
 
 /** Each state in a few words, as the goal board says what the goal is doing now. */
 export const STATE_WORDS: Record<FlowState, string> = {
@@ -55,7 +55,7 @@ export function flowTitle(flow: LeadFlow, now: number): string {
   return [why && `${why[0].toUpperCase()}${why.slice(1)}.`, flowSummary(flow, now)].filter(Boolean).join(' ');
 }
 
-/** An idle stretch this long is someone away (server/agents/flow.ts's LONG_WAIT_MS): it isn't counted while around. */
+/** An idle stretch this long is someone away (flow.ts's LONG_WAIT_MS): it isn't counted while around. */
 const AWAY_MS = 4 * 60 * 60 * 1000;
 
 /**

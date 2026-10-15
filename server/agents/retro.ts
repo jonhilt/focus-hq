@@ -3,49 +3,8 @@ import { FRICTION_KINDS, type FrictionGroup, type LedgerEvent, reportCard, repor
 
 // The chief engineer's retro, the pure half. The retro reads the ledger's session digests, not transcripts: code
 // groups their frictions by kind and signature and keeps those that came up in three or more sessions; the engineer
-// drafts an issue for each (or for a few that are plainly the same trouble), and code adds the quoted evidence. Also
-// here: telling who a message in a transcript is from, which the digests use. The I/O is in engineer.ts.
-
-export type SessionKind = 'lead' | 'agent' | 'qa';
-
-/** Who a message to the agent came from, as far as its wording tells: the office's own messages have set openings. */
-export type MessageFrom = 'captain' | 'office' | 'qa' | 'compacted';
-
-/** How the office opens the messages it sends agents, and the harness's own that aren't anyone talking. */
-const OPENINGS: [string, MessageFrom | null][] = [
-  ['[Office]', 'office'],
-  ['[QA officer', 'qa'],
-  ['Slice ', 'office'],
-  ['Your workspace, with every repo', 'office'],
-  ['Please QA pull request', 'office'],
-  ['Please resolve GitHub issue', 'office'],
-  ['Pull request #', 'office'],
-  ['QA failed pull request', 'office'],
-  ['Answer with one word', 'office'],
-  ['Notes from your manager', 'office'],
-  ['This session is being continued', 'compacted'],
-  ['<command-name>', null],
-  ['<local-command', null],
-  ['<task-notification', null],
-  ['<system-reminder>', null],
-  ['[SYSTEM NOTIFICATION', null],
-  ['Another Claude session', null],
-  ['[Request interrupted', 'captain'],
-];
-
-/** Who a message is from; null for the harness's own (command output, reminders, subagents reporting back). */
-export function messageFrom(text: string): MessageFrom | null {
-  const t = text.trim();
-  for (const [opening, from] of OPENINGS) if (t.startsWith(opening)) return from;
-  return 'captain';
-}
-
-const REMINDER = /<system-reminder>[\s\S]*?<\/system-reminder>/g;
-
-export function clip(text: string, max: number): string {
-  const t = text.replace(REMINDER, '').trim();
-  return t.length <= max ? t : `${t.slice(0, max)} …[+${t.length - max}]`;
-}
+// drafts an issue for each (or for a few that are plainly the same trouble), and code adds the quoted evidence. The
+// I/O is in engineer.ts.
 
 /** ledger.md: the report card, the ledger's lines on pull requests and goals in the window, and the captain's decisions on earlier drafts. */
 export function renderLedger(events: LedgerEvent[], now: number, days: number): string {

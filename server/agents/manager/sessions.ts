@@ -344,8 +344,11 @@ export class AgentSessions extends Part {
       const instructions = yield* this.instructions(agent);
       rt.busy = true;
       this.update(agent, { status: 'working', activity: resumeSessionId ? 'Reading your message' : 'Getting started', error: undefined, finishedAt: undefined });
-      if (lead) this.core.ledger.refreshFlow(agent.id);
-      const outcome = yield* this.turn(agent, this.runRequest(agent, prompt, instructions, resumeSessionId), true);
+      this.core.plugins.turn(agent, 'start');
+      // a turn that's interrupted (sent home, moved to the cloud) still ends, for the plugins
+      const outcome = yield* this.turn(agent, this.runRequest(agent, prompt, instructions, resumeSessionId), true).pipe(
+        Effect.ensuring(Effect.sync(() => this.core.plugins.turn(agent, 'end'))),
+      );
       rt.busy = false;
       // what the manager wrote during the turn carries them on into another; notes that waited for its end don't
       const carryOn = rt.inbox.length > 0;
@@ -423,7 +426,6 @@ export class AgentSessions extends Part {
         // the lead's turn is over: it's the captain's turn, and their work ships when the lead says so, not now. Their
         // subagents and workflows ended with it; any that just finished linger a moment
         this.update(agent, { status: 'done', activity: 'Your turn', finishedAt: Date.now(), helpers: agent.helpers?.filter((h) => h.status !== 'working'), workflows: agent.workflows?.filter((w) => w.status !== 'running'), background: agent.background?.filter((t) => t.status !== 'running') });
-        this.core.ledger.refreshFlow(agent.id);
         this.core.seating.schedule();
         return;
       }

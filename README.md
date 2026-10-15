@@ -88,8 +88,8 @@ Then on board:
 - [Your API key when your plan runs out](docs/api-key.md): carrying on with `ANTHROPIC_API_KEY` while your plan's usage limit is reached
 - [Data and backups](docs/data.md): what lives in `~/.focus/` and what to back up
 - [The ledger](docs/ledger.md): the log of how work went, and the report card
-- [Where goals' time goes](docs/flow.md): lead time, the states it splits into, the biggest wait, and the quality guards
-- [QA's catch rate](docs/qa-catch.md): bugs planted in merged pull requests, and how many QA catches
+- [Where goals' time goes](plugins/flow/README.md): lead time, the states it splits into, the biggest wait, and the quality guards (the `flow` plugin, live on each goal's board)
+- [QA's catch rate](plugins/flow/qa-catch.md): bugs planted in merged pull requests, and how many QA catches (a script of the `flow` plugin)
 - [The chief engineer's retro](docs/retro.md): a look back over the agents' sessions, with proposals for how the office works
 - [Plugins](docs/plugins.md): what the office does beyond its core, switched on by name with `FOCUS_PLUGINS`
 - [The climber](plugins/climber/README.md): a plugin; main engineering's crew member who fixes the scorecard's worst gap, one pull request at a time

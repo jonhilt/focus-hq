@@ -1,3 +1,4 @@
+import type { LedgerEvent } from '../../shared/ledger';
 import type { Agent, Brief, PluginStates } from '../../shared/types';
 import { errorMessage } from '../util';
 import type { BriefSpec, FocusPlugin, LeadTool, PluginHost, PluginParts, PluginRoute } from './contract';
@@ -92,6 +93,14 @@ export class Plugins {
 
   prClosed(repo: string, number: number, merged: boolean): void {
     this.each('prClosed', (parts) => parts.prClosed?.(repo, number, merged));
+  }
+
+  turn(agent: Agent, phase: 'start' | 'end'): void {
+    this.each('turn', (parts) => parts.turn?.(agent, phase));
+  }
+
+  ledgerRecorded(event: LedgerEvent): void {
+    this.each('ledgerRecorded', (parts) => parts.ledgerRecorded?.(event));
   }
 
   /** Whether any plugin says only the captain merges this pull request. */

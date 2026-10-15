@@ -1,7 +1,5 @@
 import { type Closer, type LedgerEntry, reportCard, type ReportCard } from '../../../shared/ledger';
-import type { Transcript } from '../engineer';
-import { goalFlow, leadFlow, transcriptMoments } from '../flow';
-import { goalRecord, hasLeadWork } from '../lead';
+import type { Transcript } from '../transcript';
 import { backfillWho, digestEntry, lastDigest, transcriptSpan } from '../sessionDigest';
 import { prKey, qaBadge } from '../../../shared/qa';
 import type { Agent } from '../../../shared/types';
@@ -21,12 +19,6 @@ export class Ledger extends Part {
   private emptyTranscripts = new Set<string>();
   /** Each session's digest in hand, so two of the same session never overlap. */
   private digesting = new Map<string, Promise<void>>();
-  /** Reads a lead's transcript for its goal's flow: `readTranscript`'s, or the demo's stand-in for its pretend leads. */
-  flowTranscript?: (sessionId: string) => Promise<string | undefined>;
-  /** The goals whose flow is being worked out, and those asked for again meanwhile. */
-  private flowing = new Set<string>();
-  private flowAgain = new Set<string>();
-
   /** Writes a PR the office knows (QA reviewed it, or an agent or lead opened it) merging or closing in the ledger, once. */
   recordLanding(repo: string, number: number, merged: boolean, by: Closer = 'github', headSha?: string): void {
     const key = prKey(repo, number);
@@ -73,37 +65,6 @@ export class Ledger extends Part {
     void next.finally(() => {
       if (this.digesting.get(sessionId) === next) this.digesting.delete(sessionId);
     });
-  }
-
-  /**
-   * Works out where an open goal's time has gone so far, and what it's waiting on now (flow.ts, docs/flow.md), from its
-   * lead's transcript and the ledger, and puts it on the goal for its screens: as the lead's turns start and end, QA
-   * reports and its slices land. One at a time per goal; asked again meanwhile, it runs once more after.
-   */
-  refreshFlow(agentId: string): void {
-    const read = this.flowTranscript ?? this.readTranscript;
-    if (!read) return;
-    if (this.flowing.has(agentId)) {
-      this.flowAgain.add(agentId);
-      return;
-    }
-    this.flowing.add(agentId);
-    const work = async () => {
-      const sessionId = this.store.agents.get(agentId)?.sessionId;
-      const text = sessionId && (await read(sessionId));
-      // as the goal is now: its lead may have moved on, or gone home, while the transcript was read
-      const agent = this.store.agents.get(agentId);
-      if (!text || !agent || !hasLeadWork(agent) || agent.cloud) return;
-      const now = Date.now();
-      const flow = leadFlow(goalFlow({ ...goalRecord(agent, now), projectId: agent.projectId }, transcriptMoments(text), this.store.ledger, this.rt(agentId).busy), now);
-      if (flow) this.update(agent, { lead: { ...agent.lead, flow } });
-    };
-    void work()
-      .catch((err: unknown) => console.warn(`Couldn't work out the flow of ${agentId}'s goal: ${errorMessage(err)}`))
-      .finally(() => {
-        this.flowing.delete(agentId);
-        if (this.flowAgain.delete(agentId)) this.refreshFlow(agentId);
-      });
   }
 
   /**
@@ -171,10 +132,11 @@ export class Ledger extends Part {
     return agent.pr ? [{ repo: agent.repo, pr: agent.pr.number }] : [];
   }
 
-  /** Writes an entry in the ledger, and shows the chief engineer the new report card. */
+  /** Writes an entry in the ledger, shows the chief engineer the new report card, and tells the plugins. */
   record(projectId: string, entry: LedgerEntry, at = Date.now()): void {
-    this.store.record({ ...entry, at, projectId });
+    const event = this.store.record({ ...entry, at, projectId });
     this.hub.send({ type: 'report', report: this.report() });
+    this.core.plugins.ledgerRecorded(event);
   }
 
   /** The ledger's last 30 days, summed up. */

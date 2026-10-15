@@ -12,6 +12,9 @@ FOCUS_PLUGINS=scorecard,climber pnpm start
 
 - **A bare name** is a folder under the office's own `plugins/`, like `climber`.
 - **A path** (anything with a slash, relative to where the office starts) is a plugin folder anywhere, like `../my-plugins/auditor`.
+- **`all`** is every folder under the office's own `plugins/`, so `FOCUS_PLUGINS=all` switches the lot on (and `all,../my-plugins/auditor` one more besides).
+
+A fresh office has none switched on. The demo office (`pnpm run demo`, `demo:start`) has them all unless `FOCUS_PLUGINS` says otherwise (`FOCUS_PLUGINS= pnpm run demo` for one with none, or a list to check a feature with and without it). The scripts that start a demo office of their own (smoke, perf, the studio's recorder, the gap and z-fighting scans, through `startDemo` in `scripts/demoOffice.ts`) always switch every plugin on, whatever `FOCUS_PLUGINS` the caller has (an agent inherits the office's), so none of them quietly loses a feature; the theme shots are taken from a demo office already running.
 
 A plugin that can't be found, or doesn't load, is left out with a line in the office's log saying why. A typo never keeps the office from starting. `info.plugins` in the snapshot lists the plugins that did start.
 
@@ -19,6 +22,7 @@ A plugin's saved state stays in `state.json` while it's switched off, so switchi
 
 ## Plugins today
 
+- [Where goals' time goes](../plugins/flow/README.md) (`flow`): each open goal's flow (what it's waiting on now, for how long, and where its time has gone) on its goal board, its card in the goals list and its lines in Comms. The `pnpm run flow` and [`pnpm run qa-catch`](../plugins/flow/qa-catch.md) scripts live in it too, and work whether it's switched on or not.
 - [The scorecard](../plugins/scorecard/README.md) (`scorecard`): main engineering's scorecards of the office's own repo, on the engineering station and the MSD. The `pnpm run scorecard` and `pnpm run crap` scripts live in it too, and work whether it's switched on or not.
 - [Cartography](../plugins/cartography/README.md) (`cartography`): each project's architecture map, from the model its repos keep in `.focus/cartography.yaml` and the imports their code makes: on the engineering station's **Maps** view, each view drawn with numbered arrows and said in sentences, and the whole map as a dependency matrix.
 - [The climber](../plugins/climber/README.md) (`climber`): main engineering's crew member, who fixes the scorecard's worst gap in the office's own repo, one pull request at a time. It requires the scorecard plugin: switched on without it, it's left out, saying why.
@@ -51,7 +55,9 @@ A plugin is a folder with a `server.ts` that default-exports a `FocusPlugin` (`s
 - **Hooks.**
   - `boardRefreshed`: a project's board was read from GitHub again (about once a minute), a moment to look at how its work stands.
   - `prOpened`: the office opened or updated the pull request of an agent on one of its briefs.
-  - `prClosed`: any pull request merged or closed.
+  - `prClosed`: any pull request merged or closed, a goal's too (once the goal has heard).
+  - `turn`: an agent's turn started or ended, any agent's (the flow plugin keeps leads). A turn cut short still ends, and a turn can start and end more than once in what looks like one (carrying on, a retry, a new session), so take each as how the agent stands now. `end` comes before the office acts on how the turn went, so the agent's status still says `working`: go by the phase.
+  - `ledgerRecorded`: a line went in the ship's log, any kind. It's heard as it's written, before the office has acted on what it says (a goal's pull request merging is logged before the goal knows), so read the office afresh a moment later rather than straight away.
   - `captainMerges`: whether only the captain merges a pull request, whatever QA and auto-merge say. It goes by branch, since a pull request outlives its agent.
 - **Lead tools.** `leadTools`: tools added to every goal lead's office beside ship, note and show, as `mcp__office__<name>`. Each has a `name` (lowercase, digits and underscores; one the office's own tools have, or another plugin's already took, is left out), a `description` the lead reads, an `input` of zod fields, and `run(lead, input)`, which answers in words (a throw is said back as the tool failing). `lead` is a `LeadToolContext`: the lead's agent, their `checkouts` of the goal's repos as they stand in their workspace, and `show(page)`, which puts a page on their station's screen as their show tool does. The cartography plugin's `map` tool is the first.
 
@@ -63,7 +69,7 @@ A hook that throws is logged and skipped, so one plugin's bug never stops the of
 
 - **State.** `host.state(fresh)` is the plugin's own slot in `state.json` (`plugins.<id>`). `set` saves it and sends it to every browser as a `plugin` event; the snapshot carries each plugin's state in `plugins`. A field the plugin adds later starts at its `fresh()` value. With `{ saved: false }` it's kept in memory only, for state the plugin reads again as the office starts (the scorecards, read from disk).
 - **Seating.** `host.seat` hands one of its briefs to an agent: someone new, or `crew` when it's always the same person, who keeps one record (and terminal) from brief to brief. `host.forget` drops what the office kept of their last session, so the next starts afresh.
-- **Reading the office.** Its projects, an agent by id, the ledger, and the office's own repo (`ownRepo`, from its checkout's remote; none in the demo).
+- **Reading the office.** Its projects, an agent by id or every agent (`agents`), the ledger, an agent session's Claude Code transcript by its session id (`transcript`: none for a cloud session's, and the scripted stand-ins in the demo), and the office's own repo (`ownRepo`, from its checkout's remote; none in the demo).
 - **Talking.** A line in an agent's terminal (`print`), and a toast.
 
 ## In the browser
@@ -77,6 +83,9 @@ A plugin's `client.ts` default-exports a `ClientPlugin` (`client/src/plugins.ts`
   - `views`: views of its own on the side nav, after the overview (the scorecard's Code and Office), each with a readout. A view gets `go`, to move to another view and scroll to what's in it.
 
   The station's own views are the overview (your plan's usage, then the plugins' parts and the retro), the **Ledger** (the report card as it stands, and the open frictions) and the **Retro**.
+- **A word on each goal under way** (`goal`), which the core places on the goal's own surfaces:
+  - `tag`: a readout on the goal's card in the goals list (`card`, under a label) or a tag on its lines in Comms (`line`). The core gives it its look (`goal-readout`, `goal-tag`) in the colour of its `--tone`. The goals list is drawn again as the plugin's state changes; Comms keeps lines from render to render, so a line's tag should keep itself up to date (the flow plugin's does, each minute and as its state changes).
+  - `board`: a strip along the bottom of the goal board in its briefing room, with its height and a key: the board makes room for it, and draws it again when its key changes, as the plugin's state changes, and each minute while it's shown, so a time in it can count up.
 - **A board on the MSD** (`msd`): what it draws beside the ship in main engineering while it's put up there, with `ui.showOnMsd({ plugin: id })`. It's drawn again as the plugin's state changes.
 - **Screens in a project's holodeck** (`hall`): given a project's id, the screens it hangs round that holodeck's wall, either side of the entrance, each a hologram you walk up to (`world/hallScreens.ts`). A screen has a `key`, a `title` (aiming at it reads *Look at …*), a `version`, and `draw(ctx, w, h)` on a 1280 × 800 canvas, which may be async. It's drawn again only when its `version` changes, at most as often as the board is. `closeUp(ui)` is what E on it opens. They're asked for again whenever the plugin's state changes. A hall has room for `HALL_SCREENS` (6) in all, given out in the order `FOCUS_PLUGINS` lists the plugins. The cartography plugin hangs a screen per view.
 
@@ -99,7 +108,7 @@ A plugin outside the office's folder can be switched on by path, but for now it 
 
 - `server/plugins/contract.ts`: what a plugin is, what it adds and what the office lends it.
 - `server/plugins/registry.ts`: `Plugins`, the core's one way to the plugins switched on (briefs, states, routes, hooks). The manager's core holds it (`core.plugins`), and the office reaches it through `office.agents.plugins`.
-- `server/plugins/load.ts`: finding and loading what `FOCUS_PLUGINS` names.
+- `server/plugins/load.ts`: finding and loading what `FOCUS_PLUGINS` names (`all` too).
 - `server/agents/manager/pluginHost.ts`: the `PluginHost` the manager lends each plugin, and its state slot.
-- `server/plugins/migrate.ts`: state saved before parts of the office became plugins, moved into their slots as `state.json` is read.
-- `client/src/plugins.ts`: the plugins' parts in the browser.
+- `server/plugins/migrate.ts`: state saved before parts of the office became plugins, moved into their slots as `state.json` is read (or dropped, like a goal's flow, which the flow plugin works out again).
+- `client/src/plugins.ts`: the plugins' parts in the browser, and `goalTags` and `goalStrips`, which the goals list, Comms and the goal board place.

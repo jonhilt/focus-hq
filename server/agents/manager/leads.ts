@@ -338,7 +338,6 @@ export class Leads extends Part {
     const prs = lead.lead.prs.map((p) => (p.repo === repo && p.number === number ? { ...p, outcome: merged ? ('merged' as const) : ('closed' as const) } : p));
     this.update(lead, { lead: { ...lead.lead, prs, ...(sliceLanded(prs) && { waypoints: landedWaypoint(lead.lead, Date.now()) }) } });
     this.print(lead, [{ kind: merged ? 'success' : 'system', text: `${merged ? '🎉' : '✻'} ${repo}#${number} was ${merged ? 'merged' : 'closed'}` }]);
-    this.core.ledger.refreshFlow(lead.id);
     if (sliceLanded(prs)) {
       this.core.ledger.digestSession(lead, prs.map((p) => ({ repo: p.repo, pr: p.number })));
       // a lead in the middle of a turn carries on: their repos only move at the start of the next one

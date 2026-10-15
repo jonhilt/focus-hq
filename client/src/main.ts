@@ -390,10 +390,11 @@ async function main() {
     world.showOnMsd({ kind: 'report', card: state.report });
   });
   state.on('retro', () => world.engineering?.showReport(state.report, state.retro));
-  // a plugin's board on the MSD follows its state, while it's up there
+  // a plugin's board on the MSD follows its state, while it's up there, and so do its words on the goal boards
   state.on('plugin', (id) => {
     const board = pluginBoard(id);
     if (board) world.showOnMsd(board);
+    if (clientPlugin(id)?.goal) for (const room of world.rooms.values()) room.syncStations();
     world.syncHallScreens();
   });
   state.on('usage', () => world.showOnMsd({ kind: 'usage', usage: state.usage }));

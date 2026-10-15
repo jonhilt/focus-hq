@@ -818,9 +818,9 @@ select.effort { width: auto; padding: 2px 6px; border-radius: 10px; font-size: 1
 .comms h3 { margin: 18px 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--lcars-lilac); }
 .comms h3:first-child { margin-top: 0; }
 .hail-project { --tone: var(--lcars-lilac); margin-left: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; background: var(--tone); color: var(--ink); border-radius: 999px; padding: 0 8px; vertical-align: 1px; }
-/* what a goal's waiting on and for how long (docs/flow.md), outlined in its state's colour */
-.flow-live { color: var(--tone); }
-.flow-tag { --tone: var(--lcars-lilac); margin-left: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--tone); border: 1px solid var(--tone); border-radius: 999px; padding: 0 8px; vertical-align: 1px; white-space: nowrap; }
+/* a plugin's word on a goal (goalTags in client/src/plugins.ts): a readout on its card, a tag on its line in Comms, outlined in its --tone */
+.goal-readout { color: var(--tone); }
+.goal-tag { --tone: var(--lcars-lilac); margin-left: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--tone); border: 1px solid var(--tone); border-radius: 999px; padding: 0 8px; vertical-align: 1px; white-space: nowrap; }
 /* Needs you: a line each, what's needed in bold, who and where under it, the buttons that answer it on the right */
 .needs { display: flex; flex-direction: column; gap: 6px; }
 .need { --tone: var(--lcars-orange); display: flex; gap: 12px; align-items: center; background: var(--surface-2); border-left: 10px solid var(--tone); border-radius: 0 var(--radius) var(--radius) 0; padding: 8px 12px; }

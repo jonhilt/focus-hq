@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { flowNow, flowShares, flowSoFar, flowSummary, flowText, flowTitle, howLong } from './flow';
-import type { LeadFlow } from './types';
+import { flowNow, flowShares, flowSoFar, flowSummary, flowText, flowTitle, howLong } from './words';
+import type { LeadFlow } from './shared';
 
 const MIN = 60_000;
 const flow = (now: LeadFlow['now'], active: Partial<LeadFlow['active']> = {}): LeadFlow => ({

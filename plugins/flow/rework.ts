@@ -1,4 +1,4 @@
-// Rework after merge (docs/flow.md): of the lines a goal's pull request added, how many were changed or deleted again
+// Rework after merge (README.md): of the lines a goal's pull request added, how many were changed or deleted again
 // on its base branch within REWORK_DAYS of it merging. GitHub says what the pull request added (its commits, its merge
 // commit, the lines each file gained); `git blame` on the base branch REWORK_DAYS later says which of those lines are
 // still there. Lead time that comes down while rework goes up hasn't really come down. The I/O is in scripts/flow.ts.

@@ -1,9 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { paths } from '../config';
-import { clip, messageFrom } from './retro';
 import type { AgentLog, SessionLogs, SubagentMeta } from './sessionTimeline';
-import { blocks, transcriptLines } from './transcript';
+import { blocks, clip, messageFrom, transcriptLines } from './transcript';
 
 // The Claude Code sessions on this Mac that the studio's computer can read, for a video built from what really
 // happened (docs/studio.md): Claude Code's own transcripts (~/.claude/projects, or CLAUDE_CONFIG_DIR's), and nothing

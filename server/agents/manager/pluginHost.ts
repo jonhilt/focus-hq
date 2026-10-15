@@ -3,10 +3,12 @@ import type { BriefWork, PluginHost, PluginState } from '../../plugins/contract'
 import type { Core } from './core';
 import { Refused } from './core';
 
-/** What the office lends a plugin that the manager doesn't have: where it runs, and its own repo. */
+/** What the office lends a plugin that the manager doesn't have: where it runs, its own repo, and the demo's transcripts. */
 export interface Lent {
   demo: boolean;
   ownRepo: () => string | undefined;
+  /** Reads a session's transcript in place of the manager's `readTranscript`: the demo's stand-ins for its scripted agents. */
+  transcript?: (sessionId: string) => Promise<string | undefined>;
 }
 
 /** A plugin's slot in `saved`, `fresh()` with what was saved on top (a field added since starts fresh). */
@@ -36,6 +38,9 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
     },
     projects: () => core.store.projects,
     agent: (agentId) => core.store.agents.get(agentId),
+    agents: () => [...core.store.agents.values()],
+    // read as it's asked for: the office sets the manager's reader once the plugins have started
+    transcript: (sessionId) => (lent.transcript ?? core.ledger.readTranscript)?.(sessionId) ?? Promise.resolve(undefined),
     ledger: () => core.store.ledger,
     ownRepo: lent.ownRepo,
     seat: (projectId, repo, work: BriefWork, crew) => {

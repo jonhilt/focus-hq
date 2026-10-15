@@ -1,5 +1,4 @@
-import { clip, messageFrom } from './retro';
-import { type Block, blocks, resultText, transcriptLines } from './transcript';
+import { type Block, blocks, clip, messageFrom, resultText, transcriptLines } from './transcript';
 
 // A Claude Code session as a story the studio's computer can stage (docs/studio.md): what was asked, what Claude said
 // and did, and each subagent and workflow it started, stitched in from their own transcripts (a session's subagents/

@@ -148,6 +148,12 @@ describe('the state a goal is in now', () => {
     const jsonl = [said('Your workspace', 0), ship('s1', 1), shipped('s1', 'Opened o/r#1', 2), work(3)].join('\n');
     expect(goalFlow(goal(20), transcriptMoments(jsonl), []).now).toEqual({ state: 'qa', since: min(3) });
   });
+
+  it('takes in a verdict logged the very moment it’s worked out', () => {
+    n = 0;
+    const jsonl = [said('Your workspace', 0), ship('s1', 1), shipped('s1', 'Opened o/r#1', 2), work(3)].join('\n');
+    expect(goalFlow(goal(20), transcriptMoments(jsonl), [verdict('fail', 20)]).now).toEqual({ state: 'captain', since: min(20), reason: 'qa-failed' });
+  });
 });
 
 describe('endsWith', () => {

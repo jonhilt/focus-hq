@@ -15,7 +15,7 @@ Comms has these parts:
   Leads whose turn you've read but not answered come last, quieter (**Waiting for your reply · read**): they still need you, but aren't counted on the badge. Most lines also have **Beam there**, which teleports you to the agent's seat (a lead's briefing room). There's no chat here: what agents said, and your replies, are in their panel.
 - **Under way**: one line per goal that's getting on without you, with **Talk** and **Beam there**. Hidden when there are none.
 
-Each goal's line, in Needs you and Under way, carries a tag saying what it's waiting on and for how long (`WAITING ON YOU · 12 MIN`, `WAITING ON QA · 4 MIN`), outlined in its state's colour, with why and where its time has gone on hover ([where goals' time goes](flow.md#live-on-the-goal-board)). The tags count up each minute while Comms is open.
+Each goal's line, in Needs you and Under way, carries the tags of the plugins switched on that have a word on goals. The `flow` plugin's says what the goal's waiting on and for how long (`WAITING ON YOU · 12 MIN`, `WAITING ON QA · 4 MIN`), outlined in its state's colour, with why and where its time has gone on hover ([where goals' time goes](../plugins/flow/README.md#live-on-the-goal-board)), and counts up each minute.
 - **Goals**: a button per project with how many of its team stations are taken (and how many goals are waiting for one), opening that project's goals panel, where you start, queue and reopen goals. **◂ Comms** at the top of a goals panel brings you back.
 
 There's nothing to mark as read. A line goes away when what it's about does: the lead is at work again after your reply, the hand is lowered, the goal is closed, the conflicts are resolved.

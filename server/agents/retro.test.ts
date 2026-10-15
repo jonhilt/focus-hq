@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { FrictionGroup } from '../../shared/ledger';
 import { freshRetro, retroAfterRestart } from '../store';
-import { messageFrom, parseDrafts, renderFrictions } from './retro';
+import { parseDrafts, renderFrictions } from './retro';
+import { messageFrom } from './transcript';
 
 describe('messageFrom', () => {
   it('knows the office’s and QA’s messages by how they open', () => {
