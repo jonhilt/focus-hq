@@ -23,6 +23,7 @@ A plugin's saved state stays in `state.json` while it's switched off, so switchi
 ## Plugins today
 
 - [Where goals' time goes](../plugins/flow/README.md) (`flow`): each open goal's flow (what it's waiting on now, for how long, and where its time has gone) on its goal board, its card in the goals list and its lines in Comms. The `pnpm run flow` and [`pnpm run qa-catch`](../plugins/flow/qa-catch.md) scripts live in it too, and work whether it's switched on or not.
+- [The chief engineer's retro](../plugins/retro/README.md) (`retro`): Lt. Brennan reads the frictions in the agents' sessions and drafts an issue for each that keeps coming back, for the captain to accept (it's filed) or reject. Its card and Retro view are on the engineering station, and while one runs or waits on the captain, Brennan says so at his station. The ledger's frictions and retro decisions stay the core's vocabulary: without the plugin they're still read and shown, but no new ones are written.
 - [The scorecard](../plugins/scorecard/README.md) (`scorecard`): main engineering's scorecards of the office's own repo, on the engineering station and the MSD. The `pnpm run scorecard` and `pnpm run crap` scripts live in it too, and work whether it's switched on or not.
 - [Cartography](../plugins/cartography/README.md) (`cartography`): each project's architecture map, from the model its repos keep in `.focus/cartography.yaml` and the imports their code makes: on the engineering station's **Maps** view, each view drawn with numbered arrows and said in sentences, the whole map as a dependency matrix, and how it changes (hotspots and change coupling from git).
 - [The climber](../plugins/climber/README.md) (`climber`): main engineering's crew member, who fixes the scorecard's worst gap in the office's own repo, one pull request at a time. It requires the scorecard plugin: switched on without it, it's left out, saying why.
@@ -69,7 +70,9 @@ A hook that throws is logged and skipped, so one plugin's bug never stops the of
 
 - **State.** `host.state(fresh)` is the plugin's own slot in `state.json` (`plugins.<id>`). `set` saves it and sends it to every browser as a `plugin` event; the snapshot carries each plugin's state in `plugins`. A field the plugin adds later starts at its `fresh()` value. With `{ saved: false }` it's kept in memory only, for state the plugin reads again as the office starts (the scorecards, read from disk).
 - **Seating.** `host.seat` hands one of its briefs to an agent: someone new, or `crew` when it's always the same person, who keeps one record (and terminal) from brief to brief. `host.forget` drops what the office kept of their last session, so the next starts afresh.
-- **Reading the office.** Its projects, an agent by id or every agent (`agents`), the ledger, an agent session's Claude Code transcript by its session id (`transcript`: none for a cloud session's, and the scripted stand-ins in the demo), and the office's own repo (`ownRepo`, from its checkout's remote; none in the demo).
+- **Reading the office.** Its projects, an agent by id or every agent (`agents`), the ledger, an agent session's Claude Code transcript by its session id (`transcript`: none for a cloud session's, and the scripted stand-ins in the demo, its pretend leads' and its older sessions'), the captain's settings (`settings`: the model a read-only session runs on, say), and the office's own repo (`ownRepo`, from its checkout's remote; none in the demo).
+- **Writing the ledger.** `record` writes a line in the ship's log and sends the new report card. Every plugin hears it on `ledgerRecorded`, the one writing it too.
+- **Filing an issue.** `fileIssue` files one on GitHub and puts it on the project's board straight away. Only in one of that project's own repos: the office refuses any other.
 - **Talking.** A line in an agent's terminal (`print`), and a toast.
 
 ## In the browser
@@ -77,12 +80,13 @@ A hook that throws is logged and skipped, so one plugin's bug never stops the of
 A plugin's `client.ts` default-exports a `ClientPlugin` (`client/src/plugins.ts`). The client finds every `plugins/*/client.ts` as it's built, and shows only those the office switched on. In the browser, a plugin's state is `state.plugins[id]`, and the `plugin` event says whose changed. A plugin can add:
 
 - **To the engineering station** (`engineering`), which the panel draws again whenever the plugin's state changes, or an agent on a brief does:
-  - `card`: a card on the overview, beside the others (the climber's);
+  - `card`: a card on the overview, beside the others (the climber's, the retro's), with `go` to open one of the station's views from it;
   - `overview`: the overview's main block, with every card laid out in it (the scorecard puts them beside what moved); the first plugin's wins, and without one the cards stand on their own;
   - `readout`: what the overview's button on the side nav reads;
-  - `views`: views of its own on the side nav, after the overview (the scorecard's Code and Office), each with a readout. A view gets `go`, to move to another view and scroll to what's in it.
+  - `views`: views of its own on the side nav, after the overview (the scorecard's Code and Office, the retro's Retro), each with a readout. A view gets `go`, to move to another view and scroll to what's in it;
+  - `station`: what the chief engineer is busy with at his station in main engineering, when it's the plugin's work, or null: a status and one line, which his bubble says and his screen shows under the report card (the retro's `Retro: 2 drafts waiting`). The first plugin with something to say is heard; with none, he's keeping the ship running. It's drawn again as the plugin's state changes.
 
-  The station's own views are the overview (your plan's usage, then the plugins' parts and the retro), the **Ledger** (the report card as it stands, and the open frictions) and the **Retro**.
+  The station's own views are the overview (your plan's usage, then the plugins' parts) and the **Ledger** (the report card as it stands, the open frictions, and **Digest them** for older sessions).
 - **A word on each goal under way** (`goal`), which the core places on the goal's own surfaces:
   - `tag`: a readout on the goal's card in the goals list (`card`, under a label) or a tag on its lines in Comms (`line`). The core gives it its look (`goal-readout`, `goal-tag`) in the colour of its `--tone`. The goals list is drawn again as the plugin's state changes; Comms keeps lines from render to render, so a line's tag should keep itself up to date (the flow plugin's does, each minute and as its state changes).
   - `board`: a strip along the bottom of the goal board in its briefing room, with its height and a key: the board makes room for it, and draws it again when its key changes, as the plugin's state changes, and each minute while it's shown, so a time in it can count up.

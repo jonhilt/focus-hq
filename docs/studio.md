@@ -276,7 +276,7 @@ floor to walk into but its walls (`STUDIO_HALL` and `studioWalls` in `client/src
   what it handed back (or that it stopped), a workflow's phases with their agents, models and how many ran at once.
   The whole session fits about 8k tokens (tool runs, then Claude's words, go first when it's long); a time window
   zooms in on a stretch, with every call. It shares its reading of transcripts with the ledger's session digests
-  (`server/agents/transcript.ts`, [the ledger](ledger.md)), but the digests count, for the retro, where a timeline
+  (`server/agents/transcript.ts`, [the ledger](ledger.md)), but the digests count (for the report card, and the retro's friction reading), where a timeline
   tells the story in order, and reads any session, not only the crew's.
 
 - **The ship and its projects** (its `ship_status` and `open_project` tools, the same as [Number One](number-one.md)'s,

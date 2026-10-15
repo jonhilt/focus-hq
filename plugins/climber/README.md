@@ -26,7 +26,7 @@ The card shows the climber at work: what they're doing, their pull request, and 
 
 Every climb is Lt. Rhee's: one crew member owns the hill, rather than a new hire each time (`climbingEngineer` in `shared.ts`). They keep one record (`CLIMBER_ID`), so their name, face and terminal carry on from climb to climb, but each climb is a fresh Claude Code session on a new branch, starting clean. The next climb waits while they're still busy with the last one (fixing QA's findings on a pull request you've just closed, say).
 
-They're not the chief engineer, Lt. Brennan: Brennan's retros only read the code and draft issues, and the climber is who changes it, taking those issues as gaps.
+They're not the chief engineer, Lt. Brennan: Brennan's retros (the [retro plugin](../retro/README.md)) only read the code and draft issues, and the climber is who changes it, taking those issues as gaps. The climber reads the retro's issues and frictions from the ledger, so it doesn't need the retro plugin on.
 
 ## A climb
 

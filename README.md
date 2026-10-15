@@ -90,7 +90,7 @@ Then on board:
 - [The ledger](docs/ledger.md): the log of how work went, and the report card
 - [Where goals' time goes](plugins/flow/README.md): lead time, the states it splits into, the biggest wait, and the quality guards (the `flow` plugin, live on each goal's board)
 - [QA's catch rate](plugins/flow/qa-catch.md): bugs planted in merged pull requests, and how many QA catches (a script of the `flow` plugin)
-- [The chief engineer's retro](docs/retro.md): a look back over the agents' sessions, with proposals for how the office works
+- [The chief engineer's retro](plugins/retro/README.md): a look back over the agents' sessions, with proposals for how the office works (the `retro` plugin)
 - [Plugins](docs/plugins.md): what the office does beyond its core, switched on by name with `FOCUS_PLUGINS`
 - [The climber](plugins/climber/README.md): a plugin; main engineering's crew member who fixes the scorecard's worst gap, one pull request at a time
 - [Auto update](docs/auto-update.md): keeping the office on the latest code

@@ -25,7 +25,7 @@ It takes about a minute and a quarter. It always exits 0: it measures, it doesn'
 - **Tests:** how many tests and test files there are, how many test files use property tests (`fast-check`), and, for `server/`, `shared/` and `plugins/`, how many functions score over [CRAP](crap.md) 30 and the total CRAP.
 - **Office:** from [the ledger](../../docs/ledger.md):
   - the report card's numbers over 30 days: QA passed first time, failed QA rounds per merge, merges without a QA pass, conflicts that needed an agent, checks sent back, cost and wasted tool calls per merge, and retro fixes that stopped their friction;
-  - the open friction patterns (3 or more sessions in 14 days, with no retro decision yet; see [the retro](../../docs/retro.md)) and the five most widespread.
+  - the open friction patterns (3 or more sessions in 14 days, with no retro decision yet; see [the retro](../retro/README.md)) and the five most widespread.
 
 ## In main engineering
 
@@ -36,7 +36,7 @@ The engineering panel (<kbd>E</kbd> at Lt. Brennan's station on deck 5) is the c
 - **Overview**, where it opens, is laid out by the plugin: one sentence on whether the gate passes and how many numbers improved or slipped since the scorecard before; a tile per section, each with the question it answers, its headline number (the gate's pass and time, type assertions, the server's share on Effect, functions over CRAP 30, QA passed first time), a line of its last ten with the latest dot green or red, and the change in words (`3 fewer`, `12s slower`); what moved, the slips first; and beside them the climber and the retro, with the most widespread open frictions. A tile, or a number that moved, opens its section; a friction opens [the ledger review](../../docs/ledger.md#reviewing-it) on its trace.
 - **Code**, the plugin's own view: the gate, the fence, Effect and the tests in full, the gate's time split by step. Each section says what it's for, and each number opens to say what it counts, why it matters, which way is better, and its history (hover a point for when and how much).
 - **Office**, the plugin's own view too: the ledger's numbers as the scorecard measured them, the same way.
-- **Ledger** and **Retro** are the core's: the ledger as it stands now (the report card, with what the scorecard doesn't count: conflicts, triage, closed PRs, goals, spend, and the open frictions), and the [chief engineer's retro](../../docs/retro.md).
+- **Ledger** is the core's: the ledger as it stands now (the report card, with what the scorecard doesn't count: conflicts, triage, closed PRs, goals, spend, and the open frictions). **Retro** is the [retro plugin](../retro/README.md)'s, when it's on.
 
 A time that moves less than its 10% wobble shows as `≈`, and a change too small to show isn't counted as a climb or a slip. The explanations live in `about.ts`, and the overview's summary in `glance` (`scorecard.ts`): a number added to the scorecard should get a line there too.
 
