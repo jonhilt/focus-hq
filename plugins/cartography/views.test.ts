@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RepoMap } from './shared';
-import { coverage, fitInto, hallViews, openingView, screenVersion, viewsOf } from './views';
+import { coverage, fitInto, hallViews, openingView, pickView, screenVersion, viewList, viewsOf } from './views';
 
 export const MAP: RepoMap = {
   repo: 'o/r',
@@ -63,5 +63,22 @@ describe('screenVersion', () => {
 describe('fitInto', () => {
   it('fits a drawing in a box as big as it goes without stretching, in the middle', () => {
     expect(fitInto(200, 100, { x: 0, y: 0, w: 400, h: 400 })).toEqual({ x: 0, y: 100, w: 400, h: 200 });
+  });
+});
+
+describe('viewList', () => {
+  it('lists each repo\'s views with their questions, or why it has none', () => {
+    expect(viewList([MAP, { ...MAP, repo: 'o/bare', model: undefined, error: 'No model yet' }])).toBe(
+      "o/r's views:\n- whole: every part, as a dependency matrix\n- front: What does the API reach? (2 parts)\n\no/bare: no views (No model yet).",
+    );
+  });
+});
+
+describe('pickView', () => {
+  it('finds a view by id, and says when there\'s none or more than one repo has it', () => {
+    const other: RepoMap = { ...MAP, repo: 'o/other', model: MAP.model && { ...MAP.model, views: [] } };
+    expect(pickView([MAP, other], 'front')).toMatchObject({ map: { repo: 'o/r' }, view: { id: 'front' } });
+    expect(pickView([MAP], 'nope')).toEqual({ error: 'There\'s no view "nope".' });
+    expect(pickView([MAP, other], 'whole')).toEqual({ error: 'More than one repo has a view "whole": say which with repo (o/r, o/other).' });
   });
 });

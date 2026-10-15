@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { EXPLAINER_LIMITS, explainerPage } from './explainer';
 import { applyNote, NOTE_LIMITS } from './lead';
-import { explainShape, noteShape } from './officeTool';
+import { explainShape, extraTools, noteShape } from './officeTool';
 
 const L = NOTE_LIMITS;
 const schema = z.object(noteShape);
@@ -97,5 +97,16 @@ describe('the explain tool schema', () => {
       [beat, { ...beat, seconds: E.maxSeconds }], [beat, { ...beat, seconds: E.maxSeconds + 1 }],
     ];
     for (const beats of cases) expect([beats, explain.safeParse(input(beats)).success]).toEqual([beats, !('error' in explainerPage(input(beats)))]);
+  });
+});
+
+describe('the plugins\' tools', () => {
+  const t = (name: string) => ({ name, description: name, input: {}, run: () => Promise.resolve(name) });
+
+  it('takes those well named and clear of the office\'s own and of each other\'s, the first of a name winning', () => {
+    const first = t('map');
+    const kept = extraTools([first, t('show'), t('Map Tool'), t('map'), t('trace_view')]);
+    expect(kept.map((x) => x.name)).toEqual(['map', 'trace_view']);
+    expect(kept[0]).toBe(first);
   });
 });

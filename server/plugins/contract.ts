@@ -2,6 +2,7 @@
 // handed to agents in place of issues), routes, and hooks into how pull requests open, close and merge. A plugin is a
 // folder under plugins/ (or anywhere, by path) whose server.ts default-exports a FocusPlugin.
 import type { Effect } from 'effect';
+import type { ZodType } from 'zod';
 import type { LedgerEvent } from '../../shared/ledger';
 import type { Agent, Planner, Project } from '../../shared/types';
 import type { GitHub } from '../github/service';
@@ -34,6 +35,29 @@ export interface PluginParts {
   prClosed?(repo: string, number: number, merged: boolean): void;
   /** Whether only the captain merges this pull request, whatever QA says. By its branch, since a pull request outlives its agent. */
   captainMerges?(pr: { branch: string }): boolean;
+  /** Tools it adds to every goal lead's office, beside ship, note and show (`mcp__office__<name>`). */
+  leadTools?: LeadTool[];
+}
+
+/** A tool a plugin adds to every goal lead's office (`mcp__office__<name>`), answered in words. */
+export interface LeadTool {
+  /** Lowercase letters, digits and underscores; a name the office's own tools have is left out. */
+  name: string;
+  /** What it's for and when to reach for it, as the lead reads it. */
+  description: string;
+  /** Its input's fields, as zod types (the SDK's tool boundary takes zod). */
+  input: Record<string, ZodType>;
+  /** Its answer to the lead, in words; a throw is said back to them as the tool failing, in its message. */
+  run(lead: LeadToolContext, input: Record<string, unknown>): Promise<string>;
+}
+
+/** What a plugin's lead tool gets: whose lead it is, their checkouts, and their station's screen. */
+export interface LeadToolContext {
+  agent: Agent;
+  /** The lead's checkout of each of the goal's repos, as it stands in their workspace (their branch, uncommitted work and all). */
+  checkouts: { repo: string; dir: string }[];
+  /** Puts a page on the lead's station's screen as their show tool does (the same id again replaces it); says where it went. */
+  show(page: { id: string; title: string; html: string }): Promise<string>;
 }
 
 /**

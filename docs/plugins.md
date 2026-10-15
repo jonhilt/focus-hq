@@ -53,6 +53,7 @@ A plugin is a folder with a `server.ts` that default-exports a `FocusPlugin` (`s
   - `prOpened`: the office opened or updated the pull request of an agent on one of its briefs.
   - `prClosed`: any pull request merged or closed.
   - `captainMerges`: whether only the captain merges a pull request, whatever QA and auto-merge say. It goes by branch, since a pull request outlives its agent.
+- **Lead tools.** `leadTools`: tools added to every goal lead's office beside ship, note and show, as `mcp__office__<name>`. Each has a `name` (lowercase, digits and underscores; one the office's own tools have, or another plugin's already took, is left out), a `description` the lead reads, an `input` of zod fields, and `run(lead, input)`, which answers in words (a throw is said back as the tool failing). `lead` is a `LeadToolContext`: the lead's agent, their `checkouts` of the goal's repos as they stand in their workspace, and `show(page)`, which puts a page on their station's screen as their show tool does. The cartography plugin's `map` tool is the first.
 
 A hook that throws is logged and skipped, so one plugin's bug never stops the office's loops.
 

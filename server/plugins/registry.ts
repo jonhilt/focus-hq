@@ -1,6 +1,6 @@
 import type { Agent, Brief, PluginStates } from '../../shared/types';
 import { errorMessage } from '../util';
-import type { BriefSpec, FocusPlugin, PluginHost, PluginParts, PluginRoute } from './contract';
+import type { BriefSpec, FocusPlugin, LeadTool, PluginHost, PluginParts, PluginRoute } from './contract';
 
 /**
  * The plugins the office started (docs/plugins.md), and the core's one way to them: it asks here rather than knowing
@@ -73,6 +73,11 @@ export class Plugins {
 
   routes(): { plugin: string; route: PluginRoute }[] {
     return [...this.parts].flatMap(([plugin, parts]) => (parts.routes ?? []).map((route) => ({ plugin, route })));
+  }
+
+  /** The tools the plugins switched on add to every lead's office, each with its plugin's id. */
+  leadTools(): { plugin: string; tool: LeadTool }[] {
+    return [...this.parts].flatMap(([plugin, parts]) => (parts.leadTools ?? []).map((tool) => ({ plugin, tool })));
   }
 
   boardRefreshed(projectId: string): void {

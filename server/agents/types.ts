@@ -1,4 +1,5 @@
 import type { AgentStatus, Autonomy, BrowserFrame, Effort, Settings, SystemModel, TermLine, Workflow, WorkflowAgent } from '../../shared/types';
+import type { ZodType } from 'zod';
 import type { ArtifactInput, NoteInput, QuestionInput } from './lead';
 import type { ExplainerInput } from './explainer';
 import type { ChecklistSource } from './checklist';
@@ -130,6 +131,16 @@ export interface OfficeTools {
   ask(input: QuestionInput): Promise<string>;
   /** The lead thinks the goal is done: the captain closes it, or carries on. */
   proposeClose(input: { reason: string }): Promise<string>;
+  /** Tools the plugins switched on add (plugins/contract.ts `leadTools`), bound to this lead. */
+  extra?: ExtraTool[];
+}
+
+/** A plugin's tool in a lead's office, bound to that lead. */
+export interface ExtraTool {
+  name: string;
+  description: string;
+  input: Record<string, ZodType>;
+  run(input: Record<string, unknown>): Promise<string>;
 }
 
 /** What a run the captain stopped reports, and how a stopped review is told apart from one that failed. */

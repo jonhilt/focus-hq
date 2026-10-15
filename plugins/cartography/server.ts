@@ -6,6 +6,7 @@ import { config } from '../../server/config';
 import { checkoutLatest } from '../../server/agents/workspace';
 import type { FocusPlugin, PluginHost, PluginState } from '../../server/plugins/contract';
 import { errorMessage } from '../../server/util';
+import { mapTool } from './leadTool';
 import { mapRepo } from './map';
 import { CARTOGRAPHY, type CartographyState, type RepoMap } from './shared';
 
@@ -65,6 +66,7 @@ const cartography: FocusPlugin = {
     const cartographer = new Cartographer(host, state);
     setTimeout(() => void cartographer.mapAll().catch((err: unknown) => console.error(`Cartography: ${errorMessage(err)}`)), MAP_AFTER_START_MS).unref();
     return {
+      leadTools: [mapTool],
       routes: [
         {
           method: 'post',

@@ -40,3 +40,22 @@ export function fitInto(w: number, h: number, box: { x: number; y: number; w: nu
   const scale = Math.min(box.w / w, box.h / h);
   return { x: box.x + (box.w - w * scale) / 2, y: box.y + (box.h - h * scale) / 2, w: w * scale, h: h * scale };
 }
+
+/** What the map tool says when asked for the views: each repo's, with its question, or why it has none. */
+export function viewList(maps: readonly RepoMap[]): string {
+  return maps
+    .map((map) => {
+      if (map.error || !map.model) return `${map.repo}: no views (${map.error ?? 'no model'}).`;
+      const lines = viewsOf(map).map((v) => `- ${v.id}: ${v.id === WHOLE.id ? 'every part, as a dependency matrix' : `${v.question} (${v.parts.length} parts)`}`);
+      return `${map.repo}'s views:\n${lines.join('\n')}`;
+    })
+    .join('\n\n');
+}
+
+/** The view with id `id` in one of `maps`: the first repo with one, or why there's none. */
+export function pickView(maps: readonly RepoMap[], id: string): { map: RepoMap; view: MapView } | { error: string } {
+  const found = maps.flatMap((map) => viewsOf(map).filter((v) => v.id === id).map((view) => ({ map, view })));
+  if (!found.length) return { error: `There's no view "${id}".` };
+  if (found.length > 1) return { error: `More than one repo has a view "${id}": say which with repo (${found.map((f) => f.map.repo).join(', ')}).` };
+  return found[0];
+}

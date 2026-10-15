@@ -5,7 +5,7 @@ import { errorMessage } from '../util';
 import { EXPLAINER_LIMITS as E, STAGE_SIZE, THREE_VERSION } from './explainer';
 import { CONTACT_LIMITS as C } from './contacts';
 import { NOTE_LIMITS as L, noteOver } from './lead';
-import type { OfficeTools, ToolReply } from './types';
+import type { ExtraTool, OfficeTools, ToolReply } from './types';
 
 /**
  * The note tool's input, with the limits `checkNote` enforces (`NOTE_LIMITS`), so the lead sees them up front rather
@@ -68,7 +68,24 @@ async function answer(run: () => Promise<string | ToolReply>, failed: string): P
   }
 }
 
-/** The office's tools for a goal's lead, as an in-process MCP server: mcp__office__ship, note, show, explain, ask and propose_close. */
+/** The office's own tools' names: a plugin's tool with one of them is left out. */
+export const OFFICE_TOOL_NAMES = ['ship', 'note', 'show', 'model', 'explain', 'ask', 'propose_close'] as const;
+const TOOL_NAME = /^[a-z][a-z0-9_]{0,40}$/;
+
+/** The plugins' tools a lead's office takes: well named, clear of the office's own and of each other's (the first wins). */
+export function extraTools(extra: readonly ExtraTool[]): ExtraTool[] {
+  const taken = new Set<string>(OFFICE_TOOL_NAMES);
+  return extra.filter((t) => {
+    if (!TOOL_NAME.test(t.name) || taken.has(t.name)) return false;
+    taken.add(t.name);
+    return true;
+  });
+}
+
+/**
+ * The office's tools for a goal's lead, as an in-process MCP server: mcp__office__ship, note, show, explain, ask and
+ * propose_close, and those the plugins switched on add.
+ */
 export function officeMcpServer(tools: OfficeTools): McpSdkServerConfigWithInstance {
   return createSdkMcpServer({
     name: 'office',
@@ -141,6 +158,7 @@ Make it 3D only when the idea is spatial (a structure, a path through space, lay
         { reason: z.string().describe('Why, in a sentence or two.') },
         ({ reason }) => answer(() => tools.proposeClose({ reason }), "Couldn't propose closing"),
       ),
+      ...extraTools(tools.extra ?? []).map((t) => tool(t.name, t.description, t.input, (input) => answer(() => t.run(input), `${t.name} failed`))),
     ],
   });
 }

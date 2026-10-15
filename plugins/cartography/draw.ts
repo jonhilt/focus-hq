@@ -105,10 +105,6 @@ export function wrap(text: string, size: number, max: number, lines = 2): string
 }
 
 /**
- * The curve from part `a` to part `b`, and its middle, where its number goes. `lane` (-1, 0 or 1) moves it aside so
- * two parts that use each other get a line each.
- */
-/**
  * The curve from part `a` to part `b`, and its middle, where its number goes. It's line `slot` of `of` between the two
  * (either way), moved aside so each gets a line of its own.
  */

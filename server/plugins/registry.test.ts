@@ -25,6 +25,12 @@ function started(saved: PluginStates, ...plugins: FocusPlugin[]): Plugins {
 }
 
 describe('Plugins', () => {
+  it('gathers the tools the plugins add to a lead’s office, with whose they are', () => {
+    const map = { name: 'map', description: 'A map', input: {}, run: () => Promise.resolve('shown') };
+    const plugins = started({}, plugin('cartography', { leadTools: [map] }), plugin('quiet', {}));
+    expect(plugins.leadTools()).toEqual([{ plugin: 'cartography', tool: map }]);
+  });
+
   it('finds a brief by its plugin and kind, while that plugin is on', () => {
     const plugins = started({}, plugin('auditor', { briefs: { audit } }));
     expect(plugins.brief({ plugin: 'auditor', kind: 'audit' })).toBe(audit);

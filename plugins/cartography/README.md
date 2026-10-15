@@ -36,6 +36,15 @@ The map puts each file under its part, as it does an import, and a view draws wh
 
 Focus records its own with `pnpm run record-flows` ([scripts](../../docs/scripts.md)): a demo office with `FOCUS_FLOWS` set counts each event the hub sends against the file that asked it to (its stack), and each `/api` request against the browser's file that made it, which the browser names in a header while it's opened with `?flows`. Another project records its own however suits it, in the same shape. The recording is evidence from one run, not every path: what the run didn't do isn't in it.
 
+## A lead's map tool
+
+The plugin adds `mcp__office__map` to every goal lead's office (`leadTool.ts`), so a lead puts a view on their station's screen with one call rather than drawing a diagram of the system afresh:
+
+- **With no view**, it lists each repo's views and their questions.
+- **With a view** (`show-to-screen`, or `whole` for the matrix), it maps the lead's own checkout (their branch, uncommitted work and all) and shows the view as a page (`page.ts`): its question, the drawing and its numbered sentences, like show's visuals. It says how many parts it took, and any drift between the model and their code.
+
+When no view answers what a lead wants to show, they add one to the model in their slice, a question and its parts, and show it at once; once it merges, every later goal has it, on the engineering station and in the holodeck too.
+
 ## When the map and the code disagree
 
 The map lists its drift beside it, and the station's **Maps** button shows how much:
@@ -73,4 +82,5 @@ Maps are made from each repo's default branch, checked out under `~/.focus/carto
 - `map.ts`: making a repo's map from a checkout (git ls-files, then scan.ts).
 - `draw.ts`: drawing a view and the matrix as SVG, and a view's connections as sentences.
 - `views.ts`: a map's views, and what the Maps view says in words.
+- `leadTool.ts`: the lead's map tool. `page.ts`: a view as a page for a station's screen.
 - `server.ts`: when maps are made, and the `/map` route. `client.ts`: the **Maps** view. `panel.ts`: a view as the browser shows it, and up close. `hall.ts`: the holodeck's screens.

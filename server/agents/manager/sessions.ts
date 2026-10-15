@@ -17,7 +17,7 @@ import { applyWorkflowEvent, journalResults, runOutcome, scriptPlan, transcriptL
 import { committedWaypoint, endedProbe, launchedProbe, nudgedWaypoint } from '../waypoints';
 import { checklistState, type ChecklistSource } from '../checklist';
 import { applyBackgroundEvent, BACKGROUND_LINGER_MS, OUTPUT_TAIL, outputLines } from '../backgroundTasks';
-import { type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN, type WorkflowEvent } from '../types';
+import { type ExtraTool, type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN, type WorkflowEvent } from '../types';
 import { EmptyRepository, FINISHED, type ManagerServices, Part, Refused, ReportGone, type Runtime, withNotes, type WorkError } from './core';
 
 /** Running an agent's Claude Code session: launching their task, each turn and its hooks, compacting, and what follows a turn. */
@@ -230,10 +230,11 @@ export class AgentSessions extends Part {
   private runRequest(agent: Agent, prompt: string, instructions: string, resumeSessionId?: string): RunRequest {
     // the lead's tools answer Claude Code as Promises: the SDK's tool boundary
     const tool = <A>(effect: Effect.Effect<A, WorkError, ManagerServices>) => this.runtime.runPromise(effect);
+    const cwd = this.runtime.runSync(Workspace.use((w) => Effect.succeed(w.dir(agent.task === 'review' ? this.core.reviews.reviewDir(agent) : agent.id))));
     return {
       agentId: agent.id,
       agentName: agent.name,
-      cwd: this.runtime.runSync(Workspace.use((w) => Effect.succeed(w.dir(agent.task === 'review' ? this.core.reviews.reviewDir(agent) : agent.id)))),
+      cwd,
       prompt,
       systemAppend: instructions,
       resumeSessionId,
@@ -245,10 +246,28 @@ export class AgentSessions extends Part {
       cloud: agent.cloud ? { branch: agent.branch } : undefined,
       scripted: this.core.plugins.brief(agent.brief)?.demo,
       tools: agent.task === 'lead'
-        ? { ship: (input) => tool(this.core.slices.shipLead(agent, input)), note: (input) => tool(this.core.goalTools.noteGoal(agent, input)), show: (input) => tool(this.core.goalTools.showArtifact(agent, input)), model: (input) => tool(this.core.goalTools.showModel(agent, input)), explain: (input) => tool(this.core.goalTools.explain(agent, input)), ask: (input) => tool(this.core.goalTools.askCaptain(agent, input)), proposeClose: (input) => tool(this.core.goalTools.proposeClose(agent, input.reason)) }
+        ? { ship: (input) => tool(this.core.slices.shipLead(agent, input)), note: (input) => tool(this.core.goalTools.noteGoal(agent, input)), show: (input) => tool(this.core.goalTools.showArtifact(agent, input)), model: (input) => tool(this.core.goalTools.showModel(agent, input)), explain: (input) => tool(this.core.goalTools.explain(agent, input)), ask: (input) => tool(this.core.goalTools.askCaptain(agent, input)), proposeClose: (input) => tool(this.core.goalTools.proposeClose(agent, input.reason)), extra: this.leadTools(agent, cwd) }
         : undefined,
       checklist: agent.task === 'lead' ? this.checklist(agent) : undefined,
     };
+  }
+
+  /** The plugins' tools in a lead's office, bound to them: their checkouts (in `workspace`), and their station's screen. */
+  private leadTools(agent: Agent, workspace: string): ExtraTool[] {
+    return this.core.plugins.leadTools().map(({ tool }) => ({
+      name: tool.name,
+      description: tool.description,
+      input: tool.input,
+      run: (input) =>
+        tool.run(
+          {
+            agent,
+            checkouts: (agent.lead?.repos ?? []).map((r) => ({ repo: r.repo, dir: join(workspace, r.folder) })),
+            show: (page) => this.runtime.runPromise(this.core.goalTools.showArtifact(agent, page)),
+          },
+          input,
+        ),
+    }));
   }
 
   /** A lead's checklist as its hooks see it: the note's, with the slice's commits counted on its waypoint. */
