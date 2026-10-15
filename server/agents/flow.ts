@@ -107,6 +107,13 @@ export interface GoalFlow {
   away: Record<FlowState, number>;
   /** `leadMs` less the time away. */
   activeMs: number;
+  /**
+   * From opening to its last pull request merging: when its outcome shipped, before the wait to be closed. Missing
+   * when nothing of it merged.
+   */
+  deliveredMs?: number;
+  /** `deliveredMs` less the time away before the last merge. */
+  deliveredActiveMs?: number;
   /** Each time the lead waited on the captain between turns, for `SHORT_WAIT_MS` or more, and how long. */
   captainWaits: number[];
   /** The time waiting on the captain by why, the time away of it, and each wait of `SHORT_WAIT_MS` or more. */
@@ -220,6 +227,8 @@ export function goalFlow(goal: ArchivedGoal, moments: Moment[], ledger: LedgerEv
   const captainWaits: number[] = [];
   const captainBy = emptyReasons();
   const breaks = [...ships.map((s) => s.at), ...verdicts.map((v) => v.at), ...ends.map((e) => e.at)];
+  const lastMerge = Math.max(-Infinity, ...ends.filter((e) => e.kind === 'merged' && e.at <= closedAt).map((e) => e.at));
+  let awayBeforeMerge = 0;
   const all = stretches(moments, openedAt, closedAt, busyNow);
   let now: FlowNow | undefined;
   for (const s of all) {
@@ -234,6 +243,7 @@ export function goalFlow(goal: ArchivedGoal, moments: Moment[], ledger: LedgerEv
       const state: FlowState = queued ? 'queued' : s.busy ? (reworking(a) ? 'rework' : 'working') : !waiting ? 'background' : waiting === 'failed' ? 'captain' : waiting;
       ms[state] += b - a;
       if (long) away[state] += b - a;
+      if (long) awayBeforeMerge += Math.max(0, Math.min(b, lastMerge) - a);
       const r = waiting === 'captain' || waiting === 'failed' ? why(waiting, s.after) : undefined;
       if (!now || now.state !== state || now.reason !== r) now = { state, since: a, ...(r ? { reason: r } : {}) };
       if (r) {
@@ -250,7 +260,8 @@ export function goalFlow(goal: ArchivedGoal, moments: Moment[], ledger: LedgerEv
   }
   const leadMs = closedAt - openedAt;
   const activeMs = leadMs - Object.values(away).reduce((n, t) => n + t, 0);
-  return { id: goal.id, title: goal.title, projectId: goal.projectId, openedAt, closedAt, leadMs, activeMs, slices: goal.slices, prs: prs.length, ms, away, captainWaits, captainBy, now };
+  const delivered = lastMerge > -Infinity ? { deliveredMs: Math.max(0, lastMerge - openedAt), deliveredActiveMs: Math.max(0, lastMerge - openedAt - awayBeforeMerge) } : {};
+  return { id: goal.id, title: goal.title, projectId: goal.projectId, openedAt, closedAt, leadMs, activeMs, ...delivered, slices: goal.slices, prs: prs.length, ms, away, captainWaits, captainBy, now };
 }
 
 /** What an open goal carries of its flow for its screens: the state it's in now, and its time so far while someone was around. */
@@ -288,6 +299,8 @@ export interface FlowReport {
   /** Lead time less the time away (idle stretches of `LONG_WAIT_MS` or more). */
   activeP50: number;
   activeP85: number;
+  /** Lead time to the last merge, over the goals that merged something: how many, then p50/p85, and the same less time away. */
+  delivered: { goals: number; p50: number; p85: number; activeP50: number; activeP85: number };
   /** Share of its active time the median goal's lead was at work (working, rework, background). */
   efficiencyP50: number;
   totals: Record<FlowState, number>;
@@ -302,6 +315,14 @@ export interface FlowReport {
 }
 
 const atWork = (g: GoalFlow) => (g.activeMs ? (g.ms.working + g.ms.rework + g.ms.background) / g.activeMs : 0);
+
+/** Lead time to the last merge, over the goals that merged something. */
+function deliveredTimes(goals: GoalFlow[]): FlowReport['delivered'] {
+  const merged = goals.filter((g) => g.deliveredMs !== undefined);
+  const to = merged.map((g) => g.deliveredMs ?? 0);
+  const active = merged.map((g) => g.deliveredActiveMs ?? 0);
+  return { goals: merged.length, p50: percentile(to, 0.5), p85: percentile(to, 0.85), activeP50: percentile(active, 0.5), activeP85: percentile(active, 0.85) };
+}
 
 /** The goals' flows summed up, with the quality guards over their pull requests. */
 export function flowReport(goals: GoalFlow[], allGoals: ArchivedGoal[], ledger: LedgerEvent[]): FlowReport {
@@ -334,6 +355,7 @@ export function flowReport(goals: GoalFlow[], allGoals: ArchivedGoal[], ledger: 
     activeP50: percentile(goals.map((g) => g.activeMs), 0.5),
     activeP85: percentile(goals.map((g) => g.activeMs), 0.85),
     efficiencyP50: percentile(goals.map(atWork), 0.5),
+    delivered: deliveredTimes(goals),
     totals,
     away,
     leadTotal: goals.reduce((n, g) => n + g.leadMs, 0),
@@ -378,6 +400,7 @@ export function flowLines(r: FlowReport, slowest = 5, guards: string[] = []): st
   return [
     `${r.goals.length} goals · lead time p50 ${span(r.leadP50)} · p85 ${span(r.leadP85)}`,
     `  leaving out idle stretches of ${span(LONG_WAIT_MS)} or more (nights, days away): p50 ${span(r.activeP50)} · p85 ${span(r.activeP85)} · the median goal's lead at work ${pct(r.efficiencyP50, 1)} of it`,
+    `  to the last merge, when the outcome shipped (${r.delivered.goals} goals that merged): p50 ${span(r.delivered.p50)} · p85 ${span(r.delivered.p85)} · leaving out idle stretches: p50 ${span(r.delivered.activeP50)} · p85 ${span(r.delivered.activeP85)}`,
     '',
     `Where the time went:   all time       while around`,
     ...states.map(row),

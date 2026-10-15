@@ -27,6 +27,7 @@ The lead is **at a turn** from the message that starts it (the captain's, the of
 ## Reading it
 
 - **Lead time p50 and p85.** The median goal, and the one 85% of goals beat. Watch p85: it's the long tail that makes goals feel slow.
+- **To the last merge.** The same times, from opening to the goal's last pull request merging: when its outcome shipped, before the wait for someone to close the goal, which delays nothing. Only goals that merged something count, so its numbers are over fewer goals than lead time's. With time away left out too, up to the merge only.
 - **Away.** An idle stretch of 4 hours or more is a night or a day away from the ship. Its time is still in its state, but the report also leaves it out (**while around**), along with the median goal's lead time without it, and the share of that time the lead was at work. A change to how the office works shows up in the active numbers. The raw ones mostly measure when someone is around.
 - **Biggest wait while around.** The wait state (qa, review, captain, queued) with the most active time: the constraint to work on first. **review** is waiting on the captain too, by another route.
 - **Each wait on the captain** of a minute or more, p50 and p85. Shorter ones are messages sent while the lead was still at work.

@@ -104,6 +104,18 @@ describe('goalFlow', () => {
     expect(f.activeMs).toBe(62 * 60_000);
   });
 
+  it('times the goal to its last merge too, less only the time away before it, and not at all when nothing merged', () => {
+    const f = goalFlow({ ...goal(0), closedAt: min(62) + LONG_WAIT_MS }, transcriptMoments(story()), ledger());
+    expect(f.deliveredMs).toBe(40 * 60_000);
+    expect(f.deliveredActiveMs).toBe(40 * 60_000);
+    n = 0;
+    const away = [said('Your workspace', 0), ship('s1', 1), shipped('s1', 'Opened o/r#1', 1), said('[QA officer Lt. Q] QA passed', 5), work(6)].join('\n');
+    const late = goalFlow(goal(6 + 600), transcriptMoments(away), [verdict('pass', 5), merged(6 + 480)]);
+    expect(late.deliveredMs).toBe((6 + 480) * 60_000);
+    expect(late.deliveredActiveMs).toBe(6 * 60_000);
+    expect(goalFlow(goal(62), transcriptMoments(story()), [verdict('pass', 30)]).deliveredMs).toBeUndefined();
+  });
+
   it('counts the time before the lead’s first line as queued, and a wait on the captain under a minute as no wait', () => {
     n = 0;
     const jsonl = [said('Your workspace, with every repo', 10), work(12), said('ok', 12.5), work(14)].join('\n');
@@ -197,6 +209,8 @@ describe('flowReport', () => {
     const lines = flowLines(r).join('\n');
     expect(lines).toContain('Biggest wait while around: qa');
     expect(lines).toContain('merged 2 · 1 without a current QA pass (50%)');
+    expect(r.delivered).toMatchObject({ goals: 1, p50: 41 * 60_000 });
+    expect(lines).toContain('to the last merge, when the outcome shipped (1 goals that merged): p50 41m · p85 41m');
   });
 });
 
