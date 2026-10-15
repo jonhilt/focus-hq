@@ -210,11 +210,9 @@ export class OfficeState {
         this.call = { ...this.call, call: event.call };
         this.emit('call', undefined);
         break;
-        break;
       case 'report':
         this.report = event.report;
         this.emit('report', undefined);
-        break;
         break;
       case 'usage':
         this.usage = event.usage;
