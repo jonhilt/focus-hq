@@ -170,3 +170,31 @@ describe('reviewAfterRestart', () => {
     expect(saved.status).toBe('testing');
   });
 });
+
+describe('loading a saved office', () => {
+  it('picks up every saved agent and review as a restart leaves them, and fits old rooms to today’s desks', () => {
+    const project = { id: 'p1', name: 'Shop', color: '#fff', theme: 'beach', repos: ['acme/shop'], maxAgents: 6, autoAssign: false, autoLabel: '', createdAt: 0 };
+    const state = {
+      settings: { maxConcurrent: 2 },
+      projects: [project],
+      agents: [agent({ status: 'working', desk: 5 })],
+      reviews: [{ projectId: 'p1', repo: 'acme/shop', number: 3, title: 't', status: 'testing', requestedAt: 0 }],
+      closedPrs: [{ repo: 'acme/shop', issue: 7, pr: 3, officer: 'Lt. Ops', note: 'Wrong approach', at: 0 }],
+      numberOne: { status: 'thinking', activity: '', messages: [], updatedAt: 0, costUsd: 0 },
+      studio: { status: 'thinking', activity: '', messages: [], takes: [], updatedAt: 0, costUsd: 0 },
+      retro: { status: 'thinking', activity: '', days: 14, sessions: 0, drafts: [], watch: [], costUsd: 0 },
+      climb: { keepClimbing: true },
+    };
+    fs.writeFileSync(path.join(dir, 'state.json'), JSON.stringify(state));
+    const store = new Store(true);
+    store.load();
+    expect(store.settings).toMatchObject({ maxConcurrent: 2, mergeMethod: 'squash' });
+    expect(store.projects[0]?.maxAgents).toBe(2);
+    expect(store.agents.get('agent_ab12')).toMatchObject({ status: 'stopped', desk: expect.any(Number) });
+    expect(store.agents.get('agent_ab12')?.desk).toBeLessThan(2);
+    expect(store.reviews.get('acme/shop#3')?.status).toBe('error');
+    expect(store.closedPrs.get('acme/shop#7')?.pr).toBe(3);
+    expect([store.numberOne.status, store.studio.status, store.retro.status]).toEqual(['failed', 'failed', 'failed']);
+    expect(store.climb.keepClimbing).toBe(true);
+  });
+});
