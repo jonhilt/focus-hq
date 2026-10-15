@@ -55,6 +55,18 @@ export function olderVerdict(current: QaReview | undefined, incoming: QaReview):
   return !!current && verdict(current) && verdict(incoming) && (incoming.finishedAt ?? 0) < (current.finishedAt ?? 0);
 }
 
+/**
+ * Whether a PR goes back to QA because its head moved past QA's verdict without the office pushing it (CI committing
+ * to the branch, the captain pushing by hand): only the office's own PRs, with auto-QA on, and not while someone the
+ * office sent is fixing it or the operations officer is looking, since they hand it back to QA themselves.
+ */
+export function verdictBehindHead(review: QaReview | undefined, pr: Pick<PullRequest, 'headSha'>, ctx: { ours: boolean; autoQa: boolean }): boolean {
+  if (!review?.sha || !pr.headSha || !ctx.ours || !ctx.autoQa) return false;
+  if (review.status !== 'passed' && review.status !== 'failed') return false;
+  if (review.followUp?.kind === 'fixing' || review.followUp?.kind === 'triaging') return false;
+  return !sameCommit(review.sha, pr.headSha);
+}
+
 /** Whether QA should pick up a PR the office just opened or pushed to: on unless the project switched it off. */
 export function autoQaFor(project: { autoQa?: boolean }): boolean {
   return project.autoQa !== false;

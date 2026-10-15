@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoQaFor, autoSendBackFor, filesCovered, olderVerdict, pullUrl, qaBadge, sameCommit, spotCheckUrl } from './qa';
+import { autoQaFor, autoSendBackFor, filesCovered, olderVerdict, pullUrl, qaBadge, sameCommit, spotCheckUrl, verdictBehindHead } from './qa';
 import type { QaReport, QaReview } from './types';
 
 const review = (r: Partial<QaReview> = {}): QaReview => ({
@@ -134,5 +134,34 @@ describe('filesCovered', () => {
     expect(c?.evidence).toBe(false);
     expect(c?.rows.map((r) => r.opened)).toEqual(['unknown', 'unknown', 'na']);
     expect(filesCovered(report(undefined), { changed: [] })).toBeUndefined();
+  });
+});
+
+describe('verdictBehindHead', () => {
+  const ctx = { ours: true, autoQa: true };
+  const moved = { headSha: 'fff0000aaa111' };
+
+  it('sends the office’s PR back to QA when its head moved past either verdict', () => {
+    expect(verdictBehindHead(review(), moved, ctx)).toBe(true);
+    expect(verdictBehindHead(review({ status: 'failed', followUp: { kind: 'needs-you', reason: 'stuck' } }), moved, ctx)).toBe(true);
+  });
+
+  it('leaves it when QA already has the head, or nothing to compare', () => {
+    expect(verdictBehindHead(review(), { headSha: 'abc1234' }, ctx)).toBe(false);
+    expect(verdictBehindHead(review({ sha: undefined }), moved, ctx)).toBe(false);
+    expect(verdictBehindHead(review(), { headSha: '' }, ctx)).toBe(false);
+    expect(verdictBehindHead(undefined, moved, ctx)).toBe(false);
+  });
+
+  it('leaves a teammate’s PR, a project without auto-QA, and a review under way or with an error', () => {
+    expect(verdictBehindHead(review(), moved, { ...ctx, ours: false })).toBe(false);
+    expect(verdictBehindHead(review(), moved, { ...ctx, autoQa: false })).toBe(false);
+    for (const status of ['queued', 'testing', 'error'] as const) expect(verdictBehindHead(review({ status }), moved, ctx)).toBe(false);
+  });
+
+  it('leaves it to whoever is fixing it, or the operations officer looking, to hand back', () => {
+    const fixes = { kind: 'qa' } as const;
+    expect(verdictBehindHead(review({ status: 'failed', followUp: { kind: 'fixing', agentId: 'a', agentName: 'Ensign Ro', fixes } }), moved, ctx)).toBe(false);
+    expect(verdictBehindHead(review({ status: 'failed', followUp: { kind: 'triaging', officer: 'Lt. Kim', activity: 'Reading' } }), moved, ctx)).toBe(false);
   });
 });

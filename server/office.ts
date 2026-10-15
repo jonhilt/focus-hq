@@ -7,7 +7,7 @@ import { chosenSet, previewPrs } from '../shared/previewSet';
 import { startOrder } from '../shared/dependencies';
 import type { Closer } from '../shared/ledger';
 import { autoMergeFor, type GateMark, mergeMethodFor, mergeStep, type MergeStep, requestedMerge } from '../shared/mergeGate';
-import { autoSendBackFor, prKey } from '../shared/qa';
+import { autoQaFor, autoSendBackFor, prKey, verdictBehindHead } from '../shared/qa';
 import type { AgentManager } from './agents/manager';
 import type { Calls } from './call/calls';
 import type { ChiefEngineer } from './agents/engineer';
@@ -344,6 +344,7 @@ export class Office {
 
     await this.noticeClosedPullRequests(projectId, board);
     await this.requestedMerges(projectId, board);
+    this.verdictsCatchUp(projectId, board);
     await this.autoMerge(projectId, board);
     this.autoAssign(projectId, board);
     this.agents.plugins.boardRefreshed(projectId);
@@ -387,6 +388,21 @@ export class Office {
             this.agents.requestMerge(pr.repo, pr.number, false);
             this.hub.toast('error', `GitHub refused to merge ${where}: ${errorMessage(err)}`, undefined, projectId);
           }
+      }
+    }
+  }
+
+  /** Sends each of the office's PRs whose head moved past QA's verdict, by a push the office didn't make, back to QA. */
+  private verdictsCatchUp(projectId: string, board: Board): void {
+    const project = this.store.projects.find((p) => p.id === projectId);
+    if (!project) return;
+    for (const pr of board.prs) {
+      const review = this.store.reviews.get(prKey(pr.repo, pr.number));
+      if (!verdictBehindHead(review, pr, { ours: this.agents.officePr(pr.repo, pr.number), autoQa: autoQaFor(project) })) continue;
+      try {
+        this.agents.requestReview(projectId, pr.repo, pr.number, pr.title, undefined, false, pr.headSha);
+      } catch (err) {
+        console.warn(`Couldn't send ${pr.repo}#${pr.number} back to QA at its new head: ${errorMessage(err)}`);
       }
     }
   }

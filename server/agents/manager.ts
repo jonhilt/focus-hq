@@ -92,6 +92,11 @@ export class AgentManager {
     return this.core.seating.openedByOffice(repo, number);
   }
 
+  /** The office opened the PR: one of its developers', a plugin's brief, or a goal's slice. */
+  officePr(repo: string, number: number): boolean {
+    return this.core.seating.openedByOffice(repo, number) || !!this.core.leads.leadWith(repo, number);
+  }
+
   busyOn(repo: string, number: number): boolean {
     return this.core.seating.busyOn(repo, number);
   }
