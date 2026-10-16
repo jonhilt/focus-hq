@@ -4,6 +4,9 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { loadPlugins, ownPlugins, pluginEntry, pluginNames } from './load';
 
+// loading the office's own plugins imports each one's whole graph, a second alone and past 5 s on a busy machine
+vi.setConfig({ testTimeout: 30_000 });
+
 describe('pluginEntry', () => {
   it('finds a bare name under the office’s plugins/, and a path anywhere', () => {
     expect(pluginEntry('climber', '/focus', '/home/me')).toBe('/focus/plugins/climber/server.ts');
