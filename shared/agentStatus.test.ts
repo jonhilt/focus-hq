@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contextLevel } from './agentStatus';
+import { contextLevel, runLine } from './agentStatus';
 
 describe('contextLevel', () => {
   it('reads how full a context is: fine, filling up, nearly full', () => {
@@ -9,5 +9,15 @@ describe('contextLevel', () => {
     expect(contextLevel(79)).toBe('filling');
     expect(contextLevel(80)).toBe('full');
     expect(contextLevel(104)).toBe('full');
+  });
+});
+
+describe('runLine', () => {
+  it('says where a run is, with its turn and what followed it', () => {
+    expect(runLine({ phase: 'turn.started', turns: 3, seq: 40 })).toBe('turn 3 running');
+    expect(runLine({ phase: 'ended', turns: 3, target: 'deliver', seq: 44 })).toBe('turn 3 ended → deliver');
+    expect(runLine({ phase: 'interrupted', turns: 1, seq: 9 })).toBe('turn 1 interrupted');
+    expect(runLine({ phase: 'waiting', turns: 2, seq: 12 })).toBe('waiting for a slot');
+    expect(runLine({ phase: 'idle', turns: 0, seq: 0 })).toBe('idle');
   });
 });

@@ -42,11 +42,15 @@ export function mermaidStatechart(machine: AnyStateMachine): string {
     for (const { target, guard, events } of arrows.values()) edges.push(`  ${id} --> ${target} : ${events.join(' | ')}${guard}`);
   };
 
-  for (const node of Object.values(machine.root.states) as AnyStateNode[]) visit(node, '  ');
-  const initial = machine.root.initial?.target[0];
+  // a machine with transitions of its own (taken from any state) is drawn as a box round its states, they leave from it
+  const { root } = machine;
+  const boxed = root.transitions.size > 0;
+  if (boxed) visit(root, '  ');
+  else for (const node of Object.values(root.states) as AnyStateNode[]) visit(node, '  ');
+  const initial = root.initial?.target[0];
   return [
     ...lines,
-    ...(initial ? [`  [*] --> ${mermaidId(initial)}`] : []),
+    ...(initial && !boxed ? [`  [*] --> ${mermaidId(initial)}`] : []),
     ...edges,
     '  classDef final fill:#1d3320,stroke:#9fd39f,color:#e8e4d8',
     ...(finals.length ? [`  class ${finals.join(',')} final`] : []),

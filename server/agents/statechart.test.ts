@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { setup } from 'xstate';
+import { journalMachine } from './runJournal';
 import { runMachine } from './runMachine';
 import { mermaidStatechart } from './statechart';
 
@@ -41,10 +42,32 @@ describe('mermaidStatechart', () => {
     );
   });
 
-  it('keeps the run machine’s picture in docs/agents.md as the code has it', () => {
+  it('draws a machine with transitions of its own as a box its states sit in, they leave from', () => {
+    const machine = setup({}).createMachine({ id: 'lamp', initial: 'off', on: { unplug: '.off' }, states: { off: { on: { flick: 'on' } }, on: { on: { flick: 'off' } } } });
+    expect(mermaidStatechart(machine)).toBe(
+      [
+        'stateDiagram-v2',
+        '  direction LR',
+        '  state "lamp" as lamp {',
+        '    [*] --> lamp_off',
+        '    state "off" as lamp_off',
+        '    state "on" as lamp_on',
+        '  }',
+        '  lamp_off --> lamp_on : flick',
+        '  lamp_on --> lamp_off : flick',
+        '  lamp --> lamp_off : unplug',
+        '  classDef final fill:#1d3320,stroke:#9fd39f,color:#e8e4d8',
+      ].join('\n'),
+    );
+  });
+
+  it.each([
+    ['run-machine', runMachine],
+    ['journal-machine', journalMachine],
+  ] as const)('keeps the %s’s picture in docs/agents.md as the code has it', (marker, machine) => {
     const doc = readFileSync(join(__dirname, '../../docs/agents.md'), 'utf8');
-    const drawn = /<!-- run-machine:start -->\n```mermaid\n---\nconfig:\n {2}layout: elk\n---\n([\s\S]*?)\n```\n<!-- run-machine:end -->/.exec(doc)?.[1];
-    // out of step? paste mermaidStatechart(runMachine)'s output between the markers
-    expect(drawn).toBe(mermaidStatechart(runMachine));
+    const drawn = new RegExp(`<!-- ${marker}:start -->\\n\`\`\`mermaid\\n---\\nconfig:\\n {2}layout: elk\\n---\\n([\\s\\S]*?)\\n\`\`\`\\n<!-- ${marker}:end -->`).exec(doc)?.[1];
+    // out of step? paste mermaidStatechart(machine)'s output between the markers
+    expect(drawn).toBe(mermaidStatechart(machine));
   });
 });

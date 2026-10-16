@@ -21,6 +21,42 @@ Each agent keeps a run journal, `~/.focus/runs/<agent id>.jsonl` (`server/agents
 
 - **Messages**: a message for an agent is `queued` as it arrives (heard next, in front, or once the turn in hand ends), `taken` into a turn's prompt or `sent` into a session that's listening (`server/agents/inbox.ts`). One taken for a prompt is still owed until its turn is asked for.
 - **Turns**: `turn-requested` (its prompt, and the conversation it goes back to) is written before Claude Code starts, then `signed-in` (your plan or your API key), `turn-started` (the session, and where Claude Code says its credential came from: its `apiKeySource`), and `turn-ended` with how it ended. Claude Code's own transcript holds what happened inside the turn; the journal holds what the office decided around it.
+- **The run's phase.** What the journal adds up to is a state machine's too (`journalMachine` in `runJournal.ts`, XState): each fact is an event and the run's phase is its state, so a run is rebuilt by replaying its journal through it (`fold`). A run is `idle`, `waiting` for a free slot, `setting-up`, in a `turn` (`requested` until Claude Code has it, `started`, `stopping` once the captain or a sign-in mismatch stopped it), `ended` (with what followed it, `decided` by the run machine below), or `interrupted`. The inbox's facts change what it holds in any phase. The agent's panel shows it as **Run** (`turn 3 running`, `turn 3 ended → deliver`), with the journal's last fact number on hover.
+
+<!-- journal-machine:start -->
+```mermaid
+---
+config:
+  layout: elk
+---
+stateDiagram-v2
+  direction LR
+  state "journal" as journal {
+    [*] --> journal_idle
+    state "idle" as journal_idle
+    state "waiting" as journal_waiting
+    state "setting-up" as journal_setting_up
+    state "turn" as journal_turn {
+      [*] --> journal_turn_requested
+      state "requested" as journal_turn_requested
+      state "started" as journal_turn_started
+      state "stopping" as journal_turn_stopping
+    }
+    state "ended" as journal_ended
+    state "interrupted" as journal_interrupted
+  }
+  journal_turn --> journal_turn_started : turn-started [this turn]
+  journal_turn --> journal_turn_stopping : stop-requested | sign-in-mismatch [this turn]
+  journal_turn --> journal_ended : turn-ended [this turn]
+  journal_turn --> journal_interrupted : interrupted [this turn]
+  journal --> journal_idle : reset
+  journal --> journal_waiting : waiting
+  journal --> journal_setting_up : setting-up
+  journal --> journal_turn : turn-requested
+  classDef final fill:#1d3320,stroke:#9fd39f,color:#e8e4d8
+```
+<!-- journal-machine:end -->
+
 - **What follows a turn** is the run's state machine, in XState (`server/agents/runMachine.ts`). The turn ended in a state (where it ran: `local`, `cloud`, or `attaching` to a cloud session the captain started), and its end is an event read once from its outcome (`done`, `failed`, `stopped`, `limited`, `mismatch`, `refused`, or why it never got going: `busy`, `asking`, `gone`, `unstarted`). `runMachine` holds each state's guarded transitions, and `step` takes one with XState's pure `transition`; an event a state has no transition for (or none whose guard passes) goes up to its parent, and `turn`, at the top, has a way out of every event. The target (deliver, the captain's turn, carry on, the plan's limit, stopped, failed, the cloud's fallbacks) is what the manager does next.
 
 The machine, drawn from its code (`mermaidStatechart` in `server/agents/statechart.ts`; a test keeps this picture in step with `runMachine`):
@@ -84,7 +120,8 @@ stateDiagram-v2
 
 **After a restart** (`AgentManager.recover`, once the office has started), whether Focus crashed or shut down on purpose (Ctrl-C, an auto-update: `shutDown` stops every session but leaves their turns open in the journal): messages that were waiting are still waiting, and those taken for a turn that was never asked for go back in front. A turn the journal says was in flight is `interrupted`, and:
 
-- a developer's, a fixer's, a conflict resolver's, a brief's or a lead's carries on by itself in the same conversation, told it was cut off (with any messages sent into it, in case they never arrived), or asked again if Claude Code never got it, as long as it would be on your plan;
+- an agent whose journal says they were `waiting` for a free slot is back in line (held for a message instead if going back to their conversation would be on your API key);
+- a developer's, a fixer's, a conflict resolver's, a brief's or a lead's turn carries on by itself in the same conversation, told it was cut off (with any messages sent into it, in case they never arrived), or asked again if Claude Code never got it, as long as it would be on your plan;
 - on your API key, QA's review, a cloud agent's, a compaction's, one the captain had just stopped (`stop-requested`), or with no conversation of its own to go back to, the agent waits for a message, saying why.
 
 An agent sent home has a `reset` in their journal, so an id that comes back (a reopened goal, QA's next review) starts from nothing.

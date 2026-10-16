@@ -402,6 +402,8 @@ export class AgentSessions extends Part {
         carryOn,
       });
       if (attaching && next !== 'attach-again') rt.attaching = undefined;
+      const ended = this.store.run(agent.id).last;
+      if (ended) this.store.journal(agent.id, { kind: 'decided', turn: ended.id, target: next });
       switch (next) {
         case 'attach-again':
         case 'attach-refused':
@@ -507,12 +509,17 @@ export class AgentSessions extends Part {
   recover(onKey: boolean): void {
     for (const agent of [...this.store.agents.values()]) {
       const next = recovery(this.store.run(agent.id), agent, onKey);
-      if (next.kind !== 'none') this.store.journal(agent.id, { kind: 'interrupted', turn: next.turn });
+      if (next.kind === 'resume' || next.kind === 'wait') this.store.journal(agent.id, { kind: 'interrupted', turn: next.turn });
       if (this.store.run(agent.id).owed.length) this.store.journal(agent.id, { kind: 'restored' });
       // a cloud agent waiting for the captain to start its session waits as it was
       if (next.kind === 'none' || agent.handover) continue;
-      if (next.kind === 'wait') {
+      if (next.kind === 'wait' || next.kind === 'hold') {
         if (agent.status === 'stopped') this.update(agent, { activity: next.why });
+        continue;
+      }
+      if (next.kind === 'requeue') {
+        this.print(agent, [{ kind: 'system', text: '✻ Focus restarted while they waited for a free slot: back in line' }]);
+        this.core.comms.pickUp(agent);
         continue;
       }
       this.rt(agent.id).inbox.unshift(next.prompt);

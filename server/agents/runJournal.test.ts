@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fold, INTERRUPTED_ACTIVITY, journalLine, readJournal, recovery, RESUMED_NOTE, type RunFact, signInMismatch } from './runJournal';
+import { fold, INTERRUPTED_ACTIVITY, journalLine, readJournal, recovery, RESUMED_NOTE, type RunFact, runView, signInMismatch } from './runJournal';
 
 const requested = (turn: string, prompt = 'Fix the flaky test', resumes?: string): RunFact => ({ kind: 'turn-requested', turn, turnKind: 'work', prompt, resumes });
 const issue = { task: 'issue' };
@@ -19,7 +19,7 @@ describe('fold', () => {
 
   it('starts from nothing when the agent was sent home, numbering on', () => {
     const run = fold([{ kind: 'queued', text: 'a', at: 'later' }, { kind: 'taken' }, requested('t1'), { kind: 'reset' }]);
-    expect(run).toEqual({ inbox: [], later: [], owed: [], seq: 4 });
+    expect(run).toEqual({ inbox: [], later: [], owed: [], turns: 0, phase: 'idle', seq: 4 });
   });
 
   it('owes messages taken for a prompt until their turn is requested, and gives them back if it never is', () => {
@@ -119,5 +119,55 @@ describe('readJournal', () => {
     const text = `${line(1, { kind: 'taken' })}not json\n${line(3, { kind: 'cleared' })}`;
     expect(readJournal(text).entries.map((e) => e.seq)).toEqual([1, 3]);
     expect(readJournal('')).toEqual({ entries: [], goodBytes: 0 });
+  });
+});
+
+describe('the journal’s machine', () => {
+  const phases = (facts: RunFact[]) => facts.map((_, i) => runView(fold(facts.slice(0, i + 1))).phase);
+
+  it('follows a run through its phases, fact by fact', () => {
+    expect(
+      phases([
+        { kind: 'waiting' },
+        { kind: 'setting-up' },
+        requested('t1'),
+        { kind: 'turn-started', turn: 't1', session: 's1' },
+        { kind: 'turn-ended', turn: 't1', outcome: { ok: true } },
+        { kind: 'decided', turn: 't1', target: 'deliver' },
+        requested('t2', 'Fix the review'),
+        { kind: 'stop-requested', turn: 't2' },
+        { kind: 'turn-ended', turn: 't2', outcome: { ok: false, aborted: true } },
+        { kind: 'reset' },
+      ]),
+    ).toEqual(['waiting', 'setting-up', 'turn.requested', 'turn.started', 'ended', 'ended', 'turn.requested', 'turn.stopping', 'ended', 'idle']);
+  });
+
+  it('keeps what followed the last turn, and counts the turns of work', () => {
+    const run = fold([requested('t1'), { kind: 'turn-ended', turn: 't1', outcome: { ok: true } }, { kind: 'decided', turn: 't1', target: 'lead-done' }]);
+    expect(runView(run)).toEqual({ phase: 'ended', turns: 1, target: 'lead-done', seq: 3 });
+    // a compaction isn't a turn of work, and a decision about another turn changes nothing
+    const later = fold([requested('t1'), { kind: 'turn-ended', turn: 't1', outcome: { ok: true } }, { kind: 'decided', turn: 't0', target: 'fail' }, { kind: 'turn-requested', turn: 'c1', turnKind: 'compact', prompt: '/compact' }]);
+    expect(runView(later)).toEqual({ phase: 'turn.requested', turns: 1, seq: 4 });
+  });
+
+  it('is interrupted only from a turn, and a mismatch stops it', () => {
+    expect(runView(fold([requested('t1'), { kind: 'interrupted', turn: 't1' }])).phase).toBe('interrupted');
+    expect(runView(fold([{ kind: 'interrupted', turn: 't1' }])).phase).toBe('idle');
+    expect(runView(fold([requested('t1'), { kind: 'turn-started', turn: 't1', session: 's1' }, { kind: 'sign-in-mismatch', turn: 't1', observed: 'apiKeyHelper' }])).phase).toBe('turn.stopping');
+  });
+});
+
+describe('recovery of a run waiting for a slot', () => {
+  const waiting = fold([requested('t1'), { kind: 'turn-ended', turn: 't1', outcome: { ok: true } }, { kind: 'waiting' }]);
+
+  it('puts them back in line', () => {
+    expect(recovery(waiting, { task: 'issue', sessionId: 's1' }, false)).toEqual({ kind: 'requeue' });
+    expect(recovery(fold([{ kind: 'waiting' }]), { task: 'lead' }, true)).toEqual({ kind: 'requeue' });
+  });
+
+  it('holds them when going back to their conversation would be on the key, and leaves QA and the cloud to their own', () => {
+    expect(recovery(waiting, { task: 'issue', sessionId: 's1' }, true)).toMatchObject({ kind: 'hold', why: expect.stringContaining('API key') });
+    expect(recovery(waiting, { task: 'review' }, false)).toEqual({ kind: 'none' });
+    expect(recovery(waiting, { task: 'issue', cloud: true }, false)).toEqual({ kind: 'none' });
   });
 });

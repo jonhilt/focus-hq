@@ -7,6 +7,7 @@ import type { Store } from '../../store';
 import { errorMessage } from '../../util';
 import { type GitFailed, type Renderer, retryServerErrors, SHIP_RETRIES, type Sessions, type Triage, Workspace } from '../services';
 import { Inbox } from '../inbox';
+import type { RunFact } from '../runJournal';
 import type { AgentSession } from '../types';
 import type { CloudMoves } from './cloudMoves';
 import type { Comms } from './comms';
@@ -83,6 +84,9 @@ export interface Runtime {
 
 export const FINISHED: AgentStatus[] = ['done', 'stopped', 'error'];
 
+/** The statuses that are a phase of the run's own, as the fact its journal records. */
+const PHASE_FACTS: Partial<Record<AgentStatus, RunFact>> = { queued: { kind: 'waiting' }, 'setting-up': { kind: 'setting-up' } };
+
 export function withNotes(prompt: string, notes: string[]): string {
   return notes.length ? `${prompt}\n\nNotes from your manager:\n${notes.map((m) => `- ${m}`).join('\n')}` : prompt;
 }
@@ -122,6 +126,7 @@ export class Core {
     readonly boardChanged: (projectId: string) => void,
   ) {
     this.plugins = new Plugins(() => store.plugins);
+    store.journaled = (agent) => this.hub.send({ type: 'agent', agent });
     this.runtime = ManagedRuntime.make(services);
     this.runs = this.runtime.runSync(FiberMap.make<string, void, never>().pipe(Scope.provide(this.scope)));
   }
@@ -151,8 +156,12 @@ export class Core {
   update(agent: Agent, patch: Partial<Agent>): void {
     // a helper that's gone on its way takes its transcript with it
     if ('helpers' in patch) for (const h of agent.helpers ?? []) if (!patch.helpers?.some((x) => x.id === h.id)) this.store.dropLines(h.id);
+    const was = agent.status;
     Object.assign(agent, patch);
     if (!this.store.agents.has(agent.id)) return; // dismissed meanwhile
+    // queued for a slot, or setting up: a phase of their run, in its journal
+    const fact = patch.status && patch.status !== was ? PHASE_FACTS[patch.status] : undefined;
+    if (fact) this.store.journal(agent.id, fact);
     this.store.putAgent(agent);
     this.hub.send({ type: 'agent', agent });
   }

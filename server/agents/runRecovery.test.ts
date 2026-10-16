@@ -28,6 +28,8 @@ describe('a run after Focus restarts', () => {
     after.claude.turns[0].end({ ok: true, summary: 'Dark mode' });
     await until(() => before.store.agent(id).status === 'done');
     expect(before.store.run(id).open).toBeUndefined();
+    // the agent's panel reads where the run is from its journal
+    expect(before.store.agent(id).run).toMatchObject({ phase: 'ended', turns: 2, target: 'deliver' });
   });
 
   it('picks it back up after the office shut down on purpose too (Ctrl-C, an update), but not after the captain’s stop', async () => {
@@ -48,6 +50,27 @@ describe('a run after Focus restarts', () => {
     await until(() => after.claude.turns.length === 1);
     expect(after.claude.turns[0].req).toMatchObject({ agentId: working, resumeSessionId: 'session-1', prompt: RESUMED_NOTE });
     expect(before.store.agent(stopped).status).toBe('stopped');
+  });
+
+  it('puts an agent who was waiting for a free slot back in line', async () => {
+    const before = office();
+    before.project.maxAgents = 1;
+    const first = before.agents.hire(before.project.id, 'demo/webshop-frontend', issue).id;
+    const second = before.agents.hire(before.project.id, 'demo/webshop-api', { number: 2, title: 'Rate-limit the login endpoint' }).id;
+    await until(() => before.claude.turns.length === 1);
+    expect(before.store.agent(second)).toMatchObject({ status: 'queued', run: { phase: 'waiting' } });
+    before.agents.shutDown();
+
+    const after = restarted(before.store);
+    expect(before.store.agent(second).status).toBe('stopped');
+    after.agents.recover();
+    // the one mid-turn carries on, and the one in line is in line again, to start once there's a slot
+    await until(() => after.claude.turns.length === 1);
+    expect(after.claude.turns[0].req.agentId).toBe(first);
+    expect(before.store.agent(second)).toMatchObject({ status: 'queued', run: { phase: 'waiting' } });
+    after.claude.turns[0].end({ ok: true, summary: 'Dark mode' });
+    await until(() => after.claude.turns.length === 2);
+    expect(after.claude.turns[1].req.agentId).toBe(second);
   });
 
   it('keeps messages that were waiting, and hears them with the next', async () => {

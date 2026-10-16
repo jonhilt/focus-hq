@@ -15,6 +15,18 @@ export type AgentStatus =
   | 'error'
   | 'stopped';
 
+/** Where an agent's run is, as its journal tells it: the phase its machine is in, and the journal's last fact. */
+export interface RunView {
+  /** The machine's state, dotted: idle, waiting, setting-up, turn.requested, turn.started, turn.stopping, ended, interrupted. */
+  phase: string;
+  /** How many turns of work the run has asked for. */
+  turns: number;
+  /** What followed the last turn, once decided (deliver, lead-done, carry-on, fail…). */
+  target?: string;
+  /** The journal's last fact's number. */
+  seq: number;
+}
+
 export const ACTIVE_STATUSES: AgentStatus[] = ['setting-up', 'working', 'testing', 'waiting', 'pushing'];
 
 export type TermKind = 'system' | 'text' | 'thinking' | 'tool' | 'output' | 'error' | 'success' | 'manager';
@@ -317,6 +329,8 @@ export interface Agent {
   permission?: PermissionRequest;
   /** The session signed in with your API key rather than your plan (a local session; a cloud one is always on the plan). */
   onKey?: boolean;
+  /** Where their run is, as its journal tells it (server/agents/runJournal.ts). */
+  run?: RunView;
   costUsd: number;
   startedAt: number;
   finishedAt?: number;

@@ -12,7 +12,7 @@ import { config, paths } from './config';
 import { takeLock } from './fileLock';
 import { fitDesks } from './agents/desks';
 import { upgradeLead } from './agents/lead';
-import { EMPTY_RUN, evolve, fold, type JournalEntry, journalLine, readJournal, type RunFact, type RunState } from './agents/runJournal';
+import { EMPTY_RUN, evolve, fold, type JournalEntry, journalLine, readJournal, type RunFact, type RunState, runView } from './agents/runJournal';
 import { fromBeforePlugins, type SavedBeforePlugins } from './plugins/migrate';
 import { newId } from './util';
 
@@ -151,7 +151,9 @@ export class Store {
       const agent = agentAfterRestart(saved, this.projects.find((p) => p.id === saved.projectId)?.name ?? 'The project');
       this.agents.set(agent.id, agent);
       this.lines.set(agent.id, this.readLog(agent.id, MEMORY_LINES));
-      this.runs.set(agent.id, this.readRun(agent.id));
+      const run = this.readRun(agent.id);
+      this.runs.set(agent.id, run);
+      agent.run = runView(run);
     }
     // rooms had six desks before team stations: anyone at a desk that's gone takes a free one, or waits off the floor
     for (const [id, desk] of fitDesks([...this.agents.values()])) {
@@ -404,8 +406,17 @@ export class Store {
     }
     const after = evolve(before, entry);
     this.runs.set(id, after);
+    const agent = this.agents.get(id);
+    if (agent) {
+      agent.run = runView(after);
+      this.save();
+      this.journaled?.(agent);
+    }
     return after;
   }
+
+  /** Told of each agent whose run moved on: the office sends them to every browser. */
+  journaled?: (agent: Agent) => void;
 
   /** What the agent's run journal adds up to. */
   run(id: string): RunState {

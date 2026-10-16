@@ -82,6 +82,7 @@ export class Seating extends Part {
       startedAt: Date.now(),
     };
     this.store.putAgent(agent);
+    this.store.journal(agent.id, { kind: 'waiting' });
     this.hub.send({ type: 'agent', agent });
     this.print(agent, [{ kind: 'system', text: `${work.brief ? `──────── ✻ ${name} starts on ${repo}: ${work.brief.icon} ${work.brief.label}` : `✻ ${name} joined ${project.name} to work on ${repo}#${work.issue.number}`} (${work.model ? `${work.model}, ` : ''}${work.effort ?? 'default'} effort${work.cloud ? ', in the cloud' : ''})` }]);
     this.schedule();

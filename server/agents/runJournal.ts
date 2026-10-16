@@ -1,6 +1,12 @@
+import { assign, setup, type StateValue, transition } from 'xstate';
+import type { RunView } from '../../shared/types';
+import type { Target } from './runMachine';
+
 // An agent's run journal, pure: the facts the office records about a run (data/runs/<agent>.jsonl), what they add up
 // to, and what the office does with them after a restart. The journal is the truth for the run's turns and its inbox:
-// each fact is on disk before the office acts on it (`Store.journal`), so a crash loses nothing it had decided.
+// each fact is on disk before the office acts on it (`Store.journal`), so a crash loses nothing it had decided. What
+// the facts add up to is a state machine's (`journalMachine`): each fact an event, the run's phase its state, so a run
+// is rebuilt by replaying its journal through it (`fold`).
 
 /** Where a message waits in the inbox: heard next (`end`, or `front` before the rest), or once the turn in hand ends (`later`). */
 export type QueuedAt = 'end' | 'front' | 'later';
@@ -52,7 +58,13 @@ export type RunFact =
   /** Claude Code signed in some other way than the office meant, at a cost: the turn is stopped. */
   | { kind: 'sign-in-mismatch'; turn: string; observed: string }
   /** Found at startup: a turn the office started and never saw end. */
-  | { kind: 'interrupted'; turn: string };
+  | { kind: 'interrupted'; turn: string }
+  /** Waiting for a free slot to start (or pick their conversation back up). */
+  | { kind: 'waiting' }
+  /** Setting up to work: a checkout, its dependencies, the task. */
+  | { kind: 'setting-up' }
+  /** What follows turn `turn`, as the run's machine took it (`runMachine`). */
+  | { kind: 'decided'; turn: string; target: Target };
 
 /** A fact as journaled: numbered from 1 in its agent’s journal, and when (`t`). */
 export type JournalEntry = RunFact & { v: 1; seq: number; t: number };
@@ -74,8 +86,8 @@ export interface JournalTurn {
   stopped?: boolean;
 }
 
-/** What an agent's journal adds up to. */
-export interface RunState {
+/** What an agent's journal adds up to, besides its phase: the machine's context. */
+export interface JournalContext {
   /** Messages for the agent's next turn, in order. */
   inbox: string[];
   /** Messages waiting for the turn in hand to end. */
@@ -84,57 +96,135 @@ export interface RunState {
   owed: string[];
   /** The turn the office started and hasn't seen end. */
   open?: JournalTurn;
-  /** The last turn that ended, and how. */
-  last?: JournalTurn & { outcome: TurnEnding };
+  /** The last turn that ended, how, and what followed it (`target`, once decided). */
+  last?: JournalTurn & { outcome: TurnEnding; target?: Target };
   /** The latest session Claude Code reported. */
   session?: string;
-  /** The last fact's number. */
+  /** How many turns of work the run has asked for. */
+  turns: number;
+}
+
+/** What an agent's journal adds up to: the run's phase (the machine's state), what it holds, and the last fact's number. */
+export interface RunState extends JournalContext {
+  phase: StateValue;
   seq: number;
 }
 
-export const EMPTY_RUN: RunState = { inbox: [], later: [], owed: [], seq: 0 };
+const START: JournalContext = { inbox: [], later: [], owed: [], turns: 0 };
+export const EMPTY_RUN: RunState = { ...START, phase: 'idle', seq: 0 };
+
+/** A fact as the machine's event: its kind is its type. */
+type JournalEvent = { [K in RunFact['kind']]: Extract<RunFact, { kind: K }> & { type: K } }[RunFact['kind']];
+
+/** The open turn, changed. */
+const onOpen = (context: JournalContext, f: (t: JournalTurn) => JournalTurn): Partial<JournalContext> => (context.open ? { open: f(context.open) } : {});
+
+/**
+ * What a run's journal adds up to, as a state machine: each fact is an event, and the run's phase is its state. A run
+ * is `idle`, `waiting` for a free slot, `setting-up`, in a `turn` (`requested` until Claude Code has it, `started`, or
+ * `stopping` once the captain or a sign-in mismatch stopped it), `ended` (with what followed, once `decided`), or
+ * `interrupted` (found at startup). The inbox's facts change what it holds in any phase. Facts about a turn that isn't
+ * the open one change nothing. Pure: `evolve` takes one fact with XState's `transition`, and nothing runs.
+ */
+export const journalMachine = setup({
+  types: {
+    context: {} as JournalContext,
+    events: {} as JournalEvent,
+  },
+  guards: {
+    'this turn': ({ context, event }) => 'turn' in event && event.turn !== undefined && event.turn === context.open?.id,
+    'the last turn': ({ context, event }) => 'turn' in event && event.turn === context.last?.id,
+  },
+}).createMachine({
+  id: 'journal',
+  context: START,
+  initial: 'idle',
+  on: {
+    queued: {
+      actions: assign(({ context, event }) =>
+        event.at === 'later' ? { later: [...context.later, event.text] } : { inbox: event.at === 'front' ? [event.text, ...context.inbox] : [...context.inbox, event.text] },
+      ),
+    },
+    released: { actions: assign(({ context }) => ({ inbox: [...context.inbox, ...context.later], later: [] })) },
+    taken: [
+      // into the session of the turn in hand: heard in it
+      { guard: 'this turn', actions: assign(({ context }) => ({ ...onOpen(context, (t) => ({ ...t, sent: [...(t.sent ?? []), ...context.inbox] })), inbox: [] })) },
+      // into a prompt: owed until its turn is asked for
+      { actions: assign(({ context, event }) => ({ inbox: [], owed: event.turn ? context.owed : [...context.owed, ...context.inbox] })) },
+    ],
+    sent: { guard: 'this turn', actions: assign(({ context, event }) => onOpen(context, (t) => ({ ...t, sent: [...(t.sent ?? []), event.text] }))) },
+    restored: { actions: assign(({ context }) => ({ inbox: [...context.owed, ...context.inbox], owed: [] })) },
+    cleared: { actions: assign({ inbox: [], later: [], owed: [] }) },
+    reset: { target: '.idle', actions: assign(() => ({ ...START, open: undefined, last: undefined, session: undefined })) },
+    waiting: '.waiting',
+    'setting-up': '.setting-up',
+    'turn-requested': {
+      target: '.turn',
+      actions: assign(({ context, event }) => ({
+        owed: event.turnKind === 'work' ? [] : context.owed,
+        turns: context.turns + (event.turnKind === 'work' ? 1 : 0),
+        open: { id: event.turn, kind: event.turnKind, prompt: event.prompt, resumes: event.resumes },
+      })),
+    },
+  },
+  states: {
+    idle: {},
+    waiting: {},
+    'setting-up': {},
+    turn: {
+      initial: 'requested',
+      on: {
+        'signed-in': { guard: 'this turn', actions: assign(({ context, event }) => onOpen(context, (t) => ({ ...t, onKey: event.onKey }))) },
+        'turn-started': {
+          guard: 'this turn',
+          target: '.started',
+          actions: assign(({ context, event }) => ({ ...onOpen(context, (t) => ({ ...t, session: event.session, keySource: event.keySource })), session: event.session })),
+        },
+        'stop-requested': { guard: 'this turn', target: '.stopping', actions: assign(({ context }) => onOpen(context, (t) => ({ ...t, stopped: true }))) },
+        'sign-in-mismatch': { guard: 'this turn', target: '.stopping', actions: assign(({ context, event }) => onOpen(context, (t) => ({ ...t, mismatch: event.observed }))) },
+        'turn-ended': {
+          guard: 'this turn',
+          target: 'ended',
+          actions: assign(({ context, event }) => ({ open: undefined, last: context.open && { ...context.open, outcome: event.outcome } })),
+        },
+        interrupted: {
+          guard: 'this turn',
+          target: 'interrupted',
+          actions: assign(({ context }) => ({ open: undefined, last: context.open && { ...context.open, outcome: { ok: false, error: INTERRUPTED_ERROR } } })),
+        },
+      },
+      states: {
+        requested: {},
+        started: {},
+        // a stop doesn't undo itself when Claude Code says more
+        stopping: { on: { 'turn-started': { guard: 'this turn', actions: assign(({ context, event }) => onOpen(context, (t) => ({ ...t, session: event.session, keySource: event.keySource }))) } } },
+      },
+    },
+    ended: {
+      on: {
+        decided: { guard: 'the last turn', actions: assign(({ context, event }) => ({ last: context.last && { ...context.last, target: event.target } })) },
+      },
+    },
+    interrupted: {},
+  },
+});
 
 /** The run after one more fact. */
 export function evolve(state: RunState, entry: RunFact & { seq?: number }): RunState {
-  const s = { ...state, seq: entry.seq ?? state.seq + 1 };
-  switch (entry.kind) {
-    case 'queued':
-      if (entry.at === 'later') return { ...s, later: [...s.later, entry.text] };
-      return { ...s, inbox: entry.at === 'front' ? [entry.text, ...s.inbox] : [...s.inbox, entry.text] };
-    case 'released':
-      return { ...s, inbox: [...s.inbox, ...s.later], later: [] };
-    case 'taken':
-      if (!entry.turn) return { ...s, inbox: [], owed: [...s.owed, ...s.inbox] };
-      return { ...withOpen(s, entry.turn, (t) => ({ ...t, sent: [...(t.sent ?? []), ...s.inbox] })), inbox: [] };
-    case 'sent':
-      return withOpen(s, entry.turn, (t) => ({ ...t, sent: [...(t.sent ?? []), entry.text] }));
-    case 'restored':
-      return { ...s, inbox: [...s.owed, ...s.inbox], owed: [] };
-    case 'cleared':
-      return { ...s, inbox: [], later: [], owed: [] };
-    case 'stop-requested':
-      return withOpen(s, entry.turn, (t) => ({ ...t, stopped: true }));
-    case 'reset':
-      return { ...EMPTY_RUN, seq: s.seq };
-    case 'turn-requested':
-      return { ...s, owed: entry.turnKind === 'work' ? [] : s.owed, open: { id: entry.turn, kind: entry.turnKind, prompt: entry.prompt, resumes: entry.resumes } };
-    case 'signed-in':
-      return withOpen(s, entry.turn, (t) => ({ ...t, onKey: entry.onKey }));
-    case 'turn-started':
-      return { ...withOpen(s, entry.turn, (t) => ({ ...t, session: entry.session, keySource: entry.keySource })), session: entry.session };
-    case 'sign-in-mismatch':
-      return withOpen(s, entry.turn, (t) => ({ ...t, mismatch: entry.observed }));
-    case 'turn-ended':
-      if (s.open?.id !== entry.turn) return s;
-      return { ...s, open: undefined, last: { ...s.open, outcome: entry.outcome } };
-    case 'interrupted':
-      if (s.open?.id !== entry.turn) return s;
-      return { ...s, open: undefined, last: { ...s.open, outcome: { ok: false, error: INTERRUPTED_ERROR } } };
-  }
+  const { phase, seq, ...context } = state;
+  const [next] = transition(journalMachine, journalMachine.resolveState({ value: phase, context }), { ...entry, type: entry.kind } as JournalEvent);
+  return { ...next.context, phase: next.value, seq: entry.seq ?? seq + 1 };
 }
 
-function withOpen(s: RunState, turn: string, f: (t: JournalTurn) => JournalTurn): RunState {
-  return s.open?.id === turn ? { ...s, open: f(s.open) } : s;
+/** A machine's state as a dotted path: `turn.started`. */
+function dotted(value: StateValue): string {
+  if (typeof value === 'string') return value;
+  return Object.entries(value).map(([k, v]) => (v ? `${k}.${dotted(v)}` : k)).join(',');
+}
+
+/** Where the run is, for the agent's panel. */
+export function runView(state: RunState): RunView {
+  return { phase: dotted(state.phase), turns: state.turns, seq: state.seq, ...(state.last?.target && !state.open && { target: state.last.target }) };
 }
 
 /** The run its journal tells, from the start. */
@@ -166,11 +256,16 @@ export type Recovery =
   /** Pick the conversation back up with `prompt` (it goes in front of whatever else is waiting). */
   | { kind: 'resume'; turn: string; prompt: string; session: string }
   /** The turn's gone and the agent waits for the captain: `why` is their activity. */
-  | { kind: 'wait'; turn: string; why: string };
+  | { kind: 'wait'; turn: string; why: string }
+  /** They were waiting for a free slot: they wait for one again, with what was waiting for them. */
+  | { kind: 'requeue' }
+  /** They were waiting for a free slot, but going back to their conversation would be on your API key. */
+  | { kind: 'hold'; why: string };
 
 /** What about the agent decides whether an interrupted turn carries on by itself. */
 export interface RecoveryAgent {
   task: string;
+  sessionId?: string;
   cloud?: unknown;
 }
 
@@ -188,7 +283,7 @@ export const RESUMED_NOTE =
  */
 export function recovery(state: RunState, agent: RecoveryAgent, onKey: boolean): Recovery {
   const turn = state.open;
-  if (!turn) return { kind: 'none' };
+  if (!turn) return state.phase === 'waiting' ? requeue(agent, onKey) : { kind: 'none' };
   // a turn that went back into no conversation was starting a new one: there's none of its own to carry on
   const session = turn.session ?? turn.resumes;
   if (turn.stopped) return { kind: 'wait', turn: turn.id, why: 'Stopped by the captain just before Focus shut down. Send a message to pick it back up.' };
@@ -197,6 +292,13 @@ export function recovery(state: RunState, agent: RecoveryAgent, onKey: boolean):
   if (turn.mismatch) return { kind: 'wait', turn: turn.id, why: 'Stopped for signing in with the API key. Send a message to pick it back up.' };
   if (onKey) return { kind: 'wait', turn: turn.id, why: 'Interrupted when Focus shut down. Picking it back up would be on your API key, so send a message when you want it to.' };
   return { kind: 'resume', turn: turn.id, prompt: turn.session ? resumedNote(turn.sent ?? []) : turn.prompt, session };
+}
+
+/** An agent that was waiting for a free slot: in line again, unless that would pick a conversation up on your API key. */
+function requeue(agent: RecoveryAgent, onKey: boolean): Recovery {
+  if (!RESUMES.has(agent.task) || agent.cloud) return { kind: 'none' };
+  if (onKey && agent.sessionId) return { kind: 'hold', why: 'Was waiting for a free slot when Focus shut down. Picking their conversation back up would be on your API key, so send a message when you want it to.' };
+  return { kind: 'requeue' };
 }
 
 /** What a turn Claude Code had is told as it carries on: and the messages sent into it, in case they never arrived. */

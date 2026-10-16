@@ -54,7 +54,7 @@ server/
     desks.ts              who sits at a room's two individual desks, and who goes home to make room (never a lead or QA)
     claudeRunner.ts       Claude Agent SDK query() in streaming-input mode, permission callback; cloud agents via --cloud; the plan's limit stopping a session; how a session ended (stopped, limited, cloud refused, failed) is pure (`endedOutcome`, `failedOutcome`)
     sdkMessages.ts        each SDK message by type → the run's hooks: lines, activity, helpers, workflows, probes, commits, screenshots, what the key spends, the turn's result
-    runJournal.ts         each agent's run journal, pure: the facts of its turns and inbox (data/runs/<agent>.jsonl, written by Store.journal before the office acts), what they add up to, the sign-in check, and what a restart does with a turn in flight
+    runJournal.ts         each agent's run journal, pure: the facts of its turns, phases and inbox (data/runs/<agent>.jsonl, written by Store.journal before the office acts), what they add up to as an XState machine (journalMachine: facts are events, the run's phase its state), the sign-in check, and what a restart does with a turn in flight or a run waiting for a slot
     inbox.ts              an agent's inbox, kept in their run journal
     runMachine.ts         what follows a turn, as an XState state machine: the state it ran in (local, cloud, attaching), the event its end was (read from its outcome once), guarded transitions handing what a state doesn't take up to its parent; `step` takes one with XState's pure `transition`
     statechart.ts         an XState machine drawn as a Mermaid statechart, from the machine itself: for docs pages and a lead's station screen

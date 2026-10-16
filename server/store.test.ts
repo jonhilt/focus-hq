@@ -64,7 +64,7 @@ describe('Store on disk', () => {
     again.flush();
     const later = new Store(true);
     later.load();
-    expect(later.run('journaled')).toEqual({ inbox: [], later: [], owed: [], seq: 4 });
+    expect(later.run('journaled')).toEqual({ inbox: [], later: [], owed: [], turns: 0, phase: 'idle', seq: 4 });
   });
 });
 

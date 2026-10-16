@@ -1,4 +1,4 @@
-import { contextLevel, statusLine } from '../../../shared/agentStatus';
+import { contextLevel, runLine, statusLine } from '../../../shared/agentStatus';
 import { AUTONOMY_LABEL, AUTONOMY_MODES, effectiveAutonomy } from '../../../shared/autonomy';
 import { cloudSessionUrl } from '../../../shared/cloud';
 import { showsBrowser } from '../../../shared/browserView';
@@ -183,6 +183,7 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
       readouts,
       readout('Status', a.status, { tone: LCARS_STATUS[a.status] }),
       readout('Activity', statusLine(a), { grow: true }),
+      a.run ? readout('Run', runLine(a.run), { title: `Where their run is, as its journal tells it (fact #${a.run.seq})` }) : null,
       a.task === 'lead' ? readout('Station', String((a.lead?.station ?? 0) + 1)) : null,
       a.task === 'lead' ? readout('Slice', String(a.lead?.slice ?? 1)) : null,
       readout('Effort', a.task === 'lead' ? leadEffortPicker(a) : a.effort ?? 'default'),
