@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { afterCloudRun, ATTACH_TRIES, attachAgain, cantMoveToCloud, CLOUD_UNAVAILABLE, carryOnInNewSession, cloudRefused, fallBackToLocal, terminalDescription } from './cloud';
+import { afterCloudRun, cantMoveToCloud, cloudRefused, terminalDescription } from './cloud';
 import { safeDescription } from './terminal';
 
 describe('afterCloudRun', () => {
@@ -10,46 +10,6 @@ describe('afterCloudRun', () => {
   it('asks once to push when nothing arrived', () => {
     expect(afterCloudRun({ before: 'aaa1111', after: 'aaa1111', nudged: false })).toBe('nudge');
     expect(afterCloudRun({ before: 'aaa1111', after: 'aaa1111', nudged: true })).toBe('deliver');
-  });
-});
-
-describe('carryOnInNewSession', () => {
-  it('starts over in a new session when reattaching failed before the session got going', () => {
-    expect(carryOnInNewSession({ ok: false, summary: '', error: 'cloud session session_01 is archived' }, true)).toBe(true);
-  });
-
-  it('leaves real failures, stops and fresh sessions alone', () => {
-    expect(carryOnInNewSession({ ok: false, summary: '', error: 'boom', started: true }, true)).toBe(false);
-    expect(carryOnInNewSession({ ok: false, summary: '', error: 'Stopped by the captain', aborted: true }, true)).toBe(false);
-    expect(carryOnInNewSession({ ok: false, summary: '', error: 'Session creation failed' }, false)).toBe(false);
-    expect(carryOnInNewSession({ ok: true, summary: 'done', started: true }, true)).toBe(false);
-  });
-
-  it('never starts a second session beside one that is still working or waiting', () => {
-    const busy = 'Error: cloud session session_01 is busy with a turn; wait for it to finish, or watch it at https://claude.ai/code/session_01, then send the message again.';
-    expect(carryOnInNewSession({ ok: false, summary: '', error: busy }, true)).toBe(false);
-    const asking = 'Error: cloud session session_01 is waiting on a question; answer it where it was asked (https://claude.ai/code/session_01) before sending it another message.';
-    expect(carryOnInNewSession({ ok: false, summary: '', error: asking }, true)).toBe(false);
-  });
-
-  it('does not start a new session when Claude Code refuses to start cloud sessions', () => {
-    expect(carryOnInNewSession({ ok: false, summary: '', error: CLOUD_UNAVAILABLE }, true)).toBe(false);
-  });
-});
-
-describe('fallBackToLocal', () => {
-  const refused = { ok: false, summary: '', error: CLOUD_UNAVAILABLE };
-
-  it('carries on locally when Claude Code refuses to start a cloud session', () => {
-    expect(fallBackToLocal({ cloud: true }, refused)).toBe(true);
-  });
-
-  it('leaves stops, successes, other errors and local agents alone', () => {
-    expect(fallBackToLocal({ cloud: true }, { ...refused, aborted: true })).toBe(false);
-    expect(fallBackToLocal({ cloud: true }, { ok: true, summary: 'done' })).toBe(false);
-    expect(fallBackToLocal({ cloud: true }, { ok: false, summary: '', error: 'Error: cloud session session_01 is busy with a turn' })).toBe(false);
-    expect(fallBackToLocal({ cloud: true }, { ok: false, summary: '', error: 'boom', started: true })).toBe(false);
-    expect(fallBackToLocal({}, refused)).toBe(false);
   });
 });
 
@@ -101,23 +61,6 @@ describe('cantMoveToCloud', () => {
     expect(cantMoveToCloud({ ...dev, status: 'pushing' })).toMatch(/pushing/);
     expect(cantMoveToCloud({ ...dev, status: 'setting-up' })).toMatch(/setting up/);
     expect(cantMoveToCloud({ ...dev, status: 'queued' })).toMatch(/pick their work back up/);
-  });
-});
-
-describe('attachAgain', () => {
-  const busy = { ok: false, summary: '', error: 'Error: cloud session session_01 is busy with a turn; wait for it to finish' };
-
-  it('tries again while the session is still answering its first message', () => {
-    expect(attachAgain(busy, 0)).toBe(true);
-    expect(attachAgain(busy, ATTACH_TRIES - 1)).toBe(true);
-    expect(attachAgain(busy, ATTACH_TRIES)).toBe(false);
-  });
-
-  it('leaves anything else to the hand-over', () => {
-    expect(attachAgain({ ok: false, summary: '', error: 'session_01 not found' }, 0)).toBe(false);
-    expect(attachAgain({ ...busy, aborted: true }, 0)).toBe(false);
-    expect(attachAgain({ ...busy, started: true }, 0)).toBe(false);
-    expect(attachAgain({ ok: true, summary: 'done', started: true }, 0)).toBe(false);
   });
 });
 

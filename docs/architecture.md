@@ -55,7 +55,7 @@ server/
     sdkMessages.ts        each SDK message by type → the run's hooks: lines, activity, helpers, workflows, probes, commits, screenshots, what the key spends, the turn's result
     runJournal.ts         each agent's run journal, pure: the facts of its turns and inbox (data/runs/<agent>.jsonl, written by Store.journal before the office acts), what they add up to, the sign-in check, and what a restart does with a turn in flight
     inbox.ts              an agent's inbox, kept in their run journal
-    afterTurn.ts          what follows a turn, pure: delivered, the captain's turn, carry on, the plan's limit, stopped, failed, the cloud's fallbacks
+    runMachine.ts         what follows a turn, as a state machine (pure data and a small interpreter): the state it ran in (local, cloud, attaching), the event its end was (read from its outcome once), guarded transitions handing what a state doesn't take up to its parent
     apiKey.ts             your login or your API key, pure: which a session signs in with, what a re-read costs on the key, ask, hold or go; keyFallback, where the office stands
     cloud.ts              what happens after a cloud agent's session (push nudge, carrying on in a new session, falling back to local when the CLI refuses --cloud), and moving an agent to the cloud
     terminal.ts           the terminal the office opens to start a cloud session (claude --cloud, recorded with script) and finding the session's id in it

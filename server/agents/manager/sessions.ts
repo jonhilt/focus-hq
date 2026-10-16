@@ -8,7 +8,7 @@ import { prKey } from '../../../shared/qa';
 import type { Agent, PermissionRequest, TermLine, WorkflowScript } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
 import { newId, truncate } from '../../util';
-import { afterTurn } from '../afterTurn';
+import { step, turnEvent } from '../runMachine';
 import { applyHelperEvent, COMPACT_INSTRUCTIONS, compactInstructions, freshSessionPrompt, hasLeadWork, HELPER_LINGER_MS, leadSystemAppend, sliceLanded } from '../lead';
 import { mismatchError, recovery, signInMismatch, turnEnding, type TurnKind } from '../runJournal';
 import { carryOnPrompt, conflictsPrompt, issuePrompt, systemAppend } from '../prompts';
@@ -390,35 +390,27 @@ export class AgentSessions extends Part {
       rt.inbox.release();
       if (!this.store.agents.has(agent.id)) return;
 
+      // the run's state machine: where the turn ran, and what its end was, say what follows (`runMachine.ts`)
       const attaching = rt.attaching;
-      const next = afterTurn({
-        outcome,
+      const mismatch = this.store.run(agent.id).last?.mismatch;
+      const next = step(attaching ? 'attaching' : agent.cloud ? 'cloud' : 'local', turnEvent(outcome, mismatch), {
         role: review ? 'review' : lead ? 'lead' : 'work',
-        cloud: !!agent.cloud,
-        hasSession: !!agent.sessionId,
         resumed: !!resumeSessionId,
-        attaching,
+        hasSession: !!agent.sessionId,
+        tries: attaching?.tries ?? 0,
         attachRefused: this.core.cloud.attachRefused,
         carryOn,
-        mismatch: this.store.run(agent.id).last?.mismatch,
       });
-      if (attaching && next.kind !== 'attach-again') rt.attaching = undefined;
-      switch (next.kind) {
+      if (attaching && next !== 'attach-again') rt.attaching = undefined;
+      switch (next) {
         case 'attach-again':
-          // the session the captain started may still be answering its first message
-          next.attaching.tries++;
-          this.update(agent, { activity: 'Waiting for the cloud session to finish its first reply' });
-          yield* Effect.sleep('15 seconds');
-          return yield* this.runSession(agent, prompt, resumeSessionId);
         case 'attach-refused':
-          // Claude Code won't attach from Focus at all: no session the captain starts would do, so they carry on here
-          this.core.cloud.attachRefused = true;
-          return yield* this.core.cloud.carryOnHere(agent, next.attaching.handover);
         case 'attach-failed':
-          this.print(agent, [{ kind: 'error', text: `✘ Couldn't attach to the cloud session: ${outcome.error ?? 'no reason given'}` }]);
-          return this.core.cloud.awaitCloud(agent, next.attaching.handover);
+          // only a turn attaching to a cloud session ends here
+          if (attaching) return yield* this.afterAttaching(agent, next, attaching, outcome, prompt, resumeSessionId);
+          return;
         case 'sign-in-mismatch':
-          this.fail(agent, mismatchError(next.observed));
+          this.fail(agent, mismatchError(mismatch ?? 'ANTHROPIC_API_KEY'));
           return;
         case 'limited':
           // your plan's usage limit stopped them: they carry on with your API key, now or once it resets
@@ -463,7 +455,7 @@ export class AgentSessions extends Part {
           // The manager wrote while the session was wrapping up: carry on in the same conversation.
           return yield* this.runSession(agent, rt.inbox.take().join('\n\n'), agent.sessionId);
         case 'fail':
-          this.fail(agent, next.error);
+          this.fail(agent, outcome.error ?? 'The agent stopped with an error');
           return;
         case 'finish-review':
           return yield* this.core.reviews.finishReview(agent, outcome.structured, outcome.summary);
@@ -475,6 +467,34 @@ export class AgentSessions extends Part {
           return;
         case 'deliver':
           return yield* this.core.delivery.deliver(agent, outcome.summary);
+      }
+    });
+  }
+
+  /** A turn attaching to the cloud session the captain started has ended: try again, carry on here, or wait for the captain. */
+  private afterAttaching(
+    agent: Agent,
+    next: 'attach-again' | 'attach-refused' | 'attach-failed',
+    attaching: NonNullable<Runtime['attaching']>,
+    outcome: RunOutcome,
+    prompt: string,
+    resumeSessionId?: string,
+  ): Effect.Effect<void, WorkError, ManagerServices> {
+    return Effect.gen({ self: this }, function* () {
+      switch (next) {
+        case 'attach-again':
+          // the session the captain started may still be answering its first message
+          attaching.tries++;
+          this.update(agent, { activity: 'Waiting for the cloud session to finish its first reply' });
+          yield* Effect.sleep('15 seconds');
+          return yield* this.runSession(agent, prompt, resumeSessionId);
+        case 'attach-refused':
+          // Claude Code won't attach from Focus at all: no session the captain starts would do, so they carry on here
+          this.core.cloud.attachRefused = true;
+          return yield* this.core.cloud.carryOnHere(agent, attaching.handover);
+        case 'attach-failed':
+          this.print(agent, [{ kind: 'error', text: `✘ Couldn't attach to the cloud session: ${outcome.error ?? 'no reason given'}` }]);
+          return this.core.cloud.awaitCloud(agent, attaching.handover);
       }
     });
   }

@@ -1,7 +1,7 @@
 import type { Agent, Effort, LeadAgent, GoalArtifact, GoalNote, GoalQuestion, GoalRecord, Helper, LeadPr, LeadWork, QaReport, QaReview, QueuedGoal, Settings } from '../../shared/types';
 import { TEAM_STATIONS } from '../../shared/types';
 import { unanswered } from '../../shared/artifacts';
-import type { BranchState, HelperEvent, RunOutcome } from './types';
+import type { BranchState, HelperEvent } from './types';
 import { slugify } from '../util';
 import { SCRATCH_RULE } from './scratch';
 import { WAIT_RULE } from './wait';
@@ -502,13 +502,6 @@ export function reopenedNote(work: LeadWork, branch: string, closedAt: number): 
     "Tell the captain where the goal stands and what you'd do next.",
   ].filter(Boolean).join(' ');
 }
-
-/**
- * A lead's conversation that couldn't be resumed because Claude Code no longer has it (the session was cleared, or the
- * goal was reopened on another machine): they carry on in a new one, hearing where the goal stands.
- */
-export const sessionGone = (outcome: RunOutcome, resumed: boolean): boolean =>
-  resumed && !outcome.ok && !outcome.aborted && !outcome.started && /no conversation found/i.test(outcome.error ?? '');
 
 /** The room's log with a goal just closed: newest first, the oldest dropping off. */
 /** The goals in `before` that `after` no longer has: what they showed can go. */
