@@ -269,7 +269,7 @@ describe('permissionAsk', () => {
 
 describe('toolPermission', () => {
   const input = { command: 'git push' };
-  const call = (extra: { agentID?: string; toolUseID?: string; title?: string } = {}) => ({ signal: new AbortController().signal, toolUseID: 't1', ...extra });
+  const call = (extra: { agentID?: string; toolUseID?: string; title?: string } = {}) => ({ signal: new AbortController().signal, toolUseID: 't1', requestId: 'r1', ...extra });
   const setup = (answer: boolean) => {
     const asked: string[] = [];
     const waits: number[] = [];

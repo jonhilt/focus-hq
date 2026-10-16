@@ -1,6 +1,6 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { query, type CanUseTool, type Options, type PermissionMode, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import { query, type CanUseTool, type Options, type PermissionMode, type PermissionResult, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { clock } from '../../shared/clock';
 import type { Autonomy } from '../../shared/types';
 import { paths } from '../config';
@@ -188,7 +188,7 @@ export function toolPermission(
   permits: WorkflowPermits,
   ask: RunHooks['permission'],
   wait: (ms: number) => Promise<unknown> = sleep,
-): CanUseTool {
+): (...args: Parameters<CanUseTool>) => Promise<PermissionResult> {
   return async (toolName, toolInput, { signal, title, agentID, toolUseID }) => {
     if (allowedWithoutAsking(autonomy(), toolName)) return { behavior: 'allow', updatedInput: toolInput };
     for (let i = 0; i < PERMIT_LOOKS && permits.mightApprove(agentID); i++) await wait(PERMIT_WAIT_MS);
