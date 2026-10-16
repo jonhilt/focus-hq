@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { changeSentences, changesSvg, esc, fit, layerColours, matrixExample, matrixOrder, matrixSvg, namesLabel, placeView, viewDrawing, viewLines, viewSentences, viewSvg, wrap } from './draw';
+import { changeSentences, changesSvg, esc, fit, layerColours, matrixExample, matrixOrder, matrixSvg, namesLabel, placeView, tiesDrawing, viewDrawing, viewLines, viewSentences, viewSvg, wrap } from './draw';
 import { VIEW_KEY, viewsOf } from './views';
 import { MAP } from './views.test';
+import type { RepoMap } from './shared';
 
 const front = viewsOf(MAP)[1];
 
@@ -139,5 +140,22 @@ describe('how a map changes', () => {
     expect(sentences).toHaveLength(3);
     expect(viewDrawing(changing, views[0]).sentences).toEqual([]);
     expect(viewDrawing(changing, views[2]).key).toBe(VIEW_KEY);
+  });
+});
+
+describe('tiesDrawing', () => {
+  const web: RepoMap = { ...MAP, repo: 'o/web', model: { ...MAP.model!, parts: [{ id: 'checkout', label: 'Checkout', layer: 'UI', kind: 'ui', paths: ['c/'] }] } };
+  const api: RepoMap = { ...MAP, repo: 'o/api' };
+
+  it('draws a column per repo with the parts its ties join, each tie numbered and said', () => {
+    const drawn = tiesDrawing([web, api], [{ a: { repo: 'o/api', part: 'core' }, b: { repo: 'o/web', part: 'checkout' }, together: 4, either: 6 }]);
+    expect(drawn?.view.parts).toEqual(['o/web#checkout', 'o/api#core']);
+    expect(drawn?.sentences).toEqual(['Core (o/api) and Checkout (o/web) changed together in 4 of the 6 change sets that touched either']);
+    expect(drawn?.svg).toContain('>O/WEB<');
+    expect(drawn?.svg).toContain('stroke-dasharray="3 7"');
+  });
+
+  it('is nothing when nothing ties them', () => {
+    expect(tiesDrawing([web, api], [])).toBeUndefined();
   });
 });

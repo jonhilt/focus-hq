@@ -6,8 +6,9 @@
 import * as THREE from 'three';
 import { canvasTexture, Hologram, hover, makeCanvas, OVERLAY_LAYER, type Place, type PluginSpace, type ShipHost, SPACE, type Ui } from '../../plugin-api/client';
 import { ARCH, HolodeckArch } from './arch';
-import { openView } from './panel';
-import { drawNote, drawView } from './screen';
+import { TIES_QUESTION, tiesDrawing } from './draw';
+import { openDrawing, openView } from './panel';
+import { drawNote, drawSvg, drawView } from './screen';
 import { sliceViews } from './slice';
 import type { CartographyState, MapView, RepoMap } from './shared';
 import { ARRIVAL, EXIT_ARCH, MAX_PANELS, type PanelSpot, panelSpots, PLATFORM, type Point, reachOf } from './spaceLayout';
@@ -40,8 +41,8 @@ interface Item {
 }
 
 /**
- * What the space puts up for a project, in the order of its spots: each repo's whole map, then what each goal under way
- * does to it, then the repos' own views and how each changes.
+ * What the space puts up for a project, in the order of its spots: each repo's whole map, then what ties its repos
+ * together (crossRepo.ts), then what each goal under way does to them, then the repos' own views and how each changes.
  */
 function items(repos: readonly RepoMap[], state: CartographyState | undefined, projectId: string): Item[] {
   const shown = spaceViews(repos);
@@ -58,7 +59,18 @@ function items(repos: readonly RepoMap[], state: CartographyState | undefined, p
     draw: (ctx) => drawView(ctx, PX.w, PX.h, map, view, marks, `${slice.title} · TS-${slice.station + 1} · ${map.repo}, its lead's checkout against the default branch`),
     open: (ui) => openView(ui, map, view, marks),
   }));
-  return [...views.slice(0, wholes), ...slices, ...views.slice(wholes)].slice(0, MAX_PANELS);
+  // a project of more than one repo: what ties them, beside their whole maps
+  const tied = state?.crossRepo[projectId] ?? [];
+  const ties = tiesDrawing(repos, tied);
+  const repoTies: Item[] = ties
+    ? [{
+        key: `ties|${tied.map((t) => `${t.a.repo}#${t.a.part}~${t.b.repo}#${t.b.part}=${t.together}/${t.either}`).join(',')}`,
+        title: 'what ties its repos together',
+        draw: (ctx) => drawSvg(ctx, PX.w, PX.h, TIES_QUESTION, ties.map.repo, ties.svg),
+        open: (ui) => openDrawing(ui, TIES_QUESTION, ties.map.repo, ties),
+      }]
+    : [];
+  return [...views.slice(0, wholes), ...repoTies, ...slices, ...views.slice(wholes)].slice(0, MAX_PANELS);
 }
 
 export class ArchitectureSpace {

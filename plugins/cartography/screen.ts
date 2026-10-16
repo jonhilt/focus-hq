@@ -28,8 +28,13 @@ function heading(ctx: CanvasRenderingContext2D, w: number, h: number, title: str
 
 /** `view` of `map` (with a slice's `marks`, said in `sub`), on a `w` × `h` canvas. */
 export async function drawView(ctx: CanvasRenderingContext2D, w: number, h: number, map: RepoMap, view: MapView, marks?: Marks, sub?: string): Promise<void> {
-  heading(ctx, w, h, view.question, `${sub ?? `${map.repo}${map.commit ? ` · ${map.commit.slice(0, 7)}` : ''}`} · E to read it up close`);
-  const img = await image(viewDrawing(map, view, marks).svg);
+  await drawSvg(ctx, w, h, view.question, sub ?? `${map.repo}${map.commit ? ` · ${map.commit.slice(0, 7)}` : ''}`, viewDrawing(map, view, marks).svg);
+}
+
+/** A drawing `svg` under `title` and what it's of (`sub`), on a `w` × `h` canvas. */
+export async function drawSvg(ctx: CanvasRenderingContext2D, w: number, h: number, title: string, sub: string, svg: string): Promise<void> {
+  heading(ctx, w, h, title, `${sub} · E to read it up close`);
+  const img = await image(svg);
   const at = fitInto(img.naturalWidth || img.width, img.naturalHeight || img.height, { x: 32, y: 140, w: w - 64, h: h - 164 });
   ctx.drawImage(img, at.x, at.y, at.w, at.h);
 }

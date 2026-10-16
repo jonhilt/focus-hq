@@ -5,7 +5,8 @@
 // FOCUS_PLUGINS=cartography.
 import { type Agent, errorMessage, type FocusPlugin, type PluginHost, type PluginState } from '../../plugin-api/server';
 import { mapTool } from './leadTool';
-import { changedFiles, mapRepo } from './map';
+import { crossCoupling, type OwnedCommit } from './crossRepo';
+import { changedFiles, mapRepo, mapRepoAndLog } from './map';
 import { CARTOGRAPHY, type CartographyState, type GoalSlice, type RepoMap } from './shared';
 import { changesAnything, sliceChange } from './slice';
 
@@ -49,22 +50,31 @@ class Cartographer {
     if (!this.host.on(id)) return this.drop(id);
     this.state.set({ mapping: [...this.state.get().mapping, id] });
     const maps: RepoMap[] = [];
+    const logs: { repo: string; commits: OwnedCommit[] }[] = [];
     for (const repo of project.repos) {
-      maps.push(await checkout(this.host, repo).then((dir) => mapRepo(repo, dir)).catch((err: unknown) => ({ repo, files: 0, mapped: 0, sizes: {}, connections: [], problems: [], error: errorMessage(err) })));
+      const mapped = await checkout(this.host, repo)
+        .then((dir) => mapRepoAndLog(repo, dir))
+        .catch((err: unknown) => ({ map: { repo, files: 0, mapped: 0, sizes: {}, connections: [], problems: [], error: errorMessage(err) }, commits: [] }));
+      maps.push(mapped.map);
+      logs.push({ repo, commits: mapped.commits });
     }
     const now = this.state.get();
-    this.state.set({ maps: { ...now.maps, [id]: maps }, mapping: now.mapping.filter((p) => p !== id) });
+    // a project of more than one repo: what ties them, from their histories
+    const { [id]: _, ...otherTies } = now.crossRepo;
+    const crossRepo = project.repos.length > 1 ? { ...otherTies, [id]: crossCoupling(logs) } : otherTies;
+    this.state.set({ maps: { ...now.maps, [id]: maps }, crossRepo, mapping: now.mapping.filter((p) => p !== id) });
     if (this.again.delete(id)) return this.map(id);
     // against the new maps, what each goal under way does to them
     await this.sliceAll(id);
   }
 
-  /** Forgets project `id`'s maps, and its goals' slices. */
+  /** Forgets project `id`'s maps, its goals' slices and what ties its repos. */
   drop(id: string): void {
-    const { maps, slices } = this.state.get();
+    const { maps, slices, crossRepo } = this.state.get();
     const { [id]: dropped, ...rest } = maps;
     const { [id]: _, ...others } = slices;
-    if (dropped || _) this.state.set({ maps: rest, slices: others });
+    const { [id]: __, ...otherTies } = crossRepo;
+    if (dropped || _ || __) this.state.set({ maps: rest, slices: others, crossRepo: otherTies });
   }
 
   /**
@@ -125,7 +135,7 @@ const cartography: FocusPlugin = {
   id: CARTOGRAPHY,
   start(host) {
     // made again from the code as the office starts, so never saved in state.json
-    const state = host.state<CartographyState>(() => ({ maps: {}, mapping: [], slices: {} }), { saved: false });
+    const state = host.state<CartographyState>(() => ({ maps: {}, mapping: [], slices: {}, crossRepo: {} }), { saved: false });
     const cartographer = new Cartographer(host, state);
     setTimeout(() => void cartographer.mapAll().catch((err: unknown) => console.error(`Cartography: ${errorMessage(err)}`)), MAP_AFTER_START_MS).unref();
     return {

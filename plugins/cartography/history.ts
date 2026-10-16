@@ -12,11 +12,13 @@ export const SWEEP_FILES = 40;
 export const COUPLING = { together: 5, share: 0.3, kept: 8 } as const;
 
 /** The `git log` arguments whose output `readLog` reads. */
-export const LOG_ARGS = ['log', '--no-merges', '--no-renames', `--since=${HISTORY_DAYS} days ago`, '--numstat', '--format=%x1e%H%x1f%cI'];
+export const LOG_ARGS = ['log', '--no-merges', '--no-renames', `--since=${HISTORY_DAYS} days ago`, '--numstat', '--format=%x1e%H%x1f%cI%x1f%ae'];
 
 export interface Commit {
   sha: string;
   date: string;
+  /** Its author's email (crossRepo.ts ties one person's commits to different repos together). */
+  author?: string;
   /** The files it changed, and how many lines (added and removed; 0 for a binary file). */
   files: { path: string; lines: number }[];
 }
@@ -28,12 +30,12 @@ export function readLog(text: string): Commit[] {
     .filter((chunk) => chunk.trim())
     .map((chunk) => {
       const [head, ...rest] = chunk.split('\n');
-      const [sha, date] = head.split('\x1f');
+      const [sha, date, author] = head.split('\x1f');
       const files = rest
         .map((line) => /^(\d+|-)\t(\d+|-)\t(.+)$/.exec(line))
         .filter((m): m is RegExpExecArray => !!m)
         .map(([, added, removed, path]) => ({ path, lines: (Number(added) || 0) + (Number(removed) || 0) }));
-      return { sha, date, files };
+      return { sha, date, ...(author ? { author } : {}), files };
     });
 }
 

@@ -101,6 +101,15 @@ export interface SliceChange {
   lost: MapConnection[];
 }
 
+/** Two parts in different repos of a project that change together (crossRepo.ts). */
+export interface CrossCoupling {
+  a: { repo: string; part: string };
+  b: { repo: string; part: string };
+  /** Change sets that touched both, and that touched either. */
+  together: number;
+  either: number;
+}
+
 /** A goal under way, and what its slice does to the architecture so far, from its lead's checkout (slice.ts). */
 export interface GoalSlice {
   leadId: string;
@@ -119,6 +128,8 @@ export interface CartographyState {
   maps: Record<string, RepoMap[]>;
   /** Each project's goals under way, and what their slices change, by project id. */
   slices: Record<string, GoalSlice[]>;
+  /** Each project of more than one repo, the parts in different repos that change together, by project id. */
+  crossRepo: Record<string, CrossCoupling[]>;
   /** Projects whose maps are being made again. */
   mapping: string[];
 }

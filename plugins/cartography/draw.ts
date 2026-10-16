@@ -1,6 +1,6 @@
 // A map drawn to be read (README.md): a view as its parts in a column per layer, each arrow saying what one part takes
 // from another, the whole map as a dependency matrix, and how it changes as bars and sentences. Pure SVG strings, free of Node and the DOM.
-import type { MapConnection, MapFlow, MapPart, MapView, RepoMap } from './shared';
+import type { CrossCoupling, MapConnection, MapFlow, MapPart, MapView, RepoMap } from './shared';
 import { CHANGES, CHANGES_KEY, MATRIX_KEY, VIEW_KEY, WHOLE } from './views';
 
 /** Each layer's colour, by its place among the map's layers. */
@@ -16,7 +16,7 @@ export interface Marks {
   gained: Set<string>;
   lost: Set<string>;
 }
-const MARK = { touched: '#ffcc66', added: '#7ee08a', removed: '#ff7a7a' } as const;
+const MARK = { touched: '#ffcc66', added: '#7ee08a', removed: '#ff7a7a', coupled: '#c9a0ff' } as const;
 
 const INK = { flow: '#ffcc66', bg: '#0b1020', panel: '#121a33', text: '#e8ecf5', muted: '#9aa6c4', line: '#cfe3ff', grid: '#0f1630', self: '#1c2340', tangle: '255,140,60', oneWay: '120,190,255' };
 
@@ -50,7 +50,8 @@ export function namesLabel(c: Pick<MapConnection, 'names'>, keep = 3): string {
 export interface ViewLine {
   from: string;
   to: string;
-  kind: 'import' | 'flow';
+  /** An import, a recorded run's flow, or two parts in different repos that change together (crossRepo.ts). */
+  kind: 'import' | 'flow' | 'coupled';
   /** On a slice's view: an import the slice makes, or one it breaks. */
   change?: 'gained' | 'lost';
   /** How many imports, or messages in the recorded run: the line's thickness. */
@@ -165,7 +166,7 @@ function numbered(x: number, y: number, n: number, colour: string): string {
  * code it uses, as thick as its imports, and a dashed gold one for what it sends another as it runs (a recorded run's
  * flows). Each arrow carries the number of its sentence in `viewSentences`; every line between two parts gets its own.
  */
-export function viewSvg(map: RepoMap, view: MapView, marks?: Marks): string {
+export function viewSvg(map: RepoMap, view: MapView, marks?: Marks, extra: readonly ViewLine[] = []): string {
   const { placed, cols, rows } = placeView(map, view);
   const colours = layerColours([...placed.values()].map((p) => p.part));
   const W = VIEW.pad * 2 + Math.max(cols, 2) * VIEW.colW;
@@ -177,7 +178,7 @@ export function viewSvg(map: RepoMap, view: MapView, marks?: Marks): string {
   ];
   [...colours].forEach(([layer, colour], i) =>
     out.push(`<text x="${VIEW.pad + VIEW.colW * (i + 0.5)}" y="30" text-anchor="middle" font-size="17" font-weight="700" letter-spacing="2" fill="${colour}">${esc(layer.toUpperCase())}</text>`));
-  const lines = viewLines(map, view, marks);
+  const lines = [...viewLines(map, view, marks), ...extra];
   const pair = (l: ViewLine) => [l.from, l.to].sort().join(' ');
   const numbers: string[] = [];
   lines.forEach((line, i) => {
@@ -189,11 +190,12 @@ export function viewSvg(map: RepoMap, view: MapView, marks?: Marks): string {
     const { d, mid } = edgePath(a, b, cols, same.indexOf(line), same.length);
     const sw = 1.5 + Math.log2(line.weight + 1) * (line.kind === 'flow' ? 0.9 : 1.4);
     const [colour, marker, dash] =
-      line.change === 'gained' ? [MARK.added, 'cg-gained', '']
+      line.kind === 'coupled' ? [MARK.coupled, '', ' stroke-dasharray="3 7" stroke-linecap="round"']
+      : line.change === 'gained' ? [MARK.added, 'cg-gained', '']
       : line.change === 'lost' ? [MARK.removed, 'cg-lost', ' stroke-dasharray="6 6"']
       : line.kind === 'flow' ? [INK.flow, 'cg-flow', ' stroke-dasharray="10 7"']
       : [INK.line, 'cg-arrow', ''];
-    out.push(`<path d="${d}" fill="none" stroke="${colour}" stroke-opacity="0.75" stroke-width="${sw.toFixed(1)}"${dash} marker-end="url(#${marker})"><title>${esc(line.sentence)}</title></path>`);
+    out.push(`<path d="${d}" fill="none" stroke="${colour}" stroke-opacity="0.75" stroke-width="${sw.toFixed(1)}"${dash} ${marker ? ` marker-end="url(#${marker})"` : ''}><title>${esc(line.sentence)}</title></path>`);
     numbers.push(numbered(mid.x, mid.y, i + 1, colour));
   });
   out.push(...numbers);
@@ -329,6 +331,36 @@ export function changeSentences(map: RepoMap): string[] {
 /** How to read a slice's view. */
 export const SLICE_KEY =
   'What this slice does to the architecture, from its lead\'s checkout against the default branch. Gold: a part its changes fall in, with how many lines. Green: a part or import it adds. Red, dashed: one it takes out. Grey arrows are imports it leaves as they were.';
+
+/** How to read the view of what ties a project's repos together. */
+export const TIES_KEY =
+  'Repos don\'t import each other, so what ties them is read from their histories: a change that needs two repos shows as one person\'s commits to each, close together (within two hours). A column per repo; a dotted lilac line joins two parts that keep changing in the same change sets, and its sentence says how often.';
+
+/** The question the view of a project's repos answers. */
+export const TIES_QUESTION = 'Which parts of its repos change together?';
+
+/**
+ * The view of what ties a project's repos together (crossRepo.ts): a column per repo, with the parts its `ties` join,
+ * each line numbered and said in a sentence. Undefined when nothing does.
+ */
+export function tiesDrawing(maps: readonly RepoMap[], ties: readonly CrossCoupling[]): { map: RepoMap; view: MapView; svg: string; key: string; sentences: string[] } | undefined {
+  if (!ties.length) return undefined;
+  const id = (repo: string, part: string) => `${repo}#${part}`;
+  const used = new Set(ties.flatMap((t) => [id(t.a.repo, t.a.part), id(t.b.repo, t.b.part)]));
+  // each repo's parts that a tie joins, the repos in the project's order, each its own column
+  const parts = maps.flatMap((m) => (m.model?.parts ?? []).filter((p) => used.has(id(m.repo, p.id))).map((p) => ({ ...p, id: id(m.repo, p.id), layer: m.repo })));
+  const label = (repo: string, part: string) => parts.find((p) => p.id === id(repo, part))?.label ?? part;
+  const map: RepoMap = { repo: maps.map((m) => m.repo).join(' + '), files: 0, mapped: 0, sizes: {}, connections: [], problems: [], model: { parts, views: [], ignore: [] } };
+  const view: MapView = { id: 'repos', question: TIES_QUESTION, parts: parts.map((p) => p.id) };
+  const lines = ties.map((t): ViewLine => ({
+    from: id(t.a.repo, t.a.part),
+    to: id(t.b.repo, t.b.part),
+    kind: 'coupled',
+    weight: t.together,
+    sentence: `${label(t.a.repo, t.a.part)} (${t.a.repo}) and ${label(t.b.repo, t.b.part)} (${t.b.repo}) changed together in ${t.together} of the ${t.either} change sets that touched either`,
+  }));
+  return { map, view, svg: viewSvg(map, view, undefined, lines), key: TIES_KEY, sentences: lines.map((l) => l.sentence) };
+}
 
 /**
  * Any view of a map as the browser and the screens show it: its drawing, how to read it, and its numbered sentences.
