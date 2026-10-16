@@ -239,7 +239,11 @@ export function apiRouter(office: Office, store: Store): express.Router {
     const text = str(req.body.text).trim();
     if (!text) throw new Error('Send the line to say');
     if (!isKokoroVoice(req.body.voice)) throw new Error('Unknown voice');
-    res.type('audio/wav').send(await office.voice.speak(text.slice(0, 1000), req.body.voice));
+    // a line nobody's waiting for any more (the page hushed it, or went) is dropped from Kokoro's queue
+    const gone = new AbortController();
+    res.on('close', () => !res.writableFinished && gone.abort());
+    const urgency = req.body.urgency === 'ahead' ? 'ahead' : 'now';
+    res.type('audio/wav').send(await office.voice.speak(text.slice(0, 1000), req.body.voice, urgency, gone.signal));
   }));
 
   // each plugin's own routes (docs/plugins.md), under its id

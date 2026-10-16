@@ -9,6 +9,15 @@ import { kokoro } from './config';
 /** server/speechWorker.ts, which runs Kokoro in a process of its own. */
 const WORKER = path.join(path.dirname(fileURLToPath(import.meta.url)), 'speechWorker.ts');
 
+interface Line {
+  id: number;
+  text: string;
+  voice: KokoroVoice;
+  urgency: LineUrgency;
+  resolve: (wav: Buffer) => void;
+  reject: (err: Error) => void;
+}
+
 /** What the office asks the speech worker. */
 export type ToSpeechWorker = { type: 'load' } | { type: 'speak'; id: number; text: string; voice: KokoroVoice };
 
@@ -19,6 +28,18 @@ export type FromSpeechWorker =
   | { type: 'failed'; error: string }
   | { type: 'spoken'; id: number; wav: Uint8Array }
   | { type: 'unspoken'; id: number; error: string };
+
+/** How soon a line is wanted: now (an answer, someone talking), or ahead of time (a briefing's next beat, fetched early). */
+export type LineUrgency = 'now' | 'ahead';
+
+/**
+ * Which waiting line Kokoro says next: the first wanted now, else the first wanted ahead of time. Kokoro says one line
+ * at a time, and a briefing fetches its lines ahead, so an answer would otherwise wait behind the narration.
+ */
+export function nextLine(waiting: readonly { urgency: LineUrgency }[]): number {
+  const now = waiting.findIndex((l) => l.urgency === 'now');
+  return now >= 0 ? now : waiting.length ? 0 : -1;
+}
 
 /** transformers.js reports each file it fetches; the download's progress is all of them added up. */
 export function downloadProgress(files: Map<string, { loaded: number; total: number }>): { bytes: number; total?: number } {
@@ -41,8 +62,10 @@ export function downloadProgress(files: Map<string, { loaded: number; total: num
 export class Speech {
   private engine: SpeechEngine = { state: 'idle' };
   private worker?: ChildProcess;
-  private readonly lines = new Map<number, { resolve: (wav: Buffer) => void; reject: (err: Error) => void }>();
-  private nextLine = 0;
+  /** Lines waiting their turn, and the one Kokoro is saying (its id), one at a time so they don't fight over the CPU. */
+  private waiting: Line[] = [];
+  private saying: Line | undefined;
+  private lineIds = 0;
 
   /** `changed` tells every browser when the status moves. */
   constructor(private readonly changed: () => void) {}
@@ -67,14 +90,41 @@ export class Speech {
     this.send({ type: 'load' });
   }
 
-  /** The line as a WAV, in the voice given. */
-  speak(text: string, voice: KokoroVoice): Promise<Buffer> {
+  /**
+   * The line as a WAV, in the voice given. Lines wanted now go ahead of those fetched ahead of time (`nextLine`); one
+   * whose `signal` aborts while it waits is dropped (whoever wanted it has gone), and one already being said finishes.
+   */
+  speak(text: string, voice: KokoroVoice, urgency: LineUrgency = 'now', signal?: AbortSignal): Promise<Buffer> {
     if (this.engine.state !== 'ready') return Promise.reject(new Error('Kokoro isn’t loaded yet'));
-    const id = this.nextLine++;
+    if (signal?.aborted) return Promise.reject(new Error('No longer wanted'));
     return new Promise((resolve, reject) => {
-      this.lines.set(id, { resolve, reject });
-      this.send({ type: 'speak', id, text, voice });
+      const line: Line = { id: this.lineIds++, text, voice, urgency, resolve, reject };
+      this.waiting.push(line);
+      signal?.addEventListener('abort', () => {
+        if (!this.waiting.includes(line)) return;
+        this.waiting = this.waiting.filter((l) => l !== line);
+        reject(new Error('No longer wanted'));
+      });
+      this.sayNext();
     });
+  }
+
+  private sayNext(): void {
+    if (this.saying) return;
+    const at = nextLine(this.waiting);
+    if (at < 0) return;
+    const [line] = this.waiting.splice(at, 1);
+    this.saying = line;
+    this.send({ type: 'speak', id: line.id, text: line.text, voice: line.voice });
+  }
+
+  /** The line being said has been (or couldn't be): the next one's turn. */
+  private said(id: number, outcome: (line: Line) => void): void {
+    const line = this.saying;
+    if (line?.id !== id) return;
+    this.saying = undefined;
+    outcome(line);
+    this.sayNext();
   }
 
   /** Ends the worker, if there is one: SIGKILL, so onnxruntime's teardown never runs (see above). */
@@ -103,13 +153,9 @@ export class Speech {
         this.close();
         return this.changed();
       case 'spoken':
-        this.lines.get(message.id)?.resolve(Buffer.from(message.wav));
-        this.lines.delete(message.id);
-        return;
+        return this.said(message.id, (line) => line.resolve(Buffer.from(message.wav)));
       case 'unspoken':
-        this.lines.get(message.id)?.reject(new Error(message.error));
-        this.lines.delete(message.id);
-        return;
+        return this.said(message.id, (line) => line.reject(new Error(message.error)));
     }
   }
 
@@ -123,7 +169,8 @@ export class Speech {
   }
 
   private dropLines(error: string): void {
-    for (const line of this.lines.values()) line.reject(new Error(error));
-    this.lines.clear();
+    for (const line of [...(this.saying ? [this.saying] : []), ...this.waiting]) line.reject(new Error(error));
+    this.saying = undefined;
+    this.waiting = [];
   }
 }

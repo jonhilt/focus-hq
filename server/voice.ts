@@ -9,7 +9,7 @@ import type { VoiceDownload, VoiceStatus } from '../shared/types';
 import { type KokoroVoice, voiceMissing } from '../shared/voice';
 import { whisper } from './config';
 import type { Hub } from './hub';
-import { Speech } from './speech';
+import { type LineUrgency, Speech } from './speech';
 import { errorMessage, newId, run } from './util';
 
 export const DEMO_TRANSCRIPT = 'This is a demo transcription.';
@@ -83,8 +83,8 @@ export class Voice {
     if (!this.demo && this.speech.status().downloaded) this.speech.load();
   }
 
-  speak(text: string, voice: KokoroVoice): Promise<Buffer> {
-    return this.speech.speak(text, voice);
+  speak(text: string, voice: KokoroVoice, urgency?: LineUrgency, signal?: AbortSignal): Promise<Buffer> {
+    return this.speech.speak(text, voice, urgency, signal);
   }
 
   /** Stops Kokoro's process, if it's running, as the office closes. */

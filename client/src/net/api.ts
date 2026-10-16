@@ -138,9 +138,9 @@ export const api = {
   downloadVoiceModel: () => call<VoiceStatus>('POST', '/voice/download-model'),
   transcribe: (wav: ArrayBuffer) => send<{ text: string }>('POST', '/transcribe', { headers: { 'Content-Type': 'audio/wav' }, body: wav }),
   loadSpeech: () => call<VoiceStatus>('POST', '/voice/speech/load'),
-  /** The line as Kokoro says it, as a WAV. */
-  speak: async (text: string, voice: KokoroVoice, signal: AbortSignal): Promise<Blob> => {
-    const res = await fetch('/api/voice/speak', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, voice }), signal });
+  /** The line as Kokoro says it, as a WAV: `ahead` for one fetched before it's needed, which waits behind any wanted now. Aborting drops it from Kokoro's queue. */
+  speak: async (text: string, voice: KokoroVoice, signal: AbortSignal, urgency: 'now' | 'ahead' = 'now'): Promise<Blob> => {
+    const res = await fetch('/api/voice/speak', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, voice, urgency }), signal });
     if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `${res.status} ${res.statusText}`);
     return res.blob();
   },

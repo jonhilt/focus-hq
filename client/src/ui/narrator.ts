@@ -34,6 +34,12 @@ function fromPlayer(data: unknown): FromPlayer | undefined {
   }
 }
 
+/**
+ * How many beats ahead of the one being said the narrator fetches lines. Only a little: Kokoro says one line at a time,
+ * and a whole briefing's lines fetched at once would hold up an answer, or another briefing, behind them.
+ */
+const LOOKAHEAD = 1;
+
 /** A line being said: Kokoro's audio, or the browser's voice if Kokoro has failed. */
 interface Saying {
   stop: () => void;
@@ -44,8 +50,8 @@ interface Saying {
 /**
  * An explainer's voice-over, up close. Its player runs in a sandbox of its own and can't reach the office, so it posts
  * its beats' lines here and asks for each to be said, paused or hushed; the narrator says them in the lead's voice and
- * tells the player when a line is done, so its beat can move on. Kokoro's audio is fetched for every line as soon as
- * the voice is on, so the next beat's is there by the time it plays. A beat whose line isn't ready holds until it is
+ * tells the player when a line is done, so its beat can move on. The first beats' audio is fetched as soon as the voice
+ * is on, and each beat's next as it plays (`LOOKAHEAD`), so the next is there by the time it's needed. A beat whose line isn't ready holds until it is
  * (the player holds a beat until its line is said): only once Kokoro has failed does the browser's voice say it.
  */
 export class Narrator {
@@ -113,22 +119,24 @@ export class Narrator {
     this.prefetch();
   }
 
+  /** The first beats' lines, so the first is ready when Play is pressed. */
   private prefetch(): void {
-    if (this.on) this.lines.forEach((_, i) => void this.fetch(i));
+    if (!this.on) return;
+    for (let beat = 0; beat < LOOKAHEAD + 1; beat++) void this.fetch(beat, 'ahead');
   }
 
   /**
    * Kokoro's audio for a line, waiting for Kokoro to load if it must (it loads the first time a voice is used, and as
    * the office starts once it's downloaded); null if it's failed, or failed on this line, so the browser's voice says it.
    */
-  private fetch(beat: number): Promise<Blob | null> {
+  private fetch(beat: number, urgency: 'now' | 'ahead' = 'now'): Promise<Blob | null> {
     const cached = this.audio.get(beat);
     if (cached) return cached;
     const text = this.lines[beat];
     if (!text) return Promise.resolve(null);
     const { signal } = this.fetching;
     const audio = kokoroReady(signal)
-      .then((ready) => (ready ? api.speak(text, this.voice.kokoro, signal) : null))
+      .then((ready) => (ready ? api.speak(text, this.voice.kokoro, signal, urgency) : null))
       .catch(() => {
         this.audio.delete(beat);
         return null;
@@ -177,6 +185,7 @@ export class Narrator {
       this.tell({ kit: 'said', beat });
     };
     if (!text) return done();
+    for (let next = beat + 1; next <= beat + LOOKAHEAD; next++) void this.fetch(next, 'ahead');
     void this.fetch(beat).then((blob) => {
       start = () => {
         if (stopped || started) return;
