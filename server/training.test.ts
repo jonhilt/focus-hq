@@ -3,7 +3,8 @@ import type { QueuedGoal, ServerEvent, Snapshot } from '../shared/types';
 import type { AgentManager } from './agents/manager';
 import type { Hub } from './hub';
 import { Store } from './store';
-import { clearForTraining, sceneFor, type SceneFile, startTraining, type TrainingShip } from './training';
+import { SHOWCASE } from '../shared/showcase';
+import { clearForTraining, sceneFor, type SceneFile, startShowcase, startTraining, type TrainingShip } from './training';
 
 function busyStore(): Store {
   const store = new Store(false);
@@ -98,5 +99,34 @@ describe('sceneFor', () => {
   it('counts a scene without a scenario as the full story, and passes over one that doesn’t read', () => {
     expect(sceneFor('full', [{ name: 'broken', raw: { title: 'x' } }, scene('plain')])?.name).toBe('plain');
     expect(sceneFor('subagents', [scene('plain')])).toBeUndefined();
+  });
+});
+
+describe('startShowcase', () => {
+  it('sends everyone home, clears the ship and starts a goal at every Focus team station, each shipping without asking', async () => {
+    const store = busyStore();
+    const { training, steps, sent } = ship(store);
+    const started: string[] = [];
+    const agents = Object.assign(training.agents, {
+      startGoal: (projectId: string, text: string, how: { station?: number }) => {
+        started.push(`${store.project(projectId).name} ${how.station} ${text}`);
+        return { agent: { id: `lead_s${how.station}` } };
+      },
+      setAutonomy: (id: string, autonomy: string) => steps.push(`${id} ${autonomy}`),
+    });
+    const ready = await startShowcase({
+      ...training,
+      agents,
+      project: (name) => {
+        const made = store.addProject(name);
+        made.repos = [...SHOWCASE.repos];
+        return made;
+      },
+    });
+    expect(steps).toEqual(['home lead_1', 'github', 'speed 1', 'boards', 'lead_s0 auto', 'lead_s1 auto', 'lead_s2 auto', 'lead_s3 auto']);
+    expect(started).toEqual(SHOWCASE.rooms.map((r) => `Focus ${r.station} ${r.goal}`));
+    expect(store.ledger).toEqual([]);
+    expect(ready).toEqual({ projectId: store.projects.find((p) => p.name === 'Focus')?.id, steps: [], speed: 1 });
+    expect(sent).toHaveLength(1);
   });
 });

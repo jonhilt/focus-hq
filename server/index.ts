@@ -23,7 +23,8 @@ import { sourceReader } from './agents/studioSource';
 import { demoLedger } from './demoLedger';
 import { config, paths } from './config';
 import { demoLayer, demoPush, demoReset } from './github/demo';
-import { startTraining } from './training';
+import { startShowcase, startTraining } from './training';
+import { SHOWCASE } from '../shared/showcase';
 import { clampSpeed, readScenario } from '../shared/scenarios';
 import { ghCliLayer } from './github/ghCli';
 import { GitHub, toProvider } from './github/service';
@@ -168,9 +169,33 @@ async function main() {
     let training = false;
     app.post('/api/demo/training', express.json(), (req, res) => {
       if (training) return void res.status(409).json({ error: 'The ship is already resetting for training' });
+      const asked = (req.body as { scenario?: unknown } | undefined)?.scenario;
+      // the busy ship: every team station in the Focus holodeck at work at once (shared/showcase.ts)
+      if (asked === 'showcase') {
+        training = true;
+        return void startShowcase({
+          store,
+          hub,
+          agents: office.agents,
+          resetGitHub: () => demoReset?.(),
+          setSpeed: (s) => (demoRunner.speed = s),
+          refreshBoards: () => office.refreshAll(),
+          snapshot: () => office.snapshot(),
+          project: (name) => {
+            const found = store.projects.find((p) => p.name === name);
+            if (found) return found;
+            const made = store.addProject(name, SHOWCASE.color, SHOWCASE.theme);
+            made.repos = [...SHOWCASE.repos];
+            made.plugins = office.agents.plugins.ids();
+            return made;
+          },
+        })
+          .then((ready) => res.json(ready), (err: unknown) => res.status(500).json({ error: errorMessage(err) }))
+          .finally(() => (training = false));
+      }
       let scenario;
       try {
-        scenario = readScenario((req.body as { scenario?: unknown } | undefined)?.scenario);
+        scenario = readScenario(asked);
       } catch (err) {
         return void res.status(400).json({ error: errorMessage(err) });
       }

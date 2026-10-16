@@ -1,4 +1,5 @@
 import { SCENARIOS, TRAINING } from '../../../shared/scenarios';
+import { SHOWCASE } from '../../../shared/showcase';
 import { api } from '../net/api';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
@@ -23,7 +24,19 @@ export function openTrainingPanel(ui: Ui): void {
         }, ui.error);
         return button;
       }),
+      showcase(ui),
     ),
   );
   ui.panels.open({ title: 'Holodeck training', body, accent: LCARS.gold });
+}
+
+/** The busy ship: every team station in the Focus holodeck at work at once, to walk round and film. */
+function showcase(ui: Ui): HTMLElement {
+  const button = h('button', { class: 'btn place' }, SHOWCASE.label, h('small', null, SHOWCASE.blurb));
+  button.onclick = () => void busy(button, async () => {
+    const ready = await api.startShowcase();
+    ui.panels.close();
+    ui.train(ready.projectId, ready.steps, ready.speed);
+  }, ui.error);
+  return button;
 }

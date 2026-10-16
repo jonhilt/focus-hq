@@ -55,6 +55,8 @@ export const api = {
     call<{ agent: Agent } | { queued: QueuedGoal }>('POST', `/projects/${projectId}/goals`, { text, ...how }),
   /** Demo only: resets the ship and readies `scenario`'s goal (the training console). */
   startTraining: (scenario: Scenario) => call<{ projectId: string; queued: QueuedGoal; steps: TrainingStep[]; speed: number }>('POST', '/demo/training', { scenario }),
+  /** Demo only: the busy ship, every team station in the Focus holodeck at work at once (shared/showcase.ts). */
+  startShowcase: () => call<{ projectId: string; steps: TrainingStep[]; speed: number }>('POST', '/demo/training', { scenario: 'showcase' }),
   /** Demo only: how fast the pretend agents go (below 1 is slower than `pnpm run demo`). */
   demoSpeed: (speed: number) => call<{ speed: number }>('POST', '/demo/speed', { speed }),
   startQueued: (projectId: string, queueId: string, edits: { text?: string; effort?: Effort; station?: number } = {}) =>

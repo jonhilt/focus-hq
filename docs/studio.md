@@ -131,6 +131,24 @@ steps:
 A scene without `steps:` gets start the goal, answer, approve, merge. The steps live in the page: reloading it, or
 picking another scenario, starts over.
 
+### The busy ship
+
+The console's last button, **Busy ship**, sets the ship up for a walk round rather than one scenario
+(`shared/showcase.ts`, `startShowcase` in `server/training.ts`). It sends everyone home and clears the ship as any reset
+does, makes a **Focus** holodeck if there isn't one (its repo `demo/focus` has a board of Focus-shaped issues), and starts
+a goal at all four of its team stations at once. Each lead plays one thing over and over, so whichever station you walk
+up to is in the middle of it:
+
+| Station | Lead keeps doing |
+| --- | --- |
+| 1 | **Subagents**: three Explore helpers read the server, the plugins and the client, report back, and go round again |
+| 2 | **Workflow**: the review and map workflows, their away teams on the station's transporter pads, run after run |
+| 3 | **Briefing**: an explainer on the screen, waiting for you to step through it and ask about a beat |
+| 4 | **QA**: ships a slice, then pushes a follow-up every minute or so, so QA is always reviewing it |
+
+The leads ship without asking (autonomy `auto`). A goal's pull requests never merge by themselves, so station 4's waits
+for you: merge it from the board and its lead ships the next slice. You're beamed to station 1, with no steps for **]**.
+
 To record while you play, **H** hides the pill, the HUD and every toast but errors (`?record=1` starts that way), and
 **H** again brings them back; the keys still work while they're hidden.
 

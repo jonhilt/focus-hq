@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { readScenario, type Scenario, turnParts } from '../../shared/scenarios';
+import { showcaseRoom, type ShowcaseRoom } from '../../shared/showcase';
 import type { ModelCite, SystemModel, TermLine } from '../../shared/types';
 import { config } from '../config';
 import { demoSinceVerdict } from '../demoGit';
@@ -22,7 +23,19 @@ export const FILES: Record<string, string[]> = {
   web: ['src/App.tsx', 'src/components/Header.tsx', 'src/components/CartBadge.tsx', 'src/pages/Product.tsx', 'src/store/cart.ts', 'src/styles/theme.css'],
   api: ['src/server.ts', 'src/routes/auth.ts', 'src/routes/products.ts', 'src/routes/orders.ts', 'src/middleware/rateLimit.ts', 'test/orders.test.ts'],
   game: ['index.html', 'src/game.ts', 'src/ship.ts', 'src/asteroids.ts', 'src/audio.ts', 'src/hud.ts'],
+  // the showcase's Focus repo, as its own files are laid out
+  focus: ['server/agents/manager.ts', 'server/agents/transcript.ts', 'server/agents/workflows.ts', 'client/src/world/office.ts', 'client/src/ui/captainsLog.ts', 'shared/types/agents.ts'],
 };
+
+/** What the showcase's subagents station hands out each round: a part of the Focus repo to each Explore helper. */
+const SHOWCASE_AREAS = [
+  { folder: 'focus/server', files: ['agents/transcript.ts', 'agents/sessionDigest.ts', 'agents/workflows.ts'], description: 'Find the server’s transcript readers', ask: 'Find every place the server reads an agent’s transcript, and what each needs from it.', found: 'server: three readers, all through transcript.ts, keyed by session id' },
+  { folder: 'focus/plugins', files: ['cartography/server.ts', 'scorecard/server.ts', 'number-one/server.ts'], description: 'Find the plugins’ transcript readers', ask: 'Which plugins read transcripts, and through what?', found: 'plugins: two, both through PluginHost.transcript' },
+  { folder: 'focus/client', files: ['src/ui/agentPanel.ts', 'src/net/state.ts', 'src/ui/captainsLog.ts'], description: 'Check the client never reads them', ask: 'Does anything in the client read a transcript directly?', found: 'client: none; lines come over the hub' },
+];
+
+/** Which kind of demo repo `repo` is, for its made-up files. */
+const repoKind = (repo: string) => (/focus/.test(repo) ? 'focus' : /api/.test(repo) ? 'api' : /game|dodger/.test(repo) ? 'game' : 'web');
 
 const pick = <T>(list: T[], n: number) => [...list].sort(() => Math.random() - 0.5).slice(0, n);
 
@@ -49,7 +62,7 @@ export class DemoRunner implements AgentRunner {
   /** How full each pretend session's context is. */
   private context = new Map<string, number>();
   /** Each lead's repos and goal, by session: a resumed turn doesn't hear them again. */
-  private leads = new Map<string, { repos: { folder: string; repo: string }[]; goal: string; scenario: Scenario }>();
+  private leads = new Map<string, { repos: { folder: string; repo: string }[]; goal: string; scenario: Scenario; room?: ShowcaseRoom }>();
   /**
    * Each pretend lead's session as Claude Code's transcript would have it, by session: the messages that started its
    * turns, what it said and the tools it called, so what reads a real session's transcript (plugins, through
@@ -136,7 +149,7 @@ export class DemoRunner implements AgentRunner {
     // a plugin's brief comes with what its stand-in writes up, rather than an issue
     const scripted = req.scripted;
     const title = scripted?.title ?? titleMatch?.[3]?.trim() ?? 'the task';
-    const kind = /api/.test(repo) ? 'api' : /game|dodger/.test(repo) ? 'game' : 'web';
+    const kind = repoKind(repo);
     const files = FILES[kind];
     const accent = ['#ff8a5b', '#5bc0eb', '#9bc53d', '#c879ff'][issueNumber % 4];
 
@@ -165,7 +178,7 @@ export class DemoRunner implements AgentRunner {
       const pr = Number(match?.[1] ?? 0);
       const prRepo = match?.[2] ?? repo;
       const prTitle = match?.[3]?.trim() ?? 'the change';
-      const prKind = /api/.test(prRepo) ? 'api' : /game|dodger/.test(prRepo) ? 'game' : 'web';
+      const prKind = repoKind(prRepo);
       const changed = pick(FILES[prKind], 2);
       // every third PR has a problem the first time round; a re-test, or a re-check after a message, finds it fixed. Every
       // sixth (PR 9, 15, …) is stubborn: QA keeps failing it until the operations officer looks into why it's stuck
@@ -382,7 +395,7 @@ export class DemoRunner implements AgentRunner {
       const listed = [...req.prompt.matchAll(/^- \.\/(\S+): (\S+), on branch/gm)].map((m) => ({ folder: m[1], repo: m[2] }));
       const known = this.leads.get(sessionId);
       const repos = listed.length ? listed : (known?.repos ?? []);
-      const kindOf = (repo: string) => (/api/.test(repo) ? 'api' : /game|dodger/.test(repo) ? 'game' : 'web');
+      const kindOf = repoKind;
       // the captain's words, without the office's note about the workspace in front of them
       const message = req.prompt.replace(/^(Your workspace|Slice \d+ starts)[^\n]*\n(- [^\n]*(\n|$))*/, '').replace(/\s+/g, ' ').trim();
       // a resumed session doesn't hear the goal again, and a goal's lead keeps the one goal
@@ -390,7 +403,9 @@ export class DemoRunner implements AgentRunner {
       const scenario = known?.scenario ?? this.scenario;
       // the captain can ask for a workflow in their own words, as with real Claude Code: the turn runs them whatever the scenario
       const parts = turnParts(scenario, message);
-      this.leads.set(sessionId, { repos, goal, scenario });
+      // a showcase station's lead (shared/showcase.ts), by the goal its first message starts
+      const room = known ? known.room : showcaseRoom(message);
+      this.leads.set(sessionId, { repos, goal, scenario, room });
       const ship = async (title: string, summary: string): Promise<boolean> => {
         hooks.lines([{ kind: 'tool', text: `⏺ mcp__office__ship(${title})` }]);
         hooks.activity('pushing', 'Shipping the slice');
@@ -420,6 +435,94 @@ export class DemoRunner implements AgentRunner {
         // as the real runner reports a commit once git says it worked
         hooks.commit?.(text);
       };
+      // Explore helpers (subagents), side by side: each reads its own files with a fresh context, and only its answer
+      // comes back; they sit down at the team station while they work
+      const helperRound = async (round: { folder: string; files: string[]; description: string; ask: string; found: string }[]) => {
+        const helpers = round.map((h) => ({ ...h, id: `demo-helper-${h.folder.replace(/\W/g, '-')}-${randomHex(2)}` }));
+        // each helper's lines are its own transcript, as the real runner keeps them
+        const helperLines = (id: string, lines: Omit<TermLine, 't'>[]) =>
+          hooks.helperLines ? hooks.helperLines(id, lines) : hooks.lines(lines.map((l) => ({ ...l, text: `    ${l.text}` })));
+        for (const h of helpers) {
+          hooks.lines([{ kind: 'tool', text: `⏺ Agent(${h.description})` }]);
+          hooks.helper?.({ kind: 'started', id: h.id, description: h.description, type: 'Explore' });
+          hooks.helper?.({ kind: 'model', id: h.id, model: 'claude-haiku-4-5-20251001' });
+          helperLines(h.id, [{ kind: 'system', text: `✻ ${h.description}` }, { kind: 'manager', text: `▶ ${h.ask}` }]);
+        }
+        hooks.activity('working', `Waiting on ${helpers.length} helpers`);
+        for (let step = 0; step < 3; step++) {
+          await wait(2, 3.5);
+          for (const h of helpers) {
+            const file = `${h.folder}/${h.files[step % h.files.length]}`;
+            helperLines(h.id, [{ kind: 'tool', text: `⏺ Read(${file})` }, { kind: 'output', text: `  ⎿  Read ${40 + step * 17} lines` }]);
+            hooks.helper?.({ kind: 'activity', id: h.id, activity: `Reading ${file}` });
+          }
+        }
+        for (const h of helpers) {
+          await wait(1, 2);
+          helperLines(h.id, [{ kind: 'text', text: h.found }]);
+          hooks.helper?.({ kind: 'ended', id: h.id, ok: true, summary: h.found });
+          helperLines(h.id, [{ kind: 'success', text: '✔ Done' }]);
+          hooks.lines([{ kind: 'output', text: `  ⎿  ${h.found}` }]);
+        }
+      };
+      // the showcase's station that ships: a slice built across its repos, shipped without asking, for QA to review and
+      // the project to merge by itself, and then the next
+      const showcaseSlice = async (slice: number): Promise<RunOutcome> => {
+        await think();
+        const files = FILES.focus;
+        const todos = (done: number) => ({
+          todos: [['Read why each goal closed', 'Reading why each goal closed'], [`Slice ${slice}: show it in the log`, 'Showing it in the log'], ['Ship the slice', 'Shipping the slice']].map(([content, activeForm], i) => ({
+            content, activeForm, status: i < done ? 'completed' : i === done ? 'in_progress' : 'pending',
+          })),
+        });
+        await tool('TodoWrite', todos(0));
+        for (const r of repos) {
+          await tool('Read', { file_path: `/work/${r.folder}/${files[4]}` }, ['Read 212 lines']);
+          await tool('TodoWrite', todos(1));
+          await tool('Edit', { file_path: `/work/${r.folder}/${files[4]}`, old_string: 'closedAt', new_string: 'closedAt, why' }, ['Updated 1 file']);
+          await tool('Bash', { command: 'pnpm test' }, ['Tests  1,204 passed']);
+          await commit(r.folder, `Slice ${slice}: the log says why ${slice === 1 ? 'a goal' : 'each goal'} closed`);
+        }
+        await tool('TodoWrite', todos(2));
+        await ship(`The captain's log says why each goal closed (slice ${slice})`, `## Summary\n\nSlice ${slice}: the captain's log shows why each goal closed.\n\n## Testing\n\n- pnpm test`);
+        await tool('TodoWrite', todos(3));
+        await say(`Slice ${slice} is shipped: QA is reviewing it, and it waits for you to merge.`);
+        // a passed slice doesn't wake a lead, so this one keeps its turn: a follow-up for QA to review every minute or so
+        for (let round = 1; ; round++) {
+          await wait(60, 90);
+          const r = repos[0];
+          await tool('Edit', { file_path: `/work/${r.folder}/${files[4]}`, old_string: 'closed:', new_string: 'closed because' }, ['Updated 1 file']);
+          await commit(r.folder, `Tighten the log's wording (${round})`);
+          await ship(`The captain's log says why each goal closed (slice ${slice})`, `Slice ${slice}, with the log's wording tightened.`);
+          await say('Pushed a follow-up: QA is looking at it again.');
+        }
+      };
+      const showcase = async (room: ShowcaseRoom): Promise<RunOutcome> => {
+        const folders = repos.map((r) => r.folder);
+        for (const r of repos) await tool('Read', { file_path: `/work/${r.folder}/CLAUDE.md` }, ['Read 41 lines']);
+        await think();
+        // something on the goal's star chart from the start: what done looks like, what's next and a loose thread
+        await note({ done: `${goal}: done, and shown to the captain.`, next: ['A thin slice end to end'], contact: 'Does this hold up with three leads in the same repo?' });
+        if (room.role === 'qa') return showcaseSlice(1);
+        if (room.role === 'briefing') {
+          hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__explain(How a save travels)' }]);
+          const explained = await tools.explain(demoExplainer(folders)).then((reply) => reply.text, (err: Error) => err.message);
+          hooks.lines([{ kind: 'output', text: `  ⎿  ${explained}` }]);
+          await say('The briefing is on the screen: step through it, and ask me about any beat.');
+          return { ok: true, summary: 'Put up a briefing.' };
+        }
+        // subagents or a workflow, round after round until the captain stops it
+        for (let round = 1; ; round++) {
+          if (room.role === 'subagents') {
+            await helperRound(SHOWCASE_AREAS.map((a) => ({ ...a, description: `${a.description} (round ${round})` })));
+            await say('Three readers between them, and none needs more than the session id. Going round again for the plugins’ side.');
+          } else {
+            await reviewWorkflows(folders, goal);
+            await say('The review is in: one area to look at again. Running it once more against the fixes.');
+          }
+          await wait(6, 10);
+        }
+      };
 
       // asked about a briefing up close: a line straight away, a look at the code, then a spoken answer about that beat
       const briefing = /^A question about your briefing “([^”]*)”[^)]*?(?:at beat (\d+), “([^”]*)”)?\): ([^\n]*)/.exec(req.prompt);
@@ -439,6 +542,11 @@ export class DemoRunner implements AgentRunner {
         await say(`${beat ? `In beat ${beat}, ${beatTitle}, ` : `In ${title}, `}the save waits for the database to answer before the page says it's done. If the database is down, it retries three times, a second apart, then tells the shopper it couldn't save. Want me to redraw that part of the briefing in more detail?`);
         return { ok: true, summary: 'Answered a question about a briefing.' };
       }
+      // the showcase: each station's lead keeps playing its one thing, so whichever you walk up to is in the middle of it
+      if (room && !req.resumeSessionId) return showcase(room);
+      // the station that ships, once the captain merges its slice from the board: on to the next
+      const landedAt = room?.role === 'qa' && /Slice (\d+) has landed/.exec(req.prompt);
+      if (landedAt) return showcaseSlice(Number(landedAt[1]) + 1);
       if (/^\[QA officer/.test(req.prompt)) {
         await think();
         if (/^\[QA officer [^\]]+\] QA failed/.test(req.prompt)) {
@@ -516,37 +624,11 @@ export class DemoRunner implements AgentRunner {
       });
       await tool('TodoWrite', leadTodos(0));
       // two helpers map the repos side by side while the lead plans: they sit down at the team station while they work
-      if (parts.helpers && repos.length > 1) {
-        const helpers = repos.map((r) => ({ ...r, id: `demo-helper-${r.folder}-${randomHex(2)}`, files: FILES[kindOf(r.repo)] }));
-        // each helper's lines are its own transcript, as the real runner keeps them
-        const helperLines = (id: string, lines: Omit<TermLine, 't'>[]) =>
-          hooks.helperLines ? hooks.helperLines(id, lines) : hooks.lines(lines.map((l) => ({ ...l, text: `    ${l.text}` })));
-        for (const h of helpers) {
-          hooks.lines([{ kind: 'tool', text: `⏺ Agent(Map ./${h.folder} for ${goal})` }]);
-          hooks.helper?.({ kind: 'started', id: h.id, description: `Map ./${h.folder} for ${goal}`, type: 'Explore' });
-          hooks.helper?.({ kind: 'model', id: h.id, model: 'claude-haiku-4-5-20251001' });
-          helperLines(h.id, [
-            { kind: 'system', text: `✻ Map ./${h.folder} for ${goal}` },
-            { kind: 'manager', text: `▶ Read through ./${h.folder} and tell me where ${goal} would fit: the files to change, and anything in the way.` },
-          ]);
-        }
-        hooks.activity('working', `Waiting on ${helpers.length} helpers`);
-        for (let step = 0; step < 3; step++) {
-          await wait(2, 3.5);
-          for (const h of helpers) {
-            const file = `${h.folder}/${h.files[step % h.files.length]}`;
-            helperLines(h.id, [{ kind: 'tool', text: `⏺ Read(${file})` }, { kind: 'output', text: `  ⎿  Read ${40 + step * 17} lines` }]);
-            hooks.helper?.({ kind: 'activity', id: h.id, activity: `Reading ${file}` });
-          }
-        }
-        for (const h of helpers) {
-          await wait(1, 2);
-          helperLines(h.id, [{ kind: 'text', text: `${h.folder}: ${goal} fits in ${h.files[1]}` }]);
-          hooks.helper?.({ kind: 'ended', id: h.id, ok: true, summary: `${h.folder}: ${goal} fits in ${h.files[1]}` });
-          helperLines(h.id, [{ kind: 'success', text: '✔ Done' }]);
-          hooks.lines([{ kind: 'output', text: `  ⎿  ${h.folder}: ${goal} fits in ${h.files[1]}` }]);
-        }
-      }
+      if (parts.helpers && repos.length > 1)
+        await helperRound(repos.map((r) => {
+          const files = FILES[kindOf(r.repo)];
+          return { folder: r.folder, files, description: `Map ./${r.folder} for ${goal}`, ask: `Read through ./${r.folder} and tell me where ${goal} would fit: the files to change, and anything in the way.`, found: `${r.folder}: ${goal} fits in ${files[1]}` };
+        }));
       // a quick script from the scratch dir to try the idea first: a probe on the goal's chart, as the real runner reports one
       if (parts.background) {
         const probe = `demo-probe-${randomHex(3)}`;
@@ -787,7 +869,7 @@ export class DemoDrafter implements Drafter {
     const idea = req.idea || req.revise?.title || 'the change';
     const backend = /\b(api|endpoint|server|order|auth|login|rate|database|email)\b/i.test(idea);
     const repo = req.revise?.repo ?? (req.repos.find((r) => (backend ? /api|server|backend/ : /web|front|app|game|dodger/).test(r)) ?? req.repos[0]);
-    const kind = /api/.test(repo) ? 'api' : /game|dodger/.test(repo) ? 'game' : 'web';
+    const kind = repoKind(repo);
     const files = pick(FILES[kind], 3);
     const folder = repo.split('/')[1];
 
