@@ -20,7 +20,8 @@ server/
   index.ts                express + WebSocket (/ws) + Vite middleware (dev) or dist/ (prod)
   office.ts               projects/rooms, Kanban boards (polling GitHub), auto-assign, settings
   settings.ts             what a change to the captain's settings (PATCH /api/settings, any JSON) leaves them as: fields of the wrong kind ignored, models trimmed, the limit on agents at once kept to 1–32 (pure)
-  store.ts                ~/.focus/state.json + per-agent terminal logs (jsonl) + per-agent run journals (runs/*.jsonl) + the ledger (ledger.jsonl)
+  store.ts                ~/.focus/state.json + per-agent terminal logs (jsonl) + run, review and slice journals (runs/, runs/reviews/, runs/slices/) + the ledger (ledger.jsonl)
+  journals.ts             append-only journals of one kind, a file each: numbered facts flushed (fsync) before append returns, folded in memory, a torn last line dropped
   ledgerLog.ts            the ledger's one writer: numbered lines flushed to disk, the lock file, repairs and damage on load
   usage.ts                main engineering's plan usage: read from Claude Code's structured /usage every few minutes, with how the office signs in
   routes.ts               REST API used by the panels
@@ -59,6 +60,7 @@ server/
     sdkMessages.ts        each SDK message by type → the run's hooks: lines, activity, helpers, workflows, probes, commits, screenshots, what the key spends, the turn's result
     reviewJournal.ts      each pull request's QA review journal, pure: its facts from requested to the verdict posted and announced (data/runs/reviews/<pr>.jsonl, written by Store.reviewJournal), what they add up to as an XState machine (reviewMachine), and what a restart does with a review under way
     runJournal.ts         each agent's run journal, pure: the facts of its turns, phases and inbox (data/runs/<agent>.jsonl, written by Store.journal before the office acts), what they add up to as an XState machine (journalMachine: facts are events, the run's phase its state), the sign-in check, and what a restart does with a turn in flight or a run waiting for a slot
+    sliceJournal.ts       each goal's slice journal, pure: its facts as a slice ships, lands and moves to fresh code (data/runs/slices/<lead>.jsonl, written by Store.sliceJournal), what they add up to as an XState machine (sliceMachine), and what a restart finishes
     inbox.ts              an agent's inbox, kept in their run journal
     runMachine.ts         what follows a turn, as an XState state machine: the state it ran in (local, cloud, attaching), the event its end was (read from its outcome once), guarded transitions handing what a state doesn't take up to its parent; `step` takes one with XState's pure `transition`
     statechart.ts         an XState machine drawn as a Mermaid statechart, from the machine itself: for docs pages and a lead's station screen

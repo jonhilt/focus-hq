@@ -1,10 +1,11 @@
-import { Effect } from 'effect';
+import { Cause, Effect } from 'effect';
 import { autoQaFor, sameCommit } from '../../../shared/qa';
 import type { Agent, LeadAgent } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
 import { errorMessage, newId } from '../../util';
-import { afterLanding, hasLeadWork, carriedNote, behindNote, everyPr, heldBack, leadPrBody, leadWorktreeId, newSliceNote, notShipped, openPr, reposBackNote, shipped, shippedSha, shipPlan, shipBranch, sliceBranch, type FreshBranch, freshBranchNote, needsFreshBranch, repoBranch } from '../lead';
+import { afterLanding, hasLeadWork, sliceLanded, carriedNote, behindNote, everyPr, heldBack, leadPrBody, leadWorktreeId, newSliceNote, notShipped, openPr, reposBackNote, shipped, shippedSha, shipPlan, shipBranch, sliceBranch, type FreshBranch, freshBranchNote, needsFreshBranch, repoBranch } from '../lead';
 import { repoFolders } from '../planner';
+import { type Moving, reconciledPrs, sliceRecovery } from '../sliceJournal';
 import { nextWaypoints, shippedWaypoint } from '../waypoints';
 import { type GitFailed, Workspace } from '../services';
 import { type ManagerServices, NothingToCheckOut, Part, Refused } from './core';
@@ -43,30 +44,109 @@ export class Slices extends Part {
     return Effect.gen({ self: this }, function* () {
       const lead = agent.lead;
       const workspace = yield* Workspace;
-      const project = this.store.project(agent.projectId);
       const dir = (folder: string) => workspace.dir(leadWorktreeId(agent.id, folder));
       const dirty = yield* Effect.filter(lead.repos, (r) => workspace.hasUncommittedChanges(dir(r.folder)));
       if (afterLanding(dirty.map((r) => r.folder)) === 'held-back') return heldBack(lead, dirty.map((r) => r.folder));
       const unshipped = yield* Effect.forEach(lead.repos, (r) =>
         workspace.unshippedCommits(dir(r.folder), r.baseBranch, shippedSha(lead, r.repo)).pipe(Effect.map((commits) => ({ ...r, commits }))),
       );
-      const oldBranch = agent.branch;
-      const slice = lead.slice + 1;
-      yield* Effect.forEach(lead.repos, (r) => workspace.remove(r.repo, leadWorktreeId(agent.id, r.folder)), { discard: true });
-      const note = lead.note && { ...lead.note, slice: [] };
-      this.update(agent, { branch: sliceBranch(lead.title, slice, newId('s').slice(-4)), lead: { ...lead, note, repos: [], slice, prs: [], landed: everyPr(lead), waypoints: nextWaypoints(lead, Date.now()) } });
-      yield* this.checkOutSlice(agent, project.repos);
-      const carried = yield* Effect.forEach(unshipped.filter((r) => r.commits.length), ({ repo, folder, commits }) =>
+      const moving: Moving = {
+        slice: lead.slice + 1,
+        branch: sliceBranch(lead.title, lead.slice + 1, newId('s').slice(-4)),
+        from: agent.branch,
+        repos: lead.repos.map(({ repo, folder }) => ({ repo, folder })),
+        carry: unshipped.filter((r) => r.commits.length).map(({ repo, commits }) => ({ repo, commits })),
+      };
+      // decided, and on disk before any checkout goes: a restart finishes the move from here (`move`)
+      this.store.sliceJournal(agent.id, { kind: 'moving', ...moving });
+      return yield* this.move(agent, moving);
+    });
+  }
+
+  /**
+   * Moves the lead's repos on to fresh code as `moving` says: the old checkouts go, every repo is checked out on the new
+   * branch, and the commits that never shipped are brought over. Each step is safe to take again, so a move cut off part
+   * way (Focus stopped, a checkout failed) is finished from the start. Succeeds with what the lead hears about it.
+   */
+  move(agent: LeadAgent, moving: Moving): Effect.Effect<string, GitHubError | GitFailed | NothingToCheckOut, ManagerServices> {
+    return Effect.gen({ self: this }, function* () {
+      const workspace = yield* Workspace;
+      const dir = (folder: string) => workspace.dir(leadWorktreeId(agent.id, folder));
+      yield* Effect.forEach(moving.repos, (r) => workspace.remove(r.repo, leadWorktreeId(agent.id, r.folder)), { discard: true });
+      const lead = agent.lead;
+      // the lead moves on once: a move taken again after that only checks out what's missing
+      if (lead.slice < moving.slice) {
+        const note = lead.note && { ...lead.note, slice: [] };
+        this.update(agent, { branch: moving.branch, lead: { ...lead, note, repos: [], slice: moving.slice, prs: [], landed: everyPr(lead), waypoints: nextWaypoints(lead, Date.now()) } });
+      } else {
+        this.update(agent, { branch: moving.branch, lead: { ...lead, repos: [] } });
+      }
+      yield* this.checkOutSlice(agent, this.store.project(agent.projectId).repos);
+      const carried = yield* Effect.forEach(moving.carry, ({ repo, commits }) =>
         Effect.gen({ self: this }, function* () {
           const now = agent.lead.repos.find((r) => r.repo === repo);
-          if (!now) return { folder, commits, applied: false };
+          if (!now) return { folder: repo.split('/')[1], commits, applied: false };
           this.print(agent, [{ kind: 'system', text: `✻ Bringing ${commits.length} unshipped commit${commits.length === 1 ? '' : 's'} over to ./${now.folder}` }]);
           const applied = yield* workspace.cherryPick(dir(now.folder), commits).pipe(Effect.as(true), Effect.orElseSucceed(() => false));
           return { folder: now.folder, commits, applied };
         }),
       );
-      return [newSliceNote(agent.lead, agent.branch), carriedNote(carried, oldBranch)].filter(Boolean).join('\n\n');
+      this.store.sliceJournal(agent.id, { kind: 'moved' });
+      return [newSliceNote(agent.lead, agent.branch), carriedNote(carried, moving.from)].filter(Boolean).join('\n\n');
     });
+  }
+
+  /**
+   * After a restart: each lead's pull requests are put right from their slice journal (one the saved state lost is
+   * watched again), and a ship or a move to fresh code that Focus cut off is finished by the office, with no Claude turn,
+   * before the lead's own run picks back up (`recoverAgent`), so the two never ship at once. The leads it's finishing
+   * something for: their runs are recovered once it's done.
+   */
+  recover(onKey: boolean): Set<string> {
+    const later = new Set<string>();
+    for (const agent of [...this.store.agents.values()]) {
+      if (agent.task !== 'lead' || !hasLeadWork(agent)) continue;
+      const journal = this.store.slice(agent.id);
+      // a move under way has the slice's pull requests behind it already
+      if (journal.phase !== 'moving') {
+        const prs = reconciledPrs(agent.lead.prs, journal.prs);
+        if (prs.length !== agent.lead.prs.length || prs.some((p, i) => p !== agent.lead.prs[i])) this.update(agent, { lead: { ...agent.lead, prs } });
+      }
+      const next = sliceRecovery(journal);
+      if (next.kind === 'none') continue;
+      later.add(agent.id);
+      const { status, activity } = agent;
+      const finish: Effect.Effect<string, GitHubError | GitFailed | Refused | NothingToCheckOut, ManagerServices> = next.kind === 'ship'
+        ? this.shipLead(agent, next).pipe(Effect.map((said) => `Focus restarted while your slice was shipping, so the office finished it:\n\n${said}`))
+        : this.move(agent, next.moving).pipe(Effect.map((said) => `Focus restarted while your repos were moving to fresh code, so the office finished the move:\n\n${said}`));
+      this.print(agent, [{ kind: 'system', text: `✻ Focus restarted part way through ${next.kind === 'ship' ? 'shipping their slice' : 'moving their repos to fresh code'}: finishing that` }]);
+      this.background(finish.pipe(
+        Effect.tap((said) => Effect.sync(() => this.rt(agent.id).inbox.push(said))),
+        Effect.catch((err) => Effect.sync(() => {
+          this.print(agent, [{ kind: 'error', text: `✘ Couldn't finish it: ${err.message}` }]);
+          this.rt(agent.id).inbox.push(`Focus restarted part way through ${next.kind === 'ship' ? 'shipping your slice' : 'moving your repos to fresh code'}, and the office couldn't finish it: ${err.message}`);
+        })),
+        // the ship marked them at work: they're as the restart left them, for their own run to pick up
+        Effect.ensuring(Effect.sync(() => {
+          this.update(agent, { status, activity });
+          this.core.sessions.recoverAgent(agent, onKey);
+        })),
+      ));
+    }
+    return later;
+  }
+
+  /**
+   * Where the lead's repos stand before their turn, and what they hear about it first (nothing, when nothing moved): a
+   * move to fresh code that didn't finish (a checkout failed) finishes from what was decided; a slice that's landed moves
+   * on; and a lead left with no repos (a move from before slices had a journal) has them checked out again.
+   */
+  beforeTurn(lead: LeadAgent): Effect.Effect<string, GitHubError | GitFailed | NothingToCheckOut, ManagerServices> {
+    const moving = this.store.slice(lead.id).moving;
+    if (moving) return this.move(lead, moving);
+    if (sliceLanded(lead.lead.prs)) return this.nextSlice(lead);
+    if (!lead.lead.repos.length) return this.reposBack(lead);
+    return Effect.succeed('');
   }
 
   /** A lead left with no repos (a slice move whose checkout failed): every repo checked out again on their branch. Succeeds with what they hear. */
@@ -85,8 +165,27 @@ export class Slices extends Part {
   shipLead(agent: Agent, input: { title: string; summary: string }): Effect.Effect<string, GitHubError | GitFailed | Refused, GitHub | Workspace> {
     return Effect.gen({ self: this }, function* () {
       if (!hasLeadWork(agent) || !agent.lead.repos.length) return yield* new Refused({ message: 'There’s nothing checked out to ship' });
-      const work = agent.lead;
       if (this.core.leads.closingGoals.has(agent.id)) return yield* new Refused({ message: 'The captain is closing the goal: nothing ships now' });
+      // on disk before anything's pushed (unless it's a ship cut off before, being finished): a restart finishes it
+      if (this.store.slice(agent.id).phase !== 'shipping') this.store.sliceJournal(agent.id, { kind: 'shipping', title: input.title, summary: input.summary });
+      return yield* this.ship(agent, input).pipe(
+        // a ship that shipped nothing, failed (or hit a bug) is over; an interrupted one isn't: a restart finishes it
+        Effect.tap(() => Effect.sync(() => this.shipEnded(agent.id))),
+        Effect.tapCause((cause) => Effect.sync(() => {
+          if (!Cause.hasInterruptsOnly(cause)) this.shipEnded(agent.id, errorMessage(Cause.squash(cause)));
+        })),
+      );
+    });
+  }
+
+  /** The ship's over without shipping, if the journal still has it under way. */
+  private shipEnded(id: string, error?: string): void {
+    if (this.store.slice(id).phase === 'shipping') this.store.sliceJournal(id, { kind: 'ship-ended', ...(error && { error }) });
+  }
+
+  private ship(agent: LeadAgent, input: { title: string; summary: string }): Effect.Effect<string, GitHubError | GitFailed | Refused, GitHub | Workspace> {
+    return Effect.gen({ self: this }, function* () {
+      const work = agent.lead;
       const github = yield* GitHub;
       const workspace = yield* Workspace;
       // a repo whose pull request merged moves to a fresh branch first: its own still carries the merged commits
@@ -132,6 +231,7 @@ export class Slices extends Part {
           lines.push(`Opened ${s.repo}#${pr.number}: ${pr.url}`);
           this.hub.toast('success', `🎉 ${agent.name} opened ${s.repo.split('/')[1]}#${pr.number}: ${title}`, agent.id);
         }
+        this.store.sliceJournal(agent.id, { kind: 'pr', repo: s.repo, number: pr.number, url: pr.url, sha: s.head, branch: s.branch });
         const others = agent.lead.prs.filter((p) => !(p.repo === s.repo && p.number === pr.number));
         this.update(agent, { lead: { ...agent.lead, prs: [...others, { repo: s.repo, number: pr.number, url: pr.url, sha: s.head, branch: s.branch }] } });
         this.print(agent, [{ kind: 'success', text: `✔ ${lines.at(-1)}` }]);
@@ -145,6 +245,7 @@ export class Slices extends Part {
           this.print(agent, [{ kind: 'error', text: `✘ Couldn't hand ${pr.repo}#${pr.number} to QA: ${errorMessage(err)}` }]);
         }
       }
+      this.store.sliceJournal(agent.id, { kind: 'shipped' });
       this.update(agent, { status: 'working', activity: 'Shipped the slice', lead: { ...agent.lead, waypoints: shippedWaypoint(agent.lead, { title, summary: input.summary }, Date.now()) } });
       this.boardChanged(agent.projectId);
       return [shipped(lines), ...movedNotes].join('\n\n');

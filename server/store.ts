@@ -12,8 +12,10 @@ import { config, paths } from './config';
 import { takeLock } from './fileLock';
 import { fitDesks } from './agents/desks';
 import { upgradeLead } from './agents/lead';
-import { EMPTY_REVIEW, evolveReview, foldReview, type ReviewEntry, type ReviewFact, type ReviewState } from './agents/reviewJournal';
-import { EMPTY_RUN, evolve, fold, type JournalEntry, journalLine, readJournal, type RunFact, type RunState, runView } from './agents/runJournal';
+import { EMPTY_REVIEW, evolveReview, type ReviewEntry, type ReviewFact, type ReviewState } from './agents/reviewJournal';
+import { EMPTY_RUN, evolve, type JournalEntry, type RunFact, type RunState, runView } from './agents/runJournal';
+import { EMPTY_SLICE, evolveSlice, type SliceFact, type SliceState } from './agents/sliceJournal';
+import { Journals, type Stamped } from './journals';
 import { fromBeforePlugins, type SavedBeforePlugins } from './plugins/migrate';
 import { newId } from './util';
 
@@ -117,16 +119,18 @@ export class Store {
   /** Artifacts' pages and pictures when nothing's saved to disk, by `<lead id>/<file>`. */
   private artifacts = new Map<string, Buffer>();
   private saveTimer: NodeJS.Timeout | null = null;
-  /** What each agent's run journal adds up to, by agent id (data/runs/<agent>.jsonl, `journal`). */
-  private runs = new Map<string, RunState>();
-  /** Each agent's journal itself, when it isn't saved to disk (the demo): the last JOURNAL_MEMORY facts. */
-  private journals = new Map<string, JournalEntry[]>();
-  /** What each pull request's review journal adds up to, by prKey (data/runs/reviews/<pr>.jsonl, `reviewJournal`). */
-  private reviewRuns = new Map<string, ReviewState>();
-  /** Each review's journal itself, when it isn't saved to disk (the demo). */
-  private reviewJournals = new Map<string, ReviewEntry[]>();
+  /** Each agent's run journal, by agent id (data/runs/<agent>.jsonl, `journal`). */
+  private runs: Journals<RunFact, RunState>;
+  /** Each pull request's review journal, by prKey (data/runs/reviews/<pr>.jsonl, `reviewJournal`). */
+  private reviewJournals: Journals<ReviewFact, ReviewState>;
+  /** Each goal's slice journal, by its lead's id (data/runs/slices/<lead>.jsonl, `sliceJournal`). */
+  private slices: Journals<SliceFact, SliceState>;
 
-  constructor(private readonly persist: boolean) {}
+  constructor(private readonly persist: boolean) {
+    this.runs = new Journals(persist, (id) => path.join(paths.runs, `${id}.jsonl`), EMPTY_RUN, evolve, JOURNAL_MEMORY);
+    this.reviewJournals = new Journals(persist, (key) => path.join(paths.runs, 'reviews', `${fileKey(key)}.jsonl`), EMPTY_REVIEW, evolveReview, JOURNAL_MEMORY);
+    this.slices = new Journals(persist, (id) => path.join(paths.runs, 'slices', `${id}.jsonl`), EMPTY_SLICE, evolveSlice, JOURNAL_MEMORY);
+  }
 
   /**
    * Reads the saved state. Throws a StateLockedError if another office holds data/state.json: two offices on one data folder each save
@@ -136,6 +140,7 @@ export class Store {
     if (!this.persist) return;
     fs.mkdirSync(paths.logs, { recursive: true });
     fs.mkdirSync(path.join(paths.runs, 'reviews'), { recursive: true });
+    fs.mkdirSync(path.join(paths.runs, 'slices'), { recursive: true });
     const holder = takeLock(`${paths.state}.lock`);
     if (holder) throw new StateLockedError(holder, config.dataDir);
     // what changed in the last moments before exiting is saved too, before the lock goes
@@ -161,9 +166,7 @@ export class Store {
       const agent = agentAfterRestart(saved, this.projects.find((p) => p.id === saved.projectId)?.name ?? 'The project');
       this.agents.set(agent.id, agent);
       this.lines.set(agent.id, this.readLog(agent.id, MEMORY_LINES));
-      const run = this.readRun(agent.id);
-      this.runs.set(agent.id, run);
-      agent.run = runView(run);
+      agent.run = runView(this.runs.state(agent.id));
     }
     // rooms had six desks before team stations: anyone at a desk that's gone takes a free one, or waits off the floor
     for (const [id, desk] of fitDesks([...this.agents.values()])) {
@@ -403,12 +406,7 @@ export class Store {
    * flushed (fsync) before this returns, so whatever the office does next on the strength of it survives a crash.
    */
   journal(id: string, fact: RunFact): RunState {
-    const before = this.run(id);
-    const entry: JournalEntry = { v: 1, seq: before.seq + 1, t: Date.now(), ...fact };
-    if (this.persist) appendFlushed(this.runFile(id), journalLine(entry));
-    else keepLast(this.journals, id, entry);
-    const after = evolve(before, entry);
-    this.runs.set(id, after);
+    const after = this.runs.append(id, fact);
     const agent = this.agents.get(id);
     if (agent) {
       agent.run = runView(after);
@@ -423,63 +421,46 @@ export class Store {
 
   /** The agent's run journal, oldest first: its file, or what's kept of it in memory. */
   journalEntries(id: string): JournalEntry[] {
-    return this.persist ? readJournalFile<JournalEntry>(this.runFile(id), false) : [...(this.journals.get(id) ?? [])];
+    return this.runs.entries(id);
   }
 
-  /** What the agent's run journal adds up to. */
+  /** What the agent's run journal adds up to (an agent not saved when the office started, a goal reopened since, may have one already). */
   run(id: string): RunState {
-    let run = this.runs.get(id);
-    if (!run) {
-      // an agent not saved when the office started (a goal reopened since, under its old id) may have a journal already
-      run = this.persist ? this.readRun(id) : EMPTY_RUN;
-      this.runs.set(id, run);
-    }
-    return run;
-  }
-
-  /** An agent's run journal from its file, dropping a last line Focus stopped part way through writing. */
-  private readRun(id: string): RunState {
-    return fold(readJournalFile<JournalEntry>(this.runFile(id), true));
-  }
-
-  private runFile(id: string): string {
-    return path.join(paths.runs, `${id}.jsonl`);
+    return this.runs.state(id);
   }
 
   // ---- review journals ----
 
-  /**
-   * Records a fact in a pull request's review journal (`key` its prKey), and what the review adds up to with it: written
-   * and flushed before this returns, like an agent's run journal.
-   */
+  /** Records a fact in a pull request's review journal (`key` its prKey), flushed before this returns, and what the review adds up to with it. */
   reviewJournal(key: string, fact: ReviewFact): ReviewState {
-    const before = this.review(key);
-    const entry: ReviewEntry = { v: 1, seq: before.seq + 1, t: Date.now(), ...fact };
-    if (this.persist) appendFlushed(this.reviewFile(key), journalLine(entry));
-    else keepLast(this.reviewJournals, key, entry);
-    const after = evolveReview(before, entry);
-    this.reviewRuns.set(key, after);
-    return after;
+    return this.reviewJournals.append(key, fact);
   }
 
   /** What a pull request's review journal adds up to. */
   review(key: string): ReviewState {
-    let review = this.reviewRuns.get(key);
-    if (!review) {
-      review = this.persist ? foldReview(readJournalFile<ReviewEntry>(this.reviewFile(key), true)) : EMPTY_REVIEW;
-      this.reviewRuns.set(key, review);
-    }
-    return review;
+    return this.reviewJournals.state(key);
   }
 
   /** A pull request's review journal, oldest first. */
   reviewEntries(key: string): ReviewEntry[] {
-    return this.persist ? readJournalFile<ReviewEntry>(this.reviewFile(key), false) : [...(this.reviewJournals.get(key) ?? [])];
+    return this.reviewJournals.entries(key);
   }
 
-  /** `owner/repo#12` → data/runs/reviews/owner__repo-12.jsonl */
-  private reviewFile(key: string): string {
-    return path.join(paths.runs, 'reviews', `${key.replace('/', '__').replace('#', '-').replace(/[^A-Za-z0-9_.-]/g, '_')}.jsonl`);
+  // ---- slice journals ----
+
+  /** Records a fact in a goal's slice journal (`id` its lead's), flushed before this returns, and what its slices add up to with it. */
+  sliceJournal(id: string, fact: SliceFact): SliceState {
+    return this.slices.append(id, fact);
+  }
+
+  /** What a goal's slice journal adds up to. */
+  slice(id: string): SliceState {
+    return this.slices.state(id);
+  }
+
+  /** A goal's slice journal, oldest first. */
+  sliceEntries(id: string): Stamped<SliceFact>[] {
+    return this.slices.entries(id);
   }
 
   // ---- terminal output ----
@@ -547,34 +528,7 @@ function isTheme(value: unknown): value is RoomTheme {
   return typeof value === 'string' && (ROOM_THEMES as readonly string[]).includes(value);
 }
 
-/** Appends a journal's line to its file and flushes it to disk (fsync) before returning. */
-function appendFlushed(file: string, line: string): void {
-  const fd = fs.openSync(file, 'a');
-  try {
-    fs.writeSync(fd, line);
-    fs.fsyncSync(fd);
-  } finally {
-    fs.closeSync(fd);
-  }
-}
-
-/** Keeps `entry` in a journal held in memory (the demo), its last JOURNAL_MEMORY facts. */
-function keepLast<E>(journals: Map<string, E[]>, key: string, entry: E): void {
-  const kept = journals.get(key) ?? [];
-  kept.push(entry);
-  if (kept.length > JOURNAL_MEMORY) kept.splice(0, kept.length - JOURNAL_MEMORY);
-  journals.set(key, kept);
-}
-
-/** A journal's entries from its file (none if there's no file). `repair` cuts off a last line Focus stopped part way through writing. */
-function readJournalFile<E>(file: string, repair: boolean): E[] {
-  let text: string;
-  try {
-    text = fs.readFileSync(file, 'utf8');
-  } catch {
-    return [];
-  }
-  const { entries, goodBytes } = readJournal<E>(text);
-  if (repair && goodBytes < Buffer.byteLength(text)) fs.truncateSync(file, goodBytes);
-  return entries;
+/** `owner/repo#12` → `owner__repo-12`: a pull request's key as a file name. */
+function fileKey(key: string): string {
+  return key.replace('/', '__').replace('#', '-').replace(/[^A-Za-z0-9_.-]/g, '_');
 }

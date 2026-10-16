@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { setup } from 'xstate';
 import { reviewMachine } from './reviewJournal';
 import { journalMachine } from './runJournal';
+import { sliceMachine } from './sliceJournal';
 import { runMachine } from './runMachine';
 import { mermaidStatechart } from './statechart';
 
@@ -66,6 +67,7 @@ describe('mermaidStatechart', () => {
     ['run-machine', runMachine, 'agents.md'],
     ['journal-machine', journalMachine, 'agents.md'],
     ['review-machine', reviewMachine, 'qa.md'],
+    ['slice-machine', sliceMachine, 'goals.md'],
   ] as const)('keeps the %s’s picture in its docs page as the code has it', (marker, machine, page) => {
     const doc = readFileSync(join(__dirname, '../../docs', page), 'utf8');
     const drawn = new RegExp(`<!-- ${marker}:start -->\\n\`\`\`mermaid\\n---\\nconfig:\\n {2}layout: elk\\n---\\n([\\s\\S]*?)\\n\`\`\`\\n<!-- ${marker}:end -->`).exec(doc)?.[1];

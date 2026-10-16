@@ -139,6 +139,7 @@ stateDiagram-v2
 
 **After a restart** (`AgentManager.recover`, once the office has started), whether Focus crashed or shut down on purpose (Ctrl-C, an auto-update: `shutDown` stops every session but leaves their turns open in the journal): messages that were waiting are still waiting, and those taken for a turn that was never asked for go back in front. A turn the journal says was in flight is `interrupted`, and:
 
+- a lead's ship or move to fresh code that was cut off is finished by the office first, before their turn picks back up ([goals](goals.md#the-slice-journal-a-ship-or-a-move-that-focus-cut-off));
 - a developer's work the journal says was going onto GitHub (`delivering`) is finished by the office: pushed again and its pull request found or opened, with no Claude turn and no nudge to commit (both steps are safe to repeat);
 - an agent the journal says was `held` for your plan's usage limit is held again until it resets, with what was waiting for them; if it reset while Focus was stopped, they carry on;
 - an agent whose journal says they were `waiting` for a free slot is back in line (held for a message instead if going back to their conversation would be on your API key);

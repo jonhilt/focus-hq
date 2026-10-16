@@ -27,3 +27,43 @@ Each pod has its team's **screen** hung over it, tipped down to the middle of th
 - **When every station is taken:** a new goal, whether you start it in the goals list or hand it over from the Ops station or Number One (the [`number-one` plugin](../plugins/number-one/README.md)), waits in line under **Waiting for a team station**, where you can reorder it or take it out. Each shows the title it will start with (its first line, cut at a word to about 60 characters, `shared/goalTitle.ts`), with your words in full under it, folded to three lines until you click them; the free stations' sign, screen and goal board say what's next up by that title too. With goals in line and a station free, a new goal offers **Start it now** beside **Add it to the line**: it takes the first free station, ahead of the goals waiting. Goals in line never start by themselves: once a station is free, the first one shows **Start it**, with its words and effort ready to change first. A goal you write at a free station you walked up to (<kbd>E</kbd> on its door or screen) still starts there and then, ahead of any in line: you picked the station for it.
 
 Leads don't take one of the holodeck's two individual desks or count towards its agent limit (at most two: one per desk). They do count towards **Agents working at once** while they work: a message to a lead (or any agent) that has finished its turn waits for a free slot like anyone starting work.
+
+## The slice journal: a ship or a move that Focus cut off
+
+Each goal keeps a slice journal, `~/.focus/runs/slices/<lead id>.jsonl` (`server/agents/sliceJournal.ts`), like an agent's run journal ([agents](agents.md#the-run-journal-where-a-run-was-and-picking-up-after-a-restart)): numbered facts, each flushed to disk before the office acts on it (`Store.sliceJournal`), never rewritten. A ship and a slice's move to fresh code both happen on GitHub and on disk, where a crash can cut them off part way, so the journal says how far they got: `started` (the goal's first slice and its branch), `shipping` (the title and summary, written before anything's pushed), a `pr` for each pull request opened or updated (repo, number, commit, branch), `shipped`, or `ship-ended` when nothing shipped; `landed` as each pull request merges or closes; `moving` (the next slice, its branch, the checkouts that go and the commits that never shipped, decided before any checkout goes) and `moved`. What they add up to is a state machine's (`sliceMachine`, XState), drawn from its code (a test keeps this picture in step):
+
+<!-- slice-machine:start -->
+```mermaid
+---
+config:
+  layout: elk
+---
+stateDiagram-v2
+  direction LR
+  state "slice" as slice {
+    [*] --> slice_working
+    state "working" as slice_working
+    state "shipping" as slice_shipping
+    state "in-review" as slice_in_review
+    state "landed" as slice_landed
+    state "moving" as slice_moving
+  }
+  slice_working --> slice_shipping : shipping
+  slice_shipping --> slice_in_review : shipped
+  slice_shipping --> slice_in_review : ship-ended [pull requests open]
+  slice_shipping --> slice_working : ship-ended
+  slice_in_review --> slice_shipping : shipping
+  slice_in_review --> slice_landed : landed [every one landed]
+  slice_moving --> slice_working : moved
+  slice --> slice_working : started
+  slice --> slice_moving : moving
+  classDef final fill:#1d3320,stroke:#9fd39f,color:#e8e4d8
+```
+<!-- slice-machine:end -->
+
+**After a restart** (`Slices.recover`, before the leads' own runs are recovered; `sliceRecovery` decides):
+
+- a ship Focus cut off is shipped again by the office, with no Claude turn: each repo pushed again, its pull request found or opened, QA asked for it (every step is safe to repeat);
+- a move to fresh code Focus cut off is finished from what was decided: the old checkouts go, every repo is checked out on the new branch, and the commits that never shipped are brought over. A move a failed checkout left part way is finished the same way at the lead's next turn;
+- the lead's own turn then picks back up as any agent's does (on your plan, in the same conversation), and they hear what the office finished with it, or with your next message;
+- pull requests the saved state lost are put back from the journal, so the office notices them merge.

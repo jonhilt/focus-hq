@@ -9,7 +9,7 @@ import type { Agent, PermissionRequest, TermLine, WorkflowScript } from '../../.
 import { GitHub, type GitHubError } from '../../github/service';
 import { newId, truncate } from '../../util';
 import { step, turnEvent } from '../runMachine';
-import { applyHelperEvent, COMPACT_INSTRUCTIONS, compactInstructions, freshSessionPrompt, hasLeadWork, HELPER_LINGER_MS, leadSystemAppend, sliceLanded } from '../lead';
+import { applyHelperEvent, COMPACT_INSTRUCTIONS, compactInstructions, freshSessionPrompt, hasLeadWork, HELPER_LINGER_MS, leadSystemAppend } from '../lead';
 import { mismatchError, recovery, signInMismatch, turnEnding, type TurnKind } from '../runJournal';
 import { carryOnPrompt, conflictsPrompt, issuePrompt, systemAppend } from '../prompts';
 import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
@@ -371,10 +371,7 @@ export class AgentSessions extends Part {
       const rt = this.rt(agent.id);
       const review = agent.task === 'review';
       const lead = agent.task === 'lead' && hasLeadWork(agent) ? agent : undefined;
-      // the lead's last slice has landed: their repos move to fresh code before they hear anything else
-      if (lead && sliceLanded(lead.lead.prs)) prompt = `${yield* this.core.slices.nextSlice(lead)}\n\n${prompt}`;
-      // a move whose checkout failed left them with no repos (and nothing landed, so no move to retry): check them out again
-      else if (lead && !lead.lead.repos.length) prompt = `${yield* this.core.slices.reposBack(lead)}\n\n${prompt}`;
+      if (lead) prompt = [yield* this.core.slices.beforeTurn(lead), prompt].filter(Boolean).join('\n\n');
       // before marking them busy: the QA officer's instructions may need GitHub, and that can fail
       const instructions = yield* this.instructions(agent);
       rt.busy = true;
@@ -508,39 +505,43 @@ export class AgentSessions extends Part {
    * go back in their inbox, and a turn that was in flight is interrupted, then carries on in the same conversation where
    * `recovery` says so (on your plan, not the key: `onKey`), or waits for the captain to send a message.
    */
-  recover(onKey: boolean): void {
-    for (const agent of [...this.store.agents.values()]) {
-      const next = recovery(this.store.run(agent.id), agent, onKey);
-      if (next.kind === 'resume' || next.kind === 'wait') this.store.journal(agent.id, { kind: 'interrupted', turn: next.turn });
-      if (this.store.run(agent.id).owed.length) this.store.journal(agent.id, { kind: 'restored' });
-      // a cloud agent waiting for the captain to start its session waits as it was
-      if (next.kind === 'none' || agent.handover) continue;
-      if (next.kind === 'wait' || next.kind === 'hold') {
-        if (agent.status === 'stopped') this.update(agent, { activity: next.why });
-        continue;
-      }
-      if (next.kind === 'hold-again') {
-        this.core.planLimit.holdUntil(agent, next.until);
-        continue;
-      }
-      if (next.kind === 'deliver') {
-        // what they'd committed goes onto GitHub as it was going to: they aren't asked to commit anything more
-        this.rt(agent.id).nudged = true;
-        this.print(agent, [{ kind: 'system', text: '✻ Focus restarted while their work was going onto GitHub: finishing that' }]);
-        this.runFor(agent.id, this.core.delivery.deliver(agent, next.summary));
-        continue;
-      }
-      if (next.kind === 'requeue') {
-        this.print(agent, [{ kind: 'system', text: '✻ Focus restarted while they waited for a free slot: back in line' }]);
-        this.core.comms.pickUp(agent);
-        continue;
-      }
-      this.rt(agent.id).inbox.unshift(next.prompt);
-      if (agent.sessionId !== next.session) this.update(agent, { sessionId: next.session });
-      this.print(agent, [{ kind: 'system', text: '✻ Focus restarted part way through their turn: picking the conversation back up' }]);
-      this.core.comms.pickUp(agent);
-    }
+  recover(onKey: boolean, later: ReadonlySet<string> = new Set()): void {
+    for (const agent of [...this.store.agents.values()]) if (!later.has(agent.id)) this.recoverAgent(agent, onKey);
   }
+
+  /** Picks one agent's run back up after a restart, from their journal (`recovery`). */
+  recoverAgent(agent: Agent, onKey: boolean): void {
+    const next = recovery(this.store.run(agent.id), agent, onKey);
+    if (next.kind === 'resume' || next.kind === 'wait') this.store.journal(agent.id, { kind: 'interrupted', turn: next.turn });
+    if (this.store.run(agent.id).owed.length) this.store.journal(agent.id, { kind: 'restored' });
+    // a cloud agent waiting for the captain to start its session waits as it was
+    if (next.kind === 'none' || agent.handover) return;
+    if (next.kind === 'wait' || next.kind === 'hold') {
+      if (agent.status === 'stopped') this.update(agent, { activity: next.why });
+      return;
+    }
+    if (next.kind === 'hold-again') {
+      this.core.planLimit.holdUntil(agent, next.until);
+      return;
+    }
+    if (next.kind === 'deliver') {
+      // what they'd committed goes onto GitHub as it was going to: they aren't asked to commit anything more
+      this.rt(agent.id).nudged = true;
+      this.print(agent, [{ kind: 'system', text: '✻ Focus restarted while their work was going onto GitHub: finishing that' }]);
+      this.runFor(agent.id, this.core.delivery.deliver(agent, next.summary));
+      return;
+    }
+    if (next.kind === 'requeue') {
+      this.print(agent, [{ kind: 'system', text: '✻ Focus restarted while they waited for a free slot: back in line' }]);
+      this.core.comms.pickUp(agent);
+      return;
+    }
+    this.rt(agent.id).inbox.unshift(next.prompt);
+    if (agent.sessionId !== next.session) this.update(agent, { sessionId: next.session });
+    this.print(agent, [{ kind: 'system', text: '✻ Focus restarted part way through their turn: picking the conversation back up' }]);
+    this.core.comms.pickUp(agent);
+  }
+
 
   /** The office is shutting down: every agent's session stops, and their turns are left to carry on when it starts again. */
   shutDown(): void {

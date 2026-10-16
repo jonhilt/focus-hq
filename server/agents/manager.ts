@@ -97,10 +97,14 @@ export class AgentManager {
     return this.core.seating.busyOn(repo, number);
   }
 
-  /** After a restart: each QA review, then each agent's run, picks up from its journal (`Reviews.recover`, `AgentSessions.recover`). */
+  /**
+   * After a restart: each QA review, each lead's slice, then each agent's run picks up from its journal (`Reviews.recover`,
+   * `Slices.recover`, `AgentSessions.recover`).
+   */
   recover(): void {
     const rooms = this.core.reviews.recover(keyFallback.onKey());
-    this.core.sessions.recover(keyFallback.onKey());
+    const later = this.core.slices.recover(keyFallback.onKey());
+    this.core.sessions.recover(keyFallback.onKey(), later);
     for (const room of rooms) this.core.reviews.nextReview(room);
   }
 

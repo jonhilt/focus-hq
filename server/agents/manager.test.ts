@@ -776,7 +776,7 @@ describe('AgentManager', () => {
     expect(leads()[1].req.prompt).toMatch(/^Slice 2 starts on fresh code/);
   });
 
-  it('checks a lead’s repos out again on their next message when the move to a new slice couldn’t', async () => {
+  it('finishes the move to a new slice on their next message when its checkout failed', async () => {
     let failNext = false;
     const { agents, claude, store, project } = office({
       ...demoWorkspace,
@@ -807,7 +807,8 @@ describe('AgentManager', () => {
     const branch = store.agent(lead.id).branch;
     expect(store.agent(lead.id).lead!.repos.map((r) => r.repo)).toEqual(project.repos);
     const prompt = leads()[1].req.prompt;
-    expect(prompt).toMatch(/^\[Office\] Your repos are checked out again/);
+    expect(prompt).toMatch(/^Slice 2 starts on fresh code/);
+    expect(store.slice(lead.id)).toMatchObject({ phase: 'working', slice: 2, branch });
     expect(prompt).toContain(`- ./webshop-frontend: demo/webshop-frontend, on branch \`${branch}\``);
     expect(prompt).toContain('Carry on');
   });

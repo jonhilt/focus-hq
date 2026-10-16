@@ -62,6 +62,7 @@ export class Leads extends Part {
     };
     this.core.freshRuntime(id, text.trim());
     this.store.putAgent(agent);
+    this.store.sliceJournal(id, { kind: 'started', slice: 1, branch: agent.branch });
     this.hub.send({ type: 'agent', agent });
     this.print(agent, [
       { kind: 'system', text: `✻ ${crew.name} takes team station ${station + 1} to lead “${title}” across ${project.repos.join(', ')} (${effort} effort)` },
@@ -337,6 +338,7 @@ export class Leads extends Part {
     const lead = this.leadWith(repo, number);
     if (!lead?.lead) return false;
     const prs = lead.lead.prs.map((p) => (p.repo === repo && p.number === number ? { ...p, outcome: merged ? ('merged' as const) : ('closed' as const) } : p));
+    this.store.sliceJournal(lead.id, { kind: 'landed', repo, number, merged });
     this.update(lead, { lead: { ...lead.lead, prs, ...(sliceLanded(prs) && { waypoints: landedWaypoint(lead.lead, Date.now()) }) } });
     this.print(lead, [{ kind: merged ? 'success' : 'system', text: `${merged ? '🎉' : '✻'} ${repo}#${number} was ${merged ? 'merged' : 'closed'}` }]);
     if (sliceLanded(prs)) {
