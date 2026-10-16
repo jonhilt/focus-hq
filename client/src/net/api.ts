@@ -1,5 +1,5 @@
 import { callerOf, FLOW_FROM_HEADER, FLOWS_PARAM } from '../../../shared/flows';
-import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ResumeHow, RoomTheme, Settings, StudioSession, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
+import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ReplayStep, ResumeHow, RoomTheme, Settings, StudioSession, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
 import type { Scenario } from '../../../shared/scenarios';
@@ -92,6 +92,8 @@ export const api = {
   hire: (projectId: string, issue: Issue, effort?: Effort, cloud?: boolean) =>
     call<Agent>('POST', '/agents', { projectId, repo: issue.repo, number: issue.number, title: issue.title, url: issue.url, effort, cloud }),
   lines: (id: string) => call<TermLine[]>('GET', `/agents/${id}/lines`),
+  /** An agent's run journal replayed: each fact in words, and where the run was after it. */
+  run: (id: string) => call<ReplayStep[]>('GET', `/agents/${id}/run`),
   /** The tail of what a lead's background command (or monitor) has written, read again each call. */
   backgroundOutput: (leadId: string, taskId: string) => call<Omit<TermLine, 't'>[]>('GET', `/agents/${leadId}/background/${encodeURIComponent(taskId)}/output`),
   /** Stops it, and tells the lead; `stopped` is false when the lead's session can't be asked. */

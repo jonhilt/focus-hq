@@ -111,6 +111,19 @@ describe('a run after Focus restarts', () => {
     expect(before.store.run(id).delivery).toBeUndefined();
   });
 
+  it('keeps the demo’s journal in memory, for a replay', async () => {
+    const { agents, claude, project, store } = office();
+    const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue);
+    await until(() => claude.turns.length === 1);
+    claude.turns[0].end({ ok: true, summary: 'Dark mode' });
+    await until(() => store.agent(id).status === 'done');
+    const kinds = store.journalEntries(id).map((e) => e.kind);
+    expect(kinds.slice(0, 2)).toEqual(['waiting', 'setting-up']);
+    expect(kinds).toContain('turn-requested');
+    expect(kinds.at(-1)).toBe('delivered');
+    expect(store.journalEntries(id).map((e) => e.seq)).toEqual(kinds.map((_, i) => i + 1));
+  });
+
   it('puts an agent who was waiting for a free slot back in line', async () => {
     const before = office();
     before.project.maxAgents = 1;

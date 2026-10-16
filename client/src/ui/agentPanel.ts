@@ -18,6 +18,7 @@ import { busy, fill, h, timeAgo } from './dom';
 import { closeGoal, CONTEXT_TONE, EFFORT_HINT, noteView, prLink, reviewing, tasksView } from './goals';
 import { type NavItem, readout, shownView, SideNav } from './panels';
 import { messageAgent } from './resume';
+import { RunReplay } from './runReplay';
 import { TermView } from './terminal';
 
 const AUTONOMY_HINT: Record<Autonomy, string> = {
@@ -29,7 +30,7 @@ const AUTONOMY_HINT: Record<Autonomy, string> = {
 const FINISHED = ['done', 'error', 'stopped'];
 
 /** What the right of an agent's panel can show beside their terminal, picked from its sidebar. */
-export type AgentView = 'browser' | 'goal' | 'tasks' | 'crew';
+export type AgentView = 'browser' | 'goal' | 'tasks' | 'crew' | 'run';
 type View = AgentView;
 
 const HELPER_TONE: Record<Helper['status'], string> = { working: LCARS.sky, done: LCARS_STATUS.done, failed: LCARS.red };
@@ -49,6 +50,8 @@ function views(a: Agent, frame: BrowserFrame | undefined): NavItem<View>[] {
     lead && { key: 'goal', label: 'Goal', readout: slice.length ? `${slice.filter((i) => i.done).length}/${slice.length}` : '' },
     { key: 'tasks', label: 'Tasks', readout: tasks.length ? `${tasks.filter((t) => t.status === 'completed').length}/${tasks.length}` : '', standby: !tasks.length },
     lead && { key: 'crew', label: 'Crew', readout: crew ? String(crew) : '', standby: !crew },
+    // the run's journal, replayed: there whenever it has one, shown once picked
+    { key: 'run', label: 'Run', readout: a.run ? `#${a.run.seq}` : '', standby: !a.run, onDemand: true },
   ];
   return items.filter((i) => i !== false);
 }
@@ -70,7 +73,8 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
   const browserCanvas = h('canvas', { width: 640, height: 420 });
   const browser = h('div', { class: 'pane browser-view' }, browserBar, browserImg, browserCanvas);
   const info = h('div', { class: 'pane' });
-  const grid = h('div', { class: 'agent-grid' }, terminal, browser, info);
+  const replay = new RunReplay(id);
+  const grid = h('div', { class: 'agent-grid' }, terminal, browser, info, replay.el);
   const ask = h('div');
   const readouts = h('div', { class: 'readouts' });
   const closing = h('div');
@@ -251,8 +255,11 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
     nav.show(items, view);
     grid.classList.toggle('single', !view);
     browser.style.display = view === 'browser' ? '' : 'none';
-    info.style.display = view && view !== 'browser' ? '' : 'none';
-    if (!view || view === 'browser') return;
+    replay.el.style.display = view === 'run' ? '' : 'none';
+    info.style.display = view && view !== 'browser' && view !== 'run' ? '' : 'none';
+    // the replay keeps its place on the scrubber: it reads the journal again only when there's more of it
+    if (view === 'run') replay.show(a.run?.seq ?? 0, ui.error);
+    if (!view || view === 'browser' || view === 'run') return;
     const next = view === 'goal' ? goalView(a) : view === 'tasks' ? tasksView(a.tasks) : crewView(a);
     // what hasn't changed stays put, so a click on it isn't lost to a redraw
     if (info.childElementCount === 1 && info.firstElementChild?.isEqualNode(next)) return;

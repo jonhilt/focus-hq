@@ -5,6 +5,7 @@ import { isAutonomy } from '../shared/autonomy';
 import { closedGoals } from '../shared/ledger';
 import { ledgerWindow } from '../shared/ledgerReview';
 import { isKokoroVoice } from '../shared/voice';
+import { replay } from './agents/runJournal';
 import { paths } from './config';
 import { appendFrameStats } from './frameStats';
 import type { Office } from './office';
@@ -175,6 +176,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
   ));
   r.delete('/projects/:id/goals/queue/:qid', h((req) => office.agents.dropQueued(param(req, 'id'), param(req, 'qid'))));
   r.get('/agents/:id/lines', h((req) => store.allLines(param(req, 'id'))));
+  r.get('/agents/:id/run', h((req) => replay(store.journalEntries(param(req, 'id')))));
   r.get('/agents/:id/background/:task/output', h((req) => office.agents.backgroundOutput(param(req, 'id'), param(req, 'task'))));
   r.post('/agents/:id/background/:task/stop', h((req) => office.agents.stopBackground(param(req, 'id'), param(req, 'task'))));
   r.get('/agents/:id/workflows/:workflow/script', h((req) => office.agents.workflowScript(param(req, 'id'), param(req, 'workflow'))));

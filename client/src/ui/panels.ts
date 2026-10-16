@@ -119,6 +119,8 @@ export interface NavItem<K extends string> {
   readout?: string;
   /** Nothing to show there right now: dimmed, and can't be picked. */
   standby?: boolean;
+  /** Shown only once picked: never the view a panel opens on by itself. */
+  onDemand?: boolean;
 }
 
 /**
@@ -214,6 +216,6 @@ export class Switch {
 
 /** The view to show: the one picked, while it has something to show; otherwise the first that does. */
 export function shownView<K extends string>(items: readonly NavItem<K>[], picked: K | undefined): K | undefined {
-  const live = items.filter((i) => !i.standby);
+  const live = items.filter((i) => !i.standby && (!i.onDemand || i.key === picked));
   return (live.find((i) => i.key === picked) ?? live[0])?.key;
 }

@@ -29,6 +29,16 @@ export interface RunView {
   pr?: number;
 }
 
+/** One fact of an agent's run journal as a replay shows it: what happened, in words, and where the run was after it. */
+export interface ReplayStep {
+  seq: number;
+  /** When it was journaled. */
+  t: number;
+  kind: string;
+  fact: string;
+  run: RunView;
+}
+
 export const ACTIVE_STATUSES: AgentStatus[] = ['setting-up', 'working', 'testing', 'waiting', 'pushing'];
 
 export type TermKind = 'system' | 'text' | 'thinking' | 'tool' | 'output' | 'error' | 'success' | 'manager';

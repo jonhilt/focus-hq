@@ -87,6 +87,9 @@ const PROJECT_COLORS = ['#ff8a5b', '#5bc0eb', '#9bc53d', '#c879ff', '#fde74c', '
 
 const MEMORY_LINES = 400;
 
+/** How many facts of each agent's run journal the demo keeps in memory, for a replay. */
+const JOURNAL_MEMORY = 2000;
+
 /** Projects, agents and settings, saved to data/state.json. Terminal output goes to data/logs/<agent>.jsonl. */
 export class Store {
   settings: Settings = { ...DEFAULT_SETTINGS };
@@ -115,6 +118,8 @@ export class Store {
   private saveTimer: NodeJS.Timeout | null = null;
   /** What each agent's run journal adds up to, by agent id (data/runs/<agent>.jsonl, `journal`). */
   private runs = new Map<string, RunState>();
+  /** Each agent's journal itself, when it isn't saved to disk (the demo): the last JOURNAL_MEMORY facts. */
+  private journals = new Map<string, JournalEntry[]>();
 
   constructor(private readonly persist: boolean) {}
 
@@ -404,6 +409,12 @@ export class Store {
         fs.closeSync(fd);
       }
     }
+    if (!this.persist) {
+      const kept = this.journals.get(id) ?? [];
+      kept.push(entry);
+      if (kept.length > JOURNAL_MEMORY) kept.splice(0, kept.length - JOURNAL_MEMORY);
+      this.journals.set(id, kept);
+    }
     const after = evolve(before, entry);
     this.runs.set(id, after);
     const agent = this.agents.get(id);
@@ -417,6 +428,16 @@ export class Store {
 
   /** Told of each agent whose run moved on: the office sends them to every browser. */
   journaled?: (agent: Agent) => void;
+
+  /** The agent's run journal, oldest first: its file, or what's kept of it in memory. */
+  journalEntries(id: string): JournalEntry[] {
+    if (!this.persist) return [...(this.journals.get(id) ?? [])];
+    try {
+      return readJournal(fs.readFileSync(path.join(paths.runs, `${id}.jsonl`), 'utf8')).entries;
+    } catch {
+      return [];
+    }
+  }
 
   /** What the agent's run journal adds up to. */
   run(id: string): RunState {

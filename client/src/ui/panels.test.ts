@@ -19,6 +19,12 @@ describe('shownView', () => {
     expect(shownView(items(['tasks']), 'tasks')).toBe('browser');
   });
 
+  it('never opens on a view shown on demand, but shows it once picked', () => {
+    const withRun = [...items(['browser', 'goal', 'tasks']), { key: 'run', label: 'Run', onDemand: true }] as NavItem<View | 'run'>[];
+    expect(shownView(withRun, undefined)).toBeUndefined();
+    expect(shownView(withRun, 'run')).toBe('run');
+  });
+
   it('shows nothing when every view is on standby', () => {
     expect(shownView(items(['browser', 'goal', 'tasks']), 'goal')).toBeUndefined();
   });

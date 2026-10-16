@@ -1,5 +1,5 @@
 import { assign, setup, type StateValue, transition } from 'xstate';
-import type { RunView } from '../../shared/types';
+import type { ReplayStep, RunView } from '../../shared/types';
 import type { Target } from './runMachine';
 
 // An agent's run journal, pure: the facts the office records about a run (data/runs/<agent>.jsonl), what they add up
@@ -418,4 +418,57 @@ export function readJournal(text: string): { entries: JournalEntry[]; goodBytes:
     }
   }
   return { entries, goodBytes };
+}
+
+/** A line of text cut to `n` characters, on one line. */
+const brief = (text: string, n = 120): string => {
+  const line = text.replace(/\s+/g, ' ').trim();
+  return line.length > n ? `${line.slice(0, n - 1)}…` : line;
+};
+
+/** How a turn ended, in words. */
+const ending = (o: TurnEnding): string =>
+  o.ok ? 'Turn ended' : o.limited ? "Turn stopped by your plan's usage limit" : o.aborted ? 'Turn stopped' : `Turn failed: ${brief(o.error ?? 'no reason given')}`;
+
+/** Each fact, in words, for a replay. */
+const FACT_LINES: { [K in RunFact['kind']]: (fact: Extract<RunFact, { kind: K }>) => string } = {
+  queued: (f) => `Message for them${f.at === 'later' ? ', once the turn ends' : f.at === 'front' ? ', first' : ''}: ${brief(f.text)}`,
+  released: () => 'What waited for the turn to end joins the inbox',
+  taken: (f) => (f.turn ? 'Messages sent into the turn' : 'Messages taken into the next prompt'),
+  sent: (f) => `Sent into the turn: ${brief(f.text)}`,
+  'stop-requested': () => 'The captain stopped the turn',
+  reset: () => 'Sent home: a new run starts from nothing',
+  restored: () => 'Messages put back in the inbox after a restart',
+  cleared: () => 'Messages dropped, unheard',
+  'turn-requested': (f) => `${f.turnKind === 'compact' ? 'Compaction' : 'Turn'} asked for, ${f.resumes ? 'in the same conversation' : 'in a new conversation'}: ${brief(f.prompt)}`,
+  'signed-in': (f) => `Signs in with ${f.onKey ? 'your API key' : 'your plan'}`,
+  'turn-started': (f) => `Claude Code has it: session ${f.session.slice(0, 8)}${f.keySource ? `, credential from ${f.keySource}` : ''}`,
+  'turn-ended': (f) => ending(f.outcome),
+  'sign-in-mismatch': (f) => `Claude Code signed in with ${f.observed} when the office meant your plan: stopped`,
+  interrupted: () => 'Found cut off when Focus started again',
+  waiting: () => 'Waiting for a free slot',
+  'setting-up': () => 'Setting up',
+  decided: (f) => `What follows: ${f.target}`,
+  delivering: () => 'Putting the work on GitHub',
+  pushed: () => 'The branch is on GitHub',
+  delivered: (f) => (f.pr ? `Pull request #${f.pr} ready` : f.outcome === 'nothing-fixed' ? 'Nothing to deliver: the fix changed nothing' : 'Nothing to deliver: no commits'),
+  'delivery-failed': (f) => `Couldn't put the work on GitHub: ${brief(f.error)}`,
+  asked: (f) => `Hand up: approval for ${brief(f.summary)}`,
+  answered: (f) => (f.dropped ? 'Hand down: the turn ended first' : f.allow ? 'The captain approved' : 'The captain declined'),
+  held: () => "On hold until your plan's usage limit resets",
+  unheld: () => 'Off hold',
+};
+
+/** A fact, in words. */
+export function factLine(fact: RunFact): string {
+  return (FACT_LINES[fact.kind] as (f: RunFact) => string)(fact);
+}
+
+/** A run's journal replayed: each fact in words, and where the run was after it (folded through `journalMachine`). */
+export function replay(entries: readonly JournalEntry[]): ReplayStep[] {
+  let state = EMPTY_RUN;
+  return entries.map((entry) => {
+    state = evolve(state, entry);
+    return { seq: entry.seq, t: entry.t, kind: entry.kind, fact: factLine(entry), run: runView(state) };
+  });
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { evolve, fold, INTERRUPTED_ACTIVITY, journalLine, readJournal, recovery, RESUMED_NOTE, type RunFact, runView, signInMismatch } from './runJournal';
+import { evolve, factLine, fold, INTERRUPTED_ACTIVITY, journalLine, readJournal, recovery, replay, RESUMED_NOTE, type RunFact, runView, signInMismatch } from './runJournal';
 
 const requested = (turn: string, prompt = 'Fix the flaky test', resumes?: string): RunFact => ({ kind: 'turn-requested', turn, turnKind: 'work', prompt, resumes });
 const issue = { task: 'issue' };
@@ -218,5 +218,48 @@ describe('a raised hand and a hold in the journal', () => {
     const held = fold([{ kind: 'held', until: 5000 }]);
     expect(recovery(held, { task: 'lead', sessionId: 's1' }, true)).toEqual({ kind: 'hold-again', until: 5000 });
     expect(recovery(held, { task: 'review' }, false)).toEqual({ kind: 'none' });
+  });
+});
+
+describe('replay', () => {
+  it('tells each fact in words, with where the run was after it', () => {
+    const facts: RunFact[] = [
+      { kind: 'queued', text: 'Fix   the\nflaky test', at: 'end' },
+      { kind: 'taken' },
+      requested('t1', 'Fix the flaky test'),
+      { kind: 'signed-in', turn: 't1', onKey: false },
+      { kind: 'turn-started', turn: 't1', session: 'session-1234abcd', keySource: 'none' },
+      { kind: 'asked', turn: 't1', tool: 'Bash', summary: 'npm publish' },
+      { kind: 'answered', turn: 't1', allow: true },
+      { kind: 'turn-ended', turn: 't1', outcome: { ok: true } },
+      { kind: 'decided', turn: 't1', target: 'deliver' },
+      { kind: 'delivering', turn: 't1', summary: 'Flaky test fixed' },
+      { kind: 'pushed', turn: 't1' },
+      { kind: 'delivered', turn: 't1', outcome: 'pr', pr: 412 },
+    ];
+    const steps = replay(facts.map((f, i) => ({ v: 1, seq: i + 1, t: 1000 + i, ...f })));
+    expect(steps.map((s) => [s.seq, s.run.phase, s.fact])).toEqual([
+      [1, 'idle', 'Message for them: Fix the flaky test'],
+      [2, 'idle', 'Messages taken into the next prompt'],
+      [3, 'turn.requested', 'Turn asked for, in a new conversation: Fix the flaky test'],
+      [4, 'turn.requested', 'Signs in with your plan'],
+      [5, 'turn.started', 'Claude Code has it: session session-, credential from none'],
+      [6, 'turn.asking', 'Hand up: approval for npm publish'],
+      [7, 'turn.started', 'The captain approved'],
+      [8, 'ended', 'Turn ended'],
+      [9, 'ended', 'What follows: deliver'],
+      [10, 'delivering.pushing', 'Putting the work on GitHub'],
+      [11, 'delivering.opening', 'The branch is on GitHub'],
+      [12, 'delivered', 'Pull request #412 ready'],
+    ]);
+    expect(steps[11]).toMatchObject({ t: 1011, kind: 'delivered', run: { turns: 1, target: 'deliver', pr: 412 } });
+  });
+
+  it('says how a turn ended, and why a delivery didn’t happen', () => {
+    expect(factLine({ kind: 'turn-ended', turn: 't', outcome: { ok: false, limited: true } })).toBe("Turn stopped by your plan's usage limit");
+    expect(factLine({ kind: 'turn-ended', turn: 't', outcome: { ok: false, error: 'npm exploded' } })).toBe('Turn failed: npm exploded');
+    expect(factLine({ kind: 'delivered', turn: 't', outcome: 'no-commits' })).toBe('Nothing to deliver: no commits');
+    expect(factLine({ kind: 'answered', turn: 't', allow: false, dropped: true })).toBe('Hand down: the turn ended first');
+    expect(factLine({ kind: 'queued', text: 'x'.repeat(200), at: 'later' })).toMatch(/^Message for them, once the turn ends: x{119}…$/);
   });
 });
