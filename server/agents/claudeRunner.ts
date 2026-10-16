@@ -205,8 +205,9 @@ export function toolPermission(
  * limit is reached.
  */
 export function agentEnv(onKey = keyFallback.onKey()): Record<string, string | undefined> {
-  // Claude Code's task tools (TaskCreate, TaskUpdate, TaskList), which a session only has when asked for: the office
-  // follows each agent's task list (`tasks.ts`), and draws a lead's on its goal's chart
+  // Claude Code's task tools (TaskCreate, TaskUpdate, TaskList): on newer models a session only has them when asked
+  // for, which the SDK's docs advise when the app reads them, as the office does: it follows each agent's task list
+  // (`tasks.ts`), and draws a lead's on its goal's chart
   const env: Record<string, string | undefined> = { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: 'focus/0.1.0', CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' };
   if (!onKey) delete env.ANTHROPIC_API_KEY;
   return env;

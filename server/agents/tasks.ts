@@ -10,6 +10,10 @@ const STATUSES: ClaudeTask['status'][] = ['pending', 'in_progress', 'completed']
 const status = (v: unknown, fallback: ClaudeTask['status']): ClaudeTask['status'] => STATUSES.find((s) => s === v) ?? fallback;
 const text = (v: unknown): string => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : '');
 const record = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
+// the input as the model sent it: Claude Code repairs `id`/`task_id` and `active_form` before it runs the tool, but the
+// stream carries them unrepaired
+const taskId = (input: Record<string, unknown>) => text(input.taskId) || text(input.id) || text(input.task_id);
+const activeForm = (input: Record<string, unknown>) => text(input.activeForm) || text(input.active_form) || undefined;
 
 /**
  * The task list after one call to a task tool: `input` is what the agent sent, `result` the tool's structured output
@@ -31,10 +35,10 @@ export function applyTaskTool(tasks: ClaudeTask[], name: string, input: Record<s
       const id = text(created.id) || /#(\d+)/.exec(resultText)?.[1];
       const subject = text(input.subject) || text(created.subject);
       if (!id || !subject || tasks.some((t) => t.id === id)) return tasks;
-      return [...tasks, { id, subject, status: 'pending', activeForm: text(input.activeForm) || undefined }];
+      return [...tasks, { id, subject, status: 'pending', activeForm: activeForm(input) }];
     }
     case 'TaskUpdate': {
-      const id = text(input.taskId);
+      const id = taskId(input);
       const task = tasks.find((t) => t.id === id);
       if (!task || record(result).success === false) return tasks;
       if (input.status === 'deleted') return tasks.filter((t) => t !== task);
@@ -42,7 +46,7 @@ export function applyTaskTool(tasks: ClaudeTask[], name: string, input: Record<s
         ...task,
         subject: text(input.subject) || task.subject,
         status: status(input.status, task.status),
-        activeForm: text(input.activeForm) || task.activeForm,
+        activeForm: activeForm(input) ?? task.activeForm,
       };
       return tasks.map((t) => (t === task ? next : t));
     }

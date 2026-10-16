@@ -38,6 +38,9 @@ describe('applyTaskTool', () => {
     expect(applyTaskTool(list, 'TaskUpdate', { taskId: '1', subject: 'Read it all' })[0].subject).toBe('Read it all');
     expect(applyTaskTool(list, 'TaskUpdate', { taskId: '1', status: 'deleted' })).toEqual([list[1]]);
     expect(applyTaskTool(list, 'TaskUpdate', { taskId: '9', status: 'completed' })).toBe(list);
+    // the stream carries the model's key names before Claude Code repairs them
+    expect(applyTaskTool(list, 'TaskUpdate', { id: '1', status: 'in_progress', active_form: 'Reading' })[0]).toMatchObject({ status: 'in_progress', activeForm: 'Reading' });
+    expect(applyTaskTool(list, 'TaskUpdate', { task_id: '2', status: 'completed' })[1].status).toBe('completed');
     expect(applyTaskTool(list, 'TaskUpdate', { taskId: '2', status: 'completed' }, { success: false })).toBe(list);
   });
 
