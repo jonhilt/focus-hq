@@ -132,7 +132,8 @@ export class Hud {
       h('div', { class: 'stat' }, `👀 ${prs} PR${prs === 1 ? '' : 's'}`),
       previews ? h('div', { class: 'stat' }, `▶ ${previews} preview${previews === 1 ? '' : 's'}`) : null,
       // your plan's usage, wherever you are on the ship (the engineering panel has the detail)
-      plan ? h('div', { class: `stat usage ${plan.tone}`, title: 'Your Claude plan’s usage' }, `◔ ${plan.text}`) : null,
+      // (class "plan", not "usage": .usage is the engineering panel's box, and its margin pushed this pill up)
+      plan ? h('div', { class: `stat plan ${plan.tone}`, title: 'Your Claude plan’s usage' }, `◔ ${plan.text}`) : null,
       // whatever waits on the captain, anywhere on the ship: C opens Comms to answer it
       h('div', { class: `comms-badge${hails ? ' hailing' : ''}`, title: hails ? `${hails} waiting on you: press C` : 'Nobody is waiting on you' },
         h('span', null, 'Comms'), h('b', null, hails), h('kbd', null, 'C')),
