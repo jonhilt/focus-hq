@@ -131,6 +131,9 @@ steps:
 A scene without `steps:` gets start the goal, answer, approve, merge. The steps live in the page: reloading it, or
 picking another scenario, starts over.
 
+To record while you play, **H** hides the pill, the HUD and every toast but errors (`?record=1` starts that way), and
+**H** again brings them back; the keys still work while they're hidden.
+
 ## The holodeck stage
 
 `pnpm run studio --stage delegation` films a **shot plan** on an empty holodeck instead of the busy ship: only what the

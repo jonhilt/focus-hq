@@ -132,6 +132,10 @@ async function main() {
   const studio = params.get('studio') === '1' ? new Studio(world, player, hud, params.get('stage')) : null;
   // the training console's steps: ] does the captain's next move, [ steps back (ui/trainingSteps.ts)
   const steps = new TrainingSteps((message) => ui.error(message));
+  // recording: H (or ?record=1) hides what's only there to drive the ship (the HUD, training's steps, all but errors'
+  // toasts), so a video shows the office and nothing else
+  const record = (on: boolean) => document.body.classList.toggle('recording', on);
+  record(params.get('record') === '1');
 
   // ---------------------------------------------------------------- ui wiring
   const ui: Ui = {
@@ -690,6 +694,7 @@ async function main() {
         if (world.locationOf(camera.position).label === 'Studio') ui.openStudio();
       },
       KeyC: () => ui.openComms(),
+      KeyH: () => record(!document.body.classList.contains('recording')),
       KeyJ: () => ui.openLog(),
       // the goals of the holodeck you're in; anywhere else, every goal's in Comms
       KeyL: () => {

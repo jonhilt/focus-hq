@@ -861,6 +861,7 @@ select.effort { width: auto; padding: 2px 6px; border-radius: 10px; font-size: 1
 
 /* the TV studio (?studio=1, ui/studio.ts): no HUD, a caption across the bottom and tags over the crew's heads */
 body.studio .hud, body.studio .toasts { display: none; }
+body.recording .hud, body.recording .training-steps, body.recording .toast:not(.error) { display: none; }
 .studio-caption {
   position: fixed; left: 6vw; right: 6vw; bottom: 5vh; z-index: 5; padding: 18px 28px 20px;
   background: #000d; border-left: 28px solid var(--lcars-orange); border-radius: 40px 12px 12px 40px;
