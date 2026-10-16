@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Waypoint } from '../../../shared/types';
-import { labelBox, overlaps, plotCourse } from './course';
+import { labelBox, misread, overlaps, plotCourse } from './course';
 import { faults, NO_FAULTS } from './legibility';
 import { chartLines, chartMarks, column, freeAngles, gather, ORBIT, quiet, sky, sliceWork, type WorkNode } from './constellation';
 
@@ -147,5 +147,35 @@ describe('a chart held to the rules', () => {
     const { bounds } = sky(plot, workOf, 2, 0.5, 17).column!;
     const name = labelBox(p.label!, p.lines, 17);
     expect(bounds.x0 <= name.x0 && bounds.y0 <= name.y0 && bounds.x1 >= name.x1 && bounds.y1 >= name.y1).toBe(true);
+  });
+});
+
+describe('counts out of focus', () => {
+  it('sits nearer its own waypoint than any other, or is left off where it can’t', () => {
+    const near = [{ x: 140, y: 100 }];
+    const q = quiet({ x: 100, y: 100 }, 5, [], [], [], 1, near)!;
+    expect(Math.hypot(q.x - 100, q.y - 100)).toBeLessThan(Math.hypot(q.x - 140, q.y - 100));
+    // hemmed in by waypoints all round, closer than its count would sit
+    const round = Array.from({ length: 8 }, (_, i) => ({ x: 100 + Math.cos((i * Math.PI) / 4) * 40, y: 100 + Math.sin((i * Math.PI) / 4) * 40 }));
+    expect(quiet({ x: 100, y: 100 }, 5, [], [], [], 1, round)).toBeUndefined();
+  });
+
+  it('is left off once zoomed out past the frame, where its number would be mistaken for a waypoint’s', () => {
+    const many = Array.from({ length: 14 }, (_, i): Waypoint => ({ slice: i + 1, startedAt: i, landedAt: i + 1, title: `Slice ${i + 1}`, tasks: [{ id: `${i}`, subject: 'x', status: 'completed' }] }));
+    const work = (slice: number) => sliceWork({ waypoint: many[slice - 1], artifacts: [], questions: [], prs: [], flying: new Set() });
+    expect(sky(plotCourse({ waypoints: many, next: [], seed: 'whole' }, 2.5, true, 2.5), work, undefined, 2.5, 17 * 2.5).quiet.size).toBe(0);
+    expect(sky(plotCourse({ waypoints: many, next: [], seed: 'whole' }, 1, true), work, undefined, 1, 17).quiet.size).toBeGreaterThan(0);
+  });
+
+  it('labels nothing as another waypoint’s on a long voyage seen at the frame’s size', () => {
+    const many = Array.from({ length: 14 }, (_, i): Waypoint => ({ slice: i + 1, startedAt: i, landedAt: i + 1, title: `Slice ${i + 1}`, tasks: [{ id: `${i}`, subject: 'x', status: 'completed' }] }));
+    const plot = plotCourse({ waypoints: many, next: [], seed: 'whole' }, 1, true);
+    const heavens = sky(plot, (slice) => sliceWork({ waypoint: many[slice - 1], artifacts: [], questions: [], prs: [], flying: new Set() }), undefined, 1, 17);
+    expect(heavens.quiet.size).toBeGreaterThan(0);
+    for (const [slice, q] of heavens.quiet) {
+      const own = plot.points[slice - 1];
+      const box = { x0: q.x - 10 * plot.marks, y0: q.y - 10 * plot.marks, x1: q.x + 10 * plot.marks, y1: q.y + 10 * plot.marks };
+      expect(misread(box, own, plot.points.filter((p) => p !== own)), `waypoint ${slice}`).toBe(false);
+    }
   });
 });

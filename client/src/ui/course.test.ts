@@ -224,6 +224,9 @@ describe('chart helpers', () => {
   it('clips at a word', () => {
     expect(clip('Show it in the header', 100)).toBe('Show it in the header');
     expect(clip('Show it in the header', 12)).toBe('Show it in…');
+    // never mid-word, unless the first word alone won't fit
+    expect(clip('Crew voices run on the GPU', 9)).toBe('Crew…');
+    expect(clip('Extraordinarily long', 9)).toBe('Extraord…');
   });
 
   it('repeats its random numbers for a seed', () => {
@@ -350,5 +353,20 @@ describe('whose name is whose', () => {
       }
     }
     expect(misnamed).toEqual([]);
+  });
+});
+
+describe('marks zoomed out', () => {
+  it('keeps every label clear of marks drawn bigger, so they stay big enough to see', () => {
+    const waypoints = Array.from({ length: 14 }, (_, i) => wp(i + 1, { title: `Slice ${i + 1} of a voyage that runs on` }));
+    const contacts = [{ id: 'c1', text: 'A loose thread', slice: 3, at: 0 }, { id: 'c2', text: 'Another one', slice: 9, at: 0 }];
+    for (const zoom of [0.8, 0.5, 0.35]) {
+      const plot = plotCourse({ waypoints, current: 14, next: ['What next'], contacts, seed: 'zoomed out' }, 1 / zoom, true, 1 / zoom);
+      expect(plot.marks).toBeCloseTo(1 / zoom);
+      const sq = (p: { x: number; y: number }, r: number) => ({ x0: p.x - r, y0: p.y - r, x1: p.x + r, y1: p.y + r });
+      const marks = [...plot.points.map((p) => sq(p, 12 * plot.marks)), ...plot.contacts.map((c) => sq(c, 7 * plot.marks)), ...plot.projected.map((p) => sq(p.to, 5 * plot.marks)), sq(plot.launch, 6 * plot.marks)];
+      const clashes = labelsOf(plot).flatMap((l) => marks.filter((m) => overlaps(l, m)));
+      expect(clashes, `at ${zoom}`).toEqual([]);
+    }
   });
 });

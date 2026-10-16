@@ -70,6 +70,8 @@ export interface CoursePlot {
   scrubbed: Scrubbed[];
   projected: Projected[];
   contacts: PlottedContact[];
+  /** How many times its usual size each mark is drawn (bigger zoomed out, so it stays big enough to see), which the layout kept clear for. */
+  marks: number;
   /** How big each kind of label is drawn, which the layout kept clear for: `LABEL_SIZE` times the plot's scale. */
   sizes: Record<keyof typeof LABEL_SIZE, number>;
 }
@@ -209,14 +211,14 @@ function along(a: Pt, b: Pt, r = 3): Box[] {
 
 /**
  * A label for something at `at`: to its right, unless that would run into the objective or off the chart, then to
- * its left, and failing that, under it.
+ * its left, and failing that, under it, `gap` from it.
  */
-export function clearOf(objective: Pt & { r: number }, at: Pt, textWidth: number, width: number): Label {
+export function clearOf(objective: Pt & { r: number }, at: Pt, textWidth: number, width: number, gap = 12): Label {
   const hits = (x0: number, x1: number, y: number) => x1 > objective.x - objective.r && x0 < objective.x + objective.r && Math.abs(y - objective.y) < objective.r + 8;
   const y = at.y + 5;
-  if (!hits(at.x + 12, at.x + 12 + textWidth, y) && at.x + 12 + textWidth < width - 8) return { x: at.x + 12, y, anchor: 'start' };
-  if (!hits(at.x - 12 - textWidth, at.x - 12, y) && at.x - 12 - textWidth > 8) return { x: at.x - 12, y, anchor: 'end' };
-  return { x: at.x, y: at.y + 24, anchor: at.x > width / 2 ? 'end' : 'start' };
+  if (!hits(at.x + gap, at.x + gap + textWidth, y) && at.x + gap + textWidth < width - 8) return { x: at.x + gap, y, anchor: 'start' };
+  if (!hits(at.x - gap - textWidth, at.x - gap, y) && at.x - gap - textWidth > 8) return { x: at.x - gap, y, anchor: 'end' };
+  return { x: at.x, y: at.y + gap * 2, anchor: at.x > width / 2 ? 'end' : 'start' };
 }
 
 /** A repeatable random sequence from a string: each goal's course always meanders the same way. */
@@ -243,12 +245,12 @@ export function wrap(text: string, max: number, lines = 2): string[] {
   return [...out, clip(rest, max)];
 }
 
-/** Cut to `max` characters at a word, with an ellipsis. */
+/** Cut to `max` characters at a word, with an ellipsis: mid-word only when the first word alone is too long. */
 export function clip(text: string, max: number): string {
   if (text.length <= max) return text;
   const cut = text.slice(0, max - 1);
   const word = cut.lastIndexOf(' ');
-  return `${(word > max / 2 ? cut.slice(0, word) : cut).replace(/[\s,;:.]+$/, '')}…`;
+  return `${(word > 0 ? cut.slice(0, word) : cut).replace(/[\s,;:.]+$/, '')}…`;
 }
 
 /** A smooth SVG path through the points (Catmull-Rom, as cubic Béziers). */
@@ -282,7 +284,7 @@ export function chartSize(n: number, grow: boolean): { width: number; height: nu
 
 /**
  * Lays the voyage out on a chart of `chartSize`, its labels `scale` times `LABEL_SIZE` (bigger on the briefing
- * room's wall). Waypoints step along the line from the launch point to the objective, never reaching it (how far is left
+ * room's wall), its marks `marks` times their usual size. Waypoints step along the line from the launch point to the objective, never reaching it (how far is left
  * is anyone's guess), each drifting a little to one side of it; after a course correction the course swings over to the
  * other side, and the old heading carries on from the turn, scrubbed.
  *
@@ -292,7 +294,7 @@ export function chartSize(n: number, grow: boolean): { width: number; height: nu
  * read as that one's, so it goes without); one with no clear spot left goes without (its name's still on hover), so
  * on a long voyage the oldest waypoints are the ones that shrink to their numbers.
  */
-export function plotCourse(voyage: Voyage, scale = 1, grow = false): CoursePlot {
+export function plotCourse(voyage: Voyage, scale = 1, grow = false, marks = 1): CoursePlot {
   const { pad, objectiveR } = CHART;
   const { width, height } = chartSize(voyage.waypoints.length, grow);
   const sizes = { waypoint: LABEL_SIZE.waypoint * scale, idea: LABEL_SIZE.idea * scale, contact: LABEL_SIZE.contact * scale, scrubbed: LABEL_SIZE.scrubbed * scale, launch: LABEL_SIZE.launch * scale };
@@ -358,12 +360,12 @@ export function plotCourse(voyage: Voyage, scale = 1, grow = false): CoursePlot 
 
   // what labels must never cover (the marks, the objective and the launch caption), and what they'd rather not: lines
   const solid: Box[] = [
-    ...points.map((p) => square(p, 14)),
-    square(launch, 8),
+    ...points.map((p) => square(p, 14 * marks)),
+    square(launch, 8 * marks),
     labelBox({ x: launch.x - 20, y: launch.y + 30, anchor: 'start' }, 'LAUNCH · SD 00.00.00', sizes.launch),
     { x0: objective.x - objectiveR, y0: objective.y - objectiveR - 18 * scale - 8, x1: objective.x + objectiveR, y1: objective.y + objectiveR },
-    ...turns.map((t) => square(t.to, 8)),
-    ...projected.map((p) => square(p.to, 7)),
+    ...turns.map((t) => square(t.to, 8 * marks)),
+    ...projected.map((p) => square(p.to, 7 * marks)),
   ];
   const lines: Box[] = [
     ...[launch, ...points].slice(1).flatMap((p, i) => along([launch, ...points][i], p)),
@@ -393,15 +395,15 @@ export function plotCourse(voyage: Voyage, scale = 1, grow = false): CoursePlot 
 
   const scrubbed: Scrubbed[] = turns.map((t) => {
     const text = `SCRUBBED ${t.text}`;
-    const natural = { x: t.to.x + side.x * 14 * t.off, y: t.to.y + side.y * 14 * t.off + 5, anchor: t.off > 0 ? ('start' as const) : ('end' as const) };
-    const label = place([natural, ...around(t.to, 14, sizes.scrubbed)], text, sizes.scrubbed);
+    const natural = { x: t.to.x + side.x * 14 * marks * t.off, y: t.to.y + side.y * 14 * marks * t.off + 5, anchor: t.off > 0 ? ('start' as const) : ('end' as const) };
+    const label = place([natural, ...around(t.to, 14 * marks, sizes.scrubbed)], text, sizes.scrubbed);
     return { from: t.from, to: t.to, text: t.text, ...(label && { label }) };
   });
 
   const order = points.map((_, i) => i).sort((a, b) => (points[b].state === 'now' ? 1 : 0) - (points[a].state === 'now' ? 1 : 0) || b - a);
   // each waypoint's name on one line, cut shorter where that won't fit anywhere; then, where there's room, in full on
   // two lines, which keeps what it means rather than losing its second half
-  const d = 26 + 4 * (scale - 1);
+  const d = 26 * marks + 4 * (scale - 1);
   const spots = (p: PlottedWaypoint, i: number, n: number) => {
     const extra = (n - 1) * sizes.waypoint * LINE_GAP;
     return [beside(p, side, outs[i], d, extra), beside(p, side, -outs[i], d, extra), ...around(p, d, sizes.waypoint, n), ...around(p, d * 1.8, sizes.waypoint, n).map((l) => ({ ...l, leader: true }))];
@@ -437,7 +439,7 @@ export function plotCourse(voyage: Voyage, scale = 1, grow = false): CoursePlot 
   }
 
   for (const p of projected) {
-    const label = place([clearOf(objective, p.to, p.text.length * TEXT_W * scale, width), ...around(p.to, 12, sizes.idea)], p.text, sizes.idea);
+    const label = place([clearOf(objective, p.to, p.text.length * TEXT_W * scale, width, 12 * marks), ...around(p.to, 12 * marks, sizes.idea)], p.text, sizes.idea);
     if (label) p.label = label;
   }
 
@@ -454,26 +456,26 @@ export function plotCourse(voyage: Voyage, scale = 1, grow = false): CoursePlot 
     const text = clip(contact.text, chars('contact'));
     const tries = [away, -away].flatMap((out) => [58, 92, 126, 170].flatMap((d) => [0, -0.35, 0.35, -0.7, 0.7].map((t) => {
       const spot = { x: clampX(by.x + side.x * d * out + dir.x * step * (t + (k % 3) * 0.12)), y: clampY(by.y + side.y * d * out + dir.y * step * (t + (k % 3) * 0.12)) };
-      const label: Label = out > 0 ? { x: spot.x + 12, y: spot.y + 5, anchor: 'start' } : { x: spot.x - 12, y: spot.y + 5, anchor: 'end' };
+      const label: Label = out > 0 ? { x: spot.x + 12 * marks, y: spot.y + 5, anchor: 'start' } : { x: spot.x - 12 * marks, y: spot.y + 5, anchor: 'end' };
       return { spot, label, further: 0 };
     })));
     // failing those, anywhere further round it, nearest first
     for (let r = 60; r <= 300; r += 40) {
       for (let a = 0; a < 12; a++) {
         const spot = { x: clampX(by.x + Math.cos((a * Math.PI) / 6) * r), y: clampY(by.y + Math.sin((a * Math.PI) / 6) * r) };
-        tries.push({ spot, label: { x: spot.x + 12, y: spot.y + 5, anchor: 'start' }, further: r / 1000 });
+        tries.push({ spot, label: { x: spot.x + 12 * marks, y: spot.y + 5, anchor: 'start' }, further: r / 1000 });
       }
     }
     // its mark matters most, weighed before its label; a try further out costs a touch more, so the nearest wins a tie
-    const best = cheapest(tries, (t) => t.further, (t) => cost(square(t.spot, 9)) * 3, (t) => cost(labelBox(t.label, text, sizes.contact)))?.at ?? tries[0];
-    solid.push(square(best.spot, 9));
-    const label = place([best.label, ...around(best.spot, 12, sizes.contact)], text, sizes.contact);
+    const best = cheapest(tries, (t) => t.further, (t) => cost(square(t.spot, 9 * marks)) * 3, (t) => cost(labelBox(t.label, text, sizes.contact)))?.at ?? tries[0];
+    solid.push(square(best.spot, 9 * marks));
+    const label = place([best.label, ...around(best.spot, 12 * marks, sizes.contact)], text, sizes.contact);
     const closed = contact.closed;
     const pursued = closed?.as === 'pursued' ? at(closed.slice) : undefined;
     return { ...best.spot, contact, state: closed?.as ?? 'open', ...(label && { label }), text, ...(pursued && { pursuedAt: { x: pursued.x, y: pursued.y } }) };
   });
 
-  return { width, height, launch, objective, points, path: smoothPath([launch, ...points]), scrubbed, projected, contacts, sizes };
+  return { width, height, launch, objective, points, path: smoothPath([launch, ...points]), scrubbed, projected, contacts, marks, sizes };
 }
 
 /** Where a waypoint's name came from: what it shipped as, the lead's heading for it, what the lead's at in it, or nothing yet. */

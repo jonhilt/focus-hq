@@ -87,12 +87,16 @@ function s(tag: string, attrs: Record<string, string | number> = {}, ...children
   return el;
 }
 
-/** A faint line from a mark out to its label (of `lines` lines), starting clear of the mark. */
-const leaderPath = (p: Pt, l: Label, size: number, lines: number) => {
+/** A faint line from a mark (`marks` times its usual size) out to its label (of `lines` lines), starting clear of the mark. */
+const leaderPath = (p: Pt, l: Label, size: number, lines: number, marks: number) => {
   const end = leaderEnd(p, l, size, lines);
   const d = Math.hypot(end.x - p.x, end.y - p.y) || 1;
-  return `M${p.x + ((end.x - p.x) * 16) / d} ${p.y + ((end.y - p.y) * 16) / d} L${end.x} ${end.y}`;
+  return `M${p.x + ((end.x - p.x) * 16 * marks) / d} ${p.y + ((end.y - p.y) * 16 * marks) / d} L${end.x} ${end.y}`;
 };
+
+/** A mark at `p`, `marks` times its usual size: zoomed out, the chart's marks grow in its units so they stay big enough to see. */
+const sized = (p: Pt, marks: number, ...children: (SVGElement | null)[]) =>
+  s('g', marks === 1 ? {} : { transform: `translate(${p.x} ${p.y}) scale(${marks.toFixed(3)}) translate(${-p.x} ${-p.y})` }, ...children);
 
 /** A waypoint's name, a line under another where it's wrapped: each line's drop is in ems, so it scales with the zoom as the text does. */
 const nameSvg = (l: Label, lines: string[], named: string) =>
@@ -183,11 +187,12 @@ function columnSvg(col: Column & { slice: number }, picked: string | undefined, 
 }
 
 /** A waypoint out of focus's work, as a count by it: picking it picks the waypoint. */
-function quietSvg(q: Quiet, slice: number, nav: Nav): SVGElement {
+function quietSvg(q: Quiet, slice: number, nav: Nav, marks: number): SVGElement {
   const g = s('g', { class: 'chart-quiet', role: 'button' },
     s('title', {}, `${q.count} piece${q.count === 1 ? '' : 's'} of work`),
-    s('circle', { cx: q.x, cy: q.y, r: 8 }),
-    s('text', { x: q.x, y: q.y + ORBIT.quiet.size * 0.35, 'text-anchor': 'middle' }, String(q.count)));
+    sized(q, marks,
+      s('circle', { cx: q.x, cy: q.y, r: 8 }),
+      s('text', { x: q.x, y: q.y + ORBIT.quiet.size * 0.35, 'text-anchor': 'middle' }, String(q.count))));
   g.addEventListener('click', () => nav.slice(slice));
   return g;
 }
@@ -212,7 +217,7 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: Picked, nav: Nav,
         s('title', {}, `Projected: ${goal.note?.next[i] ?? p.text}`),
         s('path', { d: `M${last.x} ${last.y} L${p.to.x} ${p.to.y}` }),
         s('circle', { class: 'hit', cx: p.to.x, cy: p.to.y, r: 14 }),
-        s('circle', { class: 'mark', cx: p.to.x, cy: p.to.y, r: 6 }),
+        sized(p.to, plot.marks, s('circle', { class: 'mark', cx: p.to.x, cy: p.to.y, r: 6 })),
         p.label ? s('text', { x: p.label.x, y: p.label.y, 'text-anchor': p.label.anchor }, p.text) : null,
       );
       g.addEventListener('click', () => nav.idea(i));
@@ -225,7 +230,7 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: Picked, nav: Nav,
   const scrubbed = s('g', { class: 'chart-scrubbed' },
     ...plot.scrubbed.flatMap((x) => [
       s('path', { d: `M${x.from.x} ${x.from.y} L${x.to.x} ${x.to.y}` }),
-      s('path', { class: 'cross', d: `M${x.to.x - 7} ${x.to.y - 7} l14 14 M${x.to.x + 7} ${x.to.y - 7} l-14 14` }, s('title', {}, `Scrubbed: ${x.text}`)),
+      sized(x.to, plot.marks, s('path', { class: 'cross', d: `M${x.to.x - 7} ${x.to.y - 7} l14 14 M${x.to.x + 7} ${x.to.y - 7} l-14 14` }, s('title', {}, `Scrubbed: ${x.text}`))),
       x.label ? s('text', { x: x.label.x, y: x.label.y, 'text-anchor': x.label.anchor }, s('tspan', { class: 'was' }, 'SCRUBBED '), x.text) : null,
     ]));
 
@@ -235,7 +240,7 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: Picked, nav: Nav,
       const g = s('g', { class: `chart-contact ${c.state}${c.contact.id === selected.contact ? ' picked' : ''}`, role: 'button' },
         s('title', {}, `${c.contact.id}: ${c.contact.text} (${standing(c.contact)})`),
         c.pursuedAt ? s('path', { class: 'trail', d: `M${c.x} ${c.y} L${c.pursuedAt.x} ${c.pursuedAt.y}` }) : null,
-        s('path', { class: 'blip', d: `M${c.x} ${c.y - 8} l8 8 l-8 8 l-8 -8 Z` }),
+        sized(c, plot.marks, s('path', { class: 'blip', d: `M${c.x} ${c.y - 8} l8 8 l-8 8 l-8 -8 Z` })),
         c.label ? s('text', { x: c.label.x, y: c.label.y, 'text-anchor': c.label.anchor }, c.text) : null,
       );
       g.addEventListener('click', () => nav.contact(c.contact.id));
@@ -253,15 +258,16 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: Picked, nav: Nav,
       const shields = SHIELD_WORDS[shieldState(w.shields)];
       const g = s('g', { class: `chart-wp ${p.state}${w.slice === selected.slice && !selected.contact ? ' picked' : ''}`, tabindex: 0, role: 'button' },
         s('title', {}, `Waypoint ${w.slice}: ${named(w)}${shields ? ` (${shields})` : ''}`),
-        s('circle', { class: 'hit', cx: p.x, cy: p.y, r: 24 }),
-        p.state === 'now' ? s('circle', { class: 'ping', cx: p.x, cy: p.y, r: 22 }) : null,
-        filled !== undefined ? s('circle', { class: 'track', cx: p.x, cy: p.y, r: 20 }) : null,
-        filled !== undefined ? s('circle', { class: 'progress', cx: p.x, cy: p.y, r: 20, 'stroke-dasharray': `${(filled * ARC).toFixed(1)} ${ARC.toFixed(1)}`, transform: `rotate(-90 ${p.x} ${p.y})` }) : null,
-        s('circle', { class: 'ring', cx: p.x, cy: p.y, r: 19 }),
-        shieldState(w.shields) !== 'none' ? s('circle', { class: `shield ${shieldState(w.shields)}`, cx: p.x, cy: p.y, r: 16 }) : null,
-        s('circle', { class: 'core', cx: p.x, cy: p.y, r: 12 }),
-        s('text', { class: 'num', x: p.x, y: p.y + 5, 'text-anchor': 'middle' }, String(w.slice)),
-        p.label?.leader ? s('path', { class: 'leader', d: leaderPath(p, p.label, plot.sizes.waypoint, p.lines.length) }) : null,
+        sized(p, plot.marks,
+          s('circle', { class: 'hit', cx: p.x, cy: p.y, r: 24 }),
+          p.state === 'now' ? s('circle', { class: 'ping', cx: p.x, cy: p.y, r: 22 }) : null,
+          filled !== undefined ? s('circle', { class: 'track', cx: p.x, cy: p.y, r: 20 }) : null,
+          filled !== undefined ? s('circle', { class: 'progress', cx: p.x, cy: p.y, r: 20, 'stroke-dasharray': `${(filled * ARC).toFixed(1)} ${ARC.toFixed(1)}`, transform: `rotate(-90 ${p.x} ${p.y})` }) : null,
+          s('circle', { class: 'ring', cx: p.x, cy: p.y, r: 19 }),
+          shieldState(w.shields) !== 'none' ? s('circle', { class: `shield ${shieldState(w.shields)}`, cx: p.x, cy: p.y, r: 16 }) : null,
+          s('circle', { class: 'core', cx: p.x, cy: p.y, r: 12 }),
+          s('text', { class: 'num', x: p.x, y: p.y + 5, 'text-anchor': 'middle' }, String(w.slice))),
+        p.label?.leader ? s('path', { class: 'leader', d: leaderPath(p, p.label, plot.sizes.waypoint, p.lines.length, plot.marks) }) : null,
         p.label ? nameSvg(p.label, p.lines, p.named) : null,
       );
       g.addEventListener('click', () => nav.slice(w.slice));
@@ -294,9 +300,9 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: Picked, nav: Nav,
     scrubbed,
     contacts,
     s('path', { class: 'chart-course', d: plot.path }),
-    ...[...heavens.quiet].map(([slice, q]) => quietSvg(q, slice, nav)),
+    ...[...heavens.quiet].map(([slice, q]) => quietSvg(q, slice, nav, plot.marks)),
     heavens.column ? columnSvg(heavens.column, selected.node, nav, px) : null,
-    s('circle', { class: 'chart-launch', cx: plot.launch.x, cy: plot.launch.y, r: 7 }),
+    sized(plot.launch, plot.marks, s('circle', { class: 'chart-launch', cx: plot.launch.x, cy: plot.launch.y, r: 7 })),
     s('text', { class: 'chart-caption launch', x: plot.launch.x - 20, y: plot.launch.y + 30 }, `LAUNCH · ${stardate(goal.openedAt)}`),
     waypoints,
     s('g', { class: 'chart-probes' }),
@@ -748,7 +754,7 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
     // chart's units: zoomed in, there's room to say more; zoomed out over a long voyage, the oldest names give way first
     const layout = (v: View) => {
       const z = fit() * (CHART.width / v.w);
-      const plot = plotCourse(voyage, 1 / z, true);
+      const plot = plotCourse(voyage, 1 / z, true, Math.max(1, 1 / z));
       return { z, plot, heavens: constellations(g, plot, focusing ? picked.slice : undefined, flying, 1 / z, NAME_PX / z) };
     };
     target = free ? view : zoomed && at ? zoomOn(world, { x0: at.x, y0: at.y, x1: at.x, y1: at.y }) : all ? whole(world) : home(world);

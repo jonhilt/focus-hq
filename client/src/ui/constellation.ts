@@ -4,7 +4,7 @@
 // can pick for a look at just that. Pure, so the chart panel only draws it.
 
 import type { GoalArtifact, GoalQuestion, LeadPr, Waypoint, Workflow } from '../../../shared/types';
-import { type Box, clip, type CoursePlot, type Label, labelBox, overlaps, type Pt } from './course';
+import { type Box, clip, type CoursePlot, type Label, labelBox, misread, overlaps, type Pt } from './course';
 import { type Segment, segmentHitsBox, segmentsCross } from './legibility';
 
 export type WorkKind = 'task' | 'workflow' | 'probe' | 'commits' | 'shown' | 'asked' | 'shot' | 'pr';
@@ -146,19 +146,24 @@ const square = (p: Pt, r: number): Box => ({ x0: p.x - r, y0: p.y - r, x1: p.x +
 
 /**
  * A waypoint out of focus's work, generalised as a cartographer would at this scale: one small count close in, in the
- * middle of the directions `taken` leaves free, or as near it as runs into none of `avoid` or `lines`.
+ * middle of the directions `taken` leaves free, or as near it as runs into none of `avoid` or `lines` and sits nearer
+ * its own waypoint than any of `others` (none if there's no such spot), `marks` times its usual size and distance out
+ * (as the chart's marks are drawn).
  */
-export function quiet(center: Pt, count: number, taken: number[], avoid: Box[] = [], lines: Segment[] = []): Quiet | undefined {
+export function quiet(center: Pt, count: number, taken: number[], avoid: Box[] = [], lines: Segment[] = [], marks = 1, others: readonly Pt[] = []): Quiet | undefined {
   if (!count) return undefined;
   const free = freeAngles(taken);
   const mid = (free.length - 1) / 2;
-  const { r } = ORBIT.quiet;
+  const r = ORBIT.quiet.r * marks;
   const tries = free.map((a, i) => ({ a, far: Math.abs(i - mid) })).sort((x, y) => x.far - y.far);
   const at = (a: number) => ({ x: center.x + Math.cos(a) * r, y: center.y + Math.sin(a) * r });
   const clear = tries.find(({ a }) => {
-    const box = square(at(a), 10);
-    return !avoid.some((b) => overlaps(b, box)) && !lines.some((s) => segmentHitsBox(s, box));
+    const box = square(at(a), 10 * marks);
+    return !avoid.some((b) => overlaps(b, box)) && !lines.some((s) => segmentHitsBox(s, box)) && !misread(box, center, others);
   });
+  // one that would sit nearer another waypoint than its own is left off when there's none clear (it's a small thing, and
+  // it'd mislead); with no waypoints near enough to mistake it for, it goes where it must
+  if (!clear && others.length) return undefined;
   return { ...at((clear ?? tries[0]).a), count };
 }
 
@@ -273,12 +278,13 @@ export function chartLines(plot: CoursePlot): Segment[] {
 /** What's drawn on a plotted chart that the work round its waypoints mustn't cover, its names `nameSize` big. */
 export function chartMarks(plot: CoursePlot, nameSize: number): Box[] {
   const o = plot.objective;
+  const m = plot.marks;
   return [
-    ...plot.points.flatMap((p) => [square(p, ORBIT.focus.ring), ...(p.label ? [labelBox(p.label, p.lines, nameSize)] : [])]),
-    ...plot.contacts.flatMap((c) => [square(c, 9), ...(c.label ? [labelBox(c.label, c.text, nameSize)] : [])]),
-    ...plot.projected.flatMap((p) => [square(p.to, 7), ...(p.label ? [labelBox(p.label, p.text, nameSize)] : [])]),
-    ...plot.scrubbed.flatMap((x) => [square(x.to, 8), ...(x.label ? [labelBox(x.label, `SCRUBBED ${x.text}`, nameSize)] : [])]),
-    square(plot.launch, 8),
+    ...plot.points.flatMap((p) => [square(p, ORBIT.focus.ring * m), ...(p.label ? [labelBox(p.label, p.lines, nameSize)] : [])]),
+    ...plot.contacts.flatMap((c) => [square(c, 9 * m), ...(c.label ? [labelBox(c.label, c.text, nameSize)] : [])]),
+    ...plot.projected.flatMap((p) => [square(p.to, 7 * m), ...(p.label ? [labelBox(p.label, p.text, nameSize)] : [])]),
+    ...plot.scrubbed.flatMap((x) => [square(x.to, 8 * m), ...(x.label ? [labelBox(x.label, `SCRUBBED ${x.text}`, nameSize)] : [])]),
+    square(plot.launch, 8 * m),
     { x0: o.x - o.r * 0.9, y0: o.y - o.r - 24, x1: o.x + o.r * 0.9, y1: o.y + o.r * 0.7 },
   ];
 }
@@ -302,13 +308,18 @@ export function sky(plot: CoursePlot, workOf: (slice: number) => WorkNode[], foc
   const taken = [...avoid, ...(placed ? [...placed.nodes.map((p) => square(p, ORBIT.focus.mark * px)), ...placed.nodes.map((p) => labelBox(p.label, p.name, ORBIT.focus.size * px))] : [])];
   const quietOnes = new Map<number, Quiet>();
   for (const [i, p] of plot.points.entries()) {
-    if (i === at) continue;
+    // zoomed out past the frame (its marks drawn bigger to stay seen), the counts are left off: generalised away, as a
+    // small-scale map drops its minor features, rather than numbers among the waypoints' own to mistake for them
+    if (i === at || plot.marks > 1) continue;
     const name = p.label && labelBox(p.label, p.lines, nameSize);
     const dirs = [...ways(i), ...(name ? [toward(p, { x: (name.x0 + name.x1) / 2, y: (name.y0 + name.y1) / 2 })] : [])];
-    const q = quiet(p, workOf(p.waypoint.slice).length, dirs, taken, [...lines, ...(placed?.leaders ?? [])]);
+    // a count sits by its own waypoint's mark, so that's not in its way
+    const own = square(p, ORBIT.focus.ring * plot.marks);
+    const near = taken.filter((b) => !(b.x0 === own.x0 && b.y0 === own.y0 && b.x1 === own.x1 && b.y1 === own.y1));
+    const q = quiet(p, workOf(p.waypoint.slice).length, dirs, near, [...lines, ...(placed?.leaders ?? [])], plot.marks, plot.points.filter((o) => o !== p));
     if (q) {
       quietOnes.set(p.waypoint.slice, q);
-      taken.push(square(q, 10));
+      taken.push(square(q, 10 * plot.marks));
     }
   }
   // zoomed to, the column takes its waypoint's name in with it
