@@ -26,61 +26,6 @@ views:
     parts: [api, core, types]
 ```
 
-### Scenarios: a question of how something happens
-
-A view that asks how something happens is better answered in order than as a web of imports, so a view can be a **scenario**: an `answer` (the whole of it in a line) and `steps`, each a part reaching another and what happens, in a few words.
-
-```yaml
-  show-to-screen:
-    question: How does a lead's show reach the station's screen?
-    parts: [office-tools, manager, client-net, ship, artifacts, panels]   # optional: the steps' parts, in order, if left out
-    answer: "The office tools keep the page on the lead, the manager sends the lead to the browser over /ws, and the station's screen draws its picture."
-    steps:
-      - { from: office-tools, to: manager, says: "keeps the shown page on the lead" }
-      - { from: manager, to: client-net, says: "sends the lead's update over /ws" }
-```
-
-It's drawn as a sequence diagram (`sequence.ts`): a lifeline per part in the order the steps reach them, and each step an arrow down the page, numbered, with what it says over it. The office checks each step against the code (`steps.ts`): a message the recorded run saw from one part to the other (a dashed gold arrow), or an import between them either way (solid: one calls the other, or reads from it). A step nothing backs is drawn red and said so, never left out. Under the drawing, each numbered step opens on its evidence: the imports and their names, the recorded messages and how many. That's the detail the old sentences crammed in all at once.
-
-Imports alone can't put a scenario in order: a shortest path through them runs through whatever module everything imports (the plugin API, say), not the way the code actually goes. So a scenario's steps are either written, by whoever adds the view or by a lead with the map tool, and checked; or **found in a recorded run**.
-
-### Cited steps: a scenario for any project
-
-Most projects can't be recorded, so the base of a scenario is a written one whose steps each **cite** where in the code they happen (`cite: path:line`, from the repo's root). An agent reading the code writes them, in any language, and the office checks each against the code as it stands (`steps.ts` `checkCite`), every time it maps:
-
-```yaml
-      - { from: office-tools, to: manager, says: "keeps the shown page on the lead", cite: server/agents/manager/goalTools.ts:55 }
-      - { from: manager, to: client-net, says: "sends the lead's update over /ws", cite: server/agents/manager/core.ts:169 }
-```
-
-- The cited file has to be in one of the step's two parts' code: where it calls the other, or where it reads from it.
-- Its line, or one within two of it (`CITE_SLACK`), the nearest first, has to name something one part uses of the other (the names their imports take), or a message between them as a string (`'agent'`, not any variable called `agent`), or reach a member through a class of the other part's it extends (`this.update(…)` in `class GoalTools extends Part`: `map.ts` `inheritsIn`).
-- That line is the step's first evidence, quoted under it: *server/agents/manager/core.ts:169: this.hub.send({ type: 'agent', agent }); (agent, of Mirror of the office)*.
-- A cite that checks out draws its step lilac, unless a recorded run saw it (gold). A cite that fails (no such file or line, a file in neither part, a line that names nothing of the other's) draws the step red and says why first. Code moves, so a scenario whose cite has drifted shows it. It's a warning, not a failing test: other goals move cited code all the time.
-- With nothing on the map joining the two parts (a language the map can't read yet), a cite in the right part is taken as it is, and says the map can't tell what it reaches.
-
-The map tool tells a lead how to cite, and which of their cites fail and why, so they can fix them before the view ships.
-
-### Steps found in a recorded run
-
-As the recorded run sends each event over /ws, it keeps the whole stack the event was sent from, not only its sender: the repo's frames, outermost first, with their functions (`shared/flows.ts` `chainOf`, kept as the recording's `traces`). That's the order imports can't give: who called whom to send it. The map puts each chain's frames to their parts (`graph.ts` `partTraces`), a run of frames in one part being one hop, entered by its first function, with the message's receiver last.
-
-A view with a `trace` instead of steps has them found there:
-
-```yaml
-  note-to-browser:
-    question: How does a lead's note reach the browser?
-    parts: [agents, manager, office-tools, client-net]
-    answer: "The lead's session calls the note tool, the office tools update the lead, and the manager sends it to the browser over /ws."
-    trace: { message: agent, through: office-tools }
-```
-
-Of the chains that sent `message` (an event's type) and went `through` the part, it takes the one through the most parts (a chain cut short where it awaited is busier, but tells less), and makes a step of each hop: *calls note*, *calls update*, *calls back into it* for an anonymous callback, and *sends "agent" over /ws* last. A recorded call backs a step too, written or found: a solid gold arrow, its evidence saying which functions and how often. A chain is what one run did, from the demo office (where a demo runner stands in for a lead's Claude Code session): what the run didn't do has no chain, and the map tool says so.
-
-**Legibility is tested** (`legibility.ts`): every scenario in Focus's own model is held to a budget as a station's screen shows it (at most 7 lifelines and 8 steps, no label cut short, no text under 13 px once shrunk to fit), and every step must be backed. A view that grows past it fails `pnpm test`.
-
-A part's `does` is what it does, in a line, shown in its box. Its `layer` puts it in a column, and gives it its colour; the layers go left to right in the order the model first names them. Its `kind` is one of the studio's (ui, route, handler, service, store, queue, external, job, type). Focus's own model is [`.focus/cartography.yaml`](../../.focus/cartography.yaml).
-
 ## What the imports can't show
 
 A browser and its server don't import each other: they talk over HTTP and WebSockets. A repo can keep a recorded run of that traffic beside its model, in `.focus/cartography-flows.json` (`shared/flows.ts`): each kind of message (an event's type, or a request's method and route), which file sent it, which received it, and how often, with what the run was and the commit it was recorded on.
@@ -110,7 +55,7 @@ The diagram most worth having is the one asked for: the captain asks a lead how 
 - **Where**: the page the lead drew and its picture, as files in the plugin's data folder (`diagrams/`), with an index by project beside them (`index.json`), read again as the office starts, unlike the maps.
 - **Each file it cites**, as a repo's file with a hash of what was in it when it was drawn (from the lead's checkout).
 - **In the architecture space**, after each repo's whole map and before the rest: its question over its picture, and when and by whom it was drawn. E on it opens the page itself up close, live, to step through.
-- **Out of date**: whenever a project's maps are made (as the office starts, and as a pull request merges), each diagram's cited files are hashed again on the repos' default branches. One that's changed, or gone, marks it out of date, said on it (a red band across its hologram's top) and up close (which files), It's a warning: the diagram may still be right, but the code under it has moved.
+- **Out of date**: whenever a project's maps are made (as the office starts, and as a pull request merges), each diagram's cited files are hashed again on the repos' default branches. One that's changed, or gone, marks it out of date, said on it (a red band across its hologram's top) and up close (which files). It's a warning: the diagram may still be right, but the code under it has moved.
 - **Draw it again**, up close: the office draws it afresh from its repos' default branches as they are now (`PluginHost.drawModel`: a read-only session reads the code and answers its question in the model tool's own shape, then the office checks and draws it as it does a lead's), in its place, drawn *by the office*. Its hologram says it's being drawn meanwhile, or why drawing it failed. A session costs, so it's only ever drawn again when the captain asks.
 - **Forget it**, up close, once the captain confirms: it goes, page and picture too. One whose page has gone from the folder still opens, saying so, to be drawn again or forgotten.
 
@@ -155,7 +100,7 @@ Maps are made from each repo's default branch, checked out in the plugin's own f
 
 ## What's next
 
-- Call chains for /api requests too (the browser's stack, and the handler's), and runs that cover more of what a captain and a lead do.
+- Recorded flows inside the office too (events between its own parts, Effect's spans), and runs that cover more of what a captain does.
 - The model itself compared across merged pull requests: parts and connections that came and went, slice by slice.
 
 ## Where it lives
@@ -167,9 +112,9 @@ Maps are made from each repo's default branch, checked out in the plugin's own f
 - `history.ts`: how the parts change, from git: hotspots and change coupling, pure.
 - `routes.ts`: the HTTP routes a repo declares (Spring, Express-style, OpenAPI) and the paths it calls, and the calls between a project's repos, pure.
 - `crossRepo.ts`: what ties a project's repos together, from their histories: change sets across repos, and the parts in different repos that change together, pure.
+- `diagrams.ts`: the diagrams leads draw, kept with their project, and when one's out of date, pure. `keeper.ts`: keeping them in the plugin's data folder, drawing one again and forgetting one.
 - `slice.ts`: what a goal's slice does to the architecture, from its lead's checkout against the default branch's map, and its view, pure.
 - `map.ts`: making a repo's map from a checkout (git ls-files, then each language's reader, and git log for history.ts).
-- `steps.ts`: a scenario's steps, written or found in the recorded run's call chains, checked against the map's imports, flows and calls, pure. `sequence.ts`: a scenario drawn as a sequence diagram. `legibility.ts`: how legible a drawing is where it's seen, and the budget a scenario's held to.
 - `draw.ts`: drawing a view, the matrix and the changes as SVG, with their sentences (`viewDrawing`, which every place a view shows goes through).
 - `views.ts`: a map's views, and what the Maps view says in words.
 - `leadTool.ts`: the lead's map tool. `page.ts`: a view as a page for a station's screen.

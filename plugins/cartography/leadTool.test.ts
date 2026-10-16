@@ -41,17 +41,11 @@ describe('the map tool', () => {
     const { context, shown } = lead();
     const said = await mapTool.run(context, { view: 'show-to-screen' });
     expect(said).toContain("is on your station's screen");
-    expect(said).toContain('view "show-to-screen": 6 parts. 5 steps, each backed by the code.');
+    expect(said).toContain('view "show-to-screen": 6 parts');
     expect(shown).toHaveLength(1);
     expect(shown[0].id).toBe('map-show-to-screen');
     expect(shown[0].html).toContain('<svg');
     expect(shown[0].html).toContain('Mirror of the office');
-  });
-
-  it('finds a traced view\'s steps in the recorded run, and says so', async () => {
-    const { context } = lead();
-    const said = await mapTool.run(context, { view: 'note-to-browser' });
-    expect(said).toMatch(/view "note-to-browser": 4 parts\. \d+ steps found in the recorded run, each backed by the code\./);
   });
 
   it('says there\'s no such view, with the ones there are', async () => {

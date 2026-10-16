@@ -21,41 +21,11 @@ export interface MapPart {
   does?: string;
 }
 
-/**
- * One step of a view's scenario: `from` does something that reaches `to`, said in a few words, and where in the code
- * it does it (`cite`, `path:line` from the repo's root), checked against the code as it stands (steps.ts).
- */
-export interface ViewStep {
-  from: string;
-  to: string;
-  says: string;
-  cite?: string;
-}
-
-/**
- * The lines round a step's cite, as the map read them (map.ts), with the names its file's classes extend or implement
- * (whose members it reaches as `this.`); or why it couldn't: no such file, or no such line.
- */
-export type CitedLines = { file: string; line: number; lines: string[]; first: number; inherits: string[] } | { missing: string };
-
-/** Which recorded call chain a view's steps come from: the busiest that sent `message`, going `through` a part if it says. */
-export interface ViewTrace {
-  message: string;
-  through?: string;
-}
-
-/**
- * A question the model answers, drawn with only the parts it names. One with `steps` is a scenario, drawn in order as a
- * sequence (steps.ts), with its answer in a line.
- */
+/** A question the model answers, drawn with only the parts it names. */
 export interface MapView {
   id: string;
   question: string;
   parts: string[];
-  answer?: string;
-  steps?: ViewStep[];
-  /** Its steps found in a recorded run instead of written (steps.ts `tracedSteps`), when it has none written. */
-  trace?: ViewTrace;
 }
 
 /** A repo's model as its file says it: which code belongs to which part, and its views. */
@@ -86,17 +56,6 @@ export interface MapFlow {
   count: number;
 }
 
-/**
- * A recorded call chain part to part (graph.ts `partTraces`): the parts it went through in order, each with the first
- * function it was called in there, ending at the part that received the message. How many times it went that way.
- */
-export interface PartTrace {
-  via: 'http' | 'ws';
-  name: string;
-  hops: { part: string; fn?: string }[];
-  count: number;
-}
-
 /** One file importing another, and the names it takes. */
 export interface FileEdge {
   from: string;
@@ -118,10 +77,6 @@ export interface RepoMap {
   connections: MapConnection[];
   /** What parts send each other at runtime, from the repo's recorded run, if it has one. */
   flows?: MapFlow[];
-  /** The lines round each of its scenarios' cites, by the cite (`path:line`). */
-  cited?: Record<string, CitedLines>;
-  /** The call chains that run sent its messages from, part to part, the busiest first. */
-  traces?: PartTrace[];
   /** What that run was, and the commit it was recorded on. */
   flowsRun?: { run: string; commit?: string };
   /** How its parts have changed, from the default branch's git history (history.ts). */

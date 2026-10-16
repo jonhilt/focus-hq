@@ -1,7 +1,7 @@
 // A view of a map as the browser shows it, on the engineering station and up close from its screen in the holodeck:
 // the drawing, how to read it, and what it shows in sentences.
 import { h, type Ui } from '../../plugin-api/client';
-import { type Drawing, type Marks, viewDrawing } from './draw';
+import { type Marks, viewDrawing } from './draw';
 import type { MapView, RepoMap } from './shared';
 
 /** An SVG drawing, at its own size (readable), scrolling sideways when it's wider than the station. */
@@ -11,20 +11,14 @@ function drawing(svg: string): HTMLElement {
   return box;
 }
 
-/** A view's body: its answer, how to read it, the drawing, and what it shows in numbered sentences (with a slice's `marks`). */
+/** A view's body: how to read it, the drawing, and what it shows in numbered sentences (with a slice's `marks`). */
 export function viewBody(map: RepoMap, view: MapView, marks?: Marks): HTMLElement[] {
-  return [...(view.answer && !marks ? [h('p', { class: 'cg-answer' }, view.answer)] : []), ...drawingBody(viewDrawing(map, view, marks))];
-}
-
-/** A numbered sentence, opening on its evidence when it has some (a scenario's step). */
-function sentence(s: string, more?: string[]): HTMLElement {
-  if (!more) return h('li', null, s);
-  return h('li', null, h('details', null, h('summary', null, s), h('ul', null, ...more.map((d) => h('li', null, d)))));
+  return drawingBody(viewDrawing(map, view, marks));
 }
 
 /** A drawing's body: how to read it, the drawing, and what it shows in numbered sentences. */
-export function drawingBody({ svg, key, sentences, details }: Drawing): HTMLElement[] {
-  return [h('small', { class: 'muted' }, key), drawing(svg), ...(sentences.length ? [h('ol', { class: 'cg-sentences' }, ...sentences.map((s, i) => sentence(s, details?.[i])))] : [])];
+export function drawingBody({ svg, key, sentences }: { svg: string; key: string; sentences: string[] }): HTMLElement[] {
+  return [h('small', { class: 'muted' }, key), drawing(svg), ...(sentences.length ? [h('ol', { class: 'cg-sentences' }, ...sentences.map((s) => h('li', null, s)))] : [])];
 }
 
 /** View `view` of `map` up close, filling the window (with a slice's `marks`). */
@@ -33,10 +27,9 @@ export function openView(ui: Ui, map: RepoMap, view: MapView, marks?: Marks): vo
 }
 
 /** A drawing up close, filling the window, under `title`, with what it's of (`of`). */
-export function openDrawing(ui: Ui, title: string, of: string, drawn: Drawing): void {
+export function openDrawing(ui: Ui, title: string, of: string, drawn: { svg: string; key: string; sentences: string[] }): void {
   ui.panels.open({ title, full: true, body: h('div', { class: 'cg-close-up' }, h('div', { class: 'muted' }, of), ...drawingBody(drawn)) });
 }
-
 /**
  * A kept diagram up close, filling the window: how it stands (out of date, which files changed since), what can be done
  * with it (`redraw` draws it again from the code as it stands, `forget` drops it), then the page its lead drew, live,

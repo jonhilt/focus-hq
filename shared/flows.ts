@@ -13,31 +13,12 @@ export interface Flow {
   count: number;
 }
 
-/** One function in a call chain: its file from the repo's root, and its name when the stack says one. */
-export interface Frame {
-  file: string;
-  fn?: string;
-}
-
-/**
- * One path a kind of message took through the code before it went: the repo's frames on the stack as it was sent,
- * outermost first, so the last is its sender. It's the order imports can't give: who called whom to send it.
- */
-export interface Trace {
-  via: Flow['via'];
-  name: string;
-  chain: Frame[];
-  count: number;
-}
-
 export interface FlowRecording {
   /** What was run, in a few words. */
   run: string;
   /** The commit it was recorded on. */
   commit?: string;
   flows: Flow[];
-  /** The call chains its messages were sent from, the busiest first (older recordings have none). */
-  traces?: Trace[];
 }
 
 /** Where a recording is kept in a repo, beside its model (plugins/cartography). */
@@ -70,28 +51,6 @@ export function repoPath(location: string, root?: string): string | undefined {
 }
 
 const FRAME = /(?:\(|@|at )((?:file:\/\/|https?:\/\/|\/)[^\s()]+?):\d+:\d+\)?\s*$/;
-/** A frame's function: V8's `at [async ]Name.method (` or Firefox's `name@`. */
-const FN = /^(?:at (?:async )?([^\s(]+) \(|([^\s@]+)@)/;
-
-/**
- * The repo's frames in `stack` (an Error's), but `skip`'s, outermost first: the call chain that reached the recorder.
- * A function calling itself, or one frame after another in the same place, counts once.
- */
-export function chainOf(stack: string | undefined, skip: readonly string[], root?: string): Frame[] {
-  const chain: Frame[] = [];
-  for (const line of (stack ?? '').split('\n').reverse()) {
-    const text = line.trim();
-    const at = FRAME.exec(text)?.[1];
-    const file = at && repoPath(at, root);
-    if (!file || skip.includes(file)) continue;
-    const m = FN.exec(text);
-    const fn = (m?.[1] ?? m?.[2])?.replace(/^Object\./, '');
-    const last = chain[chain.length - 1];
-    if (last && last.file === file && last.fn === fn) continue;
-    chain.push(fn && fn !== '<anonymous>' ? { file, fn } : { file });
-  }
-  return chain;
-}
 
 /** The first file in `stack` (an Error's) that's in the repo and not one of `skip`: whoever called the recorder. */
 export function callerOf(stack: string | undefined, skip: readonly string[], root?: string): string | undefined {
@@ -117,24 +76,6 @@ export class FlowCounter {
   /** The flows so far, the busiest first. */
   list(): Flow[] {
     return [...this.counts.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name) || a.from.localeCompare(b.from));
-  }
-}
-
-/** Counts a run's call chains as they happen, each kind of message's own. */
-export class TraceCounter {
-  private counts = new Map<string, Trace>();
-
-  add(via: Trace['via'], name: string, chain: Frame[]): void {
-    if (!chain.length) return;
-    const key = [via, name, ...chain.map((f) => `${f.file}#${f.fn ?? ''}`)].join('\u0000');
-    const trace = this.counts.get(key) ?? { via, name, chain, count: 0 };
-    trace.count++;
-    this.counts.set(key, trace);
-  }
-
-  /** The `max` busiest chains so far. */
-  list(max = 400): Trace[] {
-    return [...this.counts.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)).slice(0, max);
   }
 }
 

@@ -33,42 +33,6 @@ ignore: [scripts/]
     expect(() => yaml('parts: { api: { label: A, layer: L, paths: [a] } }\nviews: { v: { question: Q?, parts: [api, db] } }')).toThrow("View v shows parts the model doesn't have: db");
     expect(() => yaml('parts: [a, b]')).toThrow('Its parts is a mapping');
   });
-
-  it('reads a scenario: its answer and steps, its parts the ones its steps reach unless it names them', () => {
-    const model = yaml(`
-parts:
-  api: { label: API, layer: Server, paths: [a.ts] }
-  core: { label: Core, layer: Server, paths: [c.ts] }
-views:
-  order:
-    question: How is an order saved?
-    answer: The API hands it to the core.
-    steps:
-      - { from: api, to: core, says: hands it over }
-      - { from: core, to: core, says: checks it }
-`);
-    expect(model.views[0]).toEqual({
-      id: 'order',
-      question: 'How is an order saved?',
-      parts: ['api', 'core'],
-      answer: 'The API hands it to the core.',
-      steps: [{ from: 'api', to: 'core', says: 'hands it over' }, { from: 'core', to: 'core', says: 'checks it' }],
-    });
-    const parts = 'parts: { api: { label: A, layer: L, paths: [a] } }\n';
-    expect(() => yaml(`${parts}views: { v: { question: Q?, steps: [{ from: api, to: db, says: x }] } }`)).toThrow("View v shows parts the model doesn't have: db");
-    expect(() => yaml(`${parts}views: { v: { question: Q?, steps: [{ from: api, to: api }] } }`)).toThrow("View v's step 1's says needs some text");
-    expect(() => yaml(`${parts}views: { v: { question: Q? } }`)).toThrow('View v needs the parts it shows, or its steps');
-    // a step's cite is a path and a line
-    expect(yaml(`${parts}views: { v: { question: Q?, steps: [{ from: api, to: api, says: x, cite: ./a.ts:3 }] } }`).views[0].steps?.[0].cite).toBe('a.ts:3');
-    expect(() => yaml(`${parts}views: { v: { question: Q?, steps: [{ from: api, to: api, says: x, cite: a.ts }] } }`)).toThrow("View v's step 1's cite is a path and a line");
-  });
-
-  it('reads a view whose steps come from a recorded run: the message, and a part it goes through', () => {
-    const parts = 'parts: { api: { label: A, layer: L, paths: [a] } }\n';
-    expect(yaml(`${parts}views: { v: { question: Q?, parts: [api], trace: { message: agent, through: api } } }`).views[0].trace).toEqual({ message: 'agent', through: 'api' });
-    expect(() => yaml(`${parts}views: { v: { question: Q?, parts: [api], trace: { through: api } } }`)).toThrow("View v's trace's message needs some text");
-    expect(() => yaml(`${parts}views: { v: { question: Q?, parts: [api], trace: { message: x, through: db } } }`)).toThrow("goes through a part the model doesn't have: db");
-  });
 });
 
 describe('readRecording', () => {
@@ -76,9 +40,6 @@ describe('readRecording', () => {
     const raw = { run: 'a demo run', commit: 'abc', flows: [{ via: 'ws', name: 'agent', from: 'a.ts', to: 'b.ts', count: 3 }] };
     expect(readRecording(raw)).toEqual(raw);
     expect(readRecording({ flows: [] })).toEqual({ run: 'a recorded run', flows: [] });
-    // its call chains, leaving out one that doesn't read rather than the run
-    const chain = [{ file: 'a.ts', fn: 'go' }];
-    expect(readRecording({ flows: [], traces: [{ via: 'ws', name: 'agent', count: 2, chain }, { via: 'ws', name: 'x', chain: [] }] }).traces).toEqual([{ via: 'ws', name: 'agent', count: 2, chain }]);
   });
 
   it('says what’s wrong, in words', () => {
