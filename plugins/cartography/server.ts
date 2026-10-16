@@ -149,13 +149,30 @@ const cartography: FocusPlugin = {
     // made again from the code as the office starts, so never saved in state.json
     const state = host.state<CartographyState>(() => ({ maps: {}, mapping: [], slices: {}, crossRepo: {}, crossCalls: {}, diagrams: {} }), { saved: false });
     // the diagrams are kept in files of their own, beside the maps that are made again
-    const diagrams = new DiagramKeeper(host, state);
+    const diagrams = new DiagramKeeper(host, state, (repo) => checkout(host, repo));
     state.set({ diagrams: diagrams.load() });
     const cartographer = new Cartographer(host, state, diagrams);
     setTimeout(() => void cartographer.mapAll().catch((err: unknown) => console.error(`Cartography: ${errorMessage(err)}`)), MAP_AFTER_START_MS).unref();
     return {
       leadTools: [mapTool],
       routes: [
+        {
+          method: 'post',
+          path: '/redraw',
+          handle: ({ body }) => {
+            // a session reads the code and draws it: the answer comes later, as the diagram's state changes
+            void diagrams.redraw(String(body.project ?? ''), String(body.id ?? '')).catch((err: unknown) => console.error(`Cartography couldn't draw a diagram again: ${errorMessage(err)}`));
+            return { ok: true };
+          },
+        },
+        {
+          method: 'post',
+          path: '/forget',
+          handle: ({ body }) => {
+            diagrams.forget(String(body.project ?? ''), String(body.id ?? ''));
+            return { ok: true };
+          },
+        },
         {
           method: 'post',
           path: '/diagram',

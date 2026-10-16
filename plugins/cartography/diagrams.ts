@@ -28,6 +28,9 @@ export interface KeptDiagram {
   files: CitedFile[];
   /** The files it cites that have changed on their repo's default branch since it was drawn (or gone): out of date. */
   stale?: string[];
+  /** It's being drawn again (`PluginHost.drawModel`), or drawing it again failed, and why. */
+  redrawing?: boolean;
+  failed?: string;
 }
 
 /** A kept diagram's id: its lead's and theirs for it, safe as a file name. */
@@ -61,6 +64,15 @@ export const keep = (kept: readonly KeptDiagram[], diagram: KeptDiagram): KeptDi
 export const changedIn = (diagram: KeptDiagram, repo: string, hashOf: (path: string) => string | undefined): string[] =>
   diagram.files.filter((f) => f.repo === repo && hashOf(f.path) !== f.hash).map((f) => `${f.repo}/${f.path}`);
 
+/** The repos a diagram's cited files are in, or else all of its project's: what drawing it again reads. */
+export const reposOf = (d: KeptDiagram, projectRepos: readonly string[]): string[] => {
+  const cited = [...new Set(d.files.map((f) => f.repo))].filter((r) => projectRepos.includes(r));
+  return cited.length ? cited : [...projectRepos];
+};
+
+/** `kept` without the diagram `id`. */
+export const forget = (kept: readonly KeptDiagram[], id: string): KeptDiagram[] => kept.filter((d) => d.id !== id);
+
 /**
  * How a kept diagram stands, in a line: when and by whom it was drawn, and (unless `stale` is false, where it's said
  * at more length) whether the code under it has moved on.
@@ -68,6 +80,8 @@ export const changedIn = (diagram: KeptDiagram, repo: string, hashOf: (path: str
 export function standing(d: KeptDiagram, now: number, stale = true): string {
   const days = Math.floor((now - d.at) / 86_400_000);
   const when = days < 1 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
+  if (d.redrawing) return `Being drawn again from the code as it stands, for “${d.goal}”`;
+  const failed = d.failed ? ` · drawing it again failed: ${d.failed}` : '';
   const out = stale && d.stale?.length ? ` · OUT OF DATE: ${d.stale.length === 1 ? `${d.stale[0]} has` : `${d.stale.length} of the files it cites have`} changed since` : '';
-  return `Drawn by ${d.by} for “${d.goal}”, ${when}${out}`;
+  return `Drawn by ${d.by} for “${d.goal}”, ${when}${out}${failed}`;
 }

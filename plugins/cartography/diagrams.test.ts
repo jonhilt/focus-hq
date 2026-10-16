@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { changedIn, citedPaths, inRepo, keep, KEPT_MAX, type KeptDiagram, keptId, standing, worthKeeping } from './diagrams';
+import { changedIn, citedPaths, forget, inRepo, keep, KEPT_MAX, type KeptDiagram, keptId, reposOf, standing, worthKeeping } from './diagrams';
 
 const kept = (id: string, extra: Partial<KeptDiagram> = {}): KeptDiagram => ({ id, title: 't', question: 'Q?', by: 'Lt. Okafor', goal: 'Wishlist', at: 0, image: false, files: [], ...extra });
 const model = { question: 'Q?', nodes: [{ id: 'a', label: 'A', kind: 'service' as const, layer: 'L', cite: { file: '/w/shop/a.ts', line: 3 } }], edges: [{ from: 'a', to: 'a', kind: 'calls' as const, cite: { file: '/w/shop/a.ts', line: 9 } }], trace: [], simplified: [], checks: [{ q: 'q', a: 'a', cite: { file: '/w/api/b.ts', line: 1 } }] };
@@ -35,5 +35,22 @@ describe('kept diagrams', () => {
     expect(standing(kept('d', { at: 0, stale: ['o/shop/a.ts'] }), 1000)).toBe('Drawn by Lt. Okafor for “Wishlist”, today · OUT OF DATE: o/shop/a.ts has changed since');
     // up close, where the warning says it at length
     expect(standing(kept('d', { at: 0, stale: ['o/shop/a.ts'] }), 1000, false)).toBe('Drawn by Lt. Okafor for “Wishlist”, today');
+  });
+});
+
+describe('drawing one again, and forgetting one', () => {
+  it('reads the repos its cited files are in, or else all of its project’s', () => {
+    const d = kept('d', { files: [{ repo: 'o/api', path: 'b.ts', hash: '1' }, { repo: 'o/gone', path: 'c.ts', hash: '2' }] });
+    expect(reposOf(d, ['o/shop', 'o/api'])).toEqual(['o/api']);
+    expect(reposOf(kept('e'), ['o/shop', 'o/api'])).toEqual(['o/shop', 'o/api']);
+  });
+
+  it('says it is being drawn again, or why that failed', () => {
+    expect(standing(kept('d', { redrawing: true }), 0)).toBe('Being drawn again from the code as it stands, for “Wishlist”');
+    expect(standing(kept('d', { failed: 'no session' }), 0)).toBe('Drawn by Lt. Okafor for “Wishlist”, today · drawing it again failed: no session');
+  });
+
+  it('forgets one by its id', () => {
+    expect(forget([kept('a'), kept('b')], 'a').map((d) => d.id)).toEqual(['b']);
   });
 });

@@ -105,7 +105,7 @@ describe('Plugins', () => {
     expect(shown.model.question).toBe('Q?');
   });
 
-    it('has the captain merge a pull request when any plugin says so', () => {
+  it('has the captain merge a pull request when any plugin says so', () => {
     const plugins = started({}, plugin('a', { captainMerges: () => false }), plugin('b', { captainMerges: (pr) => pr.branch.startsWith('focus/climb-') }), plugin('c', {}));
     expect(plugins.captainMerges({ branch: 'focus/climb-ab12' })).toBe(true);
     expect(plugins.captainMerges({ branch: 'focus/7-cart' })).toBe(false);

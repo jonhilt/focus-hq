@@ -110,7 +110,9 @@ The diagram most worth having is the one asked for: the captain asks a lead how 
 - **Where**: the page the lead drew and its picture, as files in the plugin's data folder (`diagrams/`), with an index by project beside them (`index.json`), read again as the office starts, unlike the maps.
 - **Each file it cites**, as a repo's file with a hash of what was in it when it was drawn (from the lead's checkout).
 - **In the architecture space**, after each repo's whole map and before the rest: its question over its picture, and when and by whom it was drawn. E on it opens the page itself up close, live, to step through.
-- **Out of date**: whenever a project's maps are made (as the office starts, and as a pull request merges), each diagram's cited files are hashed again on the repos' default branches. One that's changed, or gone, marks it out of date, said on it (a red band across its hologram's top) and up close (which files), asking a lead to draw it again. It's a warning: the diagram may still be right, but the code under it has moved.
+- **Out of date**: whenever a project's maps are made (as the office starts, and as a pull request merges), each diagram's cited files are hashed again on the repos' default branches. One that's changed, or gone, marks it out of date, said on it (a red band across its hologram's top) and up close (which files), It's a warning: the diagram may still be right, but the code under it has moved.
+- **Draw it again**, up close: the office draws it afresh from its repos' default branches as they are now (`PluginHost.drawModel`: a read-only session reads the code and answers its question in the model tool's own shape, then the office checks and draws it as it does a lead's), in its place, drawn *by the office*. Its hologram says it's being drawn meanwhile, or why drawing it failed. A session costs, so it's only ever drawn again when the captain asks.
+- **Forget it**, up close, once the captain confirms: it goes, page and picture too. One whose page has gone from the folder still opens, saying so, to be drawn again or forgotten.
 
 ## A lead's map tool
 

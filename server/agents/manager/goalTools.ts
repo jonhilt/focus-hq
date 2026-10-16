@@ -79,6 +79,22 @@ export class GoalTools extends Part {
     });
   }
 
+  /**
+   * A model checked against the code under `dirs` and drawn as the model tool draws it, with its picture when one can
+   * be taken: for a plugin, a model a read-only session drew afresh (`PluginHost.drawModel`).
+   */
+  drawn(input: SystemModel, title: string, dirs: readonly string[]): Promise<{ model: SystemModel; problems: string[]; html: string; image?: Uint8Array }> {
+    const bad = modelError(input);
+    if (bad) return Promise.reject(new Refused({ message: bad }));
+    const read = sourceReader(dirs);
+    const { model, problems } = checkModel(input, read);
+    const html = modelPage(model, title, citedLines(model, read));
+    const picture = Effect.gen(function* () {
+      return (yield* (yield* Renderer).render(html)).image;
+    }).pipe(Effect.catch(() => Effect.void));
+    return this.runtime.runPromise(picture).then((image) => ({ model, problems, html, ...(image ? { image } : {}) }));
+  }
+
   /** The lead's explain tool: their beats and stage go in the office's player, which goes up like any of show's visuals. */
   explain(agent: Agent, input: ExplainerInput): Effect.Effect<ToolReply, Refused, Renderer> {
     return Effect.gen({ self: this }, function* () {

@@ -11,6 +11,10 @@ import type { CartographyState } from './shared';
 // mapping runs real git (ls-files, rev-parse, log), which takes longer than vitest's 5 s on a busy machine
 vi.setConfig({ testTimeout: 30_000 });
 
+/** What the office answers a plugin asking for a model drawn afresh, or a refusal. */
+let drawn: PluginHost['drawModel'] = ({ title }) =>
+  Promise.resolve({ id: title, title, html: '<p>again</p>', problems: [], model: { question: 'Q?', nodes: [{ id: 'k', label: 'K', kind: 'store', layer: 'L', cite: { file: path.join(process.cwd(), 'plugins/cartography/keeper.ts'), line: 1 } }], edges: [], trace: [], simplified: [] } });
+
 function host(projects: Pick<Project, 'id' | 'name' | 'repos' | 'plugins'>[], agents: Agent[] = [], data = fs.mkdtempSync(path.join(os.tmpdir(), 'cartography-'))) {
   let saved: CartographyState | undefined;
   const state = <S extends object>(fresh: () => S): PluginState<S> => ({
@@ -24,6 +28,8 @@ function host(projects: Pick<Project, 'id' | 'name' | 'repos' | 'plugins'>[], ag
     on: (id: string) => !!projects.find((p) => p.id === id)?.plugins?.includes('cartography'),
     officeDir: process.cwd(),
     dataDir: () => data,
+    // the demo's stand-in, as the office draws it: one model of its own code
+    drawModel: drawn,
     agent: (id: string) => agents.find((a) => a.id === id),
     agents: () => agents,
     leadCheckouts: (id: string) => (agents.find((a) => a.id === id)?.lead?.repos ?? []).map((r) => ({ repo: r.repo, dir: process.cwd(), baseBranch: r.baseBranch })),
@@ -149,5 +155,60 @@ describe('the diagrams leads draw', () => {
     await new Promise((r) => setTimeout(r, 10));
     await settled(busy);
     expect(diagrams().shop?.[0]?.stale).toEqual(['o/shop/plugins/cartography/diagrams.ts']);
+  });
+});
+
+describe('drawing a kept diagram again, and forgetting it', () => {
+  const shop = { id: 'shop', name: 'Shop', repos: ['o/shop'], plugins: ['cartography'] };
+  const old = { id: 'd', title: 'a diagram', question: 'Q?', by: 'Lt. Okafor', goal: 'Wishlist', at: 1, image: false, files: [], stale: ['o/shop/x.ts'] };
+  const until = async (ok: () => boolean) => {
+    for (let i = 0; i < 200 && !ok(); i++) await new Promise((r) => setTimeout(r, 10));
+  };
+
+  it('draws it again from its repos as they are, in its place, no longer out of date', async () => {
+    const { lent, diagrams, seed } = host([shop]);
+    const parts = cartography.start(lent);
+    seed({ diagrams: { shop: [old] } });
+    parts.routes?.find((r) => r.path === '/redraw')?.handle({ body: { project: 'shop', id: 'd' }, query: {} });
+    await until(() => diagrams().shop?.[0]?.by === 'the office');
+    const [again] = diagrams().shop ?? [];
+    expect(again).toMatchObject({ id: 'd', question: 'Q?', goal: 'Wishlist', by: 'the office' });
+    expect(again.stale).toBeUndefined();
+    expect(again.redrawing).toBeUndefined();
+    expect(again.files).toEqual([{ repo: 'o/shop', path: 'plugins/cartography/keeper.ts', hash: expect.any(String) }]);
+    expect(parts.routes?.find((r) => r.path === '/diagram')?.handle({ body: { project: 'shop', id: 'd' }, query: {} })).toEqual({ html: '<p>again</p>' });
+  });
+
+  it('says why when it can’t, and keeps the one it had', async () => {
+    const was = drawn;
+    drawn = () => Promise.reject(new Error('no session to hand'));
+    try {
+      const { lent, diagrams, seed } = host([shop]);
+      const parts = cartography.start(lent);
+      seed({ diagrams: { shop: [old] } });
+      parts.routes?.find((r) => r.path === '/redraw')?.handle({ body: { project: 'shop', id: 'd' }, query: {} });
+      await until(() => !!diagrams().shop?.[0]?.failed);
+      expect(diagrams().shop?.[0]).toMatchObject({ id: 'd', by: 'Lt. Okafor', failed: 'no session to hand' });
+      expect(diagrams().shop?.[0]?.redrawing).toBeUndefined();
+    } finally {
+      drawn = was;
+    }
+  });
+
+  it('opens one whose page has gone, so it can still be drawn again or forgotten', () => {
+    const { lent, seed } = host([shop]);
+    const parts = cartography.start(lent);
+    seed({ diagrams: { shop: [{ ...old, id: 'gone', image: true }] } });
+    const read = parts.routes?.find((r) => r.path === '/diagram')?.handle({ body: { project: 'shop', id: 'gone' }, query: {} }) as { html: string; image?: string };
+    expect(read.html).toContain('Its page is gone');
+    expect(read.image).toBeUndefined();
+  });
+
+  it('forgets one the captain doesn’t want', () => {
+    const { lent, diagrams, seed } = host([shop]);
+    const parts = cartography.start(lent);
+    seed({ diagrams: { shop: [old] } });
+    parts.routes?.find((r) => r.path === '/forget')?.handle({ body: { project: 'shop', id: 'd' }, query: {} });
+    expect(diagrams().shop).toEqual([]);
   });
 });

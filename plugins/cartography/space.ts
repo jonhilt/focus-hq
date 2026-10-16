@@ -4,7 +4,7 @@
 // One space serves every project: it shows the views of the project whose table you came through, and next to the
 // whole map, what each of its goals under way does to it (slice.ts).
 import * as THREE from 'three';
-import { callPlugin, canvasTexture, Hologram, hover, makeCanvas, OVERLAY_LAYER, type Place, type PluginSpace, type ShipHost, SPACE, type Ui } from '../../plugin-api/client';
+import { callPlugin, canvasTexture, confirmDialog, Hologram, hover, makeCanvas, OVERLAY_LAYER, type Place, type PluginSpace, type ShipHost, SPACE, type Ui } from '../../plugin-api/client';
 import { ARCH, HolodeckArch } from './arch';
 import { standing } from './diagrams';
 import { TIES_QUESTION, tiesDrawing } from './draw';
@@ -74,12 +74,22 @@ function items(repos: readonly RepoMap[], state: CartographyState | undefined, p
     : [];
   // the diagrams leads drew when asked how something works, the newest first: what the captain asked for comes first
   const kept = (state?.diagrams[projectId] ?? []).map((d): Item => {
-    const fetched = () => callPlugin<{ html: string; image?: string }>(CARTOGRAPHY, '/diagram', { project: projectId, id: d.id });
+    const call = (path: string) => callPlugin<{ html: string; image?: string }>(CARTOGRAPHY, path, { project: projectId, id: d.id });
     return {
-      key: `diagram|${d.id}|${d.at}|${(d.stale ?? []).join(',')}`,
+      key: `diagram|${d.id}|${d.at}|${(d.stale ?? []).join(',')}|${d.redrawing ? 'redrawing' : d.failed ?? ''}`,
       title: `the diagram: ${d.question}`,
-      draw: async (ctx) => drawPicture(ctx, PX.w, PX.h, d.question, standing(d, Date.now()), (await fetched()).image, !!d.stale?.length),
-      open: (ui) => void fetched().then((f) => openDiagram(ui, d.question, standing(d, Date.now(), false), d.stale ?? [], f.html)).catch((err: Error) => ui.error(err.message)),
+      draw: async (ctx) => drawPicture(ctx, PX.w, PX.h, d.question, standing(d, Date.now()), d.image ? (await call('/diagram')).image : undefined, !!d.stale?.length),
+      open: (ui) =>
+        void call('/diagram')
+          .then((f) => openDiagram(ui, d, standing(d, Date.now(), false), f.html, {
+            redraw: () => call('/redraw'),
+            // it can't be taken back: its page and picture go too
+            forget: async () => {
+              if (!(await confirmDialog({ title: 'Forget this diagram?', message: `“${d.question}” goes from the architecture space for good. A lead can draw it again if it's asked for.`, confirmLabel: 'Forget it', danger: true }))) return false;
+              return call('/forget');
+            },
+          }))
+          .catch((err: Error) => ui.error(err.message)),
     };
   });
   return [...views.slice(0, wholes), ...kept, ...repoTies, ...slices, ...views.slice(wholes)].slice(0, MAX_PANELS);

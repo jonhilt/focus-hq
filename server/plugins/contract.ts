@@ -198,6 +198,13 @@ export interface PluginHost {
    */
   shipSession(run: ShipSessionRun): Promise<ReadOnlyResult>;
   /**
+   * A model of how the code answers `question`, drawn afresh by a read-only session reading `dirs` (each a checkout,
+   * as `checkout` gives them), then checked and drawn by the office as a lead's model tool does: the model as the check
+   * left it (and what didn't check out), its page, and its picture. A session costs, so draw only when asked to. The
+   * demo's stand-in draws one model of the office's own code, whatever's asked.
+   */
+  drawModel(ask: { question: string; title: string; dirs: string[] }): Promise<ModelShown & { problems: string[] }>;
+  /**
    * Checks out `repo`'s default branch as it is on GitHub now, detached, in a folder of the plugin's own (in its
    * `dataDir`), and says where. `repo` has to be one of the office's projects' repos: it throws, in words, for any other.
    */
