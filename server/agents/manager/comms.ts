@@ -3,6 +3,7 @@ import { goneReply } from '../../../shared/mergeGate';
 import type { Agent, Autonomy, Effort, MessageReply, ResumeHow } from '../../../shared/types';
 import { truncate } from '../../util';
 import { resumeChoice } from '../apiKey';
+import { backgroundStop } from '../lead';
 import { STOPPED_BY_CAPTAIN } from '../types';
 import { FINISHED, Part, Refused } from './core';
 
@@ -94,13 +95,10 @@ export class Comms extends Part {
    * Refused when the lead's session isn't listening to ask (it's ended, and the command with it).
    */
   async stopBackground(id: string, taskId: string): Promise<{ stopped: boolean }> {
-    const agent = this.store.agents.get(id);
-    const task = agent?.background?.find((t) => t.id === taskId && t.status === 'running');
+    const stop = backgroundStop(this.store.agents.get(id), taskId);
     const session = this.rt(id).session;
-    if (!agent || !task || !session?.stopTask) return { stopped: false };
-    if (!(await session.stopTask(taskId))) return { stopped: false };
-    const what = task.kind === 'monitor' ? `your monitor (${task.description})` : `your background command \`${task.description}\``;
-    this.message(id, `I stopped ${what}. Start it again if you still need it.`);
+    if (!stop || !session?.stopTask || !(await session.stopTask(taskId))) return { stopped: false };
+    this.message(id, stop.note);
     return { stopped: true };
   }
 

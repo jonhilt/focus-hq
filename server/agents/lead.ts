@@ -754,6 +754,17 @@ export function backgroundChange(agent: Pick<Agent, 'task' | 'background'>, even
 }
 
 /**
+ * What the captain's stop of one of a lead's background tasks is for: what to tell the lead once it's stopped, so they
+ * don't wonder where it went. Undefined when the agent has no such task still running.
+ */
+export function backgroundStop(agent: Pick<Agent, 'background'> | undefined, taskId: string): { note: string } | undefined {
+  const task = agent?.background?.find((t) => t.id === taskId && t.status === 'running');
+  if (!task) return undefined;
+  const what = task.kind === 'monitor' ? `your monitor (${task.description})` : `your background command \`${task.description}\``;
+  return { note: `I stopped ${what}. Start it again if you still need it.` };
+}
+
+/**
  * What a workflow event changes on a lead: the away teams beaming into its briefing room. Undefined for anyone else's,
  * which have nowhere to beam in to, and when it changed none of them.
  */

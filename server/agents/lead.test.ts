@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadAgent, LeadWork } from '../../shared/types';
-import { afterLanding, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, backgroundChange, helperChange, taskChange, workflowChange, notedGoal, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, openPr, pickStation, qaVerdictNote, queuedStart, shippedSha, shipPlan, shipBranch, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
+import { afterLanding, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, backgroundChange, backgroundStop, helperChange, taskChange, workflowChange, notedGoal, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, openPr, pickStation, qaVerdictNote, queuedStart, shippedSha, shipPlan, shipBranch, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -329,6 +329,24 @@ describe('taskChange', () => {
 
   it('changes nothing for a call that left the list as it was, or a tool it doesn’t follow', () => {
     expect(taskChange({ task: 'lead', lead: work, tasks: [probe] }, { name: 'Read', input: {} }, 5)).toBeUndefined();
+  });
+});
+
+describe('backgroundStop', () => {
+  const task = { id: 'b1', kind: 'shell', description: 'pnpm test', status: 'running', startedAt: 5 } as const;
+
+  it('tells the lead which command or monitor the captain stopped', () => {
+    expect(backgroundStop({ background: [task] }, 'b1')).toEqual({ note: 'I stopped your background command `pnpm test`. Start it again if you still need it.' });
+    expect(backgroundStop({ background: [{ ...task, kind: 'monitor', description: 'the deploy log' }] }, 'b1')).toEqual({
+      note: 'I stopped your monitor (the deploy log). Start it again if you still need it.',
+    });
+  });
+
+  it('is for nothing once the task has ended, for another task, or for an agent who isn’t there', () => {
+    for (const status of ['done', 'failed', 'stopped'] as const) expect(backgroundStop({ background: [{ ...task, status }] }, 'b1')).toBeUndefined();
+    expect(backgroundStop({ background: [task] }, 'b2')).toBeUndefined();
+    expect(backgroundStop({}, 'b1')).toBeUndefined();
+    expect(backgroundStop(undefined, 'b1')).toBeUndefined();
   });
 });
 

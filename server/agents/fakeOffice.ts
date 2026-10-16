@@ -13,12 +13,14 @@ import { AgentManager } from './manager';
 import { Renderer, Sessions, ShipRetry, Triage, Workspace } from './services';
 import type { AgentRunner, AgentSession, CloudTerminal, CloudTerminalRequest, RunHooks, RunOutcome, RunRequest, WorkspaceOps } from './types';
 
-/** A Claude Code stand-in: each turn runs until the test ends it, and remembers being stopped and what it was sent. */
+/** A Claude Code stand-in: each turn runs until the test ends it, and remembers being stopped, what it was sent and which background tasks it stopped. */
 export class FakeClaude implements AgentRunner {
-  turns: { req: RunRequest; hooks: RunHooks; end: (outcome: RunOutcome) => void; stopped: boolean; sent: string[]; modes: Autonomy[] }[] = [];
+  turns: { req: RunRequest; hooks: RunHooks; end: (outcome: RunOutcome) => void; stopped: boolean; sent: string[]; modes: Autonomy[]; stoppedTasks: string[] }[] = [];
   /** The terminals opened to start cloud sessions, and what they show. */
   terminals: CloudTerminalRequest[] = [];
   shown = '';
+  /** Its sessions have stopped listening: they refuse to stop a background task. */
+  deaf = false;
 
   cloudTerminal(req: CloudTerminalRequest): Promise<CloudTerminal> {
     this.terminals.push(req);
@@ -28,12 +30,15 @@ export class FakeClaude implements AgentRunner {
   start(req: RunRequest, hooks: RunHooks): AgentSession {
     let end!: (outcome: RunOutcome) => void;
     const done = new Promise<RunOutcome>((resolve) => (end = resolve));
-    const turn = { req, hooks, end, stopped: false, sent: [] as string[], modes: [] as Autonomy[] };
+    const stoppedTasks: string[] = [];
+    const turn = { req, hooks, end, stopped: false, sent: [] as string[], modes: [] as Autonomy[], stoppedTasks };
     this.turns.push(turn);
     // a new cloud session's id comes once it's started, which Claude Code may refuse to do first
     if (!req.cloud || req.resumeSessionId) hooks.session(req.resumeSessionId ?? 'session-1');
     return {
       send: (text) => (turn.sent.push(text), true),
+      // a session whose input has closed can't stop one
+      stopTask: (taskId) => Promise.resolve(!this.deaf && (turn.stoppedTasks.push(taskId), true)),
       // a cloud session's mode waits for its next turn
       setAutonomy: (mode) => (turn.modes.push(mode), !req.cloud),
       stop: () => {
