@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Agent, AgentStatus } from '../shared/types';
 import type { AgentManager } from './agents/manager';
-import type { QuickAnswerer, QuickQuestion } from './agents/quickAnswer';
+import type { QuickAnswerer } from './agents/quickAnswer';
 import { BriefingDesk, QUICK_ANSWERER } from './briefingDesk';
 import type { Store } from './store';
 
@@ -35,7 +35,7 @@ describe('BriefingDesk', () => {
   it('has the quick answerer answer while the lead is busy, and tells the lead what it said', async () => {
     const { briefings, message, asked } = desk('working', () => Promise.resolve({ text: 'Because the database is down.' }));
     expect(await briefings.ask('lead1', ask)).toEqual({ by: 'quick', text: 'Because the database is down.' });
-    const req = asked.mock.calls[0][0] as QuickQuestion;
+    const req = asked.mock.calls[0][0];
     expect(req).toMatchObject({ cwd: '/work/lead1', leadName: 'Lt. Adeyemi', recent: ['Building the store.'], briefing: { html: '<p>The page</p>' } });
     expect(message.mock.calls[0][1]).toContain('The quick answerer answered for you: Because the database is down.');
     expect(message.mock.calls[0][2]).toBe(QUICK_ANSWERER);
