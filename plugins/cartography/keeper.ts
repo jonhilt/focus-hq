@@ -38,11 +38,14 @@ export class DiagramKeeper {
 
   /** The kept diagrams as the office last saved them. */
   load(): Record<string, KeptDiagram[]> {
+    let saved: Record<string, KeptDiagram[]>;
     try {
-      return JSON.parse(fs.readFileSync(this.index, 'utf8')) as Record<string, KeptDiagram[]>;
+      saved = JSON.parse(fs.readFileSync(this.index, 'utf8')) as Record<string, KeptDiagram[]>;
     } catch {
       return {};
     }
+    // no drawing can be under way as the office starts: one the office stopped in the middle of can be drawn again
+    return Object.fromEntries(Object.entries(saved).map(([project, kept]) => [project, kept.map(({ redrawing: _, ...d }) => d)]));
   }
 
   private save(diagrams: Record<string, KeptDiagram[]>): void {

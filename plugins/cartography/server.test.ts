@@ -204,6 +204,19 @@ describe('drawing a kept diagram again, and forgetting it', () => {
     expect(read.image).toBeUndefined();
   });
 
+  it('isn’t left being drawn again by an office that stopped in the middle of drawing it', async () => {
+    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'cartography-'));
+    fs.mkdirSync(path.join(data, 'diagrams'));
+    fs.writeFileSync(path.join(data, 'diagrams', 'index.json'), JSON.stringify({ shop: [{ ...old, redrawing: true }] }));
+    const { lent, diagrams } = host([shop], [], data);
+    const parts = cartography.start(lent);
+    expect(diagrams().shop?.[0]?.redrawing).toBeUndefined();
+    // so it can be drawn again
+    parts.routes?.find((r) => r.path === '/redraw')?.handle({ body: { project: 'shop', id: 'd' }, query: {} });
+    await until(() => diagrams().shop?.[0]?.by === 'the office');
+    expect(diagrams().shop?.[0]?.by).toBe('the office');
+  });
+
   it('forgets one the captain doesn’t want', () => {
     const { lent, diagrams, seed } = host([shop]);
     const parts = cartography.start(lent);
