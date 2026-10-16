@@ -52,8 +52,11 @@ export const sentences = (text: string): string[] =>
     .map((s) => s.replaceAll(HELD, '.').replace(/\s+/g, ' ').trim())
     .filter(Boolean);
 
-/** Words whose full stops don't end a sentence (Lt. Adeyemi, e.g.): the crew's ranks and the usual abbreviations. */
-const ABBREVIATION = /\b(?:Lt|Cmdr|Capt|Ens|Adm|Dr|Mr|Mrs|Ms|St|vs|etc|approx|e\.g|i\.e)\./gi;
+/**
+ * Words whose full stops don't end a sentence (Lt. Adeyemi, e.g.): titles as written, capitalised, and a few lowercase
+ * abbreviations. Case matters, so "200 ms." and "first st." still end one; "etc." is left out, since it usually ends one.
+ */
+const ABBREVIATION = /\b(?:(?:Lt|Cmdr|Capt|Ens|Adm|Dr|Mr|Mrs|Ms|St)|(?:vs|approx|e\.g|i\.e))\./g;
 /** What their full stops stand as while the text is split. */
 const HELD = '\u0000';
 

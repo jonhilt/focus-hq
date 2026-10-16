@@ -30,13 +30,25 @@ function officeUrl(): string {
   }
 }
 
-const base = `${officeUrl()}/api`;
+/** The office's API: set as the check starts, so a missing demo office fails with its own message, not a stack. */
+let base = '';
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function json<T>(method: string, route: string, body?: unknown): Promise<T> {
   const res = await fetch(`${base}${route}`, { method, headers: body === undefined ? {} : { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
-  const out = (await res.json()) as T & { error?: string };
-  if (!res.ok) throw new Error(`${route}: ${out.error ?? res.status}`);
+  return parsed<T>(route, res);
+}
+
+/** A response's JSON, or what went wrong: the office's own error, or its status when the body isn't JSON. */
+async function parsed<T>(route: string, res: Response): Promise<T> {
+  const body = await res.text();
+  let out: (T & { error?: string }) | undefined;
+  try {
+    out = JSON.parse(body) as T & { error?: string };
+  } catch {
+    out = undefined;
+  }
+  if (!res.ok || !out) throw new Error(`${route}: ${out?.error ?? `${res.status} ${res.statusText}${body ? `, ${body.slice(0, 200)}` : ''}`}`);
   return out;
 }
 
@@ -85,6 +97,7 @@ async function leadReply(id: string, since: number): Promise<string> {
 }
 
 async function main(): Promise<void> {
+  base = `${officeUrl()}/api`;
   console.log(`voice:check against ${base}`);
   const voice = await voicesReady();
   console.log(`Kokoro is ready${voice.speech.engine.state === 'ready' && voice.speech.engine.on ? ` on the ${voice.speech.engine.on.toUpperCase()}` : ''}`);
@@ -98,7 +111,8 @@ async function main(): Promise<void> {
   if (!wav) throw new Error('Kokoro’s audio isn’t a WAV');
   const [{ text: heard }, transcribeMs] = await timed(async () => {
     const res = await fetch(`${base}/transcribe`, { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: encodeWav(toMono16k([wav.samples], wav.rate)) });
-    return (await res.json()) as { text: string; error?: string };
+    // whisper missing or failing is the check's finding, said as the office says it
+    return parsed<{ text: string }>('/transcribe', res);
   });
   // the demo office transcribes every recording to the same line: there's no whisper there to check
   const demo = heard === DEMO_TRANSCRIPT;

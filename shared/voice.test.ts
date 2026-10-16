@@ -128,6 +128,10 @@ describe('sentences', () => {
     expect(sentences('   ')).toEqual([]);
   });
 
+  it('still ends a sentence on a unit or etc. that only looks like an abbreviation', () => {
+    expect(sentences('It took 200 ms. Then it retried, etc. Done.')).toEqual(['It took 200 ms.', 'Then it retried, etc.', 'Done.']);
+  });
+
   it('keeps a title or an abbreviation with the sentence it is in', () => {
     expect(sentences('Lt. Adeyemi is busy, so I answered. Ask Dr. Chen, e.g. tomorrow.')).toEqual(['Lt. Adeyemi is busy, so I answered.', 'Ask Dr. Chen, e.g. tomorrow.']);
   });
