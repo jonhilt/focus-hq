@@ -28,6 +28,7 @@ server/
   flows.ts                with FOCUS_FLOWS set, counts each event the hub sends and each /api request against the files that sent them, handed over at GET /api/flows
   previews.ts             Preview: check a PR out, run the project's preview commands, find its links, tear it down (Effect: one Scope per preview)
   previewMachine.ts       what a preview does to this machine (shell commands in their own process group, signals, probes) as an Effect service
+  previewResults.ts       what its commands print means: the last JSON result, which stack in a list is ours and when it's gone, the phase, links and logs it gives (pure)
   previewVerdicts.ts      what a running preview's health checks and its start command's exit mean (pure)
   plugins/                what a plugin is to the office (contract.ts: briefs, routes, hooks, lead tools), the ones switched on (registry.ts), loading what FOCUS_PLUGINS names (load.ts), and state saved from before (migrate.ts): docs/plugins.md
   github/                 GitHub as an Effect service: gh CLI layer (live), in-memory layer (demo), Promise adapter
