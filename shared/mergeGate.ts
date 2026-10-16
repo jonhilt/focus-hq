@@ -1,5 +1,5 @@
-import { qaBadge, sameCommit } from './qa';
-import type { FailedCheck, MergeMethod, PullRequest, QaReview } from './types';
+import { prKey, qaBadge, sameCommit } from './qa';
+import type { Board, ConflictsOutcome, FailedCheck, MergeMethod, PullRequest, QaReview } from './types';
 
 // When a pull request may merge, and what the office does next with one that can't yet. Pure, so it's unit tested
 // (shared/mergeGate.test.ts); office.ts follows the steps on each board refresh while a project has auto-merge on.
@@ -81,6 +81,41 @@ export function mergeStep(pr: GatePr, review: QaReview | undefined, office: Gate
   }
   if (pr.mergeable === 'UNKNOWN') return { kind: 'wait', reason: 'GitHub is still working out whether it merges cleanly' };
   return { kind: 'merge', sha: head };
+}
+
+/**
+ * The gate marks (by prKey) to forget after a board refresh: those of PRs in the project's repos that left the board.
+ * A repo GitHub couldn't list this time (named in `board.error`) keeps its marks, so a refused merge isn't tried again.
+ */
+export function forgottenMarks(keys: Iterable<string>, repos: string[], board: { prs: Pick<PullRequest, 'repo' | 'number'>[]; error?: Board['error'] }): string[] {
+  const open = new Set(board.prs.map((p) => prKey(p.repo, p.number)));
+  return [...keys].filter((key) => {
+    const repo = key.slice(0, key.lastIndexOf('#'));
+    return repos.includes(repo) && !board.error?.includes(repo) && !open.has(key);
+  });
+}
+
+/** The mark a step leaves on the PR's head as the office takes it, so the next refresh doesn't take it again. */
+export function stepMark(step: MergeStep): GateMark | undefined {
+  switch (step.kind) {
+    case 'rerun-checks':
+      return { sha: step.sha, kind: 'rerun' };
+    case 'send-back':
+      return { sha: step.sha, kind: 'sent-back' };
+    case 'resolve-conflicts':
+      return { sha: step.sha, kind: 'resolving' };
+    default:
+      return undefined;
+  }
+}
+
+/** What the office tells the captain once it took on a PR's conflicts with its base branch. */
+export function conflictsSaid(where: string, base: string, outcome: Exclude<ConflictsOutcome, { kind: 'agent' }> | { kind: 'agent' }): string {
+  const said = outcome.kind === 'agent' ? '– resolving them before QA'
+    : outcome.kind === 'up-to-date' ? `on GitHub, but it already has everything from ${base}`
+    : outcome.auto ? `– the office merged ${base} in, settling ${outcome.auto.join(', ')} by rule`
+    : `– the office merged ${base} in cleanly`;
+  return `🔧 ${where} conflicts with ${base} ${said}`;
 }
 
 /** Why merging a PR from the board needs the manager to confirm: QA hasn't passed its current head commit. */

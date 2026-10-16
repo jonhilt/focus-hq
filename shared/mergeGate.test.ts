@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoMergeFor, type GateOffice, goneReply, mergeAction, mergeMethodFor, mergeStep, requestedMerge, unpassedReason } from './mergeGate';
+import { autoMergeFor, conflictsSaid, forgottenMarks, type GateOffice, goneReply, mergeAction, mergeMethodFor, mergeStep, requestedMerge, stepMark, unpassedReason } from './mergeGate';
 import type { PullRequest, QaReview } from './types';
 
 const HEAD = 'abc1234def5678';
@@ -235,5 +235,61 @@ describe('mergeMethodFor', () => {
     expect(mergeMethodFor({ mergeMethods: { 'o/a': 'rebase' } }, 'o/b', 'merge')).toBe('merge');
     expect(mergeMethodFor({}, 'o/a', 'squash')).toBe('squash');
     expect(mergeMethodFor(undefined, 'o/a', 'squash')).toBe('squash');
+  });
+});
+
+describe('forgottenMarks', () => {
+  const open = (...prs: [string, number][]) => ({ prs: prs.map(([repo, number]) => ({ repo, number })) });
+
+  it('forgets the marks of PRs no longer on the board', () => {
+    expect(forgottenMarks(['acme/shop#12', 'acme/shop#13'], ['acme/shop'], open(['acme/shop', 12]))).toEqual(['acme/shop#13']);
+  });
+
+  it('keeps the marks of PRs still open', () => {
+    expect(forgottenMarks(['acme/shop#12'], ['acme/shop'], open(['acme/shop', 12]))).toEqual([]);
+  });
+
+  it('keeps the marks of a repo GitHub couldn’t list this time, so a refused merge isn’t tried again', () => {
+    const board = { ...open(['acme/api', 3]), error: 'acme/shop: HTTP 502' };
+    expect(forgottenMarks(['acme/shop#12', 'acme/api#4'], ['acme/shop', 'acme/api'], board)).toEqual(['acme/api#4']);
+  });
+
+  it('keeps the marks of repos that aren’t the project’s: another project’s refresh forgets those', () => {
+    expect(forgottenMarks(['acme/blog#7'], ['acme/shop'], open())).toEqual([]);
+  });
+
+  it('reads the repo from before the last #, whatever the name holds', () => {
+    expect(forgottenMarks(['acme/c#-lib#7', 'acme/c#-lib#8'], ['acme/c#-lib'], open(['acme/c#-lib', 8]))).toEqual(['acme/c#-lib#7']);
+  });
+});
+
+describe('stepMark', () => {
+  it('marks the head before re-running checks, sending back or resolving conflicts, so the next refresh waits', () => {
+    expect(stepMark({ kind: 'rerun-checks', sha: HEAD, runIds: [77] })).toEqual({ sha: HEAD, kind: 'rerun' });
+    expect(stepMark({ kind: 'send-back', sha: HEAD, checks: [] })).toEqual({ sha: HEAD, kind: 'sent-back' });
+    expect(stepMark({ kind: 'resolve-conflicts', sha: HEAD })).toEqual({ sha: HEAD, kind: 'resolving' });
+  });
+
+  it('leaves no mark for a merge (only a refusal marks it), QA, waiting or a blocked PR', () => {
+    expect(stepMark({ kind: 'merge', sha: HEAD })).toBeUndefined();
+    expect(stepMark({ kind: 'qa', reason: 'QA hasn’t tested it' })).toBeUndefined();
+    expect(stepMark({ kind: 'wait', reason: 'checks are running' })).toBeUndefined();
+    expect(stepMark({ kind: 'blocked', reason: 'it’s a draft' })).toBeUndefined();
+  });
+});
+
+describe('conflictsSaid', () => {
+  it('says an agent is resolving them', () => {
+    expect(conflictsSaid('shop#12', 'main', { kind: 'agent' })).toBe('🔧 shop#12 conflicts with main – resolving them before QA');
+  });
+
+  it('says the office merged the base in, and which files it settled by rule', () => {
+    expect(conflictsSaid('shop#12', 'main', { kind: 'merged' })).toBe('🔧 shop#12 conflicts with main – the office merged main in cleanly');
+    expect(conflictsSaid('shop#12', 'main', { kind: 'merged', auto: ['pnpm-lock.yaml', 'CHANGELOG.md'] }))
+      .toBe('🔧 shop#12 conflicts with main – the office merged main in, settling pnpm-lock.yaml, CHANGELOG.md by rule');
+  });
+
+  it('says when GitHub is behind and it already has everything from the base', () => {
+    expect(conflictsSaid('shop#12', 'develop', { kind: 'up-to-date' })).toBe('🔧 shop#12 conflicts with develop on GitHub, but it already has everything from develop');
   });
 });

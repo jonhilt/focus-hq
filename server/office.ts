@@ -4,7 +4,7 @@ import { freshBoard, prsOffBoard, type RepoListing, staleClosedPrs } from '../sh
 import { chosenSet, previewPrsGone } from '../shared/previewSet';
 import { issuesToAssign } from '../shared/dependencies';
 import type { Closer } from '../shared/ledger';
-import { autoMergeFor, type GateMark, mergeMethodFor, mergeStep, type MergeStep, requestedMerge } from '../shared/mergeGate';
+import { autoMergeFor, conflictsSaid, forgottenMarks, type GateMark, mergeMethodFor, mergeStep, type MergeStep, requestedMerge, stepMark } from '../shared/mergeGate';
 import { autoQaFor, autoSendBackFor, prKey, verdictBehindHead } from '../shared/qa';
 import type { AgentManager } from './agents/manager';
 import type { Lent } from './agents/manager/pluginHost';
@@ -375,11 +375,7 @@ export class Office {
   private async autoMerge(projectId: string, board: Board): Promise<void> {
     const project = this.store.projects.find((p) => p.id === projectId);
     if (!project || !autoMergeFor(project)) return;
-    const open = new Set(board.prs.map((p) => prKey(p.repo, p.number)));
-    for (const key of this.gateMarks.keys()) {
-      const repo = key.slice(0, key.lastIndexOf('#'));
-      if (project.repos.includes(repo) && !board.error?.includes(repo) && !open.has(key)) this.gateMarks.delete(key);
-    }
+    for (const key of forgottenMarks(this.gateMarks.keys(), project.repos, board)) this.gateMarks.delete(key);
     for (const pr of [...board.prs]) {
       const key = prKey(pr.repo, pr.number);
       const step = mergeStep(pr, this.store.reviews.get(key), {
@@ -400,6 +396,8 @@ export class Office {
   private async followMergeStep(projectId: string, pr: PullRequest, step: MergeStep): Promise<void> {
     const key = prKey(pr.repo, pr.number);
     const where = `${pr.repo.split('/')[1]}#${pr.number}`;
+    const mark = stepMark(step);
+    if (mark) this.gateMarks.set(key, mark);
     switch (step.kind) {
       case 'wait':
       case 'blocked':
@@ -419,25 +417,15 @@ export class Office {
         this.hub.toast('info', `🔍 ${where} goes to QA before it can merge: ${step.reason}`, undefined, projectId);
         return;
       case 'rerun-checks':
-        this.gateMarks.set(key, { sha: step.sha, kind: 'rerun' });
         await this.github.rerunFailedRuns(pr.repo, step.runIds);
         this.hub.toast('info', `↻ Re-running the failed checks on ${where}`, undefined, projectId);
         return;
       case 'send-back':
-        this.gateMarks.set(key, { sha: step.sha, kind: 'sent-back' });
         await this.agents.sendBackChecks(pr.repo, pr.number, step.checks);
         return;
       case 'resolve-conflicts': {
-        this.gateMarks.set(key, { sha: step.sha, kind: 'resolving' });
         const outcome = await this.agents.resolveConflicts(projectId, pr);
-        const said = {
-          agent: `– resolving them before QA`,
-          merged: outcome.kind === 'merged' && outcome.auto
-            ? `– the office merged ${pr.baseBranch} in, settling ${outcome.auto.join(', ')} by rule`
-            : `– the office merged ${pr.baseBranch} in cleanly`,
-          'up-to-date': `on GitHub, but it already has everything from ${pr.baseBranch}`,
-        }[outcome.kind];
-        this.hub.toast('info', `🔧 ${where} conflicts with ${pr.baseBranch} ${said}`, outcome.kind === 'agent' ? outcome.agent.id : undefined, projectId);
+        this.hub.toast('info', conflictsSaid(where, pr.baseBranch, outcome), outcome.kind === 'agent' ? outcome.agent.id : undefined, projectId);
         return;
       }
     }
