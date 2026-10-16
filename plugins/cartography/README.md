@@ -26,6 +26,26 @@ views:
     parts: [api, core, types]
 ```
 
+### Scenarios: a question of how something happens
+
+A view that asks how something happens is better answered in order than as a web of imports, so a view can be a **scenario**: an `answer` (the whole of it in a line) and `steps`, each a part reaching another and what happens, in a few words.
+
+```yaml
+  show-to-screen:
+    question: How does a lead's show reach the station's screen?
+    parts: [office-tools, manager, client-net, ship, artifacts, panels]   # optional: the steps' parts, in order, if left out
+    answer: "The office tools keep the page on the lead, the manager sends the lead to the browser over /ws, and the station's screen draws its picture."
+    steps:
+      - { from: office-tools, to: manager, says: "keeps the shown page on the lead" }
+      - { from: manager, to: client-net, says: "sends the lead's update over /ws" }
+```
+
+It's drawn as a sequence diagram (`sequence.ts`): a lifeline per part in the order the steps reach them, and each step an arrow down the page, numbered, with what it says over it. The office checks each step against the code (`steps.ts`): a message the recorded run saw from one part to the other (a dashed gold arrow), or an import between them either way (solid: one calls the other, or reads from it). A step nothing backs is drawn red and said so, never left out. Under the drawing, each numbered step opens on its evidence: the imports and their names, the recorded messages and how many. That's the detail the old sentences crammed in all at once.
+
+Imports alone can't put a scenario in order: a shortest path through them runs through whatever module everything imports (the plugin API, say), not the way the code actually goes. So a scenario's steps are written, by whoever adds the view or by a lead with the map tool, and checked rather than guessed. The map tool tells a lead which of their steps nothing backs.
+
+**Legibility is tested** (`legibility.ts`): every scenario in Focus's own model is held to a budget as a station's screen shows it (at most 7 lifelines and 8 steps, no label cut short, no text under 13 px once shrunk to fit), and every step must be backed. A view that grows past it fails `pnpm test`.
+
 A part's `does` is what it does, in a line, shown in its box. Its `layer` puts it in a column, and gives it its colour; the layers go left to right in the order the model first names them. Its `kind` is one of the studio's (ui, route, handler, service, store, queue, external, job, type). Focus's own model is [`.focus/cartography.yaml`](../../.focus/cartography.yaml).
 
 ## What the imports can't show
@@ -104,6 +124,7 @@ Maps are made from each repo's default branch, checked out in the plugin's own f
 - `crossRepo.ts`: what ties a project's repos together, from their histories: change sets across repos, and the parts in different repos that change together, pure.
 - `slice.ts`: what a goal's slice does to the architecture, from its lead's checkout against the default branch's map, and its view, pure.
 - `map.ts`: making a repo's map from a checkout (git ls-files, then each language's reader, and git log for history.ts).
+- `steps.ts`: a scenario's steps checked against the map's imports and recorded flows, pure. `sequence.ts`: a scenario drawn as a sequence diagram. `legibility.ts`: how legible a drawing is where it's seen, and the budget a scenario's held to.
 - `draw.ts`: drawing a view, the matrix and the changes as SVG, with their sentences (`viewDrawing`, which every place a view shows goes through).
 - `views.ts`: a map's views, and what the Maps view says in words.
 - `leadTool.ts`: the lead's map tool. `page.ts`: a view as a page for a station's screen.

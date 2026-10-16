@@ -1,6 +1,8 @@
 // A map drawn to be read (README.md): a view as its parts in a column per layer, each arrow saying what one part takes
 // from another, the whole map as a dependency matrix, and how it changes as bars and sentences. Pure SVG strings, free of Node and the DOM.
 import type { CrossCall, CrossCoupling, MapConnection, MapFlow, MapPart, MapView, RepoMap } from './shared';
+import { SEQUENCE_KEY, sequenceSvg } from './sequence';
+import { checkSteps, stepSentence } from './steps';
 import { CHANGES, CHANGES_KEY, MATRIX_KEY, VIEW_KEY, WHOLE } from './views';
 
 /** Each layer's colour, by its place among the map's layers. */
@@ -378,11 +380,30 @@ export function tiesDrawing(maps: readonly RepoMap[], ties: readonly CrossCoupli
   return { map, view, svg: viewSvg(map, view, undefined, lines), key: TIES_KEY, sentences: lines.map((l) => l.sentence) };
 }
 
+/** A view as it's shown: its drawing, how to read it, its numbered sentences, and the evidence behind each (a scenario's). */
+export interface Drawing {
+  svg: string;
+  key: string;
+  sentences: string[];
+  /** Each sentence's evidence, for opening on demand: a scenario's steps have it. */
+  details?: string[][];
+}
+
 /**
  * Any view of a map as the browser and the screens show it: its drawing, how to read it, and its numbered sentences.
- * A slice's view (slice.ts `sliceView`) comes with `marks`, what the slice changes.
+ * A slice's view (slice.ts `sliceView`) comes with `marks`, what the slice changes. A scenario (a view with steps) is a
+ * sequence, each step with its evidence.
  */
-export function viewDrawing(map: RepoMap, view: MapView, marks?: Marks): { svg: string; key: string; sentences: string[] } {
+export function viewDrawing(map: RepoMap, view: MapView, marks?: Marks): Drawing {
+  if (view.steps?.length && !marks) {
+    const steps = checkSteps(map, view);
+    return {
+      svg: sequenceSvg(map, view, steps),
+      key: SEQUENCE_KEY,
+      sentences: steps.map((s) => stepSentence(map, s)),
+      details: steps.map((s) => (s.evidence.length ? s.evidence.map((e) => e.sentence) : ['Nothing in the code backs this step: no import between the two parts, and no message in the recorded run.'])),
+    };
+  }
   if (marks) return { svg: viewSvg(map, view, marks), key: SLICE_KEY, sentences: viewLines(map, view, marks).map((l) => l.sentence) };
   if (view.id === WHOLE.id) {
     const example = matrixExample(map);

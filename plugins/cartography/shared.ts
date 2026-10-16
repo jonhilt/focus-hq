@@ -20,11 +20,23 @@ export interface MapPart {
   does?: string;
 }
 
-/** A question the model answers, drawn with only the parts it names. */
+/** One step of a view's scenario: `from` does something that reaches `to`, said in a few words. */
+export interface ViewStep {
+  from: string;
+  to: string;
+  says: string;
+}
+
+/**
+ * A question the model answers, drawn with only the parts it names. One with `steps` is a scenario, drawn in order as a
+ * sequence (steps.ts), with its answer in a line.
+ */
 export interface MapView {
   id: string;
   question: string;
   parts: string[];
+  answer?: string;
+  steps?: ViewStep[];
 }
 
 /** A repo's model as its file says it: which code belongs to which part, and its views. */

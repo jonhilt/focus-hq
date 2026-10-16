@@ -33,6 +33,32 @@ ignore: [scripts/]
     expect(() => yaml('parts: { api: { label: A, layer: L, paths: [a] } }\nviews: { v: { question: Q?, parts: [api, db] } }')).toThrow("View v shows parts the model doesn't have: db");
     expect(() => yaml('parts: [a, b]')).toThrow('Its parts is a mapping');
   });
+
+  it('reads a scenario: its answer and steps, its parts the ones its steps reach unless it names them', () => {
+    const model = yaml(`
+parts:
+  api: { label: API, layer: Server, paths: [a.ts] }
+  core: { label: Core, layer: Server, paths: [c.ts] }
+views:
+  order:
+    question: How is an order saved?
+    answer: The API hands it to the core.
+    steps:
+      - { from: api, to: core, says: hands it over }
+      - { from: core, to: core, says: checks it }
+`);
+    expect(model.views[0]).toEqual({
+      id: 'order',
+      question: 'How is an order saved?',
+      parts: ['api', 'core'],
+      answer: 'The API hands it to the core.',
+      steps: [{ from: 'api', to: 'core', says: 'hands it over' }, { from: 'core', to: 'core', says: 'checks it' }],
+    });
+    const parts = 'parts: { api: { label: A, layer: L, paths: [a] } }\n';
+    expect(() => yaml(`${parts}views: { v: { question: Q?, steps: [{ from: api, to: db, says: x }] } }`)).toThrow("View v shows parts the model doesn't have: db");
+    expect(() => yaml(`${parts}views: { v: { question: Q?, steps: [{ from: api, to: api }] } }`)).toThrow("View v's step 1's says needs some text");
+    expect(() => yaml(`${parts}views: { v: { question: Q? } }`)).toThrow('View v needs the parts it shows, or its steps');
+  });
 });
 
 describe('readRecording', () => {

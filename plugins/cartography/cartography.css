@@ -2,3 +2,6 @@
 .cg-drawing { overflow-x: auto; margin: 8px 0; background: #0b1020; border-radius: 12px; padding: 8px; }
 .cg-drawing svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
 .cg-sentences { margin: 6px 0 2px; padding-left: 18px; font-size: 15px; line-height: 1.5; }
+.cg-answer { margin: 4px 0 8px; font-size: 18px; line-height: 1.4; }
+.cg-sentences summary { cursor: pointer; }
+.cg-sentences details ul { margin: 2px 0 6px; padding-left: 18px; font-size: 13px; opacity: 0.75; }

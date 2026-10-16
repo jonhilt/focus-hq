@@ -1,6 +1,6 @@
 // A repo's architecture model from its parsed YAML (MODEL_FILE), or an error saying what's wrong with it. Pure.
 import { type Flow, type FlowRecording, MODEL_KINDS, type ModelKind } from '../../plugin-api/shared';
-import type { ArchitectureModel, MapPart, MapView } from './shared';
+import type { ArchitectureModel, MapPart, MapView, ViewStep } from './shared';
 
 const ID = /^[a-z][a-z0-9-]{0,31}$/;
 
@@ -35,14 +35,23 @@ function part(id: string, raw: unknown): MapPart {
   return { id, label: text(r.label, `Part ${id}'s label`), layer: text(r.layer, `Part ${id}'s layer`), kind: kind as ModelKind, paths, ...(does ? { does } : {}) };
 }
 
+function step(raw: unknown, what: string): ViewStep {
+  const r = record(raw, what);
+  return { from: text(r.from, `${what}'s from`), to: text(r.to, `${what}'s to`), says: text(r.says, `${what}'s says`) };
+}
+
 function view(id: string, raw: unknown, parts: ReadonlySet<string>): MapView {
   if (!ID.test(id)) throw new Error(`View "${id}" needs an id in lowercase letters, digits and dashes`);
   const r = record(raw, `View ${id}`);
-  const named = texts(r.parts, `View ${id}'s parts`);
-  if (!named.length) throw new Error(`View ${id} needs the parts it shows`);
-  const unknown = named.filter((p) => !parts.has(p));
+  if (r.steps !== undefined && !Array.isArray(r.steps)) throw new Error(`View ${id}'s steps are a list`);
+  const steps = ((r.steps ?? []) as unknown[]).map((s, i) => step(s, `View ${id}'s step ${i + 1}`));
+  // a scenario's parts are the ones its steps go through, in order, unless it names them
+  const named = r.parts === undefined && steps.length ? [...new Set(steps.flatMap((s) => [s.from, s.to]))] : texts(r.parts, `View ${id}'s parts`);
+  if (!named.length) throw new Error(`View ${id} needs the parts it shows, or its steps`);
+  const unknown = [...new Set([...named, ...steps.flatMap((s) => [s.from, s.to])])].filter((p) => !parts.has(p));
   if (unknown.length) throw new Error(`View ${id} shows parts the model doesn't have: ${unknown.join(', ')}`);
-  return { id, question: text(r.question, `View ${id}'s question`), parts: named };
+  const answer = r.answer === undefined ? undefined : text(r.answer, `View ${id}'s answer`);
+  return { id, question: text(r.question, `View ${id}'s question`), parts: named, ...(answer ? { answer } : {}), ...(steps.length ? { steps } : {}) };
 }
 
 export function readModel(raw: unknown): ArchitectureModel {

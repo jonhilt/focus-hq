@@ -41,7 +41,7 @@ describe('the map tool', () => {
     const { context, shown } = lead();
     const said = await mapTool.run(context, { view: 'show-to-screen' });
     expect(said).toContain("is on your station's screen");
-    expect(said).toContain('view "show-to-screen": 7 parts');
+    expect(said).toContain('view "show-to-screen": 6 parts. 5 steps, each backed by the code.');
     expect(shown).toHaveLength(1);
     expect(shown[0].id).toBe('map-show-to-screen');
     expect(shown[0].html).toContain('<svg');

@@ -6,9 +6,10 @@ import { ARTIFACT_LIMITS, type LeadTool, type LeadToolContext } from '../../plug
 import { mapRepo } from './map';
 import { mapPage } from './page';
 import { MODEL_FILE, type RepoMap } from './shared';
+import { checkSteps } from './steps';
 import { pickView, screenTitle, viewList } from './views';
 
-const DESCRIPTION = `Put a view of the project's architecture map on your station's screen, like show's visuals: the parts a question takes, the imports between them and what they send each other at runtime (from a recorded run), drawn the one way, every arrow numbered and said in a sentence. It's mapped from the model in your checkout's ${MODEL_FILE} and your code as it stands. Reach for it before drawing a diagram of how the system fits together: with no view it lists the views there are. When none answers your question, add one to the model (a question and the parts it takes) in your slice and show it: once it merges, it's there for every goal after.`;
+const DESCRIPTION = `Put a view of the project's architecture map on your station's screen, like show's visuals: the parts a question takes, the imports between them and what they send each other at runtime (from a recorded run), drawn the one way, every arrow numbered and said in a sentence. It's mapped from the model in your checkout's ${MODEL_FILE} and your code as it stands. Reach for it before drawing a diagram of how the system fits together: with no view it lists the views there are. When none answers your question, add one to the model in your slice and show it: once it merges, it's there for every goal after. For a question of how something happens, give the view an answer (the whole of it in a line) and steps (each { from, to, says }, a few words, in order, at most 8 through at most 7 parts) rather than parts: it's drawn as a sequence, and each step is checked against an import between its two parts or a message the recorded run saw.`;
 
 async function maps(lead: LeadToolContext, repo?: string): Promise<RepoMap[]> {
   const checkouts = lead.checkouts.filter((c) => !repo || c.repo === repo);
@@ -33,6 +34,9 @@ export const mapTool: LeadTool = {
     // a question can run longer than a screen's title may: the page heads with all of it
     const where = await lead.show({ id: `map-${shown.id}`, title: screenTitle(shown.question, ARTIFACT_LIMITS.title), html: mapPage(map, shown) });
     const drift = map.problems.length ? ` The map and the code disagree: ${map.problems.join('; ')}.` : '';
-    return `${where} It's ${map.repo}'s ${shown.id === 'whole' ? 'whole map' : `view "${shown.id}"`}: ${shown.parts.length} parts.${drift}`;
+    // a scenario's steps that nothing in the code backs, so the lead can fix them or say why
+    const unbacked = checkSteps(map, shown).flatMap((s, i) => (s.evidence.length ? [] : [`${i + 1} (${s.from} to ${s.to})`]));
+    const steps = shown.steps?.length ? ` ${shown.steps.length} steps, ${unbacked.length ? `and nothing in the code backs step ${unbacked.join(', ')}: no import between the two, and no recorded message` : 'each backed by the code'}.` : '';
+    return `${where} It's ${map.repo}'s ${shown.id === 'whole' ? 'whole map' : `view "${shown.id}"`}: ${shown.parts.length} parts.${steps}${drift}`;
   },
 };

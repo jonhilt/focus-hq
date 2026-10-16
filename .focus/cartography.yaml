@@ -130,7 +130,14 @@ ignore: [scripts/, eslint.config.js, vite.config.ts, vitest.config.ts, vitest.se
 views:
   show-to-screen:
     question: How does a lead's show reach the station's screen?
-    parts: [office-tools, manager, http, client-net, artifacts, station-screens, panels]
+    parts: [office-tools, manager, client-net, ship, artifacts, panels]
+    answer: "The office tools keep the page on the lead, the manager sends the lead to the browser over /ws, and the station's screen draws its picture."
+    steps:
+      - { from: office-tools, to: manager, says: "keeps the shown page on the lead" }
+      - { from: manager, to: client-net, says: "sends the lead's update over /ws" }
+      - { from: client-net, to: ship, says: "hands the station screen the lead's latest page" }
+      - { from: ship, to: artifacts, says: "asks where the page's picture is served" }
+      - { from: panels, to: artifacts, says: "opens the page up close when you press E" }
   plugins:
     question: How do plugins plug into the office?
     parts: [plugins, plugin-host, manager, http, client-app, panels]
