@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { changeSentences, changesSvg, esc, fit, layerColours, matrixExample, matrixOrder, matrixSvg, namesLabel, placeView, tiesDrawing, viewDrawing, viewLines, viewSentences, viewSvg, wrap } from './draw';
+import { changeSentences, changesSvg, esc, fit, layerColours, matrixOrder, matrixSvg, namesLabel, placeView, tiesDrawing, viewDrawing, viewLines, viewSentences, viewSvg, wrap } from './draw';
+import { findings } from './findings';
 import { VIEW_KEY, viewsOf } from './views';
 import { MAP } from './views.test';
 import type { RepoMap } from './shared';
@@ -59,10 +60,21 @@ describe('wrap', () => {
 });
 
 describe('matrix', () => {
-  it('groups the parts by layer, and reads its busiest cell out as an example', () => {
+  it('groups the parts by layer', () => {
     expect(matrixOrder(MAP).map((p) => p.id)).toEqual(['api', 'core', 'db']);
-    expect(matrixExample(MAP)).toBe('Row 1, column 2: 3 means API imports from Core 3 times (handle, Order).');
-    expect(matrixExample({ ...MAP, connections: [] })).toBeUndefined();
+  });
+
+  it('numbers each finding on its cells, outlines them only as it is pointed at, and lists them beside the grid', () => {
+    const svg = matrixSvg(MAP, findings(MAP));
+    expect(svg).toContain('WHERE TO LOOK');
+    expect(svg).toContain('<g data-look="1" opacity="0">');
+    expect(svg).toContain('data-finding="1"');
+    expect(svg).toContain('data-cell="api core"');
+    // with none, the grid alone
+    expect(matrixSvg(MAP)).not.toContain('WHERE TO LOOK');
+    // a hologram draws it as an image, which XML has to read: every attribute has a value
+    const tags = svg.match(/<[a-z][^>]*>/g) ?? [];
+    expect(tags.filter((t) => /\s[\w:-]+(?=[\s/>])(?!=)/.test(t.replace(/="[^"]*"/g, '=""')))).toEqual([]);
   });
 
   it('shades a cell per connection, orange for two parts that import each other', () => {

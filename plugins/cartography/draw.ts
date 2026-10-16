@@ -1,6 +1,7 @@
 // A map drawn to be read (README.md): a view as its parts in a column per layer, each arrow saying what one part takes
 // from another, the whole map as a dependency matrix, and how it changes as bars and sentences. Pure SVG strings, free of Node and the DOM.
 import type { CrossCall, CrossCoupling, MapConnection, MapFlow, MapPart, MapView, RepoMap } from './shared';
+import { type Finding, findings, headline } from './findings';
 import { CHANGES, CHANGES_KEY, MATRIX_KEY, VIEW_KEY, WHOLE } from './views';
 
 /** Each layer's colour, by its place among the map's layers. */
@@ -225,18 +226,9 @@ export function viewSvg(map: RepoMap, view: MapView, marks?: Marks, extra: reado
   return out.join('');
 }
 
-const GRID = { cell: 32, labels: 270, top: 40, key: 40 } as const;
-
-/** The busiest connection, as the matrix's key reads it out: where to look, and what it says. */
-export function matrixExample(map: RepoMap): string | undefined {
-  const parts = matrixOrder(map);
-  const c = map.connections[0];
-  if (!c) return undefined;
-  const row = parts.findIndex((p) => p.id === c.from) + 1;
-  const col = parts.findIndex((p) => p.id === c.to) + 1;
-  const label = (n: number) => parts[n - 1]?.label ?? '';
-  return `Row ${row}, column ${col}: ${c.imports} means ${label(row)} imports from ${label(col)} ${c.imports} times (${namesLabel(c)}).`;
-}
+const GRID = { cell: 32, labels: 270, top: 40, key: 40, gap: 36, findings: 470 } as const;
+/** Where to look: a finding's numbers and outlines on the matrix. */
+const LOOK = '#ffcc66';
 
 /** The map's parts in the matrix's order: grouped by layer, in the model's order. */
 export function matrixOrder(map: RepoMap): MapPart[] {
@@ -247,18 +239,24 @@ export function matrixOrder(map: RepoMap): MapPart[] {
 
 /**
  * The whole map as a dependency matrix: a row and a column per part, grouped by layer. The number where a row meets a
- * column is how often the row's part imports the column's, shaded by it; orange when the two import each other.
+ * column is how often the row's part imports the column's, shaded by it; orange when the two import each other. Its
+ * `found` (findings.ts) head it in a column beside it, where to look, each numbered on the cells it's about: outlined in
+ * gold, and dashed where there's no import to show. Each cell names its two parts (`data-cell`), to say more on a click.
  */
-export function matrixSvg(map: RepoMap): string {
+export function matrixSvg(map: RepoMap, found: readonly Finding[] = []): string {
   const parts = matrixOrder(map);
   const colours = layerColours(parts);
   const n = parts.length;
   const { cell: C, labels: L, top: T } = GRID;
   const at = new Map(map.connections.map((c) => [`${c.from} ${c.to}`, c]));
   const max = Math.max(1, ...map.connections.map((c) => c.imports));
-  const W = L + n * C + 10;
-  const H = T + n * C + 10;
-  const out = [`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="system-ui,sans-serif">`, `<rect x="${L}" y="${T}" width="${n * C}" height="${n * C}" fill="${INK.grid}"/>`];
+  const side = found.length ? GRID.gap + GRID.findings : 0;
+  // each finding's sentence, wrapped to the column beside the grid
+  const said = found.map((f) => wrap(f.sentence, 16, GRID.findings - 44, 5));
+  const sideH = 40 + said.reduce((h, lines) => h + lines.length * 21 + 16, 0);
+  const W = L + n * C + 10 + side;
+  const H = Math.max(T + n * C + 10, sideH);
+  const out = [`<svg data-matrix="1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="system-ui,sans-serif">`, `<rect x="${L}" y="${T}" width="${n * C}" height="${n * C}" fill="${INK.grid}"/>`];
   parts.forEach((p, i) => {
     const colour = colours.get(p.layer) ?? INK.muted;
     out.push(`<text x="${L - 10}" y="${T + i * C + C / 2 + 5}" text-anchor="end" font-size="15" fill="${colour}">${esc(fit(`${i + 1}  ${p.label}`, 15, L - 16))}</text>`);
@@ -274,18 +272,44 @@ export function matrixSvg(map: RepoMap): string {
       const tangled = at.has(`${b.id} ${a.id}`);
       const shade = (0.2 + 0.8 * Math.sqrt(c.imports / max)).toFixed(2);
       out.push(
-        `<g><title>${esc(`${a.label} imports ${b.label} ${c.imports}×: ${namesLabel(c, 8)}${tangled ? ' (they import each other)' : ''}`)}</title>`,
+        `<g data-cell="${esc(`${a.id} ${b.id}`)}" style="cursor:pointer"><title>${esc(`${a.label} imports ${b.label} ${c.imports}×: ${namesLabel(c, 8)}${tangled ? ' (they import each other)' : ''}`)}</title>`,
         `<rect x="${x + 1}" y="${y + 1}" width="${C - 2}" height="${C - 2}" fill="rgba(${tangled ? INK.tangle : INK.oneWay},${shade})"/>`,
         `<text x="${x + C / 2}" y="${y + C / 2 + 5}" text-anchor="middle" font-size="13" fill="#fff">${c.imports}</text></g>`,
       );
     }));
+  const index = new Map(parts.map((p, i) => [p.id, i]));
+  const marks: string[] = [];
+  found.forEach((f, k) => {
+    const cells = f.cells.flatMap(({ from, to }) => {
+      const i = index.get(from);
+      const j = index.get(to);
+      return i === undefined || j === undefined ? [] : [{ x: L + j * C, y: T + i * C, dashed: !at.has(`${from} ${to}`) }];
+    });
+    // its cells' outlines show as it's pointed at (wireMatrix): a column of them at once is more than a glance takes
+    out.push(`<g data-look="${k + 1}" opacity="0">`, ...cells.map((c) => `<rect x="${c.x + 1}" y="${c.y + 1}" width="${C - 2}" height="${C - 2}" fill="none" stroke="${LOOK}" stroke-width="2.5"${c.dashed ? ' stroke-dasharray="4 3"' : ''}/>`), '</g>');
+    // its number by the first of its cells, over every outline
+    const first = cells[0];
+    if (first) marks.push(`<circle cx="${first.x + C - 3}" cy="${first.y + 3}" r="10" fill="${LOOK}"/><text x="${first.x + C - 3}" y="${first.y + 8}" text-anchor="middle" font-size="13" font-weight="800" fill="${INK.bg}">${k + 1}</text>`);
+  });
+  if (found.length) {
+    const x = L + n * C + 10 + GRID.gap;
+    out.push(`<text x="${x}" y="22" font-size="15" font-weight="700" letter-spacing="2" fill="${LOOK}">WHERE TO LOOK</text>`);
+    let y = 54;
+    said.forEach((lines, k) => {
+      out.push(`<g data-finding="${k + 1}" style="cursor:pointer"><rect x="${x - 6}" y="${y - 20}" width="${GRID.findings - 4}" height="${lines.length * 21 + 10}" fill="transparent"/>`);
+      out.push(`<circle cx="${x + 12}" cy="${y - 5}" r="12" fill="${LOOK}"/><text x="${x + 12}" y="${y}" text-anchor="middle" font-size="14" font-weight="800" fill="${INK.bg}">${k + 1}</text>`);
+      lines.forEach((line, i) => out.push(`<text x="${x + 34}" y="${y + i * 21}" font-size="16" fill="${INK.text}">${esc(line)}</text>`));
+      out.push('</g>');
+      y += lines.length * 21 + 16;
+    });
+  }
   let from = 0;
   for (const [layer, colour] of colours) {
     const k = parts.filter((p) => p.layer === layer).length;
     out.push(`<rect x="${L + from * C}" y="${T + from * C}" width="${k * C}" height="${k * C}" fill="none" stroke="${colour}" stroke-width="2"/>`);
     from += k;
   }
-  out.push('</svg>');
+  out.push(...marks, '</svg>');
   return out.join('');
 }
 
@@ -314,6 +338,27 @@ export function changesSvg(map: RepoMap): string {
   });
   out.push('</svg>');
   return out.join('');
+}
+
+/** Under the matrix, until a cell's clicked: how to dig in. */
+export const MATRIX_HINT = 'Point at a finding to outline its cells; click a cell for what one part takes from the other.';
+
+/**
+ * Makes the matrix in `root` answer the pointer (a function on its own, so a page can carry it as a script, page.ts):
+ * a finding pointed at or clicked outlines its cells, and a cell clicked says what it takes in the `[data-said]` line.
+ */
+export function wireMatrix(root: ParentNode): void {
+  const svg = root.querySelector('svg[data-matrix]');
+  if (!svg) return;
+  const show = (k: string | null) => svg.querySelectorAll('[data-look]').forEach((g) => g.setAttribute('opacity', g.getAttribute('data-look') === k ? '1' : '0'));
+  svg.querySelectorAll('[data-finding]').forEach((el) => {
+    el.addEventListener('mouseenter', () => show(el.getAttribute('data-finding')));
+    el.addEventListener('click', () => show(el.getAttribute('data-finding')));
+  });
+  const said = root.querySelector('[data-said]');
+  svg.querySelectorAll('[data-cell]').forEach((el) => el.addEventListener('click', () => {
+    if (said) said.textContent = el.querySelector('title')?.textContent ?? '';
+  }));
 }
 
 /** A map's change coupling as sentences: which parts keep changing together, and whether an import says why. */
@@ -385,8 +430,8 @@ export function tiesDrawing(maps: readonly RepoMap[], ties: readonly CrossCoupli
 export function viewDrawing(map: RepoMap, view: MapView, marks?: Marks): { svg: string; key: string; sentences: string[] } {
   if (marks) return { svg: viewSvg(map, view, marks), key: SLICE_KEY, sentences: viewLines(map, view, marks).map((l) => l.sentence) };
   if (view.id === WHOLE.id) {
-    const example = matrixExample(map);
-    return { svg: matrixSvg(map), key: `${MATRIX_KEY}${example ? ` ${example}` : ''}`, sentences: [] };
+    const found = findings(map);
+    return { svg: matrixSvg(map, found), key: `${headline(map)} ${MATRIX_KEY}`, sentences: [] };
   }
   if (view.id === CHANGES.id) {
     const h = map.history;

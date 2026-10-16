@@ -1,7 +1,7 @@
 // A view of a map as the browser shows it, on the engineering station and up close from its screen in the holodeck:
 // the drawing, how to read it, and what it shows in sentences.
 import { h, type Ui } from '../../plugin-api/client';
-import { type Marks, viewDrawing } from './draw';
+import { MATRIX_HINT, type Marks, viewDrawing, wireMatrix } from './draw';
 import type { MapView, RepoMap } from './shared';
 
 /** An SVG drawing, at its own size (readable), scrolling sideways when it's wider than the station. */
@@ -16,9 +16,21 @@ export function viewBody(map: RepoMap, view: MapView, marks?: Marks): HTMLElemen
   return drawingBody(viewDrawing(map, view, marks));
 }
 
+/** Under the whole map's matrix: the line a clicked cell fills, and the matrix answering the pointer (wireMatrix). */
+function matrixDetail(box: HTMLElement): HTMLElement[] {
+  if (!box.querySelector('svg[data-matrix]')) return [];
+  const said = h('small', { class: 'muted' }, MATRIX_HINT);
+  said.dataset.said = '';
+  const wrapper = h('div', null, box, said);
+  wireMatrix(wrapper);
+  return [wrapper];
+}
+
 /** A drawing's body: how to read it, the drawing, and what it shows in numbered sentences. */
 export function drawingBody({ svg, key, sentences }: { svg: string; key: string; sentences: string[] }): HTMLElement[] {
-  return [h('small', { class: 'muted' }, key), drawing(svg), ...(sentences.length ? [h('ol', { class: 'cg-sentences' }, ...sentences.map((s) => h('li', null, s)))] : [])];
+  const box = drawing(svg);
+  const detail = matrixDetail(box);
+  return [h('small', { class: 'muted' }, key), ...(detail.length ? detail : [box]), ...(sentences.length ? [h('ol', { class: 'cg-sentences' }, ...sentences.map((s) => h('li', null, s)))] : [])];
 }
 
 /** View `view` of `map` up close, filling the window (with a slice's `marks`). */
