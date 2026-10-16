@@ -35,9 +35,14 @@ function part(id: string, raw: unknown): MapPart {
   return { id, label: text(r.label, `Part ${id}'s label`), layer: text(r.layer, `Part ${id}'s layer`), kind: kind as ModelKind, paths, ...(does ? { does } : {}) };
 }
 
+/** A cite: a path from the repo's root, and a line. */
+export const CITE = /^(.+):(\d+)$/;
+
 function step(raw: unknown, what: string): ViewStep {
   const r = record(raw, what);
-  return { from: text(r.from, `${what}'s from`), to: text(r.to, `${what}'s to`), says: text(r.says, `${what}'s says`) };
+  const cite = r.cite === undefined ? undefined : text(r.cite, `${what}'s cite`);
+  if (cite && !CITE.test(cite)) throw new Error(`${what}'s cite is a path and a line, like server/routes.ts:42`);
+  return { from: text(r.from, `${what}'s from`), to: text(r.to, `${what}'s to`), says: text(r.says, `${what}'s says`), ...(cite ? { cite: normalPath(cite) } : {}) };
 }
 
 function traced(raw: unknown, what: string, parts: ReadonlySet<string>): ViewTrace {

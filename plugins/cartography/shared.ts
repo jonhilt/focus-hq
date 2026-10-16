@@ -20,12 +20,22 @@ export interface MapPart {
   does?: string;
 }
 
-/** One step of a view's scenario: `from` does something that reaches `to`, said in a few words. */
+/**
+ * One step of a view's scenario: `from` does something that reaches `to`, said in a few words, and where in the code
+ * it does it (`cite`, `path:line` from the repo's root), checked against the code as it stands (steps.ts).
+ */
 export interface ViewStep {
   from: string;
   to: string;
   says: string;
+  cite?: string;
 }
+
+/**
+ * The lines round a step's cite, as the map read them (map.ts), with the names its file's classes extend or implement
+ * (whose members it reaches as `this.`); or why it couldn't: no such file, or no such line.
+ */
+export type CitedLines = { file: string; line: number; lines: string[]; first: number; inherits: string[] } | { missing: string };
 
 /** Which recorded call chain a view's steps come from: the busiest that sent `message`, going `through` a part if it says. */
 export interface ViewTrace {
@@ -107,6 +117,8 @@ export interface RepoMap {
   connections: MapConnection[];
   /** What parts send each other at runtime, from the repo's recorded run, if it has one. */
   flows?: MapFlow[];
+  /** The lines round each of its scenarios' cites, by the cite (`path:line`). */
+  cited?: Record<string, CitedLines>;
   /** The call chains that run sent its messages from, part to part, the busiest first. */
   traces?: PartTrace[];
   /** What that run was, and the commit it was recorded on. */

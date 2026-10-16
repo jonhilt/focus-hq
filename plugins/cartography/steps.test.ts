@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { viewDrawing } from './draw';
 import { lifelines, sequenceSvg } from './sequence';
 import type { MapView, RepoMap } from './shared';
-import { checkSteps, pickTrace, scenarioSteps, shortFn, stepSentence } from './steps';
+import { checkCite, checkSteps, pickTrace, scenarioSteps, shortFn, stepSentence } from './steps';
 import { MAP } from './views.test';
 
 const scenario: MapView = {
@@ -94,5 +94,56 @@ describe('a scenario found in a recorded run', () => {
     expect(shortFn('GoalTools.update')).toBe('update');
     expect(shortFn('PrimitiveImpl.~effect/Effect/args')).toBeUndefined();
     expect(shortFn('Api.<anonymous>')).toBeUndefined();
+  });
+});
+
+describe('a cited step', () => {
+  // the API's code is a.ts, the core's c.ts (views.test.ts); the API uses handle and Order of the core's
+  const cited = (lines: string[], inherits: string[] = [], at = 2): RepoMap => ({
+    ...MAP,
+    flows: [{ from: 'api', to: 'core', via: 'ws', names: ['order'], count: 1 }],
+    cited: { 'a.ts:2': { file: 'a.ts', line: at, first: 1, lines, inherits }, 'gone.ts:1': { missing: "there's no gone.ts" }, 'd.ts:1': { file: 'd.ts', line: 1, first: 1, lines: ['x'], inherits: [] } },
+  });
+  const step = { from: 'api', to: 'core', says: 'hands over the order', cite: 'a.ts:2' };
+
+  it('is backed by its line when it names something one part uses of the other, the cited line first', () => {
+    expect(checkCite(cited(['const o = new Order();', '  return handle(o);', 'save(o);']), step)).toEqual({ evidence: { kind: 'cite', sentence: 'a.ts:2: return handle(o); (handle, of Core)' } });
+    // a name a couple of lines off still counts
+    expect(checkCite(cited(['// it', '', 'handle(o)']), step).evidence?.sentence).toBe('a.ts:3: handle(o) (handle, of Core)');
+  });
+
+  it('takes a message between them only as a string, not any word that happens to match', () => {
+    expect(checkCite(cited(['const order = 1;', 'send(order);']), step).problem).toMatch(/names nothing of Core's within 2 lines: handle, Order, Route, order/);
+    expect(checkCite(cited(['x', "send({ type: 'order' });"]), step).evidence?.sentence).toBe("a.ts:2: send({ type: 'order' }); (order, of Core)");
+  });
+
+  it('follows a member reached through a class of the other part it extends', () => {
+    expect(checkCite(cited(['x', 'this.update(o);'], ['Route']), step).evidence?.sentence).toBe('a.ts:2: this.update(o); (a member of Route, of Core)');
+  });
+
+  it('says what is wrong: no such file or line, or a cite in neither part', () => {
+    expect(checkCite(cited([]), { ...step, cite: 'gone.ts:1' }).problem).toBe("Its cite, gone.ts:1, doesn't check out: there's no gone.ts.");
+    expect(checkCite(cited([]), { ...step, cite: 'd.ts:1' }).problem).toBe("Its cite, d.ts:1, is Store's code, not API's or Core's.");
+    expect(checkCite(cited([]), { ...step, cite: undefined })).toEqual({});
+  });
+
+  it('takes a cite in the right part as it is when nothing on the map joins the two (a language the map can’t read)', () => {
+    const bare = { ...cited(['x', 'go()']), connections: [], flows: [] };
+    expect(checkCite(bare, step).evidence?.sentence).toBe("a.ts:2: go() (in API's code; nothing on the map says what it reaches)");
+  });
+
+  it('draws a step whose cite fails red, saying why, and opens on it first', () => {
+    const map = cited(['nothing here']);
+    const view: MapView = { id: 'c', question: 'Q?', parts: ['api', 'core'], steps: [step] };
+    expect(sequenceSvg(map, view, checkSteps(map, view))).toContain('marker-end="url(#cg-seq-none)"');
+    expect(viewDrawing(map, view).details?.[0][0]).toMatch(/^Its cite, a.ts:2, names nothing/);
+  });
+});
+
+describe('a cited step drawn', () => {
+  it('is lilac when its line checks out and nothing was recorded', () => {
+    const map: RepoMap = { ...MAP, cited: { 'a.ts:1': { file: 'a.ts', line: 1, first: 1, lines: ['handle(o)'], inherits: [] } } };
+    const view: MapView = { id: 'c', question: 'Q?', parts: ['api', 'core'], steps: [{ from: 'api', to: 'core', says: 'hands it over', cite: 'a.ts:1' }] };
+    expect(sequenceSvg(map, view, checkSteps(map, view))).toContain('marker-end="url(#cg-seq-cite)"');
   });
 });

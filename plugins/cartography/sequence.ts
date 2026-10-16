@@ -6,12 +6,12 @@ import type { MapPart, MapView, RepoMap } from './shared';
 import { type CheckedStep, scenarioSteps } from './steps';
 
 /** How to read a scenario's sequence. */
-export const SEQUENCE_KEY = 'Read down, a step at a time. Gold: seen in a recorded run (dashed, a message over the wire; solid, a call). White: an import between the two. Red: nothing in the code backs it. Open a step for its evidence.';
+export const SEQUENCE_KEY = 'Read down, a step at a time. Gold: seen in a recorded run (dashed, a message over the wire; solid, a call). Lilac: a cited line that checks out. White: only an import between the two. Red: nothing in the code backs it, or its cited line fails its check. Open a step for its evidence.';
 
 /** The sequence's measures: a lifeline's column, its head, a step's row, and the type sizes (budgets.test.ts holds them). */
 export const SEQ = { col: 200, pad: 30, headW: 180, headH: 58, top: 24, first: 120, row: 74, label: 16, head: 17 } as const;
 
-const INK = { bg: '#0b1020', panel: '#121a33', text: '#e8ecf5', muted: '#9aa6c4', line: '#cfe3ff', flow: '#ffcc66', none: '#ff7a7a', life: '#3a4670' };
+const INK = { bg: '#0b1020', panel: '#121a33', text: '#e8ecf5', muted: '#9aa6c4', line: '#cfe3ff', flow: '#ffcc66', cite: '#c9a0ff', none: '#ff7a7a', life: '#3a4670' };
 
 /** The parts a scenario goes through, in the order its steps first reach them. */
 export function lifelines(map: RepoMap, view: MapView): MapPart[] {
@@ -46,7 +46,7 @@ export function sequenceSvg(map: RepoMap, view: MapView, steps: readonly Checked
   const colours = layerColours(map.model?.parts ?? []);
   const out: string[] = [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="system-ui,sans-serif">`,
-    `<defs>${[['cg-seq', INK.line], ['cg-seq-flow', INK.flow], ['cg-seq-none', INK.none]].map(([id, fill]) => `<marker id="${id}" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="13" markerHeight="13" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${fill}"/></marker>`).join('')}</defs>`,
+    `<defs>${[['cg-seq', INK.line], ['cg-seq-flow', INK.flow], ['cg-seq-cite', INK.cite], ['cg-seq-none', INK.none]].map(([id, fill]) => `<marker id="${id}" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="13" markerHeight="13" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${fill}"/></marker>`).join('')}</defs>`,
   ];
   for (const part of parts) {
     const cx = x.get(part.id) ?? 0;
@@ -65,14 +65,16 @@ export function sequenceSvg(map: RepoMap, view: MapView, steps: readonly Checked
     const a = x.get(step.from) ?? 0;
     const b = x.get(step.to) ?? 0;
     const has = (k: string) => step.evidence.some((e) => e.kind === k);
-    const kind = has('flow') ? 'flow' : has('call') ? 'call' : step.evidence.length ? 'import' : 'none';
+    // a cite that doesn't hold makes the step as doubtful as one with nothing behind it
+    const kind = step.problem ? 'none' : has('flow') ? 'flow' : has('call') ? 'call' : has('cite') ? 'cite' : step.evidence.length ? 'import' : 'none';
     const [colour, marker, dash] =
       kind === 'flow' ? [INK.flow, 'cg-seq-flow', ' stroke-dasharray="10 6"']
       : kind === 'call' ? [INK.flow, 'cg-seq-flow', '']
+      : kind === 'cite' ? [INK.cite, 'cg-seq-cite', '']
       : kind === 'none' ? [INK.none, 'cg-seq-none', ' stroke-dasharray="4 5"']
       : [INK.line, 'cg-seq', ''];
     const { lines: label, mid } = stepLabel(step, x, W);
-    const said = `${i + 1}. ${step.says}${kind === 'none' ? ' (nothing in the code backs this step)' : ''}`;
+    const said = `${i + 1}. ${step.says}${step.problem ? ` (${step.problem})` : kind === 'none' ? ' (nothing in the code backs this step)' : ''}`;
     // a step within one part loops out to its right and back
     const d = a === b ? `M${a},${y - 12} C${a + 60},${y - 12} ${a + 60},${y + 12} ${a + 6},${y + 12}` : `M${a + (b > a ? 8 : -8)},${y} L${b + (b > a ? -6 : 6)},${y}`;
     out.push(

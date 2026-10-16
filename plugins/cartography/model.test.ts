@@ -58,6 +58,9 @@ views:
     expect(() => yaml(`${parts}views: { v: { question: Q?, steps: [{ from: api, to: db, says: x }] } }`)).toThrow("View v shows parts the model doesn't have: db");
     expect(() => yaml(`${parts}views: { v: { question: Q?, steps: [{ from: api, to: api }] } }`)).toThrow("View v's step 1's says needs some text");
     expect(() => yaml(`${parts}views: { v: { question: Q? } }`)).toThrow('View v needs the parts it shows, or its steps');
+    // a step's cite is a path and a line
+    expect(yaml(`${parts}views: { v: { question: Q?, steps: [{ from: api, to: api, says: x, cite: ./a.ts:3 }] } }`).views[0].steps?.[0].cite).toBe('a.ts:3');
+    expect(() => yaml(`${parts}views: { v: { question: Q?, steps: [{ from: api, to: api, says: x, cite: a.ts }] } }`)).toThrow("View v's step 1's cite is a path and a line");
   });
 
   it('reads a view whose steps come from a recorded run: the message, and a part it goes through', () => {

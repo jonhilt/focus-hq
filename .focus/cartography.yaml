@@ -133,11 +133,11 @@ views:
     parts: [office-tools, manager, client-net, ship, artifacts, panels]
     answer: "The office tools keep the page on the lead, the manager sends the lead to the browser over /ws, and the station's screen draws its picture."
     steps:
-      - { from: office-tools, to: manager, says: "keeps the shown page on the lead" }
-      - { from: manager, to: client-net, says: "sends the lead's update over /ws" }
-      - { from: client-net, to: ship, says: "hands the station screen the lead's latest page" }
-      - { from: ship, to: artifacts, says: "asks where the page's picture is served" }
-      - { from: panels, to: artifacts, says: "opens the page up close when you press E" }
+      - { from: office-tools, to: manager, says: "keeps the shown page on the lead", cite: server/agents/manager/goalTools.ts:62 }
+      - { from: manager, to: client-net, says: "sends the lead's update over /ws", cite: server/agents/manager/core.ts:169 }
+      - { from: client-net, to: ship, says: "hands the station screen the lead's latest page", cite: client/src/world/room.ts:396 }
+      - { from: ship, to: artifacts, says: "asks where the page's picture is served", cite: client/src/world/screen.ts:360 }
+      - { from: panels, to: artifacts, says: "opens the page up close when you press E", cite: client/src/ui/screenPanel.ts:169 }
   note-to-browser:
     question: How does a lead's note reach the browser?
     parts: [agents, manager, office-tools, client-net]

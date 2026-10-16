@@ -401,7 +401,10 @@ export function viewDrawing(map: RepoMap, view: MapView, marks?: Marks): Drawing
       svg: sequenceSvg(map, view, steps),
       key: SEQUENCE_KEY,
       sentences: steps.map((s) => stepSentence(map, s)),
-      details: steps.map((s) => (s.evidence.length ? s.evidence.map((e) => e.sentence) : ['Nothing in the code backs this step: no import between the two parts, and no message in the recorded run.'])),
+      details: steps.map((s) => [
+        ...(s.problem ? [s.problem] : []),
+        ...(s.evidence.length ? s.evidence.map((e) => e.sentence) : ['Nothing in the code backs this step: no import between the two parts, and no message in the recorded run.']),
+      ]),
     };
   }
   if (marks) return { svg: viewSvg(map, view, marks), key: SLICE_KEY, sentences: viewLines(map, view, marks).map((l) => l.sentence) };

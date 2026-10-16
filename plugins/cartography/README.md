@@ -44,6 +44,23 @@ It's drawn as a sequence diagram (`sequence.ts`): a lifeline per part in the ord
 
 Imports alone can't put a scenario in order: a shortest path through them runs through whatever module everything imports (the plugin API, say), not the way the code actually goes. So a scenario's steps are either written, by whoever adds the view or by a lead with the map tool, and checked; or **found in a recorded run**.
 
+### Cited steps: a scenario for any project
+
+Most projects can't be recorded, so the base of a scenario is a written one whose steps each **cite** where in the code they happen (`cite: path:line`, from the repo's root). An agent reading the code writes them, in any language, and the office checks each against the code as it stands (`steps.ts` `checkCite`), every time it maps:
+
+```yaml
+      - { from: office-tools, to: manager, says: "keeps the shown page on the lead", cite: server/agents/manager/goalTools.ts:62 }
+      - { from: manager, to: client-net, says: "sends the lead's update over /ws", cite: server/agents/manager/core.ts:169 }
+```
+
+- The cited file has to be in one of the step's two parts' code: where it calls the other, or where it reads from it.
+- Its line, or one within two of it (`CITE_SLACK`), the nearest first, has to name something one part uses of the other (the names their imports take), or a message between them as a string (`'agent'`, not any variable called `agent`), or reach a member through a class of the other part's it extends (`this.update(…)` in `class GoalTools extends Part`: `map.ts` `inheritsIn`).
+- That line is the step's first evidence, quoted under it: *server/agents/manager/core.ts:169: this.hub.send({ type: 'agent', agent }); (agent, of Mirror of the office)*.
+- A cite that checks out draws its step lilac, unless a recorded run saw it (gold). A cite that fails (no such file or line, a file in neither part, a line that names nothing of the other's) draws the step red and says why first. Code moves, so a scenario whose cite has drifted shows it, and Focus's own fail `pnpm test` (`legibility.test.ts`), as a part whose paths went does.
+- With nothing on the map joining the two parts (a language the map can't read yet), a cite in the right part is taken as it is, and says the map can't tell what it reaches.
+
+The map tool tells a lead how to cite, and which of their cites fail and why, so they can fix them before the view ships.
+
 ### Steps found in a recorded run
 
 As the recorded run sends each event over /ws, it keeps the whole stack the event was sent from, not only its sender: the repo's frames, outermost first, with their functions (`shared/flows.ts` `chainOf`, kept as the recording's `traces`). That's the order imports can't give: who called whom to send it. The map puts each chain's frames to their parts (`graph.ts` `partTraces`), a run of frames in one part being one hop, entered by its first function, with the message's receiver last.

@@ -1,7 +1,7 @@
 // Focus's own map, as an architecture test: its model (.focus/cartography.yaml) has to keep up with its code.
 import { describe, expect, it } from 'vitest';
 import { OFFICE_DIR } from '../../plugin-api/testing';
-import { mapRepo } from './map';
+import { inheritsIn, mapRepo } from './map';
 
 describe("the office's own map", () => {
   // it reads every file in the repo and its git history: on a busy machine that's more than the usual 5 s
@@ -12,4 +12,12 @@ describe("the office's own map", () => {
     expect(map.mapped).toBe(map.files);
     expect(map.connections.length).toBeGreaterThan(0);
   }, 30_000);
+});
+
+describe('inheritsIn', () => {
+  it('names what a file’s classes extend and implement, TypeScript’s way and Java’s', () => {
+    expect(inheritsIn('export class GoalTools extends Part {')).toEqual(['Part']);
+    expect(inheritsIn('class A extends Base<T> implements Api, java.io.Serializable {')).toEqual(['Base', 'Api', 'Serializable']);
+    expect(inheritsIn('const x = 1;')).toEqual([]);
+  });
 });

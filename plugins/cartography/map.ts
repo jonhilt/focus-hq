@@ -8,11 +8,36 @@ import { errorMessage, FLOWS_FILE, type FlowRecording, run } from '../../plugin-
 import { isSource, mapOf, ownerOf } from './graph';
 import type { OwnedCommit } from './crossRepo';
 import { historyOf, LOG_ARGS, readLog } from './history';
-import { readModel, readRecording } from './model';
+import { CITE, readModel, readRecording } from './model';
 import { sourceEdges } from './languages';
 import { isSpec, repoRoutes, type RepoRoutes } from './routes';
 import { type ChangedFile, readNumstat } from './slice';
-import { type FileEdge, MODEL_FILE, type RepoMap } from './shared';
+import { type ArchitectureModel, type CitedLines, type FileEdge, MODEL_FILE, type RepoMap } from './shared';
+
+/** How many lines either side of a cite it reads, and a step may land on: a call's arguments run on, or it's moved a little. */
+export const CITE_SLACK = 2;
+
+/** The names a file's classes extend or implement (TypeScript's and Java's way of saying it), from its text. */
+export const inheritsIn = (text: string): string[] =>
+  [...new Set([...text.matchAll(/\b(?:extends|implements)\s+([\w$.]+(?:\s*<[^>{]*>)?(?:\s*,\s*[\w$.]+(?:\s*<[^>{]*>)?)*)/g)].flatMap((m) => m[1].replace(/<[^>]*>/g, '').split(',').map((n) => n.trim().split('.').pop() ?? '')))].filter(Boolean);
+
+/** The lines round each cite in the model's scenarios, read from the checkout. */
+async function citedLines(dir: string, model: ArchitectureModel): Promise<Record<string, CitedLines>> {
+  const cites = [...new Set(model.views.flatMap((v) => (v.steps ?? []).flatMap((s) => (s.cite ? [s.cite] : []))))];
+  const read = await Promise.all(
+    cites.map(async (cite): Promise<[string, CitedLines]> => {
+      const [, file, at] = CITE.exec(cite) ?? [];
+      const line = Number(at);
+      const text = await fs.readFile(path.join(dir, file), 'utf8').catch(() => undefined);
+      if (text === undefined) return [cite, { missing: `there's no ${file}` }];
+      const all = text.split('\n');
+      if (line < 1 || line > all.length) return [cite, { missing: `${file} has ${all.length} lines` }];
+      const first = Math.max(1, line - CITE_SLACK);
+      return [cite, { file, line, first, lines: all.slice(first - 1, line + CITE_SLACK), inherits: inheritsIn(text) }];
+    }),
+  );
+  return Object.fromEntries(read);
+}
 
 /** Each source file's uses of another source file in the repo, file to file, with the names they take. */
 const imports = (dir: string, files: readonly string[]): Promise<FileEdge[]> => sourceEdges(files, (file) => fs.readFile(path.join(dir, file), 'utf8').catch(() => ''));
@@ -66,7 +91,8 @@ export async function mapRepoAndLog(repo: string, dir: string, { history: withHi
   const read = (file: string) => fs.readFile(path.join(dir, file), 'utf8').catch(() => '');
   const routeFiles = known.filter((f) => isSource(f) || isSpec(f));
   const routes = repoRoutes(repo, new Map(await Promise.all(routeFiles.map(async (f) => [f, await read(f)] as const))), (f) => (isSource(f) ? ownerOf(f, model) : undefined));
-  return { map: { ...map, commit, ...(history?.commits ? { history } : {}), problems: [...map.problems, ...(recording?.error ? [recording.error] : [])] }, commits, routes };
+  const cited = await citedLines(dir, model);
+  return { map: { ...map, commit, ...(Object.keys(cited).length ? { cited } : {}), ...(history?.commits ? { history } : {}), problems: [...map.problems, ...(recording?.error ? [recording.error] : [])] }, commits, routes };
 }
 
 /**
