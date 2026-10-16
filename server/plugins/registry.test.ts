@@ -94,7 +94,18 @@ describe('Plugins', () => {
     error.mockRestore();
   });
 
-  it('has the captain merge a pull request when any plugin says so', () => {
+  it('tells every plugin a lead drew a model, each with a copy of its own', () => {
+    const heard: string[] = [];
+    const shown = { id: 'm', title: 'how it works', html: '<p/>', image: new Uint8Array([1]), model: { question: 'Q?', nodes: [], edges: [], trace: [], simplified: [] } };
+    const plugins = started({},
+      plugin('spoiler', { modelShown: (_agent, s) => void (s.model.question = 'changed') }),
+      plugin('keeper', { modelShown: (agent, s) => void heard.push(`${agent.id} ${s.model.question} ${s.image?.length}`) }));
+    plugins.modelShown({ id: 'lead_1' } as Agent, shown);
+    expect(heard).toEqual(['lead_1 Q? 1']);
+    expect(shown.model.question).toBe('Q?');
+  });
+
+    it('has the captain merge a pull request when any plugin says so', () => {
     const plugins = started({}, plugin('a', { captainMerges: () => false }), plugin('b', { captainMerges: (pr) => pr.branch.startsWith('focus/climb-') }), plugin('c', {}));
     expect(plugins.captainMerges({ branch: 'focus/climb-ab12' })).toBe(true);
     expect(plugins.captainMerges({ branch: 'focus/7-cart' })).toBe(false);

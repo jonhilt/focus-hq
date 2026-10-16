@@ -1,5 +1,8 @@
 // The cartography plugin follows the switch in each project's settings: it maps only the projects it's on for, maps one
 // as it's switched on, and forgets one as it's switched off. In the demo it maps the office's own checkout.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { Agent, PluginHost, PluginState, Project } from '../../plugin-api/server';
 import cartography from './server';
@@ -8,7 +11,7 @@ import type { CartographyState } from './shared';
 // mapping runs real git (ls-files, rev-parse, log), which takes longer than vitest's 5 s on a busy machine
 vi.setConfig({ testTimeout: 30_000 });
 
-function host(projects: Pick<Project, 'id' | 'name' | 'repos' | 'plugins'>[], agents: Agent[] = []) {
+function host(projects: Pick<Project, 'id' | 'name' | 'repos' | 'plugins'>[], agents: Agent[] = [], data = fs.mkdtempSync(path.join(os.tmpdir(), 'cartography-'))) {
   let saved: CartographyState | undefined;
   const state = <S extends object>(fresh: () => S): PluginState<S> => ({
     get: () => (saved ?? fresh()) as unknown as S,
@@ -20,11 +23,19 @@ function host(projects: Pick<Project, 'id' | 'name' | 'repos' | 'plugins'>[], ag
     projects: () => projects as Project[],
     on: (id: string) => !!projects.find((p) => p.id === id)?.plugins?.includes('cartography'),
     officeDir: process.cwd(),
+    dataDir: () => data,
     agent: (id: string) => agents.find((a) => a.id === id),
     agents: () => agents,
     leadCheckouts: (id: string) => (agents.find((a) => a.id === id)?.lead?.repos ?? []).map((r) => ({ repo: r.repo, dir: process.cwd(), baseBranch: r.baseBranch })),
   } as unknown as PluginHost;
-  return { lent, maps: () => saved?.maps ?? {}, slices: () => saved?.slices ?? {}, busy: () => saved?.mapping.length ?? 0, seed: (patch: Partial<CartographyState>) => state<CartographyState>(() => ({ maps: {}, mapping: [], slices: {}, crossRepo: {}, crossCalls: {} })).set(patch) };
+  return {
+    lent,
+    maps: () => saved?.maps ?? {},
+    slices: () => saved?.slices ?? {},
+    diagrams: () => saved?.diagrams ?? {},
+    busy: () => saved?.mapping.length ?? 0,
+    seed: (patch: Partial<CartographyState>) => state<CartographyState>(() => ({ maps: {}, mapping: [], slices: {}, crossRepo: {}, crossCalls: {}, diagrams: {} })).set(patch),
+  };
 }
 
 const settled = async (busy: () => number) => {
@@ -94,5 +105,49 @@ describe('what a goal\'s slice changes', () => {
     parts.turn?.(closing, 'end');
     for (let i = 0; i < 100 && slices().shop?.length; i++) await new Promise((r) => setTimeout(r, 20));
     expect(slices().shop).toEqual([]);
+  });
+});
+
+describe('the diagrams leads draw', () => {
+  const lead = { id: 'lead_shop_1', name: 'Lt. Okafor', projectId: 'shop', lead: { title: 'Wishlist', station: 0, repos: [{ repo: 'o/shop', folder: 'shop', baseBranch: 'main' }] } } as unknown as Agent;
+  // in the demo the office's own checkout stands in for the lead's, and for the project's default branch
+  const cited = path.join(process.cwd(), 'plugins/cartography/diagrams.ts');
+  const model = (change?: 'added') => ({
+    question: 'How is a diagram kept?',
+    nodes: [{ id: 'k', label: 'Keeper', kind: 'service' as const, layer: 'Server', cite: { file: cited, line: 1 }, ...(change ? { change } : {}) }],
+    edges: [],
+    trace: [],
+    simplified: [],
+  });
+
+  it('keeps one of how the code works, with the files it cites, past the office restarting; not one of a change', async () => {
+    const shop = { id: 'shop', name: 'Shop', repos: ['o/shop'], plugins: ['cartography'] };
+    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'cartography-'));
+    const { lent, diagrams } = host([shop], [lead], data);
+    const parts = cartography.start(lent);
+    parts.modelShown?.(lead, { id: 'keep', title: 'a diagram is kept', model: model(), html: '<p>it</p>', image: new Uint8Array([1, 2]) });
+    parts.modelShown?.(lead, { id: 'slice', title: 'what my change does', model: model('added'), html: '<p>x</p>' });
+    const [kept] = diagrams().shop ?? [];
+    expect(diagrams().shop).toHaveLength(1);
+    expect(kept).toMatchObject({ id: 'lead_shop_1-keep', question: 'How is a diagram kept?', by: 'Lt. Okafor', goal: 'Wishlist', image: true });
+    expect(kept.files).toEqual([{ repo: 'o/shop', path: 'plugins/cartography/diagrams.ts', hash: expect.stringMatching(/^[0-9a-f]{40}$/) }]);
+    // a browser reads its page and picture through the plugin's route
+    const route = parts.routes?.find((r) => r.path === '/diagram');
+    expect(route?.handle({ body: { project: 'shop', id: kept.id }, query: {} })).toEqual({ html: '<p>it</p>', image: 'data:image/jpeg;base64,AQI=' });
+    // and the office starting again finds it
+    const again = host([shop], [lead], data);
+    cartography.start(again.lent);
+    expect(again.diagrams().shop?.[0]?.id).toBe(kept.id);
+  });
+
+  it('says it is out of date once a file it cites is not as it was', async () => {
+    const shop = { id: 'shop', name: 'Shop', repos: ['o/shop'], plugins: ['cartography'] };
+    const { lent, diagrams, seed, busy } = host([shop], [lead]);
+    const parts = cartography.start(lent);
+    seed({ diagrams: { shop: [{ id: 'd', title: 't', question: 'Q?', by: 'x', goal: 'g', at: 1, image: false, files: [{ repo: 'o/shop', path: 'plugins/cartography/diagrams.ts', hash: 'not-what-it-is' }] }] } });
+    parts.projectChanged?.('shop');
+    await new Promise((r) => setTimeout(r, 10));
+    await settled(busy);
+    expect(diagrams().shop?.[0]?.stale).toEqual(['o/shop/plugins/cartography/diagrams.ts']);
   });
 });

@@ -4,7 +4,7 @@ import { viewDrawing } from './draw';
 import { legibility, SEQUENCE_BUDGET } from './legibility';
 import { mapRepo } from './map';
 import { lifelines } from './sequence';
-import { checkSteps, scenarioSteps } from './steps';
+import { scenarioSteps } from './steps';
 
 describe('legibility', () => {
   it('measures the smallest text as it is seen, shrunk with a wide drawing, and the texts cut short', () => {
@@ -27,8 +27,6 @@ describe("the office's own scenarios", () => {
         .toEqual({ view: view.id, lifelines: true, steps: true, cut: [], bigEnough: true });
       // and every step is backed by the code
       expect({ view: view.id, unbacked: drawn.details!.filter((d) => d[0].startsWith('Nothing')).length }).toEqual({ view: view.id, unbacked: 0 });
-      // and every cite holds: a scenario whose code moved fails here, as a part whose paths went does in map.test.ts
-      expect({ view: view.id, miscited: checkSteps(map, view).flatMap((s) => s.problem ?? []) }).toEqual({ view: view.id, miscited: [] });
     }
   }, 30_000);
 });

@@ -4,13 +4,14 @@
 // One space serves every project: it shows the views of the project whose table you came through, and next to the
 // whole map, what each of its goals under way does to it (slice.ts).
 import * as THREE from 'three';
-import { canvasTexture, Hologram, hover, makeCanvas, OVERLAY_LAYER, type Place, type PluginSpace, type ShipHost, SPACE, type Ui } from '../../plugin-api/client';
+import { callPlugin, canvasTexture, Hologram, hover, makeCanvas, OVERLAY_LAYER, type Place, type PluginSpace, type ShipHost, SPACE, type Ui } from '../../plugin-api/client';
 import { ARCH, HolodeckArch } from './arch';
+import { standing } from './diagrams';
 import { TIES_QUESTION, tiesDrawing } from './draw';
-import { openDrawing, openView } from './panel';
-import { drawNote, drawSvg, drawView } from './screen';
+import { openDiagram, openDrawing, openView } from './panel';
+import { drawNote, drawPicture, drawSvg, drawView } from './screen';
 import { sliceViews } from './slice';
-import type { CartographyState, MapView, RepoMap } from './shared';
+import { CARTOGRAPHY, type CartographyState, type MapView, type RepoMap } from './shared';
 import { ARRIVAL, EXIT_ARCH, MAX_PANELS, type PanelSpot, panelSpots, PLATFORM, type Point, reachOf } from './spaceLayout';
 import { CHANGES, screenVersion, spaceViews, WHOLE } from './views';
 
@@ -71,7 +72,17 @@ function items(repos: readonly RepoMap[], state: CartographyState | undefined, p
         open: (ui) => openDrawing(ui, TIES_QUESTION, ties.map.repo, ties),
       }]
     : [];
-  return [...views.slice(0, wholes), ...repoTies, ...slices, ...views.slice(wholes)].slice(0, MAX_PANELS);
+  // the diagrams leads drew when asked how something works, the newest first: what the captain asked for comes first
+  const kept = (state?.diagrams[projectId] ?? []).map((d): Item => {
+    const fetched = () => callPlugin<{ html: string; image?: string }>(CARTOGRAPHY, '/diagram', { project: projectId, id: d.id });
+    return {
+      key: `diagram|${d.id}|${d.at}|${(d.stale ?? []).join(',')}`,
+      title: `the diagram: ${d.question}`,
+      draw: async (ctx) => drawPicture(ctx, PX.w, PX.h, d.question, standing(d, Date.now()), (await fetched()).image, !!d.stale?.length),
+      open: (ui) => void fetched().then((f) => openDiagram(ui, d.question, standing(d, Date.now(), false), d.stale ?? [], f.html)).catch((err: Error) => ui.error(err.message)),
+    };
+  });
+  return [...views.slice(0, wholes), ...kept, ...repoTies, ...slices, ...views.slice(wholes)].slice(0, MAX_PANELS);
 }
 
 export class ArchitectureSpace {

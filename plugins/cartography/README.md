@@ -56,7 +56,7 @@ Most projects can't be recorded, so the base of a scenario is a written one whos
 - The cited file has to be in one of the step's two parts' code: where it calls the other, or where it reads from it.
 - Its line, or one within two of it (`CITE_SLACK`), the nearest first, has to name something one part uses of the other (the names their imports take), or a message between them as a string (`'agent'`, not any variable called `agent`), or reach a member through a class of the other part's it extends (`this.update(…)` in `class GoalTools extends Part`: `map.ts` `inheritsIn`).
 - That line is the step's first evidence, quoted under it: *server/agents/manager/core.ts:169: this.hub.send({ type: 'agent', agent }); (agent, of Mirror of the office)*.
-- A cite that checks out draws its step lilac, unless a recorded run saw it (gold). A cite that fails (no such file or line, a file in neither part, a line that names nothing of the other's) draws the step red and says why first. Code moves, so a scenario whose cite has drifted shows it, and Focus's own fail `pnpm test` (`legibility.test.ts`), as a part whose paths went does.
+- A cite that checks out draws its step lilac, unless a recorded run saw it (gold). A cite that fails (no such file or line, a file in neither part, a line that names nothing of the other's) draws the step red and says why first. Code moves, so a scenario whose cite has drifted shows it. It's a warning, not a failing test: other goals move cited code all the time.
 - With nothing on the map joining the two parts (a language the map can't read yet), a cite in the right part is taken as it is, and says the map can't tell what it reaches.
 
 The map tool tells a lead how to cite, and which of their cites fail and why, so they can fix them before the view ships.
@@ -101,6 +101,16 @@ Every map with a git history has a **changes** view too (`history.ts`): the defa
 - **Hotspots**: a bar per part for how many commits changed it (and how many lines), the busiest first. What changes most is where change costs most, and where a map is most worth keeping right.
 - **Change coupling**: the pairs of parts that keep changing in the same commits, at least 5 times and in at least 30% of the commits that changed either, each said in a sentence: *Agent sessions and Agent manager changed together in 95 of the 204 commits that changed either (47%)*. A commit touching more than 40 source files is a sweep (a rename, a reformat) and couples nothing.
 - **What ties them**: a coupled pair with an import between them is explained by the map's arrows. One without says so: either they talk over the wire (the recorded run has a flow between them), or what ties them isn't on the map at all, which is worth a look.
+
+## Diagrams leads draw, kept
+
+The diagram most worth having is the one asked for: the captain asks a lead how part of the system works, and the lead draws it with the office's `model` tool (cited, checked, stepped through as a sequence, `docs/studio.md`). The office tells the plugins each time (`modelShown`), and cartography keeps it with the project (`diagrams.ts`, `keeper.ts`), so it's there after the goal closes:
+
+- **What's kept**: a model of how the code works. One of what a change does (parts or connections marked added, changed or removed) is about a slice, and goes stale the moment it merges, so it isn't kept. The same lead drawing the same id again replaces theirs; a project keeps its 24 newest (`KEPT_MAX`).
+- **Where**: the page the lead drew and its picture, as files in the plugin's data folder (`diagrams/`), with an index by project beside them (`index.json`), read again as the office starts, unlike the maps.
+- **Each file it cites**, as a repo's file with a hash of what was in it when it was drawn (from the lead's checkout).
+- **In the architecture space**, after each repo's whole map and before the rest: its question over its picture, and when and by whom it was drawn. E on it opens the page itself up close, live, to step through.
+- **Out of date**: whenever a project's maps are made (as the office starts, and as a pull request merges), each diagram's cited files are hashed again on the repos' default branches. One that's changed, or gone, marks it out of date, said on it (a red band across its hologram's top) and up close (which files), asking a lead to draw it again. It's a warning: the diagram may still be right, but the code under it has moved.
 
 ## A lead's map tool
 

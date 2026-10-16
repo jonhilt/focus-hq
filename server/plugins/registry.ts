@@ -2,7 +2,7 @@ import { lend } from './lend';
 import type { LedgerEvent } from '../../shared/ledger';
 import type { Agent, Brief, PluginStates } from '../../shared/types';
 import { errorMessage } from '../util';
-import type { BriefSpec, FocusPlugin, LeadTool, PluginHost, PluginParts, PluginRoute } from './contract';
+import type { BriefSpec, FocusPlugin, LeadTool, ModelShown, PluginHost, PluginParts, PluginRoute } from './contract';
 
 /**
  * The plugins the office started (docs/plugins.md), and the core's one way to them: it asks here rather than knowing
@@ -103,6 +103,11 @@ export class Plugins {
   turn(agent: Agent, phase: 'start' | 'end'): void {
     // each plugin hears of its own copy, so none can change the office's agent, or what the next plugin hears
     this.each('turn', (parts) => parts.turn?.(lend(agent), phase));
+  }
+
+  /** A lead drew a model: each plugin hears of its own copy of it. */
+  modelShown(agent: Agent, shown: ModelShown): void {
+    this.each('modelShown', (parts) => parts.modelShown?.(lend(agent), lend(shown)));
   }
 
   ledgerRecorded(event: LedgerEvent): void {

@@ -5,7 +5,7 @@ import type { Agent as OfficeAgent, LeadAgent as OfficeLeadAgent, Project as Off
 import type { LedgerEvent as OfficeLedgerEvent } from '../shared/ledger';
 
 export type {
-  AgentStatus, AgentTask, ArchivedGoal, Contact, GoalNote, GoalRecord, IssueDraft, Issue, MessageReply, ModelKind, Planner, QaReport, QueuedGoal, Settings, Snapshot, Waypoint,
+  AgentStatus, AgentTask, ArchivedGoal, Contact, GoalNote, GoalRecord, IssueDraft, Issue, MessageReply, ModelCite, ModelKind, Planner, QaReport, QueuedGoal, Settings, Snapshot, SystemModel, Waypoint,
 } from '../shared/types';
 /** An agent, a project and a line of the ledger as a plugin has them: its own copies (`PluginHost`), read-only. */
 export type Agent = Readonly<OfficeAgent>;

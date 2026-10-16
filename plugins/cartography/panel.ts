@@ -36,3 +36,16 @@ export function openView(ui: Ui, map: RepoMap, view: MapView, marks?: Marks): vo
 export function openDrawing(ui: Ui, title: string, of: string, drawn: Drawing): void {
   ui.panels.open({ title, full: true, body: h('div', { class: 'cg-close-up' }, h('div', { class: 'muted' }, of), ...drawingBody(drawn)) });
 }
+
+/**
+ * A kept diagram up close, filling the window: how it stands (out of date, which files changed since), then the page its
+ * lead drew, live, to step through.
+ */
+export function openDiagram(ui: Ui, title: string, standing: string, stale: readonly string[], html: string): void {
+  const frame = h('iframe', { class: 'cg-diagram', title });
+  frame.srcdoc = html;
+  const warning = stale.length
+    ? [h('p', { class: 'cg-stale' }, `Out of date: ${stale.length === 1 ? 'a file it cites has' : `${stale.length} files it cites have`} changed on the default branch since it was drawn (${stale.join(', ')}). Ask a lead to draw it again.`)]
+    : [];
+  ui.panels.open({ title, full: true, body: h('div', { class: 'cg-close-up' }, h('div', { class: 'muted' }, standing), ...warning, frame) });
+}

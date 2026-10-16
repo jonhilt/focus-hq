@@ -4,7 +4,7 @@
 import type { Effect } from 'effect';
 import type { ZodType } from 'zod';
 import type { LedgerEntry, LedgerEvent } from '../../shared/ledger';
-import type { Agent, Issue, MessageReply, Planner, Project, QueuedGoal, Settings, Snapshot } from '../../shared/types';
+import type { Agent, Issue, MessageReply, Planner, Project, QueuedGoal, Settings, Snapshot, SystemModel } from '../../shared/types';
 import type { ShipStatus } from '../agents/shipStatus';
 import type { GitHub } from '../github/service';
 import type { ReadOnlyResult, ReadOnlyRun, ShipSessionRun } from '../agents/claudeCrew';
@@ -51,10 +51,24 @@ export interface PluginParts {
    * office afresh a moment later rather than straight away.
    */
   ledgerRecorded?(event: Readonly<LedgerEvent>): void;
+  /**
+   * A goal's lead drew a model of how the code works (their `model` tool), checked against their checkout: the id and
+   * title they gave it, the model as the check left it, the page drawn of it, and its picture when one was taken.
+   */
+  modelShown?(agent: Readonly<Agent>, shown: ModelShown): void;
   /** Whether only the captain merges this pull request, whatever QA says. By its branch, since a pull request outlives its agent. */
   captainMerges?(pr: { branch: string }): boolean;
   /** Tools it adds to the office of every goal lead whose project it's switched on for, beside ship, note and show (`mcp__office__<name>`). */
   leadTools?: LeadTool[];
+}
+
+/** A model a lead drew, as the plugins hear of it (`modelShown`). */
+export interface ModelShown {
+  id: string;
+  title: string;
+  model: SystemModel;
+  html: string;
+  image?: Uint8Array;
 }
 
 /** A tool a plugin adds to every goal lead's office (`mcp__office__<name>`), answered in words. */

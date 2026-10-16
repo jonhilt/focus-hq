@@ -73,6 +73,8 @@ export class GoalTools extends Part {
       const { model, problems } = checkModel(input.model, read);
       const html = modelPage(model, input.title, citedLines(model, read));
       const shown = yield* this.showPage(agent, { id: input.id, title: input.title, html });
+      // a model of how the code works is worth keeping past the goal: the plugins hear of it (cartography keeps them)
+      this.core.plugins.modelShown(agent, { id: input.id, title: input.title, model, html, image: shown.picture?.image });
       return `${shown.text} ${modelReport(model, problems)}`;
     });
   }

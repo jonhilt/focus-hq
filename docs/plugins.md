@@ -72,6 +72,7 @@ A plugin is a folder with a `server.ts` that default-exports a `FocusPlugin` (`s
   - `prOpened`: the office opened or updated the pull request of an agent on one of its briefs.
   - `prClosed`: any pull request merged or closed, a goal's too (once the goal has heard).
   - `turn`: an agent's turn started or ended, any agent's (the flow plugin keeps leads). A turn cut short still ends, and a turn can start and end more than once in what looks like one (carrying on, a retry, a new session), so take each as how the agent stands now. `end` comes before the office acts on how the turn went, so the agent's status still says `working`: go by the phase.
+  - `modelShown`: a goal's lead drew a model of how the code works with their `model` tool: its id and title, the model as the office's check left it, the page drawn of it, and its picture. Cartography keeps them for the architecture space.
   - `ledgerRecorded`: a line went in the ship's log, any kind. It's heard as it's written, before the office has acted on what it says (a goal's pull request merging is logged before the goal knows), so read the office afresh a moment later rather than straight away.
   - `projectChanged`: a project's settings changed, a plugin switched on or off for it, say.
   - `captainMerges`: whether only the captain merges a pull request, whatever QA and auto-merge say. It goes by branch, since a pull request outlives its agent.
