@@ -1,0 +1,3358 @@
+{
+  "cases": [
+    {
+      "fix": "b1fbc5d3b9316de95a800b75654099cb824da1b4",
+      "buggy": "09d359a49df2ce4f89e85d1f02ed1e894bc93b27",
+      "subject": "Star chart labels never overlap: one placement pass for every label, laid out for the wall's bigger words too",
+      "kind": "ui",
+      "testFiles": [
+        "client/src/ui/course.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "client/src/ui/course.test.ts",
+          "name": "the course never lets a label cover another, a mark or the objective, or run off the chart, however the voyage went",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'waypoint')"
+        },
+        {
+          "file": "client/src/ui/course.test.ts",
+          "name": "the course names every waypoint and idea, clear of every line, on a voyage like this one",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'waypoint')"
+        },
+        {
+          "file": "client/src/ui/course.test.ts",
+          "name": "the course shrinks the oldest waypoints to their numbers once a voyage runs out of room",
+          "failure": "AssertionError: expected 30 to be less than 30"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "client/src/ui/chartPanel.ts",
+          "line": 10
+        },
+        {
+          "file": "client/src/ui/chartPanel.ts",
+          "line": 97
+        },
+        {
+          "file": "client/src/ui/chartPanel.ts",
+          "line": 98
+        },
+        {
+          "file": "client/src/ui/chartPanel.ts",
+          "line": 104
+        },
+        {
+          "file": "client/src/ui/chartPanel.ts",
+          "line": 105
+        },
+        {
+          "file": "client/src/ui/chartPanel.ts",
+          "line": 115
+        },
+        {
+          "file": "client/src/ui/chartPanel.ts",
+          "line": 133
+        },
+        {
+          "file": "client/src/ui/chartPanel.ts",
+          "line": 309
+        },
+        {
+          "file": "client/src/ui/chartPanel.ts",
+          "line": 310
+        },
+        {
+          "file": "client/src/ui/chartPanel.ts",
+          "line": 311
+        },
+        {
+          "file": "client/src/ui/chartPanel.ts",
+          "line": 312
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 13
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 15
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 24
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 31
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 38
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 46
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 83
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 91
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 93
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 96
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 98
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 99
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 144
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 145
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 146
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 148
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 153
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 154
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 155
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 174
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 175
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 177
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 179
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 183
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 191
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 192
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 195
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 196
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 197
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 198
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 199
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 200
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 201
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 202
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 203
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 204
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 205
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 206
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 207
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 208
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 209
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 212
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 218
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 219
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 220
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 221
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 225
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 226
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 227
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 228
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 229
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 237
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 238
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 239
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 242
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 243
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 244
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 247
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 250
+        },
+        {
+          "file": "client/src/ui/course.ts",
+          "line": 253
+        },
+        {
+          "file": "client/src/world/goalScreens.ts",
+          "line": 10
+        },
+        {
+          "file": "client/src/world/goalScreens.ts",
+          "line": 604
+        },
+        {
+          "file": "client/src/world/goalScreens.ts",
+          "line": 708
+        },
+        {
+          "file": "client/src/world/goalScreens.ts",
+          "line": 711
+        },
+        {
+          "file": "client/src/world/goalScreens.ts",
+          "line": 729
+        },
+        {
+          "file": "client/src/world/goalScreens.ts",
+          "line": 748
+        },
+        {
+          "file": "client/src/world/goalScreens.ts",
+          "line": 774
+        },
+        {
+          "file": "client/src/world/goalScreens.ts",
+          "line": 815
+        },
+        {
+          "file": "docs/goals.md",
+          "line": 5
+        },
+        {
+          "file": "docs/goals.md",
+          "line": 17
+        }
+      ]
+    },
+    {
+      "fix": "9385a497537cfa2802d16c49e95666791dae10d4",
+      "buggy": "451410c29cd5135128d9e704df35fa3c2feec342",
+      "subject": "Smooth out the hitches the Renoir's log showed: get a room ready as you near its door, blink the viewscreen's cursor without resending the screen, draw only the hall you're in",
+      "kind": "ui",
+      "testFiles": [
+        "client/src/world/screenRedraw.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "client/src/world/screenRedraw.test.ts",
+          "name": "redrawDue draws a big screen that’s changed less often",
+          "failure": "AssertionError: expected true to be false // Object.is equality"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "CLAUDE.md",
+          "line": 40
+        },
+        {
+          "file": "client/src/main.ts",
+          "line": 48
+        },
+        {
+          "file": "client/src/ui/frameStats.ts",
+          "line": 41
+        },
+        {
+          "file": "client/src/ui/frameStats.ts",
+          "line": 90
+        },
+        {
+          "file": "client/src/ui/frameStats.ts",
+          "line": 94
+        },
+        {
+          "file": "client/src/ui/frameStats.ts",
+          "line": 95
+        },
+        {
+          "file": "client/src/ui/frameStats.ts",
+          "line": 170
+        },
+        {
+          "file": "client/src/world/office.ts",
+          "line": 110
+        },
+        {
+          "file": "client/src/world/office.ts",
+          "line": 111
+        },
+        {
+          "file": "client/src/world/room.ts",
+          "line": 31
+        },
+        {
+          "file": "client/src/world/room.ts",
+          "line": 598
+        },
+        {
+          "file": "client/src/world/room.ts",
+          "line": 599
+        },
+        {
+          "file": "client/src/world/room.ts",
+          "line": 620
+        },
+        {
+          "file": "client/src/world/screen.ts",
+          "line": 9
+        },
+        {
+          "file": "client/src/world/screen.ts",
+          "line": 101
+        },
+        {
+          "file": "client/src/world/screen.ts",
+          "line": 104
+        },
+        {
+          "file": "client/src/world/screen.ts",
+          "line": 253
+        },
+        {
+          "file": "client/src/world/screen.ts",
+          "line": 255
+        },
+        {
+          "file": "client/src/world/screen.ts",
+          "line": 256
+        },
+        {
+          "file": "client/src/world/screenRedraw.ts",
+          "line": 3
+        },
+        {
+          "file": "client/src/world/screenRedraw.ts",
+          "line": 33
+        },
+        {
+          "file": "client/src/world/screenRedraw.ts",
+          "line": 35
+        },
+        {
+          "file": "docs/performance.md",
+          "line": 12
+        },
+        {
+          "file": "docs/performance.md",
+          "line": 13
+        },
+        {
+          "file": "docs/performance.md",
+          "line": 25
+        },
+        {
+          "file": "shared/types/frameStats.ts",
+          "line": 69
+        }
+      ]
+    },
+    {
+      "fix": "4f23320b80eecfa46bd2147597ff3d70a32a8123",
+      "buggy": "56757d46da8264a0ad4d474eb32e9a5ce92dc741",
+      "subject": "Bring a lead's unshipped commits along when a slice lands (#131)",
+      "kind": "lifecycle",
+      "testFiles": [
+        "server/agents/lead.test.ts",
+        "server/agents/manager.test.ts",
+        "server/agents/workspace.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager brings commits the lead hadn’t shipped along to the next slice",
+          "failure": "AssertionError: expected [] to deeply equal [ [ 'web-next' ], [ 'api-next' ] ]"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "README.md",
+          "line": 90
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 130
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 139
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 140
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 13
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 861
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 867
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 874
+        }
+      ]
+    },
+    {
+      "fix": "1e12e7339b4606f9471a757312d816a1cb3afca4",
+      "buggy": "5e27b8e37e20e7734c427a99684cd0620d78938e",
+      "subject": "Keep every slice's pull requests on a closed goal (#168) (#176)",
+      "kind": "lifecycle",
+      "testFiles": [
+        "server/agents/lead.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/lead.test.ts",
+          "name": "closing a goal files the goal in the room’s log, newest first, keeping a few dozen",
+          "failure": "AssertionError: expected { id: 'lead_p1_ab', …(11) } to deeply equal { id: 'lead_p1_ab', …(12) }"
+        },
+        {
+          "file": "server/agents/lead.test.ts",
+          "name": "reopening a closed goal picks up the slice it was on, with its pull requests, at its new station",
+          "failure": "AssertionError: expected { station: 3, …(7) } to deeply equal { station: 3, …(7) }"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "docs/goals.md",
+          "line": 17
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 291
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 295
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 309
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 310
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 15
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1078
+        }
+      ]
+    },
+    {
+      "fix": "d64419cabed394426f93d2f46934a7ba7ee4ac89",
+      "buggy": "b524cce3c98dc57d5905f0b1716c403bb7c0adce",
+      "subject": "Never ship a lead's repo again from a branch whose pull request merged (#162) (#182)",
+      "kind": "lifecycle",
+      "testFiles": [
+        "server/agents/lead.test.ts",
+        "server/agents/manager.test.ts",
+        "server/agents/workspace.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager never ships a repo again from a branch whose pull request merged: it gets a fresh branch with only the unshipped commits",
+          "failure": "AssertionError: expected undefined to be 'focus/saved-items-1-8cc2' // Object.is equality"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "docs/goals.md",
+          "line": 11
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 69
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 109
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 276
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 15
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 953
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 961
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1025
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1026
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1105
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1111
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1117
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1120
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1126
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1127
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1128
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1136
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1141
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1153
+        },
+        {
+          "file": "shared/types.ts",
+          "line": 348
+        },
+        {
+          "file": "shared/types.ts",
+          "line": 349
+        }
+      ]
+    },
+    {
+      "fix": "720822eaa6538b892b5d03df1641e6864e133eb3",
+      "buggy": "5435bcdaff97d22bbcfe2ea507a10a6a81efabee",
+      "subject": "Keep a goal's artifacts and questions when it closes (#196)",
+      "kind": "lifecycle",
+      "testFiles": [
+        "server/agents/lead.test.ts",
+        "server/agents/manager.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/lead.test.ts",
+          "name": "reopening a closed goal keeps what the lead showed and asked with the closed goal, and brings it back when it reopens",
+          "failure": "AssertionError: expected { id: 'lead_p1_ab', …(12) } to match object { artifacts: [ { …(4) } ], …(1) }"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager puts what the lead shows on their goal, with a picture when it can take one, and files it with the goal when it closes",
+          "failure": "AssertionError: expected undefined to deeply equal [ 'data-flow', 'mockup' ]"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 1
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 2
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 26
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 27
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 28
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 46
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 66
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 70
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 79
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 83
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 104
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 116
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 124
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 130
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 131
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 135
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 143
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 158
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 159
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 160
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 161
+        },
+        {
+          "file": "docs/goals.md",
+          "line": 16
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 19
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1055
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1060
+        },
+        {
+          "file": "shared/artifacts.ts",
+          "line": 18
+        },
+        {
+          "file": "shared/artifacts.ts",
+          "line": 19
+        },
+        {
+          "file": "shared/artifacts.ts",
+          "line": 20
+        }
+      ]
+    },
+    {
+      "fix": "1785db5d990ef9c88bf26681b2f3c74af2bca8ee",
+      "buggy": "843fb603eb6e80d62c735dd97e9043e855aa7b07",
+      "subject": "Closing a goal keeps uncommitted work as a WIP snapshot (#156)",
+      "kind": "lifecycle",
+      "testFiles": [
+        "server/agents/lead.test.ts",
+        "server/agents/manager.test.ts",
+        "server/agents/snapshot.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/lead.test.ts",
+          "name": "closing a goal closes without asking when everything reached GitHub and its pull requests are settled",
+          "failure": "TypeError: dirtyFolders.map is not a function"
+        },
+        {
+          "file": "server/agents/lead.test.ts",
+          "name": "closing a goal warns about work only the office’s clone has, pull requests it leaves behind, and a goal that shipped nothing",
+          "failure": "TypeError: dirtyFolders.map is not a function"
+        },
+        {
+          "file": "server/agents/lead.test.ts",
+          "name": "closing a goal says so when git couldn’t tell how a checkout stands",
+          "failure": "TypeError: dirtyFolders.map is not a function"
+        },
+        {
+          "file": "server/agents/lead.test.ts",
+          "name": "closing a goal files the goal in the room’s log, newest first, keeping a few dozen",
+          "failure": "AssertionError: expected { id: 'lead_p1_ab', …(8) } to deeply equal { id: 'lead_p1_ab', …(10) }"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager commits a closing goal’s uncommitted work as a WIP snapshot on its branch before its checkouts go",
+          "failure": "AssertionError: expected { Object (warn) } to deeply equal { warn: ArrayContaining{…} }"
+        },
+        {
+          "file": "server/agents/snapshot.test.ts",
+          "name": "a closing goal’s checkout keeps uncommitted work, untracked files too, as a WIP commit on the branch",
+          "failure": "TypeError: ws.snapshot is not a function"
+        },
+        {
+          "file": "server/agents/snapshot.test.ts",
+          "name": "a closing goal’s checkout counts the commits GitHub hasn’t got, from the base branch until the branch is pushed",
+          "failure": "TypeError: ws.branchState is not a function"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "README.md",
+          "line": 96
+        },
+        {
+          "file": "client/src/ui/goals.ts",
+          "line": 82
+        },
+        {
+          "file": "docs/goals-plan.md",
+          "line": 78
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 3
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 254
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 255
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 257
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 269
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 14
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 876
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 877
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 885
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 886
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1620
+        },
+        {
+          "file": "server/agents/services.ts",
+          "line": 4
+        },
+        {
+          "file": "server/agents/workspace.ts",
+          "line": 6
+        }
+      ]
+    },
+    {
+      "fix": "3ed8f4b7a22e3b8b723a8e7be7204f699ea2f25d",
+      "buggy": "01ae5f23243f0f5e163d6c4e12e33fde6b91911c",
+      "subject": "Leads: a lead left with no repos by a failed slice move gets them checked out again on their next message (#319)",
+      "kind": "lifecycle",
+      "testFiles": [
+        "server/agents/lead.test.ts",
+        "server/agents/manager.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager checks a lead’s repos out again on their next message when the move to a new slice couldn’t",
+          "failure": "AssertionError: expected [] to deeply equal [ 'demo/webshop-frontend', …(1) ]"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "docs/goals.md",
+          "line": 16
+        },
+        {
+          "file": "server/agents/manager/slices.ts",
+          "line": 6
+        }
+      ]
+    },
+    {
+      "fix": "6fdfdef0b53b4fae4c721baa946c249974dc80c9",
+      "buggy": "e2751d39ae8ea977d61dca4a866cd7121f6cd03c",
+      "subject": "Settle a lead's open question when the captain replies in chat (#357)",
+      "kind": "lifecycle",
+      "testFiles": [
+        "client/src/world/goalRoom.test.ts",
+        "server/agents/lead.test.ts",
+        "server/agents/manager.test.ts",
+        "shared/artifacts.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager settles the lead’s open question when the captain replies in chat instead of picking",
+          "failure": "AssertionError: expected { id: 'q1', …(4) } to be undefined"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 1
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 120
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 123
+        },
+        {
+          "file": "client/src/ui/screenPanel.ts",
+          "line": 148
+        },
+        {
+          "file": "docs/goals.md",
+          "line": 22
+        },
+        {
+          "file": "docs/goals.md",
+          "line": 24
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 357
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 203
+        },
+        {
+          "file": "server/agents/manager/goalTools.ts",
+          "line": 3
+        },
+        {
+          "file": "server/agents/manager/goalTools.ts",
+          "line": 4
+        },
+        {
+          "file": "server/agents/manager/goalTools.ts",
+          "line": 129
+        },
+        {
+          "file": "shared/types/goals.ts",
+          "line": 238
+        },
+        {
+          "file": "shared/types/goals.ts",
+          "line": 251
+        }
+      ]
+    },
+    {
+      "fix": "f8cae72fbb560ba595c57bb1eaec55f4a1c34bed",
+      "buggy": "eec57471a2bf579a61e40f2104840c114ad157e5",
+      "subject": "Send a PR back to QA at the office's merge of its base",
+      "kind": "lifecycle",
+      "testFiles": [
+        "server/agents/manager.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager sends a PR back to QA at the office’s merge of the base, so the verdict doesn’t stay on the commit before",
+          "failure": "AssertionError: expected { projectId: 'proj_bb534989e0', …(8) } to match object { status: 'queued', …(1) }"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "docs/agents.md",
+          "line": 10
+        },
+        {
+          "file": "docs/qa.md",
+          "line": 7
+        },
+        {
+          "file": "server/agents/manager/conflicts.ts",
+          "line": 2
+        },
+        {
+          "file": "server/agents/manager/conflicts.ts",
+          "line": 4
+        },
+        {
+          "file": "server/agents/manager/delivery.ts",
+          "line": 98
+        },
+        {
+          "file": "server/agents/manager/delivery.ts",
+          "line": 105
+        }
+      ]
+    },
+    {
+      "fix": "0f97b9427f1f90c95df709b755ce79775a7750a5",
+      "buggy": "69cf425e93028c74ec0425160ad49e2e3571e0d2",
+      "subject": "A diagram the office stopped in the middle of drawing again isn't left 'being drawn again' after a restart",
+      "kind": "lifecycle",
+      "testFiles": [
+        "plugins/cartography/server.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "plugins/cartography/server.test.ts",
+          "name": "drawing a kept diagram again, and forgetting it isn’t left being drawn again by an office that stopped in the middle of drawing it",
+          "failure": "AssertionError: expected true to be undefined"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "plugins/cartography/keeper.ts",
+          "line": 42
+        }
+      ]
+    },
+    {
+      "fix": "185513c28ce18c28e4f58476f1f1dbc9b832f6eb",
+      "buggy": "d5e6b3d22c2f4452c3b045a0c9ab155982e34e24",
+      "subject": "A clean shutdown (Ctrl-C, an update) keeps a plan-limit hold in the journal: only the captain's own stop lets it go; tested through a real limited turn, shutdown and restart",
+      "kind": "lifecycle",
+      "testFiles": [
+        "server/agents/runRecovery.limit.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/runRecovery.limit.test.ts",
+          "name": "a hold for the plan’s limit outlives a clean shutdown and restart, and the captain’s own stop still lets it go",
+          "failure": "AssertionError: expected 'idle' to be 'held' // Object.is equality"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "server/agents/manager/comms.ts",
+          "line": 138
+        },
+        {
+          "file": "server/agents/manager/comms.ts",
+          "line": 139
+        }
+      ]
+    },
+    {
+      "fix": "3ec09f8faf0bc1304757aab86fab749ee4879f78",
+      "buggy": "d6449c5ceca9b96063c8f9376fddd47c5d8185a3",
+      "subject": "Goals, stage 4: look after a lead's context, and fix a double launch on resume (#112)",
+      "kind": "race",
+      "testFiles": [
+        "server/agents/lead.test.ts",
+        "shared/agentStatus.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/lead.test.ts",
+          "name": "what the lead writes and hears works in slices across every repo, ships through the office, and never pushes",
+          "failure": "AssertionError: expected '# You are Lt. Okafor, a lead on Shop …' to match /Hand broad exploration .* to subagent…/"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "client/src/ui/agentPanel.ts",
+          "line": 1
+        },
+        {
+          "file": "client/src/ui/goalsPanel.ts",
+          "line": 38
+        },
+        {
+          "file": "client/src/world/screen.ts",
+          "line": 142
+        },
+        {
+          "file": "docs/goals-plan.md",
+          "line": 169
+        },
+        {
+          "file": "server/agents/demoRunner.ts",
+          "line": 39
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 122
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 11
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 18
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 299
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 342
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 345
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 346
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 347
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 348
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 349
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 350
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 351
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 352
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 353
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 354
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 355
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 356
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 357
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 358
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 359
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 360
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 361
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 362
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 696
+        }
+      ]
+    },
+    {
+      "fix": "bd279e40f909a35613f89e71f2020b9aba6eb83f",
+      "buggy": "7062c46a71aa7cb0050f840a46b578802ab20a78",
+      "subject": "Fix the ask race and the cut-off Your answer sign (#186)",
+      "kind": "race",
+      "testFiles": [
+        "server/agents/manager.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager puts the lead’s question to the captain with an option apiece, and tells the lead which they picked",
+          "failure": "AssertionError: expected undefined to be '<p>A</p>' // Object.is equality"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "client/src/world/goalScreens.ts",
+          "line": 4
+        },
+        {
+          "file": "client/src/world/goalScreens.ts",
+          "line": 187
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 936
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 938
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 939
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 940
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 941
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 942
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 943
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 944
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 945
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 946
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 947
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 948
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 951
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 954
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 957
+        }
+      ]
+    },
+    {
+      "fix": "e295ab16935bfe5a84589c5da22335ccd3a93d19",
+      "buggy": "71e5f9ad343007c78c70336aca96fb1a4b7d5b29",
+      "subject": "Keep a finished QA review from being overwritten by an older copy (#201)",
+      "kind": "race",
+      "testFiles": [
+        "server/store.test.ts",
+        "shared/qa.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/store.test.ts",
+          "name": "Store on disk won’t open a data folder another live office holds",
+          "failure": "TypeError: stateLocked is not a function"
+        },
+        {
+          "file": "server/store.test.ts",
+          "name": "Store on disk takes over a lock left by an office that’s gone, and flushes a waiting save at once",
+          "failure": "AssertionError: expected '999999' to be '83529' // Object.is equality"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1860
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1861
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 31
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 88
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 89
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 90
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 91
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 92
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 93
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 94
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 95
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 96
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 97
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 98
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 99
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 100
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 101
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 102
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 103
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 104
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 105
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 106
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 107
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 108
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 109
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 110
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 111
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 112
+        },
+        {
+          "file": "server/ledgerLog.ts",
+          "line": 113
+        },
+        {
+          "file": "server/store.ts",
+          "line": 7
+        },
+        {
+          "file": "server/store.ts",
+          "line": 10
+        },
+        {
+          "file": "server/store.ts",
+          "line": 140
+        },
+        {
+          "file": "server/store.ts",
+          "line": 141
+        },
+        {
+          "file": "server/store.ts",
+          "line": 142
+        },
+        {
+          "file": "server/store.ts",
+          "line": 143
+        },
+        {
+          "file": "server/store.ts",
+          "line": 144
+        },
+        {
+          "file": "server/store.ts",
+          "line": 145
+        },
+        {
+          "file": "server/store.ts",
+          "line": 146
+        },
+        {
+          "file": "server/store.ts",
+          "line": 147
+        },
+        {
+          "file": "server/store.ts",
+          "line": 148
+        },
+        {
+          "file": "server/store.ts",
+          "line": 149
+        },
+        {
+          "file": "server/store.ts",
+          "line": 150
+        },
+        {
+          "file": "server/store.ts",
+          "line": 151
+        },
+        {
+          "file": "server/store.ts",
+          "line": 152
+        },
+        {
+          "file": "server/store.ts",
+          "line": 153
+        },
+        {
+          "file": "server/store.ts",
+          "line": 154
+        },
+        {
+          "file": "server/store.ts",
+          "line": 155
+        },
+        {
+          "file": "server/store.ts",
+          "line": 228
+        },
+        {
+          "file": "server/store.ts",
+          "line": 230
+        }
+      ]
+    },
+    {
+      "fix": "dde309b0beb87b9ccc9af3c2035b8c2d3b2c3c17",
+      "buggy": "e7a32741565f2349d6e953de47ad95640afbcc2b",
+      "subject": "Keep listening while a lead's workflow runs on after its turn, so the captain's message reaches it straight away instead of waiting for the workflow to end",
+      "kind": "race",
+      "testFiles": [
+        "server/agents/claudeRunner.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/claudeRunner.test.ts",
+          "name": "the background tasks are what Claude Code last listed, leaving out the ambient ones",
+          "failure": "AssertionError: expected undefined to deeply equal [ 'local_workflow' ]"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "docs/goals.md",
+          "line": 13
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 238
+        }
+      ]
+    },
+    {
+      "fix": "eab2be2e96427695988b29dfa09efb2309855eb6",
+      "buggy": "879f9ec07f7d12a30f48841f2226cce561637fff",
+      "subject": "Keep listening while a workflow the office saw start still runs, and note a fallback stop in the lead's terminal",
+      "kind": "race",
+      "testFiles": [
+        "server/agents/claudeRunner.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/claudeRunner.test.ts",
+          "name": "Listening stops after a while when no turn comes once the background task ends",
+          "failure": "AssertionError: expected [ undefined ] to deeply equal [ true ]"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 72
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 80
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 93
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 96
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 104
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 326
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 336
+        }
+      ]
+    },
+    {
+      "fix": "57f3d0e50c728f737880947f08643a504bb0b7f0",
+      "buggy": "7266a08a1f1a2ac860111cb1e5e37add9fd1c2d9",
+      "subject": "QA re-tests the commit a lead's ship pushed, not GitHub's lagging head",
+      "kind": "race",
+      "testFiles": [
+        "server/agents/lead.test.ts",
+        "server/agents/manager.test.ts",
+        "server/agents/retest.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/lead.test.ts",
+          "name": "what the lead writes and hears passes on QA’s verdict, with what to fix on a fail",
+          "failure": "AssertionError: expected 'QA failed acme/web#12: Broken\\n\\nFix …' to be 'QA failed acme/web#12 at 815552f, bef…' // Object.is equality"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager re-tests a lead’s ship after a verdict even while GitHub still answers with the commit QA tested",
+          "failure": "AssertionError: expected false to be true // Object.is equality"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager sends a PR the lead shipped again while QA tested it straight back to QA once they give their verdict",
+          "failure": "AssertionError: expected { projectId: 'proj_bb534989e0', …(15) } to match object { status: 'testing', …(2) }"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "server/agents/lead.ts",
+          "line": 584
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 172
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 173
+        },
+        {
+          "file": "server/agents/manager/leads.ts",
+          "line": 8
+        },
+        {
+          "file": "server/agents/manager/leads.ts",
+          "line": 309
+        },
+        {
+          "file": "server/agents/manager/leads.ts",
+          "line": 312
+        },
+        {
+          "file": "server/agents/manager/leads.ts",
+          "line": 313
+        },
+        {
+          "file": "server/agents/manager/reviews.ts",
+          "line": 14
+        },
+        {
+          "file": "server/agents/manager/reviews.ts",
+          "line": 31
+        },
+        {
+          "file": "server/agents/manager/reviews.ts",
+          "line": 33
+        },
+        {
+          "file": "server/agents/manager/reviews.ts",
+          "line": 37
+        },
+        {
+          "file": "server/agents/manager/reviews.ts",
+          "line": 90
+        },
+        {
+          "file": "server/agents/manager/reviews.ts",
+          "line": 93
+        },
+        {
+          "file": "server/agents/manager/reviews.ts",
+          "line": 327
+        },
+        {
+          "file": "server/agents/manager/slices.ts",
+          "line": 117
+        },
+        {
+          "file": "server/agents/manager/slices.ts",
+          "line": 138
+        },
+        {
+          "file": "server/agents/manager/slices.ts",
+          "line": 143
+        }
+      ]
+    },
+    {
+      "fix": "740f2d8ca4ba92d41486667ab258edc54089e0e3",
+      "buggy": "086f40968bb1a1a4673785c405af9288aabc3929",
+      "subject": "A retro draft accepted twice at once is filed once: the second is refused while the first files",
+      "kind": "race",
+      "testFiles": [
+        "plugins/retro/engineer.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "plugins/retro/engineer.test.ts",
+          "name": "ChiefEngineer files a draft accepted twice at once only once",
+          "failure": "AssertionError: expected { status: 'rejected', …(1) } to match object { status: 'rejected', …(1) }"
+        }
+      ],
+      "buggyLines": []
+    },
+    {
+      "fix": "e8d930f007bd0257bcc890c724b15f12ae2e1c06",
+      "buggy": "596c9cb541511a597cacb3ae8c25ae989cd2a790",
+      "subject": "A diagram forgotten while it was being drawn again stays forgotten",
+      "kind": "race",
+      "testFiles": [
+        "plugins/cartography/server.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "plugins/cartography/server.test.ts",
+          "name": "drawing a kept diagram again, and forgetting it leaves one forgotten while it was being drawn again forgotten",
+          "failure": "AssertionError: expected [ { id: 'd', …(10) } ] to deeply equal []"
+        }
+      ],
+      "buggyLines": []
+    },
+    {
+      "fix": "5e27b8e37e20e7734c427a99684cd0620d78938e",
+      "buggy": "0d67a12836486835b6efaabde9f286eb643cdb28",
+      "subject": "Make ship survive stale remote refs and GitHub 5xx (#164) (#175)",
+      "kind": "external",
+      "testFiles": [
+        "server/agents/manager.test.ts",
+        "server/agents/services.test.ts",
+        "server/github/ghCli.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager runs a goal’s lead one turn at a time, however often the office schedules",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager stops a QA session whose PR merged, and won’t resume it for a message",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager stops their Claude Code session when they’re sent home",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager commits a closing goal’s uncommitted work as a WIP snapshot on its branch before its checkouts go",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager reopens a closed goal on its branch, with the same lead picking their conversation back up",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager checks a reopened goal’s repos out again before picking up its conversation, however often that fails first",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager files a reopened goal that never got its repos back so it can be reopened again",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager reopens a goal only to a free team station",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager puts what the lead shows on their goal, with a picture when it can take one, until the goal closes",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager merges the base into a slice’s conflicting PR itself, and tells the lead to pull once their turn is over",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager seats an agent of its own on a slice’s PR when git can’t merge it, rather than interrupting the lead",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager won’t ship a lead’s repo over commits the office pushed to its branch",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager ships through GitHub 5xx answers, trying the push and the PR again",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager gives up shipping after GitHub answers 5xx four times, and never retries other failures",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager carries the goal into the next slice, as the captain put it, once the last one has landed",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager brings commits the lead hadn’t shipped along to the next slice",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager tells a lead whose conversation can’t be picked back up where the goal stands",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager seats an agent saved at a desk the room no longer has the next time they start",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager says why when a goal can’t have the station it asked for, and queues one when every station is taken",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager carries QA’s pass over a clean merge of main without seating QA, never re-tests a commit with a verdict, and re-tests a real change",
+          "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
+        },
+        {
+          "file": "server/github/ghCli.test.ts",
+          "name": "classify tells GitHub’s own 5xx trouble apart, as gh and git report it",
+          "failure": "AssertionError: expected GhCommandFailed: gh pr create failed: HTT… { …(4) } to match object { _tag: 'GhServerError' }"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "docs/agents.md",
+          "line": 8
+        },
+        {
+          "file": "docs/goals.md",
+          "line": 10
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 24
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 698
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 701
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 706
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 711
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1127
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1128
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1136
+        },
+        {
+          "file": "server/agents/services.ts",
+          "line": 1
+        },
+        {
+          "file": "server/agents/services.ts",
+          "line": 11
+        },
+        {
+          "file": "server/agents/services.ts",
+          "line": 12
+        },
+        {
+          "file": "server/agents/services.ts",
+          "line": 53
+        },
+        {
+          "file": "server/github/runner.ts",
+          "line": 40
+        }
+      ]
+    },
+    {
+      "fix": "121f20704acbd2d8c8d80c02679e07736687c7ff",
+      "buggy": "c5ec6d90678050be1311b406f1ffa839874ebd00",
+      "subject": "Carry on locally when Claude Code refuses to attach to a cloud session with stream-json (#234) (#236)",
+      "kind": "external",
+      "testFiles": [
+        "server/agents/cloud.test.ts",
+        "server/agents/manager.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/cloud.test.ts",
+          "name": "cloudRefused spots Claude Code refusing to attach to a cloud session with the SDK’s stream-json output",
+          "failure": "AssertionError: expected false to be true // Object.is equality"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager moving to the cloud carries a cloud hire on here when Claude Code won’t attach to the session the captain started, and stops sending later ones to wait",
+          "failure": "AssertionError: expected false to be true // Object.is equality"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager moving to the cloud carries a moved agent on here, in their own conversation, when Claude Code won’t attach to their cloud session",
+          "failure": "AssertionError: expected false to be true // Object.is equality"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "server/agents/cloud.ts",
+          "line": 70
+        },
+        {
+          "file": "server/agents/cloud.ts",
+          "line": 71
+        },
+        {
+          "file": "server/agents/cloud.ts",
+          "line": 74
+        },
+        {
+          "file": "server/agents/cloud.ts",
+          "line": 75
+        },
+        {
+          "file": "server/agents/cloud.ts",
+          "line": 76
+        },
+        {
+          "file": "server/agents/cloud.ts",
+          "line": 79
+        },
+        {
+          "file": "server/agents/manager/cloudMoves.ts",
+          "line": 9
+        },
+        {
+          "file": "server/agents/manager/sessions.ts",
+          "line": 7
+        }
+      ]
+    },
+    {
+      "fix": "c7e734017690c1d60da711af5fa3ba347433776e",
+      "buggy": "6e86115e23c942c793d49fdbbd2b51d9e676b30c",
+      "subject": "Cloud agents fail fast and clearly when Claude Code refuses to start a cloud session headlessly (#55)",
+      "kind": "external",
+      "testFiles": [
+        "server/agents/cloud.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/cloud.test.ts",
+          "name": "carryOnInNewSession does not start a new session when Claude Code refuses to start cloud sessions",
+          "failure": "AssertionError: expected true to be false // Object.is equality"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "CLAUDE.md",
+          "line": 20
+        },
+        {
+          "file": "README.md",
+          "line": 116
+        },
+        {
+          "file": "README.md",
+          "line": 233
+        },
+        {
+          "file": "server/agents/cloud.ts",
+          "line": 19
+        }
+      ]
+    },
+    {
+      "fix": "b0ac83cabb04296363b4314b17ea7681f5323765",
+      "buggy": "7ec7b85d2693de53ce9bbaae4438a26ae8236115",
+      "subject": "Workspace: keep the clone's local base branch up with origin's, so a diff against main shows only the branch's own commits (#298)",
+      "kind": "external",
+      "testFiles": [
+        "server/agents/workspace.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/workspace.test.ts",
+          "name": "the local base branch follows origin’s, so a diff against main in a worktree shows only the branch’s own commits",
+          "failure": "AssertionError: expected '249e3c63be1bd00b5d30f72b4d601efaa2be4…' to be 'ba7982e265c1226c7a0663f19448b963d1994…' // Object.is equality"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "docs/agents.md",
+          "line": 4
+        },
+        {
+          "file": "docs/architecture.md",
+          "line": 58
+        },
+        {
+          "file": "server/agents/workspace.ts",
+          "line": 184
+        }
+      ]
+    },
+    {
+      "fix": "b186a1791b89ca42b359438376b7294a27113b26",
+      "buggy": "a8c75197359352be4a9ef6f9cfd99d15cbc4dcc2",
+      "subject": "Scorecard: measure after each merge even with untracked files in the office's checkout",
+      "kind": "external",
+      "testFiles": [
+        "server/scorecards.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/scorecards.test.ts",
+          "name": "checkoutHead calls a checkout dirty for a change to a tracked file, not for an untracked one like an editor’s folder",
+          "failure": "AssertionError: expected true to be false // Object.is equality"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "server/scorecards.ts",
+          "line": 78
+        },
+        {
+          "file": "server/scorecards.ts",
+          "line": 80
+        }
+      ]
+    },
+    {
+      "fix": "e230e2197a23c94902bd0b59d489c54913789d5a",
+      "buggy": "92bcf8dde6b07a74cfe16d2a6aad2d36a3ce8b61",
+      "subject": "Follow task updates sent with the model's own key names (id, task_id, active_form)",
+      "kind": "external",
+      "testFiles": [
+        "server/agents/tasks.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/tasks.test.ts",
+          "name": "applyTaskTool updates, completes and deletes with TaskUpdate, leaving the list alone when the update failed",
+          "failure": "AssertionError: expected { id: '1', …(2) } to match object { status: 'in_progress', …(1) }"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 208
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 209
+        },
+        {
+          "file": "server/agents/tasks.ts",
+          "line": 34
+        },
+        {
+          "file": "server/agents/tasks.ts",
+          "line": 37
+        },
+        {
+          "file": "server/agents/tasks.ts",
+          "line": 45
+        }
+      ]
+    },
+    {
+      "fix": "9e6c672fd8e0cad0eb7832f490904d67bd8fb190",
+      "buggy": "1851b90193de5cbea010a0ae540e8fd2009f85dd",
+      "subject": "The browser's last-resort voice is never macOS's robotic Fred (or its other old synthesised voices), even when it's listed first",
+      "kind": "external",
+      "testFiles": [
+        "client/src/ui/crewVoice.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "client/src/ui/crewVoice.test.ts",
+          "name": "bestBrowserVoice never picks the old robotic voice, even when it comes first",
+          "failure": "AssertionError: expected 'Fred' to be 'Samantha' // Object.is equality"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "client/src/ui/crewVoice.ts",
+          "line": 49
+        },
+        {
+          "file": "client/src/ui/crewVoice.ts",
+          "line": 50
+        },
+        {
+          "file": "client/src/ui/crewVoice.ts",
+          "line": 54
+        },
+        {
+          "file": "client/src/ui/crewVoice.ts",
+          "line": 58
+        },
+        {
+          "file": "docs/goals.md",
+          "line": 24
+        }
+      ]
+    },
+    {
+      "fix": "d7dc19f5afbba058be4880a4e151f121783cd23a",
+      "buggy": "bb731fc46056d1e83ff9588529cb63e46347ae94",
+      "subject": "Render a malformed tool call instead of ending the session, and test renderToolUse",
+      "kind": "typehole",
+      "testFiles": [
+        "server/agents/render.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/render.test.ts",
+          "name": "renderToolUse renders malformed todos and edits without throwing",
+          "failure": "TypeError: todos.find is not a function"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "server/agents/render.ts",
+          "line": 99
+        },
+        {
+          "file": "server/agents/render.ts",
+          "line": 112
+        }
+      ]
+    },
+    {
+      "fix": "940a6f8096c1e01a1eb4084383bf468dab1e1bb8",
+      "buggy": "44fc91e3d9792ad872a4e104d48effbdadc61286",
+      "subject": "Refuse a merge method for an unconnected repo before changing anything; link qa.md to it (#246)",
+      "kind": "boundary",
+      "testFiles": [
+        "server/store.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/store.test.ts",
+          "name": "a repo’s merge method can’t be set for a repo the project hasn’t connected",
+          "failure": "AssertionError: expected 'Renamed' to be 'Focus' // Object.is equality"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "docs/qa.md",
+          "line": 26
+        },
+        {
+          "file": "server/store.ts",
+          "line": 236
+        }
+      ]
+    },
+    {
+      "fix": "da6880b4b53760c37cbbf9703acc77a3d3ddf2ce",
+      "buggy": "313ca732f859087db869cfe5d25023e3742b2cf6",
+      "subject": "Evidence keeps QA's image type: SVG screenshots copy as .svg and are served as image/svg+xml under a closed CSP",
+      "kind": "boundary",
+      "testFiles": [
+        "server/agents/waypoints.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/waypoints.test.ts",
+          "name": "evidence names its own copy of each screenshot after the repo, pull request and place",
+          "failure": "AssertionError: expected 'shot-demo-webshop-frontend-9-1.jpg' to be 'shot-demo-webshop-frontend-9-1.svg' // Object.is equality"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "server/agents/waypoints.ts",
+          "line": 134
+        },
+        {
+          "file": "server/agents/waypoints.ts",
+          "line": 136
+        },
+        {
+          "file": "server/routes.ts",
+          "line": 57
+        },
+        {
+          "file": "server/routes.ts",
+          "line": 62
+        }
+      ]
+    },
+    {
+      "fix": "e3be62bdbb8e5b2c4fb898550a823daa75b3cbd6",
+      "buggy": "c574acc71cdc793d3eacdefd9cc0a04b6fbcb7ce",
+      "subject": "A new session's task list doesn't overwrite the slice's tasks from an earlier one",
+      "kind": "boundary",
+      "testFiles": [
+        "server/agents/waypoints.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/waypoints.test.ts",
+          "name": "the slice under way keeps a task from an earlier session when the next session’s list numbers one the same",
+          "failure": "AssertionError: expected [ { id: '1', subject: 'Fresh', …(1) } ] to deeply equal [ …(2) ]"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "server/agents/waypoints.ts",
+          "line": 188
+        },
+        {
+          "file": "server/agents/waypoints.ts",
+          "line": 198
+        },
+        {
+          "file": "server/agents/waypoints.ts",
+          "line": 200
+        },
+        {
+          "file": "server/agents/waypoints.ts",
+          "line": 201
+        }
+      ]
+    },
+    {
+      "fix": "31dc8f63295041515bf48644e4b198c8bd3596a0",
+      "buggy": "d9ea5060740e5e4777344856ccc44b3f7ab55cb4",
+      "subject": "voice:check says why /transcribe failed and fails cleanly without a demo office; spoken sentences still end on '200 ms.' and 'etc.'",
+      "kind": "boundary",
+      "testFiles": [
+        "shared/voice.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "shared/voice.test.ts",
+          "name": "sentences still ends a sentence on a unit or etc. that only looks like an abbreviation",
+          "failure": "AssertionError: expected [ Array(1) ] to deeply equal [ 'It took 200 ms.', …(2) ]"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "scripts/voiceCheck.ts",
+          "line": 33
+        },
+        {
+          "file": "scripts/voiceCheck.ts",
+          "line": 38
+        },
+        {
+          "file": "scripts/voiceCheck.ts",
+          "line": 39
+        },
+        {
+          "file": "scripts/voiceCheck.ts",
+          "line": 101
+        },
+        {
+          "file": "shared/voice.ts",
+          "line": 55
+        },
+        {
+          "file": "shared/voice.ts",
+          "line": 56
+        }
+      ]
+    },
+    {
+      "fix": "d9ea5060740e5e4777344856ccc44b3f7ab55cb4",
+      "buggy": "bf301e91c240e7e23ebac065c0ab489884e46bea",
+      "subject": "voice:check times the spoken dialog with a briefing end to end against budgets; spoken sentences no longer break after ranks and abbreviations (Lt., e.g.)",
+      "kind": "boundary",
+      "testFiles": [
+        "scripts/voiceCheckRules.test.ts",
+        "shared/voice.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "shared/voice.test.ts",
+          "name": "sentences keeps a title or an abbreviation with the sentence it is in",
+          "failure": "AssertionError: expected [ 'Lt.', …(5) ] to deeply equal [ …(2) ]"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "docs/goals.md",
+          "line": 24
+        },
+        {
+          "file": "shared/voice.ts",
+          "line": 51
+        }
+      ]
+    },
+    {
+      "fix": "b52181506db11e5901a581fbf9a1fe5d1734c6fd",
+      "buggy": "6c7d8821907444069454414b403f81f4ebe21db4",
+      "subject": "Read commit messages properly: a quote- and heredoc-aware command splitter",
+      "kind": "boundary",
+      "testFiles": [
+        "server/agents/claudeRunner.test.ts",
+        "server/agents/commits.test.ts",
+        "server/agents/shell.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/claudeRunner.test.ts",
+          "name": "a commit counts once git says it worked, with its message",
+          "failure": "AssertionError: expected [ 'Heading on the chart', '\"$(cat' ] to deeply equal [ 'Heading on the chart', …(1) ]"
+        },
+        {
+          "file": "server/agents/commits.test.ts",
+          "name": "gitCommit keeps a quoted ; && or || in the message",
+          "failure": "AssertionError: expected { message: '\"Fix:' } to deeply equal { message: 'Fix: a; b && c || d' }"
+        },
+        {
+          "file": "server/agents/commits.test.ts",
+          "name": "gitCommit takes the first line of a message written in a heredoc, as sessions usually commit",
+          "failure": "AssertionError: expected { message: '\"$(cat' } to deeply equal { Object (message) }"
+        },
+        {
+          "file": "server/agents/commits.test.ts",
+          "name": "gitCommit leaves out a message only the shell could work out, rather than showing half of it",
+          "failure": "AssertionError: expected { Object (message) } to deeply equal {}"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 404
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 405
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 406
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 407
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 408
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 409
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 410
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 411
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 425
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 426
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 427
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 428
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 429
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 430
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 431
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 432
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 433
+        },
+        {
+          "file": "server/agents/claudeRunner.ts",
+          "line": 434
+        },
+        {
+          "file": "server/agents/commits.ts",
+          "line": 2
+        },
+        {
+          "file": "server/agents/commits.ts",
+          "line": 3
+        },
+        {
+          "file": "server/agents/commits.ts",
+          "line": 4
+        },
+        {
+          "file": "server/agents/commits.ts",
+          "line": 7
+        },
+        {
+          "file": "server/agents/commits.ts",
+          "line": 8
+        },
+        {
+          "file": "server/agents/commits.ts",
+          "line": 9
+        },
+        {
+          "file": "server/agents/commits.ts",
+          "line": 21
+        },
+        {
+          "file": "server/agents/commits.ts",
+          "line": 22
+        },
+        {
+          "file": "server/agents/scratch.ts",
+          "line": 147
+        },
+        {
+          "file": "server/agents/scratch.ts",
+          "line": 153
+        },
+        {
+          "file": "server/agents/scratch.ts",
+          "line": 154
+        }
+      ]
+    },
+    {
+      "fix": "e504bdce03f94210c492f2c1cd2e3befaccd9e75",
+      "buggy": "0f5e0cf490a0b62c126e5fd15ba58c12fe8d5c03",
+      "subject": "Re-trim CLAUDE.md (a merge of #405 brought the old 22 KB back) and hold it under 4 KB with a test",
+      "kind": "drift",
+      "testFiles": [
+        "scripts/claudeMd.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "scripts/claudeMd.test.ts",
+          "name": "CLAUDE.md budgets CLAUDE.md stays under 4000 bytes",
+          "failure": "AssertionError: CLAUDE.md is 21831 bytes. Keep only what Claude would get wrong without it, and put the rest in the feature's page under docs/. Resolving a conflict in it, keep main's short version.: expected 21831 to be less than or equal to 4000"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "CLAUDE.md",
+          "line": 24
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 25
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 26
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 27
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 28
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 29
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 30
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 31
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 32
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 33
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 34
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 35
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 36
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 37
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 38
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 39
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 40
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 41
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 42
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 43
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 44
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 45
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 46
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 47
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 48
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 49
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 50
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 51
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 52
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 53
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 54
+        },
+        {
+          "file": "CLAUDE.md",
+          "line": 55
+        }
+      ]
+    },
+    {
+      "fix": "19b1f09bac00c3b6b622dd12912864fa50b086ca",
+      "buggy": "9c8839d3c6e6923d3b85068c768a50225a5fbeb5",
+      "subject": "Make tests deterministic: seed the server's random choices, keep reopened leads' names, wait for the app's ready signal in smoke",
+      "kind": "flaky",
+      "testFiles": [
+        "server/agents/workspace.test.ts",
+        "shared/crew.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "shared/crew.test.ts",
+          "name": "leadFor keeps clear of the closed goals’ leads, so one reopened gets their own name back",
+          "failure": "AssertionError: expected [ 'Varga', 'Moreau', 'Tanaka' ] to not include 'Varga'"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "CLAUDE.md",
+          "line": 15
+        },
+        {
+          "file": "docs/scripts.md",
+          "line": 12
+        },
+        {
+          "file": "docs/scripts.md",
+          "line": 14
+        },
+        {
+          "file": "scripts/smoke.ts",
+          "line": 22
+        },
+        {
+          "file": "scripts/smoke.ts",
+          "line": 23
+        },
+        {
+          "file": "scripts/smoke.ts",
+          "line": 34
+        },
+        {
+          "file": "scripts/smoke.ts",
+          "line": 35
+        },
+        {
+          "file": "server/agents/demoRunner.ts",
+          "line": 1
+        },
+        {
+          "file": "server/agents/demoRunner.ts",
+          "line": 53
+        },
+        {
+          "file": "server/agents/demoRunner.ts",
+          "line": 124
+        },
+        {
+          "file": "server/agents/demoRunner.ts",
+          "line": 201
+        },
+        {
+          "file": "server/agents/demoRunner.ts",
+          "line": 272
+        },
+        {
+          "file": "server/agents/demoRunner.ts",
+          "line": 314
+        },
+        {
+          "file": "server/agents/demoRunner.ts",
+          "line": 488
+        },
+        {
+          "file": "server/agents/demoRunner.ts",
+          "line": 500
+        },
+        {
+          "file": "server/agents/demoRunner.ts",
+          "line": 634
+        },
+        {
+          "file": "server/agents/demoRunner.ts",
+          "line": 738
+        },
+        {
+          "file": "server/agents/demoRunner.ts",
+          "line": 763
+        },
+        {
+          "file": "server/agents/manager/leads.ts",
+          "line": 38
+        },
+        {
+          "file": "server/demoGit.ts",
+          "line": 1
+        },
+        {
+          "file": "server/demoGit.ts",
+          "line": 12
+        },
+        {
+          "file": "server/index.ts",
+          "line": 7
+        },
+        {
+          "file": "server/index.ts",
+          "line": 34
+        },
+        {
+          "file": "server/index.ts",
+          "line": 67
+        },
+        {
+          "file": "server/index.ts",
+          "line": 68
+        },
+        {
+          "file": "server/index.ts",
+          "line": 69
+        },
+        {
+          "file": "shared/crew.ts",
+          "line": 87
+        },
+        {
+          "file": "shared/crew.ts",
+          "line": 89
+        },
+        {
+          "file": "shared/crew.ts",
+          "line": 92
+        },
+        {
+          "file": "shared/crew.ts",
+          "line": 106
+        },
+        {
+          "file": "shared/crew.ts",
+          "line": 107
+        },
+        {
+          "file": "shared/crew.ts",
+          "line": 108
+        },
+        {
+          "file": "shared/crew.ts",
+          "line": 110
+        }
+      ]
+    },
+    {
+      "fix": "fc7b2fae6e98a3d4278826a644b49d668b97cd51",
+      "buggy": "6fdfdef0b53b4fae4c721baa946c249974dc80c9",
+      "subject": "Demo office keeps its project and goal lead ids across a restart: its ids roll from fixed dice (part of #226)",
+      "kind": "flaky",
+      "testFiles": [
+        "server/store.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/store.test.ts",
+          "name": "the demo office’s ids are the same each time it starts, so a script can keep using them across a restart",
+          "failure": "TypeError: seedDemoIds is not a function"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "CLAUDE.md",
+          "line": 14
+        },
+        {
+          "file": "docs/scripts.md",
+          "line": 8
+        },
+        {
+          "file": "server/index.ts",
+          "line": 39
+        }
+      ]
+    },
+    {
+      "fix": "56757d46da8264a0ad4d474eb32e9a5ce92dc741",
+      "buggy": "9fdb9644cb982c0592ab91d2a0d77137bf4465ee",
+      "subject": "Leave a lead's conversation alone when a slice lands (#128)",
+      "kind": "spec",
+      "testFiles": [
+        "server/agents/lead.test.ts",
+        "server/agents/manager.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager carries the goal into the next slice, as the captain put it, once the last one has landed",
+          "failure": "AssertionError: expected '/compact Summarise this conversation …' to match /^Slice 2 starts on fresh code/"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "README.md",
+          "line": 91
+        },
+        {
+          "file": "README.md",
+          "line": 92
+        },
+        {
+          "file": "client/src/ui/agentPanel.ts",
+          "line": 220
+        },
+        {
+          "file": "docs/goals-plan.md",
+          "line": 132
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 139
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 140
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 142
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 143
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 146
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 147
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 151
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 336
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 338
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 341
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 343
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 868
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 869
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 870
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 871
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 877
+        }
+      ]
+    },
+    {
+      "fix": "1383e946da1cf4b85a61e94b9a6a9093ce6eabd6",
+      "buggy": "94bac9a4df8916584d70bbc458616217602b808d",
+      "subject": "Tell a lead whose slice lands mid-turn to carry on, not stop (#192) (#193)",
+      "kind": "spec",
+      "testFiles": [
+        "server/agents/lead.test.ts",
+        "server/agents/manager.test.ts"
+      ],
+      "referees": [
+        {
+          "file": "server/agents/lead.test.ts",
+          "name": "what the lead writes and hears works in slices across every repo, ships through the office, and never pushes",
+          "failure": "AssertionError: expected '# You are Lt. Okafor, a lead on Shop …' to match /Your repos move to fresh code on a ne…/"
+        },
+        {
+          "file": "server/agents/manager.test.ts",
+          "name": "AgentManager tells a lead whose slice lands mid-turn to carry on, and moves their repos at the start of the next turn",
+          "failure": "AssertionError: expected '[Office] Slice 1 has landed: demo/web…' to match /^\\[Office\\] Slice 1 has landed: .* Ca…/"
+        }
+      ],
+      "buggyLines": [
+        {
+          "file": "docs/goals.md",
+          "line": 11
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 170
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 526
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 528
+        },
+        {
+          "file": "server/agents/lead.ts",
+          "line": 529
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 17
+        },
+        {
+          "file": "server/agents/manager.ts",
+          "line": 1279
+        }
+      ]
+    }
+  ],
+  "others": [
+    {
+      "fix": "e35cf2fa66505efdf408ae2570f82aac246e9e66",
+      "kind": "ui",
+      "subject": "Lobby directory screen no longer z-fights with its backing board (#17)",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "a960ba928e5f4b07a2609bbf984e5c50ad280eb2",
+      "kind": "ui",
+      "subject": "find and fix glitches (#26)",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "f96d549c7b9b22e7985c94b6b0918358ccde4689",
+      "kind": "ui",
+      "subject": "Glitches (#19)",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "c717f6ad803abe1f1421ea9b6fae9ad6d11f11c2",
+      "kind": "ui",
+      "subject": "Fit each room's whiteboard under the ceiling",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "8f4a7ad81e8e459568647d1272e1fc58259fcc0f",
+      "kind": "ui",
+      "subject": "Detect and fix z-fighting in the 3D ship with `npm run zfight` (#91)",
+      "verdict": "missing-code",
+      "note": "Cannot find module './zfight' imported from client/src/world/zfight.test.ts"
+    },
+    {
+      "fix": "031320121c900e5c84101fb024955748f00bdd1b",
+      "kind": "ui",
+      "subject": "Close the gaps round doorways and chair backs (#141)",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "01ab72d534cbbbe19a3940013017afbfbe2c62b3",
+      "kind": "ui",
+      "subject": "Add npm run gaps, a scan for things hovering off what they belong to, and fix what it finds (#143)",
+      "verdict": "missing-code",
+      "note": "Cannot find module './gaps' imported from client/src/world/gaps.test.ts"
+    },
+    {
+      "fix": "0610e248762340712d77cdde66b2f5364a87979e",
+      "kind": "ui",
+      "subject": "Keep focus on a side nav tab when its panel re-renders (#144)",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "0264a6b76c51b6b03049658b2f790c0dbc797b7b",
+      "kind": "ui",
+      "subject": "Keep ambient occlusion off a doorway's alcove (#152)",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "6da8a7d0eb41f8facd017ceec2fe02833a0900ee",
+      "kind": "ui",
+      "subject": "Stop the training hall's entrance z-fighting (#223)",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "3dfed2f45b24402ace133fffc58f3a42bae3c433",
+      "kind": "ui",
+      "subject": "Blend the overlay in display colours through a doorway too, so holograms are as see-through either side (#238) (#239)",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "0fdfb852ee9d78f4ae528a3d5cef47085ff16988",
+      "kind": "ui",
+      "subject": "Never get stuck leaving a team room: slide anyone who comes out of a doorway against its jamb into the opening, and let anyone in a collider walk out (#247)",
+      "verdict": "missing-code",
+      "note": "Cannot find module './collision' imported from client/src/collision.test.ts"
+    },
+    {
+      "fix": "beef15cea1769ef16ed670141bc8351836a6a3aa",
+      "kind": "ui",
+      "subject": "Move the helpers' seats back so their boots clear the curved consoles",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "720f6763fe8baad121999820def61d32aba3033e",
+      "kind": "ui",
+      "subject": "Clicking a loose thread opens its own log, not the waypoint that noticed it",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "139cb73f865a206683015672d99b2cefa4f4e9c3",
+      "kind": "ui",
+      "subject": "Keep the briefing rooms' stars streaming aft: see each drifting layer from inside its cylinder",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "7a35af49187ab5000afea982f702305c4041a14c",
+      "kind": "ui",
+      "subject": "Keep an agent panel's Activity readout readable beside the autonomy picker",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "e7d2d5ae8bb19cf8ffd68f5d5a00d448a0a77263",
+      "kind": "ui",
+      "subject": "kit3d: a label not placed this frame hides, so jumping back before it appears hides it",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "be9169748670ac915518d7853abe6c9a057cac04",
+      "kind": "ui",
+      "subject": "Give every HUD pill top right the same height",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "68f16994d374795961221ade002c3a6ebbec5bf0",
+      "kind": "ui",
+      "subject": "Align the HUD's top row: one pill height for location, stats and Comms; the usage pill no longer picks up the engineering panel's .usage margin",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "d41aecd5e1e7e71f04e0693cc1b5d4b3278aa88d",
+      "kind": "ui",
+      "subject": "A waypoint's name sits nearer its own waypoint than any other, or goes without",
+      "verdict": "missing-code",
+      "note": "TypeError: (0 , __vite_ssr_import_1__.misread) is not a function"
+    },
+    {
+      "fix": "295b457e06cc0c8abb150a7a84233bb9dd92e61d",
+      "kind": "ui",
+      "subject": "Studio: a take's plaque grows to fit its label and metaphor instead of cutting them off",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "6c69c18f61a4b30bf5563dfc6cde3dcf84be4b64",
+      "kind": "ui",
+      "subject": "Studio: hidden props stop catching the crosshair, beats open from across the floor or a take's plaque",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "5d74f455b8de51ffdb3d805d0ba565ddb47ccdb3",
+      "kind": "lifecycle",
+      "subject": "A goal's artifacts are kept for good, not deleted when it drops off the end of the room's log",
+      "verdict": "passes-before",
+      "note": ""
+    },
+    {
+      "fix": "79bf95fac012ed5499b7824a52baada4995a951c",
+      "kind": "lifecycle",
+      "subject": "Training: a scenario without a scene stops the director, rather than leave the last scene's beats over the new reset; a missing scenes/ is no scenes",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "eeea841ec8d7d8c6bfc303f984dfe5f55254592c",
+      "kind": "lifecycle",
+      "subject": "Send the office's PRs back to QA when a push it didn't make moves the head",
+      "verdict": "missing-code",
+      "note": "TypeError: (0 , __vite_ssr_import_1__.verdictBehindHead) is not a function"
+    },
+    {
+      "fix": "524d7892b2aba549dbc926df8d54550fc1ae6e9b",
+      "kind": "lifecycle",
+      "subject": "qa-catch: keep the planted clone until its control's review is done (the control borrows its objects), and score a failed git call rather than crash; document QA's file accounting",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "d0b4692e1e44886ea327ba2933963191d28cab08",
+      "kind": "lifecycle",
+      "subject": "The retro's window starts again from the latest retro's days when a new one is saved",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "12c208b7c3c28ab472a0d5dea83dd4a30be92443",
+      "kind": "race",
+      "subject": "Make worktree setup survive fetch ref-lock races and stale worktrees holding the branch (#77)",
+      "verdict": "missing-code",
+      "note": "Cannot find module './worktrees' imported from server/agents/worktrees.test.ts"
+    },
+    {
+      "fix": "879f9ec07f7d12a30f48841f2226cce561637fff",
+      "kind": "race",
+      "subject": "Keep a session listening through the turn that takes its last background task's result (#353)",
+      "verdict": "missing-code",
+      "note": "TypeError: __vite_ssr_import_1__.Listening is not a constructor"
+    },
+    {
+      "fix": "33dc5c219fadc6a0ae6246b588d0317b33938bb5",
+      "kind": "external",
+      "subject": "Keep a PR's last definite mergeable status while GitHub reports UNKNOWN on the same head and base (#84)",
+      "verdict": "missing-code",
+      "note": "TypeError: (0 , __vite_ssr_import_1__.carryMergeable) is not a function"
+    },
+    {
+      "fix": "c82fc35fac3ec4deff62365f9927e1486b1f1e76",
+      "kind": "external",
+      "subject": "Restart after an auto update even when the office aborts on exit (#106)",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "63c062e4eada3711e1a95ae752ebc11a42410672",
+      "kind": "external",
+      "subject": "Fall back to a local agent when Claude Code refuses a cloud session (#59)",
+      "verdict": "missing-code",
+      "note": "TypeError: (0 , __vite_ssr_import_1__.fallBackToLocal) is not a function"
+    },
+    {
+      "fix": "1dc03e5fdb8ed235a6d5bb769d4ae62c1a7b2c57",
+      "kind": "external",
+      "subject": "Run Kokoro in a process of its own, killed on close, so closing the office no longer aborts in onnxruntime's teardown",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "35ab58660201473c7f2eee0429d027a8ee5a99a7",
+      "kind": "external",
+      "subject": "Run local agents' Bash tool in bash, so an unmatched glob isn't zsh's \"no matches found\"",
+      "verdict": "missing-code",
+      "note": "Cannot find module './agentShell' imported from server/agents/agentShell.test.ts"
+    },
+    {
+      "fix": "a3620d8f6ed6460162492459ce3c0f8c3eab6a53",
+      "kind": "typehole",
+      "subject": "toolPermission says it always decides (never null), and its tests pass the SDK's full options",
+      "verdict": "passes-before",
+      "note": ""
+    },
+    {
+      "fix": "ca29e23fd410811a1b30584a95783db336d09d6f",
+      "kind": "typehole",
+      "subject": "The planner's ready toast reads the finished draft's title, which is always set",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "b5b515ef1d9729837d8e99dfeb2c4575e26e8d51",
+      "kind": "drift",
+      "subject": "Briefing room: no more mentions of the table it no longer has (#222)",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "086f40968bb1a1a4673785c405af9288aabc3929",
+      "kind": "drift",
+      "subject": "Drop the stray break the retro's event case left behind",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "627e121455e9d45c065d024274c0611c88215886",
+      "kind": "drift",
+      "subject": "Point the show-to-screen scenario's drifted cites at the lines where their steps happen now",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "31cec00bf8027318ae66ad8471b7e09375b1471b",
+      "kind": "drift",
+      "subject": "Cite show-to-screen's first step where goalTools.ts keeps the page now",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "8d4eb0b1973011b7dc0001229c0a03da47cf6690",
+      "kind": "drift",
+      "subject": "Cite show-to-screen's last step where screenPanel.ts asks for the page now",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "1abc69372006cab7add32ba102f5159b9ed56624",
+      "kind": "drift",
+      "subject": "Put everySlice's doc comment back on it, and say where a waypoint's label comes from (QA, #444)",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "7c4d9f57ce30926540067caef3abcb7316bc9b3f",
+      "kind": "drift",
+      "subject": "Put freshBranches' doc comment back on it",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "5c3776fb715b92c789d796aa760e38b1e384b36e",
+      "kind": "drift",
+      "subject": "CLAUDE.md: drop the duplicate pnpm run demo line, keeping the one with the workflow tip",
+      "verdict": "no-tests",
+      "note": "the fix changed no test"
+    },
+    {
+      "fix": "43dacbbdeff94138f8c218859d69a88561c31c54",
+      "kind": "flaky",
+      "subject": "Give the git-backed merge tests room on a busy machine",
+      "verdict": "passes-before",
+      "note": ""
+    },
+    {
+      "fix": "16a9a1cdfba15e4de8c9df677ff0d08c483ff143",
+      "kind": "flaky",
+      "subject": "Tests: real-git test files get the 30 s budget mergeBase has (guarded), and the course test checks each voyage once rather than per pair, so the gate passes on a busy machine (#334)",
+      "verdict": "passes-before",
+      "note": ""
+    },
+    {
+      "fix": "9c969817ab620fe68150d2854bab70abe49fd018",
+      "kind": "flaky",
+      "subject": "Star chart: weigh label spots against the course's lines by column, counted in loops, so the voyage test stops timing out on a busy machine",
+      "verdict": "missing-code",
+      "note": "TypeError: (0 , __vite_ssr_import_1__.hitCounter) is not a function"
+    },
+    {
+      "fix": "c7c68624adfc0d4053f38368c6cc17c64b3d5496",
+      "kind": "flaky",
+      "subject": "Star chart: stop weighing label spots once the best can't be beaten, so the voyage test stops timing out under load",
+      "verdict": "missing-code",
+      "note": "TypeError: (0 , __vite_ssr_import_1__.cheapest) is not a function"
+    },
+    {
+      "fix": "d8abf96a23156c13048dbbf237d9aac0975c9d60",
+      "kind": "flaky",
+      "subject": "Give the scorecards test, which now runs real git, a budget fit for a busy machine",
+      "verdict": "passes-before",
+      "note": ""
+    },
+    {
+      "fix": "4766f6765d36fc7d5ea3b195ee45cc983a9a5699",
+      "kind": "flaky",
+      "subject": "Tests: a test file that loads the office's own plugins gets the 30 s budget real-git files have (guarded), so the gate passes on a busy machine",
+      "verdict": "passes-before",
+      "note": ""
+    },
+    {
+      "fix": "636acc7e2b67327f90ad816f51690123d82abffb",
+      "kind": "spec",
+      "subject": "Revert \"QA reads each changed file's diff whole, a file at a time, never cut short with head or tail\"",
+      "verdict": "passes-before",
+      "note": ""
+    }
+  ]
+}

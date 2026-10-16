@@ -30,7 +30,8 @@
     "climb:replay": "tsx plugins/climber/scripts/climbReplay.ts",
     "flow": "tsx plugins/flow/scripts/flow.ts",
     "qa-catch": "tsx scripts/qaCatch.ts",
-    "before-after": "tsx plugins/flow/scripts/beforeAfter.ts"
+    "before-after": "tsx plugins/flow/scripts/beforeAfter.ts",
+    "bug-corpus": "tsx scripts/bugCorpus.ts"
   },
   "engines": {
     "node": ">=20"
