@@ -300,7 +300,8 @@ const KIT_HELPERS = String.raw`
 // It rests, dimmed, on the last frame until the captain presses play, so the screen's picture sums it up.
 // Up close, the office's screen offers a voice-over: the page can't reach the office itself (it runs in a sandbox of its
 // own), so it asks the screen around it to say each beat's line, and the screen says when the line is done. While the
-// voice is on it sets the pace: a beat holds on its last frame until its line is finished.
+// voice is on it sets the pace: a beat holds on its last frame until its line is finished. It tells the screen which beat
+// it's on as that changes, so a question the captain asks about it says where they were, and the screen can pause it.
 const KIT_PLAYER = String.raw`
 (function () {
   var BEATS = window.KIT_BEATS, DUR = window.KIT_DUR, el = function (id) { return document.getElementById(id); };
@@ -315,6 +316,8 @@ const KIT_PLAYER = String.raw`
   var tell = function (message) { if (screen) screen.postMessage(message, '*'); };
   function say(i) { talk = { beat: i, done: false, paused: false }; tell({ kit: 'say', beat: i }); }
   function hush() { if (!talk.done) tell({ kit: 'hush' }); talk = { beat: -1, done: true, paused: false }; }
+  // the beat last shown, as the screen was told
+  var shownBeat = -1;
   var beatEls = BEATS.map(function (b, i) {
     var d = document.createElement('div'); d.className = 'beat'; d.style.background = 'var(--' + b.colour + ')';
     d.innerHTML = '<span><b>0' + (i + 1) + '</b></span>'; d.firstChild.appendChild(document.createTextNode(b.label));
@@ -333,6 +336,7 @@ const KIT_PLAYER = String.raw`
     var bi = beatAt(t);
     if (hold >= 0 && Math.abs(t - end(hold)) < .001) bi = hold;
     el('kit-bt').textContent = BEATS[bi].title; el('kit-bx').textContent = BEATS[bi].text;
+    if (bi !== shownBeat) { shownBeat = bi; tell({ kit: 'beat', beat: bi, title: BEATS[bi].title }); }
     beatEls.forEach(function (d, i) { d.classList.toggle('on', i === bi); });
     segEls.forEach(function (d, i) {
       var k = Math.min(1, Math.max(0, (t - BEATS[i].at) / (end(i) - BEATS[i].at)));
@@ -399,6 +403,8 @@ const KIT_PLAYER = String.raw`
       el('kit-voice').textContent = voice ? 'Voice on' : 'Voice off';
       if (!voice) hush();
     } else if (m.kit === 'said' && m.beat === talk.beat) talk.done = true;
+    // the captain's asking about it: it waits, its line too, until they play it again
+    else if (m.kit === 'pause') pause();
   });
   tell({ kit: 'lines', lines: BEATS.map(function (b) { return b.say; }) });
   addEventListener('keydown', function (e) {

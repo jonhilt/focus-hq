@@ -6,6 +6,7 @@ import { LCARS } from '../world/starship';
 import { sound } from '../sound';
 import type { Ui } from './context';
 import { h } from './dom';
+import { BriefingAsk } from './briefingAsk';
 import { Narrator } from './narrator';
 import { SideNav } from './panels';
 import { answerLead } from './resume';
@@ -79,6 +80,9 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
   let step: ((by: number) => void) | undefined;
   // the voice-over for what's on show, if it's an explainer: it hears from the player's page and talks it through
   let narrator: Narrator | undefined;
+  // asking the lead about what's on show (while their goal's open): kept through a new version of it
+  let ask: BriefingAsk | undefined;
+  let askingAbout = '';
 
   /**
    * A question up close: why the lead asks, then one option at a time, large, with what it trades off and its Pick
@@ -163,12 +167,23 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
     step = undefined;
     narrator?.end();
     narrator = undefined;
+    if (!artifact) {
+      ask?.end();
+      ask = undefined;
+      askingAbout = '';
+    }
     if (question) {
       body.replaceChildren(...questionView(question));
     } else if (artifact) {
       const url = artifactUrl(leadId, artifact, 'html');
       const shownHere = stage(url, artifact.title);
       narrator = new Narrator(shownHere.querySelector('iframe')!, leadVoice(leadId));
+      if (ask && picked === askingAbout) ask.narrator = narrator;
+      else {
+        ask?.end();
+        ask = live ? new BriefingAsk(ui, leadId, artifact, narrator) : undefined;
+        askingAbout = picked;
+      }
       body.replaceChildren(
         h('div', { class: 'row artifact-head' },
           h('h3', { class: 'grow' }, artifact.title),
@@ -177,6 +192,7 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
           h('a', { class: 'btn small', href: url, target: '_blank', rel: 'noopener' }, 'Open in a tab'),
         ),
         shownHere,
+        ask?.el ?? h('span'),
       );
     } else {
       body.replaceChildren();
@@ -191,6 +207,7 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
   ui.panels.own(() => {
     window.removeEventListener('message', heard);
     narrator?.end();
+    ask?.end();
   });
   if (live) {
     ui.panels.own(state.on('agent', (agent) => {

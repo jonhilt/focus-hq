@@ -1,3 +1,4 @@
+import type { BriefingSpot } from '../../../shared/artifacts';
 import { type CrewVoice, forSpeech } from '../../../shared/voice';
 import { api } from '../net/api';
 import { bestBrowserVoice, kokoroReady } from './crewVoice';
@@ -8,6 +9,7 @@ type FromPlayer =
   | { kit: 'lines'; lines: string[] }
   | { kit: 'voice'; on: boolean }
   | { kit: 'say'; beat: number }
+  | { kit: 'beat'; beat: number; title: string }
   | { kit: 'pause' | 'resume' | 'hush' };
 
 /** The player's message, if it's one: anything else a page posts is ignored. */
@@ -21,6 +23,8 @@ function fromPlayer(data: unknown): FromPlayer | undefined {
       return { kit: 'voice', on: m.on === true };
     case 'say':
       return typeof m.beat === 'number' ? { kit: 'say', beat: m.beat } : undefined;
+    case 'beat':
+      return typeof m.beat === 'number' ? { kit: 'beat', beat: m.beat, title: String(m.title ?? '').slice(0, 200) } : undefined;
     case 'pause':
     case 'resume':
     case 'hush':
@@ -50,6 +54,8 @@ export class Narrator {
   private saying: Saying | undefined;
   private on = false;
   private readonly fetching = new AbortController();
+  /** The beat the player's on, once it's said (an explainer shown before players said so never does). */
+  spot: BriefingSpot | undefined;
 
   constructor(private readonly frame: HTMLIFrameElement, private readonly voice: CrewVoice) {}
 
@@ -70,6 +76,9 @@ export class Narrator {
       case 'say':
         this.say(m.beat);
         break;
+      case 'beat':
+        this.spot = { beat: m.beat, title: m.title };
+        break;
       case 'pause':
         this.saying?.pause();
         break;
@@ -82,13 +91,18 @@ export class Narrator {
     }
   }
 
+  /** Pauses the player, and the line being said with it (the player says so): Play picks both up again. */
+  pause(): void {
+    this.tell({ kit: 'pause' });
+  }
+
   /** Stops the voice and any line still being fetched: the panel's closed, or shows something else. */
   end(): void {
     this.hush();
     this.fetching.abort();
   }
 
-  private tell(message: { kit: 'voice'; on: boolean } | { kit: 'said'; beat: number }): void {
+  private tell(message: { kit: 'voice'; on: boolean } | { kit: 'said'; beat: number } | { kit: 'pause' }): void {
     this.frame.contentWindow?.postMessage(message, '*');
   }
 

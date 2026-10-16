@@ -34,3 +34,21 @@ export function answerMessage(question: GoalQuestion, option: string, note?: str
   const said = note?.trim() ? `\n\n${note.trim()}` : '';
   return `I picked ${option.toUpperCase()}, “${picked?.label ?? option}”, for your question “${question.question}”.${said}`;
 }
+
+/** Where the captain was in a briefing (an explainer) when they asked about it: its beat, counted from 0, and that beat's title. */
+export interface BriefingSpot {
+  beat: number;
+  title: string;
+}
+
+/**
+ * What the lead hears when the captain asks about one of their briefings, up close: which one, the beat they were on,
+ * and that the answer is read out in the lead's voice as they write it, so it should be spoken, short and plain.
+ */
+export function briefingQuestion(briefing: Pick<GoalArtifact, 'id' | 'title'>, spot: BriefingSpot | undefined, question: string): string {
+  const where = spot ? `, at beat ${spot.beat + 1}, “${spot.title}”` : '';
+  return [
+    `A question about your briefing “${briefing.title}” (\`${briefing.id}\`${where}): ${question.trim()}`,
+    'I’m listening up close, and what you write back is read out to me in your voice as you write it. Answer in a few spoken sentences: plain words, no code, paths, tables or lists. If you need to look something up first, say so in a line before you do. If a picture would answer it better, answer aloud first, then explain it again under the same id.',
+  ].join('\n\n');
+}

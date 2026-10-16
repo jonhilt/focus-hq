@@ -420,6 +420,15 @@ export class DemoRunner implements AgentRunner {
         hooks.commit?.(text);
       };
 
+      // asked about a briefing up close: a line straight away, a look at the code, then a spoken answer about that beat
+      const briefing = /^A question about your briefing “([^”]*)”[^)]*?(?:at beat (\d+), “([^”]*)”)?\): ([^\n]*)/.exec(req.prompt);
+      if (briefing) {
+        const [, title, beat, beatTitle] = briefing;
+        await say('Good question. Let me check the code on that.');
+        await tool('Read', { file_path: `/work/${repos[0]?.folder ?? 'web'}/${FILES[kindOf(repos[0]?.repo ?? 'web')][0]}` }, ['Read 84 lines']);
+        await say(`${beat ? `In beat ${beat}, ${beatTitle}, ` : `In ${title}, `}the save waits for the database to answer before the page says it's done. If the database is down, it retries three times, a second apart, then tells the shopper it couldn't save. Want me to redraw that part of the briefing in more detail?`);
+        return { ok: true, summary: 'Answered a question about a briefing.' };
+      }
       if (/^\[QA officer/.test(req.prompt)) {
         await think();
         if (/^\[QA officer [^\]]+\] QA failed/.test(req.prompt)) {

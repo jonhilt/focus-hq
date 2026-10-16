@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { answeredReadout, answerMessage, artifactUrl, latestArtifact, openQuestion, optionUrl } from './artifacts';
+import { answeredReadout, answerMessage, artifactUrl, briefingQuestion, latestArtifact, openQuestion, optionUrl } from './artifacts';
 
 describe('artifacts', () => {
   it('shows the one shown last, wherever it stands in the list', () => {
@@ -37,5 +37,22 @@ describe('questions', () => {
   it('tells the lead which option the captain picked, and anything they added', () => {
     expect(answerMessage(question, 'b')).toBe('I picked B, “Plain list”, for your question “Which layout?”.');
     expect(answerMessage(question, 'a', ' Keep the header ')).toBe('I picked A, “Cards”, for your question “Which layout?”.\n\nKeep the header');
+  });
+});
+
+describe('briefingQuestion', () => {
+  const briefing = { id: 'ledger-crash', title: 'When the ledger crashes' };
+
+  it('names the briefing and the beat the captain was on, counted from 1', () => {
+    const message = briefingQuestion(briefing, { beat: 2, title: 'The retry' }, '  Why twice? ');
+    expect(message.split('\n\n')[0]).toBe('A question about your briefing “When the ledger crashes” (`ledger-crash`, at beat 3, “The retry”): Why twice?');
+  });
+
+  it('leaves the beat out when the player never said which one it was on', () => {
+    expect(briefingQuestion(briefing, undefined, 'Why?')).toMatch(/^A question about your briefing “When the ledger crashes” \(`ledger-crash`\): Why\?/);
+  });
+
+  it('asks for an answer that reads well aloud', () => {
+    expect(briefingQuestion(briefing, undefined, 'Why?')).toContain('read out to me in your voice');
   });
 });

@@ -1,4 +1,5 @@
-import type { VoiceStatus } from './types';
+import { replyPart } from './termText';
+import type { TermLine, VoiceStatus } from './types';
 
 export const WHISPER_INSTALL = 'brew install whisper-cpp';
 
@@ -75,4 +76,20 @@ export function linesToSpeak<S extends string>(messages: { from: S; text: string
     const text = forSpeech(m.spoken ?? m.text);
     return text ? [{ speaker, text }] : [];
   });
+}
+
+/**
+ * The replies in a batch of an agent's terminal lines, each as it should be read aloud: tool calls, their output and
+ * the manager's own lines left out, and a reply that carries on from the last batch (no start) said on its own.
+ */
+export function repliesToSpeak(lines: TermLine[]): string[] {
+  const replies: string[][] = [];
+  for (const line of lines) {
+    const part = replyPart(line);
+    if (!part) continue;
+    const last = replies.at(-1);
+    if (part.start || !last) replies.push([part.text]);
+    else last.push(part.text);
+  }
+  return replies.map((reply) => forSpeech(reply.join('\n'))).filter(Boolean);
 }
