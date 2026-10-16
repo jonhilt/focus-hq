@@ -75,6 +75,7 @@ export class Comms extends Part {
       return SENT;
     }
     if (rt.session?.send(text)) {
+      if (rt.turn) this.store.journal(id, { kind: 'sent', turn: rt.turn, text });
       if (!rt.permission) this.update(agent, { activity: 'Reading your message' });
       return SENT;
     }
@@ -138,6 +139,8 @@ export class Comms extends Part {
     if (agent.handover) {
       void this.core.cloud.stayLocal(id, false).catch(() => undefined);
     } else if (rt.session) {
+      // the captain's stop, not the office shutting down: a restart doesn't undo it
+      if (rt.turn && !this.core.closing) this.store.journal(id, { kind: 'stop-requested', turn: rt.turn });
       rt.session.stop();
     } else if (!FINISHED.includes(agent.status)) {
       this.update(agent, { status: 'stopped', activity: STOPPED_BY_CAPTAIN, finishedAt: Date.now() });

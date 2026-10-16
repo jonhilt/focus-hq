@@ -110,7 +110,11 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
         baseBranch: work.baseBranch,
       }, crew);
     },
-    forget: (agentId) => void core.runtimes.delete(agentId),
+    forget: (agentId) => {
+      // what waited for them is kept in their run journal, not the runtime
+      core.rt(agentId).inbox.clear();
+      core.runtimes.delete(agentId);
+    },
     print: (agent, text) => core.print(agent, [{ kind: 'system', text }]),
     toast: (level, text, agentId) => core.hub.toast(level, text, agentId),
     uses: <T extends object>(other: string) => {

@@ -1,15 +1,16 @@
 import { pluginOn } from '../../../shared/projectPlugins';
 import { closeSync, fstatSync, openSync, readFileSync, readSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { Effect, Fiber, FiberMap } from 'effect';
+import { Effect, Exit, Fiber, FiberMap } from 'effect';
 import { effectiveAutonomy } from '../../../shared/autonomy';
 import { helperFor } from '../../../shared/crew';
 import { prKey } from '../../../shared/qa';
 import type { Agent, PermissionRequest, TermLine, WorkflowScript } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
 import { newId, truncate } from '../../util';
-import { attachAgain, carryOnInNewSession, CLOUD_UNAVAILABLE, fallBackToLocal } from '../cloud';
-import { applyHelperEvent, COMPACT_INSTRUCTIONS, compactInstructions, freshSessionPrompt, hasLeadWork, HELPER_LINGER_MS, leadSystemAppend, sessionGone, sliceLanded } from '../lead';
+import { afterTurn } from '../afterTurn';
+import { applyHelperEvent, COMPACT_INSTRUCTIONS, compactInstructions, freshSessionPrompt, hasLeadWork, HELPER_LINGER_MS, leadSystemAppend, sliceLanded } from '../lead';
+import { mismatchError, recovery, signInMismatch, turnEnding, type TurnKind } from '../runJournal';
 import { carryOnPrompt, conflictsPrompt, issuePrompt, systemAppend } from '../prompts';
 import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
 import { Sessions, Workspace } from '../services';
@@ -34,7 +35,7 @@ export class AgentSessions extends Part {
     if (rt.resume) {
       rt.resume = false;
       this.update(agent, { status: 'setting-up', activity: 'Picking up where they left off' });
-      return this.runSession(agent, rt.inbox.splice(0).join('\n\n'), agent.sessionId).pipe(this.orFail(agent));
+      return this.runSession(agent, rt.inbox.take().join('\n\n'), agent.sessionId).pipe(this.orFail(agent));
     }
     this.update(agent, { status: 'setting-up', activity: agent.task === 'review' ? 'Reading the pull request' : agent.task === 'brief' ? 'Reading the brief' : 'Reading the issue', error: undefined });
     return Effect.gen({ self: this }, function* () {
@@ -65,7 +66,7 @@ export class AgentSessions extends Part {
         yield* workspace.publish(workspace.dir(agent.id), agent.branch);
       }
       if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
-      rt.notes = rt.inbox.splice(0);
+      rt.notes = rt.inbox.take();
       yield* this.runSession(agent, withNotes(prompt, rt.notes));
     }).pipe(this.orFail(agent));
   }
@@ -100,7 +101,7 @@ export class AgentSessions extends Part {
     });
   }
 
-  private hooks(agent: Agent): RunHooks {
+  private hooks(agent: Agent, turn: string): RunHooks {
     const rt = this.rt(agent.id);
     return {
       lines: (lines) => this.print(agent, lines),
@@ -121,8 +122,18 @@ export class AgentSessions extends Part {
         rt.shots.frames.push(frame);
         if (rt.shots.frames.length > MAX_SCREENSHOTS) rt.shots.frames.shift();
       },
-      // a new session keeps a task list of its own, if any
-      session: (sessionId) => this.update(agent, { sessionId, ...(agent.sessionId && agent.sessionId !== sessionId ? { tasks: undefined, context: undefined } : {}) }),
+      session: (sessionId, keySource) => {
+        // a new session keeps a task list of its own, if any
+        this.update(agent, { sessionId, ...(agent.sessionId && agent.sessionId !== sessionId ? { tasks: undefined, context: undefined } : {}) });
+        const open = this.store.run(agent.id).open;
+        if (open?.id !== turn || (open.session === sessionId && open.keySource === keySource)) return;
+        this.store.journal(agent.id, { kind: 'turn-started', turn, session: sessionId, keySource });
+        if (open.mismatch || !keySource || !signInMismatch(open.onKey, keySource)) return;
+        // signed in with a key that costs, behind the office's back: stopped before it spends any more
+        this.store.journal(agent.id, { kind: 'sign-in-mismatch', turn, observed: keySource });
+        this.print(agent, [{ kind: 'error', text: `✘ Claude Code signed in with ${keySource} when the office meant your plan: stopping the turn` }]);
+        rt.session?.stop();
+      },
       context: (context) => this.update(agent, { context }),
       taskTool: (name, input, result, said) => {
         const before = agent.tasks ?? [];
@@ -200,7 +211,10 @@ export class AgentSessions extends Part {
         }
       },
       cost: (usd) => this.update(agent, { costUsd: usd }),
-      signIn: (onKey) => this.update(agent, { onKey }),
+      signIn: (onKey) => {
+        this.store.journal(agent.id, { kind: 'signed-in', turn, onKey });
+        this.update(agent, { onKey });
+      },
       permission: (tool, summary, signal) =>
         new Promise<boolean>((resolve) => {
           const req: PermissionRequest = { id: newId('ask'), tool, summary: truncate(summary, 300), at: Date.now() };
@@ -287,16 +301,32 @@ export class AgentSessions extends Part {
    * One turn of the agent's session, start to finish. Messages waiting for them go in as it starts (`withInbox`). The
    * turn is held in a scope: interrupting it stops Claude.
    */
-  private turn(agent: Agent, req: RunRequest, withInbox: boolean): Effect.Effect<RunOutcome, never, Sessions> {
+  private turn(agent: Agent, req: RunRequest, withInbox: boolean, kind: TurnKind = 'work'): Effect.Effect<RunOutcome, never, Sessions> {
     const rt = this.rt(agent.id);
+    const turn = newId('turn');
     return Effect.scoped(
       Effect.gen({ self: this }, function* () {
-        const session = yield* (yield* Sessions).start(req, this.hooks(agent));
+        // the intent goes in the journal before Claude Code starts, so a restart finds a turn it never saw end
+        this.store.journal(agent.id, { kind: 'turn-requested', turn, turnKind: kind, prompt: req.prompt, resumes: req.resumeSessionId });
+        const session = yield* (yield* Sessions).start(req, this.hooks(agent, turn));
         rt.session = session;
-        if (withInbox) for (const message of rt.inbox.splice(0)) session.send(message);
+        rt.turn = turn;
+        if (this.store.run(agent.id).open?.mismatch) session.stop();
+        else if (withInbox) for (const message of rt.inbox.take(turn)) session.send(message);
         return yield* Effect.promise(() => session.done);
       }),
-    ).pipe(Effect.ensuring(Effect.sync(() => (rt.session = undefined))));
+    ).pipe(
+      Effect.onExit((exit) =>
+        Effect.sync(() => {
+          rt.session = undefined;
+          rt.turn = undefined;
+          // the office shutting down stops every turn: each stays open in the journal, to carry on at the next start
+          if (this.core.closing) return;
+          // interrupted (sent home, moved to the cloud): it's over as much as a stop is
+          this.store.journal(agent.id, { kind: 'turn-ended', turn, outcome: Exit.isSuccess(exit) ? turnEnding(exit.value) : { ok: false, aborted: true } });
+        }),
+      ),
+    );
   }
 
   /**
@@ -312,7 +342,7 @@ export class AgentSessions extends Part {
       this.update(agent, { activity: 'Compacting the conversation' });
       this.print(agent, [{ kind: 'system', text: '✻ The office compacts the conversation, keeping what the goal needs' }]);
       const outcome = yield* this.instructions(agent).pipe(
-        Effect.flatMap((instructions) => this.turn(agent, this.runRequest(agent, `/compact ${keep}`, instructions, agent.sessionId), false)),
+        Effect.flatMap((instructions) => this.turn(agent, this.runRequest(agent, `/compact ${keep}`, instructions, agent.sessionId), false, 'compact')),
         Effect.catch((err) => Effect.succeed<RunOutcome>({ ok: false, summary: '', error: err.message })),
         Effect.ensuring(Effect.sync(() => (rt.busy = wasBusy))),
       );
@@ -353,87 +383,129 @@ export class AgentSessions extends Part {
         Effect.ensuring(Effect.sync(() => this.core.plugins.turn(agent, 'end'))),
       );
       rt.busy = false;
+      // the office is shutting down: what follows waits for it to start again (`recover`)
+      if (this.core.closing) return;
       // what the manager wrote during the turn carries them on into another; notes that waited for its end don't
       const carryOn = rt.inbox.length > 0;
-      rt.inbox.push(...(rt.afterTurn?.splice(0) ?? []));
+      rt.inbox.release();
       if (!this.store.agents.has(agent.id)) return;
 
       const attaching = rt.attaching;
-      if (attaching) {
-        // the session the captain started may still be answering its first message
-        if (attachAgain(outcome, attaching.tries)) {
-          attaching.tries++;
+      const next = afterTurn({
+        outcome,
+        role: review ? 'review' : lead ? 'lead' : 'work',
+        cloud: !!agent.cloud,
+        hasSession: !!agent.sessionId,
+        resumed: !!resumeSessionId,
+        attaching,
+        attachRefused: this.core.cloud.attachRefused,
+        carryOn,
+        mismatch: this.store.run(agent.id).last?.mismatch,
+      });
+      if (attaching && next.kind !== 'attach-again') rt.attaching = undefined;
+      switch (next.kind) {
+        case 'attach-again':
+          // the session the captain started may still be answering its first message
+          next.attaching.tries++;
           this.update(agent, { activity: 'Waiting for the cloud session to finish its first reply' });
           yield* Effect.sleep('15 seconds');
           return yield* this.runSession(agent, prompt, resumeSessionId);
-        }
-        rt.attaching = undefined;
-        if (!outcome.ok && !outcome.aborted && !outcome.started) {
+        case 'attach-refused':
           // Claude Code won't attach from Focus at all: no session the captain starts would do, so they carry on here
-          if (outcome.error === CLOUD_UNAVAILABLE) {
-            this.core.cloud.attachRefused = true;
-            return yield* this.core.cloud.carryOnHere(agent, attaching.handover);
-          }
+          this.core.cloud.attachRefused = true;
+          return yield* this.core.cloud.carryOnHere(agent, next.attaching.handover);
+        case 'attach-failed':
           this.print(agent, [{ kind: 'error', text: `✘ Couldn't attach to the cloud session: ${outcome.error ?? 'no reason given'}` }]);
-          return this.core.cloud.awaitCloud(agent, attaching.handover);
-        }
-      }
-      // your plan's usage limit stopped them: they carry on with your API key, now or once it resets
-      if (outcome.limited) return yield* this.core.planLimit.limited(agent, prompt);
-      if (outcome.aborted) {
-        this.update(agent, { status: 'stopped', activity: STOPPED_BY_CAPTAIN, permission: undefined, finishedAt: Date.now() });
-        if (review) this.core.reviews.reviewEnded(agent, STOPPED_BY_CAPTAIN);
-        this.core.reviews.fixEnded(agent, 'stopped');
-        this.core.seating.schedule();
-        return;
-      }
-      if (fallBackToLocal(agent, outcome)) {
-        // a session id from the cloud means it already worked there: its pushes may be on GitHub but not in the worktree
-        const ranInCloud = !!agent.sessionId;
-        rt.nudged = false;
-        if (!ranInCloud) {
+          return this.core.cloud.awaitCloud(agent, next.attaching.handover);
+        case 'sign-in-mismatch':
+          this.fail(agent, mismatchError(next.observed));
+          return;
+        case 'limited':
+          // your plan's usage limit stopped them: they carry on with your API key, now or once it resets
+          return yield* this.core.planLimit.limited(agent, prompt);
+        case 'stopped':
+          this.update(agent, { status: 'stopped', activity: STOPPED_BY_CAPTAIN, permission: undefined, finishedAt: Date.now() });
+          if (review) this.core.reviews.reviewEnded(agent, STOPPED_BY_CAPTAIN);
+          this.core.reviews.fixEnded(agent, 'stopped');
+          this.core.seating.schedule();
+          return;
+        case 'cloud-carry-on-here':
           // they haven't started, and Claude Code wouldn't attach to a session the captain started either
-          if (this.core.cloud.attachRefused) return yield* this.core.cloud.carryOnHere(agent, { since: Date.now(), fresh: true });
+          rt.nudged = false;
+          return yield* this.core.cloud.carryOnHere(agent, { since: Date.now(), fresh: true });
+        case 'cloud-await':
           // they haven't started: the captain starts their cloud session, which a terminal can, or keeps them here
+          rt.nudged = false;
           this.print(agent, [{ kind: 'system', text: "✻ Claude Code won't start a cloud session without a terminal" }]);
           return this.core.cloud.awaitCloud(agent, { since: Date.now(), fresh: true });
+        case 'cloud-to-local': {
+          // a session id from the cloud means it already worked there: its pushes may be on GitHub but not in the worktree
+          rt.nudged = false;
+          this.update(agent, { cloud: undefined, sessionId: undefined });
+          this.print(agent, [{ kind: 'system', text: "✻ Claude Code won't start a cloud session from Focus – carrying on here as a 💻 local agent" }]);
+          this.update(agent, { activity: `Fetching ${agent.branch} from GitHub` });
+          const workspace = yield* Workspace;
+          yield* workspace.pull(workspace.dir(agent.id), agent.branch);
+          // only a new session gets refused, so this is already a carry-on prompt with the manager's message in it
+          return yield* this.runSession(agent, prompt);
         }
-        this.update(agent, { cloud: undefined, sessionId: undefined });
-        this.print(agent, [{ kind: 'system', text: "✻ Claude Code won't start a cloud session from Focus – carrying on here as a 💻 local agent" }]);
-        this.update(agent, { activity: `Fetching ${agent.branch} from GitHub` });
-        const workspace = yield* Workspace;
-        yield* workspace.pull(workspace.dir(agent.id), agent.branch);
-        // only a new session gets refused, so this is already a carry-on prompt with the manager's message in it
-        return yield* this.runSession(agent, prompt);
+        case 'fresh-session':
+          // only a lead's turn ends this way
+          if (!lead) return;
+          this.print(agent, [{ kind: 'system', text: '✻ Claude Code no longer has their conversation – carrying on in a new one' }]);
+          this.update(agent, { sessionId: undefined });
+          return yield* this.runSession(agent, freshSessionPrompt(lead.lead, agent.branch, [prompt], false));
+        case 'new-cloud-session':
+          // everything the old session did is on the branch: a new one picks it up from there
+          this.print(agent, [{ kind: 'system', text: `✻ Couldn't get back into the cloud session (${truncate(outcome.error ?? 'no reason given', 200)}) – starting a new one on ${agent.branch}` }]);
+          return yield* this.runSession(agent, carryOnPrompt(agent, prompt));
+        case 'carry-on':
+          // The manager wrote while the session was wrapping up: carry on in the same conversation.
+          return yield* this.runSession(agent, rt.inbox.take().join('\n\n'), agent.sessionId);
+        case 'fail':
+          this.fail(agent, next.error);
+          return;
+        case 'finish-review':
+          return yield* this.core.reviews.finishReview(agent, outcome.structured, outcome.summary);
+        case 'lead-done':
+          // the lead's turn is over: it's the captain's turn, and their work ships when the lead says so, not now. Their
+          // subagents and workflows ended with it; any that just finished linger a moment
+          this.update(agent, { status: 'done', activity: 'Your turn', finishedAt: Date.now(), helpers: agent.helpers?.filter((h) => h.status !== 'working'), workflows: agent.workflows?.filter((w) => w.status !== 'running'), background: agent.background?.filter((t) => t.status !== 'running') });
+          this.core.seating.schedule();
+          return;
+        case 'deliver':
+          return yield* this.core.delivery.deliver(agent, outcome.summary);
       }
-      if (lead && sessionGone(outcome, !!resumeSessionId)) {
-        this.print(agent, [{ kind: 'system', text: '✻ Claude Code no longer has their conversation – carrying on in a new one' }]);
-        this.update(agent, { sessionId: undefined });
-        return yield* this.runSession(agent, freshSessionPrompt(lead.lead, agent.branch, [prompt], false));
-      }
-      if (agent.cloud && carryOnInNewSession(outcome, !!resumeSessionId)) {
-        // everything the old session did is on the branch: a new one picks it up from there
-        this.print(agent, [{ kind: 'system', text: `✻ Couldn't get back into the cloud session (${truncate(outcome.error ?? 'no reason given', 200)}) – starting a new one on ${agent.branch}` }]);
-        return yield* this.runSession(agent, carryOnPrompt(agent, prompt));
-      }
-      if (carryOn) {
-        // The manager wrote while the session was wrapping up: carry on in the same conversation.
-        return yield* this.runSession(agent, rt.inbox.splice(0).join('\n\n'), agent.sessionId);
-      }
-      if (!outcome.ok) {
-        this.fail(agent, outcome.error ?? 'The agent stopped with an error');
-        return;
-      }
-      if (review) return yield* this.core.reviews.finishReview(agent, outcome.structured, outcome.summary);
-      if (lead) {
-        // the lead's turn is over: it's the captain's turn, and their work ships when the lead says so, not now. Their
-        // subagents and workflows ended with it; any that just finished linger a moment
-        this.update(agent, { status: 'done', activity: 'Your turn', finishedAt: Date.now(), helpers: agent.helpers?.filter((h) => h.status !== 'working'), workflows: agent.workflows?.filter((w) => w.status !== 'running'), background: agent.background?.filter((t) => t.status !== 'running') });
-        this.core.seating.schedule();
-        return;
-      }
-      yield* this.core.delivery.deliver(agent, outcome.summary);
     });
+  }
+
+  /**
+   * After a restart, each agent's run picks up from their journal: messages taken for a turn that was never requested
+   * go back in their inbox, and a turn that was in flight is interrupted, then carries on in the same conversation where
+   * `recovery` says so (on your plan, not the key: `onKey`), or waits for the captain to send a message.
+   */
+  recover(onKey: boolean): void {
+    for (const agent of [...this.store.agents.values()]) {
+      const next = recovery(this.store.run(agent.id), agent, onKey);
+      if (next.kind !== 'none') this.store.journal(agent.id, { kind: 'interrupted', turn: next.turn });
+      if (this.store.run(agent.id).owed.length) this.store.journal(agent.id, { kind: 'restored' });
+      // a cloud agent waiting for the captain to start its session waits as it was
+      if (next.kind === 'none' || agent.handover) continue;
+      if (next.kind === 'wait') {
+        if (agent.status === 'stopped') this.update(agent, { activity: next.why });
+        continue;
+      }
+      this.rt(agent.id).inbox.unshift(next.prompt);
+      if (agent.sessionId !== next.session) this.update(agent, { sessionId: next.session });
+      this.print(agent, [{ kind: 'system', text: '✻ Focus restarted part way through their turn: picking the conversation back up' }]);
+      this.core.comms.pickUp(agent);
+    }
+  }
+
+  /** The office is shutting down: every agent's session stops, and their turns are left to carry on when it starts again. */
+  shutDown(): void {
+    this.core.closing = true;
+    for (const id of [...this.store.agents.keys()]) this.core.comms.stop(id);
   }
 
   fail(agent: Agent, err: { message: string } | string): void {

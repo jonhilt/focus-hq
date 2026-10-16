@@ -12,6 +12,7 @@ import { config, paths } from './config';
 import { takeLock } from './fileLock';
 import { fitDesks } from './agents/desks';
 import { upgradeLead } from './agents/lead';
+import { EMPTY_RUN, evolve, fold, type JournalEntry, journalLine, readJournal, type RunFact, type RunState } from './agents/runJournal';
 import { fromBeforePlugins, type SavedBeforePlugins } from './plugins/migrate';
 import { newId } from './util';
 
@@ -112,6 +113,8 @@ export class Store {
   /** Artifacts' pages and pictures when nothing's saved to disk, by `<lead id>/<file>`. */
   private artifacts = new Map<string, Buffer>();
   private saveTimer: NodeJS.Timeout | null = null;
+  /** What each agent's run journal adds up to, by agent id (data/runs/<agent>.jsonl, `journal`). */
+  private runs = new Map<string, RunState>();
 
   constructor(private readonly persist: boolean) {}
 
@@ -122,6 +125,7 @@ export class Store {
   load(): void {
     if (!this.persist) return;
     fs.mkdirSync(paths.logs, { recursive: true });
+    fs.mkdirSync(paths.runs, { recursive: true });
     const holder = takeLock(`${paths.state}.lock`);
     if (holder) throw new StateLockedError(holder, config.dataDir);
     // what changed in the last moments before exiting is saved too, before the lock goes
@@ -147,6 +151,7 @@ export class Store {
       const agent = agentAfterRestart(saved, this.projects.find((p) => p.id === saved.projectId)?.name ?? 'The project');
       this.agents.set(agent.id, agent);
       this.lines.set(agent.id, this.readLog(agent.id, MEMORY_LINES));
+      this.runs.set(agent.id, this.readRun(agent.id));
     }
     // rooms had six desks before team stations: anyone at a desk that's gone takes a free one, or waits off the floor
     for (const [id, desk] of fitDesks([...this.agents.values()])) {
@@ -373,8 +378,58 @@ export class Store {
   removeAgent(id: string): void {
     this.agents.delete(id);
     this.lines.delete(id);
+    // the id may come back (a reopened goal, QA's next review): it starts from nothing, its journal's numbering carrying on
+    this.journal(id, { kind: 'reset' });
     this.browser.delete(id);
     this.save();
+  }
+
+  // ---- run journals ----
+
+  /**
+   * Records a fact in the agent's run journal, and what the run adds up to with it. Saving to disk, it's written and
+   * flushed (fsync) before this returns, so whatever the office does next on the strength of it survives a crash.
+   */
+  journal(id: string, fact: RunFact): RunState {
+    const before = this.run(id);
+    const entry: JournalEntry = { v: 1, seq: before.seq + 1, t: Date.now(), ...fact };
+    if (this.persist) {
+      const fd = fs.openSync(path.join(paths.runs, `${id}.jsonl`), 'a');
+      try {
+        fs.writeSync(fd, journalLine(entry));
+        fs.fsyncSync(fd);
+      } finally {
+        fs.closeSync(fd);
+      }
+    }
+    const after = evolve(before, entry);
+    this.runs.set(id, after);
+    return after;
+  }
+
+  /** What the agent's run journal adds up to. */
+  run(id: string): RunState {
+    let run = this.runs.get(id);
+    if (!run) {
+      // an agent not saved when the office started (a goal reopened since, under its old id) may have a journal already
+      run = this.persist ? this.readRun(id) : EMPTY_RUN;
+      this.runs.set(id, run);
+    }
+    return run;
+  }
+
+  /** An agent's run journal from its file, dropping a last line Focus stopped part way through writing. */
+  private readRun(id: string): RunState {
+    const file = path.join(paths.runs, `${id}.jsonl`);
+    let text: string;
+    try {
+      text = fs.readFileSync(file, 'utf8');
+    } catch {
+      return EMPTY_RUN;
+    }
+    const { entries, goodBytes } = readJournal(text);
+    if (goodBytes < Buffer.byteLength(text)) fs.truncateSync(file, goodBytes);
+    return fold(entries);
   }
 
   // ---- terminal output ----

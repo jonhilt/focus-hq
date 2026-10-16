@@ -160,7 +160,7 @@ export class CloudMoves extends Part {
       this.update(agent, { activity: `Fetching ${agent.branch} from GitHub` });
       const workspace = yield* Workspace;
       yield* workspace.pull(workspace.dir(agent.id), agent.branch);
-      const prompt = [MOVED_ON, ...rt.inbox.splice(0)].join('\n\n');
+      const prompt = [MOVED_ON, ...rt.inbox.take()].join('\n\n');
       return yield* this.core.sessions.runSession(agent, handover.localSessionId ? prompt : carryOnPrompt(agent, prompt), handover.localSessionId);
     });
   }

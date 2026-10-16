@@ -23,7 +23,7 @@ export class Delivery extends Part {
         })),
       );
       if (rt.inbox.length && this.store.agents.has(agent.id) && agent.status === 'done' && agent.sessionId) {
-        yield* this.core.sessions.runSession(agent, rt.inbox.splice(0).join('\n\n'), agent.sessionId).pipe(this.orFail(agent));
+        yield* this.core.sessions.runSession(agent, rt.inbox.take().join('\n\n'), agent.sessionId).pipe(this.orFail(agent));
       }
     });
   }

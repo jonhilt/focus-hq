@@ -50,7 +50,8 @@ export interface RunHooks {
   browser(frame: BrowserFrame): void;
   /** A screenshot the agent took on purpose (mcp__browser__screenshot), on top of the frame every action streams. */
   screenshot(frame: BrowserFrame): void;
-  session(sessionId: string): void;
+  /** Claude Code reported the session; a local one says where its credential came from (`apiKeySource`: ANTHROPIC_API_KEY, apiKeyHelper, none…). */
+  session(sessionId: string, keySource?: string): void;
   cost(totalUsd: number): void;
   /** The session signs in with your API key (true) or your plan (false), as it starts. */
   signIn?(onKey: boolean): void;

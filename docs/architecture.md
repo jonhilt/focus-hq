@@ -18,7 +18,7 @@ server/
   updater.ts              auto update: fetch, fast-forward, install/build, restart
   index.ts                express + WebSocket (/ws) + Vite middleware (dev) or dist/ (prod)
   office.ts               projects/rooms, Kanban boards (polling GitHub), auto-assign, settings
-  store.ts                ~/.focus/state.json + per-agent terminal logs (jsonl) + the ledger (ledger.jsonl)
+  store.ts                ~/.focus/state.json + per-agent terminal logs (jsonl) + per-agent run journals (runs/*.jsonl) + the ledger (ledger.jsonl)
   ledgerLog.ts            the ledger's one writer: numbered lines flushed to disk, the lock file, repairs and damage on load
   usage.ts                main engineering's plan usage: read from Claude Code's structured /usage every few minutes, with how the office signs in
   routes.ts               REST API used by the panels
@@ -53,6 +53,9 @@ server/
     desks.ts              who sits at a room's two individual desks, and who goes home to make room (never a lead or QA)
     claudeRunner.ts       Claude Agent SDK query() in streaming-input mode, permission callback; cloud agents via --cloud; the plan's limit stopping a session; how a session ended (stopped, limited, cloud refused, failed) is pure (`endedOutcome`, `failedOutcome`)
     sdkMessages.ts        each SDK message by type → the run's hooks: lines, activity, helpers, workflows, probes, commits, screenshots, what the key spends, the turn's result
+    runJournal.ts         each agent's run journal, pure: the facts of its turns and inbox (data/runs/<agent>.jsonl, written by Store.journal before the office acts), what they add up to, the sign-in check, and what a restart does with a turn in flight
+    inbox.ts              an agent's inbox, kept in their run journal
+    afterTurn.ts          what follows a turn, pure: delivered, the captain's turn, carry on, the plan's limit, stopped, failed, the cloud's fallbacks
     apiKey.ts             your login or your API key, pure: which a session signs in with, what a re-read costs on the key, ask, hold or go; keyFallback, where the office stands
     cloud.ts              what happens after a cloud agent's session (push nudge, carrying on in a new session, falling back to local when the CLI refuses --cloud), and moving an agent to the cloud
     terminal.ts           the terminal the office opens to start a cloud session (claude --cloud, recorded with script) and finding the session's id in it

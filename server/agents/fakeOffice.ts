@@ -5,7 +5,7 @@ import { expect } from 'vitest';
 import { demoLayer } from '../github/demo';
 import type { GitHub } from '../github/service';
 import { Hub } from '../hub';
-import { Store } from '../store';
+import { agentAfterRestart, Store } from '../store';
 import type { Autonomy } from '../../shared/types';
 import { demoWorkspace } from './demoRunner';
 import { AgentManager } from './manager';
@@ -48,6 +48,19 @@ export function office(workspace: WorkspaceOps = demoWorkspace, github: Layer.La
   const store = new Store(false);
   const project = store.addProject('Shop');
   project.repos = ['demo/webshop-frontend', 'demo/webshop-api'];
+  return { store, project, ...crew(store, workspace, github) };
+}
+
+/**
+ * The office after Focus restarts: its store as it loads again (whoever was at work stopped, their run journals as they
+ * were), and a new manager and Claude Code, which haven't recovered anyone yet (`agents.recover()`).
+ */
+export function restarted(store: Store, workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<GitHub> = demoLayer) {
+  for (const agent of [...store.agents.values()]) store.putAgent(agentAfterRestart(agent, 'Shop'));
+  return crew(store, workspace, github);
+}
+
+function crew(store: Store, workspace: WorkspaceOps, github: Layer.Layer<GitHub>) {
   const claude = new FakeClaude();
   const services = Layer.mergeAll(
     github,
@@ -65,7 +78,7 @@ export function office(workspace: WorkspaceOps = demoWorkspace, github: Layer.La
       })),
     }),
   );
-  return { store, project, claude, agents: new AgentManager(store, new Hub(), services, () => undefined) };
+  return { claude, agents: new AgentManager(store, new Hub(), services, () => undefined) };
 }
 
 /** Waits (a few seconds at most) for the office to get there. */

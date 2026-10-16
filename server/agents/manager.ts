@@ -6,6 +6,7 @@ import type { FocusPlugin } from '../plugins/contract';
 import type { Plugins } from '../plugins/registry';
 import type { Store } from '../store';
 import type { Transcript } from './transcript';
+import { keyFallback } from './apiKey';
 import { CloudMoves } from './manager/cloudMoves';
 import { Comms } from './manager/comms';
 import { Conflicts } from './manager/conflicts';
@@ -94,6 +95,16 @@ export class AgentManager {
 
   busyOn(repo: string, number: number): boolean {
     return this.core.seating.busyOn(repo, number);
+  }
+
+  /** After a restart: each agent's run picks up from their journal (`AgentSessions.recover`). */
+  recover(): void {
+    this.core.sessions.recover(keyFallback.onKey());
+  }
+
+  /** The office is shutting down (`AgentSessions.shutDown`). */
+  shutDown(): void {
+    this.core.sessions.shutDown();
   }
 
   schedule(): void {

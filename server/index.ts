@@ -121,6 +121,8 @@ async function main() {
     transcript: demoRunner && (async (id) => demoRunner.transcript(id) ?? (await demoTranscripts()).find((t) => t.sessionId === id)?.read()),
     shipStatus,
   });
+  // turns Focus stopped part way through carry on, from each agent's run journal
+  office.agents.recover();
 
   if (config.demo && store.projects.length === 0) {
     const shop = store.addProject('Sock Shop', '#ff8a5b', 'beach');
@@ -284,7 +286,8 @@ async function main() {
     if (closing) return;
     closing = true;
     console.log('\nClosing the office…');
-    for (const agent of store.agents.values()) office.agents.stop(agent.id);
+    // their sessions stop, and the turns they were in carry on when the office starts again
+    office.agents.shutDown();
     store.save();
     // Kokoro's process goes by SIGKILL (see server/speech.ts): with onnxruntime out of this process, exiting can't abort
     office.voice.close();

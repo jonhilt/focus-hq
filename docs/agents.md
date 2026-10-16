@@ -15,6 +15,23 @@
 
 **Station displays** show an agent's work in panes side by side: their terminal; their browser, while they have a page up; and their progress, while there's any: the task list Claude keeps for itself. A goal's lead's note isn't on their display: it's on the goal board beside it (see [goals](goals.md)), so the viewscreen keeps to the work going on now. A desk's laptop fits two panes, so the browser wins while it's showing and the task list's count moves to the status bar; a lead's viewscreen in their briefing room (6 m across, nearly wall to wall) fits four, so what the lead has shown or asked and their browser stand side by side between the terminal and the progress pane (on a narrower screen the two share a column, what they've shown over the browser). Each pane of a briefing room's viewscreen opens up close on its own (aim at it and press E, from anywhere in the room): what the lead has shown or asked, their browser, their tasks, or their session; with nobody there, the screen is the station's, as its door is. To choose what the screens show, use the **Panes** strip of switches on the dado under the viewscreen, to starboard (the station's sign is its counterpart to port), at any station, with a lead or free: aim at a switch and press E to turn the lead's artifacts, the browser or Claude's task list on or off on every display (the terminal always shows), just for you (your browser remembers them, and every station's strip shows the same).
 
+## The run journal: where a run was, and picking up after a restart
+
+Each agent keeps a run journal, `~/.focus/runs/<agent id>.jsonl` (`server/agents/runJournal.ts`). Every line is a numbered fact about their turns and their inbox, appended and flushed to disk (fsync) *before* the office acts on it (`Store.journal`), and never rewritten. What the journal adds up to (`fold`) is the truth about the run's turns and messages:
+
+- **Messages**: a message for an agent is `queued` as it arrives (heard next, in front, or once the turn in hand ends), `taken` into a turn's prompt or `sent` into a session that's listening (`server/agents/inbox.ts`). One taken for a prompt is still owed until its turn is asked for.
+- **Turns**: `turn-requested` (its prompt, and the conversation it goes back to) is written before Claude Code starts, then `signed-in` (your plan or your API key), `turn-started` (the session, and where Claude Code says its credential came from: its `apiKeySource`), and `turn-ended` with how it ended. Claude Code's own transcript holds what happened inside the turn; the journal holds what the office decided around it.
+- **What follows a turn** is one pure decision, `afterTurn` (`server/agents/afterTurn.ts`): delivered, the captain's turn, carry on, the plan's limit, a stop, a failure, the cloud's fallbacks.
+
+**Signing in.** If Claude Code says it signed a turn in with `ANTHROPIC_API_KEY` or an `apiKeyHelper` when the office meant your plan's login (an `env` or `apiKeyHelper` in `~/.claude/settings.json` can do that behind the office's back), the turn is stopped at once (`sign-in-mismatch`) and the agent fails saying where to look, before it spends any more.
+
+**After a restart** (`AgentManager.recover`, once the office has started), whether Focus crashed or shut down on purpose (Ctrl-C, an auto-update: `shutDown` stops every session but leaves their turns open in the journal): messages that were waiting are still waiting, and those taken for a turn that was never asked for go back in front. A turn the journal says was in flight is `interrupted`, and:
+
+- a developer's, a fixer's, a conflict resolver's, a brief's or a lead's carries on by itself in the same conversation, told it was cut off (with any messages sent into it, in case they never arrived), or asked again if Claude Code never got it, as long as it would be on your plan;
+- on your API key, QA's review, a cloud agent's, a compaction's, one the captain had just stopped (`stop-requested`), or with no conversation of its own to go back to, the agent waits for a message, saying why.
+
+An agent sent home has a `reset` in their journal, so an id that comes back (a reopened goal, QA's next review) starts from nothing.
+
 ## Scratch dirs
 
 Every local session (developers, QA, leads and their helpers) gets a scratch dir for throwaway files, `$TMPDIR/focus-scratch/<agent id>`, exported to it as `FOCUS_SCRATCH` (`server/agents/scratch.ts`). The office empties it when a run starts and deletes it when the run ends (for a lead, at the end of each turn), so their prompts tell them to put probe scripts, scratch repos and test output there and never clean up after themselves. Cloud agents work on a machine of their own and don't get one.

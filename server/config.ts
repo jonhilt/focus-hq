@@ -41,6 +41,8 @@ export const paths = {
   /** The ship's log of how work went (shared/ledger.ts): appended to, never rewritten. */
   ledger: path.join(config.dataDir, 'ledger.jsonl'),
   logs: path.join(config.dataDir, 'logs'),
+  /** Each agent's run journal (server/agents/runJournal.ts): the facts of its turns and inbox, appended and flushed, never rewritten. */
+  runs: path.join(config.dataDir, 'runs'),
   /** How the 3D view ran in each browser opened with ?stats=1 (server/frameStats.ts): a file per page load. */
   frameStats: path.join(config.dataDir, 'frame-stats'),
   mirrors: path.join(config.dataDir, 'repos'),

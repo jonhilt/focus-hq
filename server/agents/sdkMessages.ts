@@ -114,7 +114,7 @@ function systemMessage(msg: SystemMessage, ctx: RunContext, hooks: RunHooks): vo
     ctx.background = foregroundTasks(msg.tasks);
     return;
   }
-  if (msg.subtype === 'init' && !ctx.cloud) hooks.session(msg.session_id);
+  if (msg.subtype === 'init' && !ctx.cloud) hooks.session(msg.session_id, msg.apiKeySource);
   const note = systemNote(msg, ctx.cloud);
   if (note) hooks.lines([note.line]);
   if (note?.activity) hooks.activity(null, note.activity);

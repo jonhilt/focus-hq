@@ -6,6 +6,7 @@ import { Plugins } from '../../plugins/registry';
 import type { Store } from '../../store';
 import { errorMessage } from '../../util';
 import { type GitFailed, type Renderer, retryServerErrors, SHIP_RETRIES, type Sessions, type Triage, Workspace } from '../services';
+import { Inbox } from '../inbox';
 import type { AgentSession } from '../types';
 import type { CloudMoves } from './cloudMoves';
 import type { Comms } from './comms';
@@ -53,16 +54,16 @@ export type WorkError = GitHubError | GitFailed | EmptyRepository | NothingToChe
 
 export interface Runtime {
   session?: AgentSession;
-  /** Messages from the manager that arrived while no session could take them. */
-  inbox: string[];
+  /** The turn `session` is in, as their run journal knows it. */
+  turn?: string;
+  /** Messages from the manager that arrived while no session could take them, and a lead's notes that wait for the end of their turn: kept in their run journal. */
+  inbox: Inbox;
   /** Where each of a lead's workflows (by task id) has Claude Code write its agents' transcripts. */
   workflowTranscripts?: Map<string, string>;
   /** Each of a lead's workflows' script (by task id): its source, when the call carried it, and where Claude Code saved it. */
   workflowScripts?: Map<string, { source?: string; path?: string }>;
   /** Where each of a lead's background commands and monitors (by task id) writes its output. */
   backgroundOutputs?: Map<string, string>;
-  /** A lead's notes that wait for the end of the turn they're in, then join the inbox (`noteForLead`). */
-  afterTurn?: string[];
   /** The manager's notes folded into the task when it was handed out, kept in case it has to be told again. */
   notes: string[];
   permission?: { req: PermissionRequest; resolve: (ok: boolean) => void; resume: AgentStatus };
@@ -92,6 +93,8 @@ export function withNotes(prompt: string, notes: string[]): string {
  */
 export class Core {
   readonly runtimes = new Map<string, Runtime>();
+  /** The office is shutting down: turns it stops are left open in their journals, to carry on when it starts again. */
+  closing = false;
   readonly runtime: ManagedRuntime.ManagedRuntime<ManagerServices, never>;
   readonly scope = Scope.makeUnsafe();
   /** Each agent's work in hand, by agent id: their launch, a turn and what follows it, or a compaction. */
@@ -126,10 +129,23 @@ export class Core {
   rt(id: string): Runtime {
     let rt = this.runtimes.get(id);
     if (!rt) {
-      rt = { inbox: [], notes: [], nudged: false, busy: false };
+      rt = { inbox: this.inbox(id), notes: [], nudged: false, busy: false };
       this.runtimes.set(id, rt);
     }
     return rt;
+  }
+
+  /** A new start for the agent's runtime (newly seated on work): nothing waiting from before, `first` to hear first. */
+  freshRuntime(id: string, first?: string): Runtime {
+    const rt: Runtime = { inbox: this.inbox(id), notes: [], nudged: false, busy: false };
+    rt.inbox.clear();
+    if (first) rt.inbox.push(first);
+    this.runtimes.set(id, rt);
+    return rt;
+  }
+
+  private inbox(id: string): Inbox {
+    return new Inbox((fact) => this.store.journal(id, fact), () => this.store.run(id));
   }
 
   update(agent: Agent, patch: Partial<Agent>): void {
@@ -261,7 +277,8 @@ export abstract class Part {
       if (!failed) return;
       this.print(agent, [{ kind: 'system', text: `✻ ${failed}` }]);
       const rt = this.rt(agent.id);
-      (rt.busy ? (rt.afterTurn ??= []) : rt.inbox).push(failed);
+      if (rt.busy) rt.inbox.later(failed);
+      else rt.inbox.push(failed);
     });
   }
 }

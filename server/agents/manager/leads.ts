@@ -60,7 +60,7 @@ export class Leads extends Part {
       costUsd: 0,
       startedAt: Date.now(),
     };
-    this.core.runtimes.set(id, { inbox: [text.trim()], notes: [], nudged: false, busy: false });
+    this.core.freshRuntime(id, text.trim());
     this.store.putAgent(agent);
     this.hub.send({ type: 'agent', agent });
     this.print(agent, [
@@ -123,7 +123,7 @@ export class Leads extends Part {
       costUsd: 0,
       startedAt: Date.now(),
     };
-    this.core.runtimes.set(agent.id, { inbox: [], notes: [], nudged: false, busy: false });
+    this.core.freshRuntime(agent.id);
     project.goals = (project.goals ?? []).filter((g) => g.id !== goal.id);
     this.projectsChanged();
     this.store.putAgent(agent);
@@ -236,7 +236,7 @@ export class Leads extends Part {
       yield* this.core.slices.checkOutSlice(agent, project.repos);
       if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
       // a new goal, or one whose conversation couldn't be resumed: the lead hears where it stands
-      yield* this.core.sessions.runSession(agent, freshSessionPrompt(agent.lead, agent.branch, rt.inbox.splice(0), sliceLanded(agent.lead.prs)));
+      yield* this.core.sessions.runSession(agent, freshSessionPrompt(agent.lead, agent.branch, rt.inbox.take(), sliceLanded(agent.lead.prs)));
     });
   }
 
@@ -263,7 +263,7 @@ export class Leads extends Part {
       }
       this.update(agent, { lead: { ...agent.lead, prs, reopening: undefined } });
       if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
-      const note = [reopenedNote(agent.lead, agent.branch, closedAt), ...rt.inbox.splice(0)].join('\n\n');
+      const note = [reopenedNote(agent.lead, agent.branch, closedAt), ...rt.inbox.take()].join('\n\n');
       yield* this.core.sessions.runSession(agent, agent.sessionId ? note : freshSessionPrompt(agent.lead, agent.branch, [note], sliceLanded(prs)), agent.sessionId);
     });
   }
@@ -328,7 +328,8 @@ export class Leads extends Part {
   noteForLead(lead: Agent, from: string, text: string): void {
     this.print(lead, [{ kind: 'manager', text: `▶ ${from}: ${text}` }]);
     const rt = this.rt(lead.id);
-    (rt.busy ? (rt.afterTurn ??= []) : rt.inbox).push(`[${from}] ${text}`);
+    if (rt.busy) rt.inbox.later(`[${from}] ${text}`);
+    else rt.inbox.push(`[${from}] ${text}`);
   }
 
   /** The lead's pull request was merged or closed. Once the slice's have all landed, the lead hears about it. */

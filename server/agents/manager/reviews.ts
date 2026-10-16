@@ -178,7 +178,7 @@ export class Reviews extends Part {
       costUsd: 0,
       startedAt: Date.now(),
     };
-    this.core.runtimes.set(id, { inbox: [], notes: [], nudged: false, busy: false });
+    this.core.freshRuntime(id);
     this.store.putAgent(agent);
     this.hub.send({ type: 'agent', agent });
     const where = goal ? ` at ${goal.name}'s table, for “${goal.lead?.title ?? 'their goal'}”` : '';
@@ -220,7 +220,7 @@ export class Reviews extends Part {
       rt.qaSystem = qaSystemAppend(agent, project, pr, sha, siblings);
       rt.shots = undefined;
       let prompt = qaPrompt(agent.repo, pr, issues, review ?? {}, rt.qaFiles.changed);
-      if (rt.inbox.length) prompt += `\n\nNotes from your manager:\n${rt.inbox.splice(0).map((m) => `- ${m}`).join('\n')}`;
+      if (rt.inbox.length) prompt += `\n\nNotes from your manager:\n${rt.inbox.take().map((m) => `- ${m}`).join('\n')}`;
       yield* this.core.sessions.runSession(agent, prompt);
     });
   }
@@ -481,7 +481,7 @@ export class Reviews extends Part {
       if (qa.task !== 'review' || qa.repo !== repo || qa.issue.number !== number || qa.prGone) continue;
       const gone = merged ? 'merged' : 'closed';
       this.update(qa, { prGone: gone });
-      this.rt(qa.id).inbox.length = 0;
+      this.rt(qa.id).inbox.clear();
       if (!FINISHED.includes(qa.status)) {
         this.print(qa, [{ kind: 'system', text: `✻ ${goneReply(number, gone)}: stopping` }]);
         this.core.comms.stop(qa.id);

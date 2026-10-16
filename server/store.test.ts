@@ -11,6 +11,8 @@ const { agentAfterRestart, reviewAfterRestart, StateLockedError, Store, stateLoc
 const { seedOffice, seedRandom } = await import('./util');
 
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+// each store opened on disk saves and lets go of its locks on exit: a few of them here, as a few restarts
+process.setMaxListeners(20);
 
 describe('Store on disk', () => {
   it('won’t open a data folder another live office holds', () => {
@@ -37,6 +39,32 @@ describe('Store on disk', () => {
     store.flush();
     const saved = JSON.parse(fs.readFileSync(path.join(dir, 'state.json'), 'utf8')) as { projects: { name: string }[] };
     expect(saved.projects.map((p) => p.name)).toEqual(['Focus']);
+  });
+
+  it('keeps each agent’s run journal on disk as it goes, and drops a last line Focus stopped part way through', () => {
+    const store = new Store(true);
+    store.load();
+    store.putAgent(agent({ id: 'journaled', status: 'working' }));
+    store.journal('journaled', { kind: 'queued', text: 'Fix the flaky test', at: 'end' });
+    store.journal('journaled', { kind: 'turn-requested', turn: 't1', turnKind: 'work', prompt: 'Go', resumes: 's1' });
+    // on disk already, before any save of the state
+    const file = path.join(dir, 'runs', 'journaled.jsonl');
+    expect(fs.readFileSync(file, 'utf8').split('\n').filter(Boolean)).toHaveLength(2);
+    fs.appendFileSync(file, '{"v":1,"seq":3,"kind":"tu');
+    store.flush();
+
+    const again = new Store(true);
+    again.load();
+    expect(again.run('journaled')).toMatchObject({ inbox: ['Fix the flaky test'], open: { id: 't1', resumes: 's1' }, seq: 2 });
+    expect(fs.readFileSync(file, 'utf8').endsWith('}\n')).toBe(true);
+    expect(again.journal('journaled', { kind: 'taken' }).seq).toBe(3);
+
+    // sent home, and the id back later (a goal reopened): it starts from nothing, numbering on from its journal
+    again.removeAgent('journaled');
+    again.flush();
+    const later = new Store(true);
+    later.load();
+    expect(later.run('journaled')).toEqual({ inbox: [], later: [], owed: [], seq: 4 });
   });
 });
 
