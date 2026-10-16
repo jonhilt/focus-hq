@@ -20,6 +20,14 @@ export interface ToolCall {
 
 const str = (v: unknown) => (typeof v === 'string' ? v : v === undefined ? '' : JSON.stringify(v));
 
+/** The objects in a list the model sent: its input is only checked against the tool's schema after we've seen it. */
+const records = (v: unknown): Record<string, unknown>[] =>
+  Array.isArray(v) ? v.filter((x): x is Record<string, unknown> => typeof x === 'object' && x !== null) : [];
+
+/** The todos in a TodoWrite call: those with something to do. */
+const todoList = (v: unknown): { content: string; status: unknown }[] =>
+  records(v).flatMap((t) => (typeof t.content === 'string' ? [{ content: t.content, status: t.status }] : []));
+
 const LOCAL_URL = /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::\d+)?[^\s'"`)<>\\]*/g;
 
 /**
@@ -96,7 +104,7 @@ export function renderToolUse(name: string, input: Record<string, unknown>, cwd:
     }
     case 'Edit':
     case 'MultiEdit': {
-      const edits = (name === 'Edit' ? [input] : ((input.edits as Record<string, unknown>[]) ?? [])).slice(0, 2);
+      const edits = (name === 'Edit' ? [input] : records(input.edits)).slice(0, 2);
       const lines: Line[] = [head(name === 'Edit' ? 'Update' : 'MultiEdit', rel(input.file_path))];
       for (const edit of edits) {
         for (const l of str(edit.old_string).split('\n').slice(0, 3)) lines.push({ kind: 'error', text: `  - ${truncate(l, 140)}` });
@@ -109,7 +117,7 @@ export function renderToolUse(name: string, input: Record<string, unknown>, cwd:
     case 'Grep':
       return { lines: [head('Search', `"${str(input.pattern)}"`)], status: 'working', activity: `Searching for "${truncate(str(input.pattern), 40)}"` };
     case 'TodoWrite': {
-      const todos = (input.todos as { content: string; status: string }[]) ?? [];
+      const todos = todoList(input.todos);
       const current = todos.find((t) => t.status === 'in_progress');
       return {
         lines: [
