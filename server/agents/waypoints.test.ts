@@ -222,6 +222,17 @@ describe('the slice under way', () => {
     // a new session starts its own list: what the slice did stays on its waypoint
     expect(taskedWaypoint({ slice: 2, waypoints: both }, [], [], 60)).toBe(both);
   });
+
+  it('keeps a task from an earlier session when the next session’s list numbers one the same', () => {
+    const a = { id: '1', subject: 'A', status: 'completed' as const };
+    const earlier = taskedWaypoint({ slice: 2, waypoints: course }, [], [a], 50);
+    // the new session's task 1 is another task altogether
+    const fresh = { id: '1', subject: 'Fresh', status: 'pending' as const };
+    const next = taskedWaypoint({ slice: 2, waypoints: earlier }, [], [fresh], 60);
+    expect(next?.[1].tasks).toEqual([{ ...a, id: "1'" }, fresh]);
+    // and it moves on as this list's from then on
+    expect(taskedWaypoint({ slice: 2, waypoints: next }, [fresh], [{ ...fresh, status: 'completed' }], 70)?.[1].tasks).toEqual([{ ...a, id: "1'" }, { ...fresh, status: 'completed' }]);
+  });
 });
 
 describe('checklistWaypoint and nudgedWaypoint', () => {

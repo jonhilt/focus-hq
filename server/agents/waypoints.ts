@@ -185,7 +185,9 @@ export function committedWaypoint(work: Course, message: string | undefined, now
 /**
  * The waypoints once the lead's task list changes from `before` to `after`: the slice under way keeps each task the lead
  * added or moved on during it, as it now stands, and drops one it deleted. A task carried over from an earlier slice and
- * left alone isn't this slice's work; the waypoints are the same when nothing it keeps changed.
+ * left alone isn't this slice's work; the waypoints are the same when nothing it keeps changed. A task kept from an
+ * earlier list (a session before this one, which numbers its tasks from 1 again) is never this list's, even when its id
+ * comes round again: it makes way under an id of its own.
  */
 export function taskedWaypoint(work: Course, before: ClaudeTask[], after: ClaudeTask[], now: number): Waypoint[] | undefined {
   const was = new Map(before.map((t) => [t.id, t]));
@@ -195,9 +197,18 @@ export function taskedWaypoint(work: Course, before: ClaudeTask[], after: Claude
   const gone = kept.filter((t) => was.has(t.id) && !ids.has(t.id));
   if (!touched.length && !gone.length) return work.waypoints;
   const keep = (t: ClaudeTask): ClaudeTask => ({ id: t.id, subject: opening(t.subject, WAYPOINT_LIMITS.task), status: t.status });
-  const tasks = [...kept.filter((t) => !gone.includes(t)).map((t) => {
+  const taken = new Set([...kept, ...after].map((t) => t.id));
+  const aside = (id: string) => {
+    let free = `${id}'`;
+    while (taken.has(free)) free += "'";
+    taken.add(free);
+    return free;
+  };
+  const stays = kept.filter((t) => !gone.includes(t)).map((t) => {
     const moved = touched.find((n) => n.id === t.id);
-    return moved ? keep(moved) : t;
-  }), ...touched.filter((t) => !kept.some((k) => k.id === t.id)).map(keep)].slice(-WAYPOINT_LIMITS.tasks);
+    if (!moved) return t;
+    return was.has(t.id) ? keep(moved) : { ...t, id: aside(t.id) };
+  });
+  const tasks = [...stays, ...touched.filter((t) => !stays.some((k) => k.id === t.id)).map(keep)].slice(-WAYPOINT_LIMITS.tasks);
   return withWaypoint(work, now, (w) => ({ ...w, tasks }));
 }
