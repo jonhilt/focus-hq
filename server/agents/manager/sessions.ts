@@ -5,10 +5,10 @@ import { Effect, Exit, Fiber, FiberMap } from 'effect';
 import { effectiveAutonomy } from '../../../shared/autonomy';
 import { helperFor } from '../../../shared/crew';
 import { prKey } from '../../../shared/qa';
-import type { Agent, PermissionRequest, TermLine, WorkflowScript } from '../../../shared/types';
+import type { Agent, LeadAgent, PermissionRequest, TermLine, WorkflowScript } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
 import { newId, truncate } from '../../util';
-import { step, turnEvent } from '../runMachine';
+import { step, type Target, turnEvent } from '../runMachine';
 import { applyHelperEvent, COMPACT_INSTRUCTIONS, compactInstructions, freshSessionPrompt, hasLeadWork, HELPER_LINGER_MS, leadSystemAppend } from '../lead';
 import { mismatchError, recovery, signInMismatch, turnEnding, type TurnKind } from '../runJournal';
 import { carryOnPrompt, conflictsPrompt, issuePrompt, systemAppend } from '../prompts';
@@ -382,39 +382,46 @@ export class AgentSessions extends Part {
       rt.inbox.release();
       if (!this.store.agents.has(agent.id)) return;
 
-      // the run's state machine: where the turn ran, and what its end was, say what follows (`runMachine.ts`)
-      const attaching = rt.attaching;
-      const mismatch = this.store.run(agent.id).last?.mismatch;
-      const next = step(attaching ? 'attaching' : agent.cloud ? 'cloud' : 'local', turnEvent(outcome, mismatch), {
-        role: review ? 'review' : lead ? 'lead' : 'work',
-        resumed: !!resumeSessionId,
-        hasSession: !!agent.sessionId,
-        tries: attaching?.tries ?? 0,
-        attachRefused: this.core.cloud.attachRefused,
-        carryOn,
-      });
-      if (attaching && next !== 'attach-again') rt.attaching = undefined;
-      const ended = this.store.run(agent.id).last;
-      if (ended) this.store.journal(agent.id, { kind: 'decided', turn: ended.id, target: next });
+      const ended: TurnEnd = { outcome, prompt, resumeSessionId, lead, review, attaching: rt.attaching, mismatch: this.store.run(agent.id).last?.mismatch };
+      return yield* this.follow(agent, this.decide(agent, ended, carryOn), ended);
+    });
+  }
+
+  /**
+   * What follows the turn, from the run's state machine (`runMachine.ts`): where it ran and what its end was say
+   * where the run goes next, and the journal has it.
+   */
+  private decide(agent: Agent, ended: TurnEnd, carryOn: boolean): Target {
+    const { attaching } = ended;
+    const next = step(attaching ? 'attaching' : agent.cloud ? 'cloud' : 'local', turnEvent(ended.outcome, ended.mismatch), {
+      role: ended.review ? 'review' : ended.lead ? 'lead' : 'work',
+      resumed: !!ended.resumeSessionId,
+      hasSession: !!agent.sessionId,
+      tries: attaching?.tries ?? 0,
+      attachRefused: this.core.cloud.attachRefused,
+      carryOn,
+    });
+    if (attaching && next !== 'attach-again') this.rt(agent.id).attaching = undefined;
+    const last = this.store.run(agent.id).last;
+    if (last) this.store.journal(agent.id, { kind: 'decided', turn: last.id, target: next });
+    return next;
+  }
+
+  /** Does what the run's machine decided follows the turn. */
+  private follow(agent: Agent, next: Target, ended: TurnEnd): Effect.Effect<void, WorkError, ManagerServices> {
+    if (next === 'attach-again' || next === 'attach-refused' || next === 'attach-failed') {
+      // only a turn attaching to a cloud session ends here
+      return ended.attaching ? this.afterAttaching(agent, next, ended.attaching, ended.outcome, ended.prompt, ended.resumeSessionId) : Effect.void;
+    }
+    if (next === 'cloud-carry-on-here' || next === 'cloud-await' || next === 'cloud-to-local' || next === 'new-cloud-session') return this.afterCloud(agent, next, ended);
+    return this.afterWork(agent, next, ended);
+  }
+
+  /** A cloud turn's session couldn't be had: carry on here, wait for the captain to start one, or start a new one. */
+  private afterCloud(agent: Agent, next: 'cloud-carry-on-here' | 'cloud-await' | 'cloud-to-local' | 'new-cloud-session', { outcome, prompt }: TurnEnd): Effect.Effect<void, WorkError, ManagerServices> {
+    return Effect.gen({ self: this }, function* () {
+      const rt = this.rt(agent.id);
       switch (next) {
-        case 'attach-again':
-        case 'attach-refused':
-        case 'attach-failed':
-          // only a turn attaching to a cloud session ends here
-          if (attaching) return yield* this.afterAttaching(agent, next, attaching, outcome, prompt, resumeSessionId);
-          return;
-        case 'sign-in-mismatch':
-          this.fail(agent, mismatchError(mismatch ?? 'ANTHROPIC_API_KEY'));
-          return;
-        case 'limited':
-          // your plan's usage limit stopped them: they carry on with your API key, now or once it resets
-          return yield* this.core.planLimit.limited(agent, prompt);
-        case 'stopped':
-          this.update(agent, { status: 'stopped', activity: STOPPED_BY_CAPTAIN, permission: undefined, finishedAt: Date.now() });
-          if (review) this.core.reviews.reviewEnded(agent, STOPPED_BY_CAPTAIN);
-          this.core.reviews.fixEnded(agent, 'stopped');
-          this.core.seating.schedule();
-          return;
         case 'cloud-carry-on-here':
           // they haven't started, and Claude Code wouldn't attach to a session the captain started either
           rt.nudged = false;
@@ -435,19 +442,39 @@ export class AgentSessions extends Part {
           // only a new session gets refused, so this is already a carry-on prompt with the manager's message in it
           return yield* this.runSession(agent, prompt);
         }
+        case 'new-cloud-session':
+          // everything the old session did is on the branch: a new one picks it up from there
+          this.print(agent, [{ kind: 'system', text: `✻ Couldn't get back into the cloud session (${truncate(outcome.error ?? 'no reason given', 200)}) – starting a new one on ${agent.branch}` }]);
+          return yield* this.runSession(agent, carryOnPrompt(agent, prompt));
+      }
+    });
+  }
+
+  /** The turn's work is over, or it stopped: what comes of it, by who they are and how it ended. */
+  private afterWork(agent: Agent, next: Exclude<Target, 'attach-again' | 'attach-refused' | 'attach-failed' | 'cloud-carry-on-here' | 'cloud-await' | 'cloud-to-local' | 'new-cloud-session'>, { outcome, prompt, lead, review, mismatch }: TurnEnd): Effect.Effect<void, WorkError, ManagerServices> {
+    return Effect.gen({ self: this }, function* () {
+      switch (next) {
+        case 'sign-in-mismatch':
+          this.fail(agent, mismatchError(mismatch ?? 'ANTHROPIC_API_KEY'));
+          return;
+        case 'limited':
+          // your plan's usage limit stopped them: they carry on with your API key, now or once it resets
+          return yield* this.core.planLimit.limited(agent, prompt);
+        case 'stopped':
+          this.update(agent, { status: 'stopped', activity: STOPPED_BY_CAPTAIN, permission: undefined, finishedAt: Date.now() });
+          if (review) this.core.reviews.reviewEnded(agent, STOPPED_BY_CAPTAIN);
+          this.core.reviews.fixEnded(agent, 'stopped');
+          this.core.seating.schedule();
+          return;
         case 'fresh-session':
           // only a lead's turn ends this way
           if (!lead) return;
           this.print(agent, [{ kind: 'system', text: '✻ Claude Code no longer has their conversation – carrying on in a new one' }]);
           this.update(agent, { sessionId: undefined });
           return yield* this.runSession(agent, freshSessionPrompt(lead.lead, agent.branch, [prompt], false));
-        case 'new-cloud-session':
-          // everything the old session did is on the branch: a new one picks it up from there
-          this.print(agent, [{ kind: 'system', text: `✻ Couldn't get back into the cloud session (${truncate(outcome.error ?? 'no reason given', 200)}) – starting a new one on ${agent.branch}` }]);
-          return yield* this.runSession(agent, carryOnPrompt(agent, prompt));
         case 'carry-on':
           // The manager wrote while the session was wrapping up: carry on in the same conversation.
-          return yield* this.runSession(agent, rt.inbox.take().join('\n\n'), agent.sessionId);
+          return yield* this.runSession(agent, this.rt(agent.id).inbox.take().join('\n\n'), agent.sessionId);
         case 'fail':
           this.fail(agent, outcome.error ?? 'The agent stopped with an error');
           return;
@@ -551,6 +578,18 @@ export class AgentSessions extends Part {
     this.core.reviews.fixEnded(agent, 'failed');
     this.core.seating.schedule();
   }
+}
+
+/** A turn as it ended: what decides what follows it, and what that needs. */
+interface TurnEnd {
+  outcome: RunOutcome;
+  prompt: string;
+  resumeSessionId?: string;
+  lead?: LeadAgent;
+  review: boolean;
+  attaching?: Runtime['attaching'];
+  /** How Claude Code signed in, when it wasn't the way the office meant. */
+  mismatch?: string;
 }
 
 /** The id Claude Code gives a workflow agent: nothing that could climb out of its transcripts' folder. */

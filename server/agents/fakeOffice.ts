@@ -4,6 +4,7 @@ import { Layer, Schedule } from 'effect';
 import { expect } from 'vitest';
 import { demoLayer } from '../github/demo';
 import type { GitHub } from '../github/service';
+import type { Triager } from './triage';
 import { Hub } from '../hub';
 import { agentAfterRestart, Store } from '../store';
 import type { Autonomy } from '../../shared/types';
@@ -44,11 +45,14 @@ export class FakeClaude implements AgentRunner {
   }
 }
 
-export function office(workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<GitHub> = demoLayer) {
+/** The room's operations officer, when nobody's said what they decide: they can't work it out. */
+const noOfficer: Triager = { triage: () => Promise.reject(new Error('no officer here')) };
+
+export function office(workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<GitHub> = demoLayer, triager: Triager = noOfficer) {
   const store = new Store(false);
   const project = store.addProject('Shop');
   project.repos = ['demo/webshop-frontend', 'demo/webshop-api'];
-  return { store, project, ...crew(store, workspace, github) };
+  return { store, project, ...crew(store, workspace, github, triager) };
 }
 
 /**
@@ -57,10 +61,10 @@ export function office(workspace: WorkspaceOps = demoWorkspace, github: Layer.La
  */
 export function restarted(store: Store, workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<GitHub> = demoLayer) {
   for (const agent of [...store.agents.values()]) store.putAgent(agentAfterRestart(agent, 'Shop'));
-  return crew(store, workspace, github);
+  return crew(store, workspace, github, noOfficer);
 }
 
-function crew(store: Store, workspace: WorkspaceOps, github: Layer.Layer<GitHub>) {
+function crew(store: Store, workspace: WorkspaceOps, github: Layer.Layer<GitHub>, triager: Triager) {
   const claude = new FakeClaude();
   const services = Layer.mergeAll(
     github,
@@ -68,7 +72,7 @@ function crew(store: Store, workspace: WorkspaceOps, github: Layer.Layer<GitHub>
     Layer.succeed(ShipRetry, Schedule.spaced(0)),
     Workspace.fromOps(workspace),
     Sessions.fromRunner(claude),
-    Triage.fromTriager({ triage: () => Promise.reject(new Error('no officer here')) }),
+    Triage.fromTriager(triager),
     Renderer.fromBrowser({
       render: (html, moments) => (html.includes('unrenderable') ? Promise.reject(new Error('no browser')) : Promise.resolve({
         image: Buffer.from('jpeg'),
