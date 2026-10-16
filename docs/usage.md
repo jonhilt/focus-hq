@@ -3,6 +3,7 @@
 Main engineering shows how much of your Claude plan the office has used, and what each agent signs in with.
 
 - **The engineering panel** (<kbd>E</kbd> on the chief engineer's station) opens with **Plan usage**. There's a bar per limit of your plan: the five-hour **session**, the **week** across all models, and any model's own weekly limit. Each bar shows how much is used and when it resets. A bar turns gold from 75% and red from 90%. **Extra usage** shows too, while it's switched on. Under the bars is how the office signs in (your plan, your API key, or your plan with the key behind it and what the key has spent), then everyone aboard with what they sign in with (*plan*, *🔑 key* or *☁ cloud*) and what their session has used at API prices. On your plan that use isn't billed.
+- **The HUD**, top right wherever you are on the ship, reads each limit as a percentage (*session 67% · week 27%*), gold from 75% and red from 90%.
 - **Show on the MSD** puts the same bars on the master systems display, beside the ship. They stay up and keep current until something else goes up there.
 - **An agent's panel** says what their session signs in with: *your plan*, or *🔑 API key* while [your API key stands in](api-key.md).
 

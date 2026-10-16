@@ -1,4 +1,5 @@
 import { ACTIVE_STATUSES } from '../../../shared/types';
+import { usageStat } from '../../../shared/usage';
 import { attention } from '../net/attention';
 import { state } from '../net/state';
 import { sound } from '../sound';
@@ -48,6 +49,7 @@ export class Hud {
     state.on('connection', refresh);
     state.on('preview', refresh);
     state.on('review', refresh);
+    state.on('usage', refresh);
   }
 
   /** Adds keys to the controls listed (a plugin's legend), before Esc. */
@@ -120,6 +122,7 @@ export class Hud {
     const hails = attention().length;
     const prs = state.shown.reduce((n, p) => n + (state.boards.get(p.id)?.prs.length ?? 0), 0);
     const previews = [...state.previews.keys()].filter((id) => !state.isHidden(id)).length;
+    const plan = usageStat(state.usage);
     fill(
       this.stats,
       !state.connected ? h('div', { class: 'stat bad' }, '🔌 reconnecting…') : null,
@@ -128,6 +131,8 @@ export class Hud {
       queued ? h('div', { class: 'stat' }, `⏳ ${queued} queued`) : null,
       h('div', { class: 'stat' }, `👀 ${prs} PR${prs === 1 ? '' : 's'}`),
       previews ? h('div', { class: 'stat' }, `▶ ${previews} preview${previews === 1 ? '' : 's'}`) : null,
+      // your plan's usage, wherever you are on the ship (the engineering panel has the detail)
+      plan ? h('div', { class: `stat usage ${plan.tone}`, title: 'Your Claude plan’s usage' }, `◔ ${plan.text}`) : null,
       // whatever waits on the captain, anywhere on the ship: C opens Comms to answer it
       h('div', { class: `comms-badge${hails ? ' hailing' : ''}`, title: hails ? `${hails} waiting on you: press C` : 'Nobody is waiting on you' },
         h('span', null, 'Comms'), h('b', null, hails), h('kbd', null, 'C')),

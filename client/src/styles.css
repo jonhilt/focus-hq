@@ -81,6 +81,7 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
   padding: 4px 14px 4px 12px; font-weight: 600; letter-spacing: 0.05em; white-space: nowrap;
 }
 .stat.alert { background: var(--lcars-gold); color: var(--ink); border-color: var(--lcars-peach); animation: blink 1s steps(1) infinite; }
+.stat.usage.warn { color: var(--lcars-gold); }
 .stat.bad { background: var(--lcars-red); color: var(--ink); border-color: var(--lcars-orange); }
 @keyframes blink { 50% { background: var(--lcars-peach); border-color: var(--lcars-gold); } }
 /* Comms on the HUD: an LCARS pill that lights up and counts whatever waits on the captain */

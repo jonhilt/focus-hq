@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Usage } from './types';
-import { agentSignIn, signInLine, usageHeadline, usageRows, usageTone } from './usage';
+import { agentSignIn, signInLine, usageHeadline, usageRows, usageStat, usageTone } from './usage';
 
 const now = new Date(2026, 9, 12, 22, 0).getTime();
 const usage = (change: Partial<Usage> = {}): Usage => ({
@@ -69,5 +69,16 @@ describe('agentSignIn', () => {
     expect(agentSignIn({ cloud: true, onKey: true })).toBe('cloud');
     expect(agentSignIn({ onKey: true })).toBe('key');
     expect(agentSignIn({})).toBe('plan');
+  });
+});
+
+describe('usageStat', () => {
+  it('lists each limit, toned by the nearest to running out', () => {
+    expect(usageStat(usage())).toEqual({ text: 'session 9% · week 92%', tone: 'bad' });
+  });
+
+  it('shows nothing without a plan reading', () => {
+    expect(usageStat(null)).toBeNull();
+    expect(usageStat(usage({ plan: null }))).toBeNull();
   });
 });

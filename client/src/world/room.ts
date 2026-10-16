@@ -55,6 +55,8 @@ const DOOR_SIGN_X = -HALF_D - OVER_DOOR;
 
 /** A holodeck's number on its door, the way a starship numbers its doors. */
 const doorCode = (slot: RoomSlot) => `04-${String(slot.index + 2).padStart(2, '0')}`;
+/** The board is the room's centrepiece: usable from across the room, not just up close. */
+const BOARD_REACH = 12;
 
 /**
  * Where the hall's furniture stands (its frame): in the control ring in the middle, everyone facing the board, the
@@ -169,7 +171,7 @@ export class ProjectRoom {
     boardMesh.layers.set(OVERLAY_LAYER);
     // what stands on the floor shades it round where it stands (contactShadow.ts): one mesh for the room's furniture
     const shadows = new ContactShadows(this.group);
-    interactive(boardMesh, { kind: 'board', projectId: project.id }, () => `Use the ${project.name} board`);
+    interactive(boardMesh, { kind: 'board', projectId: project.id }, () => `Use the ${project.name} board`, BOARD_REACH);
     // solid while you aim at it, so it's easy to read
     boardMesh.userData.aim = (on: boolean) => (this.board.hologram.aimed = on);
 

@@ -59,3 +59,11 @@ export function signInLine(usage: Usage | null): string {
 
 /** What an agent's session signs in with: their cloud session's plan, your API key, or your plan. */
 export const agentSignIn = (a: Pick<Agent, 'cloud' | 'onKey'>): 'cloud' | 'key' | 'plan' => (a.cloud ? 'cloud' : a.onKey ? 'key' : 'plan');
+
+/** The HUD's line on the plan: each limit as "session 9%", and how close the nearest is; null when there's no plan to read. */
+export function usageStat(usage: Usage | null): { text: string; tone: UsageTone } | null {
+  const windows = usage?.plan?.windows ?? [];
+  if (!windows.length) return null;
+  const top = Math.max(...windows.map((w) => w.percent));
+  return { text: windows.map((w) => `${w.label} ${w.percent}%`).join(' · '), tone: usageTone(top) };
+}
