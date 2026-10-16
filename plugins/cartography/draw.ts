@@ -2,7 +2,7 @@
 // from another, the whole map as a dependency matrix, and how it changes as bars and sentences. Pure SVG strings, free of Node and the DOM.
 import type { CrossCall, CrossCoupling, MapConnection, MapFlow, MapPart, MapView, RepoMap } from './shared';
 import { SEQUENCE_KEY, sequenceSvg } from './sequence';
-import { checkSteps, stepSentence } from './steps';
+import { checkSteps, scenarioSteps, stepSentence } from './steps';
 import { CHANGES, CHANGES_KEY, MATRIX_KEY, VIEW_KEY, WHOLE } from './views';
 
 /** Each layer's colour, by its place among the map's layers. */
@@ -395,7 +395,7 @@ export interface Drawing {
  * sequence, each step with its evidence.
  */
 export function viewDrawing(map: RepoMap, view: MapView, marks?: Marks): Drawing {
-  if (view.steps?.length && !marks) {
+  if (!marks && scenarioSteps(map, view).length) {
     const steps = checkSteps(map, view);
     return {
       svg: sequenceSvg(map, view, steps),

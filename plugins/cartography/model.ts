@@ -1,6 +1,6 @@
 // A repo's architecture model from its parsed YAML (MODEL_FILE), or an error saying what's wrong with it. Pure.
-import { type Flow, type FlowRecording, MODEL_KINDS, type ModelKind } from '../../plugin-api/shared';
-import type { ArchitectureModel, MapPart, MapView, ViewStep } from './shared';
+import { type Flow, type FlowRecording, type Frame, MODEL_KINDS, type ModelKind, type Trace } from '../../plugin-api/shared';
+import type { ArchitectureModel, MapPart, MapView, ViewStep, ViewTrace } from './shared';
 
 const ID = /^[a-z][a-z0-9-]{0,31}$/;
 
@@ -40,6 +40,13 @@ function step(raw: unknown, what: string): ViewStep {
   return { from: text(r.from, `${what}'s from`), to: text(r.to, `${what}'s to`), says: text(r.says, `${what}'s says`) };
 }
 
+function traced(raw: unknown, what: string, parts: ReadonlySet<string>): ViewTrace {
+  const r = record(raw, what);
+  const through = r.through === undefined ? undefined : text(r.through, `${what}'s through`);
+  if (through && !parts.has(through)) throw new Error(`${what} goes through a part the model doesn't have: ${through}`);
+  return { message: text(r.message, `${what}'s message`), ...(through ? { through } : {}) };
+}
+
 function view(id: string, raw: unknown, parts: ReadonlySet<string>): MapView {
   if (!ID.test(id)) throw new Error(`View "${id}" needs an id in lowercase letters, digits and dashes`);
   const r = record(raw, `View ${id}`);
@@ -51,7 +58,8 @@ function view(id: string, raw: unknown, parts: ReadonlySet<string>): MapView {
   const unknown = [...new Set([...named, ...steps.flatMap((s) => [s.from, s.to])])].filter((p) => !parts.has(p));
   if (unknown.length) throw new Error(`View ${id} shows parts the model doesn't have: ${unknown.join(', ')}`);
   const answer = r.answer === undefined ? undefined : text(r.answer, `View ${id}'s answer`);
-  return { id, question: text(r.question, `View ${id}'s question`), parts: named, ...(answer ? { answer } : {}), ...(steps.length ? { steps } : {}) };
+  const trace = r.trace === undefined ? undefined : traced(r.trace, `View ${id}'s trace`, parts);
+  return { id, question: text(r.question, `View ${id}'s question`), parts: named, ...(answer ? { answer } : {}), ...(steps.length ? { steps } : {}), ...(trace ? { trace } : {}) };
 }
 
 export function readModel(raw: unknown): ArchitectureModel {
@@ -73,5 +81,11 @@ export function readRecording(raw: unknown): FlowRecording {
     if (typeof x.count !== 'number' || x.count < 1) throw new Error(`Flow ${i + 1} needs a count`);
     return { via: x.via, name: text(x.name, `Flow ${i + 1}'s name`), from: text(x.from, `Flow ${i + 1}'s from`), to: text(x.to, `Flow ${i + 1}'s to`), count: x.count };
   });
-  return { run: typeof r.run === 'string' ? r.run : 'a recorded run', ...(typeof r.commit === 'string' ? { commit: r.commit } : {}), flows };
+  // older recordings have no traces; a trace that doesn't read is left out rather than losing the run's flows
+  const traces = (Array.isArray(r.traces) ? r.traces : []).flatMap((t: unknown): Trace[] => {
+    const x = record(t, 'A trace');
+    const chain = Array.isArray(x.chain) ? x.chain.filter((f: unknown): f is Frame => typeof (f as Frame | null)?.file === 'string') : [];
+    return (x.via === 'ws' || x.via === 'http') && typeof x.name === 'string' && typeof x.count === 'number' && chain.length ? [{ via: x.via, name: x.name, count: x.count, chain }] : [];
+  });
+  return { run: typeof r.run === 'string' ? r.run : 'a recorded run', ...(typeof r.commit === 'string' ? { commit: r.commit } : {}), flows, ...(traces.length ? { traces } : {}) };
 }

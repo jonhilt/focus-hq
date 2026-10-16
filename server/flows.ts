@@ -2,7 +2,7 @@
 // the hub sends is counted against the file that sent it, and each /api request against the browser's file that made
 // it (its FLOW_FROM_HEADER), and GET /api/flows hands over what's been counted. Off, it costs nothing.
 import type { NextFunction, Request, Response } from 'express';
-import { callerOf, FLOW_FROM_HEADER, FlowCounter, type FlowRecording, handlerOf } from '../shared/flows';
+import { callerOf, chainOf, FLOW_FROM_HEADER, FlowCounter, type FlowRecording, handlerOf, TraceCounter } from '../shared/flows';
 import { config } from './config';
 
 /** Every event over /ws lands in the browser's mirror of the office. */
@@ -12,6 +12,7 @@ const PASSING_ON = ['server/flows.ts', 'server/hub.ts'];
 
 export class FlowRecorder {
   private counter = new FlowCounter();
+  private traces = new TraceCounter();
   /** Messages it couldn't put to a file, by how they went. */
   private unattributed = { ws: 0, http: 0 };
 
@@ -19,9 +20,15 @@ export class FlowRecorder {
 
   /** The hub's about to send an event of `type`: whoever asked it to is its sender. */
   ws(type: string): void {
-    const from = callerOf(new Error().stack, PASSING_ON, this.root);
+    // deep enough to reach whoever started it, past the framework's frames
+    const limit = Error.stackTraceLimit;
+    Error.stackTraceLimit = 60;
+    const stack = new Error().stack;
+    Error.stackTraceLimit = limit;
+    const from = callerOf(stack, PASSING_ON, this.root);
     if (from) this.counter.add('ws', type, from, WS_RECEIVER);
     else this.unattributed.ws++;
+    this.traces.add('ws', type, chainOf(stack, PASSING_ON, this.root));
   }
 
   /** Counts each /api request once it's answered, against the route that answered it. */
@@ -41,7 +48,7 @@ export class FlowRecorder {
   };
 
   recording(run: string): FlowRecording & { unattributed: { ws: number; http: number } } {
-    return { run, flows: this.counter.list(), unattributed: this.unattributed };
+    return { run, flows: this.counter.list(), traces: this.traces.list(), unattributed: this.unattributed };
   }
 }
 

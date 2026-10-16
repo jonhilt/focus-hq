@@ -27,6 +27,6 @@ export type { FixEffect, FixStatus, Friction, FrictionGroup, FrictionKind, Ledge
 export { closedGoals, FIX_SESSIONS, FRICTION_KINDS, frictionGroups, frictionsByDigest, knownSignatures, OPEN_FRICTION_DAYS, reportCard, reportLines, unreadDigests } from '../shared/ledger';
 /** The office's permanent crew a plugin speaks for (the chief engineer), and a crew member of its own, always the same person. */
 export { chiefEngineer, crewVoice, fixedCrew, plannerFor } from '../shared/crew';
-export type { Flow, FlowRecording } from '../shared/flows';
+export type { Flow, FlowRecording, Frame, Trace } from '../shared/flows';
 export { FLOWS_FILE } from '../shared/flows';
 export { pluginOn } from '../shared/projectPlugins';

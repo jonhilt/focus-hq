@@ -20,7 +20,11 @@ describe('FlowRecorder', () => {
     const sendFromHere = () => recorder.ws('agent');
     sendFromHere();
     sendFromHere();
-    expect(recorder.recording('a test').flows).toEqual([{ via: 'ws', name: 'agent', from: 'server/flows.test.ts', to: 'client/src/net/state.ts', count: 2 }]);
+    const { flows, traces = [] } = recorder.recording('a test');
+    expect(flows).toEqual([{ via: 'ws', name: 'agent', from: 'server/flows.test.ts', to: 'client/src/net/state.ts', count: 2 }]);
+    // and the chain of calls it was sent by, ending at its sender
+    expect(traces[0]).toMatchObject({ via: 'ws', name: 'agent', count: 2 });
+    expect(traces[0].chain.at(-1)).toEqual({ file: 'server/flows.test.ts', fn: 'sendFromHere' });
   });
 
   it('puts an /api request to the browser’s file that made it, and the route that answered it', () => {

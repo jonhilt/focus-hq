@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { connections, flowsGone, isSource, mapOf, NAMES_KEPT, ownerOf, partFlows, problems, resolveImport } from './graph';
+import { connections, flowsGone, isSource, mapOf, NAMES_KEPT, ownerOf, partFlows, partTraces, problems, resolveImport } from './graph';
 import type { ArchitectureModel } from './shared';
 
 const model: ArchitectureModel = {
@@ -135,5 +135,26 @@ describe('flowsGone', () => {
     expect(map.flows).toEqual([{ from: 'server', to: 'shared', via: 'ws', count: 2, names: ['agent'] }]);
     expect(map.flowsRun).toEqual({ run: 'a demo run', commit: 'abc' });
     expect(mapOf('o/r', model, ['server/a.ts'], []).flows).toBeUndefined();
+  });
+});
+
+describe('partTraces', () => {
+  it('puts a chain’s frames to their parts, a run in one part one hop entered by its first function, and the receiver last', () => {
+    const owner = (f: string) => ({ 'lead.ts': 'agents', 'mgr.ts': 'manager', 'core.ts': 'manager', 'tools.ts': 'tools', 'state.ts': 'mirror' })[f];
+    const traces = partTraces(
+      {
+        run: 'r',
+        flows: [{ via: 'ws', name: 'agent', from: 'core.ts', to: 'state.ts', count: 3 }],
+        traces: [
+          { via: 'ws', name: 'agent', count: 2, chain: [{ file: 'lead.ts', fn: 'script' }, { file: 'mgr.ts', fn: 'note' }, { file: 'core.ts', fn: 'update' }, { file: 'tools.ts' }, { file: 'core.ts', fn: 'send' }] },
+          { via: 'ws', name: 'agent', count: 1, chain: [{ file: 'lead.ts', fn: 'script' }, { file: 'mgr.ts', fn: 'note' }, { file: 'tools.ts' }, { file: 'core.ts', fn: 'send' }] },
+          // never leaves a part, with nowhere it lands
+          { via: 'ws', name: 'gone', count: 5, chain: [{ file: 'core.ts' }] },
+        ],
+      },
+      owner,
+    );
+    const hops = [{ part: 'agents', fn: 'script' }, { part: 'manager', fn: 'note' }, { part: 'tools' }, { part: 'manager', fn: 'send' }, { part: 'mirror' }];
+    expect(traces).toEqual([{ via: 'ws', name: 'agent', hops, count: 3 }]);
   });
 });

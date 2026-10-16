@@ -42,7 +42,23 @@ A view that asks how something happens is better answered in order than as a web
 
 It's drawn as a sequence diagram (`sequence.ts`): a lifeline per part in the order the steps reach them, and each step an arrow down the page, numbered, with what it says over it. The office checks each step against the code (`steps.ts`): a message the recorded run saw from one part to the other (a dashed gold arrow), or an import between them either way (solid: one calls the other, or reads from it). A step nothing backs is drawn red and said so, never left out. Under the drawing, each numbered step opens on its evidence: the imports and their names, the recorded messages and how many. That's the detail the old sentences crammed in all at once.
 
-Imports alone can't put a scenario in order: a shortest path through them runs through whatever module everything imports (the plugin API, say), not the way the code actually goes. So a scenario's steps are written, by whoever adds the view or by a lead with the map tool, and checked rather than guessed. The map tool tells a lead which of their steps nothing backs.
+Imports alone can't put a scenario in order: a shortest path through them runs through whatever module everything imports (the plugin API, say), not the way the code actually goes. So a scenario's steps are either written, by whoever adds the view or by a lead with the map tool, and checked; or **found in a recorded run**.
+
+### Steps found in a recorded run
+
+As the recorded run sends each event over /ws, it keeps the whole stack the event was sent from, not only its sender: the repo's frames, outermost first, with their functions (`shared/flows.ts` `chainOf`, kept as the recording's `traces`). That's the order imports can't give: who called whom to send it. The map puts each chain's frames to their parts (`graph.ts` `partTraces`), a run of frames in one part being one hop, entered by its first function, with the message's receiver last.
+
+A view with a `trace` instead of steps has them found there:
+
+```yaml
+  note-to-browser:
+    question: How does a lead's note reach the browser?
+    parts: [agents, manager, office-tools, client-net]
+    answer: "The lead's session calls the note tool, the office tools update the lead, and the manager sends it to the browser over /ws."
+    trace: { message: agent, through: office-tools }
+```
+
+Of the chains that sent `message` (an event's type) and went `through` the part, it takes the one through the most parts (a chain cut short where it awaited is busier, but tells less), and makes a step of each hop: *calls note*, *calls update*, *calls back into it* for an anonymous callback, and *sends "agent" over /ws* last. A recorded call backs a step too, written or found: a solid gold arrow, its evidence saying which functions and how often. A chain is what one run did, from the demo office (where a demo runner stands in for a lead's Claude Code session): what the run didn't do has no chain, and the map tool says so.
 
 **Legibility is tested** (`legibility.ts`): every scenario in Focus's own model is held to a budget as a station's screen shows it (at most 7 lifelines and 8 steps, no label cut short, no text under 13 px once shrunk to fit), and every step must be backed. A view that grows past it fails `pnpm test`.
 
@@ -110,7 +126,7 @@ Maps are made from each repo's default branch, checked out in the plugin's own f
 
 ## What's next
 
-- Recorded flows inside the office too (events between its own parts, Effect's spans), and runs that cover more of what a captain does.
+- Call chains for /api requests too (the browser's stack, and the handler's), and runs that cover more of what a captain and a lead do.
 - The model itself compared across merged pull requests: parts and connections that came and went, slice by slice.
 
 ## Where it lives
@@ -124,7 +140,7 @@ Maps are made from each repo's default branch, checked out in the plugin's own f
 - `crossRepo.ts`: what ties a project's repos together, from their histories: change sets across repos, and the parts in different repos that change together, pure.
 - `slice.ts`: what a goal's slice does to the architecture, from its lead's checkout against the default branch's map, and its view, pure.
 - `map.ts`: making a repo's map from a checkout (git ls-files, then each language's reader, and git log for history.ts).
-- `steps.ts`: a scenario's steps checked against the map's imports and recorded flows, pure. `sequence.ts`: a scenario drawn as a sequence diagram. `legibility.ts`: how legible a drawing is where it's seen, and the budget a scenario's held to.
+- `steps.ts`: a scenario's steps, written or found in the recorded run's call chains, checked against the map's imports, flows and calls, pure. `sequence.ts`: a scenario drawn as a sequence diagram. `legibility.ts`: how legible a drawing is where it's seen, and the budget a scenario's held to.
 - `draw.ts`: drawing a view, the matrix and the changes as SVG, with their sentences (`viewDrawing`, which every place a view shows goes through).
 - `views.ts`: a map's views, and what the Maps view says in words.
 - `leadTool.ts`: the lead's map tool. `page.ts`: a view as a page for a station's screen.

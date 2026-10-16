@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { callerOf, FlowCounter, handlerOf, repoPath } from './flows';
+import { callerOf, chainOf, FlowCounter, handlerOf, repoPath, TraceCounter } from './flows';
 
 describe('repoPath', () => {
   it('reads a file on disk from the root, and the dev server’s URLs', () => {
@@ -59,5 +59,41 @@ describe('handlerOf', () => {
     expect(handlerOf('/api/plugins/cartography/map', true)).toBe('plugins/cartography/server.ts');
     expect(handlerOf('/api/agents/:id/message', true)).toBe('server/routes.ts');
     expect(handlerOf('/api/demo/speed', false)).toBe('server/index.ts');
+  });
+});
+
+describe('chainOf', () => {
+  it('lists the repo’s frames outermost first, with their functions, but the recorder’s own and each repeat once', () => {
+    const stack = [
+      'Error',
+      '    at FlowRecorder.ws (/repo/server/flows.ts:20:11)',
+      '    at Hub.send (/repo/server/hub.ts:28:5)',
+      '    at GoalTools.update (/repo/server/agents/manager/core.ts:88:14)',
+      '    at GoalTools.update (/repo/server/agents/manager/core.ts:90:3)',
+      '    at /repo/server/agents/manager/goalTools.ts:51:9',
+      '    at async Leads.note (/repo/server/agents/manager/leads.ts:12:1)',
+      '    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)',
+    ].join('\n');
+    expect(chainOf(stack, ['server/flows.ts', 'server/hub.ts'], '/repo')).toEqual([
+      { file: 'server/agents/manager/leads.ts', fn: 'Leads.note' },
+      { file: 'server/agents/manager/goalTools.ts' },
+      { file: 'server/agents/manager/core.ts', fn: 'GoalTools.update' },
+    ]);
+    expect(chainOf(undefined, [])).toEqual([]);
+  });
+});
+
+describe('TraceCounter', () => {
+  it('counts each chain a kind of message went by, the busiest first, and skips an empty one', () => {
+    const traces = new TraceCounter();
+    const a = [{ file: 'a.ts', fn: 'go' }];
+    traces.add('ws', 'agent', a);
+    traces.add('ws', 'agent', [{ file: 'b.ts' }]);
+    traces.add('ws', 'agent', a);
+    traces.add('ws', 'agent', []);
+    expect(traces.list()).toEqual([
+      { via: 'ws', name: 'agent', chain: a, count: 2 },
+      { via: 'ws', name: 'agent', chain: [{ file: 'b.ts' }], count: 1 },
+    ]);
   });
 });

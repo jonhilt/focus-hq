@@ -2,7 +2,7 @@
 // between parts that the imports make. Nothing here reads a disk (map.ts does).
 import path from 'node:path';
 import type { Flow, FlowRecording } from '../../plugin-api/shared';
-import type { ArchitectureModel, FileEdge, MapConnection, MapFlow, RepoMap } from './shared';
+import type { ArchitectureModel, FileEdge, MapConnection, MapFlow, PartTrace, RepoMap } from './shared';
 
 /** How many of a connection's names it keeps, the most imported first. */
 export const NAMES_KEPT = 8;
@@ -93,6 +93,31 @@ export function partFlows(flows: readonly Flow[], owner: (file: string) => strin
     .sort((x, y) => y.count - x.count || x.from.localeCompare(y.from) || x.to.localeCompare(y.to));
 }
 
+/**
+ * A recording's call chains part to part: each chain's frames put to their parts, a run of frames in one part made one
+ * hop (with the function it was entered by), and the message's receiver last. Chains that come out the same are added
+ * up; ones that never leave a part drop out.
+ */
+export function partTraces(recording: FlowRecording, owner: (file: string) => string | undefined): PartTrace[] {
+  // where each kind of message lands, from the flows (every /ws event lands in the browser's mirror)
+  const receiver = new Map(recording.flows.map((f) => [`${f.via} ${f.name}`, f.to]));
+  const found = new Map<string, PartTrace>();
+  for (const t of recording.traces ?? []) {
+    const hops: PartTrace['hops'] = [];
+    const to = receiver.get(`${t.via} ${t.name}`);
+    for (const frame of [...t.chain, ...(to ? [{ file: to }] : [])]) {
+      const part = owner(frame.file);
+      if (!part || hops[hops.length - 1]?.part === part) continue;
+      hops.push(frame.fn ? { part, fn: frame.fn } : { part });
+    }
+    if (hops.length < 2) continue;
+    const key = `${t.via} ${t.name} ${hops.map((h) => `${h.part}#${h.fn ?? ''}`).join(' ')}`;
+    const had = found.get(key);
+    found.set(key, { via: t.via, name: t.name, hops, count: (had?.count ?? 0) + t.count });
+  }
+  return [...found.values()].sort((a, b) => b.count - a.count || b.hops.length - a.hops.length);
+}
+
 /** Files a recording names that are gone from the code since: it's time to record again. */
 export function flowsGone(recording: FlowRecording, files: readonly string[]): string[] {
   const known = new Set(files);
@@ -113,7 +138,7 @@ export function mapOf(repo: string, model: ArchitectureModel, files: readonly st
     mapped: Object.values(sizes).reduce((a, b) => a + b, 0),
     sizes,
     connections: connections(imports, (f) => owners.get(f)),
-    ...(recording ? { flows: partFlows(recording.flows, (f) => owners.get(f)), flowsRun: { run: recording.run, commit: recording.commit } } : {}),
+    ...(recording ? { flows: partFlows(recording.flows, (f) => owners.get(f)), traces: partTraces(recording, (f) => owners.get(f)), flowsRun: { run: recording.run, commit: recording.commit } } : {}),
     problems: [...problems(model, files, sizes), ...(recording ? flowsGone(recording, files) : [])],
   };
 }

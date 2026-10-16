@@ -3,10 +3,10 @@
 // gold for a recorded message, solid for an import, red for nothing behind it. Pure SVG, free of Node and the DOM.
 import { esc, layerColours, wrap } from './draw';
 import type { MapPart, MapView, RepoMap } from './shared';
-import type { CheckedStep } from './steps';
+import { type CheckedStep, scenarioSteps } from './steps';
 
 /** How to read a scenario's sequence. */
-export const SEQUENCE_KEY = 'Read down, a step at a time. Dashed gold: a message seen in a recorded run. Solid: an import. Red: nothing in the code backs it. Open a step for its evidence.';
+export const SEQUENCE_KEY = 'Read down, a step at a time. Gold: seen in a recorded run (dashed, a message over the wire; solid, a call). White: an import between the two. Red: nothing in the code backs it. Open a step for its evidence.';
 
 /** The sequence's measures: a lifeline's column, its head, a step's row, and the type sizes (budgets.test.ts holds them). */
 export const SEQ = { col: 200, pad: 30, headW: 180, headH: 58, top: 24, first: 120, row: 74, label: 16, head: 17 } as const;
@@ -16,7 +16,7 @@ const INK = { bg: '#0b1020', panel: '#121a33', text: '#e8ecf5', muted: '#9aa6c4'
 /** The parts a scenario goes through, in the order its steps first reach them. */
 export function lifelines(map: RepoMap, view: MapView): MapPart[] {
   const parts = map.model?.parts ?? [];
-  const order = [...new Set([...(view.steps ?? []).flatMap((s) => [s.from, s.to]), ...view.parts])];
+  const order = [...new Set([...scenarioSteps(map, view).flatMap((s) => [s.from, s.to]), ...view.parts])];
   return order.map((id) => parts.find((p) => p.id === id)).filter((p): p is MapPart => !!p);
 }
 
@@ -24,7 +24,7 @@ export function lifelines(map: RepoMap, view: MapView): MapPart[] {
 export function placeSequence(map: RepoMap, view: MapView): { x: Map<string, number>; parts: MapPart[]; W: number; H: number } {
   const parts = lifelines(map, view);
   const x = new Map(parts.map((p, i) => [p.id, SEQ.pad + SEQ.col * (i + 0.5)]));
-  return { x, parts, W: SEQ.pad * 2 + parts.length * SEQ.col, H: SEQ.first + (view.steps?.length ?? 0) * SEQ.row };
+  return { x, parts, W: SEQ.pad * 2 + parts.length * SEQ.col, H: SEQ.first + scenarioSteps(map, view).length * SEQ.row };
 }
 
 /** How wide a step's label may run: over its arrow, and past its ends to two columns' width, since its row is its own. */
@@ -64,8 +64,13 @@ export function sequenceSvg(map: RepoMap, view: MapView, steps: readonly Checked
     const y = SEQ.first + i * SEQ.row + 40;
     const a = x.get(step.from) ?? 0;
     const b = x.get(step.to) ?? 0;
-    const kind = step.evidence.some((e) => e.kind === 'flow') ? 'flow' : step.evidence.length ? 'import' : 'none';
-    const [colour, marker, dash] = kind === 'flow' ? [INK.flow, 'cg-seq-flow', ' stroke-dasharray="10 6"'] : kind === 'none' ? [INK.none, 'cg-seq-none', ' stroke-dasharray="4 5"'] : [INK.line, 'cg-seq', ''];
+    const has = (k: string) => step.evidence.some((e) => e.kind === k);
+    const kind = has('flow') ? 'flow' : has('call') ? 'call' : step.evidence.length ? 'import' : 'none';
+    const [colour, marker, dash] =
+      kind === 'flow' ? [INK.flow, 'cg-seq-flow', ' stroke-dasharray="10 6"']
+      : kind === 'call' ? [INK.flow, 'cg-seq-flow', '']
+      : kind === 'none' ? [INK.none, 'cg-seq-none', ' stroke-dasharray="4 5"']
+      : [INK.line, 'cg-seq', ''];
     const { lines: label, mid } = stepLabel(step, x, W);
     const said = `${i + 1}. ${step.says}${kind === 'none' ? ' (nothing in the code backs this step)' : ''}`;
     // a step within one part loops out to its right and back

@@ -138,6 +138,11 @@ views:
       - { from: client-net, to: ship, says: "hands the station screen the lead's latest page" }
       - { from: ship, to: artifacts, says: "asks where the page's picture is served" }
       - { from: panels, to: artifacts, says: "opens the page up close when you press E" }
+  note-to-browser:
+    question: How does a lead's note reach the browser?
+    parts: [agents, manager, office-tools, client-net]
+    answer: "The lead's session calls the note tool, the office tools update the lead, and the manager sends it to the browser over /ws."
+    trace: { message: agent, through: office-tools }
   plugins:
     question: How do plugins plug into the office?
     parts: [plugins, plugin-host, manager, http, client-app, panels]

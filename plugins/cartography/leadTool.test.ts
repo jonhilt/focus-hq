@@ -48,6 +48,12 @@ describe('the map tool', () => {
     expect(shown[0].html).toContain('Mirror of the office');
   });
 
+  it('finds a traced view\'s steps in the recorded run, and says so', async () => {
+    const { context } = lead();
+    const said = await mapTool.run(context, { view: 'note-to-browser' });
+    expect(said).toMatch(/view "note-to-browser": 4 parts\. \d+ steps found in the recorded run, each backed by the code\./);
+  });
+
   it('says there\'s no such view, with the ones there are', async () => {
     const { context } = lead();
     await expect(mapTool.run(context, { view: 'nowhere' })).rejects.toThrow(/There's no view "nowhere"[\s\S]*show-to-screen/);
