@@ -1,10 +1,8 @@
 import { Effect, Option } from 'effect';
 import type { Agent, MessageReply, ResumeHow } from '../../../shared/types';
 import { answerMessage, openQuestion } from '../../../shared/artifacts';
-import { answerInChat, answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, applyNote, type NoteInput, pageErrorsNote } from '../lead';
+import { answerInChat, answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, type NoteInput, notedGoal, pageErrorsNote } from '../lead';
 import { beatMoments, explainerCheck, explainerPage, type ExplainerInput, momentNotes } from '../explainer';
-import { applyContacts } from '../contacts';
-import { notedWaypoint } from '../waypoints';
 import { type Picture, Renderer, Workspace } from '../services';
 import { checkModel, modelError, modelReport } from '../../../shared/systemModel';
 import type { SystemModel } from '../../../shared/types';
@@ -20,15 +18,10 @@ export class GoalTools extends Part {
     return Effect.gen({ self: this }, function* () {
       const work = agent.lead;
       if (!work) return yield* new Refused({ message: 'There’s no goal to keep a note on' });
-      const now = Date.now();
-      const next = applyNote(work, input);
-      const contacts = applyContacts(work, input, now);
-      if ('error' in contacts) return yield* new Refused({ message: contacts.error });
-      const waypoints = notedWaypoint(work, input, next.note, now);
-      this.update(agent, { lead: { ...work, title: next.title, note: next.note, ...(waypoints && { waypoints }), ...(contacts.length && { contacts }) }, issue: { ...agent.issue, title: next.title } });
-      const contact = input.contact?.trim() ? contacts.at(-1) : undefined;
-      const logged = contact ? ` Logged contact ${contact.id}.` : '';
-      return `Noted.${logged}`;
+      const noted = notedGoal(work, input, Date.now());
+      if ('error' in noted) return yield* new Refused({ message: noted.error });
+      this.update(agent, { lead: noted.lead, issue: { ...agent.issue, title: noted.lead.title } });
+      return noted.reply;
     });
   }
 

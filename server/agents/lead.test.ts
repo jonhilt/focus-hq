@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadAgent, LeadWork } from '../../shared/types';
-import { afterLanding, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, shipBranch, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
+import { afterLanding, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, notedGoal, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, shipBranch, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -326,6 +326,45 @@ describe('the goal’s note', () => {
     expect(text).not.toMatch(/checklist|heading/);
     expect(text).not.toContain('summarised');
     expect(text).toContain('What done looks like: Works anywhere');
+  });
+});
+
+describe('notedGoal', () => {
+  // slice 1 landed, slice 2 is under way with three commits so far
+  const course: LeadWork = { ...work, waypoints: [{ slice: 1, startedAt: 1, title: 'Store' }, { slice: 2, startedAt: 2, commits: 3 }] };
+  const noted = (input: Parameters<typeof notedGoal>[1], on: LeadWork = course) => {
+    const result = notedGoal(on, input, 50);
+    if ('error' in result) throw new Error(result.error);
+    return result;
+  };
+
+  it('keeps the note and title, leaving the chart alone when nothing on it changed', () => {
+    const { lead, reply } = noted({ title: 'Saved items, anywhere', next: ['Header'] }, work);
+    expect(lead).toEqual({ ...work, title: 'Saved items, anywhere', note: { ...emptyNote(), next: ['Header'] } });
+    expect(reply).toBe('Noted.');
+    expect(noted({ next: ['Header'] }).lead.waypoints).toEqual(course.waypoints);
+  });
+
+  it('puts a lesson, and what done used to look like, on the slice that landed', () => {
+    const first = noted({ done: 'Saved items survive a reload', learned: 'The store is fine' }).lead;
+    expect(first.waypoints).toEqual([{ slice: 1, startedAt: 1, title: 'Store', learned: ['The store is fine'] }, { slice: 2, startedAt: 2, commits: 3 }]);
+    expect(noted({ done: 'Saved items work anywhere' }, first).lead.waypoints?.[0]).toEqual({ slice: 1, startedAt: 1, title: 'Store', learned: ['The store is fine'], turnedFrom: 'Saved items survive a reload' });
+  });
+
+  it('names the contact it logged, and not one it only closed', () => {
+    const logged = noted({ contact: 'Is the API rate limited?' });
+    expect(logged.lead.contacts).toEqual([{ id: 'c1', text: 'Is the API rate limited?', slice: 1, at: 50 }]);
+    expect(logged.reply).toBe('Noted. Logged contact c1.');
+    const both = noted({ contact: 'Dark mode', closeContact: { id: 'c1', as: 'dropped' } }, logged.lead);
+    expect(both.reply).toBe('Noted. Logged contact c2.');
+    const closed = noted({ closeContact: { id: 'c2', as: 'pursued' } }, both.lead);
+    expect(closed.reply).toBe('Noted.');
+    expect(closed.lead.contacts?.map((c) => c.closed?.as)).toEqual(['dropped', 'pursued']);
+    expect(noted({ contact: '   ' }).lead).not.toHaveProperty('contacts');
+  });
+
+  it('refuses what the contacts refuse, changing nothing', () => {
+    expect(notedGoal(course, { done: 'Fine', closeContact: { id: 'c9', as: 'dropped' } }, 50)).toEqual({ error: 'There\'s no contact c9. Open contacts: none.' });
   });
 });
 

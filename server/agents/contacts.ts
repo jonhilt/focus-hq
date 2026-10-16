@@ -1,6 +1,6 @@
 // The loose threads a goal's lead notices along the way (a question, a risk, an idea off the course): sensor contacts on
 // its chart, open until the lead pursues or drops them. The lead logs and closes them through the note tool; these are
-// the pure decisions, and `GoalTools.noteGoal` calls them.
+// the pure decisions, and `notedGoal` in `lead.ts` calls them.
 
 import type { Contact, LeadWork } from '../../shared/types';
 import { notedSlice } from './waypoints';

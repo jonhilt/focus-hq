@@ -5,7 +5,8 @@ import type { BranchState, HelperEvent } from './types';
 import { slugify } from '../util';
 import { SCRATCH_RULE } from './scratch';
 import { WAIT_RULE } from './wait';
-import { type ContactInput, contactsForPrompt } from './contacts';
+import { applyContacts, type ContactInput, contactsForPrompt } from './contacts';
+import { notedWaypoint } from './waypoints';
 
 /** The lead's checkout of one repo: a folder inside their workspace. */
 export const leadWorktreeId = (agentId: string, folder: string) => `${agentId}/${folder}`;
@@ -239,6 +240,23 @@ export function applyNote(work: Pick<LeadWork, 'title' | 'note'>, input: NoteInp
     next: input.next ? input.next.map(clean).filter(Boolean) : before.next,
   };
   return { title, note };
+}
+
+/**
+ * The goal once the lead sends the note tool, and what the tool says back, or why it was refused (nothing changes then):
+ * its title and note (`applyNote`), its contacts (`contacts.ts`) and its waypoints, where a lesson, or a change to what
+ * done looks like, goes on the slice it's about (`notedWaypoint`).
+ */
+export function notedGoal(work: LeadWork, input: NoteInput, now: number): { lead: LeadWork; reply: string } | { error: string } {
+  const next = applyNote(work, input);
+  const contacts = applyContacts(work, input, now);
+  if ('error' in contacts) return contacts;
+  const waypoints = notedWaypoint(work, input, next.note, now);
+  const contact = input.contact?.trim() ? contacts.at(-1) : undefined;
+  return {
+    lead: { ...work, title: next.title, note: next.note, ...(waypoints && { waypoints }), ...(contacts.length && { contacts }) },
+    reply: `Noted.${contact ? ` Logged contact ${contact.id}.` : ''}`,
+  };
 }
 
 export const ARTIFACT_LIMITS = { id: 40, title: 80, count: 12, bytes: 2_000_000 } as const;
