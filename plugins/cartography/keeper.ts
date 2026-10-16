@@ -106,6 +106,8 @@ export class DiagramKeeper {
     try {
       const checkouts = await Promise.all(reposOf(d, project.repos).map(async (repo) => ({ repo, dir: await this.checkout(repo) })));
       const drawn = await this.host.drawModel({ question: d.question, title: d.title, dirs: [...new Set(checkouts.map((c) => c.dir))] });
+      // forgotten while it was being drawn: it stays forgotten
+      if (!this.state.get().diagrams[projectId]?.some((k) => k.id === id)) return;
       this.store(projectId, { ...d, by: 'the office', at: Date.now(), image: !!drawn.image, files: this.hashed(drawn.model, checkouts), stale: undefined, redrawing: undefined, failed: undefined }, drawn);
     } catch (err) {
       this.mark(projectId, id, { redrawing: undefined, failed: errorMessage(err) });

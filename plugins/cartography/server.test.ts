@@ -217,6 +217,27 @@ describe('drawing a kept diagram again, and forgetting it', () => {
     expect(diagrams().shop?.[0]?.by).toBe('the office');
   });
 
+  it('leaves one forgotten while it was being drawn again forgotten', async () => {
+    const was = drawn;
+    let finish: (() => void) | undefined;
+    drawn = (ask) => new Promise((resolve) => (finish = () => resolve(was(ask)))).then((p) => p as Awaited<ReturnType<typeof was>>);
+    try {
+      const { lent, diagrams, seed } = host([shop]);
+      const parts = cartography.start(lent);
+      seed({ diagrams: { shop: [old] } });
+      const route = (p: string) => parts.routes?.find((r) => r.path === p)?.handle({ body: { project: 'shop', id: 'd' }, query: {} });
+      route('/redraw');
+      // the drawing's asked for, and not back yet
+      await until(() => !!finish);
+      route('/forget');
+      finish?.();
+      await new Promise((r) => setTimeout(r, 50));
+      expect(diagrams().shop).toEqual([]);
+    } finally {
+      drawn = was;
+    }
+  });
+
   it('forgets one the captain doesn’t want', () => {
     const { lent, diagrams, seed } = host([shop]);
     const parts = cartography.start(lent);
