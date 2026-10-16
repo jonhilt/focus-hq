@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { type AgentLog, clock, mostAtOnce, sessionTimeline, windowTime } from './sessionTimeline';
-import { aboutSession, inside, journalResults } from './studioSessions';
+import { aboutSession, inside, journalResults, readableTranscript, sessionRef } from './studioSessions';
 
 // local times on 9 Oct 2026, as the timeline shows them
 const at = (hh: number, mm: number, ss = 0) => new Date(2026, 9, 9, hh, mm, ss).toISOString();
@@ -104,6 +104,29 @@ describe('studio sessions', () => {
     expect(inside('/home/me/.claude/projects', '/home/me/.claude/projects/../secrets.jsonl')).toBe(false);
     expect(inside('/home/me/.claude/projects', '/home/me/.claude/projects')).toBe(false);
     expect(inside('/home/me/.claude/projects', '/etc/passwd')).toBe(false);
+  });
+
+  it('reads a ref as a transcript’s path or a session’s id, and refuses anything else', () => {
+    expect(sessionRef('  ~/.claude/projects/p/s.jsonl ', '/home/me')).toEqual({ path: '/home/me/.claude/projects/p/s.jsonl' });
+    expect(sessionRef('/tmp/x/s.jsonl', '/home/me')).toEqual({ path: '/tmp/x/s.jsonl' });
+    // a bare file name is a path, read where the office runs, so the roots decide
+    expect(sessionRef('s.jsonl', '/home/me')).toEqual({ path: 's.jsonl' });
+    // only a leading ~/ is home, and with no home it stays as written (and won't resolve)
+    expect(sessionRef('a/~/s.jsonl', '/home/me')).toEqual({ path: 'a/~/s.jsonl' });
+    expect(sessionRef('~/s.jsonl', undefined)).toEqual({ path: '~/s.jsonl' });
+    expect(sessionRef(' 2053e196-be92_x ', '/home/me')).toEqual({ id: '2053e196-be92_x' });
+    expect(sessionRef('..', '/home/me')).toHaveProperty('error');
+    expect(sessionRef('a b', '/home/me')).toHaveProperty('error');
+    expect(sessionRef('', '/home/me')).toHaveProperty('error');
+  });
+
+  it('only reads a .jsonl inside one of the roots', () => {
+    const roots = ['/home/me/.claude/projects', '/srv/claude/projects'];
+    expect(readableTranscript('/home/me/.claude/projects/p/s.jsonl', roots)).toBe(true);
+    expect(readableTranscript('/srv/claude/projects/p/s.jsonl', roots)).toBe(true);
+    expect(readableTranscript('/home/me/.claude/projects/p/s.json', roots)).toBe(false);
+    expect(readableTranscript('/home/me/.ssh/s.jsonl', roots)).toBe(false);
+    expect(readableTranscript('/home/me/.claude/projects/p/s.jsonl', [])).toBe(false);
   });
 
   it('says what a session is about: Claude Code’s title and the first thing asked', () => {

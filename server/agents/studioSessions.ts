@@ -36,6 +36,22 @@ export function inside(root: string, file: string): boolean {
   return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
 }
 
+/**
+ * What the studio was asked to load: a transcript's path (`~/` read as `home`), or a session's id as the sessions tool
+ * lists them; anything else is refused.
+ */
+export function sessionRef(ref: string, home: string | undefined): { path: string } | { id: string } | { error: string } {
+  const wanted = ref.trim();
+  if (wanted.includes('/') || wanted.endsWith('.jsonl')) return { path: wanted.replace(/^~(?=\/)/, home ?? '~') };
+  if (/^[\w-]+$/.test(wanted)) return { id: wanted };
+  return { error: 'Give a session by its id (as the sessions tool lists them) or its transcript\'s path.' };
+}
+
+/** Whether the studio may read `file` (resolved, links followed): a transcript, inside one of the (resolved) roots. */
+export function readableTranscript(file: string, roots: readonly string[]): boolean {
+  return file.endsWith('.jsonl') && roots.some((r) => inside(r, file));
+}
+
 /** What a transcript's start says it's about: Claude Code's title, and the first thing asked. */
 export function aboutSession(head: string): { title?: string; asked?: string } {
   let title: string | undefined;
@@ -118,16 +134,17 @@ export async function listSessions(query = '', limit = 20): Promise<SessionSumma
 
 /** A session by its id or its transcript's path, read whole with its agents: only from inside the roots. */
 export async function loadSession(ref: string): Promise<SessionLogs> {
-  const wanted = ref.trim();
+  const asked = sessionRef(ref, process.env.HOME);
+  if ('error' in asked) throw new Error(asked.error);
   let file: string | undefined;
-  if (wanted.includes('/') || wanted.endsWith('.jsonl')) {
-    const real = await fs.realpath(wanted.replace(/^~(?=\/)/, process.env.HOME ?? '~')).catch(() => undefined);
-    if (real && real.endsWith('.jsonl') && (await Promise.all(sessionRoots().map((r) => fs.realpath(r).catch(() => r)))).some((r) => inside(r, real))) file = real;
-    if (!file) throw new Error(`The studio can only read Claude Code's own session transcripts (a .jsonl under ${sessionRoots().join(' or ')}), and ${wanted} isn't one.`);
+  if ('path' in asked) {
+    const real = await fs.realpath(asked.path).catch(() => undefined);
+    const roots = await Promise.all(sessionRoots().map((r) => fs.realpath(r).catch(() => r)));
+    file = real && readableTranscript(real, roots) ? real : undefined;
+    if (!file) throw new Error(`The studio can only read Claude Code's own session transcripts (a .jsonl under ${sessionRoots().join(' or ')}), and ${ref.trim()} isn't one.`);
   } else {
-    if (!/^[\w-]+$/.test(wanted)) throw new Error('Give a session by its id (as the sessions tool lists them) or its transcript\'s path.');
-    file = (await transcripts()).find((t) => t.id === wanted)?.file;
-    if (!file) throw new Error(`There's no session ${wanted}: look it up with the sessions tool.`);
+    file = (await transcripts()).find((t) => t.id === asked.id)?.file;
+    if (!file) throw new Error(`There's no session ${asked.id}: look it up with the sessions tool.`);
   }
   const main = await fs.readFile(file, 'utf8');
   return { id: path.basename(file, '.jsonl'), main, agents: await agentLogs(file.slice(0, -'.jsonl'.length)) };

@@ -268,7 +268,9 @@ floor to walk into but its walls (`STUDIO_HALL` and `studioWalls` in `client/src
   still and stages it again before telling you it's ready. No browser open, no sheet: the scene waits for you.
 - **Real sessions** (its `sessions` and `session_timeline` tools): for something that really happened in Claude Code,
   the computer reads the session itself. It can read Claude Code's own session transcripts on this Mac
-  (`~/.claude/projects`, or `CLAUDE_CONFIG_DIR`'s) and nothing else (`server/agents/studioSessions.ts`): it finds one
+  (`~/.claude/projects`, or `CLAUDE_CONFIG_DIR`'s) and nothing else (`server/agents/studioSessions.ts`: `sessionRef`
+  reads what it asked for as a session id or a transcript's path, and `readableTranscript` only lets through a `.jsonl`
+  that, links followed, is inside that folder; both tested in `sessionTimeline.test.ts`): it finds one
   by what it was about (Claude Code's title for it, what was first asked, its folder), then reads it as a timeline
   (`server/agents/sessionTimeline.ts`), told from code alone: what was asked, what Claude said and ran, and each
   subagent and workflow it started, stitched in from their own transcripts (`subagents/`, and a workflow run's
