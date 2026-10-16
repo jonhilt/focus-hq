@@ -21,7 +21,64 @@ Each agent keeps a run journal, `~/.focus/runs/<agent id>.jsonl` (`server/agents
 
 - **Messages**: a message for an agent is `queued` as it arrives (heard next, in front, or once the turn in hand ends), `taken` into a turn's prompt or `sent` into a session that's listening (`server/agents/inbox.ts`). One taken for a prompt is still owed until its turn is asked for.
 - **Turns**: `turn-requested` (its prompt, and the conversation it goes back to) is written before Claude Code starts, then `signed-in` (your plan or your API key), `turn-started` (the session, and where Claude Code says its credential came from: its `apiKeySource`), and `turn-ended` with how it ended. Claude Code's own transcript holds what happened inside the turn; the journal holds what the office decided around it.
-- **What follows a turn** is the run's state machine (`server/agents/runMachine.ts`). The turn ended in a state (where it ran: `local`, `cloud`, or `attaching` to a cloud session the captain started), and its end is an event read once from its outcome (`done`, `failed`, `stopped`, `limited`, `mismatch`, `refused`, or why it never got going: `busy`, `asking`, `gone`, `unstarted`). `RUN_MACHINE` holds each state's guarded transitions as data; an event a state has no transition for (or none whose guard passes) goes up to its parent, and `turn`, at the top, has a way out of every event. The target (deliver, the captain's turn, carry on, the plan's limit, stopped, failed, the cloud's fallbacks) is what the manager does next.
+- **What follows a turn** is the run's state machine, in XState (`server/agents/runMachine.ts`). The turn ended in a state (where it ran: `local`, `cloud`, or `attaching` to a cloud session the captain started), and its end is an event read once from its outcome (`done`, `failed`, `stopped`, `limited`, `mismatch`, `refused`, or why it never got going: `busy`, `asking`, `gone`, `unstarted`). `runMachine` holds each state's guarded transitions, and `step` takes one with XState's pure `transition`; an event a state has no transition for (or none whose guard passes) goes up to its parent, and `turn`, at the top, has a way out of every event. The target (deliver, the captain's turn, carry on, the plan's limit, stopped, failed, the cloud's fallbacks) is what the manager does next.
+
+The machine, drawn from its code (`mermaidStatechart` in `server/agents/statechart.ts`; a test keeps this picture in step with `runMachine`):
+
+<!-- run-machine:start -->
+```mermaid
+---
+config:
+  layout: elk
+---
+stateDiagram-v2
+  direction LR
+  state "turn" as run_turn {
+    [*] --> run_turn_local
+    state "local" as run_turn_local
+    state "cloud" as run_turn_cloud {
+      [*] --> run_turn_cloud_running
+      state "running" as run_turn_cloud_running
+      state "attaching" as run_turn_cloud_attaching
+    }
+  }
+  state "attach-again" as run_attach_again
+  state "attach-refused" as run_attach_refused
+  state "attach-failed" as run_attach_failed
+  state "sign-in-mismatch" as run_sign_in_mismatch
+  state "limited" as run_limited
+  state "stopped" as run_stopped
+  state "cloud-carry-on-here" as run_cloud_carry_on_here
+  state "cloud-await" as run_cloud_await
+  state "cloud-to-local" as run_cloud_to_local
+  state "fresh-session" as run_fresh_session
+  state "new-cloud-session" as run_new_cloud_session
+  state "carry-on" as run_carry_on
+  state "fail" as run_fail
+  state "finish-review" as run_finish_review
+  state "lead-done" as run_lead_done
+  state "deliver" as run_deliver
+  [*] --> run_turn
+  run_turn_local --> run_fresh_session : gone [a lead, resumed]
+  run_turn_cloud_attaching --> run_attach_again : busy [tries left]
+  run_turn_cloud_attaching --> run_attach_failed : busy | asking | gone | unstarted
+  run_turn_cloud_attaching --> run_attach_refused : refused
+  run_turn_cloud --> run_cloud_to_local : refused [worked there]
+  run_turn_cloud --> run_cloud_carry_on_here : refused [attach refused]
+  run_turn_cloud --> run_cloud_await : refused
+  run_turn_cloud --> run_new_cloud_session : gone | unstarted [resumed]
+  run_turn --> run_sign_in_mismatch : mismatch
+  run_turn --> run_limited : limited
+  run_turn --> run_stopped : stopped
+  run_turn --> run_carry_on : refused | busy | asking | gone | unstarted | failed | done [messages waiting]
+  run_turn --> run_fail : refused | busy | asking | gone | unstarted | failed
+  run_turn --> run_finish_review : done [QA]
+  run_turn --> run_lead_done : done [a lead]
+  run_turn --> run_deliver : done
+  classDef final fill:#1d3320,stroke:#9fd39f,color:#e8e4d8
+  class run_attach_again,run_attach_refused,run_attach_failed,run_sign_in_mismatch,run_limited,run_stopped,run_cloud_carry_on_here,run_cloud_await,run_cloud_to_local,run_fresh_session,run_new_cloud_session,run_carry_on,run_fail,run_finish_review,run_lead_done,run_deliver final
+```
+<!-- run-machine:end -->
 
 **Signing in.** If Claude Code says it signed a turn in with `ANTHROPIC_API_KEY` or an `apiKeyHelper` when the office meant your plan's login (an `env` or `apiKeyHelper` in `~/.claude/settings.json` can do that behind the office's back), the turn is stopped at once (`sign-in-mismatch`) and the agent fails saying where to look, before it spends any more.
 

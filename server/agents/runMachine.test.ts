@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ATTACH_TRIES, CLOUD_UNAVAILABLE } from './cloud';
-import { type RunContext, RUN_MACHINE, step, type Target, turnEvent, type TurnState } from './runMachine';
+import { type RunContext, runMachine, step, type Target, turnEvent, type TurnEvent, type TurnState } from './runMachine';
 import type { RunOutcome } from './types';
 
 const ctx = (over: Partial<RunContext> = {}): RunContext => ({ role: 'work', resumed: false, hasSession: true, tries: 0, attachRefused: false, carryOn: false, ...over });
@@ -79,16 +79,18 @@ describe('the run machine', () => {
     expect(after('local', failed('Stopped', { aborted: true }), {}, 'apiKeyHelper')).toBe('sign-in-mismatch');
   });
 
-  it('has a way out of every event at the top, whatever its guards say', () => {
-    for (const transitions of Object.values(RUN_MACHINE.turn.on)) {
-      const last = typeof transitions === 'string' ? transitions : transitions[transitions.length - 1];
-      expect(typeof last).toBe('string');
-    }
-  });
-
-  it('hands every state’s events up a parent that exists', () => {
-    for (const node of Object.values(RUN_MACHINE.states)) {
-      expect(node.parent === 'turn' || node.parent in RUN_MACHINE.states).toBe(true);
+  it('takes every event, from every state, to a final state, whatever its guards say', () => {
+    const events: TurnEvent[] = [
+      { type: 'done' }, { type: 'mismatch', observed: 'apiKeyHelper' }, { type: 'limited' }, { type: 'stopped' },
+      ...(['refused', 'busy', 'asking', 'gone', 'unstarted', 'failed'] as const).map((type) => ({ type, error: 'x' })),
+    ];
+    const finals = Object.entries(runMachine.root.states).filter(([, node]) => node.type === 'final').map(([name]) => name);
+    for (const state of ['local', 'cloud', 'attaching'] as const) {
+      for (const event of events) {
+        for (const over of [{}, { role: 'lead' as const, resumed: true, carryOn: true, attachRefused: true, hasSession: false, tries: ATTACH_TRIES }]) {
+          expect(finals).toContain(step(state, event, ctx(over)));
+        }
+      }
     }
   });
 });

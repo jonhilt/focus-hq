@@ -1,10 +1,11 @@
+import { setup, type StateValue, transition } from 'xstate';
 import { ATTACH_TRIES, CLOUD_UNAVAILABLE } from './cloud';
 import type { RunOutcome } from './types';
 
-// What follows an agent's turn, as a state machine: the state the turn ends in (where it ran), the event its end is
-// (read from its outcome, `turnEvent`), and the run's transitions (`RUN_MACHINE`). A state hands an event it has no
-// transition for (or none whose guard passes) up to its parent, as a statechart does; `turn`, at the top, takes every
-// event. Pure data and a small interpreter (`step`): the manager does what the target says (`runSession`).
+// What follows an agent's turn, as a state machine (XState, `runMachine`): the state the turn ends in (where it ran),
+// the event its end is (read from its outcome, `turnEvent`), and the target it goes to. A state hands an event it has no
+// transition for (or none whose guard passes) up to its parent; `turn`, at the top, takes every event. `step` takes one
+// transition, purely: the manager does what the target says (`runSession`).
 
 /** Where the turn ran: on this machine, in a cloud session, or attaching to a cloud session the captain started. */
 export type TurnState = 'local' | 'cloud' | 'attaching';
@@ -80,90 +81,107 @@ export type Target =
   /** A developer's work is done: onto GitHub. */
   | 'deliver';
 
-/** A condition on the run, named so the machine reads (and draws) as it decides. */
-export interface Guard {
-  name: string;
-  test: (c: RunContext) => boolean;
-}
+/** Whatever the turn's end, once the state it ran in has had its say: messages waiting carry it on, or it failed. */
+const failed = (): [{ guard: 'messages waiting'; target: '#run.carry-on' }, { target: '#run.fail' }] => [{ guard: 'messages waiting', target: '#run.carry-on' }, { target: '#run.fail' }];
 
-const guard = (name: string, test: Guard['test']): Guard => ({ name, test });
-const triesLeft = guard('tries left', (c) => c.tries < ATTACH_TRIES);
-const workedThere = guard('worked there', (c) => c.hasSession);
-const attachRefused = guard('attach refused', (c) => c.attachRefused);
-const resumed = guard('resumed', (c) => c.resumed);
-const leadResumed = guard('a lead, resumed', (c) => c.role === 'lead' && c.resumed);
-const messages = guard('messages waiting', (c) => c.carryOn);
-const review = guard('QA', (c) => c.role === 'review');
-const lead = guard('a lead', (c) => c.role === 'lead');
+/** Each target is a final state: where the run goes next. */
+const final = { type: 'final' } as const;
 
-/** A transition taken when its guard passes. */
-export interface Guarded {
-  to: Target;
-  when: Guard;
-}
-
-/** A state's transitions for an event, tried in order: the last, unguarded, always taken. */
-export type Transitions = Target | readonly [...Guarded[], Target];
-
-type EventType = TurnEvent['type'];
-
-export interface StateNode {
-  /** Where an event goes that this state has no transition for, or none whose guard passed. */
-  parent: TurnState | 'turn';
-  on: Partial<Record<EventType, Transitions | readonly Guarded[]>>;
-}
-
-/** Whatever the turn's end, once the state it ran in has had its say: every event has a way out. */
-const FAILED: Transitions = [{ to: 'carry-on', when: messages }, 'fail'];
-
-export const RUN_MACHINE: { states: Record<TurnState, StateNode>; turn: { on: Record<EventType, Transitions> } } = {
+/**
+ * The run's machine (XState): a turn runs `local`ly or in the `cloud` (`attaching`, to a session the captain started,
+ * within it), all within `turn`. An event a state has no transition for (or none whose guard passes) goes up to its
+ * parent, and `turn` has a way out of every event. Its transitions are pure: `step` takes one, and nothing runs.
+ */
+export const runMachine = setup({
+  types: {
+    context: {} as RunContext,
+    events: {} as TurnEvent,
+    input: {} as RunContext,
+  },
+  guards: {
+    'tries left': ({ context }) => context.tries < ATTACH_TRIES,
+    'worked there': ({ context }) => context.hasSession,
+    'attach refused': ({ context }) => context.attachRefused,
+    resumed: ({ context }) => context.resumed,
+    'a lead, resumed': ({ context }) => context.role === 'lead' && context.resumed,
+    'messages waiting': ({ context }) => context.carryOn,
+    QA: ({ context }) => context.role === 'review',
+    'a lead': ({ context }) => context.role === 'lead',
+  },
+}).createMachine({
+  id: 'run',
+  context: ({ input }) => input,
+  initial: 'turn',
   states: {
-    attaching: {
-      parent: 'cloud',
+    turn: {
+      initial: 'local',
       on: {
-        busy: [{ to: 'attach-again', when: triesLeft }, 'attach-failed'],
-        refused: 'attach-refused',
-        asking: 'attach-failed',
-        gone: 'attach-failed',
-        unstarted: 'attach-failed',
+        mismatch: '#run.sign-in-mismatch',
+        limited: '#run.limited',
+        stopped: '#run.stopped',
+        refused: failed(),
+        busy: failed(),
+        asking: failed(),
+        gone: failed(),
+        unstarted: failed(),
+        failed: failed(),
+        done: [
+          { guard: 'messages waiting', target: '#run.carry-on' },
+          { guard: 'QA', target: '#run.finish-review' },
+          { guard: 'a lead', target: '#run.lead-done' },
+          { target: '#run.deliver' },
+        ],
+      },
+      states: {
+        local: {
+          on: {
+            gone: { guard: 'a lead, resumed', target: '#run.fresh-session' },
+          },
+        },
+        cloud: {
+          initial: 'running',
+          on: {
+            refused: [
+              { guard: 'worked there', target: '#run.cloud-to-local' },
+              { guard: 'attach refused', target: '#run.cloud-carry-on-here' },
+              { target: '#run.cloud-await' },
+            ],
+            gone: { guard: 'resumed', target: '#run.new-cloud-session' },
+            unstarted: { guard: 'resumed', target: '#run.new-cloud-session' },
+          },
+          states: {
+            running: {},
+            attaching: {
+              on: {
+                busy: [{ guard: 'tries left', target: '#run.attach-again' }, { target: '#run.attach-failed' }],
+                refused: '#run.attach-refused',
+                asking: '#run.attach-failed',
+                gone: '#run.attach-failed',
+                unstarted: '#run.attach-failed',
+              },
+            },
+          },
+        },
       },
     },
-    cloud: {
-      parent: 'turn',
-      on: {
-        refused: [{ to: 'cloud-to-local', when: workedThere }, { to: 'cloud-carry-on-here', when: attachRefused }, 'cloud-await'],
-        gone: [{ to: 'new-cloud-session', when: resumed }],
-        unstarted: [{ to: 'new-cloud-session', when: resumed }],
-      },
-    },
-    local: {
-      parent: 'turn',
-      on: {
-        gone: [{ to: 'fresh-session', when: leadResumed }],
-      },
-    },
+    'attach-again': final,
+    'attach-refused': final,
+    'attach-failed': final,
+    'sign-in-mismatch': final,
+    limited: final,
+    stopped: final,
+    'cloud-carry-on-here': final,
+    'cloud-await': final,
+    'cloud-to-local': final,
+    'fresh-session': final,
+    'new-cloud-session': final,
+    'carry-on': final,
+    fail: final,
+    'finish-review': final,
+    'lead-done': final,
+    deliver: final,
   },
-  turn: {
-    on: {
-      mismatch: 'sign-in-mismatch',
-      limited: 'limited',
-      stopped: 'stopped',
-      refused: FAILED,
-      busy: FAILED,
-      asking: FAILED,
-      gone: FAILED,
-      unstarted: FAILED,
-      failed: FAILED,
-      done: [{ to: 'carry-on', when: messages }, { to: 'finish-review', when: review }, { to: 'lead-done', when: lead }, 'deliver'],
-    },
-  },
-};
-
-/** The first of `transitions` whose guard passes, if any does. */
-function take(transitions: Transitions | readonly Guarded[] | undefined, c: RunContext): Target | undefined {
-  if (typeof transitions === 'string') return transitions;
-  return transitions?.map((t) => (typeof t === 'string' ? t : t.when.test(c) ? t.to : undefined)).find((to) => to !== undefined);
-}
+});
 
 /** A turn's end as the run's event: the one place its outcome is read. */
 export function turnEvent(outcome: RunOutcome, mismatch?: string): TurnEvent {
@@ -179,19 +197,18 @@ export function turnEvent(outcome: RunOutcome, mismatch?: string): TurnEvent {
 }
 
 /** What Claude Code says when a session doesn't get going, by the event it is. */
-const UNSTARTED: [EventType & ('busy' | 'asking' | 'gone'), RegExp][] = [
+const UNSTARTED: ['busy' | 'asking' | 'gone', RegExp][] = [
   ['busy', /\bis busy\b/i],
   ['asking', /waiting on a question/i],
   ['gone', /no conversation found/i],
 ];
 
-/** One step of the machine: where a turn that ended in `state` with `event` goes, from its state up to `turn`. */
-export function step(state: TurnState, event: TurnEvent, c: RunContext): Target {
-  let node: StateNode | undefined = RUN_MACHINE.states[state];
-  while (node) {
-    const to = take(node.on[event.type], c);
-    if (to) return to;
-    node = node.parent === 'turn' ? undefined : RUN_MACHINE.states[node.parent];
-  }
-  return take(RUN_MACHINE.turn.on[event.type], c) ?? 'fail';
+/** Where each state the turn ran in is, in the machine. */
+const AT: Record<TurnState, StateValue> = { local: { turn: 'local' }, cloud: { turn: { cloud: 'running' } }, attaching: { turn: { cloud: 'attaching' } } };
+
+/** One step of the machine: where a turn that ended in `state` with `event` goes, its context deciding the guards. */
+export function step(state: TurnState, event: TurnEvent, context: RunContext): Target {
+  const [next] = transition(runMachine, runMachine.resolveState({ value: AT[state], context }), event);
+  // every event has a way out of `turn`, to a target: a machine that stayed put is one that changed without its tests
+  return typeof next.value === 'string' ? next.value : 'fail';
 }
