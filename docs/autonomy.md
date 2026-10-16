@@ -16,6 +16,8 @@ Each agent's panel has an **Autonomy** picker in its header, beside their effort
 - A cloud session's permissions are set as its turn starts, so the change applies from their next turn, and the line says so.
 - The choice stays on the agent (`autonomy` on their record): their later turns and resumes start in it. Changing the office setting afterwards doesn't touch them.
 
+Every tool call a session asks about goes through one callback (`toolPermission` in `server/agents/claudeRunner.ts`, tested next to it). It reads the agent's mode afresh on each call, so a switch applies to the very next one. It lets through what that mode allows without asking (`allowedWithoutAsking`), and anything from an agent of a workflow you approved, still running: it gives the workflow's progress up to 2 s to name that agent. Anything else raises the hand. What the hand says comes from `permissionAsk`: for a workflow, its name and what approving it means; otherwise Claude Code's own title for the call, else the tool and the command, file, URL or pattern it's on. Decline it and the agent is told to find another approach, or to explain in its summary why the action is needed.
+
 Local sessions are always started able to switch: bypassing permissions is allowed from the start (Claude Code needs that up front) and they carry Raise your hand's command rules whatever mode they start in. In Auto mode those rules only spare the classifier a few calls.
 
 None of these is a sandbox. Agents run as you, on your machine, with your `gh` credentials. Treat full autonomy accordingly.

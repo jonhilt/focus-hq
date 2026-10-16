@@ -159,10 +159,44 @@ export function permissionOptions(autonomy: Autonomy, cloud: boolean, askCommand
   return autonomy === 'auto' ? { permissionMode: 'auto', canUseTool } : { permissionMode: 'acceptEdits', allowedTools: askCommands, canUseTool };
 }
 
+/** What the captain's asked to approve: a workflow by name, else Claude Code's own title for it, else the tool and what it's on. */
+export function permissionAsk(toolName: string, input: Record<string, unknown>, title?: string): string {
+  if (toolName === 'Workflow') return workflowAsk(input);
+  return title || summarizeInput(toolName, input);
+}
+
 function summarizeInput(toolName: string, input: Record<string, unknown>): string {
   if (toolName === 'Bash') return `Bash(${truncate(String(input.command ?? ''), 300)})`;
   const first = input.file_path ?? input.url ?? input.pattern ?? Object.values(input)[0];
   return `${toolName}(${truncate(typeof first === 'string' ? first : JSON.stringify(first ?? ''), 300)})`;
+}
+
+/** What an agent hears when the captain declines its tool call. */
+export const DECLINED = 'The manager declined this action. Find another approach, or explain in your final summary why it is needed.';
+
+/** How long a helper's request waits for a workflow's progress to name it: 10 looks, 200 ms apart. */
+const PERMIT_LOOKS = 10;
+const PERMIT_WAIT_MS = 200;
+
+/**
+ * A session's canUseTool: a tool its mode lets through runs, as does a request from an agent of a workflow the captain
+ * approved (given a moment for the workflow's progress to name it); anything else asks the captain, and approving a
+ * Workflow call approves its agents too. `autonomy` is read on each call, since the captain can change it mid-session.
+ */
+export function toolPermission(
+  autonomy: () => Autonomy,
+  permits: WorkflowPermits,
+  ask: RunHooks['permission'],
+  wait: (ms: number) => Promise<unknown> = sleep,
+): CanUseTool {
+  return async (toolName, toolInput, { signal, title, agentID, toolUseID }) => {
+    if (allowedWithoutAsking(autonomy(), toolName)) return { behavior: 'allow', updatedInput: toolInput };
+    for (let i = 0; i < PERMIT_LOOKS && permits.mightApprove(agentID); i++) await wait(PERMIT_WAIT_MS);
+    if (permits.approves(agentID)) return { behavior: 'allow', updatedInput: toolInput };
+    const approved = await ask(toolName, permissionAsk(toolName, toolInput, title), signal);
+    if (approved && toolName === 'Workflow') permits.approveCall(toolUseID);
+    return approved ? { behavior: 'allow', updatedInput: toolInput } : { behavior: 'deny', message: DECLINED };
+  };
 }
 
 /**
@@ -272,21 +306,7 @@ export class ClaudeRunner implements AgentRunner {
     // a cloud agent has to push its own branch, and only that one
     const askCommands = cloud ? [...ASK_MODE_COMMANDS, `Bash(git push origin HEAD:${cloud.branch})`] : ASK_MODE_COMMANDS;
     const permits = new WorkflowPermits();
-    const canUseTool: CanUseTool = async (toolName, toolInput, { signal, title, agentID, toolUseID }) => {
-      if (allowedWithoutAsking(autonomy, toolName)) return { behavior: 'allow', updatedInput: toolInput };
-      // an agent of a workflow the captain approved: its progress may not have named it yet, so give it a moment
-      for (let i = 0; i < 10 && permits.mightApprove(agentID); i++) await sleep(200);
-      if (permits.approves(agentID)) return { behavior: 'allow', updatedInput: toolInput };
-      const summary = toolName === 'Workflow' ? workflowAsk(toolInput) : title || summarizeInput(toolName, toolInput);
-      const approved = await hooks.permission(toolName, summary, signal);
-      if (approved && toolName === 'Workflow') permits.approveCall(toolUseID);
-      return approved
-        ? { behavior: 'allow', updatedInput: toolInput }
-        : {
-            behavior: 'deny',
-            message: 'The manager declined this action. Find another approach, or explain in your final summary why it is needed.',
-          };
-    };
+    const canUseTool = toolPermission(() => autonomy, permits, (tool, summary, signal) => hooks.permission(tool, summary, signal));
 
     // a cloud session runs on your plan in the cloud, whatever this machine signs in with
     const onKey = !cloud && keyFallback.onKey();

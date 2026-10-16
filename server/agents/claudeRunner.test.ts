@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import type { TermLine } from '../../shared/types';
+import type { Autonomy, TermLine } from '../../shared/types';
 import type { BrowserPool } from './browserTool';
-import { allowedWithoutAsking, ClaudeRunner, claudeConfig, endedOutcome, failedOutcome, holdsInput, Listening, permissionOptions, runningInBackground, withResult, type SoFar } from './claudeRunner';
+import { allowedWithoutAsking, ClaudeRunner, claudeConfig, DECLINED, endedOutcome, failedOutcome, holdsInput, Listening, permissionAsk, permissionOptions, runningInBackground, toolPermission, withResult, type SoFar } from './claudeRunner';
 import { CLOUD_UNAVAILABLE } from './cloud';
+import { WorkflowPermits } from './workflows';
 import { LIMIT_REACHED, STOPPED_BY_CAPTAIN, type ProbeEvent, type RunHooks, type WorkflowEvent } from './types';
 
 describe('claudeConfig', () => {
@@ -239,6 +240,114 @@ describe('allowedWithoutAsking', () => {
     expect(allowedWithoutAsking('auto', 'Edit')).toBe(false);
     expect(allowedWithoutAsking('full', 'Bash')).toBe(true);
     expect(allowedWithoutAsking('full', 'mcp__office__ship')).toBe(true);
+  });
+});
+
+describe('permissionAsk', () => {
+  it('names a workflow, and what approving it means', () => {
+    expect(permissionAsk('Workflow', { script: "export const meta = { name: 'review-changes' }" }, 'Run a workflow')).toBe('Run workflow review-changes: its agents run their commands without asking, for this run');
+  });
+
+  it("takes Claude Code's own title over the office's summary", () => {
+    expect(permissionAsk('Bash', { command: 'git clean -fdx' }, 'Clean the checkout')).toBe('Clean the checkout');
+  });
+
+  it('shows a command, else the file, URL or pattern a tool is on, else its first input', () => {
+    expect(permissionAsk('Bash', { command: 'git push', description: 'Push' })).toBe('Bash(git push)');
+    expect(permissionAsk('Bash', {})).toBe('Bash()');
+    expect(permissionAsk('Edit', { old_string: 'a', file_path: '/repo/a.ts' })).toBe('Edit(/repo/a.ts)');
+    expect(permissionAsk('WebFetch', { prompt: 'p', url: 'https://example.com' })).toBe('WebFetch(https://example.com)');
+    expect(permissionAsk('Grep', { path: 'src', pattern: 'TODO' })).toBe('Grep(TODO)');
+    expect(permissionAsk('mcp__office__ship', { repos: ['a'] })).toBe('mcp__office__ship(["a"])');
+    expect(permissionAsk('mcp__office__status', {})).toBe('mcp__office__status("")');
+  });
+
+  it('cuts a long command short', () => {
+    expect(permissionAsk('Bash', { command: 'x'.repeat(400) }).length).toBeLessThan(320);
+  });
+});
+
+describe('toolPermission', () => {
+  const input = { command: 'git push' };
+  const call = (extra: { agentID?: string; toolUseID?: string; title?: string } = {}) => ({ signal: new AbortController().signal, toolUseID: 't1', ...extra });
+  const setup = (answer: boolean) => {
+    const asked: string[] = [];
+    const waits: number[] = [];
+    const permits = new WorkflowPermits();
+    const session: { mode: Autonomy } = { mode: 'ask' };
+    const ask = (tool: string, summary: string) => {
+      asked.push(`${tool}: ${summary}`);
+      return Promise.resolve(answer);
+    };
+    const wait = (ms: number) => {
+      waits.push(ms);
+      return Promise.resolve();
+    };
+    return { asked, waits, permits, session, canUseTool: toolPermission(() => session.mode, permits, ask, wait) };
+  };
+
+  it("lets through what the session's mode allows, without asking", async () => {
+    const { asked, canUseTool } = setup(false);
+    expect(await canUseTool('Edit', input, call())).toEqual({ behavior: 'allow', updatedInput: input });
+    expect(asked).toEqual([]);
+  });
+
+  it('asks the captain the rest, and passes on their answer', async () => {
+    const yes = setup(true);
+    expect(await yes.canUseTool('Bash', input, call())).toEqual({ behavior: 'allow', updatedInput: input });
+    expect(yes.asked).toEqual(['Bash: Bash(git push)']);
+    const no = setup(false);
+    expect(await no.canUseTool('Bash', input, call({ title: 'Push the branch' }))).toEqual({ behavior: 'deny', message: DECLINED });
+    expect(no.asked).toEqual(['Bash: Push the branch']);
+  });
+
+  it('follows the mode the captain changed it to mid-session', async () => {
+    const { asked, session, canUseTool } = setup(false);
+    session.mode = 'full';
+    expect(await canUseTool('Bash', input, call())).toEqual({ behavior: 'allow', updatedInput: input });
+    session.mode = 'auto';
+    expect((await canUseTool('Edit', input, call())).behavior).toBe('deny');
+    expect(asked).toEqual(['Edit: Edit(git push)']);
+  });
+
+  it('lets an approved workflow’s agents run without asking, for that run', async () => {
+    const { asked, permits, canUseTool } = setup(true);
+    expect((await canUseTool('Workflow', { name: 'fan-out' }, call({ toolUseID: 'w1' }))).behavior).toBe('allow');
+    permits.started('wf_1', 'w1');
+    permits.seen('wf_1', [{ agentId: 'helper' }]);
+    expect(await canUseTool('Bash', input, call({ agentID: 'helper' }))).toEqual({ behavior: 'allow', updatedInput: input });
+    expect(asked).toEqual(['Workflow: Run workflow fan-out: its agents run their commands without asking, for this run']);
+    permits.ended('wf_1');
+    await canUseTool('Bash', input, call({ agentID: 'helper' }));
+    expect(asked).toHaveLength(2);
+  });
+
+  it("doesn't approve a workflow the captain declined", async () => {
+    const { permits, canUseTool } = setup(false);
+    await canUseTool('Workflow', { name: 'fan-out' }, call({ toolUseID: 'w1' }));
+    permits.started('wf_1', 'w1');
+    permits.seen('wf_1', [{ agentId: 'helper' }]);
+    expect((await canUseTool('Bash', input, call({ agentID: 'helper' }))).behavior).toBe('deny');
+  });
+
+  it('gives a workflow’s progress up to 2 s to name an agent, then asks', async () => {
+    const { asked, waits, permits, canUseTool } = setup(true);
+    permits.approveCall('w1');
+    permits.started('wf_1', 'w1');
+    await canUseTool('Bash', input, call({ agentID: 'stranger' }));
+    expect(waits).toEqual(Array<number>(10).fill(200));
+    expect(asked).toEqual(['Bash: Bash(git push)']);
+  });
+
+  it('stops waiting once the progress names the agent', async () => {
+    const { asked, waits, permits, canUseTool } = setup(false);
+    permits.approveCall('w1');
+    permits.started('wf_1', 'w1');
+    const pending = canUseTool('Bash', input, call({ agentID: 'helper' }));
+    permits.seen('wf_1', [{ agentId: 'helper' }]);
+    expect((await pending).behavior).toBe('allow');
+    expect(waits).toEqual([200]);
+    expect(asked).toEqual([]);
   });
 });
 
