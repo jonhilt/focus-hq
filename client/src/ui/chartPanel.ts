@@ -8,9 +8,9 @@ import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { fill, h } from './dom';
 import { prLink } from './goals';
-import { type Box, CHART, clip, type CoursePlot, everySlice, type Label, labelBox, leaderEnd, plotCourse, type ProbeFlight, probeFlights, probesOut, type Pt, seeded, shieldState, TRANSMIT_MS } from './course';
+import { type Box, CHART, clip, type CoursePlot, everySlice, type Label, labelBox, leaderEnd, plotCourse, type ProbeFlight, probeFlights, probesOut, type Pt, seeded, shieldState, TRANSMIT_MS, waypointName } from './course';
 import { orbit, type PlacedNode, sliceWork, type WorkKind, type WorkNode } from './constellation';
-import { sliceProgress } from '../world/goalRoom';
+import { sliceProgress, sliceSteps } from '../world/goalRoom';
 
 /** What a goal's chart is drawn from, whether it's under way or closed. */
 interface ChartGoal {
@@ -69,7 +69,7 @@ const span = (ms: number) => {
   const hrs = Math.round(m / 60);
   return hrs < 24 ? `${hrs} h` : `${Math.floor(hrs / 24)} d${hrs % 24 ? ` ${hrs % 24} h` : ''}`;
 };
-const named = (w: Waypoint) => w.title ?? w.heading ?? `Slice ${w.slice}`;
+const named = (w: Waypoint) => waypointName(w).name;
 /** The DOM UI's LCARS green (`--lcars-green`), which the 3D palette doesn't have. */
 const GREEN = '#99cc66';
 const SHIELD_WORDS = { none: '', held: 'shields held', absorbed: 'hit absorbed', down: 'shields down' } as const;
@@ -109,12 +109,12 @@ const KIND: Record<WorkKind, { tone: string; name: string }> = {
 /** A node's colour: its kind's, unless it failed (red) or was never heard from again (grey). */
 const toneOf = (n: WorkNode) => (n.state === 'failed' ? LCARS.red : n.state === 'lost' ? '#6b6488' : KIND[n.kind].tone);
 
-/** Everything a slice did, as nodes: the slice under way's checklist, tasks and workflows too. */
+/** Everything a slice did, as nodes: its tasks, and the slice under way's checklist and workflows too. */
 const workOf = (goal: ChartGoal, w: Waypoint, flying: ReadonlySet<string>): WorkNode[] => {
   const now = w.slice === goal.current && !goal.closedAt;
   return sliceWork({
     waypoint: w, artifacts: goal.artifacts, questions: goal.questions, prs: goal.prs, flying,
-    ...(now && { checklist: goal.note?.slice, tasks: goal.tasks, workflows: goal.workflows }),
+    ...(now && { checklist: goal.note?.slice, workflows: goal.workflows }),
   });
 };
 
@@ -240,8 +240,8 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: Picked, nav: Nav,
       return g;
     }));
 
-  // the slice under way fills an arc round its waypoint as its checklist is ticked off
-  const pct = sliceProgress(goal.note);
+  // the slice under way fills an arc round its waypoint as its tasks (or checklist) get done
+  const pct = sliceProgress(sliceSteps({ slice: goal.current ?? 0, waypoints: goal.waypoints, note: goal.note }));
   const progress = pct === null ? undefined : pct / 100;
   const ARC = 2 * Math.PI * 20;
   const waypoints = s('g', { class: 'chart-waypoints' },
@@ -443,7 +443,7 @@ function logView(goal: ChartGoal, w: Waypoint | undefined, nodes: WorkNode[], ct
     w.summary || !w.title
       ? section('Intent', LCARS.orange, w.summary ? h('p', null, w.summary)
         : w.heading ? h('p', null, h('em', null, w.heading), h('small', { class: 'chart-aside' }, 'Its heading, until it ships under its own title'))
-        : h('p', { class: 'muted' }, now ? 'Heading not set: the lead names the slice as it starts' : 'Nothing shipped'))
+        : h('p', { class: 'muted' }, !now ? 'Nothing shipped' : waypointName(w).named === 'work' ? 'Nothing shipped yet: named after what the lead’s at' : 'Nothing shipped yet'))
       : null,
     w.turnedFrom ? section('Course correction', LCARS.red, h('p', null, 'Was heading for: ', h('em', null, w.turnedFrom))) : null,
     w.learned?.length ? section('Learned', LCARS.lilac, h('ul', { class: 'goal-list' }, ...w.learned.map((l) => h('li', null, l)))) : null,
@@ -475,9 +475,11 @@ function nodeView(goal: ChartGoal, w: Waypoint, node: WorkNode, nodes: WorkNode[
     case 'step':
       return view(node.state === 'done' ? 'Ticked off' : 'Still to do', h('p', { class: 'muted' }, 'A step on the slice’s checklist, which the lead keeps in the goal’s note.'));
     case 'task': {
-      const t = goal.tasks?.find((x) => x.id === id);
+      const t = w.tasks?.find((x) => x.id === id);
+      // what it says while doing it is only on the lead's live list
+      const doing = t?.status === 'in_progress' ? goal.tasks?.find((x) => x.id === id)?.activeForm : undefined;
       return view({ pending: 'To do', in_progress: 'Doing it now', completed: 'Done' }[t?.status ?? 'pending'],
-        t?.activeForm && t.status === 'in_progress' ? h('p', null, h('em', null, `${t.activeForm}…`)) : null,
+        doing ? h('p', null, h('em', null, `${doing}…`)) : null,
         h('p', { class: 'muted' }, 'On the task list the lead keeps for itself in Claude Code.'));
     }
     case 'workflow': {

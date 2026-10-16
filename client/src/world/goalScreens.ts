@@ -4,7 +4,7 @@ import type { Agent, Avatar, Helper } from '../../../shared/types';
 import { goalStrips } from '../plugins';
 import { canvasTexture, fitFont, fitText, makeCanvas, UI_FONT, wrap } from './canvas';
 import type { CrewView } from './character';
-import { checklistGlance, type GoalRoomTone, goalRoomState, leadNow, type NoteSection, noteSections, type PrGlance, rowAt, sliceProgress } from './goalRoom';
+import { checklistGlance, type GoalRoomTone, goalRoomState, leadNow, type NoteSection, noteSections, type PrGlance, rowAt, sliceProgress, sliceSteps } from './goalRoom';
 import { flat } from './materials';
 import { portrait } from './portraits';
 import { DISPLAY_EVERY, redrawDue, type ScreenView, screenTest, takeDraw } from './screenRedraw';
@@ -165,7 +165,7 @@ abstract class Display {
   protected keyOf(view: StationView): unknown {
     const { lead } = view;
     const crew = view.crew?.map(({ who, role }) => [who.name, who.status, who.line, role]);
-    return [view.index, view.next, crew, lead && [lead.name, lead.status, lead.lead?.title, lead.lead?.slice, lead.lead?.note, lead.lead?.brief]];
+    return [view.index, view.next, crew, lead && [lead.name, lead.status, lead.lead?.title, lead.lead?.slice, lead.lead?.note, sliceSteps(lead.lead), lead.lead?.brief]];
   }
 
   protected abstract draw(view: StationView): void;
@@ -214,7 +214,7 @@ export class GoalSign extends Display {
     ctx.fillText('TEAM STATION', m + 22 + codeW / 2 + 8, H / 2 + 58);
 
     // how far through the slice, or whether it's free: the state you see first
-    const progress = sliceProgress(lead?.lead?.note);
+    const progress = sliceProgress(sliceSteps(lead?.lead));
     const rightW = 330;
     const rx = W - m - 22 - rightW;
     ctx.fillStyle = PANE;
@@ -402,7 +402,8 @@ export class GoalBoard extends Display {
     if (!lead) return this.message('Free', next ? `Next up: ${next}` : 'Press E at the door, or on this board, to start a goal here.', x, y, w, h, color);
 
     const note = lead.lead?.note;
-    const sections = note ? noteSections(note, lead.lead?.slice ?? 1) : [];
+    const steps = sliceSteps(lead.lead);
+    const sections = note ? noteSections(note, lead.lead?.slice ?? 1, steps) : [];
     const brief = lead.lead?.brief;
     if (!sections.length && brief) sections.push({ heading: 'As the captain put it', side: 'goal', items: [{ mark: '“', text: brief }] });
     if (!sections.length) sections.push({ heading: 'No note yet', side: 'goal', items: [{ mark: '◎', text: `${lead.name} hasn’t written the goal’s note yet.` }] });
@@ -412,7 +413,7 @@ export class GoalBoard extends Display {
     const rw = w - leftW - gap;
     const goal = sections.filter((s) => s.side === 'goal');
     const ahead = sections.filter((s) => s.side === 'crew');
-    const progress = sliceProgress(note);
+    const progress = sliceProgress(steps);
 
     // the crew and their pull requests take what they need of the right-hand column; the note has the rest. The type
     // is the largest that fits both columns, so they match, moving what's next and the lessons over under the goal
@@ -684,7 +685,8 @@ export class ChartScreen extends Display {
     this.flying = flights.length > 0;
     this.sending = flights.some((f) => f.phase === 'transmitting');
     this.drawnAt = performance.now();
-    const pct = sliceProgress(work.note);
+    const steps = sliceSteps(work);
+    const pct = sliceProgress(steps);
     drawCourse(ctx, plot, work.note?.done, lead.id, pct === null ? undefined : pct / 100);
     drawProbes(ctx, flights, lead.helpers ?? [], plot.sizes.contact);
     ctx.restore();
@@ -715,8 +717,7 @@ export class ChartScreen extends Display {
     };
     heading(`Waypoint ${work.slice} · under way`, LCARS.gold);
     lines(now?.title ?? 'Nothing shipped yet', 3, '#ffffff');
-    const ticked = work.note?.slice.filter((i) => i.done).length ?? 0;
-    if (work.note?.slice.length) lines(`${ticked} of ${work.note.slice.length} on the checklist`, 1);
+    if (steps.length) lines(`${steps.filter((i) => i.done).length} of ${steps.length} done`, 1);
     const shields = shieldState(now?.shields);
     if (shields !== 'none') {
       heading('Shields', { held: '#99cc66', absorbed: LCARS.gold, down: LCARS.red }[shields]);
@@ -1072,10 +1073,10 @@ export class TeamScreen extends Display {
     ctx.fillStyle = TEXT;
     wrap(ctx, leadNow(lead), tw, 2).forEach((line, i) => ctx.fillText(line, tx, nowY + 82 + i * 48));
 
-    // how far through the slice, and what's left on its checklist
+    // how far through the slice, and what's left of its tasks (or checklist)
     const barY = nowY + nowH + 44;
-    const items = lead.lead?.note?.slice ?? [];
-    const progress = sliceProgress(lead.lead?.note);
+    const items = sliceSteps(lead.lead);
+    const progress = sliceProgress(items);
     ctx.font = `600 52px ${LCARS_FONT}`;
     glowText(ctx, `SLICE ${lead.lead?.slice ?? 1}`, 50, barY, TEXT, 6);
     const bx = 260;
@@ -1106,7 +1107,7 @@ export class TeamScreen extends Display {
     if (glance.done) lines.push({ mark: '☑', text: `${glance.done} done`, dim: true });
     for (const item of glance.items) lines.push({ mark: item.done ? '☑' : '☐', text: item.text, dim: item.done });
     if (glance.more) lines.push({ mark: '+', text: `${glance.more} more`, dim: true });
-    if (!items.length) lines.push({ mark: '◎', text: lead.lead?.note ? 'No checklist for this slice yet' : 'Talking the goal through', dim: true });
+    if (!items.length) lines.push({ mark: '◎', text: lead.lead?.note ? 'No tasks for this slice yet' : 'Talking the goal through', dim: true });
     ctx.font = `38px ${UI_FONT}`;
     lines.forEach((line, i) => {
       ctx.fillStyle = line.dim ? '#7d9aa3' : TEXT;

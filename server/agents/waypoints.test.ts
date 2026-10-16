@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GoalNote, LeadAgent, LeadWork, QaReport, Waypoint } from '../../shared/types';
 import { goalRecord, reopenedWork } from './lead';
-import { checklistWaypoint, committedWaypoint, nudgedWaypoint, endedProbe, evidenceFile, headedWaypoint, landedWaypoint, launchedProbe, nextWaypoints, notedSlice, notedWaypoint, opening, shieldedWaypoint, shippedWaypoint, tickedSpotCheck, WAYPOINT_LIMITS, withWaypoint } from './waypoints';
+import { checklistWaypoint, committedWaypoint, nudgedWaypoint, endedProbe, evidenceFile, headedWaypoint, landedWaypoint, launchedProbe, nextWaypoints, notedSlice, notedWaypoint, opening, shieldedWaypoint, shippedWaypoint, taskedWaypoint, tickedSpotCheck, WAYPOINT_LIMITS, withWaypoint } from './waypoints';
 
 const note = (done: string, learned: string[] = []): GoalNote => ({ done, slice: [], learned, next: [] });
 
@@ -200,6 +200,27 @@ describe('the slice under way', () => {
     const once = committedWaypoint({ slice: 2, waypoints: course }, 'Heading on the chart\n\nMore detail', 50);
     const twice = committedWaypoint({ slice: 2, waypoints: once }, undefined, 60);
     expect(twice[1]).toEqual({ slice: 2, startedAt: 40, commits: 2, lastCommit: 'Heading on the chart' });
+  });
+
+  it('keeps the tasks the lead adds or moves on during it, as they now stand, and not ones carried over untouched', () => {
+    const old = { id: '1', subject: 'From the last slice', status: 'pending' as const };
+    const probe = { id: '2', subject: 'Probe the SDK', status: 'pending' as const, activeForm: 'Probing' };
+    const added = taskedWaypoint({ slice: 2, waypoints: course }, [old], [old, probe], 50);
+    expect(added?.[1]).toEqual({ slice: 2, startedAt: 40, tasks: [{ id: '2', subject: 'Probe the SDK', status: 'pending' }] });
+    expect(added?.[0]).toBe(course[0]);
+
+    const started = taskedWaypoint({ slice: 2, waypoints: added }, [old, probe], [{ ...old, status: 'in_progress' }, { ...probe, status: 'completed' }], 60);
+    expect(started?.[1].tasks).toEqual([{ id: '2', subject: 'Probe the SDK', status: 'completed' }, { id: '1', subject: 'From the last slice', status: 'in_progress' }]);
+  });
+
+  it('drops a task the lead deletes, and is the same when nothing it keeps changed', () => {
+    const a = { id: '1', subject: 'A', status: 'pending' as const };
+    const b = { id: '2', subject: 'B', status: 'pending' as const };
+    const both = taskedWaypoint({ slice: 2, waypoints: course }, [], [a, b], 50);
+    expect(taskedWaypoint({ slice: 2, waypoints: both }, [a, b], [b], 60)?.[1].tasks).toEqual([b]);
+    expect(taskedWaypoint({ slice: 2, waypoints: both }, [a, b], [a, b], 60)).toBe(both);
+    // a new session starts its own list: what the slice did stays on its waypoint
+    expect(taskedWaypoint({ slice: 2, waypoints: both }, [], [], 60)).toBe(both);
   });
 });
 

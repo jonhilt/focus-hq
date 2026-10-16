@@ -1,6 +1,6 @@
 // Goals: each a lead at a team station, slice by slice, and the room's log of closed ones.
 
-import type { Effort } from './agents';
+import type { ClaudeTask, Effort } from './agents';
 import type { ChecksState } from './github';
 import type { QaSpotCheck } from './qa';
 
@@ -52,6 +52,8 @@ export interface Waypoint {
    */
   checklistAt?: number;
   nudgedAt?: number;
+  /** The tasks the lead added or moved on during it, on the task list it keeps for itself, as they last stood. */
+  tasks?: ClaudeTask[];
   /** The opening of what it shipped with (its pull requests' description), cut short. */
   summary?: string;
   /** The lessons the lead added to the goal's note during the slice. */

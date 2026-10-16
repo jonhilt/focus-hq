@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentStatus, GoalNote } from '../../../shared/types';
-import { checklistGlance, goalRoomState, leadNow, noteSections, prGlance, roster, rowAt, sliceProgress } from './goalRoom';
+import { checklistGlance, goalRoomState, leadNow, noteSections, prGlance, roster, rowAt, sliceProgress, sliceSteps } from './goalRoom';
 
 describe('goalRoomState', () => {
   const lead = (status: AgentStatus) => ({ status });
@@ -40,18 +40,28 @@ describe('goalRoomState', () => {
   });
 });
 
-describe('sliceProgress', () => {
+describe('sliceSteps and sliceProgress', () => {
   const note = (done: boolean[]): GoalNote => ({ done: '', slice: done.map((d, i) => ({ text: `${i}`, done: d })), learned: [], next: [] });
+  const steps = (done: boolean[]) => note(done).slice;
 
-  it('is how much of the checklist is ticked off, to the nearest percent', () => {
-    expect(sliceProgress(note([true, false, false]))).toBe(33);
-    expect(sliceProgress(note([true, true]))).toBe(100);
-    expect(sliceProgress(note([false]))).toBe(0);
+  it('is how many of the steps are done, to the nearest percent', () => {
+    expect(sliceProgress(steps([true, false, false]))).toBe(33);
+    expect(sliceProgress(steps([true, true]))).toBe(100);
+    expect(sliceProgress(steps([false]))).toBe(0);
   });
 
-  it('is nothing without a checklist', () => {
-    expect(sliceProgress(undefined)).toBeNull();
-    expect(sliceProgress(note([]))).toBeNull();
+  it('is nothing without any steps', () => {
+    expect(sliceProgress([])).toBeNull();
+    expect(sliceSteps(undefined)).toEqual([]);
+  });
+
+  it('takes the slice under way’s tasks, and the note’s checklist only while it has none', () => {
+    const waypoints = [
+      { slice: 1, startedAt: 0, tasks: [{ id: '1', subject: 'Old', status: 'completed' as const }] },
+      { slice: 2, startedAt: 5, tasks: [{ id: '2', subject: 'Probe', status: 'completed' as const }, { id: '3', subject: 'Chart', status: 'in_progress' as const }] },
+    ];
+    expect(sliceSteps({ slice: 2, waypoints, note: note([false]) })).toEqual([{ text: 'Probe', done: true }, { text: 'Chart', done: false }]);
+    expect(sliceSteps({ slice: 3, waypoints, note: note([true, false]) })).toEqual(steps([true, false]));
   });
 });
 

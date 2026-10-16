@@ -21,8 +21,8 @@ export interface PlottedWaypoint extends Pt {
   waypoint: Waypoint;
   /** What its label says: the title it shipped under, or until then the heading its lead gave it, cut short. */
   name: string;
-  /** Where its name came from: what it shipped as, the lead's heading for it, or nothing yet (the slice under way, unnamed). */
-  named: 'shipped' | 'heading' | 'unset';
+  /** Where its name came from (`waypointName`). */
+  named: Named;
   /** Landed, the slice under way, or a slice of a closed goal that never landed. */
   state: 'landed' | 'now' | 'open';
   /** Missing when there's no clear room for it (an older waypoint on a long voyage): its number shows, its name on hover. */
@@ -275,8 +275,7 @@ export function plotCourse(voyage: Voyage, scale = 1): CoursePlot {
     const outward = Math.abs(drift) > swing * 0.3 ? Math.sign(drift) : i % 2 ? 1 : -1;
     outs.push(waypoint.turnedFrom ? -outward : outward);
     const state = waypoint.landedAt ? 'landed' : waypoint.slice === voyage.current ? 'now' : 'open';
-    const named = waypoint.title ? 'shipped' : waypoint.heading ? 'heading' : 'unset';
-    const name = waypoint.title ?? waypoint.heading ?? (state === 'now' ? `Slice ${waypoint.slice} · heading not set` : `Slice ${waypoint.slice}`);
+    const { name, named } = waypointName(waypoint, state === 'now');
     return { x, y, waypoint, name: clip(name, chars('waypoint')), named, state };
   });
 
@@ -396,6 +395,21 @@ export function plotCourse(voyage: Voyage, scale = 1): CoursePlot {
  * The goal's waypoints with a gap filled for every slice that has none (goals started before they were kept, or a
  * slice nothing has happened in yet), so the chart shows every slice up to `upTo`.
  */
+/** Where a waypoint's name came from: what it shipped as, the lead's heading for it, what the lead's at in it, or nothing yet. */
+export type Named = 'shipped' | 'heading' | 'work' | 'unset';
+
+/**
+ * A waypoint's name: the title it shipped under, or before it ships, the heading the lead gave it, else what the lead's
+ * at in it (the task it's doing now, else its last commit), else just its number (and, under way, that it's under way).
+ */
+export function waypointName(w: Waypoint, underWay = false): { name: string; named: Named } {
+  if (w.title) return { name: w.title, named: 'shipped' };
+  if (w.heading) return { name: w.heading, named: 'heading' };
+  const work = w.tasks?.find((t) => t.status === 'in_progress')?.subject ?? w.lastCommit;
+  if (work) return { name: work, named: 'work' };
+  return { name: underWay ? `Slice ${w.slice} · under way` : `Slice ${w.slice}`, named: 'unset' };
+}
+
 export function everySlice(waypoints: Waypoint[] | undefined, upTo: number, startedAt: number): Waypoint[] {
   const kept = new Map((waypoints ?? []).map((w) => [w.slice, w]));
   const first = Math.min(1, ...kept.keys());

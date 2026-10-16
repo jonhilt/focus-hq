@@ -12,13 +12,13 @@ const wp: Waypoint = {
     { id: 'h4', description: 'Still out', launchedAt: 1 },
   ],
   evidence: [{ repo: 'o/focus', pr: 7, caption: 'The chart', file: 'a.png' }],
+  tasks: [{ id: '1', subject: 'Read course.ts', status: 'in_progress' }],
 };
 
 describe("a slice's work", () => {
   const nodes = sliceWork({
     waypoint: wp,
     checklist: [{ text: 'Plot it', done: true }, { text: 'Draw it', done: false }],
-    tasks: [{ id: '1', subject: 'Read course.ts', status: 'in_progress' }],
     workflows: [{ id: 'w1', name: 'review', description: '', status: 'running', phases: [], agents: [], roll: [], startedAt: 0 }],
     artifacts: [{ id: 'mock', title: 'Mockup', at: 0, slice: 2 }, { id: 'old', title: 'Older', at: 0, slice: 1 }],
     questions: [{ id: 'q1', question: 'Which layout?', options: [], at: 0, slice: 2, answer: { option: 'a', at: 1 } }],

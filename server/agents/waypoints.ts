@@ -1,11 +1,11 @@
 // A goal's slices as waypoints on its chart: what each set out to do, what it taught us, and when. The office keeps
 // them as the lead ships, notes and lands each slice; these are the pure decisions, and the manager's parts call them.
 
-import type { ChecksState, Evidence, GoalNote, LeadWork, Probe, QaReport, SpotCheck, Waypoint } from '../../shared/types';
+import type { ChecksState, ClaudeTask, Evidence, GoalNote, LeadWork, Probe, QaReport, SpotCheck, Waypoint } from '../../shared/types';
 import type { NoteInput } from './lead';
 
 /** How much a waypoint keeps: they all travel with the goal on every update, so each stays a few lines long. */
-export const WAYPOINT_LIMITS = { summary: 280, learned: 3, kept: 40, probes: 6, probeSummary: 200 } as const;
+export const WAYPOINT_LIMITS = { summary: 280, learned: 3, kept: 40, probes: 6, probeSummary: 200, tasks: 20, task: 120 } as const;
 
 type Course = Pick<LeadWork, 'slice' | 'waypoints'>;
 
@@ -180,4 +180,24 @@ export function headedWaypoint(work: Course, heading: string, now: number): Wayp
 export function committedWaypoint(work: Course, message: string | undefined, now: number): Waypoint[] {
   const said = message?.split('\n')[0].trim();
   return withWaypoint(work, now, (w) => ({ ...w, commits: (w.commits ?? 0) + 1, ...(said && { lastCommit: opening(said, WAYPOINT_LIMITS.probeSummary) }) }));
+}
+
+/**
+ * The waypoints once the lead's task list changes from `before` to `after`: the slice under way keeps each task the lead
+ * added or moved on during it, as it now stands, and drops one it deleted. A task carried over from an earlier slice and
+ * left alone isn't this slice's work; the waypoints are the same when nothing it keeps changed.
+ */
+export function taskedWaypoint(work: Course, before: ClaudeTask[], after: ClaudeTask[], now: number): Waypoint[] | undefined {
+  const was = new Map(before.map((t) => [t.id, t]));
+  const ids = new Set(after.map((t) => t.id));
+  const touched = after.filter((t) => was.get(t.id)?.subject !== t.subject || was.get(t.id)?.status !== t.status);
+  const kept = work.waypoints?.find((w) => w.slice === work.slice)?.tasks ?? [];
+  const gone = kept.filter((t) => was.has(t.id) && !ids.has(t.id));
+  if (!touched.length && !gone.length) return work.waypoints;
+  const keep = (t: ClaudeTask): ClaudeTask => ({ id: t.id, subject: opening(t.subject, WAYPOINT_LIMITS.task), status: t.status });
+  const tasks = [...kept.filter((t) => !gone.includes(t)).map((t) => {
+    const moved = touched.find((n) => n.id === t.id);
+    return moved ? keep(moved) : t;
+  }), ...touched.filter((t) => !kept.some((k) => k.id === t.id)).map(keep)].slice(-WAYPOINT_LIMITS.tasks);
+  return withWaypoint(work, now, (w) => ({ ...w, tasks }));
 }

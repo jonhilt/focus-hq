@@ -16,7 +16,7 @@ import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
 import { Sessions, Workspace } from '../services';
 import { applyTaskTool } from '../tasks';
 import { applyWorkflowEvent, journalResults, runOutcome, scriptPlan, transcriptLines, WORKFLOW_LINGER_MS } from '../workflows';
-import { committedWaypoint, endedProbe, launchedProbe, nudgedWaypoint } from '../waypoints';
+import { committedWaypoint, endedProbe, launchedProbe, nudgedWaypoint, taskedWaypoint } from '../waypoints';
 import { checklistState, type ChecklistSource } from '../checklist';
 import { applyBackgroundEvent, BACKGROUND_LINGER_MS, OUTPUT_TAIL, outputLines } from '../backgroundTasks';
 import { type ExtraTool, type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN, type WorkflowEvent } from '../types';
@@ -138,7 +138,11 @@ export class AgentSessions extends Part {
       taskTool: (name, input, result, said) => {
         const before = agent.tasks ?? [];
         const tasks = applyTaskTool(before, name, input, result, said);
-        if (tasks !== before) this.update(agent, { tasks });
+        if (tasks === before) return;
+        // a lead's are its slice's work on the goal's chart too
+        const work = agent.task === 'lead' ? agent.lead : undefined;
+        const waypoints = work && taskedWaypoint(work, before, tasks, Date.now());
+        this.update(agent, { tasks, ...(work && waypoints !== work.waypoints && { lead: { ...work, waypoints } }) });
       },
       helper: (event) => {
         // only a lead's helpers have somewhere to sit: the lead's team station

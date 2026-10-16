@@ -32,7 +32,11 @@ describe('the course', () => {
 
   it('names the slice under way by its heading until it ships, and says so when it has none', () => {
     const plot = (now: Waypoint) => plotCourse({ waypoints: [wp(1), now], current: 2, next: [], seed: 's' }).points[1];
-    expect(plot({ slice: 2, startedAt: 20 })).toMatchObject({ name: 'Slice 2 · heading not set', named: 'unset' });
+    expect(plot({ slice: 2, startedAt: 20 })).toMatchObject({ name: 'Slice 2 · under way', named: 'unset' });
+    // what the lead's at names it before it's shipped or headed: the task under way, else the last commit
+    expect(plot({ slice: 2, startedAt: 20, lastCommit: 'Count commits' })).toMatchObject({ name: 'Count commits', named: 'work' });
+    const tasks = [{ id: '1', subject: 'Probe the SDK', status: 'completed' as const }, { id: '2', subject: 'Draw the arc', status: 'in_progress' as const }];
+    expect(plot({ slice: 2, startedAt: 20, lastCommit: 'Count commits', tasks })).toMatchObject({ name: 'Draw the arc', named: 'work' });
     expect(plot({ slice: 2, startedAt: 20, heading: 'Live progress' })).toMatchObject({ name: 'Live progress', named: 'heading' });
     expect(plot({ slice: 2, startedAt: 20, heading: 'Live progress', title: 'Shipped title' })).toMatchObject({ name: 'Shipped title', named: 'shipped' });
     // a slice of a closed goal that never named itself is just its number

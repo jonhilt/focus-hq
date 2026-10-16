@@ -3,7 +3,7 @@
 // what it showed and asked on the station's screen, QA's screenshots and its pull requests. Each is a node the captain
 // can pick for a look at just that. Pure, so the chart panel only draws it.
 
-import type { ClaudeTask, GoalArtifact, GoalQuestion, LeadPr, Waypoint, Workflow } from '../../../shared/types';
+import type { GoalArtifact, GoalQuestion, LeadPr, Waypoint, Workflow } from '../../../shared/types';
 import { clip, type Label, labelBox, overlaps, type Box, type Pt } from './course';
 
 export type WorkKind = 'step' | 'task' | 'workflow' | 'probe' | 'commits' | 'shown' | 'asked' | 'shot' | 'pr';
@@ -20,9 +20,8 @@ export interface WorkNode {
 /** What a slice's work is read from: the waypoint, and what the goal keeps by slice (and, for the slice under way, live). */
 export interface SliceSource {
   waypoint: Waypoint;
-  /** The checklist, Claude's task list and the workflows: only the slice under way has them. */
+  /** The note's checklist and the workflows: only the slice under way has them. Its tasks are on its waypoint. */
   checklist?: { text: string; done: boolean }[];
-  tasks?: ClaudeTask[];
   workflows?: Workflow[];
   artifacts: GoalArtifact[];
   questions: GoalQuestion[];
@@ -40,7 +39,7 @@ export function sliceWork(src: SliceSource): WorkNode[] {
   const prName = (repo: string, n: number) => `${repo.split('/')[1] ?? repo} #${n}`;
   return [
     ...(src.checklist ?? []).map((s, i): WorkNode => ({ key: `step:${i}`, kind: 'step', text: s.text, state: s.done ? 'done' : 'open' })),
-    ...(src.tasks ?? []).map((t): WorkNode => ({ key: `task:${t.id}`, kind: 'task', text: t.subject, state: TASK_STATE[t.status] })),
+    ...(w.tasks ?? []).map((t): WorkNode => ({ key: `task:${t.id}`, kind: 'task', text: t.subject, state: TASK_STATE[t.status] })),
     ...(src.workflows ?? []).map((f): WorkNode => ({ key: `workflow:${f.id}`, kind: 'workflow', text: f.name, state: WORKFLOW_STATE[f.status] })),
     ...(w.probes ?? []).filter((p) => !src.flying.has(p.id)).map((p): WorkNode => ({
       key: `probe:${p.id}`, kind: 'probe', text: p.description,
