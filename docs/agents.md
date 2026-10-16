@@ -133,6 +133,8 @@ stateDiagram-v2
 ```
 <!-- run-machine:end -->
 
+**Replaying a run.** The **Run** view in an agent's panel (picked from its sidebar; never the view it opens on) replays their run from its journal (`replay` in `runJournal.ts`, at `GET /api/agents/:id/run`): a scrubber over its facts, and at each one where the run was after it (its machine's phase, folded again from the start), what happened in words (`factLine`), and what their terminal showed in the stretch leading up to it. It follows the run as it goes until you scrub back; **Latest** follows it again. The demo, which saves nothing to disk, keeps each agent's last 2000 facts in memory for it.
+
 **Signing in.** If Claude Code says it signed a turn in with `ANTHROPIC_API_KEY` or an `apiKeyHelper` when the office meant your plan's login (an `env` or `apiKeyHelper` in `~/.claude/settings.json` can do that behind the office's back), the turn is stopped at once (`sign-in-mismatch`) and the agent fails saying where to look, before it spends any more.
 
 **After a restart** (`AgentManager.recover`, once the office has started), whether Focus crashed or shut down on purpose (Ctrl-C, an auto-update: `shutDown` stops every session but leaves their turns open in the journal): messages that were waiting are still waiting, and those taken for a turn that was never asked for go back in front. A turn the journal says was in flight is `interrupted`, and:

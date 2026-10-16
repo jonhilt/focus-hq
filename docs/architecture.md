@@ -116,7 +116,7 @@ client/src/
     deck.ts               a deck built in Blender: loads its GLB, draws its surfaces, reads its markers and what pressing E does (deckExtras.ts: what the markers, surfaces and interactions say)
     holodeckDeck.ts       the holodeck deck, put together from its Blender modules for however many holodecks there are
     turbolift.ts          which turbolift stop you're at (the turbolift's controls are in ui/travelPanel.ts)
-  ui/                     HUD and panels (agent terminal, a helper's transcript, board, ready room console, teleport, QA station, goals, Comms, the engineering station and its scorecard, the ledger review at main engineering's master systems table)
+  ui/                     HUD and panels (agent terminal, its run replayed from the journal (runReplay.ts), a helper's transcript, board, ready room console, teleport, QA station, goals, Comms, the engineering station and its scorecard, the ledger review at main engineering's master systems table)
     frameStats.ts         ?stats=1: how the 3D view runs, top left, and sent to the office each second for its log (frameSamples.ts: the arithmetic; world/gpuTimer.ts: GPU time per pass)
     confirmDialog.ts      the in-game confirm dialog, over whatever panel is open (the Tricorder's buttons ask with it too)
     studioChat.ts         the studio's chat with its computer, docked down the right so the room stays in view
