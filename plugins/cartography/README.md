@@ -49,7 +49,7 @@ Imports alone can't put a scenario in order: a shortest path through them runs t
 Most projects can't be recorded, so the base of a scenario is a written one whose steps each **cite** where in the code they happen (`cite: path:line`, from the repo's root). An agent reading the code writes them, in any language, and the office checks each against the code as it stands (`steps.ts` `checkCite`), every time it maps:
 
 ```yaml
-      - { from: office-tools, to: manager, says: "keeps the shown page on the lead", cite: server/agents/manager/goalTools.ts:62 }
+      - { from: office-tools, to: manager, says: "keeps the shown page on the lead", cite: server/agents/manager/goalTools.ts:55 }
       - { from: manager, to: client-net, says: "sends the lead's update over /ws", cite: server/agents/manager/core.ts:169 }
 ```
 
