@@ -8,6 +8,7 @@ shared/systemModel.ts     the studio's system models: whether one holds together
 shared/modelDrawing.ts    a system model's three flat views (structure, sequence, data) as shapes, and as SVG
 shared/flows.ts           a recorded run's flows between the browser and the office (`pnpm run record-flows`): stack frames to repo files, counting, for net/api.ts and server/flows.ts
 shared/board.ts           a project's Kanban columns (to do, in progress, PRs), for the 3D board, its panel and the Tricorder; which PRs the office holds work for have left the board (`prsOffBoard`); each refresh's board from its repos' listings (`freshBoard`) and the closed-PR notes it leaves with nothing to mark (`staleClosedPrs`)
+shared/dependencies.ts    issues that wait for others ("Depends on #12"), the order to start them in (`startOrder`), and which ones auto-assign hires an agent for (`issuesToAssign`)
 shared/agentStatus.ts     how an agent's status reads (icon, one-line status)
 shared/tricorder.ts       what needs you (the Tricorder and Comms), which agents are in flight
 shared/ledger.ts          the ledger of how work went (QA verdicts, merges, conflicts, triage, goals, session digests): its line format, the check on load, and the report card

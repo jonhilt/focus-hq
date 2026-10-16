@@ -3,7 +3,7 @@ import type { Board, ConflictsOutcome, Effort, Issue, Preview, PreviewSet, Proje
 import { DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS } from '../shared/types';
 import { freshBoard, prsOffBoard, type RepoListing, staleClosedPrs } from '../shared/board';
 import { chosenSet, previewPrsGone } from '../shared/previewSet';
-import { startOrder } from '../shared/dependencies';
+import { issuesToAssign } from '../shared/dependencies';
 import type { Closer } from '../shared/ledger';
 import { autoMergeFor, type GateMark, mergeMethodFor, mergeStep, type MergeStep, requestedMerge } from '../shared/mergeGate';
 import { autoQaFor, autoSendBackFor, prKey, verdictBehindHead } from '../shared/qa';
@@ -460,15 +460,10 @@ export class Office {
   private autoAssign(projectId: string, board: Board): void {
     const project = this.store.projects.find((p) => p.id === projectId);
     if (!project?.autoAssign) return;
-    let slots = this.agents.freeSlots(projectId);
-    for (const issue of startOrder(board.issues)) {
-      if (slots <= 0) break;
-      if (project.autoLabel && !issue.labels.includes(project.autoLabel)) continue;
-      if (this.agents.claimed(issue.repo).has(issue.number)) continue;
-      if (board.prs.some((p) => p.repo === issue.repo && p.branch.startsWith(`focus/${issue.number}-`))) continue;
+    const room = { slots: this.agents.freeSlots(projectId), autoLabel: project.autoLabel, claimed: (repo: string) => this.agents.claimed(repo) };
+    for (const issue of issuesToAssign(board.issues, board.prs, room)) {
       try {
         this.agents.hire(projectId, issue.repo, issue);
-        slots--;
       } catch {
         break; // room is full
       }

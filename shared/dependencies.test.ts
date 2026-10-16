@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assignWarning, dependsOn, startOrder, waitingFor, waitsLabel } from './dependencies';
+import { assignWarning, dependsOn, issuesToAssign, startOrder, waitingFor, waitsLabel } from './dependencies';
 import type { Issue } from './types';
 
 const issue = (number: number, body = '', repo = 'acme/shop'): Issue => ({
@@ -80,5 +80,44 @@ describe('waitsLabel', () => {
   it('warns before an issue that waits is assigned by hand', () => {
     expect(assignWarning({ number: 5, waitsFor: [12] })).toBe('#5 waits for #12, which is still open. Assign an agent anyway?');
     expect(assignWarning({ number: 5, waitsFor: [] })).toBeUndefined();
+  });
+});
+
+describe('issuesToAssign', () => {
+  const none = () => new Set<number>();
+  const room = (slots: number, more: { autoLabel?: string; claimed?: (repo: string) => ReadonlySet<number> } = {}) => ({ slots, claimed: none, ...more });
+  const numbers = (issues: Issue[]) => issues.map((i) => i.number);
+
+  it('takes the issues that can start, in start order, as many as there are free slots', () => {
+    const issues = [issue(3), issue(1), issue(2, 'Depends on #1'), issue(4)];
+    expect(numbers(issuesToAssign(issues, [], room(2)))).toEqual([1, 3]);
+    expect(numbers(issuesToAssign(issues, [], room(5)))).toEqual([1, 3, 4]);
+  });
+
+  it('hires nobody without a free slot', () => {
+    expect(issuesToAssign([issue(1)], [], room(0))).toEqual([]);
+    expect(issuesToAssign([issue(1)], [], room(-1))).toEqual([]);
+  });
+
+  it('takes only issues with the auto label, when the project has one', () => {
+    const labelled = { ...issue(2), labels: ['focus'] };
+    expect(numbers(issuesToAssign([issue(1), labelled], [], room(2, { autoLabel: 'focus' })))).toEqual([2]);
+    expect(numbers(issuesToAssign([issue(1), labelled], [], room(2, { autoLabel: '' })))).toEqual([1, 2]);
+  });
+
+  it('skips an issue an agent claimed, in its own repo only', () => {
+    const claimed = (repo: string) => new Set(repo === 'acme/shop' ? [1] : []);
+    const issues = [issue(1), issue(2), issue(1, '', 'acme/api')];
+    expect(issuesToAssign(issues, [], room(5, { claimed })).map((i) => `${i.repo}#${i.number}`)).toEqual(['acme/api#1', 'acme/shop#2']);
+  });
+
+  it('skips an issue whose office branch is already open as a PR, and the skipped ones leave their slot free', () => {
+    const prs = [
+      { repo: 'acme/shop', branch: 'focus/1-fix-cart' },
+      { repo: 'acme/api', branch: 'focus/2-add-route' },
+      { repo: 'acme/shop', branch: 'focus/30-other' },
+      { repo: 'acme/shop', branch: 'feature/3-by-hand' },
+    ];
+    expect(numbers(issuesToAssign([issue(1), issue(2), issue(3), issue(4)], prs, room(2)))).toEqual([2, 3]);
   });
 });

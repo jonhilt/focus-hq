@@ -80,6 +80,22 @@ export function startOrder(issues: Issue[]): Issue[] {
     .map(([, issue]) => issue);
 }
 
+/**
+ * The issues auto-assign hires an agent for, in the order to hire them, as many as there are free slots: those that can
+ * start now (`startOrder`), carry the project's auto label if it has one, no agent has claimed and have no office branch
+ * (`focus/<number>-…`) open as a PR yet.
+ */
+export function issuesToAssign(
+  issues: Issue[],
+  prs: readonly { repo: string; branch: string }[],
+  room: { slots: number; autoLabel?: string; claimed: (repo: string) => ReadonlySet<number> },
+): Issue[] {
+  const hasPr = (issue: Issue) => prs.some((p) => p.repo === issue.repo && p.branch.startsWith(`focus/${issue.number}-`));
+  return startOrder(issues)
+    .filter((issue) => (!room.autoLabel || issue.labels.includes(room.autoLabel)) && !room.claimed(issue.repo).has(issue.number) && !hasPr(issue))
+    .slice(0, Math.max(0, room.slots));
+}
+
 /** "waits for #12, #13", or '' when the issue can start. */
 export const waitsLabel = (waitsFor: number[]) => (waitsFor.length ? `waits for ${waitsFor.map((n) => `#${n}`).join(', ')}` : '');
 
