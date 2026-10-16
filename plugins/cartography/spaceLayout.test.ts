@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { SPACE } from '../../plugin-api/layout';
-import { ARRIVAL, EXIT_ARCH, hallTable, MAX_PANELS, PANELS, panelSpots, PLATFORM, reachOf } from './spaceLayout';
+import { HALL_SCREEN, SPACE } from '../../plugin-api/layout';
+import { ARRIVAL, EXIT_ARCH, HALL_CHART, hallChart, MAX_PANELS, PANELS, panelSpots, PLATFORM, reachOf } from './spaceLayout';
 import { ARCH } from './arch';
-import { TABLE } from './table';
 
 const flat = (p: { x: number; z: number }) => Math.hypot(p.x, p.z);
 
@@ -47,11 +46,14 @@ describe('the platform', () => {
   });
 });
 
-describe('hallTable', () => {
-  it('stands outside the control ring and clear of the wall, and you come back between it and the middle', () => {
-    const { at, back } = hallTable();
-    expect(flat(at) - TABLE.radius).toBeGreaterThan(5.5);
-    expect(flat(at) + TABLE.radius).toBeLessThan(11 - 1.5);
-    expect(flat(back.at)).toBeLessThan(flat(at) - TABLE.radius - 0.5);
+describe('hallChart', () => {
+  it('hangs on the wall, turned to the middle, its bottom over your head, and you come back in front of it', () => {
+    const { at, yaw, back } = hallChart();
+    expect(flat(at)).toBeCloseTo(HALL_SCREEN.r, 6);
+    expect(at.y - HALL_CHART.width / HALL_CHART.aspect / 2).toBeCloseTo(HALL_CHART.bottom, 6);
+    // a plane turned by yaw faces (sin yaw, 0, cos yaw): towards the middle
+    expect((Math.sin(yaw) * -at.x + Math.cos(yaw) * -at.z) / flat(at)).toBeCloseTo(1, 6);
+    expect(flat(back.at)).toBeLessThan(flat(at) - 2);
+    expect(flat(at) - flat(back.at)).toBeLessThan(HALL_CHART.reach);
   });
 });

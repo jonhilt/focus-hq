@@ -1,16 +1,17 @@
 // The cartography plugin in the browser (README.md): each project's architecture map on the engineering station, its
-// views drawn by draw.ts, each with how to read it, and in sentences; and an astrometrics table in the project's
-// holodeck, its map in miniature, which takes you into the architecture space, where its views float round you.
+// views drawn by draw.ts, each with how to read it, and in sentences; and a stellar cartography screen in the
+// project's holodeck, its map as a star chart, which takes you into the architecture space, where its views float
+// round you.
 import * as THREE from 'three';
-import { callPlugin, type ClientPlugin, h, office, pluginOn, pluginState, type ShipHost, type ShipPart, type Ui } from '../../plugin-api/client';
+import { callPlugin, canvasTexture, type ClientPlugin, h, Hologram, hover, makeCanvas, office, OVERLAY_LAYER, pluginOn, pluginState, type ShipHost, type ShipPart, type Ui } from '../../plugin-api/client';
+import { drawChart } from './chart';
 import { miniature, miniatureKey } from './miniature';
 import { TIES_KEY, TIES_QUESTION, tiesDrawing } from './draw';
 import { drawingBody, viewBody } from './panel';
 import { CARTOGRAPHY, type CartographyState, MODEL_FILE, type RepoMap } from './shared';
 import { ArchitectureSpace } from './space';
 import { sliceViews } from './slice';
-import { hallTable } from './spaceLayout';
-import { AstrometricsTable, TABLE } from './table';
+import { HALL_CHART, hallChart } from './spaceLayout';
 import { coverage, openingView, viewsOf } from './views';
 import './cartography.css';
 
@@ -73,47 +74,65 @@ function projectMaps(ui: Ui, open: Set<string>): HTMLElement[] {
   }), ...(offNote ? [offNote] : [])];
 }
 
+/** The chart's canvas. */
+const CHART_PX = { w: 1280, h: 800 } as const;
+
 /**
- * The architecture space, and an astrometrics table in the holodeck of each project it's on for, its map in
- * miniature, to go there: built with the ship, so again whenever a project's switched on or off.
+ * The architecture space, and a stellar cartography screen in the holodeck of each project it's on for, its map as a
+ * star chart, to go there: built with the ship, so again whenever a project's switched on or off.
  */
 function ship(host: ShipHost): ShipPart | null {
   const on = office.projects.filter((p) => pluginOn(p, CARTOGRAPHY));
   if (!on.length) return null;
   const space: ArchitectureSpace = new ArchitectureSpace(host.space(() => space.label()), host, maps);
-  const spot = hallTable();
-  const tables = on.flatMap((project) => {
+  const spot = hallChart();
+  const charts = on.flatMap((project) => {
     const hall = host.hall(project.id);
     if (!hall) return [];
-    const table = new AstrometricsTable();
-    table.group.position.set(spot.at.x, spot.at.y, spot.at.z);
-    hall.mount(table.group);
-    const at = hall.toWorld(new THREE.Vector3(spot.at.x, 0, spot.at.z));
-    const r = TABLE.radius * 0.8;
-    host.collide({ minX: at.x - r, maxX: at.x + r, minZ: at.z - r, maxZ: at.z + r });
+    const { canvas, ctx } = makeCanvas(CHART_PX.w, CHART_PX.h);
+    const texture = canvasTexture(canvas);
+    const hologram = new Hologram(texture, HALL_CHART.aspect);
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(HALL_CHART.width, HALL_CHART.width / HALL_CHART.aspect), hologram.material);
+    mesh.position.set(spot.at.x, spot.at.y, spot.at.z);
+    mesh.rotation.y = spot.yaw;
+    // drawn over the outlines (frame.ts), like the holodeck's other screens; solid while you aim at it
+    mesh.layers.set(OVERLAY_LAYER);
+    mesh.userData.aim = (on: boolean) => (hologram.aimed = on);
+    hall.mount(mesh);
     const back = { label: project.name, projectId: project.id, position: hall.toWorld(new THREE.Vector3(spot.back.at.x, 0, spot.back.at.z)), lookAt: hall.toWorld(new THREE.Vector3(spot.back.lookAt.x, spot.back.lookAt.y, spot.back.lookAt.z)), unlisted: true };
-    host.interactive(table.group, () => `Step into the map: ${project.name}'s architecture`, (ui) => space.enter(ui, project.id, project.name, back));
-    return [{ projectId: project.id, table, shown: '' }];
+    host.interactive(mesh, () => `Step into stellar cartography: ${project.name}'s architecture`, (ui) => space.enter(ui, project.id, project.name, back), HALL_CHART.reach);
+    return [{ project, mesh, hologram, texture, ctx, shown: '' }];
   });
   let checked = -Infinity;
+  let last = 0;
   return {
     update: (t, camera) => {
       space.update(t, camera);
-      for (const { table } of tables) table.update(t);
-      // each table's miniature follows its project's maps
+      const dt = Math.min(0.1, t - last);
+      last = t;
+      for (const c of charts) {
+        hover(c.mesh, spot.at.y, t, 7);
+        c.hologram.update(dt);
+      }
+      // each chart follows its project's maps
       if (t - checked < 1) return;
       checked = t;
-      for (const at of tables) {
-        const repos = maps()?.maps[at.projectId] ?? [];
-        const key = miniatureKey(repos);
-        if (key === at.shown) continue;
-        at.shown = key;
-        at.table.show(miniature(repos));
+      for (const c of charts) {
+        const repos = maps()?.maps[c.project.id] ?? [];
+        const key = miniatureKey(repos) || 'unmapped';
+        if (key === c.shown) continue;
+        c.shown = key;
+        drawChart(c.ctx, CHART_PX.w, CHART_PX.h, c.project.name, miniature(repos));
+        c.texture.needsUpdate = true;
       }
     },
     dispose: () => {
       space.dispose();
-      for (const { table } of tables) table.dispose();
+      for (const c of charts) {
+        c.mesh.geometry.dispose();
+        c.hologram.dispose();
+        c.texture.dispose();
+      }
     },
   };
 }
@@ -122,7 +141,7 @@ const cartography: ClientPlugin = {
   id: CARTOGRAPHY,
   project: {
     label: 'Architecture map',
-    about: `Maps the project's architecture from the model each repo keeps in ${MODEL_FILE}: on the engineering station, in a space you reach through the astrometrics table in its holodeck, and its leads' map tool`,
+    about: `Maps the project's architecture from the model each repo keeps in ${MODEL_FILE}: on the engineering station, in a space you reach through the stellar cartography screen in its holodeck, and its leads' map tool`,
   },
   engineering: {
     views: [

@@ -1,7 +1,7 @@
 // Where things stand in the architecture space (space.ts), and in a holodeck for the way there: nothing here draws,
 // so it can be tested without a browser. The space's frame has its middle at the middle of the platform you stand on,
 // its floor at y 0, and straight ahead, the way you face as you arrive, is -Z.
-import { around } from '../../plugin-api/layout';
+import { around, facingIn, HALL_SCREEN } from '../../plugin-api/layout';
 
 export interface Point {
   x: number;
@@ -54,13 +54,15 @@ export function panelSpots(n: number): PanelSpot[] {
 export const reachOf = (spot: PanelSpot): number => Math.hypot(spot.at.x, spot.at.z) + PLATFORM.radius + 1;
 
 /**
- * The astrometrics table in a project's holodeck (its training hall's frame, hallLayout.ts): on the floor between the
- * control ring and the wall on the entrance's side, opposite the PADD rack; and where you stand when you come back
- * through it, between it and the middle, looking into the hall.
+ * The stellar cartography screen in a project's holodeck (its training hall's frame, hallLayout.ts): a hologram hung
+ * round the wall on the entrance's side, opposite the PADD rack, where plugins' screens hang, facing the middle; and
+ * where you stand when you come back through it, in front of it, looking into the hall.
  */
-export const HALL_TABLE_ANGLE = (3 * Math.PI) / 4;
-export function hallTable(): { at: Point; back: { at: Point; lookAt: Point } } {
-  const at = around(7, HALL_TABLE_ANGLE);
-  const back = around(5.2, HALL_TABLE_ANGLE);
-  return { at: { x: at.x, y: 0, z: at.z }, back: { at: { x: back.x, y: 0, z: back.z }, lookAt: { x: 0, y: 1.6, z: 0 } } };
+export const HALL_CHART = { angle: (3 * Math.PI) / 4, width: 4.2, aspect: 1.6, bottom: 1.5, reach: 6 } as const;
+export function hallChart(): { at: Point; yaw: number; back: { at: Point; lookAt: Point } } {
+  const h = HALL_CHART.width / HALL_CHART.aspect;
+  const at = around(HALL_SCREEN.r, HALL_CHART.angle, HALL_CHART.bottom + h / 2);
+  const back = around(HALL_SCREEN.r - 3, HALL_CHART.angle);
+  // a plane faces +Z, where what facingIn turns is built facing -Z
+  return { at: { x: at.x, y: at.y, z: at.z }, yaw: facingIn(HALL_CHART.angle) + Math.PI, back: { at: { x: back.x, y: 0, z: back.z }, lookAt: { x: 0, y: 1.6, z: 0 } } };
 }

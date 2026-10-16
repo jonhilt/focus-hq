@@ -1,16 +1,17 @@
-// A project's map in miniature, for the astrometrics table (table.ts): pure, so it can be tested without a browser.
+// A project's map in miniature, for the stellar cartography screen in its holodeck (chart.ts): pure, so it can be tested without a browser.
 // Each layer is a ring of its parts, one ring above the next in the order the model names its layers (the first on
 // top), each part as big as its share of the code, and a line for each part that imports another. Every repo's parts
 // stand together, their layers joined by name.
 import { layerColours } from './draw';
 import type { RepoMap } from './shared';
 
-/** How big the miniature is: it hangs over a table `radius` round, from `low` to `high` above its top. */
+/** How big the miniature is: `radius` round its middle, its layers from `low` to `high` (the chart sees it from above). */
 export const MINIATURE = { radius: 0.95, low: 0.2, high: 1.0, smallest: 0.05, biggest: 0.13 } as const;
 
 export interface MiniPart {
-  /** The repo and the part's id. */
+  /** The repo and the part's id, and its name. */
   key: string;
+  label: string;
   x: number;
   y: number;
   z: number;
@@ -41,7 +42,7 @@ export function miniature(maps: readonly RepoMap[]): Miniature {
     ring.forEach((a, i) => {
       const angle = (i / ring.length) * Math.PI * 2 + l * 0.6;
       const size = MINIATURE.smallest + (MINIATURE.biggest - MINIATURE.smallest) * Math.sqrt(a.files / most);
-      parts.push({ key: `${a.repo}#${a.part.id}`, x: r * Math.cos(angle), y, z: r * Math.sin(angle), size, colour: colours.get(layer) ?? '#ffffff' });
+      parts.push({ key: `${a.repo}#${a.part.id}`, label: a.part.label, x: r * Math.cos(angle), y, z: r * Math.sin(angle), size, colour: colours.get(layer) ?? '#ffffff' });
     });
   });
   const at = new Map(parts.map((p, i) => [p.key, i]));

@@ -1,6 +1,6 @@
 // The architecture space (README.md): a platform out in the dark, the project's whole map straight ahead and its
 // other views floating round you, each a hologram you read up close with E. You come here by stepping into the
-// miniature over the astrometrics table in the project's holodeck (client.ts), and leave by the arch behind you.
+// stellar cartography screen in the project's holodeck (client.ts, chart.ts), and leave by the arch behind you.
 // One space serves every project: it shows the views of the project whose table you came through, and next to the
 // whole map, what each of its goals under way does to it (slice.ts).
 import * as THREE from 'three';
