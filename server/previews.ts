@@ -9,6 +9,7 @@ import type { GitHubProvider } from './github/provider';
 import type { Hub } from './hub';
 import { packageManagerIn } from './packageManager';
 import { CheckoutFailed, type CommandNotStarted, PreviewMachine, type ShellProcess } from './previewMachine';
+import { exitVerdict, linksVerdict, stackVerdict } from './previewVerdicts';
 import { errorMessage, truncate } from './util';
 
 const LOG_LINES = 600;
@@ -18,8 +19,6 @@ const WINDOWS = process.platform === 'win32';
 const BACKSTAGE = /api|backend|server|db|database|postgres|swagger|docs|health|metrics/i;
 const STOP_TIMEOUT: Duration.Input = '5 minutes';
 const STATUS_TIMEOUT: Duration.Input = '30 seconds';
-/** A running stack's own status that's worth a warning (anything else, e.g. "ready" or "ok", clears it). */
-const TROUBLED = /unhealthy|stale|fail|error|degraded|down|stopped|dead|crash/i;
 /** How much of a log file the panel gets. */
 const LOG_TAIL = 200_000;
 /** After a start command exits unhappily, how long its sites get to answer anyway. */
@@ -516,21 +515,21 @@ export class Previews {
       const links = yield* checkLinks(run.preview.links);
       if (!running()) return false;
       if (JSON.stringify(links) !== JSON.stringify(run.preview.links)) this.update(run, { links });
-      misses = links.some((l) => l.health !== 'down') ? 0 : misses + 1;
-      if (run.detached && misses >= 3) {
-        this.fail(run, 'The site stopped answering');
+      const health = linksVerdict(links, misses, !!run.detached);
+      misses = health.misses;
+      if (health.fail) {
+        this.fail(run, health.fail);
         return false;
       }
       if (!run.statusCommand) return true;
-      const stack = yield* this.progress(run, run.statusCommand);
+      const verdict = stackVerdict(yield* this.progress(run, run.statusCommand));
       if (!running()) return false;
-      if (stack === 'gone') {
-        this.fail(run, 'The stack went away: it is no longer in the progress command’s list');
+      if (verdict && 'fail' in verdict) {
+        this.fail(run, verdict.fail);
         return false;
       }
-      if (stack && typeof stack.status === 'string') {
-        const error = typeof stack.error === 'string' && stack.error ? `: ${stack.error}` : '';
-        run.complaint = TROUBLED.test(stack.status) ? `The stack reports itself as ${stack.status}${error}` : undefined;
+      if (verdict) {
+        run.complaint = verdict.warning;
         if (run.complaint !== run.preview.warning) this.update(run, { warning: run.complaint });
       }
       return true;
@@ -542,20 +541,14 @@ export class Previews {
   private exited(run: Run, code: number | null, signal: NodeJS.Signals | null, offered: boolean): void {
     if (!this.live(run) || run.preview.status === 'failed') return;
     const result = this.readResult(run);
-    const status = typeof result?.status === 'string' ? result.status : undefined;
-    const reported = typeof result?.error === 'string' && result.error ? result.error : undefined;
-    const gaveUp = !!status && ['failed', 'error', 'stopped'].includes(status);
-    if (code === 0 && !gaveUp && (run.preview.links.length || offered)) {
-      // e.g. a CLI that starts the sites in the background and returns
+    const verdict = exitVerdict({ code, signal, result, hasLinks: run.preview.links.length > 0, offered, namedLinks: !!run.namedLinks });
+    if (verdict.kind === 'detached') {
       run.detached = true;
       this.print(run, '▸ The command finished; the sites keep running on their own');
       if (run.preview.status === 'running') this.watch(run);
-      return;
-    }
-    if (code !== 0 && !signal && !gaveUp && run.namedLinks) {
-      // A stack CLI that brought its sites up but didn't like what it saw (e.g. "unhealthy"): they may be worth a look.
+    } else if (verdict.kind === 'complained') {
+      const { complaint } = verdict;
       run.detached = true;
-      const complaint = `The command exited with code ${code}${status ? ` and reported the stack as ${status}` : ''}${reported ? `: ${reported}` : ''}`;
       run.complaint = complaint;
       if (run.preview.status === 'running') {
         this.print(run, `⚠ ${complaint}`);
@@ -568,10 +561,7 @@ export class Previews {
         });
         this.background(run, Effect.delay(giveUp, GRACE));
       }
-      return;
-    }
-    const what = signal ? `was killed (${signal})` : code === 0 ? 'finished without reporting a site' : `exited with code ${code}`;
-    this.fail(run, reported ?? `The command ${what}${status ? ` (status "${status}")` : ''}`);
+    } else this.fail(run, verdict.message);
   }
 
   /** Marks the preview failed and takes down what it left running; its output and logs stay on screen. */
