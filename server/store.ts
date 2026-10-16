@@ -1,4 +1,3 @@
-import { switchPlugin } from '../shared/projectPlugins';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -6,8 +5,8 @@ import { qaOfficerFor, randomAvatar } from '../shared/crew';
 import type { LedgerEntry, LedgerEvent } from '../shared/ledger';
 import { type LedgerHealth, LedgerLog } from './ledgerLog';
 import { prKey } from '../shared/qa';
-import type { Agent, Board, BrowserFrame, ClosedPr, MergeMethod, PluginStates, Project, QaReview, Settings, StudioSession, TermLine } from '../shared/types';
-import { ACTIVE_STATUSES, DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS, ROOM_THEMES, type RoomTheme } from '../shared/types';
+import type { Agent, Board, BrowserFrame, ClosedPr, PluginStates, Project, QaReview, Settings, StudioSession, TermLine } from '../shared/types';
+import { ACTIVE_STATUSES, DESKS_PER_ROOM, ROOM_THEMES, type RoomTheme } from '../shared/types';
 import { config, paths } from './config';
 import { takeLock } from './fileLock';
 import { fitDesks } from './agents/desks';
@@ -19,6 +18,7 @@ import { Journals, type Stamped } from './journals';
 import type { LogSources } from './agents/captainsLog';
 import { fromBeforePlugins, type SavedBeforePlugins } from './plugins/migrate';
 import { newId } from './util';
+import { changeProject } from './projectChange';
 
 export type StoredStudio = StudioSession & { sessionId?: string };
 export const freshStudio = (): StoredStudio => ({ status: 'waiting', activity: '', messages: [], takes: [], updatedAt: Date.now(), costUsd: 0 });
@@ -226,45 +226,10 @@ export class Store {
     return scenic.find((t) => !used.has(t)) ?? scenic[this.projects.length % scenic.length];
   }
 
-  updateProject(
-    id: string,
-    patch: Partial<Pick<Project, 'name' | 'color' | 'theme' | 'maxAgents' | 'autoAssign' | 'autoLabel' | 'onlyMyPrs' | 'preview' | 'autoQa' | 'autoSendBack' | 'autoMerge' | 'qaBrief' | 'qaEffort' | 'hidden'>> & { mergeMethod?: { repo: string; method: MergeMethod | '' }; plugin?: { id: string; on: boolean } },
-  ): Project {
+  /** The captain's change to a project (any JSON: `changeProject` takes what it gets right), saved. */
+  updateProject(id: string, patch: unknown): Project {
     const project = this.project(id);
-    // checked before anything changes, so a refused patch leaves the project as it was
-    if (patch.mergeMethod && !project.repos.includes(patch.mergeMethod.repo)) throw new Error(`${patch.mergeMethod.repo} isn’t connected to ${project.name}`);
-    // one plugin at a time, so two windows switching different ones don't undo each other
-    const plugins = patch.plugin ? switchPlugin(project.plugins, String(patch.plugin.id), patch.plugin.on === true) : undefined;
-    if (patch.name !== undefined) project.name = patch.name.trim() || project.name;
-    if (patch.color !== undefined) project.color = patch.color;
-    if (patch.theme !== undefined) {
-      if (!isTheme(patch.theme)) throw new Error(`Unknown room theme ${String(patch.theme)}`);
-      project.theme = patch.theme;
-    }
-    if (patch.maxAgents !== undefined) project.maxAgents = Math.max(1, Math.min(DESKS_PER_ROOM, Math.round(patch.maxAgents)));
-    if (patch.autoAssign !== undefined) project.autoAssign = patch.autoAssign;
-    if (patch.autoQa !== undefined) project.autoQa = patch.autoQa === true;
-    if (patch.autoSendBack !== undefined) project.autoSendBack = patch.autoSendBack === true;
-    if (patch.autoMerge !== undefined) project.autoMerge = patch.autoMerge === true;
-    if (patch.qaBrief !== undefined) project.qaBrief = String(patch.qaBrief).slice(0, 4000);
-    // an empty choice goes back to the model's default
-    if (patch.qaEffort !== undefined) project.qaEffort = EFFORT_LEVELS.find((e) => e === patch.qaEffort);
-    if (patch.autoLabel !== undefined) project.autoLabel = patch.autoLabel.trim();
-    if (patch.onlyMyPrs !== undefined) project.onlyMyPrs = !!patch.onlyMyPrs;
-    if (patch.hidden !== undefined) project.hidden = patch.hidden === true;
-    if (plugins) project.plugins = plugins;
-    if (patch.mergeMethod !== undefined) {
-      const { repo, method } = patch.mergeMethod;
-      // an empty (or unknown) choice goes back to the office-wide setting
-      const { [repo]: _, ...rest } = project.mergeMethods ?? {};
-      const chosen = MERGE_METHODS.find((m) => m === method);
-      project.mergeMethods = chosen ? { ...rest, [repo]: chosen } : rest;
-    }
-    if (patch.preview !== undefined) {
-      const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
-      const p = patch.preview ?? {};
-      project.preview = { command: text(p.command), stopCommand: text(p.stopCommand), statusCommand: text(p.statusCommand) };
-    }
+    Object.assign(project, changeProject(project, patch));
     this.save();
     return project;
   }

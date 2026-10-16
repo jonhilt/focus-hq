@@ -18,6 +18,7 @@ import type { Hub } from './hub';
 import type { Previews } from './previews';
 import type { Store } from './store';
 import { changeSettings } from './settings';
+import { projectChangeFollowUps } from './projectChange';
 import { errorMessage } from './util';
 import type { BriefingDesk } from './briefingDesk';
 import type { Voice } from './voice';
@@ -115,12 +116,13 @@ export class Office {
     return project;
   }
 
-  updateProject(id: string, patch: Parameters<Store['updateProject']>[1]): Project {
+  updateProject(id: string, patch: unknown): Project {
     const project = this.store.updateProject(id, patch);
+    const followUps = projectChangeFollowUps(patch);
     this.broadcastProjects();
     // a plugin switched on (or off) for the project starts (or stops) its work there
-    if (patch.plugin) this.agents.plugins.projectChanged(id);
-    if (patch.autoAssign || patch.autoMerge || patch.maxAgents !== undefined) {
+    if (followUps.plugins) this.agents.plugins.projectChanged(id);
+    if (followUps.schedule) {
       this.agents.schedule();
       this.boardChanged(id, 0);
     }

@@ -20,6 +20,7 @@ server/
   index.ts                express + WebSocket (/ws) + Vite middleware (dev) or dist/ (prod)
   office.ts               projects/rooms, Kanban boards (polling GitHub), auto-assign, settings
   settings.ts             what a change to the captain's settings (PATCH /api/settings, any JSON) leaves them as: fields of the wrong kind ignored, models trimmed, the limit on agents at once kept to 1–32 (pure)
+  projectChange.ts        what a change to a project's settings (PATCH /api/projects/:id, any JSON) leaves it as: fields of the wrong kind ignored, text trimmed, the limit on agents kept to the room's desks; an unknown theme, bad plugin id or unconnected repo refused (pure)
   store.ts                ~/.focus/state.json + per-agent terminal logs (jsonl) + run, review and slice journals (runs/, runs/reviews/, runs/slices/) + the ledger (ledger.jsonl)
   journals.ts             append-only journals of one kind, a file each: numbered facts flushed (fsync) before append returns, folded in memory, a torn last line dropped
   ledgerLog.ts            the ledger's one writer: numbered lines flushed to disk, the lock file, repairs and damage on load
