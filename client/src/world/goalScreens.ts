@@ -9,7 +9,7 @@ import { flat } from './materials';
 import { portrait } from './portraits';
 import { DISPLAY_EVERY, redrawDue, type ScreenView, screenTest, takeDraw } from './screenRedraw';
 import { LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
-import { clip, type CoursePlot, everySlice, type Label, leaderEnd, plotCourse, type ProbeFlight, probeFlights, probesOut, seeded, shieldState } from '../ui/course';
+import { clip, type CoursePlot, everySlice, type Label, leaderEnd, LINE_GAP, plotCourse, type ProbeFlight, probeFlights, probesOut, seeded, shieldState } from '../ui/course';
 
 // What a team station shows of its goal besides the lead's session. What floats in the holodeck is drawn like the
 // holograms over the pods in Lower Decks, glowing cyan on dark glass: the sign over the station's door (also lit on the
@@ -839,13 +839,13 @@ function drawCourse(ctx: CanvasRenderingContext2D, plot: CoursePlot, done: strin
   said.forEach((line, i) => ctx.fillText(line, o.x, o.y + (i - (said.length - 1) / 2) * 20 * BIG));
 
   const last = plot.points.at(-1) ?? plot.launch;
-  const label = (text: string, at: Label | undefined, size: number, color: string) => {
+  const label = (text: string | string[], at: Label | undefined, size: number, color: string) => {
     if (!at) return;
     ctx.font = `${size}px ${LCARS_FONT}`;
     ctx.fillStyle = color;
     ctx.textAlign = at.anchor === 'start' ? 'left' : at.anchor === 'end' ? 'right' : 'center';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillText(text, at.x, at.y);
+    (typeof text === 'string' ? [text] : text).forEach((line, i) => ctx.fillText(line, at.x, at.y + i * size * LINE_GAP));
   };
   ctx.setLineDash([2, 7]);
   ctx.lineWidth = 2;
@@ -956,7 +956,7 @@ function drawCourse(ctx: CanvasRenderingContext2D, plot: CoursePlot, done: strin
     ctx.textBaseline = 'middle';
     ctx.fillText(String(p.waypoint.slice), p.x, p.y + 1);
     if (p.label?.leader) {
-      const end = leaderEnd(p, p.label, plot.sizes.waypoint);
+      const end = leaderEnd(p, p.label, plot.sizes.waypoint, p.lines.length);
       const d = Math.hypot(end.x - p.x, end.y - p.y) || 1;
       ctx.strokeStyle = 'rgba(164,157,180,0.6)';
       ctx.lineWidth = 1.5;
@@ -965,7 +965,7 @@ function drawCourse(ctx: CanvasRenderingContext2D, plot: CoursePlot, done: strin
       ctx.lineTo(end.x, end.y);
       ctx.stroke();
     }
-    label(p.name, p.label, plot.sizes.waypoint, p.named === 'unset' ? '#a49db4' : p.state === 'now' ? LCARS.sky : '#f1eaff');
+    label(p.lines, p.label, plot.sizes.waypoint, p.named === 'unset' ? '#a49db4' : p.state === 'now' ? LCARS.sky : '#f1eaff');
   }
 }
 

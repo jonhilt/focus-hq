@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Waypoint } from '../../../shared/types';
-import { labelBox, overlaps } from './course';
-import { freeAngles, ORBIT, orbit, sliceWork, type WorkNode } from './constellation';
+import { labelBox, overlaps, plotCourse } from './course';
+import { faults, NO_FAULTS } from './legibility';
+import { chartLines, chartMarks, column, freeAngles, gather, ORBIT, quiet, sky, sliceWork, type WorkNode } from './constellation';
 
 const wp: Waypoint = {
   slice: 2, startedAt: 0, commits: 3, lastCommit: 'Draw it',
@@ -43,14 +44,14 @@ describe("a slice's work", () => {
 });
 
 describe('the constellation', () => {
-  const many = (n: number): WorkNode[] => Array.from({ length: n }, (_, i) => ({ key: `task:${i}`, kind: 'task', text: `Task number ${i} of the slice`, state: 'open' }));
-  const angle = (p: { x: number; y: number }) => Math.atan2(p.y, p.x);
+  const many = (n: number, text = (i: number) => `Task number ${i} of the slice`): WorkNode[] => Array.from({ length: n }, (_, i) => ({ key: `task:${i}`, kind: 'task', text: text(i), state: 'open' }));
+  const open = { px: 1, avoid: [], lines: [], course: [] as number[], width: 900, height: 560 };
 
   it('keeps clear of the ways out of the waypoint that are taken', () => {
     const free = freeAngles([0, Math.PI]);
     expect(free.every((a) => Math.min(Math.abs(Math.sin(a)), 1) > Math.sin(0.4))).toBe(true);
-    const placed = orbit({ x: 0, y: 0 }, many(8), [0, Math.PI], false);
-    for (const p of placed) expect(Math.abs(Math.sin(angle(p)))).toBeGreaterThan(Math.sin(0.4));
+    const q = quiet({ x: 0, y: 0 }, 8, [0, Math.PI])!;
+    expect(Math.abs(Math.sin(Math.atan2(q.y, q.x)))).toBeGreaterThan(Math.sin(0.4));
   });
 
   it('runs round in order, so each kind keeps together', () => {
@@ -60,30 +61,91 @@ describe('the constellation', () => {
     expect(steps.every((s) => s < 0.1)).toBe(true);
   });
 
-  it('sits close in and unnamed round every waypoint, further out and named round the one in focus', () => {
-    const quiet = orbit({ x: 100, y: 100 }, many(3), [], false);
-    expect(quiet.every((p) => !p.label && Math.round(Math.hypot(p.x - 100, p.y - 100)) === ORBIT.quiet.r)).toBe(true);
-    const focus = orbit({ x: 300, y: 300 }, many(3), [], true);
-    expect(focus.every((p) => p.label && Math.hypot(p.x - 300, p.y - 300) >= ORBIT.focus.r * 0.9)).toBe(true);
+  it('gathers work that says the same into one, counted, at it now if any of it is', () => {
+    const probe = (id: string, state: WorkNode['state']): WorkNode => ({ key: `probe:${id}`, kind: 'probe', text: 'Script tts/probe.mjs', state });
+    const g = gather([probe('a', 'done'), { key: 'task:1', kind: 'task', text: 'Script tts/probe.mjs', state: 'done' }, probe('b', 'active'), probe('c', 'done')]);
+    expect(g.map((n) => [n.key, n.count, n.state])).toEqual([['probe:a', 3, 'active'], ['task:1', 1, 'done']]);
+    expect(g[0].keys).toEqual(['probe:a', 'probe:b', 'probe:c']);
   });
 
-  it('names every one in focus, a row each, down the right and then the left, never one over another', () => {
-    const placed = orbit({ x: 400, y: 300 }, many(16), [Math.PI * 0.75, -Math.PI / 4], false);
-    expect(placed.every((p) => p.label)).toBe(false);
-    const focus = orbit({ x: 400, y: 300 }, many(16), [Math.PI * 0.75, -Math.PI / 4], true);
-    expect(focus.every((p) => p.label && p.name)).toBe(true);
-    const boxes = focus.map((p) => labelBox(p.label!, p.name!, ORBIT.focus.size));
-    for (const [i, a] of boxes.entries()) for (const b of boxes.slice(i + 1)) expect(overlaps(a, b)).toBe(false);
-    const right = focus.filter((p) => p.x > 400);
-    expect(focus.slice(0, right.length)).toEqual(right);
-    expect(right.map((p) => p.y)).toEqual([...right.map((p) => p.y)].sort((a, b) => a - b));
+  it('shows a waypoint out of focus as a count of its work, close in, and nothing when there is none', () => {
+    const q = quiet({ x: 100, y: 100 }, 14, [])!;
+    expect(q.count).toBe(14);
+    expect(Math.round(Math.hypot(q.x - 100, q.y - 100))).toBe(ORBIT.quiet.r);
+    expect(quiet({ x: 100, y: 100 }, 0, [])).toBeUndefined();
   });
 
-  it('keeps names off what it is told to avoid, and shrinks with the zoom', () => {
-    const avoid = [{ x0: 400, y0: 250, x1: 700, y1: 350 }];
-    const placed = orbit({ x: 400, y: 300 }, many(4), [], true, 1, avoid);
-    for (const p of placed) expect(overlaps(labelBox(p.label!, p.name!, ORBIT.focus.size), avoid[0])).toBe(false);
-    const zoomed = orbit({ x: 300, y: 300 }, many(1), [], true, 0.5);
-    expect(Math.round(Math.hypot(zoomed[0].x - 300, zoomed[0].y - 300))).toBe(ORBIT.focus.r / 2);
+  it('names the waypoint in focus\'s work in one column, evenly spaced, kinds in order, on the side away from the course', () => {
+    const col = column({ x: 400, y: 300 }, many(6), { ...open, course: [0] })!;
+    expect(col.side).toBe(-1);
+    expect(new Set(col.nodes.map((n) => n.x)).size).toBe(1);
+    const gaps = col.nodes.slice(1).map((n, i) => Math.round(n.y - col.nodes[i].y));
+    expect(new Set(gaps)).toEqual(new Set([ORBIT.focus.row]));
+    expect(col.nodes.map((n) => n.key)).toEqual(many(6).map((n) => n.key));
+  });
+
+  it('keeps the column off what it is told to avoid and on the chart, and its words the same size however far it is zoomed', () => {
+    const avoid = [{ x0: 200, y0: 0, x1: 395, y1: 560 }];
+    const col = column({ x: 400, y: 300 }, many(4), { ...open, avoid })!;
+    expect(col.side).toBe(1);
+    for (const n of col.nodes) expect(overlaps(labelBox(n.label, n.name, ORBIT.focus.size), avoid[0])).toBe(false);
+    const edge = column({ x: 860, y: 300 }, many(4), open)!;
+    expect(edge.side).toBe(-1);
+    const near = column({ x: 400, y: 300 }, many(1), { ...open, course: [0] })!;
+    const far = column({ x: 400, y: 300 }, many(1), { ...open, course: [0], px: 0.8 })!;
+    expect(far.nodes[0].x - 400).toBeCloseTo((near.nodes[0].x - 400) * 0.8, 0);
+  });
+
+  it('says how many more there are once a slice has more work than rows', () => {
+    const col = column({ x: 400, y: 280 }, many(20), open)!;
+    expect(col.nodes).toHaveLength(ORBIT.focus.rows);
+    expect(col.nodes.at(-1)).toMatchObject({ more: 20 - ORBIT.focus.rows + 1, name: `+${20 - ORBIT.focus.rows + 1} more in the log` });
+  });
+});
+
+describe('a chart held to the rules', () => {
+  // the voyage in the captain's screenshot: a busy first slice, a second that ran the same script three times
+  const task = (slice: number, i: number, subject: string) => ({ id: `${slice}-${i}`, subject, status: 'completed' as const });
+  const waypoints: Waypoint[] = [
+    { slice: 1, startedAt: 10, landedAt: 15, title: 'Briefings and crew always speak in their own voices', tasks: Array.from({ length: 9 }, (_, i) => task(1, i, `Voice step ${i + 1} of the briefing work`)), probes: Array.from({ length: 5 }, (_, i) => ({ id: `p1${i}`, description: `Probe voice ${i}`, launchedAt: 1, endedAt: 2, ok: true })), commits: 6 },
+    { slice: 2, startedAt: 20, landedAt: 25, title: 'Crew voices run on the Apple GPU, so busy agents don\'t slow them', probes: ['a', 'b', 'c'].map((id) => ({ id, description: 'Script tts/probe.mjs', launchedAt: 1, endedAt: 2, ok: true, type: 'script' as const })), commits: 1, tasks: [task(2, 1, 'Move Kokoro onto the GPU'), task(2, 2, 'Warm every voice at load')] },
+    { slice: 3, startedAt: 30, landedAt: 35, title: 'Updated briefings say which beat changed', commits: 2, tasks: [task(3, 1, 'Say which beat changed')] },
+    { slice: 4, startedAt: 40, tasks: [{ id: '4-1', subject: 'Lay out the chart', status: 'in_progress' }] },
+  ];
+  const contacts = [{ id: 'c1', text: 'Kokoro is CPU-bound under load', slice: 2, at: 0 }];
+  const prs = [{ repo: 'jonhilt/focus', number: 466, url: '', slice: 2, outcome: 'merged' as const }];
+  const plot = plotCourse({ waypoints, current: 4, next: ['Voice the comms panel', 'Steady the GPU fallback', 'Briefings on the wall'], contacts, seed: 'lead_proj_bd529cc4d2_voices' });
+  const workOf = (slice: number) => sliceWork({ waypoint: waypoints.find((w) => w.slice === slice)!, artifacts: [], questions: [], prs, flying: new Set() });
+  const sq = (p: { x: number; y: number }, r: number) => ({ x0: p.x - r, y0: p.y - r, x1: p.x + r, y1: p.y + r });
+
+  it('breaks none of them round whichever waypoint is in focus, however far it is zoomed', () => {
+    for (const focus of [1, 2, 3, 4]) {
+      for (const px of [1.3, 0.8, 0.5, 0.35, 0.25]) {
+        const nameSize = 17 * Math.min(1, px);
+        const heavens = sky(plot, workOf, focus, px, nameSize);
+        const col = heavens.column!;
+        expect(col.slice).toBe(focus);
+        const labels = col.nodes.map((n) => labelBox(n.label, n.name, ORBIT.focus.size * px));
+        const marks = [...chartMarks(plot, nameSize), ...[...heavens.quiet.values()].map((q) => sq(q, 9)), ...col.nodes.map((n) => sq(n, ORBIT.focus.mark * px))];
+        const found = faults({ labels, marks, lines: chartLines(plot), leaders: col.leaders }, 4 * px);
+        expect(found, `waypoint ${focus} at ${px}`).toEqual(NO_FAULTS);
+        // and the counts round the rest cover none of its names
+        for (const q of heavens.quiet.values()) for (const l of labels) expect(overlaps(sq(q, 9), l), `waypoint ${focus} at ${px}`).toBe(false);
+      }
+    }
+  });
+
+  it('draws the script run three times once, counted, and every other waypoint as a count', () => {
+    const heavens = sky(plot, workOf, 2, 0.5, 17);
+    expect(heavens.column!.nodes.filter((n) => n.kind === 'probe').map((n) => n.name)).toEqual(['Script tts/probe.mjs ×3']);
+    expect([...heavens.quiet.keys()]).toEqual([1, 3, 4]);
+    expect(heavens.quiet.get(1)!.count).toBe(15);
+  });
+
+  it('zooms to take in the waypoint in focus, its name and its column', () => {
+    const p = plot.points[1];
+    const { bounds } = sky(plot, workOf, 2, 0.5, 17).column!;
+    const name = labelBox(p.label!, p.lines, 17);
+    expect(bounds.x0 <= name.x0 && bounds.y0 <= name.y0 && bounds.x1 >= name.x1 && bounds.y1 >= name.y1).toBe(true);
   });
 });

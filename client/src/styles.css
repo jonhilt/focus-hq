@@ -448,8 +448,13 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .chart-node.active .mark { animation: chart-node-pulse 1.4s ease-in-out infinite; }
 .chart-node text { fill: var(--tone); font-size: calc(13px / var(--z, 1)); }
 .chart-node.done text { opacity: 0.85; }
-.chart-constellation:not(.focus) .chart-node { opacity: 0.75; }
+.chart-node.more text { font-style: italic; }
+.chart-quiet { cursor: pointer; }
+.chart-quiet circle { fill: #05040a; stroke: #6b6488; stroke-width: 1; }
+.chart-quiet text { fill: #a49db4; font-size: 9px; }
+.chart-quiet:hover circle { stroke: #fff; }
 .chart-constellation.focus .link { stroke-width: 1.2; opacity: 0.55; }
+.chart-constellation .spine { fill: none; stroke: #a49db4; stroke-width: 1.2; opacity: 0.55; }
 .chart-node:hover .mark, .chart-node:focus-visible .mark { stroke: #fff; }
 .chart-node:hover text, .chart-node:focus-visible text { text-decoration: underline; }
 .chart-node.picked .mark { stroke: #fff; stroke-width: 2; }

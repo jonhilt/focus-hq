@@ -6,7 +6,7 @@ const wp = (slice: number, more: Partial<Waypoint> = {}): Waypoint => ({ slice, 
 const inside = (p: { x: number; y: number }) => p.x >= 0 && p.x <= CHART.width && p.y >= 0 && p.y <= CHART.height;
 /** Where every label the plot shows lies. */
 const labelsOf = (plot: CoursePlot): Box[] => [
-  ...plot.points.flatMap((p) => (p.label ? [labelBox(p.label, p.name, plot.sizes.waypoint)] : [])),
+  ...plot.points.flatMap((p) => (p.label ? [labelBox(p.label, p.lines, plot.sizes.waypoint)] : [])),
   ...plot.scrubbed.flatMap((x) => (x.label ? [labelBox(x.label, `SCRUBBED ${x.text}`, plot.sizes.scrubbed)] : [])),
   ...plot.projected.flatMap((p) => (p.label ? [labelBox(p.label, p.text, plot.sizes.idea)] : [])),
   ...plot.contacts.flatMap((c) => (c.label ? [labelBox(c.label, c.text, plot.sizes.contact)] : [])),

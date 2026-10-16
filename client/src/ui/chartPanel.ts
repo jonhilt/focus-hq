@@ -8,8 +8,8 @@ import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { fill, h } from './dom';
 import { prLink } from './goals';
-import { type Box, CHART, clip, type CoursePlot, everySlice, type Label, labelBox, leaderEnd, plotCourse, type ProbeFlight, probeFlights, probesOut, type Pt, seeded, shieldState, TRANSMIT_MS, waypointName } from './course';
-import { orbit, type PlacedNode, sliceWork, type WorkKind, type WorkNode } from './constellation';
+import { type Box, CHART, clip, type CoursePlot, everySlice, type Label, leaderEnd, LINE_GAP, plotCourse, type ProbeFlight, probeFlights, probesOut, type Pt, seeded, shieldState, TRANSMIT_MS, waypointName } from './course';
+import { type Column, ORBIT, type PlacedNode, type Quiet, type Sky, sky, sliceWork, type WorkKind, type WorkNode } from './constellation';
 import { sliceProgress, sliceSteps } from '../world/goalRoom';
 
 /** What a goal's chart is drawn from, whether it's under way or closed. */
@@ -86,12 +86,16 @@ function s(tag: string, attrs: Record<string, string | number> = {}, ...children
   return el;
 }
 
-/** A faint line from a mark out to its label, starting clear of the mark. */
-const leaderPath = (p: Pt, l: Label, size: number) => {
-  const end = leaderEnd(p, l, size);
+/** A faint line from a mark out to its label (of `lines` lines), starting clear of the mark. */
+const leaderPath = (p: Pt, l: Label, size: number, lines: number) => {
+  const end = leaderEnd(p, l, size, lines);
   const d = Math.hypot(end.x - p.x, end.y - p.y) || 1;
   return `M${p.x + ((end.x - p.x) * 16) / d} ${p.y + ((end.y - p.y) * 16) / d} L${end.x} ${end.y}`;
 };
+
+/** A waypoint's name, a line under another where it's wrapped: each line's drop is in ems, so it scales with the zoom as the text does. */
+const nameSvg = (l: Label, lines: string[], named: string) =>
+  s('text', { class: `name ${named}`, x: l.x, y: l.y, 'text-anchor': l.anchor }, ...lines.map((line, i) => s('tspan', { x: l.x, ...(i && { dy: `${LINE_GAP}em` }) }, line)));
 
 /** Each kind of work's colour on the chart and in its drawer, and what it's called there. */
 const KIND: Record<WorkKind, { tone: string; name: string }> = {
@@ -122,28 +126,12 @@ const flyingNow = (goal: ChartGoal, out: ReadonlySet<string>, now: number) =>
   new Set([...out, ...goal.waypoints.flatMap((w) => (w.probes ?? []).filter((p) => p.endedAt && now - p.endedAt < TRANSMIT_MS).map((p) => p.id))]);
 
 /**
- * Each waypoint's constellation: its work laid round it clear of the course and its name, close in and quiet, but the
- * picked waypoint's spread out and named in `size`, clear of the other names on the chart.
+ * Each waypoint's work: zoomed in, the picked waypoint's in a column, named in `nameSize`, clear of the other names on
+ * the chart; the rest's (and with the whole voyage in view, everyone's) as counts.
  */
-function constellations(goal: ChartGoal, plot: CoursePlot, focus: number, flying: ReadonlySet<string>, px: number, nameSize: number): Map<number, PlacedNode[]> {
-  const toward = (a: Pt, b: Pt) => Math.atan2(b.y - a.y, b.x - a.x);
-  const names: Box[] = [
-    ...plot.points.flatMap((p) => (p.label ? [labelBox(p.label, p.name, nameSize)] : [])),
-    ...plot.contacts.flatMap((c) => [{ x0: c.x - 9, y0: c.y - 9, x1: c.x + 9, y1: c.y + 9 }, ...(c.label ? [labelBox(c.label, c.text, nameSize)] : [])]),
-    ...plot.projected.flatMap((p) => (p.label ? [labelBox(p.label, p.text, nameSize)] : [])),
-  ];
-  return new Map(plot.points.map((p, i) => {
-    const before = plot.points[i - 1] ?? plot.launch;
-    const after = plot.points[i + 1] ?? (plot.projected.length ? plot.objective : undefined);
-    const name = p.label && labelBox(p.label, p.name, nameSize);
-    const taken = [
-      toward(p, before),
-      ...(after ? [toward(p, after)] : []),
-      ...(name ? [toward(p, { x: (name.x0 + name.x1) / 2, y: (name.y0 + name.y1) / 2 })] : []),
-    ];
-    const marks = plot.points.map((q): Box => ({ x0: q.x - 14, y0: q.y - 14, x1: q.x + 14, y1: q.y + 14 }));
-    return [p.waypoint.slice, orbit(p, workOf(goal, p.waypoint, flying), taken, p.waypoint.slice === focus, px, [...names, ...marks])];
-  }));
+function constellations(goal: ChartGoal, plot: CoursePlot, focus: number | undefined, flying: ReadonlySet<string>, px: number, nameSize: number): Sky {
+  const work = (slice: number) => workOf(goal, goal.waypoints.find((w) => w.slice === slice) ?? { slice, startedAt: 0 }, flying);
+  return sky(plot, work, focus, px, nameSize);
 }
 
 /** A node's mark: its kind's shape, `r` across, centred on it. */
@@ -165,31 +153,46 @@ function nodeShape(n: PlacedNode, r: number): SVGElement {
   }
 }
 
-/** A waypoint's constellation: a faint link out to each node, its mark, and (round the waypoint in focus) its name. */
-function constellationSvg(p: Pt, slice: number, nodes: PlacedNode[], focus: boolean, picked: string | undefined, nav: Nav): SVGElement {
-  return s('g', { class: `chart-constellation${focus ? ' focus' : ''}` }, ...nodes.map((n) => {
-    const d = Math.hypot(n.x - p.x, n.y - p.y) || 1;
-    const from = { x: p.x + ((n.x - p.x) * 22) / d, y: p.y + ((n.y - p.y) * 22) / d };
-    const g = s('g', { class: `chart-node ${n.kind} ${n.state}${focus && n.key === picked ? ' picked' : ''}`, style: `--tone:${toneOf(n)}`, role: 'button', tabindex: focus ? 0 : -1 },
-      s('title', {}, `${KIND[n.kind].name}: ${n.text}`),
-      s('path', { class: 'link', d: `M${from.x.toFixed(1)} ${from.y.toFixed(1)} L${n.x.toFixed(1)} ${n.y.toFixed(1)}` }),
-      s('circle', { class: 'hit', cx: n.x, cy: n.y, r: focus ? 12 : 6 }),
-      nodeShape(n, focus ? 5 : 2.6),
-      n.label && n.name ? s('text', { x: n.label.x, y: n.label.y, 'text-anchor': n.label.anchor }, n.name) : null,
+/** The picked waypoint's work: a faint leader to the spine of its column, a tick out to each row, its mark, and its name. */
+function columnSvg(col: Column & { slice: number }, picked: string | undefined, nav: Nav, px: number): SVGElement {
+  const r = ORBIT.focus.mark * px * 0.8;
+  const line = ([a, b]: readonly [Pt, Pt]) => `M${a.x.toFixed(1)} ${a.y.toFixed(1)} L${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
+  const ticks = col.leaders.slice(-col.nodes.length);
+  return s('g', { class: 'chart-constellation focus' },
+    s('path', { class: 'spine', d: col.leaders.slice(0, -col.nodes.length).map(line).join(' ') }),
+    ...col.nodes.map((n, i) => {
+    const [from, to] = ticks[i];
+    const g = s('g', { class: `chart-node ${n.kind} ${n.state}${n.more ? ' more' : ''}${picked && n.keys.includes(picked) ? ' picked' : ''}`, style: `--tone:${n.more ? '#a49db4' : toneOf(n)}`, role: 'button', tabindex: 0 },
+      s('title', {}, n.more ? `${n.more} more: all of this waypoint's work is in its log` : `${KIND[n.kind].name}: ${n.text}${n.count > 1 ? ` (×${n.count})` : ''}`),
+      s('path', { class: 'link', d: `M${from.x.toFixed(1)} ${from.y.toFixed(1)} L${to.x.toFixed(1)} ${to.y.toFixed(1)}` }),
+      s('circle', { class: 'hit', cx: n.x, cy: n.y, r: ORBIT.focus.row * px * 0.5 }),
+      n.more ? null : nodeShape(n, r),
+      s('text', { x: n.label.x, y: n.label.y, 'text-anchor': n.label.anchor }, n.name),
     );
+    const open = () => (n.more ? nav.slice(col.slice) : nav.node(col.slice, n.key));
     g.addEventListener('click', (e) => {
       e.stopPropagation();
-      nav.node(slice, n.key);
+      open();
     });
     g.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') nav.node(slice, n.key);
+      if (e.key === 'Enter') open();
     });
     return g;
   }));
 }
 
+/** A waypoint out of focus's work, as a count by it: picking it picks the waypoint. */
+function quietSvg(q: Quiet, slice: number, nav: Nav): SVGElement {
+  const g = s('g', { class: 'chart-quiet', role: 'button' },
+    s('title', {}, `${q.count} piece${q.count === 1 ? '' : 's'} of work`),
+    s('circle', { cx: q.x, cy: q.y, r: 8 }),
+    s('text', { x: q.x, y: q.y + ORBIT.quiet.size * 0.35, 'text-anchor': 'middle' }, String(q.count)));
+  g.addEventListener('click', () => nav.slice(slice));
+  return g;
+}
+
 /** The star chart itself: the course flown, its waypoints, scrubbed headings, what's next and the objective. */
-function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: Picked, nav: Nav, sky: Map<number, PlacedNode[]>): SVGElement {
+function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: Picked, nav: Nav, heavens: Sky, px: number): SVGElement {
   const { width, height } = plot;
   const rand = seeded(`${goal.id}:stars`);
   const stars = s('g', { class: 'chart-stars' });
@@ -257,8 +260,8 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: Picked, nav: Nav,
         shieldState(w.shields) !== 'none' ? s('circle', { class: `shield ${shieldState(w.shields)}`, cx: p.x, cy: p.y, r: 16 }) : null,
         s('circle', { class: 'core', cx: p.x, cy: p.y, r: 12 }),
         s('text', { class: 'num', x: p.x, y: p.y + 5, 'text-anchor': 'middle' }, String(w.slice)),
-        p.label?.leader ? s('path', { class: 'leader', d: leaderPath(p, p.label, plot.sizes.waypoint) }) : null,
-        p.label ? s('text', { class: `name ${p.named}`, x: p.label.x, y: p.label.y, 'text-anchor': p.label.anchor }, p.name) : null,
+        p.label?.leader ? s('path', { class: 'leader', d: leaderPath(p, p.label, plot.sizes.waypoint, p.lines.length) }) : null,
+        p.label ? nameSvg(p.label, p.lines, p.named) : null,
       );
       g.addEventListener('click', () => nav.slice(w.slice));
       g.addEventListener('keydown', (e) => {
@@ -290,7 +293,8 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: Picked, nav: Nav,
     scrubbed,
     contacts,
     s('path', { class: 'chart-course', d: plot.path }),
-    ...plot.points.map((p) => constellationSvg(p, p.waypoint.slice, sky.get(p.waypoint.slice) ?? [], p.waypoint.slice === selected.slice, selected.node, nav)),
+    ...[...heavens.quiet].map(([slice, q]) => quietSvg(q, slice, nav)),
+    heavens.column ? columnSvg(heavens.column, selected.node, nav, px) : null,
     s('circle', { class: 'chart-launch', cx: plot.launch.x, cy: plot.launch.y, r: 7 }),
     s('text', { class: 'chart-caption launch', x: plot.launch.x - 20, y: plot.launch.y + 30 }, `LAUNCH · ${stardate(goal.openedAt)}`),
     waypoints,
@@ -601,11 +605,22 @@ interface View {
 }
 const WHOLE: View = { x: 0, y: 0, w: CHART.width, h: CHART.height };
 
-/** The part of the chart in view zoomed in on `p`: `ZOOM` times closer, kept on the chart. */
-const zoomOn = (p: Pt): View => {
-  const w = CHART.width / ZOOM;
-  const h = CHART.height / ZOOM;
-  return { x: Math.max(0, Math.min(CHART.width - w, p.x - w / 2)), y: Math.max(0, Math.min(CHART.height - h, p.y - h / 2)), w, h };
+/** How much room (in the chart's units) to leave round what's zoomed to. */
+const MARGIN = 24;
+
+/**
+ * The part of the chart in view zoomed in on `b` (the waypoint in focus and its column): `ZOOM` times closer, unless it
+ * takes less to fit all of it in with a margin, centred on it.
+ */
+export const zoomOn = (b: Box): View => {
+  const k = Math.min(ZOOM, Math.max(1, Math.min(CHART.width / (b.x1 - b.x0 + MARGIN * 2), CHART.height / (b.y1 - b.y0 + MARGIN * 2))));
+  const w = CHART.width / k;
+  const h = CHART.height / k;
+  const c = { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 };
+  // kept on the chart, unless what's zoomed to runs past its edge
+  const x = Math.max(Math.min(0, b.x0 - MARGIN), Math.min(Math.max(CHART.width, b.x1 + MARGIN) - w, c.x - w / 2));
+  const y = Math.max(Math.min(0, b.y0 - MARGIN), Math.min(Math.max(CHART.height, b.y1 + MARGIN) - h, c.y - h / 2));
+  return { x, y, w, h };
 };
 
 /**
@@ -729,10 +744,21 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
     const ideas = g.closedAt ? [] : g.note?.next ?? [];
     const plot = plotCourse({ waypoints: g.waypoints, current: g.current, next: ideas, contacts: g.contacts, seed: g.id });
     const at = plot.points.find((p) => p.waypoint.slice === picked.slice);
-    target = zoomed && at ? zoomOn(at) : WHOLE;
-    // the words' size in the chart's units, as they'll be drawn once the view has eased to where it's going
-    const z = fit() * (CHART.width / target.w);
-    const sky = constellations(g, plot, picked.slice, flying, 1 / z, NAME_PX / Math.max(1, z));
+    // the words' size in the chart's units, as they'll be drawn once the view has eased to where it's going: zoomed in
+    // on the waypoint, then fitted to its column, which takes laying out again when that has to zoom out to fit it
+    const layout = (v: View) => {
+      const z = fit() * (CHART.width / v.w);
+      return { z, heavens: constellations(g, plot, zoomed ? picked.slice : undefined, flying, 1 / z, NAME_PX / Math.max(1, z)) };
+    };
+    target = zoomed && at ? zoomOn({ x0: at.x, y0: at.y, x1: at.x, y1: at.y }) : WHOLE;
+    let { z, heavens } = layout(target);
+    for (let pass = 0; zoomed && heavens.column && pass < 3; pass++) {
+      const fitted = zoomOn(heavens.column.bounds);
+      const again = fitted.w > target.w + 1;
+      target = fitted;
+      if (!again) break;
+      ({ z, heavens } = layout(target));
+    }
     work = workOf(g, g.waypoints.find((w) => w.slice === picked.slice) ?? { slice: 0, startedAt: 0 }, flying);
     const w = g.waypoints.find((x) => x.slice === picked.slice);
     const node = work.find((n) => n.key === picked.node);
@@ -747,7 +773,7 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
         ? ideaView(g, ideas, picked.idea, nav)
         : node && w ? nodeView(g, w, node, work, ctx) : logView(g, w, work, ctx);
     whole.hidden = !zoomed;
-    fill(body, h('div', { class: 'chart-map' }, chartSvg(g, plot, picked, nav, sky), whole, readout(g)), log);
+    fill(body, h('div', { class: 'chart-map' }, chartSvg(g, plot, picked, nav, heavens, 1 / z), whole, readout(g)), log);
     const svg = body.querySelector('.chart-svg');
     if (svg) resized.observe(svg);
     showView();

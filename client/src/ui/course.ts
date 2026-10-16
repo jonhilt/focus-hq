@@ -21,6 +21,8 @@ export interface PlottedWaypoint extends Pt {
   waypoint: Waypoint;
   /** What its label says (`waypointName`), cut short. */
   name: string;
+  /** Its name as drawn: on one line, or wrapped onto two rather than cut short. */
+  lines: string[];
   /** Where its name came from (`waypointName`). */
   named: Named;
   /** Landed, the slice under way, or a slice of a closed goal that never landed. */
@@ -90,8 +92,11 @@ export const CHART = { width: 900, height: 560, pad: 56, objectiveR: 84 } as con
 /** Each kind of label's font size on the chart panel, in the plot's units; the briefing room's wall draws them bigger. */
 export const LABEL_SIZE = { waypoint: 17, idea: 15, contact: 15, scrubbed: 14, launch: 15 } as const;
 
-/** How many characters each kind of label keeps at the panel's size (fewer when drawn bigger). */
+/** How many characters each kind of label keeps at the panel's size (fewer when drawn bigger); a waypoint's on each of its two lines. */
 const LABEL_CHARS = { waypoint: 28, idea: 30, contact: 26, scrubbed: 34 } as const;
+
+/** How far apart the lines of a label wrapped onto two are, as a share of its size. */
+export const LINE_GAP = 1.15;
 
 /** About how wide a character of a chart label is, for keeping labels clear of the objective. */
 const TEXT_W = 7.2;
@@ -103,11 +108,12 @@ export interface Box {
   y1: number;
 }
 
-/** Roughly where a label's text lies, in Antonio (about 0.47em a character) at `size`. */
-export const labelBox = (l: Label, text: string, size: number): Box => {
-  const w = text.length * size * 0.47;
+/** Roughly where a label's text lies, in Antonio (about 0.47em a character) at `size`: one line, or several under it. */
+export const labelBox = (l: Label, text: string | readonly string[], size: number): Box => {
+  const lines = typeof text === 'string' ? [text] : text;
+  const w = Math.max(0, ...lines.map((t) => t.length)) * size * 0.47;
   const x0 = l.anchor === 'start' ? l.x : l.anchor === 'end' ? l.x - w : l.x - w / 2;
-  return { x0, y0: l.y - size, x1: x0 + w, y1: l.y + 3 };
+  return { x0, y0: l.y - size, x1: x0 + w, y1: l.y + size * 0.18 + (lines.length - 1) * size * LINE_GAP };
 };
 export const overlaps = (a: Box, b: Box) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
 const square = (p: Pt, r: number): Box => ({ x0: p.x - r, y0: p.y - r, x1: p.x + r, y1: p.y + r });
@@ -157,27 +163,33 @@ export function cheapest<T>(tries: readonly T[], least: (t: T, i: number) => num
   return best;
 }
 
-/** A label off to one side of the course (`out` 1 to its right as it heads up the chart, -1 to its left). */
-const beside = (p: Pt, side: Pt, out: number, d = 26): Label => ({ x: p.x + side.x * d * out, y: p.y + side.y * d * out + 5, anchor: out > 0 ? 'start' : 'end' });
+/** A label off to one side of the course (`out` 1 to its right as it heads up the chart, -1 to its left), `extra` taller than a line. */
+const beside = (p: Pt, side: Pt, out: number, d = 26, extra = 0): Label => ({ x: p.x + side.x * d * out, y: p.y + side.y * d * out + 5 - extra / 2, anchor: out > 0 ? 'start' : 'end' });
 
-/** Every spot round a mark at `p` a label of `size` could go, `d` out: to either side, the four diagonals, above and below. */
-function around(p: Pt, d: number, size: number): Label[] {
+/**
+ * Every spot round a mark at `p` a label of `size` could go, `d` out, in the cartographer's order of preference (Imhof's):
+ * above right, below right, above left, below left, then to either side, above and below. A label of `lines` lines
+ * grows up from those above the mark and stays centred on those beside it.
+ */
+function around(p: Pt, d: number, size: number, lines = 1): Label[] {
   const k = d * 0.75;
+  const extra = (lines - 1) * size * LINE_GAP;
   return [
-    { x: p.x + d, y: p.y + size * 0.35, anchor: 'start' },
-    { x: p.x - d, y: p.y + size * 0.35, anchor: 'end' },
-    { x: p.x + k, y: p.y - k, anchor: 'start' },
-    { x: p.x - k, y: p.y - k, anchor: 'end' },
+    { x: p.x + k, y: p.y - k - extra, anchor: 'start' },
     { x: p.x + k, y: p.y + k + size * 0.7, anchor: 'start' },
+    { x: p.x - k, y: p.y - k - extra, anchor: 'end' },
     { x: p.x - k, y: p.y + k + size * 0.7, anchor: 'end' },
-    { x: p.x, y: p.y - d - 2, anchor: 'middle' },
+    { x: p.x + d, y: p.y + size * 0.35 - extra / 2, anchor: 'start' },
+    { x: p.x - d, y: p.y + size * 0.35 - extra / 2, anchor: 'end' },
+    { x: p.x, y: p.y - d - 2 - extra, anchor: 'middle' },
     { x: p.x, y: p.y + d + size * 0.75, anchor: 'middle' },
   ];
 }
 
-/** Where a leader from a mark at `p` to its label `l` of `size` ends: just short of the text's nearest edge. */
-export function leaderEnd(p: Pt, l: Label, size: number): Pt {
-  const y = l.anchor === 'middle' ? (l.y < p.y ? l.y + 4 : l.y - size) : l.y - size * 0.35;
+/** Where a leader from a mark at `p` to its label `l` of `size` (and `lines` lines) ends: just short of the text's nearest edge. */
+export function leaderEnd(p: Pt, l: Label, size: number, lines = 1): Pt {
+  const extra = (lines - 1) * size * LINE_GAP;
+  const y = l.anchor === 'middle' ? (l.y < p.y ? l.y + extra + 4 : l.y - size) : l.y - size * 0.35 + extra / 2;
   const x = l.anchor === 'start' ? l.x - 4 : l.anchor === 'end' ? l.x + 4 : l.x;
   return { x, y };
 }
@@ -206,6 +218,22 @@ export function seeded(seed: string): () => number {
   for (const c of seed) s = Math.imul(s ^ c.charCodeAt(0), 16777619);
   s = (s >>> 0) % 2147483646 || 1;
   return () => (s = (s * 16807) % 2147483647) / 2147483647;
+}
+
+/**
+ * Broken at words into at most `lines` lines of `max` characters, the last cut short with an ellipsis if it all won't
+ * fit: a name keeps what it means rather than losing its second half.
+ */
+export function wrap(text: string, max: number, lines = 2): string[] {
+  const out: string[] = [];
+  let rest = text.trim();
+  while (rest && out.length < lines - 1 && rest.length > max) {
+    const cut = rest.lastIndexOf(' ', max);
+    if (cut <= max / 3) break;
+    out.push(rest.slice(0, cut));
+    rest = rest.slice(cut + 1).trim();
+  }
+  return [...out, clip(rest, max)];
 }
 
 /** Cut to `max` characters at a word, with an ellipsis. */
@@ -276,7 +304,8 @@ export function plotCourse(voyage: Voyage, scale = 1): CoursePlot {
     outs.push(waypoint.turnedFrom ? -outward : outward);
     const state = waypoint.landedAt ? 'landed' : waypoint.slice === voyage.current ? 'now' : 'open';
     const { name, named } = waypointName(waypoint, state === 'now');
-    return { x, y, waypoint, name: clip(name, chars('waypoint')), named, state };
+    const lines = wrap(name, chars('waypoint'));
+    return { x, y, waypoint, name: lines.join(' '), lines, named, state };
   });
 
   // each correction's old heading: on from the turn, further off course, to a cross
@@ -322,9 +351,13 @@ export function plotCourse(voyage: Voyage, scale = 1): CoursePlot {
   const linesHit = hitCounter(lines);
   const cost = (b: Box) => (inChart(b) ? 0 : 1000) + hitsAmong(solid, b) * 100 + linesHit(b);
   // the first of the candidates (in order of preference) that's clear, crossing the fewest lines; none if none is clear
-  const place = (candidates: Label[], text: string, size: number, claim = true): Label | undefined => {
-    const best = cheapest(candidates, (_, i) => i, (label) => cost(labelBox(label, text, size)) * 10);
-    if (!best || best.cost >= 1000) return undefined;
+  // a line crossed costs more than any spot further down the list (there are never 100), a mark covered more than any lines
+  const spot = (candidates: Label[], text: string | string[], size: number) => cheapest(candidates, (_, i) => i, (label) => cost(labelBox(label, text, size)) * 100);
+  const CROSSES = 100;
+  const COVERS = 10_000;
+  const place = (candidates: Label[], text: string | string[], size: number, claim = true): Label | undefined => {
+    const best = spot(candidates, text, size);
+    if (!best || best.cost >= COVERS) return undefined;
     if (claim) solid.push(labelBox(best.at, text, size));
     return best.at;
   };
@@ -337,18 +370,37 @@ export function plotCourse(voyage: Voyage, scale = 1): CoursePlot {
   });
 
   const order = points.map((_, i) => i).sort((a, b) => (points[b].state === 'now' ? 1 : 0) - (points[a].state === 'now' ? 1 : 0) || b - a);
-  // a waypoint's name, cut shorter where the full one won't fit anywhere
+  // each waypoint's name on one line, cut shorter where that won't fit anywhere; then, where there's room, in full on
+  // two lines, which keeps what it means rather than losing its second half
+  const d = 26 + 4 * (scale - 1);
+  const spots = (p: PlottedWaypoint, i: number, n: number) => {
+    const extra = (n - 1) * sizes.waypoint * LINE_GAP;
+    return [beside(p, side, outs[i], d, extra), beside(p, side, -outs[i], d, extra), ...around(p, d, sizes.waypoint, n), ...around(p, d * 1.8, sizes.waypoint, n).map((l) => ({ ...l, leader: true }))];
+  };
+  const wrapped = points.map((p) => p.lines);
+  const claimed = new Map<number, Box>();
+  const name = (i: number, lines: string[], label: Label) => {
+    const box = labelBox(label, lines, sizes.waypoint);
+    solid.push(box);
+    claimed.set(i, box);
+    Object.assign(points[i], { label, lines, name: lines.join(' ') });
+  };
   for (const i of order) {
     const p = points[i];
-    const d = 26 + 4 * (scale - 1);
-    const spots = [beside(p, side, outs[i], d), beside(p, side, -outs[i], d), ...around(p, d, sizes.waypoint), ...around(p, d * 1.8, sizes.waypoint).map((l) => ({ ...l, leader: true }))];
-    for (const name of [p.name, clip(p.waypoint.title ?? p.waypoint.heading ?? '', Math.round(chars('waypoint') * 0.55))]) {
-      const label = name && place(spots, name, sizes.waypoint);
-      if (!label) continue;
-      p.label = label;
-      p.name = name;
-      break;
-    }
+    const short = Math.round(chars('waypoint') * 0.55);
+    const tries = [[clip(p.name, chars('waypoint'))], [clip(p.waypoint.title ?? p.waypoint.heading ?? '', short)]].filter((lines) => lines[0]);
+    // the first that's clear of every line, else the first that's clear of everything else
+    const weighed = tries.map((lines) => ({ lines, best: spot(spots(p, i, 1), lines, sizes.waypoint) }));
+    const pick = weighed.find((t) => t.best && t.best.cost < CROSSES) ?? weighed.find((t) => t.best && t.best.cost < COVERS);
+    if (pick?.best) name(i, pick.lines, pick.best.at);
+  }
+  for (const i of order) {
+    const box = claimed.get(i);
+    if (!box || wrapped[i].length < 2) continue;
+    solid.splice(solid.indexOf(box), 1);
+    const best = spot(spots(points[i], i, 2), wrapped[i], sizes.waypoint);
+    if (best && best.cost < CROSSES) name(i, wrapped[i], best.at);
+    else solid.push(box);
   }
 
   for (const p of projected) {
