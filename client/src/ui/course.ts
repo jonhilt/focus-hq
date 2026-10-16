@@ -19,7 +19,7 @@ export interface Label extends Pt {
 
 export interface PlottedWaypoint extends Pt {
   waypoint: Waypoint;
-  /** What its label says: the title it shipped under, or until then the heading its lead gave it, cut short. */
+  /** What its label says (`waypointName`), cut short. */
   name: string;
   /** Where its name came from (`waypointName`). */
   named: Named;
@@ -391,10 +391,6 @@ export function plotCourse(voyage: Voyage, scale = 1): CoursePlot {
   return { width, height, launch, objective, points, path: smoothPath([launch, ...points]), scrubbed, projected, contacts, sizes };
 }
 
-/**
- * The goal's waypoints with a gap filled for every slice that has none (goals started before they were kept, or a
- * slice nothing has happened in yet), so the chart shows every slice up to `upTo`.
- */
 /** Where a waypoint's name came from: what it shipped as, the lead's heading for it, what the lead's at in it, or nothing yet. */
 export type Named = 'shipped' | 'heading' | 'work' | 'unset';
 
@@ -410,6 +406,10 @@ export function waypointName(w: Waypoint, underWay = false): { name: string; nam
   return { name: underWay ? `Slice ${w.slice} · under way` : `Slice ${w.slice}`, named: 'unset' };
 }
 
+/**
+ * The goal's waypoints with a gap filled for every slice that has none (goals started before they were kept, or a
+ * slice nothing has happened in yet), so the chart shows every slice up to `upTo`.
+ */
 export function everySlice(waypoints: Waypoint[] | undefined, upTo: number, startedAt: number): Waypoint[] {
   const kept = new Map((waypoints ?? []).map((w) => [w.slice, w]));
   const first = Math.min(1, ...kept.keys());
