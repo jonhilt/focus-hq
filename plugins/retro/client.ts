@@ -1,6 +1,6 @@
 // The retro in the browser (README.md): its card on the engineering station's overview, its own Retro view, and what
 // the chief engineer says at the station while one runs or waits on the captain.
-import type { ClientPlugin } from '../../client/src/plugins';
+import type { ClientPlugin } from '../../plugin-api/client';
 import { RETRO, running, stationLine, waiting } from './shared';
 import { latest, retroCard, retroView } from './view';
 import './retro.css';

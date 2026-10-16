@@ -8,7 +8,7 @@ import { crossings, importsOf, pluginOf, project, refusal } from './boundary';
  * plugin's code: the counts may only fall (and are brought down here as they do), and a plugin leaves the list once it reaches none. Any plugin not listed,
  * a new one too, has to have none.
  */
-const NOT_YET_BEHIND: Record<string, number> = { climber: 30, 'number-one': 72, retro: 31 };
+const NOT_YET_BEHIND: Record<string, number> = { climber: 30, 'number-one': 72 };
 
 const root = path.resolve(import.meta.dirname, '..');
 

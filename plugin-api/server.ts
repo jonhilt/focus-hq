@@ -5,7 +5,9 @@ export * from './shared';
 export type { BriefSpec, BriefWork, FocusPlugin, LeadTool, LeadToolContext, PluginHost, PluginParts, PluginRoute, PluginState } from '../server/plugins/contract';
 /** The limits on a page a lead tool puts on the lead's screen (`LeadToolContext.show`): its id's and title's length. */
 export { ARTIFACT_LIMITS } from '../server/agents/lead';
-export { errorMessage, run, sleep } from '../server/util';
+export { errorMessage, newId, run, sleep, truncate } from '../server/util';
+/** What a read-only Claude Code session is given and gives back (`host.readOnlySession`). */
+export type { ReadOnlyResult, ReadOnlyRun, ReadOnlyTool } from '../server/agents/claudeCrew';
 /** A plugin's own folder for files, for its scripts (its server part has `host.dataDir()`, the same folder). */
 export { pluginDataDir } from '../server/plugins/dataDir';
 /** The office on this machine, for a plugin's scripts: its ledger, its agents' transcripts and its clones of repos. */

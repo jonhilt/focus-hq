@@ -25,7 +25,7 @@ import { GOAL_TITLE_SCHEMA, goalTitlePrompt, goalTitleSystemPrompt } from './goa
 // office's own tools, `dontAsk` denies anything not pre-approved, and none of your settings, hooks or MCP servers load.
 
 /** The built-in tools a crew session may be given: none of them can change anything. */
-type ReadOnlyTool = 'Read' | 'Glob' | 'Grep' | 'WebSearch' | 'WebFetch';
+export type ReadOnlyTool = 'Read' | 'Glob' | 'Grep' | 'WebSearch' | 'WebFetch';
 export const CODE_TOOLS: ReadOnlyTool[] = ['Read', 'Glob', 'Grep'];
 export const WEB_TOOLS: ReadOnlyTool[] = ['WebSearch', 'WebFetch'];
 const TURN_TIMEOUT_MS = 8 * 60_000;

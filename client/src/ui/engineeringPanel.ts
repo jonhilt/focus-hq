@@ -1,5 +1,5 @@
 import { chiefEngineer } from '../../../shared/crew';
-import { frictionName, reportLines } from '../../../shared/ledger';
+import { reportLines } from '../../../shared/ledger';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { clientPlugins, type EngineeringGo } from '../plugins';
@@ -8,6 +8,7 @@ import type { Ui } from './context';
 import { busy, fill, h } from './dom';
 import { type NavItem, readout, shownView, SideNav } from './panels';
 import { usageView } from './usageView';
+import { frictionBars } from './frictionBars';
 
 /** A view of the station: the overview and the ledger are the core's, and plugins add their own (the scorecard's). */
 type View = string;
@@ -83,20 +84,6 @@ export function openEngineeringPanel(ui: Ui): void {
     if (a.brief) render();
   }));
   render();
-}
-
-/** The office's open frictions, the most widespread first, as bars (plugins' views show them too). Each opens its trace in the ledger review. */
-export function frictionBars(ui: Ui, limit: number): HTMLElement | null {
-  const frictions = state.report?.frictions.slice(0, limit) ?? [];
-  if (!frictions.length) return null;
-  const most = frictions[0].sessions || 1;
-  return h('div', { class: 'eng-frictions' }, ...frictions.map((f) => {
-    const { kind, signature } = frictionName(f.key);
-    return h('button', { class: 'eng-friction', title: `${f.key}: open every session it came up in`, onclick: () => ui.openLedger({ kind: 'friction', key: f.key }) },
-      h('span', { class: 'grow' }, signature, kind ? h('small', { class: 'muted' }, ` ${kind}`) : null),
-      h('span', { class: 'bar' }, h('i', { style: `width:${Math.max(4, (f.sessions / most) * 100)}%` })),
-      h('small', { class: 'muted' }, `${f.sessions} sessions ›`));
-  }));
 }
 
 /** The ledger as it stands now: the report card's numbers, and the open frictions. */

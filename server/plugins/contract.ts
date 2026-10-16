@@ -7,6 +7,7 @@ import type { LedgerEntry, LedgerEvent } from '../../shared/ledger';
 import type { Agent, Issue, MessageReply, Planner, Project, QueuedGoal, Settings, Snapshot } from '../../shared/types';
 import type { ShipStatus } from '../agents/shipStatus';
 import type { GitHub } from '../github/service';
+import type { ReadOnlyResult, ReadOnlyRun } from '../agents/claudeCrew';
 
 export interface FocusPlugin {
   /** Its name in FOCUS_PLUGINS: also its state's key in state.json, and its routes' prefix (`/api/plugins/<id>`). */
@@ -163,8 +164,16 @@ export interface PluginHost {
   ownRepo(): string | undefined;
   /** The office's own checkout (its root folder): a real repo on this machine, in the demo too. */
   readonly officeDir: string;
-  /** The plugin's own folder for files it keeps (`<data dir>/plugins/<id>`), made when it's first asked for. */
-  dataDir(): string;
+  /**
+   * The plugin's own folder for files it keeps (`<data dir>/plugins/<id>`), made when it's first asked for. `movedFrom`
+   * is a folder it kept in the office's data dir before it was a plugin: what's in it moves in.
+   */
+  dataDir(how?: { movedFrom?: string }): string;
+  /**
+   * A read-only Claude Code session, as the office's own crew run them: only the built-in tools it's given (Read,
+   * Glob, Grep, WebSearch, WebFetch), all pre-approved, none of the captain's settings or hooks, and its answer.
+   */
+  readOnlySession(run: ReadOnlyRun): Promise<ReadOnlyResult>;
   /**
    * Checks out `repo`'s default branch as it is on GitHub now, detached, in a folder of the plugin's own (in its
    * `dataDir`), and says where. `repo` has to be one of the office's projects' repos: it throws, in words, for any other.

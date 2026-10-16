@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { FrictionGroup } from '../../shared/ledger';
+import type { FrictionGroup } from '../../plugin-api/shared';
 import { parseDrafts, renderFrictions } from './retro';
 import { freshRetro, type RetroDraft, retroAfterRestart, stationLine } from './shared';
 

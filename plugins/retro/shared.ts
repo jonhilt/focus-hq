@@ -1,6 +1,6 @@
 // The chief engineer's retros (README.md): the plugin's state, as its server part saves it and the browser shows it.
 
-import type { AgentStatus } from '../../shared/types';
+import type { AgentStatus } from '../../plugin-api/shared';
 
 /** The plugin's id: in FOCUS_PLUGINS, its state's key and its routes' prefix. */
 export const RETRO = 'retro';

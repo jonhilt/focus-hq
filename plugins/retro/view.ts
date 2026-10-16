@@ -1,14 +1,8 @@
 // The retro on the engineering station (README.md): its card on the overview, and its own view, where the captain
 // starts one and decides on its drafts.
-import { chiefEngineer } from '../../shared/crew';
-import { FIX_SESSIONS, type FixEffect, type FixStatus } from '../../shared/ledger';
-import { api } from '../../client/src/net/api';
-import { state } from '../../client/src/net/state';
-import { type EngineeringGo, pluginState } from '../../client/src/plugins';
-import type { Ui } from '../../client/src/ui/context';
-import { busy, h, timeAgo } from '../../client/src/ui/dom';
-import { frictionBars } from '../../client/src/ui/engineeringPanel';
-import { markdownHtml } from '../../client/src/ui/terminal';
+import {
+  busy, callPlugin, chiefEngineer, type EngineeringGo, FIX_SESSIONS, type FixEffect, type FixStatus, frictionBars, h, markdownHtml, office, pluginState, timeAgo, type Ui,
+} from '../../plugin-api/client';
 import { type FixKind, RETRO, type Retro, type RetroDraft, running, waiting } from './shared';
 
 const KIND: Record<FixKind, string> = { check: 'Check', 'qa-rule': 'QA rule', pointer: 'Pointer', delete: 'Delete' };
@@ -17,7 +11,7 @@ const KIND: Record<FixKind, string> = { check: 'Check', 'qa-rule': 'QA rule', po
 export const latest = (): Retro | undefined => pluginState<Retro>(RETRO);
 
 /** One of the plugin's routes. */
-const call = <T>(path: string, body?: unknown) => api.plugin<T>(RETRO, path, body);
+const call = <T>(path: string, body?: unknown) => callPlugin<T>(RETRO, path, body);
 
 // the window outlives re-renders (other plugins' state changes redraw the station), so they don't reset what you typed;
 // it starts again from a retro's own window when a new one is saved
@@ -77,7 +71,7 @@ export function retroView(ui: Ui): HTMLElement {
     ),
     retro && retro.status !== 'idle' ? status(retro) : null,
     retro?.status === 'done' ? findings(ui, retro) : null,
-    state.report?.fixes.length ? fixes(state.report.fixes) : null,
+    office.report?.fixes.length ? fixes(office.report.fixes) : null,
   );
 }
 
@@ -121,7 +115,7 @@ function draft(ui: Ui, d: RetroDraft, i: number): HTMLElement {
       : h('span', { class: 'chip off' }, 'Rejected');
     return h('div', { class: 'card retro-draft' }, head, tags, details, h('div', { class: 'row' }, said, h('small', { class: 'muted' }, timeAgo(d.decision.at))));
   }
-  const repos = state.projects.flatMap((p) => p.repos.map((repo) => ({ projectId: p.id, repo, label: `${repo} (${p.name})` })));
+  const repos = office.projects.flatMap((p) => p.repos.map((repo) => ({ projectId: p.id, repo, label: `${repo} (${p.name})` })));
   const pick = h('select', null, ...repos.map((r) => h('option', { value: `${r.projectId} ${r.repo}` }, r.label)));
   const last = localStorage.getItem(FILE_IN);
   if (last && repos.some((r) => `${r.projectId} ${r.repo}` === last)) pick.value = last;

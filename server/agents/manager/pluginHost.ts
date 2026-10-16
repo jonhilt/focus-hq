@@ -9,6 +9,7 @@ import type { Core } from './core';
 import { Refused } from './core';
 import { checkoutLatest } from '../workspace';
 import { pluginDataDir } from '../../plugins/dataDir';
+import { runReadOnly } from '../claudeCrew';
 
 /**
  * What the office lends a plugin that the manager doesn't have: where it runs, its own repo, filing issues, the demo's
@@ -46,8 +47,8 @@ function slot<S extends object>(saved: () => PluginStates, id: string, fresh: ()
 
 /** What the office lends the plugin `id` (docs/plugins.md): the manager's seating, its terminals and toasts, and the store. */
 export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
-  const dataDir = () => {
-    const dir = pluginDataDir(id);
+  const dataDir = (how: { movedFrom?: string } = {}) => {
+    const dir = pluginDataDir(id, how);
     fs.mkdirSync(dir, { recursive: true });
     return dir;
   };
@@ -86,6 +87,7 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
     ownRepo: lent.ownRepo,
     officeDir: config.root,
     dataDir,
+    readOnlySession: (run) => runReadOnly(run),
     checkout: async (repo) => {
       // a plugin checks out only the captain's repos, and only into its own folder
       if (!core.store.projects.some((p) => p.repos.includes(repo))) throw new Refused({ message: `${repo} isn’t one of the office’s repositories` });

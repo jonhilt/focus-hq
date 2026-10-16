@@ -1,6 +1,7 @@
 // The plugin API's browser part (docs/plugins.md): the contract a plugin's client.ts default-exports, a read-only view
 // of the office's state, its own routes, and the station's UI kit. The browser's own state and REST client stay the
 // core's: a plugin reads what `office` shows and calls only its own routes.
+import type { ReportCard } from '../shared/ledger';
 import type { Project } from '../shared/types';
 import { api } from '../client/src/net/api';
 import { state } from '../client/src/net/state';
@@ -10,6 +11,9 @@ export type { ClientPlugin, EngineeringGo, EngineeringPart, EngineeringView, Goa
 export { pluginState } from '../client/src/plugins';
 export type { Ui } from '../client/src/ui/context';
 export { busy, h, timeAgo } from '../client/src/ui/dom';
+/** Markdown made safe to show, and the station's bars of the open frictions. */
+export { markdownHtml } from '../client/src/ui/terminal';
+export { frictionBars } from '../client/src/ui/frictionBars';
 /** The LCARS kit, for what a plugin draws on a canvas (the MSD, a goal board's strip, a hall's screen). */
 export { canvasTexture, fitText, makeCanvas, UI_FONT } from '../client/src/world/canvas';
 /** What a plugin's ship part needs to stand things in the holodeck and in a space of its own. */
@@ -24,6 +28,10 @@ export { LCARS, LCARS_FONT, LCARS_STATUS } from '../client/src/world/starship';
 export const office = {
   get projects(): readonly Project[] {
     return state.projects;
+  },
+  /** The ledger's report card as the office last sent it: none until it has. */
+  get report(): Readonly<ReportCard> | null {
+    return state.report;
   },
 };
 

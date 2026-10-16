@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { LedgerEvent } from '../../shared/ledger';
+import type { LedgerEvent } from '../../plugin-api/shared';
 import { batchesOf, checkFrictions, extractionInput, parseRead, readerPrompt, signatureOf } from './frictions';
 
 let n = 0;
