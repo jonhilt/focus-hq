@@ -1,6 +1,5 @@
-import { isAutonomy } from '../shared/autonomy';
 import type { Board, ConflictsOutcome, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
-import { DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS } from '../shared/types';
+import { DESKS_PER_ROOM } from '../shared/types';
 import { freshBoard, prsOffBoard, type RepoListing, staleClosedPrs } from '../shared/board';
 import { chosenSet, previewPrsGone } from '../shared/previewSet';
 import { issuesToAssign } from '../shared/dependencies';
@@ -18,6 +17,7 @@ import type { GitHubProvider } from './github/provider';
 import type { Hub } from './hub';
 import type { Previews } from './previews';
 import type { Store } from './store';
+import { changeSettings } from './settings';
 import { errorMessage } from './util';
 import type { Voice } from './voice';
 
@@ -472,21 +472,9 @@ export class Office {
 
   // ---------------------------------------------------------------- settings
 
-  updateSettings(patch: Partial<Settings>): Settings {
-    const s = this.store.settings;
-    if (patch.maxConcurrent !== undefined) s.maxConcurrent = Math.max(1, Math.min(32, Math.round(patch.maxConcurrent)));
-    if (isAutonomy(patch.autonomy)) s.autonomy = patch.autonomy;
-    if (patch.model !== undefined) s.model = patch.model.trim();
-    if (typeof patch.conflictsModel === 'string') s.conflictsModel = patch.conflictsModel.trim();
-    // an empty (or unknown) choice goes back to the model's default
-    if (patch.conflictsEffort !== undefined) s.conflictsEffort = EFFORT_LEVELS.find((e) => e === patch.conflictsEffort);
-    if (typeof patch.qaModel === 'string') s.qaModel = patch.qaModel.trim();
-    const mergeMethod = MERGE_METHODS.find((m) => m === patch.mergeMethod);
-    if (mergeMethod) s.mergeMethod = mergeMethod;
-    if (typeof patch.attribution === 'boolean') s.attribution = patch.attribution;
-    if (typeof patch.userClaudeMd === 'boolean') s.userClaudeMd = patch.userClaudeMd;
-    const leadEffort = EFFORT_LEVELS.find((e) => e === patch.leadEffort);
-    if (leadEffort) s.leadEffort = leadEffort;
+  /** The captain's change to the settings (any JSON: `changeSettings` takes what it gets right), saved and sent out. */
+  updateSettings(patch: unknown): Settings {
+    const s = Object.assign(this.store.settings, changeSettings(this.store.settings, patch));
     this.store.save();
     this.hub.send({ type: 'info', info: { ...this.info, settings: s } });
     this.agents.schedule();

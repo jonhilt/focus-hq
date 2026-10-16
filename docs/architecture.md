@@ -19,6 +19,7 @@ server/
   updater.ts              auto update: fetch, fast-forward, install/build, restart
   index.ts                express + WebSocket (/ws) + Vite middleware (dev) or dist/ (prod)
   office.ts               projects/rooms, Kanban boards (polling GitHub), auto-assign, settings
+  settings.ts             what a change to the captain's settings (PATCH /api/settings, any JSON) leaves them as: fields of the wrong kind ignored, models trimmed, the limit on agents at once kept to 1–32 (pure)
   store.ts                ~/.focus/state.json + per-agent terminal logs (jsonl) + per-agent run journals (runs/*.jsonl) + the ledger (ledger.jsonl)
   ledgerLog.ts            the ledger's one writer: numbered lines flushed to disk, the lock file, repairs and damage on load
   usage.ts                main engineering's plan usage: read from Claude Code's structured /usage every few minutes, with how the office signs in
