@@ -2,7 +2,7 @@
 // of the office's state, its own routes, and the station's UI kit. The browser's own state and REST client stay the
 // core's: a plugin reads what `office` shows and calls only its own routes.
 import type { ReportCard } from '../shared/ledger';
-import type { Project } from '../shared/types';
+import type { Agent, Project } from '../shared/types';
 import { api } from '../client/src/net/api';
 import { state } from '../client/src/net/state';
 
@@ -11,6 +11,7 @@ export type { ClientPlugin, EngineeringGo, EngineeringPart, EngineeringView, Goa
 export { pluginState } from '../client/src/plugins';
 export type { Ui } from '../client/src/ui/context';
 export { busy, h, timeAgo } from '../client/src/ui/dom';
+export { Switch } from '../client/src/ui/panels';
 /** Markdown made safe to show, and the station's bars of the open frictions. */
 export { markdownHtml } from '../client/src/ui/terminal';
 export { frictionBars } from '../client/src/ui/frictionBars';
@@ -29,6 +30,8 @@ export const office = {
   get projects(): readonly Project[] {
     return state.projects;
   },
+  /** An agent by id, as the browser has them now. */
+  agent: (id: string): Readonly<Agent> | undefined => state.agents.get(id),
   /** The ledger's report card as the office last sent it: none until it has. */
   get report(): Readonly<ReportCard> | null {
     return state.report;

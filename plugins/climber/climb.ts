@@ -1,10 +1,8 @@
 // Main engineering's climber (README.md), after ratstack's hill-climb prompt: each climb measures Focus with the
 // scorecard, takes the worst gap, fixes it, proves the fix with the same numbers, and ships one pull request. Pure: the
 // manager's Climbs part seats the climbing engineer and does the bookkeeping.
-import { frictionGroups, type LedgerEvent, OPEN_FRICTION_DAYS } from '../../shared/ledger';
-import type { Agent, AgentStatus, Project } from '../../shared/types';
-import type { Scorecard, ScorecardNoise, ScorecardService } from '../scorecard/types';
-import type { PastPullRequest } from '../../server/github/provider';
+import { type Agent, type AgentStatus, frictionGroups, type LedgerEvent, OPEN_FRICTION_DAYS, type PastPullRequest, type Project } from '../../plugin-api/server';
+import type { Scorecard, ScorecardNoise, ScorecardService } from '../scorecard/api';
 import type { Climb, ClimbEnd } from './shared';
 
 const FINISHED: AgentStatus[] = ['done', 'error', 'stopped'];

@@ -1,11 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AWAY_DESK } from '../../shared/types';
-import { demoWorkspace } from '../../server/agents/demoRunner';
-import { office, until } from '../../server/agents/fakeOffice';
-import type { WorkspaceOps } from '../../server/agents/types';
-import type { FocusPlugin } from '../../server/plugins/contract';
-import type { Store } from '../../server/store';
-import type { ScorecardService } from '../scorecard/types';
+import { AWAY_DESK, type FocusPlugin } from '../../plugin-api/server';
+import { demoWorkspace, office, type Store, until, type WorkspaceOps } from '../../plugin-api/testing';
+import type { ScorecardService } from '../scorecard/api';
 import climber from './server';
 import { climbingEngineer, type Climb } from './shared';
 

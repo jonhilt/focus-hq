@@ -71,7 +71,7 @@ GitHub failing costs the climb its log, not the climb: the terminal says so.
 - the **treatment** gets the same log with that pick planted as a climb you closed, with a reason;
 - a judge (`--judge`, Haiku by default) finds the rejected gap on each session's shortlist, if it's there.
 
-It's **remembered** when the rejected gap is a real contender (the control's other sessions list it too) and no treatment session takes it; **repeated** when the treatment takes it at least as often as the control; otherwise **inconclusive** (try `--runs 5`). It also counts how many sessions took the top of their own shortlist by the scoring rule. Each run is saved in `~/.focus/climb-replays/` with every shortlist and judgement and what it cost. It runs real sessions, so it's by hand, not in the gate.
+It's **remembered** when the rejected gap is a real contender (the control's other sessions list it too) and no treatment session takes it; **repeated** when the treatment takes it at least as often as the control; otherwise **inconclusive** (try `--runs 5`). It also counts how many sessions took the top of their own shortlist by the scoring rule. Each run is saved in the plugin's own folder, `~/.focus/plugins/climber/` (the office kept them in `~/.focus/climb-replays/` before the climber was a plugin; they move across on the next run) with every shortlist and judgement and what it cost. It runs real sessions, so it's by hand, not in the gate.
 
 ## Where it lives
 

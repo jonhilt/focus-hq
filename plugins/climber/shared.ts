@@ -1,8 +1,7 @@
 // Main engineering's climber (README.md): one engineer who takes the scorecard's worst gap in Focus's own repo and
 // ships one pull request for it at a time, while the captain keeps climbing switched on. What the server and the
 // browser share of it.
-import { fixedCrew } from '../../shared/crew';
-import type { Planner } from '../../shared/types';
+import { fixedCrew, type Planner } from '../../plugin-api/shared';
 
 /** The plugin's id, as FOCUS_PLUGINS names it. */
 export const CLIMBER = 'climber';

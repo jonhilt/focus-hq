@@ -3,4 +3,8 @@
 import { config } from '../server/config';
 
 export { office, until } from '../server/agents/fakeOffice';
+/** The demo's workspace, which a test's office works in unless it's given another, and the shape of one. */
+export { demoWorkspace } from '../server/agents/demoRunner';
+export type { WorkspaceOps } from '../server/agents/types';
+export type { Store } from '../server/store';
 export const OFFICE_DIR = config.root;

@@ -10,14 +10,10 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import path from 'node:path';
 import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
 import { climbBrief, climbLog } from '../climb';
-import { config } from '../../../server/config';
-import type { PastPullRequest } from '../../../server/github/provider';
-import { SavedScorecards, scorecardsDir } from '../../scorecard/desk';
-import { direction, formatValue } from '../../scorecard/scorecard';
-import type { Scorecard } from '../../scorecard/types';
-import { CLIMB_BRANCH } from '../shared';
+import { type PastPullRequest, pluginDataDir } from '../../../plugin-api/server';
+import { direction, formatValue, render, SavedScorecards, type Scorecard, scorecardsDir } from '../../scorecard/api';
+import { CLIMB_BRANCH, CLIMBER } from '../shared';
 import { FIND_SCHEMA, findGapQuestion, followsRule, PICK_SCHEMA, pickedGap, plantRejection, rankOnly, replayVerdict, sighting, type ClimbPick } from './climbReplayRules';
-import { render } from '../../scorecard/scripts/scorecardRules';
 
 const ROOT = path.resolve(import.meta.dirname, '../../..');
 const arg = (name: string) => (process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : undefined);
@@ -89,7 +85,8 @@ async function main() {
   const result = replayVerdict(controlSeen, treatmentSeen, [...control, ...treatment]);
 
   const out = { at: Date.now(), commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim(), runs: RUNS, judge: JUDGE, rejected, control, treatment, controlSeen, treatmentSeen, result, costUsd: cost };
-  const dir = path.join(config.dataDir, 'climb-replays');
+  // the plugin's own folder (kept in the office's climb-replays/ before the climber was a plugin)
+  const dir = pluginDataDir(CLIMBER, { movedFrom: 'climb-replays' });
   mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${new Date(out.at).toISOString().replace(/[:.]/g, '-')}.json`);
   writeFileSync(file, `${JSON.stringify(out, null, 2)}\n`);

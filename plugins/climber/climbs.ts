@@ -1,9 +1,6 @@
 import { Effect } from 'effect';
-import type { Agent } from '../../shared/types';
-import { GitHub } from '../../server/github/service';
-import type { PluginHost, PluginState } from '../../server/plugins/contract';
-import { errorMessage, newId } from '../../server/util';
-import type { ScorecardService } from '../scorecard/types';
+import { type Agent, errorMessage, GitHub, newId, type PluginHost, type PluginState } from '../../plugin-api/server';
+import type { ScorecardService } from '../scorecard/api';
 import { climbBrief, climbHome, climbLog, climbStep } from './climb';
 import { CLIMB_BRANCH, CLIMB_ENDS_KEPT, CLIMBER_ID, climbingEngineer, freshClimb, type Climb } from './shared';
 

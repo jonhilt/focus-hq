@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { LedgerEvent } from '../../shared/ledger';
-import type { Agent } from '../../shared/types';
-import type { Scorecard } from '../scorecard/types';
-import type { PastPullRequest } from '../../server/github/provider';
+import type { Agent, LedgerEvent, PastPullRequest } from '../../plugin-api/server';
+import type { Scorecard } from '../scorecard/api';
 import { freshClimb, type Climb } from './shared';
 import { climbBrief, climbHome, climbLog, type MainScorecards, climbLogText, climbPullRequest, climbStep, climbTarget, gapScore, openRetroIssues, ownWords, ranked, section, shortlistOf } from './climb';
 

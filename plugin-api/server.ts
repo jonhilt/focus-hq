@@ -8,6 +8,9 @@ export { ARTIFACT_LIMITS } from '../server/agents/lead';
 export { errorMessage, newId, run, sleep, truncate } from '../server/util';
 /** What a read-only Claude Code session is given and gives back (`host.readOnlySession`). */
 export type { ReadOnlyResult, ReadOnlyRun, ReadOnlyTool } from '../server/agents/claudeCrew';
+/** GitHub, as a brief's Effect reads it (`BriefSpec.brief`), and a merged or closed pull request as it gives it. */
+export { GitHub } from '../server/github/service';
+export type { PastPullRequest } from '../server/github/provider';
 /** A plugin's own folder for files, for its scripts (its server part has `host.dataDir()`, the same folder). */
 export { pluginDataDir } from '../server/plugins/dataDir';
 /** The office on this machine, for a plugin's scripts: its ledger, its agents' transcripts and its clones of repos. */

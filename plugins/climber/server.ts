@@ -1,6 +1,6 @@
 // The climber plugin (README.md): main engineering's climbing engineer, who moves the office's own repo up its
 // scorecard one pull request at a time while the captain keeps climbing switched on. FOCUS_PLUGINS=climber.
-import type { FocusPlugin } from '../../server/plugins/contract';
+import type { FocusPlugin } from '../../plugin-api/server';
 import { CLIMB_ASSIGNMENT, CLIMB_SUMMARY, climbPullRequest } from './climb';
 import { Climbs } from './climbs';
 import { CLIMBER, isClimbBranch } from './shared';

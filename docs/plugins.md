@@ -33,7 +33,7 @@ A plugin's saved state stays in `state.json` while it's switched off, so switchi
 
 A plugin that can't work without another says so: `requires: ['scorecard']` on its `FocusPlugin`. The office starts every plugin after the ones it requires, whatever order `FOCUS_PLUGINS` lists them in, and leaves out a plugin whose requirement isn't switched on, saying why in its log (`it requires scorecard, which isn't switched on (add it to FOCUS_PLUGINS)`). The plugins that require a left-out plugin are left out in turn, and so are plugins that require each other round a loop. The plugins left out, and why, are in `Plugins.leftOut`.
 
-A required plugin lends what it shares through `provides`, returned from its `start` (the scorecard provides main's scorecards: `history` and `noise`). The plugin that requires it asks the host: `host.uses<ScorecardService>('scorecard')`, typed with the providing plugin's own interface, imported as a type only, so no code passes between them. Asking for a plugin it didn't require throws.
+A required plugin lends what it shares through `provides`, returned from its `start` (the scorecard provides main's scorecards: `history` and `noise`). The plugin that requires it asks the host: `host.uses<ScorecardService>('scorecard')`, typed with the providing plugin's own interface, imported from its `api.ts`. Asking for a plugin it didn't require throws.
 
 | Climber | Scorecard | What happens |
 | --- | --- | --- |
@@ -41,7 +41,9 @@ A required plugin lends what it shares through `provides`, returned from its `st
 | off | on | the scorecard alone: it needs nothing |
 | on | off | the climber is left out, saying why: its routes, card and briefs aren't there, and its saved state waits |
 
-The scorecard provides how to read a number too (`direction`: whether it's moved past its wobble; `formatValue`: how it's written), so the climber's pure rules take them from what it provides rather than from its code. Only the climber's replay script (`pnpm run climb:replay`), a tool for working on the climber's prompt, imports the scorecard's code by path.
+The scorecard provides how to read a number too (`direction`: whether it's moved past its wobble; `formatValue`: how it's written), so the climber's pure rules take them from what it provides rather than from its code.
+
+A plugin that others require can publish an `api.ts`: the one file of it another plugin may import, as `plugin-api/` is the one way into the core. The scorecard's (`plugins/scorecard/api.ts`) lends its types (`ScorecardService`, `Scorecard`…) and, for the climber's replay script (`pnpm run climb:replay`), which runs without a host, the saved scorecards (`SavedScorecards`, `scorecardsDir`) and how it words a change (`direction`, `formatValue`, `render`). Anything else of the scorecard it can change without the climber noticing.
 
 ## Switched on per project
 
@@ -137,9 +139,9 @@ A plugin reaches the office only through `plugin-api/`, the core's one published
 - `plugin-api/layout.ts`: where the ship's spaces and holodeck halls are (`SPACE`, `around`), plain geometry that loads without the browser, and also exported from `client.ts` with the ship kit (`ShipHost`, `ShipPart`, `PluginSpace`, `Hologram`, `hover`, `canvasTexture`, `makeCanvas`);
 - `plugin-api/testing.ts`, for its tests only: `office()`, a pretend office its tests can switch it on in, `until`, and `OFFICE_DIR`.
 
-Whatever the API doesn't re-export, the core can change without a plugin noticing. When a plugin needs more of the office, the API grows: what the office does for a plugin (files, checkouts, GitHub, sessions) goes on the host, so the core decides what a plugin can do and a test can lend it a fake; a type or a pure helper is re-exported. For another plugin, see [plugins that need each other](#plugins-that-need-each-other): it reaches what that plugin provides through the host, and imports only that plugin's types.
+Whatever the API doesn't re-export, the core can change without a plugin noticing. When a plugin needs more of the office, the API grows: what the office does for a plugin (files, checkouts, GitHub, sessions) goes on the host, so the core decides what a plugin can do and a test can lend it a fake; a type or a pure helper is re-exported. For another plugin, see [plugins that need each other](#plugins-that-need-each-other): it reaches what that plugin provides through the host, and imports only that plugin's `api.ts`.
 
-`plugin-api/boundary.test.ts` holds the repo to it, resolving every import as TypeScript does: a plugin imports only its own files, `plugin-api/` (`testing.ts` from tests alone), npm packages and another plugin's types, and the core never imports a plugin. The plugins not yet moved behind the API are listed in its `NOT_YET_BEHIND`, with how many imports of theirs still cross: exactly that many, so one more fails, and one fewer means bringing the count down. A new plugin isn't on the list, so it has to import through the API from the start.
+`plugin-api/boundary.test.ts` holds the repo to it, resolving every import as TypeScript does: a plugin imports only its own files, `plugin-api/` (`testing.ts` from tests alone), npm packages and another plugin's `api.ts`, and the core never imports a plugin. The plugins not yet moved behind the API are listed in its `NOT_YET_BEHIND`, with how many imports of theirs still cross: exactly that many, so one more fails, and one fewer means bringing the count down. A new plugin isn't on the list, so it has to import through the API from the start.
 
 Typecheck, lint (no non-null assertions outside tests, as in `server/`), the scorecard's fence and CRAP cover `plugins/` like the rest.
 

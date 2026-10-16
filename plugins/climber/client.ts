@@ -1,9 +1,4 @@
-import { api } from '../../client/src/net/api';
-import { state } from '../../client/src/net/state';
-import { type ClientPlugin, pluginState } from '../../client/src/plugins';
-import type { Ui } from '../../client/src/ui/context';
-import { h, timeAgo } from '../../client/src/ui/dom';
-import { Switch } from '../../client/src/ui/panels';
+import { callPlugin, type ClientPlugin, h, office, pluginState, Switch, timeAgo, type Ui } from '../../plugin-api/client';
 import { CLIMBER, climbingEngineer, type Climb } from './shared';
 import './climber.css';
 
@@ -22,10 +17,10 @@ function climberView(ui: Ui): HTMLElement {
   // the plugin's own state, as its server part saves it
   const climb = pluginState<Climb>(CLIMBER);
   const engineer = climbingEngineer().name;
-  const climber = climb?.agentId ? state.agents.get(climb.agentId) : undefined;
+  const climber = climb?.agentId ? office.agent(climb.agentId) : undefined;
   const keep = new Switch('Keep climbing', !!climb?.keepClimbing, {
     title: 'One climb at a time on the office’s own repo: each opens a pull request that waits for you to merge it',
-    changed: (on) => void api.plugin<Climb>(CLIMBER, '/keep-climbing', { on }).catch((err: Error) => {
+    changed: (on) => void callPlugin<Climb>(CLIMBER, '/keep-climbing', { on }).catch((err: Error) => {
       keep.on = !on;
       ui.error(err.message);
     }),
