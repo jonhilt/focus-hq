@@ -58,9 +58,8 @@ export class IssuePlanner {
   start(projectId: string, idea: string, revise?: DraftRequest['revise']): IssueDraft {
     const project = this.store.project(projectId);
     const planner = plannerFor(projectId);
-    if (!project.repos.length) throw new Error(`${project.name} has no repositories yet`);
-    if (this.running.has(projectId)) throw new Error(`${planner.name} is already drafting an issue for ${project.name}`);
-    if (revise ? !revise.notes.trim() : !idea.trim()) throw new Error(revise ? `Tell ${planner.name} what to change` : `Tell ${planner.name} what you have in mind`);
+    const refused = draftRefusal({ project: project.name, repos: project.repos.length, planner: planner.name, drafting: this.running.has(projectId), idea, revise });
+    if (refused) throw new Error(refused);
 
     const draft: IssueDraft = { projectId, status: 'drafting', idea: idea.trim(), activity: 'Reading up on the project', startedAt: Date.now() };
     this.set(draft);
@@ -91,16 +90,7 @@ export class IssuePlanner {
         if (!current()) return;
         if (result.sessionId) this.sessions.set(projectId, result.sessionId);
         const repos = this.store.projects.find((p) => p.id === projectId)?.repos ?? [];
-        Object.assign(draft, {
-          status: 'ready',
-          activity: 'Draft ready',
-          repo: repos.includes(result.repo) ? result.repo : repos[0],
-          title: result.title.trim(),
-          body: result.body.trim(),
-          tooBig: result.tooBig?.trim() || undefined,
-          costUsd: result.costUsd,
-          finishedAt: Date.now(),
-        } satisfies Partial<IssueDraft>);
+        Object.assign(draft, readyDraft(result, repos, Date.now()));
         this.broadcast(draft);
         this.hub.toast('success', `📝 ${planner.name} has a draft ready at ${project.name}'s Ops station: ${truncate(draft.title ?? '', 60)}`, undefined, project.id);
       })
@@ -137,6 +127,40 @@ export class IssuePlanner {
   private broadcast(draft: IssueDraft): void {
     this.hub.send({ type: 'draft', projectId: draft.projectId, draft });
   }
+}
+
+// ---------------------------------------------------------------- decisions
+
+/** Why the planner won't start this draft, or undefined when they will. */
+export function draftRefusal(ask: {
+  project: string;
+  repos: number;
+  planner: string;
+  drafting: boolean;
+  idea: string;
+  revise?: DraftRequest['revise'];
+}): string | undefined {
+  if (!ask.repos) return `${ask.project} has no repositories yet`;
+  if (ask.drafting) return `${ask.planner} is already drafting an issue for ${ask.project}`;
+  if (ask.revise) return ask.revise.notes.trim() ? undefined : `Tell ${ask.planner} what to change`;
+  return ask.idea.trim() ? undefined : `Tell ${ask.planner} what you have in mind`;
+}
+
+/**
+ * What a finished draft becomes: in the planner's repo while it's still one of the project's (else its first), trimmed,
+ * and only flagged too big for a reason that says something.
+ */
+export function readyDraft(result: DraftResult, repos: readonly string[], now: number): Partial<IssueDraft> {
+  return {
+    status: 'ready',
+    activity: 'Draft ready',
+    repo: repos.includes(result.repo) ? result.repo : repos[0],
+    title: result.title.trim(),
+    body: result.body.trim(),
+    tooBig: result.tooBig?.trim() || undefined,
+    costUsd: result.costUsd,
+    finishedAt: now,
+  };
 }
 
 // ---------------------------------------------------------------- prompts
