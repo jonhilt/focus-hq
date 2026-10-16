@@ -135,8 +135,9 @@ export class Comms extends Part {
   stop(id: string): void {
     const agent = this.store.agent(id);
     const rt = this.rt(id);
-    // held for your plan's limit: they don't carry on by themselves when it resets
-    if (agent.held) this.update(agent, { held: undefined, activity: STOPPED_BY_CAPTAIN });
+    // held for your plan's limit: they don't carry on by themselves when it resets. The office shutting down isn't the
+    // captain's stop: the hold stays in their journal, to hold them again when it starts
+    if (agent.held && !this.core.closing) this.update(agent, { held: undefined, activity: STOPPED_BY_CAPTAIN });
     if (agent.handover) {
       void this.core.cloud.stayLocal(id, false).catch(() => undefined);
     } else if (rt.session) {
