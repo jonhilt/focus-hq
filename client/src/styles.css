@@ -469,25 +469,26 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .chart-work .chart-thread:hover > span { color: var(--tone); text-decoration: underline; }
 .chart-work li.done span { color: var(--muted); }
 .chart-evidence.one { grid-template-columns: 1fr; }
-.chart-svg { flex: 1; min-height: 0; width: 100%; background: #000; border-radius: 10px; font-family: var(--ui); }
+.chart-svg { flex: 1; min-height: 0; width: 100%; background: #000; border-radius: 10px; font-family: var(--ui); cursor: grab; touch-action: none; user-select: none; }
+.chart-svg.dragging { cursor: grabbing; }
 .chart-readout { flex: none; background: var(--surface-2); color: var(--lcars-peach); border-radius: 999px; padding: 6px 18px; font-size: 16px; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chart-course { fill: none; stroke: var(--lcars-gold); stroke-width: 4; stroke-linecap: round; }
 .chart-launch { fill: var(--lcars-orange); }
-.chart-caption { fill: var(--lcars-peach); font-size: calc(15px / max(1, var(--z, 1))); letter-spacing: 0.12em; }
+.chart-caption { fill: var(--lcars-peach); font-size: calc(15px / var(--z, 1)); letter-spacing: 0.12em; }
 .chart-caption.launch { fill: var(--lcars-orange); letter-spacing: 0.04em; }
 .chart-objective { fill: none; stroke: var(--lcars-peach); stroke-width: 1.5; stroke-dasharray: 3 6; opacity: 0.9; }
 .chart-done { height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; color: #000; font: 600 17px/1.1 var(--ui); overflow: hidden; }
 .chart-projected path { fill: none; stroke: var(--lcars-periwinkle); stroke-width: 2; stroke-dasharray: 2 7; stroke-linecap: round; }
 .chart-projected .mark { fill: #000; stroke: var(--lcars-periwinkle); stroke-width: 2; }
 .chart-projected .hit { fill: transparent; }
-.chart-projected text { fill: var(--lcars-periwinkle); font-size: calc(15px / max(1, var(--z, 1))); }
+.chart-projected text { fill: var(--lcars-periwinkle); font-size: calc(15px / var(--z, 1)); }
 .chart-idea { cursor: pointer; outline: none; }
 .chart-probe { cursor: pointer; }
 .chart-probe .trail { fill: none; stroke: var(--lcars-sky); stroke-width: 1.5; stroke-dasharray: 2 6; opacity: 0.55; }
 .chart-probe .glow { fill: var(--lcars-sky); opacity: 0.18; }
 .chart-probe .ship { fill: #f1eaff; stroke: var(--lcars-sky); stroke-width: 1.5; }
-.chart-probe .what { fill: var(--lcars-sky); font-size: calc(14px / max(1, var(--z, 1))); letter-spacing: 0.04em; }
-.chart-probe .doing { fill: var(--muted); font-size: calc(13px / max(1, var(--z, 1))); }
+.chart-probe .what { fill: var(--lcars-sky); font-size: calc(14px / var(--z, 1)); letter-spacing: 0.04em; }
+.chart-probe .doing { fill: var(--muted); font-size: calc(13px / var(--z, 1)); }
 .chart-probe .pulse { fill: var(--lcars-green); }
 .chart-probe.sent .glow { fill: var(--lcars-green); }
 .chart-probe.sent .doing { fill: var(--lcars-green); }
@@ -500,11 +501,11 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .chart-idea.picked text { fill: var(--lcars-gold); }
 .chart-scrubbed path { fill: none; stroke: var(--lcars-red); stroke-width: 2.5; stroke-dasharray: 7 6; }
 .chart-scrubbed path.cross { stroke-dasharray: none; stroke-width: 3; }
-.chart-scrubbed text { fill: var(--muted); font-size: calc(14px / max(1, var(--z, 1))); }
+.chart-scrubbed text { fill: var(--muted); font-size: calc(14px / var(--z, 1)); }
 .chart-scrubbed .was { fill: var(--lcars-red); letter-spacing: 0.06em; }
 .chart-contact { cursor: pointer; }
 .chart-contact .blip { fill: #000; stroke: var(--lcars-sky); stroke-width: 2; }
-.chart-contact text { fill: var(--lcars-sky); font-size: calc(15px / max(1, var(--z, 1))); }
+.chart-contact text { fill: var(--lcars-sky); font-size: calc(15px / var(--z, 1)); }
 .chart-contact.pursued .blip { fill: var(--lcars-green); stroke: var(--lcars-green); }
 .chart-contact.pursued text { fill: var(--lcars-green); }
 .chart-contact .trail { fill: none; stroke: var(--lcars-green); stroke-width: 1.5; stroke-dasharray: 2 5; opacity: 0.7; }
@@ -550,7 +551,7 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .qa-spots ul { margin: 4px 0 0; padding-left: 18px; }
 .qa-spots code { font-family: var(--mono); font-size: 12px; color: var(--lcars-sky); }
 .chart-wp .num { fill: #000; font-size: 14px; font-weight: 700; pointer-events: none; }
-.chart-wp .name { fill: var(--text); font-size: calc(17px / max(1, var(--z, 1))); }
+.chart-wp .name { fill: var(--text); font-size: calc(17px / var(--z, 1)); }
 .chart-wp .name.heading, .chart-wp .name.work { font-style: italic; }
 .chart-wp .name.unset { fill: var(--muted); }
 .chart-wp .track { fill: none; stroke: #2a2840; stroke-width: 4; }

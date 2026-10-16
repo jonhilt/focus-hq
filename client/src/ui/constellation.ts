@@ -116,7 +116,7 @@ export interface Column {
  */
 export const ORBIT = {
   quiet: { r: 34, size: 9 },
-  focus: { row: 24, size: 13, reach: [72, 112, 160], ring: 24, mark: 6, gap: 9, chars: 30, rows: 12 },
+  focus: { row: 24, size: 13, reach: [72, 112, 160, 220, 300], ring: 24, mark: 6, gap: 9, chars: 30, rows: 12 },
 } as const;
 
 /** How far round (radians) to keep clear of each way out of a waypoint that's already taken: the course, its name. */

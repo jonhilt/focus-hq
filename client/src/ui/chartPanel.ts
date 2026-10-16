@@ -8,7 +8,8 @@ import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { fill, h } from './dom';
 import { prLink } from './goals';
-import { type Box, CHART, clip, type CoursePlot, everySlice, type Label, leaderEnd, LINE_GAP, plotCourse, type ProbeFlight, probeFlights, probesOut, type Pt, seeded, shieldState, TRANSMIT_MS, waypointName } from './course';
+import { type Box, CHART, chartSize, clip, type CoursePlot, everySlice, type Label, leaderEnd, LINE_GAP, plotCourse, type ProbeFlight, probeFlights, probesOut, type Pt, seeded, shieldState, TRANSMIT_MS, waypointName } from './course';
+import { close, closer, home, panBy, type View, wheelZoom, whole, type World, zoomAbout, zoomOn } from './chartView';
 import { type Column, ORBIT, type PlacedNode, type Quiet, type Sky, sky, sliceWork, type WorkKind, type WorkNode } from './constellation';
 import { sliceProgress, sliceSteps } from '../world/goalRoom';
 
@@ -196,7 +197,7 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: Picked, nav: Nav,
   const { width, height } = plot;
   const rand = seeded(`${goal.id}:stars`);
   const stars = s('g', { class: 'chart-stars' });
-  for (let i = 0; i < 240; i++) stars.append(s('circle', { cx: (rand() * width).toFixed(1), cy: (rand() * height).toFixed(1), r: rand() < 0.9 ? 0.8 : 1.6, fill: rand() < 0.5 ? '#f1eaff' : LCARS.sky, opacity: (0.3 + rand() * 0.7).toFixed(2) }));
+  for (let i = 0; i < Math.round((240 * width * height) / (CHART.width * CHART.height)); i++) stars.append(s('circle', { cx: (rand() * width).toFixed(1), cy: (rand() * height).toFixed(1), r: rand() < 0.9 ? 0.8 : 1.6, fill: rand() < 0.5 ? '#f1eaff' : LCARS.sky, opacity: (0.3 + rand() * 0.7).toFixed(2) }));
   // space we've been through is clear; the rest is fog
   const holes = s('g');
   for (const p of [plot.launch, ...plot.points, ...plot.scrubbed.map((x) => x.to)]) holes.append(s('circle', { cx: p.x, cy: p.y, r: 120, fill: 'url(#chart-seen)' }));
@@ -592,36 +593,13 @@ function readout(goal: ChartGoal): HTMLElement {
   return h('div', { class: 'chart-readout' }, parts.join(' · '));
 }
 
-/** How far the chart zooms in on the waypoint in focus. */
-const ZOOM = 1.7;
-/** The course's names, in screen pixels once the chart's bigger than it's laid out for (they shrink with it when it's smaller). */
+/** The course's names, in screen pixels, however far the chart's zoomed. */
 const NAME_PX = 17;
 
-interface View {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-const WHOLE: View = { x: 0, y: 0, w: CHART.width, h: CHART.height };
-
-/** How much room (in the chart's units) to leave round what's zoomed to. */
-const MARGIN = 24;
-
-/**
- * The part of the chart in view zoomed in on `b` (the waypoint in focus and its column): `ZOOM` times closer, unless it
- * takes less to fit all of it in with a margin, centred on it.
- */
-export const zoomOn = (b: Box): View => {
-  const k = Math.min(ZOOM, Math.max(1, Math.min(CHART.width / (b.x1 - b.x0 + MARGIN * 2), CHART.height / (b.y1 - b.y0 + MARGIN * 2))));
-  const w = CHART.width / k;
-  const h = CHART.height / k;
-  const c = { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 };
-  // kept on the chart, unless what's zoomed to runs past its edge
-  const x = Math.max(Math.min(0, b.x0 - MARGIN), Math.min(Math.max(CHART.width, b.x1 + MARGIN) - w, c.x - w / 2));
-  const y = Math.max(Math.min(0, b.y0 - MARGIN), Math.min(Math.max(CHART.height, b.y1 + MARGIN) - h, c.y - h / 2));
-  return { x, y, w, h };
-};
+/** How far a pointer moves before a press on the chart is a drag rather than a click. */
+const DRAG_PX = 4;
+/** How long the chart waits once zooming stops before laying its words out again for the new size. */
+const SETTLE_MS = 180;
 
 /**
  * A goal's star chart (stellar cartography): its slices as waypoints on a course towards the objective, each with its
@@ -640,11 +618,18 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
   // the helpers still out, whose probes are in flight
   const helpers = () => (liveId ? state.agents.get(liveId)?.helpers ?? [] : []);
   const out = () => probesOut(liveId ? state.agents.get(liveId) : undefined);
-  // zoomed in on the picked waypoint, or the whole voyage; the view eases from where it was to where it's going
+  // zoomed in on the picked waypoint, or on its latest stretch (`home`, the whole of a short voyage), or the whole
+  // voyage (`all`), or wherever the captain's zoomed and dragged it to (`free`); the view eases from where it was to
+  // where it's going. A long voyage's chart is bigger than the frame it's shown in, rather than squeezed into it.
+  let world: World = chartSize(first.waypoints.length, true);
   let zoomed = false;
-  let view: View = WHOLE;
-  let target: View = WHOLE;
+  let free = false;
+  let all = false;
+  let view: View = home(world);
+  let target: View = home(world);
   let easing = 0;
+  // what's drawn past the chart's edge (the picked waypoint's column), which the view can be dragged out over
+  let extra: Box | undefined;
   // how many screen pixels a unit of the chart takes with the whole voyage in view
   const fit = () => {
     const svg = body.querySelector('.chart-svg');
@@ -699,6 +684,8 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
       delete picked.idea;
       delete picked.node;
       zoomed = true;
+      free = false;
+      all = false;
       render();
     },
     contact: (id) => {
@@ -719,14 +706,19 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
       delete picked.contact;
       delete picked.idea;
       zoomed = true;
+      free = false;
+      all = false;
       render();
     },
   };
   // a step back out to the whole voyage, over the chart's top corner
-  const whole = h('button', { class: 'btn small chart-whole', onclick: () => {
+  const wholeVoyage = () => {
     zoomed = false;
+    free = false;
+    all = true;
     render();
-  } }, 'Whole voyage');
+  };
+  const wholeButton = h('button', { class: 'btn small chart-whole', onclick: wholeVoyage }, 'Whole voyage');
   // the picked waypoint's work, for stepping through with ↑ and ↓
   let work: WorkNode[] = [];
   const render = () => {
@@ -734,30 +726,39 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
     if (!g) return;
     const flying = flyingNow(g, out(), Date.now());
     const key = `${JSON.stringify(g)}|${[...flying].join()}`;
-    const pickKey = `${picked.slice}:${picked.contact ?? ''}:${picked.idea ?? ''}:${picked.node ?? ''}:${zoomed}`;
-    if (key === drawn && pickKey === drawnPick) return;
-    const scrolled = pickKey === drawnPick ? body.querySelector('.chart-log')?.scrollTop ?? 0 : 0;
+    const pickKey = `${picked.slice}:${picked.contact ?? ''}:${picked.idea ?? ''}:${picked.node ?? ''}`;
+    // zoomed by hand, the words are laid out again for each new zoom (a drag alone doesn't change them)
+    const viewKey = free ? `free:${closer(view).toFixed(2)}` : `${zoomed}:${all}`;
+    if (key === drawn && `${pickKey}|${viewKey}` === drawnPick) return;
+    const scrolled = drawnPick.startsWith(`${pickKey}|`) ? body.querySelector('.chart-log')?.scrollTop ?? 0 : 0;
     drawn = key;
-    drawnPick = pickKey;
+    drawnPick = `${pickKey}|${viewKey}`;
     drawnFlying = [...flying].join();
     // a closed goal's ideas for next went nowhere: its chart ends at its last waypoint
     const ideas = g.closedAt ? [] : g.note?.next ?? [];
-    const plot = plotCourse({ waypoints: g.waypoints, current: g.current, next: ideas, contacts: g.contacts, seed: g.id });
-    const at = plot.points.find((p) => p.waypoint.slice === picked.slice);
+    const voyage = { waypoints: g.waypoints, current: g.current, next: ideas, contacts: g.contacts, seed: g.id };
+    // where everything lies doesn't change with the zoom, only how much room its words take
+    world = chartSize(voyage.waypoints.length, true);
+    const at = plotCourse(voyage, 1, true).points.find((p) => p.waypoint.slice === picked.slice);
     // the words' size in the chart's units, as they'll be drawn once the view has eased to where it's going: zoomed in
     // on the waypoint, then fitted to its column, which takes laying out again when that has to zoom out to fit it
+    // (zoomed by hand, it stays where it's been put, and the picked waypoint's work stands in a column once it's close in)
+    const focusing = free ? close(view) : zoomed;
+    // the words are the same size on the screen however far it's zoomed, so they're laid out again at their size in the
+    // chart's units: zoomed in, there's room to say more; zoomed out over a long voyage, the oldest names give way first
     const layout = (v: View) => {
       const z = fit() * (CHART.width / v.w);
-      return { z, heavens: constellations(g, plot, zoomed ? picked.slice : undefined, flying, 1 / z, NAME_PX / Math.max(1, z)) };
+      const plot = plotCourse(voyage, 1 / z, true);
+      return { z, plot, heavens: constellations(g, plot, focusing ? picked.slice : undefined, flying, 1 / z, NAME_PX / z) };
     };
-    target = zoomed && at ? zoomOn({ x0: at.x, y0: at.y, x1: at.x, y1: at.y }) : WHOLE;
-    let { z, heavens } = layout(target);
-    for (let pass = 0; zoomed && heavens.column && pass < 3; pass++) {
-      const fitted = zoomOn(heavens.column.bounds);
+    target = free ? view : zoomed && at ? zoomOn(world, { x0: at.x, y0: at.y, x1: at.x, y1: at.y }) : all ? whole(world) : home(world);
+    let { z, plot, heavens } = layout(target);
+    for (let pass = 0; !free && zoomed && heavens.column && pass < 3; pass++) {
+      const fitted = zoomOn(world, heavens.column.bounds);
       const again = fitted.w > target.w + 1;
       target = fitted;
       if (!again) break;
-      ({ z, heavens } = layout(target));
+      ({ z, plot, heavens } = layout(target));
     }
     work = workOf(g, g.waypoints.find((w) => w.slice === picked.slice) ?? { slice: 0, startedAt: 0 }, flying);
     const w = g.waypoints.find((x) => x.slice === picked.slice);
@@ -772,8 +773,10 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
       : picked.idea !== undefined && ideas[picked.idea] !== undefined
         ? ideaView(g, ideas, picked.idea, nav)
         : node && w ? nodeView(g, w, node, work, ctx) : logView(g, w, work, ctx);
-    whole.hidden = !zoomed;
-    fill(body, h('div', { class: 'chart-map' }, chartSvg(g, plot, picked, nav, heavens, 1 / z), whole, readout(g)), log);
+    extra = heavens.column?.bounds;
+    // there's more to see than what's in view: zoomed in, or on a long voyage's latest stretch
+    wholeButton.hidden = !zoomed && !free && (all || world.width <= CHART.width);
+    fill(body, h('div', { class: 'chart-map' }, chartSvg(g, plot, picked, nav, heavens, 1 / z), wholeButton, readout(g)), log);
     const svg = body.querySelector('.chart-svg');
     if (svg) resized.observe(svg);
     showView();
@@ -782,6 +785,73 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
     plotted = { goal: g, plot };
     if (!frame) fly();
   };
+  // zoomed (a wheel turn or a pinch, about the pointer) or dragged by hand: the view goes where it's put, and the words
+  // are laid out again for the new zoom once it stops
+  let settle = 0;
+  const moveTo = (v: View) => {
+    cancelAnimationFrame(easing);
+    easing = 0;
+    free = true;
+    view = v;
+    target = v;
+    showView();
+    wholeButton.hidden = false;
+    clearTimeout(settle);
+    settle = window.setTimeout(render, SETTLE_MS);
+  };
+  ui.panels.own(() => clearTimeout(settle));
+  const svgOf = () => body.querySelector<SVGSVGElement>('.chart-svg');
+  /** Where on the chart (in its units) a point on the screen is. */
+  const onChart = (x: number, y: number) => {
+    const m = svgOf()?.getScreenCTM();
+    return m && new DOMPoint(x, y).matrixTransform(m.inverse());
+  };
+  body.addEventListener('wheel', (e) => {
+    if (!(e.target instanceof Element) || !e.target.closest('.chart-svg')) return;
+    e.preventDefault();
+    const at = onChart(e.clientX, e.clientY);
+    if (at) moveTo(zoomAbout(world, view, at, wheelZoom(e.deltaY, e.ctrlKey), extra));
+  }, { passive: false });
+  let press: { x: number; y: number; view: View; id: number } | undefined;
+  let dragging = false;
+  let dragged = false;
+  body.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !(e.target instanceof Element) || !e.target.closest('.chart-svg')) return;
+    press = { x: e.clientX, y: e.clientY, view, id: e.pointerId };
+    dragging = false;
+  });
+  body.addEventListener('pointermove', (e) => {
+    if (!press || e.pointerId !== press.id) return;
+    const dx = e.clientX - press.x;
+    const dy = e.clientY - press.y;
+    const svg = svgOf();
+    if (!dragging) {
+      if (Math.hypot(dx, dy) < DRAG_PX) return;
+      dragging = true;
+      svg?.setPointerCapture(e.pointerId);
+      svg?.classList.add('dragging');
+    }
+    // screen pixels a unit of the chart takes, as it's drawn now
+    const scale = svg?.getScreenCTM()?.a || 1;
+    moveTo(panBy(world, press.view, dx / scale, dy / scale, extra));
+  });
+  const release = () => {
+    if (dragging) dragged = true;
+    press = undefined;
+    dragging = false;
+    svgOf()?.classList.remove('dragging');
+  };
+  body.addEventListener('pointerup', release);
+  body.addEventListener('pointercancel', release);
+  // a drag that ends over a waypoint or a node doesn't pick it
+  body.addEventListener('click', (e) => {
+    if (!dragged) return;
+    dragged = false;
+    e.stopPropagation();
+    e.preventDefault();
+  }, true);
+  const zoomBy = (by: number) => moveTo(zoomAbout(world, view, { x: view.x + view.w / 2, y: view.y + view.h / 2 }, by, extra));
+
   render();
   ui.panels.open({ title: h('h2', null, `Stellar cartography `, h('span', { class: 'muted' }, first.title)), body, accent: LCARS.gold, wide: true, full: true });
   // the panel's laid out now: size the chart's words for it
@@ -796,6 +866,17 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
   }
   // ← and → step from waypoint to waypoint, ↑ and ↓ through the picked one's work
   const keys = (e: KeyboardEvent) => {
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    // + and − zoom in and out on the middle of what's in view, 0 goes back to the whole voyage
+    if (e.key === '+' || e.key === '=' || e.key === '-' || e.key === '_') {
+      e.preventDefault();
+      zoomBy(e.key === '+' || e.key === '=' ? 1.25 : 0.8);
+      return;
+    }
+    if (e.key === '0') {
+      wholeVoyage();
+      return;
+    }
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
       if (!work.length) return;
       e.preventDefault();

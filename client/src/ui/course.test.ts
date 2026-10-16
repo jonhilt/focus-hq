@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Contact, Waypoint } from '../../../shared/types';
-import { type Box, CHART, cheapest, clearOf, clip, type CoursePlot, everySlice, hitCounter, hitsAmong, labelBox, overlaps, plotCourse, probeFlights, probesOut, seeded, shieldState, smoothPath, TRANSMIT_MS } from './course';
+import { type Box, CHART, chartSize, cheapest, clearOf, clip, type CoursePlot, everySlice, hitCounter, hitsAmong, labelBox, overlaps, plotCourse, probeFlights, probesOut, seeded, shieldState, smoothPath, STEP, TRANSMIT_MS } from './course';
 
 const wp = (slice: number, more: Partial<Waypoint> = {}): Waypoint => ({ slice, startedAt: slice * 10, landedAt: slice * 10 + 5, title: `Slice ${slice}`, ...more });
 const inside = (p: { x: number; y: number }) => p.x >= 0 && p.x <= CHART.width && p.y >= 0 && p.y <= CHART.height;
@@ -292,5 +292,34 @@ describe('probes on the chart', () => {
 
   it('draws none that never reported once its helper has gone', () => {
     expect(probeFlights(plot, waypoints, new Set(['a']), 200_000).map((f) => f.probe.id)).toEqual(['a']);
+  });
+});
+
+describe('a chart that grows', () => {
+  const steps = (plot: CoursePlot) => plot.points.slice(1).map((p, i) => Math.hypot(p.x - plot.points[i].x, p.y - plot.points[i].y));
+
+  it('stays the chart’s size for a short voyage, and on the wall however long it is', () => {
+    expect(chartSize(4, true)).toEqual({ width: CHART.width, height: CHART.height });
+    expect(chartSize(30, false)).toEqual({ width: CHART.width, height: CHART.height });
+  });
+
+  it('grows, the same shape, to keep a long voyage’s waypoints apart rather than squeezing them', () => {
+    const waypoints = Array.from({ length: 30 }, (_, i) => wp(i + 1));
+    const size = chartSize(30, true);
+    expect(size.width).toBeGreaterThan(CHART.width * 2);
+    expect(size.width / size.height).toBeCloseTo(CHART.width / CHART.height);
+    const grown = plotCourse({ waypoints, next: [], seed: 'long' }, 1, true);
+    expect({ width: grown.width, height: grown.height }).toEqual(size);
+    // along the course, a waypoint's at least most of a step on from the last, however it drifts
+    const along = (plot: CoursePlot) => {
+      const d = { x: plot.objective.x - plot.launch.x, y: plot.objective.y - plot.launch.y };
+      const len = Math.hypot(d.x, d.y);
+      return plot.points.map((p) => ((p.x - plot.launch.x) * d.x + (p.y - plot.launch.y) * d.y) / len);
+    };
+    const gaps = along(grown).slice(1).map((a, i) => a - along(grown)[i]);
+    expect(Math.min(...gaps)).toBeGreaterThan(STEP * 0.95);
+    expect(Math.min(...steps(grown))).toBeGreaterThan(Math.min(...steps(plotCourse({ waypoints, next: [], seed: 'long' }))) * 2);
+    // and every one of them is named
+    expect(grown.points.every((p) => p.label)).toBe(true);
   });
 });

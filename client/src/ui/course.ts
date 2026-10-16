@@ -258,8 +258,23 @@ export function smoothPath(pts: Pt[]): string {
   return d;
 }
 
+/** The closest waypoints come along the course on a chart that grows (`chartSize`). */
+export const STEP = 110;
+
 /**
- * Lays the voyage out on a chart of `CHART`'s size, its labels `scale` times `LABEL_SIZE` (bigger on the briefing
+ * How big a chart a voyage of `n` waypoints is laid out on: `CHART`'s size, or, when it may `grow` (the chart panel,
+ * which can be zoomed and dragged about, unlike the wall), as much bigger, the same shape, as keeps its waypoints
+ * `STEP` apart rather than squeezing them closer.
+ */
+export function chartSize(n: number, grow: boolean): { width: number; height: number } {
+  const { width, height, pad, objectiveR } = CHART;
+  const diagonal = Math.hypot(width - 2 * pad - objectiveR + 12, height - 2 * pad - objectiveR - 8);
+  const k = grow ? Math.max(1, ((n + 1.3) * STEP + objectiveR + 70) / diagonal) : 1;
+  return { width: width * k, height: height * k };
+}
+
+/**
+ * Lays the voyage out on a chart of `chartSize`, its labels `scale` times `LABEL_SIZE` (bigger on the briefing
  * room's wall). Waypoints step along the line from the launch point to the objective, never reaching it (how far is left
  * is anyone's guess), each drifting a little to one side of it; after a course correction the course swings over to the
  * other side, and the old heading carries on from the turn, scrubbed.
@@ -269,8 +284,9 @@ export function smoothPath(pts: Pt[]): string {
  * already placed, and crosses the fewest lines; one with no clear spot left goes without (its name's still on hover), so
  * on a long voyage the oldest waypoints are the ones that shrink to their numbers.
  */
-export function plotCourse(voyage: Voyage, scale = 1): CoursePlot {
-  const { width, height, pad, objectiveR } = CHART;
+export function plotCourse(voyage: Voyage, scale = 1, grow = false): CoursePlot {
+  const { pad, objectiveR } = CHART;
+  const { width, height } = chartSize(voyage.waypoints.length, grow);
   const sizes = { waypoint: LABEL_SIZE.waypoint * scale, idea: LABEL_SIZE.idea * scale, contact: LABEL_SIZE.contact * scale, scrubbed: LABEL_SIZE.scrubbed * scale, launch: LABEL_SIZE.launch * scale };
   const chars = (kind: keyof typeof LABEL_CHARS) => Math.round(LABEL_CHARS[kind] / Math.sqrt(scale));
   const rand = seeded(voyage.seed);
@@ -515,7 +531,8 @@ export interface ProbeFlight extends Pt {
  * reported sits where it was, transmitting, for `TRANSMIT_MS`; after that, or if it never reported, it's not drawn.
  */
 export function probeFlights(plot: CoursePlot, waypoints: Waypoint[], out: ReadonlySet<string>, now: number, scale = 1): ProbeFlight[] {
-  const { width, height, pad } = CHART;
+  const { pad } = CHART;
+  const { width, height } = plot;
   // each label is two lines (what it was sent to find, and what it's doing), moved up or down off any before it
   const size = LABEL_SIZE.contact * scale;
   const taken: Box[] = [];
