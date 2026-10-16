@@ -157,8 +157,11 @@ export class Core {
     // a helper that's gone on its way takes its transcript with it
     if ('helpers' in patch) for (const h of agent.helpers ?? []) if (!patch.helpers?.some((x) => x.id === h.id)) this.store.dropLines(h.id);
     const was = agent.status;
+    const wasHeld = agent.held?.until;
     Object.assign(agent, patch);
     if (!this.store.agents.has(agent.id)) return; // dismissed meanwhile
+    // on hold for your plan's limit, or off it: a phase of their run, in its journal (before any status that follows)
+    if ('held' in patch && patch.held?.until !== wasHeld) this.store.journal(agent.id, patch.held ? { kind: 'held', until: patch.held.until } : { kind: 'unheld' });
     // queued for a slot, or setting up: a phase of their run, in its journal
     const fact = patch.status && patch.status !== was ? PHASE_FACTS[patch.status] : undefined;
     if (fact) this.store.journal(agent.id, fact);

@@ -21,7 +21,6 @@ export class Delivery extends Part {
     };
     return Effect.gen({ self: this }, function* () {
       rt.busy = true;
-      journal((t) => ({ kind: 'delivering', turn: t, summary }));
       yield* this.ship(agent, summary, journal).pipe(
         // a failure (or a bug) is the delivery's end; an interruption isn't: a restart finishes it
         Effect.tapCause((cause) => Effect.sync(() => {
@@ -61,6 +60,8 @@ export class Delivery extends Part {
         this.print(agent, [{ kind: 'system', text: '✻ Uncommitted changes left behind – asking the agent to commit them' }]);
         return yield* this.core.sessions.runSession(agent, COMMIT_NUDGE, agent.sessionId);
       }
+      // past asking them to commit (or push) anything more: what's there goes onto GitHub, and a restart finishes it
+      journal((t) => ({ kind: 'delivering', turn: t, summary }));
       const fixing = this.core.reviews.fixing(agent);
       if (fixing?.sha && sameCommit(yield* workspace.head(dir), fixing.sha)) {
         journal((t) => ({ kind: 'delivered', turn: t, outcome: 'nothing-fixed' }));

@@ -122,6 +122,7 @@ export class Comms extends Part {
     const pending = rt.permission;
     if (!pending || pending.req.id !== requestId) throw new Refused({ message: 'That request is no longer pending' });
     rt.permission = undefined;
+    if (rt.turn) this.store.journal(id, { kind: 'answered', turn: rt.turn, allow });
     this.print(agent, [{ kind: 'manager', text: `${allow ? '✔ Approved' : '✘ Declined'} by the captain: ${pending.req.summary}` }]);
     this.update(agent, {
       status: pending.resume,

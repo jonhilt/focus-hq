@@ -58,6 +58,21 @@ export class PlanLimit extends Part {
     this.releaseAt(agent.id, until);
   }
 
+  /**
+   * After a restart, an agent the journal says was on hold: held again till `until`, with what's in their inbox to hear
+   * then, or carrying on now if the limit's reset meanwhile.
+   */
+  holdUntil(agent: Agent, until: number): void {
+    if (until <= Date.now()) {
+      this.print(agent, [{ kind: 'system', text: "✻ Your plan's usage limit reset while Focus was stopped: carrying on" }]);
+      this.core.comms.pickUp(agent);
+      return;
+    }
+    this.update(agent, { held: { until }, activity: `On hold until your plan's usage limit resets at ${clock(until)}` });
+    this.print(agent, [{ kind: 'system', text: `✻ Still on hold until your plan's usage limit resets at ${clock(until)}. Send them a message to carry on sooner.` }]);
+    this.releaseAt(agent.id, until);
+  }
+
   /** At `until`, the held agent carries on, unless the limit's been reached again meanwhile. */
   private releaseAt(id: string, until: number): void {
     this.background(Effect.sleep(Duration.millis(Math.max(0, until - Date.now()) + 1000)).pipe(Effect.andThen(Effect.sync(() => {

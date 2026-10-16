@@ -72,7 +72,15 @@ export type RunFact =
   /** Turn `turn`'s work is delivered: its pull request open (or updated), or there was nothing to deliver. */
   | { kind: 'delivered'; turn: string; outcome: Delivered; pr?: number }
   /** Turn `turn`'s work couldn't be delivered. */
-  | { kind: 'delivery-failed'; turn: string; error: string };
+  | { kind: 'delivery-failed'; turn: string; error: string }
+  /** The agent raised their hand in turn `turn`: approval for `summary` (a `tool` call). */
+  | { kind: 'asked'; turn: string; tool: string; summary: string }
+  /** The captain answered (or the turn ended first, `dropped`). */
+  | { kind: 'answered'; turn: string; allow: boolean; dropped?: boolean }
+  /** On hold until `until`, when your plan's usage limit resets: what's in their inbox waits for then. */
+  | { kind: 'held'; until: number }
+  /** Off hold: the limit reset, the captain sent a message, or stopped them. */
+  | { kind: 'unheld' };
 
 /** How a delivery ended: a pull request, or nothing to put in one (no commits, or a fix that fixed nothing). */
 export type Delivered = 'pr' | 'no-commits' | 'nothing-fixed';
@@ -125,6 +133,10 @@ export interface JournalContext {
   turns: number;
   /** The latest turn's work going onto GitHub. */
   delivery?: Delivery;
+  /** The approval the turn in hand is waiting for. */
+  asking?: { tool: string; summary: string };
+  /** When the hold for your plan's usage limit ends. */
+  heldUntil?: number;
 }
 
 /** What an agent's journal adds up to: the run's phase (the machine's state), what it holds, and the last fact's number. */
@@ -179,7 +191,8 @@ export const journalMachine = setup({
     sent: { guard: 'this turn', actions: assign(({ context, event }) => onOpen(context, (t) => ({ ...t, sent: [...(t.sent ?? []), event.text] }))) },
     restored: { actions: assign(({ context }) => ({ inbox: [...context.owed, ...context.inbox], owed: [] })) },
     cleared: { actions: assign({ inbox: [], later: [], owed: [] }) },
-    reset: { target: '.idle', actions: assign(() => ({ ...START, open: undefined, last: undefined, session: undefined, delivery: undefined })) },
+    reset: { target: '.idle', actions: assign(() => ({ ...START, open: undefined, last: undefined, session: undefined, delivery: undefined, asking: undefined, heldUntil: undefined })) },
+    held: { target: '.held', actions: assign(({ event }) => ({ heldUntil: event.until })) },
     // the last turn's work, onto GitHub (a cloud agent's nudge to push may have come between)
     delivering: { guard: 'the last turn', target: '.delivering', actions: assign(({ event }) => ({ delivery: { turn: event.turn, summary: event.summary } })) },
     waiting: '.waiting',
@@ -187,6 +200,7 @@ export const journalMachine = setup({
     'turn-requested': {
       target: '.turn',
       actions: assign(({ context, event }) => ({
+        asking: undefined,
         owed: event.turnKind === 'work' ? [] : context.owed,
         turns: context.turns + (event.turnKind === 'work' ? 1 : 0),
         open: { id: event.turn, kind: event.turnKind, prompt: event.prompt, resumes: event.resumes },
@@ -211,7 +225,7 @@ export const journalMachine = setup({
         'turn-ended': {
           guard: 'this turn',
           target: 'ended',
-          actions: assign(({ context, event }) => ({ open: undefined, last: context.open && { ...context.open, outcome: event.outcome } })),
+          actions: assign(({ context, event }) => ({ open: undefined, asking: undefined, last: context.open && { ...context.open, outcome: event.outcome } })),
         },
         interrupted: {
           guard: 'this turn',
@@ -221,7 +235,13 @@ export const journalMachine = setup({
       },
       states: {
         requested: {},
-        started: {},
+        started: {
+          on: { asked: { guard: 'this turn', target: 'asking', actions: assign(({ event }) => ({ asking: { tool: event.tool, summary: event.summary } })) } },
+        },
+        // the hand's up: the captain's answer (or the turn's end) puts it down
+        asking: {
+          on: { answered: { guard: 'this turn', target: 'started', actions: assign({ asking: undefined }) } },
+        },
         // a stop doesn't undo itself when Claude Code says more
         stopping: { on: { 'turn-started': { guard: 'this turn', actions: assign(({ context, event }) => onOpen(context, (t) => ({ ...t, session: event.session, keySource: event.keySource }))) } } },
       },
@@ -245,6 +265,9 @@ export const journalMachine = setup({
     },
     delivered: {},
     failed: {},
+    held: {
+      on: { unheld: { target: 'idle', actions: assign({ heldUntil: undefined }) } },
+    },
   },
 });
 
@@ -304,6 +327,8 @@ export type Recovery =
   | { kind: 'wait'; turn: string; why: string }
   /** Their work was going onto GitHub: the office finishes it (pushing again, finding or opening the pull request), no Claude turn needed. */
   | { kind: 'deliver'; turn: string; summary: string }
+  /** On hold for your plan's limit: held again till `until`, or picked back up now if that's passed. */
+  | { kind: 'hold-again'; until: number }
   /** They were waiting for a free slot: they wait for one again, with what was waiting for them. */
   | { kind: 'requeue' }
   /** They were waiting for a free slot, but going back to their conversation would be on your API key. */
@@ -331,6 +356,7 @@ export const RESUMED_NOTE =
 export function recovery(state: RunState, agent: RecoveryAgent, onKey: boolean): Recovery {
   const turn = state.open;
   if (!turn && state.delivery && inPhase(state, 'delivering') && DELIVERS.has(agent.task)) return { kind: 'deliver', turn: state.delivery.turn, summary: state.delivery.summary };
+  if (!turn && state.phase === 'held' && state.heldUntil && RESUMES.has(agent.task)) return { kind: 'hold-again', until: state.heldUntil };
   if (!turn) return state.phase === 'waiting' ? requeue(agent, onKey) : { kind: 'none' };
   // a turn that went back into no conversation was starting a new one: there's none of its own to carry on
   const session = turn.session ?? turn.resumes;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fold, INTERRUPTED_ACTIVITY, journalLine, readJournal, recovery, RESUMED_NOTE, type RunFact, runView, signInMismatch } from './runJournal';
+import { evolve, fold, INTERRUPTED_ACTIVITY, journalLine, readJournal, recovery, RESUMED_NOTE, type RunFact, runView, signInMismatch } from './runJournal';
 
 const requested = (turn: string, prompt = 'Fix the flaky test', resumes?: string): RunFact => ({ kind: 'turn-requested', turn, turnKind: 'work', prompt, resumes });
 const issue = { task: 'issue' };
@@ -192,5 +192,31 @@ describe('a delivery in the journal', () => {
     expect(recovery(fold([...delivering, { kind: 'delivered', turn: 't1', outcome: 'no-commits' }]), { task: 'issue' }, false)).toEqual({ kind: 'none' });
     expect(recovery(fold([...delivering, { kind: 'delivery-failed', turn: 't1', error: 'x' }]), { task: 'issue' }, false)).toEqual({ kind: 'none' });
     expect(recovery(fold(delivering), { task: 'lead' }, false)).toEqual({ kind: 'none' });
+  });
+});
+
+describe('a raised hand and a hold in the journal', () => {
+  const started: RunFact[] = [requested('t1', 'Go', 's1'), { kind: 'turn-started', turn: 't1', session: 's1' }];
+
+  it('raises the hand in the turn, and puts it down with the captain’s answer or the turn’s end', () => {
+    const asking = [...started, { kind: 'asked', turn: 't1', tool: 'Bash', summary: 'npm publish' } as RunFact];
+    expect(fold(asking)).toMatchObject({ phase: { turn: 'asking' }, asking: { tool: 'Bash', summary: 'npm publish' } });
+    expect(fold([...asking, { kind: 'answered', turn: 't1', allow: true }])).toMatchObject({ phase: { turn: 'started' }, asking: undefined });
+    expect(fold([...asking, { kind: 'turn-ended', turn: 't1', outcome: { ok: false, aborted: true } }])).toMatchObject({ phase: 'ended', asking: undefined });
+    // another turn's hand isn't this one's
+    expect(runView(fold([...started, { kind: 'asked', turn: 't0', tool: 'Bash', summary: 'x' }])).phase).toBe('turn.started');
+  });
+
+  it('holds the run for the plan’s limit, and lets it go', () => {
+    const held = fold([...started, { kind: 'turn-ended', turn: 't1', outcome: { ok: false, limited: true } }, { kind: 'held', until: 5000 }]);
+    expect(held).toMatchObject({ phase: 'held', heldUntil: 5000 });
+    expect(evolve(held, { kind: 'unheld' })).toMatchObject({ phase: 'idle', heldUntil: undefined });
+    expect(runView(evolve(evolve(held, { kind: 'unheld' }), { kind: 'waiting' })).phase).toBe('waiting');
+  });
+
+  it('holds them again after a restart, but not QA or the cloud', () => {
+    const held = fold([{ kind: 'held', until: 5000 }]);
+    expect(recovery(held, { task: 'lead', sessionId: 's1' }, true)).toEqual({ kind: 'hold-again', until: 5000 });
+    expect(recovery(held, { task: 'review' }, false)).toEqual({ kind: 'none' });
   });
 });

@@ -28,6 +28,8 @@ const PHASES: Record<string, string> = {
   'turn.requested': 'starting',
   'turn.started': 'running',
   'turn.stopping': 'stopping',
+  'turn.asking': 'waiting for your approval',
+  held: 'on hold for your plan',
   ended: 'ended',
   interrupted: 'interrupted',
   'delivering.pushing': 'pushing',

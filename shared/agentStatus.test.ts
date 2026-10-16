@@ -22,5 +22,7 @@ describe('runLine', () => {
     expect(runLine({ phase: 'delivering.opening', turns: 2, target: 'deliver', seq: 20 })).toBe('turn 2 opening the PR');
     expect(runLine({ phase: 'delivered', turns: 2, target: 'deliver', pr: 412, seq: 22 })).toBe('turn 2 delivered → PR #412');
     expect(runLine({ phase: 'failed', turns: 2, target: 'deliver', seq: 21 })).toBe('turn 2 delivery failed');
+    expect(runLine({ phase: 'turn.asking', turns: 4, seq: 30 })).toBe('turn 4 waiting for your approval');
+    expect(runLine({ phase: 'held', turns: 4, seq: 31 })).toBe('on hold for your plan');
   });
 });

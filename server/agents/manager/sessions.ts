@@ -220,12 +220,14 @@ export class AgentSessions extends Part {
           const req: PermissionRequest = { id: newId('ask'), tool, summary: truncate(summary, 300), at: Date.now() };
           const resume = agent.status === 'waiting' ? 'working' : agent.status;
           rt.permission = { req, resolve, resume };
+          this.store.journal(agent.id, { kind: 'asked', turn, tool, summary: req.summary });
           this.update(agent, { status: 'waiting', permission: req, activity: `Needs approval: ${truncate(summary, 60)}` });
           this.print(agent, [{ kind: 'manager', text: `✋ Waiting for the captain to approve ${truncate(summary, 200)}` }]);
           this.hub.toast('info', `✋ ${agent.name} needs your approval`, agent.id);
           signal.addEventListener('abort', () => {
             if (rt.permission?.req.id === req.id) {
               rt.permission = undefined;
+              this.store.journal(agent.id, { kind: 'answered', turn, allow: false, dropped: true });
               this.update(agent, { permission: undefined });
               resolve(false);
             }
@@ -515,6 +517,10 @@ export class AgentSessions extends Part {
       if (next.kind === 'none' || agent.handover) continue;
       if (next.kind === 'wait' || next.kind === 'hold') {
         if (agent.status === 'stopped') this.update(agent, { activity: next.why });
+        continue;
+      }
+      if (next.kind === 'hold-again') {
+        this.core.planLimit.holdUntil(agent, next.until);
         continue;
       }
       if (next.kind === 'deliver') {

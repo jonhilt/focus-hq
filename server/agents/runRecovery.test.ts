@@ -71,6 +71,46 @@ describe('a run after Focus restarts', () => {
     expect(before.store.agent(id).run).toMatchObject({ phase: 'delivered', pr });
   });
 
+  it('keeps a hold for the plan’s limit through a restart, and carries on once it’s passed', async () => {
+    const before = office();
+    const held = before.agents.hire(before.project.id, 'demo/webshop-frontend', issue).id;
+    const lapsed = before.agents.hire(before.project.id, 'demo/webshop-api', { number: 2, title: 'Rate-limit the login endpoint' }).id;
+    await until(() => before.claude.turns.length === 2);
+    for (const t of before.claude.turns) t.end({ ok: true, summary: 'Done' });
+    await until(() => before.store.agent(held).status === 'done' && before.store.agent(lapsed).status === 'done');
+    const resets = Date.now() + 60 * 60_000;
+    before.store.journal(held, { kind: 'held', until: resets });
+    before.store.journal(lapsed, { kind: 'held', until: Date.now() - 1000 });
+
+    const after = restarted(before.store);
+    after.agents.recover();
+    expect(before.store.agent(held)).toMatchObject({ held: { until: resets }, run: { phase: 'held' } });
+    // the one whose limit reset while Focus was stopped carries on, in their conversation
+    await until(() => after.claude.turns.length === 1);
+    expect(after.claude.turns[0].req).toMatchObject({ agentId: lapsed, resumeSessionId: 'session-1' });
+  });
+
+  it('raises the hand in the journal, and puts it down with the captain’s answer', async () => {
+    const { agents, claude, project, store } = office();
+    const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue);
+    await until(() => claude.turns.length === 1);
+    const answer = claude.turns[0].hooks.permission('Bash', 'npm publish', new AbortController().signal);
+    expect(store.agent(id).run?.phase).toBe('turn.asking');
+    agents.resolvePermission(id, store.agent(id).permission?.id ?? '', true);
+    expect(await answer).toBe(true);
+    expect(store.agent(id).run?.phase).toBe('turn.started');
+  });
+
+  it('asks them to commit what they left before their work goes onto GitHub, and journals the delivery only after', async () => {
+    const before = office({ ...demoWorkspace, hasUncommittedChanges: () => Promise.resolve(true) });
+    const { id } = before.agents.hire(before.project.id, 'demo/webshop-frontend', issue);
+    await until(() => before.claude.turns.length === 1);
+    before.claude.turns[0].end({ ok: true, summary: 'Dark mode' });
+    await until(() => before.claude.turns.length === 2);
+    // a restart now would ask them again, rather than deliver without their last changes
+    expect(before.store.run(id).delivery).toBeUndefined();
+  });
+
   it('puts an agent who was waiting for a free slot back in line', async () => {
     const before = office();
     before.project.maxAgents = 1;
