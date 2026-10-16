@@ -116,6 +116,13 @@ export const labelBox = (l: Label, text: string | readonly string[], size: numbe
   return { x0, y0: l.y - size, x1: x0 + w, y1: l.y + size * 0.18 + (lines.length - 1) * size * LINE_GAP };
 };
 export const overlaps = (a: Box, b: Box) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+/** How far a point is from a box (none, inside it). */
+export const distanceTo = (b: Box, p: Pt) => Math.hypot(Math.max(b.x0 - p.x, 0, p.x - b.x1), Math.max(b.y0 - p.y, 0, p.y - b.y1));
+/**
+ * Whether a label at `b` reads as another mark's: one of `others` is nearer it than its own mark at `own` (a reader
+ * takes a name for the nearest mark's, as a cartographer knows).
+ */
+export const misread = (b: Box, own: Pt, others: readonly Pt[]) => others.some((q) => distanceTo(b, q) < distanceTo(b, own));
 const square = (p: Pt, r: number): Box => ({ x0: p.x - r, y0: p.y - r, x1: p.x + r, y1: p.y + r });
 
 /** How many of `boxes` a box overlaps, counted in loops rather than filtered (no array for each of thousands of spots). */
@@ -281,7 +288,8 @@ export function chartSize(n: number, grow: boolean): { width: number; height: nu
  *
  * Then every label is placed in one pass, the ones that matter most first: the scrubbed headings, the waypoint under
  * way and the rest newest first, what's next, and the contacts. Each takes the spot round its mark that runs into nothing
- * already placed, and crosses the fewest lines; one with no clear spot left goes without (its name's still on hover), so
+ * already placed, and crosses the fewest lines (a waypoint's name sits nearer its own waypoint than any other, or it'd be
+ * read as that one's, so it goes without); one with no clear spot left goes without (its name's still on hover), so
  * on a long voyage the oldest waypoints are the ones that shrink to their numbers.
  */
 export function plotCourse(voyage: Voyage, scale = 1, grow = false): CoursePlot {
@@ -368,7 +376,12 @@ export function plotCourse(voyage: Voyage, scale = 1, grow = false): CoursePlot 
   const cost = (b: Box) => (inChart(b) ? 0 : 1000) + hitsAmong(solid, b) * 100 + linesHit(b);
   // the first of the candidates (in order of preference) that's clear, crossing the fewest lines; none if none is clear
   // a line crossed costs more than any spot further down the list (there are never 100), a mark covered more than any lines
-  const spot = (candidates: Label[], text: string | string[], size: number) => cheapest(candidates, (_, i) => i, (label) => cost(labelBox(label, text, size)) * 100);
+  // (`also` weighs what else a spot gets wrong, as many lines' worth)
+  const spot = (candidates: Label[], text: string | string[], size: number, also: (b: Box) => number = () => 0) =>
+    cheapest(candidates, (_, i) => i, (label) => {
+      const b = labelBox(label, text, size);
+      return (cost(b) + also(b)) * 100;
+    });
   const CROSSES = 100;
   const COVERS = 10_000;
   const place = (candidates: Label[], text: string | string[], size: number, claim = true): Label | undefined => {
@@ -394,6 +407,10 @@ export function plotCourse(voyage: Voyage, scale = 1, grow = false): CoursePlot 
     return [beside(p, side, outs[i], d, extra), beside(p, side, -outs[i], d, extra), ...around(p, d, sizes.waypoint, n), ...around(p, d * 1.8, sizes.waypoint, n).map((l) => ({ ...l, leader: true }))];
   };
   const wrapped = points.map((p) => p.lines);
+  // a name nearer another waypoint than its own would be read as that one's: as bad as covering a mark, so it's left off
+  // (on hover, and named again once zoomed in) rather than misleading
+  const others = (i: number) => points.filter((_, j) => j !== i);
+  const owned = (i: number) => (b: Box) => (misread(b, points[i], others(i)) ? 100 : 0);
   const claimed = new Map<number, Box>();
   const name = (i: number, lines: string[], label: Label) => {
     const box = labelBox(label, lines, sizes.waypoint);
@@ -406,7 +423,7 @@ export function plotCourse(voyage: Voyage, scale = 1, grow = false): CoursePlot 
     const short = Math.round(chars('waypoint') * 0.55);
     const tries = [[clip(p.name, chars('waypoint'))], [clip(p.waypoint.title ?? p.waypoint.heading ?? '', short)]].filter((lines) => lines[0]);
     // the first that's clear of every line, else the first that's clear of everything else
-    const weighed = tries.map((lines) => ({ lines, best: spot(spots(p, i, 1), lines, sizes.waypoint) }));
+    const weighed = tries.map((lines) => ({ lines, best: spot(spots(p, i, 1), lines, sizes.waypoint, owned(i)) }));
     const pick = weighed.find((t) => t.best && t.best.cost < CROSSES) ?? weighed.find((t) => t.best && t.best.cost < COVERS);
     if (pick?.best) name(i, pick.lines, pick.best.at);
   }
@@ -414,7 +431,7 @@ export function plotCourse(voyage: Voyage, scale = 1, grow = false): CoursePlot 
     const box = claimed.get(i);
     if (!box || wrapped[i].length < 2) continue;
     solid.splice(solid.indexOf(box), 1);
-    const best = spot(spots(points[i], i, 2), wrapped[i], sizes.waypoint);
+    const best = spot(spots(points[i], i, 2), wrapped[i], sizes.waypoint, owned(i));
     if (best && best.cost < CROSSES) name(i, wrapped[i], best.at);
     else solid.push(box);
   }

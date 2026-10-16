@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Contact, Waypoint } from '../../../shared/types';
-import { type Box, CHART, chartSize, cheapest, clearOf, clip, type CoursePlot, everySlice, hitCounter, hitsAmong, labelBox, overlaps, plotCourse, probeFlights, probesOut, seeded, shieldState, smoothPath, STEP, TRANSMIT_MS } from './course';
+import { type Box, CHART, chartSize, cheapest, clearOf, clip, type CoursePlot, distanceTo, everySlice, hitCounter, hitsAmong, labelBox, misread, overlaps, plotCourse, probeFlights, probesOut, seeded, shieldState, smoothPath, STEP, TRANSMIT_MS } from './course';
 
 const wp = (slice: number, more: Partial<Waypoint> = {}): Waypoint => ({ slice, startedAt: slice * 10, landedAt: slice * 10 + 5, title: `Slice ${slice}`, ...more });
 const inside = (p: { x: number; y: number }) => p.x >= 0 && p.x <= CHART.width && p.y >= 0 && p.y <= CHART.height;
@@ -161,12 +161,15 @@ describe('the course', () => {
     expect(weighed.then).toBeLessThan(weighed.first * 0.8);
   });
 
-  it('shrinks the oldest waypoints to their numbers once a voyage runs out of room', () => {
+  it('shrinks waypoints to their numbers once a voyage runs out of room, never naming one by another', () => {
     const plot = plotCourse({ waypoints: Array.from({ length: 30 }, (_, i) => wp(i + 1, { title: `A long slice title, number ${i + 1}` })), next: [], seed: 'long' });
-    const named = plot.points.map((p) => !!p.label);
-    expect(named.at(-1)).toBe(true);
-    expect(named.filter(Boolean).length).toBeLessThan(30);
-    expect(named.slice(-5).filter(Boolean).length).toBeGreaterThanOrEqual(named.slice(0, 5).filter(Boolean).length);
+    const named = plot.points.filter((p) => p.label);
+    expect(plot.points.at(-1)!.label).toBeDefined();
+    expect(named.length).toBeLessThan(30);
+    // the newest go first, but a name that would sit nearer another waypoint than its own is left off however new it is
+    for (const p of named) expect(misread(labelBox(p.label!, p.lines, plot.sizes.waypoint), p, plot.points.filter((q) => q !== p))).toBe(false);
+    // on the chart panel, which grows to fit, every one of them is named
+    expect(plotCourse({ waypoints: Array.from({ length: 30 }, (_, i) => wp(i + 1, { title: `A long slice title, number ${i + 1}` })), next: [], seed: 'long' }, 1, true).points.every((p) => p.label)).toBe(true);
   });
 
   it('keeps labels clear of the objective', () => {
@@ -321,5 +324,31 @@ describe('a chart that grows', () => {
     expect(Math.min(...steps(grown))).toBeGreaterThan(Math.min(...steps(plotCourse({ waypoints, next: [], seed: 'long' }))) * 2);
     // and every one of them is named
     expect(grown.points.every((p) => p.label)).toBe(true);
+  });
+});
+
+describe('whose name is whose', () => {
+  it('measures how far a point is from a box', () => {
+    const b = { x0: 0, y0: 0, x1: 10, y1: 10 };
+    expect(distanceTo(b, { x: 5, y: 5 })).toBe(0);
+    expect(distanceTo(b, { x: 13, y: 14 })).toBe(5);
+  });
+
+  it('puts every waypoint’s name nearer its own waypoint than any other, however the voyage went', () => {
+    const words = 'Header badge store tidy offline push phones merge review chart waypoint shields evidence contacts briefing room'.split(' ');
+    const misnamed: string[] = [];
+    for (let v = 0; v < 60; v++) {
+      const rand = seeded(`owners ${v}`);
+      const title = () => Array.from({ length: 2 + Math.floor(rand() * 6) }, () => words[Math.floor(rand() * words.length)]).join(' ');
+      const n = 2 + (v % 10);
+      const waypoints = Array.from({ length: n }, (_, i) => wp(i + 1, { title: title() }));
+      for (const [scale, grow] of [[1, false], [1.5, false], [0.5, true]] as const) {
+        const plot = plotCourse({ waypoints, current: n, next: [], seed: `lead_${v}` }, scale, grow);
+        for (const p of plot.points) {
+          if (p.label && misread(labelBox(p.label, p.lines, plot.sizes.waypoint), p, plot.points.filter((q) => q !== p))) misnamed.push(`voyage ${v} at ${scale}: waypoint ${p.waypoint.slice}`);
+        }
+      }
+    }
+    expect(misnamed).toEqual([]);
   });
 });
