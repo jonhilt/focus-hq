@@ -1,3 +1,4 @@
+import { lend } from './lend';
 import type { LedgerEvent } from '../../shared/ledger';
 import type { Agent, Brief, PluginStates } from '../../shared/types';
 import { errorMessage } from '../util';
@@ -92,7 +93,7 @@ export class Plugins {
   /** Only the agent's own plugin hears that their pull request opened. */
   prOpened(agent: Agent, pr: { number: number; url: string }): void {
     const parts = agent.brief && this.parts.get(agent.brief.plugin);
-    if (parts) this.safely(agent.brief?.plugin ?? '', 'prOpened', () => parts.prOpened?.(agent, pr));
+    if (parts) this.safely(agent.brief?.plugin ?? '', 'prOpened', () => parts.prOpened?.(lend(agent), pr));
   }
 
   prClosed(repo: string, number: number, merged: boolean): void {
@@ -100,11 +101,12 @@ export class Plugins {
   }
 
   turn(agent: Agent, phase: 'start' | 'end'): void {
-    this.each('turn', (parts) => parts.turn?.(agent, phase));
+    // each plugin hears of its own copy, so none can change the office's agent, or what the next plugin hears
+    this.each('turn', (parts) => parts.turn?.(lend(agent), phase));
   }
 
   ledgerRecorded(event: LedgerEvent): void {
-    this.each('ledgerRecorded', (parts) => parts.ledgerRecorded?.(event));
+    this.each('ledgerRecorded', (parts) => parts.ledgerRecorded?.(lend(event)));
   }
 
   /** Whether any plugin says only the captain merges this pull request. */

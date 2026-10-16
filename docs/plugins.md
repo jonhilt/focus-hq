@@ -81,7 +81,7 @@ A hook that throws is logged and skipped, so one plugin's bug never stops the of
 
 ## What the office lends a plugin
 
-`start` gets a `PluginHost`:
+`start` gets a `PluginHost`. What it reads of the office is a copy of its own (`server/plugins/lend.ts`): the agents, projects, settings, snapshot and ledger it asks for, and the agents and ledger lines its hooks hear of. It can keep and change them, but that never changes the office's, or what another plugin hears. The API types them read-only too (`Agent`, `LeadAgent`, `Project` and `LedgerEvent` from `plugin-api/` are `Readonly`), so writing to one is a compile error. The ledger is copied a line at a time as it grows, not whole on every call.
 
 - **State.** `host.state(fresh)` is the plugin's own slot in `state.json` (`plugins.<id>`). `set` saves it and sends it to every browser as a `plugin` event; the snapshot carries each plugin's state in `plugins`. A field the plugin adds later starts at its `fresh()` value. With `{ saved: false }` it's kept in memory only, for state the plugin reads again as the office starts (the scorecards, read from disk). A plugin can keep both on its id: the browser gets them side by side, so their keys mustn't meet (Number One saves its `chat`, but not what it's reading this moment, nor the call, which change too often or mean nothing after a restart). Nothing is saved until it's first set, so an office that never used a plugin has nothing of it waiting.
 - **Seating.** `host.seat` hands one of its briefs to an agent: someone new, or `crew` when it's always the same person, who keeps one record (and terminal) from brief to brief. `host.forget` drops what the office kept of their last session, so the next starts afresh.

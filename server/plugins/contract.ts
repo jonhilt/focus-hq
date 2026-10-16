@@ -32,7 +32,7 @@ export interface PluginParts {
   /** A project's board was read from GitHub again (about once a minute): a moment to look at how the plugin's work stands. */
   boardRefreshed?(projectId: string): void;
   /** The office opened, or updated, the pull request of an agent on one of this plugin's briefs. */
-  prOpened?(agent: Agent, pr: { number: number; url: string }): void;
+  prOpened?(agent: Readonly<Agent>, pr: { number: number; url: string }): void;
   /** A project's settings changed: a plugin switched on or off for it, say (`host.on`). */
   projectChanged?(projectId: string): void;
   /** A pull request in any project merged or closed, a goal's too (after the goal has heard). */
@@ -44,13 +44,13 @@ export interface PluginParts {
    * turn stops, before the office acts on how it went: the agent's status still says 'working' then (it becomes 'done',
    * failed or a review's verdict just after), so judge by the phase, not the status.
    */
-  turn?(agent: Agent, phase: 'start' | 'end'): void;
+  turn?(agent: Readonly<Agent>, phase: 'start' | 'end'): void;
   /**
    * A line went in the ship's log (any kind: filter for the ones that matter). It's heard as it's written, before the
    * office has acted on what it says (a goal's pull request merging is logged before the goal knows), so read the
    * office afresh a moment later rather than straight away.
    */
-  ledgerRecorded?(event: LedgerEvent): void;
+  ledgerRecorded?(event: Readonly<LedgerEvent>): void;
   /** Whether only the captain merges this pull request, whatever QA says. By its branch, since a pull request outlives its agent. */
   captainMerges?(pr: { branch: string }): boolean;
   /** Tools it adds to the office of every goal lead whose project it's switched on for, beside ship, note and show (`mcp__office__<name>`). */
@@ -108,7 +108,10 @@ export interface PluginRoute {
   handle(req: { body: Record<string, unknown>; query: Record<string, unknown> }): unknown;
 }
 
-/** What the office lends a plugin. */
+/**
+ * What the office lends a plugin. What it reads of the office (its agents, projects, settings, ledger, snapshot, and
+ * the agents and lines its hooks hear of) is a copy of its own, marked read-only: changing it never changes the office.
+ */
 export interface PluginHost {
   /** The demo office: fake GitHub and scripted agents. */
   readonly demo: boolean;
@@ -117,23 +120,23 @@ export interface PluginHost {
    * unless `saved` is false (state that's read again as the office starts, like main engineering's scorecards).
    */
   state<S extends object>(fresh: () => S, how?: { saved?: boolean }): PluginState<S>;
-  projects(): Project[];
+  projects(): Readonly<Project>[];
   /**
    * Whether this plugin is switched on for project `projectId`, in its settings (`Project.plugins`). A plugin that works
    * per project does nothing for a project it's off for; the office already keeps its lead tools and holodeck screens
    * away from one.
    */
   on(projectId: string): boolean;
-  agent(id: string): Agent | undefined;
+  agent(id: string): Readonly<Agent> | undefined;
   /** Every agent in the office now, of every project. */
-  agents(): Agent[];
+  agents(): Readonly<Agent>[];
   /**
    * An agent session's Claude Code transcript (its JSONL) by session id: undefined when it isn't on this machine (a
    * cloud session's). In the demo, the scripted agents' stand-ins.
    */
   transcript(sessionId: string): Promise<string | undefined>;
   /** The ship's log of how work went, oldest first. */
-  ledger(): LedgerEvent[];
+  ledger(): Readonly<LedgerEvent>[];
   /**
    * Writes a line in the ship's log for `projectId` (at `at`, or now), and sends the new report card. Every plugin
    * hears it on `ledgerRecorded`, the one writing it too.
@@ -146,7 +149,7 @@ export interface PluginHost {
    * boards, QA's reviews, the Ops stations' drafts and every plugin's state. It's a lot: ask when it's needed (an
    * answer to the captain), not on a timer, and only read it.
    */
-  snapshot(): Promise<Snapshot>;
+  snapshot(): Promise<Readonly<Snapshot>>;
   /**
    * The ship as the crew's `ship_status` tool tells it (`server/agents/shipStatus.ts`): per project, who's on what and
    * where their worktree is, the open pull requests, what needs the captain, and each closed goal's pull requests as
@@ -195,7 +198,7 @@ export interface PluginHost {
   /** Forgets what the office keeps of an agent's last session (what waited to be said, their notes), so their next brief starts afresh. */
   forget(agentId: string): void;
   /** A line in an agent's terminal, from the office. */
-  print(agent: Agent, text: string): void;
+  print(agent: Pick<Agent, 'id'>, text: string): void;
   toast(level: 'info' | 'success' | 'error', text: string, agentId?: string): void;
   /**
    * What the plugin `id` provides: one of this plugin's `requires`, so it's on and started already. `T` is that

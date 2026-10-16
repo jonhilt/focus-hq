@@ -9,6 +9,7 @@ import type { Core } from './core';
 import { Refused } from './core';
 import { checkoutLatest } from '../workspace';
 import { pluginDataDir } from '../../plugins/dataDir';
+import { lend, lentLog } from '../../plugins/lend';
 import { runReadOnly, shipSession } from '../claudeCrew';
 
 /**
@@ -52,6 +53,8 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
     fs.mkdirSync(dir, { recursive: true });
     return dir;
   };
+  // what a plugin reads of the office is its own copy: it can't change the office's by changing it
+  const ledger = lentLog(() => core.store.ledger);
   return {
     demo: lent.demo,
     state: (fresh, how) => {
@@ -61,16 +64,19 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
         core.hub.send({ type: 'plugin', id, state: core.plugins.stateOf(id) });
       });
     },
-    projects: () => core.store.projects,
+    projects: () => lend(core.store.projects),
     on: (projectId) => pluginOn(core.store.projects.find((p) => p.id === projectId), id),
-    agent: (agentId) => core.store.agents.get(agentId),
-    agents: () => [...core.store.agents.values()],
+    agent: (agentId) => {
+      const agent = core.store.agents.get(agentId);
+      return agent && lend(agent);
+    },
+    agents: () => lend([...core.store.agents.values()]),
     // read as it's asked for: the office sets the manager's reader once the plugins have started
     transcript: (sessionId) => (lent.transcript ?? core.ledger.readTranscript)?.(sessionId) ?? Promise.resolve(undefined),
-    ledger: () => core.store.ledger,
+    ledger,
     record: (projectId, entry, at) => core.ledger.record(projectId, entry, at),
-    settings: () => core.store.settings,
-    snapshot: () => lent.snapshot?.() ?? missing('snapshot'),
+    settings: () => lend(core.store.settings),
+    snapshot: () => lent.snapshot?.().then(lend) ?? missing('snapshot'),
     shipStatus: () => lent.shipStatus?.() ?? missing('ship’s status'),
     goals: {
       start: (projectId, text, how) => core.leads.startGoal(projectId, text, { from: how.from }),
@@ -118,7 +124,11 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
       core.rt(agentId).inbox.clear();
       core.runtimes.delete(agentId);
     },
-    print: (agent, text) => core.print(agent, [{ kind: 'system', text }]),
+    print: (agent, text) => {
+      // the office's own record of them, not the plugin's copy
+      const own = core.store.agents.get(agent.id);
+      if (own) core.print(own, [{ kind: 'system', text }]);
+    },
     toast: (level, text, agentId) => core.hub.toast(level, text, agentId),
     uses: <T extends object>(other: string) => {
       const provided = core.plugins.requires(id, other) ? core.plugins.provided(other) : undefined;
