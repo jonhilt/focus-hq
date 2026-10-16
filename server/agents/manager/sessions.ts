@@ -9,14 +9,14 @@ import type { Agent, LeadAgent, PermissionRequest, TermLine, WorkflowScript } fr
 import { GitHub, type GitHubError } from '../../github/service';
 import { newId, truncate } from '../../util';
 import { step, type Target, turnEvent } from '../runMachine';
-import { applyHelperEvent, COMPACT_INSTRUCTIONS, compactInstructions, freshSessionPrompt, hasLeadWork, HELPER_LINGER_MS, leadSystemAppend } from '../lead';
+import { COMPACT_INSTRUCTIONS, compactInstructions, freshSessionPrompt, hasLeadWork, helperChange, HELPER_LINGER_MS, leadSystemAppend } from '../lead';
 import { mismatchError, recovery, signInMismatch, turnEnding, type TurnKind } from '../runJournal';
 import { carryOnPrompt, conflictsPrompt, issuePrompt, systemAppend } from '../prompts';
 import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
 import { Sessions, Workspace } from '../services';
 import { applyTaskTool } from '../tasks';
 import { applyWorkflowEvent, journalResults, runOutcome, scriptPlan, transcriptLines, WORKFLOW_LINGER_MS } from '../workflows';
-import { committedWaypoint, endedProbe, launchedProbe, taskedWaypoint } from '../waypoints';
+import { committedWaypoint, probedWaypoints, taskedWaypoint } from '../waypoints';
 import { applyBackgroundEvent, BACKGROUND_LINGER_MS, OUTPUT_TAIL, outputLines } from '../backgroundTasks';
 import { type ExtraTool, type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN, type WorkflowEvent } from '../types';
 import { EmptyRepository, FINISHED, type ManagerServices, Part, Refused, ReportGone, type Runtime, withNotes, type WorkError } from './core';
@@ -146,17 +146,9 @@ export class AgentSessions extends Part {
       helper: (event) => {
         // only a lead's helpers have somewhere to sit: the lead's team station
         if (agent.task !== 'lead') return;
-        const before = agent.helpers ?? [];
-        const now = Date.now();
-        const helpers = applyHelperEvent(before, event, now, agent.effort);
-        if (helpers === before) return;
-        // each one's a probe on the goal's chart, from the slice under way
-        const work = agent.lead;
-        const waypoints = !work ? undefined
-          : event.kind === 'started' ? launchedProbe(work, event, now)
-          : event.kind === 'ended' ? endedProbe(work, event, now)
-          : undefined;
-        this.update(agent, { helpers, ...(work && waypoints && { lead: { ...work, waypoints } }) });
+        const change = helperChange(agent, event, Date.now());
+        if (!change) return;
+        this.update(agent, change);
         if (event.kind === 'started') this.print(agent, [{ kind: 'system', text: `✻ ${helperFor(event.id).name} joins ${agent.name}'s team station: ${event.description}` }]);
         // a helper that's done lingers a moment, so you see how it got on
         if (event.kind === 'ended') {
@@ -170,9 +162,8 @@ export class AgentSessions extends Part {
       probe: (event) => {
         const work = agent.task === 'lead' ? agent.lead : undefined;
         if (!work) return;
-        const now = Date.now();
-        const waypoints = event.kind === 'started' ? launchedProbe(work, event, now) : endedProbe(work, event, now);
-        if (waypoints && waypoints !== work.waypoints) this.update(agent, { lead: { ...work, waypoints } });
+        const waypoints = probedWaypoints(work, event, Date.now());
+        if (waypoints) this.update(agent, { lead: { ...work, waypoints } });
       },
       background: (event) => {
         // only a lead's have somewhere to float: by their chair in the briefing room

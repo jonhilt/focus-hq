@@ -3,6 +3,7 @@
 
 import type { ChecksState, ClaudeTask, Evidence, GoalNote, LeadWork, Probe, QaReport, SpotCheck, Waypoint } from '../../shared/types';
 import type { NoteInput } from './lead';
+import type { HelperEvent, ProbeEvent } from './types';
 
 /** How much a waypoint keeps: they all travel with the goal on every update, so each stays a few lines long. */
 export const WAYPOINT_LIMITS = { summary: 280, learned: 3, kept: 40, probes: 6, probeSummary: 200, tasks: 20, task: 120 } as const;
@@ -162,6 +163,15 @@ export function endedProbe(work: Course, helper: { id: string; ok: boolean; summ
     ...w,
     probes: (w.probes ?? []).map((p) => (p.id === helper.id ? { ...p, endedAt: now, ok: helper.ok, ...(summary && { summary }) } : p)),
   }), at.slice);
+}
+
+/**
+ * The waypoints once a helper or a script starts (its probe launched) or ends (its probe ended); undefined when that
+ * changes nothing on the chart, and for what a helper is doing in between.
+ */
+export function probedWaypoints(work: Course, event: HelperEvent | ProbeEvent, now: number): Waypoint[] | undefined {
+  const waypoints = event.kind === 'started' ? launchedProbe(work, event, now) : event.kind === 'ended' ? endedProbe(work, event, now) : undefined;
+  return waypoints === work.waypoints ? undefined : waypoints;
 }
 
 /** The waypoints once the lead commits during the slice under way: one more commit, with what it said. */

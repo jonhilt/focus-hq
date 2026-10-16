@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadAgent, LeadWork } from '../../shared/types';
-import { afterLanding, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, notedGoal, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, openPr, pickStation, qaVerdictNote, queuedStart, shippedSha, shipPlan, shipBranch, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
+import { afterLanding, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, helperChange, notedGoal, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, openPr, pickStation, qaVerdictNote, queuedStart, shippedSha, shipPlan, shipBranch, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -276,6 +276,35 @@ describe('applyHelperEvent', () => {
     expect(done[0]).toMatchObject({ status: 'done', activity: 'The store holds a list' });
     expect(applyHelperEvent(done, { kind: 'activity', id: 't1', activity: 'late' }, 8)).toBe(done);
     expect(applyHelperEvent(started, { kind: 'ended', id: 't1', ok: false }, 7)[0]).toMatchObject({ status: 'failed', activity: 'Hit a problem' });
+  });
+});
+
+describe('helperChange', () => {
+  const charted: LeadWork = { ...work, slice: 1, waypoints: [{ slice: 1, startedAt: 1 }] };
+  const send = { kind: 'started', id: 't1', description: 'Map the cart store', type: 'Explore' } as const;
+  const sent = helperChange({ lead: charted, effort: 'high' }, send, 5)!;
+
+  it('seats a helper the lead sends out, and launches its probe from the slice under way', () => {
+    expect(sent.helpers).toEqual([{ id: 't1', description: 'Map the cart store', type: 'Explore', effort: 'high', status: 'working', activity: 'Getting started', startedAt: 5 }]);
+    expect(sent.lead).toEqual({ ...charted, waypoints: [{ slice: 1, startedAt: 1, probes: [{ id: 't1', description: 'Map the cart store', type: 'Explore', launchedAt: 5 }] }] });
+  });
+
+  it('ends its probe with how it went when it reports back', () => {
+    const back = helperChange(sent, { kind: 'ended', id: 't1', ok: true, summary: 'The store holds a list' }, 9)!;
+    expect(back.helpers?.[0]).toMatchObject({ status: 'done', activity: 'The store holds a list' });
+    expect(back.lead?.waypoints?.[0].probes).toEqual([{ id: 't1', description: 'Map the cart store', type: 'Explore', launchedAt: 5, endedAt: 9, ok: true, summary: 'The store holds a list' }]);
+  });
+
+  it('leaves the chart alone for what a helper is doing, or a helper with no probe on it', () => {
+    expect(helperChange(sent, { kind: 'activity', id: 't1', activity: 'Reading cart.ts' }, 6)).toEqual({ helpers: [{ ...sent.helpers![0], activity: 'Reading cart.ts' }] });
+    // sent out before the lead had a goal's work to chart, or launched before the chart kept probes
+    expect(helperChange({}, send, 5)).toEqual({ helpers: [expect.objectContaining({ id: 't1' })] });
+    expect(helperChange({ ...sent, lead: charted }, { kind: 'ended', id: 't1', ok: false }, 9)).toEqual({ helpers: [expect.objectContaining({ status: 'failed' })] });
+  });
+
+  it('changes nothing for a helper it already has seated, or doesn’t know', () => {
+    expect(helperChange(sent, send, 6)).toBeUndefined();
+    expect(helperChange(sent, { kind: 'activity', id: 'nope', activity: 'x' }, 6)).toBeUndefined();
   });
 });
 

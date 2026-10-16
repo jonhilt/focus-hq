@@ -6,7 +6,7 @@ import { slugify } from '../util';
 import { SCRATCH_RULE } from './scratch';
 import { WAIT_RULE } from './wait';
 import { applyContacts, type ContactInput, contactsForPrompt } from './contacts';
-import { notedWaypoint } from './waypoints';
+import { notedWaypoint, probedWaypoints } from './waypoints';
 
 /** The lead's checkout of one repo: a folder inside their workspace. */
 export const leadWorktreeId = (agentId: string, folder: string) => `${agentId}/${folder}`;
@@ -706,4 +706,17 @@ export function applyHelperEvent(helpers: Helper[], event: HelperEvent, now: num
       ? helper.status === 'working' && event.activity ? { ...helper, activity: event.activity } : helper
       : { ...helper, status: event.ok ? 'done' : 'failed', activity: event.ok ? (event.summary?.split('\n')[0] || 'Done') : 'Hit a problem' };
   return next === helper ? helpers : helpers.map((h) => (h.id === event.id ? next : h));
+}
+
+/**
+ * What a subagent event changes on a lead: its helpers at the team station, and each one's probe on the goal's chart,
+ * from the slice under way. Undefined when the event is about no helper it seats or knows.
+ */
+export function helperChange(lead: Pick<Agent, 'helpers' | 'lead' | 'effort'>, event: HelperEvent, now: number): Pick<Agent, 'helpers' | 'lead'> | undefined {
+  const before = lead.helpers ?? [];
+  const helpers = applyHelperEvent(before, event, now, lead.effort);
+  if (helpers === before) return undefined;
+  const work = lead.lead;
+  const waypoints = work && probedWaypoints(work, event, now);
+  return { helpers, ...(work && waypoints && { lead: { ...work, waypoints } }) };
 }

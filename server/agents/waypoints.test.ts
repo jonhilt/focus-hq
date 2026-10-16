@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GoalNote, LeadAgent, LeadWork, QaReport, Waypoint } from '../../shared/types';
 import { goalRecord, reopenedWork } from './lead';
-import { committedWaypoint, endedProbe, evidenceFile, landedWaypoint, launchedProbe, nextWaypoints, notedSlice, notedWaypoint, opening, shieldedWaypoint, shippedWaypoint, taskedWaypoint, tickedSpotCheck, WAYPOINT_LIMITS, withWaypoint } from './waypoints';
+import { committedWaypoint, endedProbe, evidenceFile, landedWaypoint, launchedProbe, nextWaypoints, notedSlice, probedWaypoints, notedWaypoint, opening, shieldedWaypoint, shippedWaypoint, taskedWaypoint, tickedSpotCheck, WAYPOINT_LIMITS, withWaypoint } from './waypoints';
 
 const note = (done: string, learned: string[] = []): GoalNote => ({ done, learned, next: [] });
 
@@ -184,6 +184,18 @@ describe('probes', () => {
     // one it never launched, or that has already reported, changes nothing
     expect(endedProbe(later, { id: 'h9', ok: true }, 90)).toBeUndefined();
     expect(endedProbe({ slice: 2, waypoints: after }, { id: 'h1', ok: false }, 95)).toBeUndefined();
+  });
+
+  it('launches or ends one for a helper or script that starts or ends, and leaves them be otherwise', () => {
+    const launched = probedWaypoints({ slice: 2, waypoints: course }, { kind: 'started', id: 'h1', description: 'Map the repo', type: 'Explore' }, 50)!;
+    expect(launched[1].probes).toEqual([{ id: 'h1', description: 'Map the repo', type: 'Explore', launchedAt: 50 }]);
+    const work = { slice: 2, waypoints: launched };
+    expect(probedWaypoints(work, { kind: 'ended', id: 'h1', ok: false, summary: 'No luck' }, 60)![1].probes).toEqual([{ id: 'h1', description: 'Map the repo', type: 'Explore', launchedAt: 50, endedAt: 60, ok: false, summary: 'No luck' }]);
+    // the same helper again, one it never launched, or news that isn't a start or an end: no change to make
+    expect(probedWaypoints(work, { kind: 'started', id: 'h1', description: 'Again' }, 70)).toBeUndefined();
+    expect(probedWaypoints(work, { kind: 'ended', id: 'h9', ok: true }, 70)).toBeUndefined();
+    expect(probedWaypoints(work, { kind: 'activity', id: 'h1', activity: 'Reading' }, 70)).toBeUndefined();
+    expect(probedWaypoints(work, { kind: 'model', id: 'h1', model: 'claude-haiku-4-5' }, 70)).toBeUndefined();
   });
 });
 
