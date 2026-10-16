@@ -90,9 +90,10 @@ export class IssuePlanner {
         if (!current()) return;
         if (result.sessionId) this.sessions.set(projectId, result.sessionId);
         const repos = this.store.projects.find((p) => p.id === projectId)?.repos ?? [];
-        Object.assign(draft, readyDraft(result, repos, Date.now()));
+        const ready = readyDraft(result, repos, Date.now());
+        Object.assign(draft, ready);
         this.broadcast(draft);
-        this.hub.toast('success', `📝 ${planner.name} has a draft ready at ${project.name}'s Ops station: ${truncate(draft.title ?? '', 60)}`, undefined, project.id);
+        this.hub.toast('success', `📝 ${planner.name} has a draft ready at ${project.name}'s Ops station: ${truncate(ready.title, 60)}`, undefined, project.id);
       })
       .catch((err) => {
         if (!current()) return; // discarded meanwhile
@@ -150,7 +151,7 @@ export function draftRefusal(ask: {
  * What a finished draft becomes: in the planner's repo while it's still one of the project's (else its first), trimmed,
  * and only flagged too big for a reason that says something.
  */
-export function readyDraft(result: DraftResult, repos: readonly string[], now: number): Partial<IssueDraft> {
+export function readyDraft(result: DraftResult, repos: readonly string[], now: number): Partial<IssueDraft> & { title: string } {
   return {
     status: 'ready',
     activity: 'Draft ready',
