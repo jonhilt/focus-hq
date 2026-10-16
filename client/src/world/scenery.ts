@@ -4,6 +4,7 @@ import { clearOfHall, insideHall, keepOut } from './footprint';
 import { ENTRANCE_X } from './hallLayout';
 import { DOOR_H, DOOR_W, HALL } from './layout';
 import { toonMaterial } from './materials';
+import { dimsAtNight } from './night';
 
 // A themed holodeck's training hall (hall.ts) has its walls and ceiling lined with an invisible "skin", and a landscape
 // is built around the hall (in its frame, overlapping whatever else stands there). Each frame:
@@ -300,6 +301,8 @@ export class Kit {
         ),
       );
       mat.userData.hull = !!opts.outline;
+      // ground, sea and clouds dim at night; additive glows don't
+      if (!opts.additive) dimsAtNight(mat.color, mat);
       if (opts.underlay) {
         // pushed back in depth, so decals laid flat on it (paths, water, craters) win
         mat.polygonOffset = true;
@@ -407,6 +410,7 @@ export class Kit {
       ),
     );
     mat.userData.hull = false;
+    for (const c of ['top', 'mid', 'horizon', 'below']) dimsAtNight(mat.uniforms[c].value as THREE.Color, mat);
     // drawn first among the landscape, behind everything
     const dome = new THREE.Mesh(new THREE.SphereGeometry(190, 32, 16), mat);
     dome.renderOrder = -1;

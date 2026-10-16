@@ -37,6 +37,7 @@ import { OVERLAY_LAYER } from './world/frame';
 import { toastShows } from '../../shared/hidden';
 import { previewIncludes } from '../../shared/previewSet';
 import { sound } from './sound';
+import { dimsAtNight, fade, NIGHT_LIGHT, nightLevel, nightWanted, type Override, setNightLevel, toggle } from './world/night';
 import { screenPrefs } from './world/screenPanes';
 import { Deck } from './world/deck';
 import { HolodeckDeck } from './world/holodeckDeck';
@@ -64,6 +65,18 @@ import { type ClientParts, clientPlugin, clientPlugins, stationSays } from './pl
 function pluginBoard(id: string): MsdBoard | undefined {
   const draw = clientPlugin(id)?.msd;
   return draw && { kind: 'plugin', id, draw };
+}
+
+const NIGHT_KEY = 'focus.night';
+
+/** The captain's last say on night (B), if they've had one. */
+function readOverride(): Override | null {
+  try {
+    const o = JSON.parse(localStorage.getItem(NIGHT_KEY) ?? 'null') as Override | null;
+    return o && typeof o.night === 'boolean' && typeof o.until === 'number' ? o : null;
+  } catch {
+    return null;
+  }
 }
 
 async function fontsReady(): Promise<void> {
@@ -96,12 +109,21 @@ async function main() {
   document.getElementById('app')!.append(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#9ad7ff');
-  scene.add(new THREE.HemisphereLight('#ffffff', '#d9c7a8', 1.9));
+  const background = new THREE.Color('#9ad7ff');
+  scene.background = background;
+  const sky = new THREE.HemisphereLight('#ffffff', '#d9c7a8', 1.9);
   const sun = new THREE.DirectionalLight('#fff4e0', 1.3);
   sun.position.copy(SUN_POSITION);
-  scene.add(sun);
-  scene.add(new THREE.AmbientLight('#ffffff', 0.35));
+  const ambient = new THREE.AmbientLight('#ffffff', 0.35);
+  scene.add(sky, sun, ambient);
+  dimsAtNight(background);
+  for (const c of [sky.color, sky.groundColor, sun.color, ambient.color]) dimsAtNight(c, undefined, NIGHT_LIGHT);
+  // night: by the clock, and B says otherwise until it next changes over (world/night.ts); ?night=1 or 0 holds it
+  let forced = params.get('night');
+  let override = readOverride();
+  const wantNight = () => (forced !== null ? forced === '1' : nightWanted(new Date(), override));
+  let dark = wantNight();
+  setNightLevel(dark ? 1 : 0);
 
   const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 250);
   // ?merge=0 leaves the decks' meshes as Blender made them, for the gap and z-fighting scans to name
@@ -695,6 +717,13 @@ async function main() {
       },
       KeyC: () => ui.openComms(),
       KeyH: () => record(!document.body.classList.contains('recording')),
+      KeyB: () => {
+        forced = null;
+        override = toggle(new Date(), override);
+        localStorage.setItem(NIGHT_KEY, JSON.stringify(override));
+        dark = wantNight();
+        hud.toast('info', dark ? 'Night: the ship dims until morning' : 'Lights up until evening');
+      },
       KeyJ: () => ui.openLog(),
       // the goals of the holodeck you're in; anywhere else, every goal's in Comms
       KeyL: () => {
@@ -766,6 +795,7 @@ async function main() {
     const through = world.through(camera.position);
     if (through) player.transport(through.through, through.other.doorway.matrix);
     newFrame();
+    setNightLevel(fade(nightLevel(), dark, dt));
     world.update(t, now, camera.position);
     feed.update(world.ahead(camera.position), now);
     sound.listen(camera);
@@ -775,6 +805,7 @@ async function main() {
     }
     if (now - lastLocation > 300) {
       lastLocation = now;
+      dark = wantNight();
       const where = world.locationOf(camera.position);
       hud.setLocation(where.label, where.projectId ? state.project(where.projectId)?.color : undefined);
       if (stats) stats.where = where.label;

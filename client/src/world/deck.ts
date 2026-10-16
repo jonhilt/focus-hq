@@ -5,6 +5,7 @@ import { type Crew, type DeckScreen, isDeckScreen, type Marker, type Part, readI
 import { type Box2, contains, footprint, type Seat } from './layout';
 import { flat, occludedToon, toon } from './materials';
 import { mergeStatic } from './merge';
+import { dimsAtNight } from './night';
 import type { Place } from './office';
 import { consoleTexture, lcarsSign, readoutTexture, SlidingDoors, starChartTexture, touchPanelTexture } from './starship';
 import { viewportGlass } from './starfield';
@@ -46,8 +47,12 @@ function surfaceMaterial(surface: Surface, color: string, ao: THREE.Texture | nu
   switch (surface.kind) {
     case 'toon':
       return ao ? occludedToon(color, ao) : toon(color);
-    case 'unlit':
-      return new THREE.MeshBasicMaterial({ color });
+    case 'unlit': {
+      // ceilings and light panels: unlit, so the night dims them itself
+      const mat = new THREE.MeshBasicMaterial({ color });
+      dimsAtNight(mat.color);
+      return mat;
+    }
     case 'carpet':
       return ao ? occludedToon('#ffffff', ao, tiled.carpet(color, 1, 1)) : toon('#ffffff', { map: tiled.carpet(color, 1, 1) });
     case 'space':

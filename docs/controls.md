@@ -12,6 +12,7 @@
 | <kbd>N</kbd> | new issue for the holodeck you're in |
 | <kbd>L</kbd> | the goals of the holodeck you're in: talk to their leads, or start another (anywhere else, Comms) |
 | <kbd>H</kbd> | recording: hide the HUD, the training console's steps and every toast but errors, so a video shows only the office; <kbd>H</kbd> again brings them back (`?record=1` starts hidden) |
+| <kbd>B</kbd> | [night](night.md): dim the ship's lights, or bring them up, until the clock next changes over |
 | <kbd>1</kbd> | talk to [Number One](../plugins/number-one/README.md), with the `number-one` plugin on |
 | <kbd>Alt</kbd>+<kbd>1</kbd>… | pick a view from a panel's sidebar by its number (an agent's browser, goal, tasks or crew; the ready room's sections) |
 | <kbd>Esc</kbd> | pause / close a panel |

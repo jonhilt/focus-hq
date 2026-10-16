@@ -101,6 +101,7 @@ client/src/
   world/                  ship layout, holodecks, stations, characters, station screens (screenPanes.ts: which panes side by side, and each viewer's switches; paneSwitches.ts and paneSwitchPanel.ts: the briefing room's strip of them under its viewscreen), Kanban display (hologram.ts: a screen floating in the air, see-through where it's dark)
     scenery.ts            stencil "holo walls" that show a landscape built around a training hall (footprint.ts: keeping it out of the hall)
     themes.ts             the landscapes (beach, forest, desert, moon, city, library)
+    night.ts              night on the ship by the captain's clock, B to say otherwise: the lights, ceilings and holodeck skies dim, screens don't (docs/night.md)
     hallScreens.ts        the plugins' screens round a holodeck's wall (plugins.ts `hall`): a hologram each, drawn when its version changes, E opens it up close
     teamStation.ts        a goal's team station: its door in the holodeck and its briefing room out in the world, the lead's screen, seats for their helpers and the goal's reviewer (helperSeats.ts: who sits where)
     probes.ts             the probes by a lead's chair, one per background command or monitor (probeSlots.ts: which show, and their labels); E on one opens ui/backgroundPanel.ts: its output and Stop
