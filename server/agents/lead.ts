@@ -169,29 +169,24 @@ export function leadSystemAppend(agent: Pick<Agent, 'name'>, projectName: string
   return `
 # You are ${agent.name}, a lead on ${projectName} aboard the Focus
 
-You're the captain's own Claude Code session for one goal of ${projectName}, at team station ${station + 1} in its room. They talk to you the way they'd talk to Claude Code, and you build what they're after with them, a slice at a time. Building software is learning: ship something small and real, see what it teaches you, and revise and refactor as you go. The captain controls the ideas; you do the work and keep them in the loop.
+You're the captain's own Claude Code session for one goal of ${projectName}, at team station ${station + 1} in its room. They talk to you the way they'd talk to Claude Code, and you build what they're after with them. The captain controls the ideas; you do the work and keep them in the loop.
 
-Your workspace holds every repo of the project side by side, each in its own folder. Which folders, and the branch they're on, come in your first message and again at each new slice. Other leads may be working on other goals in the same repos at the same time, each on their own branches: keep your slices small so they merge cleanly.
+What the captain wants of you:
+- Shape the goal first. Talk it through briefly: what they want, why, and what done looks like. Don't write a spec or plan the whole route.
+- Prove risky assumptions early. Find what the goal rests on that might not hold, and try it before you build on it.
+- Bring real things back for judgement calls. When a choice is the captain's (scope, a trade-off they'd care about), show them something real (running code, a screenshot, a mockup, a model of the code) and ask. Otherwise make a sensible call and say what you decided.
+- Keep pull requests reviewable: ship in slices small enough to review and merge cleanly. Other leads may be working in the same repos at the same time, each on their own branches.
 
-How to work:
-- When a goal is new, talk it through briefly: what they want, why, and what done looks like. Don't write a spec or plan the whole route. Agree the first slice and get going.
-- Keep the goal's note with mcp__office__note. It survives when your conversation gets summarised, and the captain sees it, so keep it current and short: it's a note, not a spec. In it: what done looks like (once you've agreed it), this slice's heading as it starts (what it's heading for, in a few words: the goal's star chart shows it on the slice under way until it ships), this slice's checklist when the slice has more than a couple of parts (tick items off as you go), a line or two on what each slice taught you once it lands, and up to three ideas for what's next. You can also give the goal a better title. When a slice lands the office clears its checklist: carry what's unfinished into the next one, or say in learned that you dropped it. When you notice a loose thread worth keeping (a question, a risk, an idea off the current path), log it as a contact rather than chasing it now, and close it when you pursue or drop it: it stays on the goal's chart until you do.
-- A slice is a reasonably sized change that ships on its own and gets something real working: often a thin slice end to end, through every repo it needs. A slice can also be a refactor, once the code has learned something. Keep each pull request reviewable.
-- Before changing a repo, read its CLAUDE.md or README. Run its tests, type checks and linters, and check UI changes in the browser with the mcp__browser__ tools.
-- Commit in each repo as you go. Never push and never open pull requests yourself. Ship work in the slice you do it in, rather than holding it back for a later one: the star chart only shows what's on its way.
+How the office works:
+- Your workspace holds every repo of the project side by side, each in its own folder; which folders, and the branch each is on, come in your messages. Read a repo's CLAUDE.md or README before changing it.
+- Commit as you go, but never push or open pull requests yourself: mcp__office__ship pushes every repo with new commits and opens (or updates) a pull request in each. QA reviews them and you hear its verdict; the captain decides what merges. Once a slice's pull requests have all merged or closed you hear so, and your repos move to fresh code on a new branch at the start of your next turn, bringing along commits you hadn't shipped.
+- The goal's star chart is drawn from what you do: your task list (Claude Code's task tools), your commits and your ships.
+- mcp__office__note keeps the goal's note, which survives when your conversation gets summarised and which the captain sees: what done looks like, what you've learned, ideas for what's next, and loose threads as contacts.
+- Your station's screen: mcp__office__show puts up a visual, mcp__office__model a model of how real code works (cited and checked against your workspace), mcp__office__explain an animated explainer of a concept, and mcp__office__ask a question answered by picking a page (their pick comes back as a message: end your turn for it).
+- Hand independent work, and broad exploration, to subagents with the Agent tool, and keep their conclusions: your context has to last the whole goal.
 - ${SCRATCH_RULE} It's emptied at the end of each of your turns.
 - ${WAIT_RULE}
-- Show the captain what you mean before you build it: put a visual on your station's screen with mcp__office__show (a diagram of how a change fits before a big one, a mockup before UI work, a before-and-after). They switch between what you've shown and open each one up close. Show the same id again to keep one up to date.
-- When the captain needs to understand how real code works (a feature, how data moves through it, which parts talk to which), or what a slice changes, show it with mcp__office__model rather than a hand-drawn diagram: a model recovered from the code, every part and connection cited at the line that does it, one concrete scenario stepped through, and what the slice adds, changes or removes marked. The office checks it against your workspace before the captain sees it.
-- For ideas that aren't in code yet, or a concept rather than a code path (a mechanism, what happens when it fails, how data moves, why one design beats another), walk them through it with mcp__office__explain rather than paragraphs: an animated explainer they step through a beat at a time, each beat with a caption and a narration a voice can read to them. It's worth it for the ideas a choice rests on, not for every small point.
-- To ask the captain something best answered by looking (which layout, which diagram reads best), ask it with mcp__office__ask, each option a page of its own. Their pick comes back to you as a message from them: end your turn and wait for it.
-- When a slice is ready, call mcp__office__ship with a title and a summary. The office pushes every repo with new commits and opens (or updates) a pull request in each, and QA reviews them. Then tell the captain what's in the slice, what it taught you, and what you'd do next, and stop there while it's in review: they review it and decide whether it merges.
-- When a slice lands (you'll hear), carry on into the next one without waiting to be told: what the captain asked for next, if they said, or else the first of your note's next ideas. Tell them in a few lines what the slice taught you and what you've started, so they can steer you while you work. Ask first only when what's next is the captain's call (a change of scope, or a trade-off they'd care about).
-- Shipping again before the pull requests merge updates them: that's how you fix what QA or the captain finds.
-- You'll hear QA's verdict on each pull request, and when the slice's pull requests have all merged or closed. Your repos move to fresh code on a new branch for the next slice at the start of your next turn, and the office brings along any commits you hadn't shipped. Until then keep working on your current branch: you don't need to end your turn, or commit work in progress, for the move.
-- For independent pieces of work that can run side by side, you can hand them to subagents with the Agent tool. You own what they bring back. Hand broad exploration (reading through a repo, long test runs, combing through logs) to subagents too, and keep their conclusions rather than the details: your context has to last the whole goal.
-- When a decision is the captain's (scope, a trade-off they'd care about), ask and stop. Otherwise make sensible calls and say what you decided.
-- When what done looks like is met, or a slice has landed and nothing worthwhile is left, call mcp__office__propose_close with why, tell the captain, and stop. They close the goal, or carry on with you.
+- When what done looks like is met, or nothing worthwhile is left, say so with mcp__office__propose_close.
 `.trim();
 }
 
@@ -219,69 +214,31 @@ export function compactInstructions(work: Pick<LeadWork, 'title' | 'note' | 'bri
 export const COMPACT_INSTRUCTIONS =
   'Summarise this conversation so you can carry on with your task: keep the task, what you have done and decided and why, and what is left. Drop file contents, diffs, and command and tool output.';
 
-/** How long a goal's note may get: enough to carry the goal, never enough to become a spec. */
-export const NOTE_LIMITS = { title: 60, done: 400, slice: 7, item: 160, learned: 10, line: 200, next: 3, heading: 80 } as const;
-
-export const emptyNote = (): GoalNote => ({ done: '', slice: [], learned: [], next: [] });
+export const emptyNote = (): GoalNote => ({ done: '', learned: [], next: [] });
 
 /**
  * What the lead can send through the note tool: each field replaces what was there, except `learned`, which adds a
- * line (`allLearned` replaces them all, to merge old lessons when the list is full), and the contacts (`contacts.ts`).
+ * line (`allLearned` replaces them all, to merge old lessons), and the contacts (`contacts.ts`).
  */
 export interface NoteInput extends ContactInput {
   title?: string;
-  /** What the slice under way is heading for, in a few words: its waypoint's name on the chart until it ships. */
-  heading?: string;
   done?: string;
-  slice?: { text: string; done?: boolean }[];
   learned?: string;
   allLearned?: string[];
   next?: string[];
 }
 
-/**
- * Why one part of the note is over its limit, in the words both the office and the note tool's schema refuse with:
- * a line is named by its first 40 characters, so the lead can find the one to trim.
- */
-export const noteOver = {
-  field: (what: string, length: number, limit: number) => `${what} is ${length} characters (at most ${limit})`,
-  line: (what: string, text: string, limit: number) => `${what} “${text.length > 40 ? `${text.slice(0, 40)}…` : text}” is ${text.length} characters (at most ${limit})`,
-  slice: (items: number) => `the slice has ${items} items (at most ${NOTE_LIMITS.slice}: split the slice, or merge items)`,
-  learned: (lines: number) => `learned has ${lines} lines (at most ${NOTE_LIMITS.learned}: send allLearned with the older lessons merged)`,
-  allLearned: (lines: number) => `allLearned has ${lines} lines (at most ${NOTE_LIMITS.learned}: merge the older lessons)`,
-  next: (ideas: number) => `next has ${ideas} ideas (at most ${NOTE_LIMITS.next})`,
-};
-
-/** Why the note is too long, every part that's over named, for the lead to trim: undefined when it fits. */
-export function checkNote(title: string, note: GoalNote): string | undefined {
-  const L = NOTE_LIMITS;
-  const lines = (what: string, texts: string[], limit: number) => texts.filter((t) => t.length > limit).map((t) => noteOver.line(what, t, limit));
-  const over = [
-    ...(title.length > L.title ? [noteOver.field('the title', title.length, L.title)] : []),
-    ...(note.done.length > L.done ? [noteOver.field('done', note.done.length, L.done)] : []),
-    ...(note.slice.length > L.slice ? [noteOver.slice(note.slice.length)] : []),
-    ...lines('the slice item', note.slice.map((i) => i.text), L.item),
-    ...(note.learned.length > L.learned ? [noteOver.learned(note.learned.length)] : []),
-    ...lines('the learned line', note.learned, L.line),
-    ...(note.next.length > L.next ? [noteOver.next(note.next.length)] : []),
-    ...lines('the idea in next', note.next, L.item),
-  ];
-  return over.length ? `The note is too long: ${over.join('; ')}. It's a note, not a spec: trim it and try again.` : undefined;
-}
-
-/** The goal's title and note after the lead's update, or why it was refused (nothing changes then). */
-export function applyNote(work: Pick<LeadWork, 'title' | 'note'>, input: NoteInput): { title: string; note: GoalNote } | { error: string } {
+/** The goal's title and note after the lead's update. */
+export function applyNote(work: Pick<LeadWork, 'title' | 'note'>, input: NoteInput): { title: string; note: GoalNote } {
   const before = work.note ?? emptyNote();
   const clean = (text: string) => text.replace(/\s+/g, ' ').trim();
   const title = input.title !== undefined && clean(input.title) ? clean(input.title) : work.title;
   const note: GoalNote = {
     done: input.done !== undefined ? input.done.trim() : before.done,
-    slice: input.slice ? input.slice.map((i) => ({ text: clean(i.text), done: !!i.done })).filter((i) => i.text) : before.slice,
     learned: [...(input.allLearned ? input.allLearned.map(clean).filter(Boolean) : before.learned), ...(input.learned && clean(input.learned) ? [clean(input.learned)] : [])],
     next: input.next ? input.next.map(clean).filter(Boolean) : before.next,
   };
-  const error = checkNote(title, note);
-  return error ? { error } : { title, note };
+  return { title, note };
 }
 
 export const ARTIFACT_LIMITS = { id: 40, title: 80, count: 12, bytes: 2_000_000 } as const;
@@ -402,7 +359,6 @@ export function noteForPrompt(work: Pick<LeadWork, 'title' | 'note' | 'brief' | 
   if (work.brief && work.brief !== work.title) parts.push(`As the captain first put it:\n${work.brief.split('\n').map((l) => `> ${l}`.trimEnd()).join('\n')}`);
   if (n.done) parts.push(`What done looks like: ${n.done}`);
   if (n.learned.length) parts.push(`What the slices so far taught us:\n${n.learned.map((l) => `- ${l}`).join('\n')}`);
-  if (n.slice.length) parts.push(`This slice:\n${n.slice.map((i) => `- [${i.done ? 'x' : ' '}] ${i.text}`).join('\n')}`);
   if (n.next.length) parts.push(`Ideas for next:\n${n.next.map((x) => `- ${x}`).join('\n')}`);
   const contacts = contactsForPrompt(work.contacts);
   if (contacts) parts.push(contacts);
@@ -527,7 +483,7 @@ export function workspaceNote(work: LeadWork, branch: string): string {
 
 /** What the lead hears back after shipping: each pull request opened or updated. */
 export function shipped(lines: string[]): string {
-  return `${lines.join('\n')}\n\nThe room's QA officer reviews each pull request, and you'll hear their verdict. Tell the captain what's in the slice and what you'd do next.`;
+  return `${lines.join('\n')}\n\nThe room's QA officer reviews each pull request, and you'll hear their verdict.`;
 }
 
 /** A goal's own QA reviewer, reused from review to review like the room's QA officer. */
@@ -616,8 +572,7 @@ function landedPrs(work: LeadWork): string {
 export function landedNote(work: LeadWork): string {
   return [
     `Slice ${work.slice} has landed: ${landedPrs(work)}.`,
-    `Carry on into the next slice now, without waiting to be told: what the captain asked for next, if they said, or else the first of your note's next ideas. Tell them in a few lines what the slice taught you and what you've started, so they can steer you while you work.`,
-    `Stop to ask first only when what's next is the captain's call (a change of scope, or a trade-off they'd care about). If what done looks like is met, or nothing worthwhile is left, propose closing the goal instead.`,
+    `Carry on with what's next, unless it's the captain's call.`,
   ].join(' ');
 }
 
@@ -628,8 +583,7 @@ export function landedNote(work: LeadWork): string {
 export function landedMidTurnNote(work: LeadWork): string {
   return [
     `Slice ${work.slice} has landed: ${landedPrs(work)}.`,
-    `Carry on with what you're doing on your current branch: your commits there are safe. The office moves your repos to fresh code at the start of your next turn and brings over any commits you hadn't shipped, so you don't need to end your turn, or commit work in progress, just for the move.`,
-    `Share what the slice taught you whenever you next report to the captain, rather than stopping now to do it.`,
+    `Carry on where you are: your repos move to fresh code at the start of your next turn, bringing your commits along.`,
   ].join(' ');
 }
 
@@ -640,8 +594,7 @@ export function landedMidTurnNote(work: LeadWork): string {
 export function newSliceNote(work: LeadWork, branch: string): string {
   return [
     `Slice ${work.slice} starts on fresh code. Your repos are now:\n${workspaceList(work, branch)}`,
-    `The office cleared the last slice's checklist from your note. Where the goal stands:\n\n${noteForPrompt(work)}`,
-    `As you start this slice, name it with the note tool's heading (what it's heading for, in a few words): until then its waypoint reads "heading not set" on the star chart.`,
+    `Where the goal stands:\n\n${noteForPrompt(work)}`,
   ].join('\n\n');
 }
 

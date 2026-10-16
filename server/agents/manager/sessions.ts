@@ -16,8 +16,7 @@ import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
 import { Sessions, Workspace } from '../services';
 import { applyTaskTool } from '../tasks';
 import { applyWorkflowEvent, journalResults, runOutcome, scriptPlan, transcriptLines, WORKFLOW_LINGER_MS } from '../workflows';
-import { committedWaypoint, endedProbe, launchedProbe, nudgedWaypoint, taskedWaypoint } from '../waypoints';
-import { checklistState, type ChecklistSource } from '../checklist';
+import { committedWaypoint, endedProbe, launchedProbe, taskedWaypoint } from '../waypoints';
 import { applyBackgroundEvent, BACKGROUND_LINGER_MS, OUTPUT_TAIL, outputLines } from '../backgroundTasks';
 import { type ExtraTool, type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN, type WorkflowEvent } from '../types';
 import { EmptyRepository, FINISHED, type ManagerServices, Part, Refused, ReportGone, type Runtime, withNotes, type WorkError } from './core';
@@ -269,7 +268,6 @@ export class AgentSessions extends Part {
       tools: agent.task === 'lead'
         ? { ship: (input) => tool(this.core.slices.shipLead(agent, input)), note: (input) => tool(this.core.goalTools.noteGoal(agent, input)), show: (input) => tool(this.core.goalTools.showArtifact(agent, input)), model: (input) => tool(this.core.goalTools.showModel(agent, input)), explain: (input) => tool(this.core.goalTools.explain(agent, input)), ask: (input) => tool(this.core.goalTools.askCaptain(agent, input)), proposeClose: (input) => tool(this.core.goalTools.proposeClose(agent, input.reason)), extra: this.leadTools(agent, cwd) }
         : undefined,
-      checklist: agent.task === 'lead' ? this.checklist(agent) : undefined,
     };
   }
 
@@ -293,15 +291,6 @@ export class AgentSessions extends Part {
     }));
   }
 
-  /** A lead's checklist as its hooks see it: the note's, with the slice's commits counted on its waypoint. */
-  private checklist(agent: Agent): ChecklistSource {
-    return {
-      read: () => checklistState(agent.lead),
-      nudged: () => {
-        if (agent.lead) this.update(agent, { lead: { ...agent.lead, waypoints: nudgedWaypoint(agent.lead, Date.now()) } });
-      },
-    };
-  }
 
   /**
    * One turn of the agent's session, start to finish. Messages waiting for them go in as it starts (`withInbox`). The

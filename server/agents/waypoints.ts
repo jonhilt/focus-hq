@@ -71,12 +71,6 @@ export function notedWaypoint(work: Course & Pick<LeadWork, 'note'>, input: Note
   }, notedSlice(work));
 }
 
-/** The waypoints once the lead sends the slice's checklist: the commits so far are ones they've had the chance to tick off. */
-export const checklistWaypoint = (work: Course, now: number): Waypoint[] => withWaypoint(work, now, (w) => ({ ...w, checklistAt: w.commits ?? 0 }));
-
-/** The waypoints once the office holds the lead's turn up over unticked items: it won't again for the same commits. */
-export const nudgedWaypoint = (work: Course, now: number): Waypoint[] => withWaypoint(work, now, (w) => ({ ...w, nudgedAt: w.commits ?? 0 }));
-
 /** The waypoints as the slice's last pull request lands. */
 export const landedWaypoint = (work: Course, now: number): Waypoint[] => withWaypoint(work, now, (w) => ({ ...w, landedAt: w.landedAt ?? now }));
 
@@ -168,12 +162,6 @@ export function endedProbe(work: Course, helper: { id: string; ok: boolean; summ
     ...w,
     probes: (w.probes ?? []).map((p) => (p.id === helper.id ? { ...p, endedAt: now, ok: helper.ok, ...(summary && { summary }) } : p)),
   }), at.slice);
-}
-
-/** The waypoints once the lead names the slice under way: its heading, until it ships under its own title. */
-export function headedWaypoint(work: Course, heading: string, now: number): Waypoint[] {
-  const clean = heading.replace(/\s+/g, ' ').trim();
-  return withWaypoint(work, now, (w) => (clean ? { ...w, heading: clean } : (({ heading: _, ...rest }) => rest)(w)));
 }
 
 /** The waypoints once the lead commits during the slice under way: one more commit, with what it said. */

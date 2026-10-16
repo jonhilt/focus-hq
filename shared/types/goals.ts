@@ -16,13 +16,11 @@ export interface QueuedGoal {
 
 /**
  * What a goal's lead keeps track of, through the office's note tool: not a spec, but the part of the goal that has to
- * survive a summarised conversation. Kept short by the office (see `checkNote`).
+ * survive a summarised conversation.
  */
 export interface GoalNote {
   /** What done looks like, agreed with the captain at the start. */
   done: string;
-  /** This slice's checklist. The office clears it when the slice lands. */
-  slice: { text: string; done: boolean }[];
   /** A line or two per slice: what it taught us, what we decided and why. */
   learned: string[];
   /** A few candidate next slices, rewritten rather than added to. */
@@ -41,17 +39,11 @@ export interface Waypoint {
   landedAt?: number;
   /** What it set out to do: the title it last shipped under. Missing until it ships. */
   title?: string;
-  /** What the lead said it was heading for as it started (the note tool's heading): its name until it ships. */
+  /** What the lead said it was heading for as it started, on goals from when the note tool took a heading: its name until it ships. */
   heading?: string;
   /** The commits the lead made during it, and the last one's message, so the chart shows work as it's done. */
   commits?: number;
   lastCommit?: string;
-  /**
-   * `commits` as the lead last sent the note's checklist, and as the office last held the lead's turn up for not ticking
-   * it (`server/agents/checklist.ts`): commits beyond both are ones the lead hasn't been asked to tick off yet.
-   */
-  checklistAt?: number;
-  nudgedAt?: number;
   /** The tasks the lead added or moved on during it, on the task list it keeps for itself, as they last stood. */
   tasks?: ClaudeTask[];
   /** The opening of what it shipped with (its pull requests' description), cut short. */

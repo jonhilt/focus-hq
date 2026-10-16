@@ -4,7 +4,7 @@ import { answerMessage, openQuestion } from '../../../shared/artifacts';
 import { answerInChat, answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, applyNote, type NoteInput, pageErrorsNote } from '../lead';
 import { beatMoments, explainerCheck, explainerPage, type ExplainerInput, momentNotes } from '../explainer';
 import { applyContacts } from '../contacts';
-import { checklistWaypoint, headedWaypoint, notedWaypoint } from '../waypoints';
+import { notedWaypoint } from '../waypoints';
 import { type Picture, Renderer, Workspace } from '../services';
 import { checkModel, modelError, modelReport } from '../../../shared/systemModel';
 import type { SystemModel } from '../../../shared/types';
@@ -22,17 +22,13 @@ export class GoalTools extends Part {
       if (!work) return yield* new Refused({ message: 'There’s no goal to keep a note on' });
       const now = Date.now();
       const next = applyNote(work, input);
-      if ('error' in next) return yield* new Refused({ message: next.error });
       const contacts = applyContacts(work, input, now);
       if ('error' in contacts) return yield* new Refused({ message: contacts.error });
-      const noted = notedWaypoint(work, input, next.note, now);
-      const headed = input.heading !== undefined ? headedWaypoint({ slice: work.slice, waypoints: noted ?? work.waypoints }, input.heading, now) : noted;
-      // the checklist sent again: the commits so far are ones the lead has had the chance to tick off (`checklist.ts`)
-      const waypoints = input.slice !== undefined ? checklistWaypoint({ slice: work.slice, waypoints: headed ?? work.waypoints }, now) : headed;
+      const waypoints = notedWaypoint(work, input, next.note, now);
       this.update(agent, { lead: { ...work, title: next.title, note: next.note, ...(waypoints && { waypoints }), ...(contacts.length && { contacts }) }, issue: { ...agent.issue, title: next.title } });
       const contact = input.contact?.trim() ? contacts.at(-1) : undefined;
       const logged = contact ? ` Logged contact ${contact.id}.` : '';
-      return `Noted.${logged} The captain sees the note on the goal, and you hear it again at each new slice.`;
+      return `Noted.${logged}`;
     });
   }
 

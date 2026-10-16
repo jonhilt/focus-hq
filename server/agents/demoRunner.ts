@@ -414,7 +414,6 @@ export class DemoRunner implements AgentRunner {
         const result = await tools.show(input).catch((err: Error) => err.message);
         hooks.lines([{ kind: 'output', text: `  ⎿  ${result}` }]);
       };
-      const checklist = (ticked: number) => repos.map((r, i) => ({ text: `${r.folder}: the simplest version of ${goal}`, done: i < ticked }));
       const commit = async (folder: string, text: string) => {
         await tool('Bash', { command: `git -C ${folder} add -A && git -C ${folder} commit -m "${text}"` }, [`[${folder} 4f2a91c] ${text}`, ' 2 files changed, 41 insertions(+)']);
         // as the real runner reports a commit once git says it worked
@@ -482,7 +481,6 @@ export class DemoRunner implements AgentRunner {
         return { ok: true, summary: 'Proposed the first slice.' };
       }
       await say('On it: a thin slice first.');
-      await note({ heading: `A thin slice of ${goal}`, slice: checklist(0) });
       await show({ id: 'mockup', title: 'A first mockup', html: demoMockupPage(goal) });
       // the explainer goes up last, so the screen plays it while the slice is built
       if (parts.explain) {
@@ -544,7 +542,6 @@ export class DemoRunner implements AgentRunner {
         await tool('Edit', { file_path: `/work/${r.folder}/${files[1]}`, old_string: '// TODO', new_string: `// ${goal}` }, ['Updated 1 file']);
         await tool('Bash', { command: `npm --prefix ${r.folder} test` }, ['Tests: 44 passed, 44 total']);
         await commit(r.folder, `Thin slice: ${goal}`);
-        await note({ slice: checklist(repos.indexOf(r) + 1) });
         await tool('TodoWrite', leadTodos(repos.indexOf(r) + 1));
       }
       // the app running in the background while the slice is reviewed, and a monitor waiting on the reviews

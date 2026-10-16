@@ -76,8 +76,7 @@ export class Slices extends Part {
       const lead = agent.lead;
       // the lead moves on once: a move taken again after that only checks out what's missing
       if (lead.slice < moving.slice) {
-        const note = lead.note && { ...lead.note, slice: [] };
-        this.update(agent, { branch: moving.branch, lead: { ...lead, note, repos: [], slice: moving.slice, prs: [], landed: everyPr(lead), waypoints: nextWaypoints(lead, Date.now()) } });
+        this.update(agent, { branch: moving.branch, lead: { ...lead, repos: [], slice: moving.slice, prs: [], landed: everyPr(lead), waypoints: nextWaypoints(lead, Date.now()) } });
       } else {
         this.update(agent, { branch: moving.branch, lead: { ...lead, repos: [] } });
       }
