@@ -16,6 +16,8 @@ import { confirmDialog } from './confirmDialog';
 import { busy, fill, h } from './dom';
 import { SideNav, Switch } from './panels';
 import { plannerCard } from './plannerCard';
+import { personalEntries, personalLogTab } from './personalLogTab';
+import { personalLogView } from '../../../shared/personalLog';
 
 const COLORS = ['#ff8a5b', '#5bc0eb', '#9bc53d', '#c879ff', '#fde74c', '#ff5d8f', '#2ec4b6', '#f4a259'];
 
@@ -45,18 +47,21 @@ function repoDatalist(id: string): HTMLDataListElement {
 export function openManagerPanel(ui: Ui, tab: ManagerTab = state.projects.length ? 'projects' : 'new-project'): void {
   const body = h('div');
   const nav = new SideNav<ManagerTab>((t) => show(t));
+  const navItems = () => [
+    { key: 'projects' as const, label: 'Projects', readout: String(state.projects.length) },
+    { key: 'personal-log' as const, label: 'Personal log', readout: String(personalLogView(state.personalLog, Date.now()).open.length) },
+    { key: 'new-project' as const, label: 'New project' },
+    { key: 'issue' as const, label: 'New issue' },
+    { key: 'settings' as const, label: 'Settings' },
+  ];
   let current = tab;
   let selected: string | undefined;
   const show = (t: ManagerTab) => {
     current = t;
-    nav.show([
-      { key: 'projects', label: 'Projects', readout: String(state.projects.length) },
-      { key: 'new-project', label: 'New project' },
-      { key: 'issue', label: 'New issue' },
-      { key: 'settings', label: 'Settings' },
-    ], t);
+    nav.show(navItems(), t);
     body.replaceChildren(
       t === 'projects' ? projectsTab(ui, show, selected, openProject)
+        : t === 'personal-log' ? personalLogTab(ui)
         : t === 'new-project' ? newProjectTab(ui, openProject)
         : t === 'issue' ? issueForm(ui)
         : settingsTab(ui),
@@ -70,6 +75,11 @@ export function openManagerPanel(ui: Ui, tab: ManagerTab = state.projects.length
   show(tab);
   // keep the projects list fresh, but never wipe a form the manager is typing into
   ui.panels.own(state.on('projects', () => current === 'projects' && !body.contains(document.activeElement) && show('projects')));
+  // the personal log's count, and its entries under the jot box, which keeps what's being typed
+  ui.panels.own(state.on('personal-log', () => {
+    nav.show(navItems(), current);
+    body.querySelector('.personal-entries')?.replaceChildren(...personalEntries(ui));
+  }));
   ui.panels.own(state.on('info', () => current === 'settings' && !body.contains(document.activeElement) && show('settings')));
 }
 

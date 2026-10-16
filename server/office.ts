@@ -5,6 +5,7 @@ import { chosenSet, previewPrsGone } from '../shared/previewSet';
 import { issuesToAssign } from '../shared/dependencies';
 import type { Closer } from '../shared/ledger';
 import { autoMergeFor, conflictsSaid, forgottenMarks, type GateMark, mergeMethodFor, mergeStep, type MergeStep, requestedMerge, stepMark } from '../shared/mergeGate';
+import { entryIn, entryText, type LogFrom, type PersonalEntry, type PersonalFact } from '../shared/personalLog';
 import { autoQaFor, autoSendBackFor, prKey, verdictBehindHead } from '../shared/qa';
 import type { AgentManager } from './agents/manager';
 import type { Lent } from './agents/manager/pluginHost';
@@ -19,7 +20,7 @@ import type { Previews } from './previews';
 import type { Store } from './store';
 import { changeSettings } from './settings';
 import { projectChangeFollowUps } from './projectChange';
-import { errorMessage } from './util';
+import { errorMessage, newId } from './util';
 import type { BriefingDesk } from './briefingDesk';
 import type { Voice } from './voice';
 
@@ -97,7 +98,26 @@ export class Office {
       report: this.agents.report(),
       usage: this.usage.current(),
       plugins: this.agents.plugins.states(),
+      personalLog: this.store.personalEntries,
     };
+  }
+
+  // ---------------------------------------------------------------- the captain's personal log
+
+  /** Jots `text` down in the captain's personal log. */
+  notePersonal(text: unknown, from: LogFrom): PersonalEntry {
+    const id = newId('note');
+    const log = this.store.personalLog({ kind: 'noted', id, text: entryText(text), from });
+    this.hub.send({ type: 'personal-log', entries: log.entries });
+    return entryIn(log.entries, id);
+  }
+
+  /** Records what the captain did with an entry: edited, done, dropped, put aside or reopened. */
+  markPersonal(fact: Exclude<PersonalFact, { kind: 'noted' }>): PersonalEntry {
+    entryIn(this.store.personalEntries, fact.id);
+    const log = this.store.personalLog(fact.kind === 'edited' ? { ...fact, text: entryText(fact.text) } : fact);
+    this.hub.send({ type: 'personal-log', entries: log.entries });
+    return entryIn(log.entries, fact.id);
   }
 
   private broadcastProjects(): void {

@@ -1,5 +1,6 @@
 import { isHidden, shownProjects } from '../../../shared/hidden';
 import type { ReportCard } from '../../../shared/ledger';
+import type { PersonalEntry } from '../../../shared/personalLog';
 import { prKey } from '../../../shared/qa';
 import type { Agent, Board, BrowserFrame, IssueDraft, PluginStates, Preview, Project, QaReview, ServerEvent, ServerInfo, StudioSession, TermLine, Usage, VoiceStatus } from '../../../shared/types';
 
@@ -29,6 +30,8 @@ type Events = {
   /** A QA review changed or went away (its project id). */
   review: string;
   voice: void;
+  /** The captain's personal log changed. */
+  'personal-log': void;
   connection: boolean;
 };
 
@@ -57,6 +60,8 @@ export class OfficeState {
   reviews = new Map<string, QaReview>();
   /** Whether dictation can run on the server, and the speech model's download. */
   voice: VoiceStatus | null = null;
+  /** The captain's personal log, oldest first. */
+  personalLog: PersonalEntry[] = [];
   connected = false;
 
   private listeners = new Map<keyof Events, Set<Listener<never>>>();
@@ -118,6 +123,7 @@ export class OfficeState {
         this.report = s.report;
         this.usage = s.usage;
         this.plugins = s.plugins ?? {};
+        this.personalLog = s.personalLog ?? [];
         this.voice = s.voice;
         this.emit('snapshot', undefined);
         this.emit('report', undefined);
@@ -191,6 +197,10 @@ export class OfficeState {
         if (review) this.emit('review', review.projectId);
         break;
       }
+      case 'personal-log':
+        this.personalLog = event.entries;
+        this.emit('personal-log', undefined);
+        break;
       case 'voice':
         this.voice = event.voice;
         this.emit('voice', undefined);

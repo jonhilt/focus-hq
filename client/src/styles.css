@@ -995,3 +995,10 @@ body.recording .hud, body.recording .training-steps, body.recording .toast:not(.
 .replay-steps li { padding: 3px 8px; cursor: pointer; border-radius: 6px; }
 .replay-steps li:hover { background: var(--surface-2); }
 .replay-steps li.on { background: var(--surface-2); outline: 1px solid var(--lcars-orange); }
+
+/* the ready room's personal log */
+.personal-jot { width: 100%; resize: vertical; }
+.personal-section h3 { margin: 18px 0 8px; display: flex; align-items: center; gap: 8px; }
+.personal-entry { margin-bottom: 8px; }
+.personal-entry .personal-text { margin: 0 0 8px; white-space: pre-wrap; }
+.personal-entry.closed .personal-text { opacity: 0.6; }

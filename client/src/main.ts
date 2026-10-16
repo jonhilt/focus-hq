@@ -710,6 +710,8 @@ async function main() {
       KeyE: interact,
       KeyT: () => ui.openTeleport(),
       KeyM: () => ui.openManager(),
+      // jot a thought down in the personal log, wherever you are
+      KeyI: () => ui.openManager('personal-log'),
       KeyN: () => ui.openNewIssue(world.locationOf(camera.position).projectId),
       // in the studio, Enter talks to its computer
       Enter: () => {

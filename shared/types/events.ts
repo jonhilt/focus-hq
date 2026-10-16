@@ -1,6 +1,7 @@
 // What the server tells the browser: the snapshot it starts from, and the events after it.
 
 import type { ReportCard } from '../ledger';
+import type { PersonalEntry } from '../personalLog';
 import type { Agent, BrowserFrame, TermLine } from './agents';
 import type { IssueDraft } from './drafts';
 import type { Board, GitHubStatus } from './github';
@@ -43,6 +44,8 @@ export interface Snapshot {
   usage: Usage;
   /** Each plugin's state, by plugin id (docs/plugins.md). */
   plugins: PluginStates;
+  /** The captain's personal log, oldest first: everything in it, done and dropped included. */
+  personalLog: PersonalEntry[];
 }
 
 export type ServerEvent =
@@ -65,5 +68,7 @@ export type ServerEvent =
   /** A plugin's state changed. */
   | { type: 'plugin'; id: string; state: unknown }
   | { type: 'voice'; voice: VoiceStatus }
+  /** The captain's personal log changed: all of it. */
+  | { type: 'personal-log'; entries: PersonalEntry[] }
   /** projectId, or the agent's, lets the browser drop toasts about a hidden project. */
   | { type: 'toast'; level: 'info' | 'success' | 'error'; text: string; agentId?: string; projectId?: string };

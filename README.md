@@ -88,6 +88,7 @@ Then on board:
 - [Your API key when your plan runs out](docs/api-key.md): carrying on with `ANTHROPIC_API_KEY` while your plan's usage limit is reached
 - [Data and backups](docs/data.md): what lives in `~/.focus/` and what to back up
 - [The captain's log](docs/captains-log.md): what happened across the ship on one timeline, from every journal and the ledger, and what happened while you were away
+- [The personal log](docs/personal-log.md): jot a thought down (<kbd>I</kbd>) to come back to, on the ready room's console
 - [The ledger](docs/ledger.md): the log of how work went, and the report card
 - [Where goals' time goes](plugins/flow/README.md): lead time, the states it splits into, the biggest wait, and the quality guards (the `flow` plugin, live on each goal's board)
 - [QA's catch rate](docs/qa-catch.md): bugs planted in merged pull requests, and how many QA catches

@@ -7,6 +7,7 @@
 | <kbd>E</kbd> or click | use whatever is under the crosshair (agent, station, board, PADD rack, Ops station, console) |
 | <kbd>C</kbd> | [Comms](comms.md): who's waiting on you across the ship, every goal under way, and each project's goals |
 | <kbd>J</kbd> | [The captain's log](captains-log.md): what happened across the ship on one timeline, and while you were away |
+| <kbd>I</kbd> | [Personal log](personal-log.md): jot an idea down to come back to, wherever you are |
 | <kbd>T</kbd> | teleport to any holodeck or straight to an agent's station |
 | <kbd>M</kbd> | ready room |
 | <kbd>N</kbd> | new issue for the holodeck you're in |

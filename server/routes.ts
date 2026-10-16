@@ -6,6 +6,7 @@ import { isAutonomy } from '../shared/autonomy';
 import { closedGoals } from '../shared/ledger';
 import { ledgerWindow } from '../shared/ledgerReview';
 import { isKokoroVoice } from '../shared/voice';
+import type { PersonalFact } from '../shared/personalLog';
 import { logSince } from '../shared/captainsLog';
 import { captainsLog } from './agents/captainsLog';
 import { replay } from './agents/runJournal';
@@ -42,6 +43,22 @@ const resumeHow = (v: unknown): ResumeHow | undefined => (v === 'key' || v === '
 const briefingSpot = (v: unknown): BriefingSpot | undefined => {
   const spot = v as Partial<BriefingSpot> | null | undefined;
   return spot && Number.isInteger(spot.beat) && (spot.beat ?? -1) >= 0 ? { beat: Number(spot.beat), title: str(spot.title).slice(0, 200) } : undefined;
+};
+/** What the captain did with an entry of their personal log: `{ kind, text? , until? }`. */
+const personalMark = (id: string, body: { kind?: unknown; text?: unknown; until?: unknown }): Exclude<PersonalFact, { kind: 'noted' }> => {
+  switch (body.kind) {
+    case 'edited':
+      return { kind: 'edited', id, text: str(body.text) };
+    case 'done':
+    case 'dropped':
+    case 'reopened':
+      return { kind: body.kind, id };
+    case 'snoozed':
+      if (!Number.isFinite(body.until)) throw new Error('Say until when');
+      return { kind: 'snoozed', id, until: Number(body.until) };
+    default:
+      throw new Error('kind must be one of edited, done, dropped, snoozed, reopened');
+  }
 };
 const effort = (v: unknown): Effort | undefined => {
   if (v === undefined || v === '') return undefined;
@@ -143,6 +160,10 @@ export function apiRouter(office: Office, store: Store): express.Router {
     const since = logSince(Date.now(), Number(req.query.since));
     return captainsLog(store.logSources(since), since);
   }));
+  // the captain's personal log: what they jotted down to come back to (shared/personalLog.ts)
+  r.get('/personal-log', h(() => store.personalEntries));
+  r.post('/personal-log', h((req) => office.notePersonal(req.body.text, 'office')));
+  r.post('/personal-log/:id', h((req) => office.markPersonal(personalMark(param(req, 'id'), req.body))));
   r.get('/ledger', h((req) => ledgerWindow(store.ledger, Date.now(), Number(req.query.days ?? 14))));
   r.get('/digests/backfill', h(async () => ({ sessions: (await office.agents.undigested()).length })));
   r.post('/digests/backfill', h(() => office.agents.backfill()));

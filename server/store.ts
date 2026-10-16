@@ -15,6 +15,7 @@ import { EMPTY_REVIEW, evolveReview, type ReviewEntry, type ReviewFact, type Rev
 import { EMPTY_RUN, evolve, type JournalEntry, type RunFact, type RunState, runView } from './agents/runJournal';
 import { EMPTY_SLICE, evolveSlice, type SliceFact, type SliceState } from './agents/sliceJournal';
 import { Journals, type Stamped } from './journals';
+import { EMPTY_PERSONAL_LOG, evolvePersonalLog, type PersonalFact, type PersonalLog } from '../shared/personalLog';
 import type { LogSources } from './agents/captainsLog';
 import { fromBeforePlugins, type SavedBeforePlugins } from './plugins/migrate';
 import { newId } from './util';
@@ -79,6 +80,9 @@ const PROJECT_COLORS = ['#ff8a5b', '#5bc0eb', '#9bc53d', '#c879ff', '#fde74c', '
 
 const MEMORY_LINES = 400;
 
+/** The personal log's one journal. */
+const PERSONAL = 'personal';
+
 /** How many facts of each agent's run journal the demo keeps in memory, for a replay. */
 const JOURNAL_MEMORY = 2000;
 
@@ -114,12 +118,16 @@ export class Store {
   private reviewJournals: Journals<ReviewFact, ReviewState>;
   /** Each goal's slice journal, by its lead's id (data/runs/slices/<lead>.jsonl, `sliceJournal`). */
   private slices: Journals<SliceFact, SliceState>;
+  /** The captain's personal log, one journal (data/personal-log.jsonl, `shared/personalLog`). */
+  private personal: Journals<PersonalFact, PersonalLog>;
 
   constructor(private readonly persist: boolean) {
     const asIs = (id: string) => id;
     this.runs = new Journals(persist, { dir: paths.runs, name: asIs, key: asIs }, EMPTY_RUN, evolve, JOURNAL_MEMORY);
     this.reviewJournals = new Journals(persist, { dir: path.join(paths.runs, 'reviews'), name: fileKey, key: prKeyOf }, EMPTY_REVIEW, evolveReview, JOURNAL_MEMORY);
     this.slices = new Journals(persist, { dir: path.join(paths.runs, 'slices'), name: asIs, key: asIs }, EMPTY_SLICE, evolveSlice, JOURNAL_MEMORY);
+    const personal = path.basename(paths.personalLog, '.jsonl');
+    this.personal = new Journals<PersonalFact, PersonalLog>(persist, { dir: path.dirname(paths.personalLog), name: () => personal, key: () => PERSONAL }, EMPTY_PERSONAL_LOG, evolvePersonalLog, JOURNAL_MEMORY);
   }
 
   /**
@@ -405,6 +413,18 @@ export class Store {
   /** A goal's slice journal, oldest first. */
   sliceEntries(id: string): Stamped<SliceFact>[] {
     return this.slices.entries(id);
+  }
+
+  // ---- the captain's personal log ----
+
+  /** Records a fact in the captain's personal log, flushed before this returns, and what the log adds up to with it. */
+  personalLog(fact: PersonalFact): PersonalLog {
+    return this.personal.append(PERSONAL, fact);
+  }
+
+  /** What the captain's personal log adds up to. */
+  get personalEntries(): PersonalLog['entries'] {
+    return this.personal.state(PERSONAL).entries;
   }
 
   // ---- the captain's log ----

@@ -1,5 +1,6 @@
 import { callerOf, FLOW_FROM_HEADER, FLOWS_PARAM } from '../../../shared/flows';
 import type { LogLine } from '../../../shared/captainsLog';
+import type { PersonalEntry } from '../../../shared/personalLog';
 import type { BriefingSpot } from '../../../shared/artifacts';
 import type { Agent, Autonomy, Board, BriefingReply, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ReplayStep, ResumeHow, RoomTheme, Settings, StudioSession, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
@@ -78,6 +79,10 @@ export const api = {
   plugin: <T>(id: string, path: string, body?: unknown) => call<T>('POST', `/plugins/${encodeURIComponent(id)}${path}`, body),
   /** The ledger's events of the last `days` days, for reviewing at the master systems table. */
   ledger: (days: number) => call<LedgerEvent[]>('GET', `/ledger?days=${days}`),
+  /** Jots a thought down in the captain's personal log. */
+  notePersonal: (text: string) => call<PersonalEntry>('POST', '/personal-log', { text }),
+  markPersonal: (id: string, body: { kind: 'done' | 'dropped' | 'reopened' } | { kind: 'snoozed'; until: number } | { kind: 'edited'; text: string }) =>
+    call<PersonalEntry>('POST', `/personal-log/${id}`, body),
   log: (since: number) => call<LogLine[]>('GET', `/log?since=${since}`),
   undigested: () => call<{ sessions: number }>('GET', '/digests/backfill'),
   backfillDigests: () => call<{ sessions: number }>('POST', '/digests/backfill'),
