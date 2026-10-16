@@ -86,9 +86,39 @@ export interface RepoMap {
   error?: string;
 }
 
+/** What a slice changes in one repo. */
+export interface SliceChange {
+  repo: string;
+  /** The parts its files fall in, the most lines first. */
+  touched: { part: string; files: number; lines: number }[];
+  /** Source files it changed that no part owns. */
+  unowned: string[];
+  /** Parts the branch's model has and the default branch's doesn't, and the other way. */
+  added: string[];
+  removed: string[];
+  /** Imports between parts the branch makes and the default branch doesn't, and the other way. */
+  gained: MapConnection[];
+  lost: MapConnection[];
+}
+
+/** A goal under way, and what its slice does to the architecture so far, from its lead's checkout (slice.ts). */
+export interface GoalSlice {
+  leadId: string;
+  /** The goal's title, and what its slice is heading for. */
+  title: string;
+  heading?: string;
+  station: number;
+  /** When it was worked out: as the lead's last turn ended. */
+  at: number;
+  /** Each repo the slice changes: what it changes, and the map of the lead's checkout (without its history and flows). */
+  repos: { change: SliceChange; branch: RepoMap }[];
+}
+
 export interface CartographyState {
   /** Each project's maps, one per repo, by project id. */
   maps: Record<string, RepoMap[]>;
+  /** Each project's goals under way, and what their slices change, by project id. */
+  slices: Record<string, GoalSlice[]>;
   /** Projects whose maps are being made again. */
   mapping: string[];
 }

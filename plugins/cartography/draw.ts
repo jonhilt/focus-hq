@@ -5,6 +5,19 @@ import { CHANGES, CHANGES_KEY, MATRIX_KEY, VIEW_KEY, WHOLE } from './views';
 
 /** Each layer's colour, by its place among the map's layers. */
 const LAYER_COLOURS = ['#8fd3ff', '#ffcc66', '#c9a0ff', '#99dd88', '#ff9f80', '#80e0d0'];
+/**
+ * What a slice changes, marked on a view of it (slice.ts): the parts its files fall in, with their lines; the parts it
+ * adds and drops; and the imports between parts it makes and breaks (`from to`).
+ */
+export interface Marks {
+  touched: Map<string, number>;
+  added: Set<string>;
+  removed: Set<string>;
+  gained: Set<string>;
+  lost: Set<string>;
+}
+const MARK = { touched: '#ffcc66', added: '#7ee08a', removed: '#ff7a7a' } as const;
+
 const INK = { flow: '#ffcc66', bg: '#0b1020', panel: '#121a33', text: '#e8ecf5', muted: '#9aa6c4', line: '#cfe3ff', grid: '#0f1630', self: '#1c2340', tangle: '255,140,60', oneWay: '120,190,255' };
 
 export const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -38,6 +51,8 @@ export interface ViewLine {
   from: string;
   to: string;
   kind: 'import' | 'flow';
+  /** On a slice's view: an import the slice makes, or one it breaks. */
+  change?: 'gained' | 'lost';
   /** How many imports, or messages in the recorded run: the line's thickness. */
   weight: number;
   sentence: string;
@@ -52,13 +67,21 @@ function flowSentence(f: MapFlow, label: (id: string) => string): string {
     : `${label(f.from)} calls ${what} on ${label(f.to)} (${times(f.count, 'request')} in the recorded run)`;
 }
 
-/** A view's lines, numbered as viewSvg draws them: its imports, the busiest first, then its recorded flows. */
-export function viewLines(map: RepoMap, view: MapView): ViewLine[] {
+/**
+ * A view's lines, numbered as viewSvg draws them: its imports, the busiest first, then its recorded flows. On a slice's
+ * view (`marks`), the imports it makes and breaks say so.
+ */
+export function viewLines(map: RepoMap, view: MapView, marks?: Marks): ViewLine[] {
   const shown = new Set(view.parts);
   const label = (id: string) => map.model?.parts.find((p) => p.id === id)?.label ?? id;
   const inView = (x: { from: string; to: string }) => shown.has(x.from) && shown.has(x.to);
+  const changeOf = (c: MapConnection) => (marks?.gained.has(`${c.from} ${c.to}`) ? 'gained' : marks?.lost.has(`${c.from} ${c.to}`) ? 'lost' : undefined);
+  const said = { gained: ', new in this slice', lost: ', which this slice takes out' } as const;
   return [
-    ...map.connections.filter(inView).map((c): ViewLine => ({ from: c.from, to: c.to, kind: 'import', weight: c.imports, sentence: `${label(c.from)} uses ${namesLabel(c, 6)} from ${label(c.to)} (${times(c.imports, 'import')})` })),
+    ...map.connections.filter(inView).map((c): ViewLine => {
+      const change = changeOf(c);
+      return { from: c.from, to: c.to, kind: 'import', weight: c.imports, change, sentence: `${label(c.from)} uses ${namesLabel(c, 6)} from ${label(c.to)} (${times(c.imports, 'import')}${change ? said[change] : ''})` };
+    }),
     ...(map.flows ?? []).filter(inView).map((f): ViewLine => ({ from: f.from, to: f.to, kind: 'flow', weight: f.count, sentence: flowSentence(f, label) })),
   ];
 }
@@ -142,7 +165,7 @@ function numbered(x: number, y: number, n: number, colour: string): string {
  * code it uses, as thick as its imports, and a dashed gold one for what it sends another as it runs (a recorded run's
  * flows). Each arrow carries the number of its sentence in `viewSentences`; every line between two parts gets its own.
  */
-export function viewSvg(map: RepoMap, view: MapView): string {
+export function viewSvg(map: RepoMap, view: MapView, marks?: Marks): string {
   const { placed, cols, rows } = placeView(map, view);
   const colours = layerColours([...placed.values()].map((p) => p.part));
   const W = VIEW.pad * 2 + Math.max(cols, 2) * VIEW.colW;
@@ -150,11 +173,11 @@ export function viewSvg(map: RepoMap, view: MapView): string {
   const boxW = VIEW.colW - VIEW.gutter;
   const out: string[] = [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="system-ui,sans-serif">`,
-    `<defs>${[['cg-arrow', INK.line], ['cg-flow', INK.flow]].map(([id, fill]) => `<marker id="${id}" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${fill}"/></marker>`).join('')}</defs>`,
+    `<defs>${[['cg-arrow', INK.line], ['cg-flow', INK.flow], ['cg-gained', MARK.added], ['cg-lost', MARK.removed]].map(([id, fill]) => `<marker id="${id}" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${fill}"/></marker>`).join('')}</defs>`,
   ];
   [...colours].forEach(([layer, colour], i) =>
     out.push(`<text x="${VIEW.pad + VIEW.colW * (i + 0.5)}" y="30" text-anchor="middle" font-size="17" font-weight="700" letter-spacing="2" fill="${colour}">${esc(layer.toUpperCase())}</text>`));
-  const lines = viewLines(map, view);
+  const lines = viewLines(map, view, marks);
   const pair = (l: ViewLine) => [l.from, l.to].sort().join(' ');
   const numbers: string[] = [];
   lines.forEach((line, i) => {
@@ -165,7 +188,11 @@ export function viewSvg(map: RepoMap, view: MapView): string {
     const same = lines.filter((l) => pair(l) === pair(line));
     const { d, mid } = edgePath(a, b, cols, same.indexOf(line), same.length);
     const sw = 1.5 + Math.log2(line.weight + 1) * (line.kind === 'flow' ? 0.9 : 1.4);
-    const [colour, marker, dash] = line.kind === 'flow' ? [INK.flow, 'cg-flow', ' stroke-dasharray="10 7"'] : [INK.line, 'cg-arrow', ''];
+    const [colour, marker, dash] =
+      line.change === 'gained' ? [MARK.added, 'cg-gained', '']
+      : line.change === 'lost' ? [MARK.removed, 'cg-lost', ' stroke-dasharray="6 6"']
+      : line.kind === 'flow' ? [INK.flow, 'cg-flow', ' stroke-dasharray="10 7"']
+      : [INK.line, 'cg-arrow', ''];
     out.push(`<path d="${d}" fill="none" stroke="${colour}" stroke-opacity="0.75" stroke-width="${sw.toFixed(1)}"${dash} marker-end="url(#${marker})"><title>${esc(line.sentence)}</title></path>`);
     numbers.push(numbered(mid.x, mid.y, i + 1, colour));
   });
@@ -173,9 +200,20 @@ export function viewSvg(map: RepoMap, view: MapView): string {
   for (const { part, x, y } of placed.values()) {
     const colour = colours.get(part.layer) ?? INK.muted;
     const does = wrap(part.does ?? part.paths.join(', '), 15, boxW - 24);
+    // on a slice's view, a part it adds, drops or touches wears that colour, and says so on a tab over its corner
+    const lines = marks?.touched.get(part.id);
+    const mark = marks?.added.has(part.id) ? { colour: MARK.added, tab: 'NEW' } : marks?.removed.has(part.id) ? { colour: MARK.removed, tab: 'GONE' } : lines !== undefined ? { colour: MARK.touched, tab: lines ? `${lines} LINES` : 'CHANGED' } : undefined;
+    const left = x - boxW / 2;
+    const top = y - VIEW.boxH / 2;
     out.push(
       `<g><title>${esc(`${part.label}: ${part.paths.join(', ')}`)}</title>`,
-      `<rect x="${x - boxW / 2}" y="${y - VIEW.boxH / 2}" width="${boxW}" height="${VIEW.boxH}" rx="10" fill="${INK.panel}" stroke="${colour}" stroke-width="2.5"/>`,
+      `<rect x="${left}" y="${top}" width="${boxW}" height="${VIEW.boxH}" rx="10" fill="${INK.panel}" stroke="${mark?.colour ?? colour}" stroke-width="${mark ? 4.5 : 2.5}"${marks?.removed.has(part.id) ? ' stroke-dasharray="8 6"' : ''}/>`,
+      ...(mark
+        ? [
+            `<rect x="${left + boxW - 112}" y="${top - 13}" width="104" height="24" rx="12" fill="${mark.colour}"/>`,
+            `<text x="${left + boxW - 60}" y="${top + 4}" text-anchor="middle" font-size="13" font-weight="800" letter-spacing="1" fill="${INK.bg}">${esc(fit(mark.tab, 13, 96))}</text>`,
+          ]
+        : []),
       `<text x="${x}" y="${y - 16}" text-anchor="middle" font-size="21" font-weight="650" fill="#fff">${esc(fit(part.label, 21, boxW - 20))}</text>`,
       ...does.map((line, i) => `<text x="${x}" y="${y + 12 + i * 19}" text-anchor="middle" font-size="15" fill="${INK.muted}">${esc(line)}</text>`),
       '</g>',
@@ -288,8 +326,16 @@ export function changeSentences(map: RepoMap): string[] {
   });
 }
 
-/** Any view of a map as the browser and the screens show it: its drawing, how to read it, and its numbered sentences. */
-export function viewDrawing(map: RepoMap, view: MapView): { svg: string; key: string; sentences: string[] } {
+/** How to read a slice's view. */
+export const SLICE_KEY =
+  'What this slice does to the architecture, from its lead\'s checkout against the default branch. Gold: a part its changes fall in, with how many lines. Green: a part or import it adds. Red, dashed: one it takes out. Grey arrows are imports it leaves as they were.';
+
+/**
+ * Any view of a map as the browser and the screens show it: its drawing, how to read it, and its numbered sentences.
+ * A slice's view (slice.ts `sliceView`) comes with `marks`, what the slice changes.
+ */
+export function viewDrawing(map: RepoMap, view: MapView, marks?: Marks): { svg: string; key: string; sentences: string[] } {
+  if (marks) return { svg: viewSvg(map, view, marks), key: SLICE_KEY, sentences: viewLines(map, view, marks).map((l) => l.sentence) };
   if (view.id === WHOLE.id) {
     const example = matrixExample(map);
     return { svg: matrixSvg(map), key: `${MATRIX_KEY}${example ? ` ${example}` : ''}`, sentences: [] };

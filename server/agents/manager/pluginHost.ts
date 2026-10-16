@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { config } from '../../config';
+import { config, paths } from '../../config';
 import { pluginOn } from '../../../shared/projectPlugins';
 import type { Issue, PluginStates, Snapshot } from '../../../shared/types';
 import type { ShipStatus } from '../shipStatus';
@@ -92,6 +92,11 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
       const dir = path.join(dataDir(), 'checkouts', repo.replace('/', '__'));
       await checkoutLatest(repo, dir);
       return dir;
+    },
+    leadCheckouts: (agentId) => {
+      const agent = core.store.agents.get(agentId);
+      // where sessions.ts runs a lead: their workspace, a folder a repo
+      return (agent?.lead?.repos ?? []).map((r) => ({ repo: r.repo, dir: path.join(paths.workspaces, agentId, r.folder), baseBranch: r.baseBranch }));
     },
     seat: (projectId, repo, work: BriefWork, crew) => {
       const brief = core.plugins.brief({ plugin: id, kind: work.kind });

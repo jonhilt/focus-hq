@@ -170,6 +170,11 @@ export interface PluginHost {
    * `dataDir`), and says where. `repo` has to be one of the office's projects' repos: it throws, in words, for any other.
    */
   checkout(repo: string): Promise<string>;
+  /**
+   * A goal lead's checkouts, as their work stands in their workspace: each repo, where it is, and the branch it ships
+   * into. Only to read: the lead's at work in them. Empty for anyone who isn't a goal's lead.
+   */
+  leadCheckouts(agentId: string): { repo: string; dir: string; baseBranch: string }[];
   /** Hands one of the plugin's briefs to an agent: `crew` sits down when it's always the same person, else someone's hired. Throws, in words, when it can't. */
   seat(projectId: string, repo: string, work: BriefWork, crew?: Planner): Agent;
   /** Forgets what the office keeps of an agent's last session (what waited to be said, their notes), so their next brief starts afresh. */

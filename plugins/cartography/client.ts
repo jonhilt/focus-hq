@@ -7,6 +7,7 @@ import { miniature, miniatureKey } from './miniature';
 import { viewBody } from './panel';
 import { CARTOGRAPHY, type CartographyState, MODEL_FILE, type RepoMap } from './shared';
 import { ArchitectureSpace } from './space';
+import { sliceViews } from './slice';
 import { hallTable } from './spaceLayout';
 import { AstrometricsTable, TABLE } from './table';
 import { coverage, openingView, viewsOf } from './views';
@@ -44,9 +45,19 @@ function projectMaps(ui: Ui, open: Set<string>): HTMLElement[] {
     const remap = h('button', { class: 'btn small', onclick: () => void callPlugin(CARTOGRAPHY, '/map', { projectId: project.id }).catch((err: Error) => ui.error(err.message)) },
       now?.mapping.includes(project.id) ? 'Mapping…' : 'Map again');
     const repos = now?.maps[project.id];
+    // what each goal under way does to it, each closed until the captain opens it
+    const slices = sliceViews(now?.slices[project.id] ?? [], repos ?? []).map(({ slice, map, view, marks }) => {
+      const id = `slice#${slice.leadId}#${map.repo}`;
+      const details = h('details', { class: 'card', open: open.has(id), attrs: { 'data-key': id } },
+        h('summary', null, h('span', { class: 'chip' }, `TS-${slice.station + 1}`), ' ', h('strong', null, view.question), h('small', { class: 'muted' }, ` · ${view.parts.length} parts · ${map.repo}`)),
+        ...viewBody(map, view, marks));
+      details.addEventListener('toggle', () => (details.open ? open.add(id) : open.delete(id)));
+      return details;
+    });
     return h('div', { class: 'card' },
       h('div', { class: 'row' }, h('strong', { class: 'grow' }, project.name), remap),
-      ...(repos ? repos.flatMap((m) => repoMap(m, open)) : [h('small', { class: 'muted' }, `Not mapped yet. Each repo keeps its model in ${MODEL_FILE}.`)]));
+      ...(repos ? repos.flatMap((m) => repoMap(m, open)) : [h('small', { class: 'muted' }, `Not mapped yet. Each repo keeps its model in ${MODEL_FILE}.`)]),
+      ...(slices.length ? [h('small', { class: 'muted' }, 'Goals under way, and what each slice does to the architecture so far:'), ...slices] : []));
   }), ...(offNote ? [offNote] : [])];
 }
 

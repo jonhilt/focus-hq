@@ -8,6 +8,7 @@ import { isSource, mapOf, ownerOf, resolveImport } from './graph';
 import { historyOf, LOG_ARGS, readLog } from './history';
 import { readModel, readRecording } from './model';
 import { importsIn } from './scan';
+import { type ChangedFile, readNumstat } from './slice';
 import { type FileEdge, MODEL_FILE, type RepoMap } from './shared';
 
 /** Each source file's imports that lead to another source file in the repo, file to file, with the names they take. */
@@ -37,8 +38,11 @@ async function recorded(dir: string): Promise<{ ok?: FlowRecording; error?: stri
 
 const empty = (repo: string, error: string, commit?: string): RepoMap => ({ repo, commit, files: 0, mapped: 0, sizes: {}, connections: [], problems: [], error });
 
-/** The map of `repo`, checked out in `dir`: the model its file says, laid over the imports its code makes. */
-export async function mapRepo(repo: string, dir: string): Promise<RepoMap> {
+/**
+ * The map of `repo`, checked out in `dir`: the model its file says, laid over the imports its code makes; and how its
+ * parts changed in git, unless `history` is false (a lead's checkout, mapped for what its slice changes).
+ */
+export async function mapRepo(repo: string, dir: string, { history: withHistory = true } = {}): Promise<RepoMap> {
   const commit = (await run('git', ['rev-parse', 'HEAD'], { cwd: dir }).catch(() => '')).trim() || undefined;
   const raw = await fs.readFile(path.join(dir, MODEL_FILE), 'utf8').catch(() => undefined);
   if (raw === undefined) return empty(repo, `No ${MODEL_FILE} on its default branch yet`, commit);
@@ -52,7 +56,20 @@ export async function mapRepo(repo: string, dir: string): Promise<RepoMap> {
   const files = (await run('git', ['ls-files'], { cwd: dir })).split('\n').filter(isSource);
   const map = mapOf(repo, model, files, await imports(dir, files), recording?.ok);
   // the history's files as the map would own them: source the model has a part for, wherever it was then
-  const log = await run('git', LOG_ARGS, { cwd: dir }).catch(() => '');
+  const log = withHistory ? await run('git', LOG_ARGS, { cwd: dir }).catch(() => '') : '';
   const history = log ? historyOf(readLog(log), (f) => (isSource(f) ? ownerOf(f, model) : undefined), map.connections) : undefined;
   return { ...map, commit, ...(history?.commits ? { history } : {}), problems: [...map.problems, ...(recording?.error ? [recording.error] : [])] };
+}
+
+/**
+ * The files a checkout in `dir` has changed since it left `baseBranch`, committed or not: against where it forked from
+ * the branch on GitHub (or the local one, without a remote), with each new file not yet added counted line by line.
+ */
+export async function changedFiles(dir: string, baseBranch: string): Promise<ChangedFile[]> {
+  const git = (args: string[]) => run('git', args, { cwd: dir });
+  const base = (await git(['merge-base', 'HEAD', `origin/${baseBranch}`]).catch(() => git(['merge-base', 'HEAD', baseBranch]))).trim();
+  const changed = readNumstat(await git(['diff', '--numstat', '--no-renames', base]));
+  const added = (await git(['ls-files', '--others', '--exclude-standard'])).split('\n').filter(isSource);
+  const counted = await Promise.all(added.map(async (file) => ({ path: file, lines: (await fs.readFile(path.join(dir, file), 'utf8').catch(() => '')).split('\n').length })));
+  return [...changed, ...counted];
 }

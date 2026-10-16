@@ -1,11 +1,13 @@
 // The cartography plugin (README.md): each project's architecture map, from the model its repos keep in MODEL_FILE and
 // the imports their code makes, made again as the office starts and whenever a pull request merges into one of them,
-// for each project it's switched on for in the project's settings.
+// for each project it's switched on for in the project's settings; and what each goal's slice does to it, from its
+// lead's checkout, worked out again as the lead's turn ends.
 // FOCUS_PLUGINS=cartography.
-import { errorMessage, type FocusPlugin, type PluginHost, type PluginState } from '../../plugin-api/server';
+import { type Agent, errorMessage, type FocusPlugin, type PluginHost, type PluginState } from '../../plugin-api/server';
 import { mapTool } from './leadTool';
-import { mapRepo } from './map';
-import { CARTOGRAPHY, type CartographyState, type RepoMap } from './shared';
+import { changedFiles, mapRepo } from './map';
+import { CARTOGRAPHY, type CartographyState, type GoalSlice, type RepoMap } from './shared';
+import { changesAnything, sliceChange } from './slice';
 
 /** How long after the office starts it maps every project, once it's settled in. */
 const MAP_AFTER_START_MS = 20_000;
@@ -13,9 +15,22 @@ const MAP_AFTER_START_MS = 20_000;
 /** Where a repo is checked out to be mapped: the office's own checkout in the demo, whose projects' repos are made up. */
 const checkout = (host: PluginHost, repo: string): Promise<string> => (host.demo ? Promise.resolve(host.officeDir) : host.checkout(repo));
 
+/**
+ * A lead's checkouts: in the demo, whose leads have none, the office's own checkout stands in for each, so the demo
+ * shows what the office's branch does to it.
+ */
+const leadCheckouts = (host: PluginHost, agentId: string) =>
+  host.demo ? host.leadCheckouts(agentId).map((c) => ({ ...c, dir: host.officeDir, baseBranch: 'main' })) : host.leadCheckouts(agentId);
+
+/** A goal still under way: its lead's still here, and the goal isn't closing. */
+const underWay = (agent: Agent | undefined): boolean => !!agent?.lead && !agent.lead.closing;
+
 class Cartographer {
   /** Projects asked to be mapped again while they were being mapped. */
   private again = new Set<string>();
+  /** Leads whose slices are being worked out, and those asked again meanwhile. */
+  private slicing = new Set<string>();
+  private sliceAgain = new Set<string>();
 
   constructor(
     private host: PluginHost,
@@ -39,13 +54,60 @@ class Cartographer {
     }
     const now = this.state.get();
     this.state.set({ maps: { ...now.maps, [id]: maps }, mapping: now.mapping.filter((p) => p !== id) });
-    if (this.again.delete(id)) await this.map(id);
+    if (this.again.delete(id)) return this.map(id);
+    // against the new maps, what each goal under way does to them
+    await this.sliceAll(id);
   }
 
-  /** Forgets project `id`'s maps. */
+  /** Forgets project `id`'s maps, and its goals' slices. */
   drop(id: string): void {
-    const { [id]: _, ...rest } = this.state.get().maps;
-    if (_) this.state.set({ maps: rest });
+    const { maps, slices } = this.state.get();
+    const { [id]: dropped, ...rest } = maps;
+    const { [id]: _, ...others } = slices;
+    if (dropped || _) this.state.set({ maps: rest, slices: others });
+  }
+
+  /**
+   * Works out what lead `agentId`'s slice does to their project's architecture, from their checkouts against the
+   * project's maps; asked while it's under way, it goes again once it's done. A slice that changes nothing a map shows
+   * (or a goal that's closing) drops off.
+   */
+  async slice(agentId: string): Promise<void> {
+    if (this.slicing.has(agentId)) return void this.sliceAgain.add(agentId);
+    const agent = this.host.agent(agentId);
+    const lead = agent?.lead;
+    if (!agent || !lead || !this.host.on(agent.projectId)) return;
+    const mains = this.state.get().maps[agent.projectId];
+    if (!mains) return;
+    this.slicing.add(agentId);
+    try {
+      const repos: GoalSlice['repos'] = [];
+      if (underWay(agent)) {
+        for (const c of leadCheckouts(this.host, agentId)) {
+          const main = mains.find((m) => m.repo === c.repo);
+          if (!main?.model || main.error) continue;
+          const files = await changedFiles(c.dir, c.baseBranch).catch(() => undefined);
+          if (!files) continue;
+          const branch = await mapRepo(c.repo, c.dir, { history: false });
+          if (!branch.model || branch.error) continue;
+          const change = sliceChange(main, branch, files);
+          // what goes to every browser: the branch's map without its recorded run, which the slice's view doesn't draw
+          if (changesAnything(change)) repos.push({ change, branch: { ...branch, flows: undefined, flowsRun: undefined } });
+        }
+      }
+      const now = this.state.get().slices;
+      const kept = (now[agent.projectId] ?? []).filter((s) => s.leadId !== agentId && underWay(this.host.agent(s.leadId)));
+      const mine: GoalSlice[] = repos.length ? [{ leadId: agentId, title: lead.title, heading: lead.waypoints?.at(-1)?.heading ?? lead.waypoints?.at(-1)?.title, station: lead.station, at: Date.now(), repos }] : [];
+      this.state.set({ slices: { ...now, [agent.projectId]: [...kept, ...mine].sort((a, b) => a.station - b.station) } });
+    } finally {
+      this.slicing.delete(agentId);
+    }
+    if (this.sliceAgain.delete(agentId)) await this.slice(agentId);
+  }
+
+  /** Works out every goal under way's slice in project `id`. */
+  async sliceAll(id: string): Promise<void> {
+    for (const agent of this.host.agents()) if (agent.projectId === id && underWay(agent)) await this.slice(agent.id);
   }
 
   /** Maps every project it's switched on for. */
@@ -63,7 +125,7 @@ const cartography: FocusPlugin = {
   id: CARTOGRAPHY,
   start(host) {
     // made again from the code as the office starts, so never saved in state.json
-    const state = host.state<CartographyState>(() => ({ maps: {}, mapping: [] }), { saved: false });
+    const state = host.state<CartographyState>(() => ({ maps: {}, mapping: [], slices: {} }), { saved: false });
     const cartographer = new Cartographer(host, state);
     setTimeout(() => void cartographer.mapAll().catch((err: unknown) => console.error(`Cartography: ${errorMessage(err)}`)), MAP_AFTER_START_MS).unref();
     return {
@@ -84,6 +146,10 @@ const cartography: FocusPlugin = {
       projectChanged: (projectId) => void cartographer.map(projectId).catch((err: unknown) => console.error(`Cartography: ${errorMessage(err)}`)),
       prClosed: (repo, _number, merged) => {
         if (merged) cartographer.merged(repo);
+      },
+      // as a goal's lead finishes a turn, what their slice does to the architecture so far
+      turn: (agent, phase) => {
+        if (phase === 'end' && agent.lead) void cartographer.slice(agent.id).catch((err: unknown) => console.error(`Cartography of ${agent.id}'s slice: ${errorMessage(err)}`));
       },
     };
   },

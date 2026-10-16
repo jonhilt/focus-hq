@@ -1,5 +1,5 @@
 // A view drawn as a screen in the architecture space (space.ts): its question over its drawing, on a canvas.
-import { viewDrawing } from './draw';
+import { type Marks, viewDrawing } from './draw';
 import type { MapView, RepoMap } from './shared';
 import { fitInto } from './views';
 
@@ -26,10 +26,10 @@ function heading(ctx: CanvasRenderingContext2D, w: number, h: number, title: str
   ctx.fillText(sub, 48, 90, w - 96);
 }
 
-/** `view` of `map`, on a `w` × `h` canvas. */
-export async function drawView(ctx: CanvasRenderingContext2D, w: number, h: number, map: RepoMap, view: MapView): Promise<void> {
-  heading(ctx, w, h, view.question, `${map.repo}${map.commit ? ` · ${map.commit.slice(0, 7)}` : ''} · E to read it up close`);
-  const img = await image(viewDrawing(map, view).svg);
+/** `view` of `map` (with a slice's `marks`, said in `sub`), on a `w` × `h` canvas. */
+export async function drawView(ctx: CanvasRenderingContext2D, w: number, h: number, map: RepoMap, view: MapView, marks?: Marks, sub?: string): Promise<void> {
+  heading(ctx, w, h, view.question, `${sub ?? `${map.repo}${map.commit ? ` · ${map.commit.slice(0, 7)}` : ''}`} · E to read it up close`);
+  const img = await image(viewDrawing(map, view, marks).svg);
   const at = fitInto(img.naturalWidth || img.width, img.naturalHeight || img.height, { x: 32, y: 140, w: w - 64, h: h - 164 });
   ctx.drawImage(img, at.x, at.y, at.w, at.h);
 }

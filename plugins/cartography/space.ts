@@ -1,12 +1,14 @@
 // The architecture space (README.md): a platform out in the dark, the project's whole map straight ahead and its
 // other views floating round you, each a hologram you read up close with E. You come here by stepping into the
 // miniature over the astrometrics table in the project's holodeck (client.ts), and leave by the arch behind you.
-// One space serves every project: it shows the views of the project whose table you came through.
+// One space serves every project: it shows the views of the project whose table you came through, and next to the
+// whole map, what each of its goals under way does to it (slice.ts).
 import * as THREE from 'three';
 import { canvasTexture, Hologram, hover, makeCanvas, OVERLAY_LAYER, type Place, type PluginSpace, type ShipHost, SPACE, type Ui } from '../../plugin-api/client';
 import { ARCH, HolodeckArch } from './arch';
 import { openView } from './panel';
 import { drawNote, drawView } from './screen';
+import { sliceViews } from './slice';
 import type { CartographyState, MapView, RepoMap } from './shared';
 import { ARRIVAL, EXIT_ARCH, MAX_PANELS, type PanelSpot, panelSpots, PLATFORM, type Point, reachOf } from './spaceLayout';
 import { CHANGES, screenVersion, spaceViews, WHOLE } from './views';
@@ -28,6 +30,36 @@ const vec = (p: Point) => new THREE.Vector3(p.x, p.y, p.z);
 /** A hint's name for a view. */
 const titleOf = (map: RepoMap, view: MapView): string =>
   view.id === WHOLE.id ? `${map.repo}'s whole map` : view.id === CHANGES.id ? `how ${map.repo} changes` : `the map: ${view.question}`;
+
+/** Something the space puts up: a key that changes when its drawing would, its hint's name, how it's drawn and what E on it opens. */
+interface Item {
+  key: string;
+  title: string;
+  draw: (ctx: CanvasRenderingContext2D) => void | Promise<void>;
+  open: (ui: Ui) => void;
+}
+
+/**
+ * What the space puts up for a project, in the order of its spots: each repo's whole map, then what each goal under way
+ * does to it, then the repos' own views and how each changes.
+ */
+function items(repos: readonly RepoMap[], state: CartographyState | undefined, projectId: string): Item[] {
+  const shown = spaceViews(repos);
+  const wholes = shown.filter(({ view }) => view.id === WHOLE.id).length;
+  const views = shown.map(({ map, view }): Item => ({
+    key: `${map.repo}#${screenVersion(map, view)}`,
+    title: titleOf(map, view),
+    draw: (ctx) => drawView(ctx, PX.w, PX.h, map, view),
+    open: (ui) => openView(ui, map, view),
+  }));
+  const slices = sliceViews(state?.slices[projectId] ?? [], repos).map(({ slice, map, view, marks, key }): Item => ({
+    key,
+    title: `what ${slice.title} changes`,
+    draw: (ctx) => drawView(ctx, PX.w, PX.h, map, view, marks, `${slice.title} · TS-${slice.station + 1} · ${map.repo}, its lead's checkout against the default branch`),
+    open: (ui) => openView(ui, map, view, marks),
+  }));
+  return [...views.slice(0, wholes), ...slices, ...views.slice(wholes)].slice(0, MAX_PANELS);
+}
 
 export class ArchitectureSpace {
   private readonly arch = new HolodeckArch();
@@ -89,9 +121,10 @@ export class ArchitectureSpace {
   /** Puts up the shown project's views again when they've changed (a new map, a view added), drawing each as it comes. */
   private sync(): void {
     if (!this.shown) return;
-    const repos = this.maps()?.maps[this.shown.projectId];
-    const views = spaceViews(repos ?? []).slice(0, MAX_PANELS);
-    const key = repos ? views.map(({ map, view }) => `${map.repo}#${screenVersion(map, view)}`).join('\n') : 'unmapped';
+    const state = this.maps();
+    const repos = state?.maps[this.shown.projectId];
+    const views = items(repos ?? [], state, this.shown.projectId);
+    const key = repos ? views.map((v) => v.key).join('\n') : 'unmapped';
     if (key === this.drawnKey) return;
     this.clear();
     this.drawnKey = key;
@@ -101,7 +134,7 @@ export class ArchitectureSpace {
       this.put(spots[0], `${this.shown.name} has no map yet`, null, (ctx) => drawNote(ctx, PX.w, PX.h, `${this.shown?.name ?? 'This project'} has no map yet`, why));
       return;
     }
-    views.forEach(({ map, view }, i) => this.put(spots[i], titleOf(map, view), (ui) => openView(ui, map, view), (ctx) => drawView(ctx, PX.w, PX.h, map, view)));
+    views.forEach((v, i) => this.put(spots[i], v.title, v.open, v.draw));
   }
 
   /** A view's hologram at `spot`, drawn by `draw`; E on it does `use`. */
