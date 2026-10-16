@@ -47,15 +47,19 @@ describe('loadPlugins', () => {
     error.mockRestore();
   });
 
-  it('loads the climber from the office’s own plugins/', async () => {
-    const plugins = await loadPlugins(['climber'], path.resolve(import.meta.dirname, '../..'));
-    expect(plugins.map((p) => p.id)).toEqual(['climber']);
+  it('loads a plugin by name from the office’s own plugins/, and every one of them for all', async () => {
+    // an office of its own, so the core's tests pass with any plugins, or none, in the checkout
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-root-'));
+    for (const id of ['auditor', 'watcher']) {
+      fs.mkdirSync(path.join(root, 'plugins', id), { recursive: true });
+      fs.writeFileSync(path.join(root, 'plugins', id, 'server.ts'), `export default { id: "${id}", start: () => ({}) };\n`);
+    }
+    expect((await loadPlugins(['watcher'], root)).map((p) => p.id)).toEqual(['watcher']);
+    expect((await loadPlugins(['all'], root)).map((p) => p.id)).toEqual(['auditor', 'watcher']);
   });
 
-  it('loads every one of the office’s own plugins for all', async () => {
+  it('loads every one of this office’s own plugins for all, whichever are in its checkout', async () => {
     const root = path.resolve(import.meta.dirname, '../..');
-    const plugins = await loadPlugins(['all'], root);
-    expect(plugins.map((p) => p.id)).toEqual(ownPlugins(root));
-    expect(plugins.map((p) => p.id)).toEqual(expect.arrayContaining(['climber', 'scorecard']));
+    expect((await loadPlugins(['all'], root)).map((p) => p.id)).toEqual(ownPlugins(root));
   });
 });

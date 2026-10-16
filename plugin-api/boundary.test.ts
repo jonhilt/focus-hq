@@ -55,7 +55,9 @@ describe('the line between the core and its plugins', () => {
     const found = crossings(root, files, (f) => fs.readFileSync(f, 'utf8'), options);
     const say = (list: typeof found) => list.map((c) => `${c.file}:${c.line} ${c.spec}: ${c.why}`);
     expect(say(found.filter((c) => !pluginOf(c.file)))).toEqual([]);
-    const plugins = new Set(fs.readdirSync(path.join(root, 'plugins'), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name));
+    // none at all is fine: the core stands on its own
+    const folder = path.join(root, 'plugins');
+    const plugins = fs.existsSync(folder) ? fs.readdirSync(folder, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name) : [];
     for (const plugin of plugins) expect(say(found.filter((c) => pluginOf(c.file) === plugin)), `${plugin} imports only through plugin-api/ and other plugins' api.ts`).toEqual([]);
     // it parses every file in the repo: a second or two, longer while the rest of the suite runs beside it
   }, 30_000);

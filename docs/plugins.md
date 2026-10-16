@@ -147,6 +147,8 @@ Typecheck, lint (no non-null assertions outside tests, as in `server/`), the sco
 
 A plugin outside the office's folder can be switched on by path, but for now it still imports `plugin-api/` by relative path, and its `client.ts` isn't found (only `plugins/` inside the checkout is). Plugins in repos of their own need the API published as a package first.
 
+Both sides stand on their own. The core needs no plugin: with `plugins/` deleted, it typechecks, its tests pass (they load plugins of their own making, never the office's by name), the client builds and the demo office runs, with the engineering station's own Overview and Ledger. And a plugin needs nothing of the core but the API: each of the office's plugins typechecks in a folder of its own outside the checkout, against `plugin-api/` emitted as declarations (`tsc --declaration --emitDeclarationOnly`), with no source of the core beside it. Those declarations still carry the core's own types that the API's reach (a published package would bundle only the API's, with API Extractor or the like), so it's `boundary.test.ts`, not the build, that keeps a plugin from importing past the API.
+
 ## Where it lives
 
 - `plugin-api/`: what a plugin may import of the office, and `boundary.ts`, the line its test holds the repo to.
