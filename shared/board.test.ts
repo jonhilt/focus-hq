@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { carryMergeable, columns, goalState, prsOffBoard, resolvingAlready } from './board';
-import type { Agent, Board, LeadWork, Project, PullRequest } from './types';
+import { carryMergeable, columns, freshBoard, goalState, prsOffBoard, resolvingAlready, staleClosedPrs } from './board';
+import type { Agent, Board, ClosedPr, Issue, LeadWork, Project, PullRequest } from './types';
 
 const pr = (mergeable: PullRequest['mergeable'], over: Partial<PullRequest> = {}): PullRequest => ({
   repo: 'acme/shop',
@@ -127,5 +127,69 @@ describe('prsOffBoard', () => {
   it('only asks about an agent’s PR once the agent is done with it', () => {
     const agents = [done(1, { status: 'working' }), done(2, { status: 'error' }), { repo: 'acme/shop', status: 'done' as const }];
     expect(prsOffBoard({ prs: [] }, { ...none, agents })).toEqual([]);
+  });
+});
+
+describe('freshBoard', () => {
+  const issue = (repo: string, number: number, createdAt: string): Issue => ({ repo, number, title: `#${number}`, body: '', url: '', labels: [], createdAt });
+  const note = (repo: string, issue: number): ClosedPr => ({ repo, issue, pr: 90 + issue, officer: 'Data', note: 'wrong approach', at: 1 });
+
+  it('puts every listed repo’s issues and PRs together, oldest first', () => {
+    const board = freshBoard(
+      'p1',
+      [
+        { repo: 'acme/web', issues: [issue('acme/web', 4, '2026-01-04')], prs: [pr('MERGEABLE', { repo: 'acme/web', number: 9, createdAt: '2026-01-09' })] },
+        { repo: 'acme/api', issues: [issue('acme/api', 2, '2026-01-02'), issue('acme/api', 6, '2026-01-06')], prs: [pr('MERGEABLE', { repo: 'acme/api', number: 3, createdAt: '2026-01-03' })] },
+      ],
+      [],
+      [],
+      42,
+    );
+    expect(board.projectId).toBe('p1');
+    expect(board.updatedAt).toBe(42);
+    expect(board.issues.map((i) => `${i.repo}#${i.number}`)).toEqual(['acme/api#2', 'acme/web#4', 'acme/api#6']);
+    expect(board.prs.map((p) => `${p.repo}#${p.number}`)).toEqual(['acme/api#3', 'acme/web#9']);
+    expect(board.error).toBeUndefined();
+  });
+
+  it('names each repo GitHub couldn’t list on a line of its own, and keeps the others', () => {
+    const board = freshBoard(
+      'p1',
+      [
+        { repo: 'acme/api', error: 'HTTP 502' },
+        { repo: 'acme/web', issues: [issue('acme/web', 4, '2026-01-04')], prs: [] },
+        { repo: 'acme/admin', error: 'not found' },
+      ],
+      [],
+      [],
+      0,
+    );
+    expect(board.error).toBe('acme/api: HTTP 502\nacme/admin: not found');
+    expect(board.issues.map((i) => i.number)).toEqual([4]);
+  });
+
+  it('marks the issues the office closed a PR for, and only those', () => {
+    const board = freshBoard('p1', [{ repo: 'acme/api', issues: [issue('acme/api', 2, '2026-01-02'), issue('acme/api', 6, '2026-01-06')], prs: [] }], [], [note('acme/api', 6), note('acme/web', 2)], 0);
+    expect(board.issues.map((i) => i.closedPr?.pr)).toEqual([undefined, 96]);
+  });
+
+  it('keeps the last board’s mergeability while GitHub works it out', () => {
+    const board = freshBoard('p1', [{ repo: 'acme/shop', issues: [], prs: [pr('UNKNOWN')] }], [pr('CONFLICTING')], [], 0);
+    expect(board.prs[0].mergeable).toBe('CONFLICTING');
+  });
+});
+
+describe('staleClosedPrs', () => {
+  const note = (repo: string, issue: number): ClosedPr => ({ repo, issue, pr: 90 + issue, officer: 'Data', note: 'wrong approach', at: 1 });
+  const open = (repo: string, number: number) => ({ repo, number, title: '', body: '', url: '', labels: [], createdAt: '' });
+
+  it('drops the notes whose issue is no longer open', () => {
+    const closed = [note('acme/api', 2), note('acme/api', 6)];
+    expect(staleClosedPrs(['acme/api'], { issues: [open('acme/api', 6)] }, closed)).toEqual([note('acme/api', 2)]);
+  });
+
+  it('keeps the notes for a repo GitHub couldn’t list, or one outside the project', () => {
+    const closed = [note('acme/api', 2), note('acme/other', 3)];
+    expect(staleClosedPrs(['acme/api'], { issues: [], error: 'acme/api: HTTP 502' }, closed)).toEqual([]);
   });
 });

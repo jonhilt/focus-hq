@@ -1,8 +1,8 @@
 import { isAutonomy } from '../shared/autonomy';
 import type { Board, ConflictsOutcome, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
 import { DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS } from '../shared/types';
-import { carryMergeable, prsOffBoard } from '../shared/board';
-import { chosenSet, previewPrs } from '../shared/previewSet';
+import { freshBoard, prsOffBoard, type RepoListing, staleClosedPrs } from '../shared/board';
+import { chosenSet, previewPrsGone } from '../shared/previewSet';
 import { startOrder } from '../shared/dependencies';
 import type { Closer } from '../shared/ledger';
 import { autoMergeFor, type GateMark, mergeMethodFor, mergeStep, type MergeStep, requestedMerge } from '../shared/mergeGate';
@@ -282,37 +282,16 @@ export class Office {
   private async doRefresh(projectId: string): Promise<void> {
     const project = this.store.projects.find((p) => p.id === projectId);
     if (!project) return;
-    const board: Board = { projectId, issues: [], prs: [], updatedAt: Date.now() };
-    const errors: string[] = [];
-    await Promise.all(
-      project.repos.map(async (repo) => {
-        try {
-          const [issues, prs] = await Promise.all([this.github.listIssues(repo), this.github.listPullRequests(repo)]);
-          board.issues.push(...issues);
-          board.prs.push(...prs);
-        } catch (err) {
-          errors.push(`${repo}: ${errorMessage(err)}`);
-        }
-      }),
-    );
-    if (errors.length) board.error = errors.join('\n');
-    board.issues.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    for (const issue of board.issues) issue.closedPr = this.store.closedPrs.get(prKey(issue.repo, issue.number));
-    for (const closed of [...this.store.closedPrs.values()]) {
-      // the issue was closed since (or built another way): nothing left to mark
-      const listed = !project.repos.includes(closed.repo) || board.error?.includes(closed.repo) || board.issues.some((i) => i.repo === closed.repo && i.number === closed.issue);
-      if (!listed) this.store.removeClosedPr(closed.repo, closed.issue);
-    }
-    board.prs.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    board.prs = carryMergeable(this.store.boards.get(projectId)?.prs ?? [], board.prs);
+    const listings = await Promise.all(project.repos.map((repo) => this.listRepo(repo)));
+    const closed = [...this.store.closedPrs.values()];
+    const board = freshBoard(projectId, listings, this.store.boards.get(projectId)?.prs ?? [], closed, Date.now());
+    for (const stale of staleClosedPrs(project.repos, board, closed)) this.store.removeClosedPr(stale.repo, stale.issue);
     if (!this.store.projects.some((p) => p.id === projectId)) return;
     this.store.boards.set(projectId, board);
     this.hub.send({ type: 'board', board });
 
     const preview = this.previews.list().find((p) => p.projectId === projectId);
-    for (const { repo, number } of preview ? previewPrs(preview) : []) {
-      if (!board.error?.includes(repo) && !board.prs.some((p) => p.repo === repo && p.number === number)) this.previews.closed(repo, number);
-    }
+    for (const { repo, number } of previewPrsGone(preview, board)) this.previews.closed(repo, number);
 
     await this.noticeClosedPullRequests(projectId, board);
     await this.requestedMerges(projectId, board);
@@ -320,6 +299,15 @@ export class Office {
     await this.autoMerge(projectId, board);
     this.autoAssign(projectId, board);
     this.agents.plugins.boardRefreshed(projectId);
+  }
+
+  private async listRepo(repo: string): Promise<RepoListing> {
+    try {
+      const [issues, prs] = await Promise.all([this.github.listIssues(repo), this.github.listPullRequests(repo)]);
+      return { repo, issues, prs };
+    } catch (err) {
+      return { repo, error: errorMessage(err) };
+    }
   }
 
   /** Starts the plugins switched on (docs/plugins.md), lending them the office's own repo, and in the demo its agents' transcripts. */

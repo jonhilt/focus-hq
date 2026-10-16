@@ -65,6 +65,11 @@ export function previewPrs(preview: Pick<Preview, 'repo' | 'number' | 'checkouts
   return [{ repo: preview.repo, number: preview.number }, ...others];
 }
 
+/** The PRs a preview checks out that have left the board (merged or closed), so it comes down. A repo GitHub couldn't list doesn't count. */
+export function previewPrsGone(preview: Pick<Preview, 'repo' | 'number' | 'checkouts'> | undefined, board: Pick<Board, 'prs' | 'error'>): { repo: string; number: number }[] {
+  return (preview ? previewPrs(preview) : []).filter(({ repo, number }) => !board.error?.includes(repo) && !board.prs.some((p) => p.repo === repo && p.number === number));
+}
+
 export function previewIncludes(preview: Pick<Preview, 'repo' | 'number' | 'checkouts'>, repo: string, number: number): boolean {
   return previewPrs(preview).some((p) => p.repo === repo && p.number === number);
 }

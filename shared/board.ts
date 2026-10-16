@@ -1,5 +1,5 @@
 import { issueKey, waitingFor } from './dependencies';
-import type { Agent, Board, Issue, Project, PullRequest } from './types';
+import type { Agent, Board, ClosedPr, Issue, Project, PullRequest } from './types';
 
 export interface Columns {
   /** `waitsFor`: the open issues it depends on, empty when it can start. */
@@ -103,4 +103,32 @@ export function prsOffBoard(
     ...[...held.leadPrs, ...done].map((p) => ({ repo: p.repo, number: p.number, kind: 'seat' as const })),
   ];
   return all.filter((p) => !board.error?.includes(p.repo) && !board.prs.some((b) => b.repo === p.repo && b.number === p.number));
+}
+
+/** What GitHub gave back for one of a project's repos: its open issues and PRs, or why it couldn't list them. */
+export type RepoListing = { repo: string; issues: Issue[]; prs: PullRequest[] } | { repo: string; error: string };
+
+/**
+ * A project's board from its repos' listings, oldest first. A repo GitHub couldn't list is named in `error`, one line
+ * each, which is how the rest of the office knows to leave that repo's work alone until it can. Each issue carries the
+ * PR the office closed for it, if any, and each PR keeps `previous`'s mergeability while GitHub works it out.
+ */
+export function freshBoard(projectId: string, listings: RepoListing[], previous: PullRequest[], closed: ClosedPr[], updatedAt: number): Board {
+  const listed = listings.flatMap((l) => ('error' in l ? [] : [l]));
+  const errors = listings.flatMap((l) => ('error' in l ? [`${l.repo}: ${l.error}`] : []));
+  const oldestFirst = <T extends { createdAt: string }>(a: T, b: T) => a.createdAt.localeCompare(b.createdAt);
+  const issues = listed
+    .flatMap((l) => l.issues)
+    .sort(oldestFirst)
+    .map((i) => ({ ...i, closedPr: closed.find((c) => c.repo === i.repo && c.issue === i.number) }));
+  const prs = carryMergeable(previous, listed.flatMap((l) => l.prs).sort(oldestFirst));
+  return { projectId, issues, prs, updatedAt, ...(errors.length ? { error: errors.join('\n') } : {}) };
+}
+
+/**
+ * The closed-PR notes with nothing left to mark: their issue isn't open on the board any more (closed since, or built
+ * another way). A note for a repo GitHub couldn't list, or one outside the project, is kept.
+ */
+export function staleClosedPrs(repos: string[], board: Pick<Board, 'issues' | 'error'>, closed: ClosedPr[]): ClosedPr[] {
+  return closed.filter((c) => repos.includes(c.repo) && !board.error?.includes(c.repo) && !board.issues.some((i) => i.repo === c.repo && i.number === c.issue));
 }

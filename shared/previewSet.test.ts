@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chosenSet, featureSlugs, linkedPrs, previewIncludes, previewSet } from './previewSet';
+import { chosenSet, featureSlugs, linkedPrs, previewIncludes, previewPrsGone, previewSet } from './previewSet';
 import type { Issue, PullRequest } from './types';
 
 const REPOS = ['acme/api', 'acme/web', 'acme/admin'];
@@ -103,5 +103,23 @@ describe('previewIncludes', () => {
     expect(previewIncludes(preview, 'acme/web', 12)).toBe(true);
     expect(previewIncludes(preview, 'acme/admin', 7)).toBe(false);
     expect(previewIncludes({ ...preview, checkouts: [] }, 'acme/api', 10)).toBe(true);
+  });
+});
+
+describe('previewPrsGone', () => {
+  const preview = { repo: 'acme/api', number: 10, checkouts: [{ repo: 'acme/api', ref: { pr: 10 } }, { repo: 'acme/web', ref: { pr: 12 } }, { repo: 'acme/admin', ref: { branch: 'main' } }] };
+
+  it('names the preview’s PRs that left the board', () => {
+    expect(previewPrsGone(preview, { prs: [apiPr, adminPr] })).toEqual([{ repo: 'acme/web', number: 12 }]);
+    expect(previewPrsGone(preview, { prs: [adminPr] })).toEqual([
+      { repo: 'acme/api', number: 10 },
+      { repo: 'acme/web', number: 12 },
+    ]);
+    expect(previewPrsGone(preview, board)).toEqual([]);
+  });
+
+  it('leaves a repo GitHub couldn’t list alone, and has nothing to say without a preview', () => {
+    expect(previewPrsGone(preview, { prs: [], error: 'acme/web: HTTP 502' })).toEqual([{ repo: 'acme/api', number: 10 }]);
+    expect(previewPrsGone(undefined, { prs: [] })).toEqual([]);
   });
 });
