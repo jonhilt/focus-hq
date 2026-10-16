@@ -56,10 +56,10 @@ function projectMaps(ui: Ui, open: Set<string>): HTMLElement[] {
       return details;
     });
     // a project of more than one repo: what ties them together
-    const ties = tiesDrawing(repos ?? [], now?.crossRepo[project.id] ?? []);
+    const ties = tiesDrawing(repos ?? [], now?.crossRepo[project.id] ?? [], now?.crossCalls[project.id] ?? []);
     const tied = (() => {
       if (project.repos.length < 2 || !repos) return [];
-      if (!ties) return [h('small', { class: 'muted' }, `Its repos don't change together often enough to say what ties them: ${TIES_KEY}`)];
+      if (!ties) return [h('small', { class: 'muted' }, `Nothing ties its repos together yet: neither calls a route the other declares, nor do they change together often enough to say. ${TIES_KEY}`)];
       const id = `ties#${project.id}`;
       const details = h('details', { class: 'card', open: open.has(id), attrs: { 'data-key': id } }, h('summary', null, h('strong', null, TIES_QUESTION), h('small', { class: 'muted' }, ` · ${ties.view.parts.length} parts`)), ...drawingBody(ties));
       details.addEventListener('toggle', () => (details.open ? open.add(id) : open.delete(id)));

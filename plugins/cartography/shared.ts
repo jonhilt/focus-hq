@@ -101,6 +101,14 @@ export interface SliceChange {
   lost: MapConnection[];
 }
 
+/** A part in one of a project's repos calling routes a part of another declares (routes.ts). */
+export interface CrossCall {
+  from: { repo: string; part: string };
+  to: { repo: string; part: string };
+  /** The routes, as the declaring repo has them. */
+  routes: string[];
+}
+
 /** Two parts in different repos of a project that change together (crossRepo.ts). */
 export interface CrossCoupling {
   a: { repo: string; part: string };
@@ -130,6 +138,8 @@ export interface CartographyState {
   slices: Record<string, GoalSlice[]>;
   /** Each project of more than one repo, the parts in different repos that change together, by project id. */
   crossRepo: Record<string, CrossCoupling[]>;
+  /** Each project of more than one repo, the parts of one that call routes another declares, by project id. */
+  crossCalls: Record<string, CrossCall[]>;
   /** Projects whose maps are being made again. */
   mapping: string[];
 }

@@ -61,11 +61,12 @@ function items(repos: readonly RepoMap[], state: CartographyState | undefined, p
   }));
   // a project of more than one repo: what ties them, beside their whole maps
   const tied = state?.crossRepo[projectId] ?? [];
-  const ties = tiesDrawing(repos, tied);
+  const called = state?.crossCalls[projectId] ?? [];
+  const ties = tiesDrawing(repos, tied, called);
   const repoTies: Item[] = ties
     ? [{
-        key: `ties|${tied.map((t) => `${t.a.repo}#${t.a.part}~${t.b.repo}#${t.b.part}=${t.together}/${t.either}`).join(',')}`,
-        title: 'what ties its repos together',
+        key: `ties|${JSON.stringify([tied, called])}`,
+        title: 'how its repos connect',
         draw: (ctx) => drawSvg(ctx, PX.w, PX.h, TIES_QUESTION, ties.map.repo, ties.svg),
         open: (ui) => openDrawing(ui, TIES_QUESTION, ties.map.repo, ties),
       }]

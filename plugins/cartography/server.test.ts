@@ -24,7 +24,7 @@ function host(projects: Pick<Project, 'id' | 'name' | 'repos' | 'plugins'>[], ag
     agents: () => agents,
     leadCheckouts: (id: string) => (agents.find((a) => a.id === id)?.lead?.repos ?? []).map((r) => ({ repo: r.repo, dir: process.cwd(), baseBranch: r.baseBranch })),
   } as unknown as PluginHost;
-  return { lent, maps: () => saved?.maps ?? {}, slices: () => saved?.slices ?? {}, busy: () => saved?.mapping.length ?? 0, seed: (patch: Partial<CartographyState>) => state<CartographyState>(() => ({ maps: {}, mapping: [], slices: {}, crossRepo: {} })).set(patch) };
+  return { lent, maps: () => saved?.maps ?? {}, slices: () => saved?.slices ?? {}, busy: () => saved?.mapping.length ?? 0, seed: (patch: Partial<CartographyState>) => state<CartographyState>(() => ({ maps: {}, mapping: [], slices: {}, crossRepo: {}, crossCalls: {} })).set(patch) };
 }
 
 const settled = async (busy: () => number) => {

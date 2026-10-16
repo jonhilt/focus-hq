@@ -155,6 +155,16 @@ describe('tiesDrawing', () => {
     expect(drawn?.svg).toContain('stroke-dasharray="3 7"');
   });
 
+  it('draws the routes one repo calls on another first, a spec no part implements standing in for one', () => {
+    const drawn = tiesDrawing([web, api], [], [
+      { from: { repo: 'o/web', part: 'checkout' }, to: { repo: 'o/api', part: 'core' }, routes: ['/orders', '/orders/{id}'] },
+      { from: { repo: 'o/web', part: 'checkout' }, to: { repo: 'o/api', part: 'api/openapi.yml' }, routes: ['/carts'] },
+    ]);
+    expect(drawn?.sentences).toEqual(['Checkout (o/web) calls /orders, /orders/{id} on Core (o/api)', 'Checkout (o/web) calls /carts on openapi.yml (o/api)']);
+    expect(drawn?.view.parts).toEqual(['o/web#checkout', 'o/api#core', 'o/api#api/openapi.yml']);
+    expect(drawn?.svg).toContain('marker-end="url(#cg-flow)"');
+  });
+
   it('is nothing when nothing ties them', () => {
     expect(tiesDrawing([web, api], [])).toBeUndefined();
   });

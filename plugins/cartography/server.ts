@@ -7,6 +7,7 @@ import { type Agent, errorMessage, type FocusPlugin, type PluginHost, type Plugi
 import { mapTool } from './leadTool';
 import { crossCoupling, type OwnedCommit } from './crossRepo';
 import { changedFiles, mapRepo, mapRepoAndLog } from './map';
+import { crossCalls as callsAcross, type RepoRoutes } from './routes';
 import { CARTOGRAPHY, type CartographyState, type GoalSlice, type RepoMap } from './shared';
 import { changesAnything, sliceChange } from './slice';
 
@@ -51,18 +52,23 @@ class Cartographer {
     this.state.set({ mapping: [...this.state.get().mapping, id] });
     const maps: RepoMap[] = [];
     const logs: { repo: string; commits: OwnedCommit[] }[] = [];
+    const routes: RepoRoutes[] = [];
     for (const repo of project.repos) {
       const mapped = await checkout(this.host, repo)
         .then((dir) => mapRepoAndLog(repo, dir))
-        .catch((err: unknown) => ({ map: { repo, files: 0, mapped: 0, sizes: {}, connections: [], problems: [], error: errorMessage(err) }, commits: [] }));
+        .catch((err: unknown) => ({ map: { repo, files: 0, mapped: 0, sizes: {}, connections: [], problems: [], error: errorMessage(err) }, commits: [], routes: { repo, declared: [], called: [] } }));
       maps.push(mapped.map);
       logs.push({ repo, commits: mapped.commits });
+      routes.push(mapped.routes);
     }
     const now = this.state.get();
-    // a project of more than one repo: what ties them, from their histories
+    // a project of more than one repo: what ties them, from their histories, and the routes one calls on another
+    const many = project.repos.length > 1;
     const { [id]: _, ...otherTies } = now.crossRepo;
-    const crossRepo = project.repos.length > 1 ? { ...otherTies, [id]: crossCoupling(logs) } : otherTies;
-    this.state.set({ maps: { ...now.maps, [id]: maps }, crossRepo, mapping: now.mapping.filter((p) => p !== id) });
+    const { [id]: __, ...otherCalls } = now.crossCalls;
+    const crossRepo = many ? { ...otherTies, [id]: crossCoupling(logs) } : otherTies;
+    const crossCalls = many ? { ...otherCalls, [id]: callsAcross(routes) } : otherCalls;
+    this.state.set({ maps: { ...now.maps, [id]: maps }, crossRepo, crossCalls, mapping: now.mapping.filter((p) => p !== id) });
     if (this.again.delete(id)) return this.map(id);
     // against the new maps, what each goal under way does to them
     await this.sliceAll(id);
@@ -70,11 +76,12 @@ class Cartographer {
 
   /** Forgets project `id`'s maps, its goals' slices and what ties its repos. */
   drop(id: string): void {
-    const { maps, slices, crossRepo } = this.state.get();
+    const { maps, slices, crossRepo, crossCalls } = this.state.get();
     const { [id]: dropped, ...rest } = maps;
     const { [id]: _, ...others } = slices;
     const { [id]: __, ...otherTies } = crossRepo;
-    if (dropped || _ || __) this.state.set({ maps: rest, slices: others, crossRepo: otherTies });
+    const { [id]: ___, ...otherCalls } = crossCalls;
+    if (dropped || _ || __ || ___) this.state.set({ maps: rest, slices: others, crossRepo: otherTies, crossCalls: otherCalls });
   }
 
   /**
@@ -135,7 +142,7 @@ const cartography: FocusPlugin = {
   id: CARTOGRAPHY,
   start(host) {
     // made again from the code as the office starts, so never saved in state.json
-    const state = host.state<CartographyState>(() => ({ maps: {}, mapping: [], slices: {}, crossRepo: {} }), { saved: false });
+    const state = host.state<CartographyState>(() => ({ maps: {}, mapping: [], slices: {}, crossRepo: {}, crossCalls: {} }), { saved: false });
     const cartographer = new Cartographer(host, state);
     setTimeout(() => void cartographer.mapAll().catch((err: unknown) => console.error(`Cartography: ${errorMessage(err)}`)), MAP_AFTER_START_MS).unref();
     return {

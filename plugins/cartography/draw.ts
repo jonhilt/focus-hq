@@ -1,6 +1,6 @@
 // A map drawn to be read (README.md): a view as its parts in a column per layer, each arrow saying what one part takes
 // from another, the whole map as a dependency matrix, and how it changes as bars and sentences. Pure SVG strings, free of Node and the DOM.
-import type { CrossCoupling, MapConnection, MapFlow, MapPart, MapView, RepoMap } from './shared';
+import type { CrossCall, CrossCoupling, MapConnection, MapFlow, MapPart, MapView, RepoMap } from './shared';
 import { CHANGES, CHANGES_KEY, MATRIX_KEY, VIEW_KEY, WHOLE } from './views';
 
 /** Each layer's colour, by its place among the map's layers. */
@@ -332,33 +332,49 @@ export function changeSentences(map: RepoMap): string[] {
 export const SLICE_KEY =
   'What this slice does to the architecture, from its lead\'s checkout against the default branch. Gold: a part its changes fall in, with how many lines. Green: a part or import it adds. Red, dashed: one it takes out. Grey arrows are imports it leaves as they were.';
 
-/** How to read the view of what ties a project's repos together. */
+/** How to read the view of how a project's repos connect. */
 export const TIES_KEY =
-  'Repos don\'t import each other, so what ties them is read from their histories: a change that needs two repos shows as one person\'s commits to each, close together (within two hours). A column per repo; a dotted lilac line joins two parts that keep changing in the same change sets, and its sentence says how often.';
+  'A column per repo. A dashed gold arrow goes from a part to the part in another repo whose HTTP routes it calls (the routes one repo declares, matched to the paths another names). A dotted lilac line joins two parts that keep changing together: repos don\'t import each other, so a change that needs two shows as one person\'s commits to each, within two hours.';
 
 /** The question the view of a project's repos answers. */
-export const TIES_QUESTION = 'Which parts of its repos change together?';
+export const TIES_QUESTION = 'How do its repos connect?';
 
 /**
- * The view of what ties a project's repos together (crossRepo.ts): a column per repo, with the parts its `ties` join,
- * each line numbered and said in a sentence. Undefined when nothing does.
+ * The view of how a project's repos connect: a column per repo, with the parts its `calls` (routes.ts) and `ties`
+ * (crossRepo.ts) join, each line numbered and said in a sentence, the calls first. Undefined when nothing does.
  */
-export function tiesDrawing(maps: readonly RepoMap[], ties: readonly CrossCoupling[]): { map: RepoMap; view: MapView; svg: string; key: string; sentences: string[] } | undefined {
-  if (!ties.length) return undefined;
+export function tiesDrawing(maps: readonly RepoMap[], ties: readonly CrossCoupling[], calls: readonly CrossCall[] = []): { map: RepoMap; view: MapView; svg: string; key: string; sentences: string[] } | undefined {
+  if (!ties.length && !calls.length) return undefined;
   const id = (repo: string, part: string) => `${repo}#${part}`;
-  const used = new Set(ties.flatMap((t) => [id(t.a.repo, t.a.part), id(t.b.repo, t.b.part)]));
-  // each repo's parts that a tie joins, the repos in the project's order, each its own column
-  const parts = maps.flatMap((m) => (m.model?.parts ?? []).filter((p) => used.has(id(m.repo, p.id))).map((p) => ({ ...p, id: id(m.repo, p.id), layer: m.repo })));
+  const ends = [...calls.flatMap((c) => [c.from, c.to]), ...ties.flatMap((t) => [t.a, t.b])];
+  const used = new Set(ends.map((e) => id(e.repo, e.part)));
+  // each repo's parts the lines join, the repos in the project's order, each its own column; a spec whose routes no
+  // part implements stands in for one
+  const parts = maps.flatMap((m) => {
+    const own = (m.model?.parts ?? []).filter((p) => used.has(id(m.repo, p.id))).map((p) => ({ ...p, id: id(m.repo, p.id), layer: m.repo }));
+    const specs = [...new Set(ends.filter((e) => e.repo === m.repo && !(m.model?.parts ?? []).some((p) => p.id === e.part)).map((e) => e.part))];
+    return [...own, ...specs.map((file): MapPart => ({ id: id(m.repo, file), label: file.slice(file.lastIndexOf('/') + 1), layer: m.repo, kind: 'route', paths: [file], does: 'Its API spec' }))];
+  });
   const label = (repo: string, part: string) => parts.find((p) => p.id === id(repo, part))?.label ?? part;
   const map: RepoMap = { repo: maps.map((m) => m.repo).join(' + '), files: 0, mapped: 0, sizes: {}, connections: [], problems: [], model: { parts, views: [], ignore: [] } };
   const view: MapView = { id: 'repos', question: TIES_QUESTION, parts: parts.map((p) => p.id) };
-  const lines = ties.map((t): ViewLine => ({
-    from: id(t.a.repo, t.a.part),
-    to: id(t.b.repo, t.b.part),
-    kind: 'coupled',
-    weight: t.together,
-    sentence: `${label(t.a.repo, t.a.part)} (${t.a.repo}) and ${label(t.b.repo, t.b.part)} (${t.b.repo}) changed together in ${t.together} of the ${t.either} change sets that touched either`,
-  }));
+  const listed = (routes: readonly string[]) => routes.slice(0, 4).join(', ') + (routes.length > 4 ? ` +${routes.length - 4}` : '');
+  const lines = [
+    ...calls.map((c): ViewLine => ({
+      from: id(c.from.repo, c.from.part),
+      to: id(c.to.repo, c.to.part),
+      kind: 'flow',
+      weight: c.routes.length,
+      sentence: `${label(c.from.repo, c.from.part)} (${c.from.repo}) calls ${listed(c.routes)} on ${label(c.to.repo, c.to.part)} (${c.to.repo})`,
+    })),
+    ...ties.map((t): ViewLine => ({
+      from: id(t.a.repo, t.a.part),
+      to: id(t.b.repo, t.b.part),
+      kind: 'coupled',
+      weight: t.together,
+      sentence: `${label(t.a.repo, t.a.part)} (${t.a.repo}) and ${label(t.b.repo, t.b.part)} (${t.b.repo}) changed together in ${t.together} of the ${t.either} change sets that touched either`,
+    })),
+  ];
   return { map, view, svg: viewSvg(map, view, undefined, lines), key: TIES_KEY, sentences: lines.map((l) => l.sentence) };
 }
 

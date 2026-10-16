@@ -10,6 +10,7 @@ import type { OwnedCommit } from './crossRepo';
 import { historyOf, LOG_ARGS, readLog } from './history';
 import { readModel, readRecording } from './model';
 import { sourceEdges } from './languages';
+import { isSpec, repoRoutes, type RepoRoutes } from './routes';
 import { type ChangedFile, readNumstat } from './slice';
 import { type FileEdge, MODEL_FILE, type RepoMap } from './shared';
 
@@ -37,19 +38,24 @@ export async function mapRepo(repo: string, dir: string, options: { history?: bo
   return (await mapRepoAndLog(repo, dir, options)).map;
 }
 
-/** The map of `repo` (mapRepo), and its commits in the history's window with the parts each touched, for crossRepo.ts. */
-export async function mapRepoAndLog(repo: string, dir: string, { history: withHistory = true } = {}): Promise<{ map: RepoMap; commits: OwnedCommit[] }> {
+/**
+ * The map of `repo` (mapRepo), its commits in the history's window with the parts each touched (crossRepo.ts), and the
+ * routes it declares and calls (routes.ts): what ties it to the other repos of its project.
+ */
+export async function mapRepoAndLog(repo: string, dir: string, { history: withHistory = true } = {}): Promise<{ map: RepoMap; commits: OwnedCommit[]; routes: RepoRoutes }> {
+  const none = { repo, declared: [], called: [] };
   const commit = (await run('git', ['rev-parse', 'HEAD'], { cwd: dir }).catch(() => '')).trim() || undefined;
   const raw = await fs.readFile(path.join(dir, MODEL_FILE), 'utf8').catch(() => undefined);
-  if (raw === undefined) return { map: empty(repo, `No ${MODEL_FILE} on its default branch yet`, commit), commits: [] };
+  if (raw === undefined) return { map: empty(repo, `No ${MODEL_FILE} on its default branch yet`, commit), commits: [], routes: none };
   let model;
   try {
     model = readModel(parse(raw));
   } catch (err) {
-    return { map: empty(repo, `${MODEL_FILE}: ${errorMessage(err)}`, commit), commits: [] };
+    return { map: empty(repo, `${MODEL_FILE}: ${errorMessage(err)}`, commit), commits: [], routes: none };
   }
   const recording = await recorded(dir);
-  const files = (await run('git', ['ls-files'], { cwd: dir })).split('\n').filter(isSource);
+  const known = (await run('git', ['ls-files'], { cwd: dir })).split('\n');
+  const files = known.filter(isSource);
   const map = mapOf(repo, model, files, await imports(dir, files), recording?.ok);
   // the history's files as the map would own them: source the model has a part for, wherever it was then
   const log = withHistory ? await run('git', LOG_ARGS, { cwd: dir }).catch(() => '') : '';
@@ -57,7 +63,10 @@ export async function mapRepoAndLog(repo: string, dir: string, { history: withHi
   const logged = log ? readLog(log) : [];
   const history = log ? historyOf(logged, owner, map.connections) : undefined;
   const commits = logged.map((c) => ({ sha: c.sha, date: c.date, author: c.author ?? '', parts: [...new Set(c.files.flatMap((f) => owner(f.path) ?? []))] }));
-  return { map: { ...map, commit, ...(history?.commits ? { history } : {}), problems: [...map.problems, ...(recording?.error ? [recording.error] : [])] }, commits };
+  const read = (file: string) => fs.readFile(path.join(dir, file), 'utf8').catch(() => '');
+  const routeFiles = known.filter((f) => isSource(f) || isSpec(f));
+  const routes = repoRoutes(repo, new Map(await Promise.all(routeFiles.map(async (f) => [f, await read(f)] as const))), (f) => (isSource(f) ? ownerOf(f, model) : undefined));
+  return { map: { ...map, commit, ...(history?.commits ? { history } : {}), problems: [...map.problems, ...(recording?.error ? [recording.error] : [])] }, commits, routes };
 }
 
 /**
