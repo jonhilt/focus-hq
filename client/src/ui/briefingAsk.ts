@@ -1,6 +1,7 @@
 import { leadVoice, quickVoice } from '../../../shared/crew';
 import type { GoalArtifact } from '../../../shared/types';
-import { repliesToSpeak } from '../../../shared/voice';
+import type { CrewVoice } from '../../../shared/voice';
+import { repliesToSpeak, sentences } from '../../../shared/voice';
 import { state } from '../net/state';
 import type { Ui } from './context';
 import { micPerRecording, withMic } from './dictation';
@@ -57,6 +58,11 @@ export class BriefingAsk {
     this.speaker.hush();
   }
 
+  /** Says it a sentence at a time, so the first plays while the rest are being made. */
+  private say(text: string, voice: CrewVoice): void {
+    for (const sentence of sentences(text)) this.speaker.say(sentence, voice);
+  }
+
   /** Pauses the briefing and stops whoever's speaking, so you can be heard. */
   private quiet(): void {
     this.narrator.pause();
@@ -81,7 +87,7 @@ export class BriefingAsk {
       } else if (reply.by === 'quick') {
         waiting.before(h('p', { class: 'quick' }, h('b', null, 'Quick answer: '), reply.text));
         waiting.textContent = `Answered after ${after()}, while ${name} works: they've heard it too, and will put it right if it's wrong.`;
-        if (aloud) this.speaker.say(reply.text, quickVoice(this.leadId));
+        if (aloud) this.say(reply.text, quickVoice(this.leadId));
       } else {
         waiting.textContent = `Waiting for ${name}…`;
         this.hearLead(waiting, aloud, after);
@@ -103,7 +109,7 @@ export class BriefingAsk {
           waiting.textContent = `First reply after ${after()}`;
         }
         waiting.before(h('p', null, reply));
-        if (aloud) this.speaker.say(reply, leadVoice(this.leadId));
+        if (aloud) this.say(reply, leadVoice(this.leadId));
       }
     });
     const timer = setTimeout(() => this.stopHearing?.(), ANSWER_WINDOW_MS);

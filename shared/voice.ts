@@ -43,8 +43,14 @@ export function forSpeech(text: string): string {
     .trim();
 }
 
-const firstSentences = (text: string) =>
-  (text.match(/[^.!?]+[.!?]+["”’)]*|[^.!?]+$/g) ?? []).slice(0, SPOKEN_SENTENCES).join(' ').replace(/\s+/g, ' ').trim();
+/**
+ * Text as the sentences it's said in, so each can be spoken as soon as it's ready rather than waiting for the whole of
+ * it: Kokoro takes about half a line's length to say it, so the first sentence of an answer plays while the rest are made.
+ */
+export const sentences = (text: string): string[] =>
+  (text.match(/[^.!?]+[.!?]+["”’)]*|[^.!?]+$/g) ?? []).map((s) => s.replace(/\s+/g, ' ').trim()).filter(Boolean);
+
+const firstSentences = (text: string) => sentences(text).slice(0, SPOKEN_SENTENCES).join(' ');
 
 /**
  * The line an officer's reply is spoken as: the line they gave for it, made speakable, in at most two sentences. If

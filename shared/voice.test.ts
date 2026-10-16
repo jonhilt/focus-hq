@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TermLine, VoiceStatus } from './types';
-import { forSpeech, linesToSpeak, repliesToSpeak, spokenLine, voiceMissing } from './voice';
+import { forSpeech, linesToSpeak, repliesToSpeak, sentences, spokenLine, voiceMissing } from './voice';
 
 const status = (whisper: boolean, model: boolean): VoiceStatus => ({
   whisper: { found: whisper, command: 'whisper-cli' },
@@ -116,5 +116,15 @@ describe('repliesToSpeak', () => {
 
   it('drops code, so a reply that is only code says nothing', () => {
     expect(repliesToSpeak([text('⏺ ```ts'), text('  const a = 1;'), text('  ```')])).toEqual([]);
+  });
+});
+
+describe('sentences', () => {
+  it('splits text into the sentences it is said in, keeping their stops and closing quotes', () => {
+    expect(sentences('It waits. Then it retries “three times.” Done?  And a tail')).toEqual(['It waits.', 'Then it retries “three times.”', 'Done?', 'And a tail']);
+  });
+
+  it('has none for blank text', () => {
+    expect(sentences('   ')).toEqual([]);
   });
 });

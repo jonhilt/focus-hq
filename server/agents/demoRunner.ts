@@ -837,7 +837,7 @@ export class DemoQuickAnswerer implements QuickAnswerer {
   async answer(req: QuickQuestion): Promise<{ text: string }> {
     await sleep((800 + Math.random() * 600) / this.speed);
     const beat = req.spot ? briefingBeats(req.briefing.html)?.[req.spot.beat] : undefined;
-    const about = beat ? `In ${beat.title.toLowerCase()}: ${beat.text}` : `From “${req.briefing.title}”, as far as I can tell:`;
+    const about = beat ? `On “${beat.title}”: ${beat.text}` : `From “${req.briefing.title}”, as far as I can tell:`;
     return { text: `${about} ${req.leadName} is busy building the slice, so I've answered for now, and passed your question on in case there's more to it.` };
   }
 }
