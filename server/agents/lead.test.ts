@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadAgent, LeadWork } from '../../shared/types';
-import { afterLanding, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, helperChange, notedGoal, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, openPr, pickStation, qaVerdictNote, queuedStart, shippedSha, shipPlan, shipBranch, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
+import { afterLanding, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, backgroundChange, helperChange, taskChange, workflowChange, notedGoal, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, openPr, pickStation, qaVerdictNote, queuedStart, shippedSha, shipPlan, shipBranch, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -305,6 +305,64 @@ describe('helperChange', () => {
   it('changes nothing for a helper it already has seated, or doesn’t know', () => {
     expect(helperChange(sent, send, 6)).toBeUndefined();
     expect(helperChange(sent, { kind: 'activity', id: 'nope', activity: 'x' }, 6)).toBeUndefined();
+  });
+});
+
+describe('taskChange', () => {
+  const add = { name: 'TaskCreate', input: { subject: 'Probe the SDK' }, result: { task: { id: '1', subject: 'Probe the SDK' } } };
+  const probe = { id: '1', subject: 'Probe the SDK', status: 'pending' } as const;
+
+  it('keeps a lead’s new task on its list and on the slice’s waypoint', () => {
+    const charted: LeadWork = { ...work, waypoints: [{ slice: 2, startedAt: 1 }] };
+    expect(taskChange({ task: 'lead', lead: charted }, add, 5)).toEqual({ tasks: [probe], lead: { ...charted, waypoints: [{ slice: 2, startedAt: 1, tasks: [probe] }] } });
+  });
+
+  it('keeps anyone else’s on their list alone: they have no chart', () => {
+    expect(taskChange({ task: 'issue', lead: work }, add, 5)).toEqual({ tasks: [probe] });
+  });
+
+  it('leaves the chart alone when the list changes but nothing the slice keeps does', () => {
+    const charted: LeadWork = { ...work, waypoints: [{ slice: 2, startedAt: 1, tasks: [probe] }] };
+    // a new session starts its own list: what the slice did stays on its waypoint
+    expect(taskChange({ task: 'lead', lead: charted }, { name: 'TodoWrite', input: { todos: [] } }, 5)).toEqual({ tasks: [] });
+  });
+
+  it('changes nothing for a call that left the list as it was, or a tool it doesn’t follow', () => {
+    expect(taskChange({ task: 'lead', lead: work, tasks: [probe] }, { name: 'Read', input: {} }, 5)).toBeUndefined();
+  });
+});
+
+describe('backgroundChange', () => {
+  const started = { kind: 'started', id: 'b1', task: 'shell', description: 'pnpm test' } as const;
+
+  it('floats a lead’s new command by their chair, and says how it ended', () => {
+    const up = backgroundChange({ task: 'lead' }, started, 5);
+    expect(up).toEqual({ background: [{ id: 'b1', kind: 'shell', description: 'pnpm test', status: 'running', startedAt: 5 }] });
+    expect(backgroundChange({ task: 'lead', ...up }, { kind: 'ended', id: 'b1', status: 'done', summary: 'passed' }, 9)?.background).toEqual([
+      { id: 'b1', kind: 'shell', description: 'pnpm test', status: 'done', startedAt: 5, endedAt: 9, summary: 'passed' },
+    ]);
+  });
+
+  it('changes nothing for anyone but a lead, where its output goes, or one it already has', () => {
+    expect(backgroundChange({ task: 'issue' }, started, 5)).toBeUndefined();
+    expect(backgroundChange({ task: 'lead' }, { kind: 'output', id: 'b1', file: '/tmp/b1.output' }, 5)).toBeUndefined();
+    const up = backgroundChange({ task: 'lead' }, started, 5);
+    expect(backgroundChange({ task: 'lead', ...up }, started, 6)).toBeUndefined();
+  });
+});
+
+describe('workflowChange', () => {
+  const started = { kind: 'started', id: 'w1', name: 'review', description: 'Review the slice' } as const;
+
+  it('beams a lead’s new workflow into its briefing room, and says how it ended', () => {
+    const up = workflowChange({ task: 'lead' }, started, 5);
+    expect(up?.workflows).toEqual([expect.objectContaining({ id: 'w1', name: 'review', status: 'running', startedAt: 5 })]);
+    expect(workflowChange({ task: 'lead', ...up }, { kind: 'ended', id: 'w1', ok: true }, 9)?.workflows).toEqual([expect.objectContaining({ id: 'w1', status: 'done' })]);
+  });
+
+  it('changes nothing for anyone but a lead, or a workflow it doesn’t know', () => {
+    expect(workflowChange({ task: 'issue' }, started, 5)).toBeUndefined();
+    expect(workflowChange({ task: 'lead' }, { kind: 'ended', id: 'nope', ok: true }, 5)).toBeUndefined();
   });
 });
 

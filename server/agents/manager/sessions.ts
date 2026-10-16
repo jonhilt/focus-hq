@@ -9,15 +9,14 @@ import type { Agent, LeadAgent, PermissionRequest, TermLine, WorkflowScript } fr
 import { GitHub, type GitHubError } from '../../github/service';
 import { newId, truncate } from '../../util';
 import { step, type Target, turnEvent } from '../runMachine';
-import { COMPACT_INSTRUCTIONS, compactInstructions, freshSessionPrompt, hasLeadWork, helperChange, HELPER_LINGER_MS, leadSystemAppend } from '../lead';
+import { backgroundChange, COMPACT_INSTRUCTIONS, compactInstructions, freshSessionPrompt, hasLeadWork, helperChange, HELPER_LINGER_MS, leadSystemAppend, taskChange, workflowChange } from '../lead';
 import { mismatchError, recovery, signInMismatch, turnEnding, type TurnKind } from '../runJournal';
 import { carryOnPrompt, conflictsPrompt, issuePrompt, systemAppend } from '../prompts';
 import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
 import { Sessions, Workspace } from '../services';
-import { applyTaskTool } from '../tasks';
-import { applyWorkflowEvent, journalResults, runOutcome, scriptPlan, transcriptLines, WORKFLOW_LINGER_MS } from '../workflows';
-import { committedWaypoint, probedWaypoints, taskedWaypoint } from '../waypoints';
-import { applyBackgroundEvent, BACKGROUND_LINGER_MS, OUTPUT_TAIL, outputLines } from '../backgroundTasks';
+import { journalResults, runOutcome, scriptPlan, transcriptLines, WORKFLOW_LINGER_MS } from '../workflows';
+import { committedWaypoint, probedWaypoints } from '../waypoints';
+import { BACKGROUND_LINGER_MS, OUTPUT_TAIL, outputLines } from '../backgroundTasks';
 import { type ExtraTool, type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN, type WorkflowEvent } from '../types';
 import { EmptyRepository, FINISHED, type ManagerServices, Part, Refused, ReportGone, type Runtime, withNotes, type WorkError } from './core';
 
@@ -135,13 +134,8 @@ export class AgentSessions extends Part {
       },
       context: (context) => this.update(agent, { context }),
       taskTool: (name, input, result, said) => {
-        const before = agent.tasks ?? [];
-        const tasks = applyTaskTool(before, name, input, result, said);
-        if (tasks === before) return;
-        // a lead's are its slice's work on the goal's chart too
-        const work = agent.task === 'lead' ? agent.lead : undefined;
-        const waypoints = work && taskedWaypoint(work, before, tasks, Date.now());
-        this.update(agent, { tasks, ...(work && waypoints !== work.waypoints && { lead: { ...work, waypoints } }) });
+        const change = taskChange(agent, { name, input, result, said }, Date.now());
+        if (change) this.update(agent, change);
       },
       helper: (event) => {
         // only a lead's helpers have somewhere to sit: the lead's team station
@@ -167,15 +161,10 @@ export class AgentSessions extends Part {
       },
       background: (event) => {
         // only a lead's have somewhere to float: by their chair in the briefing room
-        if (agent.task !== 'lead') return;
-        if (event.kind === 'output') {
-          (rt.backgroundOutputs ??= new Map()).set(event.id, event.file);
-          return;
-        }
-        const before = agent.background ?? [];
-        const background = applyBackgroundEvent(before, event, Date.now());
-        if (background === before) return;
-        this.update(agent, { background });
+        if (event.kind === 'output' && agent.task === 'lead') (rt.backgroundOutputs ??= new Map()).set(event.id, event.file);
+        const change = backgroundChange(agent, event, Date.now());
+        if (!change) return;
+        this.update(agent, change);
         // one that's ended lingers a moment, so you see how it went
         if (event.kind === 'ended') {
           this.background(Effect.sleep(BACKGROUND_LINGER_MS).pipe(Effect.andThen(Effect.sync(() => {
@@ -188,12 +177,9 @@ export class AgentSessions extends Part {
         // only a lead's away teams have somewhere to beam in to: the lead's briefing room
         if (agent.task !== 'lead') return;
         const next = keepWorkflowFiles(rt, event);
-        if (!next) return;
-        event = next;
-        const before = agent.workflows ?? [];
-        const workflows = applyWorkflowEvent(before, event, Date.now());
-        if (workflows === before) return;
-        this.update(agent, { workflows });
+        const change = next && workflowChange(agent, next, Date.now());
+        if (!change) return;
+        this.update(agent, change);
         if (event.kind === 'started') this.print(agent, [{ kind: 'system', text: `✻ Workflow ${event.name}: its away team beams into ${agent.name}'s briefing room a phase at a time` }]);
         // a finished workflow's away team lingers a moment, so you see how it got on
         if (event.kind === 'ended') {

@@ -1,12 +1,15 @@
 import type { Agent, Effort, LeadAgent, GoalArtifact, GoalNote, GoalQuestion, GoalRecord, Helper, LeadPr, LeadWork, QaReport, QaReview, QueuedGoal, Settings } from '../../shared/types';
 import { TEAM_STATIONS } from '../../shared/types';
 import { unanswered } from '../../shared/artifacts';
-import type { BranchState, HelperEvent } from './types';
+import type { BranchState, HelperEvent, WorkflowEvent } from './types';
+import { applyBackgroundEvent, type BackgroundEvent } from './backgroundTasks';
+import { applyTaskTool } from './tasks';
+import { applyWorkflowEvent } from './workflows';
 import { slugify } from '../util';
 import { SCRATCH_RULE } from './scratch';
 import { WAIT_RULE } from './wait';
 import { applyContacts, type ContactInput, contactsForPrompt } from './contacts';
-import { notedWaypoint, probedWaypoints } from './waypoints';
+import { notedWaypoint, probedWaypoints, taskedWaypoint } from './waypoints';
 
 /** The lead's checkout of one repo: a folder inside their workspace. */
 export const leadWorktreeId = (agentId: string, folder: string) => `${agentId}/${folder}`;
@@ -719,4 +722,44 @@ export function helperChange(lead: Pick<Agent, 'helpers' | 'lead' | 'effort'>, e
   const work = lead.lead;
   const waypoints = work && probedWaypoints(work, event, now);
   return { helpers, ...(work && waypoints && { lead: { ...work, waypoints } }) };
+}
+
+/**
+ * What one call to a task tool changes on an agent: its task list, and for a lead its slice's work on the goal's chart.
+ * Undefined when the call left the list as it was.
+ */
+export function taskChange(
+  agent: Pick<Agent, 'task' | 'tasks' | 'lead'>,
+  call: { name: string; input: Record<string, unknown>; result?: unknown; said?: string },
+  now: number,
+): Pick<Agent, 'tasks' | 'lead'> | undefined {
+  const before = agent.tasks ?? [];
+  const tasks = applyTaskTool(before, call.name, call.input, call.result, call.said);
+  if (tasks === before) return undefined;
+  const work = agent.task === 'lead' ? agent.lead : undefined;
+  const waypoints = work && taskedWaypoint(work, before, tasks, now);
+  return { tasks, ...(work && waypoints !== work.waypoints && { lead: { ...work, waypoints } }) };
+}
+
+/**
+ * What a background command's event changes on a lead: the commands floating by their chair. Undefined for anyone
+ * else's, which have nowhere to float, and when it changed none of them (where a command's output goes is the caller's
+ * to keep).
+ */
+export function backgroundChange(agent: Pick<Agent, 'task' | 'background'>, event: BackgroundEvent, now: number): Pick<Agent, 'background'> | undefined {
+  if (agent.task !== 'lead') return undefined;
+  const before = agent.background ?? [];
+  const background = applyBackgroundEvent(before, event, now);
+  return background === before ? undefined : { background };
+}
+
+/**
+ * What a workflow event changes on a lead: the away teams beaming into its briefing room. Undefined for anyone else's,
+ * which have nowhere to beam in to, and when it changed none of them.
+ */
+export function workflowChange(agent: Pick<Agent, 'task' | 'workflows'>, event: WorkflowEvent, now: number): Pick<Agent, 'workflows'> | undefined {
+  if (agent.task !== 'lead') return undefined;
+  const before = agent.workflows ?? [];
+  const workflows = applyWorkflowEvent(before, event, now);
+  return workflows === before ? undefined : { workflows };
 }
