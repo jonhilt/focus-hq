@@ -28,8 +28,8 @@ export class Triages extends Part {
     const officer = plannerFor(review.projectId).name;
     const step = whenStuck(review, officer, reason);
     if (step.kind === 'needs-you') return this.needsYou(review, step.reason);
-    const triaging: QaReview = { ...review, triages: (review.triages ?? 0) + 1, followUp: { kind: 'triaging', officer, activity: 'Coming over to look' } };
-    this.core.reviews.putReview(triaging);
+    const triaging = this.core.reviews.record(prKey(review.repo, review.number), { kind: 'triaging', officer });
+    if (!triaging) return;
     // one at a time per room, in the order they got stuck
     this.background(this.triageLock.withPermit(review.projectId)(this.triage(triaging, reason)));
   }
@@ -51,7 +51,7 @@ export class Triages extends Part {
       };
       const activity = (text: string) => {
         const now = current();
-        if (now && text) this.core.reviews.putReview({ ...now, followUp: { kind: 'triaging', officer: officer.name, activity: truncate(text, 120) } });
+        if (now && text) this.core.reviews.record(key, { kind: 'triage-activity', text: truncate(text, 120) });
       };
       const github = yield* GitHub;
       const workspace = yield* Workspace;
@@ -97,7 +97,7 @@ export class Triages extends Part {
       const now = current();
       if (!now || !Exit.isSuccess(exit)) return;
       const result = exit.value;
-      const decided = 'decision' in result ? { ...now, triage: { officer: officer.name, ...result.decision, at: Date.now() } } : now;
+      const decided = 'decision' in result ? (this.core.reviews.record(key, { kind: 'triaged', triage: { officer: officer.name, ...result.decision, at: Date.now() } }) ?? now) : now;
       if ('decision' in result) this.core.ledger.record(review.projectId, { kind: 'triage', repo: review.repo, pr: review.number, goal: this.core.leads.leadWith(review.repo, review.number)?.lead?.title, officer: officer.name, ...result.decision });
       yield* this.afterTriage(decided, afterTriage(officer.name, result, { closes: pr?.linkedIssues ?? [] }));
     });
@@ -109,7 +109,7 @@ export class Triages extends Part {
     const officer = plannerFor(review.projectId).name;
     const where = `${review.repo.split('/')[1]}#${review.number}`;
     const backToQa = (why: string) => {
-      this.core.reviews.putReview({ ...review, followUp: undefined });
+      this.core.reviews.record(prKey(review.repo, review.number), { kind: 'follow-up' });
       this.core.reviews.requestReview(review.projectId, review.repo, review.number, review.title, `${officer}, the room's operations officer, ${why} because it was stuck: ${step.note}`);
     };
     return Effect.gen({ self: this }, function* () {
@@ -159,7 +159,7 @@ export class Triages extends Part {
 
   /** The office stops sending the PR back: it's the manager's call now. */
   needsYou(review: QaReview, reason: string): void {
-    this.core.reviews.putReview({ ...review, followUp: { kind: 'needs-you', reason } });
+    this.core.reviews.record(prKey(review.repo, review.number), { kind: 'follow-up', followUp: { kind: 'needs-you', reason } });
     this.hub.toast('error', `🙋 ${review.repo.split('/')[1]}#${review.number} needs you: ${reason}`, undefined, review.projectId);
   }
 }

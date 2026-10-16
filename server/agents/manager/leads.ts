@@ -1,3 +1,4 @@
+import { prKey } from '../../../shared/qa';
 import { Effect } from 'effect';
 import { leadFor, leadId } from '../../../shared/crew';
 import type { Agent, Effort, Evidence, LeadAgent, QaReport, QaScreenshot, QueuedGoal } from '../../../shared/types';
@@ -217,7 +218,7 @@ export class Leads extends Part {
       // the goal's reviewer goes home with its lead; a review they were on, or still waiting, goes to the room's QA officer
       const reviewer = goalReviewerId(id);
       for (const r of this.store.reviews.values()) {
-        if (r.agentId === reviewer && (r.status === 'testing' || r.status === 'queued')) this.core.reviews.putReview({ ...r, status: 'queued', agentId: undefined });
+        if (r.agentId === reviewer && (r.status === 'testing' || r.status === 'queued')) this.core.reviews.record(prKey(r.repo, r.number), { kind: 'unseated' });
       }
       yield* this.core.seating.goHome(reviewer);
       this.core.reviews.nextReview(agent.projectId);

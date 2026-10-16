@@ -40,7 +40,7 @@ Every holodeck has a QA officer in blue, sitting at a station in the control rin
 
 ## The review journal: picking a review up after a restart
 
-Each pull request's review keeps a journal, `~/.focus/runs/reviews/<owner>__<repo>-<n>.jsonl` (`server/agents/reviewJournal.ts`), like an agent's run journal ([agents](agents.md#the-run-journal-where-a-run-was-and-picking-up-after-a-restart)): numbered facts, each flushed to disk before the office acts on it (`Store.reviewJournal`), never rewritten. The reviewer's turns are in their own run journal; this one is the review around them, keyed by the PR, since a review outlives its reviewer (QA's next review resets their run). Its facts are `requested`, `prechecking` and how the precheck went (`precheck-skipped`, `precheck-carried`, `precheck-retest`), `seated`, `testing` (the commit), `reported` (the verdict, the report and the comment that says it, written before anything goes onto GitHub), `posted` (the comment's link), `announced` (once the ledger, the PR's lead and any send-back have heard), `ended` without a verdict, and `gone` when the PR merges or closes. What they add up to is a state machine's (`reviewMachine`, XState), drawn from its code (a test keeps this picture in step):
+Each pull request's review keeps a journal, `~/.focus/runs/reviews/<owner>__<repo>-<n>.jsonl` (`server/agents/reviewJournal.ts`), like an agent's run journal ([agents](agents.md#the-run-journal-where-a-run-was-and-picking-up-after-a-restart)): numbered facts, each flushed to disk before the office acts on it (`Store.reviewJournal`), never rewritten. The reviewer's turns are in their own run journal; this one is the review around them, keyed by the PR, since a review outlives its reviewer (QA's next review resets their run). Its facts are `requested` (the room, the PR and its title, a lead's shipped commit, why the operations officer sent it back), `prechecking` and how the precheck went (`precheck-skipped`, `precheck-carried`, `precheck-retest`), `seated`, `testing` (the commit), `reported` (the verdict, the report and the comment that says it, written before anything goes onto GitHub), `posted` (the comment's link), `announced` (once the ledger, the PR's lead and any send-back have heard), `ended` without a verdict, `unseated` (its reviewer went home with their goal), and `gone` when the PR merges or closes (a reopened PR can be asked for again). What they add up to is a state machine's (`reviewMachine`, XState), drawn from its code (a test keeps this picture in step):
 
 <!-- review-machine:start -->
 ```mermaid
@@ -75,9 +75,10 @@ stateDiagram-v2
   review_precheck --> review_failed : precheck-skipped
   review_precheck --> review_passed : precheck-carried
   review_precheck --> review_queued : precheck-retest
-  review_seated --> review_queued : restarted
+  review_seated --> review_queued : restarted | unseated
   review_seated --> review_testing : testing
   review_seated --> review_error : ended
+  review_testing --> review_queued : unseated
   review_testing --> review_reported : reported
   review_testing --> review_error : ended
   review_reported_posting --> review_reported_announcing : posted
@@ -86,11 +87,18 @@ stateDiagram-v2
   review_passed --> review_queued : requested
   review_failed --> review_queued : requested
   review_error --> review_queued : requested
+  review_gone --> review_queued : requested
   review --> review_gone : gone
+  review --> review_queued : imported [was queued]
+  review --> review_testing : imported [was testing]
+  review --> review_passed : imported [had passed]
+  review --> review_failed : imported [had failed]
+  review --> review_error : imported
   classDef final fill:#1d3320,stroke:#9fd39f,color:#e8e4d8
-  class review_gone final
 ```
 <!-- review-machine:end -->
+
+**The board's review comes from the journal.** What the board shows of a review (QA queued, testing, passed or failed, the report and its comment, failed rounds, a merge asked for, what the office is doing about a failed PR) is what its journal adds up to (`reviewView`): every change it shows is a fact, so `Store.reviews` is rebuilt from the journals when the office starts and follows each fact after, and `state.json` keeps no reviews of its own. Besides the review's own steps, that's `head-shipped` (a lead shipped while QA was at it), `merge-requested`, `follow-up` (a developer fixing it, or it needs you), and the operations officer's `triaging`, `triage-activity` and `triaged`. A verdict's on the board from `posted`, the moment it's on the pull request, so a crash can't leave a PR the journal has a verdict on showing **QA testing**. A review the board kept before reviews had journals is taken into its journal once, as it was (`imported`). Facts that only change what the board shows aren't arrows in the picture above: they don't move the review from one phase to another.
 
 **After a restart** (`Reviews.recover`, before the reviewers' own runs are recovered; `reviewRecovery` decides):
 
@@ -99,7 +107,9 @@ stateDiagram-v2
 - one under test carries on with its reviewer's turn when that picks itself back up: on your plan, in the same conversation, told it was cut off (or held again for your plan's limit). On your API key, or with no conversation to go back to, it ends saying "Interrupted when Focus shut down. Send it to QA again.";
 - a verdict QA had reached is posted on the PR if it wasn't yet, and passed on to everyone who hears of one (the board, the ledger, the PR's lead, a send-back), with no Claude turn. A crash in the moment between the comment going up and `posted` being written posts it twice: a verdict said twice beats one lost.
 
-Screenshots QA took before the restart are held in memory, so a review that carries on posts only the ones taken after it. A review from before reviews had journals that was under way ends as it used to, to be sent again. While the office shuts down, nobody new is seated or started.
+- a PR the operations officer was looking at goes to the captain (it needs you).
+
+Screenshots QA took before the restart are held in memory, so a review that carries on posts only the ones taken after it. While the office shuts down, nobody new is seated or started.
 
 ## Stuck PRs
 

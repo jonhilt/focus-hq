@@ -12,7 +12,7 @@ import { checksFixPrompt, evidencePath, filesPrompt, filesToRevisit, fixPrompt, 
 import type { QaLoopEvent } from '../qaLoop';
 import { qaNextStep } from '../qaLoop';
 import { carriedComment, retestStep, shippedSinceTested } from '../retest';
-import { type Reported, type ReviewRecovery, reviewRecovery } from '../reviewJournal';
+import { type Reported, type ReviewFact, type ReviewRecovery, reviewRecovery } from '../reviewJournal';
 import { recovery } from '../runJournal';
 import { Workspace } from '../services';
 import { reviewCheckoutId, reviewRepoId, triageWorkspaceId } from '../worktrees';
@@ -36,36 +36,20 @@ export class Reviews extends Part {
   requestReview(projectId: string, repo: string, number: number, title: string, retryNote?: string, asked = false, shippedHead?: string): QaReview {
     const project = this.store.project(projectId);
     if (!project.repos.includes(repo)) throw new Refused({ message: `${repo} is not connected to ${project.name}` });
-    const existing = this.store.reviews.get(prKey(repo, number));
+    const key = prKey(repo, number);
+    const existing = this.store.reviews.get(key);
     if (existing && (existing.status === 'queued' || existing.status === 'testing')) {
       if (!shippedHead) return existing;
-      const marked = { ...existing, shippedHead };
-      this.putReview(marked);
-      return marked;
+      return this.record(key, { kind: 'head-shipped', sha: shippedHead }) ?? existing;
     }
     // a re-test from the board overrides the operations officer
-    this.core.triages.stopTriage(prKey(repo, number));
-    const review: QaReview = {
-      projectId,
-      repo,
-      number,
-      title,
-      status: 'queued',
-      requestedAt: Date.now(),
-      openedByOffice: this.core.seating.openedByOffice(repo, number),
-      failedRounds: existing?.failedRounds,
-      lastRound: existing?.report ? { sha: existing.sha, report: existing.report } : existing?.lastRound,
-      triages: existing?.triages,
-      triage: existing?.triage,
-      retryNote,
-      mergeRequested: existing?.mergeRequested,
-      shippedHead,
-    };
-    this.putReview(review);
-    this.store.reviewJournal(prKey(repo, number), { kind: 'requested', ...(shippedHead && { head: shippedHead }) });
+    this.core.triages.stopTriage(key);
+    // what the last round left (failed rounds, its report, a merge asked for) carries over in the journal
+    const review = this.record(key, { kind: 'requested', projectId, repo, number, title, openedByOffice: this.core.seating.openedByOffice(repo, number), ...(shippedHead && { head: shippedHead }), ...(retryNote && { retryNote }) });
+    if (!review) throw new Refused({ message: `${repo}#${number} can't be sent to QA` });
     if (existing?.sha && (existing.status === 'passed' || existing.status === 'failed') && !retryNote && !asked) {
-      this.prechecking.add(prKey(repo, number));
-      this.store.reviewJournal(prKey(repo, number), { kind: 'prechecking' });
+      this.prechecking.add(key);
+      this.record(key, { kind: 'prechecking' });
       this.background(this.precheck(review, existing));
     } else {
       this.nextReview(projectId);
@@ -78,9 +62,7 @@ export class Reviews extends Part {
     const review = this.store.reviews.get(prKey(repo, number));
     if (!review) throw new Refused({ message: `QA isn't reviewing ${repo}#${number}` });
     if (on && review.status !== 'queued' && review.status !== 'testing') throw new Refused({ message: `QA isn't testing ${repo}#${number} right now` });
-    const next = { ...review, mergeRequested: on ? { at: Date.now() } : undefined };
-    this.putReview(next);
-    return next;
+    return this.record(prKey(repo, number), { kind: 'merge-requested', on }) ?? review;
   }
 
   /**
@@ -91,9 +73,7 @@ export class Reviews extends Part {
   private precheck(review: QaReview, last: QaReview): Effect.Effect<void, never, ManagerServices> {
     const key = prKey(review.repo, review.number);
     const where = `${review.repo.split('/')[1]}#${review.number}`;
-    const current = () => this.store.reviews.get(key)?.requestedAt === review.requestedAt && this.store.reviews.get(key)?.status === 'queued';
-    // the captain may ask for (or take back) a merge when QA passes while the office looks: keep what they asked last
-    const mergeRequested = () => this.store.reviews.get(key)?.mergeRequested;
+    const current = () => this.store.reviews.get(key)?.requestedAt === review.requestedAt && this.store.review(key).phase === 'precheck';
     return Effect.gen({ self: this }, function* () {
       const github = yield* GitHub;
       const workspace = yield* Workspace;
@@ -107,8 +87,8 @@ export class Reviews extends Part {
       if (!current()) return;
       if (step.kind === 'skip') {
         console.log(`Not sending ${review.repo}#${review.number} to QA: ${step.reason}`);
-        this.store.reviewJournal(key, { kind: 'precheck-skipped' });
-        this.putReview({ ...last, mergeRequested: mergeRequested() });
+        // the last verdict stands, with any merge the captain asked for meanwhile
+        this.record(key, { kind: 'precheck-skipped' });
         this.boardChanged(review.projectId);
         return;
       }
@@ -124,8 +104,7 @@ export class Reviews extends Part {
       const commentUrl = yield* github.commentOnPullRequest(review.repo, review.number, body).pipe(Effect.map((url) => url || undefined), Effect.orElseSucceed(() => undefined));
       // the PR may have merged or closed while the comment went up
       if (!current()) return;
-      this.store.reviewJournal(key, { kind: 'precheck-carried', sha: step.head, ...(commentUrl && { commentUrl }) });
-      this.putReview({ ...last, status: 'passed', sha: step.head, carriedFrom: last.sha, commentUrl: commentUrl ?? last.commentUrl, mergeRequested: mergeRequested(), requestedAt: review.requestedAt, finishedAt: Date.now() });
+      this.record(key, { kind: 'precheck-carried', sha: step.head, ...(commentUrl && { commentUrl }) });
       this.hub.toast('success', `✅ ${where} stays passed: merge of ${pr.baseBranch} only, checks green at ${step.head.slice(0, 7)}`, undefined, review.projectId);
       this.boardChanged(review.projectId);
     }).pipe(
@@ -133,7 +112,7 @@ export class Reviews extends Part {
       Effect.ensuring(Effect.sync(() => {
         this.prechecking.delete(key);
         // anything but a verdict that stands or carries over goes to QA
-        if (this.store.review(key).phase === 'precheck') this.store.reviewJournal(key, { kind: 'precheck-retest' });
+        if (this.store.review(key).phase === 'precheck') this.record(key, { kind: 'precheck-retest' });
         this.nextReview(review.projectId);
       })),
     );
@@ -191,8 +170,7 @@ export class Reviews extends Part {
     this.hub.send({ type: 'agent', agent });
     const where = goal ? ` at ${goal.name}'s table, for “${goal.lead?.title ?? 'their goal'}”` : '';
     this.print(agent, [{ kind: 'system', text: `──────── ✻ ${crew.name} picks up ${review.repo}#${review.number} for QA${where}: ${review.title}` }]);
-    this.store.reviewJournal(prKey(review.repo, review.number), { kind: 'seated', agent: id });
-    this.putReview({ ...review, agentId: id });
+    this.record(prKey(review.repo, review.number), { kind: 'seated', agent: id });
   }
 
   launchReview(agent: Agent): Effect.Effect<void, WorkError, ManagerServices> {
@@ -225,10 +203,7 @@ export class Reviews extends Part {
       }
       if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
       const review = this.store.reviews.get(prKey(agent.repo, pr.number));
-      if (review) {
-        this.store.reviewJournal(prKey(agent.repo, pr.number), { kind: 'testing', sha });
-        this.putReview({ ...review, status: 'testing', title: pr.title, sha, agentId: agent.id, error: undefined });
-      }
+      if (review) this.record(prKey(agent.repo, pr.number), { kind: 'testing', sha, title: pr.title });
       rt.qaSystem = qaSystemAppend(agent, project, pr, sha, siblings);
       rt.shots = undefined;
       let prompt = qaPrompt(agent.repo, pr, issues, review ?? {}, rt.qaFiles.changed);
@@ -322,7 +297,7 @@ export class Reviews extends Part {
       const body = qaComment(report, { officer: agent.name, sha: review?.sha, pr: pullUrl(agent.repo, number) }, screenshots, this.store.settings.attribution, account);
       const failedRounds = (review?.failedRounds ?? 0) + (report.verdict === 'pass' ? 0 : 1);
       // the verdict's on disk before it goes anywhere: a restart from here on posts it and tells everyone (`deliverVerdict`)
-      this.store.reviewJournal(prKey(agent.repo, number), { kind: 'reported', verdict: report.verdict, officer: agent.name, body, failedRounds, report, screenshots, files: account, sha: review?.sha });
+      this.record(prKey(agent.repo, number), { kind: 'reported', verdict: report.verdict, officer: agent.name, body, failedRounds, report, screenshots, files: account, sha: review?.sha });
       yield* this.deliverVerdict(agent.projectId, agent.repo, number);
     });
   }
@@ -339,7 +314,8 @@ export class Reviews extends Part {
       const agent = this.reviewerOn(repo, number);
       if (typeof journal.phase === 'object' && journal.phase.reported === 'posting' && journal.reported) {
         const url = yield* this.postVerdict(agent, repo, number, journal.reported.body);
-        journal = this.store.reviewJournal(key, { kind: 'posted', ...(url && { url }) });
+        this.record(key, { kind: 'posted', ...(url && { url }) });
+        journal = this.store.review(key);
       }
       if (journal.reported) yield* this.announceVerdict(projectId, repo, number, journal.reported, agent);
     });
@@ -366,14 +342,13 @@ export class Reviews extends Part {
   /** Tells everyone who hears of a verdict: the board and ledger, the reviewer's station, whoever fixes a failed PR, and its lead. */
   private announceVerdict(projectId: string, repo: string, number: number, verdict: Reported & { url?: string }, agent: Agent | undefined): Effect.Effect<void, never, ManagerServices> {
     return Effect.gen({ self: this }, function* () {
-      const { officer, report, screenshots, files, failedRounds, sha, url: commentUrl } = verdict;
+      const { officer, report, screenshots, failedRounds, sha } = verdict;
       const pass = verdict.verdict === 'pass';
-      const review = this.store.reviews.get(prKey(repo, number));
+      // the board's review has the verdict since it was posted (the journal's `posted`)
+      const done = this.store.reviews.get(prKey(repo, number));
       const checks = { pass: 0, fail: 0, skip: 0 };
       for (const c of report.checks) checks[c.result]++;
       this.core.ledger.record(projectId, { kind: 'qa-verdict', repo, pr: number, goal: this.core.leads.leadWith(repo, number)?.lead?.title, verdict: verdict.verdict, sha, reviewer: officer, checks, failedRounds });
-      const done: QaReview | undefined = review && { ...review, status: pass ? 'passed' : 'failed', report, screenshots, commentUrl, files, failedRounds, finishedAt: Date.now(), error: undefined };
-      if (done) this.putReview(done);
       if (agent) this.reviewerDone(agent, pass, number, report.checks.length);
       this.hub.toast(pass ? 'success' : 'error', `${pass ? '✅' : '❌'} ${officer} ${pass ? 'passed' : 'failed'} ${repo.split('/')[1]}#${number}: ${truncate(report.summary, 120)}`, agent?.id);
       this.boardChanged(projectId);
@@ -383,7 +358,7 @@ export class Reviews extends Part {
       // (from GitHub's head, which has caught up by now, so a PR someone else pushed past the ship doesn't loop)
       const behind = done?.sha ? shippedSinceTested(done) : undefined;
       this.core.leads.leadHearsVerdict(repo, number, `QA officer ${officer}`, report, failedRounds, behind && done?.sha ? { tested: done.sha, shipped: behind } : undefined);
-      this.store.reviewJournal(prKey(repo, number), { kind: 'announced' });
+      this.record(prKey(repo, number), { kind: 'announced' });
       if (done && behind) this.requestReview(done.projectId, done.repo, done.number, done.title);
       this.nextReview(projectId);
     });
@@ -440,7 +415,7 @@ export class Reviews extends Part {
       const step = qaNextStep({ openedByOffice: !!review.openedByOffice, autoSendBack: autoSendBackFor(project) }, event);
       switch (step.kind) {
         case 'nothing':
-          if (review.followUp) this.putReview({ ...review, followUp: undefined });
+          if (review.followUp) this.record(prKey(review.repo, review.number), { kind: 'follow-up' });
           return;
         case 'send-back':
           return yield* this.sendBack(review, { kind: 'qa' });
@@ -472,7 +447,7 @@ export class Reviews extends Part {
       const advice = note && `${plannerFor(review.projectId).name}, the operations officer, looked at why this PR is stuck: ${note}`;
       const owner = this.core.seating.prOwner(review.repo, review.number);
       if (owner) {
-        this.putReview({ ...review, followUp: { kind: 'fixing', agentId: owner.id, agentName: owner.name, fixes } });
+        this.record(prKey(review.repo, review.number), { kind: 'follow-up', followUp: { kind: 'fixing', agentId: owner.id, agentName: owner.name, fixes } });
         const prompt = this.fixPromptFor(owner, review, report, fixes);
         this.core.comms.message(owner.id, advice ? `${prompt}\n\n${advice}` : prompt);
         this.hub.toast('info', `🔧 ${where} ${why} – back to ${owner.name}`, owner.id);
@@ -488,7 +463,7 @@ export class Reviews extends Part {
         pr: { number: pr.number, url: pr.url },
       });
       if (advice) this.rt(agent.id).inbox.push(advice);
-      this.putReview({ ...review, followUp: { kind: 'fixing', agentId: agent.id, agentName: agent.name, fixes } });
+      this.record(prKey(review.repo, review.number), { kind: 'follow-up', followUp: { kind: 'fixing', agentId: agent.id, agentName: agent.name, fixes } });
       this.hub.toast('info', `🔧 ${where} ${why} – ${agent.name} sits down to fix it`, agent.id);
     }).pipe(
       // a full room throws from seat(): it's the manager's call then, like any other failure to send it back
@@ -522,10 +497,7 @@ export class Reviews extends Part {
   /** A review that ended without a verdict (stopped, failed, or its PR went away). */
   reviewEnded(agent: Agent, error: string): void {
     const review = this.store.reviews.get(prKey(agent.repo, agent.issue.number));
-    if (review && (review.status === 'testing' || review.status === 'queued')) {
-      this.store.reviewJournal(prKey(review.repo, review.number), { kind: 'ended', error });
-      this.putReview({ ...review, status: 'error', error, finishedAt: Date.now() });
-    }
+    if (review && (review.status === 'testing' || review.status === 'queued')) this.record(prKey(review.repo, review.number), { kind: 'ended', error });
     // don't start the next review under the captain's nose when they stopped this one on purpose; otherwise once this
     // one's wound down
     if (error !== STOPPED_BY_CAPTAIN) this.background(Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => this.nextReview(agent.projectId)))));
@@ -548,28 +520,28 @@ export class Reviews extends Part {
     }
     const review = this.store.reviews.get(prKey(repo, number));
     if (!review) return;
-    this.store.reviewJournal(prKey(repo, number), { kind: 'gone', merged });
+    this.record(prKey(repo, number), { kind: 'gone', merged });
     this.core.triages.stopTriage(prKey(repo, number));
     // each reviewer kept a checkout of this PR for re-tests: nobody needs them now
     const reviewers = new Set([review.agentId ?? qaAgentId(review.projectId), qaAgentId(review.projectId), triageWorkspaceId(review.projectId)]);
     this.background(Workspace.use((w) => Effect.forEach(reviewers, (id) => w.remove(repo, reviewCheckoutId(id, repo, number)), { discard: true })));
-    this.store.removeReview(repo, number);
-    this.hub.send({ type: 'review-removed', repo, number });
     this.nextReview(review.projectId);
   }
 
   /**
    * Picks reviews back up at startup, from their journals: a verdict in hand goes onto its PR, and one whose reviewer's
    * turn carries on (`Sessions.recover`) carries on with it. Before the reviewers' own runs are recovered, so a reviewer
-   * whose review starts again has nothing left to pick up. The rooms with reviews back in line: their queues move
-   * (`nextReview`) once the reviewers' runs are recovered, so one picking their review back up isn't seated on another.
+   * whose review starts again has nothing left to pick up. A PR the operations officer was looking at goes to the
+   * captain. The rooms with reviews back in line: their queues move (`nextReview`) once the reviewers' runs are
+   * recovered, so one picking their review back up isn't seated on another.
    */
   recover(onKey: boolean): Set<string> {
     const rooms = new Set<string>();
     for (const review of [...this.store.reviews.values()]) {
       const key = prKey(review.repo, review.number);
+      if (review.followUp?.kind === 'triaging') this.record(key, { kind: 'follow-up', followUp: { kind: 'needs-you', reason: `${review.followUp.officer} was looking at it when Focus shut down` } });
       const reviewer = review.agentId ? this.store.agents.get(review.agentId) : undefined;
-      const next = reviewRecovery(this.store.review(key), review.status, reviewer && recovery(this.store.run(reviewer.id), reviewer, onKey).kind);
+      const next = reviewRecovery(this.store.review(key), reviewer && recovery(this.store.run(reviewer.id), reviewer, onKey).kind);
       if (this.recoverReview(review, reviewer, next)) rooms.add(review.projectId);
     }
     return rooms;
@@ -585,19 +557,15 @@ export class Reviews extends Part {
       case 'queue':
         return true;
       case 'retest':
-        this.store.reviewJournal(key, { kind: 'precheck-retest' });
+        this.record(key, { kind: 'precheck-retest' });
         return true;
       case 'restart':
-        this.store.reviewJournal(key, { kind: 'restarted' });
+        this.record(key, { kind: 'restarted' });
         // their run was setting up: it starts again from nothing when they're seated
         if (reviewer) this.store.journal(reviewer.id, { kind: 'reset' });
-        this.putReview({ ...review, status: 'queued', agentId: undefined });
         return true;
       case 'interrupted':
-        if (review.status === 'queued' || review.status === 'testing') {
-          if (this.store.review(key).phase !== 'idle') this.store.reviewJournal(key, { kind: 'ended', error: next.error });
-          this.putReview({ ...review, status: 'error', error: next.error, finishedAt: Date.now() });
-        }
+        this.record(key, { kind: 'ended', error: next.error });
         return false;
       case 'post':
       case 'announce':
@@ -607,7 +575,16 @@ export class Reviews extends Part {
     }
   }
 
-  putReview(review: QaReview): void {
-    if (this.store.putReview(review)) this.hub.send({ type: 'review', review });
+  /**
+   * Records a fact in the pull request's review journal (`key` its prKey): the board's review follows from it
+   * (`Store.reviewJournal`), and every browser hears. The review as it is now (none once it's gone).
+   */
+  record(key: string, fact: ReviewFact): QaReview | undefined {
+    const before = this.store.reviews.get(key);
+    this.store.reviewJournal(key, fact);
+    const review = this.store.reviews.get(key);
+    if (review) this.hub.send({ type: 'review', review });
+    else if (before) this.hub.send({ type: 'review-removed', repo: before.repo, number: before.number });
+    return review;
   }
 }

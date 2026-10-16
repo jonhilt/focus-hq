@@ -1,5 +1,5 @@
 import { assign, setup, type StateValue, transition } from 'xstate';
-import type { FileAccount, QaReport, QaScreenshot, QaStatus } from '../../shared/types';
+import type { FileAccount, QaFollowUp, QaReport, QaReview, QaScreenshot, Triage } from '../../shared/types';
 import type { Recovery } from './runJournal';
 
 // A QA review's journal, pure: the facts the office records about one pull request's review (data/runs/reviews/<pr>.jsonl),
@@ -12,8 +12,15 @@ export type Verdict = 'pass' | 'fail';
 
 /** One fact about a pull request's review. */
 export type ReviewFact =
-  /** Asked for (again): it waits for its reviewer. `head` is the commit a lead's ship pushed. */
-  | { kind: 'requested'; head?: string }
+  /**
+   * Asked for (again): it waits for its reviewer. `head` is the commit a lead's ship pushed; `retryNote` why the
+   * operations officer sent it back to QA. What the last round left (failed rounds, the report, a merge asked for) carries over.
+   */
+  | { kind: 'requested'; projectId: string; repo: string; number: number; title: string; head?: string; openedByOffice?: boolean; retryNote?: string }
+  /** A lead shipped `sha` while QA was at the PR: QA goes on to it once they finish. */
+  | { kind: 'head-shipped'; sha: string }
+  /** The captain asked for the PR to merge once QA passes it, or took that back. */
+  | { kind: 'merge-requested'; on: boolean }
   /** The office looks at what changed since QA's last verdict, to see whether QA needs to test it again. */
   | { kind: 'prechecking' }
   /** Nothing to test again: the last verdict stands. */
@@ -26,17 +33,29 @@ export type ReviewFact =
   | { kind: 'seated'; agent: string }
   /** Found at startup: its reviewer was still setting up (no Claude turn yet), so it's back in the queue to start again. */
   | { kind: 'restarted' }
-  /** The reviewer is testing commit `sha`. */
-  | { kind: 'testing'; sha: string }
+  /** Its reviewer went home (their goal closed): back in the queue, for the room's QA officer. */
+  | { kind: 'unseated' }
+  /** The reviewer is testing commit `sha` (the pull request called `title` now). */
+  | { kind: 'testing'; sha: string; title?: string }
   /** The reviewer's verdict, and the comment that says it: written before it goes onto the pull request, so a restart posts it. */
   | ({ kind: 'reported' } & Reported)
-  /** The comment is on the pull request (or couldn't be put there: no `url`). */
+  /** The comment is on the pull request (or couldn't be put there: no `url`): the verdict's QA's from here. */
   | { kind: 'posted'; url?: string }
   /** Everyone who hears of a verdict has: the ledger, the PR's lead, and whoever fixes a failed one. */
   | { kind: 'announced' }
   /** It ended without a verdict: stopped, failed, or interrupted when it couldn't carry on. */
   | { kind: 'ended'; error: string }
-  /** The pull request merged or closed: the review's over for good. */
+  /** What the office is doing about a failed PR: a developer fixing it, or you wanted (none: nothing now). */
+  | { kind: 'follow-up'; followUp?: Exclude<QaFollowUp, { kind: 'triaging' }> }
+  /** The PR's stuck: the room's operations officer comes over to look. */
+  | { kind: 'triaging'; officer: string }
+  /** What the operations officer is doing now, as they look. */
+  | { kind: 'triage-activity'; text: string }
+  /** What the operations officer decided. */
+  | { kind: 'triaged'; triage: Triage }
+  /** A review the board kept before reviews had journals, taken in as it was. */
+  | { kind: 'imported'; review: QaReview }
+  /** The pull request merged or closed (or its room went): the review's over for good. */
   | { kind: 'gone'; merged: boolean };
 
 /** A verdict, as the review's journal keeps it until everyone's heard. */
@@ -69,6 +88,10 @@ export interface ReviewContext {
   /** The last verdict announced: what a skipped precheck goes back to. */
   verdict?: Verdict;
   error?: string;
+  /** The review as the board shows it (`reviewView`), built from the facts alone. */
+  view?: QaReview;
+  /** The board's review before it was asked for again: what a precheck that finds nothing to test puts back. */
+  previous?: QaReview;
 }
 
 export interface ReviewState extends ReviewContext {
@@ -78,14 +101,44 @@ export interface ReviewState extends ReviewContext {
 
 export const EMPTY_REVIEW: ReviewState = { phase: 'idle', seq: 0 };
 
-type ReviewEvent = { [K in ReviewFact['kind']]: Extract<ReviewFact, { kind: K }> & { type: K } }[ReviewFact['kind']];
+type ReviewEvent = { [K in ReviewFact['kind']]: Extract<ReviewFact, { kind: K }> & { type: K; t?: number } }[ReviewFact['kind']];
+type Event<K extends ReviewFact['kind']> = Extract<ReviewEvent, { type: K }>;
+
+/** The board's review, changed (none to change once it's gone). */
+const onView = (context: ReviewContext, f: (view: QaReview) => QaReview): Partial<ReviewContext> => (context.view ? { view: f(context.view) } : {});
+
+/** A review asked for (again), carrying over what its last round left. */
+function requested(e: Event<'requested'>, last: QaReview | undefined): QaReview {
+  return {
+    projectId: e.projectId,
+    repo: e.repo,
+    number: e.number,
+    title: e.title,
+    status: 'queued',
+    requestedAt: e.t ?? 0,
+    ...(e.openedByOffice !== undefined && { openedByOffice: e.openedByOffice }),
+    ...(e.head && { shippedHead: e.head }),
+    ...(e.retryNote && { retryNote: e.retryNote }),
+    failedRounds: last?.failedRounds,
+    lastRound: last?.report ? { sha: last.sha, report: last.report } : last?.lastRound,
+    triages: last?.triages,
+    triage: last?.triage,
+    mergeRequested: last?.mergeRequested,
+  };
+}
+
+/** The board's review once the verdict's posted. */
+function verdictView(view: QaReview, r: Reported & { url?: string }, t: number): QaReview {
+  return { ...view, status: r.verdict === 'pass' ? 'passed' : 'failed', report: r.report, screenshots: r.screenshots, commentUrl: r.url, files: r.files, failedRounds: r.failedRounds, finishedAt: t, error: undefined };
+}
 
 /**
  * What a review's journal adds up to, as a state machine. A review is `queued` for its reviewer (after a `precheck`,
  * for one QA gave a verdict on before), `seated` while its reviewer checks it out, `testing`, then `reported`:
  * `posting` its comment, then `announcing` the verdict, until it has `passed` or `failed`. It can end in `error`
- * without a verdict, and is `gone` for good once its pull request merges or closes. Asked for again once it's over,
- * it's queued again.
+ * without a verdict, and is `gone` once its pull request merges or closes. Asked for again once it's over (or its
+ * pull request is reopened), it's queued again. Its context keeps the review as the board shows it (`view`): every change the board shows is a
+ * fact, so the board's review is rebuilt from the journal like everything else.
  */
 const START: ReviewContext = {};
 
@@ -97,47 +150,88 @@ export const reviewMachine = setup({
   guards: {
     passed: ({ context }) => context.reported?.verdict === 'pass',
     'passed before': ({ context }) => context.verdict === 'pass',
+    'was queued': ({ event }) => event.type === 'imported' && event.review.status === 'queued',
+    'was testing': ({ event }) => event.type === 'imported' && event.review.status === 'testing',
+    'had passed': ({ event }) => event.type === 'imported' && event.review.status === 'passed',
+    'had failed': ({ event }) => event.type === 'imported' && event.review.status === 'failed',
   },
 }).createMachine({
   id: 'review',
   context: START,
   initial: 'idle',
   on: {
-    gone: '.gone',
+    gone: { target: '.gone', actions: assign({ view: undefined, previous: undefined }) },
+    'head-shipped': { actions: assign(({ context, event: e }) => onView(context, (v) => ({ ...v, shippedHead: e.sha }))) },
+    'merge-requested': { actions: assign(({ context, event: e }) => onView(context, (v) => ({ ...v, mergeRequested: e.on ? { at: e.t ?? 0 } : undefined }))) },
+    'follow-up': { actions: assign(({ context, event: e }) => onView(context, (v) => ({ ...v, followUp: e.followUp }))) },
+    triaging: { actions: assign(({ context, event: e }) => onView(context, (v) => ({ ...v, triages: (v.triages ?? 0) + 1, followUp: { kind: 'triaging', officer: e.officer, activity: 'Coming over to look' } }))) },
+    'triage-activity': { actions: assign(({ context, event: e }) => onView(context, (v) => (v.followUp?.kind === 'triaging' ? { ...v, followUp: { ...v.followUp, activity: e.text } } : v))) },
+    triaged: { actions: assign(({ context, event: e }) => onView(context, (v) => ({ ...v, triage: e.triage }))) },
+    // a review the board kept before journals: in the phase its status says, its verdict the last one
+    imported: [
+      { guard: 'was queued', target: '.queued', actions: assign(({ event }) => importedContext(event)) },
+      { guard: 'was testing', target: '.testing', actions: assign(({ event }) => importedContext(event)) },
+      { guard: 'had passed', target: '.passed', actions: assign(({ event }) => ({ ...importedContext(event), verdict: 'pass' as const })) },
+      { guard: 'had failed', target: '.failed', actions: assign(({ event }) => ({ ...importedContext(event), verdict: 'fail' as const })) },
+      { target: '.error', actions: assign(({ event }) => importedContext(event)) },
+    ],
   },
   states: {
-    idle: { on: { requested: 'queued' } },
+    idle: { on: { requested: { target: 'queued', actions: assign(({ context, event }) => ({ view: requested(event, context.view), previous: context.view })) } } },
     queued: {
       on: {
         prechecking: 'precheck',
-        seated: { target: 'seated', actions: assign(({ event }) => ({ agent: event.agent, error: undefined })) },
-        ended: { target: 'error', actions: assign(({ event }) => ({ error: event.error })) },
+        seated: { target: 'seated', actions: [assign(({ event }) => ({ agent: event.agent, error: undefined })), assign(({ context, event: e }) => onView(context, (v) => ({ ...v, agentId: e.agent })))] },
+        ended: { target: 'error', actions: [assign(({ event }) => ({ error: event.error })), assign(({ context, event: e }) => onView(context, (v) => ({ ...v, status: 'error', error: e.error, finishedAt: e.t ?? 0 })))] },
       },
     },
     precheck: {
       on: {
-        'precheck-skipped': [{ guard: 'passed before', target: 'passed' }, { target: 'failed' }],
-        'precheck-carried': { target: 'passed', actions: assign(({ event }) => ({ sha: event.sha, verdict: 'pass' as const })) },
+        // the last verdict stands, with what the captain asked since
+        'precheck-skipped': [
+          { guard: 'passed before', target: 'passed', actions: assign(({ context }) => ({ view: context.previous && { ...context.previous, mergeRequested: context.view?.mergeRequested } })) },
+          { target: 'failed', actions: assign(({ context }) => ({ view: context.previous && { ...context.previous, mergeRequested: context.view?.mergeRequested } })) },
+        ],
+        'precheck-carried': {
+          target: 'passed',
+          actions: assign(({ context, event }) => ({
+            sha: event.sha,
+            verdict: 'pass' as const,
+            view: context.previous && { ...context.previous, status: 'passed' as const, sha: event.sha, carriedFrom: context.previous.sha, commentUrl: event.commentUrl ?? context.previous.commentUrl, mergeRequested: context.view?.mergeRequested, requestedAt: context.view?.requestedAt ?? 0, finishedAt: event.t ?? 0 },
+          })),
+        },
         'precheck-retest': 'queued',
       },
     },
     seated: {
       on: {
-        restarted: 'queued',
-        testing: { target: 'testing', actions: assign(({ event }) => ({ sha: event.sha })) },
-        ended: { target: 'error', actions: assign(({ event }) => ({ error: event.error })) },
+        restarted: { target: 'queued', actions: assign(({ context }) => onView(context, (v) => ({ ...v, status: 'queued', agentId: undefined }))) },
+        unseated: { target: 'queued', actions: assign(({ context }) => onView(context, (v) => ({ ...v, status: 'queued', agentId: undefined }))) },
+        testing: { target: 'testing', actions: [assign(({ event }) => ({ sha: event.sha })), assign(({ context, event: e }) => onView(context, (v) => ({ ...v, status: 'testing', sha: e.sha, title: e.title ?? v.title, error: undefined })))] },
+        ended: { target: 'error', actions: [assign(({ event }) => ({ error: event.error })), assign(({ context, event: e }) => onView(context, (v) => ({ ...v, status: 'error', error: e.error, finishedAt: e.t ?? 0 })))] },
       },
     },
     testing: {
       on: {
-        reported: { target: 'reported', actions: assign(({ event: { type: _, kind: __, ...reported } }) => ({ reported })) },
-        ended: { target: 'error', actions: assign(({ event }) => ({ error: event.error })) },
+        unseated: { target: 'queued', actions: assign(({ context }) => onView(context, (v) => ({ ...v, status: 'queued', agentId: undefined }))) },
+        reported: { target: 'reported', actions: assign(({ event: { type: _, kind: __, t: ___, ...reported } }) => ({ reported })) },
+        ended: { target: 'error', actions: [assign(({ event }) => ({ error: event.error })), assign(({ context, event: e }) => onView(context, (v) => ({ ...v, status: 'error', error: e.error, finishedAt: e.t ?? 0 })))] },
       },
     },
     reported: {
       initial: 'posting',
       states: {
-        posting: { on: { posted: { target: 'announcing', actions: assign(({ context, event }) => ({ reported: context.reported && { ...context.reported, url: event.url } })) } } },
+        posting: {
+          on: {
+            posted: {
+              target: 'announcing',
+              actions: assign(({ context, event }) => {
+                const reported = context.reported && { ...context.reported, url: event.url };
+                return { reported, view: context.view && reported ? verdictView(context.view, reported, event.t ?? 0) : context.view };
+              }),
+            },
+          },
+        },
         announcing: {
           on: {
             announced: [
@@ -148,12 +242,25 @@ export const reviewMachine = setup({
         },
       },
     },
-    passed: { on: { requested: 'queued' } },
-    failed: { on: { requested: 'queued' } },
-    error: { on: { requested: 'queued' } },
-    gone: { type: 'final' },
+    passed: { on: { requested: { target: 'queued', actions: assign(({ context, event }) => ({ view: requested(event, context.view), previous: context.view })) } } },
+    failed: { on: { requested: { target: 'queued', actions: assign(({ context, event }) => ({ view: requested(event, context.view), previous: context.view })) } } },
+    error: { on: { requested: { target: 'queued', actions: assign(({ context, event }) => ({ view: requested(event, context.view), previous: context.view })) } } },
+    // a pull request reopened can be sent to QA again, from nothing
+    gone: { on: { requested: { target: 'queued', actions: assign(({ event }) => ({ view: requested(event, undefined), previous: undefined })) } } },
   },
 });
+
+/** The context a review taken in from the board starts from. */
+function importedContext(event: ReviewEvent): Partial<ReviewContext> {
+  if (event.type !== 'imported') return {};
+  const { review } = event;
+  return { view: review, previous: undefined, agent: review.agentId, sha: review.sha, error: review.error, reported: undefined };
+}
+
+/** The review as the board shows it: none before it's asked for, or once its pull request's gone. */
+export function reviewView(state: ReviewState): QaReview | undefined {
+  return state.view;
+}
 
 /** The review after one more fact. */
 export function evolveReview(state: ReviewState, entry: ReviewFact & { seq?: number }): ReviewState {
@@ -191,18 +298,13 @@ export const REVIEW_INTERRUPTED = 'Interrupted when Focus shut down. Send it to 
 /** What its reviewer's run does after a restart that keeps the review going with it. */
 const CARRIES_ON: ReadonlySet<Recovery['kind']> = new Set(['resume', 'hold-again', 'requeue']);
 
-/**
- * What to do at startup with a review, from its journal, what the board last saved of it (`saved`, for a review from
- * before it had a journal), and what its reviewer's run does after the restart (`reviewer`, from their run journal).
- */
-export function reviewRecovery(review: ReviewState, saved: QaStatus, reviewer: Recovery['kind'] | undefined): ReviewRecovery {
+/** What to do at startup with a review, from its journal, and what its reviewer's run does after the restart (`reviewer`, from their run journal). */
+export function reviewRecovery(review: ReviewState, reviewer: Recovery['kind'] | undefined): ReviewRecovery {
   const at = (phase: string) => review.phase === phase;
   if (typeof review.phase === 'object' && 'reported' in review.phase) return { kind: review.phase.reported === 'announcing' ? 'announce' : 'post' };
   if (at('queued')) return { kind: 'queue' };
   if (at('precheck')) return { kind: 'retest' };
   if (at('seated')) return { kind: 'restart' };
   if (at('testing')) return reviewer && CARRIES_ON.has(reviewer) ? { kind: 'carry-on' } : { kind: 'interrupted', error: REVIEW_INTERRUPTED };
-  // one from before reviews had journals, under way when Focus shut down
-  if (at('idle') && (saved === 'queued' || saved === 'testing')) return { kind: 'interrupted', error: REVIEW_INTERRUPTED };
   return { kind: 'none' };
 }

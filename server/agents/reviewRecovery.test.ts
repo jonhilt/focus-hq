@@ -74,6 +74,20 @@ describe('a QA review after Focus restarts', () => {
     expect(before.store.review(key).phase).toBe('passed');
   });
 
+  it('hands a PR the operations officer was looking at to the captain', async () => {
+    const before = office(workspace);
+    const [pr] = await pullRequests();
+    const key = prKey(pr.repo, pr.number);
+    before.store.reviewJournal(key, { kind: 'imported', review: { projectId: before.project.id, repo: pr.repo, number: pr.number, title: pr.title, status: 'failed', requestedAt: 1, finishedAt: 2 } });
+    before.store.reviewJournal(key, { kind: 'triaging', officer: 'Lt. Ops' });
+
+    before.agents.shutDown();
+    const after = restarted(before.store, workspace);
+    after.agents.recover();
+    expect(before.store.reviews.get(key)?.followUp).toEqual({ kind: 'needs-you', reason: 'Lt. Ops was looking at it when Focus shut down' });
+    expect(before.store.reviewEntries(key).at(-1)).toMatchObject({ kind: 'follow-up', followUp: { kind: 'needs-you' } });
+  });
+
   it('starts a review again when its reviewer was still checking it out', async () => {
     // the checkout never finishes: no Claude turn has started
     const before = office({ ...workspace, checkoutPullRequest: () => new Promise<string>(() => undefined) });

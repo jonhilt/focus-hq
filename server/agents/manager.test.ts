@@ -597,7 +597,7 @@ describe('AgentManager', () => {
     await claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
     const [pr] = store.agent(lead.id).lead!.prs;
     const report: QaReport = { verdict: 'pass', summary: 'Works', checks: [], commands: [], captions: [] };
-    store.putReview({ projectId: project.id, repo: pr.repo, number: pr.number, title: 'PR', status: 'passed', sha: pr.sha, report, requestedAt: 1, finishedAt: 2 });
+    store.reviewJournal(prKey(pr.repo, pr.number), { kind: 'imported', review: { projectId: project.id, repo: pr.repo, number: pr.number, title: 'PR', status: 'passed', sha: pr.sha, report, requestedAt: 1, finishedAt: 2 } });
 
     await agents.resolveConflicts(project.id, { repo: pr.repo, number: pr.number, title: 'Saved items', branch: store.agent(lead.id).branch, baseBranch: 'main' } as PullRequest);
     expect(store.reviews.get(prKey(pr.repo, pr.number))).toMatchObject({ status: 'queued', shippedHead: 'merge-sha1234' });
@@ -939,7 +939,7 @@ describe('AgentManager', () => {
       }
     })!;
     const report: QaReport = { verdict: 'pass', summary: 'Works', checks: [], commands: [], captions: [] };
-    const passedAt = (sha: string) => store.putReview({ projectId: project.id, repo, number, title: 'PR', status: 'passed', sha, report, requestedAt: 1, finishedAt: 2 });
+    const passedAt = (sha: string) => store.reviewJournal(prKey(repo, number), { kind: 'imported', review: { projectId: project.id, repo, number, title: 'PR', status: 'passed', sha, report, requestedAt: 1, finishedAt: 2 } });
     passedAt(push(repo, number, 'change'));
 
     // the same commit again: back to its verdict
@@ -980,7 +980,7 @@ describe('AgentManager', () => {
     const { agents, claude, store, project } = office();
     const { repo, number, push } = pushable();
     const report: QaReport = { verdict: 'fail', summary: 'Broken', checks: [], commands: [], captions: [] };
-    store.putReview({ projectId: project.id, repo, number, title: 'PR', status: 'failed', sha: push(), report, requestedAt: 1, finishedAt: 2 });
+    store.reviewJournal(prKey(repo, number), { kind: 'imported', review: { projectId: project.id, repo, number, title: 'PR', status: 'failed', sha: push(), report, requestedAt: 1, finishedAt: 2 } });
 
     // GitHub hasn't caught up with the push yet: its head is still the one QA failed
     agents.requestReview(project.id, repo, number, 'PR', undefined, false, 'abc1234def5678');

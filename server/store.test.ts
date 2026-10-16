@@ -7,7 +7,7 @@ import type { Agent, QaReview } from '../shared/types';
 // paths come from the environment when config.ts loads, so the data folder is set before the store is imported
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-store-'));
 process.env.FOCUS_DATA_DIR = dir;
-const { agentAfterRestart, fileKey, prKeyOf, reviewAfterRestart, StateLockedError, Store, stateLocked } = await import('./store');
+const { agentAfterRestart, fileKey, prKeyOf, StateLockedError, Store, stateLocked } = await import('./store');
 const { seedOffice, seedRandom } = await import('./util');
 
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -71,7 +71,7 @@ describe('Store on disk', () => {
     const store = new Store(true);
     store.load();
     store.journal('a1', { kind: 'waiting' });
-    store.reviewJournal('acme/shop-app#12', { kind: 'requested' });
+    store.reviewJournal('acme/shop-app#12', { kind: 'requested', projectId: 'p1', repo: 'acme/shop-app', number: 12, title: 'PR' });
     store.sliceJournal('lead1', { kind: 'started', slice: 1, branch: 'b' });
     const sources = store.logSources(Date.now() - 60_000);
     expect(sources.runs.map((s) => s.key)).toContain('a1');
@@ -84,7 +84,7 @@ describe('Store on disk', () => {
   it('keeps each pull request’s review journal on disk as it goes, by the PR, and drops a last line cut short', () => {
     const store = new Store(true);
     store.load();
-    store.reviewJournal('acme/shop#3', { kind: 'requested', head: 'abc' });
+    store.reviewJournal('acme/shop#3', { kind: 'requested', projectId: 'p1', repo: 'acme/shop', number: 3, title: 'PR', head: 'abc' });
     store.reviewJournal('acme/shop#3', { kind: 'seated', agent: 'qa_p' });
     const file = path.join(dir, 'runs', 'reviews', 'acme__shop-3.jsonl');
     expect(fs.readFileSync(file, 'utf8').split('\n').filter(Boolean)).toHaveLength(2);
@@ -208,26 +208,39 @@ describe('agentAfterRestart', () => {
   });
 });
 
-describe('reviewAfterRestart', () => {
-  const review = (r: Partial<QaReview>): QaReview => ({ projectId: 'p', repo: 'o/r', number: 1, title: 't', status: 'passed', requestedAt: 0, ...r });
-
-  it('leaves a review queued or under way for its journal to pick up (Reviews.recover)', () => {
-    for (const status of ['queued', 'testing', 'failed'] as const) expect(reviewAfterRestart(review({ status })).status).toBe(status);
-  });
-
-  it('hands a PR the operations officer was looking at to the captain', () => {
-    const after = reviewAfterRestart(review({ followUp: { kind: 'triaging', officer: 'Lt. Ops', activity: 'Reading the checks' } }));
-    expect(after.followUp).toEqual({ kind: 'needs-you', reason: 'Lt. Ops was looking at it when Focus shut down' });
-  });
-
-  it('leaves what it was given alone', () => {
-    const saved = review({ status: 'testing' });
-    reviewAfterRestart(saved);
-    expect(saved.status).toBe('testing');
-  });
-});
-
 describe('loading a saved office', () => {
+  it('shows each review as its journal has it, whatever state.json last saved, and takes one from before journals in once', () => {
+    const project = { id: 'p1', name: 'Shop', color: '#fff', theme: 'beach', repos: ['acme/shop'], maxAgents: 6, autoAssign: false, autoLabel: '', createdAt: 0 };
+    const report = { verdict: 'pass', summary: 'Works', checks: [], commands: [] } as unknown as QaReview['report'] & object;
+    // QA's verdict went onto the PR, and Focus went down before state.json was saved with it
+    const before = new Store(true);
+    before.load();
+    before.reviewJournal('acme/shop#5', { kind: 'requested', projectId: 'p1', repo: 'acme/shop', number: 5, title: 'Wishlist' });
+    before.reviewJournal('acme/shop#5', { kind: 'seated', agent: 'qa_p1' });
+    before.reviewJournal('acme/shop#5', { kind: 'testing', sha: 'abc1234' });
+    before.reviewJournal('acme/shop#5', { kind: 'reported', verdict: 'pass', officer: 'Lt. Q', body: 'QA passed', failedRounds: 0, report, screenshots: [], sha: 'abc1234' });
+    before.reviewJournal('acme/shop#5', { kind: 'posted', url: 'https://github.com/acme/shop/pull/5#c1' });
+    const stale = (number: number): QaReview => ({ projectId: 'p1', repo: 'acme/shop', number, title: 'PR', status: 'testing', requestedAt: 0, agentId: 'qa_p1' });
+    fs.writeFileSync(path.join(dir, 'state.json'), JSON.stringify({ settings: {}, projects: [project], agents: [], reviews: [stale(5), stale(6)] }));
+
+    const store = new Store(true);
+    store.load();
+    // the journal's verdict, not the stale "testing"
+    expect(store.reviews.get('acme/shop#5')).toMatchObject({ status: 'passed', commentUrl: 'https://github.com/acme/shop/pull/5#c1', report: { verdict: 'pass' } });
+    // one with no journal yet is taken in, as it was saved, and its journal has it from now on
+    expect(store.reviews.get('acme/shop#6')).toMatchObject({ status: 'testing', agentId: 'qa_p1' });
+    expect(store.reviewEntries('acme/shop#6').map((e) => e.kind)).toEqual(['imported']);
+    // state.json keeps no reviews of its own any more
+    store.save();
+    store.flush();
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'state.json'), 'utf8')).reviews).toBeUndefined();
+
+    const again = new Store(true);
+    again.load();
+    expect(again.reviewEntries('acme/shop#6').map((e) => e.kind)).toEqual(['imported']);
+    expect([...again.reviews.keys()].sort()).toEqual(expect.arrayContaining(['acme/shop#5', 'acme/shop#6']));
+  });
+
   it('picks up every saved agent and review as a restart leaves them, and fits old rooms to today’s desks', () => {
     const project = { id: 'p1', name: 'Shop', color: '#fff', theme: 'beach', repos: ['acme/shop'], maxAgents: 6, autoAssign: false, autoLabel: '', createdAt: 0 };
     const state = {

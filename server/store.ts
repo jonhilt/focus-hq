@@ -5,14 +5,14 @@ import path from 'node:path';
 import { qaOfficerFor, randomAvatar } from '../shared/crew';
 import type { LedgerEntry, LedgerEvent } from '../shared/ledger';
 import { type LedgerHealth, LedgerLog } from './ledgerLog';
-import { olderVerdict, prKey } from '../shared/qa';
+import { prKey } from '../shared/qa';
 import type { Agent, Board, BrowserFrame, ClosedPr, MergeMethod, PluginStates, Project, QaReview, Settings, StudioSession, TermLine } from '../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS, ROOM_THEMES, type RoomTheme } from '../shared/types';
 import { config, paths } from './config';
 import { takeLock } from './fileLock';
 import { fitDesks } from './agents/desks';
 import { upgradeLead } from './agents/lead';
-import { EMPTY_REVIEW, evolveReview, type ReviewEntry, type ReviewFact, type ReviewState } from './agents/reviewJournal';
+import { EMPTY_REVIEW, evolveReview, type ReviewEntry, type ReviewFact, type ReviewState, reviewView } from './agents/reviewJournal';
 import { EMPTY_RUN, evolve, type JournalEntry, type RunFact, type RunState, runView } from './agents/runJournal';
 import { EMPTY_SLICE, evolveSlice, type SliceFact, type SliceState } from './agents/sliceJournal';
 import { Journals, type Stamped } from './journals';
@@ -27,18 +27,6 @@ export const freshStudio = (): StoredStudio => ({ status: 'waiting', activity: '
 export function studioAfterRestart(saved: StoredStudio): StoredStudio {
   if (saved.status !== 'thinking') return saved;
   return { ...saved, status: 'failed', activity: 'Interrupted', error: 'Interrupted when Focus shut down. Say it again.' };
-}
-
-/**
- * A QA review as it picks up after a restart: a PR the operations officer was looking at goes to the captain. One queued
- * or under way picks up from its journal (`Reviews.recover`).
- */
-export function reviewAfterRestart(saved: QaReview): QaReview {
-  let review = saved;
-  if (review.followUp?.kind === 'triaging') {
-    review = { ...review, followUp: { kind: 'needs-you', reason: `${review.followUp.officer} was looking at it when Focus shut down` } };
-  }
-  return review;
 }
 
 /**
@@ -105,8 +93,8 @@ export class Store {
   studio: StoredStudio = freshStudio();
   /** Each plugin's own state, by plugin id (`PluginHost.state`, docs/plugins.md). */
   plugins: PluginStates = {};
-  /** The latest QA review per pull request (by prKey). */
-  reviews = new Map<string, QaReview>();
+  /** The latest QA review per pull request (by prKey), as the board shows it: what each review journal adds up to (`reviewJournal`). */
+  readonly reviews = new Map<string, QaReview>();
   /** PRs the operations officer closed as the wrong approach, by prKey of the issue they were for. */
   closedPrs = new Map<string, ClosedPr>();
   /** The ship's log of how work went, oldest first: data/ledger.jsonl, appended to as it grows. */
@@ -159,9 +147,11 @@ export class Store {
     this.projects = raw.projects ?? [];
     if (raw.studio) this.studio = studioAfterRestart(raw.studio);
     this.plugins = raw.plugins ?? {};
+    // the board's reviews are what their journals add up to; one the board kept before reviews had journals is taken in, once
+    for (const key of this.reviewJournals.written(0)) this.showReview(key);
     for (const saved of raw.reviews ?? []) {
-      const review = reviewAfterRestart(saved);
-      this.reviews.set(prKey(review.repo, review.number), review);
+      const key = prKey(saved.repo, saved.number);
+      if (!this.reviews.has(key) && this.review(key).phase !== 'gone') this.reviewJournal(key, { kind: 'imported', review: saved });
     }
     for (const closed of raw.closedPrs ?? []) this.closedPrs.set(prKey(closed.repo, closed.issue), closed);
     for (const saved of raw.agents ?? []) {
@@ -196,7 +186,6 @@ export class Store {
       agents: [...this.agents.values()],
       studio: this.studio,
       plugins: this.plugins,
-      reviews: [...this.reviews.values()],
       closedPrs: [...this.closedPrs.values()],
     };
     fs.mkdirSync(path.dirname(paths.state), { recursive: true });
@@ -283,22 +272,8 @@ export class Store {
   removeProject(id: string): void {
     this.projects = this.projects.filter((p) => p.id !== id);
     this.boards.delete(id);
-    for (const review of [...this.reviews.values()]) if (review.projectId === id) this.removeReview(review.repo, review.number);
+    for (const review of [...this.reviews.values()]) if (review.projectId === id) this.reviewJournal(prKey(review.repo, review.number), { kind: 'gone', merged: false });
     this.save();
-  }
-
-  /** Keeps `review`, unless it's an older copy that would put back a verdict QA has since replaced: false then. */
-  putReview(review: QaReview): boolean {
-    const key = prKey(review.repo, review.number);
-    const current = this.reviews.get(key);
-    if (current && olderVerdict(current, review)) {
-      console.warn(`Not putting back QA's older verdict on ${key} (${review.status} at ${review.sha?.slice(0, 7)}): it has since ${current.status} ${current.sha?.slice(0, 7)}`);
-      return false;
-    }
-    this.dropShots(current, review);
-    this.reviews.set(key, review);
-    this.save();
-    return true;
   }
 
   putClosedPr(closed: ClosedPr): void {
@@ -308,14 +283,6 @@ export class Store {
 
   removeClosedPr(repo: string, issue: number): void {
     if (this.closedPrs.delete(prKey(repo, issue))) this.save();
-  }
-
-  removeReview(repo: string, number: number): boolean {
-    const key = prKey(repo, number);
-    this.dropShots(this.reviews.get(key));
-    const removed = this.reviews.delete(key);
-    if (removed) this.save();
-    return removed;
   }
 
   // ---- the ledger ----
@@ -435,7 +402,17 @@ export class Store {
 
   /** Records a fact in a pull request's review journal (`key` its prKey), flushed before this returns, and what the review adds up to with it. */
   reviewJournal(key: string, fact: ReviewFact): ReviewState {
-    return this.reviewJournals.append(key, fact);
+    const after = this.reviewJournals.append(key, fact);
+    this.showReview(key);
+    return after;
+  }
+
+  /** The board's review of a pull request, as its journal has it now (none once it's gone), and its screenshots kept with it. */
+  private showReview(key: string): void {
+    const view = reviewView(this.review(key));
+    this.dropShots(this.reviews.get(key), view);
+    if (view) this.reviews.set(key, view);
+    else this.reviews.delete(key);
   }
 
   /** What a pull request's review journal adds up to. */

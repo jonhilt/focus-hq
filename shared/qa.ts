@@ -47,15 +47,6 @@ export function sameCommit(a: string, b: string): boolean {
 }
 
 /**
- * Whether writing `incoming` would put back a verdict older than the one the review holds: a copy of the review taken
- * before QA's latest verdict, written back after it (by a step that awaited GitHub or a session meanwhile).
- */
-export function olderVerdict(current: QaReview | undefined, incoming: QaReview): boolean {
-  const verdict = (r: QaReview) => r.status === 'passed' || r.status === 'failed';
-  return !!current && verdict(current) && verdict(incoming) && (incoming.finishedAt ?? 0) < (current.finishedAt ?? 0);
-}
-
-/**
  * Whether a PR goes back to QA because its head moved past QA's verdict without the office pushing it (CI committing
  * to the branch, the captain pushing by hand): only the office's own PRs, with auto-QA on, and not while someone the
  * office sent is fixing it or the operations officer is looking, since they hand it back to QA themselves.
