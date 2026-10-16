@@ -1,22 +1,11 @@
 // Number One's chat in the browser (README.md): the panel in the ready room, with voice mode and the call strip.
-import { plannerFor } from '../../shared/crew';
-import { linesToSpeak } from '../../shared/voice';
-import { api } from '../../client/src/net/api';
-import { state } from '../../client/src/net/state';
-import { pluginState } from '../../client/src/plugins';
-import type { Ui } from '../../client/src/ui/context';
-import { confirmDialog } from '../../client/src/ui/confirmDialog';
-import { type MicMode, withMic } from '../../client/src/ui/dictation';
-import { busy, fill, h } from '../../client/src/ui/dom';
-import { handOffControl } from '../../client/src/ui/goals';
-import { voicePrefs, VoiceSession, voiceToggle } from '../../client/src/ui/voiceMode';
-import { LCARS } from '../../client/src/world/starship';
 import { callView } from './callView';
 import { chatNow, NUMBER_ONE, NUMBER_ONE_VOICE, numberOne, type NumberOneChat, type NumberOneState, type WorkSuggestion } from './shared';
+import { busy, callPlugin, confirmDialog, fill, h, handOffControl, LCARS, linesToSpeak, type MicMode, office, onPluginState, plannerFor, pluginState, type Ui, voicePrefs, VoiceSession, voiceToggle, withMic } from '../../plugin-api/client';
 
 /** The chat as it stands this moment: none until the plugin's state arrives. */
 export const currentChat = (): NumberOneChat | null => chatNow(pluginState<NumberOneState>(NUMBER_ONE));
-const say = (text: string) => api.plugin<NumberOneChat>(NUMBER_ONE, '/say', { text });
+const say = (text: string) => callPlugin<NumberOneChat>(NUMBER_ONE, '/say', { text });
 
 let open = false;
 /** Whether the Number One panel is showing (so the office doesn't toast a reply you can already see). */
@@ -94,7 +83,7 @@ export function openNumberOnePanel(ui: Ui): void {
     fresh.onclick = () =>
       void busy(fresh, async () => {
         voice?.speaker.hush();
-        await api.plugin(NUMBER_ONE, '/new');
+        await callPlugin(NUMBER_ONE, '/new');
       }, ui.error);
     const cost = h('small', { class: 'muted' }, chat?.costUsd ? `$${chat.costUsd.toFixed(2)} so far` : '');
 
@@ -124,21 +113,21 @@ export function openNumberOnePanel(ui: Ui): void {
   ui.panels.own(() => (open = false));
   ui.panels.own(() => voice?.end());
   // the chat and the call are both the plugin's state
-  ui.panels.own(state.on('plugin', (id) => id === NUMBER_ONE && render()));
-  ui.panels.own(state.on('projects', render));
+  ui.panels.own(onPluginState(NUMBER_ONE, render));
+  ui.panels.own(office.onProjects(render));
   render();
 }
 
 /** What a reply suggests doing: a draft at the project's Ops station, or a goal with a lead of its own. */
 function suggestion(ui: Ui, { projectId, idea }: WorkSuggestion): HTMLElement {
-  const name = state.project(projectId)?.name ?? 'the project';
+  const name = office.project(projectId)?.name ?? 'the project';
   const officer = plannerFor(projectId).name;
   const draft = h('button', { class: 'btn small', title: `${officer} writes it up as one issue at ${name}’s Ops station` }, 'Draft at Ops');
   draft.onclick = async () => {
-    const waiting = state.drafts.get(projectId);
+    const waiting = office.draft(projectId);
     if (waiting?.status === 'ready' && !await confirmDialog({ title: 'Replace draft', message: `${officer} has a draft waiting at ${name}’s Ops station${waiting.title ? ` (“${waiting.title}”)` : ''}. Replace it?`, confirmLabel: 'Replace it' })) return;
     void busy(draft, async () => {
-      await api.draftIssue(projectId, idea);
+      await office.draftIssue(projectId, idea);
       ui.openNewIssue(projectId);
     }, ui.error);
   };

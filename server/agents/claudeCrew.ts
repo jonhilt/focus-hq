@@ -352,6 +352,33 @@ function studioServer(req: StudioTurn, activity: (text: string) => void): McpSdk
   });
 }
 
+/** A read-only session with the run of the ship (`PluginHost.shipSession`): what it's given beside a read-only session's. */
+export interface ShipSessionRun extends Omit<ReadOnlyRun, 'cwd' | 'readable' | 'tools' | 'systemAppend'> {
+  /** Its system prompt's addition, told where the agents' worktrees are (readable, to see what an agent has done). */
+  systemAppend: (where: { workspaces: string }) => string;
+  /** The projects whose code `open_project` checks out. */
+  projects: ChatProject[];
+  /** The ship as it is right now, for `ship_status`. */
+  shipStatus: () => Promise<ShipStatus>;
+}
+
+/**
+ * A read-only session with the run of the ship, as a crew member's (Number One's): from the office's planning folder,
+ * where `open_project` checks out each project, with the agents' worktrees readable and the ship tools
+ * (`ship_status`, `open_project`, as `mcp__<name>__…`), neither of which changes anything aboard.
+ */
+export function shipSession(name: string, run: ShipSessionRun, ask: Ask = query): Promise<ReadOnlyResult> {
+  fs.mkdirSync(paths.planning, { recursive: true });
+  const server = createSdkMcpServer({ name, version: '1.0.0', alwaysLoad: true, tools: shipTools(run, run.activity, (dir) => path.relative(paths.planning, dir)) });
+  return runReadOnly({
+    ...run,
+    cwd: paths.planning,
+    readable: [paths.workspaces],
+    systemAppend: run.systemAppend({ workspaces: paths.workspaces }),
+    tools: { server, names: ['ship_status', 'open_project'], activity: (tool) => (tool === 'ship_status' ? 'Checking the ship’s status' : 'Opening a project') },
+  }, ask);
+}
+
 /**
  * The ship's state and a project's code on demand, for a crew session that reads the ship (the studio's computer, and
  * plugins' crew): `shown` says where a checkout went, as the session should read it. Neither changes anything aboard.

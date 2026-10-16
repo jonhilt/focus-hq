@@ -9,7 +9,7 @@ import type { Core } from './core';
 import { Refused } from './core';
 import { checkoutLatest } from '../workspace';
 import { pluginDataDir } from '../../plugins/dataDir';
-import { runReadOnly } from '../claudeCrew';
+import { runReadOnly, shipSession } from '../claudeCrew';
 
 /**
  * What the office lends a plugin that the manager doesn't have: where it runs, its own repo, filing issues, the demo's
@@ -88,6 +88,7 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
     officeDir: config.root,
     dataDir,
     readOnlySession: (run) => runReadOnly(run),
+    shipSession: (run) => shipSession(id, run),
     checkout: async (repo) => {
       // a plugin checks out only the captain's repos, and only into its own folder
       if (!core.store.projects.some((p) => p.repos.includes(repo))) throw new Refused({ message: `${repo} isn’t one of the office’s repositories` });

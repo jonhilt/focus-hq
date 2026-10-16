@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { crewVoice } from '../../shared/crew';
 import { NUMBER_ONE_VOICE } from './shared';
+import { crewVoice } from '../../plugin-api/shared';
 
 describe('NUMBER_ONE_VOICE', () => {
   it('has a pitch of its own, so Number One never sounds like a room’s crew', () => {

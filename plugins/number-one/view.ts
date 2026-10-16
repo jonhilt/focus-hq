@@ -1,5 +1,5 @@
-import type { CrewView } from '../../client/src/world/character';
 import { numberOne, type NumberOneChat } from './shared';
+import { type CrewView } from '../../plugin-api/client';
 
 /** Number One's bubble: thinking with what they're doing, waiting for you to start or to answer, or lost the thread. */
 export function numberOneView(chat: NumberOneChat | null): CrewView {

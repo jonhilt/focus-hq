@@ -1,8 +1,5 @@
-import { api } from '../../client/src/net/api';
-import { state } from '../../client/src/net/state';
-import { pluginState } from '../../client/src/plugins';
-import { busy, h } from '../../client/src/ui/dom';
 import { type CallLine, type CallState, type CallStatus, type CallStep, NUMBER_ONE, type NumberOneState } from './shared';
+import { busy, callPlugin, h, office, onPluginState, pluginState } from '../../plugin-api/client';
 
 // Calls to Number One (calls.md): this browser carries the audio, straight to OpenAI over WebRTC; the office joins the
 // call on a line of its own, and tells every screen how it's going (the plugin's `call`). The call outlives Number
@@ -10,8 +7,8 @@ import { type CallLine, type CallState, type CallStatus, type CallStep, NUMBER_O
 
 /** Whether the office can take a call, and the call under way (or the last one): none until the plugin's state arrives. */
 const callStatus = (): CallStatus | undefined => pluginState<NumberOneState>(NUMBER_ONE)?.call;
-const startCall = (sdp: string) => api.plugin<{ id: string; sdp: string | null }>(NUMBER_ONE, '/call', { sdp });
-const hangUp = (id: string) => api.plugin(NUMBER_ONE, '/hang-up', { id });
+const startCall = (sdp: string) => callPlugin<{ id: string; sdp: string | null }>(NUMBER_ONE, '/call', { sdp });
+const hangUp = (id: string) => callPlugin(NUMBER_ONE, '/hang-up', { id });
 
 /** A call this browser is on: its audio, and the session it's for. */
 class PhoneCall {
@@ -23,7 +20,7 @@ class PhoneCall {
 
   /** Opens the mic, offers the call to the office, and plays the ship's voice. The demo's calls have no audio. */
   static async dial(): Promise<PhoneCall> {
-    if (state.info?.mode === 'demo') return new PhoneCall((await startCall('demo')).id, null, null);
+    if (office.demo) return new PhoneCall((await startCall('demo')).id, null, null);
     const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
     const peer = new RTCPeerConnection();
     try {
@@ -57,9 +54,9 @@ let current: PhoneCall | null = null;
 
 /** Lets go of this browser's mic when the office ends the call (the captain hung up elsewhere, or the line dropped). */
 export function followCalls(): void {
-  state.on('plugin', (id) => {
+  onPluginState(NUMBER_ONE, () => {
     const call = callStatus()?.call;
-    if (id === NUMBER_ONE && current && (!call || call.id !== current.id || call.step === 'ended')) {
+    if (current && (!call || call.id !== current.id || call.step === 'ended')) {
       void current.hangUp().catch(() => undefined);
       current = null;
     }

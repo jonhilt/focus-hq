@@ -1,8 +1,6 @@
 // Number One (README.md): the plugin's state, as its server part keeps it and the browser shows it, and who Number One
 // is: their name, look and voice.
-import { fixedCrew } from '../../shared/crew';
-import type { Planner } from '../../shared/types';
-import type { CrewVoice } from '../../shared/voice';
+import { type CrewVoice, fixedCrew, type Planner } from '../../plugin-api/shared';
 
 /** The plugin's id: in FOCUS_PLUGINS, its state's key and its routes' prefix. */
 export const NUMBER_ONE = 'number-one';

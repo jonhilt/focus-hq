@@ -3,13 +3,6 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { crossings, importsOf, pluginOf, project, refusal } from './boundary';
 
-/**
- * The plugins not yet moved behind plugin-api/, with how many of their imports still cross into the core or another
- * plugin's code: the counts may only fall (and are brought down here as they do), and a plugin leaves the list once it reaches none. Any plugin not listed,
- * a new one too, has to have none.
- */
-const NOT_YET_BEHIND: Record<string, number> = { 'number-one': 72 };
-
 const root = path.resolve(import.meta.dirname, '..');
 
 describe('the line between the core and its plugins', () => {
@@ -57,19 +50,13 @@ describe('the line between the core and its plugins', () => {
     ]);
   });
 
-  it('holds in the repo: the core reaches no plugin, and each plugin only as far as it’s allowed', () => {
+  it('holds in the repo: the core reaches no plugin, and no plugin reaches past plugin-api/ or another’s api.ts', () => {
     const { files, options } = project(root);
     const found = crossings(root, files, (f) => fs.readFileSync(f, 'utf8'), options);
     const say = (list: typeof found) => list.map((c) => `${c.file}:${c.line} ${c.spec}: ${c.why}`);
     expect(say(found.filter((c) => !pluginOf(c.file)))).toEqual([]);
     const plugins = new Set(fs.readdirSync(path.join(root, 'plugins'), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name));
-    for (const plugin of plugins) {
-      const theirs = found.filter((c) => pluginOf(c.file) === plugin);
-      const allowed = NOT_YET_BEHIND[plugin] ?? 0;
-      if (allowed === 0) expect(say(theirs), `${plugin} imports only through plugin-api/`).toEqual([]);
-      // exactly: one more is a new crossing to take out; one fewer, a count to bring down here
-      else expect(theirs.length, `${plugin}'s crossings, NOT_YET_BEHIND says ${allowed}:\n${say(theirs).join('\n')}`).toBe(allowed);
-    }
+    for (const plugin of plugins) expect(say(found.filter((c) => pluginOf(c.file) === plugin)), `${plugin} imports only through plugin-api/ and other plugins' api.ts`).toEqual([]);
     // it parses every file in the repo: a second or two, longer while the rest of the suite runs beside it
   }, 30_000);
 });

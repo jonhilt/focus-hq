@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Project } from '../../shared/types';
-import type { ShipStatus } from '../../server/agents/shipStatus';
-import type { PluginState } from '../../server/plugins/contract';
 import { asNumberOneReply, NumberOne, type NumberOneOfficer, numberOnePrompt, numberOneReplySchema, numberOneSystemPrompt } from './chat';
 import { chatAfterRestart, chatNow, freshChat, type NumberOneChat } from './shared';
+import { type PluginState, type Project, type ShipStatus } from '../../plugin-api/server';
 
 const project = { id: 'p1', name: 'Shop', repos: ['acme/shop', 'acme/shop-api'] } as Project;
 describe('numberOneSystemPrompt', () => {

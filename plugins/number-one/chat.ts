@@ -1,12 +1,7 @@
 // Number One's chat in the ready room (README.md): one conversation, a turn at a time, and the prompts and reply
 // schema of their read-only Claude Code session.
-import { shownProjects } from '../../shared/hidden';
-import type { Project, Settings } from '../../shared/types';
-import { spokenLine } from '../../shared/voice';
-import { type ChatProject, projectList, type ShipStatus } from '../../server/agents/shipStatus';
-import type { PluginState } from '../../server/plugins/contract';
-import { errorMessage, truncate } from '../../server/util';
 import { freshChat, numberOne, type NumberOneChat, type NumberOneLive, type NumberOneMessage, type NumberOneSaved, type WorkSuggestion } from './shared';
+import { type ChatProject, errorMessage, type PluginState, type Project, projectList, type Settings, type ShipStatus, shownProjects, spokenLine, truncate } from '../../plugin-api/server';
 
 export interface NumberOneTurn {
   projects: ChatProject[];

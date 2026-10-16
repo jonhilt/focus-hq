@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSdkMcpServer, type SDKMessage, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { Settings } from '../../shared/types';
-import { type Ask, blockActivity, type ReadOnlyRun, readOnlyOptions, runReadOnly, turnFailure, turnResult } from './claudeCrew';
+import { type Ask, blockActivity, type ReadOnlyRun, readOnlyOptions, runReadOnly, shipSession, turnFailure, turnResult } from './claudeCrew';
+import { paths } from '../config';
 
 const server = createSdkMcpServer({ name: 'office', tools: [] });
 const tools = { server, names: ['ship_status'], activity: (name: string) => `Running ${name}` };
@@ -161,5 +162,27 @@ describe('runReadOnly', () => {
     const turn = expect(runReadOnly(crewRun(), ask)).rejects.toThrow('Gave up after 8 minutes');
     await vi.advanceTimersByTimeAsync(8 * 60_000);
     await turn;
+  });
+});
+
+describe('shipSession', () => {
+  it('runs from the planning folder with the agents’ worktrees readable, and the ship tools under the plugin’s name', async () => {
+    let seen: { cwd?: string; readable?: string[]; servers: string[]; allowed?: string[]; append?: unknown } = { servers: [] };
+    const ask: Ask = async function* ({ options }) {
+      const prompt = options.systemPrompt;
+      seen = { cwd: options.cwd, readable: options.additionalDirectories, servers: Object.keys(options.mcpServers ?? {}), allowed: options.allowedTools, append: prompt && !Array.isArray(prompt) && typeof prompt === 'object' && 'append' in prompt ? prompt.append : prompt };
+      yield await Promise.resolve(init);
+      yield success();
+    };
+    const { cwd: _cwd, systemAppend: _append, ...run } = crewRun({ builtins: ['Read'] });
+    const result = await shipSession('number-one', { ...run, systemAppend: ({ workspaces }) => `Worktrees are in ${workspaces}.`, projects: [], shipStatus: () => Promise.resolve({ projects: [] }) }, ask);
+    expect(result.text).toBe('Done');
+    expect(seen).toEqual({
+      cwd: paths.planning,
+      readable: [paths.workspaces],
+      servers: ['number-one'],
+      allowed: ['Read', 'mcp__number-one__ship_status', 'mcp__number-one__open_project'],
+      append: `Worktrees are in ${paths.workspaces}.`,
+    });
   });
 });

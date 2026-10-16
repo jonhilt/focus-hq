@@ -1,11 +1,8 @@
-import { shownProjects } from '../../../shared/hidden';
-import type { LedgerEvent } from '../../../shared/ledger';
-import type { Project, Snapshot } from '../../../shared/types';
 import type { CallLine } from '../shared';
-import { goalTitle, pickStation } from '../../../server/agents/lead';
 import { briefing, pieces, type Topic, topics } from './brief';
 import type { JevAnswer, JevAnswers, JevQuestion } from './jev';
 import { spokenStatus } from './status';
+import { goalTitle, type LedgerEvent, pickStation, type Project, shownProjects, type Snapshot } from '../../../plugin-api/server';
 
 // What a call does with what the captain just said: the questions Jev is asked about it, and what its answers mean.
 // Pure, so it's unit tested (route.test.ts); the call's machine (machine.ts) acts on the result.

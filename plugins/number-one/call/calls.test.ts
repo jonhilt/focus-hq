@@ -1,11 +1,11 @@
 import { Effect, Layer } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Agent, MessageReply, Project, Snapshot } from '../../../shared/types';
 import type { CallState, CallStatus } from '../shared';
 import { type CallOffice, Calls, callsMissing, stepOf } from './calls';
 import { Jev, type JevAnswers } from './jev';
 import { Live, type LiveClientEvent, type LiveEvent, type SidebandListener } from './live';
 import { SETTLE_MS } from './machine';
+import { type Agent, type MessageReply, type Project, type Snapshot } from '../../../plugin-api/server';
 
 // A call end to end through the office's side: stand-ins for OpenAI's session (what the office sends over its
 // sideband, and events played into it), for Jev (answers in turn) and for the office (a project with a goal queued).

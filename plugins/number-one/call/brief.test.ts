@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { LedgerEvent, SessionFacts } from '../../../shared/ledger';
-import type { Agent, GoalRecord, Project, Snapshot } from '../../../shared/types';
 import { briefing, PIECE_CHARS, pieces, type Topic, topics } from './brief';
+import { type Agent, type GoalRecord, type LedgerEvent, type Project, type SessionFacts, type Snapshot } from '../../../plugin-api/server';
 
 const NOW = Date.UTC(2026, 9, 12);
 const facts: SessionFacts = { minutes: 30, turns: 10, toolCalls: 20, failedCalls: 2, refusedCalls: 0, repeatedCalls: 0, wastedCalls: 2, captainMessages: 1, nudges: 0, officeMessages: 0, compactions: 0, qaFails: 1, conflicts: 0 };

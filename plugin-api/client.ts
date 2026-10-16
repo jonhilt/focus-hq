@@ -2,7 +2,7 @@
 // of the office's state, its own routes, and the station's UI kit. The browser's own state and REST client stay the
 // core's: a plugin reads what `office` shows and calls only its own routes.
 import type { ReportCard } from '../shared/ledger';
-import type { Agent, Project } from '../shared/types';
+import type { Agent, IssueDraft, Project } from '../shared/types';
 import { api } from '../client/src/net/api';
 import { state } from '../client/src/net/state';
 
@@ -10,7 +10,18 @@ export * from './shared';
 export type { ClientPlugin, EngineeringGo, EngineeringPart, EngineeringView, GoalPart, GoalStrip, GoalTagPlace, HallHost, HallScreen, PluginSpace, ShipHost, ShipPart, StationSays } from '../client/src/plugins';
 export { pluginState } from '../client/src/plugins';
 export type { Ui } from '../client/src/ui/context';
-export { busy, h, timeAgo } from '../client/src/ui/dom';
+export { busy, fill, h, timeAgo } from '../client/src/ui/dom';
+export { confirmDialog } from '../client/src/ui/confirmDialog';
+/** Starting an idea as a goal, or handing it to one under way (the goals list's own control). */
+export { handOffControl } from '../client/src/ui/goals';
+/** The captain's voice: dictating into a field, and talking with a crew member aloud. */
+export { type MicMode, withMic } from '../client/src/ui/dictation';
+export { voicePrefs, VoiceSession, voiceToggle } from '../client/src/ui/voiceMode';
+/** A crew member in 3D, and what they sit on and cast. */
+export { Character, type CrewView } from '../client/src/world/character';
+export { chair } from '../client/src/world/props';
+export { contactShadow } from '../client/src/world/contactShadow';
+export { type Seat, seatYaw } from '../client/src/world/layout';
 export { Switch } from '../client/src/ui/panels';
 /** Markdown made safe to show, and the station's bars of the open frictions. */
 export { markdownHtml } from '../client/src/ui/terminal';
@@ -32,6 +43,17 @@ export const office = {
   },
   /** An agent by id, as the browser has them now. */
   agent: (id: string): Readonly<Agent> | undefined => state.agents.get(id),
+  /** The demo office: fake GitHub and scripted agents. */
+  get demo(): boolean {
+    return state.info?.mode === 'demo';
+  },
+  project: (id: string): Readonly<Project> | undefined => state.project(id),
+  /** The issue draft waiting, or being written, at project `projectId`'s Ops station. */
+  draft: (projectId: string): Readonly<IssueDraft> | undefined => state.drafts.get(projectId),
+  /** Calls `fn` whenever the projects change; returns what stops it. */
+  onProjects: (fn: () => void): (() => void) => state.on('projects', fn),
+  /** Asks project `projectId`'s Ops officer to write `idea` up as an issue (it waits at their station). */
+  draftIssue: (projectId: string, idea: string): Promise<unknown> => api.draftIssue(projectId, idea),
   /** The ledger's report card as the office last sent it: none until it has. */
   get report(): Readonly<ReportCard> | null {
     return state.report;

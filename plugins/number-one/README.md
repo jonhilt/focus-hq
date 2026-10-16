@@ -34,7 +34,7 @@ The ready room keeps the captain's desk, console and mission control, but no one
 
 - `server.ts`: the plugin: the chat (scripted in the demo) and calls, and its routes under `/api/plugins/number-one` (`POST /say {text}`, `/new`, `/call {sdp}`, `/hang-up {id}`). It reads the ship through `host.shipStatus` and `host.snapshot`, and acts on a call's yes through `host.goals`.
 - `chat.ts`: `NumberOne`, a turn at a time in the plugin's state, and the prompts, reply schema and reply (pure).
-- `officer.ts`, `demo.ts`: the live Number One (a read-only Claude Code session on `runReadOnly`, with the office's ship tools, `shipTools`, as `mcp__number-one__…`) and the demo's scripted one.
+- `officer.ts`, `demo.ts`: the live Number One (in the session with the run of the ship the office lends its crew, `host.shipSession`: read-only, with the ship tools as `mcp__number-one__…`) and the demo's scripted one.
 - `call/`: calls ([Calls to Number One](calls.md)).
 - `shared.ts`: who Number One is (`numberOne()`, from `fixedCrew`, and their voice), the chat and call types, and the plugin's state: the saved `chat`, and beside it, unsaved, `activity` and `call` (`chatNow` puts them together).
 - `client.ts`: the browser's part: the <kbd>1</kbd> key and its legend, the toasts and the call's mic (`start`), and the figure (`ship`).

@@ -1,15 +1,8 @@
 // Number One in the ready room (README.md): the plugin's part of the ship, in the visitor's chair at the captain's desk.
 import * as THREE from 'three';
-import type { ShipHost, ShipPart } from '../../client/src/plugins';
-import { pluginState } from '../../client/src/plugins';
-import { state } from '../../client/src/net/state';
-import { Character } from '../../client/src/world/character';
-import { contactShadow } from '../../client/src/world/contactShadow';
-import { type Seat, seatYaw } from '../../client/src/world/layout';
-import { chair } from '../../client/src/world/props';
-import type { Ui } from '../../client/src/ui/context';
 import { chatNow, NUMBER_ONE, numberOne, type NumberOneState } from './shared';
 import { numberOneView } from './view';
+import { chair, Character, contactShadow, onPluginState, pluginState, type Seat, seatYaw, type ShipHost, type ShipPart, type Ui } from '../../plugin-api/client';
 
 /** Number One only reads their PADD while someone's near enough to see. */
 const NEAR = 12;
@@ -47,9 +40,7 @@ class FirstOfficer implements ShipPart {
     host.interactive(g, () => `Talk to ${numberOne().name}, your first officer`, talk);
     // in the ready room: drawn with the command deck
     host.mount('command', g);
-    this.unsubscribe = state.on('plugin', (id) => {
-      if (id === NUMBER_ONE) this.character.set(numberOneView(chat()));
-    });
+    this.unsubscribe = onPluginState(NUMBER_ONE, () => this.character.set(numberOneView(chat())));
   }
 
   update(t: number, camera: THREE.Vector3): void {

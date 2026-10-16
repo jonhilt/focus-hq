@@ -1,10 +1,6 @@
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { type Actor, createActor, fromPromise } from 'xstate';
-import { shownProjects } from '../../../shared/hidden';
-import type { LedgerEvent } from '../../../shared/ledger';
-import type { Agent, MessageReply, QueuedGoal, Snapshot } from '../../../shared/types';
 import type { CallLine, CallState, CallStatus, CallStep } from '../shared';
-import { errorMessage } from '../../../server/util';
 import { addCaption } from './captions';
 import { DemoJev, DemoLive } from './demo';
 import { Jev } from './jev';
@@ -12,6 +8,7 @@ import { Live, type LiveEvent, type LiveSession, type Sideband } from './live';
 import { callMachine, type Reply, type RouteInput } from './machine';
 import { topics } from './brief';
 import { type Act, askFor, type Capture, callNotes, decide, dictated, type Routing, routingQuestions, routingState } from './route';
+import { type Agent, errorMessage, type LedgerEvent, type MessageReply, type QueuedGoal, shownProjects, type Snapshot } from '../../../plugin-api/server';
 
 // Calls to Number One (../calls.md): one at a time, each a gpt-live-1 session the office is the backend of. The
 // session's events drive the call's machine; what the machine says goes back over the sideband.

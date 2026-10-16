@@ -7,7 +7,7 @@ import type { LedgerEntry, LedgerEvent } from '../../shared/ledger';
 import type { Agent, Issue, MessageReply, Planner, Project, QueuedGoal, Settings, Snapshot } from '../../shared/types';
 import type { ShipStatus } from '../agents/shipStatus';
 import type { GitHub } from '../github/service';
-import type { ReadOnlyResult, ReadOnlyRun } from '../agents/claudeCrew';
+import type { ReadOnlyResult, ReadOnlyRun, ShipSessionRun } from '../agents/claudeCrew';
 
 export interface FocusPlugin {
   /** Its name in FOCUS_PLUGINS: also its state's key in state.json, and its routes' prefix (`/api/plugins/<id>`). */
@@ -174,6 +174,12 @@ export interface PluginHost {
    * Glob, Grep, WebSearch, WebFetch), all pre-approved, none of the captain's settings or hooks, and its answer.
    */
   readOnlySession(run: ReadOnlyRun): Promise<ReadOnlyResult>;
+  /**
+   * A read-only session with the run of the ship, as Number One's: from the office's planning folder (where it checks
+   * out a project's code on demand), the agents' worktrees readable, and the ship tools (`ship_status`,
+   * `open_project`) as `mcp__<plugin id>__…`. Neither tool changes anything aboard.
+   */
+  shipSession(run: ShipSessionRun): Promise<ReadOnlyResult>;
   /**
    * Checks out `repo`'s default branch as it is on GitHub now, detached, in a folder of the plugin's own (in its
    * `dataDir`), and says where. `repo` has to be one of the office's projects' repos: it throws, in words, for any other.

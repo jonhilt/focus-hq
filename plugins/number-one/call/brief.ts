@@ -1,10 +1,4 @@
-import { shownProjects } from '../../../shared/hidden';
-import type { LedgerEvent } from '../../../shared/ledger';
-import { frictionGroups } from '../../../shared/ledger';
-import { trace } from '../../../shared/ledgerReview';
-import { prKey, qaBadge } from '../../../shared/qa';
-import type { Contact, GoalNote, GoalRecord, LeadAgent, Project, Snapshot, Waypoint } from '../../../shared/types';
-import { hasLeadWork } from '../../../server/agents/lead';
+import { type Contact, frictionGroups, type GoalNote, type GoalRecord, hasLeadWork, type LeadAgent, type LedgerEvent, prKey, type Project, qaBadge, shownProjects, type Snapshot, trace, type Waypoint } from '../../../plugin-api/server';
 
 // What the captain can talk through on a call, and the briefing the voice model talks from: the record (a goal's brief,
 // its lead's note, its slices, its pull requests, and what the ledger saw of it), not the code. Pure, so it's unit

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { office, until } from '../../server/agents/fakeOffice';
 import numberOnePlugin from './server';
 import { freshChat, NUMBER_ONE, type NumberOneChat, type NumberOneState } from './shared';
+import { office, until } from '../../plugin-api/testing';
 
 /** The office with Number One switched on: its routes, and its state as the browser has it. */
 function aboard(opts: { demo?: boolean; saved?: NumberOneChat } = {}) {

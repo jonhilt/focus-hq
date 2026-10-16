@@ -1,11 +1,11 @@
 // The number-one plugin (README.md): Number One in the ready room, the ship's first officer, who talks anything through
 // with the captain in a read-only chat, and takes the captain's calls hands-free (calls.md). FOCUS_PLUGINS=number-one.
-import type { FocusPlugin } from '../../server/plugins/contract';
 import { Calls } from './call/calls';
 import { NumberOne } from './chat';
 import { DemoNumberOne } from './demo';
 import { ClaudeNumberOne } from './officer';
 import { chatAfterRestart, freshChat, NUMBER_ONE, type NumberOneLive, type NumberOneSaved } from './shared';
+import { type FocusPlugin } from '../../plugin-api/server';
 
 const text = (v: unknown): string => (typeof v === 'string' ? v : '');
 
@@ -22,7 +22,7 @@ const numberOnePlugin: FocusPlugin = {
     if (chatAfterRestart(chat) !== chat) saved.set({ chat: chatAfterRestart(chat) });
     const numberOne = new NumberOne(
       { projects: () => host.projects(), settings: () => host.settings(), shipStatus: () => host.shipStatus(), saved, live },
-      host.demo ? new DemoNumberOne() : new ClaudeNumberOne(),
+      host.demo ? new DemoNumberOne() : new ClaudeNumberOne((run) => host.shipSession(run)),
     );
     // calls read the ship and act on the captain's goals through the office, once the captain has said yes
     const calls: Calls = new Calls((call) => live.set({ call }), {

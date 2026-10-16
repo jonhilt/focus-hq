@@ -1,7 +1,6 @@
 // The demo office's Number One (README.md): scripted, on the demo's ship.
-import { FILES } from '../../server/agents/demoRunner';
-import { randomHex, sleep } from '../../server/util';
 import type { NumberOneOfficer, NumberOneReply, NumberOneTurn } from './chat';
+import { DEMO_FILES as FILES, randomHex, sleep } from '../../plugin-api/server';
 
 /** The repo a demo conversation is about, and the made-up files it talks about. */
 function demoCode(repos: string[]): { repo: string; files: string[]; folder: string } {

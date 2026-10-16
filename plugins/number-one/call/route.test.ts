@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { Agent, Project, QueuedGoal, Snapshot } from '../../../shared/types';
 import type { JevAnswers } from './jev';
 import { topics } from './brief';
 import { type Act, APPROVE_PROBABILITY, callNotes, type CallScene, decide, dictated, nextGoal, routingQuestions, routingState, type StartGoal } from './route';
 import { clip, spokenStatus } from './status';
+import { type Agent, type Project, type QueuedGoal, type Snapshot } from '../../../plugin-api/server';
 
 const queued = (text: string, id = 'q1'): QueuedGoal => ({ id, text, at: 0 });
 const shop = { id: 'p1', name: 'Shop', repos: ['acme/shop'] } as Project;
