@@ -270,7 +270,7 @@ const SECTION_COLOR: Record<string, string> = { 'Done looks like': LCARS.peach, 
 /**
  * The goal board on the briefing room's wall, an LCARS screen like the viewscreen beside it (which keeps to the work
  * going on now): an elbow in the station's colour with its code, the goal in full across the top and how the room
- * stands; under it, in two columns, this slice's checklist (with a bar for how far through it they are) and what done
+ * stands; under it, in two columns, this slice's tasks (with a bar for how far through them they are) and what done
  * looks like, and beside them who's in the briefing room, each with their face, name, part and what they're doing, the
  * slice's pull requests, what might come next and the latest lessons (noteSections). Before there's a note, the goal
  * as the captain put it. The type shrinks until it all fits, rather than cutting lines off. While the station's free,
@@ -930,7 +930,7 @@ function drawCourse(ctx: CanvasRenderingContext2D, plot: CoursePlot, done: strin
       ctx.setLineDash([]);
     }
     if (p.state === 'now') {
-      // how far through its checklist the slice is, as an arc filling round it
+      // how far through its tasks the slice is, as an arc filling round it
       ctx.strokeStyle = progress === undefined ? LCARS.sky : '#2a2840';
       ctx.lineWidth = progress === undefined ? 2 : 5;
       ctx.globalAlpha = progress === undefined ? 0.5 : 1;
@@ -972,7 +972,7 @@ function drawCourse(ctx: CanvasRenderingContext2D, plot: CoursePlot, done: strin
 /**
  * A team station's screen, hung over its pod as a hologram (hologram.ts), the four round the holodeck so you can watch every team at once
  * without going in: how its room stands across the top in big type (seen from across the holodeck), the goal, what the
- * lead's up to right now, how far through the slice they are and what's left on its checklist, and along the bottom
+ * lead's up to right now, how far through the slice they are and what's left of its tasks, and along the bottom
  * who else is in the briefing room and the slice's pull requests. A free station says so, or what's next in line for it.
  */
 export class TeamScreen extends Display {
@@ -1073,7 +1073,7 @@ export class TeamScreen extends Display {
     ctx.fillStyle = TEXT;
     wrap(ctx, leadNow(lead), tw, 2).forEach((line, i) => ctx.fillText(line, tx, nowY + 82 + i * 48));
 
-    // how far through the slice, and what's left of its tasks (or checklist)
+    // how far through the slice, and what's left of its tasks
     const barY = nowY + nowH + 44;
     const items = sliceSteps(lead.lead);
     const progress = sliceProgress(items);

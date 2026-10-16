@@ -95,7 +95,6 @@ const leaderPath = (p: Pt, l: Label, size: number) => {
 
 /** Each kind of work's colour on the chart and in its drawer, and what it's called there. */
 const KIND: Record<WorkKind, { tone: string; name: string }> = {
-  step: { tone: LCARS.gold, name: 'Step' },
   task: { tone: LCARS.peach, name: 'Task' },
   workflow: { tone: LCARS.lilac, name: 'Workflow' },
   probe: { tone: LCARS.sky, name: 'Probe' },
@@ -109,12 +108,12 @@ const KIND: Record<WorkKind, { tone: string; name: string }> = {
 /** A node's colour: its kind's, unless it failed (red) or was never heard from again (grey). */
 const toneOf = (n: WorkNode) => (n.state === 'failed' ? LCARS.red : n.state === 'lost' ? '#6b6488' : KIND[n.kind].tone);
 
-/** Everything a slice did, as nodes: its tasks, and the slice under way's checklist and workflows too. */
+/** Everything a slice did, as nodes: its tasks, and the slice under way's workflows too. */
 const workOf = (goal: ChartGoal, w: Waypoint, flying: ReadonlySet<string>): WorkNode[] => {
   const now = w.slice === goal.current && !goal.closedAt;
   return sliceWork({
     waypoint: w, artifacts: goal.artifacts, questions: goal.questions, prs: goal.prs, flying,
-    ...(now && { checklist: goal.note?.slice, workflows: goal.workflows }),
+    ...(now && { workflows: goal.workflows }),
   });
 };
 
@@ -151,9 +150,8 @@ function constellations(goal: ChartGoal, plot: CoursePlot, focus: number, flying
 function nodeShape(n: PlacedNode, r: number): SVGElement {
   const at = `translate(${n.x.toFixed(1)} ${n.y.toFixed(1)})`;
   switch (n.kind) {
-    case 'step':
     case 'task':
-      return s('rect', { class: 'mark', x: -r, y: -r, width: r * 2, height: r * 2, rx: n.kind === 'task' ? r * 0.5 : 0, transform: at });
+      return s('rect', { class: 'mark', x: -r, y: -r, width: r * 2, height: r * 2, rx: r * 0.5, transform: at });
     case 'workflow':
       return s('path', { class: 'mark', d: Array.from({ length: 6 }, (_, k) => `${k ? 'L' : 'M'}${(Math.cos((k * Math.PI) / 3) * r * 1.2).toFixed(1)} ${(Math.sin((k * Math.PI) / 3) * r * 1.2).toFixed(1)}`).join(' ') + 'Z', transform: at });
     case 'probe':
@@ -240,8 +238,8 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: Picked, nav: Nav,
       return g;
     }));
 
-  // the slice under way fills an arc round its waypoint as its tasks (or checklist) get done
-  const pct = sliceProgress(sliceSteps({ slice: goal.current ?? 0, waypoints: goal.waypoints, note: goal.note }));
+  // the slice under way fills an arc round its waypoint as its tasks get done
+  const pct = sliceProgress(sliceSteps({ slice: goal.current ?? 0, waypoints: goal.waypoints }));
   const progress = pct === null ? undefined : pct / 100;
   const ARC = 2 * Math.PI * 20;
   const waypoints = s('g', { class: 'chart-waypoints' },
@@ -472,8 +470,6 @@ function nodeView(goal: ChartGoal, w: Waypoint, node: WorkNode, nodes: WorkNode[
   const view = (sub: string | undefined, ...body: (Node | string | null)[]) =>
     h('div', { class: 'chart-log' }, back, head(`${kind.name} · waypoint ${w.slice}`, kind.tone, node.text, sub), ...body, steps);
   switch (node.kind) {
-    case 'step':
-      return view(node.state === 'done' ? 'Ticked off' : 'Still to do', h('p', { class: 'muted' }, 'A step on the slice’s checklist, which the lead keeps in the goal’s note.'));
     case 'task': {
       const t = w.tasks?.find((x) => x.id === id);
       // what it says while doing it is only on the lead's live list

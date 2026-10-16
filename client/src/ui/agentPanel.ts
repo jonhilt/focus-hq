@@ -42,12 +42,11 @@ const AGENT_MARK: Record<WorkflowAgent['status'], string> = { queued: '·', work
 function views(a: Agent, frame: BrowserFrame | undefined): NavItem<View>[] {
   const browsing = showsBrowser(frame);
   const tasks = a.tasks ?? [];
-  const slice = a.lead?.note?.slice ?? [];
   const crew = (a.helpers ?? []).length + (a.workflows ?? []).length + (a.background ?? []).length;
   const lead = a.task === 'lead';
   const items: (NavItem<View> | false)[] = [
     { key: 'browser', label: 'Browser', readout: browsing ? 'Live' : '', standby: !browsing },
-    lead && { key: 'goal', label: 'Goal', readout: slice.length ? `${slice.filter((i) => i.done).length}/${slice.length}` : '' },
+    lead && { key: 'goal', label: 'Goal', readout: '' },
     { key: 'tasks', label: 'Tasks', readout: tasks.length ? `${tasks.filter((t) => t.status === 'completed').length}/${tasks.length}` : '', standby: !tasks.length },
     lead && { key: 'crew', label: 'Crew', readout: crew ? String(crew) : '', standby: !crew },
     // the run's journal, replayed: there whenever it has one, shown once picked

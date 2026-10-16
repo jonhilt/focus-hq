@@ -18,7 +18,6 @@ const wp: Waypoint = {
 describe("a slice's work", () => {
   const nodes = sliceWork({
     waypoint: wp,
-    checklist: [{ text: 'Plot it', done: true }, { text: 'Draw it', done: false }],
     workflows: [{ id: 'w1', name: 'review', description: '', status: 'running', phases: [], agents: [], roll: [], startedAt: 0 }],
     artifacts: [{ id: 'mock', title: 'Mockup', at: 0, slice: 2 }, { id: 'old', title: 'Older', at: 0, slice: 1 }],
     questions: [{ id: 'q1', question: 'Which layout?', options: [], at: 0, slice: 2, answer: { option: 'a', at: 1 } }],
@@ -26,13 +25,13 @@ describe("a slice's work", () => {
     flying: new Set(['h4']),
   });
 
-  it('takes in everything kept on the slice, kinds together, steps first and pull requests last', () => {
-    expect(nodes.map((n) => n.key)).toEqual(['step:0', 'step:1', 'task:1', 'workflow:w1', 'probe:h1', 'probe:h2', 'probe:h3', 'commits', 'shown:mock', 'asked:q1', 'shot:0', 'pr:o/focus#7']);
+  it('takes in everything kept on the slice, kinds together, tasks first and pull requests last', () => {
+    expect(nodes.map((n) => n.key)).toEqual(['task:1', 'workflow:w1', 'probe:h1', 'probe:h2', 'probe:h3', 'commits', 'shown:mock', 'asked:q1', 'shot:0', 'pr:o/focus#7']);
   });
 
   it('says how each stands', () => {
     const state = Object.fromEntries(nodes.map((n) => [n.key, n.state]));
-    expect(state).toMatchObject({ 'step:0': 'done', 'step:1': 'open', 'task:1': 'active', 'workflow:w1': 'active', 'probe:h1': 'done', 'probe:h2': 'failed', 'probe:h3': 'lost', 'asked:q1': 'done', 'pr:o/focus#7': 'done' });
+    expect(state).toMatchObject({ 'task:1': 'active', 'workflow:w1': 'active', 'probe:h1': 'done', 'probe:h2': 'failed', 'probe:h3': 'lost', 'asked:q1': 'done', 'pr:o/focus#7': 'done' });
     expect(nodes.find((n) => n.key === 'commits')?.text).toBe('3 commits');
     expect(nodes.find((n) => n.kind === 'pr')?.text).toBe('focus #7');
   });
@@ -44,7 +43,7 @@ describe("a slice's work", () => {
 });
 
 describe('the constellation', () => {
-  const many = (n: number): WorkNode[] => Array.from({ length: n }, (_, i) => ({ key: `step:${i}`, kind: 'step', text: `Step number ${i} of the slice`, state: 'open' }));
+  const many = (n: number): WorkNode[] => Array.from({ length: n }, (_, i) => ({ key: `task:${i}`, kind: 'task', text: `Task number ${i} of the slice`, state: 'open' }));
   const angle = (p: { x: number; y: number }) => Math.atan2(p.y, p.x);
 
   it('keeps clear of the ways out of the waypoint that are taken', () => {

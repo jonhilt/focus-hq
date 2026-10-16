@@ -103,7 +103,7 @@ describe('summariseShip', () => {
   const goal = (patch: Partial<GoalRecord>): GoalRecord => ({
     id: 'g1',
     title: 'Saved items',
-    note: { done: 'Shoppers find saved items on any device', slice: [], learned: [], next: [] },
+    note: { done: 'Shoppers find saved items on any device', learned: [], next: [] },
     slices: 3,
     prs: [
       { repo: 'acme/shop', number: 50, url: '' },

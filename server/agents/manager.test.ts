@@ -764,9 +764,7 @@ describe('AgentManager', () => {
     // still in the turn they shipped from when the pull requests merge
     for (const pr of store.agent(lead.id).lead!.prs) agents.prClosed(pr.repo, pr.number, true);
     const sent = leads()[0].sent.join('\n');
-    expect(sent).toMatch(/^\[Office\] Slice 1 has landed: .* Carry on with what you're doing on your current branch/);
-    expect(sent).toContain('at the start of your next turn');
-    expect(sent).not.toContain('Tell the captain what it taught you');
+    expect(sent).toMatch(/^\[Office\] Slice 1 has landed: .* Carry on where you are: your repos move to fresh code at the start of your next turn/);
     expect(store.agent(lead.id).branch).toBe(branch);
 
     leads()[0].end({ ok: true, summary: 'Finished the next piece' });

@@ -1,74 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { EXPLAINER_LIMITS, explainerPage } from './explainer';
-import { applyNote, NOTE_LIMITS } from './lead';
+import { CONTACT_LIMITS as C } from './contacts';
+import { applyNote } from './lead';
 import { explainShape, extraTools, noteShape } from './officeTool';
 
-const L = NOTE_LIMITS;
 const schema = z.object(noteShape);
 const text = (n: number) => 'x'.repeat(n);
 const fits = (input: unknown) => schema.safeParse(input).success;
-const officeTakes = (input: Parameters<typeof applyNote>[1]) => !('error' in applyNote({ title: 'Goal' }, input));
 
 describe('the note tool schema', () => {
-  it('carries the limits the office enforces, as JSON schema the lead sees', () => {
-    const json = z.toJSONSchema(schema) as { properties: Record<string, { maxLength?: number; maxItems?: number; items?: { maxLength?: number; properties?: { text: { maxLength?: number } } } }> };
+  it('puts no limits on the note itself, and the office keeps whatever it takes', () => {
+    const json = z.toJSONSchema(schema) as { properties: Record<string, { maxLength?: number; maxItems?: number; items?: { maxLength?: number } }> };
     const p = json.properties;
-    expect(p.title.maxLength).toBe(L.title);
-    expect(p.done.maxLength).toBe(L.done);
-    expect(p.slice.maxItems).toBe(L.slice);
-    expect(p.slice.items?.properties?.text.maxLength).toBe(L.item);
-    expect(p.learned.maxLength).toBe(L.line);
-    expect(p.allLearned.maxItems).toBe(L.learned);
-    expect(p.allLearned.items?.maxLength).toBe(L.line);
-    expect(p.next.maxItems).toBe(L.next);
-    expect(p.next.items?.maxLength).toBe(L.item);
+    expect(Object.keys(p).sort()).toEqual(['allLearned', 'closeContact', 'contact', 'done', 'learned', 'next', 'title']);
+    for (const field of ['title', 'done', 'learned', 'allLearned', 'next']) {
+      expect(p[field].maxLength).toBeUndefined();
+      expect(p[field].maxItems).toBeUndefined();
+      expect(p[field].items?.maxLength).toBeUndefined();
+    }
+    const long = { title: text(500), done: text(1000), learned: text(500), next: Array.from({ length: 12 }, () => text(300)) };
+    expect(fits(long)).toBe(true);
+    expect(applyNote({ title: 'Goal' }, long).note.next).toHaveLength(12);
   });
 
-  it('says each limit in its description', () => {
-    const says = (field: keyof typeof noteShape, ...numbers: number[]) => numbers.forEach((n) => expect(noteShape[field].description).toContain(String(n)));
-    says('title', L.title);
-    says('done', L.done);
-    says('slice', L.slice, L.item);
-    says('learned', L.line, L.learned);
-    says('allLearned', L.learned, L.line);
-    says('next', L.next, L.item);
-  });
-
-  it('takes and refuses the same notes as the office', () => {
-    const cases: Parameters<typeof applyNote>[1][] = [
-      { title: text(L.title) }, { title: text(L.title + 1) },
-      { done: text(L.done) }, { done: text(L.done + 1) },
-      { slice: Array.from({ length: L.slice }, () => ({ text: 'a' })) }, { slice: Array.from({ length: L.slice + 1 }, () => ({ text: 'a' })) },
-      { slice: [{ text: text(L.item) }] }, { slice: [{ text: text(L.item + 1) }] },
-      { learned: text(L.line) }, { learned: text(L.line + 1) },
-      { allLearned: Array.from({ length: L.learned }, () => 'a') }, { allLearned: Array.from({ length: L.learned + 1 }, () => 'a') },
-      { allLearned: [text(L.line)] }, { allLearned: [text(L.line + 1)] },
-      { next: Array.from({ length: L.next }, () => 'a') }, { next: Array.from({ length: L.next + 1 }, () => 'a') },
-      { next: [text(L.item)] }, { next: [text(L.item + 1)] },
-    ];
-    for (const input of cases) expect([input, fits(input)]).toEqual([input, officeTakes(input)]);
-  });
-
-  it('refuses in the office\'s words, naming the line to fix, not a bare schema error', () => {
-    const refusal = (input: unknown) => schema.safeParse(input).error?.issues.map((i) => i.message);
-    const long = text(L.line + 5);
-    expect(refusal({ learned: long, next: ['a', 'b', 'c', 'd'] })).toEqual([
-      `the learned line “${text(40)}…” is ${L.line + 5} characters (at most ${L.line})`,
-      `next has 4 ideas (at most ${L.next})`,
-    ]);
-    const office = (input: Parameters<typeof applyNote>[1]) => {
-      const result = applyNote({ title: 'Goal' }, input);
-      return 'error' in result ? result.error : '';
-    };
-    const cases: Parameters<typeof applyNote>[1][] = [
-      { title: text(L.title + 1) }, { done: text(L.done + 1) },
-      { slice: Array.from({ length: L.slice + 1 }, () => ({ text: 'a' })) }, { slice: [{ text: text(L.item + 1) }] },
-      { learned: text(L.line + 1) }, { allLearned: [text(L.line + 1)] }, { next: Array.from({ length: L.next + 1 }, () => 'a') }, { next: [text(L.item + 1)] },
-    ];
-    for (const input of cases) for (const message of refusal(input) ?? ['accepted']) expect(office(input)).toContain(message);
-    expect(refusal({ allLearned: Array.from({ length: L.learned + 1 }, () => 'a') })).toEqual([`allLearned has ${L.learned + 1} lines (at most ${L.learned}: merge the older lessons)`]);
-    expect(refusal({ heading: text(L.heading + 1) })).toEqual([`the heading is ${L.heading + 1} characters (at most ${L.heading})`]);
+  it('keeps the limits on contacts, which the lead sees up front', () => {
+    expect(fits({ contact: text(C.text) })).toBe(true);
+    expect(fits({ contact: text(C.text + 1) })).toBe(false);
+    expect(fits({ closeContact: { id: 'c1', as: 'dropped', why: text(C.why + 1) } })).toBe(false);
+    expect(noteShape.contact.description).toContain(String(C.text));
   });
 });
 

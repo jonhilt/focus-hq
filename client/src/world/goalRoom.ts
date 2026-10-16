@@ -37,16 +37,15 @@ export function goalRoomState(lead: Pick<Agent, 'status' | 'lead' | 'held'> | un
 }
 
 /** One step of the slice under way, done or still to do. */
-export type SliceStep = GoalNote['slice'][number];
+export interface SliceStep {
+  text: string;
+  done: boolean;
+}
 
-/**
- * The slice under way's steps: the tasks the lead has added or moved on in it, on the task list it keeps for itself
- * (kept on its waypoint), or while there are none, the note's checklist.
- */
-export function sliceSteps(work: Pick<LeadWork, 'slice' | 'waypoints' | 'note'> | undefined): SliceStep[] {
-  const tasks = work?.waypoints?.find((w) => w.slice === work.slice)?.tasks;
-  if (tasks?.length) return tasks.map((t) => ({ text: t.subject, done: t.status === 'completed' }));
-  return work?.note?.slice ?? [];
+/** The slice under way's steps: the tasks the lead has added or moved on in it, on the task list it keeps for itself (kept on its waypoint). */
+export function sliceSteps(work: Pick<LeadWork, 'slice' | 'waypoints'> | undefined): SliceStep[] {
+  const tasks = work?.waypoints?.find((w) => w.slice === work.slice)?.tasks ?? [];
+  return tasks.map((t) => ({ text: t.subject, done: t.status === 'completed' }));
 }
 
 /** How far through its steps the slice is, as a whole percentage, or null while it hasn't any. */
@@ -70,10 +69,10 @@ export interface NoteSection {
 const LESSONS = 2;
 
 /**
- * The goal board's note, most pressing first: this slice's checklist, what done looks like, what might come next,
+ * The goal board's note, most pressing first: this slice's tasks, what done looks like, what might come next,
  * then the latest lessons. A section with nothing in it is left out.
  */
-export function noteSections(note: GoalNote, slice: number, steps: readonly SliceStep[] = note.slice): NoteSection[] {
+export function noteSections(note: GoalNote, slice: number, steps: readonly SliceStep[] = []): NoteSection[] {
   const out: NoteSection[] = [];
   if (steps.length) out.push({ heading: `Slice ${slice} · ${steps.filter((i) => i.done).length} of ${steps.length}`, side: 'goal', items: steps.map((i) => ({ mark: i.done ? '☑' : '☐', text: i.text, dim: i.done })) });
   if (note.done) out.push({ heading: 'Done looks like', side: 'goal', items: [{ mark: '◎', text: note.done }] });
@@ -119,7 +118,7 @@ export function leadNow(lead: Pick<Agent, 'status' | 'activity' | 'permission' |
 }
 
 /**
- * As much of a slice's checklist as fits in `room` lines: all of it if it fits; otherwise the ticked-off items at its
+ * As much of a slice's tasks as fits in `room` lines: all of it if it fits; otherwise the ticked-off items at its
  * top folded into one line (`done` of them), then what's still to do, the last line saying how many more there are.
  */
 export function checklistGlance(items: SliceStep[], room: number): { done: number; items: SliceStep[]; more: number } {

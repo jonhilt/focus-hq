@@ -47,7 +47,6 @@ function noteLines(note: GoalNote | undefined, contacts: Contact[] = []): string
   const open = contacts.filter((c) => !c.closed);
   return [
     note.done ? `What done looks like: ${note.done}` : '',
-    bullets("This slice's checklist", note.slice.map((s) => `${s.done ? '[done]' : '[to do]'} ${s.text}`)),
     bullets('What the slices taught', note.learned),
     bullets('Ideas for next', note.next),
     bullets('Loose threads still open', open.map((c) => c.text)),
@@ -57,7 +56,13 @@ function noteLines(note: GoalNote | undefined, contacts: Contact[] = []): string
 function slicesLines(waypoints: Waypoint[] = []): string {
   return bullets(
     'Its slices so far',
-    waypoints.map((w) => [`Slice ${w.slice}: ${w.title ?? w.heading ?? 'not shipped yet'}${w.landedAt ? ' (landed)' : ''}`, w.summary, ...(w.learned ?? []).map((l) => `learned: ${l}`)].filter(Boolean).join('. ')),
+    waypoints.map((w) => [
+      `Slice ${w.slice}: ${w.title ?? w.heading ?? 'not shipped yet'}${w.landedAt ? ' (landed)' : ''}`,
+      w.summary,
+      // the lead's own tasks in it, from the task list it keeps
+      ...(w.tasks ?? []).map((t) => `${t.status === 'completed' ? '[done]' : t.status === 'in_progress' ? '[doing]' : '[to do]'} ${t.subject}`),
+      ...(w.learned ?? []).map((l) => `learned: ${l}`),
+    ].filter(Boolean).join('. ')),
   );
 }
 

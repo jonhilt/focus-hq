@@ -5,7 +5,7 @@ import { type Agent, type GoalRecord, type LedgerEvent, type Project, type Sessi
 const NOW = Date.UTC(2026, 9, 12);
 const facts: SessionFacts = { minutes: 30, turns: 10, toolCalls: 20, failedCalls: 2, refusedCalls: 0, repeatedCalls: 0, wastedCalls: 2, captainMessages: 1, nudges: 0, officeMessages: 0, compactions: 0, qaFails: 1, conflicts: 0 };
 
-const closed = { id: 'g1', title: 'Calls', leadName: 'Lt. Old', slices: 2, prs: [{ repo: 'acme/shop', number: 3, url: '', outcome: 'merged' }], brief: 'Talk to the ship', note: { done: 'It talks', slice: [], learned: ['Delegation has no text'], next: [] }, openedAt: 0, closedAt: NOW - 1 } as GoalRecord;
+const closed = { id: 'g1', title: 'Calls', leadName: 'Lt. Old', slices: 2, prs: [{ repo: 'acme/shop', number: 3, url: '', outcome: 'merged' }], brief: 'Talk to the ship', note: { done: 'It talks', learned: ['Delegation has no text'], next: [] }, openedAt: 0, closedAt: NOW - 1 } as GoalRecord;
 const shop = { id: 'p1', name: 'Shop', repos: ['acme/shop'], goals: [closed], goalQueue: [{ id: 'q1', text: 'Gift wrap\nwith ribbons', at: 0 }] } as unknown as Project;
 const secret = { id: 'p9', name: 'Secret', repos: [], hidden: true } as unknown as Project;
 const lead = {
@@ -20,9 +20,9 @@ const lead = {
     slice: 2,
     brief: 'Shoppers save items for later',
     prs: [{ repo: 'acme/shop', number: 7, url: '' }],
-    note: { done: 'Saved items survive a reload', slice: [{ text: 'Save button', done: true }, { text: 'List page', done: false }], learned: ['Local storage is enough'], next: ['Share a list'] },
+    note: { done: 'Saved items survive a reload', learned: ['Local storage is enough'], next: ['Share a list'] },
     contacts: [{ id: 'c1', text: 'Guest carts?', slice: 1, at: 0 }, { id: 'c2', text: 'Done thing', slice: 1, at: 0, closed: { as: 'dropped', slice: 1, at: 0 } }],
-    waypoints: [{ slice: 1, startedAt: 0, landedAt: 1, title: 'Save button', summary: 'Adds the button', learned: ['Buttons are easy'] }],
+    waypoints: [{ slice: 1, startedAt: 0, landedAt: 1, title: 'Save button', summary: 'Adds the button', tasks: [{ id: '1', subject: 'Draw the button', status: 'completed' }, { id: '2', subject: 'Wire it up', status: 'in_progress' }], learned: ['Buttons are easy'] }],
   },
 } as unknown as Agent;
 
@@ -60,10 +60,9 @@ describe('briefing', () => {
       'Topic: the goal "Wishlist" in Shop. Lt. Data leads it, at station 2, on slice 2.',
       'The goal as the captain first put it: Shoppers save items for later',
       'What done looks like: Saved items survive a reload',
-      '- [done] Save button\n- [to do] List page',
       'What the slices taught:\n- Local storage is enough',
       'Loose threads still open:\n- Guest carts?',
-      'Slice 1: Save button (landed). Adds the button. learned: Buttons are easy',
+      'Slice 1: Save button (landed). Adds the button. [done] Draw the button. [doing] Wire it up. learned: Buttons are easy',
       'acme/shop pull request 7, "Wishlist page": QA passed',
       'From the ship’s log: 1 pull requests, 1 QA verdicts (1 failed), 0 merge conflicts, 1 sessions over 30 minutes.',
       'flaky e2e: “the test timed out again”',

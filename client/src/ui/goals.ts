@@ -33,19 +33,12 @@ export function leadEffortPicker(value: Effort = 'high'): { el: HTMLElement; sel
   return { el: h('span', { class: 'row' }, select, hint), select, picked };
 }
 
-/** The goal's note as its lead keeps it: what done looks like, this slice's checklist, what we learned, what's next. */
+/** The goal's note as its lead keeps it: what done looks like, what we learned, what's next. */
 export function noteView(note: GoalNote | undefined, compact = false): HTMLElement | null {
-  if (!note || (!note.done && !note.slice.length && !note.learned.length && !note.next.length)) return null;
+  if (!note || (!note.done && !note.learned.length && !note.next.length)) return null;
   const list = (items: string[]) => h('ul', { class: 'goal-list' }, ...items.map((t) => h('li', null, t)));
-  const ticked = note.slice.filter((i) => i.done).length;
   return h('div', { class: 'goal-note' },
     note.done ? h('div', null, h('h4', null, 'Done looks like'), note.done) : null,
-    note.slice.length
-      ? h('div', null,
-        h('h4', null, 'This slice', h('b', null, `${ticked}/${note.slice.length}`)),
-        h('ul', { class: 'goal-list checklist' }, ...note.slice.map((i) => h('li', { class: i.done ? 'ticked' : '' }, i.text))),
-      )
-      : null,
     !compact && note.learned.length ? h('div', null, h('h4', null, 'Learned'), list(note.learned)) : null,
     !compact && note.next.length ? h('div', null, h('h4', null, 'Next'), list(note.next)) : null,
   );

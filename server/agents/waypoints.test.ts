@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { GoalNote, LeadAgent, LeadWork, QaReport, Waypoint } from '../../shared/types';
 import { goalRecord, reopenedWork } from './lead';
-import { checklistWaypoint, committedWaypoint, nudgedWaypoint, endedProbe, evidenceFile, headedWaypoint, landedWaypoint, launchedProbe, nextWaypoints, notedSlice, notedWaypoint, opening, shieldedWaypoint, shippedWaypoint, taskedWaypoint, tickedSpotCheck, WAYPOINT_LIMITS, withWaypoint } from './waypoints';
+import { committedWaypoint, endedProbe, evidenceFile, landedWaypoint, launchedProbe, nextWaypoints, notedSlice, notedWaypoint, opening, shieldedWaypoint, shippedWaypoint, taskedWaypoint, tickedSpotCheck, WAYPOINT_LIMITS, withWaypoint } from './waypoints';
 
-const note = (done: string, learned: string[] = []): GoalNote => ({ done, slice: [], learned, next: [] });
+const note = (done: string, learned: string[] = []): GoalNote => ({ done, learned, next: [] });
 
 describe('waypoints', () => {
   it('adds this slice’s waypoint the first time anything happens in it, starting then', () => {
@@ -189,13 +189,6 @@ describe('probes', () => {
 
 describe('the slice under way', () => {
   const course = [{ slice: 1, startedAt: 10, landedAt: 40, title: 'Chart' }, { slice: 2, startedAt: 40 }];
-  it('wears the heading the lead gives it, until a new one replaces it, and none once it’s cleared', () => {
-    const named = headedWaypoint({ slice: 2, waypoints: course }, '  Live progress\non the chart ', 50);
-    expect(named[1]).toEqual({ slice: 2, startedAt: 40, heading: 'Live progress on the chart' });
-    expect(named[0]).toEqual(course[0]);
-    expect(headedWaypoint({ slice: 2, waypoints: named }, '', 60)[1]).toEqual({ slice: 2, startedAt: 40 });
-  });
-
   it('counts its commits, keeping the last one’s first line', () => {
     const once = committedWaypoint({ slice: 2, waypoints: course }, 'Heading on the chart\n\nMore detail', 50);
     const twice = committedWaypoint({ slice: 2, waypoints: once }, undefined, 60);
@@ -232,14 +225,5 @@ describe('the slice under way', () => {
     expect(next?.[1].tasks).toEqual([{ ...a, id: "1'" }, fresh]);
     // and it moves on as this list's from then on
     expect(taskedWaypoint({ slice: 2, waypoints: next }, [fresh], [{ ...fresh, status: 'completed' }], 70)?.[1].tasks).toEqual([{ ...a, id: "1'" }, { ...fresh, status: 'completed' }]);
-  });
-});
-
-describe('checklistWaypoint and nudgedWaypoint', () => {
-  it("mark the slice under way's commit count, starting its waypoint when there isn't one", () => {
-    const work = { slice: 2, waypoints: [{ slice: 1, startedAt: 0, commits: 4 }, { slice: 2, startedAt: 5, commits: 3 }] };
-    expect(checklistWaypoint(work, 9).at(-1)).toEqual({ slice: 2, startedAt: 5, commits: 3, checklistAt: 3 });
-    expect(nudgedWaypoint(work, 9).at(-1)).toEqual({ slice: 2, startedAt: 5, commits: 3, nudgedAt: 3 });
-    expect(checklistWaypoint({ slice: 1 }, 9)).toEqual([{ slice: 1, startedAt: 9, checklistAt: 0 }]);
   });
 });

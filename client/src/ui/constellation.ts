@@ -1,4 +1,4 @@
-// A slice's work as a constellation round its waypoint on the star chart: the checklist's steps, Claude's tasks and the
+// A slice's work as a constellation round its waypoint on the star chart: the lead's tasks and the
 // workflows the lead has running (the slice under way's, live), the probes it sent out once they're home, its commits,
 // what it showed and asked on the station's screen, QA's screenshots and its pull requests. Each is a node the captain
 // can pick for a look at just that. Pure, so the chart panel only draws it.
@@ -6,7 +6,7 @@
 import type { GoalArtifact, GoalQuestion, LeadPr, Waypoint, Workflow } from '../../../shared/types';
 import { clip, type Label, labelBox, overlaps, type Box, type Pt } from './course';
 
-export type WorkKind = 'step' | 'task' | 'workflow' | 'probe' | 'commits' | 'shown' | 'asked' | 'shot' | 'pr';
+export type WorkKind = 'task' | 'workflow' | 'probe' | 'commits' | 'shown' | 'asked' | 'shot' | 'pr';
 
 /** One piece of a slice's work. `key` is unique within the slice (`probe:<id>`, `pr:<repo>#<n>`…). */
 export interface WorkNode {
@@ -20,8 +20,7 @@ export interface WorkNode {
 /** What a slice's work is read from: the waypoint, and what the goal keeps by slice (and, for the slice under way, live). */
 export interface SliceSource {
   waypoint: Waypoint;
-  /** The note's checklist and the workflows: only the slice under way has them. Its tasks are on its waypoint. */
-  checklist?: { text: string; done: boolean }[];
+  /** The workflows: only the slice under way has them. Its tasks are on its waypoint. */
   workflows?: Workflow[];
   artifacts: GoalArtifact[];
   questions: GoalQuestion[];
@@ -33,12 +32,11 @@ export interface SliceSource {
 const TASK_STATE = { pending: 'open', in_progress: 'active', completed: 'done' } as const;
 const WORKFLOW_STATE = { running: 'active', done: 'done', failed: 'failed' } as const;
 
-/** A slice's work, in the order the constellation lays it out round the waypoint: steps first, the pull requests last. */
+/** A slice's work, in the order the constellation lays it out round the waypoint: tasks first, the pull requests last. */
 export function sliceWork(src: SliceSource): WorkNode[] {
   const w = src.waypoint;
   const prName = (repo: string, n: number) => `${repo.split('/')[1] ?? repo} #${n}`;
   return [
-    ...(src.checklist ?? []).map((s, i): WorkNode => ({ key: `step:${i}`, kind: 'step', text: s.text, state: s.done ? 'done' : 'open' })),
     ...(w.tasks ?? []).map((t): WorkNode => ({ key: `task:${t.id}`, kind: 'task', text: t.subject, state: TASK_STATE[t.status] })),
     ...(src.workflows ?? []).map((f): WorkNode => ({ key: `workflow:${f.id}`, kind: 'workflow', text: f.name, state: WORKFLOW_STATE[f.status] })),
     ...(w.probes ?? []).filter((p) => !src.flying.has(p.id)).map((p): WorkNode => ({

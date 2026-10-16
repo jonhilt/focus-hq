@@ -41,8 +41,7 @@ describe('goalRoomState', () => {
 });
 
 describe('sliceSteps and sliceProgress', () => {
-  const note = (done: boolean[]): GoalNote => ({ done: '', slice: done.map((d, i) => ({ text: `${i}`, done: d })), learned: [], next: [] });
-  const steps = (done: boolean[]) => note(done).slice;
+  const steps = (done: boolean[]) => done.map((d, i) => ({ text: `${i}`, done: d }));
 
   it('is how many of the steps are done, to the nearest percent', () => {
     expect(sliceProgress(steps([true, false, false]))).toBe(33);
@@ -55,29 +54,32 @@ describe('sliceSteps and sliceProgress', () => {
     expect(sliceSteps(undefined)).toEqual([]);
   });
 
-  it('takes the slice under way’s tasks, and the note’s checklist only while it has none', () => {
+  it('takes the slice under way’s tasks, and none from another slice', () => {
     const waypoints = [
       { slice: 1, startedAt: 0, tasks: [{ id: '1', subject: 'Old', status: 'completed' as const }] },
       { slice: 2, startedAt: 5, tasks: [{ id: '2', subject: 'Probe', status: 'completed' as const }, { id: '3', subject: 'Chart', status: 'in_progress' as const }] },
     ];
-    expect(sliceSteps({ slice: 2, waypoints, note: note([false]) })).toEqual([{ text: 'Probe', done: true }, { text: 'Chart', done: false }]);
-    expect(sliceSteps({ slice: 3, waypoints, note: note([true, false]) })).toEqual(steps([true, false]));
+    expect(sliceSteps({ slice: 2, waypoints })).toEqual([{ text: 'Probe', done: true }, { text: 'Chart', done: false }]);
+    // a slice with no tasks yet has no steps
+    expect(sliceSteps({ slice: 3, waypoints })).toEqual([]);
+    expect(sliceSteps({ slice: 2, waypoints: [{ slice: 2, startedAt: 5 }] })).toEqual([]);
   });
 });
 
 describe('noteSections', () => {
   const note: GoalNote = {
     done: 'Each station is a door to its briefing room.',
-    slice: [
-      { text: 'Goal board', done: true },
-      { text: 'Bigger sign', done: false },
-    ],
     learned: ['one', 'two', 'three'],
     next: ['A pod'],
   };
 
-  it('puts the slice’s checklist first, ticked items dimmed, then done, next and the latest two lessons', () => {
-    const sections = noteSections(note, 2);
+  const steps = [
+    { text: 'Goal board', done: true },
+    { text: 'Bigger sign', done: false },
+  ];
+
+  it('puts the slice’s steps first, finished ones dimmed, then done, next and the latest two lessons', () => {
+    const sections = noteSections(note, 2, steps);
     expect(sections.map((s) => s.heading)).toEqual(['Slice 2 · 1 of 2', 'Done looks like', 'Next', 'Learned']);
     expect(sections[0].items).toEqual([
       { mark: '☑', text: 'Goal board', dim: true },
@@ -87,11 +89,12 @@ describe('noteSections', () => {
   });
 
   it('puts the slice and what done looks like under the goal, and next and the lessons under the crew', () => {
-    expect(noteSections(note, 2).map((s) => s.side)).toEqual(['goal', 'goal', 'crew', 'crew']);
+    expect(noteSections(note, 2, steps).map((s) => s.side)).toEqual(['goal', 'goal', 'crew', 'crew']);
   });
 
   it('leaves out sections with nothing in them', () => {
-    expect(noteSections({ done: '', slice: [], learned: [], next: [] }, 1)).toEqual([]);
+    expect(noteSections({ done: '', learned: [], next: [] }, 1)).toEqual([]);
+    expect(noteSections(note, 2).map((s) => s.heading)).toEqual(['Done looks like', 'Next', 'Learned']);
   });
 });
 
