@@ -1,6 +1,6 @@
 import { type CrewVoice, forSpeech } from '../../../shared/voice';
 import { api } from '../net/api';
-import { state } from '../net/state';
+import { bestBrowserVoice, kokoroReady } from './crewVoice';
 import { voicePrefs } from './voiceMode';
 
 /** What an explainer's player asks of the screen around it (see `KIT_PLAYER` in server/agents/explainer.ts). */
@@ -30,10 +30,7 @@ function fromPlayer(data: unknown): FromPlayer | undefined {
   }
 }
 
-/** How long a beat waits for Kokoro to say its line before the browser's voice says it instead, so a beat never sits silent while Kokoro loads or catches up. */
-const KOKORO_WAIT_MS = 2500;
-
-/** A line being said: Kokoro's audio, or the browser's voice while Kokoro isn't ready. */
+/** A line being said: Kokoro's audio, or the browser's voice if Kokoro has failed. */
 interface Saying {
   stop: () => void;
   pause: () => void;
@@ -44,8 +41,8 @@ interface Saying {
  * An explainer's voice-over, up close. Its player runs in a sandbox of its own and can't reach the office, so it posts
  * its beats' lines here and asks for each to be said, paused or hushed; the narrator says them in the lead's voice and
  * tells the player when a line is done, so its beat can move on. Kokoro's audio is fetched for every line as soon as
- * the voice is on (or Kokoro's ready), so the next beat's is there by the time it plays; a line it's slow with is said in
- * the browser's voice instead.
+ * the voice is on, so the next beat's is there by the time it plays. A beat whose line isn't ready holds until it is
+ * (the player holds a beat until its line is said): only once Kokoro has failed does the browser's voice say it.
  */
 export class Narrator {
   private lines: string[] = [];
@@ -53,8 +50,6 @@ export class Narrator {
   private saying: Saying | undefined;
   private on = false;
   private readonly fetching = new AbortController();
-  // Kokoro may only be ready once the voice is on: fetch the lines then
-  private readonly unsubscribe = state.on('voice', () => this.prefetch());
 
   constructor(private readonly frame: HTMLIFrameElement, private readonly voice: CrewVoice) {}
 
@@ -91,7 +86,6 @@ export class Narrator {
   end(): void {
     this.hush();
     this.fetching.abort();
-    this.unsubscribe();
   }
 
   private tell(message: { kit: 'voice'; on: boolean } | { kit: 'said'; beat: number }): void {
@@ -102,8 +96,6 @@ export class Narrator {
     this.on = on;
     this.tell({ kit: 'voice', on });
     if (!on) return this.hush();
-    // Kokoro downloads the first time a voice is used; the browser's voice speaks until it's ready
-    void api.loadSpeech().catch(() => undefined);
     this.prefetch();
   }
 
@@ -111,16 +103,22 @@ export class Narrator {
     if (this.on) this.lines.forEach((_, i) => void this.fetch(i));
   }
 
-  /** Kokoro's audio for a line, once it's ready on the server; null while it isn't, so the browser's voice says it. */
+  /**
+   * Kokoro's audio for a line, waiting for Kokoro to load if it must (it loads the first time a voice is used, and as
+   * the office starts once it's downloaded); null if it's failed, or failed on this line, so the browser's voice says it.
+   */
   private fetch(beat: number): Promise<Blob | null> {
     const cached = this.audio.get(beat);
     if (cached) return cached;
     const text = this.lines[beat];
-    if (!text || state.voice?.speech.engine.state !== 'ready') return Promise.resolve(null);
-    const audio = api.speak(text, this.voice.kokoro, this.fetching.signal).catch(() => {
-      this.audio.delete(beat);
-      return null;
-    });
+    if (!text) return Promise.resolve(null);
+    const { signal } = this.fetching;
+    const audio = kokoroReady(signal)
+      .then((ready) => (ready ? api.speak(text, this.voice.kokoro, signal) : null))
+      .catch(() => {
+        this.audio.delete(beat);
+        return null;
+      });
     this.audio.set(beat, audio);
     return audio;
   }
@@ -165,8 +163,7 @@ export class Narrator {
       this.tell({ kit: 'said', beat });
     };
     if (!text) return done();
-    const late = new Promise<null>((resolve) => setTimeout(() => resolve(null), KOKORO_WAIT_MS));
-    void Promise.race([this.fetch(beat), late]).then((blob) => {
+    void this.fetch(beat).then((blob) => {
       start = () => {
         if (stopped || started) return;
         started = blob ? playAudio(blob, done) : speakAloud(text, this.voice, done);
@@ -205,7 +202,7 @@ function speakAloud(text: string, voice: CrewVoice, done: () => void): Saying {
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = voice.lang;
   utterance.pitch = voice.pitch;
-  utterance.voice = speechSynthesis.getVoices().find((v) => v.lang === voice.lang) ?? null;
+  utterance.voice = bestBrowserVoice(speechSynthesis.getVoices(), voice.lang);
   // some browsers never say when they've finished (or never start), and a beat waiting on its line would hold forever:
   // allow about as long as the line takes to say, and a little more, while it isn't paused
   let left = (text.length / 12 + 3) * 1000;

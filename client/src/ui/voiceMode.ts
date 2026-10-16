@@ -1,6 +1,6 @@
 import type { CrewVoice } from '../../../shared/voice';
 import { api } from '../net/api';
-import { state } from '../net/state';
+import { bestBrowserVoice, kokoroReady } from './crewVoice';
 import { cancelDictation, keptOpenMic, type Microphone, micPerRecording } from './dictation';
 import { h } from './dom';
 import { Switch } from './panels';
@@ -31,15 +31,15 @@ export const voicePrefs = {
 interface Queued {
   text: string;
   voice: CrewVoice;
-  /** Kokoro's WAV, fetched as soon as the line is queued; null means the browser's own voice says it. */
+  /** Kokoro's WAV, fetched as soon as the line is queued (once Kokoro's loaded); null means the browser's own voice says it. */
   audio: Promise<Blob | null>;
   /** Hushing aborts it, whether it's waiting, being fetched or being said. */
   abort: AbortController;
 }
 
 /**
- * Says the crew's lines one at a time, in the order they're queued, so voices never overlap. Kokoro speaks them once
- * it's ready on the server; until then, or if it fails, the browser's built-in voice does.
+ * Says the crew's lines one at a time, in the order they're queued, so voices never overlap. Kokoro speaks them, and a
+ * line waits for it while it loads: only if Kokoro fails does the browser's built-in voice say it.
  */
 export class CrewSpeaker {
   private queue: Queued[] = [];
@@ -47,7 +47,9 @@ export class CrewSpeaker {
 
   say(text: string, voice: CrewVoice): void {
     const abort = new AbortController();
-    const audio = state.voice?.speech.engine.state === 'ready' ? api.speak(text, voice.kokoro, abort.signal).catch(() => null) : Promise.resolve(null);
+    const audio = kokoroReady(abort.signal)
+      .then((ready) => (ready ? api.speak(text, voice.kokoro, abort.signal) : null))
+      .catch(() => null);
     this.queue.push({ text, voice, audio, abort });
     void this.next();
   }
@@ -90,7 +92,7 @@ async function play(line: Queued): Promise<void> {
       const utterance = new SpeechSynthesisUtterance(line.text);
       utterance.lang = line.voice.lang;
       utterance.pitch = line.voice.pitch;
-      utterance.voice = speechSynthesis.getVoices().find((v) => v.lang === line.voice.lang) ?? null;
+      utterance.voice = bestBrowserVoice(speechSynthesis.getVoices(), line.voice.lang);
       utterance.onend = utterance.onerror = () => done();
       signal.addEventListener('abort', () => speechSynthesis.cancel());
       speechSynthesis.speak(utterance);
@@ -108,7 +110,7 @@ export class VoiceSession {
 
   constructor(keepMicOpen: boolean) {
     this.microphone = keepMicOpen ? keptOpenMic() : micPerRecording;
-    // Kokoro downloads the first time voice mode is used; the browser's voice speaks until it's ready
+    // Kokoro downloads the first time voice mode is used, and the crew's lines wait for it
     void api.loadSpeech().catch(() => undefined);
   }
 

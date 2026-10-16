@@ -102,6 +102,7 @@ async function main() {
   // FOCUS_STUDIO=live: the real studio computer even in the demo office, to try it on a model without GitHub
   const studio = new StudioComputer(store, hub, config.demo && process.env.FOCUS_STUDIO !== 'live' ? new DemoStudio() : new ClaudeStudio(), shipStatus, { readSource: sourceReader([paths.planning, paths.workspaces, config.root]) });
   const office = new Office(store, hub, github, previews, planner, studio, usage, new Voice(hub, config.demo), await currentVersion());
+  office.voice.warmSpeech();
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
   // the office's own repo, for plugins that work on it (the demo has none)

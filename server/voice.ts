@@ -75,6 +75,14 @@ export class Voice {
     return this.status();
   }
 
+  /**
+   * Loads Kokoro as the office starts, if it's downloaded, so the first line anyone says is in a crew voice rather than
+   * waiting on the model. Not in the demo office: there may be many of those at once, and each would load its own.
+   */
+  warmSpeech(): void {
+    if (!this.demo && this.speech.status().downloaded) this.speech.load();
+  }
+
   speak(text: string, voice: KokoroVoice): Promise<Buffer> {
     return this.speech.speak(text, voice);
   }
