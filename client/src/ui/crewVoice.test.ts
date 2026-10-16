@@ -30,6 +30,11 @@ describe('bestBrowserVoice', () => {
     expect(bestBrowserVoice(voices, 'en-GB')?.name).toBe('Daniel');
   });
 
+  it('never picks the old robotic voice, even when it comes first', () => {
+    const voices = [voice('Fred', 'en-US'), voice('Samantha', 'en-US')];
+    expect(bestBrowserVoice(voices, 'en-US')?.name).toBe('Samantha');
+  });
+
   it('never picks a novelty voice, and takes another accent over none', () => {
     const voices = [voice('Zarvox', 'en-US'), voice('Bad News', 'en-US'), voice('Karen', 'en-AU')];
     expect(bestBrowserVoice(voices, 'en-US')?.name).toBe('Karen');
