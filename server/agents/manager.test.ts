@@ -1297,6 +1297,49 @@ describe('AgentManager', () => {
       expect(fs.existsSync(path.join(host.officeDir, 'package.json'))).toBe(true);
     });
 
+    it('lends a plugin copies: what it changes of the agents, projects, settings and ledger it reads never reaches the office', async () => {
+      const { agents, claude, store, project } = office();
+      let lent: PluginHost | undefined;
+      const heard: string[] = [];
+      agents.startPlugins([{
+        id: 'meddler',
+        start: (host) => {
+          lent = host;
+          return {
+            // a plugin that writes to what its hook hears of (past the read-only type, as plain JavaScript could)
+            turn: (agent) => {
+              heard.push(agent.name);
+              Object.assign(agent, { name: 'Meddled', status: 'failed' });
+            },
+          };
+        },
+      }], { demo: false, ownRepo: () => undefined });
+      const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+      await until(() => claude.turns.length === 1);
+      const name = store.agent(lead.id).name;
+      expect(heard).toEqual([name]);
+      expect(store.agent(lead.id)).toMatchObject({ name, status: 'working' });
+
+      const host = lent!;
+      Object.assign(host.agent(lead.id)!, { name: 'Meddled' });
+      Object.assign(host.agents()[0], { name: 'Meddled' });
+      Object.assign(host.projects()[0], { name: 'Meddled' });
+      Object.assign(host.settings(), { model: 'meddled' });
+      agents.record(project.id, { kind: 'closed', repo: 'demo/webshop-api', pr: 3, by: 'github', qa: 'none', failedRounds: 0, triages: 0 });
+      const ledger = host.ledger();
+      Object.assign(ledger[0], { repo: 'meddled/repo' });
+      ledger.length = 0;
+      expect(store.agent(lead.id).name).toBe(name);
+      expect(store.projects[0].name).toBe(project.name);
+      expect(store.settings.model).not.toBe('meddled');
+      expect(store.ledger.at(-1)).toMatchObject({ kind: 'closed', repo: 'demo/webshop-api' });
+
+      // and printing on its copy prints on the office's own agent
+      host.print(host.agent(lead.id)!, 'From the meddler');
+      expect(store.recentLines(lead.id).at(-1)).toMatchObject({ kind: 'system', text: 'From the meddler' });
+      await agents.dismiss(lead.id);
+    });
+
     it('keeps the plugin’s state in its own slot, with what it adds later filled in fresh', () => {
       const { agents, store } = office();
       const host = auditor(agents).host();
