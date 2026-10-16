@@ -66,6 +66,23 @@ describe('Store on disk', () => {
     later.load();
     expect(later.run('journaled')).toEqual({ inbox: [], later: [], owed: [], turns: 0, phase: 'idle', seq: 4 });
   });
+
+  it('keeps each pull request’s review journal on disk as it goes, by the PR, and drops a last line cut short', () => {
+    const store = new Store(true);
+    store.load();
+    store.reviewJournal('acme/shop#3', { kind: 'requested', head: 'abc' });
+    store.reviewJournal('acme/shop#3', { kind: 'seated', agent: 'qa_p' });
+    const file = path.join(dir, 'runs', 'reviews', 'acme__shop-3.jsonl');
+    expect(fs.readFileSync(file, 'utf8').split('\n').filter(Boolean)).toHaveLength(2);
+    fs.appendFileSync(file, '{"v":1,"seq":3,"kind":"tes');
+
+    const again = new Store(true);
+    again.load();
+    expect(again.review('acme/shop#3')).toMatchObject({ phase: 'seated', agent: 'qa_p', seq: 2 });
+    expect(again.reviewJournal('acme/shop#3', { kind: 'testing', sha: 'abc' })).toMatchObject({ phase: 'testing', seq: 3 });
+    expect(again.reviewEntries('acme/shop#3').map((e) => e.kind)).toEqual(['requested', 'seated', 'testing']);
+    expect(again.review('acme/shop#4').phase).toBe('idle');
+  });
 });
 
 describe('a repo’s merge method', () => {
@@ -180,11 +197,8 @@ describe('agentAfterRestart', () => {
 describe('reviewAfterRestart', () => {
   const review = (r: Partial<QaReview>): QaReview => ({ projectId: 'p', repo: 'o/r', number: 1, title: 't', status: 'passed', requestedAt: 0, ...r });
 
-  it('ends a review that was queued or under way, so it can be sent again', () => {
-    for (const status of ['queued', 'testing'] as const) {
-      expect(reviewAfterRestart(review({ status }))).toMatchObject({ status: 'error', error: expect.stringMatching(/Send it to QA again/) });
-    }
-    expect(reviewAfterRestart(review({ status: 'failed' })).status).toBe('failed');
+  it('leaves a review queued or under way for its journal to pick up (Reviews.recover)', () => {
+    for (const status of ['queued', 'testing', 'failed'] as const) expect(reviewAfterRestart(review({ status })).status).toBe(status);
   });
 
   it('hands a PR the operations officer was looking at to the captain', () => {
@@ -221,7 +235,7 @@ describe('loading a saved office', () => {
     expect(store.projects[0]?.maxAgents).toBe(2);
     expect(store.agents.get('agent_ab12')).toMatchObject({ status: 'stopped', desk: expect.any(Number) });
     expect(store.agents.get('agent_ab12')?.desk).toBeLessThan(2);
-    expect(store.reviews.get('acme/shop#3')?.status).toBe('error');
+    expect(store.reviews.get('acme/shop#3')?.status).toBe('testing');
     expect(store.closedPrs.get('acme/shop#7')?.pr).toBe(3);
     expect(store.studio.status).toBe('failed');
     expect(store.plugins).toEqual({ retro: state.retro, 'number-one': { chat: state.numberOne } });

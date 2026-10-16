@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { plannerFor, qaFor, qaOfficerFor } from '../../../shared/crew';
 import { goneReply } from '../../../shared/mergeGate';
 import { autoSendBackFor, prKey, pullUrl, sameCommit } from '../../../shared/qa';
-import type { Agent, FailedCheck, FixFor, QaReport, QaReview, QaScreenshot } from '../../../shared/types';
+import type { Agent, FailedCheck, FixFor, QaReport, QaReview, QaScreenshot, TermLine } from '../../../shared/types';
 import { QA_DESK } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../../util';
@@ -12,6 +12,8 @@ import { checksFixPrompt, evidencePath, filesPrompt, filesToRevisit, fixPrompt, 
 import type { QaLoopEvent } from '../qaLoop';
 import { qaNextStep } from '../qaLoop';
 import { carriedComment, retestStep, shippedSinceTested } from '../retest';
+import { type Reported, type ReviewRecovery, reviewRecovery } from '../reviewJournal';
+import { recovery } from '../runJournal';
 import { Workspace } from '../services';
 import { reviewCheckoutId, reviewRepoId, triageWorkspaceId } from '../worktrees';
 import { STOPPED_BY_CAPTAIN } from '../types';
@@ -60,8 +62,10 @@ export class Reviews extends Part {
       shippedHead,
     };
     this.putReview(review);
+    this.store.reviewJournal(prKey(repo, number), { kind: 'requested', ...(shippedHead && { head: shippedHead }) });
     if (existing?.sha && (existing.status === 'passed' || existing.status === 'failed') && !retryNote && !asked) {
       this.prechecking.add(prKey(repo, number));
+      this.store.reviewJournal(prKey(repo, number), { kind: 'prechecking' });
       this.background(this.precheck(review, existing));
     } else {
       this.nextReview(projectId);
@@ -103,6 +107,7 @@ export class Reviews extends Part {
       if (!current()) return;
       if (step.kind === 'skip') {
         console.log(`Not sending ${review.repo}#${review.number} to QA: ${step.reason}`);
+        this.store.reviewJournal(key, { kind: 'precheck-skipped' });
         this.putReview({ ...last, mergeRequested: mergeRequested() });
         this.boardChanged(review.projectId);
         return;
@@ -119,6 +124,7 @@ export class Reviews extends Part {
       const commentUrl = yield* github.commentOnPullRequest(review.repo, review.number, body).pipe(Effect.map((url) => url || undefined), Effect.orElseSucceed(() => undefined));
       // the PR may have merged or closed while the comment went up
       if (!current()) return;
+      this.store.reviewJournal(key, { kind: 'precheck-carried', sha: step.head, ...(commentUrl && { commentUrl }) });
       this.putReview({ ...last, status: 'passed', sha: step.head, carriedFrom: last.sha, commentUrl: commentUrl ?? last.commentUrl, mergeRequested: mergeRequested(), requestedAt: review.requestedAt, finishedAt: Date.now() });
       this.hub.toast('success', `✅ ${where} stays passed: merge of ${pr.baseBranch} only, checks green at ${step.head.slice(0, 7)}`, undefined, review.projectId);
       this.boardChanged(review.projectId);
@@ -126,6 +132,8 @@ export class Reviews extends Part {
       Effect.catchCause((cause) => Effect.sync(() => console.warn(`Couldn't look at ${review.repo}#${review.number} before QA: ${String(cause)}`))),
       Effect.ensuring(Effect.sync(() => {
         this.prechecking.delete(key);
+        // anything but a verdict that stands or carries over goes to QA
+        if (this.store.review(key).phase === 'precheck') this.store.reviewJournal(key, { kind: 'precheck-retest' });
         this.nextReview(review.projectId);
       })),
     );
@@ -183,6 +191,7 @@ export class Reviews extends Part {
     this.hub.send({ type: 'agent', agent });
     const where = goal ? ` at ${goal.name}'s table, for “${goal.lead?.title ?? 'their goal'}”` : '';
     this.print(agent, [{ kind: 'system', text: `──────── ✻ ${crew.name} picks up ${review.repo}#${review.number} for QA${where}: ${review.title}` }]);
+    this.store.reviewJournal(prKey(review.repo, review.number), { kind: 'seated', agent: id });
     this.putReview({ ...review, agentId: id });
   }
 
@@ -216,7 +225,10 @@ export class Reviews extends Part {
       }
       if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
       const review = this.store.reviews.get(prKey(agent.repo, pr.number));
-      if (review) this.putReview({ ...review, status: 'testing', title: pr.title, sha, agentId: agent.id, error: undefined });
+      if (review) {
+        this.store.reviewJournal(prKey(agent.repo, pr.number), { kind: 'testing', sha });
+        this.putReview({ ...review, status: 'testing', title: pr.title, sha, agentId: agent.id, error: undefined });
+      }
       rt.qaSystem = qaSystemAppend(agent, project, pr, sha, siblings);
       rt.shots = undefined;
       let prompt = qaPrompt(agent.repo, pr, issues, review ?? {}, rt.qaFiles.changed);
@@ -304,40 +316,84 @@ export class Reviews extends Part {
       const opened = yield* this.openedBy(agent);
       const revisit = filesToRevisit(report, files, opened);
       if (revisit && agent.sessionId) return yield* this.revisitFiles(agent, agent.sessionId, revisit);
-      const pass = report.verdict === 'pass';
       const review = this.store.reviews.get(prKey(agent.repo, number));
       const screenshots = yield* this.keepScreenshots(agent, report, review?.sha);
       const account = files && { changed: files.changed, opened: opened && [...opened], sentBack: files.sentBack };
-      this.update(agent, { activity: 'Posting the QA report on the PR' });
       const body = qaComment(report, { officer: agent.name, sha: review?.sha, pr: pullUrl(agent.repo, number) }, screenshots, this.store.settings.attribution, account);
-      const commentUrl = yield* (yield* GitHub).commentOnPullRequest(agent.repo, number, body).pipe(
-        Effect.tap((url) => Effect.sync(() => this.print(agent, [{ kind: 'system', text: `✻ Posted the QA report: ${url || 'done'}` }]))),
-        Effect.map((url) => url || undefined),
-        Effect.catch((err) => Effect.sync(() => {
-          this.print(agent, [{ kind: 'error', text: `✘ Couldn't post the QA report on the PR: ${err.message}` }]);
-          return undefined;
-        })),
-      );
-      const failedRounds = (review?.failedRounds ?? 0) + (pass ? 0 : 1);
+      const failedRounds = (review?.failedRounds ?? 0) + (report.verdict === 'pass' ? 0 : 1);
+      // the verdict's on disk before it goes anywhere: a restart from here on posts it and tells everyone (`deliverVerdict`)
+      this.store.reviewJournal(prKey(agent.repo, number), { kind: 'reported', verdict: report.verdict, officer: agent.name, body, failedRounds, report, screenshots, files: account, sha: review?.sha });
+      yield* this.deliverVerdict(agent.projectId, agent.repo, number);
+    });
+  }
+
+  /**
+   * Puts the verdict the PR's review journal holds onto the pull request, unless it's there already, then tells everyone
+   * who hears of one: the board and ledger, the reviewer's station, whoever fixes a failed PR, and the PR's lead. From a
+   * review's end, or at startup for one Focus shut down part way through.
+   */
+  private deliverVerdict(projectId: string, repo: string, number: number): Effect.Effect<void, never, ManagerServices> {
+    return Effect.gen({ self: this }, function* () {
+      const key = prKey(repo, number);
+      let journal = this.store.review(key);
+      const agent = this.reviewerOn(repo, number);
+      if (typeof journal.phase === 'object' && journal.phase.reported === 'posting' && journal.reported) {
+        const url = yield* this.postVerdict(agent, repo, number, journal.reported.body);
+        journal = this.store.reviewJournal(key, { kind: 'posted', ...(url && { url }) });
+      }
+      if (journal.reported) yield* this.announceVerdict(projectId, repo, number, journal.reported, agent);
+    });
+  }
+
+  /** The QA officer at work on the PR, while they still are. */
+  private reviewerOn(repo: string, number: number): Agent | undefined {
+    const seated = this.store.reviews.get(prKey(repo, number))?.agentId;
+    const reviewer = seated ? this.store.agents.get(seated) : undefined;
+    return reviewer?.task === 'review' && reviewer.repo === repo && reviewer.issue.number === number ? reviewer : undefined;
+  }
+
+  /** Comments the verdict on the PR: its link, or undefined when GitHub wouldn't take it (said in the reviewer's terminal). */
+  private postVerdict(agent: Agent | undefined, repo: string, number: number, body: string): Effect.Effect<string | undefined, never, GitHub> {
+    const say = (line: TermLine['kind'], text: string) => Effect.sync(() => agent && this.print(agent, [{ kind: line, text }]));
+    if (agent) this.update(agent, { activity: 'Posting the QA report on the PR' });
+    return GitHub.use((github) => github.commentOnPullRequest(repo, number, body)).pipe(
+      Effect.tap((url) => say('system', `✻ Posted the QA report: ${url || 'done'}`)),
+      Effect.map((url) => url || undefined),
+      Effect.catch((err) => say('error', `✘ Couldn't post the QA report on the PR: ${err.message}`).pipe(Effect.as(undefined))),
+    );
+  }
+
+  /** Tells everyone who hears of a verdict: the board and ledger, the reviewer's station, whoever fixes a failed PR, and its lead. */
+  private announceVerdict(projectId: string, repo: string, number: number, verdict: Reported & { url?: string }, agent: Agent | undefined): Effect.Effect<void, never, ManagerServices> {
+    return Effect.gen({ self: this }, function* () {
+      const { officer, report, screenshots, files, failedRounds, sha, url: commentUrl } = verdict;
+      const pass = verdict.verdict === 'pass';
+      const review = this.store.reviews.get(prKey(repo, number));
       const checks = { pass: 0, fail: 0, skip: 0 };
       for (const c of report.checks) checks[c.result]++;
-      this.core.ledger.record(agent.projectId, { kind: 'qa-verdict', repo: agent.repo, pr: number, goal: this.core.leads.leadWith(agent.repo, number)?.lead?.title, verdict: report.verdict, sha: review?.sha, reviewer: agent.name, checks, failedRounds });
-      const done: QaReview | undefined = review && { ...review, status: pass ? 'passed' : 'failed', report, screenshots, commentUrl, files: account, failedRounds, finishedAt: Date.now(), error: undefined };
+      this.core.ledger.record(projectId, { kind: 'qa-verdict', repo, pr: number, goal: this.core.leads.leadWith(repo, number)?.lead?.title, verdict: verdict.verdict, sha, reviewer: officer, checks, failedRounds });
+      const done: QaReview | undefined = review && { ...review, status: pass ? 'passed' : 'failed', report, screenshots, commentUrl, files, failedRounds, finishedAt: Date.now(), error: undefined };
       if (done) this.putReview(done);
-      this.print(agent, [{ kind: pass ? 'success' : 'error', text: `${pass ? '✅ QA passed' : '❌ QA failed'} PR #${number} · ${report.checks.length} checks` }]);
-      this.update(agent, { status: 'done', activity: `${pass ? '✅ Passed' : '❌ Failed'} PR #${number}`, finishedAt: Date.now() });
-      this.hub.toast(pass ? 'success' : 'error', `${pass ? '✅' : '❌'} ${agent.name} ${pass ? 'passed' : 'failed'} ${agent.repo.split('/')[1]}#${number}: ${truncate(report.summary, 120)}`, agent.id);
-      this.boardChanged(agent.projectId);
-      if (done) yield* this.qaNext(done, { kind: 'verdict', verdict: report.verdict, failedRounds });
-      this.core.ledger.digestSession(agent, [{ repo: agent.repo, pr: number }]);
-      yield* this.core.leads.leadShielded(agent.projectId, agent.repo, number, report, failedRounds, screenshots);
+      if (agent) this.reviewerDone(agent, pass, number, report.checks.length);
+      this.hub.toast(pass ? 'success' : 'error', `${pass ? '✅' : '❌'} ${officer} ${pass ? 'passed' : 'failed'} ${repo.split('/')[1]}#${number}: ${truncate(report.summary, 120)}`, agent?.id);
+      this.boardChanged(projectId);
+      if (done) yield* this.qaNext(done, { kind: 'verdict', verdict: verdict.verdict, failedRounds });
+      yield* this.core.leads.leadShielded(projectId, repo, number, report, failedRounds, screenshots);
       // the lead shipped again while QA tested: the verdict stands for the commit QA had, and QA goes on to the latest
       // (from GitHub's head, which has caught up by now, so a PR someone else pushed past the ship doesn't loop)
       const behind = done?.sha ? shippedSinceTested(done) : undefined;
-      this.core.leads.leadHearsVerdict(agent.repo, number, `QA officer ${agent.name}`, report, failedRounds, behind && done?.sha ? { tested: done.sha, shipped: behind } : undefined);
+      this.core.leads.leadHearsVerdict(repo, number, `QA officer ${officer}`, report, failedRounds, behind && done?.sha ? { tested: done.sha, shipped: behind } : undefined);
+      this.store.reviewJournal(prKey(repo, number), { kind: 'announced' });
       if (done && behind) this.requestReview(done.projectId, done.repo, done.number, done.title);
-      this.nextReview(agent.projectId);
+      this.nextReview(projectId);
     });
+  }
+
+  /** The reviewer's station after their verdict: it's in their terminal, they're done, and their session's digested. */
+  private reviewerDone(agent: Agent, pass: boolean, number: number, checks: number): void {
+    this.print(agent, [{ kind: pass ? 'success' : 'error', text: `${pass ? '✅ QA passed' : '❌ QA failed'} PR #${number} · ${checks} checks` }]);
+    this.update(agent, { status: 'done', activity: `${pass ? '✅ Passed' : '❌ Failed'} PR #${number}`, finishedAt: Date.now() });
+    this.core.ledger.digestSession(agent, [{ repo: agent.repo, pr: number }]);
   }
 
   /**
@@ -466,7 +522,10 @@ export class Reviews extends Part {
   /** A review that ended without a verdict (stopped, failed, or its PR went away). */
   reviewEnded(agent: Agent, error: string): void {
     const review = this.store.reviews.get(prKey(agent.repo, agent.issue.number));
-    if (review && (review.status === 'testing' || review.status === 'queued')) this.putReview({ ...review, status: 'error', error, finishedAt: Date.now() });
+    if (review && (review.status === 'testing' || review.status === 'queued')) {
+      this.store.reviewJournal(prKey(review.repo, review.number), { kind: 'ended', error });
+      this.putReview({ ...review, status: 'error', error, finishedAt: Date.now() });
+    }
     // don't start the next review under the captain's nose when they stopped this one on purpose; otherwise once this
     // one's wound down
     if (error !== STOPPED_BY_CAPTAIN) this.background(Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => this.nextReview(agent.projectId)))));
@@ -489,6 +548,7 @@ export class Reviews extends Part {
     }
     const review = this.store.reviews.get(prKey(repo, number));
     if (!review) return;
+    this.store.reviewJournal(prKey(repo, number), { kind: 'gone', merged });
     this.core.triages.stopTriage(prKey(repo, number));
     // each reviewer kept a checkout of this PR for re-tests: nobody needs them now
     const reviewers = new Set([review.agentId ?? qaAgentId(review.projectId), qaAgentId(review.projectId), triageWorkspaceId(review.projectId)]);
@@ -496,6 +556,55 @@ export class Reviews extends Part {
     this.store.removeReview(repo, number);
     this.hub.send({ type: 'review-removed', repo, number });
     this.nextReview(review.projectId);
+  }
+
+  /**
+   * Picks reviews back up at startup, from their journals: a verdict in hand goes onto its PR, and one whose reviewer's
+   * turn carries on (`Sessions.recover`) carries on with it. Before the reviewers' own runs are recovered, so a reviewer
+   * whose review starts again has nothing left to pick up. The rooms with reviews back in line: their queues move
+   * (`nextReview`) once the reviewers' runs are recovered, so one picking their review back up isn't seated on another.
+   */
+  recover(onKey: boolean): Set<string> {
+    const rooms = new Set<string>();
+    for (const review of [...this.store.reviews.values()]) {
+      const key = prKey(review.repo, review.number);
+      const reviewer = review.agentId ? this.store.agents.get(review.agentId) : undefined;
+      const next = reviewRecovery(this.store.review(key), review.status, reviewer && recovery(this.store.run(reviewer.id), reviewer, onKey).kind);
+      if (this.recoverReview(review, reviewer, next)) rooms.add(review.projectId);
+    }
+    return rooms;
+  }
+
+  /** Does what `reviewRecovery` says for one review: true when it's back in its room's queue. */
+  private recoverReview(review: QaReview, reviewer: Agent | undefined, next: ReviewRecovery): boolean {
+    const key = prKey(review.repo, review.number);
+    switch (next.kind) {
+      case 'none':
+      case 'carry-on':
+        return false;
+      case 'queue':
+        return true;
+      case 'retest':
+        this.store.reviewJournal(key, { kind: 'precheck-retest' });
+        return true;
+      case 'restart':
+        this.store.reviewJournal(key, { kind: 'restarted' });
+        // their run was setting up: it starts again from nothing when they're seated
+        if (reviewer) this.store.journal(reviewer.id, { kind: 'reset' });
+        this.putReview({ ...review, status: 'queued', agentId: undefined });
+        return true;
+      case 'interrupted':
+        if (review.status === 'queued' || review.status === 'testing') {
+          if (this.store.review(key).phase !== 'idle') this.store.reviewJournal(key, { kind: 'ended', error: next.error });
+          this.putReview({ ...review, status: 'error', error: next.error, finishedAt: Date.now() });
+        }
+        return false;
+      case 'post':
+      case 'announce':
+        if (reviewer) this.print(reviewer, [{ kind: 'system', text: `✻ Focus restarted before everyone heard QA's verdict: ${next.kind === 'post' ? 'posting it' : 'passing it on'}` }]);
+        this.background(this.deliverVerdict(review.projectId, review.repo, review.number));
+        return false;
+    }
   }
 
   putReview(review: QaReview): void {

@@ -5,7 +5,7 @@ import { expect } from 'vitest';
 import { demoLayer } from '../github/demo';
 import type { GitHub } from '../github/service';
 import { Hub } from '../hub';
-import { agentAfterRestart, Store } from '../store';
+import { agentAfterRestart, reviewAfterRestart, Store } from '../store';
 import type { Autonomy } from '../../shared/types';
 import { demoWorkspace } from './demoRunner';
 import { AgentManager } from './manager';
@@ -57,6 +57,7 @@ export function office(workspace: WorkspaceOps = demoWorkspace, github: Layer.La
  */
 export function restarted(store: Store, workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<GitHub> = demoLayer) {
   for (const agent of [...store.agents.values()]) store.putAgent(agentAfterRestart(agent, 'Shop'));
+  for (const review of [...store.reviews.values()]) store.putReview(reviewAfterRestart(review));
   return crew(store, workspace, github);
 }
 

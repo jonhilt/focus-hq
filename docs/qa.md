@@ -38,6 +38,69 @@ Every holodeck has a QA officer in blue, sitting at a station in the control rin
 - **Merge when QA passes:** while QA is queued or testing a PR, its merge button becomes **Merge when QA passes** (any PR, a teammate's too, auto-merge on or off). The office remembers the request with the review and, once QA passes, merges exactly the commit QA passed (`requestedMerge` in `shared/mergeGate.ts`); if QA fails it, can't finish, or GitHub refuses, it tells you and forgets the request. Commits that arrive after the pass go back to QA first. Press the button again to take the request back. Merging a PR QA failed or hasn't tested still works, after a confirm.
 - **Following up:** message the QA officer like any agent, to have them look at something else. Once their PR has merged or closed, their session is over: a message gets "PR #n was merged; nothing to review" instead of resuming it.
 
+## The review journal: picking a review up after a restart
+
+Each pull request's review keeps a journal, `~/.focus/runs/reviews/<owner>__<repo>-<n>.jsonl` (`server/agents/reviewJournal.ts`), like an agent's run journal ([agents](agents.md#the-run-journal-where-a-run-was-and-picking-up-after-a-restart)): numbered facts, each flushed to disk before the office acts on it (`Store.reviewJournal`), never rewritten. The reviewer's turns are in their own run journal; this one is the review around them, keyed by the PR, since a review outlives its reviewer (QA's next review resets their run). Its facts are `requested`, `prechecking` and how the precheck went (`precheck-skipped`, `precheck-carried`, `precheck-retest`), `seated`, `testing` (the commit), `reported` (the verdict, the report and the comment that says it, written before anything goes onto GitHub), `posted` (the comment's link), `announced` (once the ledger, the PR's lead and any send-back have heard), `ended` without a verdict, and `gone` when the PR merges or closes. What they add up to is a state machine's (`reviewMachine`, XState), drawn from its code (a test keeps this picture in step):
+
+<!-- review-machine:start -->
+```mermaid
+---
+config:
+  layout: elk
+---
+stateDiagram-v2
+  direction LR
+  state "review" as review {
+    [*] --> review_idle
+    state "idle" as review_idle
+    state "queued" as review_queued
+    state "precheck" as review_precheck
+    state "seated" as review_seated
+    state "testing" as review_testing
+    state "reported" as review_reported {
+      [*] --> review_reported_posting
+      state "posting" as review_reported_posting
+      state "announcing" as review_reported_announcing
+    }
+    state "passed" as review_passed
+    state "failed" as review_failed
+    state "error" as review_error
+    state "gone" as review_gone
+  }
+  review_idle --> review_queued : requested
+  review_queued --> review_precheck : prechecking
+  review_queued --> review_seated : seated
+  review_queued --> review_error : ended
+  review_precheck --> review_passed : precheck-skipped [passed before]
+  review_precheck --> review_failed : precheck-skipped
+  review_precheck --> review_passed : precheck-carried
+  review_precheck --> review_queued : precheck-retest
+  review_seated --> review_queued : restarted
+  review_seated --> review_testing : testing
+  review_seated --> review_error : ended
+  review_testing --> review_reported : reported
+  review_testing --> review_error : ended
+  review_reported_posting --> review_reported_announcing : posted
+  review_reported_announcing --> review_passed : announced [passed]
+  review_reported_announcing --> review_failed : announced
+  review_passed --> review_queued : requested
+  review_failed --> review_queued : requested
+  review_error --> review_queued : requested
+  review --> review_gone : gone
+  classDef final fill:#1d3320,stroke:#9fd39f,color:#e8e4d8
+  class review_gone final
+```
+<!-- review-machine:end -->
+
+**After a restart** (`Reviews.recover`, before the reviewers' own runs are recovered; `reviewRecovery` decides):
+
+- a review waiting for its reviewer waits again, and one the office was prechecking goes to QA;
+- one whose reviewer was still checking it out (no Claude turn yet) starts again;
+- one under test carries on with its reviewer's turn when that picks itself back up: on your plan, in the same conversation, told it was cut off (or held again for your plan's limit). On your API key, or with no conversation to go back to, it ends saying "Interrupted when Focus shut down. Send it to QA again.";
+- a verdict QA had reached is posted on the PR if it wasn't yet, and passed on to everyone who hears of one (the board, the ledger, the PR's lead, a send-back), with no Claude turn. A crash in the moment between the comment going up and `posted` being written posts it twice: a verdict said twice beats one lost.
+
+Screenshots QA took before the restart are held in memory, so a review that carries on posts only the ones taken after it. A review from before reviews had journals that was under way ends as it used to, to be sent again. While the office shuts down, nobody new is seated or started.
+
 ## Stuck PRs
 
 Before a stuck PR reaches you, the holodeck's operations officer (the one at the **Ops** station) looks at it. The PR card says **Lt. … is looking**, and so does their speech bubble.

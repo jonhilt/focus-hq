@@ -97,9 +97,11 @@ export class AgentManager {
     return this.core.seating.busyOn(repo, number);
   }
 
-  /** After a restart: each agent's run picks up from their journal (`AgentSessions.recover`). */
+  /** After a restart: each QA review, then each agent's run, picks up from its journal (`Reviews.recover`, `AgentSessions.recover`). */
   recover(): void {
+    const rooms = this.core.reviews.recover(keyFallback.onKey());
     this.core.sessions.recover(keyFallback.onKey());
+    for (const room of rooms) this.core.reviews.nextReview(room);
   }
 
   /** The office is shutting down (`AgentSessions.shutDown`). */

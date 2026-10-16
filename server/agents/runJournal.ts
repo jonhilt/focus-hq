@@ -341,15 +341,15 @@ export interface RecoveryAgent {
   cloud?: unknown;
 }
 
-/** The tasks whose conversation carries on after a restart. QA starts each review afresh. */
-const RESUMES: ReadonlySet<string> = new Set(['issue', 'fix', 'conflicts', 'brief', 'lead']);
+/** The tasks whose conversation carries on after a restart: QA's too, with the review it was at (`reviewRecovery`). */
+const RESUMES: ReadonlySet<string> = new Set(['issue', 'fix', 'conflicts', 'brief', 'lead', 'review']);
 
 export const RESUMED_NOTE =
   'Focus restarted while you were working, so your last turn was cut off part way. Check where you got to (git status, the files you were editing, anything you had running) and carry on from there.';
 
 /**
  * What to do with a turn the journal says was in flight when Focus stopped. It carries on in the same conversation
- * when there's one to go back to, on this machine, for work that carries on (not QA's review, or a compaction); and on
+ * when there's one to go back to, on this machine, for work that carries on (not a compaction); and on
  * your plan's login only: on the API key (`onKey`, as the office signs in now) the captain says whether it's worth it.
  * A turn Claude Code had (it reported the session) is told it was interrupted; one it never got is asked again.
  */
@@ -392,7 +392,7 @@ export function resumedNote(sent: string[]): string {
 export const INTERRUPTED_ACTIVITY = 'Interrupted when Focus shut down. Send a message to pick it back up.';
 
 /** A journal entry as its line in the file. */
-export function journalLine(entry: JournalEntry): string {
+export function journalLine(entry: { v: 1; seq: number; t: number }): string {
   return `${JSON.stringify(entry)}\n`;
 }
 
@@ -400,8 +400,8 @@ export function journalLine(entry: JournalEntry): string {
  * A journal file read back: its entries in order, and how many bytes of it are whole lines. A last line cut short
  * (Focus stopped part way through writing it) is left out, to be dropped; so is any line that doesn't parse.
  */
-export function readJournal(text: string): { entries: JournalEntry[]; goodBytes: number } {
-  const entries: JournalEntry[] = [];
+export function readJournal<E = JournalEntry>(text: string): { entries: E[]; goodBytes: number } {
+  const entries: E[] = [];
   let goodBytes = 0;
   let offset = 0;
   const size = Buffer.byteLength(text);
@@ -412,7 +412,7 @@ export function readJournal(text: string): { entries: JournalEntry[]; goodBytes:
     goodBytes = end;
     if (!line) continue;
     try {
-      entries.push(JSON.parse(line) as JournalEntry);
+      entries.push(JSON.parse(line) as E);
     } catch {
       // a damaged line tells nothing; the rest still do
     }

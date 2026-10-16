@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { setup } from 'xstate';
+import { reviewMachine } from './reviewJournal';
 import { journalMachine } from './runJournal';
 import { runMachine } from './runMachine';
 import { mermaidStatechart } from './statechart';
@@ -62,10 +63,11 @@ describe('mermaidStatechart', () => {
   });
 
   it.each([
-    ['run-machine', runMachine],
-    ['journal-machine', journalMachine],
-  ] as const)('keeps the %s’s picture in docs/agents.md as the code has it', (marker, machine) => {
-    const doc = readFileSync(join(__dirname, '../../docs/agents.md'), 'utf8');
+    ['run-machine', runMachine, 'agents.md'],
+    ['journal-machine', journalMachine, 'agents.md'],
+    ['review-machine', reviewMachine, 'qa.md'],
+  ] as const)('keeps the %s’s picture in its docs page as the code has it', (marker, machine, page) => {
+    const doc = readFileSync(join(__dirname, '../../docs', page), 'utf8');
     const drawn = new RegExp(`<!-- ${marker}:start -->\\n\`\`\`mermaid\\n---\\nconfig:\\n {2}layout: elk\\n---\\n([\\s\\S]*?)\\n\`\`\`\\n<!-- ${marker}:end -->`).exec(doc)?.[1];
     // out of step? paste mermaidStatechart(machine)'s output between the markers
     expect(drawn).toBe(mermaidStatechart(machine));

@@ -142,8 +142,8 @@ stateDiagram-v2
 - a developer's work the journal says was going onto GitHub (`delivering`) is finished by the office: pushed again and its pull request found or opened, with no Claude turn and no nudge to commit (both steps are safe to repeat);
 - an agent the journal says was `held` for your plan's usage limit is held again until it resets, with what was waiting for them; if it reset while Focus was stopped, they carry on;
 - an agent whose journal says they were `waiting` for a free slot is back in line (held for a message instead if going back to their conversation would be on your API key);
-- a developer's, a fixer's, a conflict resolver's, a brief's or a lead's turn carries on by itself in the same conversation, told it was cut off (with any messages sent into it, in case they never arrived), or asked again if Claude Code never got it, as long as it would be on your plan;
-- on your API key, QA's review, a cloud agent's, a compaction's, one the captain had just stopped (`stop-requested`), or with no conversation of its own to go back to, the agent waits for a message, saying why.
+- a developer's, a fixer's, a conflict resolver's, a brief's, a lead's or QA's turn carries on by itself in the same conversation, told it was cut off (with any messages sent into it, in case they never arrived), or asked again if Claude Code never got it, as long as it would be on your plan (QA's review carries on with it: [QA](qa.md#the-review-journal-picking-a-review-up-after-a-restart));
+- on your API key, a cloud agent's, a compaction's, one the captain had just stopped (`stop-requested`), or with no conversation of its own to go back to, the agent waits for a message, saying why.
 
 An agent sent home has a `reset` in their journal, so an id that comes back (a reopened goal, QA's next review) starts from nothing.
 

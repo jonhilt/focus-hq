@@ -12,6 +12,7 @@ import { config, paths } from './config';
 import { takeLock } from './fileLock';
 import { fitDesks } from './agents/desks';
 import { upgradeLead } from './agents/lead';
+import { EMPTY_REVIEW, evolveReview, foldReview, type ReviewEntry, type ReviewFact, type ReviewState } from './agents/reviewJournal';
 import { EMPTY_RUN, evolve, fold, type JournalEntry, journalLine, readJournal, type RunFact, type RunState, runView } from './agents/runJournal';
 import { fromBeforePlugins, type SavedBeforePlugins } from './plugins/migrate';
 import { newId } from './util';
@@ -25,12 +26,12 @@ export function studioAfterRestart(saved: StoredStudio): StoredStudio {
   return { ...saved, status: 'failed', activity: 'Interrupted', error: 'Interrupted when Focus shut down. Say it again.' };
 }
 
-/** A QA review as it picks up after a restart: one queued or under way ends, and a PR the operations officer was looking at goes to the captain. */
+/**
+ * A QA review as it picks up after a restart: a PR the operations officer was looking at goes to the captain. One queued
+ * or under way picks up from its journal (`Reviews.recover`).
+ */
 export function reviewAfterRestart(saved: QaReview): QaReview {
   let review = saved;
-  if (review.status === 'queued' || review.status === 'testing') {
-    review = { ...review, status: 'error', error: 'Interrupted when Focus shut down. Send it to QA again.' };
-  }
   if (review.followUp?.kind === 'triaging') {
     review = { ...review, followUp: { kind: 'needs-you', reason: `${review.followUp.officer} was looking at it when Focus shut down` } };
   }
@@ -120,6 +121,10 @@ export class Store {
   private runs = new Map<string, RunState>();
   /** Each agent's journal itself, when it isn't saved to disk (the demo): the last JOURNAL_MEMORY facts. */
   private journals = new Map<string, JournalEntry[]>();
+  /** What each pull request's review journal adds up to, by prKey (data/runs/reviews/<pr>.jsonl, `reviewJournal`). */
+  private reviewRuns = new Map<string, ReviewState>();
+  /** Each review's journal itself, when it isn't saved to disk (the demo). */
+  private reviewJournals = new Map<string, ReviewEntry[]>();
 
   constructor(private readonly persist: boolean) {}
 
@@ -130,7 +135,7 @@ export class Store {
   load(): void {
     if (!this.persist) return;
     fs.mkdirSync(paths.logs, { recursive: true });
-    fs.mkdirSync(paths.runs, { recursive: true });
+    fs.mkdirSync(path.join(paths.runs, 'reviews'), { recursive: true });
     const holder = takeLock(`${paths.state}.lock`);
     if (holder) throw new StateLockedError(holder, config.dataDir);
     // what changed in the last moments before exiting is saved too, before the lock goes
@@ -400,21 +405,8 @@ export class Store {
   journal(id: string, fact: RunFact): RunState {
     const before = this.run(id);
     const entry: JournalEntry = { v: 1, seq: before.seq + 1, t: Date.now(), ...fact };
-    if (this.persist) {
-      const fd = fs.openSync(path.join(paths.runs, `${id}.jsonl`), 'a');
-      try {
-        fs.writeSync(fd, journalLine(entry));
-        fs.fsyncSync(fd);
-      } finally {
-        fs.closeSync(fd);
-      }
-    }
-    if (!this.persist) {
-      const kept = this.journals.get(id) ?? [];
-      kept.push(entry);
-      if (kept.length > JOURNAL_MEMORY) kept.splice(0, kept.length - JOURNAL_MEMORY);
-      this.journals.set(id, kept);
-    }
+    if (this.persist) appendFlushed(this.runFile(id), journalLine(entry));
+    else keepLast(this.journals, id, entry);
     const after = evolve(before, entry);
     this.runs.set(id, after);
     const agent = this.agents.get(id);
@@ -431,12 +423,7 @@ export class Store {
 
   /** The agent's run journal, oldest first: its file, or what's kept of it in memory. */
   journalEntries(id: string): JournalEntry[] {
-    if (!this.persist) return [...(this.journals.get(id) ?? [])];
-    try {
-      return readJournal(fs.readFileSync(path.join(paths.runs, `${id}.jsonl`), 'utf8')).entries;
-    } catch {
-      return [];
-    }
+    return this.persist ? readJournalFile<JournalEntry>(this.runFile(id), false) : [...(this.journals.get(id) ?? [])];
   }
 
   /** What the agent's run journal adds up to. */
@@ -452,16 +439,47 @@ export class Store {
 
   /** An agent's run journal from its file, dropping a last line Focus stopped part way through writing. */
   private readRun(id: string): RunState {
-    const file = path.join(paths.runs, `${id}.jsonl`);
-    let text: string;
-    try {
-      text = fs.readFileSync(file, 'utf8');
-    } catch {
-      return EMPTY_RUN;
+    return fold(readJournalFile<JournalEntry>(this.runFile(id), true));
+  }
+
+  private runFile(id: string): string {
+    return path.join(paths.runs, `${id}.jsonl`);
+  }
+
+  // ---- review journals ----
+
+  /**
+   * Records a fact in a pull request's review journal (`key` its prKey), and what the review adds up to with it: written
+   * and flushed before this returns, like an agent's run journal.
+   */
+  reviewJournal(key: string, fact: ReviewFact): ReviewState {
+    const before = this.review(key);
+    const entry: ReviewEntry = { v: 1, seq: before.seq + 1, t: Date.now(), ...fact };
+    if (this.persist) appendFlushed(this.reviewFile(key), journalLine(entry));
+    else keepLast(this.reviewJournals, key, entry);
+    const after = evolveReview(before, entry);
+    this.reviewRuns.set(key, after);
+    return after;
+  }
+
+  /** What a pull request's review journal adds up to. */
+  review(key: string): ReviewState {
+    let review = this.reviewRuns.get(key);
+    if (!review) {
+      review = this.persist ? foldReview(readJournalFile<ReviewEntry>(this.reviewFile(key), true)) : EMPTY_REVIEW;
+      this.reviewRuns.set(key, review);
     }
-    const { entries, goodBytes } = readJournal(text);
-    if (goodBytes < Buffer.byteLength(text)) fs.truncateSync(file, goodBytes);
-    return fold(entries);
+    return review;
+  }
+
+  /** A pull request's review journal, oldest first. */
+  reviewEntries(key: string): ReviewEntry[] {
+    return this.persist ? readJournalFile<ReviewEntry>(this.reviewFile(key), false) : [...(this.reviewJournals.get(key) ?? [])];
+  }
+
+  /** `owner/repo#12` → data/runs/reviews/owner__repo-12.jsonl */
+  private reviewFile(key: string): string {
+    return path.join(paths.runs, 'reviews', `${key.replace('/', '__').replace('#', '-').replace(/[^A-Za-z0-9_.-]/g, '_')}.jsonl`);
   }
 
   // ---- terminal output ----
@@ -527,4 +545,36 @@ export function stateLocked(pid: number, dataDir: string): string {
 
 function isTheme(value: unknown): value is RoomTheme {
   return typeof value === 'string' && (ROOM_THEMES as readonly string[]).includes(value);
+}
+
+/** Appends a journal's line to its file and flushes it to disk (fsync) before returning. */
+function appendFlushed(file: string, line: string): void {
+  const fd = fs.openSync(file, 'a');
+  try {
+    fs.writeSync(fd, line);
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/** Keeps `entry` in a journal held in memory (the demo), its last JOURNAL_MEMORY facts. */
+function keepLast<E>(journals: Map<string, E[]>, key: string, entry: E): void {
+  const kept = journals.get(key) ?? [];
+  kept.push(entry);
+  if (kept.length > JOURNAL_MEMORY) kept.splice(0, kept.length - JOURNAL_MEMORY);
+  journals.set(key, kept);
+}
+
+/** A journal's entries from its file (none if there's no file). `repair` cuts off a last line Focus stopped part way through writing. */
+function readJournalFile<E>(file: string, repair: boolean): E[] {
+  let text: string;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch {
+    return [];
+  }
+  const { entries, goodBytes } = readJournal<E>(text);
+  if (repair && goodBytes < Buffer.byteLength(text)) fs.truncateSync(file, goodBytes);
+  return entries;
 }

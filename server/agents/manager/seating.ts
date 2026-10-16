@@ -102,6 +102,8 @@ export class Seating extends Part {
    * doesn't count against a room's limit: finished work gets reviewed before new work starts.
    */
   schedule(): void {
+    // shutting down: nobody new starts, whoever's in line starts when the office does
+    if (this.core.closing) return;
     const { start, wait } = whoStarts([...this.store.agents.values()], this.store.projects, this.store.settings.maxConcurrent);
     for (const { agent, why } of wait) this.update(agent, { activity: why });
     for (const agent of start) {
