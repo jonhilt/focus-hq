@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { readScenario, type Scenario, turnParts } from '../../shared/scenarios';
-import { showcaseRoom, type ShowcaseRoom } from '../../shared/showcase';
+import { endsShowcaseTurn, showcaseRoom, type ShowcaseRole, type ShowcaseRoom } from '../../shared/showcase';
 import type { ModelCite, SystemModel, TermLine } from '../../shared/types';
 import { config } from '../config';
 import { demoSinceVerdict } from '../demoGit';
@@ -33,6 +33,19 @@ const SHOWCASE_AREAS = [
   { folder: 'focus/plugins', files: ['cartography/server.ts', 'scorecard/server.ts', 'number-one/server.ts'], description: 'Find the plugins’ transcript readers', ask: 'Which plugins read transcripts, and through what?', found: 'plugins: two, both through PluginHost.transcript' },
   { folder: 'focus/client', files: ['src/ui/agentPanel.ts', 'src/net/state.ts', 'src/ui/captainsLog.ts'], description: 'Check the client never reads them', ask: 'Does anything in the client read a transcript directly?', found: 'client: none; lines come over the hub' },
 ];
+
+/**
+ * What a showcase station puts on its screen first (scenes/showcase/`file`): an explainer's input (`.json`) or a page
+ * (`.html`); none when it's missing or doesn't read, so the lead goes on without it.
+ */
+function showcaseScreen(file: string): { explainer?: ExplainerInput; page?: string } | undefined {
+  try {
+    const text = fs.readFileSync(path.join(config.root, 'scenes', 'showcase', path.basename(file)), 'utf8');
+    return file.endsWith('.json') ? { explainer: JSON.parse(text) as ExplainerInput } : { page: text };
+  } catch {
+    return undefined;
+  }
+}
 
 /** Which kind of demo repo `repo` is, for its made-up files. */
 const repoKind = (repo: string) => (/focus/.test(repo) ? 'focus' : /api/.test(repo) ? 'api' : /game|dodger/.test(repo) ? 'game' : 'web');
@@ -93,6 +106,9 @@ export class DemoRunner implements AgentRunner {
     const inbox: string[] = [];
     let stopped = false;
     let finished = false;
+    // a showcase lead's station, while its turn is one that loops, and whether a message has come that ends it
+    let looping: ShowcaseRole | undefined;
+    let ended = false;
     // the captain can change it while the session runs, as in a real one
     let autonomy = req.autonomy;
     const abort = new AbortController();
@@ -487,9 +503,15 @@ export class DemoRunner implements AgentRunner {
         await ship(`The captain's log says why each goal closed (slice ${slice})`, `## Summary\n\nSlice ${slice}: the captain's log shows why each goal closed.\n\n## Testing\n\n- pnpm test`);
         await tool('TodoWrite', todos(3));
         await say(`Slice ${slice} is shipped: QA is reviewing it, and it waits for you to merge.`);
-        // a passed slice doesn't wake a lead, so this one keeps its turn: a follow-up for QA to review every minute or so
+        // a passed slice doesn't wake a lead, so this one keeps its turn: a follow-up for QA to review every minute or so,
+        // until the captain merges the slice from the board and its next turn starts the next
+        looping = 'qa';
         for (let round = 1; ; round++) {
-          await wait(60, 90);
+          for (let waited = 0; waited < 15 && !ended; waited++) await wait(4, 6);
+          if (ended) {
+            await say(`Slice ${slice} has landed. On to the next.`);
+            return { ok: true, summary: `Slice ${slice} landed.` };
+          }
           const r = repos[0];
           await tool('Edit', { file_path: `/work/${r.folder}/${files[4]}`, old_string: 'closed:', new_string: 'closed because' }, ['Updated 1 file']);
           await commit(r.folder, `Tighten the log's wording (${round})`);
@@ -499,15 +521,23 @@ export class DemoRunner implements AgentRunner {
       };
       const showcase = async (room: ShowcaseRoom): Promise<RunOutcome> => {
         const folders = repos.map((r) => r.folder);
+        // the stations start a few seconds apart, so their screens aren't all drawn at once
+        await wait(room.station * 4, room.station * 4 + 1);
         for (const r of repos) await tool('Read', { file_path: `/work/${r.folder}/CLAUDE.md` }, ['Read 41 lines']);
         await think();
         // something on the goal's star chart from the start: what done looks like, what's next and a loose thread
         await note({ done: `${goal}: done, and shown to the captain.`, next: ['A thin slice end to end'], contact: 'Does this hold up with three leads in the same repo?' });
         if (room.role === 'qa') return showcaseSlice(1);
-        if (room.role === 'briefing') {
-          hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__explain(How a save travels)' }]);
-          const explained = await tools.explain(demoExplainer(folders)).then((reply) => reply.text, (err: Error) => err.message);
+        // what a real lead put on its screen, as it put it there (scenes/showcase/); the made-up briefing if it's gone
+        const screen = room.screen && showcaseScreen(room.screen.file);
+        if (screen?.page !== undefined) await show({ id: room.screen?.file.replace(/\.\w+$/, '') ?? 'screen', title: room.screen?.title ?? '', html: screen.page });
+        else if (screen?.explainer || room.role === 'briefing') {
+          const explainer = screen?.explainer ?? demoExplainer(folders);
+          hooks.lines([{ kind: 'tool', text: `⏺ mcp__office__explain(${explainer.title})` }]);
+          const explained = await tools.explain(explainer).then((reply) => reply.text, (err: Error) => err.message);
           hooks.lines([{ kind: 'output', text: `  ⎿  ${explained}` }]);
+        }
+        if (room.role === 'briefing') {
           await say('The briefing is on the screen: step through it, and ask me about any beat.');
           return { ok: true, summary: 'Put up a briefing.' };
         }
@@ -529,6 +559,12 @@ export class DemoRunner implements AgentRunner {
       if (briefing) {
         const [, title, beat, beatTitle, asked] = briefing;
         await say('Good question. Let me check the code on that.');
+        // the showcase's briefing is a real lead's, about workflows: an answer about that, and no redraw
+        if (room) {
+          await tool('Read', { file_path: `/work/${repos[0]?.folder ?? 'focus'}/${FILES.focus[2]}` }, ['Read 140 lines']);
+          await say(`${beat ? `In beat ${beat}, ${beatTitle}, ` : `In ${title}, `}the transporter room reads the journal Claude Code writes as each agent starts and finishes, so what you see on the pads is what the script has actually reached, not a guess. Each phase lights as its first agent beams in, and a result flows back up to it when one finishes.`);
+          return { ok: true, summary: 'Answered a question about a briefing.' };
+        }
         await tool('Read', { file_path: `/work/${repos[0]?.folder ?? 'web'}/${FILES[kindOf(repos[0]?.repo ?? 'web')][0]}` }, ['Read 84 lines']);
         // asked for more on it: an answer aloud first, then the briefing again under its id, that beat in more detail
         if (/\b(more|detail|redraw|show me)\b/i.test(asked)) {
@@ -785,6 +821,8 @@ export class DemoRunner implements AgentRunner {
     return {
       send: (text) => {
         if (finished) return false;
+        // refused, the office keeps it for the next turn, which this one ends to make way for
+        if (looping && endsShowcaseTurn(looping, text)) return !(ended = true);
         inbox.push(text);
         return true;
       },

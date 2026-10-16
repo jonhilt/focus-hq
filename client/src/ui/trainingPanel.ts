@@ -11,7 +11,7 @@ import { busy, h } from './dom';
  */
 export function openTrainingPanel(ui: Ui): void {
   const body = h('div', null,
-    h('p', { class: 'muted' }, 'Resets the ship to a quiet start: everyone goes home, goals and the log are cleared, and the dice roll from the top. The goal then waits at a free team station for you to start it.'),
+    h('p', { class: 'muted' }, 'Resets the ship to a quiet start: everyone goes home, goals and the log are cleared, and the dice roll from the top. A scenario’s goal then waits at a free team station for you to start it; the busy ship starts every Focus station at once.'),
     h('div', { class: 'places scenarios' },
       ...SCENARIOS.map((scenario) => {
         const t = TRAINING[scenario];

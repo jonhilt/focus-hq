@@ -146,8 +146,16 @@ up to is in the middle of it:
 | 3 | **Briefing**: an explainer on the screen, waiting for you to step through it and ask about a beat |
 | 4 | **QA**: ships a slice, then pushes a follow-up every minute or so, so QA is always reviewing it |
 
+What's on the first three stations' screens is real: what Focus's own leads drew on past goals, kept in
+`scenes/showcase/` (`screen` in `shared/showcase.ts`). Station 1 plays the 3D explainer *How subagents work in Claude
+Code*, station 2 shows the mockup of the transporter room's hologram, and station 3 briefs *How a dynamic workflow runs*.
+An explainer is kept as the input its lead's `explain` call took, from the lead's transcript, so it plays as it did then;
+a page as the HTML it showed. To swap one, drop the file in and point the room's `screen` at it. The stations start a few
+seconds apart, so their screens aren't all drawn at once.
+
 The leads ship without asking (autonomy `auto`). A goal's pull requests never merge by themselves, so station 4's waits
-for you: merge it from the board and its lead ships the next slice. You're beamed to station 1, with no steps for **]**.
+for you: merge it from the board and its lead ends the turn it was pushing follow-ups in (`endsShowcaseTurn`), and ships
+the next slice from its next. You're beamed to station 1, with no steps for **]**.
 
 To record while you play, **H** hides the pill, the HUD and every toast but errors (`?record=1` starts that way), and
 **H** again brings them back; the keys still work while they're hidden.
