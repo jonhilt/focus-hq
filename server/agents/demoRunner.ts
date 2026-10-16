@@ -424,9 +424,18 @@ export class DemoRunner implements AgentRunner {
       // asked about a briefing up close: a line straight away, a look at the code, then a spoken answer about that beat
       const briefing = /^A question about your briefing “([^”]*)”[^)]*?(?:at beat (\d+), “([^”]*)”)?\): ([^\n]*)/.exec(req.prompt);
       if (briefing) {
-        const [, title, beat, beatTitle] = briefing;
+        const [, title, beat, beatTitle, asked] = briefing;
         await say('Good question. Let me check the code on that.');
         await tool('Read', { file_path: `/work/${repos[0]?.folder ?? 'web'}/${FILES[kindOf(repos[0]?.repo ?? 'web')][0]}` }, ['Read 84 lines']);
+        // asked for more on it: an answer aloud first, then the briefing again under its id, that beat in more detail
+        if (/\b(more|detail|redraw|show me)\b/i.test(asked)) {
+          await say(`Short answer: it retries three times, a second apart, then tells the shopper. I'll redraw ${beat ? `beat ${beat}` : 'that part'} with the retries in it.`);
+          hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__explain(How a save travels)' }]);
+          const explained = await tools.explain(demoExplainer(repos.map((r) => r.folder), true)).then((reply) => reply.text, (err: Error) => err.message);
+          hooks.lines([{ kind: 'output', text: `  ⎿  ${explained}` }]);
+          await say('It’s updated on the screen: the outage beat now shows the three retries.');
+          return { ok: true, summary: 'Redrew a briefing in more detail.' };
+        }
         await say(`${beat ? `In beat ${beat}, ${beatTitle}, ` : `In ${title}, `}the save waits for the database to answer before the page says it's done. If the database is down, it retries three times, a second apart, then tells the shopper it couldn't save. Want me to redraw that part of the briefing in more detail?`);
         return { ok: true, summary: 'Answered a question about a briefing.' };
       }
@@ -891,7 +900,7 @@ function demoFlowPage(goal: string, folders: string[]): string {
  * Demo mode: the explainer a lead walks the captain through first, a save travelling from the shopper through each repo
  * to the database and waiting out an outage. Its script is written for the explain tool, as a lead's would be.
  */
-function demoExplainer(folders: string[]): ExplainerInput {
+function demoExplainer(folders: string[], detailed = false): ExplainerInput {
   const boxes = ['shopper', ...folders, 'database'];
   const step = 1050 / boxes.length;
   const html = boxes.map((b, i) =>
@@ -924,7 +933,9 @@ function render(t) {
     beats: [
       { title: 'The shopper saves an item', text: 'Pressing save sends one small request: which item, and who is saving it. Nothing else changes on the page until it is safely stored.', seconds: 4, label: 'Save', narration: 'On the far left is the shopper. When they press save, that gold pill sets off: one small request saying which item, and who is saving it.' },
       { title: 'Each repo passes it on', text: `It travels through ${folders.join(' and ')}, each checking what it owns before handing it to the next, and lands as one row in the database.`, seconds: 5, label: 'Pass it on', narration: 'Watch it hop along the boxes in the middle. Each one is a repo, and each checks the part it owns before handing the save on, until it lands as a row in the database on the right.' },
-      { title: 'If the database is down, it waits', text: 'The last repo keeps the save in a retry queue rather than dropping it, and sends it again when the database is back, so the shopper never loses an item.', seconds: 6, label: 'Outage', narration: 'Now the database goes red: it is down. Notice the save does not vanish. It waits at the last repo in a retry queue, and the moment the database is back, it goes through.' },
+      detailed
+        ? { title: 'If the database is down, it retries', text: 'The last repo keeps the save in a retry queue and tries again three times, a second apart. If the database is still down after the third, the page tells the shopper it couldn’t save, and the item stays in the queue.', seconds: 6, label: 'Outage', narration: 'Here is that part in more detail. The database goes red, and the save waits in the retry queue at the last repo. It tries three times, a second apart. If the database is still down after the third, the shopper is told, and the save stays queued until it is back.' }
+        : { title: 'If the database is down, it waits', text: 'The last repo keeps the save in a retry queue rather than dropping it, and sends it again when the database is back, so the shopper never loses an item.', seconds: 6, label: 'Outage', narration: 'Now the database goes red: it is down. Notice the save does not vanish. It waits at the last repo in a retry queue, and the moment the database is back, it goes through.' },
     ],
     stage: { html, css: '.box .bd { min-height:60px; }', script },
   };

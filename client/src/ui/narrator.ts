@@ -1,4 +1,4 @@
-import type { BriefingSpot } from '../../../shared/artifacts';
+import { type BriefingBeats, type BriefingSpot, firstChangedBeat } from '../../../shared/artifacts';
 import { type CrewVoice, forSpeech } from '../../../shared/voice';
 import { api } from '../net/api';
 import { bestBrowserVoice, kokoroReady } from './crewVoice';
@@ -6,7 +6,7 @@ import { voicePrefs } from './voiceMode';
 
 /** What an explainer's player asks of the screen around it (see `KIT_PLAYER` in server/agents/explainer.ts). */
 type FromPlayer =
-  | { kit: 'lines'; lines: string[] }
+  | { kit: 'lines'; lines: string[]; titles?: string[] }
   | { kit: 'voice'; on: boolean }
   | { kit: 'say'; beat: number }
   | { kit: 'beat'; beat: number; title: string }
@@ -18,7 +18,9 @@ function fromPlayer(data: unknown): FromPlayer | undefined {
   const m = data as Record<string, unknown>;
   switch (m.kit) {
     case 'lines':
-      return Array.isArray(m.lines) ? { kit: 'lines', lines: m.lines.slice(0, 8).map((l) => forSpeech(String(l)).slice(0, 1000)) } : undefined;
+      return Array.isArray(m.lines)
+        ? { kit: 'lines', lines: m.lines.slice(0, 8).map((l) => forSpeech(String(l)).slice(0, 1000)), titles: Array.isArray(m.titles) ? m.titles.slice(0, 8).map((t) => String(t).slice(0, 200)) : undefined }
+        : undefined;
     case 'voice':
       return { kit: 'voice', on: m.on === true };
     case 'say':
@@ -62,8 +64,18 @@ export class Narrator {
   private readonly fetching = new AbortController();
   /** The beat the player's on, once it's said (an explainer shown before players said so never does). */
   spot: BriefingSpot | undefined;
+  /** Its beats as the player said them, to tell what the next version of it changed. */
+  beats: BriefingBeats | undefined;
 
-  constructor(private readonly frame: HTMLIFrameElement, private readonly voice: CrewVoice) {}
+  /**
+   * `before`: the beats of the version this one replaces, if it does; `updated` hears which beat the new version changed
+   * first (-1 when none reads differently), and the player shows that beat, waiting at its start.
+   */
+  constructor(
+    private readonly frame: HTMLIFrameElement,
+    private readonly voice: CrewVoice,
+    private readonly before?: { beats: BriefingBeats | undefined; updated: (beat: number) => void },
+  ) {}
 
   /** Handles a message posted to the window, if it came from this narrator's player. */
   heard(e: MessageEvent): void {
@@ -73,7 +85,13 @@ export class Narrator {
     switch (m.kit) {
       case 'lines':
         this.lines = m.lines;
+        this.beats = { lines: m.lines, titles: m.titles };
         this.switched(voicePrefs.explainerVoice);
+        if (this.before) {
+          const changed = firstChangedBeat(this.before.beats, this.beats);
+          if (changed >= 0) this.tell({ kit: 'show', beat: changed });
+          this.before.updated(changed);
+        }
         break;
       case 'voice':
         voicePrefs.explainerVoice = m.on;
@@ -108,7 +126,7 @@ export class Narrator {
     this.fetching.abort();
   }
 
-  private tell(message: { kit: 'voice'; on: boolean } | { kit: 'said'; beat: number } | { kit: 'pause' }): void {
+  private tell(message: { kit: 'voice'; on: boolean } | { kit: 'said'; beat: number } | { kit: 'pause' } | { kit: 'show'; beat: number }): void {
     this.frame.contentWindow?.postMessage(message, '*');
   }
 

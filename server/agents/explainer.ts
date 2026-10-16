@@ -301,7 +301,8 @@ const KIT_HELPERS = String.raw`
 // Up close, the office's screen offers a voice-over: the page can't reach the office itself (it runs in a sandbox of its
 // own), so it asks the screen around it to say each beat's line, and the screen says when the line is done. While the
 // voice is on it sets the pace: a beat holds on its last frame until its line is finished. It tells the screen which beat
-// it's on as that changes, so a question the captain asks about it says where they were, and the screen can pause it.
+// it's on as that changes, so a question the captain asks about it says where they were, and the screen can pause it,
+// or (when a new version changed a beat) show that beat, waiting at its start.
 const KIT_PLAYER = String.raw`
 (function () {
   var BEATS = window.KIT_BEATS, DUR = window.KIT_DUR, el = function (id) { return document.getElementById(id); };
@@ -405,8 +406,10 @@ const KIT_PLAYER = String.raw`
     } else if (m.kit === 'said' && m.beat === talk.beat) talk.done = true;
     // the captain's asking about it: it waits, its line too, until they play it again
     else if (m.kit === 'pause') pause();
+    // a new version that changed this beat: it waits at the beat's start, to play from there
+    else if (m.kit === 'show' && BEATS[m.beat]) { stop(); hush(); hold = -1; document.body.classList.remove('rest'); t = BEATS[m.beat].at; frame(); stop(); }
   });
-  tell({ kit: 'lines', lines: BEATS.map(function (b) { return b.say; }) });
+  tell({ kit: 'lines', lines: BEATS.map(function (b) { return b.say; }), titles: BEATS.map(function (b) { return b.title; }) });
   addEventListener('keydown', function (e) {
     if (e.key === 'ArrowRight') el('kit-next').click();
     else if (e.key === 'ArrowLeft') el('kit-prev').click();

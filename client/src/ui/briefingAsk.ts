@@ -26,6 +26,8 @@ export class BriefingAsk {
   private readonly speaker = new CrewSpeaker();
   private readonly answer = h('div', { class: 'briefing-answer' });
   private readonly input = h('input', { class: 'grow', type: 'text' });
+  /** Counts the questions asked, so an answer to one that's since been asked over is never shown or said. */
+  private asked = 0;
   /** Stops hearing the answer to the last question: a new one's asked, or the briefing's gone. */
   private stopHearing: (() => void) | undefined;
 
@@ -54,6 +56,7 @@ export class BriefingAsk {
   }
 
   end(): void {
+    this.asked++;
     this.stopHearing?.();
     this.speaker.hush();
   }
@@ -75,6 +78,7 @@ export class BriefingAsk {
     this.quiet();
     this.stopHearing?.();
     this.input.value = '';
+    const asking = ++this.asked;
     const name = state.agents.get(this.leadId)?.name ?? 'the lead';
     const waiting = h('small', { class: 'muted' }, `Asking ${name}…`);
     this.answer.replaceChildren(h('p', { class: 'asked' }, h('b', null, 'You: '), question), waiting);
@@ -82,6 +86,8 @@ export class BriefingAsk {
     const after = () => `${((performance.now() - askedAt) / 1000).toFixed(1)} s`;
     try {
       const reply = await askAboutBriefing(this.leadId, this.briefing.id, this.narrator.spot, question);
+      // asked again (or closed) meanwhile: that question's answer is the one that counts
+      if (asking !== this.asked) return;
       if (!reply) {
         waiting.textContent = 'Not sent.';
       } else if (reply.by === 'quick') {
@@ -93,6 +99,7 @@ export class BriefingAsk {
         this.hearLead(waiting, aloud, after);
       }
     } catch (e) {
+      if (asking !== this.asked) return;
       waiting.textContent = 'Not sent.';
       this.ui.error((e as Error).message);
     }

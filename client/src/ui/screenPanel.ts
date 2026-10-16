@@ -83,6 +83,9 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
   // asking the lead about what's on show (while their goal's open): kept through a new version of it
   let ask: BriefingAsk | undefined;
   let askingAbout = '';
+  // the artifact the narrator's for, so a new version of it can say what changed
+  let narratorOf = '';
+  const leadName = () => state.agents.get(leadId)?.name ?? 'The lead';
 
   /**
    * A question up close: why the lead asks, then one option at a time, large, with what it trades off and its Pick
@@ -165,8 +168,12 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
     shown = key;
     resized.disconnect();
     step = undefined;
+    // a new version of the briefing on show: what it was, to tell which beat changed
+    const before = artifact && artifact.id === narratorOf ? narrator?.beats : undefined;
+    const replacing = artifact !== undefined && artifact.id === narratorOf;
     narrator?.end();
     narrator = undefined;
+    narratorOf = artifact?.id ?? '';
     if (!artifact) {
       ask?.end();
       ask = undefined;
@@ -177,7 +184,15 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
     } else if (artifact) {
       const url = artifactUrl(leadId, artifact, 'html');
       const shownHere = stage(url, artifact.title);
-      narrator = new Narrator(shownHere.querySelector('iframe')!, leadVoice(leadId));
+      const updated = h('span', { class: 'chip updated', hidden: true });
+      narrator = new Narrator(shownHere.querySelector('iframe')!, leadVoice(leadId), replacing ? {
+        beats: before,
+        updated: (beat) => {
+          updated.hidden = false;
+          updated.textContent = beat >= 0 ? `Updated · beat ${beat + 1} changed` : 'Updated';
+          updated.title = beat >= 0 ? `${leadName()} explained it again: it's waiting at the beat that changed, to play from there` : `${leadName()} explained it again`;
+        },
+      } : undefined);
       if (ask && picked === askingAbout) ask.narrator = narrator;
       else {
         ask?.end();
@@ -187,6 +202,7 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
       body.replaceChildren(
         h('div', { class: 'row artifact-head' },
           h('h3', { class: 'grow' }, artifact.title),
+          updated,
           h('small', { class: 'muted' }, `Shown ${when(artifact.at)}`),
           h('button', { class: 'btn small', title: 'Fill the screen with it (Esc to come back)', onclick: () => toggleFull(shownHere) }, 'Full screen'),
           h('a', { class: 'btn small', href: url, target: '_blank', rel: 'noopener' }, 'Open in a tab'),
