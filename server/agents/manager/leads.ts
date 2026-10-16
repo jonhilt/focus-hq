@@ -6,7 +6,7 @@ import { LEAD_DESK, TEAM_STATIONS } from '../../../shared/types';
 import { GitHub } from '../../github/service';
 import { errorMessage, newId } from '../../util';
 import { takesTitle } from '../goalTitles';
-import { afterVerdict, closeCheck, hasLeadWork, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, landedMidTurnNote, landedNote, leadWorktreeId, moveQueued, nextGoal, pickStation, qaVerdictNote, reopenable, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch, type VerdictBehind } from '../lead';
+import { afterVerdict, closeCheck, hasLeadWork, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, landedMidTurnNote, landedNote, leadWorktreeId, moveQueued, nextGoal, pickStation, qaVerdictNote, queuedStart, reopenable, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch, type VerdictBehind } from '../lead';
 import { Workspace } from '../services';
 import { EVIDENCE_PER_PR, evidenceFile, landedWaypoint, shieldedWaypoint, tickedSpotCheck } from '../waypoints';
 import { type ManagerServices, Part, Refused, type WorkError } from './core';
@@ -158,14 +158,10 @@ export class Leads extends Part {
   /** Starts a queued goal at a free team station, with the captain's last edits to it. */
   startQueued(projectId: string, queueId: string, edits: { text?: string; effort?: Effort; station?: number } = {}): Agent {
     const project = this.store.project(projectId);
-    const queued = (project.goalQueue ?? []).find((g) => g.id === queueId);
-    if (!queued) throw new Refused({ message: 'That goal is no longer in line' });
-    const leads = this.store.agentsIn(projectId).filter((a) => a.task === 'lead');
-    // the station the captain started it from, if it's still free; else the first free one
-    const taken = leads.map((a) => a.lead?.station ?? 0);
-    const station = (edits.station === undefined ? undefined : pickStation(taken, edits.station)) ?? pickStation(taken);
-    if (station === undefined) throw new Refused({ message: `Every team station in ${project.name} still has a goal` });
-    const started = this.startGoal(projectId, edits.text?.trim() || queued.text, { station, effort: edits.effort ?? queued.effort, from: queued.from });
+    const taken = this.store.agentsIn(projectId).filter((a) => a.task === 'lead').map((a) => a.lead?.station ?? 0);
+    const start = queuedStart(project.goalQueue, queueId, taken, edits, project.name);
+    if (start.kind === 'refused') throw new Refused({ message: start.message });
+    const started = this.startGoal(projectId, start.text, { station: start.station, effort: start.effort, from: start.from });
     if (!('agent' in started)) throw new Refused({ message: 'No team station was free after all' });
     this.changeQueue(projectId, (project.goalQueue ?? []).filter((g) => g.id !== queueId));
     return started.agent;

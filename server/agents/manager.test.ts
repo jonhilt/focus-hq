@@ -351,6 +351,17 @@ describe('AgentManager', () => {
     expect(project.goals![0]).toMatchObject({ id: lead.id, branch, sessionId: 'session-1', repos: [{ folder: 'webshop-frontend' }, { folder: 'webshop-api' }] });
   });
 
+  it('starts a queued goal with the captain’s last edits, at the first free station once theirs is taken, and takes it out of line', () => {
+    const { agents, store, project } = office();
+    agents.startGoal(project.id, 'Saved items');
+    const queued = agents.queueGoal(project.id, 'Wishlists', { effort: 'low', from: 'the bridge' });
+    const lead = agents.startQueued(project.id, queued.id, { text: 'Wishlists you can share', station: 0 });
+    expect(lead).toMatchObject({ task: 'lead', effort: 'low', lead: { station: 1, title: 'Wishlists you can share' } });
+    expect(store.agent(lead.id).lead?.brief).toBe('Wishlists you can share');
+    expect(project.goalQueue).toEqual([]);
+    expect(() => agents.startQueued(project.id, queued.id)).toThrow('That goal is no longer in line');
+  });
+
   it('retitles a new goal once Haiku answers, unless it was retitled meanwhile', async () => {
     const { agents, store, project } = office();
     let answer!: (title: string | undefined) => void;

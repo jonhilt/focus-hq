@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadAgent, LeadWork } from '../../shared/types';
-import { afterLanding, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, notedGoal, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, openPr, pickStation, qaVerdictNote, shippedSha, shipPlan, shipBranch, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
+import { afterLanding, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, notedGoal, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, openPr, pickStation, qaVerdictNote, queuedStart, shippedSha, shipPlan, shipBranch, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -497,6 +497,28 @@ describe('the goal queue', () => {
     expect(moveQueued(line, 'a', -1).map((g) => g.id)).toEqual(['a', 'b', 'c']);
     expect(moveQueued(line, 'b', 1).map((g) => g.id)).toEqual(['a', 'c', 'b']);
     expect(moveQueued(line, 'zz', 1)).toBe(line);
+  });
+
+  it('starts a queued goal at the station the captain picked while it’s free, else at the first free one', () => {
+    expect(queuedStart(line, 'b', [0], { station: 2 }, 'Shop')).toMatchObject({ kind: 'start', station: 2 });
+    // taken since they picked it, or never a station: the first free one
+    expect(queuedStart(line, 'b', [0, 2], { station: 2 }, 'Shop')).toMatchObject({ kind: 'start', station: 1 });
+    expect(queuedStart(line, 'b', [], { station: 9 }, 'Shop')).toMatchObject({ kind: 'start', station: 0 });
+    expect(queuedStart(line, 'b', [1], {}, 'Shop')).toMatchObject({ kind: 'start', station: 0 });
+    expect(queuedStart(line, 'b', [0, 1, 2, 3], { station: 1 }, 'Shop')).toEqual({ kind: 'refused', message: 'Every team station in Shop still has a goal' });
+  });
+
+  it('starts a queued goal with the captain’s last words and effort on it, else the ones it was queued with', () => {
+    const queued = [{ id: 'a', text: 'Saved items', effort: 'low' as const, from: 'the bridge', at: 0 }];
+    expect(queuedStart(queued, 'a', [], {}, 'Shop')).toEqual({ kind: 'start', station: 0, text: 'Saved items', effort: 'low', from: 'the bridge' });
+    expect(queuedStart(queued, 'a', [], { text: '  Wishlists ', effort: 'high' }, 'Shop')).toEqual({ kind: 'start', station: 0, text: 'Wishlists', effort: 'high', from: 'the bridge' });
+    // words cleared in the editor aren't a goal: it keeps the ones it was queued with
+    expect(queuedStart(queued, 'a', [], { text: '   ' }, 'Shop')).toMatchObject({ text: 'Saved items' });
+  });
+
+  it('refuses a goal that has left the line', () => {
+    expect(queuedStart(line, 'zz', [], {}, 'Shop')).toEqual({ kind: 'refused', message: 'That goal is no longer in line' });
+    expect(queuedStart(undefined, 'a', [], {}, 'Shop')).toEqual({ kind: 'refused', message: 'That goal is no longer in line' });
   });
 });
 
