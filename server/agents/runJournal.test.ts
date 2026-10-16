@@ -171,3 +171,26 @@ describe('recovery of a run waiting for a slot', () => {
     expect(recovery(waiting, { task: 'issue', cloud: true }, false)).toEqual({ kind: 'none' });
   });
 });
+
+describe('a delivery in the journal', () => {
+  const ended: RunFact[] = [requested('t1'), { kind: 'turn-ended', turn: 't1', outcome: { ok: true } }, { kind: 'decided', turn: 't1', target: 'deliver' }];
+  const delivering: RunFact[] = [...ended, { kind: 'delivering', turn: 't1', summary: 'Dark mode' }];
+
+  it('follows the work onto GitHub, keyed by the turn whose work it is', () => {
+    expect(runView(fold(delivering)).phase).toBe('delivering.pushing');
+    expect(runView(fold([...delivering, { kind: 'pushed', turn: 't1' }])).phase).toBe('delivering.opening');
+    expect(runView(fold([...delivering, { kind: 'pushed', turn: 't1' }, { kind: 'delivered', turn: 't1', outcome: 'pr', pr: 412 }]))).toMatchObject({ phase: 'delivered', target: 'deliver', pr: 412 });
+    expect(fold([...delivering, { kind: 'delivery-failed', turn: 't1', error: 'GitHub said no' }])).toMatchObject({ phase: 'failed', delivery: { error: 'GitHub said no' } });
+    // a fact about another turn's delivery changes nothing, nor does delivering a turn that isn't the last
+    expect(runView(fold([...delivering, { kind: 'pushed', turn: 't0' }])).phase).toBe('delivering.pushing');
+    expect(runView(fold([...ended, { kind: 'delivering', turn: 't0', summary: 'Old' }])).phase).toBe('ended');
+  });
+
+  it('is finished by the office after a restart, without Claude: only a developer’s, and only one cut off', () => {
+    expect(recovery(fold(delivering), { task: 'issue', sessionId: 's1' }, true)).toEqual({ kind: 'deliver', turn: 't1', summary: 'Dark mode' });
+    expect(recovery(fold([...delivering, { kind: 'pushed', turn: 't1' }]), { task: 'fix' }, false)).toMatchObject({ kind: 'deliver' });
+    expect(recovery(fold([...delivering, { kind: 'delivered', turn: 't1', outcome: 'no-commits' }]), { task: 'issue' }, false)).toEqual({ kind: 'none' });
+    expect(recovery(fold([...delivering, { kind: 'delivery-failed', turn: 't1', error: 'x' }]), { task: 'issue' }, false)).toEqual({ kind: 'none' });
+    expect(recovery(fold(delivering), { task: 'lead' }, false)).toEqual({ kind: 'none' });
+  });
+});

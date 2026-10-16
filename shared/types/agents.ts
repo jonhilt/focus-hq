@@ -17,7 +17,7 @@ export type AgentStatus =
 
 /** Where an agent's run is, as its journal tells it: the phase its machine is in, and the journal's last fact. */
 export interface RunView {
-  /** The machine's state, dotted: idle, waiting, setting-up, turn.requested, turn.started, turn.stopping, ended, interrupted. */
+  /** The machine's state, dotted: idle, waiting, setting-up, turn.requested, turn.started, turn.stopping, ended, interrupted, delivering.pushing, delivering.opening, delivered, failed. */
   phase: string;
   /** How many turns of work the run has asked for. */
   turns: number;
@@ -25,6 +25,8 @@ export interface RunView {
   target?: string;
   /** The journal's last fact's number. */
   seq: number;
+  /** The pull request the run's latest delivery opened or updated. */
+  pr?: number;
 }
 
 export const ACTIVE_STATUSES: AgentStatus[] = ['setting-up', 'working', 'testing', 'waiting', 'pushing'];

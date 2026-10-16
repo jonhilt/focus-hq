@@ -19,5 +19,8 @@ describe('runLine', () => {
     expect(runLine({ phase: 'interrupted', turns: 1, seq: 9 })).toBe('turn 1 interrupted');
     expect(runLine({ phase: 'waiting', turns: 2, seq: 12 })).toBe('waiting for a slot');
     expect(runLine({ phase: 'idle', turns: 0, seq: 0 })).toBe('idle');
+    expect(runLine({ phase: 'delivering.opening', turns: 2, target: 'deliver', seq: 20 })).toBe('turn 2 opening the PR');
+    expect(runLine({ phase: 'delivered', turns: 2, target: 'deliver', pr: 412, seq: 22 })).toBe('turn 2 delivered → PR #412');
+    expect(runLine({ phase: 'failed', turns: 2, target: 'deliver', seq: 21 })).toBe('turn 2 delivery failed');
   });
 });

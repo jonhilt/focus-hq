@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { demoWorkspace } from './demoRunner';
 import { office, restarted, until } from './fakeOffice';
 import { RESUMED_NOTE } from './runJournal';
 
@@ -29,7 +30,7 @@ describe('a run after Focus restarts', () => {
     await until(() => before.store.agent(id).status === 'done');
     expect(before.store.run(id).open).toBeUndefined();
     // the agent's panel reads where the run is from its journal
-    expect(before.store.agent(id).run).toMatchObject({ phase: 'ended', turns: 2, target: 'deliver' });
+    expect(before.store.agent(id).run).toMatchObject({ phase: 'delivered', turns: 2, target: 'deliver', pr: before.store.agent(id).pr?.number });
   });
 
   it('picks it back up after the office shut down on purpose too (Ctrl-C, an update), but not after the captain’s stop', async () => {
@@ -50,6 +51,24 @@ describe('a run after Focus restarts', () => {
     await until(() => after.claude.turns.length === 1);
     expect(after.claude.turns[0].req).toMatchObject({ agentId: working, resumeSessionId: 'session-1', prompt: RESUMED_NOTE });
     expect(before.store.agent(stopped).status).toBe('stopped');
+  });
+
+  it('finishes putting their work on GitHub when Focus stopped part way, without another turn', async () => {
+    // the push never comes back: Focus stops while it's under way
+    const before = office({ ...demoWorkspace, push: () => new Promise<void>(() => undefined) });
+    const { id } = before.agents.hire(before.project.id, 'demo/webshop-frontend', issue);
+    await until(() => before.claude.turns.length === 1);
+    before.claude.turns[0].end({ ok: true, summary: 'Dark mode' });
+    await until(() => before.store.agent(id).status === 'pushing');
+    expect(before.store.agent(id).run?.phase).toBe('delivering.pushing');
+
+    const after = restarted(before.store);
+    after.agents.recover();
+    await until(() => before.store.agent(id).status === 'done');
+    expect(after.claude.turns).toHaveLength(0);
+    const pr = before.store.agent(id).pr?.number;
+    expect(pr).toBeDefined();
+    expect(before.store.agent(id).run).toMatchObject({ phase: 'delivered', pr });
   });
 
   it('puts an agent who was waiting for a free slot back in line', async () => {

@@ -64,7 +64,28 @@ export type RunFact =
   /** Setting up to work: a checkout, its dependencies, the task. */
   | { kind: 'setting-up' }
   /** What follows turn `turn`, as the run's machine took it (`runMachine`). */
-  | { kind: 'decided'; turn: string; target: Target };
+  | { kind: 'decided'; turn: string; target: Target }
+  /** Turn `turn`'s work is going onto GitHub, its pull request's description `summary`: written first, so a restart finishes it. */
+  | { kind: 'delivering'; turn: string; summary: string }
+  /** Turn `turn`'s branch is on GitHub (pushed, or a cloud session's found there). */
+  | { kind: 'pushed'; turn: string }
+  /** Turn `turn`'s work is delivered: its pull request open (or updated), or there was nothing to deliver. */
+  | { kind: 'delivered'; turn: string; outcome: Delivered; pr?: number }
+  /** Turn `turn`'s work couldn't be delivered. */
+  | { kind: 'delivery-failed'; turn: string; error: string };
+
+/** How a delivery ended: a pull request, or nothing to put in one (no commits, or a fix that fixed nothing). */
+export type Delivered = 'pr' | 'no-commits' | 'nothing-fixed';
+
+/** A turn's work going onto GitHub, as the journal tells it. */
+export interface Delivery {
+  turn: string;
+  /** Its pull request's description. */
+  summary: string;
+  pr?: number;
+  outcome?: Delivered;
+  error?: string;
+}
 
 /** A fact as journaled: numbered from 1 in its agent’s journal, and when (`t`). */
 export type JournalEntry = RunFact & { v: 1; seq: number; t: number };
@@ -102,6 +123,8 @@ export interface JournalContext {
   session?: string;
   /** How many turns of work the run has asked for. */
   turns: number;
+  /** The latest turn's work going onto GitHub. */
+  delivery?: Delivery;
 }
 
 /** What an agent's journal adds up to: the run's phase (the machine's state), what it holds, and the last fact's number. */
@@ -134,6 +157,7 @@ export const journalMachine = setup({
   guards: {
     'this turn': ({ context, event }) => 'turn' in event && event.turn !== undefined && event.turn === context.open?.id,
     'the last turn': ({ context, event }) => 'turn' in event && event.turn === context.last?.id,
+    'this delivery': ({ context, event }) => 'turn' in event && event.turn === context.delivery?.turn,
   },
 }).createMachine({
   id: 'journal',
@@ -155,7 +179,9 @@ export const journalMachine = setup({
     sent: { guard: 'this turn', actions: assign(({ context, event }) => onOpen(context, (t) => ({ ...t, sent: [...(t.sent ?? []), event.text] }))) },
     restored: { actions: assign(({ context }) => ({ inbox: [...context.owed, ...context.inbox], owed: [] })) },
     cleared: { actions: assign({ inbox: [], later: [], owed: [] }) },
-    reset: { target: '.idle', actions: assign(() => ({ ...START, open: undefined, last: undefined, session: undefined })) },
+    reset: { target: '.idle', actions: assign(() => ({ ...START, open: undefined, last: undefined, session: undefined, delivery: undefined })) },
+    // the last turn's work, onto GitHub (a cloud agent's nudge to push may have come between)
+    delivering: { guard: 'the last turn', target: '.delivering', actions: assign(({ event }) => ({ delivery: { turn: event.turn, summary: event.summary } })) },
     waiting: '.waiting',
     'setting-up': '.setting-up',
     'turn-requested': {
@@ -206,6 +232,19 @@ export const journalMachine = setup({
       },
     },
     interrupted: {},
+    delivering: {
+      initial: 'pushing',
+      on: {
+        delivered: { guard: 'this delivery', target: 'delivered', actions: assign(({ context, event }) => ({ delivery: context.delivery && { ...context.delivery, outcome: event.outcome, pr: event.pr } })) },
+        'delivery-failed': { guard: 'this delivery', target: 'failed', actions: assign(({ context, event }) => ({ delivery: context.delivery && { ...context.delivery, error: event.error } })) },
+      },
+      states: {
+        pushing: { on: { pushed: { guard: 'this delivery', target: 'opening' } } },
+        opening: {},
+      },
+    },
+    delivered: {},
+    failed: {},
   },
 });
 
@@ -224,7 +263,13 @@ function dotted(value: StateValue): string {
 
 /** Where the run is, for the agent's panel. */
 export function runView(state: RunState): RunView {
-  return { phase: dotted(state.phase), turns: state.turns, seq: state.seq, ...(state.last?.target && !state.open && { target: state.last.target }) };
+  return {
+    phase: dotted(state.phase),
+    turns: state.turns,
+    seq: state.seq,
+    ...(state.last?.target && !state.open && { target: state.last.target }),
+    ...(state.delivery?.pr && { pr: state.delivery.pr }),
+  };
 }
 
 /** The run its journal tells, from the start. */
@@ -257,6 +302,8 @@ export type Recovery =
   | { kind: 'resume'; turn: string; prompt: string; session: string }
   /** The turn's gone and the agent waits for the captain: `why` is their activity. */
   | { kind: 'wait'; turn: string; why: string }
+  /** Their work was going onto GitHub: the office finishes it (pushing again, finding or opening the pull request), no Claude turn needed. */
+  | { kind: 'deliver'; turn: string; summary: string }
   /** They were waiting for a free slot: they wait for one again, with what was waiting for them. */
   | { kind: 'requeue' }
   /** They were waiting for a free slot, but going back to their conversation would be on your API key. */
@@ -283,6 +330,7 @@ export const RESUMED_NOTE =
  */
 export function recovery(state: RunState, agent: RecoveryAgent, onKey: boolean): Recovery {
   const turn = state.open;
+  if (!turn && state.delivery && inPhase(state, 'delivering') && DELIVERS.has(agent.task)) return { kind: 'deliver', turn: state.delivery.turn, summary: state.delivery.summary };
   if (!turn) return state.phase === 'waiting' ? requeue(agent, onKey) : { kind: 'none' };
   // a turn that went back into no conversation was starting a new one: there's none of its own to carry on
   const session = turn.session ?? turn.resumes;
@@ -292,6 +340,14 @@ export function recovery(state: RunState, agent: RecoveryAgent, onKey: boolean):
   if (turn.mismatch) return { kind: 'wait', turn: turn.id, why: 'Stopped for signing in with the API key. Send a message to pick it back up.' };
   if (onKey) return { kind: 'wait', turn: turn.id, why: 'Interrupted when Focus shut down. Picking it back up would be on your API key, so send a message when you want it to.' };
   return { kind: 'resume', turn: turn.id, prompt: turn.session ? resumedNote(turn.sent ?? []) : turn.prompt, session };
+}
+
+/** The tasks whose work goes onto GitHub when a turn's done (`Delivery`): not QA's, or a lead's (they ship with a tool). */
+const DELIVERS: ReadonlySet<string> = new Set(['issue', 'fix', 'conflicts', 'brief']);
+
+/** The run is in `phase`, or one of its states. */
+function inPhase(state: RunState, phase: string): boolean {
+  return state.phase === phase || (typeof state.phase === 'object' && phase in state.phase);
 }
 
 /** An agent that was waiting for a free slot: in line again, unless that would pick a conversation up on your API key. */

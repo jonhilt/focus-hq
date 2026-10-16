@@ -30,12 +30,18 @@ const PHASES: Record<string, string> = {
   'turn.stopping': 'stopping',
   ended: 'ended',
   interrupted: 'interrupted',
+  'delivering.pushing': 'pushing',
+  'delivering.opening': 'opening the PR',
+  delivered: 'delivered',
+  failed: 'delivery failed',
 };
 
 /** Where an agent's run is, as its journal tells it: `turn 3 · running`, `turn 3 ended → deliver`. */
 export function runLine(run: RunView): string {
   const phase = PHASES[run.phase] ?? run.phase;
   const turn = run.turns ? `turn ${run.turns} ` : '';
+  if (run.phase === 'delivered' && run.pr) return `${turn}delivered → PR #${run.pr}`;
+  if (run.phase.startsWith('delivering.') || run.phase === 'delivered' || run.phase === 'failed') return `${turn}${phase}`;
   if (run.phase.startsWith('turn.') || run.phase === 'ended' || run.phase === 'interrupted') return `${turn}${phase}${run.target ? ` → ${run.target}` : ''}`;
   return phase;
 }

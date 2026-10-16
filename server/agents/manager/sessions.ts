@@ -517,6 +517,13 @@ export class AgentSessions extends Part {
         if (agent.status === 'stopped') this.update(agent, { activity: next.why });
         continue;
       }
+      if (next.kind === 'deliver') {
+        // what they'd committed goes onto GitHub as it was going to: they aren't asked to commit anything more
+        this.rt(agent.id).nudged = true;
+        this.print(agent, [{ kind: 'system', text: '✻ Focus restarted while their work was going onto GitHub: finishing that' }]);
+        this.runFor(agent.id, this.core.delivery.deliver(agent, next.summary));
+        continue;
+      }
       if (next.kind === 'requeue') {
         this.print(agent, [{ kind: 'system', text: '✻ Focus restarted while they waited for a free slot: back in line' }]);
         this.core.comms.pickUp(agent);
