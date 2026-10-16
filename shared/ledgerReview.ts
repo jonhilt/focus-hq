@@ -197,8 +197,8 @@ export function groupCounts(events: LedgerEvent[], projectId?: string): Record<R
 }
 
 /** The log's rows by day, the newest day first. */
-export function byDay(rows: LedgerRow[], dayOf: (at: number) => string): { day: string; rows: LedgerRow[] }[] {
-  const days: { day: string; rows: LedgerRow[] }[] = [];
+export function byDay<R extends { at: number }>(rows: R[], dayOf: (at: number) => string): { day: string; rows: R[] }[] {
+  const days: { day: string; rows: R[] }[] = [];
   for (const row of rows) {
     const day = dayOf(row.at);
     const last = days[days.length - 1];

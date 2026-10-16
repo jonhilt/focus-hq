@@ -7,7 +7,7 @@ import type { Agent, QaReview } from '../shared/types';
 // paths come from the environment when config.ts loads, so the data folder is set before the store is imported
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-store-'));
 process.env.FOCUS_DATA_DIR = dir;
-const { agentAfterRestart, reviewAfterRestart, StateLockedError, Store, stateLocked } = await import('./store');
+const { agentAfterRestart, fileKey, prKeyOf, reviewAfterRestart, StateLockedError, Store, stateLocked } = await import('./store');
 const { seedOffice, seedRandom } = await import('./util');
 
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -65,6 +65,20 @@ describe('Store on disk', () => {
     const later = new Store(true);
     later.load();
     expect(later.run('journaled')).toEqual({ inbox: [], later: [], owed: [], turns: 0, phase: 'idle', seq: 4 });
+  });
+
+  it('lists the journals written to since a time, a review’s by its pull request', () => {
+    const store = new Store(true);
+    store.load();
+    store.journal('a1', { kind: 'waiting' });
+    store.reviewJournal('acme/shop-app#12', { kind: 'requested' });
+    store.sliceJournal('lead1', { kind: 'started', slice: 1, branch: 'b' });
+    const sources = store.logSources(Date.now() - 60_000);
+    expect(sources.runs.map((s) => s.key)).toContain('a1');
+    expect(sources.reviews.map((s) => s.key)).toContain('acme/shop-app#12');
+    expect(sources.slices.find((s) => s.key === 'lead1')?.entries).toHaveLength(1);
+    expect(store.logSources(Date.now() + 60_000).runs).toEqual([]);
+    expect(prKeyOf(fileKey('my-org/some-repo-2#7'))).toBe('my-org/some-repo-2#7');
   });
 
   it('keeps each pull request’s review journal on disk as it goes, by the PR, and drops a last line cut short', () => {

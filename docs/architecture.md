@@ -61,6 +61,7 @@ server/
     reviewJournal.ts      each pull request's QA review journal, pure: its facts from requested to the verdict posted and announced (data/runs/reviews/<pr>.jsonl, written by Store.reviewJournal), what they add up to as an XState machine (reviewMachine), and what a restart does with a review under way
     runJournal.ts         each agent's run journal, pure: the facts of its turns, phases and inbox (data/runs/<agent>.jsonl, written by Store.journal before the office acts), what they add up to as an XState machine (journalMachine: facts are events, the run's phase its state), the sign-in check, and what a restart does with a turn in flight or a run waiting for a slot
     sliceJournal.ts       each goal's slice journal, pure: its facts as a slice ships, lands and moves to fresh code (data/runs/slices/<lead>.jsonl, written by Store.sliceJournal), what they add up to as an XState machine (sliceMachine), and what a restart finishes
+    captainsLog.ts        the captain's log, pure: every journal and the ledger on one timeline, only the facts worth a line (GET /api/log, Store.logSources)
     inbox.ts              an agent's inbox, kept in their run journal
     runMachine.ts         what follows a turn, as an XState state machine: the state it ran in (local, cloud, attaching), the event its end was (read from its outcome once), guarded transitions handing what a state doesn't take up to its parent; `step` takes one with XState's pure `transition`
     statechart.ts         an XState machine drawn as a Mermaid statechart, from the machine itself: for docs pages and a lead's station screen
@@ -126,6 +127,7 @@ client/src/
     confirmDialog.ts      the in-game confirm dialog, over whatever panel is open (the Tricorder's buttons ask with it too)
     studioChat.ts         the studio's chat with its computer, docked down the right so the room stays in view
     modelPanel.ts         a studio model up close: its three views live as SVG, stepping, and a picked part's cited code
+    captainsLogPanel.ts   the captain's log (J): every journal and the ledger on one timeline, while you were away, filters
   plugins.ts              the plugins' parts in the browser: each plugins/*/client.ts, shown when the office switched it on (the engineering station's cards, views and what its engineer says, the MSD's boards, their words on each goal: goalTags, goalStrips; what each starts once with its keys and legend, and its part of the ship)
   tricorder/              the phone view at /tricorder (no three.js): home screen, agent drill-down, buttons that survive live re-renders
 client/tricorder/index.html   the Tricorder's page (a second Vite entry), with its home-screen meta tags

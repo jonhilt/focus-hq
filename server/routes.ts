@@ -5,6 +5,8 @@ import { isAutonomy } from '../shared/autonomy';
 import { closedGoals } from '../shared/ledger';
 import { ledgerWindow } from '../shared/ledgerReview';
 import { isKokoroVoice } from '../shared/voice';
+import { logSince } from '../shared/captainsLog';
+import { captainsLog } from './agents/captainsLog';
 import { replay } from './agents/runJournal';
 import { paths } from './config';
 import { appendFrameStats } from './frameStats';
@@ -130,6 +132,11 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.post('/studio/takes/:id/report', h((req) => office.studio.report(param(req, 'id'), Number(req.body.version), typeof req.body.error === 'string' ? req.body.error : undefined, typeof req.body.sheet === 'string' ? req.body.sheet : undefined)));
   // every closed goal the ledger kept, so what its lead showed can be found once it's off the room's log
   r.get('/goals/archive', h((req) => closedGoals(store.ledger, typeof req.query.project === 'string' ? req.query.project : undefined)));
+  // the captain's log: every journal and the ledger on one timeline, since `since` (the last day by default, a week at most)
+  r.get('/log', h((req) => {
+    const since = logSince(Date.now(), Number(req.query.since));
+    return captainsLog(store.logSources(since), since);
+  }));
   r.get('/ledger', h((req) => ledgerWindow(store.ledger, Date.now(), Number(req.query.days ?? 14))));
   r.get('/digests/backfill', h(async () => ({ sessions: (await office.agents.undigested()).length })));
   r.post('/digests/backfill', h(() => office.agents.backfill()));

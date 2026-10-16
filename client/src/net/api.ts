@@ -1,4 +1,5 @@
 import { callerOf, FLOW_FROM_HEADER, FLOWS_PARAM } from '../../../shared/flows';
+import type { LogLine } from '../../../shared/captainsLog';
 import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ReplayStep, ResumeHow, RoomTheme, Settings, StudioSession, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
@@ -74,6 +75,7 @@ export const api = {
   plugin: <T>(id: string, path: string, body?: unknown) => call<T>('POST', `/plugins/${encodeURIComponent(id)}${path}`, body),
   /** The ledger's events of the last `days` days, for reviewing at the master systems table. */
   ledger: (days: number) => call<LedgerEvent[]>('GET', `/ledger?days=${days}`),
+  log: (since: number) => call<LogLine[]>('GET', `/log?since=${since}`),
   undigested: () => call<{ sessions: number }>('GET', '/digests/backfill'),
   backfillDigests: () => call<{ sessions: number }>('POST', '/digests/backfill'),
   sendToQa: (projectId: string, repo: string, number: number) => call<QaReview>('POST', '/prs/qa', { projectId, repo, number }),

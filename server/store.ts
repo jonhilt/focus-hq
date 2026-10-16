@@ -16,6 +16,7 @@ import { EMPTY_REVIEW, evolveReview, type ReviewEntry, type ReviewFact, type Rev
 import { EMPTY_RUN, evolve, type JournalEntry, type RunFact, type RunState, runView } from './agents/runJournal';
 import { EMPTY_SLICE, evolveSlice, type SliceFact, type SliceState } from './agents/sliceJournal';
 import { Journals, type Stamped } from './journals';
+import type { LogSources } from './agents/captainsLog';
 import { fromBeforePlugins, type SavedBeforePlugins } from './plugins/migrate';
 import { newId } from './util';
 
@@ -127,9 +128,10 @@ export class Store {
   private slices: Journals<SliceFact, SliceState>;
 
   constructor(private readonly persist: boolean) {
-    this.runs = new Journals(persist, (id) => path.join(paths.runs, `${id}.jsonl`), EMPTY_RUN, evolve, JOURNAL_MEMORY);
-    this.reviewJournals = new Journals(persist, (key) => path.join(paths.runs, 'reviews', `${fileKey(key)}.jsonl`), EMPTY_REVIEW, evolveReview, JOURNAL_MEMORY);
-    this.slices = new Journals(persist, (id) => path.join(paths.runs, 'slices', `${id}.jsonl`), EMPTY_SLICE, evolveSlice, JOURNAL_MEMORY);
+    const asIs = (id: string) => id;
+    this.runs = new Journals(persist, { dir: paths.runs, name: asIs, key: asIs }, EMPTY_RUN, evolve, JOURNAL_MEMORY);
+    this.reviewJournals = new Journals(persist, { dir: path.join(paths.runs, 'reviews'), name: fileKey, key: prKeyOf }, EMPTY_REVIEW, evolveReview, JOURNAL_MEMORY);
+    this.slices = new Journals(persist, { dir: path.join(paths.runs, 'slices'), name: asIs, key: asIs }, EMPTY_SLICE, evolveSlice, JOURNAL_MEMORY);
   }
 
   /**
@@ -463,6 +465,50 @@ export class Store {
     return this.slices.entries(id);
   }
 
+  // ---- the captain's log ----
+
+  /**
+   * What the captain's log is made of since `since` (`captainsLog`): every journal written to since, with who and what
+   * it's about (a crew member who's gone home is named from the ledger, where their sessions and goals were kept), and
+   * the ledger.
+   */
+  logSources(since: number): LogSources {
+    const names = new Map<string, string>();
+    const goals = new Map<string, { title: string; projectId: string }>();
+    for (const e of this.ledger) {
+      if (e.kind === 'session-digest') names.set(e.agentId, e.agent);
+      if (e.kind === 'goal-closed') {
+        names.set(e.goal.id, e.goal.leadName);
+        goals.set(e.goal.id, { title: e.goal.title, projectId: e.projectId });
+      }
+    }
+    for (const a of this.agents.values()) {
+      names.set(a.id, a.name);
+      if (a.lead) goals.set(a.id, { title: a.lead.title, projectId: a.projectId });
+    }
+    const nameOf = (id: string) => names.get(id);
+    const roomOf = (repo: string) => this.projects.find((p) => p.repos.includes(repo))?.id;
+    const leadOf = (repo: string, number: number) => [...this.agents.values()].find((a) => a.lead?.prs.some((p) => p.repo === repo && p.number === number));
+    const about = (o: { projectId?: string; goal?: string; agentId?: string }) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+    return {
+      runs: this.runs.written(since).map((id) => {
+        const a = this.agents.get(id);
+        const goal = goals.get(a?.reviewFor ?? id);
+        return { key: id, who: nameOf(id) ?? 'A crew member who’s gone home', ...about({ agentId: id, projectId: a?.projectId ?? goal?.projectId, goal: goal?.title }), entries: this.runs.entries(id) };
+      }),
+      reviews: this.reviewJournals.written(since).map((key) => {
+        const [repo, number] = [key.slice(0, key.lastIndexOf('#')), Number(key.slice(key.lastIndexOf('#') + 1))];
+        return { key, who: 'QA', ...about({ projectId: roomOf(repo), goal: leadOf(repo, number)?.lead?.title }), entries: this.reviewJournals.entries(key) };
+      }),
+      slices: this.slices.written(since).map((id) => {
+        const goal = goals.get(id);
+        return { key: id, who: nameOf(id) ?? 'A lead who’s gone home', ...about({ agentId: id, projectId: goal?.projectId, goal: goal?.title }), entries: this.slices.entries(id) };
+      }),
+      ledger: this.ledger,
+      nameOf,
+    };
+  }
+
   // ---- terminal output ----
 
   /** `persist` false keeps them in memory only, like a lead's helpers' transcripts, which go when the helper does. */
@@ -529,6 +575,11 @@ function isTheme(value: unknown): value is RoomTheme {
 }
 
 /** `owner/repo#12` → `owner__repo-12`: a pull request's key as a file name. */
-function fileKey(key: string): string {
+export function fileKey(key: string): string {
   return key.replace('/', '__').replace('#', '-').replace(/[^A-Za-z0-9_.-]/g, '_');
+}
+
+/** `owner__repo-12` → `owner/repo#12`: a review journal's file name as its pull request's key (GitHub owners have no underscores). */
+export function prKeyOf(name: string): string {
+  return name.replace('__', '/').replace(/-(\d+)$/, '#$1');
 }

@@ -18,6 +18,7 @@ import { TrainingSteps } from './ui/trainingSteps';
 import { openManagerPanel } from './ui/managerPanel';
 import { openGoalsPanel } from './ui/goalsPanel';
 import { openCommsPanel } from './ui/commsPanel';
+import { openCaptainsLogPanel } from './ui/captainsLogPanel';
 import { linkAction, type NewsLink } from './ui/newsLink';
 import { openEngineeringPanel } from './ui/engineeringPanel';
 import { openLedgerPanel } from './ui/ledgerPanel';
@@ -186,6 +187,7 @@ async function main() {
           : what ? { kind: 'trace', trace: what } : { kind: 'report', card: state.report },
     ),
     openComms: () => openCommsPanel(ui),
+    openLog: () => openCaptainsLogPanel(ui),
     openGoals: (projectId, station) => openGoalsPanel(ui, projectId, station),
     openManager: (tab) => openManagerPanel(ui, tab),
     openTeleport: () => openTeleportPanel(ui),
@@ -688,6 +690,7 @@ async function main() {
         if (world.locationOf(camera.position).label === 'Studio') ui.openStudio();
       },
       KeyC: () => ui.openComms(),
+      KeyJ: () => ui.openLog(),
       // the goals of the holodeck you're in; anywhere else, every goal's in Comms
       KeyL: () => {
         const projectId = world.locationOf(camera.position).projectId;

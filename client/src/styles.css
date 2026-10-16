@@ -589,6 +589,14 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .ledger-row.tone-bad { border-left-color: var(--lcars-red); }
 .ledger-row.tone-warn { border-left-color: var(--lcars-gold); }
 .ledger-row.traceable { cursor: pointer; }
+/* the captain's log: who's on each line, and what happened while you were away at the top */
+.log-row { grid-template-columns: auto 92px 150px 1fr; }
+.log-row.new { background: color-mix(in srgb, var(--lcars-gold) 7%, transparent); }
+.log-who { overflow-wrap: anywhere; }
+.log-away { background: var(--surface-2); border-radius: var(--radius); padding: 10px 14px; }
+.log-away h3 { margin: 0 0 4px; font-size: 15px; color: var(--lcars-peach); }
+.log-away p { margin: 2px 0; }
+.log-waiting { color: var(--lcars-gold); }
 .ledger-row.traceable:hover { background: #ffffff0d; }
 .ledger-row.picked { background: color-mix(in srgb, var(--lcars-gold) 14%, transparent); }
 .ledger-trace .linkish { background: none; border: 0; padding: 0; color: var(--lcars-lilac); font: inherit; cursor: pointer; text-align: left; }

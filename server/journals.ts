@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { journalLine, readJournal } from './agents/runJournal';
 
 // Append-only journals of one kind (agents' runs, QA reviews, leads' slices), a file each in one folder: each fact is
@@ -15,8 +16,8 @@ export class Journals<F extends { kind: string }, S extends { seq: number }> {
 
   constructor(
     private readonly persist: boolean,
-    /** The file a journal's in, by its key. */
-    private readonly file: (key: string) => string,
+    /** Where the journals are: their folder, and each one's file name (without `.jsonl`) by its key, and back. */
+    private readonly folder: { dir: string; name: (key: string) => string; key: (name: string) => string },
     /** A journal with nothing in it. */
     private readonly empty: S,
     /** What a journal adds up to with one more fact. */
@@ -48,6 +49,22 @@ export class Journals<F extends { kind: string }, S extends { seq: number }> {
   /** The journal, oldest first. */
   entries(key: string): Stamped<F>[] {
     return this.persist ? this.read(key, false) : [...(this.kept.get(key) ?? [])];
+  }
+
+  /** The journals written to since `since`: by their files' times, or their last fact's when kept in memory. */
+  written(since: number): string[] {
+    if (!this.persist) return [...this.kept].filter(([, kept]) => (kept.at(-1)?.t ?? 0) > since).map(([key]) => key);
+    let names: string[];
+    try {
+      names = fs.readdirSync(this.folder.dir).filter((f) => f.endsWith('.jsonl'));
+    } catch {
+      return [];
+    }
+    return names.filter((f) => fs.statSync(path.join(this.folder.dir, f)).mtimeMs > since).map((f) => this.folder.key(f.slice(0, -'.jsonl'.length)));
+  }
+
+  private file(key: string): string {
+    return path.join(this.folder.dir, `${this.folder.name(key)}.jsonl`);
   }
 
   private keep(key: string, entry: Stamped<F>): void {
