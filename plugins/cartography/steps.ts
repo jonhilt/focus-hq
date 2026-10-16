@@ -77,7 +77,9 @@ export function checkSteps(map: RepoMap, view: MapView): CheckedStep[] {
         // the last hop is the message landing with its receiver, which the flows say, not a call
         if (before?.part === step.from && hop.part === step.to && i < chain.hops.length - 1) called.set(fn, (called.get(fn) ?? 0) + chain.count);
       });
-    const calls = [...called].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([fn, n]): Evidence => ({ kind: 'call', sentence: `Calls ${fn}: ${times(n, 'time')} in the recorded run` }));
+    // the call the step says first, then the busiest others
+    const own = (fn: string) => (step.says === `calls ${fn}` ? 1 : 0);
+    const calls = [...called].sort((a, b) => own(b[0]) - own(a[0]) || b[1] - a[1]).slice(0, 3).map(([fn, n]): Evidence => ({ kind: 'call', sentence: `Calls ${fn}: ${times(n, 'time')} in the recorded run` }));
     return { ...step, evidence: [...flows, ...calls, ...imports] };
   });
 }

@@ -84,6 +84,8 @@ describe('a scenario found in a recorded run', () => {
   it('backs each step with the calls the run saw, and an anonymous one as a callback', () => {
     const [took, back] = checkSteps(traced, view);
     expect(took.evidence[0]).toEqual({ kind: 'call', sentence: 'Calls take: 2 times in the recorded run' });
+    // the call a step says comes first, however busy the others
+    expect(checkSteps(traced, { ...view, trace: undefined, steps: [{ from: 'api', to: 'core', says: 'calls save' }] })[0].evidence[0].sentence).toBe('Calls save: 2 times in the recorded run');
     expect(back.evidence[0]).toEqual({ kind: 'call', sentence: 'Calls a callback: 2 times in the recorded run' });
     expect(sequenceSvg(traced, view, checkSteps(traced, view))).not.toContain('url(#cg-seq-none)');
   });
