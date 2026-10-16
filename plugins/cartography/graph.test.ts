@@ -17,6 +17,11 @@ describe('isSource', () => {
     expect(['a.ts', 'b/c.tsx', 'd.mjs', 'e.js'].every(isSource)).toBe(true);
     expect(['a.test.ts', 'b.spec.tsx', 'c.d.ts', 'd.css', 'e.py'].some(isSource)).toBe(false);
   });
+
+  it('reads Java too, but not its tests or its package and module declarations', () => {
+    expect(isSource('src/main/java/a/App.java')).toBe(true);
+    expect(['src/test/java/a/AppTest.java', 'a/AppTests.java', 'a/AppIT.java', 'src/main/java/a/package-info.java', 'src/main/java/module-info.java'].some(isSource)).toBe(false);
+  });
 });
 
 describe('resolveImport', () => {

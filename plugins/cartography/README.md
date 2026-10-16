@@ -7,7 +7,12 @@ Each project's architecture, as a map that keeps up with its code. A repo keeps 
 - **Which code belongs to which part.** Each part names its paths: a folder (ending in `/`) or a file. When paths overlap, the longest wins, so a part can claim a file out of another part's folder.
 - **Its views.** Each view is a question the map answers, with the parts it takes to answer it.
 
-Nobody draws the connections. The office reads every source file's imports with TypeScript's parser and adds them up part to part, with the names each takes, so a connection on the map is one the code makes, and says what goes across it. Tests (`*.test.*`, `*.spec.*`) and declarations are left out, since tests import whatever they test.
+Nobody draws the connections. The office reads what every source file uses of the others, in the languages it knows (`languages.ts`, a reader per language behind the one interface), and adds them up part to part, with the names each takes, so a connection on the map is one the code makes, and says what goes across it. Tests are left out, since they import whatever they test.
+
+- **TypeScript and JavaScript** (`scan.ts`): each file's imports, re-exports and `import('…')` calls, read with TypeScript's parser (without type-checking), and the relative ones followed to the file they lead to. Tests (`*.test.*`, `*.spec.*`) and declarations are left out.
+- **Java** (`java.ts`): each file's package and imports, read from its text without its comments and strings, with no compiler or build file. A class is found by the package its file declares, wherever its source root is (`src/main/java`, a module's, or none), so a repo of several modules maps the same way. An import leads to its class's file (a nested class's, to the file it's in; a static import's, to its class, taking the member); a package imported with `.*` leads to the classes of it the file names; and a file uses the classes of its own package it names, which need no import. Test trees (`src/test/`), `…Test`, `…Tests` and `…IT` classes, and `package-info` and `module-info` are left out. A Java repo's model names its parts by folder, like any other: `paths: [src/main/java/org/springframework/samples/petclinic/owner/]`.
+
+Git history and recorded runs don't care what a file's written in.
 
 ```yaml
 parts:
@@ -88,10 +93,10 @@ Maps are made from each repo's default branch, checked out in the plugin's own f
 - `shared.ts`: the model and the map's types.
 - `model.ts`: reading a model from its YAML, and a recorded run from its JSON, saying what's wrong with either.
 - `graph.ts`: the map's rules, pure: which files it reads, where an import leads, which part owns a file, connections, a recorded run's flows part to part, and drift.
-- `scan.ts`: what a file imports, and the names it takes (TypeScript's parser, no type-checking).
+- `languages.ts`: the languages the map reads, each behind the one interface (which files are its source, and what each uses of the others). `scan.ts`: what a TypeScript file imports, and the names it takes (TypeScript's parser, no type-checking). `java.ts`: what a Java file uses of the others (its package, imports and own package's classes), pure.
 - `history.ts`: how the parts change, from git: hotspots and change coupling, pure.
 - `slice.ts`: what a goal's slice does to the architecture, from its lead's checkout against the default branch's map, and its view, pure.
-- `map.ts`: making a repo's map from a checkout (git ls-files, then scan.ts, and git log for history.ts).
+- `map.ts`: making a repo's map from a checkout (git ls-files, then each language's reader, and git log for history.ts).
 - `draw.ts`: drawing a view, the matrix and the changes as SVG, with their sentences (`viewDrawing`, which every place a view shows goes through).
 - `views.ts`: a map's views, and what the Maps view says in words.
 - `leadTool.ts`: the lead's map tool. `page.ts`: a view as a page for a station's screen.

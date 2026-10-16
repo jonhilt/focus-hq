@@ -7,8 +7,14 @@ import type { ArchitectureModel, FileEdge, MapConnection, MapFlow, RepoMap } fro
 /** How many of a connection's names it keeps, the most imported first. */
 export const NAMES_KEPT = 8;
 
-/** Source the map reads imports from: TypeScript and JavaScript, but not tests, which import everything they test. */
-export const isSource = (file: string): boolean => /\.(ts|tsx|mts|js|jsx|mjs)$/.test(file) && !/\.d\.ts$/.test(file) && !/\.(test|spec)\.[a-z]+$/.test(file);
+/** TypeScript and JavaScript the map reads imports from, but not tests, which import everything they test. */
+export const isTypeScript = (file: string): boolean => /\.(ts|tsx|mts|js|jsx|mjs)$/.test(file) && !/\.d\.ts$/.test(file) && !/\.(test|spec)\.[a-z]+$/.test(file);
+
+/** Java the map reads (not `package-info` or `module-info`, which declare no class), but not tests: neither a Maven or Gradle test tree (`src/test/`) nor a `…Test`, `…Tests` or `…IT` class. */
+export const isJava = (file: string): boolean => file.endsWith('.java') && !/(^|\/)(package|module)-info\.java$/.test(file) && !/(^|\/)src\/test\//.test(file) && !/(Test|Tests|IT)\.java$/.test(file);
+
+/** Source the map reads, in any language it knows (languages.ts). */
+export const isSource = (file: string): boolean => isTypeScript(file) || isJava(file);
 
 const EXTENSIONS = ['.ts', '.tsx', '.mts', '.js', '.jsx', '.mjs'];
 

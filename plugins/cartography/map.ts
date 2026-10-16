@@ -1,29 +1,19 @@
-// Making a repo's map from a checkout of it: its model file, its source files (as git knows them) and their imports,
-// read with TypeScript's parser (scan.ts), and its git history (history.ts). The rules are in graph.ts.
+// Making a repo's map from a checkout of it: its model file, its source files (as git knows them) and what each uses of
+// the others, read by its language (languages.ts: TypeScript's parser, or Java's imports and packages), and its git
+// history (history.ts). The rules are in graph.ts.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { parse } from 'yaml';
 import { errorMessage, FLOWS_FILE, type FlowRecording, run } from '../../plugin-api/server';
-import { isSource, mapOf, ownerOf, resolveImport } from './graph';
+import { isSource, mapOf, ownerOf } from './graph';
 import { historyOf, LOG_ARGS, readLog } from './history';
 import { readModel, readRecording } from './model';
-import { importsIn } from './scan';
+import { sourceEdges } from './languages';
 import { type ChangedFile, readNumstat } from './slice';
 import { type FileEdge, MODEL_FILE, type RepoMap } from './shared';
 
-/** Each source file's imports that lead to another source file in the repo, file to file, with the names they take. */
-async function imports(dir: string, files: readonly string[]): Promise<FileEdge[]> {
-  const known = new Set(files);
-  const found: FileEdge[] = [];
-  for (const file of files) {
-    const text = await fs.readFile(path.join(dir, file), 'utf8').catch(() => '');
-    for (const { spec, names } of importsIn(file, text)) {
-      const to = resolveImport(file, spec, known);
-      if (to) found.push({ from: file, to, names });
-    }
-  }
-  return found;
-}
+/** Each source file's uses of another source file in the repo, file to file, with the names they take. */
+const imports = (dir: string, files: readonly string[]): Promise<FileEdge[]> => sourceEdges(files, (file) => fs.readFile(path.join(dir, file), 'utf8').catch(() => ''));
 
 /** The repo's recorded run, if it has one: or why it doesn't read. */
 async function recorded(dir: string): Promise<{ ok?: FlowRecording; error?: string } | undefined> {
