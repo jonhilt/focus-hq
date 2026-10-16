@@ -168,6 +168,15 @@ export function crewVoice(speaker: CrewSpeaker, projectId: string): CrewVoice {
   return { kokoro, lang: kokoro.startsWith('b') ? 'en-GB' : 'en-US', pitch: post.pitch };
 }
 
+/**
+ * The quick answerer's voice, for a lead's briefing (server/agents/quickAnswer.ts): never the lead's own, so an answer
+ * the lead didn't give doesn't sound as if they did.
+ */
+export function quickVoice(leadId: string): CrewVoice {
+  const kokoro: KokoroVoice = leadVoice(leadId).kokoro === 'bf_emma' ? 'af_bella' : 'bf_emma';
+  return { kokoro, lang: kokoro.startsWith('b') ? 'en-GB' : 'en-US', pitch: 1.1 };
+}
+
 /** The voice a goal's lead narrates their explainers in: an officer's, always the same one for the same lead. */
 export function leadVoice(leadId: string): CrewVoice {
   const post = VOICES.officer;

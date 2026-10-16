@@ -17,6 +17,7 @@ import type { Staged, StudioOfficer, StudioReply, StudioTurn } from './studioCom
 import { listSessions, type SessionSummary, loadSession } from './studioSessions';
 import { parseTriage, TRIAGE_SCHEMA, type TriageDecision, type Triager, type TriageRequest, triagePrompt, triageSystemPrompt } from './triage';
 import { checkoutLatest } from './workspace';
+import { QUICK_MODEL, QUICK_SYSTEM, type QuickAnswerer, quickAnswerPrompt, type QuickQuestion } from './quickAnswer';
 import { tidyGoalTitle } from '../../shared/goalTitle';
 import { GOAL_TITLE_SCHEMA, goalTitlePrompt, goalTitleSystemPrompt } from './goalTitles';
 
@@ -430,4 +431,27 @@ export async function titleGoal(brief: string, settings: Settings): Promise<stri
     timeoutMs: 60_000,
   });
   return tidyGoalTitle((result.structured as { title?: unknown } | undefined)?.title);
+}
+
+/**
+ * Answers the captain's question about a busy lead's briefing in seconds: Haiku, with the briefing, the lead's note
+ * and what they've said in the prompt, reading the lead's workspace only if it must (`quickAnswer.ts`).
+ */
+export class ClaudeQuickAnswerer implements QuickAnswerer {
+  async answer(req: QuickQuestion): Promise<{ text: string; costUsd?: number }> {
+    const result = await runReadOnly({
+      cwd: req.cwd,
+      systemAppend: QUICK_SYSTEM,
+      prompt: quickAnswerPrompt(req),
+      settings: req.settings,
+      signal: req.signal,
+      activity: () => undefined,
+      builtins: CODE_TOOLS,
+      model: QUICK_MODEL,
+      maxTurns: 6,
+      timeoutMs: 60_000,
+    });
+    if (!result.text.trim()) throw new Error('The quick answerer had nothing to say');
+    return { text: result.text.trim(), costUsd: result.costUsd };
+  }
 }

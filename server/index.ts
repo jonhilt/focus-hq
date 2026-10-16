@@ -6,13 +6,14 @@ import express from 'express';
 import { clock } from '../shared/clock';
 import { keyFallback } from './agents/apiKey';
 import { BrowserPool } from './agents/browserTool';
-import { ClaudeDrafter, ClaudeStudio, ClaudeTriager, titleGoal } from './agents/claudeCrew';
+import { ClaudeDrafter, ClaudeQuickAnswerer, ClaudeStudio, ClaudeTriager, titleGoal } from './agents/claudeCrew';
 import { StudioComputer } from './agents/studioComputer';
 import { githubRepo } from './github/repo';
 import { transcriptFolders, transcriptReader } from './agents/transcript';
 import { ClaudeRunner } from './agents/claudeRunner';
-import { DemoDrafter, DemoRunner, DemoStudio, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
+import { DemoDrafter, DemoQuickAnswerer, DemoRunner, DemoStudio, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
+import { BriefingDesk } from './briefingDesk';
 import { Renderer, Sessions, Triage, Workspace } from './agents/services';
 import { closedGoalPrs, lookUpPrStates, type ShipStatus, summariseShip } from './agents/shipStatus';
 import { IssuePlanner } from './agents/planner';
@@ -105,6 +106,7 @@ async function main() {
   office.voice.warmSpeech();
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
+  office.briefings = new BriefingDesk(store, () => office.agents, config.demo ? new DemoQuickAnswerer() : new ClaudeQuickAnswerer(), (id) => workspace.dir(id));
   // the office's own repo, for plugins that work on it (the demo has none)
   office.ownRepo = config.demo ? undefined : githubRepo(await run('git', ['remote', 'get-url', 'origin'], { cwd: config.root }).catch(() => ''));
   // each agent session is digested into the ledger as it ends: the demo's agents have no transcripts

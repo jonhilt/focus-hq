@@ -335,6 +335,7 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
 .briefing-answer:empty { display: none; }
 .briefing-answer p { margin: 4px 0; }
 .briefing-answer .asked { color: var(--lcars-sky); }
+.briefing-answer .quick b { color: var(--lcars-lilac); }
 .artifact-stage { position: relative; height: calc(100vh - 210px); overflow: hidden; }
 /* full screen: the page alone, as large as the screen holds it */
 .artifact-stage:fullscreen { height: 100vh; background: #000; }

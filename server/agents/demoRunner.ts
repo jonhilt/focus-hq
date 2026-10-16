@@ -13,6 +13,7 @@ import type { Drafter, DraftRequest, DraftResult } from './planner';
 import type { ExplainerInput } from './explainer';
 import { renderText, renderToolUse } from './render';
 import { workflowProgress } from './workflows';
+import { briefingBeats, type QuickAnswerer, type QuickQuestion } from './quickAnswer';
 import type { TriageDecision, Triager, TriageRequest } from './triage';
 import { type AgentRunner, type AgentSession, type CloudTerminal, type CloudTerminalRequest, type RunHooks, type RunOutcome, type RunRequest, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
 
@@ -826,6 +827,18 @@ export class DemoDrafter implements Drafter {
       `- This belongs in ${repo}${req.repos.length > 1 ? ' rather than the other repos in the project' : ''}.`,
     ].join('\n');
     return { repo, title, body, tooBig: demoTooBig(idea), sessionId: `demo-plan-${randomHex(3)}`, costUsd: 0.11 };
+  }
+}
+
+/** Demo mode: the quick answerer, answering about the beat the captain's on in a second or so, as Haiku would. */
+export class DemoQuickAnswerer implements QuickAnswerer {
+  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
+
+  async answer(req: QuickQuestion): Promise<{ text: string }> {
+    await sleep((800 + Math.random() * 600) / this.speed);
+    const beat = req.spot ? briefingBeats(req.briefing.html)?.[req.spot.beat] : undefined;
+    const about = beat ? `In ${beat.title.toLowerCase()}: ${beat.text}` : `From “${req.briefing.title}”, as far as I can tell:`;
+    return { text: `${about} ${req.leadName} is busy building the slice, so I've answered for now, and passed your question on in case there's more to it.` };
   }
 }
 

@@ -1,5 +1,6 @@
 import { clock } from '../../../shared/clock';
-import type { ResumeCost, ResumeHow } from '../../../shared/types';
+import type { BriefingSpot } from '../../../shared/artifacts';
+import type { BriefingReply, ResumeCost, ResumeHow } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { chooseDialog } from './confirmDialog';
@@ -46,4 +47,17 @@ export async function answerLead(id: string, question: string, option: string, n
   if (!('costly' in reply)) return;
   const how = await askResume(state.agents.get(id)?.name ?? 'The lead', reply.costly);
   if (how) await api.answer(id, question, option, note, how);
+}
+
+/**
+ * The captain's question about a lead's briefing, asked first like `messageAgent` when it would cost them on the key.
+ * Undefined when they chose not to send it.
+ */
+export async function askAboutBriefing(id: string, briefing: string, spot: BriefingSpot | undefined, question: string): Promise<Exclude<BriefingReply, { costly: unknown }> | undefined> {
+  const reply = await api.askBriefing(id, briefing, spot, question);
+  if (!('costly' in reply)) return reply;
+  const how = await askResume(state.agents.get(id)?.name ?? 'The lead', reply.costly);
+  if (!how) return undefined;
+  const asked = await api.askBriefing(id, briefing, spot, question, how);
+  return 'costly' in asked ? undefined : asked;
 }

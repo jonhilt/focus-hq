@@ -1,5 +1,4 @@
-import { briefingQuestion } from '../../../shared/artifacts';
-import { leadVoice } from '../../../shared/crew';
+import { leadVoice, quickVoice } from '../../../shared/crew';
 import type { GoalArtifact } from '../../../shared/types';
 import { repliesToSpeak } from '../../../shared/voice';
 import { state } from '../net/state';
@@ -7,7 +6,7 @@ import type { Ui } from './context';
 import { micPerRecording, withMic } from './dictation';
 import { h } from './dom';
 import type { Narrator } from './narrator';
-import { messageAgent } from './resume';
+import { askAboutBriefing } from './resume';
 import { CrewSpeaker, voicePrefs } from './voiceMode';
 
 /** How long after a question the lead's replies still count as its answer, and are said aloud. */
@@ -15,8 +14,9 @@ const ANSWER_WINDOW_MS = 5 * 60_000;
 
 /**
  * Asking a lead about their briefing, up close: type it, or press Mic and say it (sent as soon as it's transcribed).
- * Asking pauses the briefing and tells the lead which beat you were on; what they write back while answering shows
- * under it, and is said in their voice (always, if you asked aloud; with the briefing's Voice on, if you typed it).
+ * Asking pauses the briefing, and the question goes with the beat you were on. Between their turns the lead answers it:
+ * what they write back while answering shows under it, and is said in their voice (always, if you asked aloud; with
+ * the briefing's Voice on, if you typed it). While they're busy the quick answerer does, in a voice of its own.
  * How long their first word took to come back is shown beside it, the wait a conversation lives or dies by. It outlives
  * a new version of the briefing, so an answer the lead gives before explaining again carries on being said.
  */
@@ -69,17 +69,38 @@ export class BriefingAsk {
     this.quiet();
     this.stopHearing?.();
     this.input.value = '';
-    const lead = state.agents.get(this.leadId);
-    const waiting = h('small', { class: 'muted' }, `Waiting for ${lead?.name ?? 'the lead'}…`);
+    const name = state.agents.get(this.leadId)?.name ?? 'the lead';
+    const waiting = h('small', { class: 'muted' }, `Asking ${name}…`);
     this.answer.replaceChildren(h('p', { class: 'asked' }, h('b', null, 'You: '), question), waiting);
     const askedAt = performance.now();
+    const after = () => `${((performance.now() - askedAt) / 1000).toFixed(1)} s`;
+    try {
+      const reply = await askAboutBriefing(this.leadId, this.briefing.id, this.narrator.spot, question);
+      if (!reply) {
+        waiting.textContent = 'Not sent.';
+      } else if (reply.by === 'quick') {
+        waiting.before(h('p', { class: 'quick' }, h('b', null, 'Quick answer: '), reply.text));
+        waiting.textContent = `Answered after ${after()}, while ${name} works: they've heard it too, and will put it right if it's wrong.`;
+        if (aloud) this.speaker.say(reply.text, quickVoice(this.leadId));
+      } else {
+        waiting.textContent = `Waiting for ${name}…`;
+        this.hearLead(waiting, aloud, after);
+      }
+    } catch (e) {
+      waiting.textContent = 'Not sent.';
+      this.ui.error((e as Error).message);
+    }
+  }
+
+  /** Shows (and says, if `aloud`) what the lead writes back while answering, for a while after asking. */
+  private hearLead(waiting: HTMLElement, aloud: boolean, after: () => string): void {
     let replied = false;
     const unsubscribe = state.on('lines', ({ id, lines }) => {
       if (id !== this.leadId) return;
       for (const reply of repliesToSpeak(lines)) {
         if (!replied) {
           replied = true;
-          waiting.textContent = `First reply after ${((performance.now() - askedAt) / 1000).toFixed(1)} s`;
+          waiting.textContent = `First reply after ${after()}`;
         }
         waiting.before(h('p', null, reply));
         if (aloud) this.speaker.say(reply, leadVoice(this.leadId));
@@ -92,16 +113,5 @@ export class BriefingAsk {
       if (this.stopHearing === stop) this.stopHearing = undefined;
     };
     this.stopHearing = stop;
-    try {
-      const sent = await messageAgent(this.leadId, lead?.name ?? 'The lead', briefingQuestion(this.briefing, this.narrator.spot, question));
-      if (!sent) {
-        stop();
-        waiting.textContent = 'Not sent.';
-      }
-    } catch (e) {
-      stop();
-      waiting.textContent = 'Not sent.';
-      this.ui.error((e as Error).message);
-    }
   }
 }

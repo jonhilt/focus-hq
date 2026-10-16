@@ -1,6 +1,7 @@
 import path from 'node:path';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { EFFORT_LEVELS, type Effort, type PreviewSet, type ResumeHow } from '../shared/types';
+import type { BriefingSpot } from '../shared/artifacts';
 import { isAutonomy } from '../shared/autonomy';
 import { closedGoals } from '../shared/ledger';
 import { ledgerWindow } from '../shared/ledgerReview';
@@ -37,6 +38,11 @@ const picks = (v: unknown): PreviewSet | undefined => {
 };
 /** The captain's say on picking a conversation back up on your API key: now, or once your plan's limit resets. */
 const resumeHow = (v: unknown): ResumeHow | undefined => (v === 'key' || v === 'wait' ? v : undefined);
+/** The beat a question about a briefing was asked on: { beat, title }, anything else none. */
+const briefingSpot = (v: unknown): BriefingSpot | undefined => {
+  const spot = v as Partial<BriefingSpot> | null | undefined;
+  return spot && Number.isInteger(spot.beat) && (spot.beat ?? -1) >= 0 ? { beat: Number(spot.beat), title: str(spot.title).slice(0, 200) } : undefined;
+};
 const effort = (v: unknown): Effort | undefined => {
   if (v === undefined || v === '') return undefined;
   const level = EFFORT_LEVELS.find((e) => e === v);
@@ -190,6 +196,13 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.get('/agents/:id/workflows/:workflow/agents/:agent/lines', h((req) => office.agents.workflowAgentLines(param(req, 'id'), param(req, 'workflow'), param(req, 'agent'))));
   // on your API key, picking a long conversation back up costs enough that the captain says how first (`how`)
   r.post('/agents/:id/message', h((req) => office.agents.message(param(req, 'id'), str(req.body.text), undefined, resumeHow(req.body.how))));
+  // a question about a lead's briefing, up close: the lead answers it, or the quick answerer while they're busy
+  r.post('/agents/:id/briefing-question', h((req) => office.briefings.ask(param(req, 'id'), {
+    briefing: str(req.body.briefing),
+    spot: briefingSpot(req.body.spot),
+    question: str(req.body.question),
+    how: resumeHow(req.body.how),
+  })));
   r.post('/agents/:id/answer', h((req) => office.agents.answer(param(req, 'id'), str(req.body.question), str(req.body.option), typeof req.body.note === 'string' ? req.body.note : undefined, resumeHow(req.body.how))));
   r.post('/agents/:id/read', h((req) => office.agents.readTurn(param(req, 'id'))));
   r.post('/agents/:id/spot-checks', h((req) => office.agents.tickSpotCheck(param(req, 'id'), Number(req.body.slice), Number(req.body.index), req.body.checked === true)));
