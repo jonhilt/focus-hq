@@ -75,10 +75,12 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
 }
 .location .swatch { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ink); box-shadow: 0 0 0 1px var(--line); }
 .location .mode { font-size: 12px; background: var(--lcars-gold); color: var(--ink); border-radius: 999px; padding: 0 8px; }
-.stats { position: absolute; right: 16px; top: 16px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 60vw; }
+.stats { position: absolute; right: 16px; top: 16px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 60vw; align-items: center; }
 .stat {
   background: #000d; color: var(--lcars-sky); border-right: 10px solid var(--lcars-periwinkle); border-radius: 0 999px 999px 0;
-  padding: 4px 14px 4px 12px; font-weight: 600; letter-spacing: 0.05em; white-space: nowrap;
+  padding: 0 14px 0 12px; font-weight: 600; letter-spacing: 0.05em; white-space: nowrap;
+  /* every HUD pill the same height, whatever its emoji or key: matches .comms-badge */
+  box-sizing: border-box; height: 32px; display: flex; align-items: center;
 }
 .stat.alert { background: var(--lcars-gold); color: var(--ink); border-color: var(--lcars-peach); animation: blink 1s steps(1) infinite; }
 .stat.usage.warn { color: var(--lcars-gold); }
@@ -88,8 +90,9 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
 .comms-badge {
   display: flex; align-items: stretch; border-radius: 999px; overflow: hidden; font-weight: 600; letter-spacing: 0.08em;
   background: #000d; color: var(--lcars-peach); border-left: 14px solid var(--lcars-orange);
+  box-sizing: border-box; height: 32px;
 }
-.comms-badge > * { display: flex; align-items: center; padding: 4px 10px; }
+.comms-badge > * { display: flex; align-items: center; padding: 0 10px; }
 .comms-badge b { min-width: 1.6em; justify-content: center; color: var(--muted); }
 .comms-badge kbd { background: var(--lcars-lilac); color: var(--ink); font-family: var(--ui); margin: 0; border-radius: 0; }
 .comms-badge.hailing > span { background: var(--lcars-orange); color: var(--ink); }
