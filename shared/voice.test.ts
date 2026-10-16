@@ -127,4 +127,8 @@ describe('sentences', () => {
   it('has none for blank text', () => {
     expect(sentences('   ')).toEqual([]);
   });
+
+  it('keeps a title or an abbreviation with the sentence it is in', () => {
+    expect(sentences('Lt. Adeyemi is busy, so I answered. Ask Dr. Chen, e.g. tomorrow.')).toEqual(['Lt. Adeyemi is busy, so I answered.', 'Ask Dr. Chen, e.g. tomorrow.']);
+  });
 });

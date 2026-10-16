@@ -48,7 +48,14 @@ export function forSpeech(text: string): string {
  * it: Kokoro takes about half a line's length to say it, so the first sentence of an answer plays while the rest are made.
  */
 export const sentences = (text: string): string[] =>
-  (text.match(/[^.!?]+[.!?]+["”’)]*|[^.!?]+$/g) ?? []).map((s) => s.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  (text.replace(ABBREVIATION, (word) => word.replace(/\./g, HELD)).match(/[^.!?]+[.!?]+["”’)]*|[^.!?]+$/g) ?? [])
+    .map((s) => s.replaceAll(HELD, '.').replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+
+/** Words whose full stops don't end a sentence (Lt. Adeyemi, e.g.): the crew's ranks and the usual abbreviations. */
+const ABBREVIATION = /\b(?:Lt|Cmdr|Capt|Ens|Adm|Dr|Mr|Mrs|Ms|St|vs|etc|approx|e\.g|i\.e)\./gi;
+/** What their full stops stand as while the text is split. */
+const HELD = '\u0000';
 
 const firstSentences = (text: string) => sentences(text).slice(0, SPOKEN_SENTENCES).join(' ');
 
