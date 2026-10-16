@@ -19,6 +19,7 @@
 | `FOCUS_AUTO_UPDATE=0` | | turn off auto update |
 | `FOCUS_UPDATE_CHECK_MS` | `300000` | how often auto update checks for new commits |
 | `FOCUS_WHISPER_BIN` | `whisper-cli` | whisper.cpp's CLI for [voice input](voice-input.md) |
+| `FOCUS_KOKORO_GPU` | on | `0` keeps the crew's voices (Kokoro) on the CPU rather than the Apple GPU ([Number One's voice mode](../plugins/number-one/README.md#voice-mode)) |
 | `FOCUS_WHISPER_MODEL` | `~/.focus/models/ggml-large-v3-turbo-q5_0.bin` | the speech model for voice input |
 | `OPENAI_API_KEY` / `TYPESAFE_API_KEY` | | both needed for [calls to Number One](../plugins/number-one/calls.md) (the `number-one` plugin): gpt-live-1 and Jev |
 | `FOCUS_LIVE_VOICE` | `cedar` | gpt-live-1's voice on calls |

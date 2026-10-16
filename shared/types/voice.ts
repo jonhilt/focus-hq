@@ -10,7 +10,8 @@ export type VoiceDownload = { state: 'running'; bytes: number; total?: number } 
 export type SpeechEngine =
   | { state: 'idle' }
   | { state: 'loading'; bytes: number; total?: number }
-  | { state: 'ready' }
+  /** `on`: where it runs, the Apple GPU or the CPU. */
+  | { state: 'ready'; on?: 'gpu' | 'cpu' }
   | { state: 'failed'; error: string };
 
 export interface SpeechStatus {

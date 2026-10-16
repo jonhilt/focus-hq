@@ -1,13 +1,8 @@
-import { type ChildProcess, fork } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import type { SpeechEngine, SpeechStatus } from '../shared/types';
-import type { KokoroVoice } from '../shared/voice';
+import { KOKORO_VOICES, type KokoroVoice } from '../shared/voice';
 import { kokoro } from './config';
-
-/** server/speechWorker.ts, which runs Kokoro in a process of its own. */
-const WORKER = path.join(path.dirname(fileURLToPath(import.meta.url)), 'speechWorker.ts');
+import { cpuKokoro, type SpeechHelper, type SpeechProcess } from './speechHelpers';
 
 interface Line {
   id: number;
@@ -19,7 +14,7 @@ interface Line {
 }
 
 /** What the office asks the speech worker. */
-export type ToSpeechWorker = { type: 'load' } | { type: 'speak'; id: number; text: string; voice: KokoroVoice };
+export type ToSpeechWorker = { type: 'load'; voices?: readonly KokoroVoice[] } | { type: 'speak'; id: number; text: string; voice: KokoroVoice };
 
 /** What the speech worker tells the office. */
 export type FromSpeechWorker =
@@ -48,12 +43,23 @@ export function downloadProgress(files: Map<string, { loaded: number; total: num
   return { bytes: all.reduce((sum, f) => sum + f.loaded, 0), total: total || undefined };
 }
 
+/** Remembers that Kokoro has loaded on the GPU (its model's there), so `status` says the voices are downloaded. */
+function markLoadedOnGpu(): void {
+  try {
+    mkdirSync(kokoro.gpuDir, { recursive: true });
+    writeFileSync(kokoro.gpuMarker, '');
+  } catch {
+    // only the office's warm start misses it
+  }
+}
+
 /**
- * The crew's voices: Kokoro (82M) through kokoro-js. The model downloads once into the models folder, the first time
- * something asks for it, and stays loaded after that. Lines are spoken one at a time, so a queue of them doesn't fight
- * over the CPU.
+ * The crew's voices: Kokoro (82M), on the Apple GPU where it can run there, otherwise on the CPU through kokoro-js
+ * (`helpers`, tried in turn: one that can't load hands over to the next; server/speechHelpers.ts). On the GPU it keeps
+ * up however busy the agents keep the CPU. The model downloads once into the models folder, the first time something
+ * asks for it, and stays loaded after that. Lines are spoken one at a time, so a queue of them doesn't fight over it.
  *
- * Kokoro runs in a child process (server/speechWorker.ts), never in the office's: once onnxruntime-node is loaded, a
+ * Kokoro runs in a child process, never in the office's: once onnxruntime-node is loaded, a
  * process that exits normally aborts on macOS ("libc++abi: … mutex lock failed: Invalid argument") as onnxruntime's
  * native teardown runs, even after its session is released. Only a process that ends without that teardown is spared,
  * so the worker is ended with SIGKILL (`close`, and the worker itself when the office goes) and the office exits as
@@ -61,17 +67,21 @@ export function downloadProgress(files: Map<string, { loaded: number; total: num
  */
 export class Speech {
   private engine: SpeechEngine = { state: 'idle' };
-  private worker?: ChildProcess;
+  private worker?: SpeechProcess;
   /** Lines waiting their turn, and the one Kokoro is saying (its id), one at a time so they don't fight over the CPU. */
   private waiting: Line[] = [];
   private saying: Line | undefined;
   private lineIds = 0;
 
   /** `changed` tells every browser when the status moves. */
-  constructor(private readonly changed: () => void) {}
+  constructor(
+    private readonly changed: () => void,
+    private readonly helpers: readonly SpeechHelper[] = [cpuKokoro],
+  ) {}
 
   status(): SpeechStatus {
-    return { downloaded: existsSync(kokoro.marker), path: kokoro.dir, engine: this.engine };
+    const gpu = existsSync(kokoro.gpuMarker);
+    return { downloaded: gpu || existsSync(kokoro.marker), path: gpu ? kokoro.gpuDir : kokoro.dir, engine: this.engine };
   }
 
   /** Downloads (if need be) and loads the model, unless it's loaded or on its way. A failed load can be tried again. */
@@ -80,14 +90,39 @@ export class Speech {
     this.engine = { state: 'loading', bytes: 0 };
     this.changed();
     this.close();
-    // execArgv carries tsx's loader hooks, so the worker runs TypeScript the same way this process does; 'advanced'
-    // sends the WAVs back as bytes rather than JSON
-    const worker = fork(WORKER, [], { execArgv: process.execArgv, serialization: 'advanced', stdio: ['ignore', 'inherit', 'inherit', 'ipc'] });
+    this.start(0);
+  }
+
+  /** Starts the helper at `at`; if it can't load, the next one, until there are none left to try. */
+  private start(at: number): void {
+    const helper = this.helpers[at];
+    let ready = false;
+    // a helper only speaks up once it's started (its messages come in later), so the closures can name it
+    // eslint-disable-next-line prefer-const
+    let worker: SpeechProcess | undefined;
+    const handOver = (error: string) => {
+      if (this.worker !== worker) return;
+      if (at + 1 < this.helpers.length) {
+        this.worker = undefined;
+        worker?.kill();
+        return this.start(at + 1);
+      }
+      this.lost(error);
+    };
+    worker = helper.start({
+      message: (message) => {
+        if (this.worker !== worker) return;
+        if (!ready && message.type === 'failed') return handOver(`Couldn't load Kokoro: ${message.error}`);
+        if (message.type === 'ready') {
+          ready = true;
+          if (helper.on === 'gpu') markLoadedOnGpu();
+        }
+        this.received(message, helper.on);
+      },
+      gone: (error) => (ready ? this.worker === worker && this.lost(error) : handOver(error)),
+    });
     this.worker = worker;
-    worker.on('message', (message: FromSpeechWorker) => this.received(message));
-    worker.on('error', (err) => this.lost(worker, `Couldn't start Kokoro: ${err.message}`));
-    worker.on('exit', () => this.lost(worker, 'Kokoro stopped'));
-    this.send({ type: 'load' });
+    this.send({ type: 'load', voices: KOKORO_VOICES });
   }
 
   /**
@@ -132,7 +167,7 @@ export class Speech {
     const worker = this.worker;
     if (!worker) return;
     this.worker = undefined;
-    worker.kill('SIGKILL');
+    worker.kill();
     this.dropLines('Kokoro stopped');
   }
 
@@ -140,13 +175,13 @@ export class Speech {
     this.worker?.send(message);
   }
 
-  private received(message: FromSpeechWorker): void {
+  private received(message: FromSpeechWorker, on: SpeechHelper['on']): void {
     switch (message.type) {
       case 'progress':
         this.engine = { state: 'loading', bytes: message.bytes, total: message.total };
         return this.changed();
       case 'ready':
-        this.engine = { state: 'ready' };
+        this.engine = { state: 'ready', on };
         return this.changed();
       case 'failed':
         this.engine = { state: 'failed', error: `Couldn't load Kokoro: ${message.error}` };
@@ -159,10 +194,11 @@ export class Speech {
     }
   }
 
-  /** The worker ended without being asked to: whatever it was doing fails, and loading it again starts another. */
-  private lost(worker: ChildProcess, error: string): void {
-    if (this.worker !== worker) return;
+  /** The worker ended (or failed) without being asked to: whatever it was doing fails, and loading it again starts another. */
+  private lost(error: string): void {
+    const worker = this.worker;
     this.worker = undefined;
+    worker?.kill();
     this.dropLines(error);
     this.engine = { state: 'failed', error };
     this.changed();

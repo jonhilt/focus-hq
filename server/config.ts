@@ -77,7 +77,7 @@ export const whisper = {
   modelUrl: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin',
 };
 
-/** Kokoro, the crew's voices (see server/speech.ts), run through kokoro-js in a process of its own (server/speechWorker.ts). */
+/** Kokoro, the crew's voices (see server/speech.ts), run on the Apple GPU (server/speechMlx.py) or through kokoro-js on the CPU (server/speechWorker.ts), each in a process of its own. */
 export const kokoro = {
   model: 'onnx-community/Kokoro-82M-v1.0-ONNX',
   dtype: 'q8',
@@ -85,4 +85,8 @@ export const kokoro = {
   dir: path.join(paths.models, 'kokoro'),
   /** Written once the model has downloaded and loaded: transformers.js streams straight into the cache, so a download cut short looks like a model. */
   marker: path.join(paths.models, 'kokoro', 'complete'),
+  /** Hugging Face's cache for Kokoro on the Apple GPU (mlx-audio, server/speechMlx.py): its model downloads there once. */
+  gpuDir: path.join(paths.models, 'kokoro-mlx'),
+  /** Written once Kokoro has loaded on the GPU, so the office knows the voices are there to load as it starts. */
+  gpuMarker: path.join(paths.models, 'kokoro-mlx', 'complete'),
 } as const;

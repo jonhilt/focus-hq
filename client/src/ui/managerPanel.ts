@@ -433,17 +433,17 @@ const MB = 1024 * 1024;
 /** Kokoro, the crew's voices: downloaded here or the first time voice mode is switched on. */
 function speechSetup(speech: SpeechStatus, ui: Ui): HTMLElement {
   const engine = speech.engine;
-  const get = h('button', { class: 'btn small primary' }, engine.state === 'failed' ? 'Try again' : speech.downloaded ? 'Load' : 'Download (90 MB)');
+  const get = h('button', { class: 'btn small primary', title: 'About 90 MB on the CPU; on the Apple GPU, its Python packages and a 350 MB model, through uv' }, engine.state === 'failed' ? 'Try again' : speech.downloaded ? 'Load' : 'Download');
   get.onclick = () => void busy(get, () => api.loadSpeech(), ui.error);
   const chip =
-    engine.state === 'ready' ? h('span', { class: 'chip ok', title: speech.path }, 'ready')
+    engine.state === 'ready' ? h('span', { class: 'chip ok', title: speech.path }, engine.on === 'gpu' ? 'ready · Apple GPU' : engine.on === 'cpu' ? 'ready · CPU' : 'ready')
     : engine.state === 'loading' ? h('span', { class: 'chip' }, speech.downloaded ? 'loading…' : 'downloading…')
     : engine.state === 'failed' ? [h('span', { class: 'chip bad' }, 'failed'), get]
     : speech.downloaded ? [h('span', { class: 'chip ok', title: speech.path }, 'downloaded'), get]
     : [h('span', { class: 'chip bad' }, 'missing'), get];
   return h('div', null,
     h('div', { class: 'voice-row' }, h('span', null, 'Crew voices'), chip),
-    h('small', { class: 'muted' }, 'Kokoro speaks the crew’s replies in voice mode, on this machine. Until it’s ready, the browser’s built-in voice stands in.'),
+    h('small', { class: 'muted' }, 'Kokoro speaks the crew’s lines and briefings, on this machine: on the Apple GPU where it can (Apple Silicon, with uv installed), so busy agents don’t slow it, otherwise on the CPU. Lines wait for it while it loads.'),
     engine.state === 'loading' && engine.bytes
       ? h('div', { class: 'voice-progress' },
           h('progress', engine.total ? { max: engine.total, value: engine.bytes } : null),

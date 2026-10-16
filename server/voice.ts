@@ -10,6 +10,7 @@ import { type KokoroVoice, voiceMissing } from '../shared/voice';
 import { whisper } from './config';
 import type { Hub } from './hub';
 import { type LineUrgency, Speech } from './speech';
+import { cpuKokoro, gpuKokoro, type SpeechHelper, speechHelpers } from './speechHelpers';
 import { errorMessage, newId, run } from './util';
 
 export const DEMO_TRANSCRIPT = 'This is a demo transcription.';
@@ -43,6 +44,14 @@ function findExecutable(bin: string): string | undefined {
   });
 }
 
+/** Kokoro's helpers on this machine, in the order to try them: the Apple GPU (through uv) where it can, then the CPU. */
+function speechHelpersHere(): SpeechHelper[] {
+  const uv = findExecutable('uv');
+  return speechHelpers({ platform: process.platform, arch: process.arch, uv: uv !== undefined, gpu: process.env.FOCUS_KOKORO_GPU }).map((on) =>
+    on === 'gpu' && uv ? gpuKokoro(uv) : cpuKokoro,
+  );
+}
+
 /**
  * Local dictation with whisper.cpp: finds `whisper-cli` and its model, transcribes WAV recordings with them, and
  * downloads the model. Audio never leaves the machine. In demo mode it's always ready and transcribes to a fixed line.
@@ -50,7 +59,7 @@ function findExecutable(bin: string): string | undefined {
  */
 export class Voice {
   private download?: VoiceDownload;
-  private readonly speech = new Speech(() => this.refresh());
+  private readonly speech = new Speech(() => this.refresh(), speechHelpersHere());
 
   constructor(
     private readonly hub: Hub,

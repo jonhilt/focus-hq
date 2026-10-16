@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { downloadProgress, nextLine } from './speech';
+import { downloadProgress, nextLine, Speech, type ToSpeechWorker } from './speech';
+import type { SpeechHelper, SpeechListener } from './speechHelpers';
 
 describe('downloadProgress', () => {
   it('adds up every file being fetched', () => {
@@ -23,5 +24,80 @@ describe('nextLine', () => {
 
   it('has none when nothing is waiting', () => {
     expect(nextLine([])).toBe(-1);
+  });
+});
+
+/** A helper that does what the test tells it: `script` says what it answers to a load. */
+function fakeHelper(on: 'gpu' | 'cpu', load: 'ready' | 'fail' | 'crash') {
+  const sent: ToSpeechWorker[] = [];
+  let listener: SpeechListener | undefined;
+  let killed = false;
+  const helper: SpeechHelper = {
+    on,
+    start(l) {
+      listener = l;
+      return {
+        send(message) {
+          sent.push(message);
+          if (message.type !== 'load') return;
+          queueMicrotask(() => (load === 'ready' ? l.message({ type: 'ready' }) : load === 'fail' ? l.message({ type: 'failed', error: 'no' }) : l.gone('crashed')));
+        },
+        kill: () => (killed = true),
+      };
+    },
+  };
+  const speak = (id: number) => listener?.message({ type: 'spoken', id, wav: new Uint8Array([id]) });
+  return { helper, sent, speak, killed: () => killed, spoken: () => sent.filter((m) => m.type === 'speak').map((m) => (m.type === 'speak' ? m.text : '')) };
+}
+
+const settle = () => new Promise((r) => setTimeout(r, 0));
+
+describe('Speech', () => {
+  it('runs on the GPU when it loads there', async () => {
+    const gpu = fakeHelper('gpu', 'ready');
+    const speech = new Speech(() => undefined, [gpu.helper, fakeHelper('cpu', 'ready').helper]);
+    speech.load();
+    await settle();
+    expect(speech.status().engine).toEqual({ state: 'ready', on: 'gpu' });
+  });
+
+  it('hands over to the CPU when the GPU can’t load, or its process dies first', async () => {
+    for (const load of ['fail', 'crash'] as const) {
+      const gpu = fakeHelper('gpu', load);
+      const speech = new Speech(() => undefined, [gpu.helper, fakeHelper('cpu', 'ready').helper]);
+      speech.load();
+      await settle();
+      await settle();
+      expect(speech.status().engine).toEqual({ state: 'ready', on: 'cpu' });
+      expect(gpu.killed()).toBe(true);
+    }
+  });
+
+  it('fails once the last helper can’t load', async () => {
+    const speech = new Speech(() => undefined, [fakeHelper('cpu', 'fail').helper]);
+    speech.load();
+    await settle();
+    expect(speech.status().engine.state).toBe('failed');
+  });
+
+  it('says one line at a time, a line wanted now before lines fetched ahead, and drops one nobody wants', async () => {
+    const cpu = fakeHelper('cpu', 'ready');
+    const speech = new Speech(() => undefined, [cpu.helper]);
+    speech.load();
+    await settle();
+    const first = speech.speak('first', 'af_heart', 'ahead');
+    const gone = new AbortController();
+    const dropped = speech.speak('dropped', 'af_heart', 'ahead', gone.signal);
+    void speech.speak('later', 'af_heart', 'ahead');
+    const answer = speech.speak('answer', 'af_heart', 'now');
+    gone.abort();
+    await expect(dropped).rejects.toThrow('No longer wanted');
+    expect(cpu.spoken()).toEqual(['first']);
+    cpu.speak(0);
+    expect((await first)[0]).toBe(0);
+    expect(cpu.spoken()).toEqual(['first', 'answer']);
+    cpu.speak(3);
+    expect((await answer)[0]).toBe(3);
+    expect(cpu.spoken()).toEqual(['first', 'answer', 'later']);
   });
 });
