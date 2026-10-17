@@ -28,6 +28,13 @@ export class DemoNumberOne implements NumberOneOfficer {
     activity('Thinking…');
     await wait(1);
 
+    // "remember…", "note that…", "log this…": jotted down in the captain's personal log, before any other keyword in the thought can catch it
+    const remember = /^(?:please\s+)?(?:remember|note|log|jot down)(?:\s+(?:that|this))?[:,]?\s+(.+)$/i.exec(asked);
+    if (remember?.[1]) {
+      const thought = remember[1].replace(/^\w/, (c) => c.toUpperCase());
+      return { ...said(`Logged it in your personal log, Captain: “${thought}”`, 'Logged it, Captain.'), log: thought };
+    }
+
     if (/going on|status|stuck|happening|needs me|who'?s/.test(q)) {
       activity('Checking the ship’s status');
       const ship = await req.shipStatus();
@@ -40,13 +47,6 @@ export class DemoNumberOne implements NumberOneOfficer {
       });
       const waiting = ship.projects.reduce((n, p) => n + p.needsCaptain.length, 0);
       return said(rooms.join('\n\n') || 'There are no projects aboard yet.', waiting ? `${waiting} ${waiting === 1 ? 'thing needs' : 'things need'} you, Captain. The details are on screen.` : 'All quiet, Captain. Nothing needs you right now.');
-    }
-
-    // "remember…", "note that…", "log this…": jotted down in the captain's personal log
-    const remember = /^(?:please\s+)?(?:remember|note|log|jot down)(?:\s+(?:that|this))?[:,]?\s+(.+)$/i.exec(asked);
-    if (remember?.[1]) {
-      const thought = remember[1].replace(/^\w/, (c) => c.toUpperCase());
-      return { ...said(`Logged it in your personal log, Captain: “${thought}”`, 'Logged it, Captain.'), log: thought };
     }
 
     if (/land|closed goal|finished goal/.test(q)) {

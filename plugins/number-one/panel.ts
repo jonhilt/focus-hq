@@ -72,7 +72,7 @@ export function openNumberOnePanel(ui: Ui): void {
           h('strong', null, m.from === 'manager' ? 'You' : one.name),
           ...m.text.split(/\n{2,}/).map((p) => h('p', null, p)),
           m.from === 'number-one' && m.suggest ? suggestion(ui, m.suggest) : null,
-          m.from === 'number-one' && m.logged ? h('div', { class: 'row logged' }, h('small', { class: 'muted' }, `Jotted in your personal log (I): “${m.logged}”`)) : null,
+          m.from === 'number-one' && m.logged ? h('div', { class: 'row logged' }, h('small', { class: 'muted' }, `Jotted in your personal log: “${m.logged}”`)) : null,
         ),
       ),
       thinking ? h('div', { class: 'briefing-msg number-one typing' }, h('strong', null, one.name), h('p', null, chat.activity)) : null,
