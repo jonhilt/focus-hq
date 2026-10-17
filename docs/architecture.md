@@ -91,7 +91,7 @@ server/
     claudeCrew.ts         the crew's read-only Claude Code sessions (runReadOnly: Read/Glob/Grep, web search/fetch where given, structured output), and the ship tools (ship_status, open_project) the studio's computer and plugins' crew share
     fakeOffice.ts         a pretend office for tests (the manager's and plugins'): demo GitHub and checkouts, and a Claude Code stand-in whose turns the test ends
     sessionDigest.ts      a session's span digested from its transcript and the ledger, by code: calls, waste, cost, nudges
-    transcript.ts         reading a Claude Code transcript: finding the agents' on this machine, its lines and blocks, and who a message is from; shared by the digests, the studio's timelines and plugins (the retro's friction reader)
+    transcript.ts         reading a Claude Code transcript: finding the agents' on this machine, its lines and blocks, and who a message is from; Claude Code's JSON narrowed, not cast (`isRecord`, `field`, `contentBlocks`), so a line or block that isn't one is skipped; shared by the digests, the studio's timelines and plugins (the retro's friction reader)
     sessionTimeline.ts    a session told in order for the studio: asks, words, tool runs, and its subagents and workflows (phases, models, most at once, answers), whole or zoomed
     studioSessions.ts     the Claude Code sessions the studio may read (Claude Code's projects folder only): found by what they're about, loaded with their agents' transcripts
     qa.ts                 the QA officer: instructions, the report's schema and parsing, the PR comment

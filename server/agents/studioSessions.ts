@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { paths } from '../config';
 import type { AgentLog, SessionLogs, SubagentMeta } from './sessionTimeline';
-import { blocks, clip, messageFrom, transcriptLines } from './transcript';
+import { blocks, clip, isRecord, messageFrom, transcriptLines } from './transcript';
 
 // The Claude Code sessions on this Mac that the studio's computer can read, for a video built from what really
 // happened (docs/studio.md): Claude Code's own transcripts (~/.claude/projects, or CLAUDE_CONFIG_DIR's), and nothing
@@ -57,8 +57,7 @@ export function aboutSession(head: string): { title?: string; asked?: string } {
   let title: string | undefined;
   let asked: string | undefined;
   for (const line of transcriptLines(head)) {
-    const raw = line as { type?: string; aiTitle?: string };
-    if (raw.type === 'ai-title' && raw.aiTitle) title ??= raw.aiTitle;
+    if (line.type === 'ai-title' && typeof line.aiTitle === 'string' && line.aiTitle) title ??= line.aiTitle;
     if (!asked && line.type === 'user' && !line.isMeta) {
       for (const b of blocks(line)) {
         const text = b.type === 'text' ? b.text ?? '' : '';
@@ -74,26 +73,36 @@ export function aboutSession(head: string): { title?: string; asked?: string } {
 export function journalResults(journal: string): Map<string, string> {
   const results = new Map<string, string>();
   for (const line of transcriptLines(journal)) {
-    const entry = line as { type?: string; agentId?: string; result?: unknown };
-    if (entry.type === 'result' && entry.agentId) results.set(entry.agentId, typeof entry.result === 'string' ? entry.result : JSON.stringify(entry.result));
+    if (line.type === 'result' && typeof line.agentId === 'string' && line.agentId) results.set(line.agentId, typeof line.result === 'string' ? line.result : JSON.stringify(line.result));
   }
   return results;
+}
+
+/** What Claude Code notes beside a subagent's transcript (its .meta.json), keeping only the notes in the shape the studio reads. */
+export function subagentMeta(json: string): SubagentMeta {
+  const meta: unknown = JSON.parse(json);
+  if (!isRecord(meta)) return {};
+  const text = (key: string) => {
+    const v = meta[key];
+    return typeof v === 'string' ? v : undefined;
+  };
+  return { agentType: text('agentType'), description: text('description'), toolUseId: text('toolUseId'), workflowPhase: text('workflowPhase'), model: text('model'), spawnDepth: typeof meta.spawnDepth === 'number' ? meta.spawnDepth : undefined };
 }
 
 /** A session's subagents' transcripts (and its workflows' agents'), with what Claude Code noted beside each. */
 async function agentLogs(dir: string): Promise<AgentLog[]> {
   const read = async (folder: string, workflow?: string): Promise<AgentLog[]> => {
-    const names = await fs.readdir(folder).catch(() => [] as string[]);
+    const names = await fs.readdir(folder).catch((): string[] => []);
     // a workflow run's journal says what each of its agents returned to the script
     const results = workflow ? journalResults(await fs.readFile(path.join(folder, 'journal.jsonl'), 'utf8').catch(() => '')) : new Map<string, string>();
     return Promise.all(names.filter((n) => /^agent-[\w-]+\.jsonl$/.test(n)).map(async (n) => {
       const jsonl = await fs.readFile(path.join(folder, n), 'utf8');
-      const meta = await fs.readFile(path.join(folder, n.replace(/\.jsonl$/, '.meta.json')), 'utf8').then((t) => JSON.parse(t) as SubagentMeta).catch(() => ({}));
+      const meta = await fs.readFile(path.join(folder, n.replace(/\.jsonl$/, '.meta.json')), 'utf8').then(subagentMeta).catch(() => ({}));
       const result = results.get(n.slice('agent-'.length, -'.jsonl'.length));
       return { meta, jsonl, ...(workflow && { workflow }), ...(result !== undefined && { result }) };
     }));
   };
-  const runs = await fs.readdir(path.join(dir, 'subagents', 'workflows')).catch(() => [] as string[]);
+  const runs = await fs.readdir(path.join(dir, 'subagents', 'workflows')).catch((): string[] => []);
   const nested = await Promise.all(runs.map((run) => read(path.join(dir, 'subagents', 'workflows', run), run)));
   return [...(await read(path.join(dir, 'subagents'))), ...nested.flat()];
 }
@@ -102,9 +111,9 @@ async function agentLogs(dir: string): Promise<AgentLog[]> {
 async function transcripts(): Promise<{ file: string; project: string; id: string; modifiedAt: number; bytes: number }[]> {
   const found: { file: string; project: string; id: string; modifiedAt: number; bytes: number }[] = [];
   for (const root of sessionRoots()) {
-    const projects = await fs.readdir(root).catch(() => [] as string[]);
+    const projects = await fs.readdir(root).catch((): string[] => []);
     for (const project of projects) {
-      const names = await fs.readdir(path.join(root, project)).catch(() => [] as string[]);
+      const names = await fs.readdir(path.join(root, project)).catch((): string[] => []);
       for (const name of names.filter((n) => n.endsWith('.jsonl'))) {
         const file = path.join(root, project, name);
         const stat = await fs.stat(file).catch(() => undefined);

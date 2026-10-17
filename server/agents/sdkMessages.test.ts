@@ -41,6 +41,8 @@ describe('newCloudId', () => {
     expect(newCloudId(msg, { cloud: false })).toBeUndefined();
     expect(newCloudId({ cloud_session: { id: 7 } }, { cloud: true })).toBeUndefined();
     expect(newCloudId({}, { cloud: true })).toBeUndefined();
+    expect(newCloudId(null, { cloud: true })).toBeUndefined();
+    expect(newCloudId({ cloud_session: null }, { cloud: true })).toBeUndefined();
   });
 });
 
@@ -102,6 +104,10 @@ describe('resultText', () => {
     expect(resultText('done')).toBe('done');
     expect(resultText([{ type: 'text', text: 'a' }, { type: 'image' }, { type: 'text', text: 'b' }])).toBe('a\n\nb');
     expect(resultText(undefined)).toBe('');
+  });
+
+  it('reads past what isn’t a block', () => {
+    expect(resultText([null, 'x', { type: 'text', text: 'a' }])).toBe('a');
   });
 });
 
@@ -235,6 +241,26 @@ describe('a lead’s background commands, through handleMessage', () => {
       { kind: 'output', id: 'b1', file: '/t/s/tasks/b1.output' },
       { kind: 'ended', id: 'b1', status: 'stopped', summary: 'pnpm run dev' },
     ]);
+  });
+});
+
+describe('a message that isn’t the shape Claude Code documents, through handleMessage', () => {
+  it('reads a tool call’s input that isn’t an object as no input', () => {
+    const { said, hooks } = recorder();
+    const ctx = context();
+    handleMessage({ type: 'assistant', parent_tool_use_id: null, message: { id: 'm1', content: [{ type: 'tool_use', id: 't1', name: 'TodoWrite', input: 'oops' }] } } as unknown as SDKMessage, ctx, hooks);
+    expect(ctx.calls.get('t1')).toEqual({ name: 'TodoWrite', input: {} });
+    expect(said.lines.length).toBeGreaterThan(0);
+  });
+
+  it('follows background commands past a result block that isn’t one, and takes no workflow from a result that isn’t an object', () => {
+    const ctx = context({ calls: new Map([['toolu_b', { name: 'Bash', input: {} }]]) });
+    ctx.tracker = new BackgroundTracker((id) => (id ? ctx.calls.get(id)?.name : undefined));
+    const events: unknown[] = [];
+    const hooks = { lines: () => undefined, activity: () => undefined, background: (e: unknown) => events.push(e), workflow: (e: unknown) => events.push(e) } as unknown as RunHooks;
+    handleMessage(system({ subtype: 'task_started', task_type: 'local_bash', task_id: 'b1', tool_use_id: 'toolu_b', description: 'dev', is_backgrounded: true }), ctx, hooks);
+    handleMessage({ type: 'user', parent_tool_use_id: null, tool_use_result: null, message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_b', content: [null, { type: 'text', text: 'Command running in background with ID: b1. Output is being written to: /t/b1.output. You will' }] }] } } as unknown as SDKMessage, ctx, hooks);
+    expect(events).toEqual([{ kind: 'started', id: 'b1', task: 'shell', description: 'dev' }, { kind: 'output', id: 'b1', file: '/t/b1.output' }]);
   });
 });
 

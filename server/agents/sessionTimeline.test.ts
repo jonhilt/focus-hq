@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { type AgentLog, clock, mostAtOnce, sessionTimeline, windowTime } from './sessionTimeline';
-import { aboutSession, inside, journalResults, readableTranscript, sessionRef } from './studioSessions';
+import { aboutSession, inside, journalResults, readableTranscript, sessionRef, subagentMeta } from './studioSessions';
 
 // local times on 9 Oct 2026, as the timeline shows them
 const at = (hh: number, mm: number, ss = 0) => new Date(2026, 9, 9, hh, mm, ss).toISOString();
@@ -137,5 +137,18 @@ describe('studio sessions', () => {
   it('reads what each workflow agent returned from its run’s journal', () => {
     const journal = jsonl({ type: 'launched' }, { type: 'started', agentId: 'a1' }, { type: 'result', agentId: 'a1', result: 'Done' }, { type: 'result', agentId: 'a2', result: { ok: true } });
     expect([...journalResults(journal)]).toEqual([['a1', 'Done'], ['a2', '{"ok":true}']]);
+  });
+
+  it('reads past a line that isn’t a message, and a title or agent id that isn’t text', () => {
+    expect(aboutSession(`null\n${jsonl({ type: 'ai-title', aiTitle: 7 }, { type: 'ai-title', aiTitle: 'Kept' })}`)).toEqual({ title: 'Kept' });
+    expect([...journalResults(`null\n${jsonl({ type: 'result', agentId: 3, result: 'x' }, { type: 'result', agentId: 'a1', result: 'Done' })}`)]).toEqual([['a1', 'Done']]);
+  });
+
+  it('keeps what a subagent’s notes say in the shape it expects, and nothing else', () => {
+    expect(subagentMeta('{"agentType":"Explore","description":"Look","toolUseId":"t1","workflowPhase":"Plan","model":"opus","spawnDepth":2,"extra":1}'))
+      .toEqual({ agentType: 'Explore', description: 'Look', toolUseId: 't1', workflowPhase: 'Plan', model: 'opus', spawnDepth: 2 });
+    expect(subagentMeta('{"description":5,"spawnDepth":"2","model":"opus"}')).toEqual({ model: 'opus' });
+    expect(subagentMeta('null')).toEqual({});
+    expect(subagentMeta('[1]')).toEqual({});
   });
 });

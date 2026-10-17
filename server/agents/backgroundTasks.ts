@@ -14,10 +14,10 @@ export type BackgroundEvent =
   | { kind: 'output'; id: string; file: string }
   | { kind: 'ended'; id: string; status: Exclude<BackgroundTask['status'], 'running'>; summary?: string };
 
-type Msg = { subtype?: string; task_id?: string; task_type?: string; tool_use_id?: string; description?: string; is_backgrounded?: boolean; patch?: { is_backgrounded?: boolean }; status?: string; summary?: string; output_file?: string };
+type Msg = { subtype?: string; task_id?: string; task_type?: string; tool_use_id?: string; description?: string; is_backgrounded?: boolean; patch?: { is_backgrounded?: boolean }; status?: string | null; summary?: string; output_file?: string };
 
 /** How a command ended: stopped (by the captain, or Claude), failed (or a non-zero exit), or done. */
-export function endedStatus(status: string | undefined, summary = ''): Exclude<BackgroundTask['status'], 'running'> {
+export function endedStatus(status: string | null | undefined, summary = ''): Exclude<BackgroundTask['status'], 'running'> {
   if (status === 'stopped' || status === 'killed') return 'stopped';
   if (status === 'failed') return 'failed';
   const code = /exit code (\d+)/i.exec(summary)?.[1];

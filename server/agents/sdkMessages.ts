@@ -8,6 +8,7 @@ import { gitCommit } from './commits';
 import { appUrl, renderText, renderToolResult, renderToolUse, screenshotFrame, type ToolCall } from './render';
 import { scratchScript } from './scratch';
 import { TASK_TOOLS } from './tasks';
+import { contentBlocks, field, isRecord } from './transcript';
 import { BackgroundTracker } from './backgroundTasks';
 import type { RunHooks, WorkflowUsage } from './types';
 import { type WorkflowPermits, workflowProgress } from './workflows';
@@ -68,9 +69,8 @@ function followBackground(msg: SDKMessage, ctx: RunContext, hooks: RunHooks): vo
   const resultText = (b: { type: string; content?: unknown }): string[] =>
     b.type !== 'tool_result' ? []
     : typeof b.content === 'string' ? [b.content]
-    : Array.isArray(b.content) ? (b.content as { type: string; text?: string }[]).flatMap((c) => (c.type === 'text' && c.text ? [c.text] : []))
-    : [];
-  const events = msg.type === 'system' ? tracker.system(msg as Parameters<BackgroundTracker['system']>[0])
+    : contentBlocks(b.content).flatMap((c) => (c.type === 'text' && c.text ? [c.text] : []));
+  const events = msg.type === 'system' ? tracker.system(msg)
     : msg.type === 'user' && Array.isArray(msg.message.content) ? msg.message.content.flatMap((b) => resultText(b).flatMap((t) => tracker.toolResult(t)))
     : [];
   for (const e of events) hooks.background(e);
@@ -126,7 +126,7 @@ function systemMessage(msg: SystemMessage, ctx: RunContext, hooks: RunHooks): vo
  * session_id beside it doesn't reattach.
  */
 export function newCloudId(msg: unknown, ctx: Pick<RunContext, 'cloud' | 'cloudId'>): string | undefined {
-  const id = (msg as { cloud_session?: { id?: unknown } }).cloud_session?.id;
+  const id = field(field(msg, 'cloud_session'), 'id');
   return ctx.cloud && typeof id === 'string' && id !== ctx.cloudId ? id : undefined;
 }
 
@@ -146,13 +146,14 @@ export function foregroundTasks(tasks: { task_type?: string; ambient?: boolean }
 
 /** What the session's own system notes show: Claude Code starting, the CLI's notes on a cloud session, API retries, compaction. */
 export function systemNote(msg: SystemMessage, cloud: boolean): { line: Line; activity?: string } | undefined {
-  const subtype = (msg as { subtype: string }).subtype;
+  // the CLI's cloud notes have a subtype of their own, which the SDK's types don't list
+  const subtype: string = msg.subtype;
   if (msg.subtype === 'init') {
     return { line: { kind: 'system', text: `✻ Claude Code ${msg.claude_code_version} · ${msg.model} · ${msg.permissionMode}${cloud ? ' · ☁ cloud' : ''}` } };
   }
   if (subtype === 'cloud_session_status') {
     // the CLI's own notes on the cloud session (starting up, where to watch it)
-    const content = (msg as { content?: unknown }).content;
+    const content = field(msg, 'content');
     return typeof content === 'string' && content.trim() ? { line: { kind: 'system', text: `☁ ${truncate(content.trim(), 300)}` } } : undefined;
   }
   if (msg.subtype === 'api_retry') {
@@ -187,7 +188,7 @@ export function helperBrief(description: string, prompt: unknown): Line[] {
 
 function taskProgress(msg: SDKTaskProgressMessage, ctx: RunContext, hooks: RunHooks): void {
   if (ctx.workflows.has(msg.task_id)) {
-    const progress = workflowProgress((msg as { workflow_progress?: unknown }).workflow_progress);
+    const progress = workflowProgress(field(msg, 'workflow_progress'));
     if (progress) {
       ctx.permits?.seen(msg.task_id, progress.agents);
       hooks.workflow?.({ kind: 'progress', id: msg.task_id, ...progress, ...workflowUsage(msg.usage) });
@@ -270,7 +271,7 @@ function assistantBlock(block: ContentBlock, parent: string | null, ctx: RunCont
     say(hooks, parent, [{ kind: 'thinking', text: '✻ Thinking…' }]);
     hooks.activity(null, 'Thinking…');
   } else if (block.type === 'tool_use') {
-    toolUse(block.id, { name: block.name, input: (block.input ?? {}) as Record<string, unknown> }, parent, ctx, hooks);
+    toolUse(block.id, { name: block.name, input: isRecord(block.input) ? block.input : {} }, parent, ctx, hooks);
   }
 }
 
@@ -309,10 +310,12 @@ function userMessage(msg: UserMessage, ctx: RunContext, hooks: RunHooks): void {
   if (!Array.isArray(content)) return;
   const results = content.filter((b) => b.type === 'tool_result');
   // a workflow launched: where its agents' transcripts are written
-  const launched = msg.tool_use_result as { taskId?: unknown; transcriptDir?: unknown; scriptPath?: unknown } | undefined;
-  if (launched && typeof launched.taskId === 'string' && typeof launched.transcriptDir === 'string') {
-    const scriptPath = typeof launched.scriptPath === 'string' ? launched.scriptPath : undefined;
-    hooks.workflow?.({ kind: 'transcripts', id: launched.taskId, dir: launched.transcriptDir, ...(scriptPath && { scriptPath }) });
+  const launched = msg.tool_use_result;
+  const taskId = field(launched, 'taskId');
+  const dir = field(launched, 'transcriptDir');
+  if (typeof taskId === 'string' && typeof dir === 'string') {
+    const scriptPath = field(launched, 'scriptPath');
+    hooks.workflow?.({ kind: 'transcripts', id: taskId, dir, ...(typeof scriptPath === 'string' && scriptPath && { scriptPath }) });
   }
   // the structured output is the message's only when it carries this one result
   const structured = results.length === 1 ? msg.tool_use_result : undefined;
@@ -339,8 +342,7 @@ function toolResult(block: ToolResultBlock, parent: string | null, structured: u
 /** The text a tool result carries: all of it when it's a string, its text blocks' otherwise. */
 export function resultText(content: unknown): string {
   if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  return content.map((c: { type?: string; text?: string }) => (c.type === 'text' ? c.text ?? '' : '')).join('\n');
+  return contentBlocks(content).map((c) => (c.type === 'text' ? c.text ?? '' : '')).join('\n');
 }
 
 /** What looking at an image is: testing, when it's a screenshot of a page. */

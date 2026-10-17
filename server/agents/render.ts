@@ -1,6 +1,7 @@
 import type { AgentStatus, BrowserFrame, TermLine } from '../../shared/types';
 import { REPLY } from '../../shared/termText';
 import { truncate } from '../util';
+import { contentBlocks, field } from './transcript';
 
 type Line = Omit<TermLine, 't'>;
 
@@ -42,13 +43,12 @@ export function appUrl(call: ToolCall): string | undefined {
 }
 
 /** An image block as a data URL: the API's shape (source.base64) or MCP's (data + mimeType). */
-function imageUrl(block: Block): string | undefined {
-  if (block.type !== 'image') return undefined;
-  const source = block.source as { type?: unknown; media_type?: unknown; data?: unknown } | undefined;
-  if (source?.type === 'base64' && typeof source.data === 'string') {
-    return `data:${typeof source.media_type === 'string' ? source.media_type : 'image/png'};base64,${source.data}`;
-  }
-  if (typeof block.data === 'string') return `data:${typeof block.mimeType === 'string' ? block.mimeType : 'image/png'};base64,${block.data}`;
+function imageUrl(block: unknown): string | undefined {
+  if (field(block, 'type') !== 'image') return undefined;
+  const source = field(block, 'source');
+  const [sourceData, sourceType, data, mimeType] = [field(source, 'data'), field(source, 'media_type'), field(block, 'data'), field(block, 'mimeType')];
+  if (field(source, 'type') === 'base64' && typeof sourceData === 'string') return `data:${typeof sourceType === 'string' ? sourceType : 'image/png'};base64,${sourceData}`;
+  if (typeof data === 'string') return `data:${typeof mimeType === 'string' ? mimeType : 'image/png'};base64,${data}`;
   return undefined;
 }
 
@@ -58,7 +58,7 @@ function imageUrl(block: Block): string | undefined {
  */
 export function screenshotFrame(result: Block, call: ToolCall | undefined, lastUrl: string | undefined, at: number): BrowserFrame | null {
   if (call?.name.startsWith('mcp__browser__') || !Array.isArray(result.content)) return null;
-  const image = (result.content as Block[]).map(imageUrl).filter((url) => url !== undefined).at(-1);
+  const image = result.content.map(imageUrl).filter((url) => url !== undefined).at(-1);
   if (!image) return null;
   const file = typeof call?.input.file_path === 'string' ? call.input.file_path : undefined;
   const name = file?.split(/[/\\]/).pop();
@@ -147,14 +147,10 @@ export function renderToolUse(name: string, input: Record<string, unknown>, cwd:
 /** Shows the first few lines of a tool result, dimmed, like Claude Code's ⎿ output. */
 export function renderToolResult(block: Block): Line[] {
   const content = block.content;
-  let text = '';
-  if (typeof content === 'string') text = content;
-  else if (Array.isArray(content)) {
-    text = content
-      .map((c: Block) => (c.type === 'text' ? str(c.text) : c.type === 'image' ? '[screenshot]' : ''))
-      .filter(Boolean)
-      .join('\n');
-  }
+  const text = typeof content === 'string' ? content : contentBlocks(content)
+    .map((c) => (c.type === 'text' ? str(c.text) : c.type === 'image' ? '[screenshot]' : ''))
+    .filter(Boolean)
+    .join('\n');
   const kind = block.is_error ? 'error' : 'output';
   const all = text.replace(/\r/g, '').split('\n').filter((l) => l.trim().length > 0);
   if (all.length === 0) return [{ kind, text: '  ⎿  (no output)' }];
