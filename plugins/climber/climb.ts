@@ -201,7 +201,7 @@ export function climbBrief(agent: Pick<Agent, 'repo' | 'baseBranch' | 'branch'>,
     '',
     '## 0. What you\'ve climbed before',
     log.length
-      ? `Every climb is yours, newest first. A merged one is done: don't redo it. A closed one was turned down: don't take its gap again unless your **Hypothesis** says what has changed since, answering the captain's words. A gain that SLIPPED on main is a gap worth taking.\n${climbLogText(log)}`
+      ? `Every climb is yours, newest first. A merged one is done: don't redo it. A closed one was turned down: don't take its gap again unless your **Hypothesis** says what has changed since, answering the captain's words. A gain that SLIPPED on main is a gap worth taking. Most climbs took one place at a time because the brief used to ask for that; it doesn't now (see "Group before you score" in step 2), so their size is no guide to yours.\n${climbLogText(log)}`
       : 'This is your first climb.',
     '',
     '## 1. Measure',
@@ -220,7 +220,7 @@ export function climbBrief(agent: Pick<Agent, 'repo' | 'baseBranch' | 'branch'>,
     issues.length
       ? `- the retro's accepted issues, still open in ${agent.repo} (if you take one, say \`Closes #n\` in the Solution):\n${issues.map((i) => `  - #${i.number} ${i.title}`).join('\n')}`
       : '- the retro\'s accepted issues: none are open.',
-    `**Sweeps.** Gaps of one kind that take the same fix (functions over CRAP 30 whose decisions can move into pure functions, casts one honest type would replace, untested decisions in one area) go on the shortlist as one row, a sweep, rather than one place at a time: name the kind of fix and the places, worst first, up to ${SWEEP_PLACES} places and about ${SWEEP_LINES} changed lines. Score it by its worst place, with Harm one higher (up to 5) when it takes 3 or more places, since leaving the rest costs the next change; size it by the whole sweep. A single gap that has others of its kind should be a sweep.`,
+    `**Group before you score.** Run \`pnpm run crap --top 25\` and see where the fence's casts sit, then group the gaps that take the same fix: functions over CRAP 30 whose decisions can move into pure functions, casts one honest type would replace, untested decisions in one area. A kind of fix with 2 or more places goes on the shortlist as one row, a sweep, never a place at a time: name the kind of fix and its places, worst first, up to ${SWEEP_PLACES} places and about ${SWEEP_LINES} changed lines. Score a sweep by its worst place, with Harm one higher (up to 5) when it takes 3 or more places, since leaving the rest costs the next change; size it by the whole sweep. A row with one function over CRAP 30, while others over 30 could take the same fix, is the mistake this rule is here to stop.`,
     'Skip anything that needs the captain\'s sign-off (a dependency version, a change to how the office merges or deploys, anything outside this repo) and list it at the end instead.',
     '',
     '## Hypothesis, before you change anything',
@@ -231,7 +231,7 @@ export function climbBrief(agent: Pick<Agent, 'repo' | 'baseBranch' | 'branch'>,
     'In a sweep, give every place the same treatment, a test beside each new function, and plant a bug in each; one check can guard the whole kind. If a place turns out not to take the fix, leave it out and say why rather than bending the fix to it.',
     '',
     '## 4. Prove',
-    'Run the whole gate (`pnpm run typecheck`, `pnpm run lint`, `pnpm test`, `pnpm run build`), then `pnpm run scorecard --no-save` again: its numbers are your **After**. Say plainly whether your hypothesis held; a miss is worth reporting as it is. Update the docs the change touches.',
+    'Run `pnpm run scorecard --no-save` again: it runs the whole gate (typecheck, lint, the tests, build) itself, so don\'t run the gate separately first. Its numbers are your **After**, and its gate must pass; while you work, run only the tests and checks your change touches. Say plainly whether your hypothesis held; a miss is worth reporting as it is. Update the docs the change touches.',
     '',
     '## Never',
     '- Pass `--no-verify`, or loosen a lint rule, check, diagnostic or test to make something pass.',

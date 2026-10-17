@@ -162,8 +162,15 @@ describe('the shortlist', () => {
     const brief = climbBrief({ repo: REPO, baseBranch: 'main', branch: 'focus/climb-x' }, [], 0);
     expect(brief).toContain(`up to ${SWEEP_PLACES} places and about ${SWEEP_LINES} changed lines`);
     expect(brief).toContain('with Harm one higher (up to 5) when it takes 3 or more places');
+    expect(brief).toContain('A kind of fix with 2 or more places goes on the shortlist as one row, a sweep, never a place at a time');
+    expect(brief).toContain('Run `pnpm run crap --top 25`');
     expect(brief).toContain('a sweep is one reason, the same fix in each place; two kinds of fix are two reasons');
     expect(CLIMB_SUMMARY).toContain('for a sweep, each place it changed');
+  });
+
+  it('proves a climb with one scorecard, which runs the gate itself, rather than the gate and then the scorecard', () => {
+    const brief = climbBrief({ repo: REPO, baseBranch: 'main', branch: 'focus/climb-x' }, [], 0);
+    expect(brief).toContain('it runs the whole gate (typecheck, lint, the tests, build) itself, so don\'t run the gate separately first');
   });
 });
 
