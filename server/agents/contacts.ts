@@ -27,9 +27,8 @@ export function applyContacts(work: Pick<LeadWork, 'slice' | 'waypoints' | 'cont
   let all = work.contacts ?? [];
   if (input.closeContact) {
     const { id, as } = input.closeContact;
-    const found = all.find((c) => c.id === id.trim());
-    if (!found) return { error: `There's no contact ${id}. Open contacts: ${listed(all)}.` };
-    if (found.closed) return { error: `Contact ${found.id} was already ${found.closed.as}.` };
+    const found = openContact(all, id);
+    if ('error' in found) return found;
     const why = clean(input.closeContact.why ?? '');
     if (why.length > L.why) return { error: `Why is ${why.length} characters (at most ${L.why}).` };
     const closed = { as, ...(why && { why }), slice: as === 'pursued' ? work.slice : notedSlice(work), at: now };
@@ -51,6 +50,34 @@ export function applyContacts(work: Pick<LeadWork, 'slice' | 'waypoints' | 'cont
     all = all.filter((c) => c !== oldest);
   }
   return all;
+}
+
+/** The open contact `id`, or why it can't be closed. */
+function openContact(contacts: readonly Contact[], id: string): Contact | { error: string } {
+  const found = contacts.find((c) => c.id === id.trim());
+  if (!found) return { error: `There's no contact ${id}. Open contacts: ${listed(contacts)}.` };
+  if (found.closed) return { error: `Contact ${found.id} was already ${found.closed.as}.` };
+  return found;
+}
+
+/** Why the captain can't spin contact `id` off as a goal of its own, if they can't: it has to be open. */
+export function spinOffRefusal(contacts: readonly Contact[] | undefined, id: string): string | undefined {
+  const found = openContact(contacts ?? [], id);
+  return 'error' in found ? found.error : undefined;
+}
+
+/**
+ * The goal's contacts once the captain has spun `id` off as a goal of its own (`goal`, its lead, unless it's waiting in
+ * line for a station), in the slice under way.
+ */
+export function spunOffContacts(work: Pick<LeadWork, 'slice' | 'contacts'>, id: string, to: { goal?: string; title: string }, now: number): Contact[] {
+  return (work.contacts ?? []).map((c) => (c.id === id.trim() && !c.closed ? { ...c, closed: { as: 'spun off', ...(to.goal && { goal: to.goal }), title: to.title, slice: work.slice, at: now } } : c));
+}
+
+/** What the lead hears once the captain has spun one of their contacts off: it's someone else's now. */
+export function spunOffNote(c: Contact, title: string, station: number | undefined): string {
+  const where = station === undefined ? 'waiting in line for a team station' : `at team station ${station + 1}`;
+  return `The captain spun contact ${c.id} (${c.text}) off as a goal of its own, “${title}”, ${where}. It's closed on your chart: leave that thread to the new goal.`;
 }
 
 /** The open contacts, for what the lead hears with the note: so the threads survive a summarised conversation. */

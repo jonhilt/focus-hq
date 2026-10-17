@@ -223,6 +223,11 @@ export class AgentManager {
     this.core.leads.tickSpotCheck(id, slice, index, checked);
   }
 
+  /** The captain spins one of a goal's open contacts off as a goal of its own. */
+  spinOffContact(id: string, contactId: string, text: string): { agent: Agent } | { queued: QueuedGoal } {
+    return this.core.leads.spinOffContact(id, contactId, text);
+  }
+
   readTurn(id: string): void {
     this.core.comms.readTurn(id);
   }

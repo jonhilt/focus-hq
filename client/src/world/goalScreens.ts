@@ -884,14 +884,15 @@ function drawCourse(ctx: CanvasRenderingContext2D, plot: CoursePlot, done: strin
   }
 
   for (const c of plot.contacts) {
-    const color = c.state === 'pursued' ? '#99cc66' : c.state === 'dropped' ? '#4b4466' : LCARS.sky;
-    if (c.pursuedAt) {
+    const color = c.state === 'pursued' ? '#99cc66' : c.state === 'spun off' ? LCARS.peach : c.state === 'dropped' ? '#4b4466' : LCARS.sky;
+    const trail = c.pursuedAt ?? c.departsTo;
+    if (trail) {
       ctx.setLineDash([2, 5]);
-      ctx.strokeStyle = '#99cc66';
+      ctx.strokeStyle = color;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(c.x, c.y);
-      ctx.lineTo(c.pursuedAt.x, c.pursuedAt.y);
+      ctx.lineTo(trail.x, trail.y);
       ctx.stroke();
       ctx.setLineDash([]);
     }
@@ -901,7 +902,7 @@ function drawCourse(ctx: CanvasRenderingContext2D, plot: CoursePlot, done: strin
     ctx.lineTo(c.x, c.y + 8);
     ctx.lineTo(c.x - 8, c.y);
     ctx.closePath();
-    ctx.fillStyle = c.state === 'pursued' ? color : '#000000';
+    ctx.fillStyle = c.state === 'pursued' || c.state === 'spun off' ? color : '#000000';
     ctx.fill();
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;

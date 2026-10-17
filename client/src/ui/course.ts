@@ -48,15 +48,20 @@ export interface Projected {
   text: string;
 }
 
-/** A loose thread, as a sensor contact by the waypoint that noticed it: open, pursued (into `pursuedAt`) or dropped. */
+/**
+ * A loose thread, as a sensor contact by the waypoint that noticed it: open, pursued (into `pursuedAt`), dropped, or spun
+ * off as a goal of its own (heading off towards `departsTo`).
+ */
 export interface PlottedContact extends Pt {
   contact: Contact;
-  state: 'open' | 'pursued' | 'dropped';
+  state: 'open' | 'pursued' | 'dropped' | 'spun off';
   /** Missing when there's no clear room for it. */
   label?: Label;
   text: string;
   /** Where a pursued one was taken up: the waypoint of the slice it went into, when that's on the chart. */
   pursuedAt?: Pt;
+  /** Where a spun-off one's trail ends, on its way out from the waypoint that noticed it to a goal of its own. */
+  departsTo?: Pt;
 }
 
 export interface CoursePlot {
@@ -472,10 +477,19 @@ export function plotCourse(voyage: Voyage, scale = 1, grow = false, marks = 1): 
     const label = place([best.label, ...around(best.spot, 12 * marks, sizes.contact)], text, sizes.contact);
     const closed = contact.closed;
     const pursued = closed?.as === 'pursued' ? at(closed.slice) : undefined;
-    return { ...best.spot, contact, state: closed?.as ?? 'open', ...(label && { label }), text, ...(pursued && { pursuedAt: { x: pursued.x, y: pursued.y } }) };
+    const departsTo = closed?.as === 'spun off' ? departure(by, best.spot, 48 * marks) : undefined;
+    return { ...best.spot, contact, state: closed?.as ?? 'open', ...(label && { label }), text, ...(pursued && { pursuedAt: { x: pursued.x, y: pursued.y } }), ...(departsTo && { departsTo }) };
   });
 
   return { width, height, launch, objective, points, path: smoothPath([launch, ...points]), scrubbed, projected, contacts, marks, sizes };
+}
+
+/** A short trail on out from `at`, the way it lies from `from`: a contact leaving the chart for a goal of its own. */
+export function departure(from: Pt, at: Pt, reach: number): Pt {
+  const dx = at.x - from.x;
+  const dy = at.y - from.y;
+  const len = Math.hypot(dx, dy) || 1;
+  return { x: at.x + (dx / len) * reach, y: at.y + (dy / len) * reach };
 }
 
 /** Where a waypoint's name came from: what it shipped as, the lead's heading for it, what the lead's at in it, or nothing yet. */

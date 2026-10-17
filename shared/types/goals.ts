@@ -125,8 +125,11 @@ export interface Contact {
   /** The slice it was noticed in, and when. */
   slice: number;
   at: number;
-  /** Missing while it's open: pursued (taken up as work) or dropped (with why), in `slice`. */
-  closed?: { as: 'pursued' | 'dropped'; why?: string; slice: number; at: number };
+  /**
+   * Missing while it's open: pursued (taken up as work) or dropped (with why), in `slice`; or spun off by the captain as a
+   * goal of its own, `goal` (its lead's id, unless it's waiting in line for a station) titled `title` when it started.
+   */
+  closed?: { as: 'pursued' | 'dropped'; why?: string; slice: number; at: number } | { as: 'spun off'; goal?: string; title: string; slice: number; at: number };
 }
 
 /** A closed goal, in its room's log: enough to look back on, and to pick it back up one day. */

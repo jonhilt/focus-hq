@@ -509,6 +509,10 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .chart-contact.pursued .blip { fill: var(--lcars-green); stroke: var(--lcars-green); }
 .chart-contact.pursued text { fill: var(--lcars-green); }
 .chart-contact .trail { fill: none; stroke: var(--lcars-green); stroke-width: 1.5; stroke-dasharray: 2 5; opacity: 0.7; }
+.chart-contact.spun-off .blip { fill: var(--lcars-peach); stroke: var(--lcars-peach); }
+.chart-contact.spun-off text { fill: var(--lcars-peach); }
+.chart-contact.spun-off .trail { stroke: var(--lcars-peach); opacity: 1; }
+.chart-spin-text { width: 100%; box-sizing: border-box; margin: 4px 0 6px; resize: vertical; font: inherit; }
 .chart-contact.dropped .blip { stroke: #4b4466; }
 .chart-contact.dropped text { fill: #4b4466; text-decoration: line-through; }
 .chart-contact.picked .blip { stroke: var(--lcars-gold); stroke-width: 3; }
@@ -520,6 +524,7 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .chart-jump:hover, .chart-jump:focus-visible { text-decoration: underline; }
 .chart-threads li::before { content: ''; position: absolute; left: 1px; top: 0.45em; width: 7px; height: 7px; border: 2px solid var(--lcars-sky); transform: rotate(45deg); }
 .chart-threads li.pursued::before { background: var(--lcars-green); border-color: var(--lcars-green); }
+.chart-threads li.spun-off::before { background: var(--lcars-peach); border-color: var(--lcars-peach); }
 .chart-threads li.dropped { color: var(--muted); }
 .chart-threads li.dropped .chart-thread > span { text-decoration: line-through; }
 .chart-threads li.dropped::before { border-color: #4b4466; }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Contact, LeadAgent, LeadWork } from '../../shared/types';
-import { applyContacts, CONTACT_LIMITS, contactsForPrompt } from './contacts';
+import { applyContacts, CONTACT_LIMITS, contactsForPrompt, spinOffRefusal, spunOffContacts, spunOffNote } from './contacts';
 import { goalRecord, noteForPrompt, reopenedWork } from './lead';
 
 const ok = (result: Contact[] | { error: string }): Contact[] => {
@@ -42,6 +42,22 @@ describe('contacts', () => {
     expect(applyContacts({ slice: 1, contacts: full }, { contact: 'One more' }, 2)).toHaveProperty('error');
     // closing one makes room in the same update
     expect(ok(applyContacts({ slice: 1, contacts: full }, { closeContact: { id: 'c1', as: 'dropped' }, contact: 'One more' }, 2))).toHaveLength(CONTACT_LIMITS.open + 1);
+  });
+
+  it('spins an open one off as a goal of its own, in the slice under way', () => {
+    const contacts: Contact[] = [{ id: 'c1', text: 'Auth off the LAN?', slice: 1, at: 0 }, { id: 'c2', text: 'Dark mode', slice: 1, at: 0, closed: { as: 'dropped', slice: 1, at: 1 } }];
+    expect(spinOffRefusal(contacts, 'c1')).toBeUndefined();
+    expect(spinOffRefusal(contacts, 'c2')).toBe('Contact c2 was already dropped.');
+    expect(spinOffRefusal(undefined, 'c1')).toBe('There\'s no contact c1. Open contacts: none.');
+    const after = spunOffContacts({ slice: 3, contacts }, 'c1', { goal: 'lead-p-x', title: 'Auth off the LAN' }, 9);
+    expect(after[0].closed).toEqual({ as: 'spun off', goal: 'lead-p-x', title: 'Auth off the LAN', slice: 3, at: 9 });
+    expect(after[1]).toBe(contacts[1]);
+    // waiting in line, it has no lead yet
+    expect(spunOffContacts({ slice: 3, contacts }, 'c1', { title: 'Auth off the LAN' }, 9)[0].closed).not.toHaveProperty('goal');
+    // and it no longer counts against the lead's open ones
+    expect(contactsForPrompt(after)).toBeUndefined();
+    expect(spunOffNote(contacts[0], 'Auth off the LAN', 2)).toContain('“Auth off the LAN”, at team station 3');
+    expect(spunOffNote(contacts[0], 'Auth off the LAN', undefined)).toContain('waiting in line for a team station');
   });
 
   it('forgets the oldest closed ones once there are too many to keep', () => {

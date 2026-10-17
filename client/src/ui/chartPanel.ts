@@ -7,7 +7,7 @@ import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { fill, h } from './dom';
-import { prLink } from './goals';
+import { goalStarted, prLink } from './goals';
 import { type Box, CHART, chartSize, clip, type CoursePlot, everySlice, type Label, leaderEnd, LINE_GAP, plotCourse, type ProbeFlight, probeFlights, probesOut, type Pt, seeded, shieldState, TRANSMIT_MS, waypointName } from './course';
 import { close, closer, home, panBy, type View, wheelZoom, whole, type World, zoomAbout, zoomOn } from './chartView';
 import { type Column, ORBIT, type PlacedNode, type Quiet, type Sky, sky, sliceWork, type WorkKind, type WorkNode } from './constellation';
@@ -77,7 +77,12 @@ const SHIELD_WORDS = { none: '', held: 'shields held', absorbed: 'hit absorbed',
 
 /** How a contact stands, in a few words. */
 const standing = (c: Contact) =>
-  !c.closed ? `open since waypoint ${c.slice}` : c.closed.as === 'pursued' ? `pursued in waypoint ${c.closed.slice}` : `dropped${c.closed.why ? `: ${c.closed.why}` : ''}`;
+  !c.closed ? `open since waypoint ${c.slice}`
+    : c.closed.as === 'spun off' ? `spun off as “${c.closed.title}”`
+      : c.closed.as === 'pursued' ? `pursued in waypoint ${c.closed.slice}` : `dropped${c.closed.why ? `: ${c.closed.why}` : ''}`;
+
+/** What a contact spun off as a goal of its own starts the goal with, until the captain edits it: the thread, and where it came from. */
+export const spinOffText = (goal: { title: string }, c: Contact) => `${c.text}\n\n(Spun off from “${goal.title}”, contact ${c.id}, noticed in waypoint ${c.slice}.)`;
 
 const SVG = 'http://www.w3.org/2000/svg';
 function s(tag: string, attrs: Record<string, string | number> = {}, ...children: (Node | string | null | false)[]): SVGElement {
@@ -234,12 +239,13 @@ function chartSvg(goal: ChartGoal, plot: CoursePlot, selected: Picked, nav: Nav,
       x.label ? s('text', { x: x.label.x, y: x.label.y, 'text-anchor': x.label.anchor }, s('tspan', { class: 'was' }, 'SCRUBBED '), x.text) : null,
     ]));
 
-  // loose threads: a pursued one points to the waypoint it went into
+  // loose threads: a pursued one points to the waypoint it went into, a spun-off one heads off to a goal of its own
   const contacts = s('g', { class: 'chart-contacts' },
     ...plot.contacts.map((c) => {
-      const g = s('g', { class: `chart-contact ${c.state}${c.contact.id === selected.contact ? ' picked' : ''}`, role: 'button' },
+      const g = s('g', { class: `chart-contact ${c.state.replace(' ', '-')}${c.contact.id === selected.contact ? ' picked' : ''}`, role: 'button' },
         s('title', {}, `${c.contact.id}: ${c.contact.text} (${standing(c.contact)})`),
         c.pursuedAt ? s('path', { class: 'trail', d: `M${c.x} ${c.y} L${c.pursuedAt.x} ${c.pursuedAt.y}` }) : null,
+        c.departsTo ? s('path', { class: 'trail', d: `M${c.x} ${c.y} L${c.departsTo.x} ${c.departsTo.y}` }) : null,
         sized(c, plot.marks, s('path', { class: 'blip', d: `M${c.x} ${c.y - 8} l8 8 l-8 8 l-8 -8 Z` })),
         c.label ? s('text', { x: c.label.x, y: c.label.y, 'text-anchor': c.label.anchor }, c.text) : null,
       );
@@ -391,7 +397,7 @@ function ideaView(goal: ChartGoal, ideas: string[], index: number, nav: Nav): HT
 /** Loose threads as a list, each opening its own log. */
 const threadList = (list: Contact[], nav: Nav) =>
   h('ul', { class: 'chart-threads' }, ...list.map((c) =>
-    h('li', { class: c.closed?.as ?? 'open' }, h('button', { class: 'chart-thread', onclick: () => nav.contact(c.id) }, h('span', null, c.text), h('small', null, standing(c))))));
+    h('li', { class: c.closed?.as.replace(' ', '-') ?? 'open' }, h('button', { class: 'chart-thread', onclick: () => nav.contact(c.id) }, h('span', null, c.text), h('small', null, standing(c))))));
 
 /** A waypoint as a link to its log. */
 const waypointLink = (goal: ChartGoal, slice: number, nav: Nav) => {
@@ -399,8 +405,37 @@ const waypointLink = (goal: ChartGoal, slice: number, nav: Nav) => {
   return w ? h('button', { class: 'chart-jump', onclick: () => nav.slice(slice) }, `Waypoint ${slice} · ${named(w)}`) : h('span', null, `Waypoint ${slice}`);
 };
 
-/** A contact's log: the thread in full, where it was noticed, and what became of it. */
-function contactView(goal: ChartGoal, c: Contact, nav: Nav): HTMLElement {
+/** Spinning an open contact off as a goal of its own, while its goal's under way: the words it starts with, kept as they're edited. */
+interface SpinOff {
+  drafts: Map<string, string>;
+  go: (c: Contact, text: string) => Promise<void>;
+}
+
+/** An open contact's way out into a goal of its own: the words it'll start with, and the button that starts it. */
+function spinOffSection(goal: ChartGoal, c: Contact, spin: SpinOff, ui: Ui): HTMLElement {
+  const text = h('textarea', { class: 'chart-spin-text', rows: 6, title: 'What the new goal’s lead hears first' });
+  text.value = spin.drafts.get(c.id) ?? spinOffText(goal, c);
+  text.oninput = () => spin.drafts.set(c.id, text.value);
+  const go = h('button', { class: 'btn small primary' }, 'Spin off as a goal');
+  go.onclick = () => {
+    go.disabled = true;
+    spin.go(c, text.value).then(() => spin.drafts.delete(c.id), (err: Error) => ui.error(err.message)).finally(() => (go.disabled = false));
+  };
+  return section('Make it a goal of its own', LCARS.peach, text,
+    h('div', { class: 'row' }, go, h('small', { class: 'muted' }, 'It takes the first free team station, or waits in line for one')));
+}
+
+/** The goal a contact was spun off as: a link to its lead while it's on the ship, else its name. */
+function spunOffGoal(closed: { goal?: string; title: string }, ui: Ui): HTMLElement {
+  const lead = closed.goal ? state.agents.get(closed.goal) : undefined;
+  const title = lead?.lead?.title ?? closed.title;
+  return lead
+    ? h('button', { class: 'chart-jump', onclick: () => ui.openAgent(lead.id) }, `“${title}” · ${lead.name}, team station ${(lead.lead?.station ?? 0) + 1}`)
+    : h('p', null, `“${title}”`);
+}
+
+/** A contact's log: the thread in full, where it was noticed, and what became of it (or, open, a way to make it a goal of its own). */
+function contactView(goal: ChartGoal, c: Contact, nav: Nav, ui: Ui, spin?: SpinOff): HTMLElement {
   const closed = c.closed;
   return h('div', { class: 'chart-log' },
     h('div', { class: 'chart-log-head' },
@@ -408,11 +443,14 @@ function contactView(goal: ChartGoal, c: Contact, nav: Nav): HTMLElement {
       h('small', null, `Noticed ${stardate(c.at)}${closed ? ` · ${closed.as} ${stardate(closed.at)}` : ` · open ${span(Date.now() - c.at)}`}`)),
     section('Loose thread', LCARS.sky, h('p', null, c.text)),
     section('Noticed in', LCARS.orange, waypointLink(goal, c.slice, nav)),
-    closed?.as === 'pursued'
-      ? section('Pursued in', GREEN, waypointLink(goal, closed.slice, nav), closed.why ? h('p', null, closed.why) : null)
-      : closed
-        ? section('Dropped', LCARS.red, h('p', null, closed.why ?? 'No reason given'), h('small', null, 'In ', waypointLink(goal, closed.slice, nav)))
-        : section('Still open', LCARS.sky, h('p', null, 'The lead hears it with the note at every new slice, until they pursue it or drop it.')),
+    closed?.as === 'spun off'
+      ? section('Spun off as', LCARS.peach, spunOffGoal(closed, ui), h('small', null, 'From ', waypointLink(goal, closed.slice, nav)))
+      : closed?.as === 'pursued'
+        ? section('Pursued in', GREEN, waypointLink(goal, closed.slice, nav), closed.why ? h('p', null, closed.why) : null)
+        : closed
+          ? section('Dropped', LCARS.red, h('p', null, closed.why ?? 'No reason given'), h('small', null, 'In ', waypointLink(goal, closed.slice, nav)))
+          : section('Still open', LCARS.sky, h('p', null, 'The lead hears it with the note at every new slice, until they pursue it or drop it.')),
+    !closed && spin ? spinOffSection(goal, c, spin, ui) : null,
   );
 }
 
@@ -620,6 +658,14 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
   // what was last drawn: the lead's agent changes far more often than their goal does, and redrawing the same chart
   // would only flicker its pictures; a change to the same waypoint keeps the log scrolled where it was
   let drawn = '';
+  // an open contact's words for a goal of its own, as the captain edits them: kept across the redraws a live goal brings
+  const spin: SpinOff | undefined = liveId ? {
+    drafts: new Map(),
+    go: async (c, text) => {
+      const started = await api.spinOffContact(liveId, c.id, text);
+      if ('agent' in started) goalStarted(ui, started.agent);
+    },
+  } : undefined;
   let drawnPick = '';
   // the helpers still out, whose probes are in flight
   const helpers = () => (liveId ? state.agents.get(liveId)?.helpers ?? [] : []);
@@ -775,14 +821,21 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
     };
     const contact = g.contacts.find((c) => c.id === picked.contact);
     const log = contact
-      ? contactView(g, contact, nav)
+      ? contactView(g, contact, nav, ui, spin)
       : picked.idea !== undefined && ideas[picked.idea] !== undefined
         ? ideaView(g, ideas, picked.idea, nav)
         : node && w ? nodeView(g, w, node, work, ctx) : logView(g, w, work, ctx);
     extra = heavens.column?.bounds;
     // there's more to see than what's in view: zoomed in, or on a long voyage's latest stretch
     wholeButton.hidden = !zoomed && !free && (all || world.width <= CHART.width);
+    // a redraw mid-edit keeps the captain typing where they were
+    const typing = document.activeElement instanceof HTMLTextAreaElement && body.contains(document.activeElement) ? document.activeElement : undefined;
     fill(body, h('div', { class: 'chart-map' }, chartSvg(g, plot, picked, nav, heavens, 1 / z), wholeButton, readout(g)), log);
+    const again = typing && body.querySelector<HTMLTextAreaElement>(`textarea.${typing.className}`);
+    if (typing && again) {
+      again.focus();
+      again.setSelectionRange(typing.selectionStart, typing.selectionEnd);
+    }
     const svg = body.querySelector('.chart-svg');
     if (svg) resized.observe(svg);
     showView();

@@ -7,6 +7,7 @@ import { GitHub } from '../../github/service';
 import { errorMessage, newId } from '../../util';
 import { takesTitle } from '../goalTitles';
 import { afterVerdict, closeCheck, hasLeadWork, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, landedMidTurnNote, landedNote, leadWorktreeId, moveQueued, nextGoal, pickStation, qaVerdictNote, queuedStart, reopenable, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch, type VerdictBehind } from '../lead';
+import { spinOffRefusal, spunOffContacts, spunOffNote } from '../contacts';
 import { Workspace } from '../services';
 import { EVIDENCE_PER_PR, evidenceFile, landedWaypoint, shieldedWaypoint, tickedSpotCheck } from '../waypoints';
 import { type ManagerServices, Part, Refused, type WorkError } from './core';
@@ -302,6 +303,25 @@ export class Leads extends Part {
     const waypoints = tickedSpotCheck(lead.lead, slice, index, checked, Date.now());
     if ('error' in waypoints) throw new Error(waypoints.error);
     this.update(lead, { lead: { ...lead.lead, waypoints } });
+  }
+
+  /**
+   * The captain spins one of a goal's open contacts off as a goal of its own, starting it with `text` (or putting it in
+   * line for a station): the contact closes as spun off, and the goal's lead hears so.
+   */
+  spinOffContact(leadId: string, contactId: string, text: string): { agent: Agent } | { queued: QueuedGoal } {
+    const lead = this.store.agents.get(leadId);
+    if (!lead?.lead) throw new Refused({ message: 'There’s no goal under way there' });
+    const refused = spinOffRefusal(lead.lead.contacts, contactId);
+    if (refused) throw new Refused({ message: refused });
+    const contact = lead.lead.contacts?.find((c) => c.id === contactId.trim());
+    const started = this.startGoal(lead.projectId, text, { from: 'a goal’s star chart' });
+    const goal = 'agent' in started ? started.agent : undefined;
+    const title = goal?.lead?.title ?? goalTitle(text);
+    const work = this.store.agent(leadId).lead ?? lead.lead;
+    this.update(lead, { lead: { ...work, contacts: spunOffContacts(work, contactId, { goal: goal?.id, title }, Date.now()) } });
+    if (contact) this.noteForLead(lead, 'Star chart', spunOffNote(contact, title, goal?.lead?.station));
+    return started;
   }
 
   leadHearsVerdict(repo: string, number: number, from: string, report: QaReport, failedRounds: number, behind?: VerdictBehind): void {

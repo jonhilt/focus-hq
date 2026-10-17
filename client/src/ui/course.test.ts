@@ -208,6 +208,17 @@ describe('contacts on the chart', () => {
     expect(plot.contacts[1].pursuedAt).toBeUndefined();
   });
 
+  it('sends a spun-off one on out, away from the waypoint that noticed it, towards a goal of its own', () => {
+    const plot = plotCourse({ waypoints: [wp(1), wp(2)], next: [], contacts: [contact('c1', 1, { as: 'spun off', goal: 'lead-x', title: 'Auth', slice: 2, at: 1 })], seed: 's' });
+    const [c] = plot.contacts;
+    expect(c.state).toBe('spun off');
+    expect(c.pursuedAt).toBeUndefined();
+    const by = plot.points[0];
+    const out = c.departsTo ?? { x: c.x, y: c.y };
+    // further from its waypoint than the blip, on the same line
+    expect(Math.hypot(out.x - by.x, out.y - by.y)).toBeCloseTo(Math.hypot(c.x - by.x, c.y - by.y) + 48, 5);
+  });
+
   it('puts one noticed in a slice that isn’t on the chart by the last waypoint', () => {
     const plot = plotCourse({ waypoints: [wp(1)], next: [], contacts: [contact('c1', 9)], seed: 's' });
     expect(Math.hypot(plot.contacts[0].x - plot.points[0].x, plot.contacts[0].y - plot.points[0].y)).toBeLessThan(200);
