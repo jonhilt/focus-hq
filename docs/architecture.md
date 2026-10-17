@@ -26,6 +26,7 @@ server/
   ledgerLog.ts            the ledger's one writer: numbered lines flushed to disk, the lock file, repairs and damage on load
   usage.ts                main engineering's plan usage: read from Claude Code's structured /usage every few minutes, with how the office signs in
   routes.ts               REST API used by the panels
+  apiRequests.ts          what the API makes of a request: the fields it reads from a body (effort, a preview's picks, a briefing's beat…), and which QA screenshots and lead artifacts it serves, with what sandbox and caching (pure)
   frameStats.ts           the frame-stats log: what a browser opened with ?stats=1 sends of how its 3D view ran, a file per page load in ~/.focus/frame-stats/
   hostGuard.ts            who the office answers: known Host and Origin only (DNS rebinding, other sites' pages), for /api, pages and /ws
   hub.ts                  broadcasts ServerEvents to every browser tab

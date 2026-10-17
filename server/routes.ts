@@ -1,7 +1,4 @@
-import path from 'node:path';
 import express, { type NextFunction, type Request, type Response } from 'express';
-import { EFFORT_LEVELS, type Effort, type PreviewSet, type ResumeHow } from '../shared/types';
-import type { BriefingSpot } from '../shared/artifacts';
 import { isAutonomy } from '../shared/autonomy';
 import { closedGoals } from '../shared/ledger';
 import { ledgerWindow } from '../shared/ledgerReview';
@@ -10,6 +7,7 @@ import { logFrom, personalMark } from '../shared/personalLog';
 import { logSince } from '../shared/captainsLog';
 import { captainsLog } from './agents/captainsLog';
 import { replay } from './agents/runJournal';
+import { artifactServing, briefingSpot, effort, picks, qaShotServing, resumeHow, str } from './apiRequests';
 import { paths } from './config';
 import { appendFrameStats } from './frameStats';
 import type { Office } from './office';
@@ -29,27 +27,7 @@ const h = (fn: Handler) => async (req: Request, res: Response, next: NextFunctio
   }
 };
 
-const str = (v: unknown, fallback = '') => (typeof v === 'string' ? v : fallback);
 const param = (req: Request, name: string) => str(req.params[name]);
-/** Missing or empty = the model's default effort. */
-/** A preview's per-repo choices: { "owner/name": 12 } for a PR, null for the default branch. Anything else is dropped. */
-const picks = (v: unknown): PreviewSet | undefined => {
-  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
-  return Object.fromEntries(Object.entries(v).filter((e): e is [string, number | null] => e[1] === null || Number.isInteger(e[1])));
-};
-/** The captain's say on picking a conversation back up on your API key: now, or once your plan's limit resets. */
-const resumeHow = (v: unknown): ResumeHow | undefined => (v === 'key' || v === 'wait' ? v : undefined);
-/** The beat a question about a briefing was asked on: { beat, title }, anything else none. */
-const briefingSpot = (v: unknown): BriefingSpot | undefined => {
-  const spot = v as Partial<BriefingSpot> | null | undefined;
-  return spot && Number.isInteger(spot.beat) && (spot.beat ?? -1) >= 0 ? { beat: Number(spot.beat), title: str(spot.title).slice(0, 200) } : undefined;
-};
-const effort = (v: unknown): Effort | undefined => {
-  if (v === undefined || v === '') return undefined;
-  const level = EFFORT_LEVELS.find((e) => e === v);
-  if (!level) throw new Error(`Effort must be one of ${EFFORT_LEVELS.join(', ')}`);
-  return level;
-};
 
 export function apiRouter(office: Office, store: Store): express.Router {
   const r = express.Router();
@@ -60,25 +38,19 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.post('/frame-stats', h((req) => appendFrameStats(paths.frameStats, req.body.session, req.body.lines)));
   r.get('/qa-shots/:file', async (req, res) => {
     const file = param(req, 'file');
-    const bytes = /^[\w-]+\.(jpg|png|svg)$/.test(file) ? await store.readShot(file) : undefined;
-    if (!bytes) return void res.sendStatus(404);
-    res.type(path.extname(file)).set('Cache-Control', 'max-age=31536000, immutable').send(bytes);
+    const serving = qaShotServing(file);
+    const bytes = serving && (await store.readShot(file));
+    if (!serving || !bytes) return void res.sendStatus(404);
+    res.type(serving.type).set(serving.headers).send(bytes);
   });
-  // what a goal's lead put on their station's screen: the page itself runs sandboxed in an origin of its own, so its
-  // scripts can't reach the office; the picture's URL changes with each new version (?v=), so it can be kept
+  // what a goal's lead put on their station's screen, sandboxed in an origin of its own (artifactServing)
   r.get('/artifacts/:lead/:file', async (req, res) => {
     const lead = param(req, 'lead');
     const file = param(req, 'file');
-    // an artifact (data-flow.html) or an option of a question (q1.a.html), and their pictures
-    const ok = /^lead_\w+$/.test(lead) && (/^[a-z0-9][a-z0-9-]*(\.[a-d])?\.(html|jpg)$/.test(file) || /^shot-[a-z0-9-]+\.(jpg|png|svg)$/.test(file));
-    const bytes = ok ? await store.readArtifact(lead, file) : undefined;
-    if (!bytes) return void res.sendStatus(404);
-    if (file.endsWith('.html')) return void res.type('html').set({ 'Content-Security-Policy': 'sandbox allow-scripts allow-popups', 'Cache-Control': 'no-cache' }).send(bytes);
-    // a picture's URL changes with each version (?v=); a waypoint's evidence keeps its name from one QA round to the next
-    const ext = path.extname(file).slice(1);
-    // an SVG screenshot is served from the office's own origin: nothing in it runs or loads
-    if (ext === 'svg') res.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
-    res.type(ext).set('Cache-Control', file.startsWith('shot-') ? 'no-cache' : 'max-age=31536000, immutable').send(bytes);
+    const serving = artifactServing(lead, file);
+    const bytes = serving && (await store.readArtifact(lead, file));
+    if (!serving || !bytes) return void res.sendStatus(404);
+    res.type(serving.type).set(serving.headers).send(bytes);
   });
   r.post('/github/check', h(() => office.checkGitHub()));
   r.get('/github/repos', h(() => office.listRepos()));

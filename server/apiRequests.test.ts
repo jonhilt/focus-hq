@@ -1,0 +1,95 @@
+import { describe, expect, it } from 'vitest';
+import { artifactServing, briefingSpot, effort, picks, qaShotServing, resumeHow, str } from './apiRequests';
+
+const PAGE_SANDBOX = 'sandbox allow-scripts allow-popups';
+const SVG_SANDBOX = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+const KEEP = 'max-age=31536000, immutable';
+
+describe('str', () => {
+  it('takes a string, and the fallback for anything else', () => {
+    expect(str('a')).toBe('a');
+    expect(str(3)).toBe('');
+    expect(str(undefined, 'x')).toBe('x');
+  });
+});
+
+describe('picks', () => {
+  it("keeps each repo's PR number or null, and drops the rest", () => {
+    expect(picks({ 'o/a': 12, 'o/b': null, 'o/c': '12', 'o/d': 1.5 })).toEqual({ 'o/a': 12, 'o/b': null });
+  });
+
+  it('is none for anything but an object', () => {
+    expect(picks(null)).toBeUndefined();
+    expect(picks([12])).toBeUndefined();
+    expect(picks('o/a')).toBeUndefined();
+  });
+});
+
+describe('resumeHow', () => {
+  it('is key or wait, and none for anything else', () => {
+    expect(resumeHow('key')).toBe('key');
+    expect(resumeHow('wait')).toBe('wait');
+    expect(resumeHow('now')).toBeUndefined();
+  });
+});
+
+describe('briefingSpot', () => {
+  it('takes a whole beat from 0 and its title, cut to 200 characters', () => {
+    expect(briefingSpot({ beat: 0, title: 'Start' })).toEqual({ beat: 0, title: 'Start' });
+    expect(briefingSpot({ beat: 2, title: 'x'.repeat(300) })?.title).toHaveLength(200);
+    expect(briefingSpot({ beat: 2 })).toEqual({ beat: 2, title: '' });
+  });
+
+  it('is none without a whole beat from 0', () => {
+    for (const spot of [undefined, null, 'beat', {}, { beat: -1 }, { beat: 1.5 }, { beat: '1' }]) expect(briefingSpot(spot)).toBeUndefined();
+  });
+});
+
+describe('effort', () => {
+  it("is the model's default when missing or empty", () => {
+    expect(effort(undefined)).toBeUndefined();
+    expect(effort('')).toBeUndefined();
+  });
+
+  it('takes a level, and refuses anything else', () => {
+    expect(effort('high')).toBe('high');
+    expect(() => effort('extreme')).toThrow(/Effort must be one of/);
+  });
+});
+
+describe('qaShotServing', () => {
+  it('keeps a screenshot for good, an SVG one sandboxed', () => {
+    expect(qaShotServing('o-a-12-1700-1.jpg')).toEqual({ type: 'jpg', headers: { 'Cache-Control': KEEP } });
+    expect(qaShotServing('o-a-12-1700-1.svg')).toEqual({ type: 'svg', headers: { 'Cache-Control': KEEP, 'Content-Security-Policy': SVG_SANDBOX } });
+  });
+
+  it("doesn't serve any other name", () => {
+    for (const file of ['../store.json', 'a.html', 'a.jpg.html', 'a b.png', '.jpg']) expect(qaShotServing(file)).toBeUndefined();
+  });
+});
+
+describe('artifactServing', () => {
+  it("serves a lead's page, or a question's option, sandboxed and never kept", () => {
+    const page = { type: 'html', headers: { 'Content-Security-Policy': PAGE_SANDBOX, 'Cache-Control': 'no-cache' } };
+    expect(artifactServing('lead_1', 'data-flow.html')).toEqual(page);
+    expect(artifactServing('lead_1', 'q1.a.html')).toEqual(page);
+  });
+
+  it("keeps a page's picture for good, since its URL changes with each version", () => {
+    expect(artifactServing('lead_1', 'data-flow.jpg')).toEqual({ type: 'jpg', headers: { 'Cache-Control': KEEP } });
+  });
+
+  it("doesn't keep a waypoint's evidence, which keeps its name from round to round, and sandboxes an SVG one", () => {
+    expect(artifactServing('lead_1', 'shot-o-a-12-1.jpg')).toEqual({ type: 'jpg', headers: { 'Cache-Control': 'no-cache' } });
+    expect(artifactServing('lead_1', 'shot-o-a-12-1.png')).toEqual({ type: 'png', headers: { 'Cache-Control': 'no-cache' } });
+    expect(artifactServing('lead_1', 'shot-o-a-12-1.svg')).toEqual({ type: 'svg', headers: { 'Cache-Control': 'no-cache', 'Content-Security-Policy': SVG_SANDBOX } });
+  });
+
+  it("doesn't serve another lead's folder or any other name", () => {
+    expect(artifactServing('../lead_1', 'a.html')).toBeUndefined();
+    expect(artifactServing('agent_1', 'a.html')).toBeUndefined();
+    for (const file of ['../a.html', 'A.html', '-a.html', 'a.svg', 'q1.e.html', 'a.html.jpg.js', 'shot-A.png']) {
+      expect(artifactServing('lead_1', file)).toBeUndefined();
+    }
+  });
+});

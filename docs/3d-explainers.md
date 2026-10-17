@@ -176,7 +176,7 @@ A lead can already put a three.js animated explainer on its screen with today's 
   - `window.kitPlay` and `window.kitDone` are only used by the studio filming script.
 
 **Serving and sandbox**
-- `server/routes.ts` (`/artifacts/:lead/:file`) serves the html with `Content-Security-Policy: sandbox allow-scripts allow-popups`. That gives an opaque origin but sets no `script-src` or `connect-src` limit, so CDN scripts and ES-module imports load (jsdelivr and unpkg send CORS headers).
+- `server/routes.ts` (`/artifacts/:lead/:file`) serves the html, as `artifactServing` in `server/apiRequests.ts` decides, with `Content-Security-Policy: sandbox allow-scripts allow-popups`. That gives an opaque origin but sets no `script-src` or `connect-src` limit, so CDN scripts and ES-module imports load (jsdelivr and unpkg send CORS headers).
 - `client/src/ui/screenPanel.ts` shows it up close in an `<iframe sandbox="allow-scripts allow-popups">`, scaled to fit. No same-origin, so no localStorage and no reaching the office; the voice talks through `postMessage` (`client/src/ui/narrator.ts`).
 - WebGL works there, as a second WebGL context next to the office's own.
 
