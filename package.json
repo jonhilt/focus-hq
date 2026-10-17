@@ -31,7 +31,8 @@
     "flow": "tsx plugins/flow/scripts/flow.ts",
     "qa-catch": "tsx scripts/qaCatch.ts",
     "before-after": "tsx plugins/flow/scripts/beforeAfter.ts",
-    "bug-corpus": "tsx scripts/bugCorpus.ts"
+    "bug-corpus": "tsx scripts/bugCorpus.ts",
+    "bug-replay": "tsx scripts/bugReplay.ts"
   },
   "engines": {
     "node": ">=20"

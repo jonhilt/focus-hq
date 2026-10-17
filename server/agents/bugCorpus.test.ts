@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buggyLines, parseFixes, refereeTests, steadyReferees, steadyVerdict, verdict, vitestFiles, vitestRun, type VitestRun } from './bugCorpus';
+import { blameLine, buggyLines, catchesBug, introduced, owners, ruledOut, parseFixes, prNumber, refereeTests, steadyReferees, steadyVerdict, verdict, vitestFiles, vitestRun, type VitestRun } from './bugCorpus';
 
 const ROOT = '/tmp/wt';
 const json = (files: object[]) => JSON.stringify({ testResults: files });
@@ -89,6 +89,10 @@ describe('steady referees', () => {
     expect(steadyVerdict([{ before: oneFails, after }, { before: reopensOnly, after }])).toBe('unsteady');
     expect(steadyVerdict([{ before: oneFails, after }, { before: bothFail, after }])).toBe('reproduces');
   });
+
+  it('calls a fix unsteady when only a later run reproduced it', () => {
+    expect(steadyVerdict([{ before: after, after }, { before: oneFails, after }])).toBe('unsteady');
+  });
 });
 
 describe('vitestFiles', () => {
@@ -105,6 +109,7 @@ describe('buggyLines', () => {
   it('places each line the fix took out where it was in the buggy version, leaving tests out', () => {
     const diff = [
       'diff --git a/server/x.ts b/server/x.ts',
+      'index 1..2 100644',
       '--- a/server/x.ts',
       '+++ b/server/x.ts',
       '@@ -10,2 +10,1 @@',
@@ -128,8 +133,16 @@ describe('buggyLines', () => {
     ]);
   });
 
+  it("reads a removed line that starts with '-- ' as a removed line, not a file's header", () => {
+    const diff = ['diff --git a/server/x.ts b/server/x.ts', '--- a/server/x.ts', '+++ b/server/x.ts', '@@ -5,2 +5 @@', '--- a comment', '-x--;', '+x++;'].join('\n');
+    expect(buggyLines(diff)).toEqual([
+      { file: 'server/x.ts', line: 5 },
+      { file: 'server/x.ts', line: 6 },
+    ]);
+  });
+
   it('has nothing for a file the fix created', () => {
-    expect(buggyLines(['--- /dev/null', '+++ b/server/new.ts', '@@ -0,0 +1 @@', '+x'].join('\n'))).toEqual([]);
+    expect(buggyLines(['diff --git a/server/new.ts b/server/new.ts', '--- /dev/null', '+++ b/server/new.ts', '@@ -0,0 +1 @@', '+x'].join('\n'))).toEqual([]);
   });
 });
 
@@ -139,5 +152,86 @@ describe('parseFixes', () => {
       { sha: 'abc123', kind: 'lifecycle' },
       { sha: 'def456', kind: 'unclassified' },
     ]);
+  });
+});
+
+describe('introduced', () => {
+  const referees = [{ file: 'server/a.test.ts', name: 'keeps the hold' }];
+  const catches = runOf(file('server/a.test.ts', [['keeps the hold', 'failed', "AssertionError: expected 'idle' to be 'held'"]], 'failed'));
+  const passes = runOf(file('server/a.test.ts', [['keeps the hold', 'passed']]));
+  const cantRun = runOf(file('server/a.test.ts', [], 'failed', "Cannot find module './hold'"));
+  const missing = runOf(file('server/a.test.ts', [['keeps the hold', 'failed', 'TypeError: (0 , __vite_ssr_import_1__.hold) is not a function']], 'failed'));
+
+  it('says a commit brought the bug in when its referees fail on it and not on the commit before', () => {
+    expect(introduced([catches, catches], [passes, passes], referees)).toBe('introduced');
+  });
+
+  it('says the first commit of all brought it in', () => {
+    expect(introduced([catches], 'root', referees)).toBe('introduced');
+  });
+
+  it("can't say a commit brought the bug in when the referees can't run on the one before", () => {
+    expect(introduced([catches], [cantRun], referees)).toBe('first-testable');
+    expect(introduced([catches], [missing], referees)).toBe('first-testable');
+    expect(introduced([catches], [passes, cantRun], referees)).toBe('first-testable');
+  });
+
+  it('says the bug is older when a referee already fails on the commit before', () => {
+    expect(introduced([catches], [passes, catches], referees)).toBe('older');
+  });
+
+  it('says the bug came later when the referees pass on the commit', () => {
+    expect(introduced([catches, passes], [passes], referees)).toBe('not-buggy');
+  });
+
+  it("can't tell when the referees can't run on the commit", () => {
+    expect(introduced([cantRun], [cantRun], referees)).toBe('untestable');
+    expect(introduced([missing], [missing], referees)).toBe('untestable');
+  });
+
+  it('only listens to the referee tests, not others in the same file', () => {
+    const otherFails = runOf(file('server/a.test.ts', [['keeps the hold', 'passed'], ['something else', 'failed', 'AssertionError']], 'failed'));
+    expect(introduced([catches], [otherFails], referees)).toBe('introduced');
+  });
+});
+
+describe('prNumber', () => {
+  it('reads the pull request GitHub appended to a squash-merged subject', () => {
+    expect(prNumber('Move the rest of the agent manager into parts (#212)')).toBe(212);
+    expect(prNumber('Tell a lead to carry on, not stop (#192) (#196)')).toBe(196);
+    expect(prNumber('Merge pull request #392 from jonhilt/focus/okay-so (#12)')).toBe(392);
+    expect(prNumber('A direct commit to main')).toBeUndefined();
+  });
+});
+
+describe('blameLine', () => {
+  it("reads a line's owner and where the line was in it, through a move", () => {
+    const porcelain = ['8a8401a 12 40 1', 'author Lead', 'summary Carry on with your API key', 'filename server/agents/comms.ts', '\tagent.held = false;'].join('\n');
+    expect(blameLine(porcelain)).toEqual({ sha: '8a8401a', file: 'server/agents/comms.ts', line: 12 });
+  });
+
+  it('has nothing for empty output', () => {
+    expect(blameLine('')).toBeUndefined();
+  });
+});
+
+describe('catchesBug', () => {
+  const referees = [{ file: 'server/a.test.ts', name: 'keeps the hold' }];
+  it('only counts a referee failing on an assertion', () => {
+    expect(catchesBug(runOf(file('server/a.test.ts', [['keeps the hold', 'failed', 'AssertionError']], 'failed')), referees)).toBe(true);
+    expect(catchesBug(runOf(file('server/a.test.ts', [['keeps the hold', 'failed', 'TypeError: (0 , __vite_ssr_import_1__.x) is not a function']], 'failed')), referees)).toBe(false);
+    expect(catchesBug(runOf(file('server/a.test.ts', [['another', 'failed', 'AssertionError']], 'failed')), referees)).toBe(false);
+  });
+});
+
+describe('owners', () => {
+  it('puts the commit that last touched most of the lines first, ties to the earlier line', () => {
+    expect(owners(['b', 'a', 'a', 'b', 'c'])).toEqual(['b', 'a', 'c']);
+  });
+});
+
+describe('ruledOut', () => {
+  it('rules a suspect out only when the referees say the bug was older or not there yet', () => {
+    expect(['introduced', 'first-testable', 'untestable', 'older', 'not-buggy'].filter((v) => ruledOut(v as never))).toEqual(['older', 'not-buggy']);
   });
 });

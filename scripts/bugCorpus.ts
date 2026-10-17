@@ -3,7 +3,9 @@
 // fix. A fix whose tests fail before for the bug's sake and pass on it is a case: a real bug with a referee that can't
 // be argued with. The rules are in server/agents/bugCorpus.ts; this is git, the worktrees and vitest. It writes the
 // cases to scripts/bug-corpus/corpus.json and says why each other fix isn't one. A test that referees the bug on some
-// runs and not others is flaky, not a referee. Free: no model is called.
+// runs and not others is flaky, not a referee. Each case is then traced to the commit that brought its bug in, as SZZ
+// does: the commit that last wrote its lines (git blame), unless its referee tests rule that commit out.
+// Free: no model is called.
 //
 //   pnpm run bug-corpus               every fix in the list, three at a time, each fix's tests three times either side
 //   pnpm run bug-corpus --only <sha>  one fix, to see why it is or isn't a case
@@ -11,7 +13,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { type BugCase, buggyLines, firstLines, parseFixes, steadyReferees, steadyVerdict, type Verdict, vitestFiles, type VitestRun, vitestRun } from '../server/agents/bugCorpus';
+import { blameLine, type BugCase, buggyLines, firstLines, introduced, owners, parseFixes, prNumber, ruledOut, steadyReferees, steadyVerdict, type Verdict, vitestFiles, type VitestRun, vitestRun } from '../server/agents/bugCorpus';
 import { errorMessage, run } from '../server/util';
 
 const ROOT = process.cwd();
@@ -35,8 +37,8 @@ interface Outcome {
   bugCase?: BugCase;
 }
 
-/** The fix's tests run RUNS times on `at` (the fix's own versions of them written over), in a worktree that's gone afterwards. */
-async function testsAt(at: string, fix: string, tests: string[], scratch: string): Promise<VitestRun[]> {
+/** The fix's tests run `runs` times on `at` (the fix's own versions of them written over), in a worktree that's gone afterwards. */
+async function testsAt(at: string, fix: string, tests: string[], scratch: string, runs = RUNS): Promise<VitestRun[]> {
   const dir = mkdtempSync(path.join(scratch, 'wt-'));
   await git('worktree', 'add', '--quiet', '--detach', '--force', dir, at);
   try {
@@ -45,19 +47,44 @@ async function testsAt(at: string, fix: string, tests: string[], scratch: string
       mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
       writeFileSync(path.join(dir, file), await git('show', `${fix}:${file}`));
     }
-    const runs: VitestRun[] = [];
-    for (let i = 0; i < RUNS; i++) {
+    const results: VitestRun[] = [];
+    for (let i = 0; i < runs; i++) {
       const out = path.join(dir, `vitest-${i}.json`);
       // vitest exits non-zero when a test fails, which is half the point: the report is in the file either way
       await run(path.join(ROOT, 'node_modules', '.bin', 'vitest'), ['run', '--reporter=json', `--outputFile=${out}`, ...tests], { cwd: dir, timeoutMs: TEST_MS }).catch(() => '');
       if (!existsSync(out)) throw new Error(`vitest wrote no report at ${at.slice(0, 7)}`);
       // vitest names files by their real path (macOS's tmpdir is a symlink into /private), and runs are matched by name
-      runs.push(vitestRun(readFileSync(out, 'utf8'), realpathSync(dir)));
+      results.push(vitestRun(readFileSync(out, 'utf8'), realpathSync(dir)));
     }
-    return runs;
+    return results;
   } finally {
     await git('worktree', 'remove', '--force', dir).catch(() => rmSync(dir, { recursive: true, force: true }));
   }
+}
+
+/** How many suspects to try, most lines first. */
+const SUSPECTS = 3;
+
+/** The commit that brought a case's bug in, as SZZ finds one: the commits that last wrote its lines (`git blame`, through
+ *  moves and copies), most lines first, each tried with the referee tests on it and on the commit before it. The first
+ *  they don't rule out is taken; they confirm it when they fail on it and pass before it. */
+async function introducer(bug: BugCase, scratch: string): Promise<BugCase['introducedBy']> {
+  const blamed = [];
+  for (const { file, line } of bug.buggyLines) {
+    const owner = blameLine(await git('blame', '-w', '-M', '-C', '--porcelain', '-L', `${line},${line}`, bug.buggy, '--', file).catch(() => ''));
+    if (owner) blamed.push(owner);
+  }
+  for (const sha of owners(blamed.map((b) => b.sha)).slice(0, SUSPECTS)) {
+    const atCommit = await testsAt(sha, bug.fix, bug.testFiles, scratch);
+    const parent = await git('rev-parse', '--verify', '--quiet', `${sha}^`).then((p) => p.trim(), () => '');
+    const v = introduced(atCommit, parent ? await testsAt(parent, bug.fix, bug.testFiles, scratch) : 'root', bug.referees);
+    if (ruledOut(v)) continue;
+    const subject = (await git('log', '-1', '--format=%s', sha)).trim();
+    // where the bug's lines were in this commit: what a review of it should point at
+    const lines = blamed.filter((b) => b.sha === sha).map(({ file, line }) => ({ file, line }));
+    return { sha, subject, pr: prNumber(subject), verdict: v, lines };
+  }
+  return undefined;
 }
 
 async function check(fix: string, kind: string, scratch: string): Promise<Outcome> {
@@ -76,7 +103,10 @@ async function check(fix: string, kind: string, scratch: string): Promise<Outcom
   if (v !== 'reproduces') return { ...base, verdict: v, note: firstLines(failing, 1) };
   const referees = steadyReferees(runs).map((t) => ({ file: t.file, name: t.name, failure: firstLines(t.message, 1) }));
   const lines = buggyLines(await git('diff', '-U0', buggy, fix));
-  return { ...base, verdict: v, note: `${referees.length} referee test${referees.length === 1 ? '' : 's'}`, bugCase: { fix, buggy, subject, kind, testFiles: tests, referees, buggyLines: lines } };
+  const bugCase: BugCase = { fix, buggy, subject, kind, testFiles: tests, referees, buggyLines: lines };
+  const introducedBy = await introducer(bugCase, scratch);
+  const by = introducedBy ? `; ${introducedBy.verdict === 'introduced' ? 'brought in by' : `${introducedBy.verdict} at`} ${introducedBy.sha.slice(0, 7)}` : '; every suspect ruled out';
+  return { ...base, verdict: v, note: `${referees.length} referee test${referees.length === 1 ? '' : 's'}${by}`, bugCase: { ...bugCase, ...(introducedBy && { introducedBy }) } };
 }
 
 async function main() {
@@ -90,7 +120,7 @@ async function main() {
       const { sha, kind } = fixes[next++] ?? { sha: '', kind: '' };
       const outcome = await check(sha, kind, scratch).catch((err: unknown) => ({ fix: sha, kind, subject: '', verdict: 'error' as const, note: errorMessage(err) }));
       outcomes.push(outcome);
-      console.log(`${outcome.verdict.padEnd(13)} ${sha.slice(0, 7)} ${kind.padEnd(9)} ${outcome.subject.slice(0, 70)}${outcome.verdict === 'reproduces' ? '' : `\n${' '.repeat(14)}${outcome.note.slice(0, 110)}`}`);
+      console.log(`${outcome.verdict.padEnd(13)} ${sha.slice(0, 7)} ${kind.padEnd(9)} ${outcome.subject.slice(0, 70)}\n${' '.repeat(14)}${outcome.note.slice(0, 110)}`);
     }
   };
   try {
@@ -114,7 +144,10 @@ async function main() {
     row[o.verdict] = (row[o.verdict] ?? 0) + 1;
     tally.set(o.kind, row);
   }
-  console.log(`\n${cases.length} of ${outcomes.length} fixes are cases`);
+  const traced = cases.filter((c) => c.introducedBy);
+  const confirmed = traced.filter((c) => c.introducedBy?.verdict === 'introduced');
+  const byFix = traced.filter((c) => fixes.some((f) => c.introducedBy?.sha === f.sha));
+  console.log(`\n${cases.length} of ${outcomes.length} fixes are cases; ${traced.length} traced to the commit that brought the bug in (${confirmed.length} confirmed by its tests), ${byFix.length} of those itself a fix`);
   for (const [kind, row] of tally) console.log(`  ${kind.padEnd(10)} ${Object.entries(row).map(([v, n]) => `${v} ${n}`).join(', ')}`);
 }
 

@@ -84,12 +84,13 @@ export function steadyReferees(runs: { before: VitestRun; after: VitestRun }[]):
   return (first ?? []).filter((t) => rest.every((more) => more.some((m) => testKey(m) === testKey(t))));
 }
 
-/** What several runs of a fix's tests say: the first run's verdict, unless its referees didn't hold on every run. */
+/** What several runs of a fix's tests say: a case when its referees held on every run; unsteady when any run reproduced
+ *  the bug but no referee held on all of them; otherwise the first run's verdict. */
 export function steadyVerdict(runs: { before: VitestRun; after: VitestRun }[]): Verdict {
   const first = runs[0];
   if (!first) return 'no-tests';
-  const v = verdict(first.before, first.after);
-  return v === 'reproduces' && !steadyReferees(runs).length ? 'unsteady' : v;
+  if (steadyReferees(runs).length) return 'reproduces';
+  return runs.some((r) => verdict(r.before, r.after) === 'reproduces') ? 'unsteady' : verdict(first.before, first.after);
 }
 
 export function verdict(before: VitestRun, after: VitestRun): Verdict {
@@ -115,13 +116,71 @@ export function buggyLines(diff: string): BuggyLine[] {
   const out: BuggyLine[] = [];
   let file: string | undefined;
   let line = 0;
+  // a file's header runs from `diff --git` to its first hunk: a removed line reading `-- x` shows as `--- x` in a hunk
+  let header = false;
   for (const text of diff.split('\n')) {
-    if (text.startsWith('--- ')) file = text === '--- /dev/null' ? undefined : text.replace(/^--- a\//, '');
-    else if (text.startsWith('+++ ')) continue;
-    else if (text.startsWith('@@')) line = Number(/-(\d+)/.exec(text)?.[1] ?? 0);
-    else if (text.startsWith('-') && file && !/\.test\.ts$/.test(file)) out.push({ file, line: line++ });
+    if (text.startsWith('diff --git ')) header = true;
+    else if (header && text.startsWith('--- ')) file = text === '--- /dev/null' ? undefined : text.replace(/^--- a\//, '');
+    else if (text.startsWith('@@')) {
+      header = false;
+      line = Number(/-(\d+)/.exec(text)?.[1] ?? 0);
+    } else if (!header && text.startsWith('-') && file && !/\.test\.ts$/.test(file)) out.push({ file, line: line++ });
   }
   return out;
+}
+
+/** One line's owner from `git blame --porcelain -L n,n`: the commit that last touched it, and where the line was in it (file and line). */
+export function blameLine(porcelain: string): { sha: string; file: string; line: number } | undefined {
+  const [head, ...rest] = porcelain.split('\n');
+  const [sha, line] = (head ?? '').split(' ');
+  const file = rest.find((l) => l.startsWith('filename '))?.slice('filename '.length);
+  return sha && line && file ? { sha, file, line: Number(line) } : undefined;
+}
+
+/** The commits that last touched a bug's lines (one sha a line, from `git blame`), most lines first: the suspects. */
+export function owners(shas: string[]): string[] {
+  const count = new Map<string, number>();
+  for (const sha of shas) count.set(sha, (count.get(sha) ?? 0) + 1);
+  // Map keeps first-seen order, and sort is stable: ties go to the owner of the earlier line
+  return [...count.entries()].sort((a, b) => b[1] - a[1]).map(([sha]) => sha);
+}
+
+/** A suspect the referee tests rule out: the bug was already there before it, or not there yet on it. */
+export const ruledOut = (v: Introduced) => v === 'older' || v === 'not-buggy';
+
+export type Introduced =
+  | 'introduced' // a referee fails on the commit and passes on the one before it: it brought the bug in
+  | 'first-testable' // a referee fails on the commit and can't run on the one before: the bug is here or older, no telling which
+  | 'older' // a referee already fails on the commit before: the bug is older than it
+  | 'not-buggy' // the referees pass on the commit: the bug came later
+  | 'untestable'; // the referees can't run on the commit (what they call didn't exist yet)
+
+/** Whether a commit brought a bug in, from its referee tests run several times on the commit and on the one before it
+ *  (none for the first commit of all). A commit before that the referees can't run on says nothing either way. */
+export function introduced(atCommit: VitestRun[], atParent: VitestRun[] | 'root', referees: { file: string; name: string }[]): Introduced {
+  const wanted = new Set(referees.map(testKey));
+  const catches = (run: VitestRun) => catchesBug(run, referees);
+  const passes = (run: VitestRun) => run.tests.some((t) => wanted.has(testKey(t)) && t.passed);
+  const ran = (run: VitestRun) => run.tests.some((t) => wanted.has(testKey(t)) && (t.passed || !missingCode(t.message)));
+  if (!atCommit.length || !atCommit.every(catches)) return atCommit.some(ran) ? 'not-buggy' : 'untestable';
+  if (atParent === 'root') return 'introduced';
+  if (atParent.some(catches)) return 'older';
+  return atParent.length && atParent.every(passes) ? 'introduced' : 'first-testable';
+}
+
+/** Whether one run of a bug's referee tests catches it: one of them fails on an assertion, in a file that loaded. */
+export function catchesBug(run: VitestRun, referees: { file: string; name: string }[]): boolean {
+  const wanted = new Set(referees.map(testKey));
+  return run.tests.some((t) => wanted.has(testKey(t)) && !t.passed && !missingCode(t.message) && !run.loadErrors.some((e) => e.file === t.file));
+}
+
+/** The pull request a commit on main landed: a merge commit's (`Merge pull request #392 …`), or the last `(#212)` GitHub appends to a squash-merged subject. */
+export function prNumber(subject: string): number | undefined {
+  const merged = /^Merge pull request #(\d+)/.exec(subject);
+  if (merged) return Number(merged[1]);
+  const all = [...subject.matchAll(/\(#(\d+)\)/g)];
+  const last = all[all.length - 1];
+  return last ? Number(last[1]) : undefined;
 }
 
 /** One verified bug: the fix, the commit before it (the buggy code), the tests that referee it and where it was. */
@@ -133,6 +192,9 @@ export interface BugCase {
   testFiles: string[];
   referees: { file: string; name: string; failure: string }[];
   buggyLines: BuggyLine[];
+  /** The commit that brought the bug in: the one that last wrote most of its lines (`git blame`) and that its referees
+   *  don't rule out, with what they say of it (`introduced` when they confirm it). Missing when every suspect is ruled out. */
+  introducedBy?: { sha: string; subject: string; pr?: number; verdict: Introduced; lines: BuggyLine[] };
 }
 
 /** What's left of a failure message worth keeping in the corpus: its first lines. */

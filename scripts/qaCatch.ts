@@ -17,19 +17,17 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { query } from '@anthropic-ai/claude-agent-sdk';
-import { claudeConfig } from '../server/agents/claudeRunner';
-import { filesPrompt, filesToRevisit, openedFiles, parseQaReport, QA_SCHEMA, qaAgentModel, qaPrompt, qaSystemAppend, type ToolCall } from '../server/agents/qa';
+import { qaAgentModel } from '../server/agents/qa';
 import { paths } from '../server/config';
 import type { PullRequestDetail } from '../server/github/provider';
 import { checkLedger, closedGoals } from '../shared/ledger';
-import type { Project, QaReport, Settings } from '../shared/types';
+import type { Project, Settings } from '../shared/types';
 import { addedLines, type CatchResult, type CatchRun, catchLines, controlLine, type ControlResult, plant, type Planted, scoreControl, scoreReport } from '../server/agents/qaCatch';
 import { latestRun, QA_CATCH_DIR } from '../server/agents/qaCatchRuns';
+import { review } from './qaReview';
 
 const run = promisify(execFile);
 const BIG = { maxBuffer: 64 * 1024 * 1024 };
-const REVIEW_MS = 25 * 60 * 1000;
 
 const args = process.argv.slice(2);
 const opt = (name: string) => {
@@ -102,73 +100,16 @@ async function prepare(repo: string, number: number, root: string): Promise<{ di
   return { dir, pr, planted, clean };
 }
 
-/** The QA officer's review of a clone, as the office runs one: a report that leaves changed files out goes back once, naming them. */
-async function review(repo: string, dir: string, pr: PullRequestDetail): Promise<{ report: QaReport | null; costUsd?: number; minutes: number; error?: string }> {
-  const project = state.projects.find((p) => p.repos.includes(repo)) ?? { name: repo };
-  const abort = new AbortController();
-  const timer = setTimeout(() => abort.abort(), REVIEW_MS);
-  const started = Date.now();
-  const minutes = () => Math.round((Date.now() - started) / 60_000);
-  let costUsd = 0;
-  let sessionId: string | undefined;
-  // what QA's session did: which files it actually opened, as the office reads from its transcript
-  const calls: ToolCall[] = [];
-  const turn = async (prompt: string) => {
-    let structured: unknown;
-    let text = '';
-    for await (const msg of query({
-      prompt,
-      options: {
-        cwd: dir,
-        abortController: abort,
-        resume: sessionId,
-        model: qaAgentModel(state.settings),
-        ...claudeConfig(state.settings.userClaudeMd, process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude')),
-        systemPrompt: { type: 'preset', preset: 'claude_code', append: qaSystemAppend({ name: 'Lt. Replay' }, project, pr, pr.headSha) },
-        outputFormat: { type: 'json_schema', schema: QA_SCHEMA },
-        disallowedTools: ['AskUserQuestion', 'EnterPlanMode'],
-        // a throwaway clone, deleted after: nobody is there to answer a permission prompt
-        permissionMode: 'bypassPermissions',
-        allowDangerouslySkipPermissions: true,
-      },
-    })) {
-      sessionId = msg.session_id;
-      if (msg.type === 'assistant') for (const b of msg.message.content) if (b.type === 'tool_use') calls.push({ name: b.name, input: (b.input ?? {}) as Record<string, unknown> });
-      if (msg.type !== 'result') continue;
-      costUsd += msg.total_cost_usd;
-      if (msg.subtype === 'success') {
-        structured = msg.structured_output;
-        text = msg.result;
-      }
-    }
-    return parseQaReport(structured, text);
-  };
-  try {
-    const changed = (await run('git', ['-C', dir, 'diff', '--name-only', `origin/${pr.baseBranch}...HEAD`], BIG)).stdout.split('\n').filter(Boolean);
-    let report = await turn(qaPrompt(repo, pr, [], {}, changed));
-    const revisit = report && filesToRevisit(report, { changed, askedAgain: false }, openedFiles(calls, changed));
-    if (revisit) {
-      console.log(`  ${repo}#${pr.number}: of ${changed.length} changed files the report left out ${revisit.missing.length}, only skimmed ${revisit.unread.length}, never opened ${revisit.unopened.length}: sent back once`);
-      report = (await turn(filesPrompt(revisit))) ?? report;
-    }
-    return { report, costUsd, minutes: minutes() };
-  } catch (err) {
-    return { report: null, costUsd, minutes: minutes(), error: (err as Error).message.split('\n')[0] };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 /** The planted clone's review, scored against its bug. */
 async function planted(repo: string, dir: string, pr: PullRequestDetail, bug: Planted): Promise<CatchResult> {
-  const r = await review(repo, dir, pr);
+  const r = await review(repo, dir, pr, state);
   const base = { repo, pr: pr.number, planted: bug, costUsd: r.costUsd, minutes: r.minutes };
   return r.report ? { ...base, outcome: scoreReport(r.report, bug), summary: r.report.summary } : { ...base, outcome: 'error', summary: r.error ?? 'QA finished without a report' };
 }
 
 /** The clean clone's review: QA failing it is a false alarm. */
 async function controlled(repo: string, dir: string, pr: PullRequestDetail): Promise<ControlResult> {
-  const r = await review(repo, dir, { ...pr, headSha: (await run('git', ['-C', dir, 'rev-parse', 'HEAD'])).stdout.trim() });
+  const r = await review(repo, dir, { ...pr, headSha: (await run('git', ['-C', dir, 'rev-parse', 'HEAD'])).stdout.trim() }, state);
   const base = { repo, pr: pr.number, costUsd: r.costUsd, minutes: r.minutes };
   return r.report ? { ...base, outcome: scoreControl(r.report), summary: r.report.summary } : { ...base, outcome: 'error', summary: r.error ?? 'QA finished without a report' };
 }

@@ -350,7 +350,226 @@
           "file": "docs/goals.md",
           "line": 17
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "0aeed1affa5bb867622113f2561dc150b1990f44",
+        "subject": "Stellar cartography: a goal's star chart, its slices as waypoints on a course to the objective, opened from its card",
+        "verdict": "first-testable",
+        "lines": [
+          {
+            "file": "client/src/ui/chartPanel.ts",
+            "line": 77
+          },
+          {
+            "file": "client/src/ui/chartPanel.ts",
+            "line": 78
+          },
+          {
+            "file": "client/src/ui/chartPanel.ts",
+            "line": 84
+          },
+          {
+            "file": "client/src/ui/chartPanel.ts",
+            "line": 85
+          },
+          {
+            "file": "client/src/ui/chartPanel.ts",
+            "line": 98
+          },
+          {
+            "file": "client/src/ui/chartPanel.ts",
+            "line": 193
+          },
+          {
+            "file": "client/src/ui/chartPanel.ts",
+            "line": 194
+          },
+          {
+            "file": "client/src/ui/chartPanel.ts",
+            "line": 196
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 12
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 14
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 23
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 30
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 37
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 67
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 75
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 77
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 80
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 82
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 83
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 128
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 129
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 130
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 132
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 137
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 138
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 139
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 158
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 159
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 161
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 163
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 167
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 175
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 176
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 179
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 180
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 181
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 182
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 183
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 184
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 185
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 186
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 187
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 188
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 189
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 190
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 191
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 192
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 193
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 196
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 202
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 203
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 204
+          },
+          {
+            "file": "client/src/ui/course.ts",
+            "line": 205
+          }
+        ]
+      }
     },
     {
       "fix": "9385a497537cfa2802d16c49e95666791dae10d4",
@@ -472,7 +691,54 @@
           "file": "shared/types/frameStats.ts",
           "line": 69
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "e2cab00996f91fdb98b6ac6754fdc47ebbdea4b5",
+        "subject": "Warm up every region's shaders and baked lighting before boarding, and draw a station's screen only when there's something new to see",
+        "verdict": "first-testable",
+        "lines": [
+          {
+            "file": "client/src/main.ts",
+            "line": 46
+          },
+          {
+            "file": "client/src/world/room.ts",
+            "line": 595
+          },
+          {
+            "file": "client/src/world/room.ts",
+            "line": 596
+          },
+          {
+            "file": "client/src/world/room.ts",
+            "line": 616
+          },
+          {
+            "file": "client/src/world/screen.ts",
+            "line": 9
+          },
+          {
+            "file": "client/src/world/screen.ts",
+            "line": 101
+          },
+          {
+            "file": "client/src/world/screen.ts",
+            "line": 104
+          },
+          {
+            "file": "client/src/world/screenRedraw.ts",
+            "line": 3
+          },
+          {
+            "file": "client/src/world/screenRedraw.ts",
+            "line": 33
+          },
+          {
+            "file": "client/src/world/screenRedraw.ts",
+            "line": 35
+          }
+        ]
+      }
     },
     {
       "fix": "4f23320b80eecfa46bd2147597ff3d70a32a8123",
@@ -524,7 +790,23 @@
           "file": "server/agents/manager.ts",
           "line": 874
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "13ec6f179a1e01a230d9c2f206bec7ad8fc915c9",
+        "subject": "A lead per project at a group desk, replacing goals and briefings (#105)",
+        "pr": 105,
+        "verdict": "untestable",
+        "lines": [
+          {
+            "file": "README.md",
+            "line": 82
+          },
+          {
+            "file": "server/agents/lead.ts",
+            "line": 74
+          }
+        ]
+      }
     },
     {
       "fix": "1e12e7339b4606f9471a757312d816a1cb3afca4",
@@ -575,7 +857,23 @@
           "file": "server/agents/manager.ts",
           "line": 1078
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "0cd6fe2c739a9d20a613a1e6c6727c4e214a4332",
+        "subject": "Goals, stage 2: the goal note, closing goals, the queue and effort mid-goal (#108)",
+        "pr": 108,
+        "verdict": "first-testable",
+        "lines": [
+          {
+            "file": "server/agents/lead.ts",
+            "line": 199
+          },
+          {
+            "file": "server/agents/manager.ts",
+            "line": 686
+          }
+        ]
+      }
     },
     {
       "fix": "d64419cabed394426f93d2f46934a7ba7ee4ac89",
@@ -591,7 +889,7 @@
         {
           "file": "server/agents/manager.test.ts",
           "name": "AgentManager never ships a repo again from a branch whose pull request merged: it gets a fresh branch with only the unshipped commits",
-          "failure": "AssertionError: expected undefined to be 'focus/saved-items-1-8cc2' // Object.is equality"
+          "failure": "AssertionError: expected undefined to be 'focus/saved-items-1-21ea' // Object.is equality"
         }
       ],
       "buggyLines": [
@@ -679,7 +977,43 @@
           "file": "shared/types.ts",
           "line": 349
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "13ec6f179a1e01a230d9c2f206bec7ad8fc915c9",
+        "subject": "A lead per project at a group desk, replacing goals and briefings (#105)",
+        "pr": 105,
+        "verdict": "untestable",
+        "lines": [
+          {
+            "file": "server/agents/lead.ts",
+            "line": 15
+          },
+          {
+            "file": "server/agents/lead.ts",
+            "line": 55
+          },
+          {
+            "file": "server/agents/manager.ts",
+            "line": 592
+          },
+          {
+            "file": "server/agents/manager.ts",
+            "line": 598
+          },
+          {
+            "file": "server/agents/manager.ts",
+            "line": 625
+          },
+          {
+            "file": "shared/types.ts",
+            "line": 244
+          },
+          {
+            "file": "shared/types.ts",
+            "line": 245
+          }
+        ]
+      }
     },
     {
       "fix": "720822eaa6538b892b5d03df1641e6864e133eb3",
@@ -956,7 +1290,19 @@
           "file": "server/agents/manager/slices.ts",
           "line": 6
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "1383e946da1cf4b85a61e94b9a6a9093ce6eabd6",
+        "subject": "Tell a lead whose slice lands mid-turn to carry on, not stop (#192) (#193)",
+        "pr": 193,
+        "verdict": "untestable",
+        "lines": [
+          {
+            "file": "docs/goals.md",
+            "line": 11
+          }
+        ]
+      }
     },
     {
       "fix": "6fdfdef0b53b4fae4c721baa946c249974dc80c9",
@@ -1029,7 +1375,27 @@
           "file": "shared/types/goals.ts",
           "line": 251
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "720822eaa6538b892b5d03df1641e6864e133eb3",
+        "subject": "Keep a goal's artifacts and questions when it closes (#196)",
+        "pr": 196,
+        "verdict": "untestable",
+        "lines": [
+          {
+            "file": "client/src/ui/screenPanel.ts",
+            "line": 1
+          },
+          {
+            "file": "client/src/ui/screenPanel.ts",
+            "line": 116
+          },
+          {
+            "file": "client/src/ui/screenPanel.ts",
+            "line": 144
+          }
+        ]
+      }
     },
     {
       "fix": "f8cae72fbb560ba595c57bb1eaec55f4a1c34bed",
@@ -1071,7 +1437,27 @@
           "file": "server/agents/manager/delivery.ts",
           "line": 105
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "e1577c7fe95b8273fc63369c17b4a2bddbc9029d",
+        "subject": "Move the rest of the agent manager into parts (#212)",
+        "pr": 212,
+        "verdict": "untestable",
+        "lines": [
+          {
+            "file": "server/agents/manager/conflicts.ts",
+            "line": 2
+          },
+          {
+            "file": "server/agents/manager/conflicts.ts",
+            "line": 4
+          },
+          {
+            "file": "server/agents/manager/delivery.ts",
+            "line": 93
+          }
+        ]
+      }
     },
     {
       "fix": "0f97b9427f1f90c95df709b755ce79775a7750a5",
@@ -1119,7 +1505,23 @@
           "file": "server/agents/manager/comms.ts",
           "line": 139
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "8a8401aeb653c351c992d7920a984de4d9828add",
+        "subject": "Carry on with your API key when your plan's usage limit is reached (#214)",
+        "pr": 214,
+        "verdict": "untestable",
+        "lines": [
+          {
+            "file": "server/agents/manager/comms.ts",
+            "line": 106
+          },
+          {
+            "file": "server/agents/manager/comms.ts",
+            "line": 107
+          }
+        ]
+      }
     },
     {
       "fix": "3ec09f8faf0bc1304757aab86fab749ee4879f78",
@@ -1254,7 +1656,62 @@
           "file": "server/agents/manager.ts",
           "line": 696
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "c1f1545a7f04e9233a31dd9307bef1bc4632447e",
+        "subject": "Build Focus HQ: a cartoon 3D office for a Claude Code agent swarm",
+        "verdict": "untestable",
+        "lines": [
+          {
+            "file": "server/agents/demoRunner.ts",
+            "line": 18
+          },
+          {
+            "file": "server/agents/manager.ts",
+            "line": 195
+          },
+          {
+            "file": "server/agents/manager.ts",
+            "line": 196
+          },
+          {
+            "file": "server/agents/manager.ts",
+            "line": 197
+          },
+          {
+            "file": "server/agents/manager.ts",
+            "line": 198
+          },
+          {
+            "file": "server/agents/manager.ts",
+            "line": 199
+          },
+          {
+            "file": "server/agents/manager.ts",
+            "line": 200
+          },
+          {
+            "file": "server/agents/manager.ts",
+            "line": 202
+          },
+          {
+            "file": "server/agents/manager.ts",
+            "line": 203
+          },
+          {
+            "file": "server/agents/manager.ts",
+            "line": 204
+          },
+          {
+            "file": "server/agents/manager.ts",
+            "line": 205
+          },
+          {
+            "file": "server/agents/manager.ts",
+            "line": 206
+          }
+        ]
+      }
     },
     {
       "fix": "bd279e40f909a35613f89e71f2020b9aba6eb83f",
@@ -1344,7 +1801,19 @@
           "file": "server/agents/manager.ts",
           "line": 957
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "83a8968e5d6dae896e2f43e35c6513f601b2c513",
+        "subject": "Run the agent lifecycle on Effect, and let a goal's lead resolve their slice's conflicts (#114)",
+        "pr": 114,
+        "verdict": "first-testable",
+        "lines": [
+          {
+            "file": "server/agents/manager.ts",
+            "line": 1
+          }
+        ]
+      }
     },
     {
       "fix": "e295ab16935bfe5a84589c5da22335ccd3a93d19",
@@ -1364,7 +1833,7 @@
         {
           "file": "server/store.test.ts",
           "name": "Store on disk takes over a lock left by an office that’s gone, and flushes a waiting save at once",
-          "failure": "AssertionError: expected '999999' to be '83529' // Object.is equality"
+          "failure": "AssertionError: expected '999999' to be '80179' // Object.is equality"
         }
       ],
       "buggyLines": [
@@ -1564,7 +2033,55 @@
           "file": "server/store.ts",
           "line": 230
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "baaf7710aa5491576b5808bc5aef4b1b03e28d73",
+        "subject": "QA officer in every room: reviews and tests each PR, posts a report (#28)",
+        "pr": 28,
+        "verdict": "first-testable",
+        "lines": [
+          {
+            "file": "server/agents/manager.ts",
+            "line": 481
+          },
+          {
+            "file": "server/agents/manager.ts",
+            "line": 482
+          },
+          {
+            "file": "server/store.ts",
+            "line": 4
+          },
+          {
+            "file": "server/store.ts",
+            "line": 82
+          },
+          {
+            "file": "server/store.ts",
+            "line": 83
+          },
+          {
+            "file": "server/store.ts",
+            "line": 84
+          },
+          {
+            "file": "server/store.ts",
+            "line": 85
+          },
+          {
+            "file": "server/store.ts",
+            "line": 87
+          },
+          {
+            "file": "server/store.ts",
+            "line": 88
+          },
+          {
+            "file": "server/store.ts",
+            "line": 161
+          }
+        ]
+      }
     },
     {
       "fix": "dde309b0beb87b9ccc9af3c2035b8c2d3b2c3c17",
@@ -1590,7 +2107,18 @@
           "file": "server/agents/claudeRunner.ts",
           "line": 238
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "c1f1545a7f04e9233a31dd9307bef1bc4632447e",
+        "subject": "Build Focus HQ: a cartoon 3D office for a Claude Code agent swarm",
+        "verdict": "untestable",
+        "lines": [
+          {
+            "file": "server/agents/claudeRunner.ts",
+            "line": 126
+          }
+        ]
+      }
     },
     {
       "fix": "eab2be2e96427695988b29dfa09efb2309855eb6",
@@ -1636,7 +2164,43 @@
           "file": "server/agents/claudeRunner.ts",
           "line": 336
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "879f9ec07f7d12a30f48841f2226cce561637fff",
+        "subject": "Keep a session listening through the turn that takes its last background task's result (#353)",
+        "pr": 353,
+        "verdict": "first-testable",
+        "lines": [
+          {
+            "file": "server/agents/claudeRunner.ts",
+            "line": 72
+          },
+          {
+            "file": "server/agents/claudeRunner.ts",
+            "line": 80
+          },
+          {
+            "file": "server/agents/claudeRunner.ts",
+            "line": 93
+          },
+          {
+            "file": "server/agents/claudeRunner.ts",
+            "line": 96
+          },
+          {
+            "file": "server/agents/claudeRunner.ts",
+            "line": 104
+          },
+          {
+            "file": "server/agents/claudeRunner.ts",
+            "line": 326
+          },
+          {
+            "file": "server/agents/claudeRunner.ts",
+            "line": 336
+          }
+        ]
+      }
     },
     {
       "fix": "57f3d0e50c728f737880947f08643a504bb0b7f0",
@@ -1782,6 +2346,11 @@
       ],
       "referees": [
         {
+          "file": "server/github/ghCli.test.ts",
+          "name": "classify tells GitHub’s own 5xx trouble apart, as gh and git report it",
+          "failure": "AssertionError: expected GhCommandFailed: gh pr create failed: HTT… { …(4) } to match object { _tag: 'GhServerError' }"
+        },
+        {
           "file": "server/agents/manager.test.ts",
           "name": "AgentManager runs a goal’s lead one turn at a time, however often the office schedules",
           "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
@@ -1880,11 +2449,6 @@
           "file": "server/agents/manager.test.ts",
           "name": "AgentManager carries QA’s pass over a clean merge of main without seating QA, never re-tests a commit with a verdict, and re-tests a real change",
           "failure": "TypeError: Cannot read properties of undefined (reading 'key')"
-        },
-        {
-          "file": "server/github/ghCli.test.ts",
-          "name": "classify tells GitHub’s own 5xx trouble apart, as gh and git report it",
-          "failure": "AssertionError: expected GhCommandFailed: gh pr create failed: HTT… { …(4) } to match object { _tag: 'GhServerError' }"
         }
       ],
       "buggyLines": [
@@ -2009,7 +2573,35 @@
           "file": "server/agents/manager/sessions.ts",
           "line": 7
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "c7e734017690c1d60da711af5fa3ba347433776e",
+        "subject": "Cloud agents fail fast and clearly when Claude Code refuses to start a cloud session headlessly (#55)",
+        "pr": 55,
+        "verdict": "untestable",
+        "lines": [
+          {
+            "file": "server/agents/cloud.ts",
+            "line": 25
+          },
+          {
+            "file": "server/agents/cloud.ts",
+            "line": 29
+          },
+          {
+            "file": "server/agents/cloud.ts",
+            "line": 30
+          },
+          {
+            "file": "server/agents/cloud.ts",
+            "line": 31
+          },
+          {
+            "file": "server/agents/cloud.ts",
+            "line": 34
+          }
+        ]
+      }
     },
     {
       "fix": "c7e734017690c1d60da711af5fa3ba347433776e",
@@ -2043,7 +2635,31 @@
           "file": "server/agents/cloud.ts",
           "line": 19
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "6e86115e23c942c793d49fdbbd2b51d9e676b30c",
+        "subject": "Cloud agents: hire an agent into a Claude Code cloud session (#49)",
+        "pr": 49,
+        "verdict": "first-testable",
+        "lines": [
+          {
+            "file": "CLAUDE.md",
+            "line": 20
+          },
+          {
+            "file": "README.md",
+            "line": 116
+          },
+          {
+            "file": "README.md",
+            "line": 233
+          },
+          {
+            "file": "server/agents/cloud.ts",
+            "line": 19
+          }
+        ]
+      }
     },
     {
       "fix": "b0ac83cabb04296363b4314b17ea7681f5323765",
@@ -2057,7 +2673,7 @@
         {
           "file": "server/agents/workspace.test.ts",
           "name": "the local base branch follows origin’s, so a diff against main in a worktree shows only the branch’s own commits",
-          "failure": "AssertionError: expected '249e3c63be1bd00b5d30f72b4d601efaa2be4…' to be 'ba7982e265c1226c7a0663f19448b963d1994…' // Object.is equality"
+          "failure": "AssertionError: expected '28de980d75c05ca4a5d3b57a020cf0bee1dce…' to be 'ff1acd4ac113ddef74e5aa817fe2bc0d535f4…' // Object.is equality"
         }
       ],
       "buggyLines": [
@@ -2073,7 +2689,19 @@
           "file": "server/agents/workspace.ts",
           "line": 184
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "869efbe718c4196c2c87f3b10a8e61f45260ca39",
+        "subject": "Planner at the New issue stand, briefings in an observation lounge, narrower corridor (#23)",
+        "pr": 23,
+        "verdict": "untestable",
+        "lines": [
+          {
+            "file": "server/agents/workspace.ts",
+            "line": 72
+          }
+        ]
+      }
     },
     {
       "fix": "b186a1791b89ca42b359438376b7294a27113b26",
@@ -2099,7 +2727,22 @@
           "file": "server/scorecards.ts",
           "line": 80
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "01ae5f23243f0f5e163d6c4e12e33fde6b91911c",
+        "subject": "Scorecard: measure each commit the office starts on, so every merge to main gets one",
+        "verdict": "first-testable",
+        "lines": [
+          {
+            "file": "server/scorecards.ts",
+            "line": 78
+          },
+          {
+            "file": "server/scorecards.ts",
+            "line": 80
+          }
+        ]
+      }
     },
     {
       "fix": "e230e2197a23c94902bd0b59d489c54913789d5a",
@@ -2137,7 +2780,27 @@
           "file": "server/agents/tasks.ts",
           "line": 45
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "a2437861c0976fa92429583fb0f68362d2229bb4",
+        "subject": "Show what Claude's doing: its own task list, and a lead's goal, on screens (#110)",
+        "pr": 110,
+        "verdict": "first-testable",
+        "lines": [
+          {
+            "file": "server/agents/tasks.ts",
+            "line": 34
+          },
+          {
+            "file": "server/agents/tasks.ts",
+            "line": 37
+          },
+          {
+            "file": "server/agents/tasks.ts",
+            "line": 45
+          }
+        ]
+      }
     },
     {
       "fix": "9e6c672fd8e0cad0eb7832f490904d67bd8fb190",
@@ -2175,7 +2838,34 @@
           "file": "docs/goals.md",
           "line": 24
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "1851b90193de5cbea010a0ae540e8fd2009f85dd",
+        "subject": "Crew voices wait for Kokoro rather than falling back to the browser's voice after 2.5 s; the office loads Kokoro as it starts once downloaded; if Kokoro fails, the best system voice (never a novelty one) stands in",
+        "verdict": "first-testable",
+        "lines": [
+          {
+            "file": "client/src/ui/crewVoice.ts",
+            "line": 49
+          },
+          {
+            "file": "client/src/ui/crewVoice.ts",
+            "line": 50
+          },
+          {
+            "file": "client/src/ui/crewVoice.ts",
+            "line": 54
+          },
+          {
+            "file": "client/src/ui/crewVoice.ts",
+            "line": 58
+          },
+          {
+            "file": "docs/goals.md",
+            "line": 24
+          }
+        ]
+      }
     },
     {
       "fix": "d7dc19f5afbba058be4880a4e151f121783cd23a",
@@ -2201,7 +2891,22 @@
           "file": "server/agents/render.ts",
           "line": 112
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "c1f1545a7f04e9233a31dd9307bef1bc4632447e",
+        "subject": "Build Focus HQ: a cartoon 3D office for a Claude Code agent swarm",
+        "verdict": "untestable",
+        "lines": [
+          {
+            "file": "server/agents/render.ts",
+            "line": 55
+          },
+          {
+            "file": "server/agents/render.ts",
+            "line": 68
+          }
+        ]
+      }
     },
     {
       "fix": "940a6f8096c1e01a1eb4084383bf468dab1e1bb8",
@@ -2261,7 +2966,30 @@
           "file": "server/routes.ts",
           "line": 62
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "313ca732f859087db869cfe5d25023e3742b2cf6",
+        "subject": "Evidence per waypoint: QA's screenshots of a slice's pull requests, kept with the goal, and what the lead showed and asked during it",
+        "verdict": "first-testable",
+        "lines": [
+          {
+            "file": "server/agents/waypoints.ts",
+            "line": 134
+          },
+          {
+            "file": "server/agents/waypoints.ts",
+            "line": 136
+          },
+          {
+            "file": "server/routes.ts",
+            "line": 57
+          },
+          {
+            "file": "server/routes.ts",
+            "line": 62
+          }
+        ]
+      }
     },
     {
       "fix": "e3be62bdbb8e5b2c4fb898550a823daa75b3cbd6",
@@ -2295,7 +3023,30 @@
           "file": "server/agents/waypoints.ts",
           "line": 201
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "92bcf8dde6b07a74cfe16d2a6aad2d36a3ce8b61",
+        "subject": "Leads get Claude Code's task tools, and the star chart draws each slice from them",
+        "verdict": "first-testable",
+        "lines": [
+          {
+            "file": "server/agents/waypoints.ts",
+            "line": 188
+          },
+          {
+            "file": "server/agents/waypoints.ts",
+            "line": 198
+          },
+          {
+            "file": "server/agents/waypoints.ts",
+            "line": 200
+          },
+          {
+            "file": "server/agents/waypoints.ts",
+            "line": 201
+          }
+        ]
+      }
     },
     {
       "fix": "31dc8f63295041515bf48644e4b198c8bd3596a0",
@@ -2337,7 +3088,38 @@
           "file": "shared/voice.ts",
           "line": 56
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "d9ea5060740e5e4777344856ccc44b3f7ab55cb4",
+        "subject": "voice:check times the spoken dialog with a briefing end to end against budgets; spoken sentences no longer break after ranks and abbreviations (Lt., e.g.)",
+        "verdict": "introduced",
+        "lines": [
+          {
+            "file": "scripts/voiceCheck.ts",
+            "line": 33
+          },
+          {
+            "file": "scripts/voiceCheck.ts",
+            "line": 38
+          },
+          {
+            "file": "scripts/voiceCheck.ts",
+            "line": 39
+          },
+          {
+            "file": "scripts/voiceCheck.ts",
+            "line": 101
+          },
+          {
+            "file": "shared/voice.ts",
+            "line": 55
+          },
+          {
+            "file": "shared/voice.ts",
+            "line": 56
+          }
+        ]
+      }
     },
     {
       "fix": "d9ea5060740e5e4777344856ccc44b3f7ab55cb4",
@@ -2364,7 +3146,18 @@
           "file": "shared/voice.ts",
           "line": 51
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "a0e60a5d800b7614ab481f82b12d5baa3831f4eb",
+        "subject": "Answers about a briefing are said a sentence at a time, so the first plays while Kokoro makes the rest; docs for the quick answerer",
+        "verdict": "first-testable",
+        "lines": [
+          {
+            "file": "shared/voice.ts",
+            "line": 51
+          }
+        ]
+      }
     },
     {
       "fix": "b52181506db11e5901a581fbf9a1fe5d1734c6fd",
@@ -2661,7 +3454,143 @@
           "file": "CLAUDE.md",
           "line": 55
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "24af201b9b1e43cf31ff2d817d8d280c01dbf2c2",
+        "subject": "Number One and the calls become a plugin (#405)",
+        "pr": 405,
+        "verdict": "introduced",
+        "lines": [
+          {
+            "file": "CLAUDE.md",
+            "line": 24
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 25
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 26
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 27
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 28
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 29
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 30
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 31
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 32
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 33
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 34
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 35
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 36
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 37
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 38
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 39
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 40
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 41
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 42
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 43
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 44
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 45
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 46
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 47
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 48
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 49
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 50
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 51
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 52
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 53
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 54
+          },
+          {
+            "file": "CLAUDE.md",
+            "line": 55
+          }
+        ]
+      }
     },
     {
       "fix": "19b1f09bac00c3b6b622dd12912864fa50b086ca",
@@ -2812,7 +3741,31 @@
           "file": "shared/crew.ts",
           "line": 110
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "5babbec376085cebbd77b599b14024504dba70e8",
+        "subject": "Goals, stage 1: a lead per goal, up to four per room (#107)",
+        "pr": 107,
+        "verdict": "introduced",
+        "lines": [
+          {
+            "file": "server/agents/manager.ts",
+            "line": 513
+          },
+          {
+            "file": "shared/crew.ts",
+            "line": 87
+          },
+          {
+            "file": "shared/crew.ts",
+            "line": 89
+          },
+          {
+            "file": "shared/crew.ts",
+            "line": 92
+          }
+        ]
+      }
     },
     {
       "fix": "fc7b2fae6e98a3d4278826a644b49d668b97cd51",
@@ -2941,7 +3894,43 @@
           "file": "server/agents/manager.ts",
           "line": 877
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "3ec09f8faf0bc1304757aab86fab749ee4879f78",
+        "subject": "Goals, stage 4: look after a lead's context, and fix a double launch on resume (#112)",
+        "pr": 112,
+        "verdict": "untestable",
+        "lines": [
+          {
+            "file": "server/agents/lead.ts",
+            "line": 130
+          },
+          {
+            "file": "server/agents/lead.ts",
+            "line": 131
+          },
+          {
+            "file": "server/agents/lead.ts",
+            "line": 133
+          },
+          {
+            "file": "server/agents/lead.ts",
+            "line": 134
+          },
+          {
+            "file": "server/agents/lead.ts",
+            "line": 137
+          },
+          {
+            "file": "server/agents/lead.ts",
+            "line": 138
+          },
+          {
+            "file": "server/agents/manager.ts",
+            "line": 749
+          }
+        ]
+      }
     },
     {
       "fix": "1383e946da1cf4b85a61e94b9a6a9093ce6eabd6",
@@ -2993,7 +3982,31 @@
           "file": "server/agents/manager.ts",
           "line": 1279
         }
-      ]
+      ],
+      "introducedBy": {
+        "sha": "13ec6f179a1e01a230d9c2f206bec7ad8fc915c9",
+        "subject": "A lead per project at a group desk, replacing goals and briefings (#105)",
+        "pr": 105,
+        "verdict": "first-testable",
+        "lines": [
+          {
+            "file": "server/agents/lead.ts",
+            "line": 106
+          },
+          {
+            "file": "server/agents/lead.ts",
+            "line": 108
+          },
+          {
+            "file": "server/agents/lead.ts",
+            "line": 109
+          },
+          {
+            "file": "server/agents/manager.ts",
+            "line": 653
+          }
+        ]
+      }
     }
   ],
   "others": [
