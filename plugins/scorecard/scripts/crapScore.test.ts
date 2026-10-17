@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { changedLines, changedSummary, crapScore, distribution, type FileCoverage, functionsIn, score, summary, touched } from './crapScore';
+import { changedLines, changedSummary, crapScore, distribution, type FileCoverage, functionsIn, overByFile, score, summary, touched, type Scored } from './crapScore';
 
 describe('crapScore', () => {
   it('is just the complexity when fully covered', () => {
@@ -129,5 +129,13 @@ describe('reports', () => {
     const text = changedSummary(rows, new Map([['a.ts', [[2, 2]]]]), 'main');
     expect(text).toContain('Touched since main: 1 functions, total CRAP 56, 1 over 30');
     expect(text).toContain('a.ts:2 tangled');
+  });
+});
+
+describe('overByFile', () => {
+  const fn = (file: string, crap: number): Scored => ({ file, name: 'f', line: 1, column: 0, endLine: 2, endColumn: 0, complexity: 1, coverage: 0, crap });
+
+  it('counts each file\'s functions over 30, leaving out files with none and a function at exactly 30', () => {
+    expect(overByFile([fn('b.ts', 31), fn('a.ts', 90), fn('a.ts', 40), fn('a.ts', 30), fn('c.ts', 12)])).toEqual({ 'a.ts': 2, 'b.ts': 1 });
   });
 });

@@ -45,7 +45,7 @@ A climb is an agent's work like a developer's (`task: 'climb'`), with difference
   - **Hypothesis.** Before changing anything: which gap, the number it will move and by how much, and what would show them wrong, ending in a `Target: <metric key> <before> → <after>` line. It's the pull request's first section, with whether it held.
   - **Sign-off.** Anything that needs your sign-off (a dependency version, how the office merges or deploys) is listed, not done.
   - **Fix.** A check first when the bad pattern can come back, then the smallest change. A planted bug proves each new test can fail.
-  - **Prove.** The scorecard again; those numbers are the After. It runs the whole gate itself (typecheck, lint, tests, build), so the climber doesn't run the gate first and pay for it twice.
+  - **Prove.** The [ratchets](../scorecard/README.md#the-ratchets)' baselines lowered to the gain, then the scorecard again; those numbers are the After. It runs the whole gate itself (typecheck, lint, tests, build), so the climber doesn't run the gate first and pay for it twice.
   - **Never:** `--no-verify`, loosening a rule or test, changing a dependency version, or two reasons in one pull request (a sweep is one reason: the same fix in each place).
 - **The pull request.** The office pushes their branch and opens it from their final message (`climbPullRequest`). Its first line (`# …`) is the title. The rest is the body:
   - **Shortlist**, **Hypothesis**, **Problem**, **Solution** (for a sweep, each place it changed), **Before** and **After**;

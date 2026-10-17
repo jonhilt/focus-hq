@@ -61,14 +61,21 @@ To show a change's before and after:
 
 The rules live in `scripts/scorecardRules.ts` and, for how a scorecard reads wherever it's shown, `scorecard.ts` (both pure, tested next to them). `scripts/scorecard.ts` runs the commands, reads the files and the ledger, and saves the result.
 
-## The ratchet
+## The ratchets
 
-The scorecard only measures; the ratchet holds the line. Each file's type assertions (counted the way the fence counts them) may only go down: `fence-baseline.json`, committed here, holds each file's count, and a test in the gate (`fenceRatchet.test.ts`) fails
+The scorecard only measures; the ratchets hold the line. Two numbers may only go down, file by file: each file's type assertions (counted the way the fence counts them) and its functions over CRAP 30 (as `pnpm run crap` scores them). A baseline committed here holds each file's count, `fence-baseline.json` and `crap-baseline.json`, and the check fails
 
-- a file above its count, a new file with any at all among them: narrow instead (a type guard, `in`/`typeof`, an Effect Schema decode, a type that says what the value is), and don't raise the baseline to pass;
-- a file below its count: run `pnpm run fence:lower` and commit the baseline, so the gain can't be spent again.
+- a file above its count, a new file with any at all among them. Narrow a cast instead (a type guard, `in`/`typeof`, an Effect Schema decode, a type that says what the value is); move a complex function's decisions into small pure functions with tests, or test it. Don't raise the baseline to pass;
+- a file below its count: lower the baseline and commit it, so the gain can't be spent again.
 
-It counts per file, so a cast removed in one file can't pay for one added in another, and two pull requests only meet in the baseline when they change the same file's casts. `fence:lower` only ever lowers a count; raising one is a hand edit that shows in the diff. Type assertions come first since they're a plain count; functions over CRAP 30 may follow, for new and changed functions only. The rules are in `scripts/fenceRatchet.ts` (pure, tested beside it), the I/O in `scripts/fenceFiles.ts`.
+| | checked by | lowered by |
+| --- | --- | --- |
+| type assertions | a test in the gate (`fenceRatchet.test.ts`), so `pnpm test` | `pnpm run fence:lower` |
+| functions over CRAP 30 | `pnpm run crap --ratchet` (it needs a coverage run, which `pnpm test` doesn't do), before an agent finishes and in QA's review | `pnpm run crap --lower` |
+
+It counts per file, so a gain in one file can't pay for a loss in another, and two pull requests only meet in a baseline when they change the same file's count. The lowering commands only ever lower a count; raising one is a hand edit that shows in the diff. A function's CRAP is counted per file, not per function, since names repeat (two `(callback to Effect.gen)` in one file) and lines move; so a function that gets worse but was already over 30 isn't caught, nor is one that goes over while another in its file comes under. The count over 30 held still across test seeds, so the CRAP ratchet doesn't flake on coverage.
+
+Renaming or moving a file carries no count across: its old line drops to 0 and its new path counts as new, so move its line in the baseline by hand. The rules are in `scripts/fenceRatchet.ts` (pure, tested beside it), the I/O in `scripts/fenceFiles.ts` and `scripts/crap.ts`.
 
 ## Where it lives
 

@@ -171,6 +171,7 @@ describe('the shortlist', () => {
   it('proves a climb with one scorecard, which runs the gate itself, rather than the gate and then the scorecard', () => {
     const brief = climbBrief({ repo: REPO, baseBranch: 'main', branch: 'focus/climb-x' }, [], 0);
     expect(brief).toContain('it runs the whole gate (typecheck, lint, the tests, build) itself, so don\'t run the gate separately first');
+    expect(brief).toContain('Lock your gain in first: `pnpm run fence:lower` and `pnpm run crap --lower`');
   });
 });
 

@@ -1,17 +1,21 @@
 // CRAP report: runs the unit tests with coverage, scores every function in server/ and shared/ (complexity² ×
-// (1 − coverage)³ + complexity, scripts/crapScore.ts), and prints the spread and the riskiest. Advisory: it always exits 0
-// unless it couldn't measure at all.
+// (1 − coverage)³ + complexity, scripts/crapScore.ts), and prints the spread and the riskiest. Advisory: it exits 0
+// unless it couldn't measure at all, or `--ratchet` finds a file's functions over 30 off its baseline (README.md#the-ratchets).
 //
 //   pnpm run crap                      server/ + shared/, the riskiest 10
 //   pnpm run crap --all                client/src/ and scripts/ too
 //   pnpm run crap --top 25             the riskiest 25
 //   pnpm run crap --changed [base]     also what this branch touched since it left base (main by default)
 //   pnpm run crap --coverage <file>    score from an existing coverage-final.json instead of running the tests
+//   pnpm run crap --ratchet            also fails (exit 1) when a file has more functions over 30 than its baseline, or fewer
+//   pnpm run crap --lower              lowers the baseline to where each file is now; it never raises one
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { changedLines, changedSummary, fromIstanbul, functionsIn, isDemo, score, summary, type Scored } from './crapScore';
+import { CRAP_LINE, changedLines, changedSummary, fromIstanbul, functionsIn, isDemo, overByFile, score, summary, table, type Scored } from './crapScore';
+import { CRAP_BASELINE_FILE, readBaseline, writeBaseline } from './fenceFiles';
+import { CRAP_WORDS, fenceDrift, lowered, ratchetMessage, ratchetMode, type RatchetMode } from './fenceRatchet';
 
 const ROOT = path.resolve(import.meta.dirname, '../../..');
 const git = (...args: string[]) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
@@ -25,7 +29,10 @@ function args() {
     return next && !next.startsWith('--') ? next : '';
   };
   const changed = after('--changed');
-  return { all: argv.includes('--all'), top: Number(after('--top')) || 10, changed, coverage: after('--coverage') || undefined };
+  return {
+    all: argv.includes('--all'), top: Number(after('--top')) || 10, changed, coverage: after('--coverage') || undefined,
+    ratchet: ratchetMode(argv),
+  };
 }
 
 function sourceFiles(all: boolean): string[] {
@@ -78,13 +85,45 @@ function changedSince(base: string, rows: Scored[], files: string[]): string {
   return changedSummary(rows, changedLines(git('diff', '--unified=0', ref, '--', ...files)), label);
 }
 
+/** Lowers the baseline to each file's functions over 30 now: never raises one. */
+function lowerCrapBaseline(counts: Record<string, number>) {
+  const sum = (c: Record<string, number>) => Object.values(c).reduce((n, v) => n + v, 0);
+  const baseline = readBaseline(CRAP_BASELINE_FILE);
+  const next = lowered(baseline, counts);
+  writeBaseline(next, CRAP_BASELINE_FILE);
+  console.log(`\nFunctions over CRAP ${CRAP_LINE} baseline: ${sum(baseline)} → ${sum(next)}`);
+}
+
+/** Whether every file's functions over 30 match its baseline; prints what drifted, and the culprits in the files that went up. */
+function crapRatchetHolds(rows: Scored[], counts: Record<string, number>): boolean {
+  const drift = fenceDrift(readBaseline(CRAP_BASELINE_FILE), counts);
+  const message = ratchetMessage(drift, CRAP_WORDS);
+  if (!message) {
+    console.log(`\nRatchet holds: ${rows.filter((r) => r.crap > CRAP_LINE).length} functions over CRAP ${CRAP_LINE}, none more than its file's baseline.`);
+    return true;
+  }
+  const up = new Set(drift.over.map((d) => d.file));
+  const culprits = rows.filter((r) => up.has(r.file) && r.crap > CRAP_LINE);
+  console.log(`\n${message}${culprits.length ? `\n\nOver ${CRAP_LINE} in the files that went up:\n${table(culprits)}` : ''}`);
+  return false;
+}
+
+/** The CRAP ratchet, when asked for: lowers the baseline first with `--lower`, then checks it, failing the run if it drifted. */
+function holdRatchet(rows: Scored[], mode: RatchetMode | undefined) {
+  if (!mode) return;
+  const counts = overByFile(rows);
+  if (mode === 'lower') lowerCrapBaseline(counts);
+  if (!crapRatchetHolds(rows, counts)) process.exitCode = 1;
+}
+
 function main() {
-  const { all, top, changed, coverage } = args();
+  const { all, top, changed, coverage, ratchet } = args();
   const files = sourceFiles(all);
   const rows = scoreAll(files, coverage ?? runCoverage(all));
   const scope = all ? 'server, shared, plugins, client and scripts' : 'server, shared and plugins (demo code left out)';
   console.log(`CRAP for ${scope}: complexity² × (1 − coverage)³ + complexity\n\n${summary(rows, top)}`);
   if (changed !== undefined) console.log(`\n${changedSince(changed, rows, files)}`);
+  holdRatchet(rows, ratchet);
 }
 
 main();

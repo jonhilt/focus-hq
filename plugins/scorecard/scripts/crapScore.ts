@@ -182,6 +182,13 @@ export function table(rows: Scored[]): string {
   return lines.join('\n');
 }
 
+/** How many functions in each file are over the line: what the CRAP ratchet holds (a file with none isn't listed). */
+export function overByFile(rows: Scored[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const r of rows) if (r.crap > CRAP_LINE) counts[r.file] = (counts[r.file] ?? 0) + 1;
+  return Object.fromEntries(Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)));
+}
+
 /** The whole-scope summary: how many functions, how many over the line, the spread, and the riskiest `top`. */
 export function summary(rows: Scored[], top: number): string {
   const over = rows.filter((r) => r.crap > CRAP_LINE).length;

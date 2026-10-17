@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fenceCounts, readBaseline } from './fenceFiles';
-import { driftMessage, fenceDrift, lowered } from './fenceRatchet';
+import { CRAP_WORDS, driftMessage, fenceDrift, lowered, ratchetMessage, ratchetMode } from './fenceRatchet';
 
 describe('fenceDrift', () => {
   it('finds a file over its baseline, and a new file with any at all', () => {
@@ -38,6 +38,28 @@ describe('driftMessage', () => {
     expect(text).toContain("Narrow instead: a type guard, `in`/`typeof`, an Effect Schema decode, or a type that says what the value is. Don't raise the baseline to pass.\n  b.ts: 3, baseline 2");
     expect(text).toContain('lock the gain in with `pnpm run fence:lower`');
     expect(text).toContain('  a.ts: 1, baseline 2');
+  });
+});
+
+describe('ratchetMessage', () => {
+  it('words the CRAP ratchet its own way, pointing at crap --lower', () => {
+    const text = ratchetMessage(fenceDrift({ 'a.ts': 1, 'b.ts': 2 }, { 'a.ts': 2, 'b.ts': 1 }), CRAP_WORDS);
+    expect(text).toContain('Functions over CRAP 30 went up. Move the new or changed function\'s decisions into small pure functions with tests beside them, or test it; don\'t raise the baseline to pass.\n  a.ts: 2, baseline 1');
+    expect(text).toContain('lock the gain in with `pnpm run crap --lower`, and commit plugins/scorecard/crap-baseline.json.\n  b.ts: 1, baseline 2');
+  });
+});
+
+describe('ratchetMode', () => {
+  it('lowers with --lower, checks with --ratchet, and holds nothing without either', () => {
+    expect(ratchetMode(['--lower'])).toBe('lower');
+    expect(ratchetMode(['--ratchet', '--lower'])).toBe('lower');
+    expect(ratchetMode(['--changed', 'origin/main', '--ratchet'])).toBe('check');
+    expect(ratchetMode(['--top', '25'])).toBeUndefined();
+    expect(ratchetMode(['--all'])).toBeUndefined();
+  });
+
+  it('refuses --all, since the baseline holds server/, shared/ and plugins/ only', () => {
+    expect(() => ratchetMode(['--ratchet', '--all'])).toThrow('drop --all');
   });
 });
 

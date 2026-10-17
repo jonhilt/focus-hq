@@ -20,12 +20,14 @@ A fully tested function scores its complexity; an untested one scores about its 
 | `pnpm run crap --all` | `client/src/` and `scripts/` too. Most of the client is checked in the browser, not by unit tests, so it scores high: that's expected, not a to-do list |
 | `pnpm run crap --changed [base]` | also lists what the branch touched since `base` (from where the branch left it, `main` by default): how many functions, their total CRAP, and each one over 30 |
 | `pnpm run crap --coverage <file>` | scores from an existing `coverage-final.json` rather than running the tests |
+| `pnpm run crap --ratchet` | also checks each file's functions over 30 against `crap-baseline.json`, and exits 1 when a file has more, or fewer without the baseline lowered ([the ratchets](README.md#the-ratchets)) |
+| `pnpm run crap --lower` | lowers `crap-baseline.json` to where each file is now, after you brought functions under 30; it never raises a count |
 
-The demo's fakes and scripts (`demo*.ts`) are left out unless you pass `--all`. It's advisory: it exits 0 whatever the scores.
+The demo's fakes and scripts (`demo*.ts`) are left out unless you pass `--all` (the ratchet doesn't take `--all`). The scores are advisory: only `--ratchet` exits non-zero for them.
 
 ## In review
 
-Focus's QA runs `pnpm run crap --changed` on every pull request to this repo (CLAUDE.md asks them to) and reports it as an advisory check, **CRAP (advisory)**, on the PR: the functions it touched, their total and any over 30. It never fails a PR on its own. A new or worsened function over 30 gets a line in the summary saying how to bring it down, and may get a spot-check. QA, in every project, also looks for tests that run code without checking what it does.
+Focus's QA runs `pnpm run crap --changed --ratchet` on every pull request to this repo (CLAUDE.md asks them to) and reports the touched functions as an advisory check, **CRAP (advisory)**, on the PR: the functions it touched, their total and any over 30. Those numbers never fail a PR on their own; the ratchet does, when a file gained a function over 30 or lost one without the baseline lowered. A new or worsened function over 30 gets a line in the summary saying how to bring it down, and may get a spot-check. QA, in every project, also looks for tests that run code without checking what it does.
 
 ## What it doesn't tell you
 
