@@ -228,6 +228,11 @@ export class AgentManager {
     return this.core.leads.spinOffContact(id, contactId, text);
   }
 
+  /** The captain spins one of a goal's ideas for next off as a goal of its own. */
+  spinOffIdea(id: string, idea: string, text: string): { agent: Agent } | { queued: QueuedGoal } {
+    return this.core.leads.spinOffIdea(id, idea, text);
+  }
+
   readTurn(id: string): void {
     this.core.comms.readTurn(id);
   }

@@ -1,5 +1,5 @@
 // The loose threads a goal's lead notices along the way (a question, a risk, an idea off the course): sensor contacts on
-// its chart, open until the lead pursues or drops them. The lead logs and closes them through the note tool; these are
+// its chart, open until the lead pursues or drops them, or the captain spins one (or an idea for next) off as a goal. The lead logs and closes them through the note tool; these are
 // the pure decisions, and `notedGoal` in `lead.ts` calls them.
 
 import type { Contact, LeadWork } from '../../shared/types';
@@ -78,6 +78,23 @@ export function spunOffContacts(work: Pick<LeadWork, 'slice' | 'contacts'>, id: 
 export function spunOffNote(c: Contact, title: string, station: number | undefined): string {
   const where = station === undefined ? 'waiting in line for a team station' : `at team station ${station + 1}`;
   return `The captain spun contact ${c.id} (${c.text}) off as a goal of its own, “${title}”, ${where}. It's closed on your chart: leave that thread to the new goal.`;
+}
+
+/**
+ * The goal's ideas for next once the captain has spun `idea` off as a goal of its own: it's no longer this goal's to
+ * take, or why it can't be (the lead has rewritten them since).
+ */
+export function spunOffIdea(next: readonly string[] | undefined, idea: string): string[] | { error: string } {
+  const all = next ?? [];
+  const at = all.findIndex((x) => clean(x) === clean(idea));
+  if (at < 0) return { error: 'That idea isn’t one of the lead’s ideas for next any more: they’ve rewritten them since' };
+  return all.filter((_, i) => i !== at);
+}
+
+/** What the lead hears once the captain has spun one of their ideas for next off as a goal of its own. */
+export function spunOffIdeaNote(idea: string, title: string, station: number | undefined): string {
+  const where = station === undefined ? 'waiting in line for a team station' : `at team station ${station + 1}`;
+  return `The captain spun your idea for next (${clean(idea)}) off as a goal of its own, “${title}”, ${where}. It's off your ideas for next: leave it to the new goal.`;
 }
 
 /** The open contacts, for what the lead hears with the note: so the threads survive a summarised conversation. */

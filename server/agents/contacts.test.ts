@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Contact, LeadAgent, LeadWork } from '../../shared/types';
-import { applyContacts, CONTACT_LIMITS, contactsForPrompt, spinOffRefusal, spunOffContacts, spunOffNote } from './contacts';
+import { applyContacts, CONTACT_LIMITS, contactsForPrompt, spinOffRefusal, spunOffContacts, spunOffIdea, spunOffIdeaNote, spunOffNote } from './contacts';
 import { goalRecord, noteForPrompt, reopenedWork } from './lead';
 
 const ok = (result: Contact[] | { error: string }): Contact[] => {
@@ -58,6 +58,14 @@ describe('contacts', () => {
     expect(contactsForPrompt(after)).toBeUndefined();
     expect(spunOffNote(contacts[0], 'Auth off the LAN', 2)).toContain('“Auth off the LAN”, at team station 3');
     expect(spunOffNote(contacts[0], 'Auth off the LAN', undefined)).toContain('waiting in line for a team station');
+  });
+
+  it('spins an idea for next off, taking it off the lead’s ideas', () => {
+    const next = ['Show it in the header', 'Tidy the store code'];
+    expect(spunOffIdea(next, ' Tidy the  store code')).toEqual(['Show it in the header']);
+    expect(spunOffIdea(next, 'Dark mode')).toHaveProperty('error');
+    expect(spunOffIdea(undefined, 'Dark mode')).toHaveProperty('error');
+    expect(spunOffIdeaNote('Tidy the store code', 'Tidy the store', 0)).toContain('(Tidy the store code) off as a goal of its own, “Tidy the store”, at team station 1');
   });
 
   it('forgets the oldest closed ones once there are too many to keep', () => {

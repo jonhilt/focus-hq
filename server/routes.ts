@@ -212,6 +212,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.post('/agents/:id/read', h((req) => office.agents.readTurn(param(req, 'id'))));
   r.post('/agents/:id/spot-checks', h((req) => office.agents.tickSpotCheck(param(req, 'id'), Number(req.body.slice), Number(req.body.index), req.body.checked === true)));
   r.post('/agents/:id/contacts/:contact/spin-off', h((req) => office.agents.spinOffContact(param(req, 'id'), param(req, 'contact'), str(req.body.text))));
+  r.post('/agents/:id/ideas/spin-off', h((req) => office.agents.spinOffIdea(param(req, 'id'), str(req.body.idea), str(req.body.text))));
   r.post('/agents/:id/permission', h((req) => office.agents.resolvePermission(param(req, 'id'), str(req.body.requestId), req.body.allow === true)));
   r.post('/agents/:id/stop', h((req) => office.agents.stop(param(req, 'id'))));
   r.post('/agents/:id/compact', h((req) => office.agents.compactNow(param(req, 'id'))));

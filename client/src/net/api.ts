@@ -124,6 +124,7 @@ export const api = {
   /** The captain has read the lead's latest turn, here: every screen stops hailing about it. */
   readTurn: (id: string) => call('POST', `/agents/${id}/read`),
   spinOffContact: (id: string, contact: string, text: string) => call<{ agent: Agent } | { queued: QueuedGoal }>('POST', `/agents/${id}/contacts/${contact}/spin-off`, { text }),
+  spinOffIdea: (id: string, idea: string, text: string) => call<{ agent: Agent } | { queued: QueuedGoal }>('POST', `/agents/${id}/ideas/spin-off`, { idea, text }),
   tickSpotCheck: (id: string, slice: number, index: number, checked: boolean) => call('POST', `/agents/${id}/spot-checks`, { slice, index, checked }),
   permission: (id: string, requestId: string, allow: boolean) => call('POST', `/agents/${id}/permission`, { requestId, allow }),
   stop: (id: string) => call('POST', `/agents/${id}/stop`),

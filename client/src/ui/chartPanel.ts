@@ -84,6 +84,9 @@ const standing = (c: Contact) =>
 /** What a contact spun off as a goal of its own starts the goal with, until the captain edits it: the thread, and where it came from. */
 export const spinOffText = (goal: { title: string }, c: Contact) => `${c.text}\n\n(Spun off from “${goal.title}”, contact ${c.id}, noticed in waypoint ${c.slice}.)`;
 
+/** The same for one of the lead's ideas for next, a projected course on the chart. */
+export const ideaSpinOffText = (goal: { title: string }, idea: string) => `${idea}\n\n(Spun off from “${goal.title}”, where it was an idea for what’s next.)`;
+
 const SVG = 'http://www.w3.org/2000/svg';
 function s(tag: string, attrs: Record<string, string | number> = {}, ...children: (Node | string | null | false)[]): SVGElement {
   const el = document.createElementNS(SVG, tag);
@@ -380,9 +383,13 @@ const ideaList = (ideas: string[], nav: Nav, except?: number) =>
   h('ul', { class: 'chart-threads chart-ideas' }, ...ideas.flatMap((idea, i) =>
     i === except ? [] : [h('li', null, h('button', { class: 'chart-thread', onclick: () => nav.idea(i) }, h('span', null, idea)))]));
 
-/** A projected course's log: the lead's idea for what's next in full, where it heads on from, and the other ideas. */
-function ideaView(goal: ChartGoal, ideas: string[], index: number, nav: Nav): HTMLElement {
+/**
+ * A projected course's log: the lead's idea for what's next in full, where it heads on from, and the other ideas (and,
+ * while the goal's under way, a way to make it a goal of its own).
+ */
+function ideaView(goal: ChartGoal, ideas: string[], index: number, nav: Nav, ui: Ui, spin?: SpinOff): HTMLElement {
   const from = goal.waypoints.at(-1);
+  const idea = ideas[index];
   return h('div', { class: 'chart-log' },
     h('div', { class: 'chart-log-head' },
       h('h3', null, `Projected course ${index + 1} of ${ideas.length}`),
@@ -391,6 +398,7 @@ function ideaView(goal: ChartGoal, ideas: string[], index: number, nav: Nav): HT
     from ? section('On from', LCARS.orange, waypointLink(goal, from.slice, nav)) : null,
     ideas.length > 1 ? section('Other courses', LCARS.periwinkle, ideaList(ideas, nav, index)) : null,
     h('p', { class: 'muted' }, 'The lead rewrites these as the goal moves on: one becomes a waypoint once a slice ships it.'),
+    spin ? spinOffSection(`idea:${idea}`, ideaSpinOffText(goal, idea), (text) => spin.idea(idea, text), spin, ui) : null,
   );
 }
 
@@ -405,24 +413,28 @@ const waypointLink = (goal: ChartGoal, slice: number, nav: Nav) => {
   return w ? h('button', { class: 'chart-jump', onclick: () => nav.slice(slice) }, `Waypoint ${slice} · ${named(w)}`) : h('span', null, `Waypoint ${slice}`);
 };
 
-/** Spinning an open contact off as a goal of its own, while its goal's under way: the words it starts with, kept as they're edited. */
+/**
+ * Spinning an open contact, or an idea for next, off as a goal of its own while its goal's under way: the words each
+ * starts with, kept as they're edited, and what starts it.
+ */
 interface SpinOff {
   drafts: Map<string, string>;
-  go: (c: Contact, text: string) => Promise<void>;
+  contact: (c: Contact, text: string) => Promise<void>;
+  idea: (idea: string, text: string) => Promise<void>;
 }
 
-/** An open contact's way out into a goal of its own: the words it'll start with, and the button that starts it. */
-function spinOffSection(goal: ChartGoal, c: Contact, spin: SpinOff, ui: Ui): HTMLElement {
+/** A way out into a goal of its own: the words it'll start with (`start`, until they're edited), and the button that starts it. */
+function spinOffSection(key: string, start: string, go: (text: string) => Promise<void>, spin: SpinOff, ui: Ui): HTMLElement {
   const text = h('textarea', { class: 'chart-spin-text', rows: 6, title: 'What the new goal’s lead hears first' });
-  text.value = spin.drafts.get(c.id) ?? spinOffText(goal, c);
-  text.oninput = () => spin.drafts.set(c.id, text.value);
-  const go = h('button', { class: 'btn small primary' }, 'Spin off as a goal');
-  go.onclick = () => {
-    go.disabled = true;
-    spin.go(c, text.value).then(() => spin.drafts.delete(c.id), (err: Error) => ui.error(err.message)).finally(() => (go.disabled = false));
+  text.value = spin.drafts.get(key) ?? start;
+  text.oninput = () => spin.drafts.set(key, text.value);
+  const button = h('button', { class: 'btn small primary' }, 'Spin off as a goal');
+  button.onclick = () => {
+    button.disabled = true;
+    go(text.value).then(() => spin.drafts.delete(key), (err: Error) => ui.error(err.message)).finally(() => (button.disabled = false));
   };
   return section('Make it a goal of its own', LCARS.peach, text,
-    h('div', { class: 'row' }, go, h('small', { class: 'muted' }, 'It takes the first free team station, or waits in line for one')));
+    h('div', { class: 'row' }, button, h('small', { class: 'muted' }, 'It takes the first free team station, or waits in line for one')));
 }
 
 /** The goal a contact was spun off as: a link to its lead while it's on the ship, else its name. */
@@ -450,7 +462,7 @@ function contactView(goal: ChartGoal, c: Contact, nav: Nav, ui: Ui, spin?: SpinO
         : closed
           ? section('Dropped', LCARS.red, h('p', null, closed.why ?? 'No reason given'), h('small', null, 'In ', waypointLink(goal, closed.slice, nav)))
           : section('Still open', LCARS.sky, h('p', null, 'The lead hears it with the note at every new slice, until they pursue it or drop it.')),
-    !closed && spin ? spinOffSection(goal, c, spin, ui) : null,
+    !closed && spin ? spinOffSection(`contact:${c.id}`, spinOffText(goal, c), (text) => spin.contact(c, text), spin, ui) : null,
   );
 }
 
@@ -658,12 +670,18 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
   // what was last drawn: the lead's agent changes far more often than their goal does, and redrawing the same chart
   // would only flicker its pictures; a change to the same waypoint keeps the log scrolled where it was
   let drawn = '';
-  // an open contact's words for a goal of its own, as the captain edits them: kept across the redraws a live goal brings
+  // an open contact's or an idea's words for a goal of its own, as the captain edits them: kept across the redraws a live
+  // goal brings. An idea spun off comes off the chart, so the drawer goes back to the waypoint under way
+  const started = (s: { agent: Agent } | object) => {
+    if ('agent' in s) goalStarted(ui, s.agent);
+  };
   const spin: SpinOff | undefined = liveId ? {
     drafts: new Map(),
-    go: async (c, text) => {
-      const started = await api.spinOffContact(liveId, c.id, text);
-      if ('agent' in started) goalStarted(ui, started.agent);
+    contact: async (c, text) => started(await api.spinOffContact(liveId, c.id, text)),
+    idea: async (idea, text) => {
+      started(await api.spinOffIdea(liveId, idea, text));
+      delete picked.idea;
+      render();
     },
   } : undefined;
   let drawnPick = '';
@@ -823,7 +841,7 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
     const log = contact
       ? contactView(g, contact, nav, ui, spin)
       : picked.idea !== undefined && ideas[picked.idea] !== undefined
-        ? ideaView(g, ideas, picked.idea, nav)
+        ? ideaView(g, ideas, picked.idea, nav, ui, spin)
         : node && w ? nodeView(g, w, node, work, ctx) : logView(g, w, work, ctx);
     extra = heavens.column?.bounds;
     // there's more to see than what's in view: zoomed in, or on a long voyage's latest stretch

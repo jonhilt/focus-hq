@@ -362,6 +362,26 @@ describe('AgentManager', () => {
     expect(() => agents.startQueued(project.id, queued.id)).toThrow('That goal is no longer in line');
   });
 
+  it('spins a goal’s open contact or idea for next off as a goal of its own, closing it and telling its lead', () => {
+    const { agents, store, project } = office();
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    const work = store.agent(lead.id).lead!;
+    store.agent(lead.id).lead = { ...work, contacts: [{ id: 'c1', text: 'Sync across devices?', slice: 1, at: 0 }], note: { done: 'Saved', learned: [], next: ['Show it in the header', 'Tidy the store'] } };
+
+    const spun = agents.spinOffContact(lead.id, 'c1', 'Saved items follow you across devices') as { agent: { id: string } };
+    const goal = store.agent(spun.agent.id);
+    expect(goal.lead).toMatchObject({ station: 1, brief: 'Saved items follow you across devices' });
+    expect(store.agent(lead.id).lead!.contacts![0].closed).toMatchObject({ as: 'spun off', goal: goal.id, title: goal.lead!.title });
+    expect(store.recentLines(lead.id).at(-1)?.text).toContain('spun contact c1 (Sync across devices?) off as a goal of its own');
+    expect(() => agents.spinOffContact(lead.id, 'c1', 'Again')).toThrow('Contact c1 was already spun off.');
+
+    const idea = agents.spinOffIdea(lead.id, 'Tidy the store', 'Tidy the store code') as { agent: { id: string } };
+    expect(store.agent(idea.agent.id).lead).toMatchObject({ station: 2 });
+    expect(store.agent(lead.id).lead!.note!.next).toEqual(['Show it in the header']);
+    expect(store.recentLines(lead.id).at(-1)?.text).toContain('spun your idea for next (Tidy the store) off');
+    expect(() => agents.spinOffIdea(lead.id, 'Tidy the store', 'Again')).toThrow('isn’t one of the lead’s ideas');
+  });
+
   it('retitles a new goal once Haiku answers, unless it was retitled meanwhile', async () => {
     const { agents, store, project } = office();
     let answer!: (title: string | undefined) => void;
