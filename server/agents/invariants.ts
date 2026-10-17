@@ -59,7 +59,15 @@ export interface CheckOptions {
   path?: string;
 }
 
-const settings = (o: CheckOptions) => ({ numRuns: o.runs ?? 25, seed: o.seed ?? Number(process.env.FOCUS_TEST_SEED ?? 1), endOnFailure: true, includeErrorInReport: true, ...(o.path && { path: o.path }) });
+/** Where a restart falls in the action under test: mostly where restarts break things (between actions, just after it
+ *  starts, after its first deferred step), sometimes deeper in. */
+const cuts = fc.oneof({ arbitrary: fc.constantFrom(-1, 0, 1), weight: 3 }, { arbitrary: fc.integer({ min: 2, max: 6 }), weight: 1 });
+
+/** `FOCUS_INVARIANT_RUNS` multiplies every check's runs, for a longer soak than the everyday suite can afford: the
+ *  interleavings that break a part are rare draws. */
+const soak = Math.max(1, Number(process.env.FOCUS_INVARIANT_RUNS ?? 1) || 1);
+
+const settings = (o: CheckOptions) => ({ numRuns: (o.runs ?? 25) * soak, seed: o.seed ?? Number(process.env.FOCUS_TEST_SEED ?? 1), endOnFailure: true, includeErrorInReport: true, ...(o.path && { path: o.path }) });
 
 /** What came of taking an action: its name, and whether it refused (threw), which leaves the state as it was. */
 interface Taken {
@@ -131,16 +139,17 @@ async function drain<D>(s: fc.Scheduler, running: Running<D>, pending?: Promise<
 }
 
 /**
- * `later` through the scheduler, for one life of the part. Once that life is over (`alive.now` false), what it left
- * waiting still happens out there (a comment it asked GitHub for still goes up), but the office never hears back: the
- * dangerous case for a restart is a request that landed with nobody left to record it.
+ * `later` through the scheduler, for one life of the part. When that life ends with work still out (`alive.now` false),
+ * what happens to it was settled as the office went down: it landed out there (`alive.landed`: a comment it asked
+ * GitHub for went up) or it was lost on the way, and either way the office never hears back. The dangerous case for a
+ * restart is a request that landed with nobody left to record it.
  */
 const deferred =
-  (s: fc.Scheduler, alive = { now: true }): Later =>
+  (s: fc.Scheduler, alive = { now: true, landed: false }): Later =>
   (label, work) =>
     s.schedule(Promise.resolve(label), label).then(() => {
       if (alive.now) return work();
-      void work().catch(() => undefined);
+      if (alive.landed) void work().catch(() => undefined);
       return new Promise<never>(() => undefined);
     });
 
@@ -157,8 +166,8 @@ const notOneOf = (what: string, got: unknown, allowed: Record<string, unknown>) 
  */
 export async function checkRestart<D>(subject: Subject<D>, options: CheckOptions = {}): Promise<void> {
   await fc.assert(
-    fc.asyncProperty(fc.scheduler(), fc.array(fc.nat(), { maxLength: options.prefix ?? 4 }), fc.nat(), fc.integer({ min: -1, max: 6 }), fc.array(fc.nat(), { maxLength: 2 }), async (s, prefix, pick, cut, after) => {
-      const life = { now: true };
+    fc.asyncProperty(fc.scheduler(), fc.array(fc.nat(), { maxLength: options.prefix ?? 4 }), fc.nat(), cuts, fc.boolean(), fc.array(fc.nat(), { maxLength: 2 }), async (s, prefix, pick, cut, lands, after) => {
+      const life = { now: true, landed: false };
       const running = await subject.start(deferred(s, life));
       for (const p of prefix) await drain(s, running, take(running, p));
       // the action under test, started and left going: `cut` of its deferred steps finish before the office goes down
@@ -170,19 +179,31 @@ export async function checkRestart<D>(subject: Subject<D>, options: CheckOptions
         for (let i = 0; i < cut && (await deferredSoon(s)); i++) await s.waitOne();
         await tick();
       }
+      // the office goes down: what it had out either lands now, unheard, or is lost; then it starts again
       life.now = false;
+      if (lands) {
+        life.landed = true;
+        if (s.count()) await s.waitAll();
+        await tick();
+      }
       const again = await running.restart(deferred(s));
       await drain(s, again);
+      const settled = again.durable();
       // and what happens next: a restart that loses work can look the same until something should have followed on
       for (const p of after) await drain(s, again, take(again, p));
       const got = again.durable();
       again.close?.();
-      const never = await inTurn(subject, [...prefix, ...after]);
-      const done = cut < 0 ? never : await inTurn(subject, [...prefix, pick, ...after]);
-      const before = never.names.slice(0, prefix.length).join(', ');
-      const next = after.length ? `, then [${never.names.slice(prefix.length).join(', ')}]` : '';
-      if (!isDeepStrictEqual(got, never.state) && !isDeepStrictEqual(got, done.state))
-        throw new Error(notOneOf(`${subject.name}: restarted during "${name ?? 'nothing'}" after [${before}]${next}`, got, { 'never started': never.state, finished: done.state }));
+      // just after the restart, and after what followed it: a half-done state the next action happens to clear is
+      // still half-done, and lost work only shows in what follows
+      for (const then of after.length ? [[], after] : [[]]) {
+        const never = await inTurn(subject, [...prefix, ...then]);
+        const done = cut < 0 ? never : await inTurn(subject, [...prefix, pick, ...then]);
+        const state = then.length ? got : settled;
+        const before = never.names.slice(0, prefix.length).join(', ');
+        const next = then.length ? `, then [${never.names.slice(prefix.length).join(', ')}]` : '';
+        if (!isDeepStrictEqual(state, never.state) && !isDeepStrictEqual(state, done.state))
+          throw new Error(notOneOf(`${subject.name}: restarted during "${name ?? 'nothing'}" after [${before}]${next}`, state, { 'never started': never.state, finished: done.state }));
+      }
     }),
     settings(options),
   );
