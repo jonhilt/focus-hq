@@ -43,9 +43,9 @@ Focus records its own with `pnpm run record-flows` ([scripts](../../docs/scripts
 
 Every map with a git history has a **changes** view too (`history.ts`): the default branch's last 90 days, read with one `git log --numstat`, its files put under their parts as the map puts them now. Git is a witness here that neither the model nor anyone drawing it is:
 
-- **Hotspots**: a bar per part for how many commits changed it (and how many lines), the busiest first. What changes most is where change costs most, and where a map is most worth keeping right.
-- **Change coupling**: the pairs of parts that keep changing in the same commits, at least 5 times and in at least 30% of the commits that changed either, each said in a sentence: *Agent sessions and Agent manager changed together in 95 of the 204 commits that changed either (47%)*. A commit touching more than 40 source files is a sweep (a rename, a reformat) and couples nothing.
-- **What ties them**: a coupled pair with an import between them is explained by the map's arrows. One without says so: either they talk over the wire (the recorded run has a flow between them), or what ties them isn't on the map at all, which is worth a look.
+- **Hotspots**: a table, a row per part, the busiest first: its commits over time as a sparkline, then how many commits changed it and how many lines, as aligned numerals, with the whole repo's row on top. Every part's sparkline is on the one scale, so they compare at a glance, and its latest point is a gold dot; the points are a day each while the history is young, and as few days each as keep a full window to 30 (`seriesSpans`). What changes most is where change costs most, and where a map is most worth keeping right; whether it's heating up or cooling off says whether that's still true.
+- **Change coupling**: beside the table, the pairs of parts that keep changing in the same commits, at least 5 times and in at least 30% of the commits that changed either, each with how often and what ties them (the full sentence on hover): *Agent sessions and Agent manager changed together in 95 of the 204 commits that changed either (47%)*. A commit touching more than 40 source files is a sweep (a rename, a reformat) and couples nothing.
+- **What ties them**: a coupled pair with an import between them is explained by the map's arrows. One without says so, in gold, since it's the one worth a look: either they talk over the wire (the recorded run has a flow between them), or what ties them isn't on the map at all, which is worth a look.
 
 ## Diagrams leads draw, kept
 

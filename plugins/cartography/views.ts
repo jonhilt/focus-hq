@@ -32,7 +32,7 @@ export const VIEW_KEY =
   'An arrow goes from a part to a part whose code it uses: the thicker, the more it imports. A dashed gold one is what a part sends another as it runs, from a recorded run. Each number is its line below.';
 export const MATRIX_KEY = 'Each row imports from the columns it has a number in: the number is how many imports. Orange: two parts that import each other.';
 export const CHANGES_KEY =
-  'From git: each bar is how many commits changed a part, the busiest first. Each numbered line is two parts that keep changing together; with no import between them, the map\'s arrows don\'t show what ties them.';
+  'From git: each part\'s commits over time as a line, every line on one scale, the latest a gold dot, the busiest part first. Beside it, the parts that keep changing together; in gold, those with no import between them, whose tie the map\'s arrows don\'t show.';
 
 /**
  * A project's views in its architecture space, in the order they're placed (spaceLayout.ts): each repo's whole map

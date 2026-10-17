@@ -119,7 +119,9 @@ describe('how a map changes', () => {
     history: {
       days: 90,
       commits: 20,
-      parts: [{ id: 'core', commits: 12, lines: 300 }, { id: 'api', commits: 8, lines: 90 }, { id: 'db', commits: 1, lines: 1 }],
+      series: [8, 2, 10],
+      step: 1,
+      parts: [{ id: 'core', commits: 12, lines: 300, series: [6, 0, 6] }, { id: 'api', commits: 8, lines: 90, series: [2, 2, 4] }, { id: 'db', commits: 1, lines: 1, series: [0, 0, 1] }],
       coupling: [
         { a: 'api', b: 'core', together: 6, either: 14, imports: true },
         { a: 'api', b: 'db', together: 5, either: 9, imports: false },
@@ -128,11 +130,25 @@ describe('how a map changes', () => {
     },
   };
 
-  it('draws a bar per part that changed, the busiest first, saying its commits and lines', () => {
+  it('draws a row per part that changed, the busiest first, with a sparkline of its commits on one scale, and its commits and lines', () => {
     const svg = changesSvg(changing);
-    expect(svg.match(/<rect /g)).toHaveLength(3);
-    expect(svg.indexOf('12 commits · 300 lines')).toBeLessThan(svg.indexOf('8 commits · 90 lines'));
-    expect(svg).toContain('1 commit · 1 line');
+    // the repo's own row, then a row per part
+    expect(svg.match(/<polyline /g)).toHaveLength(4);
+    expect(svg.indexOf('Core: 12 commits, 300 lines')).toBeLessThan(svg.indexOf('API: 8 commits, 90 lines'));
+    expect(svg).toContain('Store: 1 commit, 1 line changed, 1 commit in the last day');
+    // every part's line on the one scale: core's runs 0 to 6, so api's 2 to 4 rises a third as far
+    const ys = (part: string) => /points="([^"]+)"/.exec(svg.slice(svg.indexOf(`${part}:`)))![1].split(' ').map((p) => Number(p.split(',')[1]));
+    const rise = (part: string) => Math.max(...ys(part)) - Math.min(...ys(part));
+    expect(rise('API')).toBeCloseTo(rise('Core') / 3, 0);
+  });
+
+  it('lists what changes together beside it, gold where nothing on the map says why', () => {
+    const svg = changesSvg(changing);
+    expect(svg).toContain('6 of 14 commits (43%)');
+    expect(svg).toContain('no import: they talk over the wire');
+    expect(svg).toContain('no import: nothing on the map says why');
+    // each row's full sentence on hover
+    for (const s of changeSentences(changing)) expect(svg).toContain(esc(s));
   });
 
   it('says what changes together, and what ties them: an import, the wire, or nothing on the map', () => {
@@ -149,7 +165,8 @@ describe('how a map changes', () => {
     const { svg, key, sentences } = viewDrawing(changing, views[1]);
     expect(svg).toContain('12 commits');
     expect(key).toContain('The last 90 days: 20 commits.');
-    expect(sentences).toHaveLength(3);
+    // what changes together is in the drawing itself, not said again under it
+    expect(sentences).toEqual([]);
     expect(viewDrawing(changing, views[0]).sentences).toEqual([]);
     expect(viewDrawing(changing, views[2]).key).toBe(VIEW_KEY);
   });

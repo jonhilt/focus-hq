@@ -61,7 +61,7 @@ export async function mapRepoAndLog(repo: string, dir: string, { history: withHi
   const log = withHistory ? await run('git', LOG_ARGS, { cwd: dir }).catch(() => '') : '';
   const owner = (f: string) => (isSource(f) ? ownerOf(f, model) : undefined);
   const logged = log ? readLog(log) : [];
-  const history = log ? historyOf(logged, owner, map.connections) : undefined;
+  const history = log ? historyOf(logged, owner, map.connections, Date.now()) : undefined;
   const commits = logged.map((c) => ({ sha: c.sha, date: c.date, author: c.author ?? '', parts: [...new Set(c.files.flatMap((f) => owner(f.path) ?? []))] }));
   const read = (file: string) => fs.readFile(path.join(dir, file), 'utf8').catch(() => '');
   const routeFiles = known.filter((f) => isSource(f) || isSpec(f));

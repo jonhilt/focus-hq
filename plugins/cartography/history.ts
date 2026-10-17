@@ -10,6 +10,9 @@ export const HISTORY_DAYS = 90;
 export const SWEEP_FILES = 40;
 /** A pair has to change together this often to be worth saying, and in this share of the commits that touched either. */
 export const COUPLING = { together: 5, share: 0.3, kept: 8 } as const;
+/** At most this many points on a part's sparkline, each as many days as it takes to span the history. */
+export const SERIES_POINTS = 30;
+const DAY_MS = 24 * 3600 * 1000;
 
 /** The `git log` arguments whose output `readLog` reads. */
 export const LOG_ARGS = ['log', '--no-merges', '--no-renames', `--since=${HISTORY_DAYS} days ago`, '--numstat', '--format=%x1e%H%x1f%cI%x1f%ae'];
@@ -44,6 +47,8 @@ export interface PartChange {
   id: string;
   commits: number;
   lines: number;
+  /** Its commits in each of the history's spans (`MapHistory.step` days), the oldest first, the last ending as the log was read. */
+  series?: number[];
 }
 
 /** Two parts that keep changing together. */
@@ -61,16 +66,42 @@ export interface MapHistory {
   days: number;
   /** Commits in the window that changed any part's code. */
   commits: number;
+  /** Those commits in each span, the oldest first, and how many days a span is. */
+  series?: number[];
+  step?: number;
   /** Every part that changed, the most often first. */
   parts: PartChange[];
   /** The pairs that change together most, by share of the commits touching either. */
   coupling: Coupling[];
 }
 
-/** The history of the parts `owner` puts files under, from `commits`, against the import connections the map found. */
-export function historyOf(commits: readonly Commit[], owner: (file: string) => string | undefined, connections: readonly MapConnection[]): MapHistory {
-  const changes = new Map<string, PartChange>();
+/**
+ * How a history from `oldest` to `until` (ms) is cut for sparklines: as few days a point as keep it to SERIES_POINTS,
+ * over the days it covers (at most HISTORY_DAYS), so a young repo's are by the day and a full window's by the few days.
+ */
+export function seriesSpans(oldest: number, until: number): { step: number; points: number } {
+  const days = Math.max(1, Math.min(HISTORY_DAYS, Math.ceil((until - oldest) / DAY_MS)));
+  const step = Math.ceil(days / SERIES_POINTS);
+  return { step, points: Math.ceil(days / step) };
+}
+
+/** Which point (0 the oldest) of a series cut as `spans`, ending at `until`, a commit on `date` falls in; -1 outside it. */
+export function pointOf(date: string, until: number, spans: { step: number; points: number }): number {
+  const back = Math.floor((until - Date.parse(date)) / (spans.step * DAY_MS));
+  return back >= 0 && back < spans.points ? spans.points - 1 - back : -1;
+}
+
+/**
+ * The history of the parts `owner` puts files under, from `commits`, against the import connections the map found,
+ * its sparklines counted back from `until` (when the log was read; the newest commit, unless it says).
+ */
+export function historyOf(commits: readonly Commit[], owner: (file: string) => string | undefined, connections: readonly MapConnection[], until?: number): MapHistory {
+  const changes = new Map<string, PartChange & { series: number[] }>();
   const pairs = new Map<string, number>();
+  const dates = commits.map((c) => Date.parse(c.date) || 0);
+  const end = until ?? Math.max(0, ...dates);
+  const spans = seriesSpans(Math.min(end, ...dates), end);
+  const series = Array<number>(spans.points).fill(0);
   let counted = 0;
   for (const commit of commits) {
     const touched = new Map<string, number>();
@@ -78,10 +109,13 @@ export function historyOf(commits: readonly Commit[], owner: (file: string) => s
     for (const f of owned) touched.set(f.id, (touched.get(f.id) ?? 0) + f.lines);
     if (!touched.size) continue;
     counted++;
+    const point = pointOf(commit.date, end, spans);
+    if (point >= 0) series[point]++;
     for (const [id, lines] of touched) {
-      const c = changes.get(id) ?? { id, commits: 0, lines: 0 };
+      const c = changes.get(id) ?? { id, commits: 0, lines: 0, series: Array<number>(spans.points).fill(0) };
       c.commits++;
       c.lines += lines;
+      if (point >= 0) c.series[point]++;
       changes.set(id, c);
     }
     if (owned.length > SWEEP_FILES) continue;
@@ -98,5 +132,5 @@ export function historyOf(commits: readonly Commit[], owner: (file: string) => s
     .filter((c) => c.together >= COUPLING.together && c.together / c.either >= COUPLING.share)
     .sort((x, y) => y.together / y.either - x.together / x.either || y.together - x.together || x.a.localeCompare(y.a))
     .slice(0, COUPLING.kept);
-  return { days: HISTORY_DAYS, commits: counted, parts: [...changes.values()].sort((x, y) => y.commits - x.commits || y.lines - x.lines || x.id.localeCompare(y.id)), coupling };
+  return { days: HISTORY_DAYS, commits: counted, series, step: spans.step, parts: [...changes.values()].sort((x, y) => y.commits - x.commits || y.lines - x.lines || x.id.localeCompare(y.id)), coupling };
 }

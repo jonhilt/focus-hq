@@ -313,29 +313,81 @@ export function matrixSvg(map: RepoMap, found: readonly Finding[] = []): string 
   return out.join('');
 }
 
-const BARS = { labels: 280, bar: 560, row: 34, top: 16, shown: 14 } as const;
+const TABLE = { labels: 250, spark: 220, sparkH: 18, row: 26, top: 44, gap: 56, coupling: 470, coupled: 46 } as const;
 
-/** How a map's parts changed in git: a bar each for its commits, the busiest first, in its layer's colour. */
+/** `values` as a sparkline `w` × `h` from (`x`, `y`), on a scale up to `max`, its last value marked. */
+function sparkline(values: readonly number[], x: number, y: number, w: number, h: number, max: number): string {
+  const at = (v: number, i: number) => [x + (i * w) / Math.max(1, values.length - 1), y + h - (v / Math.max(1, max)) * h].map((n) => n.toFixed(1));
+  const points = values.map((v, i) => at(v, i).join(',')).join(' ');
+  const [lx, ly] = at(values[values.length - 1] ?? 0, values.length - 1);
+  return `<polyline points="${points}" fill="none" stroke="${INK.line}" stroke-opacity="0.8" stroke-width="1.3" stroke-linejoin="round"/><circle cx="${lx}" cy="${ly}" r="2.6" fill="${LOOK}"/>`;
+}
+
+/**
+ * How a map's parts changed in git, as a table: each part that changed, the busiest first, named in its layer's colour,
+ * with its commits over time as a sparkline (every line on one scale, so they compare; the latest point gold), its
+ * commits and lines; the whole repo's first. Beside it, the pairs that keep changing together, and what ties them, gold
+ * where nothing on the map does.
+ */
 export function changesSvg(map: RepoMap): string {
   const parts = map.model?.parts ?? [];
   const colours = layerColours(parts);
-  const changed = (map.history?.parts ?? []).slice(0, BARS.shown);
-  const most = Math.max(1, ...changed.map((c) => c.commits));
-  const W = BARS.labels + BARS.bar + 230;
-  const H = BARS.top * 2 + Math.max(1, changed.length) * BARS.row;
-  const out = [`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="system-ui,sans-serif">`];
+  const h = map.history;
+  const changed = h?.parts ?? [];
+  const max = Math.max(1, ...changed.flatMap((c) => c.series ?? []));
+  const coupling = h?.coupling ?? [];
+  const sentences = changeSentences(map);
+  const [cSpark, cCommits, cLines] = [TABLE.labels + 16, TABLE.labels + 16 + TABLE.spark + 70, TABLE.labels + 16 + TABLE.spark + 160];
+  const tableW = cLines + 10;
+  const W = tableW + (coupling.length ? TABLE.gap + TABLE.coupling : 0);
+  const rows = 1 + changed.length;
+  const H = Math.max(TABLE.top + rows * TABLE.row + 16, TABLE.top + coupling.length * TABLE.coupled + 10);
+  const num = 'font-variant-numeric="tabular-nums" text-anchor="end"';
+  const out = [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="system-ui,sans-serif" style="font-variant-numeric:tabular-nums">`,
+    `<text x="${cSpark}" y="20" font-size="13" font-style="italic" fill="${INK.muted}">commits ${(h?.step ?? 1) === 1 ? 'a day' : `every ${h?.step} days`}, one scale</text>`,
+    `<text x="${cCommits}" y="20" ${num} font-size="13" font-style="italic" fill="${INK.muted}">commits</text>`,
+    `<text x="${cLines}" y="20" ${num} font-size="13" font-style="italic" fill="${INK.muted}">lines</text>`,
+  ];
+  const row = (i: number, label: string, colour: string, series: readonly number[] | undefined, scale: number, commits: number, lines: number | undefined, title: string, bold = false) => {
+    const y = TABLE.top + i * TABLE.row;
+    const weight = bold ? ' font-weight="700"' : '';
+    out.push(
+      `<g><title>${esc(title)}</title>`,
+      `<text x="${TABLE.labels}" y="${y + 14}" text-anchor="end" font-size="15"${weight} fill="${colour}">${esc(fit(label, 15, TABLE.labels - 10))}</text>`,
+      series ? sparkline(series, cSpark, y + 14 - TABLE.sparkH + 2, TABLE.spark, TABLE.sparkH, scale) : '',
+      `<text x="${cCommits}" y="${y + 14}" ${num} font-size="15"${weight} fill="${INK.text}">${commits}</text>`,
+      lines === undefined ? '' : `<text x="${cLines}" y="${y + 14}" ${num} font-size="15" fill="${INK.muted}">${lines.toLocaleString('en')}</text>`,
+      '</g>',
+    );
+  };
+  const span = (h?.step ?? 1) === 1 ? 'day' : `${h?.step} days`;
+  const latest = (series?: readonly number[]) => (series?.length ? `, ${times(series[series.length - 1], 'commit')} in the last ${span}` : '');
+  // the repo as a whole, on a scale of its own, ruled off from its parts
+  row(0, 'Every part', INK.text, h?.series, Math.max(1, ...(h?.series ?? [])), h?.commits ?? 0, undefined, `${times(h?.commits ?? 0, 'commit')} in ${h?.days ?? 0} days${latest(h?.series)}`, true);
+  out.push(`<line x1="${TABLE.labels - 140}" x2="${tableW}" y1="${TABLE.top + TABLE.row - 4}" y2="${TABLE.top + TABLE.row - 4}" stroke="${INK.muted}" stroke-opacity="0.35"/>`);
   changed.forEach((c, i) => {
     const part = parts.find((p) => p.id === c.id);
-    const colour = (part && colours.get(part.layer)) ?? INK.muted;
-    const y = BARS.top + i * BARS.row;
-    const w = Math.max(3, (c.commits / most) * BARS.bar);
-    out.push(
-      `<g><title>${esc(`${part?.label ?? c.id}: ${times(c.commits, 'commit')}, ${times(c.lines, 'line')} changed`)}</title>`,
-      `<text x="${BARS.labels - 12}" y="${y + 22}" text-anchor="end" font-size="16" fill="${colour}">${esc(fit(part?.label ?? c.id, 16, BARS.labels - 20))}</text>`,
-      `<rect x="${BARS.labels}" y="${y + 6}" width="${w.toFixed(1)}" height="${BARS.row - 12}" rx="4" fill="${colour}" fill-opacity="0.75"/>`,
-      `<text x="${BARS.labels + w + 10}" y="${y + 22}" font-size="14" fill="${INK.text}">${esc(`${times(c.commits, 'commit')} · ${times(c.lines, 'line')}`)}</text></g>`,
-    );
+    const label = part?.label ?? c.id;
+    row(i + 1, label, (part && colours.get(part.layer)) ?? INK.muted, c.series, max, c.commits, c.lines, `${label}: ${times(c.commits, 'commit')}, ${times(c.lines, 'line')} changed${latest(c.series)}`);
   });
+  if (coupling.length) {
+    const x = tableW + TABLE.gap;
+    const label = (id: string) => parts.find((p) => p.id === id)?.label ?? id;
+    const talk = (a: string, b: string) => (map.flows ?? []).some((f) => (f.from === a && f.to === b) || (f.from === b && f.to === a));
+    out.push(`<text x="${x}" y="20" font-size="13" font-style="italic" fill="${INK.muted}">changed together, and what ties them</text>`);
+    coupling.forEach((c, i) => {
+      const y = TABLE.top + i * TABLE.coupled;
+      const tie = c.imports ? 'an import' : talk(c.a, c.b) ? 'no import: they talk over the wire' : 'no import: nothing on the map says why';
+      const share = Math.round((c.together / c.either) * 100);
+      out.push(
+        `<g><title>${esc(sentences[i])}</title>`,
+        `<text x="${x}" y="${y + 14}" font-size="15" fill="${INK.text}">${esc(fit(`${label(c.a)} & ${label(c.b)}`, 15, TABLE.coupling))}</text>`,
+        `<text x="${x}" y="${y + 33}" font-size="13" fill="${c.imports ? INK.muted : LOOK}"><tspan fill="${INK.muted}">${c.together} of ${c.either} commits (${share}%) · </tspan>${esc(tie)}</text>`,
+        '</g>',
+      );
+    });
+  }
   out.push('</svg>');
   return out.join('');
 }
@@ -435,7 +487,7 @@ export function viewDrawing(map: RepoMap, view: MapView, marks?: Marks): { svg: 
   }
   if (view.id === CHANGES.id) {
     const h = map.history;
-    return { svg: changesSvg(map), key: `${CHANGES_KEY} The last ${h?.days ?? 0} days: ${times(h?.commits ?? 0, 'commit')}.`, sentences: changeSentences(map) };
+    return { svg: changesSvg(map), key: `${CHANGES_KEY} The last ${h?.days ?? 0} days: ${times(h?.commits ?? 0, 'commit')}.`, sentences: [] };
   }
   return { svg: viewSvg(map, view), key: VIEW_KEY, sentences: viewSentences(map, view) };
 }
