@@ -92,4 +92,6 @@ A review costs what one in the office does, about $0.60 and a few minutes: a ful
 
 Every change the hunting review stopped came with a failing proof test. One of its three "stopped controls", 7ca08cb, was stopped for two asks at once losing their pages: the very bug fixed later in bd279e4, which tracing had put on another commit. So it caught three known bugs, not two, and the other controls it stopped were for proven bugs too (an inverted byte range answered with an empty 206, a terminal line drawn indented).
 
+Review, even with proof, rarely catches the restart and race bugs. Checking them by running the code does: see [the office's two rules for state](invariants.md), which catch 4 of 4 of these bugs put back into today's code.
+
 What it can't tell: a control can hold a bug nobody has listed (as above), so "controls stopped" is an upper bound on false alarms, and each needs reading; tracing can blame the wrong commit; and the replay has no browser, as with `qa-catch`.

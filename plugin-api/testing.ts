@@ -8,3 +8,5 @@ export { demoWorkspace } from '../server/agents/demoRunner';
 export type { WorkspaceOps } from '../server/agents/types';
 export type { Store } from '../server/store';
 export const OFFICE_DIR = config.root;
+/** The office's two rules for a part that keeps state, checked by running it (docs/invariants.md). */
+export { type Action, checkAtOnce, checkRestart, type Later, type Running, type Subject } from '../server/agents/invariants';
