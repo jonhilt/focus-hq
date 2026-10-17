@@ -62,3 +62,5 @@ So 4 of the 4 bugs in parts it describes, each with the same outcome as the orig
 - Only parts somebody describes are checked, and only as far as `durable()` says what must survive: a field left out is a field it can't see go wrong.
 - A part whose async work doesn't go through `later` can't be interleaved inside that work, only between actions.
 - Like any test, it says the rules hold for the sequences it tried (25 by default), not for all of them.
+
+A third rule, for the bugs that came from wrong assumptions about git, GitHub and the SDK rather than from state: [the fakes the tests rely on must behave like the real thing](contracts.md).

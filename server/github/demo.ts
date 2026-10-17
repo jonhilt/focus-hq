@@ -230,7 +230,8 @@ export const demoLayer = Layer.sync(GitHub, () => {
         ),
       ),
 
-    pullRequestState: (name, number) => repo(name).pipe(Effect.map((r) => r.prs.find((p) => p.number === number)?.state ?? 'CLOSED')),
+    // as `gh pr view` does, a number GitHub hasn't got fails: it isn't a closed pull request
+    pullRequestState: (name, number) => pr(name, number).pipe(Effect.map((p) => p.state)),
 
     findPullRequest: (name, branch) =>
       repo(name).pipe(
@@ -272,7 +273,10 @@ export const demoLayer = Layer.sync(GitHub, () => {
 
     createPullRequest: (name, req) =>
       repo(name).pipe(
-        Effect.map((r) => {
+        Effect.flatMap((r) => {
+          // GitHub refuses a second open pull request from the same branch (422 "A pull request already exists")
+          const open = r.prs.find((p) => p.branch === req.head && p.state === 'OPEN');
+          if (open) return Effect.fail(new GitHubRejected({ message: `A pull request already exists for ${name}:${req.head}: ${open.url}` }));
           const number = r.nextNumber++;
           const url = `https://github.com/${name}/pull/${number}`;
           r.prs.push({
@@ -294,7 +298,7 @@ export const demoLayer = Layer.sync(GitHub, () => {
             body: req.body,
             headSha: Math.random().toString(16).slice(2, 12).padEnd(10, '0'),
           });
-          return { number, url };
+          return Effect.succeed({ number, url });
         }),
       ),
 

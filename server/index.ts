@@ -17,7 +17,6 @@ import { BriefingDesk } from './briefingDesk';
 import { Renderer, Sessions, Triage, Workspace } from './agents/services';
 import { closedGoalPrs, lookUpPrStates, type ShipStatus, summariseShip } from './agents/shipStatus';
 import { IssuePlanner } from './agents/planner';
-import type { WorkspaceOps } from './agents/types';
 import * as git from './agents/workspace';
 import { sourceReader } from './agents/studioSource';
 import { demoLedger } from './demoLedger';
@@ -44,32 +43,6 @@ import { Voice } from './voice';
 /** How often orphaned agent workspaces are swept up, besides once at startup. */
 const SWEEP_EVERY_MS = 60 * 60_000;
 
-const liveWorkspace: WorkspaceOps = {
-  create: git.createWorktree,
-  remove: git.removeWorktree,
-  install: (dir) => git.installDependencies(dir),
-  dir: git.workspaceDir,
-  hasUncommittedChanges: git.hasUncommittedChanges,
-  commitsAhead: git.commitsAhead,
-  head: git.head,
-  unshippedCommits: git.unshippedCommits,
-  changedFiles: git.changedFiles,
-  freshBranch: git.freshBranch,
-  renameBranch: git.renameBranch,
-  cherryPick: git.cherryPick,
-  push: git.pushBranch,
-  publish: git.publishBranch,
-  pull: git.pullBranch,
-  checkoutPullRequest: git.checkoutPullRequest,
-  mergeBase: git.mergeBase,
-  missingRemoteCommits: git.missingRemoteCommits,
-  reopen: git.reopenWorktree,
-  snapshot: git.snapshot,
-  branchState: git.branchState,
-  sinceVerdict: git.sinceVerdict,
-  runChecks: git.runChecks,
-};
-
 async function main() {
   // the studio rolls the same dice each run, the demo the same ids
   seedOffice(config, Number(process.env.FOCUS_DEMO_SEED ?? 1));
@@ -93,7 +66,7 @@ async function main() {
   const runner = demoRunner ?? new ClaudeRunner(browsers);
   const previews = new Previews(hub, github, config.demo);
   const planner = new IssuePlanner(store, hub, config.demo ? new DemoDrafter() : new ClaudeDrafter());
-  const workspace = config.demo ? demoWorkspace : liveWorkspace;
+  const workspace = config.demo ? demoWorkspace : git.liveWorkspace;
   // the studio's computer and plugins read the ship through the office, which is up by the time anyone asks
   const shipStatus = async (): Promise<ShipStatus> => {
     const snapshot = await office.snapshot();

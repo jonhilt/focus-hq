@@ -7,7 +7,7 @@ import { errorMessage, KeyedLock, run, sleep } from '../util';
 import { sameCommit } from '../../shared/qa';
 import { autoMergePlan, conflictStages, type MergeRule, mergeRules } from './conflicts';
 import { checkCommands, rangeDiffUnchanged, type SinceVerdict } from './retest';
-import type { BaseMerge, BranchState, ChecksRun } from './types';
+import type { BaseMerge, BranchState, ChecksRun, WorkspaceOps } from './types';
 import { claimBranch, heldMessage, orphanedWorkspaces, parseWorktrees, retryLockRace, trashName } from './worktrees';
 
 const lock = new KeyedLock();
@@ -547,3 +547,30 @@ export async function missingRemoteCommits(dir: string, branch: string): Promise
 export async function commitLog(dir: string, baseBranch: string): Promise<string> {
   return (await git(dir, ['log', '--format=- %s', `origin/${baseBranch}..HEAD`])).trim();
 }
+
+/** The office's git, as the manager is handed it outside the demo (held to the same contract as the demo's: workspaceContract.test.ts). */
+export const liveWorkspace: WorkspaceOps = {
+  create: createWorktree,
+  remove: removeWorktree,
+  install: (dir) => installDependencies(dir),
+  dir: workspaceDir,
+  hasUncommittedChanges: hasUncommittedChanges,
+  commitsAhead: commitsAhead,
+  head: head,
+  unshippedCommits: unshippedCommits,
+  changedFiles: changedFiles,
+  freshBranch: freshBranch,
+  renameBranch: renameBranch,
+  cherryPick: cherryPick,
+  push: pushBranch,
+  publish: publishBranch,
+  pull: pullBranch,
+  checkoutPullRequest: checkoutPullRequest,
+  mergeBase: mergeBase,
+  missingRemoteCommits: missingRemoteCommits,
+  reopen: reopenWorktree,
+  snapshot: snapshot,
+  branchState: branchState,
+  sinceVerdict: sinceVerdict,
+  runChecks: runChecks,
+};
