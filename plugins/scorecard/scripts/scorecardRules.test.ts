@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  eslintCounts, failedTests, fenceMetrics, gateMetrics, officeMetrics, render, scanSource, typecheckErrors, type GateResults, type Scorecard,
+  effectMetrics, eslintCounts, failedTests, fenceMetrics, gateMetrics, officeMetrics, render, scanSource, typecheckErrors, type GateResults, type Scorecard,
   type VitestReport,
 } from './scorecardRules';
 
@@ -37,6 +37,49 @@ describe('scanSource', () => {
     const counts = scan(`import { Schema } from 'effect/Schema'; import fc from 'fast-check'; const m = setup({}).createMachine({});`);
     expect(counts).toMatchObject({ importsEffect: true, importsFastCheck: true, machines: 1 });
     expect(scan(`import { x } from 'effective';`).importsEffect).toBe(false);
+  });
+
+  it('notices a file doing I/O: a Node module reaching outside, an await, a timer, a Promise or an AbortController', () => {
+    for (const source of [
+      `import { spawn } from 'node:child_process';`, `import fs from 'fs';`, `import { readFile } from 'node:fs/promises';`,
+      `async function f() { await g(); }`, `setTimeout(f, 10);`, `const p = new Promise(f);`, `const c = new AbortController();`, `fetch(url);`,
+    ]) expect(scan(source).doesIo, source).toBe(true);
+  });
+
+  it('leaves a file that only decides as not doing I/O, an XState machine or types from fs among them', () => {
+    for (const source of [
+      `import path from 'node:path'; export const f = (a: string) => path.join(a, 'b');`,
+      `import { setup } from 'xstate'; export const m = setup({}).createMachine({});`,
+      `import type { Stats } from 'node:fs'; export type R = () => Promise<Stats>;`,
+      `import { type ChildProcess } from 'node:child_process'; export const alive = (c: ChildProcess) => !c.killed;`,
+    ]) expect(scan(source).doesIo, source).toBe(false);
+  });
+});
+
+describe('effectMetrics', () => {
+  const file = (importsEffect: boolean, doesIo: boolean) => ({ ...scan(''), importsEffect, doesIo });
+  const value = (files: ReturnType<typeof file>[], key: string) => effectMetrics(files).find((m) => m.key === key)?.value;
+
+  it('takes the share of the files doing I/O that are on Effect, leaving pure files out', () => {
+    const files = [file(true, true), file(true, false), file(false, true), file(false, false), file(false, false)];
+    expect(value(files, 'effect.ioShare')).toBeCloseTo(2 / 3);
+    expect(value(files, 'effect.promiseIo')).toBe(1);
+  });
+
+  it('holds still when a pure file or an XState machine is added', () => {
+    const files = [file(true, true), file(false, true)];
+    const machine = { ...file(false, false), machines: 1 };
+    expect(value([...files, file(false, false), machine], 'effect.ioShare')).toBe(value(files, 'effect.ioShare'));
+  });
+
+  it('slips when a file does I/O with Promises', () => {
+    const files = [file(true, true), file(false, true)];
+    expect(value([...files, file(false, true)], 'effect.ioShare')).toBeLessThan(value(files, 'effect.ioShare') ?? 0);
+    expect(value([...files, file(false, true)], 'effect.promiseIo')).toBe(2);
+  });
+
+  it('reads no I/O at all as a share of 0', () => {
+    expect(value([file(false, false)], 'effect.ioShare')).toBe(0);
   });
 });
 
@@ -104,7 +147,7 @@ describe('render', () => {
   const card = (typeAssertions: number, commit: string): Scorecard => ({
     v: 1, at: Date.UTC(2026, 9, 12, 9), commit, branch: 'main', dirty: false, notes: [], frictions: [{ key: 'shell: bash exit code 1', sessions: 48 }],
     metrics: [...gateMetrics(gate), ...fenceMetrics([{
-      typeAssertions, nonNull: 0, explicitAny: 0, lintDisables: 0, tsSuppressions: 0, effectRuns: 0, importsEffect: false, machines: 0, importsFastCheck: false,
+      typeAssertions, nonNull: 0, explicitAny: 0, lintDisables: 0, tsSuppressions: 0, effectRuns: 0, importsEffect: false, doesIo: false, machines: 0, importsFastCheck: false,
     }]), { section: 'office', key: 'office.merged', label: 'PRs merged', value: 3, better: 'none', format: 'count' }],
   });
 

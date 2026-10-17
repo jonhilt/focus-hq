@@ -24,12 +24,20 @@ export interface SourceCounts {
   /** Calls that run an Effect (`runPromise`, `runSync`, `runFork`, `runCallback`, and their `…Exit`): each an edge into Promise land. */
   effectRuns: number;
   importsEffect: boolean;
+  /**
+   * Does I/O or concurrency itself: imports a Node module that reaches outside the process (fs, child_process, http…),
+   * awaits, or starts a timer, a Promise, an AbortController or a fetch. A file that doesn't only decides.
+   */
+  doesIo: boolean;
   /** XState machines created (`createMachine`). */
   machines: number;
   importsFastCheck: boolean;
 }
 
 const RUNS = /^run(Promise|Sync|Fork|Callback)(Exit)?$/;
+const IO_MODULES = /^(node:)?(fs|fs\/promises|child_process|http|https|http2|net|dgram|tls|worker_threads|readline)$/;
+const IO_CALLS = new Set(['setTimeout', 'setInterval', 'setImmediate', 'fetch']);
+const IO_NEWS = new Set(['Promise', 'AbortController']);
 
 const calleeName = (call: ts.CallExpression) => {
   const callee = call.expression;
@@ -38,12 +46,21 @@ const calleeName = (call: ts.CallExpression) => {
   return '';
 };
 
+/** `import type { A }` or `import { type A, type B }`: nothing comes in at runtime. */
+const typesOnly = (node: ts.ImportDeclaration) => {
+  const clause = node.importClause;
+  if (!clause) return false;
+  if (clause.isTypeOnly) return true;
+  const named = clause.namedBindings;
+  return !clause.name && !!named && ts.isNamedImports(named) && named.elements.every((e) => e.isTypeOnly);
+};
+
 /** Counts what `SourceCounts` lists in one file, from its syntax tree and comments, not by matching text. */
 export function scanSource(file: string, source: string): SourceCounts {
   const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
   const counts: SourceCounts = {
     typeAssertions: 0, nonNull: 0, explicitAny: 0, lintDisables: 0, tsSuppressions: 0,
-    effectRuns: 0, importsEffect: false, machines: 0, importsFastCheck: false,
+    effectRuns: 0, importsEffect: false, doesIo: false, machines: 0, importsFastCheck: false,
   };
   const walk = (node: ts.Node) => {
     if (ts.isAsExpression(node)) {
@@ -55,9 +72,13 @@ export function scanSource(file: string, source: string): SourceCounts {
       const name = calleeName(node);
       if (RUNS.test(name)) counts.effectRuns++;
       if (name === 'createMachine') counts.machines++;
-    } else if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+      if (IO_CALLS.has(name)) counts.doesIo = true;
+    } else if (ts.isAwaitExpression(node)) counts.doesIo = true;
+    else if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && IO_NEWS.has(node.expression.text)) counts.doesIo = true;
+    else if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
       const from = node.moduleSpecifier.text;
       if (from === 'effect' || from.startsWith('effect/')) counts.importsEffect = true;
+      if (IO_MODULES.test(from) && !typesOnly(node)) counts.doesIo = true;
       if (from === 'fast-check' || from === '@fast-check/vitest') counts.importsFastCheck = true;
     }
     ts.forEachChild(node, walk);
@@ -172,17 +193,26 @@ export function fenceMetrics(files: SourceCounts[]): Metric[] {
   ];
 }
 
-/** How far the server is along the Effect path: its files on Effect, and the edges where an Effect is run. */
+/**
+ * How far the server is along the Effect path. Effect is for the files that do I/O: a file that only decides (pure
+ * functions, an XState machine) stays plain and counts neither way. So: the share of the files doing I/O that are on
+ * Effect, the ones that do it with Promises instead, and the edges where an Effect is run.
+ */
 export function effectMetrics(server: SourceCounts[]): Metric[] {
   const onEffect = server.filter((f) => f.importsEffect).length;
+  const io = server.filter((f) => f.importsEffect || f.doesIo).length;
   return [
-    metric('effect', 'effect.files', 'Server files on Effect', onEffect, 'higher', 'count'),
-    metric('effect', 'effect.share', 'Share of server files on Effect', server.length ? onEffect / server.length : 0, 'higher', 'percent'),
+    metric('effect', 'effect.ioShare', 'Share of I/O files on Effect', io ? onEffect / io : 0, 'higher', 'percent'),
+    metric('effect', 'effect.promiseIo', 'I/O files outside Effect', promiseIo(server).length, 'lower', 'count'),
+    metric('effect', 'effect.files', 'Server files on Effect', onEffect, 'none', 'count'),
     metric('effect', 'effect.runs', 'Effect.run* calls (edges)', sum(server, 'effectRuns'), 'lower', 'count'),
     metric('effect', 'effect.runFiles', 'Files that run Effects', server.filter((f) => f.effectRuns > 0).length, 'lower', 'count'),
     metric('effect', 'effect.machines', 'XState machines', sum(server, 'machines'), 'none', 'count'),
   ];
 }
+
+/** The files doing I/O without Effect, by name: what's left on the path. */
+export const promiseIo = <F extends SourceCounts>(files: F[]): F[] => files.filter((f) => f.doesIo && !f.importsEffect);
 
 export interface CrapResults {
   functions: number;

@@ -19,7 +19,7 @@ import { noiseOf } from '../scorecard';
 import type { ScorecardNoise } from '../types';
 import { CRAP_LINE, fromIstanbul, functionsIn, isDemo, score } from './crapScore';
 import {
-  effectMetrics, eslintCounts, failedTests, fenceMetrics, gateMetrics, officeMetrics, render, renderNoise, scanSource, testMetrics, typecheckErrors,
+  effectMetrics, eslintCounts, failedTests, fenceMetrics, gateMetrics, officeMetrics, promiseIo, render, renderNoise, scanSource, testMetrics, typecheckErrors,
   type CrapResults, type GateResults, type GateStep, type Scorecard, type SourceCounts, type VitestReport,
 } from './scorecardRules';
 
@@ -115,6 +115,8 @@ function measure(): Scorecard {
   const source = code.filter((f) => !isTest(f.file));
   const server = source.filter((f) => f.file.startsWith('server/') && !isDemo(f.file));
   const tests = code.filter((f) => isTest(f.file));
+  const outside = promiseIo(server).map((f) => f.file);
+  if (outside.length) process.stderr.write(`\nServer files doing I/O outside Effect (${outside.length}):\n  ${outside.join('\n  ')}\n`);
 
   const now = Date.now();
   const { file: ledgerFile, events: ledger } = officeLedger();

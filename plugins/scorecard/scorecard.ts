@@ -127,7 +127,7 @@ export function changeWords(m: Metric, before: number): string {
 const HEADLINE: Record<ScorecardSection, { hero: string; trend?: string; also: string[] }> = {
   gate: { hero: 'gate.pass', trend: 'gate.seconds', also: ['typecheck.seconds', 'test.seconds', 'lint.seconds', 'build.seconds'] },
   fence: { hero: 'fence.typeAssertions', also: ['fence.nonNull', 'fence.explicitAny', 'fence.lintDisables', 'fence.tsSuppressions'] },
-  effect: { hero: 'effect.share', also: ['effect.files', 'effect.runs'] },
+  effect: { hero: 'effect.ioShare', also: ['effect.promiseIo', 'effect.runs'] },
   tests: { hero: 'crap.over', also: ['tests.total', 'tests.files'] },
   office: { hero: 'office.firstTime', also: ['office.merged', 'office.costPerMerge'] },
 };

@@ -103,12 +103,17 @@ export const METRIC_ABOUT: Record<string, MetricAbout> = {
     why: 'Each one hides a type error instead of fixing it.',
   },
 
-  'effect.files': { short: 'files on Effect', what: 'Server files that import Effect (demo code left out).', why: 'The migration’s progress, as a count.' },
-  'effect.share': {
-    short: 'of the server',
-    what: 'Server files that import Effect, as a share of all the server’s files (demo code left out).',
-    why: 'The migration’s progress: docs/effect-assessment.md has the path.',
+  'effect.ioShare': {
+    short: 'of I/O on Effect',
+    what: 'Server files on Effect, as a share of the server files that do I/O or concurrency: Effect’s, or Node’s fs, processes or network, `await`, timers, Promises (demo code left out).',
+    why: 'Effect is for I/O: lifetimes, interruption, typed failures. A file that only decides (pure functions, an XState machine) stays plain, so it counts neither way.',
   },
+  'effect.promiseIo': {
+    short: 'I/O outside Effect',
+    what: 'Server files that do I/O or concurrency without Effect. `pnpm run scorecard` names them.',
+    why: 'What’s left on the path: their failures are strings and their cleanup is by hand. Some stay on purpose (the Claude Agent SDK’s loop); a new one should be a choice.',
+  },
+  'effect.files': { short: 'files on Effect', what: 'Server files that import Effect (demo code left out).', why: 'Counted, not judged: it moves when code moves to a plugin, and more isn’t better for its own sake.' },
   'effect.runs': {
     short: 'run* edges',
     what: 'Calls that run an Effect: `runPromise`, `runFork`, `runSync`, `runCallback` and their `…Exit` forms.',
