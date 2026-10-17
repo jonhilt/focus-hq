@@ -40,6 +40,8 @@ describe('parseDrafts', () => {
   it('falls back to a pointer for an unknown kind, and gives up on nothing at all', () => {
     expect(parseDrafts({ summary: 's', drafts: [{ ...draft(['G1']), kind: 'essay' }] }, groups, id)?.drafts[0].kind).toBe('pointer');
     expect(parseDrafts(undefined, groups, id)).toBeUndefined();
+    expect(parseDrafts([{ summary: 's', drafts: [draft(['G1'])] }], groups, id)).toBeUndefined();
+    expect(parseDrafts({ summary: 's', drafts: [null, 'G1', [draft(['G1'])], draft(['G1'])] }, groups, id)?.drafts.map((d) => d.signatures)).toEqual([[groups[0].key]]);
     expect(parseDrafts({ drafts: [] }, groups, id)).toBeUndefined();
   });
 });

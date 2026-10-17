@@ -1,3 +1,4 @@
+import { fieldsOf } from '../../shared/records';
 import type { ClaudeTask } from '../../shared/types';
 
 // The task list an agent keeps for itself with Claude Code's task tools, followed from its session's messages: the
@@ -9,7 +10,6 @@ export const TASK_TOOLS = new Set(['TodoWrite', 'TaskCreate', 'TaskUpdate', 'Tas
 const STATUSES: ClaudeTask['status'][] = ['pending', 'in_progress', 'completed'];
 const status = (v: unknown, fallback: ClaudeTask['status']): ClaudeTask['status'] => STATUSES.find((s) => s === v) ?? fallback;
 const text = (v: unknown): string => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim() : '');
-const record = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
 // the input as the model sent it: Claude Code repairs `id`/`task_id` and `active_form` before it runs the tool, but the
 // stream carries them unrepaired
 const taskId = (input: Record<string, unknown>) => text(input.taskId) || text(input.id) || text(input.task_id);
@@ -26,12 +26,12 @@ export function applyTaskTool(tasks: ClaudeTask[], name: string, input: Record<s
     case 'TodoWrite': {
       const todos = Array.isArray(input.todos) ? input.todos : [];
       return todos
-        .map((t, i) => ({ id: String(i + 1), subject: text(record(t).content), status: status(record(t).status, 'pending'), activeForm: text(record(t).activeForm) || undefined }))
+        .map((t, i) => ({ id: String(i + 1), subject: text(fieldsOf(t).content), status: status(fieldsOf(t).status, 'pending'), activeForm: text(fieldsOf(t).activeForm) || undefined }))
         .filter((t) => t.subject);
     }
     // one more: its id comes back in the result
     case 'TaskCreate': {
-      const created = record(record(result).task);
+      const created = fieldsOf(fieldsOf(result).task);
       const id = text(created.id) || /#(\d+)/.exec(resultText)?.[1];
       const subject = text(input.subject) || text(created.subject);
       if (!id || !subject || tasks.some((t) => t.id === id)) return tasks;
@@ -40,7 +40,7 @@ export function applyTaskTool(tasks: ClaudeTask[], name: string, input: Record<s
     case 'TaskUpdate': {
       const id = taskId(input);
       const task = tasks.find((t) => t.id === id);
-      if (!task || record(result).success === false) return tasks;
+      if (!task || fieldsOf(result).success === false) return tasks;
       if (input.status === 'deleted') return tasks.filter((t) => t !== task);
       const next: ClaudeTask = {
         ...task,
@@ -52,11 +52,11 @@ export function applyTaskTool(tasks: ClaudeTask[], name: string, input: Record<s
     }
     // the list as Claude Code has it: what we followed gives way to it
     case 'TaskList': {
-      const listed = record(result).tasks;
+      const listed = fieldsOf(result).tasks;
       if (!Array.isArray(listed)) return tasks;
       return listed
         .map((t) => {
-          const r = record(t);
+          const r = fieldsOf(t);
           const id = text(r.id);
           return { id, subject: text(r.subject), status: status(r.status, 'pending'), activeForm: tasks.find((k) => k.id === id)?.activeForm };
         })

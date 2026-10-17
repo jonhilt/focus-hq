@@ -1,6 +1,7 @@
 // The TV studio (docs/studio.md): a scene script (scenes/*.yaml) the recorder plays against a demo office, its cues and
 // its beat sheet. Pure, so it's testable and shared by the recorder (scripts/studio.ts) and the browser's director.
 
+import { fieldsOf, isRecord } from './records';
 import { readScenario, type Scenario } from './scenarios';
 import { readSteps, type TrainingStep } from './trainingSteps';
 import { ACTIVE_STATUSES, type Agent, type Helper } from './types';
@@ -77,11 +78,11 @@ const seconds = (value: unknown, what: string, fallback: number): number => {
 
 /** A scene from its parsed YAML, or an error saying what's wrong with it. */
 export function readScene(raw: unknown): Scene {
-  if (!raw || typeof raw !== 'object') throw new Error('A scene is a YAML mapping, with a title, a goal and beats');
-  const s = raw as Record<string, unknown>;
+  const s = raw;
+  if (!isRecord(s)) throw new Error('A scene is a YAML mapping, with a title, a goal and beats');
   if (!Array.isArray(s.beats) || s.beats.length === 0) throw new Error('The scene needs some beats');
   const beats = s.beats.map((b: unknown, i): SceneBeat => {
-    const r = (b ?? {}) as Record<string, unknown>;
+    const r = fieldsOf(b);
     const which = `Beat ${i + 1}`;
     const beat: SceneBeat = {
       title: text(r.title, `${which}'s title`),

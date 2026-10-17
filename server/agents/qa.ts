@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Agent, FailedCheck, FileAccount, QaReport, QaReview, QaScreenshot, QaSpotCheck, Settings } from '../../shared/types';
 import { filesCovered, mustOpen, spotCheckUrl } from '../../shared/qa';
+import { fieldsOf, isRecord } from '../../shared/records';
 import type { IssueDetail, PullRequestDetail } from '../github/provider';
 import { truncate } from '../util';
 import { blocks, transcriptLines } from './transcript';
@@ -112,10 +113,10 @@ export function parseQaReport(structured: unknown, text = ''): QaReport | null {
       }
     }
   }
-  if (!raw || typeof raw !== 'object') return null;
-  const r = raw as Record<string, unknown>;
+  const r = raw;
+  if (!isRecord(r)) return null;
   if (r.verdict !== 'pass' && r.verdict !== 'fail') return null;
-  const list = (v: unknown) => (Array.isArray(v) ? (v as Record<string, unknown>[]).filter((x) => x && typeof x === 'object') : []);
+  const list = (v: unknown) => (Array.isArray(v) ? v.filter(isRecord) : []);
   const fix = typeof r.fixInstructions === 'string' && r.fixInstructions.trim() ? r.fixInstructions.trim() : undefined;
   const files = list(r.files)
     .map((f) => ({ file: String(f.file ?? '').trim(), tests: String(f.tests ?? '').trim(), checked: String(f.checked ?? '').trim() }))
@@ -165,7 +166,7 @@ export interface ToolCall {
 /** Each tool call in a Claude Code transcript (JSONL), in order. */
 export function toolCalls(jsonl: string): ToolCall[] {
   return [...transcriptLines(jsonl)].flatMap((line) =>
-    line.type === 'assistant' ? blocks(line).flatMap((b) => (b.type === 'tool_use' && b.name ? [{ name: b.name, input: (b.input ?? {}) as Record<string, unknown> }] : [])) : [],
+    line.type === 'assistant' ? blocks(line).flatMap((b) => (b.type === 'tool_use' && b.name ? [{ name: b.name, input: fieldsOf(b.input) }] : [])) : [],
   );
 }
 

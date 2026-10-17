@@ -23,6 +23,14 @@ describe('applyTaskTool', () => {
     expect(applyTaskTool(list, 'TodoWrite', {})).toEqual([]);
   });
 
+  it('passes over items and results that aren’t objects', () => {
+    expect(applyTaskTool(list, 'TodoWrite', { todos: [null, 'Read the code', ['Read the code'], { content: 'Ship it' }] })).toEqual([{ id: '4', subject: 'Ship it', status: 'pending', activeForm: undefined }]);
+    expect(applyTaskTool(list, 'TaskCreate', { subject: 'Run the tests' }, null, 'Task #7 created successfully').at(-1)?.id).toBe('7');
+    expect(applyTaskTool(list, 'TaskCreate', { subject: 'Run the tests' }, { task: 'Run the tests' }, 'Task #8 created successfully').at(-1)?.id).toBe('8');
+    expect(applyTaskTool(list, 'TaskList', {}, null)).toBe(list);
+    expect(applyTaskTool(list, 'TaskList', {}, { tasks: [null, '1', { id: '1', subject: 'Read the code' }] })).toEqual([{ id: '1', subject: 'Read the code', status: 'pending', activeForm: undefined }]);
+  });
+
   it('adds a TaskCreate with the id Claude Code gave it, from its output or, failing that, what it said', () => {
     expect(applyTaskTool(list, 'TaskCreate', { subject: 'Run the tests', activeForm: 'Running the tests' }, { task: { id: '3', subject: 'Run the tests' } })).toEqual([
       ...list,

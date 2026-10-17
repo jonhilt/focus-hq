@@ -32,6 +32,15 @@ describe('extractionInput', () => {
     );
   });
 
+  it('shows a call’s input as it came when it isn’t an object', () => {
+    n = 0;
+    const odd = [
+      line('assistant', [{ type: 'tool_use', id: 't1', name: 'Bash', input: 'ls' }, { type: 'tool_use', id: 't2', name: 'Read' }]),
+      line('user', [{ type: 'tool_result', tool_use_id: 't1', is_error: true, content: 'bad input' }, { type: 'tool_result', tool_use_id: 't2', is_error: true, content: 'no path' }]),
+    ].join('\n');
+    expect(extractionInput(odd, undefined, [])).toBe('[12:00] FAILED Bash: "ls" → bad input\n[12:00] FAILED Read: {} → no path');
+  });
+
   it('starts after the given line', () => {
     expect(extractionInput(transcript(), 'u3', [])).toBe('[12:03] CAPTAIN: go\n  (the agent had just said: “Shall I ship it?”)\n[12:04] AGENT: Lesson: always quote globs in zsh.');
   });
@@ -74,6 +83,14 @@ describe('checking what the reader found', () => {
     expect(found.get('S1')).toHaveLength(1);
     expect(found.get('S2')).toEqual([]);
     expect([...found.keys()]).toEqual(['S1', 'S2']);
+  });
+
+  it('passes over an answer, a span or a friction that isn’t an object', () => {
+    const batch = [{ label: 'S1', input: 'FAILED Bash: ls *.md → zsh: no matches found: *.md' }];
+    const zsh = { kind: 'shell', signature: 'zsh glob', quote: 'zsh: no matches found: *.md' };
+    expect(parseRead({ spans: [null, 'S1', ['S1'], { id: 'S1', frictions: [null, 'zsh', [zsh], zsh] }] }, batch).get('S1')).toEqual([{ ...zsh, signature: 'zsh glob' }]);
+    expect(parseRead(['spans'], batch).get('S1')).toEqual([]);
+    expect(parseRead('S1', batch).get('S1')).toEqual([]);
   });
 
   it('turns a signature into a few lowercase words', () => {

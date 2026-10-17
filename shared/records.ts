@@ -1,5 +1,6 @@
 // Records keyed by a union of strings, read and built without a cast at each place (lint forbids casting what
-// Object.keys/entries/fromEntries return): what each claims is here, with a test beside it.
+// Object.keys/entries/fromEntries return), and objects read from JSON, YAML or a model's output: what each claims is
+// here, with a test beside it.
 
 /**
  * A record's keys, as its key type. Only for a record written out with exactly its keys (a table of labels, say):
@@ -20,4 +21,17 @@ export function recordOf<K extends string, V>(keys: readonly K[], value: (key: K
 /** Whether `record` has a value for each of `keys`: for all of `K`, when `keys` lists every key of `K`. */
 export function hasEvery<K extends string, V>(record: Partial<Record<K, V>>, keys: readonly K[]): record is Record<K, V> {
   return keys.every((k) => k in record);
+}
+
+/**
+ * Whether a value read from outside (parsed JSON or YAML, a model's output, a tool call's input) is an object whose
+ * fields can be read, each still unknown: not null, an array or anything else `typeof` calls an object.
+ */
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** The value's fields to read, or none when it isn't an object (null, a string, a list…). */
+export function fieldsOf(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
 }

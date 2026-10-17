@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasEvery, keysOf, recordOf } from './records';
+import { fieldsOf, hasEvery, isRecord, keysOf, recordOf } from './records';
 
 type Tone = 'good' | 'bad' | 'off';
 
@@ -32,5 +32,27 @@ describe('hasEvery', () => {
   it('holds when the record has each key, even one whose value is undefined, and not when one is missing', () => {
     expect(hasEvery<Tone, number | undefined>({ good: 1, bad: 2, off: undefined }, ['good', 'bad', 'off'])).toBe(true);
     expect(hasEvery<Tone, number>({ good: 1, off: 3 }, ['good', 'bad', 'off'])).toBe(false);
+  });
+});
+
+describe('isRecord', () => {
+  it('is true of an object, empty or not', () => {
+    expect(isRecord({})).toBe(true);
+    expect(isRecord({ at: 1 })).toBe(true);
+  });
+
+  it('is false of null, a list and everything that isn’t an object', () => {
+    for (const v of [null, undefined, [], [1], 'text', 0, true]) expect(isRecord(v)).toBe(false);
+  });
+});
+
+describe('fieldsOf', () => {
+  it('gives an object as it is', () => {
+    const o = { quote: 'x' };
+    expect(fieldsOf(o)).toBe(o);
+  });
+
+  it('gives no fields for anything else', () => {
+    for (const v of [null, undefined, ['quote'], 'quote', 3]) expect(fieldsOf(v)).toEqual({});
   });
 });

@@ -31,6 +31,10 @@ describe('readScene', () => {
   });
 
   it('names what’s wrong', () => {
+    expect(() => readScene(['T', 'G'])).toThrow(/A scene is a YAML mapping/);
+    expect(() => readScene(null)).toThrow(/A scene is a YAML mapping/);
+    expect(() => readScene({ title: 'T', goal: 'G', beats: [null] })).toThrow(/Beat 1's title/);
+    expect(() => readScene({ title: 'T', goal: 'G', beats: [beat, 'Opening'] })).toThrow(/Beat 2's title/);
     expect(() => readScene({ title: 'T', goal: 'G', beats: [{ ...beat, shot: 'sky' }] })).toThrow(/Beat 1's shot is "sky"/);
     expect(() => readScene({ title: 'T', goal: 'G', beats: [{ ...beat, do: 'reply' }] })).toThrow(/needs what to say/);
     expect(() => readScene({ title: 'T', goal: 'G', beats: [{ ...beat, insert: 'explainer' }] })).toThrow(/has none/);

@@ -1,4 +1,5 @@
 import type { QaBadgeState } from './qa';
+import { isRecord } from './records';
 import type { AgentTask, ArchivedGoal, GoalRecord, TriageAction } from './types';
 
 // The ship's log of how work went: what QA said, who merged what and whether QA had passed it, conflicts, triage,
@@ -180,14 +181,14 @@ export function checkLedger(text: string): LedgerCheck {
   let sawV2 = false;
   for (const [i, line] of lines.entries()) {
     if (!line.trim()) continue;
-    let raw: Record<string, unknown>;
+    let raw: unknown;
     try {
-      raw = JSON.parse(line) as Record<string, unknown>;
+      raw = JSON.parse(line);
     } catch {
       check.problems.push(`line ${i + 1} isn’t readable`);
       continue;
     }
-    if (typeof raw.at !== 'number' || typeof raw.kind !== 'string') {
+    if (!isRecord(raw) || typeof raw.at !== 'number' || typeof raw.kind !== 'string') {
       check.problems.push(`line ${i + 1} isn’t an event`);
       continue;
     }

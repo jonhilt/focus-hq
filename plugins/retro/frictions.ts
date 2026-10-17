@@ -1,4 +1,4 @@
-import { type Block, blocks, clip, FRICTION_KINDS, type Friction, keysOf, type LedgerEvent, messageFrom, resultText, transcriptLines } from '../../plugin-api/server';
+import { type Block, blocks, clip, fieldsOf, FRICTION_KINDS, type Friction, isRecord, keysOf, type LedgerEvent, messageFrom, resultText, transcriptLines } from '../../plugin-api/server';
 
 // What the retro's reader reads of each session's span, and what's kept of its answer. Code supplies the facts
 // (server/agents/sessionDigest.ts); at retro time a strong model reads the spans not read yet, a batch at a time, and only finds and
@@ -12,8 +12,8 @@ const minute = (at?: string) => (at ? at.slice(11, 16) : '--:--');
 
 /** What a call did, in a line: a Bash command, or the tool and its input. */
 function callLine(b: Block): string {
-  const input = (b.input ?? {}) as Record<string, unknown>;
-  return typeof input.command === 'string' ? `Bash: ${input.command}` : `${b.name}: ${JSON.stringify(input)}`;
+  const input = b.input ?? {};
+  return isRecord(input) && typeof input.command === 'string' ? `Bash: ${input.command}` : `${b.name}: ${JSON.stringify(input)}`;
 }
 
 /**
@@ -129,7 +129,7 @@ export function signatureOf(text: string): string {
 export function checkFrictions(found: unknown, input: string): Friction[] {
   const text = squash(input);
   return (Array.isArray(found) ? found : []).flatMap((f): Friction[] => {
-    const r = (f ?? {}) as Record<string, unknown>;
+    const r = fieldsOf(f);
     const quote = squash(str(r.quote));
     const kind = KINDS.find((k) => k === r.kind);
     const signature = signatureOf(str(r.signature));
@@ -139,8 +139,8 @@ export function checkFrictions(found: unknown, input: string): Friction[] {
 
 /** The reader's answer for a batch: each span's checked frictions by its label (none for a span it didn't list). */
 export function parseRead(out: unknown, batch: { label: string; input: string }[]): Map<string, Friction[]> {
-  const spans = ((out ?? {}) as { spans?: unknown }).spans;
-  const listed = Array.isArray(spans) ? (spans as { id?: unknown; frictions?: unknown }[]) : [];
+  const spans = fieldsOf(out).spans;
+  const listed = Array.isArray(spans) ? spans.filter(isRecord) : [];
   return new Map(batch.map((b) => [b.label, listed.filter((s) => s.id === b.label).flatMap((s) => checkFrictions(s.frictions, b.input))]));
 }
 

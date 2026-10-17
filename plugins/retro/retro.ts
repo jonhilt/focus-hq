@@ -1,4 +1,4 @@
-import { FRICTION_KINDS, type FrictionGroup, type GoalRecord, type LedgerEvent, reportCard, reportLines } from '../../plugin-api/shared';
+import { fieldsOf, FRICTION_KINDS, type FrictionGroup, type GoalRecord, isRecord, type LedgerEvent, reportCard, reportLines } from '../../plugin-api/shared';
 import { FIX_KINDS, type RetroDraft } from './shared';
 
 // The chief engineer's retro, the pure half. The retro reads the ledger's session digests, not transcripts: code
@@ -122,11 +122,11 @@ function evidence(groups: FrictionGroup[]): string {
  * one draft at most. The body gets the quoted evidence from code.
  */
 export function parseDrafts(out: unknown, groups: FrictionGroup[], newId: () => string): { summary: string; drafts: RetroDraft[] } | undefined {
-  if (!out || typeof out !== 'object') return undefined;
-  const o = out as Record<string, unknown>;
+  if (!isRecord(out)) return undefined;
+  const o = out;
   const used = new Set<number>();
   const drafts = (Array.isArray(o.drafts) ? o.drafts : []).flatMap((d): RetroDraft[] => {
-    const r = (d ?? {}) as Record<string, unknown>;
+    const r = fieldsOf(d);
     const picked = (Array.isArray(r.groups) ? r.groups : [])
       .map((g) => Number(/^G(\d+)$/i.exec(str(g))?.[1]) - 1)
       .filter((i) => i >= 0 && i < groups.length && !used.has(i));

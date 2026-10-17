@@ -46,10 +46,11 @@ describe('parseQaReport', () => {
     expect(parseQaReport({ verdict: 'maybe', summary: 'hmm' })).toBeNull();
     expect(parseQaReport(undefined, 'I ran out of time.')).toBeNull();
     expect(parseQaReport(undefined, '{not json')).toBeNull();
+    expect(parseQaReport(['pass'])).toBeNull();
   });
 
   it('cleans up loose fields', () => {
-    const parsed = parseQaReport({ verdict: 'pass', checks: [{ name: ' A ', result: 'weird' }, null, 'x'], commands: 'nope', fixInstructions: 'ignored on a pass' });
+    const parsed = parseQaReport({ verdict: 'pass', checks: [{ name: ' A ', result: 'weird' }, null, 'x', ['B']], commands: 'nope', fixInstructions: 'ignored on a pass' });
     expect(parsed).toEqual({ verdict: 'pass', summary: '', checks: [{ name: 'A', result: 'pass', details: '' }], commands: [], fixInstructions: undefined, captions: [] });
   });
 
@@ -412,6 +413,8 @@ describe('what QA actually opened', () => {
       JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', content: 'x' }] } }),
     ].join('\n');
     expect(toolCalls(jsonl)).toEqual([{ name: 'Read', input: { file_path: 'a.ts' } }]);
+    const odd = (input: unknown) => JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', input }] } });
+    expect(toolCalls([odd('ls'), odd(['ls']), odd(null)].join('\n')).map((c) => c.input)).toEqual([{}, {}, {}]);
     expect(['server/crew.ts', 'config/app.yml', 'package.json'].every(mustOpen)).toBe(true);
     expect(['server/crew.test.ts', 'docs/qa.md', 'pnpm-lock.yaml', 'client/public/deck.glb'].some(mustOpen)).toBe(false);
   });

@@ -68,6 +68,12 @@ describe('checkLedger', () => {
     expect(checkLedger(text(1, 2) + 'not json\n' + text(5, 5)).problems).toEqual(['line 3 isn’t readable', 'lines 3–4 are missing', 'line 5 repeats or goes back to number 5']);
   });
 
+  it('reports a line that parses but isn’t an object, rather than failing to read the ledger', () => {
+    const check = checkLedger(text(1) + 'null\n' + '[1]\n' + '"text"\n' + text(2));
+    expect(check.problems).toEqual(['line 2 isn’t an event', 'line 3 isn’t an event', 'line 4 isn’t an event']);
+    expect(check.events.map((e) => e.seq)).toEqual([1, 2]);
+  });
+
   it('numbers lines in the first format, to be rewritten in this one', () => {
     const v1 = [event(1), event(2)].map(({ seq: _s, ...e }) => JSON.stringify(e) + '\n').join('');
     const check = checkLedger(v1);
