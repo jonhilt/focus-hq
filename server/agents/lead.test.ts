@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadAgent, LeadWork } from '../../shared/types';
-import { afterLanding, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, backgroundChange, backgroundStop, helperChange, taskChange, workflowChange, notedGoal, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, openPr, pickStation, qaVerdictNote, queuedStart, shippedSha, shipPlan, shipBranch, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
+import { afterLanding, afterPush, landedMidShipNote, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, backgroundChange, backgroundStop, helperChange, taskChange, workflowChange, notedGoal, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, openPr, pickStation, qaVerdictNote, queuedStart, shippedSha, shipPlan, shipBranch, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -107,6 +107,32 @@ describe('slices', () => {
     const prs = [{ repo: 'acme/web', number: 12, url: 'u12', sha: 'aaa', outcome: 'closed' as const }, { repo: 'acme/web', number: 13, url: 'u13', sha: 'bbb' }];
     expect(shippedSha({ ...work, prs }, 'acme/web')).toBe('bbb');
     expect(shippedSha(work, 'acme/api')).toBeUndefined();
+  });
+});
+
+describe('afterPush', () => {
+  const pr = (number: number, more: Partial<LeadWork['prs'][number]> = {}) => ({ repo: 'acme/web', number, url: `u${number}`, sha: 'aaa', ...more });
+
+  it('updates the pull request still open', () => {
+    expect(afterPush(pr(12), { prs: [pr(12)] }, 'acme/web')).toEqual({ kind: 'update', pr: pr(12) });
+  });
+
+  it('never puts back as open one that merged or closed while the push was under way', () => {
+    expect(afterPush(pr(12), { prs: [pr(12, { outcome: 'merged' })] }, 'acme/web')).toEqual({ kind: 'landed', pr: pr(12, { outcome: 'merged' }) });
+    expect(afterPush(pr(12), { prs: [pr(12, { outcome: 'closed' })] }, 'acme/web')).toEqual({ kind: 'landed', pr: pr(12, { outcome: 'closed' }) });
+  });
+
+  it('finds or opens one when none was open as the ship started', () => {
+    expect(afterPush(undefined, { prs: [] }, 'acme/web')).toEqual({ kind: 'open' });
+    // a merged one from before the ship started: the repo moved to a fresh branch, which gets its own
+    expect(afterPush(undefined, { prs: [pr(12, { outcome: 'merged' })] }, 'acme/web')).toEqual({ kind: 'open' });
+    // another repo's open one leaves this one to open its own
+    expect(afterPush(undefined, { prs: [pr(7, { repo: 'acme/api' })] }, 'acme/web')).toEqual({ kind: 'open' });
+  });
+
+  it('tells the lead where what the push added goes', () => {
+    expect(landedMidShipNote({ repo: 'acme/web', number: 12, outcome: 'merged' })).toMatch(/acme\/web#12 was merged while the ship was pushing.*carries them over/);
+    expect(landedMidShipNote({ repo: 'acme/web', number: 12, outcome: 'closed' })).toMatch(/was closed.*opens a new pull request/);
   });
 });
 

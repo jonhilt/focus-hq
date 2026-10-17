@@ -101,8 +101,10 @@ export const sliceMachine = setup({
     shipping: {
       on: {
         pr: { actions: assign(({ context, event: { type: _, kind: __, ...pr } }) => ({ prs: [...context.prs.filter((p) => !same(p, pr)), pr] })) },
-        shipped: { target: 'in-review', actions: assign({ ship: undefined }) },
+        // every one landed while the ship was under way (the captain merged as it pushed): the slice has landed
+        shipped: [{ guard: 'every one landed', target: 'landed', actions: assign({ ship: undefined }) }, { target: 'in-review', actions: assign({ ship: undefined }) }],
         'ship-ended': [
+          { guard: 'every one landed', target: 'landed', actions: assign({ ship: undefined }) },
           { guard: 'pull requests open', target: 'in-review', actions: assign({ ship: undefined }) },
           { target: 'working', actions: assign({ ship: undefined }) },
         ],

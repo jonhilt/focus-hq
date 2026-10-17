@@ -88,6 +88,31 @@ export const shippedSha = (work: LeadWork, repo: string): string | undefined => 
 /** The lead's open pull request in a repo, if the slice has one. */
 export const openPr = (work: Pick<LeadWork, 'prs'>, repo: string): LeadPr | undefined => work.prs.find((p) => p.repo === repo && !p.outcome);
 
+/**
+ * What a ship does with a repo's pull request once its push is done, from the one open when the ship started (`before`)
+ * and the lead's pull requests as they are now: the captain may have merged or closed it while the push was under way.
+ * One still open is updated; one that landed meanwhile stays landed (never put back as open), and what the push added
+ * to its branch hasn't shipped: it's carried as unshipped commits are (onto a fresh branch at the next ship, or onto the
+ * next slice). With none open before, the office finds or opens one.
+ */
+export type AfterPush = { kind: 'update'; pr: LeadPr } | { kind: 'landed'; pr: LeadPr & { outcome: 'merged' | 'closed' } } | { kind: 'open' };
+
+export function afterPush(before: LeadPr | undefined, now: Pick<LeadWork, 'prs'>, repo: string): AfterPush {
+  const open = openPr(now, repo);
+  if (open) return { kind: 'update', pr: open };
+  const landed = before && now.prs.find((p) => p.repo === before.repo && p.number === before.number);
+  if (landed?.outcome) return { kind: 'landed', pr: { ...landed, outcome: landed.outcome } };
+  return { kind: 'open' };
+}
+
+/** What the lead hears about a pull request that merged or closed while their ship was pushing to it. */
+export function landedMidShipNote(pr: Pick<LeadPr, 'repo' | 'number'> & { outcome: 'merged' | 'closed' }): string {
+  const then = pr.outcome === 'merged'
+    ? 'Those commits haven\'t shipped: the office carries them over (onto a fresh branch when you ship again, or onto the next slice once this one has landed).'
+    : 'Those commits are still on its branch: ship again and the office opens a new pull request from it.';
+  return `${pr.repo}#${pr.number} was ${pr.outcome} while the ship was pushing to it, so what this ship pushed isn't in it. ${then}`;
+}
+
 /** The branch one of the lead's repos is on: the goal's, unless the office started it a fresh one (`needsFreshBranch`). */
 export const repoBranch = (repo: Pick<LeadWork['repos'][number], 'branch'>, branch: string): string => repo.branch ?? branch;
 

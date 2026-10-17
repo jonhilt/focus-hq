@@ -30,6 +30,15 @@ describe('a goal’s slice journal', () => {
     expect(again.prs.find((p) => p.number === 4)?.sha).toBe('def');
   });
 
+  it('has landed once a ship ends with every pull request merged or closed while it was under way', () => {
+    const shipping: SliceFact[] = [...shipped, { kind: 'shipping', title: 'More', summary: 'z' }];
+    const both: SliceFact[] = [{ kind: 'landed', repo: 'o/web', number: 4, merged: true }, { kind: 'landed', repo: 'o/api', number: 7, merged: false }];
+    expect(foldSlice([...shipping, ...both, { kind: 'shipped' }])).toMatchObject({ phase: 'landed', ship: undefined });
+    expect(foldSlice([...shipping, ...both, { kind: 'ship-ended' }])).toMatchObject({ phase: 'landed', ship: undefined });
+    // one still open: in review
+    expect(foldSlice([...shipping, both[0], { kind: 'shipped' }]).phase).toBe('in-review');
+  });
+
   it('moves on from a journal that began before slices had one', () => {
     expect(foldSlice([{ kind: 'moving', ...moving }, { kind: 'moved' }])).toMatchObject({ phase: 'working', slice: 2 });
   });

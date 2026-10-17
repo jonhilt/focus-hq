@@ -93,12 +93,9 @@ describe('a lead’s slice after Focus restarts', () => {
 });
 
 describe('a lead’s slice when a pull request lands as they ship', () => {
-  // A known bug, kept failing on purpose until it's fixed (it.fails passes while the test fails, and fails once it
-  // passes): a ship works from the slice's pull requests as they were when it started, so a pull request that merges
-  // while it's pushing is "updated" after it merged: its `pr` fact puts it back in the slice journal as open, forgetting
-  // that it landed, and what was pushed onto its merged branch never reaches review. Found by checkAtOnce
-  // (sliceInvariants.test.ts, docs/invariants.md#found-on-main).
-  it.fails('still knows a pull request merged that merged while the lead was shipping', async () => {
+  // A ship works from the slice's pull requests as they were when it started: one the captain merges while it's pushing
+  // stays merged, and what was pushed onto its branch is carried as unshipped (docs/invariants.md#found-on-main).
+  it('still knows a pull request merged that merged while the lead was shipping', async () => {
     // the push to hold up, once one's asked for: the others go straight through
     let hold = false;
     let release = () => undefined as void;
@@ -119,6 +116,10 @@ describe('a lead’s slice when a pull request lands as they ship', () => {
     release();
     await again;
     expect(o.store.slice(agent.id).prs.find((p) => p.repo === first.repo && p.number === first.number)?.outcome).toBe('merged');
+    expect(o.store.agent(agent.id).lead!.prs.find((p) => p.repo === first.repo && p.number === first.number)?.outcome).toBe('merged');
+    // what was pushed onto its branch hasn't shipped: the shipped commit is still the one that merged
+    expect(o.store.slice(agent.id).prs.find((p) => p.repo === first.repo && p.number === first.number)?.sha).toBe(first.sha);
+    expect(await again).toContain(`${first.repo}#${first.number} was merged while the ship was pushing to it`);
   });
 });
 

@@ -60,14 +60,13 @@ interface Kept {
 const pr = (p: { repo: string; number: number; outcome?: string }) => `${p.repo}#${p.number}${p.outcome ? ` ${p.outcome}` : ''}`;
 
 /**
- * The lead's slices, from a goal just set up, or (`shipped`) with its first slice shipped (and their turn ended). `mergesMidShip`: whether
- * the captain can merge a pull request while the lead's ship is under way (a known race, below). `only`: the actions
+ * The lead's slices, from a goal just set up, or (`shipped`) with its first slice shipped (and their turn ended). `only`: the actions
  * offered, by name, when a check is after one thing. `landsMidTurn`: whether the captain can merge the slice's last pull request while the lead's turn
  * is under way. The office moves a landed slice on at the start of the lead's next turn, and a restart starts one (the
  * resumed turn), so a slice that landed mid-turn moves on a turn early after a restart: by design, and nothing half-done,
  * but not what the rule for a restart allows. The restart check leaves that case out; the check for two at once has it.
  */
-const slices = ({ landsMidTurn, mergesMidShip = true, shipped = false, only }: { landsMidTurn: boolean; mergesMidShip?: boolean; shipped?: boolean | 'and their turn ended'; only?: RegExp }): Subject<Kept> => ({
+const slices = ({ landsMidTurn, shipped = false, only }: { landsMidTurn: boolean; shipped?: boolean | 'and their turn ended'; only?: RegExp }): Subject<Kept> => ({
   name: 'slices',
   start: async (start) => {
     // GitHub, kept across lives as GitHub keeps it: the pull requests the office opens asked for through `later`
@@ -157,7 +156,6 @@ const slices = ({ landsMidTurn, mergesMidShip = true, shipped = false, only }: {
             run: () => {
               // merged by the time it's taken (two at once)
               if (p.merged) throw new Error('already merged');
-              if (!mergesMidShip && shipping) throw new Error('not while the lead is shipping');
               const rest = (store.agent(id).lead?.prs ?? []).filter((q) => !q.outcome && !(q.repo === p.repo && q.number === p.number));
               if (!landsMidTurn && !rest.length && o.claude.turns.some((t, i) => !t.stopped && !ended.has(i))) throw new Error('not while the lead’s turn is under way');
               p.merged = true;
@@ -229,16 +227,14 @@ describe('a lead’s slices, under the office’s two rules', () => {
     await checkRestart(slices({ landsMidTurn: false, shipped: 'and their turn ended', only: /merges/ }), { runs: 15, prefix: 1 });
   });
 
-  // fails on a known bug, on purpose until it's fixed: a pull request that merges while the lead is shipping is put back
-  // in the slice journal as open (docs/invariants.md#found-on-main; the same bug's own test is in sliceRecovery.test.ts).
-  // From a shipped slice, straight into a ship and a merge at once, so it finds it every time; fold it back into the
-  // fuller check below (with merges mid-ship) once it's fixed
-  it.fails('end a ship and a merge at once as one after the other would', async () => {
+  // a pull request that merges while the lead is shipping stays merged (docs/invariants.md#found-on-main; its own test
+  // is in sliceRecovery.test.ts). From a shipped slice, straight into a ship and a merge at once, so every run tries it
+  it('end a ship and a merge at once as one after the other would', async () => {
     await checkAtOnce(slices({ landsMidTurn: true, shipped: true, only: /ships|merges/ }), { runs: 30, prefix: 0 });
   });
 
-  // everything else at once, from a goal just set up: the known race above left out
+  // everything at once, from a goal just set up
   it('end two things at once as one after the other would', async () => {
-    await checkAtOnce(slices({ landsMidTurn: true, mergesMidShip: false }), { runs: 15 });
+    await checkAtOnce(slices({ landsMidTurn: true }), { runs: 15 });
   });
 });

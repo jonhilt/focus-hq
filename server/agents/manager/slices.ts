@@ -3,7 +3,7 @@ import { autoQaFor, sameCommit } from '../../../shared/qa';
 import type { Agent, LeadAgent } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
 import { errorMessage, newId } from '../../util';
-import { afterLanding, hasLeadWork, sliceLanded, carriedNote, behindNote, everyPr, heldBack, leadPrBody, leadWorktreeId, newSliceNote, notShipped, openPr, reposBackNote, shipped, shippedSha, shipPlan, shipBranch, sliceBranch, type FreshBranch, freshBranchNote, needsFreshBranch, repoBranch } from '../lead';
+import { afterLanding, afterPush, landedMidShipNote, hasLeadWork, sliceLanded, carriedNote, behindNote, everyPr, heldBack, leadPrBody, leadWorktreeId, newSliceNote, notShipped, openPr, reposBackNote, shipped, shippedSha, shipPlan, shipBranch, sliceBranch, type FreshBranch, freshBranchNote, needsFreshBranch, repoBranch } from '../lead';
 import { repoFolders } from '../planner';
 import { type Moving, reconciledPrs, sliceRecovery } from '../sliceJournal';
 import { nextWaypoints, shippedWaypoint } from '../waypoints';
@@ -218,7 +218,14 @@ export class Slices extends Part {
         this.update(agent, { status: 'pushing', activity: `Shipping ${s.repo}` });
         this.print(agent, [{ kind: 'system', text: `✻ Pushing ${s.branch} in ${s.repo}` }]);
         yield* this.retrying(agent, `the push in ${s.repo}`, workspace.push(s.dir, s.branch));
-        const found = openPr(work, s.repo) ?? (yield* this.retrying(agent, 'looking for the pull request', github.findPullRequest(s.repo, s.branch)));
+        // the captain may have merged or closed it while the push was under way: as the lead's pull requests are now
+        const next = afterPush(openPr(work, s.repo), agent.lead, s.repo);
+        if (next.kind === 'landed') {
+          lines.push(landedMidShipNote(next.pr));
+          this.print(agent, [{ kind: 'system', text: `✻ ${s.repo}#${next.pr.number} was ${next.pr.outcome} while the ship was pushing to it` }]);
+          continue;
+        }
+        const found = next.kind === 'update' ? next.pr : yield* this.retrying(agent, 'looking for the pull request', github.findPullRequest(s.repo, s.branch));
         let pr: { number: number; url: string };
         if (found) {
           pr = found;
