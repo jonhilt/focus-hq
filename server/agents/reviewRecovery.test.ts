@@ -105,4 +105,26 @@ describe('a QA review after Focus restarts', () => {
     after.claude.turns[0].end({ ok: true, summary: '', structured: pass });
     await until(() => before.store.reviews.get(key)?.status === 'passed');
   });
+
+  // A known bug, kept failing on purpose until it's fixed (it.fails passes while the test fails, and fails once it
+  // passes): a verdict that reached the pull request as the office went down is posted again after the restart, as
+  // the office can't tell it went up (GitHub's service has no way to read a pull request's comments back). Found by
+  // checkRestart (docs/invariants.md#found-on-main).
+  it.fails('doesn’t post a verdict again that reached the pull request just before the office went down', async () => {
+    // the comment goes up, and the office goes down before it hears so
+    const posted: string[] = [];
+    const before = office(workspace, commenting((body) => Effect.sync(() => posted.push(body)).pipe(Effect.andThen(Effect.never))));
+    const [pr] = await pullRequests();
+    const key = prKey(pr.repo, pr.number);
+    before.agents.requestReview(before.project.id, pr.repo, pr.number, pr.title);
+    await until(() => before.claude.turns.length === 1);
+    before.claude.turns[0].end({ ok: true, summary: '', structured: pass });
+    await until(() => posted.length === 1);
+
+    before.agents.shutDown();
+    const after = restarted(before.store, workspace, commenting((body) => Effect.sync(() => (posted.push(body), 'https://github.com/c/1'))));
+    after.agents.recover();
+    await until(() => before.store.reviews.get(key)?.status === 'passed');
+    expect(posted).toHaveLength(1);
+  });
 });

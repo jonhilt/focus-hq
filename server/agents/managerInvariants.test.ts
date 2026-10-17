@@ -44,19 +44,21 @@ const lead: Subject<Said> = {
     const life = (o: Pick<ReturnType<typeof office>, 'agents' | 'claude'>): Running<Said> => {
       // the turns this life's Claude Code has had ended: a turn ends once
       const ended = new Set<number>();
+      // the lead's turn under way, ended once: with none under way, there's nothing to end
       const turn = () => {
         const at = o.claude.turns.findIndex((t, i) => !t.stopped && !ended.has(i));
-        if (at >= 0) ended.add(at);
-        return o.claude.turns[at];
+        const t = o.claude.turns[at];
+        if (!t) throw new Error('no turn under way');
+        ended.add(at);
+        return t;
       };
       return {
         actions: () => [
-          { name: 'the turn ends', run: () => turn()?.end({ ok: true, summary: 'done', started: true }) },
+          { name: 'the turn ends', run: () => turn().end({ ok: true, summary: 'done', started: true }) },
           {
             name: 'the turn ends on the plan’s limit',
             run: () => {
               const t = turn();
-              if (!t) return;
               // a long conversation: picking it up on the key would cost too much
               t.hooks.context?.({ percent: 60, tokens: 600_000, max: 1_000_000 });
               keyFallback.limitHit(Date.now() + 60 * 60_000);

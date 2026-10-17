@@ -16,7 +16,11 @@ Most of the lifecycle and race bugs that got past review here broke one of two r
 | `restart(later)` | the office going down and starting again on what it kept |
 | `close()` | puts it away once checked, so runs don't hear each other |
 
-fast-check picks a few actions to reach a state, then the action under test, and its scheduler picks when each piece of deferred work finishes, so a restart can fall before an action starts, after it starts, or between any two of its steps, and two actions can interleave any way. The reference states (never started, finished, one then the other) come from running the same actions one at a time on a fresh part. A failure says what it did, what it settled to and what it should have been, and prints fast-check's seed and path; `path` in the options replays that one run alone. Runs are seeded from `FOCUS_TEST_SEED`, as every test is.
+fast-check picks a few actions to reach a state, then the action under test, and its scheduler picks when each piece of deferred work finishes, so a restart can fall before an action starts, after it starts, or between any two of its steps, and two actions can interleave any way. After a restart it takes a few more actions too, since a restart that loses work (a queued review never started again) can look the same until something should have followed on. The reference states (never started, finished, one then the other, each followed by the same actions) come from running the same actions one at a time on a fresh part. A failure says what it did, what it settled to and what it should have been, and prints fast-check's seed and path; `path` in the options replays that one run alone. Runs are seeded from `FOCUS_TEST_SEED`, as every test is.
+
+What a part hands to `later` is what it asks of the world outside: a model's answer, a comment on GitHub, a checkout, a push. When the office goes down with one of those under way, the request still lands out there (the comment still goes up) but the office never hears back. That's the case a restart most often gets wrong, and the harness models it. Hand every slow outside step to `later`, including ones the demo makes slow on purpose (the demo workspace sleeps to look real): left as real timers, the part looks settled before it's done.
+
+**Describe a part so it can fail.** A description that never reaches the part's interesting states passes both rules and proves nothing. QA reviews' first description did exactly that: it never got a review past the queue, because its `settle` gave up before QA's seat started. Give each description a plain test that it reaches them (as `reviewInvariants.test.ts` does), and before trusting a pass, break the part on purpose and see the check fail.
 
 ## Where it's held so far
 
@@ -25,6 +29,7 @@ fast-check picks a few actions to reach a state, then the action under test, and
 | a goal's lead (held for the plan's limit, its run) | `server/agents/managerInvariants.test.ts` | restart |
 | the cartography plugin's kept diagrams | `plugins/cartography/invariants.test.ts` | both |
 | the retro plugin's chief engineer's decisions | `plugins/retro/invariants.test.ts` | both |
+| QA reviews (asked for, failed, passed, posted on the pull request) | `server/agents/reviewInvariants.test.ts` | both |
 
 `server/agents/invariants.test.ts` holds the harness itself to them, on a toy with each kind of flaw planted on purpose.
 
@@ -42,6 +47,10 @@ Six of the corpus's lifecycle and race bugs still reverse cleanly onto today's c
 | f8cae72 | lifecycle | (neither rule: QA re-testing at the base's merge is a behaviour, not a state) | |
 
 So 4 of the 4 bugs in parts it describes, each with the same outcome as the original bug, though not always the same path (740f2d8 was fixed for two accepts at once, and the check found it through an accept and a reject). Of the four, the replay had the commit behind 185513c to review, and QA missed it both as it is and when hunting with proof.
+
+## Found on main
+
+**A verdict posted twice.** If the office goes down just after GitHub takes QA's comment and before it records that it did, the restart posts the same verdict on the pull request again: the review journal says "reported, posting", and the office has no way to read a pull request's comments back to see it went up. The review check found it; `reviewRecovery.test.ts` holds it in a plain test. Both are marked `it.fails` until it's fixed (fixing it means a GitHub call to find an existing comment, and a mark in QA's comment to find it by), so they pass while the bug is there and fail once it's gone, to be turned back.
 
 ## What it can't tell
 

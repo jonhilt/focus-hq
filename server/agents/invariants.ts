@@ -15,7 +15,8 @@
 import fc from 'fast-check';
 import { isDeepStrictEqual } from 'node:util';
 
-/** Defers a part's own async work, so the harness decides when it finishes; outside the harness, it runs at once. */
+/** Defers a part's own async work (a model answering, a request to GitHub), so the harness decides when it finishes;
+ *  outside the harness, it runs at once. `work` is what happens out there, its result what the part hears back. */
 export type Later = <T>(label: string, work: () => Promise<T>) => Promise<T>;
 
 export const now: Later = (_label, work) => work();
@@ -103,6 +104,14 @@ async function inTurn<D>(subject: Subject<D>, picks: number[], named: string[] =
 /** A turn of the event loop: what an action starts reaches the scheduler a few microtasks after it's called. */
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
+/** Whether the part hands the scheduler a deferred step soon (a tenth of a second at most): its async work can take
+ *  many turns of the event loop, and a timer or two, before it gets that far. */
+async function deferredSoon(s: fc.Scheduler): Promise<boolean> {
+  for (let i = 0; i < 50 && !s.count(); i++) await tick();
+  for (let i = 0; i < 20 && !s.count(); i++) await new Promise((r) => setTimeout(r, 5));
+  return s.count() > 0;
+}
+
 /** Lets the scheduler finish everything waiting on it, and the part settle, until `pending` (what's being waited for,
  *  if anything) is over and nothing's left waiting. */
 async function drain<D>(s: fc.Scheduler, running: Running<D>, pending?: Promise<unknown>): Promise<void> {
@@ -121,12 +130,19 @@ async function drain<D>(s: fc.Scheduler, running: Running<D>, pending?: Promise<
   throw new Error('never settled: an action is waiting on something nothing will finish');
 }
 
-/** `later` through the scheduler, for one life of the part: once that life is over (`alive.now` false), what it left
- *  waiting never finishes, as the work of an office that went down doesn't. */
+/**
+ * `later` through the scheduler, for one life of the part. Once that life is over (`alive.now` false), what it left
+ * waiting still happens out there (a comment it asked GitHub for still goes up), but the office never hears back: the
+ * dangerous case for a restart is a request that landed with nobody left to record it.
+ */
 const deferred =
   (s: fc.Scheduler, alive = { now: true }): Later =>
   (label, work) =>
-    s.schedule(Promise.resolve(label), label).then(() => (alive.now ? work() : new Promise<never>(() => undefined)));
+    s.schedule(Promise.resolve(label), label).then(() => {
+      if (alive.now) return work();
+      void work().catch(() => undefined);
+      return new Promise<never>(() => undefined);
+    });
 
 /** Why a state isn't one of those allowed, for the failure message. */
 const notOneOf = (what: string, got: unknown, allowed: Record<string, unknown>) =>
@@ -136,12 +152,12 @@ const notOneOf = (what: string, got: unknown, allowed: Record<string, unknown>) 
 
 /**
  * A restart is atomic: a prefix of actions, then one more started and the office stopped after `cut` of the part's
- * deferred steps (none, some, or all of them), or between actions, then started again on what it kept: it settles to
- * the state it would have without that action, or with it finished.
+ * deferred steps (none, some, or all of them), or between actions, then started again on what it kept, and a few more
+ * actions taken: it settles to the state it would have without that action, or with it finished, then those actions.
  */
 export async function checkRestart<D>(subject: Subject<D>, options: CheckOptions = {}): Promise<void> {
   await fc.assert(
-    fc.asyncProperty(fc.scheduler(), fc.array(fc.nat(), { maxLength: options.prefix ?? 4 }), fc.nat(), fc.integer({ min: -1, max: 6 }), async (s, prefix, pick, cut) => {
+    fc.asyncProperty(fc.scheduler(), fc.array(fc.nat(), { maxLength: options.prefix ?? 4 }), fc.nat(), fc.integer({ min: -1, max: 6 }), fc.array(fc.nat(), { maxLength: 2 }), async (s, prefix, pick, cut, after) => {
       const life = { now: true };
       const running = await subject.start(deferred(s, life));
       for (const p of prefix) await drain(s, running, take(running, p));
@@ -150,21 +166,23 @@ export async function checkRestart<D>(subject: Subject<D>, options: CheckOptions
       const name = cut < 0 ? undefined : running.actions()[pick % Math.max(running.actions().length, 1)]?.name;
       if (cut >= 0) {
         void take(running, pick, life);
+        // each cut lets one deferred step finish, once the action has got as far as deferring one
+        for (let i = 0; i < cut && (await deferredSoon(s)); i++) await s.waitOne();
         await tick();
-        for (let i = 0; i < cut && s.count(); i++) {
-          await s.waitOne();
-          await tick();
-        }
       }
       life.now = false;
       const again = await running.restart(deferred(s));
       await drain(s, again);
+      // and what happens next: a restart that loses work can look the same until something should have followed on
+      for (const p of after) await drain(s, again, take(again, p));
       const got = again.durable();
       again.close?.();
-      const never = await inTurn(subject, prefix);
-      const done = cut < 0 ? never : await inTurn(subject, [...prefix, pick]);
+      const never = await inTurn(subject, [...prefix, ...after]);
+      const done = cut < 0 ? never : await inTurn(subject, [...prefix, pick, ...after]);
+      const before = never.names.slice(0, prefix.length).join(', ');
+      const next = after.length ? `, then [${never.names.slice(prefix.length).join(', ')}]` : '';
       if (!isDeepStrictEqual(got, never.state) && !isDeepStrictEqual(got, done.state))
-        throw new Error(notOneOf(`${subject.name}: restarted during "${name ?? 'nothing'}" after [${never.names.join(', ')}]`, got, { 'never started': never.state, finished: done.state }));
+        throw new Error(notOneOf(`${subject.name}: restarted during "${name ?? 'nothing'}" after [${before}]${next}`, got, { 'never started': never.state, finished: done.state }));
     }),
     settings(options),
   );
