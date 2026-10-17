@@ -44,6 +44,6 @@ Browsers hear each change as a `personal-log` event with the whole log.
 
 ## Where it lives
 
-- `shared/personalLog.ts`: the facts, what they add up to (`evolvePersonalLog`) and the console's view of them (`personalLogView`), pure.
+- `shared/personalLog.ts`: the facts, the mark a request asks for (`personalMark`, and where it was jotted down, `logFrom`), what they add up to (`evolvePersonalLog`) and the console's view of them (`personalLogView`), pure.
 - `server/store.ts` (`personalLog`, `personalEntries`) keeps the journal. `server/office.ts` (`notePersonal`, `markPersonal`) records and broadcasts. `server/routes.ts` serves it.
 - `client/src/ui/personalLogTab.ts`: the console's section.

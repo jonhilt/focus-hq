@@ -104,3 +104,21 @@ describe('what the captain did with an entry, as asked', () => {
     expect(logFrom('anything')).toBe('office');
   });
 });
+
+describe('what the captain did with an entry, from any request', () => {
+  it('leaves an edit without text for the log to refuse', () => {
+    expect(personalMark('a', { kind: 'edited', text: 7 })).toEqual({ kind: 'edited', id: 'a', text: '' });
+  });
+
+  it('asks until when for a snooze that never ends, or says nothing', () => {
+    for (const until of [undefined, Number.POSITIVE_INFINITY]) {
+      expect(() => personalMark('a', { kind: 'snoozed', until })).toThrow('Say until when');
+    }
+  });
+
+  it('refuses a request with no mark at all, as when it has no JSON body', () => {
+    for (const body of [undefined, null, 'done', ['done'], { kind: 'DONE' }]) {
+      expect(() => personalMark('a', body)).toThrow('kind must be one of edited, done, dropped, snoozed, reopened');
+    }
+  });
+});

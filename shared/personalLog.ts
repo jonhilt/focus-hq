@@ -53,18 +53,23 @@ export function entryText(text: unknown): string {
 /** Where an entry says it was jotted down: off the ship only when it says so. */
 export const logFrom = (from: unknown): LogFrom => (from === 'remote' ? 'remote' : 'office');
 
-/** What the captain did with entry `id`, from a request's `{ kind, text?, until? }`, or why it can't be that. */
-export function personalMark(id: string, body: { kind?: unknown; text?: unknown; until?: unknown }): Exclude<PersonalFact, { kind: 'noted' }> {
-  switch (body.kind) {
+/** What the captain did with an entry: every fact but jotting one down. */
+export type PersonalMark = Exclude<PersonalFact, { kind: 'noted' }>;
+
+/** The mark a request asks for on entry `id` (`{ kind, text?, until? }`), or why it can't be one. An edit's text is
+ * checked by `entryText` as it's kept. */
+export function personalMark(id: string, body: unknown): PersonalMark {
+  const { kind, text, until }: { kind?: unknown; text?: unknown; until?: unknown } = body && typeof body === 'object' ? body : {};
+  switch (kind) {
     case 'edited':
-      return { kind: 'edited', id, text: typeof body.text === 'string' ? body.text : '' };
+      return { kind, id, text: typeof text === 'string' ? text : '' };
     case 'done':
     case 'dropped':
     case 'reopened':
-      return { kind: body.kind, id };
+      return { kind, id };
     case 'snoozed':
-      if (typeof body.until !== 'number' || !Number.isFinite(body.until)) throw new Error('Say until when');
-      return { kind: 'snoozed', id, until: body.until };
+      if (typeof until !== 'number' || !Number.isFinite(until)) throw new Error('Say until when');
+      return { kind, id, until };
     default:
       throw new Error('kind must be one of edited, done, dropped, snoozed, reopened');
   }
