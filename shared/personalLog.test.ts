@@ -10,6 +10,10 @@ describe('the personal log', () => {
     expect(log).toEqual({ seq: 1, entries: [{ id: 'a', text: 'A video about briefings', from: 'remote', at: 1000, status: 'open' }] });
   });
 
+  it('keeps who jotted it down for the captain', () => {
+    expect(fold({ kind: 'noted', id: 'a', text: 'one', from: 'office', via: 'Cmdr. Adair' }).entries[0]?.via).toBe('Cmdr. Adair');
+  });
+
   it('notes an entry once, however many times it is told', () => {
     const log = fold({ kind: 'noted', id: 'a', text: 'one', from: 'office' }, { kind: 'noted', id: 'a', text: 'again', from: 'office' });
     expect(log.entries.map((e) => e.text)).toEqual(['one']);

@@ -4,7 +4,7 @@ import { Calls } from './call/calls';
 import { NumberOne } from './chat';
 import { DemoNumberOne } from './demo';
 import { ClaudeNumberOne } from './officer';
-import { chatAfterRestart, freshChat, NUMBER_ONE, type NumberOneLive, type NumberOneSaved } from './shared';
+import { chatAfterRestart, freshChat, NUMBER_ONE, numberOne as firstOfficer, type NumberOneLive, type NumberOneSaved } from './shared';
 import { type FocusPlugin } from '../../plugin-api/server';
 
 const text = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -21,7 +21,14 @@ const numberOnePlugin: FocusPlugin = {
     const chat = saved.get().chat;
     if (chatAfterRestart(chat) !== chat) saved.set({ chat: chatAfterRestart(chat) });
     const numberOne = new NumberOne(
-      { projects: () => host.projects(), settings: () => host.settings(), shipStatus: () => host.shipStatus(), saved, live },
+      {
+        projects: () => host.projects(),
+        settings: () => host.settings(),
+        shipStatus: () => host.shipStatus(),
+        personalLog: { entries: () => host.personalLog.entries(), note: (text) => void host.personalLog.note(text, firstOfficer().name) },
+        saved,
+        live,
+      },
       host.demo ? new DemoNumberOne() : new ClaudeNumberOne((run) => host.shipSession(run)),
     );
     // calls read the ship and act on the captain's goals through the office, once the captain has said yes

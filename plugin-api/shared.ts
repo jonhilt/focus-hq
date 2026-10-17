@@ -28,5 +28,6 @@ export { closedGoals, FIX_SESSIONS, FRICTION_KINDS, frictionGroups, frictionsByD
 /** The office's permanent crew a plugin speaks for (the chief engineer), and a crew member of its own, always the same person. */
 export { chiefEngineer, crewVoice, fixedCrew, plannerFor } from '../shared/crew';
 export type { Flow, FlowRecording } from '../shared/flows';
+export type { PersonalEntry } from '../shared/personalLog';
 export { FLOWS_FILE } from '../shared/flows';
 export { pluginOn } from '../shared/projectPlugins';

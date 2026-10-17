@@ -31,6 +31,8 @@ export interface NumberOneMessage {
   /** Number One's reply in a line or two, without paths or code. */
   spoken?: string;
   suggest?: WorkSuggestion;
+  /** What Number One jotted down in the captain's personal log, as the captain asked. */
+  logged?: string;
   at: number;
 }
 

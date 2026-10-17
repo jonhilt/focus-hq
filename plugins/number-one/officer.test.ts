@@ -11,10 +11,11 @@ describe('ClaudeNumberOne', () => {
     });
     const projects = [{ id: 'p1', name: 'Shop', repos: ['o/shop'] }];
     const shipStatus = (): Promise<ShipStatus> => Promise.resolve({ projects: [] } as unknown as ShipStatus);
-    const reply = await officer.turn({ projects, messages: [{ from: 'manager', text: 'Status?', at: 1 }], resumeSessionId: 'sess-1', shipStatus, settings: {} as Settings, signal: new AbortController().signal }, () => undefined);
+    const reply = await officer.turn({ projects, messages: [{ from: 'manager', text: 'Status?', at: 1 }], resumeSessionId: 'sess-1', shipStatus, personalLog: '- A video about briefings (today)', settings: {} as Settings, signal: new AbortController().signal }, () => undefined);
     expect(reply).toMatchObject({ sessionId: 'sess-2', costUsd: 0.1 });
     const [run] = runs;
     expect([run.projects, run.shipStatus, run.resume, run.builtins]).toEqual([projects, shipStatus, 'sess-1', [...CODE_TOOLS, ...WEB_TOOLS]]);
     expect(run.systemAppend({ workspaces: '/ws' })).toContain('/ws');
+    expect(run.prompt).toContain('- A video about briefings (today)');
   });
 });

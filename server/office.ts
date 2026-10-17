@@ -104,10 +104,10 @@ export class Office {
 
   // ---------------------------------------------------------------- the captain's personal log
 
-  /** Jots `text` down in the captain's personal log. */
-  notePersonal(text: unknown, from: LogFrom): PersonalEntry {
+  /** Jots `text` down in the captain's personal log (`via` a crew member, when one jotted it down for them). */
+  notePersonal(text: unknown, from: LogFrom, via?: string): PersonalEntry {
     const id = newId('note');
-    const log = this.store.personalLog({ kind: 'noted', id, text: entryText(text), from });
+    const log = this.store.personalLog({ kind: 'noted', id, text: entryText(text), from, ...(via && { via }) });
     this.hub.send({ type: 'personal-log', entries: log.entries });
     return entryIn(log.entries, id);
   }
@@ -338,7 +338,7 @@ export class Office {
   /** Starts the plugins switched on (docs/plugins.md), lending them the office's own repo, and in the demo its agents' transcripts. */
   /** `more`: the demo's transcripts, and the ship's status, which needs GitHub and the agents' worktrees. */
   startPlugins(plugins: FocusPlugin[], more: Pick<Lent, 'transcript' | 'shipStatus'>): void {
-    this.agents.startPlugins(plugins, { demo: config.demo, ownRepo: () => this.ownRepo, fileIssue: (...issue) => this.fileIssue(...issue), snapshot: () => this.snapshot(), ...more });
+    this.agents.startPlugins(plugins, { demo: config.demo, ownRepo: () => this.ownRepo, fileIssue: (...issue) => this.fileIssue(...issue), snapshot: () => this.snapshot(), personalLog: { entries: () => this.store.personalEntries, note: (text, via) => this.notePersonal(text, 'office', via) }, ...more });
     this.info.plugins = this.agents.plugins.ids();
     // its saved state is kept, but nothing of it runs: no briefs, hooks, or pull requests kept for the captain
     for (const id of this.agents.plugins.dormant()) console.warn(`Plugin ${id} has saved state but isn't switched on: add it to FOCUS_PLUGINS to bring it back`);

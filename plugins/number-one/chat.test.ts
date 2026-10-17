@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { asNumberOneReply, NumberOne, type NumberOneOfficer, numberOnePrompt, numberOneReplySchema, numberOneSystemPrompt } from './chat';
+import { asNumberOneReply, NumberOne, type NumberOneOfficer, numberOnePrompt, numberOneReplySchema, numberOneSystemPrompt, personalLogLines } from './chat';
 import { chatAfterRestart, chatNow, freshChat, type NumberOneChat } from './shared';
-import { type PluginState, type Project, type ShipStatus } from '../../plugin-api/server';
+import { type PersonalEntry, type PluginState, type Project, type ShipStatus } from '../../plugin-api/server';
 
 const project = { id: 'p1', name: 'Shop', repos: ['acme/shop', 'acme/shop-api'] } as Project;
 describe('numberOneSystemPrompt', () => {
@@ -84,11 +84,18 @@ describe('NumberOne', () => {
   }
 
   function setup(officer: NumberOneOfficer['turn']) {
-    const store = { projects: [project] };
+    const store = { projects: [project], log: [] as PersonalEntry[], refuse: false };
     const saved = slot({ chat: freshChat() });
     const live = slot({ activity: '' });
     const turn = vi.fn(officer);
-    const numberOne = new NumberOne({ projects: () => store.projects, settings: () => ({ maxConcurrent: 2 }) as never, shipStatus: async () => ship, saved, live }, { turn });
+    const personalLog = {
+      entries: () => store.log,
+      note: (text: string) => {
+        if (store.refuse) throw new Error('Keep it under 2000 characters');
+        store.log.push({ id: `n${store.log.length}`, text, from: 'office', at: 0, status: 'open' });
+      },
+    };
+    const numberOne = new NumberOne({ projects: () => store.projects, settings: () => ({ maxConcurrent: 2 }) as never, shipStatus: async () => ship, personalLog, saved, live }, { turn });
     const settled = () => vi.waitFor(() => expect(numberOne.current().status).not.toBe('thinking'));
     return { store, saved, live, numberOne, turn, settled };
   }
@@ -118,6 +125,25 @@ describe('NumberOne', () => {
     expect(turn.mock.calls[1][0].resumeSessionId).toBe('s1');
     expect(turn.mock.calls[1][0].projects).toEqual([{ id: 'p1', name: 'Shop', repos: ['acme/shop', 'acme/shop-api'] }]);
     expect(numberOne.current().costUsd).toBeCloseTo(0.2);
+  });
+
+  it('hears what is open in the personal log, and jots down what the captain asked it to', async () => {
+    const { store, numberOne, turn, settled } = setup(async () => ({ text: 'Logged it.', log: 'Video: briefings as the fix for walls of AI text' }));
+    store.log.push({ id: 'old', text: 'Back up the data folder', from: 'office', at: Date.now(), status: 'open' });
+    numberOne.say('Remember that video idea about briefings');
+    await settled();
+    expect(turn.mock.calls[0][0].personalLog).toBe('- Back up the data folder (today)');
+    expect(store.log.map((e) => e.text)).toEqual(['Back up the data folder', 'Video: briefings as the fix for walls of AI text']);
+    expect(numberOne.current().messages[1]).toMatchObject({ text: 'Logged it.', logged: 'Video: briefings as the fix for walls of AI text' });
+  });
+
+  it('still answers when the log refuses what it was to jot down, without saying it logged it', async () => {
+    const { store, numberOne, settled } = setup(async () => ({ text: 'Logged it.', log: 'x' }));
+    store.refuse = true;
+    numberOne.say('Remember this');
+    await settled();
+    expect(numberOne.current().messages[1]).toMatchObject({ text: 'Logged it.' });
+    expect(numberOne.current().messages[1]?.logged).toBeUndefined();
   });
 
   it('keeps hidden projects out of the chat', async () => {
@@ -206,5 +232,42 @@ describe('chatNow', () => {
   it('has no chat before the plugin’s state arrives', () => {
     expect(chatNow(undefined)).toBeNull();
     expect(chatNow({ activity: '' })).toBeNull();
+  });
+});
+
+describe('personalLogLines', () => {
+  const day = 86_400_000;
+  const now = 10 * day;
+  const entry = (id: string, at: number, more: Partial<PersonalEntry> = {}): PersonalEntry => ({ id, text: id, from: 'office', at, status: 'open', ...more });
+
+  it('lists what is open, newest first, with how long ago, and counts what is put aside', () => {
+    const lines = personalLogLines([
+      entry('old idea', now - 3 * day),
+      entry('new idea', now - 1000),
+      entry('done', now, { status: 'done' }),
+      entry('aside', now, { until: now + day }),
+      entry('back', now - 2 * day, { until: now - 1 }),
+    ], now);
+    expect(lines).toBe('- new idea (today)\n- back (2d ago)\n- old idea (3d ago)\n(1 more put aside till later)');
+  });
+
+  it('is empty with nothing open, and says how many more there are past the first fifteen', () => {
+    expect(personalLogLines([entry('done', 0, { status: 'dropped' })], now)).toBe('');
+    const many = Array.from({ length: 17 }, (_, i) => entry(`idea ${i}`, i));
+    expect(personalLogLines(many, now).split('\n').at(-1)).toBe('- …and 2 older');
+  });
+});
+
+describe('the personal log in a turn', () => {
+  it('comes after what the captain says, and only when there is something open', () => {
+    const messages = [{ from: 'manager' as const, text: 'Hi', at: 0 }];
+    expect(numberOnePrompt({ messages, resumeSessionId: 's', personalLog: '- an idea (today)' })).toMatch(/Hi\n"""\n\nWhat's open in the captain's personal log.*\n- an idea \(today\)$/);
+    expect(numberOnePrompt({ messages, resumeSessionId: 's', personalLog: '' })).toBe('The captain says:\n"""\nHi\n"""');
+  });
+
+  it('is jotted down only when the reply says what to', () => {
+    expect(asNumberOneReply({ reply: 'Aye.', log: '  Back up the data folder ' }, '', []).log).toBe('Back up the data folder');
+    expect(asNumberOneReply({ reply: 'Aye.', log: '   ' }, '', [])).not.toHaveProperty('log');
+    expect(numberOneReplySchema([])).toMatchObject({ properties: { log: { type: 'string' } } });
   });
 });

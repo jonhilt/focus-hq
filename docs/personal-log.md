@@ -18,6 +18,10 @@ curl -X POST https://<mac>.<tailnet>.ts.net/api/personal-log \
 
 It answers with the entry (`{ id, text, from, at, status }`), or a 400 with `{ error }` for empty text or text over 2000 characters. `from: "remote"` marks it *from off the ship* on the console. Like the rest of the API, it has no login: the tailnet is the only lock.
 
+## Through Number One
+
+With the [`number-one`](../plugins/number-one/README.md) plugin on, ask Number One to remember, note or log something and they jot it down for you, marked *via* them on the console. Each message they hear comes with what's open in the log, so they can bring an idea back up when it bears on what you're talking about. A plugin reads and writes the log through `host.personalLog` ([plugins](plugins.md)).
+
 ## What's in it
 
 The console's **Personal log** section (its count is what's on your mind) lists:

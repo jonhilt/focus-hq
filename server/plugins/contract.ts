@@ -4,6 +4,7 @@
 import type { Effect } from 'effect';
 import type { ZodType } from 'zod';
 import type { LedgerEntry, LedgerEvent } from '../../shared/ledger';
+import type { PersonalEntry } from '../../shared/personalLog';
 import type { Agent, Issue, MessageReply, Planner, Project, QueuedGoal, Settings, Snapshot, SystemModel } from '../../shared/types';
 import type { ShipStatus } from '../agents/shipStatus';
 import type { GitHub } from '../github/service';
@@ -170,6 +171,15 @@ export interface PluginHost {
    * they stand on GitHub now. Hidden projects are left out.
    */
   shipStatus(): Promise<ShipStatus>;
+  /**
+   * The captain's personal log (docs/personal-log.md): what they've jotted down to come back to, oldest first, done and
+   * dropped included; and `note`, which jots a thought down for them, `via` whoever did (a crew member's name). Jot one
+   * down only when the captain asks.
+   */
+  readonly personalLog: {
+    entries(): Readonly<PersonalEntry>[];
+    note(text: string, via: string): PersonalEntry;
+  };
   /** The captain's goals, to act on for the captain once they've said so. */
   readonly goals: PluginGoals;
   /**

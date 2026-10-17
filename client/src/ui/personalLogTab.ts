@@ -57,7 +57,7 @@ function entryCard(ui: Ui, e: PersonalEntry): HTMLElement {
     button.onclick = () => void busy(button, () => api.markPersonal(e.id, body), ui.error);
     return button;
   };
-  const when = [timeAgo(e.at), e.from === 'remote' ? 'from off the ship' : undefined, e.until && e.status === 'open' ? `back ${new Date(e.until).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}` : undefined, e.status === 'done' ? 'done' : e.status === 'dropped' ? 'dropped' : undefined];
+  const when = [timeAgo(e.at), e.from === 'remote' ? 'from off the ship' : undefined, e.via ? `via ${e.via}` : undefined, e.until && e.status === 'open' ? `back ${new Date(e.until).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}` : undefined, e.status === 'done' ? 'done' : e.status === 'dropped' ? 'dropped' : undefined];
   const actions = e.status === 'open'
     ? [act('Done', { kind: 'done' }), act('Tomorrow', { kind: 'snoozed', until: snoozeUntil(new Date(), 'tomorrow') }), act('Next week', { kind: 'snoozed', until: snoozeUntil(new Date(), 'week') }), act('Drop', { kind: 'dropped' })]
     : [act('Reopen', { kind: 'reopened' })];

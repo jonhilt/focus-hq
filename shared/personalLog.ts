@@ -9,6 +9,8 @@ export interface PersonalEntry {
   id: string;
   text: string;
   from: LogFrom;
+  /** Who jotted it down for the captain (Number One, say), when someone did. */
+  via?: string;
   /** When it was jotted down. */
   at: number;
   status: 'open' | 'done' | 'dropped';
@@ -20,7 +22,7 @@ export interface PersonalEntry {
 
 /** One fact of the personal log. */
 export type PersonalFact =
-  | { kind: 'noted'; id: string; text: string; from: LogFrom }
+  | { kind: 'noted'; id: string; text: string; from: LogFrom; via?: string }
   | { kind: 'edited'; id: string; text: string }
   | { kind: 'done'; id: string }
   | { kind: 'dropped'; id: string }
@@ -80,7 +82,7 @@ export function evolvePersonalLog(log: PersonalLog, fact: PersonalFact & { seq: 
   const seq = fact.seq;
   if (fact.kind === 'noted') {
     if (log.entries.some((e) => e.id === fact.id)) return { ...log, seq };
-    return { seq, entries: [...log.entries, { id: fact.id, text: fact.text, from: fact.from, at: fact.t, status: 'open' }] };
+    return { seq, entries: [...log.entries, { id: fact.id, text: fact.text, from: fact.from, ...(fact.via && { via: fact.via }), at: fact.t, status: 'open' }] };
   }
   const change = (e: PersonalEntry): PersonalEntry => {
     switch (fact.kind) {
