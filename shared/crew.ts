@@ -1,3 +1,4 @@
+import { keysOf } from './records';
 import type { CrewSpeaker, CrewVoice, KokoroVoice } from './voice';
 import { type Avatar, type Division, type Hairstyle, type Planner, type Rank, type Species } from './types';
 
@@ -9,7 +10,7 @@ import { type Avatar, type Division, type Hairstyle, type Planner, type Rank, ty
 
 /** Each division's uniform colour, also used wherever the UI marks whose work something is. */
 export const UNIFORM: Record<Division, string> = { command: '#d8433b', operations: '#e8b33c', sciences: '#3f8fd8' };
-const DIVISIONS = Object.keys(UNIFORM) as Division[];
+const DIVISIONS = keysOf(UNIFORM);
 
 export const RANK_TITLE: Record<Rank, string> = { ensign: 'Ensign', lieutenant: 'Lt.' };
 

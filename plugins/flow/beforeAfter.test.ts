@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { LedgerEvent, SessionFacts } from '../../plugin-api/shared';
+import { FRICTION_KINDS, keysOf, type LedgerEvent, recordOf, type SessionFacts } from '../../plugin-api/shared';
 import { beforeAfter, beforeAfterLines, windowStats } from './beforeAfter';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -45,8 +45,7 @@ describe('windowStats', () => {
     ];
     const w = windowStats(events, AT - 2 * DAY, AT);
     expect(w.read).toBe(2);
-    expect(w.frictions['guard-block']).toBe(1);
-    expect(w.frictions['captain-correction']).toBe(1);
+    expect(w.frictions).toEqual({ ...recordOf(keysOf(FRICTION_KINDS), () => 0), 'guard-block': 1, 'captain-correction': 1 });
   });
 
   it('keeps to one project and one kind of session', () => {
@@ -68,5 +67,11 @@ describe('beforeAfter', () => {
     const lines = beforeAfterLines(beforeAfter([digest(AT - DAY, 'a', { turns: 10 }), digest(AT + DAY, 'b', { turns: 5 })], AT, 7, AT + 7 * DAY));
     expect(lines.find((l) => l.includes('turns'))).toMatch(/10\s+5\s+-50%/);
     expect(lines.at(-1)).toMatch(/Only 1 sessions/);
+  });
+
+  it('has a line for each friction either side hit, and none for the rest', () => {
+    const events = [digest(AT - DAY, 'a', {}), frictions(AT - DAY, 'a', ['guard-block']), digest(AT + DAY, 'b', {}), frictions(AT + DAY, 'b', ['captain-correction'])];
+    const lines = beforeAfterLines(beforeAfter(events, AT, 7, AT + 7 * DAY));
+    expect(lines.filter((l) => keysOf(FRICTION_KINDS).some((k) => l.startsWith(`  ${k} `))).map((l) => l.trim().split(/\s+/)[0])).toEqual(['guard-block', 'captain-correction']);
   });
 });

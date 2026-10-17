@@ -4,6 +4,7 @@
 // (the holodeck's boards, and their contact sheet), and can be tested here. Each view shows the step under way and the
 // part picked, so picking a part or a step in one lights it up in the others.
 
+import { keysOf } from './records';
 import { edgeFor, layoutLayers } from './systemModel';
 import type { ModelChange, ModelEdge, ModelEdgeKind, ModelKind, ModelNode, SystemModel } from './types';
 
@@ -210,11 +211,11 @@ function legend(m: SystemModel, colours: Map<string, string>, top: number, w: nu
       x += 46 + width(text, 20);
     }
   };
-  const kinds = (Object.keys(KIND_SHAPES) as ModelKind[]).filter((k) => m.nodes.some((n) => n.kind === k));
+  const kinds = keysOf(KIND_SHAPES).filter((k) => m.nodes.some((n) => n.kind === k));
   out.push({ t: 'text', x: 40, y: top + 34, text: `SHAPE = KIND: ${kinds.map((k) => `${k} ${KIND_SHAPES[k]}`).join(' · ')}`, size: 19, fill: INK.muted });
   row(top + 76, [...colours].map(([l, c]) => [l, c]));
-  const kindsUsed = (Object.keys(EDGE_COLOURS) as ModelEdgeKind[]).filter((k) => m.edges.some((e) => e.kind === k));
-  const changes = (Object.keys(CHANGE_TAGS) as ModelChange[]).filter((c) => m.nodes.some((n) => n.change === c) || m.edges.some((e) => e.change === c));
+  const kindsUsed = keysOf(EDGE_COLOURS).filter((k) => m.edges.some((e) => e.kind === k));
+  const changes = keysOf(CHANGE_TAGS).filter((c) => m.nodes.some((n) => n.change === c) || m.edges.some((e) => e.change === c));
   row(top + 118, [...kindsUsed.map((k): [string, string] => [k, EDGE_COLOURS[k]]), ['the step under way', INK.gold], ['not found in the code', INK.red], ...changes.map((c): [string, string] => [`${CHANGE_TAGS[c].text.toLowerCase()} in this change`, CHANGE_TAGS[c].colour])]);
   return out;
 }

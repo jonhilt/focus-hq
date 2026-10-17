@@ -1,10 +1,24 @@
-import { describe, expect, it } from 'vitest';
-import { chiefEngineer, crewVoice, hiredName, leadFor, plannerFor, qaOfficerFor } from './crew';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { chiefEngineer, crewVoice, hiredName, leadFor, plannerFor, qaOfficerFor, randomAvatar } from './crew';
 
 describe('chiefEngineer', () => {
   it('is the same operations officer on every call', () => {
     expect(chiefEngineer()).toEqual(chiefEngineer());
     expect(chiefEngineer().avatar.division).toBe('operations');
+  });
+});
+
+describe('randomAvatar', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('hires an ensign from any division, the first to the last', () => {
+    const division = (roll: number) => {
+      vi.spyOn(Math, 'random').mockReturnValue(roll);
+      return randomAvatar();
+    };
+    expect(division(0)).toMatchObject({ division: 'command', rank: 'ensign' });
+    expect(division(0.5).division).toBe('operations');
+    expect(division(0.99).division).toBe('sciences');
   });
 });
 

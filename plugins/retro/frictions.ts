@@ -1,4 +1,4 @@
-import { type Block, blocks, clip, FRICTION_KINDS, type Friction, type FrictionKind, type LedgerEvent, messageFrom, resultText, transcriptLines } from '../../plugin-api/server';
+import { type Block, blocks, clip, FRICTION_KINDS, type Friction, keysOf, type LedgerEvent, messageFrom, resultText, transcriptLines } from '../../plugin-api/server';
 
 // What the retro's reader reads of each session's span, and what's kept of its answer. Code supplies the facts
 // (server/agents/sessionDigest.ts); at retro time a strong model reads the spans not read yet, a batch at a time, and only finds and
@@ -71,7 +71,7 @@ export function extractionInput(jsonl: string, afterUuid: string | undefined, pr
   return clip([...lines.map((l) => l.text), ...(ledger.length ? ['', ...ledger] : [])].join('\n'), BUDGET);
 }
 
-const KINDS = Object.keys(FRICTION_KINDS) as FrictionKind[];
+const KINDS = keysOf(FRICTION_KINDS);
 
 export function readerSystemPrompt(): string {
   return `

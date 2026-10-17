@@ -1,7 +1,7 @@
 // Before and after a change to how agents are steered (a CLAUDE.md, a prompt): the same window of the ledger either side
 // of a moment, per session, so a change can be judged by what agents did rather than by feel. Pure; scripts/beforeAfter.ts
 // reads the ledger.
-import { type AgentTask, FRICTION_KINDS, frictionsByDigest, type FrictionKind, type LedgerEvent, type SessionFacts } from '../../plugin-api/shared';
+import { type AgentTask, FRICTION_KINDS, frictionsByDigest, type FrictionKind, keysOf, type LedgerEvent, recordOf, type SessionFacts } from '../../plugin-api/shared';
 
 const DAY = 24 * 60 * 60 * 1000;
 /** Fewer sessions than this on either side and a difference is more likely luck than the change. */
@@ -41,7 +41,7 @@ export function windowStats(events: LedgerEvent[], from: number, to: number, fil
   };
   const found = frictionsByDigest(events);
   const read = digests.filter((d) => found.has(d.key));
-  const frictions = Object.fromEntries(Object.keys(FRICTION_KINDS).map((k) => [k, read.filter((d) => found.get(d.key)?.some((f) => f.kind === k)).length])) as Record<FrictionKind, number>;
+  const frictions = recordOf(keysOf(FRICTION_KINDS), (k) => read.filter((d) => found.get(d.key)?.some((f) => f.kind === k)).length);
   // QA and merges belong to pull requests, not sessions: a task filter leaves them as they are.
   const verdicts = inWindow.filter((e) => e.kind === 'qa-verdict');
   const merged = inWindow.filter((e) => e.kind === 'merged');
@@ -49,7 +49,7 @@ export function windowStats(events: LedgerEvent[], from: number, to: number, fil
     from,
     to,
     sessions: digests.length,
-    perSession: Object.fromEntries(PER_SESSION.map((f) => [f, mean(f)])) as Record<PerSession, number>,
+    perSession: recordOf(PER_SESSION, mean),
     read: read.length,
     frictions,
     verdicts: verdicts.length,
@@ -90,13 +90,13 @@ export function beforeAfterLines({ before, after }: { before: WindowStats; after
     row('sessions', String(before.sessions), String(after.sessions)),
     '',
     'Per session',
-    ...Object.entries(LABELS).map(([k, label]) => {
-      const [b, a] = [before.perSession[k as PerSession], after.perSession[k as PerSession]];
-      return row(`  ${label}`, num(b), num(a), change(b, a));
+    ...keysOf(LABELS).map((k) => {
+      const [b, a] = [before.perSession[k], after.perSession[k]];
+      return row(`  ${LABELS[k]}`, num(b), num(a), change(b, a));
     }),
     '',
     `Sessions hitting each friction (of those read: ${before.read} before, ${after.read} after)`,
-    ...(Object.keys(FRICTION_KINDS) as FrictionKind[])
+    ...keysOf(FRICTION_KINDS)
       .filter((k) => before.frictions[k] || after.frictions[k])
       .map((k) => row(`  ${k}`, pct(before.frictions[k], before.read), pct(after.frictions[k], after.read))),
     '',

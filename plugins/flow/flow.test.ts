@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { ArchivedGoal, LedgerEvent } from '../../plugin-api/shared';
-import { endsWith, flowLines, flowReport, goalFlow, LONG_WAIT_MS, percentile, span, transcriptMoments } from './flow';
+import { type ArchivedGoal, keysOf, type LedgerEvent } from '../../plugin-api/shared';
+import { CAPTAIN_REASONS, endsWith, flowLines, flowReport, goalFlow, leadFlow, LONG_WAIT_MS, percentile, span, transcriptMoments } from './flow';
 
 const T0 = Date.parse('2026-10-08T12:00:00.000Z');
 const min = (m: number) => T0 + m * 60_000;
@@ -216,6 +216,34 @@ describe('flowReport', () => {
     expect(lines).toContain('merged 2 · 1 without a current QA pass (50%)');
     expect(r.delivered).toMatchObject({ goals: 1, p50: 41 * 60_000 });
     expect(lines).toContain('to the last merge, when the outcome shipped (1 goals that merged): p50 41m · p85 41m');
+  });
+});
+
+describe('what each state and reason adds up to', () => {
+  // queued 5 minutes before the first line, and away a long stretch after the last
+  const late = () => goalFlow({ ...goal(0, -5), closedAt: min(62) + LONG_WAIT_MS }, transcriptMoments(story()), ledger());
+
+  it('sums every state, its time away and every reason the captain was waited on, over the goals', () => {
+    const [a, b] = [late(), goalFlow(goal(62), transcriptMoments(story()), ledger())];
+    const r = flowReport([a, b], [goal(62)], ledger());
+    for (const s of keysOf(a.ms)) expect([s, r.totals[s], r.away[s]]).toEqual([s, a.ms[s] + b.ms[s], a.away[s] + b.away[s]]);
+    for (const k of keysOf(CAPTAIN_REASONS)) {
+      const [x, y, sum] = [a.captainBy[k], b.captainBy[k], r.captainBy[k]];
+      expect([k, sum.ms, sum.away, sum.waits]).toEqual([k, x.ms + y.ms, x.away + y.away, [...x.waits, ...y.waits]]);
+    }
+  });
+
+  it('gives an open goal its time in each state while someone was around', () => {
+    const f = { ...late(), now: { state: 'captain' as const, since: min(62) } };
+    expect(leadFlow(f, min(70))?.active).toEqual({ ...f.ms, captain: f.ms.captain - LONG_WAIT_MS });
+  });
+
+  it('prints a row for each state, leaves time away out of the biggest wait and the slowest goal’s, and a line for each reason', () => {
+    const lines = flowLines(flowReport([late()], [goal(62)], ledger()));
+    expect(lines.filter((l) => /^ {2}(queued|working|rework|background|qa|review|captain) /.test(l))).toHaveLength(7);
+    expect(lines).toContain('Biggest wait while around: qa, 19% of the active time.');
+    expect(lines.find((l) => l.endsWith('Faster goals'))).toMatch(/ working /);
+    for (const k of keysOf(CAPTAIN_REASONS)) expect(lines.some((l) => l.startsWith(`  ${k.padEnd(10)} ${CAPTAIN_REASONS[k].slice(0, 20)}`))).toBe(true);
   });
 });
 

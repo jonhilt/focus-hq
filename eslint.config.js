@@ -31,6 +31,17 @@ export default tseslint.config(
     },
   },
   {
+    // A cast on Object.keys/entries/fromEntries claims a record's keys without checking them: keysOf and recordOf
+    // (shared/records.ts) read and build such a record, tested.
+    files: ['shared/**/*.ts', 'server/**/*.ts', 'client/src/**/*.ts', 'plugins/**/*.ts', 'plugin-api/**/*.ts', 'scripts/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', {
+        selector: "TSAsExpression > CallExpression.expression[callee.object.name='Object'][callee.property.name=/^(keys|entries|fromEntries)$/]",
+        message: 'Use keysOf or recordOf (shared/records.ts) instead of casting what Object.keys/entries/fromEntries return.',
+      }],
+    },
+  },
+  {
     // A wrong `x!` in the office's server is a crash mid-run; say what's missing instead (tests may still assert).
     files: ['shared/**/*.ts', 'server/**/*.ts', 'plugins/**/*.ts', 'plugin-api/**/*.ts'],
     ignores: ['**/*.test.ts'],

@@ -1,4 +1,4 @@
-import { type ArchivedGoal, blocks, type LedgerEvent, messageFrom, resultText, transcriptLines } from '../../plugin-api/server';
+import { type ArchivedGoal, blocks, keysOf, type LedgerEvent, messageFrom, recordOf, resultText, transcriptLines } from '../../plugin-api/server';
 import type { CaptainReason, FlowNow, FlowState, LeadFlow, Said } from './shared';
 
 // Where a goal's time goes (README.md), from code alone: its lead's Claude Code transcript says when the lead was
@@ -276,7 +276,7 @@ function deliveredBy(openedAt: number, merges: number[], awaySpans: [number, num
 export function leadFlow(f: GoalFlow, at: number): LeadFlow | undefined {
   if (!f.now) return undefined;
   const active = emptyStates();
-  for (const s of Object.keys(active) as FlowState[]) active[s] = f.ms[s] - f.away[s];
+  for (const s of keysOf(active)) active[s] = f.ms[s] - f.away[s];
   return { at, now: f.now, active };
 }
 
@@ -337,7 +337,7 @@ export function flowReport(goals: GoalFlow[], allGoals: ArchivedGoal[], ledger: 
   const totals = emptyStates();
   const away = emptyStates();
   for (const g of goals)
-    for (const s of Object.keys(totals) as FlowState[]) {
+    for (const s of keysOf(totals)) {
       totals[s] += g.ms[s];
       away[s] += g.away[s];
     }
@@ -351,7 +351,7 @@ export function flowReport(goals: GoalFlow[], allGoals: ArchivedGoal[], ledger: 
   const waits = goals.flatMap((g) => g.captainWaits);
   const captainBy = emptyReasons();
   for (const g of goals)
-    for (const r of Object.keys(captainBy) as CaptainReason[]) {
+    for (const r of keysOf(captainBy)) {
       captainBy[r].ms += g.captainBy[r].ms;
       captainBy[r].away += g.captainBy[r].away;
       captainBy[r].waits.push(...g.captainBy[r].waits);
@@ -399,11 +399,11 @@ const WAITS: FlowState[] = ['qa', 'review', 'captain', 'queued'];
 
 /** The report as the terminal prints it, with any more guards measured elsewhere (rework after merge) among its own. */
 export function flowLines(r: FlowReport, slowest = 5, guards: string[] = []): string[] {
-  const states = (Object.keys(FLOW_STATES) as FlowState[]).filter((s) => s !== 'queued' || r.totals[s] > 0);
-  const around = Object.fromEntries(states.map((s) => [s, r.totals[s] - r.away[s]])) as Record<FlowState, number>;
+  const all = keysOf(FLOW_STATES);
+  const states = all.filter((s) => s !== 'queued' || r.totals[s] > 0);
+  const around = recordOf(all, (s) => r.totals[s] - r.away[s]);
   const biggest = most(around, WAITS);
   const g = r.guards;
-  const all = Object.keys(FLOW_STATES) as FlowState[];
   const row = (s: FlowState) => `  ${s.padEnd(10)} ${span(r.totals[s]).padStart(7)} ${pct(r.totals[s], r.leadTotal).padStart(4)}   ${span(around[s]).padStart(7)} ${pct(around[s], r.activeTotal).padStart(4)}  ${FLOW_STATES[s]}`;
   return [
     `${r.goals.length} goals · lead time p50 ${span(r.leadP50)} · p85 ${span(r.leadP85)}`,
@@ -418,7 +418,7 @@ export function flowLines(r: FlowReport, slowest = 5, guards: string[] = []): st
     `Biggest wait while around: ${biggest}, ${pct(around[biggest], r.activeTotal)} of the active time.`,
     '',
     'Waiting on the captain, by why:                 while around   waits   p50',
-    ...(Object.keys(CAPTAIN_REASONS) as CaptainReason[])
+    ...keysOf(CAPTAIN_REASONS)
       .map((k) => ({ k, near: r.captainBy[k].ms - r.captainBy[k].away, waits: r.captainBy[k].waits }))
       .sort((a, b) => b.near - a.near)
       .map(({ k, near, waits }) => `  ${k.padEnd(10)} ${CAPTAIN_REASONS[k].padEnd(62).slice(0, 62)} ${span(near).padStart(6)} ${pct(near, around.captain).padStart(4)} ${String(waits.length).padStart(5)} ${span(percentile(waits, 0.5)).padStart(5)}`),
@@ -433,7 +433,7 @@ export function flowLines(r: FlowReport, slowest = 5, guards: string[] = []): st
       .sort((a, b) => b.leadMs - a.leadMs)
       .slice(0, slowest)
       .map((f) => {
-        const near = Object.fromEntries(all.map((s) => [s, f.ms[s] - f.away[s]])) as Record<FlowState, number>;
+        const near = recordOf(all, (s) => f.ms[s] - f.away[s]);
         const top = most(near, all);
         return `  ${span(f.leadMs).padStart(6)} ${span(f.activeMs).padStart(6)}  ${top.padEnd(10)} ${pct(near[top], f.activeMs).padStart(4)}  ${f.title}`;
       }),

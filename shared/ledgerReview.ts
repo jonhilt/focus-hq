@@ -1,4 +1,5 @@
 import { type Friction, frictionKey, frictionsByDigest, type LedgerEvent, type SessionDigest } from './ledger';
+import { recordOf } from './records';
 
 // Reviewing the ledger at main engineering's master systems table: each event as a line of the log, and the trace of a
 // pull request, a goal or a friction, everything the ledger says about it in order, with what it cost. Pure, so the panel only draws.
@@ -191,7 +192,7 @@ export function ledgerLog(events: LedgerEvent[], show: ReadonlySet<ReviewGroup>,
 
 /** How many of each group there are, for the filter's counts. */
 export function groupCounts(events: LedgerEvent[], projectId?: string): Record<ReviewGroup, number> {
-  const counts = Object.fromEntries(REVIEW_GROUPS.map((g) => [g, 0])) as Record<ReviewGroup, number>;
+  const counts = recordOf(REVIEW_GROUPS, () => 0);
   for (const e of events) if (!projectId || e.projectId === projectId) counts[groupOf(e)]++;
   return counts;
 }

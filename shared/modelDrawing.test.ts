@@ -53,6 +53,16 @@ describe('structureView', () => {
   });
 });
 
+describe('the structure\'s legend', () => {
+  it('keys each kind of part and of connection the model uses, and only those', () => {
+    const t = texts(structureView(model()).shapes);
+    expect(t).toContain('SHAPE = KIND: ui window · route hexagon · store cylinder');
+    const row = t.indexOf('the step under way');
+    // the layers' colours, then the connections'
+    expect(t.slice(row - 3, row)).toEqual(['Data', 'calls', 'writes']);
+  });
+});
+
 describe('sequenceView', () => {
   it('has a lifeline for each part the scenario passes through, in the order it reaches them, and an arrow per step', () => {
     expect(participants(model())).toEqual(['page', 'api', 'db']);

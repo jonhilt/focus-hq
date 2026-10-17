@@ -1,5 +1,6 @@
 import { awayPhrases, awaySummary, type LogLine, type LogSource } from '../../../shared/captainsLog';
 import { byDay } from '../../../shared/ledgerReview';
+import { keysOf } from '../../../shared/records';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
@@ -12,13 +13,12 @@ const DAY = 86_400_000;
 /** The log's newest lines, at most. */
 const MOST = 500;
 
-const SOURCES: { source: LogSource; label: string; color: string }[] = [
-  { source: 'slice', label: 'Slices', color: LCARS.peach },
-  { source: 'review', label: 'QA', color: LCARS.periwinkle },
-  { source: 'run', label: 'Crew', color: LCARS.lilac },
-  { source: 'ledger', label: 'Ledger', color: LCARS.sky },
-];
-const COLOR = Object.fromEntries(SOURCES.map((s) => [s.source, s.color])) as Record<LogSource, string>;
+const SOURCES: Record<LogSource, { label: string; color: string }> = {
+  slice: { label: 'Slices', color: LCARS.peach },
+  review: { label: 'QA', color: LCARS.periwinkle },
+  run: { label: 'Crew', color: LCARS.lilac },
+  ledger: { label: 'Ledger', color: LCARS.sky },
+};
 
 const time = (t: number) => new Date(t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 const when = (t: number) => `${new Date(t).toDateString() === new Date().toDateString() ? '' : `${new Date(t).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })} `}${time(t)}`;
@@ -48,7 +48,7 @@ export function openCaptainsLogPanel(ui: Ui): void {
   ];
   let since = Math.min(seen, now - DAY);
   let lines: LogLine[] = [];
-  const show = new Set<LogSource>(SOURCES.map((s) => s.source));
+  const show = new Set<LogSource>(keysOf(SOURCES));
   let projectId = '';
   let goal = '';
   let who = '';
@@ -106,7 +106,8 @@ export function openCaptainsLogPanel(ui: Ui): void {
     );
 
     const picked = lines.filter((l) => (!projectId || l.projectId === projectId) && (!goal || l.goal === goal) && (!who || l.who === who));
-    fill(filters, ...SOURCES.map(({ source, label, color }) => {
+    fill(filters, ...keysOf(SOURCES).map((source) => {
+      const { label, color } = SOURCES[source];
       const n = picked.filter((l) => l.source === source).length;
       const b = h('button', { class: `chip${show.has(source) ? '' : ' off'}`, style: show.has(source) ? `--tone:${color}` : undefined }, `${label} ${n}`);
       b.onclick = () => {
@@ -129,7 +130,7 @@ export function openCaptainsLogPanel(ui: Ui): void {
   const logRow = (l: LogLine) =>
     h('div', { class: `ledger-row log-row tone-${l.tone}${l.t > seen ? ' new' : ''}` },
       h('span', { class: 'muted' }, time(l.t)),
-      h('span', { class: 'chip', style: `--tone:${COLOR[l.source]}` }, l.tag),
+      h('span', { class: 'chip', style: `--tone:${SOURCES[l.source].color}` }, l.tag),
       h('strong', { class: 'log-who' }, l.who),
       h('div', { class: 'grow' }, h('div', null, l.text), l.goal ? h('small', { class: 'muted' }, l.goal) : null),
     );
