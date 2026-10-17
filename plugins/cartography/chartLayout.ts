@@ -63,7 +63,7 @@ export function chartLayout(mini: Miniature, w: number, h: number): ChartLayout 
   mini.bands.forEach((_, band) => {
     const mine = mini.parts.map((p, i) => ({ p, i })).filter(({ p }) => p.band === band).sort((x, y) => x.p.at - y.p.at);
     // names alternate above and below, so the nearest name on the same side is two stars along
-    const room = (2 * span.width) / Math.max(1, mine.length) - 10;
+    const room = Math.max(40, (2 * span.width) / Math.max(1, mine.length) - 10);
     mine.forEach(({ p, i }, k) => {
       const r = starRadius(p.size);
       stars.push({ ...at[i], r, alpha: 0.35 + 0.65 * p.bright, colour: p.colour, label: p.label, labelY: k % 2 ? at[i].y - r - 10 : at[i].y + r + 24, room });

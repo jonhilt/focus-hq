@@ -19,7 +19,7 @@ export interface Marks {
 }
 const MARK = { touched: '#ffcc66', added: '#7ee08a', removed: '#ff7a7a', coupled: '#c9a0ff' } as const;
 
-const INK = { flow: '#ffcc66', bg: '#0b1020', panel: '#121a33', text: '#e8ecf5', muted: '#9aa6c4', line: '#cfe3ff', grid: '#0f1630', self: '#1c2340', tangle: '255,140,60', oneWay: '120,190,255' };
+const INK = { flow: '#ffcc66', bg: '#0b1020', panel: '#121a33', text: '#e8ecf5', muted: '#9aa6c4', line: '#cfe3ff', grid: '#0f1630', self: '#1c2340', tangle: '255,140,60', oneWay: '150,165,200' };
 
 export const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -239,7 +239,7 @@ export function viewSvg(map: RepoMap, view: MapView, marks?: Marks, extra: reado
   return out.join('');
 }
 
-const GRID = { cell: 32, labels: 270, top: 40, key: 40, gap: 36, findings: 470 } as const;
+const GRID = { cell: 32, labels: 270, top: 40, key: 40, gap: 36, findings: 470, uses: 46, spark: 96 } as const;
 /** Where to look: a finding's numbers and outlines on the matrix. */
 const LOOK = '#ffcc66';
 
@@ -267,8 +267,13 @@ export function matrixSvg(map: RepoMap, found: readonly Finding[] = []): string 
   // each finding's sentence, wrapped to the column beside the grid
   const said = found.map((f) => wrap(f.sentence, 16, GRID.findings - 44, 5));
   const sideH = 40 + said.reduce((h, lines) => h + lines.length * 21 + 16, 0);
-  const W = L + n * C + 10 + side;
-  const H = Math.max(T + n * C + 10, sideH);
+  // the margins: beside each row how many parts it uses and its commits over time, under each column how many use it
+  const series = new Map((map.history?.parts ?? []).map((c) => [c.id, c.series]));
+  const sparked = parts.some((p) => series.get(p.id));
+  const margin = GRID.uses + (sparked ? GRID.spark + 12 : 0);
+  const grid = L + n * C;
+  const W = grid + margin + 10 + side;
+  const H = Math.max(T + n * C + 36, sideH);
   const out = [`<svg data-matrix="1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="system-ui,sans-serif">`, `<rect x="${L}" y="${T}" width="${n * C}" height="${n * C}" fill="${INK.grid}"/>`];
   parts.forEach((p, i) => {
     const colour = colours.get(p.layer) ?? INK.muted;
@@ -283,13 +288,30 @@ export function matrixSvg(map: RepoMap, found: readonly Finding[] = []): string 
       const c = at.get(`${a.id} ${b.id}`);
       if (!c) return;
       const tangled = at.has(`${b.id} ${a.id}`);
-      const shade = (0.2 + 0.8 * Math.sqrt(c.imports / max)).toFixed(2);
+      // quiet grey for one way, shaded by how many; orange, the exception, for two parts that import each other
+      const shade = (tangled ? 0.3 + 0.7 * Math.sqrt(c.imports / max) : 0.1 + 0.45 * Math.sqrt(c.imports / max)).toFixed(2);
       out.push(
         `<g data-cell="${esc(`${a.id} ${b.id}`)}" style="cursor:pointer"><title>${esc(`${a.label} imports ${b.label} ${c.imports}×: ${namesLabel(c, 8)}${tangled ? ' (they import each other)' : ''}`)}</title>`,
         `<rect x="${x + 1}" y="${y + 1}" width="${C - 2}" height="${C - 2}" fill="rgba(${tangled ? INK.tangle : INK.oneWay},${shade})"/>`,
-        `<text x="${x + C / 2}" y="${y + C / 2 + 5}" text-anchor="middle" font-size="13" fill="#fff">${c.imports}</text></g>`,
+        `<text x="${x + C / 2}" y="${y + C / 2 + 5}" text-anchor="middle" font-size="13" fill="${tangled ? '#fff' : INK.text}">${c.imports}</text></g>`,
       );
     }));
+  const uses = (id: string) => map.connections.filter((c) => c.from === id && c.to !== id).length;
+  const usedBy = (id: string) => map.connections.filter((c) => c.to === id && c.from !== id).length;
+  const most = Math.max(1, ...parts.flatMap((p) => series.get(p.id) ?? []));
+  const num = `font-size="13" font-variant-numeric="tabular-nums" fill="${INK.muted}"`;
+  out.push(
+    `<text x="${grid + GRID.uses - 6}" y="${T - 12}" text-anchor="end" font-size="12" font-style="italic" fill="${INK.muted}">uses</text>`,
+    ...(sparked ? [`<text x="${grid + GRID.uses + 6}" y="${T - 12}" font-size="12" font-style="italic" fill="${INK.muted}">commits</text>`] : []),
+    `<text x="${L - 10}" y="${T + n * C + 22}" text-anchor="end" font-size="12" font-style="italic" fill="${INK.muted}">used by</text>`,
+  );
+  parts.forEach((p, i) => {
+    const y = T + i * C;
+    out.push(`<text x="${grid + GRID.uses - 6}" y="${y + C / 2 + 5}" text-anchor="end" ${num}>${uses(p.id)}</text>`);
+    out.push(`<text x="${L + i * C + C / 2}" y="${T + n * C + 22}" text-anchor="middle" ${num}>${usedBy(p.id)}</text>`);
+    const line = series.get(p.id);
+    if (line) out.push(sparkline(line, grid + GRID.uses + 6, y + 8, GRID.spark, C - 14, most));
+  });
   const index = new Map(parts.map((p, i) => [p.id, i]));
   const marks: string[] = [];
   found.forEach((f, k) => {
@@ -305,7 +327,7 @@ export function matrixSvg(map: RepoMap, found: readonly Finding[] = []): string 
     if (first) marks.push(`<circle cx="${first.x + C - 3}" cy="${first.y + 3}" r="10" fill="${LOOK}"/><text x="${first.x + C - 3}" y="${first.y + 8}" text-anchor="middle" font-size="13" font-weight="800" fill="${INK.bg}">${k + 1}</text>`);
   });
   if (found.length) {
-    const x = L + n * C + 10 + GRID.gap;
+    const x = grid + margin + 10 + GRID.gap;
     out.push(`<text x="${x}" y="22" font-size="15" font-weight="700" letter-spacing="2" fill="${LOOK}">WHERE TO LOOK</text>`);
     let y = 54;
     said.forEach((lines, k) => {
@@ -475,14 +497,14 @@ export function tiesDrawing(maps: readonly RepoMap[], ties: readonly CrossCoupli
       to: id(c.to.repo, c.to.part),
       kind: 'flow',
       weight: c.routes.length,
-      sentence: `${label(c.from.repo, c.from.part)} (${c.from.repo}) calls ${listed(c.routes)} on ${label(c.to.repo, c.to.part)} (${c.to.repo})`,
+      sentence: `${label(c.from.repo, c.from.part)} (${c.from.repo}) calls ${listed(c.routes)} on ${label(c.to.repo, c.to.part)} (${c.to.repo}), ${times(c.routes.length, 'route')}`,
     })),
     ...ties.map((t): ViewLine => ({
       from: id(t.a.repo, t.a.part),
       to: id(t.b.repo, t.b.part),
       kind: 'coupled',
       weight: t.together,
-      sentence: `${label(t.a.repo, t.a.part)} (${t.a.repo}) and ${label(t.b.repo, t.b.part)} (${t.b.repo}) changed together in ${t.together} of the ${t.either} change sets that touched either`,
+      sentence: `${label(t.a.repo, t.a.part)} (${t.a.repo}) and ${label(t.b.repo, t.b.part)} (${t.b.repo}): of the ${t.either} change sets that touched either, both changed in ${t.together}`,
     })),
   ];
   return { map, view, svg: viewSvg(map, view, undefined, lines), key: TIES_KEY, sentences: lines.map((l) => l.sentence) };

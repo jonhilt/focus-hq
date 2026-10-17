@@ -98,8 +98,18 @@ describe('matrix', () => {
   it('shades a cell per connection, orange for two parts that import each other', () => {
     const svg = matrixSvg(MAP);
     expect(svg.match(/rgba\(255,140,60/g)).toHaveLength(2);
-    expect(svg.match(/rgba\(120,190,255/g)).toHaveLength(1);
+    expect(svg.match(/rgba\(150,165,200/g)).toHaveLength(1);
     expect(svg).toContain('Core imports Store 1×: save');
+  });
+
+  it('says in its margins how many parts each row uses and how many use each column, and each part’s commits over time', () => {
+    const plain = matrixSvg(MAP);
+    // api uses core; core uses api and db; db uses none: and core is used by api, api by core, db by core
+    const margin = (svg: string, x: string) => [...svg.matchAll(new RegExp(`<text x="${x}"[^>]*tabular-nums[^>]*>(\\d+)<`, 'g'))].map((m) => m[1]);
+    expect(margin(plain, '\\d+')).toEqual(['1', '1', '2', '1', '0', '1']);
+    expect(plain).not.toContain('<polyline');
+    const busy = matrixSvg({ ...MAP, history: { days: 90, commits: 3, parts: [{ id: 'core', commits: 3, lines: 9, series: [1, 0, 2] }], coupling: [] } });
+    expect(busy.match(/<polyline /g)).toHaveLength(1);
   });
 
   it('gives each layer its own colour, in the order the model names them', () => {
@@ -197,7 +207,7 @@ describe('tiesDrawing', () => {
   it('draws a column per repo with the parts its ties join, each tie labelled and said', () => {
     const drawn = tiesDrawing([web, api], [{ a: { repo: 'o/api', part: 'core' }, b: { repo: 'o/web', part: 'checkout' }, together: 4, either: 6 }]);
     expect(drawn?.view.parts).toEqual(['o/web#checkout', 'o/api#core']);
-    expect(drawn?.sentences).toEqual(['Core (o/api) and Checkout (o/web) changed together in 4 of the 6 change sets that touched either']);
+    expect(drawn?.sentences).toEqual(['Core (o/api) and Checkout (o/web): of the 6 change sets that touched either, both changed in 4']);
     expect(drawn?.svg).toContain('>O/WEB<');
     expect(drawn?.svg).toContain('stroke-dasharray="3 7"');
   });
@@ -207,7 +217,7 @@ describe('tiesDrawing', () => {
       { from: { repo: 'o/web', part: 'checkout' }, to: { repo: 'o/api', part: 'core' }, routes: ['/orders', '/orders/{id}'] },
       { from: { repo: 'o/web', part: 'checkout' }, to: { repo: 'o/api', part: 'api/openapi.yml' }, routes: ['/carts'] },
     ]);
-    expect(drawn?.sentences).toEqual(['Checkout (o/web) calls /orders, /orders/{id} on Core (o/api)', 'Checkout (o/web) calls /carts on openapi.yml (o/api)']);
+    expect(drawn?.sentences).toEqual(['Checkout (o/web) calls /orders, /orders/{id} on Core (o/api), 2 routes', 'Checkout (o/web) calls /carts on openapi.yml (o/api), 1 route']);
     expect(drawn?.view.parts).toEqual(['o/web#checkout', 'o/api#core', 'o/api#api/openapi.yml']);
     expect(drawn?.svg).toContain('marker-end="url(#cg-flow)"');
   });
