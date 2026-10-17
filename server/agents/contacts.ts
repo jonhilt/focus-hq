@@ -2,7 +2,7 @@
 // its chart, open until the lead pursues or drops them, or the captain spins one (or an idea for next) off as a goal. The lead logs and closes them through the note tool; these are
 // the pure decisions, and `notedGoal` in `lead.ts` calls them.
 
-import type { Contact, LeadWork } from '../../shared/types';
+import type { Agent, Contact, LeadWork, QueuedGoal } from '../../shared/types';
 import { notedSlice } from './waypoints';
 
 /** How long a contact may be, how many may be open at once (enough to keep threads, too few for a backlog), and how many are kept. */
@@ -60,24 +60,31 @@ function openContact(contacts: readonly Contact[], id: string): Contact | { erro
   return found;
 }
 
-/** Why the captain can't spin contact `id` off as a goal of its own, if they can't: it has to be open. */
-export function spinOffRefusal(contacts: readonly Contact[] | undefined, id: string): string | undefined {
-  const found = openContact(contacts ?? [], id);
-  return 'error' in found ? found.error : undefined;
+/** The contact `id` the captain wants to spin off as a goal of its own, or why they can't: it has to be open. */
+export function contactToSpinOff(contacts: readonly Contact[] | undefined, id: string): Contact | { error: string } {
+  return openContact(contacts ?? [], id);
 }
 
 /**
- * The goal's contacts once the captain has spun `id` off as a goal of its own (`goal`, its lead, unless it's waiting in
- * line for a station), in the slice under way.
+ * What spinning contact `c` off leaves the goal with, once the new goal has `started` (its lead, or a place in line for a
+ * station): its contacts, with `c` closed as spun off in the slice under way and linked to the new lead if there is one,
+ * and what the goal's lead hears. A goal in line goes by `firstWords`, the title it will start under.
  */
-export function spunOffContacts(work: Pick<LeadWork, 'slice' | 'contacts'>, id: string, to: { goal?: string; title: string }, now: number): Contact[] {
-  return (work.contacts ?? []).map((c) => (c.id === id.trim() && !c.closed ? { ...c, closed: { as: 'spun off', ...(to.goal && { goal: to.goal }), title: to.title, slice: work.slice, at: now } } : c));
-}
-
-/** What the lead hears once the captain has spun one of their contacts off: it's someone else's now. */
-export function spunOffNote(c: Contact, title: string, station: number | undefined): string {
-  const where = station === undefined ? 'waiting in line for a team station' : `at team station ${station + 1}`;
-  return `The captain spun contact ${c.id} (${c.text}) off as a goal of its own, “${title}”, ${where}. It's closed on your chart: leave that thread to the new goal.`;
+export function spunOff(
+  work: Pick<LeadWork, 'slice' | 'contacts'>,
+  c: Contact,
+  started: { agent: Pick<Agent, 'id' | 'lead'> } | { queued: QueuedGoal },
+  firstWords: string,
+  now: number,
+): { contacts: Contact[]; note: string } {
+  const lead = 'agent' in started ? started.agent : undefined;
+  const title = lead?.lead?.title ?? firstWords;
+  const closed = { as: 'spun off' as const, ...(lead && { goal: lead.id }), title, slice: work.slice, at: now };
+  const where = lead?.lead ? `at team station ${lead.lead.station + 1}` : 'waiting in line for a team station';
+  return {
+    contacts: (work.contacts ?? []).map((x) => (x.id === c.id && !x.closed ? { ...x, closed } : x)),
+    note: `The captain spun contact ${c.id} (${c.text}) off as a goal of its own, “${title}”, ${where}. It's closed on your chart: leave that thread to the new goal.`,
+  };
 }
 
 /**

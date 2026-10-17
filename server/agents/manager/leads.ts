@@ -7,7 +7,7 @@ import { GitHub } from '../../github/service';
 import { errorMessage, newId } from '../../util';
 import { takesTitle } from '../goalTitles';
 import { afterVerdict, closeCheck, hasLeadWork, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, landedMidTurnNote, landedNote, leadWorktreeId, moveQueued, nextGoal, pickStation, qaVerdictNote, queuedStart, reopenable, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch, type VerdictBehind } from '../lead';
-import { spinOffRefusal, spunOffContacts, spunOffIdea, spunOffIdeaNote, spunOffNote } from '../contacts';
+import { contactToSpinOff, spunOff, spunOffIdea, spunOffIdeaNote } from '../contacts';
 import { Workspace } from '../services';
 import { EVIDENCE_PER_PR, evidenceFile, landedWaypoint, shieldedWaypoint, tickedSpotCheck } from '../waypoints';
 import { type ManagerServices, Part, Refused, type WorkError } from './core';
@@ -312,15 +312,13 @@ export class Leads extends Part {
   spinOffContact(leadId: string, contactId: string, text: string): { agent: Agent } | { queued: QueuedGoal } {
     const lead = this.store.agents.get(leadId);
     if (!lead?.lead) throw new Refused({ message: 'There’s no goal under way there' });
-    const refused = spinOffRefusal(lead.lead.contacts, contactId);
-    if (refused) throw new Refused({ message: refused });
-    const contact = lead.lead.contacts?.find((c) => c.id === contactId.trim());
+    const contact = contactToSpinOff(lead.lead.contacts, contactId);
+    if ('error' in contact) throw new Refused({ message: contact.error });
     const started = this.startGoal(lead.projectId, text, { from: 'a goal’s star chart' });
-    const goal = 'agent' in started ? started.agent : undefined;
-    const title = goal?.lead?.title ?? goalTitle(text);
     const work = this.store.agent(leadId).lead ?? lead.lead;
-    this.update(lead, { lead: { ...work, contacts: spunOffContacts(work, contactId, { goal: goal?.id, title }, Date.now()) } });
-    if (contact) this.noteForLead(lead, 'Star chart', spunOffNote(contact, title, goal?.lead?.station));
+    const { contacts, note } = spunOff(work, contact, started, goalTitle(text), Date.now());
+    this.update(lead, { lead: { ...work, contacts } });
+    this.noteForLead(lead, 'Star chart', note);
     return started;
   }
 

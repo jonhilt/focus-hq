@@ -13,7 +13,7 @@ import type { PluginHost } from '../plugins/contract';
 import { demoWorkspace } from './demoRunner';
 import { office, until } from './fakeOffice';
 import type { AgentManager } from './manager';
-import type { Issue, PullRequest, QaReport, Snapshot } from '../../shared/types';
+import type { Agent, Issue, PullRequest, QaReport, Snapshot } from '../../shared/types';
 import { AWAY_DESK } from '../../shared/types';
 import type { WorkspaceOps } from './types';
 import { CLOUD_UNAVAILABLE } from './cloud';
@@ -491,6 +491,28 @@ describe('AgentManager', () => {
     for (const text of ['One', 'Two', 'Three', 'Four']) agents.startGoal(project.id, text);
     expect(() => agents.reopenGoal(project.id, lead.id)).toThrow(/Every team station in Shop has a goal: close one first/);
     expect(project.goals?.map((g) => g.id)).toEqual([lead.id]);
+  });
+
+  it('spins a contact off as a goal of its own, at a free station or in line, closes it linked to the new goal, and tells the lead', () => {
+    const { agents, store, project } = office();
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: Agent };
+    const work = store.agent(lead.id).lead;
+    if (!work) throw new Error('No lead work');
+    store.putAgent({ ...store.agent(lead.id), lead: { ...work, contacts: [{ id: 'c1', text: 'Auth off the LAN?', slice: 1, at: 0 }, { id: 'c2', text: 'Dark mode', slice: 1, at: 0 }] } });
+
+    const started = agents.spinOffContact(lead.id, 'c1', 'Auth off the LAN\n\n(Spun off from “Saved items”)');
+    if (!('agent' in started)) throw new Error('It went in line');
+    const closed = store.agent(lead.id).lead?.contacts?.[0].closed;
+    expect(closed).toMatchObject({ as: 'spun off', goal: started.agent.id, title: 'Auth off the LAN', slice: 1 });
+    expect(store.recentLines(lead.id).at(-1)?.text).toBe(`▶ Star chart: The captain spun contact c1 (Auth off the LAN?) off as a goal of its own, “Auth off the LAN”, at team station ${(started.agent.lead?.station ?? 0) + 1}. It's closed on your chart: leave that thread to the new goal.`);
+    expect(() => agents.spinOffContact(lead.id, 'c1', 'Again')).toThrow('Contact c1 was already spun off.');
+    expect(() => agents.spinOffContact(lead.id, 'c9', 'Who?')).toThrow("There's no contact c9. Open contacts: c2 (Dark mode).");
+
+    // every station taken: the new goal waits in line, by its first words, and the lead hears that
+    for (const text of ['Three', 'Four']) agents.startGoal(project.id, text);
+    expect(agents.spinOffContact(lead.id, 'c2', 'Dark mode for the shop')).toMatchObject({ queued: { text: 'Dark mode for the shop' } });
+    expect(store.agent(lead.id).lead?.contacts?.[1].closed).toEqual({ as: 'spun off', title: 'Dark mode for the shop', slice: 1, at: expect.any(Number) });
+    expect(store.recentLines(lead.id).at(-1)?.text).toContain('“Dark mode for the shop”, waiting in line for a team station.');
   });
 
   it('puts what the lead shows on their goal, with a picture when it can take one, and files it with the goal when it closes', async () => {
