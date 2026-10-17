@@ -64,7 +64,8 @@ describe('ratchetMode', () => {
 });
 
 describe('the fence ratchet', () => {
+  // parses every source file the fence covers: under a second alone, past 5 s on a busy machine (#511 timed out at load 47)
   it("holds every file's type assertions at its baseline", () => {
     expect(driftMessage(fenceDrift(readBaseline(), fenceCounts()))).toBeUndefined();
-  });
+  }, 30_000);
 });
