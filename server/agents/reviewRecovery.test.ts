@@ -2,7 +2,7 @@ import { Effect, Layer } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { prKey } from '../../shared/qa';
 import { demoLayer } from '../github/demo';
-import { GitHub } from '../github/service';
+import { GitHub, GitHubRejected } from '../github/service';
 import { demoWorkspace } from './demoRunner';
 import { office, restarted, until } from './fakeOffice';
 import { RESUMED_NOTE } from './runJournal';
@@ -16,10 +16,10 @@ const workspace = { ...demoWorkspace, changedFiles: () => Promise.resolve([]) };
 const pullRequests = () => Effect.runPromise(Effect.gen(function* () {
   return yield* (yield* GitHub).listPullRequests('demo/webshop-frontend');
 }).pipe(Effect.provide(demoLayer)));
-/** The demo's GitHub, with its comments on pull requests changed. */
-const commenting = (comment: (body: string) => Effect.Effect<string>) => Layer.effect(GitHub, Effect.gen(function* () {
+/** The demo's GitHub, with its comments on pull requests changed, and what's said to be on them (`comments`). */
+const commenting = (comment: (body: string) => Effect.Effect<string>, comments: () => string[] = () => []) => Layer.effect(GitHub, Effect.gen(function* () {
   const gh = yield* GitHub;
-  return GitHub.of({ ...gh, commentOnPullRequest: (_repo, _number, body) => comment(body) });
+  return GitHub.of({ ...gh, commentOnPullRequest: (_repo, _number, body) => comment(body), pullRequestComments: () => Effect.sync(comments) });
 })).pipe(Layer.provide(demoLayer));
 
 describe('a QA review after Focus restarts', () => {
@@ -106,12 +106,9 @@ describe('a QA review after Focus restarts', () => {
     await until(() => before.store.reviews.get(key)?.status === 'passed');
   });
 
-  // A known bug, kept failing on purpose until it's fixed (it.fails passes while the test fails, and fails once it
-  // passes): a verdict that reached the pull request as the office went down is posted again after the restart, as
-  // the office can't tell it went up (GitHub's service has no way to read a pull request's comments back). Found by
-  // checkRestart (docs/invariants.md#found-on-main).
-  it.fails('doesn’t post a verdict again that reached the pull request just before the office went down', async () => {
-    // the comment goes up, and the office goes down before it hears so
+  it('doesn’t post a verdict again that reached the pull request just before the office went down', async () => {
+    // the comment goes up, and the office goes down before it hears so (found by checkRestart, docs/invariants.md):
+    // the restarted office finds the verdict's mark among the pull request's comments
     const posted: string[] = [];
     const before = office(workspace, commenting((body) => Effect.sync(() => posted.push(body)).pipe(Effect.andThen(Effect.never))));
     const [pr] = await pullRequests();
@@ -122,7 +119,28 @@ describe('a QA review after Focus restarts', () => {
     await until(() => posted.length === 1);
 
     before.agents.shutDown();
-    const after = restarted(before.store, workspace, commenting((body) => Effect.sync(() => (posted.push(body), 'https://github.com/c/1'))));
+    const after = restarted(before.store, workspace, commenting((body) => Effect.sync(() => (posted.push(body), 'https://github.com/c/1')), () => posted));
+    after.agents.recover();
+    await until(() => before.store.reviews.get(key)?.status === 'passed');
+    expect(posted).toHaveLength(1);
+  });
+
+  it('posts a verdict after a restart when GitHub can’t say whether it went up: twice beats never', async () => {
+    const posted: string[] = [];
+    const before = office(workspace, commenting(() => Effect.never));
+    const [pr] = await pullRequests();
+    const key = prKey(pr.repo, pr.number);
+    before.agents.requestReview(before.project.id, pr.repo, pr.number, pr.title);
+    await until(() => before.claude.turns.length === 1);
+    before.claude.turns[0].end({ ok: true, summary: '', structured: pass });
+    await until(() => typeof before.store.review(key).phase === 'object');
+
+    before.agents.shutDown();
+    const down = Layer.effect(GitHub, Effect.gen(function* () {
+      const gh = yield* GitHub;
+      return GitHub.of({ ...gh, commentOnPullRequest: (_r, _n, body) => Effect.sync(() => (posted.push(body), 'https://github.com/c/1')), pullRequestComments: () => Effect.fail(new GitHubRejected({ message: 'GitHub is down' })) });
+    })).pipe(Layer.provide(demoLayer));
+    const after = restarted(before.store, workspace, down);
     after.agents.recover();
     await until(() => before.store.reviews.get(key)?.status === 'passed');
     expect(posted).toHaveLength(1);

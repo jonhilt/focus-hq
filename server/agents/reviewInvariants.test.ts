@@ -52,15 +52,16 @@ const reviews: Subject<Kept[]> = {
   name: 'reviews',
   start: (start) => {
     // what went up on each pull request, kept across lives as GitHub keeps it
-    const comments = new Map<number, number>();
+    const comments = new Map<number, string[]>();
     /** The demo's GitHub, its comments on pull requests answered through `later`. */
     const github = (later: Later) =>
       Layer.effect(GitHub, Effect.gen(function* () {
         const gh = yield* GitHub;
         return GitHub.of({
           ...gh,
-          commentOnPullRequest: (_repo, number) =>
-            Effect.promise(() => later('comment', () => (comments.set(number, (comments.get(number) ?? 0) + 1), Promise.resolve(`https://github.com/c/${number}`)))),
+          commentOnPullRequest: (_repo, number, body) =>
+            Effect.promise(() => later('comment', () => (comments.set(number, [...(comments.get(number) ?? []), body]), Promise.resolve(`https://github.com/c/${number}`)))),
+          pullRequestComments: (_repo, number) => Effect.promise(() => later('read comments', () => Promise.resolve([...(comments.get(number) ?? [])]))),
         });
       })).pipe(Layer.provide(demoLayer));
     const kept = (store: ReturnType<typeof office>['store']): Kept[] =>
@@ -68,7 +69,7 @@ const reviews: Subject<Kept[]> = {
         pr: pr.number,
         status: store.reviews.get(prKey(pr.repo, pr.number))?.status,
         verdicts: store.ledger.filter((e) => e.kind === 'qa-verdict' && e.pr === pr.number).length,
-        comments: comments.get(pr.number) ?? 0,
+        comments: comments.get(pr.number)?.length ?? 0,
       }));
     const life = (o: Pick<ReturnType<typeof office>, 'agents' | 'claude' | 'store'>): Running<Kept[]> => {
       const ended = new Set<number>();
@@ -116,9 +117,7 @@ describe('QA reviews, under the office’s two rules', () => {
     expect(said).toEqual(expect.arrayContaining(['testing', 'failed', 'passed']));
   });
 
-  // fails on a known bug, on purpose until it's fixed: a verdict that reached the pull request as the office went down
-  // is posted again after the restart (docs/invariants.md#found-on-main; the same bug's own test is in reviewRecovery.test.ts)
-  it.fails('end a restart as if what was under way had never started, or had finished', async () => {
+  it('end a restart as if what was under way had never started, or had finished', async () => {
     await checkRestart(reviews, { runs: 20 });
   });
 

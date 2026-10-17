@@ -8,7 +8,7 @@ import { GitHub, type GitHubError } from '../../github/service';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../../util';
 import { goalOf, goalReviewerId, reviewsToStart, sliceSiblings } from '../lead';
 import { repoFolders } from '../planner';
-import { checksFixPrompt, evidencePath, filesPrompt, filesToRevisit, fixPrompt, openedFiles, type Revisit, toolCalls, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, type QaSibling, qaSystemAppend } from '../qa';
+import { checksFixPrompt, evidencePath, filesPrompt, filesToRevisit, fixPrompt, openedFiles, postedAlready, type Revisit, toolCalls, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, type QaSibling, qaSystemAppend, verdictMark } from '../qa';
 import type { QaLoopEvent } from '../qaLoop';
 import { qaNextStep } from '../qaLoop';
 import { carriedComment, retestStep, shippedSinceTested } from '../retest';
@@ -294,7 +294,8 @@ export class Reviews extends Part {
       const review = this.store.reviews.get(prKey(agent.repo, number));
       const screenshots = yield* this.keepScreenshots(agent, report, review?.sha);
       const account = files && { changed: files.changed, opened: opened && [...opened], sentBack: files.sentBack };
-      const body = qaComment(report, { officer: agent.name, sha: review?.sha, pr: pullUrl(agent.repo, number) }, screenshots, this.store.settings.attribution, account);
+      // marked as this verdict's own, so a restart can tell whether it went up (`deliverVerdict`)
+      const body = `${qaComment(report, { officer: agent.name, sha: review?.sha, pr: pullUrl(agent.repo, number) }, screenshots, this.store.settings.attribution, account)}${verdictMark(newId('verdict'))}`;
       const failedRounds = (review?.failedRounds ?? 0) + (report.verdict === 'pass' ? 0 : 1);
       // the verdict's on disk before it goes anywhere: a restart from here on posts it and tells everyone (`deliverVerdict`)
       this.record(prKey(agent.repo, number), { kind: 'reported', verdict: report.verdict, officer: agent.name, body, failedRounds, report, screenshots, files: account, sha: review?.sha });
@@ -307,13 +308,17 @@ export class Reviews extends Part {
    * who hears of one: the board and ledger, the reviewer's station, whoever fixes a failed PR, and the PR's lead. From a
    * review's end, or at startup for one Focus shut down part way through.
    */
-  private deliverVerdict(projectId: string, repo: string, number: number): Effect.Effect<void, never, ManagerServices> {
+  private deliverVerdict(projectId: string, repo: string, number: number, recovering = false): Effect.Effect<void, never, ManagerServices> {
     return Effect.gen({ self: this }, function* () {
       const key = prKey(repo, number);
       let journal = this.store.review(key);
       const agent = this.reviewerOn(repo, number);
       if (typeof journal.phase === 'object' && journal.phase.reported === 'posting' && journal.reported) {
-        const url = yield* this.postVerdict(agent, repo, number, journal.reported.body);
+        const body = journal.reported.body;
+        // after a restart the comment may have gone up just as the office went down: look before posting it again
+        // (and if GitHub can't say, post it: twice beats never)
+        const there = recovering && postedAlready(yield* GitHub.use((github) => github.pullRequestComments(repo, number)).pipe(Effect.orElseSucceed((): string[] => [])), body);
+        const url = there ? undefined : yield* this.postVerdict(agent, repo, number, body);
         this.record(key, { kind: 'posted', ...(url && { url }) });
         journal = this.store.review(key);
       }
@@ -570,7 +575,7 @@ export class Reviews extends Part {
       case 'post':
       case 'announce':
         if (reviewer) this.print(reviewer, [{ kind: 'system', text: `✻ Focus restarted before everyone heard QA's verdict: ${next.kind === 'post' ? 'posting it' : 'passing it on'}` }]);
-        this.background(this.deliverVerdict(review.projectId, review.repo, review.number));
+        this.background(this.deliverVerdict(review.projectId, review.repo, review.number, true));
         return false;
     }
   }

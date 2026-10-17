@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { QaReport } from '../../shared/types';
 import type { PullRequestDetail } from '../github/provider';
-import { diffAnchor, evidencePath, filesPrompt, filesSection, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPrompt, qaSystemAppend, siblingsSection, skimmed, unaccounted, filesToRevisit, openedFiles, toolCalls } from './qa';
+import { diffAnchor, evidencePath, filesPrompt, filesSection, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPrompt, qaSystemAppend, siblingsSection, skimmed, unaccounted, filesToRevisit, openedFiles, toolCalls, postedAlready, verdictMark } from './qa';
 import { mustOpen } from '../../shared/qa';
 
 const report = (r: Partial<QaReport> = {}): QaReport => ({
@@ -414,5 +414,25 @@ describe('what QA actually opened', () => {
     expect(toolCalls(jsonl)).toEqual([{ name: 'Read', input: { file_path: 'a.ts' } }]);
     expect(['server/crew.ts', 'config/app.yml', 'package.json'].every(mustOpen)).toBe(true);
     expect(['server/crew.test.ts', 'docs/qa.md', 'pnpm-lock.yaml', 'client/public/deck.glb'].some(mustOpen)).toBe(false);
+  });
+});
+
+describe('a verdict’s mark', () => {
+  const body = `## ✅ QA passed${verdictMark('verdict_a1b2c')}`;
+
+  it('finds the very verdict among the pull request’s comments', () => {
+    expect(postedAlready(['Looks good', `## ✅ QA passed\n\n<!-- focus-qa-verdict verdict_a1b2c -->`], body)).toBe(true);
+  });
+
+  it('doesn’t take another verdict on the same pull request for this one', () => {
+    expect(postedAlready([`## ❌ QA failed${verdictMark('verdict_0ld00')}`], body)).toBe(false);
+  });
+
+  it('never says a verdict without a mark went up: posting it again beats losing it', () => {
+    expect(postedAlready(['## ✅ QA passed'], '## ✅ QA passed')).toBe(false);
+  });
+
+  it('hides the mark from whoever reads the comment', () => {
+    expect(verdictMark('verdict_a1b2c')).toMatch(/^\n\n<!-- .* -->$/);
   });
 });

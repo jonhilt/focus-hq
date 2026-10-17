@@ -66,6 +66,8 @@ export interface GitHubProvider {
   getPullRequest(repo: string, number: number): Promise<PullRequestDetail>;
   /** Posts a comment on a pull request and returns its URL. */
   commentOnPullRequest(repo: string, number: number, body: string): Promise<string>;
+  /** What a pull request's comments say, oldest first. */
+  pullRequestComments(repo: string, number: number): Promise<string[]>;
   /** Commits a file to the repo's QA evidence branch, creating the branch on first use, and returns its URL. */
   uploadQaEvidence(repo: string, path: string, bytes: Buffer): Promise<string>;
   createPullRequest(repo: string, pr: CreatePullRequest): Promise<{ number: number; url: string }>;

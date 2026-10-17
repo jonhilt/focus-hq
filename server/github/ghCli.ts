@@ -20,6 +20,9 @@ const RawIssue = Schema.Struct({
 });
 
 /** What `getPullRequest` asks gh for. */
+/** A pull request's comments, as `gh pr view --json comments` gives them. */
+const RawPrComments = Schema.Struct({ comments: Schema.Array(Schema.Struct({ body: Schema.String })) });
+
 const RawPrDetail = Schema.Struct({
   number: Schema.Number,
   title: Schema.String,
@@ -233,6 +236,9 @@ const make = Effect.gen(function* () {
       ),
 
     commentOnPullRequest: (repo, number, body) => gh(['pr', 'comment', String(number), '-R', repo, '--body-file', '-'], body).pipe(Effect.map(lastLine)),
+
+    pullRequestComments: (repo, number) =>
+      ghJson(RawPrComments, ['pr', 'view', String(number), '-R', repo, '--json', 'comments']).pipe(Effect.map((raw) => raw.comments.map((c) => c.body))),
 
     uploadQaEvidence: (repo, path, bytes) =>
       evidenceBranch(repo).pipe(

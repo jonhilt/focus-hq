@@ -107,7 +107,7 @@ stateDiagram-v2
 - a review waiting for its reviewer waits again, and one the office was prechecking goes to QA;
 - one whose reviewer was still checking it out (no Claude turn yet) starts again;
 - one under test carries on with its reviewer's turn when that picks itself back up: on your plan, in the same conversation, told it was cut off (or held again for your plan's limit). On your API key, or with no conversation to go back to, it ends saying "Interrupted when Focus shut down. Send it to QA again.";
-- a verdict QA had reached is posted on the PR if it wasn't yet, and passed on to everyone who hears of one (the board, the ledger, the PR's lead, a send-back), with no Claude turn. A crash in the moment between the comment going up and `posted` being written posts it twice: a verdict said twice beats one lost.
+- a verdict QA had reached is posted on the PR if it wasn't yet, and passed on to everyone who hears of one (the board, the ledger, the PR's lead, a send-back), with no Claude turn. A crash in the moment between the comment going up and `posted` being written used to post it twice; now each verdict's comment ends with a hidden mark of its own (`verdictMark`), and a restart looks for it among the pull request's comments before posting. If GitHub can't say, it posts anyway: a verdict said twice beats one lost.
 
 - a PR the operations officer was looking at goes to the captain (it needs you).
 

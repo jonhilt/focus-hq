@@ -286,6 +286,19 @@ export function filesSection(report: QaReport, account: FileAccount | undefined)
   ];
 }
 
+/**
+ * A verdict's own mark, hidden at the end of its comment: after a restart the office looks for it among the pull
+ * request's comments before posting the verdict again, since the comment may have gone up just as it went down. One
+ * verdict's, not the pull request's: a re-review posts another verdict on the same one.
+ */
+export const verdictMark = (id: string) => `\n\n<!-- focus-qa-verdict ${id} -->`;
+
+/** Whether the verdict `body` (with its mark) is already among a pull request's `comments`. Never for a body without one. */
+export function postedAlready(comments: readonly string[], body: string): boolean {
+  const mark = /<!-- focus-qa-verdict \S+ -->/.exec(body)?.[0];
+  return !!mark && comments.some((c) => c.includes(mark));
+}
+
 /** The QA report as a pull request comment, with the screenshots that made it to GitHub and, when known, how it covered each changed file. */
 export function qaComment(report: QaReport, by: { officer: string; sha?: string; pr?: string }, screenshots: QaScreenshot[], attribution: boolean, account?: FileAccount): string {
   const pass = report.verdict === 'pass';

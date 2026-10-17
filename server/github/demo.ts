@@ -266,6 +266,8 @@ export const demoLayer = Layer.sync(GitHub, () => {
         }),
       ),
 
+    pullRequestComments: (name, number) => pr(name, number).pipe(Effect.map((p) => [...(p.comments ?? [])])),
+
     uploadQaEvidence: (name, path) => repo(name).pipe(Effect.as(evidenceUrl(name, path))),
 
     createPullRequest: (name, req) =>
