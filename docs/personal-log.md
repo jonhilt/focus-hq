@@ -6,6 +6,18 @@ The captain's own log: thoughts you jot down to come back to, like an idea for a
 
 Press <kbd>I</kbd> anywhere aboard. The ready room's console opens on **Personal log**, with the cursor in its box. Type or press **Mic** to dictate ([voice input](voice-input.md)). <kbd>Enter</kbd> logs it, and <kbd>Shift</kbd>+<kbd>Enter</kbd> starts a new line. The box stays open for the next thought. Entries don't belong to a project.
 
+## From off the ship
+
+With the office on your tailnet ([Tricorder](tricorder.md): `tailscale serve --bg 4477`), anything else on it, such as a chat bot, can jot a thought down for you:
+
+```sh
+curl -X POST https://<mac>.<tailnet>.ts.net/api/personal-log \
+  -H 'Content-Type: application/json' \
+  -d '{"text": "Video idea: briefings as the fix for walls of AI text", "from": "remote"}'
+```
+
+It answers with the entry (`{ id, text, from, at, status }`), or a 400 with `{ error }` for empty text or text over 2000 characters. `from: "remote"` marks it *from off the ship* on the console. Like the rest of the API, it has no login: the tailnet is the only lock.
+
 ## What's in it
 
 The console's **Personal log** section (its count is what's on your mind) lists:
