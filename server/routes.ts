@@ -6,7 +6,7 @@ import { isAutonomy } from '../shared/autonomy';
 import { closedGoals } from '../shared/ledger';
 import { ledgerWindow } from '../shared/ledgerReview';
 import { isKokoroVoice } from '../shared/voice';
-import { markFrom } from '../shared/personalLog';
+import { logFrom, personalMark } from '../shared/personalLog';
 import { logSince } from '../shared/captainsLog';
 import { captainsLog } from './agents/captainsLog';
 import { replay } from './agents/runJournal';
@@ -146,8 +146,8 @@ export function apiRouter(office: Office, store: Store): express.Router {
   }));
   // the captain's personal log: what they jotted down to come back to (shared/personalLog.ts)
   r.get('/personal-log', h(() => store.personalEntries));
-  r.post('/personal-log', h((req) => office.notePersonal(req.body.text, 'office')));
-  r.post('/personal-log/:id', h((req) => office.markPersonal(markFrom(param(req, 'id'), req.body))));
+  r.post('/personal-log', h((req) => office.notePersonal(req.body.text, logFrom(req.body.from))));
+  r.post('/personal-log/:id', h((req) => office.markPersonal(personalMark(param(req, 'id'), req.body))));
   r.get('/ledger', h((req) => ledgerWindow(store.ledger, Date.now(), Number(req.query.days ?? 14))));
   r.get('/digests/backfill', h(async () => ({ sessions: (await office.agents.undigested()).length })));
   r.post('/digests/backfill', h(() => office.agents.backfill()));

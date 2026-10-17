@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CLOSED_SHOWN, EMPTY_PERSONAL_LOG, entryIn, entryText, evolvePersonalLog, markFrom, type PersonalFact, personalLogView, snoozeUntil } from './personalLog';
+import { CLOSED_SHOWN, EMPTY_PERSONAL_LOG, entryIn, entryText, logFrom, personalMark, evolvePersonalLog, type PersonalFact, personalLogView, snoozeUntil } from './personalLog';
 
 const fold = (...facts: (PersonalFact & { t?: number })[]) =>
   facts.reduce((log, f, i) => evolvePersonalLog(log, { ...f, seq: i + 1, t: f.t ?? (i + 1) * 1000 }), EMPTY_PERSONAL_LOG);
@@ -79,28 +79,42 @@ describe('putting an entry aside', () => {
   });
 });
 
-describe('what the captain did with an entry', () => {
-  it('reads each kind of mark from the request', () => {
-    expect(markFrom('a', { kind: 'edited', text: 'two' })).toEqual({ kind: 'edited', id: 'a', text: 'two' });
-    expect(markFrom('a', { kind: 'done', text: 'ignored' })).toEqual({ kind: 'done', id: 'a' });
-    expect(markFrom('a', { kind: 'dropped' })).toEqual({ kind: 'dropped', id: 'a' });
-    expect(markFrom('a', { kind: 'reopened' })).toEqual({ kind: 'reopened', id: 'a' });
-    expect(markFrom('a', { kind: 'snoozed', until: 9000 })).toEqual({ kind: 'snoozed', id: 'a', until: 9000 });
+describe('what the captain did with an entry, as asked', () => {
+  it('reads each kind', () => {
+    expect(personalMark('a', { kind: 'done' })).toEqual({ kind: 'done', id: 'a' });
+    expect(personalMark('a', { kind: 'reopened', text: 'ignored' })).toEqual({ kind: 'reopened', id: 'a' });
+    expect(personalMark('a', { kind: 'edited', text: 'new' })).toEqual({ kind: 'edited', id: 'a', text: 'new' });
+    expect(personalMark('a', { kind: 'snoozed', until: 5000 })).toEqual({ kind: 'snoozed', id: 'a', until: 5000 });
   });
 
+  it('refuses a kind it does not know, or a snooze without a time', () => {
+    expect(() => personalMark('a', { kind: 'noted' })).toThrow('kind must be one of');
+    expect(() => personalMark('a', {})).toThrow('kind must be one of');
+    expect(() => personalMark('a', { kind: 'snoozed', until: '5000' })).toThrow('Say until when');
+    expect(() => personalMark('a', { kind: 'snoozed', until: Number.NaN })).toThrow('Say until when');
+  });
+
+  it('takes an entry as from off the ship only when it says so', () => {
+    expect(logFrom('remote')).toBe('remote');
+    expect(logFrom(undefined)).toBe('office');
+    expect(logFrom('anything')).toBe('office');
+  });
+});
+
+describe('what the captain did with an entry, from any request', () => {
   it('leaves an edit without text for the log to refuse', () => {
-    expect(markFrom('a', { kind: 'edited', text: 7 })).toEqual({ kind: 'edited', id: 'a', text: '' });
+    expect(personalMark('a', { kind: 'edited', text: 7 })).toEqual({ kind: 'edited', id: 'a', text: '' });
   });
 
-  it('asks until when an entry is put aside', () => {
-    for (const until of [undefined, '9000', Number.NaN, Number.POSITIVE_INFINITY]) {
-      expect(() => markFrom('a', { kind: 'snoozed', until })).toThrow('Say until when');
+  it('asks until when for a snooze that never ends, or says nothing', () => {
+    for (const until of [undefined, Number.POSITIVE_INFINITY]) {
+      expect(() => personalMark('a', { kind: 'snoozed', until })).toThrow('Say until when');
     }
   });
 
-  it('refuses a mark it does not know, or no mark at all', () => {
-    for (const body of [{ kind: 'noted', text: 'x' }, { kind: 'DONE' }, {}, undefined, null, 'done', ['done']]) {
-      expect(() => markFrom('a', body)).toThrow('kind must be one of edited, done, dropped, snoozed, reopened');
+  it('refuses a request with no mark at all, as when it has no JSON body', () => {
+    for (const body of [undefined, null, 'done', ['done'], { kind: 'DONE' }]) {
+      expect(() => personalMark('a', body)).toThrow('kind must be one of edited, done, dropped, snoozed, reopened');
     }
   });
 });

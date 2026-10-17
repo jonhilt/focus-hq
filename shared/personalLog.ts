@@ -48,12 +48,15 @@ export function entryText(text: unknown): string {
   return trimmed;
 }
 
+/** Where an entry says it was jotted down: off the ship only when it says so. */
+export const logFrom = (from: unknown): LogFrom => (from === 'remote' ? 'remote' : 'office');
+
 /** What the captain did with an entry: every fact but jotting one down. */
 export type PersonalMark = Exclude<PersonalFact, { kind: 'noted' }>;
 
 /** The mark a request asks for on entry `id` (`{ kind, text?, until? }`), or why it can't be one. An edit's text is
  * checked by `entryText` as it's kept. */
-export function markFrom(id: string, body: unknown): PersonalMark {
+export function personalMark(id: string, body: unknown): PersonalMark {
   const { kind, text, until }: { kind?: unknown; text?: unknown; until?: unknown } = body && typeof body === 'object' ? body : {};
   switch (kind) {
     case 'edited':
