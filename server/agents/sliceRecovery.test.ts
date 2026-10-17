@@ -91,3 +91,34 @@ describe('a lead’s slice after Focus restarts', () => {
     expect(after.agents.leadPrs(before.project.id)).toHaveLength(2);
   });
 });
+
+describe('a lead’s slice when a pull request lands as they ship', () => {
+  // A known bug, kept failing on purpose until it's fixed (it.fails passes while the test fails, and fails once it
+  // passes): a ship works from the slice's pull requests as they were when it started, so a pull request that merges
+  // while it's pushing is "updated" after it merged: its `pr` fact puts it back in the slice journal as open, forgetting
+  // that it landed, and what was pushed onto its merged branch never reaches review. Found by checkAtOnce
+  // (sliceInvariants.test.ts, docs/invariants.md#found-on-main).
+  it.fails('still knows a pull request merged that merged while the lead was shipping', async () => {
+    // the push to hold up, once one's asked for: the others go straight through
+    let hold = false;
+    let release = () => undefined as void;
+    const o = office({ ...demoWorkspace, push: () => (hold ? ((hold = false), new Promise<void>((resolve) => (release = resolve))) : Promise.resolve()) });
+    o.project.autoQa = false;
+    const { agent } = o.agents.startGoal(o.project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => o.claude.turns.length === 1);
+    const { tools } = o.claude.turns[0].req;
+    const ship = (input: { title: string; summary: string }) => tools!.ship(input);
+    await ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    const [first] = o.store.agent(agent.id).lead!.prs;
+
+    // they ship again, and the captain merges the first pull request while the push is under way
+    hold = true;
+    const again = ship({ title: 'Saved items, first slice', summary: 'More of it.' });
+    await until(() => o.store.agent(agent.id).status === 'pushing');
+    o.agents.prClosed(first.repo, first.number, true);
+    release();
+    await again;
+    expect(o.store.slice(agent.id).prs.find((p) => p.repo === first.repo && p.number === first.number)?.outcome).toBe('merged');
+  });
+});
+

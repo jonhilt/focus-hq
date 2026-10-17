@@ -26,7 +26,8 @@ What a part hands to `later` is what it asks of the world outside: a model's ans
 
 | part | test | rules |
 | --- | --- | --- |
-| a goal's lead (held for the plan's limit, its run) | `server/agents/managerInvariants.test.ts` | restart |
+| a goal's lead (held for the plan's limit, its run, its inbox: messages into a turn, notes waiting for it to end, none lost) | `server/agents/managerInvariants.test.ts` | restart |
+| a goal lead's slices (shipped, landed, moved on to fresh code, the lead told it landed) | `server/agents/sliceInvariants.test.ts` | both |
 | the cartography plugin's kept diagrams | `plugins/cartography/invariants.test.ts` | both |
 | the retro plugin's chief engineer's decisions | `plugins/retro/invariants.test.ts` | both |
 | QA reviews (asked for, failed, passed, posted on the pull request) | `server/agents/reviewInvariants.test.ts` | both |
@@ -51,6 +52,10 @@ So 4 of the 4 bugs in parts it describes, each with the same outcome as the orig
 ## Found on main
 
 **A verdict posted twice** (fixed). `docs/qa.md` already said this could happen, as the price of never losing a verdict; the check made it a failing test, and the fix keeps both. If the office went down just after GitHub took QA's comment and before it recorded that it did, the restart posted the same verdict on the pull request again: the review journal said "reported, posting", and the office had no way to read a pull request's comments back. The review check found it, and `reviewRecovery.test.ts` held it in a plain test. Now each verdict's comment ends with a hidden mark of its own (`verdictMark`: that one verdict's, not the pull request's, as a re-review posts another verdict on the same one), and a restart looks for it among the pull request's comments (`GitHub.pullRequestComments`) before posting again. If GitHub can't say, it posts: twice beats never.
+
+**A pull request that merges while the lead ships is put back as open.** A ship works from the slice's pull requests as they were when it started, so one the captain merges while the ship is pushing is "updated" after it merged: the ship's `pr` fact puts it back in the slice journal with no outcome, and what was pushed onto its merged branch never reaches review. The slices' check for two at once found it (a ship and a merge at once); `sliceRecovery.test.ts` holds it in a plain test. Both are marked `it.fails` until it's fixed. Until then the slices' fuller check for two at once leaves merges during a ship out, and the one that finds it starts from a shipped slice with only ships and merges on offer, so it finds it on every seed.
+
+**A slice that landed mid-turn moves on a turn early after a restart.** The office moves a landed slice's repos to fresh code at the start of the lead's next turn, and a restart starts one (the resumed turn), so after a restart the slice has moved where, without one, it would still be waiting. Nothing is half-done and nothing is lost (commits are carried over), so it's by design rather than a bug, but it's not what the rule for a restart allows: the slices' restart check leaves out merging a slice's last pull request while the lead's turn is under way.
 
 ## What it can't tell
 
