@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Agent, LedgerEvent, PastPullRequest } from '../../plugin-api/server';
 import type { Scorecard } from '../scorecard/api';
 import { freshClimb, type Climb } from './shared';
-import { climbBrief, climbHome, climbLog, type MainScorecards, climbLogText, climbPullRequest, climbStep, climbTarget, gapScore, openRetroIssues, ownWords, ranked, section, shortlistOf } from './climb';
+import { CLIMB_SUMMARY, climbBrief, climbHome, climbLog, type MainScorecards, climbLogText, climbPullRequest, climbStep, climbTarget, gapScore, openRetroIssues, ownWords, ranked, section, shortlistOf, SWEEP_LINES, SWEEP_PLACES } from './climb';
 
 const REPO = 'jonhilt/focus';
 let seq = 0;
@@ -156,6 +156,14 @@ describe('the shortlist', () => {
     expect(brief).toContain('Score = 2 × Harm + Distance');
     expect(brief).toContain('`| # | Gap | Harm | Distance | Size | Score |`');
     expect(brief).toContain('A gap a closed climb took, with nothing changed since, scores Harm 0.');
+  });
+
+  it('lets a climb sweep one kind of fix across several places, as one reason with its own bounds', () => {
+    const brief = climbBrief({ repo: REPO, baseBranch: 'main', branch: 'focus/climb-x' }, [], 0);
+    expect(brief).toContain(`up to ${SWEEP_PLACES} places and about ${SWEEP_LINES} changed lines`);
+    expect(brief).toContain('with Harm one higher (up to 5) when it takes 3 or more places');
+    expect(brief).toContain('a sweep is one reason, the same fix in each place; two kinds of fix are two reasons');
+    expect(CLIMB_SUMMARY).toContain('for a sweep, each place it changed');
   });
 });
 

@@ -2,7 +2,7 @@
 
 A plugin (`FOCUS_PLUGINS=climber`, [plugins](../../docs/plugins.md)).
 
-Main engineering's climber, Lt. Rhee, takes the [scorecard](../scorecard/README.md)'s worst gap in Focus's own repo and fixes it. Each fix is one pull request with the numbers measured before and after. You approve each one. It's a hill-climb, after [ratstack's hill-climb prompt](https://ratstack.sh/prompts/hill-climb):
+Main engineering's climber, Lt. Rhee, takes the [scorecard](../scorecard/README.md)'s worst gap in Focus's own repo and fixes it, or sweeps one kind of fix across several places at once. Each climb is one pull request with the numbers measured before and after. You approve each one. It's a hill-climb, after [ratstack's hill-climb prompt](https://ratstack.sh/prompts/hill-climb):
 
 1. measure;
 2. take the top gap;
@@ -41,13 +41,14 @@ A climb is an agent's work like a developer's (`task: 'climb'`), with difference
     - the office's open frictions (3 or more sessions in 14 days, with no retro decision yet);
     - the retro's accepted issues that no merge has closed.
   - **Shortlist.** Before choosing, the 3 to 5 strongest gaps as a scored table: Harm (1 to 5) and Distance from the standard (1 to 5), Score = 2 × Harm + Distance, Size (S, M, L) breaking a tie. They take the top that fits one pull request; a gap you turned down, with nothing changed since, scores no harm. Writing the scores down makes the pick a rule the next climb can check, rather than one session's feel (three fresh sessions on one brief once picked three different gaps).
+  - **Sweeps.** Gaps of one kind that take the same fix go on the shortlist as one row, a sweep, rather than one climb each: say, moving the decisions out of the six worst CRAP functions into pure functions. A sweep names its places, worst first, up to 6 of them and about 400 changed lines (`SWEEP_PLACES`, `SWEEP_LINES`). It scores as its worst place, with Harm one higher (up to 5) when it takes 3 or more places, and is sized as a whole. Each place gets the same treatment: a test beside it and a planted bug. A place that doesn't take the fix is left out, saying why. One-at-a-time climbs moved about 1.4 functions over CRAP 30 per pull request, for the same fixed cost (two scorecards, QA, your merge) a sweep spreads over six.
   - **Hypothesis.** Before changing anything: which gap, the number it will move and by how much, and what would show them wrong, ending in a `Target: <metric key> <before> → <after>` line. It's the pull request's first section, with whether it held.
   - **Sign-off.** Anything that needs your sign-off (a dependency version, how the office merges or deploys) is listed, not done.
   - **Fix.** A check first when the bad pattern can come back, then the smallest change. A planted bug proves each new test can fail.
   - **Prove.** The whole gate, then the scorecard again; those numbers are the After.
-  - **Never:** `--no-verify`, loosening a rule or test, changing a dependency version, or two reasons in one pull request.
+  - **Never:** `--no-verify`, loosening a rule or test, changing a dependency version, or two reasons in one pull request (a sweep is one reason: the same fix in each place).
 - **The pull request.** The office pushes their branch and opens it from their final message (`climbPullRequest`). Its first line (`# …`) is the title. The rest is the body:
-  - **Shortlist**, **Hypothesis**, **Problem**, **Solution**, **Before** and **After**;
+  - **Shortlist**, **Hypothesis**, **Problem**, **Solution** (for a sweep, each place it changed), **Before** and **After**;
   - then anything that needs your sign-off.
 
   It closes no issue of its own; when the climber took a retro issue, they say `Closes #n` themselves.

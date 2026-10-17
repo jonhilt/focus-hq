@@ -7,17 +7,23 @@ import type { Climb, ClimbEnd } from './shared';
 
 const FINISHED: AgentStatus[] = ['done', 'error', 'stopped'];
 
+/** How far one sweep goes (the brief's step 2): enough to be worth its pull request, few enough to review as one. */
+export const SWEEP_PLACES = 6;
+export const SWEEP_LINES = 400;
+
 /** What the climber is told in their system prompt: how a climb goes, and what they never do. */
 export const CLIMB_ASSIGNMENT =
   'You are main engineering\'s climber. Your job is to move Focus, the office you work in, one change at a time towards its ' +
   'own standard: its CLAUDE.md and docs, Effect v4 done properly, honest types, and a fence of checks that makes the easy ' +
-  'path the right one. This climb is one change, measured before and after.';
+  'path the right one. This climb is one change, measured before and after: one gap, or a sweep of one kind of fix ' +
+  'across several places.';
 
 export const CLIMB_SUMMARY =
   'Your final message becomes the pull request: its first line is `# ` and the title (imperative, under 70 characters), ' +
   'then six sections: **Shortlist** (your scored table from step 2, as you wrote it), ' +
   '**Hypothesis** (as you wrote it before changing anything, with its `Target:` line, and whether it held), ' +
-  '**Problem** (what was wrong, with the evidence), **Solution** (what changed, and why this way), ' +
+  '**Problem** (what was wrong, with the evidence), **Solution** (what changed, and why this way; for a sweep, each place ' +
+  'it changed), ' +
   '**Before** and **After** (the scorecard\'s numbers and anything else you measured, measured the same way both times). ' +
   'Then, if you skipped anything that needs the captain\'s sign-off, a **Needs your sign-off** list. No preamble.';
 
@@ -214,6 +220,7 @@ export function climbBrief(agent: Pick<Agent, 'repo' | 'baseBranch' | 'branch'>,
     issues.length
       ? `- the retro's accepted issues, still open in ${agent.repo} (if you take one, say \`Closes #n\` in the Solution):\n${issues.map((i) => `  - #${i.number} ${i.title}`).join('\n')}`
       : '- the retro\'s accepted issues: none are open.',
+    `**Sweeps.** Gaps of one kind that take the same fix (functions over CRAP 30 whose decisions can move into pure functions, casts one honest type would replace, untested decisions in one area) go on the shortlist as one row, a sweep, rather than one place at a time: name the kind of fix and the places, worst first, up to ${SWEEP_PLACES} places and about ${SWEEP_LINES} changed lines. Score it by its worst place, with Harm one higher (up to 5) when it takes 3 or more places, since leaving the rest costs the next change; size it by the whole sweep. A single gap that has others of its kind should be a sweep.`,
     'Skip anything that needs the captain\'s sign-off (a dependency version, a change to how the office merges or deploys, anything outside this repo) and list it at the end instead.',
     '',
     '## Hypothesis, before you change anything',
@@ -221,6 +228,7 @@ export function climbBrief(agent: Pick<Agent, 'repo' | 'baseBranch' | 'branch'>,
     '',
     '## 3. Fix',
     'If the bad pattern can come back, add a check first (a lint rule, a type, a test that guards it) and watch it fail. Then make the smallest coherent change. Plant a bug to prove each new test can fail, then take the bug out.',
+    'In a sweep, give every place the same treatment, a test beside each new function, and plant a bug in each; one check can guard the whole kind. If a place turns out not to take the fix, leave it out and say why rather than bending the fix to it.',
     '',
     '## 4. Prove',
     'Run the whole gate (`pnpm run typecheck`, `pnpm run lint`, `pnpm test`, `pnpm run build`), then `pnpm run scorecard --no-save` again: its numbers are your **After**. Say plainly whether your hypothesis held; a miss is worth reporting as it is. Update the docs the change touches.',
@@ -228,7 +236,7 @@ export function climbBrief(agent: Pick<Agent, 'repo' | 'baseBranch' | 'branch'>,
     '## Never',
     '- Pass `--no-verify`, or loosen a lint rule, check, diagnostic or test to make something pass.',
     '- Change a dependency version.',
-    '- Mix two reasons in one pull request, or claim a number you didn\'t measure.',
+    '- Mix two reasons in one pull request (a sweep is one reason, the same fix in each place; two kinds of fix are two reasons), or claim a number you didn\'t measure.',
     '',
     'If nothing is worth changing, commit nothing and say why in your final message.',
   ].join('\n');
