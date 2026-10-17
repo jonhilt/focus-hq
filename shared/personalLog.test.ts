@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CLOSED_SHOWN, EMPTY_PERSONAL_LOG, entryIn, entryText, evolvePersonalLog, type PersonalFact, personalLogView, snoozeUntil } from './personalLog';
+import { CLOSED_SHOWN, EMPTY_PERSONAL_LOG, entryIn, entryText, logFrom, personalMark, evolvePersonalLog, type PersonalFact, personalLogView, snoozeUntil } from './personalLog';
 
 const fold = (...facts: (PersonalFact & { t?: number })[]) =>
   facts.reduce((log, f, i) => evolvePersonalLog(log, { ...f, seq: i + 1, t: f.t ?? (i + 1) * 1000 }), EMPTY_PERSONAL_LOG);
@@ -76,5 +76,27 @@ describe('putting an entry aside', () => {
     const now = new Date(2026, 9, 16, 22, 30);
     expect(new Date(snoozeUntil(now, 'tomorrow'))).toEqual(new Date(2026, 9, 17, 9));
     expect(new Date(snoozeUntil(now, 'week'))).toEqual(new Date(2026, 9, 23, 9));
+  });
+});
+
+describe('what the captain did with an entry, as asked', () => {
+  it('reads each kind', () => {
+    expect(personalMark('a', { kind: 'done' })).toEqual({ kind: 'done', id: 'a' });
+    expect(personalMark('a', { kind: 'reopened', text: 'ignored' })).toEqual({ kind: 'reopened', id: 'a' });
+    expect(personalMark('a', { kind: 'edited', text: 'new' })).toEqual({ kind: 'edited', id: 'a', text: 'new' });
+    expect(personalMark('a', { kind: 'snoozed', until: 5000 })).toEqual({ kind: 'snoozed', id: 'a', until: 5000 });
+  });
+
+  it('refuses a kind it does not know, or a snooze without a time', () => {
+    expect(() => personalMark('a', { kind: 'noted' })).toThrow('kind must be one of');
+    expect(() => personalMark('a', {})).toThrow('kind must be one of');
+    expect(() => personalMark('a', { kind: 'snoozed', until: '5000' })).toThrow('Say until when');
+    expect(() => personalMark('a', { kind: 'snoozed', until: Number.NaN })).toThrow('Say until when');
+  });
+
+  it('takes an entry as from off the ship only when it says so', () => {
+    expect(logFrom('remote')).toBe('remote');
+    expect(logFrom(undefined)).toBe('office');
+    expect(logFrom('anything')).toBe('office');
   });
 });

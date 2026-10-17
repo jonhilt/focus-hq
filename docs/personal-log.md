@@ -21,7 +21,7 @@ The console's **Personal log** section (its count is what's on your mind) lists:
 ## The API
 
 - `GET /api/personal-log`: every entry, oldest first.
-- `POST /api/personal-log {text}`: jots one down.
+- `POST /api/personal-log {text, from?}`: jots one down (`from: 'remote'` shows it as jotted down off the ship).
 - `POST /api/personal-log/:id {kind}`: `done`, `dropped`, `reopened`, `snoozed` (with `until`, ms since the epoch), or `edited` (with `text`).
 
 Browsers hear each change as a `personal-log` event with the whole log.
