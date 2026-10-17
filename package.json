@@ -32,7 +32,8 @@
     "qa-catch": "tsx scripts/qaCatch.ts",
     "before-after": "tsx plugins/flow/scripts/beforeAfter.ts",
     "bug-corpus": "tsx scripts/bugCorpus.ts",
-    "bug-replay": "tsx scripts/bugReplay.ts"
+    "bug-replay": "tsx scripts/bugReplay.ts",
+    "fence:lower": "tsx plugins/scorecard/scripts/fenceLower.ts"
   },
   "engines": {
     "node": ">=20"

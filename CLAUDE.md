@@ -14,6 +14,7 @@ A browser-based 3D office (Three.js) where Claude Code agents (Claude Agent SDK)
 
 - Keep decisions (what happens next, can this merge) in small pure functions with a test next to them; the I/O stays in the caller.
 - Agents never push or open PRs themselves; the manager does (`server/agents/manager/delivery.ts`).
+- Type assertions only go down, file by file: a test holds each at `plugins/scorecard/fence-baseline.json`. Narrow instead of casting; after removing casts, `pnpm run fence:lower`. Never raise the baseline.
 - Shell commands go through `run()` in `server/util.ts` (no shell), `gh` through `GhRunner`.
 - The core never refers to a plugin by name, only through `Plugins` (`docs/plugins.md`).
 - A goal lead's system prompt can't change mid-session (Claude Code keeps the first on resume): send anything that changes as a message.

@@ -61,6 +61,15 @@ To show a change's before and after:
 
 The rules live in `scripts/scorecardRules.ts` and, for how a scorecard reads wherever it's shown, `scorecard.ts` (both pure, tested next to them). `scripts/scorecard.ts` runs the commands, reads the files and the ledger, and saves the result.
 
+## The ratchet
+
+The scorecard only measures; the ratchet holds the line. Each file's type assertions (counted the way the fence counts them) may only go down: `fence-baseline.json`, committed here, holds each file's count, and a test in the gate (`fenceRatchet.test.ts`) fails
+
+- a file above its count, a new file with any at all among them: narrow instead (a type guard, `in`/`typeof`, an Effect Schema decode, a type that says what the value is), and don't raise the baseline to pass;
+- a file below its count: run `pnpm run fence:lower` and commit the baseline, so the gain can't be spent again.
+
+It counts per file, so a cast removed in one file can't pay for one added in another, and two pull requests only meet in the baseline when they change the same file's casts. `fence:lower` only ever lowers a count; raising one is a hand edit that shows in the diff. Type assertions come first since they're a plain count; functions over CRAP 30 may follow, for new and changed functions only. The rules are in `scripts/fenceRatchet.ts` (pure, tested beside it), the I/O in `scripts/fenceFiles.ts`.
+
 ## Where it lives
 
 `plugins/scorecard/`: `server.ts` (the plugin: its state, which isn't saved since it's read from disk as the office starts, the `POST /api/plugins/scorecard/measure` route, and measuring after start), `desk.ts` (the desk, and `officeScorecards`, the one source of scorecards every plugin reads, the [climber](../climber/README.md)'s briefs among them), `demoScorecards.ts`, `scorecard.ts` and `about.ts` (how a scorecard reads), `types.ts`, `client.ts`, `view.ts` and `msd.ts` (the browser's part), and `scripts/` (`scorecard`, `crap`).
