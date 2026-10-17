@@ -48,6 +48,28 @@ export function entryText(text: unknown): string {
   return trimmed;
 }
 
+/** What the captain did with an entry: every fact but jotting one down. */
+export type PersonalMark = Exclude<PersonalFact, { kind: 'noted' }>;
+
+/** The mark a request asks for on entry `id` (`{ kind, text?, until? }`), or why it can't be one. An edit's text is
+ * checked by `entryText` as it's kept. */
+export function markFrom(id: string, body: unknown): PersonalMark {
+  const { kind, text, until }: { kind?: unknown; text?: unknown; until?: unknown } = body && typeof body === 'object' ? body : {};
+  switch (kind) {
+    case 'edited':
+      return { kind, id, text: typeof text === 'string' ? text : '' };
+    case 'done':
+    case 'dropped':
+    case 'reopened':
+      return { kind, id };
+    case 'snoozed':
+      if (typeof until !== 'number' || !Number.isFinite(until)) throw new Error('Say until when');
+      return { kind, id, until };
+    default:
+      throw new Error('kind must be one of edited, done, dropped, snoozed, reopened');
+  }
+}
+
 /** The entry `id` of the log, or why there's none. */
 export function entryIn(entries: readonly PersonalEntry[], id: string): PersonalEntry {
   const entry = entries.find((e) => e.id === id);

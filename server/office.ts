@@ -5,7 +5,7 @@ import { chosenSet, previewPrsGone } from '../shared/previewSet';
 import { issuesToAssign } from '../shared/dependencies';
 import type { Closer } from '../shared/ledger';
 import { autoMergeFor, conflictsSaid, forgottenMarks, type GateMark, mergeMethodFor, mergeStep, type MergeStep, requestedMerge, stepMark } from '../shared/mergeGate';
-import { entryIn, entryText, type LogFrom, type PersonalEntry, type PersonalFact } from '../shared/personalLog';
+import { entryIn, entryText, type LogFrom, type PersonalEntry, type PersonalMark } from '../shared/personalLog';
 import { autoQaFor, autoSendBackFor, prKey, verdictBehindHead } from '../shared/qa';
 import type { AgentManager } from './agents/manager';
 import type { Lent } from './agents/manager/pluginHost';
@@ -113,7 +113,7 @@ export class Office {
   }
 
   /** Records what the captain did with an entry: edited, done, dropped, put aside or reopened. */
-  markPersonal(fact: Exclude<PersonalFact, { kind: 'noted' }>): PersonalEntry {
+  markPersonal(fact: PersonalMark): PersonalEntry {
     entryIn(this.store.personalEntries, fact.id);
     const log = this.store.personalLog(fact.kind === 'edited' ? { ...fact, text: entryText(fact.text) } : fact);
     this.hub.send({ type: 'personal-log', entries: log.entries });

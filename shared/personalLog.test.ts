@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CLOSED_SHOWN, EMPTY_PERSONAL_LOG, entryIn, entryText, evolvePersonalLog, type PersonalFact, personalLogView, snoozeUntil } from './personalLog';
+import { CLOSED_SHOWN, EMPTY_PERSONAL_LOG, entryIn, entryText, evolvePersonalLog, markFrom, type PersonalFact, personalLogView, snoozeUntil } from './personalLog';
 
 const fold = (...facts: (PersonalFact & { t?: number })[]) =>
   facts.reduce((log, f, i) => evolvePersonalLog(log, { ...f, seq: i + 1, t: f.t ?? (i + 1) * 1000 }), EMPTY_PERSONAL_LOG);
@@ -76,5 +76,31 @@ describe('putting an entry aside', () => {
     const now = new Date(2026, 9, 16, 22, 30);
     expect(new Date(snoozeUntil(now, 'tomorrow'))).toEqual(new Date(2026, 9, 17, 9));
     expect(new Date(snoozeUntil(now, 'week'))).toEqual(new Date(2026, 9, 23, 9));
+  });
+});
+
+describe('what the captain did with an entry', () => {
+  it('reads each kind of mark from the request', () => {
+    expect(markFrom('a', { kind: 'edited', text: 'two' })).toEqual({ kind: 'edited', id: 'a', text: 'two' });
+    expect(markFrom('a', { kind: 'done', text: 'ignored' })).toEqual({ kind: 'done', id: 'a' });
+    expect(markFrom('a', { kind: 'dropped' })).toEqual({ kind: 'dropped', id: 'a' });
+    expect(markFrom('a', { kind: 'reopened' })).toEqual({ kind: 'reopened', id: 'a' });
+    expect(markFrom('a', { kind: 'snoozed', until: 9000 })).toEqual({ kind: 'snoozed', id: 'a', until: 9000 });
+  });
+
+  it('leaves an edit without text for the log to refuse', () => {
+    expect(markFrom('a', { kind: 'edited', text: 7 })).toEqual({ kind: 'edited', id: 'a', text: '' });
+  });
+
+  it('asks until when an entry is put aside', () => {
+    for (const until of [undefined, '9000', Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => markFrom('a', { kind: 'snoozed', until })).toThrow('Say until when');
+    }
+  });
+
+  it('refuses a mark it does not know, or no mark at all', () => {
+    for (const body of [{ kind: 'noted', text: 'x' }, { kind: 'DONE' }, {}, undefined, null, 'done', ['done']]) {
+      expect(() => markFrom('a', body)).toThrow('kind must be one of edited, done, dropped, snoozed, reopened');
+    }
   });
 });
