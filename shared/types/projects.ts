@@ -69,6 +69,12 @@ export interface Project {
   autoSendBack?: boolean;
   /** PRs the office opened merge by themselves once QA passed their head commit and checks are green (missing = off). */
   autoMerge?: boolean;
+  /**
+   * The package.json scripts the merge check runs on a PR merged onto its base before the office merges it
+   * (docs/merging.md): missing = typecheck, lint and test; empty = none (only conflicts stop a merge). A repo with a
+   * `merge-check` script runs that instead.
+   */
+  mergeChecks?: string[];
   /** What QA must check on every PR of this project, on top of the usual review. Goes into the QA officer's prompt. */
   qaBrief?: string;
   /**

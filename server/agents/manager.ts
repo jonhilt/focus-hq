@@ -1,6 +1,6 @@
 import type { Layer } from 'effect';
 import type { Closer, LedgerEntry, ReportCard } from '../../shared/ledger';
-import type { Agent, Autonomy, ConflictsOutcome, Effort, FailedCheck, MessageReply, PullRequest, QaReview, QueuedGoal, ResumeHow, TermLine, WorkflowScript } from '../../shared/types';
+import type { Agent, Autonomy, ConflictsOutcome, Effort, FailedCheck, MergeCheck, MessageReply, PullRequest, QaReview, QueuedGoal, ResumeHow, TermLine, WorkflowScript } from '../../shared/types';
 import type { Hub } from '../hub';
 import type { FocusPlugin } from '../plugins/contract';
 import type { Plugins } from '../plugins/registry';
@@ -14,6 +14,7 @@ import { Delivery } from './manager/delivery';
 import { GoalTools } from './manager/goalTools';
 import { Leads } from './manager/leads';
 import { Ledger } from './manager/ledger';
+import { Merges, type MergeHow, type MergeTarget } from './manager/merges';
 import { PlanLimit } from './manager/planLimit';
 import { type Lent, pluginHost } from './manager/pluginHost';
 import { Reviews } from './manager/reviews';
@@ -28,7 +29,7 @@ import { Core, type ManagerServices } from './manager/core';
  * agents, for the routes and the office's loops.
  *
  * Each concern is a part of its own in `manager/` (seating, sessions, delivery, conflicts, leads, slices, goal tools,
- * comms, reviews, triages, cloud moves, the ledger, the plan's usage limit), sharing the `Core` (`manager/core.ts`): the store and hub, the one
+ * comms, reviews, triages, cloud moves, the ledger, merges, the plan's usage limit), sharing the `Core` (`manager/core.ts`): the store and hub, the one
  * runtime, and each agent's fiber (`runs`), so they never run twice at once and sending them home interrupts it (and
  * with it their Claude Code session). The public methods below each hand over to their part.
  */
@@ -44,6 +45,7 @@ export class AgentManager {
     this.core.goalTools = new GoalTools(this.core);
     this.core.leads = new Leads(this.core);
     this.core.ledger = new Ledger(this.core);
+    this.core.merges = new Merges(this.core);
     this.core.planLimit = new PlanLimit(this.core);
     this.core.reviews = new Reviews(this.core);
     this.core.seating = new Seating(this.core);
@@ -78,6 +80,16 @@ export class AgentManager {
 
   hire(projectId: string, repo: string, issue: { number: number; title?: string; url?: string }, how: { effort?: Effort; cloud?: boolean } = {}): Agent {
     return this.core.seating.hire(projectId, repo, issue, how);
+  }
+
+  /** Merges a pull request once its merge check passes, or the captain merges past it (`Merges.merge`): the commit merged. */
+  merge(projectId: string, pr: MergeTarget, how: MergeHow): Promise<string> {
+    return this.core.merges.merge(projectId, pr, how);
+  }
+
+  /** Where a PR's merge check on its head stands, for its card. */
+  mergeCheck(pr: Pick<PullRequest, 'repo' | 'number' | 'headSha'>): MergeCheck | undefined {
+    return this.core.merges.checkOf(pr);
   }
 
   resolveConflicts(projectId: string, pr: PullRequest): Promise<ConflictsOutcome> {

@@ -1,3 +1,4 @@
+import type { MergeHeads, MergeTrial } from '../../shared/mergeCheck';
 import type { AgentStatus, Autonomy, BrowserFrame, Effort, Settings, SystemModel, TermLine, Workflow, WorkflowAgent } from '../../shared/types';
 import type { ZodType } from 'zod';
 import type { ArtifactInput, NoteInput, QuestionInput } from './lead';
@@ -263,6 +264,13 @@ export interface WorkspaceOps {
   sinceVerdict(repo: string, number: number, baseBranch: string, sha: string): Promise<SinceVerdict | null>;
   /** Runs the project's checks on the pull request at `head`: null when it has none the office knows how to run. */
   runChecks(repo: string, number: number, head: string): Promise<ChecksRun | null>;
+  /** The base branch's head and pull request `number`'s, freshly fetched into the office's clone: what a merge check is about. */
+  mergeHeads(repo: string, number: number, baseBranch: string): Promise<MergeHeads>;
+  /**
+   * The merge check: `head` merged onto `base` (both already fetched), and the repo's checks run on the merge commit
+   * (`mergeCheckScripts`, from the project's `chosen` scripts). Never pushed.
+   */
+  tryMerge(repo: string, heads: MergeHeads, chosen?: readonly string[]): Promise<MergeTrial>;
 }
 
 /** The office's own run of a PR's checks: each command, and the end of its output when it failed. */

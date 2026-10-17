@@ -64,7 +64,7 @@ export function mergeStep(pr: GatePr, review: QaReview | undefined, office: Gate
   if (review.followUp?.kind === 'needs-you') return { kind: 'blocked', reason: review.followUp.reason };
   if (review.status === 'failed') return { kind: 'blocked', reason: 'QA failed it' };
 
-  if (mark?.kind === 'refused') return { kind: 'blocked', reason: `GitHub refused the merge: ${mark.reason}` };
+  if (mark?.kind === 'refused') return { kind: 'blocked', reason: `the merge was refused: ${mark.reason}` };
   switch (pr.checks) {
     case 'pending':
       return { kind: 'wait', reason: 'checks are running' };
@@ -150,13 +150,21 @@ export function mergeMethodFor(project: { mergeMethods?: Record<string, MergeMet
   return project?.mergeMethods?.[repo] ?? fallback;
 }
 
-/** What the board's merge button does: merge now (asking first when QA hasn't passed it), or merge once QA passes. */
-export type MergeAction = { kind: 'merge'; confirm?: string } | { kind: 'when-passed' } | { kind: 'requested' };
+/**
+ * What the board's merge button does: merge now (asking first when QA hasn't passed it), merge past a merge check that
+ * refused it (`override`, asking first), wait while the check runs, or merge once QA passes.
+ */
+export type MergeAction = { kind: 'merge'; confirm?: string; override?: true } | { kind: 'checking' } | { kind: 'when-passed' } | { kind: 'requested' };
 
-export function mergeAction(review: QaReview | undefined, pr: Pick<PullRequest, 'headSha'>): MergeAction {
+export function mergeAction(review: QaReview | undefined, pr: Pick<PullRequest, 'headSha' | 'mergeCheck'>): MergeAction {
+  if (pr.mergeCheck?.state === 'checking') return { kind: 'checking' };
   const state = qaBadge(review, pr).state;
   if (state === 'queued' || state === 'testing') return review?.mergeRequested ? { kind: 'requested' } : { kind: 'when-passed' };
   const unpassed = unpassedReason(review, pr);
+  if (pr.mergeCheck?.state === 'refused') {
+    const why = `Its merge check refused it: ${pr.mergeCheck.reason ?? 'a check failed'}${unpassed ? `, and ${unpassed}` : ''}`;
+    return { kind: 'merge', confirm: `${why}. Merging past the check is noted in the ledger`, override: true };
+  }
   return unpassed ? { kind: 'merge', confirm: unpassed } : { kind: 'merge' };
 }
 
@@ -189,6 +197,11 @@ export function requestedMerge(pr: Pick<PullRequest, 'headSha' | 'isDraft' | 'me
   if (pr.mergeable === 'CONFLICTING') return { kind: 'drop', reason: 'it conflicts with its base branch' };
   if (pr.mergeable === 'UNKNOWN' || pr.checks === 'pending') return { kind: 'wait' };
   return { kind: 'merge', sha: head };
+}
+
+/** What the office tells the captain once their merge from the board went through: past the check (`override`), or checked. */
+export function boardMergeSaid(where: string, base: string, override: boolean): string {
+  return override ? `Merged ${where} past its merge check, as you asked` : `Merged ${where}: it checks out merged onto ${base}`;
 }
 
 /** What a QA officer says to a message once their PR merged or closed, instead of resuming their session. */

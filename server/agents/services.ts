@@ -4,6 +4,7 @@ import { errorMessage } from '../util';
 import type { TriageDecision, Triager, TriageRequest } from './triage';
 import type { SinceVerdict } from './retest';
 import type { StageMoment } from './explainer';
+import type { MergeHeads, MergeTrial } from '../../shared/mergeCheck';
 import type { AgentRunner, AgentSession, BaseMerge, BranchState, ChecksRun, CloudTerminalRequest, RunHooks, RunRequest, WorkspaceOps } from './types';
 
 // What the agent manager needs from the outside world, as Effect services: git on the agents' checkouts, Claude Code
@@ -61,6 +62,9 @@ export class Workspace extends Context.Service<Workspace, {
   branchState(dir: string, branch: string, baseBranch: string): Effect.Effect<BranchState, GitFailed>;
   sinceVerdict(repo: string, number: number, baseBranch: string, sha: string): Effect.Effect<SinceVerdict | null, GitFailed>;
   runChecks(repo: string, number: number, head: string): Effect.Effect<ChecksRun | null, GitFailed>;
+  mergeHeads(repo: string, number: number, baseBranch: string): Effect.Effect<MergeHeads, GitFailed>;
+  /** Never fails: what went wrong building or checking the merge is a `broken` trial. */
+  tryMerge(repo: string, heads: MergeHeads, chosen?: readonly string[]): Effect.Effect<MergeTrial>;
 }>()('focus/agents/Workspace') {
   /** The workspace on its Promise-based operations: the live git ones, or the demo's pretend ones. */
   static fromOps(ops: WorkspaceOps): Layer.Layer<Workspace> {
@@ -90,6 +94,9 @@ export class Workspace extends Context.Service<Workspace, {
       branchState: (dir, branch, baseBranch) => git(`compare with origin's ${branch}`, () => ops.branchState(dir, branch, baseBranch)),
       sinceVerdict: (repo, number, baseBranch, sha) => git(`compare PR #${number} with ${sha.slice(0, 7)}`, () => ops.sinceVerdict(repo, number, baseBranch, sha)),
       runChecks: (repo, number, head) => git(`run the checks on PR #${number}`, () => ops.runChecks(repo, number, head)),
+      mergeHeads: (repo, number, baseBranch) => git(`fetch PR #${number} and ${baseBranch}`, () => ops.mergeHeads(repo, number, baseBranch)),
+      tryMerge: (repo, heads, chosen) =>
+        git('check the merge', () => ops.tryMerge(repo, heads, chosen)).pipe(Effect.catch((err) => Effect.succeed<MergeTrial>({ kind: 'broken', ...heads, reason: err.reason }))),
     }));
   }
 }

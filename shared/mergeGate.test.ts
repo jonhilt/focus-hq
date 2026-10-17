@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoMergeFor, conflictsSaid, forgottenMarks, type GateOffice, goneReply, mergeAction, mergeMethodFor, mergeStep, requestedMerge, stepMark, unpassedReason } from './mergeGate';
+import { autoMergeFor, boardMergeSaid, conflictsSaid, forgottenMarks, type GateOffice, goneReply, mergeAction, mergeMethodFor, mergeStep, requestedMerge, stepMark, unpassedReason } from './mergeGate';
 import type { PullRequest, QaReview } from './types';
 
 const HEAD = 'abc1234def5678';
@@ -149,7 +149,7 @@ describe('mergeStep', () => {
 
   it('stops trying once GitHub refused to merge the head commit', () => {
     expect(mergeStep(pr(), review(), office({ mark: { sha: HEAD, kind: 'refused', reason: 'reviews required' } })))
-      .toEqual({ kind: 'blocked', reason: 'GitHub refused the merge: reviews required' });
+      .toEqual({ kind: 'blocked', reason: 'the merge was refused: reviews required' });
   });
 });
 
@@ -192,6 +192,16 @@ describe('mergeAction', () => {
     expect(mergeAction(review({ status: 'failed' }), pr())).toEqual({ kind: 'merge', confirm: 'QA failed it' });
     expect(mergeAction(undefined, pr())).toEqual({ kind: 'merge', confirm: 'QA hasn’t tested it' });
     expect(mergeAction(review({ sha: 'fff0000' }), pr())).toEqual({ kind: 'merge', confirm: 'QA passed an older commit, not the latest one' });
+  });
+
+  it('waits while the merge check runs', () => {
+    expect(mergeAction(review(), pr({ mergeCheck: { state: 'checking', head: HEAD } }))).toEqual({ kind: 'checking' });
+  });
+
+  it('merges past a merge check that refused it only on purpose, behind a confirm that says why', () => {
+    const refused = pr({ mergeCheck: { state: 'refused', head: HEAD, reason: '`pnpm run lint` fails on its merge with the base at 1234567' } });
+    expect(mergeAction(review(), refused)).toEqual({ kind: 'merge', override: true, confirm: 'Its merge check refused it: `pnpm run lint` fails on its merge with the base at 1234567. Merging past the check is noted in the ledger' });
+    expect(mergeAction(review({ status: 'failed' }), refused)).toMatchObject({ override: true, confirm: expect.stringContaining('and QA failed it') });
   });
 });
 
@@ -291,5 +301,12 @@ describe('conflictsSaid', () => {
 
   it('says when GitHub is behind and it already has everything from the base', () => {
     expect(conflictsSaid('shop#12', 'develop', { kind: 'up-to-date' })).toBe('🔧 shop#12 conflicts with develop on GitHub, but it already has everything from develop');
+  });
+});
+
+describe('boardMergeSaid', () => {
+  it('says whether the captain’s merge was checked or went past the check', () => {
+    expect(boardMergeSaid('shop#12', 'main', false)).toBe('Merged shop#12: it checks out merged onto main');
+    expect(boardMergeSaid('shop#12', 'main', true)).toBe('Merged shop#12 past its merge check, as you asked');
   });
 });

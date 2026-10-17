@@ -16,6 +16,7 @@ import type { Delivery } from './delivery';
 import type { GoalTools } from './goalTools';
 import type { Leads } from './leads';
 import type { Ledger } from './ledger';
+import type { Merges } from './merges';
 import type { PlanLimit } from './planLimit';
 import type { Reviews } from './reviews';
 import type { Seating } from './seating';
@@ -115,6 +116,7 @@ export class Core {
   triages!: Triages;
   cloud!: CloudMoves;
   ledger!: Ledger;
+  merges!: Merges;
   planLimit!: PlanLimit;
   /** The plugins switched on (docs/plugins.md): the parts reach them only through here. */
   readonly plugins: Plugins;

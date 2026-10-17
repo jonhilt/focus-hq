@@ -160,3 +160,38 @@ describe('what came onto a PR since QA’s verdict', () => {
     expect(later?.commits.map((c) => c.mergesBase)).toEqual([true, false]);
   }, 20_000);
 });
+
+describe('the merge check: a PR merged onto its base, checked', () => {
+  /** Publishes the PR branch as GitHub does, at refs/pull/2/head. */
+  const publish = (dev: string) => git(dev, 'push', '-q', 'origin', 'HEAD:refs/heads/focus/pr', 'HEAD:refs/pull/2/head');
+  // passes alone, fails once main's footer is in: green on its own branch, broken once merged with someone else's work
+  const typecheck = `node -e "process.exit(require('fs').existsSync('footer.ts') ? 1 : 0)"`;
+  const pkg = JSON.stringify({ name: 'gate', private: true, scripts: { typecheck } });
+
+  it('fails a PR whose checks only break merged onto the base as it is now, and pushes nothing', async () => {
+    const { dev, pr, land, remoteHead } = pullRequest('acme/gate-broken', {}, { 'package.json': pkg });
+    publish(dev);
+    land('footer.ts', 'footer');
+    const heads = await ws.mergeHeads('acme/gate-broken', 2, 'main');
+    expect(heads.head).toBe(pr);
+    const trial = await ws.tryMerge('acme/gate-broken', heads);
+    expect(trial).toMatchObject({ kind: 'checked', ...heads, results: [{ ok: true }, { command: 'npm run typecheck', ok: false }] });
+    expect(remoteHead()).toBe(pr);
+  }, 60_000);
+
+  it('passes one whose checks pass merged, and runs only the project’s chosen scripts', async () => {
+    const { dev } = pullRequest('acme/gate-clean', {}, { 'package.json': pkg });
+    publish(dev);
+    const heads = await ws.mergeHeads('acme/gate-clean', 2, 'main');
+    expect(await ws.tryMerge('acme/gate-clean', heads)).toMatchObject({ kind: 'checked', results: [{ ok: true }, { command: 'npm run typecheck', ok: true }] });
+    expect(await ws.tryMerge('acme/gate-clean', heads, [])).toMatchObject({ kind: 'checked', results: [] });
+  }, 60_000);
+
+  it('names the files a conflicting merge conflicts in', async () => {
+    const { dev, land } = pullRequest('acme/gate-conflict');
+    publish(dev);
+    land('header.ts', 'header with a banner');
+    const heads = await ws.mergeHeads('acme/gate-conflict', 2, 'main');
+    expect(await ws.tryMerge('acme/gate-conflict', heads)).toEqual({ kind: 'conflicts', ...heads, files: ['header.ts'] });
+  });
+});

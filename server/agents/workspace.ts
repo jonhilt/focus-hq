@@ -2,8 +2,9 @@ import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { paths } from '../config';
-import { INSTALL_STAMP, installable, installCommand, installFailedNote, installStamp, lockfilesIn, missingPackageManager, packageManagerFor, packageManagerIn } from '../packageManager';
-import { errorMessage, KeyedLock, run, sleep } from '../util';
+import { INSTALL_STAMP, installable, installCommand, installFailedNote, installStamp, lockfilesIn, missingPackageManager, packageManagerFor, packageManagerIn, scriptCommand } from '../packageManager';
+import { CommandError, errorMessage, KeyedLock, run, sleep } from '../util';
+import { type MergeHeads, mergeCheckScripts, type MergeTrial, mergeTreeConflicts } from '../../shared/mergeCheck';
 import { sameCommit } from '../../shared/qa';
 import { autoMergePlan, conflictStages, type MergeRule, mergeRules } from './conflicts';
 import { checkCommands, rangeDiffUnchanged, type SinceVerdict } from './retest';
@@ -364,6 +365,50 @@ function typecheckMerge(repo: string, sha: string): Promise<{ command: string; o
   });
 }
 
+/** The base branch's head and pull request `number`'s, fetched fresh into the office's clone: what a merge check is about. */
+export function mergeHeads(repo: string, number: number, baseBranch: string): Promise<MergeHeads> {
+  const mirror = mirrorDir(repo);
+  const base = `refs/remotes/origin/${baseBranch}`;
+  return lock.with(repo, async () => {
+    await ensureMirror(repo);
+    await retryLockRace(() => git(mirror, ['fetch', 'origin', `+refs/pull/${number}/head:refs/focus/gate`, `+refs/heads/${baseBranch}:${base}`], 10 * 60_000), () => sleep(750));
+    const [baseSha, head] = await Promise.all([git(mirror, ['rev-parse', base]), git(mirror, ['rev-parse', 'refs/focus/gate'])]);
+    return { base: baseSha.trim(), head: head.trim() };
+  });
+}
+
+/**
+ * The merge check (docs/merging.md): `head` merged onto `base` in the office's clone, with `git merge-tree` (no
+ * checkout, nothing pushed), and the merge commit checked out in the repo's checks folder (reused, so installed
+ * dependencies survive) to run the repo's checks on, stopping at the first that fails.
+ */
+export function tryMerge(repo: string, heads: MergeHeads, chosen?: readonly string[]): Promise<MergeTrial> {
+  const mirror = mirrorDir(repo);
+  const dir = path.join(paths.checks, repo.replace('/', '__'));
+  return checksLock.with(repo, async () => {
+    const merged = await lock.with(repo, () => mergeCommit(mirror, heads));
+    if ('files' in merged) return { kind: 'conflicts', ...heads, files: merged.files };
+    await lock.with(repo, () => detachAt(mirror, dir, merged.sha));
+    const pm = packageManagerIn(dir);
+    const results = await installAndRun(dir, mergeCheckScripts(packageScripts(dir), chosen).map((name) => scriptCommand(pm, name)));
+    return { kind: 'checked', ...heads, merge: merged.sha, results: results ?? [] };
+  });
+}
+
+/** `head` merged onto `base` as a commit in the clone (on no branch), or the files that conflict. Call inside the repo's lock. */
+async function mergeCommit(mirror: string, { base, head }: MergeHeads): Promise<{ sha: string } | { files: string[] }> {
+  let tree: string;
+  try {
+    tree = (await git(mirror, ['merge-tree', '--write-tree', '--name-only', '--no-messages', base, head])).split('\n')[0].trim();
+  } catch (err) {
+    // 1 is git's "it conflicts"; anything else is git failing
+    if (err instanceof CommandError && err.code === 1) return { files: mergeTreeConflicts(err.stdout) };
+    throw err;
+  }
+  const sha = await git(mirror, ['-c', 'user.name=Focus', '-c', 'user.email=focus@localhost', 'commit-tree', tree, '-p', base, '-p', head, '-m', 'Focus merge check']);
+  return { sha: sha.trim() };
+}
+
 export function workspaceDir(agentId: string): string {
   return path.join(paths.workspaces, agentId);
 }
@@ -573,4 +618,6 @@ export const liveWorkspace: WorkspaceOps = {
   branchState: branchState,
   sinceVerdict: sinceVerdict,
   runChecks: runChecks,
+  mergeHeads: mergeHeads,
+  tryMerge: tryMerge,
 };

@@ -41,7 +41,19 @@ export function changeProject(project: Project, patch: unknown): Project {
   if (p.plugin !== undefined) changed.plugins = switchPlugin(project.plugins, String(fields(p.plugin).id ?? ''), fields(p.plugin).on === true);
   if (p.mergeMethod !== undefined) changed.mergeMethods = mergeMethodsAfter(project, fields(p.mergeMethod));
   if (p.preview !== undefined && typeof p.preview === 'object') changed.preview = previewAfter(fields(p.preview));
+  if (p.mergeChecks === null || typeof p.mergeChecks === 'string' || Array.isArray(p.mergeChecks)) changed.mergeChecks = mergeChecksAfter(p.mergeChecks);
   return changed;
+}
+
+/**
+ * The scripts the merge check runs (a list, or names split by commas or spaces): each a package.json script's name,
+ * at most 10; null goes back to the default (typecheck, lint, test), and an empty list runs none.
+ */
+function mergeChecksAfter(v: string | unknown[] | null): string[] | undefined {
+  if (v === null) return undefined;
+  const names: unknown[] = typeof v === 'string' ? v.split(/[\s,]+/) : v;
+  const valid = names.flatMap((n) => (typeof n === 'string' && /^[\w:.-]+$/.test(n.trim()) ? [n.trim()] : []));
+  return [...new Set(valid)].slice(0, 10);
 }
 
 /** A repo's merge method set, or (empty or unknown) cleared to follow the office-wide setting. */

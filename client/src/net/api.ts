@@ -89,7 +89,7 @@ export const api = {
   sendToQa: (projectId: string, repo: string, number: number) => call<QaReview>('POST', '/prs/qa', { projectId, repo, number }),
   resolveConflicts: (projectId: string, repo: string, number: number) =>
     call<ConflictsOutcome>('POST', '/prs/resolve-conflicts', { projectId, repo, number }),
-  mergePr: (projectId: string, repo: string, number: number) => call('POST', '/prs/merge', { projectId, repo, number }),
+  mergePr: (projectId: string, repo: string, number: number, override = false) => call<{ checking: true }>('POST', '/prs/merge', { projectId, repo, number, override }),
   mergeWhenPassed: (projectId: string, repo: string, number: number, on: boolean) => call<QaReview>('POST', '/prs/merge-when-passed', { projectId, repo, number, on }),
   /** `picks`: what other repos run (a PR number, or null for the default branch); left out, the PRs linked to this one. */
   startPreview: (projectId: string, repo: string, number: number, picks?: PreviewSet) => call<Preview>('POST', '/previews', { projectId, repo, number, with: picks }),

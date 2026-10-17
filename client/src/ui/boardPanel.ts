@@ -3,6 +3,7 @@ import { columns, goalState, resolvingAlready } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import { assignWarning, waitsLabel } from '../../../shared/dependencies';
 import { mergeAction, mergeMethodFor } from '../../../shared/mergeGate';
+import { mergeCheckLine } from '../../../shared/mergeCheck';
 import { previewIncludes, previewSet } from '../../../shared/previewSet';
 import { prKey, qaBadge, sameCommit } from '../../../shared/qa';
 import { triageLabel } from '../../../shared/triage';
@@ -120,13 +121,17 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
     for (const pr of cols.prs) {
       const review = state.reviews.get(prKey(pr.repo, pr.number));
       const action = mergeAction(review, pr);
+      const method = mergeMethodFor(state.project(projectId), pr.repo, state.info?.settings.mergeMethod ?? 'squash');
       const merge = action.kind === 'merge'
-        ? h('button', { class: 'btn small go' }, `${mergeMethodFor(state.project(projectId), pr.repo, state.info?.settings.mergeMethod ?? 'squash')} & merge`)
-        : action.kind === 'when-passed'
-          ? h('button', { class: 'btn small go', title: 'The office merges the commit QA passes, or tells you if QA fails it' }, 'Merge when QA passes')
-          : h('button', { class: 'btn small primary', title: 'Merges once QA passes it. Click to cancel' }, 'Merging when QA passes ✕');
-      merge.disabled = pr.mergeable === 'CONFLICTING' || pr.isDraft;
+        ? h('button', { class: 'btn small go', title: action.override ? 'Merge past its merge check, on purpose' : 'The office checks the PR merged onto its base first' }, action.override ? 'Merge anyway' : `${method} & merge`)
+        : action.kind === 'checking'
+          ? h('button', { class: 'btn small primary', title: 'The office is running the checks on the PR merged onto its base' }, 'Checking the merge…')
+          : action.kind === 'when-passed'
+            ? h('button', { class: 'btn small go', title: 'The office merges the commit QA passes, or tells you if QA fails it' }, 'Merge when QA passes')
+            : h('button', { class: 'btn small primary', title: 'Merges once QA passes it. Click to cancel' }, 'Merging when QA passes ✕');
+      merge.disabled = pr.mergeable === 'CONFLICTING' || pr.isDraft || action.kind === 'checking';
       merge.onclick = async () => {
+        if (action.kind === 'checking') return;
         if (action.kind !== 'merge') {
           const on = action.kind === 'when-passed';
           void busy(merge, async () => {
@@ -138,11 +143,9 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
         const ask = action.confirm
           ? `${action.confirm}.\n\nMerge ${pr.repo}#${pr.number} "${pr.title}" anyway?`
           : `Merge ${pr.repo}#${pr.number} "${pr.title}"?`;
-        if (!await confirmDialog({ title: 'Merge', message: ask, confirmLabel: 'Merge' })) return;
-        void busy(merge, async () => {
-          await api.mergePr(projectId, pr.repo, pr.number);
-          ui.hud.toast('success', `Merged #${pr.number}`);
-        }, ui.error);
+        if (!await confirmDialog({ title: 'Merge', message: ask, confirmLabel: action.override ? 'Merge anyway' : 'Merge' })) return;
+        // the office checks the merge first, the card saying so, and a toast says how it went
+        void busy(merge, () => api.mergePr(projectId, pr.repo, pr.number, action.override === true), ui.error);
       };
       const resolver = pr.resolver;
       const resolve = resolver
@@ -211,6 +214,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
             qaChip,
             triage,
             h('span', { class: pr.checks === 'failing' ? 'chip bad' : pr.checks === 'passing' ? 'chip ok' : 'chip' }, checks),
+            pr.mergeCheck ? h('span', { class: pr.mergeCheck.state === 'refused' ? 'chip bad' : pr.mergeCheck.state === 'passed' ? 'chip ok' : 'chip', title: pr.mergeCheck.reason ?? '' }, mergeCheckLine(pr.mergeCheck)) : null,
             resolver
               ? h('span', { class: 'chip warn', title: resolver.activity }, `Resolving – ${resolver.name}`)
               : pr.mergeable === 'CONFLICTING' ? h('span', { class: 'chip bad' }, 'conflicts') : null,

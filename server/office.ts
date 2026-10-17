@@ -4,7 +4,7 @@ import { freshBoard, prsOffBoard, type RepoListing, staleClosedPrs } from '../sh
 import { chosenSet, previewPrsGone } from '../shared/previewSet';
 import { issuesToAssign } from '../shared/dependencies';
 import type { Closer } from '../shared/ledger';
-import { autoMergeFor, conflictsSaid, forgottenMarks, type GateMark, mergeMethodFor, mergeStep, type MergeStep, requestedMerge, stepMark } from '../shared/mergeGate';
+import { autoMergeFor, boardMergeSaid, conflictsSaid, forgottenMarks, type GateMark, mergeMethodFor, mergeStep, type MergeStep, requestedMerge, stepMark } from '../shared/mergeGate';
 import { entryIn, entryText, type LogFrom, type PersonalEntry, type PersonalMark } from '../shared/personalLog';
 import { autoQaFor, autoSendBackFor, prKey, verdictBehindHead } from '../shared/qa';
 import type { AgentManager } from './agents/manager';
@@ -46,6 +46,8 @@ export class Office {
   private refreshing = new Map<string, Promise<void>>();
   /** What auto-merge already did about each PR's head commit (by prKey). Forgotten on restart, so it may try once more. */
   private gateMarks = new Map<string, GateMark>();
+  /** The PRs (by prKey) the office is merging, their merge check under way. */
+  private merging = new Set<string>();
 
   constructor(
     private readonly store: Store,
@@ -225,18 +227,61 @@ export class Office {
     return issue;
   }
 
-  /** `headSha` merges only that commit: GitHub refuses if the branch has moved on since. The office auto-merges; otherwise it's the captain. */
-  async mergePullRequest(projectId: string, repo: string, number: number, headSha?: string, by: Closer = 'captain'): Promise<void> {
+  /**
+   * Merges an open PR on the board once its merge check passes (docs/merging.md), or past it when the captain
+   * `override`s it. `headSha` merges only that commit: the check refuses if the PR has moved on since. The office
+   * auto-merges; otherwise it's the captain. Rejects with why it didn't merge.
+   */
+  async mergePullRequest(projectId: string, repo: string, number: number, headSha?: string, by: Closer = 'captain', override = false): Promise<void> {
     const method = mergeMethodFor(this.store.projects.find((p) => p.id === projectId), repo, this.store.settings.mergeMethod);
-    await this.github.mergePullRequest(repo, number, method, headSha);
-    const board = this.store.boards.get(projectId);
-    this.agents.prClosed(repo, number, true, by, headSha ?? board?.prs.find((p) => p.repo === repo && p.number === number)?.headSha);
+    await this.agents.merge(projectId, this.boardPr(projectId, repo, number), { method, by, want: headSha, override });
     this.previews.closed(repo, number);
-    if (board) {
-      board.prs = board.prs.filter((p) => !(p.repo === repo && p.number === number));
-      this.hub.send({ type: 'board', board });
-    }
+    this.offBoard(projectId, repo, number);
     this.boardChanged(projectId);
+  }
+
+  /** An open pull request on the project's board; throws for one that isn't. */
+  private boardPr(projectId: string, repo: string, number: number): PullRequest {
+    const pr = this.store.boards.get(projectId)?.prs.find((p) => p.repo === repo && p.number === number);
+    if (!pr) throw new Error(`${repo}#${number} is not an open pull request on this board`);
+    return pr;
+  }
+
+  /** Takes a merged PR off the board straight away, before the refresh that would. */
+  private offBoard(projectId: string, repo: string, number: number): void {
+    const board = this.store.boards.get(projectId);
+    if (!board) return;
+    board.prs = board.prs.filter((p) => !(p.repo === repo && p.number === number));
+    this.hub.send({ type: 'board', board });
+  }
+
+  /**
+   * The captain's merge from the board: its merge check runs in the background, the card saying so, and a toast says
+   * how it went. `override` merges past the check, at the head the captain saw, and the ledger notes it.
+   */
+  mergeFromBoard(projectId: string, repo: string, number: number, override = false): { checking: true } {
+    const pr = this.boardPr(projectId, repo, number);
+    const where = `${repo.split('/')[1]}#${number}`;
+    const started = this.mergeLater(projectId, pr, override ? pr.headSha : undefined, 'captain', override, {
+      merged: () => this.hub.toast('success', boardMergeSaid(where, pr.baseBranch, override), undefined, projectId),
+      refused: (err) => this.hub.toast('error', `${where} didn’t merge: ${errorMessage(err)}`, undefined, projectId),
+    });
+    if (!started) throw new Error(`The office is already merging ${where}`);
+    return { checking: true };
+  }
+
+  /**
+   * Starts a merge without waiting for its merge check, which can take minutes: a board refresh carries on meanwhile,
+   * and one for a PR already merging starts nothing (false).
+   */
+  private mergeLater(projectId: string, pr: PullRequest, sha: string | undefined, by: Closer, override: boolean, then: { merged: () => void; refused: (err: unknown) => void }): boolean {
+    const key = prKey(pr.repo, pr.number);
+    if (this.merging.has(key)) return false;
+    this.merging.add(key);
+    void this.mergePullRequest(projectId, pr.repo, pr.number, sha, by, override)
+      .then(then.merged, then.refused)
+      .finally(() => this.merging.delete(key));
+    return true;
   }
 
   /** The captain's "Merge when QA passes" (or, with `on` false, taking it back): the board refresh after QA's verdict merges it. */
@@ -310,6 +355,7 @@ export class Office {
     const listings = await Promise.all(project.repos.map((repo) => this.listRepo(repo)));
     const closed = [...this.store.closedPrs.values()];
     const board = freshBoard(projectId, listings, this.store.boards.get(projectId)?.prs ?? [], closed, Date.now());
+    this.stampMergeChecks(board);
     for (const stale of staleClosedPrs(project.repos, board, closed)) this.store.removeClosedPr(stale.repo, stale.issue);
     if (!this.store.projects.some((p) => p.id === projectId)) return;
     this.store.boards.set(projectId, board);
@@ -324,6 +370,14 @@ export class Office {
     await this.autoMerge(projectId, board);
     this.autoAssign(projectId, board);
     this.agents.plugins.boardRefreshed(projectId);
+  }
+
+  /** Each PR's merge check on its head, which GitHub's listing doesn't have, back on its card. */
+  private stampMergeChecks(board: Board): void {
+    for (const pr of board.prs) {
+      const check = this.agents.mergeCheck(pr);
+      if (check) pr.mergeCheck = check;
+    }
   }
 
   private async listRepo(repo: string): Promise<RepoListing> {
@@ -367,13 +421,13 @@ export class Office {
           this.hub.toast('error', `${where} didn’t merge: ${step.reason}`, review.agentId, projectId);
           continue;
         case 'merge':
-          try {
-            await this.mergePullRequest(projectId, pr.repo, pr.number, step.sha, 'captain');
-            this.hub.toast('success', `Merged ${where}: QA passed it, as you asked`, undefined, projectId);
-          } catch (err) {
-            this.agents.requestMerge(pr.repo, pr.number, false);
-            this.hub.toast('error', `GitHub refused to merge ${where}: ${errorMessage(err)}`, undefined, projectId);
-          }
+          this.mergeLater(projectId, pr, step.sha, 'captain', false, {
+            merged: () => this.hub.toast('success', `Merged ${where}: QA passed it and its merge checks out, as you asked`, undefined, projectId),
+            refused: (err) => {
+              this.agents.requestMerge(pr.repo, pr.number, false);
+              this.hub.toast('error', `${where} didn’t merge: ${errorMessage(err)}`, undefined, projectId);
+            },
+          });
       }
     }
   }
@@ -425,14 +479,16 @@ export class Office {
       case 'blocked':
         return;
       case 'merge':
-        try {
-          await this.mergePullRequest(projectId, pr.repo, pr.number, step.sha, 'office');
-          this.gateMarks.delete(key);
-          this.hub.toast('success', `🤖 Auto-merged ${where}: QA passed it and its checks are green`, undefined, projectId);
-        } catch (err) {
-          this.gateMarks.set(key, { sha: step.sha, kind: 'refused', reason: errorMessage(err) });
-          this.hub.toast('error', `🤖 GitHub refused to merge ${where}: ${errorMessage(err)}`, undefined, projectId);
-        }
+        this.mergeLater(projectId, pr, step.sha, 'office', false, {
+          merged: () => {
+            this.gateMarks.delete(key);
+            this.hub.toast('success', `🤖 Auto-merged ${where}: QA passed it, its checks are green and so is its merge`, undefined, projectId);
+          },
+          refused: (err) => {
+            this.gateMarks.set(key, { sha: step.sha, kind: 'refused', reason: errorMessage(err) });
+            this.hub.toast('error', `🤖 ${where} didn’t merge: ${errorMessage(err)}`, undefined, projectId);
+          },
+        });
         return;
       case 'qa':
         this.agents.requestReview(projectId, pr.repo, pr.number, pr.title);

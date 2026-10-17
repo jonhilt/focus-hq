@@ -38,6 +38,7 @@ export function groupOf(e: LedgerEvent): ReviewGroup {
       return 'qa';
     case 'merged':
     case 'closed':
+    case 'merge-check':
       return 'merged';
     case 'conflicts':
       return 'conflicts';
@@ -89,6 +90,13 @@ const RESOLVED: Record<string, string> = {
   auto: 'settled by the repo’s rules for union and generated files',
   agent: 'an agent resolved them',
   'up-to-date': 'already up to date',
+};
+const MERGE_CHECK: Record<string, string> = {
+  passed: 'merge checked',
+  failed: 'merge refused, a check failed',
+  conflicts: 'merge refused, it conflicts',
+  broken: 'merge refused, couldn’t check it',
+  overridden: 'merged past the check',
 };
 const TRIAGE: Record<string, string> = {
   'retry-qa': 'ran QA again',
@@ -149,6 +157,12 @@ export function ledgerRow(e: LedgerEvent): LedgerRow {
         pr: e,
         goal: e.goal,
       };
+    case 'merge-check': {
+      const said = MERGE_CHECK[e.outcome] ?? e.outcome;
+      const at = e.head && e.base ? ` · ${e.head.slice(0, 7)} onto ${e.base.slice(0, 7)}` : '';
+      const tone = e.outcome === 'passed' ? 'ok' : e.outcome === 'overridden' || e.outcome === 'broken' ? 'warn' : 'bad';
+      return { ...base, tag: 'Merge check', tone, title: `${short(e.repo)} #${e.pr} · ${said} ${BY[e.by] ?? e.by}${at}`, detail: [e.failed, e.goal].filter(Boolean).join(' · '), pr: e, goal: e.goal };
+    }
     case 'checks-sent-back':
       return { ...base, tag: 'Sent back', tone: 'warn', title: `${short(e.repo)} #${e.pr} · failing checks sent back: ${e.checks.join(', ')}`, detail: e.goal, pr: e, goal: e.goal };
     case 'triage':

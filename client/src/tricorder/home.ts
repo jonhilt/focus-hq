@@ -3,6 +3,7 @@ import { columns, goalState, resolvingAlready } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import { assignWarning, waitsLabel } from '../../../shared/dependencies';
 import { mergeAction, mergeMethodFor } from '../../../shared/mergeGate';
+import { mergeCheckLine } from '../../../shared/mergeCheck';
 import { prKey, qaBadge } from '../../../shared/qa';
 import { type Attention, inFlight, needLine, needsYou } from '../../../shared/tricorder';
 import type { Agent, Issue, Project, PullRequest, QaReview } from '../../../shared/types';
@@ -142,11 +143,13 @@ export function mergeButton(actions: Actions, key: string, projectId: string, pr
   const blocked = pr.mergeable === 'CONFLICTING' || pr.isDraft;
   switch (action.kind) {
     case 'merge':
-      return actions.button(`${key}:${action.confirm ? 'merge-anyway' : 'merge'}`, `⤵ ${mergeMethodFor(state.project(projectId), pr.repo, state.info?.settings.mergeMethod ?? 'squash')} & merge`, () => api.mergePr(projectId, pr.repo, pr.number), {
+      return actions.button(`${key}:${action.override ? 'merge-past-check' : action.confirm ? 'merge-anyway' : 'merge'}`, action.override ? '⤵ Merge anyway' : `⤵ ${mergeMethodFor(state.project(projectId), pr.repo, state.info?.settings.mergeMethod ?? 'squash')} & merge`, () => api.mergePr(projectId, pr.repo, pr.number, action.override === true), {
         class: 'go',
         disabled: blocked,
         confirm: action.confirm ? `${action.confirm}.\n\nMerge ${pr.repo}#${pr.number} "${pr.title}" anyway?` : `Merge ${pr.repo}#${pr.number} "${pr.title}"?`,
       });
+    case 'checking':
+      return actions.button(`${key}:merge-checking`, '🚦 Checking the merge…', () => Promise.resolve(), { class: 'primary', disabled: true });
     case 'when-passed':
       return actions.button(`${key}:merge-when-passed`, '⤵ Merge when QA passes', () => api.mergeWhenPassed(projectId, pr.repo, pr.number, true), { class: 'go', disabled: blocked });
     case 'requested':
@@ -183,6 +186,7 @@ function prCard(ctx: HomeContext, project: Project, pr: PullRequest & { agent?: 
       multi ? h('span', { class: 'pill' }, pr.repo.split('/')[1]) : null,
       qa.state === 'none' ? null : h('span', { class: `pill qa ${qa.state}` }, qa.label),
       h('span', { class: `pill checks ${pr.checks}` }, checks),
+      pr.mergeCheck ? h('span', { class: `pill ${pr.mergeCheck.state === 'refused' ? 'bad' : 'warn'}` }, `🚦 ${mergeCheckLine(pr.mergeCheck)}`) : null,
       pr.resolver
         ? h('span', { class: 'pill warn', title: pr.resolver.activity }, `🔧 Resolving – ${pr.resolver.name}`)
         : conflicting ? h('span', { class: 'pill bad' }, '⚠ conflicts') : null,

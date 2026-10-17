@@ -55,6 +55,16 @@ export interface PullRequest {
   createdAt: string;
   /** Last activity on GitHub. Missing when the provider can't tell. */
   updatedAt?: string;
+  /** Where the office's merge check on its head stands (docs/merging.md): the office stamps it on, GitHub never says. */
+  mergeCheck?: MergeCheck;
+}
+
+/** Where a PR's merge check stands, as its card on the board shows it (shared/mergeCheck.ts). */
+export interface MergeCheck {
+  state: 'checking' | 'passed' | 'refused' | 'overridden';
+  /** The PR's head it's about: a push makes it old news. */
+  head: string;
+  reason?: string;
 }
 
 export interface Board {

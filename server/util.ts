@@ -7,6 +7,8 @@ export class CommandError extends Error {
     message: string,
     readonly stderr: string,
     readonly code: number | null,
+    /** What it printed before it failed (`git merge-tree` lists the conflicted files there). */
+    readonly stdout = '',
   ) {
     super(message);
   }
@@ -22,7 +24,7 @@ export function run(cmd: string, args: string[], opts: { cwd?: string; input?: s
       (err, stdout, stderr) => {
         if (err) {
           const detail = (stderr || err.message).trim().split('\n').slice(-6).join('\n');
-          reject(new CommandError(`${cmd} ${args.slice(0, 3).join(' ')} failed: ${detail}`, stderr, typeof err.code === 'number' ? err.code : null));
+          reject(new CommandError(`${cmd} ${args.slice(0, 3).join(' ')} failed: ${detail}`, stderr, typeof err.code === 'number' ? err.code : null, stdout));
         } else {
           resolve(stdout);
         }

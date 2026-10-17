@@ -12,7 +12,8 @@ shared/board.ts           a project's Kanban columns (to do, in progress, PRs), 
 shared/dependencies.ts    issues that wait for others ("Depends on #12"), the order to start them in (`startOrder`), and which ones auto-assign hires an agent for (`issuesToAssign`)
 shared/agentStatus.ts     how an agent's status reads (icon, one-line status)
 shared/tricorder.ts       what needs you (the Tricorder and Comms), which agents are in flight
-shared/ledger.ts          the ledger of how work went (QA verdicts, merges, conflicts, triage, goals, session digests): its line format, the check on load, and the report card
+shared/mergeCheck.ts      the merge check before every merge (docs/merging.md): which scripts it runs, whether a trial of the same base and head stands, and whether the merge result lets it through (pure)
+shared/ledger.ts          the ledger of how work went (QA verdicts, merges, merge checks, conflicts, triage, goals, session digests): its line format, the check on load, and the report card
 shared/usage.ts           how main engineering reads out your plan's usage (rows, tones, sign-in), for the panel and the MSD
 shared/ledgerReview.ts    reviewing the ledger: each event as a line of the log, the window, and the trace of a pull request or a goal with its totals
 server/
@@ -56,6 +57,7 @@ server/
       pluginHost.ts       what the manager lends each plugin (docs/plugins.md): seating an agent on its brief, its state slot, the office's agents and their transcripts, terminal lines and toasts
       cloudMoves.ts       moving an agent to a cloud session, attaching to it, or keeping them local
       ledger.ts           ledger entries, landings, session digests and backfill, the report card
+      merges.ts           every merge the office makes: the merge check (the PR merged onto its base, checked, a trial kept by base and head), the captain's override, then GitHub's merge, one at a time per repo
     services.ts           what the manager needs from outside as Effect services: git on the checkouts, Claude Code sessions (a scoped turn), triage
     schedule.ts           who starts next under the office's and each room's limits
     desks.ts              who sits at a room's two individual desks, and who goes home to make room (never a lead or QA)
@@ -77,7 +79,7 @@ server/
     scratch.ts            each local session's scratch dir ($FOCUS_SCRATCH), the office's dcg layer that allows rm -rf in it, and the hook that checks its paths
     wait.ts               the office's bin/ (focus-wait, for waiting on a server, build or log without `sleep N; cmd`) first on each local session's PATH, and the line that tells them so
     agentShell.ts         bash for each local session's Bash tool (CLAUDE_CODE_SHELL), where an unmatched glob isn't zsh's "no matches found"
-    workspace.ts          git mirrors (their local base branch kept up with origin's) + worktrees (agents', the per-repo preview checkout, the planner's read-only checkouts), the office's own merge of a PR's base, installing a checkout's dependencies before its agent starts
+    workspace.ts          git mirrors (their local base branch kept up with origin's) + worktrees (agents', the per-repo preview checkout, the planner's read-only checkouts), the office's own merge of a PR's base, the merge check's trial merge (`mergeHeads`, `tryMerge`), installing a checkout's dependencies before its agent starts
     conflicts.ts          merge conflicts, pure: the conflicts agent's model, the rules that settle conflicted files without one (.gitattributes), the ledger's line
     planner.ts            the officer at each room's Ops station: issue drafts, their prompt and schema
     lead.ts               each goal's lead: their station, name and branches, their instructions, what shipping a slice does, what they hear back, their helpers

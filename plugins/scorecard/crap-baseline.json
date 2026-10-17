@@ -23,7 +23,7 @@
   "server/agents/studioSessions.ts": 1,
   "server/agents/transcript.ts": 1,
   "server/index.ts": 3,
-  "server/office.ts": 7,
+  "server/office.ts": 6,
   "server/previews.ts": 2,
   "server/store.ts": 1,
   "server/updater.ts": 1,

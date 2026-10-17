@@ -135,6 +135,19 @@ describe('changeProject', () => {
   });
 });
 
+describe('changeProject: merge checks', () => {
+  it('takes the merge check’s scripts as a list or a line, leaving out what isn’t a script’s name', () => {
+    expect(changeProject(project, { mergeChecks: ['typecheck', ' test ', 'rm -rf /', 3, 'test'] }).mergeChecks).toEqual(['typecheck', 'test']);
+    expect(changeProject(project, { mergeChecks: 'lint, test:unit' }).mergeChecks).toEqual(['lint', 'test:unit']);
+  });
+
+  it('runs none for an empty list, goes back to the default for null, and ignores anything else', () => {
+    expect(changeProject(project, { mergeChecks: [] }).mergeChecks).toEqual([]);
+    expect(changeProject({ ...project, mergeChecks: ['lint'] }, { mergeChecks: null }).mergeChecks).toBeUndefined();
+    expect(changeProject({ ...project, mergeChecks: ['lint'] }, { mergeChecks: 7 }).mergeChecks).toEqual(['lint']);
+  });
+});
+
 describe('projectChangeFollowUps', () => {
   it('tells the office’s plugins when one is switched', () => {
     expect(projectChangeFollowUps({ plugin: { id: 'flow', on: true } }).plugins).toBe(true);

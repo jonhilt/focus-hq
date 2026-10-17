@@ -76,6 +76,7 @@ Then on board:
 - [How an agent works an issue](docs/agents.md): from hire to merge, their panel and station displays
 - [Cloud agents](docs/cloud-agents.md): agents in Claude Code cloud sessions
 - [QA](docs/qa.md): the QA officer, reports, send-back, auto-merge and stuck PRs
+- [Merging and the merge check](docs/merging.md): every merge the office makes checks the PR merged onto its base first, and refuses one that fails
 - [Previewing a pull request](docs/previews.md): preview commands, placeholders and links
 - [Autonomy](docs/autonomy.md): how much agents may do without asking
 - [Voice input](docs/voice-input.md): the Mic buttons and whisper.cpp

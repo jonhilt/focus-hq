@@ -883,6 +883,12 @@ export const demoWorkspace: WorkspaceOps = {
     await sleep(1500);
     return { sha: head, results: ['npm ci', 'npm run typecheck', 'npm run lint', 'npm test'].map((command) => ({ command, ok: true })) };
   },
+  // no real clone: a made-up base, and the manager falls back to the PR's head as GitHub reports it; merges check out after a pretend run
+  mergeHeads: async () => ({ base: 'demo0base', head: '' }),
+  tryMerge: async (_repo, heads) => {
+    await sleep(1500);
+    return { kind: 'checked', ...heads, merge: `${heads.head}m`, results: ['npm ci', 'npm run typecheck', 'npm run lint', 'npm test'].map((command) => ({ command, ok: true })) };
+  },
 };
 
 /** The demo planner's judgement of an idea too big for one issue: a rebuild, or a list of three or more features. */

@@ -32,6 +32,12 @@ export type LedgerEntry =
    */
   | (PrRef & { kind: 'conflicts'; resolved: 'office' | 'auto' | 'agent' | 'up-to-date'; files?: string[]; broke?: string })
   | (PrRef & { kind: 'checks-sent-back'; checks: string[] })
+  /**
+   * The office's merge check before a merge (docs/merging.md): the PR's head merged onto its base, checked. `failed` is
+   * the command that failed, the files that conflicted, or why it couldn't run; `overridden` is the captain merging
+   * past it on purpose. `base` and `head` are the commits it checked.
+   */
+  | (PrRef & { kind: 'merge-check'; outcome: 'passed' | 'failed' | 'conflicts' | 'broken' | 'overridden'; by: Closer; base?: string; head?: string; failed?: string })
   | (PrRef & { kind: 'triage'; officer: string; action: TriageAction; note: string })
   | { kind: 'goal-closed'; goal: GoalRecord }
   /**

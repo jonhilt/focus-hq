@@ -30,4 +30,4 @@ The office has no login, so it only answers your own browser. A request whose `H
 
 ## Merge method
 
-The board's merge button, and auto-merge, merge a pull request with **Settings → merge method** (squash, merge or rebase) in the ready room. A repo can merge its own way: each repository under **Projects** has a picker beside its name, `default` to follow Settings, or squash, merge or rebase for that repo alone, which wins over Settings (`mergeMethodFor` in `shared/mergeGate.ts`). The merge button says which it'll use.
+The board's merge button, and auto-merge, merge a pull request with **Settings → merge method** (squash, merge or rebase) in the ready room. A repo can merge its own way: each repository under **Projects** has a picker beside its name, `default` to follow Settings, or squash, merge or rebase for that repo alone, which wins over Settings (`mergeMethodFor` in `shared/mergeGate.ts`). The merge button says which it'll use. Before any merge, the office runs the [merge check](merging.md): the PR merged onto its base, with the project's `mergeChecks` scripts run on it.

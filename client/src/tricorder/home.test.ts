@@ -18,9 +18,9 @@ const pr = { repo: 'demo/webshop-api', number: 7, title: 'Wishlist endpoints', h
 const review = (r: Partial<QaReview>): QaReview => ({ projectId: 'p', repo: pr.repo, number: pr.number, title: pr.title, status: 'testing', sha: HEAD, requestedAt: 0, ...r });
 
 /** The card as the Tricorder keeps it: rendered once, then morphed to each new render, the way main.ts updates the page. */
-function card(first: QaReview | undefined) {
+function card(first: QaReview | undefined, onCard: PullRequest = pr) {
   const actions = new Actions(() => undefined);
-  const render = (r: QaReview | undefined) => h('div', null, mergeButton(actions, 'pr:p:demo/webshop-api#7', 'p', pr, r));
+  const render = (r: QaReview | undefined) => h('div', null, mergeButton(actions, 'pr:p:demo/webshop-api#7', 'p', onCard, r));
   const el = render(first);
   return {
     become: (r: QaReview | undefined) => morph(el, render(r)),
@@ -48,7 +48,7 @@ describe('the Tricorder’s merge button', () => {
     c.become(review({ status: 'passed' }));
     expect(c.click()).toBe('⤵ squash & merge');
     await settle();
-    expect(api.mergePr).toHaveBeenCalledWith('p', pr.repo, pr.number);
+    expect(api.mergePr).toHaveBeenCalledWith('p', pr.repo, pr.number, false);
     expect(api.mergeWhenPassed).not.toHaveBeenCalled();
     expect(confirmDialog).toHaveBeenCalledWith({ message: `Merge ${pr.repo}#7 "${pr.title}"?` });
   });
@@ -64,6 +64,20 @@ describe('the Tricorder’s merge button', () => {
     passed.click();
     await settle();
     expect(confirmDialog).toHaveBeenLastCalledWith({ message: `QA failed it.\n\nMerge ${pr.repo}#7 "${pr.title}" anyway?` });
-    expect(api.mergePr).toHaveBeenCalledWith('p', pr.repo, pr.number);
+    expect(api.mergePr).toHaveBeenCalledWith('p', pr.repo, pr.number, false);
+  });
+
+  it('merges past a refused merge check only on purpose, asking first', async () => {
+    const refused = card(review({ status: 'passed' }), { ...pr, mergeCheck: { state: 'refused', head: HEAD, reason: 'it conflicts with its base at 1234567' } });
+    expect(refused.click()).toBe('⤵ Merge anyway');
+    await settle();
+    expect(confirmDialog).toHaveBeenLastCalledWith({ message: expect.stringContaining('Its merge check refused it: it conflicts with its base at 1234567') });
+    expect(api.mergePr).toHaveBeenCalledWith('p', pr.repo, pr.number, true);
+  });
+
+  it('can’t be pressed while the merge check runs', () => {
+    const checking = card(review({ status: 'passed' }), { ...pr, mergeCheck: { state: 'checking', head: HEAD } });
+    expect(checking.click()).toBe('🚦 Checking the merge…');
+    expect(api.mergePr).not.toHaveBeenCalled();
   });
 });
