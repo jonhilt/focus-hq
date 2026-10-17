@@ -38,15 +38,33 @@ describe('placeView', () => {
 });
 
 describe('viewSvg', () => {
-  it('draws the view’s parts with what they do, and a numbered line each way for parts that use each other', () => {
+  it('draws the view’s parts with what they do, and a line each way for parts that use each other, labelled with how many imports', () => {
     const svg = viewSvg(MAP, front);
     expect(svg).toContain('>API<');
     expect(svg).toContain('Answers requests');
     expect(svg).not.toContain('>Store<');
     expect(svg.match(/marker-end=/g)).toHaveLength(2);
     expect(svg).toContain('<title>API uses handle, Order from Core (3 imports)</title>');
-    expect(svg).toMatch(/font-weight="700" fill="#fff">1</);
-    expect(svg).toMatch(/font-weight="700" fill="#fff">2</);
+    // the number on each line is what crosses it, not an index to look up
+    const labels = [...svg.matchAll(/paint-order="stroke"[^>]*>(\d+)</g)].map((m) => m[1]);
+    expect(labels).toEqual(['3', '1']);
+  });
+
+  it('rounds each line within a column a step further out than the one before, so none lies over another', () => {
+    const parts = ['a', 'b', 'c'].map((id) => ({ id, label: id.toUpperCase(), layer: 'One', kind: 'service' as const, paths: [`${id}/`] }));
+    const map: RepoMap = {
+      ...MAP,
+      model: { parts, views: [], ignore: [] },
+      connections: [
+        { from: 'a', to: 'b', imports: 5, names: ['x'] },
+        { from: 'b', to: 'a', imports: 3, names: ['y'] },
+        { from: 'a', to: 'c', imports: 2, names: ['z'] },
+      ],
+    };
+    const svg = viewSvg(map, { id: 'v', question: '?', parts: ['a', 'b', 'c'] });
+    const at = [...svg.matchAll(/<text x="([\d.]+)" y="([\d.]+)"[^>]*paint-order="stroke"/g)].map((m) => `${m[1]},${m[2]}`);
+    expect(at).toHaveLength(3);
+    expect(new Set(at.map((p) => p.split(',')[0])).size).toBe(3);
   });
 });
 
@@ -96,7 +114,7 @@ describe('flows in a view', () => {
     { from: 'db', to: 'api', via: 'ws' as const, names: ['toast'], count: 2 },
   ] };
 
-  it('says them after the imports, numbered on: what goes over the WebSocket, and what’s asked for', () => {
+  it('says them after the imports: what goes over the WebSocket, and what’s asked for', () => {
     expect(viewSentences(withFlows, front).slice(2)).toEqual([
       'Core sends agent, board to API over the WebSocket (40 events in the recorded run)',
       'API calls POST /api/goals on Core (1 request in the recorded run)',
@@ -176,7 +194,7 @@ describe('tiesDrawing', () => {
   const web: RepoMap = { ...MAP, repo: 'o/web', model: { ...MAP.model!, parts: [{ id: 'checkout', label: 'Checkout', layer: 'UI', kind: 'ui', paths: ['c/'] }] } };
   const api: RepoMap = { ...MAP, repo: 'o/api' };
 
-  it('draws a column per repo with the parts its ties join, each tie numbered and said', () => {
+  it('draws a column per repo with the parts its ties join, each tie labelled and said', () => {
     const drawn = tiesDrawing([web, api], [{ a: { repo: 'o/api', part: 'core' }, b: { repo: 'o/web', part: 'checkout' }, together: 4, either: 6 }]);
     expect(drawn?.view.parts).toEqual(['o/web#checkout', 'o/api#core']);
     expect(drawn?.sentences).toEqual(['Core (o/api) and Checkout (o/web) changed together in 4 of the 6 change sets that touched either']);

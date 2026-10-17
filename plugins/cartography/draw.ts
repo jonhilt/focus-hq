@@ -70,7 +70,7 @@ function flowSentence(f: MapFlow, label: (id: string) => string): string {
 }
 
 /**
- * A view's lines, numbered as viewSvg draws them: its imports, the busiest first, then its recorded flows. On a slice's
+ * A view's lines, in the order viewSvg draws them: its imports, the busiest first, then its recorded flows. On a slice's
  * view (`marks`), the imports it makes and breaks say so.
  */
 export function viewLines(map: RepoMap, view: MapView, marks?: Marks): ViewLine[] {
@@ -91,7 +91,7 @@ export function viewLines(map: RepoMap, view: MapView, marks?: Marks): ViewLine[
 /** A view's lines as sentences: what one part uses from another, then what it sends another as it runs. */
 export const viewSentences = (map: RepoMap, view: MapView): string[] => viewLines(map, view).map((l) => l.sentence);
 
-const VIEW = { colW: 400, pad: 70, top: 60, rowH: 140, boxH: 100, gutter: 120, bulge: 40 } as const;
+const VIEW = { colW: 400, pad: 90, top: 60, rowH: 140, boxH: 100, gutter: 120, bulge: 36, step: 22 } as const;
 
 interface Placed {
   part: MapPart;
@@ -131,10 +131,11 @@ export function wrap(text: string, size: number, max: number, lines = 2): string
 }
 
 /**
- * The curve from part `a` to part `b`, and its middle, where its number goes. It's line `slot` of `of` between the two
- * (either way), moved aside so each gets a line of its own.
+ * The curve from part `a` to part `b`, and its middle, where its label goes. It's line `slot` of `of` between the two
+ * (either way), moved aside so each gets a line of its own; within a column, line `outward` of that column's, each
+ * rounding it further out so none lies over another.
  */
-function edgePath(a: Placed, b: Placed, cols: number, slot: number, of: number): { d: string; mid: { x: number; y: number } } {
+function edgePath(a: Placed, b: Placed, cols: number, slot: number, of: number, outward: { at: number; of: number }): { d: string; mid: { x: number; y: number } } {
   const half = (VIEW.colW - VIEW.gutter) / 2;
   const lane = slot - (of - 1) / 2;
   const curve = (p0: number[], p1: number[], p2: number[], p3: number[]) => ({
@@ -146,8 +147,10 @@ function edgePath(a: Placed, b: Placed, cols: number, slot: number, of: number):
     // within a column, round its outer side (the right, for a middle one), each further line further out
     const side = a.col === 0 && cols > 1 ? -1 : 1;
     const x = a.x + side * half;
-    const ox = x + side * (VIEW.bulge + slot * 26);
-    const dy = lane * 12;
+    const ox = x + side * (VIEW.bulge + outward.at * VIEW.step);
+    // each leaving and reaching its parts at a height of its own, the outermost highest
+    const spread = outward.of > 1 ? Math.min(12, 72 / (outward.of - 1)) : 0;
+    const dy = ((outward.of - 1) / 2 - outward.at) * spread;
     return curve([x, a.y + dy], [ox, a.y + dy], [ox, b.y + dy], [x, b.y + dy]);
   }
   const dir = b.x > a.x ? 1 : -1;
@@ -158,14 +161,16 @@ function edgePath(a: Placed, b: Placed, cols: number, slot: number, of: number):
   return curve([sx, a.y + dy], [mx, a.y + dy], [mx, b.y + dy], [ex, b.y + dy]);
 }
 
-function numbered(x: number, y: number, n: number, colour: string): string {
-  return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="14" fill="${INK.bg}" stroke="${colour}" stroke-width="1.5"/><text x="${x.toFixed(1)}" y="${(y + 5).toFixed(1)}" text-anchor="middle" font-size="14" font-weight="700" fill="#fff">${n}</text>`;
+/** What crosses a line, as a number on it: knocked out of what's under it, in the line's colour. */
+function labelled(x: number, y: number, n: number, colour: string): string {
+  return `<text x="${x.toFixed(1)}" y="${(y + 5).toFixed(1)}" text-anchor="middle" font-size="14" font-weight="700" fill="${colour}" stroke="${INK.bg}" stroke-width="5" stroke-linejoin="round" paint-order="stroke" font-variant-numeric="tabular-nums">${n}</text>`;
 }
 
 /**
  * View `view` of `map`: a column per layer, each part with what it does, an arrow from each part to each part whose
  * code it uses, as thick as its imports, and a dashed gold one for what it sends another as it runs (a recorded run's
- * flows). Each arrow carries the number of its sentence in `viewSentences`; every line between two parts gets its own.
+ * flows). Each arrow is labelled with how many cross it (imports, or messages), the number its sentence in
+ * `viewSentences` ends on, so the drawing needs no key to look up; every line between two parts gets its own.
  */
 export function viewSvg(map: RepoMap, view: MapView, marks?: Marks, extra: readonly ViewLine[] = []): string {
   const { placed, cols, rows } = placeView(map, view);
@@ -181,14 +186,20 @@ export function viewSvg(map: RepoMap, view: MapView, marks?: Marks, extra: reado
     out.push(`<text x="${VIEW.pad + VIEW.colW * (i + 0.5)}" y="30" text-anchor="middle" font-size="17" font-weight="700" letter-spacing="2" fill="${colour}">${esc(layer.toUpperCase())}</text>`));
   const lines = [...viewLines(map, view, marks), ...extra];
   const pair = (l: ViewLine) => [l.from, l.to].sort().join(' ');
-  const numbers: string[] = [];
-  lines.forEach((line, i) => {
+  const column = (l: ViewLine) => {
+    const [a, b] = [placed.get(l.from), placed.get(l.to)];
+    return a && b && a.col === b.col ? a.col : undefined;
+  };
+  const labels: string[] = [];
+  lines.forEach((line) => {
     const a = placed.get(line.from);
     const b = placed.get(line.to);
     if (!a || !b) return;
     // every line between the same two parts, either way and of either kind, gets a lane of its own
     const same = lines.filter((l) => pair(l) === pair(line));
-    const { d, mid } = edgePath(a, b, cols, same.indexOf(line), same.length);
+    // and each line rounding a column, a step further out than the busier ones before it
+    const rounding = lines.filter((l) => column(l) !== undefined && column(l) === a.col);
+    const { d, mid } = edgePath(a, b, cols, same.indexOf(line), same.length, { at: Math.max(0, rounding.indexOf(line)), of: rounding.length });
     const sw = 1.5 + Math.log2(line.weight + 1) * (line.kind === 'flow' ? 0.9 : 1.4);
     const [colour, marker, dash] =
       line.kind === 'coupled' ? [MARK.coupled, '', ' stroke-dasharray="3 7" stroke-linecap="round"']
@@ -197,9 +208,9 @@ export function viewSvg(map: RepoMap, view: MapView, marks?: Marks, extra: reado
       : line.kind === 'flow' ? [INK.flow, 'cg-flow', ' stroke-dasharray="10 7"']
       : [INK.line, 'cg-arrow', ''];
     out.push(`<path d="${d}" fill="none" stroke="${colour}" stroke-opacity="0.75" stroke-width="${sw.toFixed(1)}"${dash} ${marker ? ` marker-end="url(#${marker})"` : ''}><title>${esc(line.sentence)}</title></path>`);
-    numbers.push(numbered(mid.x, mid.y, i + 1, colour));
+    labels.push(labelled(mid.x, mid.y, line.weight, colour));
   });
-  out.push(...numbers);
+  out.push(...labels);
   for (const { part, x, y } of placed.values()) {
     const colour = colours.get(part.layer) ?? INK.muted;
     const does = wrap(part.does ?? part.paths.join(', '), 15, boxW - 24);
@@ -210,7 +221,9 @@ export function viewSvg(map: RepoMap, view: MapView, marks?: Marks, extra: reado
     const top = y - VIEW.boxH / 2;
     out.push(
       `<g><title>${esc(`${part.label}: ${part.paths.join(', ')}`)}</title>`,
-      `<rect x="${left}" y="${top}" width="${boxW}" height="${VIEW.boxH}" rx="10" fill="${INK.panel}" stroke="${mark?.colour ?? colour}" stroke-width="${mark ? 4.5 : 2.5}"${marks?.removed.has(part.id) ? ' stroke-dasharray="8 6"' : ''}/>`,
+      // a quiet panel, its layer a rule down its left; outlined only when a slice marks it
+      `<rect x="${left}" y="${top}" width="${boxW}" height="${VIEW.boxH}" rx="4" fill="${INK.panel}"${mark ? ` stroke="${mark.colour}" stroke-width="4"` : ''}${marks?.removed.has(part.id) ? ' stroke-dasharray="8 6"' : ''}/>`,
+      `<rect x="${left}" y="${top}" width="4" height="${VIEW.boxH}" fill="${colour}"/>`,
       ...(mark
         ? [
             `<rect x="${left + boxW - 112}" y="${top - 13}" width="104" height="24" rx="12" fill="${mark.colour}"/>`,
@@ -438,7 +451,7 @@ export const TIES_QUESTION = 'How do its repos connect?';
 
 /**
  * The view of how a project's repos connect: a column per repo, with the parts its `calls` (routes.ts) and `ties`
- * (crossRepo.ts) join, each line numbered and said in a sentence, the calls first. Undefined when nothing does.
+ * (crossRepo.ts) join, each line labelled and said in a sentence, the calls first. Undefined when nothing does.
  */
 export function tiesDrawing(maps: readonly RepoMap[], ties: readonly CrossCoupling[], calls: readonly CrossCall[] = []): { map: RepoMap; view: MapView; svg: string; key: string; sentences: string[] } | undefined {
   if (!ties.length && !calls.length) return undefined;
@@ -476,7 +489,7 @@ export function tiesDrawing(maps: readonly RepoMap[], ties: readonly CrossCoupli
 }
 
 /**
- * Any view of a map as the browser and the screens show it: its drawing, how to read it, and its numbered sentences.
+ * Any view of a map as the browser and the screens show it: its drawing, how to read it, and its sentences.
  * A slice's view (slice.ts `sliceView`) comes with `marks`, what the slice changes.
  */
 export function viewDrawing(map: RepoMap, view: MapView, marks?: Marks): { svg: string; key: string; sentences: string[] } {

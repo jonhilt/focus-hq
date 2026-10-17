@@ -11,7 +11,7 @@ function drawing(svg: string): HTMLElement {
   return box;
 }
 
-/** A view's body: how to read it, the drawing, and what it shows in numbered sentences (with a slice's `marks`). */
+/** A view's body: how to read it, the drawing, and what it shows in sentences (with a slice's `marks`). */
 export function viewBody(map: RepoMap, view: MapView, marks?: Marks): HTMLElement[] {
   return drawingBody(viewDrawing(map, view, marks));
 }
@@ -26,11 +26,11 @@ function matrixDetail(box: HTMLElement): HTMLElement[] {
   return [wrapper];
 }
 
-/** A drawing's body: how to read it, the drawing, and what it shows in numbered sentences. */
+/** A drawing's body: how to read it, the drawing, and what it shows in sentences. */
 export function drawingBody({ svg, key, sentences }: { svg: string; key: string; sentences: string[] }): HTMLElement[] {
   const box = drawing(svg);
   const detail = matrixDetail(box);
-  return [h('small', { class: 'muted' }, key), ...(detail.length ? detail : [box]), ...(sentences.length ? [h('ol', { class: 'cg-sentences' }, ...sentences.map((s) => h('li', null, s)))] : [])];
+  return [h('small', { class: 'muted' }, key), ...(detail.length ? detail : [box]), ...(sentences.length ? [h('ul', { class: 'cg-sentences' }, ...sentences.map((s) => h('li', null, s)))] : [])];
 }
 
 /** View `view` of `map` up close, filling the window (with a slice's `marks`). */

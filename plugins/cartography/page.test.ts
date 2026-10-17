@@ -4,7 +4,7 @@ import { viewsOf } from './views';
 import { MAP } from './views.test';
 
 describe('mapPage', () => {
-  it('puts a view\'s question over its drawing and its numbered sentences, escaped', () => {
+  it('puts a view\'s question over its drawing and its sentences, escaped', () => {
     const [, front] = viewsOf(MAP);
     const html = mapPage({ ...MAP, commit: 'abcdef123' }, { ...front, question: 'Does <API> reach core?' });
     expect(html).toContain('<h1>Does &lt;API&gt; reach core?</h1>');
@@ -17,6 +17,6 @@ describe('mapPage', () => {
     const [whole] = viewsOf(MAP);
     const html = mapPage(MAP, whole);
     expect(html).toContain('Each row imports from the columns');
-    expect(html).not.toContain('<ol>');
+    expect(html).not.toContain('<ul>');
   });
 });

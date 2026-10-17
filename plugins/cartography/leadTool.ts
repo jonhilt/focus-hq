@@ -8,7 +8,7 @@ import { mapPage } from './page';
 import { MODEL_FILE, type RepoMap } from './shared';
 import { pickView, screenTitle, viewList } from './views';
 
-const DESCRIPTION = `Put a view of the project's architecture map on your station's screen, like show's visuals: the parts a question takes, the imports between them and what they send each other at runtime (from a recorded run), drawn the one way, every arrow numbered and said in a sentence. It's mapped from the model in your checkout's ${MODEL_FILE} and your code as it stands. Reach for it before drawing a diagram of how the system fits together: with no view it lists the views there are. When none answers your question, add one to the model (a question and the parts it takes) in your slice and show it: once it merges, it's there for every goal after.`;
+const DESCRIPTION = `Put a view of the project's architecture map on your station's screen, like show's visuals: the parts a question takes, the imports between them and what they send each other at runtime (from a recorded run), drawn the one way, every arrow labelled with how many imports or messages cross it and said in a sentence. It's mapped from the model in your checkout's ${MODEL_FILE} and your code as it stands. Reach for it before drawing a diagram of how the system fits together: with no view it lists the views there are. When none answers your question, add one to the model (a question and the parts it takes) in your slice and show it: once it merges, it's there for every goal after.`;
 
 async function maps(lead: LeadToolContext, repo?: string): Promise<RepoMap[]> {
   const checkouts = lead.checkouts.filter((c) => !repo || c.repo === repo);

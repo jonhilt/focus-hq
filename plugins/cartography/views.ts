@@ -29,7 +29,7 @@ export function coverage(map: RepoMap): string {
 
 /** How to read a view, under its question. */
 export const VIEW_KEY =
-  'An arrow goes from a part to a part whose code it uses: the thicker, the more it imports. A dashed gold one is what a part sends another as it runs, from a recorded run. Each number is its line below.';
+  'An arrow goes from a part to a part whose code it uses, labelled with how many imports: the thicker, the more. A dashed gold one is what a part sends another as it runs, labelled with how many messages in a recorded run. Point at one, or find its number below, for what crosses it.';
 export const MATRIX_KEY = 'Each row imports from the columns it has a number in: the number is how many imports. Orange: two parts that import each other.';
 export const CHANGES_KEY =
   'From git: each part\'s commits over time as a line, every line on one scale, the latest a gold dot, the busiest part first. Beside it, the parts that keep changing together; in gold, those with no import between them, whose tie the map\'s arrows don\'t show.';
