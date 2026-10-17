@@ -59,7 +59,18 @@ Of the 39 cases, 29 are traced (3 confirmed by their tests) and 10 have every su
 
 ## Replaying QA
 
-`pnpm run bug-replay` runs the QA officer's own review (its system prompt, prompt, report schema, model and Claude Code settings, as [QA's catch rate](qa-catch.md) does) on each commit a traced bug came from, as a pull request against the commit before it, in a throwaway clone of this repo, and scores each bug: **caught** when QA failed the change and its report points at the bug (one of its files by name in a failed check or the fix instructions, or a spot-check within 5 lines of one of its lines), **failed for something else**, or **missed**. Each of these commits got past QA once, so it says how many of them today's QA, or a change to it, would stop.
+`pnpm run bug-replay` runs the QA officer's own review (its system prompt, prompt, report schema, model and Claude Code settings, as [QA's catch rate](qa-catch.md) does) on each commit a traced bug came from, as a pull request against the commit before it, in a throwaway clone of this repo. Each of these commits got past QA once, so it says how many of them today's QA, or a change to it, would stop, and for the right reason. Each bug is scored:
+
+- **caught**: the review stopped the change, and a **judge** (a different model from QA's, `claude-opus-5-5`, holding the fix's own diff as the answer key) says one of its findings is the very bug the fix fixed: the same wrong outcome from the same cause, not the same file or a vague worry. The judge was checked both ways before use (`JUDGE_SYSTEM` in `server/agents/bugReplay.ts`), and each run keeps the whole report so its calls can be checked by hand.
+- **stopped for another bug**: the review stopped the change for something else.
+- **missed**: it let the change through.
+
+Whether the report merely named the bug's file is kept beside it: in the first baseline, all three such "catches" were other bugs in the same files.
+
+Two arms (`--arm`):
+
+- **`qa`** (the default): the office's QA as it is. It stops a change on its own verdict.
+- **`hunt`**: QA with `HUNT_BRIEF` after its instructions: the corpus's kinds of bug (restart and shutdown, two at once, assumptions about git, GitHub and the shell, edge-case input), probed with tests that drive those paths rather than read for them, and every finding proved by a `*.proof.test.ts` that fails. The replay runs the proof files itself, and the review stops a change only when one fails on an assertion (`blocks`): code decides, not QA's say-so.
 
 | | |
 | --- | --- |
@@ -67,7 +78,18 @@ Of the 39 cases, 29 are traced (3 confirmed by their tests) and 10 have every su
 | `pnpm run bug-replay --commits 3` | the first few |
 | `pnpm run bug-replay --control` | as many controls: commits that landed a pull request changing the office's code, that no listed bug came from and no listed fix made, spread over the same stretch of history. QA failing one is most likely a false alarm |
 | `pnpm run bug-replay --dry` | what it would review, without reviewing |
+| `pnpm run bug-replay --arm hunt` | the hunting review instead of the office's QA |
+| `pnpm run bug-replay --only <sha>` | one commit a bug came from |
 
 A review costs what one in the office does, about $0.60 and a few minutes: a full run with controls is 48 reviews, about $30 and a few hours. Runs are saved in `~/.focus/bug-replay/`. The rules are in `server/agents/bugReplay.ts`, the clones and sessions in `scripts/bugReplay.ts`, and QA's review session, shared with `qa-catch`, in `scripts/qaReview.ts`.
 
-What it can't tell: pointing at the bug's file isn't proof QA understood the bug (the referee tests can't run on most of these commits, so only the report says what QA saw); a control can hold a bug nobody has found yet; and the replay has no browser, as with `qa-catch`.
+### Results so far (2026-10-17, 26 bugs in 24 commits, 24 controls)
+
+| arm | caught (judge) | stopped for another bug | controls stopped | cost |
+| --- | ---: | ---: | ---: | ---: |
+| `qa` | 0 | 3 | 0 | $37 |
+| `hunt` | 2 | 6 | 3 | $36 |
+
+Every change the hunting review stopped came with a failing proof test. One of its three "stopped controls", 7ca08cb, was stopped for two asks at once losing their pages: the very bug fixed later in bd279e4, which tracing had put on another commit. So it caught three known bugs, not two, and the other controls it stopped were for proven bugs too (an inverted byte range answered with an empty 206, a terminal line drawn indented).
+
+What it can't tell: a control can hold a bug nobody has listed (as above), so "controls stopped" is an upper bound on false alarms, and each needs reading; tracing can blame the wrong commit; and the replay has no browser, as with `qa-catch`.

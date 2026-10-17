@@ -24,8 +24,9 @@ export interface Reviewed {
   error?: string;
 }
 
-/** The QA officer's review of a clone, as the office runs one: a report that leaves changed files out goes back once, naming them. */
-export async function review(repo: string, dir: string, pr: PullRequestDetail, state: { settings: Settings; projects: Project[] }): Promise<Reviewed> {
+/** The QA officer's review of a clone, as the office runs one: a report that leaves changed files out goes back once, naming them.
+ *  A `brief` goes after QA's own instructions in its system prompt, for a replay trying a change to how QA reviews. */
+export async function review(repo: string, dir: string, pr: PullRequestDetail, state: { settings: Settings; projects: Project[] }, brief = ''): Promise<Reviewed> {
   const project = state.projects.find((p) => p.repos.includes(repo)) ?? { name: repo };
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), REVIEW_MS);
@@ -46,7 +47,7 @@ export async function review(repo: string, dir: string, pr: PullRequestDetail, s
         resume: sessionId,
         model: qaAgentModel(state.settings),
         ...claudeConfig(state.settings.userClaudeMd, process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude')),
-        systemPrompt: { type: 'preset', preset: 'claude_code', append: qaSystemAppend({ name: 'Lt. Replay' }, project, pr, pr.headSha) },
+        systemPrompt: { type: 'preset', preset: 'claude_code', append: `${qaSystemAppend({ name: 'Lt. Replay' }, project, pr, pr.headSha)}${brief}` },
         outputFormat: { type: 'json_schema', schema: QA_SCHEMA },
         disallowedTools: ['AskUserQuestion', 'EnterPlanMode'],
         // a throwaway clone, deleted after: nobody is there to answer a permission prompt

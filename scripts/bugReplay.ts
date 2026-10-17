@@ -7,15 +7,42 @@
 //
 //   pnpm run bug-replay                 every commit a traced bug came from, two reviews at a time
 //   pnpm run bug-replay --commits 3     the first few of them
+//   pnpm run bug-replay --only <sha>    one commit a bug came from
 //   pnpm run bug-replay --control       as many code-changing commits no listed bug came from, reviewed the same way
 //   pnpm run bug-replay --dry           say what it would review, without running any review
+//   pnpm run bug-replay --arm hunt      the hunting review instead of the office's QA: hunts the corpus's kinds of bug and
+//                                       stops a change only with a proof test that fails when the replay runs it
+//
+// A catch counts only when a judge (a separate model, holding the fix's own diff as the answer key) says one of the
+// review's findings is the very bug the fix fixed; whether the report merely named the bug's file is kept beside it.
 
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { BugCase } from '../server/agents/bugCorpus';
-import { parseFixes, prNumber } from '../server/agents/bugCorpus';
-import { changesCode, pickControls, type ReplayControl, replayLines, type ReplayResult, type ReplayRun, scoreReplay, sitesOf } from '../server/agents/bugReplay';
+import { parseFixes, prNumber, vitestRun } from '../server/agents/bugCorpus';
+import {
+  type Arm,
+  blocks,
+  changesCode,
+  HUNT_BRIEF,
+  JUDGE_SCHEMA,
+  JUDGE_SYSTEM,
+  type Judged,
+  judgePrompt,
+  pickControls,
+  pointsAt,
+  type Proof,
+  proofFiles,
+  proofOf,
+  type ReplayControl,
+  replayLines,
+  type ReplayResult,
+  type ReplayRun,
+  scoreReplay,
+  sitesOf,
+} from '../server/agents/bugReplay';
+import { runReadOnly } from '../server/agents/claudeCrew';
 import { qaAgentModel } from '../server/agents/qa';
 import { config, paths } from '../server/config';
 import type { PullRequestDetail } from '../server/github/provider';
@@ -32,6 +59,9 @@ const args = process.argv.slice(2);
 const opt = (name: string) => (args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : undefined);
 const dry = args.includes('--dry');
 const control = args.includes('--control');
+const arm: Arm = opt('arm') === 'hunt' ? 'hunt' : 'qa';
+/** The judge: a different model from QA's, so it isn't grading its own kind of answer. */
+const JUDGE_MODEL = 'claude-opus-5-5';
 
 const git = (...a: string[]) => run('git', a, { cwd: ROOT });
 const state = JSON.parse(readFileSync(paths.state, 'utf8')) as { settings: Settings; projects: Project[] };
@@ -43,7 +73,12 @@ const traced = corpus.cases.filter((c) => c.introducedBy);
 const grouped = new Map<string, BugCase[]>();
 for (const c of traced) if (c.introducedBy) grouped.set(c.introducedBy.sha, [...(grouped.get(c.introducedBy.sha) ?? []), c]);
 const rootless = await Promise.all([...grouped].map(async ([sha, bugs]) => ((await git('rev-parse', '--verify', '--quiet', `${sha}^1`).then(() => true, () => false)) ? [[sha, bugs] as const] : [])));
-const commits = rootless.flat().slice(0, Number(opt('commits') ?? Infinity));
+const roots = traced.filter((c) => !rootless.flat().some(([sha]) => sha === c.introducedBy?.sha)).length;
+const only = opt('only');
+const commits = rootless
+  .flat()
+  .filter(([sha]) => !only || sha.startsWith(only))
+  .slice(0, Number(opt('commits') ?? Infinity));
 const cases = commits.flatMap(([, bugs]) => bugs);
 
 /** A clone of this repo at `sha`, with origin/main at the commit before it, so QA's diff is exactly what `sha` changed. */
@@ -74,32 +109,83 @@ async function asPullRequest(sha: string): Promise<PullRequestDetail> {
   };
 }
 
+/** The proof files a hunting review left in its clone, run by the replay itself (with the clone's own install, or this checkout's). */
+async function runProof(dir: string): Promise<Proof> {
+  const files = proofFiles(await run('git', ['-C', dir, 'status', '--porcelain', '--untracked-files=all']));
+  if (!files.length) return { files, failing: [] };
+  if (!existsSync(path.join(dir, 'node_modules'))) symlinkSync(path.join(ROOT, 'node_modules'), path.join(dir, 'node_modules'));
+  const out = path.join(dir, 'proof.json');
+  // vitest exits non-zero when a test fails, which is what a proof is for: the report is in the file either way
+  await run(path.join(dir, 'node_modules', '.bin', 'vitest'), ['run', '--reporter=json', `--outputFile=${out}`, ...files], { cwd: dir, timeoutMs: 5 * 60_000 }).catch(() => '');
+  return proofOf(files, existsSync(out) ? vitestRun(readFileSync(out, 'utf8'), realpathSync(dir)) : undefined);
+}
+
 async function reviewAt(sha: string, root: string) {
   const dir = await cloneAt(sha, root);
   try {
-    return await review(REPO, dir, await asPullRequest(sha), state);
+    const r = await review(REPO, dir, await asPullRequest(sha), state, arm === 'hunt' ? HUNT_BRIEF : '');
+    const proof = arm === 'hunt' && r.report ? await runProof(dir) : undefined;
+    return { ...r, proof, blocked: r.report ? blocks(arm, r.report, proof) : false };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 }
 
+/** The judge's call on whether a review found the bug a fix fixed, with the fix's diff (code, not its tests) as the answer key. */
+async function judge(bug: BugCase, report: NonNullable<Awaited<ReturnType<typeof reviewAt>>['report']>, proof: Proof | undefined): Promise<{ judged: Judged; costUsd: number }> {
+  const diff = await git('diff', `${bug.fix}^`, bug.fix, '--', '.', ':(exclude)*.test.ts');
+  const result = await runReadOnly({
+    cwd: os.tmpdir(),
+    system: JUDGE_SYSTEM,
+    systemAppend: '',
+    prompt: judgePrompt({ subject: bug.subject, diff }, report, proof),
+    settings: state.settings,
+    signal: new AbortController().signal,
+    activity: () => undefined,
+    builtins: [],
+    schema: JUDGE_SCHEMA,
+    model: JUDGE_MODEL,
+    maxTurns: 2,
+    timeoutMs: 3 * 60_000,
+  });
+  const j = result.structured as Partial<Judged> | undefined;
+  return { judged: { sameBug: j?.sameBug === true, finding: String(j?.finding ?? ''), why: String(j?.why ?? '') }, costUsd: result.costUsd ?? 0 };
+}
+
 /** One review of a commit that brought bugs in, scored against each of them: a review can catch one and miss another. */
 async function replay(sha: string, bugs: BugCase[], root: string): Promise<ReplayResult[]> {
   const r = await reviewAt(sha, root);
-  return bugs.map((bug) => {
+  const results: ReplayResult[] = [];
+  for (const bug of bugs) {
     const by = bug.introducedBy;
     const base = { fix: bug.fix, kind: bug.kind, introducedBy: sha, ...(by?.pr && { pr: by.pr }), costUsd: (r.costUsd ?? 0) / bugs.length, minutes: r.minutes };
+    if (!r.report) {
+      results.push({ ...base, outcome: 'error', summary: r.error ?? 'QA finished without a report' });
+      continue;
+    }
     const sites = sitesOf(by?.lines ?? [], [...new Set(bug.buggyLines.map((l) => l.file))]);
-    return r.report ? { ...base, outcome: scoreReplay(r.report, sites), summary: r.report.summary } : { ...base, outcome: 'error', summary: r.error ?? 'QA finished without a report' };
-  });
+    // only a review that stopped the change can have caught the bug: the judge isn't asked about one that let it through
+    const j = r.blocked ? await judge(bug, r.report, r.proof) : undefined;
+    results.push({
+      ...base,
+      costUsd: base.costUsd + (j?.costUsd ?? 0),
+      outcome: scoreReplay(r.blocked, j?.judged.sameBug ?? false),
+      summary: r.report.summary,
+      pointed: pointsAt(r.report, sites),
+      ...(j && { judged: j.judged }),
+      ...(r.proof && { proof: r.proof }),
+      report: r.report,
+    });
+  }
+  return results;
 }
 
 async function controlled(c: { sha: string; subject: string }, root: string): Promise<ReplayControl> {
   const r = await reviewAt(c.sha, root);
-  const base = { sha: c.sha, ...(prNumber(c.subject) && { pr: prNumber(c.subject) }) };
+  const base = { sha: c.sha, ...(prNumber(c.subject) && { pr: prNumber(c.subject) }), costUsd: r.costUsd, minutes: r.minutes };
   return r.report
-    ? { ...base, outcome: r.report.verdict === 'pass' ? 'clean' : 'false-alarm', summary: r.report.summary, costUsd: r.costUsd, minutes: r.minutes }
-    : { ...base, outcome: 'error', summary: r.error ?? 'QA finished without a report', costUsd: r.costUsd, minutes: r.minutes };
+    ? { ...base, outcome: r.blocked ? 'false-alarm' : 'clean', summary: r.report.summary, ...(r.proof && { proof: r.proof }), report: r.report }
+    : { ...base, outcome: 'error', summary: r.error ?? 'QA finished without a report' };
 }
 
 /** Commits on main over the cases' span that no listed bug came from and no listed fix made: as many as there are cases. */
@@ -121,7 +207,7 @@ async function controlsFor(): Promise<{ sha: string; subject: string }[]> {
 
 async function main() {
   const picked = control ? await controlsFor() : [];
-  console.log(`${cases.length} real bugs to replay in ${commits.length} commits that brought them in (of ${corpus.cases.length} cases, ${traced.length} traced, ${traced.length - cases.length} to the repo's first commit)${picked.length ? `, ${picked.length} controls` : ''}`);
+  console.log(`${cases.length} real bugs to replay in ${commits.length} commits that brought them in (of ${corpus.cases.length} cases, ${traced.length} traced, ${roots} to the repo's first commit)${picked.length ? `, ${picked.length} controls` : ''}`);
   for (const [sha, bugs] of commits) console.log(`  ${bugs.map((b) => b.kind).join(',').padEnd(24)} ${sha.slice(0, 7)} ${bugs[0]?.introducedBy?.subject.slice(0, 80)}`);
   for (const c of picked) console.log(`  control   ${c.sha.slice(0, 7)} ${c.subject.slice(0, 80)}`);
   if (dry) return;
@@ -151,10 +237,10 @@ async function main() {
     rmSync(root, { recursive: true, force: true });
   }
 
-  console.log(`\n${replayLines(results, controls).join('\n')}`);
+  console.log(`\n${replayLines(arm, results, controls).join('\n')}`);
   mkdirSync(OUT, { recursive: true });
-  const file = path.join(OUT, `${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
-  const saved: ReplayRun = { at: Date.now(), model: qaAgentModel(state.settings) ?? 'default', results, ...(controls.length && { controls }) };
+  const file = path.join(OUT, `${new Date().toISOString().replace(/[:.]/g, '-')}-${arm}.json`);
+  const saved: ReplayRun = { at: Date.now(), arm, model: qaAgentModel(state.settings) ?? 'default', results, ...(controls.length && { controls }) };
   writeFileSync(file, JSON.stringify(saved, null, 2));
   console.log(`\nSaved in ${file}`);
 }
