@@ -274,6 +274,24 @@ export function foldReview(entries: readonly (ReviewFact & { seq?: number })[]):
   return entries.reduce(evolveReview, EMPTY_REVIEW);
 }
 
+/**
+ * The facts that put a review back under test by `agent`, whose conversation the captain's message picked back up: after
+ * their turn failed ("Hit a problem – send a message to retry"), or while the review waited for them again. Without
+ * them, the verdict that turn reaches lands on a review that isn't under test, the machine drops it, and it's never
+ * posted (jonhilt/focus#523). The commit is the one they checked out. None when it's under test already, its verdict's
+ * in hand or given, nothing was ever checked out, or its pull request's gone.
+ */
+export function resumedFacts(review: ReviewState, agent: string): ReviewFact[] {
+  const { sha, view } = review;
+  if (!sha || !view) return [];
+  const testing: ReviewFact = { kind: 'testing', sha };
+  if (review.phase === 'seated') return [testing];
+  if (review.phase === 'queued') return [{ kind: 'seated', agent }, testing];
+  if (review.phase !== 'error') return [];
+  const { projectId, repo, number, title, openedByOffice } = view;
+  return [{ kind: 'requested', projectId, repo, number, title, ...(openedByOffice !== undefined && { openedByOffice }) }, { kind: 'seated', agent }, testing];
+}
+
 /** What the office does at startup with a review its journal says was under way. */
 export type ReviewRecovery =
   /** Nothing was under way. */

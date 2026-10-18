@@ -214,6 +214,32 @@ describe('AgentManager', () => {
     expect(store.recentLines(qa).at(-1)?.text).toBe(`✻ PR #${pr.number} was merged; nothing to review`);
   });
 
+  // jonhilt/focus#523: QA's turn failed (out of credit), the captain said "Continue", and QA's pass went nowhere
+  it('posts the verdict of a QA session the captain picked back up after it failed, and frees the reviewer', async () => {
+    const { agents, claude, store, project } = office();
+    const [pr, other] = await Effect.runPromise(Effect.gen(function* () {
+      return yield* (yield* GitHub).listPullRequests('demo/webshop-frontend');
+    }).pipe(Effect.provide(demoLayer)));
+    const key = prKey(pr.repo, pr.number);
+    agents.requestReview(project.id, pr.repo, pr.number, pr.title);
+    await until(() => claude.turns.length === 1);
+    const qa = store.reviews.get(key)!.agentId!;
+    claude.turns[0].end({ ok: false, summary: '', error: 'Credit balance is too low' });
+    await until(() => store.reviews.get(key)?.status === 'error');
+
+    agents.message(qa, 'Continue');
+    await until(() => claude.turns.length === 2);
+    // asked for again while QA's at it (a re-test from the board), and another PR waiting for the same reviewer
+    agents.requestReview(project.id, pr.repo, pr.number, pr.title, undefined, true);
+    agents.requestReview(project.id, other.repo, other.number, other.title);
+    claude.turns[1].end({ ok: true, summary: '', structured: { verdict: 'pass', summary: 'Works.', checks: [], commands: [], files: [] } });
+
+    await until(() => store.reviews.get(key)?.status === 'passed');
+    expect(store.reviews.get(key)?.commentUrl).toBeTruthy();
+    // the reviewer moves on to the next PR in line
+    await until(() => store.reviews.get(prKey(other.repo, other.number))?.status === 'testing');
+  });
+
   it('tests a goal’s PR with its slice’s other PRs checked out beside it, and clears them all away once it merges', async () => {
     const checkouts: string[] = [];
     const removed: string[] = [];

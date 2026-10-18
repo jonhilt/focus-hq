@@ -33,6 +33,7 @@ export class AgentSessions extends Part {
     if (rt.resume) {
       rt.resume = false;
       this.update(agent, { status: 'setting-up', activity: 'Picking up where they left off' });
+      if (agent.task === 'review') this.core.reviews.resumed(agent);
       return this.runSession(agent, rt.inbox.take().join('\n\n'), agent.sessionId).pipe(this.orFail(agent));
     }
     this.update(agent, { status: 'setting-up', activity: agent.task === 'review' ? 'Reading the pull request' : agent.task === 'brief' ? 'Reading the brief' : 'Reading the issue', error: undefined });

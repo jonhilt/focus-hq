@@ -13,7 +13,7 @@ import type { QaLoopEvent } from '../qaLoop';
 import { qaNextStep } from '../qaLoop';
 import { PROOF_MS, prove } from '../qaProof';
 import { carriedComment, retestStep, shippedSinceTested } from '../retest';
-import { type Reported, type ReviewFact, type ReviewRecovery, reviewRecovery } from '../reviewJournal';
+import { type Reported, type ReviewFact, type ReviewRecovery, resumedFacts, reviewRecovery } from '../reviewJournal';
 import { recovery } from '../runJournal';
 import { Workspace } from '../services';
 import { reviewCheckoutId, reviewRepoId, triageWorkspaceId } from '../worktrees';
@@ -211,6 +211,12 @@ export class Reviews extends Part {
       if (rt.inbox.length) prompt += `\n\nNotes from your manager:\n${rt.inbox.take().map((m) => `- ${m}`).join('\n')}`;
       yield* this.core.sessions.runSession(agent, prompt);
     });
+  }
+
+  /** The captain's message picked the reviewer's conversation back up: their PR's review is under test by them again (`resumedFacts`). */
+  resumed(agent: Agent): void {
+    const key = prKey(agent.repo, agent.issue.number);
+    for (const fact of resumedFacts(this.store.review(key), agent.id)) this.record(key, fact);
   }
 
   /** Which folder a repo's checkout goes in, in a review's folder: the one it has in a lead's workspace. */

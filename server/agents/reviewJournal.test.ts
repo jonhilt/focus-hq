@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { QaReport, QaReview } from '../../shared/types';
-import { foldReview, REVIEW_INTERRUPTED, type ReviewFact, reviewRecovery, reviewView } from './reviewJournal';
+import { foldReview, resumedFacts, REVIEW_INTERRUPTED, type ReviewFact, reviewRecovery, reviewView } from './reviewJournal';
 
 const report: QaReport = { verdict: 'pass', summary: 'Works.', checks: [], commands: [] } as unknown as QaReport;
 const reported = (verdict: 'pass' | 'fail'): ReviewFact => ({ kind: 'reported', verdict, officer: 'Lt. Quintero', body: 'QA passed', failedRounds: verdict === 'pass' ? 0 : 1, report, screenshots: [], sha: 'abc' });
@@ -88,6 +88,38 @@ describe('the board’s review, from the journal', () => {
     for (const status of ['queued', 'testing', 'failed', 'error'] as const) expect(foldReview([{ kind: 'imported', review: { ...saved, status } }]).phase).toBe(status);
     // and goes on from there like any other
     expect(foldReview([{ kind: 'imported', review: saved }, asked, { kind: 'prechecking' }, { kind: 'precheck-skipped' }]).view).toMatchObject({ status: 'passed', report });
+  });
+});
+
+describe('a review whose reviewer the captain picks back up', () => {
+  /** The review after the facts, the reviewer picked back up, and the verdict their turn reaches. */
+  const resumed = (facts: ReviewFact[]) => {
+    const before = foldReview(at(facts));
+    return foldReview(at([...facts, ...resumedFacts(before, 'qa_p'), reported('pass')]));
+  };
+  const failed: ReviewFact[] = [...tested, { kind: 'ended', error: 'Credit balance is too low' }];
+
+  it('is under test again, so the verdict their turn reaches is posted: after their turn failed, or asked for again since', () => {
+    expect(resumed(failed)).toMatchObject({ phase: { reported: 'posting' }, agent: 'qa_p', reported: { verdict: 'pass' } });
+    expect(resumed([...failed, asked])).toMatchObject({ phase: { reported: 'posting' }, reported: { verdict: 'pass' } });
+    expect(resumed(failed).view).toMatchObject({ status: 'testing', sha: 'abc', repo: 'o/web', number: 4, title: 'Saved items' });
+    // as it was, the verdict went nowhere
+    expect(foldReview([...failed, reported('pass')]).phase).toBe('error');
+    expect(foldReview([...failed, asked, reported('pass')]).phase).toBe('queued');
+  });
+
+  it('carries over what the last round left', () => {
+    const rounds = resumed([...tested, reported('fail'), { kind: 'posted' }, { kind: 'announced' }, asked, ...tested.slice(1), { kind: 'ended', error: 'x' }]);
+    expect(rounds.view).toMatchObject({ failedRounds: 1, lastRound: { sha: 'abc' } });
+  });
+
+  it('changes nothing under test, with a verdict in hand or given, never checked out, or gone', () => {
+    const none = (facts: ReviewFact[]) => resumedFacts(foldReview(at(facts)), 'qa_p');
+    expect(none(tested)).toEqual([]);
+    expect(none([...tested, reported('pass')])).toEqual([]);
+    expect(none([...tested, reported('pass'), { kind: 'posted' }, { kind: 'announced' }])).toEqual([]);
+    expect(none([asked, { kind: 'seated', agent: 'qa_p' }, { kind: 'ended', error: 'No checkout' }])).toEqual([]);
+    expect(none([...tested, { kind: 'gone', merged: true }])).toEqual([]);
   });
 });
 
