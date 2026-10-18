@@ -43,7 +43,7 @@ interface Crew {
 
 interface Pad {
   at: V3;
-  mesh: THREE.Mesh;
+  mesh: THREE.Mesh<THREE.CylinderGeometry, THREE.MeshBasicMaterial>;
   character?: Character;
   view?: CrewView;
   /** In the cycle: when its occupant finishes, leaves, and the pad is free again (stage seconds). */
@@ -56,7 +56,7 @@ interface Lane {
   crew: Crew;
   pr: Tag;
   tree: Tag;
-  strip: THREE.Mesh;
+  strip: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   number: number;
 }
 
@@ -477,7 +477,7 @@ export class HoloStage {
       set: (k) => {
         lane.tree.opacity = k;
         lane.strip.visible = k > 0.01;
-        (lane.strip.material as THREE.MeshBasicMaterial).opacity = 0.5 * k;
+        lane.strip.material.opacity = 0.5 * k;
       },
       from: 1 - o,
       to: o,
@@ -699,7 +699,7 @@ export class HoloStage {
         // the crowd on the pads wears no bubbles: a distance of 0 fades them out
         for (const pad of prop.pads) {
           pad.character?.update(now / 1000, 0);
-          (pad.mesh.material as THREE.MeshBasicMaterial).color.set(pad.character ? '#d6f2ff' : '#5f8fb3');
+          pad.mesh.material.color.set(pad.character ? '#d6f2ff' : '#5f8fb3');
         }
         if (prop.template) {
           const running = prop.pads.filter((p) => p.character && p.view?.status !== 'done').length;

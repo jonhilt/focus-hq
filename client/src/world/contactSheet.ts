@@ -115,8 +115,8 @@ export function sceneThumbnail(take: StudioTake, w = 480, h = 300): HTMLCanvasEl
 function stage(scene: THREE.Scene): void {
   scene.background = new THREE.Color('#141a33');
   const grid = new THREE.GridHelper(34, 34, LCARS.gold, LCARS.gold);
-  (grid.material as THREE.Material).transparent = true;
-  (grid.material as THREE.Material).opacity = 0.5;
+  grid.material.transparent = true;
+  grid.material.opacity = 0.5;
   scene.add(grid);
   const floor = new THREE.Mesh(new THREE.CircleGeometry(SCENE_STAGE.radius, 64).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#1b2a55' }));
   floor.position.y = 0.005;

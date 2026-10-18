@@ -226,7 +226,10 @@ export class Kit {
   readonly random: () => number;
   /** Direction towards the office's sun light, in room-local coordinates (so painted suns match the shading). */
   readonly sunDir: THREE.Vector3;
-  private readonly mats = new Map<string, THREE.Material>();
+  /** Its materials, cached per kind and per key, so each is handed back as the kind it was made. */
+  private readonly toons = new Map<string, THREE.MeshToonMaterial>();
+  private readonly basics = new Map<string, THREE.MeshBasicMaterial>();
+  private hull: THREE.ShaderMaterial | undefined;
   readonly statics: THREE.Object3D[] = [];
   readonly animated: { obj: THREE.Object3D; fn?: Animate; merge: boolean }[] = [];
   readonly owned = new Set<{ dispose(): void }>();
@@ -270,10 +273,10 @@ export class Kit {
   /** Toon material, cached per colour (+ options). */
   toon(color: THREE.ColorRepresentation, opts: { map?: THREE.Texture; side?: THREE.Side } = {}): THREE.MeshToonMaterial {
     const key = `toon${String(color)}|${opts.map?.uuid ?? ''}|${opts.side ?? ''}`;
-    let mat = this.mats.get(key) as THREE.MeshToonMaterial | undefined;
+    let mat = this.toons.get(key);
     if (!mat) {
       mat = this.own(masked(toonMaterial({ color, map: opts.map ?? null, side: opts.side ?? THREE.FrontSide }), this.ref));
-      this.mats.set(key, mat);
+      this.toons.set(key, mat);
     }
     return mat;
   }
@@ -284,7 +287,7 @@ export class Kit {
     opts: { map?: THREE.Texture; side?: THREE.Side; opacity?: number; additive?: boolean; vertexColors?: boolean; underlay?: boolean; outline?: boolean } = {},
   ): THREE.MeshBasicMaterial {
     const key = `basic${String(color)}|${opts.map?.uuid ?? ''}|${opts.side ?? ''}|${opts.opacity ?? ''}|${opts.additive ?? ''}|${opts.vertexColors ?? ''}|${opts.underlay ?? ''}|${opts.outline ?? ''}`;
-    let mat = this.mats.get(key) as THREE.MeshBasicMaterial | undefined;
+    let mat = this.basics.get(key);
     if (!mat) {
       mat = this.own(
         masked(
@@ -310,7 +313,7 @@ export class Kit {
         mat.polygonOffsetFactor = 2;
         mat.polygonOffsetUnits = 2;
       }
-      this.mats.set(key, mat);
+      this.basics.set(key, mat);
     }
     return mat;
   }
@@ -478,7 +481,7 @@ export class Kit {
 
   /** The hull material that outlines landscape meshes (outline.ts can't: it takes landscape pixels for sky). */
   hullMaterial(): THREE.ShaderMaterial {
-    let mat = this.mats.get('hull') as THREE.ShaderMaterial | undefined;
+    let mat = this.hull;
     if (!mat) {
       mat = this.own(
         masked(
@@ -503,7 +506,7 @@ export class Kit {
           this.ref,
         ),
       );
-      this.mats.set('hull', mat);
+      this.hull = mat;
     }
     return mat;
   }

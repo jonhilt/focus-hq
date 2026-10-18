@@ -66,8 +66,8 @@ interface Faded {
  */
 export class Beam {
   private readonly fx = new THREE.Group();
-  private readonly sparkles: THREE.Points;
-  private readonly column: THREE.Mesh;
+  private readonly sparkles: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>;
+  private readonly column: THREE.Mesh<THREE.CylinderGeometry, THREE.MeshBasicMaterial>;
   private readonly faded: Faded[] = [];
   private readonly start: number;
   private readonly height: number;
@@ -128,8 +128,8 @@ export class Beam {
       pos.setXYZ(i, Math.cos(a) * r, 0.05 + Math.random() * (this.height - 0.1), Math.sin(a) * r);
     }
     pos.needsUpdate = true;
-    (this.sparkles.material as THREE.PointsMaterial).opacity = sparkle;
-    (this.column.material as THREE.MeshBasicMaterial).opacity = 0.5 * sparkle;
+    this.sparkles.material.opacity = sparkle;
+    this.column.material.opacity = 0.5 * sparkle;
 
     for (const f of this.faded) {
       f.clone.opacity = f.opacity * solid;
@@ -153,9 +153,9 @@ export class Beam {
     this.figure.visible = this.mode === 'in';
     this.fx.removeFromParent();
     this.sparkles.geometry.dispose();
-    (this.sparkles.material as THREE.Material).dispose();
+    this.sparkles.material.dispose();
     this.column.geometry.dispose();
-    (this.column.material as THREE.Material).dispose();
+    this.column.material.dispose();
     this.onDone?.();
   }
 }

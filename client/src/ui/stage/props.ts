@@ -109,7 +109,7 @@ export function drawPanel(tag: Tag, title: string, lines: { text: string; colour
  */
 export class Gauge {
   readonly group = new THREE.Group();
-  private readonly fillMesh: THREE.Mesh;
+  private readonly fillMesh: THREE.Mesh<THREE.BoxGeometry, THREE.MeshBasicMaterial>;
   private readonly ghostMesh: THREE.Mesh;
   private readonly readout = new Tag(400, 170, 0.55);
   private readonly ghostTag = new Tag(420, 90, 0.26);
@@ -143,7 +143,7 @@ export class Gauge {
     const h = Math.max(0.01, this.fill * this.height);
     this.fillMesh.scale.y = h;
     this.fillMesh.position.y = 0.06 + h / 2;
-    (this.fillMesh.material as THREE.MeshBasicMaterial).color.set(fillColour(this.fill));
+    this.fillMesh.material.color.set(fillColour(this.fill));
     this.drawReadout();
   }
 

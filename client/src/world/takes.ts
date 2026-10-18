@@ -73,9 +73,9 @@ export class TakeStage {
   /** Turns with the spin: the scene's front (+z) faces the entrance (-X in the hall's frame) before it's spun. */
   private readonly turntable = new THREE.Group();
   private plot: Plot | null = null;
-  private readonly floor: THREE.Mesh;
-  private readonly ring: THREE.Mesh;
-  private readonly mark: THREE.Mesh;
+  private readonly floor: THREE.Mesh<THREE.CircleGeometry, THREE.MeshBasicMaterial>;
+  private readonly ring: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
+  private readonly mark: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
   private readonly at = new THREE.Vector3();
   private lastT: number | null = null;
 
@@ -139,7 +139,7 @@ export class TakeStage {
     this.drop();
     for (const m of [this.floor, this.ring, this.mark]) {
       m.geometry.dispose();
-      (m.material as THREE.Material).dispose();
+      m.material.dispose();
     }
   }
 }
