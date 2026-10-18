@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { beatLabel, beatMoments, beatNarration, EXPLAINER_LIMITS, explainerCheck, type ExplainerInput, explainerPage, momentNotes, type StageMoment, THREE_VERSION } from './explainer';
+import { beatLabel, beatMoments, beatNarration, EXPLAINER_LIMITS, explainerCheck, type ExplainerInput, explainerPage, momentNotes, type StageMoment, stageSeen, THREE_VERSION } from './explainer';
 
 const L = EXPLAINER_LIMITS;
 const input = (over: Partial<ExplainerInput> = {}): ExplainerInput => ({
@@ -157,6 +157,14 @@ describe('checking an explainer', () => {
     expect(momentNotes([moment({ labels: [label('A', 300, 200), label('B', 378, 200)] })])).toEqual([]);
     const crowd = Array.from({ length: 7 }, (_, i) => label(`L${i}`, i * 120, 10));
     expect(momentNotes([moment(), moment({ labels: crowd })])).toEqual(['Beat 2: 7 labels at once: a handful reads better.']);
+  });
+
+  it('reads what the player says it saw on its stage, and nothing it shouldn’t', () => {
+    const seen = { flat: 0.8, labels: [label('Client', 100, 100)] };
+    expect(stageSeen(2, seen)).toEqual({ at: 2, flat: 0.8, labels: [label('Client', 100, 100)] });
+    expect(stageSeen(2, null)).toBeNull();
+    expect(stageSeen(2, { flat: '0.8', labels: [] })).toBeNull();
+    expect(stageSeen(2, { flat: 0.8, labels: [{ text: 'Client', x: 1 }] })).toBeNull();
   });
 
   it('asks the lead to look either way', () => {

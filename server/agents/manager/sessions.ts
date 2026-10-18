@@ -262,6 +262,7 @@ export class AgentSessions extends Part {
             agent,
             checkouts: (agent.lead?.repos ?? []).map((r) => ({ repo: r.repo, dir: join(workspace, r.folder) })),
             show: (page) => this.runtime.runPromise(this.core.goalTools.showArtifact(agent, page)),
+            showFrames: (page, frames) => this.runtime.runPromise(this.core.goalTools.showFrames(agent, page, frames)),
           },
           input,
         ),

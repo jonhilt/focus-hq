@@ -4,7 +4,6 @@ import { errorMessage } from '../util';
 import type { TriageDecision, Triager, TriageRequest } from './triage';
 import type { SinceVerdict } from './retest';
 import type { CommandRun } from './qaProof';
-import type { StageMoment } from './explainer';
 import type { MergeHeads, MergeTrial } from '../../shared/mergeCheck';
 import type { AgentRunner, AgentSession, BaseMerge, BranchState, ChecksRun, CloudTerminalRequest, RunHooks, RunRequest, WorkspaceOps } from './types';
 
@@ -187,24 +186,40 @@ export class RenderFailed extends Data.TaggedError('RenderFailed')<{ reason: str
   }
 }
 
+/**
+ * Moments of a page to take a picture of besides how it rests: the page jumps to each (its `kitSeek(at)`), the picture
+ * is clipped to `clip`, and the page says what it sees in it (its `kitSeen(jpeg)`, given the picture as base64 JPEG).
+ */
+export interface Frames {
+  at: readonly number[];
+  clip: { x: number; y: number; width: number; height: number };
+}
+
+/** A page at one moment: its picture, and what the page said it saw in it (null when it has no `kitSeen`). */
+export interface Frame {
+  at: number;
+  image: Buffer;
+  seen: unknown;
+}
+
 /** A picture of a page: a JPEG as a browser shows it, and the errors its scripts reported while it loaded. */
 export interface Picture {
   image: Buffer;
   errors: string[];
-  /** For an explainer: the stage at each moment asked for, as a JPEG with what the office saw on it. */
-  moments?: (StageMoment & { image: Buffer })[];
+  /** The page at each moment asked for (`Frames`). */
+  frames?: Frame[];
 }
 
 /** Pictures of the HTML pages a goal's lead puts on their station's screen, for the screen to show. */
 export class Renderer extends Context.Service<Renderer, {
-  /** `moments`: for an explainer, the times to also take a picture of its stage at (`beatMoments`). */
-  render(html: string, moments?: readonly number[]): Effect.Effect<Picture, RenderFailed>;
+  /** `frames`: moments to also take a picture of the page at (an explainer's stage at each beat, say). */
+  render(html: string, frames?: Frames): Effect.Effect<Picture, RenderFailed>;
 }>()('focus/agents/Renderer') {
   /** Renders in the agents' shared headless Chromium (`BrowserPool.render`). */
-  static fromBrowser(browser: { render(html: string, moments?: readonly number[]): Promise<Picture> }): Layer.Layer<Renderer> {
+  static fromBrowser(browser: { render(html: string, frames?: Frames): Promise<Picture> }): Layer.Layer<Renderer> {
     const failed = (err: unknown) => new RenderFailed({ reason: errorMessage(err) });
     return Layer.succeed(Renderer, Renderer.of({
-      render: (html, moments) => Effect.tryPromise({ try: () => browser.render(html, moments), catch: failed }),
+      render: (html, frames) => Effect.tryPromise({ try: () => browser.render(html, frames), catch: failed }),
     }));
   }
 }

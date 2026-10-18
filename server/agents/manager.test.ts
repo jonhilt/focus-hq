@@ -1277,6 +1277,35 @@ describe('AgentManager', () => {
     });
   });
 
+  describe('a plugin’s lead tool', () => {
+    it('puts its page on the lead’s screen with pictures of it at the moments it asks for, and answers the lead with them', async () => {
+      const { agents, claude, store, project } = office();
+      project.plugins = ['framer'];
+      agents.startPlugins([{
+        id: 'framer',
+        start: () => ({
+          leadTools: [{
+            name: 'frame',
+            description: 'Frames a page',
+            input: {},
+            run: async (lead) => {
+              const shown = await lead.showFrames({ id: 'film', title: 'A film', html: '<p>film</p>' }, { at: [1, 2.5], clip: { x: 0, y: 0, width: 100, height: 50 } });
+              return { text: `${shown.text} Saw ${shown.frames.map((f) => JSON.stringify(f.seen)).join(', ')}`, images: shown.frames.map((f) => f.image) };
+            },
+          }],
+        }),
+      }], { demo: false, ownRepo: () => undefined });
+      const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+      await until(() => claude.turns.length === 1);
+      const [frame] = claude.turns[0].req.tools!.extra!;
+      const reply = await frame.run({});
+      if (typeof reply === 'string') throw new Error(`No pictures came back: ${reply}`);
+      expect(reply.text).toMatch(/“A film” is on your station's screen.* Saw \{"flat":0.7,"labels":\[\]\}, \{"flat":0.7,"labels":\[\]\}$/);
+      expect(reply.images.map(String)).toEqual(['beat at 1', 'beat at 2.5']);
+      expect(store.agent(lead.id).lead!.artifacts).toEqual([{ id: 'film', title: 'A film', at: expect.any(Number), image: true, slice: 1 }]);
+    });
+  });
+
   describe('a plugin’s brief', () => {
     it('hands it to an agent away from the room’s desks, and opens their pull request as the plugin names it', async () => {
       const { agents, claude, store, project } = office();

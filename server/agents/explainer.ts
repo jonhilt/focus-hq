@@ -1,3 +1,4 @@
+import { isRecord } from '../../shared/records';
 import type { ArtifactInput } from './lead';
 
 /**
@@ -86,6 +87,22 @@ export interface StageMoment {
   flat: number;
   /** kit3d's labels showing, in stage pixels, and whether what each is pinned to is in view. */
   labels: { text: string; x: number; y: number; w: number; h: number; onScreen: boolean }[];
+}
+
+/** The stage's box on the player's page, for a picture of the stage alone. */
+export const STAGE_CLIP = { x: STAGE_AT.x, y: STAGE_AT.y, width: STAGE_SIZE.w, height: STAGE_SIZE.h } as const;
+
+/** What the player said it saw on its stage at a moment (its `kitSeen`), read back from the page; null when it said nothing it should. */
+export function stageSeen(at: number, seen: unknown): StageMoment | null {
+  if (!isRecord(seen) || typeof seen.flat !== 'number' || !Array.isArray(seen.labels)) return null;
+  const labels: StageMoment['labels'] = [];
+  for (const l of seen.labels) {
+    if (!isRecord(l) || typeof l.text !== 'string' || typeof l.onScreen !== 'boolean') return null;
+    const { x, y, w, h } = l;
+    if (typeof x !== 'number' || typeof y !== 'number' || typeof w !== 'number' || typeof h !== 'number') return null;
+    labels.push({ text: l.text, x, y, w, h, onScreen: l.onScreen });
+  }
+  return { at, flat: seen.flat, labels };
 }
 
 /** A stage this close to one colour all over has nothing on it (a lone small label is about 0.997). */
@@ -422,6 +439,32 @@ const KIT_PLAYER = String.raw`
   window.kitRedraw = frame;
   // the office's pictures of each beat jump straight to a moment, lit as when playing
   window.kitSeek = function (at) { stop(); hush(); hold = -1; document.body.classList.remove('rest'); t = at; frame(); };
+  // and what the office's checks see in each: how much of the stage is its commonest colour (counted in coarse steps,
+  // so a JPEG's noise doesn't split one colour into many), and where kit3d's labels landed on it
+  window.kitSeen = function (jpeg) {
+    var img = new Image();
+    img.src = 'data:image/jpeg;base64,' + jpeg;
+    return img.decode().then(function () {
+      var canvas = document.createElement('canvas');
+      canvas.width = img.width; canvas.height = img.height;
+      var g = canvas.getContext('2d');
+      g.drawImage(img, 0, 0);
+      var px = g.getImageData(0, 0, img.width, img.height).data, counts = new Map(), n = 0, most = 0;
+      for (var i = 0; i < px.length; i += 8) {
+        var key = ((px[i] >> 4) << 8) | ((px[i + 1] >> 4) << 4) | (px[i + 2] >> 4), c = (counts.get(key) || 0) + 1;
+        counts.set(key, c); if (c > most) most = c; n++;
+      }
+      var box = window.stage.getBoundingClientRect(), kit = window.__scene;
+      var labels = Array.prototype.slice.call(document.querySelectorAll('#stage .kit3d-label'))
+        .filter(function (e) { return e.style.display !== 'none' && Number(e.style.opacity || 1) > 0; })
+        .map(function (e) {
+          var r = e.getBoundingClientRect(), text = e.textContent || '';
+          var known = kit && kit.labels.filter(function (l) { return l.text === text; })[0];
+          return { text: text, x: r.left - box.left, y: r.top - box.top, w: r.width, h: r.height, onScreen: known ? known.onScreen : true };
+        });
+      return { flat: most / n, labels: labels };
+    });
+  };
   window.kitReady = true;
 })();
 `;

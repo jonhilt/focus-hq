@@ -79,11 +79,11 @@ function crew(store: Store, workspace: WorkspaceOps, github: Layer.Layer<GitHub>
     Sessions.fromRunner(claude),
     Triage.fromTriager(triager),
     Renderer.fromBrowser({
-      render: (html, moments) => (html.includes('unrenderable') ? Promise.reject(new Error('no browser')) : Promise.resolve({
+      render: (html, frames) => (html.includes('unrenderable') ? Promise.reject(new Error('no browser')) : Promise.resolve({
         image: Buffer.from('jpeg'),
         errors: html.includes('throws') ? ['ReferenceError: nope is not defined'] : [],
         // a stage that says "blank" draws nothing
-        ...(moments && { moments: moments.map((at) => ({ at, image: Buffer.from(`beat at ${at}`), flat: html.includes('blank') ? 1 : 0.7, labels: [] })) }),
+        ...(frames && { frames: frames.at.map((at) => ({ at, image: Buffer.from(`beat at ${at}`), seen: { flat: html.includes('blank') ? 1 : 0.7, labels: [] } })) }),
       })),
     }),
   );

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { ARTIFACT_SIZE } from '../../shared/artifacts';
 import type { BrowserFrame } from '../../shared/types';
 import { errorMessage, truncate } from '../util';
-import { STAGE_AT, STAGE_SIZE, type StageMoment } from './explainer';
+import type { Frame, Frames, Picture } from './services';
 import type { RunHooks } from './types';
 
 /** How long an evaluate may run before the tool gives up on it. */
@@ -183,10 +183,10 @@ export class BrowserPool {
   /**
    * A picture of a self-contained HTML page, as a JPEG `width` × `height`: in a context of its own, so the page sees no
    * agent's cookies. Waits for what it loads from the network (a diagram library from a CDN, say), within reason. Says
-   * what its scripts threw or logged as errors meanwhile, so whoever made the page hears it's broken. For an explainer,
-   * `moments` asks for its stage at those times too, in the same visit (a 3D stage loads three.js once).
+   * what its scripts threw or logged as errors meanwhile, so whoever made the page hears it's broken. `frames` asks for
+   * the page at those moments too, in the same visit (a 3D stage loads three.js once), and what it saw in each.
    */
-  async render(html: string, moments: readonly number[] = []): Promise<{ image: Buffer; errors: string[]; moments?: (StageMoment & { image: Buffer })[] }> {
+  async render(html: string, frames?: Frames): Promise<Picture> {
     const browser = await this.shared();
     const context = await browser.newContext({ viewport: { width: ARTIFACT_SIZE.w, height: ARTIFACT_SIZE.h }, deviceScaleFactor: 1 });
     try {
@@ -197,19 +197,19 @@ export class BrowserPool {
         if (msg.type() === 'error') errors.push(msg.text());
       });
       await page.setContent(html, { waitUntil: 'networkidle', timeout: 15_000 }).catch(() => undefined);
-      // an explainer says when it has drawn its resting frame (a 3D stage only starts once three.js has loaded)
+      // a page with moments says when it has drawn its resting frame (a 3D stage only starts once three.js has loaded)
       await page.waitForFunction(() => (window as { kitReady?: boolean }).kitReady !== false, undefined, { timeout: 5000 }).catch(() => undefined);
       // scripts that draw after loading (mermaid, charts) get a moment to finish
       await page.waitForTimeout(400);
       const image = await page.screenshot({ type: 'jpeg', quality: 85 });
-      if (!moments.length) return { image, errors };
-      const stage: (StageMoment & { image: Buffer })[] = [];
-      for (const at of moments) {
+      if (!frames?.at.length) return { image, errors };
+      const taken: Frame[] = [];
+      for (const at of frames.at) {
         await page.evaluate((t) => (window as { kitSeek?: (t: number) => void }).kitSeek?.(t), at);
-        const shot = await page.screenshot({ type: 'jpeg', quality: 70, clip: { ...STAGE_AT, width: STAGE_SIZE.w, height: STAGE_SIZE.h } });
-        stage.push({ at, image: shot, flat: await page.evaluate(flatness, shot.toString('base64')), labels: await page.evaluate(stageLabels) });
+        const shot = await page.screenshot({ type: 'jpeg', quality: 70, clip: frames.clip });
+        taken.push({ at, image: shot, seen: await page.evaluate(pageSeen, shot.toString('base64')) });
       }
-      return { image, errors, moments: stage };
+      return { image, errors, frames: taken };
     } finally {
       await context.close().catch(() => undefined);
     }
@@ -227,29 +227,10 @@ export class BrowserPool {
   }
 }
 
-/**
- * Runs in the page: how much of a picture of its stage (as base64 JPEG) is its commonest colour, counted in coarse steps,
- * so a JPEG's noise doesn't split one colour into many.
- */
-async function flatness(jpeg: string): Promise<StageMoment['flat']> {
-  const img = new Image();
-  img.src = `data:image/jpeg;base64,${jpeg}`;
-  await img.decode();
-  const canvas = document.createElement('canvas');
-  canvas.width = img.width;
-  canvas.height = img.height;
-  const g = canvas.getContext('2d');
-  if (!g) throw new Error('The page has no 2D canvas to read its stage with');
-  g.drawImage(img, 0, 0);
-  const px = g.getImageData(0, 0, img.width, img.height).data;
-  const counts = new Map<number, number>();
-  let n = 0;
-  for (let i = 0; i < px.length; i += 8) {
-    const key = ((px[i] >> 4) << 8) | ((px[i + 1] >> 4) << 4) | (px[i + 2] >> 4);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-    n++;
-  }
-  return Math.max(...counts.values()) / n;
+/** Runs in the page: what it says it sees in a picture of itself (as base64 JPEG), or null when it has nothing to say. */
+async function pageSeen(jpeg: string): Promise<unknown> {
+  const seen: unknown = 'kitSeen' in window && typeof window.kitSeen === 'function' ? await window.kitSeen(jpeg) : null;
+  return seen ?? null;
 }
 
 /**
@@ -273,19 +254,6 @@ export function focusHQShape(): string | null {
     lines.push(`window.focusHQ.${hook}: ${[...names.values()].join(', ')}`);
   }
   return lines.join('\n');
-}
-
-/** Runs in the page: the kit3d labels showing on its stage, where they are on it. */
-function stageLabels(): StageMoment['labels'] {
-  const stage = document.getElementById('stage')?.getBoundingClientRect() ?? new DOMRect();
-  const kit = (window as { __scene?: { labels: { text: string; onScreen: boolean }[] } }).__scene;
-  return [...document.querySelectorAll<HTMLElement>('#stage .kit3d-label')]
-    .filter((el) => el.style.display !== 'none' && Number(el.style.opacity || 1) > 0)
-    .map((el) => {
-      const r = el.getBoundingClientRect();
-      const text = el.textContent ?? '';
-      return { text, x: r.left - stage.left, y: r.top - stage.top, w: r.width, h: r.height, onScreen: kit?.labels.find((l) => l.text === text)?.onScreen ?? true };
-    });
 }
 
 /**

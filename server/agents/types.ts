@@ -112,7 +112,7 @@ export interface RunRequest {
 /** A tool's answer with pictures for Claude to look at: JPEGs, after the words. */
 export interface ToolReply {
   text: string;
-  images: Buffer[];
+  images: Uint8Array[];
 }
 
 /** Tools the office lends a session. Each returns what happened, in words, for Claude to read. */
@@ -140,7 +140,7 @@ export interface ExtraTool {
   name: string;
   description: string;
   input: Record<string, ZodType>;
-  run(input: Record<string, unknown>): Promise<string>;
+  run(input: Record<string, unknown>): Promise<string | ToolReply>;
 }
 
 /** What a run the captain stopped reports, and how a stopped review is told apart from one that failed. */

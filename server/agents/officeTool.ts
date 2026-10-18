@@ -48,7 +48,7 @@ async function answer(run: () => Promise<string | ToolReply>, failed: string): P
   try {
     const reply = await run();
     if (typeof reply === 'string') return { content: [{ type: 'text', text: reply }] };
-    return { content: [{ type: 'text', text: reply.text }, ...reply.images.map((image) => ({ type: 'image' as const, data: image.toString('base64'), mimeType: 'image/jpeg' }))] };
+    return { content: [{ type: 'text', text: reply.text }, ...reply.images.map((image) => ({ type: 'image' as const, data: Buffer.from(image).toString('base64'), mimeType: 'image/jpeg' }))] };
   } catch (err) {
     return { content: [{ type: 'text', text: `${failed}: ${errorMessage(err)}` }], isError: true };
   }

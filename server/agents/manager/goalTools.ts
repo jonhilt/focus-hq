@@ -2,8 +2,8 @@ import { Effect, Option } from 'effect';
 import type { Agent, MessageReply, ResumeHow } from '../../../shared/types';
 import { answerMessage, openQuestion } from '../../../shared/artifacts';
 import { answerInChat, answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, type NoteInput, notedGoal, pageErrorsNote } from '../lead';
-import { beatMoments, explainerCheck, explainerPage, type ExplainerInput, momentNotes } from '../explainer';
-import { type Picture, Renderer, Workspace } from '../services';
+import { beatMoments, explainerCheck, explainerPage, type ExplainerInput, momentNotes, STAGE_CLIP, stageSeen } from '../explainer';
+import { type Frame, type Frames, type Picture, Renderer, Workspace } from '../services';
 import { checkModel, modelError, modelReport } from '../../../shared/systemModel';
 import type { SystemModel } from '../../../shared/types';
 import { citedLines, modelPage } from '../modelPage';
@@ -33,14 +33,22 @@ export class GoalTools extends Part {
     return Effect.map(this.showPage(agent, input), (shown) => shown.text);
   }
 
-  /** show's work, with the picture it took: `moments` asks for an explainer's stage at those times too. */
-  private showPage(agent: Agent, input: ArtifactInput, moments?: readonly number[]): Effect.Effect<{ text: string; picture?: Picture }, Refused, Renderer> {
+  /**
+   * show's work, with the pictures it took: `frames` asks for the page at those moments too, and what it saw in each
+   * (an explainer's stage at each beat). For a plugin's lead tool, `LeadToolContext.showFrames`.
+   */
+  showFrames(agent: Agent, input: ArtifactInput, frames: Frames): Effect.Effect<{ text: string; frames: Frame[] }, Refused, Renderer> {
+    return Effect.map(this.showPage(agent, input, frames), (shown) => ({ text: shown.text, frames: shown.picture?.frames ?? [] }));
+  }
+
+  /** show's work, with the picture it took (and the page at each of `frames`). */
+  private showPage(agent: Agent, input: ArtifactInput, frames?: Frames): Effect.Effect<{ text: string; picture?: Picture }, Refused, Renderer> {
     return Effect.gen({ self: this }, function* () {
       if (!agent.lead) return yield* new Refused({ message: 'There’s no goal to show it on' });
       const checked = showArtifact(agent.lead.artifacts ?? [], input, Date.now());
       if ('error' in checked) return yield* new Refused({ message: checked.error });
       this.store.saveArtifact(agent.id, `${input.id}.html`, Buffer.from(input.html));
-      const picture = yield* (yield* Renderer).render(input.html, moments).pipe(
+      const picture = yield* (yield* Renderer).render(input.html, frames).pipe(
         Effect.map((taken) => ({ bytes: taken.image, errors: taken.errors, taken })),
         Effect.catch((err) => Effect.succeed({ failed: err.message })),
       );
@@ -100,12 +108,12 @@ export class GoalTools extends Part {
     return Effect.gen({ self: this }, function* () {
       const built = explainerPage(input);
       if ('error' in built) return yield* new Refused({ message: built.error });
-      const shown = yield* this.showPage(agent, built, beatMoments(input.beats));
+      const shown = yield* this.showFrames(agent, built, { at: beatMoments(input.beats), clip: STAGE_CLIP });
       const seconds = input.beats.reduce((sum, b) => sum + b.seconds, 0);
       const text = `${shown.text} It's an explainer of ${input.beats.length} beats, ${Math.round(seconds)} seconds in all.`;
-      const moments = shown.picture?.moments ?? [];
-      if (!moments.length) return { text, images: [] };
-      return { text: `${text} ${explainerCheck(momentNotes(moments))}`, images: moments.map((m) => m.image) };
+      if (!shown.frames.length) return { text, images: [] };
+      const moments = shown.frames.flatMap((f) => stageSeen(f.at, f.seen) ?? []);
+      return { text: `${text} ${explainerCheck(momentNotes(moments))}`, images: shown.frames.map((f) => f.image) };
     });
   }
 

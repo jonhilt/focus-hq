@@ -57,7 +57,7 @@
   "scripts/studio.ts": 3,
   "scripts/voiceCheck.ts": 2,
   "scripts/zfight.ts": 4,
-  "server/agents/browserTool.ts": 5,
+  "server/agents/browserTool.ts": 4,
   "server/agents/bugCorpus.ts": 1,
   "server/agents/claudeCrew.ts": 3,
   "server/agents/conflicts.ts": 1,

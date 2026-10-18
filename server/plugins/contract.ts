@@ -72,7 +72,7 @@ export interface ModelShown {
   image?: Uint8Array;
 }
 
-/** A tool a plugin adds to every goal lead's office (`mcp__office__<name>`), answered in words. */
+/** A tool a plugin adds to every goal lead's office (`mcp__office__<name>`), answered in words, and pictures if it likes. */
 export interface LeadTool {
   /** Lowercase letters, digits and underscores; a name the office's own tools have is left out. */
   name: string;
@@ -80,8 +80,24 @@ export interface LeadTool {
   description: string;
   /** Its input's fields, as zod types (the SDK's tool boundary takes zod). */
   input: Record<string, ZodType>;
-  /** Its answer to the lead, in words; a throw is said back to them as the tool failing, in its message. */
-  run(lead: LeadToolContext, input: Record<string, unknown>): Promise<string>;
+  /** Its answer to the lead, in words (with JPEGs for them to look at); a throw is said back to them as the tool failing, in its message. */
+  run(lead: LeadToolContext, input: Record<string, unknown>): Promise<string | LeadToolReply>;
+}
+
+/** A lead tool's answer with pictures: the words, then JPEGs for the lead to look at. */
+export interface LeadToolReply {
+  text: string;
+  images: Uint8Array[];
+}
+
+/**
+ * Moments of a page to take a picture of besides how it rests (`LeadToolContext.showFrames`): the page jumps to each
+ * through its `window.kitSeek(at)`, the picture is clipped to `clip` (CSS pixels on its 1280 × 800), and the page's
+ * `window.kitSeen(jpeg)` (given the picture as base64 JPEG, and may return a promise) says what it sees in it.
+ */
+export interface PageFrames {
+  at: readonly number[];
+  clip: { x: number; y: number; width: number; height: number };
 }
 
 /** What a plugin's lead tool gets: whose lead it is, their checkouts, and their station's screen. */
@@ -91,6 +107,11 @@ export interface LeadToolContext {
   checkouts: { repo: string; dir: string }[];
   /** Puts a page on the lead's station's screen as their show tool does (the same id again replaces it); says where it went. */
   show(page: { id: string; title: string; html: string }): Promise<string>;
+  /**
+   * `show`, with a picture of the page at each of `frames` too, and what the page saw in each (`seen`: whatever its
+   * `kitSeen` returned, to narrow; null without one). No frames when the office couldn't take its picture.
+   */
+  showFrames(page: { id: string; title: string; html: string }, frames: PageFrames): Promise<{ text: string; frames: { at: number; image: Uint8Array; seen: unknown }[] }>;
 }
 
 /**
