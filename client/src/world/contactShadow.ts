@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { isMesh } from './isMesh';
 
 // Contact shadows: the soft shading on the floor round where something stands on it, which keeps furniture built in
 // code looking like it stands on the floor rather than floats over it. The decks have theirs baked in Blender
@@ -56,8 +57,8 @@ export function footprintOf(object: THREE.Object3D): THREE.Box3 | null {
   const box = new THREE.Box3();
   const part = new THREE.Box3();
   object.traverse((o) => {
-    const mesh = o as THREE.Mesh;
-    if (!mesh.isMesh || !mesh.visible) return;
+    if (!isMesh(o) || !o.visible) return;
+    const mesh = o;
     if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
     part.copy(mesh.geometry.boundingBox!).applyMatrix4(m.multiplyMatrices(toObject, mesh.matrixWorld));
     if (part.min.y < LOW) box.union(part);

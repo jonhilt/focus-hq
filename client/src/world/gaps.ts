@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { SKIN } from './scenery';
 import { basis, ccw, cells, clip, key, meshPath, MIN_GAP, signedArea, trianglesOf, visible, type Tri } from './zfight';
+import { isMesh } from './isMesh';
 
 /** Furthest apart two facing faces may be and still count as one thing hovering off another. */
 export const MAX_GAP = 0.05;
@@ -61,8 +62,8 @@ export function findGaps(root: THREE.Object3D): Gap[] {
   // a holodeck's skin shows its landscape over the walls behind it, so a gap behind the skin can't be seen
   const skins: THREE.Triangle[] = [];
   root.traverse((obj) => {
-    if (!(obj as THREE.Mesh).isMesh) return;
-    const mesh = obj as THREE.Mesh;
+    if (!isMesh(obj)) return;
+    const mesh = obj;
     // even while the landscape is hidden, for you're elsewhere and can't see the room
     if (mesh.geometry.name === SKIN) return void skins.push(...worldTriangles(mesh));
     if (!visible(mesh)) return;

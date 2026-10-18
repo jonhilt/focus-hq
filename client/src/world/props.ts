@@ -101,15 +101,18 @@ function paddScreenMaterial(): THREE.MeshBasicMaterial {
   return paddScreen;
 }
 
-/** A Starfleet PADD, upright with its screen facing -X; it spans PADD_WIDTH along z and is centred on its origin. */
+/**
+ * A Starfleet PADD, upright with its screen facing -X; it spans PADD_WIDTH along z and is centred on its origin. Its
+ * cap is gold unless it's lit in another colour.
+ */
 export const PADD_WIDTH = 0.26;
-export function padd(): THREE.Group {
+export function padd(capColour: string = LCARS.gold): THREE.Group {
   const g = new THREE.Group();
   g.name = 'padd';
   // its own geometries rather than box()'s shared ones, so whoever holds it can dispose them
   g.add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.34, PADD_WIDTH), toon('#2b2d42')));
   // the cap stands clear of the body on every side, so their faces don't fight
-  const cap = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.03, PADD_WIDTH + 0.006), toon(LCARS.gold));
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.03, PADD_WIDTH + 0.006), toon(capColour));
   cap.position.y = 0.16;
   g.add(cap);
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.26), paddScreenMaterial());

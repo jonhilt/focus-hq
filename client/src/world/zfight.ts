@@ -4,6 +4,7 @@
 // triangle handling.
 import * as THREE from 'three';
 import { WALL_H } from './layout';
+import { isMesh } from './isMesh';
 
 /** Closest two faces may sit before they count as fighting; also the minimum gap a fix should leave. */
 export const MIN_GAP = 0.002;
@@ -217,9 +218,9 @@ export function findZFighting(root: THREE.Object3D): FightingPair[] {
   const meshes: THREE.Mesh[] = [];
   const tris: Tri[] = [];
   root.traverse((obj) => {
-    if (!(obj as THREE.Mesh).isMesh || !visible(obj)) return;
-    meshes.push(obj as THREE.Mesh);
-    trianglesOf(obj as THREE.Mesh, meshes.length - 1, tris);
+    if (!isMesh(obj) || !visible(obj)) return;
+    meshes.push(obj);
+    trianglesOf(obj, meshes.length - 1, tris);
   });
 
   const buckets = new Map<string, number[]>();

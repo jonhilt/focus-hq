@@ -20,9 +20,10 @@ export function texturesIn(root: THREE.Object3D): Set<THREE.Texture> {
     if (value instanceof THREE.Texture && !(value as THREE.Texture & { isRenderTargetTexture?: boolean }).isRenderTargetTexture && !(value instanceof THREE.DepthTexture)) found.add(value);
   };
   root.traverse((o) => {
-    const material = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
-    if (!material) return;
+    // a mesh's, and points', lines' and sprites' too
+    const material: unknown = 'material' in o ? o.material : undefined;
     for (const m of Array.isArray(material) ? material : [material]) {
+      if (!(m instanceof THREE.Material)) continue;
       for (const value of Object.values(m)) add(value);
       const uniforms = (m as THREE.ShaderMaterial).uniforms as Record<string, THREE.IUniform> | undefined;
       if (uniforms) for (const u of Object.values(uniforms)) add(u.value);

@@ -17,7 +17,7 @@ import { type Box2, briefingRoomAt, footprints, HALL, hallAt, OVER_DOOR, type Ro
 import { ContactShadows } from './contactShadow';
 import { prGlance } from './goalRoom';
 import { mergeStatic } from './merge';
-import { box, flat, toon } from './materials';
+import { box, flat } from './materials';
 import { padd, plant } from './props';
 import { paddPiles, RACK_PILES } from './paddRack';
 import { PR_LOOK } from './goalScreens';
@@ -539,15 +539,13 @@ export class ProjectRoom {
     const step = (PADD_RACK.width - 0.3) / RACK_PILES;
     piles.forEach((pile, i) => {
       pile.forEach((pr, level) => {
-        const p = padd();
+        // the cap of each lit in how its pull request stands
+        const p = padd(PR_LOOK[pr.glance].color);
         // lying on its back, screen up, a little askew on the one below and a little sunk into it (and the bottom one
         // into the rack's top), so none of their faces lie on another's or hover just off it
         // (its length front to back, so the piles keep apart however askew)
         p.rotation.set(0, Math.PI / 2 + (((pr.number * 7 + level * 13) % 9) - 4) * 0.025, -Math.PI / 2, 'YXZ');
         p.position.set((i - (RACK_PILES - 1) / 2) * step, PADD_LIE + level * PADD_STEP, -0.05);
-        // the cap of each lit in how its pull request stands
-        const cap = p.children[1] as THREE.Mesh;
-        cap.material = toon(PR_LOOK[pr.glance].color);
         this.padds.add(p);
       });
     });

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
+import { isMesh } from './isMesh';
 import { MERGE_CELL, mergeStatic } from './merge';
 
 const red = new THREE.MeshBasicMaterial({ color: 'red' });
@@ -12,7 +13,7 @@ const box = (material: THREE.Material, x = 0, z = 0) => {
 const meshes = (root: THREE.Object3D) => {
   const found: THREE.Mesh[] = [];
   root.traverse((o) => {
-    if ((o as THREE.Mesh).isMesh) found.push(o as THREE.Mesh);
+    if (isMesh(o)) found.push(o);
   });
   return found;
 };

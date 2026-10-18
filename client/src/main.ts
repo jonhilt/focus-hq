@@ -60,6 +60,7 @@ import { canvasTest } from './world/canvas';
 import { newFrame, screenTest } from './world/screenRedraw';
 import type { MsdBoard } from './world/msd';
 import { type ClientParts, clientPlugin, clientPlugins, stationSays } from './plugins';
+import { isMesh } from './world/isMesh';
 
 /** A plugin's board for main engineering's MSD (the scorecard's), while the plugin's on and draws one. */
 function pluginBoard(id: string): MsdBoard | undefined {
@@ -519,7 +520,7 @@ async function main() {
         aiming = o;
         break;
       }
-      if (!(hit.object as THREE.Mesh).isMesh || !hit.object.layers.isEnabled(0)) continue; // nor does the overlay
+      if (!isMesh(hit.object) || !hit.object.layers.isEnabled(0)) continue; // nor does the overlay
       break; // first solid thing blocks the view
     }
     aimAt(aiming);

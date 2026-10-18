@@ -38,6 +38,10 @@ export default tseslint.config(
       'no-restricted-syntax': ['error', {
         selector: "TSAsExpression > CallExpression.expression[callee.object.name='Object'][callee.property.name=/^(keys|entries|fromEntries)$/]",
         message: 'Use keysOf or recordOf (shared/records.ts) instead of casting what Object.keys/entries/fromEntries return.',
+      }, {
+        // `(o as THREE.Mesh).isMesh` checks a cast it has already made: isMesh (client/src/world/isMesh.ts) checks and narrows at once.
+        selector: "TSAsExpression > TSTypeReference.typeAnnotation[typeName.left.name='THREE'][typeName.right.name=/^(Mesh|SkinnedMesh|InstancedMesh)$/]",
+        message: 'Narrow an Object3D with isMesh (client/src/world/isMesh.ts), or `instanceof` for a SkinnedMesh or InstancedMesh, instead of casting it.',
       }],
     },
   },

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { isMesh } from './isMesh';
 
 /**
  * How big a patch of floor (metres, in the root's frame) one merged mesh covers. Merging a whole deck's worth of a
@@ -127,8 +128,8 @@ export function mergeStatic(root: THREE.Object3D, keep: Iterable<THREE.Object3D>
 
   const visit = (o: THREE.Object3D) => {
     if (kept.has(o) || used(o) || !o.visible) return;
-    const mesh = o as THREE.Mesh;
-    if (mesh.isMesh && !(mesh as THREE.SkinnedMesh).isSkinnedMesh && !(mesh as THREE.InstancedMesh).isInstancedMesh && !Array.isArray(mesh.material)) {
+    if (isMesh(o) && !(o instanceof THREE.SkinnedMesh) && !(o instanceof THREE.InstancedMesh) && !Array.isArray(o.material)) {
+      const mesh = o;
       if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
       box.copy(mesh.geometry.boundingBox!).applyMatrix4(mesh.matrixWorld).applyMatrix4(toRoot).getCenter(centre);
       const key = mergeKey(mesh, centre);

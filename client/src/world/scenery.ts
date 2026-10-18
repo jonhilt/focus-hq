@@ -5,6 +5,7 @@ import { ENTRANCE_X } from './hallLayout';
 import { DOOR_H, DOOR_W, HALL } from './layout';
 import { toonMaterial } from './materials';
 import { dimsAtNight } from './night';
+import { isMesh } from './isMesh';
 
 // A themed holodeck's training hall (hall.ts) has its walls and ceiling lined with an invisible "skin", and a landscape
 // is built around the hall (in its frame, overlapping whatever else stands there). Each frame:
@@ -567,9 +568,8 @@ export class Scenery {
       }
       const meshes: THREE.Mesh[] = [];
       obj.traverse((o) => {
-        const mesh = o as THREE.Mesh;
-        if (mesh.geometry) this.disposables.add(mesh.geometry);
-        if (mesh.isMesh) meshes.push(mesh);
+        if ('geometry' in o && o.geometry instanceof THREE.BufferGeometry) this.disposables.add(o.geometry);
+        if (isMesh(o)) meshes.push(o);
       });
       for (const mesh of meshes) this.outline(kit, mesh);
       const transparent = meshes.some((m) => (m.material as THREE.Material).transparent);
@@ -584,8 +584,8 @@ export class Scenery {
       obj.updateMatrixWorld(true);
       const key = keyOf(obj);
       obj.traverse((o) => {
-        const mesh = o as THREE.Mesh;
-        if (!mesh.isMesh) return;
+        if (!isMesh(o)) return;
+        const mesh = o;
         const mat = mesh.material as THREE.Material;
         const id = `${mat.uuid}|${key}`;
         let bucket = buckets.get(id);
