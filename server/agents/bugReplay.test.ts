@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { QaReport } from '../../shared/types';
-import type { VitestRun } from './bugCorpus';
-import { blocks, changesCode, judgePrompt, pickControls, pointsAt, type Proof, proofFiles, proofOf, replayLines, scoreReplay, sitesOf } from './bugReplay';
+import { changesCode, judgePrompt, pickControls, pointsAt, replayLines, scoreReplay, sitesOf } from './bugReplay';
 
 const report = (over: Partial<QaReport>): QaReport => ({ verdict: 'fail', summary: '', checks: [], commands: [], captions: [], ...over });
 const sites = [{ file: 'server/agents/comms.ts', line: 40 }];
@@ -23,23 +22,6 @@ describe('pointsAt', () => {
   });
 });
 
-describe('blocks', () => {
-  const proved: Proof = { files: ['server/a.proof.test.ts'], failing: [{ file: 'server/a.proof.test.ts', name: 'keeps the hold', message: 'AssertionError' }] };
-  const unproved: Proof = { files: ['server/a.proof.test.ts'], failing: [] };
-
-  it("stops a change on the office QA's own verdict", () => {
-    expect(blocks('qa', report({ verdict: 'fail' }))).toBe(true);
-    expect(blocks('qa', report({ verdict: 'pass' }))).toBe(false);
-  });
-
-  it('stops a change in the hunting review only when a proof test fails', () => {
-    expect(blocks('hunt', report({ verdict: 'fail' }), proved)).toBe(true);
-    expect(blocks('hunt', report({ verdict: 'fail' }), unproved)).toBe(false);
-    expect(blocks('hunt', report({ verdict: 'fail' }))).toBe(false);
-    expect(blocks('hunt', report({ verdict: 'pass' }), proved)).toBe(false);
-  });
-});
-
 describe('scoreReplay', () => {
   it('is caught only when the change was stopped and the judge says the finding is the bug', () => {
     expect(scoreReplay(true, true)).toBe('caught');
@@ -48,40 +30,28 @@ describe('scoreReplay', () => {
   });
 });
 
-describe('proofFiles and proofOf', () => {
-  it('finds the proof files a review left, new or changed', () => {
-    expect(proofFiles('?? server/agents/comms.proof.test.ts\n M server/agents/comms.ts\n M plugins/x/y.proof.test.ts\n?? notes.md')).toEqual(['server/agents/comms.proof.test.ts', 'plugins/x/y.proof.test.ts']);
-  });
-
-  it('keeps only proof tests that failed on an assertion, in files that loaded', () => {
-    const run: VitestRun = {
-      tests: [
-        { file: 'a.proof.test.ts', name: 'keeps the hold', passed: false, message: "AssertionError: expected 'idle' to be 'held'\n at x" },
-        { file: 'a.proof.test.ts', name: 'passes', passed: true, message: '' },
-        { file: 'a.proof.test.ts', name: 'typo', passed: false, message: 'TypeError: (0 , __vite_ssr_import_1__.hodl) is not a function' },
-      ],
-      loadErrors: [{ file: 'b.proof.test.ts', message: "Cannot find module './x'" }],
-    };
-    expect(proofOf(['a.proof.test.ts', 'b.proof.test.ts'], run).failing).toEqual([{ file: 'a.proof.test.ts', name: 'keeps the hold', message: "AssertionError: expected 'idle' to be 'held'" }]);
-    expect(proofOf(['a.proof.test.ts'], undefined).failing).toEqual([]);
-  });
-});
-
 describe('judgePrompt', () => {
   it('gives the fix as the answer key, then only what the review found', () => {
     const prompt = judgePrompt(
       { subject: 'A clean shutdown keeps a hold', diff: '-  agent.held = false;' },
-      report({ checks: [{ name: 'shutdown', result: 'fail', details: 'stop() clears held' }, { name: 'lint', result: 'pass', details: 'fine' }], fixInstructions: 'keep held on shutdown' }),
-      { files: [], failing: [{ file: 'c.proof.test.ts', name: 'survives restart', message: 'AssertionError' }] },
+      report({
+        checks: [{ name: 'shutdown', result: 'fail', details: 'stop() clears held' }, { name: 'lint', result: 'pass', details: 'fine' }],
+        fixInstructions: 'keep held on shutdown',
+        proofs: [
+          { kind: 'test', finding: 'survives restart', file: 'c.proof.test.ts', command: 'vitest run c.proof.test.ts', outcome: 'failed', note: 'AssertionError' },
+          { kind: 'test', finding: 'a probe that passed', file: 'd.proof.test.ts', command: 'vitest run d.proof.test.ts', outcome: 'passed' },
+        ],
+      }),
     );
     expect(prompt).toContain('agent.held = false');
     expect(prompt).toContain('- shutdown: stop() clears held');
     expect(prompt).not.toContain('lint');
-    expect(prompt).toContain('c.proof.test.ts › survives restart');
+    expect(prompt).toContain('- c.proof.test.ts: survives restart (AssertionError)');
+    expect(prompt).not.toContain('d.proof.test.ts');
   });
 
   it('cuts a long diff', () => {
-    expect(judgePrompt({ subject: 's', diff: 'x'.repeat(50) }, report({}), undefined, 10)).toContain('… (cut)');
+    expect(judgePrompt({ subject: 's', diff: 'x'.repeat(50) }, report({}), 10)).toContain('… (cut)');
   });
 });
 

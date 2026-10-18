@@ -63,6 +63,8 @@ export function mergeStep(pr: GatePr, review: QaReview | undefined, office: Gate
   if (!sameCommit(review.sha, head)) return { kind: 'qa', reason: `commits arrived after QA ${review.status} it` };
   if (review.followUp?.kind === 'needs-you') return { kind: 'blocked', reason: review.followUp.reason };
   if (review.status === 'failed') return { kind: 'blocked', reason: 'QA failed it' };
+  // QA found problems it couldn't prove: the captain reads its advice before it merges
+  if (review.report?.advisory) return { kind: 'blocked', reason: 'QA passed it with advice for the captain to read' };
 
   if (mark?.kind === 'refused') return { kind: 'blocked', reason: `the merge was refused: ${mark.reason}` };
   switch (pr.checks) {

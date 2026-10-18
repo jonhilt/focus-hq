@@ -75,6 +75,11 @@ export interface Project {
    * `merge-check` script runs that instead.
    */
   mergeChecks?: string[];
+  /**
+   * QA blocks a pull request only with proof: a test that fails when the office runs it, a failing check, or a screenshot
+   * of a failure in the browser. A fail without one goes up as advice and the verdict is a pass (missing = on).
+   */
+  qaProof?: boolean;
   /** What QA must check on every PR of this project, on top of the usual review. Goes into the QA officer's prompt. */
   qaBrief?: string;
   /**

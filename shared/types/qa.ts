@@ -37,6 +37,44 @@ export interface QaReport {
   spotChecks?: QaSpotCheck[];
   /** Every file the pull request changes, accounted for: what tests exercise it and what QA checked. Missing on reports from before they were asked for. */
   files?: QaFile[];
+  /**
+   * What QA offers as proof of its findings (docs/qa.md#proof), each with what the office saw when it checked it. Missing
+   * on reports from before proof was asked for, and when the project doesn't ask for it.
+   */
+  proofs?: QaProof[];
+  /**
+   * QA failed it, but none of its proofs held when the office checked them: the verdict is a pass, and QA's findings (its
+   * failed checks and fix instructions) are posted as advice.
+   */
+  advisory?: boolean;
+}
+
+/**
+ * A proof QA names for a finding. `test`: a test it wrote (or one already there) that fails, with the command that runs
+ * just that file. `check`: one of the project's own checks (its type check, lint or build) that fails. `screenshot`: the
+ * narrow exception for what only a browser shows, a screenshot of the failure that's on the pull request.
+ */
+export interface QaProof {
+  kind: 'test' | 'check' | 'screenshot';
+  /** The finding it proves, in a sentence. */
+  finding: string;
+  /** The test file, from the repo's root (`test`). */
+  file?: string;
+  /** The command, run without a shell from the repo's root (`test`, `check`). */
+  command?: string;
+  /** Which screenshot, counting from 1 in the order QA took them (`screenshot`). */
+  screenshot?: number;
+  /**
+   * What the office saw: `failed`, it holds (a test failed, a check failed, a screenshot of the failure is on the PR);
+   * `passed`, the test or check passed when the office ran it; `broken`, it couldn't be taken as proof (`note` says why).
+   */
+  outcome?: 'failed' | 'passed' | 'broken';
+  /** Why it's broken, or the first line of what failed. */
+  note?: string;
+  /** The end of what the command printed. */
+  output?: string;
+  /** The test file's contents, for the developer to add to their branch and keep. */
+  source?: string;
 }
 
 /** A file the pull request changes, as QA accounted for it. */

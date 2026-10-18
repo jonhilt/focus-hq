@@ -1,7 +1,7 @@
 import { statusLine } from '../../../shared/agentStatus';
 import { qaOfficerFor, UNIFORM } from '../../../shared/crew';
 import { autoMergeFor } from '../../../shared/mergeGate';
-import { autoQaFor, autoSendBackFor, filesCovered, pullUrl, qaBadge, spotCheckUrl } from '../../../shared/qa';
+import { autoQaFor, autoSendBackFor, filesCovered, pullUrl, qaBadge, qaProofFor, spotCheckUrl } from '../../../shared/qa';
 import { triageLabel } from '../../../shared/triage';
 import type { Effort, QaReview, QaScreenshot } from '../../../shared/types';
 import { api } from '../net/api';
@@ -45,6 +45,7 @@ export function openQaPanel(ui: Ui, projectId: string): void {
   const save = (patch: Parameters<typeof api.updateProject>[1]) => void api.updateProject(projectId, patch).catch((e: Error) => ui.error(e.message));
   const auto = new Switch('Test every PR', autoQaFor(project), { changed: (on) => save({ autoQa: on }) });
   const sendBack = new Switch('Send failed PRs back', autoSendBackFor(project), { changed: (on) => save({ autoSendBack: on }) });
+  const proof = new Switch('Block only with proof', qaProofFor(project), { changed: (on) => save({ qaProof: on }) });
   const merge = new Switch('Auto-merge', autoMergeFor(project), { changed: (on) => save({ autoMerge: on }) });
   const effort = effortPicker(project.qaEffort);
   effort.title = 'How hard QA thinks: the QA officer, and each goal’s reviewer';
@@ -52,6 +53,7 @@ export function openQaPanel(ui: Ui, projectId: string): void {
   const settings = h('div', { class: 'qa-settings' },
     toggle(auto, 'Tests every pull request the crew opens or updates.'),
     toggle(sendBack, 'Sends a failed pull request the crew opened back to be fixed, up to 3 rounds.'),
+    toggle(proof, 'QA fails a pull request only with proof the office checks itself: a test that fails when it runs it, a failing check, or a screenshot of a broken page. Findings without proof go on the PR as advice.'),
     toggle(merge, 'Merges a pull request the crew opened once QA passed its latest commit and its checks are green.'),
     h('div', { class: 'qa-toggle' }, effort, h('span', { class: 'muted' }, 'How hard QA thinks from the next review: the QA officer, and each goal’s reviewer.')),
     h('div', { class: 'field', style: 'margin:16px 0 0' },
@@ -141,7 +143,12 @@ function reviewCard(ui: Ui, review: QaReview): HTMLElement {
       ? h('table', { class: 'qa-checks' }, ...report.checks.map((c) => h('tr', null, h('td', null, h('span', { class: `chip check ${c.result}` }, c.result)), h('td', null, h('strong', null, c.name)), h('td', null, c.details))))
       : null,
     review.screenshots?.length ? h('div', { class: 'qa-shots' }, ...review.screenshots.map((s, i) => screenshot(s, i))) : null,
-    report?.fixInstructions ? h('div', { class: 'qa-fix' }, h('strong', null, 'What needs fixing'), h('p', null, report.fixInstructions)) : null,
+    report?.proofs?.length
+      ? h('div', { class: 'qa-proofs' }, h('strong', null, 'Proof, as the office checked it'), h('ul', null, ...report.proofs.map((p) =>
+        h('li', null, h('span', { class: `chip check ${p.outcome === 'failed' ? 'fail' : p.outcome === 'passed' ? 'pass' : 'skip'}` }, p.outcome === 'failed' ? 'holds' : p.outcome === 'passed' ? 'passed' : 'not proof'),
+          ` ${p.finding} `, h('code', null, p.kind === 'test' ? p.file ?? '' : p.kind === 'check' ? p.command ?? '' : `screenshot ${p.screenshot ?? '?'}`), p.note ? ` · ${p.note}` : ''))))
+      : null,
+    report?.fixInstructions ? h('div', { class: 'qa-fix' }, h('strong', null, report.advisory ? 'Advice (not proved, so it didn’t block)' : 'What needs fixing'), h('p', null, report.fixInstructions)) : null,
     report?.spotChecks?.length
       ? h('div', { class: 'qa-spots' }, h('strong', null, 'Worth a human look'), h('ul', null, ...report.spotChecks.map((c) =>
         h('li', null, h('a', { href: spotCheckUrl(pullUrl(review.repo, review.number), c), target: '_blank', rel: 'noreferrer' }, h('code', null, `${c.file}${c.line ? `:${c.line}` : ''}`)), ` ${c.why}`))))

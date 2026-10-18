@@ -4,6 +4,7 @@ import type { ZodType } from 'zod';
 import type { ArtifactInput, NoteInput, QuestionInput } from './lead';
 import type { ExplainerInput } from './explainer';
 import type { SinceVerdict } from './retest';
+import type { CommandRun } from './qaProof';
 import type { BackgroundEvent } from './backgroundTasks';
 
 /** What Claude Code says about a subagent the session started: started, busy with something, finished. */
@@ -271,6 +272,10 @@ export interface WorkspaceOps {
    * (`mergeCheckScripts`, from the project's `chosen` scripts). Never pushed.
    */
   tryMerge(repo: string, heads: MergeHeads, chosen?: readonly string[]): Promise<MergeTrial>;
+  /** Runs a command (no shell) in a checkout: its exit code (null if it timed out or couldn't start) and all it printed. Never rejects. Missing where there are no real checkouts. */
+  runIn?(dir: string, args: string[], timeoutMs: number): Promise<CommandRun>;
+  /** A file in a checkout, named from its root: its contents, or undefined when it isn't there (or is outside it). Missing where there are no real checkouts. */
+  readIn?(dir: string, file: string): Promise<string | undefined>;
 }
 
 /** The office's own run of a PR's checks: each command, and the end of its output when it failed. */

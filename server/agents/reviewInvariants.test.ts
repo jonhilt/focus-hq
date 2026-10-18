@@ -14,7 +14,15 @@ import { checkAtOnce, checkRestart, type Later, now, type Running, type Subject 
 vi.setConfig({ testTimeout: 120_000 });
 
 /** QA's report, accounting for every changed file (there are none here), so it isn't sent back to look again. */
-const report = (verdict: 'pass' | 'fail') => ({ verdict, summary: verdict === 'pass' ? 'Works.' : 'Broken.', checks: [], commands: [], files: [], ...(verdict === 'fail' && { fixInstructions: 'Fix it.' }) });
+/** A fail comes with a proof test, which fails when the office runs it (the workspace's `runIn`), so it blocks. */
+const report = (verdict: 'pass' | 'fail') => ({
+  verdict,
+  summary: verdict === 'pass' ? 'Works.' : 'Broken.',
+  checks: [],
+  commands: [],
+  files: [],
+  ...(verdict === 'fail' && { fixInstructions: 'Fix it.', proofs: [{ kind: 'test', finding: 'Broken', file: 'a.proof.test.ts', command: 'vitest run a.proof.test.ts' }] }),
+});
 /** The demo's workspace, its slow steps (made slow on purpose, to watch in the demo) answered through `later` instead. */
 const workspace = (later: Later): WorkspaceOps => ({
   ...demoWorkspace,
@@ -24,6 +32,7 @@ const workspace = (later: Later): WorkspaceOps => ({
   push: () => later('push', () => Promise.resolve()),
   publish: () => later('publish', () => Promise.resolve()),
   pull: () => later('pull', () => Promise.resolve()),
+  runIn: () => Promise.resolve({ code: 1, output: 'AssertionError: expected 1 to be 2' }),
 });
 const [first, second] = await Effect.runPromise(Effect.gen(function* () {
   return yield* (yield* GitHub).listPullRequests('demo/webshop-frontend');

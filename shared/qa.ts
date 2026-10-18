@@ -25,7 +25,7 @@ export function qaBadge(review: QaReview | undefined, pr: Pick<PullRequest, 'hea
     case 'passed':
     case 'failed': {
       if (review.sha && pr.headSha && !sameCommit(review.sha, pr.headSha)) return { state: 'stale', label: `QA ${review.status} an older commit` };
-      if (review.status === 'passed') return { state: 'passed', label: 'QA passed' };
+      if (review.status === 'passed') return { state: 'passed', label: review.report?.advisory ? 'QA passed with advice' : 'QA passed' };
       switch (review.followUp?.kind) {
         case 'fixing':
           return { state: 'fixing', label: `QA failed: back with ${review.followUp.agentName}` };
@@ -64,6 +64,11 @@ export function autoQaFor(project: { autoQa?: boolean }): boolean {
 }
 
 /** Whether a failed PR the office opened goes back to a developer: on unless the project switched it off. */
+/** Whether QA blocks this project's pull requests only with proof (missing = on). */
+export function qaProofFor(project: { qaProof?: boolean }): boolean {
+  return project.qaProof !== false;
+}
+
 export function autoSendBackFor(project: { autoSendBack?: boolean }): boolean {
   return project.autoSendBack !== false;
 }

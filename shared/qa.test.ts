@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoQaFor, autoSendBackFor, filesCovered, pullUrl, qaBadge, sameCommit, spotCheckUrl, verdictBehindHead } from './qa';
+import { autoQaFor, autoSendBackFor, filesCovered, pullUrl, qaBadge, qaProofFor, sameCommit, spotCheckUrl, verdictBehindHead } from './qa';
 import type { QaReport, QaReview } from './types';
 
 const review = (r: Partial<QaReview> = {}): QaReview => ({
@@ -21,6 +21,11 @@ describe('qaBadge', () => {
   it('shows a verdict on the PR’s head commit', () => {
     expect(qaBadge(review(), { headSha: 'abc1234def5678' })).toEqual({ state: 'passed', label: 'QA passed' });
     expect(qaBadge(review({ status: 'failed' }), { headSha: 'abc1234def5678' })).toEqual({ state: 'failed', label: 'QA failed' });
+  });
+
+  it('says a pass came with advice: QA failed it, but no proof held', () => {
+    const report: QaReport = { verdict: 'pass', advisory: true, summary: '', checks: [], commands: [], captions: [] };
+    expect(qaBadge(review({ report }), { headSha: 'abc1234def5678' })).toEqual({ state: 'passed', label: 'QA passed with advice' });
   });
 
   it('marks a verdict on an older commit stale, whichever way it went', () => {
@@ -79,6 +84,13 @@ describe('autoSendBackFor', () => {
   it('is on unless the project switched it off', () => {
     expect(autoSendBackFor({})).toBe(true);
     expect(autoSendBackFor({ autoSendBack: false })).toBe(false);
+  });
+});
+
+describe('qaProofFor', () => {
+  it('blocks only with proof unless the project switched it off', () => {
+    expect(qaProofFor({})).toBe(true);
+    expect(qaProofFor({ qaProof: false })).toBe(false);
   });
 });
 

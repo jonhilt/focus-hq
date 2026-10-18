@@ -260,6 +260,8 @@ export class DemoRunner implements AgentRunner {
           { file: changed[0], line: 12 + (pr % 30), why: 'Reads the saved list straight from storage: a malformed entry would throw before anything renders.' },
           { file: changed[1], line: 40 + (pr % 20), why: 'New request handler: check it only returns the signed-in shopper\'s items.' },
         ],
+        // a fail comes with a proof test, which the demo's checkouts "run" and see fail (demoWorkspace.runIn)
+        proofs: fails ? [{ kind: 'test', finding: 'With an empty list the page throws', file: demoProofFile(changed[0]), command: `npx vitest run ${demoProofFile(changed[0])}` }] : [],
       };
       await say(fails ? 'Found a problem with the empty state. Writing up the report.' : 'All good. Writing up the report.');
       return { ok: true, summary: JSON.stringify(report), structured: report };
@@ -842,6 +844,9 @@ export class DemoRunner implements AgentRunner {
 }
 
 /** Demo agents don't touch git. */
+/** The proof test the demo's QA writes beside a file it fails a PR for. */
+const demoProofFile = (file: string) => file.replace(/(\.\w+)$/, '.proof.test$1');
+
 export const demoWorkspace: WorkspaceOps = {
   create: async (_repo, agentId) => `/demo/${agentId}`,
   remove: async () => undefined,
@@ -889,6 +894,13 @@ export const demoWorkspace: WorkspaceOps = {
     await sleep(1500);
     return { kind: 'checked', ...heads, merge: `${heads.head}m`, results: ['npm ci', 'npm run typecheck', 'npm run lint', 'npm test'].map((command) => ({ command, ok: true })) };
   },
+  // the demo QA's proof tests fail on an assertion when the office runs them
+  runIn: async (_dir, args) => {
+    await sleep(400);
+    const file = args.at(-1) ?? 'the proof';
+    return { code: 1, output: ` FAIL  ${file} > handles an empty list\nAssertionError: expected [] to have a length of 1 but got +0\n\n Tests  1 failed (1)` };
+  },
+  readIn: async (_dir, file) => `import { expect, it } from 'vitest';\n\n// ${file}\nit('handles an empty list', () => {\n  expect(render([])).toHaveLength(1);\n});\n`,
 };
 
 /** The demo planner's judgement of an idea too big for one issue: a rebuild, or a list of three or more features. */

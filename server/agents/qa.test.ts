@@ -439,3 +439,57 @@ describe('a verdict’s mark', () => {
     expect(verdictMark('verdict_a1b2c')).toMatch(/^\n\n<!-- .* -->$/);
   });
 });
+
+describe('proof', () => {
+  const held = { kind: 'test' as const, finding: 'Loses the saved list on reload', file: 'src/saved.proof.test.ts', command: 'pnpm vitest run src/saved.proof.test.ts', outcome: 'failed' as const, note: 'AssertionError: expected [] to have length 1', source: 'it("keeps it")' };
+
+  it('asks for proofs in the report, and reads them', () => {
+    expect(QA_SCHEMA.properties).toHaveProperty('proofs');
+    expect(parseQaReport({ ...report({ verdict: 'fail' }), proofs: [{ kind: 'check', finding: 'Doesn’t type-check', command: 'pnpm run typecheck' }] })?.proofs).toEqual([{ kind: 'check', finding: 'Doesn’t type-check', command: 'pnpm run typecheck' }]);
+    expect(parseQaReport(report())?.proofs).toBeUndefined();
+  });
+
+  it('tells QA to hunt and to fail only with proof, unless the project doesn’t ask for it', () => {
+    const on = qaSystemAppend({ name: 'Lt. Q' }, { name: 'Shop' }, pr, pr.headSha);
+    expect(on).toContain('Hunting the bugs that get past review');
+    expect(on).toContain('Fail only with proof');
+    expect(on).toContain('and only with proof (below)');
+    const off = qaSystemAppend({ name: 'Lt. Q' }, { name: 'Shop', qaProof: false }, pr, pr.headSha);
+    expect(off).not.toContain('Fail only with proof');
+    expect(off).not.toContain('Hunting');
+  });
+
+  it('shows a blocking fail’s proof on the comment, with what the office saw', () => {
+    const body = qaComment(report({ verdict: 'fail', fixInstructions: 'Persist the list.', proofs: [held, { kind: 'test', finding: 'Double save', file: 'b.proof.test.ts', command: 'vitest run b.proof.test.ts', outcome: 'broken', note: 'it ran no tests' }] }), { officer: 'Lt. Q' }, [], false);
+    expect(body).toContain('QA report: ❌ Failed');
+    expect(body).toContain('### 🧪 Proof');
+    expect(body).toContain('| ❌ | Loses the saved list on reload | test: `src/saved.proof.test.ts` with `pnpm vitest run src/saved.proof.test.ts` | fails: AssertionError: expected [] to have length 1 |');
+    expect(body).toContain('| ⚠️ | Double save | test: `b.proof.test.ts` with `vitest run b.proof.test.ts` | not proof: it ran no tests |');
+    expect(body).toContain('### 🔧 What needs fixing');
+  });
+
+  it('heads a fail without proof that held as a pass with advice, its findings as advice', () => {
+    const body = qaComment(report({ verdict: 'pass', advisory: true, fixInstructions: 'Persist the list.', proofs: [{ ...held, outcome: 'passed', note: undefined, source: undefined }] }), { officer: 'Lt. Q' }, [], false);
+    expect(body).toContain('QA report: ✅ Passed with advice');
+    expect(body).toContain('none came with proof that held');
+    expect(body).toContain('passed when the office ran it');
+    expect(body).toContain('### 💡 Advice (not proved)\n\nPersist the list.');
+    expect(body).not.toContain('What needs fixing');
+  });
+
+  it('hands the developer the proof tests to keep, and the re-test the proof that held', () => {
+    const failed = report({ verdict: 'fail', fixInstructions: 'Persist the list.', proofs: [held] });
+    const fix = fixPrompt({ number: 12, branch: pr.branch }, { sha: 'abc1234', report: failed });
+    expect(fix).toContain('it("keeps it")');
+    expect(fix).toContain('drop the `.proof`');
+    const retest = qaPrompt('acme/shop', pr, [], { lastRound: { sha: 'abc1234', report: failed } });
+    expect(retest).toContain('Proof that held');
+    expect(retest).toContain('`src/saved.proof.test.ts` with `pnpm vitest run src/saved.proof.test.ts`');
+  });
+
+  it('tells a re-test that last round’s fail went up as advice', () => {
+    const retest = qaPrompt('acme/shop', pr, [], { lastRound: { sha: 'abc1234', report: report({ verdict: 'pass', advisory: true, fixInstructions: 'Persist the list.' }) } });
+    expect(retest).toContain('failed it without proof that held, so it went up as a pass with advice');
+    expect(retest).toContain('Advice (no proof held');
+  });
+});

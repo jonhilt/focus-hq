@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
-import type { Agent, FailedCheck, FileAccount, QaReport, QaReview, QaScreenshot, QaSpotCheck, Settings } from '../../shared/types';
+import type { Agent, FailedCheck, FileAccount, QaProof, QaReport, QaReview, QaScreenshot, QaSpotCheck, Settings } from '../../shared/types';
 import { filesCovered, mustOpen, spotCheckUrl } from '../../shared/qa';
 import { fieldsOf, isRecord } from '../../shared/records';
 import type { IssueDetail, PullRequestDetail } from '../github/provider';
 import { truncate } from '../util';
 import { blocks, transcriptLines } from './transcript';
+import { HUNTING, parseProofs, PROOFS_SCHEMA, proofsToKeep } from './qaProof';
 import { SCRATCH_RULE } from './scratch';
 import { WAIT_RULE } from './wait';
 
@@ -77,6 +78,7 @@ export const QA_SCHEMA: Record<string, unknown> = {
         },
       },
     },
+    proofs: PROOFS_SCHEMA,
     spotChecks: {
       type: 'array',
       maxItems: SPOT_CHECKS,
@@ -126,6 +128,7 @@ export function parseQaReport(structured: unknown, text = ''): QaReport | null {
     .filter((c) => c.file && c.why)
     .slice(0, SPOT_CHECKS)
     .map(({ line, ...c }) => ({ ...c, ...(line && { line }), anchor: diffAnchor(c.file, line) }));
+  const proofs = parseProofs(r.proofs);
   return {
     verdict: r.verdict,
     summary: String(r.summary ?? '').trim(),
@@ -139,6 +142,7 @@ export function parseQaReport(structured: unknown, text = ''): QaReport | null {
     captions: Array.isArray(r.screenshots) ? r.screenshots.map((c) => String(c ?? '').trim()) : [],
     ...(spotChecks.length && { spotChecks }),
     ...(files.length && { files }),
+    ...(proofs.length && { proofs }),
   };
 }
 
@@ -300,19 +304,45 @@ export function postedAlready(comments: readonly string[], body: string): boolea
   return !!mark && comments.some((c) => c.includes(mark));
 }
 
+const PROOF_ICON = { failed: '❌', passed: '✅', broken: '⚠️' } as const;
+
+/** The proofs QA named and what the office saw of each, as a section of the comment. Nothing when it named none. */
+export function proofSection(report: Pick<QaReport, 'proofs' | 'verdict' | 'advisory'>, shots = 0): string[] {
+  const proofs = report.proofs ?? [];
+  if (!proofs.length) return [];
+  const what = (p: QaProof) => {
+    if (p.kind === 'screenshot') return `screenshot ${p.screenshot ?? '?'}${shots ? '' : ' (none went on the PR)'}`;
+    return p.kind === 'test' ? `\`${cell(p.file ?? '')}\` with \`${cell(p.command ?? '')}\`` : `\`${cell(p.command ?? '')}\``;
+  };
+  const seen = (p: QaProof) => {
+    if (p.outcome === 'failed') return p.kind === 'screenshot' ? `holds: ${p.note ?? ''}` : `fails${p.note ? `: ${cell(truncate(p.note, 200))}` : ''}`;
+    if (p.outcome === 'passed') return 'passed when the office ran it';
+    return `not proof: ${cell(p.note ?? 'not checked')}`;
+  };
+  return [
+    '', '### 🧪 Proof', '', 'QA blocks a pull request only with proof the office checks itself: it runs each test and check in QA\'s checkout before posting.', '',
+    '| | Finding | Proof | What the office saw |', '|---|---|---|---|',
+    ...proofs.map((p) => `| ${p.outcome ? PROOF_ICON[p.outcome] : ' '} | ${cell(p.finding)} | ${p.kind}: ${what(p)} | ${seen(p)} |`),
+  ];
+}
+
 /** The QA report as a pull request comment, with the screenshots that made it to GitHub and, when known, how it covered each changed file. */
 export function qaComment(report: QaReport, by: { officer: string; sha?: string; pr?: string }, screenshots: QaScreenshot[], attribution: boolean, account?: FileAccount): string {
   const pass = report.verdict === 'pass';
   const commit = by.sha ? `commit \`${by.sha.slice(0, 7)}\`` : '';
   const tested = attribution ? [`**Tested by** ${by.officer} (Focus QA officer)`, commit].filter(Boolean).join(' · ') : commit && `**Tested at** ${commit}`;
-  const lines = [`## 🔍 QA report: ${pass ? '✅ Passed' : '❌ Failed'}`, ...(tested ? [tested] : []), '', report.summary || (pass ? 'Everything checked out.' : 'Problems found, see below.')];
+  const heading = report.advisory ? '✅ Passed with advice' : pass ? '✅ Passed' : '❌ Failed';
+  const lines = [`## 🔍 QA report: ${heading}`, ...(tested ? [tested] : []), '', report.summary || (pass ? 'Everything checked out.' : 'Problems found, see below.')];
+  if (report.advisory) lines.push('', `> QA found problems, but none came with proof that held when the office checked it (a test that fails, a failing check, or a screenshot of a broken page), so they don't block this pull request: they're advice, below.`);
   if (report.checks.length) {
     lines.push('', '| | Check | Details |', '|---|---|---|', ...report.checks.map((c) => `| ${ICON[c.result]} | ${cell(c.name)} | ${cell(c.details)} |`));
   }
   if (report.commands.length) {
     lines.push('', '<details><summary>🧪 Commands run</summary>', '', '| Command | Result |', '|---|---|', ...report.commands.map((c) => `| \`${cell(c.command)}\` | ${cell(c.result)} |`), '', '</details>');
   }
+  lines.push(...proofSection(report, screenshots.length));
   if (!pass && report.fixInstructions) lines.push('', '### 🔧 What needs fixing', '', report.fixInstructions);
+  if (report.advisory && report.fixInstructions) lines.push('', '### 💡 Advice (not proved)', '', report.fixInstructions);
   // each links to its file and line in the pull request's changed files, when we know the pull request's address
   const spot = (c: QaSpotCheck) => {
     const where = `\`${c.file}${c.line ? `:${c.line}` : ''}\``;
@@ -351,12 +381,13 @@ Test this PR on its own first, as below. Then, where the repos depend on each ot
 `;
 }
 
-export function qaSystemAppend(agent: Pick<Agent, 'name'>, project: { name: string; qaBrief?: string }, pr: PullRequestDetail, sha: string, siblings: QaSibling[] = []): string {
+export function qaSystemAppend(agent: Pick<Agent, 'name'>, project: { name: string; qaBrief?: string; qaProof?: boolean }, pr: PullRequestDetail, sha: string, siblings: QaSibling[] = []): string {
   const brief = project.qaBrief?.trim();
+  const proof = project.qaProof !== false;
   return `
 # You are ${agent.name}, QA officer for ${project.name} aboard the Focus
 
-Developers (other Claude Code agents, or the manager's teammates) open pull requests. You review and test each one before the manager merges it. Your report is posted on the pull request and the manager decides with it in front of them, so be thorough and skeptical, but fair: fail a PR only for real problems (broken behaviour, failing tests or build, acceptance criteria not met, obvious regressions, security holes), not for style preferences.
+Developers (other Claude Code agents, or the manager's teammates) open pull requests. You review and test each one before the manager merges it. Your report is posted on the pull request and the manager decides with it in front of them, so be thorough and skeptical, but fair: fail a PR only for real problems (broken behaviour, failing tests or build, acceptance criteria not met, obvious regressions, security holes), not for style preferences${proof ? ', and only with proof (below)' : ''}.
 
 Pull request #${pr.number} "${pr.title}", branch \`${pr.branch}\` into \`${pr.baseBranch}\`: ${pr.url}
 Your current directory is a throwaway checkout of its head, commit ${sha.slice(0, 7)}, detached.
@@ -369,10 +400,10 @@ How to test:
 5. If the change touches a web UI, start its dev server in the background and exercise the change with the mcp__browser__ tools: click through it, try the edge cases, and check the console for errors. Stop the server afterwards.
    Call mcp__browser__screenshot on each state that shows the change working or failing: the last ${MAX_SCREENSHOTS} go on the pull request with your report, each with the caption you give it.
 6. You may write throwaway scripts to probe behaviour, but don't commit them. ${SCRATCH_RULE} ${WAIT_RULE}
+${proof ? HUNTING : ''}
+Rules: don't change the code under test${proof ? ' (your proof tests are the only files you add)' : ''}, don't commit or push, and don't comment on, review or merge anything on GitHub: the office posts your report. Nobody can answer questions while you work, so make sensible calls and say what you assumed.
 
-Rules: don't change the code under test, don't commit or push, and don't comment on, review or merge anything on GitHub: the office posts your report. Nobody can answer questions while you work, so make sensible calls and say what you assumed.
-
-Finish with the structured QA report: the verdict, a two to four sentence summary, every check you made (acceptance criteria first), the commands you ran with their results, a caption for each screenshot you took, up to ${SPOT_CHECKS} spot-checks and, on a fail, precise fix instructions for the developer.
+Finish with the structured QA report: the verdict, a two to four sentence summary, every check you made (acceptance criteria first), the commands you ran with their results, a caption for each screenshot you took, up to ${SPOT_CHECKS} spot-checks${proof ? ', the proofs for what you fail it for' : ''} and, on a fail, precise fix instructions for the developer.
 
 Spot-checks: the captain rarely reads a whole diff, but likes to look at the riskiest few places with their own eyes. From your review, pick up to ${SPOT_CHECKS} places most worth that look, riskiest first: a new route or permission, a changed guard or merge gate, a deleted or weakened test, data that could be lost, a tricky concurrency or error path. Give the file, the line where it starts, and in a sentence what could go wrong there. Pick none for a change too small or plain to need it.
 `.trim();
@@ -406,7 +437,7 @@ export function qaPrompt(repo: string, pr: PullRequestDetail, issues: IssueDetai
     const since = sha ? `\`git diff ${sha.slice(0, 7)}..HEAD\`` : 'the commits pushed since';
     parts.push(
       '',
-      `This is a re-test. Last round you ${report.verdict === 'pass' ? 'passed' : 'failed'} it${sha ? ` at commit ${sha.slice(0, 7)}` : ''}:`,
+      `This is a re-test. Last round you ${report.advisory ? 'failed it without proof that held, so it went up as a pass with advice' : report.verdict === 'pass' ? 'passed it' : 'failed it'}${sha ? ` at commit ${sha.slice(0, 7)}` : ''}:`,
       ...qaFindings(report, { skipped: true }),
       '',
       `Check those findings first. Then focus on what changed since (${since}), and finish with a quick smoke test of the main flow rather than a full review of the whole PR.`,
@@ -422,6 +453,7 @@ export function fixPrompt(pr: { number: number; branch: string }, review: Pick<Q
     `QA failed pull request #${pr.number}${review.sha ? ` (commit ${review.sha.slice(0, 7)})` : ''} and sent it back to you. Please fix it.`,
     '',
     ...qaFindings(review.report),
+    ...proofsToKeep(review.report),
     '',
     fixAndPush('what QA found', pr.branch, cloud),
   ].join('\n');
@@ -459,6 +491,8 @@ export function qaFindings(report: QaReport, { skipped = false } = {}): string[]
   };
   list('Failed checks:', 'fail');
   if (skipped) list('Skipped checks:', 'skip');
-  if (report.fixInstructions) lines.push('', 'What needs fixing:', truncate(report.fixInstructions, 8000));
+  if (report.fixInstructions) lines.push('', report.advisory ? 'Advice (no proof held, so it didn\'t block):' : 'What needs fixing:', truncate(report.fixInstructions, 8000));
+  const held = (report.proofs ?? []).filter((p) => p.outcome === 'failed' && p.kind !== 'screenshot');
+  if (held.length) lines.push('', 'Proof that held (the developer was asked to add each test to the branch and make it pass, so it may be there under another name):', ...held.map((p) => `- ${p.finding}: \`${p.kind === 'test' ? `${p.file}\` with \`` : ''}${p.command}\``));
   return lines;
 }

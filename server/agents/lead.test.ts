@@ -245,6 +245,14 @@ describe('what the lead writes and hears', () => {
     );
   });
 
+  it('passes on a fail without proof as a pass with advice, and a proved fail with the test to keep', () => {
+    const advice = qaVerdictNote('acme/web', 12, { verdict: 'pass', advisory: true, summary: 'Double clicks save twice', fixInstructions: 'Debounce it' });
+    expect(advice).toBe('QA passed (with advice: it found problems, but no proof held) acme/web#12: Double clicks save twice\n\nQA\'s advice, yours to take or leave: Debounce it\n\nIt waits for the captain to merge it.');
+    const proved = qaVerdictNote('acme/web', 12, { verdict: 'fail', summary: 'Broken', fixInstructions: 'Guard it', proofs: [{ kind: 'test', finding: 'Empty list crashes', file: 'a.proof.test.ts', command: 'vitest run a.proof.test.ts', outcome: 'failed', source: 'it("x")' }] });
+    expect(proved).toContain('What to fix: Guard it\n\nQA proved it');
+    expect(proved).toContain('it("x")');
+  });
+
   it('tells the lead when the slice has landed, and where their repos are for the next one', () => {
     const landed = { ...work, prs: [work.prs[0], { ...work.prs[1], outcome: 'closed' as const }] };
     const idle = landedNote(landed);

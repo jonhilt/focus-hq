@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { plannerFor, qaFor, qaOfficerFor } from '../../../shared/crew';
 import { goneReply } from '../../../shared/mergeGate';
-import { autoSendBackFor, prKey, pullUrl, sameCommit } from '../../../shared/qa';
+import { autoSendBackFor, prKey, pullUrl, qaProofFor, sameCommit } from '../../../shared/qa';
 import type { Agent, FailedCheck, FixFor, QaReport, QaReview, QaScreenshot, TermLine } from '../../../shared/types';
 import { QA_DESK } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
@@ -11,6 +11,7 @@ import { repoFolders } from '../planner';
 import { checksFixPrompt, evidencePath, filesPrompt, filesToRevisit, fixPrompt, openedFiles, postedAlready, type Revisit, toolCalls, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, type QaSibling, qaSystemAppend, verdictMark } from '../qa';
 import type { QaLoopEvent } from '../qaLoop';
 import { qaNextStep } from '../qaLoop';
+import { PROOF_MS, prove } from '../qaProof';
 import { carriedComment, retestStep, shippedSinceTested } from '../retest';
 import { type Reported, type ReviewFact, type ReviewRecovery, reviewRecovery } from '../reviewJournal';
 import { recovery } from '../runJournal';
@@ -274,12 +275,36 @@ export class Reviews extends Part {
     );
   }
 
+  /**
+   * Checks the proofs QA's report names in QA's own checkout, before anything is posted: runs each test and check, looks
+   * up each screenshot (`prove`). The report to post: a fail none of whose proofs held is a pass with advice.
+   */
+  private proveReport(agent: Agent, report: QaReport, changed: readonly string[], shots: { taken: number; kept: number }): Effect.Effect<QaReport, never, Workspace> {
+    return Effect.gen({ self: this }, function* () {
+      if (report.verdict === 'pass' && !report.proofs?.length) return report;
+      const workspace = yield* Workspace;
+      const dir = workspace.dir(this.reviewDir(agent));
+      const n = report.proofs?.length ?? 0;
+      if (n) {
+        this.update(agent, { activity: `Running QA's proof${n === 1 ? '' : 's'}` });
+        this.print(agent, [{ kind: 'system', text: `✻ The office checks ${n === 1 ? 'the proof' : `the ${n} proofs`} QA named before posting the report` }]);
+      }
+      const proven = yield* prove(report, { run: (args) => workspace.runIn(dir, args, PROOF_MS), read: (file) => workspace.readIn(dir, file), changed, shots });
+      for (const p of proven.proofs ?? []) {
+        const what = p.kind === 'test' ? p.file : p.kind === 'check' ? p.command : `screenshot ${p.screenshot ?? '?'}`;
+        this.print(agent, [{ kind: p.outcome === 'failed' ? 'success' : 'system', text: `${p.outcome === 'failed' ? '✓ Proof holds' : '✗ Not proof'}: ${what}${p.note ? ` (${p.note})` : ''}` }]);
+      }
+      if (proven.advisory) this.print(agent, [{ kind: 'system', text: '✻ QA failed it, but no proof held: the verdict is a pass, with QA\'s findings as advice' }]);
+      return proven;
+    });
+  }
+
   /** Records the QA officer's verdict, posts it on the pull request, and moves on to the next review. */
   finishReview(agent: Agent, structured: unknown, text: string): Effect.Effect<void, never, ManagerServices> {
     return Effect.gen({ self: this }, function* () {
       const number = agent.issue.number;
-      const report = parseQaReport(structured, text);
-      if (!report) {
+      const said = parseQaReport(structured, text);
+      if (!said) {
         this.core.sessions.fail(agent, 'Finished without a QA report. Send them a message to ask for one, or send the PR to QA again.');
         return;
       }
@@ -289,8 +314,14 @@ export class Reviews extends Part {
       // misses what's in the files it skipped (seen when bugs planted in merged PRs went uncaught; docs/qa.md)
       const files = this.rt(agent.id).qaFiles;
       const opened = yield* this.openedBy(agent);
-      const revisit = filesToRevisit(report, files, opened);
+      const revisit = filesToRevisit(said, files, opened);
       if (revisit && agent.sessionId) return yield* this.revisitFiles(agent, agent.sessionId, revisit);
+      // the verdict blocks only with proof the office checked itself (docs/qa.md#proof)
+      const shots = this.rt(agent.id).shots;
+      const report = qaProofFor(this.store.project(agent.projectId))
+        ? yield* this.proveReport(agent, said, files?.changed ?? [], { taken: shots?.taken ?? 0, kept: shots?.frames.length ?? 0 })
+        : said;
+      if (agent.prGone) return;
       const review = this.store.reviews.get(prKey(agent.repo, number));
       const screenshots = yield* this.keepScreenshots(agent, report, review?.sha);
       const account = files && { changed: files.changed, opened: opened && [...opened], sentBack: files.sentBack };
@@ -355,7 +386,7 @@ export class Reviews extends Part {
       for (const c of report.checks) checks[c.result]++;
       this.core.ledger.record(projectId, { kind: 'qa-verdict', repo, pr: number, goal: this.core.leads.leadWith(repo, number)?.lead?.title, verdict: verdict.verdict, sha, reviewer: officer, checks, failedRounds });
       if (agent) this.reviewerDone(agent, pass, number, report.checks.length);
-      this.hub.toast(pass ? 'success' : 'error', `${pass ? '✅' : '❌'} ${officer} ${pass ? 'passed' : 'failed'} ${repo.split('/')[1]}#${number}: ${truncate(report.summary, 120)}`, agent?.id);
+      this.hub.toast(pass ? 'success' : 'error', `${pass ? '✅' : '❌'} ${officer} ${report.advisory ? 'passed, with advice,' : pass ? 'passed' : 'failed'} ${repo.split('/')[1]}#${number}: ${truncate(report.summary, 120)}`, agent?.id);
       this.boardChanged(projectId);
       if (done) yield* this.qaNext(done, { kind: 'verdict', verdict: verdict.verdict, failedRounds });
       yield* this.core.leads.leadShielded(projectId, repo, number, report, failedRounds, screenshots);

@@ -6,6 +6,7 @@ import { applyBackgroundEvent, type BackgroundEvent } from './backgroundTasks';
 import { applyTaskTool } from './tasks';
 import { applyWorkflowEvent } from './workflows';
 import { slugify } from '../util';
+import { proofsToKeep } from './qaProof';
 import { SCRATCH_RULE } from './scratch';
 import { WAIT_RULE } from './wait';
 import { applyContacts, type ContactInput, contactsForPrompt } from './contacts';
@@ -594,9 +595,10 @@ export function afterVerdict(verdict: QaReport['verdict'], failedRounds: number)
 }
 
 /** QA's verdict on one of the slice's pull requests, for the lead. */
-export function qaVerdictNote(repo: string, number: number, report: Pick<QaReport, 'verdict' | 'summary' | 'fixInstructions'>, behind?: VerdictBehind): string {
-  const verdict = report.verdict === 'pass' ? 'passed' : 'failed';
-  const fix = report.verdict === 'fail' && report.fixInstructions ? `\n\nWhat to fix: ${report.fixInstructions}` : '';
+export function qaVerdictNote(repo: string, number: number, report: Pick<QaReport, 'verdict' | 'summary' | 'fixInstructions' | 'advisory' | 'proofs'>, behind?: VerdictBehind): string {
+  const verdict = report.advisory ? 'passed (with advice: it found problems, but no proof held)' : report.verdict === 'pass' ? 'passed' : 'failed';
+  const advice = report.advisory && report.fixInstructions ? `\n\nQA's advice, yours to take or leave: ${report.fixInstructions}` : '';
+  const fix = report.verdict === 'fail' ? `${report.fixInstructions ? `\n\nWhat to fix: ${report.fixInstructions}` : ''}${proofsToKeep(report).map((l) => `\n${l}`).join('')}` : advice;
   if (behind) {
     const what = `QA ${verdict} ${repo}#${number} at ${behind.tested.slice(0, 7)}, before your last ship (${behind.shipped.slice(0, 7)}): ${report.summary}${fix}`;
     return `${what}\n\nQA is reviewing ${behind.shipped.slice(0, 7)} now, and you'll hear that verdict too. Fix only what your last ship didn't already.`;

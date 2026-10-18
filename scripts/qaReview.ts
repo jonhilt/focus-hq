@@ -3,14 +3,30 @@
 // (scripts/qaCatch.ts, planted bugs) and the bug replay (scripts/bugReplay.ts, real ones). The clone is the caller's.
 
 import { execFile } from 'node:child_process';
+import { existsSync, symlinkSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { query } from '@anthropic-ai/claude-agent-sdk';
+import { Effect } from 'effect';
 import { claudeConfig } from '../server/agents/claudeRunner';
 import { filesPrompt, filesToRevisit, openedFiles, parseQaReport, QA_SCHEMA, qaAgentModel, qaPrompt, qaSystemAppend, type ToolCall } from '../server/agents/qa';
 import type { PullRequestDetail } from '../server/github/provider';
+import { qaProofFor } from '../shared/qa';
 import type { Project, QaReport, Settings } from '../shared/types';
+import { PROOF_MS, prove, type ProofRig } from '../server/agents/qaProof';
+import { readIn, runIn } from '../server/agents/workspace';
+
+/** QA's proofs checked in the clone, as the office checks them in its checkout: with this checkout's packages when the clone has none. No browser, so no screenshots. */
+function proofRig(dir: string, changed: string[]): ProofRig {
+  if (!existsSync(path.join(dir, 'node_modules')) && existsSync(path.join(process.cwd(), 'node_modules'))) symlinkSync(path.join(process.cwd(), 'node_modules'), path.join(dir, 'node_modules'));
+  return {
+    run: (args) => Effect.promise(() => runIn(dir, args, PROOF_MS)),
+    read: (file) => Effect.promise(() => readIn(dir, file)),
+    changed,
+    shots: { taken: 0, kept: 0 },
+  };
+}
 
 const run = promisify(execFile);
 const BIG = { maxBuffer: 64 * 1024 * 1024 };
@@ -24,10 +40,10 @@ export interface Reviewed {
   error?: string;
 }
 
-/** The QA officer's review of a clone, as the office runs one: a report that leaves changed files out goes back once, naming them.
- *  A `brief` goes after QA's own instructions in its system prompt, for a replay trying a change to how QA reviews. */
-export async function review(repo: string, dir: string, pr: PullRequestDetail, state: { settings: Settings; projects: Project[] }, brief = ''): Promise<Reviewed> {
-  const project = state.projects.find((p) => p.repos.includes(repo)) ?? { name: repo };
+/** The QA officer's review of a clone, as the office runs one: a report that leaves changed files out goes back once, naming
+ *  them, and a fail stands only with proof that holds when it's checked in the clone. */
+export async function review(repo: string, dir: string, pr: PullRequestDetail, state: { settings: Settings; projects: Project[] }): Promise<Reviewed> {
+  const project: Pick<Project, 'name' | 'qaBrief' | 'qaProof'> = state.projects.find((p) => p.repos.includes(repo)) ?? { name: repo };
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), REVIEW_MS);
   const started = Date.now();
@@ -47,7 +63,7 @@ export async function review(repo: string, dir: string, pr: PullRequestDetail, s
         resume: sessionId,
         model: qaAgentModel(state.settings),
         ...claudeConfig(state.settings.userClaudeMd, process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude')),
-        systemPrompt: { type: 'preset', preset: 'claude_code', append: `${qaSystemAppend({ name: 'Lt. Replay' }, project, pr, pr.headSha)}${brief}` },
+        systemPrompt: { type: 'preset', preset: 'claude_code', append: qaSystemAppend({ name: 'Lt. Replay' }, project, pr, pr.headSha) },
         outputFormat: { type: 'json_schema', schema: QA_SCHEMA },
         disallowedTools: ['AskUserQuestion', 'EnterPlanMode'],
         // a throwaway clone, deleted after: nobody is there to answer a permission prompt
@@ -74,6 +90,8 @@ export async function review(repo: string, dir: string, pr: PullRequestDetail, s
       console.log(`  ${repo}#${pr.number}: of ${changed.length} changed files the report left out ${revisit.missing.length}, only skimmed ${revisit.unread.length}, never opened ${revisit.unopened.length}: sent back once`);
       report = (await turn(filesPrompt(revisit))) ?? report;
     }
+    // as the office does: the verdict blocks only with proof that holds when it's checked here (docs/qa.md#proof)
+    if (report && qaProofFor(project)) report = await Effect.runPromise(prove(report, proofRig(dir, changed)));
     return { report, costUsd, minutes: minutes() };
   } catch (err) {
     return { report: null, costUsd, minutes: minutes(), error: (err as Error).message.split('\n')[0] };

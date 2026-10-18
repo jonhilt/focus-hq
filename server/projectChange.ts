@@ -32,6 +32,7 @@ export function changeProject(project: Project, patch: unknown): Project {
     autoQa: flag(p.autoQa, project.autoQa),
     autoSendBack: flag(p.autoSendBack, project.autoSendBack),
     autoMerge: flag(p.autoMerge, project.autoMerge),
+    qaProof: flag(p.qaProof, project.qaProof),
     hidden: flag(p.hidden, project.hidden),
   };
   if (typeof p.maxAgents === 'number' && Number.isFinite(p.maxAgents)) changed.maxAgents = Math.max(1, Math.min(DESKS_PER_ROOM, Math.round(p.maxAgents)));

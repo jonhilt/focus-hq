@@ -3,6 +3,7 @@ import { GhServerError, serverStatus } from '../github/runner';
 import { errorMessage } from '../util';
 import type { TriageDecision, Triager, TriageRequest } from './triage';
 import type { SinceVerdict } from './retest';
+import type { CommandRun } from './qaProof';
 import type { StageMoment } from './explainer';
 import type { MergeHeads, MergeTrial } from '../../shared/mergeCheck';
 import type { AgentRunner, AgentSession, BaseMerge, BranchState, ChecksRun, CloudTerminalRequest, RunHooks, RunRequest, WorkspaceOps } from './types';
@@ -65,6 +66,10 @@ export class Workspace extends Context.Service<Workspace, {
   mergeHeads(repo: string, number: number, baseBranch: string): Effect.Effect<MergeHeads, GitFailed>;
   /** Never fails: what went wrong building or checking the merge is a `broken` trial. */
   tryMerge(repo: string, heads: MergeHeads, chosen?: readonly string[]): Effect.Effect<MergeTrial>;
+  /** Runs a command in a checkout, without a shell. Never fails: where there's no real checkout, it couldn't start. */
+  runIn(dir: string, args: string[], timeoutMs: number): Effect.Effect<CommandRun>;
+  /** A file in a checkout; undefined when it isn't there. */
+  readIn(dir: string, file: string): Effect.Effect<string | undefined>;
 }>()('focus/agents/Workspace') {
   /** The workspace on its Promise-based operations: the live git ones, or the demo's pretend ones. */
   static fromOps(ops: WorkspaceOps): Layer.Layer<Workspace> {
@@ -97,6 +102,8 @@ export class Workspace extends Context.Service<Workspace, {
       mergeHeads: (repo, number, baseBranch) => git(`fetch PR #${number} and ${baseBranch}`, () => ops.mergeHeads(repo, number, baseBranch)),
       tryMerge: (repo, heads, chosen) =>
         git('check the merge', () => ops.tryMerge(repo, heads, chosen)).pipe(Effect.catch((err) => Effect.succeed<MergeTrial>({ kind: 'broken', ...heads, reason: err.reason }))),
+      runIn: (dir, args, timeoutMs) => Effect.promise(() => ops.runIn?.(dir, args, timeoutMs) ?? Promise.resolve({ code: null, output: 'there is no checkout to run it in' })),
+      readIn: (dir, file) => Effect.promise(() => ops.readIn?.(dir, file) ?? Promise.resolve(undefined)),
     }));
   }
 }

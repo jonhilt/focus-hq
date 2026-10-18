@@ -98,6 +98,7 @@ server/
     sessionTimeline.ts    a session told in order for the studio: asks, words, tool runs, and its subagents and workflows (phases, models, most at once, answers), whole or zoomed
     studioSessions.ts     the Claude Code sessions the studio may read (Claude Code's projects folder only): found by what they're about, loaded with their agents' transcripts
     qa.ts                 the QA officer: instructions, the report's schema and parsing, the PR comment
+    qaProof.ts            QA blocks only with proof: the hunting guidance, the proofs a report names, whether one holds
     demoRunner.ts         scripted pretend agents (and a pretend lead, planner and QA officer) for demo mode, and the made-up files of its repos
 client/src/
   main.ts                 renderer (toon shading + outline pass), loop, interaction, UI wiring

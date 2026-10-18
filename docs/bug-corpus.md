@@ -67,10 +67,10 @@ Of the 39 cases, 29 are traced (3 confirmed by their tests) and 10 have every su
 
 Whether the report merely named the bug's file is kept beside it: in the first baseline, all three such "catches" were other bugs in the same files.
 
-Two arms (`--arm`):
+It replays the office's QA as it is, which since the results below blocks a change only with proof ([QA → Proof](qa.md#proof)): `scripts/qaReview.ts` checks the report's proofs in the clone the way the office checks them in its checkout (`prove` in `server/agents/qaProof.ts`), so a review stops a change when its checked verdict is a fail, and a fail without a proof that held counts as passed. Runs are saved with the arm `proof`. The two arms below were the experiment it came from, run before that, and the replay no longer runs them:
 
-- **`qa`** (the default): the office's QA as it is. It stops a change on its own verdict.
-- **`hunt`**: QA with `HUNT_BRIEF` after its instructions: the corpus's kinds of bug (restart and shutdown, two at once, assumptions about git, GitHub and the shell, edge-case input), probed with tests that drive those paths rather than read for them, and every finding proved by a `*.proof.test.ts` that fails. The replay runs the proof files itself, and the review stops a change only when one fails on an assertion (`blocks`): code decides, not QA's say-so.
+- **`qa`**: QA as it was, stopping a change on its own say-so.
+- **`hunt`**: that QA with the hunting guidance after its instructions (the corpus's kinds of bug, probed with tests that drive those paths rather than read for them) and every finding proved by a `*.proof.test.ts` the replay ran itself, stopping a change only when one failed on an assertion. Its guidance, made general for other repos and test runners, is now QA's (`HUNTING`).
 
 | | |
 | --- | --- |
@@ -78,12 +78,11 @@ Two arms (`--arm`):
 | `pnpm run bug-replay --commits 3` | the first few |
 | `pnpm run bug-replay --control` | as many controls: commits that landed a pull request changing the office's code, that no listed bug came from and no listed fix made, spread over the same stretch of history. QA failing one is most likely a false alarm |
 | `pnpm run bug-replay --dry` | what it would review, without reviewing |
-| `pnpm run bug-replay --arm hunt` | the hunting review instead of the office's QA |
 | `pnpm run bug-replay --only <sha>` | one commit a bug came from |
 
 A review costs what one in the office does, about $0.60 and a few minutes: a full run with controls is 48 reviews, about $30 and a few hours. Runs are saved in `~/.focus/bug-replay/`. The rules are in `server/agents/bugReplay.ts`, the clones and sessions in `scripts/bugReplay.ts`, and QA's review session, shared with `qa-catch`, in `scripts/qaReview.ts`.
 
-### Results so far (2026-10-17, 26 bugs in 24 commits, 24 controls)
+### Results so far (2026-10-17, 26 bugs in 24 commits, 24 controls, before QA blocked only with proof)
 
 | arm | caught (judge) | stopped for another bug | controls stopped | cost |
 | --- | ---: | ---: | ---: | ---: |

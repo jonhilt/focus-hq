@@ -90,6 +90,12 @@ describe('mergeStep', () => {
       expect(mergeStep(pr(), review({ status: 'failed' }), office())).toEqual({ kind: 'blocked', reason: 'QA failed it' });
     });
 
+    it('leaves a pass with advice (a fail no proof held) for the captain to merge', () => {
+      const report = { verdict: 'pass' as const, advisory: true, summary: 'Double clicks save twice', checks: [], commands: [], files: [], captions: [] };
+      expect(mergeStep(pr(), review({ report }), office())).toEqual({ kind: 'blocked', reason: 'QA passed it with advice for the captain to read' });
+      expect(unpassedReason(review({ report }), pr())).toBeUndefined();
+    });
+
     it('stops when QA couldn’t finish', () => {
       expect(mergeStep(pr(), review({ status: 'error' }), office()).kind).toBe('blocked');
     });

@@ -10,31 +10,25 @@
 //   pnpm run bug-replay --only <sha>    one commit a bug came from
 //   pnpm run bug-replay --control       as many code-changing commits no listed bug came from, reviewed the same way
 //   pnpm run bug-replay --dry           say what it would review, without running any review
-//   pnpm run bug-replay --arm hunt      the hunting review instead of the office's QA: hunts the corpus's kinds of bug and
-//                                       stops a change only with a proof test that fails when the replay runs it
 //
+// QA blocks a change only with proof that holds when it's checked (docs/qa.md#proof): scripts/qaReview.ts checks it in
+// the clone as the office does in its checkout, so a review stops a change when its (checked) verdict is a fail.
 // A catch counts only when a judge (a separate model, holding the fix's own diff as the answer key) says one of the
 // review's findings is the very bug the fix fixed; whether the report merely named the bug's file is kept beside it.
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { BugCase } from '../server/agents/bugCorpus';
-import { parseFixes, prNumber, vitestRun } from '../server/agents/bugCorpus';
+import { parseFixes, prNumber } from '../server/agents/bugCorpus';
 import {
-  type Arm,
-  blocks,
   changesCode,
-  HUNT_BRIEF,
   JUDGE_SCHEMA,
   JUDGE_SYSTEM,
   type Judged,
   judgePrompt,
   pickControls,
   pointsAt,
-  type Proof,
-  proofFiles,
-  proofOf,
   type ReplayControl,
   replayLines,
   type ReplayResult,
@@ -59,7 +53,7 @@ const args = process.argv.slice(2);
 const opt = (name: string) => (args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : undefined);
 const dry = args.includes('--dry');
 const control = args.includes('--control');
-const arm: Arm = opt('arm') === 'hunt' ? 'hunt' : 'qa';
+const arm = 'proof';
 /** The judge: a different model from QA's, so it isn't grading its own kind of answer. */
 const JUDGE_MODEL = 'claude-opus-5-5';
 
@@ -109,36 +103,25 @@ async function asPullRequest(sha: string): Promise<PullRequestDetail> {
   };
 }
 
-/** The proof files a hunting review left in its clone, run by the replay itself (with the clone's own install, or this checkout's). */
-async function runProof(dir: string): Promise<Proof> {
-  const files = proofFiles(await run('git', ['-C', dir, 'status', '--porcelain', '--untracked-files=all']));
-  if (!files.length) return { files, failing: [] };
-  if (!existsSync(path.join(dir, 'node_modules'))) symlinkSync(path.join(ROOT, 'node_modules'), path.join(dir, 'node_modules'));
-  const out = path.join(dir, 'proof.json');
-  // vitest exits non-zero when a test fails, which is what a proof is for: the report is in the file either way
-  await run(path.join(dir, 'node_modules', '.bin', 'vitest'), ['run', '--reporter=json', `--outputFile=${out}`, ...files], { cwd: dir, timeoutMs: 5 * 60_000 }).catch(() => '');
-  return proofOf(files, existsSync(out) ? vitestRun(readFileSync(out, 'utf8'), realpathSync(dir)) : undefined);
-}
-
 async function reviewAt(sha: string, root: string) {
   const dir = await cloneAt(sha, root);
   try {
-    const r = await review(REPO, dir, await asPullRequest(sha), state, arm === 'hunt' ? HUNT_BRIEF : '');
-    const proof = arm === 'hunt' && r.report ? await runProof(dir) : undefined;
-    return { ...r, proof, blocked: r.report ? blocks(arm, r.report, proof) : false };
+    const r = await review(REPO, dir, await asPullRequest(sha), state);
+    // the report's verdict is already the checked one: a fail stands only with proof that held
+    return { ...r, blocked: r.report?.verdict === 'fail' };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 }
 
 /** The judge's call on whether a review found the bug a fix fixed, with the fix's diff (code, not its tests) as the answer key. */
-async function judge(bug: BugCase, report: NonNullable<Awaited<ReturnType<typeof reviewAt>>['report']>, proof: Proof | undefined): Promise<{ judged: Judged; costUsd: number }> {
+async function judge(bug: BugCase, report: NonNullable<Awaited<ReturnType<typeof reviewAt>>['report']>): Promise<{ judged: Judged; costUsd: number }> {
   const diff = await git('diff', `${bug.fix}^`, bug.fix, '--', '.', ':(exclude)*.test.ts');
   const result = await runReadOnly({
     cwd: os.tmpdir(),
     system: JUDGE_SYSTEM,
     systemAppend: '',
-    prompt: judgePrompt({ subject: bug.subject, diff }, report, proof),
+    prompt: judgePrompt({ subject: bug.subject, diff }, report),
     settings: state.settings,
     signal: new AbortController().signal,
     activity: () => undefined,
@@ -165,7 +148,7 @@ async function replay(sha: string, bugs: BugCase[], root: string): Promise<Repla
     }
     const sites = sitesOf(by?.lines ?? [], [...new Set(bug.buggyLines.map((l) => l.file))]);
     // only a review that stopped the change can have caught the bug: the judge isn't asked about one that let it through
-    const j = r.blocked ? await judge(bug, r.report, r.proof) : undefined;
+    const j = r.blocked ? await judge(bug, r.report) : undefined;
     results.push({
       ...base,
       costUsd: base.costUsd + (j?.costUsd ?? 0),
@@ -173,7 +156,6 @@ async function replay(sha: string, bugs: BugCase[], root: string): Promise<Repla
       summary: r.report.summary,
       pointed: pointsAt(r.report, sites),
       ...(j && { judged: j.judged }),
-      ...(r.proof && { proof: r.proof }),
       report: r.report,
     });
   }
@@ -184,7 +166,7 @@ async function controlled(c: { sha: string; subject: string }, root: string): Pr
   const r = await reviewAt(c.sha, root);
   const base = { sha: c.sha, ...(prNumber(c.subject) && { pr: prNumber(c.subject) }), costUsd: r.costUsd, minutes: r.minutes };
   return r.report
-    ? { ...base, outcome: r.blocked ? 'false-alarm' : 'clean', summary: r.report.summary, ...(r.proof && { proof: r.proof }), report: r.report }
+    ? { ...base, outcome: r.blocked ? 'false-alarm' : 'clean', summary: r.report.summary, report: r.report }
     : { ...base, outcome: 'error', summary: r.error ?? 'QA finished without a report' };
 }
 

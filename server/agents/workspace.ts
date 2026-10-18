@@ -8,6 +8,7 @@ import { type MergeHeads, mergeCheckScripts, type MergeTrial, mergeTreeConflicts
 import { sameCommit } from '../../shared/qa';
 import { autoMergePlan, conflictStages, type MergeRule, mergeRules } from './conflicts';
 import { checkCommands, rangeDiffUnchanged, type SinceVerdict } from './retest';
+import type { CommandRun } from './qaProof';
 import type { BaseMerge, BranchState, ChecksRun, WorkspaceOps } from './types';
 import { claimBranch, heldMessage, orphanedWorkspaces, parseWorktrees, retryLockRace, trashName } from './worktrees';
 
@@ -429,6 +430,29 @@ export async function unshippedCommits(dir: string, baseBranch: string, shipped?
   return out.split('\n').map((l) => l.trim()).filter(Boolean);
 }
 
+/**
+ * Runs a command in a checkout, without a shell (QA's proofs, docs/qa.md#proof): its exit code, null when it timed out
+ * or couldn't start, and everything it printed, stdout then stderr. Never rejects.
+ */
+export async function runIn(dir: string, args: string[], timeoutMs: number): Promise<CommandRun> {
+  const [cmd, ...rest] = args;
+  if (!cmd) return { code: null, output: 'no command' };
+  try {
+    return { code: 0, output: await run(cmd, rest, { cwd: dir, timeoutMs }) };
+  } catch (err) {
+    if (err instanceof CommandError) return { code: err.code, output: [err.stdout, err.stderr].filter(Boolean).join('\n') || err.message };
+    return { code: null, output: errorMessage(err) };
+  }
+}
+
+/** A file in a checkout, named from its root: its contents, or undefined when it isn't there or the name leads outside it. */
+export async function readIn(dir: string, file: string): Promise<string | undefined> {
+  const root = path.resolve(dir);
+  const full = path.resolve(root, file);
+  if (full !== root && !full.startsWith(root + path.sep)) return undefined;
+  return fs.promises.readFile(full, 'utf8').catch(() => undefined);
+}
+
 /** The files HEAD changes against origin's `baseBranch`, as the three-dot diff QA reviews names them. */
 export async function changedFiles(dir: string, baseBranch: string): Promise<string[]> {
   const out = await git(dir, ['diff', '--name-only', `origin/${baseBranch}...HEAD`]);
@@ -620,4 +644,6 @@ export const liveWorkspace: WorkspaceOps = {
   runChecks: runChecks,
   mergeHeads: mergeHeads,
   tryMerge: tryMerge,
+  runIn: runIn,
+  readIn: readIn,
 };
