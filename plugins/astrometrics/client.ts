@@ -2,11 +2,11 @@
 // of the office's state machines with where that project's runs of it are now, lit; E on it opens it up close, with a
 // tab for each machine to toggle through, and the screen follows the one picked.
 import * as THREE from 'three';
-import { canvasTexture, type ClientPlugin, h, Hologram, hover, type MachineRun, makeCanvas, office, onPluginState, OVERLAY_LAYER, pluginOn, pluginState, type ShipHost, type ShipPart, type Ui } from '../../plugin-api/client';
-import { INK, machineSvg, occupied } from './draw';
+import { callPlugin, canvasTexture, type ClientPlugin, h, Hologram, hover, type MachineRun, type MachineStep, makeCanvas, office, onPluginState, OVERLAY_LAYER, pluginOn, pluginState, type ShipHost, type ShipPart, timeAgo, type Ui } from '../../plugin-api/client';
+import { INK, machineSvg } from './draw';
 import { ASTROMETRICS, type Astrometrics, type MachineLayout } from './shared';
 import { HALL_MACHINES, hallMachines } from './spot';
-import { drawDue, fit, type ScreenView, screenView, tabs } from './view';
+import { closeUpView, drawDue, fit, followedRun, type ScreenView, screenView, tabs, trailSteps } from './view';
 import './astrometrics.css';
 
 const now = () => pluginState<Astrometrics>(ASTROMETRICS);
@@ -38,36 +38,55 @@ async function drawScreen(ctx: CanvasRenderingContext2D, w: number, h: number, v
   ctx.drawImage(img, at.x, at.y, at.w, at.h);
 }
 
-/** The runs of the machine in each state, as a list beside the drawing. */
-function whereTheyAre(layout: MachineLayout, runs: readonly MachineRun[]): HTMLElement {
+/** The machine's runs in the project, each a button to follow its trail (the one followed on). */
+function runButtons(layout: MachineLayout, runs: readonly MachineRun[], followed: string | undefined, follow: (key: string | undefined) => void): HTMLElement {
   if (!runs.length) return h('p', { class: 'muted' }, `No ${layout.runs} in this project is in this machine now.`);
-  const { at } = occupied(runs);
-  return h('ul', { class: 'am-where' }, ...[...at].map(([state, who]) => h('li', null, h('code', null, state), ' ', who.join(', '))));
+  return h('div', { class: 'am-runs' },
+    h('small', { class: 'muted' }, `Follow a ${layout.runs}’s trail: `),
+    ...runs.map((r) => h('button', { class: `btn small${r.key === followed ? ' on' : ''}`, onclick: () => follow(r.key === followed ? undefined : r.key) }, `${r.label} · ${r.state}`)));
 }
 
-/** The machines up close, on `projectId`'s runs: a tab each, the one picked drawn large, and where its runs are. */
+/** A followed run's last steps, numbered as its trail is, with when. */
+function timeline(run: MachineRun, steps: readonly MachineStep[]): HTMLElement {
+  return h('div', null, h('strong', null, `${run.label}’s last steps`), h('ol', { class: 'am-trail' },
+    ...trailSteps(steps).map((s) => h('li', null, h('span', { class: 'am-n' }, String(s.n)), ' ', h('code', null, s.state), ' ', h('small', { class: 'muted' }, s.t ? timeAgo(s.t) : '')))));
+}
+
+/** The machines up close, on `projectId`'s runs: a tab each, the one picked drawn large, and its runs to follow. */
 function closeUp(ui: Ui, projectId: string): void {
   const body = h('div', { class: 'am-close-up' });
+  let followed: string | undefined;
+  let steps: MachineStep[] = [];
   const pick = (id: string) => {
     picked = id;
+    void load();
+  };
+  const follow = (key: string | undefined) => {
+    followed = key;
+    void load();
+  };
+  // the followed run's path, read afresh whenever it might have moved
+  const load = async () => {
+    const run = followedRun(screenView(now(), picked, projectId).runs, followed);
+    steps = run ? await callPlugin<MachineStep[]>(ASTROMETRICS, '/path', { machine: run.machine, key: run.key }).catch(() => []) : [];
     render();
   };
   const render = () => {
-    const view = screenView(now(), picked, projectId);
+    const view = closeUpView(now(), picked, projectId, followed, steps);
     if (!view.layout) {
       body.replaceChildren(h('p', { class: 'muted' }, view.sub));
       return;
     }
     const buttons = tabs(now(), picked, projectId).map((t) => h('button', { class: `btn small${t.on ? ' on' : ''}`, onclick: () => pick(t.id) }, t.label));
     const drawing = h('div', { class: 'am-drawing' });
-    drawing.innerHTML = machineSvg(view.layout, view.runs);
-    body.replaceChildren(h('div', { class: 'am-tabs' }, ...buttons), h('p', { class: 'muted' }, view.layout.about), drawing, whereTheyAre(view.layout, view.runs));
+    drawing.innerHTML = machineSvg(view.layout, view.lit, view.trail);
+    body.replaceChildren(h('div', { class: 'am-tabs' }, ...buttons), h('p', { class: 'muted' }, view.layout.about), runButtons(view.layout, view.runs, view.run?.key, follow), drawing, ...(view.run ? [timeline(view.run, view.trail)] : []));
   };
   render();
   const project = office.project(projectId);
   ui.panels.open({ title: `State machines${project ? ` · ${project.name}` : ''}`, full: true, body });
   // it follows the runs while it's open
-  ui.panels.own(onPluginState(ASTROMETRICS, render));
+  ui.panels.own(onPluginState(ASTROMETRICS, () => void load()));
 }
 
 /** The screen's canvas. */

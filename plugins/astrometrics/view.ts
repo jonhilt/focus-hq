@@ -1,6 +1,7 @@
 // What the machines' screen and their close-up say, decided apart from drawing them (client.ts draws): which machine
 // is shown, its heading, the tabs to toggle through, and what changes when the screen's drawn again.
-import type { MachineRun } from '../../plugin-api/shared';
+import type { MachineRun, MachineStep } from '../../plugin-api/shared';
+import { TRAIL_STEPS } from './draw';
 import type { Astrometrics, MachineLayout } from './shared';
 
 /** The machine picked, by id, or the first there is. */
@@ -52,3 +53,21 @@ export function fit(w: number, h: number, box: { x: number; y: number; w: number
 
 /** Whether a screen showing `shown` draws `version` now: it changed, and it isn't still drawing the last. */
 export const drawDue = (screen: { shown: string; drawing: boolean }, version: string): boolean => version !== screen.shown && !screen.drawing;
+
+/** The run followed up close, if it's still one of `runs` (it may have gone home, or be in another machine). */
+export const followedRun = (runs: readonly MachineRun[], key: string | undefined): MachineRun | undefined => runs.find((r) => r.key === key);
+
+/** A trail's steps as the close-up lists them, numbered as the drawing numbers them, the latest last. */
+export function trailSteps(steps: readonly MachineStep[]): (MachineStep & { n: number })[] {
+  return steps.slice(-TRAIL_STEPS).map((step, i) => ({ ...step, n: i + 1 }));
+}
+
+/**
+ * What the close-up draws: the machine shown and its runs, and with a run followed (still in it), only that run, its
+ * trail's `steps`; without one, no trail.
+ */
+export function closeUpView(state: Astrometrics | undefined, picked: string, projectId: string, followed: string | undefined, steps: readonly MachineStep[]): ScreenView & { run?: MachineRun; lit: MachineRun[]; trail: readonly MachineStep[] } {
+  const view = screenView(state, picked, projectId);
+  const run = followedRun(view.runs, followed);
+  return { ...view, run, lit: run ? [run] : view.runs, trail: run ? steps : [] };
+}

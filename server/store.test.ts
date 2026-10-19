@@ -295,3 +295,20 @@ describe('a project’s plugins', () => {
     expect(project.name).toBe('Focus');
   });
 });
+
+describe('a run’s path through its machine', () => {
+  it('reads each machine’s path from its own journal, and none for a machine it doesn’t know', () => {
+    const store = new Store(false);
+    store.journal('a1', { kind: 'waiting' });
+    store.journal('a1', { kind: 'turn-requested', turn: 't1', turnKind: 'work', prompt: 'Go' });
+    store.journal('a1', { kind: 'turn-started', turn: 't1', session: 's1' });
+    store.journal('a1', { kind: 'decided', turn: 't1', target: 'deliver' });
+    store.sliceJournal('l1', { kind: 'started', slice: 1, branch: 'focus/x' });
+    store.sliceJournal('l1', { kind: 'shipping', title: 'x', summary: 'y' });
+    expect(store.machinePath('run', 'a1').map((s) => s.state)).toEqual(['idle', 'waiting', 'turn.requested', 'turn.started']);
+    expect(store.machinePath('turn', 'a1').map((s) => s.state)).toEqual(['deliver']);
+    expect(store.machinePath('slice', 'l1').map((s) => s.state)).toEqual(['working', 'shipping']);
+    expect(store.machinePath('review', 'acme/web#1').map((s) => s.state)).toEqual(['idle']);
+    expect(store.machinePath('nonsense', 'a1')).toEqual([]);
+  });
+});

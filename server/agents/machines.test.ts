@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { setup } from 'xstate';
 import type { Agent, Project } from '../../shared/types';
-import { leafOf, machineGraph, MACHINES, machineRuns } from './machines';
+import { leafOf, machineGraph, MACHINES, machineRuns, PATH_MAX, pathOf, turnPath } from './machines';
 
 const about = { id: 'door', title: 'A door', about: 'Whether it opens.', runs: 'door' };
 
@@ -93,5 +93,37 @@ describe('machineRuns', () => {
       reviews: [{ key: 'acme/web#1', phase: 'idle', seq: 0 }],
     });
     for (const run of runs) expect(states.get(run.machine)?.has(run.state), `${run.machine}: ${run.state}`).toBe(true);
+  });
+});
+
+describe('pathOf', () => {
+  // a machine that's only its phase: each fact names the phase it moves to
+  const evolve = (_: { phase: string }, e: { to: string }) => ({ phase: e.to });
+  const fact = (seq: number, to: string) => ({ seq, t: seq * 1000, to });
+
+  it('starts where the machine does, then adds each state a fact moved it into, not one that left it where it was', () => {
+    expect(pathOf([fact(1, 'waiting'), fact(2, 'waiting'), fact(3, 'turn')], evolve, { phase: 'idle' })).toEqual([
+      { state: 'idle', seq: 0, t: 1000 },
+      { state: 'waiting', seq: 1, t: 1000 },
+      { state: 'turn', seq: 3, t: 3000 },
+    ]);
+    expect(pathOf([], evolve, { phase: 'idle' })).toEqual([{ state: 'idle', seq: 0, t: 0 }]);
+  });
+
+  it('keeps a long-lived run’s last steps', () => {
+    const facts = Array.from({ length: PATH_MAX * 2 }, (_, i) => fact(i + 1, i % 2 ? 'idle' : 'turn'));
+    const path = pathOf(facts, evolve, { phase: 'idle' });
+    expect(path).toHaveLength(PATH_MAX);
+    expect(path.at(-1)?.seq).toBe(PATH_MAX * 2);
+  });
+});
+
+describe('turnPath', () => {
+  it('is what followed each turn, as it was decided', () => {
+    expect(turnPath([
+      { kind: 'turn-ended', seq: 3, t: 3 },
+      { kind: 'decided', seq: 4, t: 4, target: 'carry-on' },
+      { kind: 'decided', seq: 9, t: 9, target: 'lead-done' },
+    ])).toEqual([{ state: 'carry-on', seq: 4, t: 4 }, { state: 'lead-done', seq: 9, t: 9 }]);
   });
 });

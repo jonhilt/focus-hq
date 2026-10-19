@@ -4,3 +4,7 @@
 .am-drawing { overflow-x: auto; margin: 8px 0; background: #0b1020; border-radius: 12px; padding: 8px; }
 .am-drawing svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
 .am-where { margin: 6px 0; padding-left: 18px; font-size: 15px; line-height: 1.6; }
+.am-runs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0; }
+.am-runs .btn.on { background: #7fe3ff; color: #0b1020; }
+.am-trail { margin: 6px 0; padding-left: 4px; list-style: none; font-size: 15px; line-height: 1.7; }
+.am-trail .am-n { display: inline-block; min-width: 22px; padding: 0 6px; border-radius: 10px; background: #7fe3ff; color: #0b1020; font-weight: 700; text-align: center; }

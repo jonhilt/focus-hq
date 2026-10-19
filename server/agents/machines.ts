@@ -1,10 +1,11 @@
 import type { AnyStateMachine, AnyStateNode, StateValue } from 'xstate';
-import type { MachineGraph, MachineRun, MachineState, MachineTransition } from '../../shared/machines';
+import type { MachineGraph, MachineRun, MachineState, MachineStep, MachineTransition } from '../../shared/machines';
 import type { Agent, Project } from '../../shared/types';
-import { reviewMachine } from './reviewJournal';
-import { journalMachine } from './runJournal';
+import { Journals } from '../journals';
+import { EMPTY_REVIEW, evolveReview, reviewMachine, type ReviewFact, type ReviewState } from './reviewJournal';
+import { EMPTY_RUN, evolve, journalMachine, type RunFact, type RunState } from './runJournal';
 import { runMachine } from './runMachine';
-import { sliceMachine } from './sliceJournal';
+import { EMPTY_SLICE, evolveSlice, sliceMachine, type SliceFact, type SliceState } from './sliceJournal';
 
 // The office's state machines (docs/agents.md), each as data a drawing is made from (`machineGraph`), and where each
 // run of one is now (`machineRuns`): an agent's run, what followed their last turn, a goal's slices, a pull request's
@@ -95,4 +96,40 @@ export function machineRuns(from: RunSources): MachineRun[] {
     runs.push({ machine: 'review', key: review.key, label: review.key, ...(projectId && { projectId }), state: leafOf(review.phase), seq: review.seq });
   }
   return runs;
+}
+
+/** How many of its last steps a run's path keeps: enough to read a goal's whole story, not every turn of a long-lived crew member. */
+export const PATH_MAX = 60;
+
+/**
+ * A run's path through its machine, from its journal: the state it started in, then each state a fact moved it into
+ * (a fact that leaves it where it is adds nothing), its last `PATH_MAX` steps.
+ */
+export function pathOf<S extends { phase: StateValue }, E extends { seq: number; t: number }>(entries: readonly E[], evolve: (state: S, entry: E) => S, empty: S): MachineStep[] {
+  let state = empty;
+  const steps: MachineStep[] = [{ state: leafOf(empty.phase), seq: 0, t: entries[0]?.t ?? 0 }];
+  for (const entry of entries) {
+    state = evolve(state, entry);
+    const leaf = leafOf(state.phase);
+    if (leaf !== steps[steps.length - 1].state) steps.push({ state: leaf, seq: entry.seq, t: entry.t });
+  }
+  return steps.slice(-PATH_MAX);
+}
+
+/** What followed each of an agent's turns, from their run journal: the target each was decided to, in order. */
+export function turnPath(entries: readonly { kind: string; seq: number; t: number; target?: string }[]): MachineStep[] {
+  return entries.flatMap((e) => (e.kind === 'decided' && e.target ? [{ state: e.target, seq: e.seq, t: e.t }] : [])).slice(-PATH_MAX);
+}
+
+/** A run's path through machine `machine` (`key` an agent's id, or a pull request's key), from the journal it's kept in: none for a machine it isn't. */
+export function machinePath(
+  machine: string,
+  key: string,
+  journals: { runs: Journals<RunFact, RunState>; slices: Journals<SliceFact, SliceState>; reviews: Journals<ReviewFact, ReviewState> },
+): MachineStep[] {
+  if (machine === 'run') return pathOf(journals.runs.entries(key), evolve, EMPTY_RUN);
+  if (machine === 'turn') return turnPath(journals.runs.entries(key));
+  if (machine === 'slice') return pathOf(journals.slices.entries(key), evolveSlice, EMPTY_SLICE);
+  if (machine === 'review') return pathOf(journals.reviews.entries(key), evolveReview, EMPTY_REVIEW);
+  return [];
 }

@@ -47,3 +47,11 @@ export interface MachineRun {
   /** Its journal's last fact's number. */
   seq: number;
 }
+
+/** A step on a run's path through its machine (`PluginHost.machinePath`): the state it went into, and when. */
+export interface MachineStep {
+  state: string;
+  /** The journal's fact that took it there. */
+  seq: number;
+  t: number;
+}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MachineRun } from '../../plugin-api/shared';
 import type { Astrometrics, MachineLayout } from './shared';
-import { drawDue, fit, pickedLayout, runsOf, screenView, tabs } from './view';
+import { closeUpView, drawDue, fit, followedRun, pickedLayout, runsOf, screenView, tabs, trailSteps } from './view';
 
 const layout = (id: string, title: string, runs: string): MachineLayout => ({ id, title, about: '', runs, width: 100, height: 50, states: [], edges: [] });
 const run = (machine: string, key: string, state: string, projectId = 'p1'): MachineRun => ({ machine, key, label: key, projectId, state, seq: 1 });
@@ -64,5 +64,38 @@ describe('drawDue', () => {
     expect(drawDue({ shown: 'a', drawing: false }, 'b')).toBe(true);
     expect(drawDue({ shown: 'a', drawing: false }, 'a')).toBe(false);
     expect(drawDue({ shown: 'a', drawing: true }, 'b')).toBe(false);
+  });
+});
+
+describe('following a run', () => {
+  it('follows a run while it’s still in the machine shown, and numbers its last steps as the drawing does', () => {
+    expect(followedRun(state.runs, 'a2')?.state).toBe('turn.started');
+    expect(followedRun(state.runs, 'gone')).toBeUndefined();
+    expect(followedRun(state.runs, undefined)).toBeUndefined();
+    const steps = Array.from({ length: 15 }, (_, i) => ({ state: `s${i}`, seq: i, t: i }));
+    const listed = trailSteps(steps);
+    expect(listed).toHaveLength(12);
+    expect(listed[0]).toEqual({ state: 's3', seq: 3, t: 3, n: 1 });
+    expect(listed.at(-1)?.n).toBe(12);
+  });
+});
+
+describe('closeUpView', () => {
+  const steps = [{ state: 'idle', seq: 0, t: 0 }, { state: 'turn.started', seq: 3, t: 3 }];
+
+  it('lights only the run followed, with its trail', () => {
+    const view = closeUpView(state, 'run', 'p1', 'a2', steps);
+    expect(view.run?.key).toBe('a2');
+    expect(view.lit.map((r) => r.key)).toEqual(['a2']);
+    expect(view.trail).toBe(steps);
+  });
+
+  it('lights every run, with no trail, when none is followed or the one followed isn’t in the machine shown', () => {
+    for (const followed of [undefined, 'acme/web#1']) {
+      const view = closeUpView(state, 'run', 'p1', followed, steps);
+      expect(view.run).toBeUndefined();
+      expect(view.lit.map((r) => r.key)).toEqual(['a1', 'a2']);
+      expect(view.trail).toEqual([]);
+    }
   });
 });

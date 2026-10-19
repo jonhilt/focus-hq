@@ -17,8 +17,8 @@ import { EMPTY_RUN, evolve, type JournalEntry, type RunFact, type RunState, runV
 import { EMPTY_SLICE, evolveSlice, type SliceFact, type SliceState } from './agents/sliceJournal';
 import { Journals, type Stamped } from './journals';
 import { EMPTY_PERSONAL_LOG, evolvePersonalLog, type PersonalFact, type PersonalLog } from '../shared/personalLog';
-import { machineRuns } from './agents/machines';
-import type { MachineRun } from '../shared/machines';
+import { machinePath, machineRuns } from './agents/machines';
+import type { MachineRun, MachineStep } from '../shared/machines';
 import type { LentJournals } from './plugins/contract';
 import { fromBeforePlugins, type SavedBeforePlugins } from './plugins/migrate';
 import { newId } from './util';
@@ -354,6 +354,11 @@ export class Store {
 
   /** Told of each journal that stepped its machine (`server/agents/machines.ts`), by the machine's id and the run's key. */
   stepped?: (machine: string, key: string) => void;
+
+  /** A run's path through machine `machine` (`key` an agent's id, or a pull request's key), from its journal: none for a machine it isn't. */
+  machinePath(machine: string, key: string): MachineStep[] {
+    return machinePath(machine, key, { runs: this.runs, slices: this.slices, reviews: this.reviewJournals });
+  }
 
   /** Where every run of each of the office's machines is now (`machineRuns`). */
   machineRuns(): MachineRun[] {

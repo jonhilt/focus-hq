@@ -24,6 +24,8 @@ const astrometrics: FocusPlugin = {
       (err: unknown) => state.set({ error: `The machines couldn’t be laid out: ${errorMessage(err)}` }),
     );
     return {
+      // a run's path through one of the machines, from its journal, for the close-up to draw its trail
+      routes: [{ method: 'post', path: '/path', handle: ({ body }) => host.machinePath(String(body.machine ?? ''), String(body.key ?? '')) }],
       machineStepped: soon,
       // agents come and go, and reviews leave the boards, without a journal stepping
       boardRefreshed: soon,

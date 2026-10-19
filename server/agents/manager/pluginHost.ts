@@ -89,6 +89,7 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
     transcript: (sessionId) => (lent.transcript ?? core.ledger.readTranscript)?.(sessionId) ?? Promise.resolve(undefined),
     ledger,
     machines: () => ({ graphs: MACHINES, runs: lend(core.store.machineRuns()) }),
+    machinePath: (machine, key) => core.store.machinePath(machine, key),
     journals: (since) => lend(core.store.journalsSince(since)),
     record: (projectId, entry, at) => core.ledger.record(projectId, entry, at),
     settings: () => lend(core.store.settings),

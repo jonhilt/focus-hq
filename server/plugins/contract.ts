@@ -5,7 +5,7 @@ import type { Effect } from 'effect';
 import type { ZodType } from 'zod';
 import type { LedgerEntry, LedgerEvent } from '../../shared/ledger';
 import type { PersonalEntry } from '../../shared/personalLog';
-import type { MachineGraph, MachineRun } from '../../shared/machines';
+import type { MachineGraph, MachineRun, MachineStep } from '../../shared/machines';
 import type { Agent, Issue, MessageReply, Planner, Project, QueuedGoal, ResumeHow, Settings, SignIn, Snapshot, SystemModel, TermLine } from '../../shared/types';
 import type { ShipStatus } from '../agents/shipStatus';
 import type { GitHub } from '../github/service';
@@ -204,6 +204,12 @@ export interface PluginHost {
    * review on the boards.
    */
   machines(): { graphs: readonly Readonly<MachineGraph>[]; runs: readonly Readonly<MachineRun>[] };
+  /**
+   * A run's path through one of the machines (`machine`'s id, `key` its run's, as `machines()` gives them), read from
+   * its journal: the state it started in, then each state it moved into and when, its last steps. None for a run the
+   * office has no journal of.
+   */
+  machinePath(machine: string, key: string): readonly Readonly<MachineStep>[];
   /**
    * The office's journals written to since `since` (by their files' times), each with every fact it holds, oldest
    * first: each agent's run journal, each pull request's review journal and each goal's slice journal.
