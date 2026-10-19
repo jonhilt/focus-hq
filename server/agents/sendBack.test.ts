@@ -33,6 +33,8 @@ const issue = { number: 1, title: 'Add a dark mode toggle to the header' };
 /** A developer's PR, delivered, and QA failing it: the office, the developer and the PR's key. */
 async function failedPr(triager?: Triager, before?: (o: ReturnType<typeof office>, dev: string) => Promise<void>, ops = workspace, report: object = fail, verdict = 'failed') {
   const o = office(ops, undefined, triager);
+  // a new project leaves a failed PR with the captain: these are about sending it back
+  o.project.autoSendBack = true;
   const { id: dev } = o.agents.hire(o.project.id, 'demo/webshop-frontend', issue);
   await until(() => o.claude.turns.length === 1);
   o.claude.turns[0].end({ ok: true, summary: 'Dark mode' });

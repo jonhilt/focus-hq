@@ -210,6 +210,9 @@ export class Store {
       maxAgents: DESKS_PER_ROOM,
       autoAssign: false,
       autoLabel: '',
+      // A new project starts with QA reporting to the captain rather than sending fails back by itself: each round costs a
+      // developer's session and QA's, so it's theirs to switch on (docs/qa.md). Projects from before keep theirs.
+      autoSendBack: false,
       createdAt: Date.now(),
     };
     this.projects.push(project);

@@ -126,7 +126,9 @@ describe('auto-merge on a board refresh', () => {
 
   it('re-runs failing checks once at a head, then sends them back to the developer', async () => {
     const failing: Partial<PullRequest> = { checks: 'failing', failedChecks: [{ name: 'CI / test', url: 'https://example.test/run', runId: RUN }] };
-    const { store, reviewed, refresh, said, reruns } = await auto(failing);
+    const { store, project, reviewed, refresh, said, reruns } = await auto(failing);
+    // a new project leaves a failed PR with the captain: switched on, checks that keep failing go back to the developer
+    project.autoSendBack = true;
     reviewed();
     await refresh();
     expect(reruns).toEqual([[RUN]]);

@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { type Agent, type QaReview, ROOM_THEMES } from '../shared/types';
+import { autoQaFor, autoSendBackFor, qaProofFor } from '../shared/qa';
 
 // paths come from the environment when config.ts loads, so the data folder is set before the store is imported
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-store-'));
@@ -104,6 +105,15 @@ describe('a new room’s theme', () => {
     const store = new Store(false);
     expect(store.addProject('Shop', undefined, 'moon').theme).toBe('moon');
     expect(ROOM_THEMES).toContain(store.addProject('Dodger').theme);
+  });
+});
+
+describe('a new project’s QA', () => {
+  it('tests every PR but leaves failed ones with the captain, while a project from before keeps sending them back', () => {
+    const store = new Store(false);
+    const fresh = store.addProject('Shop');
+    expect([autoQaFor(fresh), autoSendBackFor(fresh), qaProofFor(fresh)]).toEqual([true, false, true]);
+    expect(autoSendBackFor({ ...fresh, autoSendBack: undefined })).toBe(true);
   });
 });
 

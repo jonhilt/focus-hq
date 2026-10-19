@@ -65,7 +65,7 @@ export interface Project {
   preview?: PreviewConfig;
   /** The QA officer tests every PR the office opens or updates (missing = on). */
   autoQa?: boolean;
-  /** A PR the office opened that fails QA goes back to a developer to fix (missing = on). */
+  /** A PR the office opened that fails QA goes back to a developer to fix (missing = on; a new project starts off). */
   autoSendBack?: boolean;
   /** PRs the office opened merge by themselves once QA passed their head commit and checks are green (missing = off). */
   autoMerge?: boolean;
