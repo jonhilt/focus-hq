@@ -154,6 +154,38 @@ describe('Listening', () => {
     expect(closed.count).toBe(1);
   });
 
+  // a message that went in as the turn ended isn't in the result's queued count, but Claude Code takes it in a turn
+  it('waits for the turn a message sent as the turn ended gets, and stops once it’s over', () => {
+    const { closed, listening } = session();
+    listening.messageSent();
+    listening.turnEnded(false);
+    expect(closed.count).toBe(0);
+    listening.turnStarted();
+    listening.heard();
+    vi.advanceTimersByTime(5000);
+    expect(closed.count).toBe(0);
+    listening.turnEnded(false);
+    expect(closed).toEqual({ count: 1, waited: [false] });
+  });
+
+  it('stops after the grace if no turn comes for a message sent as the turn ended', () => {
+    const { closed, listening } = session();
+    listening.messageSent();
+    listening.turnEnded(false);
+    vi.advanceTimersByTime(999);
+    expect(closed.count).toBe(0);
+    vi.advanceTimersByTime(1);
+    expect(closed).toEqual({ count: 1, waited: [false] });
+  });
+
+  it('stops at once when Claude Code said something after the message: it took it in the turn', () => {
+    const { closed, listening } = session();
+    listening.messageSent();
+    listening.heard();
+    listening.turnEnded(false);
+    expect(closed.count).toBe(1);
+  });
+
   it('keeps listening while a message is queued, or a task runs in the background', () => {
     const { closed, listening } = session();
     listening.turnEnded(true);

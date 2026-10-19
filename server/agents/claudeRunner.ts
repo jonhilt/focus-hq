@@ -84,6 +84,8 @@ export class Listening {
   private turnOver = false;
   private background: string[] = [];
   private grace?: ReturnType<typeof setTimeout>;
+  /** A message went in after the last thing Claude Code said: it may not have read it before ending its turn. */
+  private unheard = false;
 
   constructor(
     private readonly close: (waited: boolean) => void,
@@ -96,10 +98,30 @@ export class Listening {
     this.cancelGrace();
   }
 
-  /** A turn has ended, with `queued` messages still to take. */
+  /** The office sent the session a message. */
+  messageSent(): void {
+    this.unheard = true;
+  }
+
+  /** Claude Code said something other than a turn's result: whatever went in before it, it has read. */
+  heard(): void {
+    this.unheard = false;
+  }
+
+  /**
+   * A turn has ended, with `queued` messages still to take. A message sent as the turn ended isn't counted in
+   * `queued` (it was still on its way), yet Claude Code takes it in a turn of its own: closing the input then left that
+   * turn nobody listening. So with a message unheard, it waits for that turn, closing after `graceMs` if none comes.
+   */
   turnEnded(queued: boolean): void {
     this.turnOver = !queued;
-    if (this.turnOver && !holdsInput(this.background)) this.close(false);
+    if (!this.turnOver || holdsInput(this.background)) return;
+    if (!this.unheard) return this.close(false);
+    this.cancelGrace();
+    this.grace = setTimeout(() => {
+      this.grace = undefined;
+      if (this.turnOver && !holdsInput(this.background)) this.close(false);
+    }, this.graceMs);
   }
 
   /** What runs in the background (by kind), as it stands after a message: it only matters when it changes. */
@@ -367,6 +389,7 @@ export class ClaudeRunner implements AgentRunner {
         for await (const msg of q) {
           if (msg.type === 'system' && msg.subtype === 'init') so = { ...so, started: true };
           if (msg.type === 'assistant' || (msg.type === 'system' && msg.subtype === 'init')) listening.turnStarted();
+          if (msg.type !== 'result') listening.heard();
           const result = this.handle(msg, ctx, hooks);
           listening.backgroundChanged(runningInBackground(ctx.background ?? [], ctx.workflows.size));
           if (ctx.limited && !abort.signal.aborted) {
@@ -398,7 +421,11 @@ export class ClaudeRunner implements AgentRunner {
       input.close();
     };
     return {
-      send: (text) => input.push(text),
+      send: (text) => {
+        const sent = input.push(text);
+        if (sent) listening.messageSent();
+        return sent;
+      },
       // a stop only reaches a session that's still listening (its input open)
       stopTask: async (taskId) => {
         if (!q || input.closed) return false;

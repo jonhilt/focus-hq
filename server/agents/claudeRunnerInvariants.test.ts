@@ -391,7 +391,7 @@ describe('a Claude Code session, under the office’s rule for two things at onc
   // Found on main by the check above (docs/invariants.md): the turn's result says nothing's queued, as the message is
   // still on its way to Claude Code, so the office stops listening; Claude Code takes the message in a turn of its own
   // anyway, and what that turn leaves running reports to a session nobody's listening to, whose tools it cancels.
-  it.fails('a message sent as the turn ends is heard by a session still listening', async () => {
+  it('a message sent as the turn ends is heard by a session still listening', async () => {
     const held: { label: string; go: () => void }[] = [];
     const later: Later = (label, work) => new Promise<void>((go) => held.push({ label, go })).then(work);
     const release = async (label: string) => {
