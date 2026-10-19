@@ -1,5 +1,11 @@
-import { isRecord } from '../../shared/records';
-import type { ArtifactInput } from './lead';
+import { isRecord } from '../../plugin-api/shared';
+
+/** A page for the lead's screen, as show takes it. */
+export interface ExplainerPage {
+  id: string;
+  title: string;
+  html: string;
+}
 
 /**
  * Explainers: an animated walk-through a lead builds with the office's explain tool, for a concept that's hard to take
@@ -139,7 +145,7 @@ export function explainerCheck(notes: readonly string[]): string {
 }
 
 /** The player page for an explainer, ready to show under its id and title. Or why it was refused. */
-export function explainerPage(input: ExplainerInput): ArtifactInput | { error: string } {
+export function explainerPage(input: ExplainerInput): ExplainerPage | { error: string } {
   const L = EXPLAINER_LIMITS;
   const n = input.beats.length;
   if (n < L.minBeats || n > L.maxBeats) return { error: `Give ${L.minBeats} to ${L.maxBeats} beats (you gave ${n})` };

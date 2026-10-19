@@ -2,16 +2,14 @@ import { Effect, Option } from 'effect';
 import type { Agent, MessageReply, ResumeHow } from '../../../shared/types';
 import { answerMessage, openQuestion } from '../../../shared/artifacts';
 import { answerInChat, answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, type NoteInput, notedGoal, pageErrorsNote } from '../lead';
-import { beatMoments, explainerCheck, explainerPage, type ExplainerInput, momentNotes, STAGE_CLIP, stageSeen } from '../explainer';
 import { type Frame, type Frames, type Picture, Renderer, Workspace } from '../services';
 import { checkModel, modelError, modelReport } from '../../../shared/systemModel';
 import type { SystemModel } from '../../../shared/types';
 import { citedLines, modelPage } from '../modelPage';
 import { sourceReader } from '../studioSource';
-import type { ToolReply } from '../types';
 import { Part, Refused } from './core';
 
-/** The lead's office tools besides ship: the goal's note, show, model, explain, ask (and the captain's answer) and propose_close. */
+/** The lead's office tools besides ship: the goal's note, show, model, ask (and the captain's answer) and propose_close. */
 export class GoalTools extends Part {
   /** The lead's note tool: the goal's note and title, as they want them. */
   noteGoal(agent: Agent, input: NoteInput): Effect.Effect<string, Refused> {
@@ -35,7 +33,7 @@ export class GoalTools extends Part {
 
   /**
    * show's work, with the pictures it took: `frames` asks for the page at those moments too, and what it saw in each
-   * (an explainer's stage at each beat). For a plugin's lead tool, `LeadToolContext.showFrames`.
+   * (the briefings plugin's explainer, its stage at each beat). For a plugin's lead tool, `LeadToolContext.showFrames`.
    */
   showFrames(agent: Agent, input: ArtifactInput, frames: Frames): Effect.Effect<{ text: string; frames: Frame[] }, Refused, Renderer> {
     return Effect.map(this.showPage(agent, input, frames), (shown) => ({ text: shown.text, frames: shown.picture?.frames ?? [] }));
@@ -101,20 +99,6 @@ export class GoalTools extends Part {
       return (yield* (yield* Renderer).render(html)).image;
     }).pipe(Effect.catch(() => Effect.void));
     return this.runtime.runPromise(picture).then((image) => ({ model, problems, html, ...(image ? { image } : {}) }));
-  }
-
-  /** The lead's explain tool: their beats and stage go in the office's player, which goes up like any of show's visuals. */
-  explain(agent: Agent, input: ExplainerInput): Effect.Effect<ToolReply, Refused, Renderer> {
-    return Effect.gen({ self: this }, function* () {
-      const built = explainerPage(input);
-      if ('error' in built) return yield* new Refused({ message: built.error });
-      const shown = yield* this.showFrames(agent, built, { at: beatMoments(input.beats), clip: STAGE_CLIP });
-      const seconds = input.beats.reduce((sum, b) => sum + b.seconds, 0);
-      const text = `${shown.text} It's an explainer of ${input.beats.length} beats, ${Math.round(seconds)} seconds in all.`;
-      if (!shown.frames.length) return { text, images: [] };
-      const moments = shown.frames.flatMap((f) => stageSeen(f.at, f.seen) ?? []);
-      return { text: `${text} ${explainerCheck(momentNotes(moments))}`, images: shown.frames.map((f) => f.image) };
-    });
   }
 
   /**

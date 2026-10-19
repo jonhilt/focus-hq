@@ -7,7 +7,7 @@ import { logFrom, personalMark } from '../shared/personalLog';
 import { logSince } from '../shared/captainsLog';
 import { captainsLog } from './agents/captainsLog';
 import { replay } from './agents/runJournal';
-import { artifactServing, briefingSpot, effort, picks, qaShotServing, resumeHow, str } from './apiRequests';
+import { artifactServing, effort, picks, qaShotServing, resumeHow, str } from './apiRequests';
 import { paths } from './config';
 import { appendFrameStats } from './frameStats';
 import type { Office } from './office';
@@ -173,13 +173,6 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.get('/agents/:id/workflows/:workflow/agents/:agent/lines', h((req) => office.agents.workflowAgentLines(param(req, 'id'), param(req, 'workflow'), param(req, 'agent'))));
   // on your API key, picking a long conversation back up costs enough that the captain says how first (`how`)
   r.post('/agents/:id/message', h((req) => office.agents.message(param(req, 'id'), str(req.body.text), undefined, resumeHow(req.body.how))));
-  // a question about a lead's briefing, up close: the lead answers it, or the quick answerer while they're busy
-  r.post('/agents/:id/briefing-question', h((req) => office.briefings.ask(param(req, 'id'), {
-    briefing: str(req.body.briefing),
-    spot: briefingSpot(req.body.spot),
-    question: str(req.body.question),
-    how: resumeHow(req.body.how),
-  })));
   r.post('/agents/:id/answer', h((req) => office.agents.answer(param(req, 'id'), str(req.body.question), str(req.body.option), typeof req.body.note === 'string' ? req.body.note : undefined, resumeHow(req.body.how))));
   r.post('/agents/:id/read', h((req) => office.agents.readTurn(param(req, 'id'))));
   r.post('/agents/:id/spot-checks', h((req) => office.agents.tickSpotCheck(param(req, 'id'), Number(req.body.slice), Number(req.body.index), req.body.checked === true)));

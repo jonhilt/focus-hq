@@ -1,8 +1,7 @@
 import { callerOf, FLOW_FROM_HEADER, FLOWS_PARAM } from '../../../shared/flows';
 import type { LogLine } from '../../../shared/captainsLog';
 import type { PersonalEntry } from '../../../shared/personalLog';
-import type { BriefingSpot } from '../../../shared/artifacts';
-import type { Agent, Autonomy, Board, BriefingReply, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ReplayStep, ResumeHow, RoomTheme, Settings, StudioSession, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
+import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ReplayStep, ResumeHow, RoomTheme, Settings, StudioSession, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
 import type { Scenario } from '../../../shared/scenarios';
@@ -116,9 +115,6 @@ export const api = {
    * captain to say `how` (`messageAgent` asks them).
    */
   message: (id: string, text: string, how?: ResumeHow) => call<MessageReply>('POST', `/agents/${id}/message`, { text, how }),
-  /** A question about a lead's briefing: the lead answers it (as they write), or the quick answerer, whose answer comes back here. */
-  askBriefing: (id: string, briefing: string, spot: BriefingSpot | undefined, question: string, how?: ResumeHow) =>
-    call<BriefingReply>('POST', `/agents/${id}/briefing-question`, { briefing, spot, question, how }),
   answer: (id: string, question: string, option: string, note?: string, how?: ResumeHow) =>
     call<Agent | MessageReply>('POST', `/agents/${id}/answer`, { question, option, note, how }),
   /** The captain has read the lead's latest turn, here: every screen stops hailing about it. */

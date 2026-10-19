@@ -588,30 +588,6 @@ describe('AgentManager', () => {
     await expect(claude.turns[0].req.tools!.model({ id: 'bad', title: 'Bad', model: { ...model, trace: [{ from: 'api', to: 'nope', label: 'x' }] } })).rejects.toThrow(/doesn't follow a connection/);
   });
 
-  it('puts the lead’s explainer on their goal in the office’s player, and says when its stage throws', async () => {
-    const { agents, claude, store, project } = office();
-    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
-    await until(() => claude.turns.length === 1);
-    const explain = (script: string, seconds = 3) => claude.turns[0].req.tools!.explain({
-      id: 'ledger',
-      title: 'The ledger',
-      beats: [{ title: 'Append', text: 'One line per event.', seconds }, { title: 'Crash', text: 'Half a line at the end.', seconds: 4 }],
-      stage: { html: '<div id="file"></div>', script },
-    });
-    const shown = await explain('function render(t) {}');
-    expect(shown.text).toMatch(/“The ledger” is on your station's screen.*an explainer of 2 beats, 7 seconds in all\. Here's the stage at the middle of each beat.*found nothing\.$/);
-    // the stage at the middle of each beat, for the lead to look at
-    expect(shown.images.map(String)).toEqual(['beat at 1.5', 'beat at 5']);
-    expect(store.agent(lead.id).lead!.artifacts).toEqual([{ id: 'ledger', title: 'The ledger', at: expect.any(Number), image: true, slice: 1 }]);
-    expect(await store.readArtifact(lead.id, 'ledger.webm')).toBeUndefined();
-    const page = (await store.readArtifact(lead.id, 'ledger.html'))!.toString();
-    expect(page).toContain('<div id="file"></div>');
-    expect(page).toContain('Run briefing');
-    expect((await explain('function render(t) { throws(); }')).text).toMatch(/But the page reported an error as it loaded: “ReferenceError: nope is not defined”\. Fix it/);
-    expect((await explain('function render(t) { /* blank */ }')).text).toMatch(/found: Beat 1 looks empty.* Beat 2 looks empty/);
-    await expect(explain('function render(t) {}', 99)).rejects.toThrow(/Beat 1 plays for 99 seconds/);
-  });
-
   it('puts the lead’s question to the captain with an option apiece, and tells the lead which they picked', async () => {
     const { agents, claude, store, project } = office();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };

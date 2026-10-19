@@ -17,7 +17,7 @@ plus a few seconds to cut.
 1. Starts a demo office with `--studio` on a free port: the usual fake GitHub and scripted agents, but one project and
    no goals, its dice (`Math.random`) and ids seeded from the scene's `seed`, so the same crew plays the same story each
    run, at the scene's `speed`.
-2. Films the explainer insert, if there is one: the same page a lead's explain tool makes, played once from the top.
+2. Films the explainer insert, if there is one: the same page a lead's explain tool makes (from the [briefings](../plugins/briefings/README.md) plugin's `/page` route on the demo office it starts), played once from the top.
 3. Opens the office at `?studio=1` at 1920 × 1080 and plays the beats in order, as the captain would: it starts the goal,
    answers the lead's question, and approves whatever the lead asks permission for. Each beat moves the camera, puts its
    caption up, waits for its cue, and holds.

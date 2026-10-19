@@ -163,8 +163,8 @@ A lead can already put a three.js animated explainer on its screen with today's 
   - `showArtifact` checks the page with `showArtifact()` in `server/agents/lead.ts` (`ARTIFACT_LIMITS`: 2 MB, 12 artifacts, id ≤40, title ≤80).
   - It saves `<id>.html`, then gets a JPEG from the `Renderer` service and saves `<id>.jpg`.
   - It passes page errors back to the lead (`pageErrorsNote` in `lead.ts`).
-  - `explain` calls `explainerPage(input)` in `server/agents/explainer.ts`, then `showArtifact`.
-- **Player page:** `server/agents/explainer.ts` builds one 1280×800 HTML page from the LCARS frame, the beats column, the caption, the controls and the lead's stage.
+  - `explain` calls `explainerPage(input)` in `plugins/briefings/explainer.ts`, then `showArtifact`.
+- **Player page:** `plugins/briefings/explainer.ts` builds one 1280×800 HTML page from the LCARS frame, the beats column, the caption, the controls and the lead's stage.
   - The stage is a `div#stage` at left 200, top 58, 1050×500.
   - Order in the page: the stage's html, then `KIT_BEATS`/`KIT_DUR`, then `KIT_HELPERS`, then the lead's script as a plain inline `<script>` (not a module), then `KIT_PLAYER`.
   - Validation: the script can't contain `</script>`, the CSS can't contain `</style>`, html+css+script ≤1.5 MB, 2–8 beats of 1–30 s each. The stage **html** is not checked, so it can hold `<script src>` or `<canvas>` tags.

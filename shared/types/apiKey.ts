@@ -18,9 +18,3 @@ export type ResumeHow = 'key' | 'wait';
 
 /** What came of a message to an agent: sent (or waiting for the plan's limit), or a question for the captain first. */
 export type MessageReply = { sent: true } | { costly: ResumeCost };
-
-/**
- * What came of a question about a lead's briefing: it went to the lead, who answers as they write; the quick answerer
- * answered it (the lead was busy); or, as for any message, a question for the captain first.
- */
-export type BriefingReply = { by: 'lead' } | { by: 'quick'; text: string } | { costly: ResumeCost };

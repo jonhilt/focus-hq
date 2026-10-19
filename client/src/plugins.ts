@@ -3,7 +3,7 @@
 // Only the plugins the office has switched on (`info.plugins`) show.
 import type * as THREE from 'three';
 import { pluginOn } from '../../shared/projectPlugins';
-import type { Agent, AgentStatus } from '../../shared/types';
+import type { Agent, AgentStatus, GoalArtifact } from '../../shared/types';
 import { state } from './net/state';
 import type { Ui } from './ui/context';
 import type { Crew } from './world/deckExtras';
@@ -44,6 +44,55 @@ export interface ClientPlugin {
    * made usable before it threw is dropped with it, and the ship is built without it.
    */
   ship?(host: ShipHost): ShipPart | null;
+  /**
+   * Its part around a page a goal's lead put on their station's screen, while it's open up close (the briefings
+   * plugin's narrator and ask bar round an explainer), or nothing to add to that page.
+   */
+  screen?(view: ScreenView): ScreenPart | undefined;
+}
+
+/** A page a goal's lead put on their station's screen, open up close, as a plugin's `screen` sees it. */
+export interface ScreenView {
+  ui: Ui;
+  leadId: string;
+  artifact: GoalArtifact;
+  /** The live page's frame (its own origin: what its scripts post to the screen comes to `heard`). */
+  frame: HTMLIFrameElement;
+  /** The goal's still open; otherwise it's a closed goal's page, to look back at. */
+  live: boolean;
+  /**
+   * The plugin's own part for the version of this page it replaces (the lead showed it again under its id), to carry
+   * over what should outlast it: the screen doesn't end it, so the plugin ends what it doesn't keep.
+   */
+  before?: ScreenPart;
+}
+
+/** What a plugin adds round a page up close; the screen ends it as the page leaves it, or the panel closes. */
+export interface ScreenPart {
+  /** Shown in the page's head, beside its title. */
+  head?: HTMLElement;
+  /** Shown under the page. */
+  foot?: HTMLElement;
+  /** A message posted to the window while it's open (any page's: check it's from `frame`). */
+  heard?(e: MessageEvent): void;
+  end(): void;
+}
+
+/**
+ * Each plugin's part round a page up close, by plugin, given its parts for the version it replaces (`before`, none for
+ * a page newly opened). A plugin whose `screen` throws is logged and left out.
+ */
+export function screenParts(view: Omit<ScreenView, 'before'>, before?: ReadonlyMap<string, ScreenPart>): Map<string, ScreenPart> {
+  const parts = new Map<string, ScreenPart>();
+  for (const plugin of clientPlugins()) {
+    try {
+      const part = plugin.screen?.({ ...view, before: before?.get(plugin.id) });
+      if (part) parts.set(plugin.id, part);
+    } catch (err) {
+      console.error(`The ${plugin.id} plugin's part of the screen failed`, err);
+    }
+  }
+  return parts;
 }
 
 /** A plugin's parts that run once it has started. */

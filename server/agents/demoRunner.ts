@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { readScenario, type Scenario, turnParts } from '../../shared/scenarios';
 import { endsShowcaseTurn, showcaseRoom, type ShowcaseRole, type ShowcaseRoom } from '../../shared/showcase';
+import { isRecord } from '../../shared/records';
 import type { ModelCite, SystemModel, TermLine } from '../../shared/types';
 import { config } from '../config';
 import { demoSinceVerdict } from '../demoGit';
@@ -11,12 +12,10 @@ import type { Transcript } from './transcript';
 import type { Staged, StudioOfficer, StudioReply, StudioTurn } from './studioComputer';
 import { currentTake } from '../../shared/takeScript';
 import type { Drafter, DraftRequest, DraftResult } from './planner';
-import type { ExplainerInput } from './explainer';
 import { renderText, renderToolUse } from './render';
 import { workflowProgress } from './workflows';
-import { briefingBeats, type QuickAnswerer, type QuickQuestion } from './quickAnswer';
 import type { TriageDecision, Triager, TriageRequest } from './triage';
-import { type AgentRunner, type AgentSession, type CloudTerminal, type CloudTerminalRequest, type RunHooks, type RunOutcome, type RunRequest, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
+import { type AgentRunner, type AgentSession, type CloudTerminal, type CloudTerminalRequest, type ExtraTool, type RunHooks, type RunOutcome, type RunRequest, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
 
 /** The made-up files of each kind of demo repo: a web app's, an API's, a game's. */
 export const FILES: Record<string, string[]> = {
@@ -35,13 +34,15 @@ const SHOWCASE_AREAS = [
 ];
 
 /**
- * What a showcase station puts on its screen first (scenes/showcase/`file`): an explainer's input (`.json`) or a page
+ * What a showcase station puts on its screen first (scenes/showcase/`file`): a lead tool's input (`.json`) or a page
  * (`.html`); none when it's missing or doesn't read, so the lead goes on without it.
  */
-function showcaseScreen(file: string): { explainer?: ExplainerInput; page?: string } | undefined {
+function showcaseScreen(file: string): { input?: Record<string, unknown>; page?: string } | undefined {
   try {
     const text = fs.readFileSync(path.join(config.root, 'scenes', 'showcase', path.basename(file)), 'utf8');
-    return file.endsWith('.json') ? { explainer: JSON.parse(text) as ExplainerInput } : { page: text };
+    if (!file.endsWith('.json')) return { page: text };
+    const input: unknown = JSON.parse(text);
+    return isRecord(input) ? { input } : undefined;
   } catch {
     return undefined;
   }
@@ -443,6 +444,15 @@ export class DemoRunner implements AgentRunner {
         const result = await tools.note(input).catch((err: Error) => err.message);
         hooks.lines([{ kind: 'output', text: `  ⎿  ${result}` }]);
       };
+      // the plugins' lead tools the scripted lead plays with, as a real lead would call them: each one's demo input
+      const pluginTool = async (t: ExtraTool, input: Record<string, unknown>) => {
+        hooks.lines([{ kind: 'tool', text: `⏺ mcp__office__${t.name}(${typeof input.title === 'string' ? input.title : ''})` }]);
+        const result = await t.run(input).then((reply) => (typeof reply === 'string' ? reply : reply.text), (err: Error) => err.message);
+        hooks.lines([{ kind: 'output', text: `  ⎿  ${result}` }]);
+      };
+      const demoTools = async (again = false) => {
+        for (const t of tools.extra ?? []) if (t.demo) await pluginTool(t, t.demo({ folders: repos.map((r) => r.folder), again }));
+      };
       const show = async (input: Parameters<typeof tools.show>[0]) => {
         hooks.lines([{ kind: 'tool', text: `⏺ mcp__office__show(${input.title})` }]);
         const result = await tools.show(input).catch((err: Error) => err.message);
@@ -533,12 +543,10 @@ export class DemoRunner implements AgentRunner {
         // what a real lead put on its screen, as it put it there (scenes/showcase/); the made-up briefing if it's gone
         const screen = room.screen && showcaseScreen(room.screen.file);
         if (screen?.page !== undefined) await show({ id: room.screen?.file.replace(/\.\w+$/, '') ?? 'screen', title: room.screen?.title ?? '', html: screen.page });
-        else if (screen?.explainer || room.role === 'briefing') {
-          const explainer = screen?.explainer ?? demoExplainer(folders);
-          hooks.lines([{ kind: 'tool', text: `⏺ mcp__office__explain(${explainer.title})` }]);
-          const explained = await tools.explain(explainer).then((reply) => reply.text, (err: Error) => err.message);
-          hooks.lines([{ kind: 'output', text: `  ⎿  ${explained}` }]);
-        }
+        else if (screen?.input && room.screen?.tool) {
+          const t = tools.extra?.find((x) => x.name === room.screen?.tool);
+          if (t) await pluginTool(t, screen.input);
+        } else if (room.role === 'briefing') await demoTools();
         if (room.role === 'briefing') {
           await say('The briefing is on the screen: step through it, and ask me about any beat.');
           return { ok: true, summary: 'Put up a briefing.' };
@@ -571,9 +579,7 @@ export class DemoRunner implements AgentRunner {
         // asked for more on it: an answer aloud first, then the briefing again under its id, that beat in more detail
         if (/\b(more|detail|redraw|show me)\b/i.test(asked)) {
           await say(`Short answer: it retries three times, a second apart, then tells the shopper. I'll redraw ${beat ? `beat ${beat}` : 'that part'} with the retries in it.`);
-          hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__explain(How a save travels)' }]);
-          const explained = await tools.explain(demoExplainer(repos.map((r) => r.folder), true)).then((reply) => reply.text, (err: Error) => err.message);
-          hooks.lines([{ kind: 'output', text: `  ⎿  ${explained}` }]);
+          await demoTools(true);
           await say('It’s updated on the screen: the outage beat now shows the three retries.');
           return { ok: true, summary: 'Redrew a briefing in more detail.' };
         }
@@ -647,12 +653,8 @@ export class DemoRunner implements AgentRunner {
       }
       await say('On it: a thin slice first.');
       await show({ id: 'mockup', title: 'A first mockup', html: demoMockupPage(goal) });
-      // the explainer goes up last, so the screen plays it while the slice is built
-      if (parts.explain) {
-        hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__explain(How a save travels)' }]);
-        const explained = await tools.explain(demoExplainer(repos.map((r) => r.folder))).then((reply) => reply.text, (err: Error) => err.message);
-        hooks.lines([{ kind: 'output', text: `  ⎿  ${explained}` }]);
-      }
+      // the plugins' lead tools go up last (the explainer, with briefings on), so the screen plays it while the slice is built
+      if (parts.leadTools) await demoTools();
       const leadTodos = (done: number) => ({
         todos: [...repos.map((r) => [`Build ${goal} in ./${r.folder}`, `Building it in ./${r.folder}`]), ['Ship the slice', 'Shipping the slice']].map(([content, activeForm], i) => ({
           content,
@@ -977,18 +979,6 @@ export class DemoDrafter implements Drafter {
   }
 }
 
-/** Demo mode: the quick answerer, answering about the beat the captain's on in a second or so, as Haiku would. */
-export class DemoQuickAnswerer implements QuickAnswerer {
-  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
-
-  async answer(req: QuickQuestion): Promise<{ text: string }> {
-    await sleep((800 + Math.random() * 600) / this.speed);
-    const beat = req.spot ? briefingBeats(req.briefing.html)?.[req.spot.beat] : undefined;
-    const about = beat ? `On “${beat.title}”: ${beat.text}` : `From “${req.briefing.title}”, as far as I can tell:`;
-    return { text: `${about} ${req.leadName} is busy building the slice, so I've answered for now, and passed your question on in case there's more to it.` };
-  }
-}
-
 /**
  * The demo operations officer at a stuck PR: re-runs a red check, retries QA when its fixes have landed (the demo's
  * stubborn PRs), sends a fix that pushed nothing back with a different plan, and escalates the second time round.
@@ -1032,51 +1022,6 @@ function demoFlowPage(goal: string, folders: string[]): string {
   }).join('');
   return `<!doctype html><html><body style="margin:0;background:#0b1020;font-family:system-ui;color:#eee"><div style="padding:50px 60px 0"><h1 style="font-size:48px;margin:0">The data flow</h1><p style="font-size:26px;color:#99ccff;margin:10px 0 0">${escapeHtml(goal)}</p></div>
 <svg viewBox="0 0 1280 500" style="width:100%"><defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0L10 5L0 10z" fill="#ffcc66"/></marker></defs>${svg}</svg></body></html>`;
-}
-
-/**
- * Demo mode: the explainer a lead walks the captain through first, a save travelling from the shopper through each repo
- * to the database and waiting out an outage. Its script is written for the explain tool, as a lead's would be.
- */
-function demoExplainer(folders: string[], detailed = false): ExplainerInput {
-  const boxes = ['shopper', ...folders, 'database'];
-  const step = 1050 / boxes.length;
-  const html = boxes.map((b, i) =>
-    `<div class="panel box" style="left:${Math.round(i * step)}px;top:150px;width:${Math.round(step - 40)}px;--c:var(--${i === 0 ? 'lilac' : i === boxes.length - 1 ? 'sky' : 'peach'})"><div class="hd"><span>${escapeHtml(b)}</span><span>0${i + 1}</span></div><div class="bd"><span class="state"></span></div></div>`,
-  ).join('') + '<span class="lbl" style="left:0;top:40px">The journey of one save</span><div class="pill" id="save" style="top:330px;--c:var(--gold)">♥ save</div>';
-  const script = `
-const boxes = $$('.box'), last = boxes.length - 1;
-const colours = boxes.map(b => b.style.getPropertyValue('--c'));
-const centre = i => boxes[i].offsetLeft + boxes[i].offsetWidth / 2 - 50;
-// where the save is at t: hops along the boxes in beats 1 and 2, waits at the last repo in beat 3 until the database is back
-function at(t) {
-  if (t < B[1]) return p(t, 1, B[1] - .5);
-  if (t < B[2]) return 1 + (last - 2) * p(t, B[1] + .3, B[2] - .5);
-  return last - 1 + p(t, B[2] + 3.2, B[2] + 4.2);
-}
-function render(t) {
-  const x = at(t), i = Math.floor(x), k = x - i;
-  const pos = i >= last ? centre(last) : centre(i) + (centre(i + 1) - centre(i)) * k;
-  $('#save').style.transform = 'translateX(' + pos + 'px)';
-  const down = t > B[2] + .3 && t < B[2] + 3.2;
-  boxes.forEach((b, n) => {
-    const reached = x >= n - .01;
-    b.style.setProperty('--c', n === last && down ? 'var(--red)' : colours[n]);
-    b.querySelector('.state').innerHTML = n === last ? (down ? tag('offline', 'red') : reached ? tag('saved ✓', 'green') : '') : n === last - 1 && down ? tag('retry queued', 'gold') : reached ? tag('passed on', 'green') : '';
-  });
-}`;
-  return {
-    id: 'save-journey',
-    title: 'How a save travels',
-    beats: [
-      { title: 'The shopper saves an item', text: 'Pressing save sends one small request: which item, and who is saving it. Nothing else changes on the page until it is safely stored.', seconds: 4, label: 'Save', narration: 'On the far left is the shopper. When they press save, that gold pill sets off: one small request saying which item, and who is saving it.' },
-      { title: 'Each repo passes it on', text: `It travels through ${folders.join(' and ')}, each checking what it owns before handing it to the next, and lands as one row in the database.`, seconds: 5, label: 'Pass it on', narration: 'Watch it hop along the boxes in the middle. Each one is a repo, and each checks the part it owns before handing the save on, until it lands as a row in the database on the right.' },
-      detailed
-        ? { title: 'If the database is down, it retries', text: 'The last repo keeps the save in a retry queue and tries again three times, a second apart. If the database is still down after the third, the page tells the shopper it couldn’t save, and the item stays in the queue.', seconds: 6, label: 'Outage', narration: 'Here is that part in more detail. The database goes red, and the save waits in the retry queue at the last repo. It tries three times, a second apart. If the database is still down after the third, the shopper is told, and the save stays queued until it is back.' }
-        : { title: 'If the database is down, it waits', text: 'The last repo keeps the save in a retry queue rather than dropping it, and sends it again when the database is back, so the shopper never loses an item.', seconds: 6, label: 'Outage', narration: 'Now the database goes red: it is down. Notice the save does not vanish. It waits at the last repo in a retry queue, and the moment the database is back, it goes through.' },
-    ],
-    stage: { html, css: '.box .bd { min-height:60px; }', script },
-  };
 }
 
 /** Demo mode: the other option a lead asks the captain about, a plain list. */

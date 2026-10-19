@@ -35,7 +35,7 @@ export interface SceneBeat {
   insert?: 'explainer';
 }
 
-/** The explainer insert: the same input as a lead's explain tool (server/agents/explainer.ts). */
+/** The explainer insert: the same input as a lead's explain tool (the briefings plugin's explainer.ts). */
 export interface SceneExplainer {
   title: string;
   beats: { title: string; text: string; seconds: number; label?: string; narration?: string }[];

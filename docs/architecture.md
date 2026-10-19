@@ -28,7 +28,7 @@ server/
   ledgerLog.ts            the ledger's one writer: numbered lines flushed to disk, the lock file, repairs and damage on load
   usage.ts                main engineering's plan usage: read from Claude Code's structured /usage every few minutes, with how the office signs in
   routes.ts               REST API used by the panels
-  apiRequests.ts          what the API makes of a request: the fields it reads from a body (effort, a preview's picks, a briefing's beat…), and which QA screenshots and lead artifacts it serves, with what sandbox and caching (pure)
+  apiRequests.ts          what the API makes of a request: the fields it reads from a body (effort, a preview's picks…), and which QA screenshots and lead artifacts it serves, with what sandbox and caching (pure)
   frameStats.ts           the frame-stats log: what a browser opened with ?stats=1 sends of how its 3D view ran, a file per page load in ~/.focus/frame-stats/
   hostGuard.ts            who the office answers: known Host and Origin only (DNS rebinding, other sites' pages), for /api, pages and /ws
   hub.ts                  broadcasts ServerEvents to every browser tab
@@ -84,7 +84,6 @@ server/
     planner.ts            the officer at each room's Ops station: issue drafts, their prompt and schema
     lead.ts               each goal's lead: their station, name and branches, their instructions, what shipping a slice does, what they hear back, their helpers
     officeTool.ts         the office's own MCP tools for an agent (the lead's ship)
-    explainer.ts          the LCARS player a lead's explainer plays in: their beats and stage wrapped in one page, pure
     studio.ts             the studio computer's tools, pure: the scenes (takes) it stages in the middle of the hall, and retiming them; its instructions
     studioSource.ts       which files a model check may read (checkouts, worktrees, the office's code; a lead's own workspace)
     modelPage.ts          a lead's system model as a page for its station's screen: the three views, stepping and picking by CSS, the cited code carried in it
@@ -141,7 +140,7 @@ client/src/
 client/tricorder/index.html   the Tricorder's page (a second Vite entry), with its home-screen meta tags
 client/public/tricorder/  its web app manifest and home-screen icons
 plugin-api/               all a plugin may import of the office: shared.ts, server.ts (the contract, PluginHost), client.ts (ClientPlugin, office, callPlugin, the UI kit), testing.ts (the fake office), and boundary.ts, the line its test holds every import to: docs/plugins.md
-plugins/                  what the office does beyond its core, a folder per plugin (server.ts, client.ts, shared.ts, its tests and README), switched on by FOCUS_PLUGINS (all: every one): cartography/ (each project's architecture map, from its repos' .focus/cartography.yaml and their imports, TypeScript and Java), climber/ (main engineering's climber), flow/ (where each goal's time goes, on its goal board, card and Comms line, and the flow and before-after scripts), number-one/ (Number One in the ready room: the chat, voice mode, the figure, the 1 key, and calls through gpt-live-1, Jev and an XState machine), retro/ (the chief engineer's retro: frictions read from the agents' sessions, drafts filed on the captain's word, its Retro view), scorecard/ (main engineering's scorecards, and the scorecard and crap scripts)
+plugins/                  what the office does beyond its core, a folder per plugin (server.ts, client.ts, shared.ts, its tests and README), switched on by FOCUS_PLUGINS (all: every one): briefings/ (a lead's animated explainer on their screen, narrated, with questions about a beat answered by the lead or the quick answerer, and the voice:check script), cartography/ (each project's architecture map, from its repos' .focus/cartography.yaml and their imports, TypeScript and Java), climber/ (main engineering's climber), flow/ (where each goal's time goes, on its goal board, card and Comms line, and the flow and before-after scripts), number-one/ (Number One in the ready room: the chat, voice mode, the figure, the 1 key, and calls through gpt-live-1, Jev and an XState machine), retro/ (the chief engineer's retro: frictions read from the agents' sessions, drafts filed on the captain's word, its Retro view), scorecard/ (main engineering's scorecards, and the scorecard and crap scripts)
 client/public/ship/       the decks built in Blender, as GLBs (pnpm run ship writes them, or CI's Ship workflow on a branch, .github/workflows/ship.yml)
 blender/                  the Blender scripts that build the decks: ship.py (entry), kit.py (walls, furniture, markers), bake.py (each deck's ambient occlusion, baked into a lightmap), command_deck.py (the bridge, ready room and observation lounge), holodeck_deck.py (the holodecks' hallway and the turbolift), engineering_deck.py (main engineering: the gallery, the well, the warp core and the level below), team_station.py (a team station's door and briefing room), transporter_room.py (a team station's transporter room), training_hall.py (the training hall every holodeck is a copy of)
 ```

@@ -1,13 +1,11 @@
 import { ARTIFACT_SIZE, answeredReadout, artifactUrl, latestArtifact, optionUrl, unanswered } from '../../../shared/artifacts';
-import { leadVoice } from '../../../shared/crew';
 import type { GoalArtifact, GoalQuestion, GoalRecord } from '../../../shared/types';
 import { state } from '../net/state';
+import { type ScreenPart, screenParts } from '../plugins';
 import { LCARS } from '../world/starship';
 import { sound } from '../sound';
 import type { Ui } from './context';
 import { h } from './dom';
-import { BriefingAsk } from './briefingAsk';
-import { Narrator } from './narrator';
 import { SideNav } from './panels';
 import { answerLead } from './resume';
 
@@ -78,14 +76,14 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
   // which option of a question you're looking at, and whether you've asked to see them all side by side
   const looking = new Map<string, number>();
   let step: ((by: number) => void) | undefined;
-  // the voice-over for what's on show, if it's an explainer: it hears from the player's page and talks it through
-  let narrator: Narrator | undefined;
-  // asking the lead about what's on show (while their goal's open): kept through a new version of it
-  let ask: BriefingAsk | undefined;
-  let askingAbout = '';
-  // the artifact the narrator's for, so a new version of it can say what changed
-  let narratorOf = '';
-  const leadName = () => state.agents.get(leadId)?.name ?? 'The lead';
+  // the plugins' parts round the page on show (the briefings plugin's voice-over and asking about it), and the page
+  // they're for, so a new version of it hands them over to carry on with what should outlast it
+  let parts = new Map<string, ScreenPart>();
+  let partsOf = '';
+  const endParts = () => {
+    for (const part of parts.values()) part.end();
+    parts = new Map();
+  };
 
   /**
    * A question up close: why the lead asks, then one option at a time, large, with what it trades off and its Pick
@@ -168,47 +166,28 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
     shown = key;
     resized.disconnect();
     step = undefined;
-    // a new version of the briefing on show: what it was, to tell which beat changed
-    const before = artifact && artifact.id === narratorOf ? narrator?.beats : undefined;
-    const replacing = artifact !== undefined && artifact.id === narratorOf;
-    narrator?.end();
-    narrator = undefined;
-    narratorOf = artifact?.id ?? '';
-    if (!artifact) {
-      ask?.end();
-      ask = undefined;
-      askingAbout = '';
-    }
+    // a new version of the page on show hands its parts over; anything else ends them
+    const replacing = artifact !== undefined && artifact.id === partsOf;
+    const before = replacing ? parts : undefined;
+    if (!replacing) endParts();
+    parts = new Map();
+    partsOf = artifact?.id ?? '';
     if (question) {
       body.replaceChildren(...questionView(question));
     } else if (artifact) {
       const url = artifactUrl(leadId, artifact, 'html');
       const shownHere = stage(url, artifact.title);
-      const updated = h('span', { class: 'chip updated', hidden: true });
-      narrator = new Narrator(shownHere.querySelector('iframe')!, leadVoice(leadId), replacing ? {
-        beats: before,
-        updated: (beat) => {
-          updated.hidden = false;
-          updated.textContent = beat >= 0 ? `Updated · beat ${beat + 1} changed` : 'Updated';
-          updated.title = beat >= 0 ? `${leadName()} explained it again: it's waiting at the beat that changed, to play from there` : `${leadName()} explained it again`;
-        },
-      } : undefined);
-      if (ask && picked === askingAbout) ask.narrator = narrator;
-      else {
-        ask?.end();
-        ask = live ? new BriefingAsk(ui, leadId, artifact, narrator) : undefined;
-        askingAbout = picked;
-      }
+      parts = screenParts({ ui, leadId, artifact, frame: shownHere.querySelector('iframe')!, live }, before);
       body.replaceChildren(
         h('div', { class: 'row artifact-head' },
           h('h3', { class: 'grow' }, artifact.title),
-          updated,
+          ...[...parts.values()].flatMap((p) => p.head ?? []),
           h('small', { class: 'muted' }, `Shown ${when(artifact.at)}`),
           h('button', { class: 'btn small', title: 'Fill the screen with it (Esc to come back)', onclick: () => toggleFull(shownHere) }, 'Full screen'),
           h('a', { class: 'btn small', href: url, target: '_blank', rel: 'noopener' }, 'Open in a tab'),
         ),
         shownHere,
-        ask?.el ?? h('span'),
+        ...[...parts.values()].flatMap((p) => p.foot ?? []),
       );
     } else {
       body.replaceChildren();
@@ -217,13 +196,14 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
   };
   render();
   ui.panels.open({ title, body, accent: LCARS.orange, wide: true, full: true, nav });
-  // the player's page loads after this, so its first word to the narrator still arrives
-  const heard = (e: MessageEvent) => narrator?.heard(e);
+  // the page loads after this, so its first word to the plugins' parts still arrives
+  const heard = (e: MessageEvent) => {
+    for (const part of parts.values()) part.heard?.(e);
+  };
   window.addEventListener('message', heard);
   ui.panels.own(() => {
     window.removeEventListener('message', heard);
-    narrator?.end();
-    ask?.end();
+    endParts();
   });
   if (live) {
     ui.panels.own(state.on('agent', (agent) => {

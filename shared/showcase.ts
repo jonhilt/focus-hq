@@ -12,10 +12,11 @@ export interface ShowcaseRoom {
   /** The goal its lead works on. */
   goal: string;
   /**
-   * What its lead puts on the station's screen first, from scenes/showcase/: an explainer a real lead drew (`.json`, the
-   * input its `explain` call took, from its transcript) or a page one showed (`.html`).
+   * What its lead puts on the station's screen first, from scenes/showcase/: what a real lead drew with a plugin's lead
+   * tool (`.json`, the input its call to `tool` took, from its transcript: an explainer, with briefings on), or a page
+   * one showed (`.html`).
    */
-  screen?: { file: string; title: string };
+  screen?: { file: string; title: string; tool?: string };
 }
 
 export const SHOWCASE = {
@@ -26,9 +27,9 @@ export const SHOWCASE = {
   theme: 'office',
   repos: ['demo/focus'],
   rooms: [
-    { station: 0, role: 'subagents', goal: 'Map where the office reads its agents’ transcripts, and what each reader needs', screen: { file: 'subagents-basics.json', title: 'How subagents work in Claude Code' } },
+    { station: 0, role: 'subagents', goal: 'Map where the office reads its agents’ transcripts, and what each reader needs', screen: { file: 'subagents-basics.json', title: 'How subagents work in Claude Code', tool: 'explain' } },
     { station: 1, role: 'workflow', goal: 'Review the transporter rooms against every kind of workflow before they ship', screen: { file: 'flow-hologram-mockup.html', title: 'The room, from where you beam in' } },
-    { station: 2, role: 'briefing', goal: 'Show how a dynamic workflow runs, and what the transporter room shows of it', screen: { file: 'workflow-moving-parts.json', title: 'How a dynamic workflow runs' } },
+    { station: 2, role: 'briefing', goal: 'Show how a dynamic workflow runs, and what the transporter room shows of it', screen: { file: 'workflow-moving-parts.json', title: 'How a dynamic workflow runs', tool: 'explain' } },
     { station: 3, role: 'qa', goal: 'The captain’s log says why each goal closed' },
   ] satisfies ShowcaseRoom[],
 } as const;

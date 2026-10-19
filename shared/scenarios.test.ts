@@ -19,12 +19,12 @@ describe('readScenario', () => {
 
 describe('scenarioParts', () => {
   it('plays the whole story in full', () => {
-    expect(scenarioParts('full')).toEqual({ explain: true, helpers: true, background: true, workflows: true });
+    expect(scenarioParts('full')).toEqual({ leadTools: true, helpers: true, background: true, workflows: true });
   });
 
   it('keeps the subagents to helpers and the workflow to workflows', () => {
-    expect(scenarioParts('subagents')).toMatchObject({ helpers: true, workflows: false, explain: false, background: false });
-    expect(scenarioParts('workflow')).toMatchObject({ helpers: false, workflows: true, explain: false, background: false });
+    expect(scenarioParts('subagents')).toMatchObject({ helpers: true, workflows: false, leadTools: false, background: false });
+    expect(scenarioParts('workflow')).toMatchObject({ helpers: false, workflows: true, leadTools: false, background: false });
   });
 });
 

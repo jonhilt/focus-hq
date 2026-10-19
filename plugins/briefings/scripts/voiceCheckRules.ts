@@ -1,4 +1,5 @@
-// The decisions behind `pnpm run voice:check` (scripts/voiceCheck.ts), kept pure so they're tested next to it.
+// The decisions behind `pnpm run voice:check` (voiceCheck.ts), kept pure so they're tested next to it.
+import { isRecord, type VoiceStatus } from '../../../plugin-api/server';
 
 /** A 16-bit PCM WAV (Kokoro's, from either helper) as mono samples from -1 to 1, and its rate; undefined if it isn't one. */
 export function decodeWav(bytes: Uint8Array): { samples: Float32Array; rate: number } | undefined {
@@ -79,3 +80,27 @@ export function verdict(steps: readonly Step[], heard: number, minHeard = 0.7): 
   lines.push(`${misheard ? '✗' : '✓'} heard ${Math.round(heard * 100)}% of the question's words${misheard ? ` (needs ${Math.round(minHeard * 100)}%)` : ''}`);
   return { lines, pass: !over.length && !misheard };
 }
+
+/** A response's body read as JSON, or what went wrong: the office's own error, or its status when the body isn't JSON. */
+export function readResponse(route: string, res: Pick<Response, 'ok' | 'status' | 'statusText'>, text: string): { body: unknown } | { error: string } {
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    body = undefined;
+  }
+  if (res.ok && body !== undefined) return { body };
+  const said = isRecord(body) && typeof body.error === 'string' ? body.error : undefined;
+  return { error: `${route}: ${said ?? `${res.status} ${res.statusText}${text ? `, ${text.slice(0, 200)}` : ''}`}` };
+}
+
+/** The lead and briefing to ask about: `lead` and `briefing` if given, or the first lead with something on their screen (their latest). */
+export function pickBriefing<A extends { id: string; lead?: { artifacts?: readonly { id: string }[] } }>(agents: readonly A[], lead?: string, briefing?: string): { lead: A; briefing: string } | undefined {
+  const leads = agents.filter((a) => a.lead?.artifacts?.length && (!lead || a.id === lead));
+  const picked = leads.find((a) => a.lead?.artifacts?.some((x) => x.id === briefing)) ?? leads[0];
+  const about = briefing ?? picked?.lead?.artifacts?.at(-1)?.id;
+  return picked && about ? { lead: picked, briefing: about } : undefined;
+}
+
+/** Where Kokoro runs, once it's ready (` on the GPU`), or nothing to add. */
+export const engineOn = (voice: VoiceStatus): string => (voice.speech.engine.state === 'ready' && voice.speech.engine.on ? ` on the ${voice.speech.engine.on.toUpperCase()}` : '');

@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { EXPLAINER_LIMITS, explainerPage } from './explainer';
 import { CONTACT_LIMITS as C } from './contacts';
 import { applyNote } from './lead';
-import { explainShape, extraTools, noteShape } from './officeTool';
+import { extraTools, noteShape } from './officeTool';
 
 const schema = z.object(noteShape);
 const text = (n: number) => 'x'.repeat(n);
@@ -29,34 +28,6 @@ describe('the note tool schema', () => {
     expect(fits({ contact: text(C.text + 1) })).toBe(false);
     expect(fits({ closeContact: { id: 'c1', as: 'dropped', why: text(C.why + 1) } })).toBe(false);
     expect(noteShape.contact.description).toContain(String(C.text));
-  });
-});
-
-describe('the explain tool schema', () => {
-  const E = EXPLAINER_LIMITS;
-  const explain = z.object(explainShape);
-  const beat = { title: 'A beat', text: 'Its caption', seconds: 3 };
-  const input = (beats: { title: string; text: string; seconds: number; label?: string }[]) => ({ id: 'x', title: 'X', beats, stage: { html: '', script: 'function render(t) {}' } });
-
-  it('says each limit in its description', () => {
-    const beatShape = (explainShape.beats as unknown as z.ZodArray<z.ZodObject<Record<string, z.ZodType>>>).element.shape;
-    expect(explainShape.beats.description).toContain(`${E.minBeats} to ${E.maxBeats}`);
-    expect(beatShape.title.description).toContain(String(E.beatTitle));
-    expect(beatShape.text.description).toContain(String(E.text));
-    expect(beatShape.seconds.description).toContain(`${E.minSeconds} to ${E.maxSeconds}`);
-    expect(beatShape.label.description).toContain(String(E.label));
-  });
-
-  it('takes and refuses the same beats as the office', () => {
-    const cases = [
-      [beat], [beat, beat], Array.from({ length: E.maxBeats }, () => beat), Array.from({ length: E.maxBeats + 1 }, () => beat),
-      [beat, { ...beat, title: text(E.beatTitle) }], [beat, { ...beat, title: text(E.beatTitle + 1) }],
-      [beat, { ...beat, text: text(E.text) }], [beat, { ...beat, text: text(E.text + 1) }],
-      [beat, { ...beat, label: text(E.label) }], [beat, { ...beat, label: text(E.label + 1) }],
-      [beat, { ...beat, seconds: E.minSeconds }], [beat, { ...beat, seconds: E.minSeconds - 0.5 }],
-      [beat, { ...beat, seconds: E.maxSeconds }], [beat, { ...beat, seconds: E.maxSeconds + 1 }],
-    ];
-    for (const beats of cases) expect([beats, explain.safeParse(input(beats)).success]).toEqual([beats, !('error' in explainerPage(input(beats)))]);
   });
 });
 

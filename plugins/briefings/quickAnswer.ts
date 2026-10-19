@@ -1,6 +1,6 @@
-import type { BriefingSpot } from '../../shared/artifacts';
-import type { AgentStatus, GoalNote, Settings, TermLine } from '../../shared/types';
-import { repliesToSpeak } from '../../shared/voice';
+import type { AgentStatus, GoalNote, Settings, TermLine } from '../../plugin-api/shared';
+import { CODE_TOOLS, isRecord, type PluginHost, repliesToSpeak, sleep } from '../../plugin-api/server';
+import type { BriefingSpot } from './shared';
 
 // A question the captain asks about a lead's briefing while the lead's busy goes to a quick answerer instead: a light
 // model that reads the briefing, the lead's note, what they've said lately and their code, and answers in seconds. The
@@ -33,8 +33,10 @@ export function briefingBeats(html: string): BriefingBeat[] | undefined {
   const json = /window\.KIT_BEATS = (\[.*?\]); window\.KIT_DUR/s.exec(html)?.[1];
   if (!json) return undefined;
   try {
-    const beats = JSON.parse(json) as Partial<BriefingBeat>[];
-    return beats.map((b) => ({ title: String(b.title ?? ''), text: String(b.text ?? ''), say: String(b.say ?? '') }));
+    const beats: unknown = JSON.parse(json);
+    if (!Array.isArray(beats)) return undefined;
+    const said = (v: unknown) => (typeof v === 'string' || typeof v === 'number' ? String(v) : '');
+    return beats.map((b) => (isRecord(b) ? { title: said(b.title), text: said(b.text), say: said(b.say) } : { title: '', text: '', say: '' }));
   } catch {
     return undefined;
   }
@@ -115,4 +117,41 @@ export function quickAnswerNote(briefingTitle: string, spot: BriefingSpot | unde
     `The quick answerer answered for you: ${answer.trim()}`,
     'No need to reply if that’s right. If it’s wrong or misses something that matters, tell the captain in a sentence or two when you next can.',
   ].join('\n\n');
+}
+
+/**
+ * Answers the captain's question about a busy lead's briefing in seconds: Haiku, with the briefing, the lead's note
+ * and what they've said in the prompt, reading the lead's workspace only if it must.
+ */
+export class ClaudeQuickAnswerer implements QuickAnswerer {
+  constructor(private readonly host: Pick<PluginHost, 'readOnlySession'>) {}
+
+  async answer(req: QuickQuestion): Promise<{ text: string; costUsd?: number }> {
+    const result = await this.host.readOnlySession({
+      cwd: req.cwd,
+      systemAppend: QUICK_SYSTEM,
+      prompt: quickAnswerPrompt(req),
+      settings: req.settings,
+      signal: req.signal,
+      activity: () => undefined,
+      builtins: CODE_TOOLS,
+      model: QUICK_MODEL,
+      maxTurns: 6,
+      timeoutMs: 60_000,
+    });
+    if (!result.text.trim()) throw new Error('The quick answerer had nothing to say');
+    return { text: result.text.trim(), costUsd: result.costUsd };
+  }
+}
+
+/** Demo mode: the quick answerer, answering about the beat the captain's on in a second or so, as Haiku would. */
+export class DemoQuickAnswerer implements QuickAnswerer {
+  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
+
+  async answer(req: QuickQuestion): Promise<{ text: string }> {
+    await sleep((800 + Math.random() * 600) / this.speed);
+    const beat = req.spot ? briefingBeats(req.briefing.html)?.[req.spot.beat] : undefined;
+    const about = beat ? `On “${beat.title}”: ${beat.text}` : `From “${req.briefing.title}”, as far as I can tell:`;
+    return { text: `${about} ${req.leadName} is busy building the slice, so I've answered for now, and passed your question on in case there's more to it.` };
+  }
 }

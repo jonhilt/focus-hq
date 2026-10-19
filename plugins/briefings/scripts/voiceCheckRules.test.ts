@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { decodeWav, heardShare, verdict } from './voiceCheckRules';
+import { decodeWav, engineOn, heardShare, pickBriefing, readResponse, verdict } from './voiceCheckRules';
+import type { VoiceStatus } from '../../../plugin-api/server';
 
 /** A WAV of 16-bit PCM samples, as Kokoro's helpers write them. */
 function wav(samples: number[], rate: number, channels = 1): Uint8Array {
@@ -65,5 +66,51 @@ describe('verdict', () => {
     const { lines, pass } = verdict([step(5000, { skipped: true })], 1);
     expect(pass).toBe(true);
     expect(lines[0]).toMatch(/^– /);
+  });
+});
+
+describe('readResponse', () => {
+  const ok = { ok: true, status: 200, statusText: 'OK' };
+  const bad = { ok: false, status: 400, statusText: 'Bad Request' };
+
+  it('reads the JSON an answer carries', () => {
+    expect(readResponse('/state', ok, '{"agents":[]}')).toEqual({ body: { agents: [] } });
+  });
+
+  it('says the office’s own error, or its status and what came back', () => {
+    expect(readResponse('/ask', bad, '{"error":"Ask a question"}')).toEqual({ error: '/ask: Ask a question' });
+    expect(readResponse('/ask', bad, 'nope')).toEqual({ error: '/ask: 400 Bad Request, nope' });
+    expect(readResponse('/ask', { ...bad, status: 502, statusText: 'Bad Gateway' }, '')).toEqual({ error: '/ask: 502 Bad Gateway' });
+    expect(readResponse('/state', ok, '<html>')).toEqual({ error: '/state: 200 OK, <html>' });
+  });
+});
+
+describe('pickBriefing', () => {
+  const lead = (id: string, ...shown: string[]) => ({ id, lead: { artifacts: shown.map((s) => ({ id: s })) } });
+  const agents = [{ id: 'dev1' }, lead('lead1'), lead('lead2', 'mockup', 'save-journey'), lead('lead3', 'ledger')];
+
+  it('picks the first lead with something on their screen, and the latest of it', () => {
+    expect(pickBriefing(agents)).toEqual({ lead: agents[2], briefing: 'save-journey' });
+  });
+
+  it('picks the lead and briefing asked for', () => {
+    expect(pickBriefing(agents, 'lead3')).toEqual({ lead: agents[3], briefing: 'ledger' });
+    expect(pickBriefing(agents, undefined, 'ledger')).toEqual({ lead: agents[3], briefing: 'ledger' });
+    expect(pickBriefing(agents, 'lead2', 'mockup')).toEqual({ lead: agents[2], briefing: 'mockup' });
+  });
+
+  it('has none when no lead has shown anything', () => {
+    expect(pickBriefing([{ id: 'dev1' }, lead('lead1')])).toBeUndefined();
+    expect(pickBriefing(agents, 'lead1')).toBeUndefined();
+  });
+});
+
+describe('engineOn', () => {
+  const voice = (engine: unknown) => ({ speech: { engine } }) as unknown as VoiceStatus;
+
+  it('says where Kokoro runs once it’s ready', () => {
+    expect(engineOn(voice({ state: 'ready', on: 'gpu' }))).toBe(' on the GPU');
+    expect(engineOn(voice({ state: 'ready' }))).toBe('');
+    expect(engineOn(voice({ state: 'loading' }))).toBe('');
   });
 });

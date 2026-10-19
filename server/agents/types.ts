@@ -2,7 +2,7 @@ import type { MergeHeads, MergeTrial } from '../../shared/mergeCheck';
 import type { AgentStatus, Autonomy, BrowserFrame, Effort, Settings, SystemModel, TermLine, Workflow, WorkflowAgent } from '../../shared/types';
 import type { ZodType } from 'zod';
 import type { ArtifactInput, NoteInput, QuestionInput } from './lead';
-import type { ExplainerInput } from './explainer';
+import type { LeadTool } from '../plugins/contract';
 import type { SinceVerdict } from './retest';
 import type { CommandRun } from './qaProof';
 import type { BackgroundEvent } from './backgroundTasks';
@@ -125,8 +125,6 @@ export interface OfficeTools {
   show(input: ArtifactInput): Promise<string>;
   /** Puts a system model on the lead's station's screen, checked against the lead's workspace, drawn as the studio draws them. */
   model(input: { id: string; title: string; model: SystemModel }): Promise<string>;
-  /** Puts an animated explainer on the lead's station's screen: their beats and stage in the office's player, shown like show's. */
-  explain(input: ExplainerInput): Promise<ToolReply>;
   /** Puts a question to the captain with visual options, on the lead's station's screen. Their pick comes back as a message. */
   ask(input: QuestionInput): Promise<string>;
   /** The lead thinks the goal is done: the captain closes it, or carries on. */
@@ -141,6 +139,8 @@ export interface ExtraTool {
   description: string;
   input: Record<string, ZodType>;
   run(input: Record<string, unknown>): Promise<string | ToolReply>;
+  /** The input the demo's scripted lead calls it with (`LeadTool.demo`). */
+  demo?: LeadTool['demo'];
 }
 
 /** What a run the captain stopped reports, and how a stopped review is told apart from one that failed. */

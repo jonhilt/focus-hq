@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { TermLine } from '../../shared/types';
+import type { TermLine } from '../../plugin-api/shared';
 import { explainerPage } from './explainer';
 import { briefingBeats, pageText, quickAnswerNote, quickAnswerPrompt, recentReplies, whoAnswers } from './quickAnswer';
 

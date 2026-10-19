@@ -1,7 +1,6 @@
 // What the REST API (routes.ts) makes of a request: the fields it reads from a body or query, and which files it
 // serves and how. Pure, so each is tested next to it; the routes only do the I/O.
 import { EFFORT_LEVELS, type Effort, type PreviewSet, type ResumeHow } from '../shared/types';
-import type { BriefingSpot } from '../shared/artifacts';
 
 export const str = (v: unknown, fallback = '') => (typeof v === 'string' ? v : fallback);
 
@@ -13,14 +12,6 @@ export const picks = (v: unknown): PreviewSet | undefined => {
 
 /** The captain's say on picking a conversation back up on your API key: now, or once your plan's limit resets. */
 export const resumeHow = (v: unknown): ResumeHow | undefined => (v === 'key' || v === 'wait' ? v : undefined);
-
-/** The beat a question about a briefing was asked on: { beat, title }, anything else none. */
-export const briefingSpot = (v: unknown): BriefingSpot | undefined => {
-  if (!v || typeof v !== 'object' || !('beat' in v)) return undefined;
-  const { beat } = v;
-  if (typeof beat !== 'number' || !Number.isInteger(beat) || beat < 0) return undefined;
-  return { beat, title: str('title' in v ? v.title : undefined).slice(0, 200) };
-};
 
 /** Missing or empty = the model's default effort; anything else that isn't a level is refused. */
 export const effort = (v: unknown): Effort | undefined => {

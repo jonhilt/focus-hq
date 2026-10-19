@@ -1,10 +1,8 @@
-import { type BriefingBeats, type BriefingSpot, firstChangedBeat } from '../../../shared/artifacts';
-import { type CrewVoice, forSpeech } from '../../../shared/voice';
-import { api } from '../net/api';
-import { bestBrowserVoice, kokoroReady } from './crewVoice';
-import { voicePrefs } from './voiceMode';
+import { bestBrowserVoice, type CrewVoice, forSpeech, isRecord, kokoroReady, speak } from '../../plugin-api/client';
+import { type BriefingBeats, type BriefingSpot, firstChangedBeat } from './shared';
+import { explainerVoice } from './voice';
 
-/** What an explainer's player asks of the screen around it (see `KIT_PLAYER` in server/agents/explainer.ts). */
+/** What an explainer's player asks of the screen around it (see `KIT_PLAYER` in explainer.ts). */
 type FromPlayer =
   | { kit: 'lines'; lines: string[]; titles?: string[] }
   | { kit: 'voice'; on: boolean }
@@ -13,9 +11,9 @@ type FromPlayer =
   | { kit: 'pause' | 'resume' | 'hush' };
 
 /** The player's message, if it's one: anything else a page posts is ignored. */
-function fromPlayer(data: unknown): FromPlayer | undefined {
-  if (!data || typeof data !== 'object') return undefined;
-  const m = data as Record<string, unknown>;
+export function fromPlayer(data: unknown): FromPlayer | undefined {
+  if (!isRecord(data)) return undefined;
+  const m = data;
   switch (m.kit) {
     case 'lines':
       return Array.isArray(m.lines)
@@ -86,7 +84,7 @@ export class Narrator {
       case 'lines':
         this.lines = m.lines;
         this.beats = { lines: m.lines, titles: m.titles };
-        this.switched(voicePrefs.explainerVoice);
+        this.switched(explainerVoice.on);
         if (this.before) {
           const changed = firstChangedBeat(this.before.beats, this.beats);
           if (changed >= 0) this.tell({ kit: 'show', beat: changed });
@@ -94,7 +92,7 @@ export class Narrator {
         }
         break;
       case 'voice':
-        voicePrefs.explainerVoice = m.on;
+        explainerVoice.on = m.on;
         this.switched(m.on);
         break;
       case 'say':
@@ -154,7 +152,7 @@ export class Narrator {
     if (!text) return Promise.resolve(null);
     const { signal } = this.fetching;
     const audio = kokoroReady(signal)
-      .then((ready) => (ready ? api.speak(text, this.voice.kokoro, signal, urgency) : null))
+      .then((ready) => (ready ? speak(text, this.voice.kokoro, signal, urgency) : null))
       .catch(() => {
         this.audio.delete(beat);
         return null;

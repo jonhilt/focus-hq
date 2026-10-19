@@ -1,14 +1,21 @@
-import { leadVoice, quickVoice } from '../../../shared/crew';
-import type { GoalArtifact } from '../../../shared/types';
-import type { CrewVoice } from '../../../shared/voice';
-import { repliesToSpeak, sentences } from '../../../shared/voice';
-import { state } from '../net/state';
-import type { Ui } from './context';
-import { micPerRecording, withMic } from './dictation';
-import { h } from './dom';
+import { askResume, callPlugin, CrewSpeaker, type CrewVoice, type GoalArtifact, h, leadVoice, micPerRecording, office, quickVoice, repliesToSpeak, sentences, type Ui, withMic } from '../../plugin-api/client';
 import type { Narrator } from './narrator';
-import { askAboutBriefing } from './resume';
-import { CrewSpeaker, voicePrefs } from './voiceMode';
+import { BRIEFINGS, type BriefingReply, type BriefingSpot } from './shared';
+import { explainerVoice } from './voice';
+
+/**
+ * The captain's question about a lead's briefing, asked first like any message when it would cost them on the key.
+ * Undefined when they chose not to send it.
+ */
+async function askAboutBriefing(lead: string, briefing: string, spot: BriefingSpot | undefined, question: string): Promise<Exclude<BriefingReply, { costly: unknown }> | undefined> {
+  const asking = (how?: string) => callPlugin<BriefingReply>(BRIEFINGS, '/ask', { lead, briefing, spot, question, how });
+  const reply = await asking();
+  if (!('costly' in reply)) return reply;
+  const how = await askResume(office.agent(lead)?.name ?? 'The lead', reply.costly);
+  if (!how) return undefined;
+  const asked = await asking(how);
+  return 'costly' in asked ? undefined : asked;
+}
 
 /** How long after a question the lead's replies still count as its answer, and are said aloud. */
 const ANSWER_WINDOW_MS = 5 * 60_000;
@@ -38,14 +45,14 @@ export class BriefingAsk {
     /** The briefing's voice-over: a new version of the briefing (the lead explaining again) brings a new one. */
     public narrator: Narrator,
   ) {
-    const name = state.agents.get(leadId)?.name ?? 'the lead';
+    const name = office.agent(leadId)?.name ?? 'the lead';
     this.input.placeholder = `Ask ${name} about this briefing…`;
     this.input.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
       e.preventDefault();
-      void this.ask(this.input.value, voicePrefs.explainerVoice);
+      void this.ask(this.input.value, explainerVoice.on);
     });
-    const ask = h('button', { class: 'btn small', onclick: () => void this.ask(this.input.value, voicePrefs.explainerVoice) }, 'Ask');
+    const ask = h('button', { class: 'btn small', onclick: () => void this.ask(this.input.value, explainerVoice.on) }, 'Ask');
     const mic = withMic(ui, this.input, () => ({
       kind: 'talk',
       mic: micPerRecording,
@@ -79,7 +86,7 @@ export class BriefingAsk {
     this.stopHearing?.();
     this.input.value = '';
     const asking = ++this.asked;
-    const name = state.agents.get(this.leadId)?.name ?? 'the lead';
+    const name = office.agent(this.leadId)?.name ?? 'the lead';
     const waiting = h('small', { class: 'muted' }, `Asking ${name}…`);
     this.answer.replaceChildren(h('p', { class: 'asked' }, h('b', null, 'You: '), question), waiting);
     const askedAt = performance.now();
@@ -101,16 +108,16 @@ export class BriefingAsk {
     } catch (e) {
       if (asking !== this.asked) return;
       waiting.textContent = 'Not sent.';
-      this.ui.error((e as Error).message);
+      this.ui.error(e instanceof Error ? e.message : String(e));
     }
   }
 
   /** Shows (and says, if `aloud`) what the lead writes back while answering, for a while after asking. */
   private hearLead(waiting: HTMLElement, aloud: boolean, after: () => string): void {
     let replied = false;
-    const unsubscribe = state.on('lines', ({ id, lines }) => {
+    const unsubscribe = office.onLines((id, lines) => {
       if (id !== this.leadId) return;
-      for (const reply of repliesToSpeak(lines)) {
+      for (const reply of repliesToSpeak([...lines])) {
         if (!replied) {
           replied = true;
           waiting.textContent = `First reply after ${after()}`;

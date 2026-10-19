@@ -13,8 +13,8 @@ import { parse } from 'yaml';
 import { assemble, beatsFromWords, type NarrationSpec, wordsFromWhisper, type Word } from '../shared/narration';
 import { beatSheet, CUE_TIMEOUT_S, readScene, type Scene, type SceneBeat, type Timing } from '../shared/studio';
 import { whisper } from '../server/config';
+import { isRecord } from '../shared/records';
 import type { Agent } from '../shared/types';
-import { explainerPage } from '../server/agents/explainer';
 import { CheckFailed, freePort, launchBrowser, root, startDemo, stopDemo, waitForServer } from './demoOffice';
 
 const SIZE = { width: 1920, height: 1080 };
@@ -49,10 +49,20 @@ async function filming(browser: Browser, dir: string): Promise<{ page: Page; at:
   };
 }
 
+/**
+ * The explainer's page, as the demo office at `url` builds it (the briefings plugin's player, which every demo the
+ * studio starts has switched on).
+ */
+async function explainerPage(url: string, scene: Scene): Promise<{ html: string }> {
+  const res = await fetch(`${url}api/plugins/briefings/page`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: 'insert', ...scene.explainer }) });
+  const page: unknown = await res.json().catch(() => undefined);
+  if (!isRecord(page) || typeof page.html !== 'string') throw new CheckFailed(`the explainer builds (${isRecord(page) && typeof page.error === 'string' ? page.error : `${res.status} ${res.statusText}`})`);
+  return { html: page.html };
+}
+
 /** The explainer, played once from the top: its video, and when the playing starts and stops in it. */
-async function filmExplainer(browser: Browser, scene: Scene, dir: string): Promise<{ video: string; from: number; to: number }> {
-  const built = explainerPage({ id: 'insert', ...scene.explainer! });
-  if ('error' in built) throw new CheckFailed(`the explainer builds (${built.error})`);
+async function filmExplainer(browser: Browser, url: string, scene: Scene, dir: string): Promise<{ video: string; from: number; to: number }> {
+  const built = await explainerPage(url, scene);
   const film = await filming(browser, dir);
   await film.page.setContent(built.html, { waitUntil: 'networkidle' });
   await film.page.addStyleTag({ content: `html { zoom: ${EXPLAINER_ZOOM}; background: #000; } body { margin: 0 ${(SIZE.width / EXPLAINER_ZOOM - 1280) / 2}px; }` });
@@ -184,7 +194,7 @@ async function record(scene: Scene, outDir: string): Promise<void> {
   try {
     await waitForServer(url, server, 60_000);
     browser = await launchBrowser(GPU);
-    const insert = scene.explainer && scene.beats.some((b) => b.insert) ? await filmExplainer(browser, scene, raw) : null;
+    const insert = scene.explainer && scene.beats.some((b) => b.insert) ? await filmExplainer(browser, url, scene, raw) : null;
     if (insert) console.log(`  explainer: ${(insert.to - insert.from).toFixed(1)}s`);
     const ship = await filmShip(browser, scene, url, raw);
     renameSync(ship.video, path.join(raw, 'ship.webm'));

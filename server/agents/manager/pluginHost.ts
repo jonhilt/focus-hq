@@ -34,6 +34,9 @@ export interface Lent {
 }
 
 /** What a test office (one without it) answers for something the office lends. */
+/** A file's plain name, as a lead's artifacts are named (`ledger.html`, `q1.a.jpg`): no folders, nothing hidden. */
+const PLAIN_FILE = /^[\w-]+(\.[\w-]+)+$/;
+
 const missing = (what: string) => Promise.reject(new Refused({ message: `This office has no ${what}` }));
 
 /** A plugin's slot in `saved`, `fresh()` with what was saved on top (a field added since starts fresh). */
@@ -75,6 +78,9 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
       return agent && lend(agent);
     },
     agents: () => lend([...core.store.agents.values()]),
+    recentLines: (agentId, count) => lend(core.store.recentLines(agentId, count)),
+    // both become a path: only an agent's own id, and a file's plain name
+    artifact: (leadId, file) => (core.store.agents.has(leadId) && PLAIN_FILE.test(file) ? core.store.readArtifact(leadId, file) : Promise.resolve(undefined)),
     // read as it's asked for: the office sets the manager's reader once the plugins have started
     transcript: (sessionId) => (lent.transcript ?? core.ledger.readTranscript)?.(sessionId) ?? Promise.resolve(undefined),
     ledger,
@@ -92,7 +98,7 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
     goals: {
       start: (projectId, text, how) => core.leads.startGoal(projectId, text, { from: how.from }),
       startQueued: (projectId, queueId, station) => core.leads.startQueued(projectId, queueId, { station }),
-      message: (agentId, text) => core.goalTools.captainMessage(agentId, text),
+      message: (agentId, text, opts) => (opts?.from === undefined ? core.goalTools.captainMessage(agentId, text, opts?.how) : core.comms.message(agentId, text, opts.from, opts.how)),
     },
     fileIssue: (projectId, repo, title, body) => {
       // a plugin files only where the captain works: in one of the project's own repos

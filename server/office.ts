@@ -21,7 +21,6 @@ import type { Store } from './store';
 import { changeSettings } from './settings';
 import { projectChangeFollowUps } from './projectChange';
 import { errorMessage, newId } from './util';
-import type { BriefingDesk } from './briefingDesk';
 import type { Voice } from './voice';
 
 const REPO_RE = /^[\w.-]+\/[\w.-]+$/;
@@ -37,8 +36,6 @@ function normalizeRepo(input: string): string {
 /** The office itself: projects (rooms), their Kanban boards, and the manager's actions. */
 export class Office {
   agents!: AgentManager;
-  /** Questions about a lead's briefing (`server/briefingDesk.ts`). */
-  briefings!: BriefingDesk;
   /** The office's own repo (`owner/repo`, from its checkout's remote), lent to plugins (main engineering's climber works on it). */
   ownRepo: string | undefined;
   private info: ServerInfo;

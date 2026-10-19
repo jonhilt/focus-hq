@@ -5,7 +5,7 @@ import type { Effect } from 'effect';
 import type { ZodType } from 'zod';
 import type { LedgerEntry, LedgerEvent } from '../../shared/ledger';
 import type { PersonalEntry } from '../../shared/personalLog';
-import type { Agent, Issue, MessageReply, Planner, Project, QueuedGoal, Settings, Snapshot, SystemModel } from '../../shared/types';
+import type { Agent, Issue, MessageReply, Planner, Project, QueuedGoal, ResumeHow, Settings, Snapshot, SystemModel, TermLine } from '../../shared/types';
 import type { ShipStatus } from '../agents/shipStatus';
 import type { GitHub } from '../github/service';
 import type { ReadOnlyResult, ReadOnlyRun, ShipSessionRun } from '../agents/claudeCrew';
@@ -82,6 +82,11 @@ export interface LeadTool {
   input: Record<string, ZodType>;
   /** Its answer to the lead, in words (with JPEGs for them to look at); a throw is said back to them as the tool failing, in its message. */
   run(lead: LeadToolContext, input: Record<string, unknown>): Promise<string | LeadToolReply>;
+  /**
+   * The input the demo office's scripted lead calls it with, for the demo's repos' `folders`; `again` when the captain
+   * asked them for more on it. Without one, the scripted lead leaves the tool be.
+   */
+  demo?(ask: { folders: readonly string[]; again: boolean }): Record<string, unknown>;
 }
 
 /** A lead tool's answer with pictures: the words, then JPEGs for the lead to look at. */
@@ -164,6 +169,10 @@ export interface PluginHost {
    */
   on(projectId: string): boolean;
   agent(id: string): Readonly<Agent> | undefined;
+  /** An agent's last `count` terminal lines, oldest first. */
+  recentLines(agentId: string, count: number): readonly Readonly<TermLine>[];
+  /** A file a goal's lead put on their station's screen (`<id>.html`, its picture `<id>.jpg`): undefined when there's none. */
+  artifact(leadId: string, file: string): Promise<Uint8Array | undefined>;
   /** Every agent in the office now, of every project. */
   agents(): Readonly<Agent>[];
   /**
@@ -268,8 +277,11 @@ export interface PluginGoals {
   start(projectId: string, text: string, how: { from: string }): { agent: Agent } | { queued: QueuedGoal };
   /** Starts a queued goal at team station `station` (from 0). */
   startQueued(projectId: string, queueId: string, station: number): Agent;
-  /** Passes a goal's lead (or any agent) a message, as the captain's. */
-  message(agentId: string, text: string): MessageReply;
+  /**
+   * Passes a goal's lead (or any agent) a message, as the captain's, or as `from`'s (a crew member's name). On your API
+   * key, picking a long conversation back up can cost: then it comes back `costly`, for the captain to say `how`.
+   */
+  message(agentId: string, text: string, opts?: { from?: string; how?: ResumeHow }): MessageReply;
 }
 
 export interface PluginState<S> {

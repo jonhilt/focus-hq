@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { artifactServing, briefingSpot, effort, picks, qaShotServing, resumeHow, str } from './apiRequests';
+import { artifactServing, effort, picks, qaShotServing, resumeHow, str } from './apiRequests';
 
 const PAGE_SANDBOX = 'sandbox allow-scripts allow-popups';
 const SVG_SANDBOX = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
@@ -30,18 +30,6 @@ describe('resumeHow', () => {
     expect(resumeHow('key')).toBe('key');
     expect(resumeHow('wait')).toBe('wait');
     expect(resumeHow('now')).toBeUndefined();
-  });
-});
-
-describe('briefingSpot', () => {
-  it('takes a whole beat from 0 and its title, cut to 200 characters', () => {
-    expect(briefingSpot({ beat: 0, title: 'Start' })).toEqual({ beat: 0, title: 'Start' });
-    expect(briefingSpot({ beat: 2, title: 'x'.repeat(300) })?.title).toHaveLength(200);
-    expect(briefingSpot({ beat: 2 })).toEqual({ beat: 2, title: '' });
-  });
-
-  it('is none without a whole beat from 0', () => {
-    for (const spot of [undefined, null, 'beat', {}, { beat: -1 }, { beat: 1.5 }, { beat: '1' }]) expect(briefingSpot(spot)).toBeUndefined();
   });
 });
 

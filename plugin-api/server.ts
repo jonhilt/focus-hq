@@ -26,3 +26,7 @@ export { type Block, blocks, clip, type Line, messageFrom, resultText, transcrip
 /** QA's catch rate (docs/qa-catch.md): the office's latest run, and its totals. */
 export { latestRun as latestQaCatch } from '../server/agents/qaCatchRuns';
 export { type CatchRun, catchTotals } from '../server/agents/qaCatch';
+/** Speech, for a plugin's scripts that talk to the office aloud: audio as whisper takes it, and what the demo hears. */
+export { encodeWav, toMono16k } from '../client/src/ui/speech';
+export { DEMO_TRANSCRIPT } from '../server/voice';
+export type { VoiceStatus } from '../shared/types';

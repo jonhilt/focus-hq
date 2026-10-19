@@ -7,8 +7,8 @@ export type Scenario = (typeof SCENARIOS)[number];
 
 /** The parts of the lead's slice a scenario can leave out: the rest (looking round, asking, building, shipping) always plays. */
 export interface ScenarioParts {
-  /** The explainer on the station's screen: how a save travels. */
-  explain: boolean;
+  /** The plugins' lead tools, each with its demo input (with briefings on, the explainer on the station's screen: how a save travels). */
+  leadTools: boolean;
   /** A helper (an Explore subagent) per repo, mapping it side by side. */
   helpers: boolean;
   /** A probe script, and the dev server and a monitor in the background. */
@@ -18,9 +18,9 @@ export interface ScenarioParts {
 }
 
 const PARTS: Record<Scenario, ScenarioParts> = {
-  full: { explain: true, helpers: true, background: true, workflows: true },
-  subagents: { explain: false, helpers: true, background: false, workflows: false },
-  workflow: { explain: false, helpers: false, background: false, workflows: true },
+  full: { leadTools: true, helpers: true, background: true, workflows: true },
+  subagents: { leadTools: false, helpers: true, background: false, workflows: false },
+  workflow: { leadTools: false, helpers: false, background: false, workflows: true },
 };
 
 /** What the training console (docs/studio.md) says of each scenario, and the goal it readies for the captain to start. */

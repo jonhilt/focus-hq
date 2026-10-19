@@ -2,12 +2,13 @@
 // of the office's state, its own routes, and the station's UI kit. The browser's own state and REST client stay the
 // core's: a plugin reads what `office` shows and calls only its own routes.
 import type { ReportCard } from '../shared/ledger';
-import type { Agent, IssueDraft, Project } from '../shared/types';
+import type { Agent, IssueDraft, Project, TermLine } from '../shared/types';
+import type { KokoroVoice } from '../shared/voice';
 import { api } from '../client/src/net/api';
 import { state } from '../client/src/net/state';
 
 export * from './shared';
-export type { ClientPlugin, EngineeringGo, EngineeringPart, EngineeringView, GoalPart, GoalStrip, GoalTagPlace, HallHost, HallScreen, PluginSpace, ShipHost, ShipPart, StationSays } from '../client/src/plugins';
+export type { ClientPlugin, EngineeringGo, EngineeringPart, EngineeringView, GoalPart, GoalStrip, GoalTagPlace, HallHost, HallScreen, PluginSpace, ScreenPart, ScreenView, ShipHost, ShipPart, StationSays } from '../client/src/plugins';
 export { pluginState } from '../client/src/plugins';
 export type { Ui } from '../client/src/ui/context';
 export { busy, fill, h, timeAgo } from '../client/src/ui/dom';
@@ -15,8 +16,13 @@ export { confirmDialog } from '../client/src/ui/confirmDialog';
 /** Starting an idea as a goal, or handing it to one under way (the goals list's own control). */
 export { handOffControl } from '../client/src/ui/goals';
 /** The captain's voice: dictating into a field, and talking with a crew member aloud. */
-export { type MicMode, withMic } from '../client/src/ui/dictation';
-export { voicePrefs, VoiceSession, voiceToggle } from '../client/src/ui/voiceMode';
+export { type MicMode, micPerRecording, withMic } from '../client/src/ui/dictation';
+export { CrewSpeaker, voicePrefs, VoiceSession, voiceToggle } from '../client/src/ui/voiceMode';
+/** The crew's voices: whether Kokoro's ready on this office, the browser's best voice for a language, and a line said in a Kokoro voice (a WAV). */
+export { bestBrowserVoice, kokoroReady } from '../client/src/ui/crewVoice';
+export const speak = (text: string, voice: KokoroVoice, signal: AbortSignal, urgency?: 'now' | 'ahead'): Promise<Blob> => api.speak(text, voice, signal, urgency);
+/** Asks the captain how to pick a long conversation back up on your API key (a message's `costly` answer): undefined if they'd rather not. */
+export { askResume } from '../client/src/ui/resume';
 /** A crew member in 3D, and what they sit on and cast. */
 export { Character, type CrewView } from '../client/src/world/character';
 export { chair } from '../client/src/world/props';
@@ -52,6 +58,8 @@ export const office = {
   draft: (projectId: string): Readonly<IssueDraft> | undefined => state.drafts.get(projectId),
   /** Calls `fn` whenever the projects change; returns what stops it. */
   onProjects: (fn: () => void): (() => void) => state.on('projects', fn),
+  /** Calls `fn` with each agent's new terminal lines as they come; returns what stops it. */
+  onLines: (fn: (agentId: string, lines: readonly TermLine[]) => void): (() => void) => state.on('lines', ({ id, lines }) => fn(id, lines)),
   /** Asks project `projectId`'s Ops officer to write `idea` up as an issue (it waits at their station). */
   draftIssue: (projectId: string, idea: string): Promise<unknown> => api.draftIssue(projectId, idea),
   /** The ledger's report card as the office last sent it: none until it has. */

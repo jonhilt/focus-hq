@@ -5,7 +5,7 @@ import type { Agent as OfficeAgent, LeadAgent as OfficeLeadAgent, Project as Off
 import type { LedgerEvent as OfficeLedgerEvent } from '../shared/ledger';
 
 export type {
-  AgentStatus, AgentTask, ArchivedGoal, Contact, GoalNote, GoalRecord, IssueDraft, Issue, MessageReply, ModelCite, ModelKind, Planner, QaReport, QueuedGoal, Settings, Snapshot, SystemModel, Waypoint,
+  AgentStatus, AgentTask, ArchivedGoal, Contact, GoalArtifact, GoalNote, GoalRecord, IssueDraft, Issue, MessageReply, ResumeCost, ResumeHow, TermLine, ModelCite, ModelKind, Planner, QaReport, QueuedGoal, Settings, Snapshot, SystemModel, Waypoint,
 } from '../shared/types';
 /** An agent, a project and a line of the ledger as a plugin has them: its own copies (`PluginHost`), read-only. */
 export type Agent = Readonly<OfficeAgent>;
@@ -21,7 +21,8 @@ export { prKey, qaBadge } from '../shared/qa';
 export { goalTitle } from '../shared/goalTitle';
 export { trace } from '../shared/ledgerReview';
 /** The crew's voices, and what a reply says aloud. */
-export { type CrewVoice, linesToSpeak, spokenLine } from '../shared/voice';
+export { type CrewVoice, forSpeech, linesToSpeak, repliesToSpeak, sentences, spokenLine } from '../shared/voice';
+export { leadVoice, quickVoice } from '../shared/crew';
 export type { FixEffect, FixStatus, Friction, FrictionGroup, FrictionKind, LedgerEntry, SessionFacts } from '../shared/ledger';
 /** The ledger read as the office reads it: the report card, the goals it closed, and the frictions, grouped and by digest. */
 export { closedGoals, FIX_SESSIONS, FRICTION_KINDS, frictionGroups, frictionsByDigest, knownSignatures, OPEN_FRICTION_DAYS, reportCard, reportLines, unreadDigests } from '../shared/ledger';
@@ -33,3 +34,5 @@ export type { Flow, FlowRecording } from '../shared/flows';
 export type { PersonalEntry } from '../shared/personalLog';
 export { FLOWS_FILE } from '../shared/flows';
 export { pluginOn } from '../shared/projectPlugins';
+/** Where a lead's page (or its picture) is served, and the size it's laid out for. */
+export { ARTIFACT_SIZE, artifactUrl } from '../shared/artifacts';

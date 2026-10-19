@@ -1,0 +1,11 @@
+/* The briefings plugin: asking the lead about a briefing up close, and the chip that says it was explained again. */
+.briefing-ask { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.briefing-ask .dictate { flex: 1; }
+.briefing-ask .dictate input { width: 100%; }
+.briefing-answer { max-height: 22vh; overflow: auto; line-height: 1.4; }
+.briefing-answer:empty { display: none; }
+.briefing-answer p { margin: 4px 0; }
+.briefing-answer .asked { color: var(--lcars-sky); }
+.artifact-head .chip.updated { --tone: var(--lcars-gold); }
+.artifact-head .chip.updated[hidden] { display: none; }
+.briefing-answer .quick b { color: var(--lcars-lilac); }
