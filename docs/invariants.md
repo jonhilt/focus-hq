@@ -32,6 +32,7 @@ What a part hands to `later` is what it asks of the world outside: a model's ans
 | the retro plugin's chief engineer's decisions | `plugins/retro/invariants.test.ts` | both |
 | QA reviews (asked for, failed, passed, posted on the pull request) | `server/agents/reviewInvariants.test.ts` | both |
 | a Claude Code session (`ClaudeRunner`, on a stand-in for Claude Code at the SDK's `query`: listening on past its turn while a command or workflow it left runs, what they report taken in a turn that can still ask the office, done once nothing's left) | `server/agents/claudeRunnerInvariants.test.ts` | at once |
+| a goal's life to its close (what its lead showed and asked, the captain's answers on screen and in chat, its pull requests, work left uncommitted, closed and reopened) | `server/agents/goalInvariants.test.ts` | both |
 
 The session isn't held to the rule for a restart: it keeps nothing of its own across one. The office stops every session as it goes down, Claude Code's process goes and what it left running in the background with it (a probe that never reported is marked as lost contact), and what the lead was told is the lead's inbox, held in its own check above. Its description asks Claude Code everything down the pipe (reading a message, counting its context, stopping a command), and compares whether the office is listening only between turns, for the race found on main below.
 
@@ -56,6 +57,19 @@ The session was described before any of its three bugs was put back. eab2be2 rev
 
 So the rules caught 4 of the 4 bugs in the parts described before the session, and none of the session's three: two of those are wrong one at a time too (their plain reach tests catch them), and the third needs a Claude Code that behaves in a way the stand-in doesn't. The four were each caught with the same outcome as the original bug, though not always the same path (740f2d8 was fixed for two accepts at once, and the check found it through an accept and a reject). Of the four, the replay had the commit behind 185513c to review, and QA missed it both as it is and when hunting with proof.
 
+### A goal's life to its close
+
+The goal's description was written from `docs/goals.md` (closing keeps what the lead showed and asked, every slice's pull requests, and uncommitted work as a WIP snapshot) before any of these four fixes was looked at. Its `durable()` is where the goal is (at its station, in the room's log, in the ledger's archive), its artifacts and questions with how each was answered, its pull requests and GitHub's, the pages of what it has that the office lost, and the lead's work and where it's kept (uncommitted, or committed on a branch). Its reach test takes a goal through a show, a question answered in chat, another picked, a ship, work left uncommitted, a close and a reopen. Deliberate breaks it caught: a restart's close never finished (restart), a question asked as the goal closes deleting the filed question's pages (at once), a close while the lead ships (at once). Each bug was put back by hand, as the code has moved since:
+
+| bug | what it was | the two rules | the reach test | what it said |
+| --- | --- | --- | --- | --- |
+| 720822e | a closed goal dropped what its lead showed and asked, pages and all | missed | caught | the closed goal had no artifacts or questions |
+| 1785db5 | closing threw uncommitted work away (no WIP snapshot); a ship could start mid-close | caught, restart, only in the soak (`FOCUS_INVARIANT_RUNS=20`) | caught | a restart during the close left the work uncommitted in a checkout a finished close would have removed; the ship guard alone: missed, soak too |
+| 5d74f45 | a goal's pages deleted once it dropped off the end of the room's log | missed | missed | the description has one goal, which never drops off a 30-goal log |
+| 6fdfdef | a chat reply didn't settle the open question; a pick wrote back the goal as it was before the message | missed | caught | the question stayed open after the captain answered in chat |
+
+So 1 of 4 by the rules, and that one only in the long soak, by a side effect (the close not atomic) rather than the loss itself; the reach test caught 3. These were mostly bugs of what a close does, not of a restart or two things at once: the rules compare a run with the same code taken one action at a time, so a behaviour that's wrong every time (work thrown away, pages dropped) is wrong in the reference too, and only a plain test of what should happen sees it. The ship guard of 1785db5 is a race the harness can't start: it starts both actions together, and a ship that starts only once a close is part way through its snapshots needs one action to begin after another's first deferred step. Where the rules did earn their keep here was on main, below.
+
 ## Found on main
 
 **A message sent as the turn ends gets a turn the office has stopped listening to** (not fixed). The session's check for two at once found it (a message and the turn ending at once), and `claudeRunnerInvariants.test.ts` holds it in a plain test, `it.fails` until it's fixed. When the captain's message goes into the session just as Claude Code ends its turn, the turn's result says nothing's queued (the message is still on its way), so the office closes the session's input; Claude Code takes the message in a turn of its own anyway. The message isn't lost, but nobody's listening to that turn: a message sent during it waits for the next turn, **Stop** on a probe can't reach it, and anything it leaves running in the background reports to a turn whose tools Claude Code cancels ("The user doesn't want to take this action right now"), the very thing `Listening` is there to prevent. The window is short (between Claude Code ending its turn and the office reading the result, which includes asking Claude Code how full its context is).
@@ -66,10 +80,18 @@ So the rules caught 4 of the 4 bugs in the parts described before the session, a
 
 **A slice that landed mid-turn moves on a turn early after a restart.** The office moves a landed slice's repos to fresh code at the start of the lead's next turn, and a restart starts one (the resumed turn), so after a restart the slice has moved where, without one, it would still be waiting. Nothing is half-done and nothing is lost (commits are carried over), so it's by design rather than a bug, but it's not what the rule for a restart allows: the slices' restart check leaves out merging a slice's last pull request while the lead's turn is under way.
 
+**A goal closed while its lead was shipping lost the ship's pull requests** (fixed). The goal's check for two things at once (a ship and a close at once) found it: the close filed the goal with the pull requests it had then, and the ship went on to open its pull requests on GitHub for a goal that had gone, so the closed goal (and a reopened one) never knew of them. Now a close refuses while the slice journal says the slice is shipping, and one that starts during a close is refused, as before (`closingGoals`). `manager.test.ts` holds it in a plain test.
+
+**A question asked as its goal closed deleted the filed question's pages** (fixed). Asking replaces an open question, deleting its option pages, once the pictures are taken. When the goal closed meanwhile, the check for that (`agent.lead` still set on the dismissed agent) never fired: the open question went into the room's log and its pages were deleted after. Show had the same gap for an artifact's picture. Both now look for the lead in the office (`store.agents`), and `manager.test.ts` holds the question in a plain test.
+
+**A restart part way through a close left the goal open with its work committed as a WIP snapshot** (fixed). Found by the goal's restart check in a soak: the snapshot is in, the goal isn't filed, and after the restart the lead picks the goal up and ships the WIP snapshot, which `closingGoals` was there to prevent (and which a restart forgets). Now the close is marked on the lead before any snapshot (`closeStarted`), and a restart finishes it (`Leads.recoverCloses`) before the lead's run would pick back up; one that fails then leaves the goal open and the lead's run recovers. `manager.test.ts` holds it in a plain test.
+
 ## What it can't tell
 
 - Only parts somebody describes are checked, and only as far as `durable()` says what must survive: a field left out is a field it can't see go wrong.
 - A part whose async work doesn't go through `later` can't be interleaved inside that work, only between actions.
+- It compares a run with the same code taken one action at a time, so a behaviour that's wrong every time (a close that throws work away) is wrong in the reference too: only a plain test of what should happen, like a description's reach test, sees it.
+- The two actions under a check for two at once start together: a race where one starts only once the other is part way through (a ship once a close is into its snapshots) is out of its reach.
 - Like any test, it says the rules hold for the sequences it tried (25 by default), not for all of them.
 
 A third rule, for the bugs that came from wrong assumptions about git, GitHub and the SDK rather than from state: [the fakes the tests rely on must behave like the real thing](contracts.md).

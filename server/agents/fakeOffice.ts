@@ -10,7 +10,7 @@ import { agentAfterRestart, Store } from '../store';
 import type { Autonomy } from '../../shared/types';
 import { demoWorkspace } from './demoRunner';
 import { AgentManager } from './manager';
-import { Renderer, Sessions, ShipRetry, Triage, Workspace } from './services';
+import { type Frames, type Picture, Renderer, Sessions, ShipRetry, Triage, Workspace } from './services';
 import type { AgentRunner, AgentSession, CloudTerminal, CloudTerminalRequest, RunHooks, RunOutcome, RunRequest, WorkspaceOps } from './types';
 
 /** A Claude Code stand-in: each turn runs until the test ends it, and remembers being stopped, what it was sent and which background tasks it stopped. */
@@ -53,23 +53,34 @@ export class FakeClaude implements AgentRunner {
 /** The room's operations officer, when nobody's said what they decide: they can't work it out. */
 const noOfficer: Triager = { triage: () => Promise.reject(new Error('no officer here')) };
 
-export function office(workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<GitHub> = demoLayer, triager: Triager = noOfficer) {
+/** Takes a page's picture; the office's own stand-in answers at once unless a test hands it one of its own. */
+export type Render = (html: string, frames?: Frames) => Promise<Picture>;
+
+export function office(workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<GitHub> = demoLayer, triager: Triager = noOfficer, render?: Render) {
   const store = new Store(false);
   const project = store.addProject('Shop');
   project.repos = ['demo/webshop-frontend', 'demo/webshop-api'];
-  return { store, project, ...crew(store, workspace, github, triager) };
+  return { store, project, ...crew(store, workspace, github, triager, render) };
 }
 
 /**
  * The office after Focus restarts: its store as it loads again (whoever was at work stopped, their run journals as they
  * were), and a new manager and Claude Code, which haven't recovered anyone yet (`agents.recover()`).
  */
-export function restarted(store: Store, workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<GitHub> = demoLayer) {
+export function restarted(store: Store, workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<GitHub> = demoLayer, render?: Render) {
   for (const agent of [...store.agents.values()]) store.putAgent(agentAfterRestart(agent, 'Shop'));
-  return crew(store, workspace, github, noOfficer);
+  return crew(store, workspace, github, noOfficer, render);
 }
 
-function crew(store: Store, workspace: WorkspaceOps, github: Layer.Layer<GitHub>, triager: Triager) {
+/** The office's stand-in for the headless browser: a page with "unrenderable" in it can't be pictured, one with "throws" reports an error. */
+const pictured: Render = (html, frames) => (html.includes('unrenderable') ? Promise.reject(new Error('no browser')) : Promise.resolve({
+  image: Buffer.from('jpeg'),
+  errors: html.includes('throws') ? ['ReferenceError: nope is not defined'] : [],
+  // a stage that says "blank" draws nothing
+  ...(frames && { frames: frames.at.map((at) => ({ at, image: Buffer.from(`beat at ${at}`), seen: { flat: html.includes('blank') ? 1 : 0.7, labels: [] } })) }),
+}));
+
+function crew(store: Store, workspace: WorkspaceOps, github: Layer.Layer<GitHub>, triager: Triager, render: Render = pictured) {
   const claude = new FakeClaude();
   const services = Layer.mergeAll(
     github,
@@ -78,14 +89,7 @@ function crew(store: Store, workspace: WorkspaceOps, github: Layer.Layer<GitHub>
     Workspace.fromOps(workspace),
     Sessions.fromRunner(claude),
     Triage.fromTriager(triager),
-    Renderer.fromBrowser({
-      render: (html, frames) => (html.includes('unrenderable') ? Promise.reject(new Error('no browser')) : Promise.resolve({
-        image: Buffer.from('jpeg'),
-        errors: html.includes('throws') ? ['ReferenceError: nope is not defined'] : [],
-        // a stage that says "blank" draws nothing
-        ...(frames && { frames: frames.at.map((at) => ({ at, image: Buffer.from(`beat at ${at}`), seen: { flat: html.includes('blank') ? 1 : 0.7, labels: [] } })) }),
-      })),
-    }),
+    Renderer.fromBrowser({ render }),
   );
   return { claude, agents: new AgentManager(store, new Hub(), services, () => undefined) };
 }

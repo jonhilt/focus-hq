@@ -50,13 +50,14 @@ export class GoalTools extends Part {
         Effect.map((taken) => ({ bytes: taken.image, errors: taken.errors, taken })),
         Effect.catch((err) => Effect.succeed({ failed: err.message })),
       );
-      if ('bytes' in picture) this.store.saveArtifact(agent.id, `${input.id}.jpg`, picture.bytes);
-      else this.store.deleteArtifact(agent.id, `${input.id}.jpg`);
-      // taking the picture takes a moment: the goal may have closed, or the lead shown something else, meanwhile
-      const work = agent.lead;
+      // taking the picture takes a moment: the goal may have closed (its lead gone home, what it showed filed with it),
+      // or the lead shown something else, meanwhile
+      const work = this.store.agents.has(agent.id) ? agent.lead : undefined;
       if (!work) return { text: 'The goal closed before it went up.' };
       const next = showArtifact(work.artifacts ?? [], input, Date.now());
       if ('error' in next) return yield* new Refused({ message: next.error });
+      if ('bytes' in picture) this.store.saveArtifact(agent.id, `${input.id}.jpg`, picture.bytes);
+      else this.store.deleteArtifact(agent.id, `${input.id}.jpg`);
       // each goes on the waypoint of the slice it was last shown in, as evidence of what it set out to do
       this.update(agent, { lead: { ...work, artifacts: next.map((a) => (a.id === input.id ? { ...a, slice: work.slice, ...('bytes' in picture && { image: true }) } : a)) } });
       const where = `“${next.find((a) => a.id === input.id)?.title ?? input.title}” is on your station's screen; the captain can open it up close.`;
@@ -114,8 +115,9 @@ export class GoalTools extends Part {
       const renderer = yield* Renderer;
       const pictures: (Buffer | undefined)[] = [];
       for (const option of input.options) pictures.push(Option.getOrUndefined(yield* renderer.render(option.html).pipe(Effect.map((p) => p.image), Effect.option)));
-      // taking them takes a moment: the goal may have closed, or the lead asked again, meanwhile
-      const work = agent.lead;
+      // taking them takes a moment: the goal may have closed (its lead gone home, its questions filed with it, pages
+      // and all), or the lead asked again, meanwhile
+      const work = this.store.agents.has(agent.id) ? agent.lead : undefined;
       if (!work) return 'The goal closed before the question went up.';
       const next = askQuestion(work.questions ?? [], input, Date.now());
       if ('error' in next) return yield* new Refused({ message: next.error });

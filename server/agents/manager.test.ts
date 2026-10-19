@@ -11,7 +11,7 @@ import { GhServerError } from '../github/runner';
 import { GitHub } from '../github/service';
 import type { PluginHost } from '../plugins/contract';
 import { demoWorkspace } from './demoRunner';
-import { office, until } from './fakeOffice';
+import { office, restarted, until } from './fakeOffice';
 import type { AgentManager } from './manager';
 import type { Agent, Issue, PullRequest, QaReport, Snapshot } from '../../shared/types';
 import { AWAY_DESK } from '../../shared/types';
@@ -375,6 +375,75 @@ describe('AgentManager', () => {
     expect(steps.indexOf('remove webshop-api')).toBeGreaterThan(steps.indexOf(`snapshot webshop-api: ${wip}`));
     expect(await shipMidClose).toBe('The captain is closing the goal: nothing ships now');
     expect(project.goals![0]).toMatchObject({ id: lead.id, branch, sessionId: 'session-1', repos: [{ folder: 'webshop-frontend' }, { folder: 'webshop-api' }] });
+  });
+
+  // found by the goal's check for two things at once (goalInvariants.test.ts, docs/invariants.md#found-on-main)
+  it('won’t close a goal while its slice is shipping, so the pull requests it opens stay on the goal', async () => {
+    let pushed!: () => void;
+    const pushing = new Promise<void>((resolve) => (pushed = resolve));
+    const { agents, claude, store, project } = office({ ...demoWorkspace, push: () => pushing });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    const ship = claude.turns[0].req.tools!.ship({ title: 'Saved items', summary: 'A slice.' });
+    await until(() => store.agent(lead.id).status === 'pushing');
+
+    await expect(agents.closeGoal(lead.id, true)).rejects.toThrow('is shipping their slice: close the goal once it’s shipped');
+    expect(store.agents.has(lead.id)).toBe(true);
+    pushed();
+    await ship;
+    expect(await agents.closeGoal(lead.id, true)).toEqual({ closed: true });
+    expect(project.goals![0].prs.map((p) => p.repo)).toEqual(['demo/webshop-frontend', 'demo/webshop-api']);
+  });
+
+  // found by the goal's check for two things at once (goalInvariants.test.ts, docs/invariants.md#found-on-main)
+  it('leaves a closed goal’s question as it was filed when the lead asks another as it closes', async () => {
+    let taken!: () => void;
+    const taking = new Promise<void>((resolve) => (taken = resolve));
+    let held = false;
+    const { agents, claude, store, project } = office(demoWorkspace, demoLayer, undefined, async () => {
+      if (held) await taking;
+      return { image: Buffer.from('jpeg'), errors: [] };
+    });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    const options = [{ label: 'Grid', html: '<p>grid</p>' }, { label: 'List', html: '<p>list</p>' }];
+    await claude.turns[0].req.tools!.ask({ question: 'Which layout?', options });
+    held = true;
+    const again = claude.turns[0].req.tools!.ask({ question: 'Which layout, really?', options });
+    expect(await agents.closeGoal(lead.id, true)).toEqual({ closed: true });
+    taken();
+    expect(await again).toBe('The goal closed before the question went up.');
+    expect(project.goals![0].questions!.map((q) => q.question)).toEqual(['Which layout?']);
+    expect(await store.readArtifact(lead.id, 'q1.a.html')).toEqual(Buffer.from('<p>grid</p>'));
+    expect(await store.readArtifact(lead.id, 'q2.a.html')).toBeUndefined();
+  });
+
+  // found by the goal's check for a restart (goalInvariants.test.ts, docs/invariants.md#found-on-main)
+  it('finishes closing a goal the office went down in the middle of, so its WIP snapshot never stays on an open goal', async () => {
+    const snapshots: string[] = [];
+    let dirty = true;
+    const workspace: WorkspaceOps = {
+      ...demoWorkspace,
+      hasUncommittedChanges: async () => dirty,
+      snapshot: async (dir) => (dirty && snapshots.push(dir), true),
+    };
+    const first = office({ ...workspace, snapshot: (dir) => (snapshots.push(dir), new Promise<boolean>(() => undefined)) });
+    const { agent: lead } = first.agents.startGoal(first.project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => first.claude.turns.length === 1);
+    // the office goes down with the first snapshot taken, before the goal's filed
+    void first.agents.closeGoal(lead.id, true);
+    await until(() => snapshots.length === 1);
+    dirty = false;
+    first.agents.shutDown();
+    expect(first.store.agent(lead.id).lead?.closeStarted).toBeDefined();
+
+    const after = restarted(first.store, workspace);
+    after.agents.recover();
+    await until(() => !first.store.agents.has(lead.id));
+    expect(first.project.goals![0]).toMatchObject({ id: lead.id });
+    expect(first.project.goals![0]).not.toHaveProperty('closeStarted');
+    // the lead never picked the goal back up
+    expect(after.claude.turns).toEqual([]);
   });
 
   it('starts a queued goal with the captain’s last edits, at the first free station once theirs is taken, and takes it out of line', () => {

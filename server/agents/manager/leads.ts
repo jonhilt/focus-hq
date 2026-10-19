@@ -199,12 +199,20 @@ export class Leads extends Part {
         }), { concurrency: 'unbounded' });
       const check = closeCheck(work, agent.branch, repos);
       if (check.kind === 'warn' && !force) return { warn: check.reasons };
+      // a ship under way would open its pull requests after the goal's filed, on no goal: it finishes first. One that
+      // starts from here on is refused (`closingGoals`)
+      if (this.store.slice(id).phase === 'shipping') return yield* new Refused({ message: `${agent.name} is shipping their slice: close the goal once it’s shipped` });
       this.closingGoals.add(id);
+      // on disk before any snapshot's taken: a restart from here finishes the close
+      this.markClosing(agent, { at: Date.now() });
       yield* Effect.forEach(work.repos, (r) =>
         workspace.snapshot(dir(r.folder), snapshotMessage(work.title)).pipe(
           Effect.mapError((err) => new Refused({ message: `Couldn’t commit ./${r.folder}’s uncommitted work as a WIP snapshot (${err.message}), so “${work.title}” stays open` })),
           Effect.tap((saved) => Effect.sync(() => saved && this.print(agent, [{ kind: 'system', text: `✻ Committed ./${r.folder}’s uncommitted work as a WIP snapshot on ${repoBranch(r, agent.branch)}` }]))),
-        ), { discard: true }).pipe(Effect.onError(() => Effect.sync(() => this.closingGoals.delete(id))));
+        ), { discard: true }).pipe(Effect.onError(() => Effect.sync(() => {
+          this.closingGoals.delete(id);
+          this.markClosing(agent, undefined);
+        })));
       const project = this.store.project(agent.projectId);
       const record = goalRecord(agent, Date.now());
       project.goals = fileGoal(project.goals ?? [], record);
@@ -225,6 +233,28 @@ export class Leads extends Part {
         : `🏁 “${work.title}” is closed, and team station ${work.station + 1} is free`, undefined, project.id);
       return { closed: true as const };
     }));
+  }
+
+  /** The lead's goal as closing (its snapshots under way), or not any more: read afresh, as it may have changed meanwhile. */
+  private markClosing(agent: Agent, closeStarted: { at: number } | undefined): void {
+    if (agent.lead) this.update(agent, { lead: { ...agent.lead, closeStarted } });
+  }
+
+  /**
+   * After a restart: a close the office went down in the middle of (`closeStarted`) is finished, rather than the lead
+   * picking up a goal whose work is part committed as WIP snapshots. A close that fails then leaves the goal open, and
+   * its lead's run picks back up (`recoverAgent`). The leads it's finishing a close for.
+   */
+  recoverCloses(onKey: boolean): Set<string> {
+    const closing = [...this.store.agents.values()].filter((a) => a.task === 'lead' && a.lead?.closeStarted);
+    for (const agent of closing) {
+      this.print(agent, [{ kind: 'system', text: '✻ Focus restarted part way through closing the goal: finishing that' }]);
+      void this.closeGoal(agent.id, true).catch((err: unknown) => {
+        this.print(agent, [{ kind: 'error', text: `✘ Couldn't finish closing it: ${errorMessage(err)}` }]);
+        this.core.sessions.recoverAgent(agent, onKey);
+      });
+    }
+    return new Set(closing.map((a) => a.id));
   }
 
   /** Checks out every repo of the project side by side, on the goal's first branch, then hands the lead the captain's words. */

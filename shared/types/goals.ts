@@ -214,6 +214,11 @@ export interface LeadWork {
    * lead's next start does that before picking their conversation back up, however often it fails first.
    */
   reopening?: { closedAt: number };
+  /**
+   * The captain closed the goal at `at`, and its uncommitted work is being committed as WIP snapshots: a restart before
+   * the goal's filed finishes the close (`Leads.recoverCloses`), so a snapshot never stays on a goal that's still open.
+   */
+  closeStarted?: { at: number };
   /** Which slice this is: 1, 2, … */
   slice: number;
   /** This slice's pull requests. */
