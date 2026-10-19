@@ -161,6 +161,7 @@ async function main() {
       sound.beam();
       panels.close(false);
       player.teleport(place.position, place.lookAt);
+      if (place.chair) sitIn(place.chair);
       player.lock();
     },
     goToAgent: (id) => {
@@ -506,6 +507,11 @@ async function main() {
   // the captain's chair you're sat in, if you're still sat
   let seatedIn: Chair | null = null;
   const sittingIn = () => (player.seated ? seatedIn : null);
+  const sitIn = (chair: Chair) => {
+    const { eye, lookAt } = seatedView(world.chair(chair));
+    seatedIn = chair;
+    player.sit(eye, lookAt);
+  };
   const useChair = (chair: Chair) => {
     const { use } = CHAIR_USE[chair];
     if (use.kind === 'comms') ui.openComms();
@@ -577,12 +583,9 @@ async function main() {
       case 'turbolift':
         ui.openTurbolift();
         break;
-      case 'sit': {
-        const { eye, lookAt } = seatedView(world.chair(i.chair));
-        seatedIn = i.chair;
-        player.sit(eye, lookAt);
+      case 'sit':
+        sitIn(i.chair);
         break;
-      }
       case 'screen':
         ui.openScreen(i.id);
         break;

@@ -8,7 +8,7 @@
 | <kbd>E</kbd> on one of your chairs | sit down: the captain's chair on the bridge, your desk in the ready room, the head of the observation lounge's table ([your chairs](#your-chairs)) |
 | <kbd>C</kbd> | [Comms](comms.md): who's waiting on you across the ship, every goal under way, and each project's goals |
 | <kbd>I</kbd> | [Personal log](personal-log.md): jot an idea down to come back to, wherever you are |
-| <kbd>T</kbd> | teleport to any holodeck or straight to an agent's station |
+| <kbd>T</kbd> | teleport to any holodeck, straight to an agent's station, or into [one of your chairs](#your-chairs) |
 | <kbd>M</kbd> | ready room |
 | <kbd>N</kbd> | new issue for the holodeck you're in |
 | <kbd>L</kbd> | the goals of the holodeck you're in: talk to their leads, or start another (anywhere else, Comms) |
@@ -29,5 +29,7 @@ Three chairs aboard are the captain's: the captain's chair on the bridge, the on
 - **Ready room**: the ready room console.
 - **Observation lounge**: your [personal log](personal-log.md), the ideas you've jotted down to talk through.
 
-Look round freely; any movement key (or <kbd>Space</kbd>) stands you up where you were before you sat. Teleporting gets you up too. Which chair does what is `CHAIR_USE` in `client/src/world/chairs.ts`; the chairs are `chair` markers on the command deck (`blender/command_deck.py`).
+Or beam straight into one: the teleport panel (<kbd>T</kbd>) lists them under **Your chairs**.
+
+Look round freely; any movement key (or <kbd>Space</kbd>) stands you up where you were before you sat (beamed into a chair, at the spot you'd have beamed into its room). Teleporting gets you up too. Which chair does what is `CHAIR_USE` in `client/src/world/chairs.ts`; the chairs are `chair` markers on the command deck (`blender/command_deck.py`).
 

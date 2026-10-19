@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { chairInHand, SEATED_EYE, seatedView } from './chairs';
+import { chairInHand, SEATED_EYE, seatedView, standingSpot } from './chairs';
 
 describe('seatedView', () => {
   it('puts your eyes over the chair, looking level the way it faces', () => {
@@ -26,5 +26,18 @@ describe('chairInHand', () => {
 
   it('gives way to something else you aim at from the chair', () => {
     expect(chairInHand('ready-room', { kind: 'manager' })).toBeNull();
+  });
+});
+
+describe('standingSpot', () => {
+  const seat = { at: new THREE.Vector3(10, 0, 0), facing: new THREE.Vector3(11, 0, 0) };
+
+  it('is the nearest place to the chair', () => {
+    const near = new THREE.Vector3(8, 0, 1);
+    expect(standingSpot(seat, [new THREE.Vector3(0, 0, 0), near, new THREE.Vector3(-20, 0, 5)])).toBe(near);
+  });
+
+  it('is nowhere with no places', () => {
+    expect(standingSpot(seat, [])).toBeUndefined();
   });
 });

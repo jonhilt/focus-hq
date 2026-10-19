@@ -15,6 +15,20 @@ export function seatedView({ at, facing }: Seat): { eye: THREE.Vector3; lookAt: 
   return { eye, lookAt: eye.clone().add(ahead) };
 }
 
+/** The chairs' names in the teleport panel, which beams you straight into one. */
+export const CHAIR_LABEL: Record<Chair, string> = {
+  bridge: '💺 Captain’s chair',
+  'ready-room': '💺 Ready room desk',
+  lounge: '💺 Head of the lounge table',
+};
+
+/** Where you get up to from a chair you beamed into: the nearest of the places on its deck (its room's). */
+export function standingSpot(seat: Seat, places: readonly THREE.Vector3[]): THREE.Vector3 | undefined {
+  let best: THREE.Vector3 | undefined;
+  for (const p of places) if (!best || p.distanceToSquared(seat.at) < best.distanceToSquared(seat.at)) best = p;
+  return best;
+}
+
 /** What a chair puts to hand, opened with E while you're sat in it: what needs you, the ready room's console, your ideas. */
 export type ChairUse = { kind: 'comms' } | { kind: 'manager'; tab?: ManagerTab };
 

@@ -11,7 +11,9 @@ import { Switch } from './panels';
 
 /** Jump to any room or straight to an agent's desk. */
 export function openTeleportPanel(ui: Ui): void {
-  const places = ui.places().filter((place) => !place.unlisted);
+  const listed = ui.places().filter((place) => !place.unlisted);
+  const places = listed.filter((place) => !place.chair);
+  const chairs = listed.filter((place) => place.chair);
   const agents = state.shownAgents().sort((a, b) => Number(b.status === 'waiting') - Number(a.status === 'waiting') || a.startedAt - b.startedAt);
   const body = h('div', null,
     h('div', { class: 'places' },
@@ -22,6 +24,8 @@ export function openTeleportPanel(ui: Ui): void {
         ),
       ),
     ),
+    chairs.length ? h('h3', null, 'Your chairs') : null,
+    h('div', { class: 'places' }, ...chairs.map((place) => h('button', { class: 'btn place', onclick: () => ui.goTo(place) }, place.label))),
     agents.length ? h('h3', null, 'People') : null,
     h('div', { class: 'places' },
       ...agents.map((a) =>

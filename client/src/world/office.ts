@@ -10,7 +10,8 @@ import type { ClientPlugin, ShipHost, ShipPart } from '../plugins';
 import { shipParts } from './shipParts';
 import type { Deck } from './deck';
 import type { HolodeckDeck } from './holodeckDeck';
-import type { Chair, DeckScreen } from './deckExtras';
+import { CHAIR_LABEL, standingSpot } from './chairs';
+import { type Chair, CHAIRS, type DeckScreen } from './deckExtras';
 import { canvasTexture, fitText, makeCanvas, roundRect } from './canvas';
 import { type Box2, DOOR_W, HALL_HALF, ROOM_WIDTH, roomSlot, rowsFor, type Seat, slotAt, SPACE, spaceAt, SUN_POSITION } from './layout';
 import { flat } from './materials';
@@ -34,6 +35,8 @@ export interface Place {
   projectId?: string;
   /** Somewhere a script can go (`ui.goTo`) but the teleport panel doesn't list: a transporter room, which you beam into. */
   unlisted?: boolean;
+  /** One of the captain's chairs, which going to sits you in: `position` is where you get up to. */
+  chair?: Chair;
 }
 
 
@@ -351,6 +354,12 @@ export class World {
   /** Teleport destinations. */
   places(): Place[] {
     const places: Place[] = this.decks().flatMap((d) => d.places);
+    const command = this.ship.command;
+    for (const chair of CHAIRS) {
+      const seat = this.chair(chair);
+      const stand = standingSpot(seat, command.places.map((p) => p.position));
+      if (stand) places.push({ label: CHAIR_LABEL[chair], position: stand.clone(), lookAt: seat.at.clone(), chair });
+    }
     for (const room of this.rooms.values()) {
       places.push({
         label: room.project.name,
