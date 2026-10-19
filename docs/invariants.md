@@ -22,6 +22,17 @@ What a part hands to `later` is what it asks of the world outside: a model's ans
 
 **Describe a part so it can fail.** A description that never reaches the part's interesting states passes both rules and proves nothing. QA reviews' first description did exactly that: it never got a review past the queue, because its `settle` gave up before QA's seat started. Give each description a plain test that it reaches them (as `reviewInvariants.test.ts` does), and before trusting a pass, break the part on purpose and see the check fail.
 
+## Describing a part
+
+A part that keeps something across a restart (a journal, a file it saves, the store) or waits on the world outside (Claude Code, git, GitHub, a model) is described in a test file of its own, `<part>Invariants.test.ts`, with four things. `server/agents/goalInvariants.test.ts` has all four.
+
+1. **The two rules.** A `Subject` and both checks, or a line saying why one doesn't apply (a part that keeps nothing across a restart, like a Claude Code session, has only the check for two at once). Hand every outside step to `later`.
+2. **Its promises.** Each thing the part's page in `docs/` says it does ("closing a goal keeps what its lead showed and asked", "a session keeps listening while a command it left runs") is a plain test of that, run through the same description, saying what should happen. The rules can't see these: they compare a run with the same code taken one action at a time, so a part that's wrong every time is wrong in the reference too. Of the seven old bugs put back into the session and the goal's close, the rules caught 1 and the promises 5. Name the docs line each test holds. A promise the docs don't make yet is a gap in the docs: write it there first.
+3. **A reach test**, that the description gets to the states that matter (as above), and **a break you've seen caught**: one for each rule, and one promise.
+4. **Its stand-ins.** What the description stands in for the real thing (git, GitHub, Claude Code) assumes how the real thing behaves, and a check can see no further than that. A stand-in with a contract ([contracts](contracts.md)) passes it; one without says what it assumes under "What it can't tell" here. eab2be2 was missed because the session's stand-in for Claude Code always listed a running workflow, where the real one sometimes didn't.
+
+What each part caught and found goes in the sections below, with every live bug the checks find on main: check the docs for a trade-off made on purpose before calling one a bug.
+
 ## Where it's held so far
 
 | part | test | rules |

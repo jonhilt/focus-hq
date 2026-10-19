@@ -13,6 +13,7 @@ A browser-based 3D office (Three.js) where Claude Code agents (Claude Agent SDK)
 ## Rules
 
 - Keep decisions (what happens next, can this merge) in small pure functions with a test next to them; the I/O stays in the caller.
+- A part that keeps something across a restart (a journal, a saved file, the store) or waits on Claude Code, git or GitHub is described to the office's two rules, with its docs page's promises as tests (`docs/invariants.md#describing-a-part`). Adding or changing one, add or change its description.
 - Agents never push or open PRs themselves; the manager does (`server/agents/manager/delivery.ts`).
 - Type assertions and functions over CRAP 30 only go down, file by file (`plugins/scorecard/README.md#the-ratchets`). Narrow instead of casting; split or test a complex function. After removing some, `pnpm run fence:lower` or `pnpm run crap --lower`. Never raise a baseline.
 - Shell commands go through `run()` in `server/util.ts` (no shell), `gh` through `GhRunner`.
