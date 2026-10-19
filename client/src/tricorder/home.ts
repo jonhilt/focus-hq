@@ -148,6 +148,8 @@ export function mergeButton(actions: Actions, key: string, projectId: string, pr
         disabled: blocked,
         confirm: action.confirm ? `${action.confirm}.\n\nMerge ${pr.repo}#${pr.number} "${pr.title}" anyway?` : `Merge ${pr.repo}#${pr.number} "${pr.title}"?`,
       });
+    case 'queued':
+      return actions.button(`${key}:merge-queued`, `⏳ ${action.behind ? `Queued behind #${action.behind}` : 'Queued to merge'}`, () => Promise.resolve(), { class: 'primary', disabled: true });
     case 'checking':
       return actions.button(`${key}:merge-checking`, '🚦 Checking the merge…', () => Promise.resolve(), { class: 'primary', disabled: true });
     case 'when-passed':

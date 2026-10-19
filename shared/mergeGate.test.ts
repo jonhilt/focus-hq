@@ -204,6 +204,10 @@ describe('mergeAction', () => {
     expect(mergeAction(review(), pr({ mergeCheck: { state: 'checking', head: HEAD } }))).toEqual({ kind: 'checking' });
   });
 
+  it('waits while another merge in the repo goes first, saying which', () => {
+    expect(mergeAction(review(), pr({ mergeCheck: { state: 'queued', head: HEAD, behind: 41 } }))).toEqual({ kind: 'queued', behind: 41 });
+  });
+
   it('merges past a merge check that refused it only on purpose, behind a confirm that says why', () => {
     const refused = pr({ mergeCheck: { state: 'refused', head: HEAD, reason: '`pnpm run lint` fails on its merge with the base at 1234567' } });
     expect(mergeAction(review(), refused)).toEqual({ kind: 'merge', override: true, confirm: 'Its merge check refused it: `pnpm run lint` fails on its merge with the base at 1234567. Merging past the check is noted in the ledger' });

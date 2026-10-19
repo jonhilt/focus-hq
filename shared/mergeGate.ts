@@ -154,11 +154,13 @@ export function mergeMethodFor(project: { mergeMethods?: Record<string, MergeMet
 
 /**
  * What the board's merge button does: merge now (asking first when QA hasn't passed it), merge past a merge check that
- * refused it (`override`, asking first), wait while the check runs, or merge once QA passes.
+ * refused it (`override`, asking first), wait while another merge in the repo goes first (`queued`) or while the check
+ * runs, or merge once QA passes.
  */
-export type MergeAction = { kind: 'merge'; confirm?: string; override?: true } | { kind: 'checking' } | { kind: 'when-passed' } | { kind: 'requested' };
+export type MergeAction = { kind: 'merge'; confirm?: string; override?: true } | { kind: 'queued'; behind?: number } | { kind: 'checking' } | { kind: 'when-passed' } | { kind: 'requested' };
 
 export function mergeAction(review: QaReview | undefined, pr: Pick<PullRequest, 'headSha' | 'mergeCheck'>): MergeAction {
+  if (pr.mergeCheck?.state === 'queued') return { kind: 'queued', ...(pr.mergeCheck.behind && { behind: pr.mergeCheck.behind }) };
   if (pr.mergeCheck?.state === 'checking') return { kind: 'checking' };
   const state = qaBadge(review, pr).state;
   if (state === 'queued' || state === 'testing') return review?.mergeRequested ? { kind: 'requested' } : { kind: 'when-passed' };

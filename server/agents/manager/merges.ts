@@ -33,6 +33,8 @@ export class Merges extends Part {
   private checks = new Map<string, MergeCheck>();
   private inFlight = new Map<string, Promise<string>>();
   private repoLock = new KeyedLock();
+  /** The PRs merging or waiting to in each repo (by repo), in turn: the first holds the lock. */
+  private lines = new Map<string, number[]>();
 
   /** Merges the PR once its merge check passes (or the captain merges past it), and returns the commit merged. Rejects with why it didn't. */
   merge(projectId: string, pr: MergeTarget, how: MergeHow): Promise<string> {
@@ -42,9 +44,33 @@ export class Merges extends Part {
       if (how.override) return Promise.reject(new Refused({ message: `the office is still checking its merge` }));
       return going;
     }
-    const job = this.repoLock.with(pr.repo, () => this.gateAndMerge(projectId, pr, how)).finally(() => this.inFlight.delete(key));
+    const ahead = this.join(pr);
+    if (ahead !== undefined) this.queue(projectId, pr, how, ahead);
+    const job = this.repoLock.with(pr.repo, () => this.gateAndMerge(projectId, pr, how)).finally(() => {
+      this.inFlight.delete(key);
+      this.leave(pr);
+    });
     this.inFlight.set(key, job);
     return job;
+  }
+
+  /** Puts the PR at the back of its repo's line, and returns the PR just ahead of it, if any. */
+  private join(pr: MergeTarget): number | undefined {
+    const line = this.lines.get(pr.repo) ?? [];
+    this.lines.set(pr.repo, [...line, pr.number]);
+    return line.at(-1);
+  }
+
+  private leave(pr: MergeTarget): void {
+    const line = (this.lines.get(pr.repo) ?? []).filter((n) => n !== pr.number);
+    if (line.length) this.lines.set(pr.repo, line);
+    else this.lines.delete(pr.repo);
+  }
+
+  /** Shows straight away that the PR waits behind another merge in its repo, rather than nothing until its turn. */
+  private queue(projectId: string, pr: MergeTarget, how: MergeHow, behind: number): void {
+    this.show(projectId, pr, { state: 'queued', head: how.want ?? pr.headSha ?? '', behind });
+    this.hub.toast('info', `⏳ ${pr.repo.split('/')[1]}#${pr.number} is queued behind #${behind}: its merge check starts once that one’s done`, undefined, projectId);
   }
 
   /** The merge check to show on a PR's card, while it's about the PR's head. */
@@ -63,6 +89,8 @@ export class Merges extends Part {
       this.show(projectId, pr, { state: 'overridden', head });
       return this.land(projectId, pr, how, head || undefined);
     }
+    // its turn: off the queue, while the office fetches what it checks
+    if (this.checks.get(prKey(pr.repo, pr.number))?.state === 'queued') this.show(projectId, pr, { state: 'checking', head: how.want ?? pr.headSha ?? '' });
     let heads: MergeHeads;
     try {
       const fetched = await this.runtime.runPromise(Workspace.use((w) => w.mergeHeads(pr.repo, pr.number, pr.baseBranch)));

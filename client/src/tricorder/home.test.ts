@@ -80,4 +80,10 @@ describe('the Tricorder’s merge button', () => {
     expect(checking.click()).toBe('🚦 Checking the merge…');
     expect(api.mergePr).not.toHaveBeenCalled();
   });
+
+  it('can’t be pressed while queued behind another merge, and says which', () => {
+    const queued = card(review({ status: 'passed' }), { ...pr, mergeCheck: { state: 'queued', head: HEAD, behind: 41 } });
+    expect(queued.click()).toBe('⏳ Queued behind #41');
+    expect(api.mergePr).not.toHaveBeenCalled();
+  });
 });

@@ -96,6 +96,8 @@ export function mergeCheckOn(pr: Pick<PullRequest, 'headSha'>, check: MergeCheck
 /** How a merge check reads on its PR's card. */
 export function mergeCheckLine(check: MergeCheck): string {
   switch (check.state) {
+    case 'queued':
+      return check.behind ? `queued behind #${check.behind}` : 'queued to merge';
     case 'checking':
       return 'checking the merge';
     case 'passed':

@@ -23,7 +23,7 @@ PRs merged on GitHub itself don't go through the office, so the check never sees
 5. **Verdict** (`mergeVerdict`, pure). The PR merges only if git merged it by itself and every check passed (a repo with no checks to run counts as passing). Conflicts, a failing check, or a merge the office couldn't build or run all refuse it.
 6. **Merge on GitHub**. The office merges exactly the head it checked (`--match-head-commit`), using the repo's [merge method](configuration.md#merge-method).
 
-Merges in one repo go one at a time. That way each check runs against a base that already has the previous merge in it, which is the case the check exists for. If a merge lands on GitHub in the gap between the check and the office's own merge, the check doesn't see it.
+Merges in one repo go one at a time. A merge asked for while another in the same repo is still going waits its turn, and shows that straight away: its card reads **queued behind #N** (the PR just ahead of it), its button **Queued behind #N**, and a toast says so. When its turn comes the card flips to **checking the merge**. That way each check runs against a base that already has the previous merge in it, which is the case the check exists for. If a merge lands on GitHub in the gap between the check and the office's own merge, the check doesn't see it.
 
 ## Which checks
 

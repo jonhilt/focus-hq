@@ -1,8 +1,9 @@
 import { Effect, Layer, ManagedRuntime } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { MergeHeads, MergeTrial } from '../../shared/mergeCheck';
 import { demoLayer } from '../github/demo';
 import { GitHub } from '../github/service';
+import { Hub } from '../hub';
 import { demoWorkspace } from './demoRunner';
 import { office } from './fakeOffice';
 import type { WorkspaceOps } from './types';
@@ -12,7 +13,7 @@ import type { WorkspaceOps } from './types';
 const REPO = 'demo/webshop-frontend';
 
 /** A fake office whose GitHub the test can read, and whose merge checks come out as `outcome` says: each trial counted. */
-async function gated(outcome: (heads: MergeHeads) => MergeTrial) {
+async function gated(outcome: (heads: MergeHeads) => MergeTrial, hold?: Promise<void>) {
   const gh = await ManagedRuntime.make(demoLayer).runPromise(GitHub.use(Effect.succeed));
   let base = 'base0000aaa';
   const trials: MergeHeads[] = [];
@@ -21,6 +22,7 @@ async function gated(outcome: (heads: MergeHeads) => MergeTrial) {
     mergeHeads: async () => ({ base, head: '' }),
     tryMerge: async (_repo, heads) => {
       trials.push(heads);
+      await hold;
       return outcome(heads);
     },
   };
@@ -32,7 +34,7 @@ async function gated(outcome: (heads: MergeHeads) => MergeTrial) {
   const state = () => Effect.runPromise(gh.pullRequestState(REPO, pr.number));
   const comments = () => Effect.runPromise(gh.pullRequestComments(REPO, pr.number));
   const checks = () => o.store.ledger.filter((e) => e.kind === 'merge-check');
-  return { ...o, pr, trials, state, comments, checks, moveBase: (to: string) => (base = to) };
+  return { ...o, pr, prs, trials, state, comments, checks, moveBase: (to: string) => (base = to) };
 }
 
 const lintFails = (heads: MergeHeads): MergeTrial => ({
@@ -90,5 +92,31 @@ describe('the merge check', () => {
     await agents.merge(project.id, pr, { method: 'squash', by: 'captain', override: true, want: pr.headSha });
     expect(await state()).toBe('MERGED');
     expect(checks().map((e) => e.kind === 'merge-check' && e.outcome)).toEqual(['failed', 'overridden']);
+  });
+
+  it('shows a merge waiting behind another in the same repo as queued straight away, then checking once its turn comes', async () => {
+    let release = () => {};
+    const { agents, project, pr, prs, store, trials } = await gated(allPass, new Promise<void>((r) => (release = r)));
+    const other = prs.find((p) => p.number !== pr.number);
+    if (!other) throw new Error('the demo repo has only one PR');
+    const toasts = vi.spyOn(Hub.prototype, 'toast');
+    // what the board showed of the second PR, as each send went out
+    const shown: (string | undefined)[] = [];
+    const sent = vi.spyOn(Hub.prototype, 'send').mockImplementation((e) => {
+      if (e.type === 'board') shown.push(e.board.prs.find((p) => p.number === other.number)?.mergeCheck?.state);
+    });
+    const card = (n: number) => store.boards.get(project.id)?.prs.find((p) => p.number === n)?.mergeCheck;
+    const first = agents.merge(project.id, pr, { method: 'squash', by: 'captain' });
+    await expect.poll(() => card(pr.number)?.state).toBe('checking');
+    const second = agents.merge(project.id, other, { method: 'squash', by: 'captain' });
+    expect(card(other.number)).toEqual({ state: 'queued', head: other.headSha, behind: pr.number });
+    expect(toasts).toHaveBeenCalledWith('info', expect.stringContaining(`#${other.number} is queued behind #${pr.number}`), undefined, project.id);
+    expect(trials).toHaveLength(1);
+    release();
+    await Promise.all([first, second]);
+    expect(shown.filter((s, i) => s && s !== shown[i - 1])).toEqual(['queued', 'checking', 'passed']);
+    expect(trials).toHaveLength(2);
+    toasts.mockRestore();
+    sent.mockRestore();
   });
 });

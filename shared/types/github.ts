@@ -61,9 +61,11 @@ export interface PullRequest {
 
 /** Where a PR's merge check stands, as its card on the board shows it (shared/mergeCheck.ts). */
 export interface MergeCheck {
-  state: 'checking' | 'passed' | 'refused' | 'overridden';
+  state: 'queued' | 'checking' | 'passed' | 'refused' | 'overridden';
   /** The PR's head it's about: a push makes it old news. */
   head: string;
+  /** While queued: the PR whose merge in the same repo goes just before it. */
+  behind?: number;
   reason?: string;
 }
 

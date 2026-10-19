@@ -77,6 +77,7 @@ describe('the merge check on the board', () => {
   });
 
   it('reads as where it stands', () => {
+    expect(mergeCheckLine({ state: 'queued', head: 'h', behind: 41 })).toBe('queued behind #41');
     expect(mergeCheckLine({ state: 'checking', head: 'h' })).toBe('checking the merge');
     expect(mergeCheckLine({ state: 'refused', head: 'h', reason: 'it conflicts' })).toBe('merge refused: it conflicts');
   });
