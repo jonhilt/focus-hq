@@ -13,9 +13,8 @@ import { openBoardPanel } from './ui/boardPanel';
 import type { Ui } from './ui/context';
 import { h } from './ui/dom';
 import { Hud } from './ui/hud';
-import { Studio } from './ui/studio';
-import { TrainingSteps } from './ui/trainingSteps';
 import { openManagerPanel } from './ui/managerPanel';
+import { stepDemoPace } from './ui/demoPace';
 import { openGoalsPanel } from './ui/goalsPanel';
 import { openCommsPanel } from './ui/commsPanel';
 import { openCaptainsLogPanel } from './ui/captainsLogPanel';
@@ -31,7 +30,6 @@ import { openQaPanel } from './ui/qaPanel';
 import { openScreenPanel } from './ui/screenPanel';
 import { openGoalChart } from './ui/chartPanel';
 import { openNewIssuePanel, openPausePanel, openTeleportPanel, openTurboliftPanel } from './ui/travelPanel';
-import { openTrainingPanel } from './ui/trainingPanel';
 import { type Interaction, REACH } from './world/builder';
 import { OVERLAY_LAYER } from './world/frame';
 import { toastShows } from '../../shared/hidden';
@@ -151,12 +149,8 @@ async function main() {
   player.teleport(aboard.position, aboard.lookAt);
   const hud = new Hud();
   const panels = new Panels();
-  // ?studio=1: the TV studio's recorder films the office (ui/studio.ts, docs/studio.md)
-  const studio = params.get('studio') === '1' ? new Studio(world, player, hud, params.get('stage')) : null;
-  // the training console's steps: ] does the captain's next move, [ steps back (ui/trainingSteps.ts)
-  const steps = new TrainingSteps((message) => ui.error(message));
-  // recording: H (or ?record=1) hides what's only there to drive the ship (the HUD, training's steps, all but errors'
-  // toasts), so a video shows the office and nothing else
+  // recording: H (or ?record=1) hides what's only there to drive the ship (the HUD, all but errors' toasts), so a
+  // video shows the office and nothing else
   const record = (on: boolean) => document.body.classList.toggle('recording', on);
   record(params.get('record') === '1');
 
@@ -220,11 +214,6 @@ async function main() {
     openTeleport: () => openTeleportPanel(ui),
     openScreen: (leadId) => openScreenPanel(ui, leadId),
     openChart: (leadId) => openGoalChart(ui, leadId),
-    openTraining: () => openTrainingPanel(ui),
-    train: (projectId, list, speed) => {
-      steps.start(projectId, list, speed);
-      ui.beamBack(projectId, 0);
-    },
     openTurbolift: () => {
       const stops = world.stops();
       openTurboliftPanel(ui, stops, stopAt(stops, camera.position));
@@ -338,7 +327,6 @@ async function main() {
       });
   };
   const syncWorld = () => {
-    world.demo = state.info?.mode === 'demo';
     world.sync(state.projects);
     player.colliders = world.colliders;
     for (const room of world.rooms.values()) {
@@ -590,9 +578,6 @@ async function main() {
       case 'turbolift':
         ui.openTurbolift();
         break;
-      case 'training':
-        ui.openTraining();
-        break;
       case 'screen':
         ui.openScreen(i.id);
         break;
@@ -706,7 +691,11 @@ async function main() {
       return;
     }
     if (panels.isOpen) return;
-    if (steps.key(e.code)) return;
+    // in a demo office, - and = slow its agents down and speed them up (the studio's scene takes them first, above)
+    if ((e.code === 'Minus' || e.code === 'Equal') && state.info?.mode === 'demo') {
+      if (!e.repeat) stepDemoPace(e.code === 'Minus' ? -1 : 1, ui);
+      return;
+    }
     const hotkeys: Record<string, (() => void) | undefined> = {
       KeyE: interact,
       KeyT: () => ui.openTeleport(),
@@ -789,12 +778,7 @@ async function main() {
     }
     stats?.begin();
     player.enabled = !panels.isOpen;
-    // the studio holds the camera where its shot puts it
-    if (studio) studio.update(now);
-    else {
-      steps.update();
-      player.update(dt);
-    }
+    player.update(dt);
     const through = world.through(camera.position);
     if (through) player.transport(through.through, through.other.doorway.matrix);
     newFrame();
@@ -829,7 +813,7 @@ async function main() {
   loop();
 
   // handy for debugging from the console
-  Object.assign(window, { focusHQ: { state, world, player, ui, ...(studio && { studio }) } });
+  Object.assign(window, { focusHQ: { state, world, player, ui } });
 }
 
 void main();

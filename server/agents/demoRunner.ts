@@ -1,11 +1,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { readScenario, type Scenario, turnParts } from '../../shared/scenarios';
-import { endsShowcaseTurn, showcaseRoom, type ShowcaseRole, type ShowcaseRoom } from '../../shared/showcase';
-import { isRecord } from '../../shared/records';
 import type { ModelCite, SystemModel, TermLine } from '../../shared/types';
 import { config } from '../config';
+import { demoPace } from '../demoPace';
 import { demoSinceVerdict } from '../demoGit';
 import { randomHex, sleep } from '../util';
 import type { Transcript } from './transcript';
@@ -22,34 +20,15 @@ export const FILES: Record<string, string[]> = {
   web: ['src/App.tsx', 'src/components/Header.tsx', 'src/components/CartBadge.tsx', 'src/pages/Product.tsx', 'src/store/cart.ts', 'src/styles/theme.css'],
   api: ['src/server.ts', 'src/routes/auth.ts', 'src/routes/products.ts', 'src/routes/orders.ts', 'src/middleware/rateLimit.ts', 'test/orders.test.ts'],
   game: ['index.html', 'src/game.ts', 'src/ship.ts', 'src/asteroids.ts', 'src/audio.ts', 'src/hud.ts'],
-  // the showcase's Focus repo, as its own files are laid out
-  focus: ['server/agents/manager.ts', 'server/agents/transcript.ts', 'server/agents/workflows.ts', 'client/src/world/office.ts', 'client/src/ui/captainsLog.ts', 'shared/types/agents.ts'],
 };
 
-/** What the showcase's subagents station hands out each round: a part of the Focus repo to each Explore helper. */
-const SHOWCASE_AREAS = [
-  { folder: 'focus/server', files: ['agents/transcript.ts', 'agents/sessionDigest.ts', 'agents/workflows.ts'], description: 'Find the server’s transcript readers', ask: 'Find every place the server reads an agent’s transcript, and what each needs from it.', found: 'server: three readers, all through transcript.ts, keyed by session id' },
-  { folder: 'focus/plugins', files: ['cartography/server.ts', 'scorecard/server.ts', 'number-one/server.ts'], description: 'Find the plugins’ transcript readers', ask: 'Which plugins read transcripts, and through what?', found: 'plugins: two, both through PluginHost.transcript' },
-  { folder: 'focus/client', files: ['src/ui/agentPanel.ts', 'src/net/state.ts', 'src/ui/captainsLog.ts'], description: 'Check the client never reads them', ask: 'Does anything in the client read a transcript directly?', found: 'client: none; lines come over the hub' },
-];
-
-/**
- * What a showcase station puts on its screen first (scenes/showcase/`file`): a lead tool's input (`.json`) or a page
- * (`.html`); none when it's missing or doesn't read, so the lead goes on without it.
- */
-function showcaseScreen(file: string): { input?: Record<string, unknown>; page?: string } | undefined {
-  try {
-    const text = fs.readFileSync(path.join(config.root, 'scenes', 'showcase', path.basename(file)), 'utf8');
-    if (!file.endsWith('.json')) return { page: text };
-    const input: unknown = JSON.parse(text);
-    return isRecord(input) ? { input } : undefined;
-  } catch {
-    return undefined;
-  }
-}
+/** Tokens a demo workflow agent uses a second at work (at 1×): one at work for a minute uses some 36k, as a real one might. */
+const WORKFLOW_TOKENS_PER_SEC = 600;
+/** Seconds a demo workflow agent works (at 1×) between tool calls. */
+const WORKFLOW_SECS_PER_TOOL = 8;
 
 /** Which kind of demo repo `repo` is, for its made-up files. */
-const repoKind = (repo: string) => (/focus/.test(repo) ? 'focus' : /api/.test(repo) ? 'api' : /game|dodger/.test(repo) ? 'game' : 'web');
+const repoKind = (repo: string) => (/api/.test(repo) ? 'api' : /game|dodger/.test(repo) ? 'game' : 'web');
 
 const pick = <T>(list: T[], n: number) => [...list].sort(() => Math.random() - 0.5).slice(0, n);
 
@@ -71,20 +50,16 @@ function placeholderShot(url: string, heading: string, caption: string, accent: 
 
 /** Pretend agents for `npm run demo`: realistic-looking terminal output, browser testing and the odd raised hand. */
 export class DemoRunner implements AgentRunner {
-  /** How fast the pretend agents go: the training console sets it, and changes it as the captain asks (docs/studio.md). */
-  speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
   /** How full each pretend session's context is. */
   private context = new Map<string, number>();
   /** Each lead's repos and goal, by session: a resumed turn doesn't hear them again. */
-  private leads = new Map<string, { repos: { folder: string; repo: string }[]; goal: string; scenario: Scenario; room?: ShowcaseRoom }>();
+  private leads = new Map<string, { repos: { folder: string; repo: string }[]; goal: string }>();
   /**
    * Each pretend lead's session as Claude Code's transcript would have it, by session: the messages that started its
    * turns, what it said and the tools it called, so what reads a real session's transcript (plugins, through
    * `PluginHost.transcript`) has something to read in the demo.
    */
   private journals = new Map<string, string[]>();
-  /** Which parts of its story a new goal's lead plays (shared/scenarios.ts): a goal keeps the one it started with. */
-  scenario: Scenario = readScenario(process.env.FOCUS_DEMO_SCENARIO);
 
   /** A pretend lead's transcript so far, as JSONL, to read as a real one would be. */
   transcript(sessionId: string): string | undefined {
@@ -96,7 +71,7 @@ export class DemoRunner implements AgentRunner {
     const opened = Date.now();
     const id = `session_demo${randomHex(4)}`;
     return Promise.resolve({
-      read: () => Promise.resolve(Date.now() - opened < 4000 / this.speed ? 'Starting a cloud session…' : `Starting a cloud session…\n\x1b[2m☁ https://claude.ai/code/${id}\x1b[0m`),
+      read: () => Promise.resolve(Date.now() - opened < 4000 / demoPace() ? 'Starting a cloud session…' : `Starting a cloud session…\n\x1b[2m☁ https://claude.ai/code/${id}\x1b[0m`),
     });
   }
 
@@ -107,9 +82,6 @@ export class DemoRunner implements AgentRunner {
     const inbox: string[] = [];
     let stopped = false;
     let finished = false;
-    // a showcase lead's station, while its turn is one that loops, and whether a message has come that ends it
-    let looping: ShowcaseRole | undefined;
-    let ended = false;
     // the captain can change it while the session runs, as in a real one
     let autonomy = req.autonomy;
     const abort = new AbortController();
@@ -131,7 +103,7 @@ export class DemoRunner implements AgentRunner {
     };
 
     const wait = async (min: number, max: number) => {
-      await sleep(((min + Math.random() * (max - min)) * 1000) / this.speed);
+      await sleep(((min + Math.random() * (max - min)) * 1000) / demoPace());
       if (stopped) throw new Error('stopped');
     };
     const tool = async (name: string, input: Record<string, unknown>, output: string[] = []) => {
@@ -270,7 +242,8 @@ export class DemoRunner implements AgentRunner {
 
     // a workflow (Claude Code's Workflow tool), played out as Claude Code reports one: at most `cap` agents at work at once
     // and the rest queued, a pipeline's stages overlapping, agents queued as the script reaches them, some failing. Its
-    // progress goes through the same reading as a real session's
+    // progress goes through the same reading as a real session's. Each agent works for `secs` at 1× (seconds to minutes,
+    // as a real subagent does), and gets on at the demo's pace as it is at each look, so a change of pace reaches it mid-task
     type Job = { label: string; phase: number; ask: string; result?: string; after?: string; secs: [number, number] };
     const runWorkflow = async (name: string, description: string, script: string, phases: { title: string; child?: boolean }[], jobs: Job[], logs: (done: number, of: number) => string[], cap = 8) => {
       const id = `demo-wf-${randomHex(3)}`;
@@ -289,7 +262,8 @@ export class DemoRunner implements AgentRunner {
       journal({ type: 'launched' });
       const transcript = (e: { index: number }, ...entries: unknown[]) =>
         fs.appendFileSync(path.join(dir, `agent-${agentId(e)}.jsonl`), entries.map((x) => `${JSON.stringify(x)}\n`).join(''));
-      type Entry = { job: Job; index: number; queuedAt: number; startedAt?: number; doneAt?: number; state: 'start' | 'done' | 'error' };
+      // `need` is how long it works at 1× and `worked` how far it's got, both in seconds
+      type Entry = { job: Job; index: number; queuedAt: number; startedAt?: number; doneAt?: number; state: 'start' | 'done' | 'error'; need: number; worked: number };
       const entries: Entry[] = [];
       const ready = (job: Job) => !job.after || entries.some((e) => e.job.label === job.after && e.state !== 'start');
       const report = () => {
@@ -306,24 +280,28 @@ export class DemoRunner implements AgentRunner {
         const progress = workflowProgress(raw);
         if (progress) hooks.workflow?.({ kind: 'progress', id, ...progress, usage: usage() });
       };
-      // what it's used: tokens as each agent works, and a few tool calls each
+      // what it's used: tokens as each agent works, and a tool call every few seconds of it
       const usage = () => {
-        const now = Date.now();
         const started = entries.filter((e) => e.startedAt !== undefined);
-        const tokens = started.reduce((n, e) => n + Math.round((((e.doneAt ?? now) - (e.startedAt ?? now)) / 1000) * this.speed * 1800), 0);
-        return { tokens, toolUses: started.length * 2 + entries.filter((e) => e.doneAt).length * 2 };
+        return {
+          tokens: started.reduce((n, e) => n + Math.round(e.worked * WORKFLOW_TOKENS_PER_SEC), 0),
+          toolUses: started.reduce((n, e) => n + 1 + Math.floor(e.worked / WORKFLOW_SECS_PER_TOOL), 0),
+        };
       };
       hooks.lines([{ kind: 'tool', text: `⏺ Workflow(${name})` }, { kind: 'output', text: '  ⎿  Launched in the background' }]);
       hooks.workflow?.({ kind: 'started', id, name, description, script });
       hooks.workflow?.({ kind: 'transcripts', id, dir, scriptPath });
       const pending = [...jobs];
-      const ends = new Map<Entry, number>();
+      let looked = Date.now();
       while (pending.length || entries.some((e) => e.state === 'start')) {
         const now = Date.now();
+        const worked = ((now - looked) / 1000) * demoPace();
+        looked = now;
+        for (const e of entries) if (e.state === 'start' && e.startedAt !== undefined) e.worked += worked;
         // the script reaches each agent once what it waits on has finished: queued, then started when a slot is free
         for (const job of pending.filter(ready)) {
           pending.splice(pending.indexOf(job), 1);
-          entries.push({ job, index: entries.length + 1, queuedAt: now, state: 'start' });
+          entries.push({ job, index: entries.length + 1, queuedAt: now, state: 'start', need: job.secs[0] + Math.random() * (job.secs[1] - job.secs[0]), worked: 0 });
         }
         for (const e of entries) {
           if (e.state !== 'start') continue;
@@ -337,8 +315,7 @@ export class DemoRunner implements AgentRunner {
               { type: 'user', message: { content: [{ type: 'tool_result', content: `export function ${e.job.label.replace(/\W/g, '_')}() {}\n// ${30 + e.index * 7} lines` }] } },
               { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'pnpm test' } }] } },
             );
-            ends.set(e, now + ((e.job.secs[0] + Math.random() * (e.job.secs[1] - e.job.secs[0])) * 1000) / this.speed);
-          } else if (e.startedAt !== undefined && now >= (ends.get(e) ?? Infinity)) {
+          } else if (e.startedAt !== undefined && e.worked >= e.need) {
             e.doneAt = now;
             e.state = e.job.result === undefined ? 'error' : 'done';
             if (e.job.result !== undefined) journal({ type: 'result', key: `k${e.index}`, agentId: agentId(e), result: e.job.result });
@@ -369,7 +346,7 @@ export class DemoRunner implements AgentRunner {
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, '');
       let n = 0;
-      const timer = setInterval(() => fs.appendFileSync(file, `${line(++n)}\n`), 1000 / this.speed);
+      const timer = setInterval(() => fs.appendFileSync(file, `${line(++n)}\n`), 1000 / demoPace());
       jobs.set(id, { timer, task });
       hooks.lines([{ kind: 'tool', text: task === 'monitor' ? `⏺ Monitor(${description})` : `⏺ Bash(${description})` }, { kind: 'output', text: `  ⎿  Running in the background (${id})` }]);
       hooks.background?.({ kind: 'started', id, task, description });
@@ -389,14 +366,14 @@ export class DemoRunner implements AgentRunner {
       const areas = ['store', 'routes', 'views', 'tests', 'styles', 'config'];
       const review: Job[] = [
         ...areas.flatMap((a, i): Job[] => [
-          { label: `scan:${a}`, phase: 1, ask: `Scan the ${a} for anything ${goal} breaks`, result: i === 3 ? undefined : `${a}: nothing broken`, secs: [3, 7] },
-          { label: `check:${a}`, phase: 2, ask: `Check what the scan of the ${a} found`, result: 'Confirmed', after: `scan:${a}`, secs: [2, 5] },
+          { label: `scan:${a}`, phase: 1, ask: `Scan the ${a} for anything ${goal} breaks`, result: i === 3 ? undefined : `${a}: nothing broken`, secs: [45, 120] },
+          { label: `check:${a}`, phase: 2, ask: `Check what the scan of the ${a} found`, result: 'Confirmed', after: `scan:${a}`, secs: [20, 60] },
         ]),
-        ...Array.from({ length: 24 }, (_, i): Job => ({ label: `fan:${i}`, phase: 3, ask: `Try ${goal} with case ${i}`, result: i === 17 ? undefined : `Case ${i} passes`, after: 'check:config', secs: [2, 5] })),
-        { label: 'child:1', phase: 4, ask: 'Summarise the findings', result: 'Summary written', after: 'fan:23', secs: [2, 3] },
-        { label: 'child:2', phase: 4, ask: 'Draft the PR notes', result: 'Notes drafted', after: 'fan:23', secs: [2, 3] },
+        ...Array.from({ length: 24 }, (_, i): Job => ({ label: `fan:${i}`, phase: 3, ask: `Try ${goal} with case ${i}`, result: i === 17 ? undefined : `Case ${i} passes`, after: 'check:config', secs: [30, 90] })),
+        { label: 'child:1', phase: 4, ask: 'Summarise the findings', result: 'Summary written', after: 'fan:23', secs: [30, 60] },
+        { label: 'child:2', phase: 4, ask: 'Draft the PR notes', result: 'Notes drafted', after: 'fan:23', secs: [30, 60] },
       ];
-      const map: Job[] = folders.map((f) => ({ label: `map:${f}`, phase: 1, ask: `Map ./${f} for ${goal}`, result: `./${f} mapped`, secs: [4, 9] }));
+      const map: Job[] = folders.map((f) => ({ label: `map:${f}`, phase: 1, ask: `Map ./${f} for ${goal}`, result: `./${f} mapped`, secs: [60, 120] }));
       hooks.activity('working', 'Waiting on 2 workflows');
       await Promise.all([
         runWorkflow('review-slice', `Review ${goal} before it ships`, DEMO_REVIEW_SCRIPT, [{ title: 'Scan' }, { title: 'Check' }, { title: 'Fan' }, { title: '▸ summarise', child: true }], review,
@@ -419,12 +396,7 @@ export class DemoRunner implements AgentRunner {
       const message = req.prompt.replace(/^(Your workspace|Slice \d+ starts)[^\n]*\n(- [^\n]*(\n|$))*/, '').replace(/\s+/g, ' ').trim();
       // a resumed session doesn't hear the goal again, and a goal's lead keeps the one goal
       const goal = known?.goal ?? (message.replace(/[.!?]$/, '').slice(0, 60) || 'saved items');
-      const scenario = known?.scenario ?? this.scenario;
-      // the captain can ask for a workflow in their own words, as with real Claude Code: the turn runs them whatever the scenario
-      const parts = turnParts(scenario, message);
-      // a showcase station's lead (shared/showcase.ts), by the goal its first message starts
-      const room = known ? known.room : showcaseRoom(message);
-      this.leads.set(sessionId, { repos, goal, scenario, room });
+      this.leads.set(sessionId, { repos, goal });
       const ship = async (title: string, summary: string): Promise<boolean> => {
         hooks.lines([{ kind: 'tool', text: `⏺ mcp__office__ship(${title})` }]);
         hooks.activity('pushing', 'Shipping the slice');
@@ -493,88 +465,11 @@ export class DemoRunner implements AgentRunner {
           hooks.lines([{ kind: 'output', text: `  ⎿  ${h.found}` }]);
         }
       };
-      // the showcase's station that ships: a slice built across its repos, shipped without asking, for QA to review and
-      // the project to merge by itself, and then the next
-      const showcaseSlice = async (slice: number): Promise<RunOutcome> => {
-        await think();
-        const files = FILES.focus;
-        const todos = (done: number) => ({
-          todos: [['Read why each goal closed', 'Reading why each goal closed'], [`Slice ${slice}: show it in the log`, 'Showing it in the log'], ['Ship the slice', 'Shipping the slice']].map(([content, activeForm], i) => ({
-            content, activeForm, status: i < done ? 'completed' : i === done ? 'in_progress' : 'pending',
-          })),
-        });
-        await tool('TodoWrite', todos(0));
-        for (const r of repos) {
-          await tool('Read', { file_path: `/work/${r.folder}/${files[4]}` }, ['Read 212 lines']);
-          await tool('TodoWrite', todos(1));
-          await tool('Edit', { file_path: `/work/${r.folder}/${files[4]}`, old_string: 'closedAt', new_string: 'closedAt, why' }, ['Updated 1 file']);
-          await tool('Bash', { command: 'pnpm test' }, ['Tests  1,204 passed']);
-          await commit(r.folder, `Slice ${slice}: the log says why ${slice === 1 ? 'a goal' : 'each goal'} closed`);
-        }
-        await tool('TodoWrite', todos(2));
-        await ship(`The captain's log says why each goal closed (slice ${slice})`, `## Summary\n\nSlice ${slice}: the captain's log shows why each goal closed.\n\n## Testing\n\n- pnpm test`);
-        await tool('TodoWrite', todos(3));
-        await say(`Slice ${slice} is shipped: QA is reviewing it, and it waits for you to merge.`);
-        // a passed slice doesn't wake a lead, so this one keeps its turn: a follow-up for QA to review every minute or so,
-        // until the captain merges the slice from the board and its next turn starts the next
-        looping = 'qa';
-        for (let round = 1; ; round++) {
-          for (let waited = 0; waited < 15 && !ended; waited++) await wait(4, 6);
-          if (ended) {
-            await say(`Slice ${slice} has landed. On to the next.`);
-            return { ok: true, summary: `Slice ${slice} landed.` };
-          }
-          const r = repos[0];
-          await tool('Edit', { file_path: `/work/${r.folder}/${files[4]}`, old_string: 'closed:', new_string: 'closed because' }, ['Updated 1 file']);
-          await commit(r.folder, `Tighten the log's wording (${round})`);
-          await ship(`The captain's log says why each goal closed (slice ${slice})`, `Slice ${slice}, with the log's wording tightened.`);
-          await say('Pushed a follow-up: QA is looking at it again.');
-        }
-      };
-      const showcase = async (room: ShowcaseRoom): Promise<RunOutcome> => {
-        const folders = repos.map((r) => r.folder);
-        // the stations start a few seconds apart, so their screens aren't all drawn at once
-        await wait(room.station * 4, room.station * 4 + 1);
-        for (const r of repos) await tool('Read', { file_path: `/work/${r.folder}/CLAUDE.md` }, ['Read 41 lines']);
-        await think();
-        // something on the goal's star chart from the start: what done looks like, what's next and a loose thread
-        await note({ done: `${goal}: done, and shown to the captain.`, next: ['A thin slice end to end'], contact: 'Does this hold up with three leads in the same repo?' });
-        if (room.role === 'qa') return showcaseSlice(1);
-        // what a real lead put on its screen, as it put it there (scenes/showcase/); the made-up briefing if it's gone
-        const screen = room.screen && showcaseScreen(room.screen.file);
-        if (screen?.page !== undefined) await show({ id: room.screen?.file.replace(/\.\w+$/, '') ?? 'screen', title: room.screen?.title ?? '', html: screen.page });
-        else if (screen?.input && room.screen?.tool) {
-          const t = tools.extra?.find((x) => x.name === room.screen?.tool);
-          if (t) await pluginTool(t, screen.input);
-        } else if (room.role === 'briefing') await demoTools();
-        if (room.role === 'briefing') {
-          await say('The briefing is on the screen: step through it, and ask me about any beat.');
-          return { ok: true, summary: 'Put up a briefing.' };
-        }
-        // subagents or a workflow, round after round until the captain stops it
-        for (let round = 1; ; round++) {
-          if (room.role === 'subagents') {
-            await helperRound(SHOWCASE_AREAS.map((a) => ({ ...a, description: `${a.description} (round ${round})` })));
-            await say('Three readers between them, and none needs more than the session id. Going round again for the plugins’ side.');
-          } else {
-            await reviewWorkflows(folders, goal);
-            await say('The review is in: one area to look at again. Running it once more against the fixes.');
-          }
-          await wait(6, 10);
-        }
-      };
-
       // asked about a briefing up close: a line straight away, a look at the code, then a spoken answer about that beat
       const briefing = /^A question about your briefing “([^”]*)”[^)]*?(?:at beat (\d+), “([^”]*)”)?\): ([^\n]*)/.exec(req.prompt);
       if (briefing) {
         const [, title, beat, beatTitle, asked] = briefing;
         await say('Good question. Let me check the code on that.');
-        // the showcase's briefing is a real lead's, about workflows: an answer about that, and no redraw
-        if (room) {
-          await tool('Read', { file_path: `/work/${repos[0]?.folder ?? 'focus'}/${FILES.focus[2]}` }, ['Read 140 lines']);
-          await say(`${beat ? `In beat ${beat}, ${beatTitle}, ` : `In ${title}, `}the transporter room reads the journal Claude Code writes as each agent starts and finishes, so what you see on the pads is what the script has actually reached, not a guess. Each phase lights as its first agent beams in, and a result flows back up to it when one finishes.`);
-          return { ok: true, summary: 'Answered a question about a briefing.' };
-        }
         await tool('Read', { file_path: `/work/${repos[0]?.folder ?? 'web'}/${FILES[kindOf(repos[0]?.repo ?? 'web')][0]}` }, ['Read 84 lines']);
         // asked for more on it: an answer aloud first, then the briefing again under its id, that beat in more detail
         if (/\b(more|detail|redraw|show me)\b/i.test(asked)) {
@@ -586,11 +481,6 @@ export class DemoRunner implements AgentRunner {
         await say(`${beat ? `In beat ${beat}, ${beatTitle}, ` : `In ${title}, `}the save waits for the database to answer before the page says it's done. If the database is down, it retries three times, a second apart, then tells the shopper it couldn't save. Want me to redraw that part of the briefing in more detail?`);
         return { ok: true, summary: 'Answered a question about a briefing.' };
       }
-      // the showcase: each station's lead keeps playing its one thing, so whichever you walk up to is in the middle of it
-      if (room && !req.resumeSessionId) return showcase(room);
-      // the station that ships, once the captain merges its slice from the board: on to the next
-      const landedAt = room?.role === 'qa' && /Slice (\d+) has landed/.exec(req.prompt);
-      if (landedAt) return showcaseSlice(Number(landedAt[1]) + 1);
       if (/^\[QA officer/.test(req.prompt)) {
         await think();
         if (/^\[QA officer [^\]]+\] QA failed/.test(req.prompt)) {
@@ -654,7 +544,7 @@ export class DemoRunner implements AgentRunner {
       await say('On it: a thin slice first.');
       await show({ id: 'mockup', title: 'A first mockup', html: demoMockupPage(goal) });
       // the plugins' lead tools go up last (the explainer, with briefings on), so the screen plays it while the slice is built
-      if (parts.leadTools) await demoTools();
+      await demoTools();
       const leadTodos = (done: number) => ({
         todos: [...repos.map((r) => [`Build ${goal} in ./${r.folder}`, `Building it in ./${r.folder}`]), ['Ship the slice', 'Shipping the slice']].map(([content, activeForm], i) => ({
           content,
@@ -664,19 +554,17 @@ export class DemoRunner implements AgentRunner {
       });
       await tool('TodoWrite', leadTodos(0));
       // two helpers map the repos side by side while the lead plans: they sit down at the team station while they work
-      if (parts.helpers && repos.length > 1)
+      if (repos.length > 1)
         await helperRound(repos.map((r) => {
           const files = FILES[kindOf(r.repo)];
           return { folder: r.folder, files, description: `Map ./${r.folder} for ${goal}`, ask: `Read through ./${r.folder} and tell me where ${goal} would fit: the files to change, and anything in the way.`, found: `${r.folder}: ${goal} fits in ${files[1]}` };
         }));
       // a quick script from the scratch dir to try the idea first: a probe on the goal's chart, as the real runner reports one
-      if (parts.background) {
-        const probe = `demo-probe-${randomHex(3)}`;
-        const found = `${goal}: the first try works`;
-        hooks.probe?.({ kind: 'started', id: probe, description: 'Script probe.mjs', type: 'script' });
-        await tool('Bash', { command: 'node "$FOCUS_SCRATCH/probe.mjs"' }, [found]);
-        hooks.probe?.({ kind: 'ended', id: probe, ok: true, summary: found });
-      }
+      const probe = `demo-probe-${randomHex(3)}`;
+      const found = `${goal}: the first try works`;
+      hooks.probe?.({ kind: 'started', id: probe, description: 'Script probe.mjs', type: 'script' });
+      await tool('Bash', { command: 'node "$FOCUS_SCRATCH/probe.mjs"' }, [found]);
+      hooks.probe?.({ kind: 'ended', id: probe, ok: true, summary: found });
       for (const r of repos) {
         const files = FILES[kindOf(r.repo)];
         await tool('Read', { file_path: `/work/${r.folder}/${files[0]}` }, [`Read ${60 + files[0].length} lines`]);
@@ -686,12 +574,12 @@ export class DemoRunner implements AgentRunner {
         await tool('TodoWrite', leadTodos(repos.indexOf(r) + 1));
       }
       // the app running in the background while the slice is reviewed, and a monitor waiting on the reviews
-      const server = parts.background && runInBackground('shell', 'pnpm run dev', (n) => (n === 1 ? '  VITE v7.1.2  ready in 412 ms' : n === 2 ? '  ➜  Local:   http://localhost:5173/' : `  [vite] hmr update /src/App.tsx (x${n - 2})`));
-      const monitor = parts.background && parts.workflows && runInBackground('monitor', 'watch for the review workflow to finish', (n) => `waiting… (${n}s)`);
+      const server = runInBackground('shell', 'pnpm run dev', (n) => (n === 1 ? '  VITE v7.1.2  ready in 412 ms' : n === 2 ? '  ➜  Local:   http://localhost:5173/' : `  [vite] hmr update /src/App.tsx (x${n - 2})`));
+      const monitor = runInBackground('monitor', 'watch for the review workflow to finish', (n) => `waiting… (${n}s)`);
       // a workflow reviews the slice before it ships: its away team beams into the briefing room a phase at a time
-      if (parts.workflows) await reviewWorkflows(repos.map((r) => r.folder), goal);
-      if (monitor) endJob(monitor, 'done', 'The review workflow finished');
-      if (server) endJob(server, 'done', 'Background command "pnpm run dev" completed (exit code 0)');
+      await reviewWorkflows(repos.map((r) => r.folder), goal);
+      endJob(monitor, 'done', 'The review workflow finished');
+      endJob(server, 'done', 'Background command "pnpm run dev" completed (exit code 0)');
       await handleInbox();
       const title = `Thin slice: ${goal}`.slice(0, 70);
       if (await ship(title, `## Summary\n\nA first, thin version of ${goal}, end to end.\n\n## Testing\n\n- Tests pass in every repo`)) {
@@ -825,8 +713,6 @@ export class DemoRunner implements AgentRunner {
     return {
       send: (text) => {
         if (finished) return false;
-        // refused, the office keeps it for the next turn, which this one ends to make way for
-        if (looping && endsShowcaseTurn(looping, text)) return !(ended = true);
         inbox.push(text);
         return true;
       },
@@ -917,11 +803,9 @@ export function demoTooBig(idea: string): string | undefined {
 
 /** The demo planner: pretends to read the code, then writes a plausible issue from the idea. */
 export class DemoDrafter implements Drafter {
-  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
-
   async draft(req: DraftRequest, activity: (text: string) => void): Promise<DraftResult> {
     const wait = async (seconds: number) => {
-      await sleep((seconds * 1000) / this.speed);
+      await sleep((seconds * 1000) / demoPace());
       if (req.signal.aborted) throw new Error('Discarded');
     };
     const idea = req.idea || req.revise?.title || 'the change';
@@ -984,14 +868,12 @@ export class DemoDrafter implements Drafter {
  * stubborn PRs), sends a fix that pushed nothing back with a different plan, and escalates the second time round.
  */
 export class DemoTriager implements Triager {
-  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
-
   async triage(req: TriageRequest, activity: (text: string) => void): Promise<TriageDecision> {
     const folder = req.repo.split('/')[1];
     const file = /`([^`]+)`/.exec(req.review.report?.fixInstructions ?? '')?.[1] ?? 'src/App.tsx';
     for (const step of ["Reading QA's reports", `Reading ${folder}/${file}`, 'Reading the diff', "Checking GitHub's checks", 'Thinking…']) {
       activity(step);
-      await sleep((1500 + Math.random() * 1000) / this.speed);
+      await sleep((1500 + Math.random() * 1000) / demoPace());
       if (req.signal.aborted) throw new Error('Stopped');
     }
     const red = req.checks[0];
@@ -1244,11 +1126,9 @@ export function demoShipModel(): SystemModel {
 
 /** The demo's studio computer: scripted turns that stage real scenes in the middle of the hall, so the studio shows in the demo. */
 export class DemoStudio implements StudioOfficer {
-  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
-
   async turn(req: StudioTurn, activity: (text: string) => void): Promise<StudioReply> {
     const wait = async (seconds: number) => {
-      await sleep((seconds * 1000) / this.speed);
+      await sleep((seconds * 1000) / demoPace());
       if (req.signal.aborted) throw new Error('Stopped');
     };
     const said = req.messages.filter((m) => m.from === 'captain').at(-1)?.text.replace(/\s+/g, ' ').trim() ?? '';

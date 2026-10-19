@@ -14,6 +14,7 @@ import type { UsageWatch } from './usage';
 import type { StudioComputer } from './agents/studioComputer';
 import type { IssuePlanner } from './agents/planner';
 import { config } from './config';
+import { demoPace } from './demoPace';
 import type { GitHubProvider } from './github/provider';
 import type { Hub } from './hub';
 import type { Previews } from './previews';
@@ -76,14 +77,25 @@ export class Office {
 
   async checkGitHub(): Promise<ServerInfo> {
     this.info.github = await this.github.status();
-    this.hub.send({ type: 'info', info: this.info });
-    return this.info;
+    return this.infoChanged();
+  }
+
+  /** What the office says of itself now: its settings, and in a demo office the pace its agents go at. */
+  private served(): ServerInfo {
+    return { ...this.info, settings: this.store.settings, ...(config.demo && { demoPace: demoPace() }) };
+  }
+
+  /** Tells every browser what the office says of itself now, as after the demo's pace changes. */
+  infoChanged(): ServerInfo {
+    const info = this.served();
+    this.hub.send({ type: 'info', info });
+    return info;
   }
 
   async snapshot(): Promise<Snapshot> {
     const agents = [...this.store.agents.values()];
     return {
-      info: { ...this.info, settings: this.store.settings },
+      info: this.served(),
       projects: this.store.projects,
       agents,
       boards: [...this.store.boards.values()],
@@ -542,7 +554,7 @@ export class Office {
   updateSettings(patch: unknown): Settings {
     const s = Object.assign(this.store.settings, changeSettings(this.store.settings, patch));
     this.store.save();
-    this.hub.send({ type: 'info', info: { ...this.info, settings: s } });
+    this.infoChanged();
     this.agents.schedule();
     return s;
   }

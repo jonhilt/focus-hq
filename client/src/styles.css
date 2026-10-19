@@ -789,9 +789,6 @@ textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
 .places { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
 .btn.place { text-align: left; padding: 10px 26px 10px 18px; border-radius: 0 999px 999px 0; overflow: hidden; }
 .place small { display: block; font-weight: 500; overflow: hidden; text-overflow: ellipsis; text-transform: none; letter-spacing: 0.02em; }
-/* the training console's scenarios: a row each, so the whole of what each plays reads */
-.places.scenarios { grid-template-columns: 1fr; }
-.places.scenarios .place small { white-space: normal; }
 
 @media (max-width: 800px) {
   .projects { grid-template-columns: 1fr; }
@@ -854,26 +851,9 @@ select.effort { width: auto; padding: 2px 6px; border-radius: 10px; font-size: 1
 .under-way-station { background: var(--tone); color: var(--ink); align-self: stretch; display: flex; align-items: center; justify-content: flex-end; border-radius: 18px 0 0 18px; padding: 0 8px 0 18px; font-size: 18px; font-weight: 600; }
 .under-way small { display: block; }
 
-/* the TV studio (?studio=1, ui/studio.ts): no HUD, a caption across the bottom and tags over the crew's heads */
-body.studio .hud, body.studio .toasts { display: none; }
-body.recording .hud, body.recording .training-steps, body.recording .toast:not(.error) { display: none; }
-.studio-caption {
-  position: fixed; left: 6vw; right: 6vw; bottom: 5vh; z-index: 5; padding: 18px 28px 20px;
-  background: #000d; border-left: 28px solid var(--lcars-orange); border-radius: 40px 12px 12px 40px;
-  font-family: var(--ui); opacity: 0; transform: translateY(12px); transition: opacity 0.5s ease, transform 0.5s ease;
-}
-.studio-caption.up { opacity: 1; transform: none; }
-.studio-title { color: var(--lcars-gold); font-size: 28px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
-.studio-text { color: var(--text); font-size: 38px; line-height: 1.2; margin-top: 4px; }
-/* the training console's steps (ui/trainingSteps.ts): where you are, and what ] does next */
-.training-steps {
-  position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); z-index: 5; padding: 8px 20px; border-radius: 999px;
-  background: #000c; border-left: 14px solid var(--lcars-gold); color: var(--text); font-family: var(--ui); font-size: 18px;
-  white-space: nowrap; display: none;
-}
-.training-steps.up { display: block; }
-.training-steps b { color: var(--lcars-gold); font-weight: 600; margin-right: 10px; }
-.training-steps .keys { color: var(--muted); margin-left: 14px; font-size: 15px; }
+/* recording (H, or ?record=1): only the office, and errors */
+body.recording .hud, body.recording .toast:not(.error) { display: none; }
+/* the studio holodeck's voice pill (ui/studioVoice.ts): listening, transcribing, and what it sent */
 .studio-voice {
   position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); z-index: 5; padding: 8px 20px; border-radius: 999px;
   background: #000c; border-left: 14px solid var(--lcars-sky); color: var(--text); font-family: var(--ui); font-size: 18px;
@@ -881,44 +861,6 @@ body.recording .hud, body.recording .training-steps, body.recording .toast:not(.
 }
 .studio-voice.up { display: block; }
 .studio-voice b { color: var(--lcars-sky); font-weight: 600; margin-right: 10px; }
-.studio-tags { position: fixed; inset: 0; z-index: 4; pointer-events: none; }
-.studio-tag {
-  position: absolute; left: 0; top: 0; white-space: nowrap; padding: 6px 16px; border-radius: 999px;
-  background: var(--lcars-sky); color: var(--ink); font-family: var(--ui); font-size: 24px; font-weight: 600;
-  box-shadow: 0 4px 16px #0008;
-}
-
-/* the studio's holodeck stage (ui/holoStage.ts): its labels are sprites in the scene; only the closing ladder is a card */
-.stage-overlay { position: fixed; inset: 0; z-index: 4; pointer-events: none; font-family: var(--ui); }
-.stage-recap {
-  position: absolute; right: 5vw; top: 8vh; width: min(560px, 42vw); padding: 20px 26px; transition: opacity 0.6s;
-  background: #000d; border-left: 22px solid var(--lcars-gold); border-radius: 34px 12px 12px 34px;
-}
-.stage-recap .title { color: var(--lcars-gold); font-size: 30px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
-.stage-recap .row { display: flex; flex-direction: column; padding: 8px 0; border-top: 1px solid #ffffff22; animation: pop 0.4s ease-out; }
-.stage-recap .row b { color: var(--lcars-sky); font-size: 30px; font-weight: 600; text-transform: uppercase; }
-.stage-recap .row span { color: var(--text); font-size: 24px; }
-.stage-recap { opacity: 0; }
-/* the grid wipe between sections: a band of holodeck grid with the next section's chapter card */
-.stage-wipe {
-  position: absolute; inset: 0; opacity: 0; display: flex; align-items: center; justify-content: center;
-  background: #0b1030 repeating-linear-gradient(90deg, transparent 0 58px, #ffcc33aa 58px 61px), repeating-linear-gradient(0deg, transparent 0 58px, #ffcc33aa 58px 61px);
-}
-.stage-wipe-title {
-  font-size: 84px; font-weight: 600; letter-spacing: 0.08em; color: var(--lcars-gold); padding: 18px 48px;
-  background: #000d; border-left: 40px solid var(--lcars-orange); border-radius: 60px 14px 14px 60px;
-}
-.stage-wipe-title:empty { display: none; }
-.stage-dip { position: absolute; inset: 0; background: #000; opacity: 0; }
-.stage-chapter {
-  position: absolute; left: 5vw; top: 7vh; font-size: 46px; font-weight: 600; letter-spacing: 0.08em; color: var(--lcars-gold);
-  padding: 10px 28px; background: #000c; border-left: 22px solid var(--lcars-orange); border-radius: 34px 10px 10px 34px;
-  opacity: 0; transition: opacity 0.5s;
-}
-.stage-subtitle {
-  position: absolute; left: 12vw; right: 12vw; bottom: 5vh; text-align: center; font-size: 34px; color: #fff;
-  text-shadow: 0 2px 6px #000, 0 0 2px #000; opacity: 0;
-}
 
 /* your plan's usage at the top of the engineering overview (ui/usageView.ts) */
 .usage { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }

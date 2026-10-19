@@ -130,7 +130,7 @@ describe('the demo office’s ids', () => {
   const demoIds = (otherDice: number) => {
     // whatever was rolled before (another test, the office's startup) mustn't matter
     seedRandom(otherDice);
-    seedOffice({ demo: true, studio: false }, 1);
+    seedOffice({ demo: true });
     const store = new Store(false);
     return [store.addProject('Sock Shop').id, store.addProject('Space Dodger').id];
   };

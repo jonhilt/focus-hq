@@ -15,6 +15,8 @@ shared/tricorder.ts       what needs you (the Tricorder and Comms), which agents
 shared/mergeCheck.ts      the merge check before every merge (docs/merging.md): which scripts it runs, whether a trial of the same base and head stands, and whether the merge result lets it through (pure)
 shared/ledger.ts          the ledger of how work went (QA verdicts, merges, merge checks, conflicts, triage, goals, session digests): its line format, the check on load, and the report card
 shared/usage.ts           how main engineering reads out your plan's usage (rows, tones, sign-in), for the panel and the MSD
+shared/demoPace.ts        the demo's pace ladder: a step slower or faster, kept in range, read as `1×`
+shared/random.ts          dice seeded to roll the same each run (the demo's ids, the unit tests)
 shared/ledgerReview.ts    reviewing the ledger: each event as a line of the log, the window, and the trace of a pull request or a goal with its totals
 server/
   supervise.ts            runs index.ts and restarts it after an auto update
@@ -32,6 +34,7 @@ server/
   frameStats.ts           the frame-stats log: what a browser opened with ?stats=1 sends of how its 3D view ran, a file per page load in ~/.focus/frame-stats/
   hostGuard.ts            who the office answers: known Host and Origin only (DNS rebinding, other sites' pages), for /api, pages and /ws
   hub.ts                  broadcasts ServerEvents to every browser tab
+  demoPace.ts             the demo's live pace (from FOCUS_DEMO_SPEED, set by POST /api/demo/speed), which every pretend agent reads at each wait
   flows.ts                with FOCUS_FLOWS set, counts each event the hub sends and each /api request against the files that sent them, handed over at GET /api/flows
   previews.ts             Preview: check a PR out, run the project's preview commands, find its links, tear it down (Effect: one Scope per preview)
   previewMachine.ts       what a preview does to this machine (shell commands in their own process group, signals, probes) as an Effect service

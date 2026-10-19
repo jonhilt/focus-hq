@@ -20,7 +20,7 @@ export function freePort(): Promise<number> {
   });
 }
 
-/** `extra` adds arguments and environment, like the studio's `--studio` and its pacing. Every plugin is on (FOCUS_PLUGINS=all) whatever the caller's
+/** `extra` adds arguments and environment, like the demo's pace (FOCUS_DEMO_SPEED). Every plugin is on (FOCUS_PLUGINS=all) whatever the caller's
  * environment says, so no scripted run quietly loses a feature; `extra.env` can still narrow it. */
 export function startDemo(port: number, dataDir: string, extra: { args?: string[]; env?: Record<string, string> } = {}): ChildProcess {
   // Own process group so stopping it also stops whatever tsx and Vite spawn underneath.
@@ -68,7 +68,7 @@ export async function waitForServer(url: string, child: ChildProcess, timeoutMs:
 }
 
 // Same fallback order as BrowserPool in server/agents/browserTool.ts.
-/** `args` go to Chromium, like the studio's to draw on the GPU. */
+/** `args` go to Chromium, like perf's to draw on the GPU. */
 export async function launchBrowser(args: string[] = []): Promise<Browser> {
   const attempts: LaunchOptions[] = [];
   if (process.env.FOCUS_BROWSER_PATH) attempts.push({ executablePath: process.env.FOCUS_BROWSER_PATH });

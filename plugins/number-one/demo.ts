@@ -1,6 +1,6 @@
 // The demo office's Number One (README.md): scripted, on the demo's ship.
 import type { NumberOneOfficer, NumberOneReply, NumberOneTurn } from './chat';
-import { DEMO_FILES as FILES, randomHex, sleep } from '../../plugin-api/server';
+import { DEMO_FILES as FILES, demoPace, randomHex, sleep } from '../../plugin-api/server';
 
 /** The repo a demo conversation is about, and the made-up files it talks about. */
 function demoCode(repos: string[]): { repo: string; files: string[]; folder: string } {
@@ -14,11 +14,9 @@ function demoCode(repos: string[]): { repo: string; files: string[]; folder: str
  * agent's worktree, and suggests work when the captain sounds like they want something built.
  */
 export class DemoNumberOne implements NumberOneOfficer {
-  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
-
   async turn(req: NumberOneTurn, activity: (text: string) => void): Promise<NumberOneReply> {
     const wait = async (seconds: number) => {
-      await sleep((seconds * 1000) / this.speed);
+      await sleep((seconds * 1000) / demoPace());
       if (req.signal.aborted) throw new Error('Stopped');
     };
     const asked = req.messages.filter((m) => m.from === 'manager').at(-1)?.text.replace(/\s+/g, ' ').trim() ?? '';

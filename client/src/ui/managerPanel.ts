@@ -13,6 +13,7 @@ import { effortPicker, pickedCloud, pickedEffort, wherePicker } from './agentPan
 import type { ManagerTab, Ui } from './context';
 import { withMic } from './dictation';
 import { confirmDialog } from './confirmDialog';
+import { demoPaceField } from './demoPace';
 import { busy, fill, h } from './dom';
 import { SideNav, Switch } from './panels';
 import { plannerCard } from './plannerCard';
@@ -412,6 +413,7 @@ function settingsTab(ui: Ui): HTMLElement {
   recheck.onclick = () => void busy(recheck, () => api.checkGitHub(), ui.error);
 
   return h('div', null,
+    info.mode === 'demo' ? demoPaceField(ui) : null,
     h('div', { class: 'field' }, h('label', null, 'How much can agents do on their own?'), autonomy, h('small', null, "Applies to agents started from now on, except any you've given a mode of their own in their panel.")),
     h('div', { class: 'field' }, h('label', null, 'Agents working at once (all projects)'), max, h('small', null, 'Each agent is a full Claude Code session on your subscription – more agents use your limits faster.')),
     h('div', { class: 'field' }, h('label', null, 'Model'), model, h('small', null, 'e.g. claude-opus-5-5 or claude-sonnet-5-5. Leave empty for your Claude Code default.')),

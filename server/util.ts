@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { seededRandom } from '../shared/studio';
+import { seededRandom } from '../shared/random';
 
 export class CommandError extends Error {
   constructor(
@@ -54,8 +54,8 @@ export function seedIds(roll: () => number): void {
 
 /**
  * Rolls every random choice the server makes from `seed`: Math.random (crew looks and names, the demo's waits and
- * picks) and the ids (`randomHex`, which goal leads' names hash from). The studio films the same episode each run with
- * it, and the unit tests run the same way each time (`vitest.setup.ts`).
+ * picks) and the ids (`randomHex`, which goal leads' names hash from): the unit tests run the same way each time with it
+ * (`vitest.setup.ts`).
  */
 export function seedRandom(seed: number): void {
   Math.random = seededRandom(seed);
@@ -66,14 +66,12 @@ export function seedRandom(seed: number): void {
 const DEMO_ID_SEED = 226;
 
 /**
- * The dice an office starts with. The studio films the same episode each run, so all its random choices roll from
- * `studioSeed`. The demo rolls its ids from the same dice each time it starts, so its projects and goal leads keep
- * their ids across a restart and a script driving its API can go on using the ones it read (Math.random still varies
- * its waits and picks). The real office's ids come from crypto.
+ * The dice an office starts with. The demo rolls its ids from the same dice each time it starts, so its projects and
+ * goal leads keep their ids across a restart and a script driving its API can go on using the ones it read (Math.random
+ * still varies its waits and picks). The real office's ids come from crypto.
  */
-export function seedOffice(mode: { demo: boolean; studio: boolean }, studioSeed: number): void {
-  if (mode.studio) seedRandom(studioSeed);
-  else if (mode.demo) seedIds(seededRandom(DEMO_ID_SEED));
+export function seedOffice(mode: { demo: boolean }): void {
+  if (mode.demo) seedIds(seededRandom(DEMO_ID_SEED));
 }
 
 /** `bytes` random bytes as hex. */

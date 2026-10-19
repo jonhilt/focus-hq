@@ -39,20 +39,6 @@ const SEED: Record<string, { description: string; issues: [string, string, strin
     // two attempts at the same issue: a preview picks the one pushed to last
     prs: [['Wishlist endpoints (first try)', 4, 30], ['Wishlist endpoints', 4, 1]],
   },
-  // the showcase's project (shared/showcase.ts): Focus itself, its board full of the ship's own kind of work
-  'demo/focus': {
-    description: 'A starship office where Claude Code agents work your goals',
-    issues: [
-      ['Transporter rooms: show a workflow’s phases as they run', 'Each phase beams in as the script reaches it; queued agents wait on the pad.', ['enhancement']],
-      ['Star chart: draw contacts the lead dropped as faded stars', 'A dropped thread should still be on the chart, but quieter.', ['enhancement']],
-      ['QA officer: say which check failed in the PR comment', 'The verdict lists checks; the comment only says fail.', ['bug']],
-      ['Captain’s log: why each goal closed', 'Closed goals say when, not why.', ['enhancement']],
-      ['Stellar cartography: map the plugins as their own region', 'Plugins sit in with the server today.', ['enhancement']],
-      ['Briefings: the voice skips the last beat on Safari', 'The last beat’s narration never plays in Safari 19.', ['bug']],
-      ['Team station screen flickers when two leads show at once', 'Two shows within a frame swap textures twice.', ['bug']],
-      ['Ready room: a week’s usage at a glance', 'Plan usage by day, not only this session.', ['enhancement']],
-    ],
-  },
   'demo/space-dodger': {
     description: 'A tiny browser game about dodging asteroids',
     issues: [
@@ -72,9 +58,6 @@ const RUN_IDS = 4000;
 /** In-memory GitHub used by `pnpm run demo`: the seed repos above, changed by whatever the office does to them. */
 /** Pushes to an open demo PR: a merge of its base branch, or a change of its own. Set while a demo GitHub is around. */
 export let demoPush: ((repo: string, number: number, kind: 'merge-base' | 'change') => string) | undefined;
-
-/** Puts the demo GitHub back as it started: the seed repos, and nothing the office did to them. Set while one is around. */
-export let demoReset: (() => void) | undefined;
 
 export const demoLayer = Layer.sync(GitHub, () => {
   const repos = new Map<string, FakeRepo>();
@@ -145,10 +128,6 @@ export const demoLayer = Layer.sync(GitHub, () => {
     }
   };
   plant();
-  demoReset = () => {
-    repos.clear();
-    plant();
-  };
 
   const repo = (name: string): Effect.Effect<FakeRepo, GitHubNotFound> => {
     const found = repos.get(name);

@@ -4,9 +4,7 @@
 // FOCUS_PLUGINS=briefings, and switched on in each project's settings.
 import type { FocusPlugin, ResumeHow } from '../../plugin-api/server';
 import { BriefingDesk } from './desk';
-import { z } from 'zod';
-import { explainerPage } from './explainer';
-import { explainShape, explainTool } from './explainTool';
+import { explainTool } from './explainTool';
 import { ClaudeQuickAnswerer, DemoQuickAnswerer } from './quickAnswer';
 import { BRIEFINGS, briefingSpot } from './shared';
 
@@ -25,16 +23,6 @@ const briefings: FocusPlugin = {
           method: 'post',
           path: '/ask',
           handle: ({ body }) => desk.ask(text(body.lead), { briefing: text(body.briefing), spot: briefingSpot(body.spot), question: text(body.question), how: how(body.how) }),
-        },
-        // an explainer's player page from its input, as the explain tool would put it up: for the studio's recorder
-        {
-          method: 'post',
-          path: '/page',
-          handle: ({ body }) => {
-            const page = explainerPage(z.object(explainShape).parse(body));
-            if ('error' in page) throw new Error(page.error);
-            return page;
-          },
         },
       ],
     };

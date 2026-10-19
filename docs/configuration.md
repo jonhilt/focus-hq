@@ -13,9 +13,8 @@
 | `FOCUS_USE_API_KEY=fallback` | | agents use your Claude login, and `ANTHROPIC_API_KEY` while your plan's usage limit is reached ([your API key when your plan runs out](api-key.md)) |
 | `FOCUS_API_BUDGET` | `20` | the most, in dollars, the key spends each time your plan's limit is reached (with `FOCUS_USE_API_KEY=fallback`) |
 | `FOCUS_TERMINAL` | | the command that opens a terminal running a script, e.g. `kitty -e`, for starting [cloud sessions](cloud-agents.md); tried before the platform's own |
-| `FOCUS_DEMO_SPEED` | `1` | speed up the pretend agents in demo mode |
-| `FOCUS_DEMO_SCENARIO` | `full` | which parts of its story a demo goal's lead plays: `full`, `subagents` or `workflow` ([the studio](studio.md#scenarios)) |
-| `FOCUS_PLUGINS` | none (`all` in the demo) | the [plugins](plugins.md) to switch on, comma-separated: names of folders under `plugins/` (like `climber`), paths to plugin folders anywhere, or `all` for every folder under `plugins/`. The demo office (`pnpm run demo`, `demo:start`) has them all unless it's set; set it empty (`FOCUS_PLUGINS=`) for a demo with none. The scripts that start their own demo office (smoke, perf, the studio's recorder, the scans) always have them all, whatever it's set to |
+| `FOCUS_DEMO_SPEED` | `1` | the pace the demo's pretend agents start at: above 1 is faster, below slower ([demo pace](#demo-pace)) |
+| `FOCUS_PLUGINS` | none (`all` in the demo) | the [plugins](plugins.md) to switch on, comma-separated: names of folders under `plugins/` (like `climber`), paths to plugin folders anywhere, or `all` for every folder under `plugins/`. The demo office (`pnpm run demo`, `demo:start`) has them all unless it's set; set it empty (`FOCUS_PLUGINS=`) for a demo with none. The scripts that start their own demo office (smoke, perf, flows, the scans) always have them all, whatever it's set to |
 | `FOCUS_AUTO_UPDATE=0` | | turn off auto update |
 | `FOCUS_UPDATE_CHECK_MS` | `300000` | how often auto update checks for new commits |
 | `FOCUS_WHISPER_BIN` | `whisper-cli` | whisper.cpp's CLI for [voice input](voice-input.md) |
@@ -23,6 +22,18 @@
 | `FOCUS_WHISPER_MODEL` | `~/.focus/models/ggml-large-v3-turbo-q5_0.bin` | the speech model for voice input |
 | `OPENAI_API_KEY` / `TYPESAFE_API_KEY` | | both needed for [calls to Number One](../plugins/number-one/calls.md) (the `number-one` plugin): gpt-live-1 and Jev |
 | `FOCUS_LIVE_VOICE` | `cedar` | gpt-live-1's voice on calls |
+
+## Demo pace
+
+How fast a demo office's pretend agents go. At 1× (`pnpm run demo`'s) a lead's tool calls take a second or two, and a
+workflow's agents work as a real subagent does, for tens of seconds to a couple of minutes each: the review workflow's
+38 agents, eight at a time, take several minutes, and mapping the repos a minute or two. The office starts at
+`FOCUS_DEMO_SPEED`; in a demo office, the ready room's **Settings** has a **Demo pace** control (**Slower**, the pace
+now, **Faster**), stepping through 0.1×, 0.25×, 0.5×, 0.75×, 1×, 1.5×, 2× and 3× (`shared/demoPace.ts`), and **-** and
+**=** do the same while you walk the ship (in the studio holodeck they change its scene's speed instead). It changes
+for every pretend agent at once, from its next wait (a workflow agent at work speeds up or slows down there and then),
+and every tab shows the new pace (the snapshot's `info.demoPace`). Scripts set it with `POST /api/demo/speed` and
+`{ "speed": 2 }`, kept to the ladder's range.
 
 ## Who the office answers
 

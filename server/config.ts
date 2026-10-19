@@ -3,9 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const argv = new Set(process.argv.slice(2));
-// the studio (docs/studio.md) films a demo office
-const studio = argv.has('--studio');
-const demo = studio || argv.has('--demo') || process.env.FOCUS_MODE === 'demo';
+const demo = argv.has('--demo') || process.env.FOCUS_MODE === 'demo';
 
 export const config = {
   /** The Focus checkout itself. */
@@ -16,8 +14,6 @@ export const config = {
   dev: argv.has('--dev'),
   /** --demo (or FOCUS_MODE=demo) fakes GitHub and the agents so you can look around without credentials. */
   demo,
-  /** --studio: a demo office for the TV studio's recorder, with one project, no goals until it starts one, and dice seeded by FOCUS_DEMO_SEED. */
-  studio,
   /**
    * State, logs, repo clones and agent worktrees. Deliberately outside this repo: agents working in a worktree under
    * it would otherwise pick up this project's CLAUDE.md from a parent directory.

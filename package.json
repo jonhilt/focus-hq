@@ -20,7 +20,6 @@
     "smoke": "tsx scripts/smoke.ts",
     "perf": "tsx scripts/perf.ts",
     "record-flows": "tsx scripts/flows.ts",
-    "studio": "tsx scripts/studio.ts",
     "zfight": "tsx scripts/zfight.ts",
     "voice:check": "tsx plugins/briefings/scripts/voiceCheck.ts",
     "gaps": "tsx scripts/gaps.ts",

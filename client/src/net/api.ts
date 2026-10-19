@@ -4,8 +4,6 @@ import type { PersonalEntry } from '../../../shared/personalLog';
 import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ReplayStep, ResumeHow, RoomTheme, Settings, StudioSession, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
-import type { Scenario } from '../../../shared/scenarios';
-import type { TrainingStep } from '../../../shared/trainingSteps';
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   return send<T>(method, url, body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -53,11 +51,7 @@ export const api = {
    */
   startGoal: (projectId: string, text: string, how: { station?: number; effort?: Effort; from?: string } = {}) =>
     call<{ agent: Agent } | { queued: QueuedGoal }>('POST', `/projects/${projectId}/goals`, { text, ...how }),
-  /** Demo only: resets the ship and readies `scenario`'s goal (the training console). */
-  startTraining: (scenario: Scenario) => call<{ projectId: string; queued: QueuedGoal; steps: TrainingStep[]; speed: number }>('POST', '/demo/training', { scenario }),
-  /** Demo only: the busy ship, every team station in the Focus holodeck at work at once (shared/showcase.ts). */
-  startShowcase: () => call<{ projectId: string; steps: TrainingStep[]; speed: number }>('POST', '/demo/training', { scenario: 'showcase' }),
-  /** Demo only: how fast the pretend agents go (below 1 is slower than `pnpm run demo`). */
+  /** Demo only: how fast the pretend agents go (below 1 is slower than `pnpm run demo`), told to every tab. */
   demoSpeed: (speed: number) => call<{ speed: number }>('POST', '/demo/speed', { speed }),
   startQueued: (projectId: string, queueId: string, edits: { text?: string; effort?: Effort; station?: number } = {}) =>
     call<Agent>('POST', `/projects/${projectId}/goals/queue/${queueId}/start`, edits),

@@ -11,7 +11,6 @@
   "client/src/ui/managerPanel.ts": 5,
   "client/src/ui/modelPanel.ts": 1,
   "client/src/ui/qaPanel.ts": 1,
-  "client/src/ui/stage/player.ts": 9,
   "client/src/world/contactSheet.ts": 2,
   "client/src/world/gaps.ts": 2,
   "client/src/world/gpuTimer.ts": 2,
@@ -52,7 +51,6 @@
   "scripts/perf.ts": 2,
   "scripts/qaCatch.ts": 2,
   "scripts/qaReview.ts": 2,
-  "scripts/studio.ts": 3,
   "scripts/zfight.ts": 4,
   "server/agents/browserTool.ts": 4,
   "server/agents/bugCorpus.ts": 1,
@@ -80,7 +78,7 @@
   "server/fileLock.ts": 2,
   "server/flows.ts": 1,
   "server/github/provider.ts": 1,
-  "server/index.ts": 3,
+  "server/index.ts": 1,
   "server/journals.ts": 1,
   "server/plugins/migrate.ts": 2,
   "server/previewMachine.ts": 1,
@@ -90,10 +88,6 @@
   "server/usage.ts": 2,
   "server/voice.ts": 1,
   "shared/ledger.ts": 2,
-  "shared/narration.ts": 1,
-  "shared/stagePlan.ts": 5,
-  "shared/studio.ts": 1,
   "shared/systemModel.ts": 2,
-  "shared/takeScript.ts": 1,
-  "shared/trainingSteps.ts": 1
+  "shared/takeScript.ts": 1
 }

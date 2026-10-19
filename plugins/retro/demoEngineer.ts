@@ -1,15 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { sleep } from '../../plugin-api/server';
+import { demoPace, sleep } from '../../plugin-api/server';
 import type { RetroOfficer, RetroRequest } from './engineer';
 
 /** The demo's chief engineer: takes a moment over the frictions, then drafts an issue for each group it was given. */
 export class DemoEngineer implements RetroOfficer {
-  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
-
   /** Finds the port clash the scripted sessions all run into, quoting it. */
   async read(req: { prompt: string; signal: AbortSignal }): Promise<{ structured: unknown; costUsd?: number }> {
-    await sleep(800 / this.speed);
+    await sleep(800 / demoPace());
     if (req.signal.aborted) throw new Error('Stopped');
     const spans = [...req.prompt.matchAll(/<span id="([^"]+)">\n([\s\S]*?)\n<\/span>/g)].map(([, id, text]) => {
       const clash = /EADDRINUSE: address already in use :::\d+/.exec(text)?.[0];
@@ -22,7 +20,7 @@ export class DemoEngineer implements RetroOfficer {
     const groups = [...fs.readFileSync(path.join(req.cwd, 'frictions.md'), 'utf8').matchAll(/^## (G\d+): (\S+): (.+) \((\d+) sessions\)$/gm)];
     for (const step of ['Reading frictions.md', 'Reading ledger.md', 'Drafting']) {
       activity(step);
-      await sleep(1200 / this.speed);
+      await sleep(1200 / demoPace());
       if (req.signal.aborted) throw new Error('Stopped');
     }
     return {

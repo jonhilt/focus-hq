@@ -6,6 +6,7 @@ export type { BriefSpec, BriefWork, FocusPlugin, LeadTool, LeadToolContext, Lead
 /** The limits on a page a lead tool puts on the lead's screen (`LeadToolContext.show`): its id's and title's length. */
 export { ARTIFACT_LIMITS } from '../server/agents/lead';
 export { errorMessage, newId, randomHex, run, sleep, truncate } from '../server/util';
+export { demoPace } from '../server/demoPace';
 /** What a read-only Claude Code session is given and gives back (`host.readOnlySession`). */
 export { CODE_TOOLS, type ReadOnlyResult, type ReadOnlyRun, type ReadOnlyTool, type ShipSessionRun, WEB_TOOLS } from '../server/agents/claudeCrew';
 /** The ship as the crew's ship_status tool tells it (`host.shipStatus`), and its projects as a crew member's prompt lists them. */

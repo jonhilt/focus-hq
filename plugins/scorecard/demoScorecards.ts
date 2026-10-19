@@ -1,6 +1,6 @@
 // The demo office's scorecards: a made-up history that climbs a little each time, kept in memory so the demo never
 // writes to ~/.focus/scorecards/.
-import { sleep } from '../../plugin-api/server';
+import { demoPace, sleep } from '../../plugin-api/server';
 import type { Metric, Scorecard } from './types';
 import type { ScorecardSource } from './desk';
 
@@ -62,8 +62,6 @@ function demoCard(step: number, at: number): Scorecard {
 
 export class DemoScorecards implements ScorecardSource {
   private cards: Scorecard[] = Array.from({ length: 6 }, (_, i) => demoCard(i, Date.now() - (6 - i) * 20 * HOUR));
-  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
-
   history(limit: number): Scorecard[] {
     return this.cards.slice(-limit);
   }
@@ -73,7 +71,7 @@ export class DemoScorecards implements ScorecardSource {
   }
 
   async measure(): Promise<void> {
-    await sleep(6000 / this.speed);
+    await sleep(6000 / demoPace());
     this.cards.push(demoCard(this.cards.length, Date.now()));
   }
 }

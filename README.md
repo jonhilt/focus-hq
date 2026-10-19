@@ -32,7 +32,7 @@ pnpm install
 pnpm run demo       # fake GitHub + pretend agents, nothing to set up
 ```
 
-Open <http://127.0.0.1:4477>, click **Come aboard**, and walk around ([controls](docs/controls.md)).
+Open <http://127.0.0.1:4477>, click **Come aboard**, and walk around ([controls](docs/controls.md)). The ready room's settings change how fast the demo's agents go ([demo pace](docs/configuration.md#demo-pace)).
 
 ### Take the code tour
 
@@ -105,7 +105,7 @@ Then on board:
 - [The scorecard](plugins/scorecard/README.md): a plugin; the gate, the fence and the office measured, and compared over time
 - [How the 3D view runs](docs/performance.md): frame stats (`?stats=1`) and their log, and `pnpm run perf`
 - [CRAP scores](plugins/scorecard/crap.md): which functions are riskiest to change, from complexity and test coverage
-- [The TV studio](docs/studio.md): filming episodes on the ship from a scene script, in demo mode, and the studio holodeck, where you describe something and walk round it as a moving 3D scene
+- [The studio holodeck](docs/studio.md): describe something and walk round it as a moving 3D scene
 - [Focus's own interface style](docs/interface-style.md): moving off LCARS: where it lives, the line we hold, and the designs tried
 - [CLAUDE.md](CLAUDE.md): commands and conventions for the agents building Focus
 - [Goals plan](docs/goals-plan.md) and [Effect assessment](docs/effect-assessment.md): design notes

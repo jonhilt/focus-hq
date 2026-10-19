@@ -26,8 +26,6 @@ export type Interaction =
   | { kind: 'new-issue'; projectId: string }
   | { kind: 'manager'; tab?: 'projects' | 'new-project' | 'issue' | 'settings' }
   | { kind: 'turbolift' }
-  /** The demo ship's training console: back to a quiet ship, with a scenario's goal readied. */
-  | { kind: 'training' }
   /** The engineering station: the chief engineer's panel, with the report card and the plugins' parts. */
   | { kind: 'engineering' }
   /** Main engineering's master systems table: review the ledger. */

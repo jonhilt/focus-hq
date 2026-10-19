@@ -1,5 +1,5 @@
 import type { AgentStatus, GoalNote, Settings, TermLine } from '../../plugin-api/shared';
-import { CODE_TOOLS, isRecord, type PluginHost, repliesToSpeak, sleep } from '../../plugin-api/server';
+import { CODE_TOOLS, demoPace, isRecord, type PluginHost, repliesToSpeak, sleep } from '../../plugin-api/server';
 import type { BriefingSpot } from './shared';
 
 // A question the captain asks about a lead's briefing while the lead's busy goes to a quick answerer instead: a light
@@ -146,10 +146,8 @@ export class ClaudeQuickAnswerer implements QuickAnswerer {
 
 /** Demo mode: the quick answerer, answering about the beat the captain's on in a second or so, as Haiku would. */
 export class DemoQuickAnswerer implements QuickAnswerer {
-  private speed = Number(process.env.FOCUS_DEMO_SPEED ?? 1);
-
   async answer(req: QuickQuestion): Promise<{ text: string }> {
-    await sleep((800 + Math.random() * 600) / this.speed);
+    await sleep((800 + Math.random() * 600) / demoPace());
     const beat = req.spot ? briefingBeats(req.briefing.html)?.[req.spot.beat] : undefined;
     const about = beat ? `On “${beat.title}”: ${beat.text}` : `From “${req.briefing.title}”, as far as I can tell:`;
     return { text: `${about} ${req.leadName} is busy building the slice, so I've answered for now, and passed your question on in case there's more to it.` };

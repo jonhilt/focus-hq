@@ -20,10 +20,9 @@ import * as git from './agents/workspace';
 import { sourceReader } from './agents/studioSource';
 import { demoLedger } from './demoLedger';
 import { config, paths } from './config';
-import { demoLayer, demoPush, demoReset } from './github/demo';
-import { startShowcase, startTraining } from './training';
-import { SHOWCASE } from '../shared/showcase';
-import { clampSpeed, readScenario } from '../shared/scenarios';
+import { demoLayer, demoPush } from './github/demo';
+import { clampSpeed } from '../shared/demoPace';
+import { setDemoPace } from './demoPace';
 import { ghCliLayer } from './github/ghCli';
 import { GitHub, toProvider } from './github/service';
 import { allowedHosts, listensBeyondLoopback, refusal } from './hostGuard';
@@ -43,8 +42,8 @@ import { Voice } from './voice';
 const SWEEP_EVERY_MS = 60 * 60_000;
 
 async function main() {
-  // the studio rolls the same dice each run, the demo the same ids
-  seedOffice(config, Number(process.env.FOCUS_DEMO_SEED ?? 1));
+  // the demo rolls the same ids each run
+  seedOffice(config);
   const store = new Store(!config.demo);
   store.load();
 
@@ -109,14 +108,11 @@ async function main() {
     game.autoMerge = true;
     // and what each plugin that works per project does, in both: switched on for them all (the others don't look)
     for (const p of [shop, game]) p.plugins = office.agents.plugins.ids();
-    // the studio's recorder starts the one goal it films itself
-    if (!config.studio) {
-      // the demo keeps no ledger: a few days of one, to review at the master systems table
-      store.ledger = demoLedger(shop.id, game.id, Date.now());
-      // two goals under way side by side, each with its own lead at its own team station
-      office.agents.startGoal(shop.id, 'Shoppers can save items for later and find them again on any device');
-      office.agents.startGoal(shop.id, 'Show how many of each sock are left in stock on the product page', { station: 2 });
-    }
+    // the demo keeps no ledger: a few days of one, to review at the master systems table
+    store.ledger = demoLedger(shop.id, game.id, Date.now());
+    // two goals under way side by side, each with its own lead at its own team station
+    office.agents.startGoal(shop.id, 'Shoppers can save items for later and find them again on any device');
+    office.agents.startGoal(shop.id, 'Show how many of each sock are left in stock on the product page', { station: 2 });
   }
 
   const app = express();
@@ -135,80 +131,14 @@ async function main() {
     app.use(recorder.http);
     app.get('/api/flows', (_req, res) => res.json(recorder.recording(process.env.FOCUS_FLOWS ?? '')));
   }
-  // the demo ship's training console: back to a quiet ship, with a scenario's goal waiting to be started (docs/studio.md)
-  if (demoRunner) {
-    let training = false;
-    app.post('/api/demo/training', express.json(), (req, res) => {
-      if (training) return void res.status(409).json({ error: 'The ship is already resetting for training' });
-      const asked = (req.body as { scenario?: unknown } | undefined)?.scenario;
-      // the busy ship: every team station in the Focus holodeck at work at once (shared/showcase.ts)
-      if (asked === 'showcase') {
-        training = true;
-        return void startShowcase({
-          store,
-          hub,
-          agents: office.agents,
-          resetGitHub: () => demoReset?.(),
-          setSpeed: (s) => (demoRunner.speed = s),
-          refreshBoards: () => office.refreshAll(),
-          snapshot: () => office.snapshot(),
-          project: (name) => {
-            const found = store.projects.find((p) => p.name === name);
-            if (found) return found;
-            const made = store.addProject(name, SHOWCASE.color, SHOWCASE.theme);
-            made.repos = [...SHOWCASE.repos];
-            made.plugins = office.agents.plugins.ids();
-            return made;
-          },
-        })
-          .then((ready) => res.json(ready), (err: unknown) => res.status(500).json({ error: errorMessage(err) }))
-          .finally(() => (training = false));
-      }
-      let scenario;
-      try {
-        scenario = readScenario(asked);
-      } catch (err) {
-        return void res.status(400).json({ error: errorMessage(err) });
-      }
-      training = true;
-      startTraining(scenario, {
-        store,
-        hub,
-        agents: office.agents,
-        resetGitHub: () => demoReset?.(),
-        setScenario: (s) => (demoRunner.scenario = s),
-        setSpeed: (s) => (demoRunner.speed = s),
-        refreshBoards: () => office.refreshAll(),
-        snapshot: () => office.snapshot(),
-        // a scene script for the scenario brings its goal, seed and beats (scenes/*.yaml, bar shot plans and narrations)
-        // yaml is a dev dependency, as the demo's own are: loaded only when the console's used
-        scenes: async () => {
-          const { parse } = await import('yaml');
-          const dir = path.join(config.root, 'scenes');
-          if (!fs.existsSync(dir)) return [];
-          return fs.readdirSync(dir)
-            .filter((f) => /^[^.]+\.yaml$/.test(f))
-            .map((f) => ({ name: f.replace(/\.yaml$/, ''), raw: parse(fs.readFileSync(path.join(dir, f), 'utf8')) as unknown }));
-        },
-      })
-        .then((ready) => res.json(ready), (err: unknown) => res.status(500).json({ error: errorMessage(err) }))
-        .finally(() => (training = false));
-    });
-  }
-  // and its pace, which the captain changes as they play (- and = in training)
-  if (demoRunner)
+  // the demo's pace, which the captain steps slower or faster as they watch (shared/demoPace.ts): every tab hears it
+  if (config.demo)
     app.post('/api/demo/speed', express.json(), (req, res) => {
-      demoRunner.speed = clampSpeed((req.body as { speed?: unknown } | undefined)?.speed);
-      res.json({ speed: demoRunner.speed });
+      const speed = setDemoPace(clampSpeed((req.body as { speed?: unknown } | undefined)?.speed));
+      office.infoChanged();
+      res.json({ speed });
     });
   app.use('/api', apiRouter(office, store));
-  // the studio's holodeck stage plays a shot plan from scenes/ (docs/studio.md), parsed in the browser
-  if (config.studio)
-    app.get('/studio/plans/:name', (req, res) => {
-      const file = path.join(config.root, 'scenes', `${path.basename(String(req.params.name))}.plan.yaml`);
-      if (!fs.existsSync(file)) return void res.status(404).type('text').send(`There's no scenes/${path.basename(file)}`);
-      res.type('text/yaml').send(fs.readFileSync(file, 'utf8'));
-    });
   if (config.demo) {
     app.get('/demo-preview/:owner/:name/:number', (req, res) => {
       const repo = `${req.params.owner}/${req.params.name}`;

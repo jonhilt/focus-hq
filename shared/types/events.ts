@@ -22,6 +22,8 @@ export interface ServerInfo {
   deskCount: number;
   /** The plugins switched on (FOCUS_PLUGINS), by id. */
   plugins: string[];
+  /** In a demo office, how fast its pretend agents go (1 is `pnpm run demo`'s; shared/demoPace.ts). */
+  demoPace?: number;
 }
 
 export interface Snapshot {

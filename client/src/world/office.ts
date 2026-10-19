@@ -16,7 +16,6 @@ import { type Box2, DOOR_W, HALL_HALF, ROOM_WIDTH, roomSlot, rowsFor, type Seat,
 import { flat } from './materials';
 import { EngineeringStation } from './engineering';
 import { drawMsd, type MsdBoard } from './msd';
-import { TrainingConsole } from './trainingConsole';
 import { AHEAD, type Portal, type PortalEnd } from './portal';
 import { type Region, regionAt, shown } from './regions';
 import { buildHiddenRoom, ProjectRoom, VacantHall } from './room';
@@ -82,9 +81,6 @@ export class World {
   private pluginMounts: THREE.Object3D[] = [];
   /** The plugins' spaces (`ShipHost.space`), each a region of its own. */
   private readonly spaces = new THREE.Group();
-  /** The training console on the bridge: only in a demo office (`demo`, set before the first sync). */
-  training: TrainingConsole | null = null;
-  demo = false;
   /** The holodeck deck, as put together for the rows the ship has now. */
   private holodeckDeck: Deck[] = [];
   /** Room landscapes by project, theme and slot; kept across rebuilds since they're slow to make. */
@@ -216,7 +212,7 @@ export class World {
    * they have on, since a plugin can stand things in their halls) changes.
    */
   sync(projects: Project[]): void {
-    const key = JSON.stringify([this.demo, projects.map((p) => [p.id, p.name, p.color, p.repos, p.theme, p.hidden === true, p.plugins ?? []])]);
+    const key = JSON.stringify([projects.map((p) => [p.id, p.name, p.color, p.repos, p.theme, p.hidden === true, p.plugins ?? []])]);
     if (key === this.projectKey) {
       for (const room of this.rooms.values()) {
         room.project = projects.find((p) => p.id === room.project.id) ?? room.project;
@@ -245,9 +241,6 @@ export class World {
     this.vacant.clear();
     this.engineering?.dispose();
     this.unbuildPlugins();
-    this.training?.group.removeFromParent();
-    this.training?.dispose();
-    this.training = null;
     this.briefingRooms.clear();
     this.transporterGroup.clear();
     const b = new Builder();
@@ -284,7 +277,6 @@ export class World {
     this.buildHolodeckDeck(b, rows, this.ship.holodecks);
     this.seatEngineer(b, this.ship.engineering.seat('engineer'));
     this.buildPlugins(b);
-    if (this.demo) this.placeTraining(b);
 
     this.root.add(b.group, b.halls);
     this.colliders = [...b.colliders, ...this.decks().flatMap((d) => d.colliders)];
@@ -357,21 +349,6 @@ export class World {
     for (const part of this.pluginParts) part.dispose();
     this.pluginMounts = [];
     this.pluginParts = [];
-  }
-
-  /**
-   * The training console, on the bridge's starboard side aft of the rail, on your right as you come aboard: its seat
-   * faces starboard, so its screen faces the walkway in from the turbolift.
-   */
-  private placeTraining(b: Builder): void {
-    const boarding = this.boarding();
-    const ahead = boarding.lookAt.clone().sub(boarding.position).setY(0).normalize();
-    const starboard = new THREE.Vector3(-ahead.z, 0, ahead.x);
-    // you come aboard 5.8 m aft of the middle of the bridge (blender/command_deck.py)
-    const at = boarding.position.clone().setY(0).addScaledVector(ahead, 5.8 - 4.6).addScaledVector(starboard, 2.4);
-    this.training = new TrainingConsole({ at, facing: at.clone().add(starboard) });
-    this.ship.command.root.add(this.training.group);
-    b.colliders.push(this.training.footprint);
   }
 
   /** Where you come aboard: the bridge, which sorts first of the command deck's places. */
