@@ -36,6 +36,8 @@ const REVIEW_MS = 25 * 60 * 1000;
 
 /** Stops what QA left running in the clone (an old build's demo office, a dev server): asked first, then made to. */
 export async function stopLeftovers(dir: string): Promise<void> {
+  // a clone already gone has nothing left running in it
+  if (!existsSync(dir)) return;
   const real = realpathSync(dir);
   const left = async () => processesIn((await run('lsof', ['-d', 'cwd', '-Fpn'], BIG).catch((err: { stdout?: string }) => ({ stdout: err.stdout ?? '' }))).stdout, real, process.pid);
   const signal = (pids: number[], sig: NodeJS.Signals) => pids.forEach((pid) => { try { process.kill(pid, sig); } catch { /* gone already */ } });
