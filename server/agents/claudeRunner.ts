@@ -69,6 +69,13 @@ export function runningInBackground(listed: string[], workflows: number): string
   return workflows > 0 && !listed.includes('local_workflow') ? [...listed, 'local_workflow'] : listed;
 }
 
+/**
+ * Whether a message from Claude Code shows it has read what the office sent before it: something it says in a turn.
+ * What it reports whatever it has read (the background list, a task's start, end or progress, `init`) doesn't, nor
+ * does a turn's result (a message sent as the turn ends isn't in its count).
+ */
+export const showsHeard = (msg: { type: string }): boolean => msg.type === 'assistant';
+
 /** How long a session that's done waits, once its last background task ends, for the turn that takes its result. */
 export const REPORT_TURN_GRACE_MS = 60_000;
 
@@ -103,7 +110,7 @@ export class Listening {
     this.unheard = true;
   }
 
-  /** Claude Code said something other than a turn's result: whatever went in before it, it has read. */
+  /** Claude Code said something in a turn (`showsHeard`): whatever went in before it, it has read. */
   heard(): void {
     this.unheard = false;
   }
@@ -389,7 +396,7 @@ export class ClaudeRunner implements AgentRunner {
         for await (const msg of q) {
           if (msg.type === 'system' && msg.subtype === 'init') so = { ...so, started: true };
           if (msg.type === 'assistant' || (msg.type === 'system' && msg.subtype === 'init')) listening.turnStarted();
-          if (msg.type !== 'result') listening.heard();
+          if (showsHeard(msg)) listening.heard();
           const result = this.handle(msg, ctx, hooks);
           listening.backgroundChanged(runningInBackground(ctx.background ?? [], ctx.workflows.size));
           if (ctx.limited && !abort.signal.aborted) {

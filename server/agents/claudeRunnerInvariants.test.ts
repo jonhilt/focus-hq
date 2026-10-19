@@ -287,6 +287,43 @@ describe('a Claude Code session, under the office’s rule for two things at onc
     expect(said).toMatchObject({ taken: ['a message', 'report from local_bash', 'the brief'], cancelled: 0 });
   });
 
+  // c7 (probe): Claude Code says some things whatever it has read (the background list, a task's end), so they can't
+  // count as hearing a message sent before them
+  it('a message on its way as a background command ends is still heard', async () => {
+    const held: { label: string; go: () => void }[] = [];
+    const later: Later = (label, work) => new Promise<void>((go) => held.push({ label, go })).then(work);
+    const release = async (label: string) => {
+      const at = held.findIndex((h) => h.label === label);
+      held.splice(at, 1)[0]?.go();
+      await s.settle();
+    };
+    const s = await session.start(later);
+    const act = async (name: string) => {
+      void Promise.resolve().then(() => s.actions().find((a) => a.name === name)?.run()).catch(() => undefined);
+      await s.settle();
+    };
+    await act('the turn starts a command in the background');
+    await release('a command starts');
+    await act('the captain sends a message');
+    // the command ends while the message is still on its way: Claude Code lists its background, empty now
+    await act('a background task ends, and no turn comes');
+    await release('a task ends');
+    await act('the turn ends');
+    await release('the turn ends');
+    await release('Claude Code counts its context');
+    await release('Claude Code reads a message');
+    await act('the turn starts a command in the background');
+    await release('a command starts');
+    await act('the turn ends');
+    await release('the turn ends');
+    await release('Claude Code counts its context');
+    await act('a background task reports');
+    await release('a task reports');
+    const said = s.durable();
+    s.close?.();
+    expect(said).toMatchObject({ taken: ['a message', 'report from local_bash', 'the brief'], cancelled: 0 });
+  });
+
   // what's under way as a turn ends: what it left running, a message, a report
   it('ends a turn ending at once with what happens round it as one after the other would', async () => {
     await checkAtOnce(sessionOf(/turn|message|reports|no turn comes/), { runs: 40, prefix: 5 });

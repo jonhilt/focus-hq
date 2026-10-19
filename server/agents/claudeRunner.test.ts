@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { Autonomy, TermLine } from '../../shared/types';
 import type { BrowserPool } from './browserTool';
-import { allowedWithoutAsking, ClaudeRunner, claudeConfig, DECLINED, endedOutcome, failedOutcome, holdsInput, Listening, permissionAsk, permissionOptions, runningInBackground, toolPermission, withResult, type SoFar } from './claudeRunner';
+import { allowedWithoutAsking, ClaudeRunner, claudeConfig, DECLINED, endedOutcome, failedOutcome, holdsInput, Listening, permissionAsk, permissionOptions, runningInBackground, showsHeard, toolPermission, withResult, type SoFar } from './claudeRunner';
 import { CLOUD_UNAVAILABLE } from './cloud';
 import { WorkflowPermits } from './workflows';
 import { LIMIT_REACHED, STOPPED_BY_CAPTAIN, type ProbeEvent, type RunHooks, type WorkflowEvent } from './types';
@@ -184,6 +184,12 @@ describe('Listening', () => {
     listening.heard();
     listening.turnEnded(false);
     expect(closed.count).toBe(1);
+  });
+
+  // c7: the background list, a task's end or progress, come whatever Claude Code has read
+  it('takes only what Claude Code says in a turn as hearing a message, not what it reports of its background', () => {
+    expect(showsHeard({ type: 'assistant' })).toBe(true);
+    expect(['system', 'result', 'user', 'stream_event'].map((type) => showsHeard({ type }))).toEqual([false, false, false, false]);
   });
 
   it('keeps listening while a message is queued, or a task runs in the background', () => {
