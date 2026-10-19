@@ -5,6 +5,7 @@ import { BrowserPool } from './browserTool';
 import { ClaudeRunner, REPORT_TURN_GRACE_MS } from './claudeRunner';
 import { type Action, checkAtOnce, type Later, now, type Running, type Subject } from './invariants';
 import type { AgentSession, RunHooks, RunRequest } from './types';
+import { StandInClaude as Code } from './claudeStandIn';
 
 // The Claude Code session runner (`ClaudeRunner`), under the office's rule that two things at once end as one after the
 // other would (docs/invariants.md). A session keeps listening while what a turn left running in the background (a
@@ -42,178 +43,6 @@ vi.spyOn(globalThis, 'clearTimeout').mockImplementation((t?: string | number | N
   if (t instanceof Object) minute.delete(t);
   realClearTimeout(t);
 });
-
-type Kind = 'local_bash' | 'local_workflow';
-interface Task {
-  id: string;
-  kind: Kind;
-}
-
-const textOf = (m: SDKUserMessage): string => (typeof m.message.content === 'string' ? m.message.content : '');
-
-/**
- * Claude Code, as the runner meets it through the SDK: it reads what the office sends, one turn at a time (a message
- * that comes during a turn waits for the next, and the turn's result says how many wait); a turn can leave a command
- * or a workflow running in the background, which runs on after the turn and, when it ends, is taken in a turn of
- * Claude Code's own. Each turn asks the office to approve a tool, which only an office still listening can answer:
- * once the office's input has ended, and Claude Code is idle (the SDK waits for that before closing its stdin), it
- * cancels each tool that needs approval. It exits once its input has closed with nothing left to do.
- */
-class Code {
-  /** What waits for the next turn: messages, and what background tasks reported. */
-  queue: string[] = [];
-  turn = false;
-  tasks: Task[] = [];
-  inputEnded = false;
-  stdinClosed = false;
-  approved = 0;
-  cancelled = 0;
-  private dead = false;
-  private exited = false;
-  private out: Record<string, unknown>[] = [];
-  private wake?: () => void;
-  private initialised = false;
-  private ids = 0;
-
-  constructor(
-    /** What it took into its turns: its transcript, kept across the office's lives as Claude Code keeps it on disk. */
-    readonly taken: string[],
-    private readonly options: Options,
-    prompt: AsyncIterable<SDKUserMessage>,
-    private readonly later: Later,
-  ) {
-    options.abortController?.signal.addEventListener('abort', () => {
-      // the process is killed, and what it had running in the background and waiting for a turn with it
-      this.dead = true;
-      this.inputEnded = true;
-      this.turn = false;
-      this.tasks = [];
-      this.queue = [];
-      this.wake?.();
-    });
-    void this.read(prompt);
-  }
-
-  get busy(): number {
-    return this.out.length;
-  }
-
-  private async read(prompt: AsyncIterable<SDKUserMessage>): Promise<void> {
-    let first = true;
-    for await (const m of prompt) {
-      // the brief is in hand as the session starts; what the office sends later is on its way down the pipe
-      if (!first) await this.later('Claude Code reads a message', () => Promise.resolve());
-      first = false;
-      if (this.dead) return;
-      this.heard(textOf(m));
-    }
-    this.inputEnded = true;
-    this.idle();
-  }
-
-  private heard(text: string): void {
-    if (this.turn) this.queue.push(text);
-    else this.startTurn([text]);
-  }
-
-  private startTurn(taking: string[]): void {
-    this.turn = true;
-    this.taken.push(...taking);
-    if (!this.initialised) {
-      this.initialised = true;
-      this.emit({ type: 'system', subtype: 'init', session_id: 'session-1', apiKeySource: 'none', claude_code_version: '2.1.0', model: 'claude', permissionMode: 'acceptEdits' });
-    }
-    this.emit({ type: 'assistant', parent_tool_use_id: null, message: { id: `msg_${++this.ids}`, model: 'claude', content: [{ type: 'text', text: `On it: ${taking.join(', ')}` }] } });
-    void this.ask();
-  }
-
-  private async ask(): Promise<void> {
-    if (this.stdinClosed) {
-      // "The user doesn't want to take this action right now"
-      this.cancelled++;
-      return;
-    }
-    const answer = await this.options.canUseTool?.('Bash', { command: 'pnpm test' }, { signal: new AbortController().signal, toolUseID: `toolu_${++this.ids}`, requestId: `r${this.ids}` });
-    if (answer?.behavior === 'allow') this.approved++;
-  }
-
-  endTurn(): void {
-    if (this.dead || !this.turn) throw new Error('no turn under way');
-    this.emit({ type: 'result', subtype: 'success', result: 'Done', is_error: false, duration_ms: 1000, num_turns: 1, total_cost_usd: 0, queued_turn_count: this.queue.length });
-    this.turn = false;
-    if (this.queue.length) this.startTurn(this.queue.splice(0));
-    else this.idle();
-  }
-
-  startTask(kind: Kind): void {
-    if (this.dead || !this.turn) throw new Error('only a turn starts one');
-    const id = `${kind === 'local_bash' ? 'b' : 'w'}${++this.ids}`;
-    this.tasks.push({ id, kind });
-    this.emit({ type: 'system', subtype: 'task_started', task_id: id, task_type: kind, tool_use_id: `toolu_${id}`, description: kind === 'local_bash' ? 'pnpm dev' : 'Review', is_backgrounded: true, ...(kind === 'local_workflow' && { workflow_name: 'review' }) });
-    this.listTasks();
-  }
-
-  /** The oldest background task ends; `reported`, Claude Code takes what it said in a turn. */
-  taskEnds(reported: boolean, id = this.tasks[0]?.id, status = 'completed'): void {
-    const task = this.tasks.find((t) => t.id === id);
-    if (this.dead || !task) throw new Error('nothing running in the background');
-    this.tasks = this.tasks.filter((t) => t !== task);
-    this.emit({ type: 'system', subtype: 'task_notification', task_id: task.id, status, summary: 'Finished', output_file: `/tmp/tasks/${task.id}.output` });
-    this.listTasks();
-    if (reported) this.heard(`report from ${task.kind}`);
-    else this.idle();
-  }
-
-  /** A stop from the office goes over Claude Code's stdin: a command that's ended meanwhile isn't there to stop. */
-  stopTask(id: string): Promise<void> {
-    if (this.stdinClosed) return Promise.reject(new Error('stdin closed'));
-    return this.later('Claude Code stops a command', () => {
-      this.taskEnds(true, id, 'stopped');
-      return Promise.resolve();
-    });
-  }
-
-  private listTasks(): void {
-    this.emit({ type: 'system', subtype: 'background_tasks_changed', tasks: this.tasks.map((t) => ({ task_id: t.id, task_type: t.kind, description: t.id })) });
-  }
-
-  private idle(): void {
-    if (this.turn) return;
-    if (this.inputEnded) this.stdinClosed = true;
-    if (this.stdinClosed && !this.tasks.length && !this.queue.length) {
-      this.exited = true;
-      this.wake?.();
-    }
-  }
-
-  private emit(m: Record<string, unknown>): void {
-    this.out.push(m);
-    this.wake?.();
-  }
-
-  async *messages(): AsyncGenerator<Record<string, unknown>> {
-    for (;;) {
-      if (this.dead) throw new Error('Claude Code process aborted by user');
-      const m = this.out.shift();
-      if (m) yield m;
-      else if (this.exited) return;
-      else await new Promise<void>((resolve) => (this.wake = resolve));
-    }
-  }
-
-  /** The query the runner holds: its messages, and what it asks of Claude Code. */
-  query() {
-    return {
-      [Symbol.asyncIterator]: () => this.messages(),
-      // a request to Claude Code, answered down the pipe
-      getContextUsage: () => this.later('Claude Code counts its context', () => Promise.resolve({ percentage: 5, totalTokens: 50_000, rawMaxTokens: 1_000_000 })),
-      stopTask: (id: string) => this.stopTask(id),
-      interrupt: () => Promise.resolve(),
-      setPermissionMode: () => Promise.resolve(),
-      applyFlagSettings: () => Promise.resolve(),
-    };
-  }
-}
 
 const settings: Settings = { maxConcurrent: 4, autonomy: 'ask', model: '', conflictsModel: '', qaModel: '', mergeMethod: 'squash', attribution: true, userClaudeMd: true, leadEffort: 'high' };
 const request = (resumeSessionId?: string): RunRequest => ({ agentId: 'lead_runner', agentName: 'Lt. Lead', cwd: process.cwd(), prompt: resumeSessionId ? 'resumed' : 'the brief', systemAppend: '', settings, autonomy: 'ask', resumeSessionId });
@@ -311,6 +140,11 @@ const sessionOf = (only?: RegExp, except?: RegExp): Subject<Said> => ({
           { name: 'the turn starts a workflow', run: claude('a workflow starts', (c) => c.startTask('local_workflow')) },
           { name: 'a background task reports', run: claude('a task reports', (c) => c.taskEnds(true)) },
           { name: 'a background task ends, and no turn comes', run: claude('a task ends', (c) => c.taskEnds(false)) },
+          // what real streams show beside that (claudeContract.ts): a message or a report folded into the turn under
+          // way, a workflow's progress whenever it comes, and a list that leaves a running workflow out (eab2be2)
+          { name: 'Claude Code folds what waits into the turn', run: claude('Claude Code folds', (c) => c.fold()) },
+          { name: 'a workflow reports how it’s going', run: claude('a workflow reports progress', (c) => c.progress()) },
+          { name: 'Claude Code lists its background leaving a workflow out', run: claude('Claude Code lists', (c) => c.listWithoutWorkflows()) },
           {
             name: 'the captain stops a command',
             run: async () => {
@@ -382,6 +216,37 @@ describe('a Claude Code session, under the office’s rule for two things at onc
     const said = s.durable();
     s.close?.();
     expect(said).toMatchObject({ taken: ['a message', 'the brief'], turn: false, running: ['local_bash'], listening: true, approved: 2 });
+  });
+
+  // what the real streams added (claudeContract.ts): a message folded into the turn under way rather than a turn of its
+  // own, a workflow's progress between turns, and a list leaving a running workflow out
+  it('reaches a message folded into the turn under way, a workflow’s progress, and a list that leaves the workflow out', async () => {
+    const s = await session.start(now);
+    const seen: Said[] = [];
+    const ran: boolean[] = [];
+    for (const name of ['the captain sends a message', 'Claude Code folds what waits into the turn', 'the turn starts a workflow', 'the turn ends', 'a workflow reports how it’s going', 'Claude Code lists its background leaving a workflow out', 'a minute passes']) {
+      ran.push(await Promise.resolve().then(() => s.actions().find((a) => a.name === name)?.run()).then(() => true, () => false));
+      await s.settle();
+      seen.push(s.durable());
+    }
+    s.close?.();
+    // the minute: nothing waits for one, as the workflow still holds the session open
+    expect(ran).toEqual([true, true, true, true, true, true, false]);
+    // folded: taken in the turn under way, nothing waiting, no turn of its own
+    expect(seen[1]).toMatchObject({ taken: ['a message', 'the brief'], waiting: [], turn: true, approved: 2 });
+    expect(seen[5]).toMatchObject({ turn: false, running: ['local_workflow'] });
+  });
+
+  // docs/goals.md: "A workflow the office has seen start and not end holds it open too, whatever Claude Code lists"
+  it('keeps listening while a workflow it saw start runs, whatever Claude Code lists', async () => {
+    const s = await session.start(now);
+    for (const name of ['the turn starts a workflow', 'the turn ends', 'Claude Code lists its background leaving a workflow out', 'a minute passes', 'a workflow reports how it’s going']) {
+      await Promise.resolve().then(() => s.actions().find((a) => a.name === name)?.run()).catch(() => undefined);
+      await s.settle();
+    }
+    const said = s.durable();
+    s.close?.();
+    expect(said).toMatchObject({ turn: false, running: ['local_workflow'], told: ['local_workflow'], listening: true });
   });
 
   it('ends two things at once as one after the other would', async () => {

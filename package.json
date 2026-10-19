@@ -33,6 +33,7 @@
     "before-after": "tsx plugins/flow/scripts/beforeAfter.ts",
     "bug-corpus": "tsx tools/bugCorpus.ts",
     "bug-replay": "tsx tools/bugReplay.ts",
+    "claude-streams": "tsx tools/claudeStreams.ts",
     "fence:lower": "tsx plugins/scorecard/scripts/fenceLower.ts"
   },
   "engines": {

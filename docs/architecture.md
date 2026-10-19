@@ -92,6 +92,8 @@ server/
     shipStatus.ts         the ship as the crew's ship_status tool tells it, trimmed hard (summariseShip, each closed goal's PRs looked up on GitHub): plugins read it through host.shipStatus
     claudeCrew.ts         the crew's read-only Claude Code sessions (runReadOnly: Read/Glob/Grep, web search/fetch where given, structured output), and the ship tools (ship_status, open_project) plugins' crew share
     fakeOffice.ts         a pretend office for tests (the manager's and plugins'): demo GitHub and checkouts, and a Claude Code stand-in whose turns the test ends
+    claudeStandIn.ts      a stand-in for Claude Code at the SDK's query, for the session's checks, held to the Claude Code contract
+    claudeContract.ts     the Claude Code contract: what the office relies on the SDK's stream doing, and the real sessions it's held against (docs/contracts.md)
     sessionDigest.ts      a session's span digested from its transcript and the ledger, by code: calls, waste, cost, nudges
     transcript.ts         reading a Claude Code transcript: finding the agents' on this machine, its lines and blocks, and who a message is from; Claude Code's JSON narrowed, not cast (`isRecord`, `field`, `contentBlocks`), so a line or block that isn't one is skipped; shared by the digests and plugins (the retro's friction reader)
     qa.ts                 the QA officer: instructions, the report's schema and parsing, the PR comment

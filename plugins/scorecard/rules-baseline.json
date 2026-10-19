@@ -8,7 +8,7 @@
   "server/agents/manager/reviews.ts": 74,
   "server/agents/manager/seating.ts": 79,
   "server/agents/manager/sessions.ts": 42,
-  "server/agents/scratch.ts": 35,
+  "server/agents/scratch.ts": 59,
   "server/agents/terminal.ts": 0,
   "server/agents/workspace.ts": 1,
   "server/fileLock.ts": 0,
