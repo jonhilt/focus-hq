@@ -5,7 +5,7 @@ A browser-based 3D office (Three.js) where Claude Code agents (Claude Agent SDK)
 ## Commands
 
 - pnpm only (`corepack enable`, `pnpm install`); never add a `package-lock.json`.
-- Before you finish: `pnpm run typecheck`, `pnpm run lint`, `pnpm test`, `pnpm run crap --ratchet`.
+- Before you finish: `pnpm run typecheck`, `pnpm run lint`, `pnpm test`, `pnpm run crap --ratchet`, `pnpm run rules --ratchet`.
 - A failing test prints its seed (`FOCUS_TEST_SEED`): rerun on that seed rather than calling it flaky. Don't write tests that need randomness to tell things apart.
 - Check UI and 3D changes in a demo office: `pnpm run demo:start` (background, free port, prints its URL), `pnpm run demo:stop` to stop yours. Never kill a demo by port or process name: other agents' are running too.
 - Other scripts (perf, zfight, gaps, ship, scorecard, crap, flow…) are in `docs/scripts.md`.
@@ -24,3 +24,5 @@ A browser-based 3D office (Three.js) where Claude Code agents (Claude Agent SDK)
 ## Reviewing a pull request
 
 Run `pnpm run crap --changed origin/<base branch> --ratchet` and report the touched functions as an advisory check, **CRAP (advisory)** (`plugins/scorecard/crap.md`). The ratchet is not advisory: fail a PR whose file gained a function over CRAP 30, or that lowered one without lowering the baseline.
+
+Run `pnpm run rules --ratchet` too, and fail a PR it fails: a file that keeps state the state rules now reach less of, or a new one no description reaches (`docs/invariants.md#describing-a-part`).

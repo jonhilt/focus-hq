@@ -31,6 +31,8 @@ A part that keeps something across a restart (a journal, a file it saves, the st
 3. **A reach test**, that the description gets to the states that matter (as above), and **a break you've seen caught**: one for each rule, and one promise.
 4. **Its stand-ins.** What the description stands in for the real thing (git, GitHub, Claude Code) assumes how the real thing behaves, and a check can see no further than that. A stand-in with a contract ([contracts](contracts.md)) passes it; one without says what it assumes under "What it can't tell" here. eab2be2 was missed because the session's stand-in for Claude Code always listed a running workflow, where the real one sometimes didn't.
 
+**The rules' reach is a ratchet.** `pnpm run rules` runs the descriptions' checks alone with coverage (on seed 1, so two runs agree) and says how much of each file that keeps state they reach (it writes files, renames them into place, fsyncs, or writes a journal or the ledger: `keepsState` in `plugins/scorecard/scripts/rulesCoverage.ts`). `--ratchet` fails a file reached less than its baseline, `rules-baseline.json`, and a new file that keeps state with no description reaching it; `--raise` locks in a gain. Reaching a line isn't catching a bug in it, so a description still needs a break seen caught. At its start, 22 files kept state, and 9 of them were reached not at all or barely (under 10%): among them `manager/delivery.ts`, a developer's work going onto GitHub, which the office finishes after a restart.
+
 What each part caught and found goes in the sections below, with every live bug the checks find on main: check the docs for a trade-off made on purpose before calling one a bug.
 
 ## Where it's held so far

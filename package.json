@@ -25,6 +25,7 @@
     "gaps": "tsx tools/gaps.ts",
     "ship": "tsx tools/ship.ts",
     "crap": "tsx plugins/scorecard/scripts/crap.ts",
+    "rules": "tsx plugins/scorecard/scripts/rules.ts",
     "scorecard": "tsx plugins/scorecard/scripts/scorecard.ts",
     "climb:replay": "tsx plugins/climber/scripts/climbReplay.ts",
     "flow": "tsx plugins/flow/scripts/flow.ts",
