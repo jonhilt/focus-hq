@@ -82,6 +82,8 @@ It replays the office's QA as it is, which since the results below blocks a chan
 
 A review costs what one in the office does, about $0.60 and a few minutes: a full run with controls is 48 reviews, about $30 and a few hours. Runs are saved in `~/.focus/bug-replay/`. The rules are in `server/agents/bugReplay.ts`, the clones and sessions in `scripts/bugReplay.ts`, and QA's review session, shared with `qa-catch`, in `scripts/qaReview.ts`.
 
+The clones are old builds, whose instructions say to run the office (`npm run demo`, `pnpm dev`) on the live office's port and data folder, 4477 and `~/.focus`. So each review's session runs with a free port and a data folder inside its clone (`PORT`, `FOCUS_DATA_DIR`, `reviewEnv` in `scripts/replayRules.ts`), and when it ends, whatever is still running in the clone is stopped (`stopLeftovers`): a demo QA started in the background outlives the session otherwise. Both apply to `qa-catch` too.
+
 ### Results so far (2026-10-17, 26 bugs in 24 commits, 24 controls, before QA blocked only with proof)
 
 | arm | caught (judge) | stopped for another bug | controls stopped | cost |

@@ -3,7 +3,7 @@
 // (scripts/qaCatch.ts, planted bugs) and the bug replay (scripts/bugReplay.ts, real ones). The clone is the caller's.
 
 import { execFile } from 'node:child_process';
-import { existsSync, symlinkSync } from 'node:fs';
+import { existsSync, realpathSync, symlinkSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -16,6 +16,8 @@ import { qaProofFor } from '../shared/qa';
 import type { Project, QaReport, Settings } from '../shared/types';
 import { PROOF_MS, prove, type ProofRig } from '../server/agents/qaProof';
 import { readIn, runIn } from '../server/agents/workspace';
+import { freePort } from './demoOffice';
+import { processesIn, reviewEnv } from './replayRules';
 
 /** QA's proofs checked in the clone, as the office checks them in its checkout: with this checkout's packages when the clone has none. No browser, so no screenshots. */
 function proofRig(dir: string, changed: string[]): ProofRig {
@@ -31,6 +33,19 @@ function proofRig(dir: string, changed: string[]): ProofRig {
 const run = promisify(execFile);
 const BIG = { maxBuffer: 64 * 1024 * 1024 };
 const REVIEW_MS = 25 * 60 * 1000;
+
+/** Stops what QA left running in the clone (an old build's demo office, a dev server): asked first, then made to. */
+export async function stopLeftovers(dir: string): Promise<void> {
+  const real = realpathSync(dir);
+  const left = async () => processesIn((await run('lsof', ['-d', 'cwd', '-Fpn'], BIG).catch((err: { stdout?: string }) => ({ stdout: err.stdout ?? '' }))).stdout, real, process.pid);
+  const signal = (pids: number[], sig: NodeJS.Signals) => pids.forEach((pid) => { try { process.kill(pid, sig); } catch { /* gone already */ } });
+  const pids = await left();
+  if (!pids.length) return;
+  console.log(`  stopping ${pids.length} process${pids.length === 1 ? '' : 'es'} QA left running in ${path.basename(dir)}`);
+  signal(pids, 'SIGTERM');
+  await new Promise((r) => setTimeout(r, 3000));
+  signal(await left(), 'SIGKILL');
+}
 
 /** What a review came to: QA's report (none if it didn't finish, and why), and what it cost. */
 export interface Reviewed {
@@ -48,6 +63,8 @@ export async function review(repo: string, dir: string, pr: PullRequestDetail, s
   const timer = setTimeout(() => abort.abort(), REVIEW_MS);
   const started = Date.now();
   const minutes = () => Math.round((Date.now() - started) / 60_000);
+  // the old build runs on a port and data folder of its own, never the live office's 4477 and ~/.focus
+  const env = reviewEnv(process.env, await freePort(), path.join(dir, '.replay-data'));
   let costUsd = 0;
   let sessionId: string | undefined;
   // what QA's session did: which files it actually opened, as the office reads from its transcript
@@ -59,6 +76,7 @@ export async function review(repo: string, dir: string, pr: PullRequestDetail, s
       prompt,
       options: {
         cwd: dir,
+        env,
         abortController: abort,
         resume: sessionId,
         model: qaAgentModel(state.settings),
@@ -97,5 +115,6 @@ export async function review(repo: string, dir: string, pr: PullRequestDetail, s
     return { report: null, costUsd, minutes: minutes(), error: (err as Error).message.split('\n')[0] };
   } finally {
     clearTimeout(timer);
+    await stopLeftovers(dir);
   }
 }
