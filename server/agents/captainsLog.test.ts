@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { LedgerEvent } from '../../shared/ledger';
 import { captainsLog, type LogSources } from './captainsLog';
+import { demoWorkspace } from './demoRunner';
+import { office, until } from './fakeOffice';
 import type { ReviewEntry } from './reviewJournal';
 import type { JournalEntry, RunFact } from './runJournal';
 import type { SliceFact } from './sliceJournal';
@@ -70,8 +72,6 @@ describe('the captain’s log', () => {
 
 describe('the captain’s log of a real office', () => {
   it('has a goal’s ship, by its lead, and QA picking it up, by the reviewer', async () => {
-    const { office, until } = await import('./fakeOffice');
-    const { demoWorkspace } = await import('./demoRunner');
     // QA's checkout is instant, so QA's testing in good time
     const { store, agents, claude, project } = office({ ...demoWorkspace, checkoutPullRequest: async () => '' });
     const { agent } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string; name: string } };
