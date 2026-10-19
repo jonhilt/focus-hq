@@ -658,7 +658,9 @@ export function backgroundOutputLines(rt: Runtime | undefined, taskId: string): 
     const length = Math.min(size, OUTPUT_TAIL);
     const buffer = Buffer.alloc(length);
     readSync(fd, buffer, 0, length, size - length);
-    return outputLines(buffer.toString('utf8'));
+    // cut into the middle of a line: start at the next whole one
+    const text = buffer.toString('utf8');
+    return outputLines(length < size ? text.slice(text.indexOf('\n') + 1) : text);
   } catch {
     return [];
   } finally {
