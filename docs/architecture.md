@@ -3,7 +3,7 @@
 ```
 shared/types/             types shared by server and client, a file per feature (agents, goals, projects, github, qa, previews, events…) behind index.ts
 shared/crew.ts            how the crew look (uniforms, species), and the permanent crew per room (the ops officer, the QA officer), derived from the project id
-shared/records.ts         records keyed by a union of strings: their keys as that union (`keysOf`), and one built from a list of keys (`recordOf`), so nowhere else casts what `Object.keys`/`fromEntries` return (lint holds it); and whether a value read from JSON, YAML or a model is an object to read fields from (`isRecord`, `fieldsOf`), instead of casting it to `Record<string, unknown>`
+shared/records.ts         records keyed by a union of strings: their keys as that union (`keysOf`), and one built from a list of keys (`recordOf`), so nowhere else casts what `Object.keys`/`fromEntries` return (lint holds it); and whether a value read from JSON, YAML or a model is an object to read fields from (`isRecord`, `fieldsOf`), instead of casting it to `Record<string, unknown>`; and whether one is of a list of a union's members, as that union (`isOneOf`), instead of casting the list to call `includes` and the value after (lint holds it)
 shared/qa.ts              QA decisions shared by server and board (badges, stale verdicts)
 shared/systemModel.ts     the studio's system models: whether one holds together, checking its cites against the code, its timing, and its layered layout
 shared/modelDrawing.ts    a system model's three flat views (structure, sequence, data) as shapes, and as SVG

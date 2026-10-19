@@ -1,6 +1,7 @@
 // What blender/kit.py writes into a deck's glTF extras (its objects' and materials' custom properties), read once as
 // the deck loads. A deck that doesn't match is a bug in the Blender script, so it fails loudly rather than guessing.
 
+import { isOneOf } from '../../../shared/records';
 import type { Interaction } from './builder';
 import type { CorePart } from './warpCore';
 
@@ -43,7 +44,7 @@ export const HELPER_SEATS = ['station-helper-1', 'station-helper-2', 'station-he
  */
 const CREW = ['ready-room-guest', 'engineer', 'station-lead', ...HELPER_SEATS, 'station-reviewer'] as const;
 export type Crew = (typeof CREW)[number];
-const isCrew = (v: unknown): v is Crew => (CREW as readonly unknown[]).includes(v);
+const isCrew = (v: unknown): v is Crew => isOneOf(CREW, v);
 
 /**
  * A screen the browser keeps drawing on: mission control is the World's dashboard, the MSD main engineering's cutaway
@@ -73,7 +74,7 @@ export type ScreenName = (typeof SCREENS)[number];
 export type DeckScreen = Extract<ScreenName, 'mission-control' | 'msd'>;
 const DECK_SCREENS: readonly ScreenName[] = ['mission-control', 'msd'];
 export const isDeckScreen = (v: ScreenName): v is DeckScreen => DECK_SCREENS.includes(v);
-const isScreen = (v: unknown): v is ScreenName => (SCREENS as readonly unknown[]).includes(v);
+const isScreen = (v: unknown): v is ScreenName => isOneOf(SCREENS, v);
 
 /**
  * A part of a module the browser finds and changes as it goes, so it's kept out of merging: a transporter pad's lit

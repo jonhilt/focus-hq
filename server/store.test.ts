@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import type { Agent, QaReview } from '../shared/types';
+import { type Agent, type QaReview, ROOM_THEMES } from '../shared/types';
 
 // paths come from the environment when config.ts loads, so the data folder is set before the store is imported
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-store-'));
@@ -96,6 +96,14 @@ describe('Store on disk', () => {
     expect(again.reviewJournal('acme/shop#3', { kind: 'testing', sha: 'abc' })).toMatchObject({ phase: 'testing', seq: 3 });
     expect(again.reviewEntries('acme/shop#3').map((e) => e.kind)).toEqual(['requested', 'seated', 'testing']);
     expect(again.review('acme/shop#4').phase).toBe('idle');
+  });
+});
+
+describe('a new room’s theme', () => {
+  it('is the one asked for, else the next one round', () => {
+    const store = new Store(false);
+    expect(store.addProject('Shop', undefined, 'moon').theme).toBe('moon');
+    expect(ROOM_THEMES).toContain(store.addProject('Dodger').theme);
   });
 });
 

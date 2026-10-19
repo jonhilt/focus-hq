@@ -42,6 +42,14 @@ export default tseslint.config(
         // `(o as THREE.Mesh).isMesh` checks a cast it has already made: isMesh (client/src/world/isMesh.ts) checks and narrows at once.
         selector: "TSAsExpression > TSTypeReference.typeAnnotation[typeName.left.name='THREE'][typeName.right.name=/^(Mesh|SkinnedMesh|InstancedMesh)$/]",
         message: 'Narrow an Object3D with isMesh (client/src/world/isMesh.ts), or `instanceof` for a SkinnedMesh or InstancedMesh, instead of casting it.',
+      }, {
+        // `(LIST as readonly string[]).includes(v)` or `LIST.includes(v as T)` casts to check a membership it then has
+        // to cast again: isOneOf (shared/records.ts) checks and narrows at once.
+        selector: "MemberExpression[property.name=/^(includes|has)$/] > TSAsExpression.object",
+        message: 'Check that a value is one of a list with isOneOf (shared/records.ts) instead of casting the list.',
+      }, {
+        selector: "CallExpression[callee.property.name=/^(includes|has)$/] > TSAsExpression.arguments",
+        message: 'Check that a value is one of a list with isOneOf (shared/records.ts) instead of casting the value.',
       }],
     },
   },

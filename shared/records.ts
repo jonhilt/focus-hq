@@ -35,3 +35,11 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 export function fieldsOf(value: unknown): Record<string, unknown> {
   return isRecord(value) ? value : {};
 }
+
+/**
+ * Whether a value read from outside is one of `list` (a union's members written out), as that union: `includes` on a
+ * `readonly T[]` takes only a `T`, and doesn't narrow what it's given.
+ */
+export function isOneOf<T>(list: readonly T[], value: unknown): value is T {
+  return list.some((item) => item === value);
+}

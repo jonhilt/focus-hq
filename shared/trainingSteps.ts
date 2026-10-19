@@ -3,6 +3,7 @@
 // round the ship without opening a screen to keep the goal going. Pure: the browser (client/src/ui/trainingSteps.ts)
 // only runs and draws what these decide.
 
+import { isOneOf } from './records';
 import type { Agent } from './types';
 
 export const STEP_KINDS = ['start-goal', 'answer', 'reply', 'approve', 'merge'] as const;
@@ -25,7 +26,7 @@ export function readSteps(raw: unknown): TrainingStep[] {
   if (raw === undefined) return DEFAULT_STEPS;
   if (!Array.isArray(raw) || raw.length === 0) throw new Error('steps is a list of the captain’s moves');
   return raw.map((r: unknown, i): TrainingStep => {
-    if (typeof r === 'string' && (STEP_KINDS as readonly string[]).includes(r) && r !== 'reply') return { do: r as StepKind };
+    if (isOneOf(STEP_KINDS, r) && r !== 'reply') return { do: r };
     const say = r && typeof r === 'object' ? (r as Record<string, unknown>).reply : undefined;
     if (typeof say === 'string' && say.trim()) return { do: 'reply', say: say.trim() };
     throw new Error(`Step ${i + 1} is ${JSON.stringify(r)}: it's one of ${STEP_KINDS.filter((k) => k !== 'reply').join(', ')}, or reply: what to say`);

@@ -1,7 +1,7 @@
 // The TV studio (docs/studio.md): a scene script (scenes/*.yaml) the recorder plays against a demo office, its cues and
 // its beat sheet. Pure, so it's testable and shared by the recorder (scripts/studio.ts) and the browser's director.
 
-import { fieldsOf, isRecord } from './records';
+import { fieldsOf, isOneOf, isRecord } from './records';
 import { readScenario, type Scenario } from './scenarios';
 import { readSteps, type TrainingStep } from './trainingSteps';
 import { ACTIVE_STATUSES, type Agent, type Helper } from './types';
@@ -63,7 +63,7 @@ export const CUE_TIMEOUT_S = 180;
 
 const oneOf = <T extends string>(list: readonly T[], value: unknown, what: string): T | undefined => {
   if (value === undefined) return undefined;
-  if (typeof value === 'string' && (list as readonly string[]).includes(value)) return value as T;
+  if (isOneOf(list, value)) return value;
   throw new Error(`${what} is ${JSON.stringify(value)}: it's one of ${list.join(', ')}`);
 };
 const text = (value: unknown, what: string): string => {

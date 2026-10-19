@@ -1,5 +1,6 @@
 import type { FailedCheck, Planner, QaReview, Settings, TriageAction } from '../../shared/types';
 import type { IssueDetail, PullRequestDetail } from '../github/provider';
+import { isOneOf } from '../../shared/records';
 import { truncate } from '../util';
 import { qaFindings } from './qa';
 
@@ -54,8 +55,8 @@ export const TRIAGE_SCHEMA: Record<string, unknown> = {
 
 export function parseTriage(out: unknown): TriageDecision | null {
   const d = (out ?? {}) as Partial<Record<keyof TriageDecision, unknown>>;
-  if (!ACTIONS.includes(d.action as TriageAction) || typeof d.note !== 'string' || !d.note.trim()) return null;
-  return { action: d.action as TriageAction, note: d.note.trim() };
+  if (!isOneOf(ACTIONS, d.action) || typeof d.note !== 'string' || !d.note.trim()) return null;
+  return { action: d.action, note: d.note.trim() };
 }
 
 export function triageSystemPrompt(req: Pick<TriageRequest, 'officer' | 'projectName' | 'pr'>): string {

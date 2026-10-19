@@ -1,6 +1,8 @@
 // Demo mode's training scenarios (docs/studio.md): which parts of its story a demo goal's lead plays, so a scene can film
 // one idea (subagents, workflows) without the rest of the story in the way. Pure, shared by the demo runner and scenes.
 
+import { isOneOf } from './records';
+
 /** The scenarios, by name: `full` is the whole story, as `pnpm run demo` plays it. */
 export const SCENARIOS = ['full', 'subagents', 'workflow'] as const;
 export type Scenario = (typeof SCENARIOS)[number];
@@ -96,6 +98,6 @@ export function turnParts(scenario: Scenario, message: string): ScenarioParts {
 /** A scenario by name, or an error naming the ones there are; missing is `full`. */
 export function readScenario(value: unknown): Scenario {
   if (value === undefined || value === null || value === '') return 'full';
-  if (typeof value === 'string' && (SCENARIOS as readonly string[]).includes(value)) return value as Scenario;
+  if (isOneOf(SCENARIOS, value)) return value;
   throw new Error(`The scenario is ${JSON.stringify(value)}: it's one of ${SCENARIOS.join(', ')}`);
 }

@@ -2,6 +2,7 @@
 // cites against the code, how long its scenario plays, and where its parts stand. The same in the office (to refuse or
 // check a model) and in the browser (to lay it out), so a model always lands the same way.
 
+import { isOneOf } from './records';
 import { MODEL_CHANGES, MODEL_EDGE_KINDS, MODEL_KINDS, type ModelCite, type ModelEdge, type ModelNode, type ModelStep, type SystemModel } from './types';
 
 export const MODEL_LIMITS = { nodes: 40, edges: 80, steps: 24, label: 48, question: 200, simplified: 8, checks: 5 } as const;
@@ -43,17 +44,17 @@ function nodeError(n: ModelNode, ids: Set<string>): string | undefined {
   if (ids.has(n.id)) return `Two parts have the id ${n.id}.`;
   ids.add(n.id);
   if (!n.label.trim() || n.label.length > L.label) return `Part ${n.id} needs a label of at most ${L.label} characters.`;
-  if (!(MODEL_KINDS as readonly string[]).includes(n.kind)) return `Part ${n.id}'s kind is one of ${MODEL_KINDS.join(', ')}.`;
+  if (!isOneOf(MODEL_KINDS, n.kind)) return `Part ${n.id}'s kind is one of ${MODEL_KINDS.join(', ')}.`;
   if (!n.layer.trim()) return `Part ${n.id} needs a layer.`;
-  if (n.change && !(MODEL_CHANGES as readonly string[]).includes(n.change)) return `Part ${n.id}'s change is one of ${MODEL_CHANGES.join(', ')}.`;
+  if (n.change && !isOneOf(MODEL_CHANGES, n.change)) return `Part ${n.id}'s change is one of ${MODEL_CHANGES.join(', ')}.`;
   return citeError(n.cite, `Part ${n.id}`);
 }
 
 function edgeError(e: ModelEdge, ids: ReadonlySet<string>): string | undefined {
   const name = `${e.from} → ${e.to}`;
   if (!ids.has(e.from) || !ids.has(e.to)) return `Connection ${name} names a part that isn't in the model.`;
-  if (!(MODEL_EDGE_KINDS as readonly string[]).includes(e.kind)) return `Connection ${name}'s kind is one of ${MODEL_EDGE_KINDS.join(', ')}.`;
-  if (e.change && !(MODEL_CHANGES as readonly string[]).includes(e.change)) return `Connection ${name}'s change is one of ${MODEL_CHANGES.join(', ')}.`;
+  if (!isOneOf(MODEL_EDGE_KINDS, e.kind)) return `Connection ${name}'s kind is one of ${MODEL_EDGE_KINDS.join(', ')}.`;
+  if (e.change && !isOneOf(MODEL_CHANGES, e.change)) return `Connection ${name}'s change is one of ${MODEL_CHANGES.join(', ')}.`;
   return citeError(e.cite, `Connection ${name}`);
 }
 

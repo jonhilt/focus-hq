@@ -1,5 +1,5 @@
 // A repo's architecture model from its parsed YAML (MODEL_FILE), or an error saying what's wrong with it. Pure.
-import { type Flow, type FlowRecording, MODEL_KINDS, type ModelKind } from '../../plugin-api/shared';
+import { type Flow, type FlowRecording, isOneOf, MODEL_KINDS } from '../../plugin-api/shared';
 import type { ArchitectureModel, MapPart, MapView } from './shared';
 
 const ID = /^[a-z][a-z0-9-]{0,31}$/;
@@ -28,11 +28,11 @@ function part(id: string, raw: unknown): MapPart {
   if (!ID.test(id)) throw new Error(`Part "${id}" needs an id in lowercase letters, digits and dashes`);
   const r = record(raw, `Part ${id}`);
   const kind = r.kind ?? 'service';
-  if (!MODEL_KINDS.includes(kind as ModelKind)) throw new Error(`Part ${id}'s kind is one of ${MODEL_KINDS.join(', ')}`);
+  if (!isOneOf(MODEL_KINDS, kind)) throw new Error(`Part ${id}'s kind is one of ${MODEL_KINDS.join(', ')}`);
   const paths = texts(r.paths, `Part ${id}'s paths`).map(normalPath);
   if (!paths.length) throw new Error(`Part ${id} needs the paths of its code`);
   const does = r.does === undefined ? undefined : text(r.does, `Part ${id}'s does`);
-  return { id, label: text(r.label, `Part ${id}'s label`), layer: text(r.layer, `Part ${id}'s layer`), kind: kind as ModelKind, paths, ...(does ? { does } : {}) };
+  return { id, label: text(r.label, `Part ${id}'s label`), layer: text(r.layer, `Part ${id}'s layer`), kind, paths, ...(does ? { does } : {}) };
 }
 
 function view(id: string, raw: unknown, parts: ReadonlySet<string>): MapView {

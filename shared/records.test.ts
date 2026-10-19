@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fieldsOf, hasEvery, isRecord, keysOf, recordOf } from './records';
+import { fieldsOf, hasEvery, isOneOf, isRecord, keysOf, recordOf } from './records';
 
 type Tone = 'good' | 'bad' | 'off';
 
@@ -54,5 +54,17 @@ describe('fieldsOf', () => {
 
   it('gives no fields for anything else', () => {
     for (const v of [null, undefined, ['quote'], 'quote', 3]) expect(fieldsOf(v)).toEqual({});
+  });
+});
+
+describe('isOneOf', () => {
+  const MODES = ['ask', 'auto', 'full'] as const;
+
+  it('is true of each of the list', () => {
+    for (const m of MODES) expect(isOneOf(MODES, m)).toBe(true);
+  });
+
+  it('is false of anything else: another string, a different case, nothing, not a string', () => {
+    for (const v of ['manual', 'Ask', '', undefined, null, 0, ['ask'], { ask: true }]) expect(isOneOf(MODES, v)).toBe(false);
   });
 });

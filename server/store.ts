@@ -7,6 +7,7 @@ import { type LedgerHealth, LedgerLog } from './ledgerLog';
 import { prKey } from '../shared/qa';
 import type { Agent, Board, BrowserFrame, ClosedPr, PluginStates, Project, QaReview, Settings, StudioSession, TermLine } from '../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, ROOM_THEMES, type RoomTheme } from '../shared/types';
+import { isOneOf } from '../shared/records';
 import { config, paths } from './config';
 import { takeLock } from './fileLock';
 import { fitDesks } from './agents/desks';
@@ -533,7 +534,7 @@ export function stateLocked(pid: number, dataDir: string): string {
 }
 
 function isTheme(value: unknown): value is RoomTheme {
-  return typeof value === 'string' && (ROOM_THEMES as readonly string[]).includes(value);
+  return isOneOf(ROOM_THEMES, value);
 }
 
 /** `owner/repo#12` → `owner__repo-12`: a pull request's key as a file name. */
