@@ -11,7 +11,7 @@ import { newId, truncate } from '../../util';
 import { step, type Target, turnEvent } from '../runMachine';
 import { backgroundChange, COMPACT_INSTRUCTIONS, compactInstructions, freshSessionPrompt, hasLeadWork, helperChange, HELPER_LINGER_MS, leadSystemAppend, taskChange, workflowChange } from '../lead';
 import { mismatchError, recovery, signInMismatch, turnEnding, type TurnKind } from '../runJournal';
-import { carryOnPrompt, conflictsPrompt, issuePrompt, systemAppend } from '../prompts';
+import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, systemAppend } from '../prompts';
 import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
 import { Sessions, Workspace } from '../services';
 import { journalResults, runOutcome, scriptPlan, transcriptLines, WORKFLOW_LINGER_MS } from '../workflows';
@@ -383,7 +383,7 @@ export class AgentSessions extends Part {
     });
     if (attaching && next !== 'attach-again') this.rt(agent.id).attaching = undefined;
     const last = this.store.run(agent.id).last;
-    if (last) this.store.journal(agent.id, { kind: 'decided', turn: last.id, target: next });
+    if (last) this.store.journal(agent.id, { kind: 'decided', turn: last.id, target: next, ...(next === 'deliver' && { summary: ended.outcome.summary }) });
     return next;
   }
 
@@ -511,7 +511,8 @@ export class AgentSessions extends Part {
 
   /** Picks one agent's run back up after a restart, from their journal (`recovery`). */
   recoverAgent(agent: Agent, onKey: boolean): void {
-    const next = recovery(this.store.run(agent.id), agent, onKey);
+    const run = this.store.run(agent.id);
+    const next = recovery(run, agent, onKey);
     if (next.kind === 'resume' || next.kind === 'wait') this.store.journal(agent.id, { kind: 'interrupted', turn: next.turn });
     if (this.store.run(agent.id).owed.length) this.store.journal(agent.id, { kind: 'restored' });
     // a cloud agent waiting for the captain to start its session waits as it was
@@ -525,9 +526,10 @@ export class AgentSessions extends Part {
       return;
     }
     if (next.kind === 'deliver') {
-      // what they'd committed goes onto GitHub as it was going to: they aren't asked to commit anything more
-      this.rt(agent.id).nudged = true;
-      this.print(agent, [{ kind: 'system', text: '✻ Focus restarted while their work was going onto GitHub: finishing that' }]);
+      // what they'd committed goes onto GitHub as it was going to: they aren't asked to commit anything more, unless
+      // the office hadn't got as far as asking them
+      if (!next.unasked) this.rt(agent.id).nudged = true;
+      this.print(agent, [{ kind: 'system', text: next.unasked ? '✻ Focus restarted as their turn ended: putting their work on GitHub' : '✻ Focus restarted while their work was going onto GitHub: finishing that' }]);
       this.runFor(agent.id, this.core.delivery.deliver(agent, next.summary));
       return;
     }
@@ -540,6 +542,8 @@ export class AgentSessions extends Part {
     if (agent.sessionId !== next.session) this.update(agent, { sessionId: next.session });
     this.print(agent, [{ kind: 'system', text: '✻ Focus restarted part way through their turn: picking the conversation back up' }]);
     this.core.comms.pickUp(agent);
+    // the turn cut off was asking them to commit what they left: they've been asked, and aren't again as it ends
+    if (run.open?.prompt === COMMIT_NUDGE) this.rt(agent.id).nudged = true;
   }
 
 

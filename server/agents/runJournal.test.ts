@@ -193,6 +193,18 @@ describe('a delivery in the journal', () => {
     expect(recovery(fold([...delivering, { kind: 'delivery-failed', turn: 't1', error: 'x' }]), { task: 'issue' }, false)).toEqual({ kind: 'none' });
     expect(recovery(fold(delivering), { task: 'lead' }, false)).toEqual({ kind: 'none' });
   });
+
+  it('is delivered from the start after a restart that fell before it was journaled, asking them to commit first', () => {
+    const decided: RunFact[] = [requested('t1'), { kind: 'turn-ended', turn: 't1', outcome: { ok: true } }, { kind: 'decided', turn: 't1', target: 'deliver', summary: 'Dark mode' }];
+    expect(recovery(fold(decided), { task: 'issue', sessionId: 's1' }, false)).toEqual({ kind: 'deliver', turn: 't1', summary: 'Dark mode', unasked: true });
+    // journaled before the summary was: nothing to put in the pull request, so it waits as before
+    expect(recovery(fold(ended), { task: 'issue', sessionId: 's1' }, false)).toEqual({ kind: 'none' });
+    // a delivery that failed before it was journaled is over
+    const failed = fold([...decided, { kind: 'delivery-failed', turn: 't1', error: 'git status failed' }]);
+    expect(failed).toMatchObject({ phase: 'failed', delivery: { turn: 't1', summary: 'Dark mode', error: 'git status failed' } });
+    expect(recovery(failed, { task: 'issue', sessionId: 's1' }, false)).toEqual({ kind: 'none' });
+    expect(recovery(fold(decided), { task: 'lead', sessionId: 's1' }, false)).toEqual({ kind: 'none' });
+  });
 });
 
 describe('a raised hand and a hold in the journal', () => {

@@ -63,8 +63,11 @@ export type RunFact =
   | { kind: 'waiting' }
   /** Setting up to work: a checkout, its dependencies, the task. */
   | { kind: 'setting-up' }
-  /** What follows turn `turn`, as the run's machine took it (`runMachine`). */
-  | { kind: 'decided'; turn: string; target: Target }
+  /**
+   * What follows turn `turn`, as the run's machine took it (`runMachine`): when that's delivering its work, with its pull
+   * request's description, so a restart before the delivery's journaled still delivers it.
+   */
+  | { kind: 'decided'; turn: string; target: Target; summary?: string }
   /** Turn `turn`'s work is going onto GitHub, its pull request's description `summary`: written first, so a restart finishes it. */
   | { kind: 'delivering'; turn: string; summary: string }
   /** Turn `turn`'s branch is on GitHub (pushed, or a cloud session's found there). */
@@ -126,7 +129,7 @@ export interface JournalContext {
   /** The turn the office started and hasn't seen end. */
   open?: JournalTurn;
   /** The last turn that ended, how, and what followed it (`target`, once decided). */
-  last?: JournalTurn & { outcome: TurnEnding; target?: Target };
+  last?: JournalTurn & { outcome: TurnEnding; target?: Target; summary?: string };
   /** The latest session Claude Code reported. */
   session?: string;
   /** How many turns of work the run has asked for. */
@@ -248,7 +251,9 @@ export const journalMachine = setup({
     },
     ended: {
       on: {
-        decided: { guard: 'the last turn', actions: assign(({ context, event }) => ({ last: context.last && { ...context.last, target: event.target } })) },
+        decided: { guard: 'the last turn', actions: assign(({ context, event }) => ({ last: context.last && { ...context.last, target: event.target, ...(event.summary !== undefined && { summary: event.summary }) } })) },
+        // its delivery failed before it was journaled (looking for what they left, say): it's over
+        'delivery-failed': { guard: 'the last turn', target: 'failed', actions: assign(({ context, event }) => ({ delivery: { turn: event.turn, summary: context.last?.summary ?? '', error: event.error } })) },
       },
     },
     interrupted: {},
@@ -326,7 +331,7 @@ export type Recovery =
   /** The turn's gone and the agent waits for the captain: `why` is their activity. */
   | { kind: 'wait'; turn: string; why: string }
   /** Their work was going onto GitHub: the office finishes it (pushing again, finding or opening the pull request), no Claude turn needed. */
-  | { kind: 'deliver'; turn: string; summary: string }
+  | { kind: 'deliver'; turn: string; summary: string; unasked?: true }
   /** On hold for your plan's limit: held again till `until`, or picked back up now if that's passed. */
   | { kind: 'hold-again'; until: number }
   /** They were waiting for a free slot: they wait for one again, with what was waiting for them. */
@@ -355,7 +360,8 @@ export const RESUMED_NOTE =
  */
 export function recovery(state: RunState, agent: RecoveryAgent, onKey: boolean): Recovery {
   const turn = state.open;
-  if (!turn && state.delivery && inPhase(state, 'delivering') && DELIVERS.has(agent.task)) return { kind: 'deliver', turn: state.delivery.turn, summary: state.delivery.summary };
+  const delivering = delivers(state, agent);
+  if (delivering) return delivering;
   if (!turn && state.phase === 'held' && state.heldUntil && RESUMES.has(agent.task)) return { kind: 'hold-again', until: state.heldUntil };
   if (!turn) return state.phase === 'waiting' ? requeue(agent, onKey) : { kind: 'none' };
   // a turn that went back into no conversation was starting a new one: there's none of its own to carry on
@@ -370,6 +376,18 @@ export function recovery(state: RunState, agent: RecoveryAgent, onKey: boolean):
 
 /** The tasks whose work goes onto GitHub when a turn's done (`Delivery`): not QA's, or a lead's (they ship with a tool). */
 const DELIVERS: ReadonlySet<string> = new Set(['issue', 'fix', 'conflicts', 'brief']);
+
+/**
+ * Their work was going onto GitHub (`delivering`), or about to: the turn ended and it was decided to deliver it, but
+ * the office hadn't got as far as asking them to commit what they left (`unasked`), so that goes first.
+ */
+function delivers(state: RunState, agent: RecoveryAgent): Recovery | undefined {
+  if (state.open || !DELIVERS.has(agent.task)) return undefined;
+  if (state.delivery && inPhase(state, 'delivering')) return { kind: 'deliver', turn: state.delivery.turn, summary: state.delivery.summary };
+  const last = state.last;
+  if (last?.target === 'deliver' && last.summary !== undefined && inPhase(state, 'ended')) return { kind: 'deliver', turn: last.id, summary: last.summary, unasked: true };
+  return undefined;
+}
 
 /** The run is in `phase`, or one of its states. */
 function inPhase(state: RunState, phase: string): boolean {

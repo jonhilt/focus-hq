@@ -32,7 +32,10 @@ export class Delivery extends Part {
           this.core.seating.schedule();
         })),
       );
-      if (rt.inbox.length && this.store.agents.has(agent.id) && agent.status === 'done' && agent.sessionId) {
+      // a delivery that failed is no reason to leave the captain's message unheard: it's what they'd send to retry
+      if (rt.inbox.length && this.store.agents.has(agent.id) && (agent.status === 'done' || agent.status === 'error') && agent.sessionId) {
+        // new work, and a delivery of its own: they're asked to commit what it leaves, as after any message
+        rt.nudged = false;
         yield* this.core.sessions.runSession(agent, rt.inbox.take().join('\n\n'), agent.sessionId).pipe(this.orFail(agent));
       }
     });
