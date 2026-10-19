@@ -30,4 +30,18 @@ Stop      {dir:shop-api}/scripts/stack down --api {dir:shop-api} --web {dir:shop
 Progress  {dir:shop-api}/scripts/stack list
 ```
 
+## From another machine
+
+A preview's sites listen on the office's machine, often only on loopback, so their links (`http://localhost:5173/`) only open there. For a browser on another machine of your tailnet (the office on a server, or on your Mac opened from a laptop), the office mirrors each site's port onto the machine's [Tailscale](https://tailscale.com) addresses once the site answers, and closes the mirror when the preview stops. The mirror hands requests and WebSocket upgrades (hot reload) through to the site as if they came from `localhost`, so dev servers that refuse other names, like Vite, let them in. The sites themselves stay on loopback, out of reach of anything but your tailnet.
+
+The links then open at the mirror: the same port, at the name you reached the office by (`http://my-server:5173/`). In a browser on the office's own machine they stay as they are. A site that already listens on every address (`0.0.0.0`) is reached directly instead.
+
+The mirrors are plain http unless the office has a certificate. Without one, a previewed site can't use what browsers keep for secure pages (the microphone, service workers, the clipboard). To make them https, get the machine's certificate from Tailscale (HTTPS certificates switched on for the tailnet), into the office's data folder:
+
+```
+tailscale cert --cert-file ~/.focus/tls/preview.crt --key-file ~/.focus/tls/preview.key <machine>.<tailnet>.ts.net
+```
+
+The links then use the certificate's name (`https://<machine>.<tailnet>.ts.net:5173/`). The certificate lasts 90 days: run it again before then (each mirror reads it as it opens). `FOCUS_PREVIEW_HOSTS` mirrors onto other addresses instead (`off` for none), and `FOCUS_PREVIEW_CERT` / `FOCUS_PREVIEW_KEY` point at a certificate elsewhere. The mirror is `server/previewMirrors.ts`.
+
 The commands run through your shell (so `&&` and `npm` on Windows work), on your machine, as you. A preview runs the PR's code, so only preview PRs you'd be happy to run locally.

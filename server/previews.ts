@@ -9,6 +9,7 @@ import type { GitHubProvider } from './github/provider';
 import type { Hub } from './hub';
 import { packageManagerIn } from './packageManager';
 import { CheckoutFailed, type CommandNotStarted, PreviewMachine, type ShellProcess } from './previewMachine';
+import type { PreviewMirrors } from './previewMirrors';
 import { lastJson, localUrls, MAX_LINKS, ourStack, resultChanges } from './previewResults';
 import { exitVerdict, linksVerdict, stackVerdict } from './previewVerdicts';
 import { errorMessage, truncate } from './util';
@@ -116,10 +117,22 @@ export class Previews {
     private readonly github: GitHubProvider,
     private readonly demo: boolean,
     private readonly runtime: ManagedRuntime.ManagedRuntime<PreviewMachine, never> = ManagedRuntime.make(PreviewMachine.layer),
-  ) {}
+    /** Mirrors the previews' sites for browsers on other machines; none in tests and the demo. */
+    private readonly mirrors?: PreviewMirrors,
+  ) {
+    mirrors?.onChange(() => {
+      for (const run of this.runs.values()) this.publish(run);
+    });
+  }
 
   list(): Preview[] {
-    return [...this.runs.values()].map((r) => r.preview);
+    return [...this.runs.values()].map((r) => this.reached(r.preview));
+  }
+
+  /** The preview with where other machines reach its sites. */
+  private reached(preview: Preview): Preview {
+    const mirrors = this.mirrors?.reach(preview.links);
+    return mirrors ? { ...preview, mirrors } : preview;
   }
 
   log(projectId: string): PreviewLog {
@@ -236,6 +249,7 @@ export class Previews {
 
   async shutdown(): Promise<void> {
     await Promise.all([...this.runs.keys()].map((id) => this.stop(id)));
+    await this.mirrors?.shutdown();
   }
 
   // ---------------------------------------------------------------- running
@@ -562,6 +576,7 @@ export class Previews {
       if (!this.owns(run)) return;
       this.runs.delete(run.preview.projectId);
       this.hub.send({ type: 'preview', projectId: run.preview.projectId, preview: null });
+      this.mirrors?.sync(this.list());
     });
   }
 
@@ -651,7 +666,8 @@ export class Previews {
   }
 
   private publish(run: Run): void {
-    this.hub.send({ type: 'preview', projectId: run.preview.projectId, preview: run.preview });
+    this.hub.send({ type: 'preview', projectId: run.preview.projectId, preview: this.reached(run.preview) });
+    this.mirrors?.sync(this.list());
   }
 
   private print(run: Run, ...lines: string[]): void {

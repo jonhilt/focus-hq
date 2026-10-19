@@ -437,7 +437,7 @@ async function main() {
     if (!p || before?.startedAt !== p.startedAt || before.status === p.status || state.isHidden(p.projectId)) return;
     const link = p.links[0];
     if (p.status === 'running' && link) {
-      const open: NewsLink = { kind: 'url', url: link.url, label: `Open${link.name ? ` ${link.name}` : ''} ↗` };
+      const open: NewsLink = { kind: 'url', url: link.url, projectId: p.projectId, label: `Open${link.name ? ` ${link.name}` : ''} ↗` };
       if (p.warning) notify('info', `▶ ${p.repo}#${p.number} is up, but: ${p.warning}`, open);
       else notify('success', `▶ ${p.repo}#${p.number} is running`, open);
     } else if (p.status === 'failed') {

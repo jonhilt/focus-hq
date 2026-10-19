@@ -73,6 +73,17 @@ export const whisper = {
   modelUrl: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin',
 };
 
+/**
+ * Previews' ports mirrored where other machines reach them (server/previewMirrors.ts): `hosts` is FOCUS_PREVIEW_HOSTS
+ * (addresses, comma-separated, or `off`), else the machine's tailnet addresses. With a certificate and key (from
+ * `tailscale cert`), the mirrors serve https.
+ */
+export const previewMirrors = {
+  hosts: process.env.FOCUS_PREVIEW_HOSTS,
+  cert: path.resolve(process.env.FOCUS_PREVIEW_CERT || path.join(config.dataDir, 'tls', 'preview.crt')),
+  key: path.resolve(process.env.FOCUS_PREVIEW_KEY || path.join(config.dataDir, 'tls', 'preview.key')),
+};
+
 /** Kokoro, the crew's voices (see server/speech.ts), run on the Apple GPU (server/speechMlx.py) or through kokoro-js on the CPU (server/speechWorker.ts), each in a process of its own. */
 export const kokoro = {
   model: 'onnx-community/Kokoro-82M-v1.0-ONNX',

@@ -29,6 +29,16 @@ export interface PreviewLink {
   code?: number;
 }
 
+/**
+ * A local site's port, mirrored by the office on its tailnet addresses. `host` is the name on the office's TLS
+ * certificate (https needs it); without one, the name the browser reached the office by.
+ */
+export interface PreviewMirror {
+  port: number;
+  scheme: 'http' | 'https';
+  host?: string;
+}
+
 /** A log file in the folder a preview command reported as "logs". */
 export interface PreviewLogFile {
   name: string;
@@ -69,6 +79,8 @@ export interface Preview {
   command?: string;
   /** Free port offered to the command as {port} and $FOCUS_PREVIEW_PORT. */
   port?: number;
+  /** Where other machines on the tailnet reach the local sites: the office mirrors their ports (server/previewMirrors.ts). */
+  mirrors?: PreviewMirror[];
   /** Local sites the command brought up. The first one is the main link. */
   links: PreviewLink[];
   /** Where the command keeps its own logs, if it said so in its JSON output. */

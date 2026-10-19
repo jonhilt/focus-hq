@@ -7,6 +7,8 @@
 | `FOCUS_DATA_DIR` | `~/.focus` | state, agent logs, repo clones, worktrees and preview checkouts |
 | `FOCUS_MODE=demo` | | same as `--demo` |
 | `FOCUS_BOARD_REFRESH_MS` | `60000` | how often boards re-read issues and PRs |
+| `FOCUS_PREVIEW_HOSTS` | the tailnet addresses | where previews' sites are [mirrored for other machines](previews.md#from-another-machine), comma-separated, or `off` |
+| `FOCUS_PREVIEW_CERT` / `FOCUS_PREVIEW_KEY` | `~/.focus/tls/preview.crt` / `.key` | a certificate and key (from `tailscale cert`) that make the mirrors https |
 | `FOCUS_BROWSER_PATH` | | Chromium/Chrome binary for agent browser testing |
 | `FOCUS_USE_API_KEY=1` | | let agents use `ANTHROPIC_API_KEY` instead of your Claude login |
 | `FOCUS_USE_API_KEY=fallback` | | agents use your Claude login, and `ANTHROPIC_API_KEY` while your plan's usage limit is reached ([your API key when your plan runs out](api-key.md)) |

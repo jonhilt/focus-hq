@@ -1,4 +1,5 @@
 import { linkedPrs } from '../../../shared/previewSet';
+import { reachableUrl } from '../../../shared/previewReach';
 import { sameCommit } from '../../../shared/qa';
 import type { Preview, PreviewCheckout, PreviewLink, PreviewLog, PreviewLogFile, PreviewSet } from '../../../shared/types';
 import { api } from '../net/api';
@@ -184,7 +185,7 @@ export function openPreviewPanel(ui: Ui, projectId: string, initial?: Preview): 
             const sick = link.health === 'down' || link.health === 'error';
             return h('a', {
               class: `btn ${sick ? 'warn' : i === 0 ? 'go' : ''}`,
-              href: link.url,
+              href: reachableUrl(link.url, p.mirrors, location),
               target: '_blank',
               rel: 'noreferrer',
               title: [link.url, linkHealth(link)].filter(Boolean).join('\n'),

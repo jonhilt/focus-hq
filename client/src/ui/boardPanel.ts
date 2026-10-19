@@ -4,6 +4,7 @@ import { UNIFORM } from '../../../shared/crew';
 import { assignWarning, waitsLabel } from '../../../shared/dependencies';
 import { mergeAction, mergeMethodFor } from '../../../shared/mergeGate';
 import { mergeCheckLine } from '../../../shared/mergeCheck';
+import { reachableUrl } from '../../../shared/previewReach';
 import { previewIncludes, previewSet } from '../../../shared/previewSet';
 import { prKey, qaBadge, sameCommit } from '../../../shared/qa';
 import { triageLabel } from '../../../shared/triage';
@@ -181,7 +182,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
               ...preview.links.slice(0, 3).map((link) => {
                 const sick = link.health === 'down' || link.health === 'error';
                 const tip = [link.url, linkHealth(link)].filter(Boolean).join('\n');
-                return h('a', { class: `btn small ${sick ? 'warn' : 'primary'}`, href: link.url, target: '_blank', rel: 'noreferrer', title: tip }, `Open ${link.name ?? 'site'} ↗`);
+                return h('a', { class: `btn small ${sick ? 'warn' : 'primary'}`, href: reachableUrl(link.url, preview.mirrors, location), target: '_blank', rel: 'noreferrer', title: tip }, `Open ${link.name ?? 'site'} ↗`);
               }),
               preview.warning
                 ? h('button', { class: 'btn small warn', title: preview.warning, onclick: openPreview }, 'Running')

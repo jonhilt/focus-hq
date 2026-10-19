@@ -1,3 +1,4 @@
+import { reachableUrl } from '../../../shared/previewReach';
 import { state } from '../net/state';
 import type { Ui } from './context';
 import type { ToastAction } from './hud';
@@ -8,7 +9,8 @@ export type NewsLink =
   | { kind: 'agent'; id: string; talk?: boolean }
   /** The project's preview: its log. */
   | { kind: 'preview'; projectId: string }
-  | { kind: 'url'; url: string; label: string };
+  /** `projectId`: a preview's site, opened wherever its mirror is by the time it's clicked. */
+  | { kind: 'url'; url: string; label: string; projectId?: string };
 
 /** What a piece of news's button does. */
 export function linkAction(ui: Ui, link: NewsLink): ToastAction | undefined {
@@ -20,6 +22,6 @@ export function linkAction(ui: Ui, link: NewsLink): ToastAction | undefined {
     case 'preview':
       return { label: 'Log', run: () => ui.openPreview(link.projectId) };
     case 'url':
-      return { label: link.label, run: () => window.open(link.url, '_blank', 'noopener') };
+      return { label: link.label, run: () => window.open(link.projectId ? reachableUrl(link.url, state.previews.get(link.projectId)?.mirrors, location) : link.url, '_blank', 'noopener') };
   }
 }

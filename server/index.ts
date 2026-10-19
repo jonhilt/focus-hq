@@ -28,6 +28,7 @@ import { Hub } from './hub';
 import { flowRecorder } from './flows';
 import { loadPlugins } from './plugins/load';
 import { Office } from './office';
+import { PreviewMirrors } from './previewMirrors';
 import { demoPreviewPage, Previews } from './previews';
 import { apiRouter } from './routes';
 import { StateLockedError, Store } from './store';
@@ -60,7 +61,7 @@ async function main() {
   const browsers = new BrowserPool();
   const demoRunner = config.demo ? new DemoRunner() : undefined;
   const runner = demoRunner ?? new ClaudeRunner(browsers);
-  const previews = new Previews(hub, github, config.demo);
+  const previews = new Previews(hub, github, config.demo, undefined, config.demo ? undefined : new PreviewMirrors());
   const planner = new IssuePlanner(store, hub, config.demo ? new DemoDrafter() : new ClaudeDrafter());
   const workspace = config.demo ? demoWorkspace : git.liveWorkspace;
   // plugins read the ship through the office, which is up by the time anyone asks
