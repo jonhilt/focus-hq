@@ -3,7 +3,7 @@ import type { QaReport } from '../../shared/types';
 // QA's catch rate (docs/qa-catch.md): plant one known bug in a line a merged pull request added, run the QA officer's
 // own review on that code in a scratch clone, and see whether QA fails it and points at the bug. QA passing 93% of
 // pull requests first time is good work or a weak check; only bugs planted on purpose tell which. The rules are here,
-// pure; the clones, git and the review sessions are in scripts/qaCatch.ts.
+// pure; the clones, git and the review sessions are in tools/qaCatch.ts.
 
 /** A line a pull request added: its file, its line number in the new version, and its text. */
 export interface AddedLine {

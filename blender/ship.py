@@ -1,4 +1,4 @@
-"""Builds every deck and exports each as a GLB the browser loads (npm run ship, through scripts/ship.ts).
+"""Builds every deck and exports each as a GLB the browser loads (npm run ship, through tools/ship.ts).
 
 Blender -b --factory-startup --python blender/ship.py -- <glb dir> [<blend dir>]
 

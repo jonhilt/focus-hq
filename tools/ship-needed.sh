@@ -3,7 +3,7 @@
 # Blender scripts (blender/) and no GLBs (client/public/ship/) have been built on it since its last script change.
 # What the branch brings in from main by merging it doesn't count: main's scripts come with their GLBs.
 #
-#   scripts/ship-needed.sh [main ref, origin/main by default]
+#   tools/ship-needed.sh [main ref, origin/main by default]
 set -euo pipefail
 
 main=${1:-origin/main}

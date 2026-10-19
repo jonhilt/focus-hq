@@ -1,4 +1,4 @@
-// What a replayed QA review may run, and what's left to stop after it (scripts/qaReview.ts). Pure, so it's unit tested
+// What a replayed QA review may run, and what's left to stop after it (tools/qaReview.ts). Pure, so it's unit tested
 // (replayRules.test.ts). The clones are of old builds, whose instructions say to run the office (`npm run demo`,
 // `pnpm dev`) on its own port and data folder, 4477 and ~/.focus: the live office's.
 

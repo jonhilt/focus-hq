@@ -3,7 +3,7 @@
 // unless it couldn't measure at all, or `--ratchet` finds a file's functions over 30 off its baseline (README.md#the-ratchets).
 //
 //   pnpm run crap                      server/ + shared/, the riskiest 10
-//   pnpm run crap --all                client/src/ and scripts/ too
+//   pnpm run crap --all                client/src/ and tools/ too
 //   pnpm run crap --top 25             the riskiest 25
 //   pnpm run crap --changed [base]     also what this branch touched since it left base (main by default)
 //   pnpm run crap --coverage <file>    score from an existing coverage-final.json instead of running the tests
@@ -36,14 +36,14 @@ function args() {
 }
 
 function sourceFiles(all: boolean): string[] {
-  const globs = all ? ['server/*.ts', 'shared/*.ts', 'plugins/*.ts', 'client/src/*.ts', 'scripts/*.ts'] : ['server/*.ts', 'shared/*.ts', 'plugins/*.ts'];
+  const globs = all ? ['server/*.ts', 'shared/*.ts', 'plugins/*.ts', 'client/src/*.ts', 'tools/*.ts'] : ['server/*.ts', 'shared/*.ts', 'plugins/*.ts'];
   return git('ls-files', ...globs).split('\n').filter((f) => f && !f.endsWith('.test.ts') && !f.endsWith('.d.ts') && (all || !isDemo(f)));
 }
 
 /** Runs vitest with v8 coverage into a temporary folder and returns its coverage-final.json. */
 function runCoverage(all: boolean): string {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'focus-crap-'));
-  const include = (all ? ['server', 'shared', 'plugins', 'client/src', 'scripts'] : ['server', 'shared', 'plugins']).map((d) => `--coverage.include=${d}/**/*.ts`);
+  const include = (all ? ['server', 'shared', 'plugins', 'client/src', 'tools'] : ['server', 'shared', 'plugins']).map((d) => `--coverage.include=${d}/**/*.ts`);
   console.log('Running the unit tests with coverage…');
   const result = spawnSync(path.join(ROOT, 'node_modules/.bin/vitest'), [
     'run', '--coverage.enabled', '--coverage.provider=v8', '--coverage.reporter=json', `--coverage.reportsDirectory=${dir}`,
@@ -120,7 +120,7 @@ function main() {
   const { all, top, changed, coverage, ratchet } = args();
   const files = sourceFiles(all);
   const rows = scoreAll(files, coverage ?? runCoverage(all));
-  const scope = all ? 'server, shared, plugins, client and scripts' : 'server, shared and plugins (demo code left out)';
+  const scope = all ? 'server, shared, plugins, client and tools' : 'server, shared and plugins (demo code left out)';
   console.log(`CRAP for ${scope}: complexity² × (1 − coverage)³ + complexity\n\n${summary(rows, top)}`);
   if (changed !== undefined) console.log(`\n${changedSince(changed, rows, files)}`);
   holdRatchet(rows, ratchet);

@@ -16,5 +16,5 @@
     "noEmit": true,
     "plugins": [{ "name": "@effect/language-service" }]
   },
-  "include": ["shared", "server", "client/src", "plugins", "plugin-api", "vite.config.ts", "vitest.config.ts", "vitest.setup.ts", "scripts"]
+  "include": ["shared", "server", "client/src", "plugins", "plugin-api", "vite.config.ts", "vitest.config.ts", "vitest.setup.ts", "tools"]
 }

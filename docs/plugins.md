@@ -14,7 +14,7 @@ FOCUS_PLUGINS=scorecard,climber pnpm start
 - **A path** (anything with a slash, relative to where the office starts) is a plugin folder anywhere, like `../my-plugins/auditor`.
 - **`all`** is every folder under the office's own `plugins/`, so `FOCUS_PLUGINS=all` switches the lot on (and `all,../my-plugins/auditor` one more besides).
 
-A fresh office has none switched on. The demo office (`pnpm run demo`, `demo:start`) has them all unless `FOCUS_PLUGINS` says otherwise (`FOCUS_PLUGINS= pnpm run demo` for one with none, or a list to check a feature with and without it). The scripts that start a demo office of their own (smoke, perf, flows, the gap and z-fighting scans, through `startDemo` in `scripts/demoOffice.ts`) always switch every plugin on, whatever `FOCUS_PLUGINS` the caller has (an agent inherits the office's), so none of them quietly loses a feature; the theme shots are taken from a demo office already running.
+A fresh office has none switched on. The demo office (`pnpm run demo`, `demo:start`) has them all unless `FOCUS_PLUGINS` says otherwise (`FOCUS_PLUGINS= pnpm run demo` for one with none, or a list to check a feature with and without it). The scripts that start a demo office of their own (smoke, perf, flows, the gap and z-fighting scans, through `startDemo` in `tools/demoOffice.ts`) always switch every plugin on, whatever `FOCUS_PLUGINS` the caller has (an agent inherits the office's), so none of them quietly loses a feature; the theme shots are taken from a demo office already running.
 
 A plugin that can't be found, or doesn't load, is left out with a line in the office's log saying why. A typo never keeps the office from starting. `info.plugins` in the snapshot lists the plugins that did start.
 

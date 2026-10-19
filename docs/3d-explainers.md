@@ -187,7 +187,7 @@ A lead can already put a three.js animated explainer on its screen with today's 
   - a 400 ms wait, then a JPEG screenshot at quality 85
 - The 3D screen in the briefing room only ever shows that JPEG as a texture. Live animation happens only when the captain opens it up close.
 - The Chromium is launched `headless: true` with **no GPU flags**, trying in order: `FOCUS_BROWSER_PATH`, Playwright's own Chromium, then Chrome, then Edge.
-  - By contrast, `scripts/perf.ts` passes `--enable-gpu --ignore-gpu-blocklist`, plus `--use-angle=metal` on macOS.
+  - By contrast, `tools/perf.ts` passes `--enable-gpu --ignore-gpu-blocklist`, plus `--use-angle=metal` on macOS.
   - So for leads, WebGL in the snapshot depends on Chromium's software fallback (SwiftShader). Newer Chrome builds may refuse that unless given `--enable-unsafe-swiftshader`. **I haven't tested this.** If it fails, the JPEG shows a blank canvas, or a page error that comes back to the lead.
 
 **three.js as a dependency**

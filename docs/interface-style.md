@@ -69,12 +69,12 @@ The pause dialog and the splash in each look are in `docs/interface-style/shots/
 
 ## Trying a look out
 
-`scripts/themeShots.ts` takes the same screenshots of a running demo office (the splash, the HUD, a dozen panels and the screens round the ship), with any stylesheets laid over the page in order:
+`tools/themeShots.ts` takes the same screenshots of a running demo office (the splash, the HUD, a dozen panels and the screens round the ship), with any stylesheets laid over the page in order:
 
 ```sh
 pnpm run demo:start                     # prints the demo office's URL
 P=docs/interface-style/prototypes
-npx tsx scripts/themeShots.ts <url> smoke-shots/b2 $P/common.css,$P/flight.css,$P/plus1.css,$P/plus2.css
+npx tsx tools/themeShots.ts <url> smoke-shots/b2 $P/common.css,$P/flight.css,$P/plus1.css,$P/plus2.css
 ```
 
 Leave the stylesheets off for the office as it is.

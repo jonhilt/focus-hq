@@ -4,7 +4,7 @@ import type { BuggyLine } from './bugCorpus';
 // The bug replay (docs/bug-corpus.md#replaying-qa): QA's own review of each commit that brought a real bug in, from the
 // bug corpus, scored on whether QA stopped it for that bug. Every one of them got past QA once; the replay says how many
 // today's QA would stop. The rules are here, pure; the clones,
-// the review sessions and the judge are in scripts/bugReplay.ts.
+// the review sessions and the judge are in tools/bugReplay.ts.
 
 /** Where a review should point: the bug's lines in the commit that brought it in, or only its files when they're unknown. */
 export type BugSite = { file: string; line?: number };

@@ -1,7 +1,7 @@
 // The bug corpus (docs/bug-corpus.md): real bugs the office's agents shipped, each with a referee that can't be argued
 // with. A fix that came with a test is a case when that test fails on the code just before the fix, for the bug's
 // sake (an assertion, not a function that didn't exist yet), and passes on the fix. The rules are here, pure; git,
-// the worktrees and vitest are in scripts/bugCorpus.ts.
+// the worktrees and vitest are in tools/bugCorpus.ts.
 
 /** How one test came out in a vitest run. */
 export interface TestOutcome {
@@ -200,7 +200,7 @@ export interface BugCase {
 /** What's left of a failure message worth keeping in the corpus: its first lines. */
 export const firstLines = (message: string, n = 3) => message.split('\n').filter((l) => l.trim()).slice(0, n).join('\n');
 
-/** The curated list (scripts/bug-corpus/fixes.txt): `<sha> <kind>` a line, `#` comments and blank lines ignored. */
+/** The curated list (tools/bug-corpus/fixes.txt): `<sha> <kind>` a line, `#` comments and blank lines ignored. */
 export function parseFixes(text: string): { sha: string; kind: string }[] {
   return text
     .split('\n')

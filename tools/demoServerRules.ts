@@ -1,4 +1,4 @@
-// The decisions behind `pnpm run demo:start|stop|status` (scripts/demoServer.ts), kept pure so they're tested next to it.
+// The decisions behind `pnpm run demo:start|stop|status` (tools/demoServer.ts), kept pure so they're tested next to it.
 import { Option, Schema } from 'effect';
 
 export type DemoCommand = 'start' | 'stop' | 'status';

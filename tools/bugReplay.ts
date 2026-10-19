@@ -11,7 +11,7 @@
 //   pnpm run bug-replay --control       as many code-changing commits no listed bug came from, reviewed the same way
 //   pnpm run bug-replay --dry           say what it would review, without running any review
 //
-// QA blocks a change only with proof that holds when it's checked (docs/qa.md#proof): scripts/qaReview.ts checks it in
+// QA blocks a change only with proof that holds when it's checked (docs/qa.md#proof): tools/qaReview.ts checks it in
 // the clone as the office does in its checkout, so a review stops a change when its (checked) verdict is a fail.
 // A catch counts only when a judge (a separate model, holding the fix's own diff as the answer key) says one of the
 // review's findings is the very bug the fix fixed; whether the report merely named the bug's file is kept beside it.
@@ -59,8 +59,8 @@ const JUDGE_MODEL = 'claude-opus-5-5';
 
 const git = (...a: string[]) => run('git', a, { cwd: ROOT });
 const state = JSON.parse(readFileSync(paths.state, 'utf8')) as { settings: Settings; projects: Project[] };
-// the corpus is this repo's own, written by scripts/bugCorpus.ts
-const corpus = JSON.parse(readFileSync(path.join(ROOT, 'scripts', 'bug-corpus', 'corpus.json'), 'utf8')) as { cases: BugCase[] };
+// the corpus is this repo's own, written by tools/bugCorpus.ts
+const corpus = JSON.parse(readFileSync(path.join(ROOT, 'tools', 'bug-corpus', 'corpus.json'), 'utf8')) as { cases: BugCase[] };
 const traced = corpus.cases.filter((c) => c.introducedBy);
 /** The commits to review, each with the bugs it brought in, in the corpus's order. The repo's first commit is left out:
  *  there's nothing before it to review it against. */
@@ -179,7 +179,7 @@ async function controlsFor(): Promise<{ sha: string; subject: string }[]> {
     if (line.startsWith('@')) history.push({ sha: line.slice(1, 41), subject: line.slice(42), files: [] });
     else history.at(-1)?.files.push(line);
   }
-  const fixes = parseFixes(readFileSync(path.join(ROOT, 'scripts', 'bug-corpus', 'fixes.txt'), 'utf8')).map((f) => f.sha);
+  const fixes = parseFixes(readFileSync(path.join(ROOT, 'tools', 'bug-corpus', 'fixes.txt'), 'utf8')).map((f) => f.sha);
   const introducers = corpus.cases.flatMap((c) => (c.introducedBy ? [c.introducedBy.sha] : []));
   const shas = history.map((h) => h.sha);
   const from = Math.min(...introducers.map((s) => shas.indexOf(s)).filter((i) => i >= 0));

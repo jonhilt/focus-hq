@@ -1,6 +1,6 @@
 // The QA officer's own review of a throwaway clone, as the office runs one (its system prompt, prompt, report schema,
 // model and Claude Code settings), for the scripts that replay QA on code it has seen or should have: QA's catch rate
-// (scripts/qaCatch.ts, planted bugs) and the bug replay (scripts/bugReplay.ts, real ones). The clone is the caller's.
+// (tools/qaCatch.ts, planted bugs) and the bug replay (tools/bugReplay.ts, real ones). The clone is the caller's.
 
 import { execFile } from 'node:child_process';
 import { existsSync, realpathSync, symlinkSync } from 'node:fs';

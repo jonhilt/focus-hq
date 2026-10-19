@@ -125,7 +125,7 @@ parts:
     kind: service
     paths: [plugins/]
 
-ignore: [scripts/, eslint.config.js, vite.config.ts, vitest.config.ts, vitest.setup.ts]
+ignore: [tools/, eslint.config.js, vite.config.ts, vitest.config.ts, vitest.setup.ts]
 
 views:
   show-to-screen:

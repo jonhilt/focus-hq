@@ -111,7 +111,7 @@ function measure(): Scorecard {
   const { gate, coverageFile } = runGate(tmp, notes);
   if (!coverageFile) notes.push('vitest wrote no coverage, so CRAP is missing');
 
-  const code = scanned(tracked('server/*.ts', 'shared/*.ts', 'plugins/*.ts', 'client/src/*.ts', 'scripts/*.ts'));
+  const code = scanned(tracked('server/*.ts', 'shared/*.ts', 'plugins/*.ts', 'client/src/*.ts', 'tools/*.ts'));
   const source = code.filter((f) => !isTest(f.file));
   const server = source.filter((f) => f.file.startsWith('server/') && !isDemo(f.file));
   const tests = code.filter((f) => isTest(f.file));

@@ -2,12 +2,12 @@
 
 A script of the office's own (it runs in the terminal, never in the office). It turns real bugs the office's agents shipped into a benchmark with a referee that can't be argued with, so a change to how the office decides quality (QA's prompt or model, a new gate, a review step) can be judged on bugs that actually got through, not on opinion. It is to [QA's catch rate](qa-catch.md) what real bugs are to planted ones.
 
-`pnpm run bug-corpus` takes the fixes listed in `scripts/bug-corpus/fixes.txt`, and for each one that changed a test, runs those tests on two versions of the code, in throwaway worktrees of this repo:
+`pnpm run bug-corpus` takes the fixes listed in `tools/bug-corpus/fixes.txt`, and for each one that changed a test, runs those tests on two versions of the code, in throwaway worktrees of this repo:
 
 1. **On the code just before the fix**, with the fix's versions of its tests written over. This is the buggy code.
 2. **On the fix itself.**
 
-Each side runs three times. A test that fails on the buggy code on an assertion and passes on the fix, on every run, is a **referee** for that bug, and a fix with at least one referee is a **case**. The cases, with their referee tests, how each failed and the lines the fix took out (where the bug was), are written to `scripts/bug-corpus/corpus.json`, with the other fixes and why each isn't a case. It's free (no model is called) and takes half an hour or so. `--only <sha>` checks one fix.
+Each side runs three times. A test that fails on the buggy code on an assertion and passes on the fix, on every run, is a **referee** for that bug, and a fix with at least one referee is a **case**. The cases, with their referee tests, how each failed and the lines the fix took out (where the bug was), are written to `tools/bug-corpus/corpus.json`, with the other fixes and why each isn't a case. It's free (no model is called) and takes half an hour or so. `--only <sha>` checks one fix.
 
 | | |
 | --- | --- |
@@ -18,7 +18,7 @@ Each side runs three times. A test that fails on the buggy code on an assertion 
 | `no-tests` | the fix changed no test vitest runs (most UI and drift fixes) |
 | `unsteady` | a test referees the bug on some runs and not others: flaky, so not a referee |
 
-The rules are in `server/agents/bugCorpus.ts`, tested next to it; git, the worktrees and vitest are in `scripts/bugCorpus.ts`. Every worktree shares this checkout's `node_modules`.
+The rules are in `server/agents/bugCorpus.ts`, tested next to it; git, the worktrees and vitest are in `tools/bugCorpus.ts`. Every worktree shares this checkout's `node_modules`.
 
 ## The list
 
@@ -67,7 +67,7 @@ Of the 39 cases, 29 are traced (3 confirmed by their tests) and 10 have every su
 
 Whether the report merely named the bug's file is kept beside it: in the first baseline, all three such "catches" were other bugs in the same files.
 
-It replays the office's QA as it is, which since the results below blocks a change only with proof ([QA → Proof](qa.md#proof)): `scripts/qaReview.ts` checks the report's proofs in the clone the way the office checks them in its checkout (`prove` in `server/agents/qaProof.ts`), so a review stops a change when its checked verdict is a fail, and a fail without a proof that held counts as passed. Runs are saved with the arm `proof`. The two arms below were the experiment it came from, run before that, and the replay no longer runs them:
+It replays the office's QA as it is, which since the results below blocks a change only with proof ([QA → Proof](qa.md#proof)): `tools/qaReview.ts` checks the report's proofs in the clone the way the office checks them in its checkout (`prove` in `server/agents/qaProof.ts`), so a review stops a change when its checked verdict is a fail, and a fail without a proof that held counts as passed. Runs are saved with the arm `proof`. The two arms below were the experiment it came from, run before that, and the replay no longer runs them:
 
 - **`qa`**: QA as it was, stopping a change on its own say-so.
 - **`hunt`**: that QA with the hunting guidance after its instructions (the corpus's kinds of bug, probed with tests that drive those paths rather than read for them) and every finding proved by a `*.proof.test.ts` the replay ran itself, stopping a change only when one failed on an assertion. Its guidance, made general for other repos and test runners, is now QA's (`HUNTING`).
@@ -80,9 +80,9 @@ It replays the office's QA as it is, which since the results below blocks a chan
 | `pnpm run bug-replay --dry` | what it would review, without reviewing |
 | `pnpm run bug-replay --only <sha>` | one commit a bug came from |
 
-A review costs what one in the office does, about $0.60 and a few minutes: a full run with controls is 48 reviews, about $30 and a few hours. Runs are saved in `~/.focus/bug-replay/`. The rules are in `server/agents/bugReplay.ts`, the clones and sessions in `scripts/bugReplay.ts`, and QA's review session, shared with `qa-catch`, in `scripts/qaReview.ts`.
+A review costs what one in the office does, about $0.60 and a few minutes: a full run with controls is 48 reviews, about $30 and a few hours. Runs are saved in `~/.focus/bug-replay/`. The rules are in `server/agents/bugReplay.ts`, the clones and sessions in `tools/bugReplay.ts`, and QA's review session, shared with `qa-catch`, in `tools/qaReview.ts`.
 
-The clones are old builds, whose instructions say to run the office (`npm run demo`, `pnpm dev`) on the live office's port and data folder, 4477 and `~/.focus`. So each review's session runs with a free port and a data folder inside its clone (`PORT`, `FOCUS_DATA_DIR`, `reviewEnv` in `scripts/replayRules.ts`), and when it ends, whatever is still running in the clone is stopped (`stopLeftovers`): a demo QA started in the background outlives the session otherwise. Both apply to `qa-catch` too.
+The clones are old builds, whose instructions say to run the office (`npm run demo`, `pnpm dev`) on the live office's port and data folder, 4477 and `~/.focus`. So each review's session runs with a free port and a data folder inside its clone (`PORT`, `FOCUS_DATA_DIR`, `reviewEnv` in `tools/replayRules.ts`), and when it ends, whatever is still running in the clone is stopped (`stopLeftovers`): a demo QA started in the background outlives the session otherwise. Both apply to `qa-catch` too.
 
 ### Results so far (2026-10-17, 26 bugs in 24 commits, 24 controls, before QA blocked only with proof)
 

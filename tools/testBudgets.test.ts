@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 // second or two alone, but well past vitest's 5 s on a busy machine (several agents' gates at once), where it fails the
 // gate on nothing but load. Such a file sets a budget fit for it, as mergeBase.test.ts does.
 const ROOT = path.resolve(import.meta.dirname, '..');
-const testFiles = ['server', 'shared', 'client/src', 'scripts', 'plugins', 'plugin-api'].flatMap((dir) =>
+const testFiles = ['server', 'shared', 'client/src', 'tools', 'plugins', 'plugin-api'].flatMap((dir) =>
   readdirSync(path.join(ROOT, dir), { recursive: true, encoding: 'utf8' })
     .filter((f) => f.endsWith('.test.ts') && !f.includes('node_modules'))
     .map((f) => path.join(dir, f)),

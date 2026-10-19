@@ -11,7 +11,7 @@ export const CRAP_BASELINE_FILE = path.join(ROOT, 'plugins/scorecard/crap-baseli
 
 /** Each tracked source file's type assertions, over the fence's folders, tests left out, as the scorecard's fence counts them. */
 export function fenceCounts(): FenceCounts {
-  const files = execFileSync('git', ['ls-files', 'server/*.ts', 'shared/*.ts', 'plugins/*.ts', 'client/src/*.ts', 'scripts/*.ts'], { cwd: ROOT, encoding: 'utf8' })
+  const files = execFileSync('git', ['ls-files', 'server/*.ts', 'shared/*.ts', 'plugins/*.ts', 'client/src/*.ts', 'tools/*.ts'], { cwd: ROOT, encoding: 'utf8' })
     .split('\n').filter((f) => f && !f.endsWith('.d.ts') && !f.endsWith('.test.ts'));
   return Object.fromEntries(files.flatMap((f) => {
     const n = scanSource(f, readFileSync(path.join(ROOT, f), 'utf8')).typeAssertions;

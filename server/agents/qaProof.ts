@@ -6,7 +6,7 @@ import { isRecord } from './transcript';
 // QA blocks a pull request only with proof (docs/qa.md#proof): the hunting guidance QA is given, the proofs its report
 // names, and the rules for whether one holds and whether the verdict blocks. Pure, and tested beside it
 // (qaProof.test.ts), but for `prove`, which takes the running of commands and the reading of files from its caller: the
-// office's checkout of the PR (manager/reviews.ts), or a replay's clone (scripts/qaReview.ts).
+// office's checkout of the PR (manager/reviews.ts), or a replay's clone (tools/qaReview.ts).
 
 /** How many of a report's proofs the office checks, at most: more than that is a list of worries, not proof. */
 export const MAX_PROOFS = 5;

@@ -1,5 +1,5 @@
 // Screenshots of the office's interface (the splash, HUD, panels and the screens round the ship) from a running demo
-// office, to compare its look before and after a change: `tsx scripts/themeShots.ts <url> <out dir> [a.css,b.css]`,
+// office, to compare its look before and after a change: `tsx tools/themeShots.ts <url> <out dir> [a.css,b.css]`,
 // laying the stylesheets (if any) over the page in order, to try a look out before building it.
 import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';

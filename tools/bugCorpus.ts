@@ -1,8 +1,8 @@
-// The bug corpus (docs/bug-corpus.md): for each real fix in scripts/bug-corpus/fixes.txt, runs the tests the fix
+// The bug corpus (docs/bug-corpus.md): for each real fix in tools/bug-corpus/fixes.txt, runs the tests the fix
 // changed twice, in throwaway worktrees of this repo: on the code just before the fix (with the fix's tests) and on the
 // fix. A fix whose tests fail before for the bug's sake and pass on it is a case: a real bug with a referee that can't
 // be argued with. The rules are in server/agents/bugCorpus.ts; this is git, the worktrees and vitest. It writes the
-// cases to scripts/bug-corpus/corpus.json and says why each other fix isn't one. A test that referees the bug on some
+// cases to tools/bug-corpus/corpus.json and says why each other fix isn't one. A test that referees the bug on some
 // runs and not others is flaky, not a referee. Each case is then traced to the commit that brought its bug in, as SZZ
 // does: the commit that last wrote its lines (git blame), unless its referee tests rule that commit out.
 // Free: no model is called.
@@ -17,7 +17,7 @@ import { blameLine, type BugCase, buggyLines, firstLines, introduced, owners, pa
 import { errorMessage, run } from '../server/util';
 
 const ROOT = process.cwd();
-const DIR = path.join(ROOT, 'scripts', 'bug-corpus');
+const DIR = path.join(ROOT, 'tools', 'bug-corpus');
 const TEST_MS = 5 * 60_000;
 const AT_ONCE = 3;
 /** Each fix's tests run this many times either side: a referee has to hold on every one. */
@@ -111,7 +111,7 @@ async function check(fix: string, kind: string, scratch: string): Promise<Outcom
 
 async function main() {
   const fixes = parseFixes(readFileSync(path.join(DIR, 'fixes.txt'), 'utf8')).filter((f) => !only || f.sha.startsWith(only));
-  if (!fixes.length) throw new Error(only ? `${only} isn't in scripts/bug-corpus/fixes.txt` : 'no fixes listed');
+  if (!fixes.length) throw new Error(only ? `${only} isn't in tools/bug-corpus/fixes.txt` : 'no fixes listed');
   const scratch = mkdtempSync(path.join(os.tmpdir(), 'bug-corpus-'));
   const outcomes: Outcome[] = [];
   let next = 0;

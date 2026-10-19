@@ -5,7 +5,7 @@ import tseslint from 'typescript-eslint';
 export default tseslint.config(
   { ignores: ['dist/', 'node_modules/', 'data/'] },
   {
-    files: ['shared/**/*.ts', 'server/**/*.ts', 'client/src/**/*.ts', 'plugins/**/*.ts', 'plugin-api/**/*.ts', 'vite.config.ts', 'vitest.config.ts', 'scripts/**/*.ts'],
+    files: ['shared/**/*.ts', 'server/**/*.ts', 'client/src/**/*.ts', 'plugins/**/*.ts', 'plugin-api/**/*.ts', 'vite.config.ts', 'vitest.config.ts', 'tools/**/*.ts'],
     extends: [js.configs.recommended, tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       parserOptions: {
@@ -33,7 +33,7 @@ export default tseslint.config(
   {
     // A cast on Object.keys/entries/fromEntries claims a record's keys without checking them: keysOf and recordOf
     // (shared/records.ts) read and build such a record, tested.
-    files: ['shared/**/*.ts', 'server/**/*.ts', 'client/src/**/*.ts', 'plugins/**/*.ts', 'plugin-api/**/*.ts', 'scripts/**/*.ts'],
+    files: ['shared/**/*.ts', 'server/**/*.ts', 'client/src/**/*.ts', 'plugins/**/*.ts', 'plugin-api/**/*.ts', 'tools/**/*.ts'],
     rules: {
       'no-restricted-syntax': ['error', {
         selector: "TSAsExpression > CallExpression.expression[callee.object.name='Object'][callee.property.name=/^(keys|entries|fromEntries)$/]",
