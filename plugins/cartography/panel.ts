@@ -3,6 +3,7 @@
 import { h, type Ui } from '../../plugin-api/client';
 import { MATRIX_HINT, type Marks, viewDrawing, wireMatrix } from './draw';
 import type { MapView, RepoMap } from './shared';
+import { diagramStands } from './shown';
 
 /** An SVG drawing, at its own size (readable), scrolling sideways when it's wider than the station. */
 function drawing(svg: string): HTMLElement {
@@ -48,18 +49,15 @@ export function openDrawing(ui: Ui, title: string, of: string, drawn: { svg: str
  * to step through.
  */
 export function openDiagram(ui: Ui, d: { question: string; stale?: string[]; redrawing?: boolean }, standing: string, html: string, act: { redraw: () => Promise<unknown>; forget: () => Promise<unknown> }): void {
-  const stale = d.stale ?? [];
+  const { warning, redraw } = diagramStands(d);
   const frame = h('iframe', { class: 'cg-diagram', title: d.question });
   frame.srcdoc = html;
-  const warning = stale.length
-    ? [h('p', { class: 'cg-stale' }, `Out of date: ${stale.length === 1 ? 'a file it cites has' : `${stale.length} files it cites have`} changed on the default branch since it was drawn (${stale.join(', ')}).`)]
-    : [];
   // each closes the panel once it's done (the space shows the diagram being drawn again, or gone); one the captain
   // thinks better of (false) leaves it as it was
   const button = (label: string, cls: string, run: () => Promise<unknown>) =>
     h('button', { class: cls, onclick: () => void run().then((done) => done !== false && ui.panels.close(), (err: Error) => ui.error(err.message)) }, label);
   const actions = h('div', { class: 'cg-actions' },
-    d.redrawing ? h('span', { class: 'muted' }, 'Being drawn again…') : button('Draw it again', stale.length ? 'btn' : 'btn small', act.redraw),
+    redraw ? button('Draw it again', redraw.class, act.redraw) : h('span', { class: 'muted' }, 'Being drawn again…'),
     button('Forget it', 'btn small', act.forget));
-  ui.panels.open({ title: d.question, full: true, body: h('div', { class: 'cg-close-up' }, h('div', { class: 'muted' }, standing), ...warning, actions, frame) });
+  ui.panels.open({ title: d.question, full: true, body: h('div', { class: 'cg-close-up' }, h('div', { class: 'muted' }, standing), warning ? h('p', { class: 'cg-stale' }, warning) : null, actions, frame) });
 }

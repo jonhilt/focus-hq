@@ -6,11 +6,11 @@ import * as THREE from 'three';
 import { callPlugin, canvasTexture, type ClientPlugin, h, Hologram, hover, makeCanvas, office, OVERLAY_LAYER, pluginOn, pluginState, type ShipHost, type ShipPart, type Ui } from '../../plugin-api/client';
 import { drawChart } from './chart';
 import { miniature, miniatureKey } from './miniature';
-import { TIES_KEY, TIES_QUESTION, tiesDrawing } from './draw';
+import { TIES_QUESTION } from './draw';
 import { drawingBody, viewBody } from './panel';
 import { CARTOGRAPHY, type CartographyState, MODEL_FILE, type RepoMap } from './shared';
+import { NO_TIES, NOT_MAPPED, offNote, type ProjectCard, projectCard, SLICES_HEAD, type SliceView } from './shown';
 import { ArchitectureSpace } from './space';
-import { sliceViews } from './slice';
 import { HALL_CHART, hallChart } from './spaceLayout';
 import { coverage, openingView, viewsOf } from './views';
 import './cartography.css';
@@ -35,43 +35,43 @@ function repoMap(map: RepoMap, open: Set<string>): HTMLElement[] {
   return [head, h('small', { class: 'muted' }, coverage(map)), ...drift, ...views];
 }
 
+/** What each goal under way does to a project's maps, each closed until the captain opens it. */
+function sliceCards(slices: readonly SliceView[], open: Set<string>): HTMLElement[] {
+  const cards = slices.map(({ slice, map, view, marks }) => {
+    const id = `slice#${slice.leadId}#${map.repo}`;
+    const details = h('details', { class: 'card', open: open.has(id), attrs: { 'data-key': id } },
+      h('summary', null, h('span', { class: 'chip' }, `TS-${slice.station + 1}`), ' ', h('strong', null, view.question), h('small', { class: 'muted' }, ` · ${view.parts.length} parts · ${map.repo}`)),
+      ...viewBody(map, view, marks));
+    details.addEventListener('toggle', () => (details.open ? open.add(id) : open.delete(id)));
+    return details;
+  });
+  return cards.length ? [h('small', { class: 'muted' }, SLICES_HEAD), ...cards] : [];
+}
+
+/** A project of more than one repo: what ties them together, closed until the captain opens it, or that nothing does yet. */
+function tiesCard(projectId: string, ties: ProjectCard['ties'], open: Set<string>): HTMLElement[] {
+  if (ties.kind === 'none') return [];
+  if (ties.kind === 'unfound') return [h('small', { class: 'muted' }, NO_TIES)];
+  const id = `ties#${projectId}`;
+  const details = h('details', { class: 'card', open: open.has(id), attrs: { 'data-key': id } }, h('summary', null, h('strong', null, TIES_QUESTION), h('small', { class: 'muted' }, ` · ${ties.drawing.view.parts.length} parts`)), ...drawingBody(ties.drawing));
+  details.addEventListener('toggle', () => (details.open ? open.add(id) : open.delete(id)));
+  return [details];
+}
+
 function projectMaps(ui: Ui, open: Set<string>): HTMLElement[] {
   const now = maps();
   const on = office.projects.filter((p) => pluginOn(p, CARTOGRAPHY));
-  const off = office.projects.length - on.length;
   // the projects it's off for are only counted: switching it on is in each project's settings
-  const offNote = off
-    ? h('small', { class: 'muted' }, `Switched off for ${off} project${off === 1 ? '' : 's'}: switch Architecture map on in a project's settings (the manager's Projects tab) to map it.`)
-    : null;
+  const off = offNote(office.projects.length - on.length);
   return [...on.map((project) => {
-    const remap = h('button', { class: 'btn small', onclick: () => void callPlugin(CARTOGRAPHY, '/map', { projectId: project.id }).catch((err: Error) => ui.error(err.message)) },
-      now?.mapping.includes(project.id) ? 'Mapping…' : 'Map again');
-    const repos = now?.maps[project.id];
-    // what each goal under way does to it, each closed until the captain opens it
-    const slices = sliceViews(now?.slices[project.id] ?? [], repos ?? []).map(({ slice, map, view, marks }) => {
-      const id = `slice#${slice.leadId}#${map.repo}`;
-      const details = h('details', { class: 'card', open: open.has(id), attrs: { 'data-key': id } },
-        h('summary', null, h('span', { class: 'chip' }, `TS-${slice.station + 1}`), ' ', h('strong', null, view.question), h('small', { class: 'muted' }, ` · ${view.parts.length} parts · ${map.repo}`)),
-        ...viewBody(map, view, marks));
-      details.addEventListener('toggle', () => (details.open ? open.add(id) : open.delete(id)));
-      return details;
-    });
-    // a project of more than one repo: what ties them together
-    const ties = tiesDrawing(repos ?? [], now?.crossRepo[project.id] ?? [], now?.crossCalls[project.id] ?? []);
-    const tied = (() => {
-      if (project.repos.length < 2 || !repos) return [];
-      if (!ties) return [h('small', { class: 'muted' }, `Nothing ties its repos together yet: neither calls a route the other declares, nor do they change together often enough to say. ${TIES_KEY}`)];
-      const id = `ties#${project.id}`;
-      const details = h('details', { class: 'card', open: open.has(id), attrs: { 'data-key': id } }, h('summary', null, h('strong', null, TIES_QUESTION), h('small', { class: 'muted' }, ` · ${ties.view.parts.length} parts`)), ...drawingBody(ties));
-      details.addEventListener('toggle', () => (details.open ? open.add(id) : open.delete(id)));
-      return [details];
-    })();
+    const card = projectCard(project, now);
+    const remap = h('button', { class: 'btn small', onclick: () => void callPlugin(CARTOGRAPHY, '/map', { projectId: project.id }).catch((err: Error) => ui.error(err.message)) }, card.remap);
     return h('div', { class: 'card' },
       h('div', { class: 'row' }, h('strong', { class: 'grow' }, project.name), remap),
-      ...tied,
-      ...(repos ? repos.flatMap((m) => repoMap(m, open)) : [h('small', { class: 'muted' }, `Not mapped yet. Each repo keeps its model in ${MODEL_FILE}.`)]),
-      ...(slices.length ? [h('small', { class: 'muted' }, 'Goals under way, and what each slice does to the architecture so far:'), ...slices] : []));
-  }), ...(offNote ? [offNote] : [])];
+      ...tiesCard(project.id, card.ties, open),
+      ...(card.repos ? card.repos.flatMap((m) => repoMap(m, open)) : [h('small', { class: 'muted' }, NOT_MAPPED)]),
+      ...sliceCards(card.slices, open));
+  }), ...(off ? [h('small', { class: 'muted' }, off)] : [])];
 }
 
 /** The chart's canvas. */

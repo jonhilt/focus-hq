@@ -6,14 +6,13 @@
 import * as THREE from 'three';
 import { callPlugin, canvasTexture, confirmDialog, Hologram, hover, makeCanvas, OVERLAY_LAYER, type Place, type PluginSpace, type ShipHost, SPACE, type Ui } from '../../plugin-api/client';
 import { ARCH, HolodeckArch } from './arch';
-import { standing } from './diagrams';
-import { TIES_QUESTION, tiesDrawing } from './draw';
+import { type KeptDiagram, standing } from './diagrams';
+import { TIES_QUESTION } from './draw';
 import { openDiagram, openDrawing, openView } from './panel';
 import { drawNote, drawPicture, drawSvg, drawView } from './screen';
-import { sliceViews } from './slice';
-import { CARTOGRAPHY, type CartographyState, type MapView, type RepoMap } from './shared';
-import { ARRIVAL, EXIT_ARCH, MAX_PANELS, type PanelSpot, panelSpots, PLATFORM, type Point, reachOf } from './spaceLayout';
-import { CHANGES, screenVersion, spaceViews, WHOLE } from './views';
+import { type Shown, spaceStands } from './shown';
+import { CARTOGRAPHY, type CartographyState } from './shared';
+import { ARRIVAL, EXIT_ARCH, type PanelSpot, panelSpots, PLATFORM, type Point, reachOf } from './spaceLayout';
 
 /** The canvas each view's drawn on. */
 const PX = { w: 1280, h: 800 } as const;
@@ -29,10 +28,6 @@ interface Panel {
 
 const vec = (p: Point) => new THREE.Vector3(p.x, p.y, p.z);
 
-/** A hint's name for a view. */
-const titleOf = (map: RepoMap, view: MapView): string =>
-  view.id === WHOLE.id ? `${map.repo}'s whole map` : view.id === CHANGES.id ? `how ${map.repo} changes` : `the map: ${view.question}`;
-
 /** Something the space puts up: a key that changes when its drawing would, its hint's name, how it's drawn and what E on it opens. */
 interface Item {
   key: string;
@@ -41,58 +36,40 @@ interface Item {
   open: (ui: Ui) => void;
 }
 
-/**
- * What the space puts up for a project, in the order of its spots: each repo's whole map, then what ties its repos
- * together (crossRepo.ts), then what each goal under way does to them, then the repos' own views and how each changes.
- */
-function items(repos: readonly RepoMap[], state: CartographyState | undefined, projectId: string): Item[] {
-  const shown = spaceViews(repos);
-  const wholes = shown.filter(({ view }) => view.id === WHOLE.id).length;
-  const views = shown.map(({ map, view }): Item => ({
-    key: `${map.repo}#${screenVersion(map, view)}`,
-    title: titleOf(map, view),
-    draw: (ctx) => drawView(ctx, PX.w, PX.h, map, view),
-    open: (ui) => openView(ui, map, view),
-  }));
-  const slices = sliceViews(state?.slices[projectId] ?? [], repos).map(({ slice, map, view, marks, key }): Item => ({
-    key,
-    title: `what ${slice.title} changes`,
-    draw: (ctx) => drawView(ctx, PX.w, PX.h, map, view, marks, `${slice.title} · TS-${slice.station + 1} · ${map.repo}, its lead's checkout against the default branch`),
-    open: (ui) => openView(ui, map, view, marks),
-  }));
-  // a project of more than one repo: what ties them, beside their whole maps
-  const tied = state?.crossRepo[projectId] ?? [];
-  const called = state?.crossCalls[projectId] ?? [];
-  const ties = tiesDrawing(repos, tied, called);
-  const repoTies: Item[] = ties
-    ? [{
-        key: `ties|${JSON.stringify([tied, called])}`,
-        title: 'how its repos connect',
-        draw: (ctx) => drawSvg(ctx, PX.w, PX.h, TIES_QUESTION, ties.map.repo, ties.svg),
-        open: (ui) => openDrawing(ui, TIES_QUESTION, ties.map.repo, ties),
-      }]
-    : [];
-  // the diagrams leads drew when asked how something works, the newest first: what the captain asked for comes first
-  const kept = (state?.diagrams[projectId] ?? []).map((d): Item => {
-    const call = (path: string) => callPlugin<{ html: string; image?: string }>(CARTOGRAPHY, path, { project: projectId, id: d.id });
-    return {
-      key: `diagram|${d.id}|${d.at}|${(d.stale ?? []).join(',')}|${d.redrawing ? 'redrawing' : d.failed ?? ''}`,
-      title: `the diagram: ${d.question}`,
-      draw: async (ctx) => drawPicture(ctx, PX.w, PX.h, d.question, standing(d, Date.now()), d.image ? (await call('/diagram')).image : undefined, !!d.stale?.length),
-      open: (ui) =>
-        void call('/diagram')
-          .then((f) => openDiagram(ui, d, standing(d, Date.now(), false), f.html, {
-            redraw: () => call('/redraw'),
-            // it can't be taken back: its page and picture go too
-            forget: async () => {
-              if (!(await confirmDialog({ title: 'Forget this diagram?', message: `“${d.question}” goes from the architecture space for good. A lead can draw it again if it's asked for.`, confirmLabel: 'Forget it', danger: true }))) return false;
-              return call('/forget');
-            },
-          }))
-          .catch((err: Error) => ui.error(err.message)),
-    };
-  });
-  return [...views.slice(0, wholes), ...kept, ...repoTies, ...slices, ...views.slice(wholes)].slice(0, MAX_PANELS);
+/** A kept diagram's page or picture, or what drawing it again or forgetting it says, from the plugin's server part. */
+const diagramCall = (projectId: string, d: KeptDiagram) => (path: string) => callPlugin<{ html: string; image?: string }>(CARTOGRAPHY, path, { project: projectId, id: d.id });
+
+/** A kept diagram of project `projectId` as the space draws it, and up close, where it can be drawn again or forgotten. */
+function diagramItem(projectId: string, d: KeptDiagram): Pick<Item, 'draw' | 'open'> {
+  const call = diagramCall(projectId, d);
+  return {
+    draw: async (ctx) => drawPicture(ctx, PX.w, PX.h, d.question, standing(d, Date.now()), d.image ? (await call('/diagram')).image : undefined, !!d.stale?.length),
+    open: (ui) =>
+      void call('/diagram')
+        .then((f) => openDiagram(ui, d, standing(d, Date.now(), false), f.html, {
+          redraw: () => call('/redraw'),
+          // it can't be taken back: its page and picture go too
+          forget: async () => {
+            if (!(await confirmDialog({ title: 'Forget this diagram?', message: `“${d.question}” goes from the architecture space for good. A lead can draw it again if it's asked for.`, confirmLabel: 'Forget it', danger: true }))) return false;
+            return call('/forget');
+          },
+        }))
+        .catch((err: Error) => ui.error(err.message)),
+  };
+}
+
+/** How something the space puts up (shown.ts) for project `projectId` is drawn, and what E on it opens. */
+function itemOf(s: Shown, projectId: string): Item {
+  switch (s.kind) {
+    case 'view':
+      return { ...s, draw: (ctx) => drawView(ctx, PX.w, PX.h, s.map, s.view), open: (ui) => openView(ui, s.map, s.view) };
+    case 'slice':
+      return { ...s, draw: (ctx) => drawView(ctx, PX.w, PX.h, s.map, s.view, s.marks, s.caption), open: (ui) => openView(ui, s.map, s.view, s.marks) };
+    case 'ties':
+      return { ...s, draw: (ctx) => drawSvg(ctx, PX.w, PX.h, TIES_QUESTION, s.ties.map.repo, s.ties.svg), open: (ui) => openDrawing(ui, TIES_QUESTION, s.ties.map.repo, s.ties) };
+    default:
+      return { ...s, ...diagramItem(projectId, s.diagram) };
+  }
 }
 
 export class ArchitectureSpace {
@@ -155,20 +132,14 @@ export class ArchitectureSpace {
   /** Puts up the shown project's views again when they've changed (a new map, a view added), drawing each as it comes. */
   private sync(): void {
     if (!this.shown) return;
-    const state = this.maps();
-    const repos = state?.maps[this.shown.projectId];
-    const views = items(repos ?? [], state, this.shown.projectId);
-    const key = repos ? views.map((v) => v.key).join('\n') : 'unmapped';
+    const { projectId, name } = this.shown;
+    const { shows, key, note } = spaceStands(this.maps(), projectId, name);
     if (key === this.drawnKey) return;
     this.clear();
     this.drawnKey = key;
-    const spots = panelSpots(Math.max(1, views.length));
-    if (!views.length) {
-      const why = repos ? 'None of its repos has a model yet: each keeps one in .focus/cartography.yaml.' : 'It hasn’t been mapped yet: it will be in a moment.';
-      this.put(spots[0], `${this.shown.name} has no map yet`, null, (ctx) => drawNote(ctx, PX.w, PX.h, `${this.shown?.name ?? 'This project'} has no map yet`, why));
-      return;
-    }
-    views.forEach((v, i) => this.put(spots[i], v.title, v.open, v.draw));
+    const spots = panelSpots(Math.max(1, shows.length));
+    if (note) return this.put(spots[0], note.title, null, (ctx) => drawNote(ctx, PX.w, PX.h, note.title, note.why));
+    shows.map((s) => itemOf(s, projectId)).forEach((v, i) => this.put(spots[i], v.title, v.open, v.draw));
   }
 
   /** A view's hologram at `spot`, drawn by `draw`; E on it does `use`. */

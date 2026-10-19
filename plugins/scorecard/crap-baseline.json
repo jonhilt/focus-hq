@@ -1,7 +1,5 @@
 {
-  "plugins/cartography/client.ts": 2,
-  "plugins/cartography/panel.ts": 1,
-  "plugins/cartography/space.ts": 2,
+  "plugins/cartography/client.ts": 1,
   "plugins/climber/scripts/climbReplay.ts": 1,
   "plugins/flow/flow.ts": 1,
   "plugins/flow/scripts/flowRework.ts": 1,
