@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  effectMetrics, eslintCounts, failedTests, fenceMetrics, gateMetrics, officeMetrics, render, scanSource, typecheckErrors, type GateResults, type Scorecard,
+  effectMetrics, eslintCounts, failedTests, fenceMetrics, gateMetrics, officeMetrics, propertyTestFiles, render, resolveImport, scanSource, typecheckErrors, type GateResults, type Scorecard,
   type VitestReport,
 } from './scorecardRules';
 
@@ -53,6 +53,51 @@ describe('scanSource', () => {
       `import type { Stats } from 'node:fs'; export type R = () => Promise<Stats>;`,
       `import { type ChildProcess } from 'node:child_process'; export const alive = (c: ChildProcess) => !c.killed;`,
     ]) expect(scan(source).doesIo, source).toBe(false);
+  });
+});
+
+describe('property tests', () => {
+  const helper = [
+    `import fc from 'fast-check';`,
+    `export async function checkRestart() { await fc.assert(fc.property(fc.nat(), () => true)); }`,
+    `export const checkAtOnce = () => fc.check(fc.property(fc.nat(), () => true));`,
+    `export const now = (work: () => void) => work();`,
+    `function quiet() { fc.assert(fc.property(fc.nat(), () => true)); }`,
+  ].join('\n');
+
+  it('names the exported functions that run fast-check, however fast-check is brought in', () => {
+    expect(scanSource('h.ts', helper).propertyRunners).toEqual(['checkRestart', 'checkAtOnce']);
+    expect(scan(`import * as fc from 'fast-check'; export default function run() { fc.assert(p); }`).propertyRunners).toEqual(['default']);
+    expect(scan(`import { assert as holds } from 'fast-check'; export function run() { holds(p); }`).propertyRunners).toEqual(['run']);
+    expect(scan(`import fc from 'fast-check'; export const arb = fc.nat(); export function run(t: T) { t.assert(p); }`).propertyRunners).toEqual([]);
+  });
+
+  it('keeps the names a file imports at runtime from its own files, not types or packages', () => {
+    const counts = scan(`import { type A, checkRestart, now as soon } from './invariants'; import type { B } from '../b'; import * as c from '../c.js'; import d from './d'; import { e } from 'effect';`);
+    expect(counts.localImports).toEqual([{ from: './invariants', names: ['checkRestart', 'now'] }, { from: '../c.js', names: ['*'] }, { from: './d', names: ['default'] }]);
+  });
+
+  it('finds the file an import reaches', () => {
+    const files = new Set(['server/agents/invariants.ts', 'server/store/index.ts']);
+    expect(resolveImport('server/agents/a.test.ts', './invariants', files)).toBe('server/agents/invariants.ts');
+    expect(resolveImport('server/agents/a.test.ts', './invariants.js', files)).toBe('server/agents/invariants.ts');
+    expect(resolveImport('server/agents/a.test.ts', '../store', files)).toBe('server/store/index.ts');
+    expect(resolveImport('server/a.test.ts', './invariants', files)).toBeUndefined();
+  });
+
+  it('counts a test that imports fast-check, or calls a helper that runs its properties, but not one that only borrows from it', () => {
+    const file = (name: string, source: string) => ({ file: name, ...scanSource(name, source) });
+    const all = [
+      file('server/agents/invariants.ts', helper),
+      file('server/agents/direct.test.ts', `import fc from 'fast-check';`),
+      file('server/agents/restart.test.ts', `import { checkRestart, type Subject } from './invariants';`),
+      file('server/agents/whole.test.ts', `import * as inv from './invariants';`),
+      file('server/agents/contract.test.ts', `import { now } from './invariants';`),
+      file('server/agents/types.test.ts', `import type { checkRestart } from './invariants';`),
+      file('server/other/far.test.ts', `import { checkRestart } from './invariants';`),
+    ];
+    const tests = all.filter((f) => f.file.endsWith('.test.ts'));
+    expect(propertyTestFiles(tests, all).map((f) => f.file)).toEqual(['server/agents/direct.test.ts', 'server/agents/restart.test.ts', 'server/agents/whole.test.ts']);
   });
 });
 
@@ -147,7 +192,7 @@ describe('render', () => {
   const card = (typeAssertions: number, commit: string): Scorecard => ({
     v: 1, at: Date.UTC(2026, 9, 12, 9), commit, branch: 'main', dirty: false, notes: [], frictions: [{ key: 'shell: bash exit code 1', sessions: 48 }],
     metrics: [...gateMetrics(gate), ...fenceMetrics([{
-      typeAssertions, nonNull: 0, explicitAny: 0, lintDisables: 0, tsSuppressions: 0, effectRuns: 0, importsEffect: false, doesIo: false, machines: 0, importsFastCheck: false,
+      typeAssertions, nonNull: 0, explicitAny: 0, lintDisables: 0, tsSuppressions: 0, effectRuns: 0, importsEffect: false, doesIo: false, machines: 0, importsFastCheck: false, localImports: [], propertyRunners: [],
     }]), { section: 'office', key: 'office.merged', label: 'PRs merged', value: 3, better: 'none', format: 'count' }],
   });
 

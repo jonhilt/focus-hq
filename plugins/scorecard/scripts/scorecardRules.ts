@@ -32,6 +32,10 @@ export interface SourceCounts {
   /** XState machines created (`createMachine`). */
   machines: number;
   importsFastCheck: boolean;
+  /** What it imports at runtime from files of its own (`./x`, `../y`): from where, and which names (`*` for all of them). */
+  localImports: { from: string; names: string[] }[];
+  /** The functions it exports that run fast-check's properties (`fc.assert`, `fc.check`): a helper's property runners. */
+  propertyRunners: string[];
 }
 
 const RUNS = /^run(Promise|Sync|Fork|Callback)(Exit)?$/;
@@ -55,14 +59,62 @@ const typesOnly = (node: ts.ImportDeclaration) => {
   return !clause.name && !!named && ts.isNamedImports(named) && named.elements.every((e) => e.isTypeOnly);
 };
 
+const FAST_CHECK = new Set(['fast-check', '@fast-check/vitest']);
+const PROPERTY_RUNS = new Set(['assert', 'check']);
+
+/** The names an import brings in at runtime: `default`, `*` for a namespace, or each named one that isn't a type. */
+function valueNames(node: ts.ImportDeclaration): string[] {
+  const clause = node.importClause;
+  if (!clause || clause.isTypeOnly) return [];
+  const named = clause.namedBindings;
+  const names = clause.name ? ['default'] : [];
+  if (named && ts.isNamespaceImport(named)) return [...names, '*'];
+  return [...names, ...(named?.elements ?? []).filter((e) => !e.isTypeOnly).map((e) => (e.propertyName ?? e.name).text)];
+}
+
+/** What fast-check's `assert` and `check` are called in this file: through its default or namespace import, or by name. */
+function fastCheckCallees(sf: ts.SourceFile): { owners: Set<string>; direct: Set<string> } {
+  const owners = new Set<string>();
+  const direct = new Set<string>();
+  for (const node of sf.statements) {
+    if (!ts.isImportDeclaration(node) || !ts.isStringLiteral(node.moduleSpecifier) || !FAST_CHECK.has(node.moduleSpecifier.text)) continue;
+    const clause = node.importClause;
+    if (clause?.name) owners.add(clause.name.text);
+    const named = clause?.namedBindings;
+    if (named && ts.isNamespaceImport(named)) owners.add(named.name.text);
+    else for (const e of named?.elements ?? []) if (PROPERTY_RUNS.has((e.propertyName ?? e.name).text)) direct.add(e.name.text);
+  }
+  return { owners, direct };
+}
+
+const exported = (node: ts.Node) => ts.canHaveModifiers(node) && !!ts.getModifiers(node)?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
+const isDefault = (node: ts.Node) => ts.canHaveModifiers(node) && !!ts.getModifiers(node)?.some((m) => m.kind === ts.SyntaxKind.DefaultKeyword);
+
+/** The name an exported function goes out under (`export function f`, `export const f = () =>`), if the node is one. */
+function exportedFunction(node: ts.Node): string | undefined {
+  if (ts.isFunctionDeclaration(node) && exported(node)) return isDefault(node) ? 'default' : node.name?.text;
+  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer && (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))) {
+    const statement = node.parent.parent;
+    return ts.isVariableStatement(statement) && exported(statement) ? node.name.text : undefined;
+  }
+  return undefined;
+}
+
 /** Counts what `SourceCounts` lists in one file, from its syntax tree and comments, not by matching text. */
 export function scanSource(file: string, source: string): SourceCounts {
   const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
   const counts: SourceCounts = {
     typeAssertions: 0, nonNull: 0, explicitAny: 0, lintDisables: 0, tsSuppressions: 0,
-    effectRuns: 0, importsEffect: false, doesIo: false, machines: 0, importsFastCheck: false,
+    effectRuns: 0, importsEffect: false, doesIo: false, machines: 0, importsFastCheck: false, localImports: [], propertyRunners: [],
   };
-  const walk = (node: ts.Node) => {
+  const fastCheck = fastCheckCallees(sf);
+  const runsProperty = (call: ts.CallExpression) => {
+    const callee = call.expression;
+    if (ts.isIdentifier(callee)) return fastCheck.direct.has(callee.text);
+    return ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && fastCheck.owners.has(callee.expression.text) && PROPERTY_RUNS.has(callee.name.text);
+  };
+  const walk = (node: ts.Node, runner?: string) => {
+    runner = exportedFunction(node) ?? runner;
     if (ts.isAsExpression(node)) {
       if (!(ts.isTypeReferenceNode(node.type) && node.type.typeName.getText(sf) === 'const')) counts.typeAssertions++;
     } else if (ts.isTypeAssertionExpression(node)) counts.typeAssertions++;
@@ -73,15 +125,18 @@ export function scanSource(file: string, source: string): SourceCounts {
       if (RUNS.test(name)) counts.effectRuns++;
       if (name === 'createMachine') counts.machines++;
       if (IO_CALLS.has(name)) counts.doesIo = true;
+      if (runner && runsProperty(node) && !counts.propertyRunners.includes(runner)) counts.propertyRunners.push(runner);
     } else if (ts.isAwaitExpression(node)) counts.doesIo = true;
     else if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && IO_NEWS.has(node.expression.text)) counts.doesIo = true;
     else if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
       const from = node.moduleSpecifier.text;
       if (from === 'effect' || from.startsWith('effect/')) counts.importsEffect = true;
       if (IO_MODULES.test(from) && !typesOnly(node)) counts.doesIo = true;
-      if (from === 'fast-check' || from === '@fast-check/vitest') counts.importsFastCheck = true;
+      if (FAST_CHECK.has(from)) counts.importsFastCheck = true;
+      const names = from.startsWith('.') ? valueNames(node) : [];
+      if (names.length) counts.localImports.push({ from, names });
     }
-    ts.forEachChild(node, walk);
+    ts.forEachChild(node, (child) => walk(child, runner));
   };
   walk(sf);
   for (const comment of comments(source)) {
@@ -213,6 +268,25 @@ export function effectMetrics(server: SourceCounts[]): Metric[] {
 
 /** The files doing I/O without Effect, by name: what's left on the path. */
 export const promiseIo = <F extends SourceCounts>(files: F[]): F[] => files.filter((f) => f.doesIo && !f.importsEffect);
+
+/** The file an import from `./x` or `../y` in `file` reaches, among `files` (paths from the root, `/` between folders). */
+export function resolveImport(file: string, from: string, files: ReadonlySet<string>): string | undefined {
+  const base = path.posix.join(path.posix.dirname(file), from).replace(/\.[cm]?[jt]s$/, '');
+  return [`${base}.ts`, `${base}/index.ts`].find((f) => files.has(f));
+}
+
+/**
+ * The test files that run property tests: those that import fast-check themselves, and those that call a helper of
+ * the repo's own whose exported function runs fast-check's properties (`server/agents/invariants.ts`'s checks).
+ */
+export function propertyTestFiles<F extends SourceCounts & { file: string }>(tests: F[], all: F[]): F[] {
+  const runners = new Map(all.filter((f) => f.propertyRunners.length).map((f) => [f.file, f.propertyRunners]));
+  const files = new Set(all.map((f) => f.file));
+  return tests.filter((t) => t.importsFastCheck || t.localImports.some(({ from, names }) => {
+    const found = runners.get(resolveImport(t.file, from, files) ?? '');
+    return !!found && names.some((n) => n === '*' || found.includes(n));
+  }));
+}
 
 export interface CrapResults {
   functions: number;

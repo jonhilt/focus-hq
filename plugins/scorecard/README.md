@@ -22,7 +22,7 @@ It takes about a minute and a quarter. It always exits 0: it measures, it doesn'
   - the calls that run an Effect (`runPromise`, `runFork`, `runSync`, `runCallback` and their `…Exit` forms), each an edge where Effect hands over to Promise code, and how many files they're in;
   - how many XState machines there are.
   See the [Effect assessment](../../docs/effect-assessment.md) for the migration path.
-- **Tests:** how many tests and test files there are, how many test files use property tests (`fast-check`), and, for `server/`, `shared/` and `plugins/`, how many functions score over [CRAP](crap.md) 30 and the total CRAP.
+- **Tests:** how many tests and test files there are, how many test files use property tests (`fast-check`, imported by the test itself or through a helper of the repo's own whose exported function runs its properties, like `server/agents/invariants.ts`'s checks), and, for `server/`, `shared/` and `plugins/`, how many functions score over [CRAP](crap.md) 30 and the total CRAP.
 - **Office:** from [the ledger](../../docs/ledger.md):
   - the report card's numbers over 30 days: QA passed first time, failed QA rounds per merge, merges without a QA pass, conflicts that needed an agent, checks sent back, cost and wasted tool calls per merge, and retro fixes that stopped their friction;
   - the open friction patterns (3 or more sessions in 14 days, with no retro decision yet; see [the retro](../retro/README.md)) and the five most widespread.

@@ -130,7 +130,7 @@ export const METRIC_ABOUT: Record<string, MetricAbout> = {
   'tests.files': { short: 'test files', what: 'Unit test files.', why: 'How much of the code has tests beside it.' },
   'tests.propertyFiles': {
     short: 'property test files',
-    what: 'Test files that use property tests (fast-check).',
+    what: 'Test files that use property tests (fast-check): importing it themselves, or calling a helper of the repo’s own that runs its properties (`server/agents/invariants.ts`’s checks).',
     why: 'A property test tries hundreds of generated inputs, so it finds the edge cases example tests miss.',
   },
   'crap.over': {

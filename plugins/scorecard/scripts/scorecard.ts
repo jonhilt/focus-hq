@@ -19,7 +19,7 @@ import { noiseOf } from '../scorecard';
 import type { ScorecardNoise } from '../types';
 import { CRAP_LINE, fromIstanbul, functionsIn, isDemo, score } from './crapScore';
 import {
-  effectMetrics, eslintCounts, failedTests, fenceMetrics, gateMetrics, officeMetrics, promiseIo, render, renderNoise, scanSource, testMetrics, typecheckErrors,
+  effectMetrics, eslintCounts, failedTests, fenceMetrics, gateMetrics, officeMetrics, promiseIo, propertyTestFiles, render, renderNoise, scanSource, testMetrics, typecheckErrors,
   type CrapResults, type GateResults, type GateStep, type Scorecard, type SourceCounts, type VitestReport,
 } from './scorecardRules';
 
@@ -135,7 +135,7 @@ function measure(): Scorecard {
       ...fenceMetrics(source),
       ...effectMetrics(server),
       ...testMetrics(
-        { total: gate.test.tests, files: tests.length, propertyFiles: tests.filter((f) => f.importsFastCheck).length },
+        { total: gate.test.tests, files: tests.length, propertyFiles: propertyTestFiles(tests, code).length },
         coverageFile ? crapOf(coverageFile) : undefined,
       ),
       ...(office?.metrics ?? []),
