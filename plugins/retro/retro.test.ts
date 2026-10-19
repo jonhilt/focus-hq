@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FrictionGroup } from '../../plugin-api/shared';
 import { parseDrafts, renderFrictions } from './retro';
-import { freshRetro, type Retro, retroAfterRestart, retroCardLine, type RetroDraft, retroPage, startReading, stationLine } from './shared';
+import { freshRetro, type Retro, retroAfterRestart, retroCardLine, type RetroDraft, retroPage, retroStanding, startReading, stationLine, windowInput } from './shared';
 
 const DAY = 24 * 60 * 60 * 1000;
 const group = (key: string, sessions: number): FrictionGroup => {
@@ -95,6 +95,25 @@ describe('the retro on the engineering panel', () => {
     expect(retroPage(thinking)).toEqual({ startLabel: 'Start a retro', running: true, cost: '$1.23', standing: thinking, found: null });
     const done = retro({ status: 'done' });
     expect(retroPage(done)).toEqual({ startLabel: 'Start a new retro', running: false, cost: null, standing: done, found: done });
+  });
+
+  it('says how one stands: what it does, or why it failed, over which window and since when', () => {
+    const ago = (at: number) => `${at} ago`;
+    expect(retroStanding(retro({ status: 'gathering', activity: 'Reading 40 sessions', days: 7 }), ago)).toEqual({ tone: 'warn', headline: 'Reading 40 sessions', line: 'the last 7 days' });
+    expect(retroStanding(retro({ status: 'done', activity: 'Drafted 2', sessions: 40, startedAt: 5 }), ago)).toEqual({ tone: 'ok', headline: 'Drafted 2', line: '40 sessions over 14 days · started 5 ago' });
+    expect(retroStanding(retro({ status: 'failed', activity: 'Interrupted', error: 'Stopped by the captain' }), ago)).toMatchObject({ tone: 'bad', headline: 'Stopped by the captain' });
+    expect(retroStanding(retro({ status: 'failed', activity: 'Interrupted' }), ago).headline).toBe('Interrupted');
+  });
+
+  it('keeps the window the captain typed across re-renders, and starts it again from a new retro’s', () => {
+    const make = (n: number) => ({ days: n });
+    const first = windowInput(undefined, undefined, make);
+    expect(first).toEqual({ input: { days: 14 }, seededFrom: undefined });
+    expect(windowInput(first, undefined, make)).toBe(first);
+    const started = retro({ days: 7, startedAt: 5 });
+    const seeded = windowInput(first, started, make);
+    expect(seeded).toEqual({ input: { days: 7 }, seededFrom: 5 });
+    expect(windowInput(seeded, started, make)).toBe(seeded);
   });
 
   it('says what starting one reads first, and what that costs', () => {

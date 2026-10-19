@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { changeMark, changeWords, compared, deltaText, direction, duration, glance, measuredAt, noiseOf, scorecardHeadOf, tileFace, verdictPhrases, wobble } from './scorecard';
+import { changeMark, changeWords, compared, deltaText, direction, duration, flowPhrases, glance, measuredAt, msdBoard, noiseOf, overviewOf, scorecardHeadOf, shownMoved, tileFace, verdictPhrases, wobble } from './scorecard';
 import type { Metric, Scorecard, Scorecards } from './types';
 
 const m = (value: number, better: Metric['better'], format: Metric['format'] = 'count', key = 'k'): Metric => ({ section: 'fence', key, label: key, value, better, format });
@@ -237,5 +237,59 @@ describe('what the overview says', () => {
     const [gate, fence] = glance([card()])!.tiles;
     expect(tileFace(gate)).toEqual({ value: 'PASS', caption: 'in 1m 45s', also: 'typecheck 56s' });
     expect(tileFace(fence)).toEqual({ value: '200', caption: 'type assertions', also: '100 non-null' });
+  });
+});
+
+describe('what the MSD and the overview list of what moved', () => {
+  const metric = (key: string, value: number): Metric => ({ section: 'fence', key, label: key, value, better: 'lower', format: 'count' });
+  const keys = Array.from({ length: 9 }, (_, i) => `n${i}`);
+  const card = (value: number, over: Partial<Scorecard> = {}): Scorecard =>
+    ({ v: 1, at: 0, commit: 'abcdef1234', branch: 'main', dirty: false, frictions: [], notes: [], metrics: keys.map((k) => metric(k, value)), ...over });
+  const desk = (...history: Scorecard[]): Scorecards => ({ status: 'idle', history });
+  const moved = (n: number) => compared([card(1), card(2)]).flatMap((s) => s.rows).slice(0, n);
+
+  it('shows them all while they fit, and gives the last line to how many more once they don’t', () => {
+    expect(shownMoved(moved(5), 5)).toMatchObject({ rows: moved(5), more: 0 });
+    expect(shownMoved(moved(6), 5)).toMatchObject({ rows: moved(4), more: 2 });
+    expect(shownMoved([], 5)).toEqual({ rows: [], more: 0 });
+  });
+
+  it('titles the MSD by the commit it measured, and says when there’s none yet', () => {
+    expect(msdBoard(null)).toMatchObject({ title: 'SCORECARD · NOT MEASURED YET', glance: undefined, moved: [], more: null });
+    expect(msdBoard(desk(card(1)))).toMatchObject({ title: 'SCORECARD · MAIN @ ABCDEF12', heading: 'THE NEXT SCORECARD WILL SHOW WHAT MOVED' });
+  });
+
+  it('lists four of nine moved numbers on the MSD and sends the captain to the panel for the rest', () => {
+    const board = msdBoard(desk(card(1), card(2)));
+    expect(board.heading).toBe('WHAT MOVED SINCE THE ONE BEFORE');
+    expect(board.moved).toHaveLength(4);
+    expect(board.more).toBe('and 5 more on the engineering panel');
+  });
+
+  it('lists seven of nine on the overview, all eight when there are eight, and what wasn’t measured', () => {
+    expect(overviewOf(desk(card(1), card(2)))).toMatchObject({ more: 'and 2 more: open a section to see them', notMeasured: null });
+    expect(overviewOf(desk(card(1), card(2))).moved).toHaveLength(7);
+    const eight = { metrics: keys.slice(0, 8).map((k) => metric(k, 2)) };
+    expect(overviewOf(desk(card(1, eight), card(2, eight)))).toMatchObject({ more: null });
+    expect(overviewOf(desk(card(1, { notes: ['office (no ledger)', 'build'] })))).toMatchObject({ notMeasured: 'Not measured: office (no ledger) · build', more: null });
+    expect(overviewOf(desk(card(1, { notes: ['build'] }))).notMeasured).toBe('Not measured: build');
+    expect(overviewOf(null)).toEqual({ glance: undefined, moved: [], more: null, notMeasured: null });
+  });
+});
+
+describe('flowPhrases', () => {
+  const measure = (text: string) => text.length;
+
+  it('lays words along a line, keeping each phrase’s tone', () => {
+    expect(flowPhrases([{ text: 'The gate is ' }, { text: 'passing', tone: 'better' }], measure, 40, 2)).toEqual([
+      { text: 'The ', x: 0, line: 0 }, { text: 'gate ', x: 4, line: 0 }, { text: 'is ', x: 9, line: 0 }, { text: 'passing', tone: 'better', x: 12, line: 0 },
+    ]);
+  });
+
+  it('wraps a word that doesn’t fit, stops after the last line, and never wraps a line’s first word', () => {
+    const placed = flowPhrases([{ text: 'aaaa bbbb cccc dddd' }], measure, 10, 2);
+    expect(placed.map((w) => [w.text, w.x, w.line])).toEqual([['aaaa ', 0, 0], ['bbbb ', 5, 0], ['cccc ', 0, 1], ['dddd', 5, 1]]);
+    expect(flowPhrases([{ text: 'aaaa bbbb cccc dddd eeee' }], measure, 10, 2)).toHaveLength(4);
+    expect(flowPhrases([{ text: 'enormous' }], measure, 3, 2)).toEqual([{ text: 'enormous', x: 0, line: 0 }]);
   });
 });

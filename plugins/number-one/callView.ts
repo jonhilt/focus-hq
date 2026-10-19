@@ -1,5 +1,5 @@
 import { type CallLine, type CallStatus, NUMBER_ONE, type NumberOneState } from './shared';
-import { callStrip, type CallStrip } from './view';
+import { callOver, callStrip, type CallStrip } from './view';
 import { busy, callPlugin, h, office, onPluginState, pluginState } from '../../plugin-api/client';
 
 // Calls to Number One (calls.md): this browser carries the audio, straight to OpenAI over WebRTC; the office joins the
@@ -56,8 +56,7 @@ let current: PhoneCall | null = null;
 /** Lets go of this browser's mic when the office ends the call (the captain hung up elsewhere, or the line dropped). */
 export function followCalls(): void {
   onPluginState(NUMBER_ONE, () => {
-    const call = callStatus()?.call;
-    if (current && (!call || call.id !== current.id || call.step === 'ended')) {
+    if (current && callOver(current.id, callStatus()?.call)) {
       void current.hangUp().catch(() => undefined);
       current = null;
     }

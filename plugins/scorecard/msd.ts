@@ -1,6 +1,6 @@
 // The scorecard on main engineering's MSD (client/src/world/msd.ts), beside the ship, while the captain has put it up there.
 import { type Box, fitText, LCARS, LCARS_FONT, LCARS_STATUS } from '../../plugin-api/client';
-import { changeMark, formatValue, glance, measuredAt, SECTIONS, tileFace, type Trend, verdictPhrases } from './scorecard';
+import { changeMark, flowPhrases, formatValue, msdBoard, SECTIONS, tileFace, type Trend, verdictPhrases } from './scorecard';
 import type { ScorecardSection, Scorecards } from './types';
 
 /** Each section's colour on the MSD, as on the engineering panel's tiles. */
@@ -14,28 +14,20 @@ const TONE: Record<Trend | 'bad', string> = { better: GOOD, worse: LCARS.red, ba
  */
 export function drawScorecard(ctx: CanvasRenderingContext2D, b: Box, scorecards: Scorecards | null): void {
   const px = (f: number) => Math.round(b.h * f);
-  const history = scorecards?.history ?? [];
-  const latest = history.at(-1);
-  const g = glance(history);
+  const board = msdBoard(scorecards);
+  const g = board.glance;
   ctx.textBaseline = 'top';
   ctx.textAlign = 'left';
   ctx.fillStyle = LCARS.gold;
   ctx.font = `600 ${px(0.075)}px ${LCARS_FONT}`;
-  ctx.fillText(fitText(ctx, latest ? `Scorecard · ${measuredAt(latest)}`.toUpperCase() : 'SCORECARD · NOT MEASURED YET', b.w), b.x, b.y);
+  ctx.fillText(fitText(ctx, board.title, b.w), b.x, b.y);
   if (!g) return;
 
   // the verdict, a phrase at a time, the news in its colour, wrapped onto two lines at most
   ctx.font = `500 ${px(0.05)}px ${LCARS_FONT}`;
-  let [x, line] = [b.x, 0];
-  for (const phrase of verdictPhrases(g)) {
-    for (const word of phrase.text.split(/(?<= )/)) {
-      const width = ctx.measureText(word).width;
-      if (x + width > b.x + b.w && x > b.x) [x, line] = [b.x, line + 1];
-      if (line > 1) break;
-      ctx.fillStyle = phrase.tone ? TONE[phrase.tone] : '#e8e2ff';
-      ctx.fillText(word, x, b.y + b.h * (0.1 + line * 0.06));
-      x += width;
-    }
+  for (const word of flowPhrases(verdictPhrases(g), (text) => ctx.measureText(text).width, b.w, 2)) {
+    ctx.fillStyle = word.tone ? TONE[word.tone] : '#e8e2ff';
+    ctx.fillText(word.text, b.x + word.x, b.y + b.h * (0.1 + word.line * 0.06));
   }
 
   // a tile per section
@@ -70,10 +62,8 @@ export function drawScorecard(ctx: CanvasRenderingContext2D, b: Box, scorecards:
   // what moved, the slips first, each with its change on a pill in its direction's colour
   ctx.fillStyle = '#a49db4';
   ctx.font = `600 ${px(0.04)}px ${LCARS_FONT}`;
-  ctx.fillText(g.compared ? 'WHAT MOVED SINCE THE ONE BEFORE' : 'THE NEXT SCORECARD WILL SHOW WHAT MOVED', b.x, b.y + b.h * 0.58);
-  // five lines fit: four and a line saying how many more, when there are more
-  const room = g.moved.length > 5 ? 4 : 5;
-  g.moved.slice(0, room).forEach((r, i) => {
+  ctx.fillText(board.heading, b.x, b.y + b.h * 0.58);
+  board.moved.forEach((r, i) => {
     const mark = changeMark(r);
     const y = b.y + b.h * (0.64 + i * 0.072);
     ctx.fillStyle = TONE[mark.tone];
@@ -87,10 +77,10 @@ export function drawScorecard(ctx: CanvasRenderingContext2D, b: Box, scorecards:
     ctx.font = `500 ${px(0.05)}px ${LCARS_FONT}`;
     ctx.fillText(fitText(ctx, `${r.metric.label}: ${formatValue(r.metric.value, r.metric.format)}`, b.w * 0.78), b.x + b.w * 0.22, y);
   });
-  if (g.moved.length > room) {
+  if (board.more) {
     ctx.fillStyle = '#a49db4';
     ctx.font = `500 ${px(0.04)}px ${LCARS_FONT}`;
-    ctx.fillText(`and ${g.moved.length - room} more on the engineering panel`, b.x + b.w * 0.22, b.y + b.h * (0.64 + room * 0.072));
+    ctx.fillText(board.more, b.x + b.w * 0.22, b.y + b.h * (0.64 + board.moved.length * 0.072));
   }
 }
 

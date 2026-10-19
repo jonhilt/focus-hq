@@ -3,7 +3,7 @@
 import {
   busy, callPlugin, chiefEngineer, type EngineeringGo, FIX_SESSIONS, type FixEffect, type FixStatus, frictionBars, h, markdownHtml, office, pluginState, timeAgo, type Ui,
 } from '../../plugin-api/client';
-import { type FixKind, RETRO, type Retro, retroCardLine, type RetroDraft, type RetroPage, retroPage, startReading } from './shared';
+import { type FixKind, RETRO, type Retro, retroCardLine, type RetroDraft, type RetroPage, retroPage, retroStanding, startReading, windowInput, type WindowInput } from './shared';
 
 const KIND: Record<FixKind, string> = { check: 'Check', 'qa-rule': 'QA rule', pointer: 'Pointer', delete: 'Delete' };
 
@@ -15,12 +15,9 @@ const call = <T>(path: string, body?: unknown) => callPlugin<T>(RETRO, path, bod
 
 // the window outlives re-renders (other plugins' state changes redraw the station), so they don't reset what you typed;
 // it starts again from a retro's own window when a new one is saved
-let daysInput: { input: HTMLInputElement; seededFrom: number | undefined } | undefined;
+let daysInput: WindowInput<HTMLInputElement> | undefined;
 function days(): HTMLInputElement {
-  const retro = latest();
-  if (!daysInput || daysInput.seededFrom !== retro?.startedAt) {
-    daysInput = { input: h('input', { type: 'number', min: '1', max: '60', value: String(retro?.days ?? 14), style: 'width:80px' }), seededFrom: retro?.startedAt };
-  }
+  daysInput = windowInput(daysInput, latest(), (n) => h('input', { type: 'number', min: '1', max: '60', value: String(n), style: 'width:80px' }));
   return daysInput.input;
 }
 
@@ -76,16 +73,10 @@ function controls(ui: Ui, engineer: string, page: RetroPage): HTMLElement {
 }
 
 function status(retro: Retro): HTMLElement {
-  const tone = retro.status === 'failed' ? 'bad' : retro.status === 'done' ? 'ok' : 'warn';
+  const { tone, headline, line } = retroStanding(retro, timeAgo);
   return h('div', { class: 'qa-now' },
     h('span', { class: `chip ${tone}` }, retro.status),
-    h('div', { class: 'grow' },
-      h('strong', null, retro.status === 'failed' ? (retro.error ?? retro.activity) : retro.activity),
-      h('small', null, [
-        retro.sessions ? `${retro.sessions} sessions over ${retro.days} days` : `the last ${retro.days} days`,
-        retro.startedAt ? `started ${timeAgo(retro.startedAt)}` : '',
-      ].filter(Boolean).join(' · ')),
-    ),
+    h('div', { class: 'grow' }, h('strong', null, headline), h('small', null, line)),
   );
 }
 

@@ -275,3 +275,81 @@ export function tileFace(t: Tile): { value: string; caption: string; also: strin
     }).join(' · '),
   };
 }
+
+/** The first of `moved` that fit in `lines`, and how many more: when they don't all fit, the last line goes to saying so. */
+export function shownMoved(moved: ComparedRow[], lines: number): { rows: ComparedRow[]; more: number } {
+  const rows = moved.length > lines ? moved.slice(0, lines - 1) : moved;
+  return { rows, more: moved.length - rows.length };
+}
+
+/** A phrase's word where it goes: `x` from the line's left, on line `line` (from 0). */
+export interface PlacedWord {
+  text: string;
+  tone?: Phrase['tone'];
+  x: number;
+  line: number;
+}
+
+/** `phrases` laid out a word at a time in lines `width` wide (as `measure` gives a word's width), on at most `lines` of them. */
+export function flowPhrases(phrases: Phrase[], measure: (text: string) => number, width: number, lines: number): PlacedWord[] {
+  const placed: PlacedWord[] = [];
+  let [x, line] = [0, 0];
+  for (const word of phrases.flatMap((p) => p.text.split(/(?<= )/).map((text) => ({ text, tone: p.tone })))) {
+    const w = measure(word.text);
+    if (x + w > width && x > 0) [x, line] = [0, line + 1];
+    if (line >= lines) break;
+    placed.push({ ...word, x, line });
+    x += w;
+  }
+  return placed;
+}
+
+/** What the MSD's scorecard says around its tiles: its title, the heading over what moved, the moved rows that fit and the line under them. */
+export interface MsdBoard {
+  title: string;
+  glance: Glance | undefined;
+  heading: string;
+  moved: ComparedRow[];
+  more: string | null;
+}
+
+/** The MSD has room for five lines of what moved. */
+const MSD_MOVED_LINES = 5;
+
+export function msdBoard(scorecards: Scorecards | null): MsdBoard {
+  const history = scorecards?.history ?? [];
+  const latest = history.at(-1);
+  const g = glance(history);
+  const { rows, more } = shownMoved(g?.moved ?? [], MSD_MOVED_LINES);
+  return {
+    title: latest ? `Scorecard · ${measuredAt(latest)}`.toUpperCase() : 'SCORECARD · NOT MEASURED YET',
+    glance: g,
+    heading: g?.compared ? 'WHAT MOVED SINCE THE ONE BEFORE' : 'THE NEXT SCORECARD WILL SHOW WHAT MOVED',
+    moved: rows,
+    more: more ? `and ${more} more on the engineering panel` : null,
+  };
+}
+
+/** What the engineering panel's overview shows: the summing up, the moved rows it lists and how many more, and what wasn't measured. */
+export interface Overview {
+  glance: Glance | undefined;
+  moved: ComparedRow[];
+  more: string | null;
+  notMeasured: string | null;
+}
+
+/** The overview lists seven of what moved, with a line under them for the rest. */
+const OVERVIEW_MOVED_LINES = 8;
+
+export function overviewOf(scorecards: Scorecards | null): Overview {
+  const history = scorecards?.history ?? [];
+  const g = glance(history);
+  const { rows, more } = shownMoved(g?.moved ?? [], OVERVIEW_MOVED_LINES);
+  const notes = history.at(-1)?.notes ?? [];
+  return {
+    glance: g,
+    moved: rows,
+    more: more ? `and ${more} more: open a section to see them` : null,
+    notMeasured: notes.length ? `Not measured: ${notes.join(' · ')}` : null,
+  };
+}

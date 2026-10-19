@@ -67,6 +67,11 @@ export function callStrip(status: CallStatus | undefined): CallStrip {
   return { kind: 'idle', canDial: !!status && !status.missing, dialTitle: status?.missing ?? DIAL_TITLE, ended };
 }
 
+/** Whether the call this browser is on (`mine`, by id) is over: the office has no call, a different one, or this one ended. */
+export function callOver(mine: string, call: CallState | null | undefined): boolean {
+  return !call || call.id !== mine || call.step === 'ended';
+}
+
 /** What Number One's chat panel says around the messages: who's typing, the box's hint, a failed turn, and the cost. */
 export interface ChatPanel {
   messages: NumberOneMessage[];

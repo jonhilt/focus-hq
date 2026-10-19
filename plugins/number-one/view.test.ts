@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CallState, NumberOneChat } from './shared';
-import { callStrip, chatPanel, numberOneView, replyNews, stepLabel } from './view';
+import { callOver, callStrip, chatPanel, numberOneView, replyNews, stepLabel } from './view';
 
 const chat = (patch: Partial<NumberOneChat>): NumberOneChat => ({ status: 'waiting', activity: '', messages: [], updatedAt: 0, costUsd: 0, ...patch });
 const reply = { from: 'number-one' as const, text: 'It starts in the router.', at: 1 };
@@ -57,6 +57,16 @@ describe('callStrip', () => {
       topic: 'Talking through: the cart', pending: 'Start “Fix the cart”? Say yes, or make it so.', capture: 'Go on, I’m listening',
     });
     expect(callStrip({ call: call({}) })).toMatchObject({ kind: 'live', topic: null, pending: null, capture: null });
+  });
+});
+
+describe('callOver', () => {
+  it('lets go of this browser’s call once the office has none, has another, or ended it', () => {
+    expect(callOver('c1', call({}))).toBe(false);
+    expect(callOver('c1', null)).toBe(true);
+    expect(callOver('c1', undefined)).toBe(true);
+    expect(callOver('c2', call({}))).toBe(true);
+    expect(callOver('c1', call({ step: 'ended' }))).toBe(true);
   });
 });
 

@@ -108,6 +108,33 @@ export function retroPage(retro: Retro | undefined): RetroPage {
   };
 }
 
+/** How the latest retro stands on its own view (view.ts): its status's tone, what it's doing (or why it failed), and its window and start. */
+export function retroStanding(retro: Retro, ago: (at: number) => string): { tone: 'bad' | 'ok' | 'warn'; headline: string; line: string } {
+  const failed = retro.status === 'failed';
+  return {
+    tone: failed ? 'bad' : retro.status === 'done' ? 'ok' : 'warn',
+    headline: failed ? (retro.error ?? retro.activity) : retro.activity,
+    line: [
+      retro.sessions ? `${retro.sessions} sessions over ${retro.days} days` : `the last ${retro.days} days`,
+      retro.startedAt ? `started ${ago(retro.startedAt)}` : '',
+    ].filter(Boolean).join(' · '),
+  };
+}
+
+/** The window input on the retro's view, and the retro it was started from (by its `startedAt`). */
+export interface WindowInput<I> {
+  input: I;
+  seededFrom: number | undefined;
+}
+
+/**
+ * The window input to show: the one `kept`, so re-renders don't reset what the captain typed, or a new one `make`s
+ * from the retro's own window (14 days before there's one) once a new retro has been saved since it was started.
+ */
+export function windowInput<I>(kept: WindowInput<I> | undefined, retro: Retro | undefined, make: (days: number) => I): WindowInput<I> {
+  return kept && kept.seededFrom === retro?.startedAt ? kept : { input: make(retro?.days ?? 14), seededFrom: retro?.startedAt };
+}
+
 /** What starting a retro over the last `days` reads first, for the captain to confirm: the sessions no one's read yet, and roughly what that costs. */
 export function startReading(engineer: string, days: number, unread: number, costUsd: number): string {
   return unread

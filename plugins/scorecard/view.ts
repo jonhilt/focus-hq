@@ -1,4 +1,4 @@
-import { changeMark, type ComparedRow, compared, duration, formatValue, glance, type ScorecardHead, scorecardHeadOf, type Tile, tileFace, type Trend, verdictPhrases } from './scorecard';
+import { changeMark, type ComparedRow, compared, duration, formatValue, type Glance, type Overview, overviewOf, type ScorecardHead, scorecardHeadOf, type Tile, tileFace, type Trend, verdictPhrases } from './scorecard';
 import { aboutMetric, SECTION_ABOUT } from './about';
 import { busy, callPlugin, h, pluginState, timeAgo, type Ui } from '../../plugin-api/client';
 import { type Metric, type Scorecard, SCORECARD, type Scorecards, type ScorecardSection } from './types';
@@ -80,9 +80,8 @@ function measureNote(status: ScorecardHead['status']): HTMLElement | null {
 }
 
 /** The overview's opening sentence: is the gate green, and how many numbers climbed or slipped. */
-function verdict(history: Scorecard[]): HTMLElement | null {
-  const g = glance(history);
-  return g ? h('p', { class: 'sc-verdict' }, ...verdictPhrases(g).map((p) => (p.tone ? h('b', { class: p.tone }, p.text) : p.text))) : null;
+function verdict(g: Glance): HTMLElement {
+  return h('p', { class: 'sc-verdict' }, ...verdictPhrases(g).map((p) => (p.tone ? h('b', { class: p.tone }, p.text) : p.text)));
 }
 
 function tile(t: Tile, go: Go): HTMLElement {
@@ -97,33 +96,30 @@ function tile(t: Tile, go: Go): HTMLElement {
 }
 
 /** What moved since the card before, the slips first: each opens its number in its section. */
-function movedList(moved: ComparedRow[], go: Go): HTMLElement {
-  const SHOWN = 7;
+function movedList({ moved, more }: Overview, go: Go): HTMLElement {
   return h('div', { class: 'card sc-moved' },
     h('h4', null, 'What moved since the one before'),
     moved.length
-      ? h('div', { class: 'sc-moved-rows' }, ...moved.slice(0, SHOWN).map((r) =>
+      ? h('div', { class: 'sc-moved-rows' }, ...moved.map((r) =>
         h('button', { class: 'sc-moved-row', onclick: () => go(r.metric.section, r.metric.key) },
           h('span', { class: 'dot', style: `background:${SECTION_TONE[r.metric.section]}` }),
           h('span', { class: 'grow' }, r.metric.label),
           h('b', null, formatValue(r.metric.value, r.metric.format)),
           trendPill(r))))
       : h('small', { class: 'muted' }, 'Nothing yet: it fills in once there are two scorecards to compare.'),
-    moved.length > SHOWN ? h('small', { class: 'muted' }, `and ${moved.length - SHOWN} more: open a section to see them`) : null,
+    more ? h('small', { class: 'muted' }, more) : null,
   );
 }
 
 /** The overview: the verdict, a tile per section, what moved, and `beside` it (how it's getting better). */
 export function scorecardOverview(ui: Ui, go: Go, beside: HTMLElement): HTMLElement {
-  const history = scorecards()?.history ?? [];
-  const g = glance(history);
-  const notes = history.at(-1)?.notes ?? [];
+  const overview = overviewOf(scorecards());
+  const g = overview.glance;
   return h('div', { class: 'sc' },
     scorecardHead(ui),
-    verdict(history),
-    g ? h('div', { class: 'sc-tiles' }, ...g.tiles.map((t) => tile(t, go))) : null,
-    h('div', { class: 'sc-split' }, g ? movedList(g.moved, go) : null, beside),
-    notes.length ? h('small', { class: 'muted' }, `Not measured: ${notes.join(' · ')}`) : null,
+    ...(g ? [verdict(g), h('div', { class: 'sc-tiles' }, ...g.tiles.map((t) => tile(t, go)))] : []),
+    h('div', { class: 'sc-split' }, g ? movedList(overview, go) : null, beside),
+    overview.notMeasured ? h('small', { class: 'muted' }, overview.notMeasured) : null,
   );
 }
 
