@@ -66,9 +66,14 @@ function closeUp(ui: Ui, projectId: string): void {
     void load();
   };
   // the followed run's path, read afresh whenever it might have moved
+  // only the latest load draws: an earlier one answering late would put back a trail that's moved on
+  let loads = 0;
   const load = async () => {
+    const mine = ++loads;
     const run = followedRun(screenView(now(), picked, projectId).runs, followed);
-    steps = run ? await callPlugin<MachineStep[]>(ASTROMETRICS, '/path', { machine: run.machine, key: run.key }).catch(() => []) : [];
+    const path = run ? await callPlugin<MachineStep[]>(ASTROMETRICS, '/path', { machine: run.machine, key: run.key }).catch(() => []) : [];
+    if (mine !== loads) return;
+    steps = path;
     render();
   };
   const render = () => {
