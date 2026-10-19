@@ -10,7 +10,7 @@ import type { ClientPlugin, ShipHost, ShipPart } from '../plugins';
 import { shipParts } from './shipParts';
 import type { Deck } from './deck';
 import type { HolodeckDeck } from './holodeckDeck';
-import type { DeckScreen } from './deckExtras';
+import type { Chair, DeckScreen } from './deckExtras';
 import { canvasTexture, fitText, makeCanvas, roundRect } from './canvas';
 import { type Box2, DOOR_W, HALL_HALF, ROOM_WIDTH, roomSlot, rowsFor, type Seat, slotAt, SPACE, spaceAt, SUN_POSITION } from './layout';
 import { flat } from './materials';
@@ -334,6 +334,13 @@ export class World {
   /** Where you come aboard: the bridge, which sorts first of the command deck's places. */
   boarding(): Place {
     return this.ship.command.places[0];
+  }
+
+  /** Where one of the captain's chairs stands: they're all on the command deck. */
+  chair(chair: Chair): Seat {
+    const seat = this.ship.command.chairs.get(chair);
+    if (!seat) throw new Error(`Deck extras: no chair marker for the ${chair} chair`);
+    return seat;
   }
 
   /** Where the turbolift stops: in each deck's car. */

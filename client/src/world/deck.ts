@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { interactive } from './builder';
-import { type Crew, type DeckScreen, isDeckScreen, type Marker, type Part, readInteraction, readMarker, readPart, readSurface, type ScreenName, type Surface } from './deckExtras';
+import { type Chair, type Crew, type DeckScreen, isDeckScreen, type Marker, type Part, readInteraction, readMarker, readPart, readSurface, type ScreenName, type Surface } from './deckExtras';
 import { type Box2, contains, footprint, type Seat } from './layout';
 import { flat, occludedToon, toon } from './materials';
 import { mergeStatic } from './merge';
@@ -141,6 +141,8 @@ export class Deck {
   readonly screens: { screen: DeckScreen; mesh: THREE.Mesh }[] = [];
   private readonly areas: { label: string; box: Box2 }[] = [];
   private readonly seats = new Map<Crew, Seat>();
+  /** Where the captain's chairs on this deck stand. */
+  readonly chairs = new Map<Chair, Seat>();
 
   /** Loads a deck's GLB and puts its origin at `origin` in the world. */
   static async load(url: string, origin: THREE.Vector3): Promise<Deck> {
@@ -207,6 +209,11 @@ export class Deck {
       case 'seat': {
         const ahead = new THREE.Vector3(0, 0, -1).applyQuaternion(turn);
         this.seats.set(marker.crew, { at, facing: at.clone().add(ahead) });
+        break;
+      }
+      case 'chair': {
+        const ahead = new THREE.Vector3(0, 0, -1).applyQuaternion(turn);
+        this.chairs.set(marker.chair, { at, facing: at.clone().add(ahead) });
         break;
       }
       case 'portal':

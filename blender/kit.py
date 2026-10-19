@@ -10,7 +10,8 @@ What the browser reads (client/src/world/deck.ts), all through custom properties
   `height`), 'place' (a teleport destination, looking along the empty's +Y: `label`), 'area' (an empty cube: the
   floor `label` names in the HUD), 'seat' (where a crew member's chair stands, turned along the empty's +Y: `crew`,
   'ready-room-guest' at the ready room's visitor chair, 'engineer' at the engineering station, or in a team station's
-  briefing room 'station-lead', 'station-helper-1' to 'station-helper-4' or 'station-reviewer'), 'turbolift' (where the turbolift
+  briefing room 'station-lead', 'station-helper-1' to 'station-helper-4' or 'station-reviewer'), 'chair' (one of the
+  captain's: where it stands, facing along the empty's +Y, and which `chair`: 'bridge', 'ready-room' or 'lounge'), 'turbolift' (where the turbolift
   stops: you stand there in its car, facing along the empty's +Y, and `label` names the deck), 'portal' (a doorway
   to somewhere else, at its centre in the middle of its wall, the way in along the empty's +Y: `width`, `height`, and
   the `depth` of the alcove behind it, where the browser draws the other end), and in a transporter room 'pad' (a
@@ -20,8 +21,8 @@ What the browser reads (client/src/world/deck.ts), all through custom properties
   that frames the platform).
 - An object's `interact` has pressing E on it (or on anything hanging from it) do something: 'manager' (open the ready
   room console), 'turbolift' (its controls), 'engineering' (the chief engineer's panel: the report card and the plugins' parts),
-  'ledger' (reviewing the ledger) or 'energise' (a transporter room's console: beam back to the briefing room), with
-  the hint `label`.
+  'ledger' (reviewing the ledger), 'energise' (a transporter room's console: beam back to the briefing room) or 'sit'
+  (sit in the captain's `chair`, whose 'chair' marker says where), with the hint `label`.
 - An object's `part` names it for the browser, which finds it to change it as it goes, so it's kept out of merging: in
   a transporter room, 'pad-ring' (a pad's lit ring, in the colour of whoever's on it) and 'pad-emitter' (the emitter's
   glow over it), each with the pad's `tier` and `slot`, and 'buffer-glow' (the pattern buffer's glowing columns).
@@ -555,20 +556,21 @@ def keys_on_slope(name, width, front, back, frame):
 
 
 def command_chair(name, at, yaw, cushion, scale):
-    """A big chair on a pedestal facing +Y, with LCARS keys set into its arms."""
+    """A big chair on a pedestal facing +Y, with LCARS keys set into its arms. Returns its parts."""
     f = Matrix.Translation((at[0], at[1], 0)) @ Matrix.Rotation(yaw, 4, 'Z') @ Matrix.Diagonal((scale, scale, scale, 1))
     frame, soft = toon(HULL['frame']), toon(cushion)
-    cylinder(f'{name} chair base', 0.4, 0.06, toon(HULL['dado']), frame=f)
-    cylinder(f'{name} chair column', 0.12, 0.32, frame, (0, 0, 0.06), frame=f)
+    parts = [cylinder(f'{name} chair base', 0.4, 0.06, toon(HULL['dado']), frame=f),
+             cylinder(f'{name} chair column', 0.12, 0.32, frame, (0, 0, 0.06), frame=f)]
     shell = box(f'{name} chair seat', (0.84, 0.8, 0.12), frame, (0, 0, 0.38), frame=f, round=0.04)
-    box(f'{name} chair cushion', (0.7, 0.66, 0.1), soft, (0, 0.03, 0.5), frame=f, round=0.04)
-    box(f'{name} chair back', (0.84, 0.16, 1.0), frame, (0, -0.36, 0.42), frame=f, round=0.05)
-    box(f'{name} chair back cushion', (0.68, 0.06, 0.78), soft, (0, -0.26, 0.6), frame=f, round=0.03)
+    parts += [shell, box(f'{name} chair cushion', (0.7, 0.66, 0.1), soft, (0, 0.03, 0.5), frame=f, round=0.04),
+              box(f'{name} chair back', (0.84, 0.16, 1.0), frame, (0, -0.36, 0.42), frame=f, round=0.05),
+              box(f'{name} chair back cushion', (0.68, 0.06, 0.78), soft, (0, -0.26, 0.6), frame=f, round=0.03)]
     for s in (-1, 1):
-        box(f'{name} chair arm {s}', (0.14, 0.62, 0.1), frame, (s * 0.44, 0.02, 0.7), frame=f, round=0.03)
+        parts.append(box(f'{name} chair arm {s}', (0.14, 0.62, 0.1), frame, (s * 0.44, 0.02, 0.7), frame=f, round=0.03))
         box(f'{name} chair arm post {s}', (0.1, 0.12, 0.2), frame, (s * 0.44, 0.22, 0.5), frame=f)
         panel(f'{name} chair keys {s}', 0.09, 0.4, material('#000000', surface='keys'), (s * 0.44, 0.3, 0.804), f, tilt=math.pi / 2)
     collide_object(shell, pad=0.12 * scale)
+    return parts
 
 
 def bridge_console(name, length, seed, frame, display=(0.8, 0.42), accent=None):
@@ -599,22 +601,23 @@ def bridge_seat(name, frame):
 
 
 def lounge_chair(name, at, yaw):
-    """A high-backed chair on a pedestal facing +Y, turned `yaw`, as round the lounge's table. Returns its seat."""
+    """A high-backed chair on a pedestal facing +Y, turned `yaw`, as round the lounge's table. Returns its seat and back."""
     f = Matrix.Translation((at[0], at[1], 0)) @ Matrix.Rotation(yaw, 4, 'Z')
     soft = toon(UPHOLSTERY)
     cylinder(f'{name} base', 0.24, 0.04, toon(HULL['dado']), frame=f)
     cylinder(f'{name} column', 0.05, 0.36, toon(HULL['frame']), (0, 0, 0.04), frame=f)
     seat = box(f'{name} seat', (0.5, 0.5, 0.1), soft, (0, 0, 0.4), frame=f, round=0.03)
-    box(f'{name} back', (0.46, 0.08, 0.72), soft, (0, -0.24, 0.48), frame=f, round=0.03)
-    return seat
+    return [seat, box(f'{name} back', (0.46, 0.08, 0.72), soft, (0, -0.24, 0.48), frame=f, round=0.03)]
 
 # ---------------------------------------------------------------------------------------------------- markers
 
-def interact(kind, label, *objs):
-    """Has pressing E on any of `objs` do `kind` (see the module's docstring), with `label` as the hint."""
+def interact(kind, label, *objs, **props):
+    """Has pressing E on any of `objs` do `kind` (see the module's docstring), with `label` as the hint, and `props`."""
     for obj in objs:
         obj['interact'] = kind
         obj['label'] = label
+        for k, v in props.items():
+            obj[k] = v
 
 
 def part(kind, *objs, **props):

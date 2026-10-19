@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Ui } from '../ui/context';
+import type { Chair } from './deckExtras';
 import { type Box2, DOOR_H, WALL_T } from './layout';
 import type { PanePrefs } from './screenPanes';
 import { SlidingDoors } from './starship';
@@ -26,6 +27,8 @@ export type Interaction =
   | { kind: 'new-issue'; projectId: string }
   | { kind: 'manager'; tab?: 'projects' | 'new-project' | 'issue' | 'settings' }
   | { kind: 'turbolift' }
+  /** Sit in one of the captain's chairs. */
+  | { kind: 'sit'; chair: Chair }
   /** The engineering station: the chief engineer's panel, with the report card and the plugins' parts. */
   | { kind: 'engineering' }
   /** Main engineering's master systems table: review the ledger. */

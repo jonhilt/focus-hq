@@ -19,6 +19,8 @@ export type Marker =
   | { kind: 'area'; label: string }
   /** Where a crew member's chair stands, turned along the empty's forward. */
   | { kind: 'seat'; crew: Crew }
+  /** Where one of the captain's chairs stands, turned along the empty's forward. */
+  | { kind: 'chair'; chair: Chair }
   /** Where a turbolift stops: you stand here in its car, facing along the empty's forward (its doors). */
   | { kind: 'turbolift'; label: string }
   /**
@@ -45,6 +47,11 @@ export const HELPER_SEATS = ['station-helper-1', 'station-helper-2', 'station-he
 const CREW = ['ready-room-guest', 'engineer', 'station-lead', ...HELPER_SEATS, 'station-reviewer'] as const;
 export type Crew = (typeof CREW)[number];
 const isCrew = (v: unknown): v is Crew => isOneOf(CREW, v);
+
+/** The captain's chairs: on the bridge, at the ready room's desk and at the head of the observation lounge's table. */
+export const CHAIRS = ['bridge', 'ready-room', 'lounge'] as const;
+export type Chair = (typeof CHAIRS)[number];
+const isChair = (v: unknown): v is Chair => isOneOf(CHAIRS, v);
 
 /**
  * A screen the browser keeps drawing on: mission control is the World's dashboard, the MSD main engineering's cutaway
@@ -140,6 +147,8 @@ export function readMarker(e: Extras): Marker | null {
       return { kind: 'area', label: str(e, 'label') };
     case 'seat':
       return { kind: 'seat', crew: isCrew(e.crew) ? e.crew : fail('unknown crew', e) };
+    case 'chair':
+      return { kind: 'chair', chair: isChair(e.chair) ? e.chair : fail('unknown chair', e) };
     case 'turbolift':
       return { kind: 'turbolift', label: str(e, 'label') };
     case 'portal':
@@ -192,6 +201,8 @@ export function readInteraction(e: Extras): { interaction: Interaction; label: s
     case 'energise':
     case 'ledger':
       return { interaction: { kind: e.interact }, label: str(e, 'label') };
+    case 'sit':
+      return { interaction: { kind: 'sit', chair: isChair(e.chair) ? e.chair : fail('unknown chair', e) }, label: str(e, 'label') };
     default:
       return fail('unknown interaction', e);
   }

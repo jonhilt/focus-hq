@@ -147,7 +147,7 @@ def command_well():
     annulus('command ring', 2.9, 3.1, 0.008, material(HULL['carpetEdge']), segments=64)
     annulus('command carpet', 0, 2.9, 0.008, material(CARPET), segments=64)
     polygon('walkway', [(-0.8, -APOTHEM), (0.8, -APOTHEM), (0.8, -2.95), (-0.8, -2.95)], 0.003, material(HULL['carpetEdge']))
-    command_chair('captain', (0, -0.4), 0, COMMAND_RED, 1.0)
+    captains_chair('bridge', 'Sit in the captain’s chair', (0, -0.4), 0, command_chair('captain', (0, -0.4), 0, COMMAND_RED, 1.0))
     command_chair('first officer', (1.4, -0.75), 0.15, CUSHION, 0.85)
     command_chair('counsellor', (-1.4, -0.75), -0.15, CUSHION, 0.85)
 
@@ -217,7 +217,7 @@ def ready_room():
     top = slab('ready room desk', [(desk_x + x, y) for x, y in rounded_rect(1.1, 2.8, 0.15)], 0.7, 0.76, toon(CONSOLE_TOP), round=0.01)
     box('ready room desk base', (0.6, 2.3, 0.7), toon(HULL['dado']), (desk_x + 0.15, 0, 0), round=0.02)
     collide_object(top)
-    command_chair('ready room', chair_at, -math.pi / 2, COMMAND_RED, 0.85)
+    captains_chair('ready-room', 'Sit at your desk', chair_at, -math.pi / 2, command_chair('ready room', chair_at, -math.pi / 2, COMMAND_RED, 0.85))
     captains_console(Matrix.Translation((desk_x + 0.25, 0, 0.76)) @ Matrix.Rotation(math.pi / 2, 4, 'Z'))
     seat = (desk_x + 1.4, 1.9)
     # a guest's seat at the desk: whoever a plugin seats there brings a chair (client/src/plugins.ts, ShipHost.seat)
@@ -247,6 +247,12 @@ def captains_console(f):
     back = sign('captain console back', 'Captain’s console', 0.92, LCARS['gold'], (0, -0.035, 0.4), f, yaw=math.pi,
                 sub='Walk round and press E')
     interact('manager', 'Use the ready room console', body, front, back)
+
+
+def captains_chair(chair, label, at, yaw, parts):
+    """Has pressing E on a chair's `parts` sit the captain in it, at `at` facing along `yaw`."""
+    interact('sit', label, *parts, chair=chair)
+    marker(f'chair {chair}', 'chair', (at[0], at[1], 0), yaw=yaw, chair=chair)
 
 
 def couch(name, at, yaw, length):
@@ -279,7 +285,9 @@ def lounge():
     for i, dx in enumerate((-1.9, 0, 1.9)):
         lounge_chair(f'lounge chair fore {i}', (mid + dx, width / 2 + 0.45), math.pi)
         lounge_chair(f'lounge chair aft {i}', (mid + dx, -width / 2 - 0.45), 0)
-    lounge_chair('lounge chair port', (mid - length / 2 - 0.5, 0), -math.pi / 2)
+    # the head of the table, by the door, facing the star chart
+    head = (mid - length / 2 - 0.5, 0)
+    captains_chair('lounge', 'Sit at the head of the table', head, -math.pi / 2, lounge_chair('lounge chair port', head, -math.pi / 2))
     lounge_chair('lounge chair starboard', (mid + length / 2 + 0.5, 0), math.pi / 2)
 
     screen('star chart', 2.6, 1.56, {'surface': 'star-chart'}, (0, 1.92), wall_frame(far, 0, math.pi / 2))

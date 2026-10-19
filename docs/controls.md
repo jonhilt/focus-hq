@@ -5,6 +5,7 @@
 | <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / mouse | walk / look |
 | <kbd>Shift</kbd> | run |
 | <kbd>E</kbd> or click | use whatever is under the crosshair (agent, station, board, PADD rack, Ops station, console) |
+| <kbd>E</kbd> on one of your chairs | sit down: the captain's chair on the bridge, your desk in the ready room, the head of the observation lounge's table ([your chairs](#your-chairs)) |
 | <kbd>C</kbd> | [Comms](comms.md): who's waiting on you across the ship, every goal under way, and each project's goals |
 | <kbd>I</kbd> | [Personal log](personal-log.md): jot an idea down to come back to, wherever you are |
 | <kbd>T</kbd> | teleport to any holodeck or straight to an agent's station |
@@ -19,3 +20,14 @@
 | <kbd>Alt</kbd>+<kbd>1</kbd>… | pick a view from a panel's sidebar by its number (an agent's browser, goal, tasks or crew; the ready room's sections) |
 | <kbd>Esc</kbd> | pause / close a panel |
 | In [stellar cartography](stellar-cartography.md): <kbd>F</kbd> | take flight (<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> where you look, <kbd>Space</kbd> / <kbd>Shift</kbd> up and down), and <kbd>F</kbd> again to land |
+
+## Your chairs
+
+Three chairs aboard are the captain's: the captain's chair on the bridge, the one at your desk in the ready room, and the one at the head of the observation lounge's table, facing its screen. Press <kbd>E</kbd> on one to sit down. Sat there, <kbd>E</kbd> opens what the room puts to hand, unless the crosshair is on something else to use (the ready room's console, say):
+
+- **Bridge**: [Comms](comms.md), opening on what needs you.
+- **Ready room**: the ready room console.
+- **Observation lounge**: your [personal log](personal-log.md), the ideas you've jotted down to talk through.
+
+Look round freely; any movement key (or <kbd>Space</kbd>) stands you up where you were before you sat. Teleporting gets you up too. Which chair does what is `CHAIR_USE` in `client/src/world/chairs.ts`; the chairs are `chair` markers on the command deck (`blender/command_deck.py`).
+

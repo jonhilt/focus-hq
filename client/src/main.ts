@@ -27,6 +27,8 @@ import { openScreenPanel } from './ui/screenPanel';
 import { openGoalChart } from './ui/chartPanel';
 import { openNewIssuePanel, openPausePanel, openTeleportPanel, openTurboliftPanel } from './ui/travelPanel';
 import { type Interaction, REACH } from './world/builder';
+import { CHAIR_USE, chairInHand, seatedView } from './world/chairs';
+import type { Chair } from './world/deckExtras';
 import { OVERLAY_LAYER } from './world/frame';
 import { toastShows } from '../../shared/hidden';
 import { previewIncludes } from '../../shared/previewSet';
@@ -497,10 +499,22 @@ async function main() {
       break; // first solid thing blocks the view
     }
     aimAt(aiming);
-    hud.setHint(target ? target.label() : null);
+    const chair = chairInHand(sittingIn(), target?.interaction ?? null);
+    hud.setHint(chair ? CHAIR_USE[chair].label : target ? target.label() : null);
+  };
+
+  // the captain's chair you're sat in, if you're still sat
+  let seatedIn: Chair | null = null;
+  const sittingIn = () => (player.seated ? seatedIn : null);
+  const useChair = (chair: Chair) => {
+    const { use } = CHAIR_USE[chair];
+    if (use.kind === 'comms') ui.openComms();
+    else ui.openManager(use.tab);
   };
 
   const interact = () => {
+    const chair = chairInHand(sittingIn(), target?.interaction ?? null);
+    if (chair) return useChair(chair);
     if (!target) return;
     const i = target.interaction;
     switch (i.kind) {
@@ -563,6 +577,12 @@ async function main() {
       case 'turbolift':
         ui.openTurbolift();
         break;
+      case 'sit': {
+        const { eye, lookAt } = seatedView(world.chair(i.chair));
+        seatedIn = i.chair;
+        player.sit(eye, lookAt);
+        break;
+      }
       case 'screen':
         ui.openScreen(i.id);
         break;

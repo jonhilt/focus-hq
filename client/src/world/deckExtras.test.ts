@@ -17,6 +17,8 @@ describe('readMarker', () => {
     expect(readMarker({ marker: 'seat', crew: 'station-lead' })).toEqual({ kind: 'seat', crew: 'station-lead' });
     expect(readMarker({ marker: 'seat', crew: 'station-helper-4' })).toEqual({ kind: 'seat', crew: 'station-helper-4' });
     expect(readMarker({ marker: 'seat', crew: 'station-reviewer' })).toEqual({ kind: 'seat', crew: 'station-reviewer' });
+    expect(readMarker({ marker: 'chair', chair: 'bridge' })).toEqual({ kind: 'chair', chair: 'bridge' });
+    expect(readMarker({ marker: 'chair', chair: 'lounge' })).toEqual({ kind: 'chair', chair: 'lounge' });
     expect(readMarker({ marker: 'turbolift', label: 'Deck 1 · Bridge' })).toEqual({ kind: 'turbolift', label: 'Deck 1 · Bridge' });
     expect(readMarker({ marker: 'portal', width: 2, height: 2.5, depth: 0.75 })).toEqual({ kind: 'portal', width: 2, height: 2.5, depth: 0.75 });
     expect(readMarker({ marker: 'pad', tier: 2, slot: 5 })).toEqual({ kind: 'pad', tier: 2, slot: 5 });
@@ -31,6 +33,7 @@ describe('readMarker', () => {
     expect(() => readMarker({ marker: 'portal', width: 2, height: 2.5 })).toThrow(/depth should be a number/);
     expect(() => readMarker({ marker: 'seat', crew: 'cook' })).toThrow(/unknown crew/);
     expect(() => readMarker({ marker: 'seat', crew: 'station-helper-5' })).toThrow(/unknown crew/);
+    expect(() => readMarker({ marker: 'chair', chair: 'conn' })).toThrow(/unknown chair/);
     expect(() => readMarker({ marker: 'pad', tier: 0 })).toThrow(/slot should be a number/);
     expect(() => readMarker({ marker: 'camera' })).toThrow(/fov should be a number/);
   });
@@ -93,11 +96,13 @@ describe('readInteraction', () => {
     expect(readInteraction({ interact: 'engineering', label: 'Engineering' })).toEqual({ interaction: { kind: 'engineering' }, label: 'Engineering' });
     expect(readInteraction({ interact: 'ledger', label: 'Review the ledger' })).toEqual({ interaction: { kind: 'ledger' }, label: 'Review the ledger' });
     expect(readInteraction({ interact: 'energise', label: 'Energise' })).toEqual({ interaction: { kind: 'energise' }, label: 'Energise' });
+    expect(readInteraction({ interact: 'sit', chair: 'ready-room', label: 'Sit at your desk' })).toEqual({ interaction: { kind: 'sit', chair: 'ready-room' }, label: 'Sit at your desk' });
   });
 
   it('fails on an interaction it doesn’t know or one without a hint', () => {
     expect(() => readInteraction({ interact: 'replicator', label: 'Tea, Earl Grey, hot' })).toThrow(/unknown interaction/);
     expect(() => readInteraction({ interact: 'manager' })).toThrow(/label should be a string/);
+    expect(() => readInteraction({ interact: 'sit', label: 'Sit' })).toThrow(/unknown chair/);
   });
 });
 

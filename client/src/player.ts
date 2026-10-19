@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
 import { canMove, clearToward } from './collision';
+import { STAND_KEYS } from './world/chairs';
 import type { Box2 } from './world/layout';
 import { EYE_HEIGHT } from './world/layout';
 
@@ -14,6 +15,8 @@ export class Player {
   private keys = new Set<string>();
   private velocity = new THREE.Vector3();
   private bob = 0;
+  /** Sat in a chair: where you stood before you sat, to stand back up there. */
+  private sat: THREE.Vector3 | null = null;
   enabled = true;
   colliders: Box2[] = [];
 
@@ -49,8 +52,28 @@ export class Player {
     this.keys.clear();
   }
 
+  get seated(): boolean {
+    return this.sat !== null;
+  }
+
+  /** Sits the player down with their eyes at `eye`, looking at a point, until they move (or `stand()`). */
+  sit(eye: THREE.Vector3, lookAt: THREE.Vector3): void {
+    this.sat ??= this.camera.position.clone().setY(EYE_HEIGHT);
+    this.camera.position.copy(eye);
+    this.camera.lookAt(lookAt);
+    this.velocity.set(0, 0, 0);
+  }
+
+  /** Stands the player back up where they stood before they sat, still looking the way they are. */
+  stand(): void {
+    if (!this.sat) return;
+    this.camera.position.copy(this.sat);
+    this.sat = null;
+  }
+
   /** Puts the player somewhere, looking at a point. */
   teleport(feet: THREE.Vector3, lookAt: THREE.Vector3): void {
+    this.sat = null;
     this.camera.position.set(feet.x, EYE_HEIGHT, feet.z);
     this.camera.lookAt(lookAt);
     this.velocity.set(0, 0, 0);
@@ -80,6 +103,11 @@ export class Player {
 
   update(dt: number): void {
     const active = this.enabled && this.controls.isLocked;
+    if (this.sat) {
+      // sat still: moving gets you up
+      if (!active || ![...this.keys].some((k) => STAND_KEYS.has(k))) return;
+      this.stand();
+    }
     const forward = new THREE.Vector3();
     this.camera.getWorldDirection(forward);
     forward.y = 0;
