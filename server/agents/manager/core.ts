@@ -129,6 +129,7 @@ export class Core {
   ) {
     this.plugins = new Plugins(() => store.plugins);
     store.journaled = (agent) => this.hub.send({ type: 'agent', agent });
+    store.stepped = (machine, key) => this.plugins.machineStepped(machine, key);
     this.runtime = ManagedRuntime.make(services);
     this.runs = this.runtime.runSync(FiberMap.make<string, void, never>().pipe(Scope.provide(this.scope)));
   }

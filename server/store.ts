@@ -18,6 +18,8 @@ import { EMPTY_SLICE, evolveSlice, type SliceFact, type SliceState } from './age
 import { Journals, type Stamped } from './journals';
 import { EMPTY_PERSONAL_LOG, evolvePersonalLog, type PersonalFact, type PersonalLog } from '../shared/personalLog';
 import type { LogSources } from './agents/captainsLog';
+import { machineRuns } from './agents/machines';
+import type { MachineRun } from '../shared/machines';
 import { fromBeforePlugins, type SavedBeforePlugins } from './plugins/migrate';
 import { newId } from './util';
 import { changeProject } from './projectChange';
@@ -343,11 +345,25 @@ export class Store {
       this.save();
       this.journaled?.(agent);
     }
+    this.stepped?.(fact.kind === 'decided' ? 'turn' : 'run', id);
     return after;
   }
 
   /** Told of each agent whose run moved on: the office sends them to every browser. */
   journaled?: (agent: Agent) => void;
+
+  /** Told of each journal that stepped its machine (`server/agents/machines.ts`), by the machine's id and the run's key. */
+  stepped?: (machine: string, key: string) => void;
+
+  /** Where every run of each of the office's machines is now (`machineRuns`). */
+  machineRuns(): MachineRun[] {
+    return machineRuns({
+      agents: [...this.agents.values()],
+      projects: this.projects,
+      slice: (leadId) => this.slices.state(leadId),
+      reviews: [...this.reviews.keys()].map((key) => ({ key, ...this.reviewJournals.state(key) })),
+    });
+  }
 
   /** The agent's run journal, oldest first: its file, or what's kept of it in memory. */
   journalEntries(id: string): JournalEntry[] {
@@ -365,6 +381,7 @@ export class Store {
   reviewJournal(key: string, fact: ReviewFact): ReviewState {
     const after = this.reviewJournals.append(key, fact);
     this.showReview(key);
+    this.stepped?.('review', key);
     return after;
   }
 
@@ -390,7 +407,9 @@ export class Store {
 
   /** Records a fact in a goal's slice journal (`id` its lead's), flushed before this returns, and what its slices add up to with it. */
   sliceJournal(id: string, fact: SliceFact): SliceState {
-    return this.slices.append(id, fact);
+    const after = this.slices.append(id, fact);
+    this.stepped?.('slice', id);
+    return after;
   }
 
   /** What a goal's slice journal adds up to. */

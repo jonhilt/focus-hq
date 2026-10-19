@@ -31,6 +31,8 @@ export { chiefEngineer, crewVoice, fixedCrew, plannerFor } from '../shared/crew'
 /** A record's keys as its key type, and a record built from a list of keys, without a cast at each place. */
 export { fieldsOf, isOneOf, isRecord, keysOf, recordOf } from '../shared/records';
 export type { Flow, FlowRecording } from '../shared/flows';
+/** The office's state machines as data, and where a run of one is (`PluginHost.machines`). */
+export type { MachineGraph, MachineRun, MachineState, MachineTransition } from '../shared/machines';
 export type { PersonalEntry } from '../shared/personalLog';
 export { FLOWS_FILE } from '../shared/flows';
 export { pluginOn } from '../shared/projectPlugins';

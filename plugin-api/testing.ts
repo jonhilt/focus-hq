@@ -10,3 +10,5 @@ export type { Store } from '../server/store';
 export const OFFICE_DIR = config.root;
 /** The office's two rules for a part that keeps state, checked by running it (docs/invariants.md). */
 export { type Action, checkAtOnce, checkRestart, type Later, type Running, type Subject } from '../server/agents/invariants';
+/** The office's state machines as data, as `PluginHost.machines` lends them: to lay out and draw in a test. */
+export { MACHINES } from '../server/agents/machines';

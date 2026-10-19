@@ -13,6 +13,7 @@ import { pluginDataDir } from '../../plugins/dataDir';
 import { lend, lentLog } from '../../plugins/lend';
 import { runReadOnly, shipSession } from '../claudeCrew';
 import { demoModel, sessionModel } from '../modelSession';
+import { MACHINES } from '../machines';
 
 /**
  * What the office lends a plugin that the manager doesn't have: where it runs, its own repo, filing issues, the demo's
@@ -84,6 +85,7 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
     // read as it's asked for: the office sets the manager's reader once the plugins have started
     transcript: (sessionId) => (lent.transcript ?? core.ledger.readTranscript)?.(sessionId) ?? Promise.resolve(undefined),
     ledger,
+    machines: () => ({ graphs: MACHINES, runs: lend(core.store.machineRuns()) }),
     record: (projectId, entry, at) => core.ledger.record(projectId, entry, at),
     settings: () => lend(core.store.settings),
     snapshot: () => lent.snapshot?.().then(lend) ?? missing('snapshot'),

@@ -1,0 +1,6 @@
+/* the astrometrics plugin's machines up close: a tab each, the one picked drawn at its own size, shrunk to fit */
+.am-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
+.am-tabs .btn.on { background: #ffcc66; color: #14110a; }
+.am-drawing { overflow-x: auto; margin: 8px 0; background: #0b1020; border-radius: 12px; padding: 8px; }
+.am-drawing svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+.am-where { margin: 6px 0; padding-left: 18px; font-size: 15px; line-height: 1.6; }

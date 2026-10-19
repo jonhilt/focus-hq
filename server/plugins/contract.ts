@@ -5,6 +5,7 @@ import type { Effect } from 'effect';
 import type { ZodType } from 'zod';
 import type { LedgerEntry, LedgerEvent } from '../../shared/ledger';
 import type { PersonalEntry } from '../../shared/personalLog';
+import type { MachineGraph, MachineRun } from '../../shared/machines';
 import type { Agent, Issue, MessageReply, Planner, Project, QueuedGoal, ResumeHow, Settings, Snapshot, SystemModel, TermLine } from '../../shared/types';
 import type { ShipStatus } from '../agents/shipStatus';
 import type { GitHub } from '../github/service';
@@ -57,6 +58,12 @@ export interface PluginParts {
    * title they gave it, the model as the check left it, the page drawn of it, and its picture when one was taken.
    */
   modelShown?(agent: Readonly<Agent>, shown: ModelShown): void;
+  /**
+   * One of the office's state machines stepped (`host.machines`): a journal took a fact, so a run of `machine` (`key`,
+   * an agent's id or a pull request's key) may be in another state. Heard as it's written: read `host.machines()` for
+   * where it is now.
+   */
+  machineStepped?(machine: string, key: string): void;
   /** Whether only the captain merges this pull request, whatever QA says. By its branch, since a pull request outlives its agent. */
   captainMerges?(pr: { branch: string }): boolean;
   /** Tools it adds to the office of every goal lead whose project it's switched on for, beside ship, note and show (`mcp__office__<name>`). */
@@ -182,6 +189,12 @@ export interface PluginHost {
   transcript(sessionId: string): Promise<string | undefined>;
   /** The ship's log of how work went, oldest first. */
   ledger(): Readonly<LedgerEvent>[];
+  /**
+   * The office's state machines (`server/agents/machines.ts`), each as data to draw it from, in the order they're shown,
+   * and where every run of each is now: each agent's run and what followed their last turn, each goal's slices, each
+   * review on the boards.
+   */
+  machines(): { graphs: readonly Readonly<MachineGraph>[]; runs: readonly Readonly<MachineRun>[] };
   /**
    * Writes a line in the ship's log for `projectId` (at `at`, or now), and sends the new report card. Every plugin
    * hears it on `ledgerRecorded`, the one writing it too.

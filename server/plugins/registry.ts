@@ -110,6 +110,10 @@ export class Plugins {
     this.each('modelShown', (parts) => parts.modelShown?.(lend(agent), lend(shown)));
   }
 
+  machineStepped(machine: string, key: string): void {
+    this.each('machineStepped', (parts) => parts.machineStepped?.(machine, key));
+  }
+
   ledgerRecorded(event: LedgerEvent): void {
     this.each('ledgerRecorded', (parts) => parts.ledgerRecorded?.(lend(event)));
   }

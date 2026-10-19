@@ -73,6 +73,7 @@ server/
     captainsLog.ts        the captain's log, pure: every journal and the ledger on one timeline, only the facts worth a line (GET /api/log, Store.logSources)
     inbox.ts              an agent's inbox, kept in their run journal
     runMachine.ts         what follows a turn, as an XState state machine: the state it ran in (local, cloud, attaching), the event its end was (read from its outcome once), guarded transitions handing what a state doesn't take up to its parent; `step` takes one with XState's pure `transition`
+    machines.ts           the office's XState machines as data (states, transitions, guards) and where each run of them is now, from their journals: lent to the plugins, which astrometrics draws
     statechart.ts         an XState machine drawn as a Mermaid statechart, from the machine itself: for docs pages and a lead's station screen
     apiKey.ts             your login or your API key, pure: which a session signs in with, what a re-read costs on the key, ask, hold or go; keyFallback, where the office stands
     cloud.ts              what happens after a cloud agent's session (push nudge, carrying on in a new session, falling back to local when the CLI refuses --cloud), and moving an agent to the cloud
