@@ -290,6 +290,8 @@ describe('AgentManager', () => {
       { type: 'user', uuid: 'u1', timestamp: '2026-10-08T12:00:00.000Z', message: { content: 'Your workspace, with every repo of the project checked out side by side: …' } },
       { type: 'assistant', uuid: 'u2', timestamp: '2026-10-08T12:03:00.000Z', message: { content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'ls *.md' } }] } },
       { type: 'user', uuid: 'u3', timestamp: '2026-10-08T12:04:00.000Z', message: { content: [{ type: 'tool_result', tool_use_id: 't1', is_error: true, content: 'zsh: no matches found: *.md' }] } },
+      { type: 'assistant', uuid: 'u4', timestamp: '2026-10-08T12:05:00.000Z', message: { content: [{ type: 'text', text: 'Grid or list for saved items?' }] } },
+      { type: 'user', uuid: 'u5', timestamp: '2026-10-08T12:06:00.000Z', message: { content: 'List, newest first' } },
     ].map((l) => JSON.stringify(l)).join('\n');
     const reads: string[] = [];
     agents.readTranscript = (id) => (reads.push(id), Promise.resolve(transcript));
@@ -299,8 +301,30 @@ describe('AgentManager', () => {
     await agents.dismiss(lead.id);
     await until(() => store.ledger.some((e) => e.kind === 'session-digest'));
     const digest = store.ledger.find((e) => e.kind === 'session-digest');
-    expect(digest).toMatchObject({ key: 'session-1:u3', sessionId: 'session-1', task: 'lead', goal: 'Saved items', facts: { minutes: 4, toolCalls: 1, failedCalls: 1, wastedCalls: 1, costUsd: 0.42 } });
+    expect(digest).toMatchObject({ key: 'session-1:u5', sessionId: 'session-1', task: 'lead', goal: 'Saved items', facts: { minutes: 6, toolCalls: 1, failedCalls: 1, wastedCalls: 1, costUsd: 0.42 } });
     expect(reads).toEqual(['session-1']);
+    // a lead's span keeps what the captain said, beside what the lead had just said
+    await until(() => store.ledger.some((e) => e.kind === 'captain-replies'));
+    expect(store.ledger.find((e) => e.kind === 'captain-replies')).toMatchObject({
+      key: 'session-1:u5', goal: 'Saved items', replies: [{ at: '2026-10-08T12:06:00.000Z', lead: 'Grid or list for saved items?', captain: 'List, newest first' }],
+    });
+  });
+
+  it('keeps the captain’s replies from leads’ spans digested before replies were kept, once each, dated as their digests', async () => {
+    const { agents, store } = office();
+    const lead = [
+      { type: 'assistant', uuid: 'l1', message: { content: [{ type: 'text', text: 'Ship it?' }] } },
+      { type: 'user', uuid: 'l2', message: { content: 'ship it' } },
+    ].map((l) => JSON.stringify(l)).join('\n');
+    const facts = { minutes: 1, turns: 1, toolCalls: 0, failedCalls: 0, refusedCalls: 0, repeatedCalls: 0, wastedCalls: 0, captainMessages: 1, nudges: 1, officeMessages: 0, compactions: 0, qaFails: 0, conflicts: 0 };
+    store.record({ kind: 'session-digest', key: 's-lead:l2', sessionId: 's-lead', agentId: 'lead_x', agent: 'Lt. X', task: 'lead', prs: [], goal: 'G', toUuid: 'l2', facts, at: 5, projectId: 'p' });
+    store.record({ kind: 'session-digest', key: 's-dev:d1', sessionId: 's-dev', agentId: 'agent_y', agent: 'Ens. Y', task: 'issue', prs: [], toUuid: 'd1', facts, at: 6, projectId: 'p' });
+    agents.transcripts = () => Promise.resolve([{ name: 'lead-proj-p__s-lead', kind: 'lead' as const, sessionId: 's-lead', read: () => Promise.resolve(lead) }]);
+    expect(await agents.backfillReplies()).toEqual({ spans: 1 });
+    expect(store.ledger.filter((e) => e.kind === 'captain-replies')).toMatchObject([
+      { key: 's-lead:l2', at: 5, projectId: 'p', agent: 'Lt. X', goal: 'G', backfilled: true, replies: [{ lead: 'Ship it?', captain: 'ship it' }] },
+    ]);
+    expect(await agents.backfillReplies()).toEqual({ spans: 0 });
   });
 
   it('digests older transcripts once each, dated when their session ended, facts only', async () => {

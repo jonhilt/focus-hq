@@ -83,6 +83,8 @@ async function main() {
     office.agents.readTranscript = transcriptReader(paths.transcripts, paths.workspaces);
     office.agents.titleGoal = (brief) => titleGoal(brief, store.settings);
     office.agents.transcripts = transcriptFolders(paths.transcripts, paths.workspaces);
+    // the captain's replies to leads, from the spans digested before they were kept, while their transcripts last
+    void office.agents.backfillReplies().catch((err: unknown) => console.warn(`Couldn't keep the captain's older replies: ${errorMessage(err)}`));
   }
   // plugins read the agents' transcripts as the office does; in the demo, its pretend leads keep transcripts of their
   // own, and its older sessions are the scripted ones

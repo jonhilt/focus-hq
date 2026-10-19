@@ -47,6 +47,7 @@ export function groupOf(e: LedgerEvent): ReviewGroup {
     case 'retro-decision':
       return 'retro';
     case 'session-digest':
+    case 'captain-replies':
       return 'sessions';
     case 'session-frictions':
       return 'frictions';
@@ -184,6 +185,14 @@ export function ledgerRow(e: LedgerEvent): LedgerRow {
       const { title, detail } = sessionLine(e);
       return { ...base, tag: 'Session', tone: e.facts.wastedCalls > 5 || e.facts.nudges > 1 ? 'warn' : 'info', title, detail, pr: e.prs[0], goal: e.goal };
     }
+    case 'captain-replies':
+      return {
+        ...base,
+        tag: 'Captain',
+        tone: 'info',
+        title: e.replies.length ? `${plural(e.replies.length, 'reply', 'replies')} to ${e.agent}` : `Nothing said to ${e.agent}`,
+        detail: e.goal ?? '',
+      };
     case 'session-frictions':
       return {
         ...base,
@@ -263,6 +272,8 @@ export function trace(events: LedgerEvent[], subject: TraceSubject): Trace {
         return subject.kind === 'pr' ? e.prs.some(samePr) : e.goal === subject.title || e.prs.some(ofGoal);
       case 'goal-closed':
         return subject.kind === 'goal' && e.goal.title === subject.title;
+      case 'captain-replies':
+        return subject.kind === 'goal' && e.goal === subject.title;
       case 'session-frictions':
       case 'retro-decision':
         return false;

@@ -9,13 +9,13 @@ import { FIX_KINDS, type RetroDraft } from './shared';
 /** ledger.md: the report card, the ledger's lines on pull requests and goals in the window, and the captain's decisions on earlier drafts. */
 export function renderLedger(events: LedgerEvent[], now: number, days: number): string {
   const since = now - days * 24 * 60 * 60 * 1000;
-  const recent = events.filter((e) => e.at > since && e.kind !== 'session-digest' && e.kind !== 'retro-decision' && e.kind !== 'session-frictions');
+  const recent = events.filter((e) => e.at > since && (e.kind === 'goal-closed' || 'pr' in e));
   const decisions = events.flatMap((e) => (e.kind === 'retro-decision' ? [`- ${e.accepted ? 'accepted' : 'rejected'}: “${e.title}” (${e.signatures.join('; ')})${e.issue ? ` → ${e.issue.repo}#${e.issue.number}` : ''}`] : []));
   const { headline, lines } = reportLines(reportCard(events, now, days));
   const line = (e: LedgerEvent) => {
     const when = new Date(e.at).toISOString().slice(0, 16).replace('T', ' ');
     if (e.kind === 'goal-closed') return `- ${when} goal closed: “${e.goal.title}” (${e.goal.slices} slices)`;
-    if (e.kind === 'session-digest' || e.kind === 'retro-decision' || e.kind === 'session-frictions') return '';
+    if (!('pr' in e)) return '';
     const { kind, at: _at, projectId: _p, seq: _s, repo, pr, ...rest } = e;
     return `- ${when} ${kind} ${repo}#${pr} ${JSON.stringify(rest)}`;
   };

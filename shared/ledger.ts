@@ -48,8 +48,20 @@ export type LedgerEntry =
   | { kind: 'session-frictions'; key: string; sessionId: string; frictions: Friction[]; reader: string; missing?: boolean }
   /** The captain accepted (and filed) or rejected a retro's draft, resting on these friction signatures. */
   | { kind: 'retro-decision'; title: string; signatures: string[]; accepted: boolean; issue?: { repo: string; number: number } }
+  /**
+   * What the captain said to a lead in a digested span (`key` is the digest's), each with what the lead had just said:
+   * the record a chief of staff learns from, and is checked against. Written once per lead's span, none included.
+   */
+  | { kind: 'captain-replies'; key: string; sessionId: string; agent: string; goal?: string; replies: CaptainReply[]; backfilled?: boolean }
   /** A span of an agent's session, digested when it ends (or a lead's slice lands): see `SessionFacts`. */
   | SessionDigest;
+
+/** The captain's message to a lead, in full, and the end of what the lead had said since the last message to it. */
+export interface CaptainReply {
+  at?: string;
+  lead: string;
+  captain: string;
+}
 
 /**
  * What code alone can tell about a span of an agent's session, from its transcript and the ledger. A wasted call is

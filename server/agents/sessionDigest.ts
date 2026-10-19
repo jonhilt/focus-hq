@@ -1,4 +1,4 @@
-import type { LedgerEvent, SessionDigest, SessionFacts } from '../../shared/ledger';
+import type { CaptainReply, LedgerEvent, SessionDigest, SessionFacts } from '../../shared/ledger';
 import type { Agent } from '../../shared/types';
 import { type Block, blocks, messageFrom, resultText, transcriptLines } from './transcript';
 
@@ -83,6 +83,46 @@ export function transcriptSpan(jsonl: string, afterUuid?: string): Span | undefi
   facts.wastedCalls = facts.failedCalls + facts.repeatedCalls;
   facts.minutes = from && to ? Math.round((Date.parse(to) - Date.parse(from)) / 60_000) : 0;
   return { afterUuid, toUuid, from, to, facts };
+}
+
+/** How much of what the lead said before the captain answered is kept: its end, where it asks or hands over. */
+const LEAD_TAIL = 2000;
+const REMINDER = /<system-reminder>[\s\S]*?<\/system-reminder>/g;
+
+/** The end of a text, marked with how much was cut from its start. */
+function tail(text: string, max: number): string {
+  return text.length <= max ? text : `[−${text.length - max}]… ${text.slice(-max)}`;
+}
+
+/**
+ * Each message the captain sent in a span of a transcript (after `afterUuid`, up to and including `toUuid`), in full,
+ * with the end of what the agent had said since the last message to it (the office's included, which reset it too).
+ */
+export function captainReplies(jsonl: string, afterUuid?: string, toUuid?: string): CaptainReply[] {
+  const replies: CaptainReply[] = [];
+  let inSpan = !afterUuid;
+  let said: string[] = [];
+  for (const line of transcriptLines(jsonl)) {
+    if (!inSpan) {
+      if (line.uuid === afterUuid) inSpan = true;
+      continue;
+    }
+    if (line.type === 'assistant') {
+      for (const b of blocks(line)) if (b.type === 'text' && b.text?.trim()) said.push(b.text.trim());
+    } else if (line.type === 'user' && !line.isMeta) {
+      for (const b of blocks(line)) {
+        if (b.type !== 'text' || !b.text?.trim()) continue;
+        const from = messageFrom(b.text);
+        if (from === 'captain') {
+          const captain = b.text.replace(REMINDER, '').trim();
+          if (captain) replies.push({ at: line.timestamp, lead: tail(said.join('\n\n'), LEAD_TAIL), captain });
+        }
+        if (from) said = [];
+      }
+    }
+    if (toUuid && line.uuid === toUuid) break;
+  }
+  return replies;
 }
 
 /** Where the next digest of this session starts: after the last one's last line, and what the session had cost by then. */

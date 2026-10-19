@@ -282,6 +282,11 @@ export class AgentManager {
     return this.core.ledger.backfill();
   }
 
+  /** Keeps the captain's replies to leads from spans digested before they were kept (`Ledger.backfillReplies`). */
+  backfillReplies(): Promise<{ spans: number }> {
+    return this.core.ledger.backfillReplies();
+  }
+
   record(projectId: string, entry: LedgerEntry, at = Date.now()): void {
     this.core.ledger.record(projectId, entry, at);
   }

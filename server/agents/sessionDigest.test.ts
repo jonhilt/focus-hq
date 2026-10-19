@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LedgerEvent } from '../../shared/ledger';
-import { backfillWho, digestEntry, lastDigest, transcriptSpan } from './sessionDigest';
+import { backfillWho, captainReplies, digestEntry, lastDigest, transcriptSpan } from './sessionDigest';
 
 let n = 0;
 const line = (type: string, content: unknown, minute = 0) => JSON.stringify({ type, uuid: `u${++n}`, timestamp: `2026-10-08T12:${String(minute).padStart(2, '0')}:00.000Z`, message: { role: type, content } });
@@ -38,6 +38,38 @@ describe('transcriptSpan', () => {
     const t = transcript();
     expect(transcriptSpan(t, 'u5')?.facts).toMatchObject({ toolCalls: 0, captainMessages: 1, nudges: 0, compactions: 1, officeMessages: 1 });
     expect(transcriptSpan(t, 'u8')).toBeUndefined();
+  });
+});
+
+describe('captainReplies', () => {
+  const said = (text: string) => line('assistant', [{ type: 'text', text }]);
+  it('keeps each of the captain’s messages in full, with what the agent had said since the last message to it', () => {
+    n = 0;
+    const t = [
+      line('user', 'Your workspace, with every repo …'),
+      said('Reading the code.'),
+      line('assistant', [call('t1', 'ls')]),
+      line('user', [ok('t1')]),
+      said('Grid or list?'),
+      line('user', 'List, please<system-reminder>ignore</system-reminder>'),
+      line('user', '[Office] Slice merged'),
+      said('Shipped.'),
+      line('user', 'continue'),
+    ].join('\n');
+    expect(captainReplies(t)).toEqual([
+      { at: expect.any(String), lead: 'Reading the code.\n\nGrid or list?', captain: 'List, please' },
+      { at: expect.any(String), lead: 'Shipped.', captain: 'continue' },
+    ]);
+    // a span: after u6 (the first reply), up to u8
+    expect(captainReplies(t, 'u6', 'u8')).toEqual([]);
+    expect(captainReplies(t, 'u1', 'u6').map((r) => r.captain)).toEqual(['List, please']);
+  });
+
+  it('keeps the end of a long turn, marked with how much was cut', () => {
+    n = 0;
+    const r = captainReplies([said('x'.repeat(2500) + 'Which way?'), line('user', 'left')].join('\n'));
+    expect(r[0].lead).toMatch(/^\[−510\]… x+Which way\?$/);
+    expect(r[0].lead.length).toBeLessThan(2020);
   });
 });
 

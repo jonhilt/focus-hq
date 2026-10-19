@@ -4,7 +4,7 @@
   "server/agents/manager/comms.ts": 51,
   "server/agents/manager/core.ts": 81,
   "server/agents/manager/delivery.ts": 81,
-  "server/agents/manager/ledger.ts": 41,
+  "server/agents/manager/ledger.ts": 51,
   "server/agents/manager/reviews.ts": 74,
   "server/agents/manager/seating.ts": 79,
   "server/agents/manager/sessions.ts": 42,
