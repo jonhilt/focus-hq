@@ -1,0 +1,9 @@
+[Unit]
+Description=Focus: back up the office's state nightly
+
+[Timer]
+OnCalendar=*-*-* 03:30
+Persistent=true
+
+[Install]
+WantedBy=timers.target

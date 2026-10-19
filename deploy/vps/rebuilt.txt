@@ -1,0 +1,15 @@
+# What in the office's data folder (~/.focus) is rebuilt or downloaded again, so backups and moves leave it out
+# (docs/data.md#what-to-back-up). One top-level name per line.
+repos
+workspaces
+planning
+previews
+merges
+checks
+cloud-terminals
+models
+frame-stats
+dcg.toml
+tls
+state.json.lock
+ledger.jsonl.lock

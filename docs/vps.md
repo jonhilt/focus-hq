@@ -22,13 +22,14 @@ You need a server with Ubuntu 24.04 or Debian 12, a user on it with sudo, and **
 
 ```
 scp deploy/vps/setup.sh <server>:
-ssh <server> ./setup.sh
+ssh -t <server> ./setup.sh
 ```
 
-`setup.sh` (in `deploy/vps/`) installs Node 22, pnpm, git, the GitHub CLI, Claude Code, Tailscale and Playwright's Chromium with its system libraries. It asks you to sign in to Tailscale and GitHub (`gh auth setup-git` lets the office push), and for your name and email for the agents' commits. It clones Focus into `~/focus`, then installs and builds it. It asks for a Claude token (`claude setup-token` makes one from your subscription) and keeps it in `~/.config/focus/env`. Last, it installs three systemd units and puts the office on `https://<server>.<tailnet>.ts.net` with `tailscale serve`:
+`setup.sh` (in `deploy/vps/`) installs Node 22, pnpm, git, the GitHub CLI, Claude Code, Tailscale and Playwright's Chromium with its system libraries. It asks you to sign in to Tailscale and GitHub (`gh auth setup-git` lets the office push), and for your name and email for the agents' commits. It clones Focus into `~/focus`, then installs and builds it. It asks for a Claude token (`claude setup-token` makes one from your subscription) and keeps it in `~/.config/focus/env`. Last, it installs five systemd units and puts the office on `https://<server>.<tailnet>.ts.net` with `tailscale serve`:
 
 - `focus.service` runs the office and restarts it after a crash or an auto update.
 - `focus-cert.service` and `focus-cert.timer` fetch the machine's certificate into `~/.focus/tls/` at boot and weekly.
+- `focus-backup.service` and `focus-backup.timer` [back up](#backups) the office's state nightly.
 
 Run it again at any time: it skips what's done. `FOCUS_REPO` and `FOCUS_DIR` change what it clones and where, and `FOCUS_SKIP="tailscale login systemd"` leaves those steps out (that's how it's tested, in a container).
 
@@ -40,16 +41,27 @@ Agents load your `~/.claude/settings.json` (permissions, hooks, plugins, env) as
 
 ## Moving your office
 
-The office's state is plain files in `~/.focus` ([what to back up](data.md#what-to-back-up)). Only one office may run on a data folder at a time, so stop the Mac's first, then copy what isn't rebuilt:
+The office's state is plain files in `~/.focus` ([what to back up](data.md#what-to-back-up)). Only one office may run on a data folder at a time, so stop the Mac's first, then, from your Focus checkout on the Mac:
 
 ```
-rsync -a --exclude repos --exclude workspaces --exclude planning --exclude previews --exclude merges \
-  --exclude cloud-terminals --exclude models --exclude frame-stats --exclude dcg.toml --exclude tls \
-  --exclude 'state.json.lock' ~/.focus/ <server>:.focus/
-ssh <server> sudo systemctl restart focus
+deploy/vps/migrate.sh <server>
 ```
+
+It refuses while the Mac's office is still running. Otherwise it stops the server's office, copies `~/.focus` across without what's rebuilt (the list is `deploy/vps/rebuilt.txt`), and starts the office again.
 
 Projects, goals, boards, the ledger, logs and the leads' artifacts come across. Agents' sessions don't: Claude Code names its transcripts after the working directory's path, which is different on the server, so an agent that was mid-task starts a new session there. The office clones the repos again and makes fresh worktrees as agents need them.
+
+## Backups
+
+Every night at 03:30 (or at the next boot, if the server was off), `deploy/vps/backup.sh` packs the office's state into `~/focus-backups/focus-<date>-<time>.tgz`. That's `~/.focus` without what's rebuilt: projects, goals and their notes, the ledger, logs, run journals, the leads' artifacts and QA's screenshots. It keeps the newest 14 (`FOCUS_BACKUP_KEEP`). Those copies are on the same disk, so they cover a bad write but not losing the server. Set `FOCUS_BACKUP_TARGET` in `~/.config/focus/env` to an rsync destination elsewhere (`mac:Backups/focus/`, a NAS on your tailnet), and each night's backup is copied there too. The server's user needs SSH access to it: Tailscale SSH, or a key.
+
+Back up now with `sudo systemctl start focus-backup`, and see how the last one went with `journalctl -u focus-backup`. To restore one, stop the office, unpack it over `~/.focus`, and start the office again:
+
+```
+sudo systemctl stop focus
+tar -xzf ~/focus-backups/focus-<date>-<time>.tgz -C ~/.focus
+sudo systemctl start focus
+```
 
 ## Looking after it
 

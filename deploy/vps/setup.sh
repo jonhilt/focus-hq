@@ -95,12 +95,15 @@ if ! skipping login && ! grep -q '^CLAUDE_CODE_OAUTH_TOKEN=.' "$ENV_FILE" && ! g
 fi
 
 if ! skipping systemd; then
-  say "systemd: the office, and its preview certificate"
+  say "systemd: the office, its preview certificate and its backups"
   render() { sed -e "s|@USER@|$USER|g" -e "s|@HOME@|$HOME|g" -e "s|@FOCUS_DIR@|$FOCUS_DIR|g" "$FOCUS_DIR/deploy/vps/$1" | sudo tee "/etc/systemd/system/$1" >/dev/null; }
   render focus.service
   render focus-cert.service
   render focus-cert.timer
+  render focus-backup.service
+  render focus-backup.timer
   sudo systemctl daemon-reload
+  sudo systemctl enable --now focus-backup.timer
   sudo systemctl enable --now focus-cert.timer
   sudo systemctl start focus-cert.service || echo "No preview certificate yet: switch on HTTPS certificates for your tailnet (docs/vps.md), then: sudo systemctl start focus-cert"
   sudo systemctl enable focus.service

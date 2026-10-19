@@ -1,0 +1,8 @@
+[Unit]
+Description=Focus: back up the office's state
+
+[Service]
+Type=oneshot
+User=@USER@
+EnvironmentFile=-@HOME@/.config/focus/env
+ExecStart=@FOCUS_DIR@/deploy/vps/backup.sh
