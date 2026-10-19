@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Settings } from '../shared/types';
-import { changeSettings } from './settings';
+import { changeSettings, LEAD_COMPACT_MIN } from './settings';
 
 const settings: Settings = {
   maxConcurrent: 4,
@@ -13,6 +13,7 @@ const settings: Settings = {
   attribution: true,
   userClaudeMd: true,
   leadEffort: 'high',
+  leadCompactAt: 200_000,
 };
 
 describe('changeSettings', () => {
@@ -28,6 +29,7 @@ describe('changeSettings', () => {
       attribution: false,
       userClaudeMd: false,
       leadEffort: 'xhigh',
+      leadCompactAt: 150_000,
     });
     expect(changed).toEqual({
       maxConcurrent: 8,
@@ -40,6 +42,7 @@ describe('changeSettings', () => {
       attribution: false,
       userClaudeMd: false,
       leadEffort: 'xhigh',
+      leadCompactAt: 150_000,
     });
   });
 
@@ -64,9 +67,18 @@ describe('changeSettings', () => {
   });
 
   it('ignores a field of the wrong kind instead of failing the whole change', () => {
-    const wrong = { model: 5, conflictsModel: ['x'], qaModel: null, autonomy: 'yolo', mergeMethod: 'octopus', attribution: 'no', userClaudeMd: 1, leadEffort: 'huge' };
+    const wrong = { model: 5, conflictsModel: ['x'], qaModel: null, autonomy: 'yolo', mergeMethod: 'octopus', attribution: 'no', userClaudeMd: 1, leadEffort: 'huge', leadCompactAt: '150000' };
     expect(changeSettings(settings, wrong)).toEqual(settings);
     expect(changeSettings(settings, { ...wrong, autonomy: 'auto' })).toEqual({ ...settings, autonomy: 'auto' });
+  });
+
+  it('keeps a lead’s compaction threshold off at 0, or a whole number of tokens from the minimum to a million', () => {
+    expect(changeSettings(settings, { leadCompactAt: 0 }).leadCompactAt).toBe(0);
+    expect(changeSettings(settings, { leadCompactAt: -5 }).leadCompactAt).toBe(0);
+    expect(changeSettings(settings, { leadCompactAt: 10_000 }).leadCompactAt).toBe(LEAD_COMPACT_MIN);
+    expect(changeSettings(settings, { leadCompactAt: 5_000_000 }).leadCompactAt).toBe(1_000_000);
+    expect(changeSettings(settings, { leadCompactAt: 250_000.4 }).leadCompactAt).toBe(250_000);
+    expect(changeSettings(settings, { leadCompactAt: Number.NaN }).leadCompactAt).toBe(200_000);
   });
 
   it('puts an empty or unknown effort for conflict-resolving agents back to the model’s default', () => {

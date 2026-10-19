@@ -44,7 +44,7 @@ vi.spyOn(globalThis, 'clearTimeout').mockImplementation((t?: string | number | N
   realClearTimeout(t);
 });
 
-const settings: Settings = { maxConcurrent: 4, autonomy: 'ask', model: '', conflictsModel: '', qaModel: '', mergeMethod: 'squash', attribution: true, userClaudeMd: true, leadEffort: 'high' };
+const settings: Settings = { maxConcurrent: 4, autonomy: 'ask', model: '', conflictsModel: '', qaModel: '', mergeMethod: 'squash', attribution: true, userClaudeMd: true, leadEffort: 'high', leadCompactAt: 200_000 };
 const request = (resumeSessionId?: string): RunRequest => ({ agentId: 'lead_runner', agentName: 'Lt. Lead', cwd: process.cwd(), prompt: resumeSessionId ? 'resumed' : 'the brief', systemAppend: '', settings, autonomy: 'ask', resumeSessionId });
 
 /** What must hold of a session, once it has settled. */

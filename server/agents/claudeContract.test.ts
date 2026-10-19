@@ -122,7 +122,7 @@ describe('the session’s stand-in, beyond the recorded streams', () => {
 
 // ── a level up: the office's runner on the real streams ──────────────────────
 
-const settings: Settings = { maxConcurrent: 4, autonomy: 'ask', model: '', conflictsModel: '', qaModel: '', mergeMethod: 'squash', attribution: true, userClaudeMd: true, leadEffort: 'high' };
+const settings: Settings = { maxConcurrent: 4, autonomy: 'ask', model: '', conflictsModel: '', qaModel: '', mergeMethod: 'squash', attribution: true, userClaudeMd: true, leadEffort: 'high', leadCompactAt: 200_000 };
 const request: RunRequest = { agentId: 'lead_contract', agentName: 'Lt. Lead', cwd: process.cwd(), prompt: 'the brief', systemAppend: '', settings, autonomy: 'ask' };
 const hooks = (): RunHooks => ({ lines: () => undefined, activity: () => undefined, browser: () => undefined, screenshot: () => undefined, session: () => undefined, cost: () => undefined, permission: () => Promise.resolve(true) });
 

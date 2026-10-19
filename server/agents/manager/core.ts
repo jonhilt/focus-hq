@@ -71,6 +71,8 @@ export interface Runtime {
   permission?: { req: PermissionRequest; resolve: (ok: boolean) => void; resume: AgentStatus };
   nudged: boolean;
   busy: boolean;
+  /** The conversation the office couldn't compact before a lead's turn: it doesn't try again in that one. */
+  compactFailed?: string;
   /** Queued to pick its conversation back up (the inbox is what it hears), rather than to start its task. */
   resume?: boolean;
   /** The QA officer's instructions for the review in hand (they depend on the PR). */

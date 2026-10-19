@@ -6,8 +6,12 @@ import { EFFORT_LEVELS, MERGE_METHODS, type Settings } from '../shared/types';
 /**
  * The settings once the captain's change (PATCH /api/settings, any JSON) is applied: each field it gets right is taken,
  * cleaned up (models trimmed, the limit on agents at once a whole number from 1 to 32), and anything else is ignored.
- * An empty (or unknown) effort for conflict-resolving agents goes back to the model's default.
+ * An empty (or unknown) effort for conflict-resolving agents goes back to the model's default. A lead's compaction
+ * threshold is 0 (off) or a whole number of tokens from LEAD_COMPACT_MIN to a million.
  */
+/** Below this, a compacted lead's conversation (some 30–50k tokens) would soon need compacting again. */
+export const LEAD_COMPACT_MIN = 80_000;
+
 export function changeSettings(settings: Settings, patch: unknown): Settings {
   const p: Partial<Record<keyof Settings, unknown>> = patch !== null && typeof patch === 'object' ? patch : {};
   const s = { ...settings };
@@ -21,5 +25,6 @@ export function changeSettings(settings: Settings, patch: unknown): Settings {
   if (typeof p.attribution === 'boolean') s.attribution = p.attribution;
   if (typeof p.userClaudeMd === 'boolean') s.userClaudeMd = p.userClaudeMd;
   s.leadEffort = EFFORT_LEVELS.find((e) => e === p.leadEffort) ?? s.leadEffort;
+  if (typeof p.leadCompactAt === 'number' && Number.isFinite(p.leadCompactAt)) s.leadCompactAt = p.leadCompactAt <= 0 ? 0 : Math.max(LEAD_COMPACT_MIN, Math.min(1_000_000, Math.round(p.leadCompactAt)));
   return s;
 }

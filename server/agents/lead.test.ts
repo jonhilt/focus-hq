@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadAgent, LeadWork } from '../../shared/types';
-import { afterLanding, afterPush, landedMidShipNote, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, backgroundChange, backgroundStop, helperChange, taskChange, workflowChange, notedGoal, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, openPr, pickStation, qaVerdictNote, queuedStart, shippedSha, shipPlan, shipBranch, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
+import { afterLanding, afterPush, landedMidShipNote, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, backgroundChange, backgroundStop, helperChange, taskChange, workflowChange, notedGoal, COMPACT_INSTRUCTIONS, compactInstructions, compactsFirst, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, openPr, pickStation, qaVerdictNote, queuedStart, shippedSha, shipPlan, shipBranch, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -729,6 +729,20 @@ describe('the lead’s context', () => {
     );
     expect(text).toMatch(/^Work you'd committed but not shipped:\n- \.\/web: the commit you hadn't shipped came along onto the new branch\./);
     expect(text).toContain("- ./api: the 2 commits you hadn't shipped didn't apply cleanly to fresh code, so they're only on `focus/saved-items-1-ab`. Bring them over with `git cherry-pick 2222222222 3333333333`");
+  });
+
+  it('compacts a lead before a turn that picks a big conversation here back up, unless switched off or it already failed there', () => {
+    const big = { sessionId: 's1', context: { percent: 25, tokens: 250_000, max: 1_000_000 } };
+    expect(compactsFirst(big, true, 200_000)).toBe(true);
+    expect(compactsFirst({ ...big, context: { percent: 20, tokens: 200_000, max: 1_000_000 } }, true, 200_000)).toBe(true);
+    expect(compactsFirst({ ...big, context: { percent: 15, tokens: 150_000, max: 1_000_000 } }, true, 200_000)).toBe(false);
+    expect(compactsFirst({ sessionId: 's1' }, true, 200_000)).toBe(false);
+    expect(compactsFirst(big, false, 200_000)).toBe(false);
+    expect(compactsFirst(big, true, 0)).toBe(false);
+    expect(compactsFirst({ ...big, sessionId: undefined }, true, 200_000)).toBe(false);
+    expect(compactsFirst({ ...big, cloud: true }, true, 200_000)).toBe(false);
+    expect(compactsFirst(big, true, 200_000, 's1')).toBe(false);
+    expect(compactsFirst(big, true, 200_000, 's0')).toBe(true);
   });
 
   it('keeps the goal, the decisions and the lessons, drops the details, and carries the note', () => {

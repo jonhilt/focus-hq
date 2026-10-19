@@ -34,6 +34,8 @@ export interface Settings {
   userClaudeMd: boolean;
   /** The effort a new goal's lead starts at, unless the captain picks another when starting it. */
   leadEffort: Effort;
+  /** A goal lead's conversation is compacted before their next turn once it holds this many tokens. 0 = only when the captain asks. */
+  leadCompactAt: number;
 }
 
 /**

@@ -409,6 +409,8 @@ function settingsTab(ui: Ui): HTMLElement {
     const level = EFFORT_LEVELS.find((e) => e === leadEffort.value);
     if (level) save({ leadEffort: level });
   });
+  const leadCompactAt = h('input', { type: 'number', min: '0', max: '1000', step: '10', value: String(Math.round(s.leadCompactAt / 1000)), style: 'width:90px' });
+  leadCompactAt.addEventListener('change', () => save({ leadCompactAt: Number(leadCompactAt.value) * 1000 }));
   const recheck = h('button', { class: 'btn small' }, 'Check again');
   recheck.onclick = () => void busy(recheck, () => api.checkGitHub(), ui.error);
 
@@ -420,6 +422,7 @@ function settingsTab(ui: Ui): HTMLElement {
     h('div', { class: 'field' }, h('label', null, 'Model and effort for resolving merge conflicts'), h('div', { class: 'row' }, conflictsModel, conflictsEffort), h('small', null, 'For a new agent seated on a pull request to resolve its conflicts, which is usually mechanical work: e.g. claude-sonnet-5-5. Leave empty for the model above. The developer who opened the PR, if still aboard, resolves them in their own session instead.')),
     h('div', { class: 'field' }, h('label', null, 'Model for QA'), qaModel, h('small', null, 'For every room’s QA officer and every goal’s reviewer, from their next review: e.g. claude-sonnet-5-5. Leave empty for the model above. How hard they think is set at each room’s QA station.')),
     h('div', { class: 'field' }, h('label', null, 'Effort a new goal’s lead starts at'), leadEffort, h('small', null, 'You can pick another when you start a goal. High suits most slices; xhigh and max take longer and cost more.')),
+    h('div', { class: 'field' }, h('label', null, 'Compact a lead’s conversation from (thousand tokens)'), leadCompactAt, h('small', null, 'Before a lead’s next turn, the office compacts their conversation once it holds this much, keeping the goal, the decisions and what the captain prefers. Every step re-reads the whole conversation, so a big one is the costliest part of a goal. 0 = only when you ask.')),
     h('div', { class: 'field' }, h('label', null, 'Merge method for the board’s Merge button'), merge),
     h('div', { class: 'field' }, attribution.el, h('small', null, 'Names the agent or QA officer who did the work, and mentions Focus, in what the office posts on GitHub.')),
     h('div', { class: 'field' }, userClaudeMd.el, h('small', null, 'Your ~/.claude/CLAUDE.md and ~/.claude/rules, written for your own Claude Code. Turn off so agents follow only Focus and the repo’s CLAUDE.md; your ~/.claude/settings.json still loads. Applies to agents started from now on.')),

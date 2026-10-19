@@ -223,7 +223,8 @@ How the office works:
 /**
  * What happens when a slice has landed and the lead takes their next turn: nothing moves while a repo has uncommitted
  * changes; otherwise the repos move to fresh code for the next slice, taking along commits that never shipped. The
- * conversation is left as it is: the lead may be in the middle of something, so compacting is the captain's call.
+ * conversation is left as it is: it's compacted before a turn once it's grown big enough (`compactsFirst`), or when
+ * the captain asks.
  */
 export const afterLanding = (dirtyFolders: string[]): 'held-back' | 'next' => (dirtyFolders.length ? 'held-back' : 'next');
 
@@ -238,6 +239,15 @@ export function compactInstructions(work: Pick<LeadWork, 'title' | 'note' | 'bri
     'Drop: file contents, diffs, command and tool output, and the step-by-step of finished work: the code and the goal note hold it now.',
     `The goal note as it stands:\n${noteForPrompt(work)}`,
   ].join('\n\n');
+}
+
+/**
+ * Whether the office compacts a lead's conversation before their next turn: when the turn picks a conversation here
+ * back up and it held `at` tokens or more at the end of the last one (0 = never), unless compacting it already failed.
+ * Every call in a turn reads the whole conversation again, so a big one costs on every step, not just once.
+ */
+export function compactsFirst(lead: Pick<Agent, 'sessionId' | 'cloud' | 'context'>, resuming: boolean, at: number, failedIn?: string): boolean {
+  return at > 0 && resuming && !lead.cloud && !!lead.sessionId && lead.sessionId !== failedIn && (lead.context?.tokens ?? 0) >= at;
 }
 
 /** What any other agent's conversation keeps when the captain compacts it. */

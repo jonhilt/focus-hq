@@ -1281,6 +1281,8 @@ describe('AgentManager', () => {
     /** A lead mid-turn, `tokens` into their conversation, whom the plan's limit stops for `ms`. */
     async function limitedLead(tokens: number, ms: number) {
       const { agents, claude, store, project } = office();
+      // holding a long conversation, not compacting it, is what these are about
+      store.settings.leadCompactAt = 0;
       const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
       await until(() => claude.turns.length === 1);
       claude.turns[0].hooks.context!({ percent: 60, tokens, max: 1_000_000 });
@@ -1335,6 +1337,61 @@ describe('AgentManager', () => {
       second.agents.stop(second.id);
       await new Promise((r) => setTimeout(r, 1500));
       expect(second.claude.turns).toHaveLength(1);
+    });
+  });
+
+  describe('a lead’s big conversation', () => {
+    /** A goal's lead whose first turn ended `tokens` into their conversation. */
+    async function bigLead(tokens: number) {
+      const { agents, claude, store, project } = office();
+      const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+      await until(() => claude.turns.length === 1);
+      claude.turns[0].hooks.context!({ percent: 25, tokens, max: 1_000_000 });
+      claude.turns[0].end({ ok: true, summary: 'Proposed a slice' });
+      await until(() => store.agent(lead.id).status === 'done');
+      return { agents, claude, store, id: lead.id };
+    }
+
+    it('is compacted, keeping what the goal needs, before their next turn picks it back up', async () => {
+      const { agents, claude, store, id } = await bigLead(250_000);
+      agents.message(id, 'Go ahead');
+      await until(() => claude.turns.length === 2);
+      expect(claude.turns[1].req).toMatchObject({ resumeSessionId: 'session-1' });
+      expect(claude.turns[1].req.prompt).toMatch(/^\/compact Summarise this conversation for the lead of the goal "Saved items"/);
+      claude.turns[1].hooks.context!({ percent: 4, tokens: 40_000, max: 1_000_000 });
+      claude.turns[1].end({ ok: true, summary: '' });
+      await until(() => claude.turns.length === 3);
+      expect(claude.turns[2].req).toMatchObject({ resumeSessionId: 'session-1', prompt: 'Go ahead' });
+      claude.turns[2].end({ ok: true, summary: 'Shipped' });
+      await until(() => store.agent(id).status === 'done');
+    });
+
+    it('carries straight on under the threshold, or with it switched off', async () => {
+      const small = await bigLead(150_000);
+      small.agents.message(small.id, 'Go ahead');
+      await until(() => small.claude.turns.length === 2);
+      expect(small.claude.turns[1].req.prompt).toBe('Go ahead');
+
+      const off = await bigLead(600_000);
+      off.store.settings.leadCompactAt = 0;
+      off.agents.message(off.id, 'Go ahead');
+      await until(() => off.claude.turns.length === 2);
+      expect(off.claude.turns[1].req.prompt).toBe('Go ahead');
+    });
+
+    it('carries on as it is when compacting fails, and doesn’t try again in that conversation', async () => {
+      const { agents, claude, store, id } = await bigLead(250_000);
+      agents.message(id, 'Go ahead');
+      await until(() => claude.turns.length === 2);
+      claude.turns[1].end({ ok: false, summary: '', error: 'no room' });
+      await until(() => claude.turns.length === 3);
+      expect(claude.turns[2].req).toMatchObject({ resumeSessionId: 'session-1', prompt: 'Go ahead' });
+      claude.turns[2].hooks.context!({ percent: 30, tokens: 300_000, max: 1_000_000 });
+      claude.turns[2].end({ ok: true, summary: 'Shipped' });
+      await until(() => store.agent(id).status === 'done');
+      agents.message(id, 'And the next');
+      await until(() => claude.turns.length === 4);
+      expect(claude.turns[3].req.prompt).toBe('And the next');
     });
   });
 

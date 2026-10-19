@@ -67,6 +67,7 @@ const DEFAULT_SETTINGS: Settings = {
   attribution: true,
   userClaudeMd: true,
   leadEffort: 'high',
+  leadCompactAt: 200_000,
 };
 
 const PROJECT_COLORS = ['#ff8a5b', '#5bc0eb', '#9bc53d', '#c879ff', '#fde74c', '#ff5d8f', '#2ec4b6', '#f4a259'];

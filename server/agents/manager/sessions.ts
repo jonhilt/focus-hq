@@ -9,7 +9,7 @@ import type { Agent, LeadAgent, PermissionRequest, TermLine, WorkflowScript } fr
 import { GitHub, type GitHubError } from '../../github/service';
 import { newId, truncate } from '../../util';
 import { step, type Target, turnEvent } from '../runMachine';
-import { backgroundChange, COMPACT_INSTRUCTIONS, compactInstructions, freshSessionPrompt, hasLeadWork, helperChange, HELPER_LINGER_MS, leadSystemAppend, taskChange, workflowChange } from '../lead';
+import { backgroundChange, COMPACT_INSTRUCTIONS, compactInstructions, compactsFirst, freshSessionPrompt, hasLeadWork, helperChange, HELPER_LINGER_MS, leadSystemAppend, taskChange, workflowChange } from '../lead';
 import { mismatchError, recovery, signInMismatch, turnEnding, type TurnKind } from '../runJournal';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, systemAppend } from '../prompts';
 import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
@@ -343,6 +343,11 @@ export class AgentSessions extends Part {
       const rt = this.rt(agent.id);
       const review = agent.task === 'review';
       const lead = agent.task === 'lead' && hasLeadWork(agent) ? agent : undefined;
+      if (lead && compactsFirst(lead, !!resumeSessionId, this.store.settings.leadCompactAt, rt.compactFailed)) {
+        this.update(agent, { status: 'working' });
+        if (yield* this.compact(lead, compactInstructions(lead.lead))) resumeSessionId = lead.sessionId ?? resumeSessionId;
+        else rt.compactFailed = lead.sessionId;
+      }
       if (lead) prompt = [yield* this.core.slices.beforeTurn(lead), prompt].filter(Boolean).join('\n\n');
       // before marking them busy: the QA officer's instructions may need GitHub, and that can fail
       const instructions = yield* this.instructions(agent);
